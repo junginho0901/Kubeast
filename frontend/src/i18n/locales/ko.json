@@ -1748,7 +1748,12 @@
     "error": {
       "budgetSession": "이 대화는 토큰 {{used}}개를 써서 대화 예산 {{limit}}개를 넘었습니다. 이어서 하려면 새 대화를 시작하세요.",
       "budgetUserDaily": "오늘(UTC) 토큰 {{used}}개를 써서 하루 예산 {{limit}}개를 넘었습니다. 예산은 UTC 00:00에 초기화됩니다.",
-      "modelCall": "AI 모델을 호출하지 못했습니다 ({{provider}}): {{detail}}"
+      "modelCall": "AI 모델을 호출하지 못했습니다 ({{provider}}): {{detail}}",
+      "modelCredit": "AI 모델을 호출하지 못했습니다 ({{provider}}): 공급자 계정의 크레딧이나 사용 한도가 다 떨어졌습니다. 관리자가 Admin → AI Models에서 확인하거나 다른 모델을 고르세요. ({{detail}})",
+      "modelRateLimit": "AI 모델을 호출하지 못했습니다 ({{provider}}): 지금 요청이 너무 많습니다. 잠시 뒤 다시 시도하세요. ({{detail}})",
+      "modelUsageWindow": "AI 모델을 호출하지 못했습니다 ({{provider}}): 사용량 한도에 닿았습니다. {{retry_at}}(UTC)에 풀립니다. ({{detail}})",
+      "modelAuth": "AI 모델을 호출하지 못했습니다 ({{provider}}): 공급자가 키나 토큰을 거부했습니다. 관리자가 Admin → AI Models에서 확인하세요. ({{detail}})",
+      "modelUnavailable": "AI 모델을 호출하지 못했습니다 ({{provider}}): 공급자가 과부하이거나 응답하지 않았습니다. 잠시 뒤 다시 시도하세요. ({{detail}})"
     },
     "errorAnswer": "죄송합니다. 답변을 생성하는 중 오류가 발생했습니다: {{error}}",
     "errorSessionCreate": "세션 생성에 실패했습니다: {{error}}",

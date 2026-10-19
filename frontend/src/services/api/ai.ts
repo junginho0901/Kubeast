@@ -113,7 +113,8 @@ export const aiApi = {
             continue
           }
           if (parsed?.error != null) {
-            onError?.(String(parsed.error))
+            onError?.(String(parsed.error), typeof parsed?.error_key === 'string' ? parsed.error_key : null,
+              parsed?.error_args && typeof parsed.error_args === 'object' ? parsed.error_args : null)
           }
           if (typeof parsed?.content === 'string') {
             const contentKind = kind ?? 'answer'

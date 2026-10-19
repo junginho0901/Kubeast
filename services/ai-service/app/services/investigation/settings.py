@@ -21,6 +21,8 @@ class InvestigationSettings:
     dedupe_hours: int = 24
     max_per_hour: int = 6
     daily_token_budget: int = 200_000
+    # Minutes no investigation runs after the model provider refused for credit or the key (0 = never pause).
+    provider_pause_minutes: int = 30
     max_steps: int = 8
     timeout_seconds: int = 300
     model: str = ""
@@ -41,6 +43,7 @@ def load() -> InvestigationSettings:
         dedupe_hours=max(0, _int("ALERT_INVESTIGATION_DEDUPE_HOURS", 24)),
         max_per_hour=max(0, _int("ALERT_INVESTIGATION_MAX_PER_HOUR", 6)),
         daily_token_budget=max(0, _int("ALERT_INVESTIGATION_DAILY_TOKEN_BUDGET", 200_000)),
+        provider_pause_minutes=max(0, _int("ALERT_INVESTIGATION_PROVIDER_PAUSE_MINUTES", 30)),
         max_steps=min(20, max(1, _int("ALERT_INVESTIGATION_MAX_STEPS", 8))),
         timeout_seconds=min(1800, max(30, _int("ALERT_INVESTIGATION_TIMEOUT_SECONDS", 300))),
         model=os.getenv("ALERT_INVESTIGATION_MODEL", "").strip(),

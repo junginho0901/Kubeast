@@ -48,13 +48,31 @@ PROVIDER_LABELS = {
 }
 
 
+# What the English text adds for each kind of refusal (model_errors.classify); the screen has the same in its catalog.
+_REFUSAL_HINTS = {
+    "credit": "The provider account has no credit or quota left. An administrator checks it or picks another model in Admin → AI Models.",
+    "rate": "The provider refused for too many requests. Try again in a minute.",
+    "auth": "The provider refused the key or token. An administrator checks it in Admin → AI Models.",
+    "unavailable": "The provider is overloaded or did not answer. Try again later.",
+}
+
+
 def model_error(service, err: Exception) -> dict:
     """The chat's error event for a failed model call: one wording on every provider, naming the one in use, with
-    a catalog key and values next to the English text so the screen shows it in its language."""
+    the kind of refusal (credit, rate, auth, unavailable) as its catalog key and values next to the English text so
+    the screen shows it in its language."""
+    from app.services.ai.model_errors import classify
     provider = (getattr(service, "provider", None) or "").strip().lower()
     label, detail = PROVIDER_LABELS.get(provider, provider or "unknown"), safe_error(err)
-    return {"error": f"AI model call failed ({label}): {detail}", "error_key": "modelCall",
-            "error_args": {"provider": label, "detail": detail}}
+    refusal = classify(err)
+    args = {"provider": label, "detail": detail}
+    text = f"AI model call failed ({label}): {detail}"
+    if refusal.kind in _REFUSAL_HINTS:
+        text = f"{text}. {_REFUSAL_HINTS[refusal.kind]}"
+    if refusal.retry_at is not None:
+        args["retry_at"] = refusal.retry_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+        text = f"{text} The limit lifts at {args['retry_at']}."
+    return {"error": text, "error_key": refusal.key, "error_args": args}
 
 
 async def suggest_optimization_stream(
@@ -84,6 +102,34 @@ async def suggest_optimization_stream(
         # 1) 표(관측 데이터) 먼저 출력
         yield "data: " + json.dumps({"kind": "observed", "content": observed_md}, ensure_ascii=False) + "\n\n"
         await asyncio.sleep(0)
+
+        # The user's daily chat budget (ai.chat.budget.userDailyTokens) covers this explanation too: the table
+        # above is shown, the model is not called.
+        user_id = (audit_actor or {}).get("user_id")
+        over = None
+        if budget_mod.limits()[1] and user_id:
+            from app.database import get_db_service
+            over = await budget_mod.check(await get_db_service(), "", user_id)
+        if over is not None:
+            if audit_actor:
+                from app.services.ai import permissions as _perm
+                from app.services.audit_writer import write_audit
+                await write_audit(
+                    action="ai.chat.budget_exceeded",
+                    actor_user_id=audit_actor.get("user_id"),
+                    actor_email=audit_actor.get("email"),
+                    target_type="namespace",
+                    target_id=namespace,
+                    cluster=_perm.effective_cluster(service),
+                    after={"phase": "optimization", "budget": over.budget, "used": over.used, "limit": over.limit},
+                    request_ip=(audit_http or {}).get("ip"),
+                    user_agent=(audit_http or {}).get("user_agent"),
+                    request_id=(audit_http or {}).get("request_id"),
+                    path=(audit_http or {}).get("path"),
+                )
+            yield "data: " + json.dumps({"kind": "error", **over.event()}, ensure_ascii=False) + "\n\n"
+            yield "data: [DONE]\n\n"
+            return
 
         # 2) 표/관측값 기반 draft(룰 기반)도 모델 입력에 포함해 일관성 강화 (UI에는 직접 출력 X)
         draft_plan = observations.get("action_plan_md", "").strip()
@@ -176,7 +222,7 @@ async def suggest_optimization_stream(
         raise
     except Exception as e:
         err = e
-        yield "data: " + json.dumps({"kind": "error", "error": safe_error(e)}, ensure_ascii=False) + "\n\n"
+        yield "data: " + json.dumps({"kind": "error", **model_error(service, e)}, ensure_ascii=False) + "\n\n"
 
     await _audit_chat_complete(
         service,

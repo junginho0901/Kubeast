@@ -37,9 +37,10 @@ def alert(name="KubePodCrashLooping", severity="critical", fp="fp1", status="fir
 class FakeStore:
     """The store functions the gates call, over a list."""
 
-    def __init__(self, rows=None, tokens=0):
+    def __init__(self, rows=None, tokens=0, pause=""):
         self.rows = rows or []
         self.tokens = tokens
+        self.pause = pause
         self.bumped = []
 
     def install(self, monkeypatch):
@@ -63,7 +64,11 @@ class FakeStore:
             self.rows.append(f)
             return f["id"]
 
-        for name, fn in dict(find_recent=find_recent, bump_repeat=bump_repeat, count_since=count_since, tokens_since=tokens_since, insert=insert).items():
+        async def pause_reason(db, minutes, now):
+            return self.pause if minutes else ""
+
+        for name, fn in dict(find_recent=find_recent, bump_repeat=bump_repeat, count_since=count_since, tokens_since=tokens_since, insert=insert,
+                             pause_reason=pause_reason).items():
             monkeypatch.setattr(store, name, fn)
 
 
@@ -128,6 +133,13 @@ async def test_gates_skip_on_hourly_cap_and_token_budget(monkeypatch):
     fs3.install(monkeypatch)
     counts = await webhook.gate_and_queue(None, cfg(daily_token_budget=0, max_per_hour=0), "self", am_message(alert(fp="new")), NOW)
     assert counts["accepted"] == 1  # 0 = no limit
+    # the model provider refused for credit a few minutes ago: new alerts wait
+    fs4 = FakeStore(pause="paused: the AI model provider refused (credit) at 2026-10-13T11:55:00Z; no investigation until 2026-10-13T12:25:00Z")
+    fs4.install(monkeypatch)
+    counts = await webhook.gate_and_queue(None, cfg(), "self", am_message(alert(fp="new")), NOW)
+    assert counts["skipped"] == 1 and fs4.rows[-1]["status"] == "skipped" and fs4.rows[-1]["skip_reason"].startswith("paused: the AI model provider refused (credit)")
+    counts = await webhook.gate_and_queue(None, cfg(provider_pause_minutes=0), "self", am_message(alert(fp="new2")), NOW)
+    assert counts["accepted"] == 1  # 0 = never pause
 
 
 @pytest.mark.asyncio
@@ -384,6 +396,31 @@ async def sqlite_db(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_store_pause_after_a_provider_refusal(sqlite_db):
+    db = sqlite_db
+    assert await store.pause_reason(db, 30, NOW) == ""  # nothing failed yet
+    a = await store.insert(db, cluster="self", fingerprint="a", status="queued", received_at=NOW - timedelta(minutes=20))
+    await store.finish(db, a, status="failed", error="provider refused (credit): RateLimitError: insufficient_quota", finished_at=NOW - timedelta(minutes=10))
+    reason = await store.pause_reason(db, 30, NOW)
+    assert reason == "paused: the AI model provider refused (credit) at 2026-10-13T11:50:00Z; no investigation until 2026-10-13T12:20:00Z"
+    assert await store.pause_reason(db, 30, NOW + timedelta(minutes=21)) == ""  # the pause is over
+    assert await store.pause_reason(db, 0, NOW) == ""  # 0 = never pause
+    # a later failure that is not a refusal ends the pause; a usage window pauses until the time it lifts
+    b = await store.insert(db, cluster="self", fingerprint="b", status="queued", received_at=NOW)
+    await store.finish(db, b, status="failed", error="timed out after 300s", finished_at=NOW - timedelta(minutes=5))
+    assert await store.pause_reason(db, 30, NOW) == ""
+    c = await store.insert(db, cluster="self", fingerprint="c", status="queued", received_at=NOW)
+    await store.finish(db, c, status="failed", error="provider refused (rate, until 2026-10-13T14:00:00Z): ClaudeCodeError: limit", finished_at=NOW - timedelta(minutes=1))
+    assert (await store.pause_reason(db, 30, NOW + timedelta(hours=1))).endswith("until 2026-10-13T14:00:00Z")
+    assert await store.pause_reason(db, 0, NOW + timedelta(hours=1)) == ""  # 0 = never pause, a usage window too
+    # a queued row the worker will not run
+    d = await store.insert(db, cluster="self", fingerprint="d", status="queued", received_at=NOW)
+    await store.skip(db, d, "paused: …")
+    row = await store.get(db, d)
+    assert row.status == "skipped" and row.skip_reason == "paused: …"
+
+
+@pytest.mark.asyncio
 async def test_store_queue_lifecycle(sqlite_db):
     db = sqlite_db
     a = await store.insert(db, cluster="self", fingerprint="fp", status="queued", received_at=NOW - timedelta(minutes=5))
@@ -489,7 +526,8 @@ async def test_run_one_masks_credentials_in_a_provider_error(monkeypatch):
     monkeypatch.setattr(runner, "write_audit", audit)
     assert await runner.run_one(cfg(), None, row()) == "failed"
     assert "sk-proj-abcdefghijklmnop" not in finished[0]["error"] and "sk-proj-abcdefghijklmnop" not in audits[-1]["error"]
-    assert finished[0]["error"].startswith("RuntimeError: Error code: 401")
+    # a refused key holds the next runs back (store.pause_reason reads the prefix)
+    assert finished[0]["error"].startswith("provider refused (auth): RuntimeError: Error code: 401")
 
 
 @pytest.mark.asyncio
@@ -574,3 +612,42 @@ async def test_text_before_the_limit_is_not_taken_as_the_report(monkeypatch):
     install_loop(monkeypatch, FakeSubscriptionService(cc), [])
     out = await runner.investigate(cfg(max_steps=5), row())
     assert out["report"] == "## Summary\nfrom the tool results" and len(cc.completed) == 1
+
+
+@pytest.mark.asyncio
+async def test_worker_skips_a_queued_alert_while_paused(monkeypatch):
+    """An alert queued before the provider refused would be refused too: the worker marks it skipped instead of running it."""
+    import asyncio
+
+    stop = asyncio.Event()
+    skipped, ran = [], []
+
+    async def get_db():
+        return object()
+
+    async def claim_next(db):
+        if stop.is_set():
+            return None
+        stop.set()
+        return row()
+
+    async def nothing(*a, **k):
+        return 0
+
+    async def paused(db, minutes, now):
+        return "paused: the AI model provider refused (credit) at …"
+
+    async def skip(db, inv_id, reason):
+        skipped.append((inv_id, reason))
+
+    async def run_one(cfg, db, r):
+        ran.append(r.id)
+
+    monkeypatch.setattr(runner, "get_db_service", get_db)
+    monkeypatch.setattr(runner.store, "claim_next", claim_next)
+    monkeypatch.setattr(runner.store, "fail_stale_running", nothing)
+    monkeypatch.setattr(runner.store, "pause_reason", paused)
+    monkeypatch.setattr(runner.store, "skip", skip)
+    monkeypatch.setattr(runner, "run_one", run_one)
+    await runner.worker(stop)
+    assert skipped == [("inv-1", "paused: the AI model provider refused (credit) at …")] and ran == []

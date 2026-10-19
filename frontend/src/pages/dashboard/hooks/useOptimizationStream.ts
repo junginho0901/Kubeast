@@ -13,6 +13,7 @@ import { api } from '@/services/api'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
 import { aiEnabled } from '@/utils/features'
 
+import { chatErrorText } from '@/utils/chatError'
 import { unwrapOuterMarkdownFence } from '../utils'
 
 interface UsageInfo {
@@ -167,8 +168,8 @@ export function useOptimizationStream() {
           optimizationMetaReceivedRef.current = true
           setOptimizationMeta(meta)
         },
-        onError: (message) => {
-          setOptimizationStreamError(message)
+        onError: (message, key, args) => {
+          setOptimizationStreamError(chatErrorText(t, message, key, args))
         },
         onDone: () => {
           if (!optimizationMetaReceivedRef.current) {

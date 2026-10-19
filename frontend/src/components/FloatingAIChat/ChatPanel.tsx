@@ -190,21 +190,26 @@ export function ChatPanel({
 
   const isStreaming = streamState.isStreaming && streamState.sessionId === sessionId
 
+  // A call that failed (the model refused, the budget) keeps the question on screen with the error under it.
+  const failed = streamState.status === 'error' && streamState.sessionId === sessionId
+
   // 스트리밍 중이면 히스토리 + 현재 진행중 user 메시지 + 진행중 assistant content
   const visibleMessages: DisplayMessage[] = useMemo(() => {
-    if (!isStreaming) return messages
-    const pendingUser: DisplayMessage[] = streamState.userMessage
+    if (!isStreaming && !failed) return messages
+    const last = messages[messages.length - 1]
+    const saved = failed && last?.role === 'user' && last.content === streamState.userMessage
+    const pendingUser: DisplayMessage[] = streamState.userMessage && !saved
       ? [
           {
             id: `pending-user-${streamState.updatedAt}`,
             role: 'user',
             content: streamState.userMessage,
-            pending: true,
+            pending: isStreaming,
           },
         ]
       : []
     return [...messages, ...pendingUser]
-  }, [messages, isStreaming, streamState.userMessage, streamState.updatedAt])
+  }, [messages, isStreaming, failed, streamState.userMessage, streamState.updatedAt])
 
   const streamingContent = isStreaming ? streamState.assistantContent : undefined
   // follows new text only while the reader is at the bottom; a new question scrolls back smoothly
@@ -216,7 +221,7 @@ export function ChatPanel({
     if (questions > lastQuestions.current) scrollToBottom(isStreaming ? undefined : { instant: true })
     lastQuestions.current = questions
   }, [questions, isStreaming, scrollToBottom])
-  const error = streamState.status === 'error' && streamState.error
+  const error = failed && streamState.error
     ? chatErrorText(t, streamState.error, streamState.errorKey, streamState.errorArgs)
     : null
   // 세션은 첫 질문 시점에 생성하므로 평소엔 활성. 세션 생성 중이거나 스트리밍 중일 때 입력 비활성.

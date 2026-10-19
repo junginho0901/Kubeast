@@ -1747,7 +1747,8 @@ export type OptimizationStreamHandlers = {
   onContent?: (chunk: string) => void
   onUsage?: (usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number }) => void
   onMeta?: (meta: { finish_reason?: string | null; max_tokens?: number | null }) => void
-  onError?: (message: string) => void
+  // key and args: a refusal the server writes for the screen (aiChat.error.<key>), as in the chat
+  onError?: (message: string, key?: string | null, args?: Record<string, unknown> | null) => void
   onDone?: () => void
   signal?: AbortSignal
 }

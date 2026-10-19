@@ -40,6 +40,8 @@ auth:
 ai:
   baseUrlAllowedHosts:
     - host.docker.internal
+    # the model endpoint that only refuses (deploy/kind/devtools.yaml, ai-provider-errors.spec.ts)
+    - model-stub.kubeast-devtools.svc.cluster.local
   # rebuild-kind.sh loads one ai-service image under the local tag (with Claude Code when built
   # WITH_CLAUDE_CODE=true), so scripts/kind-model-subscription.sh turns the provider on without a tag suffix.
   providers:
@@ -85,6 +87,9 @@ networkPolicy:
     # Ollama on the laptop: Docker Desktop puts host.docker.internal in 192.168.65.0/24
     - cidr: 192.168.65.0/24
       port: 11434
+    # the refusing model endpoint in kubeast-devtools (kind's pod network)
+    - cidr: 10.244.0.0/16
+      port: 8090
 nodeShell:
   enabled: true
   # The second image never resolves (.invalid): e2e/tests/node-shell.spec.ts uses it for the wait reason

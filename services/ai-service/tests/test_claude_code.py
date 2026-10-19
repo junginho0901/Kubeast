@@ -34,6 +34,14 @@ class ToolUseBlock:
 class AssistantMessage:
     content: list
     model: str = "claude-haiku-5-5"
+    error: Optional[str] = None
+
+
+@dataclass
+class RateLimitEvent:
+    rate_limit_info: SimpleNamespace
+    uuid: str = "u"
+    session_id: str = "s"
 
 
 @dataclass
@@ -66,7 +74,7 @@ def make_sdk(script, *, record=None):
     include_partial_messages — sends a text block's start and its text_delta events before the whole block."""
     sdk = types.ModuleType("claude_agent_sdk")
     sdk.TextBlock, sdk.AssistantMessage, sdk.ResultMessage = TextBlock, AssistantMessage, ResultMessage
-    sdk.StreamEvent = StreamEvent
+    sdk.StreamEvent, sdk.RateLimitEvent = StreamEvent, RateLimitEvent
     state = {"options": [], "running": 0, "max_running": 0, "tool_results": []}
 
     class ClaudeAgentOptions:
@@ -105,6 +113,10 @@ def make_sdk(script, *, record=None):
                     server = options.mcp_servers[claude_code.TOOL_SERVER]
                     for name, args in calls:
                         state["tool_results"].append(await server["tools"][name].handler(args))
+                elif kind == "refuse":  # the CLI's refused call: an assistant message with its error, a rejected window
+                    if len(step) > 2:
+                        yield RateLimitEvent(SimpleNamespace(status="rejected", resets_at=step[2]))
+                    yield AssistantMessage(content=[TextBlock("API Error")], error=step[1])
                 elif kind == "result":
                     yield step[1]
                 elif kind == "raise":
@@ -299,6 +311,23 @@ async def test_an_error_result_raises_with_its_status_and_masked(on):
         async for _ in chat.turn(messages=[{"role": "user", "content": "hi"}], tools=[], run_tool=None, out=claude_code.TurnResult()):
             pass
     assert "(HTTP 401)" in str(err.value) and "Invalid bearer token" in str(err.value) and leaked not in str(err.value)
+
+
+@pytest.mark.asyncio
+async def test_a_refused_call_carries_the_kind_and_the_window(on):
+    """The SDK's AssistantMessage.error and a rejected RateLimitEvent reach model_errors.classify through the error."""
+    from app.services.ai.model_errors import CREDIT, RATE, classify
+
+    on([("refuse", "rate_limit", 1792407600), ("result", ResultMessage(subtype="success", is_error=True, num_turns=1, result="limit", api_error_status=429))])
+    with pytest.raises(claude_code.ClaudeCodeError) as err:
+        await claude_code.complete([{"role": "user", "content": "hi"}], model="m", token="t")
+    assert err.value.subscription_error == "rate_limit" and err.value.resets_at == 1792407600
+    refusal = classify(err.value)
+    assert refusal.kind == RATE and refusal.retry_at is not None and refusal.blocks
+    on([("refuse", "billing_error"), ("raise", ProcessError("Command failed with exit code 1"))])
+    with pytest.raises(claude_code.ClaudeCodeError) as err:
+        await claude_code.complete([{"role": "user", "content": "hi"}], model="m", token="t")
+    assert classify(err.value).kind == CREDIT
 
 
 @pytest.mark.asyncio

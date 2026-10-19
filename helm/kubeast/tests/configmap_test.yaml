@@ -555,6 +555,7 @@ tests:
         dedupeHours: 12
         maxPerHour: 3
         dailyTokenBudget: 5000000
+        providerPauseMinutes: 0
         maxSteps: 6
         timeoutSeconds: 600
         model: ollama-granite
@@ -571,6 +572,9 @@ tests:
       - equal:
           path: data.ALERT_INVESTIGATION_DAILY_TOKEN_BUDGET
           value: "5000000"
+      - equal:
+          path: data.ALERT_INVESTIGATION_PROVIDER_PAUSE_MINUTES
+          value: "0"
       - equal:
           path: data.ALERT_INVESTIGATION_MODEL
           value: ollama-granite

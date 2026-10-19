@@ -58,7 +58,7 @@ const MARKDOWN_COMPONENTS = { a: MarkdownLink, details: MarkdownDetails, summary
 export function MessageList({ messages, streamingContent, streamingToolCalls, streaming, error, emptyExtras }: MessageListProps) {
   const { t } = useTranslation()
 
-  if (messages.length === 0 && !streaming) {
+  if (messages.length === 0 && !streaming && !error) {
     return (
       <div className="flex h-full flex-col">
         <div className="flex flex-1 flex-col items-center justify-center px-6 py-6 text-center text-sm text-slate-500">

@@ -105,6 +105,8 @@ async def gate_and_queue(db, cfg: inv_settings.InvestigationSettings, cluster: s
             skip_reason = f"hourly cap ({cfg.max_per_hour} per hour)"
         elif cfg.daily_token_budget and await store.tokens_since(db, store.day_start(now)) >= cfg.daily_token_budget:
             skip_reason = f"daily token budget ({cfg.daily_token_budget} tokens, UTC day)"
+        else:
+            skip_reason = await store.pause_reason(db, cfg.provider_pause_minutes, now)
         await store.insert(
             db,
             cluster=cluster,

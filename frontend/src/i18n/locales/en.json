@@ -1746,7 +1746,12 @@
     "error": {
       "budgetSession": "This conversation has used {{used}} tokens, over its budget of {{limit}}. Start a new conversation to continue.",
       "budgetUserDaily": "You have used {{used}} tokens today (UTC), over the daily budget of {{limit}}. The budget resets at 00:00 UTC.",
-      "modelCall": "AI model call failed ({{provider}}): {{detail}}"
+      "modelCall": "AI model call failed ({{provider}}): {{detail}}",
+      "modelCredit": "AI model call failed ({{provider}}): the provider account has no credit or quota left. An administrator checks it or picks another model in Admin → AI Models. ({{detail}})",
+      "modelRateLimit": "AI model call failed ({{provider}}): too many requests for now. Try again in a minute. ({{detail}})",
+      "modelUsageWindow": "AI model call failed ({{provider}}): the usage limit is reached until {{retry_at}} (UTC). ({{detail}})",
+      "modelAuth": "AI model call failed ({{provider}}): the provider refused the key or token. An administrator checks it in Admin → AI Models. ({{detail}})",
+      "modelUnavailable": "AI model call failed ({{provider}}): the provider is overloaded or did not answer. Try again later. ({{detail}})"
     },
     "errorAnswer": "Sorry, an error occurred while generating the answer: {{error}}",
     "errorSessionCreate": "Failed to create session: {{error}}",

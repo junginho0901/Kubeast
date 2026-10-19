@@ -333,9 +333,65 @@ def test_a_failed_model_call_names_its_provider_in_one_wording():
     """Every provider's failure reads the same, with a catalog key the screen translates (not "OpenAI API" for all)."""
     from app.services.ai.streaming import model_error
 
-    sub = model_error(SimpleNamespace(provider="claude-code"), RuntimeError("Claude Code failed: timeout"))
-    assert sub == {"error": "AI model call failed (Claude subscription): Claude Code failed: timeout", "error_key": "modelCall",
-                   "error_args": {"provider": "Claude subscription", "detail": "Claude Code failed: timeout"}}
+    sub = model_error(SimpleNamespace(provider="claude-code"), RuntimeError("Claude Code failed: exit 2"))
+    assert sub == {"error": "AI model call failed (Claude subscription): Claude Code failed: exit 2", "error_key": "modelCall",
+                   "error_args": {"provider": "Claude subscription", "detail": "Claude Code failed: exit 2"}}
     assert model_error(SimpleNamespace(provider="Anthropic"), RuntimeError("529"))["error_args"]["provider"] == "Anthropic"
     assert model_error(SimpleNamespace(provider="vllm-gw"), RuntimeError("x"))["error_args"]["provider"] == "vllm-gw"
+
+
+def test_a_failed_model_call_says_the_kind_of_refusal():
+    """Credit, rate, key and outage refusals carry their own catalog key and the English hint; a usage window its time."""
+    from app.services.ai.streaming import model_error
+    from app.services.anthropic_messages import AnthropicAPIError as Err
+    from app.services.claude_code import ClaudeCodeError
+
+    credit = model_error(SimpleNamespace(provider="anthropic"), Err(402, "billing_error", "Your credit balance is too low"))
+    assert credit["error_key"] == "modelCredit" and "Admin → AI Models" in credit["error"] and credit["error_args"]["provider"] == "Anthropic"
+    assert model_error(SimpleNamespace(provider="anthropic"), Err(429, "rate_limit_error", "Number of requests has exceeded"))["error_key"] == "modelRateLimit"
+    assert model_error(SimpleNamespace(provider="anthropic"), Err(401, "authentication_error", "invalid x-api-key"))["error_key"] == "modelAuth"
+    assert model_error(SimpleNamespace(provider="anthropic"), Err(529, "overloaded_error", "Overloaded"))["error_key"] == "modelUnavailable"
+    window = model_error(SimpleNamespace(provider="claude-code"), ClaudeCodeError("Claude Code (HTTP 429): limit", subscription_error="rate_limit", resets_at=1792407600))
+    assert window["error_key"] == "modelUsageWindow" and window["error_args"]["retry_at"] == "2026-10-19T11:00:00Z"
+    assert "lifts at 2026-10-19T11:00:00Z" in window["error"]
     assert model_error(SimpleNamespace(provider=None), RuntimeError("x"))["error_args"]["provider"] == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_optimization_over_the_daily_budget_shows_the_table_without_the_model(monkeypatch):
+    """The user's daily chat budget covers the explanation: the observed table comes, the model is not called."""
+    from app.services.ai import budget as budget_mod
+
+    service = _make_service()
+    service.client.chat.completions.create = AsyncMock()
+    rows = _capture_audit(monkeypatch)
+    monkeypatch.setattr(budget_mod, "limits", lambda: (0, 1000))
+
+    async def db():
+        return object()
+
+    async def over(db, session_id, user_id, **kw):
+        return budget_mod.Exceeded("user_daily", 1200, 1000)
+
+    monkeypatch.setattr("app.database.get_db_service", db)
+    monkeypatch.setattr(budget_mod, "check", over)
+    events = [c async for c in suggest_optimization_stream(service, "shop", audit_actor={"user_id": "u1", "email": "e"}, audit_http={})]
+    payloads = [json.loads(e[6:]) for e in events if e.startswith("data: {")]
+    assert payloads[0]["kind"] == "observed"
+    assert payloads[-1]["kind"] == "error" and payloads[-1]["error_key"] == "budgetUserDaily" and payloads[-1]["error_args"] == {"used": 1200, "limit": 1000}
+    assert events[-1] == "data: [DONE]\n\n"
+    service.client.chat.completions.create.assert_not_called()
+    assert [r["action"] for r in rows] == ["ai.chat.budget_exceeded"] and rows[0]["after"]["phase"] == "optimization" and rows[0]["target_id"] == "shop"
+
+
+@pytest.mark.asyncio
+async def test_optimization_model_failure_says_the_kind(monkeypatch):
+    from app.services.anthropic_messages import AnthropicAPIError
+
+    service = _make_service()
+    service.provider = "anthropic"
+    service.client.chat.completions.create = AsyncMock(side_effect=AnthropicAPIError(402, "billing_error", "billing"))
+    _capture_audit(monkeypatch)
+    events = [c async for c in suggest_optimization_stream(service, "default")]
+    err = [json.loads(e[6:]) for e in events if e.startswith("data: {") and '"error"' in e][0]
+    assert err["kind"] == "error" and err["error_key"] == "modelCredit" and err["error_args"]["provider"] == "Anthropic"

@@ -24,6 +24,7 @@ import httpx
 
 from app.database import get_db_service, utcnow
 from app.services.ai.debug_dump import safe_error
+from app.services.ai.model_errors import classify
 from app.services.audit_writer import write_audit
 from app.services.investigation import prompt as inv_prompt
 from app.services.investigation import settings as inv_settings
@@ -197,6 +198,10 @@ async def run_one(cfg: inv_settings.InvestigationSettings, db, row) -> str:
     except Exception as e:  # model or network failure: record it, keep the worker alive
         log.exception("investigation %s failed", row.id)
         status, error = "failed", f"{type(e).__name__}: {clean_error(e)}"
+        refusal = classify(e)
+        if refusal.blocks:  # credit, the key, a usage window: store.pause_reason holds the next runs back
+            lifts = f", until {refusal.retry_at:%Y-%m-%dT%H:%M:%S}Z" if refusal.retry_at else ""
+            error = f"{store.REFUSAL_PREFIX}{refusal.kind}{lifts}): {error}"
     duration_ms = int((time.monotonic() - started) * 1000)
     await store.finish(db, row.id, status=status, error=error, **fields)
     report = fields.get("report") or ""
@@ -248,7 +253,11 @@ async def worker(stop: asyncio.Event) -> None:
             log.exception("investigation worker: queue unavailable")
             row = None
         if row is not None:
-            await run_one(cfg, db, row)
+            reason = await store.pause_reason(db, cfg.provider_pause_minutes, utcnow())
+            if reason:  # queued before the provider refused: it would be refused too
+                await store.skip(db, row.id, reason)
+            else:
+                await run_one(cfg, db, row)
             continue
         webhook.wake.clear()
         try:

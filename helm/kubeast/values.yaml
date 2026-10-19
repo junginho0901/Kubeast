@@ -713,6 +713,7 @@ features:
     dedupeHours: 24           # Alertmanager repeats a firing group every repeat_interval (4h)
     maxPerHour: 6             # 0 = no cap
     dailyTokenBudget: 200000  # 0 = no budget
+    providerPauseMinutes: 30  # after the model provider refuses for credit or the key, new alerts are skipped this long; 0 = no pause
     maxSteps: 8               # model calls per investigation; the last one gets no tools
     timeoutSeconds: 300
     model: ""                 # ModelConfig name; empty = the default model

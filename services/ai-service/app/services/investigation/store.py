@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime, timedelta
 from typing import Any, Optional
@@ -63,6 +64,50 @@ async def tokens_since(db, since: datetime) -> int:
             AlertInvestigation.received_at >= since
         )
         return int((await s.execute(q)).scalar() or 0)
+
+
+# The prefix runner.run_one writes before a failed run's error when the model provider refused it.
+REFUSAL_PREFIX = "provider refused ("
+
+
+async def last_refusal(db) -> Optional[AlertInvestigation]:
+    """The newest failed run whose model provider refused it (runner.run_one's REFUSAL_PREFIX), or None."""
+    async with db.async_session() as s:
+        q = (
+            select(AlertInvestigation)
+            .where(AlertInvestigation.status == "failed", AlertInvestigation.finished_at.is_not(None))
+            .order_by(AlertInvestigation.finished_at.desc())
+            .limit(1)
+        )
+        row = (await s.execute(q)).scalars().first()
+        return row if row is not None and (row.error or "").startswith(REFUSAL_PREFIX) else None
+
+
+_REFUSAL = re.compile(r"^provider refused \((\w+)(?:, until (\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ))?\)")
+
+
+async def pause_reason(db, minutes: int, now: datetime) -> str:
+    """Why no investigation runs now, or "": the model provider refused the newest failed run for credit or the
+    key less than `minutes` ago, or for a usage window that has not lifted yet."""
+    if minutes <= 0:
+        return ""
+    row = await last_refusal(db)
+    match = _REFUSAL.match(row.error or "") if row is not None else None
+    if match is None or row.finished_at is None:
+        return ""
+    kind, lifts = match.group(1), match.group(2)
+    until = datetime.strptime(lifts, "%Y-%m-%dT%H:%M:%SZ") if lifts else row.finished_at + timedelta(minutes=minutes)
+    if now >= until:
+        return ""
+    return (f"paused: the AI model provider refused ({kind}) at {row.finished_at:%Y-%m-%dT%H:%M:%S}Z; "
+            f"no investigation until {until:%Y-%m-%dT%H:%M:%S}Z")
+
+
+async def skip(db, inv_id: str, reason: str) -> None:
+    """A queued row the worker will not run (a pause began after it came)."""
+    async with db.async_session() as s:
+        await s.execute(update(AlertInvestigation).where(AlertInvestigation.id == inv_id).values(status="skipped", skip_reason=reason))
+        await s.commit()
 
 
 async def insert(db, **fields: Any) -> str:

@@ -50,7 +50,14 @@ _semaphores: dict[str, asyncio.Semaphore] = {}
 
 
 class ClaudeCodeError(RuntimeError):
-    """Claude Code is off or missing, refused the token, or ended without an answer."""
+    """Claude Code is off or missing, refused the token, or ended without an answer. subscription_error is the SDK's
+    AssistantMessage.error (billing_error, rate_limit, authentication_failed …), resets_at the Unix time a rejected
+    usage window lifts (RateLimitEvent) — what model_errors.classify reads."""
+
+    def __init__(self, message: str, *, subscription_error: Optional[str] = None, resets_at: Optional[int] = None):
+        super().__init__(message)
+        self.subscription_error = subscription_error
+        self.resets_at = resets_at
 
 
 def enabled() -> bool:
@@ -191,15 +198,26 @@ def usage_of(usage: Optional[dict]) -> dict[str, Any]:
             "prompt_tokens_details": {"cached_tokens": cached}, "cache_creation_input_tokens": created}
 
 
-def _failure(err: Exception, stderr: deque) -> ClaudeCodeError:
+def _note_refusal(sdk, message, seen: dict) -> None:
+    """Keep what the CLI said about a refused call: the assistant message's error and a rejected usage window."""
+    if isinstance(message, sdk.AssistantMessage) and getattr(message, "error", None):
+        seen["subscription_error"] = message.error
+    rate_limit = getattr(sdk, "RateLimitEvent", None)
+    if rate_limit is not None and isinstance(message, rate_limit):
+        info = message.rate_limit_info
+        if getattr(info, "status", "") == "rejected" and getattr(info, "resets_at", None):
+            seen["resets_at"] = info.resets_at
+
+
+def _failure(err: Exception, stderr: deque, seen: Optional[dict] = None) -> ClaudeCodeError:
     from app.services.redact import redact_text
     text = str(err) or type(err).__name__
     tail = " | ".join(stderr)
     message, _ = redact_text(f"{text}: {tail}" if tail else text)
-    return ClaudeCodeError(f"Claude Code failed: {message.strip()[:600]}")
+    return ClaudeCodeError(f"Claude Code failed: {message.strip()[:600]}", **(seen or {}))
 
 
-def _result_error(result) -> Optional[ClaudeCodeError]:
+def _result_error(result, seen: Optional[dict] = None) -> Optional[ClaudeCodeError]:
     """An error result as an exception; None for a successful one or a run cut off at max turns."""
     if not getattr(result, "is_error", False) or result.subtype == "error_max_turns":
         return None
@@ -207,12 +225,13 @@ def _result_error(result) -> Optional[ClaudeCodeError]:
     detail = result.result or "; ".join(result.errors or []) or result.subtype
     status = f" (HTTP {result.api_error_status})" if getattr(result, "api_error_status", None) else ""
     message, _ = redact_text(str(detail))
-    return ClaudeCodeError(f"Claude Code{status}: {message.strip()[:600]}")
+    return ClaudeCodeError(f"Claude Code{status}: {message.strip()[:600]}", **(seen or {}))
 
 
 async def _run(sdk, prompt: str, options, on_message: Callable[[Any], None], stderr: deque, lane: str = "chat"):
     """One Claude Code run within its lane's concurrency limit and the turn timeout; returns its result message."""
     result = None
+    seen: dict = {}
     async with _sem(lane):
         try:
             async with asyncio.timeout(turn_timeout()):
@@ -220,6 +239,7 @@ async def _run(sdk, prompt: str, options, on_message: Callable[[Any], None], std
                     if isinstance(message, sdk.ResultMessage):
                         result = message
                     else:
+                        _note_refusal(sdk, message, seen)
                         on_message(message)
         except TimeoutError:
             raise ClaudeCodeError(f"Claude Code did not finish within {int(turn_timeout())} s") from None
@@ -227,10 +247,10 @@ async def _run(sdk, prompt: str, options, on_message: Callable[[Any], None], std
             raise
         except Exception as e:
             if result is None:  # after an error result the SDK raises too: the result says more
-                raise _failure(e, stderr) from None
+                raise _failure(e, stderr, seen) from None
     if result is None:
-        raise ClaudeCodeError("Claude Code ended without a result")
-    error = _result_error(result)
+        raise ClaudeCodeError("Claude Code ended without a result", **seen)
+    error = _result_error(result, seen)
     if error:
         raise error
     return result

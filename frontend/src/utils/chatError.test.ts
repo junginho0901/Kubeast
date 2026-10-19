@@ -27,6 +27,19 @@ describe('chatErrorText', () => {
       .toBe('AI model call failed (Anthropic): 529 overloaded')
   })
 
+  it('says what kind of refusal the provider gave and who acts on it', async () => {
+    const ko_t = await tFor('ko')
+    const args = { provider: 'OpenAI', detail: '429 insufficient_quota' }
+    expect(chatErrorText(ko_t, 'x', 'modelCredit', args)).toBe(
+      'AI 모델을 호출하지 못했습니다 (OpenAI): 공급자 계정의 크레딧이나 사용 한도가 다 떨어졌습니다. 관리자가 Admin → AI Models에서 확인하거나 다른 모델을 고르세요. (429 insufficient_quota)')
+    expect(chatErrorText(ko_t, 'x', 'modelUsageWindow', { provider: 'Claude subscription', detail: 'rate_limit', retry_at: '2026-10-19T12:00:00Z' }))
+      .toContain('2026-10-19T12:00:00Z(UTC)에 풀립니다')
+    const en_t = await tFor('en')
+    for (const [key, words] of [['modelRateLimit', 'Try again in a minute'], ['modelAuth', 'refused the key or token'], ['modelUnavailable', 'overloaded or did not answer']]) {
+      expect(chatErrorText(en_t, 'x', key, args)).toContain(words)
+    }
+  })
+
   it('shows other errors as they came, and the server text for a key the catalog does not know', async () => {
     const t = await tFor('ko')
     expect(chatErrorText(t, 'upstream timeout')).toBe('upstream timeout')
