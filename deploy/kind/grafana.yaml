@@ -1,6 +1,7 @@
-# Grafana on kind, in the second cluster (kubeast-b), in front of that cluster's Prometheus and the
-# log-search Loki the way a central Grafana fronts its stores: Kubeast can read them through Grafana's
-# data source proxy, http://kubeast-b-control-plane:31300/api/datasources/proxy/uid/<prometheus|loki>,
+# Grafana on kind, in the second cluster (kubeast-b), in front of that cluster's Prometheus, the
+# log-search Loki and the Tempo of scripts/kind-tracing.sh the way a central Grafana fronts its stores:
+# Kubeast can read them through Grafana's data source proxy,
+# http://kubeast-b-control-plane:31300/api/datasources/proxy/uid/<prometheus|loki|tempo>,
 # with a service account token. The admin password is the Secret grafana-admin; the database is an
 # emptyDir. Applied by scripts/kind-grafana.sh.
 apiVersion: v1
@@ -28,6 +29,11 @@ data:
         type: loki
         access: proxy
         url: http://loki.loki.svc:3100
+      - name: Tempo
+        uid: tempo
+        type: tempo
+        access: proxy
+        url: http://tempo.tempo.svc:3200
 ---
 apiVersion: apps/v1
 kind: Deployment

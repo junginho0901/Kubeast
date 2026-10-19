@@ -837,6 +837,33 @@ features:
     searchUrl: ""
     traceIdLabels: [trace_id, traceid, traceID, traceId]
     traceIdPattern: ""
+  # Trace store reads for the AI's traces_* tools (off by default): Grafana
+  # Tempo's HTTP API at url — or a Grafana data source proxy URL
+  # (https://<grafana>/api/datasources/proxy/uid/<Tempo data source UID>, a
+  # Viewer service account token as Bearer, tenant empty). The AI writes
+  # TraceQL; k8s-service adds resource.<attributes.cluster> = <value of the
+  # cluster in clusters> to every spanset filter (and the namespace for a
+  # namespace-scoped grant) and refuses queries that read the parent, the
+  # root span or the whole trace's duration; a trace read by ID keeps only
+  # that cluster's spans. Who may read: anyone the cluster lets read pod
+  # logs in the namespace (log search's rule). Audited as k8s.traces.query.
+  # The auth Secret has key "authorization" (the whole header value).
+  traceStore:
+    enabled: false
+    url: ""
+    auth:
+      existingSecret: ""
+    tenant: ""
+    attributes:
+      cluster: k8s.cluster.name
+      namespace: k8s.namespace.name
+    clusters: {}
+    defaultRange: 1h
+    maxRange: 24h
+    maxTraces: 50
+    timeout: 15s
+    perUserPerMinute: 20
+    egressCIDRs: []
 
 # Argo CD guard. An object that carries Argo CD's tracking annotation
 # (argocd.argoproj.io/tracking-id, naming the object itself) is badged with

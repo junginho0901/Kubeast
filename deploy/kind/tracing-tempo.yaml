@@ -1,0 +1,101 @@
+# Trace store for the AI's traces_* tools (features.traceStore) on kind: one Tempo
+# 3.1.0 single binary in the second cluster (kubeast-b), the way a central trace
+# store serves several clusters. Local storage in an emptyDir (traces go with the
+# pod), OTLP intake on 4317/4318. Based on Tempo v3.1.0
+# example/docker-compose/single-binary/tempo.yaml. Applied by scripts/kind-tracing.sh.
+# NodePort 31200 is the query API Kubeast's k8s-service reads
+# (http://kubeast-b-control-plane:31200), 31318 the OTLP/HTTP intake the first
+# cluster's trace generator sends to.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tempo
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tempo
+  namespace: tempo
+data:
+  tempo.yaml: |
+    stream_over_http_enabled: true
+    server:
+      http_listen_port: 3200
+      log_level: warn
+    distributor:
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:4317
+            http:
+              endpoint: 0.0.0.0:4318
+    storage:
+      trace:
+        backend: local
+        wal:
+          path: /var/tempo/wal
+        local:
+          path: /var/tempo/blocks
+    usage_report:
+      reporting_enabled: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tempo
+  namespace: tempo
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: tempo}
+  template:
+    metadata:
+      labels: {app: tempo}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: tempo
+          image: grafana/tempo:3.1.0
+          imagePullPolicy: IfNotPresent
+          args: ["-config.file=/etc/tempo/tempo.yaml"]
+          ports:
+            - {name: http, containerPort: 3200}
+            - {name: otlp-grpc, containerPort: 4317}
+            - {name: otlp-http, containerPort: 4318}
+          readinessProbe:
+            httpGet: {path: /ready, port: http}
+            initialDelaySeconds: 10
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {memory: 768Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: config, mountPath: /etc/tempo}
+            - {name: data, mountPath: /var/tempo}
+      volumes:
+        - name: config
+          configMap: {name: tempo}
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tempo
+  namespace: tempo
+spec:
+  type: NodePort
+  selector: {app: tempo}
+  ports:
+    - {name: http, port: 3200, targetPort: http, nodePort: 31200}
+    - {name: otlp-grpc, port: 4317, targetPort: otlp-grpc}
+    - {name: otlp-http, port: 4318, targetPort: otlp-http, nodePort: 31318}

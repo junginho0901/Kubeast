@@ -228,7 +228,8 @@ async def test_list_clusters_names_the_tools_allowed_in_each(fakes, monkeypatch)
 
     # Feature tools follow k8s-service /features, asked as the caller for that cluster.
     feature_calls = []
-    features = {"prometheus": {"enabled": True}, "logSearch": {"enabled": True, "clusters": ["self"]}, "cost": {"enabled": True}, "policyReports": {"enabled": True}}
+    features = {"prometheus": {"enabled": True}, "logSearch": {"enabled": True, "clusters": ["self"]}, "cost": {"enabled": True}, "policyReports": {"enabled": True},
+                "traceStore": {"enabled": True, "clusters": ["self"]}}
 
     async def fetch_features(k8s_client, cluster):
         feature_calls.append((k8s_client.client.headers.get("Authorization"), k8s_client.client.params.get("cluster"), cluster))
@@ -258,10 +259,12 @@ async def test_list_clusters_names_the_tools_allowed_in_each(fakes, monkeypatch)
     tools = {c["id"]: c["tools"] for c in data["clusters"]}["self"]
     assert "issues" in tools and "prometheus_query" not in tools and "logsearch" not in tools
     prometheus = {"prometheus_query", "prometheus_metrics", "prometheus_labels", "prometheus_rules", "prometheus_targets"}
-    assert set(tools) == set(mcp_server.READ_TOOLS) - prometheus - {"logsearch", "loki_query", "loki_labels", "loki_patterns", "cost", "policy_reports", "k8s_diff"} - admin_only
+    assert set(tools) == set(mcp_server.READ_TOOLS) - prometheus - {"logsearch", "loki_query", "loki_labels", "loki_patterns", "cost", "policy_reports", "k8s_diff",
+                                                         "traces_search", "traces_get", "traces_tags", "traces_metrics", "traces_compare"} - admin_only
 
     # The admin (global *) is offered the hygiene report too.
-    features = {"prometheus": {"enabled": True}, "logSearch": {"enabled": True, "clusters": ["self"]}, "cost": {"enabled": True}, "policyReports": {"enabled": True}}
+    features = {"prometheus": {"enabled": True}, "logSearch": {"enabled": True, "clusters": ["self"]}, "cost": {"enabled": True}, "policyReports": {"enabled": True},
+                "traceStore": {"enabled": True, "clusters": ["self"]}}
 
     async def get_admin(url, **kwargs):
         assert kwargs["headers"]["Authorization"] == "Bearer tok-admin"

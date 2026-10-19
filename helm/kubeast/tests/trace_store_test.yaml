@@ -1,0 +1,90 @@
+suite: Trace store — env, auth header Secret, k8s-service egress, guards
+templates:
+  - configmap.yaml
+  - deployments.yaml
+  - networkpolicy.yaml
+  - secret.yaml
+tests:
+  - it: is off by default — no store settings, no header
+    asserts:
+      - equal:
+          path: data.TRACE_STORE_ENABLED
+          value: "false"
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - notExists:
+          path: data.TRACE_STORE_URL
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content: {name: TRACE_STORE_AUTH_HEADER}
+          any: true
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+  - it: renders the store through a Grafana proxy, attributes, clusters, limits, the header and the egress
+    set:
+      features.traceStore.enabled: true
+      features.traceStore.url: https://grafana.example.com/api/datasources/proxy/uid/tempo
+      features.traceStore.auth.existingSecret: grafana-reader
+      features.traceStore.attributes.namespace: namespace
+      features.traceStore.clusters: {alpha: eks-alpha, self: kind}
+      features.traceStore.maxRange: 6h
+      features.traceStore.egressCIDRs: [{cidr: 10.84.0.0/16, port: 3200}]
+    asserts:
+      - equal:
+          path: data.TRACE_STORE_URL
+          value: https://grafana.example.com/api/datasources/proxy/uid/tempo
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.TRACE_STORE_CLUSTERS
+          value: alpha=eks-alpha,self=kind
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.TRACE_STORE_ATTRIBUTE_CLUSTER
+          value: k8s.cluster.name
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.TRACE_STORE_ATTRIBUTE_NAMESPACE
+          value: namespace
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.TRACE_STORE_MAX_RANGE
+          value: 6h
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: TRACE_STORE_AUTH_HEADER
+            valueFrom: {secretKeyRef: {name: grafana-reader, key: authorization}}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+      - contains:
+          path: spec.egress
+          content:
+            to: [{ipBlock: {cidr: 10.84.0.0/16}}]
+            ports: [{protocol: TCP, port: 3200}]
+        template: networkpolicy.yaml
+        documentSelector: {path: metadata.name, value: RELEASE-NAME-k8s-service}
+  - it: refuses to render when enabled without a store or clusters
+    set:
+      features.traceStore.enabled: true
+      features.traceStore.clusters: {self: kind}
+    asserts:
+      - failedTemplate:
+          errorPattern: features.traceStore needs url and clusters
+        template: deployments.yaml
+  - it: refuses a URL that is not http(s)
+    set:
+      features.traceStore.enabled: true
+      features.traceStore.url: tempo:3200
+      features.traceStore.clusters: {self: kind}
+    asserts:
+      - failedTemplate:
+          errorPattern: features.traceStore.url must start with http
+        template: deployments.yaml

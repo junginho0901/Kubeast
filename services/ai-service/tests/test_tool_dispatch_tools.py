@@ -135,6 +135,11 @@ async def test_feature_tools_pass_declared_arguments_only():
          {"logql": 'sum(count_over_time({app="web"}[5m]))', "namespace": "shop", "since_time": "2d", "step": 60, "limit": 20}),
         ("loki_labels", {"label": "k8s_pod_name", "namespace": "shop", "since": "6h", "limit": 5}, {"label": "k8s_pod_name", "namespace": "shop", "since": "6h"}),
         ("loki_patterns", {"selector": '{app="web"}', "since": "3h", "logql": "x"}, {"selector": '{app="web"}', "since": "3h"}),
+        ("traces_search", {"traceql": ' { status = error } ', "namespace": "shop", "limit": "5", "logql": "x"}, {"traceql": "{ status = error }", "namespace": "shop", "limit": 5}),
+        ("traces_get", {"trace_id": "4bf92f3577b34da6", "since": "1h"}, {"trace_id": "4bf92f3577b34da6"}),
+        ("traces_tags", {"scope": "span", "tag": "span.http.route", "limit": 3}, {"scope": "span", "tag": "span.http.route"}),
+        ("traces_metrics", {"traceql": "{} | rate()", "since_time": "2d", "step": "60", "chart": True}, {"traceql": "{} | rate()", "since_time": "2d", "step": 60}),
+        ("traces_compare", {"traceql": "{ kind = server }", "limit": 50}, {"traceql": "{ kind = server }", "limit": 50}),
     ]:
         service._call_tool_server.reset_mock()
         await execute_function_with_context(service, tool, given, _ctx())

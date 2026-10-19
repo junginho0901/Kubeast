@@ -54,6 +54,11 @@ def test_tool_usage_guide():
         "loki_query",
         "loki_labels",
         "loki_patterns",
+        "traces_search",
+        "traces_get",
+        "traces_tags",
+        "traces_metrics",
+        "traces_compare",
         "helm_read",
         "policy_reports",
         "cost",
@@ -97,6 +102,10 @@ def test_not_found_protocol():
     for phrase in ("`loki_query` 지표 질의로 세세요", "count_over_time", "`loki_labels`로 먼저", "`loki_patterns`로 유형과 횟수"):
         assert phrase in logs, phrase
     assert "그 앞뒤 몇 분의 로그" in SYSTEM_MESSAGE.split("**시각으로 이으세요**")[1].split("\n")[0]
+    # Traces: names first, a baseline before a "slow" threshold, open a sample, metrics for trends, what is refused.
+    tr = SYSTEM_MESSAGE.split("**트레이스는 기준선부터 보세요**")[1].split("\n")[0]
+    for phrase in ("`traces_tags`로 먼저", "`traces_compare`로 p50·p90", "`traces_get`으로 열어", "`traces_metrics`", "`parent.`"):
+        assert phrase in tr, phrase
     assert "all_namespaces=true" not in SYSTEM_MESSAGE.split("### 못 찾았을 때")[0].split("### 네임스페이스/리소스 식별 규칙")[1], (
         "느슨한 이름은 k8s_find_resource로 찾는다 (옛 all_namespaces 규칙 제거)"
     )

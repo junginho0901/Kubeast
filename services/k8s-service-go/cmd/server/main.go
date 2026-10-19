@@ -27,6 +27,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logsearch"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/routes"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/traces"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/tracing"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/ws"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
@@ -187,6 +188,19 @@ func main() {
 		searcher.OwnStoreClusters = k8sSvc.LogStoreClusters
 		h.SetLogSearch(searcher)
 		slog.Info("log search enabled", "backend", lsCfg.Backend, "clusters", lsCfg.ClusterIDs(), "max_range", lsCfg.MaxRange.String(), "max_lines", lsCfg.MaxLines)
+	}
+
+	// Trace store reads for the AI's traces_* tools (off unless
+	// TRACE_STORE_ENABLED): a configuration that could not keep reads to one
+	// cluster stops the service.
+	if tsCfg := traces.LoadConfig(); tsCfg.Enabled {
+		store, err := traces.New(tsCfg)
+		if err != nil {
+			slog.Error("invalid trace store configuration", "err", err)
+			os.Exit(1)
+		}
+		h.SetTraceStore(store)
+		slog.Info("trace store reads enabled", "clusters", tsCfg.ClusterIDs(), "max_range", tsCfg.MaxRange.String())
 	}
 
 	// Terminal session recording (off unless SESSION_RECORDING_ENABLED): the

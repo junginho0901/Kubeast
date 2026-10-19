@@ -136,6 +136,11 @@ var argRules = map[string]argCheck{
 	"job":       checkPrintable(200),
 	// LogQL (the selector of loki_patterns is the "selector" rule above).
 	"logql": checkLogQL,
+	// TraceQL and the trace tools.
+	"traceql":  checkTraceQL,
+	"trace_id": checkTraceID,
+	"scope":    checkEnum("resource", "span", "intrinsic", "event", "link", "instrumentation"),
+	"tag":      checkTraceTag,
 }
 
 // validateToolArgs rejects any argument that would not be read by kubectl as
@@ -314,6 +319,32 @@ func checkPromQL(field, v string) error {
 func checkLogQL(field, v string) error {
 	if len(v) > 4096 || strings.IndexFunc(v, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
 		return badArg(field, v, "a LogQL query of at most 4096 printable characters")
+	}
+	return nil
+}
+
+func checkTraceQL(field, v string) error {
+	if len(v) > 4096 || strings.IndexFunc(v, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
+		return badArg(field, v, "a TraceQL query of at most 4096 printable characters")
+	}
+	return nil
+}
+
+var (
+	traceIDRe  = regexp.MustCompile(`^([0-9a-fA-F]{16}|[0-9a-fA-F]{32})$`)
+	traceTagRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.:/-]{0,199}$`)
+)
+
+func checkTraceID(field, v string) error {
+	if !traceIDRe.MatchString(v) {
+		return badArg(field, v, "a trace ID of 16 or 32 hex digits")
+	}
+	return nil
+}
+
+func checkTraceTag(field, v string) error {
+	if !traceTagRe.MatchString(v) {
+		return badArg(field, v, "an attribute name such as resource.service.name or span.http.route")
 	}
 	return nil
 }

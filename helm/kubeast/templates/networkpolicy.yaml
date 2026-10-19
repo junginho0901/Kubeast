@@ -388,6 +388,17 @@ spec:
           port: {{ if kindIs "map" . }}{{ .port | default 443 }}{{ else }}443{{ end }}
     {{- end }}
     {{- end }}
+    {{- if .Values.features.traceStore.enabled }}
+    {{- range .Values.features.traceStore.egressCIDRs }}
+    # trace store (features.traceStore.egressCIDRs)
+    - to:
+        - ipBlock:
+            cidr: {{ if kindIs "map" . }}{{ .cidr }}{{ else }}{{ . }}{{ end }}
+      ports:
+        - protocol: TCP
+          port: {{ if kindIs "map" . }}{{ .port | default 443 }}{{ else }}443{{ end }}
+    {{- end }}
+    {{- end }}
 {{- if .Values.ai.enabled }}
 ---
 # tool-server: ai-service 에서 inbound, kube-apiserver + ai-service egress

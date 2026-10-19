@@ -145,3 +145,15 @@ async def test_a_range_result_too_long_to_read_reaches_the_model_summed_up():
         iteration=1, audit_actor=None, audit_http=None, call_id=1,
     )
     assert json.loads(llm_text)["results"][0]["metric"]["pod"] == "web-0"
+
+
+@pytest.mark.asyncio
+async def test_traces_metrics_draws_with_its_traceql():
+    res = json.dumps({"traceql": "{ status = error } | rate() by (resource.service.name)", "kind": "metric", "range": True, "series": 1,
+                      "results": [{"metric": {"resource.service.name": "cart"}, "points": [{"t": 1700000000, "v": 0.5}, {"t": 1700000060, "v": 1.5}]}]})
+    events, entry, _ = await streaming._call_tool(
+        _Service(res), None, None, "s1", [], None, "traces_metrics", {"traceql": "x", "chart": True, "title": "오류율", "unit": "rate"},
+        iteration=1, audit_actor=None, audit_http=None, call_id=0,
+    )
+    chart = json.loads(events[0].removeprefix("data: "))["chart"]
+    assert chart["promql"].startswith("{ status = error }") and chart["unit"] == "rate" and chart["series"][0]["points"][1] == [1700000060, 1.5]

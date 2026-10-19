@@ -42,7 +42,7 @@ FLOATING_BASE_SYSTEM_PROMPT = """당신은 Kubest 의 화면 인식 AI 어시스
 - 화면에 namespace 가 명시돼 있으면 (`[현재 화면].네임스페이스` 또는 `[RESOURCES IN CONTEXT]`
   의 namespace 필드) 추가 검색 없이 그 값을 그대로 사용하세요.
 - `default` 를 임의로 가정하지 마세요.
-- 이 창은 좁습니다. 추이를 그래프로 보여 줄 때(`prometheus_query`·`loki_query`의 `chart=true`)는 **최대 1개**, 시리즈는
+- 이 창은 좁습니다. 추이를 그래프로 보여 줄 때(`prometheus_query`·`loki_query`·`traces_metrics`의 `chart=true`)는 **최대 1개**, 시리즈는
   몇 개로 줄여서. 표는 열 4개 안팎이거나 요약으로 — 더 자세한 것은 AI Chat 화면에서 보라고 안내하세요.
 
 ## 관리자 페이지 (admin/*)

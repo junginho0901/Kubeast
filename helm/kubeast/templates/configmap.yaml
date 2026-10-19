@@ -234,6 +234,29 @@ data:
   TRACING_TRACE_ID_PATTERN: {{ .traceIdPattern | quote }}
 {{- end }}
 {{- end }}
+{{- with .Values.features.traceStore }}
+  TRACE_STORE_ENABLED: {{ .enabled | quote }}
+{{- if .enabled }}
+{{- if or (not .url) (empty .clusters) }}
+  {{- fail "features.traceStore needs url and clusters (Kubeast cluster ID: value of attributes.cluster) when enabled" }}
+{{- end }}
+{{- if not (regexMatch "^https?://" .url) }}
+  {{- fail "features.traceStore.url must start with http:// or https://" }}
+{{- end }}
+  TRACE_STORE_URL: {{ .url | quote }}
+  TRACE_STORE_TENANT: {{ .tenant | quote }}
+  TRACE_STORE_ATTRIBUTE_CLUSTER: {{ .attributes.cluster | quote }}
+  TRACE_STORE_ATTRIBUTE_NAMESPACE: {{ .attributes.namespace | quote }}
+  {{- $pairs := list }}
+  {{- range $id, $value := .clusters }}{{ $pairs = append $pairs (printf "%s=%s" $id $value) }}{{ end }}
+  TRACE_STORE_CLUSTERS: {{ join "," $pairs | quote }}
+  TRACE_STORE_DEFAULT_RANGE: {{ .defaultRange | quote }}
+  TRACE_STORE_MAX_RANGE: {{ .maxRange | quote }}
+  TRACE_STORE_MAX_TRACES: {{ .maxTraces | quote }}
+  TRACE_STORE_TIMEOUT: {{ .timeout | quote }}
+  TRACE_STORE_PER_USER_PER_MINUTE: {{ .perUserPerMinute | quote }}
+{{- end }}
+{{- end }}
   GITOPS_ARGOCD_ENABLED: {{ .Values.gitops.argocd.enabled | quote }}
   GITOPS_ARGOCD_MODE: {{ .Values.gitops.argocd.mode | quote }}
   GITOPS_ARGOCD_TRACKING_ANNOTATION: {{ .Values.gitops.argocd.trackingAnnotation | quote }}

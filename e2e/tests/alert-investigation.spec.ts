@@ -17,6 +17,7 @@ const READ_TOOLS = new Set([
   'k8s_get_events', 'k8s_get_available_api_resources', 'k8s_get_cluster_configuration', 'k8s_check_service_connectivity', 'k8s_describe_resource',
   'k8s_find_resource', 'k8s_explain', 'issues', 'prometheus_query', 'prometheus_metrics', 'prometheus_labels',
   'prometheus_rules', 'prometheus_targets', 'logsearch', 'loki_query', 'loki_labels', 'loki_patterns',
+  'traces_search', 'traces_get', 'traces_tags', 'traces_metrics', 'traces_compare',
   'policy_reports', 'helm_read', 'cost', 'optimization', 'can_i', 'resource_graph',
   'k8s_jq_query', 'k8s_tabular_query', 'k8s_count', 'gitops_status',
 ])

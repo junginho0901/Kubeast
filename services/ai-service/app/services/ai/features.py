@@ -31,6 +31,13 @@ def _logsearch_on(features: Dict[str, Any], cluster: str) -> bool:
     return not cluster or cluster in clusters
 
 
+def _trace_store_on(features: Dict[str, Any], cluster: str) -> bool:
+    ts = features.get("traceStore") or {}
+    if not ts.get("enabled"):
+        return False
+    return not cluster or cluster in (ts.get("clusters") or [])
+
+
 def _cost_on(features: Dict[str, Any], cluster: str) -> bool:
     return bool((features.get("cost") or {}).get("enabled"))
 
@@ -50,6 +57,11 @@ GATES: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
     "loki_query": _logsearch_on,
     "loki_labels": _logsearch_on,
     "loki_patterns": _logsearch_on,
+    "traces_search": _trace_store_on,
+    "traces_get": _trace_store_on,
+    "traces_tags": _trace_store_on,
+    "traces_metrics": _trace_store_on,
+    "traces_compare": _trace_store_on,
     "cost": _cost_on,
     "policy_reports": _policy_reports_on,
 }

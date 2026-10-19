@@ -1,7 +1,17 @@
-# Kubeast values for trace links on kind (scripts/kind-tracing.sh up): links to the Jaeger in kubeast-b
-# (deploy/kind/tracing-jaeger.yaml) through a port-forward on the laptop.
+# Kubeast values for traces on kind (scripts/kind-tracing.sh up): links to the Jaeger in kubeast-b
+# (deploy/kind/tracing-jaeger.yaml) through a port-forward on the laptop, and the AI's trace reads
+# from the Tempo in kubeast-b (deploy/kind/tracing-tempo.yaml) by its container name on the kind
+# docker network; k8s-service's NetworkPolicy gets that network on the NodePort.
 features:
   tracing:
     enabled: true
     traceUrl: "http://localhost:16686/trace/{{traceId}}"
     searchUrl: "http://localhost:16686/search?service={{service}}"
+  traceStore:
+    enabled: true
+    url: http://kubeast-b-control-plane:31200
+    clusters:
+      self: kubeast
+      default: kubeast-b
+    egressCIDRs:
+      - {cidr: 172.18.0.0/16, port: 31200}

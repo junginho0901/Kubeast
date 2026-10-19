@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -52,9 +53,29 @@ func (h *Handler) LogQLSearchAll(w http.ResponseWriter, r *http.Request) {
 // get pods/log as the user and the per-user rate. Refusals past the request
 // read are audited as action ("" = a read that is not audited).
 func (h *Handler) openLogDoor(w http.ResponseWriter, r *http.Request, namespace, action string, prepare func() error, after func() json.RawMessage) bool {
+	var limit int
+	if h.logSearch != nil {
+		limit = h.logSearch.Config().PerUserPerMinute
+	}
+	return h.openReadDoor(w, r, readStore{h.logSearch, "log search", "log searches", limit}, namespace, action, prepare, after)
+}
+
+// readStore is a store read through the structured log search's door: the
+// log store, the trace store (an application's own telemetry: who may read a
+// pod's logs may read its traces).
+type readStore struct {
+	store interface {
+		Configured(ctx context.Context, id string) bool
+		Allow(user string) bool
+	}
+	name, reads string
+	perMinute   int
+}
+
+func (h *Handler) openReadDoor(w http.ResponseWriter, r *http.Request, rs readStore, namespace, action string, prepare func() error, after func() json.RawMessage) bool {
 	id, _ := cluster.FromContext(r.Context())
-	if !h.logSearch.Configured(r.Context(), string(id)) {
-		response.Error(w, http.StatusNotFound, "log search is not configured for this cluster")
+	if !rs.store.Configured(r.Context(), string(id)) {
+		response.Error(w, http.StatusNotFound, rs.name+" is not configured for this cluster")
 		return false
 	}
 	if err := h.requirePermissionForCluster(r, "resource.pod.read"); err != nil {
@@ -85,8 +106,8 @@ func (h *Handler) openLogDoor(w http.ResponseWriter, r *http.Request, namespace,
 	if !allowed {
 		return refuse(http.StatusForbidden, fmt.Errorf("forbidden: the cluster does not let you read pod logs in %s", namespaceOrAll(namespace)))
 	}
-	if !h.logSearch.Allow(payload.UserID) {
-		return refuse(http.StatusTooManyRequests, fmt.Errorf("too many log searches: %d per minute", h.logSearch.Config().PerUserPerMinute))
+	if !rs.store.Allow(payload.UserID) {
+		return refuse(http.StatusTooManyRequests, fmt.Errorf("too many %s: %d per minute", rs.reads, rs.perMinute))
 	}
 	if action != "" {
 		if rerr := h.auditReady(r); rerr != nil {

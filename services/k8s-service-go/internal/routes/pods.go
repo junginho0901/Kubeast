@@ -34,6 +34,17 @@ func RegisterPods(r chi.Router, h *handler.Handler) {
 	r.Get("/api/v1/logsearch/patterns", h.LogPatternsAll)
 	r.Get("/api/v1/namespaces/{namespace}/logsearch/logql", h.LogQLSearchNamespace)
 	r.Get("/api/v1/logsearch/logql", h.LogQLSearchAll)
+	// The AI's traces_* tools (features.traceStore), through the same door: TraceQL with the scope in every filter.
+	r.Get("/api/v1/namespaces/{namespace}/traces/search", h.TraceSearchNamespace)
+	r.Get("/api/v1/traces/search", h.TraceSearchAll)
+	r.Get("/api/v1/namespaces/{namespace}/traces/metrics", h.TraceMetricsNamespace)
+	r.Get("/api/v1/traces/metrics", h.TraceMetricsAll)
+	r.Get("/api/v1/namespaces/{namespace}/traces/compare", h.TraceCompareNamespace)
+	r.Get("/api/v1/traces/compare", h.TraceCompareAll)
+	r.Get("/api/v1/namespaces/{namespace}/traces/tags", h.TraceTagsNamespace)
+	r.Get("/api/v1/traces/tags", h.TraceTagsAll)
+	r.Get("/api/v1/namespaces/{namespace}/traces/trace/{traceID}", h.TraceGetNamespace)
+	r.Get("/api/v1/traces/trace/{traceID}", h.TraceGetAll)
 	r.Delete("/api/v1/namespaces/{namespace}/pods/{pod_name}", h.DeletePod)
 	r.Get("/api/v1/namespaces/{namespace}/pods/{name}/exec/ws", h.PodExecWS)
 }

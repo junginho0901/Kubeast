@@ -1,4 +1,4 @@
-"""A graph under the answer: when the model runs prometheus_query (or a loki_query metric query) with chart=true, the
+"""A graph under the answer: when the model runs prometheus_query (or a loki_query metric query, or traces_metrics) with chart=true, the
 range result becomes chart data the chat draws (and the saved message keeps), so the user sees the trend the answer talks
 about. The query text goes in `promql` either way."""
 
@@ -8,7 +8,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-CHART_TOOLS = frozenset({"prometheus_query", "loki_query"})
+CHART_TOOLS = frozenset({"prometheus_query", "loki_query", "traces_metrics"})
 CHART_UNITS = frozenset({"bytes", "percent", "cores", "seconds", "count", "rate"})
 MAX_SERIES = 10
 MAX_TITLE = 80
@@ -90,7 +90,8 @@ def chart_from_result(args: dict[str, Any], result: str) -> Optional[dict[str, A
     keys = sorted({k for m, _ in series for k in m})
     common = {k: series[0][0][k] for k in keys if all(m.get(k) == series[0][0].get(k) for m, _ in series)}
     differing = [k for k in keys if k not in common]
-    promql = str(data.get("promql") or data.get("logql") or args.get("promql") or args.get("logql") or "")
+    promql = str(data.get("promql") or data.get("logql") or data.get("traceql")
+                 or args.get("promql") or args.get("logql") or args.get("traceql") or "")
     unit = str(args.get("unit") or "").strip().lower()
     title = str(args.get("title") or "").strip()[:MAX_TITLE] or promql[:MAX_TITLE]
     return {

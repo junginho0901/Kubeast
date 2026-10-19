@@ -458,6 +458,129 @@ K8S_READONLY_TOOLS: List[Dict] = [
     {
         "type": "function",
         "function": {
+            "name": "traces_search",
+            "description": (
+                "TraceQL search on the cluster's trace store (Tempo): the newest matching traces (limit, max 20) with the spans that matched. "
+                "TraceQL: spanset filters { … } joined by && || and structural operators (>> descendant, > child, ~ sibling), conditions on "
+                "resource.<attr> (resource.service.name, resource.k8s.namespace.name, resource.k8s.pod.name), span.<attr> (span.http.route, "
+                "span.http.response.status_code, span.db.system) and intrinsics (name, status = error, kind = server, duration > 500ms), "
+                "e.g. { resource.service.name = \"cart\" && status = error } or { span.http.route = \"/checkout\" && duration > 2s } >> "
+                "{ span.db.system = \"postgresql\" }. Find attribute names and values with traces_tags first instead of guessing. For \"slow\" "
+                "requests do not guess a threshold: get the distribution with traces_compare (or a search without a duration filter) first. "
+                "Kubeast adds the cluster and namespace to every { } (effective_query shows what ran); queries reading the parent span (parent.), "
+                "the root span (rootName, rootServiceName, trace:rootService) or the whole trace's duration (traceDuration, trace:duration) are "
+                "refused — they can sit outside your scope. {\"status\":\"unavailable\"} = no trace store for this cluster. A grant limited to "
+                "namespaces must name one of them. Only offered where the cluster has a trace store."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "traceql": {"type": "string", "description": "The TraceQL query"},
+                    "namespace": {"type": "string", "description": "Namespace the query is limited to (empty = every namespace, for an unscoped grant)"},
+                    "since": {"type": "string", "description": "Window back from now, e.g. 15m, 2h, 24h (default 1h)"},
+                    "since_time": {"type": "string", "description": "Start of a fixed window: RFC3339 time, or 24h / 2d back from now"},
+                    "until_time": {"type": "string", "description": "End of a fixed window, RFC3339 (default now)"},
+                    "limit": {"type": "integer", "description": "Maximum traces (default and max 20)"},
+                },
+                "required": ["traceql"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "traces_get",
+            "description": (
+                "One trace by its ID (16 or 32 hex digits, e.g. from traces_search or a log line's trace ID): its spans in your cluster and "
+                "namespace — service, name, kind, start, duration, status and attributes — errors first, then by start (max 100). Spans of the "
+                "trace in another cluster or namespace are not shown (hidden counts them). Use it to see where a slow or failed request spent "
+                "its time. Only offered where the cluster has a trace store."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "trace_id": {"type": "string", "description": "The trace ID"},
+                    "namespace": {"type": "string", "description": "Namespace the spans are limited to (empty = every namespace, for an unscoped grant)"},
+                },
+                "required": ["trace_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "traces_tags",
+            "description": (
+                "Span attribute names on the cluster's traces grouped by scope (resource, span, intrinsic …; scope= to keep one), or the values "
+                "of one attribute (tag=resource.service.name, tag=span.http.route), within since (default 1h) — only your cluster's and "
+                "namespace's spans. Call it before writing TraceQL so names and values exist. Only offered where the cluster has a trace store."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "scope": {"type": "string", "description": "resource, span, intrinsic, event, link or instrumentation (empty = all)"},
+                    "tag": {"type": "string", "description": "List this attribute's values, with its scope (resource.service.name)"},
+                    "namespace": {"type": "string", "description": "Only this namespace's spans (empty = every namespace, for an unscoped grant)"},
+                    "since": {"type": "string", "description": "Window, e.g. 1h, 6h, 24h (default 1h)"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "traces_metrics",
+            "description": (
+                "TraceQL metrics over time, one series per group: a filter then a function — rate() (spans per second), count_over_time(), "
+                "quantile_over_time(duration, .95), avg_over_time(duration) — with by (…), e.g. { resource.service.name = \"cart\" && "
+                "status = error } | rate() by (span.http.route) for errors per route, or { kind = server } | quantile_over_time(duration, .95) "
+                "by (resource.service.name) for p95 latency per service. Same scope rules as traces_search. To show the trend to the user, set "
+                "chart=true with a short title and unit (rate, seconds, count). Only offered where the cluster has a trace store."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "traceql": {"type": "string", "description": "The TraceQL metrics query"},
+                    "namespace": {"type": "string", "description": "Namespace the query is limited to (empty = every namespace, for an unscoped grant)"},
+                    "since": {"type": "string", "description": "Window back from now, e.g. 30m, 6h (default 1h)"},
+                    "since_time": {"type": "string", "description": "Start of a fixed window: RFC3339 time, or 24h / 2d back from now"},
+                    "until_time": {"type": "string", "description": "End of a fixed window, RFC3339 (default now)"},
+                    "step": {"type": "integer", "description": "Seconds between points (default: the window / 120, at least 15)"},
+                    "chart": {"type": "boolean", "description": "Also show the series to the user as a graph under your answer"},
+                    "title": {"type": "string", "description": "Short title of that graph, in the user's language"},
+                    "unit": {"type": "string", "description": "Unit of the values for the graph: rate, seconds, count or percent"},
+                },
+                "required": ["traceql"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "traces_compare",
+            "description": (
+                "How long matching requests take: over the newest matching traces (limit, default 50), the p50 / p90 / min / max of each "
+                "trace's slowest matched span and the fastest, typical and slowest samples with their trace IDs — the baseline to set a "
+                "\"slow\" threshold and the traces to open with traces_get. traceql picks the spans, e.g. { resource.service.name = "
+                "\"cart\" && kind = server }. Same scope rules as traces_search. Only offered where the cluster has a trace store."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "traceql": {"type": "string", "description": "The TraceQL filter for the spans to compare"},
+                    "namespace": {"type": "string", "description": "Namespace the query is limited to (empty = every namespace, for an unscoped grant)"},
+                    "since": {"type": "string", "description": "Window back from now, e.g. 30m, 6h (default 1h)"},
+                    "since_time": {"type": "string", "description": "Start of a fixed window: RFC3339 time, or 24h / 2d back from now"},
+                    "until_time": {"type": "string", "description": "End of a fixed window, RFC3339 (default now)"},
+                    "limit": {"type": "integer", "description": "Traces to sample (default 50)"},
+                },
+                "required": ["traceql"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "policy_reports",
             "description": (
                 "Policy results from PolicyReport / ClusterPolicyReport (wgpolicyk8s.io — Kyverno, Trivy Operator and others write them). "

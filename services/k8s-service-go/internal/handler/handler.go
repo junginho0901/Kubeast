@@ -18,6 +18,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logfiles"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logsearch"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/traces"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/tracing"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
@@ -44,6 +45,8 @@ type Handler struct {
 	logSearch *logsearch.Searcher
 	// tracing holds the trace link templates (Enabled false: no links).
 	tracing tracing.Config
+	// traceStore reads the trace store (nil: trace reads off).
+	traceStore *traces.Store
 	// logSearchCanI replaces the pods/log access review in tests.
 	logSearchCanI func(ctx context.Context, namespace string) (bool, error)
 }

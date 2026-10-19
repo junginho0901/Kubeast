@@ -199,6 +199,31 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Handler:     handleLokiPatterns,
 	})
 	register(ToolDefinition{
+		Name:        "traces_search",
+		Description: "TraceQL search on the cluster's trace store (Tempo): the newest matching traces and the spans that matched",
+		Handler:     handleTracesSearch,
+	})
+	register(ToolDefinition{
+		Name:        "traces_get",
+		Description: "One trace by ID: its spans in your cluster and namespace, errors first",
+		Handler:     handleTracesGet,
+	})
+	register(ToolDefinition{
+		Name:        "traces_tags",
+		Description: "Span attribute names by scope, or one attribute's values, on the cluster's traces",
+		Handler:     handleTracesTags,
+	})
+	register(ToolDefinition{
+		Name:        "traces_metrics",
+		Description: "TraceQL metrics (rate, error rate, latency quantiles) over time, as series",
+		Handler:     handleTracesMetrics,
+	})
+	register(ToolDefinition{
+		Name:        "traces_compare",
+		Description: "Fastest, typical and slowest matching traces with p50/p90",
+		Handler:     handleTracesCompare,
+	})
+	register(ToolDefinition{
 		Name:        "issues",
 		Description: "Kubeast's issue check: failing pods, workloads, nodes, PVCs and Warning events in one pass",
 		Handler:     handleIssues,
