@@ -212,9 +212,9 @@ async def test_a_chat_turn_runs_the_tools_here_and_streams_like_the_api_key_path
     sdk = on([("text", "Checking."), ("call", "list_clusters", {}), ("text", "You can use 2 clusters."), ("result", OK)])
     calls = []
 
-    async def run_tool(name, args, turn):
-        calls.append((name, args, turn))
-        return [f"data: {json.dumps({'function_result': name, 'result': '[self, default]'})}\n\n"], '["self","default"]'
+    async def run_tool(name, args, turn, call_id=None):
+        calls.append((name, args, turn, call_id))
+        return [f"data: {json.dumps({'function_result': name, 'result': '[self, default]', 'call_id': call_id})}\n\n"], '["self","default"]'
 
     chat = claude_code.ClaudeCodeChat(model="claude-haiku-5-5", token="sk-ant-oat01-token")
     out = claude_code.TurnResult()
@@ -223,11 +223,12 @@ async def test_a_chat_turn_runs_the_tools_here_and_streams_like_the_api_key_path
 
     assert events == [
         {"content": "Checking."},
-        {"function": "list_clusters", "args": {}},
-        {"function_result": "list_clusters", "result": "[self, default]"},
+        {"function": "list_clusters", "args": {}, "call_id": 0},
+        {"function_result": "list_clusters", "result": "[self, default]", "call_id": 0},
         {"content": "\n\nYou can use 2 clusters."},
     ]
-    assert calls == [("list_clusters", {}, 1)]
+    # The call is numbered at its start and the number reaches the tool, so the result names the same call.
+    assert calls == [("list_clusters", {}, 1, 0)]
     assert sdk.state["tool_results"] == [{"content": [{"type": "text", "text": '["self","default"]'}]}]
     assert out.text == "You can use 2 clusters." and out.tool_calls == 1 and out.turns == 2 and out.finish_reason == "stop"
     assert out.usage == {"prompt_tokens": 2099, "completion_tokens": 57, "total_tokens": 2156,
@@ -248,13 +249,13 @@ async def test_a_chat_turn_streams_the_answer_as_it_is_written(on):
     sdk = on([("stream", ["Check", "ing."]), ("call", "list_clusters", {}), ("stream", ["You can use ", "2 clusters."]),
               ("result", ResultMessage(subtype="success", is_error=False, num_turns=2, result=None, usage=USAGE))])
 
-    async def run_tool(name, args, turn):
+    async def run_tool(name, args, turn, call_id=None):
         return [], "[]"
 
     out = claude_code.TurnResult()
     events = sse([e async for e in claude_code.ClaudeCodeChat(model="m", token="t").turn(
         messages=[{"role": "user", "content": "x"}], tools=TOOLS, run_tool=run_tool, out=out)])
-    assert events == [{"content": "Check"}, {"content": "ing."}, {"function": "list_clusters", "args": {}},
+    assert events == [{"content": "Check"}, {"content": "ing."}, {"function": "list_clusters", "args": {}, "call_id": 0},
                       {"content": "\n\nYou can use "}, {"content": "2 clusters."}]
     assert out.text == "You can use 2 clusters." and out.turns == 2
     assert sdk.state["options"][0][1].include_partial_messages is True
@@ -265,7 +266,7 @@ async def test_a_message_that_came_without_pieces_is_still_sent_whole(on):
     """Pieces skip only their own message: a later message with no deltas goes out whole."""
     on([("stream", ["Checking."]), ("call", "list_clusters", {}), ("text", "Two clusters."), ("result", OK)])
 
-    async def run_tool(name, args, turn):
+    async def run_tool(name, args, turn, call_id=None):
         return [], "[]"
 
     out = claude_code.TurnResult()
@@ -279,7 +280,7 @@ async def test_without_a_result_text_the_answer_is_what_follows_the_last_tool_ca
     on([("text", "Checking."), ("call", "list_clusters", {}), ("text", "Two clusters."), ("text", "self and default."),
         ("result", ResultMessage(subtype="success", is_error=False, num_turns=2, result=None, usage=USAGE))])
 
-    async def run_tool(name, args, turn):
+    async def run_tool(name, args, turn, call_id=None):
         return [], "[]"
 
     out = claude_code.TurnResult()
@@ -312,7 +313,7 @@ async def test_max_turns_ends_the_turn_without_an_answer(on):
     # Measured 10-17 on Claude Code 2.1.301: max_turns=N stops after N tool calls and reports num_turns N+1.
     on([("call", "list_clusters", {}), ("result", ResultMessage(subtype="error_max_turns", is_error=True, num_turns=2))])
 
-    async def run_tool(name, args, turn):
+    async def run_tool(name, args, turn, call_id=None):
         return [], "[]"
 
     out = claude_code.TurnResult()
@@ -328,7 +329,7 @@ async def test_a_response_numbers_its_tool_calls_as_one_iteration(on):
         ("text", "Both fine."), ("result", OK)])
     seen = []
 
-    async def run_tool(name, args, turn):
+    async def run_tool(name, args, turn, call_id=None):
         seen.append((name, turn))
         return [], "[]"
 
@@ -371,7 +372,7 @@ async def test_an_investigation_has_its_own_slot_beside_the_chat(on):
 async def test_an_investigation_turn_runs_in_its_own_lane(on):
     sdk = on([("sleep", 0.05), ("result", OK)])
 
-    async def run_tool(name, args, turn):
+    async def run_tool(name, args, turn, call_id=None):
         return [], "[]"
 
     async def investigation_turn():
@@ -387,7 +388,7 @@ async def test_an_investigation_turn_runs_in_its_own_lane(on):
 async def test_a_turn_limit_overrides_the_configured_max_turns(on):
     sdk = on([("result", OK)])
 
-    async def run_tool(name, args, turn):
+    async def run_tool(name, args, turn, call_id=None):
         return [], "[]"
 
     out = claude_code.TurnResult()

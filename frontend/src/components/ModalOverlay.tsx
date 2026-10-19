@@ -7,12 +7,15 @@ interface ModalOverlayProps {
   children: ReactNode
   onClose?: () => void
   closeOnOverlayClick?: boolean
+  // a fixed layer instead of the stack's, e.g. 1400 to open above the floating chat (z 1300)
+  zIndex?: number
 }
 
-export function ModalOverlay({ children, onClose, closeOnOverlayClick = true }: ModalOverlayProps) {
+export function ModalOverlay({ children, onClose, closeOnOverlayClick = true, zIndex: layer }: ModalOverlayProps) {
   const mouseDownTargetRef = useRef<EventTarget | null>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
-  const { isTop, zIndex } = useModalStackEntry(true)
+  const { isTop, zIndex: stackZ } = useModalStackEntry(true)
+  const zIndex = layer ?? stackZ
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

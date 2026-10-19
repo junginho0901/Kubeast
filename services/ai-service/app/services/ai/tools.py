@@ -251,7 +251,9 @@ K8S_READONLY_TOOLS: List[Dict] = [
                 "them first with prometheus_metrics and prometheus_labels. Aggregate when many series may match (sum by (namespace), topk(10, …)): "
                 "results are capped at 100 series and 120 points each, and a result marked truncated must not be answered from — narrow it and query "
                 "again. {\"status\":\"unavailable\"} means no Prometheus reaches this cluster: use get_pod_metrics / get_node_metrics for current "
-                "values and say that history is unavailable. The tool is only offered when the cluster has the Prometheus feature."
+                "values and say that history is unavailable. The tool is only offered when the cluster has the Prometheus feature. To show the "
+                "user a trend, set chart=true with a short title and the unit: the user sees that range result as a graph under your answer — "
+                "at most 2 graphs per answer, aggregated to a few series (topk) first."
             ),
             "parameters": {
                 "type": "object",
@@ -262,6 +264,9 @@ K8S_READONLY_TOOLS: List[Dict] = [
                     "since_time": {"type": "string", "description": "Start of a fixed window: 2d, 24h or an RFC3339 time (makes it a range query)"},
                     "until_time": {"type": "string", "description": "End of that window, an RFC3339 time (default now)"},
                     "step": {"type": "integer", "description": "Seconds between points (default: window/120, at least 15)"},
+                    "chart": {"type": "boolean", "description": "Also show this range result to the user as a graph under your answer (makes it a range query)"},
+                    "title": {"type": "string", "description": "Short title of that graph, in the user's language"},
+                    "unit": {"type": "string", "description": "Unit of the values for the graph: bytes, percent, cores, seconds, count or rate"},
                 },
                 "required": ["promql"],
             },

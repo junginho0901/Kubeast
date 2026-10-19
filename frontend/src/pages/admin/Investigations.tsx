@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { REMARK_PLUGINS } from '@/utils/markdown'
 import { ExternalLink, FileSearch, RefreshCw, Siren } from 'lucide-react'
 
 import { api } from '@/services/api'
@@ -291,7 +291,7 @@ function InvestigationModal({ id, onClose }: { id: string; onClose: () => void }
             <section>
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">{tr('investigations.section.report', 'Report')}</h3>
               <div className="prose prose-invert prose-sm max-w-none rounded-lg border border-slate-700 bg-slate-950/40 px-4 py-3" data-testid="investigation-report">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{data.report}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={REMARK_PLUGINS}>{data.report}</ReactMarkdown>
               </div>
             </section>
           )}

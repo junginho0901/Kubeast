@@ -16,6 +16,7 @@ import time
 from typing import Callable, Optional, TYPE_CHECKING
 
 from app.services.ai import budget as budget_mod
+from app.services.ai import charts
 from app.services.ai import formatters
 from app.services.ai import history as history_mod
 from app.services.ai import usage as usage_acct
@@ -271,10 +272,11 @@ async def _audit_chat_complete(
 
 
 async def _call_tool(service, db, session, session_id, tools, tool_context, function_name, function_args, *,
-                     iteration, audit_actor, audit_http) -> tuple[list[str], dict, str]:
+                     iteration, audit_actor, audit_http, call_id=None) -> tuple[list[str], dict, str]:
     """Answer one tool call of the model: park a write for approval or run the tool, audit it, and return the
     SSE events for the chat, the tool_calls entry the saved message keeps, and the result text for the model.
-    Both the API-key loop and Claude Code (provider claude-code) call tools through here."""
+    Both the API-key loop and Claude Code (provider claude-code) call tools through here. call_id is the call's
+    number in the turn, also on its start event, so the chat pairs a result with its call, not by tool name."""
     from app.services.audit_writer import write_audit
     from app.services.ai import permissions as _perm
     from app.services.tool_whitelists import WRITE_TOOL_NAMES, write_approval_required
@@ -349,9 +351,15 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
         "is_json": is_json,
         "is_yaml": is_yaml,
     }
+    if call_id is not None:
+        payload["call_id"] = call_id
     if display_preview is not None:
         payload["display"] = display_preview
         payload["display_format"] = "kubectl"
+    # The preview above is cut; a graph the model asked for travels whole, here and in the saved message.
+    chart = charts.chart_from_result(function_args, function_response) if function_name == "prometheus_query" else None
+    if chart is not None:
+        payload["chart"] = chart
     events.append(f"data: {json.dumps(payload, ensure_ascii=False)}\n\n")
 
     log_entry = {
@@ -365,6 +373,10 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
         # set when the call is parked for approval (H2) — the UI renders the card from this
         'approval_id': pending_approval_id,
     }
+    if call_id is not None:
+        log_entry['call_id'] = call_id
+    if chart is not None:
+        log_entry['chart'] = chart
 
     # audit: ai.tool.call (메타데이터만 — args/result 본문은 저장하지 않음)
     if audit_actor:
@@ -397,6 +409,8 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
             path=(audit_http or {}).get('path'),
         )
 
+    if chart is not None:
+        return events, log_entry, charts.for_model(chart)
     return events, log_entry, formatters._truncate_tool_result_for_llm(formatted_result)
 
 
@@ -635,10 +649,10 @@ async def session_chat_stream(
 
             cc_turn = TurnResult()
 
-            async def _cc_tool(name, args, turn_no):
+            async def _cc_tool(name, args, turn_no, call_id=None):
                 events, entry, llm_text = await _call_tool(
                     service, db, session, session_id, tools, tool_context, name, args,
-                    iteration=turn_no, audit_actor=audit_actor, audit_http=audit_http,
+                    iteration=turn_no, audit_actor=audit_actor, audit_http=audit_http, call_id=call_id,
                 )
                 tool_calls_log.append(entry)
                 return events, llm_text
@@ -800,11 +814,12 @@ async def session_chat_stream(
 
                     dump(f"[DUMP] Calling function {function_name} with args", function_args)
 
-                    yield f"data: {json.dumps({'function': function_name, 'args': function_args}, ensure_ascii=False)}\n\n"
+                    call_id = len(tool_calls_log)
+                    yield f"data: {json.dumps({'function': function_name, 'args': function_args, 'call_id': call_id}, ensure_ascii=False)}\n\n"
 
                     events, log_entry, tool_message_content = await _call_tool(
                         service, db, session, session_id, tools, tool_context, function_name, function_args,
-                        iteration=iteration, audit_actor=audit_actor, audit_http=audit_http,
+                        iteration=iteration, audit_actor=audit_actor, audit_http=audit_http, call_id=call_id,
                     )
                     for event in events:
                         yield event

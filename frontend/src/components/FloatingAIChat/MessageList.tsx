@@ -2,11 +2,12 @@ import { useState, type ReactNode } from 'react'
 import { Check, Copy } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { REMARK_PLUGINS } from '@/utils/markdown'
 import rehypeRaw from 'rehype-raw'
 import { MarkdownDetails, MarkdownSummary } from '@/components/MarkdownDisclosure'
 import { MarkdownTable } from '@/components/MarkdownTable'
 import { stripToolDetails } from '@/services/chatTextUtils'
+import { ChatCharts } from '@/components/ChatChart'
 
 import { MarkdownLink } from './MarkdownLink'
 
@@ -28,12 +29,16 @@ export interface DisplayMessage {
   role: 'user' | 'assistant'
   content: string
   pending?: boolean
+  // the saved tool calls: the graphs the AI asked to show come from here
+  toolCalls?: unknown[]
 }
 
 interface MessageListProps {
   messages: DisplayMessage[]
   /** the answer so far while one is coming ('' before its first letter) */
   streamingContent?: string
+  /** that answer's tool calls so far (its graphs show as soon as their results come) */
+  streamingToolCalls?: unknown[]
   streaming?: boolean
   error?: string | null
   /** 메시지가 없을 때 리스트 영역에 끼워 넣을 노드 (예: 추천 질문) */
@@ -50,7 +55,7 @@ const MARKDOWN_COMPONENTS = { a: MarkdownLink, details: MarkdownDetails, summary
  * - 답의 첫 글자 전에는 AI 채팅과 같은 점 세 개
  * - 끝난 답은 말풍선 오른쪽 아래 바깥에 작은 복사 아이콘 (토큰 줄은 두지 않음)
  */
-export function MessageList({ messages, streamingContent, streaming, error, emptyExtras }: MessageListProps) {
+export function MessageList({ messages, streamingContent, streamingToolCalls, streaming, error, emptyExtras }: MessageListProps) {
   const { t } = useTranslation()
 
   if (messages.length === 0 && !streaming) {
@@ -72,9 +77,9 @@ export function MessageList({ messages, streamingContent, streaming, error, empt
   return (
     <div className="flex flex-col gap-3 px-4 py-4">
       {messages.map((msg) => (
-        <MessageBubble key={msg.id} role={msg.role} content={msg.content} pending={msg.pending} />
+        <MessageBubble key={msg.id} role={msg.role} content={msg.content} pending={msg.pending} toolCalls={msg.toolCalls} />
       ))}
-      {streaming ? <MessageBubble role="assistant" content={streamingContent ?? ''} pending /> : null}
+      {streaming ? <MessageBubble role="assistant" content={streamingContent ?? ''} pending toolCalls={streamingToolCalls} /> : null}
       {error ? (
         <div className="rounded-md border border-red-700/50 bg-red-900/20 px-3 py-2 text-xs text-red-300">
           {error}
@@ -88,9 +93,10 @@ interface MessageBubbleProps {
   role: 'user' | 'assistant'
   content: string
   pending?: boolean
+  toolCalls?: unknown[]
 }
 
-function MessageBubble({ role, content, pending }: MessageBubbleProps) {
+function MessageBubble({ role, content, pending, toolCalls }: MessageBubbleProps) {
   if (role === 'user') {
     return (
       <div className="flex justify-end">
@@ -106,9 +112,10 @@ function MessageBubble({ role, content, pending }: MessageBubbleProps) {
       <div className={`min-w-0 max-w-[80%] rounded-lg bg-slate-800 px-3 py-2 text-sm text-slate-100 ${pending ? 'opacity-90' : ''}`}>
         {content ? (
           <div className="chat-md floating-md prose prose-invert prose-sm max-w-none wrap-break-word">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} urlTransform={urlTransform} components={MARKDOWN_COMPONENTS}>
+            <ReactMarkdown remarkPlugins={REMARK_PLUGINS} rehypePlugins={[rehypeRaw]} urlTransform={urlTransform} components={MARKDOWN_COMPONENTS}>
               {content}
             </ReactMarkdown>
+            <ChatCharts toolCalls={toolCalls} />
           </div>
         ) : (
           <div className="flex items-center gap-2 py-1" data-testid="floating-waiting">

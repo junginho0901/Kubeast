@@ -184,6 +184,7 @@ export function ChatPanel({
       id: m.id,
       role: m.role === 'assistant' ? 'assistant' : 'user',
       content: m.content,
+      toolCalls: Array.isArray(m.tool_calls) ? m.tool_calls : undefined,
     }))
   }, [sessionDetail])
 
@@ -289,6 +290,7 @@ export function ChatPanel({
           <MessageList
             messages={visibleMessages}
             streamingContent={streamingContent}
+            streamingToolCalls={isStreaming ? streamState.toolCalls : undefined}
             streaming={isStreaming}
             error={error}
             emptyExtras={

@@ -1,7 +1,7 @@
 import { User, Check, Copy } from 'lucide-react'
 import { turnUsageText } from '@/utils/turnUsage'
 import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { REMARK_PLUGINS } from '@/utils/markdown'
 import rehypeRaw from 'rehype-raw'
 import type { TFunction } from 'i18next'
 import type { Message } from './types'
@@ -9,6 +9,7 @@ import { truncateToolResultsInContent } from './messageContent'
 import { ApprovalCard } from './ApprovalCard'
 import { MarkdownDetails, MarkdownSummary } from '@/components/MarkdownDisclosure'
 import { MarkdownTable } from '@/components/MarkdownTable'
+import { ChatCharts } from '@/components/ChatChart'
 
 // 단일 메시지 말풍선 — user / assistant(Kubeast 아이콘) 아바타 + 콘텐츠 + 답변 대기 중인 로딩 점 +
 // (assistant 의 경우) 아래쪽 사용량 / Copy / Download ZIP 줄. 그 줄은 답이 나오는 동안 닫혀 있다가
@@ -64,13 +65,14 @@ export function MessageBubble({ message, idx, copiedMessageKey, onCopy, onDownlo
                   </p>
                 ) : (
                   <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
+                    remarkPlugins={REMARK_PLUGINS}
                     rehypePlugins={[rehypeRaw]}
                     components={{ details: MarkdownDetails, summary: MarkdownSummary, table: MarkdownTable }}
                   >
                     {truncateToolResultsInContent(message.content)}
                   </ReactMarkdown>
                 )}
+                {message.role === 'assistant' && <ChatCharts toolCalls={message.toolCalls} />}
                 {message.role === 'assistant' &&
                   (message.toolCalls || [])
                     .filter((tc: any) => tc && tc.approval_id)

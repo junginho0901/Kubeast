@@ -116,6 +116,11 @@ async def test_feature_tools_pass_declared_arguments_only():
     )
     service._call_tool_server.assert_awaited_once_with("prometheus_query", {"promql": "up", "since": "2h", "range": True, "step": 30})
 
+    # chart makes it a range query; chart, title and unit stay in ai-service (the chart is drawn from the result).
+    service._call_tool_server.reset_mock()
+    await execute_function_with_context(service, "prometheus_query", {"promql": "up", "chart": "true", "title": "t", "unit": "bytes"}, _ctx())
+    service._call_tool_server.assert_awaited_once_with("prometheus_query", {"promql": "up", "range": True})
+
     # The discovery tools and the absolute window pass their own arguments, nothing else.
     for tool, given, sent in [
         ("prometheus_query", {"promql": "up", "since_time": "2d", "until_time": "2026-10-19T00:00:00Z", "namespace": "x"},

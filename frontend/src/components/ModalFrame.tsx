@@ -21,6 +21,7 @@ interface ModalFrameProps {
   footerStart?: ReactNode
   children?: ReactNode
   testId?: string
+  zIndex?: number
   // plain (default): the body grows with its content — a scrolling body would
   // clip a form's dropdown menus. scroll: the body scrolls when the window
   // reaches the screen height. fill: the body takes the remaining height and
@@ -30,12 +31,12 @@ interface ModalFrameProps {
 
 const BODY = { plain: '', scroll: 'overflow-y-auto min-h-0 flex-1', fill: 'min-h-0 flex-1 flex flex-col' } as const
 
-export function ModalFrame({ title, subtitle, icon, size = 'md', onClose, busy, footer, footerStart, children, testId, body = 'plain' }: ModalFrameProps) {
+export function ModalFrame({ title, subtitle, icon, size = 'md', onClose, busy, footer, footerStart, children, testId, body = 'plain', zIndex }: ModalFrameProps) {
   const { t } = useTranslation()
   const titleId = useId()
   const close = busy ? undefined : onClose
   return (
-    <ModalOverlay onClose={close}>
+    <ModalOverlay onClose={close} zIndex={zIndex}>
       <div
         role="dialog"
         aria-modal="true"

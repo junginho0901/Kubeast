@@ -426,10 +426,11 @@ class ClaudeCodeChat:
 
         def handler_for(name: str):
             async def handler(args: dict) -> dict:
+                call_id = out.tool_calls  # numbered at the start, so calls made at once keep their own number
                 out.tool_calls += 1
                 args = args if isinstance(args, dict) else {}
-                queue.put_nowait(("sse", _sse({"function": name, "args": args})))  # the chat shows the call at once
-                events, text = await run_tool(name, args, max(1, state["turn"]))
+                queue.put_nowait(("sse", _sse({"function": name, "args": args, "call_id": call_id})))  # the chat shows the call at once
+                events, text = await run_tool(name, args, max(1, state["turn"]), call_id)
                 state["fresh"] = True
                 for event in events:
                     queue.put_nowait(("sse", event))

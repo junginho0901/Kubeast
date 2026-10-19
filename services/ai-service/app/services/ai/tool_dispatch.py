@@ -467,6 +467,8 @@ async def execute_function_with_context(
                         pass
                     continue
                 tool_args[key] = resolvers._coerce_limit(service, function_args.get(key), default=0, max_value=1_000_000)
+            if function_name == "prometheus_query" and _flag(function_args.get("chart")):
+                tool_args["range"] = True  # a graph needs points; chart/title/unit stay here (app/services/ai/charts.py)
             result = await service._call_tool_server(function_name, tool_args)
 
         elif function_name == "k8s_get_available_api_resources":

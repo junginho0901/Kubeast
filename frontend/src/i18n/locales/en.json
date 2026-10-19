@@ -1715,6 +1715,10 @@
     "emptySubtitle": "Click a question below or type your own.",
     "resultZipDownload": "Download result ZIP",
     "copyMessage": "Copy",
+    "chart": {
+      "viewLarger": "View larger",
+      "moreSeries": "+{{count}} more series"
+    },
     "approval": {
       "title": "This action changes the cluster",
       "cluster": "cluster",

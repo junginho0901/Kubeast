@@ -76,6 +76,27 @@ Executing...
 `
 }
 
+// Index of the tool call a result belongs to: the one with its call_id, else the first call of that tool without a
+// result yet (an older server sends no call_id). -1 = none.
+export function resultTarget(toolCalls: any[], functionName: string, callId: unknown): number {
+  if (typeof callId === 'number') {
+    const byId = toolCalls.findIndex((tc) => tc?.call_id === callId)
+    if (byId !== -1) return byId
+  }
+  return toolCalls.findIndex((tc) => tc?.function === functionName && !tc.result)
+}
+
+// Where the n-th tool block starts in functionCallsContent (blocks are appended in call order). -1 = none.
+export function nthToolBlock(content: string, n: number): number {
+  if (n < 0) return -1
+  let at = -1
+  for (let i = 0; i <= n; i++) {
+    at = content.indexOf('<summary>🔧 <strong>', at + 1)
+    if (at === -1) return -1
+  }
+  return at
+}
+
 export interface ChatStreamManagerOptions {
   /**
    * 요청 URL 템플릿. `{sessionId}` 플레이스홀더가 있으면 인코딩된 sessionId 로 치환된다.
@@ -362,6 +383,7 @@ export class ChatStreamManager {
                 result: '',
                 is_json: false,
                 is_yaml: false,
+                ...(typeof data.call_id === 'number' ? { call_id: data.call_id } : {}),
               }
 
               this.setState({
@@ -380,25 +402,27 @@ export class ChatStreamManager {
               const displayText = data.display ? String(data.display) : ''
               const displayFormat = data.display_format ? String(data.display_format) : ''
 
-              const toolCalls = this.state.toolCalls.map((tc) =>
-                tc.function === functionName
-                  ? { ...tc, result: resultText, is_json: isJson, is_yaml: isYaml }
-                  : tc
-              )
-              const mergedToolCalls = toolCalls.map((tc) =>
-                tc.function === functionName && displayText
-                  ? { ...tc, display: displayText, display_format: displayFormat }
+              // The call this result answers: by its number, else the oldest of that tool still waiting.
+              const target = resultTarget(this.state.toolCalls, functionName, data.call_id)
+              const mergedToolCalls = this.state.toolCalls.map((tc, i) =>
+                i === target
+                  ? {
+                      ...tc,
+                      result: resultText,
+                      is_json: isJson,
+                      is_yaml: isYaml,
+                      ...(displayText ? { display: displayText, display_format: displayFormat } : {}),
+                      ...(data.chart ? { chart: data.chart } : {}),
+                    }
                   : tc
               )
 
-              const lastFunctionIndex = this.state.functionCallsContent.lastIndexOf(
-                `<summary>🔧 <strong>${functionName}</strong></summary>`
-              )
+              const blockIndex = nthToolBlock(this.state.functionCallsContent, target)
 
               let functionCallsContent = this.state.functionCallsContent
-              if (lastFunctionIndex !== -1) {
-                const beforeFunction = functionCallsContent.substring(0, lastFunctionIndex)
-                const afterFunction = functionCallsContent.substring(lastFunctionIndex)
+              if (blockIndex !== -1) {
+                const beforeFunction = functionCallsContent.substring(0, blockIndex)
+                const afterFunction = functionCallsContent.substring(blockIndex)
 
                 const bodyText = displayText || resultText
                 const codeBlock = displayText

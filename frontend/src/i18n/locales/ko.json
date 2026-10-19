@@ -1717,6 +1717,10 @@
     "emptySubtitle": "아래 질문을 클릭하거나 직접 입력하세요.",
     "resultZipDownload": "Result ZIP 다운로드",
     "copyMessage": "복사",
+    "chart": {
+      "viewLarger": "크게 보기",
+      "moreSeries": "시리즈 +{{count}}개"
+    },
     "approval": {
       "title": "클러스터를 변경하는 작업입니다",
       "cluster": "클러스터",
