@@ -198,12 +198,12 @@ func (t *tempo) search(ctx context.Context, query string, start, end time.Time, 
 	}
 	res := SearchResult{Traces: []FoundTrace{}, EffectiveQuery: query}
 	for _, tr := range sr.Traces {
-		ft := FoundTrace{TraceID: tr.TraceID, Spans: []MatchedSpan{}}
+		ft := FoundTrace{TraceID: padHex(tr.TraceID, 32), Spans: []MatchedSpan{}}
 		for _, set := range tr.SpanSets {
 			ft.Matched += set.Matched
 			for _, s := range set.Spans {
 				ft.Spans = append(ft.Spans, MatchedSpan{
-					SpanID: s.SpanID, Name: s.Name,
+					SpanID: padHex(s.SpanID, 16), Name: s.Name,
 					Start:      time.Unix(0, integer(s.StartTimeUnixNano)).UTC(),
 					DurationMs: float64(integer(s.DurationNanos)) / 1e6, Attributes: attrMap(s.Attributes),
 				})

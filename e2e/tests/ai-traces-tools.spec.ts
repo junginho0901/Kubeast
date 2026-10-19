@@ -136,6 +136,8 @@ test.describe('AI trace tools', () => {
     const scope = `resource.k8s.cluster.name = "kubeast" && resource.k8s.namespace.name = "${NS}"`
     expect(found.effective_query).toBe(`{ ( resource.service.name = "${svc}" && status = error ) && ${scope} }`)
     expect(JSON.stringify(found)).not.toContain('rootServiceName')
+    // Tempo's search leaves the leading zeros out of trace IDs: they come back whole
+    for (const t of found.traces as Found[]) expect(t.traceId).toMatch(/^[0-9a-f]{32}$/)
 
     const opened = await tool(request, reader, 'traces_get', { cluster: CLUSTER, namespace: NS, trace_id: (found.traces as Found[])[0].traceId })
     expect(opened.shown).toBe(2) // telemetrygen: a server span and its child

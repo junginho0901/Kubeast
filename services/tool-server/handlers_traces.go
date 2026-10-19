@@ -111,7 +111,7 @@ func handleTracesSearch(ctx context.Context, args map[string]interface{}, header
 func handleTracesGet(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
 	traceID := strings.TrimSpace(argString(args, "trace_id", ""))
 	if traceID == "" {
-		return "", wrapBadRequest("trace_id parameter is required (16 or 32 hex digits)")
+		return "", wrapBadRequest("trace_id parameter is required (up to 32 hex digits)")
 	}
 	namespace := argString(args, "namespace", "")
 	q := url.Values{}

@@ -331,13 +331,13 @@ func checkTraceQL(field, v string) error {
 }
 
 var (
-	traceIDRe  = regexp.MustCompile(`^([0-9a-fA-F]{16}|[0-9a-fA-F]{32})$`)
+	traceIDRe  = regexp.MustCompile(`^[0-9a-fA-F]{1,32}$`)
 	traceTagRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.:/-]{0,199}$`)
 )
 
 func checkTraceID(field, v string) error {
 	if !traceIDRe.MatchString(v) {
-		return badArg(field, v, "a trace ID of 16 or 32 hex digits")
+		return badArg(field, v, "a trace ID of up to 32 hex digits")
 	}
 	return nil
 }

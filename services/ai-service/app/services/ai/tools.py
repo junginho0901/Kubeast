@@ -491,7 +491,7 @@ K8S_READONLY_TOOLS: List[Dict] = [
         "function": {
             "name": "traces_get",
             "description": (
-                "One trace by its ID (16 or 32 hex digits, e.g. from traces_search or a log line's trace ID): its spans in your cluster and "
+                "One trace by its ID (up to 32 hex digits, e.g. from traces_search or a log line's trace ID): its spans in your cluster and "
                 "namespace — service, name, kind, start, duration, status and attributes — errors first, then by start (max 100). Spans of the "
                 "trace in another cluster or namespace are not shown (hidden counts them). Use it to see where a slow or failed request spent "
                 "its time. Only offered where the cluster has a trace store."

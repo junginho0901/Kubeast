@@ -80,8 +80,8 @@ const scopeNS = `resource.k8s.cluster.name = "kubeast" && resource.k8s.namespace
 
 func TestTraceSearchAddsTheScopeAndLeavesTheRootOut(t *testing.T) {
 	f := newTraceFixture(t, func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"traces":[{"traceID":"4bf92f3577b34da6a3ce929d0e0e4736","rootServiceName":"prod-gateway","rootTraceName":"GET /","durationMs":9000,
-			"spanSets":[{"matched":2,"spans":[{"spanID":"00f067aa0ba902b7","name":"GET /cart","startTimeUnixNano":"1760443200000000000","durationNanos":"1500000000",
+		_, _ = w.Write([]byte(`{"traces":[{"traceID":"f92f3577b34da6a3ce929d0e0e4736","rootServiceName":"prod-gateway","rootTraceName":"GET /","durationMs":9000,
+			"spanSets":[{"matched":2,"spans":[{"spanID":"f067aa0ba902b7","name":"GET /cart","startTimeUnixNano":"1760443200000000000","durationNanos":"1500000000",
 			"attributes":[{"key":"http.route","value":{"stringValue":"/cart"}},{"key":"http.status_code","value":{"intValue":"500"}}]}]}]}]}`))
 	})
 	raw := `{ status = error } >> { span.http.route = "/cart" }`
@@ -101,6 +101,10 @@ func TestTraceSearchAddsTheScopeAndLeavesTheRootOut(t *testing.T) {
 	var res traces.SearchResult
 	_ = json.Unmarshal(w.Body.Bytes(), &res)
 	sp := res.Traces[0].Spans[0]
+	// Tempo writes IDs without their leading zeros: they come back whole, for traces_get
+	if res.Traces[0].TraceID != "00f92f3577b34da6a3ce929d0e0e4736" || sp.SpanID != "00f067aa0ba902b7" {
+		t.Fatalf("IDs %s %s", res.Traces[0].TraceID, sp.SpanID)
+	}
 	if res.EffectiveQuery != want || res.Traces[0].Matched != 2 || sp.DurationMs != 1500 || sp.Attributes["http.status_code"] != "500" || sp.Start.Unix() != 1760443200 {
 		t.Fatalf("result %+v", res)
 	}
@@ -124,7 +128,7 @@ func TestTraceGetKeepsOnlyTheScopesSpans(t *testing.T) {
 		{"resource":{"attributes":[{"key":"k8s.cluster.name","value":{"stringValue":"prod"}}]},
 		 "scopeSpans":[{"spans":[{"spanId":"AAAAAAAAAAM=","name":"gateway","startTimeUnixNano":"1","endTimeUnixNano":"2"}]}]}]}}`
 	f := newTraceFixture(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(trace)) })
-	id := "4BF92F3577B34DA6A3CE929D0E0E4736"
+	id := "BF92F3577B34DA6A3CE929D0E0E4736" // as Tempo's search writes it: no leading zero
 	w := f.serve(f.h.TraceGetNamespace, withTraceID(logSearchRequestAs("/api/v1/namespaces/shop/traces/trace/"+id, "self", "shop", podReader), id))
 	var res traces.TraceResult
 	_ = json.Unmarshal(w.Body.Bytes(), &res)
@@ -135,7 +139,7 @@ func TestTraceGetKeepsOnlyTheScopesSpans(t *testing.T) {
 		res.Spans[1].DurationMs != 250 || res.Spans[1].Kind != "SERVER" || strings.Contains(w.Body.String(), "gateway") || strings.Contains(w.Body.String(), "charge") {
 		t.Fatalf("spans %+v", res.Spans)
 	}
-	if p := f.requests[0].URL.Path; p != "/api/datasources/proxy/uid/tempo/api/v2/traces/4bf92f3577b34da6a3ce929d0e0e4736" || f.requests[0].URL.Query().Get("start") != "" {
+	if p := f.requests[0].URL.Path; p != "/api/datasources/proxy/uid/tempo/api/v2/traces/0bf92f3577b34da6a3ce929d0e0e4736" || res.TraceID != "0bf92f3577b34da6a3ce929d0e0e4736" || f.requests[0].URL.Query().Get("start") != "" {
 		t.Fatalf("request %s %v", p, f.requests[0].URL.Query())
 	}
 	if _, after := f.lastRow(t); after["kind"] != "trace" || after["spans"] != float64(2) || after["hidden"] != float64(2) {

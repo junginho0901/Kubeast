@@ -139,7 +139,7 @@ func TestTraces_RefusedQueryAndMissingStore(t *testing.T) {
 	if m := decode(t, out); err != nil || m["status"] != "unavailable" || !strings.Contains(m["alternative"].(string), "loki_query") {
 		t.Fatalf("missing store: %s %v", out, err)
 	}
-	for args, ok := range map[string]bool{"4bf92f3577b34da6": true, "xyz": false} {
+	for args, ok := range map[string]bool{"4bf92f3577b34da6": true, "c536060df7a6cb71dd28c7fb0886d34": true, "xyz": false, "4bf92f3577b34da6a3ce929d0e0e47360": false} {
 		if err := validateToolArgs(map[string]interface{}{"trace_id": args}); (err == nil) != ok {
 			t.Fatalf("trace_id %q: %v", args, err)
 		}

@@ -123,14 +123,24 @@ func (s *Store) Metrics(ctx context.Context, sc Scope, query string, start, end 
 	return s.tempo.metrics(ctx, q, start, end, step.Truncate(time.Second))
 }
 
-var traceIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{16}$|^[0-9a-fA-F]{32}$`)
+var traceIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{1,32}$`)
 
-// CheckTraceID refuses what is not a trace ID (16 or 32 hex digits).
+// CheckTraceID refuses what is not a trace ID: up to 32 hex digits (Tempo's
+// search writes IDs without their leading zeros).
 func CheckTraceID(id string) error {
 	if !traceIDPattern.MatchString(id) {
-		return fmt.Errorf("%w: a trace ID is 16 or 32 hex digits", ErrInvalidRequest)
+		return fmt.Errorf("%w: a trace ID is up to 32 hex digits", ErrInvalidRequest)
 	}
 	return nil
+}
+
+// padHex is id in lower case with the leading zeros an ID of width hex digits
+// has (Tempo leaves them out); what is not hex is returned as it is.
+func padHex(id string, width int) string {
+	if len(id) >= width || strings.Trim(id, "0123456789abcdefABCDEF") != "" {
+		return strings.ToLower(id)
+	}
+	return strings.Repeat("0", width-len(id)) + strings.ToLower(id)
 }
 
 // Trace reads a trace by ID: only the spans of the scope's cluster and
@@ -143,7 +153,7 @@ func (s *Store) Trace(ctx context.Context, sc Scope, traceID string, start, end 
 	if err != nil {
 		return TraceResult{}, err
 	}
-	res, err := s.tempo.trace(ctx, strings.ToLower(traceID), start, end, attrs)
+	res, err := s.tempo.trace(ctx, padHex(traceID, 32), start, end, attrs)
 	if err == nil && len(res.Spans) == 0 {
 		return res, ErrNotFound // the trace has no span in the scope: as if it were not there
 	}
