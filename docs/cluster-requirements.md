@@ -232,7 +232,7 @@ receivers:
 
 ## 14. 로그 저장소 (로그 검색)
 
-Kubeast는 Loki의 `query_range`를 읽기만 합니다. Loki와 수집기는 설치하지 않습니다.
+Kubeast는 Loki의 `query_range`(AI의 `loki_query`는 메트릭 쿼리도)·`labels`·`label/<이름>/values`·`patterns`를 읽기만 합니다(모두 GET — Grafana 데이터소스 프록시로도 됨). Loki와 수집기는 설치하지 않습니다. 패턴(`loki_patterns`)은 Loki에 `pattern_ingester: enabled: true`가 있어야 하고, 없으면 그 도구만 "없음"으로 답합니다(Loki는 창 안에서 30줄 이상인 패턴만, 최근 3시간치를 돌려줌).
 
 - **수집기**: 대상 클러스터의 컨테이너 로그를 Loki로 보내는 것. 라벨 이름이 `features.logSearch.labels`와 맞아야 합니다 — 기본값은 Loki가 OTLP로 받은 로그에 붙이는 `k8s_cluster_name`·`k8s_namespace_name`·`k8s_pod_name`·`k8s_container_name`(OpenTelemetry Collector `file_log` + `container` 파서 또는 `k8sattributes`, `otlp_http` → Loki `/otlp`; 0.162 전 이름 `filelog`·`otlphttp`는 경고와 함께 아직 동작). Promtail·Alloy의 쿠버네티스 탐색식이면 `namespace`·`pod`·`container`로 바꿉니다.
 - **클러스터 라벨**: Loki 하나에 여러 클러스터를 넣으면 클러스터마다 다른 `k8s.cluster.name`(수집기의 resource 프로세서)을 붙이고, 그 값을 `features.logSearch.clusters`에 Kubeast 클러스터 ID와 짝지어 적습니다. 적지 않은 클러스터는 검색이 없습니다.

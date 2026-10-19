@@ -27,6 +27,13 @@ func RegisterPods(r chi.Router, h *handler.Handler) {
 	r.Get("/api/v1/logsearch/status", h.LogSearchStatus)
 	r.Get("/api/v1/namespaces/{namespace}/logsearch/query", h.LogQLNamespace)
 	r.Get("/api/v1/logsearch/query", h.LogQLAll)
+	// The AI's loki_* tools, through the structured search's door: labels, patterns, LogQL (lines or series).
+	r.Get("/api/v1/namespaces/{namespace}/logsearch/labels", h.LogLabelsNamespace)
+	r.Get("/api/v1/logsearch/labels", h.LogLabelsAll)
+	r.Get("/api/v1/namespaces/{namespace}/logsearch/patterns", h.LogPatternsNamespace)
+	r.Get("/api/v1/logsearch/patterns", h.LogPatternsAll)
+	r.Get("/api/v1/namespaces/{namespace}/logsearch/logql", h.LogQLSearchNamespace)
+	r.Get("/api/v1/logsearch/logql", h.LogQLSearchAll)
 	r.Delete("/api/v1/namespaces/{namespace}/pods/{pod_name}", h.DeletePod)
 	r.Get("/api/v1/namespaces/{namespace}/pods/{name}/exec/ws", h.PodExecWS)
 }

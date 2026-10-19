@@ -184,6 +184,21 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Handler:     handleLogSearch,
 	})
 	register(ToolDefinition{
+		Name:        "loki_query",
+		Description: "LogQL on the cluster's log store: newest lines, or series for a metric query (count_over_time, rate)",
+		Handler:     handleLokiQuery,
+	})
+	register(ToolDefinition{
+		Name:        "loki_labels",
+		Description: "Label names, or one label's values, on the cluster's log streams",
+		Handler:     handleLokiLabels,
+	})
+	register(ToolDefinition{
+		Name:        "loki_patterns",
+		Description: "Log patterns of the selected streams (Loki's pattern ingester), most lines first",
+		Handler:     handleLokiPatterns,
+	})
+	register(ToolDefinition{
 		Name:        "issues",
 		Description: "Kubeast's issue check: failing pods, workloads, nodes, PVCs and Warning events in one pass",
 		Handler:     handleIssues,

@@ -258,7 +258,7 @@ async def test_list_clusters_names_the_tools_allowed_in_each(fakes, monkeypatch)
     tools = {c["id"]: c["tools"] for c in data["clusters"]}["self"]
     assert "issues" in tools and "prometheus_query" not in tools and "logsearch" not in tools
     prometheus = {"prometheus_query", "prometheus_metrics", "prometheus_labels", "prometheus_rules", "prometheus_targets"}
-    assert set(tools) == set(mcp_server.READ_TOOLS) - prometheus - {"logsearch", "cost", "policy_reports", "k8s_diff"} - admin_only
+    assert set(tools) == set(mcp_server.READ_TOOLS) - prometheus - {"logsearch", "loki_query", "loki_labels", "loki_patterns", "cost", "policy_reports", "k8s_diff"} - admin_only
 
     # The admin (global *) is offered the hygiene report too.
     features = {"prometheus": {"enabled": True}, "logSearch": {"enabled": True, "clusters": ["self"]}, "cost": {"enabled": True}, "policyReports": {"enabled": True}}

@@ -11,11 +11,14 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 
+LLM_RESULT_CHARS = 6000
+
+
 def _truncate_tool_result_for_llm(content: Optional[str]) -> str:
     """Tool 결과를 LLM 입력용으로 축약"""
     if not isinstance(content, str):
         content = "" if content is None else str(content)
-    max_chars = 6000
+    max_chars = LLM_RESULT_CHARS
     if len(content) > max_chars:
         return content[:max_chars] + "\n... (truncated for LLM) ..."
     return content

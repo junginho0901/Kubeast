@@ -37,7 +37,11 @@ def test_gated_names_by_feature_and_cluster():
     # The gate knows every feature tool the whitelist carries.
     gated = {t["function"]["name"] for t in K8S_READONLY_TOOLS if t["function"]["name"] in features.GATES}
     assert gated == {"prometheus_query", "prometheus_metrics", "prometheus_labels", "prometheus_rules", "prometheus_targets",
-                     "logsearch", "cost", "policy_reports"}
+                     "logsearch", "loki_query", "loki_labels", "loki_patterns", "cost", "policy_reports"}
+    # the LogQL tools come and go with log search
+    loki = ["loki_query", "loki_labels", "loki_patterns"]
+    assert features.gated_names(loki, {"logSearch": {"enabled": True, "clusters": ["self"]}}, "self") == loki
+    assert features.gated_names(loki, {"logSearch": {"enabled": True, "clusters": ["self"]}}, "other") == []
     feats = {"cost": {"enabled": True}, "policyReports": {"enabled": False}}
     assert features.gated_names(["cost", "policy_reports", "helm_read"], feats, "self") == ["cost", "helm_read"]
 

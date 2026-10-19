@@ -1,4 +1,5 @@
-// A graph the AI asked to show under its answer (prometheus_query chart=true, ai-service app/services/ai/charts.py):
+// A graph the AI asked to show under its answer (prometheus_query or a loki_query metric query with chart=true,
+// ai-service app/services/ai/charts.py; `promql` holds the query either way):
 // the data, and the scale, tick and value helpers the chat's ChatChart draws with.
 
 export interface ChatChartSeries {

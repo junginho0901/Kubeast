@@ -51,6 +51,9 @@ def test_tool_usage_guide():
         "prometheus_rules",
         "prometheus_targets",
         "logsearch",
+        "loki_query",
+        "loki_labels",
+        "loki_patterns",
         "helm_read",
         "policy_reports",
         "cost",
@@ -89,6 +92,11 @@ def test_not_found_protocol():
     for phrase in ("`prometheus_metrics`·`prometheus_labels`로 먼저", "`topk(10, …)`", "`truncated`", "`prometheus_rules`로 그 규칙의 식부터", "`system_*`", "`k8s_node_name`", "`prometheus_targets`"):
         assert phrase in rules, phrase
     assert "`logsearch`로" in SYSTEM_MESSAGE
+    # Logs: count with a metric query, labels first, patterns for error kinds, then the logs around a metric's jump.
+    logs = SYSTEM_MESSAGE.split("**로그는 세고 묶어서 보세요**")[1].split("\n")[0]
+    for phrase in ("`loki_query` 지표 질의로 세세요", "count_over_time", "`loki_labels`로 먼저", "`loki_patterns`로 유형과 횟수"):
+        assert phrase in logs, phrase
+    assert "그 앞뒤 몇 분의 로그" in SYSTEM_MESSAGE.split("**시각으로 이으세요**")[1].split("\n")[0]
     assert "all_namespaces=true" not in SYSTEM_MESSAGE.split("### 못 찾았을 때")[0].split("### 네임스페이스/리소스 식별 규칙")[1], (
         "느슨한 이름은 k8s_find_resource로 찾는다 (옛 all_namespaces 규칙 제거)"
     )

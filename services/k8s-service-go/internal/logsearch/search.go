@@ -3,6 +3,7 @@ package logsearch
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -118,6 +119,10 @@ type QueryRequest struct {
 	End       time.Time
 	Limit     int
 	Forward   bool
+	// Metric also runs a metric query (Result.Series, at Step when set);
+	// without it one is refused with ErrNotLogQuery.
+	Metric bool
+	Step   time.Duration
 }
 
 // Query adds the cluster's matcher (when its store has a cluster label) and
@@ -128,18 +133,71 @@ func (s *Searcher) Query(ctx context.Context, req QueryRequest) (Result, error) 
 	if !ok {
 		return Result{}, ErrNotConfigured
 	}
-	var scope []Matcher
-	if s.cfg.Labels.Cluster != "" && value != "" {
-		scope = append(scope, Matcher{Name: s.cfg.Labels.Cluster, Value: value})
-	}
-	if req.Namespace != "" {
-		scope = append(scope, Matcher{Name: s.cfg.Labels.Namespace, Value: req.Namespace})
-	}
-	effective, err := InjectMatchers(req.Query, scope)
+	effective, err := InjectMatchers(req.Query, s.scope(value, req.Namespace))
 	if err != nil {
 		return Result{}, err
 	}
-	res, err := s.store.run(ctx, store, effective, req.Start, req.End, req.Limit, req.Forward)
+	res, err := s.store.rangeQuery(ctx, store, effective, req.Start, req.End, req.Limit, req.Forward, req.Step, req.Metric)
+	res.EffectiveQuery = effective
+	return res, err
+}
+
+// scope is the matchers a query on cluster label value (and namespace) gets.
+func (s *Searcher) scope(value, namespace string) []Matcher {
+	var m []Matcher
+	if s.cfg.Labels.Cluster != "" && value != "" {
+		m = append(m, Matcher{Name: s.cfg.Labels.Cluster, Value: value})
+	}
+	if namespace != "" {
+		m = append(m, Matcher{Name: s.cfg.Labels.Namespace, Value: namespace})
+	}
+	return m
+}
+
+// LabelsRequest asks for the label names (Label empty) or one label's values
+// on a cluster's streams (one namespace's, when Namespace is set).
+type LabelsRequest struct {
+	Cluster   string
+	Namespace string
+	Label     string
+	Start     time.Time
+	End       time.Time
+}
+
+// Labels lists label names or values on the streams of req's cluster and
+// namespace only: the store is asked with the same selector a structured
+// search starts from.
+func (s *Searcher) Labels(ctx context.Context, req LabelsRequest) (LabelsResult, error) {
+	store, value, ok := s.resolve(ctx, req.Cluster)
+	if !ok {
+		return LabelsResult{}, ErrNotConfigured
+	}
+	if err := CheckLabelName(req.Label); err != nil {
+		return LabelsResult{}, err
+	}
+	return s.store.labels(ctx, store, req.Label, s.cfg.LogQL(Request{Namespace: req.Namespace}, value), req.Start, req.End)
+}
+
+// CheckLabelName refuses a label name Loki would not take ("" = none asked).
+func CheckLabelName(name string) error {
+	if name != "" && !labelName.MatchString(name) {
+		return fmt.Errorf("%w: label name %q", ErrInvalidLogQL, name)
+	}
+	return nil
+}
+
+// Patterns runs req.Query (a stream selector) on the store's pattern
+// ingester with the cluster and namespace matchers added.
+func (s *Searcher) Patterns(ctx context.Context, req QueryRequest) (PatternsResult, error) {
+	store, value, ok := s.resolve(ctx, req.Cluster)
+	if !ok {
+		return PatternsResult{}, ErrNotConfigured
+	}
+	effective, err := InjectMatchers(req.Query, s.scope(value, req.Namespace))
+	if err != nil {
+		return PatternsResult{}, err
+	}
+	res, err := s.store.patterns(ctx, store, effective, req.Start, req.End)
 	res.EffectiveQuery = effective
 	return res, err
 }

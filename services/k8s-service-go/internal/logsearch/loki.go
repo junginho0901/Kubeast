@@ -40,7 +40,28 @@ type Result struct {
 	// EffectiveQuery is the LogQL actually sent for a query an admin wrote
 	// (Searcher.Query): theirs with the cluster and namespace matchers added.
 	EffectiveQuery string `json:"effectiveQuery,omitempty"`
+	// ResultType is set for a query run with QueryRequest.Metric: "streams"
+	// (Lines) or "matrix" (Series, at most MaxSeries, Truncated past it).
+	ResultType  string   `json:"resultType,omitempty"`
+	Series      []Series `json:"series,omitempty"`
+	StepSeconds int64    `json:"stepSeconds,omitempty"`
 }
+
+// Series is one series of a metric query, in the shape of a Prometheus range
+// result: its labels and [unix seconds, value] points.
+type Series struct {
+	Metric map[string]string `json:"metric"`
+	Points []Point           `json:"points"`
+}
+
+// Point is one sample of a Series.
+type Point struct {
+	T float64 `json:"t"`
+	V float64 `json:"v"`
+}
+
+// MaxSeries caps a metric query's series.
+const MaxSeries = 100
 
 // ErrTimeout marks a search the store did not answer in time.
 var ErrTimeout = errors.New("log store did not answer in time")
@@ -129,6 +150,12 @@ func (l *loki) search(ctx context.Context, req Request, store Store, clusterValu
 
 // run sends query to store's query_range and reads the streams back.
 func (l *loki) run(ctx context.Context, store Store, query string, start, end time.Time, limit int, forward bool) (Result, error) {
+	return l.rangeQuery(ctx, store, query, start, end, limit, forward, 0, false)
+}
+
+// rangeQuery is run that, with metric, also reads a metric query's samples
+// (at step, when set) instead of refusing them.
+func (l *loki) rangeQuery(ctx context.Context, store Store, query string, start, end time.Time, limit int, forward bool, step time.Duration, metric bool) (Result, error) {
 	params := url.Values{}
 	params.Set("query", query)
 	params.Set("start", strconv.FormatInt(start.UnixNano(), 10))
@@ -139,6 +166,9 @@ func (l *loki) run(ctx context.Context, store Store, query string, start, end ti
 		direction = "forward"
 	}
 	params.Set("direction", direction)
+	if step > 0 {
+		params.Set("step", strconv.FormatInt(int64(step/time.Second), 10))
+	}
 
 	resp, err := l.get(ctx, store, "/loki/api/v1/query_range", params)
 	if err != nil {
@@ -169,6 +199,9 @@ func (l *loki) run(ctx context.Context, store Store, query string, start, end ti
 	if err := json.Unmarshal(body, &kind); err != nil {
 		return Result{Query: query}, fmt.Errorf("log store: unreadable answer: %w", err)
 	}
+	if metric && kind.Data.ResultType == "matrix" {
+		return readMatrix(body, query, step)
+	}
 	if kind.Data.ResultType != "streams" {
 		return Result{Query: query}, fmt.Errorf("%w (the store answered with %q)", ErrNotLogQuery, kind.Data.ResultType)
 	}
@@ -178,6 +211,9 @@ func (l *loki) run(ctx context.Context, store Store, query string, start, end ti
 	}
 
 	res := Result{Query: query, Bytes: lr.Data.Stats.Summary.TotalBytesProcessed, Lines: []Line{}}
+	if metric {
+		res.ResultType = "streams"
+	}
 	for _, s := range lr.Data.Result {
 		for _, v := range s.Values {
 			ns, err := strconv.ParseInt(v[0], 10, 64)

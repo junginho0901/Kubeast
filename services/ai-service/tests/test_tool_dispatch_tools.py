@@ -131,6 +131,10 @@ async def test_feature_tools_pass_declared_arguments_only():
         ("prometheus_rules", {"rule": "Crash", "rule_type": "alert", "active_only": "true", "limit": 3},
          {"rule": "Crash", "rule_type": "alert", "active_only": True}),
         ("prometheus_targets", {"health": "down", "job": "kubelet", "cluster": "y"}, {"health": "down", "job": "kubelet"}),
+        ("loki_query", {"logql": ' sum(count_over_time({app="web"}[5m])) ', "namespace": "shop", "since_time": "2d", "step": "60", "limit": 20, "promql": "x"},
+         {"logql": 'sum(count_over_time({app="web"}[5m]))', "namespace": "shop", "since_time": "2d", "step": 60, "limit": 20}),
+        ("loki_labels", {"label": "k8s_pod_name", "namespace": "shop", "since": "6h", "limit": 5}, {"label": "k8s_pod_name", "namespace": "shop", "since": "6h"}),
+        ("loki_patterns", {"selector": '{app="web"}', "since": "3h", "logql": "x"}, {"selector": '{app="web"}', "since": "3h"}),
     ]:
         service._call_tool_server.reset_mock()
         await execute_function_with_context(service, tool, given, _ctx())

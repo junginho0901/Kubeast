@@ -134,6 +134,8 @@ var argRules = map[string]argCheck{
 	"rule_type": checkEnum("alert", "record"),
 	"health":    checkEnum("up", "down", "unknown"),
 	"job":       checkPrintable(200),
+	// LogQL (the selector of loki_patterns is the "selector" rule above).
+	"logql": checkLogQL,
 }
 
 // validateToolArgs rejects any argument that would not be read by kubectl as
@@ -305,6 +307,13 @@ func checkGrep(field, v string) error {
 func checkPromQL(field, v string) error {
 	if len(v) > 2000 || strings.IndexFunc(v, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
 		return badArg(field, v, "a PromQL expression of at most 2000 printable characters")
+	}
+	return nil
+}
+
+func checkLogQL(field, v string) error {
+	if len(v) > 4096 || strings.IndexFunc(v, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
+		return badArg(field, v, "a LogQL query of at most 4096 printable characters")
 	}
 	return nil
 }

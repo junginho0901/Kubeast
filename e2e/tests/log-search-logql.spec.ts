@@ -130,6 +130,36 @@ test.describe('LogQL written by an admin', () => {
     }
   })
 
+  test('a non-admin whose global role carries admin.logsearch.query alone runs LogQL with a Read grant', async ({ request }) => {
+    // The global role puts its admin.* permissions in the token for every cluster; the cluster is still asked as the
+    // Read group, which the standard RBAC binds — no other admin feature opens.
+    const id = Date.now().toString(36)
+    const email = `e2e-logql-dev-${id}@kubeast.local`
+    let userId = ''
+    let roleId = 0
+    try {
+      const role = await request.post('/api/v1/auth/admin/roles', {
+        headers: bearer(admin), data: { name: `e2e-logql-dev-${id}`, description: 'e2e', permissions: ['admin.logsearch.query'] },
+      })
+      expect(role.status(), await role.text()).toBe(201)
+      roleId = (await role.json()).id
+      const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E logql dev', email, password: PW, role_id: roleId } })
+      expect(created.status(), await created.text()).toBe(201)
+      userId = (await created.json()).id
+      const grant = await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/${CLUSTER}`, { headers: bearer(admin), data: { role: 'Read' } })
+      expect(grant.ok(), await grant.text()).toBeTruthy()
+      const dev = await login(request, email, PW)
+      const res = await logql(request, dev, CLUSTER, `{k8s_container_name="say"} |= "${marker}"`)
+      expect(res.status(), await res.text()).toBe(200)
+      expect((await res.json()).lines).toHaveLength(2)
+      const users = await request.get('/api/v1/auth/admin/users', { headers: bearer(dev), failOnStatusCode: false })
+      expect(users.status(), 'another admin feature stays closed').toBe(403)
+    } finally {
+      if (userId) await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: bearer(admin), failOnStatusCode: false })
+      if (roleId) await request.delete(`/api/v1/auth/admin/roles/${roleId}`, { headers: bearer(admin), failOnStatusCode: false })
+    }
+  })
+
   test('the Pod drawer runs a LogQL query and shows what was sent', async ({ page }) => {
     await page.goto(`/workloads/pods?cluster=${CLUSTER}`)
     const row = page.locator('tbody:not([aria-hidden="true"]) tr', { hasText: pod }).first()

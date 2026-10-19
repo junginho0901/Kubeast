@@ -371,9 +371,87 @@ K8S_READONLY_TOOLS: List[Dict] = [
                     "container": {"type": "string", "description": "Only this container"},
                     "workload_kind": {"type": "string", "description": "Only pods of this workload kind (Deployment, StatefulSet, DaemonSet, Job, CronJob)"},
                     "workload_name": {"type": "string", "description": "Only pods of this workload"},
-                    "since": {"type": "string", "description": "Window, e.g. 15m, 2h, 1d (default 1h)"},
+                    "since": {"type": "string", "description": "Window, e.g. 15m, 2h, 24h (default 1h)"},
                     "limit": {"type": "integer", "description": "Maximum lines (default 100, max 200)"},
                 },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "loki_query",
+            "description": (
+                "LogQL on the cluster's log store. A log query ({…} with line filters |= \"x\", |~ \"re\", parsers | json, | logfmt and label "
+                "filters | level=\"error\") returns the newest lines (limit, default 100, max 200); a metric query returns one series per label "
+                "set, e.g. sum by (k8s_pod_name) (count_over_time({k8s_namespace_name=\"shop\"} |= \"error\" [5m])) for errors per pod over time, "
+                "rate(...) for lines per second, topk(5, ...) to keep the largest. Kubeast adds the cluster and namespace matchers to every selector "
+                "(effective_query shows what ran). Find label names and values with loki_labels first instead of guessing; a pod name you do not have "
+                "in full is a regex (k8s_pod_name=~\"web-.*\"), and a full name works for pods that no longer exist. Start with a short window. "
+                "To show the user a metric query's trend, set chart=true with a short title and unit (same rules as prometheus_query's graph). "
+                "For simple text search in known pods, logsearch is enough. {\"status\":\"unavailable\"} = no log store for this cluster; "
+                "{\"status\":\"forbidden\"} = the cluster does not let the user read pod logs there; a cut result says truncated — do not answer "
+                "from it. A grant limited to namespaces must name one of them. Only offered when the cluster has log search."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "logql": {"type": "string", "description": "The LogQL query"},
+                    "namespace": {"type": "string", "description": "Namespace the query is limited to (empty = every namespace, for an unscoped grant)"},
+                    "since": {"type": "string", "description": "Window back from now, e.g. 15m, 2h, 24h (default 1h)"},
+                    "since_time": {"type": "string", "description": "Start of a fixed window: RFC3339 time, or 24h / 2d back from now"},
+                    "until_time": {"type": "string", "description": "End of a fixed window, RFC3339 (default now)"},
+                    "step": {"type": "integer", "description": "Metric query: seconds between points (default: the window / 120, at least 15)"},
+                    "limit": {"type": "integer", "description": "Log query: maximum lines (default 100, max 200)"},
+                    "chart": {"type": "boolean", "description": "Metric query: also show the series to the user as a graph under your answer"},
+                    "title": {"type": "string", "description": "Short title of that graph, in the user's language"},
+                    "unit": {"type": "string", "description": "Unit of the values for the graph: count, rate, bytes, seconds or percent"},
+                },
+                "required": ["logql"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "loki_labels",
+            "description": (
+                "Label names on the cluster's log streams, or the values of one label (label=…), within since (default 1h) — only the streams "
+                "of this cluster and of namespace when given. Call it before writing LogQL so the matchers use names and values that exist "
+                "(stores fed by OpenTelemetry use k8s_namespace_name, k8s_pod_name, k8s_container_name, service_name). Only offered when the "
+                "cluster has log search."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "label": {"type": "string", "description": "List this label's values (empty = list the label names)"},
+                    "namespace": {"type": "string", "description": "Only this namespace's streams (empty = every namespace, for an unscoped grant)"},
+                    "since": {"type": "string", "description": "Window, e.g. 1h, 6h, 24h (default 1h)"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "loki_patterns",
+            "description": (
+                "Log patterns of the streams a selector picks (Loki's pattern ingester): each line shape with its variable parts as <_>, how many "
+                "lines had it, and when it was first and last seen — the kinds of errors at a glance, most frequent first (top 20; Loki lists a pattern only once 30 lines in the window have it). selector is a "
+                "stream selector only, e.g. {k8s_container_name=\"api\"}; Kubeast adds the cluster and namespace matchers. To read the lines of "
+                "one pattern, run loki_query with a line filter on its fixed text. {\"status\":\"unavailable\"} = this store keeps no patterns: "
+                "count with loki_query instead. Only offered when the cluster has log search."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "selector": {"type": "string", "description": "Stream selector, e.g. {k8s_pod_name=~\"web-.*\"}"},
+                    "namespace": {"type": "string", "description": "Namespace the selector is limited to (empty = every namespace, for an unscoped grant)"},
+                    "since": {"type": "string", "description": "Window, e.g. 1h, 3h (default 1h; the ingester keeps recent lines only)"},
+                    "since_time": {"type": "string", "description": "Start of a fixed window: RFC3339 time, or 24h / 2d back from now"},
+                    "until_time": {"type": "string", "description": "End of a fixed window, RFC3339 (default now)"},
+                },
+                "required": ["selector"],
             },
         },
     },

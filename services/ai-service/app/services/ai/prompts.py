@@ -51,6 +51,7 @@ SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 - `prometheus_rules`: 알림·기록 규칙과 지금 울리는 알림(식·`for`·상태) — 알림을 조사할 때 먼저
 - `prometheus_targets`: 수집 대상이 살아 있는지(up/down·마지막 오류) — 지표가 비거나 그래프가 빌 때
 - `logsearch`: 로그 저장소 검색 — 죽은·재시작된 파드, 워크로드 전체 파드의 로그를 텍스트로 필터 (이 클러스터에 로그 검색이 있을 때만 제공)
+- `loki_query` · `loki_labels` · `loki_patterns`: 로그 저장소에 LogQL — 시간대별 에러 수·비율(지표 질의), `| json`·`| logfmt`로 푼 줄, 레이블 이름·값 찾기, 에러 유형 묶기(패턴) (로그 검색이 있을 때만 제공)
 - `helm_read`: Helm 릴리스 **읽기만** — 목록·values·manifest·history·resources·images·리비전·두 리비전 diff ("지난 업그레이드에서 뭐가 바뀌었나"). 변경은 `helm_execute`(승인 카드)
 - `policy_reports`: PolicyReport 요약·결과 행(Kyverno 등 정책 위반) — 있을 때만 제공
 - `cost` · `optimization`: OpenCost 비용(네임스페이스·워크로드별, 기간) · requests 대비 사용량과 권고(네임스페이스별)
@@ -82,7 +83,9 @@ SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 - 클러스터·네임스페이스의 상태를 묻는 질문("문제 있어?", "뭐가 깨졌어?", "건강해?")은 `issues` **한 번**으로 시작하고, 거기 나온 객체만 describe/logs로 파세요. 파드를 전부 나열해 훑지 마세요.
 - 수치의 추이(지난 1시간 CPU, 재시작 횟수 변화, 오류율)는 `prometheus_query`(range=true)로, 지금 값만은 `get_pod_metrics`/`get_node_metrics`로. 사라진 파드나 재시작 이전의 로그는 `logsearch`로.
 - **Prometheus는 찾고 나서 질의하세요**: 결과에서 본 적 없는 지표·레이블 이름은 추측하지 말고 `prometheus_metrics`·`prometheus_labels`로 먼저 확인하세요. 노드 지표는 `node_*`(node-exporter)일 수도 `system_*`(OpenTelemetry hostmetrics, 노드는 `k8s_node_name` 레이블)일 수도 있습니다. 시리즈가 많을 수 있으면 `sum by (…)`·`topk(10, …)`로 묶어 받고, `truncated`가 붙은 결과로는 답하지 말고 좁혀서 다시 질의하세요. 알림에 대한 질문이면 `prometheus_rules`로 그 규칙의 식부터 보고 같은 식으로 확인하세요. 지표가 비면 `prometheus_targets`로 수집 대상이 내려갔는지 보세요.
-- **추이는 그래프로 보여 주세요**: 사용자에게 시간에 따른 변화를 보여 줄 때는 그 기간 질의에 `chart=true`와 짧은 `title`(사용자 언어)·`unit`(bytes·percent·cores·seconds·count·rate)을 붙이세요 — 답 아래에 그래프로 나옵니다. 답 하나에 **최대 2개**, 시리즈는 `topk`로 몇 개로 줄인 뒤. 탐색용 질의에는 붙이지 말고 **보여 줄 최종 질의에만** 붙이세요(같은 제목으로 다시 그리면 앞의 것은 화면에서 빠집니다). 글에서는 "아래 그래프"처럼 가리키세요.
+- **추이는 그래프로 보여 주세요**: 사용자에게 시간에 따른 변화를 보여 줄 때는 그 기간 질의(`prometheus_query`, 또는 `loki_query`의 지표 질의)에 `chart=true`와 짧은 `title`(사용자 언어)·`unit`(bytes·percent·cores·seconds·count·rate)을 붙이세요 — 답 아래에 그래프로 나옵니다. 답 하나에 **최대 2개**, 시리즈는 `topk`로 몇 개로 줄인 뒤. 탐색용 질의에는 붙이지 말고 **보여 줄 최종 질의에만** 붙이세요(같은 제목으로 다시 그리면 앞의 것은 화면에서 빠집니다). 글에서는 "아래 그래프"처럼 가리키세요.
+- **로그는 세고 묶어서 보세요**: "에러가 얼마나·언제부터"는 줄을 읽지 말고 `loki_query` 지표 질의로 세세요(예: `sum by (k8s_pod_name) (count_over_time({k8s_namespace_name="<ns>"} |= "error" [5m]))`). 레이블 이름·값은 `loki_labels`로 먼저 확인하고, 짧은 기간부터 보세요. "어떤 에러들이 나나"는 `loki_patterns`로 유형과 횟수를 먼저 보고, 한 유형의 줄은 그 고정 글자로 `loki_query`에서 거르세요. 패턴이 unavailable이면 `loki_query`로 세세요.
+- **시각으로 이으세요**: 지표가 튄 시각을 찾았으면 그 앞뒤 몇 분의 로그(`loki_query`·`logsearch`의 `since_time`·`until_time`)를 보고, 둘을 같이 설명하세요.
 - "누가 지웠나·언제 바뀌었나·어떤 호출이 실패했나"는 `audit_search`(Admin)로 Kubeast 감사 로그를 보세요 — `k8s_get_events`는 클러스터가 남긴 이벤트만 보여 줍니다. Argo CD로 배포한 앱의 "반영됐나·왜 Degraded인가"는 `gitops_status`로 — 없다고 답이 오면 Argo CD가 돌아가는 클러스터를 안내하세요.
 - **큰 목록은 통째로 받지 마세요**: 개수는 `k8s_count`, 몇 개 필드만 필요하면 `k8s_jq_query`·`k8s_tabular_query`로 줄여 받으세요(`k8s_get_resources -o json`은 작은 네임스페이스·단일 객체에만).
 - 매니페스트를 적용하거나 패치하기 전에 `k8s_diff`로 바뀔 내용을 먼저 보여 주세요(적용 없음). diff가 비면 적용할 이유가 없다고 말하세요.
@@ -200,6 +203,7 @@ Tool 결과를 분석한 후 다음 형식으로 응답하세요:
 - `prometheus_rules(rule, rule_type, active_only)` - Alerting and recording rules with state and active alerts — first when investigating an alert
 - `prometheus_targets(health, job)` - Scrape targets and their health — when a metric is missing
 - `logsearch(namespace, text, pod, workload_kind, workload_name, since, limit)` - Log store search, also for pods that are gone; offered only where log search exists
+- `loki_query(logql, namespace, since, since_time, until_time, step, limit)` / `loki_labels(label, namespace, since)` / `loki_patterns(selector, namespace, since)` - LogQL on the log store (lines, or series to count errors over time), its label names and values, log patterns; offered only where log search exists
 - `helm_read(what, namespace, release, revision, from, to, section)` - Helm releases read-only: list, values, manifest, history, resources, images, revision, diff
 - `policy_reports(view, namespace, policy, kind, results, severities, search, limit)` - PolicyReport summary or rows (Kyverno …); offered where policy reports exist
 - `cost(window, aggregate, namespace)` / `optimization(namespace, window_hours)` - OpenCost allocation / requests vs usage with recommendations

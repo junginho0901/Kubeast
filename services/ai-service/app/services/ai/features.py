@@ -47,6 +47,9 @@ GATES: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
     "prometheus_rules": _prometheus_on,
     "prometheus_targets": _prometheus_on,
     "logsearch": _logsearch_on,
+    "loki_query": _logsearch_on,
+    "loki_labels": _logsearch_on,
+    "loki_patterns": _logsearch_on,
     "cost": _cost_on,
     "policy_reports": _policy_reports_on,
 }

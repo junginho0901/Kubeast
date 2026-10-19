@@ -357,7 +357,7 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
         payload["display"] = display_preview
         payload["display_format"] = "kubectl"
     # The preview above is cut; a graph the model asked for travels whole, here and in the saved message.
-    chart = charts.chart_from_result(function_args, function_response) if function_name == "prometheus_query" else None
+    chart = charts.chart_from_result(function_args, function_response) if function_name in charts.CHART_TOOLS else None
     if chart is not None:
         payload["chart"] = chart
     events.append(f"data: {json.dumps(payload, ensure_ascii=False)}\n\n")
@@ -411,6 +411,10 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
 
     if chart is not None:
         return events, log_entry, charts.for_model(chart)
+    if function_name in charts.CHART_TOOLS and len(formatted_result or "") > formatters.LLM_RESULT_CHARS:
+        summed = charts.chart_from_result({"chart": True}, function_response)
+        if summed is not None:
+            return events, log_entry, charts.for_model(summed, shown_to_user=False)
     return events, log_entry, formatters._truncate_tool_result_for_llm(formatted_result)
 
 

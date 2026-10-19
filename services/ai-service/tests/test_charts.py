@@ -54,7 +54,8 @@ def test_the_model_summary_keeps_a_coarse_profile_of_a_long_series():
     summary = json.loads(charts.for_model(charts.chart_from_result({"chart": True, "title": "t"}, long)))
     s = summary["series"][0]
     assert s["points"] == 120 and len(s["profile"]) == charts.PROFILE_POINTS
-    assert s["profile"][0] == [0, 0.0] and s["profile"][-1] == [119, 119.0] and s["max"] == 119.0 and s["last"] == 119.0
+    assert s["profile"][0] == ["1970-01-01T00:00:00Z", 0.0] and s["profile"][-1] == ["1970-01-01T00:01:59Z", 119.0]
+    assert s["max"] == 119.0 and s["max_at"] == "1970-01-01T00:01:59Z" and s["last"] == 119.0
     assert len(charts.for_model(charts.chart_from_result({"chart": True}, range_result(10)))) < 6000
 
 
@@ -87,8 +88,10 @@ async def test_call_tool_numbers_the_call_and_carries_the_chart():
     # The model reads a summary it can trust instead of a result cut at its limit.
     summary = json.loads(llm_text)
     assert summary["chart_shown_to_user"] is True and "do not say points are missing" in summary["note"]
-    assert summary["series"][1] == {"label": "pod=web-1", "points": 3, "min": 10.0, "max": 12.0, "avg": 11.0, "last": 12.0,
-                                    "profile": [[1700000000, 10.0], [1700000060, 11.0], [1700000120, 12.0]]}
+    # times as UTC text, the peak's included: a small model misread unix seconds by 15 minutes (23 PR-3 probe)
+    assert summary["series"][1] == {"label": "pod=web-1", "points": 3, "min": 10.0, "max": 12.0, "max_at": "2023-11-14T22:15:20Z",
+                                    "avg": 11.0, "last": 12.0, "last_at": "2023-11-14T22:15:20Z",
+                                    "profile": [["2023-11-14T22:13:20Z", 10.0], ["2023-11-14T22:14:20Z", 11.0], ["2023-11-14T22:15:20Z", 12.0]]}
 
     service = _Service(range_result())
     events, entry, _ = await streaming._call_tool(
@@ -97,3 +100,48 @@ async def test_call_tool_numbers_the_call_and_carries_the_chart():
     )
     payload = json.loads(events[0].removeprefix("data: "))
     assert "chart" not in payload and "chart" not in entry and payload["call_id"] == 0
+
+
+@pytest.mark.asyncio
+async def test_a_loki_metric_query_draws_too_and_a_log_query_does_not():
+    metric = json.dumps({"logql": 'sum by (k8s_pod_name) (count_over_time({app="web"} |= "error" [5m]))', "kind": "metric", "range": True,
+                         "series": 1, "results": [{"metric": {"k8s_pod_name": "web-1"}, "points": [{"t": 1700000000, "v": 3}, {"t": 1700000060, "v": 5}]}],
+                         "step_seconds": 60})
+    events, entry, llm_text = await streaming._call_tool(
+        _Service(metric), None, None, "s1", [], None, "loki_query", {"logql": "x", "chart": True, "title": "에러 수", "unit": "count"},
+        iteration=1, audit_actor=None, audit_http=None, call_id=1,
+    )
+    chart = json.loads(events[0].removeprefix("data: "))["chart"]
+    assert chart["title"] == "에러 수" and chart["unit"] == "count" and chart["promql"].startswith("sum by (k8s_pod_name)")
+    assert chart["series"] == [{"label": "에러 수", "points": [[1700000000, 3], [1700000060, 5]]}] and entry["chart"] == chart
+    assert json.loads(llm_text)["chart_shown_to_user"] is True
+
+    lines = json.dumps({"logql": '{app="web"}', "kind": "log", "returned": 1, "lines": [{"line": "boom"}]})
+    events, entry, _ = await streaming._call_tool(
+        _Service(lines), None, None, "s1", [], None, "loki_query", {"logql": "x", "chart": True},
+        iteration=1, audit_actor=None, audit_http=None, call_id=2,
+    )
+    assert "chart" not in json.loads(events[0].removeprefix("data: ")) and "chart" not in entry
+
+
+@pytest.mark.asyncio
+async def test_a_range_result_too_long_to_read_reaches_the_model_summed_up():
+    # 30 series × 120 points is far past the model's limit: it gets the ten highest summed up, not a cut result
+    results = [{"metric": {"k8s_pod_name": f"web-{i}"}, "points": [{"t": 1700000000 + 60 * k, "v": float(i)} for k in range(120)]} for i in range(30)]
+    long = json.dumps({"logql": "sum by (k8s_pod_name) (rate({app=\"web\"}[5m]))", "kind": "metric", "range": True, "series": 30, "results": results})
+    events, entry, llm_text = await streaming._call_tool(
+        _Service(long), None, None, "s1", [], None, "loki_query", {"logql": "x"},
+        iteration=1, audit_actor=None, audit_http=None, call_id=0,
+    )
+    assert "chart" not in json.loads(events[0].removeprefix("data: ")) and "chart" not in entry
+    summed = json.loads(llm_text)
+    assert summed["chart_shown_to_user"] is False and "aggregate" in summed["note"] and "graph" not in summed["note"]
+    assert summed["hidden_series"] == 20 and [s["label"] for s in summed["series"]][:2] == ["k8s_pod_name=web-29", "k8s_pod_name=web-28"]
+    assert summed["series"][0]["max"] == 29.0 and len(summed["series"][0]["profile"]) == charts.PROFILE_POINTS
+
+    # a short one is read as it is
+    _, _, llm_text = await streaming._call_tool(
+        _Service(range_result()), None, None, "s1", [], None, "prometheus_query", {"promql": "x"},
+        iteration=1, audit_actor=None, audit_http=None, call_id=1,
+    )
+    assert json.loads(llm_text)["results"][0]["metric"]["pod"] == "web-0"
