@@ -1,0 +1,21 @@
+{
+ "id": "04_5xx_logs",
+ "title": "5xx 증가(로그 집계)",
+ "cluster": "self",
+ "namespace": "eval-04",
+ "question": "self 클러스터 eval-04 네임스페이스에서 최근 10분 동안 HTTP 5xx 응답이 가장 많이 나는 파드가 어디야? 대략 몇 건인지도.",
+ "expect": [
+  [
+   "web-a"
+  ]
+ ],
+ "tools": [
+  [
+   "loki_query",
+   "logsearch",
+   "loki_patterns"
+  ]
+ ],
+ "wait": "kubectl -n $NS wait --for=condition=Available deploy/web-a deploy/web-b --timeout=10s",
+ "settle_seconds": 75
+}

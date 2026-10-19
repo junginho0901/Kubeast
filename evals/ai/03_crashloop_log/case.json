@@ -1,0 +1,20 @@
+{
+ "id": "03_crashloop_log",
+ "title": "CrashLoopBackOff + 로그 에러",
+ "cluster": "self",
+ "namespace": "eval-03",
+ "question": "self 클러스터 eval-03 네임스페이스의 config-loader가 계속 안 뜨는데 원인이 뭐야?",
+ "expect": [
+  [
+   "DATABASE_URL"
+  ]
+ ],
+ "tools": [
+  [
+   "k8s_get_pod_logs",
+   "logsearch",
+   "loki_query"
+  ]
+ ],
+ "wait": "test \"$(kubectl -n $NS get pod -l app=config-loader -o jsonpath='{.items[0].status.containerStatuses[0].restartCount}')\" -ge 2"
+}

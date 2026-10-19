@@ -919,6 +919,10 @@ features:
     clusters: {alpha: eks-alpha, prod: eks-prod}
 ```
 
+### AI 분석 평가
+
+AI가 원인을 실제로 찾는지는 e2e가 아니라 평가 스크립트로 잽니다 — `scripts/ai-eval.py`가 dev 클러스터에 문제 12개(CPU 급등·OOMKilled·로그에 원인이 찍히는 CrashLoop·한 파드의 5xx·느린 경로 트레이스·울리는 알림·Pending 두 가지·ImagePullBackOff·Read 사용자의 Secret 요청·멈춘 롤아웃·PVC Pending)를 만들고, 운영자 말투로 묻고, 답에 정답 사실·필요한 도구가 있는지 채점합니다(모델마다 한 번씩). 사례 형식과 최근 결과는 [evals/ai/README.md](evals/ai/README.md) — 2026-10-19: Haiku 5.5·Sonnet 5.5(구독) 12/12.
+
 ### 알림 읽기 (AI, Alertmanager)
 
 `features.alertStore.enabled`(기본 off)면 AI의 `alerts_list`가 알림 저장소에서 **이 클러스터의 지금 알림**(이름·심각도·상태 울림/무음/억제·시작 시각·요약·레이블·받는 곳)과 **그 알림을 덮은 무음**(누가·왜·언제까지)을 읽습니다. 저장소 주소는 Alertmanager API v2(`http://alertmanager.monitoring:9093`), Grafana 데이터소스 프록시로 가는 Alertmanager(`…/api/datasources/proxy/uid/<Alertmanager UID>`), Grafana 알림 자체(`…/api/alertmanager/grafana`) 중 하나 — Grafana면 Viewer 서비스 계정 토큰.

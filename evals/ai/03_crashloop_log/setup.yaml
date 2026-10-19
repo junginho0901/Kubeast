@@ -1,0 +1,15 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: config-loader}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: config-loader}}
+  template:
+    metadata: {labels: {app: config-loader}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "echo \"starting config-loader v1.4\"; echo \"ERROR: required setting DATABASE_URL is not set\" >&2; exit 1"]

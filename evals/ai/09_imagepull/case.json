@@ -1,0 +1,31 @@
+{
+ "id": "09_imagepull",
+ "title": "ImagePullBackOff",
+ "cluster": "self",
+ "namespace": "eval-09",
+ "question": "self 클러스터 eval-09의 api 파드가 안 뜨는 이유를 알려줘.",
+ "expect": [
+  [
+   "9\\.99-eval-missing"
+  ],
+  [
+   "ImagePull",
+   "ErrImagePull",
+   "이미지.{0,15}(가져오|받|당겨|pull)",
+   "pull"
+  ]
+ ],
+ "tools": [
+  [
+   "k8s_get_resources",
+   "k8s_describe_resource",
+   "k8s_get_events",
+   "k8s_find_resource",
+   "issues",
+   "k8s_get_resource_yaml",
+   "k8s_jq_query",
+   "k8s_tabular_query"
+  ]
+ ],
+ "wait": "kubectl -n $NS get pod api -o jsonpath='{.status.containerStatuses[0].state.waiting.reason}' | grep -qE 'ImagePullBackOff|ErrImagePull'"
+}

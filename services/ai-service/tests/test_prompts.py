@@ -104,7 +104,9 @@ def test_not_found_protocol():
         assert phrase in logs, phrase
     assert "그 앞뒤 몇 분의 로그" in SYSTEM_MESSAGE.split("**시각으로 이으세요**")[1].split("\n")[0]
     # Alerts: what fires now and why one did not come.
-    assert "`alerts_list`로(안 온 알림은 `state=all`" in SYSTEM_MESSAGE.split("**Prometheus는 찾고 나서 질의하세요**")[1].split("\n")[0]
+    alerts = SYSTEM_MESSAGE.split("**Prometheus는 찾고 나서 질의하세요**")[1].split("\n")[0]
+    assert "`alerts_list`로(안 온 알림은 `state=all`" in alerts
+    assert "`prometheus_rules`(`active_only=true`)" in alerts  # an empty alert store is not "nothing fires" (evals/ai 06)
     # Traces: names first, a baseline before a "slow" threshold, open a sample, metrics for trends, what is refused.
     tr = SYSTEM_MESSAGE.split("**트레이스는 기준선부터 보세요**")[1].split("\n")[0]
     for phrase in ("`traces_tags`로 먼저", "`traces_compare`로 p50·p90", "`traces_get`으로 열어", "`traces_metrics`", "`parent.`"):

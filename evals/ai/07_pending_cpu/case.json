@@ -1,0 +1,30 @@
+{
+ "id": "07_pending_cpu",
+ "title": "Pending — 자원 부족",
+ "cluster": "self",
+ "namespace": "eval-07",
+ "question": "self 클러스터 eval-07의 big-job 파드가 왜 Pending 상태야?",
+ "expect": [
+  [
+   "Insufficient cpu",
+   "CPU.{0,25}(부족|모자|충분하지)",
+   "cpu.{0,25}insufficient"
+  ],
+  [
+   "\\b64\\b"
+  ]
+ ],
+ "tools": [
+  [
+   "k8s_get_resources",
+   "k8s_describe_resource",
+   "k8s_get_events",
+   "k8s_find_resource",
+   "issues",
+   "k8s_get_resource_yaml",
+   "k8s_jq_query",
+   "k8s_tabular_query"
+  ]
+ ],
+ "wait": "kubectl -n $NS get events --field-selector reason=FailedScheduling -o name | grep -q ."
+}

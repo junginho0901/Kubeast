@@ -1,0 +1,33 @@
+{
+ "id": "08_pending_selector",
+ "title": "Pending — 맞는 노드 없음(노드 셀렉터)",
+ "cluster": "self",
+ "namespace": "eval-08",
+ "question": "self 클러스터 eval-08의 ssd-app 파드가 스케줄이 안 되는 이유가 뭐야?",
+ "expect": [
+  [
+   "disktype",
+   "nvme-eval"
+  ],
+  [
+   "node ?selector",
+   "nodeSelector",
+   "노드 ?셀렉터",
+   "affinity",
+   "레이블|라벨|label"
+  ]
+ ],
+ "tools": [
+  [
+   "k8s_get_resources",
+   "k8s_describe_resource",
+   "k8s_get_events",
+   "k8s_find_resource",
+   "issues",
+   "k8s_get_resource_yaml",
+   "k8s_jq_query",
+   "k8s_tabular_query"
+  ]
+ ],
+ "wait": "kubectl -n $NS get events --field-selector reason=FailedScheduling -o name | grep -q ."
+}

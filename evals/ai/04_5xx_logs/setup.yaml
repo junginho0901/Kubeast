@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: web-a}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: web-a}}
+  template:
+    metadata: {labels: {app: web-a}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "i=0; while true; do i=$((i+1)); echo \"method=GET path=/api/orders status=500 duration_ms=12 req=$i\"; sleep 1; done"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: web-b}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: web-b}}
+  template:
+    metadata: {labels: {app: web-b}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "i=0; while true; do i=$((i+1)); echo \"method=GET path=/api/orders status=200 duration_ms=9 req=$i\"; if [ $((i % 30)) -eq 0 ]; then echo \"method=GET path=/api/orders status=503 duration_ms=40 req=$i\"; fi; sleep 1; done"]

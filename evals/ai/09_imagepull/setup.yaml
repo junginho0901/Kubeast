@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Pod
+metadata: {name: api}
+spec:
+  containers:
+    - name: main
+      image: docker.io/library/busybox:9.99-eval-missing
+      command: [sleep, '3600']

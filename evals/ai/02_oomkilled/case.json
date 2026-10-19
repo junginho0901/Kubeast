@@ -1,0 +1,30 @@
+{
+ "id": "02_oomkilled",
+ "title": "메모리 초과 OOMKilled",
+ "cluster": "self",
+ "namespace": "eval-02",
+ "question": "self 클러스터 eval-02 네임스페이스의 mem-hog 파드가 계속 재시작되는데 이유가 뭐야?",
+ "expect": [
+  [
+   "OOMKilled",
+   "OOM",
+   "메모리.{0,15}(초과|부족|한도)"
+  ],
+  [
+   "24 ?Mi"
+  ]
+ ],
+ "tools": [
+  [
+   "k8s_get_resources",
+   "k8s_describe_resource",
+   "k8s_get_events",
+   "k8s_find_resource",
+   "issues",
+   "k8s_get_resource_yaml",
+   "k8s_jq_query",
+   "k8s_tabular_query"
+  ]
+ ],
+ "wait": "kubectl -n $NS get pod -l app=mem-hog -o jsonpath='{.items[0].status.containerStatuses[0].lastState.terminated.reason}' | grep -q OOMKilled"
+}

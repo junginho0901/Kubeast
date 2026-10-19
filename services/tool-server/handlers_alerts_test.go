@@ -36,7 +36,7 @@ func TestAlertsList_EmptyMissingAndRefused(t *testing.T) {
 		return 200, `{"alerts":[],"total":0,"states":{"silenced":2},"byName":[],"silences":[]}`
 	})
 	out, _ := handleAlertsList(ctxFor("c1"), map[string]interface{}{}, bearer())
-	if m := decode(t, out); !strings.Contains(m["hint"].(string), "state=all") {
+	if m := decode(t, out); !strings.Contains(m["hint"].(string), "state=all") || !strings.Contains(m["hint"].(string), "prometheus_rules with active_only=true") {
 		t.Fatalf("empty firing: %s", out)
 	}
 	out, _ = handleAlertsList(ctxFor("c1"), map[string]interface{}{"state": "all"}, bearer())

@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: cpu-burner}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: cpu-burner}}
+  template:
+    metadata: {labels: {app: cpu-burner}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "while true; do :; done"]
+          resources: {limits: {cpu: 500m, memory: 32Mi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: idle}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: idle}}
+  template:
+    metadata: {labels: {app: idle}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "sleep 3600"]
+          resources: {limits: {cpu: 50m, memory: 16Mi}}

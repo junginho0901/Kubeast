@@ -1,0 +1,20 @@
+{
+ "id": "01_cpu_spike",
+ "title": "CPU 급등",
+ "cluster": "default",
+ "namespace": "eval-01",
+ "question": "default 클러스터의 eval-01 네임스페이스에서 지금 CPU를 가장 많이 쓰는 파드가 뭐야? 얼마나 쓰는지도 알려줘.",
+ "expect": [
+  [
+   "cpu-burner"
+  ]
+ ],
+ "tools": [
+  [
+   "prometheus_query",
+   "get_pod_metrics"
+  ]
+ ],
+ "wait": "kubectl -n $NS wait --for=condition=Available deploy/cpu-burner deploy/idle --timeout=10s",
+ "settle_seconds": 90
+}

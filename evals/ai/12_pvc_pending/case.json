@@ -1,0 +1,29 @@
+{
+ "id": "12_pvc_pending",
+ "title": "PVC Pending(없는 StorageClass)",
+ "cluster": "self",
+ "namespace": "eval-12",
+ "question": "self 클러스터 eval-12의 data-pvc가 왜 Pending이야?",
+ "expect": [
+  [
+   "eval-missing-sc"
+  ],
+  [
+   "StorageClass",
+   "스토리지 ?클래스"
+  ]
+ ],
+ "tools": [
+  [
+   "k8s_get_resources",
+   "k8s_describe_resource",
+   "k8s_get_events",
+   "k8s_find_resource",
+   "issues",
+   "k8s_get_resource_yaml",
+   "k8s_jq_query",
+   "k8s_tabular_query"
+  ]
+ ],
+ "wait": "kubectl -n $NS get pvc data-pvc -o jsonpath='{.status.phase}' | grep -q Pending"
+}

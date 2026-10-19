@@ -1,0 +1,39 @@
+{
+ "id": "11_rollout_stuck",
+ "title": "롤아웃 멈춤(새 버전이 준비 안 됨)",
+ "cluster": "self",
+ "namespace": "eval-11",
+ "question": "self 클러스터 eval-11의 web Deployment 롤아웃이 끝나지 않는데 이유가 뭐야?",
+ "expect": [
+  [
+   "readiness",
+   "Readiness",
+   "준비(성)? ?(검사|프로브|상태|되지)",
+   "Ready"
+  ],
+  [
+   "rollout",
+   "롤아웃",
+   "ReplicaSet",
+   "새 (파드|버전|레플리카)"
+  ]
+ ],
+ "tools": [
+  [
+   "k8s_get_resources",
+   "k8s_describe_resource",
+   "k8s_get_events",
+   "k8s_find_resource",
+   "issues",
+   "k8s_get_resource_yaml",
+   "k8s_jq_query",
+   "k8s_tabular_query"
+  ]
+ ],
+ "setup_cmds": [
+  "kubectl -n $NS wait --for=condition=Available deploy/web --timeout=120s",
+  "kubectl -n $NS patch deploy web --type=json -p='[{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/readinessProbe\",\"value\":{\"exec\":{\"command\":[\"cat\",\"/tmp/ready\"]},\"periodSeconds\":2}},{\"op\":\"replace\",\"path\":\"/spec/template/metadata/labels/version\",\"value\":\"v2\"}]'"
+ ],
+ "wait": "test \"$(kubectl -n $NS get rs -l app=web -o name | wc -l)\" -ge 2",
+ "settle_seconds": 20
+}

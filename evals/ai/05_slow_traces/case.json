@@ -1,0 +1,26 @@
+{
+ "id": "05_slow_traces",
+ "title": "느린 요청(트레이스)",
+ "cluster": "self",
+ "namespace": "eval-05",
+ "question": "self 클러스터 eval-05 네임스페이스의 eval-shop 서비스에 느린 요청이 있어? 어느 경로가 느리고 얼마나 걸리는지 알려줘.",
+ "expect": [
+  [
+   "/checkout"
+  ],
+  [
+   "2[.,]?5 ?(s|초)",
+   "2[,.]?5\\d\\d ?ms",
+   "2500"
+  ]
+ ],
+ "tools": [
+  [
+   "traces_search",
+   "traces_compare",
+   "traces_metrics"
+  ]
+ ],
+ "wait": "kubectl -n $NS wait --for=condition=complete job/traffic --timeout=10s",
+ "settle_seconds": 45
+}

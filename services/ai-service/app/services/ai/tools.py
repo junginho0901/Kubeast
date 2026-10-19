@@ -339,7 +339,8 @@ K8S_READONLY_TOOLS: List[Dict] = [
                 "This cluster's alerts in its alert store (Alertmanager, or Grafana alerting): name, severity, state (firing, silenced, "
                 "inhibited), since when, summary, labels and receivers, firing first; the silences on silenced alerts (who, why, until when); "
                 "counts by state and by name. Default state firing; state=all or silenced answers 'why did no alert come' (a silence or an "
-                "inhibition). The rule behind an alert (expression, threshold) is prometheus_rules. unavailable = no alert store here."
+                "inhibition). The rule behind an alert (expression, threshold) is prometheus_rules. An empty store does not mean nothing fires: "
+                "Prometheus rules can fire without reaching it, so check prometheus_rules active_only=true before saying so. unavailable = no alert store here."
             ),
             "parameters": {
                 "type": "object",

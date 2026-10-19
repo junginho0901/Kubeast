@@ -1,0 +1,21 @@
+{
+ "id": "06_alert_rule",
+ "title": "울리는 알림을 규칙부터",
+ "cluster": "default",
+ "namespace": "eval-06",
+ "question": "default 클러스터에서 지금 울리고 있는 알림이 있으면 하나 골라서, 그 알림 규칙의 조건식이 뭐고 지금 왜 울리는지 설명해줘.",
+ "expect": [
+  [
+   "KubeastE2EPrometheusUp"
+  ],
+  [
+   "up\\{job=.prometheus.\\}"
+  ]
+ ],
+ "tools": [
+  [
+   "prometheus_rules",
+   "alerts_list"
+  ]
+ ]
+}

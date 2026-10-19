@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Pod
+metadata: {name: ssd-app}
+spec:
+  nodeSelector: {disktype: nvme-eval}
+  containers:
+    - name: main
+      image: docker.io/library/busybox:1.38.0
+      imagePullPolicy: IfNotPresent
+      command: [sleep, '3600']

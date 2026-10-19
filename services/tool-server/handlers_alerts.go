@@ -72,9 +72,10 @@ func handleAlertsList(ctx context.Context, args map[string]interface{}, headers 
 	}
 	switch {
 	case reply.Total == 0 && state != "all":
-		result["hint"] = fmt.Sprintf("No %s alert for this cluster. The counts in states are every state: ask state=all (or silenced) to see the others.", state)
+		result["hint"] = fmt.Sprintf("No %s alert in the alert store for this cluster. The counts in states are every state: ask state=all (or silenced) to see the others. "+
+			"Prometheus may still fire alerts that never reach this store: check prometheus_rules with active_only=true before saying nothing fires.", state)
 	case reply.Total == 0:
-		result["hint"] = "The alert store holds no alert for this cluster. An alert that never came may have no rule (prometheus_rules) or be routed to another Alertmanager."
+		result["hint"] = "The alert store holds no alert for this cluster. Prometheus may still fire alerts that are not routed here: check prometheus_rules with active_only=true before saying nothing fires; an alert that never came may have no rule."
 	}
 	if truncated {
 		result["truncated"] = true
