@@ -68,4 +68,4 @@ def test_required_version_matches_go_migrations():
     import pathlib
     import re
     go = (pathlib.Path(__file__).resolve().parents[2] / "pkg" / "dbmigrate" / "dbmigrate.go").read_text()
-    assert database.REQUIRED_SCHEMA_VERSION == int(re.search(r"const Required int64 = (\d+)", go).group(1)) == 18
+    assert database.REQUIRED_SCHEMA_VERSION == int(re.search(r"const Required int64 = (\d+)", go).group(1)) == 19
