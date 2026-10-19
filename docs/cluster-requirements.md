@@ -20,6 +20,7 @@ Kubeast는 등록한 클러스터에 아무것도 설치하지 않습니다(노�
 | 노드 셸 | 특권 파드 허용과 이미지 — §9 | `nodeShell.enabled`(끔) | 파드 생성 실패 |
 | 컨테이너 안 로그 파일 | 이미지에 `ls`·`tail`, exec 권한 — §10 | `features.logFiles.enabled`(끔) | 422 "볼 수 없음" |
 | 로그 검색 | 로그를 Loki로 보내는 수집기, `pods/log` 읽기 권한 — §14 | `features.logSearch.enabled`(끔) | 검색이 안 보이고 API 404 |
+| AI 알림 읽기 | 알림에 클러스터 레이블(기본 `cluster`)을 붙이는 Alertmanager 또는 Grafana 알림 — §14 끝 | `features.alertStore.enabled`(끔) | `alerts_list`가 빠지고 API 404 |
 | AI 트레이스 읽기 | 스팬을 Tempo로 보내는 수집기(리소스 속성 `k8s.cluster.name`·`k8s.namespace.name`), `pods/log` 읽기 권한 — §14 끝 | `features.traceStore.enabled`(끔) | `traces_*` 도구가 빠지고 API 404 |
 | 위생·업그레이드 점검의 폐기 API 항목 | API 서버 `/metrics` 읽기 권한 — §11 | `features.hygiene.enabled`(켬) | 그 항목만 "수집 실패" |
 | Argo CD 가드 | Argo CD 추적 어노테이션 — §12 | `gitops.argocd.enabled`(끔) | 배지·경고 없음 |
@@ -242,6 +243,7 @@ Kubeast는 Loki의 `query_range`(AI의 `loki_query`는 메트릭 쿼리도)·`la
 - **네트워크**: k8s-service에서 Loki로. `networkPolicy`가 켜져 있고 443이 아닌 포트면 `features.logSearch.egressCIDRs`.
 - **Grafana를 거쳐**(§3과 같음): 주소 = `https://<Grafana>/api/datasources/proxy/uid/<Loki 데이터소스 UID>`, 인증 = 서비스 계정 토큰, **테넌트는 비움** — 데이터소스에 설정한 `X-Scope-OrgID`를 Grafana가 붙입니다(Kubeast는 테넌트 칸이 비면 그 헤더를 보내지 않음).
 - **AI 트레이스 읽기**(`features.traceStore`, 쓸 때): Kubeast는 Tempo의 `/api/search`·`/api/v2/traces/<id>`·`/api/v2/search/tags`·`/api/v2/search/tag/<t>/values`·`/api/metrics/query_range`를 읽기만 합니다(모두 GET — Grafana 데이터소스 프록시로도). 스팬의 **리소스 속성**에 클러스터 값(`k8s.cluster.name` — 수집기의 resource 프로세서)과 네임스페이스(`k8s.namespace.name` — `k8sattributes`)가 있어야 그 클러스터·NS로 거를 수 있습니다(값 = `features.traceStore.clusters`). TraceQL 지표(`traces_metrics`)는 Tempo 3.x에서 기본 제공(2.x는 metrics-generator `local-blocks` 필요). 지표는 Tempo `query_frontend.query_end_cutoff`(기본 30초)와 단계만큼 최근 구간이 빠집니다 — 확인: `/status/config`에서 그 값. 읽는 권한은 로그 검색과 같이 사용자 신원 `get pods/log`.
+- **AI 알림 읽기**(`features.alertStore`, 쓸 때): Kubeast는 알림 저장소의 `/api/v2/alerts`(매처 `filter`)와 `/api/v2/silences`를 GET으로 읽기만 합니다 — Alertmanager API v2, Grafana 데이터소스 프록시로 가는 Alertmanager, Grafana 알림의 Alertmanager 호환 API(`/api/alertmanager/grafana/api/v2/…`, Grafana 13.2.4에서 Viewer로 200 확인 — `…/status`는 Viewer 403이라 안 씀). 여러 클러스터가 쓰는 저장소면 알림마다 **클러스터 레이블**(기본 `cluster` — Prometheus `external_labels` 또는 Grafana 알림 규칙 레이블)이 있어야 그 클러스터 것만 거릅니다(값 = `features.alertStore.clusters`). 확인: `curl -G <url>/api/v2/alerts --data-urlencode 'filter=cluster="<값>"'`.
 - **트레이스 링크**(`features.tracing`, 쓸 때): 줄의 trace ID를 Loki 라벨에서 먼저 읽습니다. 앱이 OTLP로 로그를 보내면 Loki가 trace ID를 구조화 메타데이터 `trace_id`로 줄과 함께 돌려주므로(Loki 3.x, 10-14 kind 실측) 따로 할 일이 없습니다. 위처럼 컨테이너 로그를 파일로 읽는 수집기는 trace ID를 모르므로 줄 글자(`trace_id=…` 등)에서 찾습니다 — 앱이 로그 문장에 trace ID를 쓰거나, 수집기에서 JSON 줄을 파싱해 trace 필드로 옮기면 됩니다. 트레이스 저장소(Jaeger·Tempo)는 브라우저가 링크로 여는 곳이라 Kubeast 쪽 통신은 없습니다.
 
 ```yaml

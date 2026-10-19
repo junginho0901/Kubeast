@@ -296,6 +296,7 @@ func allPermissions() []map[string]interface{} {
 			{"ai.tool.traces_tags", "Read tool: span attribute names and values on the trace store"},
 			{"ai.tool.traces_metrics", "Read tool: TraceQL metrics (rate, error rate, latency) over time"},
 			{"ai.tool.traces_compare", "Read tool: fastest, typical and slowest traces"},
+			{"ai.tool.alerts_list", "Read tool: the cluster's alerts and silences in the alert store"},
 			{"ai.tool.policy_reports", "Read tool: policy report summary and results"},
 			{"ai.tool.helm_read", "Read tool: Helm releases read-only (values, history, diff)"},
 			{"ai.tool.cost", "Read tool: OpenCost allocation"},

@@ -40,6 +40,7 @@ var ReadAIToolPermissions = []string{
 	"ai.tool.traces_tags",
 	"ai.tool.traces_metrics",
 	"ai.tool.traces_compare",
+	"ai.tool.alerts_list",
 	"ai.tool.policy_reports",
 	"ai.tool.helm_read",
 	"ai.tool.cost",

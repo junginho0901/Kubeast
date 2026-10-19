@@ -11,6 +11,7 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/alerts"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/helm"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/hygiene"
@@ -47,6 +48,8 @@ type Handler struct {
 	tracing tracing.Config
 	// traceStore reads the trace store (nil: trace reads off).
 	traceStore *traces.Store
+	// alertStore reads the alert store (nil: alert reads off).
+	alertStore *alerts.Store
 	// logSearchCanI replaces the pods/log access review in tests.
 	logSearchCanI func(ctx context.Context, namespace string) (bool, error)
 }

@@ -399,6 +399,17 @@ spec:
           port: {{ if kindIs "map" . }}{{ .port | default 443 }}{{ else }}443{{ end }}
     {{- end }}
     {{- end }}
+    {{- if .Values.features.alertStore.enabled }}
+    {{- range .Values.features.alertStore.egressCIDRs }}
+    # alert store (features.alertStore.egressCIDRs)
+    - to:
+        - ipBlock:
+            cidr: {{ if kindIs "map" . }}{{ .cidr }}{{ else }}{{ . }}{{ end }}
+      ports:
+        - protocol: TCP
+          port: {{ if kindIs "map" . }}{{ .port | default 443 }}{{ else }}443{{ end }}
+    {{- end }}
+    {{- end }}
 {{- if .Values.ai.enabled }}
 ---
 # tool-server: ai-service 에서 inbound, kube-apiserver + ai-service egress

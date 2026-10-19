@@ -81,10 +81,10 @@ var clusterWideTools = map[string]struct{}{
 	"k8s_get_available_api_resources": {}, "k8s_get_cluster_configuration": {},
 	"k8s_apply_manifest": {}, "k8s_create_resource": {},
 	"get_cluster_overview": {}, "get_node_metrics": {},
-	// PromQL is not bounded by a namespace; the hygiene report covers the cluster;
-	// a manifest preview names its own object; the audit log and node internals
-	// are Admin-only and cluster-wide.
-	"prometheus_query": {}, "prometheus_metrics": {}, "prometheus_labels": {}, "prometheus_rules": {}, "prometheus_targets": {},
+	// PromQL and the alert store are not bounded by a namespace; the hygiene
+	// report covers the cluster; a manifest preview names its own object; the
+	// audit log and node internals are Admin-only and cluster-wide.
+	"prometheus_query": {}, "prometheus_metrics": {}, "prometheus_labels": {}, "prometheus_rules": {}, "prometheus_targets": {}, "alerts_list": {},
 	"hygiene": {}, "k8s_diff": {},
 	"audit_search": {}, "nodes_stats_summary": {}, "nodes_log": {},
 }

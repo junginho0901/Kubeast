@@ -18,6 +18,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/alerts"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/cache"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/handler"
@@ -201,6 +202,17 @@ func main() {
 		}
 		h.SetTraceStore(store)
 		slog.Info("trace store reads enabled", "clusters", tsCfg.ClusterIDs(), "max_range", tsCfg.MaxRange.String())
+	}
+
+	// Alert store reads for the AI's alerts_list (off unless ALERT_STORE_ENABLED).
+	if asCfg := alerts.LoadConfig(); asCfg.Enabled {
+		store, err := alerts.New(asCfg)
+		if err != nil {
+			slog.Error("invalid alert store configuration", "err", err)
+			os.Exit(1)
+		}
+		h.SetAlertStore(store)
+		slog.Info("alert store reads enabled", "clusters", asCfg.ClusterIDs(), "cluster_label", asCfg.ClusterLabel)
 	}
 
 	// Terminal session recording (off unless SESSION_RECORDING_ENABLED): the

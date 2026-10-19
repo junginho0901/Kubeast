@@ -38,6 +38,13 @@ def _trace_store_on(features: Dict[str, Any], cluster: str) -> bool:
     return not cluster or cluster in (ts.get("clusters") or [])
 
 
+def _alert_store_on(features: Dict[str, Any], cluster: str) -> bool:
+    al = features.get("alertStore") or {}
+    if not al.get("enabled"):
+        return False
+    return not cluster or cluster in (al.get("clusters") or [])
+
+
 def _cost_on(features: Dict[str, Any], cluster: str) -> bool:
     return bool((features.get("cost") or {}).get("enabled"))
 
@@ -62,6 +69,7 @@ GATES: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
     "traces_tags": _trace_store_on,
     "traces_metrics": _trace_store_on,
     "traces_compare": _trace_store_on,
+    "alerts_list": _alert_store_on,
     "cost": _cost_on,
     "policy_reports": _policy_reports_on,
 }

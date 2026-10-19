@@ -113,6 +113,8 @@ def scope_tool_args(function_args: Dict, cluster: str) -> Tuple[Dict, Optional[s
 CLUSTER_WIDE_TOOLS = frozenset({
     "k8s_get_available_api_resources", "k8s_get_cluster_configuration",
     "k8s_apply_manifest", "k8s_create_resource", "get_cluster_overview", "get_node_metrics",
+    "prometheus_query", "prometheus_metrics", "prometheus_labels", "prometheus_rules", "prometheus_targets", "alerts_list",
+    "hygiene", "k8s_diff", "audit_search", "nodes_stats_summary", "nodes_log",
 })
 
 

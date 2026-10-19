@@ -33,6 +33,8 @@ def system_prompt(*, cluster: str, namespace: str, language: str) -> str:
         "- When traces_search is offered, find slow or failing requests of the affected service with traces_compare or traces_search "
         "(attribute names from traces_tags), open one with traces_get to see which span took the time or failed, and use a trace ID "
         "from a log line directly.\n"
+        "- When alerts_list is offered, check which other alerts of the cluster fire at the same time (state=firing) — one cause often "
+        "fires several — and whether related ones are silenced.\n"
         "- When prometheus_rules is offered, call it first with the alert name to read the rule's expression and threshold, and check that "
         "expression with prometheus_query; find metric and label names with prometheus_metrics and prometheus_labels instead of guessing.\n"
         "- A tool result with status not_found lists similar names: use one of them or call k8s_find_resource once, then stop looking and report what was searched. "

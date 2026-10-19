@@ -141,6 +141,9 @@ var argRules = map[string]argCheck{
 	"trace_id": checkTraceID,
 	"scope":    checkEnum("resource", "span", "intrinsic", "event", "link", "instrumentation"),
 	"tag":      checkTraceTag,
+	// The alert store.
+	"state":     checkEnum("firing", "silenced", "inhibited", "all"),
+	"alertname": checkPrintable(200),
 }
 
 // validateToolArgs rejects any argument that would not be read by kubectl as
@@ -163,6 +166,14 @@ func validateToolArgs(args map[string]interface{}) error {
 					return err
 				}
 			}
+		}
+	}
+	for k, v := range argStringMap(args, "alert_labels") {
+		if !alertLabelRe.MatchString(k) {
+			return badArg("alert_labels key", k, "a label name such as severity or namespace")
+		}
+		if err := checkPrintable(200)("alert_labels value", v); err != nil {
+			return err
 		}
 	}
 	for _, k := range argStringSlice(args, "keys") {
@@ -348,6 +359,8 @@ func checkTraceTag(field, v string) error {
 	}
 	return nil
 }
+
+var alertLabelRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,127}$`)
 
 var promLabelRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.:-]{0,127}$`)
 

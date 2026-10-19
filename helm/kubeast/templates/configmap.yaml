@@ -257,6 +257,31 @@ data:
   TRACE_STORE_PER_USER_PER_MINUTE: {{ .perUserPerMinute | quote }}
 {{- end }}
 {{- end }}
+{{- with .Values.features.alertStore }}
+  ALERT_STORE_ENABLED: {{ .enabled | quote }}
+{{- if .enabled }}
+{{- if or (not .url) (empty .clusters) }}
+  {{- fail "features.alertStore needs url and clusters (Kubeast cluster ID: value of clusterLabel) when enabled" }}
+{{- end }}
+{{- if not (regexMatch "^https?://" .url) }}
+  {{- fail "features.alertStore.url must start with http:// or https://" }}
+{{- end }}
+  {{- $pairs := list }}
+  {{- range $id, $value := .clusters }}
+  {{- if and (not $value) (gt (len $.Values.features.alertStore.clusters) 1) }}
+  {{- fail (printf "features.alertStore.clusters.%s: an empty value (every alert of the store) is for a store of one cluster only" $id) }}
+  {{- end }}
+  {{- $pairs = append $pairs (printf "%s=%s" $id ($value | default "")) }}
+  {{- end }}
+  ALERT_STORE_URL: {{ .url | quote }}
+  ALERT_STORE_TENANT: {{ .tenant | quote }}
+  ALERT_STORE_CLUSTER_LABEL: {{ .clusterLabel | quote }}
+  ALERT_STORE_CLUSTERS: {{ join "," $pairs | quote }}
+  ALERT_STORE_MAX_ALERTS: {{ .maxAlerts | quote }}
+  ALERT_STORE_TIMEOUT: {{ .timeout | quote }}
+  ALERT_STORE_PER_USER_PER_MINUTE: {{ .perUserPerMinute | quote }}
+{{- end }}
+{{- end }}
   GITOPS_ARGOCD_ENABLED: {{ .Values.gitops.argocd.enabled | quote }}
   GITOPS_ARGOCD_MODE: {{ .Values.gitops.argocd.mode | quote }}
   GITOPS_ARGOCD_TRACKING_ANNOTATION: {{ .Values.gitops.argocd.trackingAnnotation | quote }}

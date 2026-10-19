@@ -1,0 +1,99 @@
+suite: Alert store — env, auth header Secret, k8s-service egress, guards
+templates:
+  - configmap.yaml
+  - deployments.yaml
+  - networkpolicy.yaml
+  - secret.yaml
+tests:
+  - it: is off by default — no store settings, no header
+    asserts:
+      - equal:
+          path: data.ALERT_STORE_ENABLED
+          value: "false"
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - notExists:
+          path: data.ALERT_STORE_URL
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content: {name: ALERT_STORE_AUTH_HEADER}
+          any: true
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+  - it: renders Grafana alerting's Alertmanager API, the cluster label, clusters, the header and the egress
+    set:
+      features.alertStore.enabled: true
+      features.alertStore.url: https://grafana.example.com/api/alertmanager/grafana
+      features.alertStore.auth.existingSecret: grafana-reader
+      features.alertStore.clusterLabel: k8s_cluster
+      features.alertStore.clusters: {alpha: eks-alpha, self: kind}
+      features.alertStore.egressCIDRs: [{cidr: 10.84.0.0/16, port: 443}]
+    asserts:
+      - equal:
+          path: data.ALERT_STORE_URL
+          value: https://grafana.example.com/api/alertmanager/grafana
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.ALERT_STORE_CLUSTERS
+          value: alpha=eks-alpha,self=kind
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.ALERT_STORE_CLUSTER_LABEL
+          value: k8s_cluster
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: ALERT_STORE_AUTH_HEADER
+            valueFrom: {secretKeyRef: {name: grafana-reader, key: authorization}}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+      - contains:
+          path: spec.egress
+          content:
+            to: [{ipBlock: {cidr: 10.84.0.0/16}}]
+            ports: [{protocol: TCP, port: 443}]
+        template: networkpolicy.yaml
+        documentSelector: {path: metadata.name, value: RELEASE-NAME-k8s-service}
+  - it: takes an empty value for a store of one cluster
+    set:
+      features.alertStore.enabled: true
+      features.alertStore.url: http://alertmanager.monitoring:9093
+      features.alertStore.clusters: {self: ""}
+    asserts:
+      - equal:
+          path: data.ALERT_STORE_CLUSTERS
+          value: self=
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+  - it: refuses an empty value next to another cluster
+    set:
+      features.alertStore.enabled: true
+      features.alertStore.url: http://alertmanager.monitoring:9093
+      features.alertStore.clusters: {self: "", alpha: eks-alpha}
+    asserts:
+      - failedTemplate:
+          errorPattern: features.alertStore.clusters.self. an empty value
+        template: deployments.yaml
+  - it: refuses to render when enabled without a store or clusters
+    set:
+      features.alertStore.enabled: true
+      features.alertStore.clusters: {self: kind}
+    asserts:
+      - failedTemplate:
+          errorPattern: features.alertStore needs url and clusters
+        template: deployments.yaml
+  - it: refuses a URL that is not http(s)
+    set:
+      features.alertStore.enabled: true
+      features.alertStore.url: alertmanager:9093
+      features.alertStore.clusters: {self: kind}
+    asserts:
+      - failedTemplate:
+          errorPattern: features.alertStore.url must start with http
+        template: deployments.yaml

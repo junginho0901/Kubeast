@@ -864,6 +864,28 @@ features:
     timeout: 15s
     perUserPerMinute: 20
     egressCIDRs: []
+  # Alert store reads for the AI's alerts_list (off by default): an
+  # Alertmanager's API v2 at url (http://alertmanager.monitoring:9093), a
+  # Grafana data source proxy to one (https://<grafana>/api/datasources/proxy/uid/<Alertmanager UID>)
+  # or Grafana alerting's own (https://<grafana>/api/alertmanager/grafana) —
+  # a Viewer service account token as Bearer. Alerts are asked with
+  # <clusterLabel>="<value of the cluster in clusters>" and every alert that
+  # comes back is checked again; silences are only those on the cluster's
+  # alerts. An empty value reads every alert of the store (a store of one
+  # cluster only). Who may read: a grant on the whole cluster, as for the
+  # Prometheus reads. The auth Secret has key "authorization".
+  alertStore:
+    enabled: false
+    url: ""
+    auth:
+      existingSecret: ""
+    tenant: ""
+    clusterLabel: cluster
+    clusters: {}
+    maxAlerts: 100
+    timeout: 10s
+    perUserPerMinute: 30
+    egressCIDRs: []
 
 # Argo CD guard. An object that carries Argo CD's tracking annotation
 # (argocd.argoproj.io/tracking-id, naming the object itself) is badged with

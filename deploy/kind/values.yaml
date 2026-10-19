@@ -136,6 +136,16 @@ features:
       - apiGroups: [wgpolicyk8s.io]
         resources: [policyreports, clusterpolicyreports]
         verbs: [get, list, watch]
+  # The AI's alerts_list (ai-alerts-list.spec.ts): the second cluster's Alertmanager (deploy/kind/alertmanager.yaml)
+  # on its NodePort, holding alerts of both clusters by their cluster label.
+  alertStore:
+    enabled: true
+    url: http://kubeast-b-control-plane:31093
+    clusters:
+      self: kubeast
+      default: kubeast-b
+    egressCIDRs:
+      - {cidr: 172.18.0.0/16, port: 31093}
 gitops:
   argocd:
     enabled: true

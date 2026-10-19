@@ -179,6 +179,11 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Handler:     handlePrometheusTargets,
 	})
 	register(ToolDefinition{
+		Name:        "alerts_list",
+		Description: "The cluster's alerts in its alert store (Alertmanager): firing, silenced or inhibited, with the silences on them",
+		Handler:     handleAlertsList,
+	})
+	register(ToolDefinition{
 		Name:        "logsearch",
 		Description: "Search the cluster's log store (Loki) through Kubeast — also pods that no longer exist",
 		Handler:     handleLogSearch,

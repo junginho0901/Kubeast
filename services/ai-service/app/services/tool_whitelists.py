@@ -44,6 +44,7 @@ READONLY_TOOL_NAMES: frozenset[str] = frozenset(
         "traces_tags",
         "traces_metrics",
         "traces_compare",
+        "alerts_list",
         "policy_reports",
         "helm_read",
         "cost",

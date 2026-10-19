@@ -38,7 +38,11 @@ def test_gated_names_by_feature_and_cluster():
     gated = {t["function"]["name"] for t in K8S_READONLY_TOOLS if t["function"]["name"] in features.GATES}
     assert gated == {"prometheus_query", "prometheus_metrics", "prometheus_labels", "prometheus_rules", "prometheus_targets",
                      "logsearch", "loki_query", "loki_labels", "loki_patterns", "traces_search", "traces_get", "traces_tags",
-                     "traces_metrics", "traces_compare", "cost", "policy_reports"}
+                     "traces_metrics", "traces_compare", "alerts_list", "cost", "policy_reports"}
+    # alerts_list comes and goes with the alert store
+    assert features.gated_names(["alerts_list"], {"alertStore": {"enabled": True, "clusters": ["self"]}}, "self") == ["alerts_list"]
+    assert features.gated_names(["alerts_list"], {"alertStore": {"enabled": True, "clusters": ["self"]}}, "other") == []
+    assert features.gated_names(["alerts_list"], {"alertStore": {"enabled": False, "clusters": ["self"]}}, "self") == []
     # the trace tools come and go with the trace store
     tr = ["traces_search", "traces_get", "traces_tags", "traces_metrics", "traces_compare"]
     assert features.gated_names(tr, {"traceStore": {"enabled": True, "clusters": ["self"]}}, "self") == tr

@@ -3,6 +3,9 @@
 # which scripts/add-kind-cluster.sh --addons copies from Kubeast's kubeast-secrets (ALERT_WEBHOOK_TOKEN).
 # Fake alerts: kubectl -n monitoring exec deploy/alertmanager -- amtool alert add <name> severity=warning namespace=… \
 #   --alertmanager.url=http://localhost:9093
+# Kubeast's alerts_list reads it on NodePort 31093 (features.alertStore in deploy/kind/values.yaml); the alerts
+# ai-alerts-list.spec.ts posts carry kubeast_e2e="store" and go to no receiver, so they start no investigation.
+# After a change here: kubectl apply -f this file, then kubectl -n monitoring rollout restart deploy/alertmanager.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -16,7 +19,11 @@ data:
       group_wait: 5s
       group_interval: 1m
       repeat_interval: 4h
+      routes:
+        - matchers: ['kubeast_e2e="store"']
+          receiver: none
     receivers:
+      - name: none
       - name: kubeast
         webhook_configs:
           - url: http://kubeast-control-plane:30080/api/v1/alerts/webhook?cluster=default
@@ -84,6 +91,7 @@ metadata:
   name: alertmanager
   namespace: monitoring
 spec:
+  type: NodePort
   selector: {app: alertmanager}
   ports:
-    - {name: http, port: 9093, targetPort: http}
+    - {name: http, port: 9093, targetPort: http, nodePort: 31093}

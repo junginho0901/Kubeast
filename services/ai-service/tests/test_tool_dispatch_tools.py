@@ -140,6 +140,8 @@ async def test_feature_tools_pass_declared_arguments_only():
         ("traces_tags", {"scope": "span", "tag": "span.http.route", "limit": 3}, {"scope": "span", "tag": "span.http.route"}),
         ("traces_metrics", {"traceql": "{} | rate()", "since_time": "2d", "step": "60", "chart": True}, {"traceql": "{} | rate()", "since_time": "2d", "step": 60}),
         ("traces_compare", {"traceql": "{ kind = server }", "limit": 50}, {"traceql": "{ kind = server }", "limit": 50}),
+        ("alerts_list", {"state": "all", "alertname": "KubePodCrashLooping", "alert_labels": {"severity": "critical", "n": 3, "x": {"y": 1}}, "namespace": "shop"},
+         {"state": "all", "alertname": "KubePodCrashLooping", "alert_labels": {"severity": "critical", "n": "3"}}),
     ]:
         service._call_tool_server.reset_mock()
         await execute_function_with_context(service, tool, given, _ctx())

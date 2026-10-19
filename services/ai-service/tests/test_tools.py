@@ -34,6 +34,7 @@ EXPECTED_READONLY_NAMES = {
     "traces_tags",
     "traces_metrics",
     "traces_compare",
+    "alerts_list",
     "policy_reports",
     "helm_read",
     "cost",

@@ -286,6 +286,15 @@ spec:
                   key: authorization
             {{- end }}
             {{- end }}
+            {{- if .Values.features.alertStore.enabled }}
+            {{- with .Values.features.alertStore.auth.existingSecret }}
+            - name: ALERT_STORE_AUTH_HEADER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . | quote }}
+                  key: authorization
+            {{- end }}
+            {{- end }}
             {{- with include "kubeast.awsEnv" . }}{{ nindent 12 . }}{{- end }}
             {{- with include "kubeast.customCAGoEnv" . }}{{ . | trim | nindent 12 }}{{ end }}
           {{- if or .Values.postgresql.sslRootCert.secretName .Values.sessionRecording.enabled .Values.customCAs }}

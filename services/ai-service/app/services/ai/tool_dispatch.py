@@ -52,6 +52,7 @@ FEATURE_TOOL_ARGS = {
     "traces_tags": ({"scope", "tag", "namespace", "since"}, set(), set()),
     "traces_metrics": ({"traceql", "namespace", "since", "since_time", "until_time"}, set(), {"step"}),
     "traces_compare": ({"traceql", "namespace", "since", "since_time", "until_time"}, set(), {"limit"}),
+    "alerts_list": ({"state", "alertname"}, set(), set()),
     "hygiene": ({"severity", "check"}, set(), set()),
     "gitops_status": ({"namespace", "name", "project", "destination_namespace"}, {"only_problems"}, {"limit"}),
     "audit_search": ({"audit_action", "service", "actor_email", "target_id", "namespace", "result", "since_time", "until_time"}, {"all_clusters"}, {"limit", "offset"}),
@@ -477,6 +478,9 @@ async def execute_function_with_context(
                 tool_args[key] = resolvers._coerce_limit(service, function_args.get(key), default=0, max_value=1_000_000)
             if function_name == "prometheus_query" and _flag(function_args.get("chart")):
                 tool_args["range"] = True  # a graph needs points; chart/title/unit stay here (app/services/ai/charts.py)
+            labels = function_args.get("alert_labels")
+            if function_name == "alerts_list" and isinstance(labels, dict):
+                tool_args["alert_labels"] = {str(k): str(v) for k, v in list(labels.items())[:10] if isinstance(v, (str, int, float))}
             result = await service._call_tool_server(function_name, tool_args)
 
         elif function_name == "k8s_get_available_api_resources":
