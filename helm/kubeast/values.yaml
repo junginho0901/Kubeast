@@ -461,7 +461,8 @@ retention:
   chatDays: 0
   # Access review and cluster hygiene sign-offs (three years; 0 = keep forever).
   reviewDays: 1095
-  # Alert investigation reports (they can quote pod logs; 0 = keep forever).
+  # Alert investigation reports (they can quote pod logs) and the Alerts inbox
+  # rows, by their last notification (0 = keep forever).
   investigationDays: 90
 
 # --- Schema migrations ---
@@ -707,6 +708,10 @@ features:
   # cluster alerts come from (scripts/render-target-rbac.sh). Needs
   # auth.impersonation.enabled and ai.enabled (the render fails without them).
   # With secrets.existingSecret, that Secret must hold ALERT_WEBHOOK_TOKEN.
+  # Every alert the webhook gets, firing or resolved and of any severity, also
+  # goes into the Alerts inbox (send_resolved: true in the webhook config, its
+  # default) for whoever reads that cluster as a whole; rows are deleted with
+  # the investigations after retention.investigationDays.
   alertInvestigation:
     enabled: false
     severities: [critical, warning]
@@ -719,6 +724,8 @@ features:
     model: ""                 # ModelConfig name; empty = the default model
     language: en              # report language (en, ko, …)
     consoleUrl: ""            # e.g. https://kubeast.example.com — links in the audit summary; empty = no link
+    inbox:
+      staleAfterHours: 8      # a firing alert with no notification for this long shows "status unknown"; twice your repeat_interval
     # More read-only rules for the investigator, appended to the
     # kubeast:investigator ClusterRole: the CRDs an investigation should see
     # (Kyverno PolicyReports, Argo Rollouts, KEDA ScaledObjects, cert-manager

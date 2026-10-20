@@ -30,6 +30,9 @@ class InvestigationSettings:
     console_url: str = ""
     token_url: str = "http://auth-service:8004/api/v1/auth/internal/investigator-token"
     internal_token: str = field(default="", repr=False)
+    # A firing inbox alert with no notification for this long shows "status unknown" (Alertmanager resends a
+    # firing alert every repeat_interval, 4 h by default, so two missed resends).
+    inbox_stale_hours: int = 8
 
 
 def load() -> InvestigationSettings:
@@ -53,4 +56,5 @@ def load() -> InvestigationSettings:
             "AUTH_INVESTIGATOR_TOKEN_URL", "http://auth-service:8004/api/v1/auth/internal/investigator-token"
         ).strip(),
         internal_token=os.getenv("INTERNAL_API_TOKEN", "").strip(),
+        inbox_stale_hours=min(24 * 30, max(1, _int("ALERT_INBOX_STALE_HOURS", 8))),
     )

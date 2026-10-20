@@ -63,9 +63,9 @@ async def test_wait_for_schema_times_out_with_versions_in_message():
 
 
 def test_required_version_matches_go_migrations():
-    # In step with services/pkg/dbmigrate.Required (it was left at 14 while Go moved to 16; 17 and 18 add columns
-    # ai-service reads or writes — model_configs.tier, messages.usage).
+    # In step with services/pkg/dbmigrate.Required (it was left at 14 while Go moved to 16; 17, 18 and 20 add columns
+    # or tables ai-service reads or writes — model_configs.tier, messages.usage, alert_inbox).
     import pathlib
     import re
     go = (pathlib.Path(__file__).resolve().parents[2] / "pkg" / "dbmigrate" / "dbmigrate.go").read_text()
-    assert database.REQUIRED_SCHEMA_VERSION == int(re.search(r"const Required int64 = (\d+)", go).group(1)) == 19
+    assert database.REQUIRED_SCHEMA_VERSION == int(re.search(r"const Required int64 = (\d+)", go).group(1)) == 20

@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.services.investigation import prompt as inv_prompt
-from app.services.investigation import runner, store, webhook
+from app.services.investigation import inbox, runner, store, webhook
 from app.services.investigation.settings import InvestigationSettings
 
 NOW = datetime(2026, 10, 13, 12, 0, 0)
@@ -42,8 +42,15 @@ class FakeStore:
         self.tokens = tokens
         self.pause = pause
         self.bumped = []
+        self.inbox = []
 
     def install(self, monkeypatch):
+        async def record(db, **f):
+            self.inbox.append(f)
+            return "new"
+
+        monkeypatch.setattr(inbox, "record", record)
+
         async def find_recent(db, cluster, fingerprint, since):
             for r in self.rows:
                 if r["cluster"] == cluster and r["fingerprint"] == fingerprint and r["received_at"] >= since and r["status"] != "skipped":
@@ -100,8 +107,11 @@ async def test_gates_filter_resolve_queue(monkeypatch):
     fs.install(monkeypatch)
     msg = am_message(alert(fp="a"), alert(fp="b", severity="info"), alert(fp="c", status="resolved"), alert(fp="d", severity="Warning"))
     counts = await webhook.gate_and_queue(None, cfg(), "self", msg, NOW)
-    assert counts == {"accepted": 2, "duplicate": 0, "filtered": 1, "skipped": 0, "resolved": 1, "dropped": 0}
+    assert counts == {"accepted": 2, "duplicate": 0, "filtered": 1, "skipped": 0, "resolved": 1, "dropped": 0, "stored": 4}
     assert [r["fingerprint"] for r in fs.rows] == ["a", "d"]
+    # the inbox takes every alert, every severity, firing or resolved
+    assert [(r["fingerprint"], r["firing"]) for r in fs.inbox] == [("a", True), ("b", True), ("c", False), ("d", True)]
+    assert fs.inbox[0]["starts_at"] == datetime(2026, 10, 13, 11, 59) and fs.inbox[0]["receiver"] == "kubeast"
     assert fs.rows[0]["status"] == "queued" and fs.rows[0]["namespace"] == "apps" and fs.rows[0]["severity"] == "critical"
     assert fs.rows[0]["starts_at"] == datetime(2026, 10, 13, 11, 59)
 

@@ -395,6 +395,7 @@
     "dashboard": "Dashboard",
     "clusterView": "Cluster View",
     "monitoring": "Monitoring",
+    "alerts": "Alerts",
     "cost": "Cost",
     "policyReports": "Policy Reports",
     "aiChat": "AI Chat",
@@ -4117,6 +4118,72 @@
       "text": "Text",
       "close": "Close"
     }
+  },
+  "alertInbox": {
+    "title": "Alerts",
+    "subtitle": "Every alert Alertmanager sent for this cluster, firing or resolved. The alert rule decides when it resolves; the marks here are kept in Kubeast.",
+    "refresh": "Refresh",
+    "disabled": "The alert webhook is off on this installation (features.alertInvestigation.enabled), so no alerts come in.",
+    "forbidden": "Alerts cover the whole cluster: they are shown to users who can read this cluster without a namespace limit.",
+    "status": {
+      "firing": "Firing",
+      "stale": "Status unknown",
+      "resolved": "Resolved",
+      "all": "All"
+    },
+    "live": {
+      "firing": "Firing",
+      "silenced": "Silenced",
+      "inhibited": "Inhibited",
+      "absent": "Not in Alertmanager"
+    },
+    "liveLabel": "Alertmanager now",
+    "filter": {
+      "severity": "Severity",
+      "mine": "Assigned to me",
+      "open": "Not done"
+    },
+    "col": {
+      "status": "Status",
+      "alert": "Alert",
+      "namespace": "Namespace",
+      "object": "Object",
+      "started": "Started",
+      "received": "Received",
+      "investigation": "AI investigation",
+      "handling": "Handling"
+    },
+    "mark": {
+      "done": "Done",
+      "acknowledged": "Acknowledged"
+    },
+    "detail": "Alert",
+    "loadFailed": "The alert could not be opened.",
+    "resolvedAt": "Resolved",
+    "lastReceived": "Last received",
+    "staleNote": "No notification for this firing alert for a while: the resolved notification may have been missed (it resolved while silenced, the route changed, or delivery failed).",
+    "section": {
+      "handling": "Handling",
+      "labels": "Labels and annotations"
+    },
+    "handlingNote": "Kept in Kubeast for your team; Alertmanager and the alert rule are not changed.",
+    "action": {
+      "ack": "Acknowledge",
+      "unack": "Undo acknowledge",
+      "assign": "Assign to me",
+      "unassign": "Unassign",
+      "done": "Mark done",
+      "reopen": "Reopen",
+      "saveNote": "Save note"
+    },
+    "ackedBy": "Acknowledged by {{who}} · {{when}}",
+    "assignee": "Assignee: {{who}}",
+    "doneBy": "Done by {{who}} · {{when}}",
+    "note": "Note",
+    "noteBy": "Last written by {{who}} · {{when}}",
+    "auditUnavailable": "Not saved: the audit log cannot take the record right now.",
+    "saveFailed": "Not saved.",
+    "noInvestigation": "Not investigated (only firing alerts of the investigated severities are, within the hourly cap and token budget)."
   },
   "investigations": {
     "title": "Investigations",

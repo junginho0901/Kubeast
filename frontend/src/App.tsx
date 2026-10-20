@@ -37,6 +37,7 @@ const AdminAccessReview = lazy(() => import('./pages/admin/AccessReview'))
 const AdminClusterHygiene = lazy(() => import('./pages/admin/ClusterHygiene'))
 const AdminSessionRecordings = lazy(() => import('./pages/admin/SessionRecordings'))
 const AdminInvestigations = lazy(() => import('./pages/admin/Investigations'))
+const AlertInbox = lazy(() => import('./pages/alerts/AlertInbox'))
 const Account = lazy(() => import('./pages/Account'))
 const HPAs = lazy(() => import('./pages/workloads/HPAs'))
 const VPAs = lazy(() => import('./pages/workloads/VPAs'))
@@ -169,6 +170,7 @@ function App() {
             <Route path="helm/releases" element={<HelmReleasesPage />} />
             <Route path="helm/releases/:namespace/:name" element={<HelmReleaseDetailPage />} />
             <Route path="monitoring" element={<Monitoring />} />
+            <Route path="alerts" element={<AIGate><AlertInbox /></AIGate>} />
             <Route path="cost" element={<Cost />} />
             <Route path="security/policyreports" element={<PolicyReports />} />
             <Route path="cluster-view" element={<ClusterView />} />

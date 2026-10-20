@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
   Activity,
+  BellRing,
   Bot,
   Building2,
   ChartColumn,
@@ -166,13 +167,15 @@ export default function Layout() {
   // whose access is granted per-cluster. has(perm) defaults to the current
   // cluster, so the menus reflect what you can actually do on the cluster you're
   // viewing.
-  const { has: hasPermission, permissions: matrix } = usePermission()
+  const { has: hasPermission, permissions: matrix, clusterNamespaces } = usePermission()
   // Chart ai.enabled (from /cluster/features): off hides the AI chat, the AI admin pages and the floating assistant.
   const clusterFeatures = useClusterFeatures().data
   const aiOn = aiEnabled(clusterFeatures)
   const costOn = costEnabled(clusterFeatures)
   const policyReportsOn = policyReportsEnabled(clusterFeatures)
   const investigationsOn = aiOn && alertInvestigationEnabled(clusterFeatures)
+  // Alerts cover the whole cluster: the inbox is for whoever reads the selected cluster without a namespace limit.
+  const alertsOn = investigationsOn && hasPermission('resource.pod.read') && !(clusterNamespaces?.length)
   // The admin section requires a GLOBAL admin permission, which lives only in
   // the matrix "*" entry — per-cluster grants never carry admin.*.
   const isAdmin = (matrix['*'] ?? []).some((p) => p === '*' || p.startsWith('admin.'))
@@ -234,6 +237,7 @@ export default function Layout() {
         { name: t('nav.dashboard'), href: '/', icon: LayoutDashboard, exact: true },
         { name: t('nav.clusterView'), href: '/cluster-view', icon: Layers },
         { name: t('nav.monitoring'), href: '/monitoring', icon: Activity },
+        ...(alertsOn ? [{ name: t('nav.alerts', { defaultValue: 'Alerts' }), href: '/alerts', icon: BellRing, testId: 'nav-alerts' }] : []),
         ...(costOn ? [{ name: t('nav.cost'), href: '/cost', icon: Coins }] : []),
         ...(aiOn ? [{ name: t('nav.aiChat'), href: '/ai-chat', icon: MessageSquare }] : []),
         { name: t('nav.resourceGraph'), href: '/cluster/resource-graph', icon: Waypoints },
@@ -415,7 +419,7 @@ export default function Layout() {
         { name: t('nav.nodeShell'), href: '/admin/node-shell', icon: SquareTerminal },
       ],
     },
-  ], [t, accessRequestsOn, pendingAccessCount, accessReviewOn, hygieneOn, aiOn, costOn, policyReportsOn, investigationsOn])
+  ], [t, accessRequestsOn, pendingAccessCount, accessReviewOn, hygieneOn, aiOn, costOn, policyReportsOn, investigationsOn, alertsOn])
 
   const active = useMemo(() => {
     for (const group of navGroups) {

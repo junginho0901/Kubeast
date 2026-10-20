@@ -1,7 +1,8 @@
 """POST /api/v1/alerts/webhook?cluster=<id> — Alertmanager's webhook receiver (payload version 4).
 
 Not behind the signed-in-user dependency: Alertmanager sends Authorization:
-Bearer <ALERT_WEBHOOK_TOKEN> (http_config.authorization). Each firing alert
+Bearer <ALERT_WEBHOOK_TOKEN> (http_config.authorization). Every alert, firing
+or resolved, goes into the alert inbox (inbox.py). Each firing alert then
 passes the severity filter, then folds into a recent row of the same
 cluster + fingerprint (Alertmanager repeats a firing group every
 repeat_interval), or is skipped by the hourly cap / daily token budget, or is
@@ -23,7 +24,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from app.database import get_db_service, utcnow
 from app.services.investigation import settings as inv_settings
-from app.services.investigation import store
+from app.services.investigation import inbox, store
 
 log = logging.getLogger(__name__)
 
@@ -81,11 +82,18 @@ def parse_time(value: Optional[str]) -> Optional[datetime]:
 
 
 async def gate_and_queue(db, cfg: inv_settings.InvestigationSettings, cluster: str, msg: AmWebhook, now: datetime) -> dict[str, int]:
-    counts = {"accepted": 0, "duplicate": 0, "filtered": 0, "skipped": 0, "resolved": 0, "dropped": 0}
+    counts = {"accepted": 0, "duplicate": 0, "filtered": 0, "skipped": 0, "resolved": 0, "dropped": 0, "stored": 0}
     alerts = msg.alerts[:MAX_ALERTS_PER_MESSAGE]
     counts["dropped"] = max(0, len(msg.alerts) - len(alerts))
     for alert in alerts:
         status = (alert.status or msg.status or "").lower()
+        await inbox.record(
+            db, cluster=cluster, fingerprint=fingerprint_of(alert), firing=status == "firing",
+            starts_at=parse_time(alert.startsAt), ends_at=parse_time(alert.endsAt), labels=alert.labels,
+            annotations=alert.annotations, generator_url=alert.generatorURL, alertmanager_url=msg.externalURL,
+            receiver=msg.receiver, group_key=msg.groupKey, now=now,
+        )
+        counts["stored"] += 1
         if status != "firing":
             counts["resolved"] += 1
             continue

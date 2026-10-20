@@ -172,6 +172,7 @@ data:
   ALERT_INVESTIGATION_MODEL: {{ .model | quote }}
   ALERT_INVESTIGATION_LANGUAGE: {{ .language | quote }}
   ALERT_INVESTIGATION_CONSOLE_URL: {{ .consoleUrl | quote }}
+  ALERT_INBOX_STALE_HOURS: {{ .inbox.staleAfterHours | int64 | quote }}
   {{- end }}
   AUTH_INVESTIGATOR_TOKEN_URL: "http://auth-service:8004/api/v1/auth/internal/investigator-token"
   INVESTIGATOR_TOKEN_MINUTES: {{ add (div (int .Values.features.alertInvestigation.timeoutSeconds) 60) 5 | quote }}

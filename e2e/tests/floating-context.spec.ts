@@ -11,7 +11,7 @@ type PageContext = { path: string; page_type: string; base?: Layer | null; overl
 // default (the second cluster) for the pages that need Kyverno, metrics-server or OpenCost. Advanced Search sends
 // nothing until something is searched.
 const MENUS: [string, string][] = [
-  '/', '/cluster/namespaces', '/cluster/resource-graph', '/timeline', '/cluster/nodes',
+  '/', '/cluster/namespaces', '/cluster/resource-graph', '/timeline', '/alerts', '/cluster/nodes',
   '/workloads/pods', '/workloads/deployments', '/workloads/statefulsets', '/workloads/daemonsets', '/workloads/replicasets',
   '/workloads/jobs', '/workloads/cronjobs', '/workloads/hpas', '/workloads/vpas', '/workloads/pdbs', '/storage',
   '/network/services', '/network/endpoints', '/network/endpointslices', '/network/ingresses', '/network/ingressclasses',

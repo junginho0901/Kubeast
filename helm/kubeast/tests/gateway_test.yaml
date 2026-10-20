@@ -34,6 +34,14 @@ tests:
         template: gateway.yaml
         documentIndex: 0
 
+  - it: sends the alert store reads to k8s-service (the Alerts inbox), not to the frontend
+    asserts:
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'location /api/v1/alertstore/ \{\s+proxy_pass http://k8s-service/api/v1/alertstore/;'
+        template: gateway.yaml
+        documentIndex: 0
+
   - it: lets the session recording player compile WebAssembly without opening JS eval
     asserts:
       - matchRegex:

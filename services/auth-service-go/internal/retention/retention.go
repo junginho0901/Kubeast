@@ -38,7 +38,8 @@ const BatchSize = 5000
 // Config is the retention policy. Zero means keep forever. ReviewDays covers
 // sign-offs with their snapshots: access reviews (access_reviews) and cluster
 // hygiene reviews (hygiene_reviews). InvestigationDays covers the alert
-// investigation reports (alert_investigations), which can quote pod logs.
+// investigation reports (alert_investigations), which can quote pod logs, and
+// the alert inbox rows (alert_inbox) by the last notification.
 type Config struct {
 	AuditDays         int
 	ChatDays          int
@@ -96,6 +97,7 @@ type Result struct {
 	AccessReviews     int64 `json:"access_reviews"`
 	HygieneReviews    int64 `json:"hygiene_reviews"`
 	Investigations    int64 `json:"alert_investigations"`
+	InboxAlerts       int64 `json:"alert_inbox"`
 }
 
 // Purger executes the policy against a database.
@@ -140,7 +142,7 @@ func (p Purger) RunOnce(ctx context.Context) Result {
 		slog.Error("retention: purge failed", "error", err, "deleted", res)
 	} else {
 		slog.Info("retention: purge done", "audit_rows", res.AuditRows, "sessions", res.Sessions, "tool_approvals", res.ToolApprovals, "session_recordings", res.SessionRecordings,
-			"access_reviews", res.AccessReviews, "hygiene_reviews", res.HygieneReviews, "alert_investigations", res.Investigations,
+			"access_reviews", res.AccessReviews, "hygiene_reviews", res.HygieneReviews, "alert_investigations", res.Investigations, "alert_inbox", res.InboxAlerts,
 			"audit_days", p.Cfg.AuditDays, "chat_days", p.Cfg.ChatDays, "review_days", p.Cfg.ReviewDays, "investigation_days", p.Cfg.InvestigationDays)
 	}
 	p.record(ctx, now, res, err)
@@ -230,6 +232,11 @@ func (p Purger) Purge(ctx context.Context, now time.Time) (Result, error) {
 		if err != nil {
 			return res, fmt.Errorf("alert investigations: %w", err)
 		}
+		res.InboxAlerts, err = deleteBatched(ctx, p.Pool,
+			`DELETE FROM alert_inbox WHERE id IN (SELECT id FROM alert_inbox WHERE last_received_at < $1 ORDER BY last_received_at LIMIT $2)`, cutoff)
+		if err != nil {
+			return res, fmt.Errorf("alert inbox: %w", err)
+		}
 	}
 	return res, nil
 }
@@ -256,18 +263,21 @@ func (p Purger) record(ctx context.Context, now time.Time, res Result, runErr er
 	}
 	auditCutoff, chatCutoff := p.Cfg.Cutoffs(now)
 	after, _ := json.Marshal(map[string]any{
-		"audit_days":         p.Cfg.AuditDays,
-		"chat_days":          p.Cfg.ChatDays,
-		"audit_cutoff":       nullableTime(auditCutoff),
-		"chat_cutoff":        nullableTime(chatCutoff),
-		"audit_rows":         res.AuditRows,
-		"sessions":           res.Sessions,
-		"tool_approvals":     res.ToolApprovals,
-		"session_recordings": res.SessionRecordings,
-		"review_days":        p.Cfg.ReviewDays,
-		"review_cutoff":      nullableTime(p.Cfg.ReviewCutoff(now)),
-		"access_reviews":     res.AccessReviews,
-		"hygiene_reviews":    res.HygieneReviews,
+		"audit_days":           p.Cfg.AuditDays,
+		"chat_days":            p.Cfg.ChatDays,
+		"audit_cutoff":         nullableTime(auditCutoff),
+		"chat_cutoff":          nullableTime(chatCutoff),
+		"audit_rows":           res.AuditRows,
+		"sessions":             res.Sessions,
+		"tool_approvals":       res.ToolApprovals,
+		"session_recordings":   res.SessionRecordings,
+		"review_days":          p.Cfg.ReviewDays,
+		"review_cutoff":        nullableTime(p.Cfg.ReviewCutoff(now)),
+		"access_reviews":       res.AccessReviews,
+		"hygiene_reviews":      res.HygieneReviews,
+		"investigation_days":   p.Cfg.InvestigationDays,
+		"alert_investigations": res.Investigations,
+		"alert_inbox":          res.InboxAlerts,
 	})
 	rec := audit.Record{
 		Service:    audit.ServiceAdmin,

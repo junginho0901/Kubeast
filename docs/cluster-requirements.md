@@ -205,13 +205,14 @@ Kubeast가 사용자 신원의 `pods/exec`로 `ls`·`tail`만 실행합니다.
 
 Argo CD가 배포한 객체에 추적 어노테이션(`argocd.argoproj.io/tracking-id`, Argo CD 3.x 기본 추적 방식)이 있어야 배지·경고가 붙습니다. 라벨 방식(`app.kubernetes.io/instance` 등)을 쓰는 설치는 `gitops.argocd.instanceLabel`에 그 키를 적습니다. Argo CD 자체가 대상 클러스터에 있을 필요는 없습니다.
 
-## 13. Alertmanager 또는 Grafana 알림 (알림 → AI 조사)
+## 13. Alertmanager 또는 Grafana 알림 (Alerts 받은편지함 · 알림 → AI 조사)
 
-조사는 Alertmanager나 Grafana 알림이 보내는 웹훅으로 시작합니다. Kubeast는 알림 엔진을 설치하지 않고, 알림 규칙도 만들지 않습니다.
+받은편지함과 조사는 Alertmanager나 Grafana 알림이 보내는 웹훅으로 시작합니다. Kubeast는 알림 엔진을 설치하지 않고, 알림 규칙도 만들지 않습니다.
 
 - **보내는 곳**: `POST <Kubeast 주소>/api/v1/alerts/webhook?cluster=<Kubeast 클러스터 ID>` — 클러스터 ID는 Admin → Clusters의 ID. 클러스터마다 수신자(또는 `cluster` 값)를 따로 둡니다.
 - **인증**: `Authorization: Bearer <kubeast-secrets의 ALERT_WEBHOOK_TOKEN>`. 차트가 만들고 업그레이드 때 유지합니다(`secrets.existingSecret`이면 그 Secret에 넣어야 함).
-- **조사되는 알림**: `status=firing`이고 `severity` 라벨이 `features.alertInvestigation.severities`(기본 critical·warning)에 있는 것. 같은 클러스터·fingerprint는 `dedupeHours`(기본 24) 안에선 다시 조사하지 않습니다 — Alertmanager는 `repeat_interval`(기본 4h)마다 다시 보냅니다. resolved는 조사하지 않습니다.
+- **받은편지함**: 받은 알림은 심각도와 상관없이, 울리는 중·해결됨 모두 Alerts 메뉴에 1건 1행으로 남습니다(같은 클러스터·fingerprint·`startsAt`). 해결 소식이 필요하니 `send_resolved: true`(웹훅의 기본값)로 둡니다. Alertmanager는 울리는 알림의 `endsAt`을 웹훅으로 보내지 않으므로, 마지막으로 받은 뒤 `features.alertInvestigation.inbox.staleAfterHours`(기본 8 — `repeat_interval`의 2배로) 동안 소식이 없으면 "상태 확인 안 됨"으로 보입니다. §14의 알림 저장소(`features.alertStore`)가 그 클러스터에 있으면 화면이 Alertmanager의 지금 상태(울리는 중·무음·억제·없음)도 함께 봅니다.
+- **조사되는 알림**: `status=firing`이고 `severity` 라벨이 `features.alertInvestigation.severities`(기본 critical·warning)에 있는 것. 같은 클러스터·fingerprint는 `dedupeHours`(기본 24) 안에선 다시 조사하지 않습니다 — Alertmanager는 `repeat_interval`(기본 4h)마다 다시 보냅니다. resolved는 조사하지 않습니다(받은편지함의 해결 표시에만 씀).
 - **`namespace` 라벨**: 있으면 조사가 그 Namespace로 한정됩니다(토큰의 `ns`). 없으면 클러스터 전체를 읽습니다.
 - **Kubeast 쪽**: `features.alertInvestigation.enabled: true`(`auth.impersonation.enabled`·`ai.enabled`도 켜져 있어야 함 — 아니면 차트 렌더 실패), 모델 하나(기본 모델 또는 `model`), 대상 클러스터에 §1의 조사 신원 RBAC.
 
@@ -221,7 +222,7 @@ receivers:
   - name: kubeast
     webhook_configs:
       - url: https://kubeast.example.com/api/v1/alerts/webhook?cluster=prod-1
-        send_resolved: false
+        send_resolved: true
         max_alerts: 20
         http_config:
           authorization:
@@ -230,7 +231,7 @@ receivers:
 ```
 
 - **Grafana 알림**: 웹훅 연락처(Contact point → Webhook)의 URL을 위와 같이, Authorization 헤더 scheme `Bearer`·credentials에 토큰. Grafana 13의 웹훅 본문(`version` "1")에도 Kubeast가 읽는 필드(`alerts[]`의 `status`·`labels`·`annotations`·`startsAt`·`fingerprint`, `externalURL`)가 같은 이름으로 있어 그대로 받습니다. 알림 정책으로 클러스터마다 그 연락처로 보내고, 규칙 레이블에 `severity`(필요하면 `namespace`)를 둡니다.
-- **확인**: Kubeast Admin → Investigations에 행이 생기는지(심각도 필터에 걸리면 행이 없음). 웹훅 응답 `{accepted, duplicate, filtered, skipped, resolved}`가 Alertmanager 로그에 남습니다. 개발용 전체 예시는 [`deploy/kind/alertmanager.yaml`](../deploy/kind/alertmanager.yaml), Grafana는 `scripts/kind-grafana.sh`와 e2e `grafana.spec.ts`(연락처 시험으로 보낸 알림이 조사됨).
+- **확인**: Kubeast Alerts 메뉴에 그 알림이 생기는지, Admin → Investigations에 조사 행이 생기는지(심각도 필터에 걸리면 조사 행은 없음). 웹훅 응답 `{accepted, duplicate, filtered, skipped, resolved, dropped, stored}`가 Alertmanager 로그에 남습니다. 개발용 전체 예시는 [`deploy/kind/alertmanager.yaml`](../deploy/kind/alertmanager.yaml), Grafana는 `scripts/kind-grafana.sh`와 e2e `grafana.spec.ts`(연락처 시험으로 보낸 알림이 조사됨).
 
 ## 14. 로그 저장소 (로그 검색)
 

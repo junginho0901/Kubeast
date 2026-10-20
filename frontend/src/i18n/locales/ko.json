@@ -395,6 +395,7 @@
     "dashboard": "Dashboard",
     "clusterView": "Cluster View",
     "monitoring": "Monitoring",
+    "alerts": "Alerts",
     "cost": "Cost",
     "policyReports": "Policy Reports",
     "aiChat": "AI Chat",
@@ -4746,6 +4747,72 @@
       "text": "텍스트",
       "close": "닫기"
     }
+  },
+  "alertInbox": {
+    "title": "Alerts",
+    "subtitle": "Alertmanager가 이 클러스터에 대해 보낸 알림을 울리는 중·해결됨 모두 보여 줍니다. 해결은 알림 규칙이 정하고, 여기의 처리 표시는 Kubeast 안에만 남습니다.",
+    "refresh": "새로고침",
+    "disabled": "이 설치에서 알림 웹훅이 꺼져 있어(features.alertInvestigation.enabled) 알림이 들어오지 않습니다.",
+    "forbidden": "알림은 클러스터 전체에 걸쳐 있어, 이 클러스터를 네임스페이스 제한 없이 읽을 수 있는 사용자에게만 보입니다.",
+    "status": {
+      "firing": "울리는 중",
+      "stale": "상태 확인 안 됨",
+      "resolved": "해결됨",
+      "all": "전체"
+    },
+    "live": {
+      "firing": "울리는 중",
+      "silenced": "무음 중",
+      "inhibited": "억제됨",
+      "absent": "Alertmanager에 없음"
+    },
+    "liveLabel": "Alertmanager 지금 상태",
+    "filter": {
+      "severity": "심각도",
+      "mine": "내 담당",
+      "open": "조치 안 된 것"
+    },
+    "col": {
+      "status": "상태",
+      "alert": "알림",
+      "namespace": "Namespace",
+      "object": "대상",
+      "started": "시작",
+      "received": "받은 횟수",
+      "investigation": "AI 조사",
+      "handling": "처리"
+    },
+    "mark": {
+      "done": "조치 완료",
+      "acknowledged": "확인함"
+    },
+    "detail": "알림",
+    "loadFailed": "알림을 열 수 없습니다.",
+    "resolvedAt": "해결",
+    "lastReceived": "마지막으로 받음",
+    "staleNote": "울리는 중인 이 알림에 한동안 소식이 없습니다. 해결 알림이 빠졌을 수 있습니다(무음 중에 해결, 라우트 변경, 전달 실패).",
+    "section": {
+      "handling": "처리",
+      "labels": "레이블과 주석"
+    },
+    "handlingNote": "팀이 보는 Kubeast 안의 기록입니다. Alertmanager와 알림 규칙은 바뀌지 않습니다.",
+    "action": {
+      "ack": "확인함",
+      "unack": "확인 취소",
+      "assign": "내가 담당",
+      "unassign": "담당 해제",
+      "done": "조치 완료",
+      "reopen": "다시 열기",
+      "saveNote": "메모 저장"
+    },
+    "ackedBy": "{{who}} 확인 · {{when}}",
+    "assignee": "담당: {{who}}",
+    "doneBy": "{{who}} 조치 완료 · {{when}}",
+    "note": "메모",
+    "noteBy": "마지막 작성 {{who}} · {{when}}",
+    "auditUnavailable": "저장하지 않았습니다. 지금 감사 로그에 기록할 수 없습니다.",
+    "saveFailed": "저장하지 않았습니다.",
+    "noInvestigation": "조사하지 않았습니다(조사 대상 심각도의 울리는 알림만, 시간당 상한과 토큰 예산 안에서 조사합니다)."
   },
   "investigations": {
     "title": "Investigations",

@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.routing import Route
 from app.api import router
 from app.api_public import admin_router, public_router
+from app.api_alert_inbox import router as alert_inbox_router
 from app.api_investigations import router as investigations_router
 from app.services.investigation import settings as investigation_settings
 from app.services.investigation.webhook import router as alerts_router
@@ -92,9 +93,10 @@ app.include_router(router, prefix="/api/v1/ai", dependencies=[Depends(require_au
 app.include_router(admin_router, prefix="/api/v1/ai")
 app.include_router(public_router, prefix="/api/v1/ai")
 
-# Alert investigation: Alertmanager's webhook (its own Bearer token, not a user)
-# and the reports for admin.investigations.read.
+# Alert investigation: Alertmanager's webhook (its own Bearer token, not a user),
+# the alert inbox for whoever reads the cluster, and the reports for admin.investigations.read.
 app.include_router(alerts_router, prefix="/api/v1/alerts")
+app.include_router(alert_inbox_router, prefix="/api/v1/alerts")
 app.include_router(investigations_router, prefix="/api/v1/ai/investigations")
 
 if _mcp is not None:

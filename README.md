@@ -764,6 +764,15 @@ Argo CD가 배포한 객체에는 추적 어노테이션(`argocd.argoproj.io/tra
 - **감사·알림**: 조사 1건 = `ai.investigation.run`(actor `system` / `kubeast:investigator`, `after`에 알림·모델·토큰·도구 호출 수·소요·요약 500자·링크), 도구 호출 = `ai.tool.call`. 감사 싱크의 `filter.actions`에 `ai.investigation.run`을 넣으면 Slack·메일로 요약이 갑니다. `consoleUrl`을 적으면 요약에 보고서 링크가 붙습니다.
 - **클러스터 쪽**: 조사 신원 RBAC과 Alertmanager 설정 예시는 [docs/cluster-requirements.md](docs/cluster-requirements.md) §1·§13. dev는 2번 클러스터의 Alertmanager에 `amtool alert add`로 가짜 알림을 넣어 확인합니다(`deploy/kind/alertmanager.yaml`). Grafana는 `scripts/kind-grafana.sh`의 Grafana에서 웹훅 연락처 시험으로 보냅니다(e2e `grafana.spec.ts`).
 
+### Alerts 받은편지함
+
+Alertmanager(또는 Grafana 알림)가 보낸 알림을 **울리는 중·해결됨 모두, 심각도와 상관없이** 클러스터마다 한 목록으로 봅니다(메뉴 Core → **Alerts**). 위 조사와 같은 웹훅으로 들어오므로 `features.alertInvestigation.enabled`(AI 켬)가 필요하고, 해결 소식을 받으려면 웹훅에 `send_resolved: true`(기본값)를 둡니다.
+
+- **누가**: 선택한 클러스터를 Namespace 제한 없이 읽는 사람(그 클러스터 `resource.pod.read`) — AI 알림 도구·알림 저장소 읽기와 같은 기준. 그 알림의 AI 조사 보고서도 여기서 열 수 있고, 열 때마다 `ai.investigation.view`가 남습니다.
+- **한 줄 = 알림 1건**: 같은 클러스터·fingerprint·`startsAt`. Alertmanager가 `repeat_interval`마다 다시 보내면 "받은 횟수"가 오르고, resolved가 오면 해결됨, 해결 뒤 다시 울리면 새 줄. 상태는 울리는 중 · **상태 확인 안 됨**(울리는 중인데 `inbox.staleAfterHours`(8) 동안 소식이 없음 — Alertmanager는 울리는 알림의 `endsAt`을 웹훅으로 보내지 않음) · 해결됨. 그 클러스터에 알림 저장소(`features.alertStore`)가 있으면 Alertmanager의 지금 상태(무음 중·억제됨·Alertmanager에 없음)도 붙입니다.
+- **처리 표시**: 확인함 · 내가 담당/해제 · 메모 · 조치 완료. Kubeast 안 기록이고 Alertmanager·알림 규칙은 바꾸지 않습니다 — "해결됨"은 규칙이 정합니다. 바꿀 때마다 `alert.inbox.update`(전·후 값), 감사 DB를 쓸 수 없으면 503이고 표시도 되돌립니다.
+- **화면**: 상태 탭(울리는 중·상태 확인 안 됨·해결됨·전체), 심각도·내 담당·조치 안 된 것 거르기, 대상(라벨 `pod`·`deployment`·`node` 등)을 누르면 리소스 상세 창. 한 건을 열면 라벨·주석·알림 보낸 곳 링크·처리 칸·AI 조사. API `GET /api/v1/alerts/inbox?cluster=`·`/{id}`·`PATCH /{id}`·`/{id}/investigation`. 보존은 조사와 같이 `retention.investigationDays`(마지막으로 받은 시각 기준).
+
 ### 감사 싱크 (S3 · 웹훅 · 메일 · 파일)
 
 감사 로그의 1차 저장소는 DB이고, 싱크는 그 행을 **밖으로 복사**합니다. auth-service 한 replica가 싱크마다

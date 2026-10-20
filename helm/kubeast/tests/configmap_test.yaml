@@ -561,6 +561,8 @@ tests:
         model: ollama-granite
         language: ko
         consoleUrl: https://kubeast.example.com
+        inbox:
+          staleAfterHours: 12
       retention.investigationDays: 30
     asserts:
       - equal:
@@ -581,6 +583,9 @@ tests:
       - equal:
           path: data.ALERT_INVESTIGATION_CONSOLE_URL
           value: https://kubeast.example.com
+      - equal:
+          path: data.ALERT_INBOX_STALE_HOURS
+          value: "12"
       - equal:
           path: data.INVESTIGATOR_TOKEN_MINUTES
           value: "15"

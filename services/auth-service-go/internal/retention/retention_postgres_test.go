@@ -238,11 +238,20 @@ func TestPostgresPurgeDropsOldInvestigations(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	for i, at := range []time.Time{now.AddDate(0, 0, -100), now.AddDate(0, 0, -1)} {
+		if _, err := pool.Exec(ctx, `INSERT INTO alert_inbox (id, cluster, fingerprint, starts_at, state, last_received_at) VALUES ($1, 'self', $2, $3, 'resolved', $3)`,
+			fmt.Sprintf("al-%d", i), fmt.Sprintf("fp-%d", i), at); err != nil {
+			t.Fatal(err)
+		}
+	}
 	res, err := Purger{Pool: pool, Cfg: Config{InvestigationDays: 90}}.Purge(ctx, now)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if res.Investigations != 2 || count(t, pool, "alert_investigations") != 1 {
 		t.Fatalf("deleted %d, left %d; want 2 and 1", res.Investigations, count(t, pool, "alert_investigations"))
+	}
+	if res.InboxAlerts != 1 || count(t, pool, "alert_inbox") != 1 {
+		t.Fatalf("inbox deleted %d, left %d; want 1 and 1", res.InboxAlerts, count(t, pool, "alert_inbox"))
 	}
 }

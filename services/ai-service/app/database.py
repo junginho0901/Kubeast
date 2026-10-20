@@ -4,7 +4,7 @@ Database models and session management
 from datetime import UTC, datetime
 from typing import Optional, List, Dict, Any
 from sqlalchemy import func
-from sqlalchemy import Column, String, DateTime, Text, JSON, Integer, ForeignKey, Boolean, create_engine
+from sqlalchemy import Column, String, DateTime, Text, JSON, Integer, ForeignKey, Boolean, UniqueConstraint, create_engine
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 import asyncio
@@ -151,9 +151,42 @@ class AlertInvestigation(Base):
     error = Column(Text, nullable=False, default="")
 
 
+class AlertInboxItem(Base):
+    """One alert Alertmanager sent, firing or resolved, with Kubeast's handling marks (00020_alert_inbox.sql)."""
+    __tablename__ = "alert_inbox"
+    __table_args__ = (UniqueConstraint("cluster", "fingerprint", "starts_at", name="alert_inbox_alert"),)
+
+    id = Column(String, primary_key=True)
+    cluster = Column(String, nullable=False)
+    fingerprint = Column(String, nullable=False)
+    starts_at = Column(DateTime, nullable=False)
+    alertname = Column(String, nullable=False, default="")
+    severity = Column(String, nullable=False, default="")
+    namespace = Column(String, nullable=False, default="")
+    labels = Column(JSON, nullable=False, default=dict)
+    annotations = Column(JSON, nullable=False, default=dict)
+    state = Column(String, nullable=False)
+    resolved_at = Column(DateTime, nullable=True)
+    first_received_at = Column(DateTime, nullable=False, default=utcnow)
+    last_received_at = Column(DateTime, nullable=False, default=utcnow)
+    received_count = Column(Integer, nullable=False, default=1)
+    generator_url = Column(Text, nullable=False, default="")
+    alertmanager_url = Column(Text, nullable=False, default="")
+    receiver = Column(String, nullable=False, default="")
+    group_key = Column(Text, nullable=False, default="")
+    acked_by = Column(String, nullable=False, default="")
+    acked_at = Column(DateTime, nullable=True)
+    assignee = Column(String, nullable=False, default="")
+    note = Column(Text, nullable=False, default="")
+    note_by = Column(String, nullable=False, default="")
+    note_at = Column(DateTime, nullable=True)
+    done_by = Column(String, nullable=False, default="")
+    done_at = Column(DateTime, nullable=True)
+
+
 # Schema version this build needs — the newest file in
 # services/pkg/dbmigrate/migrations (goose records it in goose_db_version).
-REQUIRED_SCHEMA_VERSION = 19
+REQUIRED_SCHEMA_VERSION = 20
 
 
 async def read_schema_version(engine) -> int:
