@@ -67,7 +67,7 @@ Chart-managed objects are changed through the chart (`helm upgrade`), never with
 
 The script resolves KUBECONFIG in priority order: `$KUBECONFIG_PATH` → single-file `$KUBECONFIG` → repo-local `.kubeconfig-kind` → `/tmp/kubeast-kubeconfig`. Note: the auth/k8s/session Go services share build context `services/` with explicit Dockerfiles (`<svc>-go/Dockerfile`).
 
-Install paths, all from the one chart: `helm/kubeast` (Helm), `install.sh` (one-liner for an existing cluster), `scripts/kind-deploy.sh` (local kind), `install-docker.sh` + `docker-compose.yml` (single-host, no cluster). There is no separate copy of the manifests.
+Install paths, all from the one chart: `helm/kubeast` (Helm), `install.sh` (one-liner for an existing cluster), `scripts/kind-deploy.sh` (local kind), `install-docker.sh` + `docker-compose.yml` (single-host, no cluster). There is no separate copy of the manifests. `helm/kubeast/values-minimal.yaml` is the smallest install (no AI, no Redis — k8s-service caches in memory when `REDIS_HOST` is empty — six pods, requests from measurement); the README footprint table comes from `scripts/kind-footprint.sh` (a kind cluster of its own, `crictl` working set and CPU once a minute) — rerun it and update the table when a change adds a pod or a background job.
 
 ## Per-component dev & test
 

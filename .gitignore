@@ -79,6 +79,8 @@ kubeconfig.yaml
 kubeconfig*.yaml
 .kubeconfig-kind
 deploy/kind/values.local.yaml
+# scripts/kind-footprint.sh runs (kubeconfig + samples)
+.footprint/
 
 # Docker
 .dockerignore

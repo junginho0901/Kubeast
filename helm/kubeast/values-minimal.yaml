@@ -1,0 +1,25 @@
+# The smallest install: the dashboard, admin and audit without the AI and without the cache.
+#
+#   helm install kubeast ./helm/kubeast -n kubeast --create-namespace -f helm/kubeast/values-minimal.yaml
+#
+# Six pods (auth-service, k8s-service, session-service, frontend, gateway, postgres) instead of ten. Left out:
+#   - ai.enabled: false — no ai-service, tool-server or ModelConfig controller: no AI chat, floating assistant,
+#     alert investigation, MCP server or AI optimization text. The gateway answers /api/v1/ai with a JSON 503.
+#   - redis.enabled: false — k8s-service keeps its cache in memory (it is the only Redis user, one replica).
+# Requests from scripts/kind-footprint.sh (README "자원 사용량"): memory = the larger of the idle 90th percentile and
+# the peak in use, plus 15% (memory over the request is what the kubelet evicts first; postgres from an install with
+# data); CPU = the idle 90th percentile plus 15%, at least 25m (CPU over the request is only slowed down). Limits
+# stay the chart's. Everything else is the chart default and can be turned on here.
+ai:
+  enabled: false
+redis:
+  enabled: false
+resources:
+  authService:
+    requests: { cpu: 25m, memory: 32Mi }
+  k8sService:
+    requests: { cpu: 25m, memory: 88Mi }
+  sessionService:
+    requests: { cpu: 25m, memory: 32Mi }
+  postgres:
+    requests: { cpu: 25m, memory: 160Mi }

@@ -188,7 +188,7 @@ func Load() Config {
 
 		AllowedOrigins: pkgconfig.LookupEnvList("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"),
 
-		RedisHost:     pkgconfig.GetEnv("REDIS_HOST", "localhost"),
+		RedisHost:     pkgconfig.LookupEnv("REDIS_HOST", "localhost"), // "" = no Redis (chart redis.enabled false)
 		RedisPort:     pkgconfig.GetEnvInt("REDIS_PORT", 6379),
 		RedisDB:       pkgconfig.GetEnvInt("REDIS_DB", 0),
 		RedisPassword: pkgconfig.GetEnv("REDIS_PASSWORD", ""),

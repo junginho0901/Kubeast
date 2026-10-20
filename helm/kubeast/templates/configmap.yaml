@@ -90,7 +90,7 @@ data:
   KEY_DIR: "/app/.keys"
   POSTGRES_USER: {{ .Values.postgresql.user | quote }}
   POSTGRES_DB: {{ .Values.postgresql.database | quote }}
-  REDIS_HOST: "redis"
+  REDIS_HOST: {{ ternary "redis" "" .Values.redis.enabled | quote }}
   REDIS_PORT: "6379"
   REDIS_DB: "0"
   OPENAI_MODEL: {{ .Values.ai.model | quote }}

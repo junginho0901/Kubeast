@@ -28,10 +28,14 @@ type memEntry struct {
 
 // New connects to Redis at host:port (password empty = no AUTH, the local
 // docker/kind setups) and falls back to the in-memory cache when it is not
-// reachable.
+// reachable. An empty host is no Redis at all: the in-memory cache, no attempt.
 func New(host string, port, db int, password string) *Cache {
 	c := &Cache{
 		mem: make(map[string]memEntry),
+	}
+	if host == "" {
+		slog.Info("redis off (REDIS_HOST empty), using in-memory cache")
+		return c
 	}
 
 	rdb := redis.NewClient(&redis.Options{

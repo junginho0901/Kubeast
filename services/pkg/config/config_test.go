@@ -29,3 +29,21 @@ func TestLookupEnvList_AbsentUsesDefault(t *testing.T) {
 		t.Fatalf("absent with an empty default → none: %v", got)
 	}
 }
+
+func TestLookupEnv_EmptyMeansNone(t *testing.T) {
+	const key = "KUBEAST_TEST_STRING"
+	if got := LookupEnv(key, "d"); got != "d" {
+		t.Fatalf("absent → default: %q", got)
+	}
+	t.Setenv(key, "")
+	if got := LookupEnv(key, "d"); got != "" {
+		t.Fatalf("set to empty must be none, got %q", got)
+	}
+	if got := GetEnv(key, "d"); got != "d" {
+		t.Fatalf("GetEnv keeps treating empty as unset: %q", got)
+	}
+	t.Setenv(key, "v")
+	if got := LookupEnv(key, "d"); got != "v" {
+		t.Fatalf("set → value: %q", got)
+	}
+}

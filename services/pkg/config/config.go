@@ -45,6 +45,15 @@ func GetEnvList(key, defaultVal string) []string {
 	return splitList(GetEnv(key, defaultVal))
 }
 
+// LookupEnv is GetEnv for variables where "set to nothing" means "none": the
+// default applies only when the variable is absent.
+func LookupEnv(key, defaultVal string) string {
+	if v, ok := os.LookupEnv(key); ok {
+		return v
+	}
+	return defaultVal
+}
+
 // LookupEnvList is GetEnvList for variables where "set to nothing" means
 // "none" rather than "use the default": the default applies only when the
 // variable is absent, so ALLOWED_ORIGINS="" yields an empty list.

@@ -1,0 +1,72 @@
+suite: values-minimal.yaml — six pods, no AI and no cache; REDIS_HOST empty so k8s-service does not look for Redis
+# deployments.yaml includes configmap.yaml and secret.yaml for its checksum annotation.
+templates:
+  - deployments.yaml
+  - configmap.yaml
+  - secret.yaml
+  - redis.yaml
+  - postgres.yaml
+  - gateway.yaml
+tests:
+  - it: renders auth-service, k8s-service, session-service and frontend, plus postgres and the gateway, and no redis
+    values:
+      - ../values-minimal.yaml
+    asserts:
+      - hasDocuments:
+          count: 4
+        template: deployments.yaml
+      - notMatchRegex:
+          path: metadata.name
+          pattern: ^(ai-service|tool-server|model-config-controller-go)$
+        template: deployments.yaml
+      - hasDocuments:
+          count: 0
+        template: redis.yaml
+      - containsDocument:
+          kind: Deployment
+          apiVersion: apps/v1
+          name: postgres
+          any: true
+        template: postgres.yaml
+      - containsDocument:
+          kind: Deployment
+          apiVersion: apps/v1
+          name: gateway
+          any: true
+        template: gateway.yaml
+
+  - it: leaves REDIS_HOST empty with redis off
+    values:
+      - ../values-minimal.yaml
+    template: configmap.yaml
+    documentSelector:
+      path: metadata.name
+      value: kubeast-config
+    asserts:
+      - equal:
+          path: data.REDIS_HOST
+          value: ""
+
+  - it: names the chart's redis by default
+    template: configmap.yaml
+    documentSelector:
+      path: metadata.name
+      value: kubeast-config
+    asserts:
+      - equal:
+          path: data.REDIS_HOST
+          value: redis
+
+  - it: lowers the requests to the measured ones and keeps the chart's limits
+    values:
+      - ../values-minimal.yaml
+    template: deployments.yaml
+    documentSelector:
+      path: metadata.name
+      value: k8s-service
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources
+          value:
+            requests: { cpu: 25m, memory: 88Mi }
+            limits: { memory: 512Mi }
