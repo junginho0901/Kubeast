@@ -650,7 +650,7 @@ export interface ClusterFeatures {
   // Admin → Investigations: alert → AI investigation reports (ai-service, features.alertInvestigation, needs AI).
   alertInvestigation?: { enabled: boolean }
   // Chart features.alertStore: the clusters whose alerts and silences an Alertmanager-compatible store holds.
-  alertStore?: { enabled: boolean; clusters: string[] }
+  alertStore?: { enabled: boolean; clusters: string[]; clusterLabel?: string; silences?: boolean; silenceMaxHours?: number }
 }
 
 // Policy reports (wgpolicyk8s.io/v1alpha2 PolicyReport / ClusterPolicyReport as Kyverno and others write them).

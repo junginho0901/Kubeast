@@ -25,6 +25,11 @@ func RegisterGPU(r chi.Router, h *handler.Handler) {
 	r.Get("/api/v1/prometheus/targets", h.PrometheusTargets)
 	// The AI's alerts_list (features.alertStore): the cluster's alerts and the silences on them.
 	r.Get("/api/v1/alertstore/alerts", h.AlertStoreAlerts)
+	// Silences on the cluster's alerts (the Alerts page): read, preview, and with features.alertStore.silences make / expire.
+	r.Get("/api/v1/alertstore/silences", h.AlertStoreSilences)
+	r.Get("/api/v1/alertstore/silences/preview", h.AlertStoreSilencePreview)
+	r.Post("/api/v1/alertstore/silences", h.CreateAlertSilence)
+	r.Delete("/api/v1/alertstore/silences/{silenceID}", h.ExpireAlertSilence)
 
 	// DRA - DeviceClasses (cluster-scoped)
 	r.Get("/api/v1/deviceclasses", h.GetDeviceClasses)

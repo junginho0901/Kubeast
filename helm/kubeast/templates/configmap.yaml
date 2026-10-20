@@ -282,6 +282,8 @@ data:
   ALERT_STORE_MAX_ALERTS: {{ .maxAlerts | quote }}
   ALERT_STORE_TIMEOUT: {{ .timeout | quote }}
   ALERT_STORE_PER_USER_PER_MINUTE: {{ .perUserPerMinute | quote }}
+  ALERT_STORE_SILENCES_ENABLED: {{ .silences | quote }}
+  ALERT_STORE_SILENCE_MAX_HOURS: {{ .silenceMaxHours | int64 | quote }}
 {{- end }}
 {{- end }}
   GITOPS_ARGOCD_ENABLED: {{ .Values.gitops.argocd.enabled | quote }}

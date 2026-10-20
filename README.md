@@ -770,6 +770,7 @@ Alertmanager(또는 Grafana 알림)가 보낸 알림을 **울리는 중·해결�
 
 - **누가**: 선택한 클러스터를 Namespace 제한 없이 읽는 사람(그 클러스터 `resource.pod.read`) — AI 알림 도구·알림 저장소 읽기와 같은 기준. 그 알림의 AI 조사 보고서도 여기서 열 수 있고, 열 때마다 `ai.investigation.view`가 남습니다.
 - **한 줄 = 알림 1건**: 같은 클러스터·fingerprint·`startsAt`. Alertmanager가 `repeat_interval`마다 다시 보내면 "받은 횟수"가 오르고, resolved가 오면 해결됨, 해결 뒤 다시 울리면 새 줄. 상태는 울리는 중 · **상태 확인 안 됨**(울리는 중인데 `inbox.staleAfterHours`(8) 동안 소식이 없음 — Alertmanager는 울리는 알림의 `endsAt`을 웹훅으로 보내지 않음) · 해결됨. 그 클러스터에 알림 저장소(`features.alertStore`)가 있으면 Alertmanager의 지금 상태(무음 중·억제됨·Alertmanager에 없음)도 붙입니다.
+- **무음**: 그 클러스터에 알림 저장소가 있고 `features.alertStore.silences: true`(기본 꺼짐 — 저장소 인증에 쓰기 권한 필요, Grafana면 Editor)면, 권한 `resource.alert.silence`(Write·Admin 기본, Read 없음)를 가진 사람이 알림 창의 **무음**으로 그 알림의 이름·Namespace·대상 레이블에서 시작하는 조건(`=`·`!=`·`=~`·`!~`, 더하고 지우기)·기간(최대 `silenceMaxHours` 168)·이유(필수)를 정하고, **지금 무음이 걸릴 알림**을 미리 본 뒤 만듭니다. 서버가 모든 무음에 그 클러스터 조건(`<clusterLabel>="<값>"`)을 붙여 다른 클러스터 알림은 못 멈추고, 빈 레이블도 맞는 조건만으로는(예: `alertname=~".*"`) 만들 수 없습니다(Alertmanager와 같은 규칙). **무음** 탭에서 그 클러스터의 걸린·예정 무음을 보고 "지금 끝내기". 감사 `alert.silence.create`·`alert.silence.expire`.
 - **처리 표시**: 확인함 · 내가 담당/해제 · 메모 · 조치 완료. Kubeast 안 기록이고 Alertmanager·알림 규칙은 바꾸지 않습니다 — "해결됨"은 규칙이 정합니다. 바꿀 때마다 `alert.inbox.update`(전·후 값), 감사 DB를 쓸 수 없으면 503이고 표시도 되돌립니다.
 - **화면**: 상태 탭(울리는 중·상태 확인 안 됨·해결됨·전체), 심각도·내 담당·조치 안 된 것 거르기, 대상(라벨 `pod`·`deployment`·`node` 등)을 누르면 리소스 상세 창. 한 건을 열면 라벨·주석·알림 보낸 곳 링크·처리 칸·AI 조사. API `GET /api/v1/alerts/inbox?cluster=`·`/{id}`·`PATCH /{id}`·`/{id}/investigation`. 보존은 조사와 같이 `retention.investigationDays`(마지막으로 받은 시각 기준).
 
@@ -939,7 +940,7 @@ AI가 원인을 실제로 찾는지는 e2e가 아니라 평가 스크립트로 �
 - **누가**: 그 클러스터 전체 부여가 있는 사람(Prometheus 도구와 같음) — 알림에는 노드·클러스터 알림처럼 네임스페이스가 없는 것이 많아 네임스페이스 한정 부여는 거부합니다. 분당 한도.
 - **범위 강제**: k8s-service가 저장소에 `<clusterLabel>="<clusters의 값>"` 매처로 묻고, 돌아온 알림의 레이블을 **다시 확인**해 다른 값은 버립니다. 모델이 준 조건(알림 이름·레이블 값)은 따옴표 매처로 만들고, 클러스터 레이블은 늘 이 클러스터 값입니다. 무음은 **이 클러스터 알림을 덮은 것만**(다른 클러스터 무음은 안 보임). 클러스터 하나만 쓰는 Alertmanager면 값을 비워 전부 읽습니다(`clusters`에 클러스터가 하나일 때만).
 - **감사**: 없음 — 알림은 운영 상태라 `prometheus_rules`처럼 일반 읽기.
-- **API**: `GET /api/v1/alertstore/alerts?state=firing|silenced|inhibited|all&alertname=&label=<이름>=<값>`.
+- **API**: `GET /api/v1/alertstore/alerts?state=firing|silenced|inhibited|all&alertname=&label=<이름>=<값>` · `GET /api/v1/alertstore/silences`(이 클러스터의 걸린·예정 무음) · `GET …/silences/preview?matchers=<JSON>`(무음이 지금 멈출 알림). 쓰기는 `silences: true`일 때만 — `POST /api/v1/alertstore/silences {matchers, durationMinutes, comment}`·`DELETE …/silences/{id}`(권한 `resource.alert.silence`, 위 Alerts 받은편지함의 "무음"). 화면·AI 모두 브라우저가 아니라 k8s-service가 저장소에 보냅니다(게이트웨이 `/api/v1/alertstore/`).
 
 ```yaml
 features:

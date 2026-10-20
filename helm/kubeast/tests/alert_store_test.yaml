@@ -30,7 +30,19 @@ tests:
       features.alertStore.clusterLabel: k8s_cluster
       features.alertStore.clusters: {alpha: eks-alpha, self: kind}
       features.alertStore.egressCIDRs: [{cidr: 10.84.0.0/16, port: 443}]
+      features.alertStore.silences: true
+      features.alertStore.silenceMaxHours: 24
     asserts:
+      - equal:
+          path: data.ALERT_STORE_SILENCES_ENABLED
+          value: "true"
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.ALERT_STORE_SILENCE_MAX_HOURS
+          value: "24"
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
       - equal:
           path: data.ALERT_STORE_URL
           value: https://grafana.example.com/api/alertmanager/grafana

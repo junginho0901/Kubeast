@@ -19,6 +19,16 @@ export function alertResource(labels: Record<string, string>): ResourceDetailTar
   return null
 }
 
+// The conditions a silence of this alert starts from: its name, namespace and the object it is about — narrow, so
+// it mutes this alert and not its neighbours. The cluster label is left out (the server adds it).
+export function silenceStart(labels: Record<string, string>, clusterLabel = 'cluster'): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const key of ['alertname', 'namespace']) if (labels[key] && key !== clusterLabel) out[key] = labels[key]
+  const object = [...(labels.namespace ? NAMESPACED : []), ...CLUSTER_SCOPED].find(([label]) => labels[label] && label !== clusterLabel)
+  if (object) out[object[0]] = labels[object[0]]
+  return out
+}
+
 // What the alert store says now about a firing inbox alert: "firing", "silenced", "inhibited", "absent" (the
 // store holds no such alert — the resolved notification did not come) or null (no store for this cluster, not
 // asked yet, or its list was cut short so absence proves nothing). A resolved alert is not asked about.

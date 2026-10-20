@@ -258,6 +258,9 @@ func allPermissions() []map[string]interface{} {
 		{"category": "Secret", "permissions": []perm{
 			{"resource.secret.reveal", "Reveal Secret values"},
 		}},
+		{"category": "Alerts", "permissions": []perm{
+			{"resource.alert.silence", "Create and expire alert silences"},
+		}},
 		{"category": "Helm", "permissions": []perm{
 			{"resource.helm.*", "All Helm actions"},
 			{"resource.helm.read", "View releases"},

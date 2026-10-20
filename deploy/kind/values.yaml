@@ -149,6 +149,7 @@ features:
     clusters:
       self: kubeast
       default: kubeast-b
+    silences: true
     egressCIDRs:
       - {cidr: 172.18.0.0/16, port: 31093}
 gitops:

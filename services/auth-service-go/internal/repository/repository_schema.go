@@ -89,6 +89,8 @@ func (r *Repository) SeedSystemRoles(ctx context.Context) error {
 			"resource.*.read", "resource.*.create", "resource.*.edit", "resource.*.delete",
 			"resource.cronjob.suspend", "resource.cronjob.trigger",
 			"resource.secret.reveal",
+			// Silences on the cluster's alerts in the alert store (features.alertStore.silences).
+			"resource.alert.silence",
 			"resource.pod.logfile",
 			// Helm: write role gets read + rollback + upgrade (values) + test.
 			// Uninstall stays out by default — per docs/helm-plan.md §6-2

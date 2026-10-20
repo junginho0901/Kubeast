@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { alertResource, liveStateOf } from './alertInbox'
+import { alertResource, liveStateOf, silenceStart } from './alertInbox'
 
 describe('the object an alert is about', () => {
   it('takes the most specific namespaced label first', () => {
@@ -31,5 +31,15 @@ describe('what the alert store says now', () => {
     expect(liveStateOf(firing, undefined)).toBeNull()
     expect(liveStateOf({ ...firing, status: 'resolved' }, store([]))).toBeNull()
     expect(liveStateOf(firing, store([{ fingerprint: 'b', state: 'firing' }], true))).toBeNull()
+  })
+})
+
+describe('where a silence of an alert starts', () => {
+  it('takes the name, the namespace and the object, never the cluster label', () => {
+    expect(silenceStart({ alertname: 'KubePodCrashLooping', namespace: 'shop', pod: 'cart-1', container: 'app', cluster: 'eks-alpha', severity: 'warning' }))
+      .toEqual({ alertname: 'KubePodCrashLooping', namespace: 'shop', pod: 'cart-1' })
+    expect(silenceStart({ alertname: 'NodeDiskFull', node: 'n1', k8s_cluster: 'eks' }, 'k8s_cluster')).toEqual({ alertname: 'NodeDiskFull', node: 'n1' })
+    expect(silenceStart({ alertname: 'Watchdog' })).toEqual({ alertname: 'Watchdog' })
+    expect(silenceStart({ alertname: 'X', namespace: 'apps' }, 'namespace')).toEqual({ alertname: 'X' }) // a store whose cluster label is namespace
   })
 })

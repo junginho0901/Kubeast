@@ -58,6 +58,10 @@ type Config struct {
 	MaxAlerts        int
 	Timeout          time.Duration
 	PerUserPerMinute int
+	// SilencesEnabled lets resource.alert.silence holders make and expire
+	// silences; the credentials then need write access to the store.
+	SilencesEnabled    bool
+	SilenceMaxDuration time.Duration
 }
 
 // LoadConfig reads the ALERT_STORE_* environment.
@@ -71,15 +75,17 @@ func LoadConfig() Config {
 		}
 	}
 	return Config{
-		Enabled:          pkgconfig.GetEnvBool("ALERT_STORE_ENABLED", false),
-		URL:              strings.TrimRight(strings.TrimSpace(os.Getenv("ALERT_STORE_URL")), "/"),
-		AuthHeader:       os.Getenv("ALERT_STORE_AUTH_HEADER"),
-		Tenant:           strings.TrimSpace(os.Getenv("ALERT_STORE_TENANT")),
-		ClusterLabel:     pkgconfig.GetEnv("ALERT_STORE_CLUSTER_LABEL", "cluster"),
-		Clusters:         parseClusters(os.Getenv("ALERT_STORE_CLUSTERS")),
-		MaxAlerts:        pkgconfig.GetEnvInt("ALERT_STORE_MAX_ALERTS", 100),
-		Timeout:          timeout,
-		PerUserPerMinute: pkgconfig.GetEnvInt("ALERT_STORE_PER_USER_PER_MINUTE", 30),
+		Enabled:            pkgconfig.GetEnvBool("ALERT_STORE_ENABLED", false),
+		URL:                strings.TrimRight(strings.TrimSpace(os.Getenv("ALERT_STORE_URL")), "/"),
+		AuthHeader:         os.Getenv("ALERT_STORE_AUTH_HEADER"),
+		Tenant:             strings.TrimSpace(os.Getenv("ALERT_STORE_TENANT")),
+		ClusterLabel:       pkgconfig.GetEnv("ALERT_STORE_CLUSTER_LABEL", "cluster"),
+		Clusters:           parseClusters(os.Getenv("ALERT_STORE_CLUSTERS")),
+		MaxAlerts:          pkgconfig.GetEnvInt("ALERT_STORE_MAX_ALERTS", 100),
+		Timeout:            timeout,
+		PerUserPerMinute:   pkgconfig.GetEnvInt("ALERT_STORE_PER_USER_PER_MINUTE", 30),
+		SilencesEnabled:    pkgconfig.GetEnvBool("ALERT_STORE_SILENCES_ENABLED", false),
+		SilenceMaxDuration: time.Duration(pkgconfig.GetEnvInt("ALERT_STORE_SILENCE_MAX_HOURS", 168)) * time.Hour,
 	}
 }
 
@@ -126,6 +132,9 @@ func (c Config) Validate() error {
 	}
 	if c.PerUserPerMinute < 1 {
 		return fmt.Errorf("ALERT_STORE_PER_USER_PER_MINUTE must be at least 1")
+	}
+	if c.SilencesEnabled && (c.SilenceMaxDuration < time.Hour || c.SilenceMaxDuration > 90*24*time.Hour) {
+		return fmt.Errorf("ALERT_STORE_SILENCE_MAX_HOURS must be 1..2160")
 	}
 	return nil
 }
@@ -473,7 +482,7 @@ func (s *Store) List(ctx context.Context, id string, q Query) (Result, error) {
 
 const maxBody = 16 << 20
 
-// get asks the store for path and returns a 200 answer's body.
+// get asks the store for path and returns a 2xx answer's body.
 func (s *Store) get(ctx context.Context, path string, params url.Values) ([]byte, error) {
 	target := s.cfg.URL + path
 	if len(params) > 0 {
@@ -483,6 +492,11 @@ func (s *Store) get(ctx context.Context, path string, params url.Values) ([]byte
 	if err != nil {
 		return nil, err
 	}
+	return s.do(req)
+}
+
+// do sends req with the store's credentials and returns a 2xx answer's body.
+func (s *Store) do(req *http.Request) ([]byte, error) {
 	req.Header.Set("Accept", "application/json")
 	if s.cfg.AuthHeader != "" {
 		req.Header.Set("Authorization", s.cfg.AuthHeader)
@@ -506,7 +520,7 @@ func (s *Store) get(ctx context.Context, path string, params url.Values) ([]byte
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, ErrNotServed
 	}
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return nil, &StoreError{Status: resp.StatusCode, Body: cut(strings.TrimSpace(string(body)), 300)}
 	}
 	return body, nil

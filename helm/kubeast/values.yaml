@@ -882,6 +882,11 @@ features:
   # alerts. An empty value reads every alert of the store (a store of one
   # cluster only). Who may read: a grant on the whole cluster, as for the
   # Prometheus reads. The auth Secret has key "authorization".
+  # silences: true lets holders of resource.alert.silence (Write and Admin by
+  # default) make and expire silences from the Alerts page; the credentials then
+  # need write access to silences (a Grafana Editor token). Every silence gets
+  # the <clusterLabel>="<value>" condition, so it mutes that cluster's alerts
+  # only; silenceMaxHours caps how long one lasts.
   alertStore:
     enabled: false
     url: ""
@@ -893,6 +898,8 @@ features:
     maxAlerts: 100
     timeout: 10s
     perUserPerMinute: 30
+    silences: false
+    silenceMaxHours: 168
     egressCIDRs: []
 
 # Argo CD guard. An object that carries Argo CD's tracking annotation

@@ -225,4 +225,64 @@ test.describe('Alerts inbox', () => {
     await page.reload()
     await expect(page.getByTestId(`alert-row-${heldRow.id}`).getByTestId('alert-live')).toHaveText(/Silenced|무음 중/)
   })
+
+  test('a silence from the alert window mutes it in Alertmanager for this cluster only, and ends from the Silences tab', async ({ page, request }) => {
+    const features = await (await request.get('/api/v1/cluster/features', { headers: bearer(admin) })).json()
+    test.skip(!features.alertStore?.clusters?.includes('default') || !features.alertStore?.silences, 'no alert store with silences for cluster default')
+    const mute = `E2EInboxMute${id}`
+    const labels = { alertname: mute, cluster: 'kubeast-b', severity: 'info', namespace: 'default', kubeast_e2e: 'store', e2e_run: `${id}-mute` }
+    const startsAt = new Date().toISOString()
+    am('POST', '/api/v2/alerts', [{ labels, annotations: { summary: `mute ${id}` }, startsAt, endsAt: new Date(Date.now() + 15 * 60_000).toISOString() }])
+    let fingerprint = ''
+    await expect.poll(() => {
+      fingerprint = (JSON.parse(am('GET', `/api/v2/alerts?filter=e2e_run%3D%22${id}-mute%22`)) as { fingerprint: string }[])[0]?.fingerprint ?? ''
+      return fingerprint
+    }, { timeout: 30_000 }).not.toBe('')
+    await post(request, 'default', [{ status: 'firing', labels, annotations: { summary: `mute ${id}` }, startsAt, fingerprint }])
+    const row = (await list(request, admin, 'default')).find((r) => r.alertname === mute)!
+
+    // the server adds the cluster condition and refuses one the user sets; a Read user may not silence
+    const refused = await request.post('/api/v1/alertstore/silences?cluster=default', {
+      headers: bearer(admin), data: { matchers: [{ name: 'cluster', value: 'kubeast', isRegex: false, isEqual: true }], durationMinutes: 60, comment: 'x' },
+    })
+    expect(refused.status()).toBe(400)
+    const asReader = await request.post('/api/v1/alertstore/silences?cluster=self', {
+      headers: bearer(reader), data: { matchers: [{ name: 'alertname', value: mute, isRegex: false, isEqual: true }], durationMinutes: 60, comment: 'x' },
+    })
+    expect(asReader.status()).toBe(403)
+
+    await page.goto(`/alerts?cluster=default&alert=${row.id}`)
+    const detail = page.getByTestId('alert-detail')
+    await detail.getByTestId('alert-silence').click()
+    const modal = page.getByTestId('silence-modal')
+    await expect(modal.getByTestId('silence-matcher')).toHaveCount(2) // alertname and namespace; the cluster is added by the server
+    await expect(modal.getByTestId('silence-preview-count')).toHaveText(/^1 /)
+    await modal.getByTestId('silence-comment').fill(`e2e window ${id}`)
+    await modal.getByTestId('silence-create').click()
+    await expect(modal).toHaveCount(0)
+
+    type AmSilence = { id: string; createdBy: string; comment: string; status: { state: string }; matchers: { name: string; value: string; isEqual: boolean; isRegex: boolean }[] }
+    let made: AmSilence | undefined
+    await expect.poll(() => {
+      made = (JSON.parse(am('GET', '/api/v2/silences')) as AmSilence[]).find((x) => x.comment === `e2e window ${id}`)
+      return made?.status.state
+    }, { timeout: 15_000 }).toBe('active')
+    silenceIds.push(made!.id)
+    expect(made!.createdBy).toContain(ADMIN_EMAIL)
+    expect(made!.matchers.map((m) => `${m.name}=${m.value}`).sort()).toEqual([`alertname=${mute}`, 'cluster=kubeast-b', 'namespace=default'])
+    await expect.poll(() => (JSON.parse(am('GET', `/api/v2/alerts?filter=e2e_run%3D%22${id}-mute%22&active=false`)) as unknown[]).length, { timeout: 30_000 }).toBe(1)
+
+    await page.goto('/alerts?cluster=default')
+    await page.getByTestId('alert-tab-silences').click()
+    const silenceRow = page.getByTestId(`silence-row-${made!.id}`)
+    await expect(silenceRow).toContainText(`e2e window ${id}`)
+    await silenceRow.getByTestId('silence-expire').click()
+    await page.getByRole('button', { name: /^(End now|지금 끝내기)$/ }).last().click()
+    await expect(silenceRow).toHaveCount(0)
+    expect((JSON.parse(am('GET', `/api/v2/silence/${made!.id}`)) as AmSilence).status.state).toBe('expired')
+
+    const logs = await (await request.get('/api/v1/auth/admin/audit-logs?limit=100', { headers: bearer(admin) })).json()
+    const rows = (Array.isArray(logs) ? logs : logs.items || []).filter((i: any) => (i.TargetID ?? i.target_id) === made!.id)
+    expect(rows.map((i: any) => i.Action ?? i.action).sort()).toEqual(['alert.silence.create', 'alert.silence.expire'])
+  })
 })
