@@ -25,14 +25,67 @@ import (
 var (
 	// ErrPrometheusUpstream: the metrics store answered with an error (502 to the caller).
 	ErrPrometheusUpstream = errors.New("metrics store error")
-	// ErrPrometheusNotServed: the store has no such API (a VictoriaMetrics without
-	// -vmalert.proxyURL has no rules); the caller gets 404 "not served".
+	// ErrPrometheusNotServed: the store has no such API (a VictoriaMetrics cluster's
+	// vmselect has no targets API; a VictoriaMetrics without -vmalert.proxyURL
+	// answers rules with an empty placeholder); the caller gets 404 "not served".
 	ErrPrometheusNotServed = errors.New("not served by this metrics store")
 	// ErrBadSelector: a selector argument that is not a plain series selector.
 	ErrBadSelector = errors.New("bad series selector")
+	// ErrBadQuery: a query a shared store's cluster scoping cannot parse (MetricsQL-only
+	// syntax included); 400 to the caller, not a server error.
+	ErrBadQuery = errors.New("query is not PromQL")
 )
 
 const exploreWindow = time.Hour
+
+// unsupportedPath is VictoriaMetrics's answer for an API it does not have (400
+// "unsupported path requested", e.g. vmselect's /api/v1/targets) — not served,
+// unlike a 400 about the request itself.
+func unsupportedPath(code int, body []byte) bool {
+	return code == http.StatusBadRequest && strings.Contains(string(body), "unsupported path requested")
+}
+
+// unsupportedPathError is the same answer through the API server proxy, where
+// client-go keeps a text/plain body only as the cause of its StatusError.
+func unsupportedPathError(err error) bool {
+	var se apierrors.APIStatus
+	if !errors.As(err, &se) || se.Status().Details == nil {
+		return false
+	}
+	for _, c := range se.Status().Details.Causes {
+		if unsupportedPath(int(se.Status().Code), []byte(c.Message)) {
+			return true
+		}
+	}
+	return false
+}
+
+// prometheusFlavor tells VictoriaMetrics from Prometheus by the /-/healthy text
+// each writes ("VictoriaMetrics is Healthy." / "Prometheus Server is Healthy."),
+// "" when it cannot tell.
+func (s *Service) prometheusFlavor(ctx context.Context, src *promSource) string {
+	var body []byte
+	if src.ext != nil {
+		b, code, err := src.ext.do(ctx, "/-/healthy")
+		if err != nil || code != http.StatusOK {
+			return ""
+		}
+		body = b
+	} else {
+		b, err := s.clientsetCtx(ctx).CoreV1().RESTClient().Get().AbsPath(src.proxy.proxyBase()).Suffix("-", "healthy").Do(ctx).Raw()
+		if err != nil {
+			return ""
+		}
+		body = b
+	}
+	switch text := string(body); {
+	case strings.Contains(text, "VictoriaMetrics"):
+		return "victoriametrics"
+	case strings.Contains(text, "Prometheus"):
+		return "prometheus"
+	}
+	return ""
+}
 
 // promGetData calls one Prometheus API path on the cluster's source and
 // returns the "data" member of the reply.
@@ -43,7 +96,7 @@ func (s *Service) promGetData(ctx context.Context, src *promSource, promPath str
 		if err != nil {
 			return nil, fmt.Errorf("%w: %v", ErrPrometheusUpstream, err)
 		}
-		if code == http.StatusNotFound {
+		if code == http.StatusNotFound || unsupportedPath(code, b) {
 			return nil, fmt.Errorf("%w: %s", ErrPrometheusNotServed, strings.SplitN(promPath, "?", 2)[0])
 		}
 		if code != http.StatusOK {
@@ -51,10 +104,8 @@ func (s *Service) promGetData(ctx context.Context, src *promSource, promPath str
 		}
 		body = b
 	} else {
-		info := src.proxy
-		base := fmt.Sprintf("/api/v1/namespaces/%s/services/%s:%d/proxy", info.Namespace, info.Name, info.Port)
 		sub, query, _ := strings.Cut(promPath, "?")
-		req := s.clientsetCtx(ctx).CoreV1().RESTClient().Get().AbsPath(base).Suffix(sub)
+		req := s.clientsetCtx(ctx).CoreV1().RESTClient().Get().AbsPath(src.proxy.proxyBase()).Suffix(sub)
 		params, _ := url.ParseQuery(query)
 		for k, vals := range params {
 			for _, v := range vals {
@@ -66,7 +117,7 @@ func (s *Service) promGetData(ctx context.Context, src *promSource, promPath str
 			switch {
 			case apierrors.IsForbidden(err), apierrors.IsUnauthorized(err):
 				return nil, err
-			case apierrors.IsNotFound(err):
+			case apierrors.IsNotFound(err), unsupportedPathError(err):
 				return nil, fmt.Errorf("%w: %s", ErrPrometheusNotServed, sub)
 			}
 			return nil, fmt.Errorf("%w: %v", ErrPrometheusUpstream, err)
@@ -286,6 +337,11 @@ func (s *Service) PrometheusRules(ctx context.Context, ruleType, name string) ([
 	if err := json.Unmarshal(data, &reply); err != nil {
 		return nil, false, fmt.Errorf("%w: rules: %v", ErrPrometheusUpstream, err)
 	}
+	// VictoriaMetrics keeps its rules in vmalert and, unless -vmalert.proxyURL
+	// points there, answers with an empty placeholder: no rules is not a fact here.
+	if len(reply.Groups) == 0 && s.prometheusFlavor(ctx, src) == "victoriametrics" {
+		return nil, false, fmt.Errorf("%w: /api/v1/rules (VictoriaMetrics without -vmalert.proxyURL)", ErrPrometheusNotServed)
+	}
 	shared := src.ext != nil && src.ext.labelValue != ""
 	labelName := PrometheusClusterLabelName()
 	n := strings.ToLower(strings.TrimSpace(name))
@@ -357,14 +413,17 @@ func (s *Service) PrometheusTargets(ctx context.Context) ([]PromTarget, string, 
 			if err := json.Unmarshal(data, &reply); err != nil {
 				return nil, "", fmt.Errorf("%w: targets: %v", ErrPrometheusUpstream, err)
 			}
-			out := make([]PromTarget, 0, len(reply.ActiveTargets))
-			for _, t := range reply.ActiveTargets {
-				out = append(out, PromTarget{Job: t.Labels["job"], Instance: t.Labels["instance"], Health: t.Health,
-					LastError: t.LastError, LastScrape: t.LastScrape, ScrapePool: t.ScrapePool})
+			// a store fed by remote write (VictoriaMetrics behind vmagent) scrapes
+			// nothing itself: an empty list says nothing, `up` does
+			if len(reply.ActiveTargets) > 0 {
+				out := make([]PromTarget, 0, len(reply.ActiveTargets))
+				for _, t := range reply.ActiveTargets {
+					out = append(out, PromTarget{Job: t.Labels["job"], Instance: t.Labels["instance"], Health: t.Health,
+						LastError: t.LastError, LastScrape: t.LastScrape, ScrapePool: t.ScrapePool})
+				}
+				return out, "targets_api", nil
 			}
-			return out, "targets_api", nil
-		}
-		if !errors.Is(err, ErrPrometheusNotServed) {
+		} else if !errors.Is(err, ErrPrometheusNotServed) {
 			return nil, "", err
 		}
 	}

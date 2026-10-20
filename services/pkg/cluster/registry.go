@@ -50,7 +50,7 @@ type Info struct {
 	PrometheusAuthHeader   string
 	PrometheusClusterLabel string
 	// PrometheusService names the cluster's Prometheus Service
-	// ("namespace/service:port", ParsePrometheusService) to reach through the
+	// ("namespace/service:port[/path]", ParsePrometheusService) to reach through the
 	// API server proxy instead of discovering one. Ignored with a URL.
 	PrometheusService string
 

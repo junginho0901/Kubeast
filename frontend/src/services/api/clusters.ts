@@ -17,7 +17,7 @@ export interface ClusterMeta {
   prometheus_url?: string
   prometheus_cluster_label?: string
   prometheus_auth?: boolean
-  // Prometheus Service in the cluster, namespace/service:port (empty = discover).
+  // Prometheus Service in the cluster, namespace/service:port[/path] (empty = discover).
   prometheus_service?: string
   // the cluster's own log store (empty = the deployment-wide features.logSearch); auth = a header is stored
   log_search_url?: string

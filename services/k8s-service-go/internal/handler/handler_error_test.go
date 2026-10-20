@@ -38,6 +38,7 @@ func TestStatusForError(t *testing.T) {
 		{"metrics store unreachable", fmt.Errorf("%w: prometheus request failed: dial tcp: connection refused", k8s.ErrPrometheusUpstream), http.StatusBadGateway},
 		{"metrics store without rules", fmt.Errorf("%w: /api/v1/rules", k8s.ErrPrometheusNotServed), http.StatusNotFound},
 		{"bad selector", fmt.Errorf("%w: sum(up) is an expression", k8s.ErrBadSelector), http.StatusBadRequest},
+		{"query a shared store cannot scope", fmt.Errorf("%w: parse error", k8s.ErrBadQuery), http.StatusBadRequest},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

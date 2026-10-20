@@ -651,9 +651,14 @@ features:
   # label in every namespace (kubeast.io/prometheus=true, then the prometheus
   # chart's app.kubernetes.io/name=prometheus + component=server, then the
   # Operator's operated-prometheus=true; every port is tried), then a Service
-  # named *prometheus* on 9090 in monitoring, prometheus, kube-system, … . A
-  # cluster can instead name, in Admin → Clusters → Edit, its Prometheus Service
-  # ("namespace/service:port", as Lens and Headlamp take it) or an external
+  # named *prometheus* on 9090 in monitoring, prometheus, kube-system, … ; with
+  # no Prometheus, a single-node VictoriaMetrics the same way (the VM operator's
+  # app.kubernetes.io/name=vmsingle, the chart's victoria-metrics-single, then
+  # *vmsingle* / *victoria-metrics* on 8428). A cluster can instead name, in
+  # Admin → Clusters → Edit, its Prometheus Service ("namespace/service:port",
+  # as Lens and Headlamp take it, with the path the API sits under when it has
+  # one: monitoring/vmselect-main:8481/select/0/prometheus for a VictoriaMetrics
+  # cluster) or an external
   # (central) store: URL, bearer/basic auth (kept in a Secret) and the value of
   # the cluster label its series carry — every query then gets
   # <clusterLabel>="<value>". url and auth.existingSecret (key "authorization",

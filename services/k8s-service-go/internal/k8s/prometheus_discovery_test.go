@@ -168,8 +168,9 @@ func TestPrometheusDiscovery_NotFoundProbedOnce(t *testing.T) {
 			t.Fatalf("call %d: status = %v", i+1, st)
 		}
 	}
-	if lists, _ := srv.counts(); lists != oneRound {
-		t.Fatalf("service lists = %d, want one round (%d)", lists, oneRound)
+	// nothing found: the VictoriaMetrics label lists follow the one namespace round
+	if lists, _ := srv.counts(); lists != oneRound+len(VictoriaMetricsServiceLabels) {
+		t.Fatalf("service lists = %d, want one round (%d)", lists, oneRound+len(VictoriaMetricsServiceLabels))
 	}
 }
 

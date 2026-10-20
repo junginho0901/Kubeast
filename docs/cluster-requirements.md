@@ -77,11 +77,23 @@ kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator 
 ### Kubeast가 찾는 방법
 
 - **순서**: 클러스터에 적은 주소 → 클러스터에 적은 Service → 차트 `features.prometheus.url` → 차트 `features.prometheus.service` → 자동 발견.
-- **Service 지정**(Admin → Clusters → 편집 "클러스터 안 Service", 또는 차트 `features.prometheus.service`): `namespace/service:port`(Lens·Headlamp와 같은 형식). API 서버 프록시로 읽고, 상태 API가 `/-/healthy`로 닿는지 알려 줍니다.
+- **Service 지정**(Admin → Clusters → 편집 "클러스터 안 Service", 또는 차트 `features.prometheus.service`): `namespace/service:port`(Lens·Headlamp와 같은 형식), API가 경로 아래 있으면 그 경로까지 — `namespace/service:port/경로`(예: VictoriaMetrics 클러스터 `monitoring/vmselect-main:8481/select/0/prometheus`). API 서버 프록시로 읽고, 상태 API가 `/-/healthy`로 닿는지와 저장소 종류(`flavor`: prometheus·victoriametrics — `/-/healthy` 답의 글자로)를 알려 줍니다.
 - **클러스터 안 자동 발견**: ① 모든 Namespace에서 레이블로 — `kubeast.io/prometheus=true` → prometheus 차트 서버(`app.kubernetes.io/name=prometheus,app.kubernetes.io/component=server`, 포트 80) → Prometheus Operator의 `prometheus-operated`(`operated-prometheus=true`), Service의 포트를 모두 시험 ② 없으면 이름에 `prometheus`가 든 Service 중 **포트 9090**을 `monitoring` → `prometheus` → `jupyterhub` → `kube-system` → `gpu-operator` → `observability` → `default` 순서로. `/-/healthy`가 답하면 쓰고, 찾은 결과는 클러스터마다 10분 기억합니다. 찾기는 개요 캐시 식별자(`kubeast:cache`, `view`)로 하므로 모든 Namespace의 Service 목록을 읽을 수 있어야 합니다(§1 그대로).
 - **중앙 저장소**(Thanos·Mimir·VictoriaMetrics 등 Prometheus 호환 API): Admin → Clusters → 편집에 주소·인증·클러스터 레이블 값을 적습니다(README "Prometheus 소스"). 이때 아래 지표가 그 클러스터 레이블을 달고 있어야 합니다.
 - **Grafana를 거쳐**: 저장소 조회 API를 밖에 열지 않고 Grafana 데이터소스로만 둔 곳이면 주소에 Grafana 데이터소스 프록시 `https://<Grafana>/api/datasources/proxy/uid/<데이터소스 UID>`를, 인증에 Grafana 서비스 계정 토큰(Viewer, bearer)을 적습니다. Kubeast 질의는 모두 GET이라 Grafana의 Prometheus 프록시 제한(POST 일부만 허용)에 걸리지 않고, 질의 시간은 Grafana `dataproxy.timeout`(기본 30초)도 받습니다. Grafana OSS는 데이터소스별 권한이 없어 그 토큰으로 모든 데이터소스를 읽을 수 있으니 시크릿으로 다룹니다. 로그 저장소(§14)도 같은 방식입니다.
 - 자동 발견이 못 찾는 설치(다른 이름·레이블)는 Service에 `kubeast.io/prometheus=true`를 붙이거나 Service를 직접 적습니다.
+
+### VictoriaMetrics
+
+Prometheus 질의 API를 그대로 쓰므로 화면·AI 도구 모두 같은 질의로 읽습니다(검증: v1.154.0 단일판·클러스터판, 2번 클러스터 Prometheus와 같은 값). 다른 점만:
+
+- **찾기**: Prometheus가 없을 때 단일판을 자동으로 찾습니다 — VM operator의 `app.kubernetes.io/name=vmsingle`·Helm 차트의 `app.kubernetes.io/name=victoria-metrics-single` 레이블, 그다음 이름에 `vmsingle`·`victoria-metrics`가 든 8428 Service. Prometheus가 있으면 Prometheus가 먼저입니다. 클러스터판은 테넌트 경로가 필요해 자동으로 찾지 않습니다 — Service를 경로까지 적거나(`monitoring/vmselect-<이름>:8481/select/<테넌트>/prometheus`) 중앙 저장소 주소로(`http://vmselect-<이름>.<ns>.svc:8481/select/0/prometheus`, 클러스터 레이블 값과 함께).
+- **알림 규칙**(AI `prometheus_rules`): 규칙은 vmalert에 있고, 단일판·vmselect에 `-vmalert.proxyURL=<vmalert 주소>`가 있어야 `/api/v1/rules`가 그 규칙을 돌려줍니다. 없으면 VM은 빈 목록을 주므로 Kubeast가 저장소 종류를 보고 "이 저장소는 규칙을 안 준다"로 바꿔 답합니다("규칙 없음"이라고 틀리게 말하지 않도록).
+- **수집 대상**(AI `prometheus_targets`): 단일판이 스스로 긁으면(`-promscrape.config`) 그 목록, vmagent·원격 쓰기로 받으면 빈 목록이고 vmselect는 그 API가 없어 400 `unsupported path requested` — 둘 다 `up` 지표로 대신합니다.
+- **메타데이터**(AI `prometheus_metrics`의 타입·설명): v1.137부터 기본으로 저장(`-enableMetadata`, 메모리에만 — 재시작하면 다시 쌓일 때까지 이름만).
+- **클러스터 레이블 주입**: 여러 클러스터가 쓰는 저장소면 Kubeast가 Prometheus 파서로 `cluster="<값>"`을 넣으므로 MetricsQL 전용 문법(`WITH`, `[d]` 없는 `rate(x)` 등)은 400으로 거부됩니다. 클러스터 하나만 담은 저장소(레이블 값 없음)는 질의를 그대로 보내 MetricsQL도 됩니다.
+- **OTLP로 받을 때**: VM은 점 이름을 그대로 저장하므로 hostmetrics를 OTLP로 보내면 `-opentelemetry.usePrometheusNaming`이 필요합니다(원격 쓰기는 수집기가 이미 바꿔 보냄).
+- **Read 사용자**: 클러스터 안 Service로 읽으면 `auth.impersonation.viewerProxyServices`에 `<ns>/<service>:<port>`(경로 없이)를 적습니다 — Prometheus와 같음.
 
 ### 있어야 하는 지표
 
@@ -105,7 +117,7 @@ kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator 
 - **호스트 읽기**: `root_path: /hostfs`에 호스트 `/`를 읽기 전용으로 마운트(opentelemetry-collector 차트의 hostMetrics 프리셋과 같음). 네트워크는 `hostNetwork: true`일 때만 노드 인터페이스 값입니다 — 아니면 수집기 파드 자기 트래픽이 되므로 그때는 `network` 스크레이퍼를 끄세요(Kubeast는 그 칸을 숨김). 디스크는 node-exporter 기본 제외(파티션·loop·ram)와 같은 장치를 뺍니다.
 - **예시**: [`deploy/kind/hostmetrics-collector.yaml`](../deploy/kind/hostmetrics-collector.yaml)(contrib 0.162.0, `scripts/kind-hostmetrics.sh`).
 
-**AI 도구가 더 읽는 경로**(Prometheus 찾기 도구, 질의와 같은 저장소·같은 클러스터 범위): `/api/v1/label/__name__/values`·`/api/v1/labels`·`/api/v1/label/<이름>/values`(늘 최근 1시간 등 `start`·`end`, 여러 클러스터가 쓰는 저장소면 `match[]`에 클러스터 레이블), `/api/v1/metadata`(없으면 이름만), `/api/v1/rules`(VictoriaMetrics는 조회 쪽에 `-vmalert.proxyURL`이 있을 때만 — 없으면 도구가 "규칙 없음"으로 답함), `/api/v1/targets`(클러스터 자기 Prometheus일 때만 — 여러 클러스터가 쓰는 저장소는 `up` 지표로 대신). 모두 GET이라 Grafana 데이터소스 프록시로도 읽힙니다.
+**AI 도구가 더 읽는 경로**(Prometheus 찾기 도구, 질의와 같은 저장소·같은 클러스터 범위): `/api/v1/label/__name__/values`·`/api/v1/labels`·`/api/v1/label/<이름>/values`(늘 최근 1시간 등 `start`·`end`, 여러 클러스터가 쓰는 저장소면 `match[]`에 클러스터 레이블), `/api/v1/metadata`(없으면 이름만), `/api/v1/rules`(VictoriaMetrics는 조회 쪽에 `-vmalert.proxyURL`이 있을 때만 — 없으면 "이 저장소는 규칙을 안 줌"으로 답함, 위 VictoriaMetrics 절), `/api/v1/targets`(클러스터 자기 저장소일 때만 — 여러 클러스터가 쓰는 저장소, 목록이 빈 저장소, 그 API가 없는 저장소는 `up` 지표로 대신). 모두 GET이라 Grafana 데이터소스 프록시로도 읽힙니다.
 
 ### 예시
 
@@ -295,6 +307,7 @@ service:
 | Alertmanager | v0.34.1 | 개발용 2번 클러스터 — `amtool alert add`로 넣은 알림이 웹훅으로 와서 조사됨(e2e `alert-investigation.spec.ts`) |
 | Loki · OpenTelemetry Collector contrib | 3.7.8 · 0.162.0 | 10-14, 개발용 2번 클러스터의 Loki 하나에 두 클러스터 수집기 — Job 로그를 텍스트·워크로드로 찾고 다른 클러스터에선 0줄, Job 삭제 뒤에도 찾음(e2e `log-search.spec.ts`) |
 | OpenTelemetry Collector contrib `host_metrics` | 0.162.0 | 10-17, 개발용 1번 클러스터(node-exporter 없음, `scripts/kind-hostmetrics.sh`) → 2번 클러스터 Prometheus remote write — 같은 커널을 보는 2번 클러스터 node-exporter와 메모리 70.6% / 70.7%, 전체 메모리 같은 바이트, Load 6.72 / 6.66, CPU 13.3% / 13.5%, 노드 드로어·대시보드가 채워짐(e2e `node-hostmetrics.spec.ts`). 0.162에선 `hostmetrics`·`prometheusremotewrite` 이름이 폐기 예정 별칭이라 `host_metrics`·`prometheus_remote_write`로 씀 |
+| VictoriaMetrics | v1.154.0(단일판·클러스터판, vmagent) | 10-20, 개발용 2번 클러스터(`scripts/kind-victoriametrics.sh` — 2번 클러스터 Prometheus와 같은 수집 설정) — 노드 메모리 합계가 Prometheus·단일판·클러스터판 모두 같은 바이트, 단일판·경로 붙은 vmselect의 `/-/healthy` 200, 규칙·알림은 빈 자리표시, vmselect 대상 API 400 → `up`, 메타데이터 타입·설명 있음(e2e `victoriametrics.spec.ts`) |
 | Grafana | 13.2.4 | 10-17, 개발용 2번 클러스터(`scripts/kind-grafana.sh`) — 데이터소스 프록시로 읽은 지표·로그가 직접 읽은 값과 같고 대시보드·노드 드로어가 채워짐, 틀린 토큰은 상태에 401, 웹훅 연락처 시험으로 보낸 알림이 조사됨(e2e `grafana.spec.ts`) |
 | GPU·DRA·VPA·Gateway API·ingress-nginx | — | 코드 기준, 실제 클러스터 검증 안 함 |
 

@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -42,11 +43,24 @@ type prometheusResponse struct {
 	} `json:"data"`
 }
 
-// promServiceInfo holds the discovered Prometheus service location.
+// promServiceInfo holds the discovered Prometheus service location; Path is
+// where the API sits on it ("" for Prometheus, "/select/0/prometheus" for a
+// VictoriaMetrics cluster's vmselect).
 type promServiceInfo struct {
 	Namespace string
 	Name      string
 	Port      int32
+	Path      string
+}
+
+// proxyBase is the API server proxy path to the store's API root.
+func (i *promServiceInfo) proxyBase() string {
+	return fmt.Sprintf("/api/v1/namespaces/%s/services/%s:%d/proxy%s", i.Namespace, i.Name, i.Port, i.Path)
+}
+
+// ref is the Service as the settings write it.
+func (i *promServiceInfo) ref() string {
+	return fmt.Sprintf("%s/%s:%d%s", i.Namespace, i.Name, i.Port, i.Path)
 }
 
 // promCache holds Prometheus discovery state for a single cluster. One lives on
@@ -121,6 +135,9 @@ func (s *Service) PrometheusStatus(ctx context.Context) map[string]interface{} {
 			"cluster_label": src.ext.labelValue,
 			"label_name":    PrometheusClusterLabelName(),
 		}
+		if flavor := s.prometheusFlavor(ctx, src); ok && flavor != "" {
+			out["flavor"] = flavor
+		}
 		if !ok {
 			out["message"] = msg
 		}
@@ -129,8 +146,11 @@ func (s *Service) PrometheusStatus(ctx context.Context) map[string]interface{} {
 	out := map[string]interface{}{
 		"available":  true,
 		"source":     "proxy",
-		"endpoint":   fmt.Sprintf("%s/%s:%d (via K8s API proxy)", src.proxy.Namespace, src.proxy.Name, src.proxy.Port),
+		"endpoint":   src.proxy.ref() + " (via K8s API proxy)",
 		"configured": src.configured,
+	}
+	if flavor := s.prometheusFlavor(ctx, src); flavor != "" {
+		out["flavor"] = flavor
 	}
 	// A discovered Service was verified when found; a named one is checked here,
 	// so a typo shows up instead of empty charts.
@@ -148,7 +168,7 @@ func (s *Service) PrometheusStatus(ctx context.Context) map[string]interface{} {
 // alone counts a refusal (403) as "there", which only holds for a Service the
 // discovery listed.
 func checkConfiguredService(ctx context.Context, cs kubernetes.Interface, info *promServiceInfo) (bool, string) {
-	ref := fmt.Sprintf("%s/%s:%d", info.Namespace, info.Name, info.Port)
+	ref := info.ref()
 	if cs == nil {
 		return false, "no client for this cluster"
 	}
@@ -330,44 +350,87 @@ func (s *Service) discoverPrometheus(ctx context.Context) *promServiceInfo {
 
 	// Labels first, in every namespace (Headlamp's order): a Service marked for
 	// Kubeast, the prometheus chart's server, the Operator's prometheus-operated.
-	if info := probePrometheusLabels(probeCtx, cs); info != nil {
+	if info := probeServiceLabels(probeCtx, cs, PrometheusServiceLabels); info != nil {
 		slog.Info("Prometheus discovered by label via K8s API proxy",
 			"namespace", info.Namespace, "service", info.Name, "port", info.Port)
 		return info
 	}
-
-	// Then the common namespaces, in preference order.
-	namespaces := []string{
-		"monitoring",
-		"prometheus",
-		"jupyterhub",
-		"kube-system",
-		"gpu-operator",
-		"observability",
-		"default",
+	// One listing of the common namespaces gives the candidates by name for both.
+	byName := namespaceCandidates(probeCtx, cs, isPrometheusPort, isVictoriaMetricsPort)
+	if info := firstVerified(probeCtx, cs, byName[0]); info != nil {
+		slog.Info("Prometheus discovered via K8s API proxy",
+			"namespace", info.Namespace, "service", info.Name, "port", info.Port)
+		return info
 	}
-
-	hits := make([]*promServiceInfo, len(namespaces))
-	var wg sync.WaitGroup
-	for i, ns := range namespaces {
-		wg.Add(1)
-		go func(i int, ns string) {
-			defer wg.Done()
-			hits[i] = probePrometheusNamespace(probeCtx, cs, ns)
-		}(i, ns)
+	// No Prometheus: a single-node VictoriaMetrics (the operator's vmsingle, the
+	// victoria-metrics-single chart). A VictoriaMetrics cluster's vmselect needs
+	// its tenant path, so it is named in the settings instead.
+	if info := probeServiceLabels(probeCtx, cs, VictoriaMetricsServiceLabels); info != nil {
+		slog.Info("VictoriaMetrics discovered by label via K8s API proxy",
+			"namespace", info.Namespace, "service", info.Name, "port", info.Port)
+		return info
 	}
-	wg.Wait()
-
-	for _, info := range hits {
-		if info != nil {
-			slog.Info("Prometheus discovered via K8s API proxy",
-				"namespace", info.Namespace, "service", info.Name, "port", info.Port)
-			return info
-		}
+	if info := firstVerified(probeCtx, cs, byName[1]); info != nil {
+		slog.Info("VictoriaMetrics discovered via K8s API proxy",
+			"namespace", info.Namespace, "service", info.Name, "port", info.Port)
+		return info
 	}
 
 	slog.Warn("Prometheus not found in target cluster")
 	return nil
+}
+
+// discoveryNamespaces are the namespaces searched by Service name, in preference order.
+var discoveryNamespaces = []string{"monitoring", "prometheus", "jupyterhub", "kube-system", "gpu-operator", "observability", "default"}
+
+// namespaceCandidates lists the common namespaces once (at once) and returns, for
+// each matcher, the Service ports it accepts (by lower-case Service name and
+// port) in discoveryNamespaces order, not yet verified. A missing namespace or
+// an RBAC denial gives none.
+func namespaceCandidates(ctx context.Context, cs kubernetes.Interface, matchers ...func(name string, port int32) bool) [][]*promServiceInfo {
+	lists := make([][]corev1.Service, len(discoveryNamespaces))
+	var wg sync.WaitGroup
+	for i, ns := range discoveryNamespaces {
+		wg.Add(1)
+		go func(i int, ns string) {
+			defer wg.Done()
+			if l, err := cs.CoreV1().Services(ns).List(ctx, metav1.ListOptions{}); err == nil {
+				lists[i] = l.Items
+			}
+		}(i, ns)
+	}
+	wg.Wait()
+	out := make([][]*promServiceInfo, len(matchers))
+	for m, match := range matchers {
+		for _, items := range lists {
+			for _, svc := range items {
+				for _, port := range svc.Spec.Ports {
+					if match(strings.ToLower(svc.Name), port.Port) {
+						out[m] = append(out[m], &promServiceInfo{Namespace: svc.Namespace, Name: svc.Name, Port: port.Port})
+					}
+				}
+			}
+		}
+	}
+	return out
+}
+
+// firstVerified returns the first candidate that answers through the API server proxy.
+func firstVerified(ctx context.Context, cs kubernetes.Interface, candidates []*promServiceInfo) *promServiceInfo {
+	for _, info := range candidates {
+		if verifyPrometheusProxy(ctx, cs, info) {
+			return info
+		}
+	}
+	return nil
+}
+
+func isPrometheusPort(name string, port int32) bool {
+	return strings.Contains(name, "prometheus") && port == 9090
+}
+
+func isVictoriaMetricsPort(name string, port int32) bool {
+	return (strings.Contains(name, "vmsingle") || strings.Contains(name, "victoria-metrics")) && port == 8428
 }
 
 // PrometheusServiceLabels are the label selectors discovery tries, in order,
@@ -378,11 +441,18 @@ var PrometheusServiceLabels = []string{
 	"operated-prometheus=true",
 }
 
-// probePrometheusLabels returns the first Service matching PrometheusServiceLabels
-// that answers on one of its ports, or nil (listing every namespace refused
-// counts as nothing found: the namespace probe follows).
-func probePrometheusLabels(ctx context.Context, cs kubernetes.Interface) *promServiceInfo {
-	for _, selector := range PrometheusServiceLabels {
+// VictoriaMetricsServiceLabels are tried, in order, when no Prometheus is found:
+// the VM operator's single-node Service and the victoria-metrics-single chart's.
+var VictoriaMetricsServiceLabels = []string{
+	"app.kubernetes.io/name=vmsingle",
+	"app.kubernetes.io/name=victoria-metrics-single",
+}
+
+// probeServiceLabels returns the first Service matching one of selectors (in
+// order) that answers on one of its ports, or nil (listing every namespace
+// refused counts as nothing found: the namespace probe follows).
+func probeServiceLabels(ctx context.Context, cs kubernetes.Interface, selectors []string) *promServiceInfo {
+	for _, selector := range selectors {
 		list, err := cs.CoreV1().Services("").List(ctx, metav1.ListOptions{LabelSelector: selector})
 		if err != nil {
 			slog.Debug("Prometheus label discovery: list failed", "selector", selector, "err", err)
@@ -400,39 +470,13 @@ func probePrometheusLabels(ctx context.Context, cs kubernetes.Interface) *promSe
 	return nil
 }
 
-// probePrometheusNamespace returns the first verified Prometheus :9090 service in
-// ns, or nil (a missing namespace / RBAC denial / no match all map to nil).
-func probePrometheusNamespace(ctx context.Context, cs kubernetes.Interface, ns string) *promServiceInfo {
-	svcList, err := cs.CoreV1().Services(ns).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil
-	}
-	for _, svc := range svcList.Items {
-		if !strings.Contains(strings.ToLower(svc.Name), "prometheus") {
-			continue
-		}
-		for _, port := range svc.Spec.Ports {
-			if port.Port == 9090 {
-				info := &promServiceInfo{Namespace: svc.Namespace, Name: svc.Name, Port: port.Port}
-				if verifyPrometheusProxy(ctx, cs, info) {
-					return info
-				}
-			}
-		}
-	}
-	return nil
-}
-
 // verifyPrometheusProxy checks if a service is Prometheus by hitting /-/healthy
 // via the K8s API proxy. A refusal (403) still counts as found: the Service is
 // there, and the cluster decides on each caller's own query, not on the
 // discovery identity's.
 func verifyPrometheusProxy(ctx context.Context, cs kubernetes.Interface, info *promServiceInfo) bool {
-	proxyBase := fmt.Sprintf("/api/v1/namespaces/%s/services/%s:%d/proxy",
-		info.Namespace, info.Name, info.Port)
-
 	result := cs.CoreV1().RESTClient().Get().
-		AbsPath(proxyBase).
+		AbsPath(info.proxyBase()).
 		Suffix("-", "healthy").
 		Do(ctx)
 
@@ -457,13 +501,9 @@ func verifyPrometheusProxy(ctx context.Context, cs kubernetes.Interface, info *p
 // proxy. We use restConfig + http.Client directly because the K8s RESTClient's
 // AbsPath does not handle query parameters correctly for service proxy URLs.
 func (s *Service) prometheusViaProxyUncached(ctx context.Context, info *promServiceInfo, promPath string) ([]map[string]interface{}, error) {
-	// Build the proxy base path (without query string)
-	proxyBase := fmt.Sprintf("/api/v1/namespaces/%s/services/%s:%d/proxy",
-		info.Namespace, info.Name, info.Port)
-
 	// Use the K8s RESTClient with proper param handling
 	req := s.clientsetCtx(ctx).CoreV1().RESTClient().Get().
-		AbsPath(proxyBase)
+		AbsPath(info.proxyBase())
 
 	// Parse promPath to separate the path and query parts
 	// e.g. "/api/v1/query?query=up" → subpath="/api/v1/query", params={"query": "up"}

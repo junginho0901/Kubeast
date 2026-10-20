@@ -185,7 +185,7 @@ func statusForError(err error) int {
 		return http.StatusServiceUnavailable
 	case errors.Is(err, k8s.ErrPrometheusNotServed):
 		return http.StatusNotFound
-	case errors.Is(err, k8s.ErrBadSelector):
+	case errors.Is(err, k8s.ErrBadSelector), errors.Is(err, k8s.ErrBadQuery):
 		return http.StatusBadRequest
 	case errors.Is(err, k8s.ErrPrometheusUpstream):
 		// The metrics store answered with an error (or not at all): not this service's fault.

@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -36,8 +37,14 @@ func TestInjectMatcher(t *testing.T) {
 			t.Errorf("%s\n got  %s\n want %s", in, got, norm(want))
 		}
 	}
-	if got, err := injectMatcher(`sum(`, "cluster", "alpha"); err == nil || got != `sum(` {
+	if got, err := injectMatcher(`sum(`, "cluster", "alpha"); !errors.Is(err, ErrBadQuery) || got != `sum(` {
 		t.Fatalf("invalid query must come back unchanged with an error: %q %v", got, err)
+	}
+	// MetricsQL-only syntax cannot be scoped (VictoriaMetrics would run it unscoped): refused as a bad query
+	for _, q := range []string{`rate(http_requests_total)`, `WITH (x = up) x`, `sum(rate(x[5m])) keep_metric_names`} {
+		if _, err := injectMatcher(q, "cluster", "alpha"); !errors.Is(err, ErrBadQuery) {
+			t.Errorf("%s: %v", q, err)
+		}
 	}
 }
 

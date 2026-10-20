@@ -26,8 +26,8 @@ type AuthType = 'keep' | 'none' | 'bearer' | 'basic'
 const inputClass = 'mt-1 w-full rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-hidden'
 const labelClass = 'block text-xs font-semibold text-slate-400'
 
-// namespace/service:port — the server checks the same (services/pkg/cluster ParsePrometheusService).
-const PROM_SERVICE_RE = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?\/[a-z0-9]([-a-z0-9]*[a-z0-9])?:[0-9]{1,5}$/
+// namespace/service:port[/path] — the server checks the same (services/pkg/cluster ParsePrometheusService).
+const PROM_SERVICE_RE = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?\/[a-z0-9]([-a-z0-9]*[a-z0-9])?:[0-9]{1,5}(\/[A-Za-z0-9._~-]+)*$/
 
 export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) {
   const { t } = useTranslation()
@@ -232,8 +232,8 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
           />
           <p className={`mt-1 text-[11px] ${serviceValid ? 'text-slate-500' : 'text-red-400'}`} data-testid="edit-prometheus-service-hint">
             {serviceValid
-              ? tr('cluster.edit.prometheus.serviceHint', 'namespace/service:port, read through the API server. Leave empty to find it by label, then by name. A URL below takes precedence.')
-              : tr('cluster.edit.prometheus.serviceInvalid', 'Use namespace/service:port, for example monitoring/prometheus:9090.')}
+              ? tr('cluster.edit.prometheus.serviceHint', 'namespace/service:port, with the path the API sits under if it has one (a VictoriaMetrics cluster: monitoring/vmselect-main:8481/select/0/prometheus), read through the API server. Leave empty to find Prometheus (or a single-node VictoriaMetrics) by label, then by name. A URL below takes precedence.')
+              : tr('cluster.edit.prometheus.serviceInvalid', 'Use namespace/service:port[/path], for example monitoring/prometheus:9090.')}
           </p>
           <label className={`${labelClass} mt-3`}>{tr('cluster.edit.prometheus.url', 'URL')}</label>
           <input

@@ -294,7 +294,7 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if req.PrometheusService != nil && *req.PrometheusService != "" {
-		if _, _, _, verr := cluster.ParsePrometheusService(*req.PrometheusService); verr != nil {
+		if _, _, _, _, verr := cluster.ParsePrometheusService(*req.PrometheusService); verr != nil {
 			response.Error(w, http.StatusBadRequest, verr.Error())
 			return
 		}

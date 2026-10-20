@@ -1,0 +1,235 @@
+# VictoriaMetrics in the second cluster (kubeast-b) for the VictoriaMetrics checks (scripts/kind-victoriametrics.sh,
+# e2e/tests/victoriametrics.spec.ts), beside the Prometheus of second-cluster.yaml, which is left as it is:
+#   - single-node: vmsingle-kubeast (Service labelled as the VM operator labels it) scrapes with the same scrape
+#     config as that Prometheus (its ConfigMap, the cluster label stamped by relabeling); NodePort 30428.
+#   - cluster: vmagent-kubeast scrapes the same way and writes to vminsert-kubeast → vmstorage-kubeast, read
+#     through vmselect-kubeast at /select/0/prometheus; NodePort 30481.
+# Images v1.154.0; data in emptyDir, one day kept.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vmsingle-kubeast
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: vmsingle-kubeast}
+  template:
+    metadata:
+      labels: {app: vmsingle-kubeast}
+    spec:
+      serviceAccountName: prometheus
+      containers:
+        - name: vmsingle
+          image: victoriametrics/victoria-metrics:v1.154.0
+          args:
+            - -retentionPeriod=1d
+            - -storageDataPath=/storage
+            - -promscrape.config=/etc/prometheus/prometheus.yml
+            - -promscrape.config.strictParse=false
+          ports:
+            - {name: http, containerPort: 8428}
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+          resources:
+            requests: {cpu: 20m, memory: 64Mi}
+            limits: {memory: 256Mi}
+          volumeMounts:
+            - {name: config, mountPath: /etc/prometheus}
+            - {name: data, mountPath: /storage}
+      volumes:
+        - name: config
+          configMap: {name: prometheus}
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vmsingle-kubeast
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: vmsingle
+    app.kubernetes.io/instance: kubeast
+    managed-by: vm-operator
+spec:
+  selector: {app: vmsingle-kubeast}
+  ports:
+    - {name: http, port: 8428, targetPort: http}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vmsingle-kubeast-np
+  namespace: monitoring
+spec:
+  type: NodePort
+  selector: {app: vmsingle-kubeast}
+  ports:
+    - {name: http, port: 8428, targetPort: http, nodePort: 30428}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vmstorage-kubeast
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: vmstorage-kubeast}
+  template:
+    metadata:
+      labels: {app: vmstorage-kubeast}
+    spec:
+      containers:
+        - name: vmstorage
+          image: victoriametrics/vmstorage:v1.154.0-cluster
+          args: [-retentionPeriod=1d, -storageDataPath=/storage]
+          ports:
+            - {name: http, containerPort: 8482}
+            - {name: insert, containerPort: 8400}
+            - {name: select, containerPort: 8401}
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+          resources:
+            requests: {cpu: 20m, memory: 64Mi}
+            limits: {memory: 256Mi}
+          volumeMounts:
+            - {name: data, mountPath: /storage}
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vmstorage-kubeast
+  namespace: monitoring
+spec:
+  selector: {app: vmstorage-kubeast}
+  ports:
+    - {name: insert, port: 8400, targetPort: insert}
+    - {name: select, port: 8401, targetPort: select}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vminsert-kubeast
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: vminsert-kubeast}
+  template:
+    metadata:
+      labels: {app: vminsert-kubeast}
+    spec:
+      containers:
+        - name: vminsert
+          image: victoriametrics/vminsert:v1.154.0-cluster
+          args: [-storageNode=vmstorage-kubeast:8400]
+          ports:
+            - {name: http, containerPort: 8480}
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 128Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vminsert-kubeast
+  namespace: monitoring
+spec:
+  selector: {app: vminsert-kubeast}
+  ports:
+    - {name: http, port: 8480, targetPort: http}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vmselect-kubeast
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: vmselect-kubeast}
+  template:
+    metadata:
+      labels: {app: vmselect-kubeast}
+    spec:
+      containers:
+        - name: vmselect
+          image: victoriametrics/vmselect:v1.154.0-cluster
+          args: [-storageNode=vmstorage-kubeast:8401]
+          ports:
+            - {name: http, containerPort: 8481}
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 256Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vmselect-kubeast
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: vmselect
+    app.kubernetes.io/instance: kubeast
+    managed-by: vm-operator
+spec:
+  selector: {app: vmselect-kubeast}
+  ports:
+    - {name: http, port: 8481, targetPort: http}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vmselect-kubeast-np
+  namespace: monitoring
+spec:
+  type: NodePort
+  selector: {app: vmselect-kubeast}
+  ports:
+    - {name: http, port: 8481, targetPort: http, nodePort: 30481}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vmagent-kubeast
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: vmagent-kubeast}
+  template:
+    metadata:
+      labels: {app: vmagent-kubeast}
+    spec:
+      serviceAccountName: prometheus
+      containers:
+        - name: vmagent
+          image: victoriametrics/vmagent:v1.154.0
+          args:
+            - -promscrape.config=/etc/prometheus/prometheus.yml
+            - -promscrape.config.strictParse=false
+            - -remoteWrite.url=http://vminsert-kubeast:8480/insert/0/prometheus/api/v1/write
+            - -remoteWrite.tmpDataPath=/tmp/vmagent
+          ports:
+            - {name: http, containerPort: 8429}
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+          resources:
+            requests: {cpu: 20m, memory: 64Mi}
+            limits: {memory: 256Mi}
+          volumeMounts:
+            - {name: config, mountPath: /etc/prometheus}
+            - {name: tmp, mountPath: /tmp/vmagent}
+      volumes:
+        - name: config
+          configMap: {name: prometheus}
+        - name: tmp
+          emptyDir: {}

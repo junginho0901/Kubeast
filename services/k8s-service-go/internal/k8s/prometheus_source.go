@@ -77,12 +77,12 @@ func parsePromService(ref, where string) *promServiceInfo {
 	if ref == "" {
 		return nil
 	}
-	ns, name, port, err := cluster.ParsePrometheusService(ref)
+	ns, name, port, path, err := cluster.ParsePrometheusService(ref)
 	if err != nil {
 		slog.Warn("prometheus service ignored", "where", where, "err", err)
 		return nil
 	}
-	return &promServiceInfo{Namespace: ns, Name: name, Port: port}
+	return &promServiceInfo{Namespace: ns, Name: name, Port: port, Path: path}
 }
 
 // PrometheusDiscoverEnabled reports whether a cluster without an external
@@ -123,7 +123,7 @@ var promParser = parser.NewParser(parser.Options{})
 func injectMatcher(query, name, value string) (string, error) {
 	expr, err := promParser.ParseExpr(query)
 	if err != nil {
-		return query, fmt.Errorf("parse PromQL: %w", err)
+		return query, fmt.Errorf("%w: the query must be PromQL to be scoped to this cluster (%v)", ErrBadQuery, err)
 	}
 	m, err := labels.NewMatcher(labels.MatchEqual, name, value)
 	if err != nil {
