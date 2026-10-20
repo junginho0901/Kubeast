@@ -243,6 +243,7 @@ async def test_a_chat_turn_runs_the_tools_here_and_streams_like_the_api_key_path
     assert calls == [("list_clusters", {}, 1, 0)]
     assert sdk.state["tool_results"] == [{"content": [{"type": "text", "text": '["self","default"]'}]}]
     assert out.text == "You can use 2 clusters." and out.tool_calls == 1 and out.turns == 2 and out.finish_reason == "stop"
+    assert out.parts == [("text", "Checking."), ("tool", 0), ("text", "You can use 2 clusters.")]  # the saved order
     assert out.usage == {"prompt_tokens": 2099, "completion_tokens": 57, "total_tokens": 2156,
                          "prompt_tokens_details": {"cached_tokens": 998}, "cache_creation_input_tokens": 1097}
     prompt, opts = sdk.state["options"][0]
@@ -270,6 +271,7 @@ async def test_a_chat_turn_streams_the_answer_as_it_is_written(on):
     assert events == [{"content": "Check"}, {"content": "ing."}, {"function": "list_clusters", "args": {}, "call_id": 0},
                       {"content": "\n\nYou can use "}, {"content": "2 clusters."}]
     assert out.text == "You can use 2 clusters." and out.turns == 2
+    assert out.parts == [("text", "Checking."), ("tool", 0), ("text", "You can use 2 clusters.")]
     assert sdk.state["options"][0][1].include_partial_messages is True
 
 
@@ -624,7 +626,7 @@ async def test_a_session_turn_through_claude_code_is_saved_and_audited_like_any_
     assert events[-1] == "data: [DONE]\n\n"
     answer = saved[-1]
     assert answer["role"] == "assistant" and answer["content"].endswith("You can use 2 clusters.")
-    assert "<strong>list_clusters</strong>" in answer["content"]  # tool details as with an API key
+    assert answer["content"].startswith("Checking.\n\n<details>\n<summary>🔧 <strong>list_clusters</strong>")  # in order
     assert answer["tool_calls"][0]["function"] == "list_clusters"
     assert answer["usage"] == {"prompt_tokens": 2099, "completion_tokens": 57, "cached_tokens": 998, "model_calls": 2, "model": "claude-haiku-5-5"}
     actions = [a["action"] for a in audits]

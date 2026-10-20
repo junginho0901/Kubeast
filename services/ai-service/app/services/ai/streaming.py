@@ -75,6 +75,71 @@ def model_error(service, err: Exception) -> dict:
     return {"error": text, "error_key": refusal.key, "error_args": args}
 
 
+def tool_block_markdown(tc: dict) -> str:
+    """One tool call as the saved answer shows it: a folded <details> block with its arguments and its result."""
+    if tc.get("args"):
+        args_json = json.dumps(tc["args"], indent=2, ensure_ascii=False)
+        args_section = f"""<details>
+<summary><strong>📋 Arguments</strong></summary>
+
+```json
+{args_json}
+```
+
+</details>"""
+    else:
+        args_section = "<p><strong>📋 Arguments:</strong> No arguments</p>"
+    result_preview = tc.get("display") or tc.get("result", "No result")
+    if tc.get("display"):
+        code_fence = "```"
+    elif tc.get("is_yaml", False):
+        code_fence = "```yaml"
+    else:
+        code_fence = "```json" if tc.get("is_json", False) else "```"
+    return f"""<details>
+<summary>🔧 <strong>{tc['function']}</strong></summary>
+
+{args_section}
+
+<details>
+<summary><strong>📊 Results</strong></summary>
+
+{code_fence}
+{result_preview}
+```
+
+</details>
+
+</details>
+
+"""
+
+
+def answer_markdown(parts: list, tool_calls: list) -> str:
+    """The saved answer: the turn's text and tool blocks in the order they came — what the model wrote before a
+    tool call stays in front of it. parts holds ("text", str) and ("tool", call_id); a call no part names goes
+    before the last text, as answers were saved before."""
+    by_id: dict = {}
+    for i, tc in enumerate(tool_calls):
+        by_id.setdefault(tc.get("call_id", i), tc)
+    placed = {value for kind, value in parts if kind == "tool"}
+    unplaced = "".join(tool_block_markdown(tc) for i, tc in enumerate(tool_calls) if tc.get("call_id", i) not in placed)
+    texts = [i for i, (kind, value) in enumerate(parts) if kind == "text" and str(value).strip()]
+    last_text = texts[-1] if texts else None
+    out, ends_in_text = "", False
+    for i, (kind, value) in enumerate(parts):
+        if i == last_text and unplaced:
+            out, unplaced, ends_in_text = out + unplaced, "", False
+        if kind == "tool":
+            if value in by_id:
+                out, ends_in_text = out + tool_block_markdown(by_id[value]), False
+        elif str(value).strip():
+            out, ends_in_text = out + str(value).lstrip("\n").rstrip() + "\n\n", True  # a block starts on its own line
+    if unplaced:
+        out, ends_in_text = out + unplaced, False
+    return out[:-2] if ends_in_text else out
+
+
 async def suggest_optimization_stream(
     service: "AIService",
     namespace: str,
@@ -671,6 +736,7 @@ async def session_chat_stream(
         iteration = 0
         assistant_content = ""
         tool_calls_log = []  # Tool call 정보 저장
+        parts: list = []  # the turn in order: ("text", what the model wrote) / ("tool", call_id) — the saved answer
         is_write_intent = service._detect_write_intent(message)
         skip_llm = False
         if service.user_role == "read" and is_write_intent:
@@ -731,8 +797,10 @@ async def session_chat_stream(
             turn_tool_calls = cc_turn.tool_calls
             turn_finish_reason = cc_turn.finish_reason
             assistant_content = cc_turn.text
+            parts = list(cc_turn.parts)
             if cc_turn.finish_reason == "max_turns":
                 assistant_content = "죄송합니다. 정보 수집 중 최대 반복 횟수에 도달했습니다. 더 구체적인 질문으로 다시 시도해주세요."
+                parts.append(("text", assistant_content))
                 yield f"data: {json.dumps({'content': assistant_content}, ensure_ascii=False)}\n\n"
 
         while iteration < max_iterations and not skip_llm and not delegated:
@@ -852,6 +920,8 @@ async def session_chat_stream(
                 }
                 messages.append(assistant_msg)
                 turn_tool_calls += len(tc_list)
+                if stream_content.strip():
+                    parts.append(("text", stream_content))  # what it wrote before these calls stays in front of them
 
                 for tc_dict in tc_list:
                     function_name = tc_dict["function"]["name"]
@@ -874,6 +944,7 @@ async def session_chat_stream(
                     for event in events:
                         yield event
                     tool_calls_log.append(log_entry)
+                    parts.append(("tool", call_id))
 
                     messages.append({
                         "tool_call_id": tc_dict["id"],
@@ -948,55 +1019,11 @@ async def session_chat_stream(
         
         log.debug("[DEBUG] Preparing to save message. assistant_content length: %d, tool_calls: %d", len(assistant_content), len(tool_calls_log))
         
-        # Tool call 정보를 포함한 전체 메시지 생성 (KAgent 스타일)
-        full_message = ""
-        if tool_calls_log:
-            for tc in tool_calls_log:
-                # Arguments 섹션
-                if tc['args']:
-                    args_json = json.dumps(tc['args'], indent=2, ensure_ascii=False)
-                    args_section = f"""<details>
-<summary><strong>📋 Arguments</strong></summary>
-
-```json
-{args_json}
-```
-
-</details>"""
-                else:
-                    args_section = '<p><strong>📋 Arguments:</strong> No arguments</p>'
-                
-                # Results 섹션 - 실제 tool 실행 결과
-                result_preview = tc.get('display') or tc.get('result', 'No result')
-                is_json = tc.get('is_json', False)
-                is_yaml = tc.get('is_yaml', False)
-                if tc.get('display'):
-                    code_fence = "```"
-                elif is_yaml:
-                    code_fence = "```yaml"
-                else:
-                    code_fence = "```json" if is_json else "```"
-                
-                results_section = f"""<details>
-<summary><strong>📊 Results</strong></summary>
-
-{code_fence}
-{result_preview}
-```
-
-</details>"""
-                
-                full_message += f"""<details>
-<summary>🔧 <strong>{tc['function']}</strong></summary>
-
-{args_section}
-
-{results_section}
-
-</details>
-
-"""
-        full_message += assistant_content
+        # The saved answer (KAgent-style tool blocks): the turn's text and tool calls in the order they came.
+        if assistant_content and (not delegated or not any(kind == "text" for kind, _ in parts)):
+            parts.append(("text", assistant_content))
+        full_message = answer_markdown(parts, tool_calls_log)
+        answer_length = sum(len(str(value)) for kind, value in parts if kind == "text")
         
         log.debug("[DEBUG] Full message length: %d", len(full_message))
         dump("[DUMP] Full message preview", full_message[:200])
@@ -1012,7 +1039,7 @@ async def session_chat_stream(
             service, session_id, audit_actor, audit_http,
             turn_usage=turn_usage, tool_calls=turn_tool_calls, iterations=iteration,
             started=turn_started, finish_reason=turn_finish_reason,
-            message_length=len(assistant_content or ""),
+            message_length=answer_length,
         )
         turn_completed = True
         

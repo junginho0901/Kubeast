@@ -5,7 +5,7 @@ import { clusterHeaders } from './clusterRef'
 /**
  * 플로팅 AI 위젯 전용 스트림 매니저.
  *
- * 기존 싱글톤 `chatStreamManager` 와 별도 인스턴스 — 상태(assistantContent,
+ * 기존 싱글톤 `chatStreamManager` 와 별도 인스턴스 — 상태(content,
  * abortController 등)가 분리되어 AIChat 페이지와 플로팅이 동시에 스트리밍 가능.
  *
  * 엔드포인트: `POST /api/v1/ai/sessions/{id}/floating-chat` (JSON body)

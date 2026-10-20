@@ -40,8 +40,6 @@ export function useChatStreamSync({
     if (selectedSessionId !== streamState.sessionId) return
     if (viewSessionId !== selectedSessionId) return
 
-    const combinedContent = streamState.functionCallsContent + streamState.assistantContent
-
     setMessages((prev) => {
       const tempAssistantIndex = prev.findIndex((msg) => msg.role === 'assistant' && msg.isTemporary)
 
@@ -49,7 +47,7 @@ export function useChatStreamSync({
         const updated = [...prev]
         updated[tempAssistantIndex] = {
           ...updated[tempAssistantIndex],
-          content: combinedContent,
+          content: streamState.content,
           toolCalls: streamState.toolCalls && streamState.toolCalls.length > 0 ? [...streamState.toolCalls] : undefined,
           streamingPhase: streamState.streamingPhase ?? updated[tempAssistantIndex].streamingPhase,
         }
@@ -67,7 +65,7 @@ export function useChatStreamSync({
       }
       nextMessages.push({
         role: 'assistant',
-        content: combinedContent,
+        content: streamState.content,
         isTemporary: true,
         toolCalls: streamState.toolCalls && streamState.toolCalls.length > 0 ? [...streamState.toolCalls] : undefined,
         streamingPhase: streamState.streamingPhase ?? 'waiting',

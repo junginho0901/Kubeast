@@ -48,3 +48,9 @@ def test_only_the_last_window_is_marked_topmost():
     text = build_context_prompt(ctx)
     assert text.count("← 맨 위") == 1
     assert "2. [DeleteConfirm] 삭제 확인 창 — ConfigMap default/kube-root-ca.crt ← 맨 위" in text
+
+
+def test_one_short_sentence_before_a_tool():
+    prompt = build_floating_system_prompt()
+    assert "부르기 전에 무엇을 확인하는지 짧게 한 문장만" in prompt
+    assert "도구 결과는 되풀이하지 말고" in prompt

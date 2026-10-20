@@ -130,6 +130,13 @@ def test_response_format_guide():
     assert "간결하" in SYSTEM_MESSAGE
 
 
+def test_one_sentence_before_a_tool_and_no_repeated_results():
+    """Roadmap 28: the text before a tool call stays in front of its block, so it is one sentence, and results are not
+    listed again under the block that shows them."""
+    assert "도구를 부르기 전에 무엇을 왜 확인하는지 **한 문장만**" in SYSTEM_MESSAGE
+    assert "도구 결과를 나열하거나 그대로 되풀이하지 마세요" in SYSTEM_MESSAGE
+
+
 def test_completion_requirement():
     """응답 완결성 정책 — premature stop 방지"""
     assert "COMPLETION REQUIREMENT" in SYSTEM_MESSAGE

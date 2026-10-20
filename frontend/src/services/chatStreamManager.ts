@@ -10,8 +10,8 @@ export interface ChatStreamState {
   isStreaming: boolean
   sessionId: string | null
   userMessage: string | null
-  assistantContent: string
-  functionCallsContent: string
+  // The answer as it came: the model's text and the tool blocks in order (the order the server saves)
+  content: string
   toolCalls: any[]
   streamingPhase: StreamingPhase | null
   error: string | null
@@ -28,8 +28,7 @@ const initialState: ChatStreamState = {
   isStreaming: false,
   sessionId: null,
   userMessage: null,
-  assistantContent: '',
-  functionCallsContent: '',
+  content: '',
   toolCalls: [],
   streamingPhase: null,
   error: null,
@@ -86,7 +85,7 @@ export function resultTarget(toolCalls: any[], functionName: string, callId: unk
   return toolCalls.findIndex((tc) => tc?.function === functionName && !tc.result)
 }
 
-// Where the n-th tool block starts in functionCallsContent (blocks are appended in call order). -1 = none.
+// Where the n-th tool block starts in the content (blocks are appended in call order). -1 = none.
 export function nthToolBlock(content: string, n: number): number {
   if (n < 0) return -1
   let at = -1
@@ -95,6 +94,20 @@ export function nthToolBlock(content: string, n: number): number {
     if (at === -1) return -1
   }
   return at
+}
+
+// The content with a tool block after it: the block starts on a line of its own below the text so far (markdown
+// reads <details> as a block only there).
+export function appendToolBlock(content: string, block: string): string {
+  const before = content.replace(/\s+$/, '')
+  return before ? `${before}\n\n${block}` : block
+}
+
+// The content with the n-th tool block's "Executing..." replaced by its result. Unchanged when there is no such block.
+export function withToolResult(content: string, n: number, result: string): string {
+  const at = nthToolBlock(content, n)
+  if (at === -1) return content
+  return content.substring(0, at) + content.substring(at).replace('Executing...', result)
 }
 
 export interface ChatStreamManagerOptions {
@@ -166,21 +179,21 @@ export class ChatStreamManager {
     const chars = this._charQueue.splice(0, batch).join('')
     this.state = {
       ...this.state,
-      assistantContent: this.state.assistantContent + chars,
+      content: this.state.content + chars,
       streamingPhase: 'answer',
       updatedAt: Date.now(),
     }
     this.notify()
   }
 
-  /** 큐에 남은 글자 전부 즉시 반영 (abort 시에만 사용) */
+  /** 큐에 남은 글자 전부 즉시 반영 (abort 때, 그리고 도구 블록 앞 — 도구 앞에 쓴 글이 블록 위에 남게) */
   private _flushQueue = () => {
     if (this._charQueue.length === 0) return
     const remaining = this._charQueue.join('')
     this._charQueue.length = 0
     this.state = {
       ...this.state,
-      assistantContent: this.state.assistantContent + remaining,
+      content: this.state.content + remaining,
       updatedAt: Date.now(),
     }
     this._stopTypewriter()
@@ -257,8 +270,7 @@ export class ChatStreamManager {
       isStreaming: true,
       sessionId,
       userMessage,
-      assistantContent: '',
-      functionCallsContent: '',
+      content: '',
       toolCalls: [],
       streamingPhase: 'waiting',
       error: null,
@@ -386,9 +398,10 @@ export class ChatStreamManager {
                 ...(typeof data.call_id === 'number' ? { call_id: data.call_id } : {}),
               }
 
+              this._flushQueue()
               this.setState({
                 toolCalls: [...this.state.toolCalls, toolCall],
-                functionCallsContent: this.state.functionCallsContent + buildToolCallBlock(data.function, data.args || {}),
+                content: appendToolBlock(this.state.content, buildToolCallBlock(data.function, data.args || {})),
                 streamingPhase: 'tools',
               })
               continue
@@ -417,27 +430,19 @@ export class ChatStreamManager {
                   : tc
               )
 
-              const blockIndex = nthToolBlock(this.state.functionCallsContent, target)
+              const bodyText = displayText || resultText
+              const codeBlock = displayText
+                ? `\`\`\`\n${bodyText}\n\`\`\``
+                : isYaml
+                ? `\`\`\`yaml\n${bodyText}\n\`\`\``
+                : isJson
+                ? `\`\`\`json\n${bodyText}\n\`\`\``
+                : `\`\`\`\n${bodyText}\n\`\`\``
 
-              let functionCallsContent = this.state.functionCallsContent
-              if (blockIndex !== -1) {
-                const beforeFunction = functionCallsContent.substring(0, blockIndex)
-                const afterFunction = functionCallsContent.substring(blockIndex)
-
-                const bodyText = displayText || resultText
-                const codeBlock = displayText
-                  ? `\`\`\`\n${bodyText}\n\`\`\``
-                  : isYaml
-                  ? `\`\`\`yaml\n${bodyText}\n\`\`\``
-                  : isJson
-                  ? `\`\`\`json\n${bodyText}\n\`\`\``
-                  : `\`\`\`\n${bodyText}\n\`\`\``
-                functionCallsContent = beforeFunction + afterFunction.replace('Executing...', codeBlock)
-              }
-
+              // Text still queued for the typewriter came after this call's block, so it stays in the queue.
               this.setState({
                 toolCalls: mergedToolCalls,
-                functionCallsContent,
+                content: withToolResult(this.state.content, target, codeBlock),
                 streamingPhase: 'tools',
               })
               continue

@@ -54,6 +54,38 @@ class ToolContext:
         self.cache = TTLCache()  # 결과 캐시 (5분 TTL)
 
 
+_TOOL_BLOCK_START = re.compile(r"<details>\s*<summary>🔧")
+
+
+def strip_tool_blocks(text: str) -> str:
+    """text without its tool blocks: each <details> whose summary starts with 🔧, matched to its own closing tag by
+    counting the nested <details> (Arguments, Results) — a non-greedy regex stops at the first inner one and
+    leaves the results. Other <details> stay (frontend utils stripToolDetails does the same for Copy)."""
+    out, i = [], 0
+    while True:
+        m = _TOOL_BLOCK_START.search(text, i)
+        if not m:
+            out.append(text[i:])
+            break
+        out.append(text[i:m.start()])
+        depth, j = 0, m.start()
+        while j < len(text):
+            if text.startswith("<details>", j):
+                depth += 1
+                j += len("<details>")
+            elif text.startswith("</details>", j):
+                depth -= 1
+                j += len("</details>")
+                if depth == 0:
+                    break
+            else:
+                j += 1
+        i = j
+        while i < len(text) and text[i] in " \t\r\n":
+            i += 1  # the blank lines after the block go with it
+    return "".join(out)
+
+
 class AIService:
     """AI 트러블슈팅 서비스"""
     
@@ -175,13 +207,9 @@ class AIService:
         if role != "assistant":
             return content
 
-        # Remove tool result blocks (KAgent-style <details> with 🔧 summary)
-        sanitized = re.sub(
-            r"<details>\s*<summary>🔧.*?</details>\s*",
-            "",
-            content,
-            flags=re.DOTALL,
-        ).strip()
+        # Remove tool blocks (KAgent-style <details> with a 🔧 summary) whole, nested sections and all: the
+        # text the answer wrote between them stays.
+        sanitized = strip_tool_blocks(content).strip()
 
         # Hard cap to avoid context blow-up even after stripping
         max_chars = 8000

@@ -25,7 +25,7 @@ import logging
 import os
 import tempfile
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any, AsyncIterator, Awaitable, Callable, Optional, Sequence
 
@@ -399,7 +399,8 @@ class _Completions:
 
 @dataclass
 class TurnResult:
-    text: str = ""                 # the answer: the text after the last tool call, as the API-key path saves
+    text: str = ""                 # the text after the last tool call (the investigator's report)
+    parts: list = field(default_factory=list)  # the turn in order: ("text", str) / ("tool", call_id) — the saved answer
     tool_calls: int = 0
     turns: int = 0                 # the model responses seen: a response's tool calls share its number
     finish_reason: Optional[str] = None
@@ -449,6 +450,7 @@ class ClaudeCodeChat:
                 call_id = out.tool_calls  # numbered at the start, so calls made at once keep their own number
                 out.tool_calls += 1
                 args = args if isinstance(args, dict) else {}
+                queue.put_nowait(("call", call_id))  # where the call stands among the text, for the saved answer
                 queue.put_nowait(("sse", _sse({"function": name, "args": args, "call_id": call_id})))  # the chat shows the call at once
                 events, text = await run_tool(name, args, max(1, state["turn"]), call_id)
                 state["fresh"] = True
@@ -488,12 +490,15 @@ class ClaudeCodeChat:
 
         task = asyncio.create_task(pump())
         answer = ""
+        segment = ""  # text since the last tool call
         try:
             while True:
                 kind, value = await queue.get()
                 if kind is done:
                     if isinstance(value, Exception):
                         raise value
+                    if segment.strip():
+                        out.parts.append(("text", segment))
                     out.usage = usage_of(value.usage)
                     out.turns = state["turn"]  # Claude Code's num_turns counts one more on a run cut at max_turns
                     if value.subtype == "error_max_turns":
@@ -504,9 +509,15 @@ class ClaudeCodeChat:
                     return
                 if kind == "text":  # a piece carries its paragraph break; the saved answer starts without one
                     answer = answer + value if answer else value.lstrip("\n")
+                    segment = segment + value if segment else value.lstrip("\n")
                     yield _sse({"content": value})
+                elif kind == "call":
+                    if segment.strip():
+                        out.parts.append(("text", segment))
+                    segment = ""
+                    out.parts.append(("tool", value))
                 elif kind == "tool":
-                    answer = ""  # the saved answer is what comes after the last tool call
+                    answer = ""  # out.text is what comes after the last tool call
                 else:
                     yield value
         finally:

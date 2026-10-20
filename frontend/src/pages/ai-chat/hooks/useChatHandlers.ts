@@ -77,7 +77,7 @@ export function useChatHandlers({
 
     // read after stop: the letters still queued for the typewriter are on screen by now, so they are saved too
     const stopped = chatStreamManager.getState()
-    const assistantContent = stopped.functionCallsContent + stopped.assistantContent
+    const assistantContent = stopped.content
     if (assistantContent) {
       try {
         // DB에 중단된 assistant 메시지만 저장 (user 메시지는 백엔드에서 이미 저장)

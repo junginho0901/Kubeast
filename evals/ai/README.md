@@ -60,9 +60,13 @@ Claude subscription counts cached input too, so its numbers are large and do not
 | Claude Haiku 5.5 (subscription) | 12/12 (case 06 three more times: 3/3) | 3.6 | 15.3 |
 | Claude Sonnet 5.5 (subscription) | 12/12 | 2.8 | 13.9 |
 | granite4.1:3b (Ollama, 4 cases only: 02 03 07 10) | 1/4 | 0.5 | 28.7 |
+| Claude Haiku 5.5 (subscription), 2026-10-20, after the one-sentence-before-a-tool instruction | 12/12 | 3.5 | 13.0 |
 
 What changed after the first run: case 06 failed because an empty alert store ended the answer ("no alert fires")
 while Prometheus was firing the rule — the dev Prometheus sends to no Alertmanager. `alerts_list`'s empty results,
 its description and the chat instruction now say to check `prometheus_rules` with `active_only=true` before saying
 nothing fires. The 3B model's misses (an answer written without calling the tool it names, a kubectl command instead
 of saying the Secret is not readable) are the model's limits; the instructions were not changed for it.
+
+2026-10-20: the chat instruction asks for one sentence before a tool call and no repeated results (answers now keep
+their text between tool calls); Haiku stayed at 12/12.

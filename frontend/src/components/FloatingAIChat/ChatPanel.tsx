@@ -144,7 +144,7 @@ export function ChatPanel({
 
     // read after stop, so the letters still queued for the typewriter are saved as shown
     const stopped = floatingChatStreamManager.getState()
-    const assistantContent = stopped.functionCallsContent + stopped.assistantContent
+    const assistantContent = stopped.content
     if (!assistantContent) return
 
     try {
@@ -211,7 +211,8 @@ export function ChatPanel({
     return [...messages, ...pendingUser]
   }, [messages, isStreaming, failed, streamState.userMessage, streamState.updatedAt])
 
-  const streamingContent = isStreaming ? streamState.assistantContent : undefined
+  // the answer as it comes, tool blocks in their place as once it is saved
+  const streamingContent = isStreaming ? streamState.content : undefined
   // follows new text only while the reader is at the bottom; a new question scrolls back smoothly
   const { ref: listRef, atBottom, scrollToBottom } = useStickToBottom<HTMLDivElement>([visibleMessages, streamingContent])
   const questions = visibleMessages.filter((m) => m.role === 'user').length
