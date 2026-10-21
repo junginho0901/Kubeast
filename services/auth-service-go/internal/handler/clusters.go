@@ -119,6 +119,7 @@ func (h *ClustersHandler) RegisterCluster(w http.ResponseWriter, r *http.Request
 			return
 		}
 		if verr := validateKubeconfigStatic(*req.Kubeconfig, h.cfg.KubeconfigExecCommands); verr != nil {
+			h.audit(r, "admin.cluster.register", payload, "", nil, map[string]string{"display_name": req.DisplayName}, fmt.Errorf("kubeconfig refused: %w", verr))
 			response.Error(w, http.StatusBadRequest, verr.Error())
 			return
 		}
@@ -243,24 +244,28 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 			response.Error(w, http.StatusBadRequest, "self cluster has no kubeconfig to rotate")
 			return
 		}
+		rotate := map[string]string{"kubeconfig": "replace"}
 		if verr := validateKubeconfigStatic(*req.Kubeconfig, h.cfg.KubeconfigExecCommands); verr != nil {
+			h.audit(r, "admin.cluster.update", payload, string(id), nil, rotate, fmt.Errorf("kubeconfig refused: %w", verr))
 			response.Error(w, http.StatusBadRequest, verr.Error())
 			return
 		}
 		probe, verr := probeKubeconfig(r, h.cfg, *req.Kubeconfig)
 		if verr != nil {
+			h.audit(r, "admin.cluster.update", payload, string(id), nil, rotate, fmt.Errorf("connection test failed: %w", verr))
 			response.Error(w, http.StatusBadRequest, "Connection test failed: "+verr.Error())
 			return
 		}
 		newUID := probe.UID
 		storedUID, _ := h.registry.ClusterUID(r.Context(), id)
 		if storedUID != "" && newUID != "" && storedUID != newUID {
+			h.audit(r, "admin.cluster.update", payload, string(id), nil, rotate, errors.New("the kubeconfig points to a different cluster"))
 			response.Error(w, http.StatusConflict,
 				"This kubeconfig points to a different cluster than the one registered. Delete and re-register instead.")
 			return
 		}
 		if _, werr := h.secrets.WriteKubeconfig(r.Context(), id, *req.Kubeconfig); werr != nil {
-			h.audit(r, "admin.cluster.update", payload, string(id), nil, map[string]string{"kubeconfig": "replace"}, fmt.Errorf("store kubeconfig: %w", werr))
+			h.audit(r, "admin.cluster.update", payload, string(id), nil, rotate, fmt.Errorf("store kubeconfig: %w", werr))
 			response.Error(w, http.StatusInternalServerError, "store kubeconfig: "+werr.Error())
 			return
 		}

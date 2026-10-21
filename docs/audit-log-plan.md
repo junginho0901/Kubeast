@@ -81,7 +81,7 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 | `admin.oidc.groups.read` | 관리자(`admin.users.read`)가 한 사용자의 Google Workspace 그룹 조회 결과와 매핑을 미리 봄(`GET /api/v1/auth/admin/oidc/groups?email=`, `auth.oidc.googleGroups`). target = 그 이메일, `after` = `{mapped_groups, other_groups, role, cluster_grants}`(개수와 역할만 — 그룹 이름은 남기지 않음), 조회 실패면 result failure |
 | `admin.roles.create` / `.update` / `.delete` | 역할 생성·수정·삭제. `before`/`after` = `{name, description, permissions}` — 권한 목록 변경이 그대로 남는다 |
 | `admin.organizations.create` / `.delete` | 조직(팀) 생성·삭제. `after`/`before` = `{type, name}` |
-| `admin.cluster.register` / `.update` / `.delete` / `.test` | 클러스터 등록·수정·삭제·연결 테스트. `.update`의 `after`에는 외부 Prometheus 소스(`prometheus_url`·`prometheus_cluster_label`·`prometheus_auth`(있음/없음)·`prometheus_auth_change: set|cleared`)와 지정 Service(`prometheus_service`)가 들어가고 인증 헤더 값은 Secret `cluster-prometheus-<id>`에만 있어 기록되지 않는다. API 서버 주소를 비워 등록하면 연결 확인이 본 주소가 들어가고, 주소가 빈 클러스터는 연결 테스트가 채움(`.test`의 `after.server`) · 등록 전 연결 확인·같은 클러스터 중복 거부, 수정 중 kubeconfig·인증값 저장 실패(앞 단계는 이미 바뀐 채)도 failure(2026-10-21) |
+| `admin.cluster.register` / `.update` / `.delete` / `.test` | 클러스터 등록·수정·삭제·연결 테스트. `.update`의 `after`에는 외부 Prometheus 소스(`prometheus_url`·`prometheus_cluster_label`·`prometheus_auth`(있음/없음)·`prometheus_auth_change: set|cleared`)와 지정 Service(`prometheus_service`)가 들어가고 인증 헤더 값은 Secret `cluster-prometheus-<id>`에만 있어 기록되지 않는다. API 서버 주소를 비워 등록하면 연결 확인이 본 주소가 들어가고, 주소가 빈 클러스터는 연결 테스트가 채움(`.test`의 `after.server`) · 등록·kubeconfig 교체에서 kubeconfig 거부(허용 안 된 exec 명령·TLS 검증 끄기 등)·연결 확인 실패, 같은 클러스터 중복 등록·교체 kubeconfig가 다른 클러스터를 가리킴(409), 수정 중 kubeconfig·인증값 저장 실패(앞 단계는 이미 바뀐 채)도 failure — kubeconfig 내용은 안 남김(2026-10-21) |
 | `user.cluster.switch` | 사용자가 클러스터 피커로 활성 클러스터를 바꿈(`POST /api/v1/audit/cluster-switch`, 프론트가 전환 시 fire-and-forget). `cluster` = 새 클러스터, `after` = `{previous, new}`. 모든 인증 사용자가 기록 가능, DB 쓰기 실패도 204. v0.6.0 전 행은 `cluster.switch` |
 | `admin.audit.read` / `admin.audit.export` | 감사 로그 조회·CSV |
 | `user.account.dormant_lock` | 휴면 계정 스위퍼(`DORMANT_ACCOUNTS_ENABLED`)가 활동(로그인·API 키 교환·생성) 없이 `DORMANT_ACCOUNTS_DAYS`가 지난 계정을 잠금 — actor `system`, target = 계정, `after` = `{last_activity, days, exempt_admins}`. 잠긴 계정의 로그인은 `user.login.failed` `reason: dormant`(OIDC는 `account_dormant`), 키 교환은 `user.apikey.exchange` failure `owner dormant` · 예약 스위프의 잠금 실패도 failure(2026-10-21) |
@@ -151,6 +151,8 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 - 조사기 토큰 발급(auth-service `/internal/investigator-token`) — 조사 자체가 `ai.investigation.run`.
 - 감사 봉인 실패 — 감사가 감사를 낳는 고리라 지표·로그로(`/health` `audit` 블록).
 - 채팅 대화방 만들기·메시지 저장, 받아들인 알림 웹훅 — §5-2의 해당 행에 이유.
+- 요청 형식 오류(읽을 수 없는 본문·빈 필수 값·주소 모양·FastAPI 422) — 아무것도 시도하지 않은 입력 실수. 정책이 거부한 값(키 직접 입력·허용 안 된 주소, kubeconfig의 허용 안 된 exec 명령·TLS 검증 끄기)과 권한 거부는 failure로 남김.
+- 등록 전 연결 시험(`POST /api/v1/clusters/validate`) — 받은 kubeconfig로 접속만 해 보고 아무것도 저장하지 않음. 등록하면 `admin.cluster.register`.
 
 ### 5-3. 새 액션 추가 절차
 

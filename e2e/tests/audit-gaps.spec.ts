@@ -234,6 +234,32 @@ test.describe('audit gaps', () => {
     }
   })
 
+  test('a refused or unreachable kubeconfig is a failure row and the cluster keeps its own', async ({ request }) => {
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const since = new Date(Date.now() - 2000).toISOString()
+    const ca = /certificate-authority-data: (\S+)/.exec(execSync('kind get kubeconfig --name kubeast-b', { encoding: 'utf8' }))![1]
+    const kubeconfig = (tls: string) => `apiVersion: v1\nkind: Config\nclusters:\n- name: x\n  cluster:\n    server: https://10.255.255.1:6443\n    ${tls}\n`
+      + 'users:\n- name: x\n  user:\n    token: e2e-not-a-token\ncontexts:\n- name: x\n  context: {cluster: x, user: x}\ncurrent-context: x\n'
+    const insecure = kubeconfig('insecure-skip-tls-verify: true')
+
+    const reg = await request.post('/api/v1/clusters', { headers: admin, data: { mode: 'external', display_name: 'e2e-refused', kubeconfig: insecure }, failOnStatusCode: false })
+    expect(reg.status(), await reg.text()).toBe(400)
+    expect((await request.patch('/api/v1/clusters/default', { headers: admin, data: { kubeconfig: insecure }, failOnStatusCode: false })).status()).toBe(400)
+    const unreachable = await request.patch('/api/v1/clusters/default', { headers: admin, data: { kubeconfig: kubeconfig(`certificate-authority-data: ${ca}`) }, failOnStatusCode: false, timeout: 60_000 })
+    expect(unreachable.status(), await unreachable.text()).toBe(400)
+
+    const mine = async () => [...await rows(request, admin, { action: 'admin.cluster.register', since }), ...await rows(request, admin, { action: 'admin.cluster.update', since })]
+    await expect.poll(async () => (await mine()).map((r) => `${r.Action} ${r.Result} ${r.TargetID} ${(r.Error ?? '').split(':')[0]} ${JSON.stringify(r.After)}`).sort(), { timeout: 10_000 })
+      .toEqual([
+        'admin.cluster.register failure  kubeconfig refused {"display_name":"e2e-refused"}',
+        'admin.cluster.update failure default connection test failed {"kubeconfig":"replace"}',
+        'admin.cluster.update failure default kubeconfig refused {"kubeconfig":"replace"}',
+      ])
+    expect(JSON.stringify(await mine())).not.toContain('e2e-not-a-token')
+    const check = await (await request.post('/api/v1/clusters/default/test', { headers: admin })).json()
+    expect(check.healthy, 'default still answers with its own kubeconfig').toBe(true)
+  })
+
   test('a ModelConfig resource change is a sync row, a reconcile with the same spec is not', async ({ request }) => {
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-audit-'))
