@@ -85,7 +85,7 @@ kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator 
 
 ### VictoriaMetrics
 
-Prometheus 질의 API를 그대로 쓰므로 화면·AI 도구 모두 같은 질의로 읽습니다(검증: v1.154.0 단일판·클러스터판, 2번 클러스터 Prometheus와 같은 값). 다른 점만:
+Prometheus 질의 API를 그대로 쓰므로 화면·AI 도구 모두 같은 질의로 읽습니다(검증: v1.154.1 단일판·클러스터판, 2번 클러스터 Prometheus와 같은 값). 다른 점만:
 
 - **찾기**: Prometheus가 없을 때 단일판을 자동으로 찾습니다 — VM operator의 `app.kubernetes.io/name=vmsingle`·Helm 차트의 `app.kubernetes.io/name=victoria-metrics-single` 레이블, 그다음 이름에 `vmsingle`·`victoria-metrics`가 든 8428 Service. Prometheus가 있으면 Prometheus가 먼저입니다. 클러스터판은 테넌트 경로가 필요해 자동으로 찾지 않습니다 — Service를 경로까지 적거나(`monitoring/vmselect-<이름>:8481/select/<테넌트>/prometheus`) 중앙 저장소 주소로(`http://vmselect-<이름>.<ns>.svc:8481/select/0/prometheus`, 클러스터 레이블 값과 함께).
 - **알림 규칙**(AI `prometheus_rules`): 규칙은 vmalert에 있고, 단일판·vmselect에 `-vmalert.proxyURL=<vmalert 주소>`가 있어야 `/api/v1/rules`가 그 규칙을 돌려줍니다. 없으면 VM은 빈 목록을 주므로 Kubeast가 저장소 종류를 보고 "이 저장소는 규칙을 안 준다"로 바꿔 답합니다("규칙 없음"이라고 틀리게 말하지 않도록).
@@ -114,8 +114,9 @@ Prometheus 질의 API를 그대로 쓰므로 화면·AI 도구 모두 같은 질
 - **이름**: Prometheus식 이름 변환 그대로 — `system_cpu_time_seconds_total{state}`와 `system_cpu_logical_count`(CPU 사용률 = 1 − 유휴 초 ÷ 논리 CPU 수, node-exporter와 같은 셈), `system_memory_usage_bytes{state="used"}`와 `system_memory_limit_bytes`, `system_filesystem_usage_bytes{mountpoint="/",state}`, `system_cpu_load_average_1m`, `system_network_io_bytes_total{direction,device}`, `system_disk_io_bytes_total{direction,device}`. OTel `prometheus_remote_write` exporter(0.162 전 이름 `prometheusremotewrite`)와 Prometheus의 OTLP 수신은 기본이 이 이름이고, VictoriaMetrics에 OTLP로 보내면 `-opentelemetry.usePrometheusNaming`을 줘야 합니다(기본은 점 이름 그대로).
 - **`system.memory.limit` 켜기**(기본 꺼짐): 메모리 사용률 = `used ÷ limit`. 수신기의 MemAvailable 게이트(0.137부터 기본 켬)로 `used` = 전체 − MemAvailable이라 node-exporter의 `1 − MemAvailable/MemTotal`과 같은 값입니다. state들을 더해도 전체가 되지 않으므로 합으로 나누지 않습니다.
 - **노드 레이블 `k8s_node_name`** = 노드 이름: 리소스 속성 `k8s.node.name`(downward API `spec.nodeName`)을 레이블로 — `prometheus_remote_write`의 `resource_constant_labels.included: [k8s.node.name]`, Prometheus OTLP면 `promote_resource_attributes`.
+- **수집기를 올린 직후**: 수집기 판이 레이블 `otel_scope_version`에 들어가고 멈춘 수집기는 끝 표시를 보내지 않아, 판을 올린 뒤 몇 분(조회 창, 기본 5분) 동안 같은 시리즈가 두 벌 있습니다. Kubeast의 노드 질의는 `max without (otel_scope_name, otel_scope_version)`로 한 벌만 셉니다 — 직접 `sum`을 쓰는 대시보드·알림 규칙도 같게 하세요(dev 0.162.0 → 0.163.1에서 7분 동안 합계 2배를 봄).
 - **호스트 읽기**: `root_path: /hostfs`에 호스트 `/`를 읽기 전용으로 마운트(opentelemetry-collector 차트의 hostMetrics 프리셋과 같음). 네트워크는 `hostNetwork: true`일 때만 노드 인터페이스 값입니다 — 아니면 수집기 파드 자기 트래픽이 되므로 그때는 `network` 스크레이퍼를 끄세요(Kubeast는 그 칸을 숨김). 디스크는 node-exporter 기본 제외(파티션·loop·ram)와 같은 장치를 뺍니다.
-- **예시**: [`deploy/kind/hostmetrics-collector.yaml`](../deploy/kind/hostmetrics-collector.yaml)(contrib 0.162.0, `scripts/kind-hostmetrics.sh`).
+- **예시**: [`deploy/kind/hostmetrics-collector.yaml`](../deploy/kind/hostmetrics-collector.yaml)(contrib 0.163.1, `scripts/kind-hostmetrics.sh`).
 
 **AI 도구가 더 읽는 경로**(Prometheus 찾기 도구, 질의와 같은 저장소·같은 클러스터 범위): `/api/v1/label/__name__/values`·`/api/v1/labels`·`/api/v1/label/<이름>/values`(늘 최근 1시간 등 `start`·`end`, 여러 클러스터가 쓰는 저장소면 `match[]`에 클러스터 레이블), `/api/v1/metadata`(없으면 이름만), `/api/v1/rules`(VictoriaMetrics는 조회 쪽에 `-vmalert.proxyURL`이 있을 때만 — 없으면 "이 저장소는 규칙을 안 줌"으로 답함, 위 VictoriaMetrics 절), `/api/v1/targets`(클러스터 자기 저장소일 때만 — 여러 클러스터가 쓰는 저장소, 목록이 빈 저장소, 그 API가 없는 저장소는 `up` 지표로 대신). 모두 GET이라 Grafana 데이터소스 프록시로도 읽힙니다.
 
@@ -261,7 +262,7 @@ Kubeast는 Loki의 `query_range`(AI의 `loki_query`는 메트릭 쿼리도)·`la
 - **트레이스 링크**(`features.tracing`, 쓸 때): 줄의 trace ID를 Loki 라벨에서 먼저 읽습니다. 앱이 OTLP로 로그를 보내면 Loki가 trace ID를 구조화 메타데이터 `trace_id`로 줄과 함께 돌려주므로(Loki 3.x, 10-14 kind 실측) 따로 할 일이 없습니다. 위처럼 컨테이너 로그를 파일로 읽는 수집기는 trace ID를 모르므로 줄 글자(`trace_id=…` 등)에서 찾습니다 — 앱이 로그 문장에 trace ID를 쓰거나, 수집기에서 JSON 줄을 파싱해 trace 필드로 옮기면 됩니다. 트레이스 저장소(Jaeger·Tempo)는 브라우저가 링크로 여는 곳이라 Kubeast 쪽 통신은 없습니다.
 
 ```yaml
-# OpenTelemetry Collector contrib 0.162.0 — 노드의 컨테이너 로그를 Loki로 (DaemonSet, /var/log/pods 읽기 전용 마운트)
+# OpenTelemetry Collector contrib 0.163.1 — 노드의 컨테이너 로그를 Loki로 (DaemonSet, /var/log/pods 읽기 전용 마운트)
 receivers:
   file_log:
     include: [/var/log/pods/*/*/*.log]
@@ -298,16 +299,16 @@ service:
 
 | 구성 | 버전 | 어떻게 |
 | --- | --- | --- |
-| prometheus-community/prometheus | 차트 29.36.1(Prometheus v3.15.0) | 예시 값 그대로 kind에 설치 → Kubeast가 `monitoring/prometheus-server:9090` 발견, cAdvisor·node-exporter·kube-state-metrics 지표 조회, 최적화 source `prometheus` |
-| opencost/opencost | 차트 2.5.32(OpenCost 1.121.3) | 예시 값 그대로 설치 → `opencost/opencost:9003` 발견, 비용 Namespace별 행 |
+| prometheus-community/prometheus | 차트 29.37.0(Prometheus v3.15.0) | 예시 값 그대로 kind에 설치(29.36.1) → Kubeast가 `monitoring/prometheus-server:9090` 발견, cAdvisor·node-exporter·kube-state-metrics 지표 조회, 최적화 source `prometheus`. 29.37.0은 예시 값 렌더가 차트 레이블만 다름 |
+| opencost/opencost | 차트 2.5.33(OpenCost 1.121.3) | 예시 값 그대로 설치(2.5.32) → `opencost/opencost:9003` 발견, 비용 Namespace별 행. 2.5.33은 예시 값 렌더가 차트 레이블만 다름 |
 | `scripts/render-target-rbac.sh` + `cluster-values.yaml` | — | 적용 전 Read 비용·Prometheus 조회 403 → 적용 뒤 200 |
 | kube-prometheus-stack | 92.3.0 | 렌더로 Service 이름·포트만 확인 |
 | metrics-server | 0.9.0 | 개발용 2번 클러스터(`deploy/kind/second-cluster.yaml`) |
 | Kyverno | 1.19.1(차트 3.9.1) | 개발용 2번 클러스터 |
 | Alertmanager | v0.34.1 | 개발용 2번 클러스터 — `amtool alert add`로 넣은 알림이 웹훅으로 와서 조사됨(e2e `alert-investigation.spec.ts`) |
-| Loki · OpenTelemetry Collector contrib | 3.7.8 · 0.162.0 | 10-14, 개발용 2번 클러스터의 Loki 하나에 두 클러스터 수집기 — Job 로그를 텍스트·워크로드로 찾고 다른 클러스터에선 0줄, Job 삭제 뒤에도 찾음(e2e `log-search.spec.ts`) |
-| OpenTelemetry Collector contrib `host_metrics` | 0.162.0 | 10-17, 개발용 1번 클러스터(node-exporter 없음, `scripts/kind-hostmetrics.sh`) → 2번 클러스터 Prometheus remote write — 같은 커널을 보는 2번 클러스터 node-exporter와 메모리 70.6% / 70.7%, 전체 메모리 같은 바이트, Load 6.72 / 6.66, CPU 13.3% / 13.5%, 노드 드로어·대시보드가 채워짐(e2e `node-hostmetrics.spec.ts`). 0.162에선 `hostmetrics`·`prometheusremotewrite` 이름이 폐기 예정 별칭이라 `host_metrics`·`prometheus_remote_write`로 씀 |
-| VictoriaMetrics | v1.154.0(단일판·클러스터판, vmagent) | 10-20, 개발용 2번 클러스터(`scripts/kind-victoriametrics.sh` — 2번 클러스터 Prometheus와 같은 수집 설정) — 노드 메모리 합계가 Prometheus·단일판·클러스터판 모두 같은 바이트, 단일판·경로 붙은 vmselect의 `/-/healthy` 200, 규칙·알림은 빈 자리표시, vmselect 대상 API 400 → `up`, 메타데이터 타입·설명 있음(e2e `victoriametrics.spec.ts`) |
+| Loki · OpenTelemetry Collector contrib | 3.7.9 · 0.163.1 | 10-14(3.7.8 · 0.162.0), 10-21 올림, 개발용 2번 클러스터의 Loki 하나에 두 클러스터 수집기 — Job 로그를 텍스트·워크로드로 찾고 다른 클러스터에선 0줄, Job 삭제 뒤에도 찾음(e2e `log-search.spec.ts`) |
+| OpenTelemetry Collector contrib `host_metrics` | 0.163.1 | 10-17(0.162.0), 10-21 올림, 개발용 1번 클러스터(node-exporter 없음, `scripts/kind-hostmetrics.sh`) → 2번 클러스터 Prometheus remote write — 같은 커널을 보는 2번 클러스터 node-exporter와 메모리 70.6% / 70.7%, 전체 메모리 같은 바이트, Load 6.72 / 6.66, CPU 13.3% / 13.5%, 노드 드로어·대시보드가 채워짐(e2e `node-hostmetrics.spec.ts`). 0.162에선 `hostmetrics`·`prometheusremotewrite` 이름이 폐기 예정 별칭이라 `host_metrics`·`prometheus_remote_write`로 씀 |
+| VictoriaMetrics | v1.154.1(단일판·클러스터판, vmagent) | 10-20(v1.154.0), 10-21 올림, 개발용 2번 클러스터(`scripts/kind-victoriametrics.sh` — 2번 클러스터 Prometheus와 같은 수집 설정) — 노드 메모리 합계가 Prometheus·단일판·클러스터판 모두 같은 바이트, 단일판·경로 붙은 vmselect의 `/-/healthy` 200, 규칙·알림은 빈 자리표시, vmselect 대상 API 400 → `up`, 메타데이터 타입·설명 있음(e2e `victoriametrics.spec.ts`) |
 | Grafana | 13.2.4 | 10-17, 개발용 2번 클러스터(`scripts/kind-grafana.sh`) — 데이터소스 프록시로 읽은 지표·로그가 직접 읽은 값과 같고 대시보드·노드 드로어가 채워짐, 틀린 토큰은 상태에 401, 웹훅 연락처 시험으로 보낸 알림이 조사됨(e2e `grafana.spec.ts`) |
 | GPU·DRA·VPA·Gateway API·ingress-nginx | — | 코드 기준, 실제 클러스터 검증 안 함 |
 

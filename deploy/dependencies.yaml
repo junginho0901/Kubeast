@@ -1,0 +1,256 @@
+# Versions of the tools the dev clusters run next to Kubeast (deploy/kind, scripts/kind-*.sh) and of the
+# target-cluster example charts, with every place each version is written. Checked by zeitgeist
+# (sigs.k8s.io/zeitgeist, the tool kubernetes/kubernetes uses for build/dependencies.yaml): CI checks that
+# every place agrees, the weekly addon-versions workflow checks upstream for newer releases.
+dependencies:
+  - name: zeitgeist
+    version: v0.8.0
+    upstream:
+      flavour: github
+      url: kubernetes-sigs/zeitgeist
+    refPaths:
+      - path: .github/workflows/ci.yaml
+        match: 'ZEITGEIST_VERSION:'
+      - path: .github/workflows/addon-versions.yaml
+        match: 'ZEITGEIST_VERSION:'
+
+  - name: prometheus
+    version: v3.15.0
+    upstream:
+      flavour: github
+      url: prometheus/prometheus
+    refPaths:
+      - path: deploy/kind/second-cluster.yaml
+        match: 'prom/prometheus:v'
+      - path: deploy/kind/second-cluster.yaml
+        match: 'one-pod Prometheus v'
+      - path: deploy/examples/target-cluster/prometheus-values.yaml
+        match: '\(Prometheus v'
+      - path: docs/cluster-requirements.md
+        match: '\| prometheus-community/prometheus \|'
+
+  - name: prometheus-chart
+    version: 29.37.0
+    upstream:
+      flavour: helm
+      repo: https://prometheus-community.github.io/helm-charts
+      chart: prometheus
+    refPaths:
+      - path: deploy/examples/target-cluster/prometheus-values.yaml
+        match: '^# prometheus-community/prometheus [0-9]'
+      - path: docs/cluster-requirements.md
+        match: '\| prometheus-community/prometheus \|'
+
+  - name: node-exporter
+    version: v1.12.1
+    upstream:
+      flavour: github
+      url: prometheus/node_exporter
+    refPaths:
+      - path: deploy/kind/second-cluster.yaml
+        match: 'prometheus/node-exporter:v'
+      - path: deploy/kind/second-cluster.yaml
+        match: 'and node-exporter v'
+
+  - name: kube-state-metrics
+    version: v2.20.0
+    upstream:
+      flavour: github
+      url: kubernetes/kube-state-metrics
+    refPaths:
+      - path: deploy/kind/second-cluster.yaml
+        match: 'kube-state-metrics/kube-state-metrics:v'
+      - path: deploy/kind/second-cluster.yaml
+        match: '# kube-state-metrics v'
+
+  - name: metrics-server
+    version: v0.9.0
+    upstream:
+      flavour: github
+      url: kubernetes-sigs/metrics-server
+    refPaths:
+      - path: deploy/kind/second-cluster.yaml
+        match: 'metrics-server/metrics-server:v'
+      - path: deploy/kind/second-cluster.yaml
+        match: 'metrics-server v'
+
+  - name: metrics-server-chart
+    version: 3.14.0
+    upstream:
+      flavour: helm
+      repo: https://kubernetes-sigs.github.io/metrics-server
+      chart: metrics-server
+    refPaths:
+      - path: docs/cluster-requirements.md
+        match: '\[metrics-server 차트\]'
+
+  - name: opencost
+    version: 1.121.3
+    upstream:
+      flavour: github
+      url: opencost/opencost
+    refPaths:
+      - path: deploy/kind/second-cluster.yaml
+        match: 'ghcr.io/opencost/opencost:'
+      - path: deploy/kind/second-cluster.yaml
+        match: 'OpenCost [0-9]'
+      - path: deploy/examples/target-cluster/opencost-values.yaml
+        match: '\(OpenCost [0-9]'
+      - path: docs/cluster-requirements.md
+        match: '\| opencost/opencost \|'
+
+  - name: opencost-chart
+    version: 2.5.33
+    upstream:
+      flavour: helm
+      repo: https://opencost.github.io/opencost-helm-chart
+      chart: opencost
+    refPaths:
+      - path: deploy/examples/target-cluster/opencost-values.yaml
+        match: '^# opencost/opencost [0-9]'
+      - path: deploy/kind/second-cluster.yaml
+        match: 'chart opencost-[0-9]'
+      - path: docs/cluster-requirements.md
+        match: '\| opencost/opencost \|'
+
+  - name: alertmanager
+    version: v0.34.1
+    upstream:
+      flavour: github
+      url: prometheus/alertmanager
+    refPaths:
+      - path: deploy/kind/alertmanager.yaml
+        match: 'prometheus/alertmanager:v'
+      - path: deploy/kind/alertmanager.yaml
+        match: '^# Alertmanager v'
+      - path: docs/cluster-requirements.md
+        match: '(# Alertmanager v|\| Alertmanager \|)'
+
+  - name: grafana
+    version: 13.2.4
+    upstream:
+      flavour: github
+      url: grafana/grafana
+    refPaths:
+      - path: deploy/kind/grafana.yaml
+        match: 'grafana/grafana:[0-9]'
+      - path: scripts/kind-grafana.sh
+        match: '^IMAGE="grafana/grafana:'
+      - path: docs/cluster-requirements.md
+        match: '\| Grafana \|'
+
+  - name: loki
+    version: 3.7.9
+    upstream:
+      flavour: github
+      url: grafana/loki
+    refPaths:
+      - path: deploy/kind/logsearch-loki.yaml
+        match: 'grafana/loki:[0-9]'
+      - path: deploy/kind/logsearch-loki.yaml
+        match: 'Based on Loki v'
+      - path: scripts/kind-logsearch.sh
+        match: '^LOKI_IMAGE='
+      - path: docs/cluster-requirements.md
+        match: '\| Loki · OpenTelemetry Collector contrib \|'
+
+  - name: otel-collector-contrib
+    version: 0.163.1
+    upstream:
+      flavour: github
+      url: open-telemetry/opentelemetry-collector-releases
+    refPaths:
+      - path: deploy/kind/logsearch-collector.yaml
+        match: 'otel/opentelemetry-collector-contrib:[0-9]'
+      - path: deploy/kind/hostmetrics-collector.yaml
+        match: 'otel/opentelemetry-collector-contrib:[0-9]'
+      - path: scripts/kind-logsearch.sh
+        match: '^COLLECTOR_IMAGE='
+      - path: scripts/kind-hostmetrics.sh
+        match: '^COLLECTOR_IMAGE='
+      - path: docs/cluster-requirements.md
+        match: '(\(contrib [0-9]|# OpenTelemetry Collector contrib [0-9]|\| Loki · OpenTelemetry Collector contrib \||\| OpenTelemetry Collector contrib `host_metrics` \|)'
+
+  - name: telemetrygen
+    version: v0.163.0
+    upstream:
+      flavour: github
+      url: open-telemetry/opentelemetry-collector-contrib
+    refPaths:
+      - path: scripts/kind-tracing.sh
+        match: '^TELEMETRYGEN_IMAGE='
+      - path: e2e/tests/ai-traces-tools.spec.ts
+        match: '^const GEN ='
+      - path: evals/ai/05_slow_traces/setup.yaml
+        match: 'telemetrygen:v'
+
+  - name: tempo
+    version: 3.1.0
+    upstream:
+      flavour: github
+      url: grafana/tempo
+    refPaths:
+      - path: deploy/kind/tracing-tempo.yaml
+        match: 'grafana/tempo:[0-9]'
+      - path: deploy/kind/tracing-tempo.yaml
+        match: 'Based on Tempo v'
+      - path: scripts/kind-tracing.sh
+        match: '^TEMPO_IMAGE='
+      # the TraceQL scope rewriter follows this Tempo's lexer: a new Tempo means re-checking it
+      - path: services/k8s-service-go/internal/traces/traceql.go
+        match: 'pkg/traceql/lexer.go, v'
+
+  - name: jaeger
+    version: 2.22.0
+    upstream:
+      flavour: github
+      url: jaegertracing/jaeger
+    refPaths:
+      - path: deploy/kind/tracing-jaeger.yaml
+        match: 'jaegertracing/jaeger:[0-9]'
+      - path: scripts/kind-tracing.sh
+        match: '^JAEGER_IMAGE='
+
+  - name: victoriametrics
+    version: v1.154.1
+    upstream:
+      flavour: github
+      url: VictoriaMetrics/VictoriaMetrics
+    refPaths:
+      - path: deploy/kind/victoriametrics.yaml
+        match: 'image: victoriametrics/'
+      - path: deploy/kind/victoriametrics.yaml
+        match: '^# Images v'
+      - path: scripts/kind-victoriametrics.sh
+        match: '^VERSION='
+      - path: docs/cluster-requirements.md
+        match: '(검증: v[0-9.]+ 단일판|\| VictoriaMetrics \|)'
+
+  # Kyverno's images come with the chart's CRDs: the chart version leads, the app version follows it.
+  - name: kyverno-chart
+    version: 3.9.1
+    upstream:
+      flavour: helm
+      repo: https://kyverno.github.io/kyverno
+      chart: kyverno
+    refPaths:
+      - path: scripts/add-kind-cluster.sh
+        match: 'KYVERNO_CHART_VERSION=[0-9]'
+      - path: deploy/kind/kyverno-values.yaml
+        match: 'chart kyverno/kyverno [0-9]'
+      - path: docs/cluster-requirements.md
+        match: '(\[Kyverno 차트\]|\| Kyverno \|)'
+      - path: README.md
+        match: '차트 [0-9.]+을 `helm template --no-hooks`'
+
+  - name: kyverno
+    version: 1.19.1
+    refPaths:
+      - path: scripts/add-kind-cluster.sh
+        match: 'reg.kyverno.io/kyverno/'
+      - path: scripts/add-kind-cluster.sh
+        match: 'and Kyverno [0-9]'
+      - path: deploy/kind/kyverno-values.yaml
+        match: '\(app v'
+      - path: docs/cluster-requirements.md
+        match: '(\[Kyverno 차트\]|\| Kyverno \|)'

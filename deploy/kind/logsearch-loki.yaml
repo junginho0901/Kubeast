@@ -1,7 +1,7 @@
 # Log search (features.logSearch) on kind: one Loki for every local cluster, in the
 # second cluster (kubeast-b), the way a central log store serves several clusters.
 # Single process, filesystem storage in an emptyDir (logs go with the pod), OTLP intake
-# at /otlp, the pattern ingester on (the AI's loki_patterns). Based on Loki v3.7.8
+# at /otlp, the pattern ingester on (the AI's loki_patterns). Based on Loki v3.7.9
 # cmd/loki/loki-local-config.yaml. Applied by
 # scripts/kind-logsearch.sh. NodePort 31100 is how the other cluster's collector and
 # Kubeast's k8s-service reach it: http://kubeast-b-control-plane:31100.
@@ -80,7 +80,7 @@ spec:
         seccompProfile: {type: RuntimeDefault}
       containers:
         - name: loki
-          image: grafana/loki:3.7.8
+          image: grafana/loki:3.7.9
           imagePullPolicy: IfNotPresent
           args: ["-config.file=/etc/loki/loki.yaml"]
           ports:

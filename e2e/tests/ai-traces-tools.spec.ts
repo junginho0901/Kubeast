@@ -21,7 +21,7 @@ const NS = 'default'
 const MCP = '/api/v1/ai/mcp'
 const RPC = { Accept: 'application/json, text/event-stream', 'Content-Type': 'application/json' }
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Requested-With': 'XMLHttpRequest' })
-const GEN = 'ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:v0.162.0'
+const GEN = 'ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:v0.163.0'
 
 function kubectlFor(kindName: string) {
   const kcPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-traces-')), 'kubeconfig')

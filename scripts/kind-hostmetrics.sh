@@ -12,7 +12,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 KUBECONFIG_PATH="${KUBECONFIG_PATH:-$ROOT/.kubeconfig-kind}"
 MAIN="${KIND_CLUSTER_NAME:-kubeast}"
 STORE="${HOSTMETRICS_STORE_CLUSTER:-kubeast-b}"
-COLLECTOR_IMAGE="otel/opentelemetry-collector-contrib:0.162.0"
+COLLECTOR_IMAGE="otel/opentelemetry-collector-contrib:0.163.1"
 
 main_kubectl() { kubectl --kubeconfig "$KUBECONFIG_PATH" --context "kind-$MAIN" "$@"; }
 store_kubectl() { kubectl --kubeconfig <(kind get kubeconfig --name "$STORE") "$@"; }

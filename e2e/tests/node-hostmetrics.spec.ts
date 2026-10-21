@@ -80,16 +80,19 @@ test.describe('node values from OpenTelemetry hostmetrics', () => {
     for (const name of ['system_memory_usage_bytes', 'system_memory_limit_bytes', 'system_cpu_load_average_1m', 'system_network_io_bytes_total', 'system_disk_io_bytes_total']) {
       expect(await value(request, admin, SELF, `count(${name}{${sel}})`), name).toBeGreaterThan(0)
     }
-    const memory = await value(request, admin, SELF, `100 * sum(system_memory_usage_bytes{state="used",${sel}}) / sum(system_memory_limit_bytes{${sel}})`)
+    // a collector upgrade leaves the old version's series (otel_scope_version) for minutes: count each once, as the drawer does
+    const one = (s: string) => `max without (otel_scope_name, otel_scope_version) (${s})`
+    const memory = await value(request, admin, SELF, `100 * sum(${one(`system_memory_usage_bytes{state="used",${sel}}`)}) / sum(${one(`system_memory_limit_bytes{${sel}}`)})`)
     const memoryNE = await value(request, admin, SECOND, '(1 - sum(node_memory_MemAvailable_bytes) / sum(node_memory_MemTotal_bytes)) * 100')
     expect(Math.abs((memory as number) - (memoryNE as number)), `hostmetrics ${memory} vs node-exporter ${memoryNE}`).toBeLessThan(5)
-    const total = await value(request, admin, SELF, `sum(system_memory_limit_bytes{${sel}})`)
+    const total = await value(request, admin, SELF, `sum(${one(`system_memory_limit_bytes{${sel}}`)})`)
     const totalNE = await value(request, admin, SECOND, 'sum(node_memory_MemTotal_bytes)')
     expect(total).toBe(totalNE)
-    const load = await value(request, admin, SELF, `max(system_cpu_load_average_1m{${sel}})`)
-    const loadNE = await value(request, admin, SECOND, 'max(node_load1)')
+    // the two collectors read the kernel at different moments: compare two-minute averages, not one sample each
+    const load = await value(request, admin, SELF, `max(avg_over_time(system_cpu_load_average_1m{${sel}}[2m]))`)
+    const loadNE = await value(request, admin, SECOND, 'max(avg_over_time(node_load1[2m]))')
     expect(Math.abs((load as number) - (loadNE as number)), `hostmetrics ${load} vs node-exporter ${loadNE}`).toBeLessThan(2)
-    const cpu = await value(request, admin, SELF, `100 * (1 - sum(rate(system_cpu_time_seconds_total{state="idle",${sel}}[5m])) / sum(system_cpu_logical_count{${sel}}))`)
+    const cpu = await value(request, admin, SELF, `100 * (1 - sum(${one(`rate(system_cpu_time_seconds_total{state="idle",${sel}}[5m])`)}) / sum(${one(`system_cpu_logical_count{${sel}}`)}))`)
     const cpuNE = await value(request, admin, SECOND, '100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)')
     expect(Math.abs((cpu as number) - (cpuNE as number)), `hostmetrics ${cpu} vs node-exporter ${cpuNE}`).toBeLessThan(5)
     expect(secondNode).not.toBe(node)

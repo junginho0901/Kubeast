@@ -4,7 +4,7 @@
 #     config as that Prometheus (its ConfigMap, the cluster label stamped by relabeling); NodePort 30428.
 #   - cluster: vmagent-kubeast scrapes the same way and writes to vminsert-kubeast → vmstorage-kubeast, read
 #     through vmselect-kubeast at /select/0/prometheus; NodePort 30481.
-# Images v1.154.0; data in emptyDir, one day kept.
+# Images v1.154.1; data in emptyDir, one day kept.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -21,7 +21,7 @@ spec:
       serviceAccountName: prometheus
       containers:
         - name: vmsingle
-          image: victoriametrics/victoria-metrics:v1.154.0
+          image: victoriametrics/victoria-metrics:v1.154.1
           args:
             - -retentionPeriod=1d
             - -storageDataPath=/storage
@@ -83,7 +83,7 @@ spec:
     spec:
       containers:
         - name: vmstorage
-          image: victoriametrics/vmstorage:v1.154.0-cluster
+          image: victoriametrics/vmstorage:v1.154.1-cluster
           args: [-retentionPeriod=1d, -storageDataPath=/storage]
           ports:
             - {name: http, containerPort: 8482}
@@ -126,7 +126,7 @@ spec:
     spec:
       containers:
         - name: vminsert
-          image: victoriametrics/vminsert:v1.154.0-cluster
+          image: victoriametrics/vminsert:v1.154.1-cluster
           args: [-storageNode=vmstorage-kubeast:8400]
           ports:
             - {name: http, containerPort: 8480}
@@ -161,7 +161,7 @@ spec:
     spec:
       containers:
         - name: vmselect
-          image: victoriametrics/vmselect:v1.154.0-cluster
+          image: victoriametrics/vmselect:v1.154.1-cluster
           args: [-storageNode=vmstorage-kubeast:8401]
           ports:
             - {name: http, containerPort: 8481}
@@ -212,7 +212,7 @@ spec:
       serviceAccountName: prometheus
       containers:
         - name: vmagent
-          image: victoriametrics/vmagent:v1.154.0
+          image: victoriametrics/vmagent:v1.154.1
           args:
             - -promscrape.config=/etc/prometheus/prometheus.yml
             - -promscrape.config.strictParse=false

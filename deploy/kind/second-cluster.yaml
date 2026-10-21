@@ -767,7 +767,7 @@ spec:
       targetPort: http
       nodePort: 30091
 ---
-# OpenCost 1.121.3 (chart opencost-2.5.32's image, env and ClusterRole, as plain manifests): allocation costs from
+# OpenCost 1.121.3 (chart opencost-2.5.33's image, env and ClusterRole, as plain manifests): allocation costs from
 # the Prometheus above, read by Kubeast's Cost page (GET /api/v1/cost) through the API server proxy. Default
 # (on-prem) prices apply on kind.
 apiVersion: v1
@@ -841,8 +841,7 @@ spec:
       serviceAccountName: opencost
       containers:
         - name: opencost
-          # 1.121.3
-          image: ghcr.io/opencost/opencost@sha256:4cdd173253e5abba048dfe2cfa968707a5b59d774157d5356940d0d923a6c281
+          image: ghcr.io/opencost/opencost:1.121.3@sha256:4cdd173253e5abba048dfe2cfa968707a5b59d774157d5356940d0d923a6c281
           env:
             - name: PROMETHEUS_SERVER_ENDPOINT
               value: http://prometheus.monitoring.svc:9090

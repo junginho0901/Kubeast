@@ -8,11 +8,11 @@ spec:
       restartPolicy: Never
       initContainers:
         - name: cart
-          image: ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:v0.162.0
+          image: ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:v0.163.0
           imagePullPolicy: IfNotPresent
           args: ["traces", "--otlp-endpoint", "kubeast-b-control-plane:31318", "--otlp-http", "--otlp-insecure", "--service", "eval-shop", "--otlp-attributes", "k8s.cluster.name=\"kubeast\"", "--otlp-attributes", "k8s.namespace.name=\"eval-05\"", "--traces", "20", "--span-duration", "150ms", "--telemetry-attributes", "http.route=\"/cart\""]
       containers:
         - name: checkout
-          image: ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:v0.162.0
+          image: ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:v0.163.0
           imagePullPolicy: IfNotPresent
           args: ["traces", "--otlp-endpoint", "kubeast-b-control-plane:31318", "--otlp-http", "--otlp-insecure", "--service", "eval-shop", "--otlp-attributes", "k8s.cluster.name=\"kubeast\"", "--otlp-attributes", "k8s.namespace.name=\"eval-05\"", "--traces", "8", "--span-duration", "2500ms", "--telemetry-attributes", "http.route=\"/checkout\""]

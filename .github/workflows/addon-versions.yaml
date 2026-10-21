@@ -1,0 +1,44 @@
+# Weekly: is anything in deploy/dependencies.yaml behind upstream? Keeps one open issue listing the newer
+# releases and closes it once everything is current.
+name: addon-versions
+
+on:
+  schedule:
+    - cron: "17 1 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      ZEITGEIST_VERSION: v0.8.0
+      ZEITGEIST_SHA256: 3899d666a6dc8ccfa99bfbb468ee282de56925c6b58a4c5937c763b14a7cae35
+      GITHUB_TOKEN: ${{ github.token }}
+      GH_TOKEN: ${{ github.token }}
+      TITLE: Dev add-on updates available
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: |
+          set -o pipefail
+          curl -sSfL -o zeitgeist-remote "https://github.com/kubernetes-sigs/zeitgeist/releases/download/${ZEITGEIST_VERSION}/zeitgeist-remote-amd64-linux"
+          echo "${ZEITGEIST_SHA256}  zeitgeist-remote" | sha256sum -c -
+          chmod +x zeitgeist-remote
+          ./zeitgeist-remote validate --base-path . --config deploy/dependencies.yaml | tee out.txt
+          grep '^Update available' out.txt > updates.txt || true
+          issue=$(gh issue list --state open --search "in:title \"${TITLE}\"" --json number --jq '.[0].number // empty')
+          if [ -s updates.txt ]; then
+            {
+              echo "Newer upstream releases for \`deploy/dependencies.yaml\` ([run](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})):"
+              echo
+              sed 's/^/- /' updates.txt
+              echo
+              echo "Bump the version there and in every refPath (CI checks they agree), then run the e2e specs that use the add-on."
+            } > body.md
+            if [ -n "$issue" ]; then gh issue edit "$issue" --body-file body.md; else gh issue create --title "$TITLE" --body-file body.md; fi
+          elif [ -n "$issue" ]; then
+            gh issue close "$issue" --comment "Everything in deploy/dependencies.yaml is current."
+          fi

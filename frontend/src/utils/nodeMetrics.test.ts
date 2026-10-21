@@ -50,14 +50,24 @@ describe('nodeQueries', () => {
     }
     expect(q.network_rx).toBe(
       '(sum(rate(node_network_receive_bytes_total{device!="lo",instance=~"(?:node-1|10\\\\.0\\\\.1\\\\.1)(?::[0-9]+)?"}[5m]))) or ' +
-        '(sum(rate(system_network_io_bytes_total{direction="receive",device!="lo",k8s_node_name="node-1"}[5m])))',
+        '(sum(max without (otel_scope_name, otel_scope_version) (rate(system_network_io_bytes_total{direction="receive",device!="lo",k8s_node_name="node-1"}[5m]))))',
     )
   })
 
   it('takes CPU as idle per logical CPU, memory as used over system.memory.limit, the root filesystem as free over its states', () => {
-    expect(q.cpu).toContain('(100 * (1 - sum(rate(system_cpu_time_seconds_total{state="idle",k8s_node_name="node-1"}[5m])) / sum(system_cpu_logical_count{k8s_node_name="node-1"})))')
-    expect(q.memory).toContain('100 * sum(system_memory_usage_bytes{state="used",k8s_node_name="node-1"}) / sum(system_memory_limit_bytes{k8s_node_name="node-1"})')
-    expect(q.filesystem).toContain('sum(system_filesystem_usage_bytes{state="free",mountpoint="/",k8s_node_name="node-1"}) / sum(system_filesystem_usage_bytes{mountpoint="/",k8s_node_name="node-1"})')
+    const one = (s: string) => `max without (otel_scope_name, otel_scope_version) (${s})`
+    expect(q.cpu).toContain(`(100 * (1 - sum(${one('rate(system_cpu_time_seconds_total{state="idle",k8s_node_name="node-1"}[5m])')}) / sum(${one('system_cpu_logical_count{k8s_node_name="node-1"}')})))`)
+    expect(q.memory).toContain(`100 * sum(${one('system_memory_usage_bytes{state="used",k8s_node_name="node-1"}')}) / sum(${one('system_memory_limit_bytes{k8s_node_name="node-1"}')})`)
+    expect(q.filesystem).toContain(`sum(${one('system_filesystem_usage_bytes{state="free",mountpoint="/",k8s_node_name="node-1"}')}) / sum(${one('system_filesystem_usage_bytes{mountpoint="/",k8s_node_name="node-1"}')})`)
+  })
+
+  it('counts a hostmetrics series once when two collector versions both wrote it (the minutes after an upgrade)', () => {
+    for (const promql of [...Object.values(q), ...Object.values(clusterNodeQueries())]) {
+      const hostmetricsSide = promql.split(') or (')[1]
+      for (const sum of hostmetricsSide.match(/sum\((?!max without \(otel_scope_name, otel_scope_version\) \()/g) ?? []) {
+        expect.fail(`a hostmetrics sum without the version de-duplication: ${sum} in ${hostmetricsSide}`)
+      }
+    }
   })
 
   it('leaves out the disk devices node-exporter leaves out', () => {
@@ -72,7 +82,7 @@ describe('clusterNodeQueries', () => {
   it('adds up every node, node-exporter first, with no empty selector', () => {
     const c = clusterNodeQueries()
     expect(c.cpu.startsWith('(100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) or (')).toBe(true)
-    expect(c.memory).toContain('sum(system_memory_limit_bytes)')
+    expect(c.memory).toContain('sum(max without (otel_scope_name, otel_scope_version) (system_memory_limit_bytes))')
     for (const promql of Object.values(c)) {
       expect(promql).not.toContain('{}')
       expect(promql).not.toContain(',}')

@@ -11,7 +11,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STORE="${VM_STORE_CLUSTER:-kubeast-b}"
-VERSION="v1.154.0"
+VERSION="v1.154.1"
 IMAGES=("victoriametrics/victoria-metrics:$VERSION" "victoriametrics/vmagent:$VERSION"
   "victoriametrics/vmstorage:$VERSION-cluster" "victoriametrics/vminsert:$VERSION-cluster" "victoriametrics/vmselect:$VERSION-cluster")
 

@@ -50,19 +50,22 @@ function nodeExporter(sel: string): Queries {
 // The node-exporter figures from hostmetrics: CPU is idle seconds per logical CPU, as node-exporter's
 // avg(rate(idle)) counts it (the states can add up to less on a VM). Memory is used / system.memory.limit (an
 // optional metric): with the receiver's default MemAvailable gate, "used" is total − MemAvailable; the states do
-// not add up to the total.
+// not add up to the total. The collector's version is a label (otel_scope_version) and a stopped collector sends
+// no staleness marker, so for minutes after an upgrade each series exists twice: `one` takes it once.
+const one = (q: string) => `max without (otel_scope_name, otel_scope_version) (${q})`
+
 function hostmetrics(sel: string): Queries {
-  const disk = (dir: string) => `sum(rate(system_disk_io_bytes_total${m(`direction="${dir}"`, `device!~${DISK_EXCLUDE}`, sel)}[5m]))`
-  const net = (dir: string) => `sum(rate(system_network_io_bytes_total${m(`direction="${dir}"`, 'device!="lo"', sel)}[5m]))`
+  const disk = (dir: string) => `sum(${one(`rate(system_disk_io_bytes_total${m(`direction="${dir}"`, `device!~${DISK_EXCLUDE}`, sel)}[5m])`)})`
+  const net = (dir: string) => `sum(${one(`rate(system_network_io_bytes_total${m(`direction="${dir}"`, 'device!="lo"', sel)}[5m])`)})`
   return {
-    cpu: `100 * (1 - sum(rate(system_cpu_time_seconds_total${m('state="idle"', sel)}[5m])) / sum(system_cpu_logical_count${m(sel)}))`,
-    memory: `100 * sum(system_memory_usage_bytes${m('state="used"', sel)}) / sum(system_memory_limit_bytes${m(sel)})`,
+    cpu: `100 * (1 - sum(${one(`rate(system_cpu_time_seconds_total${m('state="idle"', sel)}[5m])`)}) / sum(${one(`system_cpu_logical_count${m(sel)}`)}))`,
+    memory: `100 * sum(${one(`system_memory_usage_bytes${m('state="used"', sel)}`)}) / sum(${one(`system_memory_limit_bytes${m(sel)}`)})`,
     disk_read: disk('read'),
     disk_write: disk('write'),
     network_rx: net('receive'),
     network_tx: net('transmit'),
     load1: `max(system_cpu_load_average_1m${m(sel)})`,
-    filesystem: `100 * (1 - sum(system_filesystem_usage_bytes${m('state="free"', 'mountpoint="/"', sel)}) / sum(system_filesystem_usage_bytes${m('mountpoint="/"', sel)}))`,
+    filesystem: `100 * (1 - sum(${one(`system_filesystem_usage_bytes${m('state="free"', 'mountpoint="/"', sel)}`)}) / sum(${one(`system_filesystem_usage_bytes${m('mountpoint="/"', sel)}`)}))`,
   }
 }
 

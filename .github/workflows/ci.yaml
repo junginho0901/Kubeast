@@ -232,3 +232,17 @@ jobs:
       - run: |
           pip install pip-audit
           pip-audit -r services/ai-service/requirements.txt
+
+  dependencies:
+    name: dev add-on versions agree (zeitgeist)
+    runs-on: ubuntu-latest
+    env:
+      ZEITGEIST_VERSION: v0.8.0
+      ZEITGEIST_SHA256: b004b91e0ad881732f2ba0e63def2e3c35950323e221b50c50cbad75b3f5c2b1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: |
+          curl -sSfL -o zeitgeist "https://github.com/kubernetes-sigs/zeitgeist/releases/download/${ZEITGEIST_VERSION}/zeitgeist-amd64-linux"
+          echo "${ZEITGEIST_SHA256}  zeitgeist" | sha256sum -c -
+          chmod +x zeitgeist
+          ./zeitgeist validate --local-only --base-path . --config deploy/dependencies.yaml
