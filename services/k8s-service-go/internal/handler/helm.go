@@ -195,7 +195,7 @@ func (h *Handler) DiffHelmRelease(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !reveal {
-		result.Diff = helmRedactText(result.Diff)
+		result.Diff = result.MaskedDiff // masking the diff itself misses lines behind its +/- prefixes
 	}
 	response.JSON(w, http.StatusOK, result)
 }

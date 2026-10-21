@@ -73,6 +73,9 @@ type DiffResult struct {
 	To      int         `json:"to"`
 	Section SectionKind `json:"section"`
 	Diff    string      `json:"diff"`
+	// MaskedDiff is the same diff of the masked texts (maskedDiff), for a
+	// caller without resource.secret.reveal; never sent as is.
+	MaskedDiff string `json:"-"`
 }
 
 // ReleaseResource is one Kubernetes resource that a Helm release created.
@@ -102,6 +105,7 @@ type RollbackResult struct {
 	NewRevision  int    `json:"newRevision,omitempty"`
 	Status       string `json:"status,omitempty"`
 	Diff         string `json:"diff,omitempty"`
+	MaskedDiff   string `json:"-"` // see DiffResult
 }
 
 // UninstallResult mirrors RollbackResult's dual-mode shape. On dry-run
@@ -135,6 +139,7 @@ type UpgradeResult struct {
 	NewRevision  int    `json:"newRevision,omitempty"`
 	Status       string `json:"status,omitempty"`
 	Diff         string `json:"diff,omitempty"`
+	MaskedDiff   string `json:"-"` // see DiffResult
 	ChartVersion string `json:"chartVersion"`
 }
 

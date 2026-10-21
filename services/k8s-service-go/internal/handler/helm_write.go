@@ -43,8 +43,8 @@ func (h *Handler) RollbackHelmRelease(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.helmSvc.Rollback(r.Context(), ns, name, req.Revision, req.DryRun)
 
-	// Only the apply path is audited. A dry-run neither mutates the
-	// cluster nor is it worth a row per preview.
+	// The apply path is audited as a rollback. A dry-run changes nothing; its
+	// manifest diff is a reveal like the revision diff (revealDryRunDiff).
 	if !req.DryRun {
 		fromRev := 0
 		newRev := 0
@@ -62,6 +62,9 @@ func (h *Handler) RollbackHelmRelease(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		h.handleHelmError(w, err)
+		return
+	}
+	if req.DryRun && !h.revealDryRunDiff(w, r, ns, name, "rollback dry-run", &result.Diff, result.MaskedDiff) {
 		return
 	}
 	response.JSON(w, http.StatusOK, result)
@@ -138,6 +141,9 @@ func (h *Handler) UpgradeHelmValues(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		h.handleHelmError(w, err)
+		return
+	}
+	if req.DryRun && !h.revealDryRunDiff(w, r, ns, name, "upgrade dry-run", &result.Diff, result.MaskedDiff) {
 		return
 	}
 	response.JSON(w, http.StatusOK, result)

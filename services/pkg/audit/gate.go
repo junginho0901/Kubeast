@@ -25,6 +25,14 @@ type Pinger interface {
 	Ping(ctx context.Context) error
 }
 
+// WriteProber checks that a write would land without keeping a row
+// (PostgresStore: an INSERT rolled back). Guarded asks it after a write failed,
+// since a store that answers a ping can still refuse rows (a full disk, a lock,
+// a trigger).
+type WriteProber interface {
+	ProbeWrite(ctx context.Context) error
+}
+
 // Readier is what handlers ask before an audited action runs.
 type Readier interface {
 	// Ready returns nil when a record written now would land in the store, or
@@ -86,17 +94,22 @@ type Statuser interface {
 // Guarded wraps a Store for fail-closed operation: it counts write failures,
 // keeps the last one, and answers Ready by pinging the store (cached for a
 // short window) so handlers can refuse to run an action that would go
-// unrecorded. With failClosed off, Ready always passes and the wrapper only
-// counts.
+// unrecorded. After a failed write it also probes a write (WriteProber) until
+// one lands again: the database may answer while the audit table takes no row.
+// With failClosed off, Ready always passes and the wrapper only counts.
 type Guarded struct {
 	Store
 	pinger     Pinger
+	prober     WriteProber
 	failClosed bool
 	ttl        time.Duration
 
 	mu        sync.Mutex
 	checkedAt time.Time
 	lastPing  error
+	broken    bool // a write failed and none has landed since
+	probedAt  time.Time
+	lastProbe error
 
 	failures atomic.Int64
 	lastFail atomic.Pointer[writeFailure]
@@ -110,19 +123,26 @@ type writeFailure struct {
 // Guard wraps store; pinger is normally the same PostgresStore. A nil pinger
 // means Ready only reflects the fail-closed switch (never pings).
 func Guard(store Store, pinger Pinger, failClosed bool) *Guarded {
-	return &Guarded{Store: store, pinger: pinger, failClosed: failClosed, ttl: 2 * time.Second}
+	g := &Guarded{Store: store, pinger: pinger, failClosed: failClosed, ttl: 2 * time.Second}
+	g.prober, _ = pinger.(WriteProber)
+	return g
 }
 
 // Write persists through the inner Store, counting and logging failures. A
 // failure also drops the Ready cache so the next check pings again.
 func (g *Guarded) Write(ctx context.Context, rec Record) (int64, error) {
 	id, err := g.Store.Write(ctx, rec)
+	g.mu.Lock()
+	if err != nil {
+		g.checkedAt, g.probedAt = time.Time{}, time.Time{}
+		g.broken = true
+	} else {
+		g.broken = false
+	}
+	g.mu.Unlock()
 	if err != nil {
 		g.failures.Add(1)
 		g.lastFail.Store(&writeFailure{at: time.Now(), err: err.Error()})
-		g.mu.Lock()
-		g.checkedAt = time.Time{}
-		g.mu.Unlock()
 		slog.ErrorContext(ctx, "audit: write failed", "action", rec.Action, "error", err)
 	}
 	return id, err
@@ -143,6 +163,18 @@ func (g *Guarded) Ready(ctx context.Context) error {
 	}
 	if g.lastPing != nil {
 		return fmt.Errorf("%w: %v", ErrUnavailable, g.lastPing)
+	}
+	if g.broken && g.prober != nil {
+		if time.Since(g.probedAt) >= g.ttl {
+			pctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+			g.lastProbe = g.prober.ProbeWrite(pctx)
+			cancel()
+			g.probedAt = time.Now()
+			g.broken = g.lastProbe != nil
+		}
+		if g.broken {
+			return fmt.Errorf("%w: %v", ErrUnavailable, g.lastProbe)
+		}
 	}
 	return nil
 }

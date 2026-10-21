@@ -86,7 +86,7 @@ func (h *AuthHandler) clusterGrantsOf(groups []string) map[string]string {
 // in. Only mapped groups are named; the rest are counted.
 func (h *AuthHandler) AdminOIDCGroups(w http.ResponseWriter, r *http.Request) {
 	actor, ok := requirePerm(h.auditStore, w, r, "admin.users.read")
-	if !ok {
+	if !ok || refuseIfUnaudited(h.auditStore, w, r) {
 		return
 	}
 	if h.googleGroups == nil {

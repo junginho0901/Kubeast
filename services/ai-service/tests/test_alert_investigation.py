@@ -661,3 +661,24 @@ async def test_worker_skips_a_queued_alert_while_paused(monkeypatch):
     monkeypatch.setattr(runner, "run_one", run_one)
     await runner.worker(stop)
     assert skipped == [("inv-1", "paused: the AI model provider refused (credit) at …")] and ran == []
+
+
+@pytest.mark.asyncio
+async def test_a_tool_is_not_run_when_the_audit_store_goes_down_mid_investigation(monkeypatch):
+    # up when the run starts, down by the first tool call: the tool does not read the cluster and its row is a failure
+    service = FakeService([
+        completion(calls=[tool_call("c1", "k8s_get_pod_logs", {"namespace": "apps", "pod_name": "p"})]),
+        completion(content="## Summary\nno logs"),
+    ])
+    audits = []
+    install_loop(monkeypatch, service, audits)
+    states = iter([(True, None), (False, "database unreachable")])
+
+    async def ready():
+        return next(states, (False, "database unreachable"))
+
+    monkeypatch.setattr(runner, "audit_ready", ready)
+    out = await runner.investigate(cfg(max_steps=3), row())
+    assert service.executed == []
+    assert out["tool_calls"][0]["error"] == "audit unavailable"
+    assert audits[0]["action"] == "ai.tool.call" and audits[0]["result"] == "failure" and audits[0]["error"] == "audit unavailable"

@@ -443,12 +443,16 @@ func (h *ClustersHandler) invalidateToolServer(r *http.Request, id cluster.ID) {
 		slog.Warn("cluster: build tool-server invalidate request failed", "id", id, "err", err)
 		return
 	}
+	internalauth.Set(req, h.cfg.InternalAPIToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		slog.Warn("cluster: tool-server invalidate call failed", "id", id, "err", err)
 		return
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		slog.Warn("cluster: tool-server invalidate refused", "id", id, "status", resp.StatusCode)
+	}
 }
 
 // TestCluster handles POST /api/v1/clusters/{id}/test — re-validates a

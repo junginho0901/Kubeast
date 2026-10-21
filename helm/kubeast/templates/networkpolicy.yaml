@@ -207,6 +207,16 @@ spec:
       ports:
         - protocol: TCP
           port: 8002
+    {{- if .Values.ai.enabled }}
+    # tool-server /internal/invalidate after a kubeconfig change or a cluster delete
+    - to:
+        - podSelector:
+            matchLabels:
+              app: tool-server
+      ports:
+        - protocol: TCP
+          port: 8086
+    {{- end }}
     # kube-apiserver (registered-cluster kubeconfig Secrets) + OIDC issuer — 사설망 (kind / VPC 사설 엔드포인트) + 공인 IP 모두 허용
     - to:
         - ipBlock:
@@ -430,6 +440,14 @@ spec:
         - podSelector:
             matchLabels:
               app: ai-service
+    # auth-service: /internal/invalidate (internal token) after a kubeconfig change or a cluster delete
+    - from:
+        - podSelector:
+            matchLabels:
+              app: auth-service
+      ports:
+        - protocol: TCP
+          port: 8086
   egress:
     - to:
         - podSelector:

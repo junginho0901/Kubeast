@@ -49,3 +49,22 @@ func helmRedactValues(v map[string]interface{}) map[string]interface{} {
 	}
 	return v
 }
+
+// revealDryRunDiff gives a dry-run's manifest diff the revision diff's rules:
+// in full with resource.secret.reveal and a helm.release.reveal row, the diff
+// of the masked manifests otherwise. False means the reveal could not be
+// recorded and 503 was sent.
+func (h *Handler) revealDryRunDiff(w http.ResponseWriter, r *http.Request, namespace, name, section string, diff *string, masked string) bool {
+	if *diff == "" {
+		return true
+	}
+	reveal, err := h.helmReveal(r, namespace, name, section)
+	if err != nil {
+		h.refuseUnaudited(w, r, err)
+		return false
+	}
+	if !reveal {
+		*diff = masked
+	}
+	return true
+}

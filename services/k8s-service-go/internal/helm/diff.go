@@ -3,10 +3,6 @@ package helm
 import (
 	"context"
 	"fmt"
-
-	"github.com/hexops/gotextdiff"
-	"github.com/hexops/gotextdiff/myers"
-	"github.com/hexops/gotextdiff/span"
 )
 
 // DiffRevisions returns a unified diff between two revisions of the same
@@ -37,13 +33,11 @@ func (s *Service) DiffRevisions(ctx context.Context, namespace, name string, req
 	fromLabel := fmt.Sprintf("%s/%s@%d.%s", namespace, name, req.From, req.Section)
 	toLabel := fmt.Sprintf("%s/%s@%d.%s", namespace, name, req.To, req.Section)
 
-	edits := myers.ComputeEdits(span.URIFromPath(fromLabel), fromText, toText)
-	unified := gotextdiff.ToUnified(fromLabel, toLabel, fromText, edits)
-
 	return &DiffResult{
-		From:    req.From,
-		To:      req.To,
-		Section: req.Section,
-		Diff:    fmt.Sprint(unified),
+		From:       req.From,
+		To:         req.To,
+		Section:    req.Section,
+		Diff:       unifiedDiff(fromLabel, toLabel, fromText, toText),
+		MaskedDiff: maskedDiff(fromLabel, toLabel, fromText, toText),
 	}, nil
 }

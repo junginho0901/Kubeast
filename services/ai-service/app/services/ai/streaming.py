@@ -382,13 +382,40 @@ async def _audit_chat_complete(
     )
 
 
+# A tool answer that is a refusal or an error is a failed call in the audit log; "not_found" or "unavailable" is
+# the tool answering (its status is kept with the row).
+_FAILED_TOOL_STATUSES = {"forbidden", "not_permitted", "audit_unavailable", "rate_limited"}
+
+AUDIT_UNAVAILABLE_RESULT = json.dumps({
+    "status": "audit_unavailable",
+    "message": "The audit log cannot record this call right now, so it was not run. Tell the user the cluster "
+               "cannot be read from the chat until the audit log is back.",
+}, ensure_ascii=False)
+
+
+def tool_outcome(response) -> tuple[str, Optional[str], Optional[str]]:
+    """(result, error, status) for the ai.tool.call row of a tool answer."""
+    try:
+        data = json.loads(response) if isinstance(response, str) else response
+    except (TypeError, ValueError):
+        return "success", None, None
+    if not isinstance(data, dict):
+        return "success", None, None
+    status = data.get("status") if isinstance(data.get("status"), str) else None
+    if data.get("error"):
+        return "failure", str(data["error"])[:300], status
+    if status in _FAILED_TOOL_STATUSES:
+        return "failure", status, status
+    return "success", None, status
+
+
 async def _call_tool(service, db, session, session_id, tools, tool_context, function_name, function_args, *,
                      iteration, audit_actor, audit_http, call_id=None) -> tuple[list[str], dict, str]:
     """Answer one tool call of the model: park a write for approval or run the tool, audit it, and return the
     SSE events for the chat, the tool_calls entry the saved message keeps, and the result text for the model.
     Both the API-key loop and Claude Code (provider claude-code) call tools through here. call_id is the call's
     number in the turn, also on its start event, so the chat pairs a result with its call, not by tool name."""
-    from app.services.audit_writer import write_audit
+    from app.services.audit_writer import audit_ready, write_audit
     from app.services.ai import permissions as _perm
     from app.services.tool_whitelists import WRITE_TOOL_NAMES, write_approval_required
 
@@ -436,6 +463,9 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
             "approval_id": approval.id,
             "message": "This action changes the cluster and is waiting for the user's approval in the chat. Do not call the tool again; tell the user it awaits their approval.",
         }, ensure_ascii=False)
+    elif audit_actor and not (await audit_ready())[0]:
+        # Like the screens and MCP: what the chat reads from a cluster runs only when its row can be stored.
+        function_response = AUDIT_UNAVAILABLE_RESULT
     else:
         function_response = await service._execute_function_with_context(
             function_name, function_args, tool_context
@@ -498,6 +528,7 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
             or function_args.get('pod_name')
         ) if isinstance(function_args, dict) else None
         target_type_arg = function_args.get('resource_type') if isinstance(function_args, dict) else None
+        tool_result, tool_error, tool_status = tool_outcome(function_response)
         await write_audit(
             action='ai.tool.call',
             actor_user_id=audit_actor.get('user_id'),
@@ -511,6 +542,7 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
                 'tool': function_name,
                 'iteration': iteration,
                 'resource_type': target_type_arg,
+                'status': tool_status,
                 # what tool-server masked before the result reached the model
                 'redacted': getattr(service.tool_server, 'last_redacted', None),
             },
@@ -518,6 +550,8 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
             user_agent=(audit_http or {}).get('user_agent'),
             request_id=(audit_http or {}).get('request_id'),
             path=(audit_http or {}).get('path'),
+            result=tool_result,
+            error=tool_error,
         )
 
     if chart is not None:

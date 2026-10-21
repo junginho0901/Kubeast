@@ -78,9 +78,10 @@ tests:
         documentSelector:
           path: metadata.name
           value: RELEASE-NAME-auth-service
+      # postgres, k8s-service, tool-server (invalidate), kube-apiserver
       - lengthEqual:
           path: spec.egress
-          count: 3
+          count: 4
         documentSelector:
           path: metadata.name
           value: RELEASE-NAME-auth-service
@@ -251,3 +252,50 @@ tests:
         documentSelector:
           path: metadata.name
           value: RELEASE-NAME-migrate
+
+  - it: lets auth-service reach tool-server's invalidate endpoint, and tool-server take it, only on 8086
+    asserts:
+      - contains:
+          path: spec.egress
+          content:
+            to:
+              - podSelector:
+                  matchLabels:
+                    app: tool-server
+            ports:
+              - protocol: TCP
+                port: 8086
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-auth-service
+      - contains:
+          path: spec.ingress
+          content:
+            from:
+              - podSelector:
+                  matchLabels:
+                    app: auth-service
+            ports:
+              - protocol: TCP
+                port: 8086
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-tool-server
+
+  - it: has no auth-service → tool-server rule without the AI
+    set:
+      ai.enabled: false
+    asserts:
+      - notContains:
+          path: spec.egress
+          content:
+            to:
+              - podSelector:
+                  matchLabels:
+                    app: tool-server
+            ports:
+              - protocol: TCP
+                port: 8086
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-auth-service

@@ -74,7 +74,9 @@ _, _ = h.auditStore.Write(r.Context(), rec)
   거부한다(`AUDIT_FAIL_CLOSED`, 기본 true; 차트 `audit.failClosed`). 목록·조회는 계속된다.
   구현 = 변경 라우트는 `audit.RequireWritable` 미들웨어, 감사가 조건부인 GET 핸들러는 동작 전 `h.auditReady(r)` +
   `recordAudit*` 반환 오류 확인(`h.refuseUnaudited`). 이미 실행된 변경의 사후 쓰기 실패는 `audit.Guarded`가 세고
-  ERROR 로그로 남기며 응답은 그대로다. 부팅 때 DB가 없으면 `AUDIT_DB_WAIT_SEC`(90 s)까지 기다렸다가 종료한다 —
+  ERROR 로그로 남기며 응답은 그대로다 — 그 뒤로는 준비 확인이 시험 쓰기(넣었다 되돌림)로 바뀌어 감사 표가 다시
+  행을 받을 때까지 거부한다. auth-service는 관리자 쓰기만 거부(로그인·로그아웃·토큰 갱신·본인 비밀번호 변경은 계속),
+  AI 채팅 도구·알림 조사도 실행 전에 확인한다. 부팅 때 DB가 없으면 `AUDIT_DB_WAIT_SEC`(90 s)까지 기다렸다가 종료한다 —
   로그 전용 폴백은 없다.
 - 민감 필드(password, secret, token, apikey 등)는 **`audit.MaskSensitive(...)` 적용 후** 저장.
 

@@ -22,7 +22,7 @@ import (
 // Logs the read itself as "admin.audit.read" (meta-audit).
 func (h *AuthHandler) AdminListAuditLogs(w http.ResponseWriter, r *http.Request) {
 	payload, ok := requirePerm(h.auditStore, w, r, "admin.audit.read")
-	if !ok {
+	if !ok || refuseIfUnaudited(h.auditStore, w, r) {
 		return
 	}
 

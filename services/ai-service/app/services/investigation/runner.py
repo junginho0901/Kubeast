@@ -25,7 +25,7 @@ import httpx
 from app.database import get_db_service, utcnow
 from app.services.ai.debug_dump import safe_error
 from app.services.ai.model_errors import classify
-from app.services.audit_writer import write_audit
+from app.services.audit_writer import audit_ready, write_audit
 from app.services.investigation import prompt as inv_prompt
 from app.services.investigation import settings as inv_settings
 from app.services.investigation import store
@@ -116,6 +116,9 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row) -> dict[str,
     from app.services.tool_whitelists import READONLY_TOOL_NAMES, readonly_tool_filter
 
     deadline = time.monotonic() + cfg.timeout_seconds
+    # The investigator reads the cluster (logs included) as the system; it does so only when the reads are recorded.
+    if not (await audit_ready())[0]:
+        raise InvestigationError("audit log unavailable: not investigated")
 
     def remaining() -> float:
         left = deadline - time.monotonic()
@@ -139,6 +142,9 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row) -> dict[str,
         if name not in READONLY_TOOL_NAMES:
             result = json.dumps({"error": f"'{name}' is not a read-only tool; investigations only read"})
             entry["error"] = "not a read-only tool"
+        elif not (await audit_ready())[0]:
+            result = json.dumps({"status": "audit_unavailable"})
+            entry["error"] = "audit unavailable"
         else:
             try:
                 raw = await asyncio.wait_for(service._execute_function_with_context(name, args, context), timeout=remaining())
@@ -166,6 +172,8 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row) -> dict[str,
                 "resource_type": args.get("resource_type"),
                 "redacted": getattr(service.tool_server, "last_redacted", None),
             },
+            result="failure" if entry.get("error") else "success",
+            error=entry.get("error"),
         )
         return result
 

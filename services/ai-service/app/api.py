@@ -320,10 +320,16 @@ async def reject_tool_approval(
     authorization: str = Depends(bearer_or_cookie),
 ):
     from app.database import utcnow
-    from app.services.audit_writer import write_audit
+    from app.services.audit_writer import AuditUnavailable, require_audit_ready, write_audit
 
     payload = _caller(authorization)
     db, approval = await _load_own_pending_approval(approval_id, payload)
+    # Like approve: the decision is made only when its row can be stored.
+    try:
+        await require_audit_ready()
+    except AuditUnavailable as e:
+        logger.warning("audit: refusing unrecorded rejection (approval=%s tool=%s): %s", approval.id, approval.tool, e)
+        raise HTTPException(status_code=503, detail="audit unavailable")
     approval = await db.transition_tool_approval(approval.id, "pending", status="rejected", decided_at=utcnow())
     if approval is None:
         raise HTTPException(status_code=409, detail="Approval is no longer pending")

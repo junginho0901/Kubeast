@@ -28,7 +28,7 @@ var exportColumns = []string{
 // admin.audit.export permission and records the export itself.
 func (h *AuthHandler) AdminExportAuditLogs(w http.ResponseWriter, r *http.Request) {
 	payload, ok := requirePerm(h.auditStore, w, r, "admin.audit.export")
-	if !ok {
+	if !ok || refuseIfUnaudited(h.auditStore, w, r) {
 		return
 	}
 	filter := auditFilterFromQuery(r)

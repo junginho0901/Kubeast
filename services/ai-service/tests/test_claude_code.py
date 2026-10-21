@@ -593,6 +593,11 @@ async def test_a_session_turn_through_claude_code_is_saved_and_audited_like_any_
 
     monkeypatch.setattr("app.database.get_db_service", get_db_service)
     monkeypatch.setattr("app.services.audit_writer.write_audit", fake_write_audit)
+
+    async def audit_up():
+        return True, None
+
+    monkeypatch.setattr("app.services.audit_writer.audit_ready", audit_up)
     monkeypatch.setattr(streaming.budget_mod, "check", no_budget)
     monkeypatch.setattr("app.services.ai.features.gate_tools", same_tools)
 

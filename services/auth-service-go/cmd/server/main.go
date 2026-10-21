@@ -115,8 +115,8 @@ func main() {
 	repo := repository.New(pool)
 	// Shared audit store; its table comes from the migrations above.
 	pgAudit := audit.NewPostgresStore(pool, audit.ServiceAuth)
-	auditStore := audit.WithStdout(pgAudit, audit.StdoutEnabled())
-	slog.Info("audit writer ready", "stdout", audit.StdoutEnabled())
+	auditStore := audit.Guard(audit.WithStdout(pgAudit, audit.StdoutEnabled()), pgAudit, audit.FailClosedEnabled())
+	slog.Info("audit writer ready", "stdout", audit.StdoutEnabled(), "fail_closed", audit.FailClosedEnabled())
 
 	// Data retention: delete audit / chat rows past their window, once now and
 	// then daily; every run is audited as admin.retention.purge. Off unless a
@@ -339,6 +339,7 @@ func main() {
 		// Protected endpoints
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware)
+			r.Use(handler.AdminWritesGate(auditStore))
 
 			// Setup wizard (admin.clusters.create, checked in the handler)
 			r.Get("/setup/status", setupHandler.GetSetup)
@@ -423,6 +424,7 @@ func main() {
 	// admin.clusters.* permission is enforced inside each cluster handler.
 	r.Group(func(r chi.Router) {
 		r.Use(authMiddleware)
+		r.Use(handler.AdminWritesGate(auditStore))
 
 		r.Get("/api/v1/clusters", clustersHandler.ListClusters)
 		r.Post("/api/v1/clusters", clustersHandler.RegisterCluster)

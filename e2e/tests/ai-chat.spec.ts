@@ -1,4 +1,9 @@
-import { test, expect } from '@playwright/test'
+import { execSync } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+
+import { test, expect, type Locator } from '@playwright/test'
 
 // AI Chat 회귀 — Phase 2.3 의 streaming.py 추출 (4a~4c) 의 자동 검증.
 // 이전엔 사용자가 brower 로 매 PR 확인했지만 토큰 비용은 자동/수동 동일하고
@@ -11,6 +16,23 @@ import { test, expect } from '@playwright/test'
 const PLACEHOLDER_RE = /메시지|message/i
 const SEND_RE = /^전송$|^send$/i
 const STOP_RE = /^중단$|^stop$/i
+
+// The chat page's cluster is "default" (the second kind cluster): ask for a namespace that has pods there, and
+// check the answer against what kube-system really runs.
+function kubeSystemPods(): string[] {
+  const kc = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-chat-')), 'kubeconfig')
+  fs.writeFileSync(kc, execSync('kind get kubeconfig --name kubeast-b', { encoding: 'utf8' }), { mode: 0o600 })
+  return execSync(`kubectl --kubeconfig ${kc} -n kube-system get pods -o jsonpath='{.items[*].metadata.name}'`, { encoding: 'utf8' })
+    .trim().split(/\s+/).filter(Boolean)
+}
+const POD_QUERY = 'kube-system 네임스페이스의 pod 목록 알려줘'
+
+// The answer's own text, the tool blocks left out: a tool result that lists the pods does not count as the answer.
+const answerText = (el: Locator) => el.evaluate((n) => {
+  const c = n.cloneNode(true) as HTMLElement
+  c.querySelectorAll('.md-details').forEach((d) => d.remove())
+  return c.textContent ?? ''
+})
 
 test.describe('AI Chat', () => {
   test('initial render — input area visible', async ({ page }) => {
@@ -56,26 +78,25 @@ test.describe('AI Chat', () => {
     expect(text).toMatch(/[가-힣]/) // 한글 음절 1자 이상
   })
 
-  test('tool-calling query — pod list shows 🔧 marker and pod info', async ({ page }) => {
+  test('tool-calling query — the answer names the pods kube-system really runs', async ({ page }) => {
+    const pods = kubeSystemPods()
     await page.goto('/ai-chat')
     await page.waitForLoadState('networkidle')
 
     const input = page.getByPlaceholder(PLACEHOLDER_RE)
     const sendButton = page.getByRole('button', { name: SEND_RE })
 
-    await input.fill('default 네임스페이스의 pod 목록 알려줘')
+    await input.fill(POD_QUERY)
     await sendButton.click()
 
-    // streaming 끝까지 — tool 호출 (k8s_get_resources) 포함이라 일반 query 보다 길 수 있음
+    // streaming 끝까지 — tool 호출 포함이라 일반 query 보다 길 수 있음
     await expect(input).toBeEnabled({ timeout: 90_000 })
 
-    // 마지막 assistant message 안에 🔧 marker (tool call indicator) 또는
-    // pod 관련 키워드가 있어야 함
     const lastAssistant = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)').last()
-    const text = await lastAssistant.innerText()
-    // tool 호출 메타가 표시되는지 (chatStreamManager 가 <details>🔧 박음) +
-    // 답변에 pod 리소스 관련 텍스트
-    expect(text).toMatch(/🔧|pod|파드/i)
+    // a tool was called (its block is on screen) and the answer itself names real pods
+    expect(await lastAssistant.locator('.md-details').count()).toBeGreaterThan(0)
+    const answer = await answerText(lastAssistant)
+    expect(pods.some((p) => answer.includes(p)), `the answer names one of ${pods.join(', ')}:\n${answer}`).toBe(true)
   })
 
   test('stop button cancels streaming mid-response', async ({ page }) => {
@@ -115,7 +136,8 @@ test.describe('AI Chat', () => {
     const sendButton = page.getByRole('button', { name: SEND_RE })
 
     // tool 호출 query — message.content 에 <details>🔧 가 박힘
-    await input.fill('default 네임스페이스의 pod 목록 알려줘')
+    const pods = kubeSystemPods()
+    await input.fill(POD_QUERY)
     await sendButton.click()
     await expect(input).toBeEnabled({ timeout: 90_000 })
 
@@ -128,6 +150,8 @@ test.describe('AI Chat', () => {
     expect(clipboardText.length).toBeGreaterThan(0)
     expect(clipboardText).not.toContain('<details>')
     expect(clipboardText).not.toContain('<summary>🔧')
+    // what is copied is the answer: it names the pods
+    expect(pods.some((p) => clipboardText.includes(p)), clipboardText).toBe(true)
   })
 
   test('clicking same session twice does not blank the chat', async ({ page }) => {

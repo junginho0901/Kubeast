@@ -52,12 +52,18 @@ class AuditUnavailable(Exception):
 READY_TTL_SEC = 2.0
 _ready_cache: dict[str, Any] = {"at": 0.0, "ok": True, "error": None}
 write_failures = 0
+# A write failed and none has landed since: readiness then probes a write (inserted and rolled back), since the
+# database can answer SELECT 1 while the audit table takes no row (a full disk, a lock, a trigger).
+_write_broken = False
+_PROBE_SQL = text("INSERT INTO auth_audit_logs (service, action) VALUES ('ai', 'audit.probe')")
 
 
 async def audit_ready() -> tuple[bool, Optional[str]]:
     """Whether a row written now would land in auth_audit_logs: SELECT 1 through
-    the engine, cached READY_TTL_SEC. Always True with fail-closed off or on the
-    sqlite dev database (no audit table there)."""
+    the engine — after a failed write, an insert rolled back — cached
+    READY_TTL_SEC. Always True with fail-closed off or on the sqlite dev
+    database (no audit table there)."""
+    global _write_broken
     if not fail_closed_enabled():
         return True, None
     now = time.monotonic()
@@ -71,7 +77,14 @@ async def audit_ready() -> tuple[bool, Optional[str]]:
         if "postgresql" in str(db.database_url):
             async with db.engine.connect() as conn:
                 await asyncio.wait_for(conn.execute(text("SELECT 1")), timeout=2.0)
-    except Exception as exc:  # unreachable, timeout, pool exhausted, ...
+                if _write_broken:
+                    trans = await conn.begin()
+                    try:
+                        await asyncio.wait_for(conn.execute(_PROBE_SQL), timeout=2.0)
+                    finally:
+                        await trans.rollback()
+        _write_broken = False
+    except Exception as exc:  # unreachable, timeout, pool exhausted, the table refusing rows, ...
         ok, error = False, str(exc) or exc.__class__.__name__
     _ready_cache.update(at=time.monotonic(), ok=ok, error=error)
     return ok, error
@@ -154,7 +167,7 @@ async def write_audit(
     doesn't exist and we skip silently. `cluster` is the cluster the request
     acted on; callers that do not know it leave it unset (stored empty).
     """
-    global write_failures
+    global write_failures, _write_broken
     _emit_stdout(
         {
             "service": SERVICE_AI,
@@ -204,9 +217,11 @@ async def write_audit(
                     "error": error or None,
                 },
             )
+        _write_broken = False
         return True
     except Exception as exc:
         write_failures += 1
-        _ready_cache["at"] = 0.0  # re-probe on the next readiness check
+        _write_broken = True
+        _ready_cache["at"] = 0.0  # re-probe (a write this time) on the next readiness check
         logger.error("audit write failed (action=%s, failures=%d): %s", action, write_failures, exc)
         return False

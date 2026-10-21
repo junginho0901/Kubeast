@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
+	"github.com/junginho0901/kubeast/services/pkg/internalauth"
 	"github.com/junginho0901/kubeast/services/pkg/metrics"
 )
 
@@ -57,15 +58,8 @@ func main() {
 		handleCall(w, r, toolRegistry)
 	})
 	// Internal: drop a cluster's cached kubeconfig (called by auth-service after a
-	// kubeconfig rotation). Cluster-network only; just a cache-bust, no K8s access.
-	mux.HandleFunc("/internal/invalidate", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-		invalidateClusterKubeconfig(r.URL.Query().Get("cluster"))
-		w.WriteHeader(http.StatusNoContent)
-	})
+	// kubeconfig rotation or a cluster delete). Cluster-network only.
+	mux.Handle("/internal/invalidate", invalidateHandler(os.Getenv(internalauth.Env)))
 
 	srv := &http.Server{
 		Addr:         ":" + port,
@@ -365,4 +359,17 @@ func buildToolRegistry() map[string]ToolDefinition {
 	})
 
 	return registry
+}
+
+// invalidateHandler answers POST /internal/invalidate?cluster= from a service
+// holding the internal token (X-Internal-Token, like k8s-service's /internal).
+func invalidateHandler(token string) http.Handler {
+	return internalauth.Middleware(token)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		invalidateClusterKubeconfig(r.URL.Query().Get("cluster"))
+		w.WriteHeader(http.StatusNoContent)
+	}))
 }

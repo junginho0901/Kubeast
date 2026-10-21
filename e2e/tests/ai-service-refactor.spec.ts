@@ -1,4 +1,9 @@
-import { test, expect } from '@playwright/test'
+import { execSync } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+
+import { test, expect, type Locator } from '@playwright/test'
 
 // ai_service.py refactor (1,782 → 311줄, 5 신규 모듈로 분리) 회귀 spec.
 // 분리된 5 모듈 (intent / quantities / optimization / diagnostics / oneshot) 의
@@ -7,6 +12,23 @@ import { test, expect } from '@playwright/test'
 
 const PLACEHOLDER_RE = /메시지|message/i
 const SEND_RE = /^전송$|^send$/i
+
+// The chat page's cluster is "default" (the second kind cluster): ask for a namespace that has pods there, and
+// check the answer against what kube-system really runs.
+function kubeSystemPods(): string[] {
+  const kc = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-chat-')), 'kubeconfig')
+  fs.writeFileSync(kc, execSync('kind get kubeconfig --name kubeast-b', { encoding: 'utf8' }), { mode: 0o600 })
+  return execSync(`kubectl --kubeconfig ${kc} -n kube-system get pods -o jsonpath='{.items[*].metadata.name}'`, { encoding: 'utf8' })
+    .trim().split(/\s+/).filter(Boolean)
+}
+const POD_QUERY = 'kube-system 네임스페이스의 pod 목록 알려줘'
+
+// The answer's own text, the tool blocks left out: a tool result that lists the pods does not count as the answer.
+const answerText = (el: Locator) => el.evaluate((n) => {
+  const c = n.cloneNode(true) as HTMLElement
+  c.querySelectorAll('.md-details').forEach((d) => d.remove())
+  return c.textContent ?? ''
+})
 
 test.describe('ai_service refactor regression', () => {
 
@@ -29,21 +51,22 @@ test.describe('ai_service refactor regression', () => {
     expect(text).toMatch(/[가-힣]/)
   })
 
-  test('Tool-calling — k8s_get_resources 호출 + tools.py 의 get_tools_definition 정상', async ({ page }) => {
+  test('Tool-calling — a tool is called and the answer names the pods kube-system runs', async ({ page }) => {
+    const pods = kubeSystemPods()
     await page.goto('/ai-chat')
     await page.waitForLoadState('networkidle')
 
     const input = page.getByPlaceholder(PLACEHOLDER_RE)
-    await input.fill('default 네임스페이스의 pod 목록 알려줘')
+    await input.fill(POD_QUERY)
     await page.getByRole('button', { name: SEND_RE }).click()
 
     // tool 호출 포함이라 일반 query 보다 길 수 있음
     await expect(input).toBeEnabled({ timeout: 90_000 })
 
     const lastAssistant = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)').last()
-    const text = await lastAssistant.innerText()
-    // 🔧 marker 또는 pod 관련 키워드 — tool 호출 + 답변 둘 중 하나
-    expect(text).toMatch(/🔧|pod|파드/i)
+    expect(await lastAssistant.locator('.md-details').count()).toBeGreaterThan(0)
+    const answer = await answerText(lastAssistant)
+    expect(pods.some((p) => answer.includes(p)), `the answer names one of ${pods.join(', ')}:\n${answer}`).toBe(true)
   })
 
   test('Stop streaming — chatStreamManager 가 SSE 중단', async ({ page }) => {
@@ -73,7 +96,8 @@ test.describe('ai_service refactor regression', () => {
     await page.waitForLoadState('networkidle')
 
     const input = page.getByPlaceholder(PLACEHOLDER_RE)
-    await input.fill('default 네임스페이스의 pod 목록 알려줘')
+    const pods = kubeSystemPods()
+    await input.fill(POD_QUERY)
     await page.getByRole('button', { name: SEND_RE }).click()
     await expect(input).toBeEnabled({ timeout: 90_000 })
 
@@ -84,6 +108,7 @@ test.describe('ai_service refactor regression', () => {
     expect(clipboardText.length).toBeGreaterThan(0)
     expect(clipboardText).not.toContain('<details>')
     expect(clipboardText).not.toContain('<summary>🔧')
+    expect(pods.some((p) => clipboardText.includes(p)), clipboardText).toBe(true)
   })
 
   test('AI Chat / Dashboard 라우트 이동 후 stream manager 정상', async ({ page }) => {

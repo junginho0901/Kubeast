@@ -152,3 +152,60 @@ func TestEnvSwitches(t *testing.T) {
 		t.Fatalf("wait = %v", BootWait())
 	}
 }
+
+// probingPinger answers pings and probes a write.
+type probingPinger struct {
+	fakePinger
+	probeErr error
+	probes   int
+}
+
+func (p *probingPinger) ProbeWrite(context.Context) error {
+	p.probes++
+	return p.probeErr
+}
+
+// A store that answers pings but takes no row: after a failed write, Ready
+// probes a write and refuses until one lands; a write that lands clears it;
+// with fail-closed off nothing is refused.
+func TestGuardedProbesAWriteAfterAFailedWrite(t *testing.T) {
+	ctx := context.Background()
+	p := &probingPinger{}
+	store := &fakeStore{id: 1}
+	g := Guard(store, p, true)
+	if err := g.Ready(ctx); err != nil || p.probes != 0 {
+		t.Fatalf("healthy: %v probes %d (no probe before a failure)", err, p.probes)
+	}
+
+	store.err = errors.New("disk full")
+	_, _ = g.Write(ctx, Record{Action: "x"})
+	p.probeErr = errors.New("disk full")
+	if err := g.Ready(ctx); !errors.Is(err, ErrUnavailable) || p.probes != 1 {
+		t.Fatalf("after a failed write: %v probes %d", err, p.probes)
+	}
+	if err := g.Ready(ctx); !errors.Is(err, ErrUnavailable) || p.probes != 1 {
+		t.Fatalf("within the window: cached refusal, %v probes %d", err, p.probes)
+	}
+
+	g.ttl = 0
+	p.probeErr = nil
+	if err := g.Ready(ctx); err != nil || p.probes != 2 {
+		t.Fatalf("probe lands: ready again, %v probes %d", err, p.probes)
+	}
+	if err := g.Ready(ctx); err != nil || p.probes != 2 {
+		t.Fatalf("no more probes once healthy: %v probes %d", err, p.probes)
+	}
+
+	_, _ = g.Write(ctx, Record{Action: "x"}) // fails again
+	store.err = nil
+	_, _ = g.Write(ctx, Record{Action: "y"}) // lands
+	if err := g.Ready(ctx); err != nil || p.probes != 2 {
+		t.Fatalf("a landed write clears it without a probe: %v probes %d", err, p.probes)
+	}
+
+	off := Guard(&fakeStore{id: 1, err: errors.New("x")}, &probingPinger{probeErr: errors.New("x")}, false)
+	_, _ = off.Write(ctx, Record{Action: "x"})
+	if err := off.Ready(ctx); err != nil {
+		t.Fatalf("fail-closed off: %v", err)
+	}
+}

@@ -150,7 +150,7 @@ func parseSince(r *http.Request) (*time.Time, error) {
 // AdminAccessReview handles GET /auth/admin/access-review?since=: the report.
 func (h *AuthHandler) AdminAccessReview(w http.ResponseWriter, r *http.Request) {
 	payload, ok := h.requireAccessReview(w, r, "admin.review.read")
-	if !ok {
+	if !ok || refuseIfUnaudited(h.auditStore, w, r) {
 		return
 	}
 	since, err := parseSince(r)
@@ -172,7 +172,7 @@ func (h *AuthHandler) AdminAccessReview(w http.ResponseWriter, r *http.Request) 
 // one section as CSV, of the live report or of a signed-off snapshot.
 func (h *AuthHandler) AdminAccessReviewExport(w http.ResponseWriter, r *http.Request) {
 	payload, ok := h.requireAccessReview(w, r, "admin.review.export")
-	if !ok {
+	if !ok || refuseIfUnaudited(h.auditStore, w, r) {
 		return
 	}
 	section := strings.TrimSpace(r.URL.Query().Get("section"))
@@ -290,7 +290,7 @@ func (h *AuthHandler) AdminAccessReviewHistory(w http.ResponseWriter, r *http.Re
 // one sign-off with the report as it stood.
 func (h *AuthHandler) AdminAccessReviewSnapshot(w http.ResponseWriter, r *http.Request) {
 	payload, ok := h.requireAccessReview(w, r, "admin.review.read")
-	if !ok {
+	if !ok || refuseIfUnaudited(h.auditStore, w, r) {
 		return
 	}
 	id := chi.URLParam(r, "id")

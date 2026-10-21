@@ -10,6 +10,8 @@ import (
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/release"
 	"sigs.k8s.io/yaml"
+
+	"github.com/junginho0901/kubeast/services/pkg/redact"
 )
 
 // Rollback restores the release to a previous revision. When dryRun is
@@ -43,17 +45,14 @@ func (s *Service) Rollback(ctx context.Context, namespace, name string, revision
 	}
 
 	if dryRun {
-		diff := unifiedDiff(
-			fmt.Sprintf("%s/%s@%d.manifest", namespace, name, fromRev),
-			fmt.Sprintf("%s/%s@%d.manifest", namespace, name, revision),
-			current.Manifest,
-			target.Manifest,
-		)
+		fromLabel := fmt.Sprintf("%s/%s@%d.manifest", namespace, name, fromRev)
+		toLabel := fmt.Sprintf("%s/%s@%d.manifest", namespace, name, revision)
 		return &RollbackResult{
 			DryRun:       true,
 			FromRevision: fromRev,
 			ToRevision:   revision,
-			Diff:         diff,
+			Diff:         unifiedDiff(fromLabel, toLabel, current.Manifest, target.Manifest),
+			MaskedDiff:   maskedDiff(fromLabel, toLabel, current.Manifest, target.Manifest),
 		}, nil
 	}
 
@@ -107,6 +106,21 @@ func (s *Service) Rollback(ctx context.Context, namespace, name string, revision
 func unifiedDiff(fromLabel, toLabel, fromText, toText string) string {
 	edits := myers.ComputeEdits(span.URIFromPath(fromLabel), fromText, toText)
 	return fmt.Sprint(gotextdiff.ToUnified(fromLabel, toLabel, fromText, edits))
+}
+
+// maskedDiff is unifiedDiff of the two texts masked first (Secret documents
+// stripped, credential-looking values masked — services/pkg/redact). Masking
+// the diff output instead does not work: its +/- line prefixes hide the YAML
+// the masking reads.
+func maskedDiff(fromLabel, toLabel, fromText, toText string) string {
+	return unifiedDiff(fromLabel, toLabel, maskText(fromText), maskText(toText))
+}
+
+var maskOpts = redact.Options{Enabled: true, Disabled: map[string]bool{}}
+
+func maskText(s string) string {
+	out, _ := redact.Text(s, maskOpts)
+	return out
 }
 
 // Test runs the release's helm test hooks (usually Pod kind with the
@@ -279,17 +293,14 @@ func (s *Service) UpgradeValues(ctx context.Context, namespace, name, valuesYAML
 	}
 
 	if dryRun {
-		diff := unifiedDiff(
-			fmt.Sprintf("%s/%s@%d.manifest", namespace, name, current.Version),
-			fmt.Sprintf("%s/%s@next.manifest", namespace, name),
-			current.Manifest,
-			newRel.Manifest,
-		)
+		fromLabel := fmt.Sprintf("%s/%s@%d.manifest", namespace, name, current.Version)
+		toLabel := fmt.Sprintf("%s/%s@next.manifest", namespace, name)
 		return &UpgradeResult{
 			DryRun:       true,
 			FromRevision: current.Version,
 			ChartVersion: chartVersion,
-			Diff:         diff,
+			Diff:         unifiedDiff(fromLabel, toLabel, current.Manifest, newRel.Manifest),
+			MaskedDiff:   maskedDiff(fromLabel, toLabel, current.Manifest, newRel.Manifest),
 		}, nil
 	}
 

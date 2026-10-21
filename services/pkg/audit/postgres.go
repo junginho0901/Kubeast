@@ -36,6 +36,19 @@ func (s *PostgresStore) Ping(ctx context.Context) error {
 	return s.pool.Ping(ctx)
 }
 
+// ProbeWrite inserts a row and rolls it back: whether a write lands now,
+// without keeping one (the id it used is skipped; the audit chain numbers
+// sealed rows by chain_seq, not id).
+func (s *PostgresStore) ProbeWrite(ctx context.Context) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // the rollback is the point
+	_, err = tx.Exec(ctx, `INSERT INTO auth_audit_logs (service, action) VALUES ($1, 'audit.probe')`, s.defaultService)
+	return err
+}
+
 // Write inserts a Record and returns the assigned id.
 func (s *PostgresStore) Write(ctx context.Context, rec Record) (int64, error) {
 	if rec.Service == "" {

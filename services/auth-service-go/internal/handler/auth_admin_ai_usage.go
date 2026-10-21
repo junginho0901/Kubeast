@@ -17,7 +17,7 @@ import (
 // admin.audit.read and, like the audit-log list, records the read itself.
 func (h *AuthHandler) AdminAIUsage(w http.ResponseWriter, r *http.Request) {
 	payload, ok := requirePerm(h.auditStore, w, r, "admin.audit.read")
-	if !ok {
+	if !ok || refuseIfUnaudited(h.auditStore, w, r) {
 		return
 	}
 

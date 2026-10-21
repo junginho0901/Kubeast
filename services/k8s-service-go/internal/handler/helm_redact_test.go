@@ -1,8 +1,15 @@
 package handler
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/junginho0901/kubeast/services/pkg/audit"
+	"github.com/junginho0901/kubeast/services/pkg/auth"
+	"github.com/junginho0901/kubeast/services/pkg/cluster"
 )
 
 const sampleManifest = `---
@@ -58,5 +65,54 @@ func TestHelmRedactValues_MasksCredentialKeys(t *testing.T) {
 	}
 	if helmRedactValues(nil) != nil {
 		t.Fatal("nil in, nil out")
+	}
+}
+
+// downAudit is an audit store that cannot take a row (the fail-closed check fails).
+type downAudit struct{ memAudit }
+
+func (d *downAudit) Ready(context.Context) error { return audit.ErrUnavailable }
+
+// A dry-run's manifest diff follows the revision diff's rules: masked without
+// resource.secret.reveal, in full with it and a helm.release.reveal row, and
+// refused (503, nothing shown) when that row cannot be recorded.
+func TestDryRunDiffIsARevealLikeTheRevisionDiff(t *testing.T) {
+	diff := "+kind: Secret\n+data:\n+  password: c2VjcmV0\n"
+	masked := "(the diff of the masked manifests)"
+	req := func(perms ...string) *http.Request {
+		r := httptest.NewRequest(http.MethodPost, "/api/v1/helm/releases/ns/rel/rollback", nil)
+		ctx := context.WithValue(r.Context(), auth.TokenPayloadContextKey(),
+			auth.TokenPayload{UserID: "u1", Email: "dev@example.com", Perms: auth.PermissionMatrix{"self": perms}})
+		return r.WithContext(cluster.WithID(ctx, cluster.ID("self")))
+	}
+
+	store := &memAudit{}
+	h := &Handler{auditStore: store}
+	got := diff
+	if !h.revealDryRunDiff(httptest.NewRecorder(), req("resource.helm.rollback"), "ns", "rel", "rollback dry-run", &got, masked) {
+		t.Fatal("masked diff must be answered")
+	}
+	if got != masked || len(store.rows) != 0 {
+		t.Fatalf("without reveal: masked and no row, got %q rows %d", got, len(store.rows))
+	}
+
+	got = diff
+	if !h.revealDryRunDiff(httptest.NewRecorder(), req("resource.helm.rollback", "resource.secret.reveal"), "ns", "rel", "rollback dry-run", &got, masked) {
+		t.Fatal("revealed diff must be answered")
+	}
+	if got != diff || len(store.rows) != 1 || store.rows[0].Action != "helm.release.reveal" || !strings.Contains(string(store.rows[0].After), "rollback dry-run") {
+		t.Fatalf("with reveal: full text and one reveal row, got %q rows %+v", got, store.rows)
+	}
+
+	down := &Handler{auditStore: &downAudit{}}
+	w := httptest.NewRecorder()
+	got = diff
+	if down.revealDryRunDiff(w, req("resource.helm.rollback", "resource.secret.reveal"), "ns", "rel", "rollback dry-run", &got, masked) || w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("audit down: refused with 503, got %d", w.Code)
+	}
+
+	empty := ""
+	if !h.revealDryRunDiff(httptest.NewRecorder(), req("resource.helm.rollback", "resource.secret.reveal"), "ns", "rel", "rollback dry-run", &empty, masked) || len(store.rows) != 1 {
+		t.Fatal("an empty diff reveals nothing and writes no row")
 	}
 }
