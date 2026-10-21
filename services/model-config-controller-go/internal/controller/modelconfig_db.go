@@ -169,6 +169,14 @@ func (r *ModelConfigReconciler) deleteModelConfig(ctx context.Context, nn types.
 	if err := r.ensureDB(); err != nil {
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, err
 	}
-	_, err := r.db.ExecContext(ctx, "DELETE FROM model_configs WHERE name = $1", nn.Name)
-	return ctrl.Result{}, err
+	before, _ := r.storedView(ctx, nn.Name)
+	res, err := r.db.ExecContext(ctx, "DELETE FROM model_configs WHERE name = $1", nn.Name)
+	if err != nil {
+		r.recordSync(ctx, nn.Name, "delete", before, nil, err)
+		return ctrl.Result{}, err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		r.recordSync(ctx, nn.Name, "delete", before, nil, nil)
+	}
+	return ctrl.Result{}, nil
 }

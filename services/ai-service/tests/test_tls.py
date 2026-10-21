@@ -140,7 +140,7 @@ async def test_model_list_names_an_untrusted_certificate(monkeypatch):
         raise httpx.ConnectError("[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate")
 
     monkeypatch.setattr(api_public, "_list_models", untrusted)
-    out = await api_public.list_provider_models({"provider": "ollama", "base_url": "https://llm.internal"})
+    out = await api_public._list_provider_models({"provider": "ollama", "base_url": "https://llm.internal"})
     assert out["models"] == [] and "add its CA" in out["error"]
 
 
@@ -163,7 +163,7 @@ async def test_connection_test_and_model_list_use_the_model_ca(monkeypatch, ca):
     monkeypatch.setattr(api_public, "_list_models", fake_list)
     monkeypatch.setattr(api_public, "_test_openai_compatible", fake_test)
     body = {"provider": "openai", "api_key_env": "OPENAI_API_KEY", "base_url": "https://llm.internal/v1", "ca_cert": _pem(ca[0])}
-    await api_public.list_provider_models(dict(body))
-    await api_public.test_model_connection(dict(body, model="m"))
+    await api_public._list_provider_models(dict(body))
+    await api_public._test_model_connection(dict(body, model="m"))
     for which in ("list", "test"):
         assert isinstance(seen[which], ssl.SSLContext) and "Kubeast Test CA" in _subjects(seen[which]), which

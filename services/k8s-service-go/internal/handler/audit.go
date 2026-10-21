@@ -58,19 +58,7 @@ func (h *Handler) recordAuditAs(
 		return nil
 	}
 
-	payload, _ := auth.FromContext(r.Context())
-
-	rec := audit.FromHTTPRequest(r)
-	rec.Service = service
-	rec.Action = action
-	rec.ActorUserID = payload.UserID
-	rec.ActorEmail = payload.Email
-	if id, ok := cluster.FromContext(r.Context()); ok { // which cluster the object lives in
-		rec.Cluster = string(id)
-	}
-	rec.TargetID = targetID
-	rec.TargetType = targetType
-	rec.Namespace = namespace
+	rec := auditBase(r, service, action, targetType, targetID, namespace)
 	rec.Before = before
 	rec.After = after
 	if err != nil {
@@ -82,6 +70,25 @@ func (h *Handler) recordAuditAs(
 
 	_, werr := h.auditStore.Write(r.Context(), rec)
 	return werr
+}
+
+// auditBase is the record recordAuditAs fills from the request — actor,
+// address, cluster, target — also for an outcome written after the request
+// has ended (a drain).
+func auditBase(r *http.Request, service, action, targetType, targetID, namespace string) audit.Record {
+	payload, _ := auth.FromContext(r.Context())
+	rec := audit.FromHTTPRequest(r)
+	rec.Service = service
+	rec.Action = action
+	rec.ActorUserID = payload.UserID
+	rec.ActorEmail = payload.Email
+	if id, ok := cluster.FromContext(r.Context()); ok { // which cluster the object lives in
+		rec.Cluster = string(id)
+	}
+	rec.TargetID = targetID
+	rec.TargetType = targetType
+	rec.Namespace = namespace
+	return rec
 }
 
 // auditReady says whether a sensitive action may run now. With a fail-closed

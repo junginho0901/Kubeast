@@ -73,13 +73,20 @@ func (h *Handler) PodExecWS(w http.ResponseWriter, r *http.Request) {
 
 	// The exec runs on the request's cluster as the signed-in user: the
 	// executor builds its transport from this config, identity included.
+	// The row above says the session was opened; one that never got a shell
+	// says so in a second, failed row (a closed tab is not a failure).
+	failed := func(err error) {
+		_ = h.recordAuditWithPayload(r, "k8s.pod.exec", "pod", podName, namespace, err, nil, audit.MustJSON(payload))
+	}
 	cfg, err := h.svc.UserRESTConfigFor(ctx)
 	if err != nil {
+		failed(fmt.Errorf("cluster config: %w", err))
 		_ = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("cluster config: %v\r\n", err)))
 		return
 	}
 	cs, err := h.svc.ClientsetFor(ctx)
 	if err != nil {
+		failed(fmt.Errorf("cluster client: %w", err))
 		_ = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("cluster client: %v\r\n", err)))
 		return
 	}
@@ -88,6 +95,9 @@ func (h *Handler) PodExecWS(w http.ResponseWriter, r *http.Request) {
 	if err := streamShell(ctx, conn, readFrames(ctx, conn), cfg, execURL(cs, namespace, podName, container, command), rec, r.URL.Query().Get("lang")); err != nil {
 		msg := fmt.Sprintf("failed to connect to K8s API: %v", err)
 		slog.Error(msg)
+		if ctx.Err() == nil {
+			failed(err)
+		}
 		_ = conn.WriteMessage(websocket.TextMessage, []byte(msg+"\r\n"))
 		return
 	}

@@ -23,6 +23,7 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field, ValidationError
 
 from app.database import get_db_service, utcnow
+from app.services.audit_writer import write_audit
 from app.services.investigation import settings as inv_settings
 from app.services.investigation import inbox, store
 
@@ -148,6 +149,15 @@ async def alert_webhook(
     if not cfg.webhook_token:
         raise HTTPException(status_code=503, detail="webhook token not configured (ALERT_WEBHOOK_TOKEN)")
     if not bearer_matches(authorization, cfg.webhook_token):
+        # A machine caller, so no actor; the refused attempt is the row (an accepted call is recorded by its inbox
+        # rows and investigations).
+        await write_audit(
+            action="alert.webhook.refuse", target_type="cluster", target_id=cluster.strip() or None,
+            cluster=cluster.strip() or None, result="failure", error="invalid webhook token",
+            after={"reason": "missing token" if not authorization else "token mismatch"},
+            request_ip=request.headers.get("x-real-ip", "").strip() or (request.client.host if request.client else None),
+            user_agent=request.headers.get("user-agent"), path=str(request.url.path),
+        )
         raise HTTPException(status_code=401, detail="invalid webhook token")
     cluster = cluster.strip()
     if not cluster:

@@ -184,7 +184,16 @@ async def set_inbox_marks(item_id: str, body: MarksIn, request: Request, payload
 @router.get("/inbox/{item_id}/investigation")
 async def get_inbox_investigation(item_id: str, request: Request, payload: TokenPayload = Depends(require_auth)) -> dict[str, Any]:
     _settings()
-    db, row = await _readable_row(item_id, payload)
+    try:
+        db, row = await _readable_row(item_id, payload)
+    except HTTPException as e:
+        if e.status_code == 403:  # the refused read of a report is recorded too
+            await write_audit(
+                action="ai.investigation.view", actor_user_id=payload.user_id, actor_email=payload.email,
+                target_type="alert", target_id=item_id, result="failure", error=str(e.detail),
+                after={"from": "inbox"}, **_http(request),
+            )
+        raise
     investigation = (await inbox.investigations_for(db, [row])).get(row.id)
     if investigation is None:
         raise HTTPException(status_code=404, detail="no investigation for this alert")

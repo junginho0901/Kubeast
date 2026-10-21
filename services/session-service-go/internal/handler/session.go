@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -10,20 +11,58 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 	"github.com/junginho0901/kubeast/services/session-service-go/internal/model"
 	"github.com/junginho0901/kubeast/services/session-service-go/internal/repository"
 )
 
-// SessionHandler handles session-related HTTP requests.
-type SessionHandler struct {
-	repo *repository.Repository
+// sessionStore is what the handler needs of repository.Repository.
+type sessionStore interface {
+	CreateSession(ctx context.Context, id, userID, clusterID, title string) (*model.Session, error)
+	GetSession(ctx context.Context, id string) (*model.Session, error)
+	ListSessionsWithMessageCounts(ctx context.Context, userID, clusterID string, limit, offset int, beforeUpdatedAt *time.Time, beforeID *string) ([]model.Session, error)
+	UpdateSessionTitle(ctx context.Context, id, title string) error
+	DeleteSession(ctx context.Context, id string) error
+	GetMessages(ctx context.Context, sessionID string, limit int) ([]model.Message, error)
+	AddMessage(ctx context.Context, sessionID, role, content string, toolCalls, usage *json.RawMessage) (*model.Message, error)
+	GetMessageCount(ctx context.Context, sessionID string) (int, error)
 }
 
-// NewSessionHandler creates a new SessionHandler.
-func NewSessionHandler(repo *repository.Repository) *SessionHandler {
-	return &SessionHandler{repo: repo}
+// SessionHandler handles session-related HTTP requests.
+type SessionHandler struct {
+	repo       sessionStore
+	auditStore audit.Writer
+}
+
+// NewSessionHandler creates a new SessionHandler. Renaming and deleting a
+// conversation are recorded in auditStore (ai.session.rename/.delete).
+func NewSessionHandler(repo *repository.Repository, auditStore audit.Writer) *SessionHandler {
+	return &SessionHandler{repo: repo, auditStore: auditStore}
+}
+
+// recordSession writes ai.session.rename/.delete for the conversation's owner.
+func (h *SessionHandler) recordSession(r *http.Request, payload auth.TokenPayload, action, sessionID string, before, after any, err error) {
+	if h.auditStore == nil {
+		return
+	}
+	rec := audit.FromHTTPRequest(r)
+	rec.Service = audit.ServiceAI
+	rec.Action = action
+	rec.ActorUserID, rec.ActorEmail = payload.UserID, payload.Email
+	rec.TargetType, rec.TargetID = "session", sessionID
+	if before != nil {
+		rec.Before = audit.MustJSON(before)
+	}
+	if after != nil {
+		rec.After = audit.MustJSON(after)
+	}
+	rec.Result = audit.ResultSuccess
+	if err != nil {
+		rec.Result, rec.Error = audit.ResultFailure, err.Error()
+	}
+	_, _ = h.auditStore.Write(r.Context(), rec) // the mutation already ran; audit.Guarded counts a failure
 }
 
 // ListSessions handles GET /sessions
@@ -202,11 +241,14 @@ func (h *SessionHandler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	before, after := map[string]string{"title": existing.Title}, map[string]string{"title": req.Title}
 	if err := h.repo.UpdateSessionTitle(r.Context(), sessionID, req.Title); err != nil {
 		slog.Error("update session failed", "error", err)
+		h.recordSession(r, payload, "ai.session.rename", sessionID, before, after, err)
 		response.InternalError(w, r, err)
 		return
 	}
+	h.recordSession(r, payload, "ai.session.rename", sessionID, before, after, nil)
 
 	session, err := h.repo.GetSession(r.Context(), sessionID)
 	if err != nil || session == nil {
@@ -290,11 +332,14 @@ func (h *SessionHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	before := map[string]string{"title": session.Title}
 	if err := h.repo.DeleteSession(r.Context(), sessionID); err != nil {
 		slog.Error("delete session failed", "error", err)
+		h.recordSession(r, payload, "ai.session.delete", sessionID, before, nil, err)
 		response.InternalError(w, r, err)
 		return
 	}
+	h.recordSession(r, payload, "ai.session.delete", sessionID, before, nil, nil)
 
 	response.JSON(w, http.StatusOK, map[string]string{
 		"message": "Session deleted successfully",

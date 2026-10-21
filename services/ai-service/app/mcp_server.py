@@ -5,7 +5,8 @@ with a Kubeast API key or access token instead of a kubeconfig. Every tool
 call then runs as that user: the user's cluster role (tool-server impersonates
 them), the read tools the chat offers, the same masking of what leaves for a
 model, and an audit row (ai.mcp.call) per call — refused while the row cannot
-be stored. Read tools only; nothing here changes a cluster.
+be stored. Read tools; with MCP_WRITE_TOOLS and a Write-ceiling key, the chat's
+write tools too (each call signed as its own approval).
 
 Stateless with JSON responses: there is no session to hijack, any replica
 answers, and the bearer token is checked on every request (MCP spec,
@@ -302,7 +303,8 @@ class KubeastMCPServer(MCPServer):
             name="Kubeast",
             instructions=(
                 "Kubernetes clusters through Kubeast, as the signed-in user. Call list_clusters first and pass "
-                "its cluster id to every other tool. Tools are read-only; Secret values are masked."
+                "its cluster id to every other tool. Secret values are masked; a tool that changes the cluster is "
+                "offered only when this server and your key allow writes."
             ),
         )
         self._tool_server_url = tool_server_url
@@ -416,7 +418,7 @@ class KubeastMCPServer(MCPServer):
         ai.mcp.use check here, since the requester usually lacks it in that very
         cluster. The agent retries after an admin approves — the granted role
         reaches the key on its next exchange (EXCHANGE_CACHE_SECONDS). Audited
-        here and, by auth-service, as user.access.request."""
+        here and, by auth-service, as access.request.create."""
         try:
             jsonschema.validate(instance=args, schema=REQUEST_ACCESS.input_schema)
         except jsonschema.ValidationError as e:

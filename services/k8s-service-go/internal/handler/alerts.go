@@ -31,11 +31,19 @@ func (h *Handler) alertStoreFeature() map[string]interface{} {
 }
 
 // alertStoreGate passes a caller who holds perm on the request's cluster as a whole (alerts and silences cover
-// the whole cluster, so a grant limited to namespaces is refused) and returns the cluster ID and the caller.
-func (h *Handler) alertStoreGate(w http.ResponseWriter, r *http.Request, perm string) (string, auth.TokenPayload, bool) {
+// the whole cluster, so a grant limited to namespaces is refused) and returns the cluster ID and the caller. A
+// write names its audit action: its refusals here are failure rows too (a missing permission is
+// k8s.access.denied already).
+func (h *Handler) alertStoreGate(w http.ResponseWriter, r *http.Request, perm, action string) (string, auth.TokenPayload, bool) {
+	refuse := func(status int, msg string) {
+		if action != "" {
+			h.recordAuditWithPayload(r, action, "silence", chi.URLParam(r, "silenceID"), "", errors.New(msg), nil, nil)
+		}
+		response.Error(w, status, msg)
+	}
 	id, _ := cluster.FromContext(r.Context())
 	if !h.alertStore.Configured(r.Context(), string(id)) {
-		response.Error(w, http.StatusNotFound, "alert store is not configured for this cluster")
+		refuse(http.StatusNotFound, "alert store is not configured for this cluster")
 		return "", auth.TokenPayload{}, false
 	}
 	if err := h.requirePermissionForCluster(r, perm); err != nil {
@@ -44,7 +52,7 @@ func (h *Handler) alertStoreGate(w http.ResponseWriter, r *http.Request, perm st
 	}
 	payload, _ := auth.FromContext(r.Context())
 	if len(payload.Namespaces[string(id)]) > 0 {
-		response.Error(w, http.StatusForbidden, "alerts cover the whole cluster; your grant on this cluster is limited to namespaces ("+strings.Join(payload.Namespaces[string(id)], ", ")+")")
+		refuse(http.StatusForbidden, "alerts cover the whole cluster; your grant on this cluster is limited to namespaces ("+strings.Join(payload.Namespaces[string(id)], ", ")+")")
 		return "", auth.TokenPayload{}, false
 	}
 	return string(id), payload, true
@@ -76,7 +84,7 @@ func alertStoreError(w http.ResponseWriter, err error) {
 // cover the whole cluster (nodes, the control plane), so a grant limited to
 // namespaces is refused, as for the Prometheus reads. A plain read: no audit row.
 func (h *Handler) AlertStoreAlerts(w http.ResponseWriter, r *http.Request) {
-	id, payload, ok := h.alertStoreGate(w, r, "resource.pod.read")
+	id, payload, ok := h.alertStoreGate(w, r, "resource.pod.read", "")
 	if !ok {
 		return
 	}
@@ -107,7 +115,7 @@ func (h *Handler) AlertStoreAlerts(w http.ResponseWriter, r *http.Request) {
 
 // AlertStoreSilences handles GET /api/v1/alertstore/silences: the cluster's active and pending silences. A plain read.
 func (h *Handler) AlertStoreSilences(w http.ResponseWriter, r *http.Request) {
-	id, payload, ok := h.alertStoreGate(w, r, "resource.pod.read")
+	id, payload, ok := h.alertStoreGate(w, r, "resource.pod.read", "")
 	if !ok || !h.allowAlertRead(w, payload) {
 		return
 	}
@@ -122,7 +130,7 @@ func (h *Handler) AlertStoreSilences(w http.ResponseWriter, r *http.Request) {
 // AlertStoreSilencePreview handles GET /api/v1/alertstore/silences/preview?matchers=<JSON list>: the cluster's
 // alerts a silence with those conditions would mute now (the cluster condition added). A plain read.
 func (h *Handler) AlertStoreSilencePreview(w http.ResponseWriter, r *http.Request) {
-	id, payload, ok := h.alertStoreGate(w, r, "resource.pod.read")
+	id, payload, ok := h.alertStoreGate(w, r, "resource.pod.read", "")
 	if !ok {
 		return
 	}
@@ -152,12 +160,13 @@ type silenceIn struct {
 // a silence in the alert store with the cluster condition added, created by the caller. Audited as
 // alert.silence.create, refused and failed ones too.
 func (h *Handler) CreateAlertSilence(w http.ResponseWriter, r *http.Request) {
-	id, payload, ok := h.alertStoreGate(w, r, "resource.alert.silence")
+	id, payload, ok := h.alertStoreGate(w, r, "resource.alert.silence", "alert.silence.create")
 	if !ok {
 		return
 	}
 	var in silenceIn
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&in); err != nil {
+		h.recordAuditWithPayload(r, "alert.silence.create", "silence", "", "", errors.New("unreadable body"), nil, nil)
 		response.Error(w, http.StatusBadRequest, "body: {matchers, durationMinutes, comment}")
 		return
 	}
@@ -183,7 +192,7 @@ func (h *Handler) CreateAlertSilence(w http.ResponseWriter, r *http.Request) {
 // ExpireAlertSilence handles DELETE /api/v1/alertstore/silences/{id} (resource.alert.silence): ends one of the
 // cluster's silences now — one without the cluster condition is not found. Audited as alert.silence.expire.
 func (h *Handler) ExpireAlertSilence(w http.ResponseWriter, r *http.Request) {
-	id, _, ok := h.alertStoreGate(w, r, "resource.alert.silence")
+	id, _, ok := h.alertStoreGate(w, r, "resource.alert.silence", "alert.silence.expire")
 	if !ok {
 		return
 	}

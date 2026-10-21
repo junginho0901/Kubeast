@@ -38,9 +38,11 @@ type Sweeper struct {
 	ExemptAdmins bool
 }
 
-// Run sweeps once immediately and then every `every`, until ctx is done.
+// Run sweeps once immediately and then every `every`, until ctx is done. A
+// scheduled sweep that cannot lock is a failure row (the manual sweep records
+// its own as admin.dormant.sweep).
 func Run(ctx context.Context, s Sweeper, every time.Duration) {
-	s.RunOnce(ctx)
+	s.scheduled(ctx)
 	t := time.NewTicker(every)
 	defer t.Stop()
 	for {
@@ -48,7 +50,17 @@ func Run(ctx context.Context, s Sweeper, every time.Duration) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			s.RunOnce(ctx)
+			s.scheduled(ctx)
+		}
+	}
+}
+
+func (s Sweeper) scheduled(ctx context.Context) {
+	if res := s.RunOnce(ctx); res.Err != nil && s.Audit != nil {
+		rec := audit.Record{Service: audit.ServiceAuth, Action: ActionLock, ActorUserID: "system", ActorEmail: "system",
+			Result: audit.ResultFailure, Error: res.Err.Error()}
+		if _, err := s.Audit.Write(ctx, rec); err != nil {
+			slog.Error("dormant accounts: audit write failed", "error", err)
 		}
 	}
 }

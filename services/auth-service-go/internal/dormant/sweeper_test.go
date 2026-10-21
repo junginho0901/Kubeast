@@ -71,3 +71,19 @@ func TestRunOnceStoreErrorAndZeroDays(t *testing.T) {
 		t.Fatalf("Days 0 must not touch the store: %+v", res)
 	}
 }
+
+// The scheduled sweep records a lock that failed; RunOnce alone does not (the
+// manual sweep records its own admin.dormant.sweep).
+func TestAScheduledSweepThatCannotLockIsAFailureRow(t *testing.T) {
+	aud := &memAudit{}
+	s := Sweeper{Store: &fakeStore{err: errors.New("db down")}, Audit: aud, Days: 90}
+	s.scheduled(context.Background())
+	if len(aud.recs) != 1 || aud.recs[0].Action != ActionLock || aud.recs[0].Result != audit.ResultFailure || aud.recs[0].Error != "db down" {
+		t.Fatalf("audit = %+v", aud.recs)
+	}
+	ok := Sweeper{Store: &fakeStore{}, Audit: &memAudit{}, Days: 90}
+	ok.scheduled(context.Background())
+	if n := len(ok.Audit.(*memAudit).recs); n != 0 {
+		t.Fatalf("a sweep that locks nobody writes nothing, got %d", n)
+	}
+}

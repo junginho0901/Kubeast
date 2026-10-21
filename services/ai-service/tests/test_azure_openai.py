@@ -58,7 +58,7 @@ async def test_the_connection_test_takes_the_chat_path(monkeypatch):
     monkeypatch.setenv("KUBEAST_AI_KEY_AZURE", "az-key")
     monkeypatch.setattr(api_public, "_validate_base_url", lambda url: None)
     seen = serve(monkeypatch)
-    out = await api_public.test_model_connection({
+    out = await api_public._test_model_connection({
         "provider": "azure", "model": "my-deployment", "base_url": BASE, "api_key_env": "KUBEAST_AI_KEY_AZURE",
     })
     assert out == {"success": True, "model": "my-deployment", "message": "Connection successful"}

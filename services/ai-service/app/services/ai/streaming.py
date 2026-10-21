@@ -191,6 +191,8 @@ async def suggest_optimization_stream(
                     user_agent=(audit_http or {}).get("user_agent"),
                     request_id=(audit_http or {}).get("request_id"),
                     path=(audit_http or {}).get("path"),
+                    result="failure",
+                    error=f"{over.budget} token budget reached",
                 )
             yield "data: " + json.dumps({"kind": "error", **over.event()}, ensure_ascii=False) + "\n\n"
             yield "data: [DONE]\n\n"

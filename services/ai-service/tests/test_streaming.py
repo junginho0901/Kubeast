@@ -382,6 +382,7 @@ async def test_optimization_over_the_daily_budget_shows_the_table_without_the_mo
     assert events[-1] == "data: [DONE]\n\n"
     service.client.chat.completions.create.assert_not_called()
     assert [r["action"] for r in rows] == ["ai.chat.budget_exceeded"] and rows[0]["after"]["phase"] == "optimization" and rows[0]["target_id"] == "shop"
+    assert rows[0]["result"] == "failure" and "budget" in rows[0]["error"]  # a refusal, as the chat's row (catalog: failure)
 
 
 @pytest.mark.asyncio

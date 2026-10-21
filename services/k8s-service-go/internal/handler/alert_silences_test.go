@@ -126,7 +126,7 @@ func TestSilenceWritesAreRefused(t *testing.T) {
 		if name == "no silence permission" && (len(store.rows) != 1 || store.rows[0].Action != "k8s.access.denied") {
 			t.Errorf("%s: audit %+v", name, store.rows)
 		}
-		if (name == "silences off" || name == "cluster condition") && (len(store.rows) != 1 || store.rows[0].Action != "alert.silence.create" || store.rows[0].Result != "failure") {
+		if name != "no silence permission" && (len(store.rows) != 1 || store.rows[0].Action != "alert.silence.create" || store.rows[0].Result != "failure") {
 			t.Errorf("%s: audit %+v", name, store.rows)
 		}
 	}

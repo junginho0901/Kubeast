@@ -73,6 +73,7 @@ func (s Sweeper) RunOnce(ctx context.Context) Result {
 	expired, err := s.Store.ExpireGrants(ctx, now)
 	if err != nil {
 		slog.Error("access requests: expiring grants failed", "error", err)
+		s.recordFailure(ctx, ActionGrantExpire, err) // grants that should end may still be in force
 	}
 	for _, g := range expired {
 		res.GrantsExpired++
@@ -83,6 +84,7 @@ func (s Sweeper) RunOnce(ctx context.Context) Result {
 	lapsed, err := s.Store.ExpirePendingRequests(ctx, now.Add(-PendingTTL), now)
 	if err != nil {
 		slog.Error("access requests: lapsing pending requests failed", "error", err)
+		s.recordFailure(ctx, ActionRequestExpire, err)
 	}
 	for _, l := range lapsed {
 		res.RequestsLapsed++
@@ -90,6 +92,18 @@ func (s Sweeper) RunOnce(ctx context.Context) Result {
 		s.record(ctx, ActionRequestExpire, l.UserID, l.UserEmail, l.ClusterID, after)
 	}
 	return res
+}
+
+// recordFailure writes a failed sweep step: nothing was changed, so no target.
+func (s Sweeper) recordFailure(ctx context.Context, action string, cause error) {
+	if s.Audit == nil {
+		return
+	}
+	rec := audit.Record{Service: audit.ServiceAuth, Action: action, ActorUserID: "system", ActorEmail: "system",
+		Result: audit.ResultFailure, Error: cause.Error()}
+	if _, err := s.Audit.Write(ctx, rec); err != nil {
+		slog.Error("access requests: audit write failed", "action", action, "error", err)
+	}
 }
 
 func (s Sweeper) record(ctx context.Context, action, userID, email, clusterID string, after map[string]any) {

@@ -15,6 +15,7 @@ Action keys:
 - ai.chat.send      — chat session received a user message (start of stream)
 - ai.chat.complete  — chat turn finished (token usage, tool calls, duration in `after`)
 - ai.tool.call      — LLM invoked a readonly tool
+- ai.tool.execute   — an approved write tool ran
 
 Schema columns come from services/pkg/dbmigrate/migrations (auth_audit_logs).
 """

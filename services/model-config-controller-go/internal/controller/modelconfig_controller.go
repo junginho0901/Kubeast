@@ -75,10 +75,15 @@ func (r *ModelConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return r.patchErrorStatus(ctx, &modelConfig, err)
 	}
 
+	before, _ := r.storedView(ctx, data.Name) // nil also when it cannot be read: then the write is recorded
 	dbID, err := r.upsertModelConfig(ctx, data)
 	if err != nil {
+		r.recordSync(ctx, data.Name, "upsert", before, viewOf(data), err)
 		syncTotal.WithLabelValues("error", provider).Inc()
 		return r.patchErrorStatus(ctx, &modelConfig, err)
+	}
+	if next := viewOf(data); changed(before, next) {
+		r.recordSync(ctx, data.Name, "upsert", before, next, nil)
 	}
 
 	secretHash, secretState, secretMsg, secretErr := r.resolveSecret(ctx, &modelConfig)

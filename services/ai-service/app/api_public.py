@@ -11,10 +11,10 @@ import re
 import ssl
 from typing import Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 import httpx
 
-from app.security import require_admin
+from app.security import require_admin, require_auth
 from app.services.ai.debug_dump import safe_error
 from app.services import claude_code, model_config_policy
 from app.services.anthropic_messages import API_VERSION as ANTHROPIC_VERSION, api_root as anthropic_root
@@ -215,7 +215,25 @@ async def provider_availability():
 
 
 @admin_router.post("/model-configs/test")
-async def test_model_connection(request: dict = None):
+async def test_model_connection(raw: Request, payload=Depends(require_auth), request: dict = None):
+    """Connection test, recorded as ai.model_config.test (the server's key goes to that address)."""
+    from app.services import model_config_audit
+
+    body = request or {}
+    try:
+        out = await _test_model_connection(body)
+    except HTTPException as e:
+        await model_config_audit.record("ai.model_config.test", payload, raw, body.get("name"), after=body,
+                                        extra={"ok": False}, result="failure", error=str(e.detail))
+        raise
+    ok = bool(out.get("success"))
+    await model_config_audit.record("ai.model_config.test", payload, raw, body.get("name"), after=body,
+                                    extra={"ok": ok}, result="success" if ok else "failure",
+                                    error=None if ok else str(out.get("message") or ""))
+    return out
+
+
+async def _test_model_connection(request: dict) -> dict:
     """
     모델 연결 테스트 (admin.ai_models.*).
     body: { provider, model, base_url?, api_key_env?, api_key?, tls_verify?, ca_cert? }
@@ -310,7 +328,25 @@ async def _list_models(provider: str, api_key: str, base: str, verify: Union[boo
 
 
 @admin_router.post("/model-configs/models")
-async def list_provider_models(request: dict = None):
+async def list_provider_models(raw: Request, payload=Depends(require_auth), request: dict = None):
+    """The provider's model list, recorded as ai.model_config.models (the server's key goes to that address)."""
+    from app.services import model_config_audit
+
+    body = request or {}
+    try:
+        out = await _list_provider_models(body)
+    except HTTPException as e:
+        await model_config_audit.record("ai.model_config.models", payload, raw, body.get("name"), after=body,
+                                        extra={"ok": False}, result="failure", error=str(e.detail))
+        raise
+    ok = not out.get("error")
+    await model_config_audit.record("ai.model_config.models", payload, raw, body.get("name"), after=body,
+                                    extra={"ok": ok, "models": len(out.get("models") or [])},
+                                    result="success" if ok else "failure", error=out.get("error"))
+    return out
+
+
+async def _list_provider_models(request: dict) -> dict:
     """
     The models the provider lists for this key and address, for the model
     dropdown (admin.ai_models.*). Same key and base_url rules as the connection

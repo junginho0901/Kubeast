@@ -75,10 +75,12 @@ func (h *Handler) DrainNode(w http.ResponseWriter, r *http.Request) {
 	}
 	setDrainStatus(ds)
 
-	// Record the drain *acceptance* at request time. The async runDrain
-	// may later complete or fail, but the user's intent is already audit-worthy.
+	// Record the drain's acceptance now and its outcome when it ends (phase
+	// finished) — a drain that cannot evict a pod is a failure, not the
+	// acceptance's success.
 	h.recordAuditWithPayload(r, "k8s.node.drain", "node", nodeName, "", nil,
-		nil, audit.MustJSON(map[string]interface{}{"drain_id": drainID}))
+		nil, audit.MustJSON(map[string]interface{}{"drain_id": drainID, "phase": "started"}))
+	end := auditBase(r, audit.ServiceK8s, "k8s.node.drain", "node", nodeName, "")
 
 	// The drain outlives the request: carry only the selected cluster id into
 	// the background context so the goroutine targets the same cluster.
@@ -89,7 +91,10 @@ func (h *Handler) DrainNode(w http.ResponseWriter, r *http.Request) {
 	if p, ok := auth.FromContext(r.Context()); ok { // evictions are made as the user (impersonation)
 		bg = auth.WithPayload(bg, p)
 	}
-	go h.runDrain(bg, nodeName, drainID)
+	go func() {
+		h.runDrain(bg, nodeName, drainID)
+		h.recordDrainEnd(end, drainID)
+	}()
 
 	response.JSON(w, http.StatusOK, map[string]interface{}{
 		"drain_id": drainID,
@@ -187,6 +192,24 @@ func (h *Handler) runDrain(parent context.Context, nodeName, drainID string) {
 	ds.Status = "success"
 	ds.Message = fmt.Sprintf("drain completed, %d pods evicted", len(candidates))
 	setDrainStatus(ds)
+}
+
+// recordDrainEnd writes the drain's outcome with the request's actor and
+// address (base): failure unless every pod was evicted.
+func (h *Handler) recordDrainEnd(base audit.Record, drainID string) {
+	ds := getDrainStatus(drainID)
+	if h.auditStore == nil || ds == nil {
+		return
+	}
+	rec := base
+	rec.After = audit.MustJSON(map[string]interface{}{"drain_id": drainID, "phase": "finished", "status": ds.Status, "message": ds.Message})
+	rec.Result = audit.ResultSuccess
+	if ds.Status != "success" {
+		rec.Result, rec.Error = audit.ResultFailure, ds.Message
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, _ = h.auditStore.Write(ctx, rec) // audit.Guarded counts a failure
 }
 
 // evictRetryInterval is how long to wait before retrying an eviction a

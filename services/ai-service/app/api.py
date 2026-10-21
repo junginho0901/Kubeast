@@ -417,7 +417,7 @@ async def approve_tool_approval(
         tool_calls=[{"function": approval.tool, "args": args, "result": approval.result, "approval_id": approval.id, "approval_status": status}],
     )
     await write_audit(
-        action="ai.tool.call", actor_user_id=actor.get("user_id"), actor_email=actor.get("email"), cluster=approval.cluster,
+        action="ai.tool.execute", actor_user_id=actor.get("user_id"), actor_email=actor.get("email"), cluster=approval.cluster,
         target_type=args.get("resource_type") or "tool",
         target_id=args.get("resource_name") or args.get("name") or approval.tool,
         namespace=args.get("namespace"),
@@ -543,22 +543,30 @@ async def get_active_model_config(payload=Depends(require_auth)):
 
 
 @router.post("/model-configs")
-async def create_model_config(payload=Depends(require_auth), request: dict = None):
+async def create_model_config(raw: Request, payload=Depends(require_auth), request: dict = None):
     from app.database import get_db_service
     from app.models.model_config import ModelConfigCreate, ModelConfigResponse
+    from app.services import model_config_audit
 
     _require_admin(payload)
-
+    await model_config_audit.ready_or_503("model config create")
+    body = request or {}
     try:
-        data = ModelConfigCreate(**(request or {})).model_dump(exclude_unset=True)
-    except ValidationError as e:
-        raise HTTPException(status_code=400, detail=_validation_message(e))
-    _check_model_config_policy(data)
-    db = await get_db_service()
-    try:
-        config = await db.create_model_config(data)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        try:
+            data = ModelConfigCreate(**body).model_dump(exclude_unset=True)
+        except ValidationError as e:
+            raise HTTPException(status_code=400, detail=_validation_message(e))
+        _check_model_config_policy(data)
+        db = await get_db_service()
+        try:
+            config = await db.create_model_config(data)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException as e:
+        await model_config_audit.record("ai.model_config.create", payload, raw, body.get("name"),
+                                        after=body, result="failure", error=str(e.detail))
+        raise
+    await model_config_audit.record("ai.model_config.create", payload, raw, config.name, after=config)
     _invalidate_caches()
     return ModelConfigResponse.model_validate(config)
 
@@ -596,43 +604,58 @@ def _check_model_config_policy(data: dict, current=None) -> None:
 
 
 @router.patch("/model-configs/{config_id}")
-async def update_model_config(config_id: int, payload=Depends(require_auth), request: dict = None):
+async def update_model_config(config_id: int, raw: Request, payload=Depends(require_auth), request: dict = None):
     from app.database import get_db_service
     from app.models.model_config import ModelConfigUpdate, ModelConfigResponse
+    from app.services import model_config_audit
 
     _require_admin(payload)
-
-    try:
-        data = ModelConfigUpdate(**(request or {})).model_dump(exclude_unset=True)
-    except ValidationError as e:
-        raise HTTPException(status_code=400, detail=_validation_message(e))
+    await model_config_audit.ready_or_503("model config update")
     db = await get_db_service()
     current = await db.get_model_config(config_id)
-    _check_model_config_policy(data, current)
-    if data.get("extra_headers"):
-        # Responses mask header values; a client echoing them back keeps the
-        # stored value instead of overwriting it with the mask.
-        from app.services.model_config_policy import MASK
+    name = current.name if current else str(config_id)
+    try:
+        try:
+            data = ModelConfigUpdate(**(request or {})).model_dump(exclude_unset=True)
+        except ValidationError as e:
+            raise HTTPException(status_code=400, detail=_validation_message(e))
+        _check_model_config_policy(data, current)
+        if data.get("extra_headers"):
+            # Responses mask header values; a client echoing them back keeps the
+            # stored value instead of overwriting it with the mask.
+            from app.services.model_config_policy import MASK
 
-        stored = (current.extra_headers or {}) if current else {}
-        data["extra_headers"] = {k: (stored.get(k, v) if v == MASK else v) for k, v in data["extra_headers"].items()}
-    config = await db.update_model_config(config_id, data)
-    if not config:
-        raise HTTPException(status_code=404, detail="Model config not found")
+            stored = (current.extra_headers or {}) if current else {}
+            data["extra_headers"] = {k: (stored.get(k, v) if v == MASK else v) for k, v in data["extra_headers"].items()}
+        before = model_config_audit.view(current)
+        config = await db.update_model_config(config_id, data)
+        if not config:
+            raise HTTPException(status_code=404, detail="Model config not found")
+    except HTTPException as e:
+        await model_config_audit.record("ai.model_config.update", payload, raw, name, before=current,
+                                        result="failure", error=str(e.detail))
+        raise
+    await model_config_audit.record("ai.model_config.update", payload, raw, config.name, before=before, after=config)
     _invalidate_caches()
     return ModelConfigResponse.model_validate(config)
 
 
 @router.delete("/model-configs/{config_id}", status_code=204)
-async def delete_model_config(config_id: int, payload=Depends(require_auth)):
+async def delete_model_config(config_id: int, raw: Request, payload=Depends(require_auth)):
     from app.database import get_db_service
+    from app.services import model_config_audit
 
     _require_admin(payload)
-
+    await model_config_audit.ready_or_503("model config delete")
     db = await get_db_service()
+    current = await db.get_model_config(config_id)
+    before = model_config_audit.view(current)
     ok = await db.delete_model_config(config_id)
     if not ok:
+        await model_config_audit.record("ai.model_config.delete", payload, raw, str(config_id),
+                                        result="failure", error="Model config not found")
         raise HTTPException(status_code=404, detail="Model config not found")
+    await model_config_audit.record("ai.model_config.delete", payload, raw, current.name if current else str(config_id), before=before)
     _invalidate_caches()
 
 @router.get("/mcp/config")

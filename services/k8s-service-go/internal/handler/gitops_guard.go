@@ -3,6 +3,8 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"io"
 	"log/slog"
 	"net/http"
@@ -165,7 +167,17 @@ func (h *Handler) GitopsGuard(next http.Handler) http.Handler {
 			}
 			if res.Managed {
 				slog.Info("gitops guard: write refused", "path", r.URL.Path, "method", r.Method, "app", res.App, "by", res.Method)
-				response.Error(w, http.StatusConflict, "managed by Argo CD application "+res.App+"; change it in Git")
+				msg := "managed by Argo CD application " + res.App + "; change it in Git"
+				kind := t.kind
+				if kind == "" {
+					kind = t.resourceType
+				}
+				if kind == "" {
+					kind = t.plural
+				}
+				h.recordAuditWithPayload(r, "k8s.gitops.refuse", kind, t.name, t.namespace, errors.New(msg), nil,
+					audit.MustJSON(map[string]interface{}{"app": res.App, "method": r.Method, "path": r.URL.Path, "by": res.Method}))
+				response.Error(w, http.StatusConflict, msg)
 				return
 			}
 		}

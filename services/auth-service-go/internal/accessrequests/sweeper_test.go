@@ -68,8 +68,14 @@ func TestRunOnce_AuditsEveryReversalAsSystem(t *testing.T) {
 
 func TestRunOnce_StoreErrorIsLoggedNotFatal(t *testing.T) {
 	store := &fakeStore{grantsE: errors.New("db down")}
-	res := Sweeper{Store: store, Audit: &memWriter{}}.RunOnce(context.Background())
+	aud := &memWriter{}
+	res := Sweeper{Store: store, Audit: aud}.RunOnce(context.Background())
 	if res.GrantsExpired != 0 {
 		t.Fatalf("result = %+v", res)
+	}
+	// a grant that should have ended may still be in force: the failed step is a row
+	if len(aud.recs) != 1 || aud.recs[0].Action != ActionGrantExpire || aud.recs[0].Result != audit.ResultFailure ||
+		aud.recs[0].Error != "db down" || aud.recs[0].ActorUserID != "system" {
+		t.Fatalf("audit = %+v", aud.recs)
 	}
 }

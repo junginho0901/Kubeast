@@ -1,4 +1,8 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { execSync } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 
 // Audit rows that used to be missing or mislabelled, checked against the audit
 // log itself: a live log stream is a recorded sensitive read, a refused sign-in
@@ -9,7 +13,7 @@ const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
 const CLUSTER = 'self'
 
 type Headers = Record<string, string>
-type Row = { Action: string; Result: string; Error: string; TargetID: string; ActorEmail: string; Cluster: string; After: Record<string, any> | null }
+type Row = { Action: string; Result: string; Error: string; TargetID: string; ActorEmail: string; Cluster: string; Before: Record<string, any> | null; After: Record<string, any> | null }
 
 async function login(request: APIRequestContext, email: string, password: string): Promise<Headers> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
@@ -150,6 +154,108 @@ test.describe('audit gaps', () => {
       }
     } finally {
       await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: admin, failOnStatusCode: false })
+    }
+  })
+
+  // 2026-10-21 (docs/audit-log-plan.md §5-2): the rows below did not exist before.
+  test('AI model settings changes and the connection test are rows without header values', async ({ request }) => {
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const since = new Date(Date.now() - 2000).toISOString()
+    const name = `e2e-audit-model-${Date.now().toString(36)}`
+    const target = { provider: 'ollama', model: 'granite4.1:3b', base_url: 'http://host.docker.internal:11434/v1' }
+    const created = await request.post('/api/v1/ai/model-configs', { headers: admin, data: { name, ...target, enabled: false, extra_headers: { 'X-E2E': 'e2e-header-value' } } })
+    expect(created.status(), await created.text()).toBe(200)
+    const id = (await created.json()).id as number
+    try {
+      expect((await request.patch(`/api/v1/ai/model-configs/${id}`, { headers: admin, data: { model: 'granite4.1:8b' } })).status()).toBe(200)
+      const tested = await request.post('/api/v1/ai/model-configs/test', { headers: admin, data: target })
+      expect(tested.status()).toBe(200)
+      const ok = (await tested.json()).success === true
+      expect((await request.delete(`/api/v1/ai/model-configs/${id}`, { headers: admin })).status()).toBe(204)
+
+      const changes = async () => (await Promise.all(['create', 'update', 'delete'].map((a) => rows(request, admin, { action: `ai.model_config.${a}`, since }))))
+        .flat().filter((r) => r.TargetID === name)
+      await expect.poll(async () => (await changes()).map((r) => `${r.Action} ${r.Result}`).sort(), { timeout: 10_000 })
+        .toEqual(['ai.model_config.create success', 'ai.model_config.delete success', 'ai.model_config.update success'])
+      const mine = await changes()
+      const update = mine.find((r) => r.Action === 'ai.model_config.update')!
+      expect([update.After?.before?.model, update.After?.after?.model]).toEqual(['granite4.1:3b', 'granite4.1:8b'])
+      expect(mine.find((r) => r.Action === 'ai.model_config.create')!.After?.after?.extra_headers).toEqual(['X-E2E'])
+      expect(JSON.stringify(mine)).not.toContain('e2e-header-value')
+      const probe = (await rows(request, admin, { action: 'ai.model_config.test', since })).find((r) => r.After?.after?.base_url === target.base_url)
+      expect(probe && `${probe.Result} ${probe.After?.ok}`, 'the connection test row').toBe(`${ok ? 'success' : 'failure'} ${ok}`)
+    } finally {
+      await request.delete(`/api/v1/ai/model-configs/${id}`, { headers: admin, failOnStatusCode: false })
+    }
+  })
+
+  test('renaming and deleting a conversation are rows', async ({ request }) => {
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const since = new Date(Date.now() - 2000).toISOString()
+    const created = await request.post('/api/v1/sessions', { headers: admin, data: { title: 'e2e audit session' } })
+    expect(created.ok(), await created.text()).toBeTruthy()
+    const id = (await created.json()).id as string
+    expect((await request.patch(`/api/v1/sessions/${id}`, { headers: admin, data: { title: 'e2e audit session renamed' } })).status()).toBe(200)
+    expect((await request.delete(`/api/v1/sessions/${id}`, { headers: admin })).status()).toBe(200)
+    expect((await request.get(`/api/v1/sessions/${id}`, { headers: admin, failOnStatusCode: false })).status()).toBe(404)
+
+    const mine = async () => [...await rows(request, admin, { action: 'ai.session.rename', since }), ...await rows(request, admin, { action: 'ai.session.delete', since })]
+      .filter((r) => r.TargetID === id)
+    await expect.poll(async () => (await mine()).map((r) => `${r.Action} ${r.Result}`).sort(), { timeout: 10_000 })
+      .toEqual(['ai.session.delete success', 'ai.session.rename success'])
+    const rename = (await mine()).find((r) => r.Action === 'ai.session.rename')!
+    expect([rename.Before?.title, rename.After?.title]).toEqual(['e2e audit session', 'e2e audit session renamed'])
+  })
+
+  test('a wrong alert webhook token and a refused report read are failure rows', async ({ request }) => {
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const since = new Date(Date.now() - 2000).toISOString()
+    const hook = await request.post('/api/v1/alerts/webhook?cluster=default', { headers: { Authorization: 'Bearer e2e-wrong-token' }, data: {}, failOnStatusCode: false })
+    test.skip(hook.status() === 404, 'features.alertInvestigation is off')
+    expect(hook.status()).toBe(401)
+    await expect.poll(async () => (await rows(request, admin, { action: 'alert.webhook.refuse', since })).map((r) => `${r.Result} ${r.Cluster} ${r.After?.reason}`)[0], { timeout: 10_000 })
+      .toBe('failure default token mismatch')
+
+    const roles = await (await request.get('/api/v1/auth/roles', { headers: admin })).json()
+    const memberRole = ((Array.isArray(roles) ? roles : roles.items) as Array<{ id: number; name: string }>).find((r) => r.name === 'Member')!.id
+    const email = `e2e-audit-report-${Date.now()}@kubeast.local`
+    const password = 'e2e-audit-report-throwaway'
+    const user = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E audit report', email, password, role_id: memberRole } })
+    expect(user.status(), await user.text()).toBe(201)
+    const userId = (await user.json()).id as string
+    try {
+      const member = await login(request, email, password)
+      expect((await request.get('/api/v1/ai/investigations/e2e-audit-none', { headers: member, failOnStatusCode: false })).status()).toBe(403)
+      await expect.poll(async () => (await rows(request, admin, { action: 'ai.investigation.view', since })).filter((r) => r.ActorEmail === email)
+        .map((r) => `${r.Result} ${r.TargetID} ${r.Error}`), { timeout: 10_000 })
+        .toEqual(['failure e2e-audit-none permission required: admin.investigations.read'])
+    } finally {
+      await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: admin, failOnStatusCode: false })
+    }
+  })
+
+  test('a ModelConfig resource change is a sync row, a reconcile with the same spec is not', async ({ request }) => {
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-audit-'))
+    const kc = path.join(dir, 'kubeconfig')
+    fs.writeFileSync(kc, execSync('kind get kubeconfig --name kubeast', { encoding: 'utf8' }), { mode: 0o600 })
+    const kubectl = (args: string, input?: string) => execSync(`kubectl --kubeconfig ${kc} -n kubeast ${args}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], input })
+    const name = `e2e-audit-cr-${Date.now().toString(36)}`
+    const since = new Date(Date.now() - 2000).toISOString()
+    const ops = async () => (await rows(request, admin, { action: 'ai.model_config.sync', since })).filter((r) => r.TargetID === name)
+      .map((r) => `${r.Result} ${r.ActorEmail} ${r.After?.op} ${(r.After?.after ?? r.After?.before)?.model}`)
+    const sync = 'kubeast:model-config-controller'
+    try {
+      kubectl('apply -f -', `apiVersion: ai.kubeast.io/v1alpha1\nkind: ModelConfig\nmetadata: {name: ${name}}\nspec: {provider: ollama, model: granite4.1:3b, baseURL: "http://host.docker.internal:11434/v1", enabled: false, isDefault: false}\n`)
+      await expect.poll(ops, { timeout: 20_000 }).toEqual([`success ${sync} upsert granite4.1:3b`])
+      kubectl(`annotate modelconfig ${name} e2e/touch=1`)
+      kubectl(`patch modelconfig ${name} --type merge -p '{"spec":{"model":"granite4.1:8b"}}'`)
+      await expect.poll(ops, { timeout: 20_000 }).toEqual([`success ${sync} upsert granite4.1:8b`, `success ${sync} upsert granite4.1:3b`])
+      kubectl(`delete modelconfig ${name}`)
+      await expect.poll(ops, { timeout: 20_000 }).toEqual([`success ${sync} delete granite4.1:8b`, `success ${sync} upsert granite4.1:8b`, `success ${sync} upsert granite4.1:3b`])
+    } finally {
+      kubectl(`delete modelconfig ${name} --ignore-not-found`)
+      fs.rmSync(dir, { recursive: true, force: true })
     }
   })
 })

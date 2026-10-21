@@ -268,6 +268,8 @@ func (h *AuthHandler) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.CreateUser(r.Context(), user); err != nil {
+		h.writeAuditFailure(r, "user.create", &payload.UserID, &payload.Email, nil, &user.Email, err.Error(),
+			jsonRaw(map[string]string{"email": user.Email, "role": targetRole.Name, "name": user.Name}))
 		response.InternalError(w, r, err)
 		return
 	}
@@ -386,6 +388,7 @@ func (h *AuthHandler) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 	// Apply profile updates (name/team)
 	if req.Name != nil || req.Team != nil {
 		if err := h.repo.UpdateUserProfile(r.Context(), userID, req.Name, req.Team); err != nil {
+			h.writeAuditFailure(r, "user.update", &payload.UserID, &payload.Email, &userID, nil, err.Error(), nil)
 			response.InternalError(w, r, err)
 			return
 		}
@@ -394,6 +397,7 @@ func (h *AuthHandler) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 	// Apply role update
 	if req.RoleID != nil {
 		if err := h.repo.UpdateUserRole(r.Context(), userID, *req.RoleID); err != nil {
+			h.writeAuditFailure(r, "user.role.update", &payload.UserID, &payload.Email, &userID, nil, err.Error(), nil)
 			response.InternalError(w, r, err)
 			return
 		}
@@ -471,6 +475,7 @@ func (h *AuthHandler) AdminResetPassword(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := h.repo.UpdateUserPassword(r.Context(), userID, newHash); err != nil {
+		h.writeAuditFailure(r, "user.password.reset", &payload.UserID, &payload.Email, &userID, &target.Email, err.Error(), nil)
 		response.InternalError(w, r, err)
 		return
 	}
@@ -514,6 +519,7 @@ func (h *AuthHandler) AdminDeleteUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.DeleteUser(r.Context(), userID); err != nil {
+		h.writeAuditFailure(r, "user.delete", &payload.UserID, &payload.Email, &userID, &target.Email, err.Error(), nil)
 		response.InternalError(w, r, err)
 		return
 	}

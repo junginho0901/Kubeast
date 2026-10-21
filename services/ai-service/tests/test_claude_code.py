@@ -531,9 +531,9 @@ async def test_the_connection_test_route_says_why_before_reading_the_variable(mo
     from app import api_public
     monkeypatch.setattr(claude_code.settings, "AI_CLAUDE_CODE_ENABLED", False, raising=False)
     monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
-    res = await api_public.test_model_connection({"provider": "claude-code", "model": "claude-sonnet-5-5", "api_key_env": "CLAUDE_CODE_OAUTH_TOKEN"})
+    res = await api_public._test_model_connection({"provider": "claude-code", "model": "claude-sonnet-5-5", "api_key_env": "CLAUDE_CODE_OAUTH_TOKEN"})
     assert res["success"] is False and "ai.providers.claudeCode.enabled" in res["message"]
-    listed = await api_public.list_provider_models({"provider": "claude-code", "api_key_env": "CLAUDE_CODE_OAUTH_TOKEN"})
+    listed = await api_public._list_provider_models({"provider": "claude-code", "api_key_env": "CLAUDE_CODE_OAUTH_TOKEN"})
     assert listed["models"] == [] and "no model list" in listed["error"]
 
 

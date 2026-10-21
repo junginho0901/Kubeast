@@ -473,6 +473,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.UpdateUserPassword(r.Context(), user.ID, newHash); err != nil {
+		h.writeAuditFailure(r, "user.password.change", &user.ID, &user.Email, &user.ID, &user.Email, err.Error(), nil)
 		response.InternalError(w, r, err)
 		return
 	}

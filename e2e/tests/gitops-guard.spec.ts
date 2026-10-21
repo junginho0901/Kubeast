@@ -28,6 +28,7 @@ test.describe('Argo CD guard', () => {
     test.skip(managed.status() === 404, 'fixture e2e-argo-managed is missing (deploy/kind/fixtures.yaml)')
 
     // Every write path answers 409 for the managed object: delete, rollback, YAML apply.
+    const started = Date.now()
     const del = await request.delete('/api/v1/cluster/namespaces/default/deployments/e2e-argo-managed?cluster=self', { headers: admin, failOnStatusCode: false })
     expect(del.status(), await del.text()).toBe(409)
     expect((await del.json()).detail).toContain('managed by Argo CD application e2e-app')
@@ -38,6 +39,14 @@ test.describe('Argo CD guard', () => {
       data: { namespace: 'default', yaml: 'apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: e2e-argo-managed\n  namespace: default\nspec:\n  replicas: 2\n' },
     })
     expect(apply.status(), await apply.text()).toBe(409)
+    // Each refusal is a k8s.gitops.refuse row (a blocked attempt, like a permission refusal).
+    type Row = { Action: string; TargetID: string; Namespace: string; Result: string; After: { app?: string; method?: string }; CreatedAt: string }
+    await expect.poll(async () => {
+      const rows: Row[] = (await (await request.get('/api/v1/auth/admin/audit-logs?action=k8s.gitops.refuse&limit=10', { headers: admin })).json()).items
+      return rows.filter((r) => r.TargetID === 'e2e-argo-managed' && r.Namespace === 'default' && r.Result === 'failure' && r.After?.app === 'e2e-app'
+        && Date.parse(r.CreatedAt) >= started - 5_000)
+        .map((r) => r.After.method).sort()
+    }, { timeout: 10_000 }).toEqual(['DELETE', 'POST', 'POST'])
     // Still there, untouched.
     expect((await request.get('/api/v1/cluster/namespaces/default/deployments/e2e-argo-managed/describe?cluster=self', { headers: admin })).status()).toBe(200)
 

@@ -24,6 +24,7 @@ import (
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/model"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/repository"
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -504,14 +505,19 @@ func (h *AuthHandler) provisionOIDCUser(r *http.Request, claims oidcClaims) (*mo
 	}
 
 	if h.cfg.OIDC.SyncRoles && claims.HasGroups {
-		if err := h.syncClusterGrants(ctx, user.ID, h.clusterGrantsOf(claims.Groups)); err != nil {
+		if err := h.syncClusterGrants(r, user, h.clusterGrantsOf(claims.Groups)); err != nil {
 			return nil, err
 		}
 	}
 	return user, nil
 }
 
-func (h *AuthHandler) syncClusterGrants(ctx context.Context, userID string, want map[string]string) error {
+// syncClusterGrants sets the per-cluster roles the user's groups name; each
+// change is a user.cluster_role.set/.unset row (after.via = oidc, the user as
+// actor), like an admin's grant.
+func (h *AuthHandler) syncClusterGrants(r *http.Request, user *model.User, want map[string]string) error {
+	ctx, userID := r.Context(), user.ID
+	self := auth.TokenPayload{UserID: user.ID, Email: user.Email}
 	have, err := h.repo.ListUserClusterRoleNames(ctx, userID)
 	if err != nil {
 		return err
@@ -538,13 +544,16 @@ func (h *AuthHandler) syncClusterGrants(ctx context.Context, userID string, want
 			slog.Warn("oidc: cluster group names unknown role", "cluster", clusterID, "role", roleName)
 			continue
 		}
-		if err := h.repo.SetUserClusterRole(ctx, userID, clusterID, role.ID, nil); err != nil { // group-driven grants are cluster-wide
-			// A group for a cluster that is not (or no longer) registered must
-			// not fail the whole login: skip it and keep the other grants (L21).
-			if repository.IsForeignKeyViolation(err) {
-				slog.Warn("oidc: cluster group names an unregistered cluster, skipped", "cluster", clusterID, "role", roleName)
-				continue
-			}
+		err = h.repo.SetUserClusterRole(ctx, userID, clusterID, role.ID, nil) // group-driven grants are cluster-wide
+		// A group for a cluster that is not (or no longer) registered must
+		// not fail the whole login: skip it and keep the other grants (L21).
+		if err != nil && repository.IsForeignKeyViolation(err) {
+			slog.Warn("oidc: cluster group names an unregistered cluster, skipped", "cluster", clusterID, "role", roleName)
+			continue
+		}
+		h.auditClusterRole(r, "user.cluster_role.set", self, userID, user.Email, clusterID,
+			map[string]any{"role": roleName, "previous": have[clusterID], "via": "oidc"}, err)
+		if err != nil {
 			return err
 		}
 	}
@@ -553,7 +562,10 @@ func (h *AuthHandler) syncClusterGrants(ctx context.Context, userID string, want
 			continue
 		}
 		if _, keep := want[clusterID]; !keep {
-			if _, err := h.repo.DeleteUserClusterRole(ctx, userID, clusterID); err != nil {
+			_, err := h.repo.DeleteUserClusterRole(ctx, userID, clusterID)
+			h.auditClusterRole(r, "user.cluster_role.unset", self, userID, user.Email, clusterID,
+				map[string]any{"previous": have[clusterID], "via": "oidc"}, err)
+			if err != nil {
 				return err
 			}
 		}

@@ -89,7 +89,10 @@ func main() {
 	})
 
 	// Setup handlers
-	sessionHandler := handler.NewSessionHandler(repo)
+	// Audit rows for renaming and deleting a conversation; the same table and fail-closed rule as the other services.
+	pgAudit := audit.NewPostgresStore(pool, audit.ServiceAI)
+	auditStore := audit.Guard(audit.WithStdout(pgAudit, audit.StdoutEnabled()), pgAudit, audit.FailClosedEnabled())
+	sessionHandler := handler.NewSessionHandler(repo, auditStore)
 	healthHandler := handler.NewHealthHandler(pool)
 
 	// Setup router
@@ -138,9 +141,10 @@ func main() {
 		r.Get("/sessions", sessionHandler.ListSessions)
 		r.Post("/sessions", sessionHandler.CreateSession)
 		r.Get("/sessions/{session_id}", sessionHandler.GetSession)
-		r.Patch("/sessions/{session_id}", sessionHandler.UpdateSession)
+		// Renaming and deleting are recorded, so they wait for the audit store (deleting erases chat history).
+		r.With(audit.RequireWritable(auditStore)).Patch("/sessions/{session_id}", sessionHandler.UpdateSession)
 		r.Post("/sessions/{session_id}/messages", sessionHandler.SaveMessages)
-		r.Delete("/sessions/{session_id}", sessionHandler.DeleteSession)
+		r.With(audit.RequireWritable(auditStore)).Delete("/sessions/{session_id}", sessionHandler.DeleteSession)
 	})
 
 	// Start server
