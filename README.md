@@ -634,7 +634,7 @@ npx playwright test cluster-hygiene.spec.ts   # 스펙 하나
 
 전제(없으면 해당 스펙은 실패하지 않고 사유를 남기며 건너뜀):
 
-- **두 번째 클러스터 `default`** — `scripts/add-kind-cluster.sh default --addons`: `kubeast` 네임스페이스는 없고 metrics-server·kube-state-metrics·node-exporter·작은 Prometheus·그 Prometheus를 읽고 또 그 Prometheus가 긁는 OpenCost(`deploy/kind/second-cluster.yaml`), 그리고 Audit 정책 2개를 둔 Kyverno 1.19(차트 3.9.1을 `helm template --no-hooks`로 렌더해 server-side 적용 — `default`엔 Helm 릴리스가 없어야 `helm.spec.ts`의 빈 목록 기준선이 맞음; `deploy/kind/kyverno-values.yaml`·`kyverno-policies.yaml`, `policy-reports.spec.ts`가 읽는 PolicyReport의 출처)가 있는 kind. `?cluster=` 없이 연 화면은 이 클러스터를 보여 주므로, 객체가 필요한 드로어 스펙은 `?cluster=self`로 고정합니다.
+- **두 번째 클러스터 `default`** — `scripts/add-kind-cluster.sh default --addons`: `kubeast` 네임스페이스는 없고 metrics-server·kube-state-metrics·node-exporter·작은 Prometheus·그 Prometheus를 읽고 또 그 Prometheus가 긁는 OpenCost(`deploy/kind/second-cluster.yaml`), 그리고 Audit 정책 2개를 둔 Kyverno 1.19(차트 3.9.2를 `helm template --no-hooks`로 렌더해 server-side 적용 — `default`엔 Helm 릴리스가 없어야 `helm.spec.ts`의 빈 목록 기준선이 맞음; `deploy/kind/kyverno-values.yaml`·`kyverno-policies.yaml`, `policy-reports.spec.ts`가 읽는 PolicyReport의 출처)가 있는 kind. `?cluster=` 없이 연 화면은 이 클러스터를 보여 주므로, 객체가 필요한 드로어 스펙은 `?cluster=self`로 고정합니다.
 - **픽스처** — `deploy/kind/fixtures.yaml`(`kind-deploy.sh`가 적용): CronJob·TLS Ingress·StatefulSet·HPA·RuntimeClass·Argo CD 어노테이션 Deployment, 이슈 스펙용 깨진 객체 2(스케줄 안 되는 Deployment, 실패한 Job), 로그를 파일로만 쓰는 `e2e-logfile-writer`(`logfiles.spec.ts`용). dev 값은 `features.prometheus.enabled`와 `features.logFiles`(`/var/log/app/*.log`, `default`)가 켜져 있습니다.
 - **AI 스펙** — 기본 모델 1개(위 Ollama `ModelConfig`).
 - **감사 싱크·세션 기록 스펙** — `deploy/kind/devtools.yaml`(S3 스탠드인·Mailpit·웹훅 수신기)과 dev 값의 싱크·`sessionRecording.enabled`.

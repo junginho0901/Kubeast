@@ -1,0 +1,40 @@
+# The Application scripts/kind-argocd.sh gives the Argo CD core install on the second dev cluster: the
+# podinfo chart (a small HTTP app, a Deployment and a Service) synced into e2e-argo, for argocd-real.spec.ts.
+# The chart comes from podinfo's git repository at its release tag (github.com is the one host the dev laptops'
+# TLS-inspecting proxy leaves alone; pods do not trust that proxy's CA). Its own project, limited to that source
+# and namespace (the core install has no `default` project: the API server, which it leaves out, creates it).
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: kubeast-e2e
+  namespace: argocd
+spec:
+  sourceRepos: [https://github.com/stefanprodan/podinfo.git]
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: e2e-argo
+  clusterResourceWhitelist:
+    - {group: '', kind: Namespace}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: e2e-podinfo
+  namespace: argocd
+spec:
+  project: kubeast-e2e
+  source:
+    repoURL: https://github.com/stefanprodan/podinfo.git
+    path: charts/podinfo
+    targetRevision: 6.15.0
+    helm:
+      valuesObject:
+        replicaCount: 1
+        resources:
+          requests: {cpu: 10m, memory: 32Mi}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: e2e-argo
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+    syncOptions: [CreateNamespace=true]

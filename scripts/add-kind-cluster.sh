@@ -17,7 +17,7 @@
 #   scripts/add-kind-cluster.sh test2
 #   scripts/add-kind-cluster.sh default --addons   # the e2e suite's second cluster: metrics-server,
 #                                                   # kube-state-metrics, Prometheus, OpenCost (deploy/kind/second-cluster.yaml)
-#                                                   # and Kyverno 1.19.1 with two Audit policies (deploy/kind/kyverno-*.yaml)
+#                                                   # and Kyverno 1.19.2 with two Audit policies (deploy/kind/kyverno-*.yaml)
 #
 # Provide an admin JWT via --token or KUBEAST_TOKEN, or set
 # KUBEAST_EMAIL/KUBEAST_PASSWORD to log in automatically.
@@ -107,9 +107,9 @@ if [ "$ADDONS" = 1 ]; then
   #     none) — --no-hooks keeps the chart's pre-delete webhook cleanup Job from running on apply. Then two
   #     Audit policies (deploy/kind/kyverno-policies.yaml) so PolicyReports exist. Images are imported from
   #     the host when present, like the add-ons above.
-  KYVERNO_CHART_VERSION=3.9.1
-  for image in reg.kyverno.io/kyverno/kyverno:v1.19.1 reg.kyverno.io/kyverno/kyvernopre:v1.19.1 \
-      reg.kyverno.io/kyverno/background-controller:v1.19.1 reg.kyverno.io/kyverno/reports-controller:v1.19.1; do
+  KYVERNO_CHART_VERSION=3.9.2
+  for image in reg.kyverno.io/kyverno/kyverno:v1.19.2 reg.kyverno.io/kyverno/kyvernopre:v1.19.2 \
+      reg.kyverno.io/kyverno/background-controller:v1.19.2 reg.kyverno.io/kyverno/reports-controller:v1.19.2; do
     if docker image inspect "$image" >/dev/null 2>&1; then
       docker save "$image" | docker exec --privileged -i "$CP" \
         ctr --namespace=k8s.io images import --digests --snapshotter=overlayfs - >/dev/null

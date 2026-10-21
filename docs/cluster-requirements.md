@@ -158,7 +158,7 @@ Kubeast에서는 Admin → Clusters → 편집 → Prometheus "연결 확인"이
 
 `wgpolicyk8s.io/v1alpha2`의 PolicyReport·ClusterPolicyReport CRD와 그 보고서를 만드는 도구가 있어야 합니다. Kubeast는 보고서를 읽기만 합니다.
 
-- **Kyverno**: [Kyverno 차트](https://kyverno.io/docs/installation/methods/) `3.9.1`(Kyverno 1.19.1)이 CRD와 보고서를 만들고, 보고서 읽기를 기본 `view` 롤에 집계해 Read도 읽습니다. 보고서는 정책이 있어야 생기므로 Audit 정책 몇 개부터 둡니다. 개발용 값·정책 예시는 [`deploy/kind/kyverno-values.yaml`](../deploy/kind/kyverno-values.yaml)·[`kyverno-policies.yaml`](../deploy/kind/kyverno-policies.yaml).
+- **Kyverno**: [Kyverno 차트](https://kyverno.io/docs/installation/methods/) `3.9.2`(Kyverno 1.19.2)이 CRD와 보고서를 만들고, 보고서 읽기를 기본 `view` 롤에 집계해 Read도 읽습니다. 보고서는 정책이 있어야 생기므로 Audit 정책 몇 개부터 둡니다. 개발용 값·정책 예시는 [`deploy/kind/kyverno-values.yaml`](../deploy/kind/kyverno-values.yaml)·[`kyverno-policies.yaml`](../deploy/kind/kyverno-policies.yaml).
 - 같은 CRD를 쓰는 다른 도구의 보고서도 읽히지만 Kyverno로만 검증했습니다.
 - **확인**: `kubectl --context <cluster> get policyreports -A`
 
@@ -217,6 +217,8 @@ Kubeast가 사용자 신원의 `pods/exec`로 `ls`·`tail`만 실행합니다.
 ## 12. Argo CD 가드
 
 Argo CD가 배포한 객체에 추적 어노테이션(`argocd.argoproj.io/tracking-id`, Argo CD 3.x 기본 추적 방식)이 있어야 배지·경고가 붙습니다. 라벨 방식(`app.kubernetes.io/instance` 등)을 쓰는 설치는 `gitops.argocd.instanceLabel`에 그 키를 적습니다. Argo CD 자체가 대상 클러스터에 있을 필요는 없습니다.
+
+- **검증**: Argo CD 3.5.6 core 설치가 실제로 동기화한 Deployment(`scripts/kind-argocd.sh`, podinfo 차트 6.15.0)에 `<앱>:apps/Deployment:<NS>/<이름>` 어노테이션이 붙고, Kubeast는 그 객체의 삭제·롤백을 409로 막고 `k8s.gitops.refuse` 행을 남기며, 드로어에 배지가 뜨고, `gitops_status`가 그 Application을 kubectl과 같게 읽습니다(e2e `argocd-real.spec.ts`).
 
 ## 13. Alertmanager 또는 Grafana 알림 (Alerts 받은편지함 · 알림 → AI 조사)
 
@@ -304,12 +306,13 @@ service:
 | `scripts/render-target-rbac.sh` + `cluster-values.yaml` | — | 적용 전 Read 비용·Prometheus 조회 403 → 적용 뒤 200 |
 | kube-prometheus-stack | 92.3.0 | 렌더로 Service 이름·포트만 확인 |
 | metrics-server | 0.9.0 | 개발용 2번 클러스터(`deploy/kind/second-cluster.yaml`) |
-| Kyverno | 1.19.1(차트 3.9.1) | 개발용 2번 클러스터 |
+| Kyverno | 1.19.2(차트 3.9.2) | 개발용 2번 클러스터 |
 | Alertmanager | v0.34.1 | 개발용 2번 클러스터 — `amtool alert add`로 넣은 알림이 웹훅으로 와서 조사됨(e2e `alert-investigation.spec.ts`) |
 | Loki · OpenTelemetry Collector contrib | 3.7.9 · 0.163.1 | 10-14(3.7.8 · 0.162.0), 10-21 올림, 개발용 2번 클러스터의 Loki 하나에 두 클러스터 수집기 — Job 로그를 텍스트·워크로드로 찾고 다른 클러스터에선 0줄, Job 삭제 뒤에도 찾음(e2e `log-search.spec.ts`) |
 | OpenTelemetry Collector contrib `host_metrics` | 0.163.1 | 10-17(0.162.0), 10-21 올림, 개발용 1번 클러스터(node-exporter 없음, `scripts/kind-hostmetrics.sh`) → 2번 클러스터 Prometheus remote write — 같은 커널을 보는 2번 클러스터 node-exporter와 메모리 70.6% / 70.7%, 전체 메모리 같은 바이트, Load 6.72 / 6.66, CPU 13.3% / 13.5%, 노드 드로어·대시보드가 채워짐(e2e `node-hostmetrics.spec.ts`). 0.162에선 `hostmetrics`·`prometheusremotewrite` 이름이 폐기 예정 별칭이라 `host_metrics`·`prometheus_remote_write`로 씀 |
 | VictoriaMetrics | v1.154.1(단일판·클러스터판, vmagent) | 10-20(v1.154.0), 10-21 올림, 개발용 2번 클러스터(`scripts/kind-victoriametrics.sh` — 2번 클러스터 Prometheus와 같은 수집 설정) — 노드 메모리 합계가 Prometheus·단일판·클러스터판 모두 같은 바이트, 단일판·경로 붙은 vmselect의 `/-/healthy` 200, 규칙·알림은 빈 자리표시, vmselect 대상 API 400 → `up`, 메타데이터 타입·설명 있음(e2e `victoriametrics.spec.ts`) |
 | Grafana | 13.2.4 | 10-17, 개발용 2번 클러스터(`scripts/kind-grafana.sh`) — 데이터소스 프록시로 읽은 지표·로그가 직접 읽은 값과 같고 대시보드·노드 드로어가 채워짐, 틀린 토큰은 상태에 401, 웹훅 연락처 시험으로 보낸 알림이 조사됨(e2e `grafana.spec.ts`) |
+| Argo CD | 3.5.6(core 설치) | 10-21, 개발용 2번 클러스터(`scripts/kind-argocd.sh`) — Application이 podinfo 차트를 동기화, 추적 어노테이션·409·감사 행·드로어 배지·`gitops_status`(e2e `argocd-real.spec.ts`) |
 | GPU·DRA·VPA·Gateway API·ingress-nginx | — | 코드 기준, 실제 클러스터 검증 안 함 |
 
 kind 노드는 루트 파일시스템이 `mountpoint="/"`로 잡히지 않아 디스크 사용률이 비고, local-path 볼륨은 볼륨 통계가 없습니다 — 실제 노드·CSI 드라이버에서는 나오는 값입니다.

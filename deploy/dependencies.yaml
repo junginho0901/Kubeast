@@ -228,7 +228,7 @@ dependencies:
 
   # Kyverno's images come with the chart's CRDs: the chart version leads, the app version follows it.
   - name: kyverno-chart
-    version: 3.9.1
+    version: 3.9.2
     upstream:
       flavour: helm
       repo: https://kyverno.github.io/kyverno
@@ -241,10 +241,10 @@ dependencies:
       - path: docs/cluster-requirements.md
         match: '(\[Kyverno 차트\]|\| Kyverno \|)'
       - path: README.md
-        match: '차트 [0-9.]+을 `helm template --no-hooks`'
+        match: '차트 [0-9.]+[을를] `helm template --no-hooks`'
 
   - name: kyverno
-    version: 1.19.1
+    version: 1.19.2
     refPaths:
       - path: scripts/add-kind-cluster.sh
         match: 'reg.kyverno.io/kyverno/'
@@ -254,3 +254,25 @@ dependencies:
         match: '\(app v'
       - path: docs/cluster-requirements.md
         match: '(\[Kyverno 차트\]|\| Kyverno \|)'
+
+  - name: argo-cd
+    version: 3.5.6
+    upstream:
+      flavour: github
+      url: argoproj/argo-cd
+    refPaths:
+      - path: scripts/kind-argocd.sh
+        match: '^ARGOCD_VERSION='
+      - path: docs/cluster-requirements.md
+        match: '(Argo CD [0-9.]+ core 설치가|\| Argo CD \|)'
+
+  - name: podinfo
+    version: 6.15.0
+    upstream:
+      flavour: github
+      url: stefanprodan/podinfo
+    refPaths:
+      - path: deploy/kind/argocd-app.yaml
+        match: 'targetRevision:'
+      - path: docs/cluster-requirements.md
+        match: 'podinfo 차트 [0-9]'
