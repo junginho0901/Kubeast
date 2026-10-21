@@ -15,6 +15,7 @@ const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
 test.beforeEach(async ({ request }) => {
   const cfg = await (await request.get('/api/v1/auth/oidc/config')).json()
   test.skip(!cfg.enabled, 'OIDC not enabled on auth-service — run e2e/scripts/oidc-mock.sh up')
+  test.skip(cfg.display_name !== 'Mock IdP', `OIDC points at ${cfg.display_name}, not the mock (oidc-keycloak.spec.ts covers Keycloak)`)
 })
 
 // Accounts the mock provisions, removed after the run.

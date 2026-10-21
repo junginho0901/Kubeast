@@ -137,6 +137,37 @@ tests:
           path: metadata.name
           value: RELEASE-NAME-auth-service
 
+  - it: appends auth.oidc.egress to the auth-service policy and to no other
+    template: networkpolicy.yaml
+    set:
+      networkPolicy.enabled: true
+      auth.oidc.egress:
+        - to:
+            - ipBlock: {cidr: 10.0.7.0/24}
+          ports:
+            - {protocol: TCP, port: 8443}
+    asserts:
+      - contains:
+          path: spec.egress
+          content:
+            to:
+              - ipBlock: {cidr: 10.0.7.0/24}
+            ports:
+              - {protocol: TCP, port: 8443}
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-auth-service
+      - notContains:
+          path: spec.egress
+          content:
+            to:
+              - ipBlock: {cidr: 10.0.7.0/24}
+            ports:
+              - {protocol: TCP, port: 8443}
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-k8s-service
+
   - it: alerts when a sink stops sending
     template: prometheusrule.yaml
     set:

@@ -276,3 +276,14 @@ dependencies:
         match: 'targetRevision:'
       - path: docs/cluster-requirements.md
         match: 'podinfo 차트 [0-9]'
+
+  - name: keycloak
+    version: 26.8.1
+    upstream:
+      flavour: github
+      url: keycloak/keycloak
+    refPaths:
+      - path: e2e/scripts/oidc-keycloak.sh
+        match: '^IMAGE="quay.io/keycloak/keycloak:'
+      - path: docs/oidc.md
+        match: '확인함\(2026-10-21, Keycloak [0-9]'

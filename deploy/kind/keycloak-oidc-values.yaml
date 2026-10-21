@@ -1,0 +1,22 @@
+# OIDC sign-in through the dev Keycloak (e2e/scripts/oidc-keycloak.sh up, realm deploy/kind/keycloak-realm.json),
+# with the group names the company Keycloak uses: sre → Admin, dev and viewer → Member with Write or Read on
+# cluster default, anyone else → Pending.
+auth:
+  oidc:
+    enabled: true
+    displayName: Keycloak
+    issuerUrl: http://host.docker.internal:8180/realms/kubeast
+    clientId: kubeast
+    existingSecret: kubeast-oidc-keycloak
+    redirectUrl: http://localhost:30080/api/v1/auth/oidc/callback
+    allowedDomains: [example.com]
+    roleMapping: [sre=Admin, dev=Member, viewer=Member]
+    clusterGroupMapping: ["dev=default:Write", "viewer=default:Read"]
+    defaultRole: Pending
+    syncRoles: true
+    # Docker Desktop puts host.docker.internal in 192.168.65.0/24; the default rules open 443 and 6443 only
+    egress:
+      - to:
+          - ipBlock: {cidr: 192.168.65.0/24}
+        ports:
+          - {protocol: TCP, port: 8180}

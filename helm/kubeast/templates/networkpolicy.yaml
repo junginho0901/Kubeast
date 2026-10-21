@@ -235,6 +235,10 @@ spec:
     # audit sinks (audit.sinkEgress)
     {{- toYaml . | nindent 4 }}
     {{- end }}
+    {{- with .Values.auth.oidc.egress }}
+    # OIDC issuer on another port (auth.oidc.egress)
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
 ---
 # session-service: gateway 에서 inbound, postgres + redis + auth(JWKS) egress
 apiVersion: networking.k8s.io/v1

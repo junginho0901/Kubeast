@@ -111,6 +111,10 @@ auth:
       credentialsSecret: ""
       domain: ""
       tokenAudience: ""
+    # Extra NetworkPolicy egress rules for auth-service to reach an issuer the
+    # default rules do not cover (443 and 6443 are open to every address; a
+    # Keycloak on 8443 or 8080 is not). Raw NetworkPolicyEgressRule entries.
+    egress: []
   # Kubernetes user impersonation: k8s-service and tool-server act toward every
   # cluster as the signed-in user (email) in groups kubeast:viewer/operator/admin,
   # so the cluster's RBAC decides and its audit log names the person. The

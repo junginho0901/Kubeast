@@ -77,6 +77,8 @@ auth:
 - 클라이언트: Client authentication 켬(confidential), Standard flow, Valid redirect URIs = 위 callback, (고급) PKCE method S256.
 - 그룹: 클라이언트 전용 scope(또는 기본 scope)에 **Group Membership** 매퍼 — Token Claim Name `groups`, **Full group path 끔**(켜면 `/kubeast-admins`처럼 앞에 `/`가 붙어 `roleMapping`과 안 맞음), Add to ID token 켬.
 - `issuerUrl`: `https://<keycloak>/realms/<realm>`.
+- Keycloak이 443이 아닌 포트(8443 등)로만 열려 있으면 `auth.oidc.egress`에 그 주소·포트의 NetworkPolicy 규칙을 넣습니다(auth-service는 기본으로 443·6443만 나감).
+- 확인함(2026-10-21, Keycloak 26.8.1): 위 설정의 렐름([`deploy/kind/keycloak-realm.json`](../deploy/kind/keycloak-realm.json) — 그룹 `sre`·`dev`·`viewer`, PKCE S256 필수)으로 그룹 → 계정 등급·클러스터 역할, 그룹 없는 사람 Pending, Keycloak에서 그룹을 옮기면 다음 로그인 때 클러스터 역할이 바뀌고 `user.cluster_role.set`(`via: oidc`)이 남음(e2e `oidc-keycloak.spec.ts`, `e2e/scripts/oidc-keycloak.sh up`). Kubeast 로그아웃은 Kubeast 세션만 끝내고 Keycloak 세션은 남깁니다 — 같은 브라우저에서 다시 로그인하면 비밀번호를 묻지 않습니다.
 
 ### Google
 

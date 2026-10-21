@@ -1,0 +1,63 @@
+{
+  "realm": "kubeast",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "groups": [
+    {"name": "sre"},
+    {"name": "dev"},
+    {"name": "viewer"}
+  ],
+  "clients": [
+    {
+      "clientId": "kubeast",
+      "name": "Kubeast (dev)",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "kubeast-dev-keycloak-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["http://localhost:30080/api/v1/auth/oidc/callback"],
+      "webOrigins": ["http://localhost:30080"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:30080/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "config": {
+            "claim.name": "groups",
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "kc-sre", "email": "kc-sre@example.com", "emailVerified": true, "firstName": "KC", "lastName": "SRE", "enabled": true,
+      "credentials": [{"type": "password", "value": "kc-sre", "temporary": false}], "groups": ["/sre"]
+    },
+    {
+      "username": "kc-dev", "email": "kc-dev@example.com", "emailVerified": true, "firstName": "KC", "lastName": "Dev", "enabled": true,
+      "credentials": [{"type": "password", "value": "kc-dev", "temporary": false}], "groups": ["/dev"]
+    },
+    {
+      "username": "kc-viewer", "email": "kc-viewer@example.com", "emailVerified": true, "firstName": "KC", "lastName": "Viewer", "enabled": true,
+      "credentials": [{"type": "password", "value": "kc-viewer", "temporary": false}], "groups": ["/viewer"]
+    },
+    {
+      "username": "kc-newbie", "email": "kc-newbie@example.com", "emailVerified": true, "firstName": "KC", "lastName": "Newbie", "enabled": true,
+      "credentials": [{"type": "password", "value": "kc-newbie", "temporary": false}]
+    }
+  ]
+}
