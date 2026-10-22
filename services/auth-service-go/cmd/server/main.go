@@ -69,7 +69,10 @@ func main() {
 	poolCfg.MaxConns = 20
 	poolCfg.MinConns = 2
 
-	ctx := context.Background()
+	// SIGINT/SIGTERM cancels ctx: the background workers stop and give back their connections (the audit sinks
+	// hold one for their leader lock), so pool.Close returns instead of waiting out the pod's grace period.
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
 		slog.Error("failed to connect to database", "error", err)
@@ -465,12 +468,10 @@ func main() {
 		}
 	}()
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	<-ctx.Done()
 
 	slog.Info("shutting down server...")
-	shutdownCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	srv.Shutdown(shutdownCtx)
 	slog.Info("server stopped")

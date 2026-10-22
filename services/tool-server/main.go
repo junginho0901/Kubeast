@@ -5,7 +5,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
@@ -69,10 +71,20 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	log.Printf("tool-server listening on :%s", port)
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("server error: %v", err)
-	}
+	go func() {
+		log.Printf("tool-server listening on :%s", port)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("server error: %v", err)
+		}
+	}()
+
+	// On SIGTERM a rollout lets the tool calls in flight finish (within the pod's grace period) instead of cutting them.
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	<-ctx.Done()
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+	_ = srv.Shutdown(shutdownCtx)
 }
 
 func buildToolRegistry() map[string]ToolDefinition {
