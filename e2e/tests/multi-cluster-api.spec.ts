@@ -330,3 +330,46 @@ test.describe('per-cluster RBAC enforcement (step 08)', () => {
     })
   })
 })
+
+test.describe('one role on several clusters (sign-in token size)', () => {
+  // A Read grant on every registered cluster: the token writes the Read list once and the other clusters name it, so
+  // it stays under the 4 KB a browser keeps in a cookie (a list per cluster passed it at two clusters — re-re-QA
+  // 2026-10-22), and every cluster still gets the Read permissions.
+  test('Read on every cluster signs in, by API and in the browser', async ({ request, browser }) => {
+    const auth = { Authorization: `Bearer ${await login(request)}`, 'X-Requested-With': 'XMLHttpRequest' }
+    const ids = (((await (await request.get('/api/v1/clusters', { headers: auth })).json()).items ?? []) as { id: string }[]).map((c) => c.id)
+    test.skip(ids.length < 2, 'needs two registered clusters')
+    const email = `e2e-multi-read-${Date.now()}@kubeast.local`
+    const password = 'e2e-multi-read-throwaway'
+    const created = await request.post('/api/v1/auth/admin/users', { headers: auth, data: { name: 'E2E multi read', email, password } })
+    expect(created.status()).toBe(201)
+    const userId = (await created.json()).id as string
+    try {
+      for (const id of ids) {
+        expect((await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/${id}`, { headers: auth, data: { role: 'Read' } })).ok()).toBeTruthy()
+      }
+      const res = await request.post('/api/v1/auth/login', { data: { email, password } })
+      expect(res.status(), 'sign-in through the gateway').toBe(200)
+      const token = (await res.json()).access_token as string
+      expect(token.length).toBeLessThan(3800)
+      const perms = decodeJwtPayload(token).permissions as Record<string, string[] | string>
+      const owner = [...ids].sort()[0]
+      expect(Array.isArray(perms[owner])).toBe(true)
+      for (const id of ids.filter((i) => i !== owner)) expect(perms[id]).toBe(owner)
+      const me = await (await request.get('/api/v1/auth/me', { headers: { Authorization: `Bearer ${token}` } })).json()
+      for (const id of ids) expect(me.permissions_matrix?.[id], id).toContain('resource.*.read')
+
+      const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } })
+      const page = await ctx.newPage()
+      await page.goto('/login')
+      await page.locator('input[autocomplete="email"]').fill(email)
+      await page.locator('input[type="password"]').fill(password)
+      await page.locator('button[type="submit"]').first().click()
+      await expect(page.locator('input[autocomplete="email"]')).toHaveCount(0, { timeout: 20_000 })
+      expect((await ctx.cookies()).some((c) => c.name === 'kubeast.token')).toBe(true)
+      await ctx.close()
+    } finally {
+      await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: auth, failOnStatusCode: false })
+    }
+  })
+})

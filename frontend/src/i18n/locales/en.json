@@ -2798,7 +2798,8 @@
       "ssoDenied": "Sign-in was cancelled or refused by the identity provider.",
       "ssoDomain": "This email domain is not allowed to sign in.",
       "ssoEmailUnverified": "The identity provider has not verified this email address.",
-      "ssoNoEmail": "The identity provider did not return an email address."
+      "ssoNoEmail": "The identity provider did not return an email address.",
+      "tokenTooLarge": "Your roles differ across too many clusters to fit in a sign-in token. Ask an administrator to align them."
     },
     "sso": {
       "button": "Continue with {{name}}",

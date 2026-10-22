@@ -1,6 +1,10 @@
 package auth
 
-import "testing"
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
 
 // permMatches must agree with ai-service security.py and frontend
 // utils/permissions.ts (same table in their tests).
@@ -102,5 +106,47 @@ func TestHasForCluster_Superuser(t *testing.T) {
 		if !m.HasForCluster("resource.pod.delete", cl) {
 			t.Errorf("superuser should pass for cluster %q", cl)
 		}
+	}
+}
+
+func TestCompactPermissions_EachListOnceAndParseRestoresTheMatrix(t *testing.T) {
+	read := []string{"menu.dashboard", "resource.*.read", "ai.tool.k8s_get_resources"}
+	m := PermissionMatrix{"test2": read, "default": read, "self": append([]string(nil), read...), "*": {"admin.users.read"}, "prod": {"resource.*.read"}}
+	c := CompactPermissions(m)
+	// the first id in sorted order keeps the list, the others name it
+	if _, ok := c["default"].([]string); !ok {
+		t.Fatalf("default should carry the list: %#v", c["default"])
+	}
+	if c["self"] != "default" || c["test2"] != "default" {
+		t.Fatalf("self/test2 should reference default: %#v", c)
+	}
+	if _, ok := c["prod"].([]string); !ok {
+		t.Fatalf("a different list is written: %#v", c["prod"])
+	}
+	// through JSON, as a token carries it
+	raw, _ := json.Marshal(c)
+	var back map[string]any
+	_ = json.Unmarshal(raw, &back)
+	got := ParsePermissions(back)
+	for id, want := range m {
+		if strings.Join(got[id], ",") != strings.Join(want, ",") {
+			t.Fatalf("%s: got %v want %v", id, got[id], want)
+		}
+	}
+	if !got.HasForCluster("resource.pods.read", "test2") || got.HasForCluster("menu.dashboard", "prod") {
+		t.Fatal("permission checks on a referenced cluster")
+	}
+}
+
+func TestParsePermissions_BadReferencesAreDropped(t *testing.T) {
+	got := ParsePermissions(map[string]any{"a": []any{"x"}, "b": "a", "c": "b", "d": "missing"})
+	if strings.Join(got["b"], ",") != "x" {
+		t.Fatalf("b: %v", got["b"])
+	}
+	if _, ok := got["c"]; ok {
+		t.Fatalf("a reference to a reference is not followed: %v", got["c"])
+	}
+	if _, ok := got["d"]; ok {
+		t.Fatalf("a reference to a missing cluster is dropped: %v", got["d"])
 	}
 }

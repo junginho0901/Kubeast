@@ -32,9 +32,13 @@ func TestAuthMiddleware_TokenVersionRevokes(t *testing.T) {
 	m := newTestManager(t)
 	perms := auth.PermissionMatrix{"*": {"*"}}
 	current := 3
-	lookup := func(ctx context.Context, userID string) (int, error) {
+	revoked := map[string]bool{}
+	lookup := func(ctx context.Context, userID, apiKeyID string) (int, error) {
 		if userID != "u1" {
 			return 0, errors.New("no such user")
+		}
+		if apiKeyID != "" && revoked[apiKeyID] {
+			return 0, errors.New("api key revoked")
 		}
 		return current, nil
 	}
@@ -61,6 +65,19 @@ func TestAuthMiddleware_TokenVersionRevokes(t *testing.T) {
 	gone, _ := m.CreateToken("deleted", "x@example.com", "admin", perms, nil, nil, 0)
 	if code := callWithToken(t, mw, gone); code != http.StatusUnauthorized {
 		t.Fatalf("token of an unknown user must be rejected, got %d", code)
+	}
+
+	// A token an API key was exchanged for goes with the key; the user's own sign-in stays.
+	keyTok, _ := m.CreateAPIKeyToken("u1", "u1@example.com", "admin", perms, nil, nil, 4, "key-1")
+	if code := callWithToken(t, mw, keyTok); code != http.StatusOK {
+		t.Fatalf("live key token must pass, got %d", code)
+	}
+	revoked["key-1"] = true
+	if code := callWithToken(t, mw, keyTok); code != http.StatusUnauthorized {
+		t.Fatalf("token of a revoked key must be rejected, got %d", code)
+	}
+	if code := callWithToken(t, mw, tok2); code != http.StatusOK {
+		t.Fatalf("the sign-in token is not touched by the key, got %d", code)
 	}
 }
 

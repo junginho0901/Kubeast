@@ -19,6 +19,7 @@ const SSO_ERROR_KEYS: Record<string, [string, string]> = {
   oidc_domain: ['login.errors.ssoDomain', 'This email domain is not allowed to sign in.'],
   oidc_email_unverified: ['login.errors.ssoEmailUnverified', 'The identity provider has not verified this email address.'],
   oidc_no_email: ['login.errors.ssoNoEmail', 'The identity provider did not return an email address.'],
+  token_too_large: ['login.errors.tokenTooLarge', 'Your roles differ across too many clusters to fit in a sign-in token. Ask an administrator to align them.'],
 }
 
 export default function Login() {
@@ -333,7 +334,9 @@ export default function Login() {
                   <div className="rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200" aria-live="polite">
                     {formError ??
                       (mode === 'login'
-                        ? tr('login.errors.loginFailed', 'Failed to sign in.')
+                        ? (String((loginMutation.error as { response?: { data?: { detail?: string } } } | null)?.response?.data?.detail ?? '').startsWith('Sign-in token too large')
+                          ? tr('login.errors.tokenTooLarge', 'Your roles differ across too many clusters to fit in a sign-in token. Ask an administrator to align them.')
+                          : tr('login.errors.loginFailed', 'Failed to sign in.'))
                         : ((registerMutation.error as { response?: { data?: { detail?: string } } } | null)?.response?.data?.detail
                           || tr('login.errors.registerFailed', 'Failed to create account.')))}
                     {mode === 'login' && loginMutation.isError && failCount >= 3 && (

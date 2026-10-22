@@ -10,8 +10,9 @@ import (
 )
 
 // TokenVersionLookup returns the user's current revocation counter. An error
-// (unknown user) rejects the token.
-type TokenVersionLookup func(ctx context.Context, userID string) (int, error)
+// (unknown user, or for a token an API key was exchanged for, a key revoked
+// or expired since) rejects the token.
+type TokenVersionLookup func(ctx context.Context, userID, apiKeyID string) (int, error)
 
 // AuthMiddleware validates JWTs using the local JWTManager's public key directly.
 // This avoids the self-referencing JWKS issue where auth-service tries to fetch
@@ -61,7 +62,8 @@ func AuthMiddleware(jwtMgr *JWTManager, tokenVersion TokenVersionLookup, cookieN
 
 			if tokenVersion != nil {
 				claimed, _ := claims["tv"].(float64) // JSON numbers decode as float64; missing claim = 0
-				current, err := tokenVersion(r.Context(), userID)
+				akid, _ := claims["akid"].(string)
+				current, err := tokenVersion(r.Context(), userID, akid)
 				if err != nil || int(claimed) != current {
 					http.Error(w, `{"detail":"Token revoked"}`, http.StatusUnauthorized)
 					return

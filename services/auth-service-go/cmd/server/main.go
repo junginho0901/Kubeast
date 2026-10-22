@@ -214,6 +214,13 @@ func main() {
 
 	// Bootstrap default users
 	bootstrapUsers(ctx, repo, cfg)
+	if cfg.BootstrapDemoUsers {
+		if ids, err := repo.ListClusterIDs(ctx); err != nil {
+			slog.Warn("demo accounts: list clusters", "error", err)
+		} else {
+			grantDemoClusterRoles(ctx, repo, cfg, ids)
+		}
+	}
 
 	// JWT Manager
 	jwtMgr, err := security.NewJWTManager(cfg.KeyDir, cfg.JWTIssuer, cfg.JWTAudience, cfg.JWTExpiresMinutes)
@@ -224,7 +231,7 @@ func main() {
 	slog.Info("JWT keys loaded")
 
 	// Auth middleware (validates tokens using local public key, no JWKS fetch needed)
-	authMiddleware := security.AuthMiddleware(jwtMgr, repo.GetTokenVersion, cfg.AuthCookieName)
+	authMiddleware := security.AuthMiddleware(jwtMgr, repo.TokenVersionFor, cfg.AuthCookieName)
 
 	// Cluster registry: per-cluster kubeconfigs are stored as Secrets (k8s) or
 	// files (docker) and read at request time, so registering a cluster never
@@ -260,6 +267,9 @@ func main() {
 	roleHandler := handler.NewRoleHandler(repo, auditStore)
 	setupHandler := handler.NewSetupHandler(cfg, registry, secretStore, auditStore)
 	clustersHandler := handler.NewClustersHandler(registry, secretStore, auditStore, cfg)
+	if cfg.BootstrapDemoUsers {
+		clustersHandler.OnRegistered = func(ctx context.Context, id string) { grantDemoClusterRoles(ctx, repo, cfg, []string{id}) }
+	}
 	healthHandler := handler.NewHealthHandler(pool)
 
 	// Router
@@ -485,8 +495,10 @@ func bootstrapUsers(ctx context.Context, repo *repository.Repository, cfg config
 	// Demo read/write accounts exist only for local development.
 	if cfg.BootstrapDemoUsers {
 		users = append(users,
-			struct{ email, password, roleName, name string }{cfg.DefaultReadEmail, cfg.DefaultReadPassword, "Read", "read"},
-			struct{ email, password, roleName, name string }{cfg.DefaultWriteEmail, cfg.DefaultWritePassword, "Write", "write"},
+			// Member accounts: access is per cluster (grantDemoClusterRoles) — a global
+			// Read/Write is folded into Member at boot (SeedSystemRoles) and grants nothing.
+			struct{ email, password, roleName, name string }{cfg.DefaultReadEmail, cfg.DefaultReadPassword, "Member", "read"},
+			struct{ email, password, roleName, name string }{cfg.DefaultWriteEmail, cfg.DefaultWritePassword, "Member", "write"},
 		)
 	}
 
@@ -524,6 +536,38 @@ func bootstrapUsers(ctx context.Context, repo *repository.Repository, cfg config
 			slog.Error("failed to create bootstrap user", "email", u.email, "error", err)
 		} else {
 			slog.Info("bootstrap user created", "email", u.email, "role", u.roleName)
+		}
+	}
+}
+
+// grantDemoClusterRoles gives the dev demo accounts their role on each cluster
+// (read → Read, write → Write) where they have none yet; an admin's change is
+// left alone. Runs at boot for the clusters already registered and after each
+// registration (BOOTSTRAP_DEMO_USERS only).
+func grantDemoClusterRoles(ctx context.Context, repo *repository.Repository, cfg config.Config, clusterIDs []string) {
+	for _, d := range []struct{ email, role string }{{cfg.DefaultReadEmail, "Read"}, {cfg.DefaultWriteEmail, "Write"}} {
+		user, err := repo.GetUserByEmail(ctx, d.email)
+		if err != nil || user == nil {
+			continue
+		}
+		role, err := repo.GetRoleByName(ctx, d.role)
+		if err != nil || role == nil {
+			continue
+		}
+		have, err := repo.ListUserClusterRoleNames(ctx, user.ID)
+		if err != nil {
+			slog.Warn("demo accounts: read grants", "email", d.email, "error", err)
+			continue
+		}
+		for _, id := range clusterIDs {
+			if _, ok := have[id]; ok {
+				continue
+			}
+			if err := repo.SetUserClusterRole(ctx, user.ID, id, role.ID, nil); err != nil {
+				slog.Warn("demo accounts: grant", "email", d.email, "cluster", id, "error", err)
+				continue
+			}
+			slog.Info("demo accounts: granted", "email", d.email, "cluster", id, "role", d.role)
 		}
 	}
 }

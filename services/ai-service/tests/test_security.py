@@ -16,6 +16,16 @@ def test_parse_matrix_keeps_clusters_separate():
     }
 
 
+def test_parse_matrix_resolves_a_cluster_that_names_another():
+    """auth-service writes each distinct list once; another cluster with the same list carries that cluster's id."""
+    raw = {"default": ["resource.*.read", "menu.dashboard"], "self": "default", "test2": "default",
+           "x": "self", "y": "missing"}
+    m = _parse_permission_matrix(raw)
+    assert m["self"] == m["test2"] == ("resource.*.read", "menu.dashboard")
+    assert "x" not in m and "y" not in m  # no chains, no dangling references
+    assert _payload(m).has_permission_for_cluster("resource.pod.read", "test2")
+
+
 def test_parse_matrix_rejects_legacy_and_bad_shapes():
     assert _parse_permission_matrix(["resource.pod.read"]) is None
     assert _parse_permission_matrix(None) is None

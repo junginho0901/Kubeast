@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -51,7 +52,13 @@ func (h *AuthHandler) TokenVersion(w http.ResponseWriter, r *http.Request) {
 		response.JSON(w, http.StatusOK, map[string]int{"tv": 0})
 		return
 	}
-	tv, err := h.repo.GetTokenVersion(r.Context(), userID)
+	// A token an API key was exchanged for goes with the key (revoked or expired).
+	akid, _ := claims["akid"].(string)
+	tv, err := h.repo.TokenVersionFor(r.Context(), userID, akid)
+	if errors.Is(err, repository.ErrAPIKeyNotFound) {
+		response.Error(w, http.StatusNotFound, "API key revoked")
+		return
+	}
 	if err != nil {
 		response.Error(w, http.StatusNotFound, "Unknown user")
 		return

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -57,6 +58,24 @@ func (r *Repository) GetTokenVersion(ctx context.Context, id string) (int, error
 	var v int
 	err := r.pool.QueryRow(ctx, `SELECT token_version FROM auth_users WHERE id = $1`, id).Scan(&v)
 	return v, err
+}
+
+// TokenVersionFor is GetTokenVersion for a presented token: one an API key was
+// exchanged for (apiKeyID set) is revoked with the key, so a key deleted or
+// past its expiry answers ErrAPIKeyNotFound and the token stops working on the
+// validators' next check instead of at its own expiry.
+func (r *Repository) TokenVersionFor(ctx context.Context, userID, apiKeyID string) (int, error) {
+	if apiKeyID != "" {
+		var expires time.Time
+		err := r.pool.QueryRow(ctx, `SELECT expires_at FROM api_keys WHERE id = $1 AND user_id = $2`, apiKeyID, userID).Scan(&expires)
+		if errors.Is(err, pgx.ErrNoRows) || (err == nil && !expires.After(time.Now())) {
+			return 0, ErrAPIKeyNotFound
+		}
+		if err != nil {
+			return 0, err
+		}
+	}
+	return r.GetTokenVersion(ctx, userID)
 }
 
 // BumpTokenVersion invalidates every token issued to the user so far.

@@ -380,8 +380,9 @@ func (v *JWTValidator) Validate(tokenStr string) (TokenPayload, error) {
 	if f, ok := claims["tv"].(float64); ok {
 		claimedTV = int(f)
 	}
+	akid, _ := claims["akid"].(string)
 	if v.cfg.TokenVersionURL != "" {
-		if err := v.checkTokenVersion(tokenStr, userID, claimedTV); err != nil {
+		if err := v.checkTokenVersion(tokenStr, userID, akid, claimedTV); err != nil {
 			return TokenPayload{}, err
 		}
 	}
@@ -391,7 +392,6 @@ func (v *JWTValidator) Validate(tokenStr string) (TokenPayload, error) {
 	} else if f, ok := claims["iat"].(float64); ok && f > 0 {
 		authTime = int64(f)
 	}
-	akid, _ := claims["akid"].(string)
 	sys, _ := claims["sys"].(string)
 	return TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms, Roles: ParseRoles(claims["roles"]), Namespaces: ParseNamespaces(claims["ns"]), TokenVersion: claimedTV, AuthTime: authTime, APIKeyID: akid, System: sys}, nil
 }

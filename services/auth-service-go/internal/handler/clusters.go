@@ -32,6 +32,9 @@ type ClustersHandler struct {
 	secrets    cluster.SecretWriter // nil when no store is configured for this mode
 	auditStore audit.Store
 	cfg        config.Config
+	// OnRegistered runs after a cluster is registered (the dev demo accounts get
+	// their grant on it, main.go); nil does nothing.
+	OnRegistered func(ctx context.Context, id string)
 }
 
 func NewClustersHandler(registry *cluster.PostgresRegistry, secrets cluster.SecretWriter, auditStore audit.Store, cfg config.Config) *ClustersHandler {
@@ -181,6 +184,9 @@ func (h *ClustersHandler) RegisterCluster(w http.ResponseWriter, r *http.Request
 
 	h.audit(r, "admin.cluster.register", payload, string(meta.ID),
 		nil, map[string]any{"mode": meta.Mode, "display_name": meta.DisplayName, "api_server_url": meta.APIServerURL}, nil)
+	if h.OnRegistered != nil {
+		h.OnRegistered(r.Context(), string(meta.ID))
+	}
 	response.JSON(w, http.StatusCreated, meta)
 }
 

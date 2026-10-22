@@ -135,6 +135,9 @@ test.describe('API keys', () => {
       // Revoke: the next exchange is refused; the admin revokes the other one.
       expect((await request.delete(`/api/v1/auth/api-keys/${readKey.id}`, { headers: bearer(user) })).status()).toBe(204)
       expect((await exchange(request, readKey.key)).status(), 'revoked key').toBe(401)
+      // the token already exchanged goes with the key once the services re-check (their token-version cache, 30 s)
+      await expect.poll(async () => (await request.get(`/api/v1/cluster/overview?cluster=${CLUSTER}`, { headers: onCluster(token, CLUSTER), failOnStatusCode: false })).status(),
+        { timeout: 45_000, intervals: [3_000] }).toBe(401)
       const adminList = await (await request.get(`/api/v1/auth/admin/users/${userId}/api-keys`, { headers: bearer(admin) })).json()
       expect(adminList.map((k: any) => k.id)).toEqual([writeKey.id])
       expect((await request.delete(`/api/v1/auth/admin/users/${userId}/api-keys/${writeKey.id}`, { headers: bearer(admin) })).status()).toBe(204)

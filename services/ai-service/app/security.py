@@ -50,7 +50,7 @@ def _fetch_token_version(token: str, user_id: str) -> int:
         raise
 
 
-_tv_cache: Dict[str, Tuple[int, float]] = {}  # user_id -> (version, monotonic seconds fetched)
+_tv_cache: Dict[str, Tuple[int, float]] = {}  # user_id[|akid] -> (version, monotonic seconds fetched)
 _tv_lock = threading.Lock()
 
 
@@ -59,15 +59,19 @@ def _compare_token_version(claimed: int, current: int) -> None:
         raise HTTPException(status_code=401, detail="Token revoked")
 
 
-def check_token_version(token: str, user_id: str, claimed: int) -> None:
+def check_token_version(token: str, user_id: str, claimed: int, akid: str = "") -> None:
     """Versions only grow, so a token claiming more than the cached version was
     issued after the cache entry (sign-in right after a role change): that
-    refreshes the cache instead of waiting for it to expire."""
+    refreshes the cache instead of waiting for it to expire. A token an API key
+    was exchanged for (akid) is cached apart: auth-service answers "revoked" for
+    it once the key is deleted or expired, and the user's sign-in token must not
+    keep a shared entry fresh for it (pkg/auth checkTokenVersion)."""
     if not AUTH_TOKEN_VERSION_URL:
         return
     now = time.monotonic()
+    key = f"{user_id}|{akid}" if akid else user_id
     with _tv_lock:
-        cached = _tv_cache.get(user_id)
+        cached = _tv_cache.get(key)
     if cached and now - cached[1] < TOKEN_VERSION_CACHE_SECONDS and claimed <= cached[0]:
         _compare_token_version(claimed, cached[0])
         return
@@ -75,7 +79,7 @@ def check_token_version(token: str, user_id: str, claimed: int) -> None:
         current = _fetch_token_version(token, user_id)
     except TokenRevokedError:
         with _tv_lock:
-            _tv_cache.pop(user_id, None)
+            _tv_cache.pop(key, None)
         raise HTTPException(status_code=401, detail="Token revoked")
     except Exception:
         if cached and now - cached[1] < TOKEN_VERSION_STALE_SECONDS:
@@ -87,7 +91,7 @@ def check_token_version(token: str, user_id: str, claimed: int) -> None:
             return
         raise HTTPException(status_code=401, detail="Token version unavailable")
     with _tv_lock:
-        _tv_cache[user_id] = (current, now)
+        _tv_cache[key] = (current, now)
     _compare_token_version(claimed, current)
 
 # Cluster id the services fall back to when a request names none (mirrors
@@ -169,6 +173,9 @@ def _parse_permission_matrix(raw) -> Optional[dict]:
     Only the per-cluster map form is accepted (auth-service issues nothing
     else since step 06). A flat list, a missing claim or any other shape returns
     None so the caller rejects the token — the same rule the Go services apply.
+    A value that is another cluster's id takes that cluster's list (auth-service
+    writes each distinct list once — pkg/auth CompactPermissions); a reference
+    to a reference or to a missing cluster is dropped.
     """
     if not isinstance(raw, dict):
         return None
@@ -176,6 +183,9 @@ def _parse_permission_matrix(raw) -> Optional[dict]:
     for cid, perms in raw.items():
         if isinstance(cid, str) and isinstance(perms, list):
             out[cid] = tuple(p for p in perms if isinstance(p, str))
+    for cid, ref in raw.items():
+        if isinstance(cid, str) and isinstance(ref, str) and isinstance(raw.get(ref), list):
+            out[cid] = out[ref]
     return out
 
 
@@ -210,7 +220,7 @@ def decode_access_token(token: str) -> TokenPayload:
         matrix = _parse_permission_matrix(payload.get("permissions"))
         if matrix is None:
             raise HTTPException(status_code=401, detail="Invalid token: permissions claim must be a per-cluster map")
-        check_token_version(token, user_id, int(payload.get("tv") or 0))
+        check_token_version(token, user_id, int(payload.get("tv") or 0), str(payload.get("akid") or ""))
         return TokenPayload(
             user_id=user_id,
             role=role or "read",

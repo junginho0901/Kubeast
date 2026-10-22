@@ -164,10 +164,31 @@ func (m *JWTManager) CreateInvestigatorToken(clusterID, namespace string, readTo
 // log's "system" actor, as for the other background work.
 const InvestigatorSubject = "system"
 
+// MaxTokenBytes bounds a signed token: it travels as the kubeast.token cookie,
+// and a browser keeps at most 4096 bytes of a cookie's name, value and
+// attributes (RFC 6265 §6.1). A bigger token would be dropped by the browser
+// without a word, so it is refused here with an error the caller logs.
+const MaxTokenBytes = 3800
+
+// ErrTokenTooLarge is returned when a signed token passes MaxTokenBytes.
+var ErrTokenTooLarge = errors.New("token too large for a browser cookie")
+
 func (m *JWTManager) sign(claims jwt.MapClaims) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	token.Header["kid"] = m.KeyID
-	return token.SignedString(m.PrivateKey)
+	signed, err := token.SignedString(m.PrivateKey)
+	if err != nil {
+		return "", err
+	}
+	if len(signed) > MaxTokenBytes {
+		return "", fmt.Errorf("%w: %d bytes (%d clusters)", ErrTokenTooLarge, len(signed), len(asMatrix(claims["permissions"])))
+	}
+	return signed, nil
+}
+
+func asMatrix(v any) map[string]any {
+	m, _ := v.(map[string]any)
+	return m
 }
 
 func (m *JWTManager) claims(userID, email, roleName string, permissions auth.PermissionMatrix, clusterRoles map[string]string, namespaces map[string][]string, tokenVersion int, authTime time.Time) jwt.MapClaims {
@@ -185,7 +206,7 @@ func (m *JWTManager) claims(userID, email, roleName string, permissions auth.Per
 		"sub":         userID,
 		"email":       email,
 		"role":        roleName,
-		"permissions": permissions,
+		"permissions": auth.CompactPermissions(permissions),
 		"roles":       clusterRoles,
 		"tv":          tokenVersion,
 		"auth_time":   authTime.Unix(),

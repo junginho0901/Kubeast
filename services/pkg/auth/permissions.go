@@ -1,6 +1,9 @@
 package auth
 
-import "strings"
+import (
+	"sort"
+	"strings"
+)
 
 // PermissionMatrix maps a cluster ID to the permission keys granted in that
 // cluster. The special key "*" applies to every cluster — it carries the
@@ -10,12 +13,42 @@ import "strings"
 // 00-COMMON §2-3).
 type PermissionMatrix map[string][]string
 
+// CompactPermissions is the "permissions" claim as auth-service writes it: each
+// distinct list once. A cluster whose list equals one already written (cluster
+// ids in sorted order) carries that cluster's id instead of the list, so one
+// role granted on many clusters does not repeat its list per cluster — a Read
+// list repeated on two clusters already passed the 4 KB a browser keeps in a
+// cookie (RFC 6265 §6.1). ParsePermissions resolves the references.
+func CompactPermissions(m PermissionMatrix) map[string]any {
+	ids := make([]string, 0, len(m))
+	for id := range m {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	owner := map[string]string{}
+	out := make(map[string]any, len(m))
+	for _, id := range ids {
+		sorted := append([]string(nil), m[id]...)
+		sort.Strings(sorted)
+		key := strings.Join(sorted, "\x00")
+		if first, ok := owner[key]; ok {
+			out[id] = first
+			continue
+		}
+		owner[key] = id
+		out[id] = m[id]
+	}
+	return out
+}
+
 // ParsePermissions converts a raw JWT "permissions" claim into a matrix.
 //
 // Only the per-cluster map form is accepted. The legacy flat-array form (and a
 // missing/!map claim) returns nil so the caller rejects the token with 401 and
 // forces a one-time re-login after the format switch (00-COMMON §2-3). An empty
-// map is a valid (deny-everything) matrix and is NOT rejected.
+// map is a valid (deny-everything) matrix and is NOT rejected. A value that is a
+// cluster id (CompactPermissions) takes that cluster's list; a reference to
+// another reference or to a missing cluster is dropped.
 func ParsePermissions(raw any) PermissionMatrix {
 	m, ok := raw.(map[string]any)
 	if !ok {
@@ -34,6 +67,13 @@ func ParsePermissions(raw any) PermissionMatrix {
 			}
 		}
 		out[cid] = perms
+	}
+	for cid, v := range m {
+		if ref, ok := v.(string); ok {
+			if list, ok := m[ref].([]any); ok && list != nil {
+				out[cid] = append([]string(nil), out[ref]...)
+			}
+		}
 	}
 	return out
 }

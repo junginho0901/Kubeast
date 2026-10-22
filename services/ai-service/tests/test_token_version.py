@@ -130,3 +130,19 @@ def test_check_is_off_without_a_url(monkeypatch):
     monkeypatch.setattr(security, "AUTH_TOKEN_VERSION_URL", "")
     monkeypatch.setattr(security, "_fetch_token_version", FakeLookup(99))
     assert _status(security.check_token_version, "tok", "u1", 1) == (200, None)
+
+
+def test_a_key_token_is_cached_apart_from_the_users_sign_in(lookup):
+    """auth-service answers "revoked" for a token whose API key was deleted; the user's sign-in token refreshing its
+    own entry must not let the key's token ride on it."""
+    def fetch(token, user_id):
+        lookup.calls.append((token, user_id))
+        if token == "key-tok" and lookup.error is not None:
+            raise lookup.error
+        return 3
+    security._fetch_token_version = fetch  # restored by monkeypatch teardown of the fixture's attribute
+    assert _status(security.check_token_version, "key-tok", "u1", 3, "key-1") == (200, None)
+    lookup.error = security.TokenRevokedError()
+    security._tv_cache["u1|key-1"] = (3, time.monotonic() - security.TOKEN_VERSION_CACHE_SECONDS - 1)  # due
+    assert _status(security.check_token_version, "sign-in", "u1", 3) == (200, None)  # refreshes "u1"
+    assert _status(security.check_token_version, "key-tok", "u1", 3, "key-1") == (401, "Token revoked")

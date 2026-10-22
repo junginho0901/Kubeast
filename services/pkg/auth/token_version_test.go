@@ -168,3 +168,44 @@ func TestValidate_TokenVersionOffWithoutURL(t *testing.T) {
 		t.Fatalf("without a lookup URL the claim is carried but not checked: %v", err)
 	}
 }
+
+// A token an API key was exchanged for is cached apart from the user's sign-in token: once auth-service answers
+// "revoked" for it (the key was deleted), the user's sign-in token checking in keeps passing but cannot refresh an
+// entry the key's token would ride on.
+func TestValidate_TokenVersionKeyTokenCachedApart(t *testing.T) {
+	j := newJWKSServer(t, "k1")
+	revokedKey := atomic.Bool{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tok, _ := jwt.Parse(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "), func(*jwt.Token) (any, error) { return &j.key.PublicKey, nil })
+		if claims, ok := tok.Claims.(jwt.MapClaims); ok && claims["akid"] != nil && revokedKey.Load() {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = w.Write([]byte(`{"tv":3}`))
+	}))
+	t.Cleanup(srv.Close)
+	v := NewJWTValidator(JWKSConfig{JWKSURL: j.srv.URL, Issuer: "iss", Audience: "aud", TokenVersionURL: srv.URL,
+		TokenVersionCacheTTL: 50 * time.Millisecond, TokenVersionStaleTTL: time.Minute})
+	signIn := signWithTV(t, j.key, "k1", 3)
+	keyTok := func() string {
+		tok := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+			"sub": "u1", "email": "u1@example.com", "role": "admin", "akid": "key-1",
+			"permissions": map[string][]string{"*": {"*"}}, "iss": "iss", "aud": "aud", "tv": 3,
+			"iat": time.Now().Unix(), "exp": time.Now().Add(time.Minute).Unix(),
+		})
+		tok.Header["kid"] = "k1"
+		s, _ := tok.SignedString(j.key)
+		return s
+	}()
+	if _, err := v.Validate(keyTok); err != nil {
+		t.Fatalf("live key token: %v", err)
+	}
+	revokedKey.Store(true)
+	time.Sleep(60 * time.Millisecond) // the key token's entry is due; the sign-in token now refreshes its own
+	if _, err := v.Validate(signIn); err != nil {
+		t.Fatalf("sign-in token after the key went: %v", err)
+	}
+	if _, err := v.Validate(keyTok); !errors.Is(err, ErrTokenRevoked) {
+		t.Fatalf("key token after revocation must be refused, got %v", err)
+	}
+}

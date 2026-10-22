@@ -31,10 +31,19 @@ type tokenVersionEntry struct {
 // waiting for it to expire. When auth-service cannot be reached, a version
 // fetched within the stale TTL still counts; with nothing cached the token is
 // refused rather than trusted.
-func (v *JWTValidator) checkTokenVersion(tokenStr, userID string, claimed int) error {
+//
+// A token an API key was exchanged for (akid) is cached apart from the user's
+// other tokens: auth-service answers "revoked" for it once the key is deleted
+// or expired, and a sign-in token of the same user must not keep refreshing a
+// shared entry that lets the key's token through.
+func (v *JWTValidator) checkTokenVersion(tokenStr, userID, akid string, claimed int) error {
 	now := time.Now()
+	key := userID
+	if akid != "" {
+		key = userID + "|" + akid
+	}
 	v.tvMu.Lock()
-	entry, cached := v.tv[userID]
+	entry, cached := v.tv[key]
 	v.tvMu.Unlock()
 	if cached && now.Sub(entry.fetched) < v.cfg.TokenVersionCacheTTL && claimed <= entry.version {
 		return compareTokenVersion(claimed, entry.version)
@@ -44,12 +53,12 @@ func (v *JWTValidator) checkTokenVersion(tokenStr, userID string, claimed int) e
 	switch {
 	case err == nil:
 		v.tvMu.Lock()
-		v.tv[userID] = tokenVersionEntry{version: current, fetched: now}
+		v.tv[key] = tokenVersionEntry{version: current, fetched: now}
 		v.tvMu.Unlock()
 		return compareTokenVersion(claimed, current)
 	case errors.Is(err, ErrTokenRevoked):
 		v.tvMu.Lock()
-		delete(v.tv, userID)
+		delete(v.tv, key)
 		v.tvMu.Unlock()
 		return err
 	case cached && now.Sub(entry.fetched) < v.cfg.TokenVersionStaleTTL:

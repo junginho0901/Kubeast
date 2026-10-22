@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -221,6 +222,13 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token, err := h.jwtMgr.CreateToken(user.ID, user.Email, user.RoleName, matrix, clusterRoles, namespaces, user.TokenVersion)
+	if errors.Is(err, security.ErrTokenTooLarge) {
+		slog.Warn("login: token too large", "user", user.Email, "err", err)
+		h.writeAuditFailure(r, "user.login.failed", &user.ID, &user.Email, &user.ID, &user.Email, "token_too_large",
+			jsonRaw(map[string]interface{}{"reason": "token_too_large", "clusters": len(clusterRoles)}))
+		response.Error(w, http.StatusInternalServerError, "Sign-in token too large: too many clusters with different roles")
+		return
+	}
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "Failed to create token")
 		return

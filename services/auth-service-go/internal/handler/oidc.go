@@ -24,6 +24,7 @@ import (
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/model"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/repository"
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/security"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
@@ -429,6 +430,10 @@ func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token, err := h.jwtMgr.CreateToken(user.ID, user.Email, user.RoleName, matrix, clusterRoles, namespaces, user.TokenVersion)
+	if errors.Is(err, security.ErrTokenTooLarge) {
+		h.oidcFail(w, r, "token_too_large", claims.Email, err)
+		return
+	}
 	if err != nil {
 		h.oidcFail(w, r, "oidc_provision", claims.Email, err)
 		return
