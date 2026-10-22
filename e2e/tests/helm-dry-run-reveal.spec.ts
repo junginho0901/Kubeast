@@ -57,6 +57,9 @@ test('the rollback window names the release it rolls back', async ({ page, reque
   // the preview compares two revisions of one release: one file, not a rename
   await expect(page.locator('.helm-diff2html').or(page.getByText(/^(No changes will be applied\.|적용될 변경이 없습니다\.)$/))).toBeVisible({ timeout: 20_000 })
   await expect(page.locator('.d2h-moved-tag')).toHaveCount(0)
+  if (await page.locator('.helm-diff2html').count()) {
+    await expect(page.locator('.helm-diff2html .d2h-file-name').first()).toHaveText(/^kubeast\/kubeast @\d+ → @\d+$/)
+  }
   await page.getByRole('button', { name: /^(cancel|취소)$/i }).click()
   await expect(subtitle).toHaveCount(0)
 })

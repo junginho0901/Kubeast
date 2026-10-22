@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { html as diffToHtml, parse as diffParse } from 'diff2html'
 import 'diff2html/bundles/css/diff2html.min.css'
+import { revisionFiles } from './diffFiles'
 
 // DiffView renders a unified-diff string as diff2html side-by-side
 // coloured diff. Falls back to <pre> when the parser returns nothing
@@ -12,9 +13,7 @@ export default function DiffView({ diff }: { diff: string }) {
   const html = useMemo(() => {
     if (!diff || !diff.trim()) return ''
     try {
-      // the two sides are revisions of one release (name@1.manifest → name@2.manifest): one file, not a rename
-      const files = diffParse(diff).map((f) => (f.isRename ? { ...f, isRename: false, oldName: f.newName } : f))
-      return diffToHtml(files, {
+      return diffToHtml(revisionFiles(diffParse(diff)), {
         drawFileList: false,
         matching: 'lines',
         outputFormat: 'side-by-side',
