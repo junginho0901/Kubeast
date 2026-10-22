@@ -400,6 +400,27 @@ async def test_an_investigation_has_its_own_slot_beside_the_chat(on):
 
 
 @pytest.mark.asyncio
+async def test_the_investigators_loop_runs_its_tools_through_the_real_turn(on):
+    """tool_turn's Claude Code branch against the real ClaudeCodeChat.turn (only the SDK is faked): each call reaches
+    the investigator's run_tool and its result goes back to the model. The two sides share the ToolRunner call."""
+    from app.services.ai import tool_turn
+
+    sdk = on([("call", "k8s_get_resources", {"resource_type": "pods"}), ("result", OK)])
+    ran = []
+
+    async def run_tool(name, args, step):
+        ran.append((name, args, step))
+        return "NAME READY"
+
+    service = SimpleNamespace(client=SimpleNamespace(claude_code=claude_code.ClaudeCodeChat(model="m", token="t")))
+    out = await tool_turn._claude_code_turn(service, [{"role": "user", "content": "x"}], TOOLS, run_tool, max_steps=5,
+                                            final_message="final", remaining=lambda: 30, lane="investigation")
+    assert ran == [("k8s_get_resources", {"resource_type": "pods"}, 1)]
+    assert sdk.state["tool_results"] == [{"content": [{"type": "text", "text": "NAME READY"}]}]
+    assert out.answer == "You can use 2 clusters."  # the run's result text is the report
+
+
+@pytest.mark.asyncio
 async def test_an_investigation_turn_runs_in_its_own_lane(on):
     sdk = on([("sleep", 0.05), ("result", OK)])
 

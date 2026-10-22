@@ -121,11 +121,16 @@ test.describe('AI Chat', () => {
     // input 즉시 또는 1~2초 안에 enabled 복귀 (streaming 종료)
     await expect(input).toBeEnabled({ timeout: 5_000 })
     await expect(stopButton).toHaveCount(0)
-    // the stream really stopped: the answer does not grow any more
-    const lastAssistant = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)').last()
-    const stopped = (await lastAssistant.innerText()).length
+    // the stream really stopped: the answer does not grow any more (stopped before the first word, there is no
+    // answer bubble at all — nothing was written or saved)
+    const assistants = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)')
+    const before = await assistants.count()
+    const stopped = before ? (await assistants.last().innerText()).length : 0
     await page.waitForTimeout(3000)
-    expect((await lastAssistant.innerText()).length).toBe(stopped)
+    expect(await assistants.count()).toBe(before)
+    if (before) expect((await assistants.last().innerText()).length).toBe(stopped)
+    // nothing looks busy after the stop (no "…" placeholder left)
+    await expect(page.locator('.animate-bounce')).toHaveCount(0)
   })
 
   test('copy button strips tool details from clipboard', async ({ page, context }) => {

@@ -80,7 +80,7 @@ async def _claude_code_turn(service, messages, tools, run_tool, *, max_steps, fi
     out, cc = ToolTurn(), TurnResult()
     results: list[str] = []
 
-    async def cc_tool(name: str, args: dict, step: int):
+    async def cc_tool(name: str, args: dict, step: int, call_id: Optional[int] = None):
         text = await run_tool(name, args, step)
         results.append(f"{name} {json.dumps(args, ensure_ascii=False)}\n{text}")
         return [], text

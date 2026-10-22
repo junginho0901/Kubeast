@@ -35,8 +35,13 @@ describe('markStoppedAnswer', () => {
     expect(out.slice(0, 3)).toEqual(msgs.slice(0, 3))
   })
 
-  it('marks nothing when the stopped turn has no answer text yet', () => {
+  it('drops the empty placeholder of a turn stopped before any text, as nothing is saved for it', () => {
     const msgs = [{ role: 'user' as const, content: 'q' }, { role: 'assistant' as const, content: '' }]
-    expect(markStoppedAnswer(msgs)).toBe(msgs)
+    expect(markStoppedAnswer(msgs)).toEqual([{ role: 'user', content: 'q' }])
+  })
+
+  it('keeps an empty placeholder that already holds a tool call', () => {
+    const msgs = [{ role: 'user' as const, content: 'q' }, { role: 'assistant' as const, content: '', toolCalls: [{ function: 'k8s_get_resources' }] }]
+    expect(markStoppedAnswer(msgs as any)).toBe(msgs)
   })
 })

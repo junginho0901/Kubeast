@@ -126,6 +126,11 @@ test.describe('alert investigation', () => {
     expect([d.provider, d.model]).toEqual([active.provider, active.model])
     expect(d.iterations).toBeGreaterThanOrEqual(1)
     for (const call of d.tool_calls as Array<{ tool: string }>) expect(READ_TOOLS.has(call.tool), `tool ${call.tool}`).toBe(true)
+    // A model that calls tools (not the dev Ollama one) read the cluster: at least one call came back without an error.
+    if (d.provider !== 'ollama') {
+      const ok = (d.tool_calls as Array<{ tool: string; error?: string }>).filter((c) => !c.error)
+      expect(ok.length, `tool calls: ${JSON.stringify(d.tool_calls)}`).toBeGreaterThan(0)
+    }
 
     const runs = (await auditRows(request, admin, 'ai.investigation.run', since)).filter((r) => r.after.investigation_id === row.id)
     expect(runs).toHaveLength(1)

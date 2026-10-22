@@ -42,8 +42,8 @@ STDERR_LINES = 20
 KEEP_ENV = frozenset({"PATH", "LANG", "LC_ALL", "TZ", "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY",
                       "https_proxy", "http_proxy", "no_proxy", "SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS"})
 
-# (tool name, arguments, model turn) → (chat SSE events after the call, the result text the model reads)
-ToolRunner = Callable[[str, dict, int], Awaitable[tuple[list[str], str]]]
+# (tool name, arguments, model turn, call number) → (chat SSE events after the call, the result text the model reads)
+ToolRunner = Callable[[str, dict, int, int], Awaitable[tuple[list[str], str]]]
 
 # Concurrency lanes: "chat" (chat, floating assistant, plain completions) and "investigation" (one worker, one run).
 _semaphores: dict[str, asyncio.Semaphore] = {}

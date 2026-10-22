@@ -560,8 +560,8 @@ class FakeClaudeCode:
 
     async def turn(self, *, messages, tools, run_tool, out, turn_limit=None, lane="chat", model=None):
         self.turn_kw = {"tools": [t["function"]["name"] for t in tools], "turn_limit": turn_limit, "lane": lane}
-        for name, args in self.calls:
-            events, _text = await run_tool(name, args, 1)
+        for call_id, (name, args) in enumerate(self.calls):
+            events, _text = await run_tool(name, args, 1, call_id)  # as ClaudeCodeChat.turn calls it
             for e in events:
                 yield e
         out.text, out.finish_reason, out.turns = self.text, self.finish, self.turns

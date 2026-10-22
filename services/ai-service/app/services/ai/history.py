@@ -39,11 +39,14 @@ DIGEST_INSTRUCTION = (
 DIGEST_DIRECTIVE = (
     "Write one note for the messages above, at most {cap} characters: what the user asked and what the assistant "
     "established (resource names, namespaces, clusters, counts, errors, decisions) or left open. "
+    "Every concrete value the user stated or asked you to keep in mind (a name, a number, an identifier, a preference) "
+    "goes into the note word for word, not as \"the user gave a name\". "
     "Do not answer or continue the messages — describe them."
 )
 COMPACT_DIRECTIVE = (
-    "Merge the notes above into one note of at most {cap} characters, oldest first, keeping every resource name, "
-    "namespace, cluster, count, error and decision they mention. Do not add anything."
+    "Merge the notes above into one note of at most {cap} characters, oldest first, keeping every value the user "
+    "stated word for word and every resource name, namespace, cluster, count, error and decision they mention. "
+    "Do not add anything."
 )
 
 _FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
@@ -127,7 +130,8 @@ def render_block(summary: Summary) -> dict[str, str]:
         "role": "user",
         "content": (
             f"[Earlier in this conversation — a summary of {summary.messages} messages that are no longer shown verbatim, "
-            "oldest first. Treat it as context, not as a new request.]\n" + summary.text
+            "oldest first. Treat it as context, not as a new request; answer in the language of the latest user "
+            "message.]\n" + summary.text
         ),
     }
 

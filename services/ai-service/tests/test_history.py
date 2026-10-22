@@ -232,3 +232,12 @@ async def test_per_message_input_is_capped():
     await history.ensure_summary(service, FakeDB(), "s1", older, sanitize, {})
     body = comp.calls[0]["messages"][1]["content"]
     assert "a" * history.PER_MESSAGE_CAP in body and "a" * (history.PER_MESSAGE_CAP + 1) not in body and "…" in body
+
+
+def test_notes_keep_the_values_the_user_stated_and_the_block_names_the_answer_language():
+    """A note that says "the user gave a nickname" loses it: the value itself goes in, also when notes are merged; the
+    recap block (written in English) does not decide the language of the answer."""
+    assert "word for word" in history.DIGEST_DIRECTIVE and "a name, a number" in history.DIGEST_DIRECTIVE
+    assert "every value the user stated word for word" in history.COMPACT_DIRECTIVE
+    s = history.load({"summary": _stored([{"upto_id": 2, "messages": 2, "text": "User's nickname is 파란고래, number 47."}])})
+    assert "answer in the language of the latest user message" in history.render_block(s)["content"]

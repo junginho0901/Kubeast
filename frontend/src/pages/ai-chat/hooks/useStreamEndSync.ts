@@ -20,10 +20,14 @@ export function settleMessages(messages: Message[], errored: boolean): Message[]
 }
 
 // The answer the user stopped: the last assistant bubble carries the stopped marker the server saves with it, so its
-// usage line reads "Stopped · usage not available" now and after a reload.
+// usage line reads "Stopped · usage not available" now and after a reload. Stopped before any text or tool call,
+// nothing is saved, so its empty placeholder goes too (it would stay as a "…" bubble that looks still busy).
 export function markStoppedAnswer(messages: Message[]): Message[] {
   const last = messages.map((m) => m.role).lastIndexOf('assistant')
-  if (last < 0 || !messages[last].content) return messages
+  if (last < 0) return messages
+  if (!messages[last].content) {
+    return last === messages.length - 1 && !messages[last].toolCalls?.length ? messages.slice(0, last) : messages
+  }
   return messages.map((m, i) => (i === last ? { ...m, usage: { stopped: true } } : m))
 }
 
