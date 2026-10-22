@@ -84,11 +84,14 @@ test.describe('ai_service refactor regression', () => {
     await page.waitForTimeout(2000)
     await stop.click()
     await expect(input).toBeEnabled({ timeout: 5_000 })
-    // the SSE really stopped: the answer does not grow any more
-    const lastAssistant = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)').last()
-    const stopped = (await lastAssistant.innerText()).length
+    // the SSE really stopped: the answer does not grow any more (stopped before the first word, there is no answer
+    // bubble at all)
+    const assistants = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)')
+    const before = await assistants.count()
+    const stopped = before ? (await assistants.last().innerText()).length : 0
     await page.waitForTimeout(3000)
-    expect((await lastAssistant.innerText()).length).toBe(stopped)
+    expect(await assistants.count()).toBe(before)
+    if (before) expect((await assistants.last().innerText()).length).toBe(stopped)
   })
 
   test('Copy 버튼 — intent.py 의 stripToolDetails 가 클립보드에서 tool 메타 제거', async ({ page }) => {

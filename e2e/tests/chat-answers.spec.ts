@@ -132,9 +132,15 @@ test.describe('Chat answers', () => {
     await expect(copy).toBeVisible({ timeout: 90_000 })
     await expect(answer.getByTestId('floating-assistant-avatar')).toHaveAttribute('src', '/icon.svg')
     await expect(page.getByTestId('floating-waiting')).toHaveCount(0)
-    const shown = (await answer.locator('.prose').innerText()).trim()
     await copy.click()
     await expect(copy).toHaveAttribute('aria-label', /Copied|복사됨/)
-    expect((await page.evaluate(() => navigator.clipboard.readText())).trim()).toBe(shown)
+    // what is copied is the answer as written (markdown, as AI Chat's copy), which is also what was saved
+    const id = await page.evaluate(() => sessionStorage.getItem('kubest.floatingChat.sessionId'))
+    const copied = (await page.evaluate(() => navigator.clipboard.readText())).trim()
+    await expect.poll(async () => {
+      const detail = await (await page.request.get(`/api/v1/sessions/${id}?cluster=self`, { headers: XRW })).json()
+      const last = detail.messages?.[detail.messages.length - 1]
+      return last?.role === 'assistant' ? last.content.trim() : null
+    }).toBe(copied)
   })
 })
