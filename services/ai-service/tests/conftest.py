@@ -31,3 +31,17 @@ class _StubSettings:
 _stub_module = ModuleType("app.config")
 _stub_module.settings = _StubSettings()
 sys.modules["app.config"] = _stub_module
+
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _fresh_audit_readiness():
+    """감사 준비 확인(audit_writer)은 결과를 READY_TTL_SEC 동안 모듈 전역에 기억한다 — 앞 시험이 남긴 "불가"가
+    다음 시험의 쓰기 경로를 503으로 막지 않게, 시험마다 처음 상태로 돌린다."""
+    from app.services import audit_writer
+
+    audit_writer._ready_cache.update(at=0.0, ok=True, error=None)
+    audit_writer._write_broken = False
+    yield
