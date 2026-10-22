@@ -142,6 +142,10 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
   }
 
   const statusText = (s: PrometheusStatus) => {
+    const text = statusBody(s)
+    return s.flavor === 'victoriametrics' ? `${text} · VictoriaMetrics` : text
+  }
+  const statusBody = (s: PrometheusStatus) => {
     if (s.source === 'external') {
       return tr('cluster.edit.prometheus.resultExternal', 'External store {{endpoint}} — {{state}}', {
         endpoint: s.endpoint,
@@ -155,7 +159,8 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
       })
     }
     if (s.source === 'proxy') return tr('cluster.edit.prometheus.resultProxy', 'Found inside the cluster: {{endpoint}}', { endpoint: s.endpoint })
-    return tr('cluster.edit.prometheus.resultNone', 'No Prometheus: {{message}}', { message: s.message ?? '' })
+    const message = s.reason ? tr(`cluster.edit.prometheus.reason.${s.reason}`, s.message ?? '') : (s.message ?? '')
+    return tr('cluster.edit.prometheus.resultNone', 'No Prometheus: {{message}}', { message })
   }
 
   return (

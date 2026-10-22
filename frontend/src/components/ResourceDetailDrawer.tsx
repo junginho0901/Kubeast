@@ -140,7 +140,7 @@ export default function ResourceDetailDrawer() {
     && !UNRESOLVABLE_KINDS.has(kind)
     && !!name
 
-  const { data: fetchedRawJson, isFetching: rawJsonFetching } = useQuery({
+  const { data: fetchedRawJson, isFetching: rawJsonFetching, error: rawJsonError } = useQuery({
     queryKey: ['resource-json', kind, ns, name],
     queryFn: () => api.getResourceJson(kindToPlural(kind), name, ns || undefined),
     enabled: needsRawJsonFetch,
@@ -149,6 +149,10 @@ export default function ResourceDetailDrawer() {
   })
 
   const effectiveRawJson = target?.rawJson ?? fetchedRawJson
+  // Opened by link with nothing from a list: an object that is gone (404) or out of the caller's reach (403) says
+  // so, instead of an empty object with a delete button.
+  const loadStatus = needsRawJsonFetch && !target?.rawJson ? (rawJsonError as { response?: { status?: number } } | null)?.response?.status : undefined
+  const unreadable = loadStatus === 403 || loadStatus === 404
   // Argo CD guard: an object an Application manages is badged; in block mode
   // the console's write buttons are off (k8s-service refuses them anyway).
   const argoManaged = detectArgoApp((fetchedRawJson ?? effectiveRawJson) as Record<string, unknown> | undefined, kind, argoCfg)
@@ -351,7 +355,7 @@ export default function ResourceDetailDrawer() {
           name={name}
           effectiveRawJson={effectiveRawJson}
           canGoBack={canGoBack}
-          canDelete={canDelete && !argoBlocked}
+          canDelete={canDelete && !argoBlocked && !unreadable}
           argo={argo}
           tab={tab}
           onClose={handleClose}
@@ -373,7 +377,13 @@ export default function ResourceDetailDrawer() {
         <div ref={contentScrollRef} className="flex-1 overflow-y-auto overflow-x-hidden">
           {tab === 'info' && (
             <div className="p-5 space-y-6 text-sm">
-              {renderInfoContent()}
+              {unreadable ? (
+                <p data-testid="detail-unreadable" className="rounded-lg border border-amber-700/40 bg-amber-950/20 px-4 py-3 text-amber-200">
+                  {loadStatus === 404
+                    ? t('common.objectNotFound', { defaultValue: 'This object does not exist; it may have been deleted.' })
+                    : t('common.objectForbidden', { defaultValue: 'You are not allowed to see this object.' })}
+                </p>
+              ) : renderInfoContent()}
             </div>
           )}
 
@@ -382,12 +392,12 @@ export default function ResourceDetailDrawer() {
               <YamlEditor
                 key={`${kind}-${name}-${ns || ''}`}
                 value={kind === 'Secret' && canEditYaml && yamlData?.yaml ? decodeSecretYaml(yamlData.yaml) : yamlData?.yaml || ''}
-                canEdit={canEditYaml && !argoBlocked}
+                canEdit={canEditYaml && !argoBlocked && !unreadable}
                 isLoading={yamlLoading}
                 isRefreshing={yamlFetching}
                 error={yamlError ? t('common.yamlError', { defaultValue: 'Failed to load YAML.' }) : null}
                 onRefresh={() => setYamlRefreshNonce(prev => prev + 1)}
-                onApply={canEditYaml && !argoBlocked ? handleApplyYamlGuarded : undefined}
+                onApply={canEditYaml && !argoBlocked && !unreadable ? handleApplyYamlGuarded : undefined}
                 onApplySuccess={() => { invalidateAfterApply(); setApplyToast({ type: 'success', message: t('common.applied', { defaultValue: 'Applied' }) }) }}
                 onApplyError={(msg) => setApplyToast({ type: 'error', message: msg || t('common.applyError', { defaultValue: 'Apply failed.' }) })}
                 onDirtyChange={setIsYamlDirty}

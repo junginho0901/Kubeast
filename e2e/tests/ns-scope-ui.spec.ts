@@ -97,6 +97,8 @@ test.describe('namespace-scoped grants in the UI', () => {
       await page.goto('/')
       await expect(page.getByTestId('forbidden-banner')).toBeVisible({ timeout: 20_000 })
       await expect(page.getByTestId('forbidden-namespace-hint')).toContainText('api, web')
+      // nodes are not counted for a namespace-scoped grant: no number rather than a 0 that reads as "no nodes"
+      await expect(page.getByTestId('stat-value-nodes')).toHaveText('—')
 
       // The request form is prefilled with the scope and cannot leave it empty.
       await page.goto('/account')

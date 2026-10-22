@@ -114,3 +114,27 @@ func TestPasswordLoginAllowed(t *testing.T) {
 		t.Fatal("off allows nobody")
 	}
 }
+
+func TestRolesFromGroups(t *testing.T) {
+	keycloak := config.OIDCConfig{Enabled: true, SyncRoles: true, GroupsClaim: "groups", IssuerURL: "https://sso.example.com/realms/corp"}
+	google := config.OIDCConfig{Enabled: true, SyncRoles: true, GroupsClaim: "groups", IssuerURL: "https://accounts.google.com"}
+	googleLookup := google
+	googleLookup.GoogleGroups.Enabled = true
+	noSync := keycloak
+	noSync.SyncRoles = false
+	cases := map[string]struct {
+		cfg  config.OIDCConfig
+		want bool
+	}{
+		"groups claim, synced":         {keycloak, true},
+		"Google without the lookup":    {google, false},
+		"Google with the group lookup": {googleLookup, true},
+		"syncRoles off":                {noSync, false},
+		"SSO off":                      {config.OIDCConfig{SyncRoles: true, GroupsClaim: "groups"}, false},
+	}
+	for name, c := range cases {
+		if got := rolesFromGroups(c.cfg); got != c.want {
+			t.Errorf("%s: rolesFromGroups = %v, want %v", name, got, c.want)
+		}
+	}
+}

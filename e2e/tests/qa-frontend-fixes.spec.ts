@@ -51,6 +51,14 @@ test.describe('QA sweep frontend fixes', () => {
     }
   })
 
+  test('a link to an object that does not exist says so, with nothing to delete', async ({ page }) => {
+    const name = `e2e-no-such-cm-${Date.now().toString(36)}`
+    await page.goto(`/configuration/configmaps?cluster=self&detail=ConfigMap/default/${name}`)
+    const drawer = page.locator('div[class*="fixed"][class*="inset-y-0"][class*="right-0"]').last()
+    await expect(drawer.getByTestId('detail-unreadable')).toHaveText(/does not exist|객체가 없습니다/, { timeout: 15_000 })
+    await expect(drawer.getByRole('button', { name: /^delete\b|삭제/i })).toHaveCount(0)
+  })
+
   test('the sidebar nav scrolls under the account box instead of overlapping it (900px)', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto('/admin/users')

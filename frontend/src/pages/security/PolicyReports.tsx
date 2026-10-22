@@ -222,7 +222,7 @@ export default function PolicyReports() {
   const isError = tab === 'results' ? resultsQuery.isError : summaryQuery.isError
   const errorDetail = ((tab === 'results' ? resultsQuery.error : summaryQuery.error) as { response?: { data?: { detail?: string } } } | null)?.response?.data?.detail
   const sortHeader = (key: NonNullable<SortKey>, label: string, extra = '', align = 'text-left') => (
-    <th className={`${extra} ${align} py-3 px-4 cursor-pointer`} onClick={() => handleSort(key)}>
+    <th className={`${extra} ${align} py-3 px-4 cursor-pointer whitespace-nowrap`} onClick={() => handleSort(key)}>
       <span className="inline-flex items-center gap-1">{label}{renderSortIcon(key)}</span>
     </th>
   )

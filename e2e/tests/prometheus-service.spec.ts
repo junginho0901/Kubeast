@@ -127,5 +127,21 @@ test.describe('Prometheus Service named or found by label', () => {
     await page.getByTestId('edit-prometheus-check').click()
     await expect(page.getByTestId('edit-prometheus-status')).toContainText(`Service ${ALT}`, { timeout: 20000 })
     await expect(page.getByTestId('edit-prometheus-status')).toContainText(/OK|정상/)
+    await expect(page.getByTestId('edit-prometheus-status')).not.toContainText('VictoriaMetrics')
   })
+})
+
+test('a cluster with no Prometheus says why in the page language', async ({ page, request }) => {
+  const admin = await login(request)
+  const st = await (await request.get('/api/v1/cluster/prometheus/status?cluster=self', { headers: bearer(admin) })).json()
+  test.skip(st.source !== 'none', `cluster self has a Prometheus here (${JSON.stringify(st)})`)
+  expect(st.reason).toBe('not_found')
+
+  await page.goto('/admin/clusters')
+  const row = page.locator('tbody tr').filter({ has: page.getByText('self', { exact: true }) }).first()
+  await row.getByRole('button', { name: /Edit|편집/ }).click()
+  await page.getByTestId('edit-prometheus-check').click()
+  const result = page.getByTestId('edit-prometheus-status')
+  await expect(result).toContainText(/none found in the cluster|클러스터 안에서 찾지 못했습니다/, { timeout: 20000 })
+  await expect(result).not.toContainText(st.message)
 })

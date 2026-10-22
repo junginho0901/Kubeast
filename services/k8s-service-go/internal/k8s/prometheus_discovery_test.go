@@ -164,7 +164,7 @@ func TestPrometheusDiscovery_NotFoundProbedOnce(t *testing.T) {
 	s := newPromService(cs, nil)
 	ctx := context.Background()
 	for i := 0; i < 2; i++ {
-		if st := s.PrometheusStatus(ctx); st["available"] != false || st["message"] != "Prometheus not found in target cluster" {
+		if st := s.PrometheusStatus(ctx); st["available"] != false || st["message"] != "Prometheus not found in target cluster" || st["reason"] != "not_found" {
 			t.Fatalf("call %d: status = %v", i+1, st)
 		}
 	}

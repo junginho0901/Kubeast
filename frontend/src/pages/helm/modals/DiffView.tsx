@@ -12,7 +12,8 @@ export default function DiffView({ diff }: { diff: string }) {
   const html = useMemo(() => {
     if (!diff || !diff.trim()) return ''
     try {
-      const files = diffParse(diff)
+      // the two sides are revisions of one release (name@1.manifest → name@2.manifest): one file, not a rename
+      const files = diffParse(diff).map((f) => (f.isRename ? { ...f, isRename: false, oldName: f.newName } : f))
       return diffToHtml(files, {
         drawFileList: false,
         matching: 'lines',

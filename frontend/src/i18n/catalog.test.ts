@@ -40,6 +40,19 @@ describe('Korean catalog', () => {
     expect(missing).toEqual([])
   })
 
+  // i18next reads some option names itself: `ns` picks the catalog namespace, `lng` the language — passed as a
+  // value (`t(key, { ns: namespace })`) the lookup goes elsewhere and the raw key shows (the Helm rollback window).
+  it('never uses an i18next option name as a placeholder', () => {
+    const reserved = /\{\{\s*(ns|lng|lngs|defaultValue|keySeparator|nsSeparator|returnObjects)\s*[},]/
+    const bad: string[] = []
+    const walkCat = (o: unknown, path: string) => {
+      if (typeof o === 'string') { if (reserved.test(o)) bad.push(path) } else if (o && typeof o === 'object') for (const [k, v] of Object.entries(o)) walkCat(v, path ? `${path}.${k}` : k)
+    }
+    walkCat(en, 'en'); walkCat(ko, 'ko')
+    const calls = files.flatMap((f) => [...readFileSync(f, 'utf8').matchAll(/\b(?:tr|t)\(\s*'[\w.]+'\s*,\s*\{[^}]*\bns:\s*(?!DETAIL_NS)/g)].map(() => relative(SRC, f)))
+    expect([...bad, ...calls]).toEqual([])
+  })
+
   it('never uses a key both as a label and as the parent of other keys', () => {
     const keys = [...used.keys()]
     expect(keys.filter((k) => keys.some((o) => o.startsWith(`${k}.`)))).toEqual([])

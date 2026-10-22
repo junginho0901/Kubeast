@@ -83,7 +83,7 @@ export default function RollbackModal({
           {t('helmReleaseDetail.rollback.title', { rev: targetRevision })}
         </h3>
         <p className="text-sm text-slate-400 mb-4">
-          {t('helmReleaseDetail.rollback.subtitle', { ns: namespace, name })}
+          {t('helmReleaseDetail.rollback.subtitle', { namespace, name })}
         </p>
 
         {loading ? (

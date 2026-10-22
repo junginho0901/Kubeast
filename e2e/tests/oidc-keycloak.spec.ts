@@ -85,6 +85,8 @@ test.describe('OIDC sign-in through Keycloak', () => {
     expect(discovery.code_challenge_methods_supported).toContain('S256')
     await page.goto('/login')
     await expect(page.getByTestId('sso-login')).toContainText('Keycloak')
+    // syncRoles with the groups claim: a role set in Kubeast would not last past the next sign-in
+    expect((await (await request.get('/api/v1/auth/oidc/config')).json()).roles_from_groups).toBe(true)
   })
 
   test('the company groups give each person the account level and cluster role they map to', async ({ page }) => {
@@ -100,6 +102,11 @@ test.describe('OIDC sign-in through Keycloak', () => {
       const body = await me(page)
       expect([body.email, body.auth_source, body.role?.name], username).toEqual([`${username}@example.com`, 'oidc', want.role])
       expect(body.cluster_roles?.[CLUSTER], `${username} on ${CLUSTER}`).toBe(want.cluster)
+      if (want.role === 'Pending') {
+        // the pending page sends them to the group, not to an admin's role in Kubeast (it would be reset at sign-in)
+        await page.goto('/')
+        await expect(page.getByText(/your role comes from your groups|역할은 인증 제공자\(IdP\)의 그룹/)).toBeVisible({ timeout: 15_000 })
+      }
     }
   })
 

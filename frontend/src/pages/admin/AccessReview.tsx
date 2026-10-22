@@ -129,7 +129,7 @@ export default function AccessReview() {
     access_requests: [
       { key: 'requester_email', label: tr('accessReview.col.requester', 'Requester'), render: (r) => <span className="text-white">{r.requester_email}</span>, text: (r) => r.requester_email },
       { key: 'cluster', label: tr('accessReview.col.cluster', 'Cluster'), render: (r) => `${r.cluster} · ${r.role}`, text: (r) => `${r.cluster} ${r.role}` },
-      { key: 'duration', label: tr('accessReview.col.duration', 'Duration'), render: (r) => formatDuration(r.duration_minutes) },
+      { key: 'duration', label: tr('accessReview.col.duration', 'Duration'), render: (r) => formatDuration(r.duration_minutes, t) },
       { key: 'reason', label: tr('accessReview.col.reason', 'Reason'), render: (r) => <span className="line-clamp-2">{r.reason}</span>, text: (r) => r.reason },
       { key: 'status', label: tr('accessReview.col.status', 'Status'), render: (r) => `${r.status}${r.end_reason ? ` (${r.end_reason})` : ''}`, text: (r) => r.status },
       { key: 'created_at', label: tr('accessReview.col.requested', 'Requested'), render: (r) => whenCell(r.created_at) },

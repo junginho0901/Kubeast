@@ -62,7 +62,7 @@ export default function UpgradePreviewModal({
           {t('helmReleaseDetail.upgrade.title')}
         </h3>
         <p className="text-sm text-slate-400 mb-4">
-          {t('helmReleaseDetail.upgrade.subtitle', { ns: namespace, name })}
+          {t('helmReleaseDetail.upgrade.subtitle', { namespace, name })}
         </p>
 
         {noChange ? (

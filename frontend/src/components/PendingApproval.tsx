@@ -13,6 +13,7 @@ export default function PendingApproval() {
   // Shared with RequireAuth (same key), so this is served from the cache.
   const { data: me } = useQuery({ queryKey: ['me'], queryFn: api.me, staleTime: 30000, retry: false })
   const viaSSO = me?.auth_source === 'oidc'
+  const { data: oidc } = useQuery({ queryKey: ['oidc-config'], queryFn: api.oidcConfig, staleTime: 60000, retry: false, enabled: viaSSO })
 
   const handleLogout = () => {
     void logoutSession()
@@ -42,7 +43,9 @@ export default function PendingApproval() {
         <div className="mt-6 rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-3">
           <p className="text-xs text-slate-500">
             {viaSSO
-              ? tr('pending.ssoHint', 'You signed in with single sign-on. Once an administrator assigns your role, sign out and sign in again.')
+              ? oidc?.roles_from_groups
+                ? tr('pending.ssoGroupHint', 'You signed in with single sign-on, and your role comes from your groups at the identity provider. Ask an administrator to add you to a group there, then sign out and sign in again.')
+                : tr('pending.ssoHint', 'You signed in with single sign-on. Once an administrator assigns your role, sign out and sign in again.')
               : tr('pending.hint', 'Please contact your administrator to get your account approved.')}
           </p>
         </div>

@@ -119,11 +119,12 @@ func (s *Service) PrometheusStatus(ctx context.Context) map[string]interface{} {
 	}
 	src := s.getPromSource(ctx)
 	if src == nil {
-		msg := "Prometheus not found in target cluster"
+		msg, reason := "Prometheus not found in target cluster", "not_found"
 		if !PrometheusDiscoverEnabled() {
-			msg = "No Prometheus URL registered for this cluster (features.prometheus.discover=false)"
+			msg, reason = "No Prometheus URL registered for this cluster (features.prometheus.discover=false)", "discover_off"
 		}
-		return map[string]interface{}{"available": false, "source": "none", "message": msg}
+		// reason is the screen's catalog key for message (cluster.edit.prometheus.reason.<reason>)
+		return map[string]interface{}{"available": false, "source": "none", "message": msg, "reason": reason}
 	}
 	if src.ext != nil {
 		ok, msg := src.ext.healthy(ctx)

@@ -284,11 +284,26 @@ func passwordLoginAllowed(cfg config.Config, email string) bool {
 // page can hide "Create account" instead of letting the form fail with 404.
 func (h *AuthHandler) OIDCConfig(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, map[string]any{
-		"enabled":        h.cfg.OIDC.Enabled,
-		"display_name":   h.cfg.OIDC.DisplayName,
-		"password_login": h.cfg.PasswordLogin,
-		"registration":   h.cfg.AllowRegistration,
+		"enabled":           h.cfg.OIDC.Enabled,
+		"display_name":      h.cfg.OIDC.DisplayName,
+		"password_login":    h.cfg.PasswordLogin,
+		"registration":      h.cfg.AllowRegistration,
+		"roles_from_groups": rolesFromGroups(h.cfg.OIDC),
 	})
+}
+
+// rolesFromGroups: every sign-in re-applies the provider's groups, so a role an
+// admin sets in Kubeast does not last — the pending page says to ask for a
+// group. Google ID tokens carry no groups claim: there only the Workspace group
+// lookup brings groups, and without it an admin's grant stays.
+func rolesFromGroups(c config.OIDCConfig) bool {
+	if !c.Enabled || !c.SyncRoles {
+		return false
+	}
+	if strings.TrimRight(c.IssuerURL, "/") == "https://accounts.google.com" {
+		return c.GoogleGroups.Enabled
+	}
+	return c.GroupsClaim != ""
 }
 
 // OIDCLogin handles GET /auth/oidc/login?next=/path — starts the code flow.

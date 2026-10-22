@@ -375,7 +375,10 @@
       "namespacesPlaceholder": "비우면 클러스터 전체 — 한정하려면 쉼표로 나열",
       "namespacesScoped": "이 클러스터의 내 권한은 {{namespaces}}에 한정됩니다. 요청도 그 안에서만 됩니다.",
       "namespacesHint": "적은 네임스페이스에서만 임시 역할이 적용됩니다."
-    }
+    },
+    "durationMin": "{{m}}분",
+    "durationH": "{{h}}시간",
+    "durationHMin": "{{h}}시간 {{m}}분"
   },
   "nav": {
     "accessRequests": "Access Requests",
@@ -1799,7 +1802,7 @@
       "network": "네트워크"
     },
     "table": {
-      "name": "Name",
+      "name": "이름",
       "namespace": "Namespace",
       "cpu": "CPU",
       "ram": "메모리",
@@ -1844,7 +1847,7 @@
     "searchResults": "정책·규칙·리소스·메시지로 검색...",
     "source": "보고서 {{reports}}개 · {{time}}",
     "table": {
-      "policy": "Policy",
+      "policy": "정책",
       "category": "분류",
       "severity": "심각도",
       "source": "출처",
@@ -1859,7 +1862,7 @@
       "result": "결과",
       "rule": "규칙",
       "kind": "Kind",
-      "name": "Name",
+      "name": "이름",
       "message": "메시지",
       "time": "시각",
       "resource": "리소스"
@@ -1992,7 +1995,9 @@
       "fit": "맞춤"
     },
     "listEmpty": "항목이 없습니다.",
-    "noSearchResults": "검색 결과가 없습니다."
+    "noSearchResults": "검색 결과가 없습니다.",
+    "objectNotFound": "이 객체가 없습니다. 지워졌을 수 있습니다.",
+    "objectForbidden": "이 객체를 볼 권한이 없습니다."
   },
   "dashboard": {
     "optimization": {
@@ -2871,8 +2876,9 @@
     "title": "승인 대기 중",
     "description": "계정이 생성되었습니다. 관리자가 계정을 승인해야 서비스를 이용할 수 있습니다.",
     "hint": "관리자에게 계정 승인을 요청해 주세요.",
-    "ssoHint": "SSO로 로그인한 계정입니다. 관리자가 역할을 부여하면 로그아웃 후 다시 로그인해 주세요.",
-    "logout": "로그아웃"
+    "ssoHint": "SSO로 로그인한 계정입니다. 관리자가 역할을 부여하면 로그아웃 후 다시 로그인하세요.",
+    "logout": "로그아웃",
+    "ssoGroupHint": "SSO로 로그인한 계정이고, 역할은 인증 제공자(IdP)의 그룹에서 정해집니다. 관리자에게 그 그룹에 추가해 달라고 요청한 뒤 로그아웃했다가 다시 로그인하세요."
   },
   "login": {
     "errors": {
@@ -3452,7 +3458,7 @@
       "permission": {
         "all": "전체 권한",
         "menu_all": "모든 메뉴",
-        "menu_dashboard": "대시보드",
+        "menu_dashboard": "Core 메뉴 묶음(Dashboard·Cluster View·Monitoring·Alerts·Cost·AI Chat 등)",
         "menu_workloads": "워크로드",
         "menu_network": "네트워크",
         "menu_storage": "스토리지",
@@ -3893,7 +3899,7 @@
     "rollback": {
       "button": "롤백",
       "title": "리비전 {{rev}}로 롤백",
-      "subtitle": "{{ns}}/{{name}} — 변경 내용을 미리 보고 적용합니다.",
+      "subtitle": "{{namespace}}/{{name}} — 변경 내용을 미리 보고 적용합니다.",
       "noChange": "적용될 변경이 없습니다.",
       "cancel": "취소",
       "apply": "롤백 실행",
@@ -3904,7 +3910,7 @@
       "cancel": "취소",
       "preview": "변경 미리보기 (Dry Run)",
       "title": "Values 변경 미리보기",
-      "subtitle": "{{ns}}/{{name}} — chart 버전은 그대로 두고 values만 바꿉니다.",
+      "subtitle": "{{namespace}}/{{name}} — chart 버전은 그대로 두고 values만 바꿉니다.",
       "noChange": "적용될 변경이 없습니다.",
       "apply": "업그레이드 실행",
       "applying": "업그레이드 중..."
@@ -4099,7 +4105,11 @@
         "resultNone": "Prometheus 없음: {{message}}",
         "ok": "정상",
         "fail": "실패: {{message}}",
-        "checkNote": "연결 확인은 저장된 설정으로 합니다. 바꾼 값은 저장 뒤에 확인하세요."
+        "checkNote": "연결 확인은 저장된 설정으로 합니다. 바꾼 값은 저장 뒤에 확인하세요.",
+        "reason": {
+          "not_found": "클러스터 안에서 찾지 못했습니다(레이블·이름으로 Prometheus나 단일 VictoriaMetrics Service가 없음)",
+          "discover_off": "이 클러스터에 등록한 주소가 없고 찾기도 꺼져 있습니다(features.prometheus.discover=false)"
+        }
       },
       "logSearch": {
         "title": "로그 검색",
@@ -4830,9 +4840,9 @@
       "failed": "무음을 만들지 못했습니다.",
       "create": "무음",
       "by": "만든 사람",
-      "ends": "끝",
+      "ends": "끝나는 시각",
       "state": {
-        "active": "걸림",
+        "active": "적용 중",
         "pending": "예정",
         "expired": "끝남"
       },
@@ -4983,13 +4993,13 @@
       "bindings": "전체 바인딩"
     },
     "table": {
-      "name": "Name",
+      "name": "이름",
       "validations": "Validations",
       "mutations": "Mutations",
       "paramKind": "Param kind",
       "bindings": "Bindings",
       "failurePolicy": "Failure policy",
-      "age": "Age"
+      "age": "경과 시간"
     }
   },
   "ai": {

@@ -41,3 +41,22 @@ test('a rollback preview is a recorded reveal and leaves the release as it is', 
   const after = await (await request.get(`${release}?cluster=self`, { headers: bearer(admin) })).json()
   expect(after.revision).toBe(revision) // a preview does not roll back
 })
+
+test('the rollback window names the release it rolls back', async ({ page, request }) => {
+  const admin = await login(request)
+  const detail = await request.get('/api/v1/helm/releases/kubeast/kubeast?cluster=self', { headers: bearer(admin), failOnStatusCode: false })
+  test.skip(!detail.ok(), `no Helm release kubeast/kubeast on cluster self (${detail.status()})`)
+  test.skip((await detail.json()).revision < 2, 'the release has one revision: nothing to roll back to')
+
+  await page.goto('/helm/releases/kubeast/kubeast?cluster=self')
+  await page.getByRole('button', { name: /^(history|이력)$/i }).click()
+  await page.getByRole('button', { name: /^(rollback|롤백)$/i }).first().click()
+  const subtitle = page.getByText(/^kubeast\/kubeast — /)
+  await expect(subtitle).toHaveText(/^kubeast\/kubeast — (review the diff|변경 내용을 미리)/)
+  await expect(page.getByText(/helmReleaseDetail\./)).toHaveCount(0)
+  // the preview compares two revisions of one release: one file, not a rename
+  await expect(page.locator('.helm-diff2html').or(page.getByText(/^(No changes will be applied\.|적용될 변경이 없습니다\.)$/))).toBeVisible({ timeout: 20_000 })
+  await expect(page.locator('.d2h-moved-tag')).toHaveCount(0)
+  await page.getByRole('button', { name: /^(cancel|취소)$/i }).click()
+  await expect(subtitle).toHaveCount(0)
+})

@@ -82,6 +82,8 @@ export interface ClusterOverview {
   total_pvs: number
   pod_status: Record<string, number>
   node_count: number
+  /** counted within a namespace-scoped grant: cluster-wide numbers (nodes, PVs) are not counted */
+  scoped?: boolean
   cluster_version?: string
 }
 
@@ -587,6 +589,10 @@ export interface PrometheusStatus {
   // proxy: the Service was named in the settings (true) or found by discovery.
   configured?: boolean
   message?: string
+  // source none: why, as a catalog key for message (not_found, discover_off)
+  reason?: string
+  // what answered: prometheus or victoriametrics
+  flavor?: string
 }
 
 export interface PrometheusQueryResponse {
@@ -1650,6 +1656,8 @@ export interface OIDCLoginConfig {
   password_login: 'on' | 'admin-only' | 'off'
   /** self-service registration (ALLOW_REGISTRATION); absent on older servers = unknown, keep the link */
   registration?: boolean
+  /** each sign-in takes the role from the provider's groups (syncRoles): an admin's role in Kubeast does not last */
+  roles_from_groups?: boolean
 }
 
 // AdminResetPassword 응답: Member 필드 + 1회용 평문 비밀번호

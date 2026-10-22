@@ -375,7 +375,10 @@
       "namespacesPlaceholder": "Empty = the whole cluster — or list some, comma-separated",
       "namespacesScoped": "Your access here is limited to {{namespaces}}; a request stays within them.",
       "namespacesHint": "The temporary role applies to the listed namespaces only."
-    }
+    },
+    "durationMin": "{{m}} min",
+    "durationH": "{{h}} h",
+    "durationHMin": "{{h}} h {{m}} min"
   },
   "nav": {
     "accessRequests": "Access Requests",
@@ -1982,7 +1985,9 @@
       "fit": "Fit"
     },
     "listEmpty": "No items.",
-    "noSearchResults": "No results found."
+    "noSearchResults": "No results found.",
+    "objectNotFound": "This object does not exist; it may have been deleted.",
+    "objectForbidden": "You are not allowed to see this object."
   },
   "dashboard": {
     "optimization": {
@@ -2786,7 +2791,8 @@
     "description": "Your account has been created. An administrator needs to approve your account before you can access the service.",
     "hint": "Please contact your administrator to get your account approved.",
     "ssoHint": "You signed in with single sign-on. Once an administrator assigns your role, sign out and sign in again.",
-    "logout": "Sign out"
+    "logout": "Sign out",
+    "ssoGroupHint": "You signed in with single sign-on, and your role comes from your groups at the identity provider. Ask an administrator to add you to a group there, then sign out and sign in again."
   },
   "login": {
     "errors": {
@@ -3339,7 +3345,7 @@
       "permission": {
         "all": "All permissions",
         "menu_all": "All menus",
-        "menu_dashboard": "Dashboard",
+        "menu_dashboard": "Core menus (Dashboard, Cluster View, Monitoring, Alerts, Cost, AI Chat …)",
         "menu_workloads": "Workloads",
         "menu_network": "Network",
         "menu_storage": "Storage",
@@ -3530,7 +3536,7 @@
     "rollback": {
       "button": "Rollback",
       "title": "Rollback to revision {{rev}}",
-      "subtitle": "{{ns}}/{{name}} — review the diff before applying",
+      "subtitle": "{{namespace}}/{{name}} — review the diff before applying",
       "noChange": "No changes will be applied.",
       "cancel": "Cancel",
       "apply": "Apply rollback",
@@ -3541,7 +3547,7 @@
       "cancel": "Cancel",
       "preview": "Preview changes (dry-run)",
       "title": "Values upgrade preview",
-      "subtitle": "{{ns}}/{{name}} — chart version unchanged; values only",
+      "subtitle": "{{namespace}}/{{name}} — chart version unchanged; values only",
       "noChange": "No changes will be applied.",
       "apply": "Apply upgrade",
       "applying": "Upgrading..."
@@ -3721,7 +3727,11 @@
         "resultNone": "No Prometheus: {{message}}",
         "ok": "OK",
         "fail": "failed: {{message}}",
-        "checkNote": "The check uses the saved settings. Save first, then check changed values."
+        "checkNote": "The check uses the saved settings. Save first, then check changed values.",
+        "reason": {
+          "not_found": "none found in the cluster (no Prometheus or single-node VictoriaMetrics Service by label or name)",
+          "discover_off": "no URL registered for this cluster, and discovery is off (features.prometheus.discover=false)"
+        }
       },
       "logSearch": {
         "title": "Log search",
@@ -4201,7 +4211,7 @@
       "failed": "The silence was not made.",
       "create": "Silence",
       "by": "By",
-      "ends": "Ends",
+      "ends": "Ends at",
       "state": {
         "active": "Active",
         "pending": "Pending",

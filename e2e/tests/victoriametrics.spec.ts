@@ -94,10 +94,18 @@ test.describe('VictoriaMetrics as the metrics store', () => {
     })
   })
 
-  test('a single node named as the Service reads the same values; its targets come from its own scraping', async ({ request }) => {
+  test('a single node named as the Service reads the same values; its targets come from its own scraping', async ({ page, request }) => {
     await patch(request, { prometheus_service: SINGLE })
     const st = await status(request)
     expect(st).toMatchObject({ available: true, source: 'proxy', configured: true, flavor: 'victoriametrics', endpoint: `${SINGLE} (via K8s API proxy)` })
+    // the edit dialog's check names the store
+    await page.goto('/admin/clusters')
+    const row = page.locator('tbody tr').filter({ hasText: CLUSTER }).filter({ hasNot: page.getByText('self', { exact: true }) }).first()
+    await row.getByRole('button', { name: /Edit|편집/ }).click()
+    await page.getByTestId('edit-prometheus-check').click()
+    await expect(page.getByTestId('edit-prometheus-status')).toContainText(`${SINGLE} (via K8s API proxy)`, { timeout: 20000 })
+    await expect(page.getByTestId('edit-prometheus-status')).toContainText(/· VictoriaMetrics$/)
+    await page.keyboard.press('Escape')
     expect(await memoryNow(request)).toBe(memory)
     test.skip(!mcp, 'the MCP server is off')
     const targets = JSON.parse((await tool(request, admin, 'prometheus_targets', { cluster: CLUSTER })).text)

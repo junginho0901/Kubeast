@@ -178,7 +178,7 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
               <div key={r.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-700/60 px-3 py-2 text-sm" data-testid={`my-access-request-${r.id}`}>
                 <div className="min-w-0">
                   <div className="text-slate-200 truncate">
-                    <span className="font-medium">{r.cluster_name || r.cluster_id}</span> · {r.role} · {formatDuration(r.duration_minutes)}
+                    <span className="font-medium">{r.cluster_name || r.cluster_id}</span> · {r.role} · {formatDuration(r.duration_minutes, t)}
                   </div>
                   <div className="text-xs text-slate-400 truncate">
                     {formatWhen(r.created_at)}
@@ -250,7 +250,7 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
                   value={String(duration)}
                   onChange={(v) => setDuration(Number(v))}
                   className="mt-1 w-full"
-                  options={durations.map((m) => ({ value: String(m), label: formatDuration(m), testId: `access-request-duration-opt-${m}` }))}
+                  options={durations.map((m) => ({ value: String(m), label: formatDuration(m, t), testId: `access-request-duration-opt-${m}` }))}
                 />
               </label>
               <label className="block text-xs font-semibold text-slate-400">

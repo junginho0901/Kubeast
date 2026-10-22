@@ -436,7 +436,8 @@ export function DashboardBody() {
     {
       name: tr('dashboard.stats.nodes', 'Nodes'),
       resourceType: 'nodes' as ResourceType,
-      value: count(overview?.node_count),
+      // a namespace-scoped grant cannot read nodes: the scoped overview's 0 means "not counted", not "no nodes"
+      value: overview?.scoped ? '—' : count(overview?.node_count),
       icon: Server,
       color: 'text-cyan-400',
       bgColor: 'bg-cyan-500/10',

@@ -224,7 +224,7 @@ export default function AlertInbox() {
                       )}
                     </td>
                     <td className="py-3 px-4">
-                      <span className="block truncate font-medium text-white" title={r.alertname}>{r.alertname || '-'}</span>
+                      <span className="block break-all line-clamp-2 font-medium text-white" title={r.alertname}>{r.alertname || '-'}</span>
                       <span className={`text-xs ${severityClass[r.severity] ?? 'text-slate-400'}`}>{r.severity || '-'}</span>
                       {r.summary && <span className="block truncate text-xs text-slate-400" title={r.summary}>{r.summary}</span>}
                     </td>

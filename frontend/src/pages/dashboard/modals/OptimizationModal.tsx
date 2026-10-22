@@ -266,7 +266,8 @@ export function OptimizationModal({
         </td>
       )}
       <td className="px-2 py-1.5">
-        <div className="flex flex-wrap gap-1">
+        {/* the table is as wide as its content (w-max): a bounded box lets the badges wrap instead of running off */}
+        <div className="flex flex-wrap gap-1 max-w-[220px]">
           {row.flags.length === 0 ? (
             <span className="text-slate-500">-</span>
           ) : (

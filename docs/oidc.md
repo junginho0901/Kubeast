@@ -69,6 +69,7 @@ auth:
 - 여러 그룹이 걸리면 넓은 쪽: 계정 등급 Admin > 커스텀 > Member > Pending, 클러스터별 Admin > Write > Read.
 - `syncRoles: true`이고 **토큰에 그룹 클레임이 있으면** 로그인마다 다시 맞춥니다 — 공급자에서 그룹을 빼면 다음 로그인에 권한도 빠집니다(매핑되는 그룹이 없으면 `defaultRole`). **그룹 클레임이 없으면**(Google) 관리자가 화면에서 준 권한을 덮어쓰지 않습니다.
 - Namespace 범위 권한은 커스텀 역할(`auth.impersonation.customRoles`의 `namespaces`)로 줍니다.
+- 승인 대기 화면: 로그인마다 그룹으로 역할을 다시 맞추는 설치(`syncRoles`이고 그룹 클레임을 받는 공급자, Google은 `googleGroups`를 켰을 때 — `GET /api/v1/auth/oidc/config`의 `roles_from_groups`)면 "관리자에게 그룹 추가를 요청하세요"라고 안내합니다. 그 밖에는 "관리자가 역할을 부여하면 다시 로그인하세요"입니다.
 
 ## 4. 공급자별
 
