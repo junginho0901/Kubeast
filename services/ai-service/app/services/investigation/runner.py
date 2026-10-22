@@ -25,6 +25,7 @@ import httpx
 from app.database import get_db_service, utcnow
 from app.services.ai.debug_dump import safe_error
 from app.services.ai.model_errors import classify
+from app.services.audit_target import tool_target
 from app.services.audit_writer import audit_ready, write_audit
 from app.services.investigation import prompt as inv_prompt
 from app.services.investigation import settings as inv_settings
@@ -157,13 +158,14 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row) -> dict[str,
                 result = json.dumps({"error": clean_error(e)})
                 entry["error"] = clean_error(e)
         tool_log.append(entry)
+        target = tool_target(name, args)
         await write_audit(
             action="ai.tool.call",
             actor_user_id=ACTOR_ID,
             actor_email=ACTOR_EMAIL,
-            target_type=args.get("resource_type") or "tool",
-            target_id=args.get("resource_name") or args.get("name") or args.get("pod_name") or name,
-            namespace=args.get("namespace") or row.namespace or None,
+            target_type=target.type,
+            target_id=target.id,
+            namespace=target.namespace or row.namespace or None,
             cluster=perm.effective_cluster(service),
             after={
                 "investigation_id": row.id,

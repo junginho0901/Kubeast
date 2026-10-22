@@ -8,7 +8,7 @@ import { test, expect, type APIRequestContext } from '@playwright/test'
 // Cluster → Validating / Mutating Admission Policies (admissionregistration.k8s.io/v1, read-only): a policy and its
 // binding created with kubectl show up in the list with the kubectl columns plus the binding count, and the drawer
 // carries the CEL expression and the binding table. The binding's namespace selector matches no namespace, so the
-// policy affects nothing while the test runs.
+// policy affects nothing while the test runs. A Read user lists them too (kubeast:cluster-reader).
 
 const EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const PASSWORD = process.env.E2E_USER_PASSWORD || ''
@@ -133,5 +133,24 @@ test.describe('admission policies', () => {
     await expect(info.getByTestId('admission-policy-mutation')).toContainText('ApplyConfiguration')
     await expect(info.getByTestId('admission-policy-mutation')).toContainText('e2e-map')
     await expect(info.getByTestId('admission-policy-bindings')).toContainText(`${MAP}-binding`)
+  })
+
+  test('a Read user reads the policies too (kubeast:cluster-reader)', async ({ request }) => {
+    test.skip(!hasVAP, 'the cluster does not serve validatingadmissionpolicies/v1')
+    const email = `e2e-vap-reader-${stamp}@kubeast.local`
+    const password = 'e2e-reader-throwaway'
+    const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E VAP reader', email, password } })
+    expect(created.status()).toBe(201)
+    const id = (await created.json()).id as string
+    try {
+      expect((await request.put(`/api/v1/auth/admin/users/${id}/cluster-roles/self`, { headers: bearer(admin), data: { role: 'Read' } })).status()).toBe(200)
+      const reader = await login(request, email, password)
+      const res = await request.get('/api/v1/cluster/validatingadmissionpolicies?cluster=self', { headers: bearer(reader) })
+      expect(res.status(), await res.text()).toBe(200)
+      expect(((await res.json()) as { name: string }[]).map((p) => p.name)).toContain(VAP)
+      if (hasMAP) expect((await request.get('/api/v1/cluster/mutatingadmissionpolicies?cluster=self', { headers: bearer(reader) })).status()).toBe(200)
+    } finally {
+      await request.delete(`/api/v1/auth/admin/users/${id}`, { headers: bearer(admin), failOnStatusCode: false })
+    }
   })
 })

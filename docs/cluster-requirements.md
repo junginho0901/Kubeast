@@ -125,7 +125,7 @@ Prometheus 질의 API를 그대로 쓰므로 화면·AI 도구 모두 같은 질
 - **prometheus-community/prometheus 차트** — [`prometheus-values.yaml`](../deploy/examples/target-cluster/prometheus-values.yaml). 서버 Service는 레이블로 찾으므로 Namespace·포트(기본 80)와 상관없습니다 — 예시는 Read 프록시 값(`cluster-values.yaml`의 `viewerProxyServices`)과 맞추려고 9090으로 둡니다. 기본 수집 작업(cAdvisor·kubelet·kube-state-metrics·node-exporter)에 OpenCost를 더합니다.
 
   ```bash
-  helm install prometheus prometheus-community/prometheus --version 29.36.1 \
+  helm install prometheus prometheus-community/prometheus --version 29.37.0 \
     -n monitoring --create-namespace -f deploy/examples/target-cluster/prometheus-values.yaml
   ```
 
@@ -148,7 +148,7 @@ Kubeast에서는 Admin → Clusters → 편집 → Prometheus "연결 확인"이
 - **예시**: [`opencost-values.yaml`](../deploy/examples/target-cluster/opencost-values.yaml) — §3 예시의 Prometheus를 읽도록 한 값.
 
   ```bash
-  helm install opencost opencost/opencost --version 2.5.32 \
+  helm install opencost opencost/opencost --version 2.5.33 \
     -n opencost --create-namespace -f deploy/examples/target-cluster/opencost-values.yaml
   ```
 
@@ -183,7 +183,7 @@ CRD가 없으면 Kubeast는 빈 목록과 "설치 안 됨"(`X-Kubeast-Not-Instal
 | VerticalPodAutoscalers | `autoscaling.k8s.io/v1` CRD. 추천값은 VPA recommender가 채움 |
 | Gateway API | `gateway.networking.k8s.io/v1` CRD(GatewayClass·Gateway·HTTPRoute 등)와 구현체 |
 | Gateway 정책 | 라벨 `gateway.networking.k8s.io/policy`가 붙은 CRD(GEP-713), 또는 기본 목록 — BackendTLSPolicy, Envoy Gateway(`gateway.envoyproxy.io`의 BackendTraffic·ClientTraffic·Security·EnvoyPatch·EnvoyExtension Policy), Istio(AuthorizationPolicy·RequestAuthentication·PeerAuthentication·Telemetry·WasmPlugin·EnvoyFilter·DestinationRule) |
-| Admission Policies | ValidatingAdmissionPolicy(`admissionregistration.k8s.io/v1`), MutatingAdmissionPolicy(`admissionregistration.k8s.io/v1`) — 서빙하지 않는 클러스터는 "설치 안 됨" |
+| Admission Policies | ValidatingAdmissionPolicy(`admissionregistration.k8s.io/v1`), MutatingAdmissionPolicy(`admissionregistration.k8s.io/v1`) — 서빙하지 않는 클러스터는 "설치 안 됨". Read 그룹은 `kubeast:cluster-reader`로 정책·바인딩을 읽음(2026-10-22 추가 — 그 전에 RBAC를 적용한 클러스터는 다시 적용, `view`에는 없음) |
 | Ingress 드로어 지연 | ingress-nginx 컨트롤러와 §3의 `nginx_ingress_controller_*` 수집 |
 | AI 도구 `gitops_status` | `applications.argoproj.io` CRD(Argo CD). Argo CD가 설치된 클러스터에만 있으므로 중앙 Argo CD면 관리 클러스터에서 호출 — 없으면 도구가 unavailable로 답함. 읽는 사람의 RBAC(`applications.argoproj.io` get/list)이 상한 |
 

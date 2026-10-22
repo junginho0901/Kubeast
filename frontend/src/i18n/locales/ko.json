@@ -3824,7 +3824,7 @@
     "allNamespaces": "전체 Namespace",
     "searchPlaceholder": "Release 이름 검색...",
     "matchCount": "{{count}}개의 Release가 검색되었습니다.",
-    "forbidden": "이 클러스터에서 Helm Release를 조회할 권한이 없습니다.",
+    "forbidden": "Helm은 Release 기록을 Secret에 둡니다. 이 클러스터에서 지금 역할로는 Secret을 읽을 수 없어(Read는 못 읽음) Release를 볼 수 없습니다. Write 이상이나 Secret을 읽는 역할이 필요합니다.",
     "stats": {
       "total": "전체",
       "deployed": "배포됨",
@@ -3937,7 +3937,7 @@
     },
     "error": {
       "notFound": "Release를 찾을 수 없습니다.",
-      "forbidden": "이 클러스터에서 이 Release를 볼 권한이 없습니다.",
+      "forbidden": "Helm은 이 Release의 기록을 Secret에 둡니다. 이 클러스터에서 지금 역할로는 Secret을 읽을 수 없어(Read는 못 읽음) 볼 수 없습니다. Write 이상이나 Secret을 읽는 역할이 필요합니다.",
       "loadFailed": "Release를 불러오지 못했습니다(서버 오류 {{code}})."
     }
   },

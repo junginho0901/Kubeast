@@ -355,6 +355,7 @@ async def approve_tool_approval(
     authorization: str = Depends(bearer_or_cookie),
 ):
     from app.database import utcnow
+    from app.services.audit_target import tool_target
     from app.services.audit_writer import AuditUnavailable, fail_closed_enabled, require_audit_ready, write_audit
     from app.services.ai import formatters
 
@@ -416,12 +417,12 @@ async def approve_tool_approval(
         f"{icon} `{approval.tool}` on `{approval.cluster}` was approved and {'executed' if status == 'executed' else 'failed'}.\n\n```\n{approval.result}\n```",
         tool_calls=[{"function": approval.tool, "args": args, "result": approval.result, "approval_id": approval.id, "approval_status": status}],
     )
+    target = tool_target(approval.tool, args)
     await write_audit(
         action="ai.tool.execute", actor_user_id=actor.get("user_id"), actor_email=actor.get("email"), cluster=approval.cluster,
-        target_type=args.get("resource_type") or "tool",
-        target_id=args.get("resource_name") or args.get("name") or approval.tool,
-        namespace=args.get("namespace"),
-        after={"approval_id": approval.id, "session_id": approval.session_id, "cluster": approval.cluster, "tool": approval.tool, "approved": True},
+        target_type=target.type, target_id=target.id, namespace=target.namespace,
+        after={"approval_id": approval.id, "session_id": approval.session_id, "cluster": approval.cluster, "tool": approval.tool, "approved": True,
+               **({"objects": target.objects} if target.objects else {})},
         request_ip=http.get("ip"), user_agent=http.get("user_agent"), request_id=http.get("request_id"), path=http.get("path"),
         result="success" if status == "executed" else "failure", error=error,
     )

@@ -63,7 +63,13 @@ rules:
     resources: ["customresourcedefinitions"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["admissionregistration.k8s.io"]
-    resources: ["mutatingwebhookconfigurations", "validatingwebhookconfigurations"]
+    resources:
+      - mutatingwebhookconfigurations
+      - validatingwebhookconfigurations
+      - validatingadmissionpolicies
+      - validatingadmissionpolicybindings
+      - mutatingadmissionpolicies
+      - mutatingadmissionpolicybindings
     verbs: ["get", "list", "watch"]
   - apiGroups: ["rbac.authorization.k8s.io"]
     resources: ["clusterroles", "clusterrolebindings"]

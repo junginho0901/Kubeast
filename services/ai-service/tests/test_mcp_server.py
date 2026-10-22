@@ -438,6 +438,25 @@ async def test_write_call_signs_the_approval_tool_server_expects(fakes, monkeypa
 
 
 @pytest.mark.asyncio
+async def test_a_manifest_write_is_audited_as_the_objects_it_names(fakes, monkeypatch):
+    """create and apply take a manifest, not resource_type/resource_name: the row names what the YAML makes."""
+    monkeypatch.setenv("MCP_WRITE_TOOLS", "true")
+    monkeypatch.setenv("AI_WRITE_APPROVAL", "false")
+    server = mcp_server.KubeastMCPServer(tool_server_url="http://tools")
+    one = "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: made\n  namespace: team-a\ndata:\n  k: v\n"
+    two = one + "---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: token\n"
+    async with running_app(server) as client:
+        for tool, manifest in (("k8s_create_resource", one), ("k8s_apply_manifest", two)):
+            res = await call(client, "tok-key", "tools/call", {"name": tool, "arguments": {"cluster": "self", "yaml_content": manifest}})
+            assert res.json()["result"].get("isError") in (None, False), res.text
+    created, applied = fakes["audit"]
+    assert (created["target_type"], created["target_id"], created["namespace"]) == ("ConfigMap", "made", "team-a")
+    assert created["after"]["objects"] == ["ConfigMap team-a/made"] and created["after"]["write"] is True
+    assert (applied["target_type"], applied["target_id"], applied["namespace"]) == ("manifest", "2 objects", None)
+    assert applied["after"]["objects"] == ["ConfigMap team-a/made", "Secret token"]
+
+
+@pytest.mark.asyncio
 async def test_request_access_files_the_request_as_the_user(fakes, monkeypatch):
     monkeypatch.setenv("MCP_WRITE_TOOLS", "true")
     server = mcp_server.KubeastMCPServer(tool_server_url="http://tools")

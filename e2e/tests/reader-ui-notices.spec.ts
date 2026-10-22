@@ -93,7 +93,8 @@ test.describe('non-admin UI notices', () => {
       expect(list.status(), 'viewer helm list').toBe(403)
       await page.goto('/helm/releases?cluster=self')
       await expect(page.getByTestId('helm-forbidden')).toBeVisible({ timeout: 20000 })
-      await expect(page.getByTestId('helm-forbidden')).toContainText('permission')
+      // says why: Helm keeps its records in Secrets, which Read cannot read
+      await expect(page.getByTestId('helm-forbidden')).toContainText(/Secrets?.*Read cannot|Secret을 읽을 수 없어/)
       await ctx.close()
     } finally {
       await request.delete(`/api/v1/auth/admin/users/${user.id}`, { headers: admin })

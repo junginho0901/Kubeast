@@ -1,5 +1,5 @@
 # opencost/opencost 2.5.33 (OpenCost 1.121.3) for the Cost page and the optimization cost columns.
-#   helm install opencost opencost/opencost --version 2.5.32 \
+#   helm install opencost opencost/opencost --version 2.5.33 \
 #     -n opencost --create-namespace -f deploy/examples/target-cluster/opencost-values.yaml
 # Kubeast looks for a Service whose name contains "opencost" with port 9003 in
 # opencost, kubecost, monitoring or cost that answers /healthz. OpenCost reads the

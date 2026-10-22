@@ -3474,7 +3474,7 @@
     "allNamespaces": "All namespaces",
     "searchPlaceholder": "Search release name...",
     "matchCount": "{{count}} release(s) match.",
-    "forbidden": "You do not have permission to view Helm releases in this cluster.",
+    "forbidden": "Helm keeps release records in Secrets, and your role in this cluster cannot read Secrets (Read cannot). Viewing releases needs Write or a role that reads Secrets.",
     "stats": {
       "total": "Total",
       "deployed": "Deployed",
@@ -3574,7 +3574,7 @@
     },
     "error": {
       "notFound": "Release not found.",
-      "forbidden": "You do not have permission to view this release in this cluster.",
+      "forbidden": "Helm keeps this release's records in Secrets, and your role in this cluster cannot read Secrets (Read cannot). Viewing it needs Write or a role that reads Secrets.",
       "loadFailed": "Could not load the release (server error {{code}})."
     }
   },

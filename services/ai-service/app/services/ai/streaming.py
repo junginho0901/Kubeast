@@ -417,6 +417,7 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
     SSE events for the chat, the tool_calls entry the saved message keeps, and the result text for the model.
     Both the API-key loop and Claude Code (provider claude-code) call tools through here. call_id is the call's
     number in the turn, also on its start event, so the chat pairs a result with its call, not by tool name."""
+    from app.services.audit_target import tool_target
     from app.services.audit_writer import audit_ready, write_audit
     from app.services.ai import permissions as _perm
     from app.services.tool_whitelists import WRITE_TOOL_NAMES, write_approval_required
@@ -523,30 +524,26 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
 
     # audit: ai.tool.call (메타데이터만 — args/result 본문은 저장하지 않음)
     if audit_actor:
-        ns_arg = function_args.get('namespace') if isinstance(function_args, dict) else None
-        target_id_arg = (
-            function_args.get('resource_name')
-            or function_args.get('name')
-            or function_args.get('pod_name')
-        ) if isinstance(function_args, dict) else None
-        target_type_arg = function_args.get('resource_type') if isinstance(function_args, dict) else None
+        args_dict = function_args if isinstance(function_args, dict) else {}
+        target = tool_target(function_name, args_dict)
         tool_result, tool_error, tool_status = tool_outcome(function_response)
         await write_audit(
             action='ai.tool.call',
             actor_user_id=audit_actor.get('user_id'),
             actor_email=audit_actor.get('email'),
-            target_type=target_type_arg or 'tool',
-            target_id=target_id_arg or function_name,
-            namespace=ns_arg,
+            target_type=target.type,
+            target_id=target.id,
+            namespace=target.namespace,
             cluster=_perm.effective_cluster(service),
             after={
                 'session_id': session_id,
                 'tool': function_name,
                 'iteration': iteration,
-                'resource_type': target_type_arg,
+                'resource_type': args_dict.get('resource_type'),
                 'status': tool_status,
                 # what tool-server masked before the result reached the model
                 'redacted': getattr(service.tool_server, 'last_redacted', None),
+                **({'objects': target.objects} if target.objects else {}),
             },
             request_ip=(audit_http or {}).get('ip'),
             user_agent=(audit_http or {}).get('user_agent'),

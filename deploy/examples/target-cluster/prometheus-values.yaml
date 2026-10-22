@@ -1,5 +1,5 @@
 # prometheus-community/prometheus 29.37.0 (Prometheus v3.15.0) for a cluster Kubeast reads.
-#   helm install prometheus prometheus-community/prometheus --version 29.36.1 \
+#   helm install prometheus prometheus-community/prometheus --version 29.37.0 \
 #     -n monitoring --create-namespace -f deploy/examples/target-cluster/prometheus-values.yaml
 # Kubeast finds this chart's server Service by its labels (app.kubernetes.io/name=
 # prometheus, app.kubernetes.io/component=server) in any namespace and on any port;

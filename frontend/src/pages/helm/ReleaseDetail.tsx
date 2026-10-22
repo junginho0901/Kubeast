@@ -167,7 +167,7 @@ export default function HelmReleaseDetailPage() {
     return (
       <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200" data-testid={`helm-release-${key}`}>
         {key === 'forbidden'
-          ? t('helmReleaseDetail.error.forbidden', { defaultValue: 'You do not have permission to view this release in this cluster.' })
+          ? t('helmReleaseDetail.error.forbidden')
           : key === 'notFound'
             ? t('helmReleaseDetail.error.notFound')
             : t('helmReleaseDetail.error.loadFailed', { code: status ?? '-', defaultValue: 'Could not load the release (server error {{code}}).' })}

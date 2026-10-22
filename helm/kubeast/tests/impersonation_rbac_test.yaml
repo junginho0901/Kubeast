@@ -39,3 +39,23 @@ tests:
           path: rules[1].resourceNames
           content: system:masters
         documentIndex: 0
+
+  - it: lets the Read group read admission policies and their bindings (the Admission Policies page), not change them
+    asserts:
+      - equal:
+          path: metadata.name
+          value: kubeast:cluster-reader
+        documentIndex: 1
+      - contains:
+          path: rules
+          content:
+            apiGroups: ["admissionregistration.k8s.io"]
+            resources:
+              - mutatingwebhookconfigurations
+              - validatingwebhookconfigurations
+              - validatingadmissionpolicies
+              - validatingadmissionpolicybindings
+              - mutatingadmissionpolicies
+              - mutatingadmissionpolicybindings
+            verbs: ["get", "list", "watch"]
+        documentIndex: 1

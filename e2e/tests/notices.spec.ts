@@ -124,7 +124,7 @@ test.describe('notices instead of "nothing here"', () => {
       await expect(drawer.getByText(/No RoleBinding or ClusterRoleBinding binds|묶는 RoleBinding·ClusterRoleBinding이 없습니다/)).toHaveCount(0)
 
       await reader.page.goto('/helm/releases/kubeast/kubeast?cluster=self')
-      await expect(reader.page.getByTestId('helm-release-forbidden')).toBeVisible({ timeout: 20000 })
+      await expect(reader.page.getByTestId('helm-release-forbidden')).toContainText(/Secrets?.*Read cannot|Secret을 읽을 수 없어/, { timeout: 20000 })
     } finally {
       await reader.done()
     }

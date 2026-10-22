@@ -41,6 +41,7 @@ from app.services.ai import features as feature_gate
 from app.services.ai.tools import ADMIN_READ_TOOLS, CLUSTER_METRICS_TOOLS, K8S_READONLY_TOOLS, K8S_WRITE_TOOLS, WRITE_PREVIEW_TOOLS
 from app.services.k8s_client import K8sServiceClient
 from app.services.approval_token import ApprovalTokenUnavailable, sign as sign_approval
+from app.services.audit_target import tool_target
 from app.services.audit_writer import AuditUnavailable, require_audit_ready, write_audit
 from app.services.tool_whitelists import write_approval_required
 from app.services.http_shared import ScopedClient
@@ -350,13 +351,14 @@ class KubeastMCPServer(MCPServer):
             return _text(f"invalid arguments: {e.message}", error=True)
 
         meta = _http_meta(context)
+        target = tool_target(name, args)
         audit: Dict[str, Any] = {
             "action": AUDIT_ACTION,
             "actor_user_id": payload.user_id,
             "actor_email": payload.email,
-            "target_type": args.get("resource_type") or "tool",
-            "target_id": args.get("resource_name") or args.get("name") or args.get("pod_name") or name,
-            "namespace": args.get("namespace"),
+            "target_type": target.type,
+            "target_id": target.id,
+            "namespace": target.namespace,
             "cluster": cluster,
             "request_ip": meta["ip"],
             "user_agent": meta["user_agent"],
@@ -370,6 +372,8 @@ class KubeastMCPServer(MCPServer):
             "credential": {"type": "api_key" if payload.api_key_id else "session", "akid": payload.api_key_id or None},
             "client": meta["user_agent"],
         }
+        if target.objects:
+            after["objects"] = target.objects
 
         if not (_may_use_mcp(payload, cluster) and payload.has_permission_for_cluster(f"ai.tool.{name}", cluster)):
             reason = f"forbidden: {name} is not granted to you in cluster {cluster}"

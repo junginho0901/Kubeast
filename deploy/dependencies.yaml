@@ -38,8 +38,12 @@ dependencies:
     refPaths:
       - path: deploy/examples/target-cluster/prometheus-values.yaml
         match: '^# prometheus-community/prometheus [0-9]'
+      - path: deploy/examples/target-cluster/prometheus-values.yaml
+        match: 'prometheus-community/prometheus --version'
       - path: docs/cluster-requirements.md
         match: '\| prometheus-community/prometheus \|'
+      - path: docs/cluster-requirements.md
+        match: 'prometheus-community/prometheus --version'
 
   - name: node-exporter
     version: v1.12.1
@@ -108,10 +112,14 @@ dependencies:
     refPaths:
       - path: deploy/examples/target-cluster/opencost-values.yaml
         match: '^# opencost/opencost [0-9]'
+      - path: deploy/examples/target-cluster/opencost-values.yaml
+        match: 'opencost/opencost --version'
       - path: deploy/kind/second-cluster.yaml
         match: 'chart opencost-[0-9]'
       - path: docs/cluster-requirements.md
         match: '\| opencost/opencost \|'
+      - path: docs/cluster-requirements.md
+        match: 'opencost/opencost --version'
 
   - name: alertmanager
     version: v0.34.1

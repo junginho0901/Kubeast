@@ -86,7 +86,10 @@ async function callTool(request: APIRequestContext, token: string, name: string,
 async function auditRows(request: APIRequestContext, admin: string, actorEmail: string) {
   const res = await request.get('/api/v1/auth/admin/audit-logs?action=ai.mcp.call&limit=100', { headers: bearer(admin) })
   const items = ((await res.json()).items ?? []) as any[]
-  return items.filter((i) => (i.ActorEmail ?? i.actor_email) === actorEmail).map((r) => ({ result: r.Result ?? r.result, error: r.Error ?? r.error ?? '', cluster: r.Cluster ?? r.cluster, after: r.After ?? r.after }))
+  return items.filter((i) => (i.ActorEmail ?? i.actor_email) === actorEmail).map((r) => ({
+    result: r.Result ?? r.result, error: r.Error ?? r.error ?? '', cluster: r.Cluster ?? r.cluster, after: r.After ?? r.after,
+    target: [r.TargetType ?? r.target_type, r.Namespace ?? r.namespace, r.TargetID ?? r.target_id].join(' '),
+  }))
 }
 
 // A namespace with a Deployment to scale and a ConfigMap to delete; replicas changes need no running pods.
@@ -154,6 +157,12 @@ test.describe('MCP write tools', () => {
       expect(deleted.isError, deleted.content?.[0]?.text).toBeFalsy()
       expect(tryKubectl(`-n ${ns} get configmap scratch`), 'the ConfigMap is gone').toBeNull()
 
+      // A manifest write: the YAML names the object, and so does its audit row (below).
+      const manifest = `apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: made\n  namespace: ${ns}\ndata:\n  k: v\n`
+      const created = await callTool(request, writeKey.key, 'k8s_create_resource', { cluster: 'self', yaml_content: manifest })
+      expect(created.isError, created.content?.[0]?.text).toBeFalsy()
+      expect(tryKubectl(`-n ${ns} get configmap made -o jsonpath='{.data.k}'`)?.replace(/'/g, '')).toBe('v')
+
       // An Argo CD-managed Deployment (deploy/kind/fixtures.yaml): block refuses, warn runs with a notice first.
       const argoBefore = tryKubectl(`-n default get deployment e2e-argo-managed -o jsonpath='{.spec.replicas}'`)?.replace(/'/g, '')
       if (argoBefore) {
@@ -172,10 +181,14 @@ test.describe('MCP write tools', () => {
       }
 
       // Audit: the writes carry write: true; the refusal is a failure row that says which tool.
-      await expect.poll(async () => (await auditRows(request, admin, writer)).length, { timeout: 15_000 }).toBeGreaterThanOrEqual(3)
+      await expect.poll(async () => (await auditRows(request, admin, writer)).length, { timeout: 15_000 }).toBeGreaterThanOrEqual(4)
       const rows = await auditRows(request, admin, writer)
       const ok = rows.filter((r) => r.result === 'success')
-      expect(ok.map((r) => r.after?.tool).sort()).toEqual(expect.arrayContaining(['k8s_delete_resource', 'k8s_scale']))
+      expect(ok.map((r) => r.after?.tool).sort()).toEqual(expect.arrayContaining(['k8s_create_resource', 'k8s_delete_resource', 'k8s_scale']))
+      const made = ok.find((r) => r.after?.tool === 'k8s_create_resource')
+      expect(made?.target).toBe(`ConfigMap ${ns} made`)
+      expect(made?.after?.objects).toEqual([`ConfigMap ${ns}/made`])
+      expect(ok.find((r) => r.after?.tool === 'k8s_delete_resource')?.target).toBe(`configmap ${ns} scratch`)
       expect(ok.every((r) => r.after?.write === true && r.cluster === 'self')).toBe(true)
       expect(ok.find((r) => r.after?.tool === 'k8s_scale')?.after?.credential).toEqual({ type: 'api_key', akid: writeKey.id })
       const fail = rows.find((r) => r.result === 'failure' && r.after?.tool === 'k8s_scale' && /forbidden/.test(r.error))
