@@ -2,15 +2,17 @@
 
 ## 빠른 시작
 
-모든 컴포넌트 이미지는 **GitHub Container Registry(ghcr.io)에 공개 패키지**로 게시되어
+모든 컴포넌트 이미지와 Helm 차트는 **GitHub Container Registry(ghcr.io)에 공개 패키지**로 게시되어
 있어 별도 빌드 없이 바로 설치됩니다. (공개 패키지는 익명 pull rate limit이 없습니다.)
+설치는 릴리스된 차트(`oci://ghcr.io/junginho0901/charts/kubeast`)로 합니다 — 그 차트에 그 릴리스의 이미지 판이 들어 있습니다.
+저장소에서 받은 소스의 `helm/kubeast`는 개발용이라 이미지 판이 릴리스와 맞지 않습니다.
 
 ### 옵션 1. 설치 스크립트 (이미 동작 중인 K8s 클러스터)
 
 태그가 붙은 스크립트를 내려받아 내용을 확인한 뒤 실행합니다(검토하지 않은 스크립트를 `curl | bash`로 바로 실행하지 않습니다).
 
 ```bash
-curl -fsSLo install.sh https://raw.githubusercontent.com/junginho0901/Kubeast/v0.3.0/install.sh
+curl -fsSLo install.sh https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.0/install.sh
 less install.sh
 bash install.sh
 ```
@@ -28,7 +30,7 @@ bash install.sh --load-balancer
 bash install.sh --namespace my-ns
 
 # 차트 버전 지정
-bash install.sh --version 0.3.0
+bash install.sh --version 0.7.0
 ```
 
 > 사전 요구: `kubectl`, `helm`, 그리고 접근 가능한 Kubernetes 클러스터.
@@ -36,21 +38,19 @@ bash install.sh --version 0.3.0
 ### 옵션 2. Helm 직접 사용
 
 ```bash
-git clone https://github.com/junginho0901/Kubeast.git
-cd Kubeast
-
-helm install kubeast ./helm/kubeast \
+helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.0 \
   --namespace kubeast --create-namespace \
   --set ai.openaiApiKey=$OPENAI_API_KEY     # 선택: 나중에 UI에서도 등록 가능
 
 # 가장 가볍게: AI·캐시 없이 콘솔·관리·감사만 (파드 6개, docs/architecture.md "자원 사용량")
-helm install kubeast ./helm/kubeast -n kubeast --create-namespace -f helm/kubeast/values-minimal.yaml
+helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.0 -n kubeast --create-namespace \
+  -f https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.0/helm/kubeast/values-minimal.yaml
 ```
 
 ### 옵션 3. Docker Compose (클러스터 없이 단일 호스트)
 
 ```bash
-git clone https://github.com/junginho0901/Kubeast.git
+git clone --branch v0.7.0 --depth 1 https://github.com/junginho0901/Kubeast.git
 cd Kubeast
 
 ./install-docker.sh
@@ -59,7 +59,7 @@ cd Kubeast
 #   --uninstall                             # 컨테이너 + 볼륨 모두 제거
 ```
 
-`docker-compose`는 published 이미지를 pull 합니다. 소스에서 빌드하려면:
+`docker-compose`는 published 이미지(기본 = 받은 태그의 판, `KUBEAST_TAG`로 바꿈)를 pull 합니다. 소스에서 빌드하려면:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build

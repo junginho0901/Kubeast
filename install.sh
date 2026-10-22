@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
-# Kubest Installer
+# Kubeast Installer — installs the released chart from ghcr.io (OCI) at CHART_VERSION.
 #
 # Usage — download a tagged copy, read it, then run it (do not pipe an
 # unreviewed script into bash):
-#   curl -fsSLo install.sh https://raw.githubusercontent.com/junginho0901/Kubeast/v0.3.0/install.sh
+#   curl -fsSLo install.sh https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.0/install.sh
 #   less install.sh
 #   bash install.sh
 #
@@ -12,17 +12,19 @@
 #   bash install.sh --node-port 30080
 #   bash install.sh --load-balancer
 #   bash install.sh --namespace my-ns
-#   bash install.sh --version 0.3.0
+#   bash install.sh --version 0.7.0
+#   bash install.sh --local        # the chart of this checkout (development)
 #
 set -euo pipefail
 
 # Defaults
 NAMESPACE="kubeast"
 RELEASE_NAME="kubeast"
-CHART_VERSION="0.3.0"
+CHART_VERSION="0.7.0"   # the release this script belongs to (deploy/dependencies.yaml: kubeast)
+CHART_REF="oci://ghcr.io/junginho0901/charts/kubeast"
+USE_LOCAL=false
 SERVICE_TYPE="NodePort"
 NODE_PORT="30333"
-REPO_URL="https://github.com/junginho0901/Kubeast"
 
 # Colors
 RED='\033[0;31m'
@@ -45,8 +47,9 @@ while [[ $# -gt 0 ]]; do
     --load-balancer) SERVICE_TYPE="LoadBalancer"; shift ;;
     --cluster-ip)    SERVICE_TYPE="ClusterIP"; shift ;;
     --version)       CHART_VERSION="$2"; shift 2 ;;
+    --local)         USE_LOCAL=true; shift ;;
     --help|-h)
-      echo "Kubest Installer"
+      echo "Kubeast Installer"
       echo ""
       echo "Usage: bash install.sh [OPTIONS]   (download a tagged install.sh and read it first)"
       echo ""
@@ -56,6 +59,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --load-balancer      Use LoadBalancer instead of NodePort"
       echo "  --cluster-ip         Use ClusterIP (for use with ingress)"
       echo "  --version <ver>      Chart version (default: $CHART_VERSION)"
+      echo "  --local              Install the chart of this checkout (development; its images are not the release)"
       echo "  -h, --help           Show this help"
       exit 0
       ;;
@@ -73,40 +77,23 @@ kubectl cluster-info --request-timeout=5s >/dev/null 2>&1 || fail "Cannot connec
 ok "Kubernetes cluster reachable"
 
 # ─── Locate chart ───
-# 스크립트가 clone 된 repo 안에서 실행되면 로컬 차트를 사용하고,
-# `curl | bash` 처럼 단독 실행되면 원격에서 다운로드한다.
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || pwd)"
-LOCAL_CHART="$SCRIPT_DIR/helm/kubeast"
-
-if [ -f "$LOCAL_CHART/Chart.yaml" ]; then
-  CHART_PATH="$LOCAL_CHART"
-  ok "Using local chart at $LOCAL_CHART"
+# The released chart from ghcr.io carries the image tags of its release. The chart in a git checkout
+# does not (the release workflow sets them when it packages), so --local is for development only.
+if [[ "$USE_LOCAL" == true ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || pwd)"
+  CHART_PATH="$SCRIPT_DIR/helm/kubeast"
+  [ -f "$CHART_PATH/Chart.yaml" ] || fail "No chart at $CHART_PATH (run --local from a Kubeast checkout)."
+  VERSION_ARGS=()
+  ok "Using local chart at $CHART_PATH"
 else
-  info "Downloading Kubest Helm chart..."
-
-  TMPDIR=$(mktemp -d)
-  trap "rm -rf $TMPDIR" EXIT
-
-  if command -v git >/dev/null 2>&1; then
-    git clone --depth 1 --branch "v${CHART_VERSION}" "$REPO_URL.git" "$TMPDIR/kubeast" 2>/dev/null || \
-    git clone --depth 1 "$REPO_URL.git" "$TMPDIR/kubeast" 2>/dev/null || \
-    fail "Failed to download chart. Check your internet connection."
-  else
-    curl -sSL "$REPO_URL/archive/refs/heads/main.tar.gz" -o "$TMPDIR/kubeast.tar.gz" || fail "Failed to download chart."
-    tar -xzf "$TMPDIR/kubeast.tar.gz" -C "$TMPDIR"
-    # GitHub archive 디렉토리명은 저장소 이름과 동일 (대소문자 그대로)
-    mv "$TMPDIR"/Kubeast-main "$TMPDIR/kubeast" 2>/dev/null || \
-    mv "$TMPDIR"/kubeast-main "$TMPDIR/kubeast" 2>/dev/null || true
-  fi
-
-  CHART_PATH="$TMPDIR/kubeast/helm/kubeast"
-  [ -f "$CHART_PATH/Chart.yaml" ] || fail "Chart not found in downloaded files."
-  ok "Chart downloaded"
+  CHART_PATH="$CHART_REF"
+  VERSION_ARGS=(--version "$CHART_VERSION")
+  info "Chart: $CHART_REF $CHART_VERSION"
 fi
 
 # ─── Install ───
 echo ""
-echo -e "${BOLD}Installing Kubest...${NC}"
+echo -e "${BOLD}Installing Kubeast...${NC}"
 echo -e "  Namespace:    ${CYAN}${NAMESPACE}${NC}"
 echo -e "  Service type: ${CYAN}${SERVICE_TYPE}${NC}"
 if [[ "$SERVICE_TYPE" == "NodePort" ]]; then
@@ -114,7 +101,7 @@ if [[ "$SERVICE_TYPE" == "NodePort" ]]; then
 fi
 echo ""
 
-helm upgrade --install "$RELEASE_NAME" "$CHART_PATH" \
+helm upgrade --install "$RELEASE_NAME" "$CHART_PATH" ${VERSION_ARGS[@]+"${VERSION_ARGS[@]}"} \
   --namespace "$NAMESPACE" --create-namespace \
   --set gateway.service.type="$SERVICE_TYPE" \
   --set gateway.service.nodePort="$NODE_PORT" \
@@ -123,12 +110,12 @@ helm upgrade --install "$RELEASE_NAME" "$CHART_PATH" \
   2>&1
 
 echo ""
-ok "Kubest installed successfully!"
+ok "Kubeast installed successfully!"
 echo ""
 
 # ─── Access info ───
 echo -e "${GREEN}╔══════════════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║          Kubest is ready!                        ║${NC}"
+echo -e "${GREEN}║          Kubeast is ready!                       ║${NC}"
 echo -e "${GREEN}╚══════════════════════════════════════════════════╝${NC}"
 echo ""
 

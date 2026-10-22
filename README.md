@@ -19,9 +19,8 @@ LLM 기반 채팅으로 리소스 조회·진단·변경을 수행할 수 있습
 ## 빠른 시작
 
 ```bash
-git clone https://github.com/junginho0901/Kubeast.git
-cd Kubeast
-helm install kubeast ./helm/kubeast --namespace kubeast --create-namespace
+helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.0 \
+  --namespace kubeast --create-namespace
 ```
 
 설치 스크립트·Docker Compose·제거, 관리자 비밀번호 확인, 클러스터 연결, AI 켜기는 [설치와 첫 설정](docs/getting-started.md)에 있습니다.

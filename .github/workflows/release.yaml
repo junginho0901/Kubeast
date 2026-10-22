@@ -74,6 +74,14 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # The install paths name the release (deploy/dependencies.yaml `kubeast`, kept in agreement by zeitgeist):
+      # a tag that differs would ship install docs and an install.sh pointing at another version.
+      - name: Tag matches the release version
+        if: github.event_name == 'push'
+        run: |
+          want=$(awk '/^  - name: kubeast$/{f=1; next} f && /version:/{print $2; exit}' deploy/dependencies.yaml)
+          [ "v${want}" = "$GITHUB_REF_NAME" ] || { echo "::error::tag $GITHUB_REF_NAME, deploy/dependencies.yaml kubeast = ${want}: bump the release version and its places first"; exit 1; }
+
       # Owner must be lowercase for ghcr.io image names.
       - name: Lowercase owner
         id: owner

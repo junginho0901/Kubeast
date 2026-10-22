@@ -8,6 +8,13 @@ against that digest, and the version tag (`:vX.Y.Z`) is applied only after the
 last of them succeeds — a release that fails a gate leaves nothing a pull by tag
 can reach. There is no `latest` tag. The workflow's own actions are pinned to
 commit SHAs (`uses: owner/repo@<sha> # vX.Y.Z`), refreshed by Dependabot.
+
+Before tagging `vX.Y.Z`, set `kubeast` in `deploy/dependencies.yaml` to `X.Y.Z` together with every place it
+lists (`install.sh`, `docker-compose.yml`, the README and `docs/getting-started.md` install lines — CI checks
+that they agree): the workflow's first step stops a tag that differs, so the install docs and `install.sh`
+always name the release they ship with. They install the released OCI chart, whose image tags the workflow
+sets when it packages; the chart in a checkout keeps a placeholder tag.
+
 Per image, by digest:
 
 | Step | What it produces | Fails the release when |

@@ -3,6 +3,31 @@
 # (sigs.k8s.io/zeitgeist, the tool kubernetes/kubernetes uses for build/dependencies.yaml): CI checks that
 # every place agrees, the weekly addon-versions workflow checks upstream for newer releases.
 dependencies:
+  # Kubeast's own release: where the install paths name it (the released OCI chart carries that release's
+  # image tags; the chart in a checkout does not). Bump it and every place below before tagging vX.Y.Z —
+  # the release workflow stops when the tag and this version differ.
+  - name: kubeast
+    version: 0.7.0
+    refPaths:
+      - path: install.sh
+        match: '^CHART_VERSION="'
+      - path: install.sh
+        match: 'Kubeast/v[0-9.]+/install\.sh'
+      - path: install.sh
+        match: 'install\.sh --version'
+      - path: docker-compose.yml
+        match: 'KUBEAST_TAG:-v'
+      - path: README.md
+        match: 'charts/kubeast --version'
+      - path: docs/getting-started.md
+        match: 'charts/kubeast --version'
+      - path: docs/getting-started.md
+        match: 'Kubeast/v[0-9.]+/'
+      - path: docs/getting-started.md
+        match: 'install\.sh --version'
+      - path: docs/getting-started.md
+        match: 'git clone --branch v'
+
   - name: zeitgeist
     version: v0.8.0
     upstream:
