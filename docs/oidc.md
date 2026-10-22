@@ -36,7 +36,7 @@ Kubeast는 OpenID Connect 공급자 하나로 로그인할 수 있습니다(Keyc
        defaultRole: Pending      # 매핑되는 그룹이 없는 사람
    ```
 
-4. **사설 CA** — 공급자 인증서가 사내 CA로 서명됐으면 `customCAs`에 그 CA를 넣습니다(README "신뢰할 CA 추가"). 없으면 discovery가 x509 오류로 실패하고 로그인은 `oidc_provider`로 돌아옵니다.
+4. **사설 CA** — 공급자 인증서가 사내 CA로 서명됐으면 `customCAs`에 그 CA를 넣습니다([신뢰할 CA 추가](operations.md#신뢰할-ca-추가-사설-catls-가로채는-프록시)). 없으면 discovery가 x509 오류로 실패하고 로그인은 `oidc_provider`로 돌아옵니다.
 5. **첫 관리자** — 차트의 `admin` 계정(비밀번호, `kubeast-secrets`의 `DEFAULT_ADMIN_PASSWORD`)으로 로그인 → Admin → User Management에서 본인 SSO 계정을 Admin으로 바꿉니다. 그룹 매핑(§3)으로 Admin을 주면 이 단계는 없습니다.
 6. **비밀번호 로그인 줄이기** — SSO가 돌면 `auth.passwordLogin: "admin-only"`(공급자 장애 때 `admin` 계정만 비상 경로로) 또는 `"off"`.
 7. **확인** — 로그인 화면의 버튼 → 공급자 → 돌아와 앱이 열리면 끝. 실패하면 주소가 `/login?error=<코드>`가 되고 auth-service 로그에 `oidc: login failed`가 남습니다(§6).
@@ -79,7 +79,8 @@ auth:
 - 그룹: 클라이언트 전용 scope(또는 기본 scope)에 **Group Membership** 매퍼 — Token Claim Name `groups`, **Full group path 끔**(켜면 `/kubeast-admins`처럼 앞에 `/`가 붙어 `roleMapping`과 안 맞음), Add to ID token 켬.
 - `issuerUrl`: `https://<keycloak>/realms/<realm>`.
 - Keycloak이 443이 아닌 포트(8443 등)로만 열려 있으면 `auth.oidc.egress`에 그 주소·포트의 NetworkPolicy 규칙을 넣습니다(auth-service는 기본으로 443·6443만 나감).
-- 확인함(2026-10-21, Keycloak 26.8.1): 위 설정의 렐름([`deploy/kind/keycloak-realm.json`](../deploy/kind/keycloak-realm.json) — 그룹 `sre`·`dev`·`viewer`, PKCE S256 필수)으로 그룹 → 계정 등급·클러스터 역할, 그룹 없는 사람 Pending, Keycloak에서 그룹을 옮기면 다음 로그인 때 클러스터 역할이 바뀌고 `user.cluster_role.set`(`via: oidc`)이 남음(e2e `oidc-keycloak.spec.ts`, `e2e/scripts/oidc-keycloak.sh up`). Kubeast 로그아웃은 Kubeast 세션만 끝내고 Keycloak 세션은 남깁니다 — 같은 브라우저에서 다시 로그인하면 비밀번호를 묻지 않습니다.
+- 확인함(2026-10-21, Keycloak 26.8.1): 위 설정의 렐름([`deploy/kind/keycloak-realm.json`](../deploy/kind/keycloak-realm.json) — 그룹 `sre`·`dev`·`viewer`, PKCE S256 필수)으로 그룹 → 계정 등급·클러스터 역할, 그룹 없는 사람 Pending, Keycloak에서 그룹을 옮기면 다음 로그인 때 클러스터 역할이 바뀌고 `user.cluster_role.set`(`via: oidc`)이 남음(e2e `oidc-keycloak.spec.ts`, `e2e/scripts/oidc-keycloak.sh up`).
+  - Kubeast 로그아웃은 Kubeast 세션만 끝내고 Keycloak 세션은 남깁니다 — 같은 브라우저에서 다시 로그인하면 비밀번호를 묻지 않습니다.
 
 ### Google
 

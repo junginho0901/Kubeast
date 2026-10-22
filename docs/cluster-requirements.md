@@ -50,7 +50,7 @@ scripts/render-target-rbac.sh -f values.yaml -f cluster-b-values.yaml | kubectl 
 # OCI 차트로 설치했다면: KUBEAST_CHART=oci://<레지스트리>/kubeast scripts/render-target-rbac.sh --version <버전> -f ...
 ```
 
-**EKS**: Kubeast 파드의 IRSA 롤이 대상 롤을 AssumeRole하고(README "클러스터 연결"), 대상 클러스터의 **access entry가 그 롤을 Kubernetes 그룹 `kubeast:impersonator`에 매핑**해야 합니다(`kubernetesGroups`).
+**EKS**: Kubeast 파드의 IRSA 롤이 대상 롤을 AssumeRole하고([설치와 첫 설정 — 클러스터 연결](getting-started.md#3-로그인-후-클러스터-연결-connect-your-cluster)), 대상 클러스터의 **access entry가 그 롤을 Kubernetes 그룹 `kubeast:impersonator`에 매핑**해야 합니다(`kubernetesGroups`).
 
 **확인**
 
@@ -78,8 +78,9 @@ kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator 
 
 - **순서**: 클러스터에 적은 주소 → 클러스터에 적은 Service → 차트 `features.prometheus.url` → 차트 `features.prometheus.service` → 자동 발견.
 - **Service 지정**(Admin → Clusters → 편집 "클러스터 안 Service", 또는 차트 `features.prometheus.service`): `namespace/service:port`(Lens·Headlamp와 같은 형식), API가 경로 아래 있으면 그 경로까지 — `namespace/service:port/경로`(예: VictoriaMetrics 클러스터 `monitoring/vmselect-main:8481/select/0/prometheus`). API 서버 프록시로 읽고, 상태 API가 `/-/healthy`로 닿는지와 저장소 종류(`flavor`: prometheus·victoriametrics — `/-/healthy` 답의 글자로)를 알려 줍니다.
-- **클러스터 안 자동 발견**: ① 모든 Namespace에서 레이블로 — `kubeast.io/prometheus=true` → prometheus 차트 서버(`app.kubernetes.io/name=prometheus,app.kubernetes.io/component=server`, 포트 80) → Prometheus Operator의 `prometheus-operated`(`operated-prometheus=true`), Service의 포트를 모두 시험 ② 없으면 이름에 `prometheus`가 든 Service 중 **포트 9090**을 `monitoring` → `prometheus` → `jupyterhub` → `kube-system` → `gpu-operator` → `observability` → `default` 순서로. `/-/healthy`가 답하면 쓰고, 찾은 결과는 클러스터마다 10분 기억합니다. 찾기는 개요 캐시 식별자(`kubeast:cache`, `view`)로 하므로 모든 Namespace의 Service 목록을 읽을 수 있어야 합니다(§1 그대로).
-- **중앙 저장소**(Thanos·Mimir·VictoriaMetrics 등 Prometheus 호환 API): Admin → Clusters → 편집에 주소·인증·클러스터 레이블 값을 적습니다(README "Prometheus 소스"). 이때 아래 지표가 그 클러스터 레이블을 달고 있어야 합니다.
+- **클러스터 안 자동 발견**: ① 모든 Namespace에서 레이블로 — `kubeast.io/prometheus=true` → prometheus 차트 서버(`app.kubernetes.io/name=prometheus,app.kubernetes.io/component=server`, 포트 80) → Prometheus Operator의 `prometheus-operated`(`operated-prometheus=true`), Service의 포트를 모두 시험 ② 없으면 이름에 `prometheus`가 든 Service 중 **포트 9090**을 `monitoring` → `prometheus` → `jupyterhub` → `kube-system` → `gpu-operator` → `observability` → `default` 순서로. `/-/healthy`가 답하면 쓰고, 찾은 결과는 클러스터마다 10분 기억합니다.
+  - 찾기는 개요 캐시 식별자(`kubeast:cache`, `view`)로 하므로 모든 Namespace의 Service 목록을 읽을 수 있어야 합니다(§1 그대로).
+- **중앙 저장소**(Thanos·Mimir·VictoriaMetrics 등 Prometheus 호환 API): Admin → Clusters → 편집에 주소·인증·클러스터 레이블 값을 적습니다([운영 기능 — 대시보드 빠른 작업의 "Prometheus 소스"](operations.md#대시보드-빠른-작업-이슈--최적화--스토리지)). 이때 아래 지표가 그 클러스터 레이블을 달고 있어야 합니다.
 - **Grafana를 거쳐**: 저장소 조회 API를 밖에 열지 않고 Grafana 데이터소스로만 둔 곳이면 주소에 Grafana 데이터소스 프록시 `https://<Grafana>/api/datasources/proxy/uid/<데이터소스 UID>`를, 인증에 Grafana 서비스 계정 토큰(Viewer, bearer)을 적습니다. Kubeast 질의는 모두 GET이라 Grafana의 Prometheus 프록시 제한(POST 일부만 허용)에 걸리지 않고, 질의 시간은 Grafana `dataproxy.timeout`(기본 30초)도 받습니다. Grafana OSS는 데이터소스별 권한이 없어 그 토큰으로 모든 데이터소스를 읽을 수 있으니 시크릿으로 다룹니다. 로그 저장소(§14)도 같은 방식입니다.
 - 자동 발견이 못 찾는 설치(다른 이름·레이블)는 Service에 `kubeast.io/prometheus=true`를 붙이거나 Service를 직접 적습니다.
 
@@ -87,7 +88,8 @@ kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator 
 
 Prometheus 질의 API를 그대로 쓰므로 화면·AI 도구 모두 같은 질의로 읽습니다(검증: v1.154.1 단일판·클러스터판, 2번 클러스터 Prometheus와 같은 값). 다른 점만:
 
-- **찾기**: Prometheus가 없을 때 단일판을 자동으로 찾습니다 — VM operator의 `app.kubernetes.io/name=vmsingle`·Helm 차트의 `app.kubernetes.io/name=victoria-metrics-single` 레이블, 그다음 이름에 `vmsingle`·`victoria-metrics`가 든 8428 Service. Prometheus가 있으면 Prometheus가 먼저입니다. 클러스터판은 테넌트 경로가 필요해 자동으로 찾지 않습니다 — Service를 경로까지 적거나(`monitoring/vmselect-<이름>:8481/select/<테넌트>/prometheus`) 중앙 저장소 주소로(`http://vmselect-<이름>.<ns>.svc:8481/select/0/prometheus`, 클러스터 레이블 값과 함께).
+- **찾기**: Prometheus가 없을 때 단일판을 자동으로 찾습니다 — VM operator의 `app.kubernetes.io/name=vmsingle`·Helm 차트의 `app.kubernetes.io/name=victoria-metrics-single` 레이블, 그다음 이름에 `vmsingle`·`victoria-metrics`가 든 8428 Service. Prometheus가 있으면 Prometheus가 먼저입니다.
+  - 클러스터판은 테넌트 경로가 필요해 자동으로 찾지 않습니다 — Service를 경로까지 적거나(`monitoring/vmselect-<이름>:8481/select/<테넌트>/prometheus`) 중앙 저장소 주소로(`http://vmselect-<이름>.<ns>.svc:8481/select/0/prometheus`, 클러스터 레이블 값과 함께).
 - **알림 규칙**(AI `prometheus_rules`): 규칙은 vmalert에 있고, 단일판·vmselect에 `-vmalert.proxyURL=<vmalert 주소>`가 있어야 `/api/v1/rules`가 그 규칙을 돌려줍니다. 없으면 VM은 빈 목록을 주므로 Kubeast가 저장소 종류를 보고 "이 저장소는 규칙을 안 준다"로 바꿔 답합니다("규칙 없음"이라고 틀리게 말하지 않도록).
 - **수집 대상**(AI `prometheus_targets`): 단일판이 스스로 긁으면(`-promscrape.config`) 그 목록, vmagent·원격 쓰기로 받으면 빈 목록이고 vmselect는 그 API가 없어 400 `unsupported path requested` — 둘 다 `up` 지표로 대신합니다.
 - **메타데이터**(AI `prometheus_metrics`의 타입·설명): v1.137부터 기본으로 저장(`-enableMetadata`, 메모리에만 — 재시작하면 다시 쌓일 때까지 이름만).
@@ -111,7 +113,8 @@ Prometheus 질의 API를 그대로 쓰므로 화면·AI 도구 모두 같은 질
 
 **node-exporter 대신 OpenTelemetry `hostmetrics`**: 노드 질의는 모두 "node-exporter 식 `or` hostmetrics 식"이라 저장소에 있는 쪽이 나옵니다(둘 다 있으면 node-exporter). 고르는 설정은 없습니다. hostmetrics로 갈 때 맞출 것:
 
-- **이름**: Prometheus식 이름 변환 그대로 — `system_cpu_time_seconds_total{state}`와 `system_cpu_logical_count`(CPU 사용률 = 1 − 유휴 초 ÷ 논리 CPU 수, node-exporter와 같은 셈), `system_memory_usage_bytes{state="used"}`와 `system_memory_limit_bytes`, `system_filesystem_usage_bytes{mountpoint="/",state}`, `system_cpu_load_average_1m`, `system_network_io_bytes_total{direction,device}`, `system_disk_io_bytes_total{direction,device}`. OTel `prometheus_remote_write` exporter(0.162 전 이름 `prometheusremotewrite`)와 Prometheus의 OTLP 수신은 기본이 이 이름이고, VictoriaMetrics에 OTLP로 보내면 `-opentelemetry.usePrometheusNaming`을 줘야 합니다(기본은 점 이름 그대로).
+- **이름**: Prometheus식 이름 변환 그대로 — `system_cpu_time_seconds_total{state}`와 `system_cpu_logical_count`(CPU 사용률 = 1 − 유휴 초 ÷ 논리 CPU 수, node-exporter와 같은 셈), `system_memory_usage_bytes{state="used"}`와 `system_memory_limit_bytes`, `system_filesystem_usage_bytes{mountpoint="/",state}`, `system_cpu_load_average_1m`, `system_network_io_bytes_total{direction,device}`, `system_disk_io_bytes_total{direction,device}`.
+  - OTel `prometheus_remote_write` exporter(0.162 전 이름 `prometheusremotewrite`)와 Prometheus의 OTLP 수신은 기본이 이 이름이고, VictoriaMetrics에 OTLP로 보내면 `-opentelemetry.usePrometheusNaming`을 줘야 합니다(기본은 점 이름 그대로).
 - **`system.memory.limit` 켜기**(기본 꺼짐): 메모리 사용률 = `used ÷ limit`. 수신기의 MemAvailable 게이트(0.137부터 기본 켬)로 `used` = 전체 − MemAvailable이라 node-exporter의 `1 − MemAvailable/MemTotal`과 같은 값입니다. state들을 더해도 전체가 되지 않으므로 합으로 나누지 않습니다.
 - **노드 레이블 `k8s_node_name`** = 노드 이름: 리소스 속성 `k8s.node.name`(downward API `spec.nodeName`)을 레이블로 — `prometheus_remote_write`의 `resource_constant_labels.included: [k8s.node.name]`, Prometheus OTLP면 `promote_resource_attributes`.
 - **수집기를 올린 직후**: 수집기 판이 레이블 `otel_scope_version`에 들어가고 멈춘 수집기는 끝 표시를 보내지 않아, 판을 올린 뒤 몇 분(조회 창, 기본 5분) 동안 같은 시리즈가 두 벌 있습니다. Kubeast의 노드 질의는 `max without (otel_scope_name, otel_scope_version)`로 한 벌만 셉니다 — 직접 `sum`을 쓰는 대시보드·알림 규칙도 같게 하세요(dev 0.162.0 → 0.163.1에서 7분 동안 합계 2배를 봄).
@@ -226,7 +229,10 @@ Argo CD가 배포한 객체에 추적 어노테이션(`argocd.argoproj.io/tracki
 
 - **보내는 곳**: `POST <Kubeast 주소>/api/v1/alerts/webhook?cluster=<Kubeast 클러스터 ID>` — 클러스터 ID는 Admin → Clusters의 ID. 클러스터마다 수신자(또는 `cluster` 값)를 따로 둡니다.
 - **인증**: `Authorization: Bearer <kubeast-secrets의 ALERT_WEBHOOK_TOKEN>`. 차트가 만들고 업그레이드 때 유지합니다(`secrets.existingSecret`이면 그 Secret에 넣어야 함).
-- **받은편지함**: 받은 알림은 심각도와 상관없이, 울리는 중·해결됨 모두 Alerts 메뉴에 1건 1행으로 남습니다(같은 클러스터·fingerprint·`startsAt`). 해결 소식이 필요하니 `send_resolved: true`(웹훅의 기본값)로 둡니다. Alertmanager는 울리는 알림의 `endsAt`을 웹훅으로 보내지 않으므로, 마지막으로 받은 뒤 `features.alertInvestigation.inbox.staleAfterHours`(기본 8 — `repeat_interval`의 2배로) 동안 소식이 없으면 "상태 확인 안 됨"으로 보입니다. §14의 알림 저장소(`features.alertStore`)가 그 클러스터에 있으면 화면이 Alertmanager의 지금 상태(울리는 중·무음·억제·없음)도 함께 봅니다.
+- **받은편지함**: 받은 알림은 심각도와 상관없이, 울리는 중·해결됨 모두 Alerts 메뉴에 1건 1행으로 남습니다(같은 클러스터·fingerprint·`startsAt`).
+  - 해결 소식이 필요하니 `send_resolved: true`(웹훅의 기본값)로 둡니다.
+  - Alertmanager는 울리는 알림의 `endsAt`을 웹훅으로 보내지 않으므로, 마지막으로 받은 뒤 `features.alertInvestigation.inbox.staleAfterHours`(기본 8 — `repeat_interval`의 2배로) 동안 소식이 없으면 "상태 확인 안 됨"으로 보입니다.
+  - §14의 알림 저장소(`features.alertStore`)가 그 클러스터에 있으면 화면이 Alertmanager의 지금 상태(울리는 중·무음·억제·없음)도 함께 봅니다.
 - **조사되는 알림**: `status=firing`이고 `severity` 라벨이 `features.alertInvestigation.severities`(기본 critical·warning)에 있는 것. 같은 클러스터·fingerprint는 `dedupeHours`(기본 24) 안에선 다시 조사하지 않습니다 — Alertmanager는 `repeat_interval`(기본 4h)마다 다시 보냅니다. resolved는 조사하지 않습니다(받은편지함의 해결 표시에만 씀).
 - **`namespace` 라벨**: 있으면 조사가 그 Namespace로 한정됩니다(토큰의 `ns`). 없으면 클러스터 전체를 읽습니다.
 - **Kubeast 쪽**: `features.alertInvestigation.enabled: true`(`auth.impersonation.enabled`·`ai.enabled`도 켜져 있어야 함 — 아니면 차트 렌더 실패), 모델 하나(기본 모델 또는 `model`), 대상 클러스터에 §1의 조사 신원 RBAC.
@@ -252,15 +258,24 @@ receivers:
 
 Kubeast는 Loki의 `query_range`(AI의 `loki_query`는 메트릭 쿼리도)·`labels`·`label/<이름>/values`·`patterns`를 읽기만 합니다(모두 GET — Grafana 데이터소스 프록시로도 됨). Loki와 수집기는 설치하지 않습니다. 패턴(`loki_patterns`)은 Loki에 `pattern_ingester: enabled: true`가 있어야 하고, 없으면 그 도구만 "없음"으로 답합니다(Loki는 창 안에서 30줄 이상인 패턴만, 최근 3시간치를 돌려줌).
 
-- **수집기**: 대상 클러스터의 컨테이너 로그를 Loki로 보내는 것. 라벨 이름이 `features.logSearch.labels`와 맞아야 합니다 — 기본값은 Loki가 OTLP로 받은 로그에 붙이는 `k8s_cluster_name`·`k8s_namespace_name`·`k8s_pod_name`·`k8s_container_name`(OpenTelemetry Collector `file_log` + `container` 파서 또는 `k8sattributes`, `otlp_http` → Loki `/otlp`; 0.162 전 이름 `filelog`·`otlphttp`는 경고와 함께 아직 동작). Promtail·Alloy의 쿠버네티스 탐색식이면 `namespace`·`pod`·`container`로 바꿉니다.
+- **수집기**: 대상 클러스터의 컨테이너 로그를 Loki로 보내는 것.
+  - 라벨 이름이 `features.logSearch.labels`와 맞아야 합니다 — 기본값은 Loki가 OTLP로 받은 로그에 붙이는 `k8s_cluster_name`·`k8s_namespace_name`·`k8s_pod_name`·`k8s_container_name`(OpenTelemetry Collector `file_log` + `container` 파서 또는 `k8sattributes`, `otlp_http` → Loki `/otlp`; 0.162 전 이름 `filelog`·`otlphttp`는 경고와 함께 아직 동작).
+  - Promtail·Alloy의 쿠버네티스 탐색식이면 `namespace`·`pod`·`container`로 바꿉니다.
 - **클러스터 라벨**: Loki 하나에 여러 클러스터를 넣으면 클러스터마다 다른 `k8s.cluster.name`(수집기의 resource 프로세서)을 붙이고, 그 값을 `features.logSearch.clusters`에 Kubeast 클러스터 ID와 짝지어 적습니다. 적지 않은 클러스터는 검색이 없습니다.
 - **클러스터별 저장소**: 로그가 다른 Loki에 있는 클러스터는 Admin → Clusters → 편집에서 그 저장소의 주소·인증·테넌트·레이블 값을 적습니다(`features.logSearch.url`보다 먼저 쓰임). 라벨 이름은 배포 전체 값과 같아야 하므로 그 저장소의 수집기도 같은 라벨 이름으로 보내야 합니다. 그 저장소의 호스트·포트도 네트워크 정책(아래)에 넣습니다.
 - **권한**: 사용자 신원으로 `get pods/log`(그 Namespace, 전체 검색은 전체)를 묻습니다. `view`·`edit`에 들어 있으므로 §1의 Read·Write 그룹이면 됩니다. Namespace 범위 부여는 그 Namespace에 바인딩이 있어야 합니다.
 - **네트워크**: k8s-service에서 Loki로. `networkPolicy`가 켜져 있고 443이 아닌 포트면 `features.logSearch.egressCIDRs`.
 - **Grafana를 거쳐**(§3과 같음): 주소 = `https://<Grafana>/api/datasources/proxy/uid/<Loki 데이터소스 UID>`, 인증 = 서비스 계정 토큰, **테넌트는 비움** — 데이터소스에 설정한 `X-Scope-OrgID`를 Grafana가 붙입니다(Kubeast는 테넌트 칸이 비면 그 헤더를 보내지 않음).
-- **AI 트레이스 읽기**(`features.traceStore`, 쓸 때): Kubeast는 Tempo의 `/api/search`·`/api/v2/traces/<id>`·`/api/v2/search/tags`·`/api/v2/search/tag/<t>/values`·`/api/metrics/query_range`를 읽기만 합니다(모두 GET — Grafana 데이터소스 프록시로도). 스팬의 **리소스 속성**에 클러스터 값(`k8s.cluster.name` — 수집기의 resource 프로세서)과 네임스페이스(`k8s.namespace.name` — `k8sattributes`)가 있어야 그 클러스터·NS로 거를 수 있습니다(값 = `features.traceStore.clusters`). TraceQL 지표(`traces_metrics`)는 Tempo 3.x에서 기본 제공(2.x는 metrics-generator `local-blocks` 필요). 지표는 Tempo `query_frontend.query_end_cutoff`(기본 30초)와 단계만큼 최근 구간이 빠집니다 — 확인: `/status/config`에서 그 값. 읽는 권한은 로그 검색과 같이 사용자 신원 `get pods/log`.
-- **AI 알림 읽기**(`features.alertStore`, 쓸 때): Kubeast는 알림 저장소의 `/api/v2/alerts`(매처 `filter`)와 `/api/v2/silences`를 GET으로 읽습니다(무음 쓰기를 켜면 아래 한 줄 더) — Alertmanager API v2, Grafana 데이터소스 프록시로 가는 Alertmanager, Grafana 알림의 Alertmanager 호환 API(`/api/alertmanager/grafana/api/v2/…`, Grafana 13.2.4에서 Viewer로 200 확인 — `…/status`는 Viewer 403이라 안 씀). 여러 클러스터가 쓰는 저장소면 알림마다 **클러스터 레이블**(기본 `cluster` — Prometheus `external_labels` 또는 Grafana 알림 규칙 레이블)이 있어야 그 클러스터 것만 거릅니다(값 = `features.alertStore.clusters`). 확인: `curl -G <url>/api/v2/alerts --data-urlencode 'filter=cluster="<값>"'`.
-- **무음 쓰기**(`features.alertStore.silences: true`, 쓸 때): Alerts 화면에서 `resource.alert.silence`를 가진 사람이 만들면 `POST /api/v2/silences`, 끝내면 `DELETE /api/v2/silence/<id>`를 보냅니다(Alertmanager API v2 · Grafana 데이터소스 프록시 · Grafana 알림의 호환 API). 그래서 그 인증에 무음 쓰기 권한이 있어야 합니다 — Grafana면 Editor 이상의 서비스 계정(Viewer로는 403, 화면에 "저장소가 쓰기를 거부"). 무음마다 `<clusterLabel>="<값>"` 조건이 붙어 그 클러스터 알림만 멈추고, 기간은 `silenceMaxHours`(168)까지입니다.
+- **AI 트레이스 읽기**(`features.traceStore`, 쓸 때): Kubeast는 Tempo의 `/api/search`·`/api/v2/traces/<id>`·`/api/v2/search/tags`·`/api/v2/search/tag/<t>/values`·`/api/metrics/query_range`를 읽기만 합니다(모두 GET — Grafana 데이터소스 프록시로도).
+  - 스팬의 **리소스 속성**에 클러스터 값(`k8s.cluster.name` — 수집기의 resource 프로세서)과 네임스페이스(`k8s.namespace.name` — `k8sattributes`)가 있어야 그 클러스터·NS로 거를 수 있습니다(값 = `features.traceStore.clusters`).
+  - TraceQL 지표(`traces_metrics`)는 Tempo 3.x에서 기본 제공(2.x는 metrics-generator `local-blocks` 필요).
+  - 지표는 Tempo `query_frontend.query_end_cutoff`(기본 30초)와 단계만큼 최근 구간이 빠집니다 — 확인: `/status/config`에서 그 값. 읽는 권한은 로그 검색과 같이 사용자 신원 `get pods/log`.
+- **AI 알림 읽기**(`features.alertStore`, 쓸 때): Kubeast는 알림 저장소의 `/api/v2/alerts`(매처 `filter`)와 `/api/v2/silences`를 GET으로 읽습니다(무음 쓰기를 켜면 아래 한 줄 더) — Alertmanager API v2, Grafana 데이터소스 프록시로 가는 Alertmanager, Grafana 알림의 Alertmanager 호환 API(`/api/alertmanager/grafana/api/v2/…`, Grafana 13.2.4에서 Viewer로 200 확인 — `…/status`는 Viewer 403이라 안 씀).
+  - 여러 클러스터가 쓰는 저장소면 알림마다 **클러스터 레이블**(기본 `cluster` — Prometheus `external_labels` 또는 Grafana 알림 규칙 레이블)이 있어야 그 클러스터 것만 거릅니다(값 = `features.alertStore.clusters`).
+  - 확인: `curl -G <url>/api/v2/alerts --data-urlencode 'filter=cluster="<값>"'`.
+- **무음 쓰기**(`features.alertStore.silences: true`, 쓸 때): Alerts 화면에서 `resource.alert.silence`를 가진 사람이 만들면 `POST /api/v2/silences`, 끝내면 `DELETE /api/v2/silence/<id>`를 보냅니다(Alertmanager API v2 · Grafana 데이터소스 프록시 · Grafana 알림의 호환 API).
+  - 그래서 그 인증에 무음 쓰기 권한이 있어야 합니다 — Grafana면 Editor 이상의 서비스 계정(Viewer로는 403, 화면에 "저장소가 쓰기를 거부").
+  - 무음마다 `<clusterLabel>="<값>"` 조건이 붙어 그 클러스터 알림만 멈추고, 기간은 `silenceMaxHours`(168)까지입니다.
 - **트레이스 링크**(`features.tracing`, 쓸 때): 줄의 trace ID를 Loki 라벨에서 먼저 읽습니다. 앱이 OTLP로 로그를 보내면 Loki가 trace ID를 구조화 메타데이터 `trace_id`로 줄과 함께 돌려주므로(Loki 3.x, 10-14 kind 실측) 따로 할 일이 없습니다. 위처럼 컨테이너 로그를 파일로 읽는 수집기는 trace ID를 모르므로 줄 글자(`trace_id=…` 등)에서 찾습니다 — 앱이 로그 문장에 trace ID를 쓰거나, 수집기에서 JSON 줄을 파싱해 trace 필드로 옮기면 됩니다. 트레이스 저장소(Jaeger·Tempo)는 브라우저가 링크로 여는 곳이라 Kubeast 쪽 통신은 없습니다.
 
 ```yaml

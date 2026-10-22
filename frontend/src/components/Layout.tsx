@@ -73,7 +73,7 @@ type NavGroup = {
   items: NavItem[]
   adminOnly?: boolean
   // requiredPermission hides the entire group when the user lacks the
-  // menu.* permission it names (README "역할과 권한"); the built-in roles
+  // menu.* permission it names (docs/features.md "역할과 권한"); the built-in roles
   // hold menu.*, so only a custom role ever hides a group. Admin is
   // adminOnly instead.
   requiredPermission?: string

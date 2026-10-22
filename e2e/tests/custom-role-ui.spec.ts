@@ -1,6 +1,6 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
 
-// A custom role (README "역할과 권한"): the sidebar shows only the groups its menu.* permissions name, and the
+// A custom role (docs/features.md "역할과 권한"): the sidebar shows only the groups its menu.* permissions name, and the
 // dashboard overview is refused while the cluster has not bound the role's group kubeast:role:<slug> — the counts
 // come from a cache that is not the user's identity, so they are served only to an identity that may list
 // namespaces. Throwaway role and user, removed at the end.

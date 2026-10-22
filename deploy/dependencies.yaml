@@ -248,7 +248,7 @@ dependencies:
         match: 'chart kyverno/kyverno [0-9]'
       - path: docs/cluster-requirements.md
         match: '(\[Kyverno 차트\]|\| Kyverno \|)'
-      - path: README.md
+      - path: docs/development.md
         match: '차트 [0-9.]+[을를] `helm template --no-hooks`'
 
   - name: kyverno
