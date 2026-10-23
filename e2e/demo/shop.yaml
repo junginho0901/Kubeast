@@ -1,7 +1,7 @@
 # A small shop for the site recordings, applied to the second dev cluster
 # (kubeast-b, registered as "default") and removed after: a storefront that
-# serves and logs requests, an API that cannot start, and a service no node
-# has room for. The pods carry app.kubernetes.io/name, so the dev cluster's
+# serves and logs requests, an API that cannot start (and its settings), and a
+# service no node has room for. The pods carry app.kubernetes.io/name, so the dev cluster's
 # Kyverno require-labels policy has nothing to report about them.
 apiVersion: v1
 kind: Namespace
@@ -58,6 +58,20 @@ spec:
   ports:
     - port: 80
       targetPort: 8080
+---
+# The API's settings, with made-up credentials for the masking clip: the AI's
+# tool result must show them masked.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: checkout-config
+  namespace: shop
+data:
+  DATABASE_URL: postgres://checkout:Autumn-Sale-2026@orders-db.shop:5432/orders
+  PAYMENT_API_KEY: demo-7f3a9c2e1b5d8f4a6c0e
+  SESSION_SECRET: demo-session-4c1f9e7a2b
+  LOG_LEVEL: info
+  CHECKOUT_V2: "true"
 ---
 apiVersion: apps/v1
 kind: Deployment

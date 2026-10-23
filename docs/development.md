@@ -79,7 +79,7 @@ scripts/site-media.sh logs helm    # only these
 
 - The script puts a recording shop (`e2e/demo/shop.yaml`) and a three-revision Helm release (`e2e/demo/chart`) on the second cluster and removes them after. The recordings are the `demo` project, which exists only with `E2E_DEMO=1`, so they are not in the default run.
 - Only what a script shows between `show()` and `hide()` stays in the clip (page loads and waits such as an investigation are cut). `step(id)` marks where the clip's step list on the site moves on; the script writes those times to `site/media/steps.js`.
-- Needs `ffmpeg` (`brew install ffmpeg`) and the same `E2E_USER_EMAIL` and `E2E_USER_PASSWORD` as the E2E. The AI clips (`ai-chat`, `alert-investigation`) need a default model that answers well (`scripts/kind-model-subscription.sh up`, record, then `down`).
+- Needs `ffmpeg` (`brew install ffmpeg`) and the same `E2E_USER_EMAIL` and `E2E_USER_PASSWORD` as the E2E. The AI clips (`ai-chat`, `floating-chat`, `alert-investigation`, `masking`) need a default model that answers well (`scripts/kind-model-subscription.sh up`, record, then `down`).
 - When a screen changes, record its clip again.
 - `site/particles.js` is the console's sign-in particle logo (`frontend/src/components/login/LoginHero.tsx`, `frontend/src/utils/particles.ts`) in plain JavaScript: change them together. Unlike the sign-in page, whose canvas is fixed to the window, the site's canvas covers the page's first screen and scrolls with it (a fixed canvas redrawn on scroll trails the page by a frame); the dots still come in from anywhere in the window.
 

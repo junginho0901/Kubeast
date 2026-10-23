@@ -74,34 +74,55 @@
     return items[i]
   }
 
-  // Cards: hover plays the clip from its start and marks the step it is at.
+  // Cards: hover plays the clip from its start and marks the step it is at. A touch screen has no hover: there a
+  // clip plays while its picture is on screen, and a touch that ends a scroll opens nothing.
+  var touch = window.matchMedia('(hover: none)').matches
+  var scrolledAt = 0
+  window.addEventListener('scroll', function () { scrolledAt = Date.now() }, { passive: true })
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'))
+  var players = new Map()
   cards.forEach(function (card) {
     var video = card.querySelector('video')
     var steps = card.querySelector('.steps')
     var load = function () { if (!video.src) video.src = video.dataset.src }
     video.addEventListener('timeupdate', function () { highlight(steps, video, card.dataset.clip) })
     video.addEventListener('ended', function () { video.currentTime = 0; video.play().catch(function () {}) })
-    if (!still) {
-      card.addEventListener('mouseenter', function () {
-        load()
-        video.currentTime = 0
-        video.play().catch(function () {})
-        card.classList.add('playing')
-      })
-      card.addEventListener('mouseleave', function () {
-        video.pause()
-        card.classList.remove('playing')
-        steps.querySelectorAll('li').forEach(function (li) { li.classList.remove('now', 'done') })
-      })
+    var play = function () {
+      load()
+      video.currentTime = 0
+      video.play().catch(function () {})
+      card.classList.add('playing')
     }
-    card.addEventListener('click', function () { open(cards.indexOf(card)) })
+    var stop = function () {
+      video.pause()
+      card.classList.remove('playing')
+      steps.querySelectorAll('li').forEach(function (li) { li.classList.remove('now', 'done') })
+    }
+    players.set(card.querySelector('.thumb'), { play: play, stop: stop })
+    if (!still && !touch) {
+      card.addEventListener('mouseenter', play)
+      card.addEventListener('mouseleave', stop)
+    }
+    card.addEventListener('click', function () {
+      if (touch && Date.now() - scrolledAt < 300) return
+      open(cards.indexOf(card))
+    })
     card.tabIndex = 0
     card.setAttribute('role', 'button')
     card.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(cards.indexOf(card)) }
     })
   })
+  if (touch && !still && 'IntersectionObserver' in window) {
+    var onScreen = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        var player = players.get(e.target)
+        if (e.isIntersecting) player.play()
+        else player.stop()
+      })
+    }, { threshold: 0.75 })
+    players.forEach(function (_, thumb) { onScreen.observe(thumb) })
+  }
 
   // The large view: the clip grows out of its card to the middle of the screen, and back into it on close.
   var lb = document.getElementById('lightbox')

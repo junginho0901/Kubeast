@@ -37,6 +37,9 @@ body.lb-open { overflow: hidden; }
 html:not([lang="ko"]) body [lang="ko"],
 html[lang="ko"] body [lang="en"] { display: none; }
 html[lang="ko"] body { word-break: keep-all; overflow-wrap: break-word; }
+/* How to watch the clips, for a mouse or for a touch screen. */
+@media (hover: hover) { .for-touch { display: none; } }
+@media (hover: none) { .for-pointer { display: none; } }
 
 /* The sign-in page's night: deep navy with soft sky and indigo light. */
 .backdrop {

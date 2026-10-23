@@ -14,6 +14,7 @@
 - Helm 릴리스 관리(롤백·업그레이드·삭제·테스트, 실행 전 dry-run 미리보기)
 - GPU·DRA 모니터링, Prometheus 메트릭, Loki 로그 검색, 리소스 연결 그래프, Node Shell
 - 모든 변경과 민감한 조회를 감사 로그(해시 체인)로, 터미널 세션은 녹화로
+- AI 도구가 읽은 내용 속 비밀번호·키·토큰은 모델에 닿기 전에 가림
 - Claude Code·Cursor 같은 외부 AI 에이전트가 쓰는 MCP 서버
 - 공개 이미지(ghcr.io)로 한 줄 설치 — Kubernetes·Docker 모두
 - 한국어·영어 화면

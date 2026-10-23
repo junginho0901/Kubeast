@@ -25,6 +25,11 @@ window.KUBEAST_STEPS = {
     "issues": 2.5,
     "switch": 8.7
   },
+  "floating-chat": {
+    "answer": 11.7,
+    "ask": 2.9,
+    "screen": 0
+  },
   "helm": {
     "diff": 6.7,
     "history": 0,
@@ -34,11 +39,21 @@ window.KUBEAST_STEPS = {
     "crash": 11.8,
     "stream": 0
   },
+  "masking": {
+    "ask": 0,
+    "audit": 19.8,
+    "masked": 11.7
+  },
   "resource-drawer": {
     "applied": 13.3,
     "drawer": 3.4,
     "edit": 6.4,
     "find": 0
+  },
+  "security-audit": {
+    "hygiene": 10.7,
+    "review": 7,
+    "verify": 0
   },
   "terminal": {
     "commands": 5,

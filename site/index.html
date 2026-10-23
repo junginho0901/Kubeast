@@ -61,8 +61,8 @@
     <div class="section-head">
       <p class="kicker"><span lang="en">What you can do</span><span lang="ko">기능</span></p>
       <h2><span lang="en">Watch it work</span><span lang="ko">직접 확인해 보세요.</span></h2>
-      <p class="sub" lang="en">Each clip is a real run on a test cluster. Hover to play, click to watch it large.</p>
-      <p class="sub" lang="ko">모든 영상은 테스트 클러스터에서 실제로 녹화했습니다. 마우스를 올리면 재생되고, 클릭하면 크게 볼 수 있습니다.</p>
+      <p class="sub" lang="en">Each clip is a real run on a test cluster. <span class="for-pointer">Hover to play, click to watch it large.</span><span class="for-touch">Clips play as you scroll; tap one to watch it large.</span></p>
+      <p class="sub" lang="ko">모든 영상은 테스트 클러스터에서 실제로 녹화했습니다. <span class="for-pointer">마우스를 올리면 재생되고, 클릭하면 크게 볼 수 있습니다.</span><span class="for-touch">스크롤하면 저절로 재생되고, 누르면 크게 볼 수 있습니다.</span></p>
     </div>
 
     <div class="grid">
@@ -76,6 +76,20 @@
             <li data-step="ask"><span lang="en">Ask in plain words</span><span lang="ko">평소 말투 그대로 질문하면</span></li>
             <li data-step="tools"><span lang="en">It reads the cluster with tools</span><span lang="ko">AI가 클러스터를 직접 확인하고</span></li>
             <li data-step="answer"><span lang="en">Causes and fixes, with commands</span><span lang="ko">원인과 해결책을 명령어까지 알려 줍니다</span></li>
+          </ol>
+        </div>
+      </article>
+
+      <article class="card" data-clip="floating-chat">
+        <div class="thumb"><video muted playsinline preload="none" poster="media/floating-chat.jpg" data-src="media/floating-chat.mp4"></video><span class="play" aria-hidden="true"></span></div>
+        <div class="card-body">
+          <h3><span lang="en">Ask about what you see</span><span lang="ko">보고 있는 화면 그대로 물어보세요</span></h3>
+          <p lang="en">An assistant waits in the corner of every screen. It reads what the page shows — the list, the drawer, the dialog — and answers about it.</p>
+          <p lang="ko">모든 화면 오른쪽 아래에 AI가 있습니다. 지금 보고 있는 목록과 상세 패널을 읽고, 바로 그 내용에 대해 답합니다.</p>
+          <ol class="steps">
+            <li data-step="screen"><span lang="en">Open the pod that keeps failing</span><span lang="ko">계속 실패하는 파드를 열고</span></li>
+            <li data-step="ask"><span lang="en">Ask right there</span><span lang="ko">그 자리에서 물으면</span></li>
+            <li data-step="answer"><span lang="en">It answers from what is on screen</span><span lang="ko">화면에 보이는 내용으로 답합니다</span></li>
           </ol>
         </div>
       </article>
@@ -191,6 +205,34 @@
           </ol>
         </div>
       </article>
+
+      <article class="card" data-clip="masking">
+        <div class="thumb"><video muted playsinline preload="none" poster="media/masking.jpg" data-src="media/masking.mp4"></video><span class="play" aria-hidden="true"></span></div>
+        <div class="card-body">
+          <h3><span lang="en">Secrets stay out of the AI</span><span lang="ko">비밀번호는 AI에게 가지 않습니다</span></h3>
+          <p lang="en">Passwords, keys, tokens and credentials in URLs are masked before anything reaches the model. Secret values never leave.</p>
+          <p lang="ko">비밀번호, 키, 토큰, 주소 속 계정 정보는 모델에 닿기 전에 가려집니다. Secret 값은 아예 나가지 않습니다.</p>
+          <ol class="steps">
+            <li data-step="ask"><span lang="en">Ask for a config with credentials</span><span lang="ko">비밀번호가 든 설정을 물어도</span></li>
+            <li data-step="masked"><span lang="en">The values arrive masked</span><span lang="ko">값은 가려진 채로 전달되고</span></li>
+            <li data-step="audit"><span lang="en">The audit log counts what was masked</span><span lang="ko">무엇을 가렸는지 감사 로그에 남습니다</span></li>
+          </ol>
+        </div>
+      </article>
+
+      <article class="card" data-clip="security-audit">
+        <div class="thumb"><video muted playsinline preload="none" poster="media/security-audit.jpg" data-src="media/security-audit.mp4"></video><span class="play" aria-hidden="true"></span></div>
+        <div class="card-body">
+          <h3><span lang="en">Security you can prove</span><span lang="ko">증명할 수 있는 보안</span></h3>
+          <p lang="en">Verify that no audit record was changed or removed, review who holds what access, and find risky settings in the workloads.</p>
+          <p lang="ko">감사 기록이 하나도 바뀌거나 지워지지 않았는지 검증하고, 누가 어떤 권한을 가졌는지 검토하고, 위험한 설정을 찾아냅니다.</p>
+          <ol class="steps">
+            <li data-step="verify"><span lang="en">Verify the audit log is intact</span><span lang="ko">감사 로그 무결성 검증</span></li>
+            <li data-step="review"><span lang="en">Who can do what, right now</span><span lang="ko">지금 누가 무엇을 할 수 있는지</span></li>
+            <li data-step="hygiene"><span lang="en">Risky settings, found for you</span><span lang="ko">위험한 설정을 대신 찾아 줍니다</span></li>
+          </ol>
+        </div>
+      </article>
     </div>
   </section>
 
@@ -205,7 +247,7 @@
       <div class="tile"><b>Policy Reports</b><span lang="en">Kyverno and Trivy Operator results</span><span lang="ko">Kyverno와 Trivy Operator 결과를 한곳에서</span></div>
       <div class="tile"><b>Cost</b><span lang="en">OpenCost per namespace and workload</span><span lang="ko">OpenCost로 보는 Namespace·워크로드별 비용</span></div>
       <div class="tile"><b>Argo CD guard</b><span lang="en">Warn or block edits to managed objects</span><span lang="ko">Argo CD가 관리하는 리소스는 수정 전에 경고하거나 막습니다</span></div>
-      <div class="tile"><b>Cluster hygiene</b><span lang="en">Pod Security, image tags, RBAC, TLS expiry</span><span lang="ko">Pod Security, 이미지 태그, RBAC, TLS 만료 점검</span></div>
+      <div class="tile"><b>Logs &amp; traces</b><span lang="en">Loki, Tempo and Jaeger, read by the console and the AI</span><span lang="ko">Loki·Tempo·Jaeger를 콘솔과 AI가 함께 읽습니다</span></div>
       <div class="tile"><b>English · 한국어</b><span lang="en">The console in both languages</span><span lang="ko">콘솔 전체를 두 언어로</span></div>
     </div>
   </section>
@@ -247,6 +289,10 @@
     <details>
       <summary><span lang="en">What can the AI change?</span><span lang="ko">AI는 무엇까지 바꿀 수 있나요?</span></summary>
       <div class="answer"><p lang="en">Only what the person asking may change, and only after they approve that exact action. Alert investigations are read-only. Every tool call is in the audit log.</p><p lang="ko">질문한 사람이 바꿀 수 있는 것만, 그 작업을 직접 승인한 뒤에만 바꿉니다. 알림 조사는 읽기만 하고, AI의 모든 도구 호출은 감사 로그에 남습니다.</p></div>
+    </details>
+    <details>
+      <summary><span lang="en">Do passwords or keys reach the AI provider?</span><span lang="ko">AI에게 비밀번호나 키가 넘어가나요?</span></summary>
+      <div class="answer"><p lang="en">No. What the tools read is masked before it is sent: values under names like password, token or api_key, credentials in URLs, bearer tokens and cloud keys, and every value of a Secret. Each tool call's audit row records what was masked. Emails and phone numbers can be masked too (<code>ai.redaction.pii</code>).</p><p lang="ko">아니요. 도구가 읽은 내용은 보내기 전에 가려집니다. password·token·api_key 같은 이름의 값, 주소 속 계정 정보, Bearer 토큰과 클라우드 키, 그리고 Secret의 모든 값이 대상입니다. 무엇을 가렸는지는 도구 호출마다 감사 로그에 남습니다. 이메일·전화번호도 가릴 수 있습니다(<code>ai.redaction.pii</code>).</p></div>
     </details>
     <details>
       <summary><span lang="en">How does it reach my clusters?</span><span lang="ko">클러스터는 어떻게 연결하나요?</span></summary>

@@ -14,6 +14,7 @@ Key features:
 - Helm release management (rollback / upgrade / uninstall / test)
 - GPU & DRA monitoring, Prometheus metrics, log search (Loki), topology visualization, Node Shell
 - Audit log (hash chain) for every write/sensitive operation, terminal session recording
+- Passwords, keys and tokens in what the AI's tools read are masked before they reach the model
 - MCP server for external AI agents
 - One-line install from public container images (ghcr.io) (Kubernetes / Docker)
 - Korean · English support
