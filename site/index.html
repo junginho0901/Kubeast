@@ -38,7 +38,7 @@
 <main>
   <section class="hero" id="hero">
     <div class="hero-text">
-      <p class="eyebrow"><span class="dot"></span><span lang="en">Open source · MIT · v0.7.0</span><span lang="ko">오픈소스 · MIT · v0.7.0</span></p>
+      <p class="eyebrow"><span class="dot"></span><span lang="en">Open source · MIT · v0.7.1</span><span lang="ko">오픈소스 · MIT · v0.7.1</span></p>
       <h1>
         <span lang="en">The Kubernetes console with an AI that <em>reads your clusters</em></span>
         <span lang="ko"><em>클러스터를 읽는 AI</em>,<br>Kubernetes<br>콘솔 안에.</span>
@@ -50,8 +50,8 @@
         <a class="btn btn-ghost" href="#features"><span lang="en">See it work</span><span lang="ko">영상으로 보기</span></a>
       </div>
       <div class="snippet">
-        <code>helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.0</code>
-        <button type="button" class="copy" data-copy="helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.0 --namespace kubeast --create-namespace" aria-label="Copy"><span lang="en">Copy</span><span lang="ko">복사</span></button>
+        <code>helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.1</code>
+        <button type="button" class="copy" data-copy="helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.1 --namespace kubeast --create-namespace" aria-label="Copy"><span lang="en">Copy</span><span lang="ko">복사</span></button>
       </div>
     </div>
     <div class="hero-art" id="particles"></div>
@@ -263,18 +263,22 @@
         <div class="tabs" role="tablist">
           <button type="button" role="tab" class="tab active" data-tab="helm">Helm</button>
           <button type="button" role="tab" class="tab" data-tab="script"><span lang="en">Install script</span><span lang="ko">설치 스크립트</span></button>
+          <button type="button" role="tab" class="tab" data-tab="docker">Docker</button>
         </div>
         <button type="button" class="copy" data-copy-tab aria-label="Copy"><span lang="en">Copy</span><span lang="ko">복사</span></button>
       </div>
-      <pre class="tab-panel active" data-panel="helm"><code><span class="prompt">$</span> helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.0 \
+      <pre class="tab-panel active" data-panel="helm"><code><span class="prompt">$</span> helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.1 \
     --namespace kubeast --create-namespace</code></pre>
-      <pre class="tab-panel" data-panel="script"><code><span class="prompt">$</span> curl -fsSLo install.sh https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.0/install.sh
+      <pre class="tab-panel" data-panel="script"><code><span class="prompt">$</span> curl -fsSLo install.sh https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.1/install.sh
 <span class="prompt">$</span> less install.sh   <span class="comment"># read it first</span>
 <span class="prompt">$</span> bash install.sh</code></pre>
+      <pre class="tab-panel" data-panel="docker"><code><span class="prompt">$</span> git clone --branch v0.7.1 --depth 1 https://github.com/junginho0901/Kubeast.git
+<span class="prompt">$</span> cd Kubeast
+<span class="prompt">$</span> ./install-docker.sh   <span class="comment"># then connect a cluster on the Setup page</span></code></pre>
     </div>
     <p class="install-note">
-      <span lang="en">The admin password, more clusters, turning on AI and Docker Compose: <a class="doc" data-doc="getting-started.md" href="https://github.com/junginho0901/Kubeast/blob/main/docs/getting-started.md">Getting started →</a></span>
-      <span lang="ko">관리자 비밀번호, 클러스터 추가, AI 설정, Docker Compose 설치까지: <a class="doc" data-doc="getting-started.md" href="https://github.com/junginho0901/Kubeast/blob/main/docs/ko/getting-started.md">시작 가이드 →</a></span>
+      <span lang="en">The admin password, more clusters, turning on AI and connecting a cluster to Docker: <a class="doc" data-doc="getting-started.md" href="https://github.com/junginho0901/Kubeast/blob/main/docs/getting-started.md">Getting started →</a></span>
+      <span lang="ko">관리자 비밀번호, 클러스터 추가, AI 설정, Docker에 클러스터 연결까지: <a class="doc" data-doc="getting-started.md" href="https://github.com/junginho0901/Kubeast/blob/main/docs/ko/getting-started.md">시작 가이드 →</a></span>
     </p>
   </section>
 

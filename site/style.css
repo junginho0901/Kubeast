@@ -445,7 +445,8 @@ h2 { font-size: clamp(1.9rem, 3.4vw, 2.8rem); letter-spacing: -0.025em; line-hei
 .lights i { width: 11px; height: 11px; border-radius: 50%; background: #ef4444; opacity: .8; }
 .lights i:nth-child(2) { background: #eab308; }
 .lights i:nth-child(3) { background: #22c55e; }
-.tabs { display: flex; gap: 4px; flex: 1; }
+.tabs { display: flex; gap: 4px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.term-bar .copy { flex-shrink: 0; }
 .tab {
   font: inherit;
   font-size: 0.85rem;
@@ -454,6 +455,7 @@ h2 { font-size: clamp(1.9rem, 3.4vw, 2.8rem); letter-spacing: -0.025em; line-hei
   border: 1px solid transparent;
   border-radius: 8px;
   padding: 4px 12px;
+  white-space: nowrap;
   cursor: pointer;
 }
 .tab.active { color: var(--text); background: rgba(255, 255, 255, 0.06); border-color: var(--line); }
@@ -530,6 +532,9 @@ footer nav a:hover { color: var(--text); }
   .lb-caption { display: none; }
   /* the text sits over the page here, not beside the clip */
   .lb-backdrop { background: var(--bg); }
+  .lights { display: none; }
+  .term-bar { gap: 8px; padding: 10px; }
+  .tab { padding: 4px 9px; }
 }
 @media (max-width: 380px) {
   .gh-label { display: none; }
