@@ -28,6 +28,7 @@ jobs:
           - services/k8s-service-go
           - services/session-service-go
           - services/tool-server
+          - services/tool-server/kubectl
           - services/model-config-controller-go
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -193,6 +194,7 @@ jobs:
           - services/k8s-service-go
           - services/session-service-go
           - services/tool-server
+          - services/tool-server/kubectl
           - services/model-config-controller-go
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
