@@ -12,7 +12,7 @@ import {
   MarkerType,
 } from '@xyflow/react'
 import type { ResourceGraphNode, ResourceGraphEdge } from '@/services/api'
-import { edgeStyles, kindIcon, statusColor, type GroupBy } from './constants'
+import { edgeStyles, kindIcon, pointsUp, statusColor, type GroupBy } from './constants'
 import { applyElkLayout } from './elkLayout'
 
 export interface ResourceGraphLayoutInput {
@@ -85,17 +85,20 @@ export function useResourceGraphLayout({
     })
 
     // Build RF edges
+    const kindOf = new Map(gNodes.map(n => [n.id, n.kind]))
     const rfEdges: Edge[] = graphData.edges
       .filter(e => edgeTypeFilters.has(e.type) && nodeIds.has(e.source) && nodeIds.has(e.target))
       .map((e, i) => {
         const style = edgeStyles[e.type] || edgeStyles.owns
+        const arrow = { type: MarkerType.ArrowClosed, color: style.stroke }
+        const up = pointsUp(kindOf.get(e.source) ?? '', kindOf.get(e.target) ?? '')
         return {
           id: `e-${i}`,
-          source: e.source,
-          target: e.target,
+          source: up ? e.target : e.source,
+          target: up ? e.source : e.target,
           animated: e.type === 'selects',
           style: { stroke: style.stroke, strokeDasharray: style.strokeDasharray, strokeWidth: 1.5 },
-          markerEnd: { type: MarkerType.ArrowClosed, color: style.stroke },
+          ...(up ? { markerStart: arrow } : { markerEnd: arrow }),
           label: style.label,
           labelStyle: { fill: style.stroke, fontSize: 10 },
           labelBgStyle: { fill: '#0f172a', fillOpacity: 0.8 },

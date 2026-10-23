@@ -17,11 +17,12 @@ export const kindIcon: Record<string, string> = {
   EndpointSlice: '📡', Endpoints: '📡',
 }
 
-// Kind weight for layered layout (higher = further left/top)
+// Kind weight for layered layout (higher = further left/top). A Service sits on the row of the workloads it
+// selects for.
 export const kindWeight: Record<string, number> = {
   HorizontalPodAutoscaler: 1000,
   Ingress: 950,
-  Service: 900,
+  Service: 850,
   Deployment: 850, StatefulSet: 850, DaemonSet: 850,
   CronJob: 820, Job: 810,
   ReplicaSet: 800,
@@ -33,6 +34,13 @@ export const kindWeight: Record<string, number> = {
   RoleBinding: 200, ClusterRoleBinding: 200,
   EndpointSlice: 150, Endpoints: 150,
 }
+
+// An edge whose source kind sits below its target kind (EndpointSlice → Service, NetworkPolicy → Pod,
+// StorageClass → PV, RoleBinding → Role, ServiceAccount → Deployment) is drawn from the target down to the
+// source, with the arrowhead at its start: the layout keeps every edge going down the rows instead of
+// looping back up across the graph.
+export const pointsUp = (sourceKind: string, targetKind: string) =>
+  (kindWeight[sourceKind] || 0) < (kindWeight[targetKind] || 0)
 
 // Status → border color
 export function statusColor(status: string): string {

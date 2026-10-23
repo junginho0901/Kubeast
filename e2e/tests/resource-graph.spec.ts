@@ -108,6 +108,28 @@ test.describe('resource graph', () => {
     await expect(drawer).toBeVisible({ timeout: 15000 })
     await expect(drawer.getByText(name!, { exact: true }).first()).toBeVisible()
   })
+
+  // EndpointSlice → Service (and the other edges whose source kind sits on a lower row) used to loop back up
+  // across the graph, and the Service sat a row above its Deployment.
+  test('a Service shares its Deployment row, its EndpointSlice sits below it, and every edge runs down', async ({ page }) => {
+    await page.goto('/cluster/resource-graph?cluster=self&namespace=kube-system')
+    const service = page.locator(`${NODES}[data-id="Service/kube-system/kube-dns"]`)
+    const deployment = page.locator(`${NODES}[data-id="Deployment/kube-system/coredns"]`)
+    const slice = page.locator(`${NODES}[data-id^="EndpointSlice/kube-system/kube-dns-"]`).first()
+    await expect(service).toBeVisible({ timeout: 30000 })
+    const [s, d, e] = [await box(service), await box(deployment), await box(slice)]
+    expect(Math.abs(s.y - d.y)).toBeLessThan(2)
+    expect(e.y).toBeGreaterThan(s.y + s.height)
+
+    // React Flow draws an edge from its source handle (a node's bottom) to its target handle (a node's top).
+    const paths = await page.locator('.react-flow__edge-path').evaluateAll((els) => els.map((el) => el.getAttribute('d') ?? ''))
+    expect(paths.length).toBeGreaterThan(0)
+    const upward = paths.filter((d) => {
+      const nums = (d.match(/-?\d+(\.\d+)?/g) ?? []).map(Number)
+      return nums.length >= 4 && nums[1] > nums[nums.length - 1]
+    })
+    expect(upward).toEqual([])
+  })
 })
 
 test.describe('resource graph for a Read user', () => {

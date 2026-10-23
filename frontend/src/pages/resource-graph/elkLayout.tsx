@@ -55,6 +55,8 @@ export async function applyElkLayout(
         'elk.spacing.nodeNode': '60',
         'elk.layered.spacing.nodeNodeBetweenLayers': '80',
         'partitioning.activate': 'true',
+        // unrelated workloads side by side; at the default 1.6 they stack and seem to connect
+        'elk.aspectRatio': '2',
         'elk.nodeSize.minimum': '(200,60)',
         'elk.nodeSize.constraints': '[MINIMUM_SIZE]',
       },
@@ -149,6 +151,7 @@ export async function applyElkLayout(
       'elk.edgeRouting': 'SPLINES',
       'elk.spacing.nodeNode': '80',
       'elk.layered.spacing.nodeNodeBetweenLayers': '100',
+      'elk.aspectRatio': '2',
     },
     children: elkChildren,
     edges: crossEdges.map((e, i) => ({
