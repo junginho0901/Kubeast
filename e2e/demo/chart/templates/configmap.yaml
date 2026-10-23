@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}
+data:
+  theme: {{ .Values.theme | quote }}
+  checkout-v2: {{ .Values.checkoutV2 | quote }}
+  currency: {{ .Values.currency | quote }}

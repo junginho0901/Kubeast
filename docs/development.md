@@ -20,8 +20,10 @@
 ├── deploy/examples/target-cluster/   # example values for target-cluster prerequisites (Prometheus·OpenCost charts, per-cluster RBAC values — docs/cluster-requirements.md)
 ├── docs/                            # operations docs (cluster prerequisites·SSO·metrics·audit·backup·supply chain)
 ├── e2e/                             # Playwright E2E (against a live cluster)
-│   └── actions/                     # opt-in action suite — 92 UI actions + kubectl checks (E2E_ACTIONS=1 --project=actions)
+│   ├── actions/                     # opt-in action suite — 92 UI actions + kubectl checks (E2E_ACTIONS=1 --project=actions)
+│   └── demo/                        # scripts that record the project site's clips (E2E_DEMO=1 --project=demo, scripts/site-media.sh)
 ├── scripts/                         # build/deploy/dev scripts
+├── site/                            # project site (GitHub Pages, .github/workflows/pages.yaml)
 ├── install.sh                       # K8s one-line install
 ├── install-docker.sh                # Docker one-line install
 └── docker-compose.yml               # (+ docker-compose.build.yml build override)
@@ -65,6 +67,21 @@ Prerequisites (without them the spec does not fail; it skips and records the rea
 - A reset removes all of the data above, so create it again.
 
 `e2e/actions/` is an opt-in action suite (it runs 92 UI actions against the second cluster and checks them with `kubectl`, about 12 minutes), so it is not part of the default run: `E2E_ACTIONS=1 npx playwright test --project=actions` — prerequisites in [e2e/actions/README.md](../e2e/actions/README.md).
+
+### Project site (`site/`)
+
+[https://junginho0901.github.io/Kubeast/](https://junginho0901.github.io/Kubeast/) is `site/` (a static page — `index.html`, `style.css`, `app.js`, `particles.js` — English with a Korean switch), published to GitHub Pages by `.github/workflows/pages.yaml` when it changes on main. The feature clips (`site/media/<name>.mp4` and a poster `.jpg`) are recorded on the dev clusters from the scripts `e2e/demo/<name>.demo.ts`.
+
+```bash
+scripts/site-media.sh              # every clip
+scripts/site-media.sh logs helm    # only these
+```
+
+- The script puts a recording shop (`e2e/demo/shop.yaml`) and a three-revision Helm release (`e2e/demo/chart`) on the second cluster and removes them after. The recordings are the `demo` project, which exists only with `E2E_DEMO=1`, so they are not in the default run.
+- Only what a script shows between `show()` and `hide()` stays in the clip (page loads and waits such as an investigation are cut). `step(id)` marks where the clip's step list on the site moves on; the script writes those times to `site/media/steps.js`.
+- Needs `ffmpeg` (`brew install ffmpeg`) and the same `E2E_USER_EMAIL` and `E2E_USER_PASSWORD` as the E2E. The AI clips (`ai-chat`, `alert-investigation`) need a default model that answers well (`scripts/kind-model-subscription.sh up`, record, then `down`).
+- When a screen changes, record its clip again.
+- `site/particles.js` is the console's sign-in particle logo (`frontend/src/components/login/LoginHero.tsx`, `frontend/src/utils/particles.ts`) in plain JavaScript: change them together.
 
 ### Frontend
 

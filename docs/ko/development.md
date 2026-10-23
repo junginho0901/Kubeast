@@ -20,8 +20,10 @@
 ├── deploy/examples/target-cluster/   # 대상 클러스터 준비물 예시 값 (Prometheus·OpenCost 차트, 클러스터별 RBAC 값 — docs/ko/cluster-requirements.md)
 ├── docs/                            # 운영 문서 (클러스터 준비물·SSO·메트릭·감사·백업·공급망)
 ├── e2e/                             # Playwright E2E (라이브 클러스터 대상)
-│   └── actions/                     # 옵트인 동작 스위트 — UI 동작 92개 + kubectl 검증 (E2E_ACTIONS=1 --project=actions)
+│   ├── actions/                     # 옵트인 동작 스위트 — UI 동작 92개 + kubectl 검증 (E2E_ACTIONS=1 --project=actions)
+│   └── demo/                        # 소개 사이트 영상 대본 (E2E_DEMO=1 --project=demo, scripts/site-media.sh)
 ├── scripts/                         # 빌드/배포/개발 스크립트
+├── site/                            # 소개 사이트 (GitHub Pages, .github/workflows/pages.yaml)
 ├── install.sh                       # K8s 원라인 설치
 ├── install-docker.sh                # Docker 원라인 설치
 └── docker-compose.yml               # (+ docker-compose.build.yml 빌드 override)
@@ -71,6 +73,21 @@ npx playwright test cluster-hygiene.spec.ts   # 스펙 하나
 - 리셋하면 위 데이터가 다 사라지므로 다시 만듭니다.
 
 `e2e/actions/`는 옵트인 동작 스위트(UI 동작 92개를 두 번째 클러스터에 실행하고 `kubectl`로 확인, 약 12분)라 기본 실행에 들어가지 않습니다: `E2E_ACTIONS=1 npx playwright test --project=actions` — 전제는 [e2e/actions/README.md](../../e2e/actions/README.md).
+
+### 소개 사이트 (`site/`)
+
+[https://junginho0901.github.io/Kubeast/](https://junginho0901.github.io/Kubeast/)는 `site/`(정적 페이지 — `index.html`·`style.css`·`app.js`·`particles.js`, 영어·한국어 전환)를 main에 반영할 때 `.github/workflows/pages.yaml`이 GitHub Pages로 냅니다. 기능 영상(`site/media/<이름>.mp4`와 첫 장면 `.jpg`)은 `e2e/demo/<이름>.demo.ts` 대본을 dev 클러스터에서 녹화해 만듭니다.
+
+```bash
+scripts/site-media.sh              # 전부
+scripts/site-media.sh logs helm    # 이것만
+```
+
+- 스크립트는 두 번째 클러스터에 녹화용 가게(`e2e/demo/shop.yaml`)와 리비전 3개짜리 Helm 릴리스(`e2e/demo/chart`)를 올렸다가 끝나면 지웁니다. 녹화는 `E2E_DEMO=1`일 때만 생기는 `demo` 프로젝트라 기본 실행에 들어가지 않습니다.
+- 대본의 `show()`·`hide()` 사이만 영상에 남습니다(페이지 로딩·조사 대기 같은 기다림은 잘림). `step(id)`는 사이트에서 그 영상의 단계 목록이 넘어가는 곳이며, 스크립트가 그 시각을 `site/media/steps.js`에 씁니다.
+- `ffmpeg`(`brew install ffmpeg`)와 E2E와 같은 `E2E_USER_EMAIL`·`E2E_USER_PASSWORD`가 필요합니다. AI 영상(`ai-chat`·`alert-investigation`)은 답을 잘하는 기본 모델이 있어야 합니다(`scripts/kind-model-subscription.sh up` → 녹화 → `down`).
+- 화면이 바뀌면 그 영상만 다시 찍습니다.
+- `site/particles.js`는 콘솔 로그인 화면의 입자 로고(`frontend/src/components/login/LoginHero.tsx`·`frontend/src/utils/particles.ts`)를 순수 자바스크립트로 옮긴 것입니다. 둘을 함께 바꿉니다.
 
 ### 프론트엔드
 

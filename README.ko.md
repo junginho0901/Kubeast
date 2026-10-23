@@ -6,6 +6,8 @@ AI 어시스턴트를 내장한 멀티클러스터 Kubernetes 운영 플랫폼�
 클러스터의 리소스(Workloads, Network, Storage, RBAC, GPU, Helm 등)를 조회·관리하고,
 LLM 기반 채팅으로 리소스 조회·진단·변경을 수행할 수 있습니다.
 
+소개 사이트(기능 영상): https://junginho0901.github.io/Kubeast/
+
 주요 특징:
 
 - 다중 LLM(OpenAI · Anthropic · Gemini · Azure OpenAI · Ollama) AI 어시스턴트, Tool calling 기반 클러스터 조작

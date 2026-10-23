@@ -1,0 +1,4 @@
+apiVersion: v2
+name: storefront-settings
+description: Settings of the site recordings' shop, so its Helm clip has a history to show.
+version: 0.1.0
