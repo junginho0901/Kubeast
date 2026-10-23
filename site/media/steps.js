@@ -6,9 +6,9 @@ window.KUBEAST_STEPS = {
     "request": 0
   },
   "ai-chat": {
-    "answer": 8.2,
+    "answer": 8,
     "ask": 0,
-    "tools": 4.1
+    "tools": 4
   },
   "alert-investigation": {
     "alert": 2,
@@ -26,7 +26,7 @@ window.KUBEAST_STEPS = {
     "switch": 8.7
   },
   "floating-chat": {
-    "answer": 11.7,
+    "answer": 10.9,
     "ask": 2.9,
     "screen": 0
   },
