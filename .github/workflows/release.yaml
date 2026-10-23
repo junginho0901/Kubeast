@@ -28,6 +28,8 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     strategy:
+      # every image reaches its gates: one failing image does not cancel (and hide) the others
+      fail-fast: false
       matrix:
         # binary: an executable in the image whose ELF architecture must match
         # each platform variant (architecture check below).
@@ -117,6 +119,31 @@ jobs:
           platforms: linux/amd64,linux/arm64
           build-args: ${{ matrix.build_args }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.image || matrix.name }},push-by-digest=true,name-canonical=true,push=${{ github.event_name == 'push' }}
+
+      # The dry run (no push) meets the same vulnerability gate before a tag does: the amd64
+      # variant, built again from the builder's cache into the runner's docker, is scanned there.
+      - name: Load for the dry-run scan (amd64)
+        if: github.event_name != 'push'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile != '' && format('{0}/{1}', matrix.context, matrix.dockerfile) || format('{0}/Dockerfile', matrix.context) }}
+          platforms: linux/amd64
+          build-args: ${{ matrix.build_args }}
+          load: true
+          tags: dry-run/kubeast-${{ matrix.image || matrix.name }}:scan
+
+      - name: Vulnerability gate (trivy, dry run)
+        if: github.event_name != 'push'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: dry-run/kubeast-${{ matrix.image || matrix.name }}:scan
+          scan-type: image
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
 
       # Each platform variant must carry a binary of its own architecture: the
       # v0.3.0/v0.4.0 arm64 variants of two images shipped x86-64 binaries and

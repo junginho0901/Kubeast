@@ -28,6 +28,19 @@ dependencies:
       - path: docs/getting-started.md
         match: 'git clone --branch v'
 
+  # Built from source into the tool-server and k8s-service images (their Dockerfiles), so the
+  # release image scan sees this toolchain rather than the project's release binary.
+  - name: aws-iam-authenticator
+    version: 0.7.23
+    upstream:
+      flavour: github
+      url: kubernetes-sigs/aws-iam-authenticator
+    refPaths:
+      - path: services/tool-server/Dockerfile
+        match: 'ARG AWS_IAM_AUTHENTICATOR_VERSION='
+      - path: services/k8s-service-go/Dockerfile
+        match: 'ARG AWS_IAM_AUTHENTICATOR_VERSION='
+
   - name: zeitgeist
     version: v0.8.0
     upstream:

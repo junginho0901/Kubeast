@@ -18,6 +18,7 @@ updates:
       - /services/k8s-service-go
       - /services/session-service-go
       - /services/tool-server
+      - /services/tool-server/kubectl
       - /services/model-config-controller-go
     schedule:
       interval: weekly
