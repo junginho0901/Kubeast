@@ -111,6 +111,7 @@ scripts/site-media.sh logs helm    # 이것만
 - `ffmpeg`(`brew install ffmpeg`)와, E2E에서 쓰는 것과 같은 `E2E_USER_EMAIL`·`E2E_USER_PASSWORD`가 필요합니다.
   AI 영상(`ai-chat`·`floating-chat`·`alert-investigation`·`masking`)에는 답을 잘하는 기본 모델이 있어야 합니다(`scripts/kind-model-subscription.sh up` → 녹화 → `down`).
 - 화면이 바뀌면 그 영상만 다시 찍으세요.
+- `floating-chat`을 녹화하면 두 README 맨 위 그림인 `docs/images/floating-chat.gif`도 함께 만들어집니다.
 - 배포 단계에서 `index.html`이 불러오는 스타일·스크립트·영상 주소에 `?v=<커밋>`을 붙입니다.
   Pages는 파일을 `max-age=600`으로 내주고, 새로고침해도 페이지만 다시 받기 때문입니다. 저장소의 `index.html`에는 이 값이 붙어 있지 않습니다.
 - 휴대폰 화면은 두 엔진으로 확인합니다.

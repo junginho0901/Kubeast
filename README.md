@@ -4,6 +4,8 @@
 
 A multi-cluster Kubernetes operations platform with a built-in AI assistant. In the web UI you can view and manage resources across multiple clusters (Workloads, Network, Storage, RBAC, GPU, Helm, etc.), and use LLM-based chat to view, diagnose and change resources.
 
+<p align="center"><a href="https://junginho0901.github.io/Kubeast/"><img src="docs/images/floating-chat.gif" alt="Asking the floating AI assistant why the pod on screen keeps crashing"></a></p>
+
 Project site (feature clips): https://junginho0901.github.io/Kubeast/
 
 Key features:

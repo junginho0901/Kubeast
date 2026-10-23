@@ -111,6 +111,7 @@ scripts/site-media.sh logs helm    # only these
 - Recording needs `ffmpeg` (`brew install ffmpeg`) and the same `E2E_USER_EMAIL` and `E2E_USER_PASSWORD` as the E2E.
 - The AI clips (`ai-chat`, `floating-chat`, `alert-investigation`, `masking`) need a default model that answers well. Run `scripts/kind-model-subscription.sh up`, record, then run `down`.
 - When a screen changes, record its clip again.
+- Recording `floating-chat` also writes `docs/images/floating-chat.gif`, the picture at the top of both READMEs.
 - The deploy adds `?v=<commit>` to the stylesheet, the scripts and the clips in `index.html`, because Pages serves files with `max-age=600` and a reload fetches only the page. The checked-in `index.html` has none.
 - Check a change on phones in both engines: Playwright WebKit (every iOS browser is WebKit) and Chromium with an Android device (`devices['iPhone 15']`, `devices['iPhone SE']`, `devices['Pixel 7']`).
   - At a few moments after load, check that the page is as wide as the screen and the large view is inside it.

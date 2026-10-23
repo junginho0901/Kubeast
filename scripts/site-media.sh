@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Record the clips of the project site (site/) on the dev kind clusters and write site/media/<name>.mp4 and a
-# poster <name>.jpg (its last frame). Each clip is one e2e/demo/<name>.demo.ts; the shop in e2e/demo/shop.yaml
+# poster <name>.jpg (its last frame); the floating-chat clip also becomes docs/images/floating-chat.gif, the README's
+# picture. Each clip is one e2e/demo/<name>.demo.ts; the shop in e2e/demo/shop.yaml
 # and a Helm release of e2e/demo/chart with three revisions are put on the second cluster for the run and removed
 # after (helm.spec.ts expects no release there). Dev data only.
 #
@@ -49,6 +50,11 @@ for raw in "$CLIPS"/*.webm; do
     -vf "fps=25,select='$keep',setpts=N/FRAME_RATE/TB,scale=1280:-2" \
     -c:v libx264 -preset slow -crf 28 -pix_fmt yuv420p -movflags +faststart "$MEDIA/$name.mp4"
   ffmpeg -y -loglevel error -sseof -0.2 -i "$MEDIA/$name.mp4" -frames:v 1 -q:v 4 "$MEDIA/$name.jpg"
+  if [ "$name" = floating-chat ]; then
+    ffmpeg -y -loglevel error -i "$MEDIA/$name.mp4" -loop 0 \
+      -vf "fps=10,scale=960:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle" \
+      "$ROOT/docs/images/$name.gif"
+  fi
   echo "$name: $(du -h "$MEDIA/$name.mp4" | cut -f1)"
 done
 

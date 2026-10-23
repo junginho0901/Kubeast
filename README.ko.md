@@ -4,6 +4,8 @@
 
 여러 Kubernetes 클러스터를 웹 콘솔 하나로 다루고, 궁금한 건 AI에게 물어보세요. Workloads, Network, Storage, RBAC, GPU, Helm까지 리소스를 살펴보고 고칠 수 있고, AI는 내 권한 그대로 클러스터를 읽고 원인을 찾아 답합니다.
 
+<p align="center"><a href="https://junginho0901.github.io/Kubeast/"><img src="docs/images/floating-chat.gif" alt="화면에 띄운 파드가 왜 계속 죽는지 플로팅 AI에게 묻는 장면"></a></p>
+
 소개 사이트(기능 영상): https://junginho0901.github.io/Kubeast/
 
 주요 기능:
