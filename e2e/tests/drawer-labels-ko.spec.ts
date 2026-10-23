@@ -3,6 +3,8 @@ import { test, expect } from '@playwright/test'
 // With the UI in Korean, a resource drawer's Info tab shows descriptive labels in
 // Korean while Kubernetes field names stay English (the detail label catalog).
 const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+// a row that opens the drawer: while the list loads, its first row is the loading row, which opens nothing
+const ROW = 'tbody tr.cursor-pointer'
 
 test.describe('drawer labels in Korean', () => {
   test.beforeEach(async ({ page }) => {
@@ -15,7 +17,7 @@ test.describe('drawer labels in Korean', () => {
     // Roles: every cluster has kube-system roles, and the drawer's Basic Info
     // lists Name / Namespace / Created next to UID / Resource Version.
     await page.goto('/security/roles?cluster=self')
-    const firstRow = page.locator('tbody tr').first()
+    const firstRow = page.locator(ROW).first()
     await expect(firstRow).toBeVisible({ timeout: 20000 })
     await firstRow.click()
 
@@ -35,7 +37,7 @@ test.describe('drawer labels in Korean', () => {
 
   test('node drawer: section titles with a count, sub-section table heads and placeholders in Korean', async ({ page }) => {
     await page.goto('/cluster/nodes?cluster=self')
-    const firstRow = page.locator('tbody tr').first()
+    const firstRow = page.locator(ROW).first()
     await expect(firstRow).toBeVisible({ timeout: 20000 })
     await firstRow.click()
 

@@ -100,6 +100,9 @@ async function rightEdge(locator: Locator): Promise<number> {
   return box.x + box.width
 }
 
+// a row that opens the drawer: while the list loads, its first row is the loading row, which opens nothing
+const firstPod = (page: Page) => page.locator('main tbody tr.cursor-pointer').first()
+
 test.describe('floating chat screen data', () => {
   test('every menu sends its screen data, on the first visit and when opened again', async ({ page }) => {
     test.setTimeout(600_000)
@@ -151,7 +154,7 @@ test.describe('floating chat screen data', () => {
     await page.setViewportSize({ width: 1440, height: 900 })
     const sent = await captureFloating(page)
     await page.goto('/workloads/pods?cluster=self')
-    await page.locator('table tbody tr').first().click()
+    await firstPod(page).click()
     const drawer = page.locator('[class*="max-w-[740px]"]')
     await expect(drawer).toBeVisible()
     const drawerLeft = (await drawer.boundingBox())!.x
@@ -178,7 +181,7 @@ test.describe('floating chat screen data', () => {
   test('on a screen too narrow for the drawer and the window side by side the chat stays in the corner, in front', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 })
     await page.goto('/workloads/pods?cluster=self')
-    await page.locator('table tbody tr').first().click()
+    await firstPod(page).click()
     await expect(page.locator('[class*="max-w-[740px]"]')).toBeVisible()
     const toggle = page.getByTestId('floating-chat-toggle')
     expect(await rightEdge(toggle)).toBeGreaterThan(1240)
@@ -225,6 +228,8 @@ test.describe('floating chat — windows and admin screens', () => {
 
     await page.getByTestId('floating-chat-input').focus()
     await page.keyboard.press('Escape')
+    // the closing window stays in the page for its transition; a question typed into it then is lost
+    await expect(page.getByTestId('floating-chat-panel')).toHaveCount(0)
     await page.getByRole('button', { name: 'Cancel' }).click()
     await expect(page.getByTestId('delete-dialog')).toHaveCount(0)
     expect(top(await ask(page, sent)).source, 'the closed confirmation is gone from the layers').toBe('ResourceDetailDrawer')
