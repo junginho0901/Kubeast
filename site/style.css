@@ -30,6 +30,8 @@ body {
   color: var(--text);
   font: 16px/1.6 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* the floating names and glow may reach past a narrow screen's edge; clip keeps the header sticky */
+  overflow-x: clip;
 }
 body.lb-open { overflow: hidden; }
 
@@ -349,9 +351,9 @@ h2 { font-size: clamp(1.9rem, 3.4vw, 2.8rem); letter-spacing: -0.025em; line-hei
 .steps li.now::before { background: var(--grad); border-color: transparent; color: #fff; box-shadow: 0 0 14px rgba(14, 165, 233, 0.7); }
 
 /* Large view */
-.lightbox { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 24px; }
+.lightbox { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 24px; overflow-y: auto; overscroll-behavior: contain; }
 .lightbox[hidden] { display: none; }
-.lb-backdrop { position: absolute; inset: 0; background: rgba(2, 6, 23, 0.8); backdrop-filter: blur(10px); }
+.lb-backdrop { position: fixed; inset: 0; background: rgba(2, 6, 23, 0.8); backdrop-filter: blur(10px); }
 .lb-frame {
   position: relative;
   display: grid;
@@ -359,6 +361,8 @@ h2 { font-size: clamp(1.9rem, 3.4vw, 2.8rem); letter-spacing: -0.025em; line-hei
   gap: 24px;
   align-items: center;
   width: min(1480px, 100%);
+  /* centred while it fits, from the top (scrolling) when it is taller than a small or turned phone */
+  margin-block: auto;
 }
 .lb-video {
   position: relative;
@@ -503,8 +507,8 @@ footer nav a:hover { color: var(--text); }
 @media (max-width: 1080px) {
   .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .lb-frame { grid-template-columns: 1fr; gap: 16px; }
-  .lb-side { display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; align-items: start; }
+  .lb-frame { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .lb-side { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 16px; align-items: start; }
   .lb-side h3, .lb-text { grid-column: 1; }
   .lb-steps { grid-column: 1; }
   .lb-nav { grid-column: 2; grid-row: 1; margin: 0; }
@@ -513,9 +517,16 @@ footer nav a:hover { color: var(--text); }
   .top nav > a:not(.btn) { display: none; }
   .hero { grid-template-columns: minmax(0, 1fr); min-height: auto; padding-top: 8px; }
   .hero-art { order: -1; height: 340px; }
-  .grid, .tiles { grid-template-columns: 1fr; }
+  /* minmax(0, …) as above: WebKit (Safari, iOS browsers) takes a video's own width as the card's minimum */
+  .grid, .tiles { grid-template-columns: minmax(0, 1fr); }
   .card:hover { transform: none; }
   .features, .more, .install, .faq { padding-top: 64px; }
   .lb-close { top: 6px; right: 6px; }
   .lb-caption { bottom: 46px; font-size: 0.85rem; }
+  /* the text sits over the page here, not beside the clip */
+  .lb-backdrop { background: var(--bg); }
+}
+@media (max-width: 380px) {
+  .gh-label { display: none; }
+  .top nav .btn-sm { padding: 7px 10px; }
 }
