@@ -1,4 +1,17 @@
+# Only the gateway is published. Every other service is reachable inside msa-network only;
+# use `docker compose exec` (or an override file) to reach one directly.
 services:
+  # The services run as UID 65532; Docker creates named volumes owned by root.
+  volume-init:
+    image: busybox:1.38
+    user: "0"
+    command: ["chown", "65532:65532", "/keys", "/kubeconfig"]
+    volumes:
+      - auth_keys:/keys
+      - kubeconfig_data:/kubeconfig
+    network_mode: none
+    restart: "no"
+
   # PostgreSQL Database
   # PGDATA stays on the volume — the 18 image's default moved to /var/lib/postgresql/18/docker.
   postgres:
@@ -12,8 +25,6 @@ services:
       PGDATA: /var/lib/postgresql/data
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     networks:
       - msa-network
     healthcheck:
@@ -26,8 +37,6 @@ services:
   # Redis (캐싱 및 세션 관리)
   redis:
     image: valkey/valkey:9.1-alpine
-    ports:
-      - "6379:6379"
     networks:
       - msa-network
     healthcheck:
@@ -40,8 +49,6 @@ services:
   # Auth Service (Go)
   auth-service:
     image: ghcr.io/junginho0901/kubeast-auth-service:${KUBEAST_TAG:-v0.7.0}
-    ports:
-      - "8004:8004"
     env_file:
       - .env
     environment:
@@ -66,6 +73,8 @@ services:
     networks:
       - msa-network
     depends_on:
+      volume-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
     restart: unless-stopped
@@ -73,8 +82,6 @@ services:
   # AI Service
   ai-service:
     image: ghcr.io/junginho0901/kubeast-ai-service:${KUBEAST_TAG:-v0.7.0}
-    ports:
-      - "8001:8001"
     env_file:
       - .env
     environment:
@@ -107,8 +114,6 @@ services:
   # K8s Service (Go)
   k8s-service:
     image: ghcr.io/junginho0901/kubeast-k8s-service:${KUBEAST_TAG:-v0.7.0}
-    ports:
-      - "8002:8002"
     env_file:
       - .env
     environment:
@@ -143,8 +148,6 @@ services:
   # Session Service (Go)
   session-service:
     image: ghcr.io/junginho0901/kubeast-session-service:${KUBEAST_TAG:-v0.7.0}
-    ports:
-      - "8003:8003"
     env_file:
       - .env
     environment:
@@ -165,8 +168,6 @@ services:
   # Tool Server (K8s tool executor)
   tool-server:
     image: ghcr.io/junginho0901/kubeast-tool-server:${KUBEAST_TAG:-v0.7.0}
-    ports:
-      - "8086:8086"
     env_file:
       - .env
     environment:
@@ -192,7 +193,7 @@ services:
   gateway:
     image: nginx:alpine
     ports:
-      - "8000:8000"
+      - "${GATEWAY_PORT:-8000}:8000"
     volumes:
       # Single source of truth (same file the Helm chart ships).
       - ./helm/kubeast/files/nginx.conf:/etc/nginx/nginx.conf:ro
@@ -209,8 +210,6 @@ services:
   # Frontend
   frontend:
     image: ghcr.io/junginho0901/kubeast-frontend:${KUBEAST_TAG:-v0.7.0}
-    ports:
-      - "5173:5173"
     networks:
       - msa-network
     restart: unless-stopped

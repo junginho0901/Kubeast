@@ -56,10 +56,17 @@ git clone --branch v0.7.0 --depth 1 https://github.com/junginho0901/Kubeast.git
 cd Kubeast
 
 ./install-docker.sh
-#   --kubeconfig /path/to/kubeconfig.yaml   # 관리할 클러스터 kubeconfig
 #   --port 9000                             # Gateway 포트 (기본 8000)
 #   --uninstall                             # 컨테이너 + 볼륨 모두 제거
 ```
+
+로그인이 응답하면 스크립트가 주소와 관리자 비밀번호를 출력합니다.
+
+- 로그인하면 Setup 화면이 관리할 클러스터의 kubeconfig를 묻습니다.
+  - 그 server 주소는 컨테이너 안에서 닿아야 합니다. `127.0.0.1`이나 `localhost`(kind, minikube)는 컨테이너 자신을 가리킵니다.
+  - kind 클러스터라면 `kind get kubeconfig --internal --name <클러스터>`를 붙여 넣고, 클러스터와 통신하는 컨테이너를 kind 네트워크에 연결하세요: `docker network connect kind <폴더>-auth-service-1`, `k8s-service`와 `tool-server`도 같은 방식입니다(`<폴더>`는 내려받은 폴더 이름, 곧 Compose 프로젝트 이름).
+- 밖으로 여는 포트는 Gateway 하나뿐입니다. 다른 서비스에는 `docker compose exec`로 들어가세요.
+- 스크립트를 다시 실행해도(예: `--port`를 바꿔서) `.env`의 비밀번호와 키는 그대로 둡니다. 데이터베이스 볼륨이 처음 만들 때의 비밀번호를 기억하기 때문입니다.
 
 `docker-compose`는 게시된 이미지를 pull합니다. 기본은 내려받은 태그의 버전이며 `KUBEAST_TAG`로 바꿀 수 있습니다. 소스에서 빌드하려면 다음을 실행하세요.
 

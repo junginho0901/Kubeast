@@ -57,10 +57,17 @@ git clone --branch v0.7.0 --depth 1 https://github.com/junginho0901/Kubeast.git
 cd Kubeast
 
 ./install-docker.sh
-#   --kubeconfig /path/to/kubeconfig.yaml   # kubeconfig of the cluster to manage
 #   --port 9000                             # Gateway port (default 8000)
 #   --uninstall                             # remove containers + volumes
 ```
+
+The script prints the address and the admin password once sign-in answers.
+
+- Sign in, and the Setup page asks for the kubeconfig of the cluster to manage.
+  - Its server address must be reachable from inside the containers. `127.0.0.1` or `localhost` (kind, minikube) points at the container itself.
+  - For a kind cluster, paste `kind get kubeconfig --internal --name <cluster>` and connect the containers that talk to it to kind's network: `docker network connect kind <dir>-auth-service-1`, and the same for `k8s-service` and `tool-server` (`<dir>` is the checkout folder's name, the Compose project).
+- Only the gateway port is published. Reach the other services with `docker compose exec`.
+- Running the script again (for example with another `--port`) keeps the passwords and keys in `.env`, because the database volume keeps the password it was created with.
 
 `docker-compose` pulls the published images. By default it uses the version of the tag you checked out; set `KUBEAST_TAG` to change it.
 To build from source:
