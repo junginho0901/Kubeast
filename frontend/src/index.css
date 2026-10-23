@@ -352,3 +352,14 @@ body {
   overflow-wrap: break-word !important;
   white-space: normal !important;
 }
+
+/* 인라인 코드: typography 플러그인이 앞뒤에 붙이는 백틱(code::before/after) 대신 옅은 칩 (not-prose 안은 그대로) */
+.prose code:not(pre code):not(.not-prose code) {
+  padding: 0.15em 0.4em;
+  border-radius: 0.375rem;
+  background-color: rgb(148 163 184 / 0.16);
+}
+.prose code:not(pre code)::before,
+.prose code:not(pre code)::after {
+  content: none;
+}
