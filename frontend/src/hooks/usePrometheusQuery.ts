@@ -1,5 +1,6 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { api, type PrometheusQueryResponse, type PrometheusRangeResponse, type ClusterFeatures } from '@/services/api'
+import { clustersApi } from '@/services/api/clusters'
 import { useCluster } from '@/contexts/ClusterContext'
 
 /**
@@ -11,9 +12,19 @@ import { useCluster } from '@/contexts/ClusterContext'
  * fallback so local-dev / older deployments keep auto-discovery.
  */
 export function useClusterFeatures() {
+  // Asked once the picker has settled on one of this user's clusters: a request without ?cluster= is
+  // answered for the server's default cluster, which the user may not be allowed on (403, "No permission").
+  const { currentCluster } = useCluster()
+  const { data: clusters, isSuccess } = useQuery({
+    queryKey: ['clusters-accessible'],
+    queryFn: () => clustersApi.listClusters(true),
+    staleTime: 30_000,
+  })
+  const settled = isSuccess && (clusters.length === 0 || clusters.some((c) => c.id === currentCluster))
   return useQuery<ClusterFeatures>({
-    queryKey: ['cluster-features'],
+    queryKey: ['cluster-features', currentCluster],
     queryFn: () => api.getClusterFeatures(),
+    enabled: settled,
     staleTime: 5 * 60 * 1000, // 5 minutes — feature flags don't move
     retry: 1,
     // If the endpoint is missing (older backend) treat Prometheus as enabled

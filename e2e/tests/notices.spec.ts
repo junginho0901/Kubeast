@@ -12,6 +12,8 @@ import { test, expect, type APIRequestContext, type Browser } from '@playwright/
 //  #44 a Read user's Helm release page: "no permission", not "not found"
 //  #72/#73 a user with no cluster: the chart's "where to ask" text and link, and the
 //          footer says "no accessible cluster" on Settings too
+//  a user with no role on self: the first page asked the feature flags before the picker chose a
+//          cluster, the server answered for self (403) and every first page said "no permission"
 // The dev install has no Gateway API CRDs on self and sets auth.accessHelp (deploy/kind/values.yaml).
 
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
@@ -146,6 +148,34 @@ test.describe('notices instead of "nothing here"', () => {
       await expect(member.page.getByTestId('access-help').first()).toBeVisible()
     } finally {
       await member.done()
+    }
+  })
+
+  test('a user without access to self opens the console with no "no permission": the feature flags wait for their cluster', async ({ browser, request }) => {
+    const admin = await adminHeaders(request)
+    const email = `e2e-notices-noself-${Date.now()}@kubeast.local`
+    const password = 'e2e-notices-throwaway'
+    const created = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E notices no self', email, password } })
+    expect(created.status()).toBe(201)
+    const id = (await created.json()).id as string
+    const ctx = await browser.newContext({ baseURL: BASE, storageState: { cookies: [], origins: [] } })
+    try {
+      expect((await request.put(`/api/v1/auth/admin/users/${id}/cluster-roles/default`, { headers: admin, data: { role: 'Read' } })).status()).toBe(200)
+      expect((await ctx.request.post('/api/v1/auth/login', { data: { email, password } })).ok(), `login ${email}`).toBeTruthy()
+      const page = await ctx.newPage()
+      const asked: string[] = []
+      page.on('request', (r) => {
+        if (r.url().includes('/api/v1/cluster/features')) asked.push(new URL(r.url()).searchParams.get('cluster') ?? '')
+      })
+      await page.goto('/account')
+      await expect(page.getByTestId('cluster-picker')).toContainText('default', { timeout: 20000 })
+      await expect.poll(() => asked.length, { timeout: 20000 }).toBeGreaterThan(0)
+      await page.waitForLoadState('networkidle')
+      expect(asked, 'every feature request names the picked cluster').toEqual(asked.map(() => 'default'))
+      await expect(page.getByTestId('forbidden-banner')).toHaveCount(0)
+    } finally {
+      await ctx.close()
+      await request.delete(`/api/v1/auth/admin/users/${id}`, { headers: admin, failOnStatusCode: false })
     }
   })
 })
