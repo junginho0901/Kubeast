@@ -105,9 +105,10 @@ jobs:
         id: version
         run: echo "tag=$([ "$GITHUB_REF_TYPE" = tag ] && echo "$GITHUB_REF_NAME" || echo dry-run)" >> "$GITHUB_OUTPUT"
 
-      # The image is pushed by digest only (no tag): the version tag is applied
-      # as the last step, after the architecture check, the vulnerability gate,
-      # the attestations and the signature. A build that fails any of them
+      # The image is pushed by digest only (no tag): the tag job applies the
+      # version tag last, after the architecture check, the vulnerability gate,
+      # the attestations, the signature and the Compose install (compose-smoke)
+      # have passed for every image. A build that fails any of them
       # leaves an untagged manifest behind and nothing a `docker pull` by tag
       # can reach. There is no `latest` tag: every release tag is immutable.
       - name: Build and push (by digest)
@@ -218,20 +219,91 @@ jobs:
           IMAGE: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.image || matrix.name }}
           DIGEST: ${{ steps.build.outputs.digest }}
 
-      # Last: the release tag points at the digest that passed everything above.
-      - name: Tag release
+      # The tag job applies the release tag to this digest once the Compose install has started on it.
+      - name: Export digest
         if: github.event_name == 'push'
-        run: docker buildx imagetools create -t "${IMAGE}:${TAG}${SUFFIX}" "${IMAGE}@${DIGEST}"
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          echo "${IMAGE}@${DIGEST} ${SUFFIX}" > "$RUNNER_TEMP/digests/${NAME}"
         env:
           IMAGE: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.image || matrix.name }}
           DIGEST: ${{ steps.build.outputs.digest }}
-          TAG: ${{ steps.version.outputs.tag }}
           SUFFIX: ${{ matrix.suffix }}
+          NAME: ${{ matrix.name }}
+
+      - name: Upload digest
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: digest-${{ matrix.name }}
+          path: ${{ runner.temp }}/digests/${{ matrix.name }}
+          retention-days: 1
+
+  # install-docker.sh starts and signs in on this run's images before any of them gets the release tag:
+  # on a tag the pushed digests, on the dry run the same Dockerfiles built here (scripts/compose-smoke.sh).
+  compose-smoke:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Log in to ghcr.io
+        if: github.event_name == 'push'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download digests
+        if: github.event_name == 'push'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: digest-*
+          path: ${{ runner.temp }}/digests
+          merge-multiple: true
+
+      - name: Compose install on the pushed digests
+        if: github.event_name == 'push'
+        run: scripts/compose-smoke.sh "$RUNNER_TEMP/digests"
+
+      - name: Compose install on images built from this commit
+        if: github.event_name != 'push'
+        run: scripts/compose-smoke.sh --build
+
+  # Last: each release tag points at the digest that passed everything above.
+  tag:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    needs: compose-smoke
+    steps:
+      - name: Log in to ghcr.io
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Download digests
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: digest-*
+          path: ${{ runner.temp }}/digests
+          merge-multiple: true
+
+      - name: Tag release
+        run: |
+          for f in "$RUNNER_TEMP"/digests/*; do
+            read -r ref suffix < "$f"
+            docker buildx imagetools create -t "${ref%@*}:${GITHUB_REF_NAME}${suffix}" "$ref"
+          done
 
   helm-package:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    needs: build-and-push
+    needs: tag
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

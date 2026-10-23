@@ -7,6 +7,7 @@
 
 - 각 이미지는 **먼저 digest로** push하고, 아래 단계를 그 digest에 대해 실행합니다.
 - 버전 태그(`:vX.Y.Z`)는 마지막 단계까지 성공해야 붙입니다. 그래서 게이트에서 실패한 릴리스는 태그로 pull할 수 있는 것을 하나도 남기지 않습니다.
+- 태그를 붙이기 전에 push한 digest로 Docker Compose 설치(`install-docker.sh`)를 띄우고 관리자 로그인까지 확인합니다(`scripts/compose-smoke.sh`). 모든 컨테이너가 재시작 없이 떠 있어야 통과합니다.
 - `latest` 태그는 없습니다.
 - 워크플로가 쓰는 action은 커밋 SHA로 고정하고(`uses: owner/repo@<sha> # vX.Y.Z`), Dependabot이 갱신합니다.
 
@@ -17,6 +18,7 @@
   - 워크플로의 첫 단계가 값이 다른 태그를 멈추므로, 설치 문서와 `install.sh`는 항상 함께 나가는 릴리스를 가리킵니다.
 - 태그를 push하기 전에 워크플로를 수동으로(workflow_dispatch) 실행하세요.
   - 이 dry run은 모든 이미지를 push하지 않고 빌드한 뒤 amd64 변형을 같은 trivy 게이트로 검사합니다.
+  - 같은 커밋으로 빌드한 이미지로 Compose 설치도 띄워 봅니다(`scripts/compose-smoke.sh --build`).
   - 그래서 태그는 게이트를 통과한 뒤에 push하게 됩니다.
 
 설치 문서와 `install.sh`는 릴리스된 OCI 차트를 설치하며, 그 차트의 이미지 태그는 워크플로가 패키징할 때 정합니다.

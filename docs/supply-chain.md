@@ -10,6 +10,9 @@ artifact is `sbom-ai-service-claude-code.spdx.json`.
 - Each image is pushed **by digest first**, and the steps below run against that digest.
 - The version tag (`:vX.Y.Z`) is applied only after the last of them succeeds,
   so a release that fails a gate leaves nothing a pull by tag can reach.
+- Before any image gets the tag, the Docker Compose install (`install-docker.sh`)
+  starts on the pushed digests and the admin signs in (`scripts/compose-smoke.sh`):
+  every container keeps running without a restart.
 - There is no `latest` tag.
 - The workflow's own actions are pinned to commit SHAs
   (`uses: owner/repo@<sha> # vX.Y.Z`) and refreshed by Dependabot.
@@ -24,6 +27,8 @@ Before tagging `vX.Y.Z`:
 - Run the workflow by hand (workflow_dispatch) first. That dry run builds every
   image without pushing and puts the amd64 variant through the same trivy gate,
   so a tag is pushed after the gate has passed.
+  It also starts the Compose install on images built from the commit
+  (`scripts/compose-smoke.sh --build`).
 
 The install docs and the install script install the released OCI chart, whose
 image tags the workflow sets when it packages. The chart in a checkout keeps a
