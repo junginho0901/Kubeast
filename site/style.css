@@ -454,7 +454,8 @@ h2 { font-size: clamp(1.9rem, 3.4vw, 2.8rem); letter-spacing: -0.025em; line-hei
 .install-note { text-align: center; color: var(--text-dim); margin: 20px 0 0; }
 
 /* FAQ */
-.faq { max-width: 860px; margin: 0 auto; padding-bottom: 96px; }
+/* A narrower column through the sections' own side padding (a max-width here would subtract that padding twice). */
+.faq { --width: 860px; padding-bottom: 96px; }
 .faq details {
   border: 1px solid var(--line);
   border-radius: 14px;
