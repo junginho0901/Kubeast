@@ -87,6 +87,8 @@ scripts/site-media.sh logs helm    # 이것만
 - 대본의 `show()`·`hide()` 사이만 영상에 남습니다(페이지 로딩·조사 대기 같은 기다림은 잘림). `step(id)`는 사이트에서 그 영상의 단계 목록이 넘어가는 곳이며, 스크립트가 그 시각을 `site/media/steps.js`에 씁니다.
 - `ffmpeg`(`brew install ffmpeg`)와 E2E와 같은 `E2E_USER_EMAIL`·`E2E_USER_PASSWORD`가 필요합니다. AI 영상(`ai-chat`·`floating-chat`·`alert-investigation`·`masking`)은 답을 잘하는 기본 모델이 있어야 합니다(`scripts/kind-model-subscription.sh up` → 녹화 → `down`).
 - 화면이 바뀌면 그 영상만 다시 찍습니다.
+- 배포 단계가 `index.html`이 부르는 스타일·스크립트·영상 주소에 `?v=<커밋>`을 붙입니다. Pages는 파일을 `max-age=600`으로 내주고 새로고침은 페이지만 다시 받기 때문입니다. 저장소의 `index.html`에는 붙어 있지 않습니다.
+- 휴대폰 확인은 두 엔진으로 합니다 — Playwright WebKit(아이폰의 모든 브라우저가 WebKit)과 안드로이드 기기를 흉내 낸 Chromium(`devices['iPhone 15']`·`devices['iPhone SE']`·`devices['Pixel 7']`), 불러온 뒤 몇 시점에서: 페이지 폭이 화면 폭과 같은지, 확대 창이 화면 안에 들어오는지. WebKit은 영상의 원래 폭을 격자 칸의 최소 폭으로 세고(그래서 격자는 `minmax(0, 1fr)`), 안드로이드 크롬은 한 번 넓힌 페이지 폭을 그대로 둡니다(그래서 떠다니는 이름은 놓은 뒤 폭을 재고, 첫 화면은 가로로 잘라 냅니다).
 - `site/particles.js`는 콘솔 로그인 화면의 입자 로고(`frontend/src/components/login/LoginHero.tsx`·`frontend/src/utils/particles.ts`)를 순수 자바스크립트로 옮긴 것입니다. 둘을 함께 바꿉니다. 로그인 화면은 그림판이 창에 고정돼 있지만, 사이트는 그림판이 페이지의 첫 화면을 덮고 페이지와 함께 스크롤됩니다(창에 고정한 그림판을 스크롤 때 다시 그리면 페이지보다 한 박자 늦게 따라옴). 점은 그대로 화면 어디서든 날아와 모입니다.
 
 ### 프론트엔드
