@@ -195,8 +195,15 @@
       var w = box.clientWidth, h = box.clientHeight
       if (!w || !h) return
       var dpr = window.devicePixelRatio || 1
-      canvas.width = w * dpr
-      canvas.height = h * dpr
+      // The canvas covers the whole window, so the dots can come in from anywhere in it. Everything is laid
+      // out in the box's coordinates and drawn shifted by where the box sits in the window.
+      var shift = { x: 0, y: 0 }
+      function place() {
+        var r = box.getBoundingClientRect()
+        shift.x = r.left
+        shift.y = r.top
+      }
+      place()
       var size = Math.round(Math.min(w, h) * 0.66)
       var cx = w / 2, cy = h / 2
       var logo = { cx: cx, cy: cy, r: size * 0.52 }
@@ -204,7 +211,7 @@
       var far = scatterWords(FAR, { w: w, h: h }, logo, { seed: 13, depth: [0, 0.4], fontSize: [9.5, 12.5], opacity: [0.2, 0.45], avoidLogo: false, avoid: near })
       farLayer.textContent = ''
       nearLayer.textContent = ''
-      var area = { x: -w * 0.25, y: -h * 0.25, w: w * 1.5, h: h * 1.5 }
+      var area = { x: -shift.x, y: -shift.y, w: window.innerWidth, h: window.innerHeight }
       var enter = !still && !played
       var wordRand = seeded(21)
       var words = near.map(function (p) { return { p: p, layer: nearLayer, near: true } })
@@ -255,7 +262,9 @@
         glow.style.opacity = String(dawn)
         ctx.setTransform(1, 0, 0, 1, 0, 0)
         ctx.clearRect(0, 0, canvas.width, canvas.height)
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+        // the first screen scrolled out of the window: nothing of it to draw
+        if (shift.y > window.innerHeight || shift.y + h < 0) return
+        ctx.setTransform(dpr, 0, 0, dpr, shift.x * dpr, shift.y * dpr)
         var target = pointer ? { x: (pointer.x - cx) / cx, y: (pointer.y - cy) / cy } : { x: 0, y: 0 }
         eased.x += (target.x - eased.x) * 0.06
         eased.y += (target.y - eased.y) * 0.06
@@ -331,6 +340,17 @@
         cancelAnimationFrame(frame)
         if (!document.hidden && !still && !cancelled) frame = requestAnimationFrame(loop)
       }
+      // Follow the window's size and the box's place in it (the still picture is drawn again).
+      function onScroll() {
+        place()
+        if (still && dots.length) draw(0)
+      }
+      function fit() {
+        canvas.width = window.innerWidth * dpr
+        canvas.height = window.innerHeight * dpr
+        onScroll()
+      }
+      fit()
 
       var img = new Image()
       img.onload = function () {
@@ -360,10 +380,14 @@
       }
       img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(ICON)
       document.addEventListener('visibilitychange', onVisibility)
+      window.addEventListener('resize', fit)
+      window.addEventListener('scroll', onScroll, { passive: true })
       cleanup = function () {
         cancelled = true
         cancelAnimationFrame(frame)
         document.removeEventListener('visibilitychange', onVisibility)
+        window.removeEventListener('resize', fit)
+        window.removeEventListener('scroll', onScroll)
       }
     }
 

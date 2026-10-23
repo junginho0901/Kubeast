@@ -4,7 +4,7 @@
   var still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   var titles = {
     en: 'Kubeast — Kubernetes console with an AI that reads your clusters',
-    ko: 'Kubeast — 클러스터를 직접 읽는 AI가 들어 있는 Kubernetes 콘솔',
+    ko: 'Kubeast — 클러스터를 읽는 AI가 함께하는 Kubernetes 콘솔',
   }
   // Each clip's step marks in seconds, written by scripts/site-media.sh from the recording scripts.
   var STEPS = window.KUBEAST_STEPS || {}

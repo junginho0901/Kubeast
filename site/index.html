@@ -29,7 +29,7 @@
   <nav>
     <a href="#features"><span lang="en">Features</span><span lang="ko">기능</span></a>
     <a href="#install"><span lang="en">Install</span><span lang="ko">설치</span></a>
-    <a href="#faq"><span lang="en">FAQ</span><span lang="ko">자주 묻는 것</span></a>
+    <a href="#faq"><span lang="en">FAQ</span><span lang="ko">자주 묻는 질문</span></a>
     <button type="button" class="pill lang-toggle" id="lang-toggle"><span lang="en">한국어</span><span lang="ko">English</span></button>
     <a class="btn btn-ghost btn-sm" href="https://github.com/junginho0901/Kubeast"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a>
   </nav>
@@ -41,13 +41,13 @@
       <p class="eyebrow"><span class="dot"></span><span lang="en">Open source · MIT · v0.7.0</span><span lang="ko">오픈소스 · MIT · v0.7.0</span></p>
       <h1>
         <span lang="en">The Kubernetes console with an AI that <em>reads your clusters</em></span>
-        <span lang="ko">클러스터를 <em>직접 읽는 AI</em>가 들어 있는 Kubernetes 콘솔</span>
+        <span lang="ko"><em>클러스터를 읽는 AI</em>,<br>Kubernetes<br>콘솔 안에.</span>
       </h1>
       <p class="lead" lang="en">One web console for many clusters. Browse and edit resources, follow logs, open a shell, roll back a Helm release — and ask an assistant that answers from the cluster with your own permissions.</p>
-      <p class="lead" lang="ko">여러 클러스터를 웹 콘솔 하나로. 리소스 보기·편집, 로그 따라보기, 셸, Helm 롤백 — 그리고 내 권한 그대로 클러스터를 읽고 답하는 AI.</p>
+      <p class="lead" lang="ko">여러 클러스터를, 하나의 웹 콘솔에서. 리소스 확인과 수정, 실시간 로그, 셸, Helm 롤백까지. 궁금한 건 AI에게 물어보세요. 내 권한 그대로 클러스터를 읽고 답합니다.</p>
       <div class="actions">
         <a class="btn btn-primary" href="#install"><span lang="en">Get started</span><span lang="ko">시작하기</span><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M11.3 4.3a1 1 0 011.4 0l5 5a1 1 0 010 1.4l-5 5a1 1 0 01-1.4-1.4L14.6 11H3a1 1 0 110-2h11.6l-3.3-3.3a1 1 0 010-1.4z"/></svg></a>
-        <a class="btn btn-ghost" href="#features"><span lang="en">See it work</span><span lang="ko">기능 영상 보기</span></a>
+        <a class="btn btn-ghost" href="#features"><span lang="en">See it work</span><span lang="ko">영상으로 보기</span></a>
       </div>
       <div class="snippet">
         <code>helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.0</code>
@@ -59,23 +59,23 @@
 
   <section class="features" id="features">
     <div class="section-head">
-      <p class="kicker"><span lang="en">What you can do</span><span lang="ko">할 수 있는 것</span></p>
-      <h2><span lang="en">Watch it work</span><span lang="ko">직접 보세요</span></h2>
+      <p class="kicker"><span lang="en">What you can do</span><span lang="ko">기능</span></p>
+      <h2><span lang="en">Watch it work</span><span lang="ko">직접 확인해 보세요.</span></h2>
       <p class="sub" lang="en">Each clip is a real run on a test cluster. Hover to play, click to watch it large.</p>
-      <p class="sub" lang="ko">모두 시험 클러스터에서 실제로 돌린 화면입니다. 마우스를 올리면 재생되고, 누르면 크게 봅니다.</p>
+      <p class="sub" lang="ko">모든 영상은 테스트 클러스터에서 실제로 녹화했습니다. 마우스를 올리면 재생되고, 클릭하면 크게 볼 수 있습니다.</p>
     </div>
 
     <div class="grid">
       <article class="card" data-clip="ai-chat">
         <div class="thumb"><video muted playsinline preload="none" poster="media/ai-chat.jpg" data-src="media/ai-chat.mp4"></video><span class="play" aria-hidden="true"></span></div>
         <div class="card-body">
-          <h3><span lang="en">Ask the cluster</span><span lang="ko">클러스터에 묻기</span></h3>
+          <h3><span lang="en">Ask the cluster</span><span lang="ko">클러스터에게 물어보세요</span></h3>
           <p lang="en">The assistant reads the cluster with tools and answers with causes and fixes. It sees only what you can see.</p>
-          <p lang="ko">AI가 도구로 클러스터를 읽고 원인과 고칠 방법을 답합니다. 내가 볼 수 있는 것만 봅니다.</p>
+          <p lang="ko">AI가 클러스터를 직접 살펴보고 원인과 해결책을 알려 줍니다. 볼 수 있는 범위는 딱 내 권한만큼.</p>
           <ol class="steps">
-            <li data-step="ask"><span lang="en">Ask in plain words</span><span lang="ko">평소 말로 질문</span></li>
-            <li data-step="tools"><span lang="en">It reads the cluster with tools</span><span lang="ko">도구로 클러스터를 읽음</span></li>
-            <li data-step="answer"><span lang="en">Causes and fixes, with commands</span><span lang="ko">원인과 고칠 방법, 명령까지</span></li>
+            <li data-step="ask"><span lang="en">Ask in plain words</span><span lang="ko">평소 말투 그대로 질문하면</span></li>
+            <li data-step="tools"><span lang="en">It reads the cluster with tools</span><span lang="ko">AI가 클러스터를 직접 확인하고</span></li>
+            <li data-step="answer"><span lang="en">Causes and fixes, with commands</span><span lang="ko">원인과 해결책을 명령어까지 알려 줍니다</span></li>
           </ol>
         </div>
       </article>
@@ -83,13 +83,13 @@
       <article class="card" data-clip="alert-investigation">
         <div class="thumb"><video muted playsinline preload="none" poster="media/alert-investigation.jpg" data-src="media/alert-investigation.mp4"></video><span class="play" aria-hidden="true"></span></div>
         <div class="card-body">
-          <h3><span lang="en">Alerts come investigated</span><span lang="ko">조사 보고서가 붙은 알림</span></h3>
+          <h3><span lang="en">Alerts come investigated</span><span lang="ko">알림이 오면, 조사는 이미 끝나 있습니다</span></h3>
           <p lang="en">Alertmanager or Grafana sends an alert; a read-only investigation runs under its own identity.</p>
-          <p lang="ko">Alertmanager나 Grafana가 알림을 보내면 AI가 전용 권한(읽기만)으로 조사합니다.</p>
+          <p lang="ko">Alertmanager나 Grafana에서 알림이 오면, AI가 읽기 전용 권한으로 먼저 조사합니다.</p>
           <ol class="steps">
-            <li data-step="inbox"><span lang="en">The alert lands in the inbox</span><span lang="ko">알림이 받은편지함에</span></li>
-            <li data-step="alert"><span lang="en">Open it: labels, handling, status</span><span lang="ko">열면 라벨·처리·조사 상태</span></li>
-            <li data-step="report"><span lang="en">The report: what was checked, likely cause</span><span lang="ko">보고서: 확인한 것, 유력한 원인</span></li>
+            <li data-step="inbox"><span lang="en">The alert lands in the inbox</span><span lang="ko">받은편지함에 도착한 알림</span></li>
+            <li data-step="alert"><span lang="en">Open it: labels, handling, status</span><span lang="ko">라벨, 처리 상태, 조사 진행까지 한눈에</span></li>
+            <li data-step="report"><span lang="en">The report: what was checked, likely cause</span><span lang="ko">확인한 내용과 가장 유력한 원인</span></li>
           </ol>
         </div>
       </article>
@@ -97,13 +97,13 @@
       <article class="card" data-clip="dashboard">
         <div class="thumb"><video muted playsinline preload="none" poster="media/dashboard.jpg" data-src="media/dashboard.mp4"></video><span class="play" aria-hidden="true"></span></div>
         <div class="card-body">
-          <h3><span lang="en">Many clusters, one screen</span><span lang="ko">여러 클러스터를 한 화면에서</span></h3>
+          <h3><span lang="en">Many clusters, one screen</span><span lang="ko">여러 클러스터를, 한 화면에서</span></h3>
           <p lang="en">Each cluster's state and what needs attention, one click to the next cluster. Access is per user and cluster; others do not appear.</p>
-          <p lang="ko">클러스터마다 상태와 손볼 곳을 보고, 사이드바에서 다음 클러스터로 바꿉니다. 권한은 사용자×클러스터로, 없는 클러스터는 보이지 않습니다.</p>
+          <p lang="ko">클러스터마다 상태와 챙겨야 할 문제를 확인하고, 클릭 한 번으로 다른 클러스터로 넘어가세요. 권한은 사람마다, 클러스터마다 따로. 권한이 없는 클러스터는 아예 보이지 않습니다.</p>
           <ol class="steps">
-            <li data-step="cards"><span lang="en">The cluster at a glance</span><span lang="ko">클러스터 한눈에</span></li>
-            <li data-step="issues"><span lang="en">Check issues: what needs attention</span><span lang="ko">Check issues: 손볼 곳</span></li>
-            <li data-step="switch"><span lang="en">Switch cluster from the sidebar</span><span lang="ko">사이드바에서 클러스터 바꾸기</span></li>
+            <li data-step="cards"><span lang="en">The cluster at a glance</span><span lang="ko">클러스터 현황을 한눈에</span></li>
+            <li data-step="issues"><span lang="en">Check issues: what needs attention</span><span lang="ko">Check issues로 문제 찾기</span></li>
+            <li data-step="switch"><span lang="en">Switch cluster from the sidebar</span><span lang="ko">사이드바에서 클러스터 전환</span></li>
           </ol>
         </div>
       </article>
@@ -111,14 +111,14 @@
       <article class="card" data-clip="resource-drawer">
         <div class="thumb"><video muted playsinline preload="none" poster="media/resource-drawer.jpg" data-src="media/resource-drawer.mp4"></video><span class="play" aria-hidden="true"></span></div>
         <div class="card-body">
-          <h3><span lang="en">Every resource in a drawer</span><span lang="ko">모든 리소스를 드로어로</span></h3>
+          <h3><span lang="en">Every resource in a drawer</span><span lang="ko">모든 리소스를, 패널 하나에</span></h3>
           <p lang="en">Status, usage and events in one place, and the YAML edited in place.</p>
-          <p lang="ko">상태·사용량·이벤트를 한곳에서 보고, 그 자리에서 YAML을 고칩니다.</p>
+          <p lang="ko">상태와 사용량, 이벤트를 한곳에서 확인하고 YAML도 그 자리에서 바로 고치세요.</p>
           <ol class="steps">
             <li data-step="find"><span lang="en">Find the Deployment</span><span lang="ko">Deployment 찾기</span></li>
-            <li data-step="drawer"><span lang="en">Status, usage, events</span><span lang="ko">상태·사용량·이벤트</span></li>
-            <li data-step="edit"><span lang="en">Edit the YAML: replicas 2 → 3</span><span lang="ko">YAML 고치기: replicas 2 → 3</span></li>
-            <li data-step="applied"><span lang="en">Applied: three replicas</span><span lang="ko">적용: 레플리카 3</span></li>
+            <li data-step="drawer"><span lang="en">Status, usage, events</span><span lang="ko">상태, 사용량, 이벤트 확인</span></li>
+            <li data-step="edit"><span lang="en">Edit the YAML: replicas 2 → 3</span><span lang="ko">YAML 수정: replicas 2 → 3</span></li>
+            <li data-step="applied"><span lang="en">Applied: three replicas</span><span lang="ko">적용 완료, 레플리카 3개</span></li>
           </ol>
         </div>
       </article>
@@ -128,10 +128,10 @@
         <div class="card-body">
           <h3><span lang="en">Live logs</span><span lang="ko">실시간 로그</span></h3>
           <p lang="en">Logs stream in from Cluster View. With Loki, search the logs of pods already gone.</p>
-          <p lang="ko">Cluster View에서 로그가 들어오는 대로 봅니다. Loki를 연결하면 사라진 파드의 로그도 찾습니다.</p>
+          <p lang="ko">Cluster View에서 로그를 실시간으로 따라가세요. Loki를 연결하면 이미 사라진 파드의 로그까지 찾을 수 있습니다.</p>
           <ol class="steps">
-            <li data-step="stream"><span lang="en">Requests as they arrive</span><span lang="ko">요청이 들어오는 대로</span></li>
-            <li data-step="crash"><span lang="en">Why checkout-api stops</span><span lang="ko">checkout-api가 멈추는 이유</span></li>
+            <li data-step="stream"><span lang="en">Requests as they arrive</span><span lang="ko">들어오는 요청을 실시간으로</span></li>
+            <li data-step="crash"><span lang="en">Why checkout-api stops</span><span lang="ko">checkout-api가 멈추는 이유 찾기</span></li>
           </ol>
         </div>
       </article>
@@ -139,13 +139,13 @@
       <article class="card" data-clip="terminal">
         <div class="thumb"><video muted playsinline preload="none" poster="media/terminal.jpg" data-src="media/terminal.mp4"></video><span class="play" aria-hidden="true"></span></div>
         <div class="card-body">
-          <h3><span lang="en">A terminal in the browser</span><span lang="ko">브라우저 안의 터미널</span></h3>
+          <h3><span lang="en">A terminal in the browser</span><span lang="ko">브라우저 속 터미널</span></h3>
           <p lang="en">A shell in a pod without a kubeconfig on your laptop, recorded and replayable.</p>
-          <p lang="ko">노트북에 kubeconfig 없이 파드 셸을 열고, 녹화해 다시 봅니다.</p>
+          <p lang="ko">노트북에 kubeconfig가 없어도 파드 셸이 열립니다. 모든 세션은 녹화되어 언제든 다시 볼 수 있습니다.</p>
           <ol class="steps">
             <li data-step="exec"><span lang="en">Open a shell from the pod</span><span lang="ko">파드에서 셸 열기</span></li>
             <li data-step="commands"><span lang="en">Run commands</span><span lang="ko">명령 실행</span></li>
-            <li data-step="replay"><span lang="en">Replay the recording</span><span lang="ko">녹화 다시보기</span></li>
+            <li data-step="replay"><span lang="en">Replay the recording</span><span lang="ko">녹화된 세션 다시 보기</span></li>
           </ol>
         </div>
       </article>
@@ -155,11 +155,11 @@
         <div class="card-body">
           <h3><span lang="en">Helm releases</span><span lang="ko">Helm 릴리스</span></h3>
           <p lang="en">History, values and manifests; every rollback, upgrade and uninstall previews a dry run first.</p>
-          <p lang="ko">이력·values·매니페스트를 보고, 롤백·업그레이드·삭제는 먼저 dry-run 미리보기를 봅니다.</p>
+          <p lang="ko">이력과 values, 매니페스트를 한눈에. 롤백, 업그레이드, 삭제 전에는 dry-run으로 결과를 먼저 보여 줍니다.</p>
           <ol class="steps">
             <li data-step="history"><span lang="en">Release history</span><span lang="ko">릴리스 이력</span></li>
-            <li data-step="diff"><span lang="en">Revision 1 against now</span><span lang="ko">리비전 1과 지금 비교</span></li>
-            <li data-step="rollback"><span lang="en">Rollback preview, cancelled</span><span lang="ko">롤백 미리보기 후 취소</span></li>
+            <li data-step="diff"><span lang="en">Revision 1 against now</span><span lang="ko">리비전 1과 현재 비교</span></li>
+            <li data-step="rollback"><span lang="en">Rollback preview, cancelled</span><span lang="ko">롤백 결과를 미리 보고 취소</span></li>
           </ol>
         </div>
       </article>
@@ -167,13 +167,13 @@
       <article class="card" data-clip="changes">
         <div class="thumb"><video muted playsinline preload="none" poster="media/changes.jpg" data-src="media/changes.mp4"></video><span class="play" aria-hidden="true"></span></div>
         <div class="card-body">
-          <h3><span lang="en">What changed, what connects</span><span lang="ko">바뀐 것, 이어진 것</span></h3>
+          <h3><span lang="en">What changed, what connects</span><span lang="ko">무엇이 바뀌었고, 어떻게 이어져 있는지</span></h3>
           <p lang="en">Change History lines up events and rollouts; Resource Graph draws how objects connect.</p>
-          <p lang="ko">Change History는 이벤트와 롤아웃을 시간순으로, Resource Graph는 객체가 이어진 모양을 보여 줍니다.</p>
+          <p lang="ko">Change History는 이벤트와 롤아웃을 시간순으로 정리하고, Resource Graph는 리소스가 어떻게 연결되는지 그려 줍니다.</p>
           <ol class="steps">
-            <li data-step="timeline"><span lang="en">Events and rollouts of a namespace</span><span lang="ko">Namespace의 이벤트·롤아웃</span></li>
-            <li data-step="graph"><span lang="en">How its objects connect</span><span lang="ko">객체가 이어진 모양</span></li>
-            <li data-step="drawer"><span lang="en">A node opens its drawer</span><span lang="ko">노드를 누르면 드로어</span></li>
+            <li data-step="timeline"><span lang="en">Events and rollouts of a namespace</span><span lang="ko">Namespace의 이벤트와 롤아웃</span></li>
+            <li data-step="graph"><span lang="en">How its objects connect</span><span lang="ko">리소스 연결 관계</span></li>
+            <li data-step="drawer"><span lang="en">A node opens its drawer</span><span lang="ko">그래프에서 누르면 상세 패널로</span></li>
           </ol>
         </div>
       </article>
@@ -181,13 +181,13 @@
       <article class="card" data-clip="access-audit">
         <div class="thumb"><video muted playsinline preload="none" poster="media/access-audit.jpg" data-src="media/access-audit.mp4"></video><span class="play" aria-hidden="true"></span></div>
         <div class="card-body">
-          <h3><span lang="en">Temporary access, full audit</span><span lang="ko">임시 권한, 빠짐없는 감사</span></h3>
+          <h3><span lang="en">Temporary access, full audit</span><span lang="ko">필요할 때만 권한을. 기록은 빠짐없이</span></h3>
           <p lang="en">Ask for more access for an hour; an approver grants it and it ends on its own. Every step is audited.</p>
-          <p lang="ko">한 시간 더 권한을 요청하면 승인자가 주고 시간이 지나 저절로 끝납니다. 모든 단계가 감사 로그에 남습니다.</p>
+          <p lang="ko">필요한 권한을 한 시간만 요청하세요. 승인되면 바로 쓰고, 시간이 지나면 자동으로 회수됩니다. 모든 과정은 감사 로그에 남습니다.</p>
           <ol class="steps">
-            <li data-step="request"><span lang="en">A Read user asks for Write</span><span lang="ko">Read 사용자가 Write 요청</span></li>
+            <li data-step="request"><span lang="en">A Read user asks for Write</span><span lang="ko">Read 사용자가 Write 권한을 요청</span></li>
             <li data-step="approve"><span lang="en">An admin approves</span><span lang="ko">관리자가 승인</span></li>
-            <li data-step="audit"><span lang="en">Every step in the audit log</span><span lang="ko">모든 단계가 감사 로그에</span></li>
+            <li data-step="audit"><span lang="en">Every step in the audit log</span><span lang="ko">모든 과정이 감사 로그에</span></li>
           </ol>
         </div>
       </article>
@@ -196,24 +196,24 @@
 
   <section class="more">
     <div class="section-head">
-      <p class="kicker"><span lang="en">Also in the box</span><span lang="ko">그 밖에</span></p>
+      <p class="kicker"><span lang="en">Also in the box</span><span lang="ko">이 밖에도</span></p>
     </div>
     <div class="tiles">
-      <div class="tile"><b>MCP</b><span lang="en">Claude Code or Cursor use the same read tools as the signed-in user</span><span lang="ko">Claude Code·Cursor가 같은 읽기 도구를 그 사람 권한으로</span></div>
-      <div class="tile"><b>SSO</b><span lang="en">Keycloak, Google, Entra ID, Okta over OIDC</span><span lang="ko">OIDC로 Keycloak·Google·Entra ID·Okta</span></div>
-      <div class="tile"><b>GPU &amp; DRA</b><span lang="en">GPU nodes, usage and DRA resources</span><span lang="ko">GPU 노드·사용률·DRA 리소스</span></div>
-      <div class="tile"><b>Policy Reports</b><span lang="en">Kyverno and Trivy Operator results</span><span lang="ko">Kyverno·Trivy Operator 결과</span></div>
-      <div class="tile"><b>Cost</b><span lang="en">OpenCost per namespace and workload</span><span lang="ko">OpenCost로 Namespace·워크로드별 비용</span></div>
-      <div class="tile"><b>Argo CD guard</b><span lang="en">Warn or block edits to managed objects</span><span lang="ko">Argo CD가 관리하는 객체 수정 경고·차단</span></div>
-      <div class="tile"><b>Cluster hygiene</b><span lang="en">Pod Security, image tags, RBAC, TLS expiry</span><span lang="ko">Pod Security·이미지 태그·RBAC·TLS 만료</span></div>
-      <div class="tile"><b>English · 한국어</b><span lang="en">The console in both languages</span><span lang="ko">콘솔 두 언어</span></div>
+      <div class="tile"><b>MCP</b><span lang="en">Claude Code or Cursor use the same read tools as the signed-in user</span><span lang="ko">Claude Code와 Cursor도 같은 읽기 도구를, 로그인한 사람의 권한으로</span></div>
+      <div class="tile"><b>SSO</b><span lang="en">Keycloak, Google, Entra ID, Okta over OIDC</span><span lang="ko">Keycloak, Google, Entra ID, Okta 계정으로 로그인</span></div>
+      <div class="tile"><b>GPU &amp; DRA</b><span lang="en">GPU nodes, usage and DRA resources</span><span lang="ko">GPU 노드와 사용률, DRA 리소스까지</span></div>
+      <div class="tile"><b>Policy Reports</b><span lang="en">Kyverno and Trivy Operator results</span><span lang="ko">Kyverno와 Trivy Operator 결과를 한곳에서</span></div>
+      <div class="tile"><b>Cost</b><span lang="en">OpenCost per namespace and workload</span><span lang="ko">OpenCost로 보는 Namespace·워크로드별 비용</span></div>
+      <div class="tile"><b>Argo CD guard</b><span lang="en">Warn or block edits to managed objects</span><span lang="ko">Argo CD가 관리하는 리소스는 수정 전에 경고하거나 막습니다</span></div>
+      <div class="tile"><b>Cluster hygiene</b><span lang="en">Pod Security, image tags, RBAC, TLS expiry</span><span lang="ko">Pod Security, 이미지 태그, RBAC, TLS 만료 점검</span></div>
+      <div class="tile"><b>English · 한국어</b><span lang="en">The console in both languages</span><span lang="ko">콘솔 전체를 두 언어로</span></div>
     </div>
   </section>
 
   <section class="install" id="install">
     <div class="section-head">
       <p class="kicker"><span lang="en">Install</span><span lang="ko">설치</span></p>
-      <h2><span lang="en">Running in two minutes</span><span lang="ko">2분이면 설치</span></h2>
+      <h2><span lang="en">Running in two minutes</span><span lang="ko">2분이면 충분합니다</span></h2>
     </div>
     <div class="terminal">
       <div class="term-bar">
@@ -232,37 +232,37 @@
     </div>
     <p class="install-note">
       <span lang="en">The admin password, more clusters, turning on AI and Docker Compose: <a class="doc" data-doc="getting-started.md" href="https://github.com/junginho0901/Kubeast/blob/main/docs/getting-started.md">Getting started →</a></span>
-      <span lang="ko">관리자 비밀번호, 클러스터 더 연결하기, AI 켜기, Docker Compose: <a class="doc" data-doc="getting-started.md" href="https://github.com/junginho0901/Kubeast/blob/main/docs/ko/getting-started.md">설치와 첫 설정 →</a></span>
+      <span lang="ko">관리자 비밀번호, 클러스터 추가, AI 설정, Docker Compose 설치까지: <a class="doc" data-doc="getting-started.md" href="https://github.com/junginho0901/Kubeast/blob/main/docs/ko/getting-started.md">시작 가이드 →</a></span>
     </p>
   </section>
 
   <section class="faq" id="faq">
     <div class="section-head">
-      <p class="kicker"><span lang="en">Questions</span><span lang="ko">자주 묻는 것</span></p>
+      <p class="kicker"><span lang="en">Questions</span><span lang="ko">자주 묻는 질문</span></p>
     </div>
     <details>
-      <summary><span lang="en">Do I need an AI provider?</span><span lang="ko">AI 제공자가 꼭 있어야 하나요?</span></summary>
-      <div class="answer"><p lang="en">No. With <code>ai.enabled=false</code> the AI services are not installed and the rest of the console works as is. With a local model in Ollama, nothing leaves your network.</p><p lang="ko">아니요. <code>ai.enabled=false</code>면 AI 서비스가 설치되지 않고 나머지는 그대로 씁니다. Ollama의 로컬 모델을 쓰면 바깥으로 나가는 것이 없습니다.</p></div>
+      <summary><span lang="en">Do I need an AI provider?</span><span lang="ko">AI 서비스가 꼭 필요한가요?</span></summary>
+      <div class="answer"><p lang="en">No. With <code>ai.enabled=false</code> the AI services are not installed and the rest of the console works as is. With a local model in Ollama, nothing leaves your network.</p><p lang="ko">아니요. <code>ai.enabled=false</code>로 설치하면 AI 없이 나머지 기능을 모두 쓸 수 있습니다. Ollama로 로컬 모델을 쓰면 데이터가 내 네트워크 밖으로 나가지 않습니다.</p></div>
     </details>
     <details>
-      <summary><span lang="en">What can the AI change?</span><span lang="ko">AI가 무엇을 바꿀 수 있나요?</span></summary>
-      <div class="answer"><p lang="en">Only what the person asking may change, and only after they approve that exact action. Alert investigations are read-only. Every tool call is in the audit log.</p><p lang="ko">묻는 사람이 바꿀 수 있는 것만, 그 사람이 그 작업을 승인한 뒤에만 바꿉니다. 알림 조사는 읽기만 합니다. 도구 호출은 모두 감사 로그에 남습니다.</p></div>
+      <summary><span lang="en">What can the AI change?</span><span lang="ko">AI는 무엇까지 바꿀 수 있나요?</span></summary>
+      <div class="answer"><p lang="en">Only what the person asking may change, and only after they approve that exact action. Alert investigations are read-only. Every tool call is in the audit log.</p><p lang="ko">질문한 사람이 바꿀 수 있는 것만, 그 작업을 직접 승인한 뒤에만 바꿉니다. 알림 조사는 읽기만 하고, AI의 모든 도구 호출은 감사 로그에 남습니다.</p></div>
     </details>
     <details>
-      <summary><span lang="en">How does it reach my clusters?</span><span lang="ko">클러스터에는 어떻게 붙나요?</span></summary>
-      <div class="answer"><p lang="en">The cluster it runs in is connected from the start; others are added with a kubeconfig. Requests go to each cluster as the signed-in user, so the cluster's own RBAC still decides. Kubeast installs nothing on the clusters it manages.</p><p lang="ko">설치된 클러스터는 처음부터 연결되고, 다른 클러스터는 kubeconfig로 추가합니다. 요청은 로그인한 사람으로 가므로 클러스터의 RBAC가 그대로 판단합니다. 관리하는 클러스터에는 아무것도 설치하지 않습니다.</p></div>
+      <summary><span lang="en">How does it reach my clusters?</span><span lang="ko">클러스터는 어떻게 연결하나요?</span></summary>
+      <div class="answer"><p lang="en">The cluster it runs in is connected from the start; others are added with a kubeconfig. Requests go to each cluster as the signed-in user, so the cluster's own RBAC still decides. Kubeast installs nothing on the clusters it manages.</p><p lang="ko">Kubeast가 설치된 클러스터는 처음부터 연결되어 있고, 다른 클러스터는 kubeconfig로 추가합니다. 모든 요청은 로그인한 사용자 이름으로 전달되므로, 권한 판단은 클러스터의 RBAC가 그대로 맡습니다. 관리하는 클러스터에는 아무것도 설치하지 않습니다.</p></div>
     </details>
     <details>
       <summary><span lang="en">Where is the data kept?</span><span lang="ko">데이터는 어디에 저장되나요?</span></summary>
-      <div class="answer"><p lang="en">In PostgreSQL — in the cluster or your own. Audit logs and terminal recordings can also go to S3-compatible storage.</p><p lang="ko">PostgreSQL(클러스터 안 또는 따로 둔 DB)에 둡니다. 감사 로그와 터미널 녹화는 S3 호환 저장소로도 보낼 수 있습니다.</p></div>
+      <div class="answer"><p lang="en">In PostgreSQL — in the cluster or your own. Audit logs and terminal recordings can also go to S3-compatible storage.</p><p lang="ko">클러스터 안의 PostgreSQL이나 직접 운영하는 PostgreSQL에 저장합니다. 감사 로그와 터미널 녹화는 S3 호환 스토리지로 내보낼 수도 있습니다.</p></div>
     </details>
     <details>
-      <summary><span lang="en">How much does it need?</span><span lang="ko">자원은 얼마나 드나요?</span></summary>
-      <div class="answer"><p lang="en">A minimal install without AI fits on a small node; measured numbers per install size are in <a class="doc" data-doc="architecture.md" href="https://github.com/junginho0901/Kubeast/blob/main/docs/architecture.md">Architecture</a>.</p><p lang="ko">AI 없는 최소 설치는 작은 노드 하나에 들어갑니다. 설치 크기별 실측값은 <a class="doc" data-doc="architecture.md" href="https://github.com/junginho0901/Kubeast/blob/main/docs/ko/architecture.md">아키텍처</a>에 있습니다.</p></div>
+      <summary><span lang="en">How much does it need?</span><span lang="ko">자원은 얼마나 필요한가요?</span></summary>
+      <div class="answer"><p lang="en">A minimal install without AI fits on a small node; measured numbers per install size are in <a class="doc" data-doc="architecture.md" href="https://github.com/junginho0901/Kubeast/blob/main/docs/architecture.md">Architecture</a>.</p><p lang="ko">AI를 뺀 최소 설치라면 작은 노드 하나로 충분합니다. 설치 구성별 실측값은 <a class="doc" data-doc="architecture.md" href="https://github.com/junginho0901/Kubeast/blob/main/docs/ko/architecture.md">아키텍처 문서</a>에서 확인하세요.</p></div>
     </details>
     <details>
       <summary><span lang="en">Is it free?</span><span lang="ko">무료인가요?</span></summary>
-      <div class="answer"><p lang="en">Yes, MIT licensed. Images are public on ghcr.io and signed with cosign.</p><p lang="ko">네, MIT 라이선스입니다. 이미지는 ghcr.io에 공개돼 있고 cosign으로 서명돼 있습니다.</p></div>
+      <div class="answer"><p lang="en">Yes, MIT licensed. Images are public on ghcr.io and signed with cosign.</p><p lang="ko">네. MIT 라이선스로 누구나 무료로 쓸 수 있습니다. 이미지는 ghcr.io에 공개되어 있고, cosign으로 서명되어 있습니다.</p></div>
     </details>
   </section>
 </main>
