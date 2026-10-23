@@ -2,7 +2,20 @@
 
 # Console metrics (`/metrics`)
 
-Kubeast exposes **its own** state in the Prometheus text format (these are not the target clusters' metrics — for those, `features.prometheus` is the feature where Kubeast *reads* Prometheus). The five backend services (auth 8004 · ai 8001 · k8s 8002 · session 8003 · tool-server 8086) each serve it as `GET /metrics` on their service port. The gateway does not proxy this path, so it is not visible from outside and only scrapers inside the cluster reach it (with `networkPolicy.enabled`, open it with `metrics.networkPolicy.from`). With `METRICS_ENABLED=false` (chart `metrics.enabled`) it returns 404.
+Kubeast exposes **its own** state in the Prometheus text format.
+These are not the target clusters' metrics. For those, `features.prometheus` is the feature where Kubeast *reads* Prometheus.
+
+Each of the five backend services serves it as `GET /metrics` on its service port:
+
+- auth 8004
+- ai 8001
+- k8s 8002
+- session 8003
+- tool-server 8086
+
+The gateway does not proxy this path, so it is not visible from outside, and only scrapers inside the cluster reach it.
+With `networkPolicy.enabled`, open it with `metrics.networkPolicy.from`.
+With `METRICS_ENABLED=false` (chart `metrics.enabled`), it returns 404.
 
 ## Metrics
 
@@ -22,7 +35,8 @@ Kubeast exposes **its own** state in the Prometheus text format (these are not t
 | `kubeast_session_recording_last_upload_timestamp_seconds` | gauge | `service` | When a recording part was last uploaded (starting from the start time) |
 | `go_*`, `process_*` / `python_*` | default collectors | | Runtime and process |
 
-`service` = `auth` · `ai` · `k8s` · `session` · `tool-server`. User and cluster IDs are not put in labels (Prometheus instrumentation guidelines: keep label sets small, do not put identifiers in labels).
+`service` is one of `auth`, `ai`, `k8s`, `session` and `tool-server`.
+User and cluster IDs are not put in labels. This follows the Prometheus instrumentation guidelines: keep label sets small, and do not put identifiers in labels.
 
 ## Scraping
 
@@ -52,7 +66,10 @@ One ServiceMonitor selects the five backend Services labelled `kubeast.io/metric
 | `KubeastAuditSinkStalled` | `kubeast_audit_sink_pending > 0` and the last successful send more than 10 minutes ago, for 5 minutes | Audit sink sending has stopped (errors in the auth-service log; retention keeps the unsent rows) |
 | `KubeastSessionRecordingUploadStalled` | `kubeast_session_recording_pending_bytes > 0` and the last upload more than 10 minutes ago, for 5 minutes | Session recording upload has stopped (output piles up in the k8s-service spool; sessions are not blocked) |
 
-Useful expressions: request rate per service `sum by (service) (rate(kubeast_http_requests_total[5m]))` · p95 per route `histogram_quantile(0.95, sum by (route, le) (rate(kubeast_http_request_duration_seconds_bucket{service="k8s"}[5m])))`.
+Useful expressions:
+
+- Request rate per service: `sum by (service) (rate(kubeast_http_requests_total[5m]))`
+- p95 per route: `histogram_quantile(0.95, sum by (route, le) (rate(kubeast_http_request_duration_seconds_bucket{service="k8s"}[5m])))`
 
 ## Check
 

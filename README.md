@@ -8,16 +8,16 @@ Project site (feature clips): https://junginho0901.github.io/Kubeast/
 
 Key features:
 
-- AI assistant with multiple LLMs (OpenAI · Anthropic · Gemini · Azure OpenAI · Ollama), cluster operations through tool calling
-- When an alert (Alertmanager · Grafana) arrives, the AI investigates it with read tools and leaves a report
-- Multi-cluster management and per-user × per-cluster RBAC, temporary access requests and approvals
-- Helm release management (rollback / upgrade / uninstall / test)
-- GPU & DRA monitoring, Prometheus metrics, log search (Loki), topology visualization, Node Shell
-- Audit log (hash chain) for every write/sensitive operation, terminal session recording
+- AI assistant with multiple LLMs (OpenAI, Anthropic, Gemini, Azure OpenAI, Ollama) that operates clusters through tool calling
+- When an alert from Alertmanager or Grafana arrives, the AI investigates it with read tools and leaves a report
+- Multi-cluster management, RBAC per user and per cluster, and temporary access requests with approval
+- Helm release management (rollback, upgrade, uninstall, test)
+- GPU and DRA monitoring, Prometheus metrics, log search (Loki), topology visualization, Node Shell
+- Audit log (hash chain) for every write and sensitive operation, and terminal session recording
 - Passwords, keys and tokens in what the AI's tools read are masked before they reach the model
 - MCP server for external AI agents
-- One-line install from public container images (ghcr.io) (Kubernetes / Docker)
-- Korean · English support
+- One-line install from public container images on ghcr.io, for Kubernetes or Docker
+- Korean and English support
 
 ## Quick start
 
@@ -32,20 +32,20 @@ The install script, Docker Compose, uninstalling, finding the admin password, co
 
 | Document | Contents |
 | --- | --- |
-| [Installation and first setup](docs/getting-started.md) | 3 install methods · uninstall · first access · connecting a cluster · turning on AI |
-| [Features at a glance](docs/features.md) | AI assistant · multi-cluster, roles and permissions · resource management · Helm · GPU · observability · authentication and audit |
-| [AI and alerts](docs/ai-alerts.md) | MCP server · alert → AI investigation · Alerts inbox · reading traces and alerts · AI analysis evaluation |
-| [Security and audit](docs/security-audit.md) | API keys · access review · dormant account lockout · audit sinks · audit log integrity · session recording |
-| [Operations features](docs/operations.md) | Policy reports · cluster hygiene check · Argo CD guard · dashboard quick actions · log files · log search · trace links · trusted CAs |
-| [Cluster requirements](docs/cluster-requirements.md) | What the clusters you manage must have (RBAC · metrics-server · Prometheus · OpenCost, etc.) and how to check |
-| [SSO (OIDC) setup](docs/oidc.md) | Connecting Keycloak · Google · Entra ID · Okta |
-| [Architecture](docs/architecture.md) | Services · container images · resource usage |
+| [Installation and first setup](docs/getting-started.md) | 3 install methods, uninstall, first access, connecting a cluster, turning on AI |
+| [Features at a glance](docs/features.md) | AI assistant, multi-cluster with roles and permissions, resource management, Helm, GPU, observability, authentication and audit |
+| [AI and alerts](docs/ai-alerts.md) | MCP server, alert → AI investigation, Alerts inbox, reading traces and alerts, AI analysis evaluation |
+| [Security and audit](docs/security-audit.md) | API keys, access review, dormant account lockout, audit sinks, audit log integrity, session recording |
+| [Operations features](docs/operations.md) | Policy reports, cluster hygiene check, Argo CD guard, dashboard quick actions, log files, log search, trace links, trusted CAs |
+| [Cluster requirements](docs/cluster-requirements.md) | What the clusters you manage must have (RBAC, metrics-server, Prometheus, OpenCost, etc.) and how to check |
+| [SSO (OIDC) setup](docs/oidc.md) | Connecting Keycloak, Google, Entra ID or Okta |
+| [Architecture](docs/architecture.md) | Services, container images, resource usage |
 | [Configuration (values.yaml)](docs/configuration.md) | Chart values explained |
-| [Database: TLS, backup and restore](docs/database-backup-restore.md) | DB connection TLS · backup and restore · retention |
+| [Database: TLS, backup and restore](docs/database-backup-restore.md) | DB connection TLS, backup and restore, retention |
 | [Console metrics](docs/metrics.md) | Kubeast's own `/metrics` |
-| [Supply chain](docs/supply-chain.md) | Image scanning · SBOM · provenance attestation · signing |
+| [Supply chain](docs/supply-chain.md) | Image scanning, SBOM, provenance attestation, signing |
 | [Audit log plan](docs/audit-log-plan.md) | Audit action catalog and permission mapping |
-| [Development](docs/development.md) | Directory layout · kind dev loop · E2E · per-service development · tech stack |
+| [Development](docs/development.md) | Directory layout, kind dev loop, E2E, per-service development, tech stack |
 
 ## License
 

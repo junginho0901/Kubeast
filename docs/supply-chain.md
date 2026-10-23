@@ -3,21 +3,31 @@
 # Supply chain: scan, SBOM, provenance, signature
 
 Every release (`v*` tag, `.github/workflows/release.yaml`) publishes the seven
-images to ghcr.io, plus ai-service with Claude Code as `kubeast-ai-service:vX.Y.Z-claude-code`
-(the chart runs it when `ai.providers.claudeCode.enabled` is on; SBOM artifact
-`sbom-ai-service-claude-code.spdx.json`). Each image is pushed **by digest first**; the steps below run
-against that digest, and the version tag (`:vX.Y.Z`) is applied only after the
-last of them succeeds — a release that fails a gate leaves nothing a pull by tag
-can reach. There is no `latest` tag. The workflow's own actions are pinned to
-commit SHAs (`uses: owner/repo@<sha> # vX.Y.Z`), refreshed by Dependabot.
+images to ghcr.io, plus ai-service with Claude Code as `kubeast-ai-service:vX.Y.Z-claude-code`.
+The chart runs that image when `ai.providers.claudeCode.enabled` is on. Its SBOM
+artifact is `sbom-ai-service-claude-code.spdx.json`.
 
-Before tagging `vX.Y.Z`, set `kubeast` in `deploy/dependencies.yaml` to `X.Y.Z` together with every place it
-lists (`install.sh`, `docker-compose.yml`, the README and `docs/getting-started.md` install lines — CI checks
-that they agree): the workflow's first step stops a tag that differs, so the install docs and `install.sh`
-always name the release they ship with. Run the workflow by hand (workflow_dispatch) first: that dry run
-builds every image without pushing and puts the amd64 variant through the same trivy gate, so a tag is
-pushed after the gate has passed. They install the released OCI chart, whose image tags the workflow
-sets when it packages; the chart in a checkout keeps a placeholder tag.
+- Each image is pushed **by digest first**, and the steps below run against that digest.
+- The version tag (`:vX.Y.Z`) is applied only after the last of them succeeds,
+  so a release that fails a gate leaves nothing a pull by tag can reach.
+- There is no `latest` tag.
+- The workflow's own actions are pinned to commit SHAs
+  (`uses: owner/repo@<sha> # vX.Y.Z`) and refreshed by Dependabot.
+
+Before tagging `vX.Y.Z`:
+
+- Set `kubeast` in `deploy/dependencies.yaml` to `X.Y.Z`, together with every
+  place it lists: `install.sh`, `docker-compose.yml`, and the README and
+  `docs/getting-started.md` install lines. CI checks that they agree. The
+  workflow's first step stops a tag that differs, so the install docs and
+  `install.sh` always name the release they ship with.
+- Run the workflow by hand (workflow_dispatch) first. That dry run builds every
+  image without pushing and puts the amd64 variant through the same trivy gate,
+  so a tag is pushed after the gate has passed.
+
+The install docs and the install script install the released OCI chart, whose
+image tags the workflow sets when it packages. The chart in a checkout keeps a
+placeholder tag.
 
 Per image, by digest:
 
@@ -35,7 +45,7 @@ build-provenance attestation and keyless signature on its OCI digest after
 `helm push`.
 
 The repository is public, so GitHub's attestations and the Sigstore public
-instance cost nothing and there is no key to keep: the signing identity is the
+instance cost nothing. There is no key to keep: the signing identity is the
 release workflow itself (`https://github.com/junginho0901/Kubeast/.github/workflows/release.yaml@refs/tags/vX.Y.Z`).
 
 ## Verifying an image

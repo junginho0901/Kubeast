@@ -4,7 +4,11 @@
 
 ## Quick start
 
-All component images and the Helm chart are published as **public packages on GitHub Container Registry (ghcr.io)**, so they install right away without building anything. (Public packages have no anonymous pull rate limit.) Install from the released chart (`oci://ghcr.io/junginho0901/charts/kubeast`) — that chart carries that release's image versions. `helm/kubeast` in the source you get from the repository is for development, so its image versions do not match the release.
+All component images and the Helm chart are published as **public packages on GitHub Container Registry (ghcr.io)**, so they install right away without building anything.
+Public packages have no anonymous pull rate limit.
+
+Install from the released chart (`oci://ghcr.io/junginho0901/charts/kubeast`), which carries that release's image versions.
+`helm/kubeast` in the repository source is for development, so its image versions do not match the release.
 
 ### Option 1. Install script (a K8s cluster that is already running)
 
@@ -58,7 +62,8 @@ cd Kubeast
 #   --uninstall                             # remove containers + volumes
 ```
 
-`docker-compose` pulls the published images (default = the version of the tag you checked out, changed with `KUBEAST_TAG`). To build from source:
+`docker-compose` pulls the published images. By default it uses the version of the tag you checked out; set `KUBEAST_TAG` to change it.
+To build from source:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
@@ -109,11 +114,23 @@ To set the password yourself, pass `--set admin.password=<your-password>` at ins
 Log in with the `admin` account first. If no cluster is registered, you are taken to the `/setup` wizard right after login (the wizard and its API require admin permission). **Change the password right after logging in.**
 
 - **In-cluster** — automatically connects the cluster Kubeast runs in, with its ServiceAccount permissions
-- **External** — registers another cluster's kubeconfig (multi-cluster). If you leave the API server address empty, the address actually connected to during the connection check is filled in, and for clusters registered without an address, the connection test in **Admin > Clusters** fills it in
+- **External** — registers another cluster's kubeconfig (multi-cluster).
+  - If you leave the API server address empty, the address actually used during the connection check is filled in.
+  - For a cluster registered without an address, the connection test in **Admin > Clusters** fills it in.
 
-**Cluster requirements**: Kubeast installs nothing on the clusters you register. Permissions (RBAC) must exist on each cluster, and features such as graphs, cost and policy reports read that cluster's metrics-server, Prometheus, OpenCost, Kyverno, etc. What each feature needs, how to find it, check commands and examples are in [docs/cluster-requirements.md](cluster-requirements.md); example values are in `deploy/examples/target-cluster/`, and the permission render for registered clusters is `scripts/render-target-rbac.sh`.
+**Cluster requirements**: Kubeast installs nothing on the clusters you register.
+Each cluster must already have the permissions (RBAC). Features such as graphs, cost and policy reports read that cluster's metrics-server, Prometheus, OpenCost, Kyverno, etc.
 
-**EKS clusters** authenticate with IAM. The k8s-service and tool-server images include `aws-iam-authenticator`, so the kubeconfig uses the exec plugin instead of static credentials. The Kubeast pod's IRSA role (`aws.irsaRoleArn` in `values.yaml`) assumes the target role given in `-r` (AssumeRole), and the target cluster's access entry maps that role to a Kubernetes group (group permissions in `helm/kubeast/files/impersonation-rbac.yaml`).
+- [docs/cluster-requirements.md](cluster-requirements.md) lists what each feature needs, how to find it, check commands and examples.
+- Example values are in `deploy/examples/target-cluster/`.
+- `scripts/render-target-rbac.sh` renders the permissions for registered clusters.
+
+**EKS clusters** authenticate with IAM.
+The k8s-service and tool-server images include `aws-iam-authenticator`, so the kubeconfig uses the exec plugin instead of static credentials.
+
+- The Kubeast pod's IRSA role (`aws.irsaRoleArn` in `values.yaml`) assumes the target role given in `-r` (AssumeRole).
+- The target cluster's access entry maps that role to a Kubernetes group.
+- The group permissions are in `helm/kubeast/files/impersonation-rbac.yaml`.
 
 ```yaml
 users:
@@ -126,39 +143,76 @@ users:
       interactiveMode: Never
 ```
 
-The exec command of a registered kubeconfig must be on the allow list (`multicluster.execCommands`, default `aws-iam-authenticator`), and static key env vars such as `AWS_ACCESS_KEY_ID` are rejected.
+The exec command of a registered kubeconfig must be on the allow list (`multicluster.execCommands`, default `aws-iam-authenticator`).
+Static key env vars such as `AWS_ACCESS_KEY_ID` are rejected.
 
 ### 4. Enable AI
 
-Register an API key for OpenAI / Anthropic / Gemini, etc. in **Admin > AI Models** to enable the AI assistant.
+To enable the AI assistant, register an API key for OpenAI, Anthropic, Gemini or another provider in **Admin > AI Models**.
 
-The model dropdown is the model list the provider reports for that key and address — ai-service calls Anthropic `GET /v1/models`, and for the others (OpenAI · Gemini · Ollama · OpenAI-compatible gateways) `GET {base_url}/models` (`POST /api/v1/ai/model-configs/models`, admin, same key and address rules as the connection test), and leaves out embedding, speech and image models. If there is no key or the list cannot be fetched, the built-in list and the reason are shown, and "Custom model name" also works. The browser does not call anything outside Kubeast, so even on an internal network you get the list from the address in that setting (an internal gateway, Ollama).
+The model dropdown shows the models the provider reports for that key and address:
 
-To use only the console without AI, install with `ai.enabled: false` — ai-service, tool-server and the ModelConfig controller are not deployed (a new install has no CRD either; an install where it was turned on and then off keeps the CRD and ModelConfigs), the gateway's `/api/v1/ai` returns JSON 503, and the UI hides AI chat, the floating assistant, the AI admin pages and the MCP guide (`ai.enabled` in `/api/v1/cluster/features`). Even on an install where it is on, ai-service loads the provider SDK only when it first creates a model client, and the MCP SDK only when `mcp.enabled`, to reduce idle memory.
+- For Anthropic, ai-service calls `GET /v1/models`.
+- For the others (OpenAI, Gemini, Ollama and OpenAI-compatible gateways), it calls `GET {base_url}/models`.
+- The API behind it is `POST /api/v1/ai/model-configs/models` (admin only), with the same key and address rules as the connection test.
+- Embedding, speech and image models are left out.
+- If there is no key or the list cannot be fetched, the built-in list is shown with the reason. "Custom model name" also works.
+- The browser does not call anything outside Kubeast. So even on an internal network, you get the list from the address in that setting (an internal gateway, Ollama).
 
-Anthropic (provider `anthropic`) is called through the Messages API (`/v1/messages`), not an OpenAI-compatible address (`app/services/anthropic_messages.py`; responses are converted to the same shape as other providers).
+To use only the console without AI, install with `ai.enabled: false`:
+
+- ai-service, tool-server and the ModelConfig controller are not deployed.
+- A new install has no CRD either. An install where AI was turned on and then off keeps the CRD and ModelConfigs.
+- The gateway's `/api/v1/ai` returns JSON 503.
+- The UI hides AI chat, the floating assistant, the AI admin pages and the MCP guide (`ai.enabled` in `/api/v1/cluster/features`).
+
+When AI is on, ai-service keeps idle memory low: it loads the provider SDK only when it first creates a model client, and the MCP SDK only when `mcp.enabled` is on.
+
+Anthropic (provider `anthropic`) is called through the Messages API (`/v1/messages`), not an OpenAI-compatible address.
+The code is in `app/services/anthropic_messages.py`, and responses are converted to the same shape as other providers.
+
 - **Sampling values**: `temperature`, `top_p` and `top_k` are not sent to Claude 4.7 and later models (including models whose version cannot be read from the name) — those models return 400 for anything other than the defaults.
-- **thinking**: follows the model default (on by default for the Claude 5 family). Between tool calls, the turn's thinking blocks are sent back as is (API requirement). thinking tokens also count toward `max_tokens`, so for the Claude 5 family (including models with no version in the name) 4,096 is added to the caller's `max_tokens` — it is only a cap; you are billed only for what is used.
+- **thinking**: follows the model default (on by default for the Claude 5 family).
+  - Between tool calls, the turn's thinking blocks are sent back as is (an API requirement).
+  - Thinking tokens also count toward `max_tokens`, so for the Claude 5 family (including models with no version in the name) 4,096 is added to the caller's `max_tokens`. This is only a cap: you are billed only for what is used.
 - **Prompt cache**: automatic caching (`cache_control`) is on by default. Turn it off with the model setting option `prompt_cache: false`. Input tokens in usage are the total input, including tokens read from the cache.
 - Keep the key in `ANTHROPIC_API_KEY` (or `KUBEAST_AI_KEY_*`) as before. If the old compatible address (`https://api.anthropic.com/v1/`) is in base_url, it still works.
 
-**Azure OpenAI (provider `azure`, CRD `azureopenai`)** — only Azure's **v1 API** is used (since 2025-08, OpenAI-compatible, no dated `api-version`). **Not yet verified against a real account**: connection and chat use the same call code and were checked only against a fake server and OpenAI-compatible servers.
-- **Address**: `https://<resource>.openai.azure.com/openai/v1/` (`…services.ai.azure.com/openai/v1/` or a gateway address such as API Management also works). It cannot be left empty (so the key does not go anywhere else).
-- **Model field**: the **deployment name**, not the model name (Azure AI Foundry → Deployments). There is no provider model list (type the name in).
-- **Key**: kept in a `KUBEAST_AI_KEY_*` variable, it is sent as both the `Authorization: Bearer` header and the `api-key` header.
-- **Not supported**: the old per-deployment address (`…/openai/deployments/<deployment>`) and dated `api-version` — saving and the connection test reject them and point to the v1 address. Entra ID token authentication is not available yet either.
-- For resources that resolve to a private address through Private Link, add that host to `ai.baseUrlAllowedHosts`. When creating it with a CRD, put the v1 address in `spec.baseURL` (or `azureOpenAI.azureEndpoint`) and the deployment name in `spec.model` (`apiVersion`, `azureDeployment` and `azureAdToken` remain for kagent compatibility but are not used).
+**Azure OpenAI (provider `azure`, CRD `azureopenai`)** uses only Azure's **v1 API** (since 2025-08, OpenAI-compatible, no dated `api-version`).
+**Not yet verified against a real account**: connection and chat use the same call code and were checked only against a fake server and OpenAI-compatible servers.
 
-**Using a Claude subscription (provider `claude-code`, personal use)** — chats with the `claude setup-token` value of a Claude Pro/Max subscription instead of an API key. Only Claude Code accepts subscription tokens, so ai-service starts Claude Code for each model call (Claude Agent SDK, `app/services/claude_code.py`), and the tools Claude Code calls are handled inside this process by the chat's tool code. So the tool list, approval cards for write tools, masking and the `ai.tool.call` · `ai.chat.complete` audit (provider `claude-code`) are the same as on the API key path.
+- **Address**: `https://<resource>.openai.azure.com/openai/v1/` (`…services.ai.azure.com/openai/v1/` or a gateway address such as API Management also works). It cannot be left empty, so the key does not go anywhere else.
+- **Model field**: the **deployment name**, not the model name (Azure AI Foundry → Deployments). There is no provider model list; type the name in.
+- **Key**: kept in a `KUBEAST_AI_KEY_*` variable, it is sent as both the `Authorization: Bearer` header and the `api-key` header.
+- **Not supported**: the old per-deployment address (`…/openai/deployments/<deployment>`) and dated `api-version`. Saving and the connection test reject them and point to the v1 address. Entra ID token authentication is not available yet either.
+- **Private Link**: for resources that resolve to a private address through Private Link, add that host to `ai.baseUrlAllowedHosts`.
+- **CRD**: put the v1 address in `spec.baseURL` (or `azureOpenAI.azureEndpoint`) and the deployment name in `spec.model`. `apiVersion`, `azureDeployment` and `azureAdToken` remain for kagent compatibility but are not used.
+
+**Using a Claude subscription (provider `claude-code`, personal use)** lets you chat with the `claude setup-token` value of a Claude Pro/Max subscription instead of an API key.
+Only Claude Code accepts subscription tokens, so ai-service starts Claude Code for each model call (Claude Agent SDK, `app/services/claude_code.py`).
+The tools Claude Code calls are handled inside this process by the chat's tool code.
+So these are the same as on the API key path: the tool list, approval cards for write tools, masking, and the `ai.tool.call` and `ai.chat.complete` audit records (provider `claude-code`).
+
 - Turn it on **only in an install you use alone**. Anthropic's terms limit a subscription to personal use. Do not put it in a Kubeast used by a team or by multiple users. The admin screen shows the same warning when you pick this provider.
-- **How to turn it on**: ① On your own PC, create a token (1 year) with `claude setup-token`, put it in `ai.claudeCodeOAuthToken` (or the `CLAUDE_CODE_OAUTH_TOKEN` key of `apiKeysSecret`), and roll out with `ai.providers.claudeCode.enabled: true`.
-  - With this value on, ai-service switches to an image that contains Claude Code (the `<version>-claude-code` tag of the same version, about 250 MB larger) — the default image does not have it.
+- **How to turn it on**: ① On your own PC, create a token (valid for 1 year) with `claude setup-token`, put it in `ai.claudeCodeOAuthToken` (or the `CLAUDE_CODE_OAUTH_TOKEN` key of `apiKeysSecret`), and roll out with `ai.providers.claudeCode.enabled: true`.
+  - With this value on, ai-service switches to an image that contains Claude Code: the `<version>-claude-code` tag of the same version, about 250 MB larger. The default image does not have it.
   - For an image you build yourself, build with `--build-arg WITH_CLAUDE_CODE=true` and set `ai.providers.claudeCode.imageTagSuffix: ""`.
-  - ② In **Admin > AI Models**, pick "Claude subscription" and the variable name is filled in as `CLAUDE_CODE_OAUTH_TOKEN`.
+  - ② In **Admin > AI Models**, pick "Claude subscription"; the variable name is filled in as `CLAUDE_CODE_OAUTH_TOKEN`.
   - Save after the connection test.
-  - If it cannot be used yet on this install (the value is off or the image has no Claude Code), it appears dimmed as "Not set up" in the list; picking it shows the reason first and blocks the Test and Save buttons.
-- **Isolation**: each run gets a temporary HOME and config directory, no Claude Code built-in tools (Bash, files, web), and reads no settings files or CLAUDE.md. All environment variables ai-service received are overwritten with empty values except path, proxy and CA variables, so model keys and DB addresses are not passed on. The token goes only as `CLAUDE_CODE_OAUTH_TOKEN`.
-- **Rules**: only claude-code can use `CLAUDE_CODE_OAUTH_TOKEN`, and claude-code does not accept base_url or other providers' key variables. On an install where it is off, saving a new claude-code setting is rejected with 400 and the connection test shows the reason.
-- **Limits**: concurrent turns are capped at `maxConcurrent` (default 1, the rest wait), and one turn at `turnTimeoutSeconds` (default 300 seconds) and `maxTurns` (default 10 model calls). Each turn starts one Claude Code process (up to about 300 MB), so if you raise `maxConcurrent`, also raise `resources.aiService.limits.memory`.
-- **Alert → AI investigation** also runs on this provider. Investigations use one slot separate from chat (the investigator runs one at a time), so chat does not wait during an investigation — so with investigation on, up to `maxConcurrent` + 1 Claude Code processes run. The step cap is `maxSteps` (the last step is a report without tools), the same as with an API key.
+  - If it cannot be used yet on this install (the value is off or the image has no Claude Code), it appears dimmed as "Not set up" in the list. Picking it shows the reason first and blocks the Test and Save buttons.
+- **Isolation**:
+  - Each run gets a temporary HOME and config directory and no Claude Code built-in tools (Bash, files, web). It reads no settings files or CLAUDE.md.
+  - All environment variables ai-service received are overwritten with empty values, except path, proxy and CA variables. So model keys and DB addresses are not passed on.
+  - The token goes only as `CLAUDE_CODE_OAUTH_TOKEN`.
+- **Rules**:
+  - Only claude-code can use `CLAUDE_CODE_OAUTH_TOKEN`, and claude-code does not accept base_url or other providers' key variables.
+  - On an install where it is off, saving a new claude-code setting is rejected with 400, and the connection test shows the reason.
+- **Limits**:
+  - Concurrent turns are capped at `maxConcurrent` (default 1; the rest wait).
+  - One turn is capped at `turnTimeoutSeconds` (default 300 seconds) and `maxTurns` (default 10 model calls).
+  - Each turn starts one Claude Code process (up to about 300 MB). If you raise `maxConcurrent`, also raise `resources.aiService.limits.memory`.
+- **Alert → AI investigation** also runs on this provider.
+  - Investigations use one slot separate from chat (the investigator runs one at a time), so chat does not wait during an investigation.
+  - With investigation on, up to `maxConcurrent` + 1 Claude Code processes therefore run.
+  - The step cap is `maxSteps`, the same as with an API key. The last step is a report without tools.
 - **Not supported**: provider model list (built-in list or type the name in).

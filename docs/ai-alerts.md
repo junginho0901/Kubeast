@@ -4,7 +4,19 @@
 
 ## Connecting AI agents (MCP server)
 
-To let an AI agent such as Claude Code or Cursor see a cluster, people usually hand the agent a kubeconfig. Then the audit does not show who did what, the agent holds more permissions than the person, and Secret values go to the model as they are. Kubeast's MCP server (`/api/v1/ai/mcp`, [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports)) takes that place — the agent connects with **one API key** and uses the same **read tools** as the chat, **only with that person's permissions** (per-cluster roles, impersonation). Results are masked before they go to the model (Secret values are always removed), every call leaves an `ai.mcp.call` entry in the audit log, and a call is refused when the audit row cannot be written. There are no write tools by default; when the operator turns them on (`mcp.writeTools`), they are open only to keys whose ceiling is Write.
+To let an AI agent such as Claude Code or Cursor see a cluster, people usually hand the agent a kubeconfig. With a kubeconfig, however:
+
+- the audit does not show who did what
+- the agent holds more permissions than the person
+- Secret values go to the model as they are
+
+Kubeast's MCP server (`/api/v1/ai/mcp`, [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports)) takes the kubeconfig's place.
+
+The agent connects with **one API key** and uses the same **read tools** as the chat, **only with that person's permissions** (per-cluster roles, impersonation).
+
+- Results are masked before they go to the model. Secret values are always removed.
+- Every call leaves an `ai.mcp.call` entry in the audit log, and a call is refused when the audit row cannot be written.
+- There are no write tools by default. When the operator turns them on (`mcp.writeTools`), they are open only to keys whose ceiling is Write.
 
 ```bash
 # After issuing a key in Settings → API keys (set clusters and role ceiling), register it with the agent
@@ -13,57 +25,121 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
 ```
 
 - Turning it on: `mcp.enabled: true` (`MCP_ENABLED` in compose). Off by default; when off, the path does not exist.
-- Permissions: `ai.mcp.use` on that cluster (included in the system Read and Write roles; Admin has everything) and `ai.tool.<name>` for each tool to be used (Read gets only the 39 read tools, Write gets all of them plus the write preview `k8s_diff`; `hygiene` is visible only to Admins with `admin.hygiene.read`). `list_clusters` tells the connected person which clusters and tools they can use, and the other tools require the `cluster` argument (no fallback to the default cluster).
-- Authentication: an API key (`kbk_…`) or an access token in the `Authorization: Bearer` header. The server exchanges the key for a short-lived token (the exchange is audited too), and once the key is revoked, the next call is refused. There is no session (stateless), so every request is checked, and multiple replicas work.
-- Audit: the `after` of `ai.mcp.call` holds the tool, cluster, masking statistics, credential (`credential.akid` = key id), client (User-Agent) and `write` (whether it is a write tool). Calls outside the permissions are recorded too, as `failure`.
-- Write tools (`mcp.writeTools: true`, `MCP_WRITE_TOOLS` in compose, off by default): the chat's 11 write tools (apply, create, delete, patch, annotate, label, scale, rollout, exec …) also appear for **keys whose role ceiling is Write**. The chat's approval card (`ai.writeApproval`) does not exist in MCP — the agent can do only as much as that person can do on that cluster (a permanent role, or a temporary role obtained through an [access request](configuration.md) (`accessRequests`)), and every call is audited with `write: true`. The tool annotations (`destructiveHint`) are set honestly, so clients such as Claude Code ask the user to confirm before the call. Objects managed by Argo CD follow the guard mode — `block` refuses ("change it in Git"), `warn` runs and adds a warning to the first line of the result. When permissions fall short, the agent files an access request itself with the `request_access` tool (admin approval → applied within a minute) and tries again.
+- Permissions:
+  - `ai.mcp.use` on that cluster. The system Read and Write roles include it, and Admin has everything.
+  - `ai.tool.<name>` for each tool to be used. Read gets only the 39 read tools; Write gets all of them plus the write preview `k8s_diff`. `hygiene` is visible only to Admins with `admin.hygiene.read`.
+  - `list_clusters` tells the connected person which clusters and tools they can use. The other tools require the `cluster` argument and do not fall back to the default cluster.
+- Authentication: an API key (`kbk_…`) or an access token in the `Authorization: Bearer` header.
+  - The server exchanges the key for a short-lived token, and the exchange is audited too. Once the key is revoked, the next call is refused.
+  - There is no session (stateless), so every request is checked, and multiple replicas work.
+- Audit: calls outside the permissions are recorded too, as `failure`. The `after` of `ai.mcp.call` holds:
+  - the tool, cluster and masking statistics
+  - the credential (`credential.akid` = key id)
+  - the client (User-Agent)
+  - `write`: whether it is a write tool
+- Write tools (`mcp.writeTools: true`, `MCP_WRITE_TOOLS` in compose, off by default): the chat's 11 write tools (apply, create, delete, patch, annotate, label, scale, rollout, exec …) also appear for **keys whose role ceiling is Write**.
+  - The chat's approval card (`ai.writeApproval`) does not exist in MCP. The agent can do only as much as that person can do on that cluster, with a permanent role or a temporary role obtained through an [access request](configuration.md) (`accessRequests`).
+  - Every call is audited with `write: true`.
+  - The tool annotations (`destructiveHint`) are set honestly, so clients such as Claude Code ask the user to confirm before the call.
+  - Objects managed by Argo CD follow the guard mode: `block` refuses ("change it in Git"), and `warn` runs and adds a warning to the first line of the result.
+  - When permissions fall short, the agent files an access request itself with the `request_access` tool and tries again. Once an admin approves it, the request is applied within a minute.
 
 ## Alert → AI investigation (Alertmanager, Grafana)
 
-When an alert fires, Kubeast **does a first investigation with read tools only** and leaves a report. It does not write — a person reads the report and does the fixing. Off by default (`features.alertInvestigation.enabled`). Turning it on also requires `auth.impersonation.enabled` and `ai.enabled` (otherwise the chart render fails).
+When an alert fires, Kubeast **does a first investigation with read tools only** and leaves a report. It does not write; a person reads the report and does the fixing.
 
-- **Endpoint**: point an Alertmanager webhook receiver at `POST <Kubeast URL>/api/v1/alerts/webhook?cluster=<cluster ID>`, with Bearer `ALERT_WEBHOOK_TOKEN` (kubeast-secrets, generated by the chart) in `http_config.authorization`. The format is Alertmanager v4 as is. For Grafana alerting, put the same URL and Authorization header (Bearer, the token) on a webhook contact point — the Grafana 13 webhook body has the same fields Kubeast reads, so it is accepted as is. A wrong token gets 401, an unknown cluster 404, and 404 when the feature is off.
-- **Filtering**: only alerts that are `firing` and whose `severity` label is in `severities` (default critical, warning). For the same cluster and fingerprint within `dedupeHours` (24), only `repeat_count` goes up (Alertmanager resends every 4 hours).
+The feature is off by default (`features.alertInvestigation.enabled`). Turning it on also requires `auth.impersonation.enabled` and `ai.enabled`; otherwise the chart render fails.
+
+- **Endpoint**: point an Alertmanager webhook receiver at `POST <Kubeast URL>/api/v1/alerts/webhook?cluster=<cluster ID>`, with Bearer `ALERT_WEBHOOK_TOKEN` (kubeast-secrets, generated by the chart) in `http_config.authorization`. The format is Alertmanager v4 as is.
+  - For Grafana alerting, put the same URL and Authorization header (Bearer, the token) on a webhook contact point. The Grafana 13 webhook body has the same fields Kubeast reads, so it is accepted as is.
+  - A wrong token gets 401, an unknown cluster 404, and 404 when the feature is off.
+- **Filtering**: only alerts that are `firing` and whose `severity` label is in `severities` (default critical, warning) pass. For the same cluster and fingerprint within `dedupeHours` (24), only `repeat_count` goes up (Alertmanager resends every 4 hours).
   - Past `maxPerHour` (6) per hour or the daily `dailyTokenBudget` (200,000 tokens, UTC), alerts are recorded as `skipped`.
-  - When the model provider **refuses because of a credit or key problem** (for a subscription, the usage limit — until the time it lifts), that alert becomes `failed` ("provider refused (credit)…"), and alerts arriving in the following `providerPauseMinutes` (30 minutes, 0 = off) as well as alerts already queued become `skipped` ("paused: …until …") — a blocked provider is not called again for every alert.
+  - When the model provider **refuses because of a credit or key problem**, investigations pause. For a subscription, this is the usage limit, and the pause lasts until the time it lifts.
+    - That alert becomes `failed` ("provider refused (credit)…").
+    - Alerts arriving in the following `providerPauseMinutes` (30 minutes, 0 = off), and alerts already queued, become `skipped` ("paused: …until …").
+    - This way, a blocked provider is not called again for every alert.
   - Rate limiting (429) and outages are temporary, so they do not pause it.
   - The response comes right away: `{accepted, duplicate, filtered, skipped, resolved, dropped}`.
 - **Investigation**: one worker processes queued alerts one at a time (only once, even with multiple replicas).
-  - auth-service issues an **investigation-only token** for that cluster (permissions for the 39 read tools + `resource.pod.read`, which log store search asks for; the Helm, policy report and cost tools lack those permissions, so the investigation does not see them; limited to the alert's Namespace when the alert has a `namespace` label; 10 minutes), and requests reach the cluster as user and group `kubeast:investigator` (a read-only ClusterRole — no Secrets, exec or writes, `templates/impersonation-investigator.yaml`).
-  - To let the investigation read CRDs too (Kyverno PolicyReport, Argo Rollout, KEDA ScaledObject, etc.), add read rules to `extraRules` — verbs get, list and watch only; the render refuses `apiGroups "*"`, Secrets, exec, proxy, tokens and wildcard resources.
+  - auth-service issues an **investigation-only token** for that cluster, valid for 10 minutes.
+    - It holds permissions for the 39 read tools plus `resource.pod.read`, which log store search asks for. It lacks the permissions of the Helm, policy report and cost tools, so the investigation does not see them.
+    - When the alert has a `namespace` label, the token is limited to the alert's Namespace.
+  - Requests reach the cluster as user and group `kubeast:investigator`: a read-only ClusterRole with no Secrets, exec or writes (`templates/impersonation-investigator.yaml`).
+  - To let the investigation read CRDs too (Kyverno PolicyReport, Argo Rollout, KEDA ScaledObject, etc.), add read rules to `extraRules`, with verbs get, list and watch only. The render refuses `apiGroups "*"`, Secrets, exec, proxy, tokens and wildcard resources.
   - Apply the added rules again to every cluster that sends alerts (`scripts/render-target-rbac.sh`).
-  - Model = `model` (a ModelConfig name) or the default model, up to `maxSteps` (8) calls — the last call gets no tools, so an answer comes back — and `timeoutSeconds` (300) overall.
+  - The model is `model` (a ModelConfig name) or the default model. It makes up to `maxSteps` (8) calls, within `timeoutSeconds` (300) overall. The last call gets no tools, so an answer comes back.
   - The alert's labels and annotations are kept apart in the prompt as "untrusted data".
-- **Report**: Summary · What I checked · Likely cause · Next steps (`language`, default en). `GET /api/v1/ai/investigations` (list, filter by `status` and `cluster`) · `/{id}` (details: report, tool calls, tokens), permission `admin.investigations.read`. Opening the details is recorded as `ai.investigation.view`, since pod logs may be quoted. Retention `retention.investigationDays` (90 days).
-- **Screen**: Admin → **Investigations** (in the menu when the feature and AI are on, permission `admin.investigations.read`) — a table of received time, cluster, alert, severity, Namespace, status, repeats, tokens and duration, filtered by status and cluster. Pressing "Report" opens a window with the report, the alert labels/annotations, a link to the alert sender (Alertmanager, Grafana) and the tool calls (arguments, result length), and the URL becomes `?id=<investigation ID>`, the same as the link in the audit summary. The report is text written by a model that read an external alert, so it is rendered as Markdown only, without raw HTML.
+- **Report**: sections Summary, What I checked, Likely cause and Next steps, written in `language` (default en).
+  - API (permission `admin.investigations.read`): `GET /api/v1/ai/investigations` lists them (filter by `status` and `cluster`), and `/{id}` returns the details (report, tool calls, tokens).
+  - Opening the details is recorded as `ai.investigation.view`, since pod logs may be quoted.
+  - Retention: `retention.investigationDays` (90 days).
+- **Screen**: Admin → **Investigations**, in the menu when the feature and AI are on (permission `admin.investigations.read`).
+  - A table shows received time, cluster, alert, severity, Namespace, status, repeats, tokens and duration, filtered by status and cluster.
+  - Pressing "Report" opens a window with the report, the alert labels/annotations, a link to the alert sender (Alertmanager, Grafana) and the tool calls (arguments, result length).
+  - The URL becomes `?id=<investigation ID>`, the same as the link in the audit summary.
+  - The report is text written by a model that read an external alert, so it is rendered as Markdown only, without raw HTML.
 - **Model**: report quality follows the model. Small local models sometimes put weakly supported causation under "Likely cause", so in production we recommend setting a larger model that is good at tool calling as `model`.
-- **Audit and notification**: one investigation = `ai.investigation.run` (actor `system` / `kubeast:investigator`; `after` holds the alert, model, tokens, number of tool calls, duration, a 500-character summary and the link), a tool call = `ai.tool.call`. Add `ai.investigation.run` to an audit sink's `filter.actions` and the summary goes to Slack or email. Set `consoleUrl` and the summary carries a link to the report.
-- **Cluster side**: the investigation identity's RBAC and an Alertmanager configuration example are in [docs/cluster-requirements.md](cluster-requirements.md) §1 and §13. In dev, check it by putting a fake alert into the second cluster's Alertmanager with `amtool alert add` (`deploy/kind/alertmanager.yaml`). For Grafana, send one with a webhook contact point test from the Grafana of `scripts/kind-grafana.sh` (e2e `grafana.spec.ts`).
+- **Audit and notification**: one investigation is recorded as `ai.investigation.run`, and each tool call as `ai.tool.call`.
+  - The investigation row has actor `system` / `kubeast:investigator`. Its `after` holds the alert, model, tokens, number of tool calls, duration, a 500-character summary and the link.
+  - Add `ai.investigation.run` to an audit sink's `filter.actions` and the summary goes to Slack or email. Set `consoleUrl` and the summary carries a link to the report.
+- **Cluster side**: the investigation identity's RBAC and an Alertmanager configuration example are in [docs/cluster-requirements.md](cluster-requirements.md) §1 and §13.
+  - In dev, check it by putting a fake alert into the second cluster's Alertmanager with `amtool alert add` (`deploy/kind/alertmanager.yaml`).
+  - For Grafana, send one with a webhook contact point test from the Grafana of `scripts/kind-grafana.sh` (e2e `grafana.spec.ts`).
 
 ## Alerts inbox
 
-Shows the alerts sent by Alertmanager (or Grafana alerting), **firing and resolved alike, of every severity**, in one list per cluster (menu Core → **Alerts**). They come in through the same webhook as the investigation above, so `features.alertInvestigation.enabled` (with AI on) is required, and to receive resolutions, set `send_resolved: true` (the default) on the webhook.
+The inbox shows the alerts sent by Alertmanager (or Grafana alerting), **firing and resolved alike, of every severity**, in one list per cluster (menu Core → **Alerts**).
 
-- **Who**: people who read the selected cluster without a Namespace limit (`resource.pod.read` on that cluster) — the same rule as the AI alert tool and alert store reads. The alert's AI investigation report can be opened here too, and each opening records `ai.investigation.view`.
-- **One row = one alert**: the same cluster, fingerprint and `startsAt`. When Alertmanager resends every `repeat_interval`, "Received" goes up; when resolved arrives, the row becomes Resolved; if the alert fires again after resolving, a new row. Statuses are Firing · **Status unknown** (firing, but nothing heard for `inbox.staleAfterHours` (8) — Alertmanager does not send a firing alert's `endsAt` through the webhook) · Resolved. When the cluster has an alert store (`features.alertStore`), Alertmanager's current state (Silenced, Inhibited, Not in Alertmanager) is shown too.
-- **Silence**: when the cluster has an alert store and `features.alertStore.silences: true` (off by default — the store credentials need write permission, Editor for Grafana), people with the permission `resource.alert.silence` (Write and Admin by default, not Read) use **Silence** in the alert window to set conditions starting from the alert's name, Namespace and object labels (`=` · `!=` · `=~` · `!~`, add and remove), a duration (at most `silenceMaxHours` 168) and a reason (required), preview the **alerts it would mute now**, and then create it.
-  - The server adds the cluster condition (`<clusterLabel>="<value>"`) to every silence, so it cannot mute other clusters' alerts, and a silence made only of conditions that also match an empty label (e.g. `alertname=~".*"`) cannot be created (the same rule as Alertmanager).
+Alerts come in through the same webhook as the investigation above, so `features.alertInvestigation.enabled` (with AI on) is required. To receive resolutions, set `send_resolved: true` (the default) on the webhook.
+
+- **Who**: people who read the selected cluster without a Namespace limit (`resource.pod.read` on that cluster). This is the same rule as the AI alert tool and alert store reads.
+  - The alert's AI investigation report can be opened here too, and each opening records `ai.investigation.view`.
+- **One row = one alert**: the same cluster, fingerprint and `startsAt`.
+  - When Alertmanager resends every `repeat_interval`, "Received" goes up. When resolved arrives, the row becomes Resolved. If the alert fires again after resolving, it gets a new row.
+  - Statuses are Firing, **Status unknown** and Resolved. Status unknown means firing, but nothing heard for `inbox.staleAfterHours` (8); Alertmanager does not send a firing alert's `endsAt` through the webhook.
+  - When the cluster has an alert store (`features.alertStore`), Alertmanager's current state (Silenced, Inhibited, Not in Alertmanager) is shown too.
+- **Silence**: needs an alert store on the cluster and `features.alertStore.silences: true`. This is off by default; the store credentials need write permission (Editor for Grafana).
+  - People with the permission `resource.alert.silence` (Write and Admin by default, not Read) use **Silence** in the alert window.
+  - They set conditions starting from the alert's name, Namespace and object labels (`=`, `!=`, `=~`, `!~`, add and remove), a duration (at most `silenceMaxHours` 168) and a reason (required). They preview the **alerts it would mute now**, and then create it.
+  - The server adds the cluster condition (`<clusterLabel>="<value>"`) to every silence, so it cannot mute other clusters' alerts.
+  - A silence made only of conditions that also match an empty label (e.g. `alertname=~".*"`) cannot be created. Alertmanager has the same rule.
   - The **Silences** tab shows the cluster's active and pending silences, with "End now".
-  - Audit `alert.silence.create` · `alert.silence.expire`.
-- **Handling marks**: Acknowledge · Assign to me/Unassign · Note · Mark done. They are records inside Kubeast and do not change Alertmanager or the alert rules — the rule decides "Resolved". Every change records `alert.inbox.update` (before and after values); when the audit DB cannot be written, the response is 503 and the mark is rolled back.
-- **Screen**: status tabs (Firing, Status unknown, Resolved, All), filters for severity, Assigned to me and Not done; pressing the object (label `pod`, `deployment`, `node`, etc.) opens the resource details window. Opening one alert shows labels, annotations, the alert sender link, the handling area and the AI investigation. API `GET /api/v1/alerts/inbox?cluster=` · `/{id}` · `PATCH /{id}` · `/{id}/investigation`. Retention is `retention.investigationDays`, as for investigations (counted from the last time the alert was received).
+  - Audit: `alert.silence.create` and `alert.silence.expire`.
+- **Handling marks**: Acknowledge, Assign to me/Unassign, Note and Mark done.
+  - They are records inside Kubeast and do not change Alertmanager or the alert rules. The rule decides "Resolved".
+  - Every change records `alert.inbox.update` (before and after values). When the audit DB cannot be written, the response is 503 and the mark is rolled back.
+- **Screen**: status tabs (Firing, Status unknown, Resolved, All) and filters for severity, Assigned to me and Not done.
+  - Pressing the object (label `pod`, `deployment`, `node`, etc.) opens the resource details window.
+  - Opening one alert shows labels, annotations, the alert sender link, the handling area and the AI investigation.
+  - API: `GET /api/v1/alerts/inbox?cluster=`, `/{id}`, `PATCH /{id}` and `/{id}/investigation`.
+  - Retention is `retention.investigationDays`, as for investigations, counted from the last time the alert was received.
 
 ## Reading traces (AI, Tempo)
 
-With `features.traceStore.enabled` (default off), the AI reads the Tempo HTTP API (or the Grafana data source proxy `…/api/datasources/proxy/uid/<Tempo UID>` — a Viewer service account token, tenant left empty) — `traces_search` (TraceQL search) · `traces_get` (trace ID → spans) · `traces_tags` (attribute names and values) · `traces_metrics` (TraceQL metrics → series, also as a chart) · `traces_compare` (fast, typical and slow samples + p50, p90).
+With `features.traceStore.enabled` (default off), the AI reads the Tempo HTTP API. It can also read it through the Grafana data source proxy `…/api/datasources/proxy/uid/<Tempo UID>`, with a Viewer service account token and the tenant left empty.
 
-- **Who**: the same gate as log search — Pod read + `get pods/log` in that namespace as the user's identity (asked of the cluster) + a per-minute limit. A namespace-scoped grant reaches only its own namespaces.
-- **Scope enforcement**: into **every spanset filter `{ }`** of the TraceQL the AI writes, k8s-service ANDs `resource.<attributes.cluster> = "<value from clusters>"` (on an NS path, also `resource.<attributes.namespace> = "<ns>"`).
-  - Filters are found with the same rules as the Tempo lexer (reading strings, raw strings, comments and attribute names), and broken brackets or nested braces are refused — over 1 million variants fed to the real Tempo 3.1.0 parser confirmed 0 filters without the scope.
-  - `parent.`, which reads other spans, the root span (`rootName` · `rootServiceName` · `trace:rootService`), whole-trace duration (`traceDuration` · `trace:duration`) and tree position (`nestedSet*`) get 400. Search results leave out the root service and total duration, and a lookup by ID returns only the spans of that cluster (and NS) (the rest only as a `hidden` count).
-- **Recent data**: Tempo serves new spans to search only after some tens of seconds (about 25 seconds on the dev Tempo), and for TraceQL metrics it moves the end back from now by `query_end_cutoff` (default 30 seconds) and then rounds down to whole steps — with a one-day window (12-minute steps), the last few minutes are missing from the metrics. When the points end more than 2 minutes before the end of the window, `traces_metrics` adds that time with a note to "use `traces_search` for the last few minutes".
-- **Audit**: `k8s.traces.query` (`kind` search · metrics · compare · trace, the query written, the query sent and the count — no span contents). Attribute lists are not audited.
-- **API**: `GET /api/v1/[cluster/namespaces/{ns}/]traces/{search,metrics,compare}?q=&since=` · `…/traces/trace/{traceID}` · `…/traces/tags?scope=&tag=`.
+- **Tools**:
+  - `traces_search`: TraceQL search
+  - `traces_get`: trace ID → spans
+  - `traces_tags`: attribute names and values
+  - `traces_metrics`: TraceQL metrics → series, also as a chart
+  - `traces_compare`: fast, typical and slow samples + p50, p90
+- **Who**: the same gate as log search. That is Pod read and `get pods/log` in that namespace as the user's identity (asked of the cluster), plus a per-minute limit. A namespace-scoped grant reaches only its own namespaces.
+- **Scope enforcement**: k8s-service ANDs `resource.<attributes.cluster> = "<value from clusters>"` into **every spanset filter `{ }`** of the TraceQL the AI writes. On an NS path, it also adds `resource.<attributes.namespace> = "<ns>"`.
+  - Filters are found with the same rules as the Tempo lexer, which reads strings, raw strings, comments and attribute names. Broken brackets or nested braces are refused.
+  - Over 1 million variants fed to the real Tempo 3.1.0 parser confirmed 0 filters without the scope.
+  - These get 400:
+    - `parent.`, which reads other spans
+    - the root span (`rootName`, `rootServiceName`, `trace:rootService`)
+    - whole-trace duration (`traceDuration`, `trace:duration`)
+    - tree position (`nestedSet*`)
+  - Search results leave out the root service and total duration. A lookup by ID returns only the spans of that cluster (and NS); the rest appear only as a `hidden` count.
+- **Recent data**: Tempo serves new spans to search only after some tens of seconds (about 25 seconds on the dev Tempo).
+  - For TraceQL metrics, Tempo moves the end back from now by `query_end_cutoff` (default 30 seconds) and then rounds down to whole steps. With a one-day window (12-minute steps), the last few minutes are missing from the metrics.
+  - When the points end more than 2 minutes before the end of the window, `traces_metrics` adds that time with a note to "use `traces_search` for the last few minutes".
+- **Audit**: `k8s.traces.query` records the `kind` (search, metrics, compare or trace), the query written, the query sent and the count, but no span contents. Attribute lists are not audited.
+- **API**: `GET /api/v1/[cluster/namespaces/{ns}/]traces/{search,metrics,compare}?q=&since=`, `…/traces/trace/{traceID}` and `…/traces/tags?scope=&tag=`.
 
 ```yaml
 features:
@@ -77,17 +153,50 @@ features:
 
 ## AI analysis evaluation
 
-Whether the AI actually finds the cause is measured with an evaluation script, not e2e — `scripts/ai-eval.py` creates 12 problems on the dev clusters (CPU spike, OOMKilled, a CrashLoop whose cause is printed in the logs, 5xx from one pod, a slow-path trace, a firing alert, two kinds of Pending, ImagePullBackOff, a Secret request from a Read user, a stuck rollout, PVC Pending), asks as an operator would, and scores whether each answer contains the expected facts and the needed tools (once per model). Case format and recent results are in [evals/ai/README.md](../evals/ai/README.md) — 2026-10-19: Haiku 5.5 and Sonnet 5.5 (subscription) 12/12.
+Whether the AI actually finds the cause is measured with an evaluation script, not e2e.
+
+`scripts/ai-eval.py` creates 12 problems on the dev clusters, asks as an operator would, and scores whether each answer contains the expected facts and the needed tools (once per model). The problems are:
+
+- CPU spike
+- OOMKilled
+- a CrashLoop whose cause is printed in the logs
+- 5xx from one pod
+- a slow-path trace
+- a firing alert
+- two kinds of Pending
+- ImagePullBackOff
+- a Secret request from a Read user
+- a stuck rollout
+- PVC Pending
+
+Case format and recent results are in [evals/ai/README.md](../evals/ai/README.md). On 2026-10-19, Haiku 5.5 and Sonnet 5.5 (subscription) scored 12/12.
 
 ## Reading alerts (AI, Alertmanager)
 
-With `features.alertStore.enabled` (default off), the AI's `alerts_list` reads from the alert store **this cluster's current alerts** (name, severity, state firing/silenced/inhibited, start time, summary, labels, receivers) and **the silences covering them** (who, why, until when). The store URL is one of the Alertmanager API v2 (`http://alertmanager.monitoring:9093`), an Alertmanager through the Grafana data source proxy (`…/api/datasources/proxy/uid/<Alertmanager UID>`), or Grafana alerting itself (`…/api/alertmanager/grafana`) — for Grafana, a Viewer service account token.
+With `features.alertStore.enabled` (default off), the AI's `alerts_list` reads two things from the alert store:
 
-- **Who**: people with a whole-cluster grant on that cluster (same as the Prometheus tools) — many alerts, such as node and cluster alerts, have no namespace, so namespace-scoped grants are refused. A per-minute limit.
-- **Scope enforcement**: k8s-service asks the store with the matcher `<clusterLabel>="<value from clusters>"` and **checks the labels again** on the returned alerts, dropping other values. Conditions from the model (alert name, label values) become quoted matchers, and the cluster label is always this cluster's value. Silences: **only those covering this cluster's alerts** (other clusters' silences are not shown). For an Alertmanager used by a single cluster, leave the value empty to read everything (only when `clusters` has one cluster).
-- **Audit**: none — alerts are operational state, so they are a plain read, like `prometheus_rules`.
-- **API**: `GET /api/v1/alertstore/alerts?state=firing|silenced|inhibited|all&alertname=&label=<name>=<value>` · `GET /api/v1/alertstore/silences` (this cluster's active and pending silences) · `GET …/silences/preview?matchers=<JSON>` (the alerts a silence would mute now).
-  - Writes only with `silences: true` — `POST /api/v1/alertstore/silences {matchers, durationMinutes, comment}` · `DELETE …/silences/{id}` (permission `resource.alert.silence`, "Silence" in the Alerts inbox above).
+- **this cluster's current alerts**: name, severity, state firing/silenced/inhibited, start time, summary, labels and receivers
+- **the silences covering them**: who, why and until when
+
+The store URL is one of:
+
+- the Alertmanager API v2 (`http://alertmanager.monitoring:9093`)
+- an Alertmanager through the Grafana data source proxy (`…/api/datasources/proxy/uid/<Alertmanager UID>`)
+- Grafana alerting itself (`…/api/alertmanager/grafana`)
+
+For Grafana, use a Viewer service account token.
+
+- **Who**: people with a whole-cluster grant on that cluster, as for the Prometheus tools. Many alerts, such as node and cluster alerts, have no namespace, so namespace-scoped grants are refused. A per-minute limit applies.
+- **Scope enforcement**: k8s-service asks the store with the matcher `<clusterLabel>="<value from clusters>"` and **checks the labels again** on the returned alerts, dropping other values.
+  - Conditions from the model (alert name, label values) become quoted matchers, and the cluster label is always this cluster's value.
+  - Silences: **only those covering this cluster's alerts** are shown. Other clusters' silences are not.
+  - For an Alertmanager used by a single cluster, leave the value empty to read everything. This works only when `clusters` has one cluster.
+- **Audit**: none. Alerts are operational state, so they are a plain read, like `prometheus_rules`.
+- **API**:
+  - `GET /api/v1/alertstore/alerts?state=firing|silenced|inhibited|all&alertname=&label=<name>=<value>`
+  - `GET /api/v1/alertstore/silences`: this cluster's active and pending silences
+  - `GET …/silences/preview?matchers=<JSON>`: the alerts a silence would mute now
+  - Writes, only with `silences: true`: `POST /api/v1/alertstore/silences {matchers, durationMinutes, comment}` and `DELETE …/silences/{id}`. They need the permission `resource.alert.silence` ("Silence" in the Alerts inbox above).
   - For both the screen and the AI, k8s-service sends the requests to the store, not the browser (gateway `/api/v1/alertstore/`).
 
 ```yaml

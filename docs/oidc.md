@@ -2,26 +2,33 @@
 
 # SSO (OIDC) setup
 
-Kubeast can sign people in with one OpenID Connect provider (Keycloak, Google, Entra ID, Okta, etc.). This document goes through creating a client at the provider, setting the chart values, choosing the first admin, and connecting groups to roles. The authoritative description of the values is `auth.oidc` in [`helm/kubeast/values.yaml`](../helm/kubeast/values.yaml).
+Kubeast can sign people in with one OpenID Connect provider (Keycloak, Google, Entra ID, Okta, etc.).
+This document covers creating a client at the provider, setting the chart values, choosing the first admin, and connecting groups to roles.
+The authoritative description of the values is `auth.oidc` in [`helm/kubeast/values.yaml`](../helm/kubeast/values.yaml).
 
 ## 1. How it works
 
-- authorization code + PKCE (S256). The state, nonce and PKCE verifier are kept in a signed cookie.
+- Authorization code flow with PKCE (S256). The state, nonce and PKCE verifier are kept in a signed cookie.
 - The ID token's signature, issuer, audience (`clientId`), expiry and nonce are checked with the keys from discovery (`<issuerUrl>/.well-known/openid-configuration`).
 - If `email_verified` is `false`, the sign-in is refused. If `allowedDomains` is set, only mail addresses in those domains are accepted.
 - The account is created at the first sign-in (no password). If an account with the same email already exists, the person signs in to that account.
-- Both success and failure are recorded in the audit log (`user.login.success`; a failure is `user.login.failed` + a reason code, §6).
+- Both success and failure are recorded in the audit log: `user.login.success`, or `user.login.failed` with a reason code (§6).
 
 ## 2. Common steps
 
-1. **Register a client at the provider** — web application (confidential), redirect URI = `<Kubeast public URL>/api/v1/auth/oidc/callback`, scope `openid email profile` (if you use groups, make the group claim go into the ID token, §4).
+1. **Register a client at the provider**:
+   - web application (confidential)
+   - redirect URI = `<Kubeast public URL>/api/v1/auth/oidc/callback`
+   - scope `openid email profile`. If you use groups, put the group claim in the ID token (§4).
 2. **The client secret as a Secret**
 
    ```bash
    kubectl -n <ns> create secret generic kubeast-oidc --from-literal=client_secret='<secret>'
    ```
 
-   `auth.oidc.existingSecret: kubeast-oidc`. To pass it as a value, use `clientSecret` (it then becomes `OIDC_CLIENT_SECRET` in `kubeast-secrets`). Installs that use `secrets.existingSecret` put `OIDC_CLIENT_SECRET` in that Secret or use `existingSecret`.
+   Then set `auth.oidc.existingSecret: kubeast-oidc`.
+   To pass it as a value instead, use `clientSecret`; it then becomes `OIDC_CLIENT_SECRET` in `kubeast-secrets`.
+   Installs that use `secrets.existingSecret` put `OIDC_CLIENT_SECRET` in that Secret or use `existingSecret`.
 3. **Chart values**
 
    ```yaml
@@ -39,9 +46,9 @@ Kubeast can sign people in with one OpenID Connect provider (Keycloak, Google, E
    ```
 
 4. **Private CA** — if the provider's certificate is signed by an internal CA, put that CA in `customCAs` ([Add a trusted CA](operations.md#adding-trusted-cas-private-cas-tls-intercepting-proxies)). Without it, discovery fails with an x509 error and sign-in comes back with `oidc_provider`.
-5. **First admin** — sign in with the chart's `admin` account (password: `DEFAULT_ADMIN_PASSWORD` in `kubeast-secrets`) → in Admin → User Management, change your own SSO account to Admin. If group mapping (§3) gives you Admin, this step is not needed.
+5. **First admin** — sign in with the chart's `admin` account (password: `DEFAULT_ADMIN_PASSWORD` in `kubeast-secrets`). Then, in Admin → User Management, change your own SSO account to Admin. If group mapping (§3) gives you Admin, this step is not needed.
 6. **Reduce password sign-in** — once SSO works, set `auth.passwordLogin: "admin-only"` (only the `admin` account, as an emergency path when the provider is down) or `"off"`.
-7. **Check** — the button on the sign-in screen → the provider → back, and the app opens: done. On failure the address becomes `/login?error=<code>` and the auth-service log has `oidc: login failed` (§6).
+7. **Check** — click the button on the sign-in screen, sign in at the provider and come back. If the app opens, you are done. On failure the address becomes `/login?error=<code>` and the auth-service log has `oidc: login failed` (§6).
 
 ## 3. Connecting roles
 
@@ -69,20 +76,30 @@ auth:
 ```
 
 - When several groups match, the broader one wins: account level Admin > custom > Member > Pending, per cluster Admin > Write > Read.
-- With `syncRoles: true` and **a group claim in the token**, roles are synced again at every sign-in — remove a group at the provider and the permission goes too at the next sign-in (`defaultRole` when no group maps). **Without a group claim** (Google), permissions an admin gave on screen are not overwritten.
+- With `syncRoles: true` and **a group claim in the token**, roles are synced again at every sign-in. Remove a group at the provider, and the permission goes too at the next sign-in (`defaultRole` when no group maps).
+- **Without a group claim** (Google), permissions an admin gave on screen are not overwritten.
 - Namespace-scoped permissions are given through custom roles (`namespaces` in `auth.impersonation.customRoles`).
-- Waiting-for-approval screen: on installs that sync roles from groups at every sign-in (`syncRoles` and a provider that sends a group claim; Google when `googleGroups` is on — `roles_from_groups` in `GET /api/v1/auth/oidc/config`), it says "Ask an administrator to add you to a group there, then sign out and sign in again." Otherwise it says "Once an administrator assigns your role, sign out and sign in again."
+- The waiting-for-approval screen shows one of two messages:
+  - On installs that sync roles from groups at every sign-in, it says "Ask an administrator to add you to a group there, then sign out and sign in again."
+    These are installs with `syncRoles` and a provider that sends a group claim, or Google with `googleGroups` on (`roles_from_groups` in `GET /api/v1/auth/oidc/config`).
+  - Otherwise it says "Once an administrator assigns your role, sign out and sign in again."
 
 ## 4. By provider
 
 ### Keycloak
 
 - Client: Client authentication on (confidential), Standard flow, Valid redirect URIs = the callback above, (advanced) PKCE method S256.
-- Groups: a **Group Membership** mapper in a client-dedicated scope (or a default scope) — Token Claim Name `groups`, **Full group path off** (when on, a `/` is prepended, as in `/kubeast-admins`, and it does not match `roleMapping`), Add to ID token on.
+- Groups: a **Group Membership** mapper in a client-dedicated scope (or a default scope), with these settings:
+  - Token Claim Name `groups`
+  - **Full group path off**. When it is on, a `/` is prepended, as in `/kubeast-admins`, and the name does not match `roleMapping`.
+  - Add to ID token on
 - `issuerUrl`: `https://<keycloak>/realms/<realm>`.
-- If Keycloak is open only on a port other than 443 (8443, etc.), add a NetworkPolicy rule for that address and port in `auth.oidc.egress` (auth-service goes out only on 443 and 6443 by default).
-- Verified (2026-10-21, Keycloak 26.8.1): with a realm set up as above ([`deploy/kind/keycloak-realm.json`](../deploy/kind/keycloak-realm.json) — groups `sre`, `dev`, `viewer`, PKCE S256 required): groups → account level and cluster roles, people without a group are Pending, and moving someone to another group in Keycloak changes their cluster role at the next sign-in and leaves `user.cluster_role.set` (`via: oidc`) (e2e `oidc-keycloak.spec.ts`, `e2e/scripts/oidc-keycloak.sh up`).
-  - Kubeast sign-out ends only the Kubeast session and leaves the Keycloak session — signing in again in the same browser does not ask for the password.
+- If Keycloak is open only on a port other than 443 (8443, etc.), add a NetworkPolicy rule for that address and port in `auth.oidc.egress`. By default, auth-service goes out only on 443 and 6443.
+- Verified (2026-10-21, Keycloak 26.8.1) with e2e `oidc-keycloak.spec.ts` (`e2e/scripts/oidc-keycloak.sh up`), against a realm set up as above: [`deploy/kind/keycloak-realm.json`](../deploy/kind/keycloak-realm.json), with groups `sre`, `dev`, `viewer` and PKCE S256 required.
+  - Groups map to the account level and cluster roles.
+  - People without a group are Pending.
+  - Moving someone to another group in Keycloak changes their cluster role at the next sign-in and records `user.cluster_role.set` (`via: oidc`).
+  - Kubeast sign-out ends only the Kubeast session and leaves the Keycloak session. Signing in again in the same browser does not ask for the password.
 
 ### Google
 
@@ -90,12 +107,17 @@ auth:
 - `issuerUrl: https://accounts.google.com`, `allowedDomains: [<Workspace domain>]` (without it, any Google account gets a Pending account).
 - **Google ID tokens have no groups.** Pick one of two:
   - An admin grants roles in User Management (default `defaultRole: Pending` → approval). `syncRoles` does not overwrite them.
-  - `auth.oidc.googleGroups.enabled: true` — at sign-in, Kubeast reads the person's Workspace groups through the Admin SDK Directory API and uses only those that match the mapping. The service account needs the Workspace admin role **Groups Reader** (no domain-wide delegation); its credentials are `credentials.json` in a Secret (no key with Workload Identity Federation; set `tokenAudience`), `domain` = the Workspace domain. Preview: `GET /api/v1/auth/admin/oidc/groups?email=<mail>`. Google group names are mail addresses, so use `clusterGroupMapping`.
+  - `auth.oidc.googleGroups.enabled: true`: at sign-in, Kubeast reads the person's Workspace groups through the Admin SDK Directory API and uses only those that match the mapping.
+    - The service account needs the Workspace admin role **Groups Reader** (no domain-wide delegation).
+    - Its credentials are `credentials.json` in a Secret. With Workload Identity Federation there is no key; set `tokenAudience`.
+    - Set `domain` to the Workspace domain.
+    - Preview: `GET /api/v1/auth/admin/oidc/groups?email=<mail>`.
+    - Google group names are mail addresses, so use `clusterGroupMapping`.
 
 ### Microsoft Entra ID
 
 - App registration → Web redirect URI = the callback above, issue a client secret. `issuerUrl: https://login.microsoftonline.com/<tenant-id>/v2.0`.
-- The group claim (Token configuration → groups claim) defaults to **group object IDs** → write the IDs in `clusterGroupMapping` and `roleMapping`.
+- The group claim (Token configuration → groups claim) defaults to **group object IDs**, so write the IDs in `clusterGroupMapping` and `roleMapping`.
 
 ### Okta
 
@@ -104,7 +126,9 @@ auth:
 
 ## 5. Kubernetes side
 
-A signed-in person's requests go to the target cluster as **that person's email + the group `kubeast:viewer`/`operator`/`admin`** (impersonation). Provider groups do not go to the cluster RBAC directly. For the cluster-side bindings see [cluster-requirements §1](cluster-requirements.md).
+A signed-in person's requests go to the target cluster as **that person's email + the group `kubeast:viewer`/`operator`/`admin`** (impersonation).
+Provider groups do not go to the cluster RBAC directly.
+For the cluster-side bindings, see [cluster-requirements §1](cluster-requirements.md).
 
 ## 6. Sign-in failure codes
 

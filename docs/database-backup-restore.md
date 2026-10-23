@@ -6,8 +6,8 @@ Kubeast keeps its durable state in one PostgreSQL database (users, roles,
 registered clusters, chat sessions and messages, tool approvals, model
 configs, audit log). This page covers how the services connect to it over TLS,
 and how to back up and restore the in-cluster database the chart installs by
-default. The procedure below was rehearsed on kind (dump → uninstall + PVC
-delete → reinstall → restore → login, row counts, registered clusters).
+default. The procedure below was rehearsed on kind: dump → uninstall + PVC
+delete → reinstall → restore → check login, row counts and registered clusters.
 
 ## What lives where
 
@@ -19,7 +19,7 @@ delete → reinstall → restore → login, row counts, registered clusters).
 | LLM API keys | Secret named by `model_configs.api_key_secret_name` | same |
 
 A database restore therefore brings back users, permissions, audit history,
-chat history and cluster registrations; the Secrets next to it must come from
+chat history and cluster registrations. The Secrets next to it must come from
 their own source of truth.
 
 ## TLS to the database
@@ -87,10 +87,13 @@ for d in auth-service session-service k8s-service ai-service model-config-contro
 done
 ```
 
-Check: admin login works with the password from **before** the loss (it is in
-the dump, hashed), `auth_users` / `auth_audit_logs` / `clusters` counts match
-the source, `GET /api/v1/clusters` lists the registrations, and the schema
-version table shows the same versions as before.
+Check that:
+
+- admin login works with the password from **before** the loss (it is in the
+  dump, hashed);
+- `auth_users` / `auth_audit_logs` / `clusters` counts match the source;
+- `GET /api/v1/clusters` lists the registrations;
+- the schema version table shows the same versions as before.
 
 If the dump is from an **older** Kubeast (lower `goose_db_version`), restore
 it and then restart auth-service once: it applies the missing migrations at
@@ -118,8 +121,8 @@ boot (`MIGRATIONS_MODE=startup`) or the hook Job does on the next upgrade.
 
 A PostgreSQL server does not start on a data directory from another major
 version ("database files are incompatible with server"), so changing
-`images.postgres` to a new major needs the data moved once. On a new volume,
-keeping the old one for a rollback (rehearsed 15 → 18):
+`images.postgres` to a new major needs the data moved once. Move it to a new
+volume and keep the old one for a rollback (rehearsed 15 → 18):
 
 ```bash
 NS=<ns>
@@ -138,12 +141,15 @@ helm upgrade kubeast <chart> -n $NS --reset-then-reuse-values \
 # 4. restore as in "From a logical dump" above: stop the writers, pg_restore --clean, start them
 ```
 
-Do the same checks. Rollback: the old image with the old claim
-(`postgresql.persistence.existingClaim`), untouched. The old claim stays until
-you delete it. docker-compose: dump the same way (`docker compose exec postgres
-pg_dump …`), move the `postgres_data` volume aside, start the new image on a new
-one, and restore with `docker compose exec -T postgres pg_restore --clean
---if-exists --no-owner -U kubeast -d kubeast < kubeast-before-upgrade.dump`.
+Do the same checks.
+
+- **Rollback**: the old image with the old claim
+  (`postgresql.persistence.existingClaim`), untouched. The old claim stays
+  until you delete it.
+- **docker-compose**: dump the same way (`docker compose exec postgres
+  pg_dump …`), move the `postgres_data` volume aside, start the new image on a new
+  one, and restore with `docker compose exec -T postgres pg_restore --clean
+  --if-exists --no-owner -U kubeast -d kubeast < kubeast-before-upgrade.dump`.
 
 ## Retention
 
@@ -169,5 +175,5 @@ retention:
 Pick the audit window from your regulatory baseline (for example, Korea's
 personal-information safety standard requires access records to be kept for
 at least one year, two years for some processors). With more than one
-auth-service replica every replica runs the purge; the deletes are idempotent,
-you only get one audit record per replica per day.
+auth-service replica, every replica runs the purge. The deletes are idempotent,
+so the only effect is one audit record per replica per day.
