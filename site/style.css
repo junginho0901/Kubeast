@@ -151,6 +151,9 @@ main > section { padding-left: max(20px, calc((100% - var(--width)) / 2)); paddi
   min-height: calc(100vh - 64px);
   padding-top: 24px;
   padding-bottom: 48px;
+  /* the names fly in from past the screen's sides: clipped here, or Chrome on Android widens the page for them
+     (and keeps it wide, the large view with it); only sideways, the dots still cover the header */
+  overflow-x: clip;
 }
 .eyebrow {
   display: inline-flex;
@@ -470,7 +473,7 @@ h2 { font-size: clamp(1.9rem, 3.4vw, 2.8rem); letter-spacing: -0.025em; line-hei
   margin-bottom: 10px;
   transition: border-color .3s, background .3s;
 }
-.faq details[open] { border-color: rgba(56, 189, 248, 0.4); background: rgba(14, 165, 233, 0.05); }
+.faq details[open]:not(.closing) { border-color: rgba(56, 189, 248, 0.4); background: rgba(14, 165, 233, 0.05); }
 .faq summary { list-style: none; cursor: pointer; padding: 18px 54px 18px 20px; font-weight: 650; position: relative; }
 .faq summary::-webkit-details-marker { display: none; }
 .faq summary::after {
@@ -483,8 +486,8 @@ h2 { font-size: clamp(1.9rem, 3.4vw, 2.8rem); letter-spacing: -0.025em; line-hei
   color: var(--sky-soft);
   transition: transform .3s var(--ease);
 }
-.faq details[open] summary::after { transform: translateY(-50%) rotate(45deg); }
-.answer { padding: 0 20px 18px; color: var(--text-dim); }
+.faq details[open]:not(.closing) summary::after { transform: translateY(-50%) rotate(45deg); }
+.answer { padding: 0 20px 18px; color: var(--text-dim); overflow: hidden; }
 .answer p { margin: 0; }
 .answer code { font-size: 0.88em; background: rgba(255, 255, 255, 0.06); padding: 1px 6px; border-radius: 5px; }
 
@@ -521,8 +524,10 @@ footer nav a:hover { color: var(--text); }
   .grid, .tiles { grid-template-columns: minmax(0, 1fr); }
   .card:hover { transform: none; }
   .features, .more, .install, .faq { padding-top: 64px; }
-  .lb-close { top: 6px; right: 6px; }
-  .lb-caption { bottom: 46px; font-size: 0.85rem; }
+  /* nothing over the clip on a phone: the step list under it lights the step, and Close sits above it */
+  .lightbox { padding-top: 68px; }
+  .lb-close { top: -52px; right: 0; }
+  .lb-caption { display: none; }
   /* the text sits over the page here, not beside the clip */
   .lb-backdrop { background: var(--bg); }
 }

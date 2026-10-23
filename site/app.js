@@ -218,4 +218,37 @@
     else if (e.key === 'ArrowRight') go(1)
     else if (e.key === 'ArrowLeft') go(-1)
   })
+
+  // Questions: an answer slides open and shut (a <details> alone shows and hides it at once). While closing, the
+  // details stays open until the answer has folded, with .closing for the look of a closed one.
+  document.querySelectorAll('.faq details').forEach(function (item) {
+    var answer = item.querySelector('.answer')
+    var running = null
+    item.querySelector('summary').addEventListener('click', function (e) {
+      if (still) return
+      e.preventDefault()
+      // a closed answer still reports its height, so it starts from nothing; one mid-slide starts where it is
+      var from = item.open ? answer.getBoundingClientRect().height : 0
+      if (running) running.cancel()
+      var opening = !item.open || item.classList.contains('closing')
+      item.classList.toggle('closing', !opening)
+      item.open = true
+      var pad = getComputedStyle(answer).paddingBottom
+      var to = opening ? answer.scrollHeight : 0
+      running = answer.animate(
+        [
+          { height: from + 'px', paddingBottom: from ? pad : '0px', opacity: opening ? Math.min(1, from / to) : 1 },
+          { height: to + 'px', paddingBottom: opening ? pad : '0px', opacity: opening ? 1 : 0 },
+        ],
+        { duration: opening ? 360 : 280, easing: EASE },
+      )
+      running.onfinish = function () {
+        running = null
+        if (!opening) {
+          item.open = false
+          item.classList.remove('closing')
+        }
+      }
+    })
+  })
 })()

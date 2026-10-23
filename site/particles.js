@@ -230,6 +230,14 @@
           el.style.setProperty('--o', item.p.opacity)
           if (!item.near) el.style.setProperty('--blur', ((0.4 - item.p.z) * 1.5).toFixed(2) + 'px')
           item.layer.appendChild(el)
+          // The placing guessed the width from the letters; a wider font (Android's) can push a name past the box
+          // and the screen, which widens the page. Pull it back in, leaving room for its drift.
+          var actual = el.offsetWidth
+          if (item.p.x + actual > w - 28) {
+            item.p.x = Math.max(4, w - 28 - actual)
+            el.style.left = item.p.x + 'px'
+          }
+          item.p.width = actual
           var intro = enter ? makeIntro(item.p.x + item.p.width / 2, item.p.y + item.p.height / 2, area, wordRand, WORD_TIMING) : null
           if (intro) el.style.opacity = '0'
           return { el: el, p: item.p, intro: intro, cur: { x: 0, y: 0 } }
