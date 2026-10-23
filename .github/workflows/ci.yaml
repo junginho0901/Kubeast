@@ -1,5 +1,5 @@
 # PR gate: unit tests, type checks and gofmt for every service. e2e (kind + LLM)
-# stays local — see docs/development.md "E2E 테스트". eslint is informational until the
+# stays local — see docs/development.md "E2E tests". eslint is informational until the
 # pre-existing lint debt is cleared.
 name: ci
 

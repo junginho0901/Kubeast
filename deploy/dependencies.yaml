@@ -19,13 +19,23 @@ dependencies:
         match: 'KUBEAST_TAG:-v'
       - path: README.md
         match: 'charts/kubeast --version'
+      - path: README.ko.md
+        match: 'charts/kubeast --version'
       - path: docs/getting-started.md
+        match: 'charts/kubeast --version'
+      - path: docs/ko/getting-started.md
         match: 'charts/kubeast --version'
       - path: docs/getting-started.md
         match: 'Kubeast/v[0-9.]+/'
+      - path: docs/ko/getting-started.md
+        match: 'Kubeast/v[0-9.]+/'
       - path: docs/getting-started.md
         match: 'install\.sh --version'
+      - path: docs/ko/getting-started.md
+        match: 'install\.sh --version'
       - path: docs/getting-started.md
+        match: 'git clone --branch v'
+      - path: docs/ko/getting-started.md
         match: 'git clone --branch v'
 
   # Built from source into the tool-server and k8s-service images (their Dockerfiles), so the
@@ -66,6 +76,8 @@ dependencies:
         match: '\(Prometheus v'
       - path: docs/cluster-requirements.md
         match: '\| prometheus-community/prometheus \|'
+      - path: docs/ko/cluster-requirements.md
+        match: '\| prometheus-community/prometheus \|'
 
   - name: prometheus-chart
     version: 29.37.0
@@ -80,7 +92,11 @@ dependencies:
         match: 'prometheus-community/prometheus --version'
       - path: docs/cluster-requirements.md
         match: '\| prometheus-community/prometheus \|'
+      - path: docs/ko/cluster-requirements.md
+        match: '\| prometheus-community/prometheus \|'
       - path: docs/cluster-requirements.md
+        match: 'prometheus-community/prometheus --version'
+      - path: docs/ko/cluster-requirements.md
         match: 'prometheus-community/prometheus --version'
 
   - name: node-exporter
@@ -124,6 +140,8 @@ dependencies:
       chart: metrics-server
     refPaths:
       - path: docs/cluster-requirements.md
+        match: '\[metrics-server chart\]'
+      - path: docs/ko/cluster-requirements.md
         match: '\[metrics-server 차트\]'
 
   - name: opencost
@@ -139,6 +157,8 @@ dependencies:
       - path: deploy/examples/target-cluster/opencost-values.yaml
         match: '\(OpenCost [0-9]'
       - path: docs/cluster-requirements.md
+        match: '\| opencost/opencost \|'
+      - path: docs/ko/cluster-requirements.md
         match: '\| opencost/opencost \|'
 
   - name: opencost-chart
@@ -156,7 +176,11 @@ dependencies:
         match: 'chart opencost-[0-9]'
       - path: docs/cluster-requirements.md
         match: '\| opencost/opencost \|'
+      - path: docs/ko/cluster-requirements.md
+        match: '\| opencost/opencost \|'
       - path: docs/cluster-requirements.md
+        match: 'opencost/opencost --version'
+      - path: docs/ko/cluster-requirements.md
         match: 'opencost/opencost --version'
 
   - name: alertmanager
@@ -171,6 +195,8 @@ dependencies:
         match: '^# Alertmanager v'
       - path: docs/cluster-requirements.md
         match: '(# Alertmanager v|\| Alertmanager \|)'
+      - path: docs/ko/cluster-requirements.md
+        match: '(# Alertmanager v|\| Alertmanager \|)'
 
   - name: grafana
     version: 13.2.4
@@ -183,6 +209,8 @@ dependencies:
       - path: scripts/kind-grafana.sh
         match: '^IMAGE="grafana/grafana:'
       - path: docs/cluster-requirements.md
+        match: '\| Grafana \|'
+      - path: docs/ko/cluster-requirements.md
         match: '\| Grafana \|'
 
   - name: loki
@@ -198,6 +226,8 @@ dependencies:
       - path: scripts/kind-logsearch.sh
         match: '^LOKI_IMAGE='
       - path: docs/cluster-requirements.md
+        match: '\| Loki · OpenTelemetry Collector contrib \|'
+      - path: docs/ko/cluster-requirements.md
         match: '\| Loki · OpenTelemetry Collector contrib \|'
 
   - name: otel-collector-contrib
@@ -215,6 +245,8 @@ dependencies:
       - path: scripts/kind-hostmetrics.sh
         match: '^COLLECTOR_IMAGE='
       - path: docs/cluster-requirements.md
+        match: '(\(contrib [0-9]|# OpenTelemetry Collector contrib [0-9]|\| Loki · OpenTelemetry Collector contrib \||\| OpenTelemetry Collector contrib `host_metrics` \|)'
+      - path: docs/ko/cluster-requirements.md
         match: '(\(contrib [0-9]|# OpenTelemetry Collector contrib [0-9]|\| Loki · OpenTelemetry Collector contrib \||\| OpenTelemetry Collector contrib `host_metrics` \|)'
 
   - name: telemetrygen
@@ -270,6 +302,8 @@ dependencies:
       - path: scripts/kind-victoriametrics.sh
         match: '^VERSION='
       - path: docs/cluster-requirements.md
+        match: '(verified: v[0-9.]+ single-node|\| VictoriaMetrics \|)'
+      - path: docs/ko/cluster-requirements.md
         match: '(검증: v[0-9.]+ 단일판|\| VictoriaMetrics \|)'
 
   # Kyverno's images come with the chart's CRDs: the chart version leads, the app version follows it.
@@ -285,8 +319,12 @@ dependencies:
       - path: deploy/kind/kyverno-values.yaml
         match: 'chart kyverno/kyverno [0-9]'
       - path: docs/cluster-requirements.md
+        match: '(\[Kyverno chart\]|\| Kyverno \|)'
+      - path: docs/ko/cluster-requirements.md
         match: '(\[Kyverno 차트\]|\| Kyverno \|)'
       - path: docs/development.md
+        match: 'chart [0-9.]+ rendered with `helm template --no-hooks`'
+      - path: docs/ko/development.md
         match: '차트 [0-9.]+[을를] `helm template --no-hooks`'
 
   - name: kyverno
@@ -299,6 +337,8 @@ dependencies:
       - path: deploy/kind/kyverno-values.yaml
         match: '\(app v'
       - path: docs/cluster-requirements.md
+        match: '(\[Kyverno chart\]|\| Kyverno \|)'
+      - path: docs/ko/cluster-requirements.md
         match: '(\[Kyverno 차트\]|\| Kyverno \|)'
 
   - name: argo-cd
@@ -310,6 +350,8 @@ dependencies:
       - path: scripts/kind-argocd.sh
         match: '^ARGOCD_VERSION='
       - path: docs/cluster-requirements.md
+        match: '(Argo CD [0-9.]+ core install|\| Argo CD \|)'
+      - path: docs/ko/cluster-requirements.md
         match: '(Argo CD [0-9.]+ core 설치가|\| Argo CD \|)'
 
   - name: podinfo
@@ -321,6 +363,8 @@ dependencies:
       - path: deploy/kind/argocd-app.yaml
         match: 'targetRevision:'
       - path: docs/cluster-requirements.md
+        match: 'podinfo chart [0-9]'
+      - path: docs/ko/cluster-requirements.md
         match: 'podinfo 차트 [0-9]'
 
   - name: keycloak
@@ -332,4 +376,6 @@ dependencies:
       - path: e2e/scripts/oidc-keycloak.sh
         match: '^IMAGE="quay.io/keycloak/keycloak:'
       - path: docs/oidc.md
+        match: 'Verified \(2026-10-21, Keycloak [0-9]'
+      - path: docs/ko/oidc.md
         match: '확인함\(2026-10-21, Keycloak [0-9]'

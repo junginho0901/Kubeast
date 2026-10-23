@@ -1,132 +1,126 @@
-# 기능 한눈에
+**English** | [한국어](ko/features.md)
+
+# Features at a glance
 
 
-## 🤖 AI 어시스턴트
+## 🤖 AI assistant
 
-- **다중 LLM 지원** — OpenAI · Anthropic · Gemini · Ollama 등 (OpenAI 호환 어댑터로 통합, Anthropic은 Messages API)
-- **스트리밍 채팅** — SSE 기반 실시간 응답, 세션/히스토리 보존. 모델에는 최근 `ai.chat.historyMessages`(기본 10)개의 user/assistant 메시지가 그대로 가고, 그 앞의 대화는 같은 모델이 밀려난 턴마다 적은 메모를 덧붙인 **요약 하나**(`ai.chat.summary.enabled`, 기본 켬; 마스킹·`maxChars` 상한, 넘으면 오래된 메모를 합침)로 접혀 세션 컨텍스트에 남는다 — 긴 대화도 앞부분 사실을 잃지 않으면서 프롬프트가 커지지 않음.
-  - 요약은 창 밖으로 새 메시지가 밀릴 때만 증분 갱신되고 `ai.chat.summarize`로 감사됨.
-  - 답마다 아래에 그 턴의 토큰("입력 · 출력 · 캐시 %", 툴팁에 모델 호출 수·모델)이 보이며, 메시지에 저장돼(`messages.usage`, 그 턴 `ai.chat.complete`와 같은 값) 새로고침 뒤에도 남음.
-  - 그 줄(토큰·Copy)은 답이 나오는 동안 닫혀 있다가 끝나거나 멈추면 열리고 서서히 나타남(운영체제의 움직임 줄이기면 바로).
-  - 멈춘 답은 그때까지의 글이 "멈춤 · 사용량을 표시할 수 없음" 표시와 함께 저장됨(session-service가 표식 `{"stopped": true}`만 받음).
-  - 대화는 맨 아래에 있을 때만 새 글을 따라가고, 위로 올리면 멈춘 채 "맨 아래로" 버튼이 뜸. 답의 표는 가로·세로 선, 답 옆엔 Kubeast 아이콘
-- **다중 라운드 Tool Calling** — AI가 화이트리스트 툴로 K8s를 조회·변경(최대 10라운드).
-  읽기/쓰기/관리 툴은 **사용자 권한(JWT)에 따라 게이팅**. 읽기 도구 13종에는 이름 조각·레이블로 여러 종류·네임스페이스를 한 번에 찾는 `k8s_find_resource`, API 스키마를 묻는 `k8s_explain`, 죽은 컨테이너의 직전 로그(`previous`)·기간·전체 컨테이너·텍스트 필터가 있는 Pod 로그, 객체·종류·`type=Warning`으로 좁히는 이벤트가 들어 있다.
-  없는 이름·없는 종류·없는 기능(metrics-server 등)은 kubectl 오류 대신 **`not_found`(비슷한 이름 목록 포함)·`unknown_kind`·`unavailable` 결과**로 돌아와, AI가 네임스페이스를 바꿔 가며 되묻지 않고 한 번 찾아본 뒤 어디를 봤는지 말하고 질문한다. 비슷한 이름은 그 사람의 네임스페이스 범위 안에서만 찾는다.
-  - Kubeast 기능을 쓰는 도구 — `issues`(이슈 점검: 파드·워크로드·노드·PVC·경고 이벤트 한 번에), `prometheus_query`(PromQL 즉시·범위, 절대 시각 범위도 — `chart=true`·제목·단위를 주면 그 결과가 **답 아래 그래프**로: AI 채팅·플로팅 같은 그래프, 시리즈 최대 10, "크게 보기", 저장된 답에도 남음) · `prometheus_metrics`·`prometheus_labels`(지표 이름·타입·설명, 레이블 이름·값 찾기 — 질의 전에) · `prometheus_rules`(알림·기록 규칙과 지금 울리는 알림 — 알림 조사 때 먼저) · `prometheus_targets`(수집 대상 up/down — 지표가 빌 때; 여러 클러스터가 쓰는 저장소나 targets API가 없으면 `up` 지표로) · `alerts_list`(알림 저장소의 이 클러스터 알림 — 울림·무음·억제, 그 알림을 덮은 무음), `logsearch`(로그 저장소 검색, 사라진 파드도) · `loki_query`(LogQL — 줄, 또는 `count_over_time`·`rate` 같은 메트릭 쿼리로 시간대별 에러 수 시리즈, 그래프로도) · `loki_labels`(로그 레이블 이름·값) · `loki_patterns`(로그 패턴 — 에러 유형별 줄 수) · `traces_search`·`traces_get`·`traces_tags`·`traces_metrics`·`traces_compare`(트레이스 저장소에 TraceQL — 느리거나 실패한 요청, 한 트레이스의 스팬, 속성 찾기, 요청 수·오류율·p95 추이 그래프, 빠른·느린 표본), `helm_read`(릴리스 목록·values·manifest·이력·리소스·이미지·리비전·두 리비전 diff, **읽기만**), `policy_reports`(PolicyReport 요약·결과), `cost`(OpenCost 배분)·`optimization`(requests 대비 사용량·권고), `can_i`(그 사용자가 할 수 있는지), `resource_graph`(네임스페이스 객체와 연결), `hygiene`(위생 보고, Admin) — 는 kubectl이 아니라 k8s-service API를 **그 사람 토큰으로** 부르므로 권한·감사·마스킹이 화면과 같다.
-  - 그 클러스터에 기능이 없거나(Prometheus 미설정, 로그·트레이스·알림 저장소 없음, 비용·정책 보고 꺼짐) 그 사람에게 k8s-service가 묻는 권한(`admin.hygiene.read`·`resource.helm.read`·`resource.policyreport.read`·`resource.cost.read`)이 없으면 도구 목록에서 빠진다(`/api/v1/features`, 1분 캐시).
-  - 결과는 시리즈 100·점 120·로그 200줄·행 200·그래프 노드 200/엣지 400·텍스트 64 KB에서 자른다.
-  - 기간 결과(`prometheus_query`·`loki_query` 지표 질의)가 모델이 한 번에 읽는 길이(6,000자)를 넘으면 잘라 주지 않고 값이 큰 시리즈 10개의 최저·최고·평균·마지막 값과 12점 개요로 줄여 준다(그래프로 그린 결과도 같은 요약).
-  - `gitops_status`는 Argo CD Application CR를 그 사람 권한으로 읽어 sync·health·마지막 operation·오류 조건·OutOfSync 리소스를 앱별로 정리한다(Argo CD가 없는 클러스터면 unavailable — 중앙 Argo CD면 관리 클러스터에서).
-  - Admin 전용 `audit_search`는 auth-service의 감사 로그 API(`admin.audit.read`, 읽기 자체도 감사됨)를, `nodes_stats_summary`·`nodes_log`는 kubelet의 stats summary와 로그 질의를 API 서버 프록시로(`admin.nodes.read` + 클러스터 RBAC `nodes/proxy`; 로그 질의는 kubelet `enableSystemLogQuery`가 켜져 있어야 하고, 꺼져 있으면 unavailable로 답한다) 읽는다.
-  - 큰 목록은 `k8s_jq_query`(`kubectl get -o json`을 jq로 걸러 필요한 필드만, 환경·파일 접근 없음·5초 상한)·`k8s_tabular_query`(고른 열만 표)·`k8s_count`(개수·그룹별 개수)로 줄여 받고, 쓰기 전엔 `k8s_diff`(서버 dry-run 결과를 라이브 객체와 비교한 diff — **적용 없음**, 쓰기 권한 사용자에게만 보임)로 바뀔 내용을 먼저 보인다.
-- **플로팅 AI 위젯(AI Chat)** — 모든 페이지에 떠 있는 위젯이 **현재 화면 컨텍스트(보고 있는 리소스)**
-  - 를 이해하고 답변 (read-only 툴로 제한).
-  - 첫 글자 전엔 대기 점, 끝난 답 옆엔 작은 복사 아이콘(토큰 줄은 없음), 넓은 표는 상자 안에서 스크롤되고 머리 줄 고정. 모달 위에도 떠서 열린 창을 보며 물을 수 있고, 오른쪽 상세 드로어가 열리면 드로어 왼쪽으로 비켜남(1348px 이상 화면).
-  - 위젯 안에서 누른 Esc는 위젯만 닫음.
-  - 목록 화면은 비어 있어도 "0개"를 넘김(불러오는 중엔 안 넘김).
-  - 정보를 보여 주는 창(대시보드 목록·문제·최적화·스토리지, 클러스터 뷰 파드, Helm 리비전·테스트·업그레이드 미리보기, 알림 조사 보고서)은 그 내용을, 생성·확인 창은 "무슨 작업 + 대상"만 넘김. 관리자 메뉴(클러스터 정리·알림 조사는 예외)와 내 계정 화면은 아무것도 안 넘김. 대화는 브라우저 탭마다 하나(새로고침하면 이어짐) — 입력칸 왼쪽 "+"로 새 대화(이전 대화는 AI Chat 목록에 남음), 로그아웃하면 비워짐
-- **리소스 최적화 제안** — 네임스페이스 관측값(requests/limits·사용량) 표 + AI 제안 스트리밍 + 행마다 **재시작 없이 적용**(Pod `resize` 하위 리소스, Kubernetes 1.35+, `features.inPlaceResize`); Pod 드로어의 컨테이너 카드에서도 값을 직접 넣어 같은 방식으로 조정
-- **비용(OpenCost)** — 클러스터 안의 OpenCost를 Prometheus처럼 찾아(이름에 `opencost`가 든 9003 Service, API 서버 프록시) Namespace별·워크로드별 비용 표(Cost 메뉴)와 최적화 표의 **월 비용·월 절약** 열을 보여 줌(`features.cost`). 권한 `resource.cost.read`, Namespace 범위 부여는 그 Namespace만
-- **정책 보고서(Policy Reports)** — Kyverno·Trivy Operator 등이 쓰는 `wgpolicyk8s.io` PolicyReport/ClusterPolicyReport를 읽어 Security → Policy Reports에 정책별·Namespace별 pass/fail/warn/error/skip과 결과 행을, 워크로드·Pod 드로어에 "Policy violations" 절을 보여 줌(`features.policyReports`, CRD 없으면 "설치되어 있지 않습니다"). 권한 `resource.policyreport.read`, Namespace 범위 부여는 그 Namespace만
-- **AI 에이전트 연결(MCP 서버)** — Claude Code·Cursor가 kubeconfig 대신 API 키로 연결해 같은 읽기 도구를
-  **그 사람 권한으로만**, 마스킹·감사를 거쳐 사용(기본 꺼짐). 운영자가 켜면(`mcp.writeTools`) 상한이 Write인 키에 쓰기 도구와
-  접근 요청 도구도 — 승인 카드 없이 그 사람 권한(영구·임시) 그대로, Argo CD 가드·감사 동일
-- **모델 설정** — `ModelConfig` CRD + DB로 관리, Admin UI에서 추가/테스트. 등급(`tier`, CRD `spec.tier`)이 `economy`인 설정을 켜 두면 채팅 이력 요약과 플로팅 어시스턴트가 그 (보통 더 싼) 모델을 쓰고 채팅은 기본 모델 그대로 — 스트림의 `model_info.tier`로 어느 쪽인지 보임. economy 설정이 없거나 키가 없어 못 쓰면 둘 다 기본 모델
+- **Multiple LLM support** — OpenAI · Anthropic · Gemini · Ollama, etc. (unified through an OpenAI-compatible adapter; Anthropic through the Messages API)
+- **Streaming chat** — SSE-based real-time responses, sessions/history kept. The model gets the most recent `ai.chat.historyMessages` (default 10) user/assistant messages as is, and the conversation before them is folded into **one summary** (`ai.chat.summary.enabled`, on by default; masked, capped at `maxChars`, older notes merged when the cap is exceeded) to which the same model adds a note for each turn pushed out, kept in the session context — long conversations do not lose early facts and the prompt does not grow.
+  - The summary is updated incrementally only when new messages are pushed out of the window, and is audited as `ai.chat.summarize`.
+  - Below each answer, the turn's tokens ("In · out · % cached", with the number of model calls and the model in the tooltip) are shown, and they are stored with the message (`messages.usage`, the same values as that turn's `ai.chat.complete`) so they remain after a refresh.
+  - That row (tokens · Copy) stays closed while the answer is coming in, and opens and fades in when the answer ends or is stopped (immediately with the operating system's reduce-motion setting).
+  - A stopped answer is saved with the text so far and a "Stopped · usage not available" marker (session-service accepts only the marker `{"stopped": true}`).
+  - The conversation follows new text only while you are at the bottom; when you scroll up it stays put and a "Jump to latest" button appears. Tables in answers have horizontal and vertical lines, and answers have the Kubeast icon next to them
+- **Multi-round Tool Calling** — the AI views and changes K8s with allowlisted tools (up to 10 rounds). Read/write/admin tools are **gated by the user's permissions (JWT)**. The 13 read tools include `k8s_find_resource`, which finds multiple kinds and namespaces at once by name fragment or label, `k8s_explain`, which asks for the API schema, Pod logs with the previous log of a dead container (`previous`), a time range, all containers and a text filter, and events narrowed by object, kind or `type=Warning`. A missing name, missing kind or missing capability (metrics-server, etc.) comes back as a **`not_found` (with a list of similar names), `unknown_kind` or `unavailable` result** instead of a kubectl error, so the AI looks once instead of asking back while switching namespaces, then says where it looked and asks. Similar names are searched only within that person's namespace scope.
+  - Tools that use Kubeast features — `issues` (issue check: pods, workloads, nodes, PVCs and warning events at once), `prometheus_query` (PromQL instant and range, absolute time ranges too — given `chart=true`, a title and a unit, the result becomes a **graph below the answer**: the same graph in AI Chat and floating, up to 10 series, "View larger", kept in saved answers) · `prometheus_metrics`·`prometheus_labels` (find metric names, types and descriptions, label names and values — before querying) · `prometheus_rules` (alerting and recording rules and the alerts firing now — first when investigating an alert) · `prometheus_targets` (scrape targets up/down — when a metric is empty; via the `up` metric if the store is shared by multiple clusters or has no targets API) · `alerts_list` (this cluster's alerts in the alert store — firing, silenced, inhibited, and the silences covering them), `logsearch` (log store search, also for pods that are gone) · `loki_query` (LogQL — lines, or metric queries such as `count_over_time`·`rate` for a series of error counts over time, also as a graph) · `loki_labels` (log label names and values) · `loki_patterns` (log patterns — line count per error type) · `traces_search`·`traces_get`·`traces_tags`·`traces_metrics`·`traces_compare` (TraceQL on the trace store — slow or failed requests, the spans of one trace, finding attributes, graphs of request count, error rate and p95 trends, fast and slow samples), `helm_read` (release list, values, manifest, history, resources, images, revisions, diff of two revisions, **read only**), `policy_reports` (PolicyReport summary and results), `cost` (OpenCost allocation)·`optimization` (usage against requests, recommendations), `can_i` (whether that user can do something), `resource_graph` (namespace objects and their connections), `hygiene` (hygiene report, Admin) — call the k8s-service API **with that person's token** rather than kubectl, so permissions, audit and masking are the same as in the UI.
+  - If the cluster does not have the feature (Prometheus not set up, no log, trace or alert store, cost or policy reports off), or the person lacks the permission k8s-service checks (`admin.hygiene.read`·`resource.helm.read`·`resource.policyreport.read`·`resource.cost.read`), the tool is left out of the tool list (`/api/v1/features`, 1-minute cache).
+  - Results are cut at 100 series, 120 points, 200 log lines, 200 rows, 200 graph nodes/400 edges and 64 KB of text.
+  - When a range result (`prometheus_query`·`loki_query` metric queries) is longer than what the model reads at once (6,000 characters), it is not cut but reduced to the min, max, average and last value plus a 12-point overview of the 10 series with the largest values (results drawn as graphs get the same summary).
+  - `gitops_status` reads Argo CD Application CRs with that person's permissions and summarizes sync, health, the last operation, error conditions and OutOfSync resources per app (unavailable on a cluster without Argo CD — with a central Argo CD, ask on the management cluster).
+  - The Admin-only `audit_search` reads auth-service's audit log API (`admin.audit.read`; the read itself is audited), and `nodes_stats_summary`·`nodes_log` read the kubelet's stats summary and log query through the API server proxy (`admin.nodes.read` + cluster RBAC `nodes/proxy`; log queries need kubelet `enableSystemLogQuery` on, and answer unavailable when it is off).
+  - Large lists are reduced with `k8s_jq_query` (filters `kubectl get -o json` with jq down to the needed fields, no environment or file access, 5-second cap), `k8s_tabular_query` (a table of chosen columns only) and `k8s_count` (counts, counts per group), and before a write, `k8s_diff` (a diff of the server dry-run result against the live object — **nothing is applied**, shown only to users with write permission) shows what will change first.
+- **Floating AI widget (AI Chat)** — a widget floating on every page understands the **current screen context (the resource you are looking at)**
+  - and answers (limited to read-only tools).
+  - Waiting dots before the first character, a small copy icon next to a finished answer (no token row), wide tables scroll inside a box with a fixed header row. It also floats above modals so you can ask while looking at an open dialog, and moves to the left of the right-hand detail drawer when that opens (screens 1348px and wider).
+  - Esc pressed inside the widget closes only the widget.
+  - List screens pass "0 items" even when empty (not while loading).
+  - Dialogs that show information (dashboard lists · issues · optimization · storage, Cluster View pods, Helm revisions · tests · upgrade preview, alert investigation report) pass their contents; create and confirm dialogs pass only "which action + target". Admin menus (except Cluster Hygiene and Investigations) and the My account screen pass nothing. One conversation per browser tab (it continues after a refresh) — "+" to the left of the input starts a new conversation (previous conversations stay in the AI Chat list), and it is cleared on logout
+- **Resource optimization suggestions** — a table of namespace observations (requests/limits · usage) + streamed AI suggestions + per-row **apply without restart** (Pod `resize` subresource, Kubernetes 1.35+, `features.inPlaceResize`); values can also be entered directly in the container card of the Pod drawer and adjusted the same way
+- **Cost (OpenCost)** — finds OpenCost in the cluster the same way as Prometheus (a 9003 Service with `opencost` in its name, API server proxy) and shows cost tables by Namespace and by workload (Cost menu) and the **monthly cost · monthly savings** columns of the optimization table (`features.cost`). Permission `resource.cost.read`; a Namespace-scoped grant covers only those Namespaces
+- **Policy Reports** — reads the `wgpolicyk8s.io` PolicyReport/ClusterPolicyReport written by Kyverno, Trivy Operator, etc., and shows pass/fail/warn/error/skip per policy and per Namespace with result rows in Security → Policy Reports, and a "Policy violations" section in workload and Pod drawers (`features.policyReports`; without the CRD, "is not installed on this cluster"). Permission `resource.policyreport.read`; a Namespace-scoped grant covers only those Namespaces
+- **AI agent connection (MCP server)** — Claude Code and Cursor connect with an API key instead of a kubeconfig and use the same read tools **only with that person's permissions**, through masking and audit (off by default). When the operator turns it on (`mcp.writeTools`), keys whose ceiling is Write also get write tools and access request tools — without approval cards, with that person's permissions (permanent or temporary) as they are, with the same Argo CD guard and audit
+- **Model settings** — managed with the `ModelConfig` CRD + DB, added and tested in the Admin UI. When a setting whose tier (`tier`, CRD `spec.tier`) is `economy` is enabled, the chat history summary and the floating assistant use that (usually cheaper) model while chat keeps the default model — `model_info.tier` in the stream shows which one. If there is no economy setting, or it cannot be used because it has no key, both use the default model
 
-## 🌐 멀티클러스터 & RBAC
+## 🌐 Multi-cluster & RBAC
 
-- **클러스터 레지스트리** — in-cluster(self) + 외부 클러스터(kubeconfig) 등록/검증/헬스체크
-- **클러스터별 RBAC** — 사용자×클러스터마다 역할 부여, **deny-by-default**
-  (권한 없는 클러스터는 목록에도 안 보임)
-- **부하/장애 격리** — 클러스터별 클라이언트 풀(LRU) · 서킷 브레이커 · 헬스체크 ·
-  rate limit · Prometheus 쿼리 캐시
-- **클러스터 스위처** — UI 상단에서 전환, 탭별 독립(URL 쿼리 기반)
-- **커스텀 역할** — 리소스 단위 권한(`resource.*.read/create/edit/delete`),
-  메뉴 가시성(`menu.*`), AI 툴(`ai.tool.*`)
+- **Cluster registry** — register/validate/health-check in-cluster (self) + external clusters (kubeconfig)
+- **Per-cluster RBAC** — roles granted per user × cluster, **deny-by-default** (clusters without permission do not even appear in the list)
+- **Load/failure isolation** — per-cluster client pool (LRU) · circuit breaker · health checks · rate limit · Prometheus query cache
+- **Cluster switcher** — switch at the top of the UI, independent per tab (URL query based)
+- **Custom roles** — resource-level permissions (`resource.*.read/create/edit/delete`), menu visibility (`menu.*`), AI tools (`ai.tool.*`)
 
-### 역할과 권한 — 기본 역할이 무엇을 할 수 있고, 클러스터에는 누구로 가나
+### Roles and permissions — what the built-in roles can do, and who they act as in the cluster
 
-| Kubeast 역할 | 어디에 주나 | 앱 권한 | 클러스터 안 신원(impersonation 그룹) |
+| Kubeast role | Granted where | App permissions | In-cluster identity (impersonation group) |
 | --- | --- | --- | --- |
-| **Pending** | 가입·SSO 직후 기본값 | 없음 — 로그인만 되고 API는 403 | — |
-| **Member** | 계정 등급 | 전역 권한 없음, **클러스터별 부여로만** 접근 | `kubeast:authenticated`(권한 없음) |
-| **Read** | 클러스터별 | 메뉴 10 · 모든 리소스 읽기(`resource.*.read`, 비용 `resource.cost.read` 포함) · Helm 읽기(권한 키는 있지만 Release 기록이 Secret이라 클러스터가 거부 — 오른쪽) · 컨테이너 안 로그 파일 읽기(`resource.pod.logfile`, 기능을 켰을 때) · AI 채팅의 읽기 도구 39종(`ai.tool.<읽기 도구>`)과 MCP 연결(`ai.mcp.use`) — 쓰기 도구는 없음 | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view`는 Secret과 `services/proxy`를 제외하므로 Secret과 Helm 릴리스(Secret에 저장)는 클러스터가 거부하고 화면은 권한 안내를 띄운다. API 서버 프록시로 읽는 Prometheus·OpenCost(최적화 사용량·스토리지 분석·비용·드로어 메트릭)는 차트 값 `auth.impersonation.viewerProxyServices`에 적은 Service만 **GET으로** 열린다 — 그 Namespace의 Role, 이름은 정확히 `<service>:<port>`, 다른 Service·POST·NS 범위 부여는 계속 거부([설정](configuration.md)의 values 주석). 적지 않으면 거부(프록시는 `kubeast:operator`=`edit`부터) |
-| **Write** | 클러스터별 | `menu.*` · 리소스 생성/수정/삭제 · CronJob suspend/trigger · Secret 값 보기 · 로그 파일 읽기 · Helm rollback/upgrade/test · AI 툴 전부(`ai.tool.*`, 쓰기 도구 포함) · MCP 연결 | `kubeast:operator` = `edit` + viewer |
-| **Admin** | 계정 등급(`*`) 또는 클러스터별 | 전부 — 관리자 메뉴, 모든 클러스터(나중에 등록한 것 포함) | `kubeast:admin` = `cluster-admin` |
-| 커스텀 | 클러스터별 | 고른 권한만(만드는 사람이 가진 권한 안에서) | `kubeast:role:<이름>` — 클러스터가 이 그룹을 바인딩하기 전엔 모든 호출이 403(`auth.impersonation.customRoles`). 화면의 권한 없음 배너와 역할 만들기 창이 이 그룹 이름을 보여 준다 |
+| **Pending** | Default right after sign-up/SSO | None — can log in, but the API returns 403 | — |
+| **Member** | Account level | No global permissions, access **only through per-cluster grants** | `kubeast:authenticated` (no permissions) |
+| **Read** | Per cluster | 10 menus · read all resources (`resource.*.read`, including cost `resource.cost.read`) · Helm read (the permission key exists, but Release records are Secrets so the cluster refuses — see the right column) · read log files inside containers (`resource.pod.logfile`, when the feature is on) · the 39 read tools of AI chat (`ai.tool.<read tool>`) and MCP connection (`ai.mcp.use`) — no write tools | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view` excludes Secrets and `services/proxy`, so the cluster refuses Secrets and Helm releases (stored in Secrets) and the UI shows a permission notice. Prometheus and OpenCost read through the API server proxy (optimization usage, storage analysis, cost, drawer metrics) are opened **for GET** only for the Services listed in the chart value `auth.impersonation.viewerProxyServices` — a Role in that Namespace, name exactly `<service>:<port>`; other Services, POST and NS-scoped grants are still refused (values comments in [Configuration](configuration.md)). If not listed, refused (the proxy starts at `kubeast:operator`=`edit`) |
+| **Write** | Per cluster | `menu.*` · create/edit/delete resources · CronJob suspend/trigger · view Secret values · read log files · Helm rollback/upgrade/test · all AI tools (`ai.tool.*`, including write tools) · MCP connection | `kubeast:operator` = `edit` + viewer |
+| **Admin** | Account level (`*`) or per cluster | Everything — admin menus, all clusters (including ones registered later) | `kubeast:admin` = `cluster-admin` |
+| Custom | Per cluster | Only the chosen permissions (within the permissions the creator has) | `kubeast:role:<name>` — every call is 403 until the cluster binds this group (`auth.impersonation.customRoles`). The no-permission banner in the UI and the role creation dialog show this group name |
 
-- **Admin만 되는 것**: Pod exec · Node shell · cordon/drain · 워크로드 rollback · Helm uninstall. `resource.pod.exec`·`resource.node.cordon/drain/shell`·`resource.workload.rollback`·`resource.helm.uninstall`은 Write에 없고, 필요하면 커스텀 역할에 넣는다.
-  - 클러스터 쪽에서 보면 Write 그룹(`kubeast:operator`)은 기본 `edit` ClusterRole에 `pods/exec`가 들어 있어 원래 모든 네임스페이스에서 exec가 된다 — Pod exec를 Admin 전용으로 만드는 것은 Kubeast의 앱 권한이다. 그래서 Kubeast의 impersonation 자격(`kubeast-impersonator`)은 그 그룹들 전체 권한과 같은 무게로 지켜야 한다.
-  - 로그 파일 보기(`features.logFiles`, 기본 off)는 Kubeast가 명령을 `ls`·`tail`로 고정하므로 Read·Write도 쓴다. 이를 위해 차트는 적어 둔 네임스페이스에만 Read 그룹(`kubeast:viewer`)에 `pods/exec`를 묶는다([컨테이너 안 로그 파일](operations.md#컨테이너-안-로그-파일-log-files)).
-- **쓰기 API는 전부** 핸들러에서 권한을 검사하고 감사 행 없이는 거부된다(fail-closed).
-  - **읽기 API**는 "그 클러스터에 역할이 있나"(클러스터 미들웨어, deny-by-default) + 클러스터의 RBAC(viewer 그룹)으로 막힌다.
-  - `menu.*`는 화면 메뉴만 가린다 — 사이드바 그룹마다 하나씩: Core(대시보드·Cluster View·Monitoring·Alerts·Cost·AI Chat·Resource Graph·Change History·Advanced Search — Alerts·Cost·AI Chat은 그 기능을 켰을 때)는 `menu.dashboard`, Cluster와 Custom Resources는 `menu.cluster`, Workloads·Storage·Network·Gateway·GPU·Security·Configuration·Helm은 같은 이름의 키, Admin은 관리자 여부. 기본 역할은 `menu.*`를 가지므로 커스텀 역할에서만 그룹이 빠진다.
-- **대시보드 개수**(네임스페이스·파드·노드 …)는 클러스터별 informer 캐시(`kubeast:cache` 신원)에서 세므로, 사용자 신원이 네임스페이스를 list 할 수 있는지(SelfSubjectAccessReview, 60초 캐시)를 먼저 묻고 안 되면 403을 돌려준다 — 그룹이 아직 바인딩되지 않은 커스텀 역할이나 네임스페이스 하나에만 묶인 사용자가 클러스터 전체 개수를 보지 않도록.
-- **YAML 생성·편집**은 문서마다 그 Kind의 `resource.<이름>.create`(편집은 대상의 `resource.<이름>.edit`)를 본다.
-  - 이름은 Kind 소문자, 단 HorizontalPodAutoscaler·VerticalPodAutoscaler·PodDisruptionBudget·PersistentVolume·PersistentVolumeClaim·CustomResourceDefinition은 `hpa`·`vpa`·`pdb`·`pv`·`pvc`·`crd`, 자기 이름이 없는 Kind(CR 등)는 `customresource`.
-  - Write 그룹의 `edit`는 클러스터 범위 객체(Namespace·ClusterRole·StorageClass 등)를 만들 수 없어 그건 클러스터가 거부한다 — 그래서 그 화면들(클러스터 범위 15종 + Role·RoleBinding)의 생성 버튼은 앱 권한에 더해 클러스터에 직접 묻는다(`GET /api/v1/cluster/can-i?verb=create&group=&resource=`, 사용자 신원의 SelfSubjectAccessReview = `kubectl auth can-i`).
-  - 클러스터가 안 된다고 하면 버튼이 없다.
-- **네임스페이스 범위 부여**: 클러스터별 역할을 네임스페이스 목록(최대 50)으로 한정할 수 있다 — 사용자 상세의 역할 옆 칸이나 클러스터 접근 창에서 적고(비우면 클러스터 전체), 부여 API는 `namespaces`로 받아 `/auth/me`(`cluster_namespaces`)와 토큰(`ns` 클레임)에 싣는다.
-  - 접근 요청도 목록을 가질 수 있고, 범위 부여를 가진 사람은 그 안에서만 요청한다(폼에 프리필·필수).
-  - 그런 부여는 Kubeast가 **그 네임스페이스 밖의 경로를 403으로 거르고**(클러스터에 묻기 전에, 쓰기는 감사 행), 네임스페이스 목록은 부여 목록 그대로, "전체 네임스페이스" 조회는 목록을 하나씩 모아 합치며, 대시보드 개수도 그 안에서만 센다(`scoped: true`, 노드·PV는 0).
-  - AI 도구와 MCP는 `namespace`를 꼭 받고 클러스터 전체 도구(overview·노드 메트릭·apply·create·API 목록·클러스터 설정)는 거부한다.
-  - 클러스터 쪽 신원은 `kubeast:role:<slug>` 그룹이라 **그 네임스페이스마다 RoleBinding을 묶기 전엔 클러스터가 거부한다** — 차트 `auth.impersonation.customRoles`에 `{name: Read, namespaces: [a, b], clusterRoles: [view]}`처럼 적으면 그 RoleBinding이 렌더된다(등록 클러스터마다 적용).
-  - 화면에선 네임스페이스 선택기가 부여된 것만 보여 주고, 권한 없음 안내에 "이 클러스터에서는 네임스페이스 a, b만"이 붙으며, 실시간 갱신도 네임스페이스별로 구독한다.
-  - Access Review 보고서·CSV에 `namespaces` 열이 있다.
-- **SSO 그룹 → 역할**: OIDC 공급자가 주는 그룹을 `auth.oidc.roleMapping`(`<그룹>=<Admin|Member|커스텀>`, 계정 등급)과 클러스터별 부여 — 그룹 이름 `<clusterGroupPrefix><클러스터>:<역할>` 또는 이름을 못 정하는 그룹(Google 그룹 이메일·Entra 그룹 ID)은 `auth.oidc.clusterGroupMapping`(`<그룹>=<클러스터>:<역할>`) — 으로 바꾸고, `syncRoles`면 로그인마다 다시 맞춘다.
-  - **Google 로그인은 ID 토큰에 그룹이 없으므로** `auth.oidc.googleGroups`를 켜면 로그인 때 Admin SDK Directory API로 그 사람의 Workspace 그룹을 읽어 매핑에 걸리는 것만 더한다(회사 그룹 전체를 감사 행에 남기지 않음).
-  - 서비스 계정엔 Workspace 관리자 역할 **Groups Reader**(도메인 전체 위임 없음 — 대신 요청에 `domain`이 붙는다), 자격은 Secret의 `credentials.json` 하나: 키 없는 Workload Identity Federation 설정 파일(`external_account`, 이 클러스터 토큰이면 `tokenAudience`) 또는 서비스 계정 키. 조회가 실패하면 지금 역할을 그대로 두고 로그인 감사 행에 `groups_lookup: failed`를 남긴다.
-  - 관리자는 `GET /api/v1/auth/admin/oidc/groups?email=`로 그 사람의 매핑 결과를 미리 본다(매핑된 그룹 이름 + 나머지 개수, 감사 `admin.oidc.groups.read`).
-  - 공급자별 설정 순서(Keycloak·Google·Entra ID·Okta)·첫 관리자·로그인 실패 코드는 [docs/oidc.md](oidc.md).
-- `auth.impersonation.enabled=false`는 데모용이다: k8s-service가 `cluster-admin`, tool-server가 `*`로 돌고 읽기 API는 클러스터 부여만으로 열린다.
-- **목록이 비었을 때 화면이 하는 말**: 권한이 없으면(403) "볼 권한이 없습니다"(위쪽 배너 + 표), 서버 오류·응답 없음이면 "불러오지 못했습니다(서버 오류 503)" + 다시 시도, 클러스터에 그 CRD가 없으면(Gateway API·VPA) "설치되어 있지 않습니다"(k8s-service가 discovery로 보고 빈 목록에 `X-Kubeast-Not-Installed` 헤더 — 역할과 무관하게 같은 답, 생성 버튼 없음). 그 밖엔 "없습니다". 없는 주소는 404 화면.
-- 회귀 확인: `e2e/tests/rbac-matrix.spec.ts`(역할 × 동작 403/200 표) · `permission-ceiling.spec.ts`(남에게 자기 이상 못 줌) · `reader-ui-notices.spec.ts`(Read의 화면 안내) · `notices.spec.ts`(서버 오류·설치 안 됨·404·생성 버튼 can-i·권한 요청 안내).
+- **Admin only**: Pod exec · Node shell · cordon/drain · workload rollback · Helm uninstall. `resource.pod.exec`·`resource.node.cordon/drain/shell`·`resource.workload.rollback`·`resource.helm.uninstall` are not in Write; add them to a custom role if needed.
+  - From the cluster side, the Write group (`kubeast:operator`) can already exec in every namespace because the default `edit` ClusterRole includes `pods/exec` — what makes Pod exec Admin-only is Kubeast's app permission. So Kubeast's impersonation credential (`kubeast-impersonator`) must be guarded with the same weight as the full permissions of those groups.
+  - Log file viewing (`features.logFiles`, default off) is also available to Read and Write, because Kubeast fixes the commands to `ls` and `tail`. For this, the chart binds `pods/exec` to the Read group (`kubeast:viewer`) only in the namespaces you list ([Log files inside containers](operations.md#log-files-inside-containers)).
+- **Every write API** checks permissions in the handler and is refused without an audit row (fail-closed).
+  - **Read APIs** are blocked by "does the user have a role on that cluster" (cluster middleware, deny-by-default) + the cluster's RBAC (viewer group).
+  - `menu.*` only hides UI menus — one per sidebar group: Core (Dashboard · Cluster View · Monitoring · Alerts · Cost · AI Chat · Resource Graph · Change History · Advanced Search — Alerts, Cost and AI Chat when those features are on) is `menu.dashboard`, Cluster and Custom Resources are `menu.cluster`, Workloads · Storage · Network · Gateway · GPU · Security · Configuration · Helm are the key of the same name, and Admin is whether the user is an admin. The built-in roles have `menu.*`, so groups go missing only in custom roles.
+- **Dashboard counts** (namespaces · pods · nodes …) are counted from the per-cluster informer cache (`kubeast:cache` identity), so Kubeast first asks whether the user identity can list namespaces (SelfSubjectAccessReview, 60-second cache) and returns 403 if not — so that custom roles whose group is not yet bound, or users bound to a single namespace, do not see cluster-wide counts.
+- **YAML create and edit** check the Kind's `resource.<name>.create` for each document (edit checks the target's `resource.<name>.edit`).
+  - The name is the Kind in lowercase, except that HorizontalPodAutoscaler·VerticalPodAutoscaler·PodDisruptionBudget·PersistentVolume·PersistentVolumeClaim·CustomResourceDefinition are `hpa`·`vpa`·`pdb`·`pv`·`pvc`·`crd`, and Kinds without a name of their own (CRs, etc.) are `customresource`.
+  - The Write group's `edit` cannot create cluster-scoped objects (Namespace · ClusterRole · StorageClass, etc.), so the cluster refuses those — so on those screens (15 cluster-scoped kinds + Role · RoleBinding) the create button asks the cluster directly in addition to the app permission (`GET /api/v1/cluster/can-i?verb=create&group=&resource=`, a SelfSubjectAccessReview of the user identity = `kubectl auth can-i`).
+  - If the cluster says no, there is no button.
+- **Namespace-scoped grants**: a per-cluster role can be limited to a list of namespaces (up to 50) — entered in the field next to the role in the user details or in the cluster access dialog (empty means the whole cluster); the grant API takes it as `namespaces` and puts it in `/auth/me` (`cluster_namespaces`) and in the token (`ns` claim).
+  - Access requests can also have a list, and people with scoped grants can only request within it (prefilled and required in the form).
+  - For such grants, Kubeast **filters paths outside those namespaces with 403** (before asking the cluster; writes get an audit row), the namespace list is the grant list as is, an "all namespaces" query collects the list one by one and merges the results, and dashboard counts are counted only within it (`scoped: true`, nodes and PVs are 0).
+  - AI tools and MCP require `namespace` and refuse cluster-wide tools (overview · node metrics · apply · create · API list · cluster settings).
+  - The cluster-side identity is the `kubeast:role:<slug>` group, so **the cluster refuses until a RoleBinding is bound in each of those namespaces** — writing `{name: Read, namespaces: [a, b], clusterRoles: [view]}` in the chart's `auth.impersonation.customRoles` renders those RoleBindings (applied on each registered cluster).
+  - In the UI, the namespace selector shows only the granted ones, the no-permission notice adds "Your access to this cluster is limited to the namespaces a, b", and real-time updates subscribe per namespace.
+  - The Access Review report and CSV have a `namespaces` column.
+- **SSO group → role**: groups from the OIDC provider are converted with `auth.oidc.roleMapping` (`<group>=<Admin|Member|custom>`, account level) and per-cluster grants — group name `<clusterGroupPrefix><cluster>:<role>`, or, for groups whose name you cannot choose (Google group email · Entra group ID), `auth.oidc.clusterGroupMapping` (`<group>=<cluster>:<role>`) — and with `syncRoles` they are re-applied at every login.
+  - **Google login has no groups in the ID token**, so turning on `auth.oidc.googleGroups` reads the person's Workspace groups through the Admin SDK Directory API at login and adds only those that match a mapping (the company's full group list is not left in the audit row).
+  - The service account gets the Workspace admin role **Groups Reader** (no domain-wide delegation — instead `domain` is added to the request), and the credential is a single `credentials.json` in a Secret: a keyless Workload Identity Federation config file (`external_account`, `tokenAudience` for this cluster's token) or a service account key. If the lookup fails, the current roles are kept and `groups_lookup: failed` is left in the login audit row.
+  - Admins preview a person's mapping result with `GET /api/v1/auth/admin/oidc/groups?email=` (mapped group names + the count of the rest, audit `admin.oidc.groups.read`).
+  - Setup steps per provider (Keycloak · Google · Entra ID · Okta), the first admin and login failure codes are in [docs/oidc.md](oidc.md).
+- `auth.impersonation.enabled=false` is for demos: k8s-service runs as `cluster-admin`, tool-server as `*`, and read APIs open with the cluster grant alone.
+- **What the UI says when a list is empty**: without permission (403), "You do not have permission to view" (banner at the top + table); on a server error or no response, "Could not load (server error 503)" + Retry; if the cluster does not have that CRD (Gateway API · VPA), "is not installed on this cluster" (k8s-service checks via discovery and adds the `X-Kubeast-Not-Installed` header to the empty list — the same answer regardless of role, no create button). Otherwise "No items". An address that does not exist shows the 404 screen.
+- Regression checks: `e2e/tests/rbac-matrix.spec.ts` (role × action 403/200 table) · `permission-ceiling.spec.ts` (cannot grant others more than you have) · `reader-ui-notices.spec.ts` (UI notices for Read) · `notices.spec.ts` (server error · not installed · 404 · create button can-i · permission request notice).
 
-## ☸️ Kubernetes 리소스 관리
+## ☸️ Kubernetes resource management
 
-| 도메인 | 리소스 |
+| Domain | Resources |
 | --- | --- |
 | **Workloads** | Pod, Deployment, StatefulSet, DaemonSet, ReplicaSet, Job, CronJob, HPA, VPA, PDB |
-| **Network** | Service, Endpoint(1.33부터 폐기된 API — 객체 화면은 남기고, Service 상세·리소스 그래프·AI 서비스 점검은 EndpointSlice를 읽음), EndpointSlice, Ingress, IngressClass, NetworkPolicy |
-| **Gateway API** | Gateway, GatewayClass, HTTPRoute, GRPCRoute, ReferenceGrant, BackendTLSPolicy, Policies(모든 구현체의 정책 한 화면 — `gateway.networking.k8s.io/policy` 라벨 CRD 자동 탐색 + Envoy Gateway·Istio 내장 + `gatewayApi.policyKinds`) |
+| **Network** | Service, Endpoint (API deprecated since 1.33 — the object screens remain, while Service details, the resource graph and the AI service check read EndpointSlice), EndpointSlice, Ingress, IngressClass, NetworkPolicy |
+| **Gateway API** | Gateway, GatewayClass, HTTPRoute, GRPCRoute, ReferenceGrant, BackendTLSPolicy, Policies (policies of all implementations on one screen — automatic discovery of CRDs labeled `gateway.networking.k8s.io/policy` + built-in Envoy Gateway · Istio + `gatewayApi.policyKinds`) |
 | **Storage** | PV, PVC, StorageClass, VolumeAttachment |
 | **Configuration** | ConfigMap, Secret, ResourceQuota, LimitRange, PriorityClass, RuntimeClass, Lease |
-| **Security (RBAC)** | Role, ClusterRole, RoleBinding, ClusterRoleBinding, ServiceAccount · Policy Reports(`wgpolicyk8s.io` 보고서 모음, CRD 있을 때) |
-| **Cluster** | Node, Namespace, Webhook Configuration(Mutating/Validating), Admission Policy(Validating/Mutating — `admissionregistration.k8s.io/v1`, 읽기 전용, API가 없으면 "설치 안 됨"; `features.admissionPolicies.readOnly: true`면 공용 YAML 적용과 AI 쓰기 도구도 정책·바인딩 4종을 거부해 Git으로만 바꿈) |
-| **Custom Resources** | CRD 동적 탐색 및 인스턴스 편집 |
+| **Security (RBAC)** | Role, ClusterRole, RoleBinding, ClusterRoleBinding, ServiceAccount · Policy Reports (collection of `wgpolicyk8s.io` reports, when the CRD exists) |
+| **Cluster** | Node, Namespace, Webhook Configuration (Mutating/Validating), Admission Policy (Validating/Mutating — `admissionregistration.k8s.io/v1`, read-only, "not installed" if the API is missing; with `features.admissionPolicies.readOnly: true`, the shared YAML apply and AI write tools also refuse the 4 policy and binding kinds, so they change only through Git) |
+| **Custom Resources** | Dynamic CRD discovery and instance editing |
 
-- **YAML 편집** (Monaco), **Pod Exec / 로그** (xterm.js, WebSocket)
-- **실시간 갱신** — WebSocket 멀티플렉서로 리소스 변경 스트리밍
+- **YAML editing** (Monaco), **Pod Exec / logs** (xterm.js, WebSocket)
+- **Real-time updates** — resource changes streamed through a WebSocket multiplexer
 
-## ⎈ Helm 릴리스 관리
+## ⎈ Helm release management
 
-- 릴리스 목록 / 상세 / 히스토리 / values / 매니페스트 / 리소스 보기
-- **Rollback · Upgrade · Uninstall · Test** (모두 dry-run 미리보기 + 확인 후 실행)
+- View release list / details / history / values / manifest / resources
+- **Rollback · Upgrade · Uninstall · Test** (all with a dry-run preview, run after confirmation)
 
 ## 🎮 GPU & DRA (Dynamic Resource Allocation)
 
-- GPU 노드 / Pod / 사용률 대시보드, NVIDIA GPU 메트릭
-- DeviceClass, ResourceClaim, ResourceClaimTemplate, ResourceSlice 관리
+- GPU node / Pod / utilization dashboard, NVIDIA GPU metrics
+- DeviceClass, ResourceClaim, ResourceClaimTemplate, ResourceSlice management
 
-## 📊 관측성 (Observability)
+## 📊 Observability
 
-- **Topology View** — 클러스터 리소스 관계 시각화 (React Flow / dagre / elkjs)
-- **Dependency Graph** — 워크로드 간 의존성 그래프
-- **Monitoring** — Prometheus 시계열 차트, 이상 감지, 상관 분석, GPU 심층 메트릭 (대상 클러스터에 있어야 하는 Prometheus·지표는 [docs/cluster-requirements.md §3](cluster-requirements.md#3-prometheus))
-- **Node Shell** — 웹 기반 노드 터미널
-- **로그 파일** — 파일로 로그를 쓰는 앱의 컨테이너 안 로그를 허용 경로에서만 읽고 따라가기(고정 `tail`, 기본 off, [자세히](operations.md#컨테이너-안-로그-파일-log-files))
-- **로그 검색** — Loki에서 재시작·삭제된 파드까지 텍스트·기간으로 찾기, 클러스터 RBAC(`pods/log`)대로(기본 off, [자세히](operations.md#로그-검색-loki))
-- **Advanced Search** — 표현식 기반 전역 리소스 탐색
+- **Topology View** — visualization of cluster resource relationships (React Flow / dagre / elkjs)
+- **Dependency Graph** — dependency graph between workloads
+- **Monitoring** — Prometheus time-series charts, anomaly detection, correlation analysis, in-depth GPU metrics (the Prometheus and metrics the target cluster needs are in [docs/cluster-requirements.md §3](cluster-requirements.md#3-prometheus))
+- **Node Shell** — web-based node terminal
+- **Log files** — read and follow the in-container logs of apps that write logs to files, only from allowed paths (fixed `tail`, default off, [details](operations.md#log-files-inside-containers))
+- **Log search** — find logs in Loki by text and time range, even for restarted or deleted pods, following cluster RBAC (`pods/log`) (default off, [details](operations.md#log-search-loki))
+- **Advanced Search** — expression-based global resource search
 
-## 🔐 인증 · 감사
+## 🔐 Authentication · Audit
 
-- JWT 기반 자체 인증(JWKS) — 조직(Organization) / 팀(Team) / 사용자 계층
-- **API 키** — 스크립트·CI용 자격(Settings → API keys). 키는 짧은 액세스 토큰으로 교환해 쓰며 클러스터 범위·역할 상한·만료를 갖고, 발급자의 권한을 넘지 못함([API 키](security-audit.md#api-키-자동화))
-- **감사 로그** — 모든 쓰기 작업 + 민감 조회(Secret 열람, Node Shell, 컨테이너 로그 파일 열람, 로그 검색, Helm 변경 등)를
-  기록, 성공/실패 모두 추적
-- **클러스터 위생 점검** — Pod Security Standards·이미지 태그·리소스·Namespace 정책·RBAC·TLS 만료를 보는 사람 권한으로 읽어 한 장으로, CSV/JSON과 클러스터별 월간 서명(Admin → Cluster hygiene, [자세히](operations.md#클러스터-위생-점검-cluster-hygiene))
-- **AI 사용량** — 채팅 턴과 Optimization의 AI 설명마다 남는 `ai.chat.complete` 감사 행(제공자가 보낸 토큰 수를 턴 단위로 합산)을 사용자·모델·클러스터별로 집계(Admin → AI Usage).
-  - 한도는 없고 누가 얼마나 썼는지 본다; 제공자가 usage를 안 보낸 호출은 합계에서 빼고 건수로 표시. 입력 토큰 옆의 **캐시 적중**은 제공자가 캐시에서 서빙한 입력 토큰(Anthropic `cache_read_input_tokens`, OpenAI `prompt_tokens_details.cached_tokens`)과 그 비율, 입력 토큰 칸의 툴팁은 ai-service가 실제로 보낸 프롬프트 평균 크기(시스템·도구 정의·이력·메시지 JSON 문자 수, `prompt_chars`) — 제공자 집계와 무관하게 이력 창·요약·도구 설명 변경의 효과를 보는 지표. 같은 행 합계로 **채팅 토큰 예산**을 걸 수 있음(`ai.chat.budget.sessionTokens` 세션 누적·`ai.chat.budget.userDailyTokens` 사용자 UTC 하루 누적, 기본 0 = 끔): 넘으면 그 턴은 모델 호출 없이 거부되고 채팅에 안내가 뜨며 `ai.chat.budget_exceeded`로 감사됨(사용량 기준이 이 화면과 같음; Optimization AI 설명도 사용자 하루 예산을 넘으면 관측 표만 보이고 모델은 안 부름).
-  - 모델 공급자가 거절하면 채팅·플로팅·Optimization이 **종류별로** 화면 언어로 알림 — 크레딧·한도 소진(OpenAI `insufficient_quota`, Claude API `billing_error`·지출 한도, Gemini 402), 너무 잦음(429), 키·토큰 거부(401·403), 공급자 과부하·장애(5xx·529·시간 초과), 구독 사용량 한도(풀리는 시각과 함께) — 공급자 이름과 원문(마스킹)을 같이(`app/services/ai/model_errors.py`)
-- **i18n** — 한국어 · 영어. Kubernetes 리소스 종류(`StatefulSet`, `ConfigMap`, `Namespace` …)와 화면 이름(사이드바 항목·페이지 제목)은 두 언어 모두 영어로, 동사·설명·안내문만 번역합니다(예: "StatefulSet 생성", "전체 Namespace")
+- JWT-based built-in authentication (JWKS) — Organization / Team / User hierarchy
+- **API keys** — credentials for scripts and CI (Settings → API keys). A key is exchanged for a short access token, has a cluster scope, a role ceiling and an expiry, and cannot exceed the issuer's permissions ([API keys](security-audit.md#api-keys-automation))
+- **Audit log** — records every write operation + sensitive reads (viewing Secrets, Node Shell, viewing container log files, log search, Helm changes, etc.), tracking both success and failure
+- **Cluster hygiene check** — reads Pod Security Standards, image tags, resources, Namespace policies, RBAC and TLS expiry with the viewer's permissions into one sheet, with CSV/JSON and a monthly sign-off per cluster (Admin → Cluster hygiene, [details](operations.md#cluster-hygiene-check))
+- **AI usage** — aggregates by user, model and cluster the `ai.chat.complete` audit rows left for each chat turn and each Optimization AI explanation (the token counts the provider sent, summed per turn) (Admin → AI Usage).
+  - There are no limits; it shows who used how much; calls for which the provider sent no usage are left out of the totals and shown as a count. **Cached** next to input tokens is the input tokens the provider served from its cache (Anthropic `cache_read_input_tokens`, OpenAI `prompt_tokens_details.cached_tokens`) and their share, and the tooltip on the input token column is the average size of the prompts ai-service actually sent (JSON character count of system, tool definitions, history and messages, `prompt_chars`) — a metric for seeing the effect of changes to the history window, summary or tool descriptions, independent of provider accounting. **Chat token budgets** can be set on the same row totals (`ai.chat.budget.sessionTokens` per session cumulative · `ai.chat.budget.userDailyTokens` per user per UTC day cumulative, default 0 = off): when exceeded, that turn is refused without calling the model, a notice appears in the chat, and it is audited as `ai.chat.budget_exceeded` (the usage basis is the same as this screen; the Optimization AI explanation also shows only the observation table and does not call the model once the user's daily budget is exceeded).
+  - When the model provider refuses, chat, floating and Optimization report it **by type** in the UI language — credits or quota exhausted (OpenAI `insufficient_quota`, Claude API `billing_error` · spend limit, Gemini 402), too frequent (429), key or token rejected (401 · 403), provider overload or outage (5xx · 529 · timeout), subscription usage limit (with the time it resets) — together with the provider name and the original message (masked) (`app/services/ai/model_errors.py`)
+- **i18n** — Korean · English. Kubernetes resource kinds (`StatefulSet`, `ConfigMap`, `Namespace` …) and screen names (sidebar items · page titles) are in English in both languages; only verbs, descriptions and guidance text are translated (e.g. "StatefulSet 생성", "전체 Namespace")

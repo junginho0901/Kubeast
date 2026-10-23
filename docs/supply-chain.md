@@ -1,3 +1,5 @@
+**English** | [한국어](ko/supply-chain.md)
+
 # Supply chain: scan, SBOM, provenance, signature
 
 Every release (`v*` tag, `.github/workflows/release.yaml`) publishes the seven

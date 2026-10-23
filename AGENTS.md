@@ -10,7 +10,7 @@
 
 ## 감사 로그(Audit Log) 필수 규칙
 
-> 2026-04-15 발효. 근거: [docs/audit-log-plan.md §8](docs/audit-log-plan.md#8-개발-규칙-영속화)
+> 2026-04-15 발효. 근거: [docs/ko/audit-log-plan.md §8](docs/ko/audit-log-plan.md#8-개발-규칙-영속화)
 
 모든 **쓰기(write) 성격의 HTTP 핸들러**, 그리고 **민감 정보 열람
 (Secret reveal / Node shell / 세션 기록 열람 / 감사 로그 조회)** 은 반드시
@@ -63,7 +63,7 @@ _, _ = h.auditStore.Write(r.Context(), rec)
 - `ai.tool.execute`
 - `admin.audit.read`
 
-전체 카탈로그는 [docs/audit-log-plan.md §5-2](docs/audit-log-plan.md#5-2-카탈로그-초기-확정) 를 항상 기준으로 한다.
+전체 카탈로그는 [docs/ko/audit-log-plan.md §5-2](docs/ko/audit-log-plan.md#5-2-카탈로그-초기-확정) 를 항상 기준으로 한다.
 카탈로그에 없는 신규 action 을 추가할 때는 **계획서부터 갱신**한다.
 
 ### 예외 없는 원칙
@@ -101,7 +101,7 @@ _, _ = h.auditStore.Write(r.Context(), rec)
 | HTTP Endpoint | Permission | Audit Action |
 ```
 
-계획서 작성 시 [docs/helm-plan.md §8](docs/helm-plan.md#8-감사-로그-공용화-사전-작업) 를 참고한다.
+계획서 작성 시 [docs/ko/audit-log-plan.md §5-3](docs/ko/audit-log-plan.md#5-3-새-액션-추가-절차) 를 참고한다.
 
 ---
 

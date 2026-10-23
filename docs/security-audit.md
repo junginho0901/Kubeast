@@ -1,94 +1,89 @@
-# 보안·감사
+**English** | [한국어](ko/security-audit.md)
 
-## API 키 (자동화)
+# Security and audit
 
-사람 로그인 대신 스크립트·CI가 쓰는 긴 자격입니다. Settings → API keys에서 이름·만료(기본 30일, 상한은 차트
-`auth.apiKeys.maxDays`)·클러스터·역할 상한(기본 Read)을 정해 발급하면 값(`kbk_…`)이 한 번만 보입니다. 키는 그
-자체로 API를 부르지 않고 짧은 액세스 토큰으로 교환해 씁니다 — 토큰은 발급자가 그 순간 가진 권한을 키의 범위로
-잘라낸 것이라 발급자보다 많은 일을 할 수 없고, 키를 폐기하면(또는 만료되면) 다음 교환부터 거부되고 그 키로 이미
-받은 토큰도 서비스의 토큰 확인 주기(30초) 안에 거부됩니다(관리자는 사용자 상세에서 남의 키를 폐기할 수 있고, 발급은 본인만).
+## API keys (automation)
+
+A long-lived credential that scripts and CI use instead of a human sign-in. In Settings → API keys, set a name, an expiry (default 30 days, capped by the chart's `auth.apiKeys.maxDays`), clusters and a role ceiling (default Read) and issue the key; its value (`kbk_…`) is shown only once. The key does not call the API itself; it is exchanged for a short-lived access token — the token is the permissions the issuer holds at that moment, cut down to the key's scope, so it cannot do more than the issuer. Once the key is revoked (or expires), the next exchange is refused, and tokens already obtained with that key are refused within the services' token check interval (30 seconds) (an admin can revoke someone else's key from the user details; only the owner can issue one).
 
 ```bash
 TOKEN=$(curl -s -X POST https://console.example.com/api/v1/auth/token \
-  -H "Authorization: Bearer $KUBEAST_API_KEY" | jq -r .access_token)     # expires_in 초 뒤 다시 교환
+  -H "Authorization: Bearer $KUBEAST_API_KEY" | jq -r .access_token)     # exchange again after expires_in seconds
 curl -s "https://console.example.com/api/v1/cluster/overview?cluster=prod" \
   -H "Authorization: Bearer $TOKEN" -H "X-Cluster-Name: prod"
 ```
 
-`?cluster=`를 빼면 레지스트리 기본 클러스터(self 클러스터, 없으면 가장 먼저 등록한 것)로 가고 권한도 그 클러스터로 검사합니다. 어느 클러스터인지는 `GET /api/v1/cluster/current`(`{"id": "…"}`)로 확인합니다.
+Without `?cluster=`, the request goes to the registry's default cluster (the self cluster, or else the first one registered), and permissions are checked against that cluster. `GET /api/v1/cluster/current` (`{"id": "…"}`) tells which cluster it is.
 
-끄려면 `auth.apiKeys.enabled: false`(컴포즈는 `API_KEYS_ENABLED`). 발급·폐기·교환은 감사 로그에 남습니다.
+To turn it off, set `auth.apiKeys.enabled: false` (`API_KEYS_ENABLED` in compose). Issuing, revoking and exchanging keys are recorded in the audit log.
 
-## 접근 권한 검토 (Access review)
+## Access review
 
-"지금 누가 무엇을 할 수 있나"를 한 장으로 뽑아 주기적으로 검토하고 "검토했다"를 남기는 기능입니다(ISMS-P 2.5.6 접근권한 검토, NIST 800-53 AC-2(j)). 관리자 → Access review에 섹션 5개가 표로 뜹니다.
+Puts "who can do what right now" on one page so it can be reviewed periodically, and records "reviewed" (ISMS-P 2.5.6 access rights review, NIST 800-53 AC-2(j)). Admin → Access review shows five sections as tables.
 
-| 섹션 | 내용 | 플래그 |
+| Section | Contents | Flags |
 |---|---|---|
-| 사용자 | 이메일·팀·전역 역할·인증 출처·생성일·**마지막 로그인**(`auth_users.last_login_at`, 로그인 성공마다 기록·감사 로그로 백필)·클러스터 역할/API 키/임시 권한 개수 | `global_admin` · `never_logged_in` · `dormant`(마지막 로그인 또는 생성이 `dormantDays` 전) · `locked` |
-| 클러스터 역할 | 사용자별 클러스터·역할, 영구/요청 경유, 만료·복귀 역할 | `temporary` · `admin_role` |
-| API 키 | 소유자·이름·접두어·클러스터·역할 상한·생성·만료·마지막 사용 | `expired` · `expiring_30d` · `unused_30d` |
-| 임시 권한 이력 | 마지막 검토 이후의 권한 요청: 신청자·클러스터·역할·기간·사유·승인자·결정·종료 | — |
-| 역할 | 이름·시스템 여부·권한 목록·쓰는 사용자/바인딩 수 | `has_admin_permissions` · `unused` |
+| Users | email, team, global role, auth source, created date, **last login** (`auth_users.last_login_at`, recorded on every successful login, backfilled from the audit log), number of cluster roles/API keys/temporary grants | `global_admin` · `never_logged_in` · `dormant` (last login or creation `dormantDays` ago) · `locked` |
+| Cluster roles | cluster and role per user, permanent/via request, expiry and the role it reverts to | `temporary` · `admin_role` |
+| API keys | owner, name, prefix, cluster, role ceiling, created, expires, last used | `expired` · `expiring_30d` · `unused_30d` |
+| Temporary access history | access requests since the last review: requester, cluster, role, duration, reason, approver, decision, end | — |
+| Roles | name, system or not, permission list, number of users/bindings using it | `has_admin_permissions` · `unused` |
 
-- 탭마다 **CSV**(UTF-8 BOM, 수식 주입 방지) · 상단 카드에 전역 Admin·휴면·만료 임박 키·활성 임시 권한 수와 **마지막 검토·다음 기한**(`intervalDays` 뒤, 지나면 표시).
-- **검토 완료** 버튼이 메모와 함께 그 시점 보고서를 통째로 저장합니다(`access_reviews`, 보존 `retention.reviewDays` 기본 3년). 지난 검토는 목록에서 열어 보고 그때 CSV로 다시 내려받을 수 있습니다.
-- 권한 `admin.review.read` · `admin.review.export` · `admin.review.signoff`(시스템 Admin 역할에 포함), 감사 액션도 같은 이름. 쓰기는 서명뿐이고 권한 변경은 기존 화면에서 합니다.
-- 끄려면 `auth.accessReview.enabled: false`(메뉴·API가 사라짐). 비용: 페이지를 열 때 조회 7번, 서명 1건당 스냅샷 수십 KB.
+- **CSV** per tab (UTF-8 BOM, formula injection prevented) · cards at the top with the number of global Admins, dormant accounts, keys about to expire and active temporary grants, and the **last review and next due date** (`intervalDays` later, flagged when past).
+- The **Sign off** button saves the whole report as of that moment, with a note (`access_reviews`, kept for `retention.reviewDays`, default 3 years). Past reviews can be opened from the list and downloaded again as the CSV of that time.
+- Permissions `admin.review.read` · `admin.review.export` · `admin.review.signoff` (included in the system Admin role); the audit actions have the same names. The only write is the sign-off; access changes are made on the existing screens.
+- To turn it off, `auth.accessReview.enabled: false` (the menu and API go away). Cost: 7 queries when the page opens, a snapshot of tens of KB per sign-off.
 
-## 휴면 계정 자동 잠금 (Dormant accounts)
+## Dormant account auto-lock
 
-위 보고서가 휴면 계정을 **보여 주는** 것이라면, 이 기능은 사람이 안 봐도 **닫습니다**(ISMS-P 2.5.6 결함 사례 "6개월 이상 미접속 계정 활성", NIST 800-53 AC-2(3)). `auth.dormantAccounts.enabled: true`면 auth-service 안의 스위퍼가 `sweepHours`(24)마다 돌면서 `days`(90) 동안 **로그인도 API 키 교환도 없는 계정**(한 번도 안 쓴 계정은 생성일 기준)을 잠그고 그 계정의 세션을 회수합니다. 잠긴 계정은 비밀번호 로그인·SSO·API 키 교환이 모두 거부되고(응답은 일반 401, 사유는 감사 로그 `reason: dormant`), 관리자가 Admin → User Management에서 **잠금 해제**를 눌러야 다시 들어옵니다.
+Where the report above **shows** dormant accounts, this feature **closes** them without anyone looking (ISMS-P 2.5.6 deficiency example "accounts not accessed for 6 months or more still active", NIST 800-53 AC-2(3)). With `auth.dormantAccounts.enabled: true`, a sweeper inside auth-service runs every `sweepHours` (24), locks **accounts with no login and no API key exchange** for `days` (90) (an account never used counts from its creation date) and revokes that account's sessions. A locked account is refused password login, SSO and API key exchange alike (the response is a plain 401; the reason is `reason: dormant` in the audit log), and gets back in only after an admin presses **Unlock** in Admin → User Management.
 
-- `exemptAdmins: true`(기본)면 역할에 `*`나 `admin.*` 권한이 있는 계정은 잠그지 않습니다 — 마지막 관리자까지 잠기면 아무도 못 풀기 때문. 대신 접근 권한 검토 보고서에 `dormant`로 계속 보입니다.
-- Admin → User Management: 잠긴 계정에 "휴면 잠김"/"잠김" 배지와 **잠금 해제** 버튼, 상단에 **휴면 계정 지금 점검**(스위퍼를 즉시 1회 실행, `admin.users.update`). 감사 액션: `user.account.dormant_lock`(actor `system`) · `admin.dormant.sweep` · `admin.users.unlock`.
-- 끄면 스위퍼가 멈추고 새로 잠그지 않지만, 이미 잠긴 계정은 풀 때까지 그대로입니다. 접근 권한 검토의 `dormantDays`(표시 기준)와는 별개 값이라 "60일부터 표시, 90일에 잠금"처럼 벌릴 수 있습니다.
+- With `exemptAdmins: true` (default), accounts whose roles carry the `*` or `admin.*` permission are not locked — if the last admin were locked too, no one could unlock anyone. They keep showing as `dormant` in the access review report instead.
+- Admin → User Management: a "Dormant lock"/"Locked" badge and an **Unlock** button on locked accounts, and **Sweep dormant now** at the top (runs the sweeper once right away, `admin.users.update`). Audit actions: `user.account.dormant_lock` (actor `system`) · `admin.dormant.sweep` · `admin.users.unlock`.
+- Turning it off stops the sweeper so no new locks happen, but accounts already locked stay locked until unlocked. It is a separate value from the access review's `dormantDays` (the display threshold), so the two can be spread apart, e.g. "flag from 60 days, lock at 90".
 
-## 감사 싱크 (S3 · 웹훅 · 메일 · 파일)
+## Audit sinks (S3 · webhook · email · file)
 
-감사 로그의 1차 저장소는 DB이고, 싱크는 그 행을 **밖으로 복사**합니다. auth-service 한 replica가 싱크마다
-"어디까지 보냈는지"(커서)를 DB에 두고 배치로 보내므로, 싱크가 죽어도 요청은 막히지 않고 복구되면 이어서
-보냅니다(최소 1회 전달 — 레코드의 `id`로 중복 제거). 싱크가 없으면 지금과 똑같습니다.
+The audit log's primary store is the DB; sinks **copy** its rows **out**. One auth-service replica keeps "how far it has sent" (a cursor) per sink in the DB and sends in batches, so a dead sink does not block requests, and sending resumes once it recovers (at-least-once delivery — deduplicate by the record's `id`). Without sinks, nothing changes.
 
-| 종류 | 용도 | 비밀(Secret 키) |
+| Type | Use | Secrets (Secret keys) |
 |---|---|---|
-| `s3` | 장기 보관(S3·MinIO·GCS·R2). 시간 파티션 NDJSON gzip | `accessKeyId`·`secretAccessKey` — 없으면 IRSA(`serviceAccounts.authService.annotations`에 롤) |
-| `webhook` `json` | SIEM·n8n 등 범용(선택 HMAC 서명 `X-Kubeast-Signature`) | `url`, `hmacSecret` |
-| `webhook` `slack` · `teams` · `discord` | 채팅 알림 | `url` |
-| `webhook` `telegram` | 채팅 알림(`chatId`) | `botToken` |
-| `webhook` `pagerduty` | 온콜(Events v2, 이벤트당 1건) | `routingKey` |
-| `email` | 메일(SMTP, STARTTLS/TLS) | `username`·`password` |
-| `file` | PVC에 NDJSON(`/var/lib/kubeast-audit`, `audit.fileSinkVolume`) | — |
+| `s3` | long-term retention (S3, MinIO, GCS, R2). Time-partitioned NDJSON gzip | `accessKeyId`·`secretAccessKey` — without them, IRSA (role in `serviceAccounts.authService.annotations`) |
+| `webhook` `json` | general purpose, such as SIEM or n8n (optional HMAC signature `X-Kubeast-Signature`) | `url`, `hmacSecret` |
+| `webhook` `slack` · `teams` · `discord` | chat notifications | `url` |
+| `webhook` `telegram` | chat notifications (`chatId`) | `botToken` |
+| `webhook` `pagerduty` | on-call (Events v2, one per event) | `routingKey` |
+| `email` | email (SMTP, STARTTLS/TLS) | `username`·`password` |
+| `file` | NDJSON on a PVC (`/var/lib/kubeast-audit`, `audit.fileSinkVolume`) | — |
 
-`teams`·`discord`·`pagerduty`는 각 서비스의 공개 페이로드 형식을 따르지만 실제 서비스로는 아직 확인하지 않았습니다.
+`teams`, `discord` and `pagerduty` follow each service's published payload format but have not been tested against the real services yet.
 
 ```yaml
 audit:
   sinks:
-    - name: archive                      # 장기 보관, 전체 이력
+    - name: archive                      # long-term retention, full history
       type: s3
       s3: {bucket: kubeast-audit, prefix: audit/, region: ap-northeast-2}
-    - name: slack-danger                 # 위험한 행동만 Slack으로
+    - name: slack-danger                 # only risky actions to Slack
       type: webhook
       secret: kubeast-audit-slack        # kubectl create secret generic kubeast-audit-slack --from-literal=url=https://hooks.slack.com/...
       webhook: {format: slack}
       filter: {actions: ["k8s.*.delete", "k8s.pod.exec", "k8s.node.shell", "access.request.create", "admin.*"]}
 retention:
-  auditDays: 90                          # S3를 켰다면 DB는 화면·CSV에 필요한 기간만
+  auditDays: 90                          # with S3 on, keep in the DB only the period the screen and CSV need
 ```
 
-- **필터**: 권한 패턴과 같은 와일드카드(`k8s.*.delete`, `admin.*`)와 `results: [failure]`. 필터 없음 = 전부.
-- **시작점**: `s3`·`file`은 처음부터(기존 이력 전체), 나머지는 켠 시점부터(`startFrom`으로 바꿈).
-- **S3 Object Lock(WORM, ISMS-P 증적)**: 버킷을 Object Lock + 버전 관리로 만들고 **기본 보존**(compliance 또는 governance, 기간)을 겁니다. Kubeast는 객체마다 보존을 지정하지 않으며 IAM 권한은 `s3:PutObject` 하나면 됩니다. compliance 모드는 기간 동안 root도 못 지웁니다.
-- **보존**: `retention.auditDays`가 지나도 **아직 싱크로 안 보낸 행은 지우지 않습니다**. 멈춘 싱크는 알람 `KubeastAuditSinkStalled`(메트릭 `kubeast_audit_sink_pending`·`_failures_total`·`_last_success_timestamp_seconds`)로 드러납니다.
-- **네트워크**: 443은 열려 있습니다. SMTP(587/465)나 클러스터 안 엔드포인트는 `audit.sinkEgress`에 NetworkPolicy 규칙을 추가합니다.
+- **Filter**: the same wildcards as permission patterns (`k8s.*.delete`, `admin.*`) and `results: [failure]`. No filter = everything.
+- **Starting point**: `s3` and `file` start from the beginning (the whole existing history), the rest from when they are turned on (change with `startFrom`).
+- **S3 Object Lock (WORM, ISMS-P evidence)**: create the bucket with Object Lock + versioning and set a **default retention** (compliance or governance, a period). Kubeast does not set retention per object, and the only IAM permission needed is `s3:PutObject`. In compliance mode, not even root can delete during the period.
+- **Retention**: even past `retention.auditDays`, **rows not yet sent to a sink are not deleted**. A stalled sink shows up as the alert `KubeastAuditSinkStalled` (metrics `kubeast_audit_sink_pending` · `_failures_total` · `_last_success_timestamp_seconds`).
+- **Network**: 443 is open. For SMTP (587/465) or in-cluster endpoints, add NetworkPolicy rules to `audit.sinkEgress`.
 
-로컬 kind에는 `deploy/kind/devtools.yaml`(S3 대용 versitygw + Object Lock 버킷, Mailpit, 웹훅 수신기)이 `kind-deploy.sh`로
-함께 올라가고 dev 값이 싱크 3개를 그쪽으로 향합니다. 메일 수신함은 `kubectl -n kubeast-devtools port-forward svc/mailpit 8025`.
+On local kind, `kind-deploy.sh` also brings up `deploy/kind/devtools.yaml` (versitygw as an S3 stand-in + an Object Lock bucket, Mailpit, a webhook receiver), and the dev values point three sinks at it. Mail inbox: `kubectl -n kubeast-devtools port-forward svc/mailpit 8025`.
 
-## 감사 로그 무결성 (해시 체인 · S3 앵커)
+## Audit log integrity (hash chain · S3 anchor)
 
-감사 행을 나중에 고치거나 지웠는지 알 수 있게 합니다. auth-service가 `audit.integrity.sealSeconds`(기본 10초)마다 새 행을 앞 행의 해시를 포함한 sha256으로 묶고(`chain_seq`·`prev_hash`·`row_hash`), `audit.integrity.anchor.sink`에 S3 싱크 이름을 적으면 `anchor.hours`(기본 24)마다 체인 머리를 다이제스트 JSON으로 그 버킷의 `<prefix>digests/`에 씁니다. Admin → 감사 로그 상단 띠에서 봉인 위치와 마지막 앵커를 보고, **검증**(기본 = 마지막 앵커부터, 싱크 객체 대조 포함)과 **지금 앵커**를 누를 수 있습니다. 둘 다 감사 행(`admin.audit.verify`·`admin.audit.anchor`)으로 남고, 주기 앵커는 `audit.chain.anchor`(actor `system`)입니다.
+Makes it possible to tell whether audit rows were changed or deleted later. Every `audit.integrity.sealSeconds` (default 10 seconds), auth-service chains new rows with a sha256 that includes the previous row's hash (`chain_seq` · `prev_hash` · `row_hash`), and when `audit.integrity.anchor.sink` names an S3 sink, it writes the chain head as a digest JSON to `<prefix>digests/` in that bucket every `anchor.hours` (default 24). The bar at the top of Admin → Audit Logs shows the seal position and the last anchor, with **Verify** (default = from the last anchor, including a check against the sink objects) and **Anchor now** buttons. Both are recorded as audit rows (`admin.audit.verify` · `admin.audit.anchor`); the periodic anchor is `audit.chain.anchor` (actor `system`).
 
 ```yaml
 audit:
@@ -97,36 +92,34 @@ audit:
       type: s3
       s3: {bucket: kubeast-audit, prefix: audit/, region: ap-northeast-2}
   integrity:
-    enabled: true        # 기본값: 체인만(의존성 없음)
+    enabled: true        # default: chain only (no dependencies)
     sealSeconds: 10
     anchor:
-      sink: archive      # 위 s3 싱크의 이름. 비우면 앵커 없음
+      sink: archive      # name of the s3 sink above. Empty = no anchor
       hours: 24
 ```
 
-- **신뢰 근거는 버킷의 Object Lock**입니다. DB와 S3를 둘 다 고칠 수 있는 사람은 앵커도 다시 쓸 수 있으니, 다이제스트가 놓이는 버킷에 기본 보존을 거세요. 다이제스트에 서명은 없습니다.
-- **독립 검증**: Kubeast 없이 psql로 같은 식을 재계산할 수 있습니다(`services/auth-service-go/internal/auditchain`의 `CanonSQL`, [docs/audit-log-plan.md](audit-log-plan.md) §7).
-- **한계**: 봉인 전 창(≤ `sealSeconds`)에 지워진 행은 못 잡습니다. 껐다 켠 구간은 검증 결과에 앵커 없음으로 드러납니다. 보존(`retention.auditDays`)은 체인 접두만 지웁니다.
-- 메트릭 `kubeast_audit_chain_sealed_seq` · `kubeast_audit_chain_unsealed_rows` · `kubeast_audit_anchor_last_timestamp_seconds`.
+- **The trust anchor is the bucket's Object Lock.** Someone who can change both the DB and S3 can also rewrite the anchors, so set a default retention on the bucket that holds the digests. Digests are not signed.
+- **Independent verification**: the same formula can be recomputed with psql, without Kubeast (`CanonSQL` in `services/auth-service-go/internal/auditchain`, [docs/audit-log-plan.md](audit-log-plan.md) §7).
+- **Limits**: rows deleted in the window before sealing (≤ `sealSeconds`) are not caught. A period during which it was turned off and on again shows in the verification result as having no anchor. Retention (`retention.auditDays`) deletes only a prefix of the chain.
+- Metrics `kubeast_audit_chain_sealed_seq` · `kubeast_audit_chain_unsealed_rows` · `kubeast_audit_anchor_last_timestamp_seconds`.
 
-로컬 kind는 dev 값이 `dev-s3` 스탠드인에 앵커합니다(`e2e/tests/audit-integrity.spec.ts`).
+On local kind, the dev values anchor to the `dev-s3` stand-in (`e2e/tests/audit-integrity.spec.ts`).
 
-## 세션 기록 (exec · 노드 셸)
+## Session recording (exec · node shell)
 
-켜면(`sessionRecording.enabled`, 기본 off) Pod exec와 노드 셸 터미널에 **찍힌 출력**(사용자가 본 화면 — 친 명령은
-에코로 보이고, 에코되지 않는 비밀번호 입력은 안 남음)을 asciicast v2로 녹화합니다. 세션을 열면 터미널에
-"This session is recorded"(한국어 화면이면 "이 세션은 녹화됩니다") 한 줄이 먼저 찍히고 — 녹화에도 그 줄이 그대로 남습니다 — 감사 행(`k8s.pod.exec`·`k8s.node.shell`)에 `recording_id`가 붙습니다.
+When on (`sessionRecording.enabled`, default off), the **output printed** to Pod exec and node shell terminals (what the user saw — typed commands show through the echo, and password input that is not echoed is not kept) is recorded as asciicast v2. When a session opens, the terminal first prints one line, "This session is recorded" ("이 세션은 녹화됩니다" on a Korean screen) — the recording keeps that line too — and the audit row (`k8s.pod.exec` · `k8s.node.shell`) gets a `recording_id`.
 
-- **저장**: k8s-service가 로컬 볼륨에 쓰고 세션 중에도 `chunkSeconds`(기본 30초)마다 조각을 올립니다 — k8s-service 파드가 사라져도 잃는 건 마지막 조각 간격만큼. 저장소 = `s3`(운영 권장, 감사 S3 싱크와 같은 필드) · `database`(세션당 1 MiB, S3 없는 작은 설치) · `file`(PVC). S3 키는 파일로 마운트돼 k8s-service의 IRSA 신원을 건드리지 않습니다.
-- **끊긴 세션**: k8s-service 쪽 사정으로 끊긴 세션은 `interrupted`로 남습니다 — 정상 종료(롤아웃·드레인)와 컨테이너 재시작은 남은 출력까지 다 올리고, 파드가 통째로 사라지면 그 전에 올린 조각만 남습니다. 목록의 크기는 남은(올라간) 크기이고, 올라간 조각이 없으면 재생 버튼이 꺼집니다.
-- **터미널이 끊길 때**: 브라우저 탭을 닫거나 네트워크가 끊겨 터미널이 `exit` 없이 사라지면, k8s-service가 셸에 Ctrl-C·Ctrl-D를 보내 끝냅니다(컨테이너 런타임은 끊긴 exec의 프로세스를 정리하지 않음). 편집기처럼 이를 무시하는 프로그램이 앞에 떠 있으면 남을 수 있습니다.
-- **실패**: 녹화를 시작하지 못하면(로컬 볼륨에 못 씀) 세션을 거부합니다(`required: true`). 저장소 업로드가 실패하거나 조각 하나가 30초 안에 끝나지 않아도 세션은 계속되고, 재시도하며 알람 `KubeastSessionRecordingUploadStalled`로 드러납니다. 세션당 `maxBytes`(기본 64 MiB)를 넘으면 녹화만 멈춥니다.
-- **다시보기**: Admin → Session recordings(권한 `admin.sessions.read`)에서 재생·`.cast`·텍스트 사본 내려받기, Audit Logs의 exec 행에서도 재생. 녹화를 열 때마다 `admin.session.read`가 감사에 남습니다.
-- **재생기와 CSP**: 재생기(asciinema-player)는 터미널을 WebAssembly로 돌립니다. 그래서 게이트웨이가 보내는 CSP의 `script-src`에 `'wasm-unsafe-eval'`이 들어 있습니다(`'unsafe-eval'`은 아님, `helm/kubeast/files/nginx.conf`). 앞단 Ingress·프록시가 CSP 헤더를 덮어쓰면 같은 값을 허용해야 재생됩니다 — 빠지면 ▶ 버튼과 `--:--`에서 멈춥니다.
-- **보존**: 원격 객체는 버킷 수명주기·Object Lock에 맡기고, 목록 행은 `retention.auditDays`를 따릅니다.
+- **Storage**: k8s-service writes to a local volume and uploads chunks every `chunkSeconds` (default 30 seconds) during the session — if the k8s-service pod disappears, only the last chunk interval is lost. Store = `s3` (recommended for production, the same fields as the audit S3 sink) · `database` (1 MiB per session, small installs without S3) · `file` (PVC). S3 keys are mounted as files, so they do not touch k8s-service's IRSA identity.
+- **Interrupted sessions**: a session cut off for reasons on the k8s-service side stays as `interrupted` — a graceful shutdown (rollout, drain) and a container restart upload all the remaining output; if the pod disappears entirely, only the chunks uploaded before that remain. The size in the list is the size kept (uploaded), and the play button is disabled when no chunk was uploaded.
+- **When the terminal drops**: when the terminal goes away without `exit` because the browser tab was closed or the network dropped, k8s-service sends Ctrl-C and Ctrl-D to the shell to end it (the container runtime does not clean up the processes of a disconnected exec). A program in the foreground that ignores them, such as an editor, may be left running.
+- **Failures**: if recording cannot start (cannot write to the local volume), the session is refused (`required: true`). If an upload to the store fails or one chunk does not finish within 30 seconds, the session goes on; uploads are retried, and the problem shows up as the alert `KubeastSessionRecordingUploadStalled`. Past `maxBytes` per session (default 64 MiB), only the recording stops.
+- **Playback**: play, or download the `.cast` or a text copy, in Admin → Session recordings (permission `admin.sessions.read`); exec rows in Audit Logs play too. Every time a recording is opened, `admin.session.read` is audited.
+- **Player and CSP**: the player (asciinema-player) runs the terminal in WebAssembly. That is why the `script-src` of the CSP the gateway sends includes `'wasm-unsafe-eval'` (not `'unsafe-eval'`, `helm/kubeast/files/nginx.conf`). If an Ingress or proxy in front overwrites the CSP header, it must allow the same value for playback to work — without it, the player stops at the ▶ button and `--:--`.
+- **Retention**: remote objects are left to the bucket lifecycle and Object Lock; list rows follow `retention.auditDays`.
 
 ```yaml
 sessionRecording:
   enabled: true
-  s3: {bucket: kubeast-sessions, prefix: sessions/, region: ap-northeast-2}   # k8s-service 롤에 s3:PutObject·GetObject
+  s3: {bucket: kubeast-sessions, prefix: sessions/, region: ap-northeast-2}   # s3:PutObject·GetObject on the k8s-service role
 ```

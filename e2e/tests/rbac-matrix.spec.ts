@@ -1,6 +1,6 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
 
-// Role × action matrix behind docs/features.md "역할과 권한": what each Kubeast role may do
+// Role × action matrix behind docs/features.md "Roles and permissions": what each Kubeast role may do
 // on a cluster, checked end to end through the gateway — the JWT permission
 // matrix in k8s-service first, then the cluster's own RBAC via the
 // impersonation groups (kubeast:viewer / operator / admin / role:<slug>).

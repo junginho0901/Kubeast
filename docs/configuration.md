@@ -1,20 +1,22 @@
-# 설정 (values.yaml)
+**English** | [한국어](ko/configuration.md)
+
+# Configuration (values.yaml)
 
 
-자주 쓰는 값:
+Frequently used values:
 
 ```yaml
 global:
   imageTag: "v0.1.0"
 
-# 초기 관리자 계정 — password 를 비우면 설치 시 랜덤 생성
+# Initial admin account — leave password empty to generate a random one at install
 admin:
   email: admin
-  password: ""          # 비우면 자동 생성 (secret 으로 확인)
+  password: ""          # generated automatically when empty (look it up in the secret)
 
-# JWT 서명키 — 비우면 설치 시 생성해 Secret(kubeast-auth-keys)에 보관, upgrade 때 재사용.
-# 직접 관리하는 Secret(키 이름 jwt_private.pem)이 있으면 지정.
-# 토큰 60분(활동 중이면 UI가 자동 갱신), 셀프 가입·데모 계정은 기본 off
+# JWT signing key — when empty, generated at install, kept in a Secret (kubeast-auth-keys) and reused on upgrade.
+# Set this if you manage your own Secret (key name jwt_private.pem).
+# Tokens last 15 minutes (the UI renews them automatically while you are active); self sign-up and demo accounts are off by default
 auth:
   signingKey:
     existingSecret: ""
@@ -22,26 +24,26 @@ auth:
   allowRegistration: false
   bootstrapDemoUsers: false
   passwordMinLength: 12
-  # 세션 쿠키 Secure(HTTPS에서만 전송). TLS 뒤(Ingress·Gateway API)면 true 유지,
-  # localhost 아닌 주소를 plain http로 쓸 때만 false (아니면 로그인 쿠키가 버려짐)
+  # Session cookie Secure (sent only over HTTPS). Keep true behind TLS (Ingress · Gateway API);
+  # false only when using a non-localhost address over plain http (otherwise the login cookie is dropped)
   cookieSecure: true
-  # 클러스터에는 로그인한 사용자 본인(이메일)으로 impersonation — 클러스터 RBAC이
-  # 최종 판단, K8s audit에 사용자가 남음. 등록하는 모든 클러스터에 아래 RBAC 적용:
+  # Impersonates the logged-in user (email) on the cluster — the cluster RBAC makes
+  # the final decision, and the user shows up in the K8s audit. Apply the RBAC below to every cluster you register:
   #   helm template kubeast helm/kubeast -s templates/impersonation-rbac.yaml | kubectl --context <cluster> apply -f -
-  # 아래 커스텀 역할·Read 프록시·로그 파일 권한까지 한 번에(쓰지 않는 템플릿은 건너뜀, docs/cluster-requirements.md §1):
-  #   scripts/render-target-rbac.sh -f values.yaml -f <그 클러스터 값> | kubectl --context <cluster> apply -f -
-  # (Kubeast 자격증명은 ClusterRole kubeast-impersonator 만 있으면 됨 — 설치된
-  #  클러스터의 k8s-service·tool-server ServiceAccount도 이것과 kubeconfig Secret
-  #  읽기 Role만 받음; false면 예전처럼 cluster-admin)
-  # 커스텀 역할(Read/Write/Admin 외)을 클러스터에 부여하면 그룹 kubeast:role:<slug>로
-  # 동작하는데, 위 RBAC은 고정 그룹 4개만 impersonate 허용 → customRoles에 적어야
-  # 그 그룹이 허용되고 적은 ClusterRole에 묶임(등록 클러스터마다 같은 렌더 적용):
+  # Including the custom roles, Read proxy and log file permissions below in one go (unused templates are skipped, docs/cluster-requirements.md §1):
+  #   scripts/render-target-rbac.sh -f values.yaml -f <that cluster's values> | kubectl --context <cluster> apply -f -
+  # (Kubeast credentials only need the ClusterRole kubeast-impersonator — the k8s-service and tool-server
+  #  ServiceAccounts of the cluster it is installed in also get only this and a Role to read the
+  #  kubeconfig Secret; when false, cluster-admin as before)
+  # A custom role (other than Read/Write/Admin) granted on a cluster acts as the group kubeast:role:<slug>,
+  # but the RBAC above allows impersonating only the 4 fixed groups → list it in customRoles so
+  # that group is allowed and bound to the listed ClusterRoles (apply the same render on each registered cluster):
   #   helm template kubeast helm/kubeast -s templates/impersonation-custom-roles.yaml -f values.yaml | kubectl --context <cluster> apply -f -
-  # 네임스페이스 범위 부여(Read/Write/Admin이든 커스텀이든 그룹 kubeast:role:<slug>)는
-  # 항목에 namespaces를 적으면 그 네임스페이스마다 RoleBinding으로 묶인다.
-  # Read(kubeast:viewer)는 기본 view라 프록시가 없음 → Prometheus·OpenCost 화면이 거부됨.
-  # viewerProxyServices에 그 클러스터의 Service를 적으면 그 Namespace에 Role을 만들어
-  # "<service>:<port>" GET만 허용(다른 Service·POST·NS 범위 부여는 그대로 거부, 클러스터마다 그 클러스터 값으로):
+  # Namespace-scoped grants (group kubeast:role:<slug>, whether Read/Write/Admin or custom)
+  # are bound with a RoleBinding in each namespace when you list namespaces in the entry.
+  # Read (kubeast:viewer) is plain view and has no proxy → the Prometheus and OpenCost screens are refused.
+  # Listing that cluster's Services in viewerProxyServices creates a Role in that Namespace that
+  # allows only GET on "<service>:<port>" (other Services, POST and NS-scoped grants are still refused; per cluster, with that cluster's values):
   #   helm template kubeast helm/kubeast -s templates/impersonation-viewer-proxy.yaml -f values.yaml | kubectl --context <cluster> apply -f -
   impersonation:
     enabled: true
@@ -55,122 +57,122 @@ auth:
     viewerProxyServices: []
     #  - {namespace: monitoring, service: prometheus, port: 9090}
     #  - {namespace: opencost, service: opencost, port: 9003}
-  # 임시 권한 요청 — 기본 off. 켜면 사용자가 Settings → Cluster access에서 이미 권한이 있는
-  # 클러스터에 더 높은 역할(기본 Write까지)을 최대 maxHours 동안 사유와 함께 요청하고,
-  # 관리자(본인 제외)가 Admin → Access requests에서 승인·거절. 승인되면 요청자는 다시
-  # 로그인해 그 역할로 들어오고, 시간이 지나면 자동으로 이전 역할로 돌아간다(감사 로그
-  # access.request.* / access.grant.expire). 클러스터 RBAC가 그 역할의 그룹을 바인딩한
-  # 클러스터에서만 효력이 있다(viewer만 바인딩한 운영 클러스터에선 승격돼도 403).
+  # Temporary access requests — off by default. When on, users request a higher role (up to Write by default) on a cluster
+  # they already have access to, in Settings → Cluster access, for up to maxHours with a reason, and
+  # an admin (other than themselves) approves or rejects it in Admin → Access requests. Once approved, the requester logs in
+  # again and comes in with that role, and when the time is up it automatically goes back to the previous role (audit log
+  # access.request.* / access.grant.expire). It takes effect only on clusters whose RBAC binds that role's group
+  # (on a production cluster that binds only viewer, 403 even after elevation).
   accessRequests:
     enabled: false
     maxHours: 8
     roles: [Write]
-  # 클러스터가 하나도 없는 사용자에게 "어디서 권한을 요청하나" — 대시보드·Settings의
-  # "접근 가능한 클러스터 없음" 아래에 보인다. 한 줄 문구 + http(s) 링크(사내 요청 양식 등).
-  # #이 들어가면 따옴표로 감싼다(YAML 주석). 비우면 일반 문구만
+  # "Where do I request access" for users with no cluster at all — shown under "No accessible cluster"
+  # on the dashboard and in Settings. One line of text + an http(s) link (an internal request form, etc.).
+  # Quote it if it contains # (YAML comment). Empty shows only the generic text
   accessHelp:
     text: ""
     url: ""
 
-# EKS: k8s-service·tool-server 파드가 aws-iam-authenticator를 실행할 IRSA 롤 + STS 리전
+# EKS: IRSA role with which the k8s-service and tool-server pods run aws-iam-authenticator + STS region
 aws:
   irsaRoleArn: ""
   region: ""
-# 서비스마다 자기 롤(IRSA)이나 다른 클라우드 워크로드 아이덴티티 주석 — 감사 S3 싱크는
-# authService, S3 세션 기록은 k8sService(aws.irsaRoleArn 위에 덮어씀)
+# Per-service own role (IRSA) or another cloud's workload identity annotations — the audit S3 sink uses
+# authService, S3 session recording uses k8sService (overrides aws.irsaRoleArn)
 serviceAccounts:
   authService:
-    annotations: {}   # eks.amazonaws.com/role-arn: arn:aws:iam::<계정>:role/kubeast-audit-sink
+    annotations: {}   # eks.amazonaws.com/role-arn: arn:aws:iam::<account>:role/kubeast-audit-sink
   k8sService:
     annotations: {}
 
-# 콘솔 자체 메트릭 — 백엔드 5개가 각자 포트의 /metrics로 Prometheus 메트릭을 냄
-# (요청 수·지연·진행 중, 감사 저장소 상태, WebSocket 구독; docs/metrics.md).
-# 게이트웨이는 /metrics를 프록시하지 않음. prometheus-operator가 있으면 ServiceMonitor,
-# networkPolicy.enabled면 스크레이퍼를 from에 적어 열어 줌. 알람 5개는 prometheusRule.
+# The console's own metrics — the 5 backends each expose Prometheus metrics at /metrics on their own port
+# (request count, latency, in flight, audit store status, WebSocket subscriptions; docs/metrics.md).
+# The gateway does not proxy /metrics. With prometheus-operator, a ServiceMonitor;
+# with networkPolicy.enabled, list the scraper in from to open it. The 5 alerts are in prometheusRule.
 metrics:
   enabled: true
   serviceMonitor:
     enabled: false
     interval: 30s
-    labels: {}            # kube-prometheus-stack: {release: <그 릴리스 이름>}
+    labels: {}            # kube-prometheus-stack: {release: <that release name>}
   networkPolicy:
     from: []
   prometheusRule:
     enabled: false
 
-# 서비스 간 토큰 — k8s-service의 /internal 라우트(tool-server의 kubeconfig 조회,
-# auth-service의 validate·invalidate)는 사용자 JWT에 더해 Secret kubeast-secrets의
-# INTERNAL_API_TOKEN을 X-Internal-Token으로 요구한다(차트가 생성·보존). 회전 = 값 교체 후
-# auth-service·k8s-service·tool-server 롤아웃. secrets.existingSecret를 쓰면 그 Secret에 넣는다.
+# Service-to-service token — k8s-service's /internal routes (tool-server's kubeconfig lookup,
+# auth-service's validate · invalidate) require, in addition to the user JWT, INTERNAL_API_TOKEN from the Secret kubeast-secrets
+# as X-Internal-Token (the chart generates and keeps it). Rotation = replace the value, then
+# roll out auth-service, k8s-service and tool-server. If you use secrets.existingSecret, put it in that Secret.
 
-# 노드 셸(특권 디버그 파드) — 기본 off. 켜면 전용 네임스페이스 + 이미지 허용 목록(첫 항목이 기본).
-# 이미지는 IfNotPresent로 받으므로 버전을 고정(또는 사내 미러 주소) — 이미 받은 노드는 레지스트리에 안 감
+# Node shell (privileged debug pod) — off by default. When on, a dedicated namespace + an image allow list (the first entry is the default).
+# Images are pulled with IfNotPresent, so pin the version (or use an internal mirror address) — nodes that already have the image do not go to the registry
 nodeShell:
   enabled: false
   images:
     - docker.io/library/busybox:1.38.0
 
-# 파드 보안 (Pod Security Standards restricted 기본). 사용자 네임스페이스를
-# 지원하지 않는 클러스터(커널 6.3 미만)에서는 hostUsers: true
+# Pod security (Pod Security Standards restricted by default). On clusters that do not support
+# user namespaces (kernel below 6.3), hostUsers: true
 podSecurity:
   enabled: true
   hostUsers: false
   readOnlyRootFilesystem: true
 
-# 가용성 — replicas 를 2 이상으로 올릴 때 pdb.enabled: true
+# Availability — pdb.enabled: true when raising replicas to 2 or more
 replicas:
   gateway: 1
 pdb:
   enabled: false
 topologySpread:
   enabled: true
-resources:               # 컨테이너별 requests / memory limit (전체는 values.yaml)
+resources:               # per-container requests / memory limit (the full list is in values.yaml)
   aiService:
     requests: { cpu: 100m, memory: 256Mi }
     limits: { memory: 1Gi }
 
-# AI 키 — ai-service 환경변수로만 주입되고 DB에는 저장되지 않음. 모델 설정(UI/CRD)은
-# 변수 이름(api_key_env)만 가리킴. ESO 등으로 만든 Secret이 있으면 apiKeysSecret에 지정
+# AI keys — injected only as ai-service environment variables and not stored in the DB. Model settings (UI/CRD)
+# point only to the variable name (api_key_env). If you have a Secret created by ESO or the like, set it in apiKeysSecret
 ai:
   openaiApiKey: ""
   anthropicApiKey: ""
   geminiApiKey: ""
-  claudeCodeOAuthToken: ""  # Claude 구독 setup-token(provider claude-code, 개인용 — "4. AI 활성화" 참고)
+  claudeCodeOAuthToken: ""  # Claude subscription setup-token (provider claude-code, personal use — see "4. Enable AI")
   apiKeysSecret: ""
   model: "gpt-4o-mini"
-  baseUrlAllowedHosts: []  # 모델 설정 base_url이 사설 주소(클러스터 안 Ollama·사내 LLM 게이트웨이)면 여기 등록. api_key_env는 OPENAI/ANTHROPIC/GEMINI_API_KEY, CLAUDE_CODE_OAUTH_TOKEN(claude-code 전용) 또는 KUBEAST_AI_KEY_*
+  baseUrlAllowedHosts: []  # register here when a model setting's base_url is a private address (in-cluster Ollama, internal LLM gateway). api_key_env is OPENAI/ANTHROPIC/GEMINI_API_KEY, CLAUDE_CODE_OAUTH_TOKEN (claude-code only) or KUBEAST_AI_KEY_*
   providers:
     claudeCode: { enabled: false, maxConcurrent: 1, turnTimeoutSeconds: 300, maxTurns: 10 }
 
-# 내장 PostgreSQL(false 면 외부 DB) / Redis(false 면 k8s-service가 메모리 캐시 — Redis를 쓰는 곳은 그 하나)
+# Built-in PostgreSQL (false = external DB) / Redis (false = k8s-service caches in memory — it is the only user of Redis)
 postgresql:
   enabled: true
   user: kubeast
-  password: ""          # 비우면 설치 때 생성·업그레이드에도 유지 (secret 으로 확인). 외부 DB(enabled: false)면 필수
+  password: ""          # when empty, generated at install and kept across upgrades (look it up in the secret). Required for an external DB (enabled: false)
   database: kubeast
 redis:
   enabled: true
-  password: ""          # requirepass — 비우면 생성 (REDIS_PASSWORD)
+  password: ""          # requirepass — generated when empty (REDIS_PASSWORD)
 networkPolicy:
-  enabled: true         # 기본 거부 + 서비스가 쓰는 흐름만. NetworkPolicy를 강제하지 않는 CNI(kindnet 등)에선 무해
+  enabled: true         # default deny + only the flows the services use. Harmless on CNIs that do not enforce NetworkPolicy (kindnet, etc.)
 
-# Gateway 노출 방식
+# Gateway exposure
 gateway:
   service:
     type: NodePort        # NodePort | ClusterIP | LoadBalancer
     nodePort: 30333
-  trustedProxies: []      # 앞단 프록시(Ingress 컨트롤러·LB) CIDR — 감사 로그의 클라이언트 주소를 그 뒤에서 읽음
-  allowedOrigins: []      # 게이트웨이 자기 호스트·Ingress 호스트 외에 API·WebSocket을 열 브라우저 origin(없으면 같은 호스트만)
+  trustedProxies: []      # CIDRs of front proxies (Ingress controller, LB) — the client address in the audit log is read from behind them
+  allowedOrigins: []      # browser origins to open the API and WebSocket to besides the gateway's own host and the Ingress host (none = same host only)
 
-# Ingress (선택)
+# Ingress (optional)
 ingress:
   enabled: false
   className: ""
   host: kubeast.example.com
   tls: false
 
-# 멀티클러스터 부하/장애 격리 튜닝
+# Multi-cluster load/failure isolation tuning
 multicluster:
   maxClusters: 20
   healthcheckIntervalSec: 60
@@ -178,4 +180,4 @@ multicluster:
   breakerConsecutiveFails: 5
 ```
 
-전체 옵션은 [helm/kubeast/values.yaml](../helm/kubeast/values.yaml) 참고.
+See [helm/kubeast/values.yaml](../helm/kubeast/values.yaml) for all options.

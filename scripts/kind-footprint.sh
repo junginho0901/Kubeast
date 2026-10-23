@@ -2,7 +2,7 @@
 # Kubeast's resource footprint, measured on kind: a kind cluster of its own (kubeast-fp, apart from the dev clusters)
 # with the chart installed from helm/kubeast/values-minimal.yaml, sampled once a minute with crictl — each container's
 # memory working set (what `kubectl top` and the kubelet report, not RSS) and its CPU from the usage counter. The
-# footprint table in docs/architecture.md ("자원 사용량") comes from these runs.
+# footprint table in docs/architecture.md ("Resource usage") comes from these runs.
 #
 #   scripts/kind-footprint.sh up                          # cluster + minimal install (images kubeast/*:$IMAGE_TAG from the host)
 #   scripts/kind-footprint.sh step <label> <min> [helm…]  # helm upgrade with these --set args on top of the previous
