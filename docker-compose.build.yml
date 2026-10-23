@@ -28,8 +28,8 @@ services:
 
   tool-server:
     build:
-      context: ./services/tool-server
-      dockerfile: Dockerfile
+      context: ./services
+      dockerfile: tool-server/Dockerfile
 
   frontend:
     build:
