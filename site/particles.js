@@ -195,13 +195,17 @@
       var w = box.clientWidth, h = box.clientHeight
       if (!w || !h) return
       var dpr = window.devicePixelRatio || 1
-      // The canvas covers the whole window, so the dots can come in from anywhere in it. Everything is laid
-      // out in the box's coordinates and drawn shifted by where the box sits in the window.
+      // The canvas covers the first screen of the page, so the dots can come in from anywhere in the window, and it
+      // scrolls with the page (one fixed to the window and moved on scroll trails the page by a frame). Everything
+      // is laid out in the box's coordinates and drawn shifted by where the box sits on the page.
       var shift = { x: 0, y: 0 }
+      var view = { w: 0, h: 0 }
       function place() {
         var r = box.getBoundingClientRect()
-        shift.x = r.left
-        shift.y = r.top
+        shift.x = r.left + window.scrollX
+        shift.y = r.top + window.scrollY
+        view.w = document.documentElement.clientWidth
+        view.h = Math.max(window.innerHeight, shift.y + h)
       }
       place()
       var size = Math.round(Math.min(w, h) * 0.66)
@@ -211,7 +215,7 @@
       var far = scatterWords(FAR, { w: w, h: h }, logo, { seed: 13, depth: [0, 0.4], fontSize: [9.5, 12.5], opacity: [0.2, 0.45], avoidLogo: false, avoid: near })
       farLayer.textContent = ''
       nearLayer.textContent = ''
-      var area = { x: -shift.x, y: -shift.y, w: window.innerWidth, h: window.innerHeight }
+      var area = { x: -shift.x, y: -shift.y, w: view.w, h: view.h }
       var enter = !still && !played
       var wordRand = seeded(21)
       var words = near.map(function (p) { return { p: p, layer: nearLayer, near: true } })
@@ -263,7 +267,7 @@
         ctx.setTransform(1, 0, 0, 1, 0, 0)
         ctx.clearRect(0, 0, canvas.width, canvas.height)
         // the first screen scrolled out of the window: nothing of it to draw
-        if (shift.y > window.innerHeight || shift.y + h < 0) return
+        if (window.scrollY > view.h) return
         ctx.setTransform(dpr, 0, 0, dpr, shift.x * dpr, shift.y * dpr)
         var target = pointer ? { x: (pointer.x - cx) / cx, y: (pointer.y - cy) / cy } : { x: 0, y: 0 }
         eased.x += (target.x - eased.x) * 0.06
@@ -340,15 +344,16 @@
         cancelAnimationFrame(frame)
         if (!document.hidden && !still && !cancelled) frame = requestAnimationFrame(loop)
       }
-      // Follow the window's size and the box's place in it (the still picture is drawn again).
-      function onScroll() {
-        place()
-        if (still && dots.length) draw(0)
-      }
+      // Follow the page's size and the box's place on it (the still picture is drawn again).
       function fit() {
-        canvas.width = window.innerWidth * dpr
-        canvas.height = window.innerHeight * dpr
-        onScroll()
+        place()
+        canvas.style.left = -shift.x + 'px'
+        canvas.style.top = -shift.y + 'px'
+        canvas.style.width = view.w + 'px'
+        canvas.style.height = view.h + 'px'
+        canvas.width = view.w * dpr
+        canvas.height = view.h * dpr
+        if (still && dots.length) draw(0)
       }
       fit()
 
@@ -381,13 +386,14 @@
       img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(ICON)
       document.addEventListener('visibilitychange', onVisibility)
       window.addEventListener('resize', fit)
-      window.addEventListener('scroll', onScroll, { passive: true })
+      // fonts and images arriving can move the box down the page
+      window.addEventListener('load', fit)
       cleanup = function () {
         cancelled = true
         cancelAnimationFrame(frame)
         document.removeEventListener('visibilitychange', onVisibility)
         window.removeEventListener('resize', fit)
-        window.removeEventListener('scroll', onScroll)
+        window.removeEventListener('load', fit)
       }
     }
 

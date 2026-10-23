@@ -87,7 +87,7 @@ scripts/site-media.sh logs helm    # 이것만
 - 대본의 `show()`·`hide()` 사이만 영상에 남습니다(페이지 로딩·조사 대기 같은 기다림은 잘림). `step(id)`는 사이트에서 그 영상의 단계 목록이 넘어가는 곳이며, 스크립트가 그 시각을 `site/media/steps.js`에 씁니다.
 - `ffmpeg`(`brew install ffmpeg`)와 E2E와 같은 `E2E_USER_EMAIL`·`E2E_USER_PASSWORD`가 필요합니다. AI 영상(`ai-chat`·`alert-investigation`)은 답을 잘하는 기본 모델이 있어야 합니다(`scripts/kind-model-subscription.sh up` → 녹화 → `down`).
 - 화면이 바뀌면 그 영상만 다시 찍습니다.
-- `site/particles.js`는 콘솔 로그인 화면의 입자 로고(`frontend/src/components/login/LoginHero.tsx`·`frontend/src/utils/particles.ts`)를 순수 자바스크립트로 옮긴 것입니다. 그림판도 로그인 화면처럼 창 전체를 덮어, 점이 화면 어디서든 날아와 모입니다. 둘을 함께 바꿉니다.
+- `site/particles.js`는 콘솔 로그인 화면의 입자 로고(`frontend/src/components/login/LoginHero.tsx`·`frontend/src/utils/particles.ts`)를 순수 자바스크립트로 옮긴 것입니다. 둘을 함께 바꿉니다. 로그인 화면은 그림판이 창에 고정돼 있지만, 사이트는 그림판이 페이지의 첫 화면을 덮고 페이지와 함께 스크롤됩니다(창에 고정한 그림판을 스크롤 때 다시 그리면 페이지보다 한 박자 늦게 따라옴). 점은 그대로 화면 어디서든 날아와 모입니다.
 
 ### 프론트엔드
 
