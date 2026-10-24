@@ -173,6 +173,16 @@ func TestNetworkFlowsLimitAndRelayFailure(t *testing.T) {
 	}
 }
 
+// A read the audit store cannot record is refused before the Relay is asked.
+func TestNetworkFlowsWithoutAudit(t *testing.T) {
+	f := newNetflowsFixture(t, 5)
+	f.h.auditStore = &downAudit{}
+	w := f.get("/api/v1/namespaces/demo/networkflows", flowReader)
+	if w.Code != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "audit unavailable") || f.calls != 0 {
+		t.Fatalf("status %d calls %d %s", w.Code, f.calls, w.Body)
+	}
+}
+
 func TestNetworkFlowsFeature(t *testing.T) {
 	if got := (&Handler{}).networkFlowsFeature(); got["enabled"] != false {
 		t.Fatalf("off: %v", got)
