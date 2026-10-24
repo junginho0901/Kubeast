@@ -39,6 +39,7 @@ Kubeast는 등록한 클러스터에 아무것도 설치하지 않습니다. 예
 | Argo CD 가드 | Argo CD 추적 어노테이션 — §12 | `gitops.argocd.enabled`(끔) | 배지·경고 없음 |
 | NetworkPolicy 보기와 연결 확인 | NetworkPolicy를 강제하는 네트워크 플러그인, 관련 네임스페이스 읽기 권한 — §7 | — | 답은 정책이 말하는 것이지 클러스터가 하는 것이 아님. 규칙이 사용자가 읽지 못하는 네임스페이스 레이블을 쓰면 "알 수 없음" |
 | 최근 흐름(드로어, AI `network_flows`) | TLS로 서비스하는 Cilium Hubble Relay, Relay Service의 `services/proxy` create 권한 — §16 | `features.networkFlows.enabled`(끔) | 칸과 도구가 빠지고 API는 404. 클러스터 권한이 없으면 403 |
+| 네트워크 차단(드로어, AI `network_drops`) | 클러스터 Prometheus에 워크로드 레이블이 붙은 Hubble 차단 지표 — §17 | Prometheus(§3) | 칸이 나오지 않고, 도구는 지표가 없다고 알려 줌 |
 
 ## 1. 권한(RBAC) — 모든 대상 클러스터
 
@@ -497,6 +498,32 @@ service:
   또는 사용자 신원으로 `kubectl auth can-i create services/https:hubble-relay:443 --subresource=proxy -n kube-system --as=<user> --as-group=kubeast:viewer`를 실행합니다.
   전체 개발 예시는 `scripts/kind-cilium.sh`(`deploy/kind/cilium-*.yaml`, `deploy/kind/networkflows-values.yaml`)입니다.
 
+## 17. Hubble 지표 (네트워크 차단)
+
+드로어의 "네트워크 차단"과 AI 도구 `network_drops`를 쓰려면 클러스터 Prometheus(§3)에 Hubble 차단 지표 `hubble_drop_total`이 있어야 합니다. Kubeast 쪽 스위치는 없고, Prometheus가 설정된 곳이면 칸과 도구가 이 지표를 읽습니다.
+
+- **지표**: Hubble의 `drop` 지표(Cilium 기본 꺼짐)에 양 끝을 가리키는 레이블이 있어야 합니다. Kubeast는 두 모양 중 하나를 읽습니다.
+  - **레이블을 따로(권장)**: `labelsContext`에 최소 `source_namespace`·`source_workload`·`destination_namespace`·`destination_workload`
+    - `source_workload_kind`·`destination_workload_kind`가 있으면 종류까지 맞춥니다.
+    - `source_pod`·`destination_pod`가 있으면 파드의 차단은 그 파드 것이고, 없으면 파드는 워크로드의 차단 수를 보여 줍니다. 파드 레이블은 시리즈를 많이 늘립니다.
+  - **끝마다 레이블 하나**: `sourceContext=pod`·`destinationContext=pod`이면 `source`/`destination` = `<namespace>/<pod>`입니다. Microsoft Retina의 Hubble 컨트롤 플레인이 이 모양(파드 자기 쪽 끝만)으로 쓰지만, 확인한 것은 Cilium뿐입니다.
+  - 둘 다 아니면 파드·워크로드 레이블이 없다고 알려 줍니다.
+- **Cilium Helm 값**(1.20.4):
+
+  ```yaml
+  hubble:
+    metrics:
+      enabled:
+        - drop:labelsContext=source_namespace,source_workload,source_workload_kind,destination_namespace,destination_workload,destination_workload_kind,traffic_direction
+  ```
+
+- **나중에 레이블을 바꿀 때**: 에이전트는 시작할 때 지표 설정을 읽습니다. Helm으로 바꾼 뒤에는 에이전트를 다시 시작하거나(`kubectl -n kube-system rollout restart ds/cilium`) `rollOutCiliumPods: true`를 설정하세요.
+- **수집**: Prometheus가 에이전트마다 지표 포트(Service `kube-system/hubble-metrics`, 포트 `hubble-metrics`, 9965)를 긁습니다. 공유 저장소면 다른 지표와 같이 클러스터 레이블이 붙어야 합니다(§3).
+- **보존**: 드로어는 최대 1일을 보여 줍니다. 보존이 더 짧으면 남은 만큼만 보입니다.
+- **권한**: 다른 Prometheus 읽기와 같습니다(§3). 사용자 신원의 API 서버 프록시 GET이거나 저장소 자체 인증입니다. Kubeast는 `resource.networkflow.read`도 확인합니다.
+- **수의 뜻**: 하나는 막힌 패킷 하나(Hubble 이벤트 하나)입니다. 거부된 연결이 다시 시도하면 여러 번 셉니다. `reason`은 `POLICY_DENIED` 같은 차단 사유 이름입니다.
+- **확인**: Prometheus에서 `count by (source_workload, destination_workload, reason) (hubble_drop_total)`, 또는 Pod 드로어 → 네트워크 차단.
+
 ## 검증한 버전 (2026-10-13)
 
 | 구성 | 버전 | 검증 방법 |
@@ -513,7 +540,7 @@ service:
 | VictoriaMetrics | v1.154.1(단일판·클러스터판, vmagent) | 10-20에 v1.154.0으로 검증하고 10-21에 올렸습니다. 개발용 2번 클러스터(`scripts/kind-victoriametrics.sh` — 2번 클러스터 Prometheus와 같은 수집 설정)에서 노드 메모리 합계가 Prometheus·단일판·클러스터판 모두 같은 바이트였습니다. 단일판과 경로를 붙인 vmselect의 `/-/healthy`는 200, 규칙·알림은 빈 자리표시, vmselect 대상 API는 400이라 `up`으로 대신하고, 메타데이터 타입·설명도 읽힙니다(e2e `victoriametrics.spec.ts`) |
 | Grafana | 13.2.4 | 10-17, 개발용 2번 클러스터(`scripts/kind-grafana.sh`). 데이터소스 프록시로 읽은 지표·로그가 직접 읽은 값과 같고 대시보드·노드 드로어가 채워집니다. 틀린 토큰은 상태에 401로 나오고, 웹훅 연락처 시험으로 보낸 알림이 조사됩니다(e2e `grafana.spec.ts`) |
 | Argo CD | 3.5.6(core 설치) | 10-21, 개발용 2번 클러스터(`scripts/kind-argocd.sh`). Application이 podinfo 차트를 동기화하고, 추적 어노테이션·409·감사 행·드로어 배지·`gitops_status`를 확인했습니다(e2e `argocd-real.spec.ts`) |
-| Cilium(Hubble Relay) | 1.20.4 | 10-24, 기본 CNI 없이 만든 별도 kind 클러스터(`scripts/kind-cilium.sh`, Relay TLS 켬). Read 사용자로 `proxy` 모드에서 읽었습니다 — client → web 80 포트는 FORWARDED이고 `ingress_allowed_by`에 NetworkPolicy `web-only-client`가 있으며 응답이 합쳐졌고, stranger → web은 정책대로 ingress에서 `POLICY_DENIED`로 DROPPED였습니다. 네임스페이스가 정해진 사용자는 클러스터에서 403을 받고, 드로어의 "왜?"가 규칙을 알려 주며, MCP도 같은 묶음을 줍니다(e2e `network-flows.spec.ts`) |
+| Cilium(Hubble Relay) | 1.20.4 | 10-24, 기본 CNI 없이 만든 별도 kind 클러스터(`scripts/kind-cilium.sh`, Relay TLS 켬). Read 사용자로 `proxy` 모드에서 읽었습니다 — client → web 80 포트는 FORWARDED이고 `ingress_allowed_by`에 NetworkPolicy `web-only-client`가 있으며 응답이 합쳐졌고, stranger → web은 정책대로 ingress에서 `POLICY_DENIED`로 DROPPED였습니다. 네임스페이스가 정해진 사용자는 클러스터에서 403을 받고, 드로어의 "왜?"가 규칙을 알려 주며, MCP도 같은 묶음을 줍니다(e2e `network-flows.spec.ts`). 10-25: 같은 클러스터에서 §17 레이블로 켠 `drop` 지표를 Prometheus v3.15.0(`deploy/kind/cilium-prometheus.yaml`)이 수집합니다 — 드로어와 `network_drops`가 직접 질의와 같은 상대·사유·수를 주고, 네임스페이스가 정해진 사용자는 클러스터에서 403을 받습니다(e2e `network-drops.spec.ts`) |
 | GPU·DRA·VPA·Gateway API·ingress-nginx | — | 코드 기준이며 실제 클러스터에서는 검증하지 않았습니다 |
 
 kind 노드에서는 루트 파일시스템이 `mountpoint="/"`로 잡히지 않아 디스크 사용률이 비어 있고, local-path 볼륨에는 볼륨 통계가 없습니다. 실제 노드와 CSI 드라이버에서는 이 값이 나옵니다.

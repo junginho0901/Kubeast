@@ -56,6 +56,7 @@
     - `can_i` — 그 사용자가 할 수 있는지 확인
     - `network_policy_check` — NetworkPolicy가 연결을 허용하는지와 그렇게 정한 정책·규칙([NetworkPolicy 보기와 연결 확인](#networkpolicy-보기와-연결-확인))
     - `network_flows` — 클러스터의 Hubble Relay가 본 네임스페이스·파드·워크로드의 최근 연결. 연결별로 합치고, 막힌 이유와 판정한 정책을 붙입니다([최근 흐름](#최근-흐름-hubble)).
+    - `network_drops` — Hubble 에이전트가 센 네임스페이스·파드·워크로드의 차단 수를 클러스터의 Prometheus에서 사유·상대별로, 최대 1일 전까지([네트워크 차단](#네트워크-차단-hubble-지표)).
     - `resource_graph` — 네임스페이스 객체와 그 연결
     - `hygiene` — 위생 보고, Admin
   - 다음 경우에는 그 도구가 도구 목록에서 빠집니다(`/api/v1/features`, 1분 캐시).
@@ -122,7 +123,7 @@
 | --- | --- | --- | --- |
 | **Pending** | 가입·SSO 직후 기본값 | 없음 — 로그인은 되지만 API는 403 | — |
 | **Member** | 계정 등급 | 전역 권한 없음, **클러스터별 부여로만** 접근 | `kubeast:authenticated`(권한 없음) |
-| **Read** | 클러스터별 | 메뉴 10개 · 모든 리소스 읽기(`resource.*.read`, 비용 `resource.cost.read` 포함) · Helm 읽기(권한 키는 있지만 Release 기록이 Secret이라 클러스터가 거부 — 오른쪽 칸 참고) · 컨테이너 안 로그 파일 읽기(`resource.pod.logfile`, 기능을 켰을 때) · AI 채팅의 읽기 도구 41종(`ai.tool.<읽기 도구>`)과 MCP 연결(`ai.mcp.use`) — 쓰기 도구는 없음 | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view`는 Secret과 `services/proxy`를 제외하므로, Secret과 Helm 릴리스(Secret에 저장)는 클러스터가 거부하고 화면에는 권한 안내가 뜹니다. API 서버 프록시로 읽는 Prometheus·OpenCost(최적화 사용량·스토리지 분석·비용·드로어 메트릭)는 차트 값 `auth.impersonation.viewerProxyServices`에 적은 Service만 **GET으로** 열립니다. 허용은 그 Namespace의 Role로 주고, 이름은 정확히 `<service>:<port>`로 적으며, 다른 Service·POST·NS 범위 부여는 계속 거부됩니다([설정](configuration.md)의 values 주석). 적지 않으면 거부됩니다(프록시는 `kubeast:operator`=`edit`부터 허용) |
+| **Read** | 클러스터별 | 메뉴 10개 · 모든 리소스 읽기(`resource.*.read`, 비용 `resource.cost.read` 포함) · Helm 읽기(권한 키는 있지만 Release 기록이 Secret이라 클러스터가 거부 — 오른쪽 칸 참고) · 컨테이너 안 로그 파일 읽기(`resource.pod.logfile`, 기능을 켰을 때) · AI 채팅의 읽기 도구 42종(`ai.tool.<읽기 도구>`)과 MCP 연결(`ai.mcp.use`) — 쓰기 도구는 없음 | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view`는 Secret과 `services/proxy`를 제외하므로, Secret과 Helm 릴리스(Secret에 저장)는 클러스터가 거부하고 화면에는 권한 안내가 뜹니다. API 서버 프록시로 읽는 Prometheus·OpenCost(최적화 사용량·스토리지 분석·비용·드로어 메트릭)는 차트 값 `auth.impersonation.viewerProxyServices`에 적은 Service만 **GET으로** 열립니다. 허용은 그 Namespace의 Role로 주고, 이름은 정확히 `<service>:<port>`로 적으며, 다른 Service·POST·NS 범위 부여는 계속 거부됩니다([설정](configuration.md)의 values 주석). 적지 않으면 거부됩니다(프록시는 `kubeast:operator`=`edit`부터 허용) |
 | **Write** | 클러스터별 | `menu.*` · 리소스 생성/수정/삭제 · CronJob suspend/trigger · Secret 값 보기 · 로그 파일 읽기 · Helm rollback/upgrade/test · AI 툴 전부(`ai.tool.*`, 쓰기 도구 포함) · MCP 연결 | `kubeast:operator` = `edit` + viewer |
 | **Admin** | 계정 등급(`*`) 또는 클러스터별 | 전부 — 관리자 메뉴, 모든 클러스터(나중에 등록한 것 포함) | `kubeast:admin` = `cluster-admin` |
 | 커스텀 | 클러스터별 | 고른 권한만(만드는 사람이 가진 권한 안에서) | `kubeast:role:<이름>` — 클러스터가 이 그룹을 바인딩하기 전에는 모든 호출이 403입니다(`auth.impersonation.customRoles`). 화면의 권한 없음 배너와 역할 만들기 창에 이 그룹 이름이 나옵니다 |
@@ -235,6 +236,21 @@ Pod·워크로드 드로어에 "NetworkPolicy" 칸이 있습니다.
 - 네임스페이스가 정해진 사용자에게는 자기 네임스페이스 밖의 상대가 네임스페이스와 주소로만 보이고, URL의 쿼리 문자열은 지웁니다.
 - AI 도구 `network_flows`도 같은 연결을 읽고, 막힌 연결이면 `network_policy_check`로 이어 보라고 알려 줍니다.
 - 대상 클러스터에 필요한 것은 [클러스터 요구사항 §16](cluster-requirements.md#16-hubble-relay-네트워크-흐름)에 있습니다.
+
+### 네트워크 차단 (Hubble 지표)
+
+클러스터의 Prometheus에 Hubble 차단 지표가 있으면 Pod·워크로드 드로어에 "네트워크 차단" 칸이 생깁니다.
+
+- Hubble 에이전트가 센 그 파드·워크로드의 차단을 보여 줍니다. 범위는 최근 15분·1시간·6시간·1일 중에서 고릅니다.
+  - 들어옴·나감 합계와, 상대별 차단 수·사유
+- 하나는 막힌 패킷 하나입니다. 거부된 연결이 다시 시도하면 여러 번 셉니다.
+- `POLICY_DENIED` 줄의 "왜?"를 누르면 NetworkPolicy 연결 확인이 그 상대·방향으로 열려 규칙을 알려 줍니다.
+- 드로어 그래프처럼 바로 읽고 감사 로그에는 남기지 않습니다. 다른 지표와 같은 길로, 로그인한 사람의 권한으로 클러스터의 Prometheus를 읽습니다.
+- Prometheus나 지표가 없으면 칸이 나오지 않습니다. 지표에 파드·워크로드 레이블이 없으면 그렇다고 알려 줍니다.
+- 지표에 파드 레이블이 없으면 파드는 그 워크로드의 차단 수를 보여 주고, 그렇다고 알려 줍니다.
+- 네임스페이스가 정해진 사용자에게는 자기 네임스페이스 밖의 상대가 네임스페이스로만 보입니다.
+- AI 도구 `network_drops`도 같은 수를 읽습니다.
+- 대상 클러스터에 필요한 것은 [클러스터 요구사항 §17](cluster-requirements.md#17-hubble-지표-네트워크-차단)에 있습니다.
 
 ## ⎈ Helm 릴리스 관리
 

@@ -190,6 +190,7 @@ async def test_second_batch_feature_tools_pass_declared_arguments_only():
             {"namespace": "shop", "workload_kind": "Deployment", "workload_name": "web", "verdict": "DROPPED", "limit": 30, "cluster": "x"},
             {"namespace": "shop", "workload_kind": "Deployment", "workload_name": "web", "verdict": "DROPPED", "limit": 30},
         ),
+        ("network_drops", {"namespace": "shop", "pod": "web-1", "since": "6h", "verdict": "DROPPED"}, {"namespace": "shop", "pod": "web-1", "since": "6h"}),
         ("hygiene", {"severity": "critical", "check": "pss-level"}, {"severity": "critical", "check": "pss-level"}),
     ]:
         service._call_tool_server.reset_mock()

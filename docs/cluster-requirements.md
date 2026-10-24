@@ -39,6 +39,7 @@ A "target cluster" is a cluster Kubeast manages, including the cluster it is ins
 | Argo CD guard | Argo CD tracking annotation — §12 | `gitops.argocd.enabled` (off) | No badge or warning |
 | NetworkPolicy view and check | A network plugin that enforces NetworkPolicy, read permission on the namespaces involved — §7 | — | The answer is what the policies say, not what the cluster does; "unknown" where a rule needs namespace labels the user cannot read |
 | Recent flows (drawers, AI `network_flows`) | Cilium Hubble Relay serving TLS, `create` on `services/proxy` for the Relay Service — §16 | `features.networkFlows.enabled` (off) | The section and the tool are left out and the API returns 404; without the cluster permission, 403 |
+| Network drops (drawers, AI `network_drops`) | The Hubble drop metric with workload labels in the cluster's Prometheus — §17 | Prometheus (§3) | The section is not shown; the tool says the metric is missing |
 
 ## 1. Permissions (RBAC) — every target cluster
 
@@ -480,6 +481,32 @@ For the drawers' "Recent Flows" and the AI tool `network_flows` (`features.netwo
   Or, with the user's identity: `kubectl auth can-i create services/https:hubble-relay:443 --subresource=proxy -n kube-system --as=<user> --as-group=kubeast:viewer`.
   The full development example is `scripts/kind-cilium.sh` (`deploy/kind/cilium-*.yaml`, `deploy/kind/networkflows-values.yaml`).
 
+## 17. Hubble metrics (network drops)
+
+For the drawers' "Network Drops" and the AI tool `network_drops`, the cluster's Prometheus (§3) needs the Hubble drop metric `hubble_drop_total`. There is no Kubeast switch: the section and the tool read it wherever Prometheus is set up.
+
+- **The metric**: Hubble's `drop` metric, off by default in Cilium, with labels that name both ends. Kubeast reads one of two shapes.
+  - **Separate labels (recommended)**: `labelsContext` with at least `source_namespace`, `source_workload`, `destination_namespace` and `destination_workload`.
+    - With `source_workload_kind` and `destination_workload_kind`, Kubeast also matches the kind.
+    - With `source_pod` and `destination_pod`, a pod's drops are its own; without them, a pod shows its workload's. Pod labels add many series.
+  - **One label per end**: `sourceContext=pod` and `destinationContext=pod` give `source`/`destination` = `<namespace>/<pod>`. Microsoft Retina's Hubble control plane writes this shape (only the pod's own end), but only Cilium was checked.
+  - A metric with neither shape is reported as having no pod or workload labels.
+- **Cilium Helm values** (1.20.4):
+
+  ```yaml
+  hubble:
+    metrics:
+      enabled:
+        - drop:labelsContext=source_namespace,source_workload,source_workload_kind,destination_namespace,destination_workload,destination_workload_kind,traffic_direction
+  ```
+
+- **Changing the labels later**: the agents read the metric settings when they start. After a Helm change, restart them (`kubectl -n kube-system rollout restart ds/cilium`) or set `rollOutCiliumPods: true`.
+- **Scraping**: Prometheus scrapes each agent's metrics port (Service `kube-system/hubble-metrics`, port `hubble-metrics`, 9965). On a shared store the cluster label applies as for every other metric (§3).
+- **Retention**: the drawer offers up to a day. Shorter retention shows what is kept.
+- **Permission**: as for every Prometheus read (§3): the user's GET through the API server proxy, or the store's own credentials. Kubeast also asks `resource.networkflow.read`.
+- **What a count is**: one dropped packet (each a Hubble event), so a refused connection that retries counts several times. `reason` is the drop reason name, such as `POLICY_DENIED`.
+- **Check**: `count by (source_workload, destination_workload, reason) (hubble_drop_total)` in Prometheus, or a Pod drawer → Network Drops.
+
 ## Verified versions (2026-10-13)
 
 | Component | Version | How |
@@ -496,7 +523,7 @@ For the drawers' "Recent Flows" and the AI tool `network_flows` (`features.netwo
 | VictoriaMetrics | v1.154.1 (single-node, cluster, vmagent) | 10-20 (v1.154.0), raised 10-21. Development cluster 2 (`scripts/kind-victoriametrics.sh`, with the same scrape config as cluster 2's Prometheus): node memory total is the same bytes in Prometheus and in the single-node and cluster versions; `/-/healthy` is 200 on the single-node version and on vmselect with its path; rules and alerts are empty placeholders; the vmselect targets API gives 400 → `up`; metadata types and descriptions are present (e2e `victoriametrics.spec.ts`) |
 | Grafana | 13.2.4 | 10-17, development cluster 2 (`scripts/kind-grafana.sh`). Metrics and logs read through the data source proxy equal the values read directly, and the dashboard and node drawer fill. A wrong token gives 401 in the status. An alert sent by a webhook contact point test is investigated (e2e `grafana.spec.ts`) |
 | Argo CD | 3.5.6 (core install) | 10-21, development cluster 2 (`scripts/kind-argocd.sh`). An Application syncs the podinfo chart. Checked: tracking annotation, 409, audit row, drawer badge, `gitops_status` (e2e `argocd-real.spec.ts`) |
-| Cilium (Hubble Relay) | 1.20.4 | 10-24, a kind cluster of its own without the default CNI (`scripts/kind-cilium.sh`, Relay TLS on). Read in `proxy` mode as a Read user: client → web on port 80 is FORWARDED with the NetworkPolicy `web-only-client` in `ingress_allowed_by` and the replies folded in, and stranger → web is DROPPED with `POLICY_DENIED` at ingress, as the policy says. A namespace-limited user gets 403 from the cluster; the drawer's "Why?" names the rule; MCP gives the same groups (e2e `network-flows.spec.ts`) |
+| Cilium (Hubble Relay) | 1.20.4 | 10-24, a kind cluster of its own without the default CNI (`scripts/kind-cilium.sh`, Relay TLS on). Read in `proxy` mode as a Read user: client → web on port 80 is FORWARDED with the NetworkPolicy `web-only-client` in `ingress_allowed_by` and the replies folded in, and stranger → web is DROPPED with `POLICY_DENIED` at ingress, as the policy says. A namespace-limited user gets 403 from the cluster; the drawer's "Why?" names the rule; MCP gives the same groups (e2e `network-flows.spec.ts`). 10-25: the `drop` metric with the labels of §17, scraped by Prometheus v3.15.0 on that cluster (`deploy/kind/cilium-prometheus.yaml`): the drawer and `network_drops` give the peers, reasons and counts of a direct query, and a namespace-limited user gets 403 from the cluster (e2e `network-drops.spec.ts`) |
 | GPU, DRA, VPA, Gateway API, ingress-nginx | — | Based on the code, not verified on a real cluster |
 
 On kind nodes the root filesystem is not picked up as `mountpoint="/"`, so disk utilization is empty, and local-path volumes have no volume stats. Real nodes and CSI drivers do produce these values.

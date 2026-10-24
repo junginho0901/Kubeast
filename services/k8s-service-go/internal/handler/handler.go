@@ -58,6 +58,8 @@ type Handler struct {
 	netflowsCanI func(ctx context.Context, r netflows.Relay) (bool, error)
 	netflowsDial func(ctx context.Context, t netflows.Target) (string, *http.Client, error)
 	netflowsNow  func() time.Time
+	// netdropsSrc replaces the Prometheus and cluster reads of NetworkDrops in tests (nil: svc).
+	netdropsSrc netdropsSource
 	// alertStore reads the alert store (nil: alert reads off).
 	alertStore *alerts.Store
 	// logSearchCanI replaces the pods/log access review in tests.

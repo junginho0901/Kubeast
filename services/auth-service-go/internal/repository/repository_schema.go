@@ -48,6 +48,7 @@ var ReadAIToolPermissions = []string{
 	"ai.tool.can_i",
 	"ai.tool.network_policy_check",
 	"ai.tool.network_flows",
+	"ai.tool.network_drops",
 	"ai.tool.resource_graph",
 	"ai.tool.k8s_jq_query",
 	"ai.tool.k8s_tabular_query",

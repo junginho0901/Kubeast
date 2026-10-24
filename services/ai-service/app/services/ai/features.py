@@ -78,6 +78,7 @@ GATES: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
     "traces_compare": _trace_store_on,
     "alerts_list": _alert_store_on,
     "network_flows": _network_flows_on,
+    "network_drops": _prometheus_on,
     "cost": _cost_on,
     "policy_reports": _policy_reports_on,
 }
@@ -91,6 +92,7 @@ REQUIRED_PERMISSIONS: Dict[str, tuple[str, str]] = {
     "cost": ("cluster", "resource.cost.read"),
     "helm_read": ("cluster", "resource.helm.read"),
     "network_flows": ("cluster", "resource.networkflow.read"),
+    "network_drops": ("cluster", "resource.networkflow.read"),
     # A server dry run needs the write's RBAC; the Write role's edit permission stands for it.
     "k8s_diff": ("cluster", "resource.*.edit"),
     # Admin-only: the audit log (auth-service asks for it) and node internals through nodes/proxy.

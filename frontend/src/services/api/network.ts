@@ -10,6 +10,7 @@ import type {
   IngressClassInfo,
   IngressInfo,
   NetflowResult,
+  NetdropResult,
   NetpolCheckResult,
   NetpolEffective,
   NetworkPolicyInfo,
@@ -160,6 +161,11 @@ export const networkApi = {
 
   getNetworkFlows: async (namespace: string, params: { kind?: string; name?: string; since?: string; verdict?: string; limit?: number }): Promise<NetflowResult> => {
     const { data } = await client.get(`/cluster/namespaces/${encodeURIComponent(namespace)}/networkflows`, { params })
+    return data
+  },
+
+  getNetworkDrops: async (namespace: string, params: { kind?: string; name?: string; range?: string }): Promise<NetdropResult> => {
+    const { data } = await client.get(`/cluster/namespaces/${encodeURIComponent(namespace)}/networkdrops`, { params })
     return data
   },
 

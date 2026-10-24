@@ -311,6 +311,11 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Handler:     handleNetworkFlows,
 	})
 	register(ToolDefinition{
+		Name:        "network_drops",
+		Description: "Network drops of a namespace, pod or workload counted by the Hubble agents (Prometheus): how many, why, and from or to whom",
+		Handler:     handleNetworkDrops,
+	})
+	register(ToolDefinition{
 		Name:        "resource_graph",
 		Description: "The objects of one namespace and the edges between them, with counts by kind",
 		Handler:     handleResourceGraph,

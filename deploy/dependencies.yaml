@@ -72,6 +72,10 @@ dependencies:
         match: 'prom/prometheus:v'
       - path: deploy/kind/second-cluster.yaml
         match: 'one-pod Prometheus v'
+      - path: deploy/kind/cilium-prometheus.yaml
+        match: 'prom/prometheus:v'
+      - path: deploy/kind/cilium-prometheus.yaml
+        match: 'one-pod Prometheus v'
       - path: deploy/examples/target-cluster/prometheus-values.yaml
         match: '\(Prometheus v'
       - path: docs/cluster-requirements.md
@@ -351,6 +355,14 @@ dependencies:
     refPaths:
       - path: scripts/kind-cilium.sh
         match: '^CILIUM_VERSION='
+      - path: docs/cluster-requirements.md
+        match: '\*\*Cilium Helm values\*\*'
+      - path: docs/ko/cluster-requirements.md
+        match: '\*\*Cilium Helm 값\*\*'
+      - path: docs/cluster-requirements.md
+        match: '\| Cilium \(Hubble Relay\) \|'
+      - path: docs/ko/cluster-requirements.md
+        match: '\| Cilium\(Hubble Relay\) \|'
 
   - name: argo-cd
     version: 3.5.6

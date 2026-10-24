@@ -67,6 +67,7 @@ def test_tool_usage_guide():
         "can_i",
         "network_policy_check",
         "network_flows",
+        "network_drops",
         "resource_graph",
         "hygiene",
         "k8s_jq_query",

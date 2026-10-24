@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Network flows on kind: a kind cluster without its default CNI (kubeast-cilium, deploy/kind/cilium-kind.yaml)
-# running Cilium with Hubble Relay serving TLS, the traffic of deploy/kind/cilium-demo.yaml (client reaches web,
-# stranger is dropped by the NetworkPolicy web-only-client), registered with Kubeast under its own name, the
-# Relay Role from templates/impersonation-viewer-hubble.yaml, and features.networkFlows through
-# deploy/kind/networkflows-values.yaml. e2e/tests/network-flows.spec.ts reads those flows.
+# Network flows and drops on kind: a kind cluster without its default CNI (kubeast-cilium, deploy/kind/cilium-kind.yaml)
+# running Cilium with Hubble Relay serving TLS and the Hubble drop metric (deploy/kind/cilium-values.yaml), a
+# Prometheus that scrapes it (deploy/kind/cilium-prometheus.yaml), the traffic of deploy/kind/cilium-demo.yaml
+# (client reaches web, stranger is dropped by the NetworkPolicy web-only-client), registered with Kubeast under its
+# own name, the Relay Role from templates/impersonation-viewer-hubble.yaml, the Prometheus Role from
+# templates/impersonation-viewer-proxy.yaml, and features.networkFlows through deploy/kind/networkflows-values.yaml.
+# e2e/tests/network-flows.spec.ts and network-drops.spec.ts read them.
 #
 #   scripts/kind-cilium.sh up       # creates the cluster, or starts it when stopped
 #   scripts/kind-cilium.sh down     # turns the feature off and stops the cluster (kept for next time)
@@ -46,7 +48,7 @@ registered_id() { # the Kubeast cluster whose name is $NAME, if any
 
 case "${1:-}" in
   up)
-    if ! kind get clusters 2>/dev/null | grep -qx "$NAME"; then
+    if ! kind get clusters 2>/dev/null | grep -x "$NAME" >/dev/null; then
       echo "═══ creating kind cluster $NAME (no default CNI) ═══"
       kind create cluster --name "$NAME" --config "$ROOT/deploy/kind/cilium-kind.yaml" --kubeconfig "$KC"
       if [ -n "${CILIUM_NODE_HOOK:-}" ]; then $CILIUM_NODE_HOOK "$NAME"; fi
@@ -57,16 +59,16 @@ case "${1:-}" in
     kind get kubeconfig --name "$NAME" > "$KC"
     for _ in $(seq 1 60); do ck get --raw /readyz >/dev/null 2>&1 && break; sleep 2; done
 
-    echo "═══ Cilium $CILIUM_VERSION with Hubble Relay over TLS ═══"
+    echo "═══ Cilium $CILIUM_VERSION with Hubble Relay over TLS and the drop metric ═══"
     helm repo add cilium https://helm.cilium.io/ >/dev/null 2>&1 || true
     helm repo update cilium >/dev/null
-    # The API server reaches a backend over HTTP/2 only with TLS, so the Relay serves TLS (certificates from the chart).
     helm --kubeconfig "$KC" -n kube-system upgrade --install cilium cilium/cilium --version "$CILIUM_VERSION" \
-      --set image.pullPolicy=IfNotPresent --set ipam.mode=kubernetes \
-      --set hubble.relay.enabled=true --set hubble.relay.tls.server.enabled=true >/dev/null
+      -f "$ROOT/deploy/kind/cilium-values.yaml" >/dev/null
     ck -n kube-system rollout status ds/cilium --timeout=600s
     ck -n kube-system rollout status deploy/hubble-relay --timeout=600s
+    ck apply -f "$ROOT/deploy/kind/cilium-prometheus.yaml" >/dev/null
     ck apply -f "$ROOT/deploy/kind/cilium-demo.yaml" >/dev/null
+    ck -n monitoring rollout status deploy/prometheus --timeout=300s
     ck -n flows-demo rollout status deploy/web deploy/client deploy/stranger --timeout=300s
 
     TOKEN="$(token)"
@@ -81,6 +83,9 @@ case "${1:-}" in
     # Read users (kubeast:viewer) may POST to the Relay's TLS port through the API server, nothing else.
     helm template "$RELEASE" "$ROOT/helm/kubeast" -s templates/impersonation-viewer-hubble.yaml \
       -f "$ROOT/deploy/kind/values.yaml" -f "$ROOT/deploy/kind/networkflows-values.yaml" | ck apply -f - >/dev/null
+    # ... and GET the Prometheus through the API server proxy (network drops).
+    helm template "$RELEASE" "$ROOT/helm/kubeast" -s templates/impersonation-viewer-proxy.yaml -f "$ROOT/deploy/kind/values.yaml" \
+      --set-json 'auth.impersonation.viewerProxyServices=[{"namespace":"monitoring","service":"prometheus","port":9090}]' | ck apply -f - >/dev/null
     echo "═══ Kubeast: features.networkFlows for cluster $ID ═══"
     main_helm upgrade "$RELEASE" "$ROOT/helm/kubeast" --reset-then-reuse-values \
       -f "$ROOT/deploy/kind/networkflows-values.yaml" --set-json "features.networkFlows.clusters={\"$ID\":\"proxy\"}" \

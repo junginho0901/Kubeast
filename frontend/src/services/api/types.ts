@@ -809,6 +809,39 @@ export interface NetflowResult {
   redacted?: boolean
 }
 
+// GET /api/v1/cluster/namespaces/{ns}/networkdrops?kind=&name=&range= — drops counted by the Hubble agents
+// (Prometheus hubble_drop_total). incoming: the target is the destination; outgoing: the source.
+export interface NetdropPeer {
+  namespace?: string
+  workload?: string
+  kind?: string
+  pod?: string
+  reason: string
+  count: number
+}
+
+export interface NetdropSide {
+  total: number
+  reasons: { reason: string; count: number }[] | null
+  peers: NetdropPeer[] | null
+}
+
+export interface NetdropResult {
+  available: boolean
+  reason?: 'no_prometheus' | 'no_metrics' | 'no_context_labels'
+  source?: string
+  style?: 'labels' | 'pod'
+  namespace: string
+  kind?: string
+  name?: string
+  workload?: { kind: string; name: string }
+  range: string
+  incoming: NetdropSide
+  outgoing: NetdropSide
+  notes?: string[]
+  redacted?: boolean
+}
+
 // GET /api/v1/cluster/networkpolicies/check?src=&dst=&port=&protocol= — an end is
 // <kind>/<namespace>/<name> or an IP address; dst may be service/<namespace>/<name>.
 export type NetpolResult = 'allowed' | 'denied' | 'unknown'

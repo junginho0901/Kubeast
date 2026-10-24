@@ -267,7 +267,7 @@ async def test_list_clusters_names_the_tools_allowed_in_each(fakes, monkeypatch)
         data = json.loads(res.json()["result"]["content"][0]["text"])
     tools = {c["id"]: c["tools"] for c in data["clusters"]}["self"]
     assert "issues" in tools and "prometheus_query" not in tools and "logsearch" not in tools
-    prometheus = {"prometheus_query", "prometheus_metrics", "prometheus_labels", "prometheus_rules", "prometheus_targets"}
+    prometheus = {"prometheus_query", "prometheus_metrics", "prometheus_labels", "prometheus_rules", "prometheus_targets", "network_drops"}
     assert set(tools) == set(mcp_server.READ_TOOLS) - prometheus - {"logsearch", "loki_query", "loki_labels", "loki_patterns", "cost", "policy_reports", "k8s_diff",
                                                          "traces_search", "traces_get", "traces_tags", "traces_metrics", "traces_compare",
                                                          "alerts_list", "network_flows"} - admin_only

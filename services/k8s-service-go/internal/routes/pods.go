@@ -34,8 +34,10 @@ func RegisterPods(r chi.Router, h *handler.Handler) {
 	r.Get("/api/v1/logsearch/patterns", h.LogPatternsAll)
 	r.Get("/api/v1/namespaces/{namespace}/logsearch/logql", h.LogQLSearchNamespace)
 	r.Get("/api/v1/logsearch/logql", h.LogQLSearchAll)
-	// The AI's traces_* tools (features.traceStore), through the same door: TraceQL with the scope in every filter.
+	// The drawers' "Recent Flows" and "Network Drops" and the AI's network_flows and network_drops.
 	r.Get("/api/v1/namespaces/{namespace}/networkflows", h.NetworkFlows)
+	r.Get("/api/v1/namespaces/{namespace}/networkdrops", h.NetworkDrops)
+	// The AI's traces_* tools (features.traceStore), through the same door: TraceQL with the scope in every filter.
 	r.Get("/api/v1/namespaces/{namespace}/traces/search", h.TraceSearchNamespace)
 	r.Get("/api/v1/traces/search", h.TraceSearchAll)
 	r.Get("/api/v1/namespaces/{namespace}/traces/metrics", h.TraceMetricsNamespace)

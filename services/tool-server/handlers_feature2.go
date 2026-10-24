@@ -472,14 +472,12 @@ func handleNetworkPolicyCheck(ctx context.Context, args map[string]interface{}, 
 	return marshalJSON(reply)
 }
 
-// handleNetworkFlows reads recent flows of a namespace, pod or workload from
-// the cluster's Hubble Relay through k8s-service (as the user, audited there).
-func handleNetworkFlows(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+// networkTarget reads the namespace and the pod or workload of the network tools into q.
+func networkTarget(args map[string]interface{}, q url.Values) (string, error) {
 	namespace := strings.TrimSpace(argString(args, "namespace", ""))
 	if namespace == "" {
 		return "", wrapBadRequest("namespace is required")
 	}
-	q := url.Values{}
 	pod := strings.TrimSpace(argString(args, "pod", ""))
 	kind, name := strings.TrimSpace(argString(args, "workload_kind", "")), strings.TrimSpace(argString(args, "workload_name", ""))
 	switch {
@@ -494,6 +492,17 @@ func handleNetworkFlows(ctx context.Context, args map[string]interface{}, header
 		}
 		q.Set("kind", kind)
 		q.Set("name", name)
+	}
+	return namespace, nil
+}
+
+// handleNetworkFlows reads recent flows of a namespace, pod or workload from
+// the cluster's Hubble Relay through k8s-service (as the user, audited there).
+func handleNetworkFlows(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+	q := url.Values{}
+	namespace, err := networkTarget(args, q)
+	if err != nil {
+		return "", err
 	}
 	if v := strings.TrimSpace(argString(args, "verdict", "")); v != "" {
 		q.Set("verdict", strings.ToUpper(v))
@@ -518,5 +527,46 @@ func handleNetworkFlows(ctx context.Context, args map[string]interface{}, header
 		"observed = egress at the source, ingress at the destination). DROPPED with drop_reason POLICY_DENIED means a network policy blocked it: " +
 		"call network_policy_check for the same source, destination and port to name the Kubernetes NetworkPolicy rule. " +
 		"truncated: the Relay had more than the limit; redacted: peers outside the user's namespaces show namespace and address only."
+	return marshalJSON(reply)
+}
+
+// netdropsUnavailable explains why a cluster has no drop counts to read.
+var netdropsUnavailable = map[string]string{
+	"no_prometheus":     "No Prometheus is set up for this cluster (features.prometheus).",
+	"no_metrics":        "The cluster's Prometheus has no hubble_drop_total: the Hubble drop metric is not enabled or not scraped.",
+	"no_context_labels": "hubble_drop_total has no pod or workload labels, so drops cannot be tied to a workload (see docs/cluster-requirements.md, Hubble metrics).",
+}
+
+// handleNetworkDrops reads the Hubble drops of a namespace, pod or workload from
+// the cluster's Prometheus through k8s-service (as the user).
+func handleNetworkDrops(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+	q := url.Values{}
+	namespace, err := networkTarget(args, q)
+	if err != nil {
+		return "", err
+	}
+	if v := strings.TrimSpace(argString(args, "since", "")); v != "" {
+		q.Set("range", v)
+	}
+	status, body, err := k8sServiceGet(ctx, headers, "/namespaces/"+url.PathEscape(namespace)+"/networkdrops", q)
+	if err != nil {
+		return "", err
+	}
+	reply, out, err := featureReply("networkDrops", "", status, body)
+	if err != nil || out != "" {
+		return out, err
+	}
+	if reply["available"] != true {
+		reason, _ := reply["reason"].(string)
+		reply["status"] = "unavailable"
+		reply["note"] = netdropsUnavailable[reason] + " Use network_policy_check to see what NetworkPolicy allows."
+		return marshalJSON(reply)
+	}
+	reply["note"] = "Counted by the Hubble agents (hubble_drop_total) over the range, read from the cluster's Prometheus as the signed-in user. " +
+		"incoming: drops where the target is the destination, the peer is the source; outgoing: the reverse. " +
+		"POLICY_DENIED means a network policy dropped it: call network_policy_check with that peer and the target (no port checks every declared port) " +
+		"to name the Kubernetes NetworkPolicy rule, and network_flows for the connections themselves when the cluster has a Hubble Relay. " +
+		"notes workload_level: the metric has no pod label, so a pod's numbers are its workload's. A peer without a namespace is outside the cluster or not named by the agent; " +
+		"redacted: peers outside the user's namespaces show their namespace only."
 	return marshalJSON(reply)
 }

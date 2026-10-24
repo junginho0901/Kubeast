@@ -37,7 +37,7 @@ while [ $# -gt 0 ]; do
 done
 
 # 1. Create the kind cluster (idempotent).
-if ! kind get clusters 2>/dev/null | grep -qx "$NAME"; then
+if ! kind get clusters 2>/dev/null | grep -x "$NAME" >/dev/null; then
   echo "═══ creating kind cluster '$NAME' ═══"
   kind create cluster --name "$NAME"
 else

@@ -778,6 +778,31 @@ K8S_READONLY_TOOLS: List[Dict] = [
     {
         "type": "function",
         "function": {
+            "name": "network_drops",
+            "description": (
+                "Network drops counted by the Hubble agents (Cilium, or Retina's Hubble), read from the cluster's Prometheus "
+                "(hubble_drop_total) as the signed-in user, for the namespace, a pod (pod) or a workload (workload_kind + workload_name): "
+                "incoming (the target is the destination) and outgoing totals over since (1m to 24h, default 1h), the drop reasons "
+                "(POLICY_DENIED = a network policy dropped it) and the peers they came from or went to. Use it for \"is anything being "
+                "dropped\", \"how much and since when\"; for POLICY_DENIED, call network_policy_check with that peer to name the rule, and "
+                "network_flows for the connections themselves. available false says why (no Prometheus, no Hubble drop metric, no workload labels)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "namespace": {"type": "string", "description": "Namespace of the pod or workload"},
+                    "pod": {"type": "string", "description": "Pod name (or use workload_kind + workload_name)"},
+                    "workload_kind": {"type": "string", "description": "Deployment, StatefulSet, DaemonSet, ReplicaSet, Job or CronJob"},
+                    "workload_name": {"type": "string", "description": "Workload name"},
+                    "since": {"type": "string", "description": "Range, e.g. 1h, 6h or 24h (default 1h)"},
+                },
+                "required": ["namespace"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "resource_graph",
             "description": (
                 "The objects of one namespace and the edges between them — owner (Deployment → ReplicaSet → Pod), selector (Service → Pod), "

@@ -409,3 +409,36 @@ func TestNetworkFlows(t *testing.T) {
 		t.Fatalf("not configured: %s %v", out, err)
 	}
 }
+
+func TestNetworkDrops(t *testing.T) {
+	seen := fakeK8sService(t, func(r *http.Request) (int, string) {
+		return 200, `{"available":true,"source":"hubble","style":"labels","incoming":{"total":40,"reasons":[{"reason":"POLICY_DENIED","count":40}],"peers":[{"namespace":"shop","workload":"stranger","reason":"POLICY_DENIED","count":40}]},"outgoing":{"total":0,"reasons":[],"peers":[]}}`
+	})
+	out, err := handleNetworkDrops(ctxFor("c1"), map[string]interface{}{"namespace": "shop", "workload_kind": "Deployment", "workload_name": "web", "since": "6h"}, bearer())
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := (*seen)[0].URL.Query()
+	if (*seen)[0].URL.Path != "/api/v1/namespaces/shop/networkdrops" || q.Get("kind") != "Deployment" || q.Get("name") != "web" || q.Get("range") != "6h" || q.Get("cluster") != "c1" {
+		t.Fatalf("request %s %s", (*seen)[0].URL.Path, (*seen)[0].URL.RawQuery)
+	}
+	m := decode(t, out)
+	if m["incoming"].(map[string]interface{})["total"] != float64(40) || !strings.Contains(m["note"].(string), "network_policy_check") {
+		t.Fatalf("reply: %s", out)
+	}
+	if _, err := handleNetworkDrops(ctxFor("c1"), map[string]interface{}{"namespace": "shop", "pod": "a", "workload_kind": "Deployment", "workload_name": "web"}, bearer()); !errors.Is(err, errBadRequest) {
+		t.Fatalf("pod and workload: %v", err)
+	}
+	// nothing to read: the reason, and where to go instead
+	fakeK8sService(t, func(r *http.Request) (int, string) { return 200, `{"available":false,"reason":"no_metrics"}` })
+	out, err = handleNetworkDrops(ctxFor("c1"), map[string]interface{}{"namespace": "shop"}, bearer())
+	if m := decode(t, out); err != nil || m["status"] != "unavailable" || !strings.Contains(m["note"].(string), "hubble_drop_total") {
+		t.Fatalf("no metrics: %s %v", out, err)
+	}
+	// the cluster refuses the Prometheus read for this user
+	fakeK8sService(t, func(r *http.Request) (int, string) { return 403, `{"detail":"forbidden: services/proxy"}` })
+	out, err = handleNetworkDrops(ctxFor("c1"), map[string]interface{}{"namespace": "shop"}, bearer())
+	if err != nil || decode(t, out)["status"] != "forbidden" {
+		t.Fatalf("forbidden: %s %v", out, err)
+	}
+}

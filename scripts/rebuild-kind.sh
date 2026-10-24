@@ -166,7 +166,7 @@ if [[ ${#SERVICES[@]} -eq 0 ]]; then
   exit 1
 fi
 
-if ! kind get clusters | grep -qx "$KIND_CLUSTER_NAME"; then
+if ! kind get clusters | grep -x "$KIND_CLUSTER_NAME" >/dev/null; then
   echo "Kind cluster '$KIND_CLUSTER_NAME' not found. Create it first." >&2
   exit 1
 fi

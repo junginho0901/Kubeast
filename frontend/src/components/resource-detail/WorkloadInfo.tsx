@@ -10,6 +10,7 @@ import WorkloadStrategySection from './workload-info/WorkloadStrategySection'
 import PolicyViolations from './PolicyViolations'
 import NetworkPolicies from './NetworkPolicies'
 import NetworkFlows from './NetworkFlows'
+import NetworkDrops from './NetworkDrops'
 import { LogSearchView } from '@/components/LogSearchView'
 import { useLogSearchAvailable } from '@/hooks/useLogSearchAvailable'
 import WorkloadKindInfo from './workload-info/WorkloadKindInfo'
@@ -282,6 +283,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlo
       <PolicyViolations kind={kind} namespace={namespace ?? ''} name={name} />
       {NETPOL_KINDS.has(kind) && <NetworkPolicies kind={kind} namespace={namespace ?? ''} name={name} />}
       {NETPOL_KINDS.has(kind) && <NetworkFlows kind={kind} namespace={namespace ?? ''} name={name} />}
+      {NETPOL_KINDS.has(kind) && <NetworkDrops kind={kind} namespace={namespace ?? ''} name={name} />}
 
       {logSearchAvailable && namespace && LOG_SEARCH_KINDS.includes(kind) && (
         <InfoSection
