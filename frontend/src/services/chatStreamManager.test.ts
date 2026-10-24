@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { appendToolBlock, ChatStreamManager, nthToolBlock, resultTarget, withToolResult } from './chatStreamManager'
+import { appendToolBlock, ChatStreamManager, nthToolBlock, resultTarget, withToolAccess, withToolResult } from './chatStreamManager'
+import { accessLine } from './toolAccess'
 
 describe('pairing a tool result with its call', () => {
   const calls = [
@@ -104,5 +105,60 @@ describe('the stream manager keeps text and tool blocks in arrival order', () =>
   it('an answer without tools is its text', async () => {
     const state = await run([{ content: 'Two clusters.' }, '[DONE]'])
     expect(state.content).toBe('Two clusters.')
+  })
+
+  it('puts the identity a call reached the cluster as under its name, and none on a call that reached no cluster', async () => {
+    const access = { cluster: 'self', kind: 'person', user: 'a@example.com', groups: ['kubeast:authenticated', 'kubeast:viewer'], role: 'Read', impersonation: true, mode: 'read' }
+    const state = await run([
+      { function: 'k8s_get_resources', args: { kind: 'pods' }, call_id: 0 },
+      { function: 'list_clusters', args: {}, call_id: 1 },
+      { function_result: 'list_clusters', result: '["self"]', call_id: 1 },
+      { function_result: 'k8s_get_resources', result: 'pod-a Running', call_id: 0, access },
+      '[DONE]',
+    ])
+    const c = state.content
+    expect(c.split('🔐 Ran as:').length - 1).toBe(1)
+    expect(c).toContain(`<summary>🔧 <strong>k8s_get_resources</strong></summary>\n\n${accessLine(access)}\n\n<details>`)
+    expect(c.indexOf('🔐')).toBeLessThan(c.indexOf('<strong>list_clusters</strong>'))
+    expect(state.toolCalls.map((tc) => tc.access ?? null)).toEqual([access, null])
+  })
+})
+
+describe('the 🔐 line', () => {
+  const read = { cluster: 'prod', kind: 'person', user: 'a@example.com', groups: ['kubeast:authenticated', 'kubeast:viewer'], role: 'Read', impersonation: true }
+
+  // The same cases and text as ai-service tests/test_tool_access.py: the saved answer and the live one must match.
+  it.each([
+    [{ ...read, mode: 'read' },
+      '<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> · groups <code>kubeast:authenticated</code> <code>kubeast:viewer</code> · role Read · whole cluster · read-only</p>'],
+    [{ ...read, role: 'Write', groups: ['kubeast:authenticated', 'kubeast:role:write'], namespaces: ['shop', 'payments'], mode: 'write' },
+      '<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> · groups <code>kubeast:authenticated</code> <code>kubeast:role:write</code> · role Write · namespaces shop, payments · write</p>'],
+    [{ ...read, role: '*', groups: ['kubeast:admin', 'kubeast:authenticated'] },
+      '<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> · groups <code>kubeast:admin</code> <code>kubeast:authenticated</code> · global admin · whole cluster · read-only</p>'],
+    [{ ...read, kind: 'api_key', api_key: 'k-1' },
+      '<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> (API key) · groups <code>kubeast:authenticated</code> <code>kubeast:viewer</code> · role Read · whole cluster · read-only</p>'],
+    [{ cluster: 'prod', kind: 'investigator', user: 'kubeast:investigator', groups: ['kubeast:investigator'], impersonation: true },
+      '<p><strong>🔐 Ran as:</strong> <code>kubeast:investigator</code> · groups <code>kubeast:investigator</code> · alert investigator · read-only</p>'],
+    [{ cluster: 'prod', kind: 'person', role: 'Read', impersonation: false },
+      "<p><strong>🔐 Ran as:</strong> ⚠️ Kubeast's own credential, not this user's permissions (impersonation is off) · role Read · whole cluster · read-only</p>"],
+    [{ ...read, role: '' },
+      '<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> · groups <code>kubeast:authenticated</code> <code>kubeast:viewer</code> · no role in this cluster · whole cluster · read-only</p>'],
+  ])('%#', (access, want) => {
+    expect(accessLine(access)).toBe(want)
+  })
+
+  it('escapes what the token carries and is empty without an identity', () => {
+    const out = accessLine({ ...read, user: '<b>x</b>', role: '<img src=x>', namespaces: ['<s>'] })
+    expect(out).not.toMatch(/<b>|<img|<s>/)
+    expect(out).toContain('&lt;b&gt;x&lt;/b&gt;')
+    expect(accessLine(null)).toBe('')
+  })
+
+  it('goes under the n-th block name only', () => {
+    const block = (n: string) => `<details>\n<summary>🔧 <strong>${n}</strong></summary>\n\n<p>args</p>\n\n</details>\n\n`
+    const content = block('a') + block('b')
+    expect(withToolAccess(content, 1, '<p>L</p>')).toBe(block('a') + block('b').replace('</summary>\n', '</summary>\n\n<p>L</p>\n'))
+    expect(withToolAccess(content, 2, '<p>L</p>')).toBe(content)
+    expect(withToolAccess(content, 0, '')).toBe(content)
   })
 })

@@ -27,6 +27,12 @@
   - A missing name, kind or capability (metrics-server, etc.) comes back as a result instead of a kubectl error: **`not_found` (with a list of similar names), `unknown_kind` or `unavailable`**.
   - The AI therefore looks once instead of asking back while switching namespaces, then says where it looked and asks.
   - Similar names are searched only within that person's namespace scope.
+  - Each tool block starts with a **🔐 line: who the cluster saw the call as**.
+    - The user and groups are the impersonation values sent to the cluster, as the service that sent them reports them (tool-server, or k8s-service in its `X-Kubeast-Access` header).
+    - The line also shows the Kubeast role, the namespace scope and whether the tool reads or writes.
+    - The same values are in the call's audit row (`after.access`), so the call can be matched with `impersonatedUser` in the cluster's audit log.
+    - With impersonation off (`auth.impersonation.enabled=false`), the line says Kubeast's own credential ran the call.
+    - An alert investigation report says which identity read the cluster.
   - Tools that use Kubeast features call the k8s-service API **with that person's token** rather than kubectl, so permissions, audit and masking are the same as in the UI. These tools are:
     - `issues`: an issue check of pods, workloads, nodes, PVCs and warning events at once
     - `prometheus_query`: PromQL instant and range queries, absolute time ranges too. Given `chart=true`, a title and a unit, the result becomes a **graph below the answer**.

@@ -81,6 +81,9 @@ func (h *Handler) ClusterMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		// The identity this request's cluster calls go out as, which the AI
+		// chat shows next to a tool call that came through here.
+		w.Header().Set(auth.HeaderAccess, payload.Access(c, h.cfg.ImpersonationEnabled).Header())
 		sr := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(sr, r)
 

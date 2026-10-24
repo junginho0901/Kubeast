@@ -28,6 +28,9 @@ type ToolCallResponse struct {
 	// Redacted says what was masked in Content before it leaves for the model
 	// (services/pkg/redact); ai-service copies it into the audit row.
 	Redacted *redact.Stats `json:"redacted,omitempty"`
+	// Access is the identity the call reached the cluster as, set once the
+	// tool ran (also when it failed); shown next to the call and audited.
+	Access *auth.Access `json:"access,omitempty"`
 }
 
 // redactOpts is read once from the environment (REDACTION_ENABLED, REDACTION_PII,
@@ -127,6 +130,7 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 	ctx = withKubeconfigPath(ctx, kcPath)
 	ctx = withClusterID(ctx, clusterID)
 	ctx = auth.WithPayload(ctx, payload)
+	access := payload.Access(clusterID, impersonationEnabled)
 
 	output, err := tool.Handler(ctx, req.Arguments, r.Header)
 	if err != nil {
@@ -136,14 +140,14 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 		} else if errors.Is(err, errConflict) {
 			status = http.StatusConflict
 		}
-		respondJSON(w, status, ToolCallResponse{Error: err.Error()})
+		respondJSON(w, status, ToolCallResponse{Error: err.Error(), Access: &access})
 		return
 	}
 
 	// Everything a tool returns is bound for the model: mask credentials
 	// (and Secret data) here, once, for every tool.
 	content, stats := redactToolOutput(output)
-	respondJSON(w, http.StatusOK, ToolCallResponse{Content: content, Redacted: stats})
+	respondJSON(w, http.StatusOK, ToolCallResponse{Content: content, Redacted: stats, Access: &access})
 }
 
 func redactToolOutput(output string) (string, *redact.Stats) {

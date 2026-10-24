@@ -4,6 +4,7 @@
 // because a report can quote pod logs.
 
 import { client } from './client'
+import type { ToolAccess } from '@/services/toolAccess'
 
 export type InvestigationStatus = 'queued' | 'running' | 'done' | 'failed' | 'skipped'
 
@@ -33,6 +34,8 @@ export interface InvestigationToolCall {
   step: number
   result_chars?: number
   error?: string
+  // The identity the call reached the cluster as (absent when it reached none)
+  access?: ToolAccess
 }
 
 export interface Investigation extends InvestigationSummary {

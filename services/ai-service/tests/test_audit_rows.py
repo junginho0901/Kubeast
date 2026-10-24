@@ -213,13 +213,20 @@ async def test_an_approved_write_runs_as_ai_tool_execute(monkeypatch):
             return approval
 
         async def add_message(self, *a, **k):
-            return None
+            messages.append((a, k))
 
     async def load(approval_id, payload):
         return DB(), approval
 
+    messages = []
+    who = {"cluster": "self", "kind": "person", "user": "dev@example.com", "groups": ["kubeast:authenticated", "kubeast:operator"],
+           "role": "Write", "impersonation": True}
+
     class Service:
+        tool_server = SimpleNamespace(last_access=None)
+
         async def _call_tool_server(self, tool, args, **kw):
+            self.tool_server.last_access = who
             return "deployment.apps/web scaled"
 
     async def build(authorization, cluster_name=None):
@@ -237,3 +244,8 @@ async def test_an_approved_write_runs_as_ai_tool_execute(monkeypatch):
     assert actions == ["ai.tool.approve", "ai.tool.execute"], actions  # the run is not a read tool's ai.tool.call
     run = out[-1]
     assert run["result"] == "success" and run["target_id"] == "web" and run["namespace"] == "shop" and run["after"]["tool"] == "k8s_scale"
+    # the identity the write went out as, in the row and in the chat message
+    assert run["after"]["access"] == {**who, "mode": "write"}
+    (_, _, content), kw = messages[0]
+    assert "<p><strong>🔐 Ran as:</strong> <code>dev@example.com</code>" in content and content.index("🔐") < content.index("```")
+    assert kw["tool_calls"][0]["access"] == {**who, "mode": "write"}

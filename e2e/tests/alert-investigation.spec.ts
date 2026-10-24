@@ -131,6 +131,9 @@ test.describe('alert investigation', () => {
       const ok = (d.tool_calls as Array<{ tool: string; error?: string }>).filter((c) => !c.error)
       expect(ok.length, `tool calls: ${JSON.stringify(d.tool_calls)}`).toBeGreaterThan(0)
     }
+    // Every call that reached the cluster went out as the investigator's own identity, never a person's.
+    const reached = (d.tool_calls as Array<{ access?: { kind: string; user: string; groups: string[]; mode: string } }>).filter((c) => c.access)
+    for (const c of reached) expect(c.access).toMatchObject({ kind: 'investigator', user: 'kubeast:investigator', groups: ['kubeast:investigator'], mode: 'read' })
 
     const runs = (await auditRows(request, admin, 'ai.investigation.run', since)).filter((r) => r.after.investigation_id === row.id)
     expect(runs).toHaveLength(1)
@@ -144,6 +147,8 @@ test.describe('alert investigation', () => {
       const toolRows = (await auditRows(request, admin, 'ai.tool.call', since)).filter((r) => r.after.investigation_id === row.id)
       expect(toolRows.length).toBe(d.tool_calls.length)
       expect(toolRows.every((r) => (r.ActorEmail ?? r.actor_email) === 'kubeast:investigator')).toBe(true)
+      expect(toolRows.filter((r) => r.after.access).every((r) => r.after.access.user === 'kubeast:investigator')).toBe(true)
+      expect(toolRows.filter((r) => r.after.access).length).toBe(reached.length)
     }
 
     const again = await request.post('/api/v1/alerts/webhook?cluster=self', { headers: { Authorization: `Bearer ${token}` }, data: message([firing(name, fp)]) })

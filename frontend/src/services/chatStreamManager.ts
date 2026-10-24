@@ -1,5 +1,6 @@
 import { getAuthHeaders, handleUnauthorized } from '@/services/auth'
 import { clusterHeaders } from '@/services/clusterRef'
+import { accessLine } from '@/services/toolAccess'
 
 export type StreamingPhase = 'waiting' | 'tools' | 'answer'
 
@@ -108,6 +109,15 @@ export function withToolResult(content: string, n: number, result: string): stri
   const at = nthToolBlock(content, n)
   if (at === -1) return content
   return content.substring(0, at) + content.substring(at).replace('Executing...', result)
+}
+
+// The content with a line under the n-th tool block's name (the 🔐 line), where the saved answer has it.
+export function withToolAccess(content: string, n: number, line: string): string {
+  const at = nthToolBlock(content, n)
+  const end = at === -1 ? -1 : content.indexOf('</summary>\n', at)
+  if (!line || end === -1) return content
+  const cut = end + '</summary>\n'.length
+  return `${content.substring(0, cut)}\n${line}\n${content.substring(cut)}`
 }
 
 export interface ChatStreamManagerOptions {
@@ -426,6 +436,7 @@ export class ChatStreamManager {
                       is_yaml: isYaml,
                       ...(displayText ? { display: displayText, display_format: displayFormat } : {}),
                       ...(data.chart ? { chart: data.chart } : {}),
+                      ...(data.access ? { access: data.access } : {}),
                     }
                   : tc
               )
@@ -442,7 +453,7 @@ export class ChatStreamManager {
               // Text still queued for the typewriter came after this call's block, so it stays in the queue.
               this.setState({
                 toolCalls: mergedToolCalls,
-                content: withToolResult(this.state.content, target, codeBlock),
+                content: withToolAccess(withToolResult(this.state.content, target, codeBlock), target, accessLine(data.access)),
                 streamingPhase: 'tools',
               })
               continue

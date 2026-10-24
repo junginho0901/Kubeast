@@ -4282,6 +4282,7 @@
     },
     "noAnnotations": "No annotations",
     "noTools": "The model answered without calling a tool.",
+    "ranAs": "Read the cluster as {{user}} (groups {{groups}}), read-only.",
     "link": {
       "source": "Source query",
       "sender": "Alert sender"

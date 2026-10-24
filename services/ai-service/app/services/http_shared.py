@@ -6,7 +6,7 @@ connection pool per client, so that both leaked sockets and defeated pooling.
 Here the pool is shared per base URL and each request gets a thin scope that
 only adds its own headers and query params to every call.
 """
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import httpx
 
@@ -33,11 +33,13 @@ class ScopedClient:
     request's headers and params. `params`/`headers` stay readable as dicts."""
 
     def __init__(self, base_url: str, timeout: float, headers: Optional[Dict[str, str]] = None,
-                 params: Optional[Dict[str, str]] = None):
+                 params: Optional[Dict[str, str]] = None,
+                 on_response: Optional[Callable[[httpx.Response], None]] = None):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.headers: Dict[str, str] = dict(headers or {})
         self.params: Dict[str, str] = dict(params or {})
+        self.on_response = on_response
 
     @property
     def pool(self) -> httpx.AsyncClient:
@@ -55,7 +57,10 @@ class ScopedClient:
         return kwargs
 
     async def request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
-        return await self.pool.request(method, url, **self._merge(kwargs))
+        response = await self.pool.request(method, url, **self._merge(kwargs))
+        if self.on_response is not None:
+            self.on_response(response)
+        return response
 
     async def get(self, url: str, **kwargs: Any) -> httpx.Response:
         return await self.request("GET", url, **kwargs)

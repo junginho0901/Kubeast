@@ -5,6 +5,7 @@ MSA 환경에서 K8s Service와 HTTP로 통신
 from typing import List, Optional, Dict
 import json
 
+from app.services.ai.access import HEADER as ACCESS_HEADER, from_header
 from app.services.http_shared import ScopedClient
 
 K8S_SERVICE_URL = "http://k8s-service:8002/api/v1"
@@ -23,7 +24,15 @@ class K8sServiceClient:
         # with any per-request params. The connection pool is shared, only the
         # user's headers and params belong to this instance.
         params = {"cluster": cluster_name} if cluster_name else None
-        self.client = ScopedClient(self.base_url, timeout=30.0, headers=headers, params=params)
+        self.client = ScopedClient(self.base_url, timeout=30.0, headers=headers, params=params, on_response=self._note_access)
+        # The identity the last cluster request went out as (k8s-service's X-Kubeast-Access), for the AI tool
+        # call it served (app/services/ai/access.py).
+        self.last_access: Optional[Dict] = None
+
+    def _note_access(self, response) -> None:
+        access = from_header(response.headers.get(ACCESS_HEADER))
+        if access is not None:
+            self.last_access = access
 
     async def get_current_cluster(self) -> str:
         """The cluster k8s-service targets for this client (its default when none is named)."""

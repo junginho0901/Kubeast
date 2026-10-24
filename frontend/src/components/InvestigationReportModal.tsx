@@ -39,6 +39,8 @@ export default function InvestigationReportModal({ id, load, onClose }: {
       error: data.error || undefined, report: data.report.slice(0, 4096),
     },
   } : null, [data])
+  // The investigator has one identity; the first call that reached the cluster shows it.
+  const ranAs = data?.tool_calls.find((c) => c.access?.impersonation)?.access
 
   return (
     <ModalFrame
@@ -124,6 +126,11 @@ export default function InvestigationReportModal({ id, load, onClose }: {
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
               {tr('investigations.section.tools', 'Tool calls ({{count}})', { count: data.tool_calls.length })}
             </h3>
+            {ranAs && (
+              <div className="mb-2 text-xs text-slate-400" data-testid="investigation-access">
+                {tr('investigations.ranAs', 'Read the cluster as {{user}} (groups {{groups}}), read-only.', { user: ranAs.user, groups: (ranAs.groups || []).join(', ') })}
+              </div>
+            )}
             {data.tool_calls.length === 0 ? (
               <div className="text-xs text-slate-500">{tr('investigations.noTools', 'The model answered without calling a tool.')}</div>
             ) : (

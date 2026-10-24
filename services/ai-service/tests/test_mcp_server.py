@@ -40,12 +40,14 @@ class FakeToolServer:
     def __init__(self, authorization=None, base_url=None):
         self.authorization = authorization
         self.last_redacted = None
+        self.last_access = None
 
     headers: list = []
 
     async def call_tool(self, name, arguments=None, headers=None):
         FakeToolServer.calls.append((self.authorization, name, dict(arguments or {})))
         FakeToolServer.headers.append(headers)
+        self.last_access = {"cluster": arguments["cluster"], "kind": "api_key", "user": "w@example.com", "groups": ["kubeast:authenticated", "kubeast:operator"], "impersonation": True}
         if FakeToolServer.fail:
             raise Exception(FakeToolServer.fail)
         self.last_redacted = {"count": 1, "kinds": ["key_name"]}
@@ -165,6 +167,9 @@ async def test_call_runs_as_the_user_and_is_audited(fakes):
     assert row["target_type"] == "pods" and row["target_id"] == "k8s_get_resources" and row["path"] == mcp_server.MCP_PATH
     assert row["after"]["credential"] == {"type": "api_key", "akid": "k-1"}
     assert row["after"]["redacted"] == {"count": 1, "kinds": ["key_name"]}
+    # the identity tool-server reported, with whether the tool writes
+    assert row["after"]["access"] == {"cluster": "self", "kind": "api_key", "user": "w@example.com",
+                                      "groups": ["kubeast:authenticated", "kubeast:operator"], "impersonation": True, "mode": "read"}
 
 
 @pytest.mark.asyncio

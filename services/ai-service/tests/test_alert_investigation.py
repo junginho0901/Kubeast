@@ -334,6 +334,30 @@ async def test_investigate_reads_with_tools_then_reports(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_the_report_and_rows_carry_the_identity_tool_server_reported(monkeypatch):
+    who = {"cluster": "self", "kind": "investigator", "user": "kubeast:investigator", "groups": ["kubeast:investigator"], "impersonation": True}
+    service = FakeService([
+        completion(calls=[tool_call("c1", "k8s_get_resources", {"resource_type": "pods", "namespace": "apps"}),
+                          tool_call("c2", "k8s_delete_resource", {"resource_type": "pod", "resource_name": "pod-1"})]),
+        completion(content="## Summary\nok"),
+    ])
+    service.tool_server = SimpleNamespace(last_redacted=None, last_access=None)
+    run = service._execute_function_with_context
+
+    async def execute(name, args, ctx):
+        service.tool_server.last_access = who
+        return await run(name, args, ctx)
+
+    service._execute_function_with_context = execute
+    audits = []
+    install_loop(monkeypatch, service, audits)
+    out = await runner.investigate(cfg(max_steps=5), row())
+    # the read reached the cluster as the investigator; the refused write reached nothing
+    assert [c.get("access") for c in out["tool_calls"]] == [{**who, "mode": "read"}, None]
+    assert [a["after"]["access"] for a in audits] == [{**who, "mode": "read"}, None]
+
+
+@pytest.mark.asyncio
 async def test_last_step_has_no_tools(monkeypatch):
     keeps_calling = completion(calls=[tool_call("c", "k8s_get_pod_logs", {"namespace": "apps", "pod_name": "p"})])
     service = FakeService([keeps_calling, keeps_calling, completion(content="## Summary\nok")])

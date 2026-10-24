@@ -2,11 +2,15 @@ package handler
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
@@ -121,6 +125,40 @@ func TestClusterMiddlewareUnknownClusterIs404(t *testing.T) {
 		mw.ServeHTTP(rec, req)
 		if rec.Code != tc.status || called != tc.next {
 			t.Errorf("%q: status %d next=%v, want %d next=%v (body %s)", tc.query, rec.Code, called, tc.status, tc.next, rec.Body.String())
+		}
+	}
+}
+
+// Every request through the middleware answers with the identity its cluster
+// calls go out as: the groups the impersonating transport sends, nothing when
+// impersonation is off.
+func TestClusterMiddlewareAccessHeader(t *testing.T) {
+	svc, err := k8s.NewService(context.Background(), middlewareRegistry{}, false, nil, k8s.ServiceOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := auth.TokenPayload{UserID: "u1", Email: "a@example.com", Perms: auth.PermissionMatrix{"known": {"resource.*.read"}}, Roles: map[string]string{"known": "Read"}}
+	for _, imp := range []bool{true, false} {
+		h := &Handler{svc: svc, cfg: config.Config{ImpersonationEnabled: imp}}
+		mw := h.ClusterMiddleware(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/namespaces?cluster=known", nil)
+		req = req.WithContext(auth.WithPayload(req.Context(), p))
+		rec := httptest.NewRecorder()
+		mw.ServeHTTP(rec, req)
+		raw, err := base64.RawURLEncoding.DecodeString(rec.Header().Get(auth.HeaderAccess))
+		if err != nil {
+			t.Fatalf("impersonation=%v: header %q: %v", imp, rec.Header().Get(auth.HeaderAccess), err)
+		}
+		var got auth.Access
+		if err := json.Unmarshal(raw, &got); err != nil {
+			t.Fatal(err)
+		}
+		want := auth.Access{Cluster: "known", Kind: "person", Role: "Read", Impersonation: imp}
+		if imp {
+			want.User, want.Groups = "a@example.com", []string{auth.GroupAuthenticated, auth.GroupViewer}
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("impersonation=%v: access %+v, want %+v", imp, got, want)
 		}
 	}
 }

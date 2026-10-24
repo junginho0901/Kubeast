@@ -23,6 +23,7 @@ from typing import Any, Optional
 import httpx
 
 from app.database import get_db_service, utcnow
+from app.services.ai import access as access_mod
 from app.services.ai.debug_dump import safe_error
 from app.services.ai.model_errors import classify
 from app.services.audit_target import tool_target
@@ -147,6 +148,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row) -> dict[str,
             result = json.dumps({"status": "audit_unavailable"})
             entry["error"] = "audit unavailable"
         else:
+            access_mod.reset(service)
             try:
                 raw = await asyncio.wait_for(service._execute_function_with_context(name, args, context), timeout=remaining())
                 formatted, _is_json, _is_yaml = formatters._format_tool_result(name, args, raw)
@@ -157,6 +159,8 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row) -> dict[str,
             except Exception as e:  # a tool error is the model's to read, not the end of the run
                 result = json.dumps({"error": clean_error(e)})
                 entry["error"] = clean_error(e)
+            if (access := access_mod.of_call(service, name)) is not None:
+                entry["access"] = access
         tool_log.append(entry)
         target = tool_target(name, args)
         await write_audit(
@@ -173,6 +177,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row) -> dict[str,
                 "iteration": step,
                 "resource_type": args.get("resource_type"),
                 "redacted": getattr(service.tool_server, "last_redacted", None),
+                "access": entry.get("access"),
             },
             result="failure" if entry.get("error") else "success",
             error=entry.get("error"),

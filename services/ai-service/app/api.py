@@ -357,7 +357,7 @@ async def approve_tool_approval(
     from app.database import utcnow
     from app.services.audit_target import tool_target
     from app.services.audit_writer import AuditUnavailable, fail_closed_enabled, require_audit_ready, write_audit
-    from app.services.ai import formatters
+    from app.services.ai import access as tool_access, formatters
 
     from app.services.approval_token import ApprovalTokenUnavailable, sign as sign_approval
     payload = _caller(authorization)
@@ -408,21 +408,25 @@ async def approve_tool_approval(
     except Exception as e:  # tool-server error (403 from the cluster, kubectl failure, ...)
         status, error = "failed", str(e)
         formatted = f"error: {error}"
+    call_access = tool_access.with_mode(ai_service.tool_server.last_access, approval.tool)
     approval = await db.transition_tool_approval(
         approval.id, "approved", status=status, result=formatted[:APPROVAL_RESULT_MAX_CHARS], decided_at=utcnow(),
     ) or approval
     icon = "✅" if status == "executed" else "⚠️"
+    access_line = tool_access.line(call_access)
     await db.add_message(
         approval.session_id, "assistant",
-        f"{icon} `{approval.tool}` on `{approval.cluster}` was approved and {'executed' if status == 'executed' else 'failed'}.\n\n```\n{approval.result}\n```",
-        tool_calls=[{"function": approval.tool, "args": args, "result": approval.result, "approval_id": approval.id, "approval_status": status}],
+        f"{icon} `{approval.tool}` on `{approval.cluster}` was approved and {'executed' if status == 'executed' else 'failed'}.\n\n"
+        + (f"{access_line}\n\n" if access_line else "") + f"```\n{approval.result}\n```",
+        tool_calls=[{"function": approval.tool, "args": args, "result": approval.result, "approval_id": approval.id, "approval_status": status,
+                     **({"access": call_access} if call_access else {})}],
     )
     target = tool_target(approval.tool, args)
     await write_audit(
         action="ai.tool.execute", actor_user_id=actor.get("user_id"), actor_email=actor.get("email"), cluster=approval.cluster,
         target_type=target.type, target_id=target.id, namespace=target.namespace,
         after={"approval_id": approval.id, "session_id": approval.session_id, "cluster": approval.cluster, "tool": approval.tool, "approved": True,
-               **({"objects": target.objects} if target.objects else {})},
+               "access": call_access, **({"objects": target.objects} if target.objects else {})},
         request_ip=http.get("ip"), user_agent=http.get("user_agent"), request_id=http.get("request_id"), path=http.get("path"),
         result="success" if status == "executed" else "failure", error=error,
     )

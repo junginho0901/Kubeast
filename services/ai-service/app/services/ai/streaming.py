@@ -15,6 +15,7 @@ import json
 import time
 from typing import Callable, Optional, TYPE_CHECKING
 
+from app.services.ai import access as access_mod
 from app.services.ai import budget as budget_mod
 from app.services.ai import charts
 from app.services.ai import formatters
@@ -96,10 +97,12 @@ def tool_block_markdown(tc: dict) -> str:
         code_fence = "```yaml"
     else:
         code_fence = "```json" if tc.get("is_json", False) else "```"
+    access_line = access_mod.line(tc.get("access"))
+    access_section = f"{access_line}\n\n" if access_line else ""
     return f"""<details>
 <summary>🔧 <strong>{tc['function']}</strong></summary>
 
-{args_section}
+{access_section}{args_section}
 
 <details>
 <summary><strong>📊 Results</strong></summary>
@@ -423,6 +426,7 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
     from app.services.tool_whitelists import WRITE_TOOL_NAMES, write_approval_required
 
     events: list[str] = []
+    call_access = None
     # H2: a tool that changes the cluster is not run from the
     # model's call. Record an approval request, tell the user
     # (SSE) and the model (tool result), and move on.
@@ -470,9 +474,11 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
         # Like the screens and MCP: what the chat reads from a cluster runs only when its row can be stored.
         function_response = AUDIT_UNAVAILABLE_RESULT
     else:
+        access_mod.reset(service)
         function_response = await service._execute_function_with_context(
             function_name, function_args, tool_context
         )
+        call_access = access_mod.of_call(service, function_name)
 
     log.debug("[DEBUG] Function response length: %d", len(str(function_response)))
 
@@ -497,6 +503,8 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
     }
     if call_id is not None:
         payload["call_id"] = call_id
+    if call_access is not None:
+        payload["access"] = call_access
     if display_preview is not None:
         payload["display"] = display_preview
         payload["display_format"] = "kubectl"
@@ -519,6 +527,8 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
     }
     if call_id is not None:
         log_entry['call_id'] = call_id
+    if call_access is not None:
+        log_entry['access'] = call_access
     if chart is not None:
         log_entry['chart'] = chart
 
@@ -543,6 +553,8 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
                 'status': tool_status,
                 # what tool-server masked before the result reached the model
                 'redacted': getattr(service.tool_server, 'last_redacted', None),
+                # the identity the cluster saw the call as (None when it reached no cluster)
+                'access': call_access,
                 **({'objects': target.objects} if target.objects else {}),
             },
             request_ip=(audit_http or {}).get('ip'),

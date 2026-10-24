@@ -26,6 +26,12 @@
     - API 스키마를 묻는 `k8s_explain`
     - 죽은 컨테이너의 직전 로그(`previous`), 기간, 전체 컨테이너, 텍스트 필터를 지원하는 Pod 로그
     - 객체·종류·`type=Warning`으로 좁히는 이벤트
+  - 도구 블록 맨 위에는 **🔐 줄이 있어 클러스터가 그 호출을 누구로 봤는지** 보여 줍니다.
+    - 사용자와 그룹은 클러스터에 실제로 보낸 impersonation 값이고, 보낸 서비스가 알려 준 그대로입니다(tool-server, 또는 k8s-service의 `X-Kubeast-Access` 헤더).
+    - Kubeast 역할, 네임스페이스 범위, 읽기인지 쓰기인지도 함께 보입니다.
+    - 같은 값이 그 호출의 감사 행(`after.access`)에 남으므로, 클러스터 감사 로그의 `impersonatedUser`와 맞춰 볼 수 있습니다.
+    - impersonation이 꺼져 있으면(`auth.impersonation.enabled=false`) Kubeast 자체 자격 증명으로 실행됐다고 알립니다.
+    - 알림 조사 보고서에는 어떤 신원으로 클러스터를 읽었는지 나옵니다.
   - Kubeast 기능을 쓰는 도구는 kubectl이 아니라 k8s-service API를 **그 사람 토큰으로** 부르므로, 권한·감사·마스킹이 화면과 같습니다. 이런 도구는 다음과 같습니다.
     - `issues` — 이슈 점검: 파드·워크로드·노드·PVC·경고 이벤트를 한 번에
     - `prometheus_query` — PromQL 즉시·범위 질의, 절대 시각 범위도 가능합니다.

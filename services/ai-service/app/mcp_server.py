@@ -38,6 +38,7 @@ from starlette.types import ASGIApp
 from app.security import TokenPayload, decode_access_token
 from app.services.ai.permissions import namespace_scope_error
 from app.services.ai import features as feature_gate
+from app.services.ai.access import with_mode
 from app.services.ai.tools import ADMIN_READ_TOOLS, CLUSTER_METRICS_TOOLS, K8S_READONLY_TOOLS, K8S_WRITE_TOOLS, WRITE_PREVIEW_TOOLS
 from app.services.k8s_client import K8sServiceClient
 from app.services.approval_token import ApprovalTokenUnavailable, sign as sign_approval
@@ -410,9 +411,11 @@ class KubeastMCPServer(MCPServer):
         except Exception as e:
             error = str(e) or e.__class__.__name__
             after["redacted"] = client.last_redacted
+            after["access"] = with_mode(client.last_access, name)
             await write_audit(**audit, after=after, result="failure", error=error[:500])
             return _text(error, error=True)
         after["redacted"] = client.last_redacted
+        after["access"] = with_mode(client.last_access, name)
         await write_audit(**audit, after=after)
         return _text(content)
 
