@@ -60,6 +60,11 @@ AI chat and the AI e2e specs need one default model registered:
 
 The scripts run helm upgrade with the chart of the checkout they sit in, so while working on a branch, run them from that worktree.
 
+The specs that need a second model endpoint do not use the laptop's Ollama.
+- `ai-model-list`, `ai-azure-openai` and `ai-model-tier` use the working OpenAI-compatible endpoint the dev `model-stub` serves under `/ok/` (`deploy/kind/devtools.yaml`).
+- It lists `stub-large` and `stub-small` and answers every chat with "ok", streamed when asked.
+- They skip with the reason when that stub is not installed.
+
 ### E2E tests (Playwright)
 
 `e2e/` runs against **the dev kind cluster's gateway** (`E2E_BASE_URL`, default `http://localhost:30080`), not a dev server. It runs one test at a time (`workers: 1`) because it changes shared cluster state. Visual comparison specs compare against baseline images taken on main.

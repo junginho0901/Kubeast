@@ -61,6 +61,11 @@ AI 채팅과 AI e2e 스펙을 쓰려면 기본 모델이 하나 등록돼 있어
 
 스크립트는 자기가 있는 체크아웃의 chart로 helm upgrade하므로, 브랜치 작업 중에는 그 워크트리에서 실행하세요.
 
+모델 주소가 하나 더 필요한 스펙은 노트북의 Ollama를 쓰지 않습니다.
+- `ai-model-list`·`ai-azure-openai`·`ai-model-tier`는 dev `model-stub`이 `/ok/` 아래에서 여는 OpenAI 호환 주소를 씁니다(`deploy/kind/devtools.yaml`).
+- 이 주소는 `stub-large`·`stub-small`을 목록으로 내주고, 모든 채팅에 "ok"로 답하며, 요청하면 스트리밍으로 답합니다.
+- 이 스텁이 설치돼 있지 않으면 이유를 남기고 건너뜁니다.
+
 ### E2E 테스트 (Playwright)
 
 `e2e/`는 개발 서버가 아니라 **dev kind 클러스터의 게이트웨이**(`E2E_BASE_URL`, 기본 `http://localhost:30080`)를 대상으로 실행합니다.

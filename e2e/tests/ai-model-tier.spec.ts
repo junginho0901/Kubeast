@@ -1,12 +1,14 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
 
 // Model config tier: with an enabled economy-tier config the floating assistant runs on it and the chat stays on
-// the active (default) config; each stream names its tier in model_info. The economy config here is the dev Ollama
-// model, so the spec works whichever model is the default (Ollama, or Haiku through scripts/kind-model-haiku.sh).
+// the active (default) config; each stream names its tier in model_info. The economy config here is an Ollama
+// address at the dev model-stub's working endpoint (/ok/, deploy/kind/devtools.yaml, answers "ok"), so the spec works
+// whichever model is the default (the subscription, Haiku through scripts/kind-model-haiku.sh, or Ollama) and needs no
+// local model server.
 
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
-const OLLAMA = 'http://host.docker.internal:11434'
+const STUB = 'http://model-stub.kubeast-devtools.svc.cluster.local:8090/ok'
 
 async function adminHeaders(request: APIRequestContext) {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
@@ -31,15 +33,15 @@ test.describe('AI model tier', () => {
 
   test('the floating assistant runs on the economy config, the chat on the default one', async ({ request, page }) => {
     const admin = await adminHeaders(request)
-    const listed = await request.post('/api/v1/ai/model-configs/models', { headers: admin, data: { provider: 'ollama', base_url: `${OLLAMA}/v1` } })
+    const listed = await request.post('/api/v1/ai/model-configs/models', { headers: admin, data: { provider: 'ollama', base_url: `${STUB}/v1` } })
     const models = (await listed.json()) as { models: Array<{ name: string }>; error?: string }
-    test.skip(!models.models?.length, `the dev Ollama is not reachable (${models.error})`)
-    const economyModel = models.models[0].name
+    test.skip(!models.models?.length, `the dev model-stub is not reachable — kubectl apply -f deploy/kind/devtools.yaml (${models.error})`)
+    const economyModel = 'stub-small'
 
     const name = `e2e-economy-${Date.now().toString(36)}`
     const created = await request.post('/api/v1/ai/model-configs', {
       headers: admin,
-      data: { name, provider: 'ollama', model: economyModel, base_url: OLLAMA, tier: 'economy', enabled: true, is_default: false },
+      data: { name, provider: 'ollama', model: economyModel, base_url: STUB, tier: 'economy', enabled: true, is_default: false },
     })
     expect(created.ok(), `create: ${await created.text()}`).toBeTruthy()
     const config = await created.json()
@@ -85,7 +87,7 @@ test.describe('AI model tier', () => {
     const admin = await adminHeaders(request)
     const res = await request.post('/api/v1/ai/model-configs', {
       headers: admin,
-      data: { name: `e2e-tier-bad-${Date.now().toString(36)}`, provider: 'ollama', model: 'x', base_url: OLLAMA, tier: 'cheap' },
+      data: { name: `e2e-tier-bad-${Date.now().toString(36)}`, provider: 'ollama', model: 'x', base_url: STUB, tier: 'cheap' },
       failOnStatusCode: false,
     })
     // The model-config API answers a schema error with 400 and the first error's message.

@@ -2,11 +2,12 @@ import { test, expect, type APIResponse, type Page } from '@playwright/test'
 
 // Azure OpenAI is its v1 API only: the form asks for https://<resource>.openai.azure.com/openai/v1/ and a deployment
 // name, deployment URLs and api-version are refused on save and on test with the v1 form in the message, and the
-// connection test runs the chat's own client. There is no Azure account in the dev install: the dev Ollama's
-// OpenAI-compatible /v1 stands in for the endpoint (it ignores the key headers), one short "ping".
+// connection test runs the chat's own client. There is no Azure account in the dev install: the dev model-stub's
+// working OpenAI-compatible endpoint (/ok/, deploy/kind/devtools.yaml) stands in for <resource>/openai/v1 (it ignores
+// the key headers), one short "ping".
 
 const XRW = { 'X-Requested-With': 'XMLHttpRequest' }
-const OLLAMA = 'http://host.docker.internal:11434/v1'
+const STUB = 'http://model-stub.kubeast-devtools.svc.cluster.local:8090/ok'
 const V1_FORM = 'https://<resource>.openai.azure.com/openai/v1/'
 
 async function dropIfCreated(page: Page, res: APIResponse) {
@@ -63,15 +64,14 @@ test.describe('Azure OpenAI (v1 API)', () => {
   })
 
   test('the connection test reaches an OpenAI-compatible v1 endpoint through the chat client', async ({ page }) => {
-    const listed = await (await page.request.post('/api/v1/ai/model-configs/models', { headers: XRW, data: { provider: 'ollama', base_url: OLLAMA } })).json()
-    test.skip(!listed.models?.length, `the dev Ollama is not reachable (${listed.error ?? 'no models'})`)
-    const model: string = listed.models.find((m: { name: string }) => m.name === 'granite4.1:3b')?.name ?? listed.models[0].name
+    const listed = await (await page.request.post('/api/v1/ai/model-configs/models', { headers: XRW, data: { provider: 'ollama', base_url: `${STUB}/v1` } })).json()
+    test.skip(!listed.models?.length, `the dev model-stub is not reachable — kubectl apply -f deploy/kind/devtools.yaml (${listed.error ?? 'no models'})`)
 
     const res = await page.request.post('/api/v1/ai/model-configs/test', {
-      headers: XRW, data: { provider: 'azure', model, base_url: OLLAMA, api_key: 'e2e-azure-key' },
+      headers: XRW, data: { provider: 'azure', model: 'stub-small', base_url: `${STUB}/openai/v1`, api_key: 'e2e-azure-key' },
       timeout: 120_000,
     })
     expect(res.status()).toBe(200)
-    expect(await res.json()).toMatchObject({ success: true, message: 'Connection successful' })
+    expect(await res.json()).toMatchObject({ success: true, model: 'stub-small', message: 'Connection successful' })
   })
 })

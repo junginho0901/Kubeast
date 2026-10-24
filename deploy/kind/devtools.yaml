@@ -192,11 +192,14 @@ spec:
   selector: {app: receiver}
   ports: [{port: 8080, targetPort: 8080}]
 ---
-# A model endpoint that only refuses, the way the providers document their refusals (ai-provider-errors.spec.ts):
+# A model endpoint that refuses the way the providers document their refusals (ai-provider-errors.spec.ts):
 # POST /<case>/v1/chat/completions answers as an OpenAI-compatible API and POST /<case>/v1/messages as the Claude API,
 # case = credit (429 insufficient_quota / 402 billing_error), rate (429 rate_limit_exceeded), auth (401) or down
-# (503 / 529). ai-service reaches it as http://model-stub.kubeast-devtools.svc.cluster.local:8090 (dev values:
-# ai.baseUrlAllowedHosts and networkPolicy.allowExternalEgressCIDRs).
+# (503 / 529). Under /ok/ it is a working OpenAI-compatible API instead — GET …/models lists stub-large and stub-small,
+# POST …/chat/completions answers "ok", streamed when asked — for the specs that need a second model endpoint
+# (ai-model-list, ai-azure-openai, ai-model-tier). ai-service reaches it as
+# http://model-stub.kubeast-devtools.svc.cluster.local:8090 (dev values: ai.baseUrlAllowedHosts and
+# networkPolicy.allowExternalEgressCIDRs).
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -220,18 +223,50 @@ data:
         "down": (529, {"type": "error", "error": {"type": "overloaded_error", "message": "Overloaded"}}),
     }
 
+    MODELS = {"object": "list", "data": [{"id": m, "object": "model", "created": 0, "owned_by": "kubeast-dev"} for m in ("stub-large", "stub-small")]}
+
+    def completion(model, chunk):
+        usage = {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}
+        if not chunk:
+            return {"id": "stub-1", "object": "chat.completion", "created": 0, "model": model, "usage": usage,
+                    "choices": [{"index": 0, "message": {"role": "assistant", "content": "ok"}, "finish_reason": "stop"}]}
+        return [{"id": "stub-1", "object": "chat.completion.chunk", "created": 0, "model": model,
+                 "choices": [{"index": 0, "delta": {"role": "assistant", "content": "ok"}, "finish_reason": None}]},
+                {"id": "stub-1", "object": "chat.completion.chunk", "created": 0, "model": model, "usage": usage,
+                 "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]}]
+
     class H(BaseHTTPRequestHandler):
-        def do_POST(self):
-            self.rfile.read(int(self.headers.get("Content-Length") or 0))
-            parts = self.path.strip("/").split("/")
-            table = ANTHROPIC if self.path.endswith("/messages") else OPENAI
-            code, body = table.get(parts[0] if parts else "", (404, {"error": {"message": "no such case"}}))
+        def send_json(self, code, body):
             raw = json.dumps(body).encode()
             self.send_response(code)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(raw)))
             self.end_headers()
             self.wfile.write(raw)
+
+        def do_POST(self):
+            req = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+            parts = self.path.strip("/").split("/")
+            if parts and parts[0] == "ok":
+                path = self.path.split("?")[0].rstrip("/")
+                if path.endswith("/models"):
+                    return self.send_json(200, MODELS)
+                if path.endswith("/chat/completions"):
+                    body = json.loads(req or b"{}")
+                    model = body.get("model") or "stub-small"
+                    if not body.get("stream"):
+                        return self.send_json(200, completion(model, False))
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/event-stream")
+                    self.end_headers()
+                    for c in completion(model, True):
+                        self.wfile.write(f"data: {json.dumps(c)}\n\n".encode())
+                    self.wfile.write(b"data: [DONE]\n\n")
+                    return
+                return self.send_json(404, {"error": {"message": "no such path"}})
+            table = ANTHROPIC if self.path.endswith("/messages") else OPENAI
+            code, body = table.get(parts[0] if parts else "", (404, {"error": {"message": "no such case"}}))
+            self.send_json(code, body)
         do_GET = do_POST
         def log_message(self, *a):
             pass
