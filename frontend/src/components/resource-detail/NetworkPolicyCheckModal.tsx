@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ShieldCheck } from 'lucide-react'
@@ -15,7 +15,7 @@ import { reasonText, resultLabel, ruleName, unevaluatedText, type Tr } from './n
 // rule decide.
 
 const KINDS = ['pod', 'deployment', 'statefulset', 'daemonset', 'service', 'ip'] as const
-type OtherKind = (typeof KINDS)[number]
+export type OtherKind = (typeof KINDS)[number]
 const KIND_LABEL: Record<OtherKind, string> = { pod: 'Pod', deployment: 'Deployment', statefulset: 'StatefulSet', daemonset: 'DaemonSet', service: 'Service', ip: '' }
 const RESULT_BADGE: Record<string, string> = { allowed: 'badge-success', denied: 'badge-error', unknown: 'badge-warning', mixed: 'badge-warning' }
 const LABEL = 'block text-xs font-semibold text-slate-400 mb-1'
@@ -73,16 +73,27 @@ function CheckRow({ c, res, tr }: { c: NetpolCheck; res: NetpolCheckResult; tr: 
   )
 }
 
-export default function NetworkPolicyCheckModal({ self, selfName, namespace, onClose }: { self: string; selfName: string; namespace: string; onClose: () => void }) {
+// What a flow row fills in (NetworkFlows): the other end, the port and the direction; the check then runs at once.
+export interface NetpolCheckInitial {
+  outgoing: boolean
+  kind: OtherKind
+  namespace?: string
+  name?: string
+  ip?: string
+  port?: string
+  protocol?: string
+}
+
+export default function NetworkPolicyCheckModal({ self, selfName, namespace, onClose, initial }: { self: string; selfName: string; namespace: string; onClose: () => void; initial?: NetpolCheckInitial }) {
   const { t } = useTranslation()
   const tr: Tr = (key, fallback, options) => t(key, { defaultValue: fallback, ...options })
-  const [outgoing, setOutgoing] = useState(true)
-  const [kind, setKind] = useState<OtherKind>('pod')
-  const [otherNs, setOtherNs] = useState(namespace)
-  const [otherName, setOtherName] = useState('')
-  const [ip, setIP] = useState('')
-  const [port, setPort] = useState('')
-  const [protocol, setProtocol] = useState('TCP')
+  const [outgoing, setOutgoing] = useState(initial?.outgoing ?? true)
+  const [kind, setKind] = useState<OtherKind>(initial?.kind ?? 'pod')
+  const [otherNs, setOtherNs] = useState(initial?.namespace ?? namespace)
+  const [otherName, setOtherName] = useState(initial?.name ?? '')
+  const [ip, setIP] = useState(initial?.ip ?? '')
+  const [port, setPort] = useState(initial?.port ?? '')
+  const [protocol, setProtocol] = useState(initial?.protocol ?? 'TCP')
 
   const namespaces = useQuery({ queryKey: ['cluster', 'namespaces', 'names'], queryFn: async () => (await api.getNamespaces()).map((n) => n.name).sort(), retry: false })
   const nameList = useQuery({ queryKey: ['cluster', 'netpol-check-names', kind, otherNs], queryFn: () => names(kind, otherNs), enabled: kind !== 'ip' && !!otherNs, retry: false })
@@ -94,6 +105,11 @@ export default function NetworkPolicyCheckModal({ self, selfName, namespace, onC
   })
   const kinds = KINDS.filter((k) => outgoing || k !== 'service')
   const ready = kind === 'ip' ? ip.trim() !== '' : otherName !== ''
+  // Opened from a flow: the connection is known, so answer it straight away.
+  useEffect(() => {
+    if (initial) check.mutate()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const res = check.data
   const errorText = (check.error as any)?.response?.data?.detail ?? (check.error as any)?.response?.data?.error ?? (check.error as Error | null)?.message
   useAIContext({

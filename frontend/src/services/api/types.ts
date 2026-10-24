@@ -657,6 +657,8 @@ export interface ClusterFeatures {
   alertInvestigation?: { enabled: boolean }
   // Chart features.alertStore: the clusters whose alerts and silences an Alertmanager-compatible store holds.
   alertStore?: { enabled: boolean; clusters: string[]; clusterLabel?: string; silences?: boolean; silenceMaxHours?: number }
+  // Chart features.networkFlows: the clusters whose Hubble Relay Kubeast reads.
+  networkFlows?: { enabled: boolean; clusters: string[] }
 }
 
 // Policy reports (wgpolicyk8s.io/v1alpha2 PolicyReport / ClusterPolicyReport as Kyverno and others write them).
@@ -757,6 +759,54 @@ export interface NetpolEffective {
   ingress: NetpolDirection
   egress: NetpolDirection
   unevaluated: NetpolUnevaluated[]
+}
+
+// GET /api/v1/cluster/namespaces/{ns}/networkflows?kind=&name=&since=&verdict=&limit= — recent flows from the
+// cluster's Hubble Relay. A peer outside a namespace-limited reader's namespaces has its namespace and address only.
+export interface NetflowEnd {
+  namespace?: string
+  pod?: string
+  workload?: { kind: string; name: string }
+  ip?: string
+  port?: number
+  names?: string[]
+  service?: string
+}
+
+export interface NetflowPolicyRef {
+  kind?: string
+  namespace?: string
+  name: string
+}
+
+// One connection: its flows from source to destination (count), the replies, where they were seen.
+export interface NetflowGroup {
+  source: NetflowEnd
+  destination: NetflowEnd
+  protocol?: string
+  observed: string[]
+  verdict: string
+  drop_reason?: string
+  policies?: { egress_allowed_by?: NetflowPolicyRef[]; ingress_allowed_by?: NetflowPolicyRef[]; egress_denied_by?: NetflowPolicyRef[]; ingress_denied_by?: NetflowPolicyRef[] }
+  count: number
+  replies: number
+  first: string
+  last: string
+}
+
+export interface NetflowResult {
+  cluster: string
+  mode: string
+  relay: string
+  namespace: string
+  kind?: string
+  name?: string
+  since: string
+  groups: NetflowGroup[]
+  flows: unknown[]
+  lost_events?: number
+  truncated: boolean
+  redacted?: boolean
 }
 
 // GET /api/v1/cluster/networkpolicies/check?src=&dst=&port=&protocol= — an end is

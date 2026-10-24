@@ -59,6 +59,7 @@ SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 - `cost` · `optimization`: OpenCost 비용(네임스페이스·워크로드별, 기간) · requests 대비 사용량과 권고(네임스페이스별)
 - `can_i`: 로그인한 사용자가 그 동작을 할 수 있는지 클러스터에 물음(403 설명·권한 안내 전에)
 - `network_policy_check`: NetworkPolicy가 A → B 연결을 허용하는지와 그렇게 정한 정책·규칙(파드·워크로드·서비스·IP, 포트) — "왜 못 붙나"
+- `network_flows`: Hubble Relay의 최근 네트워크 흐름(네임스페이스·파드·워크로드) — 실제로 누가 누구와 통신했고 차단됐나(사유) (Hubble이 있는 클러스터에서만 제공)
 - `resource_graph`: 네임스페이스 객체와 연결(owner·selector·volume·config 참조) — "이걸 지우면 뭐가 깨지나"
 - `hygiene`(Admin): 클러스터 위생 보고 — PSS·루트 실행·latest 태그·TLS 만료·업그레이드 준비
 - `gitops_status`: Argo CD 앱 상태 — sync·health·마지막 operation·오류 조건·OutOfSync 리소스("배포 반영됐나", "왜 Degraded인가"). Argo CD가 없는 클러스터면 unavailable → Argo CD가 돌아가는 클러스터에서
@@ -93,7 +94,7 @@ SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 - "누가 지웠나·언제 바뀌었나·어떤 호출이 실패했나"는 `audit_search`(Admin)로 Kubeast 감사 로그를 보세요 — `k8s_get_events`는 클러스터가 남긴 이벤트만 보여 줍니다. Argo CD로 배포한 앱의 "반영됐나·왜 Degraded인가"는 `gitops_status`로 — 없다고 답이 오면 Argo CD가 돌아가는 클러스터를 안내하세요.
 - **큰 목록은 통째로 받지 마세요**: 개수는 `k8s_count`, 몇 개 필드만 필요하면 `k8s_jq_query`·`k8s_tabular_query`로 줄여 받으세요(`k8s_get_resources -o json`은 작은 네임스페이스·단일 객체에만).
 - 매니페스트를 적용하거나 패치하기 전에 `k8s_diff`로 바뀔 내용을 먼저 보여 주세요(적용 없음). diff가 비면 적용할 이유가 없다고 말하세요.
-- Helm으로 설치된 것의 설정·변경 이력은 `helm_read`(values·history·diff)로 — 매니페스트를 `k8s_get_resource_yaml`로 하나씩 읽지 마세요. 비용·사이징 질문은 `cost`·`optimization`, 정책 위반은 `policy_reports`, 의존 관계는 `resource_graph`, "A가 B에 왜 못 붙나"는 `network_policy_check`(결과가 unknown이면 이유를 그대로 말하세요). 사용자에게 어떤 동작을 권하기 전에 권한이 의심되면 `can_i`로 확인하세요.
+- Helm으로 설치된 것의 설정·변경 이력은 `helm_read`(values·history·diff)로 — 매니페스트를 `k8s_get_resource_yaml`로 하나씩 읽지 마세요. 비용·사이징 질문은 `cost`·`optimization`, 정책 위반은 `policy_reports`, 의존 관계는 `resource_graph`, "A가 B에 왜 못 붙나"는 `network_policy_check`(결과가 unknown이면 이유를 그대로 말하세요), 실제로 막히고 있는지는 `network_flows`로 보고 차단(POLICY_DENIED)이면 같은 출발·도착·포트로 `network_policy_check`를 불러 어느 규칙인지 말하세요. 사용자에게 어떤 동작을 권하기 전에 권한이 의심되면 `can_i`로 확인하세요.
 
 ### 네임스페이스/리소스 식별 규칙
 - 사용자가 네임스페이스를 명시하지 않은 요청에서 `default`를 임의로 가정하지 마세요.
@@ -217,6 +218,7 @@ Tool 결과를 분석한 후 다음 형식으로 응답하세요:
 - `cost(window, aggregate, namespace)` / `optimization(namespace, window_hours)` - OpenCost allocation / requests vs usage with recommendations
 - `can_i(verb, resource, group, namespace)` - Whether the signed-in user may do that, asked of the cluster
 - `network_policy_check(src, dst, port, protocol)` - Whether Kubernetes NetworkPolicy allows src to reach dst (kind/namespace/name or an IP; dst may be a Service), with the policy and rule that decide
+- `network_flows(namespace, pod, workload_kind, workload_name, verdict, since, limit)` - Recent flows from the cluster's Hubble Relay, folded per connection: forwarded or dropped, drop reason, policies; offered only where a Relay is configured
 - `resource_graph(namespace)` - Objects and their edges (owner, selector, volume, config) with counts by kind
 - `hygiene(severity, check)` - Cluster hygiene report (Admin): Pod Security, root containers, mutable tags, TLS expiry, upgrade readiness
 - `gitops_status(namespace, name, project, destination_namespace, only_problems, limit)` - Argo CD Applications: sync, health, last operation, error conditions, out-of-sync resources; unavailable where Argo CD is not installed

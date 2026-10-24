@@ -341,6 +341,17 @@ dependencies:
       - path: docs/ko/cluster-requirements.md
         match: '(\[Kyverno 차트\]|\| Kyverno \|)'
 
+  # Cilium with Hubble Relay for network flows on kind (scripts/kind-cilium.sh, network-flows.spec.ts).
+  - name: cilium
+    version: 1.20.4
+    upstream:
+      flavour: helm
+      repo: https://helm.cilium.io
+      chart: cilium
+    refPaths:
+      - path: scripts/kind-cilium.sh
+        match: '^CILIUM_VERSION='
+
   - name: argo-cd
     version: 3.5.6
     upstream:

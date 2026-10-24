@@ -51,6 +51,7 @@ READONLY_TOOL_NAMES: frozenset[str] = frozenset(
         "optimization",
         "can_i",
         "network_policy_check",
+        "network_flows",
         "resource_graph",
         "k8s_jq_query",
         "k8s_tabular_query",

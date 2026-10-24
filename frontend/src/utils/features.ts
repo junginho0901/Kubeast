@@ -23,6 +23,11 @@ export function logSearchEnabledFor(features: ClusterFeatures | null | undefined
   return features?.logSearch?.enabled === true && !!clusterId && (features.logSearch.clusters ?? []).includes(clusterId)
 }
 
+// Chart features.networkFlows for this cluster: Kubeast reads its Hubble Relay. Unknown counts as off.
+export function networkFlowsEnabledFor(features: ClusterFeatures | null | undefined, clusterId: string): boolean {
+  return features?.networkFlows?.enabled === true && !!clusterId && (features.networkFlows.clusters ?? []).includes(clusterId)
+}
+
 // Chart features.tracing: the URL templates of trace links, or undefined when off. Unknown counts as off.
 export function traceTemplates(features?: ClusterFeatures | null): { traceUrl?: string; searchUrl?: string } | undefined {
   const t = features?.tracing

@@ -297,11 +297,16 @@ spec:
             {{- end }}
             {{- with include "kubeast.awsEnv" . }}{{ nindent 12 . }}{{- end }}
             {{- with include "kubeast.customCAGoEnv" . }}{{ . | trim | nindent 12 }}{{ end }}
-          {{- if or .Values.postgresql.sslRootCert.secretName .Values.sessionRecording.enabled .Values.customCAs }}
+          {{- if or .Values.postgresql.sslRootCert.secretName .Values.sessionRecording.enabled .Values.customCAs (and .Values.features.networkFlows.enabled .Values.features.networkFlows.tls.existingSecret) }}
           volumeMounts:
             {{- with include "kubeast.dbCAVolumeMount" . }}{{ . | trim | nindent 12 }}{{ end }}
             {{- with include "kubeast.recordingVolumeMounts" . }}{{ . | trim | nindent 12 }}{{ end }}
             {{- with include "kubeast.customCAVolumeMount" . }}{{ . | trim | nindent 12 }}{{ end }}
+            {{- if and .Values.features.networkFlows.enabled .Values.features.networkFlows.tls.existingSecret }}
+            - name: network-flows-tls
+              mountPath: /etc/kubeast/network-flows
+              readOnly: true
+            {{- end }}
           {{- end }}
           readinessProbe:
             httpGet:
@@ -315,11 +320,16 @@ spec:
               port: 8002
             initialDelaySeconds: 10
             periodSeconds: 30
-      {{- if or .Values.postgresql.sslRootCert.secretName .Values.sessionRecording.enabled .Values.customCAs }}
+      {{- if or .Values.postgresql.sslRootCert.secretName .Values.sessionRecording.enabled .Values.customCAs (and .Values.features.networkFlows.enabled .Values.features.networkFlows.tls.existingSecret) }}
       volumes:
         {{- with include "kubeast.dbCAVolume" . }}{{ . | trim | nindent 8 }}{{ end }}
         {{- with include "kubeast.recordingVolumes" . }}{{ . | trim | nindent 8 }}{{ end }}
         {{- with include "kubeast.customCAVolume" . }}{{ . | trim | nindent 8 }}{{ end }}
+        {{- if and .Values.features.networkFlows.enabled .Values.features.networkFlows.tls.existingSecret }}
+        - name: network-flows-tls
+          secret:
+            secretName: {{ .Values.features.networkFlows.tls.existingSecret | quote }}
+        {{- end }}
       {{- end }}
 ---
 # --- Session Service ---

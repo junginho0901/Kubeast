@@ -38,6 +38,7 @@ Kubeast는 등록한 클러스터에 아무것도 설치하지 않습니다. 예
 | 위생·업그레이드 점검의 폐기 API 항목 | API 서버 `/metrics` 읽기 권한 — §11 | `features.hygiene.enabled`(켬) | 그 항목만 "수집 실패"로 표시 |
 | Argo CD 가드 | Argo CD 추적 어노테이션 — §12 | `gitops.argocd.enabled`(끔) | 배지·경고 없음 |
 | NetworkPolicy 보기와 연결 확인 | NetworkPolicy를 강제하는 네트워크 플러그인, 관련 네임스페이스 읽기 권한 — §7 | — | 답은 정책이 말하는 것이지 클러스터가 하는 것이 아님. 규칙이 사용자가 읽지 못하는 네임스페이스 레이블을 쓰면 "알 수 없음" |
+| 최근 흐름(드로어, AI `network_flows`) | TLS로 서비스하는 Cilium Hubble Relay, Relay Service의 `services/proxy` create 권한 — §16 | `features.networkFlows.enabled`(끔) | 칸과 도구가 빠지고 API는 404. 클러스터 권한이 없으면 403 |
 
 ## 1. 권한(RBAC) — 모든 대상 클러스터
 
@@ -472,6 +473,30 @@ service:
 | EKS 외부 클러스터·S3 | IRSA 롤(`aws.irsaRoleArn` 등) |
 | 사설 CA·TLS를 가로채는 프록시 | `customCAs`에 적은 Secret·ConfigMap이 릴리스 네임스페이스에 먼저 있어야 합니다. 없으면 새 파드가 볼륨을 기다리느라 뜨지 않으며, 이전 파드는 계속 응답합니다 |
 
+## 16. Hubble Relay (네트워크 흐름)
+
+드로어의 "최근 흐름"과 AI 도구 `network_flows`(`features.networkFlows`, 기본 꺼짐)를 쓰려면 `features.networkFlows.clusters`에 적은 클러스터마다 다음이 있어야 합니다.
+
+- **Hubble Relay**: Hubble과 Hubble Relay를 켠 Cilium(`hubble.relay.enabled=true`)
+  - Kubeast는 Relay의 `observer.Observer/GetFlows`만 부릅니다. Microsoft Retina의 Hubble 컨트롤 플레인 같은 다른 Hubble Relay도 같은 API를 제공하지만, 확인한 것은 Cilium뿐입니다.
+  - 흐름은 노드마다 Hubble이 메모리에 들고 있는 것입니다. 바쁜 노드일수록 짧은 과거만 남고, Hubble이 잃은 이벤트를 알리면 답에 그렇게 나옵니다.
+- **`proxy` 모드(기본값)**: Kubeast가 그 클러스터의 API 서버에 로그인한 사람의 신원으로 `POST /api/v1/namespaces/<ns>/services/https:<service>:<port>/proxy/observer.Observer/GetFlows`를 보냅니다. 네트워크에서 새로 여는 것은 없습니다.
+  - Relay Service는 `features.networkFlows.relay`(기본 `kube-system/hubble-relay:443`)이거나, 항목에 적은 것(`proxy:<namespace>/<service>:<port>`)입니다.
+  - **Relay가 TLS로 서비스해야 합니다**(`hubble.relay.tls.server.enabled=true`). API 서버는 백엔드와 TLS일 때만 HTTP/2로 말하고, gRPC에는 HTTP/2가 필요합니다. 평문 Relay면 502나 503이 오고, 메시지에 이 설정 이름이 나옵니다.
+  - API 서버는 Relay 인증서를 검사하지 않고(IP로 중계) 클라이언트 인증서도 보내지 않습니다. 그래서 클라이언트 인증서를 요구하는 Relay(`hubble.relay.tls.server.mtls=true`)는 주소 모드를 써야 합니다.
+- **주소 모드**(`https://<host>:<port>`): Kubeast가 Relay에 직접 TLS로 연결합니다.
+  - `tls.existingSecret`에 `ca.crt`를 넣고, `tls.clientCertificate: true`면 mTLS용 `tls.crt`·`tls.key`도 넣습니다. 인증서에서 확인할 이름은 `tls.serverName`으로 바꿀 수 있습니다.
+  - k8s-service에서 Relay로 연결할 수 있어야 합니다. `networkPolicy`가 켜져 있으면 그 주소를 `features.networkFlows.egressCIDRs`에 추가하세요.
+  - 읽기 전마다 아래와 같은 권한을 클러스터에 물어(SelfSubjectAccessReview) 두 모드에서 같은 사람만 읽게 합니다.
+- **권한**: Kubeast의 `resource.networkflow.read`(Read 역할에 포함)와, 클러스터에서 Relay Service에 대한 `services/proxy` create 권한이 있어야 합니다. 이름은 정확히 `https:<service>:<port>`입니다.
+  - `view`·`edit`에는 `services/proxy`가 없으므로 클러스터마다 Role을 렌더해 적용합니다.
+    `helm template kubeast helm/kubeast -s templates/impersonation-viewer-hubble.yaml -f <values> | kubectl --context <cluster> apply -f -`
+  - 이 Role은 Relay 네임스페이스에서 그 이름 하나에 대한 `get`·`create`를 `kubeast:viewer`에 바인딩합니다(`features.alertInvestigation`을 켜면 `kubeast:investigator`에도).
+  - 네임스페이스 범위 부여(`kubeast:role:*`)는 바인딩하지 않으므로, 그 사용자는 권한 이름이 적힌 403을 받습니다. 바인딩된 사용자라도 네임스페이스가 정해져 있으면 자기 네임스페이스 밖의 상대가 네임스페이스와 주소로만 보입니다.
+- **확인**: Read 사용자로 Pod 드로어 → 최근 흐름 → 흐름 보기를 엽니다.
+  또는 사용자 신원으로 `kubectl auth can-i create services/https:hubble-relay:443 --subresource=proxy -n kube-system --as=<user> --as-group=kubeast:viewer`를 실행합니다.
+  전체 개발 예시는 `scripts/kind-cilium.sh`(`deploy/kind/cilium-*.yaml`, `deploy/kind/networkflows-values.yaml`)입니다.
+
 ## 검증한 버전 (2026-10-13)
 
 | 구성 | 버전 | 검증 방법 |
@@ -488,6 +513,7 @@ service:
 | VictoriaMetrics | v1.154.1(단일판·클러스터판, vmagent) | 10-20에 v1.154.0으로 검증하고 10-21에 올렸습니다. 개발용 2번 클러스터(`scripts/kind-victoriametrics.sh` — 2번 클러스터 Prometheus와 같은 수집 설정)에서 노드 메모리 합계가 Prometheus·단일판·클러스터판 모두 같은 바이트였습니다. 단일판과 경로를 붙인 vmselect의 `/-/healthy`는 200, 규칙·알림은 빈 자리표시, vmselect 대상 API는 400이라 `up`으로 대신하고, 메타데이터 타입·설명도 읽힙니다(e2e `victoriametrics.spec.ts`) |
 | Grafana | 13.2.4 | 10-17, 개발용 2번 클러스터(`scripts/kind-grafana.sh`). 데이터소스 프록시로 읽은 지표·로그가 직접 읽은 값과 같고 대시보드·노드 드로어가 채워집니다. 틀린 토큰은 상태에 401로 나오고, 웹훅 연락처 시험으로 보낸 알림이 조사됩니다(e2e `grafana.spec.ts`) |
 | Argo CD | 3.5.6(core 설치) | 10-21, 개발용 2번 클러스터(`scripts/kind-argocd.sh`). Application이 podinfo 차트를 동기화하고, 추적 어노테이션·409·감사 행·드로어 배지·`gitops_status`를 확인했습니다(e2e `argocd-real.spec.ts`) |
+| Cilium(Hubble Relay) | 1.20.4 | 10-24, 기본 CNI 없이 만든 별도 kind 클러스터(`scripts/kind-cilium.sh`, Relay TLS 켬). Read 사용자로 `proxy` 모드에서 읽었습니다 — client → web 80 포트는 FORWARDED이고 `ingress_allowed_by`에 NetworkPolicy `web-only-client`가 있으며 응답이 합쳐졌고, stranger → web은 정책대로 ingress에서 `POLICY_DENIED`로 DROPPED였습니다. 네임스페이스가 정해진 사용자는 클러스터에서 403을 받고, 드로어의 "왜?"가 규칙을 알려 주며, MCP도 같은 묶음을 줍니다(e2e `network-flows.spec.ts`) |
 | GPU·DRA·VPA·Gateway API·ingress-nginx | — | 코드 기준이며 실제 클러스터에서는 검증하지 않았습니다 |
 
 kind 노드에서는 루트 파일시스템이 `mountpoint="/"`로 잡히지 않아 디스크 사용률이 비어 있고, local-path 볼륨에는 볼륨 통계가 없습니다. 실제 노드와 CSI 드라이버에서는 이 값이 나옵니다.

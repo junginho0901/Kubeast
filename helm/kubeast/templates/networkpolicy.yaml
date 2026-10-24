@@ -402,6 +402,17 @@ spec:
           port: {{ if kindIs "map" . }}{{ .port | default 443 }}{{ else }}443{{ end }}
     {{- end }}
     {{- end }}
+    {{- if .Values.features.networkFlows.enabled }}
+    {{- range .Values.features.networkFlows.egressCIDRs }}
+    # Hubble Relay at an address (features.networkFlows.egressCIDRs)
+    - to:
+        - ipBlock:
+            cidr: {{ if kindIs "map" . }}{{ .cidr }}{{ else }}{{ . }}{{ end }}
+      ports:
+        - protocol: TCP
+          port: {{ if kindIs "map" . }}{{ .port | default 443 }}{{ else }}443{{ end }}
+    {{- end }}
+    {{- end }}
     {{- if .Values.features.traceStore.enabled }}
     {{- range .Values.features.traceStore.egressCIDRs }}
     # trace store (features.traceStore.egressCIDRs)

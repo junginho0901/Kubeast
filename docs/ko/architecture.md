@@ -110,7 +110,7 @@ ghcr.io/junginho0901/kubeast-model-config-controller-go
 | `features.alertInvestigation` | 0 | 0 | 없음 — 알림 웹훅이 올 때만 조사 |
 | `sessionRecording.enabled` | 0 | 0 | exec·노드 셸이 열려 있는 동안 녹화 조각을 업로드 |
 | `nodeShell.enabled` | 셸이 열려 있는 동안 노드마다 1 | 0 | 없음 |
-| `features.prometheus`·`logSearch`·`tracing`·`traceStore`·`alertStore`·`cost`·`policyReports`·`hygiene`·`inPlaceResize`·`logFiles` | 0 | 0 | 없음 — 화면이나 AI가 요청할 때만 동작(정리 점검도 화면을 열 때 계산) |
+| `features.prometheus`·`logSearch`·`tracing`·`traceStore`·`alertStore`·`networkFlows`·`cost`·`policyReports`·`hygiene`·`inPlaceResize`·`logFiles` | 0 | 0 | 없음 — 화면이나 AI가 요청할 때만 동작(정리 점검도 화면을 열 때 계산) |
 
 늘 도는 작업은 다음과 같습니다.
 

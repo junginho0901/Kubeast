@@ -55,11 +55,12 @@
     - `optimization`: usage against requests, and recommendations
     - `can_i`: whether that user can do something
     - `network_policy_check`: whether NetworkPolicy allows a connection, with the policy and rule that decide (see [NetworkPolicy view and check](#networkpolicy-view-and-check))
+    - `network_flows`: recent connections of a namespace, pod or workload from the cluster's Hubble Relay, folded per connection, with the drop reason and the policies that decided (see [Recent flows](#recent-flows-hubble))
     - `resource_graph`: namespace objects and their connections
     - `hygiene`: the hygiene report (Admin)
   - A tool is left out of the tool list (`/api/v1/features`, 1-minute cache) when:
-    - the cluster does not have the feature: Prometheus is not set up, there is no log, trace or alert store, or cost or policy reports are off
-    - the person lacks the permission k8s-service checks: `admin.hygiene.read`, `resource.helm.read`, `resource.policyreport.read` or `resource.cost.read`
+    - the cluster does not have the feature: Prometheus is not set up, there is no log, trace or alert store, network flows are off, or cost or policy reports are off
+    - the person lacks the permission k8s-service checks: `admin.hygiene.read`, `resource.helm.read`, `resource.policyreport.read`, `resource.cost.read` or `resource.networkflow.read`
   - Results are cut at 100 series, 120 points, 200 log lines, 200 rows, 200 graph nodes/400 edges and 64 KB of text.
   - A range result (`prometheus_query` and `loki_query` metric queries) can be longer than what the model reads at once (6,000 characters). Then it is not cut.
   - Instead, it is reduced to the 10 series with the largest values, each with its min, max, average and last value and a 12-point overview. Results drawn as graphs get the same summary.
@@ -117,7 +118,7 @@
 | --- | --- | --- | --- |
 | **Pending** | Default right after sign-up/SSO | None — can log in, but the API returns 403 | — |
 | **Member** | Account level | No global permissions, access **only through per-cluster grants** | `kubeast:authenticated` (no permissions) |
-| **Read** | Per cluster | 10 menus · read all resources (`resource.*.read`, including cost `resource.cost.read`) · Helm read (the permission key exists, but Release records are Secrets so the cluster refuses — see the right column) · read log files inside containers (`resource.pod.logfile`, when the feature is on) · the 40 read tools of AI chat (`ai.tool.<read tool>`) and MCP connection (`ai.mcp.use`) — no write tools | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view` excludes Secrets and `services/proxy`, so the cluster refuses Secrets and Helm releases (stored in Secrets) and the UI shows a permission notice. Prometheus and OpenCost read through the API server proxy (optimization usage, storage analysis, cost, drawer metrics) are opened **for GET** only for the Services listed in the chart value `auth.impersonation.viewerProxyServices` — a Role in that Namespace, name exactly `<service>:<port>`; other Services, POST and NS-scoped grants are still refused (values comments in [Configuration](configuration.md)). If not listed, refused (the proxy starts at `kubeast:operator`=`edit`) |
+| **Read** | Per cluster | 10 menus · read all resources (`resource.*.read`, including cost `resource.cost.read`) · Helm read (the permission key exists, but Release records are Secrets so the cluster refuses — see the right column) · read log files inside containers (`resource.pod.logfile`, when the feature is on) · the 41 read tools of AI chat (`ai.tool.<read tool>`) and MCP connection (`ai.mcp.use`) — no write tools | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view` excludes Secrets and `services/proxy`, so the cluster refuses Secrets and Helm releases (stored in Secrets) and the UI shows a permission notice. Prometheus and OpenCost read through the API server proxy (optimization usage, storage analysis, cost, drawer metrics) are opened **for GET** only for the Services listed in the chart value `auth.impersonation.viewerProxyServices` — a Role in that Namespace, name exactly `<service>:<port>`; other Services, POST and NS-scoped grants are still refused (values comments in [Configuration](configuration.md)). If not listed, refused (the proxy starts at `kubeast:operator`=`edit`) |
 | **Write** | Per cluster | `menu.*` · create/edit/delete resources · CronJob suspend/trigger · view Secret values · read log files · Helm rollback/upgrade/test · all AI tools (`ai.tool.*`, including write tools) · MCP connection | `kubeast:operator` = `edit` + viewer |
 | **Admin** | Account level (`*`) or per cluster | Everything — admin menus, all clusters (including ones registered later) | `kubeast:admin` = `cluster-admin` |
 | Custom | Per cluster | Only the chosen permissions (within the permissions the creator has) | `kubeast:role:<name>` — every call is 403 until the cluster binds this group (`auth.impersonation.customRoles`). The no-permission banner in the UI and the role creation dialog show this group name |
@@ -219,6 +220,19 @@ The Pod and workload drawers have a "Network Policies" section.
 - The AI tool `network_policy_check` gives the same answer.
 - The evaluator (`services/pkg/netpol`) has no outside dependency. Its tests check it against np-guard/netpol-analyzer on generated policies (`services/netpol-oracle`), and the e2e test against real connections on kind's kindnet.
 - What the target cluster needs is in [Cluster requirements §7](cluster-requirements.md#7-apis-shown-when-present).
+
+### Recent flows (Hubble)
+
+With `features.networkFlows` on for a cluster, the Pod and workload drawers also have a "Recent Flows" section.
+
+- It shows the connections the cluster's Hubble Relay saw to and from the pod or workload: verdict, direction, the other end, port, count, last seen, and the drop reason or the policies that decided.
+- It loads only after "Show flows", because reading flows is recorded in the audit log (`k8s.networkflows.query`). The window is the last 5 minutes, 15 minutes or hour, and it can show drops only.
+- One row is one connection: the reply packets are folded into it, and a connection seen on both nodes shows once.
+- "Why?" on a dropped connection opens the NetworkPolicy check above for that peer, port and direction, so the rule that denies it is named.
+- The Relay is read as the signed-in user, through the cluster's API server service proxy (`proxy`, the default) or at a TLS address (`https://`). The cluster must let the user create `services/proxy` on the Relay Service; `templates/impersonation-viewer-hubble.yaml` gives that to the Read group.
+- A namespace-limited user sees peers outside their namespaces by namespace and address only, and URL query strings are dropped.
+- The AI tool `network_flows` reads the same connections and points to `network_policy_check` for a drop.
+- What the target cluster needs is in [Cluster requirements §16](cluster-requirements.md#16-hubble-relay-network-flows).
 
 ## ⎈ Helm release management
 

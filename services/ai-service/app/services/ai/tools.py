@@ -751,6 +751,33 @@ K8S_READONLY_TOOLS: List[Dict] = [
     {
         "type": "function",
         "function": {
+            "name": "network_flows",
+            "description": (
+                "Recent network flows from the cluster's Hubble Relay (Cilium, or Retina's Hubble), read as the signed-in user: the flows with the "
+                "namespace, a pod (pod) or a workload (workload_kind + workload_name) on either side. groups fold one connection's flows: source, "
+                "destination, port, protocol, verdict (FORWARDED, DROPPED …), drop_reason (POLICY_DENIED = a network policy blocked it), policies "
+                "that allowed or denied it when the plugin reports them, count and last time. verdict filters (e.g. DROPPED), since is a window up to "
+                "the server's maximum (default 15m). Use it for \"is anything being blocked\", \"who talks to this pod\"; for a drop, call "
+                "network_policy_check with the same ends and port to name the NetworkPolicy rule."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "namespace": {"type": "string", "description": "Namespace of the pod or workload"},
+                    "pod": {"type": "string", "description": "Pod name (or use workload_kind + workload_name)"},
+                    "workload_kind": {"type": "string", "description": "Deployment, StatefulSet, DaemonSet, ReplicaSet, Job or CronJob"},
+                    "workload_name": {"type": "string", "description": "Workload name"},
+                    "verdict": {"type": "string", "description": "Verdicts to keep, comma-separated, e.g. DROPPED"},
+                    "since": {"type": "string", "description": "Window, e.g. 15m (default from settings)"},
+                    "limit": {"type": "integer", "description": "Most recent flows to read (capped by the server)"},
+                },
+                "required": ["namespace"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "resource_graph",
             "description": (
                 "The objects of one namespace and the edges between them — owner (Deployment → ReplicaSet → Pod), selector (Service → Pod), "

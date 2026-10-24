@@ -134,6 +134,7 @@ var argRules = map[string]argCheck{
 	"dst":      checkNetpolEnd,
 	"port":     checkPortSpec,
 	"protocol": checkProtocol,
+	"verdict":  checkVerdicts,
 	// Prometheus discovery: a series selector, a label name, a rule name, a job.
 	"selector":  checkPromQL,
 	"label":     checkPromLabel,
@@ -231,6 +232,18 @@ func checkPortSpec(field, v string) error {
 	}
 	if !portNameRe.MatchString(v) {
 		return badArg(field, v, "a port number or a port name")
+	}
+	return nil
+}
+
+// checkVerdicts takes Hubble verdicts, comma-separated.
+func checkVerdicts(field, v string) error {
+	for _, part := range strings.Split(v, ",") {
+		switch strings.ToUpper(strings.TrimSpace(part)) {
+		case "FORWARDED", "DROPPED", "ERROR", "AUDIT", "REDIRECTED", "TRACED", "TRANSLATED":
+		default:
+			return badArg(field, v, "FORWARDED, DROPPED, ERROR, AUDIT, REDIRECTED, TRACED or TRANSLATED (comma-separated)")
+		}
 	}
 	return nil
 }
