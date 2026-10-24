@@ -192,4 +192,9 @@ AI 도구 호출마다 클러스터가 그 호출을 누구로 봤는지와 그 
   - Amazon EKS: 컨트롤 플레인 로깅의 `audit` 로그 유형, CloudWatch Logs `/aws/eks/<cluster>/cluster`.
   - GKE·AKS: 각 서비스의 감사 로그 설정.
 - Kubeast가 자기 캐시로 답한 경우는 "answered from Kubeast's own store"로 나옵니다. 클러스터에 보낸 요청이 없으므로 클러스터 로그에도 남지 않습니다.
-- kubectl을 쓰는 도구는 아직 목록에 나오지 않고, 블록에 🔐 줄만 있습니다.
+- kubectl을 쓰는 도구는 클러스터에 직접 붙지 않습니다. kubectl은 실행 한 번짜리 kubeconfig를 받는데, 그 주소는 tool-server 안의 중계입니다(루프백 전용, 시작할 때 만든 인증서로 TLS, 그 실행에만 쓰는 토큰).
+  - 중계는 kubectl이 보낸 신원(`Authorization`·`Impersonate-*`·`Audit-ID`)을 지웁니다.
+  - 요청마다 클러스터 자격 증명, 그 사람의 impersonation, 새 `Audit-ID`를 붙여 보내고 목록에 남깁니다.
+  - exec·attach·port-forward·로그 스트림도 같은 중계를 거칩니다. 업그레이드된 연결(exec)은 끝날 때 상태 101로 남습니다.
+  - kubectl 자체의 탐색 요청(`/api`·`/apis`·`/openapi`)은 중계를 거치지만 목록에는 넣지 않습니다.
+  - tool-server에 `TOOL_SERVER_KUBECTL_PROXY=false`를 주면 kubectl이 `--as`로 클러스터에 바로 붙고, 목록은 없습니다.

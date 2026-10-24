@@ -48,6 +48,17 @@ func main() {
 
 	toolRegistry := buildToolRegistry()
 
+	// kubectl reaches clusters through a loopback proxy that lists each request
+	// with its Audit-ID (kubeproxy.go); TOOL_SERVER_KUBECTL_PROXY=false or a
+	// failed start keeps the direct path.
+	if !strings.EqualFold(os.Getenv("TOOL_SERVER_KUBECTL_PROXY"), "false") {
+		if p, err := startKubeProxy(); err != nil {
+			log.Printf("kubectl proxy not started, kubectl goes to clusters directly: %v", err)
+		} else {
+			kubectlProxy = p
+		}
+	}
+
 	// Console metrics (services/pkg/metrics): the four fixed paths by name.
 	m := metrics.New("tool-server")
 	mux := http.NewServeMux()

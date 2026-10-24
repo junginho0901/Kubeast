@@ -193,4 +193,9 @@ Each AI tool call shows who the cluster saw it as and the cluster requests it ma
   - Amazon EKS: control plane logging with the `audit` log type, in CloudWatch Logs `/aws/eks/<cluster>/cluster`.
   - GKE and AKS: their own audit log settings.
 - An answer Kubeast gave from its own cache reads "answered from Kubeast's own store". No cluster request was made, so the cluster's log has nothing for it.
-- The tools that run kubectl are not listed yet. Their blocks show the 🔐 line only.
+- The tools that run kubectl do not talk to the cluster themselves. kubectl gets a kubeconfig for one run that points at a proxy inside tool-server (loopback only, TLS with a certificate made at start, a token for that run).
+  - The proxy drops any identity kubectl sends (`Authorization`, `Impersonate-*`, `Audit-ID`).
+  - It sends each request with the cluster's credential, the person's impersonation and a new `Audit-ID`, and lists it.
+  - exec, attach, port-forward and log streams pass through it too. An upgraded connection (exec) is listed when it ends, with status 101.
+  - kubectl's own discovery reads (`/api`, `/apis`, `/openapi`) go through it but are not listed.
+  - `TOOL_SERVER_KUBECTL_PROXY=false` on tool-server sends kubectl to the cluster directly with `--as`, without the list.

@@ -15,6 +15,9 @@ import (
 	"strconv"
 	"strings"
 
+	"k8s.io/client-go/rest"
+
+	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
@@ -53,7 +56,12 @@ var kubectlExec = func(ctx context.Context, args []string, stdin *string) ([]byt
 }
 
 func runKubectl(ctx context.Context, headers http.Header, args ...string) (string, error) {
-	output, err := kubectlExec(ctx, kubectlArgs(ctx, args), nil)
+	argv, done, err := kubectlCommand(ctx, args)
+	if err != nil {
+		return "", err
+	}
+	defer done()
+	output, err := kubectlExec(ctx, argv, nil)
 	if err != nil {
 		errText := strings.TrimSpace(capOutput(output))
 		if errText == "" {
@@ -66,7 +74,12 @@ func runKubectl(ctx context.Context, headers http.Header, args ...string) (strin
 }
 
 func runKubectlWithInput(ctx context.Context, headers http.Header, input string, args ...string) (string, error) {
-	output, err := kubectlExec(ctx, kubectlArgs(ctx, args), &input)
+	argv, done, err := kubectlCommand(ctx, args)
+	if err != nil {
+		return "", err
+	}
+	defer done()
+	output, err := kubectlExec(ctx, argv, &input)
 	if err != nil {
 		errText := strings.TrimSpace(capOutput(output))
 		if errText == "" {
@@ -75,6 +88,31 @@ func runKubectlWithInput(ctx context.Context, headers http.Header, input string,
 		return "", fmt.Errorf("kubectl failed: %s", errText)
 	}
 	return capOutput(output), nil
+}
+
+// kubectlCommand is the argv of one kubectl run and what to clean up after it.
+// Through the loopback proxy (kubeproxy.go) kubectl names only the proxy; the
+// proxy adds the cluster credential, the impersonated user and an Audit-ID per
+// request and lists the request for the call. Without it, kubectlArgs.
+func kubectlCommand(ctx context.Context, args []string) ([]string, func(), error) {
+	if kubectlProxy == nil {
+		return kubectlArgs(ctx, args), func() {}, nil
+	}
+	var imp rest.ImpersonationConfig
+	if impersonationEnabled {
+		if p, ok := auth.FromContext(ctx); ok {
+			imp.UserName, imp.Groups = p.Impersonation(clusterIDFromCtx(ctx))
+		}
+	}
+	rec := accesstrail.FromContext(ctx)
+	if rec == nil {
+		rec = &accesstrail.Recorder{}
+	}
+	path, done, err := kubectlProxy.prepare(clusterIDFromCtx(ctx), kubeconfigForCtx(ctx), imp, rec)
+	if err != nil {
+		return nil, nil, fmt.Errorf("kubectl proxy: %w", err)
+	}
+	return append([]string{"--kubeconfig", path}, args...), done, nil
 }
 
 // kubectlArgs prefixes the tool's arguments with the per-request kubeconfig and

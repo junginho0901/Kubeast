@@ -105,6 +105,11 @@ test.describe('AI tool access trail', () => {
     expect(readRow.access).toEqual({
       cluster: CLUSTER, kind: 'person', user: people.read.email, groups: ['kubeast:authenticated', 'kubeast:viewer'], role: 'Read', impersonation: true, mode: 'read',
     })
+    // a kubectl tool: its request went through tool-server's proxy with a Kubeast Audit-ID the API server returned
+    const listed = ((readRow.requests?.requests ?? []) as Array<Record<string, any>>).filter((r) => r.source === 'api')
+    expect(listed.some((r) => r.verb === 'list' && r.resource === 'pods' && r.namespace === NS && r.status === 200 && r.echoed === true
+      && /^kubeast-[0-9a-f]{32}$/.test(r.audit_id)), JSON.stringify(readRow.requests)).toBe(true)
+    expect(listed.every((r) => r.resource), 'kubectl discovery reads are not listed').toBe(true)
     const scopedRows = await mcpRows(request, admin, people.scoped.email)
     expect(scopedRows).toHaveLength(2)
     const inScope = scopedRows.find((r) => r.access)
