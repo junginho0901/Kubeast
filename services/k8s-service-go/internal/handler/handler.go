@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logfiles"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logsearch"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/netflows"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/traces"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/tracing"
@@ -48,6 +50,14 @@ type Handler struct {
 	tracing tracing.Config
 	// traceStore reads the trace store (nil: trace reads off).
 	traceStore *traces.Store
+	// netflows reads Hubble Relays (nil: network flows off).
+	netflows *netflows.Store
+	// netflowsCanI asks the cluster about the Relay's services/proxy,
+	// netflowsDial picks the Relay's URL and client, and netflowsNow is the
+	// clock the window ends at (tests replace them).
+	netflowsCanI func(ctx context.Context, r netflows.Relay) (bool, error)
+	netflowsDial func(ctx context.Context, t netflows.Target) (string, *http.Client, error)
+	netflowsNow  func() time.Time
 	// alertStore reads the alert store (nil: alert reads off).
 	alertStore *alerts.Store
 	// logSearchCanI replaces the pods/log access review in tests.

@@ -35,6 +35,7 @@ func RegisterPods(r chi.Router, h *handler.Handler) {
 	r.Get("/api/v1/namespaces/{namespace}/logsearch/logql", h.LogQLSearchNamespace)
 	r.Get("/api/v1/logsearch/logql", h.LogQLSearchAll)
 	// The AI's traces_* tools (features.traceStore), through the same door: TraceQL with the scope in every filter.
+	r.Get("/api/v1/namespaces/{namespace}/networkflows", h.NetworkFlows)
 	r.Get("/api/v1/namespaces/{namespace}/traces/search", h.TraceSearchNamespace)
 	r.Get("/api/v1/traces/search", h.TraceSearchAll)
 	r.Get("/api/v1/namespaces/{namespace}/traces/metrics", h.TraceMetricsNamespace)

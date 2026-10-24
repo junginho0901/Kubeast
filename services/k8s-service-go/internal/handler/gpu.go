@@ -175,6 +175,7 @@ func (h *Handler) GetClusterFeatures(w http.ResponseWriter, r *http.Request) {
 		"logSearch":          h.logSearchFeature(r.Context()),
 		"tracing":            h.tracingFeature(),
 		"traceStore":         h.traceStoreFeature(),
+		"networkFlows":       h.networkFlowsFeature(),
 		"alertStore":         h.alertStoreFeature(),
 		"inPlaceResize":      map[string]interface{}{"enabled": h.cfg.InPlaceResizeEnabled, "serverSupports": h.cfg.InPlaceResizeEnabled && h.svc.ServerSupportsResize(r.Context())},
 		"admissionPolicies":  map[string]interface{}{"readOnly": h.cfg.AdmissionPoliciesReadOnly},

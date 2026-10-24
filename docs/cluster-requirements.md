@@ -38,6 +38,7 @@ A "target cluster" is a cluster Kubeast manages, including the cluster it is ins
 | Deprecated API item of the hygiene and upgrade checks | Read permission on the API server's `/metrics` — §11 | `features.hygiene.enabled` (on) | Only that item shows "collection failed" |
 | Argo CD guard | Argo CD tracking annotation — §12 | `gitops.argocd.enabled` (off) | No badge or warning |
 | NetworkPolicy view and check | A network plugin that enforces NetworkPolicy, read permission on the namespaces involved — §7 | — | The answer is what the policies say, not what the cluster does; "unknown" where a rule needs namespace labels the user cannot read |
+| Recent flows (drawers, AI `network_flows`) | Cilium Hubble Relay serving TLS, `create` on `services/proxy` for the Relay Service — §16 | `features.networkFlows.enabled` (off) | The section and the tool are left out and the API returns 404; without the cluster permission, 403 |
 
 ## 1. Permissions (RBAC) — every target cluster
 
@@ -455,6 +456,30 @@ service:
 | EKS external clusters, S3 | IRSA role (`aws.irsaRoleArn`, etc.) |
 | Private CA, TLS-intercepting proxy | The Secrets and ConfigMaps listed in `customCAs` must exist in the release namespace first (otherwise new pods wait for the volume and do not start, while the previous pods keep answering) |
 
+## 16. Hubble Relay (network flows)
+
+For the drawers' "Recent Flows" and the AI tool `network_flows` (`features.networkFlows`, off by default), each cluster listed in `features.networkFlows.clusters` needs the following.
+
+- **Hubble Relay**: Cilium with Hubble and Hubble Relay on (`hubble.relay.enabled=true`).
+  - Kubeast calls only the Relay's `observer.Observer/GetFlows`. Another Hubble Relay, such as Microsoft Retina's Hubble control plane, serves the same API, but only Cilium was checked.
+  - The flows are what Hubble keeps in memory on each node. A busy node keeps a shorter past, and the answer says so when Hubble reports lost events.
+- **`proxy` mode (default)**: Kubeast sends `POST /api/v1/namespaces/<ns>/services/https:<service>:<port>/proxy/observer.Observer/GetFlows` to that cluster's API server as the signed-in user. Nothing new is opened on the network.
+  - The Relay Service is `features.networkFlows.relay` (default `kube-system/hubble-relay:443`), or the one an entry names (`proxy:<namespace>/<service>:<port>`).
+  - **The Relay must serve TLS** (`hubble.relay.tls.server.enabled=true`): the API server speaks HTTP/2 to a backend only over TLS, and gRPC needs HTTP/2. A plaintext Relay gives 502 or 503, and the message names that setting.
+  - The API server does not check the Relay's certificate (it proxies by IP) and sends no client certificate, so a Relay that requires client certificates (`hubble.relay.tls.server.mtls=true`) needs the address mode.
+- **Address mode** (`https://<host>:<port>`): Kubeast connects to the Relay itself over TLS.
+  - `tls.existingSecret` holds `ca.crt`, and with `tls.clientCertificate: true` also `tls.crt` and `tls.key` for mTLS. `tls.serverName` overrides the name checked on the certificate.
+  - The Relay must be reachable from k8s-service: add the address to `features.networkFlows.egressCIDRs` when `networkPolicy` is on.
+  - Kubeast asks the cluster the same permission as below (SelfSubjectAccessReview) before each read, so the same people read in both modes.
+- **Permission**: the user needs `resource.networkflow.read` in Kubeast (in the Read role) and, in the cluster, `create` on `services/proxy` for the Relay Service, named exactly `https:<service>:<port>`.
+  - `view` and `edit` do not include `services/proxy`, so render the Role for each cluster:
+    `helm template kubeast helm/kubeast -s templates/impersonation-viewer-hubble.yaml -f <values> | kubectl --context <cluster> apply -f -`
+  - It binds `kubeast:viewer` (and `kubeast:investigator` while `features.alertInvestigation` is on) to `get` and `create` on that one name in the Relay's namespace.
+  - Namespace-limited grants (`kubeast:role:*`) are not bound, so those users get 403 with the permission named. A namespace-limited user who is bound sees peers outside their namespaces by namespace and address only.
+- **Check**: as a Read user, open a Pod drawer → Recent Flows → Show flows.
+  Or, with the user's identity: `kubectl auth can-i create services/https:hubble-relay:443 --subresource=proxy -n kube-system --as=<user> --as-group=kubeast:viewer`.
+  The full development example is `scripts/kind-cilium.sh` (`deploy/kind/cilium-*.yaml`, `deploy/kind/networkflows-values.yaml`).
+
 ## Verified versions (2026-10-13)
 
 | Component | Version | How |
@@ -471,6 +496,7 @@ service:
 | VictoriaMetrics | v1.154.1 (single-node, cluster, vmagent) | 10-20 (v1.154.0), raised 10-21. Development cluster 2 (`scripts/kind-victoriametrics.sh`, with the same scrape config as cluster 2's Prometheus): node memory total is the same bytes in Prometheus and in the single-node and cluster versions; `/-/healthy` is 200 on the single-node version and on vmselect with its path; rules and alerts are empty placeholders; the vmselect targets API gives 400 → `up`; metadata types and descriptions are present (e2e `victoriametrics.spec.ts`) |
 | Grafana | 13.2.4 | 10-17, development cluster 2 (`scripts/kind-grafana.sh`). Metrics and logs read through the data source proxy equal the values read directly, and the dashboard and node drawer fill. A wrong token gives 401 in the status. An alert sent by a webhook contact point test is investigated (e2e `grafana.spec.ts`) |
 | Argo CD | 3.5.6 (core install) | 10-21, development cluster 2 (`scripts/kind-argocd.sh`). An Application syncs the podinfo chart. Checked: tracking annotation, 409, audit row, drawer badge, `gitops_status` (e2e `argocd-real.spec.ts`) |
+| Cilium (Hubble Relay) | 1.20.4 | 10-24, a kind cluster of its own without the default CNI (`scripts/kind-cilium.sh`, Relay TLS on). Read in `proxy` mode as a Read user: client → web on port 80 is FORWARDED with the NetworkPolicy `web-only-client` in `ingress_allowed_by` and the replies folded in, and stranger → web is DROPPED with `POLICY_DENIED` at ingress, as the policy says. A namespace-limited user gets 403 from the cluster; the drawer's "Why?" names the rule; MCP gives the same groups (e2e `network-flows.spec.ts`) |
 | GPU, DRA, VPA, Gateway API, ingress-nginx | — | Based on the code, not verified on a real cluster |
 
 On kind nodes the root filesystem is not picked up as `mountpoint="/"`, so disk utilization is empty, and local-path volumes have no volume stats. Real nodes and CSI drivers do produce these values.

@@ -81,6 +81,7 @@ func TestNetpolCheckArgs(t *testing.T) {
 		{"src": "pod/shop/web-1", "dst": "service/shop/web", "port": "http", "protocol": "udp"},
 		{"src": "Deployment/shop/api", "dst": "203.0.113.9", "port": float64(443)},
 		{"src": "cronjob/batch/nightly.v2", "dst": "2001:db8::1", "port": "65535", "protocol": "SCTP"},
+		{"verdict": "dropped, FORWARDED"},
 	} {
 		if err := validateToolArgs(ok); err != nil {
 			t.Errorf("%v: %v", ok, err)
@@ -95,6 +96,7 @@ func TestNetpolCheckArgs(t *testing.T) {
 		{"port": "70000"},
 		{"port": "HTTP"},
 		{"protocol": "icmp"},
+		{"verdict": "dropped,maybe"},
 	} {
 		if err := validateToolArgs(bad); !errors.Is(err, errBadRequest) {
 			t.Errorf("%v: want a bad request, got %v", bad, err)

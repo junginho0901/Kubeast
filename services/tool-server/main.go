@@ -306,6 +306,11 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Handler:     handleNetworkPolicyCheck,
 	})
 	register(ToolDefinition{
+		Name:        "network_flows",
+		Description: "Recent network flows of a namespace, pod or workload from the cluster's Hubble Relay: who talked to whom, forwarded or dropped and why",
+		Handler:     handleNetworkFlows,
+	})
+	register(ToolDefinition{
 		Name:        "resource_graph",
 		Description: "The objects of one namespace and the edges between them, with counts by kind",
 		Handler:     handleResourceGraph,

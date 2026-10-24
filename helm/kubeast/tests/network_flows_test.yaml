@@ -1,0 +1,115 @@
+suite: Network flows — env, Relay TLS Secret, k8s-service egress, target-cluster RBAC, guards
+templates:
+  - configmap.yaml
+  - deployments.yaml
+  - networkpolicy.yaml
+  - secret.yaml
+  - impersonation-viewer-hubble.yaml
+tests:
+  - it: is off by default — no settings, no mount, no RBAC
+    asserts:
+      - equal:
+          path: data.NETWORK_FLOWS_ENABLED
+          value: "false"
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - notExists:
+          path: data.NETWORK_FLOWS_CLUSTERS
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - hasDocuments:
+          count: 0
+        template: impersonation-viewer-hubble.yaml
+  - it: renders proxy and address clusters, limits, the TLS Secret, the egress and the Relay RBAC
+    set:
+      features.networkFlows.enabled: true
+      features.networkFlows.clusters: {self: proxy, cilium: "proxy:monitoring/relay:4245", edge: "https://relay.example:4245"}
+      features.networkFlows.relay: monitoring/relay:4245
+      features.networkFlows.tls.existingSecret: relay-tls
+      features.networkFlows.tls.clientCertificate: true
+      features.networkFlows.tls.serverName: relay.internal
+      features.networkFlows.maxFlows: 500
+      features.networkFlows.egressCIDRs: [{cidr: 203.0.113.9/32, port: 4245}]
+    asserts:
+      - equal:
+          path: data.NETWORK_FLOWS_CLUSTERS
+          value: cilium=proxy:monitoring/relay:4245,edge=https://relay.example:4245,self=proxy
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.NETWORK_FLOWS_MAX_FLOWS
+          value: "500"
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.NETWORK_FLOWS_TLS_CERT_FILE
+          value: /etc/kubeast/network-flows/tls.crt
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.NETWORK_FLOWS_TLS_SERVER_NAME
+          value: relay.internal
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - contains:
+          path: spec.template.spec.volumes
+          content: {name: network-flows-tls, secret: {secretName: relay-tls}}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content: {name: network-flows-tls, mountPath: /etc/kubeast/network-flows, readOnly: true}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+      - contains:
+          path: spec.egress
+          content:
+            to: [{ipBlock: {cidr: 203.0.113.9/32}}]
+            ports: [{protocol: TCP, port: 4245}]
+        template: networkpolicy.yaml
+        documentSelector: {path: metadata.name, value: RELEASE-NAME-k8s-service}
+      - equal:
+          path: rules[0]
+          value: {apiGroups: [""], resources: [services/proxy], verbs: [get, create], resourceNames: ["https:relay:4245"]}
+        template: impersonation-viewer-hubble.yaml
+        documentSelector: {path: kind, value: Role}
+      - equal:
+          path: metadata.namespace
+          value: monitoring
+        template: impersonation-viewer-hubble.yaml
+        documentSelector: {path: kind, value: Role}
+  - it: binds the investigator too while alert investigation is on
+    set:
+      features.networkFlows.enabled: true
+      features.networkFlows.clusters: {self: proxy}
+      features.alertInvestigation.enabled: true
+    asserts:
+      - contains:
+          path: subjects
+          content: {apiGroup: rbac.authorization.k8s.io, kind: Group, name: "kubeast:investigator"}
+        template: impersonation-viewer-hubble.yaml
+        documentSelector: {path: kind, value: RoleBinding}
+  - it: refuses an enabled store without clusters
+    set:
+      features.networkFlows.enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "features.networkFlows needs clusters"
+        template: deployments.yaml
+  - it: refuses an entry that is not proxy or https
+    set:
+      features.networkFlows.enabled: true
+      features.networkFlows.clusters: {self: "http://relay:4245"}
+    asserts:
+      - failedTemplate:
+          errorPattern: "is not proxy, proxy:<namespace>/<service>:<port> or https://<host>:<port>"
+        template: deployments.yaml
+  - it: refuses a relay that is not namespace/service:port
+    set:
+      features.networkFlows.enabled: true
+      features.networkFlows.clusters: {self: proxy}
+      features.networkFlows.relay: hubble-relay
+    asserts:
+      - failedTemplate:
+          errorPattern: "is not <namespace>/<service>:<port>"
+        template: impersonation-viewer-hubble.yaml

@@ -1,0 +1,56 @@
+{{- if and .Values.auth.impersonation.enabled .Values.features.networkFlows.enabled }}
+{{- /*
+Network flows read the Hubble Relay as the signed-in user: GetFlows is a gRPC
+POST to the Relay Service through the API server proxy, which the Read group
+(kubeast:viewer = view + kubeast:cluster-reader) does not have. This lets that
+group use exactly the Relay's TLS port — a Role in the Relay's namespace,
+services/proxy, resourceNames "https:<service>:<port>", verbs get and create —
+and nothing else. Kubeast asks the same permission before a read at an
+https:// address too. Namespace-scoped grants (kubeast:role:*) are not bound;
+the alert investigator is, while features.alertInvestigation is on. Apply to
+every cluster listed in features.networkFlows.clusters (relay = that cluster's
+Relay Service):
+  helm template kubeast helm/kubeast -s templates/impersonation-viewer-hubble.yaml -f <values> | kubectl --context <cluster> apply -f -
+*/}}
+{{- $relay := .Values.features.networkFlows.relay }}
+{{- if not (regexMatch "^[a-z0-9.-]+/[a-z0-9.-]+:[0-9]+$" $relay) }}
+{{- fail (printf "features.networkFlows.relay %q is not <namespace>/<service>:<port>" $relay) }}
+{{- end }}
+{{- $ns := index (splitList "/" $relay) 0 }}
+{{- $svcPort := index (splitList "/" $relay) 1 }}
+{{- $svc := index (splitList ":" $svcPort) 0 }}
+{{- $port := index (splitList ":" $svcPort) 1 }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kubeast:viewer-hubble
+  namespace: {{ $ns }}
+  labels:
+    {{- include "kubeast.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["services/proxy"]
+    verbs: ["get", "create"]
+    resourceNames: [{{ printf "https:%s:%s" $svc $port | quote }}]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kubeast:viewer-hubble
+  namespace: {{ $ns }}
+  labels:
+    {{- include "kubeast.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kubeast:viewer-hubble
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: kubeast:viewer
+{{- if .Values.features.alertInvestigation.enabled }}
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: kubeast:investigator
+{{- end }}
+{{- end }}

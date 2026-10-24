@@ -1,0 +1,8 @@
+# Kubeast values for network flows on kind (scripts/kind-cilium.sh up): cluster kubeast-cilium's Hubble
+# Relay through its API server service proxy (Relay TLS on, the Read group's Role from
+# templates/impersonation-viewer-hubble.yaml). Nothing to open: k8s-service already reaches that API server.
+features:
+  networkFlows:
+    enabled: true
+    clusters:
+      kubeast-cilium: proxy

@@ -26,6 +26,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logfiles"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logsearch"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/netflows"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/routes"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/traces"
@@ -202,6 +203,21 @@ func main() {
 		}
 		h.SetTraceStore(store)
 		slog.Info("trace store reads enabled", "clusters", tsCfg.ClusterIDs(), "max_range", tsCfg.MaxRange.String())
+	}
+
+	// Network flows from each cluster's Hubble Relay (off unless NETWORK_FLOWS_ENABLED).
+	if nfCfg := netflows.LoadConfig(); nfCfg.Enabled {
+		if err := nfCfg.Validate(); err != nil {
+			slog.Error("invalid network flows configuration", "err", err)
+			os.Exit(1)
+		}
+		store, err := netflows.New(nfCfg)
+		if err != nil {
+			slog.Error("invalid network flows configuration", "err", err)
+			os.Exit(1)
+		}
+		h.SetNetworkFlows(store)
+		slog.Info("network flows enabled", "clusters", nfCfg.ClusterIDs(), "max_range", nfCfg.MaxRange.String(), "max_flows", nfCfg.MaxFlows)
 	}
 
 	// Alert store reads for the AI's alerts_list (off unless ALERT_STORE_ENABLED).

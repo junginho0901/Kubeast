@@ -41,6 +41,7 @@ EXPECTED_READONLY_NAMES = {
     "optimization",
     "can_i",
     "network_policy_check",
+    "network_flows",
     "resource_graph",
     "k8s_jq_query",
     "k8s_tabular_query",

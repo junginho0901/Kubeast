@@ -19,17 +19,20 @@ import (
 )
 
 const (
-	rowsCap          = 200
-	helmTextCap      = 64 << 10
-	helmValuesCap    = 32 << 10
-	graphNodesCap    = 200
-	graphEdgesCap    = 400
-	hygieneFindCap   = 200
-	policyRowsCap    = 200
-	netpolChecksCap  = 40
-	costDefaultWin   = "24h"
-	helmDefaultSect  = "values"
-	policyDefaultTop = "summary"
+	rowsCap             = 200
+	helmTextCap         = 64 << 10
+	helmValuesCap       = 32 << 10
+	graphNodesCap       = 200
+	graphEdgesCap       = 400
+	hygieneFindCap      = 200
+	policyRowsCap       = 200
+	netpolChecksCap     = 40
+	netflowsGroupsCap   = 50
+	netflowsFlowsCap    = 20
+	netflowsAlternative = "No Hubble Relay is configured for this cluster (features.networkFlows). Use network_policy_check to see what NetworkPolicy allows, and prometheus_query for drop counters (hubble_drop_total) if Hubble metrics are scraped."
+	costDefaultWin      = "24h"
+	helmDefaultSect     = "values"
+	policyDefaultTop    = "summary"
 )
 
 // k8sServicePost is k8sServiceGet with a JSON body (the Helm diff).
@@ -466,5 +469,54 @@ func handleNetworkPolicyCheck(ctx context.Context, args map[string]interface{}, 
 		"(an ipBlock that covers a pod IP, a hostNetwork pod) or on namespace labels the user cannot read — say which. " +
 		"unevaluated lists other policy kinds (Cilium, Calico, AdminNetworkPolicy) in these namespaces that can change the answer. " +
 		"notes dns_egress_denied: the source may not reach cluster DNS, so a Service name will not resolve even where the pods are allowed."
+	return marshalJSON(reply)
+}
+
+// handleNetworkFlows reads recent flows of a namespace, pod or workload from
+// the cluster's Hubble Relay through k8s-service (as the user, audited there).
+func handleNetworkFlows(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+	namespace := strings.TrimSpace(argString(args, "namespace", ""))
+	if namespace == "" {
+		return "", wrapBadRequest("namespace is required")
+	}
+	q := url.Values{}
+	pod := strings.TrimSpace(argString(args, "pod", ""))
+	kind, name := strings.TrimSpace(argString(args, "workload_kind", "")), strings.TrimSpace(argString(args, "workload_name", ""))
+	switch {
+	case pod != "" && (kind != "" || name != ""):
+		return "", wrapBadRequest("give pod or workload_kind and workload_name, not both")
+	case pod != "":
+		q.Set("kind", "Pod")
+		q.Set("name", pod)
+	case kind != "" || name != "":
+		if kind == "" || name == "" {
+			return "", wrapBadRequest("workload_kind and workload_name go together")
+		}
+		q.Set("kind", kind)
+		q.Set("name", name)
+	}
+	if v := strings.TrimSpace(argString(args, "verdict", "")); v != "" {
+		q.Set("verdict", strings.ToUpper(v))
+	}
+	if v := strings.TrimSpace(argString(args, "since", "")); v != "" {
+		q.Set("since", v)
+	}
+	if limit := argInt(args, "limit", 0); limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	status, body, err := k8sServiceGet(ctx, headers, "/namespaces/"+url.PathEscape(namespace)+"/networkflows", q)
+	if err != nil {
+		return "", err
+	}
+	reply, out, err := featureReply("networkFlows", netflowsAlternative, status, body)
+	if err != nil || out != "" {
+		return out, err
+	}
+	capList(reply, "groups", netflowsGroupsCap)
+	capList(reply, "flows", netflowsFlowsCap)
+	reply["note"] = "Read from the cluster's Hubble Relay as the signed-in user. groups fold the flows of one connection (count, first, last; " +
+		"observed = egress at the source, ingress at the destination). DROPPED with drop_reason POLICY_DENIED means a network policy blocked it: " +
+		"call network_policy_check for the same source, destination and port to name the Kubernetes NetworkPolicy rule. " +
+		"truncated: the Relay had more than the limit; redacted: peers outside the user's namespaces show namespace and address only."
 	return marshalJSON(reply)
 }

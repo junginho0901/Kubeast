@@ -261,6 +261,9 @@ func allPermissions() []map[string]interface{} {
 		{"category": "Alerts", "permissions": []perm{
 			{"resource.alert.silence", "Create and expire alert silences"},
 		}},
+		{"category": "Network", "permissions": []perm{
+			{"resource.networkflow.read", "Read network flows (Hubble)"},
+		}},
 		{"category": "Helm", "permissions": []perm{
 			{"resource.helm.*", "All Helm actions"},
 			{"resource.helm.read", "View releases"},
@@ -306,6 +309,7 @@ func allPermissions() []map[string]interface{} {
 			{"ai.tool.optimization", "Read tool: requests vs usage with recommendations"},
 			{"ai.tool.can_i", "Read tool: whether the user may do an action (can-i)"},
 			{"ai.tool.network_policy_check", "Read tool: whether NetworkPolicy allows a connection"},
+			{"ai.tool.network_flows", "Read tool: recent network flows (Hubble)"},
 			{"ai.tool.resource_graph", "Read tool: a namespace's resource graph"},
 			{"ai.tool.hygiene", "Admin tool: the cluster hygiene report"},
 			{"ai.tool.k8s_jq_query", "Read tool: a resource list filtered by jq"},

@@ -881,6 +881,38 @@ features:
     timeout: 15s
     perUserPerMinute: 20
     egressCIDRs: []
+  # Network flows from each cluster's Hubble Relay (off by default): Cilium,
+  # or Microsoft Retina's Hubble control plane. Shown in the Pod and workload
+  # drawers and read by the AI's network_flows. Each entry of clusters is
+  # <Kubeast cluster ID>: one of
+  #   proxy — through that cluster's API server service proxy as the
+  #     signed-in user, at the Relay Service in relay; nothing is opened, but
+  #     the Relay must serve TLS (Cilium hubble.relay.tls.server.enabled=true):
+  #     the API server speaks HTTP/2 to a backend only over TLS;
+  #   proxy:<namespace>/<service>:<port> — the same at another Relay Service;
+  #   https://<host>:<port> — the Relay at that address over TLS: tls.existingSecret
+  #     holds ca.crt (and tls.crt, tls.key with tls.clientCertificate for mTLS);
+  #     add the address to egressCIDRs.
+  # Who may read: holders of resource.networkflow.read (in the Read role)
+  # whom the cluster lets create services/proxy on the Relay Service — render
+  # templates/impersonation-viewer-hubble.yaml for each such cluster. A
+  # namespace-limited reader sees peers outside their namespaces by namespace
+  # and address only; URL query strings are dropped. Audited as
+  # k8s.networkflows.query.
+  networkFlows:
+    enabled: false
+    clusters: {}
+    relay: kube-system/hubble-relay:443
+    tls:
+      existingSecret: ""
+      clientCertificate: false
+      serverName: ""
+    defaultRange: 15m
+    maxRange: 1h
+    maxFlows: 200
+    timeout: 10s
+    perUserPerMinute: 20
+    egressCIDRs: []
   # Alert store reads for the AI's alerts_list (off by default): an
   # Alertmanager's API v2 at url (http://alertmanager.monitoring:9093), a
   # Grafana data source proxy to one (https://<grafana>/api/datasources/proxy/uid/<Alertmanager UID>)

@@ -366,3 +366,46 @@ func TestNetworkPolicyCheck(t *testing.T) {
 		t.Fatalf("forbidden: %s %v", out, err)
 	}
 }
+
+func TestNetworkFlows(t *testing.T) {
+	var groups []string
+	for i := 0; i < netflowsGroupsCap+3; i++ {
+		groups = append(groups, `{"verdict":"FORWARDED","count":1}`)
+	}
+	seen := fakeK8sService(t, func(r *http.Request) (int, string) {
+		return 200, `{"cluster":"c1","mode":"proxy","groups":[` + strings.Join(groups, ",") + `],"flows":[],"truncated":false}`
+	})
+	out, err := handleNetworkFlows(ctxFor("c1"), map[string]interface{}{"namespace": "shop", "workload_kind": "Deployment", "workload_name": "web", "verdict": "dropped", "since": "30m", "limit": float64(50)}, bearer())
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := (*seen)[0].URL.Query()
+	if (*seen)[0].URL.Path != "/api/v1/namespaces/shop/networkflows" || q.Get("kind") != "Deployment" || q.Get("name") != "web" || q.Get("verdict") != "DROPPED" ||
+		q.Get("since") != "30m" || q.Get("limit") != "50" || q.Get("cluster") != "c1" {
+		t.Fatalf("request %s %s", (*seen)[0].URL.Path, (*seen)[0].URL.RawQuery)
+	}
+	m := decode(t, out)
+	if len(m["groups"].([]interface{})) != netflowsGroupsCap || m["truncated"] != true || !strings.Contains(m["note"].(string), "network_policy_check") {
+		t.Fatalf("reply: %s", out)
+	}
+	fakeK8sService(t, func(r *http.Request) (int, string) { return 200, `{"groups":[],"flows":[]}` })
+	if _, err := handleNetworkFlows(ctxFor("c1"), map[string]interface{}{"namespace": "shop", "pod": "web-1"}, bearer()); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []map[string]interface{}{
+		{},
+		{"namespace": "shop", "pod": "a", "workload_kind": "Deployment", "workload_name": "web"},
+		{"namespace": "shop", "workload_kind": "Deployment"},
+	} {
+		if _, err := handleNetworkFlows(ctxFor("c1"), bad, bearer()); !errors.Is(err, errBadRequest) {
+			t.Errorf("%v: %v", bad, err)
+		}
+	}
+	fakeK8sService(t, func(r *http.Request) (int, string) {
+		return 404, `{"detail":"network flows are not configured for this cluster"}`
+	})
+	out, err = handleNetworkFlows(ctxFor("c1"), map[string]interface{}{"namespace": "shop"}, bearer())
+	if err != nil || decode(t, out)["status"] != "unavailable" {
+		t.Fatalf("not configured: %s %v", out, err)
+	}
+}

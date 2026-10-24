@@ -185,6 +185,11 @@ async def test_second_batch_feature_tools_pass_declared_arguments_only():
             {"src": "deployment/shop/client", "dst": "service/shop/web", "port": "80", "protocol": "TCP"},
         ),
         ("network_policy_check", {"src": "pod/shop/a", "dst": "10.0.0.1", "port": "http", "protocol": ""}, {"src": "pod/shop/a", "dst": "10.0.0.1", "port": "http"}),
+        (
+            "network_flows",
+            {"namespace": "shop", "workload_kind": "Deployment", "workload_name": "web", "verdict": "DROPPED", "limit": 30, "cluster": "x"},
+            {"namespace": "shop", "workload_kind": "Deployment", "workload_name": "web", "verdict": "DROPPED", "limit": 30},
+        ),
         ("hygiene", {"severity": "critical", "check": "pss-level"}, {"severity": "critical", "check": "pss-level"}),
     ]:
         service._call_tool_server.reset_mock()

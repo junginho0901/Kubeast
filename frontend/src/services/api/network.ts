@@ -9,6 +9,7 @@ import type {
   EndpointSliceInfo,
   IngressClassInfo,
   IngressInfo,
+  NetflowResult,
   NetpolCheckResult,
   NetpolEffective,
   NetworkPolicyInfo,
@@ -154,6 +155,11 @@ export const networkApi = {
 
   getEffectiveNetworkPolicies: async (namespace: string, kind: string, name: string): Promise<NetpolEffective> => {
     const { data } = await client.get(`/cluster/namespaces/${encodeURIComponent(namespace)}/networkpolicies/effective`, { params: { kind, name } })
+    return data
+  },
+
+  getNetworkFlows: async (namespace: string, params: { kind?: string; name?: string; since?: string; verdict?: string; limit?: number }): Promise<NetflowResult> => {
+    const { data } = await client.get(`/cluster/namespaces/${encodeURIComponent(namespace)}/networkflows`, { params })
     return data
   },
 

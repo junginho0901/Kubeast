@@ -27,6 +27,7 @@ import { traceTemplates } from '@/utils/features'
 import { fillTraceTemplate, podServiceName } from '@/utils/traceLinks'
 import PolicyViolations from './PolicyViolations'
 import NetworkPolicies from './NetworkPolicies'
+import NetworkFlows from './NetworkFlows'
 
 interface Props {
   name: string
@@ -769,6 +770,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
 
       <PolicyViolations kind="Pod" namespace={namespace} name={name} />
       <NetworkPolicies kind="Pod" namespace={namespace} name={name} />
+      <NetworkFlows kind="Pod" namespace={namespace} name={name} />
 
       {/* Labels & Annotations */}
       <InfoSection title="Labels">
