@@ -186,7 +186,7 @@ AI 도구 호출마다 클러스터가 그 호출을 누구로 봤는지와 그 
 - 클러스터 감사 로그에서 호출을 찾으려면 그 ID로 검색합니다.
   - `auditID`는 Kubeast가 보여 준 ID입니다.
   - `user`는 Kubeast 자체 자격 증명입니다.
-  - `impersonatedUser`는 그 사람이고, 알림 조사면 `kubeast:investigator`입니다.
+  - `impersonatedUser`는 그 사람이고, 알림 조사면 `kubeast:investigator`입니다. 그 그룹은 Kubeast가 보여 준 그룹에 API 서버가 모든 impersonation 사용자에게 붙이는 `system:authenticated`가 더해진 것입니다.
 - 이런 로그는 API 서버 감사가 켜져 있어야 남습니다.
   - kubeadm·직접 운영 클러스터: kube-apiserver의 `--audit-policy-file`과 `--audit-log-path`.
   - Amazon EKS: 컨트롤 플레인 로깅의 `audit` 로그 유형, CloudWatch Logs `/aws/eks/<cluster>/cluster`.

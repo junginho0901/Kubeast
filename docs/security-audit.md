@@ -187,7 +187,7 @@ Each AI tool call shows who the cluster saw it as and the cluster requests it ma
 - To find a call in the cluster's audit log, search for its ID.
   - `auditID` is the ID Kubeast showed.
   - `user` is Kubeast's own credential.
-  - `impersonatedUser` is the person, or `kubeast:investigator` for an alert investigation.
+  - `impersonatedUser` is the person, or `kubeast:investigator` for an alert investigation. Its groups are the ones Kubeast showed plus `system:authenticated`, which the API server adds to every impersonated user.
 - The cluster keeps such a log only with API server auditing on.
   - kubeadm and self-managed clusters: `--audit-policy-file` and `--audit-log-path` on kube-apiserver.
   - Amazon EKS: control plane logging with the `audit` log type, in CloudWatch Logs `/aws/eks/<cluster>/cluster`.
