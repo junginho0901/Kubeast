@@ -7,8 +7,8 @@
 // takes a port entry with a protocol and no port as every protocol, so the
 // analyzer gets each such entry written as the protocol's ports 1-65535,
 // which the API defines as the same. Its connection sets (the list command)
-// were tried first and lose allowed ports when a rule's named port is
-// missing on the destination.
+// were tried first and drop a connection whose egress and ingress port ranges
+// overlap when the egress range starts later (egress 85-95, ingress 80-90).
 //
 // netpol-analyzer assumes an ipBlock never selects a pod, so the comparison
 // leaves out what netpol reports as depending on the network plugin (an
