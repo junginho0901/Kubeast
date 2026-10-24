@@ -358,6 +358,7 @@ async def approve_tool_approval(
     from app.services.audit_target import tool_target
     from app.services.audit_writer import AuditUnavailable, fail_closed_enabled, require_audit_ready, write_audit
     from app.services.ai import access as tool_access, formatters
+    from app.services.ai.streaming import tool_outcome
 
     from app.services.approval_token import ApprovalTokenUnavailable, sign as sign_approval
     payload = _caller(authorization)
@@ -405,6 +406,10 @@ async def approve_tool_approval(
     try:
         response = await ai_service._call_tool_server(approval.tool, args, approval_id=approval.id, approval_token=approval_token)
         formatted, _, _ = formatters._format_tool_result(approval.tool, args, response)
+        # refused before tool-server (a namespace-scoped grant): not executed
+        _outcome, problem, _status = tool_outcome(response)
+        if problem:
+            status, error = "failed", problem
     except Exception as e:  # tool-server error (403 from the cluster, kubectl failure, ...)
         status, error = "failed", str(e)
         formatted = f"error: {error}"

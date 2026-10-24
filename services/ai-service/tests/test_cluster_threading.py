@@ -74,3 +74,28 @@ def test_k8s_client_sets_cluster_query_param():
 
     no_cluster = K8sServiceClient()
     assert "cluster" not in no_cluster.client.params
+
+
+@pytest.mark.asyncio
+async def test_a_scope_refusal_is_a_forbidden_result_not_a_call():
+    # The model gets the reason; the call's audit row reads failure (streaming.tool_outcome), not success.
+    import json
+    from types import SimpleNamespace
+
+    from app.services.ai.streaming import tool_outcome
+
+    svc = _bare_service("prod")
+    svc._token_payload = SimpleNamespace(namespaces={"prod": ("web",)}, allowed_in=lambda cluster, ns: ns == "web")
+    calls = []
+
+    class FakeToolServer:
+        async def call_tool(self, name, args, headers=None):
+            calls.append(name)
+            return "ok"
+
+    svc.tool_server = FakeToolServer()
+    out = await svc._call_tool_server("k8s_get_resources", {"namespace": "db"})
+    assert calls == []
+    assert json.loads(out) == {"status": "forbidden", "message": "forbidden: namespace 'db' is outside your grant on prod (web)"}
+    assert tool_outcome(out) == ("failure", "forbidden", "forbidden")
+    assert await svc._call_tool_server("k8s_get_resources", {"namespace": "web"}) == "ok"

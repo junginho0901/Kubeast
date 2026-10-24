@@ -358,6 +358,26 @@ async def test_the_report_and_rows_carry_the_identity_tool_server_reported(monke
 
 
 @pytest.mark.asyncio
+async def test_a_refused_call_is_marked_in_the_report_and_its_row(monkeypatch):
+    # A namespace-scoped investigator token: a cluster-wide tool is refused before tool-server, as a forbidden result.
+    service = FakeService([
+        completion(calls=[tool_call("c1", "alerts_list", {})]),
+        completion(content="## Summary\nok"),
+    ])
+    refusal = json.dumps({"status": "forbidden", "message": "forbidden: alerts_list spans the cluster; your grant on self is limited to namespaces apps"})
+
+    async def execute(name, args, ctx):
+        return refusal
+
+    service._execute_function_with_context = execute
+    audits = []
+    install_loop(monkeypatch, service, audits)
+    out = await runner.investigate(cfg(max_steps=5), row())
+    assert out["tool_calls"][0]["error"] == "forbidden"
+    assert audits[0]["result"] == "failure" and audits[0]["error"] == "forbidden"
+
+
+@pytest.mark.asyncio
 async def test_last_step_has_no_tools(monkeypatch):
     keeps_calling = completion(calls=[tool_call("c", "k8s_get_pod_logs", {"namespace": "apps", "pod_name": "p"})])
     service = FakeService([keeps_calling, keeps_calling, completion(content="## Summary\nok")])

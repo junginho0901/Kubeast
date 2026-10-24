@@ -113,6 +113,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row) -> dict[str,
     """Run one investigation; return the fields to store. Raises on failure."""
     from app.services.ai import formatters
     from app.services.ai import permissions as perm
+    from app.services.ai.streaming import tool_outcome
     from app.services.ai.tool_turn import run_tool_turn
     from app.services.ai_service import ToolContext
     from app.services.tool_whitelists import READONLY_TOOL_NAMES, readonly_tool_filter
@@ -154,6 +155,10 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row) -> dict[str,
                 formatted, _is_json, _is_yaml = formatters._format_tool_result(name, args, raw)
                 result = formatters._truncate_tool_result_for_llm(formatted)
                 entry["result_chars"] = len(formatted)
+                # a refusal or an error the tool answered with, read as the chat reads it
+                _outcome, problem, _status = tool_outcome(raw)
+                if problem:
+                    entry["error"] = problem
             except InvestigationError:
                 raise
             except Exception as e:  # a tool error is the model's to read, not the end of the run
