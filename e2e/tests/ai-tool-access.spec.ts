@@ -4,7 +4,9 @@ import { test, expect, type APIRequestContext } from '@playwright/test'
 // that called the cluster sent, the Kubeast role and scope behind them, read or write — in its audit row
 // (after.access) and as the 🔐 line of the chat's tool block. The MCP endpoint drives exact calls as a Read user and
 // a namespace-limited one; k8s-service answers the same identity in X-Kubeast-Access; a call refused before the
-// cluster carries none. The chat case asks the dev model for one read and checks the line live and after a reload.
+// cluster carries none. A call through k8s-service also lists its cluster requests (after.requests), each sent with
+// a Kubeast Audit-ID the API server returned. The chat case asks the dev model for one read and checks the line live
+// and after a reload.
 
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
@@ -110,6 +112,42 @@ test.describe('AI tool access trail', () => {
       cluster: CLUSTER, kind: 'person', user: people.scoped.email, groups: ['kubeast:authenticated', 'kubeast:role:read'], role: 'Read', namespaces: [NS], impersonation: true, mode: 'read',
     })
     expect(scopedRows.filter((r) => !r.access)).toHaveLength(1)
+  })
+
+  test('a call through k8s-service lists the cluster requests it made, each with an Audit-ID the API server returned', async ({ request }) => {
+    test.skip(!mcpOn, 'the MCP server is off (mcp.enabled)')
+    const out = await mcpCall(request, people.read.token, 'issues', { cluster: CLUSTER, namespace: NS })
+    expect(out.isError ?? false, out.content?.[0]?.text).toBe(false)
+    let row: any
+    await expect.poll(async () => {
+      row = (await mcpRows(request, admin, people.read.email)).find((r) => r.tool === 'issues')
+      return !!row
+    }, { timeout: 15_000 }).toBe(true)
+    const trail = row.requests as { requests: Array<Record<string, any>>; total: number }
+    const api = trail.requests.filter((r) => r.source === 'api')
+    expect(trail.total, JSON.stringify(trail)).toBeGreaterThanOrEqual(api.length)
+    expect(api.length, JSON.stringify(trail)).toBeGreaterThan(0)
+    // every request went out with its own Kubeast Audit-ID, and the API server answered with the same one
+    for (const r of api) {
+      expect(r.audit_id).toMatch(/^kubeast-[0-9a-f]{32}$/)
+      expect(r.echoed, JSON.stringify(r)).toBe(true)
+      expect(r.status).toBeGreaterThanOrEqual(200)
+    }
+    expect(new Set(api.map((r) => r.audit_id)).size).toBe(api.length)
+    // the issues check lists pods (a Read user's lists span the cluster, then the answer is cut to the namespace)
+    expect(api.some((r) => r.verb === 'list' && r.resource === 'pods'), JSON.stringify(api)).toBe(true)
+
+    // a grant limited to one namespace: its pod reads stay inside it
+    const scopedOut = await mcpCall(request, people.scoped.token, 'issues', { cluster: CLUSTER, namespace: NS })
+    expect(scopedOut.isError ?? false, scopedOut.content?.[0]?.text).toBe(false)
+    let scopedRow: any
+    await expect.poll(async () => {
+      scopedRow = (await mcpRows(request, admin, people.scoped.email)).find((r) => r.tool === 'issues')
+      return !!scopedRow
+    }, { timeout: 15_000 }).toBe(true)
+    const scopedPods = ((scopedRow.requests?.requests ?? []) as Array<Record<string, any>>).filter((r) => r.source === 'api' && r.resource === 'pods')
+    expect(scopedPods.length, JSON.stringify(scopedRow.requests)).toBeGreaterThan(0)
+    expect(scopedPods.every((r) => r.namespace === NS && r.echoed === true), JSON.stringify(scopedPods)).toBe(true)
   })
 
   test('the chat shows the 🔐 line under the tool name, live and after a reload', async ({ page, request }) => {

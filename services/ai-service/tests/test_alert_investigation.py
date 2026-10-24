@@ -341,11 +341,12 @@ async def test_the_report_and_rows_carry_the_identity_tool_server_reported(monke
                           tool_call("c2", "k8s_delete_resource", {"resource_type": "pod", "resource_name": "pod-1"})]),
         completion(content="## Summary\nok"),
     ])
-    service.tool_server = SimpleNamespace(last_redacted=None, last_access=None)
+    service.tool_server = SimpleNamespace(last_redacted=None, last_access=None, last_requests=None)
     run = service._execute_function_with_context
+    sent = {"requests": [{"source": "api", "verb": "list", "resource": "pods", "namespace": "apps", "status": 200, "audit_id": "kubeast-5", "echoed": True}], "total": 1}
 
     async def execute(name, args, ctx):
-        service.tool_server.last_access = who
+        service.tool_server.last_access, service.tool_server.last_requests = who, sent
         return await run(name, args, ctx)
 
     service._execute_function_with_context = execute
@@ -355,6 +356,8 @@ async def test_the_report_and_rows_carry_the_identity_tool_server_reported(monke
     # the read reached the cluster as the investigator; the refused write reached nothing
     assert [c.get("access") for c in out["tool_calls"]] == [{**who, "mode": "read"}, None]
     assert [a["after"]["access"] for a in audits] == [{**who, "mode": "read"}, None]
+    assert [c.get("requests") for c in out["tool_calls"]] == [sent, None]
+    assert [a["after"]["requests"] for a in audits] == [sent, None]
 
 
 @pytest.mark.asyncio

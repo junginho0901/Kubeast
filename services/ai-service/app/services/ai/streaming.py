@@ -97,8 +97,8 @@ def tool_block_markdown(tc: dict) -> str:
         code_fence = "```yaml"
     else:
         code_fence = "```json" if tc.get("is_json", False) else "```"
-    access_line = access_mod.line(tc.get("access"))
-    access_section = f"{access_line}\n\n" if access_line else ""
+    access_section = access_mod.section(tc.get("access"), tc.get("requests"))
+    access_section = f"{access_section}\n\n" if access_section else ""
     return f"""<details>
 <summary>🔧 <strong>{tc['function']}</strong></summary>
 
@@ -426,7 +426,7 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
     from app.services.tool_whitelists import WRITE_TOOL_NAMES, write_approval_required
 
     events: list[str] = []
-    call_access = None
+    call_access = call_requests = None
     # H2: a tool that changes the cluster is not run from the
     # model's call. Record an approval request, tell the user
     # (SSE) and the model (tool result), and move on.
@@ -479,6 +479,7 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
             function_name, function_args, tool_context
         )
         call_access = access_mod.of_call(service, function_name)
+        call_requests = access_mod.requests_of_call(service)
 
     log.debug("[DEBUG] Function response length: %d", len(str(function_response)))
 
@@ -505,6 +506,8 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
         payload["call_id"] = call_id
     if call_access is not None:
         payload["access"] = call_access
+    if call_requests is not None:
+        payload["requests"] = call_requests
     if display_preview is not None:
         payload["display"] = display_preview
         payload["display_format"] = "kubectl"
@@ -529,6 +532,8 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
         log_entry['call_id'] = call_id
     if call_access is not None:
         log_entry['access'] = call_access
+    if call_requests is not None:
+        log_entry['requests'] = call_requests
     if chart is not None:
         log_entry['chart'] = chart
 
@@ -555,6 +560,8 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
                 'redacted': getattr(service.tool_server, 'last_redacted', None),
                 # the identity the cluster saw the call as (None when it reached no cluster)
                 'access': call_access,
+                # the cluster requests it made, each with the Audit-ID to find it in the cluster's audit log
+                'requests': call_requests,
                 **({'objects': target.objects} if target.objects else {}),
             },
             request_ip=(audit_http or {}).get('ip'),

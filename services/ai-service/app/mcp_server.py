@@ -412,10 +412,12 @@ class KubeastMCPServer(MCPServer):
             error = str(e) or e.__class__.__name__
             after["redacted"] = client.last_redacted
             after["access"] = with_mode(client.last_access, name)
+            after["requests"] = client.last_requests
             await write_audit(**audit, after=after, result="failure", error=error[:500])
             return _text(error, error=True)
         after["redacted"] = client.last_redacted
         after["access"] = with_mode(client.last_access, name)
+        after["requests"] = client.last_requests
         await write_audit(**audit, after=after)
         return _text(content)
 

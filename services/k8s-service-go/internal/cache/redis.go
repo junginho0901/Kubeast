@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+
+	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
 )
 
 // Cache provides Redis caching with in-memory fallback.
@@ -61,7 +64,17 @@ func New(host string, port, db int, password string) *Cache {
 	return c
 }
 
+// Get reads key into dest. A hit is noted for an AI tool call being recorded
+// (accesstrail): the answer came from Kubeast's cache, not from the cluster.
 func (c *Cache) Get(ctx context.Context, key string, dest interface{}) bool {
+	if !c.get(ctx, key, dest) {
+		return false
+	}
+	accesstrail.Cached(ctx, "cache "+cacheName(key))
+	return true
+}
+
+func (c *Cache) get(ctx context.Context, key string, dest interface{}) bool {
 	if c.connected {
 		data, err := c.rdb.Get(ctx, key).Bytes()
 		if err != nil {
@@ -138,4 +151,16 @@ func (c *Cache) FlushAll(ctx context.Context) error {
 	c.mem = make(map[string]memEntry)
 	c.mu.Unlock()
 	return nil
+}
+
+// cacheName is a key without its cluster and identity parts (k8s.Service
+// clusterCacheKey writes "cluster|key|as:identity").
+func cacheName(key string) string {
+	if i := strings.Index(key, "|as:"); i != -1 {
+		key = key[:i]
+	}
+	if i := strings.Index(key, "|"); i != -1 {
+		key = key[i+1:]
+	}
+	return key
 }

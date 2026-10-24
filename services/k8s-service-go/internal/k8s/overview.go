@@ -11,6 +11,8 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
 )
 
 // overviewIdentityTTL is how long a cluster's answer about one identity is kept.
@@ -36,6 +38,7 @@ func (s *Service) GetClusterOverview(ctx context.Context) (map[string]interface{
 			}
 		}
 		if ci := b.overviewInformers(); ci != nil && ci.waitSynced(ctx, overviewSyncWait) {
+			accesstrail.Cached(ctx, "overview informers (watched as "+overviewCacheUser+")")
 			ov := ci.overviewFor(scope)
 			ov["cluster_version"] = ci.serverVersion(b.discovery)
 			return ov, nil

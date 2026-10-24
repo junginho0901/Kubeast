@@ -166,6 +166,8 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row) -> dict[str,
                 entry["error"] = clean_error(e)
             if (access := access_mod.of_call(service, name)) is not None:
                 entry["access"] = access
+            if (requests := access_mod.requests_of_call(service)) is not None:
+                entry["requests"] = requests
         tool_log.append(entry)
         target = tool_target(name, args)
         await write_audit(
@@ -183,6 +185,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row) -> dict[str,
                 "resource_type": args.get("resource_type"),
                 "redacted": getattr(service.tool_server, "last_redacted", None),
                 "access": entry.get("access"),
+                "requests": entry.get("requests"),
             },
             result="failure" if entry.get("error") else "success",
             error=entry.get("error"),

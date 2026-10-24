@@ -18,6 +18,7 @@ import (
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/cache"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logsearch"
+	kubetrail "github.com/junginho0901/kubeast/services/pkg/accesstrail/kube"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/gitops"
@@ -241,6 +242,8 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 		cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return auth.ImpersonationRoundTripper(rt, id) })
 		cacheCfg.Impersonate = rest.ImpersonationConfig{UserName: overviewCacheUser, Groups: []string{auth.GroupAuthenticated, auth.GroupViewer}}
 	}
+	// A request recorded for an AI tool call (accesstrail) goes out with its own Audit-ID.
+	cfg.Wrap(kubetrail.RoundTripper)
 	clientset, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("create clientset: %w", err)

@@ -33,6 +33,9 @@
     - The same values are in the call's audit row (`after.access`), so the call can be matched with `impersonatedUser` in the cluster's audit log.
     - With impersonation off (`auth.impersonation.enabled=false`), the line says Kubeast's own credential ran the call.
     - An alert investigation report says which identity read the cluster.
+  - Under the 🔐 line, **🧾 Cluster requests** lists the Kubernetes requests the call made, each with the `Audit-ID` Kubeast sent and whether the API server returned it, so the call can be found in the cluster's audit log ([Security and audit](security-audit.md#ai-tool-calls-in-the-clusters-audit-log)).
+    - An answer from Kubeast's own cache is listed as such: no request reached the cluster.
+    - The kubectl tools are not listed yet.
   - Tools that use Kubeast features call the k8s-service API **with that person's token** rather than kubectl, so permissions, audit and masking are the same as in the UI. These tools are:
     - `issues`: an issue check of pods, workloads, nodes, PVCs and warning events at once
     - `prometheus_query`: PromQL instant and range queries, absolute time ranges too. Given `chart=true`, a title and a unit, the result becomes a **graph below the answer**.

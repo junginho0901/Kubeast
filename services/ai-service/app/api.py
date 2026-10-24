@@ -414,24 +414,25 @@ async def approve_tool_approval(
         status, error = "failed", str(e)
         formatted = f"error: {error}"
     call_access = tool_access.with_mode(ai_service.tool_server.last_access, approval.tool)
+    call_requests = ai_service.tool_server.last_requests
     approval = await db.transition_tool_approval(
         approval.id, "approved", status=status, result=formatted[:APPROVAL_RESULT_MAX_CHARS], decided_at=utcnow(),
     ) or approval
     icon = "✅" if status == "executed" else "⚠️"
-    access_line = tool_access.line(call_access)
+    access_line = tool_access.section(call_access, call_requests)
     await db.add_message(
         approval.session_id, "assistant",
         f"{icon} `{approval.tool}` on `{approval.cluster}` was approved and {'executed' if status == 'executed' else 'failed'}.\n\n"
         + (f"{access_line}\n\n" if access_line else "") + f"```\n{approval.result}\n```",
         tool_calls=[{"function": approval.tool, "args": args, "result": approval.result, "approval_id": approval.id, "approval_status": status,
-                     **({"access": call_access} if call_access else {})}],
+                     **({"access": call_access} if call_access else {}), **({"requests": call_requests} if call_requests else {})}],
     )
     target = tool_target(approval.tool, args)
     await write_audit(
         action="ai.tool.execute", actor_user_id=actor.get("user_id"), actor_email=actor.get("email"), cluster=approval.cluster,
         target_type=target.type, target_id=target.id, namespace=target.namespace,
         after={"approval_id": approval.id, "session_id": approval.session_id, "cluster": approval.cluster, "tool": approval.tool, "approved": True,
-               "access": call_access, **({"objects": target.objects} if target.objects else {})},
+               "access": call_access, "requests": call_requests, **({"objects": target.objects} if target.objects else {})},
         request_ip=http.get("ip"), user_agent=http.get("user_agent"), request_id=http.get("request_id"), path=http.get("path"),
         result="success" if status == "executed" else "failure", error=error,
     )

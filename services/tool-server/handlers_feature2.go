@@ -49,7 +49,7 @@ func k8sServicePost(ctx context.Context, headers http.Header, path string, q url
 	if auth := headers.Get("Authorization"); auth != "" {
 		req.Header.Set("Authorization", auth)
 	}
-	resp, err := featureHTTP.Do(req)
+	resp, err := doTraced(featureHTTP, req)
 	if err != nil {
 		return 0, nil, fmt.Errorf("k8s-service %s: %w", path, err)
 	}

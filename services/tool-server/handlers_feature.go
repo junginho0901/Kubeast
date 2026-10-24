@@ -17,6 +17,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
 )
 
 var featureHTTP = &http.Client{Timeout: 45 * time.Second}
@@ -43,7 +45,7 @@ func k8sServiceGet(ctx context.Context, headers http.Header, path string, q url.
 	if auth := headers.Get("Authorization"); auth != "" {
 		req.Header.Set("Authorization", auth)
 	}
-	resp, err := featureHTTP.Do(req)
+	resp, err := doTraced(featureHTTP, req)
 	if err != nil {
 		return 0, nil, fmt.Errorf("k8s-service %s: %w", path, err)
 	}
@@ -53,6 +55,22 @@ func k8sServiceGet(ctx context.Context, headers http.Header, path string, q url.
 		return 0, nil, fmt.Errorf("k8s-service %s: %w", path, err)
 	}
 	return resp.StatusCode, body, nil
+}
+
+// doTraced sends a k8s-service request; for a tool call being recorded it asks
+// for the cluster requests k8s-service makes and adds them to the call's trail.
+func doTraced(client *http.Client, req *http.Request) (*http.Response, error) {
+	rec := accesstrail.FromContext(req.Context())
+	if rec != nil {
+		req.Header.Set(accesstrail.HeaderRecord, "1")
+	}
+	resp, err := client.Do(req)
+	if rec != nil && resp != nil {
+		if trail, ok := accesstrail.ParseHeader(resp.Header.Get(accesstrail.HeaderRequests)); ok {
+			rec.Merge(trail)
+		}
+	}
+	return resp, err
 }
 
 // detailOf reads k8s-service's {"detail": …} / {"error": …} message.

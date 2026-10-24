@@ -176,3 +176,21 @@ sessionRecording:
   enabled: true
   s3: {bucket: kubeast-sessions, prefix: sessions/, region: ap-northeast-2}   # s3:PutObject·GetObject on the k8s-service role
 ```
+
+## AI tool calls in the cluster's audit log
+
+Each AI tool call shows who the cluster saw it as and the cluster requests it made: the 🔐 line and "🧾 Cluster requests" in the chat's tool block, `after.access` and `after.requests` in its audit row.
+
+- Kubeast sends each request of a tool call with its own `Audit-ID` header: `kubeast-` and 32 hex characters.
+- The API server takes that value as the audit event's `auditID` and returns it in the response. ✓ next to a request means it came back.
+- Requests the API server hands to the kubelet (exec, attach, port-forward) may come back without it. They are marked "not echoed" and are still in the cluster's audit log under the same ID.
+- To find a call in the cluster's audit log, search for its ID.
+  - `auditID` is the ID Kubeast showed.
+  - `user` is Kubeast's own credential.
+  - `impersonatedUser` is the person, or `kubeast:investigator` for an alert investigation.
+- The cluster keeps such a log only with API server auditing on.
+  - kubeadm and self-managed clusters: `--audit-policy-file` and `--audit-log-path` on kube-apiserver.
+  - Amazon EKS: control plane logging with the `audit` log type, in CloudWatch Logs `/aws/eks/<cluster>/cluster`.
+  - GKE and AKS: their own audit log settings.
+- An answer Kubeast gave from its own cache reads "answered from Kubeast's own store". No cluster request was made, so the cluster's log has nothing for it.
+- The tools that run kubectl are not listed yet. Their blocks show the 🔐 line only.

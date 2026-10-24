@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
@@ -85,6 +86,11 @@ func (h *Handler) ClusterMiddleware(next http.Handler) http.Handler {
 		// chat shows next to a tool call that came through here.
 		w.Header().Set(auth.HeaderAccess, payload.Access(c, h.cfg.ImpersonationEnabled).Header())
 		sr := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		// An AI tool call asks for the cluster requests it caused, each with its Audit-ID.
+		if r.Header.Get(accesstrail.HeaderRecord) != "" {
+			sr.trail = &accesstrail.Recorder{}
+			r = r.WithContext(accesstrail.NewContext(r.Context(), sr.trail))
+		}
 		next.ServeHTTP(sr, r)
 
 		switch {
@@ -102,14 +108,33 @@ func (h *Handler) ClusterMiddleware(next http.Handler) http.Handler {
 type statusRecorder struct {
 	http.ResponseWriter
 	status int
+	// trail, when set, goes out in HeaderRequests with the response headers:
+	// the cluster requests made before the handler started its answer.
+	trail   *accesstrail.Recorder
+	stamped bool
+}
+
+func (s *statusRecorder) stamp() {
+	if s.trail == nil || s.stamped {
+		return
+	}
+	s.stamped = true
+	s.Header().Set(accesstrail.HeaderRequests, s.trail.Snapshot().Header())
 }
 
 func (s *statusRecorder) WriteHeader(code int) {
+	s.stamp()
 	s.status = code
 	s.ResponseWriter.WriteHeader(code)
 }
 
+func (s *statusRecorder) Write(b []byte) (int, error) {
+	s.stamp()
+	return s.ResponseWriter.Write(b)
+}
+
 func (s *statusRecorder) Flush() {
+	s.stamp()
 	if f, ok := s.ResponseWriter.(http.Flusher); ok {
 		f.Flush()
 	}

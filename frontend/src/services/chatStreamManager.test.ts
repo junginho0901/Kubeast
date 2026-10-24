@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { appendToolBlock, ChatStreamManager, nthToolBlock, resultTarget, withToolAccess, withToolResult } from './chatStreamManager'
-import { accessLine } from './toolAccess'
+import { accessLine, accessSection, requestsBlock } from './toolAccess'
 
 describe('pairing a tool result with its call', () => {
   const calls = [
@@ -109,18 +109,20 @@ describe('the stream manager keeps text and tool blocks in arrival order', () =>
 
   it('puts the identity a call reached the cluster as under its name, and none on a call that reached no cluster', async () => {
     const access = { cluster: 'self', kind: 'person', user: 'a@example.com', groups: ['kubeast:authenticated', 'kubeast:viewer'], role: 'Read', impersonation: true, mode: 'read' }
+    const requests = { requests: [{ source: 'api', verb: 'list', resource: 'pods', namespace: 'kube-system', status: 200, audit_id: 'kubeast-1', echoed: true }], total: 1 }
     const state = await run([
       { function: 'k8s_get_resources', args: { kind: 'pods' }, call_id: 0 },
       { function: 'list_clusters', args: {}, call_id: 1 },
       { function_result: 'list_clusters', result: '["self"]', call_id: 1 },
-      { function_result: 'k8s_get_resources', result: 'pod-a Running', call_id: 0, access },
+      { function_result: 'k8s_get_resources', result: 'pod-a Running', call_id: 0, access, requests },
       '[DONE]',
     ])
     const c = state.content
     expect(c.split('🔐 Ran as:').length - 1).toBe(1)
-    expect(c).toContain(`<summary>🔧 <strong>k8s_get_resources</strong></summary>\n\n${accessLine(access)}\n\n<details>`)
+    expect(c).toContain(`<summary>🔧 <strong>k8s_get_resources</strong></summary>\n\n${accessLine(access)}\n\n${requestsBlock(requests)}\n\n<details>`)
     expect(c.indexOf('🔐')).toBeLessThan(c.indexOf('<strong>list_clusters</strong>'))
     expect(state.toolCalls.map((tc) => tc.access ?? null)).toEqual([access, null])
+    expect(state.toolCalls.map((tc) => tc.requests ?? null)).toEqual([requests, null])
   })
 })
 
@@ -160,5 +162,35 @@ describe('the 🔐 line', () => {
     expect(withToolAccess(content, 1, '<p>L</p>')).toBe(block('a') + block('b').replace('</summary>\n', '</summary>\n\n<p>L</p>\n'))
     expect(withToolAccess(content, 2, '<p>L</p>')).toBe(content)
     expect(withToolAccess(content, 0, '')).toBe(content)
+  })
+})
+
+describe('the cluster requests under the 🔐 line', () => {
+  const LIST = { source: 'api', verb: 'list', resource: 'pods', namespace: 'shop', status: 200, audit_id: 'kubeast-1', echoed: true }
+  const SSAR = { source: 'api', verb: 'create', group: 'authorization.k8s.io', resource: 'selfsubjectaccessreviews', status: 201, audit_id: 'kubeast-2', echoed: true }
+  const EXEC = { source: 'api', verb: 'create', resource: 'pods', subresource: 'exec', namespace: 'shop', name: 'web-1', status: 101, audit_id: 'kubeast-3' }
+  const CACHE = { source: 'cache', cache: 'cache cluster_overview' }
+  const VERSION = { source: 'api', verb: 'get', path: '/version', status: 200, audit_id: 'kubeast-4', echoed: true }
+
+  // The same cases and text as ai-service tests/test_tool_access.py test_requests_block.
+  it('lists each request with its Audit-ID, cache answers and the rest as a count', () => {
+    expect(requestsBlock({ requests: [LIST, SSAR, EXEC, CACHE, VERSION], total: 7 })).toBe(
+      '<details>\n<summary><strong>🧾 Cluster requests (7)</strong></summary>\n\n<ul>\n' +
+      '<li>list pods in shop → 200 · Audit-ID <code>kubeast-1</code> ✓</li>\n' +
+      '<li>create authorization.k8s.io/selfsubjectaccessreviews → 201 · Audit-ID <code>kubeast-2</code> ✓</li>\n' +
+      '<li>create pods/exec web-1 in shop → 101 · Audit-ID <code>kubeast-3</code> (not echoed)</li>\n' +
+      "<li>answered from Kubeast's own store (cache cluster_overview), no cluster request</li>\n" +
+      '<li>get /version → 200 · Audit-ID <code>kubeast-4</code> ✓</li>\n' +
+      '<li>and 2 more</li>\n</ul>\n\n</details>')
+    expect(requestsBlock(null)).toBe('')
+    expect(requestsBlock({ requests: [], total: 0 })).toBe('')
+    expect(requestsBlock({ requests: [{ ...LIST, namespace: '<x>' }], total: 1 })).toContain('&lt;x&gt;')
+  })
+
+  it('goes under the 🔐 line, live as in the saved answer', () => {
+    const access = { cluster: 'prod', kind: 'person', user: 'a@example.com', groups: ['kubeast:authenticated'], role: 'Read', impersonation: true, mode: 'read' }
+    const both = accessSection(access, { requests: [LIST], total: 1 })
+    expect(both).toBe(`${accessLine(access)}\n\n${requestsBlock({ requests: [LIST], total: 1 })}`)
+    expect(accessSection(null, null)).toBe('')
   })
 })

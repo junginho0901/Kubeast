@@ -5,7 +5,7 @@ MSA 환경에서 K8s Service와 HTTP로 통신
 from typing import List, Optional, Dict
 import json
 
-from app.services.ai.access import HEADER as ACCESS_HEADER, from_header
+from app.services.ai.access import HEADER as ACCESS_HEADER, RECORD_HEADER, REQUESTS_HEADER, from_header, merge, trail_from_header
 from app.services.http_shared import ScopedClient
 
 K8S_SERVICE_URL = "http://k8s-service:8002/api/v1"
@@ -19,6 +19,8 @@ class K8sServiceClient:
         headers: Dict[str, str] = {}
         if authorization and authorization.strip():
             headers["Authorization"] = authorization.strip()
+        # every call is for an AI tool: k8s-service lists the cluster requests it makes, with their Audit-IDs
+        headers[RECORD_HEADER] = "1"
         # Multi-cluster (step 14): a client-level param adds ?cluster= to every
         # call so k8s-service (step 05) targets the selected cluster; merged
         # with any per-request params. The connection pool is shared, only the
@@ -28,11 +30,14 @@ class K8sServiceClient:
         # The identity the last cluster request went out as (k8s-service's X-Kubeast-Access), for the AI tool
         # call it served (app/services/ai/access.py).
         self.last_access: Optional[Dict] = None
+        # The cluster requests since the tool began ({requests, total}), across its k8s-service calls.
+        self.last_requests: Optional[Dict] = None
 
     def _note_access(self, response) -> None:
         access = from_header(response.headers.get(ACCESS_HEADER))
         if access is not None:
             self.last_access = access
+        self.last_requests = merge(self.last_requests, trail_from_header(response.headers.get(REQUESTS_HEADER)))
 
     async def get_current_cluster(self) -> str:
         """The cluster k8s-service targets for this client (its default when none is named)."""

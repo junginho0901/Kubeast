@@ -183,11 +183,13 @@ async def test_chat_shows_and_audits_each_calls_own_identity(monkeypatch):
     async def create(**kwargs):
         return replies.pop(0)
 
-    tool_server = SimpleNamespace(last_access=None, last_redacted=None)
+    tool_server = SimpleNamespace(last_access=None, last_redacted=None, last_requests=None)
 
     async def execute(name, args, ctx):
         if name == "k8s_get_resources":  # reaches the cluster through tool-server
             tool_server.last_access = READ
+            tool_server.last_requests = {"requests": [{"source": "api", "verb": "list", "resource": "pods", "status": 200,
+                                                       "audit_id": "kubeast-1", "echoed": True}], "total": 1}
         return "[]"
 
     tools = [{"type": "function", "function": {"name": n, "parameters": {"type": "object", "properties": {}}}}
@@ -215,3 +217,84 @@ async def test_chat_shows_and_audits_each_calls_own_identity(monkeypatch):
     assert f"<summary>🔧 <strong>k8s_get_resources</strong></summary>\n\n{line}\n\n" in answer["content"]
     rows = [a for a in audits if a["action"] == "ai.tool.call"]
     assert [r["after"]["access"] for r in rows] == [{**READ, "mode": "read"}, None]
+    sent = {"requests": [{"source": "api", "verb": "list", "resource": "pods", "status": 200, "audit_id": "kubeast-1", "echoed": True}], "total": 1}
+    assert [r.get("requests") for r in results] == [sent, None]
+    assert [tc.get("requests") for tc in answer["tool_calls"]] == [sent, None]
+    assert [r["after"]["requests"] for r in rows] == [sent, None]
+    assert f"{line}\n\n{access.requests_block(sent)}\n\n" in answer["content"]
+
+
+# --- the cluster requests of a call (accesstrail): what was sent, each with its Audit-ID ---
+
+LIST = {"source": "api", "verb": "list", "resource": "pods", "namespace": "shop", "status": 200, "audit_id": "kubeast-1", "echoed": True}
+SSAR = {"source": "api", "verb": "create", "group": "authorization.k8s.io", "resource": "selfsubjectaccessreviews", "status": 201,
+        "audit_id": "kubeast-2", "echoed": True}
+EXEC = {"source": "api", "verb": "create", "resource": "pods", "subresource": "exec", "namespace": "shop", "name": "web-1", "status": 101,
+        "audit_id": "kubeast-3"}
+CACHE = {"source": "cache", "cache": "cache cluster_overview"}
+VERSION = {"source": "api", "verb": "get", "path": "/version", "status": 200, "audit_id": "kubeast-4", "echoed": True}
+
+
+def test_trail_shape_merge_and_header():
+    t = {"requests": [LIST], "total": 1}
+    assert access.trail(t) == t and access.trail({"requests": "x", "total": 1}) is None and access.trail(None) is None
+    assert access.trail_from_header(header(t)) == t
+    big = {"requests": [LIST] * 15, "total": 15}
+    merged = access.merge(big, {"requests": [SSAR] * 10, "total": 12})
+    assert merged["total"] == 27 and len(merged["requests"]) == access.MAX_REQUESTS and merged["requests"][-1] == SSAR
+    assert access.merge(None, t) == t and access.merge(t, None) == t
+
+
+def test_requests_block():
+    out = access.requests_block({"requests": [LIST, SSAR, EXEC, CACHE, VERSION], "total": 7})
+    assert out == ("<details>\n<summary><strong>🧾 Cluster requests (7)</strong></summary>\n\n<ul>\n"
+                   "<li>list pods in shop → 200 · Audit-ID <code>kubeast-1</code> ✓</li>\n"
+                   "<li>create authorization.k8s.io/selfsubjectaccessreviews → 201 · Audit-ID <code>kubeast-2</code> ✓</li>\n"
+                   "<li>create pods/exec web-1 in shop → 101 · Audit-ID <code>kubeast-3</code> (not echoed)</li>\n"
+                   "<li>answered from Kubeast's own store (cache cluster_overview), no cluster request</li>\n"
+                   "<li>get /version → 200 · Audit-ID <code>kubeast-4</code> ✓</li>\n"
+                   "<li>and 2 more</li>\n</ul>\n\n</details>")
+    assert access.requests_block(None) == "" and access.requests_block({"requests": [], "total": 0}) == ""
+    assert "&lt;x&gt;" in access.requests_block({"requests": [{**LIST, "namespace": "<x>"}], "total": 1})
+    # the section under a block name: the 🔐 line, then the requests, either alone
+    both = access.section({**READ, "mode": "read"}, {"requests": [LIST], "total": 1})
+    assert both.startswith("<p><strong>🔐 Ran as:") and "\n\n<details>\n<summary><strong>🧾 Cluster requests (1)" in both
+    assert access.section(None, None) == ""
+
+
+@pytest.mark.asyncio
+async def test_k8s_client_asks_to_record_and_keeps_the_calls_requests(monkeypatch):
+    from app.services import http_shared
+    from app.services.k8s_client import K8sServiceClient
+
+    asked = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        asked.append(request.headers.get(access.RECORD_HEADER))
+        t = {"requests": [SSAR], "total": 1} if request.url.path.endswith("/namespaces") else {"requests": [LIST], "total": 1}
+        return httpx.Response(200, json=[], headers={access.HEADER: header(READ), access.REQUESTS_HEADER: header(t)})
+
+    monkeypatch.setattr(http_shared, "shared_client",
+                        lambda base_url, timeout: httpx.AsyncClient(base_url=base_url, transport=httpx.MockTransport(handler)))
+    c = K8sServiceClient(authorization="Bearer t", cluster_name="prod")
+    await c.get_namespaces()
+    await c.get_pods("shop")
+    assert asked == ["1", "1"]
+    assert c.last_requests == {"requests": [SSAR, LIST], "total": 2}
+    access.reset(SimpleNamespace(k8s_service=c))
+    assert c.last_requests is None and c.last_access is None
+
+
+@pytest.mark.asyncio
+async def test_tool_server_client_keeps_requests():
+    answers = [httpx.Response(200, json={"content": "ok", "access": READ, "requests": {"requests": [LIST], "total": 1}}),
+               httpx.Response(500, json={"error": "kubectl failed", "access": READ, "requests": {"requests": [SSAR], "total": 1}}),
+               httpx.Response(200, json={"content": "ok", "access": READ})]
+    c = _tool_client(lambda request: answers.pop(0))
+    await c.call_tool("k8s_get_resources", {})
+    assert c.last_requests == {"requests": [LIST], "total": 1}
+    with pytest.raises(Exception):
+        await c.call_tool("k8s_get_resources", {})
+    assert c.last_requests == {"requests": [SSAR], "total": 1}
+    await c.call_tool("k8s_get_resources", {})
+    assert c.last_requests is None

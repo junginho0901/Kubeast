@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
 )
 
 // PodMetrics represents the metrics.k8s.io pod metrics response.
@@ -255,6 +257,7 @@ type nodeCapacity struct{ cpuNano, memBytes int64 }
 func (s *Service) nodeCapacities(ctx context.Context) map[string]nodeCapacity {
 	if b := s.bundleForCtx(ctx); b != nil {
 		if ci := b.syncedInformers(); ci != nil {
+			accesstrail.Cached(ctx, "node capacities from the overview informers (watched as "+overviewCacheUser+")")
 			return ci.nodeCapacities()
 		}
 	}

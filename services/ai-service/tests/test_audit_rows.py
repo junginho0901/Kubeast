@@ -223,11 +223,14 @@ async def test_an_approved_write_runs_as_ai_tool_execute(monkeypatch):
     who = {"cluster": "self", "kind": "person", "user": "dev@example.com", "groups": ["kubeast:authenticated", "kubeast:operator"],
            "role": "Write", "impersonation": True}
 
+    sent = {"requests": [{"source": "api", "verb": "patch", "group": "apps", "resource": "deployments", "subresource": "scale",
+                          "namespace": "shop", "name": "web", "status": 200, "audit_id": "kubeast-9", "echoed": True}], "total": 1}
+
     class Service:
-        tool_server = SimpleNamespace(last_access=None)
+        tool_server = SimpleNamespace(last_access=None, last_requests=None)
 
         async def _call_tool_server(self, tool, args, **kw):
-            self.tool_server.last_access = who
+            self.tool_server.last_access, self.tool_server.last_requests = who, sent
             return "deployment.apps/web scaled"
 
     async def build(authorization, cluster_name=None):
@@ -250,6 +253,8 @@ async def test_an_approved_write_runs_as_ai_tool_execute(monkeypatch):
     (_, _, content), kw = messages[0]
     assert "<p><strong>🔐 Ran as:</strong> <code>dev@example.com</code>" in content and content.index("🔐") < content.index("```")
     assert kw["tool_calls"][0]["access"] == {**who, "mode": "write"}
+    assert run["after"]["requests"] == sent and kw["tool_calls"][0]["requests"] == sent
+    assert "patch apps/deployments/scale web in shop → 200 · Audit-ID <code>kubeast-9</code> ✓" in content
 
 
 @pytest.mark.asyncio
@@ -284,7 +289,7 @@ async def test_an_approved_write_refused_before_tool_server_is_failed(monkeypatc
         return DB(), approval
 
     class Service:
-        tool_server = SimpleNamespace(last_access=None)
+        tool_server = SimpleNamespace(last_access=None, last_requests=None)
 
         async def _call_tool_server(self, tool, args, **kw):
             return json.dumps({"status": "forbidden", "message": "forbidden: namespace 'db' is outside your grant on self (web)"})
@@ -303,7 +308,7 @@ async def test_an_approved_write_refused_before_tool_server_is_failed(monkeypatc
     run = out[-1]
     assert run["action"] == "ai.tool.execute" and run["result"] == "failure" and run["error"] == "forbidden"
     assert approval.status == "failed"
-    assert run["after"]["access"] is None  # nothing reached the cluster
+    assert run["after"]["access"] is None and run["after"]["requests"] is None  # nothing reached the cluster
     (_, _, content), kw = messages[0]
     assert content.startswith("⚠️ `k8s_scale` on `self` was approved and failed.")
     assert kw["tool_calls"][0]["approval_status"] == "failed"

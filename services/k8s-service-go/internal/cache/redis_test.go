@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
 )
 
 func logs(t *testing.T) *bytes.Buffer {
@@ -45,5 +47,25 @@ func TestUnreachableHostFallsBackWithAWarning(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "redis not available") {
 		t.Fatalf("warning expected: %s", buf.String())
+	}
+}
+
+// A hit for a recorded AI tool call is listed as answered from the cache, by
+// the key without its cluster and identity parts; a miss lists nothing.
+func TestGetListsAHitForARecordedCall(t *testing.T) {
+	c := New("", 0, 0, "")
+	rec := &accesstrail.Recorder{}
+	ctx := accesstrail.NewContext(context.Background(), rec)
+	var out map[string]string
+	if c.Get(ctx, "a|resource_yaml:pods:shop:web|as:0123abcd", &out) {
+		t.Fatal("hit on an empty cache")
+	}
+	c.Set(ctx, "a|resource_yaml:pods:shop:web|as:0123abcd", map[string]string{"k": "v"}, time.Minute)
+	if !c.Get(ctx, "a|resource_yaml:pods:shop:web|as:0123abcd", &out) || out["k"] != "v" {
+		t.Fatalf("no hit: %v", out)
+	}
+	trail := rec.Snapshot()
+	if trail.Total != 1 || trail.Requests[0] != (accesstrail.Request{Source: "cache", Cache: "cache resource_yaml:pods:shop:web"}) {
+		t.Fatalf("trail %+v", trail)
 	}
 }

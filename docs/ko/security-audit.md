@@ -175,3 +175,21 @@ sessionRecording:
   enabled: true
   s3: {bucket: kubeast-sessions, prefix: sessions/, region: ap-northeast-2}   # k8s-service 롤에 s3:PutObject·GetObject
 ```
+
+## 클러스터 감사 로그에서 AI 도구 호출 찾기
+
+AI 도구 호출마다 클러스터가 그 호출을 누구로 봤는지와 그 호출이 보낸 클러스터 요청이 남습니다. 채팅 도구 블록의 🔐 줄과 "🧾 Cluster requests", 그 호출 감사 행의 `after.access`와 `after.requests`입니다.
+
+- Kubeast는 도구 호출의 요청마다 자기만의 `Audit-ID` 헤더를 붙여 보냅니다. 값은 `kubeast-`와 16진수 32자입니다.
+- API 서버는 그 값을 감사 이벤트의 `auditID`로 쓰고 응답에 돌려줍니다. 요청 옆 ✓는 돌려받았다는 뜻입니다.
+- API 서버가 kubelet으로 넘기는 요청(exec·attach·port-forward)은 응답에 이 값이 없을 수 있습니다. 이런 요청은 "not echoed"로 표시되고, 클러스터 감사 로그에는 같은 ID로 남습니다.
+- 클러스터 감사 로그에서 호출을 찾으려면 그 ID로 검색합니다.
+  - `auditID`는 Kubeast가 보여 준 ID입니다.
+  - `user`는 Kubeast 자체 자격 증명입니다.
+  - `impersonatedUser`는 그 사람이고, 알림 조사면 `kubeast:investigator`입니다.
+- 이런 로그는 API 서버 감사가 켜져 있어야 남습니다.
+  - kubeadm·직접 운영 클러스터: kube-apiserver의 `--audit-policy-file`과 `--audit-log-path`.
+  - Amazon EKS: 컨트롤 플레인 로깅의 `audit` 로그 유형, CloudWatch Logs `/aws/eks/<cluster>/cluster`.
+  - GKE·AKS: 각 서비스의 감사 로그 설정.
+- Kubeast가 자기 캐시로 답한 경우는 "answered from Kubeast's own store"로 나옵니다. 클러스터에 보낸 요청이 없으므로 클러스터 로그에도 남지 않습니다.
+- kubectl을 쓰는 도구는 아직 목록에 나오지 않고, 블록에 🔐 줄만 있습니다.

@@ -1,6 +1,6 @@
 import { getAuthHeaders, handleUnauthorized } from '@/services/auth'
 import { clusterHeaders } from '@/services/clusterRef'
-import { accessLine } from '@/services/toolAccess'
+import { accessSection } from '@/services/toolAccess'
 
 export type StreamingPhase = 'waiting' | 'tools' | 'answer'
 
@@ -111,7 +111,7 @@ export function withToolResult(content: string, n: number, result: string): stri
   return content.substring(0, at) + content.substring(at).replace('Executing...', result)
 }
 
-// The content with a line under the n-th tool block's name (the 🔐 line), where the saved answer has it.
+// The content with what goes under the n-th tool block's name (the 🔐 line and its requests), where the saved answer has it.
 export function withToolAccess(content: string, n: number, line: string): string {
   const at = nthToolBlock(content, n)
   const end = at === -1 ? -1 : content.indexOf('</summary>\n', at)
@@ -437,6 +437,7 @@ export class ChatStreamManager {
                       ...(displayText ? { display: displayText, display_format: displayFormat } : {}),
                       ...(data.chart ? { chart: data.chart } : {}),
                       ...(data.access ? { access: data.access } : {}),
+                      ...(data.requests ? { requests: data.requests } : {}),
                     }
                   : tc
               )
@@ -453,7 +454,7 @@ export class ChatStreamManager {
               // Text still queued for the typewriter came after this call's block, so it stays in the queue.
               this.setState({
                 toolCalls: mergedToolCalls,
-                content: withToolAccess(withToolResult(this.state.content, target, codeBlock), target, accessLine(data.access)),
+                content: withToolAccess(withToolResult(this.state.content, target, codeBlock), target, accessSection(data.access, data.requests)),
                 streamingPhase: 'tools',
               })
               continue

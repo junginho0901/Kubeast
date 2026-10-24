@@ -12,6 +12,7 @@ import (
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
+	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 )
@@ -159,6 +160,50 @@ func TestClusterMiddlewareAccessHeader(t *testing.T) {
 		}
 		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("impersonation=%v: access %+v, want %+v", imp, got, want)
+		}
+	}
+}
+
+// A request that asks for its cluster requests (X-Kubeast-Record) gets the ones
+// made before the answer started, in X-Kubeast-Requests; one that does not ask
+// gets neither a recorder nor the header.
+func TestClusterMiddlewareRequestsHeader(t *testing.T) {
+	svc, err := k8s.NewService(context.Background(), middlewareRegistry{}, false, nil, k8s.ServiceOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := &Handler{svc: svc}
+	p := auth.TokenPayload{UserID: "u1", Perms: auth.PermissionMatrix{"known": {"resource.*.read"}}}
+	var hadRecorder bool
+	mw := h.ClusterMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rec := accesstrail.FromContext(r.Context())
+		hadRecorder = rec != nil
+		if rec != nil {
+			rec.Add(accesstrail.Request{Source: "api", Verb: "list", Resource: "pods", AuditID: "kubeast-1"})
+		}
+		_, _ = w.Write([]byte("[]"))
+		if rec != nil {
+			rec.Add(accesstrail.Request{Source: "api", Verb: "get", Resource: "pods", AuditID: "kubeast-late"})
+		}
+	}))
+	for _, ask := range []bool{true, false} {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/namespaces/shop/pods?cluster=known", nil)
+		if ask {
+			req.Header.Set(accesstrail.HeaderRecord, "1")
+		}
+		req = req.WithContext(auth.WithPayload(req.Context(), p))
+		rec := httptest.NewRecorder()
+		mw.ServeHTTP(rec, req)
+		header := rec.Header().Get(accesstrail.HeaderRequests)
+		if !ask {
+			if hadRecorder || header != "" {
+				t.Fatalf("not asked: recorder %v header %q", hadRecorder, header)
+			}
+			continue
+		}
+		trail, ok := accesstrail.ParseHeader(header)
+		if !ok || trail.Total != 1 || trail.Requests[0].AuditID != "kubeast-1" {
+			t.Fatalf("asked: header %q → %+v", header, trail)
 		}
 	}
 }
