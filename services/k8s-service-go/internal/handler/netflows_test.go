@@ -173,6 +173,25 @@ func TestNetworkFlowsLimitAndRelayFailure(t *testing.T) {
 	}
 }
 
+// The token's namespaces reach the query. NamespaceScopeMiddleware keeps such a
+// reader in those namespaces; here every end is outside them, so all are redacted.
+func TestNetworkFlowsPassesTheScope(t *testing.T) {
+	f := newNetflowsFixture(t, 5)
+	scoped := flowReader
+	scoped.Namespaces = map[string][]string{"self": {"shop"}}
+	w := f.get("/api/v1/namespaces/demo/networkflows", scoped)
+	var res netflows.Result
+	_ = json.Unmarshal(w.Body.Bytes(), &res)
+	if w.Code != http.StatusOK || !res.Redacted || len(res.Groups) == 0 {
+		t.Fatalf("status %d %+v", w.Code, res)
+	}
+	for _, g := range res.Groups {
+		if g.Source.Pod != "" || g.Destination.Pod != "" || g.Source.Workload != nil {
+			t.Fatalf("an end outside the scope is named: %+v", g)
+		}
+	}
+}
+
 // A read the audit store cannot record is refused before the Relay is asked.
 func TestNetworkFlowsWithoutAudit(t *testing.T) {
 	f := newNetflowsFixture(t, 5)

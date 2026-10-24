@@ -308,6 +308,27 @@ func TestNormalize(t *testing.T) {
 	}
 }
 
+// Hubble is asked for either side of a flow, so the limit is spent on the flows asked for.
+func TestFiltersAskBothSides(t *testing.T) {
+	web := []Workload{{Kind: "Deployment", Name: "web"}}
+	dropped := []int32{Verdicts["DROPPED"]}
+	for _, c := range []struct {
+		req  Request
+		want []filter
+	}{
+		{Request{Namespace: "demo"}, []filter{{sourcePod: []string{"demo/"}}, {destinationPod: []string{"demo/"}}}},
+		{Request{Namespace: "demo", Kind: "Pod", Name: "web-1"}, []filter{{sourcePod: []string{"demo/web-1"}}, {destinationPod: []string{"demo/web-1"}}}},
+		{Request{Namespace: "demo", Kind: "Deployment", Name: "web", Verdicts: []string{"DROPPED"}}, []filter{
+			{sourcePod: []string{"demo/"}, sourceWorkload: web, verdicts: dropped},
+			{destinationPod: []string{"demo/"}, destinationWorkload: web, verdicts: dropped},
+		}},
+	} {
+		if got := c.req.filters(); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%+v: %+v", c.req, got)
+		}
+	}
+}
+
 func TestPerUserLimit(t *testing.T) {
 	s := testStore()
 	if !s.Allow("u") || !s.Allow("u") || s.Allow("u") || !s.Allow("v") {
