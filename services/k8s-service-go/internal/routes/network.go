@@ -48,7 +48,9 @@ func RegisterNetwork(r chi.Router, h *handler.Handler) {
 
 	// NetworkPolicies
 	r.Get("/api/v1/networkpolicies/all", h.GetAllNetworkPolicies)
+	r.Get("/api/v1/networkpolicies/check", h.CheckNetworkPolicy)
 	r.Get("/api/v1/namespaces/{namespace}/networkpolicies", h.GetNetworkPolicies)
+	r.Get("/api/v1/namespaces/{namespace}/networkpolicies/effective", h.EffectiveNetworkPolicies)
 	r.Get("/api/v1/namespaces/{namespace}/networkpolicies/{name}/describe", h.DescribeNetworkPolicy)
 	r.Get("/api/v1/namespaces/{namespace}/networkpolicies/{name}/yaml", h.GetNetworkPolicyYAML)
 	r.Delete("/api/v1/namespaces/{namespace}/networkpolicies/{name}", h.DeleteNetworkPolicy)

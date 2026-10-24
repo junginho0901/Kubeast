@@ -54,6 +54,7 @@
     - `cost`: OpenCost allocation
     - `optimization`: usage against requests, and recommendations
     - `can_i`: whether that user can do something
+    - `network_policy_check`: whether NetworkPolicy allows a connection, with the policy and rule that decide (see [NetworkPolicy view and check](#networkpolicy-view-and-check))
     - `resource_graph`: namespace objects and their connections
     - `hygiene`: the hygiene report (Admin)
   - A tool is left out of the tool list (`/api/v1/features`, 1-minute cache) when:
@@ -116,7 +117,7 @@
 | --- | --- | --- | --- |
 | **Pending** | Default right after sign-up/SSO | None — can log in, but the API returns 403 | — |
 | **Member** | Account level | No global permissions, access **only through per-cluster grants** | `kubeast:authenticated` (no permissions) |
-| **Read** | Per cluster | 10 menus · read all resources (`resource.*.read`, including cost `resource.cost.read`) · Helm read (the permission key exists, but Release records are Secrets so the cluster refuses — see the right column) · read log files inside containers (`resource.pod.logfile`, when the feature is on) · the 39 read tools of AI chat (`ai.tool.<read tool>`) and MCP connection (`ai.mcp.use`) — no write tools | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view` excludes Secrets and `services/proxy`, so the cluster refuses Secrets and Helm releases (stored in Secrets) and the UI shows a permission notice. Prometheus and OpenCost read through the API server proxy (optimization usage, storage analysis, cost, drawer metrics) are opened **for GET** only for the Services listed in the chart value `auth.impersonation.viewerProxyServices` — a Role in that Namespace, name exactly `<service>:<port>`; other Services, POST and NS-scoped grants are still refused (values comments in [Configuration](configuration.md)). If not listed, refused (the proxy starts at `kubeast:operator`=`edit`) |
+| **Read** | Per cluster | 10 menus · read all resources (`resource.*.read`, including cost `resource.cost.read`) · Helm read (the permission key exists, but Release records are Secrets so the cluster refuses — see the right column) · read log files inside containers (`resource.pod.logfile`, when the feature is on) · the 40 read tools of AI chat (`ai.tool.<read tool>`) and MCP connection (`ai.mcp.use`) — no write tools | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view` excludes Secrets and `services/proxy`, so the cluster refuses Secrets and Helm releases (stored in Secrets) and the UI shows a permission notice. Prometheus and OpenCost read through the API server proxy (optimization usage, storage analysis, cost, drawer metrics) are opened **for GET** only for the Services listed in the chart value `auth.impersonation.viewerProxyServices` — a Role in that Namespace, name exactly `<service>:<port>`; other Services, POST and NS-scoped grants are still refused (values comments in [Configuration](configuration.md)). If not listed, refused (the proxy starts at `kubeast:operator`=`edit`) |
 | **Write** | Per cluster | `menu.*` · create/edit/delete resources · CronJob suspend/trigger · view Secret values · read log files · Helm rollback/upgrade/test · all AI tools (`ai.tool.*`, including write tools) · MCP connection | `kubeast:operator` = `edit` + viewer |
 | **Admin** | Account level (`*`) or per cluster | Everything — admin menus, all clusters (including ones registered later) | `kubeast:admin` = `cluster-admin` |
 | Custom | Per cluster | Only the chosen permissions (within the permissions the creator has) | `kubeast:role:<name>` — every call is 403 until the cluster binds this group (`auth.impersonation.customRoles`). The no-permission banner in the UI and the role creation dialog show this group name |
@@ -200,6 +201,24 @@
 
 - **YAML editing** (Monaco), **Pod Exec / logs** (xterm.js, WebSocket)
 - **Real-time updates** — resource changes streamed through a WebSocket multiplexer
+
+### NetworkPolicy view and check
+
+The Pod and workload drawers have a "Network Policies" section.
+
+- It lists the NetworkPolicies that select the pods, for incoming and for outgoing connections, and what their rules allow.
+- "Check a connection" asks whether NetworkPolicy allows one connection with another pod, workload, Service or IP address.
+- The answer is allowed, denied or unknown, with the policy and rule that decide, or why each rule did not match.
+- A Service is checked at its pods' port. A named target port is looked up on each pod.
+- Unknown means one of two things:
+  - the network plugin decides: an `ipBlock` that covers a pod IP (Calico and kindnet apply it, Cilium does not), or a hostNetwork pod
+  - a rule selects namespaces by labels that your permissions do not let Kubeast read
+- When the source's egress policies leave out cluster DNS, the answer says that a Service name will not resolve, though its IP works.
+- Only Kubernetes NetworkPolicy is evaluated. Cilium, Calico and network-policy-api policies in those namespaces are listed as not part of the answer.
+- Everything is read as the signed-in user, and a namespace-limited user can check only connections within their namespaces.
+- The AI tool `network_policy_check` gives the same answer.
+- The evaluator (`services/pkg/netpol`) has no outside dependency. Its tests check it against np-guard/netpol-analyzer on generated policies (`services/netpol-oracle`), and the e2e test against real connections on kind's kindnet.
+- What the target cluster needs is in [Cluster requirements §7](cluster-requirements.md#7-apis-shown-when-present).
 
 ## ⎈ Helm release management
 

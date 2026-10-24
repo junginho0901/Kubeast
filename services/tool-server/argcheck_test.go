@@ -75,3 +75,29 @@ func TestValidateToolArgs(t *testing.T) {
 		}
 	}
 }
+
+func TestNetpolCheckArgs(t *testing.T) {
+	for _, ok := range []map[string]interface{}{
+		{"src": "pod/shop/web-1", "dst": "service/shop/web", "port": "http", "protocol": "udp"},
+		{"src": "Deployment/shop/api", "dst": "203.0.113.9", "port": float64(443)},
+		{"src": "cronjob/batch/nightly.v2", "dst": "2001:db8::1", "port": "65535", "protocol": "SCTP"},
+	} {
+		if err := validateToolArgs(ok); err != nil {
+			t.Errorf("%v: %v", ok, err)
+		}
+	}
+	for _, bad := range []map[string]interface{}{
+		{"src": "secret/shop/x"},
+		{"src": "pod/shop"},
+		{"dst": "pod/shop/a b"},
+		{"dst": "10.0.0.0/8"},
+		{"port": "0"},
+		{"port": "70000"},
+		{"port": "HTTP"},
+		{"protocol": "icmp"},
+	} {
+		if err := validateToolArgs(bad); !errors.Is(err, errBadRequest) {
+			t.Errorf("%v: want a bad request, got %v", bad, err)
+		}
+	}
+}

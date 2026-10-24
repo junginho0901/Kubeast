@@ -65,6 +65,7 @@ def test_tool_usage_guide():
         "cost",
         "optimization",
         "can_i",
+        "network_policy_check",
         "resource_graph",
         "hygiene",
         "k8s_jq_query",

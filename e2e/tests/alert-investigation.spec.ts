@@ -18,7 +18,7 @@ const READ_TOOLS = new Set([
   'k8s_find_resource', 'k8s_explain', 'issues', 'prometheus_query', 'prometheus_metrics', 'prometheus_labels',
   'prometheus_rules', 'prometheus_targets', 'logsearch', 'loki_query', 'loki_labels', 'loki_patterns',
   'traces_search', 'traces_get', 'traces_tags', 'traces_metrics', 'traces_compare', 'alerts_list',
-  'policy_reports', 'helm_read', 'cost', 'optimization', 'can_i', 'resource_graph',
+  'policy_reports', 'helm_read', 'cost', 'optimization', 'can_i', 'network_policy_check', 'resource_graph',
   'k8s_jq_query', 'k8s_tabular_query', 'k8s_count', 'gitops_status',
 ])
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Requested-With': 'XMLHttpRequest' })

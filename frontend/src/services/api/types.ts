@@ -720,6 +720,95 @@ export interface PolicyReportResults {
   rows: PolicyReportResult[]
 }
 
+// GET /api/v1/cluster/namespaces/{ns}/networkpolicies/effective?kind=&name= — the NetworkPolicies that
+// select a pod or a workload's pods. A selector is label-selector text: "" selects everything,
+// absent means the peer does not use it.
+export interface NetpolPeerSummary {
+  pod_selector?: string
+  namespace_selector?: string
+  cidr?: string
+  except?: string[]
+}
+
+export interface NetpolPortSummary {
+  protocol: string
+  port?: string
+  end_port?: number
+}
+
+export interface NetpolDirection {
+  isolated: boolean
+  policies: { name: string; rules: { peers: NetpolPeerSummary[]; ports: NetpolPortSummary[] }[] }[]
+}
+
+// Policy kinds of a plugin (Cilium, Calico) or of network-policy-api that the check does not evaluate;
+// count -1 when they could not be listed.
+export interface NetpolUnevaluated {
+  kind: string
+  group: string
+  count: number
+}
+
+export interface NetpolEffective {
+  kind: string
+  namespace: string
+  name: string
+  host_network: boolean
+  ingress: NetpolDirection
+  egress: NetpolDirection
+  unevaluated: NetpolUnevaluated[]
+}
+
+// GET /api/v1/cluster/networkpolicies/check?src=&dst=&port=&protocol= — an end is
+// <kind>/<namespace>/<name> or an IP address; dst may be service/<namespace>/<name>.
+export type NetpolResult = 'allowed' | 'denied' | 'unknown'
+
+export interface NetpolRuleMiss {
+  policy: string
+  rule: number
+  reason: string
+}
+
+export interface NetpolSide {
+  isolated: boolean
+  policies: string[]
+  result: NetpolResult
+  allowed_by: { policy: string; rule: number }[]
+  undecided: NetpolRuleMiss[]
+  misses: NetpolRuleMiss[]
+}
+
+export interface NetpolCheck {
+  pods?: string[]
+  port: number
+  protocol: string
+  service_port?: string
+  result: NetpolResult
+  egress?: NetpolSide
+  ingress?: NetpolSide
+  notes: string[]
+}
+
+export interface NetpolEnd {
+  ref: string
+  kind: string
+  namespace?: string
+  name?: string
+  ips: string[]
+  pods?: string[]
+  namespace_labels_known: boolean
+}
+
+export interface NetpolCheckResult {
+  source: NetpolEnd
+  destination: NetpolEnd
+  result: NetpolResult | 'mixed'
+  checks: NetpolCheck[]
+  unevaluated: NetpolUnevaluated[]
+  notes: string[]
+  truncated?: boolean
+}
+
 // GET /api/v1/cluster/namespaces/{ns}/policyreports/resource?kind=&name= — a workload includes its pods.
 export interface PolicyReportResource {
   generated_at: string

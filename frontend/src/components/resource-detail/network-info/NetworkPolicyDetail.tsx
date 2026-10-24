@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import type { PodInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
@@ -8,6 +9,7 @@ import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
 import { InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
+import { peerOf, peerText, portOf, portsText, selectorText, type Tr } from '../netpolText'
 
 interface Props {
   name: string
@@ -22,13 +24,13 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
   const labels = (meta.labels ?? {}) as Record<string, string>
   const annotations = (meta.annotations ?? {}) as Record<string, string>
   const finalizers = (meta.finalizers ?? rawJson?.finalizers ?? []) as string[]
+  const { t } = useTranslation()
+  const tr: Tr = (key, fallback, options) => t(key, { defaultValue: fallback, ...options })
   const podSelector = (spec.podSelector as any)?.matchLabels as Record<string, string> | undefined
 
-  const selectorStr = useMemo(
-    () => (podSelector ? Object.entries(podSelector).map(([k, v]) => `${k}=${v}`).join(',') : ''),
-    [podSelector],
-  )
-  const watchEnabled = !!namespace && !!selectorStr
+  // matchExpressions too; an empty selector ("") is every pod of the namespace
+  const selectorStr = useMemo(() => selectorText(spec.podSelector as any), [spec.podSelector])
+  const watchEnabled = !!namespace
 
   const { data: affectedPods } = useQuery({
     queryKey: ['networkpolicy-affected-pods', namespace, name, selectorStr],
@@ -54,18 +56,12 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
   const isDefaultDenyIngress = policyTypes.includes('Ingress') && (!spec.ingress || (Array.isArray(spec.ingress) && (spec.ingress as any[]).length === 0))
   const isDefaultDenyEgress = policyTypes.includes('Egress') && (!spec.egress || (Array.isArray(spec.egress) && (spec.egress as any[]).length === 0))
 
-  const renderPeer = (peer: any) => {
-    const parts: string[] = []
-    // an empty except list printed "(except )"
-    if (peer.ipBlock) parts.push(`CIDR: ${peer.ipBlock.cidr}${peer.ipBlock.except?.length ? ` (except ${peer.ipBlock.except.join(', ')})` : ''}`)
-    if (peer.namespaceSelector?.matchLabels) parts.push(`ns: ${Object.entries(peer.namespaceSelector.matchLabels).map(([k, v]) => `${k}=${v}`).join(',')}`)
-    if (peer.podSelector) {
-      const labels = Object.entries(peer.podSelector.matchLabels || {}).map(([k, v]) => `${k}=${v}`).join(',')
-      // an empty podSelector selects every pod in the namespace
-      parts.push(`pod: ${labels || '*'}`)
-    }
-    return parts.join(' | ') || '*'
-  }
+  // No peers is every source or destination (pods and addresses), not 0.0.0.0/0.
+  const renderPeers = (peers: any[] | undefined, incoming: boolean) =>
+    peers?.length
+      ? peers.map((p) => peerText(peerOf(p), tr)).join(' ; ')
+      : incoming ? tr('netpolCheck.fromAnywhere', 'from anywhere') : tr('netpolCheck.toAnywhere', 'to anywhere')
+  const renderPorts = (ports: any[]) => portsText(ports.map(portOf), tr)
 
   // egress to[] 의 namespaceSelector 만 별도 인라인 태그로 강조 (k=v 쌍 단위)
   const renderEgressNsTags = (peer: any) => {
@@ -99,19 +95,21 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
         </div>
       </InfoSection>
 
-      {podSelector && Object.keys(podSelector).length > 0 && (
-        <InfoSection title="Pod Selector">
-          <KeyValueTags data={podSelector} />
-        </InfoSection>
-      )}
+      <InfoSection title="Pod Selector">
+        {podSelector && Object.keys(podSelector).length > 0 && <KeyValueTags data={podSelector} />}
+        {((spec.podSelector as any)?.matchExpressions?.length ?? 0) > 0 && (
+          <p className="mt-1 text-xs font-mono text-slate-200" data-testid="netpol-pod-selector-expressions">{selectorText({ matchExpressions: (spec.podSelector as any).matchExpressions })}</p>
+        )}
+        {!selectorStr && <p className="text-xs text-slate-400" data-testid="netpol-pod-selector-all">{tr('netpolCheck.peer.allPodsHere', 'every pod in this namespace')}</p>}
+      </InfoSection>
 
       {ingress.length > 0 && (
         <InfoSection title="Ingress Rules">
           <div className="space-y-2 text-xs">
             {ingress.map((rule: any, i: number) => (
               <div key={i} className="rounded-sm border border-slate-800 p-2">
-                {rule.ports?.length > 0 && <div className="text-slate-400">Ports: {rule.ports.map((p: any) => `${p.port}/${p.protocol || 'TCP'}`).join(', ')}</div>}
-                <div className="text-slate-200">From: {(rule.from || [{ ipBlock: { cidr: '0.0.0.0/0' } }]).map(renderPeer).join(' ; ')}</div>
+                {rule.ports?.length > 0 && <div className="text-slate-400" data-testid="netpol-rule-ports">Ports: {renderPorts(rule.ports)}</div>}
+                <div className="text-slate-200" data-testid="netpol-rule-peers">From: {renderPeers(rule.from, true)}</div>
               </div>
             ))}
           </div>
@@ -122,11 +120,11 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
         <InfoSection title="Egress Rules">
           <div className="space-y-2 text-xs">
             {egress.map((rule: any, i: number) => {
-              const peers: any[] = rule.to || [{ ipBlock: { cidr: '0.0.0.0/0' } }]
+              const peers: any[] = rule.to || []
               return (
                 <div key={i} className="rounded-sm border border-slate-800 p-2">
-                  {rule.ports?.length > 0 && <div className="text-slate-400">Ports: {rule.ports.map((p: any) => `${p.port}/${p.protocol || 'TCP'}`).join(', ')}</div>}
-                  <div className="text-slate-200">To: {peers.map(renderPeer).join(' ; ')}</div>
+                  {rule.ports?.length > 0 && <div className="text-slate-400" data-testid="netpol-rule-ports">Ports: {renderPorts(rule.ports)}</div>}
+                  <div className="text-slate-200" data-testid="netpol-rule-peers">To: {renderPeers(rule.to, false)}</div>
                   {peers.some((p) => p?.namespaceSelector?.matchLabels) && (
                     <div className="mt-1 flex flex-wrap items-center gap-1">
                       {peers.map((peer, pi) => {

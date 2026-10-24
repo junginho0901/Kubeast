@@ -334,3 +334,35 @@ func TestFeatureArgs2AndGate(t *testing.T) {
 	}
 	_ = context.Background()
 }
+
+func TestNetworkPolicyCheck(t *testing.T) {
+	var checks []string
+	for i := 0; i < netpolChecksCap+5; i++ {
+		checks = append(checks, `{"port":`+strconv.Itoa(8000+i)+`,"protocol":"TCP","result":"denied"}`)
+	}
+	seen := fakeK8sService(t, func(r *http.Request) (int, string) {
+		return 200, `{"result":"denied","checks":[` + strings.Join(checks, ",") + `],"unevaluated":[]}`
+	})
+	out, err := handleNetworkPolicyCheck(ctxFor("c1"), map[string]interface{}{"src": "deployment/shop/client", "dst": "service/shop/web", "port": float64(80), "protocol": "tcp"}, bearer())
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := (*seen)[0].URL.Query()
+	if (*seen)[0].URL.Path != "/api/v1/networkpolicies/check" || q.Get("src") != "deployment/shop/client" || q.Get("dst") != "service/shop/web" || q.Get("port") != "80" || q.Get("protocol") != "TCP" || q.Get("cluster") != "c1" {
+		t.Fatalf("request: %s %s", (*seen)[0].URL.Path, (*seen)[0].URL.RawQuery)
+	}
+	m := decode(t, out)
+	if len(m["checks"].([]interface{})) != netpolChecksCap || m["truncated"] != true || !strings.Contains(m["note"].(string), "signed-in user") {
+		t.Fatalf("reply: %s", out)
+	}
+	if _, err := handleNetworkPolicyCheck(ctxFor("c1"), map[string]interface{}{"src": "pod/shop/a"}, bearer()); !errors.Is(err, errBadRequest) {
+		t.Fatalf("dst required: %v", err)
+	}
+	fakeK8sService(t, func(r *http.Request) (int, string) {
+		return 403, `{"detail":"forbidden: namespace db is outside your grant"}`
+	})
+	out, err = handleNetworkPolicyCheck(ctxFor("c1"), map[string]interface{}{"src": "pod/shop/a", "dst": "pod/db/b", "port": "5432"}, bearer())
+	if err != nil || decode(t, out)["status"] != "forbidden" {
+		t.Fatalf("forbidden: %s %v", out, err)
+	}
+}

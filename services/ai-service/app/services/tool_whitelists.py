@@ -50,6 +50,7 @@ READONLY_TOOL_NAMES: frozenset[str] = frozenset(
         "cost",
         "optimization",
         "can_i",
+        "network_policy_check",
         "resource_graph",
         "k8s_jq_query",
         "k8s_tabular_query",

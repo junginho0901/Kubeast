@@ -35,6 +35,8 @@ def _flag(value) -> bool:
 # arguments each one declares. Anything else the model sends is dropped.
 # Integer arguments that may be zero or negative (a system boot index: 0 current, -1 previous).
 SIGNED_INT_ARGS = {"boot"}
+# String arguments a model may send as a number (a port: 8080 or http).
+NUMERIC_STRING_ARGS = {"port"}
 
 FEATURE_TOOL_ARGS = {
     "issues": ({"namespace", "severity"}, set(), {"window_minutes"}),
@@ -63,6 +65,7 @@ FEATURE_TOOL_ARGS = {
     "cost": ({"window", "aggregate", "namespace"}, set(), set()),
     "optimization": ({"namespace"}, set(), {"window_hours"}),
     "can_i": ({"verb", "resource", "group", "namespace"}, set(), set()),
+    "network_policy_check": ({"src", "dst", "port", "protocol"}, set(), set()),
     "resource_graph": ({"namespace"}, set(), set()),
     # Query tools (kubectl + jq / columns / count, filtered in tool-server).
     "k8s_jq_query": ({"resource_type", "jq", "namespace", "label_selector", "field_selector"}, set(), {"limit"}),
@@ -463,6 +466,8 @@ async def execute_function_with_context(
                 value = function_args.get(key)
                 if isinstance(value, str) and value.strip():
                     tool_args[key] = value.strip()
+                elif key in NUMERIC_STRING_ARGS and isinstance(value, (int, float)) and not isinstance(value, bool):
+                    tool_args[key] = str(int(value))
             for key in spec[1]:
                 if _flag(function_args.get(key)):
                     tool_args[key] = True

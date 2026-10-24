@@ -9,6 +9,8 @@ import type {
   EndpointSliceInfo,
   IngressClassInfo,
   IngressInfo,
+  NetpolCheckResult,
+  NetpolEffective,
   NetworkPolicyInfo,
   ServiceInfo,
 } from './types'
@@ -148,5 +150,15 @@ export const networkApi = {
 
   deleteNetworkPolicy: async (namespace: string, name: string): Promise<void> => {
     await client.delete(`/cluster/namespaces/${namespace}/networkpolicies/${name}`)
+  },
+
+  getEffectiveNetworkPolicies: async (namespace: string, kind: string, name: string): Promise<NetpolEffective> => {
+    const { data } = await client.get(`/cluster/namespaces/${encodeURIComponent(namespace)}/networkpolicies/effective`, { params: { kind, name } })
+    return data
+  },
+
+  checkNetworkPolicy: async (src: string, dst: string, port?: string, protocol?: string): Promise<NetpolCheckResult> => {
+    const { data } = await client.get('/cluster/networkpolicies/check', { params: { src, dst, port: port || undefined, protocol: protocol || undefined } })
+    return data
   },
 }

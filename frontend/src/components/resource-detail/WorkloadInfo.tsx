@@ -8,6 +8,7 @@ import { useWorkloadData } from './workload-info/useWorkloadData'
 import WorkloadReplicasSection from './workload-info/WorkloadReplicasSection'
 import WorkloadStrategySection from './workload-info/WorkloadStrategySection'
 import PolicyViolations from './PolicyViolations'
+import NetworkPolicies from './NetworkPolicies'
 import { LogSearchView } from '@/components/LogSearchView'
 import { useLogSearchAvailable } from '@/hooks/useLogSearchAvailable'
 import WorkloadKindInfo from './workload-info/WorkloadKindInfo'
@@ -27,6 +28,8 @@ interface Props {
 
 // Kinds whose pods the log search can name from the workload (the controller's pod name pattern).
 const LOG_SEARCH_KINDS = ['Deployment', 'StatefulSet', 'DaemonSet', 'ReplicaSet', 'Job', 'CronJob']
+// Kinds with a pod template the NetworkPolicy view reads (k8s-service netpolKinds).
+const NETPOL_KINDS = new Set(LOG_SEARCH_KINDS)
 
 export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlocked = false }: Props) {
   const { t } = useTranslation()
@@ -276,6 +279,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlo
       )}
 
       <PolicyViolations kind={kind} namespace={namespace ?? ''} name={name} />
+      {NETPOL_KINDS.has(kind) && <NetworkPolicies kind={kind} namespace={namespace ?? ''} name={name} />}
 
       {logSearchAvailable && namespace && LOG_SEARCH_KINDS.includes(kind) && (
         <InfoSection

@@ -37,6 +37,7 @@ A "target cluster" is a cluster Kubeast manages, including the cluster it is ins
 | AI trace reading | A collector that sends spans to Tempo (resource attributes `k8s.cluster.name`, `k8s.namespace.name`), `pods/log` read permission — end of §14 | `features.traceStore.enabled` (off) | The `traces_*` tools are left out and the API returns 404 |
 | Deprecated API item of the hygiene and upgrade checks | Read permission on the API server's `/metrics` — §11 | `features.hygiene.enabled` (on) | Only that item shows "collection failed" |
 | Argo CD guard | Argo CD tracking annotation — §12 | `gitops.argocd.enabled` (off) | No badge or warning |
+| NetworkPolicy view and check | A network plugin that enforces NetworkPolicy, read permission on the namespaces involved — §7 | — | The answer is what the policies say, not what the cluster does; "unknown" where a rule needs namespace labels the user cannot read |
 
 ## 1. Permissions (RBAC) — every target cluster
 
@@ -279,6 +280,7 @@ Without the CRD, Kubeast answers with an empty list and "not installed" (`X-Kube
 | Gateway policies | CRDs labelled `gateway.networking.k8s.io/policy` (GEP-713), or the default list: BackendTLSPolicy; Envoy Gateway (BackendTraffic, ClientTraffic, Security, EnvoyPatch and EnvoyExtension Policy of `gateway.envoyproxy.io`); Istio (AuthorizationPolicy, RequestAuthentication, PeerAuthentication, Telemetry, WasmPlugin, EnvoyFilter, DestinationRule) |
 | Admission Policies | ValidatingAdmissionPolicy (`admissionregistration.k8s.io/v1`) and MutatingAdmissionPolicy (`admissionregistration.k8s.io/v1`). Clusters that do not serve them show "not installed". The Read group reads policies and bindings through `kubeast:cluster-reader`, which `view` does not have. It was added 2026-10-22, so re-apply the RBAC on clusters where it was applied before that |
 | Ingress drawer latency | The ingress-nginx controller and scraping of `nginx_ingress_controller_*` from §3 |
+| NetworkPolicy view and check (Pod and workload drawers, AI tool `network_policy_check`) | Nothing to install: it reads NetworkPolicies, pods, Services, workloads and Namespaces as the user. Whether policies are enforced is up to the network plugin (kind's kindnet, Calico and Cilium do; check yours). A rule that selects namespaces by labels needs `get` on those Namespaces; without it the answer is unknown. Cilium (`cilium.io`), Calico (`projectcalico.org`, or `crd.projectcalico.org` without its API server) and network-policy-api (`policy.networking.k8s.io`) policies are found through discovery and counted with `list` (count unknown without it), not evaluated |
 | AI tool `gitops_status` | The `applications.argoproj.io` CRD (Argo CD). It exists only on clusters where Argo CD is installed, so with a central Argo CD, call it on the management cluster. Otherwise the tool answers unavailable. The reader's RBAC (`applications.argoproj.io` get/list) is the ceiling |
 
 ## 8. Kubernetes version requirements

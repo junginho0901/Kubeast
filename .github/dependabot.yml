@@ -20,6 +20,7 @@ updates:
       - /services/tool-server
       - /services/tool-server/kubectl
       - /services/model-config-controller-go
+      - /services/netpol-oracle
     schedule:
       interval: weekly
     groups:

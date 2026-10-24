@@ -37,6 +37,7 @@ Kubeast는 등록한 클러스터에 아무것도 설치하지 않습니다. 예
 | AI 트레이스 읽기 | 스팬을 Tempo로 보내는 수집기(리소스 속성 `k8s.cluster.name`·`k8s.namespace.name`), `pods/log` 읽기 권한 — §14 끝 | `features.traceStore.enabled`(끔) | `traces_*` 도구가 빠지고 API는 404 |
 | 위생·업그레이드 점검의 폐기 API 항목 | API 서버 `/metrics` 읽기 권한 — §11 | `features.hygiene.enabled`(켬) | 그 항목만 "수집 실패"로 표시 |
 | Argo CD 가드 | Argo CD 추적 어노테이션 — §12 | `gitops.argocd.enabled`(끔) | 배지·경고 없음 |
+| NetworkPolicy 보기와 연결 확인 | NetworkPolicy를 강제하는 네트워크 플러그인, 관련 네임스페이스 읽기 권한 — §7 | — | 답은 정책이 말하는 것이지 클러스터가 하는 것이 아님. 규칙이 사용자가 읽지 못하는 네임스페이스 레이블을 쓰면 "알 수 없음" |
 
 ## 1. 권한(RBAC) — 모든 대상 클러스터
 
@@ -293,6 +294,7 @@ CRD가 없으면 Kubeast는 빈 목록과 "설치 안 됨"(`X-Kubeast-Not-Instal
 | Gateway 정책 | 라벨 `gateway.networking.k8s.io/policy`가 붙은 CRD(GEP-713), 또는 기본 목록 — BackendTLSPolicy, Envoy Gateway(`gateway.envoyproxy.io`의 BackendTraffic·ClientTraffic·Security·EnvoyPatch·EnvoyExtension Policy), Istio(AuthorizationPolicy·RequestAuthentication·PeerAuthentication·Telemetry·WasmPlugin·EnvoyFilter·DestinationRule) |
 | Admission Policies | ValidatingAdmissionPolicy(`admissionregistration.k8s.io/v1`), MutatingAdmissionPolicy(`admissionregistration.k8s.io/v1`) — 이 API를 제공하지 않는 클러스터는 "설치 안 됨". Read 그룹은 `kubeast:cluster-reader`로 정책과 바인딩을 읽습니다. 이 권한은 2026-10-22에 추가되었고 `view`에는 없으므로, 그 전에 RBAC를 적용한 클러스터는 다시 적용하세요 |
 | Ingress 드로어 지연 | ingress-nginx 컨트롤러와 §3의 `nginx_ingress_controller_*` 지표 수집 |
+| NetworkPolicy 보기와 연결 확인(Pod·워크로드 드로어, AI 도구 `network_policy_check`) | 설치할 것은 없습니다. 로그인한 사람의 권한으로 NetworkPolicy·파드·Service·워크로드·Namespace를 읽습니다. 정책이 실제로 강제되는지는 네트워크 플러그인에 달려 있습니다(kind의 kindnet·Calico·Cilium은 강제합니다. 쓰는 플러그인을 확인하세요). 네임스페이스를 레이블로 고르는 규칙은 그 Namespace의 `get` 권한이 필요하며, 없으면 답이 알 수 없음입니다. Cilium(`cilium.io`)·Calico(`projectcalico.org`, API 서버가 없으면 `crd.projectcalico.org`)·network-policy-api(`policy.networking.k8s.io`) 정책은 디스커버리로 찾아 `list`로 개수를 셉니다(권한이 없으면 개수 모름). 평가하지는 않습니다 |
 | AI 도구 `gitops_status` | `applications.argoproj.io` CRD(Argo CD). 이 CRD는 Argo CD가 설치된 클러스터에만 있으므로, 중앙 Argo CD를 쓴다면 관리 클러스터에서 호출하세요. 없으면 도구가 unavailable로 답합니다. 권한 상한은 읽는 사람의 RBAC(`applications.argoproj.io` get/list)입니다 |
 
 ## 8. Kubernetes 버전 조건

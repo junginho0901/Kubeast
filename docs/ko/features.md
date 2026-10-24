@@ -54,6 +54,7 @@
     - `cost` — OpenCost 배분
     - `optimization` — requests 대비 사용량·권고
     - `can_i` — 그 사용자가 할 수 있는지 확인
+    - `network_policy_check` — NetworkPolicy가 연결을 허용하는지와 그렇게 정한 정책·규칙([NetworkPolicy 보기와 연결 확인](#networkpolicy-보기와-연결-확인))
     - `resource_graph` — 네임스페이스 객체와 그 연결
     - `hygiene` — 위생 보고, Admin
   - 다음 경우에는 그 도구가 도구 목록에서 빠집니다(`/api/v1/features`, 1분 캐시).
@@ -120,7 +121,7 @@
 | --- | --- | --- | --- |
 | **Pending** | 가입·SSO 직후 기본값 | 없음 — 로그인은 되지만 API는 403 | — |
 | **Member** | 계정 등급 | 전역 권한 없음, **클러스터별 부여로만** 접근 | `kubeast:authenticated`(권한 없음) |
-| **Read** | 클러스터별 | 메뉴 10개 · 모든 리소스 읽기(`resource.*.read`, 비용 `resource.cost.read` 포함) · Helm 읽기(권한 키는 있지만 Release 기록이 Secret이라 클러스터가 거부 — 오른쪽 칸 참고) · 컨테이너 안 로그 파일 읽기(`resource.pod.logfile`, 기능을 켰을 때) · AI 채팅의 읽기 도구 39종(`ai.tool.<읽기 도구>`)과 MCP 연결(`ai.mcp.use`) — 쓰기 도구는 없음 | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view`는 Secret과 `services/proxy`를 제외하므로, Secret과 Helm 릴리스(Secret에 저장)는 클러스터가 거부하고 화면에는 권한 안내가 뜹니다. API 서버 프록시로 읽는 Prometheus·OpenCost(최적화 사용량·스토리지 분석·비용·드로어 메트릭)는 차트 값 `auth.impersonation.viewerProxyServices`에 적은 Service만 **GET으로** 열립니다. 허용은 그 Namespace의 Role로 주고, 이름은 정확히 `<service>:<port>`로 적으며, 다른 Service·POST·NS 범위 부여는 계속 거부됩니다([설정](configuration.md)의 values 주석). 적지 않으면 거부됩니다(프록시는 `kubeast:operator`=`edit`부터 허용) |
+| **Read** | 클러스터별 | 메뉴 10개 · 모든 리소스 읽기(`resource.*.read`, 비용 `resource.cost.read` 포함) · Helm 읽기(권한 키는 있지만 Release 기록이 Secret이라 클러스터가 거부 — 오른쪽 칸 참고) · 컨테이너 안 로그 파일 읽기(`resource.pod.logfile`, 기능을 켰을 때) · AI 채팅의 읽기 도구 40종(`ai.tool.<읽기 도구>`)과 MCP 연결(`ai.mcp.use`) — 쓰기 도구는 없음 | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view`는 Secret과 `services/proxy`를 제외하므로, Secret과 Helm 릴리스(Secret에 저장)는 클러스터가 거부하고 화면에는 권한 안내가 뜹니다. API 서버 프록시로 읽는 Prometheus·OpenCost(최적화 사용량·스토리지 분석·비용·드로어 메트릭)는 차트 값 `auth.impersonation.viewerProxyServices`에 적은 Service만 **GET으로** 열립니다. 허용은 그 Namespace의 Role로 주고, 이름은 정확히 `<service>:<port>`로 적으며, 다른 Service·POST·NS 범위 부여는 계속 거부됩니다([설정](configuration.md)의 values 주석). 적지 않으면 거부됩니다(프록시는 `kubeast:operator`=`edit`부터 허용) |
 | **Write** | 클러스터별 | `menu.*` · 리소스 생성/수정/삭제 · CronJob suspend/trigger · Secret 값 보기 · 로그 파일 읽기 · Helm rollback/upgrade/test · AI 툴 전부(`ai.tool.*`, 쓰기 도구 포함) · MCP 연결 | `kubeast:operator` = `edit` + viewer |
 | **Admin** | 계정 등급(`*`) 또는 클러스터별 | 전부 — 관리자 메뉴, 모든 클러스터(나중에 등록한 것 포함) | `kubeast:admin` = `cluster-admin` |
 | 커스텀 | 클러스터별 | 고른 권한만(만드는 사람이 가진 권한 안에서) | `kubeast:role:<이름>` — 클러스터가 이 그룹을 바인딩하기 전에는 모든 호출이 403입니다(`auth.impersonation.customRoles`). 화면의 권한 없음 배너와 역할 만들기 창에 이 그룹 이름이 나옵니다 |
@@ -199,6 +200,24 @@
 
 - **YAML 편집** (Monaco), **Pod Exec / 로그** (xterm.js, WebSocket)
 - **실시간 갱신** — WebSocket 멀티플렉서로 리소스 변경 스트리밍
+
+### NetworkPolicy 보기와 연결 확인
+
+Pod·워크로드 드로어에 "NetworkPolicy" 칸이 있습니다.
+
+- 파드를 고르는 NetworkPolicy를 들어오는 연결·나가는 연결별로, 규칙이 허용하는 것과 함께 보여 줍니다.
+- "연결 확인"은 다른 파드·워크로드·Service·IP 주소와의 연결 하나를 NetworkPolicy가 허용하는지 묻습니다.
+- 답은 허용·거부·알 수 없음이고, 그렇게 정한 정책·규칙이나 규칙마다 맞지 않은 이유가 함께 나옵니다.
+- Service는 뒤에 있는 파드의 포트로 확인합니다. 이름으로 된 대상 포트는 파드마다 찾습니다.
+- 알 수 없음은 다음 둘 중 하나입니다.
+  - 네트워크 플러그인이 정하는 경우: 파드 IP를 포함하는 `ipBlock`(Calico·kindnet은 적용하고 Cilium은 적용하지 않음), hostNetwork 파드
+  - 규칙이 네임스페이스를 레이블로 고르는데, 권한이 없어 Kubeast가 그 레이블을 읽지 못한 경우
+- 출발 쪽 나가기 정책이 클러스터 DNS를 허용하지 않으면, Service 이름이 풀리지 않는다고 알려 줍니다(IP로는 됩니다).
+- Kubernetes NetworkPolicy만 평가합니다. 그 네임스페이스의 Cilium·Calico·network-policy-api 정책은 답에 들어가지 않는다고 따로 보여 줍니다.
+- 모든 읽기는 로그인한 사람의 권한으로 하며, 네임스페이스가 정해진 사용자는 자기 네임스페이스 안의 연결만 확인할 수 있습니다.
+- AI 도구 `network_policy_check`도 같은 답을 줍니다.
+- 평가기(`services/pkg/netpol`)는 외부 의존이 없습니다. 시험에서 자동으로 만든 정책으로 np-guard/netpol-analyzer와 대조하고(`services/netpol-oracle`), e2e에서는 kind의 kindnet에서 실제 접속과 대조합니다.
+- 대상 클러스터에 필요한 것은 [클러스터 요구사항 §7](cluster-requirements.md#7-있으면-보여-주는-api)에 있습니다.
 
 ## ⎈ Helm 릴리스 관리
 

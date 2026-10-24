@@ -11,7 +11,9 @@ package main
 
 import (
 	"fmt"
+	"net/netip"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -127,6 +129,11 @@ var argRules = map[string]argCheck{
 	"rank_by":               checkEnum("memory", "cpu", "ephemeral_storage"),
 	"source":                checkLogSource,
 	"pattern":               checkPrintable(200),
+	// The NetworkPolicy check (port is also k8s_check_service_connectivity's).
+	"src":      checkNetpolEnd,
+	"dst":      checkNetpolEnd,
+	"port":     checkPortSpec,
+	"protocol": checkProtocol,
 	// Prometheus discovery: a series selector, a label name, a rule name, a job.
 	"selector":  checkPromQL,
 	"label":     checkPromLabel,
@@ -204,7 +211,37 @@ var (
 	auditActionRe = regexp.MustCompile(`^[a-z][a-z0-9_.*-]{0,79}$`)
 	rfc3339Re     = regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$`)
 	logSourceRe   = regexp.MustCompile(`^[A-Za-z0-9_/][A-Za-z0-9_./-]{0,119}$`)
+	netpolEndRe   = regexp.MustCompile(`^(?i:pod|deployment|statefulset|daemonset|replicaset|job|cronjob|service)/[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?/[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$`)
+	portNameRe    = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$`)
 )
+
+func checkNetpolEnd(field, v string) error {
+	if _, err := netip.ParseAddr(v); err == nil || netpolEndRe.MatchString(v) {
+		return nil
+	}
+	return badArg(field, v, "<kind>/<namespace>/<name> (pod, deployment, statefulset, daemonset, replicaset, job, cronjob, service) or an IP address")
+}
+
+func checkPortSpec(field, v string) error {
+	if n, err := strconv.Atoi(v); err == nil {
+		if n < 1 || n > 65535 {
+			return badArg(field, v, "a port between 1 and 65535")
+		}
+		return nil
+	}
+	if !portNameRe.MatchString(v) {
+		return badArg(field, v, "a port number or a port name")
+	}
+	return nil
+}
+
+func checkProtocol(field, v string) error {
+	switch strings.ToUpper(v) {
+	case "TCP", "UDP", "SCTP":
+		return nil
+	}
+	return badArg(field, v, "TCP, UDP or SCTP")
+}
 
 func checkAuditAction(field, v string) error {
 	if !auditActionRe.MatchString(v) {

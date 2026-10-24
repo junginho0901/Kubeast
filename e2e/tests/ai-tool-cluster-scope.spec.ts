@@ -2,7 +2,7 @@ import { test, expect, type APIRequestContext, type Page } from '@playwright/tes
 
 // C1: AI tool permissions are decided per cluster. A user with the Write role
 // (ai.tool.*) on `test2` and only Read on `self` gets tool calls on both — the
-// Read role carries the thirty-nine read tools — but every tool call recorded on
+// Read role carries the forty read tools — but every tool call recorded on
 // self is a read tool, even though both grants live in the same token.
 
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'

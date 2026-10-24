@@ -26,6 +26,7 @@ const (
 	graphEdgesCap    = 400
 	hygieneFindCap   = 200
 	policyRowsCap    = 200
+	netpolChecksCap  = 40
 	costDefaultWin   = "24h"
 	helmDefaultSect  = "values"
 	policyDefaultTop = "summary"
@@ -434,5 +435,36 @@ func handleResourceGraph(ctx context.Context, args map[string]interface{}, heade
 	capList(reply, "nodes", graphNodesCap)
 	capList(reply, "edges", graphEdgesCap)
 	reply["namespace"] = namespace
+	return marshalJSON(reply)
+}
+
+// handleNetworkPolicyCheck asks k8s-service whether NetworkPolicy allows src
+// to reach dst; it reads the policies, pods and namespaces as the user.
+func handleNetworkPolicyCheck(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+	src := strings.TrimSpace(argString(args, "src", ""))
+	dst := strings.TrimSpace(argString(args, "dst", ""))
+	if src == "" || dst == "" {
+		return "", wrapBadRequest("src and dst are required: <kind>/<namespace>/<name> (pod, deployment, statefulset, daemonset, replicaset, job, cronjob; dst may be service) or an IP address")
+	}
+	q := url.Values{"src": {src}, "dst": {dst}}
+	if port := strings.TrimSpace(argString(args, "port", "")); port != "" {
+		q.Set("port", port)
+	}
+	if protocol := strings.TrimSpace(argString(args, "protocol", "")); protocol != "" {
+		q.Set("protocol", strings.ToUpper(protocol))
+	}
+	status, body, err := k8sServiceGet(ctx, headers, "/networkpolicies/check", q)
+	if err != nil {
+		return "", err
+	}
+	reply, out, err := featureReply("networkpolicy-check", "", status, body)
+	if err != nil || out != "" {
+		return out, err
+	}
+	capList(reply, "checks", netpolChecksCap)
+	reply["note"] = "Kubernetes NetworkPolicy only, read as the signed-in user. result unknown: the answer depends on the network plugin " +
+		"(an ipBlock that covers a pod IP, a hostNetwork pod) or on namespace labels the user cannot read — say which. " +
+		"unevaluated lists other policy kinds (Cilium, Calico, AdminNetworkPolicy) in these namespaces that can change the answer. " +
+		"notes dns_egress_denied: the source may not reach cluster DNS, so a Service name will not resolve even where the pods are allowed."
 	return marshalJSON(reply)
 }

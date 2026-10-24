@@ -726,6 +726,31 @@ K8S_READONLY_TOOLS: List[Dict] = [
     {
         "type": "function",
         "function": {
+            "name": "network_policy_check",
+            "description": (
+                "Whether Kubernetes NetworkPolicy allows a connection from src to dst, and the policy and rule that decide (read as the signed-in "
+                "user). src and dst are <kind>/<namespace>/<name> — pod, deployment, statefulset, daemonset, replicaset, job, cronjob; dst may also "
+                "be service/<namespace>/<name> — or an IP address. port is the destination port (a Service port for a Service, a number or a "
+                "container port name); leave it out to check every port the destination declares. Each check says egress (from src) and ingress "
+                "(into dst): isolated or not, allowed_by rules, and misses with the reason (peer, port, named_port, no_rules). result unknown means "
+                "the plugin decides (pod_ip_block, host_network) or namespace labels could not be read (namespace_labels_unknown); notes dns_egress_denied = the source cannot resolve a Service name. Use it for "
+                "\"why can't A reach B\", \"who may connect to this pod\", before blaming DNS or the app."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "src": {"type": "string", "description": "Source: <kind>/<namespace>/<name> or an IP address, e.g. deployment/shop/frontend"},
+                    "dst": {"type": "string", "description": "Destination: <kind>/<namespace>/<name> (service allowed) or an IP address, e.g. service/shop/db"},
+                    "port": {"type": "string", "description": "Destination port number or name (empty = every declared port)"},
+                    "protocol": {"type": "string", "enum": ["TCP", "UDP", "SCTP"], "description": "Protocol (default TCP)"},
+                },
+                "required": ["src", "dst"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "resource_graph",
             "description": (
                 "The objects of one namespace and the edges between them — owner (Deployment → ReplicaSet → Pod), selector (Service → Pod), "

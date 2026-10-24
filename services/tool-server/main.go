@@ -301,6 +301,11 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Handler:     handleCanI,
 	})
 	register(ToolDefinition{
+		Name:        "network_policy_check",
+		Description: "Whether Kubernetes NetworkPolicy allows a connection between pods, workloads, a Service or an address, and which policy and rule decide",
+		Handler:     handleNetworkPolicyCheck,
+	})
+	register(ToolDefinition{
 		Name:        "resource_graph",
 		Description: "The objects of one namespace and the edges between them, with counts by kind",
 		Handler:     handleResourceGraph,
