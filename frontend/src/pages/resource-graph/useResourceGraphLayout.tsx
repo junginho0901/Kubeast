@@ -15,7 +15,7 @@ import i18next from 'i18next'
 import type { ResourceGraphNode, ResourceGraphEdge, TrafficEnd, TrafficLine } from '@/services/api'
 import { edgeStyles, kindIcon, pointsUp, statusColor, type GroupBy } from './constants'
 import { applyElkLayout } from './elkLayout'
-import { buildTraffic, endText, lineColor, type GraphView, type TrafficEdge } from './traffic'
+import { buildTraffic, endText, lineColor, portText, type GraphView, type TrafficEdge } from './traffic'
 
 export interface ResourceGraphLayoutInput {
   graphData: { nodes: ResourceGraphNode[]; edges: ResourceGraphEdge[] } | undefined
@@ -44,7 +44,10 @@ function peerKindText(e: TrafficEnd): string {
 
 function trafficEdge(t: TrafficEdge): Edge {
   const color = lineColor[t.state]
-  const label = t.state === 'allowed' ? count(t.line.allowed) : t.state === 'dropped' ? `✕ ${count(t.line.dropped)}` : `${count(t.line.allowed)} · ✕ ${count(t.line.dropped)}`
+  const counts = t.state === 'allowed' ? count(t.line.allowed) : t.state === 'dropped' ? `✕ ${count(t.line.dropped)}` : `${count(t.line.allowed)} · ✕ ${count(t.line.dropped)}`
+  // the port first: lines into one box told apart by where they go (Hubble UI shows the port on the box)
+  const ports = portText(t.line.ports)
+  const label = ports ? `${ports} · ${counts}` : counts
   return {
     id: t.id,
     source: t.source,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getBezierPath, Position } from '@xyflow/react'
 import type { ClusterFeatures, NetflowGroup, ResourceGraphNode, TrafficLine } from '@/services/api'
-import { anchorOf, buildTraffic, checkFor, endText, lineState, pointOnBezier, roundedPath, trafficParams, trafficSources, PEER_KIND } from './traffic'
+import { anchorOf, buildTraffic, checkFor, endText, lineState, pointOnBezier, portText, roundedPath, trafficParams, trafficSources, PEER_KIND } from './traffic'
 
 const node = (kind: string, namespace: string, name: string): ResourceGraphNode => ({ id: `${kind}/${namespace}/${name}`, kind, name, namespace, status: 'Running' })
 const shown = new Map([node('Deployment', 'shop', 'web'), node('Deployment', 'shop', 'client'), node('Pod', 'shop', 'debug'), node('StatefulSet', 'shop', 'db')].map((n) => [n.id, n]))
@@ -137,5 +137,15 @@ describe('roundedPath', () => {
     // a 6 px leg rounds by 3 at most
     expect(roundedPath([{ x: 0, y: 0 }, { x: 6, y: 0 }, { x: 6, y: 50 }], 8)).toBe('M 0 0 L 3 0 Q 6 0 6 3 L 6 50')
     expect(roundedPath([], 8)).toBe('')
+  })
+})
+
+describe('portText', () => {
+  it('names the ports short', () => {
+    expect(portText([{ protocol: 'TCP', port: 80 }])).toBe('80')
+    expect(portText([{ protocol: 'UDP', port: 53 }])).toBe('UDP 53')
+    expect(portText([{ protocol: 'TCP', port: 80 }, { protocol: 'TCP', port: 443 }])).toBe('80, 443')
+    expect(portText([{ protocol: 'TCP', port: 80 }, { protocol: 'TCP', port: 443 }, { protocol: 'TCP', port: 8080 }])).toBe('80 +2')
+    expect(portText(undefined)).toBe('')
   })
 })

@@ -180,3 +180,10 @@ export function roundedPath(points: { x: number; y: number }[], r: number): stri
   const last = points[points.length - 1]
   return `${d} L ${last.x} ${last.y}`
 }
+
+// portText names a line's destination ports short: "80", "UDP 53", "80, 443", "80 +2" (TCP without its name).
+export function portText(ports: TrafficLine['ports']): string {
+  const names = (ports ?? []).map((p) => (p.protocol && p.protocol !== 'TCP' ? `${p.protocol} ${p.port ?? ''}`.trim() : String(p.port ?? ''))).filter(Boolean)
+  if (names.length <= 2) return names.join(', ')
+  return `${names[0]} +${names.length - 1}`
+}

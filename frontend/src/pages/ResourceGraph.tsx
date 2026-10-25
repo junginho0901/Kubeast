@@ -64,7 +64,7 @@ function focusLines(nodes: Node[], edges: Edge[], focus: { edge?: string; node?:
 
 export default function ResourceGraph() {
   const { t } = useTranslation()
-  const { open: openDetail } = useResourceDetail()
+  const { open: openDetail, target: drawerTarget } = useResourceDetail()
 
   // State
   const [searchParams] = useSearchParams()
@@ -222,7 +222,22 @@ export default function ResourceGraph() {
     view,
     traffic: traffic?.lines,
   })
-  const focus = !routed ? null : hoverEdge ? { edge: hoverEdge } : hoverNode ? { node: hoverNode } : selected ? { edge: selected.id } : null
+  // the box whose drawer is open keeps its lines lit (a stand-in by the end it stands for)
+  const drawerNode = useMemo(() => {
+    if (!routed || !drawerTarget) return undefined
+    const t = drawerTarget
+    return laidNodes.find((n) => {
+      const raw = n.data?.raw as ResourceGraphNode | undefined
+      if (!raw) return false
+      if (isPeer(raw)) return raw.end.kind === t.kind && raw.end.name === t.name && raw.end.namespace === t.namespace
+      return raw.kind === t.kind && raw.name === t.name && (raw.namespace || undefined) === (t.namespace || undefined)
+    })?.id
+  }, [routed, drawerTarget, laidNodes])
+  const focus = !routed ? null
+    : hoverEdge ? { edge: hoverEdge }
+      : hoverNode ? { node: hoverNode }
+        : selected ? { edge: selected.id }
+          : drawerNode ? { node: drawerNode } : null
   const { nodes, edges } = useMemo(() => focusLines(laidNodes, laidEdges, focus), [laidNodes, laidEdges, focus?.edge, focus?.node]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Interactions
@@ -480,7 +495,7 @@ export default function ResourceGraph() {
             </div>
             <div className="text-slate-500 max-w-[160px]">
               {traffic.source === 'relay'
-                ? t('resourceGraph.traffic.legend.unitRelay', 'number = flows')
+                ? t('resourceGraph.traffic.legend.unitRelay', 'port · number of flows')
                 : t('resourceGraph.traffic.legend.unitMetrics', 'number = TCP connections · ✕ dropped packets')}
             </div>
           </div>

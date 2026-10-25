@@ -3173,7 +3173,7 @@
         "mixed": "일부 차단",
         "dropped": "차단",
         "peer": "이 그래프에 없음",
-        "unitRelay": "숫자 = 흐름 수",
+        "unitRelay": "포트 · 흐름 수",
         "unitMetrics": "숫자 = TCP 연결 수 · ✕ 차단된 패킷"
       },
       "statusRelay": "Hubble Relay의 최근 흐름 {{flows}}개에서 선 {{lines}}개(최근 {{w}})",

@@ -3071,7 +3071,7 @@
         "mixed": "partly dropped",
         "dropped": "dropped",
         "peer": "not in this graph",
-        "unitRelay": "number = flows",
+        "unitRelay": "port · number of flows",
         "unitMetrics": "number = TCP connections · ✕ dropped packets"
       },
       "statusRelay": "{{lines}} lines from {{flows}} recent flows of the Hubble Relay (last {{w}})",

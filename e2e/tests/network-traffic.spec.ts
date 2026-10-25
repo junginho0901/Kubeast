@@ -200,7 +200,9 @@ test.describe('Resource Graph traffic lines (Hubble)', () => {
     await page.getByTestId('graph-view-both').click()
     await expect(page.locator(`[data-testid="rf__node-Service/${NS}/web"]`)).toHaveCount(1, { timeout: 20_000 })
     await expect(page.locator(`[aria-label="${NS}/client → ${NS}/web"]`)).toHaveCount(1)
-    await expect(page.getByTestId('traffic-legend')).toContainText('number = flows')
+    await expect(page.getByTestId('traffic-legend')).toContainText('port · number of flows')
+    // the port starts each line's number
+    await expect(page.locator(`[aria-label="${NS}/client → ${NS}/web"] .react-flow__edge-text`)).toContainText('80 ·')
     // the metrics: no DNS line (UDP), the dropped line still there
     if (metricsReady) {
       await page.getByTestId('traffic-source-1h').click()
