@@ -323,6 +323,8 @@ func TestFromMetrics(t *testing.T) {
 		sample(0.2, ends("shop/Deployment/client", "shop/Deployment/idle", "traffic_direction", "ingress")...), // rounds to 0
 		// stranger's SYNs leave (FORWARDED at its egress) and are dropped at web: not opened
 		sample(9, ends("shop/Deployment/stranger", "shop/Deployment/web", "traffic_direction", "egress")...),
+		// SYNs seen leaving towards a pod and never arriving, with no drop counted: no line
+		sample(5, ends("shop/Deployment/client", "shop/Deployment/ghost", "traffic_direction", "egress")...),
 		// the world reaching web: only the ingress side sees it; web reaching the world: only the egress side
 		sample(3, "destination_namespace", "shop", "destination_workload", "web", "destination_workload_kind", "Deployment", "traffic_direction", "ingress"),
 		sample(2, "source_namespace", "shop", "source_workload", "web", "source_workload_kind", "Deployment", "traffic_direction", "egress"),

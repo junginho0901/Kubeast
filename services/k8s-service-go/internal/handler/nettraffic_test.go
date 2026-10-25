@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/nettraffic"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
+	"google.golang.org/protobuf/encoding/protowire"
 )
 
 func getTraffic(h *Handler, target string, payload auth.TokenPayload) (*httptest.ResponseRecorder, nettraffic.Result) {
@@ -132,6 +134,66 @@ func TestNetworkTrafficRelayScope(t *testing.T) {
 	// the fixture is namespace demo: asked for shop, nothing comes back
 	if len(res.Lines) != 0 {
 		t.Fatalf("another namespace's flows: %+v", res.Lines)
+	}
+}
+
+// droppedFlow is one GetFlows answer message: a DROPPED flow from (namespace, pod, workload) to demo/web-1:80.
+func droppedFlow(at time.Time, ns, pod, workload string) []byte {
+	str := func(b []byte, n protowire.Number, v string) []byte {
+		b = protowire.AppendTag(b, n, protowire.BytesType)
+		return protowire.AppendString(b, v)
+	}
+	msg := func(b []byte, n protowire.Number, m []byte) []byte {
+		b = protowire.AppendTag(b, n, protowire.BytesType)
+		return protowire.AppendBytes(b, m)
+	}
+	end := func(ns, pod, workload string) []byte {
+		b := str(str(nil, 3, ns), 5, pod)
+		if workload != "" {
+			b = msg(b, 6, str(str(nil, 1, workload), 2, "Deployment"))
+		}
+		return b
+	}
+	var flow, ts, tcp []byte
+	ts = protowire.AppendVarint(protowire.AppendTag(ts, 1, protowire.VarintType), uint64(at.Unix()))
+	flow = msg(flow, 1, ts)
+	flow = protowire.AppendVarint(protowire.AppendTag(flow, 2, protowire.VarintType), uint64(netflows.Verdicts["DROPPED"]))
+	tcp = protowire.AppendVarint(protowire.AppendTag(tcp, 2, protowire.VarintType), 80)
+	flow = msg(flow, 6, msg(nil, 1, tcp))
+	flow = msg(flow, 8, end(ns, pod, workload))
+	flow = msg(flow, 9, end("demo", "web-1", "web"))
+	m := msg(nil, 1, flow)
+	out := make([]byte, 5, 5+len(m))
+	binary.BigEndian.PutUint32(out[1:], uint32(len(m)))
+	return append(out, m...)
+}
+
+// A namespace-limited reader's Relay read hides the ends outside their namespaces: namespace only.
+func TestNetworkTrafficRelayRedactsOutsideTheScope(t *testing.T) {
+	f := newNetflowsFixture(t, 5)
+	at := time.Date(2026, 10, 24, 14, 5, 0, 0, time.UTC)
+	answer := append(droppedFlow(at, "ops", "probe-1", "probe"), droppedFlow(at, "demo", "client-1", "client")...)
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/grpc")
+		w.Header().Set("Trailer", "Grpc-Status")
+		_, _ = w.Write(answer)
+		w.Header().Set("Grpc-Status", "0")
+	}))
+	srv.EnableHTTP2 = true
+	srv.StartTLS()
+	t.Cleanup(srv.Close)
+	f.h.netflowsDial = func(context.Context, netflows.Target) (string, *http.Client, error) {
+		return srv.URL + "/observer.Observer/GetFlows", srv.Client(), nil
+	}
+	scoped := flowReader
+	scoped.Namespaces = map[string][]string{"self": {"demo"}}
+	_, res := getTraffic(f.h, "/api/v1/networktraffic?namespaces=demo&source=relay", scoped)
+	if !res.Redacted || lineOf(res, "ops/", "demo/web") == nil || lineOf(res, "demo/client", "demo/web") == nil {
+		t.Fatalf("scoped: %+v", res)
+	}
+	_, res = getTraffic(f.h, "/api/v1/networktraffic?namespaces=demo&source=relay", flowReader)
+	if res.Redacted || lineOf(res, "ops/probe", "demo/web") == nil {
+		t.Fatalf("unscoped: %+v", res)
 	}
 }
 
