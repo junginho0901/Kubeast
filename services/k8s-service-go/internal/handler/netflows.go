@@ -25,12 +25,20 @@ import (
 // SetNetworkFlows turns on network flow reads (chart features.networkFlows).
 func (h *Handler) SetNetworkFlows(s *netflows.Store) { h.netflows = s }
 
-// networkFlowsFeature is the /cluster/features entry: the clusters with flow reads.
+// networkFlowsFeature is the /cluster/features entry: the clusters with flow reads, and what serves each
+// (hubble or calico).
 func (h *Handler) networkFlowsFeature() map[string]interface{} {
 	if h.netflows == nil {
-		return map[string]interface{}{"enabled": false, "clusters": []string{}}
+		return map[string]interface{}{"enabled": false, "clusters": []string{}, "providers": map[string]string{}}
 	}
-	return map[string]interface{}{"enabled": true, "clusters": h.netflows.Config().ClusterIDs()}
+	providers := map[string]string{}
+	for id, t := range h.netflows.Config().Clusters {
+		providers[id] = netflows.SourceHubble
+		if t.Calico() {
+			providers[id] = netflows.SourceCalico
+		}
+	}
+	return map[string]interface{}{"enabled": true, "clusters": h.netflows.Config().ClusterIDs(), "providers": providers}
 }
 
 // NetworkFlows handles GET /api/v1/namespaces/{namespace}/networkflows?kind=&name=&since=&verdict=&limit=:
@@ -65,6 +73,9 @@ func (h *Handler) NetworkFlows(w http.ResponseWriter, r *http.Request) {
 	if req.Lookup = h.flowsLookup(); req.Lookup != nil && req.Kind != "" && req.Kind != "Pod" {
 		req.Pods = workloadPods(ctx, req.Lookup, namespace, req.Kind, req.Name)
 	}
+	if t, _ := h.netflows.Target(string(id)); t.Calico() && req.Kind == "Pod" && req.Lookup != nil {
+		req.PodSet, _ = req.Lookup.PodSet(ctx, namespace, req.Name) // Calico names the pods of one GenerateName together
+	}
 	if err := h.netflows.Normalize(&req); err != nil {
 		response.Error(w, http.StatusBadRequest, err.Error())
 		return
@@ -97,6 +108,10 @@ func (l svcLookup) Workloads(ctx context.Context, namespace string) (map[string]
 
 func (l svcLookup) ServiceIPs(ctx context.Context, namespace string) (map[string]bool, error) {
 	return l.s.NetflowsServiceIPs(ctx, namespace)
+}
+
+func (l svcLookup) PodSet(ctx context.Context, namespace, pod string) (string, error) {
+	return l.s.NetflowsPodSet(ctx, namespace, pod)
 }
 
 // workloadPods are the current pods of a workload, by name, for flows that name no workload; none when the
@@ -140,13 +155,13 @@ func (h *Handler) relayRead(w http.ResponseWriter, r *http.Request, req netflows
 		_ = h.recordAuditWithPayload(r, "k8s.networkflows.query", targetType, targetID, namespace, err, nil, after())
 		response.Error(w, status, err.Error())
 	}
-	allowed, err := h.canReadRelay(ctx, target.Relay)
+	allowed, err := h.canReadRelay(ctx, target)
 	if err != nil {
 		h.handleError(w, err)
 		return nil
 	}
 	if !allowed {
-		refuse(http.StatusForbidden, fmt.Errorf("forbidden: the cluster does not let you read the Hubble Relay (create on services/proxy %s in %s)", target.Relay.ProxyName(), target.Relay.Namespace))
+		refuse(http.StatusForbidden, fmt.Errorf("forbidden: the cluster does not let you read %s (%s on services/proxy %s in %s)", target.What(), target.ProxyVerb(), target.Relay.ProxyName(), target.Relay.Namespace))
 		return nil
 	}
 	if !h.netflows.Allow(payload.UserID) {
@@ -166,7 +181,7 @@ func (h *Handler) relayRead(w http.ResponseWriter, r *http.Request, req netflows
 		if h.netflowsNow != nil {
 			now = h.netflowsNow()
 		}
-		res, qerr = h.netflows.Query(ctx, client, url, req, now)
+		res, qerr = h.netflows.Read(ctx, target, client, url, req, now)
 	}
 	if res != nil {
 		res.Cluster, res.Mode, res.Relay = string(id), target.Mode, target.Relay.String()
@@ -185,20 +200,22 @@ func (h *Handler) relayRead(w http.ResponseWriter, r *http.Request, req netflows
 	return res
 }
 
-// canReadRelay asks the cluster whether the user may use the Relay's
-// services/proxy — what the API server checks in mode proxy, and what
-// Kubeast holds a reader to in mode address.
-func (h *Handler) canReadRelay(ctx context.Context, relay netflows.Relay) (bool, error) {
+// canReadRelay asks the cluster whether the user may use the flow source's
+// services/proxy (create for the Relay's GetFlows, get for Whisker) — what the
+// API server checks in mode proxy, and what Kubeast holds a reader to in mode
+// address.
+func (h *Handler) canReadRelay(ctx context.Context, t netflows.Target) (bool, error) {
 	if h.netflowsCanI != nil {
-		return h.netflowsCanI(ctx, relay)
+		return h.netflowsCanI(ctx, t)
 	}
+	relay := t.Relay
 	cs, err := h.svc.ClientsetFor(ctx)
 	if err != nil {
 		return false, err
 	}
 	review, err := cs.AuthorizationV1().SelfSubjectAccessReviews().Create(ctx, &authorizationv1.SelfSubjectAccessReview{
 		Spec: authorizationv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authorizationv1.ResourceAttributes{
-			Verb: "create", Resource: "services", Subresource: "proxy", Name: relay.ProxyName(), Namespace: relay.Namespace,
+			Verb: t.ProxyVerb(), Resource: "services", Subresource: "proxy", Name: relay.ProxyName(), Namespace: relay.Namespace,
 		}},
 	}, metav1.CreateOptions{})
 	if err != nil {
@@ -241,8 +258,13 @@ func netflowsStatus(err error) int {
 
 // netflowsAudit is the after payload: what was asked and how much came back, never the flows.
 func netflowsAudit(t netflows.Target, req netflows.Request, res *netflows.Result) json.RawMessage {
+	provider := netflows.SourceHubble
+	if t.Calico() {
+		provider = netflows.SourceCalico
+	}
 	after := map[string]interface{}{
 		"mode":          t.Mode,
+		"provider":      provider,
 		"relay":         t.Relay.String(),
 		"since_seconds": int64(req.Since.Seconds()),
 		"limit":         req.Limit,

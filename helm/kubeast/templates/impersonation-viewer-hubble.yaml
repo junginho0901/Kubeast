@@ -11,6 +11,7 @@ the alert investigator is, while features.alertInvestigation is on. Apply to
 every cluster listed in features.networkFlows.clusters (relay = that cluster's
 Relay Service):
   helm template kubeast helm/kubeast -s templates/impersonation-viewer-hubble.yaml -f <values> | kubectl --context <cluster> apply -f -
+A calico entry reads Calico's Whisker instead: impersonation-viewer-whisker.yaml.
 */}}
 {{- $relay := .Values.features.networkFlows.relay }}
 {{- if not (regexMatch "^[a-z0-9.-]+/[a-z0-9.-]+:[0-9]+$" $relay) }}

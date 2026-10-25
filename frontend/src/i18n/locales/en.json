@@ -1819,6 +1819,7 @@
   },
   "netflows": {
     "intro": "Connections the cluster's Hubble Relay saw to and from this {{kind}}. Reading them is recorded in the audit log.",
+    "introCalico": "Connections Calico's Whisker saw to and from this {{kind}}, counted in packets. Calico names the pods of one ReplicaSet or Job together. Reading them is recorded in the audit log.",
     "load": "Show flows",
     "window": "last {{w}}",
     "all": "All",
@@ -3059,6 +3060,7 @@
       "connections": "Latest connections",
       "flowsCount": "{{n}} flows",
       "aboutRelay": "From the cluster's Hubble Relay: the latest flows it keeps, read once. Each end's drawer shows its recent flows.",
+      "aboutCalico": "From Calico's Whisker: the flows Calico's Goldmane aggregated, read once and counted in packets. Each end's drawer shows its recent flows.",
       "aboutMetrics": "From the Hubble metrics in the cluster's Prometheus: TCP connections opened (SYN) and dropped packets. UDP traffic such as DNS is not counted.",
       "unavailable": {
         "no_prometheus": "This cluster has no Prometheus Kubeast can read.",
@@ -3075,6 +3077,7 @@
         "unitMetrics": "number = TCP connections · ✕ dropped packets"
       },
       "statusRelay": "{{lines}} lines from {{flows}} recent flows of the Hubble Relay (last {{w}})",
+      "statusCalico": "{{lines}} lines from {{flows}} recent flow records of Calico's Whisker, counted in packets (last {{w}})",
       "statusMetrics": "{{lines}} lines from the Hubble metrics (last {{w}})",
       "truncated": "Only the latest flows the Relay returned: older traffic is not drawn.",
       "linesTruncated": "Only the busiest 300 lines are drawn.",

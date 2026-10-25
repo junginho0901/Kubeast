@@ -163,6 +163,16 @@ func TestFromFlowsCountsAServiceAddressWhereItArrives(t *testing.T) {
 	}
 }
 
+// Calico names an address outside the pods without the address: the line ends at that name.
+func TestFromFlowsNamedOutsideWithoutAddress(t *testing.T) {
+	dns := netflows.End{Namespace: "kube-system", Pod: "coredns-559f6c778d-*", Workload: &netflows.Workload{Kind: "Deployment", Name: "coredns"}}
+	res := &netflows.Result{Groups: []netflows.Group{seen(group(dns, netflows.End{Names: []string{"public network"}, Port: 53}, "FORWARDED", 4, 4, -time.Second), "egress")}}
+	got := FromFlows(res, []string{"kube-system"})
+	if len(got.Lines) != 1 || got.Lines[0].To != (End{Outside: "public network"}) || got.Lines[0].Allowed != 8 {
+		t.Fatalf("%+v", got.Lines)
+	}
+}
+
 func TestFromFlowsKeepsTheBusiestPorts(t *testing.T) {
 	src := netflows.End{Namespace: "shop", Pod: "client-1", Workload: &netflows.Workload{Kind: "Deployment", Name: "client"}}
 	var groups []netflows.Group

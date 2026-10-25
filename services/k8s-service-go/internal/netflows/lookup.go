@@ -10,10 +10,13 @@ import (
 // the packet to a pod, or before it put the pod's address back on the reply); Cilium's flows carry both, so
 // nothing is looked up for them.
 type Lookup interface {
-	// Workloads names the workload of each pod of a namespace as the Hubble agent does.
+	// Workloads names the workload of each pod of a namespace as the Hubble agent does, by the pod's name and
+	// by its set as Calico names it (<generateName>*).
 	Workloads(ctx context.Context, namespace string) (map[string]Workload, error)
 	// ServiceIPs are the cluster IPs of a namespace's Services.
 	ServiceIPs(ctx context.Context, namespace string) (map[string]bool, error)
+	// PodSet is a pod's set as Calico names it: <generateName>*, or the pod's name when it has none.
+	PodSet(ctx context.Context, namespace, pod string) (string, error)
 }
 
 // MaxLookupNamespaces caps the namespaces one read looks up; ends in others stay as the flows name them.

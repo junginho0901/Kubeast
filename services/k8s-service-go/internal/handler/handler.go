@@ -56,7 +56,7 @@ type Handler struct {
 	// netflowsDial picks the Relay's URL and client, netflowsNow is the
 	// clock the window ends at, and netflowsLook fills in what flows leave
 	// out (tests replace them).
-	netflowsCanI func(ctx context.Context, r netflows.Relay) (bool, error)
+	netflowsCanI func(ctx context.Context, t netflows.Target) (bool, error)
 	netflowsDial func(ctx context.Context, t netflows.Target) (string, *http.Client, error)
 	netflowsNow  func() time.Time
 	netflowsLook netflows.Lookup

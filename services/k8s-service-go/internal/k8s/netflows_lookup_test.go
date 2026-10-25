@@ -64,8 +64,16 @@ func TestNetflowsLookupLists(t *testing.T) {
 		&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "ext", Namespace: "shop"}, Spec: corev1.ServiceSpec{Type: corev1.ServiceTypeExternalName}},
 	)
 	pods, err := netflowsWorkloads(context.Background(), cs, "shop")
-	if err != nil || !reflect.DeepEqual(pods, map[string]netflows.Workload{"client-7bc956576c-2j5zw": {Kind: "Deployment", Name: "client"}}) {
+	client := netflows.Workload{Kind: "Deployment", Name: "client"}
+	// by the pod's name, and by its set as Calico names it
+	if err != nil || !reflect.DeepEqual(pods, map[string]netflows.Workload{"client-7bc956576c-2j5zw": client, "client-7bc956576c-*": client}) {
 		t.Fatalf("pods %v %v", pods, err)
+	}
+	if set, err := netflowsPodSet(context.Background(), cs, "shop", "client-7bc956576c-2j5zw"); err != nil || set != "client-7bc956576c-*" {
+		t.Fatalf("set %q %v", set, err)
+	}
+	if set, _ := netflowsPodSet(context.Background(), cs, "shop", "debug"); set != "debug" {
+		t.Fatalf("a pod named by hand is its own set: %q", set)
 	}
 	ips, err := netflowsServiceIPs(context.Background(), cs, "shop")
 	if err != nil || !reflect.DeepEqual(ips, map[string]bool{"10.96.0.20": true, "fd00::20": true}) {
@@ -79,5 +87,8 @@ func TestNetflowsLookupLists(t *testing.T) {
 	}
 	if _, err := netflowsServiceIPs(context.Background(), cs, "shop"); err == nil {
 		t.Fatal("a refused list is an error")
+	}
+	if _, err := netflowsPodSet(context.Background(), cs, "shop", "missing"); err == nil {
+		t.Fatal("a missing pod is an error")
 	}
 }

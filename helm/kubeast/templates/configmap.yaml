@@ -263,12 +263,12 @@ data:
   NETWORK_FLOWS_ENABLED: {{ .enabled | quote }}
 {{- if .enabled }}
 {{- if empty .clusters }}
-  {{- fail "features.networkFlows needs clusters (Kubeast cluster ID: proxy, proxy:<namespace>/<service>:<port> or https://<host>:<port>) when enabled" }}
+  {{- fail "features.networkFlows needs clusters (Kubeast cluster ID: proxy, proxy:<namespace>/<service>:<port>, https://<host>:<port>, calico or calico:<namespace>/<service>:<port>) when enabled" }}
 {{- end }}
   {{- $pairs := list }}
   {{- range $id, $value := .clusters }}
-  {{- if not (regexMatch "^(proxy|proxy:[a-z0-9.-]+/[a-z0-9.-]+:[0-9]+|https://.+)$" (toString $value)) }}
-    {{- fail (printf "features.networkFlows.clusters.%s: %q is not proxy, proxy:<namespace>/<service>:<port> or https://<host>:<port>" $id (toString $value)) }}
+  {{- if not (regexMatch "^(proxy|proxy:[a-z0-9.-]+/[a-z0-9.-]+:[0-9]+|https://.+|calico|calico:[a-z0-9.-]+/[a-z0-9.-]+:[0-9]+)$" (toString $value)) }}
+    {{- fail (printf "features.networkFlows.clusters.%s: %q is not proxy, proxy:<namespace>/<service>:<port>, https://<host>:<port>, calico or calico:<namespace>/<service>:<port>" $id (toString $value)) }}
   {{- end }}
   {{- $pairs = append $pairs (printf "%s=%s" $id $value) }}
   {{- end }}

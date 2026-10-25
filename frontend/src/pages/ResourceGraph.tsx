@@ -543,9 +543,11 @@ function TrafficStatus({ error, result, selfLoops }: { error?: string; result?: 
   else if (result) {
     lines.push({
       key: 'source',
-      text: result.source === 'relay'
-        ? t('resourceGraph.traffic.statusRelay', { defaultValue: '{{lines}} lines from {{flows}} recent flows of the Hubble Relay (last {{w}})', lines: result.lines.length, flows: result.flows ?? 0, w: result.since })
-        : t('resourceGraph.traffic.statusMetrics', { defaultValue: '{{lines}} lines from the Hubble metrics (last {{w}})', lines: result.lines.length, w: result.range }),
+      text: result.source === 'metrics'
+        ? t('resourceGraph.traffic.statusMetrics', { defaultValue: '{{lines}} lines from the Hubble metrics (last {{w}})', lines: result.lines.length, w: result.range })
+        : result.provider === 'calico'
+          ? t('resourceGraph.traffic.statusCalico', { defaultValue: "{{lines}} lines from {{flows}} recent flow records of Calico's Whisker, counted in packets (last {{w}})", lines: result.lines.length, flows: result.flows ?? 0, w: result.since })
+          : t('resourceGraph.traffic.statusRelay', { defaultValue: '{{lines}} lines from {{flows}} recent flows of the Hubble Relay (last {{w}})', lines: result.lines.length, flows: result.flows ?? 0, w: result.since }),
     })
     if (result.truncated) lines.push({ key: 'truncated', text: t('resourceGraph.traffic.truncated', 'Only the latest flows the Relay returned: older traffic is not drawn.'), warn: true })
     if (result.lines_truncated) lines.push({ key: 'lines', text: t('resourceGraph.traffic.linesTruncated', 'Only the busiest 300 lines are drawn.'), warn: true })

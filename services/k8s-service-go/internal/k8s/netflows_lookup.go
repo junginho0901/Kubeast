@@ -16,7 +16,8 @@ import (
 const maxLookupPods = 5000
 
 // NetflowsWorkloads lists a namespace's pods as the signed-in user, each with its workload as the Hubble
-// agent names it (agentWorkload). Pods without one are left out.
+// agent names it (agentWorkload), keyed by the pod's name and by <generateName>* (Calico's name for the pods
+// of one GenerateName). Pods without one are left out.
 func (s *Service) NetflowsWorkloads(ctx context.Context, namespace string) (map[string]netflows.Workload, error) {
 	cs := s.clientsetCtx(ctx)
 	if cs == nil {
@@ -36,6 +37,7 @@ func netflowsWorkloads(ctx context.Context, cs kubernetes.Interface, namespace s
 		for i := range list.Items {
 			if w, ok := agentWorkload(&list.Items[i]); ok {
 				out[list.Items[i].Name] = w
+				out[list.Items[i].GenerateName+"*"] = w
 			}
 		}
 		n += len(list.Items)
@@ -44,6 +46,27 @@ func netflowsWorkloads(ctx context.Context, cs kubernetes.Interface, namespace s
 		}
 	}
 	return out, nil
+}
+
+// NetflowsPodSet reads a pod as the signed-in user and names its set as Calico does: <generateName>*, or the
+// pod's own name.
+func (s *Service) NetflowsPodSet(ctx context.Context, namespace, pod string) (string, error) {
+	cs := s.clientsetCtx(ctx)
+	if cs == nil {
+		return "", ErrNoUser
+	}
+	return netflowsPodSet(ctx, cs, namespace, pod)
+}
+
+func netflowsPodSet(ctx context.Context, cs kubernetes.Interface, namespace, pod string) (string, error) {
+	p, err := cs.CoreV1().Pods(namespace).Get(ctx, pod, metav1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+	if p.GenerateName == "" {
+		return p.Name, nil
+	}
+	return p.GenerateName + "*", nil
 }
 
 // NetflowsServiceIPs lists the cluster IPs of a namespace's Services as the signed-in user.

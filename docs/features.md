@@ -233,6 +233,7 @@ With `features.networkFlows` on for a cluster, the Pod and workload drawers also
 - The Relay is read as the signed-in user, through the cluster's API server service proxy (`proxy`, the default) or at a TLS address (`https://`). The cluster must let the user create `services/proxy` on the Relay Service; `templates/impersonation-viewer-hubble.yaml` gives that to the Read group.
 - A namespace-limited user sees peers outside their namespaces by namespace and address only, and URL query strings are dropped.
 - Microsoft Retina's Hubble control plane serves the same Relay. Its flows name pods only, so Kubeast names their workloads from the pods it lists as the user. A connection to a Service shows the Service's cluster IP where it left the client.
+- On Calico, the flows come from Whisker (read the same way, as the user), aggregated by Calico: the numbers are packets, and a pod shows the flows of the pods of its ReplicaSet or Job, which Calico names together.
 - The AI tool `network_flows` reads the same connections and points to `network_policy_check` for a drop.
 - What the target cluster needs is in [Cluster requirements §16](cluster-requirements.md#16-hubble-relay-network-flows).
 

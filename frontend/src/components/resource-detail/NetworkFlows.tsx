@@ -60,6 +60,7 @@ export default function NetworkFlows({ kind, namespace, name }: { kind: string; 
   const [dropsOnly, setDropsOnly] = useState(false)
   const [why, setWhy] = useState<NetpolCheckInitial | null>(null)
   const on = networkFlowsEnabledFor(features, currentCluster) && has('resource.networkflow.read')
+  const calico = features?.networkFlows?.providers?.[currentCluster] === 'calico'
   const self: FlowSelf = { kind, namespace, name }
   const flows = useQuery({
     queryKey: ['cluster', 'networkflows', namespace, kind, name, since, dropsOnly],
@@ -103,7 +104,11 @@ export default function NetworkFlows({ kind, namespace, name }: { kind: string; 
       <div className="space-y-2 text-xs" data-testid="netflow-section">
         {!asked ? (
           <div className="flex items-center gap-3">
-            <p className="text-slate-400">{tr('netflows.intro', "Connections the cluster's Hubble Relay saw to and from this {{kind}}. Reading them is recorded in the audit log.", { kind })}</p>
+            <p className="text-slate-400">
+              {calico
+                ? tr('netflows.introCalico', "Connections Calico's Whisker saw to and from this {{kind}}, counted in packets. Calico names the pods of one ReplicaSet or Job together. Reading them is recorded in the audit log.", { kind })
+                : tr('netflows.intro', "Connections the cluster's Hubble Relay saw to and from this {{kind}}. Reading them is recorded in the audit log.", { kind })}
+            </p>
             <button type="button" className="shrink-0 h-7 px-2.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-200 text-[11px] hover:bg-slate-700" onClick={() => setAsked(true)} data-testid="netflow-load">
               {tr('netflows.load', 'Show flows')}
             </button>

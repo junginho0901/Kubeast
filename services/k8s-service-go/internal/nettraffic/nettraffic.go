@@ -134,6 +134,8 @@ type Result struct {
 	Cluster   string   `json:"cluster,omitempty"`
 	Mode      string   `json:"mode,omitempty"`
 	Relay     string   `json:"relay,omitempty"`
+	// Provider is what served the recent flows: hubble or calico.
+	Provider string `json:"provider,omitempty"`
 }
 
 // reserved names Cilium's reserved identities (pkg/identity/numericidentity.go), stable numbers.
@@ -149,6 +151,8 @@ func flowEnd(e netflows.End, names map[string]string) End {
 		return End{Namespace: e.Namespace, Kind: "Pod", Name: e.Pod}
 	case e.Namespace != "":
 		return End{Namespace: e.Namespace}
+	case e.IP == "" && len(e.Names) > 0: // named without an address: Calico's "public network", "private network"
+		return End{Outside: e.Names[0]}
 	}
 	out := reserved[e.Identity]
 	if out == "world" || out == "" {
@@ -234,7 +238,7 @@ func FromFlows(res *netflows.Result, namespaces []string) Result {
 		}
 	}
 	out := Result{Available: true, Source: "relay", Namespaces: namespaces, Since: res.Since, Flows: len(res.Flows),
-		Truncated: res.Truncated, Lost: res.Lost, Redacted: res.Redacted, Cluster: res.Cluster, Mode: res.Mode, Relay: res.Relay}
+		Truncated: res.Truncated, Lost: res.Lost, Redacted: res.Redacted, Cluster: res.Cluster, Mode: res.Mode, Relay: res.Relay, Provider: res.Provider}
 	all := make([]*line, 0, len(order))
 	for _, k := range order {
 		if lines[k].total() > 0 {

@@ -27,6 +27,7 @@ const (
 type fakeLookup struct {
 	workloads map[string]map[string]Workload
 	ips       map[string]map[string]bool
+	sets      map[string]string
 	fail      map[string]bool
 	asked     []string
 }
@@ -37,6 +38,11 @@ func (f *fakeLookup) Workloads(_ context.Context, ns string) (map[string]Workloa
 		return nil, errors.New("forbidden")
 	}
 	return f.workloads[ns], nil
+}
+
+func (f *fakeLookup) PodSet(_ context.Context, ns, pod string) (string, error) {
+	f.asked = append(f.asked, "pod "+ns+"/"+pod)
+	return f.sets[ns+"/"+pod], nil
 }
 
 func (f *fakeLookup) ServiceIPs(_ context.Context, ns string) (map[string]bool, error) {

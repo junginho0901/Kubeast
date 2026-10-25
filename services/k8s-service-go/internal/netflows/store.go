@@ -22,9 +22,9 @@ import (
 var (
 	ErrInvalidRequest = errors.New("invalid flow request")
 	ErrForbidden      = errors.New("forbidden")
-	ErrRelayMissing   = errors.New("no Hubble Relay found")
-	ErrUnavailable    = errors.New("hubble relay unavailable")
-	ErrTimeout        = errors.New("hubble relay did not answer in time")
+	ErrRelayMissing   = errors.New("no flow source found")
+	ErrUnavailable    = errors.New("flow source unavailable")
+	ErrTimeout        = errors.New("flow source did not answer in time")
 )
 
 // Kinds a flow request can name, besides the whole namespace.
@@ -132,6 +132,8 @@ type Request struct {
 	Scope []string
 	// Pods are a workload's current pods, asked for by name as well, for flows that name no workload.
 	Pods []string
+	// PodSet is the pod's set as Calico names it (<generateName>*): a Pod read on Calico reads its set's flows.
+	PodSet string
 	// Lookup fills in what the flows leave out (nil: nothing).
 	Lookup Lookup
 }
@@ -228,7 +230,7 @@ func (r Request) side(e End) bool {
 	}
 	switch r.Kind {
 	case "Pod":
-		return e.Pod == r.Name
+		return e.Pod == r.Name || r.PodSet != "" && e.Pod == r.PodSet
 	default:
 		return e.Workload != nil && e.Workload.Kind == r.Kind && e.Workload.Name == r.Name
 	}
@@ -268,8 +270,10 @@ func (r Request) redact(e *End) bool {
 
 // Result is the answer of Query, newest flow first.
 type Result struct {
-	Cluster   string `json:"cluster"`
-	Mode      string `json:"mode"`
+	Cluster string `json:"cluster"`
+	Mode    string `json:"mode"`
+	// Provider is what served the flows: hubble (a Hubble Relay) or calico (Calico's Whisker, at Relay).
+	Provider  string `json:"provider,omitempty"`
 	Relay     string `json:"relay"`
 	Namespace string `json:"namespace"`
 	Kind      string `json:"kind,omitempty"`
@@ -340,7 +344,12 @@ func group(flows []Flow) []Group {
 			g.Replies++
 			continue
 		}
-		g.Count++
+		if f.Count > 0 { // an aggregated record (Calico)
+			g.Count += f.Count
+			g.Replies += f.ReplyCount
+		} else {
+			g.Count++
+		}
 		if f.Direction != "" && !contains(g.Observed, f.Direction) {
 			g.Observed = append(g.Observed, f.Direction)
 			sort.Strings(g.Observed)
@@ -441,14 +450,47 @@ func (s *Store) Query(ctx context.Context, client *http.Client, url string, req 
 	if err := grpcStatus(resp.Trailer); err != nil {
 		return nil, err
 	}
+	truncated := len(flows) >= req.Limit
+	for i, j := 0, len(flows)-1; i < j; i, j = i+1, j-1 { // the Relay answers oldest first
+		flows[i], flows[j] = flows[j], flows[i]
+	}
+	res := s.keep(ctx, req, flows, now, truncated)
+	res.Lost = lost
+	return res, nil
+}
+
+// Read asks the target's flow source: a Hubble Relay's GetFlows, or Calico's Whisker.
+func (s *Store) Read(ctx context.Context, t Target, client *http.Client, url string, req Request, now time.Time) (*Result, error) {
+	var res *Result
+	var err error
+	if t.Calico() {
+		res, err = s.queryWhisker(ctx, client, url, req, now)
+	} else {
+		res, err = s.Query(ctx, client, url, req, now)
+	}
+	if res != nil {
+		res.Provider = SourceHubble
+		if t.Calico() {
+			res.Provider = SourceCalico
+		}
+	}
+	return res, err
+}
+
+// keep fills in what the flows (newest first) leave out, keeps those of the window that the request asked for,
+// up to its limit, with the peers outside the reader's scope hidden, and folds them into connections.
+func (s *Store) keep(ctx context.Context, req Request, flows []Flow, now time.Time, truncated bool) *Result {
 	fill(ctx, req.Lookup, flows)
 	cutoff := now.Add(-req.Since)
 	out := []Flow{}
 	redacted := false
-	for i := len(flows) - 1; i >= 0; i-- {
-		f := flows[i]
+	for _, f := range flows {
 		if f.Time.Before(cutoff) || !req.matches(f) {
 			continue
+		}
+		if len(out) == req.Limit {
+			truncated = true
+			break
 		}
 		if req.redact(&f.Source) {
 			redacted = true
@@ -460,8 +502,8 @@ func (s *Store) Query(ctx context.Context, client *http.Client, url string, req 
 	}
 	return &Result{
 		Namespace: req.Namespace, Kind: req.Kind, Name: req.Name, Since: req.Since.String(),
-		Flows: out, Lost: lost, Truncated: len(flows) >= req.Limit, Redacted: redacted, Groups: group(out),
-	}, nil
+		Flows: out, Truncated: truncated, Redacted: redacted, Groups: group(out),
+	}
 }
 
 func statusError(resp *http.Response) error {
@@ -471,7 +513,7 @@ func statusError(resp *http.Response) error {
 	case http.StatusUnauthorized, http.StatusForbidden:
 		return fmt.Errorf("%w: the cluster refused the Relay read (%d): %s", ErrForbidden, resp.StatusCode, detail)
 	case http.StatusNotFound:
-		return fmt.Errorf("%w: %s", ErrRelayMissing, detail)
+		return fmt.Errorf("%w: no Hubble Relay Service there (404): %s", ErrRelayMissing, detail)
 	case http.StatusServiceUnavailable, http.StatusBadGateway:
 		return fmt.Errorf("%w (%d): %s — the API server reaches the Relay over HTTP/2 only with Relay TLS on (hubble.relay.tls.server.enabled=true)", ErrUnavailable, resp.StatusCode, detail)
 	}

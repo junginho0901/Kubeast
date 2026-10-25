@@ -470,6 +470,33 @@ For the drawers' "Recent Flows" and the AI tool `network_flows` (`features.netwo
   - Retina's flows name the pod but not its workload. Kubeast names it as Cilium does (the Deployment of a ReplicaSet's pods, the CronJob of a Job's), from the pods it lists as the user (`list` on `pods`, which `view` has). For a workload's flows it also asks the Relay for the workload's current pods by name.
   - Retina sees a pod's packet to a Service before kube-proxy sends it on, so the destination is the Service's cluster IP. Kubeast lists the Services as the user and marks that end (`service_address`).
   - A NetworkPolicy drop is DROPPED only where Retina sees the drop. On kind's kindnet, which decides policy in user space, a refused connection is FORWARDED where it leaves the client and gets no reply.
+- **Calico** (3.33.0, Tigera operator 1.44.0, with the operator's `Goldmane` and `Whisker` resources): an entry `calico` (or `calico:<namespace>/<service>:<port>`) reads Whisker's flow list, `GET /api/v1/namespaces/calico-system/services/https:whisker:8443/proxy/whisker-backend/flows`, as the signed-in user. Goldmane itself requires client certificates, so Kubeast does not call it.
+  - **Let the API server reach Whisker.** The operator's policy `calico-system.whisker` admits nothing, and Whisker has no authentication of its own, so do not open it wider than the API server. One Calico policy in the `calico-system` tier admits the endpoints of `default/kubernetes` (`deploy/kind/calico-whisker-apiserver.yaml`):
+
+    ```yaml
+    apiVersion: projectcalico.org/v3
+    kind: NetworkPolicy
+    metadata:
+      name: calico-system.kubeast-whisker-apiserver
+      namespace: calico-system
+    spec:
+      tier: calico-system
+      order: 0
+      selector: k8s-app == 'whisker'
+      types: [Ingress]
+      ingress:
+        - action: Allow
+          protocol: TCP
+          source:
+            services: {name: kubernetes, namespace: default}
+          destination:
+            ports: [8443]
+    ```
+
+    Without it the read gives 502 with the API server's timeout. On a single-node cluster it may work anyway, because Calico always lets a node reach its own pods.
+  - **Permission**: `get` on `services/proxy` named `https:whisker:8443` in `calico-system`. Render `templates/impersonation-viewer-whisker.yaml` with `features.networkFlows.whisker=calico-system/whisker:8443` for each such cluster. The template renders nothing while that value is empty.
+  - Calico reports flows aggregated over the window, per pair of pod sets (`client-7bc956576c-*`: the pods of one GenerateName), port, action and the side that reported. Kubeast counts packets, names each set's workload from the pods it lists as the user, and shows a Pod drawer the flows of its set.
+  - A denied connection is DROPPED (`POLICY_DENIED`) where Calico reports it. The policy that allowed or denied it is named when it has a name; a deny at the end of a tier has none.
 - **`proxy` mode (default)**: Kubeast sends `POST /api/v1/namespaces/<ns>/services/https:<service>:<port>/proxy/observer.Observer/GetFlows` to that cluster's API server as the signed-in user. Nothing new is opened on the network.
   - The Relay Service is `features.networkFlows.relay` (default `kube-system/hubble-relay:443`), or the one an entry names (`proxy:<namespace>/<service>:<port>`).
   - **The Relay must serve TLS** (`hubble.relay.tls.server.enabled=true`): the API server speaks HTTP/2 to a backend only over TLS, and gRPC needs HTTP/2. A plaintext Relay gives 502 or 503, and the message names that setting.
@@ -518,7 +545,7 @@ For the drawers' "Network Drops" and the AI tool `network_drops`, the cluster's 
 
 The Resource Graph's Traffic and Both views draw lines from one of two sources. The switch is shown when the cluster has at least one and the user has `resource.networkflow.read`.
 
-- **Recent flows**: the Hubble Relay of §16, with the same permission. One read covers all the chosen namespaces (Hubble's pod filter takes several `<namespace>/` prefixes).
+- **Recent flows**: the Hubble Relay of §16, with the same permission. One read covers all the chosen namespaces (Hubble's pod filter takes several `<namespace>/` prefixes). On Calico it is Whisker (§16): two lists, one per side, and the numbers are packets.
   - A connection is allowed where it arrived: seen at the destination's ingress, answered, or going outside the pods. One seen only leaving towards a pod is not drawn as allowed; when NetworkPolicy dropped it at the destination, that drop draws the line.
   - Up to `features.networkFlows.graphMaxFlows` flows (2,000, at most 10,000) from the last `defaultRange` (15 minutes). The Relay keeps a ring of flows on each node (Cilium `hubble.eventBufferCapacity`, 4,095 by default), so a busy cluster shows a shorter past; the graph says when the read reached the limit.
   - Measured on the development cluster: a read of 200 flows took about 12 ms and 100 KB; the Relay used 31 MiB.
@@ -562,6 +589,7 @@ The Resource Graph's Traffic and Both views draw lines from one of two sources. 
 | Argo CD | 3.5.6 (core install) | 10-21, development cluster 2 (`scripts/kind-argocd.sh`). An Application syncs the podinfo chart. Checked: tracking annotation, 409, audit row, drawer badge, `gitops_status` (e2e `argocd-real.spec.ts`) |
 | Cilium (Hubble Relay) | 1.20.4 | 10-24, a kind cluster of its own without the default CNI (`scripts/kind-cilium.sh`, Relay TLS on). Read in `proxy` mode as a Read user: client → web on port 80 is FORWARDED with the NetworkPolicy `web-only-client` in `ingress_allowed_by` and the replies folded in, and stranger → web is DROPPED with `POLICY_DENIED` at ingress, as the policy says. A namespace-limited user gets 403 from the cluster; the drawer's "Why?" names the rule; MCP gives the same groups (e2e `network-flows.spec.ts`). 10-25: the `drop` metric with the labels of §17, scraped by Prometheus v3.15.0 on that cluster (`deploy/kind/cilium-prometheus.yaml`): the drawer and `network_drops` give the peers, reasons and counts of a direct query, and a namespace-limited user gets 403 from the cluster (e2e `network-drops.spec.ts`) |
 | Microsoft Retina (Hubble control plane) | 1.3.0 | 10-25, a kind cluster with kindnet (`scripts/kind-retina.sh`, `deploy/kind/retina-values.yaml`; the 1.3.1 images were not published). Read in `proxy` mode: a Deployment's recent flows find its pods by name, with the workloads named from the pods; client → web is one line, counted at web's ingress, not at the Service's cluster IP; with the pod labels, the metric lines equal a direct query of the SYNs at web's ingress (e2e `network-retina.spec.ts`). Policy drops were not reported as drops there (kindnet) |
+| Calico (Goldmane, Whisker) | 3.33.0 (Tigera operator 1.44.0) | 10-25, a kind cluster of a control plane and a worker (`scripts/kind-calico.sh`), Whisker on the worker. Without the policy above the API server proxy timed out; with it, read in `proxy` mode: client → web allowed by the NetworkPolicy `web-only-client`, stranger → web denied at web, a Pod drawer showing its set, the Resource Graph's lines with stranger → web dropped; a pod in another namespace still could not reach Whisker (e2e `network-calico.spec.ts`) |
 | GPU, DRA, VPA, Gateway API, ingress-nginx | — | Based on the code, not verified on a real cluster |
 
 On kind nodes the root filesystem is not picked up as `mountpoint="/"`, so disk utilization is empty, and local-path volumes have no volume stats. Real nodes and CSI drivers do produce these values.

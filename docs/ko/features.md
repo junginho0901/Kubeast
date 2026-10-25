@@ -235,6 +235,7 @@ Pod·워크로드 드로어에 "NetworkPolicy" 칸이 있습니다.
   - 클러스터가 그 사람에게 Relay Service의 `services/proxy` create를 허용해야 합니다. `templates/impersonation-viewer-hubble.yaml`이 Read 그룹에 이 권한을 줍니다.
 - 네임스페이스가 정해진 사용자에게는 자기 네임스페이스 밖의 상대가 네임스페이스와 주소로만 보이고, URL의 쿼리 문자열은 지웁니다.
 - Microsoft Retina의 Hubble 컨트롤 플레인도 같은 Relay를 제공합니다. 그 흐름에는 파드 이름만 있어, Kubeast가 로그인한 사람의 권한으로 파드 목록을 읽어 워크로드를 붙입니다. Service로 가는 연결은 클라이언트에서 나간 곳에서 Service의 cluster IP로 보입니다.
+- Calico에서는 흐름을 Whisker에서 읽고(같은 방식, 로그인한 사람의 신원), Calico가 합쳐서 줍니다. 수는 패킷이고, 파드에는 Calico가 함께 나타내는 같은 ReplicaSet·Job 파드들의 흐름이 보입니다.
 - AI 도구 `network_flows`도 같은 연결을 읽고, 막힌 연결이면 `network_policy_check`로 이어 보라고 알려 줍니다.
 - 대상 클러스터에 필요한 것은 [클러스터 요구사항 §16](cluster-requirements.md#16-hubble-relay-네트워크-흐름)에 있습니다.
 

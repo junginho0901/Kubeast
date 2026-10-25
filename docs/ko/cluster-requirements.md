@@ -487,6 +487,33 @@ service:
   - Retina의 흐름은 파드 이름만 있고 워크로드가 없습니다. Kubeast가 로그인한 사람의 신원으로 파드 목록을 읽어(`pods` `list`, `view`에 있음) Cilium과 같은 규칙으로 워크로드를 붙입니다(ReplicaSet 파드는 Deployment, Job 파드는 CronJob). 워크로드의 흐름을 읽을 때는 그 워크로드의 지금 파드도 이름으로 Relay에 함께 요청합니다.
   - Retina는 파드가 Service로 보내는 패킷을 kube-proxy가 넘기기 전에 보므로, 도착지가 Service의 cluster IP입니다. Kubeast가 로그인한 사람의 신원으로 Service 목록을 읽어 그 끝에 표시합니다(`service_address`).
   - NetworkPolicy 차단은 Retina가 그 차단을 보는 곳에서만 DROPPED입니다. kind의 kindnet은 정책을 사용자 공간에서 판정하므로, 거부된 연결이 클라이언트에서 나갈 때 FORWARDED이고 응답이 없을 뿐입니다.
+- **Calico**(3.33.0, Tigera 운영자 1.44.0, 운영자의 `Goldmane`·`Whisker` 리소스를 켠 경우): `calico`(또는 `calico:<namespace>/<service>:<port>`) 항목은 Whisker의 흐름 목록 `GET /api/v1/namespaces/calico-system/services/https:whisker:8443/proxy/whisker-backend/flows`를 로그인한 사람의 신원으로 읽습니다. Goldmane 자체는 클라이언트 인증서를 요구하므로 Kubeast는 부르지 않습니다.
+  - **API 서버가 Whisker에 닿게 합니다.** 운영자의 정책 `calico-system.whisker`는 아무것도 받지 않고, Whisker에는 자체 인증이 없으므로 API 서버보다 넓게 열지 않습니다. `calico-system` 계층에 `default/kubernetes`의 엔드포인트만 받는 Calico 정책 하나를 둡니다(`deploy/kind/calico-whisker-apiserver.yaml`):
+
+    ```yaml
+    apiVersion: projectcalico.org/v3
+    kind: NetworkPolicy
+    metadata:
+      name: calico-system.kubeast-whisker-apiserver
+      namespace: calico-system
+    spec:
+      tier: calico-system
+      order: 0
+      selector: k8s-app == 'whisker'
+      types: [Ingress]
+      ingress:
+        - action: Allow
+          protocol: TCP
+          source:
+            services: {name: kubernetes, namespace: default}
+          destination:
+            ports: [8443]
+    ```
+
+    이 정책이 없으면 API 서버의 시간 초과와 함께 502가 됩니다. 노드가 하나인 클러스터에서는 없어도 될 수 있는데, Calico는 노드가 자기 파드에 닿는 것을 항상 허용하기 때문입니다.
+  - **권한**: `calico-system`에서 이름이 `https:whisker:8443`인 `services/proxy`의 `get`. 그런 클러스터마다 `features.networkFlows.whisker=calico-system/whisker:8443`로 `templates/impersonation-viewer-whisker.yaml`을 렌더합니다. 이 값이 비어 있으면 템플릿은 아무것도 만들지 않습니다.
+  - Calico는 창 안의 흐름을 파드 묶음(`client-7bc956576c-*`: GenerateName이 같은 파드들) 쌍·포트·판정·보고한 쪽마다 합쳐서 줍니다. Kubeast는 패킷을 세고, 로그인한 사람의 신원으로 파드 목록을 읽어 묶음의 워크로드를 붙이며, Pod 드로어에는 그 묶음의 흐름을 보여 줍니다.
+  - 거부된 연결은 Calico가 보고한 곳에서 DROPPED(`POLICY_DENIED`)입니다. 허용·거부한 정책은 이름이 있을 때 나오고, 계층 끝의 거부에는 이름이 없습니다.
 - **`proxy` 모드(기본값)**: Kubeast가 그 클러스터의 API 서버에 로그인한 사람의 신원으로 `POST /api/v1/namespaces/<ns>/services/https:<service>:<port>/proxy/observer.Observer/GetFlows`를 보냅니다. 네트워크에서 새로 여는 것은 없습니다.
   - Relay Service는 `features.networkFlows.relay`(기본 `kube-system/hubble-relay:443`)이거나, 항목에 적은 것(`proxy:<namespace>/<service>:<port>`)입니다.
   - **Relay가 TLS로 서비스해야 합니다**(`hubble.relay.tls.server.enabled=true`). API 서버는 백엔드와 TLS일 때만 HTTP/2로 말하고, gRPC에는 HTTP/2가 필요합니다. 평문 Relay면 502나 503이 오고, 메시지에 이 설정 이름이 나옵니다.
@@ -535,7 +562,7 @@ service:
 
 Resource Graph의 통신·둘 다 보기는 두 출처 중 하나로 선을 그립니다. 클러스터에 하나라도 있고 사용자에게 `resource.networkflow.read`가 있으면 전환이 보입니다.
 
-- **최근 흐름**: §16의 Hubble Relay이고 권한도 같습니다. 고른 네임스페이스 전체를 한 번에 읽습니다(Hubble 파드 필터에 `<네임스페이스>/` 접두어를 여러 개 넣음).
+- **최근 흐름**: §16의 Hubble Relay이고 권한도 같습니다. 고른 네임스페이스 전체를 한 번에 읽습니다(Hubble 파드 필터에 `<네임스페이스>/` 접두어를 여러 개 넣음). Calico에서는 Whisker(§16)이고, 출발·도착 쪽으로 목록을 두 번 읽으며 수는 패킷입니다.
   - 연결은 도착한 곳에서 허용으로 셉니다: 도착 쪽 ingress에서 보였거나, 응답이 왔거나, 파드 밖으로 가는 경우. 파드로 나가는 것만 보인 연결은 허용으로 그리지 않고, NetworkPolicy가 도착 쪽에서 막았다면 그 차단이 선을 그립니다.
   - 최근 `defaultRange`(15분) 동안의 흐름을 최대 `features.networkFlows.graphMaxFlows`개(2,000, 상한 10,000) 읽습니다. Relay는 노드마다 흐름을 고리 모양으로 보관하므로(Cilium `hubble.eventBufferCapacity`, 기본 4,095) 바쁜 클러스터는 더 짧은 과거만 보입니다. 읽기가 상한에 닿으면 그래프가 알려 줍니다.
   - 개발 클러스터에서 잰 값: 흐름 200개 읽기에 약 12 ms·100 KB, Relay 31 MiB.
@@ -579,6 +606,7 @@ Resource Graph의 통신·둘 다 보기는 두 출처 중 하나로 선을 그�
 | Argo CD | 3.5.6(core 설치) | 10-21, 개발용 2번 클러스터(`scripts/kind-argocd.sh`). Application이 podinfo 차트를 동기화하고, 추적 어노테이션·409·감사 행·드로어 배지·`gitops_status`를 확인했습니다(e2e `argocd-real.spec.ts`) |
 | Cilium(Hubble Relay) | 1.20.4 | 10-24, 기본 CNI 없이 만든 별도 kind 클러스터(`scripts/kind-cilium.sh`, Relay TLS 켬). Read 사용자로 `proxy` 모드에서 읽었습니다 — client → web 80 포트는 FORWARDED이고 `ingress_allowed_by`에 NetworkPolicy `web-only-client`가 있으며 응답이 합쳐졌고, stranger → web은 정책대로 ingress에서 `POLICY_DENIED`로 DROPPED였습니다. 네임스페이스가 정해진 사용자는 클러스터에서 403을 받고, 드로어의 "왜?"가 규칙을 알려 주며, MCP도 같은 묶음을 줍니다(e2e `network-flows.spec.ts`). 10-25: 같은 클러스터에서 §17 레이블로 켠 `drop` 지표를 Prometheus v3.15.0(`deploy/kind/cilium-prometheus.yaml`)이 수집합니다 — 드로어와 `network_drops`가 직접 질의와 같은 상대·사유·수를 주고, 네임스페이스가 정해진 사용자는 클러스터에서 403을 받습니다(e2e `network-drops.spec.ts`) |
 | Microsoft Retina(Hubble 컨트롤 플레인) | 1.3.0 | 10-25, kindnet kind 클러스터(`scripts/kind-retina.sh`, `deploy/kind/retina-values.yaml`, 1.3.1 이미지는 공개되지 않음). `proxy` 모드로 읽음: Deployment의 최근 흐름이 파드 이름으로 찾아지고 워크로드는 파드에서 붙음 · client → web은 Service cluster IP가 아니라 web의 ingress에서 센 선 하나 · 파드 레이블을 더한 지표 선이 web ingress의 SYN 직접 질의와 같음(e2e `network-retina.spec.ts`). 그곳(kindnet)에서는 정책 차단이 차단으로 오지 않음 |
+| Calico(Goldmane·Whisker) | 3.33.0(Tigera 운영자 1.44.0) | 10-25, control plane + worker kind 클러스터(`scripts/kind-calico.sh`), Whisker는 워커. 위 정책이 없으면 API 서버 프록시가 시간 초과, 있으면 `proxy` 모드로 읽음: client → web은 NetworkPolicy `web-only-client`가 허용 · stranger → web은 web에서 거부 · Pod 드로어는 그 묶음 · Resource Graph 선에 stranger → web 차단 · 다른 네임스페이스 파드는 여전히 Whisker에 못 닿음(e2e `network-calico.spec.ts`) |
 | GPU·DRA·VPA·Gateway API·ingress-nginx | — | 코드 기준이며 실제 클러스터에서는 검증하지 않았습니다 |
 
 kind 노드에서는 루트 파일시스템이 `mountpoint="/"`로 잡히지 않아 디스크 사용률이 비어 있고, local-path 볼륨에는 볼륨 통계가 없습니다. 실제 노드와 CSI 드라이버에서는 이 값이 나옵니다.

@@ -93,9 +93,11 @@ export function TrafficPanel({ line, result, onClose, onWhy, onOpen }: {
         </div>
       )}
       <p className="mt-3 text-slate-500">
-        {relay
-          ? tr('resourceGraph.traffic.aboutRelay', "From the cluster's Hubble Relay: the latest flows it keeps, read once. Each end's drawer shows its recent flows.")
-          : tr('resourceGraph.traffic.aboutMetrics', "From the Hubble metrics in the cluster's Prometheus: TCP connections opened (SYN) and dropped packets. UDP traffic such as DNS is not counted.")}
+        {!relay
+          ? tr('resourceGraph.traffic.aboutMetrics', "From the Hubble metrics in the cluster's Prometheus: TCP connections opened (SYN) and dropped packets. UDP traffic such as DNS is not counted.")
+          : result.provider === 'calico'
+            ? tr('resourceGraph.traffic.aboutCalico', "From Calico's Whisker: the flows Calico's Goldmane aggregated, read once and counted in packets. Each end's drawer shows its recent flows.")
+            : tr('resourceGraph.traffic.aboutRelay', "From the cluster's Hubble Relay: the latest flows it keeps, read once. Each end's drawer shows its recent flows.")}
       </p>
     </div>
   )

@@ -34,6 +34,10 @@ func (l *retinaLookup) Workloads(_ context.Context, ns string) (map[string]netfl
 	return nil, errors.New("forbidden")
 }
 
+func (l *retinaLookup) PodSet(context.Context, string, string) (string, error) {
+	return "", errors.New("not used on Retina")
+}
+
 func (l *retinaLookup) ServiceIPs(_ context.Context, ns string) (map[string]bool, error) {
 	l.asked = append(l.asked, "services "+ns)
 	return map[string]map[string]bool{"flows-demo": {"10.96.228.69": true}, "kube-system": {"10.96.0.10": true}}[ns], nil

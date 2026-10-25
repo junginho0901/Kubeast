@@ -1821,6 +1821,7 @@
   },
   "netflows": {
     "intro": "클러스터의 Hubble Relay가 본 이 {{kind}}의 들어오고 나가는 연결입니다. 읽으면 감사 로그에 남습니다.",
+    "introCalico": "Calico의 Whisker가 본 이 {{kind}}의 들어오고 나가는 연결이며, 수는 패킷입니다. Calico는 한 ReplicaSet·Job의 파드를 묶어서 나타냅니다. 읽으면 감사 로그에 남습니다.",
     "load": "흐름 보기",
     "window": "최근 {{w}}",
     "all": "전체",
@@ -3161,6 +3162,7 @@
       "connections": "최근 연결",
       "flowsCount": "흐름 {{n}}개",
       "aboutRelay": "클러스터의 Hubble Relay가 가진 최근 흐름을 한 번 읽은 것입니다. 각 끝의 드로어에서 최근 흐름을 더 볼 수 있습니다.",
+      "aboutCalico": "Calico의 Whisker에서 Calico Goldmane이 모은 흐름을 한 번 읽은 것이며, 수는 패킷입니다. 각 끝의 드로어에서 최근 흐름을 더 볼 수 있습니다.",
       "aboutMetrics": "클러스터 Prometheus의 Hubble 지표입니다: 연 TCP 연결(SYN)과 차단된 패킷. DNS 같은 UDP 통신은 세지 않습니다.",
       "unavailable": {
         "no_prometheus": "이 클러스터에는 Kubeast가 읽을 수 있는 Prometheus가 없습니다.",
@@ -3177,6 +3179,7 @@
         "unitMetrics": "숫자 = TCP 연결 수 · ✕ 차단된 패킷"
       },
       "statusRelay": "Hubble Relay의 최근 흐름 {{flows}}개에서 선 {{lines}}개(최근 {{w}})",
+      "statusCalico": "Calico Whisker의 최근 흐름 기록 {{flows}}개에서 선 {{lines}}개, 수는 패킷(최근 {{w}})",
       "statusMetrics": "Hubble 지표에서 선 {{lines}}개(최근 {{w}})",
       "truncated": "Relay가 돌려준 최근 흐름만 그립니다. 그보다 오래된 통신은 빠집니다.",
       "linesTruncated": "가장 많이 쓰인 선 300개만 그립니다.",

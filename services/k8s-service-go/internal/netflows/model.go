@@ -17,6 +17,10 @@ type Flow struct {
 	Policies    *Policies `json:"policies,omitempty"`
 	L7          *L7       `json:"l7,omitempty"`
 	Node        string    `json:"node,omitempty"`
+	// Count and ReplyCount: the packets an aggregated record stands for (Calico), sent and back; 0 for one
+	// Hubble event.
+	Count      int `json:"count,omitempty"`
+	ReplyCount int `json:"reply_count,omitempty"`
 }
 
 // End is one side of a flow: a pod (namespace, name, owner) or an address.

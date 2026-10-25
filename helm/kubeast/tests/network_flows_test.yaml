@@ -5,6 +5,7 @@ templates:
   - networkpolicy.yaml
   - secret.yaml
   - impersonation-viewer-hubble.yaml
+  - impersonation-viewer-whisker.yaml
 tests:
   - it: is off by default — no settings, no mount, no RBAC
     asserts:
@@ -102,14 +103,60 @@ tests:
       - failedTemplate:
           errorPattern: "features.networkFlows needs clusters"
         template: deployments.yaml
-  - it: refuses an entry that is not proxy or https
+  - it: refuses an entry that is not proxy, https or calico
     set:
       features.networkFlows.enabled: true
       features.networkFlows.clusters: {self: "http://relay:4245"}
     asserts:
       - failedTemplate:
-          errorPattern: "is not proxy, proxy:<namespace>/<service>:<port> or https://<host>:<port>"
+          errorPattern: "is not proxy, proxy:<namespace>/<service>:<port>, https://<host>:<port>, calico or calico:<namespace>/<service>:<port>"
         template: deployments.yaml
+  - it: renders calico clusters, and no Whisker RBAC in the release until whisker names one
+    set:
+      features.networkFlows.enabled: true
+      features.networkFlows.clusters: {a: calico, b: "calico:tigera/whisker2:9443"}
+    asserts:
+      - equal:
+          path: data.NETWORK_FLOWS_CLUSTERS
+          value: "a=calico,b=calico:tigera/whisker2:9443"
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - hasDocuments:
+          count: 0
+        template: impersonation-viewer-whisker.yaml
+  - it: renders the Whisker Role — get on its TLS port only — when whisker names it
+    set:
+      features.networkFlows.enabled: true
+      features.networkFlows.clusters: {a: calico}
+      features.networkFlows.whisker: calico-system/whisker:8443
+    asserts:
+      - hasDocuments:
+          count: 2
+        template: impersonation-viewer-whisker.yaml
+      - equal:
+          path: rules
+          value: [{apiGroups: [""], resources: ["services/proxy"], verbs: ["get"], resourceNames: ["https:whisker:8443"]}]
+        template: impersonation-viewer-whisker.yaml
+        documentIndex: 0
+      - equal:
+          path: metadata.namespace
+          value: calico-system
+        template: impersonation-viewer-whisker.yaml
+        documentIndex: 0
+      - equal:
+          path: subjects
+          value: [{apiGroup: rbac.authorization.k8s.io, kind: Group, name: "kubeast:viewer"}]
+        template: impersonation-viewer-whisker.yaml
+        documentIndex: 1
+  - it: refuses a whisker that is not namespace/service:port
+    set:
+      features.networkFlows.enabled: true
+      features.networkFlows.clusters: {a: calico}
+      features.networkFlows.whisker: whisker
+    asserts:
+      - failedTemplate:
+          errorPattern: "features.networkFlows.whisker \"whisker\" is not <namespace>/<service>:<port>"
+        template: impersonation-viewer-whisker.yaml
   - it: refuses a relay that is not namespace/service:port
     set:
       features.networkFlows.enabled: true

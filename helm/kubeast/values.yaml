@@ -892,10 +892,17 @@ features:
   #   proxy:<namespace>/<service>:<port> — the same at another Relay Service;
   #   https://<host>:<port> — the Relay at that address over TLS: tls.existingSecret
   #     holds ca.crt (and tls.crt, tls.key with tls.clientCertificate for mTLS);
-  #     add the address to egressCIDRs.
+  #     add the address to egressCIDRs;
+  #   calico — Calico's Whisker backend (calico-system/whisker:8443, the
+  #     operator's) through that cluster's API server service proxy as the
+  #     signed-in user; the cluster must let the API server reach Whisker
+  #     (docs/cluster-requirements.md §16);
+  #   calico:<namespace>/<service>:<port> — the same at another Whisker Service.
   # Who may read: holders of resource.networkflow.read (in the Read role)
   # whom the cluster lets create services/proxy on the Relay Service — render
-  # templates/impersonation-viewer-hubble.yaml for each such cluster. A
+  # templates/impersonation-viewer-hubble.yaml for each such cluster — or get
+  # it on the Whisker Service: templates/impersonation-viewer-whisker.yaml with
+  # whisker = that Service (left empty, it renders nothing). A
   # namespace-limited reader sees peers outside their namespaces by namespace
   # and address only; URL query strings are dropped. Audited as
   # k8s.networkflows.query. The Resource Graph's traffic lines read the
@@ -904,6 +911,7 @@ features:
     enabled: false
     clusters: {}
     relay: kube-system/hubble-relay:443
+    whisker: ""
     tls:
       existingSecret: ""
       clientCertificate: false

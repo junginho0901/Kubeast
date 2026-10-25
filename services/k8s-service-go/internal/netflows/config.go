@@ -34,13 +34,47 @@ func (r Relay) ProxyPath() string {
 
 func (r Relay) String() string { return fmt.Sprintf("%s/%s:%d", r.Namespace, r.Service, r.Port) }
 
-const getFlowsPath = "/observer.Observer/GetFlows"
+const (
+	getFlowsPath = "/observer.Observer/GetFlows"
+	// whiskerFlowsPath is the Whisker backend's flow list behind Whisker's nginx (tigera-operator pkg/render/whisker).
+	whiskerFlowsPath = "/whisker-backend/flows"
+)
 
-// Target is how one cluster's Relay is reached.
+// Sources of flows: a Hubble Relay (Cilium, Retina), or Calico's Whisker backend, which reads Goldmane.
+const (
+	SourceHubble = "hubble"
+	SourceCalico = "calico"
+)
+
+// DefaultWhisker is the Whisker Service the Tigera operator creates.
+var DefaultWhisker = Relay{Namespace: "calico-system", Service: "whisker", Port: 8443}
+
+// Target is how one cluster's flows are reached.
 type Target struct {
-	Mode  string // proxy or address
-	Relay Relay
-	URL   string // mode address: https://host:port
+	Mode string // proxy or address
+	// Source is what Relay names: a Hubble Relay ("" or SourceHubble) or Calico's Whisker (SourceCalico).
+	Source string
+	Relay  Relay
+	URL    string // mode address: https://host:port
+}
+
+// Calico tells a Whisker target from a Hubble Relay.
+func (t Target) Calico() bool { return t.Source == SourceCalico }
+
+// ProxyVerb is the services/proxy verb the read takes: a GetFlows POST, or a GET of Whisker's flows.
+func (t Target) ProxyVerb() string {
+	if t.Calico() {
+		return "get"
+	}
+	return "create"
+}
+
+// What names the flow source for messages.
+func (t Target) What() string {
+	if t.Calico() {
+		return "Calico's Whisker"
+	}
+	return "the Hubble Relay"
 }
 
 // Config is the network flows configuration (chart features.networkFlows).
@@ -105,8 +139,9 @@ func parseRelay(s string) (Relay, error) {
 	return Relay{Namespace: ns, Service: svc, Port: p}, nil
 }
 
-// parseClusters reads "id=proxy", "id=proxy:namespace/service:port" and
-// "id=https://host:port", comma-separated.
+// parseClusters reads "id=proxy", "id=proxy:namespace/service:port",
+// "id=https://host:port", "id=calico" and "id=calico:namespace/service:port",
+// comma-separated.
 func parseClusters(raw string, relay Relay) map[string]Target {
 	out := map[string]Target{}
 	for _, part := range strings.Split(raw, ",") {
@@ -128,8 +163,17 @@ func parseClusters(raw string, relay Relay) map[string]Target {
 			out[id] = Target{Mode: "proxy", Relay: r}
 		case strings.HasPrefix(value, "https://"):
 			out[id] = Target{Mode: "address", Relay: relay, URL: strings.TrimRight(value, "/")}
+		case value == "calico":
+			out[id] = Target{Mode: "proxy", Source: SourceCalico, Relay: DefaultWhisker}
+		case strings.HasPrefix(value, "calico:"):
+			r, err := parseRelay(strings.TrimPrefix(value, "calico:"))
+			if err != nil {
+				out[id] = Target{Mode: "invalid: " + err.Error()}
+				continue
+			}
+			out[id] = Target{Mode: "proxy", Source: SourceCalico, Relay: r}
 		default:
-			out[id] = Target{Mode: "invalid: " + fmt.Sprintf("%q is not proxy, proxy:namespace/service:port or an https:// address", value)}
+			out[id] = Target{Mode: "invalid: " + fmt.Sprintf("%q is not proxy, proxy:namespace/service:port, an https:// address, calico or calico:namespace/service:port", value)}
 		}
 	}
 	return out
@@ -187,8 +231,8 @@ func (c Config) ClusterIDs() []string {
 	return ids
 }
 
-// Endpoint is the GetFlows URL: through the API server at apiHost (mode
-// proxy) or at the registered address.
+// Endpoint is the GetFlows URL (Whisker's flow list for Calico): through the
+// API server at apiHost (mode proxy) or at the registered address.
 func (t Target) Endpoint(apiHost string) string {
 	if t.Mode == "address" {
 		return t.URL + getFlowsPath
@@ -196,6 +240,9 @@ func (t Target) Endpoint(apiHost string) string {
 	host := strings.TrimRight(apiHost, "/")
 	if !strings.Contains(host, "://") {
 		host = "https://" + host
+	}
+	if t.Calico() {
+		return host + "/api/v1/namespaces/" + t.Relay.Namespace + "/services/" + t.Relay.ProxyName() + "/proxy" + whiskerFlowsPath
 	}
 	return host + t.Relay.ProxyPath()
 }

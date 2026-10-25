@@ -94,7 +94,7 @@ func TestNetworkTrafficRefusals(t *testing.T) {
 	for _, c := range cases {
 		f := newNetflowsFixture(t, 5)
 		allowed := c.canI
-		f.h.netflowsCanI = func(context.Context, netflows.Relay) (bool, error) { return allowed, nil }
+		f.h.netflowsCanI = func(context.Context, netflows.Target) (bool, error) { return allowed, nil }
 		w, _ := getTraffic(f.h, c.target, c.payload)
 		if w.Code != c.status || f.calls != 0 {
 			t.Errorf("%s: %d %s (relay calls %d)", c.name, w.Code, w.Body, f.calls)

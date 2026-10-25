@@ -24,6 +24,7 @@ type netflowsFixture struct {
 	asked  []byte // the last GetFlows request
 	status int
 	relays []netflows.Relay
+	verbs  []string
 }
 
 func newNetflowsFixture(t *testing.T, perMinute int) *netflowsFixture {
@@ -63,8 +64,9 @@ func newNetflowsFixtureFrom(t *testing.T, perMinute int, file string, now time.T
 	}
 	f.h = &Handler{auditStore: f.store}
 	f.h.SetNetworkFlows(s)
-	f.h.netflowsCanI = func(_ context.Context, r netflows.Relay) (bool, error) {
-		f.relays = append(f.relays, r)
+	f.h.netflowsCanI = func(_ context.Context, t netflows.Target) (bool, error) {
+		f.relays = append(f.relays, t.Relay)
+		f.verbs = append(f.verbs, t.ProxyVerb())
 		return true, nil
 	}
 	f.h.netflowsDial = func(context.Context, netflows.Target) (string, *http.Client, error) {
@@ -136,7 +138,7 @@ func TestNetworkFlowsRefusals(t *testing.T) {
 	for _, c := range cases {
 		f := newNetflowsFixture(t, 5)
 		allowed := c.canI
-		f.h.netflowsCanI = func(context.Context, netflows.Relay) (bool, error) { return allowed, nil }
+		f.h.netflowsCanI = func(context.Context, netflows.Target) (bool, error) { return allowed, nil }
 		w := f.get(c.target, c.payload)
 		if w.Code != c.status || f.calls != 0 {
 			t.Errorf("%s: %d %s (relay calls %d)", c.name, w.Code, w.Body, f.calls)

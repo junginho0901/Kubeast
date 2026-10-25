@@ -657,8 +657,8 @@ export interface ClusterFeatures {
   alertInvestigation?: { enabled: boolean }
   // Chart features.alertStore: the clusters whose alerts and silences an Alertmanager-compatible store holds.
   alertStore?: { enabled: boolean; clusters: string[]; clusterLabel?: string; silences?: boolean; silenceMaxHours?: number }
-  // Chart features.networkFlows: the clusters whose Hubble Relay Kubeast reads.
-  networkFlows?: { enabled: boolean; clusters: string[] }
+  // Chart features.networkFlows: the clusters whose flows Kubeast reads, and what serves each (a Hubble Relay or Calico's Whisker).
+  networkFlows?: { enabled: boolean; clusters: string[]; providers?: Record<string, 'hubble' | 'calico'> }
 }
 
 // Policy reports (wgpolicyk8s.io/v1alpha2 PolicyReport / ClusterPolicyReport as Kyverno and others write them).
@@ -797,6 +797,7 @@ export interface NetflowGroup {
 export interface NetflowResult {
   cluster: string
   mode: string
+  provider?: 'hubble' | 'calico'
   relay: string
   namespace: string
   kind?: string
@@ -881,6 +882,7 @@ export interface TrafficResult {
   lost_events?: number
   redacted?: boolean
   notes?: string[]
+  provider?: 'hubble' | 'calico'
 }
 
 // GET /api/v1/cluster/networkpolicies/check?src=&dst=&port=&protocol= — an end is
