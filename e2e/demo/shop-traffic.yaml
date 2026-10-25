@@ -1,0 +1,115 @@
+# The shop of the site clip "changes" on the Cilium kind cluster (scripts/kind-cilium.sh), with traffic between
+# its workloads for the Resource Graph's traffic lines: storefront calls checkout-api and recommendations,
+# checkout-api calls payments, and payments takes calls only from checkout-api (NetworkPolicy
+# payments-from-checkout), so storefront's calls to payments are dropped. scripts/site-media.sh puts it on that
+# cluster for the run and removes it. The images are the ones deploy/kind/cilium-demo.yaml already uses there.
+apiVersion: v1
+kind: Namespace
+metadata: {name: shop}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: storefront, namespace: shop}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: storefront}}
+  template:
+    metadata: {labels: {app: storefront}}
+    spec:
+      containers:
+        - name: web
+          image: docker.io/library/nginx:1.29-alpine
+          ports: [{name: http, containerPort: 80}]
+        - name: traffic
+          image: docker.io/library/busybox:1.38.0
+          command:
+            - sh
+            - -c
+            - |
+              while true; do
+                for s in checkout-api recommendations payments; do wget -q -T 2 -O /dev/null "http://$s.shop" 2>/dev/null; done
+                sleep 3
+              done
+---
+apiVersion: v1
+kind: Service
+metadata: {name: storefront, namespace: shop}
+spec:
+  selector: {app: storefront}
+  ports: [{name: http, port: 80, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: checkout-api, namespace: shop}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: checkout-api}}
+  template:
+    metadata: {labels: {app: checkout-api}}
+    spec:
+      containers:
+        - name: api
+          image: docker.io/library/nginx:1.29-alpine
+          ports: [{name: http, containerPort: 80}]
+        - name: payments-client
+          image: docker.io/library/busybox:1.38.0
+          command: [sh, -c, "while true; do wget -q -T 2 -O /dev/null http://payments.shop 2>/dev/null; sleep 4; done"]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: checkout-api, namespace: shop}
+spec:
+  selector: {app: checkout-api}
+  ports: [{name: http, port: 80, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: recommendations, namespace: shop}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: recommendations}}
+  template:
+    metadata: {labels: {app: recommendations}}
+    spec:
+      containers:
+        - name: model
+          image: docker.io/library/nginx:1.29-alpine
+          ports: [{name: http, containerPort: 80}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: recommendations, namespace: shop}
+spec:
+  selector: {app: recommendations}
+  ports: [{name: http, port: 80, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: payments, namespace: shop}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: payments}}
+  template:
+    metadata: {labels: {app: payments}}
+    spec:
+      containers:
+        - name: payments
+          image: docker.io/library/nginx:1.29-alpine
+          ports: [{name: http, containerPort: 80}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: payments, namespace: shop}
+spec:
+  selector: {app: payments}
+  ports: [{name: http, port: 80, targetPort: http}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: payments-from-checkout, namespace: shop}
+spec:
+  podSelector: {matchLabels: {app: payments}}
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{podSelector: {matchLabels: {app: checkout-api}}}]
+      ports: [{protocol: TCP, port: 80}]

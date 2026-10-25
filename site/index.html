@@ -188,12 +188,13 @@
         <div class="thumb"><video muted playsinline preload="none" poster="media/changes.jpg" data-src="media/changes.mp4"></video><span class="play" aria-hidden="true"></span></div>
         <div class="card-body">
           <h3><span lang="en">What changed, what connects</span><span lang="ko">무엇이 바뀌었고, 어떻게 이어져 있는지</span></h3>
-          <p lang="en">Change History lines up events and rollouts; Resource Graph draws how objects connect.</p>
-          <p lang="ko">Change History는 이벤트와 롤아웃을 시간순으로 정리하고, Resource Graph는 리소스가 어떻게 연결되는지 그려 줍니다.</p>
+          <p lang="en">Change History lines up events and rollouts; Resource Graph draws how objects connect and, with Cilium Hubble, who actually talks to whom.</p>
+          <p lang="ko">Change History는 이벤트와 롤아웃을 시간순으로 정리하고, Resource Graph는 리소스가 어떻게 연결되는지, Cilium Hubble이 있으면 실제로 누가 누구와 통신하는지 그려 줍니다.</p>
           <ol class="steps">
             <li data-step="timeline"><span lang="en">Events and rollouts of a namespace</span><span lang="ko">Namespace의 이벤트와 롤아웃</span></li>
             <li data-step="graph"><span lang="en">How its objects connect</span><span lang="ko">리소스 연결 관계</span></li>
-            <li data-step="drawer"><span lang="en">A node opens its drawer</span><span lang="ko">그래프에서 누르면 상세 패널로</span></li>
+            <li data-step="traffic"><span lang="en">Who actually talks to whom, by port</span><span lang="ko">실제로 누가 누구와, 어느 포트로 통신하는지</span></li>
+            <li data-step="why"><span lang="en">Why a connection is dropped</span><span lang="ko">연결이 왜 막혔는지</span></li>
           </ol>
         </div>
       </article>
