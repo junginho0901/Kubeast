@@ -1,0 +1,12 @@
+# The kind cluster of scripts/kind-calico.sh: no default CNI, Calico installs one through its operator, on the pod
+# subnet of Calico's default Installation (Calico docs, kind). A worker keeps Whisker off the API server's node:
+# Calico lets a node's own host reach its local pods whatever the policy, which would hide what the API server
+# proxy meets on a cluster whose API server is elsewhere.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  disableDefaultCNI: true
+  podSubnet: 192.168.0.0/16
+nodes:
+  - role: control-plane
+  - role: worker

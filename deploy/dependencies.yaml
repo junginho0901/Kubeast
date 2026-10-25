@@ -345,6 +345,19 @@ dependencies:
       - path: docs/ko/cluster-requirements.md
         match: '(\[Kyverno 차트\]|\| Kyverno \|)'
 
+  # Calico (Tigera operator, Goldmane and Whisker) for network flows on kind (scripts/kind-calico.sh,
+  # network-calico.spec.ts); deploy/kind/calico-resources.yaml is that release's custom-resources.yaml.
+  - name: calico
+    version: v3.33.0
+    upstream:
+      flavour: github
+      url: projectcalico/calico
+    refPaths:
+      - path: scripts/kind-calico.sh
+        match: '^CALICO_VERSION='
+      - path: deploy/kind/calico-resources.yaml
+        match: '^# Calico v'
+
   # Microsoft Retina's Hubble control plane for network flows on kind (scripts/kind-retina.sh). v1.3.1 is
   # released but its images were not on ghcr.io on 2026-10-25, so the chart and images stay at v1.3.0.
   - name: retina

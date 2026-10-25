@@ -1,0 +1,25 @@
+# Lets the Kubernetes API server reach Whisker (calico-system/whisker:8443), so Kubeast can read Calico's flows
+# through the API server service proxy as the signed-in user. The operator's own policy calico-system.whisker
+# admits nothing, and Whisker has no authentication of its own, so only the API server's addresses (the endpoints
+# of the Service default/kubernetes) are let in — in the calico-system tier, where that policy is evaluated.
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: calico-system.kubeast-whisker-apiserver
+  namespace: calico-system
+spec:
+  tier: calico-system
+  order: 0
+  selector: k8s-app == 'whisker'
+  types:
+    - Ingress
+  ingress:
+    - action: Allow
+      protocol: TCP
+      source:
+        services:
+          name: kubernetes
+          namespace: default
+      destination:
+        ports:
+          - 8443
