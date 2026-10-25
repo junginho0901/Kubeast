@@ -130,7 +130,14 @@ type Request struct {
 	// Scope is a namespace-scoped reader's namespaces (nil = the whole cluster):
 	// peers outside it are shown by namespace and address only.
 	Scope []string
+	// Pods are a workload's current pods, asked for by name as well, for flows that name no workload.
+	Pods []string
+	// Lookup fills in what the flows leave out (nil: nothing).
+	Lookup Lookup
 }
+
+// MaxPods caps the pods of a workload read asked for by name.
+const MaxPods = 100
 
 // Normalize fills defaults and refuses what the configuration does not allow.
 func (s *Store) Normalize(r *Request) error {
@@ -158,6 +165,12 @@ func (s *Store) Normalize(r *Request) error {
 	}
 	if len(r.More) > 0 && (!r.Graph || r.Kind != "") {
 		return fmt.Errorf("%w: more namespaces are for a whole-namespace graph read", ErrInvalidRequest)
+	}
+	if len(r.Pods) > 0 && (r.Kind == "" || r.Kind == "Pod") {
+		return fmt.Errorf("%w: pods are for a workload read", ErrInvalidRequest)
+	}
+	if len(r.Pods) > MaxPods {
+		r.Pods = r.Pods[:MaxPods]
 	}
 	max := s.cfg.MaxFlows
 	if r.Graph {
@@ -190,6 +203,13 @@ func (r Request) filters() []filter {
 		w := []Workload{{Kind: r.Kind, Name: r.Name}}
 		src.sourcePod, src.sourceWorkload = []string{r.Namespace + "/"}, w
 		dst.destinationPod, dst.destinationWorkload = []string{r.Namespace + "/"}, w
+		if len(r.Pods) > 0 {
+			names := make([]string, len(r.Pods))
+			for i, p := range r.Pods {
+				names[i] = r.Namespace + "/" + p
+			}
+			return []filter{src, dst, {sourcePod: names, verdicts: verdicts}, {destinationPod: names, verdicts: verdicts}}
+		}
 	}
 	return []filter{src, dst}
 }
@@ -421,6 +441,7 @@ func (s *Store) Query(ctx context.Context, client *http.Client, url string, req 
 	if err := grpcStatus(resp.Trailer); err != nil {
 		return nil, err
 	}
+	fill(ctx, req.Lookup, flows)
 	cutoff := now.Add(-req.Since)
 	out := []Flow{}
 	redacted := false

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/netflows"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
@@ -60,6 +62,9 @@ func (h *Handler) NetworkFlows(w http.ResponseWriter, r *http.Request) {
 	if scope := payload.Namespaces[string(id)]; len(scope) > 0 {
 		req.Scope = scope
 	}
+	if req.Lookup = h.flowsLookup(); req.Lookup != nil && req.Kind != "" && req.Kind != "Pod" {
+		req.Pods = workloadPods(ctx, req.Lookup, namespace, req.Kind, req.Name)
+	}
 	if err := h.netflows.Normalize(&req); err != nil {
 		response.Error(w, http.StatusBadRequest, err.Error())
 		return
@@ -71,6 +76,41 @@ func (h *Handler) NetworkFlows(w http.ResponseWriter, r *http.Request) {
 	if res := h.relayRead(w, r, req, targetType, targetID, namespace); res != nil {
 		response.JSON(w, http.StatusOK, res)
 	}
+}
+
+// flowsLookup fills in a flow read as the signed-in user (netflowsLook in tests; nil without a cluster service).
+func (h *Handler) flowsLookup() netflows.Lookup {
+	if h.netflowsLook != nil {
+		return h.netflowsLook
+	}
+	if h.svc == nil {
+		return nil
+	}
+	return svcLookup{h.svc}
+}
+
+type svcLookup struct{ s *k8s.Service }
+
+func (l svcLookup) Workloads(ctx context.Context, namespace string) (map[string]netflows.Workload, error) {
+	return l.s.NetflowsWorkloads(ctx, namespace)
+}
+
+func (l svcLookup) ServiceIPs(ctx context.Context, namespace string) (map[string]bool, error) {
+	return l.s.NetflowsServiceIPs(ctx, namespace)
+}
+
+// workloadPods are the current pods of a workload, by name, for flows that name no workload; none when the
+// namespace cannot be listed.
+func workloadPods(ctx context.Context, l netflows.Lookup, namespace, kind, name string) []string {
+	pods, _ := l.Workloads(ctx, namespace)
+	var out []string
+	for pod, w := range pods {
+		if w.Kind == kind && w.Name == name {
+			out = append(out, pod)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // parseSince reads the since parameter of a flow read; empty is the configured default.

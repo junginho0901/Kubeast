@@ -463,8 +463,13 @@ service:
 For the drawers' "Recent Flows" and the AI tool `network_flows` (`features.networkFlows`, off by default), each cluster listed in `features.networkFlows.clusters` needs the following.
 
 - **Hubble Relay**: Cilium with Hubble and Hubble Relay on (`hubble.relay.enabled=true`).
-  - Kubeast calls only the Relay's `observer.Observer/GetFlows`. Another Hubble Relay, such as Microsoft Retina's Hubble control plane, serves the same API, but only Cilium was checked.
+  - Kubeast calls only the Relay's `observer.Observer/GetFlows`.
   - The flows are what Hubble keeps in memory on each node. A busy node keeps a shorter past, and the answer says so when Hubble reports lost events.
+- **Microsoft Retina's Hubble control plane** (1.3.0, chart `oci://ghcr.io/microsoft/retina/charts/retina-hubble`) serves the same Relay API:
+  - The chart's Relay requires client certificates by default. Set `hubble.relay.tls.server.enabled=true` and `hubble.relay.tls.server.mtls=false` for `proxy` mode, and `hubble.tls.auto.method=cronJob` (`helm` does not render in 1.3.0).
+  - Retina's flows name the pod but not its workload. Kubeast names it as Cilium does (the Deployment of a ReplicaSet's pods, the CronJob of a Job's), from the pods it lists as the user (`list` on `pods`, which `view` has). For a workload's flows it also asks the Relay for the workload's current pods by name.
+  - Retina sees a pod's packet to a Service before kube-proxy sends it on, so the destination is the Service's cluster IP. Kubeast lists the Services as the user and marks that end (`service_address`).
+  - A NetworkPolicy drop is DROPPED only where Retina sees the drop. On kind's kindnet, which decides policy in user space, a refused connection is FORWARDED where it leaves the client and gets no reply.
 - **`proxy` mode (default)**: Kubeast sends `POST /api/v1/namespaces/<ns>/services/https:<service>:<port>/proxy/observer.Observer/GetFlows` to that cluster's API server as the signed-in user. Nothing new is opened on the network.
   - The Relay Service is `features.networkFlows.relay` (default `kube-system/hubble-relay:443`), or the one an entry names (`proxy:<namespace>/<service>:<port>`).
   - **The Relay must serve TLS** (`hubble.relay.tls.server.enabled=true`): the API server speaks HTTP/2 to a backend only over TLS, and gRPC needs HTTP/2. A plaintext Relay gives 502 or 503, and the message names that setting.
@@ -490,7 +495,8 @@ For the drawers' "Network Drops" and the AI tool `network_drops`, the cluster's 
   - **Separate labels (recommended)**: `labelsContext` with at least `source_namespace`, `source_workload`, `destination_namespace` and `destination_workload`.
     - With `source_workload_kind` and `destination_workload_kind`, Kubeast also matches the kind.
     - With `source_pod` and `destination_pod`, a pod's drops are its own; without them, a pod shows its workload's. Pod labels add many series.
-  - **One label per end**: `sourceContext=pod` and `destinationContext=pod` give `source`/`destination` = `<namespace>/<pod>`. Microsoft Retina's Hubble control plane writes this shape (only the pod's own end), but only Cilium was checked.
+  - **One label per end**: `sourceContext=pod` and `destinationContext=pod` give `source`/`destination` = `<namespace>/<pod>`. Retina's chart default writes this shape for the pod's own end only (`sourceEgressContext=pod;destinationIngressContext=pod`).
+  - Retina's drop metric on kind's kindnet names no pod at all (`DROP_REASON_UNKNOWN`), so the drawer reports no labels there.
   - A metric with neither shape is reported as having no pod or workload labels.
 - **Cilium Helm values** (1.20.4):
 
@@ -532,6 +538,10 @@ The Resource Graph's Traffic and Both views draw lines from one of two sources. 
   ```
 
   Restart the agents after the change, as in §17.
+- **Retina**:
+  - Recent flows: a connection to a Service is seen leaving the client towards the Service's cluster IP (§16). It counts where it arrives, at the pod's ingress, not as a line to an address outside the pods.
+  - Metrics: Retina leaves the workload labels empty, so add `source_pod` and `destination_pod` to `labelsContext` (`deploy/kind/retina-values.yaml`). Kubeast then names the pods' workloads as in §16.
+  - The SYNs leaving a client towards a Service carry no destination in the metrics, like those leaving the pods. With pod labels only, Kubeast does not draw connections towards an unnamed address, and the graph says so. Recent flows show them.
 - **Check**: `sum by (source_workload, destination_workload) (increase(hubble_tcp_flags_total{flag="SYN"}[1h]))` in Prometheus, or Resource Graph → Traffic.
 
 ## Verified versions (2026-10-13)
@@ -551,6 +561,7 @@ The Resource Graph's Traffic and Both views draw lines from one of two sources. 
 | Grafana | 13.2.4 | 10-17, development cluster 2 (`scripts/kind-grafana.sh`). Metrics and logs read through the data source proxy equal the values read directly, and the dashboard and node drawer fill. A wrong token gives 401 in the status. An alert sent by a webhook contact point test is investigated (e2e `grafana.spec.ts`) |
 | Argo CD | 3.5.6 (core install) | 10-21, development cluster 2 (`scripts/kind-argocd.sh`). An Application syncs the podinfo chart. Checked: tracking annotation, 409, audit row, drawer badge, `gitops_status` (e2e `argocd-real.spec.ts`) |
 | Cilium (Hubble Relay) | 1.20.4 | 10-24, a kind cluster of its own without the default CNI (`scripts/kind-cilium.sh`, Relay TLS on). Read in `proxy` mode as a Read user: client → web on port 80 is FORWARDED with the NetworkPolicy `web-only-client` in `ingress_allowed_by` and the replies folded in, and stranger → web is DROPPED with `POLICY_DENIED` at ingress, as the policy says. A namespace-limited user gets 403 from the cluster; the drawer's "Why?" names the rule; MCP gives the same groups (e2e `network-flows.spec.ts`). 10-25: the `drop` metric with the labels of §17, scraped by Prometheus v3.15.0 on that cluster (`deploy/kind/cilium-prometheus.yaml`): the drawer and `network_drops` give the peers, reasons and counts of a direct query, and a namespace-limited user gets 403 from the cluster (e2e `network-drops.spec.ts`) |
+| Microsoft Retina (Hubble control plane) | 1.3.0 | 10-25, a kind cluster with kindnet (`scripts/kind-retina.sh`, `deploy/kind/retina-values.yaml`; the 1.3.1 images were not published). Read in `proxy` mode: a Deployment's recent flows find its pods by name, with the workloads named from the pods; client → web is one line, counted at web's ingress, not at the Service's cluster IP; with the pod labels, the metric lines equal a direct query of the SYNs at web's ingress (e2e `network-retina.spec.ts`). Policy drops were not reported as drops there (kindnet) |
 | GPU, DRA, VPA, Gateway API, ingress-nginx | — | Based on the code, not verified on a real cluster |
 
 On kind nodes the root filesystem is not picked up as `mountpoint="/"`, so disk utilization is empty, and local-path volumes have no volume stats. Real nodes and CSI drivers do produce these values.

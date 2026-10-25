@@ -30,6 +30,9 @@ type End struct {
 	Names    []string `json:"names,omitempty"`
 	Service  string   `json:"service,omitempty"`
 	Identity uint32   `json:"identity,omitempty"`
+	// ServiceAddress: IP is a Service's own cluster IP — the packet was seen before it was sent on to one of
+	// the Service's pods (or, on a reply, before the pod's address was put back).
+	ServiceAddress bool `json:"service_address,omitempty"`
 }
 
 // Policies are the policies that allowed or denied the flow, when the

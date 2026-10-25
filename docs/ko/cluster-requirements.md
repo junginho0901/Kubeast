@@ -480,8 +480,13 @@ service:
 드로어의 "최근 흐름"과 AI 도구 `network_flows`(`features.networkFlows`, 기본 꺼짐)를 쓰려면 `features.networkFlows.clusters`에 적은 클러스터마다 다음이 있어야 합니다.
 
 - **Hubble Relay**: Hubble과 Hubble Relay를 켠 Cilium(`hubble.relay.enabled=true`)
-  - Kubeast는 Relay의 `observer.Observer/GetFlows`만 부릅니다. Microsoft Retina의 Hubble 컨트롤 플레인 같은 다른 Hubble Relay도 같은 API를 제공하지만, 확인한 것은 Cilium뿐입니다.
+  - Kubeast는 Relay의 `observer.Observer/GetFlows`만 부릅니다.
   - 흐름은 노드마다 Hubble이 메모리에 들고 있는 것입니다. 바쁜 노드일수록 짧은 과거만 남고, Hubble이 잃은 이벤트를 알리면 답에 그렇게 나옵니다.
+- **Microsoft Retina의 Hubble 컨트롤 플레인**(1.3.0, 차트 `oci://ghcr.io/microsoft/retina/charts/retina-hubble`)도 같은 Relay API를 제공합니다.
+  - 이 차트의 Relay는 기본값이 클라이언트 인증서를 요구합니다. `proxy` 모드로 쓰려면 `hubble.relay.tls.server.enabled=true`·`hubble.relay.tls.server.mtls=false`, 인증서는 `hubble.tls.auto.method=cronJob`으로 둡니다(1.3.0에서 `helm`은 렌더되지 않음).
+  - Retina의 흐름은 파드 이름만 있고 워크로드가 없습니다. Kubeast가 로그인한 사람의 신원으로 파드 목록을 읽어(`pods` `list`, `view`에 있음) Cilium과 같은 규칙으로 워크로드를 붙입니다(ReplicaSet 파드는 Deployment, Job 파드는 CronJob). 워크로드의 흐름을 읽을 때는 그 워크로드의 지금 파드도 이름으로 Relay에 함께 요청합니다.
+  - Retina는 파드가 Service로 보내는 패킷을 kube-proxy가 넘기기 전에 보므로, 도착지가 Service의 cluster IP입니다. Kubeast가 로그인한 사람의 신원으로 Service 목록을 읽어 그 끝에 표시합니다(`service_address`).
+  - NetworkPolicy 차단은 Retina가 그 차단을 보는 곳에서만 DROPPED입니다. kind의 kindnet은 정책을 사용자 공간에서 판정하므로, 거부된 연결이 클라이언트에서 나갈 때 FORWARDED이고 응답이 없을 뿐입니다.
 - **`proxy` 모드(기본값)**: Kubeast가 그 클러스터의 API 서버에 로그인한 사람의 신원으로 `POST /api/v1/namespaces/<ns>/services/https:<service>:<port>/proxy/observer.Observer/GetFlows`를 보냅니다. 네트워크에서 새로 여는 것은 없습니다.
   - Relay Service는 `features.networkFlows.relay`(기본 `kube-system/hubble-relay:443`)이거나, 항목에 적은 것(`proxy:<namespace>/<service>:<port>`)입니다.
   - **Relay가 TLS로 서비스해야 합니다**(`hubble.relay.tls.server.enabled=true`). API 서버는 백엔드와 TLS일 때만 HTTP/2로 말하고, gRPC에는 HTTP/2가 필요합니다. 평문 Relay면 502나 503이 오고, 메시지에 이 설정 이름이 나옵니다.
@@ -507,7 +512,8 @@ service:
   - **레이블을 따로(권장)**: `labelsContext`에 최소 `source_namespace`·`source_workload`·`destination_namespace`·`destination_workload`
     - `source_workload_kind`·`destination_workload_kind`가 있으면 종류까지 맞춥니다.
     - `source_pod`·`destination_pod`가 있으면 파드의 차단은 그 파드 것이고, 없으면 파드는 워크로드의 차단 수를 보여 줍니다. 파드 레이블은 시리즈를 많이 늘립니다.
-  - **끝마다 레이블 하나**: `sourceContext=pod`·`destinationContext=pod`이면 `source`/`destination` = `<namespace>/<pod>`입니다. Microsoft Retina의 Hubble 컨트롤 플레인이 이 모양(파드 자기 쪽 끝만)으로 쓰지만, 확인한 것은 Cilium뿐입니다.
+  - **끝마다 레이블 하나**: `sourceContext=pod`·`destinationContext=pod`이면 `source`/`destination` = `<namespace>/<pod>`입니다. Retina 차트 기본값은 이 모양을 파드 자기 쪽 끝만 씁니다(`sourceEgressContext=pod;destinationIngressContext=pod`).
+  - kind의 kindnet에서 Retina의 차단 지표에는 파드가 전혀 없으므로(`DROP_REASON_UNKNOWN`), 드로어는 레이블이 없다고 알립니다.
   - 둘 다 아니면 파드·워크로드 레이블이 없다고 알려 줍니다.
 - **Cilium Helm 값**(1.20.4):
 
@@ -549,6 +555,10 @@ Resource Graph의 통신·둘 다 보기는 두 출처 중 하나로 선을 그�
   ```
 
   바꾼 뒤에는 §17처럼 에이전트를 다시 시작합니다.
+- **Retina**:
+  - 최근 흐름: Service로 가는 연결은 클라이언트에서 나갈 때 Service의 cluster IP로 보입니다(§16). 파드 바깥 주소로 가는 선이 아니라, 도착한 파드의 ingress에서 셉니다.
+  - 지표: Retina는 워크로드 레이블을 비워 두므로 `labelsContext`에 `source_pod`·`destination_pod`를 더합니다(`deploy/kind/retina-values.yaml`). 그러면 Kubeast가 §16처럼 파드의 워크로드를 붙입니다.
+  - 클라이언트에서 Service로 나가는 SYN은 지표에 도착지가 없어, 파드 바깥으로 나가는 것과 구별되지 않습니다. 파드 레이블만 있는 지표에서는 이름 없는 주소로 나가는 연결을 그리지 않고, 그래프가 그렇다고 알립니다. 최근 흐름에는 나옵니다.
 - **확인**: Prometheus에서 `sum by (source_workload, destination_workload) (increase(hubble_tcp_flags_total{flag="SYN"}[1h]))`, 또는 Resource Graph → 통신.
 
 ## 검증한 버전 (2026-10-13)
@@ -568,6 +578,7 @@ Resource Graph의 통신·둘 다 보기는 두 출처 중 하나로 선을 그�
 | Grafana | 13.2.4 | 10-17, 개발용 2번 클러스터(`scripts/kind-grafana.sh`). 데이터소스 프록시로 읽은 지표·로그가 직접 읽은 값과 같고 대시보드·노드 드로어가 채워집니다. 틀린 토큰은 상태에 401로 나오고, 웹훅 연락처 시험으로 보낸 알림이 조사됩니다(e2e `grafana.spec.ts`) |
 | Argo CD | 3.5.6(core 설치) | 10-21, 개발용 2번 클러스터(`scripts/kind-argocd.sh`). Application이 podinfo 차트를 동기화하고, 추적 어노테이션·409·감사 행·드로어 배지·`gitops_status`를 확인했습니다(e2e `argocd-real.spec.ts`) |
 | Cilium(Hubble Relay) | 1.20.4 | 10-24, 기본 CNI 없이 만든 별도 kind 클러스터(`scripts/kind-cilium.sh`, Relay TLS 켬). Read 사용자로 `proxy` 모드에서 읽었습니다 — client → web 80 포트는 FORWARDED이고 `ingress_allowed_by`에 NetworkPolicy `web-only-client`가 있으며 응답이 합쳐졌고, stranger → web은 정책대로 ingress에서 `POLICY_DENIED`로 DROPPED였습니다. 네임스페이스가 정해진 사용자는 클러스터에서 403을 받고, 드로어의 "왜?"가 규칙을 알려 주며, MCP도 같은 묶음을 줍니다(e2e `network-flows.spec.ts`). 10-25: 같은 클러스터에서 §17 레이블로 켠 `drop` 지표를 Prometheus v3.15.0(`deploy/kind/cilium-prometheus.yaml`)이 수집합니다 — 드로어와 `network_drops`가 직접 질의와 같은 상대·사유·수를 주고, 네임스페이스가 정해진 사용자는 클러스터에서 403을 받습니다(e2e `network-drops.spec.ts`) |
+| Microsoft Retina(Hubble 컨트롤 플레인) | 1.3.0 | 10-25, kindnet kind 클러스터(`scripts/kind-retina.sh`, `deploy/kind/retina-values.yaml`, 1.3.1 이미지는 공개되지 않음). `proxy` 모드로 읽음: Deployment의 최근 흐름이 파드 이름으로 찾아지고 워크로드는 파드에서 붙음 · client → web은 Service cluster IP가 아니라 web의 ingress에서 센 선 하나 · 파드 레이블을 더한 지표 선이 web ingress의 SYN 직접 질의와 같음(e2e `network-retina.spec.ts`). 그곳(kindnet)에서는 정책 차단이 차단으로 오지 않음 |
 | GPU·DRA·VPA·Gateway API·ingress-nginx | — | 코드 기준이며 실제 클러스터에서는 검증하지 않았습니다 |
 
 kind 노드에서는 루트 파일시스템이 `mountpoint="/"`로 잡히지 않아 디스크 사용률이 비어 있고, local-path 볼륨에는 볼륨 통계가 없습니다. 실제 노드와 CSI 드라이버에서는 이 값이 나옵니다.

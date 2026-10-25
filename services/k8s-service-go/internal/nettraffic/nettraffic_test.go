@@ -136,6 +136,33 @@ func TestFromFlows(t *testing.T) {
 	}
 }
 
+// Retina sees a connection to a Service at the client's egress with the Service's own address: it is counted
+// where it arrives (the backend's ingress), not as a line to an address outside the pods.
+func TestFromFlowsCountsAServiceAddressWhereItArrives(t *testing.T) {
+	client := netflows.End{Namespace: "shop", Pod: "client-1", Workload: &netflows.Workload{Kind: "Deployment", Name: "client"}}
+	svc := netflows.End{IP: "10.96.228.69", Port: 80, Service: "shop/web", Identity: 2, ServiceAddress: true}
+	unmarked := svc
+	unmarked.ServiceAddress = false
+	res := &netflows.Result{Groups: []netflows.Group{
+		seen(group(client, svc, "FORWARDED", 5, 4, -time.Second), "egress"),
+		seen(group(client, web(80), "FORWARDED", 5, 4, -time.Second), "ingress"),
+	}}
+	got := FromFlows(res, []string{"shop"})
+	if len(got.Lines) != 1 || got.Lines[0].To.Name != "web" || got.Lines[0].Allowed != 9 {
+		t.Fatalf("one line, client → web: %+v", got.Lines)
+	}
+	// a Service address the lookup could not confirm stays what the flows say: an address outside the pods
+	res.Groups[0].Destination = unmarked
+	if got = FromFlows(res, []string{"shop"}); len(got.Lines) != 2 {
+		t.Fatalf("unconfirmed: %+v", got.Lines)
+	}
+	// a drop on the way to the Service's address never arrives anywhere: it counts where it was dropped
+	res.Groups = []netflows.Group{seen(group(client, svc, "DROPPED", 2, 0, -time.Second), "egress")}
+	if got = FromFlows(res, []string{"shop"}); len(got.Lines) != 1 || got.Lines[0].Dropped != 2 {
+		t.Fatalf("dropped: %+v", got.Lines)
+	}
+}
+
 func TestFromFlowsKeepsTheBusiestPorts(t *testing.T) {
 	src := netflows.End{Namespace: "shop", Pod: "client-1", Workload: &netflows.Workload{Kind: "Deployment", Name: "client"}}
 	var groups []netflows.Group
@@ -220,6 +247,59 @@ func TestDetectShape(t *testing.T) {
 	}
 	if _, ok := DetectShape([]string{"flag", "family", "traffic_direction"}); ok {
 		t.Fatal("no ends, no shape")
+	}
+	// Retina: the workload labels stay empty (its flows carry no workload), so only the pods name the ends
+	s, ok = DetectShape(retinaShape)
+	if !ok || s.Style != netdrops.StyleLabels || !s.Pod || !s.NoWorkload || s.Kind || !s.Direction {
+		t.Fatalf("%+v %v", s, ok)
+	}
+	if _, ok := DetectShape([]string{"source_namespace", "destination_namespace", "source_pod", "traffic_direction"}); ok {
+		t.Fatal("a destination named by namespace only names no line")
+	}
+}
+
+var retinaShape = []string{"__name__", "destination_namespace", "destination_pod", "family", "flag", "instance", "job", "source_namespace", "source_pod", "traffic_direction"}
+
+func TestQueryRetinaPods(t *testing.T) {
+	shape, _ := DetectShape(retinaShape)
+	halves, by, _ := query(t, Query(TCPMetric, shape, []string{"flows-demo"}, time.Hour), TCPMetric)
+	if !reflect.DeepEqual(by, []string{"source_namespace", "source_pod", "destination_namespace", "destination_pod", "traffic_direction"}) {
+		t.Fatalf("by %v", by)
+	}
+	if !halves[0]["source_namespace"].Matches("flows-demo") || !halves[1]["destination_namespace"].Matches("flows-demo") {
+		t.Fatalf("matchers %v", halves)
+	}
+}
+
+// Metrics that name pods only: each pod end becomes the workload the lookup names, so a Deployment's pods make one line.
+func TestFromMetricsNamesThePodsWorkloads(t *testing.T) {
+	shape, _ := DetectShape(retinaShape)
+	pods := func(src, dst, dir string) []string {
+		s, d := strings.SplitN(src, "/", 2), strings.SplitN(dst, "/", 2)
+		return []string{"source_namespace", s[0], "source_pod", s[1], "destination_namespace", d[0], "destination_pod", d[1], "traffic_direction", dir}
+	}
+	rows := []Sample{
+		sample(3, pods("flows-demo/client-a", "flows-demo/web-a", "ingress")...),
+		sample(2, pods("flows-demo/client-b", "flows-demo/web-a", "ingress")...),
+		sample(5, pods("flows-demo/client-a", "flows-demo/web-a", "egress")...), // the arriving side counts
+		sample(1, pods("flows-demo/debug", "flows-demo/web-a", "ingress")...),
+		// leaving client towards an unnamed address: the Service's own, or one outside the pods — not drawn
+		sample(5, "source_namespace", "flows-demo", "source_pod", "client-a", "traffic_direction", "egress"),
+	}
+	owners := map[string]*netflows.Workload{
+		"flows-demo/client-a": {Kind: "Deployment", Name: "client"}, "flows-demo/client-b": {Kind: "Deployment", Name: "client"},
+		"flows-demo/web-a": {Kind: "Deployment", Name: "web"},
+	}
+	got := FromMetrics(shape, true, rows, Shape{}, false, nil, []string{"flows-demo"}, nil, time.Hour, func(ns, pod string) *netflows.Workload { return owners[ns+"/"+pod] })
+	want := map[string]int64{"flows-demo/Deployment/client → flows-demo/Deployment/web": 5, "flows-demo/Pod/debug → flows-demo/Deployment/web": 1}
+	if len(got.Lines) != len(want) || !reflect.DeepEqual(got.Notes, []string{NoteNoDropMetric, NotePodsOnlyNoOutside}) {
+		t.Fatalf("lines %+v notes %v", got.Lines, got.Notes)
+	}
+	for _, l := range got.Lines {
+		k := l.From.Namespace + "/" + l.From.Kind + "/" + l.From.Name + " → " + l.To.Namespace + "/" + l.To.Kind + "/" + l.To.Name
+		if want[k] != l.Allowed || l.Dropped != 0 {
+			t.Errorf("%s: %d", k, l.Allowed)
+		}
 	}
 }
 
@@ -333,7 +413,12 @@ func TestFromMetrics(t *testing.T) {
 		sample(5, ends("shop/Deployment/stranger", "shop/Deployment/web", "reason", "POLICY_DENIED", "traffic_direction", "ingress")...),
 		sample(1, ends("shop/Deployment/stranger", "shop/Deployment/web", "reason", "CT_MAP_INSERTION_FAILED", "traffic_direction", "egress")...),
 	}
-	got := FromMetrics(tcp, true, tcpRows, drop, true, dropRows, []string{"shop"}, []string{"shop"}, time.Hour)
+	// the metrics name workloads: no end is looked up
+	noLookup := func(ns, name string) *netflows.Workload {
+		t.Errorf("%s/%s looked up as a pod", ns, name)
+		return &netflows.Workload{Kind: "Deployment", Name: "wrong"}
+	}
+	got := FromMetrics(tcp, true, tcpRows, drop, true, dropRows, []string{"shop"}, []string{"shop"}, time.Hour, noLookup)
 	if !got.Available || got.Source != "metrics" || got.Style != netdrops.StyleLabels || got.Range != "1h0m0s" || len(got.Notes) != 0 || !got.Redacted {
 		t.Fatalf("result %+v", got)
 	}
@@ -352,18 +437,18 @@ func TestFromMetrics(t *testing.T) {
 
 	// without traffic_direction both ends' counts add up, and the screen says so
 	noDir := Shape{Shape: tcp.Shape}
-	got = FromMetrics(noDir, true, tcpRows[:2], drop, false, nil, []string{"shop"}, nil, time.Hour)
+	got = FromMetrics(noDir, true, tcpRows[:2], drop, false, nil, []string{"shop"}, nil, time.Hour, nil)
 	if got.Lines[0].Allowed != 24 || !reflect.DeepEqual(got.Notes, []string{NoteCountedTwice, NoteNoDropMetric}) || got.Redacted { // 12 + 12
 		t.Fatalf("no direction %+v", got)
 	}
 	// drops only
-	got = FromMetrics(Shape{}, false, nil, drop, true, dropRows, []string{"shop"}, nil, time.Hour)
+	got = FromMetrics(Shape{}, false, nil, drop, true, dropRows, []string{"shop"}, nil, time.Hour, nil)
 	if len(got.Lines) != 1 || got.Lines[0].Dropped != 6 || !reflect.DeepEqual(got.Notes, []string{NoteNoTCPMetric}) || got.Style != netdrops.StyleLabels {
 		t.Fatalf("drops only %+v", got)
 	}
 	// pod style: "namespace/name" may be a pod or a workload, so no kind
 	pod := Shape{Shape: netdrops.Shape{Style: netdrops.StylePod}}
-	got = FromMetrics(pod, true, []Sample{sample(2, "source", "shop/client-1", "destination", "shop/web-1"), sample(1, "source", "shop/client-1")}, Shape{}, false, nil, []string{"shop"}, nil, time.Hour)
+	got = FromMetrics(pod, true, []Sample{sample(2, "source", "shop/client-1", "destination", "shop/web-1"), sample(1, "source", "shop/client-1")}, Shape{}, false, nil, []string{"shop"}, nil, time.Hour, nil)
 	if !reflect.DeepEqual(got.Lines, []Line{
 		{From: End{Namespace: "shop", Name: "client-1"}, To: End{Namespace: "shop", Name: "web-1"}, Allowed: 2},
 		{From: End{Namespace: "shop", Name: "client-1"}, To: End{Outside: "unknown"}, Allowed: 1},

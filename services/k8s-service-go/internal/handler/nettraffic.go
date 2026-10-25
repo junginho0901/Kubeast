@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -59,7 +60,7 @@ func (h *Handler) NetworkTraffic(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) networkTrafficRelay(w http.ResponseWriter, r *http.Request, namespaces, scope []string) {
-	req := netflows.Request{Namespace: namespaces[0], More: namespaces[1:], Graph: true, Scope: scope}
+	req := netflows.Request{Namespace: namespaces[0], More: namespaces[1:], Graph: true, Scope: scope, Lookup: h.flowsLookup()}
 	var err error
 	if req.Since, err = parseSince(r.URL.Query().Get("since")); err == nil {
 		err = h.netflows.Normalize(&req)
@@ -130,5 +131,25 @@ func (h *Handler) networkTrafficMetrics(w http.ResponseWriter, r *http.Request, 
 	}
 	tcp, tcpOK := shapes[nettraffic.TCPMetric]
 	drop, dropOK := shapes[netdrops.Metric]
-	response.JSON(w, http.StatusOK, nettraffic.FromMetrics(tcp, tcpOK, rows[nettraffic.TCPMetric], drop, dropOK, rows[netdrops.Metric], namespaces, scope, rng))
+	var owners func(namespace, pod string) *netflows.Workload
+	if l := h.flowsLookup(); l != nil && (tcp.NoWorkload || drop.NoWorkload) {
+		owners = podOwners(ctx, l)
+	}
+	response.JSON(w, http.StatusOK, nettraffic.FromMetrics(tcp, tcpOK, rows[nettraffic.TCPMetric], drop, dropOK, rows[netdrops.Metric], namespaces, scope, rng, owners))
+}
+
+// podOwners names a pod's workload through the lookup, one namespace list at most each (netflows.MaxLookupNamespaces).
+func podOwners(ctx context.Context, l netflows.Lookup) func(namespace, pod string) *netflows.Workload {
+	byNamespace := map[string]map[string]netflows.Workload{}
+	return func(namespace, pod string) *netflows.Workload {
+		m, ok := byNamespace[namespace]
+		if !ok && len(byNamespace) < netflows.MaxLookupNamespaces {
+			m, _ = l.Workloads(ctx, namespace)
+			byNamespace[namespace] = m
+		}
+		if w, ok := m[pod]; ok {
+			return &w
+		}
+		return nil
+	}
 }

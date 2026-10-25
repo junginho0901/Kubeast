@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -20,19 +21,27 @@ type netflowsFixture struct {
 	h      *Handler
 	store  *memAudit
 	calls  int
+	asked  []byte // the last GetFlows request
 	status int
 	relays []netflows.Relay
 }
 
 func newNetflowsFixture(t *testing.T, perMinute int) *netflowsFixture {
 	t.Helper()
-	raw, err := os.ReadFile("../netflows/testdata/getflows-web.bin")
+	// the flows in testdata were recorded from a Relay at about this time
+	return newNetflowsFixtureFrom(t, perMinute, "getflows-web.bin", time.Date(2026, 10, 24, 14, 5, 30, 0, time.UTC))
+}
+
+func newNetflowsFixtureFrom(t *testing.T, perMinute int, file string, now time.Time) *netflowsFixture {
+	t.Helper()
+	raw, err := os.ReadFile("../netflows/testdata/" + file)
 	if err != nil {
 		t.Fatal(err)
 	}
 	f := &netflowsFixture{store: &memAudit{}}
 	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.calls++
+		f.asked, _ = io.ReadAll(r.Body)
 		if f.status != 0 {
 			w.WriteHeader(f.status)
 			return
@@ -61,8 +70,7 @@ func newNetflowsFixture(t *testing.T, perMinute int) *netflowsFixture {
 	f.h.netflowsDial = func(context.Context, netflows.Target) (string, *http.Client, error) {
 		return srv.URL + "/observer.Observer/GetFlows", srv.Client(), nil
 	}
-	// the flows in testdata were recorded from a Relay at about this time
-	f.h.netflowsNow = func() time.Time { return time.Date(2026, 10, 24, 14, 5, 30, 0, time.UTC) }
+	f.h.netflowsNow = func() time.Time { return now }
 	return f
 }
 

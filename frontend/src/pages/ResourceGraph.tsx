@@ -566,4 +566,5 @@ const noteText: Record<string, string> = {
   no_tcp_metric: "The cluster's Hubble TCP metric is missing or has no workload labels: only drops are drawn.",
   no_drop_metric: "The cluster's Hubble drop metric is missing or has no workload labels: drops are not drawn.",
   counted_at_both_ends: 'The metric has no traffic_direction label: a connection seen at both ends counts twice.',
+  pods_only_no_outside: "The metric names pods only and cannot tell a Service's address from one outside the pods: connections leaving towards an unnamed address are not drawn.",
 }

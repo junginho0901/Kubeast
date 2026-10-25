@@ -30,6 +30,9 @@ const (
 	NoteNoDropMetric = "no_drop_metric" // only connections: the drop metric is missing or has no context labels
 	// NoteCountedTwice: without traffic_direction a connection seen at both ends is counted at each.
 	NoteCountedTwice = "counted_at_both_ends"
+	// NotePodsOnlyNoOutside: metrics that name pods only (Retina) leave the destination of a connection to a
+	// Service unnamed where it leaves the client, as for one leaving the pods; those are not drawn.
+	NotePodsOnlyNoOutside = "pods_only_no_outside"
 )
 
 // Caps of an answer.
@@ -186,6 +189,9 @@ func FromFlows(res *netflows.Result, namespaces []string) Result {
 	lines := map[string]*line{}
 	var order []string
 	for _, g := range res.Groups {
+		if g.Destination.ServiceAddress && g.Verdict != "DROPPED" {
+			continue // seen before the Service sent it on: counted where it arrives
+		}
 		from, to := flowEnd(g.Source, names), flowEnd(g.Destination, names)
 		k := from.key() + "→" + to.key()
 		l, ok := lines[k]
@@ -300,20 +306,26 @@ func finish(all []*line) ([]Line, bool) {
 type Shape struct {
 	netdrops.Shape
 	Direction bool // traffic_direction
+	// NoWorkload: the ends are named by namespace and pod only (Retina's flows carry no workload, so its
+	// workload labels stay empty); the pods' workloads are looked up.
+	NoWorkload bool
 }
 
 // DetectShape reads a metric's label names; ok is false when the ends are not named.
 func DetectShape(labels []string) (Shape, bool) {
+	has := map[string]bool{}
+	for _, l := range labels {
+		has[l] = true
+	}
 	s, ok := netdrops.DetectShape(labels)
+	noWorkload := false
+	if !ok && has["source_namespace"] && has["destination_namespace"] && has["source_pod"] && has["destination_pod"] {
+		s, ok, noWorkload = netdrops.Shape{Style: netdrops.StyleLabels, Pod: true}, true, true
+	}
 	if !ok {
 		return Shape{}, false
 	}
-	for _, l := range labels {
-		if l == "traffic_direction" {
-			return Shape{Shape: s, Direction: true}, true
-		}
-	}
-	return Shape{Shape: s}, true
+	return Shape{Shape: s, Direction: has["traffic_direction"], NoWorkload: noWorkload}, true
 }
 
 // Query builds the query of a metric over the namespaces: either end in one of them (the two halves joined
@@ -332,7 +344,10 @@ func Query(metric string, shape Shape, namespaces []string, rng time.Duration) s
 		src, dst = `source=~"(`+set+`)/.+"`, `destination=~"(`+set+`)/.+"`
 	} else {
 		for _, end := range []string{"source", "destination"} {
-			by = append(by, end+"_namespace", end+"_workload")
+			by = append(by, end+"_namespace")
+			if !shape.NoWorkload {
+				by = append(by, end+"_workload")
+			}
 			if shape.Kind {
 				by = append(by, end+"_workload_kind")
 			}
@@ -399,8 +414,9 @@ type Sample = netdrops.Sample
 // FromMetrics makes the lines of the two metrics' answers (either may be absent: shape ok false). With
 // traffic_direction a connection is counted where it arrived — the SYNs seen at a pod's ingress, or leaving
 // towards an address outside the pods — so a SYN NetworkPolicy drops at the destination (FORWARDED at the
-// source's egress) is not counted as opened. Without it, both sides add up.
-func FromMetrics(tcp Shape, tcpOK bool, tcpRows []Sample, drop Shape, dropOK bool, dropRows []Sample, namespaces, scope []string, rng time.Duration) Result {
+// source's egress) is not counted as opened. Without it, both sides add up. owners (nil: none) names the
+// workload of a pod end, for metrics that name pods only.
+func FromMetrics(tcp Shape, tcpOK bool, tcpRows []Sample, drop Shape, dropOK bool, dropRows []Sample, namespaces, scope []string, rng time.Duration, owners func(namespace, pod string) *netflows.Workload) Result {
 	out := Result{Available: true, Source: "metrics", Namespaces: namespaces, Range: rng.String()}
 	if tcpOK {
 		out.Style = tcp.Style
@@ -416,6 +432,14 @@ func FromMetrics(tcp Shape, tcpOK bool, tcpRows []Sample, drop Shape, dropOK boo
 	}
 	lines := map[string]*line{}
 	get := func(from, to End) *line {
+		for _, e := range []*End{&from, &to} {
+			if owners == nil || e.Kind != "Pod" {
+				continue
+			}
+			if w := owners(e.Namespace, e.Name); w != nil {
+				e.Kind, e.Name = w.Kind, w.Name
+			}
+		}
 		if hide(&from, scope) {
 			out.Redacted = true
 		}
@@ -432,16 +456,25 @@ func FromMetrics(tcp Shape, tcpOK bool, tcpRows []Sample, drop Shape, dropOK boo
 	}
 	// connections opened, by line and observing side
 	opened := map[*line]map[string]int64{}
+	unnamed := false
 	for _, s := range tcpRows {
 		n := int64(math.Round(s.Value))
 		if n <= 0 {
 			continue
 		}
-		l := get(metricEnd(tcp, "source", s.Labels), metricEnd(tcp, "destination", s.Labels))
+		to := metricEnd(tcp, "destination", s.Labels)
+		if tcp.NoWorkload && to.Outside != "" {
+			unnamed = true
+			continue
+		}
+		l := get(metricEnd(tcp, "source", s.Labels), to)
 		if opened[l] == nil {
 			opened[l] = map[string]int64{}
 		}
 		opened[l][s.Labels["traffic_direction"]] += n
+	}
+	if unnamed {
+		out.Notes = append(out.Notes, NotePodsOnlyNoOutside)
 	}
 	for l, bySide := range opened {
 		switch {

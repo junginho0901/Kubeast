@@ -321,6 +321,8 @@ func TestNormalize(t *testing.T) {
 		{Namespace: "a", Since: 2 * time.Hour},
 		{Namespace: "a", More: []string{"b"}},
 		{Namespace: "a", Kind: "Pod", Name: "x", More: []string{"b"}, Graph: true},
+		{Namespace: "a", Pods: []string{"p"}},
+		{Namespace: "a", Kind: "Pod", Name: "x", Pods: []string{"x"}},
 	} {
 		if err := s.Normalize(&bad); !errors.Is(err, ErrInvalidRequest) {
 			t.Errorf("%+v: %v", bad, err)
@@ -333,6 +335,10 @@ func TestNormalize(t *testing.T) {
 	g := Request{Namespace: "a", More: []string{"b"}, Graph: true, Limit: 5000}
 	if err := s.Normalize(&g); err != nil || g.Limit != 300 {
 		t.Fatalf("a graph read has its own cap: %+v %v", g, err)
+	}
+	w := Request{Namespace: "a", Kind: "Deployment", Name: "web", Pods: make([]string, MaxPods+1)}
+	if err := s.Normalize(&w); err != nil || len(w.Pods) != MaxPods {
+		t.Fatalf("a workload's pods are capped: %d %v", len(w.Pods), err)
 	}
 }
 
@@ -350,6 +356,13 @@ func TestFiltersAskBothSides(t *testing.T) {
 		{Request{Namespace: "demo", Kind: "Deployment", Name: "web", Verdicts: []string{"DROPPED"}}, []filter{
 			{sourcePod: []string{"demo/"}, sourceWorkload: web, verdicts: dropped},
 			{destinationPod: []string{"demo/"}, destinationWorkload: web, verdicts: dropped},
+		}},
+		// flows that name no workload (Retina) are asked for by the workload's pods as well
+		{Request{Namespace: "demo", Kind: "Deployment", Name: "web", Verdicts: []string{"DROPPED"}, Pods: []string{"web-1", "web-2"}}, []filter{
+			{sourcePod: []string{"demo/"}, sourceWorkload: web, verdicts: dropped},
+			{destinationPod: []string{"demo/"}, destinationWorkload: web, verdicts: dropped},
+			{sourcePod: []string{"demo/web-1", "demo/web-2"}, verdicts: dropped},
+			{destinationPod: []string{"demo/web-1", "demo/web-2"}, verdicts: dropped},
 		}},
 	} {
 		if got := c.req.filters(); !reflect.DeepEqual(got, c.want) {

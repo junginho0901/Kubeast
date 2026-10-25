@@ -53,11 +53,13 @@ type Handler struct {
 	// netflows reads Hubble Relays (nil: network flows off).
 	netflows *netflows.Store
 	// netflowsCanI asks the cluster about the Relay's services/proxy,
-	// netflowsDial picks the Relay's URL and client, and netflowsNow is the
-	// clock the window ends at (tests replace them).
+	// netflowsDial picks the Relay's URL and client, netflowsNow is the
+	// clock the window ends at, and netflowsLook fills in what flows leave
+	// out (tests replace them).
 	netflowsCanI func(ctx context.Context, r netflows.Relay) (bool, error)
 	netflowsDial func(ctx context.Context, t netflows.Target) (string, *http.Client, error)
 	netflowsNow  func() time.Time
+	netflowsLook netflows.Lookup
 	// netdropsSrc replaces the Prometheus and cluster reads of NetworkDrops in tests (nil: svc).
 	netdropsSrc netdropsSource
 	// alertStore reads the alert store (nil: alert reads off).
