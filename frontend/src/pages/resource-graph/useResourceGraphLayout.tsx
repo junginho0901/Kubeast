@@ -240,13 +240,17 @@ export function useResourceGraphLayout({
     }
 
     setLayoutReady(false)
+    // a layout that finishes after the input changed (a view switched while a large graph was laid out) is dropped
+    let stale = false
     applyElkLayout(filteredNodes, filteredEdges, groupBy, layoutData, { byTraffic: view === 'traffic', routed })
       .then(({ nodes: ln, edges: le }) => {
+        if (stale) return
         setNodes(ln)
         setEdges(le)
         setLayoutReady(true)
       })
       .catch(err => {
+        if (stale) return
         console.error('ELK layout error:', err)
         // Fallback: simple grid
         setNodes(filteredNodes.map((n, i) => ({
@@ -256,6 +260,7 @@ export function useResourceGraphLayout({
         setEdges(filteredEdges)
         setLayoutReady(true)
       })
+    return () => { stale = true }
   }, [filteredNodes, filteredEdges, routed, groupBy, layoutData, view, setNodes, setEdges])
 
   return { nodes, edges, onNodesChange, onEdgesChange, layoutReady, selfLoops, routed }
