@@ -4,7 +4,7 @@
 #
 # Usage — download a tagged copy, read it, then run it (do not pipe an
 # unreviewed script into bash):
-#   curl -fsSLo install.sh https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.1/install.sh
+#   curl -fsSLo install.sh https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.2/install.sh
 #   less install.sh
 #   bash install.sh
 #
@@ -12,7 +12,7 @@
 #   bash install.sh --node-port 30080
 #   bash install.sh --load-balancer
 #   bash install.sh --namespace my-ns
-#   bash install.sh --version 0.7.1
+#   bash install.sh --version 0.7.2
 #   bash install.sh --local        # the chart of this checkout (development)
 #
 set -euo pipefail
@@ -20,7 +20,7 @@ set -euo pipefail
 # Defaults
 NAMESPACE="kubeast"
 RELEASE_NAME="kubeast"
-CHART_VERSION="0.7.1"   # the release this script belongs to (deploy/dependencies.yaml: kubeast)
+CHART_VERSION="0.7.2"   # the release this script belongs to (deploy/dependencies.yaml: kubeast)
 CHART_REF="oci://ghcr.io/junginho0901/charts/kubeast"
 USE_LOCAL=false
 SERVICE_TYPE="NodePort"
