@@ -1,6 +1,7 @@
-# A one-pod Prometheus v3.15.0 in `monitoring` on the Cilium kind cluster (scripts/kind-cilium.sh): it
-# scrapes only the Hubble metrics of each Cilium agent (Service kube-system/hubble-metrics, enabled by
-# deploy/kind/cilium-values.yaml) and keeps a day in memory. Kubeast finds it as monitoring/prometheus:9090;
+# A one-pod Prometheus v3.15.0 in `monitoring` on the Cilium kind cluster (scripts/kind-cilium.sh), and on the
+# Retina one (scripts/kind-retina.sh): it scrapes only the Hubble metrics of each agent (Service
+# kube-system/hubble-metrics, enabled by deploy/kind/cilium-values.yaml, or network-observability, by
+# deploy/kind/retina-values.yaml) and keeps a day in memory. Kubeast finds it as monitoring/prometheus:9090;
 # e2e/tests/network-drops.spec.ts and network-traffic.spec.ts read the drops and connections of
 # deploy/kind/cilium-demo.yaml through it.
 ---
@@ -55,9 +56,10 @@ data:
             namespaces:
               names: [kube-system]
         relabel_configs:
-          # the endpoints role also lists the agent's other container ports
+          # the Hubble metrics port of Cilium's hubble-metrics or Retina's network-observability (the endpoints
+          # role also lists the agent's other container ports)
           - source_labels: [__meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
-            regex: hubble-metrics;hubble-metrics
+            regex: hubble-metrics;hubble-metrics|network-observability;hubble
             action: keep
           - source_labels: [__meta_kubernetes_pod_node_name]
             target_label: node

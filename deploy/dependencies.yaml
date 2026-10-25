@@ -345,6 +345,19 @@ dependencies:
       - path: docs/ko/cluster-requirements.md
         match: '(\[Kyverno 차트\]|\| Kyverno \|)'
 
+  # Microsoft Retina's Hubble control plane for network flows on kind (scripts/kind-retina.sh). v1.3.1 is
+  # released but its images were not on ghcr.io on 2026-10-25, so the chart and images stay at v1.3.0.
+  - name: retina
+    version: v1.3.0
+    upstream:
+      flavour: github
+      url: microsoft/retina
+    refPaths:
+      - path: scripts/kind-retina.sh
+        match: '^RETINA_VERSION='
+      - path: deploy/kind/retina-values.yaml
+        match: 'tag: v'
+
   # Cilium with Hubble Relay for network flows on kind (scripts/kind-cilium.sh, network-flows.spec.ts).
   - name: cilium
     version: 1.20.4

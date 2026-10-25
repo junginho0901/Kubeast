@@ -1,0 +1,39 @@
+# Microsoft Retina's Hubble control plane on the kind cluster of scripts/kind-retina.sh (kind's own CNI): the same
+# Hubble Relay API and Hubble metrics Kubeast reads from Cilium. The Relay serves TLS without client certificates
+# (Kubeast reads it through the API server service proxy, which sends none); certificates come from the certgen
+# Job (the chart's method helm does not render in 1.3.0). The metrics carry the labels of
+# docs/cluster-requirements.md §17 instead of the chart's one-label pod context, with the pods as well: Retina's
+# flows name no workload, so its workload labels stay empty and Kubeast names the pods' workloads.
+operator:
+  enabled: true
+  repository: ghcr.io/microsoft/retina/retina-operator
+  tag: v1.3.0
+agent:
+  enabled: true
+  repository: ghcr.io/microsoft/retina/retina-agent
+  tag: v1.3.0
+  init:
+    enabled: true
+    repository: ghcr.io/microsoft/retina/retina-init
+    tag: v1.3.0
+os:
+  windows: false
+hubble:
+  tls:
+    enabled: true
+    auto:
+      enabled: true
+      method: cronJob
+  relay:
+    image:
+      useDigest: false
+    tls:
+      server:
+        enabled: true
+        mtls: false
+  ui:
+    enabled: false
+  metrics:
+    enabled:
+      - drop:labelsContext=source_namespace,source_workload,source_workload_kind,source_pod,destination_namespace,destination_workload,destination_workload_kind,destination_pod,traffic_direction
+      - tcp:labelsContext=source_namespace,source_workload,source_workload_kind,source_pod,destination_namespace,destination_workload,destination_workload_kind,destination_pod,traffic_direction
