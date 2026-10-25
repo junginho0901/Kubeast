@@ -1,7 +1,8 @@
 # A one-pod Prometheus v3.15.0 in `monitoring` on the Cilium kind cluster (scripts/kind-cilium.sh): it
 # scrapes only the Hubble metrics of each Cilium agent (Service kube-system/hubble-metrics, enabled by
 # deploy/kind/cilium-values.yaml) and keeps a day in memory. Kubeast finds it as monitoring/prometheus:9090;
-# e2e/tests/network-drops.spec.ts reads the drops of deploy/kind/cilium-demo.yaml through it.
+# e2e/tests/network-drops.spec.ts and network-traffic.spec.ts read the drops and connections of
+# deploy/kind/cilium-demo.yaml through it.
 ---
 apiVersion: v1
 kind: Namespace

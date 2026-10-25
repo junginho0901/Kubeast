@@ -40,6 +40,7 @@ A "target cluster" is a cluster Kubeast manages, including the cluster it is ins
 | NetworkPolicy view and check | A network plugin that enforces NetworkPolicy, read permission on the namespaces involved — §7 | — | The answer is what the policies say, not what the cluster does; "unknown" where a rule needs namespace labels the user cannot read |
 | Recent flows (drawers, AI `network_flows`) | Cilium Hubble Relay serving TLS, `create` on `services/proxy` for the Relay Service — §16 | `features.networkFlows.enabled` (off) | The section and the tool are left out and the API returns 404; without the cluster permission, 403 |
 | Network drops (drawers, AI `network_drops`) | The Hubble drop metric with workload labels in the cluster's Prometheus — §17 | Prometheus (§3) | The section is not shown; the tool says the metric is missing |
+| Resource Graph traffic lines | Recent flows (§16), or the Hubble TCP and drop metrics with workload labels in the cluster's Prometheus — §18 | `features.networkFlows` or Prometheus | The switch is not shown; a missing metric is named in the graph |
 
 ## 1. Permissions (RBAC) — every target cluster
 
@@ -506,6 +507,32 @@ For the drawers' "Network Drops" and the AI tool `network_drops`, the cluster's 
 - **Permission**: as for every Prometheus read (§3): the user's GET through the API server proxy, or the store's own credentials. Kubeast also asks `resource.networkflow.read`.
 - **What a count is**: one dropped packet (each a Hubble event), so a refused connection that retries counts several times. `reason` is the drop reason name, such as `POLICY_DENIED`.
 - **Check**: `count by (source_workload, destination_workload, reason) (hubble_drop_total)` in Prometheus, or a Pod drawer → Network Drops.
+
+## 18. Resource Graph traffic lines
+
+The Resource Graph's Traffic and Both views draw lines from one of two sources. The switch is shown when the cluster has at least one and the user has `resource.networkflow.read`.
+
+- **Recent flows**: the Hubble Relay of §16, with the same permission. One read covers all the chosen namespaces (Hubble's pod filter takes several `<namespace>/` prefixes).
+  - A connection is allowed where it arrived: seen at the destination's ingress, answered, or going outside the pods. One seen only leaving towards a pod is not drawn as allowed; when NetworkPolicy dropped it at the destination, that drop draws the line.
+  - Up to `features.networkFlows.graphMaxFlows` flows (2,000, at most 10,000) from the last `defaultRange` (15 minutes). The Relay keeps a ring of flows on each node (Cilium `hubble.eventBufferCapacity`, 4,095 by default), so a busy cluster shows a shorter past; the graph says when the read reached the limit.
+  - Measured on the development cluster: a read of 200 flows took about 12 ms and 100 KB; the Relay used 31 MiB.
+- **Metrics**: the cluster's Prometheus (§3) with these Hubble metrics, in either label shape of §17:
+  - `hubble_tcp_flags_total` (Hubble's `tcp` metric): Kubeast counts `flag="SYN"`, the packet a client sends to open a connection, so a line points from client to server. With `traffic_direction`, a connection counts once, where it arrived: at the destination pod's ingress, or leaving towards an address outside the pods. Hubble's verdict is per observation point, so a SYN that NetworkPolicy drops at the destination is FORWARDED where it left the client; counted where it arrived, it is not an opened connection. Without `traffic_direction`, both sides add up and the graph says so.
+  - `hubble_drop_total` (§17) for the dropped packets and their reasons.
+  - UDP traffic such as DNS has no SYN and is not drawn from the metrics. Recent flows show it.
+  - **Why not `hubble_flows_processed_total`**: Hubble's `flow` metric counts every flow, replies too, and has no label to tell them apart, so every connection would also draw a line back. Leaving replies out takes an `excludeFilters` entry, which only the dynamic metrics exporter has, and Cilium refuses static and dynamic metrics together ("cannot configure both static and dynamic Hubble metrics", 1.20.4).
+- **Cilium Helm values** (1.20.4), next to the `drop` metric of §17:
+
+  ```yaml
+  hubble:
+    metrics:
+      enabled:
+        - drop:labelsContext=source_namespace,source_workload,source_workload_kind,destination_namespace,destination_workload,destination_workload_kind,traffic_direction
+        - tcp:labelsContext=source_namespace,source_workload,source_workload_kind,destination_namespace,destination_workload,destination_workload_kind,traffic_direction
+  ```
+
+  Restart the agents after the change, as in §17.
+- **Check**: `sum by (source_workload, destination_workload) (increase(hubble_tcp_flags_total{flag="SYN"}[1h]))` in Prometheus, or Resource Graph → Traffic.
 
 ## Verified versions (2026-10-13)
 

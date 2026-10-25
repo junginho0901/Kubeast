@@ -12,6 +12,7 @@ import type {
   NetflowResult,
   NetdropResult,
   NetpolCheckResult,
+  TrafficResult,
   NetpolEffective,
   NetworkPolicyInfo,
   ServiceInfo,
@@ -166,6 +167,11 @@ export const networkApi = {
 
   getNetworkDrops: async (namespace: string, params: { kind?: string; name?: string; range?: string }): Promise<NetdropResult> => {
     const { data } = await client.get(`/cluster/namespaces/${encodeURIComponent(namespace)}/networkdrops`, { params })
+    return data
+  },
+
+  getNetworkTraffic: async (namespaces: string[], params: { source: 'relay' | 'metrics'; since?: string; range?: string }): Promise<TrafficResult> => {
+    const { data } = await client.get('/cluster/networktraffic', { params: { namespaces: namespaces.join(','), ...params } })
     return data
   },
 

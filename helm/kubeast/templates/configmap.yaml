@@ -277,6 +277,7 @@ data:
   NETWORK_FLOWS_DEFAULT_RANGE: {{ .defaultRange | quote }}
   NETWORK_FLOWS_MAX_RANGE: {{ .maxRange | quote }}
   NETWORK_FLOWS_MAX_FLOWS: {{ .maxFlows | quote }}
+  NETWORK_FLOWS_GRAPH_MAX_FLOWS: {{ .graphMaxFlows | quote }}
   NETWORK_FLOWS_TIMEOUT: {{ .timeout | quote }}
   NETWORK_FLOWS_PER_USER_PER_MINUTE: {{ .perUserPerMinute | quote }}
 {{- if .tls.existingSecret }}

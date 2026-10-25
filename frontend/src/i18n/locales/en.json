@@ -3031,6 +3031,61 @@
       "namespace": "Namespace",
       "node": "Node",
       "instance": "Instance"
+    },
+    "traffic": {
+      "peerGroup": "outside this view",
+      "peerPodOrWorkload": "Pod or workload",
+      "peerOutside": "Outside the pods",
+      "viewLabel": "What the lines show",
+      "view": {
+        "structure": "Structure",
+        "traffic": "Traffic",
+        "both": "Both"
+      },
+      "sourceLabel": "Traffic source",
+      "sourceRelay": "Recent flows",
+      "sourceMetrics": "Metrics {{w}}",
+      "refresh": "Read the traffic again",
+      "panelTitle": "Traffic",
+      "from": "From",
+      "to": "To",
+      "countsRelay": "{{allowed}} flows allowed · {{dropped}} dropped in the last {{w}}",
+      "countsMetrics": "{{allowed}} TCP connections opened · {{dropped}} packets dropped in the last {{w}}",
+      "ports": "Ports",
+      "reasons": "Drop reasons",
+      "deniedBy": "Denied by",
+      "last": "Last seen {{time}}",
+      "open": "Open {{name}}",
+      "connections": "Latest connections",
+      "flowsCount": "{{n}} flows",
+      "aboutRelay": "From the cluster's Hubble Relay: the latest flows it keeps, read once. Each end's drawer shows its recent flows.",
+      "aboutMetrics": "From the Hubble metrics in the cluster's Prometheus: TCP connections opened (SYN) and dropped packets. UDP traffic such as DNS is not counted.",
+      "unavailable": {
+        "no_prometheus": "This cluster has no Prometheus Kubeast can read.",
+        "no_metrics": "The cluster's Prometheus has no Hubble TCP or drop metric. See the cluster requirements (Hubble metrics).",
+        "no_context_labels": "The cluster's Hubble metrics have no pod or workload labels. See the cluster requirements (Hubble metrics)."
+      },
+      "none": "No traffic between these namespaces’ workloads in what was read.",
+      "legend": {
+        "allowed": "allowed",
+        "mixed": "partly dropped",
+        "dropped": "dropped",
+        "peer": "not in this graph",
+        "unitRelay": "number = flows",
+        "unitMetrics": "number = TCP connections · ✕ dropped packets"
+      },
+      "statusRelay": "{{lines}} lines from {{flows}} recent flows of the Hubble Relay (last {{w}})",
+      "statusMetrics": "{{lines}} lines from the Hubble metrics (last {{w}})",
+      "truncated": "Only the latest flows the Relay returned: older traffic is not drawn.",
+      "linesTruncated": "Only the busiest 300 lines are drawn.",
+      "note": {
+        "no_tcp_metric": "The cluster's Hubble TCP metric is missing or has no workload labels: only drops are drawn.",
+        "no_drop_metric": "The cluster's Hubble drop metric is missing or has no workload labels: drops are not drawn.",
+        "counted_at_both_ends": "The metric has no traffic_direction label: a connection seen at both ends counts twice."
+      },
+      "redacted": "Peers outside your namespaces show their namespace only.",
+      "selfLoops": "{{n}} lines inside one workload are not drawn.",
+      "lineCount": "{{n}} traffic lines"
     }
   },
   "advancedSearch": {

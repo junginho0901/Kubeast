@@ -3133,6 +3133,61 @@
       "namespace": "Namespace",
       "node": "Node",
       "instance": "인스턴스"
+    },
+    "traffic": {
+      "peerGroup": "이 그래프 밖",
+      "peerPodOrWorkload": "Pod 또는 워크로드",
+      "peerOutside": "파드 밖",
+      "viewLabel": "선이 보여 주는 것",
+      "view": {
+        "structure": "구조",
+        "traffic": "통신",
+        "both": "둘 다"
+      },
+      "sourceLabel": "통신 출처",
+      "sourceRelay": "최근 흐름",
+      "sourceMetrics": "지표 {{w}}",
+      "refresh": "통신 다시 읽기",
+      "panelTitle": "통신",
+      "from": "출발",
+      "to": "도착",
+      "countsRelay": "최근 {{w}} 동안 허용된 흐름 {{allowed}}개 · 차단 {{dropped}}개",
+      "countsMetrics": "최근 {{w}} 동안 연 TCP 연결 {{allowed}}번 · 차단된 패킷 {{dropped}}개",
+      "ports": "포트",
+      "reasons": "차단 사유",
+      "deniedBy": "막은 정책",
+      "last": "마지막 {{time}}",
+      "open": "{{name}} 열기",
+      "connections": "최근 연결",
+      "flowsCount": "흐름 {{n}}개",
+      "aboutRelay": "클러스터의 Hubble Relay가 가진 최근 흐름을 한 번 읽은 것입니다. 각 끝의 드로어에서 최근 흐름을 더 볼 수 있습니다.",
+      "aboutMetrics": "클러스터 Prometheus의 Hubble 지표입니다: 연 TCP 연결(SYN)과 차단된 패킷. DNS 같은 UDP 통신은 세지 않습니다.",
+      "unavailable": {
+        "no_prometheus": "이 클러스터에는 Kubeast가 읽을 수 있는 Prometheus가 없습니다.",
+        "no_metrics": "클러스터 Prometheus에 Hubble TCP·차단 지표가 없습니다. 클러스터 요구사항(Hubble 지표)을 확인하세요.",
+        "no_context_labels": "클러스터의 Hubble 지표에 파드·워크로드 레이블이 없습니다. 클러스터 요구사항(Hubble 지표)을 확인하세요."
+      },
+      "none": "읽은 범위에서 이 네임스페이스들의 워크로드 사이 통신이 없습니다.",
+      "legend": {
+        "allowed": "허용",
+        "mixed": "일부 차단",
+        "dropped": "차단",
+        "peer": "이 그래프에 없음",
+        "unitRelay": "숫자 = 흐름 수",
+        "unitMetrics": "숫자 = TCP 연결 수 · ✕ 차단된 패킷"
+      },
+      "statusRelay": "Hubble Relay의 최근 흐름 {{flows}}개에서 선 {{lines}}개(최근 {{w}})",
+      "statusMetrics": "Hubble 지표에서 선 {{lines}}개(최근 {{w}})",
+      "truncated": "Relay가 돌려준 최근 흐름만 그립니다. 그보다 오래된 통신은 빠집니다.",
+      "linesTruncated": "가장 많이 쓰인 선 300개만 그립니다.",
+      "note": {
+        "no_tcp_metric": "클러스터의 Hubble TCP 지표가 없거나 워크로드 레이블이 없어 차단만 그립니다.",
+        "no_drop_metric": "클러스터의 Hubble 차단 지표가 없거나 워크로드 레이블이 없어 차단은 그리지 않습니다.",
+        "counted_at_both_ends": "지표에 traffic_direction 레이블이 없어 양쪽 끝에서 본 연결은 두 번 셉니다."
+      },
+      "redacted": "내 네임스페이스 밖의 상대는 네임스페이스만 보입니다.",
+      "selfLoops": "한 워크로드 안의 선 {{n}}개는 그리지 않습니다.",
+      "lineCount": "통신 선 {{n}}개"
     }
   },
   "advancedSearch": {

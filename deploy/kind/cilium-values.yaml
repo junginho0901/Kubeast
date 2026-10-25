@@ -1,6 +1,7 @@
 # Cilium on the kind cluster of scripts/kind-cilium.sh. Hubble Relay serves TLS because the API server
-# reaches a backend over HTTP/2 only with TLS (network flows), and the Hubble drop metric carries the
-# workload labels Kubeast reads (network drops, docs/cluster-requirements.md §17).
+# reaches a backend over HTTP/2 only with TLS (network flows), and the Hubble drop and TCP metrics carry the
+# workload labels Kubeast reads (network drops and the Resource Graph's traffic lines,
+# docs/cluster-requirements.md §17 and §18).
 image:
   pullPolicy: IfNotPresent
 # the agents read the metric settings at start: restart them when the ConfigMap changes
@@ -16,3 +17,4 @@ hubble:
   metrics:
     enabled:
       - drop:labelsContext=source_namespace,source_workload,source_workload_kind,destination_namespace,destination_workload,destination_workload_kind,traffic_direction
+      - tcp:labelsContext=source_namespace,source_workload,source_workload_kind,destination_namespace,destination_workload,destination_workload_kind,traffic_direction

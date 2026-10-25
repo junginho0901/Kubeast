@@ -47,7 +47,7 @@ func newNetflowsFixture(t *testing.T, perMinute int) *netflowsFixture {
 	t.Cleanup(srv.Close)
 	s, err := netflows.New(netflows.Config{
 		Clusters:     map[string]netflows.Target{"self": {Mode: "proxy", Relay: netflows.Relay{Namespace: "kube-system", Service: "hubble-relay", Port: 443}}},
-		DefaultRange: time.Hour, MaxRange: time.Hour, MaxFlows: 50, Timeout: 2 * time.Second, PerUserPerMinute: perMinute,
+		DefaultRange: time.Hour, MaxRange: time.Hour, MaxFlows: 50, GraphMaxFlows: 400, Timeout: 2 * time.Second, PerUserPerMinute: perMinute,
 	})
 	if err != nil {
 		t.Fatal(err)

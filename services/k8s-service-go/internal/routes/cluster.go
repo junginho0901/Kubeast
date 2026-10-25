@@ -74,6 +74,8 @@ func RegisterCluster(r chi.Router, h *handler.Handler) {
 	// Resource Graph (upgraded)
 	r.Get("/api/v1/resource-graph", h.GetResourceGraph)
 	r.Get("/api/v1/namespaces/{namespace}/resource-graph", h.GetNamespaceResourceGraph)
+	// its traffic lines (Hubble Relay or the Hubble metrics)
+	r.Get("/api/v1/networktraffic", h.NetworkTraffic)
 
 	// Timeline (nginx rewrites /api/v1/cluster/namespaces/* → /api/v1/namespaces/*)
 	r.Get("/api/v1/timeline", h.GetClusterTimeline)

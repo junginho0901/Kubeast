@@ -121,9 +121,12 @@ type Request struct {
 	Namespace string
 	Kind      string // "" for the whole namespace
 	Name      string
-	Verdicts  []string
-	Since     time.Duration
-	Limit     int
+	// More are the other namespaces of a Resource Graph read (Graph), read like Namespace.
+	More     []string
+	Graph    bool // a Resource Graph read: up to GraphMaxFlows
+	Verdicts []string
+	Since    time.Duration
+	Limit    int
 	// Scope is a namespace-scoped reader's namespaces (nil = the whole cluster):
 	// peers outside it are shown by namespace and address only.
 	Scope []string
@@ -153,11 +156,21 @@ func (s *Store) Normalize(r *Request) error {
 	if r.Since < 0 || r.Since > s.cfg.MaxRange {
 		return fmt.Errorf("%w: since must be between 1s and %s", ErrInvalidRequest, s.cfg.MaxRange)
 	}
-	if r.Limit <= 0 || r.Limit > s.cfg.MaxFlows {
-		r.Limit = s.cfg.MaxFlows
+	if len(r.More) > 0 && (!r.Graph || r.Kind != "") {
+		return fmt.Errorf("%w: more namespaces are for a whole-namespace graph read", ErrInvalidRequest)
+	}
+	max := s.cfg.MaxFlows
+	if r.Graph {
+		max = s.cfg.GraphMaxFlows
+	}
+	if r.Limit <= 0 || r.Limit > max {
+		r.Limit = max
 	}
 	return nil
 }
+
+// Namespaces are the request's namespaces: Namespace, then More.
+func (r Request) Namespaces() []string { return append([]string{r.Namespace}, r.More...) }
 
 func (r Request) filters() []filter {
 	var verdicts []int32
@@ -167,7 +180,9 @@ func (r Request) filters() []filter {
 	src, dst := filter{verdicts: verdicts}, filter{verdicts: verdicts}
 	switch r.Kind {
 	case "":
-		src.sourcePod, dst.destinationPod = []string{r.Namespace + "/"}, []string{r.Namespace + "/"}
+		for _, ns := range r.Namespaces() {
+			src.sourcePod, dst.destinationPod = append(src.sourcePod, ns+"/"), append(dst.destinationPod, ns+"/")
+		}
 	case "Pod":
 		// a prefix to Hubble: the exact name is checked on the answer
 		src.sourcePod, dst.destinationPod = []string{r.Namespace + "/" + r.Name}, []string{r.Namespace + "/" + r.Name}
@@ -180,12 +195,18 @@ func (r Request) filters() []filter {
 }
 
 func (r Request) side(e End) bool {
+	if r.Kind == "" {
+		for _, ns := range r.Namespaces() {
+			if e.Namespace == ns {
+				return true
+			}
+		}
+		return false
+	}
 	if e.Namespace != r.Namespace {
 		return false
 	}
 	switch r.Kind {
-	case "":
-		return true
 	case "Pod":
 		return e.Pod == r.Name
 	default:

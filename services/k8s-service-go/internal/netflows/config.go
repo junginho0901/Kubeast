@@ -45,11 +45,13 @@ type Target struct {
 
 // Config is the network flows configuration (chart features.networkFlows).
 type Config struct {
-	Enabled          bool
-	Clusters         map[string]Target
-	DefaultRange     time.Duration
-	MaxRange         time.Duration
-	MaxFlows         int
+	Enabled      bool
+	Clusters     map[string]Target
+	DefaultRange time.Duration
+	MaxRange     time.Duration
+	MaxFlows     int
+	// GraphMaxFlows caps a Resource Graph read, which covers several namespaces.
+	GraphMaxFlows    int
 	Timeout          time.Duration
 	PerUserPerMinute int
 	// TLS for mode address: a CA to trust (empty = system roots), an optional
@@ -65,6 +67,7 @@ func LoadConfig() Config {
 		DefaultRange:     envDuration("NETWORK_FLOWS_DEFAULT_RANGE", 15*time.Minute),
 		MaxRange:         envDuration("NETWORK_FLOWS_MAX_RANGE", time.Hour),
 		MaxFlows:         pkgconfig.GetEnvInt("NETWORK_FLOWS_MAX_FLOWS", 200),
+		GraphMaxFlows:    pkgconfig.GetEnvInt("NETWORK_FLOWS_GRAPH_MAX_FLOWS", 2000),
 		Timeout:          envDuration("NETWORK_FLOWS_TIMEOUT", 10*time.Second),
 		PerUserPerMinute: pkgconfig.GetEnvInt("NETWORK_FLOWS_PER_USER_PER_MINUTE", 20),
 		CAFile:           strings.TrimSpace(os.Getenv("NETWORK_FLOWS_TLS_CA_FILE")),
@@ -164,6 +167,9 @@ func (c Config) Validate() error {
 	}
 	if c.MaxFlows < 1 || c.MaxFlows > 1000 {
 		return fmt.Errorf("NETWORK_FLOWS_MAX_FLOWS must be 1..1000")
+	}
+	if c.GraphMaxFlows < 1 || c.GraphMaxFlows > 10000 {
+		return fmt.Errorf("NETWORK_FLOWS_GRAPH_MAX_FLOWS must be 1..10000")
 	}
 	if c.PerUserPerMinute < 1 {
 		return fmt.Errorf("NETWORK_FLOWS_PER_USER_PER_MINUTE must be at least 1")

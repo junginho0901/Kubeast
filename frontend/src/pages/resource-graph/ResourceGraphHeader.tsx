@@ -4,7 +4,7 @@
 // Group By + Issues + Filter toggle + Filter panel) 추출. dropdown click-outside
 // useEffect 도 자체 보유.
 
-import { Dispatch, SetStateAction, useEffect, useRef } from 'react'
+import { Dispatch, ReactNode, SetStateAction, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CheckCircle, ChevronDown, Filter, Search, X } from 'lucide-react'
 import type { ResourceGraphEdgeType } from '@/services/api'
@@ -25,6 +25,7 @@ interface Props {
   // counts
   nodeCount: number
   edgeCount: number
+  trafficLineCount?: number
   // namespaces
   namespaces: NamespaceLite[] | undefined
   selectedNamespaces: Set<string>
@@ -47,11 +48,14 @@ interface Props {
   setKindFilters: Dispatch<SetStateAction<Set<string>>>
   edgeTypeFilters: Set<string>
   setEdgeTypeFilters: Dispatch<SetStateAction<Set<string>>>
+  // controls after the grouping (the traffic switch)
+  extra?: ReactNode
 }
 
 export function ResourceGraphHeader({
   nodeCount,
   edgeCount,
+  trafficLineCount,
   namespaces,
   selectedNamespaces,
   setSelectedNamespaces,
@@ -69,6 +73,7 @@ export function ResourceGraphHeader({
   setKindFilters,
   edgeTypeFilters,
   setEdgeTypeFilters,
+  extra,
 }: Props) {
   const { t } = useTranslation()
   const nsDropdownRef = useRef<HTMLDivElement>(null)
@@ -128,6 +133,12 @@ export function ResourceGraphHeader({
           <span>{t('resourceGraph.nodeCount', { defaultValue: '{{n}} nodes', n: nodeCount })}</span>
           <span>·</span>
           <span>{t('resourceGraph.edgeCount', { defaultValue: '{{n}} edges', n: edgeCount })}</span>
+          {trafficLineCount !== undefined && (
+            <>
+              <span>·</span>
+              <span data-testid="traffic-line-count">{t('resourceGraph.traffic.lineCount', { defaultValue: '{{n}} traffic lines', n: trafficLineCount })}</span>
+            </>
+          )}
         </div>
       </div>
 
@@ -173,7 +184,7 @@ export function ResourceGraphHeader({
         </div>
 
         {/* Search */}
-        <div className="relative flex-1 max-w-xs">
+        <div className="relative flex-1 min-w-[180px] max-w-xs">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             type="text"
@@ -204,6 +215,8 @@ export function ResourceGraphHeader({
             </button>
           ))}
         </div>
+
+        {extra}
 
         {/* Status filter */}
         <button

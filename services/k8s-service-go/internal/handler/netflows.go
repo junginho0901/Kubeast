@@ -51,13 +51,10 @@ func (h *Handler) NetworkFlows(w http.ResponseWriter, r *http.Request) {
 	if v := strings.TrimSpace(q.Get("verdict")); v != "" {
 		req.Verdicts = strings.Split(v, ",")
 	}
-	if v := q.Get("since"); v != "" {
-		d, err := time.ParseDuration(v)
-		if err != nil || d <= 0 {
-			response.Error(w, http.StatusBadRequest, "since must be a positive duration such as 15m")
-			return
-		}
-		req.Since = d
+	var err error
+	if req.Since, err = parseSince(q.Get("since")); err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	payload, _ := auth.FromContext(ctx)
 	if scope := payload.Namespaces[string(id)]; len(scope) > 0 {
@@ -67,11 +64,36 @@ func (h *Handler) NetworkFlows(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	target, _ := h.netflows.Target(string(id))
 	targetType, targetID := "namespace", namespace
 	if req.Kind != "" {
 		targetType, targetID = strings.ToLower(req.Kind), req.Name
 	}
+	if res := h.relayRead(w, r, req, targetType, targetID, namespace); res != nil {
+		response.JSON(w, http.StatusOK, res)
+	}
+}
+
+// parseSince reads the since parameter of a flow read; empty is the configured default.
+func parseSince(v string) (time.Duration, error) {
+	if v == "" {
+		return 0, nil
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil || d <= 0 {
+		return 0, errors.New("since must be a positive duration such as 15m")
+	}
+	return d, nil
+}
+
+// relayRead reads the flows of a normalized request from the cluster's Relay as the user, after a flow
+// read's checks (the cluster's services/proxy answer, the user's budget, the audit store) and with its
+// audit row k8s.networkflows.query on the given target. It answers the request itself and returns nil when
+// a check or the read fails.
+func (h *Handler) relayRead(w http.ResponseWriter, r *http.Request, req netflows.Request, targetType, targetID, namespace string) *netflows.Result {
+	ctx := r.Context()
+	id, _ := cluster.FromContext(ctx)
+	payload, _ := auth.FromContext(ctx)
+	target, _ := h.netflows.Target(string(id))
 	var res *netflows.Result
 	after := func() json.RawMessage { return netflowsAudit(target, req, res) }
 	refuse := func(status int, err error) {
@@ -81,19 +103,19 @@ func (h *Handler) NetworkFlows(w http.ResponseWriter, r *http.Request) {
 	allowed, err := h.canReadRelay(ctx, target.Relay)
 	if err != nil {
 		h.handleError(w, err)
-		return
+		return nil
 	}
 	if !allowed {
 		refuse(http.StatusForbidden, fmt.Errorf("forbidden: the cluster does not let you read the Hubble Relay (create on services/proxy %s in %s)", target.Relay.ProxyName(), target.Relay.Namespace))
-		return
+		return nil
 	}
 	if !h.netflows.Allow(payload.UserID) {
 		refuse(http.StatusTooManyRequests, fmt.Errorf("too many network flow reads: %d per minute", h.netflows.Config().PerUserPerMinute))
-		return
+		return nil
 	}
 	if rerr := h.auditReady(r); rerr != nil {
 		h.refuseUnaudited(w, r, rerr)
-		return
+		return nil
 	}
 	url, client, err := h.relayClient(ctx, target)
 	var qerr error
@@ -114,13 +136,13 @@ func (h *Handler) NetworkFlows(w http.ResponseWriter, r *http.Request) {
 	}
 	if werr := h.recordAuditWithPayload(r, "k8s.networkflows.query", targetType, targetID, namespace, qerr, nil, after()); werr != nil {
 		h.refuseUnaudited(w, r, werr)
-		return
+		return nil
 	}
 	if qerr != nil {
 		response.Error(w, netflowsStatus(qerr), qerr.Error())
-		return
+		return nil
 	}
-	response.JSON(w, http.StatusOK, res)
+	return res
 }
 
 // canReadRelay asks the cluster whether the user may use the Relay's
@@ -193,6 +215,9 @@ func netflowsAudit(t netflows.Target, req netflows.Request, res *netflows.Result
 	}
 	if len(req.Verdicts) > 0 {
 		after["verdicts"] = req.Verdicts
+	}
+	if req.Graph {
+		after["graph"], after["namespaces"] = true, req.Namespaces()
 	}
 	if res != nil {
 		after["flows"], after["groups"], after["truncated"] = len(res.Flows), len(res.Groups), res.Truncated

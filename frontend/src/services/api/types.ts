@@ -842,6 +842,46 @@ export interface NetdropResult {
   redacted?: boolean
 }
 
+// GET /api/v1/cluster/networktraffic?namespaces=a,b&source=relay|metrics&since=&range= — the Resource Graph's
+// traffic lines. An end is a workload or pod (kind empty when a metric named it "namespace/name" only), a
+// namespace alone (outside a namespace-limited reader's namespaces), or outside the cluster's pods.
+export interface TrafficEnd {
+  namespace?: string
+  kind?: string
+  name?: string
+  outside?: string
+}
+
+// allowed/dropped: flows (relay — both ways, at each end seen) or TCP connections opened / packets dropped (metrics).
+export interface TrafficLine {
+  from: TrafficEnd
+  to: TrafficEnd
+  allowed: number
+  dropped: number
+  ports?: { protocol?: string; port?: number }[]
+  reasons?: { reason: string; count: number }[]
+  denied_by?: NetflowPolicyRef[]
+  last?: string
+  connections?: NetflowGroup[]
+}
+
+export interface TrafficResult {
+  available: boolean
+  reason?: 'no_prometheus' | 'no_metrics' | 'no_context_labels'
+  source: 'relay' | 'metrics'
+  style?: 'labels' | 'pod'
+  namespaces: string[]
+  since?: string
+  range?: string
+  lines: TrafficLine[]
+  lines_truncated?: boolean
+  flows?: number
+  truncated?: boolean
+  lost_events?: number
+  redacted?: boolean
+  notes?: string[]
+}
+
 // GET /api/v1/cluster/networkpolicies/check?src=&dst=&port=&protocol= — an end is
 // <kind>/<namespace>/<name> or an IP address; dst may be service/<namespace>/<name>.
 export type NetpolResult = 'allowed' | 'denied' | 'unknown'

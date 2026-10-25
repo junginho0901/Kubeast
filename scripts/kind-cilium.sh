@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Network flows and drops on kind: a kind cluster without its default CNI (kubeast-cilium, deploy/kind/cilium-kind.yaml)
-# running Cilium with Hubble Relay serving TLS and the Hubble drop metric (deploy/kind/cilium-values.yaml), a
+# running Cilium with Hubble Relay serving TLS and the Hubble drop and TCP metrics (deploy/kind/cilium-values.yaml), a
 # Prometheus that scrapes it (deploy/kind/cilium-prometheus.yaml), the traffic of deploy/kind/cilium-demo.yaml
 # (client reaches web, stranger is dropped by the NetworkPolicy web-only-client), registered with Kubeast under its
 # own name, the Relay Role from templates/impersonation-viewer-hubble.yaml, the Prometheus Role from
 # templates/impersonation-viewer-proxy.yaml, and features.networkFlows through deploy/kind/networkflows-values.yaml.
-# e2e/tests/network-flows.spec.ts and network-drops.spec.ts read them.
+# e2e/tests/network-flows.spec.ts, network-drops.spec.ts and network-traffic.spec.ts read them.
 #
 #   scripts/kind-cilium.sh up       # creates the cluster, or starts it when stopped
 #   scripts/kind-cilium.sh down     # turns the feature off and stops the cluster (kept for next time)
@@ -59,7 +59,7 @@ case "${1:-}" in
     kind get kubeconfig --name "$NAME" > "$KC"
     for _ in $(seq 1 60); do ck get --raw /readyz >/dev/null 2>&1 && break; sleep 2; done
 
-    echo "═══ Cilium $CILIUM_VERSION with Hubble Relay over TLS and the drop metric ═══"
+    echo "═══ Cilium $CILIUM_VERSION with Hubble Relay over TLS and the drop and TCP metrics ═══"
     helm repo add cilium https://helm.cilium.io/ >/dev/null 2>&1 || true
     helm repo update cilium >/dev/null
     helm --kubeconfig "$KC" -n kube-system upgrade --install cilium cilium/cilium --version "$CILIUM_VERSION" \

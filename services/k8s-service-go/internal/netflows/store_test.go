@@ -105,7 +105,7 @@ func fixtureMessages(t *testing.T, name string) [][]byte {
 }
 
 func testStore() *Store {
-	s, _ := New(Config{Clusters: map[string]Target{"c": {Mode: "proxy"}}, DefaultRange: 15 * time.Minute, MaxRange: time.Hour, MaxFlows: 20, Timeout: 2 * time.Second, PerUserPerMinute: 2})
+	s, _ := New(Config{Clusters: map[string]Target{"c": {Mode: "proxy"}}, DefaultRange: 15 * time.Minute, MaxRange: time.Hour, MaxFlows: 20, GraphMaxFlows: 300, Timeout: 2 * time.Second, PerUserPerMinute: 2})
 	return s
 }
 
@@ -236,6 +236,28 @@ func TestQueryRedactsPeersOutsideTheScope(t *testing.T) {
 	}
 }
 
+func TestQuerySeveralNamespaces(t *testing.T) {
+	now := time.Date(2026, 10, 24, 15, 0, 0, 0, time.UTC)
+	flows := [][]byte{
+		encodeFlow(Flow{Time: now.Add(-time.Minute), Verdict: "FORWARDED", Source: End{Namespace: "ops", Pod: "probe-1"}, Destination: End{Namespace: "shop", Pod: "web-1", Port: 80}}),
+		encodeFlow(Flow{Time: now.Add(-time.Minute), Verdict: "FORWARDED", Source: End{Namespace: "ops", Pod: "probe-1"}, Destination: End{Namespace: "kube-system", Pod: "dns-1", Port: 53}}),
+		encodeFlow(Flow{Time: now.Add(-time.Minute), Verdict: "FORWARDED", Source: End{Namespace: "lab", Pod: "x-1"}, Destination: End{Namespace: "lab", Pod: "y-1", Port: 80}}),
+	}
+	r := &relay{messages: flows, trailer: map[string]string{"Grpc-Status": "0"}}
+	srv, client := r.serve(t)
+	s := testStore()
+	req := Request{Namespace: "shop", More: []string{"ops"}, Graph: true}
+	_ = s.Normalize(&req)
+	res, err := s.Query(context.Background(), client, srv.URL+getFlowsPath, req, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// both namespaces' flows, either side; another namespace's flow is checked out again
+	if len(res.Flows) != 2 || len(res.Groups) != 2 {
+		t.Fatalf("flows of shop and ops: %+v", res.Flows)
+	}
+}
+
 func TestGroupFoldsReplies(t *testing.T) {
 	now := time.Date(2026, 10, 24, 15, 0, 0, 0, time.UTC)
 	client := End{Namespace: "shop", Pod: "client-1", Workload: &Workload{Kind: "Deployment", Name: "client"}}
@@ -297,6 +319,8 @@ func TestNormalize(t *testing.T) {
 		{Namespace: "a", Name: "x"},
 		{Namespace: "a", Verdicts: []string{"maybe"}},
 		{Namespace: "a", Since: 2 * time.Hour},
+		{Namespace: "a", More: []string{"b"}},
+		{Namespace: "a", Kind: "Pod", Name: "x", More: []string{"b"}, Graph: true},
 	} {
 		if err := s.Normalize(&bad); !errors.Is(err, ErrInvalidRequest) {
 			t.Errorf("%+v: %v", bad, err)
@@ -305,6 +329,10 @@ func TestNormalize(t *testing.T) {
 	r := Request{Namespace: "a", Limit: 5000, Verdicts: []string{" dropped "}}
 	if err := s.Normalize(&r); err != nil || r.Limit != 20 || r.Since != 15*time.Minute || r.Verdicts[0] != "DROPPED" {
 		t.Fatalf("defaults: %+v %v", r, err)
+	}
+	g := Request{Namespace: "a", More: []string{"b"}, Graph: true, Limit: 5000}
+	if err := s.Normalize(&g); err != nil || g.Limit != 300 {
+		t.Fatalf("a graph read has its own cap: %+v %v", g, err)
 	}
 }
 
@@ -317,6 +345,7 @@ func TestFiltersAskBothSides(t *testing.T) {
 		want []filter
 	}{
 		{Request{Namespace: "demo"}, []filter{{sourcePod: []string{"demo/"}}, {destinationPod: []string{"demo/"}}}},
+		{Request{Namespace: "demo", More: []string{"shop"}, Graph: true}, []filter{{sourcePod: []string{"demo/", "shop/"}}, {destinationPod: []string{"demo/", "shop/"}}}},
 		{Request{Namespace: "demo", Kind: "Pod", Name: "web-1"}, []filter{{sourcePod: []string{"demo/web-1"}}, {destinationPod: []string{"demo/web-1"}}}},
 		{Request{Namespace: "demo", Kind: "Deployment", Name: "web", Verdicts: []string{"DROPPED"}}, []filter{
 			{sourcePod: []string{"demo/"}, sourceWorkload: web, verdicts: dropped},

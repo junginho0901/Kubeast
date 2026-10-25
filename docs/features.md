@@ -249,6 +249,23 @@ Where the cluster's Prometheus has the Hubble drop metric, the Pod and workload 
 - The AI tool `network_drops` reads the same counts.
 - What the target cluster needs is in [Cluster requirements §17](cluster-requirements.md#17-hubble-metrics-network-drops).
 
+### Traffic lines in the Resource Graph (Hubble)
+
+Where the cluster has Recent flows or the Hubble metrics, the Resource Graph header has a switch: **Structure** (the objects and how they relate, as before), **Traffic** (who talks to whom among the workloads of the chosen namespaces) and **Both**.
+
+- It is off until switched on, and reads once then and on refresh only.
+- Two sources:
+  - **Recent flows**: one Hubble Relay read for all the chosen namespaces, recorded in the audit log like the drawer's (`k8s.networkflows.query`, with `graph: true` and the namespaces). It covers the last 15 minutes, up to `features.networkFlows.graphMaxFlows` flows (2,000).
+  - **Metrics 1h / 24h**: the Hubble TCP metric (connections opened, `flag="SYN"`) and drop metric in the cluster's Prometheus. Not audited, like the drawer's drops. UDP traffic such as DNS is not counted.
+- A line goes from the workload that opened the connection to the one it reached: green allowed, red dropped, amber both. It is wider when busier, and its number is flows (recent flows) or connections and dropped packets (metrics).
+- The lines are routed around the boxes, at right angles, with their numbers where they cover nothing. Hovering a box or a line lights its lines and fades the rest, so a line can be followed to its end. While lines are shown the boxes stay where the layout put them.
+- A peer the graph does not show (another namespace, outside the cluster's pods, a kind the filters hide) is a dashed box; clicking one with a drawer opens it.
+- Clicking a line opens its details on the right: ports, drop reasons, the policies that denied it, and (recent flows) its latest connections. "Why?" on a dropped line opens the NetworkPolicy check for it, and each end's drawer has its recent flows.
+- The Traffic view lays the workloads out by their lines, left to right. Both keeps the structure layout and draws the lines over it.
+- A box at the top says what was read and what is left out: only the latest flows the Relay returned, a missing metric, peers outside a namespace-limited user's namespaces (namespace only).
+- Who may see it: `resource.networkflow.read`, plus what the source needs (the Relay permission of §16, or Prometheus).
+- What the target cluster needs is in [Cluster requirements §18](cluster-requirements.md#18-resource-graph-traffic-lines).
+
 ## ⎈ Helm release management
 
 - View the release list, details, history, values, manifest and resources

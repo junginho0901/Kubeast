@@ -29,6 +29,7 @@ tests:
       features.networkFlows.tls.clientCertificate: true
       features.networkFlows.tls.serverName: relay.internal
       features.networkFlows.maxFlows: 500
+      features.networkFlows.graphMaxFlows: 3000
       features.networkFlows.egressCIDRs: [{cidr: 203.0.113.9/32, port: 4245}]
     asserts:
       - equal:
@@ -39,6 +40,11 @@ tests:
       - equal:
           path: data.NETWORK_FLOWS_MAX_FLOWS
           value: "500"
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.NETWORK_FLOWS_GRAPH_MAX_FLOWS
+          value: "3000"
         template: configmap.yaml
         documentSelector: {path: metadata.name, value: kubeast-config}
       - equal:

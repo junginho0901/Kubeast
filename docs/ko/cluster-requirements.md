@@ -40,6 +40,7 @@ Kubeast는 등록한 클러스터에 아무것도 설치하지 않습니다. 예
 | NetworkPolicy 보기와 연결 확인 | NetworkPolicy를 강제하는 네트워크 플러그인, 관련 네임스페이스 읽기 권한 — §7 | — | 답은 정책이 말하는 것이지 클러스터가 하는 것이 아님. 규칙이 사용자가 읽지 못하는 네임스페이스 레이블을 쓰면 "알 수 없음" |
 | 최근 흐름(드로어, AI `network_flows`) | TLS로 서비스하는 Cilium Hubble Relay, Relay Service의 `services/proxy` create 권한 — §16 | `features.networkFlows.enabled`(끔) | 칸과 도구가 빠지고 API는 404. 클러스터 권한이 없으면 403 |
 | 네트워크 차단(드로어, AI `network_drops`) | 클러스터 Prometheus에 워크로드 레이블이 붙은 Hubble 차단 지표 — §17 | Prometheus(§3) | 칸이 나오지 않고, 도구는 지표가 없다고 알려 줌 |
+| Resource Graph 통신 선 | 최근 흐름(§16), 또는 클러스터 Prometheus에 워크로드 레이블이 붙은 Hubble TCP·차단 지표 — §18 | `features.networkFlows` 또는 Prometheus | 전환이 나오지 않고, 없는 지표는 그래프에서 알려 줌 |
 
 ## 1. 권한(RBAC) — 모든 대상 클러스터
 
@@ -523,6 +524,32 @@ service:
 - **권한**: 다른 Prometheus 읽기와 같습니다(§3). 사용자 신원의 API 서버 프록시 GET이거나 저장소 자체 인증입니다. Kubeast는 `resource.networkflow.read`도 확인합니다.
 - **수의 뜻**: 하나는 막힌 패킷 하나(Hubble 이벤트 하나)입니다. 거부된 연결이 다시 시도하면 여러 번 셉니다. `reason`은 `POLICY_DENIED` 같은 차단 사유 이름입니다.
 - **확인**: Prometheus에서 `count by (source_workload, destination_workload, reason) (hubble_drop_total)`, 또는 Pod 드로어 → 네트워크 차단.
+
+## 18. Resource Graph 통신 선
+
+Resource Graph의 통신·둘 다 보기는 두 출처 중 하나로 선을 그립니다. 클러스터에 하나라도 있고 사용자에게 `resource.networkflow.read`가 있으면 전환이 보입니다.
+
+- **최근 흐름**: §16의 Hubble Relay이고 권한도 같습니다. 고른 네임스페이스 전체를 한 번에 읽습니다(Hubble 파드 필터에 `<네임스페이스>/` 접두어를 여러 개 넣음).
+  - 연결은 도착한 곳에서 허용으로 셉니다: 도착 쪽 ingress에서 보였거나, 응답이 왔거나, 파드 밖으로 가는 경우. 파드로 나가는 것만 보인 연결은 허용으로 그리지 않고, NetworkPolicy가 도착 쪽에서 막았다면 그 차단이 선을 그립니다.
+  - 최근 `defaultRange`(15분) 동안의 흐름을 최대 `features.networkFlows.graphMaxFlows`개(2,000, 상한 10,000) 읽습니다. Relay는 노드마다 흐름을 고리 모양으로 보관하므로(Cilium `hubble.eventBufferCapacity`, 기본 4,095) 바쁜 클러스터는 더 짧은 과거만 보입니다. 읽기가 상한에 닿으면 그래프가 알려 줍니다.
+  - 개발 클러스터에서 잰 값: 흐름 200개 읽기에 약 12 ms·100 KB, Relay 31 MiB.
+- **지표**: 클러스터 Prometheus(§3)에 다음 Hubble 지표가 §17의 두 레이블 모양 중 하나로 있어야 합니다.
+  - `hubble_tcp_flags_total`(Hubble `tcp` 지표): Kubeast는 클라이언트가 연결을 열 때 보내는 `flag="SYN"`을 세므로 선이 클라이언트에서 서버로 갑니다. `traffic_direction`이 있으면 연결을 도착한 곳에서 한 번만 셉니다: 도착 파드의 ingress, 또는 파드 밖 주소로 나가는 쪽. Hubble의 판정은 관찰 지점마다 따로라서, NetworkPolicy가 도착 쪽에서 막은 SYN도 클라이언트를 나갈 때는 FORWARDED입니다. 도착한 곳에서 세므로 이런 SYN은 연 연결로 세지 않습니다. `traffic_direction`이 없으면 두 쪽을 더하고 그래프가 그렇다고 알려 줍니다.
+  - `hubble_drop_total`(§17): 차단된 패킷과 사유.
+  - DNS 같은 UDP 통신은 SYN이 없어 지표로는 그리지 않습니다. 최근 흐름에는 나옵니다.
+  - **`hubble_flows_processed_total`을 안 쓰는 이유**: Hubble `flow` 지표는 응답까지 모든 흐름을 세고 응답을 가리는 레이블이 없어, 연결마다 반대 방향 선이 하나 더 생깁니다. 응답을 빼려면 `excludeFilters`가 필요한데 동적 지표 내보내기에만 있고, Cilium은 정적·동적 지표를 함께 쓰지 못하게 합니다("cannot configure both static and dynamic Hubble metrics", 1.20.4).
+- **Cilium Helm 값**(1.20.4), §17의 `drop` 지표 옆에:
+
+  ```yaml
+  hubble:
+    metrics:
+      enabled:
+        - drop:labelsContext=source_namespace,source_workload,source_workload_kind,destination_namespace,destination_workload,destination_workload_kind,traffic_direction
+        - tcp:labelsContext=source_namespace,source_workload,source_workload_kind,destination_namespace,destination_workload,destination_workload_kind,traffic_direction
+  ```
+
+  바꾼 뒤에는 §17처럼 에이전트를 다시 시작합니다.
+- **확인**: Prometheus에서 `sum by (source_workload, destination_workload) (increase(hubble_tcp_flags_total{flag="SYN"}[1h]))`, 또는 Resource Graph → 통신.
 
 ## 검증한 버전 (2026-10-13)
 

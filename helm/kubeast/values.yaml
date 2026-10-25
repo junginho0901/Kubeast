@@ -898,7 +898,8 @@ features:
   # templates/impersonation-viewer-hubble.yaml for each such cluster. A
   # namespace-limited reader sees peers outside their namespaces by namespace
   # and address only; URL query strings are dropped. Audited as
-  # k8s.networkflows.query.
+  # k8s.networkflows.query. The Resource Graph's traffic lines read the
+  # flows of its namespaces at once, up to graphMaxFlows.
   networkFlows:
     enabled: false
     clusters: {}
@@ -910,6 +911,7 @@ features:
     defaultRange: 15m
     maxRange: 1h
     maxFlows: 200
+    graphMaxFlows: 2000
     timeout: 10s
     perUserPerMinute: 20
     egressCIDRs: []

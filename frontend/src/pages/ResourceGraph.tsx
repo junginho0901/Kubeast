@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, type SetStateAction } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   ReactFlow,
+  type Edge,
   type Node,
   Controls,
   Background,
@@ -12,9 +13,13 @@ import '@xyflow/react/dist/style.css'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Info, ShieldAlert } from 'lucide-react'
-import { api, ResourceGraphNode } from '@/services/api'
+import { api, ResourceGraphNode, type TrafficEnd, type TrafficLine, type TrafficResult } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import NetworkPolicyCheckModal from '@/components/resource-detail/NetworkPolicyCheckModal'
+import { useCluster } from '@/contexts/ClusterContext'
 import { useAIContext } from '@/hooks/useAIContext'
+import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
+import { usePermission } from '@/hooks/usePermission'
 import { buildResourceLink } from '@/utils/resourceLink'
 import {
   ALL_EDGE_TYPES,
@@ -26,6 +31,36 @@ import {
 import { Glance } from './resource-graph/Glance'
 import { ResourceGraphHeader } from './resource-graph/ResourceGraphHeader'
 import { useResourceGraphLayout } from './resource-graph/useResourceGraphLayout'
+import { TrafficControls } from './resource-graph/TrafficControls'
+import { TrafficPanel } from './resource-graph/TrafficPanel'
+import { RoutedEdge } from './resource-graph/RoutedEdge'
+import { isPeer, lineColor, openableEnd, trafficParams, trafficSources, type GraphView, type LineCheck, type TrafficSource } from './resource-graph/traffic'
+
+const edgeTypes = { routed: RoutedEdge }
+
+// focusLines: with a traffic line or a node hovered (or a line selected), its lines stay lit and the rest fade,
+// so a line can be followed to its end.
+function focusLines(nodes: Node[], edges: Edge[], focus: { edge?: string; node?: string } | null): { nodes: Node[]; edges: Edge[] } {
+  if (!focus) return { nodes, edges }
+  const lit = new Set<string>()
+  const litNodes = new Set<string>()
+  for (const e of edges) {
+    if (focus.edge ? e.id === focus.edge : e.source === focus.node || e.target === focus.node) {
+      lit.add(e.id)
+      litNodes.add(e.source)
+      litNodes.add(e.target)
+    }
+  }
+  if (focus.node) litNodes.add(focus.node)
+  if (lit.size === 0) return { nodes, edges }
+  const faded = 0.12
+  return {
+    edges: edges.map((e) => (lit.has(e.id)
+      ? { ...e, animated: !!e.data?.line && e.data?.state !== 'dropped', zIndex: 2 }
+      : { ...e, style: { ...e.style, opacity: faded }, labelStyle: { ...e.labelStyle, opacity: faded }, labelBgStyle: { ...e.labelBgStyle, fillOpacity: faded } })),
+    nodes: nodes.map((n) => (litNodes.has(n.id) || n.id.startsWith('group-') ? n : { ...n, style: { ...n.style, opacity: 0.35 } })),
+  }
+}
 
 export default function ResourceGraph() {
   const { t } = useTranslation()
@@ -38,7 +73,8 @@ export default function ResourceGraph() {
     const fromUrl = (searchParams.get('namespace') || '').split(',').filter(Boolean)
     return fromUrl.length > 0 ? new Set(fromUrl) : null
   })
-  const [legendOpen, setLegendOpen] = useState(true)
+  // closed on a narrow screen, where it would cover the graph
+  const [legendOpen, setLegendOpen] = useState(() => typeof window === 'undefined' || window.innerWidth >= 768)
   const [isNsDropdownOpen, setIsNsDropdownOpen] = useState(false)
   const [kindFilters, setKindFilters] = useState<Set<string>>(new Set(DEFAULT_KINDS))
   const [edgeTypeFilters, setEdgeTypeFilters] = useState<Set<string>>(new Set(ALL_EDGE_TYPES))
@@ -48,6 +84,20 @@ export default function ResourceGraph() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'issues'>('all')
   const [glanceNode, setGlanceNode] = useState<ResourceGraphNode | null>(null)
   const [glancePos, setGlancePos] = useState({ x: 0, y: 0 })
+  // Traffic lines (off until switched on): the sources this cluster has and the user may read
+  const { currentCluster } = useCluster()
+  const features = useClusterFeatures().data
+  const { has } = usePermission()
+  const sources = useMemo(() => (has('resource.networkflow.read') ? trafficSources(features, currentCluster) : []), [has, features, currentCluster])
+  const [pickedView, setView] = useState<GraphView>('structure')
+  const [pickedSource, setSource] = useState<TrafficSource | null>(null)
+  const view: GraphView = sources.length > 0 ? pickedView : 'structure'
+  const source = pickedSource && sources.includes(pickedSource) ? pickedSource : sources[0]
+  const [selected, setSelected] = useState<{ id: string; line: TrafficLine } | null>(null)
+  const selectedLine = selected?.line ?? null
+  const [hoverEdge, setHoverEdge] = useState<string | null>(null)
+  const [hoverNode, setHoverNode] = useState<string | null>(null)
+  const [why, setWhy] = useState<LineCheck | null>(null)
 
   // Data fetching
   const { data: namespaces } = useQuery({
@@ -80,6 +130,19 @@ export default function ResourceGraph() {
   })
   const graphErrorCode = (graphError as { response?: { status?: number } } | null)?.response?.status
   const forbiddenKinds = graphData?.forbidden_kinds ?? []
+
+  // Read once when switched on, and on refresh: a Relay read is recorded in the audit log.
+  const trafficQuery = useQuery({
+    queryKey: ['network-traffic', currentCluster, nsArray, source],
+    queryFn: () => api.getNetworkTraffic(nsArray ?? [], trafficParams(source!)),
+    enabled: view !== 'structure' && !!source && hasSelection,
+    retry: false,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+  })
+  const traffic = view !== 'structure' && trafficQuery.data?.available ? trafficQuery.data : undefined
+  const trafficError = trafficQuery.error as { response?: { status?: number; data?: { detail?: string; error?: string } }; message?: string } | null
+  const trafficErrorText = trafficError ? trafficError.response?.data?.detail ?? trafficError.response?.data?.error ?? trafficError.message : undefined
 
   // 플로팅 AI 위젯용 스냅샷
   // visible_items: 화면에 그려진 노드 중 (1) 검색·필터 통과 + (2) 문제 있는 것 우선,
@@ -141,32 +204,54 @@ export default function ResourceGraph() {
         },
         stats: { total_nodes: totalNodes, total_edges: totalEdges, by_kind: byKind, filtered_total: filteredNodes.length, problematic: problematicCount },
         visible_items: visibleItems,
+        // the traffic lines on screen, counted only: the AI reads flows itself (network_flows)
+        traffic: traffic ? { view, source, lines: traffic.lines.length, dropped_lines: traffic.lines.filter((l) => l.dropped > 0).length, truncated: traffic.truncated || undefined } : undefined,
       },
     }
-  }, [graphData, nsArray, kindFilters, edgeTypeFilters, searchQuery, groupBy, statusFilter])
+  }, [graphData, nsArray, kindFilters, edgeTypeFilters, searchQuery, groupBy, statusFilter, traffic, view, source])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { nodes, edges, onNodesChange, onEdgesChange, layoutReady } = useResourceGraphLayout({
+  const { nodes: laidNodes, edges: laidEdges, onNodesChange, onEdgesChange, layoutReady, selfLoops, routed } = useResourceGraphLayout({
     graphData,
     kindFilters,
     edgeTypeFilters,
     searchQuery,
     statusFilter,
     groupBy,
+    view,
+    traffic: traffic?.lines,
   })
+  const focus = !routed ? null : hoverEdge ? { edge: hoverEdge } : hoverNode ? { node: hoverNode } : selected ? { edge: selected.id } : null
+  const { nodes, edges } = useMemo(() => focusLines(laidNodes, laidEdges, focus), [laidNodes, laidEdges, focus?.edge, focus?.node]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Interactions
-  const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
-    const raw = node.data?.raw as ResourceGraphNode | undefined
-    if (raw) {
-      openDetail({ kind: raw.kind, name: raw.name, namespace: raw.namespace })
-    }
+  const openEnd = useCallback((e: TrafficEnd) => {
+    if (openableEnd(e)) openDetail({ kind: e.kind, name: e.name, namespace: e.namespace })
   }, [openDetail])
 
-  const onNodeMouseEnter = useCallback((_: React.MouseEvent, node: Node) => {
+  const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     const raw = node.data?.raw as ResourceGraphNode | undefined
-    if (raw) {
+    if (raw && isPeer(raw)) openEnd(raw.end)
+    else if (raw) {
+      openDetail({ kind: raw.kind, name: raw.name, namespace: raw.namespace })
+    }
+  }, [openDetail, openEnd])
+
+  const onEdgeClick = useCallback((_: React.MouseEvent, edge: Edge) => {
+    const line = edge.data?.line as TrafficLine | undefined
+    if (line) setSelected({ id: edge.id, line })
+  }, [])
+
+  const onEdgeMouseEnter = useCallback((_: React.MouseEvent, edge: Edge) => {
+    if (edge.data?.line) setHoverEdge(edge.id)
+  }, [])
+  const onEdgeMouseLeave = useCallback(() => setHoverEdge(null), [])
+
+  const onNodeMouseEnter = useCallback((_: React.MouseEvent, node: Node) => {
+    setHoverNode(node.id)
+    const raw = node.data?.raw as ResourceGraphNode | undefined
+    if (raw && !isPeer(raw)) {
       setGlanceNode(raw)
       // Position relative to viewport
       const rect = (_.target as HTMLElement).getBoundingClientRect()
@@ -176,6 +261,7 @@ export default function ResourceGraph() {
 
   const onNodeMouseLeave = useCallback(() => {
     setGlanceNode(null)
+    setHoverNode(null)
   }, [])
 
   const nodeCount = graphData?.nodes?.length || 0
@@ -186,6 +272,7 @@ export default function ResourceGraph() {
       <ResourceGraphHeader
         nodeCount={nodeCount}
         edgeCount={edgeCount}
+        trafficLineCount={traffic?.lines.length}
         namespaces={namespaces}
         selectedNamespaces={selectedNamespaces}
         setSelectedNamespaces={setSelectedNamespaces}
@@ -203,6 +290,17 @@ export default function ResourceGraph() {
         setKindFilters={setKindFilters}
         edgeTypeFilters={edgeTypeFilters}
         setEdgeTypeFilters={setEdgeTypeFilters}
+        extra={sources.length > 0 && source ? (
+          <TrafficControls
+            view={view}
+            setView={(v) => { setView(v); setSelected(null) }}
+            sources={sources}
+            source={source}
+            setSource={(s) => { setSource(s); setSelected(null) }}
+            onRefresh={() => { setSelected(null); void trafficQuery.refetch() }}
+            fetching={trafficQuery.isFetching}
+          />
+        ) : undefined}
       />
 
       {/* Graph */}
@@ -255,9 +353,20 @@ export default function ResourceGraph() {
               {t('common.retry', { defaultValue: 'Retry' })}
             </button>
           </div>
-        ) : isLoading || !layoutReady ? (
+        ) : isLoading || !layoutReady || (view !== 'structure' && trafficQuery.isLoading) ? (
           <div className="w-full h-full flex items-center justify-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" />
+          </div>
+        ) : view === 'traffic' && nodes.length === 0 ? (
+          <div className="w-full h-full flex flex-col items-center justify-center text-slate-400" data-testid="traffic-empty">
+            <Info className="w-12 h-12 mb-3" />
+            <p className="text-sm max-w-md text-center">
+              {trafficErrorText
+                ? trafficErrorText
+                : trafficQuery.data && !trafficQuery.data.available
+                  ? t(`resourceGraph.traffic.unavailable.${trafficQuery.data.reason}`, unavailableText[trafficQuery.data.reason ?? 'no_metrics'])
+                  : t('resourceGraph.traffic.none', 'No traffic between these namespaces’ workloads in what was read.')}
+            </p>
           </div>
         ) : nodeCount === 0 ? (
           <div className="w-full h-full flex flex-col items-center justify-center text-slate-400">
@@ -267,15 +376,23 @@ export default function ResourceGraph() {
         ) : (
           <div style={{ width: '100%', height: '100%' }} className="[&_.react-flow\_\_attribution]:hidden!">
             <ReactFlow
+              // routed lines do not use the side handles: hidden, so no dot suggests a line ends there
+              className={routed ? '[&_[data-handlepos]]:opacity-0!' : undefined}
               nodes={nodes}
               edges={edges}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onNodeClick={onNodeClick}
+              onEdgeClick={onEdgeClick}
+              onEdgeMouseEnter={onEdgeMouseEnter}
+              onEdgeMouseLeave={onEdgeMouseLeave}
+              edgeTypes={edgeTypes}
+              nodesDraggable={!routed}
               onNodeMouseEnter={onNodeMouseEnter}
               onNodeMouseLeave={onNodeMouseLeave}
               fitView
-              fitViewOptions={{ padding: 0.2 }}
+              // with lines on screen, room for the status box above and the open legend on the left, so they cover no box
+              fitViewOptions={{ padding: routed ? { top: '64px', right: 0.1, bottom: 0.1, left: legendOpen ? '180px' : 0.1 } : 0.2 }}
               minZoom={0.05}
               maxZoom={2}
             >
@@ -303,6 +420,20 @@ export default function ResourceGraph() {
           </div>
         )}
 
+        {/* Traffic: what was read and what the lines leave out */}
+        {hasSelection && view !== 'structure' && !trafficQuery.isLoading && (view === 'both' || nodes.length > 0) && (
+          <TrafficStatus
+            error={trafficErrorText}
+            result={trafficQuery.data}
+            selfLoops={selfLoops}
+          />
+        )}
+
+        {selectedLine && traffic && (
+          <TrafficPanel line={selectedLine} result={traffic} onClose={() => setSelected(null)} onWhy={setWhy} onOpen={openEnd} />
+        )}
+        {why && <NetworkPolicyCheckModal self={why.self} selfName={why.selfName} namespace={why.namespace} initial={why.initial} onClose={() => setWhy(null)} />}
+
         {/* Glance */}
         <Glance node={glanceNode} position={glancePos} />
 
@@ -320,7 +451,7 @@ export default function ResourceGraph() {
             <span>{t('resourceGraph.legend', 'Legend')}</span>
             <span className="text-slate-500">{legendOpen ? '−' : '+'}</span>
           </button>
-          {legendOpen && ALL_EDGE_TYPES.filter(type => edgeTypeFilters.has(type)).slice(0, 7).map(type => {
+          {legendOpen && view !== 'traffic' && ALL_EDGE_TYPES.filter(type => edgeTypeFilters.has(type)).slice(0, 7).map(type => {
             const style = edgeStyles[type]
             return (
               <div key={type} className="flex items-center gap-2">
@@ -332,6 +463,28 @@ export default function ResourceGraph() {
               </div>
             )
           })}
+          {legendOpen && traffic && (
+          <div className="border-t border-slate-700 pt-1.5 mt-1.5 space-y-1" data-testid="traffic-legend">
+            {(['allowed', 'mixed', 'dropped'] as const).map((st) => (
+              <div key={st} className="flex items-center gap-2">
+                <svg width="24" height="8" className="shrink-0">
+                  <line x1="0" y1="4" x2="20" y2="4" stroke={lineColor[st]} strokeWidth="2.5" strokeDasharray={st === 'dropped' ? '6 4' : ''} />
+                  <polygon points="20,1 24,4 20,7" fill={lineColor[st]} />
+                </svg>
+                <span style={{ color: lineColor[st] }}>{t(`resourceGraph.traffic.legend.${st}`, legendText[st])}</span>
+              </div>
+            ))}
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-sm border-2 border-dashed border-slate-500" />
+              <span className="text-slate-400">{t('resourceGraph.traffic.legend.peer', 'not in this graph')}</span>
+            </div>
+            <div className="text-slate-500 max-w-[160px]">
+              {traffic.source === 'relay'
+                ? t('resourceGraph.traffic.legend.unitRelay', 'number = flows')
+                : t('resourceGraph.traffic.legend.unitMetrics', 'number = TCP connections · ✕ dropped packets')}
+            </div>
+          </div>
+          )}
           {legendOpen && (
           <div className="border-t border-slate-700 pt-1.5 mt-1.5 space-y-1">
             <div className="flex items-center gap-2">
@@ -353,4 +506,46 @@ export default function ResourceGraph() {
       </div>
     </div>
   )
+}
+
+const unavailableText: Record<string, string> = {
+  no_prometheus: 'This cluster has no Prometheus Kubeast can read.',
+  no_metrics: "The cluster's Prometheus has no Hubble TCP or drop metric. See the cluster requirements (Hubble metrics).",
+  no_context_labels: "The cluster's Hubble metrics have no pod or workload labels. See the cluster requirements (Hubble metrics).",
+}
+
+const legendText = { allowed: 'allowed', mixed: 'partly dropped', dropped: 'dropped' }
+
+// TrafficStatus says what the lines come from and what they leave out.
+function TrafficStatus({ error, result, selfLoops }: { error?: string; result?: TrafficResult; selfLoops: number }) {
+  const { t } = useTranslation()
+  const lines: { key: string; text: string; warn?: boolean }[] = []
+  if (error) lines.push({ key: 'error', text: error, warn: true })
+  else if (result && !result.available) lines.push({ key: 'unavailable', text: t(`resourceGraph.traffic.unavailable.${result.reason}`, unavailableText[result.reason ?? 'no_metrics']), warn: true })
+  else if (result) {
+    lines.push({
+      key: 'source',
+      text: result.source === 'relay'
+        ? t('resourceGraph.traffic.statusRelay', { defaultValue: '{{lines}} lines from {{flows}} recent flows of the Hubble Relay (last {{w}})', lines: result.lines.length, flows: result.flows ?? 0, w: result.since })
+        : t('resourceGraph.traffic.statusMetrics', { defaultValue: '{{lines}} lines from the Hubble metrics (last {{w}})', lines: result.lines.length, w: result.range }),
+    })
+    if (result.truncated) lines.push({ key: 'truncated', text: t('resourceGraph.traffic.truncated', 'Only the latest flows the Relay returned: older traffic is not drawn.'), warn: true })
+    if (result.lines_truncated) lines.push({ key: 'lines', text: t('resourceGraph.traffic.linesTruncated', 'Only the busiest 300 lines are drawn.'), warn: true })
+    for (const n of result.notes ?? []) lines.push({ key: n, text: t(`resourceGraph.traffic.note.${n}`, noteText[n] ?? n), warn: n !== 'counted_at_both_ends' })
+    if ((result.lost_events ?? 0) > 0) lines.push({ key: 'lost', text: t('netflows.lost', { defaultValue: 'Hubble reported {{n}} lost events: some flows may be missing.', n: result.lost_events }), warn: true })
+    if (result.redacted) lines.push({ key: 'redacted', text: t('resourceGraph.traffic.redacted', 'Peers outside your namespaces show their namespace only.') })
+    if (selfLoops > 0) lines.push({ key: 'self', text: t('resourceGraph.traffic.selfLoops', { defaultValue: '{{n}} lines inside one workload are not drawn.', n: selfLoops }) })
+  }
+  if (lines.length === 0) return null
+  return (
+    <div className="absolute top-3 left-3 z-10 max-w-md rounded-lg border border-slate-700 bg-slate-800/90 px-3 py-2 text-xs space-y-0.5 backdrop-blur-xs" data-testid="traffic-status">
+      {lines.map((l) => <p key={l.key} className={l.warn ? 'text-amber-300' : 'text-slate-300'} data-testid={`traffic-status-${l.key}`}>{l.text}</p>)}
+    </div>
+  )
+}
+
+const noteText: Record<string, string> = {
+  no_tcp_metric: "The cluster's Hubble TCP metric is missing or has no workload labels: only drops are drawn.",
+  no_drop_metric: "The cluster's Hubble drop metric is missing or has no workload labels: drops are not drawn.",
+  counted_at_both_ends: 'The metric has no traffic_direction label: a connection seen at both ends counts twice.',
 }
