@@ -84,6 +84,14 @@ func (e End) key() string { return e.Namespace + "/" + e.Kind + "/" + e.Name + "
 type Port struct {
 	Protocol string `json:"protocol,omitempty"`
 	Port     uint32 `json:"port,omitempty"`
+	// Allowed and Dropped are the line's counts to this port.
+	Allowed int64 `json:"allowed"`
+	Dropped int64 `json:"dropped"`
+}
+
+type portKey struct {
+	protocol string
+	port     uint32
 }
 
 // Line is the traffic from one end to another. Allowed and Dropped count flows (source relay: every flow
@@ -153,7 +161,7 @@ func flowEnd(e netflows.End, names map[string]string) End {
 
 type line struct {
 	Line
-	ports   map[Port]bool
+	ports   map[portKey]*Port
 	reasons map[string]int64
 	denied  map[netflows.PolicyRef]bool
 }
@@ -182,22 +190,29 @@ func FromFlows(res *netflows.Result, namespaces []string) Result {
 		k := from.key() + "→" + to.key()
 		l, ok := lines[k]
 		if !ok {
-			l = &line{Line: Line{From: from, To: to}, ports: map[Port]bool{}, reasons: map[string]int64{}, denied: map[netflows.PolicyRef]bool{}}
+			l = &line{Line: Line{From: from, To: to}, ports: map[portKey]*Port{}, reasons: map[string]int64{}, denied: map[netflows.PolicyRef]bool{}}
 			lines[k] = l
 			order = append(order, k)
 		}
 		n := int64(g.Count + g.Replies)
+		port := &Port{}
+		if g.Destination.Port != 0 || g.Protocol != "" {
+			k := portKey{g.Protocol, g.Destination.Port}
+			if l.ports[k] == nil {
+				l.ports[k] = &Port{Protocol: g.Protocol, Port: g.Destination.Port}
+			}
+			port = l.ports[k]
+		}
 		switch {
 		case g.Verdict == "DROPPED":
 			l.Dropped += n
+			port.Dropped += n
 			if g.DropReason != "" {
 				l.reasons[g.DropReason] += n
 			}
 		case g.Replies > 0 || to.Outside != "" || slices.Contains(g.Observed, "ingress"):
 			l.Allowed += n
-		}
-		if g.Destination.Port != 0 || g.Protocol != "" {
-			l.ports[Port{Protocol: g.Protocol, Port: g.Destination.Port}] = true
+			port.Allowed += n
 		}
 		if g.Policies != nil {
 			for _, p := range append(append([]netflows.PolicyRef{}, g.Policies.EgressDeniedBy...), g.Policies.IngressDeniedBy...) {
@@ -238,18 +253,28 @@ func finish(all []*line) ([]Line, bool) {
 	}
 	out := make([]Line, 0, len(all))
 	for _, l := range all {
-		for p := range l.ports {
-			l.Ports = append(l.Ports, p)
+		for _, p := range l.ports {
+			if p.Allowed+p.Dropped > 0 {
+				l.Ports = append(l.Ports, *p)
+			}
 		}
-		sort.Slice(l.Ports, func(i, j int) bool {
+		byPort := func(i, j int) bool {
 			if l.Ports[i].Port != l.Ports[j].Port {
 				return l.Ports[i].Port < l.Ports[j].Port
 			}
 			return l.Ports[i].Protocol < l.Ports[j].Protocol
+		}
+		// the busiest MaxPorts, listed by port
+		sort.Slice(l.Ports, func(i, j int) bool {
+			if a, b := l.Ports[i].Allowed+l.Ports[i].Dropped, l.Ports[j].Allowed+l.Ports[j].Dropped; a != b {
+				return a > b
+			}
+			return byPort(i, j)
 		})
 		if len(l.Ports) > MaxPorts {
 			l.Ports = l.Ports[:MaxPorts]
 		}
+		sort.Slice(l.Ports, byPort)
 		for r, n := range l.reasons {
 			l.Reasons = append(l.Reasons, netdrops.Reason{Reason: r, Count: n})
 		}

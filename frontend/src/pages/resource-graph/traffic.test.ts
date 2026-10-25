@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getBezierPath, Position } from '@xyflow/react'
 import type { ClusterFeatures, NetflowGroup, ResourceGraphNode, TrafficLine } from '@/services/api'
-import { anchorOf, buildTraffic, checkFor, endText, lineState, pointOnBezier, portText, roundedPath, trafficParams, trafficSources, PEER_KIND } from './traffic'
+import { anchorOf, boxHeight, buildTraffic, byPort, checkFor, endText, lineState, MAX_ROWS, pointOnBezier, portText, rowCenter, roundedPath, trafficParams, trafficSources, PEER_KIND } from './traffic'
 
 const node = (kind: string, namespace: string, name: string): ResourceGraphNode => ({ id: `${kind}/${namespace}/${name}`, kind, name, namespace, status: 'Running' })
 const shown = new Map([node('Deployment', 'shop', 'web'), node('Deployment', 'shop', 'client'), node('Pod', 'shop', 'debug'), node('StatefulSet', 'shop', 'db')].map((n) => [n.id, n]))
@@ -147,5 +147,48 @@ describe('portText', () => {
     expect(portText([{ protocol: 'TCP', port: 80 }, { protocol: 'TCP', port: 443 }])).toBe('80, 443')
     expect(portText([{ protocol: 'TCP', port: 80 }, { protocol: 'TCP', port: 443 }, { protocol: 'TCP', port: 8080 }])).toBe('80 +2')
     expect(portText(undefined)).toBe('')
+  })
+})
+
+describe('byPort', () => {
+  const edge = (id: string, source: string, target: string, ports: TrafficLine['ports'], allowed = 0, dropped = 0) =>
+    ({ id, source, target, line: line({ name: source }, { name: target }, allowed, dropped, { ports }), state: 'allowed' as const, width: 1.5 })
+  it('splits a line by port, ending at its row in the receiving box', () => {
+    const { edges, rows } = byPort([
+      edge('a', 'client', 'web', [{ protocol: 'TCP', port: 80, allowed: 6 }, { protocol: 'TCP', port: 8080, allowed: 1 }], 7),
+      edge('b', 'stranger', 'web', [{ protocol: 'TCP', port: 80, dropped: 3 }], 0, 3),
+      edge('c', 'client', 'dns', [{ protocol: 'UDP', port: 53, allowed: 4 }], 4),
+      edge('d', 'x', 'web', undefined, 5), // the metrics: no ports, one edge
+    ])
+    expect(rows.get('web')).toEqual([
+      { key: 'TCP/80', text: 'TCP 80', allowed: 6, dropped: 3 },
+      { key: 'TCP/8080', text: 'TCP 8080', allowed: 1, dropped: 0 },
+    ])
+    expect(rows.get('dns')).toEqual([{ key: 'UDP/53', text: 'UDP 53', allowed: 4, dropped: 0 }])
+    expect(edges.map((e) => [e.id, e.lineId, e.row, e.rowText, e.allowed, e.dropped, e.state])).toEqual([
+      ['a:TCP/80', 'a', 'TCP/80', 'TCP 80', 6, 0, 'allowed'],
+      ['a:TCP/8080', 'a', 'TCP/8080', 'TCP 8080', 1, 0, 'allowed'],
+      ['b:TCP/80', 'b', 'TCP/80', 'TCP 80', 0, 3, 'dropped'],
+      ['c:UDP/53', 'c', 'UDP/53', 'UDP 53', 4, 0, 'allowed'],
+      ['d', 'd', undefined, undefined, 5, 0, 'allowed'],
+    ])
+    expect(edges[0].width).toBe(4) // the busiest share
+  })
+  it('keeps the busiest rows and puts the rest on a last "+n" row', () => {
+    const ports = Array.from({ length: MAX_ROWS + 2 }, (_, i) => ({ protocol: 'TCP', port: 9000 + i, allowed: i === 0 ? 1 : 10 + i }))
+    const { edges, rows } = byPort([edge('a', 'client', 'web', ports, 100)])
+    const list = rows.get('web')!
+    expect(list).toHaveLength(MAX_ROWS)
+    expect(list[list.length - 1]).toMatchObject({ key: 'more', text: '+3' })
+    // 9000 (quietest) is on the "+3" row, with the next two quietest
+    expect(list.map((r) => r.key)).not.toContain('TCP/9000')
+    const more = edges.find((e) => e.row === 'more')!
+    expect(more.allowed).toBe(1 + 11 + 12)
+  })
+  it('places the rows below the box head', () => {
+    expect(boxHeight(0)).toBe(60)
+    expect(boxHeight(2)).toBe(60 + 36 + 6)
+    expect(rowCenter(0)).toBe(72)
+    expect(rowCenter(1)).toBe(90)
   })
 })

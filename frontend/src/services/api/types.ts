@@ -858,7 +858,8 @@ export interface TrafficLine {
   to: TrafficEnd
   allowed: number
   dropped: number
-  ports?: { protocol?: string; port?: number }[]
+  // the busiest destination ports (relay), each with the line's counts to it
+  ports?: { protocol?: string; port?: number; allowed?: number; dropped?: number }[]
   reasons?: { reason: string; count: number }[]
   denied_by?: NetflowPolicyRef[]
   last?: string

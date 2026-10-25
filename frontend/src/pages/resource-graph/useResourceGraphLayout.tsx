@@ -3,7 +3,7 @@
 // frontend/src/pages/ResourceGraph.tsx 의 filteredNodes/Edges useMemo + ELK
 // useEffect 를 묶어 추출. 결과 nodes/edges + layoutReady 플래그 반환.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import {
   type Node,
   type Edge,
@@ -15,7 +15,7 @@ import i18next from 'i18next'
 import type { ResourceGraphNode, ResourceGraphEdge, TrafficEnd, TrafficLine } from '@/services/api'
 import { edgeStyles, kindIcon, pointsUp, statusColor, type GroupBy } from './constants'
 import { applyElkLayout } from './elkLayout'
-import { buildTraffic, endText, lineColor, portText, type GraphView, type TrafficEdge } from './traffic'
+import { boxHeight, buildTraffic, byPort, endText, lineColor, portText, BOX_HEIGHT, ROW_HEIGHT, ROWS_PADDING, type GraphView, type PortEdge, type PortRow, type TrafficEdge } from './traffic'
 
 export interface ResourceGraphLayoutInput {
   graphData: { nodes: ResourceGraphNode[]; edges: ResourceGraphEdge[] } | undefined
@@ -42,11 +42,14 @@ function peerKindText(e: TrafficEnd): string {
   return i18next.t('resourceGraph.traffic.peerOutside', 'Outside the pods')
 }
 
-function trafficEdge(t: TrafficEdge): Edge {
+// trafficEdge draws a line, or (Traffic view) its share to one port, which ends at that port's row of the box
+// and so carries only its counts; elsewhere the port starts the line's number.
+function trafficEdge(t: TrafficEdge | PortEdge): Edge {
   const color = lineColor[t.state]
-  const counts = t.state === 'allowed' ? count(t.line.allowed) : t.state === 'dropped' ? `✕ ${count(t.line.dropped)}` : `${count(t.line.allowed)} · ✕ ${count(t.line.dropped)}`
-  // the port first: lines into one box told apart by where they go (Hubble UI shows the port on the box)
-  const ports = portText(t.line.ports)
+  const share = 'lineId' in t ? t : undefined
+  const [allowed, dropped] = share ? [share.allowed, share.dropped] : [t.line.allowed, t.line.dropped]
+  const counts = t.state === 'allowed' ? count(allowed) : t.state === 'dropped' ? `✕ ${count(dropped)}` : `${count(allowed)} · ✕ ${count(dropped)}`
+  const ports = share ? '' : portText(t.line.ports)
   const label = ports ? `${ports} · ${counts}` : counts
   return {
     id: t.id,
@@ -62,9 +65,38 @@ function trafficEdge(t: TrafficEdge): Edge {
     labelBgBorderRadius: 4,
     interactionWidth: 16,
     zIndex: 1,
-    ariaLabel: `${endText(t.line.from)} → ${endText(t.line.to)}`,
-    data: { line: t.line, state: t.state },
+    ariaLabel: `${endText(t.line.from)} → ${endText(t.line.to)}${share?.rowText ? ` (${share.rowText})` : ''}`,
+    data: { line: t.line, state: t.state, lineId: share?.lineId ?? t.id, row: share?.row },
   }
+}
+
+// rowsBlock lists a receiving box's ports under its head, one row each, where the lines to that port end.
+function rowsBlock(rows: PortRow[]) {
+  return (
+    <div className="border-t border-slate-700" style={{ paddingTop: ROWS_PADDING / 2, paddingBottom: ROWS_PADDING / 2 }} data-testid="port-rows">
+      {rows.map(r => (
+        <div key={r.key} className="flex items-center justify-between px-2 font-mono text-[10px] text-slate-300" style={{ height: ROW_HEIGHT }} data-testid="port-row" data-port-text={r.text}>
+          <span>{r.text}</span>
+          <span>
+            {r.allowed > 0 && <span style={{ color: lineColor.allowed }}>{count(r.allowed)}</span>}
+            {r.allowed > 0 && r.dropped > 0 && <span className="text-slate-500"> · </span>}
+            {r.dropped > 0 && <span style={{ color: lineColor.dropped }}>✕ {count(r.dropped)}</span>}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// withRows puts the head in BOX_HEIGHT and the rows under it, when the box has rows.
+function withRows(head: ReactElement, rows: PortRow[] | undefined) {
+  if (!rows) return head
+  return (
+    <div className="w-full">
+      <div className="flex flex-col justify-center" style={{ height: BOX_HEIGHT }}>{head}</div>
+      {rowsBlock(rows)}
+    </div>
+  )
 }
 
 export function useResourceGraphLayout({
@@ -100,16 +132,23 @@ export function useResourceGraphLayout({
       const ends = new Set(placed.edges.flatMap(e => [e.source, e.target]))
       gNodes = gNodes.filter(n => ends.has(n.id))
     }
+    // the Traffic view splits the lines by port into the receiving boxes' rows
+    const split = view === 'traffic' && withTraffic ? byPort(placed.edges) : undefined
+    const rowsOf = split?.rows ?? new Map<string, PortRow[]>()
+    const layoutOf = (id: string) => {
+      const rows = rowsOf.get(id)
+      return rows ? { height: boxHeight(rows.length), rows: rows.map(r => r.key) } : undefined
+    }
 
     const nodeIds = new Set(gNodes.map(n => n.id))
     // routed lines start and end on the box the layout assumed (200 × 60), so the box is exactly that tall
-    const boxSize = withTraffic ? { height: 60, display: 'flex', flexDirection: 'column' as const, justifyContent: 'center' } : {}
+    const boxSize = (id: string) => withTraffic ? { height: layoutOf(id)?.height ?? BOX_HEIGHT, display: 'flex', flexDirection: 'column' as const, justifyContent: 'center' } : {}
 
     // Build RF nodes
     const peerNodes: Node[] = placed.peers.map(p => ({
       id: p.id,
       data: {
-        label: (
+        label: withRows(
           <div className="flex items-center gap-1.5 px-2 py-1 min-w-0" data-testid="traffic-peer">
             <span className="text-base shrink-0">{p.end.name ? kindIcon[p.end.kind ?? ''] || '📄' : p.end.namespace ? '🗂' : '🌐'}</span>
             <div className="min-w-0 flex-1">
@@ -117,12 +156,14 @@ export function useResourceGraphLayout({
               <div className="text-xs font-medium text-white truncate leading-tight" title={p.name}>{p.name}</div>
               {p.end.name && p.namespace && <div className="text-[10px] text-slate-400 leading-tight truncate">{p.namespace}</div>}
             </div>
-          </div>
+          </div>,
+          rowsOf.get(p.id),
         ),
         raw: p,
+        layout: layoutOf(p.id),
       },
       position: { x: 0, y: 0 },
-      style: { background: '#0f172a', border: '2px dashed #64748b', borderRadius: '8px', padding: 0, width: 200, ...boxSize },
+      style: { background: '#0f172a', border: '2px dashed #64748b', borderRadius: '8px', padding: 0, width: 200, ...boxSize(p.id) },
     }))
     const rfNodes: Node[] = gNodes.map(n => {
       const icon = kindIcon[n.kind] || '📄'
@@ -131,7 +172,7 @@ export function useResourceGraphLayout({
       return {
         id: n.id,
         data: {
-          label: (
+          label: withRows(
             <div className="flex items-center gap-1.5 px-2 py-1 min-w-0">
               <span className="text-base shrink-0">{icon}</span>
               <div className="min-w-0 flex-1">
@@ -141,9 +182,11 @@ export function useResourceGraphLayout({
                 </div>
                 {n.ready && <div className="text-[10px] text-slate-400 leading-tight">{n.ready}</div>}
               </div>
-            </div>
+            </div>,
+            rowsOf.get(n.id),
           ),
           raw: n,
+          layout: layoutOf(n.id),
         },
         position: { x: 0, y: 0 },
         style: {
@@ -152,7 +195,7 @@ export function useResourceGraphLayout({
           borderRadius: '8px',
           padding: 0,
           width: 200,
-          ...boxSize,
+          ...boxSize(n.id),
           boxShadow: isHighlighted ? '0 0 0 3px #3b82f6' : undefined,
           opacity: searchQuery && !isHighlighted ? 0.3 : 1,
         },
@@ -183,7 +226,7 @@ export function useResourceGraphLayout({
       })
 
     // with traffic on, every line is laid out and routed around the boxes
-    const lines = placed.edges.map(trafficEdge)
+    const lines = (split?.edges ?? placed.edges).map(trafficEdge)
     const data = placed.peers.length > 0 ? { nodes: [...graphData.nodes, ...placed.peers], edges: graphData.edges } : graphData
     return { filteredNodes: [...rfNodes, ...peerNodes], filteredEdges: [...rfEdges, ...lines], routed: withTraffic, layoutData: data, selfLoops: placed.selfLoops }
   }, [graphData, kindFilters, edgeTypeFilters, searchQuery, statusFilter, view, traffic])

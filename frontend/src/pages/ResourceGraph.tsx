@@ -44,8 +44,11 @@ function focusLines(nodes: Node[], edges: Edge[], focus: { edge?: string; node?:
   if (!focus) return { nodes, edges }
   const lit = new Set<string>()
   const litNodes = new Set<string>()
+  // a line split by port (Traffic view) lights all its parts
+  const lineOf = (e: Edge) => (e.data?.lineId as string | undefined) ?? e.id
+  const focusLine = focus.edge ? lineOf(edges.find((e) => e.id === focus.edge) ?? ({ id: focus.edge } as Edge)) : undefined
   for (const e of edges) {
-    if (focus.edge ? e.id === focus.edge : e.source === focus.node || e.target === focus.node) {
+    if (focusLine ? lineOf(e) === focusLine : e.source === focus.node || e.target === focus.node) {
       lit.add(e.id)
       litNodes.add(e.source)
       litNodes.add(e.target)

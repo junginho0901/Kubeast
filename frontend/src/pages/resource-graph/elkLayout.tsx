@@ -11,7 +11,7 @@ import { Layers } from 'lucide-react'
 import i18next from 'i18next'
 import type { ResourceGraphNode, ResourceGraphEdge } from '@/services/api'
 import { kindWeight, type GroupBy } from './constants'
-import { isPeer } from './traffic'
+import { isPeer, rowCenter, BOX_HEIGHT } from './traffic'
 
 const elk = new ELK()
 
@@ -36,12 +36,39 @@ export interface EdgeRoute {
 const LABEL_HEIGHT = 16
 const labelWidth = (text: string) => Math.ceil(text.length * 6.5) + 12
 
-function elkEdge(e: Edge, id: string, routed: boolean) {
+// A box with port rows (Traffic view) has fixed ports: one out on the right, one in on the left at the head and
+// one at each row, where the lines to that port end.
+type BoxLayout = { height: number; rows: string[] }
+const boxLayout = (n: Node) => n.data?.layout as BoxLayout | undefined
+
+function elkNode(n: Node, partition?: string) {
+  const layout = boxLayout(n)
+  const port = (id: string, x: number, y: number, side: string) => ({ id, x, y, width: 0, height: 0, layoutOptions: { 'elk.port.side': side } })
+  return {
+    id: n.id,
+    width: 200,
+    height: layout?.height ?? BOX_HEIGHT,
+    layoutOptions: {
+      ...(partition !== undefined ? { 'partitioning.partition': partition } : {}),
+      ...(layout ? { 'elk.portConstraints': 'FIXED_POS' } : {}),
+    },
+    ...(layout ? {
+      ports: [
+        port(`${n.id}::out`, 200, BOX_HEIGHT / 2, 'EAST'),
+        port(`${n.id}::in`, 0, BOX_HEIGHT / 2, 'WEST'),
+        ...layout.rows.map((k, i) => port(`${n.id}::in::${k}`, 0, rowCenter(i), 'WEST')),
+      ],
+    } : {}),
+  }
+}
+
+function elkEdge(e: Edge, id: string, routed: boolean, withRows: Set<string>) {
   const text = typeof e.label === 'string' ? e.label : ''
+  const row = (e.data as { row?: string } | undefined)?.row
   return {
     id,
-    sources: [e.source],
-    targets: [e.target],
+    sources: [withRows.has(e.source) ? `${e.source}::out` : e.source],
+    targets: [withRows.has(e.target) ? (row ? `${e.target}::in::${row}` : `${e.target}::in`) : e.target],
     ...(routed && text ? { labels: [{ id: `${id}-l`, text, width: labelWidth(text), height: LABEL_HEIGHT }] } : {}),
   }
 }
@@ -103,6 +130,7 @@ export async function applyElkLayout(
   const rfNodeIds = new Set(rfNodes.map(n => n.id))
   const validEdges = rfEdges.filter(e => rfNodeIds.has(e.source) && rfNodeIds.has(e.target))
   const elkIds = validEdges.map((_, i) => `elk-e-${i}`)
+  const withRows = new Set(rfNodes.filter(n => boxLayout(n)).map(n => n.id))
 
   if (groupBy === 'none') {
     // Flat layout
@@ -121,15 +149,8 @@ export async function applyElkLayout(
         'elk.nodeSize.constraints': '[MINIMUM_SIZE]',
         ...(routed ? routedOptions : {}),
       },
-      children: rfNodes.map(n => ({
-        id: n.id,
-        width: 200,
-        height: 60,
-        layoutOptions: {
-          'partitioning.partition': kindPartition(n),
-        },
-      })),
-      edges: validEdges.map((e, i) => elkEdge(e, elkIds[i], routed)),
+      children: rfNodes.map(n => elkNode(n, kindPartition(n))),
+      edges: validEdges.map((e, i) => elkEdge(e, elkIds[i], routed, withRows)),
     }
 
     const result = await elk.layout(graph)
@@ -158,6 +179,8 @@ export async function applyElkLayout(
     const groupId = `group-${groupKey}`
     const memberIds = new Set(members.map(m => m.id))
     const memberRfNodes = rfNodes.filter(n => memberIds.has(n.id))
+    // a group whose objects are all filtered out (or have no line, in the Traffic view) is not drawn
+    if (memberRfNodes.length === 0) continue
     const intraEdges = validEdges.filter(e => memberIds.has(e.source) && memberIds.has(e.target))
 
     elkChildren.push({
@@ -180,14 +203,7 @@ export async function applyElkLayout(
             'elk.spacing.nodeNode': '20',
             'elk.padding': '[left=16, top=40, right=16, bottom=16]',
           },
-      children: memberRfNodes.map(n => ({
-        id: n.id,
-        width: 200,
-        height: 60,
-        layoutOptions: {
-          'partitioning.partition': kindPartition(n),
-        },
-      })),
+      children: memberRfNodes.map(n => elkNode(n, kindPartition(n))),
       edges: routed ? [] : intraEdges.map((e, i) => ({
         id: `elk-ge-${groupKey}-${i}`,
         sources: [e.source],
@@ -216,7 +232,7 @@ export async function applyElkLayout(
     },
     children: elkChildren,
     edges: routed
-      ? validEdges.map((e, i) => elkEdge(e, elkIds[i], true))
+      ? validEdges.map((e, i) => elkEdge(e, elkIds[i], true, withRows))
       : crossEdges.map((e, i) => ({
           id: `elk-ce-${i}`,
           sources: [e.source],

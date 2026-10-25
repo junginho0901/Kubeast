@@ -109,14 +109,14 @@ test.describe('Resource Graph traffic lines (Hubble)', () => {
     const allowed = byKey.get(`${NS}/client → ${NS}/web`)
     expect(allowed, [...byKey.keys()].join('; ')).toMatchObject({ from: { kind: 'Deployment' }, to: { kind: 'Deployment' }, dropped: 0 })
     expect(allowed!.allowed).toBeGreaterThan(0)
-    expect(allowed!.ports).toEqual([{ protocol: 'TCP', port: 80 }])
+    expect(allowed!.ports).toEqual([{ protocol: 'TCP', port: 80, allowed: allowed!.allowed, dropped: 0 }])
     // stranger's connections leave it (FORWARDED at its egress) and are dropped at web: a dropped line, not a mixed one
     const dropped = byKey.get(`${NS}/stranger → ${NS}/web`)
     expect(dropped).toMatchObject({ allowed: 0, reasons: [expect.objectContaining({ reason: 'POLICY_DENIED' })] })
     expect(dropped!.dropped).toBeGreaterThan(0)
     // the lookups of web's name reach the cluster DNS in kube-system, which the graph of flows-demo does not show
     const dnsName = kubectl!('-n kube-system get deploy -l k8s-app=kube-dns -o jsonpath={.items[0].metadata.name}')
-    expect(byKey.get(`${NS}/client → kube-system/${dnsName}`)?.ports).toEqual([{ protocol: 'UDP', port: 53 }])
+    expect(byKey.get(`${NS}/client → kube-system/${dnsName}`)?.ports).toMatchObject([{ protocol: 'UDP', port: 53 }])
     // every workload a line names is one the cluster runs
     const workloads = new Set([NS, 'kube-system'].flatMap((ns) => kubectl!(`-n ${ns} get deploy,ds,sts -o name`).split('\n').map((n) => `${ns}/${n.split('/')[1]}`)))
     for (const l of lines) {
@@ -176,16 +176,19 @@ test.describe('Resource Graph traffic lines (Hubble)', () => {
     // off until switched on
     await expect(page.locator('[data-testid^="rf__edge-traffic-"]')).toHaveCount(0)
     await page.getByTestId('graph-view-traffic').click()
-    const allowed = page.locator(`[aria-label="${NS}/client → ${NS}/web"]`)
+    // the Traffic view splits each line by port: it ends at that port's row of the receiving box
+    const allowed = page.locator(`[aria-label="${NS}/client → ${NS}/web (TCP 80)"]`)
     await expect(allowed).toHaveCount(1, { timeout: 30_000 })
-    // as many lines as the API gives (none here is inside one workload)
     const api = await traffic(request, admin, { source: 'relay' })
-    await expect(page.locator('[data-testid^="rf__edge-traffic-"]')).toHaveCount((api.body.lines as Line[]).length)
+    const lines = api.body.lines as Line[]
+    await expect(page.locator('[data-testid^="rf__edge-traffic-"]')).toHaveCount(lines.reduce((n, l) => n + Math.max(1, l.ports?.length ?? 0), 0))
+    await expect(page.locator(`[data-testid="rf__node-Deployment/${NS}/web"] [data-testid="port-row"]`)).toHaveCount(1)
+    await expect(page.locator(`[data-testid="rf__node-Deployment/${NS}/web"] [data-port-text="TCP 80"]`)).toContainText('✕')
     await expect(page.getByTestId('traffic-status-source')).toContainText('recent flows of the Hubble Relay')
     // the cluster DNS is not in this graph: a stand-in
     await expect(page.getByTestId('traffic-peer').filter({ hasText: 'kube-system' })).toHaveCount(1)
     // the dropped line: its details, then "Why?"
-    await page.locator(`[aria-label="${NS}/stranger → ${NS}/web"] .react-flow__edge-textwrapper`).click()
+    await page.locator(`[aria-label="${NS}/stranger → ${NS}/web (TCP 80)"] .react-flow__edge-textwrapper`).click()
     const panel = page.getByTestId('traffic-panel')
     await expect(panel.getByTestId('traffic-panel-counts')).toContainText('0 flows allowed')
     await expect(panel.getByTestId('traffic-panel-reasons')).toContainText('POLICY_DENIED')

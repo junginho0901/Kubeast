@@ -187,3 +187,102 @@ export function portText(ports: TrafficLine['ports']): string {
   if (names.length <= 2) return names.join(', ')
   return `${names[0]} +${names.length - 1}`
 }
+
+// A receiving box lists the ports its lines go to, and each line ends at its port's row (as Hubble UI's service
+// map does): the Traffic view's boxes are BOX_HEIGHT tall plus ROW_HEIGHT per row, at most MAX_ROWS rows (the
+// quietest ports beyond share a last "+n" row).
+export const BOX_HEIGHT = 60
+export const ROW_HEIGHT = 18
+export const ROWS_PADDING = 6
+export const MAX_ROWS = 6
+export const MORE_ROW = 'more'
+
+export interface PortRow {
+  key: string
+  text: string
+  allowed: number
+  dropped: number
+}
+
+export interface PortEdge extends TrafficEdge {
+  // the edge of TrafficEdge this one is part of: its port's share
+  lineId: string
+  row?: string
+  rowText?: string
+  allowed: number
+  dropped: number
+}
+
+const rowKey = (p: { protocol?: string; port?: number }) => `${p.protocol ?? ''}/${p.port ?? 0}`
+const rowText = (p: { protocol?: string; port?: number }) => [p.protocol, p.port || undefined].filter(Boolean).join(' ')
+
+export function boxHeight(rows: number): number {
+  return rows > 0 ? BOX_HEIGHT + rows * ROW_HEIGHT + ROWS_PADDING : BOX_HEIGHT
+}
+
+// rowCenter is the middle of a box's row i, from the box's top.
+export function rowCenter(i: number): number {
+  return BOX_HEIGHT + ROWS_PADDING / 2 + i * ROW_HEIGHT + ROW_HEIGHT / 2
+}
+
+// byPort splits each line into one edge per destination port, ending at that port's row in the receiving box;
+// a line without ports (the metrics) stays one edge. Widths are set again across the split edges.
+export function byPort(edges: TrafficEdge[]): { edges: PortEdge[]; rows: Map<string, PortRow[]> } {
+  const perBox = new Map<string, Map<string, PortRow>>()
+  for (const e of edges) {
+    for (const p of e.line.ports ?? []) {
+      const box = perBox.get(e.target) ?? new Map<string, PortRow>()
+      perBox.set(e.target, box)
+      const k = rowKey(p)
+      const row = box.get(k) ?? { key: k, text: rowText(p), allowed: 0, dropped: 0 }
+      row.allowed += p.allowed ?? 0
+      row.dropped += p.dropped ?? 0
+      box.set(k, row)
+    }
+  }
+  const rows = new Map<string, PortRow[]>()
+  const rowOf = new Map<string, Map<string, string>>() // box → port key → row key
+  for (const [box, byKey] of perBox) {
+    let list = [...byKey.values()]
+    const keep = new Map<string, string>()
+    if (list.length > MAX_ROWS) {
+      const busiest = [...list].sort((a, b) => b.allowed + b.dropped - (a.allowed + a.dropped) || a.key.localeCompare(b.key)).slice(0, MAX_ROWS - 1)
+      const kept = new Set(busiest.map((r) => r.key))
+      const rest = list.filter((r) => !kept.has(r.key))
+      for (const r of list) keep.set(r.key, kept.has(r.key) ? r.key : MORE_ROW)
+      list = [...busiest, { key: MORE_ROW, text: `+${rest.length}`, allowed: rest.reduce((n, r) => n + r.allowed, 0), dropped: rest.reduce((n, r) => n + r.dropped, 0) }]
+    } else {
+      for (const r of list) keep.set(r.key, r.key)
+    }
+    const order = (r: PortRow) => (r.key === MORE_ROW ? [2, '', 0] : [0, r.key.split('/')[0], Number(r.key.split('/')[1])]) as [number, string, number]
+    list.sort((a, b) => {
+      const [x, y] = [order(a), order(b)]
+      return x[0] - y[0] || x[1].localeCompare(y[1]) || x[2] - y[2]
+    })
+    rows.set(box, list)
+    rowOf.set(box, keep)
+  }
+  const out: PortEdge[] = []
+  for (const e of edges) {
+    const ports = e.line.ports ?? []
+    if (ports.length === 0) {
+      out.push({ ...e, lineId: e.id, allowed: e.line.allowed, dropped: e.line.dropped })
+      continue
+    }
+    const shares = new Map<string, PortEdge>()
+    for (const p of ports) {
+      const row = rowOf.get(e.target)!.get(rowKey(p))!
+      const share = shares.get(row) ?? { ...e, id: `${e.id}:${row}`, lineId: e.id, row, rowText: row === MORE_ROW ? rows.get(e.target)!.find((r) => r.key === MORE_ROW)!.text : rowText(p), allowed: 0, dropped: 0 }
+      share.allowed += p.allowed ?? 0
+      share.dropped += p.dropped ?? 0
+      shares.set(row, share)
+    }
+    out.push(...shares.values())
+  }
+  const busiest = Math.max(1, ...out.map((e) => e.allowed + e.dropped))
+  for (const e of out) {
+    e.state = e.dropped > 0 ? (e.allowed > 0 ? 'mixed' : 'dropped') : 'allowed'
+    e.width = Math.round((1.5 + (2.5 * Math.log1p(e.allowed + e.dropped)) / Math.log1p(busiest)) * 10) / 10
+  }
+  return { edges: out, rows }
+}

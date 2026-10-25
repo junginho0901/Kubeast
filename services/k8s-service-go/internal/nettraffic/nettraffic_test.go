@@ -75,7 +75,7 @@ func TestFromFlows(t *testing.T) {
 			seen(group(stranger, web(80), "FORWARDED", 3, 0, -2*time.Second), "egress"),
 			group(client2, web(80), "FORWARDED", 1, 1, -3*time.Second), // another pod of the same workload: the same line
 			group(client, web(8080), "FORWARDED", 1, 0, -4*time.Second),
-			seen(group(client, dns, "FORWARDED", 1, 1, -5*time.Second), "egress"), // answered: it arrived
+			seen(group(client, dns, "FORWARDED", 1, 1, -5*time.Second), "egress"),  // answered: it arrived
 			seen(group(bare, github, "FORWARDED", 1, 0, -6*time.Second), "egress"), // outside the pods: leaving is all there is
 			seen(group(bare, other, "FORWARDED", 1, 0, -7*time.Second), "egress"),
 			seen(group(hidden, apiserver, "FORWARDED", 1, 0, -8*time.Second), "egress"),
@@ -102,14 +102,15 @@ func TestFromFlows(t *testing.T) {
 		}
 		return l
 	}
-	// client → web: 2+2 and 1+1 flows on port 80, 1 on 8080
+	// client → web: 2+2 and 1+1 flows on port 80, 1 on 8080 — counted per port too
 	cw := line(wl("shop", "Deployment", "client"), wl("shop", "Deployment", "web"))
-	if cw.Allowed != 7 || cw.Dropped != 0 || !reflect.DeepEqual(cw.Ports, []Port{{"TCP", 80}, {"TCP", 8080}}) || len(cw.Connections) != 3 ||
+	if cw.Allowed != 7 || cw.Dropped != 0 || !reflect.DeepEqual(cw.Ports, []Port{{"TCP", 80, 6, 0}, {"TCP", 8080, 1, 0}}) || len(cw.Connections) != 3 ||
 		!cw.Last.Equal(t0.Add(-time.Second)) || cw.Reasons != nil || cw.DeniedBy != nil {
 		t.Fatalf("client → web %+v", cw)
 	}
 	sw := line(wl("shop", "Deployment", "stranger"), wl("shop", "Deployment", "web"))
-	if sw.Allowed != 0 || sw.Dropped != 3 || len(sw.Connections) != 2 || !reflect.DeepEqual(sw.Reasons, []netdrops.Reason{{Reason: "POLICY_DENIED", Count: 3}}) ||
+	// the SYNs that left stranger and never arrived count on no port
+	if sw.Allowed != 0 || sw.Dropped != 3 || len(sw.Connections) != 2 || !reflect.DeepEqual(sw.Ports, []Port{{"TCP", 80, 0, 3}}) || !reflect.DeepEqual(sw.Reasons, []netdrops.Reason{{Reason: "POLICY_DENIED", Count: 3}}) ||
 		!reflect.DeepEqual(sw.DeniedBy, denied.IngressDeniedBy) {
 		t.Fatalf("stranger → web %+v", sw)
 	}
@@ -135,6 +136,19 @@ func TestFromFlows(t *testing.T) {
 	}
 }
 
+func TestFromFlowsKeepsTheBusiestPorts(t *testing.T) {
+	src := netflows.End{Namespace: "shop", Pod: "client-1", Workload: &netflows.Workload{Kind: "Deployment", Name: "client"}}
+	var groups []netflows.Group
+	for i := 0; i < MaxPorts; i++ {
+		groups = append(groups, group(src, web(uint32(1000+i)), "FORWARDED", 1, 0, -time.Second))
+	}
+	groups = append(groups, group(src, web(9999), "FORWARDED", 50, 50, -time.Second))
+	got := FromFlows(&netflows.Result{Groups: groups}, []string{"shop"}).Lines[0].Ports
+	if len(got) != MaxPorts || got[len(got)-1] != (Port{"TCP", 9999, 100, 0}) || got[0].Port != 1000 || got[MaxPorts-2].Port != 1008 {
+		t.Fatalf("ports %+v", got)
+	}
+}
+
 func TestFromFlowsCaps(t *testing.T) {
 	var groups []netflows.Group
 	src := netflows.End{Namespace: "shop", Pod: "client-1", Workload: &netflows.Workload{Kind: "Deployment", Name: "client"}}
@@ -149,7 +163,8 @@ func TestFromFlowsCaps(t *testing.T) {
 		t.Fatalf("%d lines, truncated %v", len(got.Lines), got.LinesTruncated)
 	}
 	first := got.Lines[0]
-	if first.From.Name != "client" || len(first.Ports) != MaxPorts || first.Ports[0].Port != 1000 || len(first.Connections) != MaxConnections ||
+	// the busiest ports kept: here all equal, so the lowest numbers, listed by port
+	if first.From.Name != "client" || len(first.Ports) != MaxPorts || first.Ports[0].Port != 1000 || first.Ports[MaxPorts-1].Port != 1009 || len(first.Connections) != MaxConnections ||
 		first.Connections[0].Destination.Port != 1000 {
 		t.Fatalf("caps %+v", first)
 	}
