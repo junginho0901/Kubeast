@@ -5,7 +5,7 @@ metadata:
   labels:
     {{- include "kubeast.labels" . | nindent 4 }}
 data:
-  APP_NAME: "Kubest"
+  APP_NAME: "Kubeast"
   APP_VERSION: {{ .Values.global.imageTag | quote }}
   DEBUG: "false"
   # Browser origins other than the gateway's own host (same host always

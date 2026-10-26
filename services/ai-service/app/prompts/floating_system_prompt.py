@@ -12,7 +12,7 @@ from typing import List, Optional
 from app.models.floating_ai import PageContextPayload
 
 
-FLOATING_BASE_SYSTEM_PROMPT = """당신은 Kubest 의 화면 인식 AI 어시스턴트입니다.
+FLOATING_BASE_SYSTEM_PROMPT = """당신은 Kubeast 의 화면 인식 AI 어시스턴트입니다.
 
 사용자는 Kubernetes 대시보드의 특정 화면을 보고 있으며, 플로팅 채팅 위젯을 통해 "현재 화면" 에 대해 질문합니다.
 당신의 역할은:
