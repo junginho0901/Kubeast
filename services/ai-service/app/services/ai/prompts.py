@@ -61,6 +61,7 @@ SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 - `network_policy_check`: NetworkPolicy가 A → B 연결을 허용하는지와 그렇게 정한 정책·규칙(파드·워크로드·서비스·IP, 포트) — "왜 못 붙나"
 - `network_flows`: Hubble Relay(Cilium·Retina)나 Calico Whisker의 최근 네트워크 흐름(네임스페이스·파드·워크로드) — 실제로 누가 누구와 통신했고 차단됐나(사유) (흐름 읽기가 설정된 클러스터에서만 제공, Calico는 수가 패킷)
 - `network_drops`: Hubble 에이전트가 센 차단 수(Prometheus `hubble_drop_total`) — 기간 동안 얼마나·왜(사유)·누가(상대) 막혔나, 들어옴/나감별 (Prometheus가 있는 클러스터에서 제공)
+- `network_top_flows`: AWS Network Flow Monitor의 상위 통신(네임스페이스·파드·워크로드) — 누구와 가장 많이 주고받나, 재전송·재전송 시간 초과가 어디서 나나, 영역 간·S3·DynamoDB·외부로 얼마나 (EKS에서 모니터가 설정된 클러스터에서만 제공, 한 연결이 양쪽에서 한 번씩 나올 수 있음)
 - `resource_graph`: 네임스페이스 객체와 연결(owner·selector·volume·config 참조) — "이걸 지우면 뭐가 깨지나"
 - `hygiene`(Admin): 클러스터 위생 보고 — PSS·루트 실행·latest 태그·TLS 만료·업그레이드 준비
 - `gitops_status`: Argo CD 앱 상태 — sync·health·마지막 operation·오류 조건·OutOfSync 리소스("배포 반영됐나", "왜 Degraded인가"). Argo CD가 없는 클러스터면 unavailable → Argo CD가 돌아가는 클러스터에서
@@ -221,6 +222,7 @@ Tool 결과를 분석한 후 다음 형식으로 응답하세요:
 - `network_policy_check(src, dst, port, protocol)` - Whether Kubernetes NetworkPolicy allows src to reach dst (kind/namespace/name or an IP; dst may be a Service), with the policy and rule that decide
 - `network_flows(namespace, pod, workload_kind, workload_name, verdict, since, limit)` - Recent flows from the cluster's Hubble Relay (Cilium, Retina) or Calico's Whisker, folded per connection: forwarded or dropped, drop reason, policies; offered only where flow reads are configured (on Calico the counts are packets)
 - `network_drops(namespace, pod, workload_kind, workload_name, since)` - Drops counted by the Hubble agents (Prometheus hubble_drop_total) over a range up to 24h: incoming and outgoing totals, reasons and peers
+- `network_top_flows(namespace, pod, workload_kind, workload_name, metric, destination, since)` - Top contributors from the cluster's Network Flow Monitor (AWS): the peers a target exchanges the most data, retransmissions or timeouts with, within the cluster, to AWS services or outside AWS; offered only where a monitor is configured (a connection can be listed once from each end)
 - `resource_graph(namespace)` - Objects and their edges (owner, selector, volume, config) with counts by kind
 - `hygiene(severity, check)` - Cluster hygiene report (Admin): Pod Security, root containers, mutable tags, TLS expiry, upgrade readiness
 - `gitops_status(namespace, name, project, destination_namespace, only_problems, limit)` - Argo CD Applications: sync, health, last operation, error conditions, out-of-sync resources; unavailable where Argo CD is not installed

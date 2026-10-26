@@ -135,6 +135,9 @@ var argRules = map[string]argCheck{
 	"port":     checkPortSpec,
 	"protocol": checkProtocol,
 	"verdict":  checkVerdicts,
+	// Network Flow Monitor's metric and the console's destination views.
+	"metric":      checkEnum("data_transferred", "retransmissions", "timeouts"),
+	"destination": checkEnum("cluster", "aws", "external"),
 	// Prometheus discovery: a series selector, a label name, a rule name, a job.
 	"selector":  checkPromQL,
 	"label":     checkPromLabel,

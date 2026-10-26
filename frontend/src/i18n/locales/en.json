@@ -1860,6 +1860,34 @@
     "redacted": "Peers outside your namespaces show their namespace only.",
     "source": "Counted by the Hubble agents (Prometheus), one per dropped packet."
   },
+  "toptalkers": {
+    "intro": "Who this {{kind}} exchanges the most data with, and where retransmissions happen, from the cluster's Network Flow Monitor (AWS). Reading them is recorded in the audit log.",
+    "load": "Show top talkers",
+    "refresh": "Refresh",
+    "range": "last {{w}}",
+    "view": {
+      "cluster": "Within the cluster",
+      "aws": "AWS services",
+      "external": "Outside AWS"
+    },
+    "metric": {
+      "data": "Data transferred",
+      "retransmissions": "Retransmissions",
+      "timeouts": "Retransmission timeouts"
+    },
+    "category": {
+      "title": "Category",
+      "intraAz": "same zone",
+      "interAz": "across zones",
+      "unclassified": "internet or on-premises"
+    },
+    "peer": "Peer",
+    "port": "Port",
+    "zones": "Zones",
+    "truncated": "Network Flow Monitor gave as many rows as were asked in a category: this {{kind}} may have more than these.",
+    "redacted": "Peers in namespaces whose pods you cannot list show their namespace and address only.",
+    "source": "Measured by the Network Flow Monitor agent on each node over the last {{w}}, monitor {{monitor}}. A connection between two pods can be listed once from each end."
+  },
   "netpolCheck": {
     "open": "Check a connection",
     "title": "Check a connection",
@@ -3589,6 +3617,7 @@
         "ai_tool_network_policy_check": "Read tool: whether NetworkPolicy allows a connection",
         "ai_tool_network_flows": "Read tool: recent network flows (Hubble)",
         "ai_tool_network_drops": "Read tool: network drops by reason and peer (Hubble metrics)",
+        "ai_tool_network_top_flows": "Read tool: top talkers from AWS Network Flow Monitor",
         "ai_tool_resource_graph": "Read tool: a namespace's resource graph",
         "ai_tool_hygiene": "Admin tool: the cluster hygiene report",
         "ai_tool_k8s_jq_query": "Read tool: a resource list filtered by jq",

@@ -307,13 +307,18 @@ func buildToolRegistry() map[string]ToolDefinition {
 	})
 	register(ToolDefinition{
 		Name:        "network_flows",
-		Description: "Recent network flows of a namespace, pod or workload from the cluster's Hubble Relay: who talked to whom, forwarded or dropped and why",
+		Description: "Recent network flows of a namespace, pod or workload from the cluster's Hubble Relay or Calico's Whisker: who talked to whom, forwarded or dropped and why",
 		Handler:     handleNetworkFlows,
 	})
 	register(ToolDefinition{
 		Name:        "network_drops",
 		Description: "Network drops of a namespace, pod or workload counted by the Hubble agents (Prometheus): how many, why, and from or to whom",
 		Handler:     handleNetworkDrops,
+	})
+	register(ToolDefinition{
+		Name:        "network_top_flows",
+		Description: "Top contributors of a namespace, pod or workload from the cluster's Network Flow Monitor (AWS): who it exchanges the most data with, where retransmissions and timeouts happen",
+		Handler:     handleNetworkTopFlows,
 	})
 	register(ToolDefinition{
 		Name:        "resource_graph",

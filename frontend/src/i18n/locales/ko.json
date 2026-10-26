@@ -1862,6 +1862,34 @@
     "redacted": "내 네임스페이스 밖의 상대는 네임스페이스만 보입니다.",
     "source": "Hubble 에이전트가 센 수입니다(Prometheus). 막힌 패킷마다 1입니다."
   },
+  "toptalkers": {
+    "intro": "클러스터의 Network Flow Monitor(AWS)가 잰, 이 {{kind}}와 가장 많이 주고받는 상대와 재전송이 나는 곳입니다. 읽으면 감사 로그에 남습니다.",
+    "load": "상위 통신 보기",
+    "refresh": "새로 고침",
+    "range": "최근 {{w}}",
+    "view": {
+      "cluster": "클러스터 안",
+      "aws": "AWS 서비스",
+      "external": "AWS 밖"
+    },
+    "metric": {
+      "data": "전송량",
+      "retransmissions": "재전송",
+      "timeouts": "재전송 시간 초과"
+    },
+    "category": {
+      "title": "구분",
+      "intraAz": "같은 영역",
+      "interAz": "영역 간",
+      "unclassified": "인터넷 또는 온프레미스"
+    },
+    "peer": "상대",
+    "port": "포트",
+    "zones": "가용 영역",
+    "truncated": "Network Flow Monitor가 한 구분에서 요청한 만큼 줄을 돌려주었습니다. 이 {{kind}}의 줄이 더 있을 수 있습니다.",
+    "redacted": "파드를 볼 수 없는 네임스페이스의 상대는 네임스페이스와 주소만 보입니다.",
+    "source": "각 노드의 Network Flow Monitor 에이전트가 최근 {{w}} 동안 잰 값입니다(모니터 {{monitor}}). 두 파드 사이의 연결은 양쪽에서 한 번씩 나올 수 있습니다."
+  },
   "netpolCheck": {
     "open": "연결 확인",
     "title": "연결 확인",
@@ -3702,6 +3730,7 @@
         "ai_tool_network_policy_check": "읽기 도구: NetworkPolicy가 연결을 허용하는지",
         "ai_tool_network_flows": "읽기 도구: 최근 네트워크 흐름(Hubble)",
         "ai_tool_network_drops": "읽기 도구: 사유·상대별 네트워크 차단(Hubble 지표)",
+        "ai_tool_network_top_flows": "읽기 도구: AWS Network Flow Monitor의 상위 통신",
         "ai_tool_resource_graph": "읽기 도구: 네임스페이스 리소스 그래프",
         "ai_tool_hygiene": "관리자 도구: 클러스터 위생 점검 보고",
         "ai_tool_k8s_jq_query": "읽기 도구: 리소스 목록을 jq로 걸러 보기",
@@ -4818,6 +4847,7 @@
     "section:Network Policies": "NetworkPolicy",
     "section:Recent Flows": "최근 흐름",
     "section:Network Drops": "네트워크 차단",
+    "section:Top Talkers": "상위 통신",
     "section:Log search": "로그 검색",
     "section:Config": "설정",
     "section:Container Policies": "컨테이너 정책",

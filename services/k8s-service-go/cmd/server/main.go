@@ -27,6 +27,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logfiles"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logsearch"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/netflows"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/nfm"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/routes"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/traces"
@@ -218,6 +219,21 @@ func main() {
 		}
 		h.SetNetworkFlows(store)
 		slog.Info("network flows enabled", "clusters", nfCfg.ClusterIDs(), "max_range", nfCfg.MaxRange.String(), "max_flows", nfCfg.MaxFlows)
+	}
+
+	// Top contributors of each cluster's Network Flow Monitor monitor (off unless NETWORK_FLOW_MONITOR_ENABLED).
+	if nfmCfg := nfm.LoadConfig(); nfmCfg.Enabled {
+		if err := nfmCfg.Validate(); err != nil {
+			slog.Error("invalid network flow monitor configuration", "err", err)
+			os.Exit(1)
+		}
+		store, err := nfm.New(nfmCfg)
+		if err != nil {
+			slog.Error("invalid network flow monitor configuration", "err", err)
+			os.Exit(1)
+		}
+		h.SetNetworkFlowMonitor(store)
+		slog.Info("network flow monitor enabled", "clusters", nfmCfg.ClusterIDs(), "region", nfmCfg.Region, "max_range", nfmCfg.MaxRange.String())
 	}
 
 	// Alert store reads for the AI's alerts_list (off unless ALERT_STORE_ENABLED).

@@ -57,6 +57,7 @@
     - `network_policy_check`: whether NetworkPolicy allows a connection, with the policy and rule that decide (see [NetworkPolicy view and check](#networkpolicy-view-and-check))
     - `network_flows`: recent connections of a namespace, pod or workload from the cluster's Hubble Relay, folded per connection, with the drop reason and the policies that decided (see [Recent flows](#recent-flows-hubble))
     - `network_drops`: drops of a namespace, pod or workload counted by the Hubble agents, from the cluster's Prometheus, by reason and peer, up to a day back (see [Network drops](#network-drops-hubble-metrics))
+    - `network_top_flows`: the peers a namespace, pod or workload exchanges the most data with, or has the most retransmissions or timeouts with, from the cluster's Network Flow Monitor on EKS (see [Top talkers](#top-talkers-network-flow-monitor))
     - `resource_graph`: namespace objects and their connections
     - `hygiene`: the hygiene report (Admin)
   - A tool is left out of the tool list (`/api/v1/features`, 1-minute cache) when:
@@ -119,7 +120,7 @@
 | --- | --- | --- | --- |
 | **Pending** | Default right after sign-up/SSO | None — can log in, but the API returns 403 | — |
 | **Member** | Account level | No global permissions, access **only through per-cluster grants** | `kubeast:authenticated` (no permissions) |
-| **Read** | Per cluster | 10 menus · read all resources (`resource.*.read`, including cost `resource.cost.read`) · Helm read (the permission key exists, but Release records are Secrets so the cluster refuses — see the right column) · read log files inside containers (`resource.pod.logfile`, when the feature is on) · the 42 read tools of AI chat (`ai.tool.<read tool>`) and MCP connection (`ai.mcp.use`) — no write tools | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view` excludes Secrets and `services/proxy`, so the cluster refuses Secrets and Helm releases (stored in Secrets) and the UI shows a permission notice. Prometheus and OpenCost read through the API server proxy (optimization usage, storage analysis, cost, drawer metrics) are opened **for GET** only for the Services listed in the chart value `auth.impersonation.viewerProxyServices` — a Role in that Namespace, name exactly `<service>:<port>`; other Services, POST and NS-scoped grants are still refused (values comments in [Configuration](configuration.md)). If not listed, refused (the proxy starts at `kubeast:operator`=`edit`) |
+| **Read** | Per cluster | 10 menus · read all resources (`resource.*.read`, including cost `resource.cost.read`) · Helm read (the permission key exists, but Release records are Secrets so the cluster refuses — see the right column) · read log files inside containers (`resource.pod.logfile`, when the feature is on) · the 43 read tools of AI chat (`ai.tool.<read tool>`) and MCP connection (`ai.mcp.use`) — no write tools | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view` excludes Secrets and `services/proxy`, so the cluster refuses Secrets and Helm releases (stored in Secrets) and the UI shows a permission notice. Prometheus and OpenCost read through the API server proxy (optimization usage, storage analysis, cost, drawer metrics) are opened **for GET** only for the Services listed in the chart value `auth.impersonation.viewerProxyServices` — a Role in that Namespace, name exactly `<service>:<port>`; other Services, POST and NS-scoped grants are still refused (values comments in [Configuration](configuration.md)). If not listed, refused (the proxy starts at `kubeast:operator`=`edit`) |
 | **Write** | Per cluster | `menu.*` · create/edit/delete resources · CronJob suspend/trigger · view Secret values · read log files · Helm rollback/upgrade/test · all AI tools (`ai.tool.*`, including write tools) · MCP connection | `kubeast:operator` = `edit` + viewer |
 | **Admin** | Account level (`*`) or per cluster | Everything — admin menus, all clusters (including ones registered later) | `kubeast:admin` = `cluster-admin` |
 | Custom | Per cluster | Only the chosen permissions (within the permissions the creator has) | `kubeast:role:<name>` — every call is 403 until the cluster binds this group (`auth.impersonation.customRoles`). The no-permission banner in the UI and the role creation dialog show this group name |
@@ -250,6 +251,20 @@ Where the cluster's Prometheus has the Hubble drop metric, the Pod and workload 
 - Peers outside a namespace-limited user's namespaces show their namespace only.
 - The AI tool `network_drops` reads the same counts.
 - What the target cluster needs is in [Cluster requirements §17](cluster-requirements.md#17-hubble-metrics-network-drops).
+
+### Top talkers (Network Flow Monitor)
+
+With `features.networkFlowMonitor` on for an EKS cluster, the Pod and workload drawers have a "Top Talkers" section, like the EKS console's flow table.
+
+- It lists the peers the pod or workload exchanged the most data with over the last 15 minutes, hour or 2 hours, from the cluster's Amazon CloudWatch Network Flow Monitor monitor: peer, port, value, zones and category.
+  - Views: within the cluster (same zone and across zones), AWS services (Amazon S3, DynamoDB), outside AWS (the internet or on-premises).
+  - Ranked by data transferred, retransmissions or retransmission timeouts.
+  - A workload's rows also name which of its pods it was.
+- It loads only after "Show top talkers": the read goes to AWS and is recorded in the audit log (`k8s.networkflows.query`, `provider: nfm`).
+- Kubeast reads AWS with its own identity, so the user must be able to list the namespace's pods. Peers in namespaces whose pods the user cannot list show their namespace and address only.
+- A connection between two pods can be listed once from each end, since each node's agent reports what it measured.
+- The AI tool `network_top_flows` reads the same rows.
+- What the cluster and AWS need is in [Cluster requirements §19](cluster-requirements.md#19-network-flow-monitor-top-talkers-eks).
 
 ### Traffic lines in the Resource Graph (Hubble)
 

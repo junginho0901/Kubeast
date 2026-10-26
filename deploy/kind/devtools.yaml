@@ -1,7 +1,8 @@
 # Local stand-ins for the audit sinks on the kind dev cluster (applied by scripts/kind-deploy.sh, not part of
 # the chart): an S3-compatible store with Object Lock (versitygw), an SMTP catcher with a web inbox (Mailpit),
-# a webhook receiver that keeps the last requests, and a model endpoint that only refuses (ai-provider-errors.spec.ts).
-# deploy/kind/values.yaml points the dev sinks here.
+# a webhook receiver that keeps the last requests, a model endpoint that only refuses (ai-provider-errors.spec.ts)
+# and an Amazon CloudWatch Network Flow Monitor top contributors API (network-top-flows.spec.ts).
+# deploy/kind/values.yaml points the dev sinks and the monitor of cluster self here.
 # Dev-only credentials; nothing here is meant for a real install.
 apiVersion: v1
 kind: Namespace
@@ -302,3 +303,150 @@ metadata:
 spec:
   selector: {app: model-stub}
   ports: [{port: 8090, targetPort: 8090}]
+---
+# the AWS keys k8s-service signs the Network Flow Monitor stand-in's requests with (the stand-in reads none)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kubeast-nfm-dev
+  namespace: kubeast
+stringData:
+  accessKeyId: kubeast-dev
+  secretAccessKey: kubeast-dev-secret
+---
+# The four top contributors operations of Network Flow Monitor at the AWS SDK's paths and JSON (restjson1), for
+# one monitor, kubeast-monitor. A test gives it rows with PUT /_rows {"rows": {<category>: [<row>, …]}} and
+# reads the StartQuery bodies it got with GET /_calls (DELETE /_calls forgets them); the rows are the same for
+# every metric, in Bytes for DATA_TRANSFERRED and Count for the others.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nfm-stub
+  namespace: kubeast-devtools
+data:
+  stub.py: |
+    import json
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from urllib.parse import parse_qs, urlparse
+
+    MONITOR = "kubeast-monitor"
+    LOCK = threading.Lock()
+    STATE = {"rows": {}, "calls": [], "queries": {}}
+
+    class H(BaseHTTPRequestHandler):
+        def send_json(self, code, body, error=None):
+            raw = json.dumps(body).encode()
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            if error:
+                self.send_header("X-Amzn-ErrorType", error)
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def read_json(self):
+            n = int(self.headers.get("Content-Length") or 0)
+            return json.loads(self.rfile.read(n) or b"{}")
+
+        def route(self):
+            url = urlparse(self.path)
+            parts = [p for p in url.path.split("/") if p]
+            return url, parts
+
+        def monitor(self, parts):
+            if len(parts) < 3 or parts[0] != "monitors" or parts[2] != "topContributorsQueries":
+                self.send_json(404, {"message": "no such path"})
+                return False
+            if parts[1] != MONITOR:
+                self.send_json(404, {"message": "monitor %s not found" % parts[1]}, "ResourceNotFoundException")
+                return False
+            return True
+
+        def do_PUT(self):
+            url, parts = self.route()
+            if parts != ["_rows"]:
+                return self.send_json(404, {"message": "no such path"})
+            body = self.read_json()
+            with LOCK:
+                STATE["rows"] = body.get("rows") or {}
+            self.send_json(200, {"categories": sorted(STATE["rows"])})
+
+        def do_POST(self):
+            url, parts = self.route()
+            if not self.monitor(parts) or len(parts) != 3:
+                return
+            body = self.read_json()
+            with LOCK:
+                qid = "q%d" % (len(STATE["calls"]) + 1)
+                signed = (self.headers.get("Authorization") or "").startswith("AWS4-HMAC-SHA256 Credential=kubeast-dev/")
+                STATE["calls"].append(dict(body, queryId=qid, signed=signed))
+                STATE["queries"][qid] = body
+            self.send_json(200, {"queryId": qid})
+
+        def do_GET(self):
+            url, parts = self.route()
+            if parts == ["_calls"]:
+                with LOCK:
+                    return self.send_json(200, {"calls": STATE["calls"]})
+            if not self.monitor(parts) or len(parts) != 5:
+                return
+            with LOCK:
+                q = STATE["queries"].get(parts[3])
+                rows = list(STATE["rows"].get(q["destinationCategory"], [])) if q else []
+            if q is None:
+                return self.send_json(404, {"message": "query not found"}, "ResourceNotFoundException")
+            if parts[4] == "status":
+                return self.send_json(200, {"status": "SUCCEEDED"})
+            rows = rows[: int(q.get("limit") or 500)]
+            args = parse_qs(url.query)
+            start = int((args.get("nextToken") or ["0"])[0])
+            size = int((args.get("maxResults") or ["500"])[0])
+            page = {"topContributors": rows[start:start + size], "unit": "Bytes" if q["metricName"] == "DATA_TRANSFERRED" else "Count"}
+            if start + size < len(rows):
+                page["nextToken"] = str(start + size)
+            self.send_json(200, page)
+
+        def do_DELETE(self):
+            url, parts = self.route()
+            if parts == ["_calls"]:
+                with LOCK:
+                    STATE["calls"] = []
+                return self.send_json(200, {})
+            if self.monitor(parts) and len(parts) == 4:
+                self.send_json(200, {})
+
+        def log_message(self, *a):
+            pass
+
+    ThreadingHTTPServer(("", 8091), H).serve_forever()
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nfm-stub
+  namespace: kubeast-devtools
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: nfm-stub}}
+  template:
+    metadata: {labels: {app: nfm-stub}}
+    spec:
+      containers:
+        - name: stub
+          image: python:3.12-alpine
+          imagePullPolicy: IfNotPresent
+          command: [python, -u, /app/stub.py]
+          ports: [{containerPort: 8091}]
+          readinessProbe: {tcpSocket: {port: 8091}, periodSeconds: 5}
+          volumeMounts: [{name: app, mountPath: /app}]
+      volumes: [{name: app, configMap: {name: nfm-stub}}]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nfm-stub
+  namespace: kubeast-devtools
+spec:
+  selector: {app: nfm-stub}
+  ports: [{port: 8091, targetPort: 8091}]

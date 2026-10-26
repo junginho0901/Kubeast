@@ -659,6 +659,8 @@ export interface ClusterFeatures {
   alertStore?: { enabled: boolean; clusters: string[]; clusterLabel?: string; silences?: boolean; silenceMaxHours?: number }
   // Chart features.networkFlows: the clusters whose flows Kubeast reads, and what serves each (a Hubble Relay or Calico's Whisker).
   networkFlows?: { enabled: boolean; clusters: string[]; providers?: Record<string, 'hubble' | 'calico'> }
+  // Chart features.networkFlowMonitor: the clusters with an Amazon CloudWatch Network Flow Monitor monitor.
+  networkFlowMonitor?: { enabled: boolean; clusters: string[] }
 }
 
 // Policy reports (wgpolicyk8s.io/v1alpha2 PolicyReport / ClusterPolicyReport as Kyverno and others write them).
@@ -812,6 +814,45 @@ export interface NetflowResult {
 
 // GET /api/v1/cluster/namespaces/{ns}/networkdrops?kind=&name=&range= — drops counted by the Hubble agents
 // (Prometheus hubble_drop_total). incoming: the target is the destination; outgoing: the source.
+// GET /cluster/namespaces/{ns}/networktopflows: the top contributors of the cluster's Network Flow Monitor
+// monitor with the namespace, a pod or a workload at either end. local is where NFM's agent measured.
+export interface NfmEnd {
+  namespace?: string
+  pod?: string
+  workload?: { kind: string; name: string }
+  service?: string
+  ip?: string
+  az?: string
+  vpc?: string
+  instance?: string
+}
+
+export interface NfmRow {
+  local: NfmEnd
+  remote: NfmEnd
+  port?: number
+  value: number
+  category: string
+}
+
+export type NfmMetric = 'DATA_TRANSFERRED' | 'RETRANSMISSIONS' | 'TIMEOUTS'
+export type NfmView = 'cluster' | 'aws' | 'external'
+
+export interface NfmResult {
+  cluster: string
+  monitor: string
+  namespace: string
+  kind?: string
+  name?: string
+  metric: NfmMetric
+  unit?: string
+  view: NfmView
+  range: string
+  rows: NfmRow[]
+  truncated: boolean
+  redacted?: boolean
+}
+
 export interface NetdropPeer {
   namespace?: string
   workload?: string

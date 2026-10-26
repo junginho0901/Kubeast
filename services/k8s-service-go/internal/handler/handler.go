@@ -20,6 +20,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logfiles"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logsearch"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/netflows"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/nfm"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/traces"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/tracing"
@@ -60,6 +61,9 @@ type Handler struct {
 	netflowsDial func(ctx context.Context, t netflows.Target) (string, *http.Client, error)
 	netflowsNow  func() time.Time
 	netflowsLook netflows.Lookup
+	// nfm reads Network Flow Monitor monitors (nil: off); nfmCanI replaces the list pods review in tests.
+	nfm     *nfm.Store
+	nfmCanI func(ctx context.Context, namespace string) (bool, error)
 	// netdropsSrc replaces the Prometheus and cluster reads of NetworkDrops in tests (nil: svc).
 	netdropsSrc netdropsSource
 	// alertStore reads the alert store (nil: alert reads off).

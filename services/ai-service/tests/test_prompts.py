@@ -68,6 +68,7 @@ def test_tool_usage_guide():
         "network_policy_check",
         "network_flows",
         "network_drops",
+        "network_top_flows",
         "resource_graph",
         "hygiene",
         "k8s_jq_query",

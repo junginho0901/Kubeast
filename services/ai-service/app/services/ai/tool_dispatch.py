@@ -68,6 +68,7 @@ FEATURE_TOOL_ARGS = {
     "network_policy_check": ({"src", "dst", "port", "protocol"}, set(), set()),
     "network_flows": ({"namespace", "pod", "workload_kind", "workload_name", "verdict", "since"}, set(), {"limit"}),
     "network_drops": ({"namespace", "pod", "workload_kind", "workload_name", "since"}, set(), set()),
+    "network_top_flows": ({"namespace", "pod", "workload_kind", "workload_name", "metric", "destination", "since"}, set(), set()),
     "resource_graph": ({"namespace"}, set(), set()),
     # Query tools (kubectl + jq / columns / count, filtered in tool-server).
     "k8s_jq_query": ({"resource_type", "jq", "namespace", "label_selector", "field_selector"}, set(), {"limit"}),

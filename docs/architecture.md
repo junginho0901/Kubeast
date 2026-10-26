@@ -110,7 +110,7 @@ The requests of the minimal install are set as follows:
 | `features.alertInvestigation` | 0 | 0 | None; it investigates when an alert webhook arrives |
 | `sessionRecording.enabled` | 0 | 0 | Uploads chunks while exec or a node shell is open |
 | `nodeShell.enabled` | 1 per node while a shell is open | 0 | None |
-| `features.prometheus`, `logSearch`, `tracing`, `traceStore`, `alertStore`, `networkFlows`, `cost`, `policyReports`, `hygiene`, `inPlaceResize`, `logFiles` | 0 | 0 | None; works only when the UI or the AI asks (the hygiene check is also computed when its screen opens) |
+| `features.prometheus`, `logSearch`, `tracing`, `traceStore`, `alertStore`, `networkFlows`, `networkFlowMonitor`, `cost`, `policyReports`, `hygiene`, `inPlaceResize`, `logFiles` | 0 | 0 | None; works only when the UI or the AI asks (the hygiene check is also computed when its screen opens) |
 
 Work that always runs:
 

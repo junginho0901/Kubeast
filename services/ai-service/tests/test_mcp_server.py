@@ -238,7 +238,7 @@ async def test_list_clusters_names_the_tools_allowed_in_each(fakes, monkeypatch)
     feature_calls = []
     features = {"prometheus": {"enabled": True}, "logSearch": {"enabled": True, "clusters": ["self"]}, "cost": {"enabled": True}, "policyReports": {"enabled": True},
                 "traceStore": {"enabled": True, "clusters": ["self"]}, "alertStore": {"enabled": True, "clusters": ["self"]},
-                "networkFlows": {"enabled": True, "clusters": ["self"]}}
+                "networkFlows": {"enabled": True, "clusters": ["self"]}, "networkFlowMonitor": {"enabled": True, "clusters": ["self"]}}
 
     async def fetch_features(k8s_client, cluster):
         feature_calls.append((k8s_client.client.headers.get("Authorization"), k8s_client.client.params.get("cluster"), cluster))
@@ -270,12 +270,12 @@ async def test_list_clusters_names_the_tools_allowed_in_each(fakes, monkeypatch)
     prometheus = {"prometheus_query", "prometheus_metrics", "prometheus_labels", "prometheus_rules", "prometheus_targets", "network_drops"}
     assert set(tools) == set(mcp_server.READ_TOOLS) - prometheus - {"logsearch", "loki_query", "loki_labels", "loki_patterns", "cost", "policy_reports", "k8s_diff",
                                                          "traces_search", "traces_get", "traces_tags", "traces_metrics", "traces_compare",
-                                                         "alerts_list", "network_flows"} - admin_only
+                                                         "alerts_list", "network_flows", "network_top_flows"} - admin_only
 
     # The admin (global *) is offered the hygiene report too.
     features = {"prometheus": {"enabled": True}, "logSearch": {"enabled": True, "clusters": ["self"]}, "cost": {"enabled": True}, "policyReports": {"enabled": True},
                 "traceStore": {"enabled": True, "clusters": ["self"]}, "alertStore": {"enabled": True, "clusters": ["self"]},
-                "networkFlows": {"enabled": True, "clusters": ["self"]}}
+                "networkFlows": {"enabled": True, "clusters": ["self"]}, "networkFlowMonitor": {"enabled": True, "clusters": ["self"]}}
 
     async def get_admin(url, **kwargs):
         assert kwargs["headers"]["Authorization"] == "Bearer tok-admin"

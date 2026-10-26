@@ -923,6 +923,36 @@ features:
     timeout: 10s
     perUserPerMinute: 20
     egressCIDRs: []
+  # Top contributors of each EKS cluster's Amazon CloudWatch Network Flow Monitor
+  # monitor (off by default): what EKS Container Network Observability (or an
+  # NFM scope and monitor of your own) collects with the agent add-on
+  # aws-network-flow-monitoring-agent 1.1.0 or later. Shown in the Pod and
+  # workload drawers and read by the AI's network_top_flows. clusters maps
+  # <Kubeast cluster ID>: <monitor name> (the EKS console names it
+  # <cluster>-monitor); region is the monitors' Region. Kubeast reads with its
+  # own AWS identity — the aws.irsaRoleArn role or serviceAccounts.k8sService,
+  # or existingSecret (accessKeyId, secretAccessKey) — which needs
+  # networkflowmonitor:StartQueryMonitorTopContributors, GetQueryStatusMonitorTopContributors,
+  # GetQueryResultsMonitorTopContributors and StopQueryMonitorTopContributors
+  # on those monitors (docs/cluster-requirements.md §19). Who may read: holders
+  # of resource.networkflow.read whom the cluster lets list pods in the
+  # namespace; a peer in a namespace whose pods the reader cannot list shows
+  # its namespace and address only. Audited as k8s.networkflows.query
+  # (provider nfm). limit is the rows asked per category (1-500); endpoint
+  # replaces the service's (a stand-in), egress adds NetworkPolicy rules for
+  # it — AWS on 443 is open already.
+  networkFlowMonitor:
+    enabled: false
+    region: ""
+    clusters: {}
+    existingSecret: ""
+    endpoint: ""
+    defaultRange: 1h
+    maxRange: 2h
+    limit: 500
+    timeout: 15s
+    perUserPerMinute: 20
+    egress: []
   # Alert store reads for the AI's alerts_list (off by default): an
   # Alertmanager's API v2 at url (http://alertmanager.monitoring:9093), a
   # Grafana data source proxy to one (https://<grafana>/api/datasources/proxy/uid/<Alertmanager UID>)

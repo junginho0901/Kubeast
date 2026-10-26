@@ -41,6 +41,7 @@ Kubeast는 등록한 클러스터에 아무것도 설치하지 않습니다. 예
 | 최근 흐름(드로어, AI `network_flows`) | TLS로 서비스하는 Cilium Hubble Relay, Relay Service의 `services/proxy` create 권한 — §16 | `features.networkFlows.enabled`(끔) | 칸과 도구가 빠지고 API는 404. 클러스터 권한이 없으면 403 |
 | 네트워크 차단(드로어, AI `network_drops`) | 클러스터 Prometheus에 워크로드 레이블이 붙은 Hubble 차단 지표 — §17 | Prometheus(§3) | 칸이 나오지 않고, 도구는 지표가 없다고 알려 줌 |
 | Resource Graph 통신 선 | 최근 흐름(§16), 또는 클러스터 Prometheus에 워크로드 레이블이 붙은 Hubble TCP·차단 지표 — §18 | `features.networkFlows` 또는 Prometheus | 전환이 나오지 않고, 없는 지표는 그래프에서 알려 줌 |
+| 상위 통신(드로어, AI `network_top_flows`) | EKS 클러스터의 Amazon CloudWatch Network Flow Monitor 모니터, 그 모니터를 조회할 수 있는 Kubeast의 AWS 신원, 사용자의 파드 `list` 권한 — §19 | `features.networkFlowMonitor.enabled`(끔) | 칸과 도구가 빠지고 API는 404. 파드 `list` 권한이 없으면 403. AWS가 Kubeast의 신원을 거부하면 502 |
 
 ## 1. 권한(RBAC) — 모든 대상 클러스터
 
@@ -587,6 +588,44 @@ Resource Graph의 통신·둘 다 보기는 두 출처 중 하나로 선을 그�
   - 지표: Retina는 워크로드 레이블을 비워 두므로 `labelsContext`에 `source_pod`·`destination_pod`를 더합니다(`deploy/kind/retina-values.yaml`). 그러면 Kubeast가 §16처럼 파드의 워크로드를 붙입니다.
   - 클라이언트에서 Service로 나가는 SYN은 지표에 도착지가 없어, 파드 바깥으로 나가는 것과 구별되지 않습니다. 파드 레이블만 있는 지표에서는 이름 없는 주소로 나가는 연결을 그리지 않고, 그래프가 그렇다고 알립니다. 최근 흐름에는 나옵니다.
 - **확인**: Prometheus에서 `sum by (source_workload, destination_workload) (increase(hubble_tcp_flags_total{flag="SYN"}[1h]))`, 또는 Resource Graph → 통신.
+
+## 19. Network Flow Monitor (상위 통신, EKS)
+
+드로어의 "상위 통신"과 AI 도구 `network_top_flows`(`features.networkFlowMonitor`, 기본 꺼짐)는 Amazon CloudWatch Network Flow Monitor(NFM) 모니터의 상위 기여자(top contributors)를 읽습니다. EKS Container Network Observability가 콘솔의 흐름 표에 보여 주는 것과 같습니다. 클러스터를 거쳐 읽는 것은 없습니다. Kubeast가 자기 AWS 신원으로 AWS에 묻고, 클러스터는 누가 그 줄을 볼 수 있는지만 정합니다.
+
+- **AWS 쪽**: EKS 콘솔에서 클러스터의 Container Network Observability를 켜거나, NFM 범위(scope)와 로컬 리소스가 그 클러스터인 모니터, 애드온 `aws-network-flow-monitoring-agent` 1.1.0 이상을 만듭니다(Terraform AWS provider 6.21.0 이상). 콘솔은 모니터 이름을 `<클러스터>-monitor`로 짓습니다.
+  - 에이전트는 자기 네트워크 네임스페이스가 있는 파드만 이름을 붙입니다. 호스트 네트워크 파드는 노드 주소로 보입니다.
+- **설정**: `features.networkFlowMonitor.region`(모니터의 리전), `clusters`(`<Kubeast 클러스터 ID>: <모니터 이름>`).
+- **Kubeast가 읽는 것**: 고른 보기의 구분마다 상위 기여자 쿼리 하나를 시작하고, 성공할 때까지 상태를 묻고, 줄을 읽습니다. `timeout`(15초) 안에 끝나지 않은 쿼리는 멈춥니다.
+  - 보기는 콘솔과 같습니다. 클러스터 안(`INTRA_AZ`, `INTER_AZ`), AWS 서비스(`AMAZON_S3`, `AMAZON_DYNAMODB`), AWS 밖(`UNCLASSIFIED`, 인터넷 또는 온프레미스).
+  - 지표는 `DATA_TRANSFERRED`(바이트), `RETRANSMISSIONS`(재전송), `TIMEOUTS`(재전송 시간 초과)입니다. EKS 에이전트의 흐름에 이 세 가지가 있습니다.
+  - NFM 쿼리에는 네임스페이스·파드 조건이 없어서, 쿼리마다 모니터 전체에서 `limit`(500, NFM 최대)줄까지 돌려받습니다. Kubeast는 그중 네임스페이스·파드·워크로드가 어느 한쪽 끝에 있는 줄만 남기고, 사용자가 볼 수 있는 파드 목록으로 워크로드 이름을 붙입니다. 같은 분에 같은 질문은 기억해 둔 답을 씁니다.
+  - 기간은 `defaultRange`(1시간), 최대 `maxRange`(2시간)입니다. 콘솔도 1시간·2시간을 읽습니다.
+  - 노드마다 에이전트가 잰 것을 보내므로, 두 파드 사이의 연결은 양쪽에서 한 번씩 나올 수 있습니다.
+- **Kubeast의 AWS 신원**(k8s-service): `aws.irsaRoleArn` 롤, `serviceAccounts.k8sService.annotations`의 롤(IRSA), 또는 `accessKeyId`·`secretAccessKey`가 든 `existingSecret`. 모니터에 대해 다음 네 동작이 필요합니다(IAM은 시작·중지를 Write로 분류합니다. 쿼리를 시작하고 멈출 뿐 모니터는 바꾸지 않습니다).
+
+  ```json
+  {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Action": [
+          "networkflowmonitor:StartQueryMonitorTopContributors",
+          "networkflowmonitor:GetQueryStatusMonitorTopContributors",
+          "networkflowmonitor:GetQueryResultsMonitorTopContributors",
+          "networkflowmonitor:StopQueryMonitorTopContributors"
+        ],
+        "Resource": "arn:aws:networkflowmonitor:<region>:<account>:monitor/<monitor name>"
+      }
+    ]
+  }
+  ```
+
+  Kubeast의 NetworkPolicy는 443 포트로 AWS에 나가는 것을 이미 엽니다. AWS가 거부하면 설치 설정 문제이므로 API는 AWS 오류 코드와 함께 502를 돌려줍니다.
+- **누가 읽나**: `resource.networkflow.read`가 있고, 클러스터가 그 네임스페이스의 파드 `list`를 허용하는 사용자(Kubeast가 사용자로서 SelfSubjectAccessReview로 묻습니다). 사용자가 파드를 볼 수 없는 네임스페이스나 네임스페이스 한정 권한 밖의 상대는 네임스페이스와 주소만 보입니다. 읽을 때마다 `k8s.networkflows.query`(`provider: nfm`)로 감사 로그에 남습니다.
+- **확인**: `aws networkflowmonitor list-monitors --region <region>`에 모니터가 나오고, Pod 드로어 → 상위 통신 → 상위 통신 보기에 줄이 나오면 됩니다.
+- **검증**: 개발 클러스터의 API 대역(`deploy/kind/devtools.yaml`, e2e `network-top-flows.spec.ts`)에 AWS SDK for Go v2 클라이언트로 확인했습니다. 실제 모니터로는 아직 확인하지 않았습니다.
 
 ## 검증한 버전 (2026-10-13)
 

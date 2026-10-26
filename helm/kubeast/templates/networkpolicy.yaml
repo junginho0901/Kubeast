@@ -413,6 +413,12 @@ spec:
           port: {{ if kindIs "map" . }}{{ .port | default 443 }}{{ else }}443{{ end }}
     {{- end }}
     {{- end }}
+    {{- if .Values.features.networkFlowMonitor.enabled }}
+    {{- with .Values.features.networkFlowMonitor.egress }}
+    # Network Flow Monitor stand-in (features.networkFlowMonitor.egress) — AWS on 443 is open above
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- end }}
     {{- if .Values.features.traceStore.enabled }}
     {{- range .Values.features.traceStore.egressCIDRs }}
     # trace store (features.traceStore.egressCIDRs)

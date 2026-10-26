@@ -804,6 +804,35 @@ K8S_READONLY_TOOLS: List[Dict] = [
     {
         "type": "function",
         "function": {
+            "name": "network_top_flows",
+            "description": (
+                "Top contributors from the cluster's Amazon CloudWatch Network Flow Monitor (EKS Container Network Observability), read "
+                "with Kubeast's AWS identity for a user who may list the namespace's pods: the rows with the namespace, a pod (pod) or a "
+                "workload (workload_kind + workload_name) at either end, largest first, ranked by metric — data_transferred (bytes, "
+                "default), retransmissions or timeouts (retransmission timeouts) — over since (1m to the server's maximum, default 1h). "
+                "destination picks the EKS console's view: cluster (within the cluster, INTRA_AZ and INTER_AZ, default), aws (Amazon S3 "
+                "and DynamoDB) or external (internet or on-premises). Each row has local (where the agent measured) and remote: pod, "
+                "workload, Service, IP, zone, port, value, category. Use it for \"who does this talk to the most\", \"where do "
+                "retransmissions come from\", \"how much crosses zones\"; a connection can be listed once from each end."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "namespace": {"type": "string", "description": "Namespace of the pod or workload"},
+                    "pod": {"type": "string", "description": "Pod name (or use workload_kind + workload_name)"},
+                    "workload_kind": {"type": "string", "description": "Deployment, StatefulSet, DaemonSet, ReplicaSet, Job or CronJob"},
+                    "workload_name": {"type": "string", "description": "Workload name"},
+                    "metric": {"type": "string", "enum": ["data_transferred", "retransmissions", "timeouts"], "description": "What to rank by (default data_transferred)"},
+                    "destination": {"type": "string", "enum": ["cluster", "aws", "external"], "description": "Which flows: within the cluster (default), to AWS services, or outside AWS"},
+                    "since": {"type": "string", "description": "Range, e.g. 15m, 1h or 2h (default 1h)"},
+                },
+                "required": ["namespace"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "resource_graph",
             "description": (
                 "The objects of one namespace and the edges between them — owner (Deployment → ReplicaSet → Pod), selector (Service → Pod), "

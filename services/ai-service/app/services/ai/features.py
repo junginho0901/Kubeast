@@ -52,6 +52,13 @@ def _network_flows_on(features: Dict[str, Any], cluster: str) -> bool:
     return not cluster or cluster in (nf.get("clusters") or [])
 
 
+def _network_flow_monitor_on(features: Dict[str, Any], cluster: str) -> bool:
+    nfm = features.get("networkFlowMonitor") or {}
+    if not nfm.get("enabled"):
+        return False
+    return not cluster or cluster in (nfm.get("clusters") or [])
+
+
 def _cost_on(features: Dict[str, Any], cluster: str) -> bool:
     return bool((features.get("cost") or {}).get("enabled"))
 
@@ -79,6 +86,7 @@ GATES: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
     "alerts_list": _alert_store_on,
     "network_flows": _network_flows_on,
     "network_drops": _prometheus_on,
+    "network_top_flows": _network_flow_monitor_on,
     "cost": _cost_on,
     "policy_reports": _policy_reports_on,
 }
@@ -93,6 +101,7 @@ REQUIRED_PERMISSIONS: Dict[str, tuple[str, str]] = {
     "helm_read": ("cluster", "resource.helm.read"),
     "network_flows": ("cluster", "resource.networkflow.read"),
     "network_drops": ("cluster", "resource.networkflow.read"),
+    "network_top_flows": ("cluster", "resource.networkflow.read"),
     # A server dry run needs the write's RBAC; the Write role's edit permission stands for it.
     "k8s_diff": ("cluster", "resource.*.edit"),
     # Admin-only: the audit log (auth-service asks for it) and node internals through nodes/proxy.

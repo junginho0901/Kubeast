@@ -27,7 +27,7 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
 - Turning it on: `mcp.enabled: true` (`MCP_ENABLED` in compose). Off by default; when off, the path does not exist.
 - Permissions:
   - `ai.mcp.use` on that cluster. The system Read and Write roles include it, and Admin has everything.
-  - `ai.tool.<name>` for each tool to be used. Read gets only the 42 read tools; Write gets all of them plus the write preview `k8s_diff`. `hygiene` is visible only to Admins with `admin.hygiene.read`.
+  - `ai.tool.<name>` for each tool to be used. Read gets only the 43 read tools; Write gets all of them plus the write preview `k8s_diff`. `hygiene` is visible only to Admins with `admin.hygiene.read`.
   - `list_clusters` tells the connected person which clusters and tools they can use. The other tools require the `cluster` argument and do not fall back to the default cluster.
 - Authentication: an API key (`kbk_…`) or an access token in the `Authorization: Bearer` header.
   - The server exchanges the key for a short-lived token, and the exchange is audited too. Once the key is revoked, the next call is refused.
@@ -63,7 +63,7 @@ The feature is off by default (`features.alertInvestigation.enabled`). Turning i
   - The response comes right away: `{accepted, duplicate, filtered, skipped, resolved, dropped}`.
 - **Investigation**: one worker processes queued alerts one at a time (only once, even with multiple replicas).
   - auth-service issues an **investigation-only token** for that cluster, valid for 10 minutes.
-    - It holds permissions for the 42 read tools plus `resource.pod.read`, which log store search asks for. It lacks the permissions of the Helm, policy report, cost, network flow and network drop tools, so the investigation does not see them.
+    - It holds permissions for the 43 read tools plus `resource.pod.read`, which log store search asks for. It lacks the permissions of the Helm, policy report, cost, network flow, network drop and top talker tools, so the investigation does not see them.
     - When the alert has a `namespace` label, the token is limited to the alert's Namespace.
   - Requests reach the cluster as user and group `kubeast:investigator`: a read-only ClusterRole with no Secrets, exec or writes (`templates/impersonation-investigator.yaml`).
   - To let the investigation read CRDs too (Kyverno PolicyReport, Argo Rollout, KEDA ScaledObject, etc.), add read rules to `extraRules`, with verbs get, list and watch only. The render refuses `apiGroups "*"`, Secrets, exec, proxy, tokens and wildcard resources.

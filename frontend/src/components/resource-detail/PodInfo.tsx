@@ -29,6 +29,7 @@ import PolicyViolations from './PolicyViolations'
 import NetworkPolicies from './NetworkPolicies'
 import NetworkFlows from './NetworkFlows'
 import NetworkDrops from './NetworkDrops'
+import TopTalkers from './TopTalkers'
 
 interface Props {
   name: string
@@ -773,6 +774,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
       <NetworkPolicies kind="Pod" namespace={namespace} name={name} />
       <NetworkFlows kind="Pod" namespace={namespace} name={name} />
       <NetworkDrops kind="Pod" namespace={namespace} name={name} />
+      <TopTalkers kind="Pod" namespace={namespace} name={name} />
 
       {/* Labels & Annotations */}
       <InfoSection title="Labels">

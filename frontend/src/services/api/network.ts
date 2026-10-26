@@ -11,6 +11,9 @@ import type {
   IngressInfo,
   NetflowResult,
   NetdropResult,
+  NfmMetric,
+  NfmResult,
+  NfmView,
   NetpolCheckResult,
   TrafficResult,
   NetpolEffective,
@@ -167,6 +170,11 @@ export const networkApi = {
 
   getNetworkDrops: async (namespace: string, params: { kind?: string; name?: string; range?: string }): Promise<NetdropResult> => {
     const { data } = await client.get(`/cluster/namespaces/${encodeURIComponent(namespace)}/networkdrops`, { params })
+    return data
+  },
+
+  getNetworkTopFlows: async (namespace: string, params: { kind?: string; name?: string; metric?: NfmMetric; view?: NfmView; range?: string }): Promise<NfmResult> => {
+    const { data } = await client.get(`/cluster/namespaces/${encodeURIComponent(namespace)}/networktopflows`, { params })
     return data
   },
 

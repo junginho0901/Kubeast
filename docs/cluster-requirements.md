@@ -41,6 +41,7 @@ A "target cluster" is a cluster Kubeast manages, including the cluster it is ins
 | Recent flows (drawers, AI `network_flows`) | Cilium Hubble Relay serving TLS, `create` on `services/proxy` for the Relay Service — §16 | `features.networkFlows.enabled` (off) | The section and the tool are left out and the API returns 404; without the cluster permission, 403 |
 | Network drops (drawers, AI `network_drops`) | The Hubble drop metric with workload labels in the cluster's Prometheus — §17 | Prometheus (§3) | The section is not shown; the tool says the metric is missing |
 | Resource Graph traffic lines | Recent flows (§16), or the Hubble TCP and drop metrics with workload labels in the cluster's Prometheus — §18 | `features.networkFlows` or Prometheus | The switch is not shown; a missing metric is named in the graph |
+| Top talkers (drawers, AI `network_top_flows`) | An Amazon CloudWatch Network Flow Monitor monitor for the EKS cluster, Kubeast's AWS identity allowed to query it, the user's `list` on pods — §19 | `features.networkFlowMonitor.enabled` (off) | The section and the tool are left out and the API returns 404; without `list` on pods, 403; when AWS refuses Kubeast's identity, 502 |
 
 ## 1. Permissions (RBAC) — every target cluster
 
@@ -570,6 +571,44 @@ The Resource Graph's Traffic and Both views draw lines from one of two sources. 
   - Metrics: Retina leaves the workload labels empty, so add `source_pod` and `destination_pod` to `labelsContext` (`deploy/kind/retina-values.yaml`). Kubeast then names the pods' workloads as in §16.
   - The SYNs leaving a client towards a Service carry no destination in the metrics, like those leaving the pods. With pod labels only, Kubeast does not draw connections towards an unnamed address, and the graph says so. Recent flows show them.
 - **Check**: `sum by (source_workload, destination_workload) (increase(hubble_tcp_flags_total{flag="SYN"}[1h]))` in Prometheus, or Resource Graph → Traffic.
+
+## 19. Network Flow Monitor (top talkers, EKS)
+
+For the drawers' "Top Talkers" and the AI tool `network_top_flows` (`features.networkFlowMonitor`, off by default), Kubeast reads the top contributors of an Amazon CloudWatch Network Flow Monitor (NFM) monitor: what EKS Container Network Observability shows in the console's flow table. Nothing is read through the cluster. Kubeast asks AWS with its own identity, and the cluster only decides who may see the rows.
+
+- **On AWS**: turn on Container Network Observability for the cluster in the EKS console, or create an NFM scope, a monitor whose local resource is the cluster and the add-on `aws-network-flow-monitoring-agent` 1.1.0 or later (Terraform AWS provider 6.21.0 or later). The console names the monitor `<cluster>-monitor`.
+  - The agent names only pods that have their own network namespace; a host-network pod shows as its node's address.
+- **Settings**: `features.networkFlowMonitor.region` (the monitors' Region) and `clusters` (`<Kubeast cluster ID>: <monitor name>`).
+- **What Kubeast reads**: one top contributors query per category of the chosen view: start it, ask its status until it has succeeded, read its rows. A query that has not finished within `timeout` (15 seconds) is stopped.
+  - Views, as in the console: within the cluster (`INTRA_AZ`, `INTER_AZ`), AWS services (`AMAZON_S3`, `AMAZON_DYNAMODB`), outside AWS (`UNCLASSIFIED`, the internet or on-premises).
+  - Metrics: `DATA_TRANSFERRED` (bytes), `RETRANSMISSIONS`, `TIMEOUTS` (retransmission timeouts). The EKS agent's flows carry these three.
+  - NFM takes no namespace or pod: each query returns up to `limit` rows (500, NFM's maximum) for the whole monitor. Kubeast keeps the rows with the namespace, pod or workload at either end and names the pods' workloads as the user lists them. The same question in the same minute is answered from memory.
+  - The range is `defaultRange` (1 hour), at most `maxRange` (2 hours) — the console reads 1 and 2 hours.
+  - A connection between two pods can be listed once from each end, since each node's agent reports what it measured.
+- **Kubeast's AWS identity** (k8s-service): the `aws.irsaRoleArn` role, a role in `serviceAccounts.k8sService.annotations` (IRSA), or `existingSecret` with `accessKeyId` and `secretAccessKey`. It needs these four actions on the monitors (IAM lists the start and stop actions as Write; they start and stop a query, the monitor is not changed):
+
+  ```json
+  {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Action": [
+          "networkflowmonitor:StartQueryMonitorTopContributors",
+          "networkflowmonitor:GetQueryStatusMonitorTopContributors",
+          "networkflowmonitor:GetQueryResultsMonitorTopContributors",
+          "networkflowmonitor:StopQueryMonitorTopContributors"
+        ],
+        "Resource": "arn:aws:networkflowmonitor:<region>:<account>:monitor/<monitor name>"
+      }
+    ]
+  }
+  ```
+
+  AWS on port 443 is open in Kubeast's NetworkPolicy. A refusal by AWS is the install's configuration, so the API answers 502 with AWS's error code.
+- **Who may read**: holders of `resource.networkflow.read` whom the cluster lets `list` pods in the namespace (Kubeast asks with a SelfSubjectAccessReview as the user). A peer in a namespace whose pods the user cannot list, or outside a namespace-limited grant, shows its namespace and address only. Each read is recorded as `k8s.networkflows.query` with `provider: nfm`.
+- **Check**: `aws networkflowmonitor list-monitors --region <region>` shows the monitor, and a Pod drawer → Top Talkers → Show top talkers lists rows.
+- **Verified**: against a stand-in of the API in the development cluster (`deploy/kind/devtools.yaml`, e2e `network-top-flows.spec.ts`) with the AWS SDK for Go v2 client; not yet against a real monitor.
 
 ## Verified versions (2026-10-13)
 

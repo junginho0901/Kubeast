@@ -157,6 +157,22 @@ features:
     silences: true
     egressCIDRs:
       - {cidr: 172.18.0.0/16, port: 31093}
+  # Top talkers of cluster self from the Network Flow Monitor stand-in in deploy/kind/devtools.yaml
+  # (network-top-flows.spec.ts gives it rows naming this install's pods).
+  networkFlowMonitor:
+    enabled: true
+    region: us-east-1
+    clusters:
+      self: kubeast-monitor
+    existingSecret: kubeast-nfm-dev
+    endpoint: http://nfm-stub.kubeast-devtools:8091
+    egress:
+      - to:
+          - namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: kubeast-devtools
+        ports:
+          - {protocol: TCP, port: 8091}
 gitops:
   argocd:
     enabled: true

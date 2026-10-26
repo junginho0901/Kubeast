@@ -292,6 +292,34 @@ data:
 {{- end }}
 {{- end }}
 {{- end }}
+{{- with .Values.features.networkFlowMonitor }}
+  NETWORK_FLOW_MONITOR_ENABLED: {{ .enabled | quote }}
+{{- if .enabled }}
+{{- if or (not .region) (empty .clusters) }}
+  {{- fail "features.networkFlowMonitor needs region and clusters (Kubeast cluster ID: monitor name) when enabled" }}
+{{- end }}
+  {{- $pairs := list }}
+  {{- range $id, $monitor := .clusters }}
+  {{- if not (regexMatch "^[a-zA-Z0-9_.-]{1,255}$" (toString $monitor)) }}
+    {{- fail (printf "features.networkFlowMonitor.clusters.%s: %q is not a monitor name" $id (toString $monitor)) }}
+  {{- end }}
+  {{- $pairs = append $pairs (printf "%s=%s" $id $monitor) }}
+  {{- end }}
+  NETWORK_FLOW_MONITOR_REGION: {{ .region | quote }}
+  NETWORK_FLOW_MONITOR_CLUSTERS: {{ join "," $pairs | quote }}
+  NETWORK_FLOW_MONITOR_DEFAULT_RANGE: {{ .defaultRange | quote }}
+  NETWORK_FLOW_MONITOR_MAX_RANGE: {{ .maxRange | quote }}
+  NETWORK_FLOW_MONITOR_LIMIT: {{ .limit | quote }}
+  NETWORK_FLOW_MONITOR_TIMEOUT: {{ .timeout | quote }}
+  NETWORK_FLOW_MONITOR_PER_USER_PER_MINUTE: {{ .perUserPerMinute | quote }}
+{{- with .endpoint }}
+  NETWORK_FLOW_MONITOR_ENDPOINT: {{ . | quote }}
+{{- end }}
+{{- if .existingSecret }}
+  NETWORK_FLOW_MONITOR_SECRET_DIR: /etc/kubeast/network-flow-monitor
+{{- end }}
+{{- end }}
+{{- end }}
 {{- with .Values.features.alertStore }}
   ALERT_STORE_ENABLED: {{ .enabled | quote }}
 {{- if .enabled }}

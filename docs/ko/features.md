@@ -57,6 +57,7 @@
     - `network_policy_check` — NetworkPolicy가 연결을 허용하는지와 그렇게 정한 정책·규칙([NetworkPolicy 보기와 연결 확인](#networkpolicy-보기와-연결-확인))
     - `network_flows` — 클러스터의 Hubble Relay가 본 네임스페이스·파드·워크로드의 최근 연결. 연결별로 합치고, 막힌 이유와 판정한 정책을 붙입니다([최근 흐름](#최근-흐름-hubble)).
     - `network_drops` — Hubble 에이전트가 센 네임스페이스·파드·워크로드의 차단 수를 클러스터의 Prometheus에서 사유·상대별로, 최대 1일 전까지([네트워크 차단](#네트워크-차단-hubble-지표)).
+    - `network_top_flows` — EKS 클러스터의 Network Flow Monitor에서, 네임스페이스·파드·워크로드가 가장 많이 주고받거나 재전송·재전송 시간 초과가 가장 많은 상대([상위 통신](#상위-통신-network-flow-monitor)).
     - `resource_graph` — 네임스페이스 객체와 그 연결
     - `hygiene` — 위생 보고, Admin
   - 다음 경우에는 그 도구가 도구 목록에서 빠집니다(`/api/v1/features`, 1분 캐시).
@@ -123,7 +124,7 @@
 | --- | --- | --- | --- |
 | **Pending** | 가입·SSO 직후 기본값 | 없음 — 로그인은 되지만 API는 403 | — |
 | **Member** | 계정 등급 | 전역 권한 없음, **클러스터별 부여로만** 접근 | `kubeast:authenticated`(권한 없음) |
-| **Read** | 클러스터별 | 메뉴 10개 · 모든 리소스 읽기(`resource.*.read`, 비용 `resource.cost.read` 포함) · Helm 읽기(권한 키는 있지만 Release 기록이 Secret이라 클러스터가 거부 — 오른쪽 칸 참고) · 컨테이너 안 로그 파일 읽기(`resource.pod.logfile`, 기능을 켰을 때) · AI 채팅의 읽기 도구 42종(`ai.tool.<읽기 도구>`)과 MCP 연결(`ai.mcp.use`) — 쓰기 도구는 없음 | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view`는 Secret과 `services/proxy`를 제외하므로, Secret과 Helm 릴리스(Secret에 저장)는 클러스터가 거부하고 화면에는 권한 안내가 뜹니다. API 서버 프록시로 읽는 Prometheus·OpenCost(최적화 사용량·스토리지 분석·비용·드로어 메트릭)는 차트 값 `auth.impersonation.viewerProxyServices`에 적은 Service만 **GET으로** 열립니다. 허용은 그 Namespace의 Role로 주고, 이름은 정확히 `<service>:<port>`로 적으며, 다른 Service·POST·NS 범위 부여는 계속 거부됩니다([설정](configuration.md)의 values 주석). 적지 않으면 거부됩니다(프록시는 `kubeast:operator`=`edit`부터 허용) |
+| **Read** | 클러스터별 | 메뉴 10개 · 모든 리소스 읽기(`resource.*.read`, 비용 `resource.cost.read` 포함) · Helm 읽기(권한 키는 있지만 Release 기록이 Secret이라 클러스터가 거부 — 오른쪽 칸 참고) · 컨테이너 안 로그 파일 읽기(`resource.pod.logfile`, 기능을 켰을 때) · AI 채팅의 읽기 도구 43종(`ai.tool.<읽기 도구>`)과 MCP 연결(`ai.mcp.use`) — 쓰기 도구는 없음 | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view`는 Secret과 `services/proxy`를 제외하므로, Secret과 Helm 릴리스(Secret에 저장)는 클러스터가 거부하고 화면에는 권한 안내가 뜹니다. API 서버 프록시로 읽는 Prometheus·OpenCost(최적화 사용량·스토리지 분석·비용·드로어 메트릭)는 차트 값 `auth.impersonation.viewerProxyServices`에 적은 Service만 **GET으로** 열립니다. 허용은 그 Namespace의 Role로 주고, 이름은 정확히 `<service>:<port>`로 적으며, 다른 Service·POST·NS 범위 부여는 계속 거부됩니다([설정](configuration.md)의 values 주석). 적지 않으면 거부됩니다(프록시는 `kubeast:operator`=`edit`부터 허용) |
 | **Write** | 클러스터별 | `menu.*` · 리소스 생성/수정/삭제 · CronJob suspend/trigger · Secret 값 보기 · 로그 파일 읽기 · Helm rollback/upgrade/test · AI 툴 전부(`ai.tool.*`, 쓰기 도구 포함) · MCP 연결 | `kubeast:operator` = `edit` + viewer |
 | **Admin** | 계정 등급(`*`) 또는 클러스터별 | 전부 — 관리자 메뉴, 모든 클러스터(나중에 등록한 것 포함) | `kubeast:admin` = `cluster-admin` |
 | 커스텀 | 클러스터별 | 고른 권한만(만드는 사람이 가진 권한 안에서) | `kubeast:role:<이름>` — 클러스터가 이 그룹을 바인딩하기 전에는 모든 호출이 403입니다(`auth.impersonation.customRoles`). 화면의 권한 없음 배너와 역할 만들기 창에 이 그룹 이름이 나옵니다 |
@@ -253,6 +254,20 @@ Pod·워크로드 드로어에 "NetworkPolicy" 칸이 있습니다.
 - 네임스페이스가 정해진 사용자에게는 자기 네임스페이스 밖의 상대가 네임스페이스로만 보입니다.
 - AI 도구 `network_drops`도 같은 수를 읽습니다.
 - 대상 클러스터에 필요한 것은 [클러스터 요구사항 §17](cluster-requirements.md#17-hubble-지표-네트워크-차단)에 있습니다.
+
+### 상위 통신 (Network Flow Monitor)
+
+EKS 클러스터에 `features.networkFlowMonitor`를 켜면 Pod·워크로드 드로어에 "상위 통신" 칸이 생깁니다. EKS 콘솔의 흐름 표와 같은 내용입니다.
+
+- 클러스터의 Amazon CloudWatch Network Flow Monitor 모니터에서, 그 파드·워크로드가 최근 15분·1시간·2시간 동안 가장 많이 주고받은 상대를 보여 줍니다. 상대·포트·값·가용 영역·구분이 나옵니다.
+  - 보기: 클러스터 안(같은 영역·영역 간), AWS 서비스(Amazon S3·DynamoDB), AWS 밖(인터넷 또는 온프레미스)
+  - 순위 기준: 전송량, 재전송, 재전송 시간 초과
+  - 워크로드는 그중 어느 파드였는지도 보여 줍니다.
+- AWS에 묻고 감사 로그(`k8s.networkflows.query`, `provider: nfm`)에 남으므로 "상위 통신 보기"를 눌러야 읽습니다.
+- Kubeast가 자기 AWS 신원으로 읽으므로, 사용자가 그 네임스페이스의 파드를 볼 수 있어야 합니다. 파드를 볼 수 없는 네임스페이스의 상대는 네임스페이스와 주소만 보입니다.
+- 노드마다 에이전트가 잰 것을 보내므로, 두 파드 사이의 연결은 양쪽에서 한 번씩 나올 수 있습니다.
+- AI 도구 `network_top_flows`도 같은 줄을 읽습니다.
+- 클러스터와 AWS에 필요한 것은 [클러스터 요구사항 §19](cluster-requirements.md#19-network-flow-monitor-상위-통신-eks)에 있습니다.
 
 ### Resource Graph의 통신 선 (Hubble)
 

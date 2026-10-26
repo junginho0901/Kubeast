@@ -442,3 +442,51 @@ func TestNetworkDrops(t *testing.T) {
 		t.Fatalf("forbidden: %s %v", out, err)
 	}
 }
+
+func TestNetworkTopFlows(t *testing.T) {
+	rows := make([]string, 60)
+	for i := range rows {
+		rows[i] = `{"local":{"namespace":"shop","pod":"web-1"},"remote":{"namespace":"shop","pod":"api-1"},"port":8080,"value":` + strconv.Itoa(1000-i) + `,"category":"INTRA_AZ"}`
+	}
+	seen := fakeK8sService(t, func(r *http.Request) (int, string) {
+		return 200, `{"cluster":"c1","monitor":"shop-monitor","metric":"RETRANSMISSIONS","unit":"Count","view":"cluster","rows":[` + strings.Join(rows, ",") + `],"truncated":false}`
+	})
+	args := map[string]interface{}{"namespace": "shop", "workload_kind": "Deployment", "workload_name": "web", "metric": "retransmissions", "destination": "cluster", "since": "2h"}
+	if err := validateToolArgs(args); err != nil {
+		t.Fatal(err)
+	}
+	out, err := handleNetworkTopFlows(ctxFor("c1"), args, bearer())
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := (*seen)[0].URL.Query()
+	if (*seen)[0].URL.Path != "/api/v1/namespaces/shop/networktopflows" || q.Get("kind") != "Deployment" || q.Get("name") != "web" || q.Get("metric") != "RETRANSMISSIONS" ||
+		q.Get("view") != "cluster" || q.Get("range") != "2h" || q.Get("cluster") != "c1" {
+		t.Fatalf("request %s %s", (*seen)[0].URL.Path, (*seen)[0].URL.RawQuery)
+	}
+	m := decode(t, out)
+	if len(m["rows"].([]interface{})) != nfmRowsCap || m["rows_total"] != float64(60) || m["truncated"] != true || !strings.Contains(m["note"].(string), "once from each end") {
+		t.Fatalf("reply: rows %d total %v truncated %v", len(m["rows"].([]interface{})), m["rows_total"], m["truncated"])
+	}
+	for _, bad := range []map[string]interface{}{{"namespace": "shop", "metric": "ROUND_TRIP_TIME"}, {"namespace": "shop", "destination": "INTER_VPC"}} {
+		if err := validateToolArgs(bad); err == nil {
+			t.Fatalf("accepted %v", bad)
+		}
+	}
+	// no monitor for this cluster: unavailable, with where to go instead
+	fakeK8sService(t, func(r *http.Request) (int, string) {
+		return 404, `{"detail":"network flow monitor is not configured for this cluster"}`
+	})
+	out, err = handleNetworkTopFlows(ctxFor("c1"), map[string]interface{}{"namespace": "shop"}, bearer())
+	if m := decode(t, out); err != nil || m["status"] != "unavailable" || !strings.Contains(m["alternative"].(string), "network_flows") {
+		t.Fatalf("not configured: %s %v", out, err)
+	}
+	// the cluster does not let the user list the namespace's pods
+	fakeK8sService(t, func(r *http.Request) (int, string) {
+		return 403, `{"detail":"forbidden: the cluster does not let you list pods in shop"}`
+	})
+	out, err = handleNetworkTopFlows(ctxFor("c1"), map[string]interface{}{"namespace": "shop"}, bearer())
+	if err != nil || decode(t, out)["status"] != "forbidden" {
+		t.Fatalf("forbidden: %s %v", out, err)
+	}
+}

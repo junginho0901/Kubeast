@@ -25,7 +25,7 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
 
 - 켜기: `mcp.enabled: true`(컴포즈는 `MCP_ENABLED`). 기본은 꺼져 있고, 꺼져 있으면 경로 자체가 없습니다.
 - 권한: 그 클러스터에 대한 `ai.mcp.use`(시스템 Read·Write 역할에 포함, Admin은 모든 권한)와 쓰려는 도구의 `ai.tool.<이름>`이 필요합니다.
-  - Read는 읽기 도구 42종만, Write는 전부와 쓰기 미리보기 `k8s_diff`를 쓸 수 있습니다.
+  - Read는 읽기 도구 43종만, Write는 전부와 쓰기 미리보기 `k8s_diff`를 쓸 수 있습니다.
   - `hygiene`은 `admin.hygiene.read`를 가진 Admin에게만 보입니다.
   - `list_clusters`가 연결한 사람이 쓸 수 있는 클러스터와 도구를 알려 줍니다.
   - 나머지 도구는 `cluster` 인자가 필수이며 기본 클러스터로 대신하지 않습니다.
@@ -61,7 +61,7 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
   - 웹훅 응답 `{accepted, duplicate, filtered, skipped, resolved, dropped}`은 바로 돌아옵니다.
 - **조사**: 작업자 하나가 대기열의 알림을 하나씩 처리하며, 복제본이 여럿이어도 한 번만 처리합니다.
   - auth-service가 그 클러스터용 **조사 전용 토큰**을 10분짜리로 발급합니다.
-    - 권한은 읽기 도구 42개와 로그 저장소 검색이 확인하는 `resource.pod.read`입니다. Helm·정책 보고·비용·네트워크 흐름·네트워크 차단 도구는 이 권한이 없어 조사에는 보이지 않습니다.
+    - 권한은 읽기 도구 43개와 로그 저장소 검색이 확인하는 `resource.pod.read`입니다. Helm·정책 보고·비용·네트워크 흐름·네트워크 차단·상위 통신 도구는 이 권한이 없어 조사에는 보이지 않습니다.
     - 알림에 `namespace` 라벨이 있으면 그 Namespace로 한정합니다.
     - 클러스터에는 사용자·그룹 `kubeast:investigator`로 요청합니다. 이 신원은 Secret·exec·쓰기 권한이 없는 읽기 전용 ClusterRole입니다(`templates/impersonation-investigator.yaml`).
   - 조사에서 CRD(Kyverno PolicyReport, Argo Rollout, KEDA ScaledObject 등)도 읽게 하려면 `extraRules`에 읽기 규칙을 추가하세요. 동사는 get, list, watch만 쓸 수 있고, `apiGroups "*"`, Secret, exec, 프록시, 토큰, 와일드카드 자원은 렌더 단계에서 거부합니다.

@@ -30,6 +30,8 @@ const (
 	netflowsGroupsCap   = 50
 	netflowsFlowsCap    = 20
 	netflowsAlternative = "No Hubble Relay is configured for this cluster (features.networkFlows). Use network_policy_check to see what NetworkPolicy allows, and prometheus_query for drop counters (hubble_drop_total) if Hubble metrics are scraped."
+	nfmRowsCap          = 50
+	nfmAlternative      = "No Network Flow Monitor monitor is configured for this cluster (features.networkFlowMonitor). Use network_flows where the cluster has a Hubble Relay or Calico's Whisker, and network_drops for drop counts."
 	costDefaultWin      = "24h"
 	helmDefaultSect     = "values"
 	policyDefaultTop    = "summary"
@@ -523,7 +525,7 @@ func handleNetworkFlows(ctx context.Context, args map[string]interface{}, header
 	}
 	capList(reply, "groups", netflowsGroupsCap)
 	capList(reply, "flows", netflowsFlowsCap)
-	reply["note"] = "Read from the cluster's Hubble Relay as the signed-in user. groups fold the flows of one connection (count, first, last; " +
+	reply["note"] = "Read from the cluster's Hubble Relay (or Calico's Whisker, provider calico) as the signed-in user. groups fold the flows of one connection (count, first, last; " +
 		"observed = egress at the source, ingress at the destination). DROPPED with drop_reason POLICY_DENIED means a network policy blocked it: " +
 		"call network_policy_check for the same source, destination and port to name the Kubernetes NetworkPolicy rule. " +
 		"truncated: the Relay had more than the limit; redacted: peers outside the user's namespaces show namespace and address only."
@@ -568,5 +570,39 @@ func handleNetworkDrops(ctx context.Context, args map[string]interface{}, header
 		"to name the Kubernetes NetworkPolicy rule, and network_flows for the connections themselves when the cluster has flow reads (a Hubble Relay or Calico's Whisker). " +
 		"notes workload_level: the metric has no pod label, so a pod's numbers are its workload's. A peer without a namespace is outside the cluster or not named by the agent; " +
 		"redacted: peers outside the user's namespaces show their namespace only."
+	return marshalJSON(reply)
+}
+
+// handleNetworkTopFlows reads the top contributors of the cluster's Network Flow Monitor monitor with a
+// namespace, pod or workload at either end, through k8s-service (Kubeast's AWS identity, audited there).
+func handleNetworkTopFlows(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+	q := url.Values{}
+	namespace, err := networkTarget(args, q)
+	if err != nil {
+		return "", err
+	}
+	if v := strings.TrimSpace(argString(args, "metric", "")); v != "" {
+		q.Set("metric", strings.ToUpper(v))
+	}
+	if v := strings.TrimSpace(argString(args, "destination", "")); v != "" {
+		q.Set("view", v)
+	}
+	if v := strings.TrimSpace(argString(args, "since", "")); v != "" {
+		q.Set("range", v)
+	}
+	status, body, err := k8sServiceGet(ctx, headers, "/namespaces/"+url.PathEscape(namespace)+"/networktopflows", q)
+	if err != nil {
+		return "", err
+	}
+	reply, out, err := featureReply("networkFlowMonitor", nfmAlternative, status, body)
+	if err != nil || out != "" {
+		return out, err
+	}
+	capList(reply, "rows", nfmRowsCap)
+	reply["note"] = "Top contributors of the cluster's Amazon CloudWatch Network Flow Monitor monitor over the range, largest value first, read with Kubeast's AWS identity " +
+		"for a user who may list the namespace's pods. local is where the NFM agent measured, remote the other end; a connection between two pods can be listed " +
+		"once from each end, so do not add the two. value is in unit (Bytes for data_transferred, Count for retransmissions and timeouts). category: INTRA_AZ and " +
+		"INTER_AZ (within the cluster; INTER_AZ crosses zones and costs data transfer), AMAZON_S3, AMAZON_DYNAMODB, UNCLASSIFIED (internet or on-premises). " +
+		"truncated: NFM gave as many rows as asked in a category; redacted: peers in namespaces whose pods the user cannot list show namespace and address only."
 	return marshalJSON(reply)
 }

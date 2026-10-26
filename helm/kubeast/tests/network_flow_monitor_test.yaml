@@ -1,0 +1,115 @@
+suite: Network Flow Monitor — env, key Secret, stand-in egress, guards
+templates:
+  - configmap.yaml
+  - deployments.yaml
+  - networkpolicy.yaml
+  - secret.yaml
+tests:
+  - it: is off by default — no settings, no mount
+    asserts:
+      - equal:
+          path: data.NETWORK_FLOW_MONITOR_ENABLED
+          value: "false"
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - notExists:
+          path: data.NETWORK_FLOW_MONITOR_CLUSTERS
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - notContains:
+          path: spec.template.spec.volumes
+          content: {name: network-flow-monitor}
+          any: true
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+  - it: renders the monitors, the limits and the AWS identity of the default chain
+    set:
+      features.networkFlowMonitor.enabled: true
+      features.networkFlowMonitor.region: ap-northeast-2
+      features.networkFlowMonitor.clusters: {alpha: alpha-monitor, prod: prod_eks.monitor-1}
+      features.networkFlowMonitor.limit: 200
+      features.networkFlowMonitor.maxRange: 6h
+    asserts:
+      - equal:
+          path: data.NETWORK_FLOW_MONITOR_CLUSTERS
+          value: alpha=alpha-monitor,prod=prod_eks.monitor-1
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.NETWORK_FLOW_MONITOR_REGION
+          value: ap-northeast-2
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.NETWORK_FLOW_MONITOR_LIMIT
+          value: "200"
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.NETWORK_FLOW_MONITOR_MAX_RANGE
+          value: 6h
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - notExists:
+          path: data.NETWORK_FLOW_MONITOR_SECRET_DIR
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - notExists:
+          path: data.NETWORK_FLOW_MONITOR_ENDPOINT
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+  - it: mounts the key Secret for k8s-service and opens the stand-in's port
+    set:
+      features.networkFlowMonitor.enabled: true
+      features.networkFlowMonitor.region: us-east-1
+      features.networkFlowMonitor.clusters: {self: kubeast-monitor}
+      features.networkFlowMonitor.existingSecret: nfm-keys
+      features.networkFlowMonitor.endpoint: http://nfm-stub.kubeast-devtools:8080
+      features.networkFlowMonitor.egress:
+        - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kubeast-devtools}}}]
+          ports: [{protocol: TCP, port: 8080}]
+    asserts:
+      - equal:
+          path: data.NETWORK_FLOW_MONITOR_SECRET_DIR
+          value: /etc/kubeast/network-flow-monitor
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.NETWORK_FLOW_MONITOR_ENDPOINT
+          value: http://nfm-stub.kubeast-devtools:8080
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - contains:
+          path: spec.template.spec.volumes
+          content: {name: network-flow-monitor, secret: {secretName: nfm-keys}}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content: {name: network-flow-monitor, mountPath: /etc/kubeast/network-flow-monitor, readOnly: true}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+      - contains:
+          path: spec.egress
+          content:
+            to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kubeast-devtools}}}]
+            ports: [{protocol: TCP, port: 8080}]
+        template: networkpolicy.yaml
+        documentSelector: {path: metadata.name, value: RELEASE-NAME-k8s-service}
+  - it: refuses an enabled monitor without a region or clusters
+    set:
+      features.networkFlowMonitor.enabled: true
+      features.networkFlowMonitor.clusters: {self: kubeast-monitor}
+    asserts:
+      - failedTemplate:
+          errorPattern: "features.networkFlowMonitor needs region and clusters"
+        template: deployments.yaml
+  - it: refuses a monitor name NFM would not take
+    set:
+      features.networkFlowMonitor.enabled: true
+      features.networkFlowMonitor.region: us-east-1
+      features.networkFlowMonitor.clusters: {self: "arn:aws:networkflowmonitor:us-east-1:111122223333:monitor/x"}
+    asserts:
+      - failedTemplate:
+          errorPattern: "is not a monitor name"
+        template: deployments.yaml
