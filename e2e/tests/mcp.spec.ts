@@ -146,7 +146,7 @@ test.describe('MCP server', () => {
       expect(readNames.filter((n) => /^k8s_(apply|create|delete|patch|scale|rollout|execute|label|annotat|remove)/.test(n))).toEqual([])
       expect(readNames).toContain('k8s_get_resources')
       expect(readNames.includes('request_access')).toBe(!!cfg.write_tools)
-      expect(readNames.filter((n) => n !== 'request_access' && n !== 'list_clusters').length).toBe(42)
+      expect(readNames.filter((n) => n !== 'request_access' && n !== 'list_clusters').length).toBe(43)
       expect(readNames).not.toContain('hygiene')
       expect(readNames).not.toContain('audit_search')
       expect(readNames).not.toContain('nodes_log')
