@@ -89,8 +89,11 @@ test.describe('Grafana in front of the stores', () => {
   })
 
   test('metrics through the data source proxy match the direct path and fill the dashboard and the node drawer', async ({ request, page }) => {
-    const direct = await promQuery(request, admin, 'count by (job) (up)')
-    expect(direct.results.length).toBeGreaterThan(0)
+    // the direct path has answered with no series for a moment in full runs, so it is asked until it has some
+    let direct = { results: [] as any[] }
+    await expect
+      .poll(async () => (direct = await promQuery(request, admin, 'count by (job) (up)')).results.length, { timeout: 60_000, intervals: [3_000] })
+      .toBeGreaterThan(0)
 
     const url = `${grafana}/api/datasources/proxy/uid/prometheus`
     const res = await patch(request, admin, { prometheus_url: url, prometheus_cluster_label: 'kubeast-b', prometheus_auth: { type: 'bearer', token } })
