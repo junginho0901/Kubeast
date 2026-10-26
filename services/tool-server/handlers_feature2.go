@@ -565,7 +565,7 @@ func handleNetworkDrops(ctx context.Context, args map[string]interface{}, header
 	reply["note"] = "Counted by the Hubble agents (hubble_drop_total) over the range, read from the cluster's Prometheus as the signed-in user. " +
 		"incoming: drops where the target is the destination, the peer is the source; outgoing: the reverse. " +
 		"POLICY_DENIED means a network policy dropped it: call network_policy_check with that peer and the target (no port checks every declared port) " +
-		"to name the Kubernetes NetworkPolicy rule, and network_flows for the connections themselves when the cluster has a Hubble Relay. " +
+		"to name the Kubernetes NetworkPolicy rule, and network_flows for the connections themselves when the cluster has flow reads (a Hubble Relay or Calico's Whisker). " +
 		"notes workload_level: the metric has no pod label, so a pod's numbers are its workload's. A peer without a namespace is outside the cluster or not named by the agent; " +
 		"redacted: peers outside the user's namespaces show their namespace only."
 	return marshalJSON(reply)

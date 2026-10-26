@@ -59,7 +59,7 @@ SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 - `cost` · `optimization`: OpenCost 비용(네임스페이스·워크로드별, 기간) · requests 대비 사용량과 권고(네임스페이스별)
 - `can_i`: 로그인한 사용자가 그 동작을 할 수 있는지 클러스터에 물음(403 설명·권한 안내 전에)
 - `network_policy_check`: NetworkPolicy가 A → B 연결을 허용하는지와 그렇게 정한 정책·규칙(파드·워크로드·서비스·IP, 포트) — "왜 못 붙나"
-- `network_flows`: Hubble Relay의 최근 네트워크 흐름(네임스페이스·파드·워크로드) — 실제로 누가 누구와 통신했고 차단됐나(사유) (Hubble이 있는 클러스터에서만 제공)
+- `network_flows`: Hubble Relay(Cilium·Retina)나 Calico Whisker의 최근 네트워크 흐름(네임스페이스·파드·워크로드) — 실제로 누가 누구와 통신했고 차단됐나(사유) (흐름 읽기가 설정된 클러스터에서만 제공, Calico는 수가 패킷)
 - `network_drops`: Hubble 에이전트가 센 차단 수(Prometheus `hubble_drop_total`) — 기간 동안 얼마나·왜(사유)·누가(상대) 막혔나, 들어옴/나감별 (Prometheus가 있는 클러스터에서 제공)
 - `resource_graph`: 네임스페이스 객체와 연결(owner·selector·volume·config 참조) — "이걸 지우면 뭐가 깨지나"
 - `hygiene`(Admin): 클러스터 위생 보고 — PSS·루트 실행·latest 태그·TLS 만료·업그레이드 준비
@@ -219,7 +219,7 @@ Tool 결과를 분석한 후 다음 형식으로 응답하세요:
 - `cost(window, aggregate, namespace)` / `optimization(namespace, window_hours)` - OpenCost allocation / requests vs usage with recommendations
 - `can_i(verb, resource, group, namespace)` - Whether the signed-in user may do that, asked of the cluster
 - `network_policy_check(src, dst, port, protocol)` - Whether Kubernetes NetworkPolicy allows src to reach dst (kind/namespace/name or an IP; dst may be a Service), with the policy and rule that decide
-- `network_flows(namespace, pod, workload_kind, workload_name, verdict, since, limit)` - Recent flows from the cluster's Hubble Relay, folded per connection: forwarded or dropped, drop reason, policies; offered only where a Relay is configured
+- `network_flows(namespace, pod, workload_kind, workload_name, verdict, since, limit)` - Recent flows from the cluster's Hubble Relay (Cilium, Retina) or Calico's Whisker, folded per connection: forwarded or dropped, drop reason, policies; offered only where flow reads are configured (on Calico the counts are packets)
 - `network_drops(namespace, pod, workload_kind, workload_name, since)` - Drops counted by the Hubble agents (Prometheus hubble_drop_total) over a range up to 24h: incoming and outgoing totals, reasons and peers
 - `resource_graph(namespace)` - Objects and their edges (owner, selector, volume, config) with counts by kind
 - `hygiene(severity, check)` - Cluster hygiene report (Admin): Pod Security, root containers, mutable tags, TLS expiry, upgrade readiness

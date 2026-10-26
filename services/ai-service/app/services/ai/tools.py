@@ -753,12 +753,13 @@ K8S_READONLY_TOOLS: List[Dict] = [
         "function": {
             "name": "network_flows",
             "description": (
-                "Recent network flows from the cluster's Hubble Relay (Cilium, or Retina's Hubble), read as the signed-in user: the flows with the "
-                "namespace, a pod (pod) or a workload (workload_kind + workload_name) on either side. groups fold one connection's flows: source, "
-                "destination, port, protocol, verdict (FORWARDED, DROPPED …), drop_reason (POLICY_DENIED = a network policy blocked it), policies "
-                "that allowed or denied it when the plugin reports them, count and last time. verdict filters (e.g. DROPPED), since is a window up to "
-                "the server's maximum (default 15m). Use it for \"is anything being blocked\", \"who talks to this pod\"; for a drop, call "
-                "network_policy_check with the same ends and port to name the NetworkPolicy rule."
+                "Recent network flows from the cluster's Hubble Relay (Cilium, or Retina's Hubble) or Calico's Whisker, read as the signed-in "
+                "user: the flows with the namespace, a pod (pod) or a workload (workload_kind + workload_name) on either side. groups fold one "
+                "connection's flows: source, destination, port, protocol, verdict (FORWARDED, DROPPED …), drop_reason (POLICY_DENIED = a network "
+                "policy blocked it), policies that allowed or denied it when the plugin reports them, count and last time. The result's provider "
+                "says which: on calico the counts are packets and a pod is named with the other pods of its ReplicaSet or Job (<generateName>*). "
+                "verdict filters (e.g. DROPPED), since is a window up to the server's maximum (default 15m). Use it for \"is anything being "
+                "blocked\", \"who talks to this pod\"; for a drop, call network_policy_check with the same ends and port to name the NetworkPolicy rule."
             ),
             "parameters": {
                 "type": "object",

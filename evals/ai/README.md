@@ -61,6 +61,7 @@ Claude subscription counts cached input too, so its numbers are large and do not
 | Claude Sonnet 5.5 (subscription) | 12/12 | 2.8 | 13.9 |
 | granite4.1:3b (Ollama, 4 cases only: 02 03 07 10) | 1/4 | 0.5 | 28.7 |
 | Claude Haiku 5.5 (subscription), 2026-10-20, after the one-sentence-before-a-tool instruction | 12/12 | 3.5 | 13.0 |
+| Claude Haiku 5.5 (subscription), 2026-10-26, after `network_flows` named Calico's Whisker | 12/12 | 3.7 | 11.9 |
 
 What changed after the first run: case 06 failed because an empty alert store ended the answer ("no alert fires")
 while Prometheus was firing the rule — the dev Prometheus sends to no Alertmanager. `alerts_list`'s empty results,
@@ -70,3 +71,6 @@ of saying the Secret is not readable) are the model's limits; the instructions w
 
 2026-10-20: the chat instruction asks for one sentence before a tool call and no repeated results (answers now keep
 their text between tool calls); Haiku stayed at 12/12.
+
+2026-10-26: `network_flows`' description and the chat instruction name Calico's Whisker as a source next to the Hubble
+Relay. No case calls that tool; the run checks that the change leaves the others as they were (12/12).

@@ -52,7 +52,7 @@ def test_gated_names_by_feature_and_cluster():
     loki = ["loki_query", "loki_labels", "loki_patterns"]
     assert features.gated_names(loki, {"logSearch": {"enabled": True, "clusters": ["self"]}}, "self") == loki
     assert features.gated_names(loki, {"logSearch": {"enabled": True, "clusters": ["self"]}}, "other") == []
-    # network_flows comes and goes with the clusters that have a Hubble Relay
+    # network_flows comes and goes with the clusters that have flow reads (a Hubble Relay or Calico's Whisker)
     nf = {"networkFlows": {"enabled": True, "clusters": ["cilium"]}}
     assert features.gated_names(["network_flows"], nf, "cilium") == ["network_flows"]
     assert features.gated_names(["network_flows"], nf, "self") == []
