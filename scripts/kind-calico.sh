@@ -8,8 +8,8 @@
 # to the clusters already there.
 #
 #   scripts/kind-calico.sh up       # creates the cluster, or starts it when stopped
-#   scripts/kind-calico.sh down     # takes the cluster out of features.networkFlows and stops it (kept for next time)
-#   scripts/kind-calico.sh delete   # down, unregister and delete the cluster
+#   scripts/kind-calico.sh down     # takes the cluster out of features.networkFlows, unregisters it and stops it (kept: up registers it again)
+#   scripts/kind-calico.sh delete   # down and delete the cluster
 #
 # Behind a TLS-inspecting proxy set CALICO_NODE_HOOK to a command that gets a node container's name and makes it
 # trust the proxy (run on each node right after the cluster is created).
@@ -103,10 +103,11 @@ case "${1:-}" in
       main_helm upgrade "$RELEASE" "$ROOT/helm/kubeast" --reset-then-reuse-values --set "features.networkFlows.clusters.$ID=null" \
         --wait --timeout 5m | grep -E "REVISION|STATUS"
     fi
+    # unregistered on down too: a stopped cluster left registered fails every read that goes to all clusters
+    if [ -n "$ID" ]; then
+      curl -s -o /dev/null -X DELETE -H "Authorization: Bearer $TOKEN" "$GATEWAY/api/v1/clusters/$ID"
+    fi
     if [ "$1" = delete ]; then
-      if [ -n "$ID" ]; then
-        curl -s -o /dev/null -X DELETE -H "Authorization: Bearer $TOKEN" "$GATEWAY/api/v1/clusters/$ID"
-      fi
       kind delete cluster --name "$NAME" --kubeconfig "$KC"
     else
       for node in $(kind get nodes --name "$NAME" 2>/dev/null); do docker stop "$node" >/dev/null; done

@@ -8,8 +8,8 @@
 # e2e/tests/network-flows.spec.ts, network-drops.spec.ts and network-traffic.spec.ts read them.
 #
 #   scripts/kind-cilium.sh up       # creates the cluster, or starts it when stopped
-#   scripts/kind-cilium.sh down     # turns the feature off and stops the cluster (kept for next time)
-#   scripts/kind-cilium.sh delete   # down, unregister and delete the cluster
+#   scripts/kind-cilium.sh down     # turns the feature off, unregisters the cluster and stops it (kept: up registers it again)
+#   scripts/kind-cilium.sh delete   # down and delete the cluster
 #
 # Behind a TLS-inspecting proxy the node must trust it before Cilium pulls its images: set
 # CILIUM_NODE_HOOK to a command that gets the cluster name (run right after the cluster is created).
@@ -98,12 +98,13 @@ case "${1:-}" in
       main_helm upgrade "$RELEASE" "$ROOT/helm/kubeast" --reset-then-reuse-values --set features.networkFlows.enabled=false \
         --wait --timeout 5m | grep -E "REVISION|STATUS"
     fi
+    # unregistered on down too: a stopped cluster left registered fails every read that goes to all clusters
+    TOKEN="$(token)"
+    ID="$(registered_id "$TOKEN")"
+    if [ -n "$ID" ]; then
+      curl -s -o /dev/null -X DELETE -H "Authorization: Bearer $TOKEN" "$GATEWAY/api/v1/clusters/$ID"
+    fi
     if [ "$1" = delete ]; then
-      TOKEN="$(token)"
-      ID="$(registered_id "$TOKEN")"
-      if [ -n "$ID" ]; then
-        curl -s -o /dev/null -X DELETE -H "Authorization: Bearer $TOKEN" "$GATEWAY/api/v1/clusters/$ID"
-      fi
       kind delete cluster --name "$NAME" --kubeconfig "$KC"
     elif docker inspect "$CP" >/dev/null 2>&1; then
       docker stop "$CP" >/dev/null
