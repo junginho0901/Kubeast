@@ -136,7 +136,7 @@ export function ResourceGraphHeader({
           {trafficLineCount !== undefined && (
             <>
               <span>·</span>
-              <span data-testid="traffic-line-count">{t('resourceGraph.traffic.lineCount', { defaultValue: '{{n}} traffic lines', n: trafficLineCount })}</span>
+              <span data-testid="traffic-line-count">{t('resourceGraph.traffic.lineCount', { defaultValue: '{{n}} traffic lines', n: trafficLineCount, count: trafficLineCount })}</span>
             </>
           )}
         </div>

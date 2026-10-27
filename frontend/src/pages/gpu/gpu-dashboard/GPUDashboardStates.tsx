@@ -41,7 +41,7 @@ interface ErrorEmptyProps {
   onRefetch: () => void
 }
 
-export function GPUDashboardError({ tr, onRefetch }: ErrorEmptyProps) {
+export function GPUDashboardError({ tr, onRefetch, forbidden }: ErrorEmptyProps & { forbidden?: string }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -63,8 +63,8 @@ export function GPUDashboardError({ tr, onRefetch }: ErrorEmptyProps) {
       </div>
       <div className="flex flex-col items-center justify-center rounded-xl border border-red-500/20 bg-red-500/5 py-24">
         <XCircle className="mb-4 h-12 w-12 text-red-400" />
-        <p className="text-lg text-red-300">
-          {tr('gpuDashboardPage.error', 'Failed to load GPU data. The cluster may be temporarily unreachable.')}
+        <p className="text-lg text-red-300" data-testid={forbidden ? 'gpu-dashboard-forbidden' : undefined}>
+          {forbidden ?? tr('gpuDashboardPage.error', 'Failed to load GPU data. The cluster may be temporarily unreachable.')}
         </p>
         <button
           onClick={onRefetch}

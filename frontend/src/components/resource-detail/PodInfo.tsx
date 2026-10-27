@@ -525,7 +525,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
               <tbody className="divide-y divide-slate-800">
                 {(((podDescribe?.tolerations as any[]) ?? (spec.tolerations as any[])) as any[]).map((tol: any, i: number) => (
                   <tr key={i} className="text-slate-200">
-                    <td className="py-1 pr-2">{tol.key || '*'}</td>
+                    <td className="py-1 pr-2 break-all">{tol.key || '*'}</td>
                     <td className="py-1 pr-2">{tol.operator || 'Equal'}</td>
                     <td className="py-1 pr-2">{tol.value || '-'}</td>
                     <td className="py-1 pr-2">{tol.effect || '-'}</td>

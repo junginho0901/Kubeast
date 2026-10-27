@@ -12,8 +12,9 @@ export interface CreateTarget {
 }
 
 // Whether a create button shows: the app permission, and for kinds the
-// cluster's RBAC may refuse even so — cluster-scoped objects and Roles, which
-// the Write role's edit ClusterRole cannot create — the cluster's answer for
+// cluster's RBAC may refuse even so — cluster-scoped objects, Roles and custom
+// resources such as the Gateway API's and VPAs, which the Write role's edit
+// ClusterRole does not cover — the cluster's answer for
 // the signed-in user (SelfSubjectAccessReview). Hidden while the cluster is
 // asked; if it cannot be asked, the app permission decides as before.
 export function useCanCreate(permission: string, target?: CreateTarget): boolean {

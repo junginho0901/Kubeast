@@ -8,7 +8,8 @@ import {
   CheckCircle2,
   ArrowUpCircle,
 } from 'lucide-react'
-import { api, TimelineEvent, RolloutRevision } from '@/services/api'
+import { api, isForbiddenError, TimelineEvent, RolloutRevision } from '@/services/api'
+import { forbiddenResourceFromUrl } from '@/utils/forbiddenResource'
 import CustomDropdown from '@/components/CustomDropdown'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAIContext } from '@/hooks/useAIContext'
@@ -51,7 +52,7 @@ export default function Timeline() {
   const namespace = selectedNamespace
   const allNamespaces = namespace === ''
 
-  const { data: timeline, isLoading, refetch } = useQuery({
+  const { data: timeline, isLoading, error, refetch } = useQuery({
     queryKey: ['timeline', allNamespaces ? '*' : namespace, hours],
     queryFn: () => (allNamespaces ? api.getClusterTimeline(hours) : api.getNamespaceTimeline(namespace, hours)),
     staleTime: 15000,
@@ -242,6 +243,12 @@ export default function Timeline() {
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
             <RefreshCw className="w-5 h-5 animate-spin text-gray-400" />
+          </div>
+        ) : isForbiddenError(error) ? (
+          <div className="text-center py-16">
+            <p className="text-sm text-gray-500 dark:text-gray-400" data-testid="timeline-forbidden">
+              {t('common.forbiddenEmpty', { resource: forbiddenResourceFromUrl('/cluster/timeline'), defaultValue: 'You do not have permission to view {{resource}} in this cluster.' })}
+            </p>
           </div>
         ) : visibleItems.length === 0 ? (
           <div className="text-center py-16">

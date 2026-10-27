@@ -109,6 +109,9 @@ export const disableMetrics = (): void => {
 
 export const isMetricsDisabled = (): boolean => metricsDisabledClusters.has(metricsClusterKey())
 
+/** The request answered 403: the section says "no permission", not that the cluster has nothing. */
+export const isForbiddenError = (err: any): boolean => err?.response?.status === 403
+
 export const isMetricsUnavailableError = (err: any): boolean => {
   const status = err?.response?.status
   if (status === 503) return true

@@ -78,6 +78,21 @@ test.describe('Recent flows and traffic lines from Calico', () => {
     expect((podBody.groups as Group[]).map((g) => `${g.source.workload?.name} ${g.verdict}`).sort()).toEqual(groups.map((g) => `${g.source.workload?.name} ${g.verdict}`).sort())
   })
 
+  test('a web pod’s drawer reads its set’s flows as arriving from client and stranger', async ({ page }) => {
+    test.skip(!ready, `no Calico cluster ${CLUSTER} with network flows (scripts/kind-calico.sh up)`)
+    const pod = kubectl!(`-n ${NS} get pods -l app=web -o jsonpath={.items[0].metadata.name}`)
+    await page.goto(`/workloads/pods?cluster=${CLUSTER}&namespace=${NS}&detail=Pod/${NS}/${pod}`)
+    const section = page.getByTestId('netflow-section')
+    await section.getByTestId('netflow-load').click()
+    const row = (peer: string) => section.getByTestId('netflow-row').filter({ has: page.getByTestId('netflow-peer').filter({ hasText: new RegExp(`^Deployment/${peer}$`) }) })
+    await expect(row('client')).toHaveCount(1, { timeout: 30_000 })
+    await expect(row('client').locator('td').nth(1)).toHaveText(/^(in|들어옴)$/)
+    await expect(row('stranger').locator('td').nth(1)).toHaveText(/^(in|들어옴)$/)
+    await expect(row('stranger').getByTestId('netflow-verdict')).toHaveText('DROPPED')
+    // the pod's own set is never the other end
+    await expect(row('web')).toHaveCount(0)
+  })
+
   test('the lines count a connection where it arrived', async ({ request }) => {
     test.skip(!ready, `no Calico cluster ${CLUSTER} with network flows (scripts/kind-calico.sh up)`)
     const body = await get(request, '/api/v1/cluster/networktraffic', { namespaces: NS, source: 'relay', since: '5m' })
@@ -99,6 +114,8 @@ test.describe('Recent flows and traffic lines from Calico', () => {
     await page.getByTestId('graph-view-traffic').click({ timeout: 20_000 })
     await expect(page.locator(`[aria-label="${NS}/client → ${NS}/web (TCP 80)"]`)).toHaveCount(1, { timeout: 30_000 })
     await expect(page.getByTestId('traffic-status-source')).toContainText("Calico's Whisker")
+    // no Prometheus for this cluster: the recent flows only, no metrics buttons
+    await expect(page.locator('[data-testid^="traffic-source-"]')).toHaveCount(1)
     await page.locator(`[aria-label="${NS}/stranger → ${NS}/web (TCP 80)"] .react-flow__edge-textwrapper`).click()
     const panel = page.getByTestId('traffic-panel')
     await expect(panel.getByTestId('traffic-panel-reasons')).toContainText('POLICY_DENIED')

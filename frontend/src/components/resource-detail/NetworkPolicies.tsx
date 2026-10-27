@@ -22,7 +22,7 @@ function DirectionBlock({ title, dir, incoming, namespace, tr }: { title: string
       ) : (
         <>
           <p className="text-xs text-amber-300" data-testid="netpol-isolated">
-            {tr('netpolCheck.isolatedBy', 'Isolated by {{n}} policies: only what their rules allow.', { n: dir.policies.length })}
+            {tr('netpolCheck.isolatedBy', 'Isolated by {{n}} policies: only what their rules allow.', { n: dir.policies.length, count: dir.policies.length })}
           </p>
           <ul className="space-y-1.5">
             {dir.policies.map((p) => (

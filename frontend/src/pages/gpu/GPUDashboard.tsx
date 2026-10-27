@@ -4,6 +4,8 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAIContext } from '@/hooks/useAIContext'
 import { summarizeKPI } from '@/utils/aiContext/summarizeKPI'
 import { buildResourceLink } from '@/utils/resourceLink'
+import { forbiddenResourceFromUrl } from '@/utils/forbiddenResource'
+import { isForbiddenError } from '@/services/api'
 import { RefreshCw } from 'lucide-react'
 
 import { useGPUDashboardData } from './gpu-dashboard/useGPUDashboardData'
@@ -32,6 +34,7 @@ export default function GPUDashboard() {
     recentPods,
     isLoading,
     isError,
+    error,
     refetch,
   } = useGPUDashboardData()
 
@@ -107,7 +110,12 @@ export default function GPUDashboard() {
   useAIContext(aiSnapshot, [aiSnapshot])
 
   if (isLoading) return <GPUDashboardLoading />
-  if (isError) return <GPUDashboardError tr={tr} onRefetch={() => refetch()} />
+  if (isError) {
+    const forbidden = isForbiddenError(error)
+      ? t('common.forbiddenEmpty', { resource: forbiddenResourceFromUrl('/cluster/gpu/dashboard'), defaultValue: 'You do not have permission to view {{resource}} in this cluster.' })
+      : undefined
+    return <GPUDashboardError tr={tr} onRefetch={() => refetch()} forbidden={forbidden} />
+  }
   if (!data || data.total_gpu_capacity === 0) return <GPUDashboardEmpty tr={tr} onRefetch={() => refetch()} />
 
   const nodeReadyCount = data.gpu_nodes.filter((n) => n.status === 'Ready').length

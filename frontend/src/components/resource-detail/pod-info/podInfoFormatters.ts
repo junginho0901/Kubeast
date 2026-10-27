@@ -47,6 +47,11 @@ export function formatProbe(probe: any): string | null {
 }
 
 export function getVolumeDetail(v: any): { type: string; detail: string } {
+  // k8s-service's describe sends { name, type, config_map | secret | pvc | path }; a spec volume has no top-level type
+  if (typeof v.type === 'string') {
+    const name = v.config_map ?? v.secret ?? v.pvc ?? v.path
+    return { type: v.type, detail: typeof name === 'string' && name ? name : '-' }
+  }
   if (v.configMap) return { type: 'ConfigMap', detail: v.configMap.name || '-' }
   if (v.secret) return { type: 'Secret', detail: v.secret.secretName || '-' }
   if (v.persistentVolumeClaim) {

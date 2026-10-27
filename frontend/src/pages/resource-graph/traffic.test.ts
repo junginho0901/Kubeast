@@ -11,11 +11,12 @@ const client = { namespace: 'shop', kind: 'Deployment', name: 'client' }
 
 describe('trafficSources', () => {
   const features = (relay: string[], prometheus: boolean) => ({ prometheus: { enabled: prometheus }, networkFlows: { enabled: relay.length > 0, clusters: relay } }) as unknown as ClusterFeatures
-  it('offers the Relay only for a cluster it reads, and the metrics with Prometheus', () => {
-    expect(trafficSources(features(['c1'], true), 'c1')).toEqual(['relay', '1h', '24h'])
-    expect(trafficSources(features(['c1'], false), 'c2')).toEqual([])
-    expect(trafficSources(features([], true), 'c1')).toEqual(['1h', '24h'])
-    expect(trafficSources(undefined, 'c1')).toEqual([])
+  it('offers the Relay only for a cluster it reads, and the metrics with a Prometheus for that cluster', () => {
+    expect(trafficSources(features(['c1'], true), 'c1', true)).toEqual(['relay', '1h', '24h'])
+    expect(trafficSources(features(['c1'], true), 'c1', false)).toEqual(['relay'])
+    expect(trafficSources(features(['c1'], false), 'c2', true)).toEqual([])
+    expect(trafficSources(features([], true), 'c1', true)).toEqual(['1h', '24h'])
+    expect(trafficSources(undefined, 'c1', true)).toEqual([])
   })
   it('asks the server for the source', () => {
     expect(trafficParams('relay')).toEqual({ source: 'relay' })

@@ -10,7 +10,6 @@ import {
   Zap,
   X,
   CircleDot,
-  RefreshCw,
 } from 'lucide-react'
 import { useProviderAvailability } from '@/hooks/useProviderAvailability'
 import { providerOptions } from './helpers'
@@ -41,8 +40,6 @@ export default function ModelConfigForm({ form, inModal }: Props) {
     formOptionsError,
     testing,
     testResult,
-    rolloutStatus,
-    rolloutMessage,
     currentProviderDef,
     currentModelOptions,
     modelList,
@@ -51,7 +48,6 @@ export default function ModelConfigForm({ form, inModal }: Props) {
     handleProviderChange,
     handleSubmit,
     handleTest,
-    handleRollout,
   } = form
   const unavailable = useProviderAvailability()
   const unavailableReason = unavailable[formProvider] ?? null
@@ -334,31 +330,16 @@ export default function ModelConfigForm({ form, inModal }: Props) {
         </div>}
       </div>
 
-      {/* Rollout hint — only for new model that may require new env vars */}
+      {/* A new key in the Secret reaches ai-service only after a restart — only for a new model */}
       {!editingId && testResult && !testResult.success && (
         <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-300/80 space-y-2">
           <p className="flex items-center gap-1.5">
             <AlertCircle className="h-3.5 w-3.5 shrink-0" />
             {tr('admin.aiModels.testFailedHint', "Connection test failed. If you've recently added a new API key to the Kubernetes Secret, the ai-service pod may need a restart to pick up the new environment variable.")}
           </p>
-          <button
-            type="button"
-            onClick={handleRollout}
-            disabled={rolloutStatus === 'rolling'}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-200 hover:bg-amber-500/20 disabled:opacity-50"
-          >
-            {rolloutStatus === 'rolling' ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <RefreshCw className="h-3 w-3" />
-            )}
-            {rolloutStatus === 'rolling' ? tr('admin.aiModels.checking', 'Checking…') : tr('admin.aiModels.checkHealth', 'Check service health')}
-          </button>
-          {rolloutMessage && (
-            <p className={`text-[11px] ${rolloutStatus === 'done' ? 'text-emerald-400' : rolloutStatus === 'error' ? 'text-red-400' : 'text-slate-400'}`}>
-              {rolloutMessage}
-            </p>
-          )}
+          <code className="block font-mono text-[11px] text-amber-200" data-testid="ai-key-restart-command">
+            kubectl -n &lt;namespace&gt; rollout restart deployment/ai-service
+          </code>
         </div>
       )}
     </div>

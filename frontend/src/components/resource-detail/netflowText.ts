@@ -9,10 +9,15 @@ export interface FlowSelf {
   name: string
 }
 
-// isSelf: this end is the pod, or one of the workload's pods, the drawer shows.
+// isSelf: this end is the pod, or one of the workload's pods, the drawer shows. Calico names a pod set
+// "<generateName>*", and the API server names such a pod generateName plus five random characters.
 export function isSelf(e: NetflowEnd, self: FlowSelf): boolean {
   if (e.namespace !== self.namespace) return false
-  if (self.kind === 'Pod') return e.pod === self.name
+  if (self.kind === 'Pod') {
+    if (e.pod === self.name) return true
+    const set = e.pod?.endsWith('*') ? e.pod.slice(0, -1) : ''
+    return set !== '' && self.name.length === set.length + 5 && self.name.startsWith(set)
+  }
   return e.workload?.kind === self.kind && e.workload?.name === self.name
 }
 

@@ -28,8 +28,6 @@ export function useModelForm() {
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
 
-  const [rolloutStatus, setRolloutStatus] = useState<'idle' | 'rolling' | 'done' | 'error'>('idle')
-  const [rolloutMessage, setRolloutMessage] = useState('')
 
   const { data: configs, isLoading } = useQuery({
     queryKey: ['model-configs'],
@@ -119,8 +117,6 @@ export function useModelForm() {
     setFormOptions('')
     setFormOptionsError(null)
     setTestResult(null)
-    setRolloutStatus('idle')
-    setRolloutMessage('')
   }
 
   const openEditForm = (cfg: ModelConfigResponse) => {
@@ -141,8 +137,6 @@ export function useModelForm() {
     setFormOptions(cfg.options ? JSON.stringify(cfg.options, null, 2) : '')
     setFormOptionsError(null)
     setTestResult(null)
-    setRolloutStatus('idle')
-    setRolloutMessage('')
   }
 
   const openCreateForm = () => {
@@ -231,23 +225,6 @@ export function useModelForm() {
     }
   }
 
-  const handleRollout = async () => {
-    setRolloutStatus('rolling')
-    setRolloutMessage('Restarting ai-service to pick up new API keys…')
-    try {
-      const resp = await fetch('/api/v1/cluster/health')
-      if (resp.ok) {
-        setRolloutStatus('done')
-        setRolloutMessage('Service is healthy. New API keys should be available.')
-      } else {
-        throw new Error('Health check returned non-ok')
-      }
-    } catch {
-      setRolloutStatus('error')
-      setRolloutMessage('Rollout may still be in progress. Please wait and refresh.')
-    }
-  }
-
   const isSaving = createMutation.isPending || updateMutation.isPending
 
   return {
@@ -269,8 +246,6 @@ export function useModelForm() {
     formOptionsError,
     testing,
     testResult,
-    rolloutStatus,
-    rolloutMessage,
     currentProviderDef,
     currentModelOptions,
     modelList,
@@ -283,7 +258,6 @@ export function useModelForm() {
     handleProviderChange,
     handleSubmit,
     handleTest,
-    handleRollout,
   }
 }
 

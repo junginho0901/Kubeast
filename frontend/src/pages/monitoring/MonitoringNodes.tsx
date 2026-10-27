@@ -12,9 +12,11 @@ import {
 import {
   api,
   disableMetrics,
+  isForbiddenError,
   isMetricsDisabled,
   isMetricsUnavailableError,
 } from '@/services/api'
+import { forbiddenResourceFromUrl } from '@/utils/forbiddenResource'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useCluster } from '@/contexts/ClusterContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
@@ -278,6 +280,12 @@ export default function MonitoringNodes({
               </div>
             )
           })}
+        </div>
+      ) : isForbiddenError(error) ? (
+        <div className="text-center py-12">
+          <p className="text-slate-400" data-testid="node-metrics-forbidden">
+            {t('common.forbiddenEmpty', { resource: forbiddenResourceFromUrl('/cluster/metrics/nodes'), defaultValue: 'You do not have permission to view {{resource}} in this cluster.' })}
+          </p>
         </div>
       ) : (
         <div className="text-center py-12">

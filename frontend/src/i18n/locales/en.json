@@ -1284,7 +1284,7 @@
   "mutatingWebhooks": {
     "title": "MutatingWebhookConfigurations",
     "subtitle": "Manage mutating admission webhook configurations in the cluster.",
-    "create": "Create",
+    "create": "Create MutatingWebhookConfiguration",
     "createTitle": "Create Mutating Webhook Configuration from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
@@ -1303,7 +1303,7 @@
   "validatingWebhooks": {
     "title": "ValidatingWebhookConfigurations",
     "subtitle": "Manage validating admission webhook configurations in the cluster.",
-    "create": "Create",
+    "create": "Create ValidatingWebhookConfiguration",
     "createTitle": "Create Validating Webhook Configuration from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
@@ -1710,6 +1710,7 @@
     "loadMore": "Load more",
     "endOfHistory": "End of history.",
     "messageCount": "{{count}} messages",
+    "messageCount_one": "{{count}} message",
     "noSessions": "No chat history.",
     "rename": "Rename",
     "delete": "Delete",
@@ -1746,7 +1747,9 @@
     "confirmDelete": "Delete this chat?",
     "deleteTitle": "Delete chat",
     "confirmDeleteSelectedWithStreaming": "Delete {{count}} selected chats?\\n(A chat that is currently generating will be stopped and removed.)",
+    "confirmDeleteSelectedWithStreaming_one": "Delete {{count}} selected chat?\\n(A chat that is currently generating will be stopped and removed.)",
     "confirmDeleteSelected": "Delete {{count}} selected chats?",
+    "confirmDeleteSelected_one": "Delete {{count}} selected chat?",
     "error": {
       "budgetSession": "This conversation has used {{used}} tokens, over its budget of {{limit}}. Start a new conversation to continue.",
       "budgetUserDaily": "You have used {{used}} tokens today (UTC), over the daily budget of {{limit}}. The budget resets at 00:00 UTC.",
@@ -1815,7 +1818,8 @@
     "scoped": "Only the namespaces of your grant are shown; the totals add up those rows.",
     "source": "OpenCost {{endpoint}} · {{currency}} · window {{start}} – {{end}}",
     "loadError": "Could not load the cost table",
-    "matchCount": "{{count}} rows match."
+    "matchCount": "{{count}} rows match.",
+    "matchCount_one": "{{count}} row matches."
   },
   "netflows": {
     "intro": "Connections the cluster's Hubble Relay saw to and from this {{kind}}. Reading them is recorded in the audit log.",
@@ -1834,12 +1838,14 @@
     "in": "in",
     "out": "out",
     "repliesTitle": "{{n}} replies",
+    "repliesTitle_one": "{{n}} reply",
     "allowedBy": "allowed by {{list}}",
     "deniedBy": "denied by {{list}}",
     "why": "Why?",
     "truncated": "The Relay had more flows than were read ({{n}}); a shorter window shows the most recent ones.",
     "redacted": "Peers outside your namespaces show their namespace and address only.",
-    "lost": "Hubble reported {{n}} lost events: some flows may be missing."
+    "lost": "Hubble reported {{n}} lost events: some flows may be missing.",
+    "lost_one": "Hubble reported {{n}} lost event: some flows may be missing."
   },
   "netdrops": {
     "range": "last {{w}}",
@@ -1896,6 +1902,7 @@
     "outgoing": "Outgoing",
     "notIsolated": "Not isolated: every connection is allowed.",
     "isolatedBy": "Isolated by {{n}} policies: only what their rules allow.",
+    "isolatedBy_one": "Isolated by {{n}} policy: only what its rules allow.",
     "noRules": "No rules: denies all.",
     "rule": "Rule {{n}}",
     "fromAnywhere": "from anywhere",
@@ -2024,6 +2031,7 @@
     "nodes": {
       "title": "Node resource usage",
       "total": "Total {{count}} nodes",
+      "total_one": "Total {{count}} node",
       "unavailable": "Node metrics are not available"
     },
     "pods": {
@@ -2425,6 +2433,7 @@
         "includeBroad": "(including broad)",
         "excludeBroad": "(excluding broad)",
         "total": "{{count}} items",
+        "total_one": "{{count}} item",
         "none": "None",
         "resources": "Resources",
         "table": {
@@ -2467,6 +2476,7 @@
       "noContainers": "No containers",
       "downloadLines": "Log download lines",
       "linesCount": "{{count}} lines",
+      "linesCount_one": "{{count}} line",
       "download": "Download",
       "downloading": "Downloading...",
       "loading": "Loading logs..."
@@ -2511,6 +2521,7 @@
       "matchCase": "Match case",
       "search": "Search",
       "summary": "{{count}} lines from the last {{range}} · {{bytes}} scanned.",
+      "summary_one": "{{count}} line from the last {{range}} · {{bytes}} scanned.",
       "notice": "Lines come from the log store, including pods that are gone. Each search is recorded in the audit log.",
       "searching": "Searching...",
       "noLines": "No lines in this range.",
@@ -2545,6 +2556,7 @@
     "searchResultsTotal": "(out of {{count}})",
     "noSearchResults": "No pods found for \"{{query}}\"",
     "nodePodsCount": "{{count}} Pods",
+    "nodePodsCount_one": "{{count}} Pod",
     "restarts": "Restarts: {{count}}",
     "podDeleting": "Deleting...",
     "noPods": "No pods found",
@@ -2787,6 +2799,7 @@
     "bulkUploading": "Uploading...",
     "bulkFormat": "CSV format:",
     "bulkCreated": "{{count}} users created.",
+    "bulkCreated_one": "{{count}} user created.",
     "pendingBtn": "Pending",
     "pendingBadge": "Pending",
     "pendingModal": {
@@ -3087,6 +3100,7 @@
       "open": "Open {{name}}",
       "connections": "Latest connections",
       "flowsCount": "{{n}} flows",
+      "flowsCount_one": "{{n}} flow",
       "aboutRelay": "From the cluster's Hubble Relay: the latest flows it keeps, read once. Each end's drawer shows its recent flows.",
       "aboutCalico": "From Calico's Whisker: the flows Calico's Goldmane aggregated, read once and counted in packets. Each end's drawer shows its recent flows.",
       "aboutMetrics": "From the Hubble metrics in the cluster's Prometheus: TCP connections opened (SYN) and dropped packets. UDP traffic such as DNS is not counted.",
@@ -3105,8 +3119,11 @@
         "unitMetrics": "number = TCP connections · ✕ dropped packets"
       },
       "statusRelay": "{{lines}} lines from {{flows}} recent flows of the Hubble Relay (last {{w}})",
+      "statusRelay_one": "{{lines}} line from {{flows}} recent flows of the Hubble Relay (last {{w}})",
       "statusCalico": "{{lines}} lines from {{flows}} recent flow records of Calico's Whisker, counted in packets (last {{w}})",
+      "statusCalico_one": "{{lines}} line from {{flows}} recent flow records of Calico's Whisker, counted in packets (last {{w}})",
       "statusMetrics": "{{lines}} lines from the Hubble metrics (last {{w}})",
+      "statusMetrics_one": "{{lines}} line from the Hubble metrics (last {{w}})",
       "truncated": "Only the latest flows the Relay returned: older traffic is not drawn.",
       "linesTruncated": "Only the busiest 300 lines are drawn.",
       "note": {
@@ -3117,7 +3134,9 @@
       },
       "redacted": "Peers outside your namespaces show their namespace only.",
       "selfLoops": "{{n}} lines inside one workload are not drawn.",
-      "lineCount": "{{n}} traffic lines"
+      "selfLoops_one": "{{n}} line inside one workload is not drawn.",
+      "lineCount": "{{n}} traffic lines",
+      "lineCount_one": "{{n}} traffic line"
     }
   },
   "advancedSearch": {
@@ -3131,9 +3150,11 @@
     "queryPlaceholder": "Search resources by JavaScript expression...",
     "searching": "Searching...",
     "resultsCount": "{{count}} results",
+    "resultsCount_one": "{{count}} result",
     "outOf": "(out of {{total}})",
     "loading": "Loading resources...",
     "loaded": "{{count}} items loaded",
+    "loaded_one": "{{count}} item loaded",
     "refresh": "Refresh",
     "noResults": "No resources match your query",
     "noResultsHint": "Check your expression syntax or try a different query",
@@ -3771,6 +3792,7 @@
       "button": "Uninstall",
       "title": "Uninstall release \"{{name}}\"",
       "warning": "This will delete {{count}} Kubernetes resources owned by this release. This cannot be undone.",
+      "warning_one": "This will delete {{count}} Kubernetes resource owned by this release. This cannot be undone.",
       "keepHistory": "Keep revision history (can be restored with helm rollback later)",
       "confirmLabel": "Type the release name \"{{name}}\" to confirm.",
       "cancel": "Cancel",
@@ -4033,6 +4055,7 @@
     "apply": "Search",
     "reset": "Reset",
     "total": "{{total}} entries",
+    "total_one": "{{total}} entry",
     "col": {
       "time": "Time",
       "actor": "User",
@@ -4060,6 +4083,7 @@
     "create": "Create DeviceClass",
     "createTitle": "Create DeviceClass from YAML",
     "matchCount": "{{count}} device classes matched.",
+    "matchCount_one": "{{count}} device class matched.",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
     "searchPlaceholder": "Search by device class name...",
@@ -4190,6 +4214,7 @@
     "create": "Create ResourceClaimTemplate",
     "createTitle": "Create ResourceClaimTemplate from YAML",
     "matchCount": "{{count}} ResourceClaimTemplates matched.",
+    "matchCount_one": "{{count}} ResourceClaimTemplate matched.",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
     "searchPlaceholder": "Search by ResourceClaimTemplate name...",
@@ -4210,6 +4235,7 @@
     "create": "Create ResourceClaim",
     "createTitle": "Create ResourceClaim from YAML",
     "matchCount": "{{count}} ResourceClaims matched.",
+    "matchCount_one": "{{count}} ResourceClaim matched.",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
     "searchPlaceholder": "Search by ResourceClaim name...",
@@ -4231,6 +4257,7 @@
   },
   "resourceSlicesPage": {
     "matchCount": "{{count}} resource slices matched.",
+    "matchCount_one": "{{count}} resource slice matched.",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
     "searchPlaceholder": "Search by resource slice name, node, driver, or pool...",

@@ -441,7 +441,7 @@ export default function AdminAudit() {
             {tr('adminAudit.reset', '초기화')}
           </button>
           <span className="ml-auto text-xs text-slate-400 self-center">
-            {tr('adminAudit.total', '총 {{total}}건', { total })}
+            {tr('adminAudit.total', '총 {{total}}건', { total, count: total })}
           </span>
         </div>
       </div>

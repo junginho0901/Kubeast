@@ -7,7 +7,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
-import { usePermission } from '@/hooks/usePermission'
+import { useCanCreate } from '@/hooks/useCanCreate'
 import { useNotInstalled } from '@/services/listStatusStore'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
@@ -49,9 +49,8 @@ export default function Gateways() {
         : api.getGateways(selectedNamespace, false)
     ),
   })
-  const { has } = usePermission()
   const notInstalled = useNotInstalled('gateways')
-  const canCreate = has('resource.gateway.create') && !notInstalled
+  const canCreate = useCanCreate('resource.gateway.create', { group: 'gateway.networking.k8s.io', resource: 'gateways', namespace: selectedNamespace }) && !notInstalled
 
   useKubeWatchList({
     enabled: true,

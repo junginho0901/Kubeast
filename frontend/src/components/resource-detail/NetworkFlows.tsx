@@ -33,7 +33,7 @@ function GroupRow({ g, self, tr, onWhy }: { g: NetflowGroup; self: FlowSelf; tr:
       <td className="py-1.5 pr-2 whitespace-nowrap text-slate-400">{incoming ? tr('netflows.in', 'in') : tr('netflows.out', 'out')}</td>
       <td className="py-1.5 pr-2 font-mono break-all" data-testid="netflow-peer">{endLabel(peer, self.namespace)}</td>
       <td className="py-1.5 pr-2 font-mono whitespace-nowrap">{g.protocol || '-'} {g.destination.port || ''}</td>
-      <td className="py-1.5 pr-2 whitespace-nowrap" title={tr('netflows.repliesTitle', '{{n}} replies', { n: g.replies })}>{g.count}</td>
+      <td className="py-1.5 pr-2 whitespace-nowrap" title={tr('netflows.repliesTitle', '{{n}} replies', { n: g.replies, count: g.replies })}>{g.count}</td>
       <td className="py-1.5 pr-2 whitespace-nowrap text-slate-400" title={g.last}>{formatAge(g.last)}</td>
       <td className="py-1.5 text-slate-300 break-words">
         {g.drop_reason && <span className="text-red-300" data-testid="netflow-reason">{g.drop_reason}</span>}
@@ -139,7 +139,7 @@ export default function NetworkFlows({ kind, namespace, name }: { kind: string; 
         )}
         {res && res.truncated && <p className="text-slate-500">{tr('netflows.truncated', 'The Relay had more flows than were read ({{n}}); a shorter window shows the most recent ones.', { n: res.flows.length })}</p>}
         {res?.redacted && <p className="text-slate-500">{tr('netflows.redacted', 'Peers outside your namespaces show their namespace and address only.')}</p>}
-        {res && (res.lost_events ?? 0) > 0 && <p className="text-amber-300">{tr('netflows.lost', 'Hubble reported {{n}} lost events: some flows may be missing.', { n: res.lost_events })}</p>}
+        {res && (res.lost_events ?? 0) > 0 && <p className="text-amber-300">{tr('netflows.lost', 'Hubble reported {{n}} lost events: some flows may be missing.', { n: res.lost_events, count: res.lost_events })}</p>}
       </div>
       {why && <NetworkPolicyCheckModal self={`${kind.toLowerCase()}/${namespace}/${name}`} selfName={name} namespace={namespace} initial={why} onClose={() => setWhy(null)} />}
     </InfoSection>

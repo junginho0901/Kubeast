@@ -11,7 +11,7 @@ import { api } from '@/services/api'
 import type { GPUDashboardData, GPUMetricsData, GPUDeviceMetric } from '@/services/api'
 
 export function useGPUDashboardData() {
-  const { data, isLoading, isError, refetch } = useQuery<GPUDashboardData>({
+  const { data, isLoading, isError, error, refetch } = useQuery<GPUDashboardData>({
     queryKey: ['gpu', 'dashboard'],
     queryFn: () => api.getGPUDashboard(),
     refetchInterval: 30000,
@@ -114,6 +114,7 @@ export function useGPUDashboardData() {
     recentPods,
     isLoading,
     isError,
+    error,
     refetch,
   }
 }

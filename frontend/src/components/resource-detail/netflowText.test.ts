@@ -19,6 +19,16 @@ describe('netflowText', () => {
     expect(isSelf(client, { kind: 'Pod', namespace: 'shop', name: 'web-1' })).toBe(false)
   })
 
+  it('takes Calico’s pod set as the pod whose generated name it covers', () => {
+    const set = { namespace: 'shop', pod: 'web-787b7df48d-*', workload: { kind: 'Deployment', name: 'web' } }
+    expect(isSelf(set, { kind: 'Pod', namespace: 'shop', name: 'web-787b7df48d-4fdhd' })).toBe(true)
+    expect(isSelf(set, { kind: 'Pod', namespace: 'shop', name: 'web-787b7df48d-4fdhd-x' })).toBe(false)
+    expect(isSelf({ namespace: 'shop', pod: 'kindnet-*' }, { kind: 'Pod', namespace: 'shop', name: 'kindnet-extra-ab12c' })).toBe(false)
+    expect(isSelf({ namespace: 'shop', pod: 'kindnet-*' }, { kind: 'Pod', namespace: 'shop', name: 'kindnet-ab12c' })).toBe(true)
+    expect(checkInitial({ source: client, destination: set, verdict: 'FORWARDED', count: 1 } as never, { kind: 'Pod', namespace: 'shop', name: 'web-787b7df48d-4fdhd' }))
+      .toMatchObject({ outgoing: false, kind: 'deployment', name: 'client' })
+  })
+
   it('names an end the shortest clear way', () => {
     expect(endLabel(client, 'shop')).toBe('Deployment/client')
     expect(endLabel({ ...client, namespace: 'ops' }, 'shop')).toBe('ops/Deployment/client')

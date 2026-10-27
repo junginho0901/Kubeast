@@ -91,7 +91,18 @@ export default function ResourceGraph() {
   const { currentCluster } = useCluster()
   const features = useClusterFeatures().data
   const { has } = usePermission()
-  const sources = useMemo(() => (has('resource.networkflow.read') ? trafficSources(features, currentCluster) : []), [has, features, currentCluster])
+  const prometheus = useQuery({
+    queryKey: ['prometheus-status', currentCluster],
+    queryFn: () => api.getPrometheusStatus(),
+    enabled: features?.prometheus?.enabled === true,
+    staleTime: 60_000,
+    retry: false,
+  })
+  const prometheusAvailable = prometheus.data?.available === true
+  const sources = useMemo(
+    () => (has('resource.networkflow.read') ? trafficSources(features, currentCluster, prometheusAvailable) : []),
+    [has, features, currentCluster, prometheusAvailable],
+  )
   const [pickedView, setView] = useState<GraphView>('structure')
   const [pickedSource, setSource] = useState<TrafficSource | null>(null)
   const view: GraphView = sources.length > 0 ? pickedView : 'structure'
@@ -544,17 +555,17 @@ function TrafficStatus({ error, result, selfLoops }: { error?: string; result?: 
     lines.push({
       key: 'source',
       text: result.source === 'metrics'
-        ? t('resourceGraph.traffic.statusMetrics', { defaultValue: '{{lines}} lines from the Hubble metrics (last {{w}})', lines: result.lines.length, w: result.range })
+        ? t('resourceGraph.traffic.statusMetrics', { defaultValue: '{{lines}} lines from the Hubble metrics (last {{w}})', lines: result.lines.length, count: result.lines.length, w: result.range })
         : result.provider === 'calico'
-          ? t('resourceGraph.traffic.statusCalico', { defaultValue: "{{lines}} lines from {{flows}} recent flow records of Calico's Whisker, counted in packets (last {{w}})", lines: result.lines.length, flows: result.flows ?? 0, w: result.since })
-          : t('resourceGraph.traffic.statusRelay', { defaultValue: '{{lines}} lines from {{flows}} recent flows of the Hubble Relay (last {{w}})', lines: result.lines.length, flows: result.flows ?? 0, w: result.since }),
+          ? t('resourceGraph.traffic.statusCalico', { defaultValue: "{{lines}} lines from {{flows}} recent flow records of Calico's Whisker, counted in packets (last {{w}})", lines: result.lines.length, count: result.lines.length, flows: result.flows ?? 0, w: result.since })
+          : t('resourceGraph.traffic.statusRelay', { defaultValue: '{{lines}} lines from {{flows}} recent flows of the Hubble Relay (last {{w}})', lines: result.lines.length, count: result.lines.length, flows: result.flows ?? 0, w: result.since }),
     })
     if (result.truncated) lines.push({ key: 'truncated', text: t('resourceGraph.traffic.truncated', 'Only the latest flows the Relay returned: older traffic is not drawn.'), warn: true })
     if (result.lines_truncated) lines.push({ key: 'lines', text: t('resourceGraph.traffic.linesTruncated', 'Only the busiest 300 lines are drawn.'), warn: true })
     for (const n of result.notes ?? []) lines.push({ key: n, text: t(`resourceGraph.traffic.note.${n}`, noteText[n] ?? n), warn: n !== 'counted_at_both_ends' })
-    if ((result.lost_events ?? 0) > 0) lines.push({ key: 'lost', text: t('netflows.lost', { defaultValue: 'Hubble reported {{n}} lost events: some flows may be missing.', n: result.lost_events }), warn: true })
+    if ((result.lost_events ?? 0) > 0) lines.push({ key: 'lost', text: t('netflows.lost', { defaultValue: 'Hubble reported {{n}} lost events: some flows may be missing.', n: result.lost_events, count: result.lost_events }), warn: true })
     if (result.redacted) lines.push({ key: 'redacted', text: t('resourceGraph.traffic.redacted', 'Peers outside your namespaces show their namespace only.') })
-    if (selfLoops > 0) lines.push({ key: 'self', text: t('resourceGraph.traffic.selfLoops', { defaultValue: '{{n}} lines inside one workload are not drawn.', n: selfLoops }) })
+    if (selfLoops > 0) lines.push({ key: 'self', text: t('resourceGraph.traffic.selfLoops', { defaultValue: '{{n}} lines inside one workload are not drawn.', n: selfLoops, count: selfLoops }) })
   }
   if (lines.length === 0) return null
   return (

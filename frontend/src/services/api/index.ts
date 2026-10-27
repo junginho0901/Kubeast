@@ -102,6 +102,7 @@ export type {
 // (Dashboard / Monitoring etc.).
 export {
   disableMetrics,
+  isForbiddenError,
   isMetricsDisabled,
   isMetricsUnavailableError,
 } from './client'

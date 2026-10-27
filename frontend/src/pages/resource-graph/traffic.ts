@@ -12,10 +12,11 @@ export type GraphView = 'structure' | 'traffic' | 'both'
 // relay: the recent flows of the cluster's Hubble Relay · 1h/24h: the Hubble metrics in its Prometheus
 export type TrafficSource = 'relay' | '1h' | '24h'
 
-export function trafficSources(features: ClusterFeatures | null | undefined, clusterId: string): TrafficSource[] {
+// The metrics sources need a Prometheus Kubeast reads for this cluster (GET /cluster/prometheus/status).
+export function trafficSources(features: ClusterFeatures | null | undefined, clusterId: string, prometheusAvailable: boolean): TrafficSource[] {
   const out: TrafficSource[] = []
   if (networkFlowsEnabledFor(features, clusterId)) out.push('relay')
-  if (features?.prometheus?.enabled === true) out.push('1h', '24h')
+  if (features?.prometheus?.enabled === true && prometheusAvailable) out.push('1h', '24h')
   return out
 }
 

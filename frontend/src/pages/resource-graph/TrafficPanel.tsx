@@ -85,7 +85,7 @@ export function TrafficPanel({ line, result, onClose, onWhy, onOpen }: {
                 <div className="font-mono text-slate-200 break-all">{endLabel(g.source, '')} → {endLabel(g.destination, '')}{g.destination.port ? `:${g.destination.port}` : ''}</div>
                 <div className="text-slate-400">
                   <span className={g.verdict === 'DROPPED' ? 'text-red-300' : 'text-emerald-300'}>{g.verdict}</span>
-                  {g.drop_reason ? ` ${g.drop_reason}` : ''} · {tr('resourceGraph.traffic.flowsCount', '{{n}} flows', { n: g.count + g.replies })} · {formatTime(g.last)}
+                  {g.drop_reason ? ` ${g.drop_reason}` : ''} · {tr('resourceGraph.traffic.flowsCount', '{{n}} flows', { n: g.count + g.replies, count: g.count + g.replies })} · {formatTime(g.last)}
                 </div>
               </li>
             ))}
