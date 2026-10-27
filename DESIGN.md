@@ -146,7 +146,8 @@ Cards 24px (`rounded-3xl`). Buttons are pills (`.btn` is `rounded-full`). Inputs
 - **Sidebar:** group names in `text-xs font-semibold` sentence case; the open group's name is brighter. The selected item is filled with the accent (`bg-primary-600 text-white`).
 - **Cards:** `.card` — surface grey, 24px corners, hairline, no shadow, no card inside a card (rows inside use dividers).
 - **Badges:** `badge-success`, `badge-warning`, `badge-error` for state, `badge-info` in the sky accent, `badge-neutral` for a state that needs no attention.
-- **Charts:** flat bars and lines, no 3D, no gradient fills; grid lines in the grey ladder.
+- **Charts:** flat bars and lines, no 3D, no gradient fills; grid lines in the grey ladder. A usage bar (CPU, memory, GPU, disk) is the accent while normal and turns yellow/amber, then red, past its thresholds; its number stays grey until then.
+- **Icons:** one tone (`slate-300`/`slate-400`); an icon is coloured only when it reports a state (a green Ready check, an amber warning).
 
 ## Do's and Don'ts
 

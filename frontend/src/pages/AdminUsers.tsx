@@ -918,8 +918,8 @@ export default function AdminUsers() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-3 mb-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/30">
-                <KeyRound className="h-5 w-5 text-emerald-400" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-700/60 border border-slate-600">
+                <KeyRound className="h-5 w-5 text-slate-300" />
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-white">

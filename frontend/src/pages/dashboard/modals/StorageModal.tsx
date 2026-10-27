@@ -299,7 +299,7 @@ export function StorageModal({
                               <div className="flex flex-wrap items-center gap-2" data-testid="pvc-usage">
                                 <div className="h-1.5 w-32 rounded bg-slate-700 overflow-hidden" role="progressbar" aria-valuenow={pvc.usage.percent} aria-valuemin={0} aria-valuemax={100}>
                                   <div
-                                    className={`h-full ${pvc.usage.percent >= 97 ? 'bg-red-500' : pvc.usage.percent >= 85 ? 'bg-yellow-400' : 'bg-emerald-500'}`}
+                                    className={`h-full ${pvc.usage.percent >= 97 ? 'bg-red-500' : pvc.usage.percent >= 85 ? 'bg-yellow-400' : 'bg-primary-400'}`}
                                     style={{ width: `${Math.min(100, pvc.usage.percent)}%` }}
                                   />
                                 </div>

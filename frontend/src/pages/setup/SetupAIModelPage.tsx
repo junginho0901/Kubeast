@@ -263,7 +263,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
             {aiTesting ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <Zap className="h-3.5 w-3.5 text-yellow-400" />
+              <Zap className="h-3.5 w-3.5" />
             )}
             {tr('setup.ai.test', 'Test Connection')}
           </button>

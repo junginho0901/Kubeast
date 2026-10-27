@@ -140,8 +140,8 @@ export default function MonitoringPods({
     <div className="card overflow-visible">
       <div className="flex items-start justify-between mb-6">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-green-500/10">
-            <Box className="w-6 h-6 text-green-400" />
+          <div className="p-2 rounded-lg bg-slate-700/60">
+            <Box className="w-6 h-6 text-slate-300" />
           </div>
           <div>
             <h2 className="text-xl font-bold text-white">{t('monitoring.pods.title')}</h2>
@@ -152,8 +152,8 @@ export default function MonitoringPods({
           <div className="flex flex-col items-end gap-1 text-right">
             {latestPodMetricTime && (
               <div className="flex items-center gap-2 text-sm text-slate-400">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-green-400">{t('monitoring.autoRefresh')}</span>
+                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <span className="text-slate-400">{t('monitoring.autoRefresh')}</span>
               </div>
             )}
             {latestPodMetricTime && (
@@ -197,7 +197,7 @@ export default function MonitoringPods({
                 <p className="text-sm text-slate-400">{t('monitoring.pods.totalPods')}</p>
                 <p className="text-2xl font-bold text-white mt-1">{podStats.totalPods}</p>
               </div>
-              <Box className="w-8 h-8 text-green-400" />
+              <Box className="w-8 h-8 text-slate-500" />
             </div>
           </div>
           <div className="p-4 bg-slate-700 rounded-lg">
@@ -206,7 +206,7 @@ export default function MonitoringPods({
                 <p className="text-sm text-slate-400">{t('monitoring.pods.totalCpu')}</p>
                 <p className="text-2xl font-bold text-white mt-1">{podStats.totalCpu}m</p>
               </div>
-              <Cpu className="w-8 h-8 text-green-400" />
+              <Cpu className="w-8 h-8 text-slate-500" />
             </div>
           </div>
           <div className="p-4 bg-slate-700 rounded-lg">
@@ -328,7 +328,7 @@ export default function MonitoringPods({
                               ? 'text-red-400'
                               : cpu >= 500
                                 ? 'text-yellow-400'
-                                : 'text-green-400'
+                                : 'text-slate-200'
                           }`}
                         />
                         <span className="text-white font-mono">{podMetric.cpu}</span>

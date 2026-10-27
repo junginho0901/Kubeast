@@ -21,7 +21,7 @@ export function MetricBar({
   const color =
     pct >= thresholds.danger ? 'bg-red-500'
     : pct >= thresholds.warn ? 'bg-amber-500'
-    : 'bg-emerald-500'
+    : 'bg-primary-400'
 
   return (
     <div className="space-y-1">

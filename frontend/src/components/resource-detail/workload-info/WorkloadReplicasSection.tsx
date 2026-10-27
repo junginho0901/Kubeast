@@ -112,7 +112,7 @@ export default function WorkloadReplicasSection({
                 <span className="text-xs text-slate-400 w-48 truncate">{r.metric?.pod}</span>
                 <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full ${r.value >= 500 ? 'bg-red-500' : r.value >= 200 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                    className={`h-full rounded-full ${r.value >= 500 ? 'bg-red-500' : r.value >= 200 ? 'bg-amber-500' : 'bg-primary-400'}`}
                     style={{ width: `${Math.min((r.value / 1000) * 100, 100)}%` }}
                   />
                 </div>

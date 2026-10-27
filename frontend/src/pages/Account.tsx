@@ -136,8 +136,8 @@ export default function Account() {
 
         <div className="card">
           <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 rounded-lg bg-emerald-500/10">
-              <Languages className="w-6 h-6 text-emerald-400" />
+            <div className="p-2 rounded-lg bg-slate-700/60">
+              <Languages className="w-6 h-6 text-slate-300" />
             </div>
             <div>
               <h2 className="text-xl font-bold text-white">{tr('account.language.title', 'Language')}</h2>

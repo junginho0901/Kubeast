@@ -39,7 +39,7 @@ export default function GPUNodesRealtimeMetrics({ gpusByHost }: Props) {
                         <span className="text-[10px] text-slate-500 w-7">{tr('gpuDashboardPage.realtime.core', 'Core')}</span>
                         <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
                           <div
-                            className={`h-full rounded-full ${gpu.gpu_util >= 80 ? 'bg-red-500' : gpu.gpu_util >= 50 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                            className={`h-full rounded-full ${gpu.gpu_util >= 80 ? 'bg-red-500' : gpu.gpu_util >= 50 ? 'bg-amber-500' : 'bg-primary-400'}`}
                             style={{ width: `${Math.min(gpu.gpu_util, 100)}%` }}
                           />
                         </div>

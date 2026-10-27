@@ -60,9 +60,9 @@ export function SummaryCardsRow({ data, allocationRate, devicePluginHealthy, tr 
       label: tr('gpuDashboardPage.summary.allocationRate', 'Allocation Rate'),
       value: `${allocationRate}%`,
       icon: Gauge,
-      border: allocationRate > 80 ? 'border-amber-500/30' : 'border-emerald-500/30',
-      iconBg: allocationRate > 80 ? 'bg-amber-500/10' : 'bg-emerald-500/10',
-      iconColor: allocationRate > 80 ? 'text-amber-400' : 'text-emerald-400',
+      border: allocationRate > 80 ? 'border-amber-500/30' : 'border-slate-700',
+      iconBg: allocationRate > 80 ? 'bg-amber-500/10' : 'bg-slate-700/60',
+      iconColor: allocationRate > 80 ? 'text-amber-400' : 'text-slate-300',
       bar: true,
     },
   ]
@@ -93,7 +93,7 @@ export function SummaryCardsRow({ data, allocationRate, devicePluginHealthy, tr 
                         ? 'bg-amber-500'
                         : allocationRate > 50
                           ? 'bg-primary-400'
-                          : 'bg-emerald-500'
+                          : 'bg-primary-400'
                     }`}
                     style={{ width: `${Math.min(allocationRate, 100)}%` }}
                   />

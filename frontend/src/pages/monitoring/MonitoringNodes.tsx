@@ -161,8 +161,8 @@ export default function MonitoringNodes({
         <div className="flex flex-col items-end gap-1 text-right">
           {latestNodeMetricTime && (
             <div className="flex items-center gap-2 text-sm text-slate-400">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-green-400">{t('monitoring.autoRefresh')}</span>
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <span className="text-slate-400">{t('monitoring.autoRefresh')}</span>
             </div>
           )}
           {latestNodeMetricTime && (
@@ -202,7 +202,7 @@ export default function MonitoringNodes({
                   </h3>
                   <div className="flex items-center gap-4 text-sm text-slate-300">
                     <div className="flex items-center gap-2">
-                      <Cpu className="w-4 h-4 text-green-400" />
+                      <Cpu className="w-4 h-4 text-slate-400" />
                       <span>{node.cpu}</span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -225,7 +225,7 @@ export default function MonitoringNodes({
                           ? 'text-red-400'
                           : cpuPercent >= 60
                             ? 'text-yellow-400'
-                            : 'text-green-400'
+                            : 'text-slate-200'
                       }`}
                     >
                       {node.cpu_percent}
@@ -238,7 +238,7 @@ export default function MonitoringNodes({
                           ? 'bg-red-500'
                           : cpuPercent >= 60
                             ? 'bg-yellow-500'
-                            : 'bg-green-500'
+                            : 'bg-primary-400'
                       }`}
                       style={{ width: `${Math.min(cpuPercent, 100)}%` }}
                     />
