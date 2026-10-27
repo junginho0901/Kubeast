@@ -1,6 +1,6 @@
 // Dashboard 의 Prometheus cluster-wide metrics 카드 (CPU / Memory / Disk / Pods).
 // promCluster.available 일 때만 mount. 4개 metric 모두 null 이면 빈 grid 만.
-// 색상 threshold 는 기존 inline 과 동일: >=80 red / >=60 amber / else 정상색.
+// 색상 threshold: >=80 red / >=60 amber / else 정상색(브랜드 하늘색 하나).
 
 import { useTranslation } from 'react-i18next'
 
@@ -25,9 +25,9 @@ function MetricBar({ label, value, normalClass }: { label: string; value: number
         <span className="text-slate-400">{label}</span>
         <span className="font-mono text-slate-300">{Math.round(value)}%</span>
       </div>
-      <div className="h-3 w-full overflow-hidden rounded-full bg-slate-800">
+      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-700">
         <div
-          className={`h-full rounded-full transition-all ${threshold(value, normalClass)}`}
+          className={`h-full rounded-full transition-[width] duration-200 ${threshold(value, normalClass)}`}
           style={{ width: `${Math.min(value, 100)}%` }}
         />
       </div>
@@ -40,21 +40,18 @@ export function PrometheusClusterMetrics({ title, cpu, memory, disk, podCount }:
   return (
     <div className="card">
       <div className="flex items-center gap-2 mb-4">
-        <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-        <h2 className="text-xl font-bold text-white">{title}</h2>
+        <div className="h-2 w-2 rounded-full bg-emerald-400" />
+        <h2 className="text-lg font-semibold text-white">{title}</h2>
         <span className="text-xs text-slate-500">{t('dashboard.live', 'Live')}</span>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {cpu !== null && <MetricBar label="CPU" value={cpu} normalClass="bg-emerald-500" />}
-        {memory !== null && <MetricBar label={t('dashboard.memory', 'Memory')} value={memory} normalClass="bg-blue-500" />}
-        {disk !== null && <MetricBar label={t('dashboard.disk', 'Disk')} value={disk} normalClass="bg-violet-500" />}
+        {cpu !== null && <MetricBar label="CPU" value={cpu} normalClass="bg-sky-400" />}
+        {memory !== null && <MetricBar label={t('dashboard.memory', 'Memory')} value={memory} normalClass="bg-sky-400" />}
+        {disk !== null && <MetricBar label={t('dashboard.disk', 'Disk')} value={disk} normalClass="bg-sky-400" />}
         {podCount !== null && (
           <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-400">{t('dashboard.pods', 'Pods')}</span>
-              <span className="font-mono text-slate-300">{Math.round(podCount)}</span>
-            </div>
-            <div className="text-2xl font-bold text-white">{Math.round(podCount)}</div>
+            <div className="text-xs text-slate-400">{t('dashboard.pods', 'Pods')}</div>
+            <div className="text-2xl font-semibold text-white tabular-nums">{Math.round(podCount)}</div>
           </div>
         )}
       </div>

@@ -398,40 +398,30 @@ export function DashboardBody() {
       resourceType: 'namespaces' as ResourceType,
       value: count(overview?.total_namespaces),
       icon: Server,
-      color: 'text-blue-400',
-      bgColor: 'bg-blue-500/10',
     },
     {
       name: tr('dashboard.stats.pods', 'Pods'),
       resourceType: 'pods' as ResourceType,
       value: count(overview?.total_pods),
       icon: Box,
-      color: 'text-green-400',
-      bgColor: 'bg-green-500/10',
     },
     {
       name: tr('dashboard.stats.services', 'Services'),
       resourceType: 'services' as ResourceType,
       value: count(overview?.total_services),
       icon: Database,
-      color: 'text-purple-400',
-      bgColor: 'bg-purple-500/10',
     },
     {
       name: tr('dashboard.stats.deployments', 'Deployments'),
       resourceType: 'deployments' as ResourceType,
       value: count(overview?.total_deployments),
       icon: TrendingUp,
-      color: 'text-yellow-400',
-      bgColor: 'bg-yellow-500/10',
     },
     {
       name: tr('dashboard.stats.pvcs', 'PVCs'),
       resourceType: 'pvcs' as ResourceType,
       value: count(overview?.total_pvcs),
       icon: HardDrive,
-      color: 'text-pink-400',
-      bgColor: 'bg-pink-500/10',
     },
     {
       name: tr('dashboard.stats.nodes', 'Nodes'),
@@ -439,8 +429,6 @@ export function DashboardBody() {
       // a namespace-scoped grant cannot read nodes: the scoped overview's 0 means "not counted", not "no nodes"
       value: overview?.scoped ? '—' : count(overview?.node_count),
       icon: Server,
-      color: 'text-cyan-400',
-      bgColor: 'bg-cyan-500/10',
     },
   ]
 

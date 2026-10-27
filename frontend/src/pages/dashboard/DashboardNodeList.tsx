@@ -20,13 +20,13 @@ export function DashboardNodeList({ nodes, onNodeClick }: Props) {
 
   return (
     <div className="card">
-      <h2 className="text-xl font-bold text-white mb-4">{tr('dashboard.nodes.title', 'Nodes')}</h2>
+      <h2 className="text-lg font-semibold text-white mb-4">{tr('dashboard.nodes.title', 'Nodes')}</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[400px] overflow-y-auto">
         {nodes.map((node) => (
           <button
             key={node.name}
             onClick={() => onNodeClick(node)}
-            className="p-3 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors text-left cursor-pointer"
+            className="p-3 border border-slate-700 rounded-md hover:bg-slate-700/50 transition-colors text-left cursor-pointer"
           >
             <div className="flex items-start gap-2 mb-2">
               {node.status === 'Ready' ? (
