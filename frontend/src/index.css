@@ -60,7 +60,9 @@
 /* Colour modes (DESIGN.md, utils/colorMode.ts): the data-color-mode attribute on <html> swaps the neutral ladders;
    utilities read the variables, so class names stay the same in every mode. gray-* takes the same ladder.
    default — deep navy: Tailwind's slate with the surfaces one step down, so the page is the sign-in ground
-   (slate-950, #020617). The sign-in pages carry data-color-mode="default" and keep it in every mode.
+   (slate-950, #020617); the faint step (500) is lifted from Tailwind's 55.4% to 61% lightness, the least that
+   keeps 4.5:1 on the card surface (Tailwind's own is 3.7:1 there). The sign-in pages carry
+   data-color-mode="default" and keep it in every mode.
    dark — neutral grey; light — below. */
 @layer base {
   :root,
@@ -71,7 +73,7 @@
     --color-slate-200: oklch(92.9% 0.013 255.508);
     --color-slate-300: oklch(86.9% 0.022 252.894);
     --color-slate-400: oklch(70.4% 0.04 256.788);
-    --color-slate-500: oklch(55.4% 0.046 257.417);
+    --color-slate-500: oklch(61% 0.043 257.1);
     --color-slate-600: oklch(37.2% 0.044 257.287);
     --color-slate-700: oklch(27.9% 0.041 260.031);
     --color-slate-800: oklch(20.8% 0.042 265.755);
@@ -82,7 +84,7 @@
     --color-gray-200: oklch(92.9% 0.013 255.508);
     --color-gray-300: oklch(86.9% 0.022 252.894);
     --color-gray-400: oklch(70.4% 0.04 256.788);
-    --color-gray-500: oklch(55.4% 0.046 257.417);
+    --color-gray-500: oklch(61% 0.043 257.1);
     --color-gray-600: oklch(37.2% 0.044 257.287);
     --color-gray-700: oklch(27.9% 0.041 260.031);
     --color-gray-800: oklch(20.8% 0.042 265.755);
