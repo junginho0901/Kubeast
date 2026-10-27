@@ -96,8 +96,8 @@ test('nobody changes their own cluster access: refused with an audit row, the se
   expect(unset.status(), await unset.text()).toBe(403)
   expect((await request.get('/api/v1/auth/me', { headers: mine })).status()).toBe(200)
   const rows = await (await request.get(`/api/v1/auth/admin/audit-logs?action=user.cluster_role.unset&limit=20`, { headers: admin })).json()
-  const items = (rows.items ?? rows) as Array<{ actor_email?: string; result?: string }>
-  expect(items.some((r) => r.actor_email === u.email && r.result === 'failure')).toBe(true)
+  const items = (rows.items ?? []) as Array<{ ActorEmail?: string; Result?: string; Error?: string }>
+  expect(items.some((r) => r.ActorEmail === u.email && r.Result === 'failure' && /own cluster access/.test(r.Error ?? ''))).toBe(true)
 })
 
 test('a role still held is not deleted, and Role Management says why', async ({ page, request }) => {
