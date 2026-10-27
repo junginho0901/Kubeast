@@ -294,7 +294,7 @@ export function OptimizationModal({
         <div className="p-4 border-b border-slate-700">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-lg font-bold text-white">
+              <h2 className="text-lg font-semibold text-white">
                 {tr('dashboard.optimization.title', 'Optimization suggestions')}
               </h2>
               <p className="text-xs text-slate-400">

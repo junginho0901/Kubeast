@@ -171,7 +171,7 @@ export default function ClusterHygiene() {
         <div>
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-6 h-6 text-primary-400" />
-            <h1 className="text-3xl font-bold text-white">{tr('clusterHygiene.title', 'Cluster hygiene')}</h1>
+            <h1 className="text-3xl font-semibold text-white">{tr('clusterHygiene.title', 'Cluster hygiene')}</h1>
           </div>
           <p className="text-slate-400 text-sm mt-1">
             {tr('clusterHygiene.subtitle', 'Configuration risks read from the cluster as you: Pod Security Standards, image tags, resources, namespace policy, ServiceAccount tokens, RBAC, TLS expiry and readiness for the next Kubernetes minor. Review, export, sign off.')}

@@ -110,7 +110,7 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
           <KeyRound className="w-5 h-5 text-primary-400" />
         </div>
         <div>
-          <h2 className="text-xl font-bold text-white">{tr('accessRequests.mine.title', 'Cluster access')}</h2>
+          <h2 className="text-xl font-semibold text-white">{tr('accessRequests.mine.title', 'Cluster access')}</h2>
           <p className="text-slate-400 text-sm">
             {tr('accessRequests.mine.subtitle', 'Your role on each cluster. Ask for a higher role for a limited time when you need it; an admin approves.')}
           </p>

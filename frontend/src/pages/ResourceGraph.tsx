@@ -338,7 +338,7 @@ export default function ResourceGraph() {
           <div className="w-full h-full flex flex-col items-center justify-center text-slate-400">
             <div className="max-w-lg text-center">
               <div className="text-6xl mb-6 opacity-30">🔗</div>
-              <h2 className="text-xl font-bold text-white mb-3">{t('resourceGraph.title', 'Resource Graph')}</h2>
+              <h2 className="text-xl font-semibold text-white mb-3">{t('resourceGraph.title', 'Resource Graph')}</h2>
               <p className="text-sm text-slate-400 mb-6 leading-relaxed">
                 {t('resourceGraph.emptyDesc1')}<br />
                 {t('resourceGraph.emptyDesc2')}<br />

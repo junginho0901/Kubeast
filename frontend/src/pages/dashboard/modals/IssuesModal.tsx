@@ -97,7 +97,7 @@ export function IssuesModal({
         <div className="p-6 border-b border-slate-700">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-xl font-bold text-white">{tr('dashboard.issues.title', 'Issues')}</h2>
+              <h2 className="text-xl font-semibold text-white">{tr('dashboard.issues.title', 'Issues')}</h2>
               <p className="text-sm text-slate-400">
                 {tr(
                   'dashboard.issues.subtitle',

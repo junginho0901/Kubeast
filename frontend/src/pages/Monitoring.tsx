@@ -39,7 +39,7 @@ export default function Monitoring() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white">{t('monitoring.title')}</h1>
+          <h1 className="text-3xl font-semibold text-white">{t('monitoring.title')}</h1>
           <p className="mt-2 text-slate-400">{t('monitoring.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">

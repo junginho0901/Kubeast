@@ -18,7 +18,7 @@ export default function AdminNodeShell() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-white">{tr('account.nodeShell.title', 'Node Shell')}</h1>
+        <h1 className="text-3xl font-semibold text-white">{tr('account.nodeShell.title', 'Node Shell')}</h1>
         <p className="mt-2 text-slate-400">
           {tr('account.nodeShell.subtitle', 'Configure debug shell settings for nodes.')}
         </p>

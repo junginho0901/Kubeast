@@ -72,7 +72,7 @@ export default function Investigations() {
             <Siren className="w-6 h-6 text-primary-400" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-white">{tr('investigations.title', 'Investigations')}</h1>
+            <h1 className="text-3xl font-semibold text-white">{tr('investigations.title', 'Investigations')}</h1>
             <p className="text-slate-400">
               {tr('investigations.subtitle', 'What the AI found with read-only tools when an alert came in (Alertmanager or Grafana). Opening a report is audited.')}
             </p>

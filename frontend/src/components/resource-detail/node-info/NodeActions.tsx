@@ -106,7 +106,7 @@ export default function NodeActions({ name, tr, data }: NodeActionsProps) {
       {drainDialogOpen && (
         <ModalOverlay onClose={() => setDrainDialogOpen(false)}>
           <div className="bg-slate-800 rounded-lg w-full max-w-lg p-6" onClick={e => e.stopPropagation()}>
-            <h2 className="text-xl font-bold text-white mb-4">{tr('nodes.drain.title', 'Drain node')}</h2>
+            <h2 className="text-xl font-semibold text-white mb-4">{tr('nodes.drain.title', 'Drain node')}</h2>
             <p className="text-slate-300">{tr('nodes.drain.confirm', 'Are you sure you want to drain node {{name}}?', { name })}</p>
             <p className="text-slate-400 mt-3">{tr('nodes.drain.warning', 'Draining will evict pods from this node.')}</p>
             {drainError && <div className="mt-4 text-sm text-red-400">{drainError}</div>}

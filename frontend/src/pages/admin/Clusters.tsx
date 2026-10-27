@@ -66,7 +66,7 @@ export default function AdminClusters() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white flex items-center gap-2">
+          <h1 className="text-3xl font-semibold text-white flex items-center gap-2">
             <Server className="w-6 h-6 text-primary-500" />
             {tr('cluster.admin.title', 'Clusters')}
           </h1>

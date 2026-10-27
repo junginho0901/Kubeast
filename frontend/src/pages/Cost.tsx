@@ -190,7 +190,7 @@ export default function Cost() {
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-3xl font-bold text-white">{tr('cost.title', 'Cost')}</h1>
+          <h1 className="text-3xl font-semibold text-white">{tr('cost.title', 'Cost')}</h1>
           <p className="mt-2 text-slate-400">
             {tr('cost.subtitle', "What each namespace or workload cost over the window, as OpenCost allocates it from the cluster's Prometheus. Prices come from the cloud provider's price list, or OpenCost's default on-prem prices.")}
           </p>

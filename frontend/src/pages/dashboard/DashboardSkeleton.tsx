@@ -35,7 +35,7 @@ export function DashboardSkeleton() {
       {/* Header — identical to real, version line is a pulse placeholder */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white">{tr('dashboard.title', 'Cluster Dashboard')}</h1>
+          <h1 className="text-3xl font-semibold text-white">{tr('dashboard.title', 'Cluster Dashboard')}</h1>
           <p className="mt-2 text-slate-400">
             {tr('dashboard.subtitle', 'Get a quick overview of your Kubernetes cluster.')}
           </p>

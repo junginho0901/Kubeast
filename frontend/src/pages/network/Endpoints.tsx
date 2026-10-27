@@ -238,7 +238,7 @@ subsets:
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-3xl font-bold text-white">
+          <h1 className="text-3xl font-semibold text-white">
             {tr('endpointsPage.title', 'Endpoints')}
             <span className="ml-3 align-middle text-xs font-medium text-slate-400 border border-slate-600 rounded px-1.5 py-0.5" data-testid="endpoints-deprecated">{tr('endpointsPage.deprecated', 'API deprecated since Kubernetes 1.33')}</span>
           </h1>

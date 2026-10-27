@@ -104,7 +104,7 @@ export default function ApiKeysSection() {
             <KeySquare className="w-5 h-5 text-primary-400" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-white">{tr('apiKeys.title', 'API keys')}</h2>
+            <h2 className="text-xl font-semibold text-white">{tr('apiKeys.title', 'API keys')}</h2>
             <p className="text-slate-400 text-sm">
               {tr('apiKeys.subtitle', 'For scripts and CI. A key is exchanged for a short access token and never grants more than you hold.')}
             </p>

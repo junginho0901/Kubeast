@@ -191,7 +191,7 @@ export default function HelmReleaseDetailPage() {
 
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white">{rel.name}</h1>
+          <h1 className="text-3xl font-semibold text-white">{rel.name}</h1>
           <p className="text-slate-400 text-sm mt-1">
             {rel.namespace} · {rel.chart}@{rel.chartVersion} · rev {rel.revision}
           </p>

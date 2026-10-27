@@ -153,7 +153,7 @@ export default function AdminOrganizations() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-white">{tr('adminOrg.title', 'Team management')}</h1>
+        <h1 className="text-3xl font-semibold text-white">{tr('adminOrg.title', 'Team management')}</h1>
         <p className="mt-2 text-slate-400">
           {tr('adminOrg.subtitle', 'Manage the list of Teams that users can select during registration.')}
         </p>

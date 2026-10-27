@@ -126,7 +126,7 @@ export function ResourceGraphHeader({
   return (
     <div className="shrink-0 px-6 py-4 border-b border-slate-700">
       <div className="flex items-center justify-between mb-3">
-        <h1 className="text-xl font-bold text-white">
+        <h1 className="text-xl font-semibold text-white">
           {t('resourceGraph.title', 'Resource Graph')}
         </h1>
         <div className="flex items-center gap-2 text-xs text-slate-400">

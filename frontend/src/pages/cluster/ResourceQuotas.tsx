@@ -210,7 +210,7 @@ spec:
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-3xl font-bold text-white">{tr('resourceQuotas.title', 'Resource Quotas')}</h1>
+          <h1 className="text-3xl font-semibold text-white">{tr('resourceQuotas.title', 'Resource Quotas')}</h1>
           <p className="mt-2 text-slate-400">
             {tr('resourceQuotas.subtitle', 'Manage resource quotas across namespaces.')}
           </p>

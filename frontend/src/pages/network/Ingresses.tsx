@@ -238,7 +238,7 @@ spec:
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-3xl font-bold text-white">{tr('ingressesPage.title', 'Ingresses')}</h1>
+          <h1 className="text-3xl font-semibold text-white">{tr('ingressesPage.title', 'Ingresses')}</h1>
           <p className="mt-2 text-slate-400">{tr('ingressesPage.subtitle', 'Inspect and manage Ingresses across namespaces.')}</p>
         </div>
         <div className="flex items-center gap-2">

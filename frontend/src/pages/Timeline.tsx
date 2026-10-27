@@ -133,7 +133,7 @@ export default function Timeline() {
     <div className="space-y-4">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold text-gray-900 dark:text-white">
+        <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
           {t('timeline.title', 'Change History Timeline')}
         </h1>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">

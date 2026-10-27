@@ -176,7 +176,7 @@ export default function MonitoringNodes({
             <Server className="w-6 h-6 text-slate-300" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-white">{t('monitoring.nodes.title')}</h2>
+            <h2 className="text-xl font-semibold text-white">{t('monitoring.nodes.title')}</h2>
           </div>
         </div>
         <div className="flex flex-col items-end gap-1 text-right">

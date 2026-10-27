@@ -216,7 +216,7 @@ export default function GPUPods() {
       {/* Header */}
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-3xl font-bold text-white">{tr('gpuPods.title', 'GPU Pods')}</h1>
+          <h1 className="text-3xl font-semibold text-white">{tr('gpuPods.title', 'GPU Pods')}</h1>
           <p className="mt-2 text-slate-400">{tr('gpuPods.subtitle', 'Pods consuming GPU resources across the cluster.')}</p>
         </div>
         <div className="flex items-center gap-2">

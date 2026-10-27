@@ -66,7 +66,7 @@ export default function SessionRecordings() {
             <Film className="w-6 h-6 text-primary-400" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-white">{tr('recordings.title', 'Session recordings')}</h1>
+            <h1 className="text-3xl font-semibold text-white">{tr('recordings.title', 'Session recordings')}</h1>
             <p className="text-slate-400">{tr('recordings.subtitle', 'What users saw in pod exec and node shell terminals. Opening a recording is audited.')}</p>
           </div>
         </div>

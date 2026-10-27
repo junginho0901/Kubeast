@@ -14,8 +14,9 @@
   font-display: swap;
 }
 
-/* Colours: see DESIGN.md. Slate is a neutral grey ladder, primary the one sky accent. primary-600, the fill of
-   buttons and selections, is the brightest sky that keeps white text at 4.5:1 (#027ac0, 4.6:1). */
+/* Colours: see DESIGN.md. primary is the one sky accent, the same in every colour mode; primary-600, the fill of
+   buttons and selections, is the brightest sky that keeps white text at 4.5:1 (#027ac0, 4.6:1). The neutral
+   ladders slate-* and gray-* are set per colour mode below. */
 @theme {
   --color-primary-50: #f0f9ff;
   --color-primary-100: #e0f2fe;
@@ -27,31 +28,6 @@
   --color-primary-700: #0369a1;
   --color-primary-800: #075985;
   --color-primary-900: #0c4a6e;
-
-  --color-slate-50: #fafafa;
-  --color-slate-100: #f3f3f3;
-  --color-slate-200: #e0e0e0;
-  --color-slate-300: #c7c7c7;
-  --color-slate-400: #a3a3a3;
-  --color-slate-500: #858585;
-  --color-slate-600: #3d3d3d;
-  --color-slate-700: #2a2a2a;
-  --color-slate-800: #1c1c1c;
-  --color-slate-900: #141414;
-  --color-slate-950: #0a0a0a;
-
-  /* the few screens written with gray-* get the same ladder */
-  --color-gray-50: #fafafa;
-  --color-gray-100: #f3f3f3;
-  --color-gray-200: #e0e0e0;
-  --color-gray-300: #c7c7c7;
-  --color-gray-400: #a3a3a3;
-  --color-gray-500: #858585;
-  --color-gray-600: #3d3d3d;
-  --color-gray-700: #2a2a2a;
-  --color-gray-800: #1c1c1c;
-  --color-gray-900: #141414;
-  --color-gray-950: #0a0a0a;
 
   --font-sans: InterVariable, Inter, system-ui, sans-serif;
 
@@ -72,6 +48,64 @@
     0% { left: -35%; width: 35%; }
     50% { left: 30%; width: 55%; }
     100% { left: 100%; width: 35%; }
+  }
+}
+
+/* Colour modes (DESIGN.md, utils/colorMode.ts): the data-color-mode attribute on <html> swaps the neutral ladders;
+   utilities read the variables, so class names stay the same in every mode. gray-* takes the same ladder.
+   default — deep navy: Tailwind's slate with the surfaces one step down, so the page is the sign-in ground
+   (slate-950, #020617). The sign-in pages carry data-color-mode="default" and keep it in every mode.
+   dark — neutral grey. */
+@layer base {
+  :root,
+  [data-color-mode='default'] {
+    --color-slate-50: oklch(98.4% 0.003 247.858);
+    --color-slate-100: oklch(96.8% 0.007 247.896);
+    --color-slate-200: oklch(92.9% 0.013 255.508);
+    --color-slate-300: oklch(86.9% 0.022 252.894);
+    --color-slate-400: oklch(70.4% 0.04 256.788);
+    --color-slate-500: oklch(55.4% 0.046 257.417);
+    --color-slate-600: oklch(37.2% 0.044 257.287);
+    --color-slate-700: oklch(27.9% 0.041 260.031);
+    --color-slate-800: oklch(20.8% 0.042 265.755);
+    --color-slate-900: oklch(12.9% 0.042 264.695);
+    --color-slate-950: oklch(12.9% 0.042 264.695);
+    --color-gray-50: oklch(98.4% 0.003 247.858);
+    --color-gray-100: oklch(96.8% 0.007 247.896);
+    --color-gray-200: oklch(92.9% 0.013 255.508);
+    --color-gray-300: oklch(86.9% 0.022 252.894);
+    --color-gray-400: oklch(70.4% 0.04 256.788);
+    --color-gray-500: oklch(55.4% 0.046 257.417);
+    --color-gray-600: oklch(37.2% 0.044 257.287);
+    --color-gray-700: oklch(27.9% 0.041 260.031);
+    --color-gray-800: oklch(20.8% 0.042 265.755);
+    --color-gray-900: oklch(12.9% 0.042 264.695);
+    --color-gray-950: oklch(12.9% 0.042 264.695);
+  }
+
+  :root[data-color-mode='dark'] {
+    --color-slate-50: #fafafa;
+    --color-slate-100: #f3f3f3;
+    --color-slate-200: #e0e0e0;
+    --color-slate-300: #c7c7c7;
+    --color-slate-400: #a3a3a3;
+    --color-slate-500: #858585;
+    --color-slate-600: #3d3d3d;
+    --color-slate-700: #2a2a2a;
+    --color-slate-800: #1c1c1c;
+    --color-slate-900: #141414;
+    --color-slate-950: #0a0a0a;
+    --color-gray-50: #fafafa;
+    --color-gray-100: #f3f3f3;
+    --color-gray-200: #e0e0e0;
+    --color-gray-300: #c7c7c7;
+    --color-gray-400: #a3a3a3;
+    --color-gray-500: #858585;
+    --color-gray-600: #3d3d3d;
+    --color-gray-700: #2a2a2a;
+    --color-gray-800: #1c1c1c;
+    --color-gray-900: #141414;
+    --color-gray-950: #0a0a0a;
   }
 }
 
@@ -97,6 +131,12 @@
   /* Korean breaks lines between any two syllables by default ("시/스템", "새로고/침"); keep-all breaks only
      at spaces (CSS Text 3), and a single word longer than its box still wraps (overflow-wrap) instead of
      spilling out. <html lang> follows the UI language (i18n/index.ts). */
+  /* page and section titles: tight tracking (DESIGN.md typography) */
+  h1,
+  h2 {
+    letter-spacing: -0.02em;
+  }
+
   html:lang(ko) body {
     word-break: keep-all;
     overflow-wrap: break-word; /* not `anywhere`: that also shrinks a table column's minimum width */
@@ -166,14 +206,14 @@ body {
 }
 
 @layer components {
-  /* flat: depth comes from the grey steps and a hairline, not a shadow */
+  /* flat: depth comes from the ladder's steps and a hairline, not a shadow */
   .card {
-    @apply bg-slate-800 rounded-3xl p-6 border border-slate-700/70;
+    @apply bg-slate-800 rounded-xl p-6 border border-slate-700/70;
   }
 
   .btn {
     /* nowrap: at 1024px the page-header actions ("Create Namespace") broke into two lines */
-    @apply px-4 py-2 rounded-full font-medium transition-colors whitespace-nowrap;
+    @apply px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap;
   }
 
   .btn-primary {

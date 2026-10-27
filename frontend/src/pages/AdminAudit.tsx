@@ -232,7 +232,7 @@ export default function AdminAudit() {
     <div className="page-scrolls space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white">{tr('adminAudit.title', '감사 로그')}</h1>
+          <h1 className="text-3xl font-semibold text-white">{tr('adminAudit.title', '감사 로그')}</h1>
           <p className="text-slate-400 text-sm mt-1">
             {tr('adminAudit.subtitle', '모든 쓰기 작업과 민감 열람 내역')}
           </p>

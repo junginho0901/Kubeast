@@ -118,7 +118,7 @@ export function StorageModal({
         <div className="p-6 border-b border-slate-700">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-xl font-bold text-white">
+              <h2 className="text-xl font-semibold text-white">
                 {tr('dashboard.storage.title', 'Storage analysis')}
               </h2>
               <p className="text-sm text-slate-400">

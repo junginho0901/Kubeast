@@ -374,7 +374,7 @@ export default function AdminUsers() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white">{tr('adminUsers.title', 'User management')}</h1>
+          <h1 className="text-3xl font-semibold text-white">{tr('adminUsers.title', 'User management')}</h1>
           <p className="mt-2 text-slate-400">
             {tr('adminUsers.subtitle', 'Update user roles (read/write/admin).')}
           </p>

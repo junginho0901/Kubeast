@@ -172,7 +172,7 @@ export default function AccessReview() {
         <div>
           <div className="flex items-center gap-2">
             <ClipboardCheck className="w-6 h-6 text-primary-400" />
-            <h1 className="text-3xl font-bold text-white">{tr('accessReview.title', 'Access review')}</h1>
+            <h1 className="text-3xl font-semibold text-white">{tr('accessReview.title', 'Access review')}</h1>
           </div>
           <p className="text-slate-400 text-sm mt-1">
             {tr('accessReview.subtitle', 'Who can do what right now: accounts, per-cluster grants, API keys, temporary grants since the last review, roles. Review, export, sign off.')}

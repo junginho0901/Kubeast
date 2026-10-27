@@ -1,12 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { api } from '@/services/api'
-import { ChevronDown, KeyRound, Languages, User } from 'lucide-react'
+import { ChevronDown, KeyRound, Languages, Palette, User } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
 import ClusterAccessSection from './account/ClusterAccessSection'
 import ApiKeysSection from './account/ApiKeysSection'
+import { setColorMode, useColorMode, type ColorMode } from '@/utils/colorMode'
+
+// light joins when its colours are done
+const SHOWN_COLOR_MODES: ColorMode[] = ['default', 'dark']
 
 export default function Account() {
   const queryClient = useQueryClient()
@@ -23,6 +27,7 @@ export default function Account() {
   const [passwordModalOpen, setPasswordModalOpen] = useState(false)
   const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false)
   const languageDropdownRef = useRef<HTMLDivElement>(null)
+  const colorMode = useColorMode()
 
   const changePasswordMutation = useMutation({
     mutationFn: () => api.changePassword({ current_password: currentPassword, new_password: newPassword }),
@@ -86,9 +91,9 @@ export default function Account() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-white">{tr('account.title', 'Settings')}</h1>
+        <h1 className="text-3xl font-semibold text-white">{tr('account.title', 'Settings')}</h1>
         <p className="mt-2 text-slate-400">
-          {tr('account.subtitle', 'Manage your profile, password, and language.')}
+          {tr('account.subtitle', 'Manage your profile, password, language, and color mode.')}
         </p>
       </div>
 
@@ -100,7 +105,7 @@ export default function Account() {
                 <User className="w-6 h-6 text-primary-400" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-white">{tr('account.profile.title', 'Profile')}</h2>
+                <h2 className="text-xl font-semibold text-white">{tr('account.profile.title', 'Profile')}</h2>
                 <p className="text-sm text-slate-400">
                   {tr('account.profile.subtitle', 'Signed-in account information')}
                 </p>
@@ -140,7 +145,7 @@ export default function Account() {
               <Languages className="w-6 h-6 text-slate-300" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white">{tr('account.language.title', 'Language')}</h2>
+              <h2 className="text-xl font-semibold text-white">{tr('account.language.title', 'Language')}</h2>
               <p className="text-sm text-slate-400">
                 {tr('account.language.subtitle', 'Choose the display language.')}
               </p>
@@ -202,6 +207,42 @@ export default function Account() {
           <p className="mt-3 text-xs text-slate-400">
             {tr('account.language.hint', 'Changes apply immediately.')}
           </p>
+        </div>
+
+        <div className="card">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 rounded-lg bg-slate-700/60">
+              <Palette className="w-6 h-6 text-slate-300" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-white">{tr('account.colorMode.title', 'Color mode')}</h2>
+              <p className="text-sm text-slate-400">
+                {tr('account.colorMode.subtitle', 'Choose the console colors. The choice is kept in this browser.')}
+              </p>
+            </div>
+          </div>
+
+          <div
+            role="radiogroup"
+            aria-label={tr('account.colorMode.title', 'Color mode')}
+            className="inline-flex gap-1 rounded-lg border border-slate-700 bg-slate-900/40 p-1"
+          >
+            {SHOWN_COLOR_MODES.map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                role="radio"
+                aria-checked={colorMode === mode}
+                data-testid={`color-mode-${mode}`}
+                onClick={() => setColorMode(mode)}
+                className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+                  colorMode === mode ? 'bg-primary-600 text-white' : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
+                }`}
+              >
+                {tr(`account.colorMode.${mode}`, { default: 'Default', dark: 'Dark', light: 'Light' }[mode])}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

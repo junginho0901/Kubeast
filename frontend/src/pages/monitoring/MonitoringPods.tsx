@@ -181,7 +181,7 @@ export default function MonitoringPods({
             <Box className="w-6 h-6 text-slate-300" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-white">{t('monitoring.pods.title')}</h2>
+            <h2 className="text-xl font-semibold text-white">{t('monitoring.pods.title')}</h2>
             <p className="text-sm text-slate-400">{t('monitoring.pods.subtitle')}</p>
           </div>
         </div>
