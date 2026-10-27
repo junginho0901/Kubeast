@@ -69,7 +69,7 @@ case "${1:-}" in
     ck -n tigera-operator rollout status deploy/tigera-operator --timeout=300s
     ck apply -f "$ROOT/deploy/kind/calico-resources.yaml" >/dev/null
     for _ in $(seq 1 90); do
-      ck -n calico-system get deploy whisker >/dev/null 2>&1 && ck get crd networkpolicies.projectcalico.org >/dev/null 2>&1 && break
+      ck -n calico-system get deploy whisker >/dev/null 2>&1 && ck -n calico-system get networkpolicies.projectcalico.org >/dev/null 2>&1 && break
       sleep 5
     done
     ck -n calico-system rollout status deploy/whisker deploy/goldmane --timeout=600s
