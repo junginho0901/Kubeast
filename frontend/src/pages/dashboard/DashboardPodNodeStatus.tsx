@@ -9,8 +9,8 @@ import { StatusBarChart } from './StatusBarChart'
 
 // colour by meaning: the normal state in the brand blue, failures red, waiting amber, the rest grey
 const STATE_COLOR: Record<string, string> = {
-  Running: 'var(--color-primary-400)',
-  Ready: 'var(--color-primary-400)',
+  Running: 'var(--color-primary-bright)',
+  Ready: 'var(--color-primary-bright)',
   Succeeded: 'var(--color-slate-400)',
   Pending: 'var(--color-amber-400)',
   Failed: 'var(--color-red-400)',

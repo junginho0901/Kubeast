@@ -119,8 +119,8 @@ function NodeResourceTrend({ name, cpuQuery, memoryQuery }: { name: string; cpuQ
             points={cpuPoints}
             width={420}
             height={50}
-            stroke="var(--color-primary-400)"
-            fillFrom="color-mix(in srgb, var(--color-primary-400) 28%, transparent)"
+            stroke="var(--color-primary-bright)"
+            fillFrom="color-mix(in srgb, var(--color-primary-bright) 28%, transparent)"
             fillTo="transparent"
             min={0}
             max={100}
@@ -141,8 +141,8 @@ function NodeResourceTrend({ name, cpuQuery, memoryQuery }: { name: string; cpuQ
             points={memPoints}
             width={420}
             height={50}
-            stroke="var(--color-primary-400)"
-            fillFrom="color-mix(in srgb, var(--color-primary-400) 28%, transparent)"
+            stroke="var(--color-primary-bright)"
+            fillFrom="color-mix(in srgb, var(--color-primary-bright) 28%, transparent)"
             fillTo="transparent"
             min={0}
             max={100}

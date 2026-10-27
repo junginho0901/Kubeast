@@ -77,7 +77,7 @@ export default function NodeTopUsageCard({
                   </div>
                   <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full ${cpuPercent >= 80 ? 'bg-red-500' : cpuPercent >= 60 ? 'bg-amber-500' : 'bg-primary-400'}`}
+                      className={`h-full rounded-full ${cpuPercent >= 80 ? 'bg-red-500' : cpuPercent >= 60 ? 'bg-amber-500' : 'bg-primary-bright'}`}
                       style={{ width: `${Math.min(cpuPercent, 100)}%` }}
                     />
                   </div>
@@ -87,7 +87,7 @@ export default function NodeTopUsageCard({
                   </div>
                   <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full ${memPercent >= 80 ? 'bg-red-500' : memPercent >= 60 ? 'bg-amber-500' : 'bg-primary-400'}`}
+                      className={`h-full rounded-full ${memPercent >= 80 ? 'bg-red-500' : memPercent >= 60 ? 'bg-amber-500' : 'bg-primary-bright'}`}
                       style={{ width: `${Math.min(memPercent, 100)}%` }}
                     />
                   </div>

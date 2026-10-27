@@ -29,6 +29,9 @@
   --color-primary-800: #075985;
   --color-primary-900: #0c4a6e;
 
+  /* primary-bright: the accent as a fill — usage bars, chart series, highlight rings (DESIGN.md primary-bright) */
+  --color-primary-bright: #38bdf8;
+
   /* ink: text on a surface (white here, near-black in light); text-white is for text on a filled colour */
   --color-ink: #fff;
 
@@ -143,6 +146,7 @@
     --color-gray-800: #ffffff;
     --color-gray-900: #f7f8f8;
     --color-gray-950: #ffffff;
+    --color-primary-bright: #0284c7;
     --color-primary-200: #0c4a6e;
     --color-primary-300: #0c4a6e;
     --color-primary-400: #075985;

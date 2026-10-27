@@ -92,8 +92,8 @@ export function SummaryCardsRow({ data, allocationRate, devicePluginHealthy, tr 
                       allocationRate > 80
                         ? 'bg-amber-500'
                         : allocationRate > 50
-                          ? 'bg-primary-400'
-                          : 'bg-primary-400'
+                          ? 'bg-primary-bright'
+                          : 'bg-primary-bright'
                     }`}
                     style={{ width: `${Math.min(allocationRate, 100)}%` }}
                   />

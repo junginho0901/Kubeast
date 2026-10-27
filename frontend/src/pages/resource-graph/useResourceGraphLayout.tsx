@@ -196,7 +196,7 @@ export function useResourceGraphLayout({
           padding: 0,
           width: 200,
           ...boxSize(n.id),
-          boxShadow: isHighlighted ? '0 0 0 3px var(--color-primary-400)' : undefined,
+          boxShadow: isHighlighted ? '0 0 0 3px var(--color-primary-bright)' : undefined,
           opacity: searchQuery && !isHighlighted ? 0.3 : 1,
         },
       }

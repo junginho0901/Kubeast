@@ -270,7 +270,7 @@ export default function MonitoringNodes({
                           ? 'bg-red-500'
                           : cpuPercent >= 60
                             ? 'bg-yellow-500'
-                            : 'bg-primary-400'
+                            : 'bg-primary-bright'
                       }`}
                       style={{ width: `${Math.min(cpuPercent, 100)}%` }}
                     />
@@ -303,7 +303,7 @@ export default function MonitoringNodes({
                           ? 'bg-red-500'
                           : memoryPercent >= 60
                             ? 'bg-yellow-500'
-                            : 'bg-primary-400'
+                            : 'bg-primary-bright'
                       }`}
                       style={{ width: `${Math.min(memoryPercent, 100)}%` }}
                     />
