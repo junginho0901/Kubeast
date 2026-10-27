@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -132,7 +133,8 @@ func TestReadWorkloadKeepsItsRowsAtEitherEnd(t *testing.T) {
 	if b["metricName"] != "DATA_TRANSFERRED" || b["limit"] != float64(500) || b["startTime"] != "2026-10-26T02:17:00Z" || b["endTime"] != "2026-10-26T03:17:00Z" {
 		t.Fatalf("start body %v", b)
 	}
-	if !strings.HasPrefix(f.Auth[0], "AWS4-HMAC-SHA256 Credential=test-key-id/20261026/ap-northeast-2/networkflowmonitor/aws4_request") {
+	// the SDK signs at the wall clock, not the store's
+	if !regexp.MustCompile(`^AWS4-HMAC-SHA256 Credential=test-key-id/\d{8}/ap-northeast-2/networkflowmonitor/aws4_request`).MatchString(f.Auth[0]) {
 		t.Fatalf("signed with %q", f.Auth[0])
 	}
 	if f.MaxAsked[0] != "500" || len(f.Stopped) != 0 {
