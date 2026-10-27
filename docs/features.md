@@ -136,7 +136,7 @@
     - Core is `menu.dashboard`. It holds Dashboard, Cluster View, Monitoring, Alerts, Cost, AI Chat, Resource Graph, Change History and Advanced Search. Alerts, Cost and AI Chat appear when those features are on.
     - Cluster and Custom Resources are `menu.cluster`.
     - Workloads, Storage, Network, Gateway, GPU, Security, Configuration and Helm each use the key of the same name.
-    - Admin depends on whether the user is an admin.
+    - Admin shows each admin page to whoever holds that page's permission (`frontend/src/utils/adminAccess.ts`: User Management `admin.users.read`, Audit Logs `admin.audit.read`, Role Management any of `admin.roles.create/update/delete` …), so a custom role with some admin permissions sees and opens those pages only. Admin permissions open pages, not clusters: only `*` reaches every cluster.
   - The built-in roles have `menu.*`, so groups go missing only in custom roles.
 - **Dashboard counts** (namespaces, pods, nodes …) are counted from the per-cluster informer cache, which uses the `kubeast:cache` identity.
   - Kubeast therefore first asks whether the user identity can list namespaces (SelfSubjectAccessReview, 60-second cache), and returns 403 if not.

@@ -141,7 +141,7 @@
     - Core(대시보드·Cluster View·Monitoring·Alerts·Cost·AI Chat·Resource Graph·Change History·Advanced Search)는 `menu.dashboard`입니다. Alerts·Cost·AI Chat은 그 기능을 켰을 때만 나타납니다.
     - Cluster와 Custom Resources는 `menu.cluster`입니다.
     - Workloads·Storage·Network·Gateway·GPU·Security·Configuration·Helm은 같은 이름의 키를 따릅니다.
-    - Admin은 관리자인지로 정해집니다.
+    - Admin은 관리 화면마다 그 화면의 권한을 가진 사람에게 보입니다(`frontend/src/utils/adminAccess.ts`: User Management `admin.users.read`, Audit Logs `admin.audit.read`, Role Management `admin.roles.create/update/delete` 중 하나 …). 그래서 관리 권한 일부만 가진 커스텀 역할은 그 화면만 보고 엽니다. 관리 권한은 화면을 열 뿐 클러스터를 열지는 않습니다. 모든 클러스터에 닿는 것은 `*`뿐입니다.
 - **대시보드 개수**(네임스페이스·파드·노드 …)는 클러스터별 informer 캐시(`kubeast:cache` 신원)에서 셉니다.
   그래서 사용자 신원이 네임스페이스를 list할 수 있는지(SelfSubjectAccessReview, 60초 캐시) 먼저 묻고, 안 되면 403을 돌려줍니다.
   그룹이 아직 바인딩되지 않은 커스텀 역할이나 네임스페이스 하나에만 묶인 사용자가 클러스터 전체 개수를 보지 못하게 하기 위해서입니다.
