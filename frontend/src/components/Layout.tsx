@@ -509,14 +509,12 @@ export default function Layout() {
                   <button
                     type="button"
                     onClick={() => toggleGroup(group.id)}
-                    className={`relative w-full flex items-center px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.2em] transition-colors ${
-                      openGroups[group.id]
-                        ? "text-white before:content-[''] before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-1 before:rounded-full before:bg-primary-500/80"
-                        : 'text-slate-400 hover:text-slate-200'
+                    className={`w-full flex items-center px-4 py-1.5 text-xs font-semibold transition-colors ${
+                      openGroups[group.id] ? 'text-slate-200' : 'text-slate-500 hover:text-slate-300'
                     }`}
                   >
                     <span>{group.label}</span>
-                    {group.tag && <span className="ml-2 normal-case tracking-normal"><BetaTag label={group.tag} /></span>}
+                    {group.tag && <span className="ml-2"><BetaTag label={group.tag} /></span>}
                   </button>
                   <div
                     className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out ${
@@ -539,8 +537,10 @@ export default function Layout() {
                             data-testid={item.testId}
                             title={item.name}
                             className={`
-                              flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors
-                              ${isActive ? 'bg-primary-600 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}
+                              relative flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors
+                              ${isActive
+                                ? "bg-slate-700 text-white before:content-[''] before:absolute before:left-0 before:top-2 before:bottom-2 before:w-0.5 before:rounded-full before:bg-primary-400"
+                                : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'}
                             `}
                           >
                             {/* shrink-0: a long name squeezed the icon; truncate: the long kind names ran out of the bar */}
