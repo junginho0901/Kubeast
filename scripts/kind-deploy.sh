@@ -9,7 +9,7 @@
 #   KIND_CLUSTER_NAME=kubeast-dev2 KIND_HOST_PORT=30081 scripts/kind-deploy.sh   # a second cluster
 #
 # After the first install: http://localhost:30080, admin password =
-#   kubectl -n kubeast get secret kubeast-secrets -o jsonpath='{.data.DEFAULT_ADMIN_PASSWORD}' | base64 -d
+#   kubectl -n kubeast get secret kubeast-secrets -o go-template='{{.data.DEFAULT_ADMIN_PASSWORD | base64decode | println}}'
 # Day-to-day rebuilds of one service: scripts/rebuild-kind.sh <service>.
 set -euo pipefail
 
@@ -98,5 +98,5 @@ helm upgrade --install "$RELEASE" "$ROOT/helm/kubeast" -n "$NAMESPACE" --create-
 
 echo "═══ Done ═══"
 echo "  URL:   http://localhost:${KIND_HOST_PORT}"
-echo "  admin: kubectl -n ${NAMESPACE} get secret kubeast-secrets -o jsonpath='{.data.DEFAULT_ADMIN_PASSWORD}' | base64 -d"
+echo "  admin: kubectl -n ${NAMESPACE} get secret kubeast-secrets -o go-template='{{.data.DEFAULT_ADMIN_PASSWORD | base64decode | println}}'"
 echo "  demo:  read / read · write / write"

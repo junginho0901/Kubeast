@@ -106,17 +106,16 @@ helm uninstall kubeast -n kubeast      # K8s
 **설치 스크립트가 끝날 때 화면에 출력**됩니다.
 
 ```text
-Default account:
-  ID:       admin
-  Password: KhHAm7GGGvXiT9ysnOiV     ← 설치 출력에서 바로 확인
+  Sign in
+    ID            admin
+    Password      KhHAm7GGGvXiT9ysnOiV     ← 설치 출력에서 바로 확인
 ```
 
 출력을 놓쳤다면 언제든 다시 조회할 수 있습니다.
 
 ```bash
-# K8s / Helm
-kubectl -n kubeast get secret kubeast-secrets \
-  -o jsonpath='{.data.DEFAULT_ADMIN_PASSWORD}' | base64 -d ; echo
+# K8s / Helm — 비밀번호를 그대로 출력합니다(bash, zsh, PowerShell 모두)
+kubectl -n kubeast get secret kubeast-secrets -o go-template='{{.data.DEFAULT_ADMIN_PASSWORD | base64decode | println}}'
 
 # Docker — .env 파일의 DEFAULT_ADMIN_PASSWORD
 grep DEFAULT_ADMIN_PASSWORD .env

@@ -107,17 +107,16 @@ helm uninstall kubeast -n kubeast      # K8s
 The initial admin password is **generated randomly at install time** (when `admin.password` is left empty), and **the install script prints it on screen when it finishes**.
 
 ```text
-Default account:
-  ID:       admin
-  Password: KhHAm7GGGvXiT9ysnOiV     ← shown right in the install output
+  Sign in
+    ID            admin
+    Password      KhHAm7GGGvXiT9ysnOiV     ← shown right in the install output
 ```
 
 If you missed the output, you can look it up again at any time.
 
 ```bash
-# K8s / Helm
-kubectl -n kubeast get secret kubeast-secrets \
-  -o jsonpath='{.data.DEFAULT_ADMIN_PASSWORD}' | base64 -d ; echo
+# K8s / Helm — prints the password itself (bash, zsh or PowerShell)
+kubectl -n kubeast get secret kubeast-secrets -o go-template='{{.data.DEFAULT_ADMIN_PASSWORD | base64decode | println}}'
 
 # Docker — DEFAULT_ADMIN_PASSWORD in the .env file
 grep DEFAULT_ADMIN_PASSWORD .env

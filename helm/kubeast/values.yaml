@@ -9,7 +9,7 @@ global:
 # password 를 비워두면 helm install 시 자동 생성 (randAlphaNum 20).
 # 생성된 비번은 다음 명령으로 확인:
 #   kubectl -n <namespace> get secret kubeast-secrets \
-#     -o jsonpath='{.data.DEFAULT_ADMIN_PASSWORD}' | base64 -d ; echo
+#     -o go-template='{{.data.DEFAULT_ADMIN_PASSWORD | base64decode | println}}'
 admin:
   email: admin
   password: ""

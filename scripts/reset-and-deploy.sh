@@ -42,7 +42,7 @@ wait_for_auth() {
 print_accounts() {
   echo ""
   echo "  URL:   http://localhost:${KIND_HOST_PORT}"
-  echo "  admin: kubectl -n ${NAMESPACE} get secret kubeast-secrets -o jsonpath='{.data.DEFAULT_ADMIN_PASSWORD}' | base64 -d"
+  echo "  admin: kubectl -n ${NAMESPACE} get secret kubeast-secrets -o go-template='{{.data.DEFAULT_ADMIN_PASSWORD | base64decode | println}}'"
   echo "  demo:  read / read · write / write"
   echo ""
 }
