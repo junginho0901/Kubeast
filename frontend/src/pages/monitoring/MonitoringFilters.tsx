@@ -1,6 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronDown, CheckCircle } from 'lucide-react'
+import { ChevronDown, CheckCircle, Search } from 'lucide-react'
+
+// The list search box of both tabs (the list pages' h-12 style); it narrows the rows by name.
+export function MonitoringSearch({ value, onChange, placeholder, testId }: { value: string; onChange: (next: string) => void; placeholder: string; testId: string }) {
+  return (
+    <div className="relative mb-4">
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+      <input
+        type="text"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        data-testid={testId}
+        className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+      />
+    </div>
+  )
+}
 
 interface NamespaceOption {
   name: string
@@ -46,6 +63,7 @@ export function NamespaceFilter({ namespaces, value, onChange }: NamespaceFilter
       <div className="relative w-full md:w-64" ref={containerRef}>
         <button
           onClick={() => setIsOpen(!isOpen)}
+          data-testid="monitoring-namespace"
           className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 justify-between"
         >
           <span className="text-sm font-medium">{label}</span>
@@ -90,6 +108,7 @@ export function NamespaceFilter({ namespaces, value, onChange }: NamespaceFilter
               namespaces.map((ns) => (
                 <button
                   key={ns.name}
+                  data-testid={`monitoring-namespace-opt-${ns.name}`}
                   onClick={() => {
                     onChange(ns.name)
                     setIsOpen(false)

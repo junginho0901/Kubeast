@@ -2026,7 +2026,8 @@
     "nodes": {
       "title": "Node 리소스 사용량",
       "total": "총 {{count}}개 Node",
-      "unavailable": "Node 메트릭을 사용할 수 없습니다"
+      "unavailable": "Node 메트릭을 사용할 수 없습니다",
+      "searchPlaceholder": "Node 이름 검색..."
     },
     "pods": {
       "title": "Pod 리소스 사용량",
@@ -2037,7 +2038,8 @@
       "errorTitle": "Pod 메트릭을 불러오는 중 오류가 발생했습니다",
       "retrying": "자동으로 재시도 중입니다... (5초마다 갱신)",
       "unavailableAll": "Pod 메트릭을 사용할 수 없습니다",
-      "noPodsInNamespace": "{{namespace}} Namespace에 Pod가 없습니다"
+      "noPodsInNamespace": "{{namespace}} Namespace에 Pod가 없습니다",
+      "searchPlaceholder": "Pod 이름 검색..."
     },
     "autoRefresh": "5초마다 자동 갱신",
     "metricTimestamp": "메트릭 기준 수집 시각: {{time}}",

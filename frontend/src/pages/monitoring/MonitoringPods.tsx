@@ -10,6 +10,10 @@ import {
   Cpu,
   Clock,
 } from 'lucide-react'
+import { ListPager } from '@/components/ListPager'
+import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { cpuToMillis, memoryToBytes } from '@/utils/resourceQuantity'
+import { podLimit, usageTone } from './podUsage'
 import {
   api,
   disableMetrics,
@@ -21,7 +25,7 @@ import { useAIContext } from '@/hooks/useAIContext'
 import { useCluster } from '@/contexts/ClusterContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
-import { NamespaceFilter } from './MonitoringFilters'
+import { MonitoringSearch, NamespaceFilter } from './MonitoringFilters'
 import type { PodMetric } from './types'
 
 interface MonitoringPodsProps {
@@ -29,6 +33,10 @@ interface MonitoringPodsProps {
   onMetricsUnavailable: () => void
   namespaces: { name: string }[] | undefined
 }
+
+// Pod rows per page: the page scrolls, so a fixed count (as the admin tables) rather than a fit to the screen.
+const PODS_PER_PAGE = 50
+const MIB = 1024 ** 2
 
 const getLatestMetricTimestamp = (
   items: Array<{ timestamp?: string }> | undefined | null,
@@ -54,7 +62,10 @@ export default function MonitoringPods({
 }: MonitoringPodsProps) {
   const { t } = useTranslation()
   const [selectedNamespace, setSelectedNamespace] = useState<string>('')
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
   const { currentCluster } = useCluster()
+  const { open: openDetail } = useResourceDetail()
 
   // Pod 리소스 사용량 (네임스페이스 선택 시에만 활성화, 5초마다 자동 갱신)
   const { data: podMetrics, isLoading, error } = useQuery<PodMetric[], Error>({
@@ -120,19 +131,45 @@ export default function MonitoringPods({
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
+  const rows = useMemo(() => {
+    if (!Array.isArray(podMetrics)) return []
+    const details = new Map((allPods ?? []).map((p) => [`${p.namespace}/${p.name}`, p]))
+    return podMetrics.map((m) => {
+      const detail = details.get(`${m.namespace}/${m.name}`)
+      const cpu = cpuToMillis(m.cpu)
+      const memory = memoryToBytes(m.memory)
+      const cpuLimit = podLimit(detail?.containers, 'cpu')
+      const memoryLimit = podLimit(detail?.containers, 'memory')
+      return {
+        metric: m,
+        cpu,
+        memory,
+        cpuLimit,
+        memoryLimit,
+        cpuPct: cpu !== null && cpuLimit ? (cpu / cpuLimit) * 100 : null,
+        memoryPct: memory !== null && memoryLimit ? (memory / memoryLimit) * 100 : null,
+      }
+    })
+  }, [podMetrics, allPods])
+
   const podStats = podMetrics
     ? {
         totalPods: podMetrics.length,
-        totalCpu: podMetrics.reduce((acc, pod) => {
-          const cpu = parseInt(pod.cpu.replace('m', ''))
-          return acc + (isNaN(cpu) ? 0 : cpu)
-        }, 0),
-        totalMemory: podMetrics.reduce((acc, pod) => {
-          const memory = parseInt(pod.memory.replace('Mi', ''))
-          return acc + (isNaN(memory) ? 0 : memory)
-        }, 0),
+        totalCpu: rows.reduce((acc, r) => acc + (r.cpu ?? 0), 0),
+        totalMemory: Math.round(rows.reduce((acc, r) => acc + (r.memory ?? 0), 0) / MIB),
       }
     : null
+
+  const filteredRows = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return q ? rows.filter((r) => r.metric.name.toLowerCase().includes(q)) : rows
+  }, [rows, search])
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PODS_PER_PAGE))
+  useEffect(() => setPage(1), [search, selectedNamespace, currentCluster])
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages)
+  }, [page, totalPages])
+  const pagedRows = filteredRows.slice((page - 1) * PODS_PER_PAGE, page * PODS_PER_PAGE)
 
   const latestPodMetricTime = getLatestMetricTimestamp(podMetrics)
 
@@ -174,6 +211,10 @@ export default function MonitoringPods({
         value={selectedNamespace}
         onChange={setSelectedNamespace}
       />
+
+      {selectedNamespace && podMetrics && podMetrics.length > 0 && (
+        <MonitoringSearch value={search} onChange={setSearch} placeholder={t('monitoring.pods.searchPlaceholder', 'Search pods by name...')} testId="monitoring-pod-search" />
+      )}
 
       {/* 네임스페이스 미선택 시 안내 메시지 */}
       {!selectedNamespace && (
@@ -264,113 +305,51 @@ export default function MonitoringPods({
               </tr>
             </thead>
             <tbody>
-              {podMetrics.map((podMetric) => {
-                const cpu = parseInt(podMetric.cpu.replace('m', ''))
-                const memory = parseInt(podMetric.memory.replace('Mi', ''))
-
-                // Pod 상세 정보에서 Limit/Request 찾기
-                const podDetail = allPods?.find(
-                  (p) => p.name === podMetric.name && p.namespace === podMetric.namespace,
-                )
-
-                // 모든 컨테이너의 Limit 합산
-                let cpuLimit = 'None'
-                let memoryLimit = 'None'
-
-                if (podDetail?.containers) {
-                  let totalCpuLimit = 0
-                  let totalMemoryLimit = 0
-                  let hasCpuLimit = false
-                  let hasMemoryLimit = false
-
-                  podDetail.containers.forEach((container: any) => {
-                    if (container.limits?.cpu) {
-                      hasCpuLimit = true
-                      const cpuStr = container.limits.cpu
-                      if (cpuStr.endsWith('m')) {
-                        totalCpuLimit += parseInt(cpuStr.replace('m', ''))
-                      } else {
-                        totalCpuLimit += parseInt(cpuStr) * 1000
-                      }
-                    }
-
-                    if (container.limits?.memory) {
-                      hasMemoryLimit = true
-                      const memStr = container.limits.memory
-                      if (memStr.endsWith('Mi')) {
-                        totalMemoryLimit += parseInt(memStr.replace('Mi', ''))
-                      } else if (memStr.endsWith('Gi')) {
-                        totalMemoryLimit += parseInt(memStr.replace('Gi', '')) * 1024
-                      } else if (memStr.endsWith('Ki')) {
-                        totalMemoryLimit += parseInt(memStr.replace('Ki', '')) / 1024
-                      }
-                    }
-                  })
-
-                  if (hasCpuLimit) cpuLimit = `${totalCpuLimit}m`
-                  if (hasMemoryLimit) memoryLimit = `${Math.round(totalMemoryLimit)}Mi`
-                }
-
-                return (
-                  <tr
-                    key={`${podMetric.namespace}-${podMetric.name}`}
-                    className="border-b border-slate-700/50 hover:bg-slate-700/30"
-                  >
-                    <td className="py-3 px-4 text-white font-mono text-sm">{podMetric.name}</td>
-                    <td className="py-3 px-4">
-                      <span className="badge badge-info text-xs">{podMetric.namespace}</span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-2">
-                        <Activity
-                          className={`w-4 h-4 ${
-                            cpu >= 1000
-                              ? 'text-red-400'
-                              : cpu >= 500
-                                ? 'text-yellow-400'
-                                : 'text-slate-200'
-                          }`}
-                        />
-                        <span className="text-white font-mono">{podMetric.cpu}</span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span
-                        className={`font-mono text-sm ${
-                          cpuLimit === 'None' ? 'text-slate-500' : 'text-slate-300'
-                        }`}
-                      >
-                        {cpuLimit}
+              {pagedRows.map(({ metric: podMetric, cpuLimit, memoryLimit, cpuPct, memoryPct }) => (
+                <tr
+                  key={`${podMetric.namespace}-${podMetric.name}`}
+                  onClick={() => openDetail({ kind: 'Pod', name: podMetric.name, namespace: podMetric.namespace })}
+                  data-testid="monitoring-pod-row"
+                  className="border-b border-slate-700/50 hover:bg-slate-700/30 cursor-pointer"
+                >
+                  <td className="py-3 px-4 text-white font-mono text-sm">{podMetric.name}</td>
+                  <td className="py-3 px-4 font-mono text-xs text-slate-300">{podMetric.namespace}</td>
+                  <td className="py-3 px-4">
+                    <span className={`font-mono ${usageTone(cpuPct)}`} data-testid="monitoring-pod-cpu">{podMetric.cpu}</span>
+                  </td>
+                  <td className="py-3 px-4 font-mono text-sm">
+                    {cpuLimit === null ? (
+                      <span className="text-slate-500">-</span>
+                    ) : (
+                      <span className="text-slate-300">
+                        {cpuLimit}m <span className="text-slate-400" data-testid="monitoring-pod-cpu-pct">({Math.round(cpuPct ?? 0)}%)</span>
                       </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-2">
-                        <Activity
-                          className={`w-4 h-4 ${
-                            memory >= 1024
-                              ? 'text-red-400'
-                              : memory >= 512
-                                ? 'text-yellow-400'
-                                : 'text-slate-200'
-                          }`}
-                        />
-                        <span className="text-white font-mono">{podMetric.memory}</span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span
-                        className={`font-mono text-sm ${
-                          memoryLimit === 'None' ? 'text-slate-500' : 'text-slate-300'
-                        }`}
-                      >
-                        {memoryLimit}
+                    )}
+                  </td>
+                  <td className="py-3 px-4">
+                    <span className={`font-mono ${usageTone(memoryPct)}`}>{podMetric.memory}</span>
+                  </td>
+                  <td className="py-3 px-4 font-mono text-sm">
+                    {memoryLimit === null ? (
+                      <span className="text-slate-500">-</span>
+                    ) : (
+                      <span className="text-slate-300">
+                        {Math.round(memoryLimit / MIB)}Mi <span className="text-slate-400">({Math.round(memoryPct ?? 0)}%)</span>
                       </span>
-                    </td>
-                  </tr>
-                )
-              })}
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {filteredRows.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-10 px-4 text-center text-slate-400" data-testid="monitoring-pod-empty">
+                    {t('common.noSearchResults', 'No results found.')}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
+          <ListPager currentPage={page} totalPages={totalPages} total={filteredRows.length} rowsPerPage={PODS_PER_PAGE} onPageChange={setPage} showPageSize={false} testId="monitoring-pod-pager" />
         </div>
       ) : selectedNamespace && error ? (
         <div className="text-center py-12">

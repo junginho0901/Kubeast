@@ -2032,7 +2032,8 @@
       "title": "Node resource usage",
       "total": "Total {{count}} nodes",
       "total_one": "Total {{count}} node",
-      "unavailable": "Node metrics are not available"
+      "unavailable": "Node metrics are not available",
+      "searchPlaceholder": "Search nodes by name..."
     },
     "pods": {
       "title": "Pod resource usage",
@@ -2043,7 +2044,8 @@
       "errorTitle": "Failed to load pod metrics",
       "retrying": "Retrying automatically... (every 5 seconds)",
       "unavailableAll": "Pod metrics are not available",
-      "noPodsInNamespace": "No pods in {{namespace}} namespace"
+      "noPodsInNamespace": "No pods in {{namespace}} namespace",
+      "searchPlaceholder": "Search pods by name..."
     },
     "autoRefresh": "Auto refresh every 5 seconds",
     "metricTimestamp": "Metrics sampled at: {{time}}",
