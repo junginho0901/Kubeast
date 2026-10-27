@@ -66,7 +66,7 @@ export default function AdminClusters() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-semibold text-white flex items-center gap-2">
+          <h1 className="text-3xl font-semibold text-ink flex items-center gap-2">
             <Server className="w-6 h-6 text-primary-500" />
             {tr('cluster.admin.title', 'Clusters')}
           </h1>
@@ -116,7 +116,7 @@ export default function AdminClusters() {
             {clusters.map((c) => {
               const res = testResults[c.id]
               return (
-                <tr key={c.id} className="text-white">
+                <tr key={c.id} className="text-ink">
                   <td className="px-4 py-3">
                     {c.display_name}
                     {c.is_self_cluster && (
@@ -232,9 +232,9 @@ export default function AdminClusters() {
       {deleteTarget && (
         <ModalOverlay onClose={() => deleteMutation.isPending || setDeleteTarget(null)}>
           <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-800 p-6 shadow-2xl">
-            <h3 className="text-lg font-bold text-white">{tr('cluster.delete.title', 'Delete cluster')}</h3>
+            <h3 className="text-lg font-bold text-ink">{tr('cluster.delete.title', 'Delete cluster')}</h3>
             <p className="mt-2 text-sm text-slate-300">
-              {tr('cluster.delete.confirm', 'Remove')} <span className="font-semibold text-white">{deleteTarget.display_name}</span>
+              {tr('cluster.delete.confirm', 'Remove')} <span className="font-semibold text-ink">{deleteTarget.display_name}</span>
               {deleteTarget.is_self_cluster
                 ? ` — ${tr('cluster.delete.self', 'removed from the multi-cluster view only.')}`
                 : ` — ${tr('cluster.delete.external', 'its stored kubeconfig is deleted too.')}`}

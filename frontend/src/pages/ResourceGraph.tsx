@@ -338,7 +338,7 @@ export default function ResourceGraph() {
           <div className="w-full h-full flex flex-col items-center justify-center text-slate-400">
             <div className="max-w-lg text-center">
               <div className="text-6xl mb-6 opacity-30">🔗</div>
-              <h2 className="text-xl font-semibold text-white mb-3">{t('resourceGraph.title', 'Resource Graph')}</h2>
+              <h2 className="text-xl font-semibold text-ink mb-3">{t('resourceGraph.title', 'Resource Graph')}</h2>
               <p className="text-sm text-slate-400 mb-6 leading-relaxed">
                 {t('resourceGraph.emptyDesc1')}<br />
                 {t('resourceGraph.emptyDesc2')}<br />
@@ -426,7 +426,7 @@ export default function ResourceGraph() {
               maxZoom={2}
             >
               <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="var(--color-slate-700)" />
-              <Controls className="bg-slate-800! border-slate-700! rounded-lg! [&>button]:bg-slate-700! [&>button]:border-slate-600! [&>button]:text-white! [&>button:hover]:bg-slate-600!" />
+              <Controls className="bg-slate-800! border-slate-700! rounded-lg! [&>button]:bg-slate-700! [&>button]:border-slate-600! [&>button]:text-ink! [&>button:hover]:bg-slate-600!" />
               <MiniMap
                 nodeColor={node => {
                   const raw = node.data?.raw as ResourceGraphNode | undefined

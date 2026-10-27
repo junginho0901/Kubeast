@@ -56,7 +56,7 @@ export default function NodePodsList({
           <tbody className="divide-y divide-slate-800">
             {pagedPods.map((pod: any) => (
               <tr key={`${pod.namespace}-${pod.name}`} className="text-slate-200">
-                <td className="py-2 pr-2 font-medium text-white"><span className="block truncate"><ResourceLink kind="Pod" name={pod.name} namespace={pod.namespace} /></span></td>
+                <td className="py-2 pr-2 font-medium text-ink"><span className="block truncate"><ResourceLink kind="Pod" name={pod.name} namespace={pod.namespace} /></span></td>
                 <td className="py-2 pr-2"><span className="block truncate">{pod.namespace}</span></td>
                 <td className="py-2 pr-2">{pod.ready || '-'}</td>
                 <td className="py-2 pr-2"><span className="block truncate">{pod.status || pod.phase || '-'}</span></td>

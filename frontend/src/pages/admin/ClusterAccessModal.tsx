@@ -82,7 +82,7 @@ export default function ClusterAccessModal({
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-primary-400" />
             <div>
-              <h3 className="text-lg font-bold text-white">
+              <h3 className="text-lg font-bold text-ink">
                 {tr('cluster.access.title', 'Cluster access')}
               </h3>
               <p className="text-xs text-slate-400">
@@ -93,7 +93,7 @@ export default function ClusterAccessModal({
               </p>
             </div>
           </div>
-          <button type="button" onClick={() => pending || onClose()} className="text-slate-400 hover:text-white">
+          <button type="button" onClick={() => pending || onClose()} className="text-slate-400 hover:text-ink">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -116,7 +116,7 @@ export default function ClusterAccessModal({
             grants.map((g) => (
               <div key={g.user_id} className="flex items-center justify-between gap-3 rounded-lg bg-slate-900/40 px-3 py-2">
                 <div className="min-w-0">
-                  <div className="text-sm text-white truncate">{g.name || g.email}</div>
+                  <div className="text-sm text-ink truncate">{g.name || g.email}</div>
                   <div className="text-xs text-slate-400 truncate">
                     {g.email}
                     {g.expires_at && (

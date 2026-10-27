@@ -133,7 +133,7 @@ export function ResourceClaimsTable({
                 })}
               >
                 {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={item.namespace}><span className="block truncate">{item.namespace}</span></td>}
-                <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{item.name}</span></td>
+                <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{item.name}</span></td>
                 <td className="py-3 px-4 text-xs">{renderStatusBadge(item.allocation_status)}</td>
                 <td className="py-3 px-4 text-xs font-mono">{item.request_count || 0}</td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>

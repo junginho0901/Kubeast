@@ -68,7 +68,7 @@ export default function HistoryTab({
                   className="hover:bg-slate-800/60 cursor-pointer"
                   onClick={() => setInspectTarget(h.revision)}
                 >
-                  <td className="px-3 py-2 text-white font-medium">
+                  <td className="px-3 py-2 text-ink font-medium">
                     {h.revision}
                     {isCurrent && (
                       <span className="ml-2 rounded-sm bg-primary-600/30 px-1.5 py-0.5 text-[10px] text-primary-200">

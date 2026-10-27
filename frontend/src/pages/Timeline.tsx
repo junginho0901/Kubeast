@@ -133,7 +133,7 @@ export default function Timeline() {
     <div className="space-y-4">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
+        <h1 className="text-xl font-semibold text-gray-900 dark:text-ink">
           {t('timeline.title', 'Change History Timeline')}
         </h1>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
@@ -165,7 +165,7 @@ export default function Timeline() {
               className={`px-2.5 py-1 text-xs font-medium rounded-sm transition-colors ${
                 hours === tr.value
                   ? 'bg-primary-600 text-white shadow-xs'
-                  : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+                  : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-ink'
               }`}
             >
               {t(`timeline.${tr.label}`, tr.label)}
@@ -182,7 +182,7 @@ export default function Timeline() {
               className={`px-2.5 py-1 text-xs font-medium rounded-sm transition-colors ${
                 eventFilter === f
                   ? 'bg-primary-600 text-white shadow-xs'
-                  : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+                  : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-ink'
               }`}
             >
               {t(`timeline.${f.toLowerCase()}`, f)}
@@ -367,7 +367,7 @@ function EventRow({
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-medium text-gray-900 dark:text-white">
+          <span className="text-sm font-medium text-gray-900 dark:text-ink">
             {event.reason}
           </span>
           {event.count > 1 && (

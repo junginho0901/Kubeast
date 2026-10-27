@@ -244,7 +244,7 @@ webhooks:
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-3xl font-semibold text-white">{tr('mutatingWebhooks.title', 'Mutating Webhook Configurations')}</h1>
+          <h1 className="text-3xl font-semibold text-ink">{tr('mutatingWebhooks.title', 'Mutating Webhook Configurations')}</h1>
           <p className="mt-2 text-slate-400">
             {tr('mutatingWebhooks.subtitle', 'Manage mutating admission webhook configurations in the cluster.')}
           </p>
@@ -281,7 +281,7 @@ webhooks:
             placeholder={tr('mutatingWebhooks.searchPlaceholder', 'Search by name...')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
         </div>
       </div>
@@ -289,11 +289,11 @@ webhooks:
       <div className="grid grid-cols-2 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('mutatingWebhooks.stats.total', 'Total Configurations')}</p>
-          <p className="text-lg text-white font-semibold mt-1">{summary.total}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('mutatingWebhooks.stats.totalWebhooks', 'Total Webhooks')}</p>
-          <p className="text-lg text-white font-semibold mt-1">{summary.totalWebhooks}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{summary.totalWebhooks}</p>
         </div>
       </div>
 
@@ -340,7 +340,7 @@ webhooks:
                     rawJson: toRawJson(item),
                   })}
                 >
-                  <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{item.name}</span></td>
+                  <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{item.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{item.webhooks_count}</td>
                   <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
                 </tr>

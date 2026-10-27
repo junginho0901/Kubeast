@@ -18,7 +18,7 @@ export function ChatHeader() {
     <div className="px-6 border-b border-slate-700 bg-slate-800 h-[100px] flex items-center">
       <div className="flex-1">
         <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold text-white flex items-center gap-3">
+          <h1 className="text-xl font-semibold text-ink flex items-center gap-3">
             <MessageSquare className="w-6 h-6 text-slate-300" />
             {t('aiChat.title')}
           </h1>

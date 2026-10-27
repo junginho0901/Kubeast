@@ -27,7 +27,7 @@ export function ReauthModal({ open, tr }: Props) {
         aria-label={tr('adminUsers.reauth.ariaLabel', 'Re-authentication required')}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold text-white">
+        <h2 className="text-lg font-semibold text-ink">
           {tr('adminUsers.reauth.title', 'Role updated')}
         </h2>
         <p className="mt-2 text-sm text-slate-300">

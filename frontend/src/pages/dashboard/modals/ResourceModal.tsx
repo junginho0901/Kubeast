@@ -79,11 +79,11 @@ export function ResourceModal({
             <div className="flex items-center gap-3">
               {selectedStat && (
                 <div className={`p-2 rounded-lg ${selectedStat.bgColor || 'bg-slate-700'}`}>
-                  <Icon className={`w-5 h-5 ${selectedStat.color || 'text-white'}`} />
+                  <Icon className={`w-5 h-5 ${selectedStat.color || 'text-ink'}`} />
                 </div>
               )}
               <div>
-                <h2 className="text-xl font-semibold text-white">
+                <h2 className="text-xl font-semibold text-ink">
                   {selectedStat?.name || selectedResourceType}
                 </h2>
                 <p className="text-sm text-slate-400">
@@ -108,7 +108,7 @@ export function ResourceModal({
               placeholder={tr('dashboard.resourceModal.searchPlaceholder', 'Search...')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-10 pl-10 pr-10 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors"
+              className="w-full h-10 pl-10 pr-10 bg-slate-700 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors"
             />
             {searchQuery && (
               <button
@@ -141,7 +141,7 @@ export function ResourceModal({
                       >
                         <div className="flex items-center justify-between">
                           <div>
-                            <h3 className="font-medium text-white">{ns.name}</h3>
+                            <h3 className="font-medium text-ink">{ns.name}</h3>
                             <p className="text-sm text-slate-400 mt-1">
                               {tr('dashboard.resourceModal.namespaceSummary', 'Pods: {{pods}} | Services: {{services}} | Deployments: {{deployments}}', {
                                 pods: ns.resource_count?.pods || 0,
@@ -186,7 +186,7 @@ export function ResourceModal({
                               <XCircle className="w-5 h-5 text-red-400" />
                             )}
                             <div>
-                              <h3 className="font-medium text-white">{pod.name}</h3>
+                              <h3 className="font-medium text-ink">{pod.name}</h3>
                               <p className="text-sm text-slate-400">{pod.namespace}</p>
                             </div>
                           </div>
@@ -225,7 +225,7 @@ export function ResourceModal({
                       >
                         <div className="flex items-center justify-between">
                           <div>
-                            <h3 className="font-medium text-white">{svc.name}</h3>
+                            <h3 className="font-medium text-ink">{svc.name}</h3>
                             <p className="text-sm text-slate-400 mt-1">
                               {svc.namespace} | {tr('dashboard.resourceModal.typeLabel', 'Type')}: {svc.type} | {tr('dashboard.resourceModal.clusterIpLabel', 'Cluster IP')}: {svc.cluster_ip || none}
                             </p>
@@ -257,7 +257,7 @@ export function ResourceModal({
                       >
                         <div className="flex items-center justify-between">
                           <div>
-                            <h3 className="font-medium text-white">{deploy.name}</h3>
+                            <h3 className="font-medium text-ink">{deploy.name}</h3>
                             <p className="text-sm text-slate-400 mt-1">
                               {deploy.namespace} | {tr('dashboard.resourceModal.replicasLabel', 'Replicas')}: {deploy.ready_replicas}/{deploy.replicas}
                             </p>
@@ -292,7 +292,7 @@ export function ResourceModal({
                       >
                         <div className="flex items-center justify-between">
                           <div>
-                            <h3 className="font-medium text-white">{pvc.name}</h3>
+                            <h3 className="font-medium text-ink">{pvc.name}</h3>
                             <p className="text-sm text-slate-400 mt-1">
                               {pvc.namespace} | {pvc.capacity || na} | {pvc.storage_class || na}
                             </p>
@@ -327,7 +327,7 @@ export function ResourceModal({
                       >
                         <div className="flex items-center justify-between">
                           <div>
-                            <h3 className="font-medium text-white">{node.name}</h3>
+                            <h3 className="font-medium text-ink">{node.name}</h3>
                             <p className="text-sm text-slate-400 mt-1">
                               {tr('dashboard.resourceModal.versionLabel', 'Version')}: {node.version || na} |
                               {tr('dashboard.resourceModal.internalIpLabel', 'Internal IP')}: {node.internal_ip || na}

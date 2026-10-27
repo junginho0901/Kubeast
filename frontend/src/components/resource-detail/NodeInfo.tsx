@@ -63,7 +63,7 @@ export default function NodeInfo({ name }: Props) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-3">
           <p className="text-xs text-slate-400"><Tx>Uptime</Tx></p>
-          <p className="text-base text-white mt-1">{fmtRel(nodeDescribe.conditions?.find((c: any) => c.type === 'Ready')?.last_transition_time)}</p>
+          <p className="text-base text-ink mt-1">{fmtRel(nodeDescribe.conditions?.find((c: any) => c.type === 'Ready')?.last_transition_time)}</p>
         </div>
         <UsageCard
           label="CPU Usage"
@@ -140,7 +140,7 @@ export default function NodeInfo({ name }: Props) {
             {nodeDescribe.conditions.map((c: any, i: number) => (
               <div key={`${c.type}-${i}`} className="flex items-start justify-between gap-4">
                 <div>
-                  <div className="font-medium text-white">{c.type}</div>
+                  <div className="font-medium text-ink">{c.type}</div>
                   <div className="text-slate-400">{c.reason || '-'}</div>
                 </div>
                 <div className="text-right text-slate-400">

@@ -42,7 +42,7 @@ export default function NodeTopUsageCard({
   return (
     <div className="card shrink-0">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold text-white">
+        <h2 className="text-sm font-semibold text-ink">
           {tr('nodes.top.title', 'Top nodes by resource usage')}
         </h2>
         <Server className="w-4 h-4 text-slate-400" />
@@ -66,7 +66,7 @@ export default function NodeTopUsageCard({
                 data-testid="node-top-usage"
                 className="block w-full text-left rounded-lg border border-slate-700 bg-slate-900/40 px-4 py-3 hover:bg-slate-800 transition-colors cursor-pointer"
               >
-                <div className="flex items-center justify-between text-sm text-white">
+                <div className="flex items-center justify-between text-sm text-ink">
                   <span className="font-medium">#{index + 1} {node.name}</span>
                   <span className="text-xs text-slate-400">{node.cpu} / {node.memory}</span>
                 </div>

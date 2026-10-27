@@ -33,7 +33,7 @@ interface Props {
   tr: (key: string, fallback: string, opts?: any) => string
 }
 
-const inputClass = 'w-full h-10 rounded-lg border border-slate-700 bg-slate-950/40 px-3 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600'
+const inputClass = 'w-full h-10 rounded-lg border border-slate-700 bg-slate-950/40 px-3 text-sm text-ink placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600'
 
 export function CreateUserModal({
   open,

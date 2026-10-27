@@ -14,7 +14,7 @@ export function ClusterViewHeader({ namespaces }: Props) {
   return (
     <div className="flex items-center justify-between">
       <div>
-        <h1 className="text-3xl font-semibold text-white">{tr('clusterView.title', 'Cluster view')}</h1>
+        <h1 className="text-3xl font-semibold text-ink">{tr('clusterView.title', 'Cluster view')}</h1>
         <p className="mt-2 text-slate-400">
           {tr('clusterView.subtitle', 'Review pod placement across nodes')}
         </p>
@@ -27,7 +27,7 @@ export function ClusterViewHeader({ namespaces }: Props) {
             placeholder={tr('clusterView.searchPlaceholder', 'Search pod name...')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-10 pl-10 pr-4 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors w-64"
+            className="h-10 pl-10 pr-4 bg-slate-700 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors w-64"
           />
           {searchQuery && (
             <button

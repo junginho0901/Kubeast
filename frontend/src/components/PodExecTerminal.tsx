@@ -190,7 +190,7 @@ export default function PodExecTerminal({ podName, namespace, container, command
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-slate-700 px-4 py-2">
         <div>
-          <p className="text-sm font-semibold text-white">
+          <p className="text-sm font-semibold text-ink">
             {t('pods.exec.title', {
               defaultValue: 'Exec: {{pod}} / {{container}}',
               pod: podName,
@@ -209,7 +209,7 @@ export default function PodExecTerminal({ podName, namespace, container, command
         </div>
         <button
           type="button"
-          className="text-slate-400 hover:text-white"
+          className="text-slate-400 hover:text-ink"
           onClick={() => {
             try {
               if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {

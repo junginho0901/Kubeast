@@ -58,7 +58,7 @@ export default function ContainerCard({
   return (
     <div className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-white wrap-break-word">{c.name || `${namePrefix}-${i + 1}`}</span>
+        <span className="text-sm font-semibold text-ink wrap-break-word">{c.name || `${namePrefix}-${i + 1}`}</span>
         <div className="flex items-center gap-2">
           {isContainer && canResize && stateKey === 'running' && onResize && (
             <button

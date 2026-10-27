@@ -151,7 +151,7 @@ export default function AdminRoles() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-semibold text-white">{tr('adminRoles.title', 'Role Management')}</h1>
+          <h1 className="text-3xl font-semibold text-ink">{tr('adminRoles.title', 'Role Management')}</h1>
           <p className="mt-2 text-slate-400">
             {tr('adminRoles.subtitle', 'Create custom roles with fine-grained permissions')}
           </p>
@@ -295,7 +295,7 @@ export default function AdminRoles() {
                   <Users className="h-5 w-5 text-primary-400" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-white">{usersRole.name}</h2>
+                  <h2 className="text-lg font-semibold text-ink">{usersRole.name}</h2>
                   <p className="text-sm text-slate-400">
                     {tr('adminRoles.usersWithRole', 'Users with this global (account-level) role')}
                     <span className="ml-2 text-slate-500">({roleMembers.length})</span>
@@ -311,7 +311,7 @@ export default function AdminRoles() {
               <button
                 type="button"
                 onClick={() => setUsersRole(null)}
-                className="rounded-sm p-1.5 text-slate-400 hover:text-white hover:bg-slate-800"
+                className="rounded-sm p-1.5 text-slate-400 hover:text-ink hover:bg-slate-800"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -401,7 +401,7 @@ export default function AdminRoles() {
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   disabled={editingRole?.is_system}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600 disabled:opacity-50"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-ink placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600 disabled:opacity-50"
                   placeholder={tr('adminRoles.form.namePh', 'e.g. InfraManager')}
                 />
               </div>
@@ -412,7 +412,7 @@ export default function AdminRoles() {
                 <input
                   value={formDesc}
                   onChange={(e) => setFormDesc(e.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-ink placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
                   placeholder={tr('adminRoles.form.descPh', 'e.g. Infrastructure team lead')}
                 />
               </div>
@@ -447,7 +447,7 @@ export default function AdminRoles() {
                           className="h-4 w-4 rounded-sm border-slate-600 bg-slate-900 text-primary-600 focus:ring-primary-600 focus:ring-offset-0 disabled:opacity-50"
                         />
                         <div className="flex-1 min-w-0">
-                          <span className="text-xs font-mono text-slate-300 group-hover:text-white transition-colors">
+                          <span className="text-xs font-mono text-slate-300 group-hover:text-ink transition-colors">
                             {p.key}
                           </span>
                           <span className="ml-2 text-[11px] text-slate-500">{tr(`adminRoles.catalog.permission.${i18nKey(p.key)}`, p.description)}</span>

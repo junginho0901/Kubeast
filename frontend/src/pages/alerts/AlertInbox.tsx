@@ -118,7 +118,7 @@ export default function AlertInbox() {
       type="button"
       onClick={() => { setStatus(value); setShowSilences(false) }}
       data-testid={`alert-tab-${value || 'all'}`}
-      className={`h-10 rounded-lg border px-3 text-sm ${!showSilences && status === value ? 'border-primary-500 bg-primary-600/20 text-white' : 'border-slate-700 text-slate-300 hover:border-slate-500'}`}
+      className={`h-10 rounded-lg border px-3 text-sm ${!showSilences && status === value ? 'border-primary-500 bg-primary-600/20 text-ink' : 'border-slate-700 text-slate-300 hover:border-slate-500'}`}
     >
       {label}{count !== undefined && <span className="ml-2 text-xs text-slate-400">{count}</span>}
     </button>
@@ -128,7 +128,7 @@ export default function AlertInbox() {
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
       <div className="flex items-start justify-between gap-3 shrink-0">
         <div>
-          <h1 className="text-3xl font-semibold text-white">{tr('alertInbox.title', 'Alerts')}</h1>
+          <h1 className="text-3xl font-semibold text-ink">{tr('alertInbox.title', 'Alerts')}</h1>
           <p className="mt-2 text-slate-400">
             {tr('alertInbox.subtitle', 'Every alert Alertmanager sent for this cluster, firing or resolved. The alert rule decides when it resolves; the marks here are kept in Kubeast.')}
           </p>
@@ -159,7 +159,7 @@ export default function AlertInbox() {
             type="button"
             onClick={() => setShowSilences(true)}
             data-testid="alert-tab-silences"
-            className={`h-10 inline-flex items-center gap-1 rounded-lg border px-3 text-sm ${showSilences ? 'border-primary-500 bg-primary-600/20 text-white' : 'border-slate-700 text-slate-300 hover:border-slate-500'}`}
+            className={`h-10 inline-flex items-center gap-1 rounded-lg border px-3 text-sm ${showSilences ? 'border-primary-500 bg-primary-600/20 text-ink' : 'border-slate-700 text-slate-300 hover:border-slate-500'}`}
           >
             <BellOff className="w-4 h-4" /> {tr('alertInbox.silence.tab', 'Silences')}
           </button>
@@ -224,7 +224,7 @@ export default function AlertInbox() {
                       )}
                     </td>
                     <td className="py-3 px-4">
-                      <span className="block break-all line-clamp-2 font-medium text-white" title={r.alertname}>{r.alertname || '-'}</span>
+                      <span className="block break-all line-clamp-2 font-medium text-ink" title={r.alertname}>{r.alertname || '-'}</span>
                       <span className={`text-xs ${severityClass[r.severity] ?? 'text-slate-400'}`}>{r.severity || '-'}</span>
                       {r.summary && <span className="block truncate text-xs text-slate-400" title={r.summary}>{r.summary}</span>}
                     </td>
@@ -421,7 +421,7 @@ function AlertDetailModal({ id, live, silenceWith, onClose }: {
                 onChange={(e) => setNote(e.target.value)}
                 maxLength={2000}
                 rows={3}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm text-white"
+                className="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm text-ink"
                 data-testid="alert-note"
               />
               <div className="mt-1 flex items-center justify-between text-xs text-slate-500">

@@ -161,7 +161,7 @@ export default function AdmissionPolicyInfo({ name, kind }: Props) {
                   const brules: any[] = Array.isArray(mr.resourceRules) ? mr.resourceRules : []
                   return (
                     <tr key={b.name} className="text-slate-200">
-                      <td className="px-2 py-1.5 font-medium text-white break-all">{b.name}</td>
+                      <td className="px-2 py-1.5 font-medium text-ink break-all">{b.name}</td>
                       {validating && <td className="px-2 py-1.5">{Array.isArray(bs.validationActions) && bs.validationActions.length > 0 ? bs.validationActions.join(', ') : '-'}</td>}
                       <td className="px-2 py-1.5 break-all">{paramRefText(bs.paramRef)}</td>
                       <td className="px-2 py-1.5 break-all">{selectorText(mr.namespaceSelector) || '-'}</td>

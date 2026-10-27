@@ -20,7 +20,7 @@ export function DashboardNodeList({ nodes, onNodeClick }: Props) {
 
   return (
     <div className="card">
-      <h2 className="text-lg font-semibold text-white mb-4">{tr('dashboard.nodes.title', 'Nodes')}</h2>
+      <h2 className="text-lg font-semibold text-ink mb-4">{tr('dashboard.nodes.title', 'Nodes')}</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[400px] overflow-y-auto">
         {nodes.map((node) => (
           <button
@@ -35,7 +35,7 @@ export function DashboardNodeList({ nodes, onNodeClick }: Props) {
                 <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
               )}
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate" title={node.name}>
+                <p className="text-sm font-medium text-ink truncate" title={node.name}>
                   {node.name}
                 </p>
               </div>

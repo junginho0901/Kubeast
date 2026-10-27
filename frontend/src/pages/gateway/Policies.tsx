@@ -192,7 +192,7 @@ export default function Policies() {
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-3xl font-semibold text-white">{tr('policiesPage.title', 'Policies')}</h1>
+          <h1 className="text-3xl font-semibold text-ink">{tr('policiesPage.title', 'Policies')}</h1>
           <p className="mt-2 text-slate-400">{tr('policiesPage.subtitle', 'Policies attached to Gateway API objects, from every implementation installed on the cluster.')}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -206,7 +206,7 @@ export default function Policies() {
       <div className="flex gap-3 shrink-0">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-          <input type="text" placeholder={tr('policiesPage.searchPlaceholder', 'Search by name, namespace, kind, or target...')} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+          <input type="text" placeholder={tr('policiesPage.searchPlaceholder', 'Search by name, namespace, kind, or target...')} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
         </div>
         <CustomDropdown
           size="lg"
@@ -230,7 +230,7 @@ export default function Policies() {
         {summaryCards.map(([label, value, boxClass, labelClass]) => (
           <div key={label} className={`rounded-lg border px-4 py-3 ${boxClass}`}>
             <p className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelClass}`}>{label}</p>
-            <p className="text-lg text-white font-semibold mt-1">{value}</p>
+            <p className="text-lg text-ink font-semibold mt-1">{value}</p>
           </div>
         ))}
       </div>
@@ -298,7 +298,7 @@ export default function Policies() {
                       })}
                 >
                   <td className="py-3 px-4 text-xs font-mono" title={`${item.plural}.${item.group}/${item.version}`}><span className="block truncate">{item.kind}</span></td>
-                  <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{item.name}</span></td>
+                  <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{item.name}</span></td>
                   <td className="py-3 px-4 text-xs"><span className="block truncate">{item.namespace || '-'}</span></td>
                   <td className="py-3 px-4 text-xs font-mono"><span className="block truncate" title={formatPolicyTargets(item)}>{formatPolicyTargets(item)}</span></td>
                   <td className="py-3 px-4 text-xs">

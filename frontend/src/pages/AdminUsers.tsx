@@ -374,7 +374,7 @@ export default function AdminUsers() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-semibold text-white">{tr('adminUsers.title', 'User management')}</h1>
+          <h1 className="text-3xl font-semibold text-ink">{tr('adminUsers.title', 'User management')}</h1>
           <p className="mt-2 text-slate-400">
             {tr('adminUsers.subtitle', 'Update user roles (read/write/admin).')}
           </p>
@@ -436,7 +436,7 @@ export default function AdminUsers() {
           onChange={(e) => { setSearch(e.target.value); setPage(1) }}
           placeholder={tr('adminUsers.searchPlaceholder', 'Search by name, email or team...')}
           data-testid="admin-users-search"
-          className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
         />
       </div>
 
@@ -444,16 +444,16 @@ export default function AdminUsers() {
         <table className="w-full text-sm">
           <thead className="bg-slate-800 text-slate-400">
             <tr className="text-left">
-              <th className="px-4 py-3 cursor-pointer select-none hover:text-white" onClick={() => handleSort('name')}>
+              <th className="px-4 py-3 cursor-pointer select-none hover:text-ink" onClick={() => handleSort('name')}>
                 {tr('adminUsers.table.name', 'Name')}{renderSortIcon('name')}
               </th>
-              <th className="px-4 py-3 cursor-pointer select-none hover:text-white" onClick={() => handleSort('email')}>
+              <th className="px-4 py-3 cursor-pointer select-none hover:text-ink" onClick={() => handleSort('email')}>
                 {tr('adminUsers.table.email', 'Email')}{renderSortIcon('email')}
               </th>
-              <th className="px-4 py-3 cursor-pointer select-none hover:text-white" onClick={() => handleSort('team')}>
+              <th className="px-4 py-3 cursor-pointer select-none hover:text-ink" onClick={() => handleSort('team')}>
                 {tr('adminUsers.table.team', 'Team')}{renderSortIcon('team')}
               </th>
-              <th className="px-4 py-3 cursor-pointer select-none hover:text-white" onClick={() => handleSort('role')}>
+              <th className="px-4 py-3 cursor-pointer select-none hover:text-ink" onClick={() => handleSort('role')}>
                 {tr('adminUsers.table.role', 'Role')}{renderSortIcon('role')}
               </th>
               <th className="px-4 py-3">{tr('adminUsers.table.password', 'Password')}</th>
@@ -552,7 +552,7 @@ export default function AdminUsers() {
                                   updateRoleMutation.mutate({ userId: u.id, roleId: role.id })
                                 }}
                                 className={`w-full px-3 py-2 text-xs flex items-center gap-2 hover:bg-slate-800 transition-colors ${
-                                  isSelected ? 'bg-slate-800 text-white' : 'text-slate-200'
+                                  isSelected ? 'bg-slate-800 text-ink' : 'text-slate-200'
                                 }`}
                               >
                                 <span className="flex-1 text-left">
@@ -701,7 +701,7 @@ export default function AdminUsers() {
                 <Clock className="h-5 w-5 text-amber-400" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-white">
+                <h2 className="text-lg font-semibold text-ink">
                   {tr('adminUsers.pendingModal.title', 'Pending approval')}
                 </h2>
                 <p className="text-sm text-slate-400">
@@ -775,7 +775,7 @@ export default function AdminUsers() {
                     type="button"
                     onClick={() => handlePendingBulkApprove('Member')}
                     disabled={pendingSelectedIds.size === 0 || bulkUpdateRoleMutation.isPending}
-                    className="rounded-lg bg-green-600/80 px-4 py-2 text-xs font-medium text-white hover:bg-green-600 disabled:opacity-40"
+                    className="rounded-lg bg-green-600/80 px-4 py-2 text-xs font-medium text-ink hover:bg-green-600 disabled:opacity-40"
                   >
                     {tr('adminUsers.bulk.approveMember', 'Approve as Member')}
                   </button>
@@ -783,7 +783,7 @@ export default function AdminUsers() {
                     type="button"
                     onClick={() => handlePendingBulkApprove('Admin')}
                     disabled={pendingSelectedIds.size === 0 || bulkUpdateRoleMutation.isPending}
-                    className="rounded-lg bg-primary-600/80 px-4 py-2 text-xs font-medium text-white hover:bg-primary-600 disabled:opacity-40"
+                    className="rounded-lg bg-primary-600/80 px-4 py-2 text-xs font-medium text-ink hover:bg-primary-600 disabled:opacity-40"
                   >
                     {tr('adminUsers.bulk.approveAdmin', 'Approve as Admin')}
                   </button>
@@ -813,7 +813,7 @@ export default function AdminUsers() {
             aria-modal="true"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-semibold text-white">
+            <h2 className="text-lg font-semibold text-ink">
               {tr('adminUsers.bulkUploadTitle', 'Bulk upload users')}
             </h2>
             <p className="mt-1 text-sm text-slate-400">
@@ -827,7 +827,7 @@ export default function AdminUsers() {
                 <button
                   type="button"
                   onClick={downloadCsvTemplate}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-slate-700 px-3 py-1.5 text-xs text-white hover:bg-slate-600"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-slate-700 px-3 py-1.5 text-xs text-ink hover:bg-slate-600"
                 >
                   <Download className="w-3.5 h-3.5" />
                   {tr('adminUsers.bulkDownload', 'Download')}
@@ -922,7 +922,7 @@ export default function AdminUsers() {
                 <KeyRound className="h-5 w-5 text-slate-300" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-white">
+                <h2 className="text-lg font-semibold text-ink">
                   {tr('adminUsers.resetResult.title', 'Password reset')}
                 </h2>
                 <p className="text-xs text-slate-400">

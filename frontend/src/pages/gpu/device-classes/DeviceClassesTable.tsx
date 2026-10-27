@@ -86,7 +86,7 @@ export default function DeviceClassesTable({
                   rawJson: deviceClassToRawJson(item),
                 })}
               >
-                <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{item.name}</span></td>
+                <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{item.name}</span></td>
                 <td className="py-3 px-4 text-xs">{item.selector_count ?? 0}</td>
                 <td className="py-3 px-4 text-xs">
                   <span className="block truncate">

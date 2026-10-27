@@ -72,7 +72,7 @@ export default function Investigations() {
             <Siren className="w-6 h-6 text-primary-400" />
           </div>
           <div>
-            <h1 className="text-3xl font-semibold text-white">{tr('investigations.title', 'Investigations')}</h1>
+            <h1 className="text-3xl font-semibold text-ink">{tr('investigations.title', 'Investigations')}</h1>
             <p className="text-slate-400">
               {tr('investigations.subtitle', 'What the AI found with read-only tools when an alert came in (Alertmanager or Grafana). Opening a report is audited.')}
             </p>
@@ -108,7 +108,7 @@ export default function Investigations() {
               value={cluster}
               onChange={(e) => setCluster(e.target.value)}
               placeholder={tr('investigations.filter.clusterPlaceholder', 'cluster ID')}
-              className="w-48 h-10 rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-sm text-white"
+              className="w-48 h-10 rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-sm text-ink"
               data-testid="investigations-cluster-filter"
             />
           </div>
@@ -188,11 +188,11 @@ export default function Investigations() {
               : tr('common.paginationEmpty', 'Showing 0 of 0')}
           </div>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500">
+            <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-ink hover:border-slate-500">
               {tr('common.prev', 'Prev')}
             </button>
             <span className="text-xs text-slate-300 min-w-[48px] text-center">{page}</span>
-            <button type="button" onClick={() => setPage((p) => p + 1)} disabled={first + rows.length - 1 >= total} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500">
+            <button type="button" onClick={() => setPage((p) => p + 1)} disabled={first + rows.length - 1 >= total} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-ink hover:border-slate-500">
               {tr('common.next', 'Next')}
             </button>
           </div>

@@ -48,7 +48,7 @@ export function InfoRow({ label, value, asIs }: { label: string; value: ReactNod
   return (
     <div className="grid grid-cols-1 md:grid-cols-[140px_1fr] gap-1 text-xs text-slate-200">
       <span className="text-slate-400 shrink-0">{asIs ? label : dl(label)}</span>
-      <span className="text-white font-medium break-all">{isYesNo(value) ? dl(value) : typeof value === 'string' || typeof value === 'number' ? value : value ?? '-'}</span>
+      <span className="text-ink font-medium break-all">{isYesNo(value) ? dl(value) : typeof value === 'string' || typeof value === 'number' ? value : value ?? '-'}</span>
     </div>
   )
 }
@@ -175,7 +175,7 @@ export function UsageCard({ label, value, percent, color }: { label: string; val
   return (
     <div className="rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-3">
       <p className="text-xs text-slate-400">{dl(label)}</p>
-      <p className="text-base text-white mt-1">{value}</p>
+      <p className="text-base text-ink mt-1">{value}</p>
       <div className="mt-3 w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
         <div className="h-full rounded-full" style={{ width: `${Math.min(Math.max(percent, 0), 100)}%`, backgroundColor: color }} />
       </div>

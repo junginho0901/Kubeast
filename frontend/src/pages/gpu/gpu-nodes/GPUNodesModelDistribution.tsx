@@ -21,7 +21,7 @@ export default function GPUNodesModelDistribution({ modelDistribution }: Props) 
   return (
     <div className="card shrink-0">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold text-white">
+        <h2 className="text-sm font-semibold text-ink">
           {tr('gpuNodes.modelDistribution', 'GPU Model Distribution')}
         </h2>
         <Monitor className="w-4 h-4 text-slate-400" />
@@ -33,7 +33,7 @@ export default function GPUNodesModelDistribution({ modelDistribution }: Props) 
             : 0
           return (
             <div key={model} className="rounded-lg border border-slate-700 bg-slate-900/40 px-4 py-3">
-              <div className="flex items-center justify-between text-sm text-white">
+              <div className="flex items-center justify-between text-sm text-ink">
                 <span className="font-medium truncate">{model}</span>
                 <span className="text-xs text-slate-400 ml-2 whitespace-nowrap">
                   {info.count === 1 ? tr('gpuNodes.nodeCountOne', '{{n}} node', { n: info.count }) : tr('gpuNodes.nodeCount', '{{n}} nodes', { n: info.count })}

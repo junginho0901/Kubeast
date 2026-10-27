@@ -143,7 +143,7 @@ export function ReplicaSetTable({
                 })}
               >
                 {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={rs.namespace}>{rs.namespace}</td>}
-                <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{rs.name}</span></td>
+                <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{rs.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{rs.current_replicas ?? 0}</td>
                 <td className="py-3 px-4 text-xs font-mono">{rs.replicas ?? 0}</td>
                 <td className="py-3 px-4 text-xs font-mono">{rs.ready_replicas ?? 0}</td>

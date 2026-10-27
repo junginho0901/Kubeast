@@ -221,7 +221,7 @@ rules:
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-3xl font-semibold text-white">{tr('clusterRolesPage.title', 'Cluster Roles')}</h1>
+          <h1 className="text-3xl font-semibold text-ink">{tr('clusterRolesPage.title', 'Cluster Roles')}</h1>
           <p className="mt-2 text-slate-400">{tr('clusterRolesPage.subtitle', 'Manage ClusterRoles across the cluster.')}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -241,7 +241,7 @@ rules:
       <div className="shrink-0">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-          <input type="text" placeholder={tr('clusterRolesPage.searchPlaceholder', 'Search by name...')} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+          <input type="text" placeholder={tr('clusterRolesPage.searchPlaceholder', 'Search by name...')} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
         </div>
       </div>
 
@@ -249,7 +249,7 @@ rules:
         {summaryCards.map(([label, value, boxClass, labelClass]) => (
           <div key={label} className={`rounded-lg border px-4 py-3 ${boxClass}`}>
             <p className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelClass}`}>{label}</p>
-            <p className="text-lg text-white font-semibold mt-1">{value}</p>
+            <p className="text-lg text-ink font-semibold mt-1">{value}</p>
           </div>
         ))}
       </div>
@@ -280,7 +280,7 @@ rules:
               {pagedItems.map((cr, idx) => (
                 <tr
                       ref={idx === 0 ? firstRowRef : undefined} key={cr.name} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'ClusterRole', name: cr.name })}>
-                  <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{cr.name}</span></td>
+                  <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{cr.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{cr.rules_count}</td>
                   <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(cr.created_at)}</td>
                 </tr>

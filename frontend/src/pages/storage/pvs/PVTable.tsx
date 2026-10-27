@@ -139,7 +139,7 @@ export function PVTable({
                   rawJson: pvToRawJson(pv),
                 })}
               >
-                <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{pv.name}</span></td>
+                <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{pv.name}</span></td>
                 <td className="py-3 px-4">
                   <span className={`badge ${statusBadgeClass(pv.status)}`}>{pv.status || '-'}</span>
                 </td>

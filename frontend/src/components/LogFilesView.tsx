@@ -52,7 +52,7 @@ export function LogSourceToggle({
           aria-pressed={value === o.v}
           onClick={() => onChange(o.v)}
           className={`${item} rounded-md whitespace-nowrap transition-colors ${
-            value === o.v ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            value === o.v ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-ink hover:bg-slate-800'
           }`}
         >
           {o.label}
@@ -231,7 +231,7 @@ export function LogFilesView({ namespace, pod, container, size = 'md', leading }
               className={`${buttonSize} rounded-lg border whitespace-nowrap flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                 follow
                   ? 'bg-primary-600 border-primary-500 text-white hover:bg-primary-700'
-                  : 'bg-slate-700 border-slate-600 text-white hover:bg-slate-600'
+                  : 'bg-slate-700 border-slate-600 text-ink hover:bg-slate-600'
               }`}
             >
               <Radio className={`${sm ? 'w-3 h-3' : 'w-4 h-4'} ${follow ? 'animate-pulse' : ''}`} />
@@ -246,7 +246,7 @@ export function LogFilesView({ namespace, pod, container, size = 'md', leading }
                 void list.refetch()
                 void content.refetch()
               }}
-              className={`${buttonSize} rounded-lg border border-slate-600 bg-slate-700 text-white hover:bg-slate-600 whitespace-nowrap flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
+              className={`${buttonSize} rounded-lg border border-slate-600 bg-slate-700 text-ink hover:bg-slate-600 whitespace-nowrap flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
             >
               <RefreshCw className={`${sm ? 'w-3 h-3' : 'w-4 h-4'} ${content.isFetching ? 'animate-spin' : ''}`} />
               {t('clusterView.logFiles.refresh', 'Refresh')}

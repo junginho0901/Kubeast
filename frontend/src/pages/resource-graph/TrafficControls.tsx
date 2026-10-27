@@ -5,7 +5,7 @@ import type { GraphView, TrafficSource } from './traffic'
 // The header's switch between the objects (structure), who talks to whom (traffic) and both, with the
 // traffic's source and a refresh. Traffic is read when it is switched on and on refresh only.
 
-const segment = (on: boolean) => `px-2.5 py-1.5 rounded-md text-xs transition-colors ${on ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`
+const segment = (on: boolean) => `px-2.5 py-1.5 rounded-md text-xs transition-colors ${on ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-ink'}`
 
 export function TrafficControls({ view, setView, sources, source, setSource, onRefresh, fetching }: {
   view: GraphView

@@ -285,7 +285,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
             <div className="relative" ref={execContainerRef}>
               <button
                 onClick={() => { setIsExecContainerOpen(!isExecContainerOpen); setIsExecShellOpen(false) }}
-                className="h-7 px-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-hidden transition-colors flex items-center gap-1.5 min-w-[120px] justify-between"
+                className="h-7 px-2.5 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-slate-600 focus:outline-hidden transition-colors flex items-center gap-1.5 min-w-[120px] justify-between"
               >
                 <span className="text-[11px] font-medium truncate">{execSelectContainer || containerNames[0]}</span>
                 <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isExecContainerOpen ? 'rotate-180' : ''}`} />
@@ -296,7 +296,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                     <button
                       key={n}
                       onClick={() => { setExecSelectContainer(n); setIsExecContainerOpen(false) }}
-                      className="w-full px-2.5 py-1.5 text-left text-[11px] text-white hover:bg-slate-600 transition-colors flex items-center gap-1.5 first:rounded-t-lg last:rounded-b-lg"
+                      className="w-full px-2.5 py-1.5 text-left text-[11px] text-ink hover:bg-slate-600 transition-colors flex items-center gap-1.5 first:rounded-t-lg last:rounded-b-lg"
                     >
                       {(execSelectContainer || containerNames[0]) === n && <CheckCircle className="w-3 h-3 text-primary-400 shrink-0" />}
                       <span className={(execSelectContainer || containerNames[0]) === n ? 'font-medium' : ''}>{n}</span>
@@ -309,7 +309,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
             <div className="relative" ref={execShellRef}>
               <button
                 onClick={() => { setIsExecShellOpen(!isExecShellOpen); setIsExecContainerOpen(false) }}
-                className="h-7 px-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-hidden transition-colors flex items-center gap-1.5 min-w-[90px] justify-between"
+                className="h-7 px-2.5 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-slate-600 focus:outline-hidden transition-colors flex items-center gap-1.5 min-w-[90px] justify-between"
               >
                 <span className="text-[11px] font-medium">{execCommand}</span>
                 <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isExecShellOpen ? 'rotate-180' : ''}`} />
@@ -320,7 +320,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                     <button
                       key={sh}
                       onClick={() => { setExecCommand(sh); setIsExecShellOpen(false) }}
-                      className="w-full px-2.5 py-1.5 text-left text-[11px] text-white hover:bg-slate-600 transition-colors flex items-center gap-1.5 first:rounded-t-lg last:rounded-b-lg"
+                      className="w-full px-2.5 py-1.5 text-left text-[11px] text-ink hover:bg-slate-600 transition-colors flex items-center gap-1.5 first:rounded-t-lg last:rounded-b-lg"
                     >
                       {execCommand === sh && <CheckCircle className="w-3 h-3 text-primary-400 shrink-0" />}
                       <span className={execCommand === sh ? 'font-medium' : ''}>{sh}</span>
@@ -345,23 +345,23 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <div className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
             <div className="text-[11px] text-slate-400"><Tx>Status</Tx></div>
-            <div className="mt-1 text-xs text-white font-medium truncate" title={statusReason}>{statusReason || '-'}</div>
+            <div className="mt-1 text-xs text-ink font-medium truncate" title={statusReason}>{statusReason || '-'}</div>
           </div>
           <div className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
             <div className="text-[11px] text-slate-400"><Tx>Ready</Tx></div>
-            <div className="mt-1 text-xs text-white font-medium">{`${readyContainers}/${Math.max(totalContainers, 0)}`}</div>
+            <div className="mt-1 text-xs text-ink font-medium">{`${readyContainers}/${Math.max(totalContainers, 0)}`}</div>
           </div>
           <div className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
             <div className="text-[11px] text-slate-400"><Tx>Waiting</Tx></div>
-            <div className="mt-1 text-xs text-white font-medium">{waitingCount}</div>
+            <div className="mt-1 text-xs text-ink font-medium">{waitingCount}</div>
           </div>
           <div className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
             <div className="text-[11px] text-slate-400"><Tx>CrashLoop</Tx></div>
-            <div className={`mt-1 text-xs font-medium ${crashLoopCount > 0 ? 'text-red-300' : 'text-white'}`}>{crashLoopCount}</div>
+            <div className={`mt-1 text-xs font-medium ${crashLoopCount > 0 ? 'text-red-300' : 'text-ink'}`}>{crashLoopCount}</div>
           </div>
           <div className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
             <div className="text-[11px] text-slate-400"><Tx>Terminated</Tx></div>
-            <div className="mt-1 text-xs text-white font-medium">{terminatedCount}</div>
+            <div className="mt-1 text-xs text-ink font-medium">{terminatedCount}</div>
           </div>
         </div>
       </InfoSection>
@@ -758,7 +758,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                   }
                   return (
                     <tr key={i} className="text-slate-200">
-                      <td className="py-1 pr-2 font-medium text-white break-all">{v.name}</td>
+                      <td className="py-1 pr-2 font-medium text-ink break-all">{v.name}</td>
                       <td className="py-1 pr-2 text-slate-400">{type}</td>
                       <td className="py-1 pr-2 font-mono break-all">{detailNode}</td>
                     </tr>
@@ -885,7 +885,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
             />
             <button
               onClick={() => { setShowLogs(true); refetchLogs() }}
-              className="text-xs px-3 py-1 rounded-sm border border-slate-700 bg-slate-800 text-white hover:border-slate-500 flex items-center gap-1"
+              className="text-xs px-3 py-1 rounded-sm border border-slate-700 bg-slate-800 text-ink hover:border-slate-500 flex items-center gap-1"
             >
               {logsFetching ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
               {dl(showLogs ? 'Refresh' : 'Load Logs')}

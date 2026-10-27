@@ -19,7 +19,7 @@ export function NamespaceDropdown({ namespaces }: Props) {
     <div className="relative" ref={namespaceDropdownRef}>
       <button
         onClick={() => setIsNamespaceDropdownOpen(!isNamespaceDropdownOpen)}
-        className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[200px] justify-between"
+        className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[200px] justify-between"
       >
         <span className="text-sm font-medium">
           {selectedNamespace === 'all'
@@ -40,7 +40,7 @@ export function NamespaceDropdown({ namespaces }: Props) {
               setSelectedNamespace('all')
               setIsNamespaceDropdownOpen(false)
             }}
-            className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg"
+            className="w-full px-4 py-2.5 text-left text-sm text-ink hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg"
           >
             {selectedNamespace === 'all' && (
               <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />
@@ -56,7 +56,7 @@ export function NamespaceDropdown({ namespaces }: Props) {
                 setSelectedNamespace(ns.name)
                 setIsNamespaceDropdownOpen(false)
               }}
-              className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 last:rounded-b-lg"
+              className="w-full px-4 py-2.5 text-left text-sm text-ink hover:bg-slate-600 transition-colors flex items-center gap-2 last:rounded-b-lg"
             >
               {selectedNamespace === ns.name && (
                 <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />

@@ -79,7 +79,7 @@ export function UserDetailModal({
               </span>
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-white">
+              <h2 className="text-lg font-semibold text-ink">
                 {tr('adminUsers.detail.title', 'User details')}
               </h2>
               <p className="text-sm text-slate-400">{u.email ?? '-'}</p>
@@ -99,7 +99,7 @@ export function UserDetailModal({
             <button
               type="button"
               onClick={closeDetail}
-              className="rounded-sm p-1.5 text-slate-400 hover:text-white hover:bg-slate-800"
+              className="rounded-sm p-1.5 text-slate-400 hover:text-ink hover:bg-slate-800"
             >
               <X className="w-5 h-5" />
             </button>
@@ -116,7 +116,7 @@ export function UserDetailModal({
                 <input
                   value={detailDraft.name}
                   onChange={(e) => setDetailDraft((p) => ({ ...p, name: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-white focus:outline-hidden focus:ring-2 focus:ring-primary-600"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-ink focus:outline-hidden focus:ring-2 focus:ring-primary-600"
                 />
               ) : (
                 <div className="rounded-lg border border-slate-700/50 bg-slate-950/30 px-3 py-2 text-sm text-slate-200">{u.name}</div>

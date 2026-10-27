@@ -145,7 +145,7 @@ export default function Namespaces() {
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-3xl font-semibold text-white">{tr('namespaces.title', 'Namespaces')}</h1>
+          <h1 className="text-3xl font-semibold text-ink">{tr('namespaces.title', 'Namespaces')}</h1>
           <p className="mt-2 text-slate-400">
             {tr('namespaces.subtitle', 'Review all namespaces in the cluster and manage resources')}
           </p>
@@ -179,7 +179,7 @@ export default function Namespaces() {
           placeholder={tr('namespaces.searchPlaceholder', 'Search namespaces...')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
         />
       </div>
 
@@ -187,7 +187,7 @@ export default function Namespaces() {
         {summaryCards.map(([label, value, boxClass, labelClass]) => (
           <div key={label} className={`rounded-lg border px-4 py-3 ${boxClass}`}>
             <p className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelClass}`}>{label}</p>
-            <p className="mt-1 text-lg font-semibold text-white">{value}</p>
+            <p className="mt-1 text-lg font-semibold text-ink">{value}</p>
           </div>
         ))}
       </div>

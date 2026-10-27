@@ -155,7 +155,7 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-slate-700 px-4 py-2">
         <div>
-          <p className="text-sm font-semibold text-white">
+          <p className="text-sm font-semibold text-ink">
             {title || t('nodes.shell.title', 'Shell: {{node}}', { node: nodeName })}
           </p>
           <p className="text-xs text-slate-400">
@@ -172,7 +172,7 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
         </div>
         <button
           type="button"
-          className="text-slate-400 hover:text-white"
+          className="text-slate-400 hover:text-ink"
           onClick={() => {
             try {
               if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {

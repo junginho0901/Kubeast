@@ -97,7 +97,7 @@ export default function IngressDetail({ name, namespace, rawJson }: Props) {
           <div className="space-y-3">
             {rules.map((rule: any, i: number) => (
               <div key={i} className="rounded-sm border border-slate-800 p-3">
-                <p className="text-xs text-white font-medium mb-2">{rule.host || '*'}</p>
+                <p className="text-xs text-ink font-medium mb-2">{rule.host || '*'}</p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead className="text-slate-400"><tr><Th className="text-left py-1">Path</Th><Th className="text-left py-1">Type</Th><Th className="text-left py-1">Backend</Th></tr></thead>

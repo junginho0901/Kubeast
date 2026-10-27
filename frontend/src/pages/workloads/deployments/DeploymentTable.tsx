@@ -150,7 +150,7 @@ export function DeploymentTable({
                 })}
               >
                 {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={dep.namespace}>{dep.namespace}</td>}
-                <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{dep.name}</span></td>
+                <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{dep.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{dep.ready_replicas}/{dep.replicas}</td>
                 <td className="py-3 px-4 text-xs font-mono">{dep.updated_replicas ?? 0}</td>
                 <td className="py-3 px-4 text-xs font-mono">{dep.available_replicas ?? 0}</td>

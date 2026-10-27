@@ -48,7 +48,7 @@ export function PodNodeGrid({ sortedNodeEntries, filteredPods, allPodsLen, isLoa
       {searchQuery && (
         <div className="text-sm text-slate-400">
           {tr('clusterView.searchResults', 'Results')}:{' '}
-          <span className="text-white font-medium">{filteredPods.length}</span>{' '}
+          <span className="text-ink font-medium">{filteredPods.length}</span>{' '}
           {tr('clusterView.countSuffix', 'items')}
           {filteredPods.length !== allPodsLen && (
             <span className="ml-2">
@@ -72,7 +72,7 @@ export function PodNodeGrid({ sortedNodeEntries, filteredPods, allPodsLen, isLoa
           <div key={nodeName} className="card">
             <div className="flex items-center gap-3 mb-4">
               <Server className="w-6 h-6 text-slate-400" />
-              <h2 className="text-xl font-semibold text-white">{nodeName}</h2>
+              <h2 className="text-xl font-semibold text-ink">{nodeName}</h2>
               <span className="badge badge-secondary">
                 {tr('clusterView.nodePodsCount', '{{count}} Pods', { count: pods.length })}
               </span>
@@ -103,7 +103,7 @@ export function PodNodeGrid({ sortedNodeEntries, filteredPods, allPodsLen, isLoa
                         getHealthIcon(health.level, health.reason)
                       )}
                     </div>
-                    <div className="text-sm font-medium text-white truncate" title={pod.name}>
+                    <div className="text-sm font-medium text-ink truncate" title={pod.name}>
                       {pod.name}
                     </div>
                     <div className="text-xs text-slate-400 mt-1">{pod.namespace}</div>

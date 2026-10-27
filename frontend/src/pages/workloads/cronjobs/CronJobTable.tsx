@@ -139,7 +139,7 @@ export function CronJobTable({
                 })}
               >
                 {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={cronjob.namespace}>{cronjob.namespace}</td>}
-                <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{cronjob.name}</span></td>
+                <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{cronjob.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{cronjob.schedule || '-'}</span></td>
                 <td className="py-3 px-4">
                   <span className={`badge ${cronjob.suspend ? 'badge-warning' : 'badge-success'}`}>

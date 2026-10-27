@@ -295,7 +295,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
               placeholder={tr('secretInfo.searchKeys', 'Search keys...')}
               value={dataSearch}
               onChange={(e) => { setDataSearch(e.target.value); setDataPage(1) }}
-              className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-sm text-xs text-white placeholder-slate-500 focus:outline-hidden focus:ring-1 focus:ring-primary-500"
+              className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-sm text-xs text-ink placeholder-slate-500 focus:outline-hidden focus:ring-1 focus:ring-primary-500"
             />
           </div>
         )}
@@ -333,7 +333,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
             {ownerRefs.map((ref) => (
               <div key={ref.uid} className="flex items-center gap-2 text-xs">
                 <span className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 font-mono text-slate-300">{ref.kind}</span>
-                <span className="text-white font-medium">{ref.name}</span>
+                <span className="text-ink font-medium">{ref.name}</span>
               </div>
             ))}
           </div>
@@ -457,7 +457,7 @@ function SecretDataRow({ dataKey, size, value, canReveal }: { dataKey: string; s
               <button
                 type="button"
                 onClick={() => setVisible((v) => !v)}
-                className="p-1 rounded-sm hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+                className="p-1 rounded-sm hover:bg-slate-700 text-slate-400 hover:text-ink transition-colors"
                 title={dl(visible ? 'Hide' : 'Show')}
               >
                 {visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -466,7 +466,7 @@ function SecretDataRow({ dataKey, size, value, canReveal }: { dataKey: string; s
                 <button
                   type="button"
                   onClick={handleCopy}
-                  className="p-1 rounded-sm hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+                  className="p-1 rounded-sm hover:bg-slate-700 text-slate-400 hover:text-ink transition-colors"
                   title={dl('Copy value')}
                 >
                   {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}

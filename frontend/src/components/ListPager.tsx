@@ -14,7 +14,7 @@ interface Props {
 }
 
 const pagerButton =
-  'px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500'
+  'px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-ink hover:border-slate-500'
 
 // The footer of every list table: rows per page, the range shown and the page buttons — always there, also with
 // one page or no rows, so a list never changes shape with its row count.

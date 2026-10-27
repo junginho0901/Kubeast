@@ -138,7 +138,7 @@ export function HTTPRouteTable({
                 })}
               >
                 {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={item.namespace}><span className="block truncate">{item.namespace}</span></td>}
-                <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{item.name}</span></td>
+                <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{item.name}</span></td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{formatHostnames(item)}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{item.parent_refs_count || 0}</td>
                 <td className="py-3 px-4 text-xs font-mono">{item.rule_count || 0}</td>

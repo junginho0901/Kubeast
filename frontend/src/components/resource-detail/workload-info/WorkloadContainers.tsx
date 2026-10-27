@@ -23,7 +23,7 @@ export default function WorkloadContainers({ containers }: Props) {
         {containers.map((container: any, idx: number) => (
           <div key={`${container.name || 'container'}-${idx}`} className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 space-y-2">
             <div className="pb-2 border-b border-slate-800">
-              <div className="text-sm font-semibold text-white wrap-break-word">{container.name || `container-${idx + 1}`}</div>
+              <div className="text-sm font-semibold text-ink wrap-break-word">{container.name || `container-${idx + 1}`}</div>
             </div>
             <div className="divide-y divide-slate-800/70">
               <ContainerKvRow label="Image">

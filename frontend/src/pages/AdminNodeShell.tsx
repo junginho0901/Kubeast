@@ -18,7 +18,7 @@ export default function AdminNodeShell() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-semibold text-white">{tr('account.nodeShell.title', 'Node Shell')}</h1>
+        <h1 className="text-3xl font-semibold text-ink">{tr('account.nodeShell.title', 'Node Shell')}</h1>
         <p className="mt-2 text-slate-400">
           {tr('account.nodeShell.subtitle', 'Configure debug shell settings for nodes.')}
         </p>
@@ -28,7 +28,7 @@ export default function AdminNodeShell() {
         <div className="rounded-xl border border-slate-700 bg-slate-900/40 p-4 space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm font-semibold text-white">
+              <div className="text-sm font-semibold text-ink">
                 {tr('account.nodeShell.enable', 'Enable Node Shell')}
               </div>
               <div className="text-xs text-slate-400">

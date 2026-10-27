@@ -29,7 +29,7 @@ export function DashboardTopResources({ topResources, isLoading, isError, metric
       {/* Top 파드 */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-white">
+          <h2 className="text-lg font-semibold text-ink">
             {tr('dashboard.topPods.title', 'Top 5 pods by resource usage')}
           </h2>
           {/* only while there is data to refresh — with no metrics it promised updates that never come */}
@@ -77,7 +77,7 @@ export function DashboardTopResources({ topResources, isLoading, isError, metric
                 <div className="flex items-center gap-3">
                   <span className="w-5 shrink-0 text-sm text-slate-500 tabular-nums">#{index + 1}</span>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-white truncate" title={pod.name}>
+                    <h3 className="font-medium text-ink truncate" title={pod.name}>
                       {pod.name}
                     </h3>
                     <p className="text-sm text-slate-400">{pod.namespace}</p>
@@ -116,7 +116,7 @@ export function DashboardTopResources({ topResources, isLoading, isError, metric
       {/* Top Node */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-white">
+          <h2 className="text-lg font-semibold text-ink">
             {tr('dashboard.topNodes.title', 'Top 3 nodes by resource usage')}
           </h2>
           {(topResources?.top_nodes?.length ?? 0) > 0 && <p className="text-xs text-slate-400">{tr('dashboard.autoRefresh', 'Auto refresh every 5 seconds')}</p>}
@@ -172,7 +172,7 @@ export function DashboardTopResources({ topResources, isLoading, isError, metric
                   <div className="flex items-center gap-3">
                     <span className="w-5 shrink-0 text-sm text-slate-500 tabular-nums">#{index + 1}</span>
                     <div className="flex-1">
-                      <h3 className="font-medium text-white">{node.name}</h3>
+                      <h3 className="font-medium text-ink">{node.name}</h3>
                       <div className="flex items-center gap-4 text-sm text-slate-400 mt-1">
                         <span>{tr('dashboard.cpu', 'CPU')}: {node.cpu}</span>
                         <span>{tr('dashboard.memory', 'Memory')}: {node.memory}</span>

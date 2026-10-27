@@ -19,7 +19,7 @@ export type OtherKind = (typeof KINDS)[number]
 const KIND_LABEL: Record<OtherKind, string> = { pod: 'Pod', deployment: 'Deployment', statefulset: 'StatefulSet', daemonset: 'DaemonSet', service: 'Service', ip: '' }
 const RESULT_BADGE: Record<string, string> = { allowed: 'badge-success', denied: 'badge-error', unknown: 'badge-warning', mixed: 'badge-warning' }
 const LABEL = 'block text-xs font-semibold text-slate-400 mb-1'
-const INPUT = 'h-10 w-full rounded-lg border border-slate-600 bg-slate-900/60 px-3 text-sm font-mono text-white focus:border-primary-500 focus:outline-hidden'
+const INPUT = 'h-10 w-full rounded-lg border border-slate-600 bg-slate-900/60 px-3 text-sm font-mono text-ink focus:border-primary-500 focus:outline-hidden'
 
 async function names(kind: OtherKind, namespace: string): Promise<string[]> {
   const list: { name: string }[] =

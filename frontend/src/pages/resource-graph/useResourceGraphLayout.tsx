@@ -153,7 +153,7 @@ export function useResourceGraphLayout({
             <span className="text-base shrink-0">{p.end.name ? kindIcon[p.end.kind ?? ''] || '📄' : p.end.namespace ? '🗂' : '🌐'}</span>
             <div className="min-w-0 flex-1">
               <div className="text-[10px] text-slate-400 leading-tight">{peerKindText(p.end)}</div>
-              <div className="text-xs font-medium text-white truncate leading-tight" title={p.name}>{p.name}</div>
+              <div className="text-xs font-medium text-ink truncate leading-tight" title={p.name}>{p.name}</div>
               {p.end.name && p.namespace && <div className="text-[10px] text-slate-400 leading-tight truncate">{p.namespace}</div>}
             </div>
           </div>,
@@ -177,7 +177,7 @@ export function useResourceGraphLayout({
               <span className="text-base shrink-0">{icon}</span>
               <div className="min-w-0 flex-1">
                 <div className="text-[10px] text-slate-400 leading-tight">{n.kind}</div>
-                <div className="text-xs font-medium text-white truncate leading-tight" title={n.name}>
+                <div className="text-xs font-medium text-ink truncate leading-tight" title={n.name}>
                   {n.name}
                 </div>
                 {n.ready && <div className="text-[10px] text-slate-400 leading-tight">{n.ready}</div>}

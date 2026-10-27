@@ -56,7 +56,7 @@ export function ResourceDetailHeader({
             <span className="text-xs px-2 py-0.5 rounded-sm bg-slate-700 text-slate-300 font-medium">{displayKind}</span>
             {ns && <span className="text-xs text-slate-500">{ns}</span>}
           </div>
-          <h2 className="text-lg font-semibold text-white truncate">{name}</h2>
+          <h2 className="text-lg font-semibold text-ink truncate">{name}</h2>
           <HelmReleaseBadge rawJson={effectiveRawJson} />
           {argo && <ArgoBadge argo={argo.managed} url={argo.url} blocked={argo.blocked} />}
         </div>
@@ -64,13 +64,13 @@ export function ResourceDetailHeader({
           {canGoBack && (
             <button
               onClick={onGoBack}
-              className="text-slate-400 hover:text-white p-1 rounded-sm hover:bg-slate-700 transition-colors"
+              className="text-slate-400 hover:text-ink p-1 rounded-sm hover:bg-slate-700 transition-colors"
               title={t('common.back', { defaultValue: 'Back' })}
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
           )}
-          <button onClick={onClose} className="text-slate-400 hover:text-white p-1">
+          <button onClick={onClose} className="text-slate-400 hover:text-ink p-1">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -89,7 +89,7 @@ export function ResourceDetailHeader({
               className={`flex items-center gap-1.5 px-3 py-1 rounded-md border transition-colors ${
                 tab === id
                   ? 'border-primary-600 bg-primary-600 text-white'
-                  : 'border-slate-800 text-slate-400 hover:text-white'
+                  : 'border-slate-800 text-slate-400 hover:text-ink'
               }`}
             >
               <Icon className="w-3.5 h-3.5" />

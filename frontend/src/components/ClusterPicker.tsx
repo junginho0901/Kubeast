@@ -82,7 +82,7 @@ export default function ClusterPicker() {
       >
         <Server className="w-4 h-4 text-slate-400 shrink-0" />
         <span className={`w-2 h-2 rounded-full shrink-0 ${healthDotClass(selected?.health_status)}`} />
-        <span className="flex-1 truncate text-sm text-white">
+        <span className="flex-1 truncate text-sm text-ink">
           {selected?.display_name ?? currentCluster ?? tr('cluster.picker.select', 'Select cluster')}
         </span>
         {/* "self" says this is the cluster Kubeast runs in — left out when that is already the name */}
@@ -108,7 +108,7 @@ export default function ClusterPicker() {
               className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-700/50"
             >
               <span className={`w-2 h-2 rounded-full shrink-0 ${healthDotClass(c.health_status)}`} />
-              <span className="flex-1 truncate text-white">{c.display_name}</span>
+              <span className="flex-1 truncate text-ink">{c.display_name}</span>
               {c.is_self_cluster && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-slate-700 text-slate-300">self</span>
               )}

@@ -35,7 +35,7 @@ export function DashboardSkeleton() {
       {/* Header — identical to real, version line is a pulse placeholder */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-semibold text-white">{tr('dashboard.title', 'Cluster Dashboard')}</h1>
+          <h1 className="text-3xl font-semibold text-ink">{tr('dashboard.title', 'Cluster Dashboard')}</h1>
           <p className="mt-2 text-slate-400">
             {tr('dashboard.subtitle', 'Get a quick overview of your Kubernetes cluster.')}
           </p>
@@ -57,7 +57,7 @@ export function DashboardSkeleton() {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-400">{s.label}</p>
-                {/* same as: <p className="mt-2 text-2xl font-semibold text-white">12</p> */}
+                {/* same as: <p className="mt-2 text-2xl font-semibold text-ink">12</p> */}
                 <p className="mt-2 text-2xl font-semibold leading-none">
                   <span className="inline-block h-[1em] w-[1.6em] rounded-sm bg-slate-700 animate-pulse align-baseline" />
                 </p>
@@ -75,7 +75,7 @@ export function DashboardSkeleton() {
           { title: tr('dashboard.nodeStatus.title', 'Node status'), sub: tr('dashboard.nodeStatus.subtitle', 'Click to view nodes in each status'), bars: [75, 20] },
         ].map((chart) => (
           <div key={chart.title} className="card">
-            <h2 className="text-lg font-semibold text-white">{chart.title}</h2>
+            <h2 className="text-lg font-semibold text-ink">{chart.title}</h2>
             <p className="text-sm text-slate-400 mt-1 mb-4">{chart.sub}</p>
             <svg width="100%" height={340} viewBox="0 0 540 340" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
               <line x1={40} y1={304} x2={524} y2={304} stroke="var(--color-slate-600)" strokeWidth={1} />
@@ -95,7 +95,7 @@ export function DashboardSkeleton() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="card">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-white">
+            <h2 className="text-lg font-semibold text-ink">
               {tr('dashboard.topPods.title', 'Top 5 pods by resource usage')}
             </h2>
             <p className="text-xs text-slate-400">{tr('dashboard.autoRefresh', 'Auto refresh every 5 seconds')}</p>
@@ -120,7 +120,7 @@ export function DashboardSkeleton() {
         </div>
         <div className="card">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-white">
+            <h2 className="text-lg font-semibold text-ink">
               {tr('dashboard.topNodes.title', 'Top 3 nodes by resource usage')}
             </h2>
             <p className="text-xs text-slate-400">{tr('dashboard.autoRefresh', 'Auto refresh every 5 seconds')}</p>
@@ -160,7 +160,7 @@ export function DashboardSkeleton() {
 
       {/* Nodes — real title, card shape matches real layout */}
       <div className="card">
-        <h2 className="text-lg font-semibold text-white mb-4">{tr('dashboard.nodes.title', 'Nodes')}</h2>
+        <h2 className="text-lg font-semibold text-ink mb-4">{tr('dashboard.nodes.title', 'Nodes')}</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[400px] overflow-y-auto">
           {[...Array(4)].map((_, i) => (
             <div key={i} className="p-3 border border-slate-700 rounded-md">
@@ -194,7 +194,7 @@ export function DashboardSkeleton() {
 
       {/* Quick actions — real text & icons, just disabled */}
       <div className="card">
-        <h2 className="text-lg font-semibold text-white mb-4">{tr('dashboard.quickActions.title', 'Quick actions')}</h2>
+        <h2 className="text-lg font-semibold text-ink mb-4">{tr('dashboard.quickActions.title', 'Quick actions')}</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div className="btn btn-secondary text-left opacity-50 pointer-events-none">
             <div className="flex items-center gap-3">

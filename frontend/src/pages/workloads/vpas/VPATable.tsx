@@ -147,7 +147,7 @@ export function VPATable({
                 })}
               >
                 {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={v.namespace}>{v.namespace}</td>}
-                <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{v.name}</span></td>
+                <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{v.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{v.target_ref || '-'}</span></td>
                 <td className="py-3 px-4 text-xs">{v.update_mode || '-'}</td>
                 <td className="py-3 px-4 text-xs font-mono">{v.cpu_target || '-'}</td>

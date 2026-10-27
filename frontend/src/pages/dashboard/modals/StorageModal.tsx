@@ -118,7 +118,7 @@ export function StorageModal({
         <div className="p-6 border-b border-slate-700">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-xl font-semibold text-white">
+              <h2 className="text-xl font-semibold text-ink">
                 {tr('dashboard.storage.title', 'Storage analysis')}
               </h2>
               <p className="text-sm text-slate-400">
@@ -185,7 +185,7 @@ export function StorageModal({
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[200px] justify-between"
+                className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[200px] justify-between"
                 title={tr('dashboard.storage.namespaceFilter', 'Namespace filter')}
               >
                 <span className="text-sm font-medium">
@@ -205,7 +205,7 @@ export function StorageModal({
                       setNamespaceFilter('all')
                       setIsDropdownOpen(false)
                     }}
-                    className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg"
+                    className="w-full px-4 py-2.5 text-left text-sm text-ink hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg"
                   >
                     {namespaceFilter === 'all' && (
                       <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />
@@ -221,7 +221,7 @@ export function StorageModal({
                         setNamespaceFilter(ns)
                         setIsDropdownOpen(false)
                       }}
-                      className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 last:rounded-b-lg"
+                      className="w-full px-4 py-2.5 text-left text-sm text-ink hover:bg-slate-600 transition-colors flex items-center gap-2 last:rounded-b-lg"
                     >
                       {namespaceFilter === ns && (
                         <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />
@@ -241,7 +241,7 @@ export function StorageModal({
               placeholder={tr('dashboard.storage.searchPlaceholder', 'Search (name/status/StorageClass/Claim)...')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-10 pl-10 pr-10 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors"
+              className="w-full h-10 pl-10 pr-10 bg-slate-700 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors"
             />
             {searchQuery && (
               <button
@@ -286,7 +286,7 @@ export function StorageModal({
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className={`badge ${badge}`}>{status}</span>
-                            <p className="text-sm font-medium text-white truncate">{pvc.name}</p>
+                            <p className="text-sm font-medium text-ink truncate">{pvc.name}</p>
                           </div>
                           <div className="mt-1 space-y-0.5">
                             <p className="text-xs text-slate-400">
@@ -359,7 +359,7 @@ export function StorageModal({
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className={`badge ${badge}`}>{status}</span>
-                            <p className="text-sm font-medium text-white truncate">{pv.name}</p>
+                            <p className="text-sm font-medium text-ink truncate">{pv.name}</p>
                           </div>
                           <div className="mt-1 space-y-0.5">
                             <p className="text-xs text-slate-400">

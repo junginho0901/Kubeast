@@ -56,7 +56,7 @@ function CustomDropdown<T extends string | number>({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className={`w-full ${minWidth} h-10 px-2 bg-slate-900 hover:bg-slate-800 text-white rounded-sm border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 justify-between text-sm`}
+        className={`w-full ${minWidth} h-10 px-2 bg-slate-900 hover:bg-slate-800 text-ink rounded-sm border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 justify-between text-sm`}
       >
         <span className="font-medium truncate">{selected?.label ?? '-'}</span>
         <ChevronDown
@@ -73,7 +73,7 @@ function CustomDropdown<T extends string | number>({
                 onChange(opt.value)
                 setOpen(false)
               }}
-              className="w-full px-3 py-2 text-left text-sm text-white hover:bg-slate-700 transition-colors flex items-center gap-2 first:rounded-t last:rounded-b"
+              className="w-full px-3 py-2 text-left text-sm text-ink hover:bg-slate-700 transition-colors flex items-center gap-2 first:rounded-t last:rounded-b"
             >
               {value === opt.value && (
                 <CheckCircle className="w-3.5 h-3.5 text-primary-400 shrink-0" />
@@ -232,7 +232,7 @@ export default function AdminAudit() {
     <div className="page-scrolls space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-semibold text-white">{tr('adminAudit.title', '감사 로그')}</h1>
+          <h1 className="text-3xl font-semibold text-ink">{tr('adminAudit.title', '감사 로그')}</h1>
           <p className="text-slate-400 text-sm mt-1">
             {tr('adminAudit.subtitle', '모든 쓰기 작업과 민감 열람 내역')}
           </p>
@@ -284,7 +284,7 @@ export default function AdminAudit() {
               onClick={() => verifyMutation.mutate()}
               disabled={verifyMutation.isPending}
               data-testid="audit-integrity-verify"
-              className="rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 py-1.5 text-sm text-white"
+              className="rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 py-1.5 text-sm text-ink"
             >
               {verifyMutation.isPending ? tr('adminAudit.integrity.verifying', '검증 중...') : tr('adminAudit.integrity.verify', '검증')}
             </button>
@@ -295,7 +295,7 @@ export default function AdminAudit() {
                 disabled={anchorMutation.isPending}
                 data-testid="audit-integrity-anchor"
                 title={tr('adminAudit.integrity.anchorNowTitle', 'Write the head of the hash chain to the anchor sink now (it is also written on its own schedule)')}
-                className="rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 py-1.5 text-sm text-white"
+                className="rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 py-1.5 text-sm text-ink"
               >
                 {anchorMutation.isPending ? tr('adminAudit.integrity.anchoring', '앵커 중...') : tr('adminAudit.integrity.anchorNow', '지금 앵커')}
               </button>
@@ -363,7 +363,7 @@ export default function AdminAudit() {
             <input
               type="text"
               placeholder="k8s.pod.delete"
-              className="mt-1 h-10 rounded-sm bg-slate-900 border border-slate-600 px-2 text-sm text-white"
+              className="mt-1 h-10 rounded-sm bg-slate-900 border border-slate-600 px-2 text-sm text-ink"
               value={draft.action ?? ''}
               onChange={(e) => setDraft({ ...draft, action: e.target.value || undefined })}
             />
@@ -374,7 +374,7 @@ export default function AdminAudit() {
             <input
               type="text"
               placeholder="user@example.com"
-              className="mt-1 h-10 rounded-sm bg-slate-900 border border-slate-600 px-2 text-sm text-white"
+              className="mt-1 h-10 rounded-sm bg-slate-900 border border-slate-600 px-2 text-sm text-ink"
               value={draft.actor_email ?? ''}
               onChange={(e) => setDraft({ ...draft, actor_email: e.target.value || undefined })}
             />
@@ -402,7 +402,7 @@ export default function AdminAudit() {
             {tr('adminAudit.filter.namespace', 'Namespace')}
             <input
               type="text"
-              className="mt-1 h-10 rounded-sm bg-slate-900 border border-slate-600 px-2 text-sm text-white"
+              className="mt-1 h-10 rounded-sm bg-slate-900 border border-slate-600 px-2 text-sm text-ink"
               value={draft.namespace ?? ''}
               onChange={(e) => setDraft({ ...draft, namespace: e.target.value || undefined })}
             />
@@ -439,7 +439,7 @@ export default function AdminAudit() {
           </button>
           <button
             onClick={resetFilter}
-            className="rounded-sm bg-slate-700 hover:bg-slate-600 px-3 py-1.5 text-sm text-white"
+            className="rounded-sm bg-slate-700 hover:bg-slate-600 px-3 py-1.5 text-sm text-ink"
           >
             {tr('adminAudit.reset', '초기화')}
           </button>

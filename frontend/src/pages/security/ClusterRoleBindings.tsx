@@ -231,7 +231,7 @@ subjects:
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-3xl font-semibold text-white">{tr('clusterRoleBindingsPage.title', 'Cluster Role Bindings')}</h1>
+          <h1 className="text-3xl font-semibold text-ink">{tr('clusterRoleBindingsPage.title', 'Cluster Role Bindings')}</h1>
           <p className="mt-2 text-slate-400">{tr('clusterRoleBindingsPage.subtitle', 'Manage ClusterRoleBindings across the cluster.')}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -251,7 +251,7 @@ subjects:
       <div className="shrink-0">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-          <input type="text" placeholder={tr('clusterRoleBindingsPage.searchPlaceholder', 'Search by name or role ref...')} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+          <input type="text" placeholder={tr('clusterRoleBindingsPage.searchPlaceholder', 'Search by name or role ref...')} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
         </div>
       </div>
 
@@ -259,7 +259,7 @@ subjects:
         {summaryCards.map(([label, value, boxClass, labelClass]) => (
           <div key={label} className={`rounded-lg border px-4 py-3 ${boxClass}`}>
             <p className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelClass}`}>{label}</p>
-            <p className="text-lg text-white font-semibold mt-1">{value}</p>
+            <p className="text-lg text-ink font-semibold mt-1">{value}</p>
           </div>
         ))}
       </div>
@@ -293,7 +293,7 @@ subjects:
               {pagedItems.map((crb, idx) => (
                 <tr
                       ref={idx === 0 ? firstRowRef : undefined} key={crb.name} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'ClusterRoleBinding', name: crb.name })}>
-                  <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{crb.name}</span></td>
+                  <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{crb.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono truncate" title={`${crb.role_ref_kind}/${crb.role_ref_name}`}>
                     <span className="text-slate-400">{crb.role_ref_kind}/</span>{crb.role_ref_name}
                   </td>

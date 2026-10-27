@@ -27,13 +27,13 @@ export default function OverviewTab({ detail }: { detail: HelmReleaseDetail }) {
   const row = (label: string, value: string) => (
     <div className="flex flex-col gap-1 rounded-lg bg-slate-800/40 border border-slate-700 px-4 py-3">
       <span className="text-xs text-slate-400">{label}</span>
-      <span className="text-sm text-white">{value || '-'}</span>
+      <span className="text-sm text-ink">{value || '-'}</span>
     </div>
   )
   const countRow = (label: string, pending: boolean, value: number) => (
     <div className="flex flex-col gap-1 rounded-lg bg-slate-800/40 border border-slate-700 px-4 py-3">
       <span className="text-xs text-slate-400">{label}</span>
-      <span className="text-lg font-semibold text-white">{pending ? '…' : value}</span>
+      <span className="text-lg font-semibold text-ink">{pending ? '…' : value}</span>
     </div>
   )
 

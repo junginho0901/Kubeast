@@ -104,7 +104,7 @@ export function LimitRangeTable({
                 className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
                 onClick={() => onOpenDetail(lr)}
               >
-                <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{lr.name}</span></td>
+                <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{lr.name}</span></td>
                 {showNamespaceColumn && (
                   <td className="col-low py-3 px-4 text-xs font-mono text-slate-400" title={lr.namespace}>{lr.namespace}</td>
                 )}

@@ -171,7 +171,7 @@ export default function ClusterHygiene() {
         <div>
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-6 h-6 text-primary-400" />
-            <h1 className="text-3xl font-semibold text-white">{tr('clusterHygiene.title', 'Cluster hygiene')}</h1>
+            <h1 className="text-3xl font-semibold text-ink">{tr('clusterHygiene.title', 'Cluster hygiene')}</h1>
           </div>
           <p className="text-slate-400 text-sm mt-1">
             {tr('clusterHygiene.subtitle', 'Configuration risks read from the cluster as you: Pod Security Standards, image tags, resources, namespace policy, ServiceAccount tokens, RBAC, TLS expiry and readiness for the next Kubernetes minor. Review, export, sign off.')}
@@ -205,7 +205,7 @@ export default function ClusterHygiene() {
             {tr('clusterHygiene.snapshot.viewing', 'Viewing the report as signed off on {{when}} by {{who}}.', { when: formatWhen(viewed.reviewed_at), who: viewed.reviewed_by_email })}
             {viewed.note && <span className="text-primary-200/80"> · {viewed.note}</span>}
           </span>
-          <button onClick={() => setViewId(null)} className="rounded-sm bg-slate-700 hover:bg-slate-600 px-2 py-1 text-xs text-white flex items-center gap-1">
+          <button onClick={() => setViewId(null)} className="rounded-sm bg-slate-700 hover:bg-slate-600 px-2 py-1 text-xs text-ink flex items-center gap-1">
             <X className="w-3 h-3" /> {tr('clusterHygiene.snapshot.back', 'Back to now')}
           </button>
         </div>
@@ -227,7 +227,7 @@ export default function ClusterHygiene() {
               data-testid={`hygiene-card-${key}`}
             >
               <div className="text-xs text-slate-400">{key === 'exempt' ? tr('clusterHygiene.exempt', 'Exempt') : severityLabel(key)}</div>
-              <div className={`text-2xl font-semibold ${key === 'critical' && counts[key] > 0 ? 'text-red-300' : key === 'warning' && counts[key] > 0 ? 'text-yellow-300' : 'text-white'}`}>{counts[key]}</div>
+              <div className={`text-2xl font-semibold ${key === 'critical' && counts[key] > 0 ? 'text-red-300' : key === 'warning' && counts[key] > 0 ? 'text-yellow-300' : 'text-ink'}`}>{counts[key]}</div>
             </button>
           ))}
         </div>
@@ -286,11 +286,11 @@ export default function ClusterHygiene() {
         {!viewId && (
           <div className="ml-auto flex items-center gap-2">
             <button onClick={() => download('csv')} disabled={!live} data-testid="hygiene-export-csv"
-              className="h-9 rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 text-sm text-white flex items-center gap-2">
+              className="h-9 rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 text-sm text-ink flex items-center gap-2">
               <Download className="w-4 h-4" /> CSV
             </button>
             <button onClick={() => download('json')} disabled={!live} data-testid="hygiene-export-json"
-              className="h-9 rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 text-sm text-white flex items-center gap-2">
+              className="h-9 rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 text-sm text-ink flex items-center gap-2">
               <Download className="w-4 h-4" /> JSON
             </button>
           </div>
@@ -311,7 +311,7 @@ export default function ClusterHygiene() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={tr('clusterHygiene.search', 'Search Namespace, name, message...')}
-              className="h-10 px-3 bg-slate-700 text-white rounded-sm border border-slate-600 focus:outline-hidden focus:border-primary-500 text-sm flex-1 min-w-48"
+              className="h-10 px-3 bg-slate-700 text-ink rounded-sm border border-slate-600 focus:outline-hidden focus:border-primary-500 text-sm flex-1 min-w-48"
             />
           </div>
           <div className="rounded-lg bg-slate-800/50 border border-slate-700 overflow-x-auto">
@@ -345,7 +345,7 @@ export default function ClusterHygiene() {
                       <td className="px-3 py-2">{checkTitle(f.check)}</td>
                       <td className="px-3 py-2 whitespace-nowrap">{f.namespace || '-'}</td>
                       <td className="px-3 py-2">
-                        <span className="text-white">{f.kind}/<wbr />{f.name}</span>
+                        <span className="text-ink">{f.kind}/<wbr />{f.name}</span>
                         {f.container && <span className="text-slate-400"> · {f.container}</span>}
                         {f.pods && f.pods > 1 ? <span className="text-slate-500"> · {tr('clusterHygiene.pods', '{{count}} Pods', { count: f.pods })}</span> : null}
                       </td>
@@ -383,7 +383,7 @@ export default function ClusterHygiene() {
               {report.checks.map((c) => (
                 <tr key={c.id} className={`border-t border-slate-700/60 ${c.applies === false ? 'text-slate-500' : 'text-slate-300'}`} data-testid="hygiene-check-row" data-applies={c.applies === false ? 'false' : 'true'}>
                   <td className="px-3 py-2">
-                    <button onClick={() => { setCheck(c.id); setSeverity('all'); setTab('findings') }} className={`${c.applies === false ? 'text-slate-400' : 'text-white'} hover:text-primary-300 text-left`}>{checkTitle(c.id)}</button>
+                    <button onClick={() => { setCheck(c.id); setSeverity('all'); setTab('findings') }} className={`${c.applies === false ? 'text-slate-400' : 'text-ink'} hover:text-primary-300 text-left`}>{checkTitle(c.id)}</button>
                     <div className="text-[11px] font-mono text-slate-500">
                       {c.id}
                       {c.applies === false && c.since ? <span className="ml-2 font-sans">{tr('clusterHygiene.fromTarget', 'from target v1.{{since}}', { since: c.since })}</span> : null}
@@ -420,12 +420,12 @@ export default function ClusterHygiene() {
               <tbody>
                 {history.map((h) => (
                   <tr key={h.id} className="border-t border-slate-700/60 text-slate-300" data-testid="hygiene-history-row">
-                    <td className="px-3 py-2 whitespace-nowrap text-white" title={utcTitle(h.reviewed_at)}>{formatWhen(h.reviewed_at)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-ink" title={utcTitle(h.reviewed_at)}>{formatWhen(h.reviewed_at)}</td>
                     <td className="px-3 py-2">{h.reviewed_by_email}</td>
                     <td className="px-3 py-2">{h.note || '-'}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{h.counts?.critical ?? '-'} / {h.counts?.warning ?? '-'} / {h.counts?.info ?? '-'} / {h.counts?.exempt ?? '-'}</td>
                     <td className="px-3 py-2 text-right">
-                      <button onClick={() => { setViewId(h.id); setTab('findings') }} className="rounded-sm bg-slate-700 hover:bg-slate-600 px-2 py-1 text-xs text-white">
+                      <button onClick={() => { setViewId(h.id); setTab('findings') }} className="rounded-sm bg-slate-700 hover:bg-slate-600 px-2 py-1 text-xs text-ink">
                         {tr('clusterHygiene.open', 'Open')}
                       </button>
                     </td>
@@ -439,7 +439,7 @@ export default function ClusterHygiene() {
 
       {!viewId && (
         <div className="rounded-lg bg-slate-800/50 border border-slate-700 p-4 space-y-2" data-testid="hygiene-signoff-panel">
-          <div className="text-sm font-medium text-white">{tr('clusterHygiene.signoff.title', 'Sign off this cluster')}</div>
+          <div className="text-sm font-medium text-ink">{tr('clusterHygiene.signoff.title', 'Sign off this cluster')}</div>
           <p className="text-xs text-slate-400">
             {tr('clusterHygiene.signoff.hint', 'Stores the report as it stands with your name, the time and your note. Fix or exempt findings first (annotations kubeast.io/hygiene-exempt and kubeast.io/hygiene-exempt-reason).')}
           </p>
@@ -450,7 +450,7 @@ export default function ClusterHygiene() {
             rows={2}
             placeholder={tr('clusterHygiene.signoff.notePlaceholder', 'Findings and actions taken (optional)')}
             data-testid="hygiene-signoff-note"
-            className="w-full px-3 py-2 bg-slate-700 text-white rounded-sm border border-slate-600 focus:outline-hidden focus:border-primary-500 text-sm"
+            className="w-full px-3 py-2 bg-slate-700 text-ink rounded-sm border border-slate-600 focus:outline-hidden focus:border-primary-500 text-sm"
           />
           <div className="flex items-center gap-3">
             <button

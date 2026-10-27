@@ -58,19 +58,19 @@ export function PodSummaryTab({
       <div className="grid grid-cols-2 gap-4">
         <div>
           <p className="text-sm text-slate-400">{tr('clusterView.summary.kind', 'Kind')}</p>
-          <p className="text-white font-medium">{tr('clusterView.summary.kindPod', 'Pod')}</p>
+          <p className="text-ink font-medium">{tr('clusterView.summary.kindPod', 'Pod')}</p>
         </div>
         <div>
           <p className="text-sm text-slate-400">{tr('clusterView.summary.state', 'State')}</p>
-          <p className="text-white font-medium">{health.reason}</p>
+          <p className="text-ink font-medium">{health.reason}</p>
         </div>
         <div>
           <p className="text-sm text-slate-400">{tr('clusterView.summary.node', 'Node')}</p>
-          <p className="text-white font-medium">{pod.node || na}</p>
+          <p className="text-ink font-medium">{pod.node || na}</p>
         </div>
         <div>
           <p className="text-sm text-slate-400">{tr('clusterView.summary.createdAt', 'Created at')}</p>
-          <p className="text-white font-medium">
+          <p className="text-ink font-medium">
             {pod.created_at ? <span title={utcTitle(pod.created_at)}>{formatTime(pod.created_at)}</span> : na}
           </p>
         </div>
@@ -79,7 +79,7 @@ export function PodSummaryTab({
       {/* 컨테이너 상태 */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-bold text-white">
+          <h3 className="text-lg font-bold text-ink">
             {tr('clusterView.containers.title', 'Container state')}
           </h3>
         </div>
@@ -92,7 +92,7 @@ export function PodSummaryTab({
               placeholder={tr('clusterView.containers.searchPlaceholder', 'Search containers...')}
               value={containerSearchQuery}
               onChange={(e) => onContainerSearchChange(e.target.value)}
-              className="w-full h-10 pl-10 pr-10 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors"
+              className="w-full h-10 pl-10 pr-10 bg-slate-700 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors"
             />
             {containerSearchQuery && (
               <button
@@ -139,7 +139,7 @@ export function PodSummaryTab({
                       ) : (
                         <XCircle className="w-5 h-5 text-red-400" />
                       )}
-                      <span className="font-medium text-white">{container.name}</span>
+                      <span className="font-medium text-ink">{container.name}</span>
                     </div>
                     <span className={`text-sm ${stateColor}`}>{stateText}</span>
                   </div>
@@ -168,12 +168,12 @@ export function PodSummaryTab({
 
       {/* Health */}
       <div>
-        <h3 className="text-lg font-bold text-white mb-3">
+        <h3 className="text-lg font-bold text-ink mb-3">
           {tr('clusterView.health.title', 'Health')}
         </h3>
         <div className="flex items-center gap-2">
           {getHealthIcon(health.level, health.reason)}
-          <span className="text-white font-medium">{health.reason}</span>
+          <span className="text-ink font-medium">{health.reason}</span>
         </div>
       </div>
     </div>

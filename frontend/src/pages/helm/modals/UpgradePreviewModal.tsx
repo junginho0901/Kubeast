@@ -58,7 +58,7 @@ export default function UpgradePreviewModal({
         className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-3xl mx-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-lg font-semibold text-white mb-1">
+        <h3 className="text-lg font-semibold text-ink mb-1">
           {t('helmReleaseDetail.upgrade.title')}
         </h3>
         <p className="text-sm text-slate-400 mb-4">
@@ -80,7 +80,7 @@ export default function UpgradePreviewModal({
             type="button"
             onClick={onClose}
             disabled={applying}
-            className="px-4 py-2 text-sm text-slate-300 hover:text-white border border-slate-600 rounded-lg hover:bg-slate-800 disabled:opacity-50"
+            className="px-4 py-2 text-sm text-slate-300 hover:text-ink border border-slate-600 rounded-lg hover:bg-slate-800 disabled:opacity-50"
           >
             {t('helmReleaseDetail.upgrade.cancel')}
           </button>

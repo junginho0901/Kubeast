@@ -182,7 +182,7 @@ export default function HelmReleaseDetailPage() {
       <div className="flex items-center gap-3">
         <Link
           to="/helm/releases"
-          className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-white"
+          className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-ink"
         >
           <ArrowLeft className="w-4 h-4" />
           {t('helmReleases.title', 'Helm Releases')}
@@ -191,7 +191,7 @@ export default function HelmReleaseDetailPage() {
 
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold text-white">{rel.name}</h1>
+          <h1 className="text-3xl font-semibold text-ink">{rel.name}</h1>
           <p className="text-slate-400 text-sm mt-1">
             {rel.namespace} · {rel.chart}@{rel.chartVersion} · rev {rel.revision}
           </p>
@@ -227,8 +227,8 @@ export default function HelmReleaseDetailPage() {
             onClick={() => setTab(k)}
             className={`px-4 py-2 text-sm -mb-px border-b-2 transition ${
               tab === k
-                ? 'border-primary-500 text-white'
-                : 'border-transparent text-slate-400 hover:text-white'
+                ? 'border-primary-500 text-ink'
+                : 'border-transparent text-slate-400 hover:text-ink'
             }`}
           >
             {t(`helmReleaseDetail.tabs.${k}`)}

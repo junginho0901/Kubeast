@@ -249,7 +249,7 @@ export function OptimizationModal({
               onClick={() => applyResize(row)}
               disabled={resize.isPending}
               data-testid="optimization-resize"
-              className="h-7 px-2 rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-[11px] text-white inline-flex items-center gap-1 whitespace-nowrap"
+              className="h-7 px-2 rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-[11px] text-ink inline-flex items-center gap-1 whitespace-nowrap"
               title={tr('dashboard.optimization.resize.title', 'Apply without restart')}
             >
               <Zap className="w-3 h-3" />
@@ -294,7 +294,7 @@ export function OptimizationModal({
         <div className="p-4 border-b border-slate-700">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-lg font-semibold text-white">
+              <h2 className="text-lg font-semibold text-ink">
                 {tr('dashboard.optimization.title', 'Optimization suggestions')}
               </h2>
               <p className="text-xs text-slate-400">
@@ -316,7 +316,7 @@ export function OptimizationModal({
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[240px] justify-between disabled:opacity-60 disabled:cursor-not-allowed"
+                className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[240px] justify-between disabled:opacity-60 disabled:cursor-not-allowed"
                 title={tr('dashboard.optimization.selectNamespaceTitle', 'Select namespace')}
                 disabled={isLoadingNamespaces}
               >
@@ -344,7 +344,7 @@ export function OptimizationModal({
                           setNamespace(ns)
                           setIsDropdownOpen(false)
                         }}
-                        className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg"
+                        className="w-full px-4 py-2.5 text-left text-sm text-ink hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg"
                       >
                         {namespace === ns && (
                           <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />

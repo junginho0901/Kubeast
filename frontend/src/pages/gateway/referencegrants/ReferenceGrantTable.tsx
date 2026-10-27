@@ -130,7 +130,7 @@ export function ReferenceGrantTable({
                 })}
               >
                 {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={item.namespace}><span className="block truncate">{item.namespace}</span></td>}
-                <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{item.name}</span></td>
+                <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{item.name}</span></td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{formatFrom(item)}</span></td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{formatTo(item)}</span></td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>

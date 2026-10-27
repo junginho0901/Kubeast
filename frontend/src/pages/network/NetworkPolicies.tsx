@@ -241,7 +241,7 @@ spec:
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-3xl font-semibold text-white">{tr('networkPoliciesPage.title', 'Network Policies')}</h1>
+          <h1 className="text-3xl font-semibold text-ink">{tr('networkPoliciesPage.title', 'Network Policies')}</h1>
           <p className="mt-2 text-slate-400">{tr('networkPoliciesPage.subtitle', 'Inspect and manage NetworkPolicy resources across namespaces.')}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -282,7 +282,7 @@ spec:
         {summaryCards.map(([label, value, boxClass, labelClass]) => (
           <div key={label} className={`rounded-lg border px-4 py-3 ${boxClass}`}>
             <p className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelClass}`}>{label}</p>
-            <p className="text-lg text-white font-semibold mt-1">{value}</p>
+            <p className="text-lg text-ink font-semibold mt-1">{value}</p>
           </div>
         ))}
       </div>

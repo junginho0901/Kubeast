@@ -46,7 +46,7 @@ export function GPUDashboardError({ tr, onRefetch, forbidden }: ErrorEmptyProps 
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-semibold text-white">
+          <h1 className="text-3xl font-semibold text-ink">
             {tr('gpuDashboardPage.title', 'GPU Dashboard')}
           </h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -68,7 +68,7 @@ export function GPUDashboardError({ tr, onRefetch, forbidden }: ErrorEmptyProps 
         </p>
         <button
           onClick={onRefetch}
-          className="mt-4 rounded-lg bg-slate-700 px-4 py-2 text-sm text-white hover:bg-slate-600"
+          className="mt-4 rounded-lg bg-slate-700 px-4 py-2 text-sm text-ink hover:bg-slate-600"
         >
           {tr('gpuDashboardPage.retry', 'Retry')}
         </button>
@@ -82,7 +82,7 @@ export function GPUDashboardEmpty({ tr, onRefetch }: ErrorEmptyProps) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-semibold text-white">
+          <h1 className="text-3xl font-semibold text-ink">
             {tr('gpuDashboardPage.title', 'GPU Dashboard')}
           </h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">

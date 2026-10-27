@@ -60,7 +60,7 @@ export default function AdminOrganizations() {
     setInputValue: (v: string) => void,
   ) => (
     <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-5">
-      <h2 className="text-lg font-semibold text-white">{title}</h2>
+      <h2 className="text-lg font-semibold text-ink">{title}</h2>
       <p className="mt-1 text-sm text-slate-400">{subtitle}</p>
 
       <form
@@ -78,7 +78,7 @@ export default function AdminOrganizations() {
         <input
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
-          className="flex-1 h-10 rounded-lg border border-slate-700 bg-slate-950/40 px-3 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
+          className="flex-1 h-10 rounded-lg border border-slate-700 bg-slate-950/40 px-3 text-sm text-ink placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
           placeholder={tr('adminOrg.inputPlaceholder', 'Enter name...')}
         />
         <button
@@ -153,7 +153,7 @@ export default function AdminOrganizations() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-semibold text-white">{tr('adminOrg.title', 'Team management')}</h1>
+        <h1 className="text-3xl font-semibold text-ink">{tr('adminOrg.title', 'Team management')}</h1>
         <p className="mt-2 text-slate-400">
           {tr('adminOrg.subtitle', 'Manage the list of Teams that users can select during registration.')}
         </p>
@@ -184,7 +184,7 @@ export default function AdminOrganizations() {
                   <Users className="h-5 w-5 text-primary-400" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-white">{selectedOrg.name}</h2>
+                  <h2 className="text-lg font-semibold text-ink">{selectedOrg.name}</h2>
                   <p className="text-sm text-slate-400">
                     {tr('adminOrg.teamMembers', 'Team members')}
                     <span className="ml-2 text-slate-500">({orgMembers.length})</span>
@@ -194,7 +194,7 @@ export default function AdminOrganizations() {
               <button
                 type="button"
                 onClick={() => setSelectedOrg(null)}
-                className="rounded-sm p-1.5 text-slate-400 hover:text-white hover:bg-slate-800"
+                className="rounded-sm p-1.5 text-slate-400 hover:text-ink hover:bg-slate-800"
               >
                 <X className="w-5 h-5" />
               </button>

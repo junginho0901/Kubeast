@@ -51,7 +51,7 @@ export default function ResourcesTab({ namespace, name }: { namespace: string; n
                 })
               }
             >
-              <td className="px-3 py-2 text-white">{r.kind}</td>
+              <td className="px-3 py-2 text-ink">{r.kind}</td>
               <td className="px-3 py-2 text-slate-400">{r.apiVersion}</td>
               <td className="px-3 py-2 text-slate-300">{r.name}</td>
               <td className="px-3 py-2 text-slate-300">{r.namespace ?? '-'}</td>

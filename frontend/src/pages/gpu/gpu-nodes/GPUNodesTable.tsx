@@ -95,7 +95,7 @@ export default function GPUNodesTable({
                 className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
                 onClick={() => openDetail({ kind: 'Node', name: node.name })}
               >
-                <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{node.name}</span></td>
+                <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{node.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{node.gpu_model ?? '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{node.gpu_memory ?? '-'}</td>
                 <td className="py-3 px-4 text-xs font-mono">{node.gpu_capacity}</td>

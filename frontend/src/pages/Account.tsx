@@ -7,10 +7,7 @@ import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
 import ClusterAccessSection from './account/ClusterAccessSection'
 import ApiKeysSection from './account/ApiKeysSection'
-import { setColorMode, useColorMode, type ColorMode } from '@/utils/colorMode'
-
-// light joins when its colours are done
-const SHOWN_COLOR_MODES: ColorMode[] = ['default', 'dark']
+import { COLOR_MODES, setColorMode, useColorMode } from '@/utils/colorMode'
 
 export default function Account() {
   const queryClient = useQueryClient()
@@ -91,7 +88,7 @@ export default function Account() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-semibold text-white">{tr('account.title', 'Settings')}</h1>
+        <h1 className="text-3xl font-semibold text-ink">{tr('account.title', 'Settings')}</h1>
         <p className="mt-2 text-slate-400">
           {tr('account.subtitle', 'Manage your profile, password, language, and color mode.')}
         </p>
@@ -105,7 +102,7 @@ export default function Account() {
                 <User className="w-6 h-6 text-primary-400" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-white">{tr('account.profile.title', 'Profile')}</h2>
+                <h2 className="text-xl font-semibold text-ink">{tr('account.profile.title', 'Profile')}</h2>
                 <p className="text-sm text-slate-400">
                   {tr('account.profile.subtitle', 'Signed-in account information')}
                 </p>
@@ -125,13 +122,13 @@ export default function Account() {
 
           <div className="rounded-xl border border-slate-700 bg-slate-900/40 p-4">
             <div className="text-xs text-slate-400">{tr('account.profile.name', 'Name')}</div>
-            <div className="mt-1 text-sm text-white">{me?.name ?? '-'}</div>
+            <div className="mt-1 text-sm text-ink">{me?.name ?? '-'}</div>
             <div className="mt-3 text-xs text-slate-400">{tr('account.profile.email', 'Email')}</div>
-            <div className="mt-1 text-sm text-white">{me?.email ?? '-'}</div>
+            <div className="mt-1 text-sm text-ink">{me?.email ?? '-'}</div>
             <div className="mt-3 text-xs text-slate-400">{tr('account.profile.team', 'Team')}</div>
-            <div className="mt-1 text-sm text-white">{me?.team ?? '-'}</div>
+            <div className="mt-1 text-sm text-ink">{me?.team ?? '-'}</div>
             <div className="mt-3 text-xs text-slate-400">{tr('account.profile.role', 'Role')}</div>
-            <div className="mt-1 text-sm text-white">{me?.role?.name ?? '-'}</div>
+            <div className="mt-1 text-sm text-ink">{me?.role?.name ?? '-'}</div>
           </div>
         </div>
 
@@ -145,7 +142,7 @@ export default function Account() {
               <Languages className="w-6 h-6 text-slate-300" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-white">{tr('account.language.title', 'Language')}</h2>
+              <h2 className="text-xl font-semibold text-ink">{tr('account.language.title', 'Language')}</h2>
               <p className="text-sm text-slate-400">
                 {tr('account.language.subtitle', 'Choose the display language.')}
               </p>
@@ -181,7 +178,7 @@ export default function Account() {
                   }}
                   className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-sm ${
                     language === 'en'
-                      ? 'bg-primary-600/20 text-white'
+                      ? 'bg-primary-600/20 text-ink'
                       : 'text-slate-200 hover:bg-slate-800'
                   }`}
                 >
@@ -195,7 +192,7 @@ export default function Account() {
                   }}
                   className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-sm ${
                     language === 'ko'
-                      ? 'bg-primary-600/20 text-white'
+                      ? 'bg-primary-600/20 text-ink'
                       : 'text-slate-200 hover:bg-slate-800'
                   }`}
                 >
@@ -215,7 +212,7 @@ export default function Account() {
               <Palette className="w-6 h-6 text-slate-300" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-white">{tr('account.colorMode.title', 'Color mode')}</h2>
+              <h2 className="text-xl font-semibold text-ink">{tr('account.colorMode.title', 'Color mode')}</h2>
               <p className="text-sm text-slate-400">
                 {tr('account.colorMode.subtitle', 'Choose the console colors. The choice is kept in this browser.')}
               </p>
@@ -227,7 +224,7 @@ export default function Account() {
             aria-label={tr('account.colorMode.title', 'Color mode')}
             className="inline-flex gap-1 rounded-lg border border-slate-700 bg-slate-900/40 p-1"
           >
-            {SHOWN_COLOR_MODES.map((mode) => (
+            {COLOR_MODES.map((mode) => (
               <button
                 key={mode}
                 type="button"
@@ -236,7 +233,7 @@ export default function Account() {
                 data-testid={`color-mode-${mode}`}
                 onClick={() => setColorMode(mode)}
                 className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
-                  colorMode === mode ? 'bg-primary-600 text-white' : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
+                  colorMode === mode ? 'bg-primary-600 text-white' : 'text-slate-300 hover:bg-slate-700/50 hover:text-ink'
                 }`}
               >
                 {tr(`account.colorMode.${mode}`, { default: 'Default', dark: 'Dark', light: 'Light' }[mode])}
@@ -292,7 +289,7 @@ export default function Account() {
                   type="password"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2.5 text-sm text-ink placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
                   placeholder="••••••••"
                   autoComplete="current-password"
                 />
@@ -306,7 +303,7 @@ export default function Account() {
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2.5 text-sm text-ink placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
                   placeholder={tr('account.password.minLength', 'At least 4 characters')}
                   autoComplete="new-password"
                 />
@@ -320,7 +317,7 @@ export default function Account() {
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2.5 text-sm text-ink placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
                   placeholder={tr('account.password.confirmPlaceholder', 'Type again')}
                   autoComplete="new-password"
                 />

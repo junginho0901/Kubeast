@@ -147,7 +147,7 @@ export default function YamlEditor({
             type="button"
             onClick={onRefresh}
             disabled={!isReady || isRefreshing}
-            className="px-2.5 py-1 text-xs rounded-sm border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-50 transition-colors"
+            className="px-2.5 py-1 text-xs rounded-sm border border-slate-700 text-slate-300 hover:text-ink hover:border-slate-500 disabled:opacity-50 transition-colors"
           >
             {labels.refresh}
           </button>
@@ -156,7 +156,7 @@ export default function YamlEditor({
             onClick={handleCopy}
             disabled={!isReady || !draft}
             className={`relative inline-flex items-center justify-center px-2.5 py-1 text-xs rounded-sm border border-slate-700 min-w-[52px] disabled:opacity-50 transition-colors ${
-              copied ? 'text-emerald-300 border-emerald-500/40' : 'text-slate-300 hover:text-white hover:border-slate-500'
+              copied ? 'text-emerald-300 border-emerald-500/40' : 'text-slate-300 hover:text-ink hover:border-slate-500'
             }`}
           >
             <span className={copied ? 'opacity-0' : 'opacity-100'}>{labels.copy}</span>
@@ -181,7 +181,7 @@ export default function YamlEditor({
                       setDraft(value || '')
                     }}
                     disabled={!isReady}
-                    className="px-2.5 py-1 text-xs rounded-sm border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 transition-colors"
+                    className="px-2.5 py-1 text-xs rounded-sm border border-slate-700 text-slate-300 hover:text-ink hover:border-slate-500 transition-colors"
                   >
                     {labels.cancel}
                   </button>
@@ -191,7 +191,7 @@ export default function YamlEditor({
                   type="button"
                   onClick={() => setIsEditing(true)}
                   disabled={!isReady}
-                  className="px-2.5 py-1 text-xs rounded-sm border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-50 transition-colors"
+                  className="px-2.5 py-1 text-xs rounded-sm border border-slate-700 text-slate-300 hover:text-ink hover:border-slate-500 disabled:opacity-50 transition-colors"
                 >
                   {labels.edit}
                 </button>

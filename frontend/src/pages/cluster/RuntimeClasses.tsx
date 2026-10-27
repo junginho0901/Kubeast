@@ -236,7 +236,7 @@ handler: runc
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-3xl font-semibold text-white">{tr('runtimeClasses.title', 'Runtime Classes')}</h1>
+          <h1 className="text-3xl font-semibold text-ink">{tr('runtimeClasses.title', 'Runtime Classes')}</h1>
           <p className="mt-2 text-slate-400">
             {tr('runtimeClasses.subtitle', 'Manage container runtime configurations for the cluster.')}
           </p>
@@ -273,7 +273,7 @@ handler: runc
             placeholder={tr('runtimeClasses.searchPlaceholder', 'Search runtime classes by name or handler...')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
         </div>
       </div>
@@ -281,11 +281,11 @@ handler: runc
       <div className="grid grid-cols-2 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('runtimeClasses.stats.total', 'Total')}</p>
-          <p className="text-lg text-white font-semibold mt-1">{summary.total}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('runtimeClasses.stats.uniqueHandlers', 'Unique Handlers')}</p>
-          <p className="text-lg text-white font-semibold mt-1">{summary.uniqueHandlers}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{summary.uniqueHandlers}</p>
         </div>
       </div>
 
@@ -332,7 +332,7 @@ handler: runc
                     rawJson: runtimeClassToRawJson(rc),
                   })}
                 >
-                  <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{rc.name}</span></td>
+                  <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{rc.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{rc.handler}</td>
                   <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(rc.created_at)}</td>
                 </tr>

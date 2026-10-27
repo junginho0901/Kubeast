@@ -84,7 +84,7 @@ export function SummaryCardsRow({ data, allocationRate, devicePluginHealthy, tr 
                   <Icon className={`h-4 w-4 ${card.iconColor}`} />
                 </div>
               </div>
-              <p className="mt-2 text-3xl font-bold text-white">{card.value}</p>
+              <p className="mt-2 text-3xl font-bold text-ink">{card.value}</p>
               {card.bar && (
                 <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-700">
                   <div

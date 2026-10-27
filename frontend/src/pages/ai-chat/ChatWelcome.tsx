@@ -19,7 +19,7 @@ export function ChatWelcome({ emptyTitle, emptySubtitle, questions, onSelectQues
         <div className="mb-6">
           <ParticleWaveLoader className="w-[clamp(220px,24vh,360px)] h-[clamp(220px,24vh,360px)]" />
         </div>
-        <h2 className="text-2xl sm:text-3xl font-semibold text-white mb-2 text-center">
+        <h2 className="text-2xl sm:text-3xl font-semibold text-ink mb-2 text-center">
           {emptyTitle}
         </h2>
         <p className="text-slate-400 mb-8 text-center text-sm sm:text-base">

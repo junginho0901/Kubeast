@@ -97,7 +97,7 @@ export function IssuesModal({
         <div className="p-6 border-b border-slate-700">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-xl font-semibold text-white">{tr('dashboard.issues.title', 'Issues')}</h2>
+              <h2 className="text-xl font-semibold text-ink">{tr('dashboard.issues.title', 'Issues')}</h2>
               <p className="text-sm text-slate-400">
                 {tr(
                   'dashboard.issues.subtitle',
@@ -179,7 +179,7 @@ export function IssuesModal({
               placeholder={tr('dashboard.issues.searchPlaceholder', 'Search issues (name/namespace/message)...')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-10 pl-10 pr-10 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors"
+              className="w-full h-10 pl-10 pr-10 bg-slate-700 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors"
             />
             {searchQuery && (
               <button
@@ -251,7 +251,7 @@ export function IssuesModal({
                                 >
                                   {issueSeverityLabels[issue.severity] || issue.severity.toUpperCase()}
                                 </span>
-                                <p className="text-sm font-medium text-white truncate">
+                                <p className="text-sm font-medium text-ink truncate">
                                   {issue.title}
                                 </p>
                                 {issue.namespace && (

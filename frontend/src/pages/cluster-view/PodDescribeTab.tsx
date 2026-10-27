@@ -17,36 +17,36 @@ export function PodDescribeTab({ data, na, tr }: Props) {
     <div className="space-y-6">
       {/* 기본 정보 */}
       <div>
-        <h3 className="text-lg font-semibold text-white mb-4">
+        <h3 className="text-lg font-semibold text-ink mb-4">
           {tr('clusterView.describe.basicInfo', 'Basic information')}
         </h3>
         <div className="grid grid-cols-2 gap-4 bg-slate-800 rounded-lg p-4">
           <div>
             <p className="text-sm text-slate-400">{tr('clusterView.describe.name', 'Name')}</p>
-            <p className="text-white font-medium">{data.name}</p>
+            <p className="text-ink font-medium">{data.name}</p>
           </div>
           <div>
             <p className="text-sm text-slate-400">{tr('clusterView.describe.namespace', 'Namespace')}</p>
-            <p className="text-white font-medium">{data.namespace}</p>
+            <p className="text-ink font-medium">{data.namespace}</p>
           </div>
           <div>
             <p className="text-sm text-slate-400">{tr('clusterView.describe.node', 'Node')}</p>
-            <p className="text-white font-medium">{data.node || na}</p>
+            <p className="text-ink font-medium">{data.node || na}</p>
           </div>
           <div>
             <p className="text-sm text-slate-400">{tr('clusterView.describe.phase', 'Phase')}</p>
-            <p className="text-white font-medium">{data.phase}</p>
+            <p className="text-ink font-medium">{data.phase}</p>
           </div>
           <div>
             <p className="text-sm text-slate-400">{tr('clusterView.describe.createdAt', 'Created at')}</p>
-            <p className="text-white font-medium">
+            <p className="text-ink font-medium">
               <span title={utcTitle(data.created_at)}>{formatTime(data.created_at)}</span>
             </p>
           </div>
           {data.pod_ip && (
             <div>
               <p className="text-sm text-slate-400">{tr('clusterView.describe.podIp', 'Pod IP')}</p>
-              <p className="text-white font-medium">{data.pod_ip}</p>
+              <p className="text-ink font-medium">{data.pod_ip}</p>
             </div>
           )}
         </div>
@@ -55,7 +55,7 @@ export function PodDescribeTab({ data, na, tr }: Props) {
       {/* 레이블 */}
       {data.labels && Object.keys(data.labels).length > 0 && (
         <div>
-          <h3 className="text-lg font-semibold text-white mb-4">
+          <h3 className="text-lg font-semibold text-ink mb-4">
             {tr('clusterView.describe.labels', 'Labels')}
           </h3>
           <div className="bg-slate-800 rounded-lg p-4">
@@ -63,7 +63,7 @@ export function PodDescribeTab({ data, na, tr }: Props) {
               {Object.entries(data.labels).map(([key, value]) => (
                 <div key={key} className="flex items-start gap-2">
                   <span className="text-slate-400 font-mono text-sm">{key}:</span>
-                  <span className="text-white font-mono text-sm">{String(value)}</span>
+                  <span className="text-ink font-mono text-sm">{String(value)}</span>
                 </div>
               ))}
             </div>
@@ -74,14 +74,14 @@ export function PodDescribeTab({ data, na, tr }: Props) {
       {/* 컨테이너 */}
       {data.containers && data.containers.length > 0 && (
         <div>
-          <h3 className="text-lg font-semibold text-white mb-4">
+          <h3 className="text-lg font-semibold text-ink mb-4">
             {tr('clusterView.describe.containers', 'Containers')}
           </h3>
           <div className="space-y-4">
             {data.containers.map((container: any, idx: number) => (
               <div key={idx} className="bg-slate-800 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-white font-medium">{container.name}</h4>
+                  <h4 className="text-ink font-medium">{container.name}</h4>
                   <span className={`px-2 py-1 rounded-sm text-xs font-medium ${
                     container.ready ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
                   }`}>
@@ -93,11 +93,11 @@ export function PodDescribeTab({ data, na, tr }: Props) {
                 <div className="space-y-2 text-sm">
                   <div>
                     <span className="text-slate-400">{tr('clusterView.describe.containerImage', 'Image')}: </span>
-                    <span className="text-white font-mono">{container.image}</span>
+                    <span className="text-ink font-mono">{container.image}</span>
                   </div>
                   <div>
                     <span className="text-slate-400">{tr('clusterView.describe.containerState', 'State')}: </span>
-                    <span className="text-white">
+                    <span className="text-ink">
                       {container.state?.running
                         ? tr('clusterView.containers.state.running', 'Running')
                         : container.state?.waiting
@@ -113,7 +113,7 @@ export function PodDescribeTab({ data, na, tr }: Props) {
                   </div>
                   <div>
                     <span className="text-slate-400">{tr('clusterView.describe.containerRestarts', 'Restart Count')}: </span>
-                    <span className="text-white">{container.restart_count}</span>
+                    <span className="text-ink">{container.restart_count}</span>
                   </div>
                 </div>
               </div>
@@ -125,7 +125,7 @@ export function PodDescribeTab({ data, na, tr }: Props) {
       {/* Conditions */}
       {data.conditions && data.conditions.length > 0 && (
         <div>
-          <h3 className="text-lg font-semibold text-white mb-4">
+          <h3 className="text-lg font-semibold text-ink mb-4">
             {tr('clusterView.describe.conditions', 'Conditions')}
           </h3>
           <div className="bg-slate-800 rounded-lg overflow-hidden">
@@ -146,7 +146,7 @@ export function PodDescribeTab({ data, na, tr }: Props) {
               <tbody className="divide-y divide-slate-700">
                 {data.conditions.map((condition: any, idx: number) => (
                   <tr key={idx}>
-                    <td className="px-4 py-2 text-sm text-white">{condition.type}</td>
+                    <td className="px-4 py-2 text-sm text-ink">{condition.type}</td>
                     <td className="px-4 py-2 text-sm">
                       <span className={`px-2 py-1 rounded-sm text-xs font-medium ${
                         condition.status === 'True' ? 'bg-green-500/20 text-green-400' : 'bg-slate-600 text-slate-300'
@@ -168,7 +168,7 @@ export function PodDescribeTab({ data, na, tr }: Props) {
       {/* Events */}
       {data.events && data.events.length > 0 && (
         <div>
-          <h3 className="text-lg font-semibold text-white mb-4">
+          <h3 className="text-lg font-semibold text-ink mb-4">
             {tr('clusterView.describe.events', 'Events')}
           </h3>
           <div className="bg-slate-800 rounded-lg p-4 space-y-3 max-h-96 overflow-y-auto">
@@ -182,7 +182,7 @@ export function PodDescribeTab({ data, na, tr }: Props) {
                       }`}>
                         {event.type}
                       </span>
-                      <span className="text-white text-sm font-medium">{event.reason}</span>
+                      <span className="text-ink text-sm font-medium">{event.reason}</span>
                     </div>
                     <p className="text-slate-300 text-sm mt-1">{event.message}</p>
                   </div>

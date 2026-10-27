@@ -115,7 +115,7 @@ export function SessionSidebar({
             <button
               onClick={handleToggleMultiSelect}
               className={`w-full btn flex items-center justify-center gap-2 text-sm ${
-                isMultiSelectMode ? 'bg-slate-600 hover:bg-slate-500 text-white' : 'btn-secondary'
+                isMultiSelectMode ? 'bg-slate-600 hover:bg-slate-500 text-ink' : 'btn-secondary'
               }`}
             >
               {isMultiSelectMode ? (
@@ -239,7 +239,7 @@ export function SessionSidebar({
                           type="text"
                           value={editingTitle}
                           onChange={(e) => setEditingTitle(e.target.value)}
-                          className="flex-1 px-2 py-1 text-sm bg-slate-600 border border-slate-500 rounded-sm text-white min-w-0"
+                          className="flex-1 px-2 py-1 text-sm bg-slate-600 border border-slate-500 rounded-sm text-ink min-w-0"
                           autoFocus
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') handleSaveEdit(session.id)

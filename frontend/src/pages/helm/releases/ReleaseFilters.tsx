@@ -40,7 +40,7 @@ export default function ReleaseFilters({
             placeholder={t('helmReleases.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
         </div>
       </div>
@@ -48,7 +48,7 @@ export default function ReleaseFilters({
         <button
           type="button"
           onClick={() => setNsOpen(!nsOpen)}
-          className="h-12 w-full px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent flex items-center justify-between gap-2"
+          className="h-12 w-full px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent flex items-center justify-between gap-2"
         >
           <span className="text-sm font-medium truncate">
             {namespace === '' ? t('helmReleases.allNamespaces') : namespace}
@@ -65,7 +65,7 @@ export default function ReleaseFilters({
                 onNamespaceChange('')
                 setNsOpen(false)
               }}
-              className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg"
+              className="w-full px-4 py-2.5 text-left text-sm text-ink hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg"
             >
               {namespace === '' && <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />}
               <span className={namespace === '' ? 'font-medium' : ''}>
@@ -80,7 +80,7 @@ export default function ReleaseFilters({
                   onNamespaceChange(ns)
                   setNsOpen(false)
                 }}
-                className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 last:rounded-b-lg"
+                className="w-full px-4 py-2.5 text-left text-sm text-ink hover:bg-slate-600 transition-colors flex items-center gap-2 last:rounded-b-lg"
               >
                 {namespace === ns && <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />}
                 <span className={namespace === ns ? 'font-medium' : ''}>{ns}</span>

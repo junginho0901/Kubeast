@@ -153,7 +153,7 @@ export function HPATable({
                 })}
               >
                 {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={h.namespace}>{h.namespace}</td>}
-                <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{h.name}</span></td>
+                <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{h.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{h.target_ref || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{h.min_replicas ?? '-'}</td>
                 <td className="py-3 px-4 text-xs font-mono">{h.max_replicas}</td>

@@ -143,7 +143,7 @@ export function LogSearchView({ namespace, pod, workload, container, size = 'md'
   const buttonSize = sm ? 'h-8 px-3 text-xs' : 'h-10 px-4 text-sm'
   const toggleSize = sm ? 'h-8 w-8 text-xs' : 'h-10 w-10 text-sm'
   const toggleOn = 'bg-primary-600 border-primary-500 text-white'
-  const toggleOff = 'bg-slate-800 border-slate-600 text-slate-400 hover:text-white'
+  const toggleOff = 'bg-slate-800 border-slate-600 text-slate-400 hover:text-ink'
   const showPod = !pod
   const showContainer = !container
   const rangeLabel = (m: number) =>
@@ -166,7 +166,7 @@ export function LogSearchView({ namespace, pod, workload, container, size = 'md'
             spellCheck={false}
             placeholder={t('clusterView.logSearch.logqlPlaceholder', '{} |= "error" | json | level="error"')}
             aria-label={t('clusterView.logSearch.logqlLabel', 'LogQL query')}
-            className={`${sm ? 'text-xs min-w-[140px]' : 'text-sm min-w-[260px]'} flex-1 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 font-mono text-white placeholder:text-slate-500 focus:outline-none focus:border-primary-500`}
+            className={`${sm ? 'text-xs min-w-[140px]' : 'text-sm min-w-[260px]'} flex-1 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 font-mono text-ink placeholder:text-slate-500 focus:outline-none focus:border-primary-500`}
           />
         ) : (
           <input
@@ -177,7 +177,7 @@ export function LogSearchView({ namespace, pod, workload, container, size = 'md'
             maxLength={256}
             placeholder={regex ? t('clusterView.logSearch.regexPlaceholder', 'Regular expression (RE2)') : t('clusterView.logSearch.placeholder', 'Text in the line')}
             aria-label={t('clusterView.logSearch.textLabel', 'Search text')}
-            className={`${sm ? 'h-8 text-xs min-w-[140px]' : 'h-10 text-sm min-w-[260px]'} flex-1 rounded-lg border border-slate-600 bg-slate-800 px-3 text-white placeholder:text-slate-500 focus:outline-none focus:border-primary-500`}
+            className={`${sm ? 'h-8 text-xs min-w-[140px]' : 'h-10 text-sm min-w-[260px]'} flex-1 rounded-lg border border-slate-600 bg-slate-800 px-3 text-ink placeholder:text-slate-500 focus:outline-none focus:border-primary-500`}
           />
         )}
         <CustomDropdown
@@ -310,7 +310,7 @@ export function LogSearchView({ namespace, pod, workload, container, size = 'md'
           data-testid="logsearch-older"
           disabled={busy}
           onClick={() => void run(submitted, oldest)}
-          className={`${buttonSize} rounded-lg border border-slate-600 bg-slate-700 text-white hover:bg-slate-600 whitespace-nowrap flex items-center gap-2 transition-colors disabled:opacity-50 ${sm ? '' : 'mt-3 self-start'}`}
+          className={`${buttonSize} rounded-lg border border-slate-600 bg-slate-700 text-ink hover:bg-slate-600 whitespace-nowrap flex items-center gap-2 transition-colors disabled:opacity-50 ${sm ? '' : 'mt-3 self-start'}`}
         >
           <History className={sm ? 'w-3 h-3' : 'w-4 h-4'} />
           {t('clusterView.logSearch.older', 'Load older')}

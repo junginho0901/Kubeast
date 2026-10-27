@@ -27,7 +27,7 @@ export function DateTextInput({ value, onChange, withTime = false, testId, class
         placeholder={format}
         aria-invalid={invalid || undefined}
         data-testid={testId}
-        className={`mt-1 block ${withTime ? 'w-44' : 'w-32'} ${className} rounded-lg border bg-slate-900 px-2 font-mono text-sm text-white placeholder-slate-500 ${invalid ? 'border-red-500' : 'border-slate-600'}`}
+        className={`mt-1 block ${withTime ? 'w-44' : 'w-32'} ${className} rounded-lg border bg-slate-900 px-2 font-mono text-sm text-ink placeholder-slate-500 ${invalid ? 'border-red-500' : 'border-slate-600'}`}
       />
       {invalid && (
         <span className="mt-1 block text-[11px] font-normal text-red-300">
