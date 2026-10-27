@@ -79,7 +79,7 @@ docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ### Upgrade
 
 ```bash
-helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version <version> \
+helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.3 \
   -n kubeast --reset-then-reuse-values
 ```
 
