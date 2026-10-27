@@ -2779,7 +2779,9 @@
       "warning": "Copy this temporary password now — it will not be shown again. Ask the user to change it after signing in.",
       "copy": "Copy",
       "copied": "Copied",
-      "close": "Done"
+      "close": "Done",
+      "self": "This is your own account: closing this window signs you out. Sign in again with this password.",
+      "signIn": "Done — sign in again"
     },
     "resetting": "Resetting...",
     "reset": "Reset password",

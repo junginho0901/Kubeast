@@ -11,6 +11,8 @@ import { useAdminUserData } from './admin-users/useAdminUserData'
 import { ReauthModal } from './admin-users/ReauthModal'
 import { CreateUserModal } from './admin-users/CreateUserModal'
 import { useConfirm } from '@/services/confirm'
+import { logoutSession } from '@/services/auth'
+import { useNavigate } from 'react-router-dom'
 import { UserDetailModal } from './admin-users/UserDetailModal'
 
 const USERS_PAGE_SIZE = 25
@@ -94,8 +96,20 @@ export default function AdminUsers() {
   })
 
   // 비번 재발급 결과 (1회용 평문) — 모달로 한 번 보여주고 닫히면 잊어버림
-  const [resetResult, setResetResult] = useState<{ targetLabel: string; password: string } | null>(null)
+  const [resetResult, setResetResult] = useState<{ targetLabel: string; password: string; self: boolean } | null>(null)
   const [resetCopied, setResetCopied] = useState(false)
+  const navigate = useNavigate()
+  // One's own reset: the server kept this session so the window could show the password; closing it signs out
+  // to the login page, where the new password signs in.
+  const closeResetResult = () => {
+    const self = resetResult?.self
+    setResetResult(null)
+    if (self) {
+      void logoutSession()
+      queryClient.clear()
+      navigate('/login')
+    }
+  }
 
   // Dormant accounts: "sweep now" appears when the sweeper is on; the lock
   // badge and the unlock button show for any locked account either way.
@@ -120,10 +134,10 @@ export default function AdminUsers() {
   const resetPasswordMutation = useMutation({
     mutationFn: ({ userId, targetLabel }: { userId: string; targetLabel: string }) =>
       api.adminResetUserPassword(userId).then((res) => ({ res, targetLabel })),
-    onSuccess: ({ res, targetLabel }) => {
+    onSuccess: ({ res, targetLabel }, { userId }) => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
       setResetCopied(false)
-      setResetResult({ targetLabel, password: res.temporary_password })
+      setResetResult({ targetLabel, password: res.temporary_password, self: !!me?.id && userId === me.id })
     },
   })
 
@@ -568,6 +582,7 @@ export default function AdminUsers() {
                       }}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900/40 px-2.5 py-2 text-xs text-slate-200 hover:bg-slate-900/60 focus:outline-hidden focus:ring-2 focus:ring-primary-600 disabled:opacity-50"
                       title={tr('adminUsers.resetPasswordTitle', 'Reset to random password')}
+                      data-testid="user-reset-password"
                     >
                       <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
                       <span>
@@ -894,11 +909,12 @@ export default function AdminUsers() {
 
       {/* Reset password result modal — 1회용 평문 비밀번호 표시 */}
       {resetResult && (
-        <ModalOverlay onClose={() => setResetResult(null)}>
+        <ModalOverlay onClose={closeResetResult}>
           <div
             className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
             role="dialog"
             aria-modal="true"
+            data-testid="reset-password-result"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-3 mb-4">
@@ -921,9 +937,14 @@ export default function AdminUsers() {
                 'Copy this temporary password now — it will not be shown again. Ask the user to change it after signing in.',
               )}
             </p>
+            {resetResult.self && (
+              <p className="text-xs text-amber-300 mb-2" data-testid="reset-password-self">
+                {tr('adminUsers.resetResult.self', 'This is your own account: closing this window signs you out. Sign in again with this password.')}
+              </p>
+            )}
 
             <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2">
-              <code className="flex-1 font-mono text-sm text-amber-300 break-all">
+              <code className="flex-1 font-mono text-sm text-amber-300 break-all" data-testid="reset-password-value">
                 {resetResult.password}
               </code>
               <button
@@ -949,10 +970,13 @@ export default function AdminUsers() {
             <div className="mt-5 flex justify-end">
               <button
                 type="button"
-                onClick={() => setResetResult(null)}
+                onClick={closeResetResult}
                 className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-500"
+                data-testid="reset-password-done"
               >
-                {tr('adminUsers.resetResult.close', 'Done')}
+                {resetResult.self
+                  ? tr('adminUsers.resetResult.signIn', 'Done — sign in again')
+                  : tr('adminUsers.resetResult.close', 'Done')}
               </button>
             </div>
           </div>

@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -492,6 +493,15 @@ func (h *AuthHandler) AdminResetPassword(w http.ResponseWriter, r *http.Request)
 	updated, _ := h.repo.GetUserByID(r.Context(), userID)
 	if updated == nil {
 		updated = target
+	}
+	// An admin resetting their own password keeps this session, as a password change does: the page has to
+	// show the new password before they sign in with it.
+	if userID == payload.UserID {
+		if token, err := h.issueToken(r.Context(), updated); err != nil {
+			slog.Error("reset-password: re-issue session token", "user", updated.ID, "err", err)
+		} else {
+			h.setAuthCookie(w, r, token)
+		}
 	}
 	response.JSON(w, http.StatusOK, model.AdminResetPasswordResponse{
 		UserResponse:      updated.ToResponse(),
