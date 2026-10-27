@@ -76,6 +76,15 @@ To build from source:
 docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ```
 
+### Upgrade
+
+```bash
+helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version <version> \
+  -n kubeast --reset-then-reuse-values
+```
+
+`--reset-then-reuse-values` keeps the values you set and adds what the new version brings. `--reuse-values` keeps the defaults of the version you installed, so a value a later version added is missing; the chart stops such an upgrade with this hint and leaves the release as it was.
+
 ### Uninstall
 
 ```bash

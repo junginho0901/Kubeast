@@ -1,0 +1,19 @@
+{{- /*
+`helm upgrade --reuse-values` renders this chart on the values of the release it upgrades: that version's defaults,
+without what later versions added. Helm renders the deepest paths first, so this file stops such an upgrade with the
+fix before a template fails on a missing value. scripts/chart-upgrade-values.sh (CI) says when a path belongs here.
+*/}}
+{{- range list "features.networkFlowMonitor" }}
+{{- $node := $.Values }}
+{{- $found := true }}
+{{- range splitList "." . }}
+{{- if and $found (kindIs "map" $node) (hasKey $node .) }}
+{{- $node = index $node . }}
+{{- else }}
+{{- $found = false }}
+{{- end }}
+{{- end }}
+{{- if not $found }}
+{{- fail (printf "the values have no %s: they come from an earlier Kubeast chart, which --reuse-values keeps. Upgrade with --reset-then-reuse-values instead (your values are kept, this chart's new defaults are added)." .) }}
+{{- end }}
+{{- end }}

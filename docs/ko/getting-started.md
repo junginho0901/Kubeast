@@ -74,6 +74,15 @@ cd Kubeast
 docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ```
 
+### 업그레이드
+
+```bash
+helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version <version> \
+  -n kubeast --reset-then-reuse-values
+```
+
+`--reset-then-reuse-values`는 직접 넣은 값을 그대로 두고 새 버전에 생긴 값을 더합니다. `--reuse-values`는 처음 설치한 버전의 기본값을 그대로 써서 뒤 버전에 생긴 값이 빠집니다. 차트는 그런 업그레이드를 이 안내와 함께 멈추고, 릴리스는 그대로 둡니다.
+
 ### 제거
 
 ```bash
