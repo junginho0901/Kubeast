@@ -51,6 +51,10 @@ func pingWithRetry(ctx context.Context, pool *pgxpool.Pool, attempts int, wait t
 }
 
 func main() {
+	// `server reset-admin`: get the admin account back (reset_admin.go), then exit.
+	if len(os.Args) > 1 && os.Args[1] == "reset-admin" {
+		os.Exit(runResetAdmin(os.Args[2:], os.Stdout))
+	}
 	cfg := config.Load()
 	pkglogger.Setup("auth-service", cfg.Debug)
 	slog.Info("starting auth-service", "port", cfg.Port)

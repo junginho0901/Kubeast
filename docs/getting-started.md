@@ -124,6 +124,20 @@ grep DEFAULT_ADMIN_PASSWORD .env
 
 To set the password yourself, pass `--set admin.password=<your-password>` at install time.
 
+#### Locked out of the admin account
+
+If the admin password was changed and lost, the account is locked after failed sign-ins, or it lost the Admin role, run `reset-admin` where auth-service runs. It sets the account back to the password above (the Secret's `DEFAULT_ADMIN_PASSWORD`, or `.env` for Docker), gives it the Admin role, clears its locks and ends its sessions; a deleted admin account is created again. It prints no password and leaves an audit row (`user.account.recover`).
+
+```bash
+# K8s / Helm
+kubectl -n kubeast exec deploy/auth-service -- /app/server reset-admin
+
+# Docker
+docker compose exec auth-service /app/server reset-admin
+```
+
+`--email <account>` recovers another account than `admin`. To use a new password instead of the generated one, change it first (`helm upgrade … --reset-then-reuse-values --set admin.password=<new>`, or `DEFAULT_ADMIN_PASSWORD` in `.env`), restart auth-service (`kubectl -n kubeast rollout restart deploy/auth-service`, or `docker compose up -d auth-service`), then run `reset-admin`.
+
 ### 3. Log in and connect a cluster (Connect your cluster)
 
 Log in with the `admin` account first. If no cluster is registered, you are taken to the `/setup` wizard right after login (the wizard and its API require admin permission). **Change the password right after logging in.**

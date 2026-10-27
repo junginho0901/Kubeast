@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -69,7 +70,9 @@ func (h *ClustersHandler) ListClusters(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !showAll {
+	// accessibleOnly lists what the caller reaches: every cluster for the global admin ("*"), the granted ones for
+	// anyone else — also for a holder of admin.clusters.list, which lists clusters but reaches none of them.
+	if !showAll || (accessibleOnly && !slices.Contains(payload.Perms["*"], "*")) {
 		accessible := make(map[string]struct{})
 		for cid := range payload.Perms {
 			if cid != "*" {
