@@ -99,7 +99,7 @@ export default function SavedSearches({ query, resources, namespace, onLoad }: P
           <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
         {open && (
-          <div className="absolute left-0 top-full mt-2 z-100 w-[min(28rem,90vw)] max-h-80 overflow-y-auto rounded-lg border border-slate-600 bg-slate-700 shadow-xl" data-testid="saved-search-menu">
+          <div className="absolute right-0 top-full mt-2 z-100 w-[min(28rem,90vw)] max-h-80 overflow-y-auto rounded-lg border border-slate-600 bg-slate-700 shadow-xl" data-testid="saved-search-menu">
             {searches.length === 0 ? (
               <p className="px-4 py-3 text-sm text-slate-400">{t('advancedSearch.saved.empty', 'No saved searches yet.')}</p>
             ) : (
