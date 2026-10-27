@@ -7,7 +7,7 @@ dependencies:
   # image tags; the chart in a checkout does not). Bump it and every place below before tagging vX.Y.Z —
   # the release workflow stops when the tag and this version differ.
   - name: kubeast
-    version: 0.7.3
+    version: 0.7.4
     refPaths:
       - path: install.sh
         match: '^CHART_VERSION="'

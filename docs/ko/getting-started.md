@@ -14,7 +14,7 @@
 태그가 붙은 스크립트를 내려받아 내용을 확인한 뒤 실행하세요. 검토하지 않은 스크립트를 `curl | bash`로 바로 실행하지 마세요.
 
 ```bash
-curl -fsSLo install.sh https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.3/install.sh
+curl -fsSLo install.sh https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.4/install.sh
 less install.sh
 bash install.sh
 ```
@@ -32,7 +32,7 @@ bash install.sh --load-balancer
 bash install.sh --namespace my-ns
 
 # 차트 버전 지정
-bash install.sh --version 0.7.3
+bash install.sh --version 0.7.4
 ```
 
 > 필요한 것: `kubectl`, `helm`, 접근할 수 있는 Kubernetes 클러스터
@@ -40,19 +40,19 @@ bash install.sh --version 0.7.3
 ### 옵션 2. Helm 직접 사용
 
 ```bash
-helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.3 \
+helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.4 \
   --namespace kubeast --create-namespace \
   --set ai.openaiApiKey=$OPENAI_API_KEY     # 선택: 나중에 UI에서도 등록 가능
 
 # 가장 가볍게: AI·캐시 없이 콘솔·관리·감사만 (파드 6개, docs/ko/architecture.md "자원 사용량")
-helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.3 -n kubeast --create-namespace \
-  -f https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.3/helm/kubeast/values-minimal.yaml
+helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.4 -n kubeast --create-namespace \
+  -f https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.4/helm/kubeast/values-minimal.yaml
 ```
 
 ### 옵션 3. Docker Compose (클러스터 없이 단일 호스트)
 
 ```bash
-git clone --branch v0.7.3 --depth 1 https://github.com/junginho0901/Kubeast.git
+git clone --branch v0.7.4 --depth 1 https://github.com/junginho0901/Kubeast.git
 cd Kubeast
 
 ./install-docker.sh
@@ -77,7 +77,7 @@ docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ### 업그레이드
 
 ```bash
-helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.3 \
+helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.4 \
   -n kubeast --reset-then-reuse-values
 ```
 

@@ -15,7 +15,7 @@ Install from the released chart (`oci://ghcr.io/junginho0901/charts/kubeast`), w
 Download the tagged script, check its contents, then run it (do not run an unreviewed script directly with `curl | bash`).
 
 ```bash
-curl -fsSLo install.sh https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.3/install.sh
+curl -fsSLo install.sh https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.4/install.sh
 less install.sh
 bash install.sh
 ```
@@ -33,7 +33,7 @@ bash install.sh --load-balancer
 bash install.sh --namespace my-ns
 
 # Set the chart version
-bash install.sh --version 0.7.3
+bash install.sh --version 0.7.4
 ```
 
 > Prerequisites: `kubectl`, `helm`, and a reachable Kubernetes cluster.
@@ -41,19 +41,19 @@ bash install.sh --version 0.7.3
 ### Option 2. Using Helm directly
 
 ```bash
-helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.3 \
+helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.4 \
   --namespace kubeast --create-namespace \
   --set ai.openaiApiKey=$OPENAI_API_KEY     # optional: can also be registered in the UI later
 
 # Lightest: console, management and audit only, without AI or cache (6 pods, docs/architecture.md "Resource usage")
-helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.3 -n kubeast --create-namespace \
-  -f https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.3/helm/kubeast/values-minimal.yaml
+helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.4 -n kubeast --create-namespace \
+  -f https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.4/helm/kubeast/values-minimal.yaml
 ```
 
 ### Option 3. Docker Compose (single host, no cluster)
 
 ```bash
-git clone --branch v0.7.3 --depth 1 https://github.com/junginho0901/Kubeast.git
+git clone --branch v0.7.4 --depth 1 https://github.com/junginho0901/Kubeast.git
 cd Kubeast
 
 ./install-docker.sh
@@ -79,7 +79,7 @@ docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ### Upgrade
 
 ```bash
-helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.3 \
+helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.4 \
   -n kubeast --reset-then-reuse-values
 ```
 
