@@ -87,8 +87,8 @@ test.describe('Recent flows and traffic lines from Calico', () => {
     const row = (peer: string) => section.getByTestId('netflow-row').filter({ has: page.getByTestId('netflow-peer').filter({ hasText: new RegExp(`^Deployment/${peer}$`) }) })
     await expect(row('client')).toHaveCount(1, { timeout: 30_000 })
     await expect(row('client').locator('td').nth(1)).toHaveText(/^(in|들어옴)$/)
-    await expect(row('stranger').locator('td').nth(1)).toHaveText(/^(in|들어옴)$/)
-    await expect(row('stranger').getByTestId('netflow-verdict')).toHaveText('DROPPED')
+    const denied = row('stranger').filter({ has: page.getByTestId('netflow-verdict').filter({ hasText: /^DROPPED$/ }) })
+    await expect(denied.locator('td').nth(1)).toHaveText(/^(in|들어옴)$/)
     // the pod's own set is never the other end
     await expect(row('web')).toHaveCount(0)
   })
