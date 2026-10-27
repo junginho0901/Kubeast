@@ -88,7 +88,7 @@ export function ResourceDetailHeader({
               onClick={() => onTabChange(id)}
               className={`flex items-center gap-1.5 px-3 py-1 rounded-md border transition-colors ${
                 tab === id
-                  ? 'border-slate-500 bg-slate-800 text-white'
+                  ? 'border-primary-600 bg-primary-600 text-white'
                   : 'border-slate-800 text-slate-400 hover:text-white'
               }`}
             >

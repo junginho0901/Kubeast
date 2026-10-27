@@ -175,7 +175,7 @@ export function ResourceGraphHeader({
                   onClick={() => toggleNs(ns.name)}
                   className="w-full px-4 py-2 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2"
                 >
-                  {selectedNamespaces.has(ns.name) && <CheckCircle className="w-3.5 h-3.5 text-green-400 shrink-0" />}
+                  {selectedNamespaces.has(ns.name) && <CheckCircle className="w-3.5 h-3.5 text-primary-400 shrink-0" />}
                   <span className={selectedNamespaces.has(ns.name) ? 'font-medium' : ''}>{ns.name}</span>
                 </button>
               ))}
@@ -285,7 +285,7 @@ export function ResourceGraphHeader({
                   }}
                   className={`px-1.5 py-0.5 rounded-sm text-[10px] transition-colors ${
                     kindFilters.has(kind)
-                      ? 'bg-slate-600 text-white'
+                      ? 'bg-primary-500/25 text-white'
                       : 'bg-slate-800 text-slate-600'
                   }`}
                 >
@@ -308,7 +308,7 @@ export function ResourceGraphHeader({
                     onClick={() => toggleEdgeType(type)}
                     className={`px-2 py-0.5 rounded-sm text-xs flex items-center gap-1.5 transition-colors ${
                       edgeTypeFilters.has(type)
-                        ? 'bg-slate-700 border border-slate-500'
+                        ? 'bg-primary-500/20 border border-primary-500/60'
                         : 'bg-slate-800 text-slate-500 border border-slate-700'
                     }`}
                   >

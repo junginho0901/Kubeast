@@ -67,7 +67,7 @@ export default function ReleaseFilters({
               }}
               className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg"
             >
-              {namespace === '' && <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />}
+              {namespace === '' && <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />}
               <span className={namespace === '' ? 'font-medium' : ''}>
                 {t('helmReleases.allNamespaces')}
               </span>
@@ -82,7 +82,7 @@ export default function ReleaseFilters({
                 }}
                 className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 last:rounded-b-lg"
               >
-                {namespace === ns && <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />}
+                {namespace === ns && <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />}
                 <span className={namespace === ns ? 'font-medium' : ''}>{ns}</span>
               </button>
             ))}

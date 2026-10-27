@@ -84,7 +84,7 @@ export function PodFilters({
               }}
               className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg"
             >
-              {selectedNamespace === 'all' && <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />}
+              {selectedNamespace === 'all' && <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />}
               <span className={selectedNamespace === 'all' ? 'font-medium' : ''}>
                 {allNamespacesLabel}
               </span>
@@ -99,7 +99,7 @@ export function PodFilters({
                 }}
                 className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 last:rounded-b-lg"
               >
-                {selectedNamespace === ns.name && <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />}
+                {selectedNamespace === ns.name && <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />}
                 <span className={selectedNamespace === ns.name ? 'font-medium' : ''}>{ns.name}</span>
               </button>
             ))}

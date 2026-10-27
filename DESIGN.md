@@ -3,8 +3,8 @@ version: alpha
 name: Kubeast console
 description: A dark operations console — neutral grey surfaces, one sky accent, colour only where it means something.
 colors:
-  primary: "#0369a1"
-  primary-hover: "#075985"
+  primary: "#027ac0"
+  primary-hover: "#0369a1"
   primary-bright: "#38bdf8"
   on-primary: "#ffffff"
   canvas: "#141414"
@@ -118,7 +118,7 @@ Colour, type and shape tokens live in `frontend/src/index.css` (`@theme`). Compo
 ## Colors
 
 - **Neutral grey (`slate-*`):** the `slate` ladder is a neutral grey, not Tailwind's blue slate (`gray-*` is set to the same ladder for the few screens written with it). Canvas `slate-900` (#141414) for the page, surface `slate-800` (#1c1c1c) for cards and the sidebar, raised `slate-700` (#2a2a2a) for hover, secondary buttons and hairlines. Text `slate-100` (#f3f3f3), muted `slate-400` (#a3a3a3), faint `slate-500` (#858585).
-- **Sky accent (`primary-*`):** the one accent. Filled controls use `primary-600` (#0369a1, white text 5.9:1) with `primary-700` on hover; text, lines and focus on the dark grey use `primary-400` (#38bdf8). It marks what can be pressed (the page's main button, links), what is selected, focus, and the way into the AI (the floating chat button).
+- **Sky accent (`primary-*`):** the one accent. Filled controls and selections use `primary-600` (#027ac0 — the brightest sky that keeps white text at 4.5:1, here 4.6:1) with `primary-700` on hover; text, lines and focus on the dark grey use `primary-400` (#38bdf8). It marks what can be pressed (the page's main button, links), what is selected — the sidebar item, a tab or segment, the open chat in the history, the drawer's Info/YAML, a filter that is on, a switch that is on, the check on a dropdown's chosen entry — focus, and the way into the AI (the floating chat button). A check that reports a state (Ready, no issues) stays green.
 - **State:** green (healthy), yellow/amber (needs a look), red (failed) — only for the state of something. A count that is not a state (Total, Exposed, Total rules) stays grey.
 - **Not used on the console:** cyan, indigo, purple, pink as decoration, gradients, glows. Charts with one series use the sky accent; charts by state use the state colours. Where many series or kinds must be told apart — the chat's charts (`utils/chatChart.ts`), the Resource Graph's relation lines — a categorical palette is data, not decoration, and stays.
 - **Literals:** a library that takes a colour value instead of a class (the xterm terminal theme, the three.js particles) uses the token's hex; SVG attributes and inline styles use the variable (`var(--color-slate-700)`).

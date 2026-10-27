@@ -164,7 +164,7 @@ export default function Timeline() {
               onClick={() => { setHours(tr.value); setShowCount(50) }}
               className={`px-2.5 py-1 text-xs font-medium rounded-sm transition-colors ${
                 hours === tr.value
-                  ? 'bg-white dark:bg-gray-600 text-primary-600 dark:text-primary-400 shadow-xs'
+                  ? 'bg-primary-600 text-white shadow-xs'
                   : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
@@ -181,7 +181,7 @@ export default function Timeline() {
               onClick={() => setEventFilter(f)}
               className={`px-2.5 py-1 text-xs font-medium rounded-sm transition-colors ${
                 eventFilter === f
-                  ? 'bg-white dark:bg-gray-600 text-primary-600 dark:text-primary-400 shadow-xs'
+                  ? 'bg-primary-600 text-white shadow-xs'
                   : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
               }`}
             >

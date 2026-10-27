@@ -45,7 +45,7 @@ export function PodExecPanel() {
                   }}
                   className="w-full px-3 py-2 text-left text-xs text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg"
                 >
-                  {execContainer === c.name && <CheckCircle className="w-3.5 h-3.5 text-green-400 shrink-0" />}
+                  {execContainer === c.name && <CheckCircle className="w-3.5 h-3.5 text-primary-400 shrink-0" />}
                   <span className={execContainer === c.name ? 'font-medium' : ''}>{c.name}</span>
                 </button>
               ))}
@@ -75,7 +75,7 @@ export function PodExecPanel() {
                   }}
                   className="w-full px-3 py-2 text-left text-xs text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg"
                 >
-                  {execCommand === sh && <CheckCircle className="w-3.5 h-3.5 text-green-400 shrink-0" />}
+                  {execCommand === sh && <CheckCircle className="w-3.5 h-3.5 text-primary-400 shrink-0" />}
                   <span className={execCommand === sh ? 'font-medium' : ''}>{sh}</span>
                 </button>
               ))}

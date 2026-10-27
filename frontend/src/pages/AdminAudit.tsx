@@ -76,7 +76,7 @@ function CustomDropdown<T extends string | number>({
               className="w-full px-3 py-2 text-left text-sm text-white hover:bg-slate-700 transition-colors flex items-center gap-2 first:rounded-t last:rounded-b"
             >
               {value === opt.value && (
-                <CheckCircle className="w-3.5 h-3.5 text-green-400 shrink-0" />
+                <CheckCircle className="w-3.5 h-3.5 text-primary-400 shrink-0" />
               )}
               <span className={value === opt.value ? 'font-medium' : ''}>{opt.label}</span>
             </button>

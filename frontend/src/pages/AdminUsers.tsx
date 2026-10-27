@@ -558,7 +558,7 @@ export default function AdminUsers() {
                                 <span className="flex-1 text-left">
                                   {role.name}
                                 </span>
-                                {isSelected && <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />}
+                                {isSelected && <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />}
                               </button>
                             )
                           })}

@@ -39,7 +39,7 @@ export default function AdminNodeShell() {
               type="button"
               onClick={() => setNodeShellEnabled((prev) => !prev)}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
-                nodeShellEnabled ? 'bg-emerald-500' : 'bg-slate-700'
+                nodeShellEnabled ? 'bg-primary-600' : 'bg-slate-700'
               }`}
               aria-pressed={nodeShellEnabled}
             >

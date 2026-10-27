@@ -298,7 +298,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                       onClick={() => { setExecSelectContainer(n); setIsExecContainerOpen(false) }}
                       className="w-full px-2.5 py-1.5 text-left text-[11px] text-white hover:bg-slate-600 transition-colors flex items-center gap-1.5 first:rounded-t-lg last:rounded-b-lg"
                     >
-                      {(execSelectContainer || containerNames[0]) === n && <CheckCircle className="w-3 h-3 text-green-400 shrink-0" />}
+                      {(execSelectContainer || containerNames[0]) === n && <CheckCircle className="w-3 h-3 text-primary-400 shrink-0" />}
                       <span className={(execSelectContainer || containerNames[0]) === n ? 'font-medium' : ''}>{n}</span>
                     </button>
                   ))}
@@ -322,7 +322,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                       onClick={() => { setExecCommand(sh); setIsExecShellOpen(false) }}
                       className="w-full px-2.5 py-1.5 text-left text-[11px] text-white hover:bg-slate-600 transition-colors flex items-center gap-1.5 first:rounded-t-lg last:rounded-b-lg"
                     >
-                      {execCommand === sh && <CheckCircle className="w-3 h-3 text-green-400 shrink-0" />}
+                      {execCommand === sh && <CheckCircle className="w-3 h-3 text-primary-400 shrink-0" />}
                       <span className={execCommand === sh ? 'font-medium' : ''}>{sh}</span>
                     </button>
                   ))}
