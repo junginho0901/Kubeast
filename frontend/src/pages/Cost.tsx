@@ -7,12 +7,16 @@ import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
+import { useResourceDetail } from '@/components/ResourceDetailContext'
 import CustomDropdown from '@/components/CustomDropdown'
 import { useAIContext } from '@/hooks/useAIContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { formatMoney, formatPercent } from '@/utils/money'
 import { formatTime } from '@/utils/time'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
+
+// Workload kinds the detail drawer opens; OpenCost's other rows (no controller, a ReplicationController) stay plain.
+const DRAWER_KINDS = new Set(['Deployment', 'StatefulSet', 'DaemonSet', 'ReplicaSet', 'Job', 'CronJob', 'Pod'])
 
 // Cost: what each namespace or workload cost over a window, from the OpenCost in
 // the selected cluster (k8s-service /cluster/cost, features.cost). A cluster
@@ -26,6 +30,7 @@ export default function Cost() {
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
   const queryClient = useQueryClient()
+  const { open: openDetail } = useResourceDetail()
   const [win, setWin] = useState<CostWindow>('24h')
   const [aggregate, setAggregate] = useState<CostAggregate>('namespace')
   const [searchQuery, setSearchQuery] = useState('')
@@ -159,6 +164,13 @@ export default function Cost() {
   // The server's reason (a cluster that refused the proxy for this user, OpenCost not answering): shown under the error row.
   const errorDetail = (cost.error as { response?: { data?: { detail?: string } } } | null)?.response?.data?.detail
   const money = (v: number | undefined) => formatMoney(v, currency)
+  // A namespace row opens that Namespace, a workload row its workload; OpenCost's own buckets (__unallocated__ …) open nothing.
+  const openRow = (r: CostRow) => {
+    if (r.name.startsWith('__')) return null
+    if (!byWorkload) return () => openDetail({ kind: 'Namespace', name: r.name })
+    if (r.kind && DRAWER_KINDS.has(r.kind)) return () => openDetail({ kind: r.kind as string, name: r.name, namespace: r.namespace })
+    return null
+  }
   const columnCount = byWorkload ? 8 : 7
   const windowOptions = WINDOWS.map((w) => ({ value: w, label: tr(`cost.windows.${w}`, w), testId: `cost-window-opt-${w}` }))
   const tab = (value: CostAggregate, label: string) => (
@@ -321,12 +333,16 @@ export default function Cost() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700">
-                  {paged.map((row, idx) => (
+                  {paged.map((row, idx) => {
+                    const onOpen = openRow(row)
+                    return (
                     <tr
                       ref={idx === 0 ? firstRowRef : undefined}
                       key={`${row.namespace}/${row.kind || ''}/${row.name}`}
                       data-testid="cost-row"
-                      className="text-slate-200 hover:bg-slate-800/60"
+                      data-openable={onOpen ? 'true' : 'false'}
+                      onClick={onOpen ?? undefined}
+                      className={`text-slate-200 hover:bg-slate-800/60 ${onOpen ? 'cursor-pointer' : ''}`}
                     >
                       <td className="py-3 px-4 font-medium text-white">
                         <span className="block truncate" title={`${row.kind ? `${row.kind}/` : ''}${row.name}`}>
@@ -342,7 +358,8 @@ export default function Cost() {
                       <td className="py-3 px-4 text-right text-xs font-mono text-white whitespace-nowrap" data-testid="cost-row-total">{money(row.total_cost)}</td>
                       <td className="col-optional py-3 px-4 text-right text-xs font-mono whitespace-nowrap">{formatPercent(row.total_efficiency)}</td>
                     </tr>
-                  ))}
+                    )
+                  })}
                   {cost.isLoading && (
                     <tr>
                       <td colSpan={columnCount} className="py-10 px-4 text-center text-slate-400">

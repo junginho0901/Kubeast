@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { formatTime } from '@/utils/time'
@@ -21,7 +21,13 @@ import { useAIContext } from '@/hooks/useAIContext'
 import { useCluster } from '@/contexts/ClusterContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
+import { ListPager } from '@/components/ListPager'
+import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { MonitoringSearch } from './MonitoringFilters'
 import type { NodeMetric } from './types'
+
+// Node cards per page: the page scrolls, so a fixed count (as the admin tables) rather than a fit to the screen.
+const NODES_PER_PAGE = 20
 
 interface MonitoringNodesProps {
   metricsUnavailable: boolean
@@ -57,6 +63,9 @@ export default function MonitoringNodes({
 }: MonitoringNodesProps) {
   const { t } = useTranslation()
   const { currentCluster } = useCluster()
+  const { open: openDetail } = useResourceDetail()
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
 
   // The node count comes from the node list, not from the metrics samples:
   // without metrics-server the metrics list is empty while the nodes exist.
@@ -147,6 +156,18 @@ export default function MonitoringNodes({
 
   const latestNodeMetricTime = getLatestMetricTimestamp(nodeMetrics)
 
+  const filteredNodes = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const list = Array.isArray(nodeMetrics) ? nodeMetrics : []
+    return q ? list.filter((n) => n.name.toLowerCase().includes(q)) : list
+  }, [nodeMetrics, search])
+  const totalPages = Math.max(1, Math.ceil(filteredNodes.length / NODES_PER_PAGE))
+  useEffect(() => setPage(1), [search, currentCluster])
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages)
+  }, [page, totalPages])
+  const pagedNodes = filteredNodes.slice((page - 1) * NODES_PER_PAGE, page * NODES_PER_PAGE)
+
   return (
     <div className="card">
       <div className="flex items-start justify-between mb-6">
@@ -188,13 +209,24 @@ export default function MonitoringNodes({
           <p className="text-slate-400">{t('monitoring.loading')}</p>
         </div>
       ) : nodeMetrics && nodeMetrics.length > 0 ? (
+        <div>
+        <MonitoringSearch value={search} onChange={setSearch} placeholder={t('monitoring.nodes.searchPlaceholder', 'Search nodes by name...')} testId="monitoring-node-search" />
+        {filteredNodes.length === 0 && (
+          <p className="py-12 text-center text-slate-400" data-testid="monitoring-node-empty">{t('common.noSearchResults', 'No results found.')}</p>
+        )}
         <div className="space-y-6">
-          {nodeMetrics.map((node) => {
+          {pagedNodes.map((node) => {
             const cpuPercent = parseFloat(node.cpu_percent)
             const memoryPercent = parseFloat(node.memory_percent)
 
             return (
-              <div key={node.name} className="p-4 bg-slate-700 rounded-lg">
+              <button
+                type="button"
+                key={node.name}
+                onClick={() => openDetail({ kind: 'Node', name: node.name })}
+                data-testid="monitoring-node"
+                className="block w-full text-left p-4 bg-slate-700 rounded-lg hover:bg-slate-600/80 transition-colors cursor-pointer"
+              >
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-medium text-white flex items-center gap-2">
                     <Server className="w-5 h-5 text-slate-400" />
@@ -277,9 +309,13 @@ export default function MonitoringNodes({
                     />
                   </div>
                 </div>
-              </div>
+              </button>
             )
           })}
+        </div>
+        <div className="mt-4">
+          <ListPager currentPage={page} totalPages={totalPages} total={filteredNodes.length} rowsPerPage={NODES_PER_PAGE} onPageChange={setPage} showPageSize={false} testId="monitoring-node-pager" />
+        </div>
         </div>
       ) : isForbiddenError(error) ? (
         <div className="text-center py-12">

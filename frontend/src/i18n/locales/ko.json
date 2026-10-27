@@ -378,7 +378,8 @@
     },
     "durationMin": "{{m}}분",
     "durationH": "{{h}}시간",
-    "durationHMin": "{{h}}시간 {{m}}분"
+    "durationHMin": "{{h}}시간 {{m}}분",
+    "searchPlaceholder": "요청자, 클러스터, 역할 검색..."
   },
   "nav": {
     "accessRequests": "Access Requests",
@@ -2026,7 +2027,8 @@
     "nodes": {
       "title": "Node 리소스 사용량",
       "total": "총 {{count}}개 Node",
-      "unavailable": "Node 메트릭을 사용할 수 없습니다"
+      "unavailable": "Node 메트릭을 사용할 수 없습니다",
+      "searchPlaceholder": "Node 이름 검색..."
     },
     "pods": {
       "title": "Pod 리소스 사용량",
@@ -2037,7 +2039,8 @@
       "errorTitle": "Pod 메트릭을 불러오는 중 오류가 발생했습니다",
       "retrying": "자동으로 재시도 중입니다... (5초마다 갱신)",
       "unavailableAll": "Pod 메트릭을 사용할 수 없습니다",
-      "noPodsInNamespace": "{{namespace}} Namespace에 Pod가 없습니다"
+      "noPodsInNamespace": "{{namespace}} Namespace에 Pod가 없습니다",
+      "searchPlaceholder": "Pod 이름 검색..."
     },
     "autoRefresh": "5초마다 자동 갱신",
     "metricTimestamp": "메트릭 기준 수집 시각: {{time}}",
@@ -3291,7 +3294,20 @@
     "clusterScoped": "클러스터",
     "copyName": "이름 복사",
     "detail": "상세",
-    "examplesAll": "전체"
+    "examplesAll": "전체",
+    "saved": {
+      "save": "검색 저장",
+      "list": "저장된 검색",
+      "empty": "아직 저장된 검색이 없습니다.",
+      "hint": "이 브라우저에 {{max}}개까지 저장합니다.",
+      "nameLabel": "이름",
+      "saveTitle": "이 검색 저장",
+      "renameTitle": "저장된 검색 이름 바꾸기",
+      "rename": "이름 바꾸기",
+      "delete": "삭제",
+      "deleteTitle": "저장된 검색 삭제",
+      "deleteMessage": "\"{{name}}\" 검색을 삭제합니다. 이 브라우저에만 저장되어 있습니다."
+    }
   },
   "serviceAccountsPage": {
     "title": "ServiceAccounts",

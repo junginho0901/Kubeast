@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { Server } from 'lucide-react'
+import { useResourceDetail } from '@/components/ResourceDetailContext'
 import type { NodeMetric } from './clusterNodeHelpers'
 
 interface Props {
@@ -17,6 +18,7 @@ export default function NodeTopUsageCard({
   isMetricsError,
   tr,
 }: Props) {
+  const { open: openDetail } = useResourceDetail()
   const topNodes = useMemo(() => {
     if (!Array.isArray(metrics) || metrics.length === 0) return [] as NodeMetric[]
     const parsePercent = (value: string | undefined) => {
@@ -57,7 +59,13 @@ export default function NodeTopUsageCard({
             const cpuPercent = parseFloat(node.cpu_percent)
             const memPercent = parseFloat(node.memory_percent)
             return (
-              <div key={node.name} className="rounded-lg border border-slate-700 bg-slate-900/40 px-4 py-3">
+              <button
+                type="button"
+                key={node.name}
+                onClick={() => openDetail({ kind: 'Node', name: node.name })}
+                data-testid="node-top-usage"
+                className="block w-full text-left rounded-lg border border-slate-700 bg-slate-900/40 px-4 py-3 hover:bg-slate-800 transition-colors cursor-pointer"
+              >
                 <div className="flex items-center justify-between text-sm text-white">
                   <span className="font-medium">#{index + 1} {node.name}</span>
                   <span className="text-xs text-slate-400">{node.cpu} / {node.memory}</span>
@@ -84,7 +92,7 @@ export default function NodeTopUsageCard({
                     />
                   </div>
                 </div>
-              </div>
+              </button>
             )
           })}
         </div>
