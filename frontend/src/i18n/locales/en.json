@@ -3211,7 +3211,20 @@
     "loadingHint": "This may take a while if there are many resources.",
     "manual": "Manual",
     "pageInfo": "Page {{current}} / {{total}}",
-    "examplesAll": "All"
+    "examplesAll": "All",
+    "saved": {
+      "save": "Save search",
+      "list": "Saved searches",
+      "empty": "No saved searches yet.",
+      "hint": "Kept in this browser, up to {{max}}.",
+      "nameLabel": "Name",
+      "saveTitle": "Save this search",
+      "renameTitle": "Rename saved search",
+      "rename": "Rename",
+      "delete": "Delete",
+      "deleteTitle": "Delete saved search",
+      "deleteMessage": "Delete \"{{name}}\"? It is kept only in this browser."
+    }
   },
   "serviceAccountsPage": {
     "title": "ServiceAccounts",

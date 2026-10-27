@@ -3294,7 +3294,20 @@
     "clusterScoped": "클러스터",
     "copyName": "이름 복사",
     "detail": "상세",
-    "examplesAll": "전체"
+    "examplesAll": "전체",
+    "saved": {
+      "save": "검색 저장",
+      "list": "저장된 검색",
+      "empty": "아직 저장된 검색이 없습니다.",
+      "hint": "이 브라우저에 {{max}}개까지 저장합니다.",
+      "nameLabel": "이름",
+      "saveTitle": "이 검색 저장",
+      "renameTitle": "저장된 검색 이름 바꾸기",
+      "rename": "이름 바꾸기",
+      "delete": "삭제",
+      "deleteTitle": "저장된 검색 삭제",
+      "deleteMessage": "\"{{name}}\" 검색을 삭제합니다. 이 브라우저에만 저장되어 있습니다."
+    }
   },
   "serviceAccountsPage": {
     "title": "ServiceAccounts",

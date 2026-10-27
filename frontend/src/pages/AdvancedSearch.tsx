@@ -12,6 +12,8 @@ import SearchQueryEditor from '@/components/search/SearchQueryEditor'
 import SearchResultTable from '@/components/search/SearchResultTable'
 import SearchExamples from '@/components/search/SearchExamples'
 import SearchSettings from '@/components/search/SearchSettings'
+import SavedSearches from '@/components/search/SavedSearches'
+import type { SavedSearch } from '@/components/search/savedSearchStore'
 import { searchWithExpression, toSearchResult, SearchResult } from '@/components/search/searchEngine'
 import { useAIContext } from '@/hooks/useAIContext'
 import { buildResourceLink } from '@/utils/resourceLink'
@@ -233,6 +235,14 @@ export default function AdvancedSearch() {
     setRawQuery(query)
   }, [])
 
+  // A saved search brings back its expression, its resource types (the listable ones) and its namespace.
+  const handleSavedLoad = useCallback((s: SavedSearch) => {
+    const types = s.resources.filter((r) => !NON_LISTABLE.has(r))
+    if (types.length > 0) setSelectedResources(new Set(types))
+    setNamespace(s.namespace)
+    setRawQuery(s.query)
+  }, [])
+
   const showResults = deferredQuery.trim().length > 0 && deferredResults.length > 0 && !isSearching
   const showExamples = !deferredQuery.trim()
 
@@ -286,6 +296,8 @@ export default function AdvancedSearch() {
             ...(namespaces ?? []).map(ns => ({ value: ns.name, label: ns.name })),
           ]}
         />
+
+        <SavedSearches query={rawQuery} resources={selectedResources} namespace={namespace} onLoad={handleSavedLoad} />
 
         {/* Item count + errors */}
         <div className="ml-auto flex items-center gap-3 text-xs">
