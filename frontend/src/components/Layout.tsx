@@ -537,10 +537,8 @@ export default function Layout() {
                             data-testid={item.testId}
                             title={item.name}
                             className={`
-                              relative flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors
-                              ${isActive
-                                ? "bg-slate-700 text-white before:content-[''] before:absolute before:left-0 before:top-2 before:bottom-2 before:w-0.5 before:rounded-full before:bg-primary-400"
-                                : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'}
+                              flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors
+                              ${isActive ? 'bg-primary-600 text-white' : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'}
                             `}
                           >
                             {/* shrink-0: a long name squeezed the icon; truncate: the long kind names ran out of the bar */}
