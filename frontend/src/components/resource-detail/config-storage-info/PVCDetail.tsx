@@ -158,7 +158,7 @@ export default function PVCDetail({ name, namespace, rawJson }: { name: string; 
               value={(
                 <button
                   type="button"
-                  className="text-cyan-300 hover:text-cyan-200 underline underline-offset-2 break-all text-left"
+                  className="text-primary-400 hover:text-primary-300 underline underline-offset-2 break-all text-left"
                   onClick={() => openDetail({ kind: 'PersistentVolume', name: String(boundPv.name) })}
                 >
                   {String(boundPv.name)}

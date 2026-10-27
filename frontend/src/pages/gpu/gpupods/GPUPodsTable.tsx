@@ -176,7 +176,7 @@ export function GPUPodsTable({
                         <div className="flex items-center gap-2">
                           <div className="w-16 h-2 bg-slate-800 rounded-full overflow-hidden">
                             <div
-                              className={`h-full rounded-full ${podMetric.memory_util_percent >= 80 ? 'bg-red-500' : podMetric.memory_util_percent >= 50 ? 'bg-amber-500' : 'bg-blue-500'}`}
+                              className={`h-full rounded-full ${podMetric.memory_util_percent >= 80 ? 'bg-red-500' : podMetric.memory_util_percent >= 50 ? 'bg-amber-500' : 'bg-primary-400'}`}
                               style={{ width: `${Math.min(podMetric.memory_util_percent, 100)}%` }}
                             />
                           </div>

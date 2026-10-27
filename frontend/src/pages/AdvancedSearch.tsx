@@ -242,7 +242,7 @@ export default function AdvancedSearch() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-            <Search className="w-7 h-7 text-sky-400" />
+            <Search className="w-7 h-7 text-primary-400" />
             {t('advancedSearch.title', 'Advanced Search')}
             <BetaTag label={t('common.beta', 'Beta')} size="md" />
           </h1>
@@ -291,7 +291,7 @@ export default function AdvancedSearch() {
         <div className="ml-auto flex items-center gap-3 text-xs">
           <span className="flex items-center gap-1.5 text-slate-500">
             {(isLoadingResources || isFetching) ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-400" />
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-primary-400" />
             ) : (
               <Database className="w-3.5 h-3.5" />
             )}
@@ -330,7 +330,7 @@ export default function AdvancedSearch() {
       {/* Loading overlay */}
       {isLoadingResources && (
         <div className="flex flex-col items-center justify-center gap-3 py-16">
-          <Loader2 className="w-8 h-8 animate-spin text-sky-400" />
+          <Loader2 className="w-8 h-8 animate-spin text-primary-400" />
           <p className="text-sm text-slate-400">
             {t('advancedSearch.loadingData', 'Loading {{count}} resource types...', { count: resourceTypes.length })}
           </p>

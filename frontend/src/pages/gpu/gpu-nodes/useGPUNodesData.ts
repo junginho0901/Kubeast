@@ -80,9 +80,9 @@ export function useGPUNodesData({ searchQuery, sortKey, sortDir, currentPage }: 
       [tr('gpuNodes.stats.total', 'Total Nodes'), stats.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
       [tr('gpuNodes.stats.ready', 'Ready'), stats.ready, 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
       [tr('gpuNodes.stats.notReady', 'Not Ready'), stats.notReady, 'border-rose-700/40 bg-rose-900/10', 'text-rose-300'],
-      [tr('gpuNodes.stats.capacity', 'GPU Capacity'), stats.totalCapacity, 'border-blue-700/40 bg-blue-900/10', 'text-blue-300'],
-      [tr('gpuNodes.stats.allocatable', 'Allocatable'), stats.totalAllocatable, 'border-cyan-700/40 bg-cyan-900/10', 'text-cyan-300'],
-      [tr('gpuNodes.stats.used', 'Used'), stats.totalUsed, 'border-violet-700/40 bg-violet-900/10', 'text-violet-300'],
+      [tr('gpuNodes.stats.capacity', 'GPU Capacity'), stats.totalCapacity, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('gpuNodes.stats.allocatable', 'Allocatable'), stats.totalAllocatable, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('gpuNodes.stats.used', 'Used'), stats.totalUsed, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ],
     [stats, tr],
   )

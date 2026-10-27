@@ -70,7 +70,7 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
     return (
       <span className="inline-flex flex-wrap gap-1 ml-1">
         {Object.entries(matchLabels).map(([k, v]) => (
-          <span key={`${k}=${v}`} className="inline-flex rounded-sm border border-cyan-700/50 bg-cyan-900/30 px-1.5 py-0.5 text-[10px] font-mono text-cyan-200">
+          <span key={`${k}=${v}`} className="inline-flex rounded-sm border border-slate-600 bg-slate-800 px-1.5 py-0.5 text-[10px] font-mono text-slate-200">
             ns:{k}={v}
           </span>
         ))}

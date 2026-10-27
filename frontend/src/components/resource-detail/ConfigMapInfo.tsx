@@ -134,7 +134,7 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
                     onClick={() => toggleKey(key)}
                     className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-slate-800/40 transition-colors"
                   >
-                    <span className="font-mono text-xs text-cyan-300 break-all">{key}</span>
+                    <span className="font-mono text-xs text-slate-200 break-all">{key}</span>
                     <span className="text-[10px] text-slate-500 ml-2 shrink-0">
                       {value ? dl('{{n}} chars', { n: value.length }) : dl('empty')}
                     </span>

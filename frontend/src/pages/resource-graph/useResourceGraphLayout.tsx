@@ -60,7 +60,7 @@ function trafficEdge(t: TrafficEdge | PortEdge): Edge {
     markerEnd: { type: MarkerType.ArrowClosed, color, width: 14, height: 14, markerUnits: 'userSpaceOnUse' },
     label,
     labelStyle: { fill: color, fontSize: 10, fontWeight: 600 },
-    labelBgStyle: { fill: '#0f172a', fillOpacity: 0.9 },
+    labelBgStyle: { fill: 'var(--color-slate-900)', fillOpacity: 0.9 },
     labelBgPadding: [4, 2] as [number, number],
     labelBgBorderRadius: 4,
     interactionWidth: 16,
@@ -163,7 +163,7 @@ export function useResourceGraphLayout({
         layout: layoutOf(p.id),
       },
       position: { x: 0, y: 0 },
-      style: { background: '#0f172a', border: '2px dashed #64748b', borderRadius: '8px', padding: 0, width: 200, ...boxSize(p.id) },
+      style: { background: 'var(--color-slate-900)', border: '2px dashed var(--color-slate-500)', borderRadius: '8px', padding: 0, width: 200, ...boxSize(p.id) },
     }))
     const rfNodes: Node[] = gNodes.map(n => {
       const icon = kindIcon[n.kind] || '📄'
@@ -190,13 +190,13 @@ export function useResourceGraphLayout({
         },
         position: { x: 0, y: 0 },
         style: {
-          background: '#1e293b',
+          background: 'var(--color-slate-800)',
           border: `2px solid ${borderColor}`,
           borderRadius: '8px',
           padding: 0,
           width: 200,
           ...boxSize(n.id),
-          boxShadow: isHighlighted ? '0 0 0 3px #3b82f6' : undefined,
+          boxShadow: isHighlighted ? '0 0 0 3px var(--color-primary-400)' : undefined,
           opacity: searchQuery && !isHighlighted ? 0.3 : 1,
         },
       }
@@ -219,7 +219,7 @@ export function useResourceGraphLayout({
           ...(up ? { markerStart: arrow } : { markerEnd: arrow }),
           label: style.label,
           labelStyle: { fill: style.stroke, fontSize: 10 },
-          labelBgStyle: { fill: '#0f172a', fillOpacity: 0.8 },
+          labelBgStyle: { fill: 'var(--color-slate-900)', fillOpacity: 0.8 },
           labelBgPadding: [4, 2] as [number, number],
           labelBgBorderRadius: 4,
         }

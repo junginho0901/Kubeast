@@ -197,7 +197,7 @@ export function DashboardTopResources({ topResources, isLoading, isError, metric
                             ? 'bg-red-500'
                             : cpuPercent >= 60
                               ? 'bg-amber-500'
-                              : 'bg-sky-400'
+                              : 'bg-primary-400'
                           }`}
                         style={{ width: `${Math.min(cpuPercent, 100)}%` }}
                       />
@@ -221,7 +221,7 @@ export function DashboardTopResources({ topResources, isLoading, isError, metric
                             ? 'bg-red-500'
                             : memoryPercent >= 60
                               ? 'bg-amber-500'
-                              : 'bg-sky-400'
+                              : 'bg-primary-400'
                           }`}
                         style={{ width: `${Math.min(memoryPercent, 100)}%` }}
                       />

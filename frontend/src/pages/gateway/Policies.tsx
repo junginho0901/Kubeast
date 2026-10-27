@@ -91,7 +91,7 @@ export default function Policies() {
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
       [tr('policiesPage.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('policiesPage.stats.kinds', 'Kinds'), summary.kinds, 'border-cyan-700/40 bg-cyan-900/10', 'text-cyan-300'],
+      [tr('policiesPage.stats.kinds', 'Kinds'), summary.kinds, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
       [tr('policiesPage.stats.accepted', 'Accepted'), summary.accepted, 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
     ],
     [summary.total, summary.kinds, summary.accepted, tr],

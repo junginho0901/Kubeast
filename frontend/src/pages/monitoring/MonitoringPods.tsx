@@ -215,7 +215,7 @@ export default function MonitoringPods({
                 <p className="text-sm text-slate-400">{t('monitoring.pods.totalMemory')}</p>
                 <p className="text-2xl font-bold text-white mt-1">{podStats.totalMemory}Mi</p>
               </div>
-              <HardDrive className="w-8 h-8 text-blue-400" />
+              <HardDrive className="w-8 h-8 text-slate-500" />
             </div>
           </div>
         </div>
@@ -351,7 +351,7 @@ export default function MonitoringPods({
                               ? 'text-red-400'
                               : memory >= 512
                                 ? 'text-yellow-400'
-                                : 'text-blue-400'
+                                : 'text-slate-200'
                           }`}
                         />
                         <span className="text-white font-mono">{podMetric.memory}</span>

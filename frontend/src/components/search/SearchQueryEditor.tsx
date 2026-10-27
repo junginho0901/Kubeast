@@ -75,7 +75,7 @@ export default function SearchQueryEditor({
     <div className="space-y-2">
       <div
         className={`relative flex items-center rounded-xl border transition-colors ${
-          focused ? 'border-sky-500/50 bg-slate-800/80' : 'border-slate-600 bg-slate-800/50'
+          focused ? 'border-primary-500/50 bg-slate-800/80' : 'border-slate-600 bg-slate-800/50'
         }`}
       >
         {!focused && !value && (
@@ -131,7 +131,7 @@ export default function SearchQueryEditor({
 
       <div className="flex items-center gap-3 text-xs text-slate-500 h-5 ml-1">
         {isSearching && (
-          <span className="flex items-center gap-1.5 text-sky-400">
+          <span className="flex items-center gap-1.5 text-primary-400">
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
             {t('advancedSearch.searching', 'Searching...')}
           </span>

@@ -108,16 +108,16 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
               {columns.map(col => (
                 <th
                   key={col.key}
-                  className={`px-4 py-2.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-200 transition-colors ${col.className}`}
+                  className={`px-4 py-2.5 text-left text-xs font-semibold text-slate-400 cursor-pointer hover:text-slate-200 transition-colors ${col.className}`}
                   onClick={() => toggleSort(col.key)}
                 >
                   <span className="flex items-center gap-1">
                     {col.label}
-                    <ArrowUpDown className={`w-3 h-3 ${sortKey === col.key ? 'text-sky-400' : 'text-slate-600'}`} />
+                    <ArrowUpDown className={`w-3 h-3 ${sortKey === col.key ? 'text-primary-400' : 'text-slate-600'}`} />
                   </span>
                 </th>
               ))}
-              <th className="px-4 py-2.5 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider w-24">
+              <th className="px-4 py-2.5 text-right text-xs font-semibold text-slate-400 w-24">
                 {t('advancedSearch.colActions', 'Actions')}
               </th>
             </tr>
@@ -144,7 +144,7 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
                           namespace: item.namespace || undefined,
                           rawJson: item.raw,
                         })}
-                        className="truncate text-sky-400 hover:text-sky-300 hover:underline transition-colors text-left"
+                        className="truncate text-primary-400 hover:text-primary-300 hover:underline transition-colors text-left"
                       >
                         {item.name}
                       </button>
@@ -161,7 +161,7 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
                     {item.namespace && item.namespace !== '-' ? (
                       <button
                         onClick={() => openDetail({ kind: 'Namespace', name: item.namespace, rawJson: undefined })}
-                        className="text-slate-400 hover:text-sky-400 hover:underline transition-colors"
+                        className="text-slate-400 hover:text-primary-400 hover:underline transition-colors"
                       >
                         {item.namespace}
                       </button>

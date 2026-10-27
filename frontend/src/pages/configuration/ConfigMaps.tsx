@@ -153,7 +153,7 @@ export default function ConfigMaps() {
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
       [tr('configMapsPage.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('configMapsPage.stats.totalKeys', 'Total Data Keys'), summary.totalKeys, 'border-cyan-700/40 bg-cyan-900/10', 'text-cyan-300'],
+      [tr('configMapsPage.stats.totalKeys', 'Total Data Keys'), summary.totalKeys, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ],
     [summary.total, summary.totalKeys, tr],
   )

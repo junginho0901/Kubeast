@@ -783,7 +783,7 @@ export default function AdminUsers() {
                     type="button"
                     onClick={() => handlePendingBulkApprove('Admin')}
                     disabled={pendingSelectedIds.size === 0 || bulkUpdateRoleMutation.isPending}
-                    className="rounded-lg bg-blue-600/80 px-4 py-2 text-xs font-medium text-white hover:bg-blue-600 disabled:opacity-40"
+                    className="rounded-lg bg-primary-600/80 px-4 py-2 text-xs font-medium text-white hover:bg-primary-600 disabled:opacity-40"
                   >
                     {tr('adminUsers.bulk.approveAdmin', 'Approve as Admin')}
                   </button>

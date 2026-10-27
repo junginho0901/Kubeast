@@ -262,8 +262,8 @@ export async function applyElkLayout(
       style: {
         width: group.width,
         height: group.height,
-        background: 'rgba(30, 41, 59, 0.3)',
-        border: '1px solid #334155',
+        background: 'color-mix(in srgb, var(--color-slate-800) 30%, transparent)',
+        border: '1px solid var(--color-slate-700)',
         borderRadius: '12px',
         padding: 0,
       },

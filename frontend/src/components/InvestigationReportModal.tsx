@@ -86,7 +86,7 @@ export default function InvestigationReportModal({ id, load, onClose }: {
 
           {data.report && (
             <section>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">{tr('investigations.section.report', 'Report')}</h3>
+              <h3 className="mb-2 text-xs font-semibold text-slate-400">{tr('investigations.section.report', 'Report')}</h3>
               <div className="prose prose-invert prose-sm max-w-none rounded-lg border border-slate-700 bg-slate-950/40 px-4 py-3" data-testid="investigation-report">
                 <ReactMarkdown remarkPlugins={REMARK_PLUGINS}>{data.report}</ReactMarkdown>
               </div>
@@ -94,7 +94,7 @@ export default function InvestigationReportModal({ id, load, onClose }: {
           )}
 
           <section>
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">{tr('investigations.section.alert', 'Alert')}</h3>
+            <h3 className="mb-2 text-xs font-semibold text-slate-400">{tr('investigations.section.alert', 'Alert')}</h3>
             <div className="grid gap-3 md:grid-cols-2">
               <dl className="rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-xs">
                 {Object.entries(data.labels).map(([k, v]) => (
@@ -123,7 +123,7 @@ export default function InvestigationReportModal({ id, load, onClose }: {
           </section>
 
           <section>
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+            <h3 className="mb-2 text-xs font-semibold text-slate-400">
               {tr('investigations.section.tools', 'Tool calls ({{count}})', { count: data.tool_calls.length })}
             </h3>
             {ranAs && (

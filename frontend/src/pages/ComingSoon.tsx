@@ -13,7 +13,7 @@ export default function ComingSoon({ title, description }: ComingSoonProps) {
   return (
     <div className="min-h-[calc(100vh-4rem)]">
       <div className="mx-auto max-w-3xl rounded-2xl border border-slate-700 bg-slate-800/40 p-10 shadow-xs">
-        <div className="text-xs uppercase tracking-[0.2em] text-slate-400">{t('comingSoon.badge', 'Coming Soon')}</div>
+        <div className="text-xs text-slate-400">{t('comingSoon.badge', 'Coming Soon')}</div>
         <h1 className="mt-3 text-3xl font-semibold text-white">{title}</h1>
         <p className="mt-4 text-slate-300">
           {description || t('comingSoon.description', 'This section is being prepared. The sidebar structure is ready and features will be filled in next.')}

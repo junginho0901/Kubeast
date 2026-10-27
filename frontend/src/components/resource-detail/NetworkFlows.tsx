@@ -40,7 +40,7 @@ function GroupRow({ g, self, tr, onWhy }: { g: NetflowGroup; self: FlowSelf; tr:
         {refs.allowed.length > 0 && <span className="text-slate-400">{tr('netflows.allowedBy', 'allowed by {{list}}', { list: refs.allowed.join(', ') })}</span>}
         {refs.denied.length > 0 && <span className="text-red-300">{tr('netflows.deniedBy', 'denied by {{list}}', { list: refs.denied.join(', ') })}</span>}
         {why && (
-          <button type="button" className="ml-2 text-blue-400 hover:text-blue-300 hover:underline" onClick={() => onWhy(why)} data-testid="netflow-why">
+          <button type="button" className="ml-2 text-primary-400 hover:text-primary-300 hover:underline" onClick={() => onWhy(why)} data-testid="netflow-why">
             {tr('netflows.why', 'Why?')}
           </button>
         )}

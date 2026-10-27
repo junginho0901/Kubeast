@@ -391,7 +391,7 @@ function AlertDetailModal({ id, live, silenceWith, onClose }: {
             </div>
 
             <section data-testid="alert-handling-section">
-              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">{tr('alertInbox.section.handling', 'Handling')}</h3>
+              <h3 className="mb-1 text-xs font-semibold text-slate-400">{tr('alertInbox.section.handling', 'Handling')}</h3>
               <p className="mb-2 text-xs text-slate-500">{tr('alertInbox.handlingNote', 'Kept in Kubeast for your team; Alertmanager and the alert rule are not changed.')}</p>
               <div className="flex flex-wrap gap-2">
                 <button type="button" disabled={save.isPending} onClick={() => save.mutate({ acknowledged: !data.acknowledged })} className="btn btn-secondary flex items-center gap-1" data-testid="alert-ack">
@@ -440,7 +440,7 @@ function AlertDetailModal({ id, live, silenceWith, onClose }: {
             </section>
 
             <section>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">{tr('alertInbox.col.investigation', 'AI investigation')}</h3>
+              <h3 className="mb-2 text-xs font-semibold text-slate-400">{tr('alertInbox.col.investigation', 'AI investigation')}</h3>
               {data.investigation ? (
                 <div className="flex items-center gap-3 text-sm">
                   <span className={`rounded-sm border px-1.5 py-0.5 text-xs ${investigationClass[data.investigation.status] ?? ''}`}>
@@ -462,7 +462,7 @@ function AlertDetailModal({ id, live, silenceWith, onClose }: {
             </section>
 
             <section>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">{tr('alertInbox.section.labels', 'Labels and annotations')}</h3>
+              <h3 className="mb-2 text-xs font-semibold text-slate-400">{tr('alertInbox.section.labels', 'Labels and annotations')}</h3>
               <div className="grid gap-3 md:grid-cols-2">
                 <dl className="rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-xs" data-testid="alert-labels">
                   {Object.entries(data.labels).map(([k, v]) => (

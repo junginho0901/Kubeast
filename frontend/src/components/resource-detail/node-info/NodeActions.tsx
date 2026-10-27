@@ -51,7 +51,7 @@ export default function NodeActions({ name, tr, data }: NodeActionsProps) {
     : drainStatus === 'error'
     ? { icon: AlertTriangle, label: 'Failed', tone: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/20' }
     : drainStatus === 'draining'
-    ? { icon: Loader2, label: 'Draining', tone: 'text-sky-300', bg: 'bg-sky-500/10', border: 'border-sky-500/20' }
+    ? { icon: Loader2, label: 'Draining', tone: 'text-primary-300', bg: 'bg-primary-500/10', border: 'border-primary-500/20' }
     : { icon: Clock, label: 'Queued', tone: 'text-amber-300', bg: 'bg-amber-500/10', border: 'border-amber-500/20' }
 
   return (

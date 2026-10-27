@@ -117,11 +117,12 @@ Colour, type and shape tokens live in `frontend/src/index.css` (`@theme`). Compo
 
 ## Colors
 
-- **Neutral grey (`slate-*`):** the `slate` ladder is a neutral grey, not Tailwind's blue slate. Canvas `slate-900` (#141414) for the page, surface `slate-800` (#1c1c1c) for cards and the sidebar, raised `slate-700` (#2a2a2a) for the selected row and secondary buttons and hairlines. Text `slate-100` (#f3f3f3), muted `slate-400` (#a3a3a3), faint `slate-500` (#858585).
+- **Neutral grey (`slate-*`):** the `slate` ladder is a neutral grey, not Tailwind's blue slate (`gray-*` is set to the same ladder for the few screens written with it). Canvas `slate-900` (#141414) for the page, surface `slate-800` (#1c1c1c) for cards and the sidebar, raised `slate-700` (#2a2a2a) for the selected row and secondary buttons and hairlines. Text `slate-100` (#f3f3f3), muted `slate-400` (#a3a3a3), faint `slate-500` (#858585).
 - **Sky accent (`primary-*`):** the one accent. Filled controls use `primary-600` (#0369a1, white text 5.9:1) with `primary-700` on hover; text, lines and focus on the dark grey use `primary-400` (#38bdf8). It marks what can be pressed (the page's main button, links), what is selected, focus, and the way into the AI (the floating chat button).
 - **State:** green (healthy), yellow/amber (needs a look), red (failed) — only for the state of something. A count that is not a state (Total, Exposed, Total rules) stays grey.
-- **Not used on the console:** cyan, indigo, purple, pink as decoration, gradients, glows. Charts with one series use the sky accent; charts by state use the state colours.
-- **Brand ground (#020617):** the sign-in page's navy, pinned there (`bg-[#020617]`) so it does not follow the console's grey.
+- **Not used on the console:** cyan, indigo, purple, pink as decoration, gradients, glows. Charts with one series use the sky accent; charts by state use the state colours. Where many series or kinds must be told apart — the chat's charts (`utils/chatChart.ts`), the Resource Graph's relation lines — a categorical palette is data, not decoration, and stays.
+- **Literals:** a library that takes a colour value instead of a class (the xterm terminal theme, the three.js particles) uses the token's hex; SVG attributes and inline styles use the variable (`var(--color-slate-700)`).
+- **Brand ground (#020617):** the navy of the pages before the console — sign-in, first setup, waiting for approval — pinned there (`bg-[#020617]`) so it does not follow the console's grey.
 
 ## Typography
 

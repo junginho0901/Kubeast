@@ -131,7 +131,7 @@ export default function Pods() {
       [tr('pods.stats.notReady', 'Not Ready'), podStats.notReady, 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
       [tr('pods.stats.pending', 'Pending'), podStats.pending, 'border-yellow-700/40 bg-yellow-900/10', 'text-yellow-300'],
       [tr('pods.stats.error', 'Error'), podStats.error, 'border-rose-700/40 bg-rose-900/10', 'text-rose-300'],
-      [tr('pods.stats.restarted', 'Restarted'), podStats.restarted, 'border-cyan-700/40 bg-cyan-900/10', 'text-cyan-300'],
+      [tr('pods.stats.restarted', 'Restarted'), podStats.restarted, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
       [tr('pods.stats.completed', 'Completed'), podStats.completed, 'border-slate-600/50 bg-slate-800/30', 'text-slate-300'],
     ],
     [podStats.completed, podStats.error, podStats.notReady, podStats.pending, podStats.ready, podStats.restarted, podStats.total, tr],

@@ -19,7 +19,7 @@ interface Props {
 
 const statusStyles: Record<ToolApproval['status'], string> = {
   pending: 'border-amber-500/40 bg-amber-500/10',
-  approved: 'border-sky-500/40 bg-sky-500/10',
+  approved: 'border-primary-500/40 bg-primary-500/10',
   executed: 'border-emerald-500/40 bg-emerald-500/10',
   failed: 'border-red-500/40 bg-red-500/10',
   rejected: 'border-slate-600 bg-slate-800/60',
@@ -73,7 +73,7 @@ export function ApprovalCard({ approvalId, tool, args, cluster, initialStatus }:
       <div className="flex items-center gap-2">
         <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
         <span className="font-semibold">{t('aiChat.approval.title', 'This action changes the cluster')}</span>
-        <span className="ml-auto rounded-full border border-slate-600 px-2 py-0.5 text-[11px] uppercase tracking-wide text-slate-300">
+        <span className="ml-auto rounded-full border border-slate-600 px-2 py-0.5 text-[11px] text-slate-300">
           {t(`aiChat.approval.status.${status}`, status)}
         </span>
       </div>

@@ -2,7 +2,7 @@
 
 export const statusClass: Record<string, string> = {
   queued: 'bg-slate-800/60 text-slate-300 border-slate-600',
-  running: 'bg-sky-900/40 text-sky-300 border-sky-800/60',
+  running: 'bg-primary-900/40 text-primary-300 border-primary-800/60',
   done: 'bg-emerald-900/40 text-emerald-300 border-emerald-800/60',
   failed: 'bg-red-900/40 text-red-300 border-red-800/60',
   skipped: 'bg-amber-900/40 text-amber-300 border-amber-800/60',

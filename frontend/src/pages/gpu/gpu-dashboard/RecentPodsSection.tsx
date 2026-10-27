@@ -37,7 +37,7 @@ export function RecentPodsSection({ recentPods, openDetail, tr }: Props) {
       <div className="overflow-x-auto">
         <table className="w-full text-sm table-fixed">
           <thead>
-            <tr className="border-b border-slate-700/50 text-left text-xs uppercase tracking-wider text-slate-500">
+            <tr className="border-b border-slate-700/50 text-left text-xs text-slate-500">
               <th className="w-[17%] px-5 py-3 font-medium">{tr('gpuDashboardPage.recentPods.namespace', 'Namespace')}</th>
               <th className="w-[30%] px-5 py-3 font-medium">{tr('gpuDashboardPage.recentPods.name', 'Name')}</th>
               <th className="w-[17%] px-5 py-3 font-medium">{tr('gpuDashboardPage.recentPods.node', 'Node')}</th>

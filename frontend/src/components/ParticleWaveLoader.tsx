@@ -35,9 +35,9 @@ export default function ParticleWaveLoader({ className }: ParticleWaveLoaderProp
         waveSpeed: 2.0,
         rotationSpeed: 0.002,
         pointSize: 0.15,
-        colorPrimary: 0x60a5fa,  // blue-400
-        colorSecondary: 0x8b5cf6, // purple-500
-        colorAccent: 0xec4899,   // pink-500
+        colorPrimary: 0x38bdf8,  // primary-400 (sky)
+        colorSecondary: 0x0284c7, // primary-500
+        colorAccent: 0xbae6fd,   // primary-200
       }
 
       // Scene

@@ -165,7 +165,7 @@ export default function Secrets() {
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
       [tr('secretsPage.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('secretsPage.stats.opaque', 'Opaque'), summary.opaque, 'border-cyan-700/40 bg-cyan-900/10', 'text-cyan-300'],
+      [tr('secretsPage.stats.opaque', 'Opaque'), summary.opaque, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ],
     [summary.total, summary.opaque, tr],
   )

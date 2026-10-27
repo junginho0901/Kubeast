@@ -151,8 +151,8 @@ export default function MonitoringNodes({
     <div className="card">
       <div className="flex items-start justify-between mb-6">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-cyan-500/10">
-            <Server className="w-6 h-6 text-cyan-400" />
+          <div className="p-2 rounded-lg bg-slate-700/60">
+            <Server className="w-6 h-6 text-slate-300" />
           </div>
           <div>
             <h2 className="text-xl font-bold text-white">{t('monitoring.nodes.title')}</h2>
@@ -197,7 +197,7 @@ export default function MonitoringNodes({
               <div key={node.name} className="p-4 bg-slate-700 rounded-lg">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-medium text-white flex items-center gap-2">
-                    <Server className="w-5 h-5 text-cyan-400" />
+                    <Server className="w-5 h-5 text-slate-400" />
                     {node.name}
                   </h3>
                   <div className="flex items-center gap-4 text-sm text-slate-300">
@@ -206,7 +206,7 @@ export default function MonitoringNodes({
                       <span>{node.cpu}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <HardDrive className="w-4 h-4 text-blue-400" />
+                      <HardDrive className="w-4 h-4 text-slate-400" />
                       <span>{node.memory}</span>
                     </div>
                   </div>
@@ -258,7 +258,7 @@ export default function MonitoringNodes({
                           ? 'text-red-400'
                           : memoryPercent >= 60
                             ? 'text-yellow-400'
-                            : 'text-blue-400'
+                            : 'text-slate-200'
                       }`}
                     >
                       {node.memory_percent}
@@ -271,7 +271,7 @@ export default function MonitoringNodes({
                           ? 'bg-red-500'
                           : memoryPercent >= 60
                             ? 'bg-yellow-500'
-                            : 'bg-blue-500'
+                            : 'bg-primary-400'
                       }`}
                       style={{ width: `${Math.min(memoryPercent, 100)}%` }}
                     />

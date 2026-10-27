@@ -273,7 +273,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
             rel="noopener noreferrer"
             data-testid="pod-traces-link"
             title={t('clusterView.logSearch.tracesTitle', 'Search the traces of {{service}} in a new tab', { service: podService })}
-            className="ml-auto flex items-center gap-1 h-7 px-2.5 rounded-lg border border-sky-700 bg-sky-900/30 text-sky-300 text-[11px] hover:bg-sky-800/40 transition-colors"
+            className="ml-auto flex items-center gap-1 h-7 px-2.5 rounded-lg border border-primary-700 bg-primary-900/30 text-primary-300 text-[11px] hover:bg-primary-800/40 transition-colors"
           >
             <Waypoints className="w-3.5 h-3.5" />
             {t('clusterView.logSearch.traces', 'Traces')}
@@ -606,13 +606,13 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                 <div className="space-y-2">
                   {reqTerms && (
                     <div>
-                      <div className="text-[11px] text-slate-500 uppercase mb-1">{tr('pod.affinity.required', 'Required')}</div>
+                      <div className="text-[11px] text-slate-500 mb-1">{tr('pod.affinity.required', 'Required')}</div>
                       {renderNodeSelectorTerms(reqTerms)}
                     </div>
                   )}
                   {Array.isArray(prefTerms) && prefTerms.length > 0 && (
                     <div>
-                      <div className="text-[11px] text-slate-500 uppercase mb-1">{tr('pod.affinity.preferred', 'Preferred')}</div>
+                      <div className="text-[11px] text-slate-500 mb-1">{tr('pod.affinity.preferred', 'Preferred')}</div>
                       {prefTerms.map((pref: any, pi: number) => (
                         <div key={pi} className="space-y-1">
                           <span className="text-slate-400 text-xs">weight={pref.weight}</span>
@@ -637,13 +637,13 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
               <div className="space-y-2">
                 {Array.isArray(reqTerms) && reqTerms.length > 0 && (
                   <div>
-                    <div className="text-[11px] text-slate-500 uppercase mb-1">{tr('pod.affinity.required', 'Required')}</div>
+                    <div className="text-[11px] text-slate-500 mb-1">{tr('pod.affinity.required', 'Required')}</div>
                     {renderPodAffinityTerms(reqTerms, 'req')}
                   </div>
                 )}
                 {Array.isArray(prefTerms) && prefTerms.length > 0 && (
                   <div>
-                    <div className="text-[11px] text-slate-500 uppercase mb-1">{tr('pod.affinity.preferred', 'Preferred')}</div>
+                    <div className="text-[11px] text-slate-500 mb-1">{tr('pod.affinity.preferred', 'Preferred')}</div>
                     {renderPodAffinityTerms(prefTerms, 'pref')}
                   </div>
                 )}

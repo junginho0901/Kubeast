@@ -78,13 +78,13 @@ export function DashboardSkeleton() {
             <h2 className="text-lg font-semibold text-white">{chart.title}</h2>
             <p className="text-sm text-slate-400 mt-1 mb-4">{chart.sub}</p>
             <svg width="100%" height={340} viewBox="0 0 540 340" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-              <line x1={40} y1={304} x2={524} y2={304} stroke="#475569" strokeWidth={1} />
+              <line x1={40} y1={304} x2={524} y2={304} stroke="var(--color-slate-600)" strokeWidth={1} />
               {chart.bars.map((pct, j) => {
                 const groupW = 484 / chart.bars.length
                 const bw = Math.min(groupW * 0.5, 48)
                 const bx = 40 + j * groupW + (groupW - bw) / 2
                 const barH = (pct / 100) * 280
-                return <rect key={j} className="animate-pulse" x={bx} y={304 - barH} width={bw} height={barH} rx={3} fill="#334155" />
+                return <rect key={j} className="animate-pulse" x={bx} y={304 - barH} width={bw} height={barH} rx={3} fill="var(--color-slate-700)" />
               })}
             </svg>
           </div>

@@ -85,7 +85,7 @@ export default function NetworkDrops({ kind, namespace, name }: { kind: string; 
                         <td className="py-1.5 pr-2 text-red-300 break-all" data-testid="netdrop-reason">
                           {r.reason}
                           {init && (
-                            <button type="button" className="ml-2 text-blue-400 hover:text-blue-300 hover:underline" onClick={() => setWhy(init)} data-testid="netdrop-why">
+                            <button type="button" className="ml-2 text-primary-400 hover:text-primary-300 hover:underline" onClick={() => setWhy(init)} data-testid="netdrop-why">
                               {tr('netdrops.why', 'Why?')}
                             </button>
                           )}

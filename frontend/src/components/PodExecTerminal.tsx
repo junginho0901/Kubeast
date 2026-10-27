@@ -75,8 +75,8 @@ export default function PodExecTerminal({ podName, namespace, container, command
       cursorBlink: true,
       fontSize: 12,
       theme: {
-        background: '#0b1220',
-        foreground: '#e2e8f0',
+        background: '#0a0a0a',
+        foreground: '#e0e0e0',
       },
     })
     const fit = new FitAddon()

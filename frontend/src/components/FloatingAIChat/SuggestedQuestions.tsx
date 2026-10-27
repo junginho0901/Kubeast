@@ -1,5 +1,4 @@
 import { useTranslation } from 'react-i18next'
-import { Sparkles } from 'lucide-react'
 
 interface SuggestedQuestionsProps {
   pageType: string
@@ -46,8 +45,7 @@ export function SuggestedQuestions({ pageType, onPick }: SuggestedQuestionsProps
 
   return (
     <div className="flex flex-col gap-2 px-4 pb-4">
-      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.15em] text-slate-500">
-        <Sparkles className="h-3 w-3" />
+      <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
         <span>{t('floatingChat.suggestedLabel', { defaultValue: 'Suggestions' })}</span>
       </div>
       <div className="flex flex-col gap-1.5">

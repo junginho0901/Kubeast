@@ -155,7 +155,7 @@ export default function RoleBindings() {
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
       [tr('roleBindingsPage.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('roleBindingsPage.stats.totalSubjects', 'Total Subjects'), summary.totalSubjects, 'border-cyan-700/40 bg-cyan-900/10', 'text-cyan-300'],
+      [tr('roleBindingsPage.stats.totalSubjects', 'Total Subjects'), summary.totalSubjects, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ],
     [summary.total, summary.totalSubjects, tr],
   )

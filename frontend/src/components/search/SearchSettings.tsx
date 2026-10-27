@@ -49,7 +49,7 @@ export default function SearchSettings({
                 ref={maxItemsRef}
                 type="number"
                 defaultValue={maxItemsPerResource}
-                className="w-full h-10 px-3 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm focus:outline-hidden focus:border-sky-500"
+                className="w-full h-10 px-3 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm focus:outline-hidden focus:border-primary-500"
               />
               <p className="mt-1 text-[11px] text-slate-500">
                 {t('advancedSearch.maxItemsHelp', 'Resources exceeding this limit will be excluded to prevent slowdowns.')}
@@ -75,7 +75,7 @@ export default function SearchSettings({
 
             <button
               onClick={save}
-              className="w-full py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium transition-colors"
+              className="w-full py-2 rounded-lg bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium transition-colors"
             >
               {t('advancedSearch.save', 'Save')}
             </button>

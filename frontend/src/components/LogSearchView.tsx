@@ -274,8 +274,8 @@ export function LogSearchView({ namespace, pod, workload, container, size = 'md'
               return (
                 <li key={`${l.ts}-${i}`} data-testid="logsearch-line" className="flex gap-3">
                   <span className="shrink-0 text-slate-500 tabular-nums" title={absoluteTitle(l.ts)}>{formatTime(l.ts)}</span>
-                  {showPod && <span className="shrink-0 text-sky-400" data-testid="logsearch-line-pod">{l.pod}</span>}
-                  {showContainer && <span className="shrink-0 text-violet-400">{l.container}</span>}
+                  {showPod && <span className="shrink-0 text-slate-300" data-testid="logsearch-line-pod">{l.pod}</span>}
+                  {showContainer && <span className="shrink-0 text-slate-400">{l.container}</span>}
                   <span className="min-w-0 whitespace-pre-wrap wrap-break-word" data-testid="logsearch-line-text">
                     {highlightParts(l.line, submitted?.q ?? '', submitted?.regex ?? false, submitted?.ignoreCase ?? false).map((p, j) =>
                       p.match ? (
@@ -292,7 +292,7 @@ export function LogSearchView({ namespace, pod, workload, container, size = 'md'
                       rel="noopener noreferrer"
                       data-testid="logsearch-line-trace"
                       title={t('clusterView.logSearch.traceTitle', 'Open trace {{id}} in a new tab', { id: l.traceId })}
-                      className="shrink-0 self-start ml-auto inline-flex items-center gap-1 text-sky-400 hover:text-sky-300"
+                      className="shrink-0 self-start ml-auto inline-flex items-center gap-1 text-primary-400 hover:text-primary-300"
                     >
                       <Waypoints className="w-3 h-3" />
                       {t('clusterView.logSearch.trace', 'Trace')}

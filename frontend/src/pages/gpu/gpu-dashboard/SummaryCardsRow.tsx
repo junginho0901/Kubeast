@@ -36,25 +36,25 @@ export function SummaryCardsRow({ data, allocationRate, devicePluginHealthy, tr 
       label: tr('gpuDashboardPage.summary.capacity', 'Total Capacity'),
       value: data.total_gpu_capacity,
       icon: Monitor,
-      border: 'border-blue-500/30',
-      iconBg: 'bg-blue-500/10',
-      iconColor: 'text-blue-400',
+      border: 'border-slate-700',
+      iconBg: 'bg-slate-700/60',
+      iconColor: 'text-slate-300',
     },
     {
       label: tr('gpuDashboardPage.summary.allocatable', 'Allocatable'),
       value: data.total_gpu_allocatable,
       icon: Cpu,
-      border: 'border-cyan-500/30',
-      iconBg: 'bg-cyan-500/10',
-      iconColor: 'text-cyan-400',
+      border: 'border-slate-700',
+      iconBg: 'bg-slate-700/60',
+      iconColor: 'text-slate-300',
     },
     {
       label: tr('gpuDashboardPage.summary.used', 'Used'),
       value: data.total_gpu_used,
       icon: Activity,
-      border: 'border-violet-500/30',
-      iconBg: 'bg-violet-500/10',
-      iconColor: 'text-violet-400',
+      border: 'border-slate-700',
+      iconBg: 'bg-slate-700/60',
+      iconColor: 'text-slate-300',
     },
     {
       label: tr('gpuDashboardPage.summary.allocationRate', 'Allocation Rate'),
@@ -92,7 +92,7 @@ export function SummaryCardsRow({ data, allocationRate, devicePluginHealthy, tr 
                       allocationRate > 80
                         ? 'bg-amber-500'
                         : allocationRate > 50
-                          ? 'bg-cyan-500'
+                          ? 'bg-primary-400'
                           : 'bg-emerald-500'
                     }`}
                     style={{ width: `${Math.min(allocationRate, 100)}%` }}

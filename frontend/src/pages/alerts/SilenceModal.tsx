@@ -88,7 +88,7 @@ export default function SilenceModal({ initial, maxHours, onClose }: {
     >
       <div className="space-y-5">
         <section>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">{tr('alertInbox.silence.conditions', 'Label conditions')}</h3>
+          <h3 className="mb-2 text-xs font-semibold text-slate-400">{tr('alertInbox.silence.conditions', 'Label conditions')}</h3>
           <div className="space-y-2">
             {rows.map((r, i) => (
               <div key={i} className="flex items-center gap-2" data-testid="silence-matcher">
@@ -128,7 +128,7 @@ export default function SilenceModal({ initial, maxHours, onClose }: {
         </div>
 
         <section data-testid="silence-preview">
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">{tr('alertInbox.silence.affected', 'Alerts it would mute now')}</h3>
+          <h3 className="mb-2 text-xs font-semibold text-slate-400">{tr('alertInbox.silence.affected', 'Alerts it would mute now')}</h3>
           {previewError ? (
             <p className="text-sm text-amber-300">{previewError.detail || tr('alertInbox.silence.previewFailed', 'The conditions could not be checked.')}</p>
           ) : preview.data ? (

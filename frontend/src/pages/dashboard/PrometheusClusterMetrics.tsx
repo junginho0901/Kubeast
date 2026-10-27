@@ -45,9 +45,9 @@ export function PrometheusClusterMetrics({ title, cpu, memory, disk, podCount }:
         <span className="text-xs text-slate-500">{t('dashboard.live', 'Live')}</span>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {cpu !== null && <MetricBar label="CPU" value={cpu} normalClass="bg-sky-400" />}
-        {memory !== null && <MetricBar label={t('dashboard.memory', 'Memory')} value={memory} normalClass="bg-sky-400" />}
-        {disk !== null && <MetricBar label={t('dashboard.disk', 'Disk')} value={disk} normalClass="bg-sky-400" />}
+        {cpu !== null && <MetricBar label="CPU" value={cpu} normalClass="bg-primary-400" />}
+        {memory !== null && <MetricBar label={t('dashboard.memory', 'Memory')} value={memory} normalClass="bg-primary-400" />}
+        {disk !== null && <MetricBar label={t('dashboard.disk', 'Disk')} value={disk} normalClass="bg-primary-400" />}
         {podCount !== null && (
           <div className="space-y-2">
             <div className="text-xs text-slate-400">{t('dashboard.pods', 'Pods')}</div>

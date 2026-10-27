@@ -170,7 +170,7 @@ export default function YamlEditor({
                     type="button"
                     onClick={handleApply}
                     disabled={isApplying || !isReady}
-                    className="px-2.5 py-1 text-xs rounded-sm border border-sky-600 bg-sky-600/20 text-sky-300 hover:bg-sky-600/30 disabled:opacity-50 transition-colors"
+                    className="px-2.5 py-1 text-xs rounded-sm border border-primary-600 bg-primary-600/20 text-primary-300 hover:bg-primary-600/30 disabled:opacity-50 transition-colors"
                   >
                     {isApplying ? labels.applying : labels.apply}
                   </button>

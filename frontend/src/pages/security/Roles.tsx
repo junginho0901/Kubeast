@@ -151,7 +151,7 @@ export default function Roles() {
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
       [tr('rolesPage.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('rolesPage.stats.totalRules', 'Total Rules'), summary.totalRules, 'border-cyan-700/40 bg-cyan-900/10', 'text-cyan-300'],
+      [tr('rolesPage.stats.totalRules', 'Total Rules'), summary.totalRules, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ],
     [summary.total, summary.totalRules, tr],
   )

@@ -71,7 +71,7 @@ export function PodNodeGrid({ sortedNodeEntries, filteredPods, allPodsLen, isLoa
         sortedNodeEntries.map(([nodeName, pods]) => (
           <div key={nodeName} className="card">
             <div className="flex items-center gap-3 mb-4">
-              <Server className="w-6 h-6 text-cyan-400" />
+              <Server className="w-6 h-6 text-slate-400" />
               <h2 className="text-xl font-bold text-white">{nodeName}</h2>
               <span className="badge badge-secondary">
                 {tr('clusterView.nodePodsCount', '{{count}} Pods', { count: pods.length })}

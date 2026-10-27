@@ -266,8 +266,8 @@ spec:
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('pvs.stats.bound', 'Bound')}</p>
           <p className="text-lg text-white font-semibold mt-1">{summary.bound}</p>
         </div>
-        <div className="rounded-lg border border-cyan-700/40 bg-cyan-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-cyan-300">{tr('pvs.stats.available', 'Available')}</p>
+        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
+          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('pvs.stats.available', 'Available')}</p>
           <p className="text-lg text-white font-semibold mt-1">{summary.available}</p>
         </div>
         <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3">

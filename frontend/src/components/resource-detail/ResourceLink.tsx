@@ -12,7 +12,7 @@ export function ResourceLink({ kind, name, namespace }: ResourceLinkProps) {
   return (
     <button
       type="button"
-      className="text-blue-400 hover:text-blue-300 hover:underline cursor-pointer"
+      className="text-primary-400 hover:text-primary-300 hover:underline cursor-pointer"
       onClick={(e) => {
         e.stopPropagation()
         open({ kind, name, namespace })

@@ -107,7 +107,7 @@ export default function Endpoints() {
       [tr('endpointsPage.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
       [tr('endpointsPage.stats.withReady', 'With Ready'), summary.withReady, 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
       [tr('endpointsPage.stats.withNotReady', 'With NotReady'), summary.withNotReady, 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
-      [tr('endpointsPage.stats.totalAddresses', 'Total Addresses'), summary.totalAddresses, 'border-cyan-700/40 bg-cyan-900/10', 'text-cyan-300'],
+      [tr('endpointsPage.stats.totalAddresses', 'Total Addresses'), summary.totalAddresses, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ],
     [summary.total, summary.totalAddresses, summary.withNotReady, summary.withReady, tr],
   )

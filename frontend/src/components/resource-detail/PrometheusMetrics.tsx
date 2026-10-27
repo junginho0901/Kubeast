@@ -90,7 +90,7 @@ export function PrometheusSection({
     <div className="mt-4 rounded-lg border border-slate-700/50 bg-slate-800/30 p-4">
       <div className="flex items-center gap-2 mb-3">
         <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-        <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider"><Tx>{title}</Tx></h3>
+        <h3 className="text-xs font-semibold text-slate-300"><Tx>{title}</Tx></h3>
       </div>
       {children}
     </div>

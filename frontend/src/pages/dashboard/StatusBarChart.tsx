@@ -34,8 +34,8 @@ export function StatusBarChart({ data, colorFor, chartHeight = 340, onBarClick }
         const y = baseY - (tick / niceMax) * CH
         return (
           <g key={`yt-${tick}`}>
-            <line x1={M.l} y1={y} x2={M.l + CW} y2={y} stroke={tick === 0 ? '#475569' : '#334155'} strokeWidth={tick === 0 ? 1 : 0.5} />
-            <text x={M.l - 8} y={y + 3.5} textAnchor="end" fill="#94a3b8" fontSize={10}>{tick}</text>
+            <line x1={M.l} y1={y} x2={M.l + CW} y2={y} stroke={tick === 0 ? 'var(--color-slate-600)' : 'var(--color-slate-700)'} strokeWidth={tick === 0 ? 1 : 0.5} />
+            <text x={M.l - 8} y={y + 3.5} textAnchor="end" fill="var(--color-slate-400)" fontSize={10}>{tick}</text>
           </g>
         )
       })}
@@ -57,7 +57,7 @@ export function StatusBarChart({ data, colorFor, chartHeight = 340, onBarClick }
             {/* the whole column takes the click, so a 0 is as easy to hit as a tall bar */}
             <rect x={M.l + i * groupW} y={M.t} width={groupW} height={CH} fill="transparent" />
             {barH > 0 && <rect x={bx} y={by} width={barW} height={barH} rx={3} fill={colorFor(d.name)} />}
-            <text x={bx + barW / 2} y={by - 6} textAnchor="middle" fill="#e2e8f0" fontSize={11} fontWeight={600}>{d.value}</text>
+            <text x={bx + barW / 2} y={by - 6} textAnchor="middle" fill="var(--color-slate-200)" fontSize={11} fontWeight={600}>{d.value}</text>
           </g>
         )
       })}
@@ -68,7 +68,7 @@ export function StatusBarChart({ data, colorFor, chartHeight = 340, onBarClick }
           x={M.l + i * groupW + groupW / 2}
           y={baseY + 20}
           textAnchor="middle"
-          fill="#94a3b8"
+          fill="var(--color-slate-400)"
           fontSize={10.5}
           fontWeight={500}
           style={{ cursor: 'pointer' }}

@@ -209,8 +209,8 @@ export default function Account() {
         <ModalFrame
           size="md"
           icon={
-            <div className="p-2 rounded-lg bg-cyan-500/10 shrink-0">
-              <KeyRound className="w-6 h-6 text-cyan-400" />
+            <div className="p-2 rounded-lg bg-slate-700/60 shrink-0">
+              <KeyRound className="w-6 h-6 text-slate-300" />
             </div>
           }
           title={tr('account.password.title', 'Change password')}
