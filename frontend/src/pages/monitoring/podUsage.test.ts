@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { podLimit, usageTone } from './podUsage'
 
 describe('podLimit', () => {
+  it('reads the limits under resources, as the pod list gives them', () => {
+    expect(podLimit([{ resources: { limits: { memory: '170Mi' } } }], 'memory')).toBe(170 * 1024 ** 2)
+    expect(podLimit([{ resources: { limits: { memory: '170Mi' } } }], 'cpu')).toBeNull()
+  })
+
   it('adds the containers’ limits in their units', () => {
     expect(podLimit([{ limits: { cpu: '500m' } }, { limits: { cpu: '1.5' } }], 'cpu')).toBe(2000)
     expect(podLimit([{ limits: { memory: '256Mi' } }, { limits: { memory: '1Gi' } }], 'memory')).toBe(1280 * 1024 ** 2)
