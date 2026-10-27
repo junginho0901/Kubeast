@@ -24,7 +24,7 @@ Key features:
 ## Quick start
 
 ```bash
-helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.4 \
+helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.5 \
   --namespace kubeast --create-namespace
 ```
 
