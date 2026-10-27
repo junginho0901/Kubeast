@@ -2,7 +2,7 @@ import { useEffect, type JSX } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { startSessionKeepalive } from '@/services/auth'
+import { markSignedIn, noteSessionEnded, startSessionKeepalive } from '@/services/auth'
 
 // The session is an HttpOnly cookie the page cannot inspect, so "signed in"
 // means GET /auth/me succeeds. The result is shared (query key 'me') with the
@@ -21,6 +21,15 @@ export default function RequireAuth({ children }: { children: JSX.Element }) {
     if (ttl <= 0) return
     return startSessionKeepalive(ttl)
   }, [ttl])
+
+  // the sign-in page says the session ended when a browser that was signed in comes back without one
+  const meId = me?.id
+  useEffect(() => {
+    if (meId) markSignedIn()
+  }, [meId])
+  useEffect(() => {
+    if (isError) noteSessionEnded()
+  }, [isError])
 
   if (isError) {
     return <Navigate to="/login" state={{ from: location }} replace />

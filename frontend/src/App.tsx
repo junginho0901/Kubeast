@@ -4,7 +4,6 @@ import Layout from './components/Layout'
 import RequireAuth from './components/RequireAuth'
 import RequireAdmin from './components/RequireAdmin'
 import AIGate from './components/AIGate'
-import RequirePermission from './components/RequirePermission'
 import RouteFallback from './components/RouteFallback'
 import Login from './pages/Login'
 import { ClusterProvider } from './contexts/ClusterProvider'
@@ -108,7 +107,7 @@ function App() {
       <ClusterProvider>
         <Suspense fallback={<RouteFallback />}>
           <Routes>
-          <Route path="/setup" element={<RequireAuth><RequireAdmin><Setup /></RequireAdmin></RequireAuth>} />
+          <Route path="/setup" element={<RequireAuth><RequireAdmin page="/setup"><Setup /></RequireAdmin></RequireAuth>} />
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<RequireAuth><Layout /></RequireAuth>}>
             <Route index element={<Dashboard />} />
@@ -179,19 +178,19 @@ function App() {
             <Route path="topology/:namespace" element={<TopologyRedirect />} />
             <Route path="network/:namespace" element={<Navigate to="/network/services" replace />} />
             <Route path="ai-chat" element={<AIGate><AIChat /></AIGate>} />
-            <Route path="admin/clusters" element={<RequireAdmin><AdminClusters /></RequireAdmin>} />
-            <Route path="admin/users" element={<RequireAdmin><AdminUsers /></RequireAdmin>} />
-            <Route path="admin/ai-models" element={<RequireAdmin><AIGate><AdminAIModels /></AIGate></RequireAdmin>} />
-            <Route path="admin/audit" element={<RequireAdmin><AdminAudit /></RequireAdmin>} />
-            <Route path="admin/ai-usage" element={<RequireAdmin><AIGate><AdminAIUsage /></AIGate></RequireAdmin>} />
-            <Route path="admin/node-shell" element={<RequireAdmin><AdminNodeShell /></RequireAdmin>} />
-            <Route path="admin/organizations" element={<RequireAdmin><AdminOrganizations /></RequireAdmin>} />
-            <Route path="admin/roles" element={<RequireAdmin><AdminRoles /></RequireAdmin>} />
-            <Route path="admin/access-requests" element={<RequireAdmin><AdminAccessRequests /></RequireAdmin>} />
-            <Route path="admin/access-review" element={<RequirePermission permission="admin.review.read"><AdminAccessReview /></RequirePermission>} />
-            <Route path="admin/cluster-hygiene" element={<RequirePermission permission="admin.hygiene.read"><AdminClusterHygiene /></RequirePermission>} />
-            <Route path="admin/session-recordings" element={<RequirePermission permission="admin.sessions.read"><AdminSessionRecordings /></RequirePermission>} />
-            <Route path="admin/investigations" element={<RequirePermission permission="admin.investigations.read"><AIGate><AdminInvestigations /></AIGate></RequirePermission>} />
+            <Route path="admin/clusters" element={<RequireAdmin page="/admin/clusters"><AdminClusters /></RequireAdmin>} />
+            <Route path="admin/users" element={<RequireAdmin page="/admin/users"><AdminUsers /></RequireAdmin>} />
+            <Route path="admin/ai-models" element={<RequireAdmin page="/admin/ai-models"><AIGate><AdminAIModels /></AIGate></RequireAdmin>} />
+            <Route path="admin/audit" element={<RequireAdmin page="/admin/audit"><AdminAudit /></RequireAdmin>} />
+            <Route path="admin/ai-usage" element={<RequireAdmin page="/admin/ai-usage"><AIGate><AdminAIUsage /></AIGate></RequireAdmin>} />
+            <Route path="admin/node-shell" element={<RequireAdmin page="/admin/node-shell"><AdminNodeShell /></RequireAdmin>} />
+            <Route path="admin/organizations" element={<RequireAdmin page="/admin/organizations"><AdminOrganizations /></RequireAdmin>} />
+            <Route path="admin/roles" element={<RequireAdmin page="/admin/roles"><AdminRoles /></RequireAdmin>} />
+            <Route path="admin/access-requests" element={<RequireAdmin page="/admin/access-requests"><AdminAccessRequests /></RequireAdmin>} />
+            <Route path="admin/access-review" element={<RequireAdmin page="/admin/access-review"><AdminAccessReview /></RequireAdmin>} />
+            <Route path="admin/cluster-hygiene" element={<RequireAdmin page="/admin/cluster-hygiene"><AdminClusterHygiene /></RequireAdmin>} />
+            <Route path="admin/session-recordings" element={<RequireAdmin page="/admin/session-recordings"><AdminSessionRecordings /></RequireAdmin>} />
+            <Route path="admin/investigations" element={<RequireAdmin page="/admin/investigations"><AIGate><AdminInvestigations /></AIGate></RequireAdmin>} />
             <Route path="*" element={<NotFound />} />
           </Route>
           </Routes>

@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
-import { useMemo, useState, useEffect, Suspense, type ComponentType } from 'react'
+import { useCallback, useMemo, useState, useEffect, Suspense, type ComponentType } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
@@ -51,6 +51,7 @@ import { usePermission } from '@/hooks/usePermission'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
 import { aiEnabled, alertInvestigationEnabled, costEnabled, policyReportsEnabled } from '@/utils/features'
 import { resolveRouteMeta } from '@/utils/aiContext/routeMatcher'
+import { ADMIN_PAGE_PERMISSIONS, isGlobalAdmin } from '@/utils/adminAccess'
 
 type NavItem = {
   name: string
@@ -63,6 +64,8 @@ type NavItem = {
   // A small label after the name (Beta).
   tag?: string
   testId?: string
+  // Shown when the user holds any of these (the admin pages: utils/adminAccess).
+  permissions?: string[]
 }
 
 type NavGroup = {
@@ -75,7 +78,7 @@ type NavGroup = {
   // requiredPermission hides the entire group when the user lacks the
   // menu.* permission it names (docs/features.md "Roles and permissions"); the built-in roles
   // hold menu.*, so only a custom role ever hides a group. Admin is
-  // adminOnly instead.
+  // adminOnly instead: shown with the items the user may open.
   requiredPermission?: string
 }
 
@@ -176,12 +179,13 @@ export default function Layout() {
   const investigationsOn = aiOn && alertInvestigationEnabled(clusterFeatures)
   // Alerts cover the whole cluster: the inbox is for whoever reads the selected cluster without a namespace limit.
   const alertsOn = investigationsOn && hasPermission('resource.pod.read') && !(clusterNamespaces?.length)
-  // The admin section requires a GLOBAL admin permission, which lives only in
-  // the matrix "*" entry — per-cluster grants never carry admin.*.
-  const isAdmin = (matrix['*'] ?? []).some((p) => p === '*' || p.startsWith('admin.'))
-  // A non-admin with zero accessible clusters can't view any resource page;
+  // Admin pages each need their own permission (utils/adminAccess), held in the matrix "*" entry; only "*" itself
+  // reaches every cluster.
+  const globalAdmin = isGlobalAdmin(matrix)
+  const canOpen = useCallback((item: NavItem) => !item.permissions || item.permissions.some((p) => hasPermission(p)), [hasPermission])
+  // Someone who reaches no cluster can't view any resource page;
   // the account page (profile, language, sign-out) needs no cluster.
-  const hasNoCluster = !isAdmin && !isClustersLoading && accessibleClusters.length === 0
+  const hasNoCluster = !globalAdmin && !isClustersLoading && accessibleClusters.length === 0
   const noAccessibleCluster = hasNoCluster && location.pathname !== '/account'
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ core: true })
 
@@ -197,7 +201,7 @@ export default function Layout() {
   const { data: pendingAccessRequests = [] } = useQuery({
     queryKey: ['access-requests', 'admin', 'pending'],
     queryFn: () => api.adminListAccessRequests('pending'),
-    enabled: isAdmin && accessRequestsOn,
+    enabled: hasPermission('admin.users.update') && accessRequestsOn,
     refetchInterval: 60_000,
     retry: false,
   })
@@ -208,11 +212,11 @@ export default function Layout() {
     queryFn: api.getAccessReviewConfig,
     staleTime: 60_000,
     retry: false,
-    enabled: isAdmin,
+    enabled: hasPermission('admin.review.read'),
   })
   const accessReviewOn = !!accessReviewConfig?.enabled
   // Cluster hygiene: shown to admins who can read it, when the installation has it on.
-  const canReadHygiene = isAdmin && hasPermission('admin.hygiene.read')
+  const canReadHygiene = hasPermission('admin.hygiene.read')
   const { data: hygieneConfig } = useQuery({
     queryKey: ['hygiene', 'config'],
     queryFn: api.getHygieneConfig,
@@ -397,7 +401,7 @@ export default function Layout() {
       id: 'admin',
       label: t('nav.admin'),
       adminOnly: true,
-      items: [
+      items: ([
         { name: t('nav.clusters', { defaultValue: 'Clusters' }), href: '/admin/clusters', icon: Cloud },
         { name: t('nav.userManagement'), href: '/admin/users', icon: Users },
         { name: t('nav.roleManagement'), href: '/admin/roles', icon: IdCard },
@@ -417,15 +421,14 @@ export default function Layout() {
         ...(aiOn ? [{ name: t('nav.aiUsage'), href: '/admin/ai-usage', icon: ChartColumn }] : []),
         ...(investigationsOn ? [{ name: t('nav.investigations', { defaultValue: 'Investigations' }), href: '/admin/investigations', icon: Siren, testId: 'nav-investigations' }] : []),
         { name: t('nav.nodeShell'), href: '/admin/node-shell', icon: SquareTerminal },
-      ],
+      ] as NavItem[]).map((item) => ({ ...item, permissions: ADMIN_PAGE_PERMISSIONS[item.href] })),
     },
   ], [t, accessRequestsOn, pendingAccessCount, accessReviewOn, hygieneOn, aiOn, costOn, policyReportsOn, investigationsOn, alertsOn])
 
   const active = useMemo(() => {
     for (const group of navGroups) {
-      if (group.adminOnly && !isAdmin) continue
       if (group.requiredPermission && !hasPermission(group.requiredPermission)) continue
-      for (const item of group.items) {
+      for (const item of group.items.filter(canOpen)) {
         const isActive = item.match
           ? item.match(location.pathname, location.search)
           : item.exact
@@ -435,7 +438,7 @@ export default function Layout() {
       }
     }
     return null
-  }, [isAdmin, location.pathname, location.search, navGroups, hasPermission])
+  }, [canOpen, location.pathname, location.search, navGroups, hasPermission])
   const activeGroup = active?.group ?? null
 
   // Browser tab: "<screen> · Kubeast" (WCAG 2.4.2 Page Titled) — the sidebar's name for the page, or the route's
@@ -497,7 +500,7 @@ export default function Layout() {
           <nav data-testid="sidebar-nav" className="sidebar-nav flex-1 min-h-0 px-4 py-6 space-y-2 overflow-y-auto">
             {navGroups
               .filter((group) => {
-                if (group.adminOnly && !isAdmin) return false
+                if (group.adminOnly && !group.items.some(canOpen)) return false
                 if (group.requiredPermission && !hasPermission(group.requiredPermission)) return false
                 return true
               })
@@ -522,7 +525,7 @@ export default function Layout() {
                   >
                     <div className="overflow-hidden">
                       <div className="space-y-1">
-                      {group.items.map((item) => {
+                      {group.items.filter(canOpen).map((item) => {
                         const isActive = item.match
                           ? item.match(location.pathname, location.search)
                           : item.exact
@@ -617,7 +620,8 @@ export default function Layout() {
               state (selected namespace, filters, open modals) never carries over
               to a different cluster — its namespaces/resources differ. */}
           <div key={currentCluster || 'default'} className="contents">
-            <ForbiddenBanner clusterKey={currentCluster || 'default'} />
+            {/* with no cluster to reach, the page below says so: no "in this cluster" notice above it */}
+            {!noAccessibleCluster && <ForbiddenBanner clusterKey={currentCluster || 'default'} />}
             {noAccessibleCluster ? (
               <div
                 data-testid="no-accessible-cluster"
@@ -637,7 +641,7 @@ export default function Layout() {
                 </p>
                 <AccessHelp className="mt-3 max-w-md text-sm" />
               </div>
-            ) : !isAdmin && isClustersLoading ? (
+            ) : !globalAdmin && isClustersLoading ? (
               // Until the accessible-cluster list is known, a non-admin's
               // page would mount and fire cluster requests that all 403.
               <RouteFallback />

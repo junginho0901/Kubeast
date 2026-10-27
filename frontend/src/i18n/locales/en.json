@@ -2951,6 +2951,7 @@
     "ssoGroupHint": "You signed in with single sign-on, and your role comes from your groups at the identity provider. Ask an administrator to add you to a group there, then sign out and sign in again."
   },
   "login": {
+    "sessionEnded": "Your session ended: your account or access may have changed, or the session timed out. Sign in again.",
     "errors": {
       "passwordMismatch": "Passwords do not match.",
       "loginFailed": "Failed to sign in.",
@@ -3986,7 +3987,8 @@
       "adminAll": "Global admin — reaches every cluster automatically.",
       "none": "No access",
       "noClusters": "No clusters registered.",
-      "namespacesNote": "A role can be limited to namespaces (the box next to it; empty = the whole cluster)."
+      "namespacesNote": "A role can be limited to namespaces (the box next to it; empty = the whole cluster).",
+      "self": "This is your own account: your cluster access is changed by another admin or through an access request."
     },
     "aiModels": {
       "add": "Add Model",

@@ -1,6 +1,44 @@
 import { forgetFloatingChat } from './floatingChatSession'
 
 const REDIRECT_AFTER_LOGIN_KEY = 'kubeast:redirect-after-login'
+const SIGNED_IN_KEY = 'kubeast:signed-in'
+const SESSION_ENDED_KEY = 'kubeast:session-ended'
+
+// A browser that was signed in and loses its session without signing out — an admin changed the account or its
+// access, deleted it, or the session timed out — gets one notice on the sign-in page. Signing out clears the mark.
+export function markSignedIn() {
+  try {
+    window.localStorage.setItem(SIGNED_IN_KEY, '1')
+  } catch {
+    // storage off
+  }
+}
+
+export function noteSessionEnded() {
+  try {
+    if (window.localStorage.getItem(SIGNED_IN_KEY) !== '1') return
+    window.localStorage.removeItem(SIGNED_IN_KEY)
+    window.sessionStorage.setItem(SESSION_ENDED_KEY, '1')
+  } catch {
+    // storage off
+  }
+}
+
+export function sessionEndedNotice(): boolean {
+  try {
+    return window.sessionStorage.getItem(SESSION_ENDED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function clearSessionEndedNotice() {
+  try {
+    window.sessionStorage.removeItem(SESSION_ENDED_KEY)
+  } catch {
+    // storage off
+  }
+}
 
 // The session lives only in the HttpOnly cookie that POST /auth/login sets; the
 // page never sees the token, so a script injected into it cannot read one.
@@ -19,6 +57,11 @@ export function getAuthHeaders(): Record<string, string> {
 export function logoutSession(): Promise<void> {
   if (typeof window === 'undefined') return Promise.resolve()
   forgetFloatingChat()
+  try {
+    window.localStorage.removeItem(SIGNED_IN_KEY)
+  } catch {
+    // storage off
+  }
   return fetch('/api/v1/auth/logout', {
     method: 'POST',
     headers: CSRF_HEADER,
@@ -114,6 +157,7 @@ export function handleUnauthorized() {
   if (handlingUnauthorized) return
   handlingUnauthorized = true
 
+  noteSessionEnded()
   void logoutSession()
 
   try {

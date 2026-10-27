@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '@/services/api'
-import { clearRedirectAfterLogin, getRedirectAfterLogin } from '@/services/auth'
+import { clearRedirectAfterLogin, clearSessionEndedNotice, getRedirectAfterLogin, sessionEndedNotice } from '@/services/auth'
 import { clearStoredCluster } from '@/contexts/ClusterContext'
 import { KeyRound, Lock, UserPlus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -74,6 +74,9 @@ export default function Login() {
   // third failure on, hint that the lockout may be the reason — client-side
   // only, nothing about the account leaves the server.
   const [failCount, setFailCount] = useState(0)
+  // Shown once: the session of a browser that was signed in ended without signing out.
+  const [sessionEnded] = useState(sessionEndedNotice)
+  useEffect(() => clearSessionEndedNotice(), [])
   const [registered, setRegistered] = useState(false)
 
   const redirectTo = useMemo(() => {
@@ -224,6 +227,12 @@ export default function Login() {
                   ? tr('login.form.loginSubtitle', 'Sign in to access the service.')
                   : tr('login.form.registerSubtitle', 'Create a new account and sign in.')}
               </p>
+
+              {sessionEnded && mode === 'login' && (
+                <div className="mt-4 rounded-lg border border-amber-700/50 bg-amber-900/20 px-3 py-2 text-sm text-amber-100" role="status" data-testid="login-session-ended">
+                  {tr('login.sessionEnded', 'Your session ended: your account or access may have changed, or the session timed out. Sign in again.')}
+                </div>
+              )}
 
               {ssoEnabled && mode === 'login' && (
                 <div className="mt-5 space-y-3">

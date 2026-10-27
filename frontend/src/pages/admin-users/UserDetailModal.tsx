@@ -5,8 +5,9 @@
 // state 와 mutation 을 보유하기 때문 — useUserCRUD 같은 hook 으로 묶기엔
 // 외부 setter 의존이 12+개라 ROI 낮아 그대로 둠.
 
-import type { UseMutationResult } from '@tanstack/react-query'
-import type { Member, RoleWithDetails } from '@/services/api'
+import { useQuery, type UseMutationResult } from '@tanstack/react-query'
+import { api, type Member, type RoleWithDetails } from '@/services/api'
+import { roleReachesEveryCluster } from '@/utils/adminAccess'
 import ClusterRoleMatrix from '@/pages/admin/ClusterRoleMatrix'
 import UserApiKeys from './UserApiKeys'
 import { Pencil, X } from 'lucide-react'
@@ -56,6 +57,7 @@ export function UserDetailModal({
   updateUserMutation,
   tr,
 }: Props) {
+  const { data: me } = useQuery({ queryKey: ['me'], queryFn: api.me, retry: false, staleTime: 30000 })
   if (!detailUserId) return null
   const u = rows.find((x) => x.id === detailUserId)
   if (!u) return null
@@ -186,13 +188,17 @@ export function UserDetailModal({
             </div>
           </div>
 
-          <ClusterRoleMatrix
-            userID={u.id}
-            canEdit={canEditUsers}
-            userIsGlobalAdmin={permissions.some((p) => p === '*' || p.startsWith('admin.'))}
-          />
+          {/* both read through admin.users.update APIs */}
+          {canEditUsers && (
+            <ClusterRoleMatrix
+              userID={u.id}
+              canEdit={canEditUsers}
+              userIsGlobalAdmin={roleReachesEveryCluster(permissions)}
+              isSelf={!!me?.id && me.id === u.id}
+            />
+          )}
 
-          <UserApiKeys userID={u.id} canEdit={canEditUsers} tr={tr} />
+          {canEditUsers && <UserApiKeys userID={u.id} canEdit={canEditUsers} tr={tr} />}
         </div>
 
         {detailError && (

@@ -5,7 +5,8 @@ import { api } from '@/services/api'
 import { usePermission } from '@/hooks/usePermission'
 
 interface Props {
-  permission: string
+  // one permission, or several of which any opens the page
+  permission: string | string[]
   children: JSX.Element
 }
 
@@ -28,7 +29,7 @@ export default function RequirePermission({ permission, children }: Props) {
     return <div className="min-h-screen bg-slate-900" />
   }
 
-  if (!has(permission)) {
+  if (!(Array.isArray(permission) ? permission : [permission]).some((p) => has(p))) {
     return <Navigate to="/" replace />
   }
 

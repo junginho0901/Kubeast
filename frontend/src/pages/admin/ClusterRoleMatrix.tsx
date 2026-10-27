@@ -6,26 +6,33 @@ import { api } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
 import CustomDropdown from '@/components/CustomDropdown'
 import NamespaceScopeInput from '@/components/NamespaceScopeInput'
+import { usePermission } from '@/hooks/usePermission'
 
 interface Props {
   userID: string
   canEdit: boolean
-  // The target user is a global admin (admin.* / "*") → reaches every cluster
+  // The target user is a global admin ("*") → reaches every cluster
   // automatically, so per-cluster grants are unnecessary.
   userIsGlobalAdmin?: boolean
+  // The admin's own account: shown read-only (the server refuses a change to one's own cluster access).
+  isSelf?: boolean
 }
 
 // Per-user × per-cluster role grants (step 12), backed by the step-08 API.
 // One row per registered cluster with a role <select> ("none" = no access,
 // deny-by-default). Changes apply on the user's NEXT login (token re-issue).
-export default function ClusterRoleMatrix({ userID, canEdit, userIsGlobalAdmin }: Props) {
+export default function ClusterRoleMatrix({ userID, canEdit: canEditUsers, userIsGlobalAdmin, isSelf }: Props) {
+  const canEdit = canEditUsers && !isSelf
   const { t } = useTranslation()
   const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
   const queryClient = useQueryClient()
 
+  // Without the full cluster list, the clusters one reaches — the ones one may grant on (permission ceiling).
+  const { has } = usePermission()
+  const everyCluster = has('admin.clusters.list')
   const { data: clusters = [] } = useQuery({
-    queryKey: ['clusters-all'],
-    queryFn: () => clustersApi.listClusters(false),
+    queryKey: ['clusters-all', everyCluster],
+    queryFn: () => clustersApi.listClusters(!everyCluster),
     staleTime: 30_000,
   })
   const { data: roles = [] } = useQuery({ queryKey: ['roles'], queryFn: api.listRoles, staleTime: 60_000 })
@@ -79,6 +86,11 @@ export default function ClusterRoleMatrix({ userID, canEdit, userIsGlobalAdmin }
         )}{' '}
         {tr('admin.userClusterRoles.namespacesNote', 'A role can be limited to namespaces (the box next to it; empty = the whole cluster).')}
       </p>
+      {isSelf && (
+        <p className="text-xs text-amber-200 mb-3" data-testid="cluster-role-matrix-self">
+          {tr('admin.userClusterRoles.self', 'This is your own account: your cluster access is changed by another admin or through an access request.')}
+        </p>
+      )}
 
       {userIsGlobalAdmin ? (
         <p className="text-sm text-primary-300 bg-primary-900/20 border border-primary-800/40 rounded-lg px-3 py-2">

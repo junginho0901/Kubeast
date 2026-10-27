@@ -5,6 +5,7 @@ import { AlertTriangle, Download, History, Loader2, RefreshCw, ShieldCheck, X } 
 
 import CustomDropdown from '@/components/CustomDropdown'
 import { useAIContext } from '@/hooks/useAIContext'
+import { usePermission } from '@/hooks/usePermission'
 import { api, clustersApi } from '@/services/api'
 import type { HygieneFinding, HygieneReport, HygieneReview, HygieneSeverity } from '@/services/api/hygiene'
 import { getCurrentClusterID } from '@/services/clusterRef'
@@ -51,7 +52,9 @@ export default function ClusterHygiene() {
   const [error, setError] = useState<string | null>(null)
   const [viewId, setViewId] = useState<string | null>(null)
 
-  const { data: clusters = [] } = useQuery({ queryKey: ['clusters', 'all'], queryFn: () => clustersApi.listClusters() })
+  // without the full cluster list (admin.clusters.list), the clusters the reader reaches
+  const everyCluster = usePermission().has('admin.clusters.list')
+  const { data: clusters = [] } = useQuery({ queryKey: ['clusters', 'all', everyCluster], queryFn: () => clustersApi.listClusters(!everyCluster) })
   useEffect(() => {
     if (cluster || clusters.length === 0) return
     const current = getCurrentClusterID()

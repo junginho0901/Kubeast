@@ -43,7 +43,8 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
     enabled,
   })
 
-  const isGlobalAdmin = (me?.permissions_matrix?.['*'] ?? []).some((p) => p === '*' || p.startsWith('admin.'))
+  // only "*" reaches every cluster; admin.* keys open admin pages and still need a grant per cluster
+  const isGlobalAdmin = (me?.permissions_matrix?.['*'] ?? []).includes('*')
   const myRoles = me?.cluster_roles ?? {}
   const durations = useMemo(() => {
     const max = (config?.max_hours ?? 8) * 60

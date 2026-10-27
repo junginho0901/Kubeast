@@ -2811,7 +2811,8 @@
       "adminAll": "전역 admin — 모든 클러스터에 자동 접근합니다.",
       "none": "접근 없음",
       "noClusters": "등록된 클러스터가 없습니다.",
-      "namespacesNote": "역할은 네임스페이스로 한정할 수 있습니다(옆 칸, 비우면 클러스터 전체)."
+      "namespacesNote": "역할은 네임스페이스로 한정할 수 있습니다(옆 칸, 비우면 클러스터 전체).",
+      "self": "내 계정입니다. 내 클러스터 권한은 다른 관리자가 바꾸거나 접근 요청으로 받습니다."
     }
   },
   "adminUsers": {
@@ -3022,6 +3023,7 @@
     "ssoGroupHint": "SSO로 로그인한 계정이고, 역할은 인증 제공자(IdP)의 그룹에서 정해집니다. 관리자에게 그 그룹에 추가해 달라고 요청한 뒤 로그아웃했다가 다시 로그인하세요."
   },
   "login": {
+    "sessionEnded": "세션이 끝났습니다. 계정이나 권한이 바뀌었거나 오래 사용하지 않아 로그아웃되었을 수 있습니다. 다시 로그인하세요.",
     "errors": {
       "passwordMismatch": "비밀번호가 일치하지 않습니다.",
       "loginFailed": "로그인에 실패했습니다.",
@@ -3814,7 +3816,8 @@
     "subtitle": "세분화된 권한으로 사용자 정의 역할을 만듭니다.",
     "systemNote": "시스템 역할: 이름과 권한은 고정이고 설명만 바꿀 수 있습니다",
     "title": "Role Management",
-    "updateError": "역할을 수정하지 못했습니다"
+    "updateError": "역할을 수정하지 못했습니다",
+    "deleteError": "역할을 삭제하지 못했습니다"
   },
   "gpuDashboardPage": {
     "title": "GPU Dashboard",

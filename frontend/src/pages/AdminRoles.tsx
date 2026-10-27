@@ -29,6 +29,7 @@ export default function AdminRoles() {
   const [formDesc, setFormDesc] = useState('')
   const [formPerms, setFormPerms] = useState<Set<string>>(new Set())
   const [formError, setFormError] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const [usersRole, setUsersRole] = useState<RoleWithDetails | null>(null)
 
   const { has: hasPerm } = usePermission()
@@ -77,7 +78,10 @@ export default function AdminRoles() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.adminDeleteRole(id),
+    onMutate: () => setDeleteError(null),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['roles'] }),
+    // The server says why (the role is still held or asked for): show it.
+    onError: (err: any) => setDeleteError(err?.response?.data?.detail || tr('adminRoles.deleteError', 'Failed to delete role')),
   })
 
   const closeModal = () => {
@@ -150,6 +154,12 @@ export default function AdminRoles() {
           {tr('adminRoles.create', 'Create Role')}
         </button>
       </div>
+
+      {deleteError && (
+        <div className="rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200" role="alert" data-testid="admin-roles-delete-error">
+          {deleteError}
+        </div>
+      )}
 
       {isLoading ? (
         <div className="text-slate-400 text-sm">{tr('adminRoles.loading', 'Loading...')}</div>
