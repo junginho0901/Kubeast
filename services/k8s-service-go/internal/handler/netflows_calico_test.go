@@ -89,7 +89,7 @@ func (f *netflowsFixture) getCalico(target string) (*httptest.ResponseRecorder, 
 func TestNetworkFlowsCalico(t *testing.T) {
 	f, paths := newCalicoFixture(t)
 	w, res := f.getCalico("/api/v1/namespaces/flows-demo/networkflows?kind=Deployment&name=web")
-	if w.Code != http.StatusOK || res.Provider != "calico" || res.Relay != "calico-system/whisker:8443" || len(res.Groups) != 3 {
+	if w.Code != http.StatusOK || res.Provider != "calico" || res.Relay != "calico-system/whisker:8443" || len(res.Groups) != 2 { // client allowed, stranger dropped
 		t.Fatalf("status %d %s", w.Code, w.Body)
 	}
 	// the cluster was asked for get on Whisker's services/proxy, and Whisker for its two lists

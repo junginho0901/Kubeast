@@ -209,8 +209,10 @@ func TestQueryWhiskerReadsEitherEndOnce(t *testing.T) {
 	if g := byKey["stranger→web DROPPED"]; g.Count != 77 || g.DropReason != "POLICY_DENIED" || !reflect.DeepEqual(g.Observed, []string{"ingress"}) {
 		t.Fatalf("stranger → web denied: %+v", g)
 	}
-	if g := byKey["stranger→web FORWARDED"]; g.Count != 77 || g.Replies != 0 || !reflect.DeepEqual(g.Observed, []string{"egress"}) {
-		t.Fatalf("stranger leaving, never answered: %+v", g)
+	// stranger's side reported its packets leaving; web's side dropped them: one connection, dropped — as the
+	// traffic lines count it where it arrived
+	if g, ok := byKey["stranger→web FORWARDED"]; ok {
+		t.Fatalf("the sender's half of a dropped connection: %+v", g)
 	}
 }
 

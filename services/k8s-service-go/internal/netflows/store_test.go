@@ -282,6 +282,32 @@ func TestGroupFoldsReplies(t *testing.T) {
 	}
 }
 
+func TestGroupLeavesOutTheSenderHalfOfADroppedConnection(t *testing.T) {
+	now := time.Date(2026, 10, 27, 11, 0, 0, 0, time.UTC)
+	stranger := End{Namespace: "flows-demo", Pod: "stranger-5d9-*", Workload: &Workload{Kind: "Deployment", Name: "stranger"}}
+	client := End{Namespace: "flows-demo", Pod: "client-7c9-*", Workload: &Workload{Kind: "Deployment", Name: "client"}}
+	web := End{Namespace: "flows-demo", Pod: "web-787-*", Workload: &Workload{Kind: "Deployment", Name: "web"}}
+	web.Port = 80
+	flow := func(src End, verdict, dir string) Flow {
+		f := Flow{Time: now, Verdict: verdict, Protocol: "TCP", Direction: dir, Source: src, Destination: web, Count: 10}
+		if verdict == "DROPPED" {
+			f.DropReason = "POLICY_DENIED"
+		}
+		return f
+	}
+	got := group([]Flow{
+		flow(stranger, "FORWARDED", "egress"), flow(stranger, "DROPPED", "ingress"), // Calico's two halves of one denied connection
+		flow(client, "FORWARDED", "egress"), flow(client, "FORWARDED", "ingress"),
+	})
+	var lines []string
+	for _, g := range got {
+		lines = append(lines, g.Source.Workload.Name+" "+g.Verdict)
+	}
+	if !reflect.DeepEqual(lines, []string{"stranger DROPPED", "client FORWARDED"}) {
+		t.Fatalf("groups %v", lines)
+	}
+}
+
 func TestQueryErrors(t *testing.T) {
 	s := testStore()
 	req := Request{Namespace: "demo"}

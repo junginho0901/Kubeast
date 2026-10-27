@@ -356,6 +356,28 @@ func group(flows []Flow) []Group {
 		}
 		g.Policies = mergePolicies(g.Policies, f.Policies)
 	}
+	return dropSenderHalves(out)
+}
+
+// dropSenderHalves leaves out what only the sending side saw forwarded when the receiving side dropped the same
+// connection — Calico reports both halves, and the connection did not get through.
+func dropSenderHalves(groups []Group) []Group {
+	conn := func(g Group) string {
+		return strings.Join([]string{endKey(g.Source), endKey(g.Destination), fmt.Sprint(g.Destination.Port), g.Protocol}, "#")
+	}
+	dropped := map[string]bool{}
+	for _, g := range groups {
+		if g.Verdict == "DROPPED" && contains(g.Observed, "ingress") {
+			dropped[conn(g)] = true
+		}
+	}
+	out := make([]Group, 0, len(groups))
+	for _, g := range groups {
+		if g.Verdict == "FORWARDED" && len(g.Observed) == 1 && g.Observed[0] == "egress" && dropped[conn(g)] {
+			continue
+		}
+		out = append(out, g)
+	}
 	return out
 }
 

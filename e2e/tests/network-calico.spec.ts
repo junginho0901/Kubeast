@@ -72,6 +72,8 @@ test.describe('Recent flows and traffic lines from Calico', () => {
     const denied = groups.find((g) => g.source.workload?.name === 'stranger' && g.verdict === 'DROPPED')
     expect(denied, JSON.stringify(groups)).toMatchObject({ drop_reason: 'POLICY_DENIED' })
     expect(denied!.count).toBeGreaterThan(0)
+    // web's side dropped stranger's packets: what stranger's side saw leave is not a second, forwarded group
+    expect(groups.filter((g) => g.source.workload?.name === 'stranger').map((g) => g.verdict)).toEqual(['DROPPED'])
     // a web pod's drawer shows its set's flows: the same connections
     const pod = kubectl!(`-n ${NS} get pods -l app=web -o jsonpath={.items[0].metadata.name}`)
     const podBody = await get(request, `/api/v1/cluster/namespaces/${NS}/networkflows`, { kind: 'Pod', name: pod, since: '5m' })
