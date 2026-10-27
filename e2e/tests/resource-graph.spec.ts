@@ -191,7 +191,7 @@ test.describe('resource graph for a Read user', () => {
       await page.goto(`/cluster/resource-graph?cluster=self&namespace=${NS}`)
 
       await expect(page.getByTestId('resource-graph-forbidden')).toHaveText(/^RoleBinding, Secret[:\s]|RoleBinding, Secret in this cluster/, { timeout: 30000 })
-      await expect(page.getByText(new RegExp(`^(${expected} nodes|리소스 ${expected}개)$`))).toHaveCount(1)
+      await expect(page.getByText(new RegExp(`^(${expected} nodes?|리소스 ${expected}개)$`))).toHaveCount(1)
       await expect(page.locator(NODES).first()).toBeVisible({ timeout: 30000 })
     } finally {
       await ctx.close()

@@ -75,7 +75,7 @@ test.describe('log search UI', () => {
     await page.getByTestId('logsearch-submit').click()
     await expect(page.getByTestId('logsearch-line')).toHaveCount(1)
     await expect(output.locator('mark')).toHaveText('beta')
-    await expect(page.getByTestId('logsearch-summary')).toContainText(/1 lines|1줄/)
+    await expect(page.getByTestId('logsearch-summary')).toContainText(/\b1 line\b|1줄/)
   })
 
   test("a Job drawer searches the Job's pods once the section is opened", async ({ page }) => {
