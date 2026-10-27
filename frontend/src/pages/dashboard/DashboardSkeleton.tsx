@@ -102,13 +102,15 @@ export function DashboardSkeleton() {
           </div>
           <div className="divide-y divide-slate-700/60">
             {[...Array(5)].map((_, i) => (
-              <div key={i} className="flex items-center gap-3 px-2 py-3">
-                <span className="w-5 shrink-0 text-sm text-slate-500 tabular-nums">#{i + 1}</span>
-                <div className="flex-1 min-w-0 space-y-2">
-                  <div className="h-4 bg-slate-700 rounded-sm w-3/4 animate-pulse" />
-                  <div className="h-3.5 bg-slate-700/70 rounded-sm w-1/3 animate-pulse" />
+              <div key={i} className="px-2 py-3">
+                <div className="flex items-center gap-3">
+                  <span className="w-5 shrink-0 text-sm text-slate-500 tabular-nums">#{i + 1}</span>
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div className="h-4 bg-slate-700 rounded-sm w-3/4 animate-pulse" />
+                    <div className="h-3.5 bg-slate-700/70 rounded-sm w-1/3 animate-pulse" />
+                  </div>
                 </div>
-                <div className="flex items-center gap-5 text-sm shrink-0">
+                <div className="flex items-center justify-end gap-5 mt-1 text-sm">
                   <span className="text-slate-400">{tr('dashboard.cpu', 'CPU')}: <span className="inline-block h-3.5 w-10 align-middle rounded-sm bg-slate-700 animate-pulse" /></span>
                   <span className="text-slate-400">{tr('dashboard.memory', 'Memory')}: <span className="inline-block h-3.5 w-12 align-middle rounded-sm bg-slate-700 animate-pulse" /></span>
                 </div>

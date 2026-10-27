@@ -72,16 +72,18 @@ export function DashboardTopResources({ topResources, isLoading, isError, metric
                 type="button"
                 key={`${pod.namespace}-${pod.name}`}
                 onClick={() => openDetail({ kind: 'Pod', name: pod.name, namespace: pod.namespace })}
-                className="w-full text-left flex items-center gap-3 px-2 py-3 rounded-md hover:bg-slate-700/50 transition-colors cursor-pointer"
+                className="w-full text-left px-2 py-3 rounded-md hover:bg-slate-700/50 transition-colors cursor-pointer"
               >
-                <span className="w-5 shrink-0 text-sm text-slate-500 tabular-nums">#{index + 1}</span>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-medium text-white truncate" title={pod.name}>
-                    {pod.name}
-                  </h3>
-                  <p className="text-sm text-slate-400">{pod.namespace}</p>
+                <div className="flex items-center gap-3">
+                  <span className="w-5 shrink-0 text-sm text-slate-500 tabular-nums">#{index + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-medium text-white truncate" title={pod.name}>
+                      {pod.name}
+                    </h3>
+                    <p className="text-sm text-slate-400">{pod.namespace}</p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-5 text-sm shrink-0">
+                <div className="flex items-center justify-end gap-5 mt-1 text-sm">
                   <div className="flex items-center gap-1.5">
                     <span className="text-slate-400">{tr('dashboard.cpu', 'CPU')}:</span>
                     <span className="text-slate-200 font-mono">{pod.cpu}</span>
