@@ -275,7 +275,7 @@ export default function ClusterHygiene() {
 
       <div className="flex flex-wrap items-center gap-2">
         <button onClick={() => setTab('findings')} className={tabClass(tab === 'findings')} data-testid="hygiene-tab-findings">
-          {tr('clusterHygiene.tab.findings', 'Findings')} {report ? <span className="text-xs opacity-70">({report.findings.length})</span> : null}
+          {tr('clusterHygiene.tab.findings', 'Findings')} {report ? <span className="text-xs">({report.findings.length})</span> : null}
         </button>
         <button onClick={() => setTab('checks')} className={tabClass(tab === 'checks')} data-testid="hygiene-tab-checks">
           {tr('clusterHygiene.tab.checks', 'Checks')}

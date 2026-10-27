@@ -325,7 +325,7 @@ function SummaryCard({ label, value, color }: { label: string; value: number; co
   }
   return (
     <div className={`border rounded-lg p-3 ${colors[color]}`}>
-      <p className="text-xs opacity-70">{label}</p>
+      <p className="text-xs opacity-80">{label}</p>
       <p className="text-2xl font-bold mt-0.5">{value}</p>
     </div>
   )

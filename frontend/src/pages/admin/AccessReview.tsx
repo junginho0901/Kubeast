@@ -254,7 +254,7 @@ export default function AccessReview() {
             data-testid={`access-review-tab-${s}`}
             className={`rounded-sm px-3 py-1.5 text-sm ${tab === s ? 'bg-primary-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'}`}
           >
-            {sectionLabel(s)} {report ? <span className="text-xs opacity-70">({(report[s] ?? []).length})</span> : null}
+            {sectionLabel(s)} {report ? <span className="text-xs">({(report[s] ?? []).length})</span> : null}
           </button>
         ))}
         <button

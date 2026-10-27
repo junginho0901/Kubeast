@@ -151,7 +151,7 @@ export default function SearchQueryEditor({
               )}
             </span>
             {searchTimeMs !== null && (
-              <span className="text-slate-600">
+              <span className="text-slate-500">
                 {searchTimeMs.toFixed(0)}ms
               </span>
             )}
