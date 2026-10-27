@@ -230,6 +230,7 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
                 <InfoRow
                   key={col.name}
                   label={col.name}
+                  asIs
                   value={<span className="font-mono text-[11px]">{displayValue}</span>}
                 />
               )

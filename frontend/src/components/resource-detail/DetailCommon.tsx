@@ -42,11 +42,12 @@ export function InfoSection({ title, titleValues, children, actions }: { title: 
 // Values are data and stay as they are, except the Yes / No the views print for booleans.
 const isYesNo = (v: unknown): v is 'Yes' | 'No' => v === 'Yes' || v === 'No'
 
-export function InfoRow({ label, value }: { label: string; value: ReactNode }) {
+// asIs keeps a label someone else named (a CRD's printer column) as written, untranslated.
+export function InfoRow({ label, value, asIs }: { label: string; value: ReactNode; asIs?: boolean }) {
   const dl = useDetailLabel()
   return (
     <div className="grid grid-cols-1 md:grid-cols-[140px_1fr] gap-1 text-xs text-slate-200">
-      <span className="text-slate-400 shrink-0">{dl(label)}</span>
+      <span className="text-slate-400 shrink-0">{asIs ? label : dl(label)}</span>
       <span className="text-white font-medium break-all">{isYesNo(value) ? dl(value) : typeof value === 'string' || typeof value === 'number' ? value : value ?? '-'}</span>
     </div>
   )
