@@ -118,7 +118,7 @@ export default function ClusterRoles() {
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
       [tr('clusterRolesPage.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('clusterRolesPage.stats.totalRules', 'Total Rules'), summary.totalRules, 'border-cyan-700/40 bg-cyan-900/10', 'text-cyan-300'],
+      [tr('clusterRolesPage.stats.totalRules', 'Total Rules'), summary.totalRules, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ],
     [summary.total, summary.totalRules, tr],
   )

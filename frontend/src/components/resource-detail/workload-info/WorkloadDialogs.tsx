@@ -74,7 +74,7 @@ export default function WorkloadDialogs({
               <button
                 onClick={() => triggerMut.mutate()}
                 disabled={triggerMut.isPending}
-                className="px-3 py-1.5 text-sm rounded-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                className="px-3 py-1.5 text-sm rounded-sm bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50"
               >{triggerMut.isPending ? '...' : tr('cronjob.runNow', 'Run Now')}</button>
             </div>
           </div>
@@ -97,7 +97,7 @@ export default function WorkloadDialogs({
                     key={rev.revision}
                     className={`flex items-center gap-3 px-3 py-2 rounded-sm cursor-pointer text-xs ${
                       rev.is_current ? 'opacity-50 cursor-not-allowed bg-slate-800/30' : 'hover:bg-slate-800/60'
-                    } ${selectedRevision === rev.revision ? 'bg-blue-900/30 border border-blue-700' : 'border border-transparent'}`}
+                    } ${selectedRevision === rev.revision ? 'bg-primary-900/30 border border-primary-700' : 'border border-transparent'}`}
                   >
                     <input
                       type="radio"
@@ -106,7 +106,7 @@ export default function WorkloadDialogs({
                       checked={selectedRevision === rev.revision}
                       disabled={rev.is_current}
                       onChange={() => setSelectedRevision(rev.revision)}
-                      className="accent-blue-500"
+                      className="accent-primary-500"
                     />
                     <div className="flex-1 min-w-0">
                       <div className="text-white font-medium">

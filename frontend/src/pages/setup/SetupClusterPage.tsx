@@ -85,7 +85,7 @@ export default function SetupClusterPage({
           }`}
         >
           <div className="flex items-center gap-2 text-sm font-semibold">
-            <Database className="h-4 w-4 text-cyan-400" />
+            <Database className="h-4 w-4 text-slate-400" />
             {tr('setup.option.external.title', 'Connect external cluster')}
           </div>
           <p className="mt-2 text-xs text-slate-400">

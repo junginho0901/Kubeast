@@ -105,8 +105,8 @@ export default function GPUPods() {
       [tr('gpuPods.stats.running', 'Running'), stats.running, 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
       [tr('gpuPods.stats.pending', 'Pending'), stats.pending, 'border-yellow-700/40 bg-yellow-900/10', 'text-yellow-300'],
       [tr('gpuPods.stats.failed', 'Failed'), stats.failed, 'border-rose-700/40 bg-rose-900/10', 'text-rose-300'],
-      [tr('gpuPods.stats.gpuRequested', 'GPUs Requested'), stats.totalGpuRequested, 'border-violet-700/40 bg-violet-900/10', 'text-violet-300'],
-      [tr('gpuPods.stats.namespaces', 'Namespaces'), stats.namespaces, 'border-cyan-700/40 bg-cyan-900/10', 'text-cyan-300'],
+      [tr('gpuPods.stats.gpuRequested', 'GPUs Requested'), stats.totalGpuRequested, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('gpuPods.stats.namespaces', 'Namespaces'), stats.namespaces, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ],
     [stats, tr],
   )

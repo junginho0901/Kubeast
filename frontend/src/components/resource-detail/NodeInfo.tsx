@@ -69,13 +69,13 @@ export default function NodeInfo({ name }: Props) {
           label="CPU Usage"
           value={metricForNode ? `${metricForNode.cpu || '-'} (${metricForNode.cpu_percent || '-'})` : tr('nodes.detail.noMetrics', 'No metrics (metrics-server not installed)')}
           percent={Number.isFinite(cpuP) ? cpuP : 0}
-          color={cpuP >= 80 ? '#ef4444' : cpuP >= 60 ? '#f59e0b' : '#10b981'}
+          color={cpuP >= 80 ? '#ef4444' : cpuP >= 60 ? '#f59e0b' : 'var(--color-primary-400)'}
         />
         <UsageCard
           label="Memory Usage"
           value={metricForNode ? `${metricForNode.memory || '-'} (${metricForNode.memory_percent || '-'})` : tr('nodes.detail.noMetrics', 'No metrics (metrics-server not installed)')}
           percent={Number.isFinite(memP) ? memP : 0}
-          color={memP >= 80 ? '#ef4444' : memP >= 60 ? '#f59e0b' : '#3b82f6'}
+          color={memP >= 80 ? '#ef4444' : memP >= 60 ? '#f59e0b' : 'var(--color-primary-400)'}
         />
       </div>
 

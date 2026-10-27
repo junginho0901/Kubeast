@@ -106,7 +106,7 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
             value={nodeName !== '-' ? (
               <button
                 type="button"
-                className="text-cyan-300 hover:text-cyan-200 underline underline-offset-2 break-all text-left"
+                className="text-primary-400 hover:text-primary-300 underline underline-offset-2 break-all text-left"
                 onClick={() => openDetail({ kind: 'Node', name: nodeName })}
               >
                 {nodeName}
@@ -118,7 +118,7 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
             value={pvName !== '-' ? (
               <button
                 type="button"
-                className="text-cyan-300 hover:text-cyan-200 underline underline-offset-2 break-all text-left"
+                className="text-primary-400 hover:text-primary-300 underline underline-offset-2 break-all text-left"
                 onClick={() => openDetail({ kind: 'PersistentVolume', name: pvName })}
               >
                 {pvName}
@@ -168,7 +168,7 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
               value={(
                 <button
                   type="button"
-                  className="text-cyan-300 hover:text-cyan-200 underline underline-offset-2 break-all text-left"
+                  className="text-primary-400 hover:text-primary-300 underline underline-offset-2 break-all text-left"
                   onClick={() => openDetail({ kind: 'PersistentVolume', name: String(pvSummary.name) })}
                 >
                   {String(pvSummary.name)}
@@ -196,7 +196,7 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
               value={(
                 <button
                   type="button"
-                  className="text-cyan-300 hover:text-cyan-200 underline underline-offset-2 break-all text-left"
+                  className="text-primary-400 hover:text-primary-300 underline underline-offset-2 break-all text-left"
                   onClick={() => openDetail({ kind: 'PersistentVolumeClaim', name: boundClaim.name!, namespace: boundClaim.namespace! })}
                 >
                   {boundClaim.namespace}/{boundClaim.name}

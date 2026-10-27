@@ -52,7 +52,7 @@ export function LogSourceToggle({
           aria-pressed={value === o.v}
           onClick={() => onChange(o.v)}
           className={`${item} rounded-md whitespace-nowrap transition-colors ${
-            value === o.v ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            value === o.v ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
         >
           {o.label}

@@ -208,7 +208,7 @@ export function StorageModal({
                     className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg"
                   >
                     {namespaceFilter === 'all' && (
-                      <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
+                      <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />
                     )}
                     <span className={namespaceFilter === 'all' ? 'font-medium' : ''}>
                       {tr('dashboard.storage.allNamespaces', 'All namespaces')}
@@ -224,7 +224,7 @@ export function StorageModal({
                       className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 last:rounded-b-lg"
                     >
                       {namespaceFilter === ns && (
-                        <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
+                        <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />
                       )}
                       <span className={namespaceFilter === ns ? 'font-medium' : ''}>{ns}</span>
                     </button>
@@ -299,7 +299,7 @@ export function StorageModal({
                               <div className="flex flex-wrap items-center gap-2" data-testid="pvc-usage">
                                 <div className="h-1.5 w-32 rounded bg-slate-700 overflow-hidden" role="progressbar" aria-valuenow={pvc.usage.percent} aria-valuemin={0} aria-valuemax={100}>
                                   <div
-                                    className={`h-full ${pvc.usage.percent >= 97 ? 'bg-red-500' : pvc.usage.percent >= 85 ? 'bg-yellow-400' : 'bg-emerald-500'}`}
+                                    className={`h-full ${pvc.usage.percent >= 97 ? 'bg-red-500' : pvc.usage.percent >= 85 ? 'bg-yellow-400' : 'bg-primary-400'}`}
                                     style={{ width: `${Math.min(100, pvc.usage.percent)}%` }}
                                   />
                                 </div>

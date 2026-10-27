@@ -39,7 +39,7 @@ export function DistributionsSection({ data, modelDistribution, podStatusDist, t
                     <span className="text-xs text-slate-400 ml-2 whitespace-nowrap">{gpuCount} GPU ({pct}%)</span>
                   </div>
                   <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full bg-blue-500" style={{ width: `${pct}%` }} />
+                    <div className="h-full rounded-full bg-primary-400" style={{ width: `${pct}%` }} />
                   </div>
                 </div>
               )
@@ -84,7 +84,7 @@ export function DistributionsSection({ data, modelDistribution, podStatusDist, t
                       className={`h-full rounded-full ${
                         status === 'Running' ? 'bg-emerald-500'
                         : status === 'Pending' ? 'bg-yellow-500'
-                        : status === 'Succeeded' ? 'bg-blue-500'
+                        : status === 'Succeeded' ? 'bg-primary-400'
                         : status === 'Failed' ? 'bg-red-500'
                         : 'bg-slate-500'
                       }`}

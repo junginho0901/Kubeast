@@ -45,7 +45,7 @@ export function GPUPodsCharts({
                     {info.podCount === 1 ? tr('gpuPods.podCountOne', '{{n}} pod', { n: info.podCount }) : tr('gpuPods.podCount', '{{n}} pods', { n: info.podCount })}
                   </span>
                 </div>
-                <span className="text-sm font-semibold text-violet-300">
+                <span className="text-sm font-semibold text-slate-200">
                   {info.totalGpu} GPU{info.totalGpu !== 1 ? 's' : ''}
                 </span>
               </div>
@@ -75,7 +75,7 @@ export function GPUPodsCharts({
                       className={`h-full rounded-full ${
                         status === 'Running' ? 'bg-emerald-500'
                         : status === 'Pending' ? 'bg-yellow-500'
-                        : status === 'Succeeded' ? 'bg-blue-500'
+                        : status === 'Succeeded' ? 'bg-slate-500'
                         : status === 'Failed' ? 'bg-red-500'
                         : 'bg-slate-500'
                       }`}

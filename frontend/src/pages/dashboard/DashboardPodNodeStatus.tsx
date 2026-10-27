@@ -1,11 +1,22 @@
-// Dashboard pod / node status charts (Iso3D bar chart per status).
+// Dashboard pod / node status charts (one flat bar per status).
 // Click a bar → drill into the matching list (handled by parent via
 // onPodStatusClick / onNodeStatusClick). Each chart is hidden when
 // its data array is empty.
 
 import { useTranslation } from 'react-i18next'
 
-import { Iso3DChart } from './Iso3DChart'
+import { StatusBarChart } from './StatusBarChart'
+
+// colour by meaning: the normal state in the brand blue, failures red, waiting amber, the rest grey
+const STATE_COLOR: Record<string, string> = {
+  Running: 'var(--color-primary-400)',
+  Ready: 'var(--color-primary-400)',
+  Succeeded: 'var(--color-slate-400)',
+  Pending: 'var(--color-amber-400)',
+  Failed: 'var(--color-red-400)',
+  NotReady: 'var(--color-red-400)',
+}
+const stateColor = (name: string) => STATE_COLOR[name] ?? 'var(--color-slate-500)'
 
 interface BarDatum {
   name: string
@@ -32,44 +43,22 @@ export function DashboardPodNodeStatus({
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       {podStatusData.length > 0 && (
-        <div className="card relative overflow-hidden">
-          <div className="absolute inset-0 bg-linear-to-br from-sky-500/5 via-transparent to-blue-500/5 pointer-events-none" />
-          <h2 className="text-xl font-bold text-white mb-4 relative">{tr('dashboard.podStatus.title', 'Pod status')}</h2>
-          <p className="text-sm text-slate-400 mb-4 relative">
+        <div className="card">
+          <h2 className="text-lg font-semibold text-white">{tr('dashboard.podStatus.title', 'Pod status')}</h2>
+          <p className="text-sm text-slate-400 mt-1 mb-4">
             {tr('dashboard.podStatus.subtitle', 'Click to view pods in each status')}
           </p>
-          <Iso3DChart
-            data={podStatusData}
-            uid="pod"
-            colors={{
-              front: ['#38bdf8', '#0369a1'],
-              side: '#0c4a6e',
-              top: '#7dd3fc',
-              accent: '#38bdf8',
-            }}
-            onBarClick={onPodStatusClick}
-          />
+          <StatusBarChart data={podStatusData} colorFor={stateColor} onBarClick={onPodStatusClick} />
         </div>
       )}
 
       {nodeStatusChartData.length > 0 && (
-        <div className="card relative overflow-hidden">
-          <div className="absolute inset-0 bg-linear-to-br from-cyan-500/5 via-transparent to-teal-500/5 pointer-events-none" />
-          <h2 className="text-xl font-bold text-white mb-4 relative">{tr('dashboard.nodeStatus.title', 'Node status')}</h2>
-          <p className="text-sm text-slate-400 mb-4 relative">
+        <div className="card">
+          <h2 className="text-lg font-semibold text-white">{tr('dashboard.nodeStatus.title', 'Node status')}</h2>
+          <p className="text-sm text-slate-400 mt-1 mb-4">
             {tr('dashboard.nodeStatus.subtitle', 'Click to view nodes in each status')}
           </p>
-          <Iso3DChart
-            data={nodeStatusChartData}
-            uid="node"
-            colors={{
-              front: ['#22d3ee', '#0e7490'],
-              side: '#164e63',
-              top: '#a5f3fc',
-              accent: '#22d3ee',
-            }}
-            onBarClick={onNodeStatusClick}
-          />
+          <StatusBarChart data={nodeStatusChartData} colorFor={stateColor} onBarClick={onNodeStatusClick} />
         </div>
       )}
     </div>

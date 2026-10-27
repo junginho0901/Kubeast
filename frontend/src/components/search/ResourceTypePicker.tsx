@@ -97,7 +97,7 @@ export default function ResourceTypePicker({ selected, onChange, extraResources 
         <Search className="w-4 h-4 text-slate-400" />
         {t('advancedSearch.selectResources', 'Select Resources')}
         {selected.size > 0 && (
-          <span className="ml-1 px-1.5 py-0.5 text-xs rounded-full bg-sky-500/20 text-sky-400">
+          <span className="ml-1 px-1.5 py-0.5 text-xs rounded-full bg-primary-500/20 text-primary-400">
             {selected.size}
           </span>
         )}
@@ -116,7 +116,7 @@ export default function ResourceTypePicker({ selected, onChange, extraResources 
                   placeholder={t('advancedSearch.filterResources', 'Filter resources...')}
                   value={filter}
                   onChange={e => setFilter(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm placeholder-slate-500 focus:outline-hidden focus:border-sky-500"
+                  className="w-full pl-9 pr-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm placeholder-slate-500 focus:outline-hidden focus:border-primary-500"
                   autoFocus
                 />
               </div>
@@ -132,7 +132,7 @@ export default function ResourceTypePicker({ selected, onChange, extraResources 
             <div className="overflow-y-auto p-2 space-y-1">
               {grouped.map(([group, resources]) => (
                 <div key={group}>
-                  <div className="px-2 py-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  <div className="px-2 py-1.5 text-xs font-semibold text-slate-500">
                     {group}
                   </div>
                   {resources.map(r => {
@@ -142,11 +142,11 @@ export default function ResourceTypePicker({ selected, onChange, extraResources 
                         key={r.name}
                         onClick={() => toggle(r.name)}
                         className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                          checked ? 'bg-sky-500/10 text-sky-300' : 'text-slate-300 hover:bg-slate-700'
+                          checked ? 'bg-primary-500/10 text-primary-300' : 'text-slate-300 hover:bg-slate-700'
                         }`}
                       >
                         <div className={`w-4 h-4 rounded-sm border flex items-center justify-center ${
-                          checked ? 'bg-sky-500 border-sky-500' : 'border-slate-500'
+                          checked ? 'bg-primary-500 border-primary-500' : 'border-slate-500'
                         }`}>
                           {checked && <Check className="w-3 h-3 text-white" />}
                         </div>

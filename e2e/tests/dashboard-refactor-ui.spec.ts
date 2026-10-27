@@ -199,7 +199,7 @@ test.describe('Dashboard refactor — UI verification', () => {
     const podStatusH2 = page.locator('h2, h3').filter({ hasText: /Pod status|Pod\s*상태/i }).first()
     await expect(podStatusH2).toBeVisible({ timeout: 10000 })
 
-    // chart 의 첫번째 bar (Running phase) — Iso3DChart: a clickable <g> per bar
+    // chart 의 첫번째 bar (Running phase) — StatusBarChart: a clickable <g> per bar
     const firstBar = page.locator('div').filter({ has: podStatusH2 }).locator('svg g[style*="cursor: pointer"]').first()
     await expect(firstBar).toHaveCount(1, { timeout: 10000 })
     await firstBar.click({ force: true })

@@ -63,7 +63,7 @@ export default function ContainerCard({
           {isContainer && canResize && stateKey === 'running' && onResize && (
             <button
               onClick={() => onResize(c.name, requests)}
-              className="p-1 rounded-sm hover:bg-slate-700 text-slate-400 hover:text-sky-400 transition-colors"
+              className="p-1 rounded-sm hover:bg-slate-700 text-slate-400 hover:text-primary-400 transition-colors"
               title={resizeTooltip}
               data-testid={`pod-resize-${c.name}`}
             >

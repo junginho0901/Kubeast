@@ -558,7 +558,7 @@ export default function AdminUsers() {
                                 <span className="flex-1 text-left">
                                   {role.name}
                                 </span>
-                                {isSelected && <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />}
+                                {isSelected && <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />}
                               </button>
                             )
                           })}
@@ -783,7 +783,7 @@ export default function AdminUsers() {
                     type="button"
                     onClick={() => handlePendingBulkApprove('Admin')}
                     disabled={pendingSelectedIds.size === 0 || bulkUpdateRoleMutation.isPending}
-                    className="rounded-lg bg-blue-600/80 px-4 py-2 text-xs font-medium text-white hover:bg-blue-600 disabled:opacity-40"
+                    className="rounded-lg bg-primary-600/80 px-4 py-2 text-xs font-medium text-white hover:bg-primary-600 disabled:opacity-40"
                   >
                     {tr('adminUsers.bulk.approveAdmin', 'Approve as Admin')}
                   </button>
@@ -918,8 +918,8 @@ export default function AdminUsers() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-3 mb-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/30">
-                <KeyRound className="h-5 w-5 text-emerald-400" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-700/60 border border-slate-600">
+                <KeyRound className="h-5 w-5 text-slate-300" />
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-white">

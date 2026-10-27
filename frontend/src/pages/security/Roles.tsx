@@ -151,7 +151,7 @@ export default function Roles() {
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
       [tr('rolesPage.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('rolesPage.stats.totalRules', 'Total Rules'), summary.totalRules, 'border-cyan-700/40 bg-cyan-900/10', 'text-cyan-300'],
+      [tr('rolesPage.stats.totalRules', 'Total Rules'), summary.totalRules, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ],
     [summary.total, summary.totalRules, tr],
   )
@@ -296,12 +296,12 @@ rules:
           {isNamespaceDropdownOpen && (
             <div className="absolute top-full left-0 mt-2 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-100 max-h-[240px] overflow-y-auto">
               <button type="button" onClick={() => { setSelectedNamespace('all'); setIsNamespaceDropdownOpen(false) }} className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg">
-                {selectedNamespace === 'all' && <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />}
+                {selectedNamespace === 'all' && <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />}
                 <span className={selectedNamespace === 'all' ? 'font-medium' : ''}>{tr('rolesPage.allNamespaces', 'All namespaces')}</span>
               </button>
               {(namespaces || []).map((ns) => (
                 <button key={ns.name} type="button" onClick={() => { setSelectedNamespace(ns.name); setIsNamespaceDropdownOpen(false) }} className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 last:rounded-b-lg">
-                  {selectedNamespace === ns.name && <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />}
+                  {selectedNamespace === ns.name && <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />}
                   <span className={selectedNamespace === ns.name ? 'font-medium' : ''}>{ns.name}</span>
                 </button>
               ))}

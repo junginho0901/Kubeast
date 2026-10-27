@@ -42,15 +42,15 @@ export default function GPUNodesModelDistribution({ modelDistribution }: Props) 
               <div className="mt-3 space-y-2">
                 <div className="text-xs text-slate-400 flex items-center justify-between">
                   <span>{tr('gpuNodes.capacity', 'Capacity')}</span>
-                  <span className="font-medium text-blue-300">{info.totalCapacity}</span>
+                  <span className="font-medium text-slate-200">{info.totalCapacity}</span>
                 </div>
                 <div className="text-xs text-slate-400 flex items-center justify-between">
                   <span>{tr('gpuNodes.allocatable', 'Allocatable')}</span>
-                  <span className="font-medium text-cyan-300">{info.totalAllocatable}</span>
+                  <span className="font-medium text-slate-200">{info.totalAllocatable}</span>
                 </div>
                 <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full ${utilization >= 80 ? 'bg-red-500' : utilization >= 60 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                    className={`h-full rounded-full ${utilization >= 80 ? 'bg-red-500' : utilization >= 60 ? 'bg-amber-500' : 'bg-primary-400'}`}
                     style={{ width: `${Math.min(utilization, 100)}%` }}
                   />
                 </div>

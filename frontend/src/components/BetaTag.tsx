@@ -2,5 +2,5 @@
 // the page title show the same one.
 export function BetaTag({ label, size = 'sm' }: { label: string; size?: 'sm' | 'md' }) {
   const box = size === 'md' ? 'text-xs px-2' : 'text-[10px] px-1.5'
-  return <span className={`${box} py-0.5 rounded-full bg-sky-500/10 text-sky-400 font-medium`}>{label}</span>
+  return <span className={`${box} py-0.5 rounded-full bg-slate-700 text-slate-300 font-medium`}>{label}</span>
 }

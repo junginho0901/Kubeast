@@ -233,7 +233,7 @@ export default function PolicyReports() {
       aria-selected={tab === value}
       data-testid={`policy-reports-tab-${value}`}
       onClick={() => setTab(value)}
-      className={`h-8 px-3 text-sm rounded-md transition-colors ${tab === value ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+      className={`h-8 px-3 text-sm rounded-md transition-colors ${tab === value ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
     >
       {label}
     </button>

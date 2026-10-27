@@ -200,7 +200,8 @@ export function SessionSidebar({
       
                 const session = sessionsList[index]
                 if (!session) continue
-      
+                const isSelected = isMultiSelectMode ? selectedSessionIds.has(session.id) : selectedSessionId === session.id
+
                 rows.push(
                   <div
                     key={session.id}
@@ -208,13 +209,7 @@ export function SessionSidebar({
                     onClick={() => handleSelectSession(session.id)}
                     onContextMenu={(e) => handleContextMenu(session, e)}
                     className={`group relative rounded-lg cursor-pointer transition-colors overflow-hidden ${
-                      isMultiSelectMode
-                        ? selectedSessionIds.has(session.id)
-                          ? 'bg-primary-600 text-white'
-                          : 'hover:bg-slate-700/50 text-slate-300'
-                        : selectedSessionId === session.id
-                          ? 'bg-slate-700 text-white'
-                          : 'hover:bg-slate-700/50 text-slate-300'
+                      isSelected ? 'bg-primary-600 text-white' : 'hover:bg-slate-700/50 text-slate-300'
                     }`}
                   >
                     {/* 다중 선택 모드일 때 체크박스 표시 */}
@@ -271,7 +266,7 @@ export function SessionSidebar({
                           <div className="text-sm font-medium truncate" title={session.title}>
                             {session.title}
                           </div>
-                          <div className="text-xs text-slate-400 mt-1">
+                          <div className={`text-xs mt-1 ${isSelected ? 'text-white/80' : 'text-slate-400'}`}>
                             {t('aiChat.messageCount', { count: session.message_count })}
                           </div>
                         </div>

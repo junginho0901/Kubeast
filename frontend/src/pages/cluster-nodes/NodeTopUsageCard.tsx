@@ -65,21 +65,21 @@ export default function NodeTopUsageCard({
                 <div className="mt-3 space-y-2">
                   <div className="text-xs text-slate-400 flex items-center justify-between">
                     <span>CPU</span>
-                    <span className="font-medium text-emerald-300">{node.cpu_percent}</span>
+                    <span className="font-medium text-slate-200">{node.cpu_percent}</span>
                   </div>
                   <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full ${cpuPercent >= 80 ? 'bg-red-500' : cpuPercent >= 60 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                      className={`h-full rounded-full ${cpuPercent >= 80 ? 'bg-red-500' : cpuPercent >= 60 ? 'bg-amber-500' : 'bg-primary-400'}`}
                       style={{ width: `${Math.min(cpuPercent, 100)}%` }}
                     />
                   </div>
                   <div className="text-xs text-slate-400 flex items-center justify-between">
                     <span>MEM</span>
-                    <span className="font-medium text-blue-300">{node.memory_percent}</span>
+                    <span className="font-medium text-slate-200">{node.memory_percent}</span>
                   </div>
                   <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full ${memPercent >= 80 ? 'bg-red-500' : memPercent >= 60 ? 'bg-amber-500' : 'bg-blue-500'}`}
+                      className={`h-full rounded-full ${memPercent >= 80 ? 'bg-red-500' : memPercent >= 60 ? 'bg-amber-500' : 'bg-primary-400'}`}
                       style={{ width: `${Math.min(memPercent, 100)}%` }}
                     />
                   </div>

@@ -96,11 +96,11 @@ export default function RoleBindingInfo({ name, namespace, rawJson }: Props) {
               <div key={idx} className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 space-y-1.5">
                 <div className="text-xs text-slate-300 space-y-1">
                   <div>
-                    <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2"><Tx>Kind:</Tx></span>
+                    <span className="text-[11px] text-slate-500 mr-2"><Tx>Kind:</Tx></span>
                     <span className="font-mono">{subj.kind || '-'}</span>
                   </div>
                   <div>
-                    <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2"><Tx>Name:</Tx></span>
+                    <span className="text-[11px] text-slate-500 mr-2"><Tx>Name:</Tx></span>
                     {subj.kind === 'ServiceAccount' && subj.name ? (
                       <ResourceLink kind="ServiceAccount" name={subj.name} namespace={subj.namespace ?? namespace} />
                     ) : (
@@ -109,13 +109,13 @@ export default function RoleBindingInfo({ name, namespace, rawJson }: Props) {
                   </div>
                   {subj.namespace && (
                     <div>
-                      <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2"><Tx>Namespace:</Tx></span>
+                      <span className="text-[11px] text-slate-500 mr-2"><Tx>Namespace:</Tx></span>
                       <span className="font-mono">{subj.namespace}</span>
                     </div>
                   )}
                   {subj.apiGroup && (
                     <div>
-                      <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2"><Tx>API Group:</Tx></span>
+                      <span className="text-[11px] text-slate-500 mr-2"><Tx>API Group:</Tx></span>
                       <span className="font-mono">{subj.apiGroup}</span>
                     </div>
                   )}

@@ -32,7 +32,7 @@ const FLAG_TONE: Record<string, string> = {
   expiring_30d: 'bg-yellow-500/20 text-yellow-300',
   unused_30d: 'bg-yellow-500/20 text-yellow-300',
   unused: 'bg-yellow-500/20 text-yellow-300',
-  temporary: 'bg-blue-500/20 text-blue-300',
+  temporary: 'bg-primary-500/20 text-primary-300',
 }
 
 interface Column<T> {
@@ -189,11 +189,11 @@ export default function AccessReview() {
       </div>
 
       {viewId && viewed && (
-        <div className="rounded-lg border border-blue-500/40 bg-blue-500/10 p-3 text-sm text-blue-100 flex items-center justify-between gap-3" data-testid="access-review-snapshot-banner">
+        <div className="rounded-lg border border-primary-500/40 bg-primary-500/10 p-3 text-sm text-primary-100 flex items-center justify-between gap-3" data-testid="access-review-snapshot-banner">
           <span>
             <History className="inline w-4 h-4 mr-1" />
             {tr('accessReview.snapshot.viewing', 'Viewing the report as signed off on {{when}} by {{who}}.', { when: formatWhen(viewed.reviewed_at), who: viewed.reviewed_by_email })}
-            {viewed.note && <span className="text-blue-200/80"> · {viewed.note}</span>}
+            {viewed.note && <span className="text-primary-200/80"> · {viewed.note}</span>}
           </span>
           <button onClick={() => setViewId(null)} className="rounded-sm bg-slate-700 hover:bg-slate-600 px-2 py-1 text-xs text-white flex items-center gap-1">
             <X className="w-3 h-3" /> {tr('accessReview.snapshot.back', 'Back to now')}

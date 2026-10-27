@@ -1,4 +1,4 @@
-import { Sparkles } from 'lucide-react'
+import { MessageSquare } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
@@ -19,7 +19,7 @@ export function ChatHeader() {
       <div className="flex-1">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-bold text-white flex items-center gap-3">
-            <Sparkles className="w-6 h-6 text-yellow-400" />
+            <MessageSquare className="w-6 h-6 text-slate-300" />
             {t('aiChat.title')}
           </h1>
           {aiConfig && (

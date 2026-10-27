@@ -76,7 +76,7 @@ function CustomDropdown<T extends string | number>({
               className="w-full px-3 py-2 text-left text-sm text-white hover:bg-slate-700 transition-colors flex items-center gap-2 first:rounded-t last:rounded-b"
             >
               {value === opt.value && (
-                <CheckCircle className="w-3.5 h-3.5 text-green-400 shrink-0" />
+                <CheckCircle className="w-3.5 h-3.5 text-primary-400 shrink-0" />
               )}
               <span className={value === opt.value ? 'font-medium' : ''}>{opt.label}</span>
             </button>
@@ -433,7 +433,7 @@ export default function AdminAudit() {
           <button
             onClick={applyFilter}
             disabled={!rangeOk}
-            className="inline-flex items-center gap-1 rounded-sm bg-sky-600 hover:bg-sky-500 px-3 py-1.5 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1 rounded-sm bg-primary-600 hover:bg-primary-500 px-3 py-1.5 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Search className="w-4 h-4" /> {tr('adminAudit.apply', '조회')}
           </button>

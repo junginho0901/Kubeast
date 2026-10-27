@@ -164,7 +164,7 @@ export default function Timeline() {
               onClick={() => { setHours(tr.value); setShowCount(50) }}
               className={`px-2.5 py-1 text-xs font-medium rounded-sm transition-colors ${
                 hours === tr.value
-                  ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-xs'
+                  ? 'bg-primary-600 text-white shadow-xs'
                   : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
@@ -181,7 +181,7 @@ export default function Timeline() {
               onClick={() => setEventFilter(f)}
               className={`px-2.5 py-1 text-xs font-medium rounded-sm transition-colors ${
                 eventFilter === f
-                  ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-xs'
+                  ? 'bg-primary-600 text-white shadow-xs'
                   : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
@@ -304,7 +304,7 @@ export default function Timeline() {
               <div className="p-3 text-center border-t border-gray-100 dark:border-gray-700/50">
                 <button
                   onClick={() => setShowCount((c) => c + 50)}
-                  className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                  className="text-xs font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
                 >
                   {t('timeline.loadMore', 'Load More')} {t('timeline.remaining', { defaultValue: '({{n}} remaining)', n: mergedItems.length - showCount })}
                 </button>
@@ -319,7 +319,7 @@ export default function Timeline() {
 
 function SummaryCard({ label, value, color }: { label: string; value: number; color: 'blue' | 'green' | 'yellow' }) {
   const colors = {
-    blue: 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+    blue: 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 border-primary-200 dark:border-primary-800',
     green: 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800',
     yellow: 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800',
   }
@@ -385,7 +385,7 @@ function EventRow({
         <div className="flex items-center gap-2 mt-1">
           <button
             onClick={() => onResourceClick(event.resource.kind, event.resource.name, event.resource.namespace)}
-            className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
+            className="text-[11px] text-primary-600 dark:text-primary-400 hover:underline"
           >
             {showNamespace && event.resource.namespace ? `${event.resource.namespace} · ` : ''}{event.resource.kind}/{event.resource.name}
           </button>
@@ -412,7 +412,7 @@ function RolloutRow({
   t: any
 }) {
   return (
-    <div className="flex items-start gap-3 px-4 py-2.5 bg-blue-50/50 dark:bg-blue-900/10 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+    <div className="flex items-start gap-3 px-4 py-2.5 bg-primary-50/50 dark:bg-primary-900/10 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors">
       {/* Time */}
       <div className="w-[120px] shrink-0 text-right hidden md:block">
         <span
@@ -425,13 +425,13 @@ function RolloutRow({
 
       {/* Icon */}
       <div className="shrink-0 mt-0.5">
-        <ArrowUpCircle className="w-4 h-4 text-blue-500" />
+        <ArrowUpCircle className="w-4 h-4 text-primary-500" />
       </div>
 
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-medium text-blue-800 dark:text-blue-300">
+          <span className="text-sm font-medium text-primary-800 dark:text-primary-300">
             {t('timeline.revision', 'Revision')} #{rollout.revision}
           </span>
           <span className="text-xs text-gray-400 dark:text-gray-500 md:hidden">
@@ -441,7 +441,7 @@ function RolloutRow({
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
           <button
             onClick={() => onResourceClick(rollout.kind, rollout.name, rollout.namespace)}
-            className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
+            className="text-[11px] text-primary-600 dark:text-primary-400 hover:underline"
           >
             {showNamespace && rollout.namespace ? `${rollout.namespace} · ` : ''}{rollout.kind}/{rollout.name}
           </button>

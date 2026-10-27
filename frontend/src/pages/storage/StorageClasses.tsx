@@ -239,8 +239,8 @@ allowVolumeExpansion: true
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('storageclasses.stats.total', 'Total')}</p>
           <p className="text-lg text-white font-semibold mt-1">{summary.total}</p>
         </div>
-        <div className="rounded-lg border border-cyan-700/40 bg-cyan-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-cyan-300">{tr('storageclasses.stats.default', 'Default')}</p>
+        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
+          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('storageclasses.stats.default', 'Default')}</p>
           <p className="text-lg text-white font-semibold mt-1">{summary.defaults}</p>
         </div>
         <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">

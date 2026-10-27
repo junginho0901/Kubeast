@@ -108,7 +108,7 @@ export default function NetworkPolicies() {
       [tr('networkPoliciesPage.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
       [tr('networkPoliciesPage.stats.defaultDenyIngress', 'Default Deny Ingress'), summary.defaultDenyIngress, 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
       [tr('networkPoliciesPage.stats.defaultDenyEgress', 'Default Deny Egress'), summary.defaultDenyEgress, 'border-orange-700/40 bg-orange-900/10', 'text-orange-300'],
-      [tr('networkPoliciesPage.stats.selectsAllPods', 'Selects All Pods'), summary.selectsAllPods, 'border-cyan-700/40 bg-cyan-900/10', 'text-cyan-300'],
+      [tr('networkPoliciesPage.stats.selectsAllPods', 'Selects All Pods'), summary.selectsAllPods, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ],
     [summary.defaultDenyEgress, summary.defaultDenyIngress, summary.selectsAllPods, summary.total, tr],
   )

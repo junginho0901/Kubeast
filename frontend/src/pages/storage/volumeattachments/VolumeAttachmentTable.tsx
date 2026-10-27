@@ -137,7 +137,7 @@ export function VolumeAttachmentTable({
                     {va.persistent_volume_name ? (
                       <button
                         type="button"
-                        className="text-cyan-300 hover:text-cyan-200 underline underline-offset-2 break-all text-left"
+                        className="text-primary-400 hover:text-primary-300 underline underline-offset-2 break-all text-left"
                         onClick={(e) => {
                           e.stopPropagation()
                           openDetail({ kind: 'PersistentVolume', name: va.persistent_volume_name as string })
@@ -151,7 +151,7 @@ export function VolumeAttachmentTable({
                     {va.node_name ? (
                       <button
                         type="button"
-                        className="text-cyan-300 hover:text-cyan-200 underline underline-offset-2 break-all text-left"
+                        className="text-primary-400 hover:text-primary-300 underline underline-offset-2 break-all text-left"
                         onClick={(e) => {
                           e.stopPropagation()
                           openDetail({ kind: 'Node', name: va.node_name as string })

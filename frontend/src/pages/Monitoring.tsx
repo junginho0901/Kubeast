@@ -49,7 +49,7 @@ export default function Monitoring() {
               onClick={() => setActiveTab('nodes')}
               className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
                 activeTab === 'nodes'
-                  ? 'bg-slate-700 text-white'
+                  ? 'bg-primary-600 text-white'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800'
               }`}
             >
@@ -60,7 +60,7 @@ export default function Monitoring() {
               onClick={() => setActiveTab('pods')}
               className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
                 activeTab === 'pods'
-                  ? 'bg-slate-700 text-white'
+                  ? 'bg-primary-600 text-white'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800'
               }`}
             >

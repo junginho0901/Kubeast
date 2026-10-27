@@ -265,8 +265,8 @@ spec:
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('referenceGrantsPage.stats.withFrom', 'With From')}</p>
           <p className="text-lg text-white font-semibold mt-1">{summary.withFrom}</p>
         </div>
-        <div className="rounded-lg border border-cyan-700/40 bg-cyan-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-cyan-300">{tr('referenceGrantsPage.stats.withTo', 'With To')}</p>
+        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
+          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('referenceGrantsPage.stats.withTo', 'With To')}</p>
           <p className="text-lg text-white font-semibold mt-1">{summary.withTo}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">

@@ -49,7 +49,7 @@ function renderStatusBadge(status?: string | null) {
     return <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-emerald-900/40 text-emerald-300 border border-emerald-700/40">Allocated</span>
   }
   if (status === 'Reserved') {
-    return <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-cyan-900/40 text-cyan-300 border border-cyan-700/40">Reserved</span>
+    return <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-primary-500/15 text-primary-300 border border-primary-500/30">Reserved</span>
   }
   return <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-amber-900/40 text-amber-300 border border-amber-700/40">Pending</span>
 }

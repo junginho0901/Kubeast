@@ -10,8 +10,6 @@ export interface StatItem {
   resourceType: ResourceType
   value: number | string
   icon: LucideIcon
-  color: string
-  bgColor: string
 }
 
 interface Props {
@@ -29,16 +27,14 @@ export function StatsGrid({ stats, onStatClick }: Props) {
           onClick={() => onStatClick(stat.resourceType)}
           className="card hover:border-primary-500 transition-colors text-left cursor-pointer"
         >
-          <div className="flex items-center justify-between">
+          <div className="flex items-start justify-between">
             <div>
               <p className="text-sm font-medium text-slate-400">{stat.name}</p>
-              <p data-testid={`stat-value-${stat.resourceType}`} className="mt-2 text-3xl font-bold text-white">
+              <p data-testid={`stat-value-${stat.resourceType}`} className="mt-2 text-2xl font-semibold text-white tabular-nums">
                 {stat.value}
               </p>
             </div>
-            <div className={`p-3 rounded-lg ${stat.bgColor}`}>
-              <stat.icon className={`w-6 h-6 ${stat.color}`} />
-            </div>
+            <stat.icon className="w-5 h-5 text-slate-500" aria-hidden="true" />
           </div>
         </button>
       ))}

@@ -13,7 +13,7 @@ import {
   ChevronDown,
   Copy,
   RefreshCw,
-  Sparkles,
+  MessageSquare,
   StopCircle,
   X,
   Zap,
@@ -342,7 +342,7 @@ export function OptimizationModal({
                         className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg"
                       >
                         {namespace === ns && (
-                          <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
+                          <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />
                         )}
                         <span className={namespace === ns ? 'font-medium' : ''}>{ns}</span>
                       </button>
@@ -356,10 +356,10 @@ export function OptimizationModal({
               <button
                 onClick={onRun}
                 disabled={!namespace || isStreaming || !table}
-                className="h-9 px-3 rounded-lg text-xs font-medium transition-colors bg-primary-600 hover:bg-primary-500 text-white disabled:bg-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed flex items-center gap-2"
+                className="h-9 px-3 rounded-lg text-xs font-medium transition-colors bg-primary-600 hover:bg-primary-700 text-white disabled:bg-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed flex items-center gap-2"
                 title={tr('dashboard.optimization.runTitle', 'Ask the AI to explain this table')}
               >
-                {isStreaming ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                {isStreaming ? <RefreshCw className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
                 {isStreaming
                   ? tr('dashboard.optimization.running', 'Explaining...')
                   : tr('dashboard.optimization.run', 'Explain with AI')}

@@ -168,7 +168,7 @@ export default function Cost() {
       aria-selected={aggregate === value}
       data-testid={`cost-aggregate-${value}`}
       onClick={() => setAggregate(value)}
-      className={`h-8 px-3 text-sm rounded-md transition-colors ${aggregate === value ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+      className={`h-8 px-3 text-sm rounded-md transition-colors ${aggregate === value ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
     >
       {label}
     </button>

@@ -225,7 +225,7 @@ spec:
           <p className="mt-2 text-slate-400">
             {tr('volumeattachments.subtitle', 'Inspect cluster-wide volume attachment state and troubleshooting signals.')}
           </p>
-          <p className="mt-1 text-xs text-cyan-300">
+          <p className="mt-1 text-xs text-slate-400">
             {tr('storage.volumeAttachment.infoLine1', 'VolumeAttachments are created for CSI volumes that require attach/detach.')}{' '}
             {tr('storage.volumeAttachment.infoLine2', '(e.g., NFS may not create them)')}
           </p>

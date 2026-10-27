@@ -123,7 +123,7 @@ export default function ClusterRoleBindings() {
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
       [tr('clusterRoleBindingsPage.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('clusterRoleBindingsPage.stats.totalSubjects', 'Total Subjects'), summary.totalSubjects, 'border-cyan-700/40 bg-cyan-900/10', 'text-cyan-300'],
+      [tr('clusterRoleBindingsPage.stats.totalSubjects', 'Total Subjects'), summary.totalSubjects, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ],
     [summary.total, summary.totalSubjects, tr],
   )

@@ -28,7 +28,7 @@ export default function UserApiKeys({ userID, canEdit, tr }: Props) {
 
   return (
     <div data-testid="admin-user-api-keys">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">{tr('apiKeys.admin.title', 'API keys')}</h3>
+      <h3 className="text-xs font-semibold text-slate-400 mb-2">{tr('apiKeys.admin.title', 'API keys')}</h3>
       <div className="rounded-xl border border-slate-700/50 bg-slate-950/30 p-3 space-y-1.5">
         {keys.length === 0 ? (
           <p className="text-xs text-slate-500">{tr('apiKeys.admin.empty', 'No API keys')}</p>

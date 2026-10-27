@@ -136,8 +136,9 @@ export default function Login() {
   }
 
   return (
-    // overflow-clip: the hero's names come in from past the window's edges, without scroll bars
-    <div className="min-h-screen overflow-clip bg-slate-950">
+    // overflow-clip: the hero's names come in from past the window's edges, without scroll bars.
+    // The navy ground is the brand's (the site has the same), not the console's grey slate.
+    <div className="min-h-screen overflow-clip bg-[#020617]">
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(37,99,235,0.18),rgba(2,6,23,0))]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom,rgba(34,211,238,0.12),rgba(2,6,23,0))]" />
@@ -188,7 +189,7 @@ export default function Login() {
                     setRegistered(false)
                     setMode('login')
                   }}
-                  className="mt-6 rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-primary-500"
+                  className="mt-6 rounded-full bg-primary-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-primary-700"
                 >
                   {tr('login.registered.backToLogin', 'Back to sign in')}
                 </button>
@@ -247,7 +248,7 @@ export default function Login() {
                   <a
                     href={`/api/v1/auth/oidc/login?next=${encodeURIComponent(redirectTo)}`}
                     data-testid="sso-login"
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 lg:py-3 text-sm lg:text-base font-medium text-white hover:bg-primary-500"
+                    className="flex w-full items-center justify-center gap-2 rounded-full bg-primary-600 px-4 py-2.5 lg:py-3 text-sm lg:text-base font-medium text-white hover:bg-primary-700"
                   >
                     <KeyRound className="h-4 w-4" />
                     {tr('login.sso.button', 'Continue with {{name}}', { name: oidc?.display_name || 'SSO' })}
@@ -364,7 +365,7 @@ export default function Login() {
                   !password ||
                   (mode === 'register' && (!confirmPassword || password !== confirmPassword))
                 }
-                className="w-full rounded-lg bg-primary-600 px-4 py-2.5 lg:py-3 text-sm lg:text-base font-medium text-white hover:bg-primary-500 disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full rounded-full bg-primary-600 px-4 py-2.5 lg:py-3 text-sm lg:text-base font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isBusy
                   ? tr('login.form.processing', 'Processing...')

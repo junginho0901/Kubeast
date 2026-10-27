@@ -234,8 +234,8 @@ spec:
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('gatewayClassesPage.stats.accepted', 'Accepted')}</p>
           <p className="text-lg text-white font-semibold mt-1">{summary.accepted}</p>
         </div>
-        <div className="rounded-lg border border-cyan-700/40 bg-cyan-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-cyan-300">{tr('gatewayClassesPage.stats.withParameters', 'With Parameters')}</p>
+        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
+          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('gatewayClassesPage.stats.withParameters', 'With Parameters')}</p>
           <p className="text-lg text-white font-semibold mt-1">{summary.withParameters}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">

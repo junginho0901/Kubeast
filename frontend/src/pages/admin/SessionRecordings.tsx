@@ -52,7 +52,7 @@ export default function SessionRecordings() {
   const first = (page - 1) * PAGE_SIZE + 1
 
   const statusClass: Record<string, string> = {
-    recording: 'bg-sky-900/40 text-sky-300 border-sky-800/60',
+    recording: 'bg-primary-900/40 text-primary-300 border-primary-800/60',
     uploading: 'bg-amber-900/40 text-amber-300 border-amber-800/60',
     uploaded: 'bg-emerald-900/40 text-emerald-300 border-emerald-800/60',
     interrupted: 'bg-red-900/40 text-red-300 border-red-800/60',

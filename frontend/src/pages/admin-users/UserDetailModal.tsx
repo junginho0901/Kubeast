@@ -167,7 +167,7 @@ export function UserDetailModal({
           </div>
   
           <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+            <h3 className="text-xs font-semibold text-slate-400 mb-2">
               {tr('adminUsers.detail.permissions', 'Permissions')}
             </h3>
             <div className="rounded-xl border border-slate-700/50 bg-slate-950/30 p-3">

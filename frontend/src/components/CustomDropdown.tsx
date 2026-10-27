@@ -45,7 +45,7 @@ const TRIGGER_SIZE: Record<NonNullable<CustomDropdownProps['size']>, string> = {
 
 /**
  * CustomDropdown — matches the style used in ClusterView / Monitoring / Pods
- * (bg-slate-700 trigger, green CheckCircle on selected item)
+ * (bg-slate-700 trigger, sky CheckCircle on selected item)
  */
 export default function CustomDropdown({
   options,
@@ -126,7 +126,7 @@ export default function CustomDropdown({
                 }`}
               >
                 {isSelected && (
-                  <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
+                  <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />
                 )}
                 {opt.icon && !isSelected && (
                   <span className="text-base shrink-0">{opt.icon}</span>

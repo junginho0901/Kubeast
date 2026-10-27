@@ -149,8 +149,8 @@ export default function CustomResourceInstances() {
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
       [tr('crInstancesPage.stats.total', 'Total Instances'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('crInstancesPage.stats.kinds', 'Unique Kinds'), summary.kinds, 'border-cyan-700/40 bg-cyan-900/10', 'text-cyan-300'],
-      [tr('crInstancesPage.stats.namespaces', 'Namespaces'), summary.namespaces, 'border-purple-700/40 bg-purple-900/10', 'text-purple-300'],
+      [tr('crInstancesPage.stats.kinds', 'Unique Kinds'), summary.kinds, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('crInstancesPage.stats.namespaces', 'Namespaces'), summary.namespaces, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ],
     [summary.total, summary.kinds, summary.namespaces, tr],
   )

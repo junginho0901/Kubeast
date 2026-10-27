@@ -181,7 +181,7 @@ export default function PVDetail({ name, rawJson }: { name: string; rawJson?: Re
               value={boundClaim.namespace ? (
                 <button
                   type="button"
-                  className="text-cyan-300 hover:text-cyan-200 underline underline-offset-2 break-all text-left"
+                  className="text-primary-400 hover:text-primary-300 underline underline-offset-2 break-all text-left"
                   onClick={() => openDetail({
                     kind: 'PersistentVolumeClaim',
                     name: String(boundClaim.name),

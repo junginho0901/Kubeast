@@ -425,15 +425,15 @@ export default function ResourceGraph() {
               minZoom={0.05}
               maxZoom={2}
             >
-              <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#334155" />
+              <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="var(--color-slate-700)" />
               <Controls className="bg-slate-800! border-slate-700! rounded-lg! [&>button]:bg-slate-700! [&>button]:border-slate-600! [&>button]:text-white! [&>button:hover]:bg-slate-600!" />
               <MiniMap
                 nodeColor={node => {
                   const raw = node.data?.raw as ResourceGraphNode | undefined
-                  return raw ? statusColor(raw.status) : '#64748b'
+                  return raw ? statusColor(raw.status) : 'var(--color-slate-500)'
                 }}
-                maskColor="rgba(15, 23, 42, 0.7)"
-                style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
+                maskColor="color-mix(in srgb, var(--color-slate-900) 70%, transparent)"
+                style={{ background: 'var(--color-slate-800)', border: '1px solid var(--color-slate-700)', borderRadius: '8px' }}
               />
             </ReactFlow>
           </div>

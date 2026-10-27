@@ -96,7 +96,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
           <InfoRow label={tr('crdInfo.scope', 'Scope')} value={
             describe?.scope ? (
               <span className={`inline-flex px-2 py-0.5 rounded-sm text-[11px] font-medium ${
-                describe.scope === 'Namespaced' ? 'bg-cyan-900/40 text-cyan-300' : 'bg-purple-900/40 text-purple-300'
+                'bg-slate-700 text-slate-300'
               }`}>
                 {describe.scope}
               </span>
@@ -168,7 +168,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
                     <span className="inline-flex px-2 py-0.5 rounded-sm text-[11px] font-medium bg-green-900/40 text-green-300"><Tx>Storage</Tx></span>
                   )}
                   {ver.served && (
-                    <span className="inline-flex px-2 py-0.5 rounded-sm text-[11px] font-medium bg-blue-900/40 text-blue-300"><Tx>Served</Tx></span>
+                    <span className="inline-flex px-2 py-0.5 rounded-sm text-[11px] font-medium bg-primary-900/40 text-primary-300"><Tx>Served</Tx></span>
                   )}
                   {!ver.served && (
                     <span className="inline-flex px-2 py-0.5 rounded-sm text-[11px] font-medium bg-slate-800 text-slate-400"><Tx>Not Served</Tx></span>
@@ -177,7 +177,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
                 {/* describe.versions[].additionalPrinterColumns 는 backend 가 spec 의 원형을 그대로 forward 함 — verified */}
                 {Array.isArray(ver.additionalPrinterColumns) && ver.additionalPrinterColumns.length > 0 && (
                   <div className="mt-2">
-                    <p className="text-[11px] uppercase tracking-wide text-slate-500 mb-1"><Tx>Additional Printer Columns</Tx></p>
+                    <p className="text-[11px] text-slate-500 mb-1"><Tx>Additional Printer Columns</Tx></p>
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>

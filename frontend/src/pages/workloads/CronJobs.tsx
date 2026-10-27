@@ -278,8 +278,8 @@ spec:
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-amber-300">{tr('cronjobs.stats.suspended', 'Suspended')}</p>
           <p className="text-lg text-white font-semibold mt-1">{summary.suspended}</p>
         </div>
-        <div className="rounded-lg border border-indigo-700/40 bg-indigo-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-indigo-300">{tr('cronjobs.stats.scheduled', 'Scheduled')}</p>
+        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
+          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('cronjobs.stats.scheduled', 'Scheduled')}</p>
           <p className="text-lg text-white font-semibold mt-1">{summary.scheduled}</p>
         </div>
       </div>

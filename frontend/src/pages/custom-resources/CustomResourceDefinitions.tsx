@@ -135,8 +135,8 @@ export default function CustomResourceDefinitions() {
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
       [tr('crdPage.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('crdPage.stats.namespaced', 'Namespaced'), summary.namespaced, 'border-cyan-700/40 bg-cyan-900/10', 'text-cyan-300'],
-      [tr('crdPage.stats.cluster', 'Cluster-scoped'), summary.cluster, 'border-purple-700/40 bg-purple-900/10', 'text-purple-300'],
+      [tr('crdPage.stats.namespaced', 'Namespaced'), summary.namespaced, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('crdPage.stats.cluster', 'Cluster-scoped'), summary.cluster, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ],
     [summary.total, summary.namespaced, summary.cluster, tr],
   )
@@ -331,7 +331,7 @@ spec:
                   <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{crd.group}</span></td>
                   <td className="col-optional py-3 px-4 text-xs font-mono">{crd.version}</td>
                   <td className="py-3 px-4 text-xs">
-                    <span className={`inline-flex px-2 py-0.5 rounded-sm text-[11px] font-medium ${crd.scope === 'Namespaced' ? 'bg-cyan-900/40 text-cyan-300' : 'bg-purple-900/40 text-purple-300'}`}>
+                    <span className={`inline-flex px-2 py-0.5 rounded-sm text-[11px] font-medium bg-slate-700 text-slate-300`}>
                       {crd.scope}
                     </span>
                   </td>

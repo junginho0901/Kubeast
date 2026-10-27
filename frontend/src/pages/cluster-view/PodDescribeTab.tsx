@@ -178,7 +178,7 @@ export function PodDescribeTab({ data, na, tr }: Props) {
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <span className={`px-2 py-1 rounded-sm text-xs font-medium ${
-                        event.type === 'Normal' ? 'bg-blue-500/20 text-blue-400' : 'bg-yellow-500/20 text-yellow-400'
+                        event.type === 'Normal' ? 'bg-slate-500/20 text-slate-300' : 'bg-yellow-500/20 text-yellow-400'
                       }`}>
                         {event.type}
                       </span>

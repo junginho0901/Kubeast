@@ -19,11 +19,11 @@ export function DashboardQuickActions({ onOpenIssues, onOpenOptimization, onOpen
 
   return (
     <div className="card">
-      <h2 className="text-xl font-bold text-white mb-4">{tr('dashboard.quickActions.title', 'Quick actions')}</h2>
+      <h2 className="text-lg font-semibold text-white mb-4">{tr('dashboard.quickActions.title', 'Quick actions')}</h2>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <button className="btn btn-secondary text-left" onClick={onOpenIssues}>
           <div className="flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-yellow-400" />
+            <AlertCircle className="w-5 h-5 text-slate-400" aria-hidden="true" />
             <div>
               <div className="font-medium">{tr('dashboard.quickActions.issues.title', 'Check issues')}</div>
               <div className="text-xs text-slate-400">
@@ -34,7 +34,7 @@ export function DashboardQuickActions({ onOpenIssues, onOpenOptimization, onOpen
         </button>
         <button className="btn btn-secondary text-left" onClick={onOpenOptimization}>
           <div className="flex items-center gap-3">
-            <TrendingUp className="w-5 h-5 text-green-400" />
+            <TrendingUp className="w-5 h-5 text-slate-400" aria-hidden="true" />
             <div>
               <div className="font-medium">{tr('dashboard.quickActions.optimization.title', 'Optimization suggestions')}</div>
               <div className="text-xs text-slate-400">
@@ -45,7 +45,7 @@ export function DashboardQuickActions({ onOpenIssues, onOpenOptimization, onOpen
         </button>
         <button className="btn btn-secondary text-left" onClick={onOpenStorage}>
           <div className="flex items-center gap-3">
-            <Database className="w-5 h-5 text-blue-400" />
+            <Database className="w-5 h-5 text-slate-400" aria-hidden="true" />
             <div>
               <div className="font-medium">{tr('dashboard.quickActions.storage.title', 'Storage analysis')}</div>
               <div className="text-xs text-slate-400">
