@@ -93,8 +93,9 @@ func (h *AuthHandler) AdminDeleteOrganization(w http.ResponseWriter, r *http.Req
 			}
 		}
 	}
-	err = h.repo.DeleteOrganization(r.Context(), id)
-	writeAudit(h.auditStore, r, payload, auditEvent{action: "admin.organizations.delete", targetType: "organization", targetID: idStr, before: before, err: err})
+	_, cleared, err := h.repo.DeleteOrganization(r.Context(), id)
+	writeAudit(h.auditStore, r, payload, auditEvent{action: "admin.organizations.delete", targetType: "organization", targetID: idStr, before: before,
+		after: map[string]any{"accounts_cleared": cleared}, err: err})
 	if err != nil {
 		response.InternalError(w, r, err)
 		return

@@ -143,6 +143,16 @@ func (r *Repository) DeleteRole(ctx context.Context, id int) error {
 	return err
 }
 
+// RoleUsage counts what still names the role by foreign key: accounts holding it, cluster grants giving it or
+// returning to it when a temporary grant ends, and access requests that asked for it.
+func (r *Repository) RoleUsage(ctx context.Context, id int) (users, grants, requests int, err error) {
+	err = r.pool.QueryRow(ctx, `SELECT
+		(SELECT count(*) FROM auth_users WHERE role_id = $1),
+		(SELECT count(*) FROM user_cluster_roles WHERE role_id = $1 OR restore_role_id = $1),
+		(SELECT count(*) FROM access_requests WHERE role_id = $1)`, id).Scan(&users, &grants, &requests)
+	return users, grants, requests, err
+}
+
 func (r *Repository) GetPermissionsByRoleID(ctx context.Context, roleID int) ([]string, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT permission FROM role_permissions WHERE role_id = $1 ORDER BY permission`, roleID)

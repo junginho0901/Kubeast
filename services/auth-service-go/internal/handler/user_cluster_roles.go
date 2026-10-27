@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -103,6 +104,9 @@ func (h *AuthHandler) SetUserClusterRole(w http.ResponseWriter, r *http.Request)
 		response.Error(w, http.StatusBadRequest, "Invalid request body: role required")
 		return
 	}
+	if h.refuseOwnClusterAccess(w, r, "user.cluster_role.set", payload, userID, clusterID, map[string]any{"role": req.Role}) {
+		return
+	}
 
 	target, err := h.repo.GetUserByID(r.Context(), userID)
 	if err != nil || target == nil {
@@ -165,6 +169,9 @@ func (h *AuthHandler) DeleteUserClusterRole(w http.ResponseWriter, r *http.Reque
 	}
 	userID := chi.URLParam(r, "user_id")
 	clusterID := chi.URLParam(r, "cluster_id")
+	if h.refuseOwnClusterAccess(w, r, "user.cluster_role.unset", payload, userID, clusterID, nil) {
+		return
+	}
 
 	target, err := h.repo.GetUserByID(r.Context(), userID)
 	if err != nil || target == nil {
@@ -187,6 +194,19 @@ func (h *AuthHandler) DeleteUserClusterRole(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// refuseOwnClusterAccess stops a change to the caller's own cluster access, as a change of one's own role is: the
+// change would end the caller's sessions (the token carries the old matrix) and an access request is the way to
+// change one's own access.
+func (h *AuthHandler) refuseOwnClusterAccess(w http.ResponseWriter, r *http.Request, action string, payload auth.TokenPayload, userID, clusterID string, after map[string]any) bool {
+	if userID != payload.UserID {
+		return false
+	}
+	err := errors.New("cannot change your own cluster access")
+	h.auditClusterRole(r, action, payload, userID, payload.Email, clusterID, after, err)
+	response.Error(w, http.StatusForbidden, "Cannot change your own cluster access")
+	return true
 }
 
 // endApprovedRequests closes the approved access requests behind the user's

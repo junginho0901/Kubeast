@@ -2,6 +2,10 @@ package repository
 
 import (
 	"context"
+	"errors"
+	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/model"
 )
@@ -38,9 +42,29 @@ func (r *Repository) CreateOrganization(ctx context.Context, orgType, name strin
 	return &o, err
 }
 
-func (r *Repository) DeleteOrganization(ctx context.Context, id int) error {
-	_, err := r.pool.Exec(ctx, `DELETE FROM organizations WHERE id = $1`, id)
-	return err
+// DeleteOrganization removes a team and clears it from the accounts that name it, in one transaction, so no
+// account keeps a team the list no longer has. It returns the team's name and how many accounts it cleared.
+func (r *Repository) DeleteOrganization(ctx context.Context, id int) (name string, cleared int64, err error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return "", 0, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var orgType string
+	if err := tx.QueryRow(ctx, `DELETE FROM organizations WHERE id = $1 RETURNING type, name`, id).Scan(&orgType, &name); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", 0, nil
+		}
+		return "", 0, err
+	}
+	if orgType == "team" {
+		tag, err := tx.Exec(ctx, `UPDATE auth_users SET team = NULL, updated_at = $1 WHERE team = $2`, time.Now(), name)
+		if err != nil {
+			return "", 0, err
+		}
+		cleared = tag.RowsAffected()
+	}
+	return name, cleared, tx.Commit(ctx)
 }
 
 func (r *Repository) OrganizationExists(ctx context.Context, orgType, name string) (bool, error) {
