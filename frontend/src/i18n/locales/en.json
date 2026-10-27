@@ -378,7 +378,8 @@
     },
     "durationMin": "{{m}} min",
     "durationH": "{{h}} h",
-    "durationHMin": "{{h}} h {{m}} min"
+    "durationHMin": "{{h}} h {{m}} min",
+    "searchPlaceholder": "Search by requester, cluster or role..."
   },
   "nav": {
     "accessRequests": "Access Requests",

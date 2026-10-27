@@ -378,7 +378,8 @@
     },
     "durationMin": "{{m}}분",
     "durationH": "{{h}}시간",
-    "durationHMin": "{{h}}시간 {{m}}분"
+    "durationHMin": "{{h}}시간 {{m}}분",
+    "searchPlaceholder": "요청자, 클러스터, 역할 검색..."
   },
   "nav": {
     "accessRequests": "Access Requests",

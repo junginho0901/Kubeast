@@ -1,8 +1,8 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 
-// Monitoring's two lists search and page, and their rows open the resource drawer; Cost's rows open the
-// Namespace or the workload they cost. Compared with the API on cluster `default` (the second kind cluster,
-// which runs metrics-server and OpenCost).
+// Lists that open the resource drawer from a row and search and page their rows: Monitoring's two tabs, Cost,
+// Cluster hygiene, the dashboard's Optimization window, the Nodes page's top-usage cards and the admin Access
+// requests. Compared with the API on cluster `default` (the second kind cluster: metrics-server, OpenCost).
 
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
@@ -35,7 +35,7 @@ function memoryLimitMiB(pod: PodInfo | undefined): number | null {
 
 const detailOf = (page: Page) => new URL(page.url()).searchParams.get('detail')
 
-test.describe('Monitoring and Cost rows', () => {
+test.describe('Rows that open the drawer, lists that search and page', () => {
   test('nodes: the search narrows by name, the pager counts them and a card opens its Node', async ({ page, request }) => {
     const res = await request.get('/api/v1/cluster/metrics/nodes', { headers: await headers(request) })
     test.skip(!res.ok(), `node metrics: ${res.status()}`)
@@ -123,5 +123,66 @@ test.describe('Monitoring and Cost rows', () => {
       await page.getByTestId('cost-row').first().click()
       await expect.poll(() => detailOf(page)).toBeNull()
     }
+  })
+
+  test('cluster hygiene: a finding on the selected cluster opens its object, the pager counts the report', async ({ page, request }) => {
+    const res = await request.get('/api/v1/cluster/hygiene', { headers: await headers(request), params: { cluster: 'default' } })
+    test.skip(!res.ok(), `hygiene: ${res.status()}`)
+    const findings: { kind: string; name: string; namespace?: string }[] = (await res.json()).findings ?? []
+    test.skip(!findings.some((f) => f.kind !== 'API' && f.name), 'no finding that names an object on cluster default')
+
+    await page.goto('/admin/cluster-hygiene?cluster=default')
+    await expect(page.getByTestId('hygiene-pager')).toContainText(new RegExp(`\\b${findings.length}\\b`), { timeout: 30_000 })
+    const row = page.locator('[data-testid="hygiene-finding-row"][data-openable="true"]').first()
+    const ns = (await row.locator('td').nth(2).innerText()).trim()
+    const [kind, ...rest] = (await row.locator('td').nth(3).locator('span').first().innerText()).replace(/\u200b/g, '').trim().split('/')
+    const name = rest.join('/')
+    expect(findings.some((f) => f.kind === kind && f.name === name && (f.namespace || '-') === ns)).toBe(true)
+    await row.click()
+    await expect.poll(() => detailOf(page)).toBe(ns === '-' ? `${kind}/${name}` : `${kind}/${ns}/${name}`)
+  })
+
+  test('optimization window: a workload opens its own drawer over the window', async ({ page, request }) => {
+    const res = await request.get('/api/v1/cluster/optimization', { headers: await headers(request), params: { cluster: 'default', namespace: NS } })
+    test.skip(!res.ok(), `optimization: ${res.status()}`)
+    const rows: { kind: string; name: string }[] = (await res.json()).rows ?? []
+    test.skip(rows.length === 0, `no workload in ${NS}`)
+
+    await page.goto('/?cluster=default')
+    await page.locator('button').filter({ hasText: /Optimization suggestions|최적화 제안/ }).first().click()
+    await page.locator('button[title="Select namespace"], button[title="Namespace 선택"]').first().click()
+    await page.getByRole('button', { name: NS, exact: true }).click()
+    const open = page.getByTestId('optimization-open').first()
+    await expect(open).toBeVisible({ timeout: 20_000 })
+    const [kind, name] = (await open.innerText()).trim().split('/')
+    expect(rows.some((r) => r.kind === kind && r.name === name)).toBe(true)
+    await open.click()
+    await expect.poll(() => detailOf(page)).toBe(`${kind}/${NS}/${name}`)
+  })
+
+  test('nodes page: a top-usage card opens its Node', async ({ page, request }) => {
+    const res = await request.get('/api/v1/cluster/metrics/nodes', { headers: await headers(request) })
+    test.skip(!res.ok(), `node metrics: ${res.status()}`)
+    const nodes: NodeMetric[] = await res.json()
+    test.skip(nodes.length === 0, 'no node metrics on cluster default')
+
+    await page.goto('/cluster/nodes')
+    const card = page.getByTestId('node-top-usage').first()
+    const name = (await card.locator('span').first().innerText()).replace(/^#\d+\s+/, '').trim()
+    expect(nodes.map((n) => n.name)).toContain(name)
+    await card.click()
+    await expect.poll(() => detailOf(page)).toBe(`Node/${name}`)
+  })
+
+  test('access requests: the pager counts the pending requests, the search narrows them', async ({ page, request }) => {
+    const res = await request.get('/api/v1/auth/admin/access-requests', { headers: await headers(request), params: { status: 'pending' } })
+    expect(res.ok(), `access requests: ${res.status()}`).toBeTruthy()
+    const pending: unknown[] = await res.json()
+
+    await page.goto('/admin/access-requests')
+    await expect(page.getByTestId('access-requests-pager')).toContainText(new RegExp(`\\b${pending.length}\\b`))
+    await page.getByTestId('access-requests-search').fill('no-such-requester-e2e')
+    await expect(page.getByTestId('access-requests-table-pending')).toContainText(/No results found|검색 결과가 없습니다/)
+    await expect(page.getByTestId('access-requests-pager')).toContainText(/Showing 0 of 0|0개 중 0/)
   })
 })

@@ -4,6 +4,9 @@ import { useTranslation } from 'react-i18next'
 import { AlertTriangle, Download, History, Loader2, RefreshCw, ShieldCheck, X } from 'lucide-react'
 
 import CustomDropdown from '@/components/CustomDropdown'
+import { ListPager } from '@/components/ListPager'
+import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { useCluster } from '@/contexts/ClusterContext'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { api, clustersApi } from '@/services/api'
@@ -38,8 +41,14 @@ function findingText(tr: Tr, f: HygieneFinding): string {
     : text
 }
 
+// Findings per page: the admin page scrolls, so a fixed count; a report holds up to 5000.
+const FINDINGS_PER_PAGE = 50
+
 export default function ClusterHygiene() {
   const { t } = useTranslation()
+  const { currentCluster } = useCluster()
+  const { open: openDetail } = useResourceDetail()
+  const [page, setPage] = useState(1)
   const tr = (key: string, fallback: string, opts?: Record<string, unknown>) => t(key, { defaultValue: fallback, ...opts })
   const queryClient = useQueryClient()
   const [cluster, setCluster] = useState('')
@@ -103,6 +112,13 @@ export default function ClusterHygiene() {
       return [f.namespace, f.kind, f.name, f.container, f.message, findingText(label, f), f.exempt_reason].join(' ').toLowerCase().includes(q)
     })
   }, [report, severity, check, search, t])
+  const totalPages = Math.max(1, Math.ceil(findings.length / FINDINGS_PER_PAGE))
+  useEffect(() => setPage(1), [report, severity, check, search])
+  const pagedFindings = findings.slice((page - 1) * FINDINGS_PER_PAGE, page * FINDINGS_PER_PAGE)
+  // A finding opens its object in the drawer, which reads the selected cluster: only while this page shows that
+  // cluster's report. "API" findings name an API version, not an object.
+  const openFinding = (f: HygieneFinding) =>
+    cluster === currentCluster && f.kind !== 'API' && f.name ? () => openDetail({ kind: f.kind, name: f.name, namespace: f.namespace || undefined }) : null
 
   const download = (format: 'csv' | 'json') => {
     const a = document.createElement('a')
@@ -315,8 +331,16 @@ export default function ClusterHygiene() {
                   </tr>
                 </thead>
                 <tbody>
-                  {findings.map((f, i) => (
-                    <tr key={`${f.check}-${f.kind}-${f.namespace}-${f.name}-${f.container}-${i}`} className="border-t border-slate-700/60 text-slate-300 align-top" data-testid="hygiene-finding-row">
+                  {pagedFindings.map((f, i) => {
+                    const onOpen = openFinding(f)
+                    return (
+                    <tr
+                      key={`${f.check}-${f.kind}-${f.namespace}-${f.name}-${f.container}-${i}`}
+                      onClick={onOpen ?? undefined}
+                      data-openable={onOpen ? 'true' : 'false'}
+                      className={`border-t border-slate-700/60 text-slate-300 align-top ${onOpen ? 'cursor-pointer hover:bg-slate-700/30' : ''}`}
+                      data-testid="hygiene-finding-row"
+                    >
                       <td className="px-3 py-2">{badge(f)}</td>
                       <td className="px-3 py-2">{checkTitle(f.check)}</td>
                       <td className="px-3 py-2 whitespace-nowrap">{f.namespace || '-'}</td>
@@ -330,9 +354,13 @@ export default function ClusterHygiene() {
                         {f.exempt && f.exempt_reason && <div className="text-xs text-slate-400 mt-0.5">{tr('clusterHygiene.exemptReason', 'Exempt: {{reason}}', { reason: f.exempt_reason })}</div>}
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
+            )}
+            {findings.length > 0 && (
+              <ListPager currentPage={page} totalPages={totalPages} total={findings.length} rowsPerPage={FINDINGS_PER_PAGE} onPageChange={setPage} showPageSize={false} testId="hygiene-pager" />
             )}
             {report?.truncated && <div className="p-3 text-xs text-yellow-300">{tr('clusterHygiene.truncated', 'Only the first 5000 findings are shown; the counts include all of them.')}</div>}
           </div>

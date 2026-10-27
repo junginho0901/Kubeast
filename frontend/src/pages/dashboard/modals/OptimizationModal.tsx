@@ -22,6 +22,7 @@ import ReactMarkdown from 'react-markdown'
 import { REMARK_PLUGINS } from '@/utils/markdown'
 
 import { ModalOverlay } from '@/components/ModalOverlay'
+import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { api } from '@/services/api'
 import type { OptimizationResponse, OptimizationRow, ResizeResult } from '@/services/api/types'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
@@ -124,6 +125,7 @@ export function OptimizationModal({
   const { data: features } = useClusterFeatures()
   const { has } = usePermission()
   const confirm = useConfirm()
+  const { open: openDetail } = useResourceDetail()
   const queryClient = useQueryClient()
   const canResize = !!features?.inPlaceResize?.enabled && !!features?.inPlaceResize?.serverSupports && has('resource.pod.edit')
   // The cluster has an OpenCost: the server priced each row's requests (cost.go).
@@ -223,8 +225,11 @@ export function OptimizationModal({
   const renderRow = (row: OptimizationRow) => (
     <tr key={`${row.kind}/${row.name}/${row.container}`} data-testid="optimization-row" className="border-t border-slate-700/60">
       <td className="px-2 py-1.5 whitespace-nowrap">
-        <span className="text-slate-400">{row.kind}/</span>
-        <span className="text-slate-100 font-medium">{row.name}</span>
+        {/* the drawer opens over this window (the modal stack) */}
+        <button type="button" onClick={() => openDetail({ kind: row.kind, name: row.name, namespace: row.namespace })} className="text-left hover:underline" data-testid="optimization-open">
+          <span className="text-slate-400">{row.kind}/</span>
+          <span className="text-slate-100 font-medium">{row.name}</span>
+        </button>
       </td>
       <td className="px-2 py-1.5 text-slate-300 whitespace-nowrap">{row.container}</td>
       <td className="px-2 py-1.5 text-right text-slate-300">{row.pods}</td>
