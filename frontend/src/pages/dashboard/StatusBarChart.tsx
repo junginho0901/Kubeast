@@ -21,7 +21,8 @@ export function StatusBarChart({ data, colorFor, chartHeight = 340, onBarClick }
 
   const maxVal = Math.max(...data.map(d => d.value), 1)
   const niceMax = Math.ceil(maxVal / 10) * 10 || 10
-  const ticks = Array.from({ length: 5 }, (_, i) => Math.round(niceMax * i / 4))
+  // five steps of a multiple of ten stay whole numbers (0, 2, 4 … 10 / 0, 8, 16 … 40)
+  const ticks = Array.from({ length: 6 }, (_, i) => niceMax * i / 5)
 
   const groupW = CW / data.length
   const barW = Math.min(groupW * 0.5, 48)
