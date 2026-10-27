@@ -123,6 +123,20 @@ grep DEFAULT_ADMIN_PASSWORD .env
 
 비밀번호를 직접 정하려면 설치할 때 `--set admin.password=<원하는비번>`을 넘기세요.
 
+#### admin 계정에 못 들어갈 때
+
+admin 비밀번호를 바꾼 뒤 잊었거나, 로그인 실패로 잠겼거나, Admin 역할을 잃었으면 auth-service가 도는 곳에서 `reset-admin`을 실행하세요. 계정을 위의 비밀번호(Secret의 `DEFAULT_ADMIN_PASSWORD`, Docker는 `.env`)로 되돌리고, Admin 역할을 주고, 잠금을 풀고, 기존 세션을 끊습니다. 지워진 admin 계정은 다시 만듭니다. 비밀번호는 출력하지 않고, 감사 로그(`user.account.recover`)를 남깁니다.
+
+```bash
+# K8s / Helm
+kubectl -n kubeast exec deploy/auth-service -- /app/server reset-admin
+
+# Docker
+docker compose exec auth-service /app/server reset-admin
+```
+
+`admin`이 아닌 계정은 `--email <계정>`으로 지정합니다. 만들어진 비밀번호 대신 새 비밀번호를 쓰려면 먼저 바꾸고(`helm upgrade … --reset-then-reuse-values --set admin.password=<새 비번>`, Docker는 `.env`의 `DEFAULT_ADMIN_PASSWORD`), auth-service를 다시 띄운 뒤(`kubectl -n kubeast rollout restart deploy/auth-service`, Docker는 `docker compose up -d auth-service`) `reset-admin`을 실행하세요.
+
 ### 3. 로그인 후 클러스터 연결 (Connect your cluster)
 
 먼저 `admin` 계정으로 로그인하세요. 등록된 클러스터가 없으면 로그인하자마자 `/setup` 마법사로 이동합니다.

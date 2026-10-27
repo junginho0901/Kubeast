@@ -152,6 +152,21 @@ test('a session that ends without signing out is told on the sign-in page; signi
   await expect(page.getByTestId('login-session-ended')).toHaveCount(0)
 })
 
+test('a role with the cluster permissions opens Clusters; its cluster picker lists only the clusters it reaches', async ({ page, request }) => {
+  const role = await mkRole(request, 'clustermgr', ['menu.dashboard', 'admin.clusters.list', 'admin.clusters.update', 'resource.*.read'])
+  const u = await mkUser(request, 'clustermgr', role.id)
+  expect((await request.put(`/api/v1/auth/admin/users/${u.id}/cluster-roles/default`, { headers: admin, data: { role: 'Read', namespaces: [] } })).status()).toBeLessThan(300)
+  const mine = await bearer(request, u.email, u.password)
+  const all = ((await (await request.get('/api/v1/clusters', { headers: mine })).json()).items as Array<{ id: string }>).map((c) => c.id)
+  const reached = ((await (await request.get('/api/v1/clusters?accessibleOnly=true', { headers: mine })).json()).items as Array<{ id: string }>).map((c) => c.id)
+  expect(all).toEqual(expect.arrayContaining(['self', 'default']))
+  expect(reached).toEqual(['default'])
+  await uiLogin(page, u.email, u.password)
+  await page.goto('/admin/clusters')
+  await expect(page).toHaveURL(/\/admin\/clusters/, { timeout: 15000 })
+  await expect(page.getByTestId('sidebar-nav').getByRole('link', { name: 'Clusters' })).toHaveCount(1)
+})
+
 test('someone with no cluster sees the no-cluster page without a "no permission in this cluster" notice', async ({ page, request }) => {
   const u = await mkUser(request, 'nocluster', await roleId(request, 'Member'))
   await uiLogin(page, u.email, u.password)
