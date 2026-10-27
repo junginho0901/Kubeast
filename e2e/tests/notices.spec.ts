@@ -1,3 +1,7 @@
+import { execSync } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { test, expect, type APIRequestContext, type Browser } from '@playwright/test'
 
 // Re-QA PR-5: the console says what really happened instead of "no … found"
@@ -8,7 +12,8 @@ import { test, expect, type APIRequestContext, type Browser } from '@playwright/
 //          every role (a Read user got "no permission", an admin "none"), no create button
 //  #45 rest a cluster-scoped create button only where the cluster allows it
 //          (SelfSubjectAccessReview): not for Write, yes for an admin
-//  #43 a Read user's ServiceAccount drawer: bindings it may not list are "cannot check", not "none"
+//  #43 a ServiceAccount drawer: bindings the user may not list are "cannot check", not "none" (a Read user
+//          lists them through kubeast:cluster-reader; a namespace-limited reader bound to view does not)
 //  #44 a Read user's Helm release page: "no permission", not "not found"
 //  #72/#73 a user with no cluster: the chart's "where to ask" text and link, and the
 //          footer says "no accessible cluster" on Settings too
@@ -28,15 +33,21 @@ async function adminHeaders(request: APIRequestContext) {
   return { Authorization: `Bearer ${(await res.json()).access_token as string}` }
 }
 
-// A temporary user with an optional role on self, and a browser signed in as it.
-async function tempUser(browser: Browser, request: APIRequestContext, admin: Record<string, string>, tag: string, clusterRole?: string) {
+function kubectl(args: string) {
+  const kcPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-notices-')), 'kubeconfig')
+  fs.writeFileSync(kcPath, execSync('kind get kubeconfig --name kubeast', { encoding: 'utf8' }), { mode: 0o600 })
+  return execSync(`kubectl --kubeconfig ${kcPath} ${args}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
+}
+
+// A temporary user with an optional role on self (limited to namespaces when given), and a browser signed in as it.
+async function tempUser(browser: Browser, request: APIRequestContext, admin: Record<string, string>, tag: string, clusterRole?: string, namespaces?: string[]) {
   const email = `e2e-notices-${tag}-${Date.now()}@kubeast.local`
   const password = 'e2e-notices-throwaway'
   const created = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: `E2E notices ${tag}`, email, password } })
   expect(created.status()).toBe(201)
   const id = (await created.json()).id as string
   if (clusterRole) {
-    expect((await request.put(`/api/v1/auth/admin/users/${id}/cluster-roles/self`, { headers: admin, data: { role: clusterRole } })).status()).toBe(200)
+    expect((await request.put(`/api/v1/auth/admin/users/${id}/cluster-roles/self`, { headers: admin, data: { role: clusterRole, ...(namespaces ? { namespaces } : {}) } })).status()).toBe(200)
   }
   const ctx = await browser.newContext({ baseURL: BASE })
   expect((await ctx.request.post('/api/v1/auth/login', { data: { email, password } })).ok(), `login ${email}`).toBeTruthy()
@@ -115,20 +126,41 @@ test.describe('notices instead of "nothing here"', () => {
     }
   })
 
-  test('a Read user: unlistable bindings are "cannot check", a refused Helm release is "no permission"', async ({ browser, request }) => {
+  test('a Read user: the bindings are listed, a refused Helm release is "no permission"', async ({ browser, request }) => {
     const admin = await adminHeaders(request)
     const reader = await tempUser(browser, request, admin, 'read2', 'Read')
     try {
+      expect(await (await reader.page.request.get('/api/v1/cluster/rolebindings/all?cluster=self')).status()).toBe(200)
       await reader.page.goto('/security/serviceaccounts?cluster=self')
       await reader.page.locator('tbody tr').filter({ hasText: 'default' }).first().click()
       const drawer = reader.page.locator(DRAWER).last()
-      await expect(drawer.getByTestId('sa-bindings-unreadable')).toContainText('RoleBinding', { timeout: 20000 })
-      await expect(drawer.getByText(/No RoleBinding or ClusterRoleBinding binds|묶는 RoleBinding·ClusterRoleBinding이 없습니다/)).toHaveCount(0)
+      // the loaded title counts the bindings ("(n bindings)") only when every binding kind could be listed
+      await expect(drawer.getByText(/Effective Permissions \(\d+ bindings?\)|실효 권한 \(바인딩 \d+개\)/)).toHaveCount(1, { timeout: 20000 })
+      await expect(drawer.getByTestId('sa-bindings-unreadable')).toHaveCount(0)
 
       await reader.page.goto('/helm/releases/kubeast/kubeast?cluster=self')
       await expect(reader.page.getByTestId('helm-release-forbidden')).toContainText(/Secrets?.*Read cannot|Secret을 읽을 수 없어/, { timeout: 20000 })
     } finally {
       await reader.done()
+    }
+  })
+
+  test('a namespace-limited reader bound to view: unlistable bindings are "cannot check"', async ({ browser, request }) => {
+    const admin = await adminHeaders(request)
+    const binding = `e2e-notices-view-${Date.now()}`
+    // view lists ServiceAccounts in default but not RoleBindings; the group is kubeast:role:read (the chart allows it)
+    kubectl(`-n default create rolebinding ${binding} --clusterrole=view --group=kubeast:role:read`)
+    const reader = await tempUser(browser, request, admin, 'nsread', 'Read', ['default'])
+    try {
+      expect(await (await reader.page.request.get('/api/v1/cluster/namespaces/default/rolebindings?cluster=self')).status()).toBe(403)
+      await reader.page.goto('/security/serviceaccounts?cluster=self')
+      await reader.page.locator('tbody tr').filter({ hasText: 'default' }).first().click()
+      const drawer = reader.page.locator(DRAWER).last()
+      await expect(drawer.getByTestId('sa-bindings-unreadable')).toContainText('RoleBinding', { timeout: 20000 })
+      await expect(drawer.getByText(/No RoleBinding or ClusterRoleBinding binds|묶는 RoleBinding·ClusterRoleBinding이 없습니다/)).toHaveCount(0)
+    } finally {
+      await reader.done()
+      kubectl(`-n default delete rolebinding ${binding} --ignore-not-found`)
     }
   })
 

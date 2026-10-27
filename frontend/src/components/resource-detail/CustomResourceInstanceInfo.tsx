@@ -5,6 +5,7 @@ import { JSONPath } from 'jsonpath-plus'
 import { api } from '@/services/api'
 import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
+import { printerColumnObject } from './customResourceFields'
 import { usePagination } from './usePagination'
 import { formatAge, formatTime } from '@/utils/time'
 
@@ -189,23 +190,7 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
     )
   }, [crdDescribe?.versions])
 
-  // Build the full object JSON for JSONPath evaluation
-  const fullJson = useMemo(() => {
-    if (!describe) return null
-    // Reconstruct a k8s-like object for JSONPath
-    return {
-      metadata: {
-        name: describe.name,
-        namespace: describe.namespace,
-        uid: describe.uid,
-        creationTimestamp: describe.created_at,
-        labels: describe.labels,
-        annotations: describe.annotations,
-      },
-      spec: describe.spec || {},
-      status: describe.status || {},
-    }
-  }, [describe])
+  const fullJson = useMemo(() => (describe ? printerColumnObject(describe) : null), [describe])
 
   const labels = (describe?.labels as Record<string, string> | undefined) ?? {}
   const annotations = (describe?.annotations as Record<string, string> | undefined) ?? {}

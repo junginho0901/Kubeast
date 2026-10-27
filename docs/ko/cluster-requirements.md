@@ -50,7 +50,7 @@ Kubeast는 **로그인한 사람의 신원으로**(impersonation) 클러스터�
 | 항목 | 필요한 이유 | 위치 |
 | --- | --- | --- |
 | ClusterRole `kubeast-impersonator` + 바인딩(그룹 `kubeast:impersonator`) | Kubeast 자격 증명이 사용자와 정해진 그룹으로만 가장하도록 제한 | [`helm/kubeast/files/impersonation-rbac.yaml`](../../helm/kubeast/files/impersonation-rbac.yaml) |
-| 그룹 바인딩 `kubeast:viewer`(view + `kubeast:cluster-reader`) · `kubeast:operator`(edit) · `kubeast:admin`(cluster-admin) | Read·Write·Admin 역할이 클러스터에서 할 수 있는 범위 | 같은 파일 |
+| 그룹 바인딩 `kubeast:viewer`(view + `kubeast:cluster-reader`) · `kubeast:operator`(edit) · `kubeast:admin`(cluster-admin) | Read·Write·Admin 역할이 클러스터에서 할 수 있는 범위. `kubeast:cluster-reader`는 `view`에 없는 클러스터 범위 객체와 Role·RoleBinding을 더합니다(Role·RoleBinding은 2026-10-27부터 — 그 전에 RBAC를 적용한 클러스터는 다시 적용하세요) | 같은 파일 |
 | 커스텀 역할 그룹 `kubeast:role:<이름>`, Namespace 범위 부여 | 커스텀 역할이나 Namespace 한정 부여를 쓸 때 | `auth.impersonation.customRoles` → `templates/impersonation-custom-roles.yaml` |
 | Read의 Prometheus·OpenCost 프록시 GET | Read 역할이 비용과 그래프를 볼 때 | `auth.impersonation.viewerProxyServices` → `templates/impersonation-viewer-proxy.yaml` |
 | Admin의 `nodes/proxy` get — AI 도구 `nodes_stats_summary`·`nodes_log` | API 서버 프록시를 거쳐 노드의 kubelet stats summary를 읽고 로그를 질의할 때 필요합니다. `kubeast:admin`(cluster-admin)에는 이미 들어 있고, 커스텀 역할로 Admin 도구를 쓰려면 `nodes` get + `nodes/proxy` get을 넣어야 합니다. `nodes_log`에는 kubelet 설정 `enableSystemLogHandler: true` + `enableSystemLogQuery: true`(NodeLogQuery, 1.36 GA)도 필요하며, 꺼져 있으면 도구가 unavailable로 답합니다. kind는 기본값에서 query가 꺼져 있습니다 | 차트 `impersonation-rbac`(cluster-admin) · kubelet 설정 |

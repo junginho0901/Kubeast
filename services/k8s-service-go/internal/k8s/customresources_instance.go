@@ -244,6 +244,9 @@ func (s *Service) DescribeCustomResourceInstance(ctx context.Context, group, ver
 	if status, ok := item.Object["status"]; ok {
 		result["status"] = status
 	}
+	if fields := topLevelFields(item.Object); len(fields) > 0 {
+		result["fields"] = fields
+	}
 
 	// Owner references
 	if ownerRefs := item.GetOwnerReferences(); len(ownerRefs) > 0 {
@@ -302,4 +305,18 @@ func (s *Service) DeleteCustomResourceInstance(ctx context.Context, group, versi
 		return s.dynamicCtx(ctx).Resource(gvr).Namespace(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	}
 	return s.dynamicCtx(ctx).Resource(gvr).Delete(ctx, name, metav1.DeleteOptions{})
+}
+
+// topLevelFields returns what an object keeps beside apiVersion, kind, metadata, spec and status — a
+// PolicyReport's scope, summary and results — for the drawer, whose CRD printer columns may point there.
+func topLevelFields(obj map[string]interface{}) map[string]interface{} {
+	out := map[string]interface{}{}
+	for k, v := range obj {
+		switch k {
+		case "apiVersion", "kind", "metadata", "spec", "status":
+		default:
+			out[k] = v
+		}
+	}
+	return out
 }

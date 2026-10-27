@@ -39,7 +39,8 @@ rules:
     resourceNames: ["kubeast:authenticated", "kubeast:viewer", "kubeast:operator", "kubeast:admin", "kubeast:role:read", "kubeast:role:write", "kubeast:role:admin"]
 ---
 # Read-only view of cluster-scoped objects the console shows (the built-in
-# "view" role is namespaced only).
+# "view" role is namespaced only), and of Roles and RoleBindings, which "view"
+# leaves out while the console lists them next to ClusterRoles.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -72,7 +73,7 @@ rules:
       - mutatingadmissionpolicybindings
     verbs: ["get", "list", "watch"]
   - apiGroups: ["rbac.authorization.k8s.io"]
-    resources: ["clusterroles", "clusterrolebindings"]
+    resources: ["clusterroles", "clusterrolebindings", "roles", "rolebindings"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["metrics.k8s.io"]
     resources: ["nodes", "pods"]

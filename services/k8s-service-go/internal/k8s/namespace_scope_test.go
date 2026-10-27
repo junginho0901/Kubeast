@@ -61,6 +61,10 @@ func TestListAcrossNamespaces(t *testing.T) {
 	if _, err := s.listAcrossNamespaces(scopedCtx("api", "down"), list); err == nil {
 		t.Fatal("a cluster error must surface")
 	}
+	// Refused in every namespace: the refusal, not an empty list.
+	if _, err := s.listAcrossNamespaces(scopedCtx("gone"), list); !apierrors.IsForbidden(err) {
+		t.Fatalf("refused everywhere: %v", err)
+	}
 }
 
 func TestOverviewFor_Scope(t *testing.T) {

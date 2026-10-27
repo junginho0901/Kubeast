@@ -641,6 +641,10 @@ def('cm-yaml-apply', 'k8s-service:POST:/api/v1/resources/yaml/apply', 'configura
 const addLabel = (yaml: string) => yaml.replace(/^( +)labels:\n( +)/m, (_m, a, b) => `${a}labels:\n${b}qa-sweep/touched: "yes"\n${b}`)
 def('node-yaml-apply', 'k8s-service:POST:/api/v1/nodes/{name}/yaml/apply', 'cluster/nodes', async (page, ctx) => {
   ctx.node = firstNode()
+  // The seed does not recreate the node: a label left by an earlier run would make the edit a duplicate key
+  // (refused) and the check below pass anyway, so start without it.
+  kubectl(['label', 'node', ctx.node, 'qa-sweep/touched-'])
+  if (kubectl(['get', 'node', ctx.node, '-o', 'jsonpath={.metadata.labels.qa-sweep/touched}']).out !== '') throw new Error('label qa-sweep/touched still on the node')
   await openRow(page, ctx.node)
   await clickTab(page, /yaml/i)
   await sleep(1200)

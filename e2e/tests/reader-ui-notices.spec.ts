@@ -53,21 +53,21 @@ test.describe('non-admin UI notices', () => {
 
   // Every other list page has no notice of its own: the banner above the page
   // (fed by the API client's 403 event) names the kinds the viewer cannot list,
-  // instead of the page passing a 403 off as "No roles found.".
-  test('a viewer sees the permission banner on a page without its own notice (Roles)', async ({ browser, request }) => {
+  // instead of the page passing a 403 off as an empty list. Leases: the built-in view role leaves them out.
+  test('a viewer sees the permission banner on a page without its own notice (Leases)', async ({ browser, request }) => {
     const admin = await adminHeaders(request)
     const user = await createUser(request, admin, 'viewer-roles')
     try {
       const grant = await request.put(`/api/v1/auth/admin/users/${user.id}/cluster-roles/self`, { headers: admin, data: { role: 'Read' } })
       expect(grant.status()).toBe(200)
       const { ctx, page } = await userPage(browser, user.email, user.password)
-      await page.goto('/security/roles?cluster=self')
+      await page.goto('/cluster/leases?cluster=self')
       const banner = page.getByTestId('forbidden-banner')
       await expect(banner).toBeVisible({ timeout: 20000 })
       await expect(banner).toContainText(/permission|권한/)
-      // the Kubernetes kind name (re-QA #42), not "roles"
-      await expect(banner).toContainText('Role')
-      await expect(banner).not.toContainText('roles')
+      // the Kubernetes kind name (re-QA #42), not "leases"
+      await expect(banner).toContainText('Lease')
+      await expect(banner).not.toContainText('leases')
       // a built-in role acts as a group the chart binds: no custom-role hint
       await expect(page.getByTestId('forbidden-custom-role-hint')).toHaveCount(0)
       // another page resets the banner; a page the viewer may read shows none

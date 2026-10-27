@@ -3,6 +3,7 @@ package k8s
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"sync"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -34,13 +35,17 @@ const listFanOutWorkers = 8
 // unscoped caller, or once per namespace of a scoped caller and merges the
 // results in the scope's order. A namespace the cluster refuses or does not
 // have is skipped — the grant names it, the cluster is not bound there (yet) —
-// so the rest still shows; any other error is returned.
+// so the rest still shows; when none could be read and one was refused, that
+// refusal is returned (an empty list would read as "the cluster has none").
+// Any other error is returned.
 func (s *Service) listAcrossNamespaces(ctx context.Context, list func(namespace string) ([]map[string]interface{}, error)) ([]map[string]interface{}, error) {
 	scope := scopeFromCtx(ctx)
 	if len(scope) == 0 {
 		return list("")
 	}
 	results := make([][]map[string]interface{}, len(scope))
+	read := make([]bool, len(scope))
+	refused := make([]error, len(scope))
 	errs := make([]error, len(scope))
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, listFanOutWorkers)
@@ -54,18 +59,29 @@ func (s *Service) listAcrossNamespaces(ctx context.Context, list func(namespace 
 			if err != nil {
 				if apierrors.IsForbidden(err) || apierrors.IsNotFound(err) {
 					slog.Debug("namespace scope: skipping namespace the cluster refused", "namespace", ns, "err", err)
+					if apierrors.IsForbidden(err) {
+						refused[i] = err
+					}
 					return
 				}
 				errs[i] = err
 				return
 			}
 			results[i] = items
+			read[i] = true
 		}(i, ns)
 	}
 	wg.Wait()
 	for _, err := range errs {
 		if err != nil {
 			return nil, err
+		}
+	}
+	if !slices.Contains(read, true) {
+		for _, err := range refused {
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	out := make([]map[string]interface{}, 0)
