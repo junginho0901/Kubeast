@@ -3544,6 +3544,7 @@
     }
   },
   "adminRoles": {
+    "deleteInUse": "Role \"{{name}}\" is still in use (accounts {{accounts}}, cluster grants {{grants}}, access requests {{requests}}). Give them another role first.",
     "systemRoles": {
       "pending": "Awaiting approval",
       "member": "Regular user (access per cluster grant)",

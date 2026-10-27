@@ -105,7 +105,7 @@ test('a role still held is not deleted, and Role Management says why', async ({ 
   await mkUser(request, 'holder', role.id)
   const del = await request.delete(`/api/v1/auth/admin/roles/${role.id}`, { headers: admin, failOnStatusCode: false })
   expect(del.status()).toBe(409)
-  expect((await del.json()).detail).toMatch(/in use by 1 accounts/)
+  expect(await del.json()).toMatchObject({ code: 'role_in_use', accounts: 1, cluster_grants: 0, access_requests: 0 })
   await uiLogin(page, ADMIN_EMAIL, ADMIN_PASSWORD)
   await page.goto('/admin/roles')
   const row = page.locator('tr').filter({ hasText: role.name })

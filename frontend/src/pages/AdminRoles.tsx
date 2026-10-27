@@ -77,11 +77,21 @@ export default function AdminRoles() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => api.adminDeleteRole(id),
+    mutationFn: ({ id }: { id: number; name: string }) => api.adminDeleteRole(id),
     onMutate: () => setDeleteError(null),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['roles'] }),
-    // The server says why (the role is still held or asked for): show it.
-    onError: (err: any) => setDeleteError(err?.response?.data?.detail || tr('adminRoles.deleteError', 'Failed to delete role')),
+    // The server says why: a role still held or asked for comes with the counts.
+    onError: (err: any, vars) => {
+      const data = err?.response?.data
+      setDeleteError(
+        data?.code === 'role_in_use'
+          ? t('adminRoles.deleteInUse', {
+              defaultValue: 'Role "{{name}}" is still in use (accounts {{accounts}}, cluster grants {{grants}}, access requests {{requests}}). Give them another role first.',
+              name: vars.name, accounts: data.accounts, grants: data.cluster_grants, requests: data.access_requests,
+            })
+          : data?.detail || tr('adminRoles.deleteError', 'Failed to delete role'),
+      )
+    },
   })
 
   const closeModal = () => {
@@ -251,7 +261,7 @@ export default function AdminRoles() {
                               confirmLabel: tr('adminRoles.delete', 'Delete'),
                               danger: true,
                             })
-                            if (ok) deleteMutation.mutate(role.id)
+                            if (ok) deleteMutation.mutate({ id: role.id, name: role.name })
                           }}
                           disabled={deleteMutation.isPending}
                           className="rounded-sm p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-950/30 transition-colors"

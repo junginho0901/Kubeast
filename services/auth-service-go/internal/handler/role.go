@@ -207,7 +207,14 @@ func (h *RoleHandler) DeleteRole(w http.ResponseWriter, r *http.Request) {
 			action: "admin.roles.delete", targetType: "role", targetID: strconv.Itoa(id),
 			before: roleState(existing.Name, existing.Description, existing.Permissions), err: inUse,
 		})
-		response.Error(w, http.StatusConflict, fmt.Sprintf("Role %q is in use by %d accounts, %d cluster grants and %d access requests. Give them another role first.", existing.Name, users, grants, requests))
+		// code and counts for the screen's own sentence (Role Management), detail for API callers
+		response.JSON(w, http.StatusConflict, map[string]any{
+			"detail":          fmt.Sprintf("Role %q is still in use (accounts %d, cluster grants %d, access requests %d). Give them another role first.", existing.Name, users, grants, requests),
+			"code":            "role_in_use",
+			"accounts":        users,
+			"cluster_grants":  grants,
+			"access_requests": requests,
+		})
 		return
 	}
 

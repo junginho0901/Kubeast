@@ -3817,7 +3817,8 @@
     "systemNote": "시스템 역할: 이름과 권한은 고정이고 설명만 바꿀 수 있습니다",
     "title": "Role Management",
     "updateError": "역할을 수정하지 못했습니다",
-    "deleteError": "역할을 삭제하지 못했습니다"
+    "deleteError": "역할을 삭제하지 못했습니다",
+    "deleteInUse": "역할 \"{{name}}\"을 아직 쓰고 있어 삭제하지 않았습니다(계정 {{accounts}}, 클러스터 권한 {{grants}}, 접근 요청 {{requests}}). 먼저 다른 역할로 바꾸세요."
   },
   "gpuDashboardPage": {
     "title": "GPU Dashboard",
