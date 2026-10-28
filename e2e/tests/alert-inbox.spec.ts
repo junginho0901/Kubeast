@@ -67,7 +67,8 @@ test.describe('Alerts inbox', () => {
     ...extra,
   })
   const list = async (request: APIRequestContext, as: string, cluster = 'self'): Promise<Item[]> => {
-    const res = await request.get('/api/v1/alerts/inbox', { headers: bearer(as), params: { cluster, limit: 200 } })
+    // this run's alerts only (the search): the dev inbox keeps every run's firing rows, which sort first
+    const res = await request.get('/api/v1/alerts/inbox', { headers: bearer(as), params: { cluster, q: id, limit: 200 } })
     expect(res.status(), await res.text()).toBe(200)
     return ((await res.json()).items as Item[]).filter((i) => i.alertname.endsWith(id))
   }
@@ -219,6 +220,13 @@ test.describe('Alerts inbox', () => {
     await expect.poll(rowIds).toEqual([])
     await box.fill('')
     await expect.poll(async () => (await rowIds()).length).toBeGreaterThan(1)
+    // resolve the two, so the dev inbox does not keep them firing
+    const endsAt = new Date().toISOString()
+    await post(request, 'self', [
+      alert('resolved', t, { labels: { alertname: disk, severity: 'info', namespace: 'default', node: `e2e-node-${id}` }, fingerprint: `inbox-disk-${id}`, endsAt }),
+      alert('resolved', t, { labels: { alertname: net, severity: 'info', namespace: 'kube-system' }, fingerprint: `inbox-net-${id}`, endsAt }),
+    ])
+    expect((await search(`E2EInbox`)).items.filter((i) => [disk, net].includes(i.alertname)).map((i) => i.status)).toEqual(['resolved', 'resolved'])
   })
 
   test("Alertmanager's view: firing, then silenced; an alert it does not hold is called out", async ({ page, request }) => {
