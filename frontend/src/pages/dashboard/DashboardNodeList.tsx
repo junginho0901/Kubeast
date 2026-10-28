@@ -1,9 +1,13 @@
 // Dashboard "Nodes" card — compact grid of node cards (status icon /
 // name / version / roles / IP / status badge). Click a card to open
-// the node detail drawer (handled by the parent).
+// the node detail drawer (handled by the parent). Nodes that are not Ready
+// come first and the card shows at most SHOWN; the Nodes page lists them all.
 
+import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { CheckCircle, Info, XCircle } from 'lucide-react'
+
+const SHOWN = 8
 
 interface Props {
   nodes: any[]
@@ -17,12 +21,20 @@ export function DashboardNodeList({ nodes, onNodeClick }: Props) {
   const na = tr('common.notAvailable', 'N/A')
 
   if (!Array.isArray(nodes) || nodes.length === 0) return null
+  const shown = [...nodes].sort((a, b) => Number(a.status === 'Ready') - Number(b.status === 'Ready')).slice(0, SHOWN)
 
   return (
     <div className="card">
-      <h2 className="text-lg font-semibold text-ink mb-4">{tr('dashboard.nodes.title', 'Nodes')}</h2>
+      <div className="flex items-center justify-between gap-4 mb-4">
+        <h2 className="text-lg font-semibold text-ink">{tr('dashboard.nodes.title', 'Nodes')}</h2>
+        {nodes.length > SHOWN && (
+          <Link to="/cluster/nodes" data-testid="dashboard-nodes-all" className="text-sm text-primary-400 hover:text-primary-300">
+            {tr('dashboard.nodes.viewAll', 'View all {{count}} nodes', { count: nodes.length })}
+          </Link>
+        )}
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[400px] overflow-y-auto">
-        {nodes.map((node) => (
+        {shown.map((node) => (
           <button
             key={node.name}
             onClick={() => onNodeClick(node)}

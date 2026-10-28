@@ -2,16 +2,20 @@
 // clicked (Namespaces / Pods / Services / Deployments / PVCs / Nodes).
 // Each branch renders a different list shape; the parent prepares the
 // filtered list for the current resource type and passes it as
-// `filteredResources`.
+// `filteredResources`, shown 50 a page.
 
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Box, CheckCircle, RefreshCw, Search, X, XCircle } from 'lucide-react'
 
+import { ListPager } from '@/components/ListPager'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAIContext } from '@/hooks/useAIContext'
 import { buildResourceLink } from '@/utils/resourceLink'
 import type { ResourceType } from '../types'
+
+const ITEMS_PER_PAGE = 50
 
 const KIND_BY_TYPE: Record<ResourceType, string> = {
   namespaces: 'Namespace', pods: 'Pod', services: 'Service', deployments: 'Deployment', pvcs: 'PersistentVolumeClaim', nodes: 'Node',
@@ -51,6 +55,13 @@ export function ResourceModal({
   const na = tr('common.notAvailable', 'N/A')
   const none = tr('common.none', 'None')
   const { open: openDetail } = useResourceDetail()
+  const [page, setPage] = useState(1)
+  const totalPages = Math.max(1, Math.ceil(filteredResources.length / ITEMS_PER_PAGE))
+  useEffect(() => setPage(1), [selectedResourceType, searchQuery])
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages)
+  }, [page, totalPages])
+  const pageItems = filteredResources.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE)
 
   useAIContext(selectedResourceType && !isLoading ? {
     source: 'ResourceModal',
@@ -133,7 +144,7 @@ export function ResourceModal({
               {selectedResourceType === 'namespaces' && (
                 <div className="space-y-2">
                   {filteredResources.length > 0 ? (
-                    filteredResources.map((ns) => (
+                    pageItems.map((ns) => (
                       <div
                         key={ns.name}
                         onClick={() => openDetail({ kind: 'Namespace', name: ns.name })}
@@ -172,7 +183,7 @@ export function ResourceModal({
               {selectedResourceType === 'pods' && (
                 <div className="space-y-2">
                   {filteredResources.length > 0 ? (
-                    filteredResources.map((pod) => (
+                    pageItems.map((pod) => (
                       <div
                         key={`${pod.namespace}-${pod.name}`}
                         onClick={() => openDetail({ kind: 'Pod', name: pod.name, namespace: pod.namespace })}
@@ -217,7 +228,7 @@ export function ResourceModal({
               {selectedResourceType === 'services' && (
                 <div className="space-y-2">
                   {filteredResources.length > 0 ? (
-                    filteredResources.map((svc) => (
+                    pageItems.map((svc) => (
                       <div
                         key={`${svc.namespace}-${svc.name}`}
                         onClick={() => openDetail({ kind: 'Service', name: svc.name, namespace: svc.namespace })}
@@ -249,7 +260,7 @@ export function ResourceModal({
               {selectedResourceType === 'deployments' && (
                 <div className="space-y-2">
                   {filteredResources.length > 0 ? (
-                    filteredResources.map((deploy) => (
+                    pageItems.map((deploy) => (
                       <div
                         key={`${deploy.namespace}-${deploy.name}`}
                         onClick={() => openDetail({ kind: 'Deployment', name: deploy.name, namespace: deploy.namespace })}
@@ -284,7 +295,7 @@ export function ResourceModal({
               {selectedResourceType === 'pvcs' && (
                 <div className="space-y-2">
                   {filteredResources.length > 0 ? (
-                    filteredResources.map((pvc) => (
+                    pageItems.map((pvc) => (
                       <div
                         key={`${pvc.namespace}-${pvc.name}`}
                         onClick={() => openDetail({ kind: 'PersistentVolumeClaim', name: pvc.name, namespace: pvc.namespace })}
@@ -319,7 +330,7 @@ export function ResourceModal({
               {selectedResourceType === 'nodes' && (
                 <div className="space-y-2">
                   {filteredResources.length > 0 ? (
-                    filteredResources.map((node) => (
+                    pageItems.map((node) => (
                       <div
                         key={node.name}
                         onClick={() => openDetail({ kind: 'Node', name: node.name })}
@@ -355,6 +366,17 @@ export function ResourceModal({
             </>
           )}
         </div>
+        {!isLoading && (
+          <ListPager
+            currentPage={page}
+            totalPages={totalPages}
+            total={filteredResources.length}
+            rowsPerPage={ITEMS_PER_PAGE}
+            onPageChange={setPage}
+            showPageSize={false}
+            testId="resource-modal-pager"
+          />
+        )}
       </div>
     </ModalOverlay>
   )

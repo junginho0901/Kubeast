@@ -2300,7 +2300,8 @@
       "metricsError": "Failed to fetch node metrics"
     },
     "nodes": {
-      "title": "Nodes"
+      "title": "Nodes",
+      "viewAll": "View all {{count}} nodes"
     },
     "nodeCard": {
       "versionLabel": "Version",

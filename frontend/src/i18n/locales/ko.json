@@ -2302,7 +2302,8 @@
       "metricsError": "Node 메트릭을 가져오지 못했습니다"
     },
     "nodes": {
-      "title": "Node"
+      "title": "Node",
+      "viewAll": "노드 {{count}}개 모두 보기"
     },
     "nodeCard": {
       "versionLabel": "버전",

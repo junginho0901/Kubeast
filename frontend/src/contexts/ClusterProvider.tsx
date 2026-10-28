@@ -44,11 +44,12 @@ export function ClusterProvider({ children }: { children: ReactNode }) {
     const prev = prevClusterRef.current
     if (prev === currentCluster) return
     prevClusterRef.current = currentCluster
-    // Skip the initial population ('' → first cluster, e.g. the picker's
-    // auto-select): there is no prior cluster's cache to clear, and clearing
-    // here would needlessly refetch the just-loaded page on every fresh visit.
-    if (!prev) return
     queryClient.removeQueries({ predicate: (q) => isClusterScopedQueryKey(q.queryKey) })
+    // The first selection ('' → the picker's auto-select, after every sign-in) is
+    // not a switch: no indicator. Its cache still goes: requests made while the
+    // selection was empty reached the server's default cluster, which need not be
+    // the one the picker chose — the dashboard showed `self`'s nodes as `default`.
+    if (!prev) return
     // Drive the global switch indicator until the new cluster's queries settle.
     switchStartRef.current = Date.now()
     setIsSwitching(true)
