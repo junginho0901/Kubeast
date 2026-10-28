@@ -125,9 +125,9 @@ export default function AlertInbox() {
       type="button"
       onClick={() => { setStatus(value); setShowSilences(false) }}
       data-testid={`alert-tab-${value || 'all'}`}
-      className={`h-10 rounded-lg border px-3 text-sm ${!showSilences && status === value ? 'border-primary-500 bg-primary-600/20 text-ink' : 'border-slate-700 text-slate-300 hover:border-slate-500'}`}
+      className={`h-10 rounded-lg border px-3 text-sm ${!showSilences && status === value ? 'border-primary-600 bg-primary-600 text-white' : 'border-slate-700 text-slate-300 hover:border-slate-500'}`}
     >
-      {label}{count !== undefined && <span className="ml-2 text-xs text-slate-400">{count}</span>}
+      {label}{count !== undefined && <span className={`ml-2 text-xs ${!showSilences && status === value ? 'text-white/80' : 'text-slate-400'}`}>{count}</span>}
     </button>
   )
 
@@ -179,7 +179,7 @@ export default function AlertInbox() {
             type="button"
             onClick={() => setShowSilences(true)}
             data-testid="alert-tab-silences"
-            className={`h-10 inline-flex items-center gap-1 rounded-lg border px-3 text-sm ${showSilences ? 'border-primary-500 bg-primary-600/20 text-ink' : 'border-slate-700 text-slate-300 hover:border-slate-500'}`}
+            className={`h-10 inline-flex items-center gap-1 rounded-lg border px-3 text-sm ${showSilences ? 'border-primary-600 bg-primary-600 text-white' : 'border-slate-700 text-slate-300 hover:border-slate-500'}`}
           >
             <BellOff className="w-4 h-4" /> {tr('alertInbox.silence.tab', 'Silences')}
           </button>
