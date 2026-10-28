@@ -107,6 +107,8 @@ async def list_inbox(
     severity: str = Query("", max_length=50),
     mine: bool = Query(False),
     open_only: bool = Query(False, alias="open"),
+    # matched in the alert name, namespace, assignee, labels and annotations (inbox.search_condition)
+    q: str = Query("", max_length=200),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     payload: TokenPayload = Depends(require_auth),
@@ -120,7 +122,7 @@ async def list_inbox(
     stale_before = inbox.stale_cutoff(utcnow(), cfg.inbox_stale_hours)
     rows, total, counts = await inbox.list_rows(
         db, cluster=cluster, status=status, severity=severity.strip().lower(), assignee=payload.email if mine else "",
-        open_only=open_only, stale_before=stale_before, limit=limit, offset=offset,
+        open_only=open_only, search=q.strip(), stale_before=stale_before, limit=limit, offset=offset,
     )
     investigations = await inbox.investigations_for(db, rows)
     return {

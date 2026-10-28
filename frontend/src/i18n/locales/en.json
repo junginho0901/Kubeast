@@ -4422,6 +4422,7 @@
       "mine": "Assigned to me",
       "open": "Not done"
     },
+    "searchPlaceholder": "Search by alert name, namespace, label, summary or assignee...",
     "col": {
       "status": "Status",
       "alert": "Alert",

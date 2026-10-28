@@ -185,6 +185,42 @@ test.describe('Alerts inbox', () => {
     await expect(line.getByTestId('alert-handling')).toContainText(/Done|조치 완료/)
   })
 
+  test('the search asks the server: a term finds alerts on any page, the counts follow, no match says so', async ({ page, request }) => {
+    const t = new Date(Date.now() - 5 * 60_000).toISOString()
+    const disk = `E2EInboxDisk${id}`
+    const net = `E2EInboxNet${id}`
+    await post(request, 'self', [
+      alert('firing', t, { labels: { alertname: disk, severity: 'info', namespace: 'default', node: `e2e-node-${id}` }, annotations: { summary: `disk filling ${id}` }, fingerprint: `inbox-disk-${id}` }),
+      alert('firing', t, { labels: { alertname: net, severity: 'info', namespace: 'kube-system' }, annotations: { summary: `packet loss ${id}` }, fingerprint: `inbox-net-${id}` }),
+    ])
+    const search = async (q: string) => {
+      const res = await request.get('/api/v1/alerts/inbox', { headers: bearer(reader), params: { cluster: 'self', q, limit: 200 } })
+      expect(res.status(), await res.text()).toBe(200)
+      return res.json() as Promise<{ items: Item[]; total: number; counts: Record<string, number> }>
+    }
+    // a label value, any case; the summary; the counts are of the matches
+    const byNode = await search(`E2E-NODE-${id}`)
+    expect(byNode.items.map((i) => i.alertname)).toEqual([disk])
+    expect(byNode.counts).toEqual({ firing: 1, stale: 0, resolved: 0 })
+    expect((await search(`packet loss ${id}`)).items.map((i) => i.alertname)).toEqual([net])
+    expect((await search(`nothing-${id}`)).total).toBe(0)
+
+    await page.goto('/alerts?cluster=self')
+    await page.getByTestId('alert-tab-all').click()
+    const box = page.getByTestId('alert-inbox-search')
+    const asked = page.waitForRequest((r) => r.url().includes('/api/v1/alerts/inbox?') && r.url().includes(`q=e2e-node-${id}`))
+    await box.fill(`e2e-node-${id}`)
+    await asked
+    const rowIds = () => page.locator('[data-testid^="alert-row-"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')))
+    await expect.poll(rowIds).toEqual([`alert-row-${byNode.items[0].id}`])
+    await expect(page.getByTestId('alert-tab-all')).toHaveText(/(^|\D)1(\D|$)/)
+    await box.fill(`nothing-${id}`)
+    await expect(page.getByText(/No results found\.|검색 결과가 없습니다\./)).toBeVisible()
+    await expect.poll(rowIds).toEqual([])
+    await box.fill('')
+    await expect.poll(async () => (await rowIds()).length).toBeGreaterThan(1)
+  })
+
   test("Alertmanager's view: firing, then silenced; an alert it does not hold is called out", async ({ page, request }) => {
     const features = await (await request.get('/api/v1/cluster/features', { headers: bearer(admin) })).json()
     test.skip(!features.alertStore?.clusters?.includes('default'), 'no alert store for cluster default')

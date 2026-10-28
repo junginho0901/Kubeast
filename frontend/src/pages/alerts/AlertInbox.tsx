@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { BellOff, BellRing, Check, ExternalLink, FileSearch, Loader2, RefreshCw, UserCheck } from 'lucide-react'
+import { BellOff, BellRing, Check, ExternalLink, FileSearch, Loader2, RefreshCw, Search, UserCheck } from 'lucide-react'
 
 import { api } from '@/services/api'
 import type { AlertInboxDetail, AlertInboxItem, AlertInboxMarks } from '@/services/api/alertInbox'
@@ -59,10 +59,17 @@ export default function AlertInbox() {
   const [severity, setSeverity] = useState('')
   const [mine, setMine] = useState(false)
   const [openOnly, setOpenOnly] = useState(false)
+  // the server searches the whole inbox (q), not only the page shown; asked once typing pauses
+  const [searchInput, setSearchInput] = useState('')
+  const [search, setSearch] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), 300)
+    return () => clearTimeout(t)
+  }, [searchInput])
   const [page, setPage] = useState(1)
   const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: status })
 
-  const filter = { status, severity, mine, open: openOnly, limit: rowsPerPage, offset: (page - 1) * rowsPerPage }
+  const filter = { status, severity, mine, open: openOnly, q: search, limit: rowsPerPage, offset: (page - 1) * rowsPerPage }
   const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ['alert-inbox', 'list', currentCluster, filter],
     queryFn: () => api.listAlertInbox(filter),
@@ -87,7 +94,7 @@ export default function AlertInbox() {
   const totalPages = Math.max(1, Math.ceil(total / rowsPerPage))
   const forbidden = (error as { response?: { status?: number } } | null)?.response?.status === 403
 
-  useEffect(() => setPage(1), [status, severity, mine, openOnly, currentCluster])
+  useEffect(() => setPage(1), [status, severity, mine, openOnly, search, currentCluster])
 
   const open = (id: string | null) => {
     const next = new URLSearchParams(params)
@@ -100,7 +107,7 @@ export default function AlertInbox() {
     summary: `알림 ${total}건 (울리는 중 ${counts.firing}, 상태 확인 안 됨 ${counts.stale}, 해결됨 ${counts.resolved})${status ? ` — ${status}만` : ''}`,
     data: {
       cluster: currentCluster,
-      filters: { status: status || undefined, severity: severity || undefined, mine: mine || undefined, open: openOnly || undefined, page },
+      filters: { status: status || undefined, severity: severity || undefined, mine: mine || undefined, open: openOnly || undefined, search: search || undefined, page },
       counts,
       items: rows.map((r) => ({
         alertname: r.alertname, severity: r.severity, namespace: r.namespace || undefined, status: r.status,
@@ -109,7 +116,7 @@ export default function AlertInbox() {
         assignee: r.assignee || undefined, done: r.done || undefined, investigation: r.investigation?.status,
       })),
     },
-  } : null, [data, store, status, severity, mine, openOnly, page, currentCluster])
+  } : null, [data, store, status, severity, mine, openOnly, search, page, currentCluster])
 
   const statusLabel = (s: string) => tr(`alertInbox.status.${s}`, s)
   const tab = (value: string, label: string, count?: number) => (
@@ -148,6 +155,19 @@ export default function AlertInbox() {
           {tr('alertInbox.forbidden', 'Alerts cover the whole cluster: they are shown to users who can read this cluster without a namespace limit.')}
         </div>
       )}
+
+      <div className={`relative shrink-0 ${showSilences ? 'hidden' : ''}`}>
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+        <input
+          type="text"
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          placeholder={tr('alertInbox.searchPlaceholder', 'Search by alert name, namespace, label, summary or assignee...')}
+          maxLength={200}
+          data-testid="alert-inbox-search"
+          className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+        />
+      </div>
 
       <div className="flex flex-wrap items-end gap-3 shrink-0">
         {tab('firing', statusLabel('firing'), counts.firing)}
@@ -264,7 +284,7 @@ export default function AlertInbox() {
                   </td>
                 </tr>
               )}
-              {!isLoading && rows.length === 0 && <TableEmptyRow colSpan={COLUMNS} resource="alerts" />}
+              {!isLoading && rows.length === 0 && <TableEmptyRow colSpan={COLUMNS} resource="alerts" searching={!!search} />}
             </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - rows.length} columnCount={COLUMNS} />
           </table>

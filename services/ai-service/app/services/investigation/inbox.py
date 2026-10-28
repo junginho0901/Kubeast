@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from sqlalchemy import case, func, select
+from sqlalchemy import String, case, cast, func, or_, select
 from sqlalchemy.exc import IntegrityError
 
 from app.database import AlertInboxItem, AlertInvestigation
@@ -70,12 +70,28 @@ def status_of(row: AlertInboxItem, stale_before: datetime) -> str:
     return STALE if row.last_received_at < stale_before else FIRING
 
 
+def search_condition(text: str):
+    """The rows whose alert name, namespace, assignee, labels or annotations contain text, any case. The JSON
+    columns are matched as their text, so a label or annotation name matches too; % and _ are literal."""
+    pattern = "%" + text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+    return or_(*(
+        col.ilike(pattern, escape="\\")
+        for col in (
+            AlertInboxItem.alertname, AlertInboxItem.namespace, AlertInboxItem.assignee,
+            cast(AlertInboxItem.labels, String), cast(AlertInboxItem.annotations, String),
+        )
+    ))
+
+
 async def list_rows(
     db, *, cluster: str, status: str = "", severity: str = "", assignee: str = "", open_only: bool = False,
-    stale_before: datetime, limit: int = 50, offset: int = 0,
+    search: str = "", stale_before: datetime, limit: int = 50, offset: int = 0,
 ) -> tuple[list[AlertInboxItem], int, dict[str, int]]:
-    """A cluster's alerts, firing first then newest, and how many there are per status (before the status filter)."""
+    """A cluster's alerts, firing first then newest, and how many there are per status (before the status filter,
+    after the search)."""
     base = [AlertInboxItem.cluster == cluster]
+    if search:
+        base.append(search_condition(search))
     if severity:
         base.append(AlertInboxItem.severity == severity)
     if assignee:
