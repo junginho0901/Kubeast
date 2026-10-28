@@ -1,8 +1,10 @@
 import { useState } from 'react'
 
-// Flat bar chart for the dashboard's pod / node status counts. One clickable
-// <g> per bar (the dashboard e2e clicks the first one); a bar's colour comes
-// from colorFor(name) so a state reads the same everywhere on the page.
+// Bar chart for the dashboard's pod / node status counts. One clickable <g> per
+// bar (the dashboard e2e clicks the first one); a bar's colour comes from
+// colorFor(name) so a state reads the same everywhere on the page. A bar has a
+// thin top and side of its own colour, lighter and darker (DESIGN.md Charts):
+// no gradient, glow or animation, and the axes stay flat.
 
 interface StatusBarChartProps {
   data: { name: string; value: number }[]
@@ -27,6 +29,7 @@ export function StatusBarChart({ data, colorFor, chartHeight = 340, onBarClick }
   const groupW = CW / data.length
   const barW = Math.min(groupW * 0.5, 48)
   const baseY = M.t + CH
+  const DEPTH_X = 4.25, DEPTH_Y = -2.75
 
   return (
     <svg width="100%" height={chartHeight} viewBox={`0 0 ${VW} ${VH}`} preserveAspectRatio="xMidYMid meet">
@@ -56,8 +59,20 @@ export function StatusBarChart({ data, colorFor, chartHeight = 340, onBarClick }
             <title>{`${d.name}: ${d.value}`}</title>
             {/* the whole column takes the click, so a 0 is as easy to hit as a tall bar */}
             <rect x={M.l + i * groupW} y={M.t} width={groupW} height={CH} fill="transparent" />
-            {barH > 0 && <rect x={bx} y={by} width={barW} height={barH} rx={3} fill={colorFor(d.name)} />}
-            <text x={bx + barW / 2} y={by - 6} textAnchor="middle" fill="var(--color-slate-200)" fontSize={11} fontWeight={600}>{d.value}</text>
+            {barH > 0 && (
+              <>
+                <rect x={bx} y={by} width={barW} height={barH} fill={colorFor(d.name)} />
+                <polygon
+                  points={`${bx},${by} ${bx + DEPTH_X},${by + DEPTH_Y} ${bx + barW + DEPTH_X},${by + DEPTH_Y} ${bx + barW},${by}`}
+                  fill={`color-mix(in oklab, ${colorFor(d.name)} 68%, white)`}
+                />
+                <polygon
+                  points={`${bx + barW},${by} ${bx + barW + DEPTH_X},${by + DEPTH_Y} ${bx + barW + DEPTH_X},${baseY + DEPTH_Y} ${bx + barW},${baseY}`}
+                  fill={`color-mix(in oklab, ${colorFor(d.name)} 62%, black)`}
+                />
+              </>
+            )}
+            <text x={bx + barW / 2 + 2} y={by - 9} textAnchor="middle" fill="var(--color-slate-200)" fontSize={11} fontWeight={600}>{d.value}</text>
           </g>
         )
       })}
