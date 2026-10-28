@@ -171,7 +171,7 @@ Cards 12px (`.card` is `rounded-xl`). Buttons, inputs, list rows, dropdowns and 
 - **Sidebar:** group names in `text-xs font-semibold` sentence case; the open group's name is brighter. The selected item is filled with the accent (`bg-primary-600 text-white`).
 - **Cards:** `.card` — surface, 12px corners, hairline, no shadow, no card inside a card (rows inside use dividers).
 - **Badges:** `badge-success`, `badge-warning`, `badge-error` for state, `badge-info` in the sky accent, `badge-neutral` for a state that needs no attention.
-- **Charts:** flat bars and lines, no 3D, no gradient fills; grid lines in the neutral ladder. A usage bar (CPU, memory, GPU, disk) is the accent (`primary-bright`) while normal and turns yellow/amber, then red, past its thresholds; its number stays grey until then.
+- **Charts:** bars with a thin top and side face of their own colour (lighter top, darker side; the dashboard's status charts) and flat lines; no gradient fills, glow or animation, flat axes; grid lines in the neutral ladder. A usage bar (CPU, memory, GPU, disk) is the accent (`primary-bright`) while normal and turns yellow/amber, then red, past its thresholds; its number stays grey until then.
 - **Icons:** one tone (`slate-300`/`slate-400`); an icon is coloured only when it reports a state (a green Ready check, an amber warning).
 
 ## Do's and Don'ts
@@ -180,7 +180,7 @@ Cards 12px (`.card` is `rounded-xl`). Buttons, inputs, list rows, dropdowns and 
 - Do use `text-ink` for text on a surface and `text-white` only on a filled colour; check new screens in all three colour modes.
 - Do keep text at 4.5:1 against its background (WCAG 2.2 1.4.3) and controls at 3:1 (1.4.11).
 - Do colour a count only when it is a state; don't tint tiles for decoration.
-- Don't add a second accent (cyan, indigo, purple, pink), gradients, glows, 3D charts, or rainbow icon chips.
+- Don't add a second accent (cyan, indigo, purple, pink), gradients, glows, perspective floors or walls on charts, or rainbow icon chips.
 - Don't use all-caps or tracked labels.
 - Don't use sparkle icons or colour to say "AI"; the floating chat button and the AI pages are enough.
 - Don't change the sign-in page's ground or the site's look along with the console or its colour mode.

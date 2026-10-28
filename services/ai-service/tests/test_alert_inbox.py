@@ -194,6 +194,10 @@ async def test_the_inbox_is_for_whoever_reads_the_whole_cluster(monkeypatch, sql
     assert item["status"] == "firing" and item["summary"] == "api-1 restarts" and item["investigation"] is None
     assert c.get(f"/api/v1/alerts/inbox/{item['id']}").json()["annotations"] == {"summary": "api-1 restarts"}
     assert c.get("/api/v1/alerts/inbox?cluster=self&status=bogus").status_code == 400
+    # the search term: matched, unmatched, too long
+    assert c.get("/api/v1/alerts/inbox?cluster=self&q=crashloop").json()["total"] == 1
+    assert c.get("/api/v1/alerts/inbox?cluster=self&q=nothing-like-this").json()["total"] == 0
+    assert c.get("/api/v1/alerts/inbox?cluster=self&q=" + "x" * 201).status_code == 422
 
     for kw in (dict(matrix={"default": ("resource.pod.read",)}), dict(matrix={"self": ("resource.configmap.read",)}),
                dict(namespaces={"self": ("apps",)})):
@@ -246,3 +250,27 @@ async def test_the_report_opens_from_the_inbox_with_its_audit_row(monkeypatch, s
     assert c.get(f"/api/v1/alerts/inbox/{row.id}/investigation").status_code == 503
     c, _ = client(monkeypatch, sqlite_db, namespaces={"self": ("apps",)})
     assert c.get(f"/api/v1/alerts/inbox/{row.id}/investigation").status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_search_matches_name_labels_summary_and_assignee_any_case_with_literal_wildcards(sqlite_db):
+    db = sqlite_db
+    await put(db, fp="a", name="KubePodCrashLooping")
+    await put(db, fp="b", name="NodeDiskPressure", node="worker-7")
+    await put(db, fp="c", name="Watchdog_50%", severity="info", firing=False, ends_at=NOW - timedelta(minutes=1))
+    fingerprints = lambda rows: sorted(r.fingerprint for r in rows)  # noqa: E731
+
+    rows, total, _ = await rows_of(db, search="nodedisk")  # the alert name, any case
+    assert (fingerprints(rows), total) == (["b"], 1)
+    assert fingerprints((await rows_of(db, search="worker-7"))[0]) == ["b"]  # a label value
+    assert (await rows_of(db, search="API-1 RESTARTS"))[1] == 3  # the summary annotation
+    # % and _ are the characters, not LIKE wildcards: only c's name has them
+    assert fingerprints((await rows_of(db, search="%"))[0]) == ["c"]
+    assert fingerprints((await rows_of(db, search="_5"))[0]) == ["c"]
+    # the per-status counts follow the search
+    assert (await rows_of(db, search="watchdog"))[2] == {"firing": 0, "stale": 0, "resolved": 1}
+    # the assignee
+    row = next(r for r in (await rows_of(db))[0] if r.fingerprint == "a")
+    await inbox.set_marks(db, row.id, {"assignee": "oncall@example.com"}, "oncall@example.com", NOW)
+    assert fingerprints((await rows_of(db, search="oncall@"))[0]) == ["a"]
+    assert (await rows_of(db, search="nothing-like-this"))[1] == 0

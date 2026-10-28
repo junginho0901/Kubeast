@@ -54,6 +54,8 @@ export interface AlertInboxFilter {
   severity?: string
   mine?: boolean
   open?: boolean
+  /** matched by the server in the alert name, namespace, assignee, labels and annotations */
+  q?: string
   limit?: number
   offset?: number
 }
