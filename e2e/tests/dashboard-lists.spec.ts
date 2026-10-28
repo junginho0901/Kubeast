@@ -18,8 +18,9 @@ test.describe('Dashboard lists', () => {
     await page.locator('input[type="password"]').first().fill(process.env.E2E_USER_PASSWORD ?? '')
     await page.locator('button[type="submit"]').first().click()
     await page.waitForFunction(() => !document.querySelector('input[autocomplete="email"]'))
-    await page.goto('/')
-    // the picker selects `default` on a sign-in; the card must list that cluster's nodes
+    // no reload: the sign-in lands on the dashboard while the selection is still empty, and the picker then
+    // selects `default` — the card must list that cluster's nodes, not those of the server's default cluster
+    await page.waitForURL((u) => u.pathname === '/')
     await expect.poll(() => page.evaluate(() => localStorage.getItem('kubeast:current-cluster'))).toBe('default')
     const res = await page.request.get('/api/v1/cluster/nodes?cluster=default')
     expect(res.ok()).toBe(true)
