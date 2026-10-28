@@ -273,7 +273,7 @@ subjects:
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-3xl font-bold text-white">{tr('roleBindingsPage.title', 'Role Bindings')}</h1>
+          <h1 className="text-3xl font-semibold text-ink">{tr('roleBindingsPage.title', 'Role Bindings')}</h1>
           <p className="mt-2 text-slate-400">{tr('roleBindingsPage.subtitle', 'Manage RoleBindings across namespaces.')}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -294,22 +294,22 @@ subjects:
         <div className="xl:col-span-2">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <input type="text" placeholder={tr('roleBindingsPage.searchPlaceholder', 'Search by name, namespace, or role ref...')} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+            <input type="text" placeholder={tr('roleBindingsPage.searchPlaceholder', 'Search by name, namespace, or role ref...')} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
           </div>
         </div>
         <div className="relative" ref={namespaceDropdownRef}>
-          <button type="button" onClick={() => setIsNamespaceDropdownOpen((v) => !v)} className="h-12 w-full px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent flex items-center justify-between gap-2">
+          <button type="button" onClick={() => setIsNamespaceDropdownOpen((v) => !v)} className="h-12 w-full px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent flex items-center justify-between gap-2">
             <span className="text-sm font-medium">{selectedNamespace === 'all' ? tr('roleBindingsPage.allNamespaces', 'All namespaces') : selectedNamespace}</span>
             <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isNamespaceDropdownOpen ? 'rotate-180' : ''}`} />
           </button>
           {isNamespaceDropdownOpen && (
             <div className="absolute top-full left-0 mt-2 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-100 max-h-[240px] overflow-y-auto">
-              <button type="button" onClick={() => { setSelectedNamespace('all'); setIsNamespaceDropdownOpen(false) }} className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg">
+              <button type="button" onClick={() => { setSelectedNamespace('all'); setIsNamespaceDropdownOpen(false) }} className="w-full px-4 py-2.5 text-left text-sm text-ink hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg">
                 {selectedNamespace === 'all' && <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />}
                 <span className={selectedNamespace === 'all' ? 'font-medium' : ''}>{tr('roleBindingsPage.allNamespaces', 'All namespaces')}</span>
               </button>
               {(namespaces || []).map((ns) => (
-                <button key={ns.name} type="button" onClick={() => { setSelectedNamespace(ns.name); setIsNamespaceDropdownOpen(false) }} className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 last:rounded-b-lg">
+                <button key={ns.name} type="button" onClick={() => { setSelectedNamespace(ns.name); setIsNamespaceDropdownOpen(false) }} className="w-full px-4 py-2.5 text-left text-sm text-ink hover:bg-slate-600 transition-colors flex items-center gap-2 last:rounded-b-lg">
                   {selectedNamespace === ns.name && <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />}
                   <span className={selectedNamespace === ns.name ? 'font-medium' : ''}>{ns.name}</span>
                 </button>
@@ -323,7 +323,7 @@ subjects:
         {summaryCards.map(([label, value, boxClass, labelClass]) => (
           <div key={label} className={`rounded-lg border px-4 py-3 ${boxClass}`}>
             <p className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelClass}`}>{label}</p>
-            <p className="text-lg text-white font-semibold mt-1">{value}</p>
+            <p className="text-lg text-ink font-semibold mt-1">{value}</p>
           </div>
         ))}
       </div>
@@ -363,7 +363,7 @@ subjects:
                 <tr
                       ref={idx === 0 ? firstRowRef : undefined} key={`${rb.namespace}/${rb.name}`} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'RoleBinding', name: rb.name, namespace: rb.namespace })}>
                   {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={rb.namespace}>{rb.namespace}</td>}
-                  <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{rb.name}</span></td>
+                  <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{rb.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono truncate" title={`${rb.role_ref_kind}/${rb.role_ref_name}`}>
                     <span className="text-slate-400">{rb.role_ref_kind}/</span>{rb.role_ref_name}
                   </td>

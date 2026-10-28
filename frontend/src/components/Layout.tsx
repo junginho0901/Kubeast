@@ -488,7 +488,7 @@ export default function Layout() {
             <img src="/icon.svg" alt="" className="w-8 h-8" data-testid="brand-logo" />
             <div>
               {/* not an <h1>: the page title is the one heading of each screen */}
-              <p className="text-xl font-bold text-white">Kubeast</p>
+              <p className="text-xl font-bold text-ink">Kubeast</p>
               <p className="text-xs text-slate-400">K8s DevOps Platform</p>
             </div>
           </div>
@@ -538,7 +538,7 @@ export default function Layout() {
                             title={item.name}
                             className={`
                               flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors
-                              ${isActive ? 'bg-primary-600 text-white' : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'}
+                              ${isActive ? 'bg-primary-600 text-white' : 'text-slate-300 hover:bg-slate-700/50 hover:text-ink'}
                             `}
                           >
                             {/* shrink-0: a long name squeezed the icon; truncate: the long kind names ran out of the bar */}
@@ -570,7 +570,7 @@ export default function Layout() {
               title={t('layout.accountTitle')}
             >
               <div className="text-[11px] text-slate-400">{t('layout.account')}</div>
-              <div className="mt-0.5 truncate text-sm text-white">{me?.name ?? '...'}</div>
+              <div className="mt-0.5 truncate text-sm text-ink">{me?.name ?? '...'}</div>
               {me?.email && me.email !== me.name && <div className="truncate text-xs text-slate-400">{me.email}</div>}
             </Link>
 
@@ -628,7 +628,7 @@ export default function Layout() {
                 <div className="rounded-full bg-slate-800 border border-slate-700 p-4 mb-4">
                   <Activity className="w-8 h-8 text-slate-500" />
                 </div>
-                <h2 className="text-lg font-semibold text-white">
+                <h2 className="text-lg font-semibold text-ink">
                   {t('cluster.noAccess.title', { defaultValue: 'No accessible cluster' })}
                 </h2>
                 <p className="mt-1 max-w-md text-sm text-slate-400">

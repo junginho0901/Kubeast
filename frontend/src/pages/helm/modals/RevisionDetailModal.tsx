@@ -36,7 +36,7 @@ export default function RevisionDetailModal({
         className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-4xl mx-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-lg font-semibold text-white mb-1">
+        <h3 className="text-lg font-semibold text-ink mb-1">
           {t('helmReleaseDetail.revision.title', { rev: revision })}
         </h3>
         <p className="text-sm text-slate-400 mb-4">
@@ -63,8 +63,8 @@ export default function RevisionDetailModal({
               onClick={() => setTab(id)}
               className={`px-3 py-1.5 text-xs -mb-px border-b-2 transition ${
                 tab === id
-                  ? 'border-primary-500 text-white'
-                  : 'border-transparent text-slate-400 hover:text-white'
+                  ? 'border-primary-500 text-ink'
+                  : 'border-transparent text-slate-400 hover:text-ink'
               }`}
             >
               {label}
@@ -82,7 +82,7 @@ export default function RevisionDetailModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm text-slate-300 hover:text-white border border-slate-600 rounded-lg hover:bg-slate-800"
+            className="px-4 py-2 text-sm text-slate-300 hover:text-ink border border-slate-600 rounded-lg hover:bg-slate-800"
           >
             {t('helmReleaseDetail.revision.close')}
           </button>

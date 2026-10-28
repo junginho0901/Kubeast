@@ -9,8 +9,8 @@ import { StatusBarChart } from './StatusBarChart'
 
 // colour by meaning: the normal state in the brand blue, failures red, waiting amber, the rest grey
 const STATE_COLOR: Record<string, string> = {
-  Running: 'var(--color-primary-400)',
-  Ready: 'var(--color-primary-400)',
+  Running: 'var(--color-primary-bright)',
+  Ready: 'var(--color-primary-bright)',
   Succeeded: 'var(--color-slate-400)',
   Pending: 'var(--color-amber-400)',
   Failed: 'var(--color-red-400)',
@@ -44,7 +44,7 @@ export function DashboardPodNodeStatus({
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       {podStatusData.length > 0 && (
         <div className="card">
-          <h2 className="text-lg font-semibold text-white">{tr('dashboard.podStatus.title', 'Pod status')}</h2>
+          <h2 className="text-lg font-semibold text-ink">{tr('dashboard.podStatus.title', 'Pod status')}</h2>
           <p className="text-sm text-slate-400 mt-1 mb-4">
             {tr('dashboard.podStatus.subtitle', 'Click to view pods in each status')}
           </p>
@@ -54,7 +54,7 @@ export function DashboardPodNodeStatus({
 
       {nodeStatusChartData.length > 0 && (
         <div className="card">
-          <h2 className="text-lg font-semibold text-white">{tr('dashboard.nodeStatus.title', 'Node status')}</h2>
+          <h2 className="text-lg font-semibold text-ink">{tr('dashboard.nodeStatus.title', 'Node status')}</h2>
           <p className="text-sm text-slate-400 mt-1 mb-4">
             {tr('dashboard.nodeStatus.subtitle', 'Click to view nodes in each status')}
           </p>

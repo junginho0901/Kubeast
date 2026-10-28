@@ -39,7 +39,7 @@ export default function Monitoring() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white">{t('monitoring.title')}</h1>
+          <h1 className="text-3xl font-semibold text-ink">{t('monitoring.title')}</h1>
           <p className="mt-2 text-slate-400">{t('monitoring.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -50,7 +50,7 @@ export default function Monitoring() {
               className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
                 activeTab === 'nodes'
                   ? 'bg-primary-600 text-white'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  : 'text-slate-400 hover:text-ink hover:bg-slate-800'
               }`}
             >
               {t('monitoring.tabs.nodes')}
@@ -61,7 +61,7 @@ export default function Monitoring() {
               className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
                 activeTab === 'pods'
                   ? 'bg-primary-600 text-white'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  : 'text-slate-400 hover:text-ink hover:bg-slate-800'
               }`}
             >
               {t('monitoring.tabs.pods')}

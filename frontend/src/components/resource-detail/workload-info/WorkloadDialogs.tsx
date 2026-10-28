@@ -61,7 +61,7 @@ export default function WorkloadDialogs({
       {triggerDialogOpen && (
         <ModalOverlay onClose={() => { if (!triggerMut.isPending) setTriggerDialogOpen(false) }}>
           <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white mb-3">{tr('cronjob.runNow', 'Run Now')}</h3>
+            <h3 className="text-lg font-bold text-ink mb-3">{tr('cronjob.runNow', 'Run Now')}</h3>
             <p className="text-sm text-slate-300 mb-6">
               {tr('cronjob.runNowConfirm', 'Are you sure you want to trigger a manual job from this CronJob?')}
             </p>
@@ -84,7 +84,7 @@ export default function WorkloadDialogs({
       {rollbackDialogOpen && (
         <ModalOverlay onClose={() => { if (!rollbackMut.isPending) setRollbackDialogOpen(false) }}>
           <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-lg" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white mb-3">{tr('rollback.title', 'Rollback')}</h3>
+            <h3 className="text-lg font-bold text-ink mb-3">{tr('rollback.title', 'Rollback')}</h3>
             <p className="text-sm text-slate-400 mb-4">{tr('rollback.selectRevision', 'Select a revision to rollback to')}</p>
             {!revisions ? (
               <p className="text-xs text-slate-400 py-4 text-center"><Tx>Loading...</Tx></p>
@@ -109,7 +109,7 @@ export default function WorkloadDialogs({
                       className="accent-primary-500"
                     />
                     <div className="flex-1 min-w-0">
-                      <div className="text-white font-medium">
+                      <div className="text-ink font-medium">
                         {tr('rollback.revision', 'Revision')} {rev.revision}
                         {rev.is_current && <span className="ml-2 text-emerald-400">({tr('rollback.current', 'Current')})</span>}
                       </div>

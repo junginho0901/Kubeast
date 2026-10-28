@@ -31,7 +31,7 @@ export function GPUPodsCharts({
       {nodeGpuUsage.length > 0 && (
         <div className="card">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-white">
+            <h2 className="text-sm font-semibold text-ink">
               {tr('gpuPods.nodeUsage', 'GPU Usage by Node')}
             </h2>
             <Box className="w-4 h-4 text-slate-400" />
@@ -40,7 +40,7 @@ export function GPUPodsCharts({
             {nodeGpuUsage.map(([node, info]) => (
               <div key={node} className="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-900/40 px-4 py-2.5">
                 <div>
-                  <span className="text-sm font-medium text-white">{node}</span>
+                  <span className="text-sm font-medium text-ink">{node}</span>
                   <span className="ml-2 text-xs text-slate-400">
                     {info.podCount === 1 ? tr('gpuPods.podCountOne', '{{n}} pod', { n: info.podCount }) : tr('gpuPods.podCount', '{{n}} pods', { n: info.podCount })}
                   </span>
@@ -57,7 +57,7 @@ export function GPUPodsCharts({
       {topStatuses.length > 0 && (
         <div className="card">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-white">
+            <h2 className="text-sm font-semibold text-ink">
               {tr('gpuPods.statusDistribution', 'Status Distribution')}
             </h2>
           </div>

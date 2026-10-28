@@ -75,7 +75,7 @@ export default function UninstallModal({
         className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-2xl mx-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-lg font-semibold text-white mb-1">
+        <h3 className="text-lg font-semibold text-ink mb-1">
           {t('helmReleaseDetail.uninstall.title', { name })}
         </h3>
         <p className="text-sm text-red-300/80 mb-4">
@@ -141,7 +141,7 @@ export default function UninstallModal({
             onChange={(e) => setTyped(e.target.value)}
             disabled={applying}
             placeholder={name}
-            className="w-full rounded-sm border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:border-red-500 outline-hidden"
+            className="w-full rounded-sm border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-ink placeholder:text-slate-600 focus:border-red-500 outline-hidden"
             autoFocus
           />
         </div>
@@ -155,7 +155,7 @@ export default function UninstallModal({
             type="button"
             onClick={onClose}
             disabled={applying}
-            className="px-4 py-2 text-sm text-slate-300 hover:text-white border border-slate-600 rounded-lg hover:bg-slate-800 disabled:opacity-50"
+            className="px-4 py-2 text-sm text-slate-300 hover:text-ink border border-slate-600 rounded-lg hover:bg-slate-800 disabled:opacity-50"
           >
             {t('helmReleaseDetail.uninstall.cancel')}
           </button>

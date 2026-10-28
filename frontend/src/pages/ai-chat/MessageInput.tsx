@@ -46,7 +46,7 @@ export function MessageInput({
           placeholder={placeholder}
           disabled={isStreaming}
           rows={1}
-          className="flex-1 px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-hidden focus:border-primary-500 disabled:opacity-50 resize-none"
+          className="flex-1 px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-ink placeholder-slate-400 focus:outline-hidden focus:border-primary-500 disabled:opacity-50 resize-none"
         />
         {isStreaming ? (
           <button

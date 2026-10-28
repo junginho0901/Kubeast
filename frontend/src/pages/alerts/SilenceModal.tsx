@@ -93,14 +93,14 @@ export default function SilenceModal({ initial, maxHours, onClose }: {
             {rows.map((r, i) => (
               <div key={i} className="flex items-center gap-2" data-testid="silence-matcher">
                 <input value={r.name} onChange={(e) => set(i, { name: e.target.value })} placeholder="label"
-                  className="h-10 w-44 rounded-lg border border-slate-700 bg-slate-950/60 px-3 font-mono text-sm text-white" aria-label={tr('alertInbox.silence.label', 'Label')} />
+                  className="h-10 w-44 rounded-lg border border-slate-700 bg-slate-950/60 px-3 font-mono text-sm text-ink" aria-label={tr('alertInbox.silence.label', 'Label')} />
                 <select value={r.op} onChange={(e) => set(i, { op: e.target.value as Op })}
-                  className="h-10 rounded-lg border border-slate-700 bg-slate-950/60 px-2 font-mono text-sm text-white" aria-label={tr('alertInbox.silence.operator', 'Operator')}>
+                  className="h-10 rounded-lg border border-slate-700 bg-slate-950/60 px-2 font-mono text-sm text-ink" aria-label={tr('alertInbox.silence.operator', 'Operator')}>
                   {OPS.map((op) => <option key={op} value={op}>{op}</option>)}
                 </select>
                 <input value={r.value} onChange={(e) => set(i, { value: e.target.value })}
-                  className="h-10 min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950/60 px-3 font-mono text-sm text-white" aria-label={tr('alertInbox.silence.value', 'Value')} />
-                <button type="button" onClick={() => setRows((all) => all.filter((_, j) => j !== i))} className="rounded-sm p-1.5 text-slate-400 hover:text-white"
+                  className="h-10 min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950/60 px-3 font-mono text-sm text-ink" aria-label={tr('alertInbox.silence.value', 'Value')} />
+                <button type="button" onClick={() => setRows((all) => all.filter((_, j) => j !== i))} className="rounded-sm p-1.5 text-slate-400 hover:text-ink"
                   aria-label={tr('alertInbox.silence.remove', 'Remove condition')}>
                   <X className="w-4 h-4" />
                 </button>
@@ -123,7 +123,7 @@ export default function SilenceModal({ initial, maxHours, onClose }: {
           <div>
             <label className="block text-xs font-semibold text-slate-400 mb-1" htmlFor="silence-comment">{tr('alertInbox.silence.comment', 'Why (required)')}</label>
             <input id="silence-comment" value={comment} onChange={(e) => setComment(e.target.value)} maxLength={500}
-              className="h-10 w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-sm text-white" data-testid="silence-comment" />
+              className="h-10 w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-sm text-ink" data-testid="silence-comment" />
           </div>
         </div>
 

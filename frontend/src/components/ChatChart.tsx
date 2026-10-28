@@ -146,7 +146,7 @@ export function ChatChart({ chart }: { chart: ChatChartData }) {
         <button
           type="button"
           onClick={() => setLarge(true)}
-          className="ml-auto flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 text-[11px] text-slate-300 hover:bg-slate-700 hover:text-white"
+          className="ml-auto flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 text-[11px] text-slate-300 hover:bg-slate-700 hover:text-ink"
           data-testid="chat-chart-enlarge"
         >
           <Maximize2 className="h-3 w-3" />

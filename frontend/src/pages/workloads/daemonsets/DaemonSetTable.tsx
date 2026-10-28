@@ -160,7 +160,7 @@ export function DaemonSetTable({
                 })}
               >
                 {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={daemonset.namespace}>{daemonset.namespace}</td>}
-                <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{daemonset.name}</span></td>
+                <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{daemonset.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{daemonset.ready}/{daemonset.desired}</td>
                 <td className="py-3 px-4 text-xs font-mono">{daemonset.current}</td>
                 <td className="py-3 px-4 text-xs font-mono">{daemonset.desired}</td>

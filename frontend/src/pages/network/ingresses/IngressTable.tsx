@@ -135,7 +135,7 @@ export function IngressTable({
                 })}
               >
                 {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={ing.namespace}>{ing.namespace}</td>}
-                <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{ing.name}</span></td>
+                <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{ing.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{ing.class || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatHosts(ing)}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatRules(ing)}</span></td>

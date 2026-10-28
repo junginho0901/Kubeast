@@ -147,7 +147,7 @@ export function PDBTable({
                 })}
               >
                 {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={p.namespace}>{p.namespace}</td>}
-                <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{p.name}</span></td>
+                <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{p.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{p.min_available ?? '-'}</td>
                 <td className="py-3 px-4 text-xs font-mono">{p.max_unavailable ?? '-'}</td>
                 <td className="py-3 px-4 text-xs font-mono">{p.disruptions_allowed}</td>

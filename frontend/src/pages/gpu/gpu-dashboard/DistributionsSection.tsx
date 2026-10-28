@@ -22,7 +22,7 @@ export function DistributionsSection({ data, modelDistribution, podStatusDist, t
       <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-5">
         <div className="flex items-center gap-2 mb-4">
           <Monitor className="h-4 w-4 text-slate-400" />
-          <h2 className="text-sm font-semibold text-white">
+          <h2 className="text-sm font-semibold text-ink">
             {tr('gpuDashboardPage.modelDist.title', 'GPU Models')}
           </h2>
         </div>
@@ -39,7 +39,7 @@ export function DistributionsSection({ data, modelDistribution, podStatusDist, t
                     <span className="text-xs text-slate-400 ml-2 whitespace-nowrap">{gpuCount} GPU ({pct}%)</span>
                   </div>
                   <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full bg-primary-400" style={{ width: `${pct}%` }} />
+                    <div className="h-full rounded-full bg-primary-bright" style={{ width: `${pct}%` }} />
                   </div>
                 </div>
               )
@@ -55,7 +55,7 @@ export function DistributionsSection({ data, modelDistribution, podStatusDist, t
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Box className="h-4 w-4 text-slate-400" />
-            <h2 className="text-sm font-semibold text-white">
+            <h2 className="text-sm font-semibold text-ink">
               {tr('gpuDashboardPage.podStatus.title', 'Pod Status')}
             </h2>
             <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-300">
@@ -64,7 +64,7 @@ export function DistributionsSection({ data, modelDistribution, podStatusDist, t
           </div>
           <Link
             to="/gpu/pods"
-            className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors"
+            className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-ink transition-colors"
           >
             {tr('gpuDashboardPage.viewAll', 'View all')}
             <ArrowRight className="h-3 w-3" />
@@ -84,7 +84,7 @@ export function DistributionsSection({ data, modelDistribution, podStatusDist, t
                       className={`h-full rounded-full ${
                         status === 'Running' ? 'bg-emerald-500'
                         : status === 'Pending' ? 'bg-yellow-500'
-                        : status === 'Succeeded' ? 'bg-primary-400'
+                        : status === 'Succeeded' ? 'bg-primary-bright'
                         : status === 'Failed' ? 'bg-red-500'
                         : 'bg-slate-500'
                       }`}

@@ -244,7 +244,7 @@ spec:
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-3xl font-bold text-white">{tr('replicasets.title', 'Replica Sets')}</h1>
+          <h1 className="text-3xl font-semibold text-ink">{tr('replicasets.title', 'Replica Sets')}</h1>
           <p className="mt-2 text-slate-400">{tr('replicasets.subtitle', 'Inspect and manage ReplicaSets across namespaces.')}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -284,23 +284,23 @@ spec:
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('replicasets.stats.total', 'Total')}</p>
-          <p className="text-lg text-white font-semibold mt-1">{summary.total}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
         </div>
         <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('replicasets.stats.healthy', 'Healthy')}</p>
-          <p className="text-lg text-white font-semibold mt-1">{summary.healthy}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{summary.healthy}</p>
         </div>
         <div className="rounded-lg border border-slate-600/50 bg-slate-800/30 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-300">{tr('replicasets.stats.idle', 'Idle')}</p>
-          <p className="text-lg text-white font-semibold mt-1">{summary.idle}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{summary.idle}</p>
         </div>
         <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-amber-300">{tr('replicasets.stats.degraded', 'Degraded')}</p>
-          <p className="text-lg text-white font-semibold mt-1">{summary.degraded}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{summary.degraded}</p>
         </div>
         <div className="rounded-lg border border-red-700/40 bg-red-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-red-300">{tr('replicasets.stats.unavailable', 'Unavailable')}</p>
-          <p className="text-lg text-white font-semibold mt-1">{summary.unavailable}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{summary.unavailable}</p>
         </div>
       </div>
 

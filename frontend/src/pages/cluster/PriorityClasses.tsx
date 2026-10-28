@@ -252,7 +252,7 @@ description: "Sample priority class"
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-3xl font-bold text-white">{tr('priorityClasses.title', 'Priority Classes')}</h1>
+          <h1 className="text-3xl font-semibold text-ink">{tr('priorityClasses.title', 'Priority Classes')}</h1>
           <p className="mt-2 text-slate-400">
             {tr('priorityClasses.subtitle', 'Manage pod scheduling priority across the cluster.')}
           </p>
@@ -289,7 +289,7 @@ description: "Sample priority class"
             placeholder={tr('priorityClasses.searchPlaceholder', 'Search priority classes by name...')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
         </div>
       </div>
@@ -297,15 +297,15 @@ description: "Sample priority class"
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('priorityClasses.stats.total', 'Total')}</p>
-          <p className="text-lg text-white font-semibold mt-1">{summary.total}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
         </div>
         <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('priorityClasses.stats.globalDefault', 'Global Default')}</p>
-          <p className="text-lg text-white font-semibold mt-1">{summary.globalDefault}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{summary.globalDefault}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('priorityClasses.stats.preempting', 'Preempting')}</p>
-          <p className="text-lg text-white font-semibold mt-1">{summary.preempting}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{summary.preempting}</p>
         </div>
       </div>
 
@@ -362,7 +362,7 @@ description: "Sample priority class"
                     rawJson: priorityClassToRawJson(pc),
                   })}
                 >
-                  <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{pc.name}</span></td>
+                  <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{pc.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{pc.value}</td>
                   <td className="py-3 px-4">
                     {pc.global_default ? (

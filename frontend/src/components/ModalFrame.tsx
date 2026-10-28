@@ -49,7 +49,7 @@ export function ModalFrame({ title, subtitle, icon, size = 'md', onClose, busy, 
           <div className="flex items-start gap-3 min-w-0">
             {icon}
             <div className="min-w-0">
-              <h2 id={titleId} className="text-lg font-semibold text-white break-keep">{title}</h2>
+              <h2 id={titleId} className="text-lg font-semibold text-ink break-keep">{title}</h2>
               {subtitle && <p className="mt-1 text-sm text-slate-400 break-keep">{subtitle}</p>}
             </div>
           </div>
@@ -58,7 +58,7 @@ export function ModalFrame({ title, subtitle, icon, size = 'md', onClose, busy, 
             onClick={close}
             disabled={busy}
             aria-label={t('common.close', { defaultValue: 'Close' })}
-            className="shrink-0 rounded-lg p-1 text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-50"
+            className="shrink-0 rounded-lg p-1 text-slate-400 hover:text-ink hover:bg-slate-800 disabled:opacity-50"
           >
             <X className="w-5 h-5" />
           </button>

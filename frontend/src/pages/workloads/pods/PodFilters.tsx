@@ -56,7 +56,7 @@ export function PodFilters({
             placeholder={searchPlaceholder}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
         </div>
       </div>
@@ -65,7 +65,7 @@ export function PodFilters({
         <button
           type="button"
           onClick={() => setIsNamespaceDropdownOpen(!isNamespaceDropdownOpen)}
-          className="h-12 w-full px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent flex items-center justify-between gap-2"
+          className="h-12 w-full px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent flex items-center justify-between gap-2"
         >
           <span className="text-sm font-medium">
             {selectedNamespace === 'all' ? allNamespacesLabel : selectedNamespace}
@@ -82,7 +82,7 @@ export function PodFilters({
                 setSelectedNamespace('all')
                 setIsNamespaceDropdownOpen(false)
               }}
-              className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg"
+              className="w-full px-4 py-2.5 text-left text-sm text-ink hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg"
             >
               {selectedNamespace === 'all' && <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />}
               <span className={selectedNamespace === 'all' ? 'font-medium' : ''}>
@@ -97,7 +97,7 @@ export function PodFilters({
                   setSelectedNamespace(ns.name)
                   setIsNamespaceDropdownOpen(false)
                 }}
-                className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 last:rounded-b-lg"
+                className="w-full px-4 py-2.5 text-left text-sm text-ink hover:bg-slate-600 transition-colors flex items-center gap-2 last:rounded-b-lg"
               >
                 {selectedNamespace === ns.name && <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />}
                 <span className={selectedNamespace === ns.name ? 'font-medium' : ''}>{ns.name}</span>

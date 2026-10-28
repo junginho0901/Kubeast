@@ -135,7 +135,7 @@ export function EndpointTable({
                 })}
               >
                 {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={ep.namespace}>{ep.namespace}</td>}
-                <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{ep.name}</span></td>
+                <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{ep.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatAddresses(ep)}</span></td>
                 <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{formatPorts(ep.ports)}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{ep.ready_count || 0}</td>

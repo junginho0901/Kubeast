@@ -102,7 +102,7 @@ export default function NodeTable({
                   className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
                   onClick={() => onRowClick(node.name)}
                 >
-                  <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{node.name}</span></td>
+                  <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{node.name}</span></td>
                   <td className="py-3 px-4">
                     <div className="flex flex-wrap gap-1">
                       {node.status.split(',').map((s: string, i: number) => (

@@ -148,7 +148,7 @@ export default function ClusterNodes() {
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-3xl font-bold text-white">{tr('nodes.title', 'Nodes')}</h1>
+          <h1 className="text-3xl font-semibold text-ink">{tr('nodes.title', 'Nodes')}</h1>
           <p className="mt-2 text-slate-400">{tr('nodes.subtitle', 'Inspect cluster node status and capacity.')}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -182,7 +182,7 @@ export default function ClusterNodes() {
           placeholder={tr('nodes.searchPlaceholder', 'Search nodes by name...')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
         />
       </div>
 

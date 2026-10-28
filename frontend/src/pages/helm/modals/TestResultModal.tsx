@@ -68,7 +68,7 @@ export default function TestResultModal({
         className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-2xl mx-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-lg font-semibold text-white mb-1">
+        <h3 className="text-lg font-semibold text-ink mb-1">
           {t('helmReleaseDetail.test.title', { name })}
         </h3>
         <p className="text-sm text-slate-400 mb-4">
@@ -105,7 +105,7 @@ export default function TestResultModal({
                   ) : (
                     <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
                   )}
-                  <span className="text-white truncate">{h.name}</span>
+                  <span className="text-ink truncate">{h.name}</span>
                   <span className="text-xs text-slate-400 ml-auto">{h.phase}</span>
                 </li>
               ))}
@@ -122,7 +122,7 @@ export default function TestResultModal({
             type="button"
             onClick={onClose}
             disabled={running}
-            className="px-4 py-2 text-sm text-slate-300 hover:text-white border border-slate-600 rounded-lg hover:bg-slate-800 disabled:opacity-50"
+            className="px-4 py-2 text-sm text-slate-300 hover:text-ink border border-slate-600 rounded-lg hover:bg-slate-800 disabled:opacity-50"
           >
             {t('helmReleaseDetail.test.close')}
           </button>

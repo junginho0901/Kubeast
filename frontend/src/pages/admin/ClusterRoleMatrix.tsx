@@ -74,7 +74,7 @@ export default function ClusterRoleMatrix({ userID, canEdit: canEditUsers, userI
     <div className="rounded-lg border border-slate-700/50 bg-slate-950/30 p-3">
       <div className="flex items-center gap-2 mb-1">
         <ShieldCheck className="w-4 h-4 text-primary-400" />
-        <h4 className="text-sm font-semibold text-white">
+        <h4 className="text-sm font-semibold text-ink">
           {tr('admin.userClusterRoles.title', 'Cluster access')}
         </h4>
         {pending && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />}

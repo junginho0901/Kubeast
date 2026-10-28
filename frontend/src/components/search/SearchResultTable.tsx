@@ -135,7 +135,7 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
                       {item.kind}
                     </span>
                   </td>
-                  <td className="px-4 py-2 font-medium text-white truncate max-w-0">
+                  <td className="px-4 py-2 font-medium text-ink truncate max-w-0">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <button
                         onClick={() => openDetail({
@@ -150,7 +150,7 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
                       </button>
                       <button
                         onClick={() => copyName(item.name, globalIdx)}
-                        className="shrink-0 p-0.5 text-slate-500 hover:text-white transition-colors"
+                        className="shrink-0 p-0.5 text-slate-500 hover:text-ink transition-colors"
                         title={t('advancedSearch.copyName', 'Copy name')}
                       >
                         {copiedIdx === globalIdx ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
@@ -179,7 +179,7 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
                         namespace: item.namespace || undefined,
                         rawJson: item.raw,
                       })}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white transition-colors"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-ink transition-colors"
                     >
                       <Eye className="w-3.5 h-3.5" />
                       {t('advancedSearch.detail', 'Detail')}

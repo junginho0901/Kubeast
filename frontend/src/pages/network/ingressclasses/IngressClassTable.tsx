@@ -120,7 +120,7 @@ export function IngressClassTable({
                   rawJson: ingressClassToRawJson(item),
                 })}
               >
-                <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{item.name}</span></td>
+                <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{item.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{item.controller || '-'}</span></td>
                 <td className="py-3 px-4 text-xs">{item.is_default ? tr('common.yes', 'Yes') : tr('common.no', 'No')}</td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatParameters(item)}</span></td>

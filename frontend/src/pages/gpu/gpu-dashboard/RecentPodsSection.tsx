@@ -22,13 +22,13 @@ export function RecentPodsSection({ recentPods, openDetail, tr }: Props) {
       <div className="flex items-center justify-between border-b border-slate-700/50 px-5 py-3">
         <div className="flex items-center gap-2">
           <Box className="h-4 w-4 text-slate-400" />
-          <h2 className="text-sm font-semibold text-white">
+          <h2 className="text-sm font-semibold text-ink">
             {tr('gpuDashboardPage.recentPods.title', 'Recent GPU Pods')}
           </h2>
         </div>
         <Link
           to="/gpu/pods"
-          className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors"
+          className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-ink transition-colors"
         >
           {tr('gpuDashboardPage.viewAll', 'View all')}
           <ArrowRight className="h-3 w-3" />
@@ -54,7 +54,7 @@ export function RecentPodsSection({ recentPods, openDetail, tr }: Props) {
                 onClick={() => openDetail({ kind: 'Pod', name: pod.name, namespace: pod.namespace })}
               >
                 <td className="truncate px-5 py-3 text-xs font-mono">{pod.namespace}</td>
-                <td className="truncate px-5 py-3 font-medium text-white">{pod.name}</td>
+                <td className="truncate px-5 py-3 font-medium text-ink">{pod.name}</td>
                 <td className="truncate px-5 py-3 text-xs font-mono">{pod.node_name ?? '-'}</td>
                 <td className="truncate px-5 py-3 text-xs font-mono">{pod.gpu_requested}</td>
                 <td className="px-5 py-3">

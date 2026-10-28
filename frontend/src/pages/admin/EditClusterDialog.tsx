@@ -23,7 +23,7 @@ interface Props {
 
 type AuthType = 'keep' | 'none' | 'bearer' | 'basic'
 
-const inputClass = 'mt-1 w-full rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-hidden'
+const inputClass = 'mt-1 w-full rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-2 text-sm text-ink focus:border-primary-500 focus:outline-hidden'
 const labelClass = 'block text-xs font-semibold text-slate-400'
 
 // namespace/service:port[/path] — the server checks the same (services/pkg/cluster ParsePrometheusService).
@@ -201,7 +201,7 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
               </label>
               <button
                 onClick={() => fileRef.current?.click()}
-                className="inline-flex items-center gap-1 text-xs text-slate-300 hover:text-white"
+                className="inline-flex items-center gap-1 text-xs text-slate-300 hover:text-ink"
               >
                 <Upload className="h-3.5 w-3.5" />
                 {tr('cluster.register.upload', 'Upload')}
@@ -214,7 +214,7 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
               onChange={(e) => setKubeconfig(e.target.value)}
               placeholder={tr('cluster.edit.kubeconfigHint', 'Leave blank to keep the current kubeconfig. Paste a new one to rotate credentials.')}
               rows={7}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-2 font-mono text-xs text-white focus:border-primary-500 focus:outline-hidden"
+              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-2 font-mono text-xs text-ink focus:border-primary-500 focus:outline-hidden"
             />
             <p className="mt-1 text-[11px] text-slate-500">
               {tr('cluster.edit.sameClusterNote', 'A new kubeconfig must point to the same cluster — RBAC grants and chat history are preserved.')}
@@ -223,7 +223,7 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
         )}
 
         <div className="mt-5 border-t border-slate-700 pt-4" data-testid="edit-prometheus">
-          <p className="text-sm font-semibold text-white">{tr('cluster.edit.prometheus.title', 'Prometheus')}</p>
+          <p className="text-sm font-semibold text-ink">{tr('cluster.edit.prometheus.title', 'Prometheus')}</p>
           <p className="mt-1 text-[11px] text-slate-500">
             {tr('cluster.edit.prometheus.hint', 'Leave everything empty to find Prometheus inside the cluster. Name its Service if discovery cannot; for a central store (Thanos, Mimir, VictoriaMetrics, …) enter its URL and the value of this cluster\'s label.')}
           </p>
@@ -294,7 +294,7 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
               data-testid="edit-prometheus-check"
               onClick={check}
               disabled={checking}
-              className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm bg-slate-700 px-3 text-xs text-white hover:bg-slate-600 disabled:opacity-50"
+              className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm bg-slate-700 px-3 text-xs text-ink hover:bg-slate-600 disabled:opacity-50"
             >
               {checking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Activity className="h-3.5 w-3.5" />}
               {checking ? tr('cluster.edit.prometheus.checking', 'Checking...') : tr('cluster.edit.prometheus.check', 'Check connection')}
@@ -310,7 +310,7 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
 
         {/* The cluster's own log store, before the deployment-wide features.logSearch. */}
         <div className="mt-5 border-t border-slate-700 pt-4" data-testid="edit-logsearch">
-          <p className="text-sm font-semibold text-white">{tr('cluster.edit.logSearch.title', 'Log search')}</p>
+          <p className="text-sm font-semibold text-ink">{tr('cluster.edit.logSearch.title', 'Log search')}</p>
           <p className="mt-1 text-[11px] text-slate-500">
             {tr('cluster.edit.logSearch.hint', "Leave everything empty to search the deployment's log store (features.logSearch). Enter a URL when this cluster's logs live in another Loki — it is used for this cluster only.")}
           </p>
@@ -361,7 +361,7 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
               data-testid="edit-logsearch-check"
               onClick={checkLogSearch}
               disabled={lsChecking}
-              className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm bg-slate-700 px-3 text-xs text-white hover:bg-slate-600 disabled:opacity-50"
+              className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm bg-slate-700 px-3 text-xs text-ink hover:bg-slate-600 disabled:opacity-50"
             >
               {lsChecking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Activity className="h-3.5 w-3.5" />}
               {lsChecking ? tr('cluster.edit.prometheus.checking', 'Checking...') : tr('cluster.edit.logSearch.check', 'Check connection')}

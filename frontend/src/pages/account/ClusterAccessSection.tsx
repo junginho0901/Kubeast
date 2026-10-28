@@ -110,7 +110,7 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
           <KeyRound className="w-5 h-5 text-primary-400" />
         </div>
         <div>
-          <h2 className="text-xl font-bold text-white">{tr('accessRequests.mine.title', 'Cluster access')}</h2>
+          <h2 className="text-xl font-semibold text-ink">{tr('accessRequests.mine.title', 'Cluster access')}</h2>
           <p className="text-slate-400 text-sm">
             {tr('accessRequests.mine.subtitle', 'Your role on each cluster. Ask for a higher role for a limited time when you need it; an admin approves.')}
           </p>
@@ -141,7 +141,7 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
             return (
               <div key={cluster.id} className="flex items-center justify-between gap-3 rounded-lg bg-slate-900/40 px-3 py-2" data-testid={`account-cluster-${cluster.id}`}>
                 <div className="min-w-0">
-                  <div className="text-sm text-white truncate">{cluster.display_name}</div>
+                  <div className="text-sm text-ink truncate">{cluster.display_name}</div>
                   <div className="text-xs text-slate-400">
                     {current || tr('accessRequests.mine.noRole', 'No role')}
                     {active?.expires_at && (
@@ -261,7 +261,7 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
                   value={namespaces}
                   onChange={(e) => setNamespaces(e.target.value)}
                   placeholder={tr('accessRequests.modal.namespacesPlaceholder', 'Empty = the whole cluster — or list some, comma-separated')}
-                  className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-primary-500 focus:outline-hidden"
+                  className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-ink placeholder:text-slate-500 focus:border-primary-500 focus:outline-hidden"
                 />
                 <span className="mt-1 block font-normal text-[11px] text-slate-500" data-testid="access-request-namespaces-hint">
                   {scopedTo?.length
@@ -278,7 +278,7 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
                   rows={3}
                   maxLength={500}
                   placeholder={tr('accessRequests.modal.reasonPlaceholder', 'What you need to do and why (ticket, incident, deploy…)')}
-                  className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white placeholder:text-slate-500"
+                  className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-ink placeholder:text-slate-500"
                 />
               </label>
               {error && <div className="text-sm text-red-300" data-testid="access-request-error">{error}</div>}

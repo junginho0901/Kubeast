@@ -125,7 +125,7 @@ ${yamlBodyTemplate}`
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-3xl font-bold text-white">{strings.title}</h1>
+          <h1 className="text-3xl font-semibold text-ink">{strings.title}</h1>
           <p className="mt-2 text-slate-400">{strings.subtitle}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -154,14 +154,14 @@ ${yamlBodyTemplate}`
               type="text"
               placeholder={strings.searchPlaceholder}
               value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
           </div>
         </div>
 
         <div className="relative" ref={namespaceDropdownRef}>
           <button type="button" onClick={() => setIsNamespaceDropdownOpen((v) => !v)}
-            className="h-12 w-full px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent flex items-center justify-between gap-2">
+            className="h-12 w-full px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent flex items-center justify-between gap-2">
             <span className="text-sm font-medium">
               {selectedNamespace === 'all' ? strings.allNamespaces : selectedNamespace}
             </span>
@@ -170,13 +170,13 @@ ${yamlBodyTemplate}`
           {isNamespaceDropdownOpen && (
             <div className="absolute top-full left-0 mt-2 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-100 max-h-[240px] overflow-y-auto">
               <button type="button" onClick={() => { setSelectedNamespace('all'); setIsNamespaceDropdownOpen(false) }}
-                className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg">
+                className="w-full px-4 py-2.5 text-left text-sm text-ink hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg">
                 {selectedNamespace === 'all' && <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />}
                 <span className={selectedNamespace === 'all' ? 'font-medium' : ''}>{strings.allNamespaces}</span>
               </button>
               {(namespaces || []).map((ns) => (
                 <button key={ns.name} type="button" onClick={() => { setSelectedNamespace(ns.name); setIsNamespaceDropdownOpen(false) }}
-                  className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 last:rounded-b-lg">
+                  className="w-full px-4 py-2.5 text-left text-sm text-ink hover:bg-slate-600 transition-colors flex items-center gap-2 last:rounded-b-lg">
                   {selectedNamespace === ns.name && <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />}
                   <span className={selectedNamespace === ns.name ? 'font-medium' : ''}>{ns.name}</span>
                 </button>
@@ -189,15 +189,15 @@ ${yamlBodyTemplate}`
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{strings.statsTotal}</p>
-          <p className="text-lg text-white font-semibold mt-1">{summary.total}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
         </div>
         <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{strings.statsAccepted}</p>
-          <p className="text-lg text-white font-semibold mt-1">{summary.accepted}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{summary.accepted}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{strings.statsWithTargets}</p>
-          <p className="text-lg text-white font-semibold mt-1">{summary.withTargetRefs}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{summary.withTargetRefs}</p>
         </div>
       </div>
 
@@ -245,7 +245,7 @@ ${yamlBodyTemplate}`
                   })}
                 >
                   {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={item.namespace}><span className="block truncate">{item.namespace}</span></td>}
-                  <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{item.name}</span></td>
+                  <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{item.name}</span></td>
                   <td className="py-3 px-4 text-xs"><span className="block truncate">{formatTargetRefs(item)}</span></td>
                   <td className="py-3 px-4 text-xs"><span className="block truncate">{formatConditionStatus(item)}</span></td>
                   <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>

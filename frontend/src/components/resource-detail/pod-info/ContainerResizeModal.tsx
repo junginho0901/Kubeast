@@ -8,7 +8,7 @@ import { modalButton } from '@/components/modalStyles'
 import { useAIContext } from '@/hooks/useAIContext'
 import { bytesToMiB, cpuToMillis, memoryToBytes } from '@/utils/resourceQuantity'
 
-const inputClass = 'h-10 w-full rounded-lg border border-slate-600 bg-slate-900/60 px-3 text-sm font-mono text-white focus:border-primary-500 focus:outline-hidden disabled:opacity-50'
+const inputClass = 'h-10 w-full rounded-lg border border-slate-600 bg-slate-900/60 px-3 text-sm font-mono text-ink focus:border-primary-500 focus:outline-hidden disabled:opacity-50'
 
 interface Props {
   namespace: string

@@ -106,7 +106,7 @@ export function LeaseTable({
                 {showNamespaceColumn && (
                   <td className="col-low py-3 px-4 text-xs font-mono text-slate-400" title={l.namespace}>{l.namespace}</td>
                 )}
-                <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{l.name}</span></td>
+                <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{l.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{l.holder_identity || '-'}</span></td>
                 <td className="col-optional py-3 px-4 text-xs font-mono">{l.lease_duration_seconds ?? '-'}</td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(l.created_at)}</td>

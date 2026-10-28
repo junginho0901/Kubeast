@@ -12,7 +12,7 @@ export default function NotFound() {
       <div className="rounded-full bg-slate-800 border border-slate-700 p-4 mb-4">
         <Compass className="w-8 h-8 text-slate-500" />
       </div>
-      <h1 className="text-lg font-semibold text-white">{t('notFound.title', { defaultValue: 'Page not found' })}</h1>
+      <h1 className="text-lg font-semibold text-ink">{t('notFound.title', { defaultValue: 'Page not found' })}</h1>
       <p className="mt-1 max-w-md text-sm text-slate-400">
         {t('notFound.body', { path: location.pathname, defaultValue: 'There is no screen at {{path}}.' })}
       </p>

@@ -29,7 +29,7 @@ export function PodExecPanel() {
               setIsExecContainerDropdownOpen(!isExecContainerDropdownOpen)
               setIsExecShellDropdownOpen(false)
             }}
-            className="h-8 px-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[160px] justify-between"
+            className="h-8 px-3 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[160px] justify-between"
           >
             <span className="text-xs font-medium truncate">{execContainer || '-'}</span>
             <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isExecContainerDropdownOpen ? 'rotate-180' : ''}`} />
@@ -43,7 +43,7 @@ export function PodExecPanel() {
                     setExecContainer(c.name)
                     setIsExecContainerDropdownOpen(false)
                   }}
-                  className="w-full px-3 py-2 text-left text-xs text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg"
+                  className="w-full px-3 py-2 text-left text-xs text-ink hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg"
                 >
                   {execContainer === c.name && <CheckCircle className="w-3.5 h-3.5 text-primary-400 shrink-0" />}
                   <span className={execContainer === c.name ? 'font-medium' : ''}>{c.name}</span>
@@ -59,7 +59,7 @@ export function PodExecPanel() {
               setIsExecShellDropdownOpen(!isExecShellDropdownOpen)
               setIsExecContainerDropdownOpen(false)
             }}
-            className="h-8 px-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[120px] justify-between"
+            className="h-8 px-3 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[120px] justify-between"
           >
             <span className="text-xs font-medium">{execCommand}</span>
             <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isExecShellDropdownOpen ? 'rotate-180' : ''}`} />
@@ -73,7 +73,7 @@ export function PodExecPanel() {
                     setExecCommand(sh)
                     setIsExecShellDropdownOpen(false)
                   }}
-                  className="w-full px-3 py-2 text-left text-xs text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg"
+                  className="w-full px-3 py-2 text-left text-xs text-ink hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg"
                 >
                   {execCommand === sh && <CheckCircle className="w-3.5 h-3.5 text-primary-400 shrink-0" />}
                   <span className={execCommand === sh ? 'font-medium' : ''}>{sh}</span>

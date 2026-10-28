@@ -19,7 +19,7 @@ export function DashboardQuickActions({ onOpenIssues, onOpenOptimization, onOpen
 
   return (
     <div className="card">
-      <h2 className="text-lg font-semibold text-white mb-4">{tr('dashboard.quickActions.title', 'Quick actions')}</h2>
+      <h2 className="text-lg font-semibold text-ink mb-4">{tr('dashboard.quickActions.title', 'Quick actions')}</h2>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <button className="btn btn-secondary text-left" onClick={onOpenIssues}>
           <div className="flex items-center gap-3">

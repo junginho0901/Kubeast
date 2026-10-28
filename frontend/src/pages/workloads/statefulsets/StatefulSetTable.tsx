@@ -128,7 +128,7 @@ export function StatefulSetTable({
                 onClick={() => openDetail({ kind: 'StatefulSet', name: sts.name, namespace: sts.namespace })}
               >
                 {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={sts.namespace}>{sts.namespace}</td>}
-                <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{sts.name}</span></td>
+                <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{sts.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{`${sts.ready_replicas ?? 0}/${sts.replicas ?? 0}`}</td>
                 <td className="py-3 px-4 text-xs font-mono">{`${sts.updated_replicas ?? sts.current_replicas ?? 0}/${sts.replicas ?? 0}`}</td>
                 <td className="py-3 px-4 text-xs font-mono">{sts.available_replicas ?? 0}</td>

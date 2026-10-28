@@ -138,7 +138,7 @@ export default function Login() {
   return (
     // overflow-clip: the hero's names come in from past the window's edges, without scroll bars.
     // The navy ground is the brand's (the site has the same), not the console's grey slate.
-    <div className="min-h-screen overflow-clip bg-[#020617]">
+    <div data-color-mode="default" className="min-h-screen overflow-clip bg-[#020617]">
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(37,99,235,0.18),rgba(2,6,23,0))]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom,rgba(34,211,238,0.12),rgba(2,6,23,0))]" />

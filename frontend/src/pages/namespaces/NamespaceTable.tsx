@@ -92,7 +92,7 @@ export default function NamespaceTable({
                   className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
                   onClick={() => onRowClick(ns.name)}
                 >
-                  <td className="py-3 px-4 font-medium text-white">
+                  <td className="py-3 px-4 font-medium text-ink">
                     <span className="block truncate">{ns.name}</span>
                   </td>
                   <td className="py-3 px-4">

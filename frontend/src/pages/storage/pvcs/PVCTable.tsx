@@ -141,7 +141,7 @@ export function PVCTable({
                 })}
               >
                 {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={pvc.namespace}>{pvc.namespace}</td>}
-                <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{pvc.name}</span></td>
+                <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{pvc.name}</span></td>
                 <td className="py-3 px-4">
                   <span className={`badge ${String(pvc.status || '').toLowerCase() === 'bound' ? 'badge-success' : String(pvc.status || '').toLowerCase() === 'pending' ? 'badge-warning' : 'badge-error'}`}>
                     {pvc.status || '-'}

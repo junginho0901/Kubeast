@@ -126,7 +126,7 @@ export function ResourceGraphHeader({
   return (
     <div className="shrink-0 px-6 py-4 border-b border-slate-700">
       <div className="flex items-center justify-between mb-3">
-        <h1 className="text-xl font-bold text-white">
+        <h1 className="text-xl font-semibold text-ink">
           {t('resourceGraph.title', 'Resource Graph')}
         </h1>
         <div className="flex items-center gap-2 text-xs text-slate-400">
@@ -148,7 +148,7 @@ export function ResourceGraphHeader({
           <button
             type="button"
             onClick={() => setIsNsDropdownOpen(!isNsDropdownOpen)}
-            className="h-9 px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-hidden focus:ring-2 focus:ring-primary-500 flex items-center gap-2 min-w-[180px] justify-between"
+            className="h-9 px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink focus:outline-hidden focus:ring-2 focus:ring-primary-500 flex items-center gap-2 min-w-[180px] justify-between"
           >
             <span className="truncate">
               {selectedNamespaces.size === 0
@@ -173,7 +173,7 @@ export function ResourceGraphHeader({
                   key={ns.name}
                   type="button"
                   onClick={() => toggleNs(ns.name)}
-                  className="w-full px-4 py-2 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2"
+                  className="w-full px-4 py-2 text-left text-sm text-ink hover:bg-slate-600 transition-colors flex items-center gap-2"
                 >
                   {selectedNamespaces.has(ns.name) && <CheckCircle className="w-3.5 h-3.5 text-primary-400 shrink-0" />}
                   <span className={selectedNamespaces.has(ns.name) ? 'font-medium' : ''}>{ns.name}</span>
@@ -191,11 +191,11 @@ export function ResourceGraphHeader({
             placeholder={t('resourceGraph.search', 'Search resources...')}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="h-9 w-full pl-8 pr-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+            className="h-9 w-full pl-8 pr-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500"
           />
           {searchQuery && (
             <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2">
-              <X className="w-3.5 h-3.5 text-slate-400 hover:text-white" />
+              <X className="w-3.5 h-3.5 text-slate-400 hover:text-ink" />
             </button>
           )}
         </div>
@@ -208,7 +208,7 @@ export function ResourceGraphHeader({
               type="button"
               onClick={() => setGroupBy(val)}
               className={`px-2.5 py-1.5 rounded-md text-xs transition-colors ${
-                groupBy === val ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'
+                groupBy === val ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-ink'
               }`}
             >
               {t(`resourceGraph.groupBy.${val}`, label)}
@@ -285,7 +285,7 @@ export function ResourceGraphHeader({
                   }}
                   className={`px-1.5 py-0.5 rounded-sm text-[10px] transition-colors ${
                     kindFilters.has(kind)
-                      ? 'bg-primary-500/25 text-white'
+                      ? 'bg-primary-500/25 text-ink'
                       : 'bg-slate-800 text-slate-600'
                   }`}
                 >

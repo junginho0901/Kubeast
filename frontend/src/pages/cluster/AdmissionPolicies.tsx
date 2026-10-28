@@ -174,7 +174,7 @@ export default function AdmissionPolicies({ kind }: { kind: AdmissionPolicyKind 
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-3xl font-bold text-white">
+          <h1 className="text-3xl font-semibold text-ink">
             {validating
               ? tr('admissionPolicies.validating.title', 'Validating Admission Policies')
               : tr('admissionPolicies.mutating.title', 'Mutating Admission Policies')}
@@ -207,7 +207,7 @@ export default function AdmissionPolicies({ kind }: { kind: AdmissionPolicyKind 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             data-testid="admission-policies-search"
-            className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
         </div>
       </div>
@@ -215,11 +215,11 @@ export default function AdmissionPolicies({ kind }: { kind: AdmissionPolicyKind 
       <div className="grid grid-cols-2 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('admissionPolicies.stats.total', 'Total Policies')}</p>
-          <p className="text-lg text-white font-semibold mt-1" data-testid="admission-policies-total">{summary.total}</p>
+          <p className="text-lg text-ink font-semibold mt-1" data-testid="admission-policies-total">{summary.total}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('admissionPolicies.stats.bindings', 'Total Bindings')}</p>
-          <p className="text-lg text-white font-semibold mt-1">{summary.bindings}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{summary.bindings}</p>
         </div>
       </div>
 
@@ -270,7 +270,7 @@ export default function AdmissionPolicies({ kind }: { kind: AdmissionPolicyKind 
                   className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
                   onClick={() => openDetail({ kind, name: item.name, rawJson: toRawJson(kind, item) })}
                 >
-                  <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{item.name}</span></td>
+                  <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{item.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{rulesOf(item)}</td>
                   <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate" title={item.param_kind || undefined}>{item.param_kind || '-'}</span></td>
                   <td className="py-3 px-4 text-xs font-mono" title={item.bindings.join(', ') || undefined}>{item.bindings_count}</td>

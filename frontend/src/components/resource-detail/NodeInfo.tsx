@@ -63,19 +63,19 @@ export default function NodeInfo({ name }: Props) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-3">
           <p className="text-xs text-slate-400"><Tx>Uptime</Tx></p>
-          <p className="text-base text-white mt-1">{fmtRel(nodeDescribe.conditions?.find((c: any) => c.type === 'Ready')?.last_transition_time)}</p>
+          <p className="text-base text-ink mt-1">{fmtRel(nodeDescribe.conditions?.find((c: any) => c.type === 'Ready')?.last_transition_time)}</p>
         </div>
         <UsageCard
           label="CPU Usage"
           value={metricForNode ? `${metricForNode.cpu || '-'} (${metricForNode.cpu_percent || '-'})` : tr('nodes.detail.noMetrics', 'No metrics (metrics-server not installed)')}
           percent={Number.isFinite(cpuP) ? cpuP : 0}
-          color={cpuP >= 80 ? '#ef4444' : cpuP >= 60 ? '#f59e0b' : 'var(--color-primary-400)'}
+          color={cpuP >= 80 ? '#ef4444' : cpuP >= 60 ? '#f59e0b' : 'var(--color-primary-bright)'}
         />
         <UsageCard
           label="Memory Usage"
           value={metricForNode ? `${metricForNode.memory || '-'} (${metricForNode.memory_percent || '-'})` : tr('nodes.detail.noMetrics', 'No metrics (metrics-server not installed)')}
           percent={Number.isFinite(memP) ? memP : 0}
-          color={memP >= 80 ? '#ef4444' : memP >= 60 ? '#f59e0b' : 'var(--color-primary-400)'}
+          color={memP >= 80 ? '#ef4444' : memP >= 60 ? '#f59e0b' : 'var(--color-primary-bright)'}
         />
       </div>
 
@@ -140,7 +140,7 @@ export default function NodeInfo({ name }: Props) {
             {nodeDescribe.conditions.map((c: any, i: number) => (
               <div key={`${c.type}-${i}`} className="flex items-start justify-between gap-4">
                 <div>
-                  <div className="font-medium text-white">{c.type}</div>
+                  <div className="font-medium text-ink">{c.type}</div>
                   <div className="text-slate-400">{c.reason || '-'}</div>
                 </div>
                 <div className="text-right text-slate-400">

@@ -15,7 +15,7 @@ export default function AIGate({ children }: { children: ReactNode }) {
     <div className="m-6 rounded-lg border border-slate-700 bg-slate-800/50 p-6 text-slate-300 flex items-start gap-3" data-testid="ai-disabled-notice">
       <Bot className="w-5 h-5 mt-0.5 text-slate-400 shrink-0" />
       <div>
-        <div className="font-semibold text-white">{t('ai.disabled.title', { defaultValue: 'AI is off in this installation' })}</div>
+        <div className="font-semibold text-ink">{t('ai.disabled.title', { defaultValue: 'AI is off in this installation' })}</div>
         <p className="mt-1 text-sm">{t('ai.disabled.body', { defaultValue: 'The chart was installed with ai.enabled: false, so there is no AI service, no AI tools and no MCP server here.' })}</p>
       </div>
     </div>

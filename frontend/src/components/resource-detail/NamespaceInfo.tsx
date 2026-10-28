@@ -359,7 +359,7 @@ export default function NamespaceInfo({ name }: Props) {
           <div className="space-y-3">
             {resourceQuotas.map((rq: any) => (
               <div key={rq.name} className="rounded-sm border border-slate-800 p-3">
-                <p className="text-xs text-white font-medium mb-2">{rq.name}</p>
+                <p className="text-xs text-ink font-medium mb-2">{rq.name}</p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs table-fixed min-w-[360px]">
                     <thead className="text-slate-400"><tr><Th className="text-left py-1 w-[40%]">Resource</Th><Th className="text-left py-1 w-[30%]">Used</Th><Th className="text-left py-1 w-[30%]">Hard</Th></tr></thead>
@@ -386,7 +386,7 @@ export default function NamespaceInfo({ name }: Props) {
           <div className="space-y-3">
             {limitRanges.map((lr: any) => (
               <div key={lr.name} className="rounded-sm border border-slate-800 p-3">
-                <p className="text-xs text-white font-medium mb-2">{lr.name}</p>
+                <p className="text-xs text-ink font-medium mb-2">{lr.name}</p>
                 {lr.limits?.map((lim: any, li: number) => (
                   <div key={li} className="overflow-x-auto mb-2">
                     <p className="text-[11px] text-slate-400 mb-1">Type: {lim.type || '-'}</p>
@@ -424,7 +424,7 @@ export default function NamespaceInfo({ name }: Props) {
               value={podFilter}
               onChange={e => setPodFilter(e.target.value)}
               placeholder={dl('Filter...')}
-              className="pl-6 pr-2 py-1 text-[11px] bg-slate-800 border border-slate-700 rounded-sm text-white placeholder-slate-500 focus:outline-hidden w-36"
+              className="pl-6 pr-2 py-1 text-[11px] bg-slate-800 border border-slate-700 rounded-sm text-ink placeholder-slate-500 focus:outline-hidden w-36"
             />
           </div>
         }

@@ -63,7 +63,7 @@ export default function NodeActions({ name, tr, data }: NodeActionsProps) {
             <button
               onClick={() => nodeDescribe.unschedulable ? uncordonMut.mutate(name) : cordonMut.mutate(name)}
               disabled={isSchedulingMut || isDrainMut}
-              className="text-xs px-3 py-1 rounded-md border border-slate-700 bg-slate-800 text-white hover:border-slate-500 disabled:opacity-60"
+              className="text-xs px-3 py-1 rounded-md border border-slate-700 bg-slate-800 text-ink hover:border-slate-500 disabled:opacity-60"
             >
               {isSchedulingMut ? (nodeDescribe.unschedulable ? tr('nodes.actions.uncordoning', 'Uncordoning...') : tr('nodes.actions.cordoning', 'Cordoning...'))
                 : (nodeDescribe.unschedulable ? tr('nodes.actions.uncordon', 'Uncordon') : tr('nodes.actions.cordon', 'Cordon'))}
@@ -73,7 +73,7 @@ export default function NodeActions({ name, tr, data }: NodeActionsProps) {
             <button
               onClick={() => { setDrainDialogOpen(true); setDrainError(null) }}
               disabled={isDrainMut || isSchedulingMut}
-              className="text-xs px-3 py-1 rounded-md border border-slate-700 bg-slate-800 text-white hover:border-slate-500 disabled:opacity-60"
+              className="text-xs px-3 py-1 rounded-md border border-slate-700 bg-slate-800 text-ink hover:border-slate-500 disabled:opacity-60"
             >
               {isDrainMut ? tr('nodes.actions.draining', 'Draining...') : tr('nodes.actions.drain', 'Drain')}
             </button>
@@ -83,7 +83,7 @@ export default function NodeActions({ name, tr, data }: NodeActionsProps) {
               onClick={() => setShowNodeShell(true)}
               disabled={!isLinuxNode}
               title={isLinuxNode ? undefined : dl('Linux only')}
-              className="text-xs px-3 py-1 rounded-md border border-slate-700 bg-slate-800 text-white hover:border-slate-500 disabled:opacity-60"
+              className="text-xs px-3 py-1 rounded-md border border-slate-700 bg-slate-800 text-ink hover:border-slate-500 disabled:opacity-60"
             >
               {tr('nodes.actions.debug', 'Debug')}
             </button>
@@ -106,7 +106,7 @@ export default function NodeActions({ name, tr, data }: NodeActionsProps) {
       {drainDialogOpen && (
         <ModalOverlay onClose={() => setDrainDialogOpen(false)}>
           <div className="bg-slate-800 rounded-lg w-full max-w-lg p-6" onClick={e => e.stopPropagation()}>
-            <h2 className="text-xl font-bold text-white mb-4">{tr('nodes.drain.title', 'Drain node')}</h2>
+            <h2 className="text-xl font-semibold text-ink mb-4">{tr('nodes.drain.title', 'Drain node')}</h2>
             <p className="text-slate-300">{tr('nodes.drain.confirm', 'Are you sure you want to drain node {{name}}?', { name })}</p>
             <p className="text-slate-400 mt-3">{tr('nodes.drain.warning', 'Draining will evict pods from this node.')}</p>
             {drainError && <div className="mt-4 text-sm text-red-400">{drainError}</div>}

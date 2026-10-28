@@ -92,7 +92,7 @@ export default function ResourceTypePicker({ selected, onChange, extraResources 
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium transition-colors"
+        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-ink text-sm font-medium transition-colors"
       >
         <Search className="w-4 h-4 text-slate-400" />
         {t('advancedSearch.selectResources', 'Select Resources')}
@@ -116,7 +116,7 @@ export default function ResourceTypePicker({ selected, onChange, extraResources 
                   placeholder={t('advancedSearch.filterResources', 'Filter resources...')}
                   value={filter}
                   onChange={e => setFilter(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm placeholder-slate-500 focus:outline-hidden focus:border-primary-500"
+                  className="w-full pl-9 pr-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-ink text-sm placeholder-slate-500 focus:outline-hidden focus:border-primary-500"
                   autoFocus
                 />
               </div>
@@ -148,7 +148,7 @@ export default function ResourceTypePicker({ selected, onChange, extraResources 
                         <div className={`w-4 h-4 rounded-sm border flex items-center justify-center ${
                           checked ? 'bg-primary-500 border-primary-500' : 'border-slate-500'
                         }`}>
-                          {checked && <Check className="w-3 h-3 text-white" />}
+                          {checked && <Check className="w-3 h-3 text-ink" />}
                         </div>
                         <span className="font-medium">{r.kind}</span>
                         {!r.namespaced && (

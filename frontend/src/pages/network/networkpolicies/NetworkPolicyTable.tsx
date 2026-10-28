@@ -138,7 +138,7 @@ export function NetworkPolicyTable({
                 })}
               >
                 {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={policy.namespace}><span className="block truncate">{policy.namespace}</span></td>}
-                <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{policy.name}</span></td>
+                <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{policy.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatSelector(policy)}</span></td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{formatPolicyTypes(policy)}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{policy.ingress_rules || 0}</td>

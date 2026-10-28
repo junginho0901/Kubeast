@@ -44,7 +44,7 @@ export function PodDetailModal({ isAdmin, manifest, describeData }: Props) {
           <div className="flex items-center gap-3">
             <Box className="w-6 h-6 text-primary-400" />
             <div>
-              <h2 className="text-xl font-bold text-white">{selectedPod.name}</h2>
+              <h2 className="text-xl font-semibold text-ink">{selectedPod.name}</h2>
               <p className="text-sm text-slate-400">{selectedPod.namespace}</p>
             </div>
           </div>

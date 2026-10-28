@@ -31,7 +31,7 @@ export function NodeAllocationSection({ nodeAllocation, nodeReadyCount, nodeNotR
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Server className="h-4 w-4 text-slate-400" />
-          <h2 className="text-sm font-semibold text-white">
+          <h2 className="text-sm font-semibold text-ink">
             {tr('gpuDashboardPage.nodeAllocation.title', 'Node GPU Allocation')}
           </h2>
           <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-300">
@@ -43,7 +43,7 @@ export function NodeAllocationSection({ nodeAllocation, nodeReadyCount, nodeNotR
         </div>
         <Link
           to="/gpu/nodes"
-          className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors"
+          className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-ink transition-colors"
         >
           {tr('gpuDashboardPage.viewAll', 'View all')}
           <ArrowRight className="h-3 w-3" />
@@ -63,7 +63,7 @@ export function NodeAllocationSection({ nodeAllocation, nodeReadyCount, nodeNotR
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-white">{node.name}</span>
+                    <span className="text-sm font-medium text-ink">{node.name}</span>
                     <span className={`badge ${getStatusColor(node.status)}`}>{node.status}</span>
                   </div>
                   <span className="text-xs text-slate-400">
@@ -74,7 +74,7 @@ export function NodeAllocationSection({ nodeAllocation, nodeReadyCount, nodeNotR
                   <div className="flex-1 h-2.5 bg-slate-800 rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all ${
-                        usedPct >= 80 ? 'bg-red-500' : usedPct >= 50 ? 'bg-amber-500' : 'bg-primary-400'
+                        usedPct >= 80 ? 'bg-red-500' : usedPct >= 50 ? 'bg-amber-500' : 'bg-primary-bright'
                       }`}
                       style={{ width: `${Math.min(usedPct, 100)}%` }}
                     />

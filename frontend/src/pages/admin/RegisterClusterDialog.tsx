@@ -88,7 +88,7 @@ export default function RegisterClusterDialog({ onClose, onRegistered }: Props) 
 
   const tabClass = (active: boolean) =>
     `px-4 py-2 text-sm font-medium border-b-2 ${
-      active ? 'border-primary-500 text-white' : 'border-transparent text-slate-400 hover:text-slate-200'
+      active ? 'border-primary-500 text-ink' : 'border-transparent text-slate-400 hover:text-slate-200'
     }`
 
   return (
@@ -137,7 +137,7 @@ export default function RegisterClusterDialog({ onClose, onRegistered }: Props) 
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               placeholder="prod-seoul"
-              className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-white"
+              className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-ink"
             />
           </div>
 
@@ -164,7 +164,7 @@ export default function RegisterClusterDialog({ onClose, onRegistered }: Props) 
                   }}
                   rows={8}
                   placeholder="apiVersion: v1&#10;kind: Config&#10;..."
-                  className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-xs font-mono text-white"
+                  className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-xs font-mono text-ink"
                 />
                 <p className="mt-1 text-[11px] text-slate-500">
                   {tr(
@@ -181,7 +181,7 @@ export default function RegisterClusterDialog({ onClose, onRegistered }: Props) 
                   value={apiServerURL}
                   onChange={(e) => setApiServerURL(e.target.value)}
                   placeholder={tr('cluster.register.apiServerPlaceholder', 'Empty = the server in the kubeconfig')}
-                  className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-white"
+                  className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-ink"
                 />
               </div>
               <div className="flex items-center gap-3">

@@ -27,18 +27,18 @@ export function Glance({ node, position }: Props) {
         <span className="text-base">{kindIcon[node.kind] || '📄'}</span>
         <div className="min-w-0 flex-1">
           <div className="text-[10px] text-slate-400">{node.kind}</div>
-          <div className="text-xs font-semibold text-white truncate">{node.name}</div>
+          <div className="text-xs font-semibold text-ink truncate">{node.name}</div>
         </div>
         <span className="w-2 h-2 rounded-full shrink-0" style={{ background: borderColor, boxShadow: `0 0 6px ${borderColor}` }} />
       </div>
 
       <div className="space-y-1 text-[10px]">
-        <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.status', 'Status')}</span><span className="text-white">{node.status}</span></div>
-        {node.ready && <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.ready', 'Ready')}</span><span className="text-white">{node.ready}</span></div>}
-        {node.namespace && <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.namespace', 'Namespace')}</span><span className="text-white">{node.namespace}</span></div>}
-        {node.nodeName && <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.node', 'Node')}</span><span className="text-white">{node.nodeName}</span></div>}
-        {node.ownerKind && <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.owner', 'Owner')}</span><span className="text-white">{node.ownerKind}</span></div>}
-        {node.instanceLabel && <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.instance', 'Instance')}</span><span className="text-white">{node.instanceLabel}</span></div>}
+        <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.status', 'Status')}</span><span className="text-ink">{node.status}</span></div>
+        {node.ready && <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.ready', 'Ready')}</span><span className="text-ink">{node.ready}</span></div>}
+        {node.namespace && <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.namespace', 'Namespace')}</span><span className="text-ink">{node.namespace}</span></div>}
+        {node.nodeName && <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.node', 'Node')}</span><span className="text-ink">{node.nodeName}</span></div>}
+        {node.ownerKind && <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.owner', 'Owner')}</span><span className="text-ink">{node.ownerKind}</span></div>}
+        {node.instanceLabel && <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.instance', 'Instance')}</span><span className="text-ink">{node.instanceLabel}</span></div>}
       </div>
     </div>
   )

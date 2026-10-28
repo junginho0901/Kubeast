@@ -62,7 +62,7 @@ export default function GPUNodes() {
       {/* Header */}
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-3xl font-bold text-white">{tr('gpuNodes.title', 'GPU Nodes')}</h1>
+          <h1 className="text-3xl font-semibold text-ink">{tr('gpuNodes.title', 'GPU Nodes')}</h1>
           <p className="mt-2 text-slate-400">{tr('gpuNodes.subtitle', 'GPU node status, capacity, and model information.')}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -92,7 +92,7 @@ export default function GPUNodes() {
           placeholder={tr('gpuNodes.searchPlaceholder', 'Search by node name, GPU model, driver version...')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
         />
       </div>
 
@@ -101,7 +101,7 @@ export default function GPUNodes() {
         {summaryCards.map(([label, value, boxClass, labelColor]) => (
           <div key={label} className={`rounded-lg border px-3 py-2.5 ${boxClass}`}>
             <div className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelColor}`}>{label}</div>
-            <div className="mt-1 text-lg font-semibold text-white">{value}</div>
+            <div className="mt-1 text-lg font-semibold text-ink">{value}</div>
           </div>
         ))}
       </div>

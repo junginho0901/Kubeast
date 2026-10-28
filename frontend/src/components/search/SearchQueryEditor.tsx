@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { X, Loader2 } from 'lucide-react'
 import MonacoEditor, { type Monaco } from '@/components/monaco/CodeEditor'
 import { generateGlobalVarDeclarations } from './inferTypes'
+import { useColorMode } from '@/utils/colorMode'
 
 interface Props {
   value: string
@@ -27,6 +28,7 @@ export default function SearchQueryEditor({
 }: Props) {
   const { t } = useTranslation()
   const [focused, setFocused] = useState(false)
+  const colorMode = useColorMode()
   // Set from onMount: monaco is loaded lazily with the editor, so there is no
   // instance to read before it mounts.
   const [monaco, setMonaco] = useState<Monaco | null>(null)
@@ -54,13 +56,15 @@ export default function SearchQueryEditor({
 
   function handleEditorWillMount(m: Monaco) {
     // vs-dark paints an opaque #1e1e1e box inside the rounded field and over the
-    // placeholder; this theme keeps the field's own background.
-    m.editor.defineTheme('kubeast-search', {
-      base: 'vs-dark',
-      inherit: true,
-      rules: [],
-      colors: { 'editor.background': '#00000000', 'editorGutter.background': '#00000000' },
-    })
+    // placeholder; these themes keep the field's own background.
+    for (const [name, base] of [['kubeast-search', 'vs-dark'], ['kubeast-search-light', 'vs']] as const) {
+      m.editor.defineTheme(name, {
+        base,
+        inherit: true,
+        rules: [],
+        colors: { 'editor.background': '#00000000', 'editorGutter.background': '#00000000' },
+      })
+    }
     const ts = (m.languages as any).typescript
     if (!ts) return
     ts.javascriptDefaults.setCompilerOptions({
@@ -87,7 +91,7 @@ export default function SearchQueryEditor({
           <MonacoEditor
             height="28px"
             language="javascript"
-            theme="kubeast-search"
+            theme={colorMode === 'light' ? 'kubeast-search-light' : 'kubeast-search'}
             value={value}
             beforeMount={handleEditorWillMount}
             onChange={v => onChange(v ?? '')}
@@ -122,7 +126,7 @@ export default function SearchQueryEditor({
         {value && (
           <button
             onClick={onClear}
-            className="p-2 mr-1 text-slate-400 hover:text-white transition-colors"
+            className="p-2 mr-1 text-slate-400 hover:text-ink transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -147,7 +151,7 @@ export default function SearchQueryEditor({
               )}
             </span>
             {searchTimeMs !== null && (
-              <span className="text-slate-600">
+              <span className="text-slate-500">
                 {searchTimeMs.toFixed(0)}ms
               </span>
             )}

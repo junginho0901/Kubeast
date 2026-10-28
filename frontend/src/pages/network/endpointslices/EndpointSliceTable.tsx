@@ -147,7 +147,7 @@ export function EndpointSliceTable({
                   })}
                 >
                   {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={es.namespace}>{es.namespace}</td>}
-                  <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{es.name}</span></td>
+                  <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{es.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{es.service_name || '-'}</span></td>
                   <td className="col-optional py-3 px-4 text-xs font-mono">{es.address_type || '-'}</td>
                   <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{formatPorts(es.ports)}</span></td>

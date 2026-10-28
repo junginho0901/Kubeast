@@ -2300,7 +2300,8 @@
       "metricsError": "Failed to fetch node metrics"
     },
     "nodes": {
-      "title": "Nodes"
+      "title": "Nodes",
+      "viewAll": "View all {{count}} nodes"
     },
     "nodeCard": {
       "versionLabel": "Version",
@@ -2864,6 +2865,13 @@
       "korean": "Korean",
       "hint": "Changes apply immediately."
     },
+    "colorMode": {
+      "title": "Color mode",
+      "subtitle": "Choose the console colors. The choice is kept in this browser.",
+      "default": "Default",
+      "dark": "Dark",
+      "light": "Light"
+    },
     "password": {
       "changed": "Password updated.",
       "required": "Enter current and new passwords.",
@@ -2883,7 +2891,7 @@
       "submit": "Update password"
     },
     "title": "Settings",
-    "subtitle": "Manage your profile, password, and language.",
+    "subtitle": "Manage your profile, password, language, and color mode.",
     "profile": {
       "title": "Profile",
       "subtitle": "Signed-in account information",

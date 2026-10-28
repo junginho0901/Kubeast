@@ -176,7 +176,7 @@ export default function MonitoringNodes({
             <Server className="w-6 h-6 text-slate-300" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-white">{t('monitoring.nodes.title')}</h2>
+            <h2 className="text-xl font-semibold text-ink">{t('monitoring.nodes.title')}</h2>
           </div>
         </div>
         <div className="flex flex-col items-end gap-1 text-right">
@@ -228,7 +228,7 @@ export default function MonitoringNodes({
                 className="block w-full text-left p-4 bg-slate-700 rounded-lg hover:bg-slate-600/80 transition-colors cursor-pointer"
               >
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-medium text-white flex items-center gap-2">
+                  <h3 className="font-medium text-ink flex items-center gap-2">
                     <Server className="w-5 h-5 text-slate-400" />
                     {node.name}
                   </h3>
@@ -270,7 +270,7 @@ export default function MonitoringNodes({
                           ? 'bg-red-500'
                           : cpuPercent >= 60
                             ? 'bg-yellow-500'
-                            : 'bg-primary-400'
+                            : 'bg-primary-bright'
                       }`}
                       style={{ width: `${Math.min(cpuPercent, 100)}%` }}
                     />
@@ -303,7 +303,7 @@ export default function MonitoringNodes({
                           ? 'bg-red-500'
                           : memoryPercent >= 60
                             ? 'bg-yellow-500'
-                            : 'bg-primary-400'
+                            : 'bg-primary-bright'
                       }`}
                       style={{ width: `${Math.min(memoryPercent, 100)}%` }}
                     />

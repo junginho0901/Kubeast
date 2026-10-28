@@ -73,7 +73,7 @@ export default function AccessRequests() {
       <div>
         <div className="flex items-center gap-2">
           <ShieldCheck className="w-6 h-6 text-primary-400" />
-          <h1 className="text-3xl font-bold text-white">{tr('accessRequests.title', 'Access requests')}</h1>
+          <h1 className="text-3xl font-semibold text-ink">{tr('accessRequests.title', 'Access requests')}</h1>
         </div>
         <p className="text-slate-400 mt-2">
           {tr(
@@ -113,7 +113,7 @@ export default function AccessRequests() {
           onChange={(e) => setSearch(e.target.value)}
           placeholder={tr('accessRequests.searchPlaceholder', 'Search by requester, cluster or role...')}
           data-testid="access-requests-search"
-          className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
         />
       </div>
 
@@ -176,7 +176,7 @@ export default function AccessRequests() {
                               value={notes[r.id] ?? ''}
                               onChange={(e) => setNotes((n) => ({ ...n, [r.id]: e.target.value }))}
                               placeholder={tr('accessRequests.admin.notePlaceholder', 'Note (optional)')}
-                              className="w-40 rounded-lg border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-white placeholder:text-slate-500"
+                              className="w-40 rounded-lg border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-ink placeholder:text-slate-500"
                             />
                             <button
                               type="button"

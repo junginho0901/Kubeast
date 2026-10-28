@@ -163,7 +163,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
             {versions.map((ver: any) => (
               <div key={ver.name} className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 space-y-1.5">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-white">{ver.name}</span>
+                  <span className="text-sm font-medium text-ink">{ver.name}</span>
                   {ver.storage && (
                     <span className="inline-flex px-2 py-0.5 rounded-sm text-[11px] font-medium bg-green-900/40 text-green-300"><Tx>Storage</Tx></span>
                   )}
@@ -234,7 +234,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
                 placeholder={tr('crdInfo.searchInstances', 'Search instances...')}
                 value={instanceSearch}
                 onChange={(e) => { setInstanceSearch(e.target.value); setInstancePage(1) }}
-                className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-sm text-xs text-white placeholder-slate-500 focus:outline-hidden focus:ring-1 focus:ring-primary-500"
+                className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-sm text-xs text-ink placeholder-slate-500 focus:outline-hidden focus:ring-1 focus:ring-primary-500"
               />
             </div>
           )}
@@ -254,7 +254,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
                   <tbody className="divide-y divide-slate-800">
                     {pagedInstances.map((inst: any) => (
                       <tr key={`${inst.namespace || '-'}/${inst.name}`} className="text-slate-300 hover:bg-slate-800/40">
-                        <td className="py-1.5 pr-3 font-mono text-white truncate max-w-[200px]">{inst.name}</td>
+                        <td className="py-1.5 pr-3 font-mono text-ink truncate max-w-[200px]">{inst.name}</td>
                         <td className="py-1.5 pr-3">{inst.namespace || '-'}</td>
                         <td className="py-1.5 font-mono">{formatAge(inst.created_at)}</td>
                       </tr>
@@ -266,9 +266,9 @@ export default function CRDInfo({ name, rawJson }: Props) {
                 <div className="flex items-center justify-between mt-2 text-xs text-slate-400">
                   <span><Tx text="{{n}} total" values={{ n: filteredInstances.length }} /></span>
                   <div className="flex items-center gap-1">
-                    <button onClick={() => setInstancePage(p => Math.max(1, p - 1))} disabled={instancePage <= 1} className="px-2 py-0.5 rounded-sm border border-slate-700 text-slate-400 disabled:opacity-40 hover:text-white"><Tx>Prev</Tx></button>
+                    <button onClick={() => setInstancePage(p => Math.max(1, p - 1))} disabled={instancePage <= 1} className="px-2 py-0.5 rounded-sm border border-slate-700 text-slate-400 disabled:opacity-40 hover:text-ink"><Tx>Prev</Tx></button>
                     <span className="min-w-[48px] text-center">{instancePage}/{instanceTotalPages}</span>
-                    <button onClick={() => setInstancePage(p => Math.min(instanceTotalPages, p + 1))} disabled={instancePage >= instanceTotalPages} className="px-2 py-0.5 rounded-sm border border-slate-700 text-slate-400 disabled:opacity-40 hover:text-white"><Tx>Next</Tx></button>
+                    <button onClick={() => setInstancePage(p => Math.min(instanceTotalPages, p + 1))} disabled={instancePage >= instanceTotalPages} className="px-2 py-0.5 rounded-sm border border-slate-700 text-slate-400 disabled:opacity-40 hover:text-ink"><Tx>Next</Tx></button>
                   </div>
                 </div>
               )}

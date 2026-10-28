@@ -41,17 +41,17 @@ export function PrometheusClusterMetrics({ title, cpu, memory, disk, podCount }:
     <div className="card">
       <div className="flex items-center gap-2 mb-4">
         <div className="h-2 w-2 rounded-full bg-emerald-400" />
-        <h2 className="text-lg font-semibold text-white">{title}</h2>
+        <h2 className="text-lg font-semibold text-ink">{title}</h2>
         <span className="text-xs text-slate-500">{t('dashboard.live', 'Live')}</span>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {cpu !== null && <MetricBar label="CPU" value={cpu} normalClass="bg-primary-400" />}
-        {memory !== null && <MetricBar label={t('dashboard.memory', 'Memory')} value={memory} normalClass="bg-primary-400" />}
-        {disk !== null && <MetricBar label={t('dashboard.disk', 'Disk')} value={disk} normalClass="bg-primary-400" />}
+        {cpu !== null && <MetricBar label="CPU" value={cpu} normalClass="bg-primary-bright" />}
+        {memory !== null && <MetricBar label={t('dashboard.memory', 'Memory')} value={memory} normalClass="bg-primary-bright" />}
+        {disk !== null && <MetricBar label={t('dashboard.disk', 'Disk')} value={disk} normalClass="bg-primary-bright" />}
         {podCount !== null && (
           <div className="space-y-2">
             <div className="text-xs text-slate-400">{t('dashboard.pods', 'Pods')}</div>
-            <div className="text-2xl font-semibold text-white tabular-nums">{Math.round(podCount)}</div>
+            <div className="text-2xl font-semibold text-ink tabular-nums">{Math.round(podCount)}</div>
           </div>
         )}
       </div>

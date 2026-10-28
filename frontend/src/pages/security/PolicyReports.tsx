@@ -233,7 +233,7 @@ export default function PolicyReports() {
       aria-selected={tab === value}
       data-testid={`policy-reports-tab-${value}`}
       onClick={() => setTab(value)}
-      className={`h-8 px-3 text-sm rounded-md transition-colors ${tab === value ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+      className={`h-8 px-3 text-sm rounded-md transition-colors ${tab === value ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-ink hover:bg-slate-800'}`}
     >
       {label}
     </button>
@@ -261,7 +261,7 @@ export default function PolicyReports() {
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-3xl font-bold text-white">{tr('policyReports.title', 'Policy Reports')}</h1>
+          <h1 className="text-3xl font-semibold text-ink">{tr('policyReports.title', 'Policy Reports')}</h1>
           <p className="mt-2 text-slate-400">
             {tr('policyReports.subtitle', "What the cluster's policy engine (Kyverno, Trivy Operator, …) recorded in PolicyReports: results by policy and by namespace, and the rows behind them. Read-only.")}
           </p>
@@ -351,7 +351,7 @@ export default function PolicyReports() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 data-testid="policy-reports-search"
-                className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
             </div>
           </div>
@@ -419,7 +419,7 @@ export default function PolicyReports() {
                 <tbody className="divide-y divide-slate-700">
                   {tab === 'policies' && pagedPolicies.map((r, idx) => (
                     <tr ref={idx === 0 ? firstRowRef : undefined} key={r.policy} data-testid="policy-report-row" className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => showPolicy(r.policy)}>
-                      <td className="py-3 px-4 font-medium text-white"><span className="block truncate" title={r.policy}>{r.policy}</span></td>
+                      <td className="py-3 px-4 font-medium text-ink"><span className="block truncate" title={r.policy}>{r.policy}</span></td>
                       <td className="col-optional py-3 px-4 text-xs"><span className="block truncate" title={r.category}>{r.category || '-'}</span></td>
                       <td className="py-3 px-4 text-xs">{r.severity || '-'}</td>
                       <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate" title={r.source}>{r.source || '-'}</span></td>
@@ -429,7 +429,7 @@ export default function PolicyReports() {
                   ))}
                   {tab === 'namespaces' && pagedNamespaces.map((r, idx) => (
                     <tr ref={idx === 0 ? firstRowRef : undefined} key={r.namespace || '(cluster)'} data-testid="policy-report-row" className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => r.namespace && showNamespace(r.namespace)}>
-                      <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{r.namespace || tr('policyReports.clusterScope', 'Cluster-scoped')}</span></td>
+                      <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{r.namespace || tr('policyReports.clusterScope', 'Cluster-scoped')}</span></td>
                       <td className="py-3 px-4 text-right text-xs font-mono">{r.policies}</td>
                       {countCells(r)}
                     </tr>
@@ -437,7 +437,7 @@ export default function PolicyReports() {
                   {tab === 'results' && pagedResults.map((r, idx) => (
                     <tr ref={idx === 0 ? firstRowRef : undefined} key={`${r.report}/${r.policy}/${r.rule}/${r.name}/${idx}`} data-testid="policy-report-row" className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openRow(r)}>
                       <td className="py-3 px-4"><span className={`badge ${RESULT_BADGE[r.result] || 'badge-neutral'}`} data-testid="policy-report-result">{resultLabel(r.result)}</span></td>
-                      <td className="py-3 px-4 text-xs font-medium text-white"><span className="block truncate" title={r.policy}>{r.policy}</span></td>
+                      <td className="py-3 px-4 text-xs font-medium text-ink"><span className="block truncate" title={r.policy}>{r.policy}</span></td>
                       <td className="py-3 px-4 text-xs font-mono">
                         <span className="block truncate" title={`${r.kind}/${r.name}`}>
                           {r.kind && <span className="text-slate-400">{r.kind}/</span>}

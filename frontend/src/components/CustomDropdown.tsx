@@ -89,7 +89,7 @@ export default function CustomDropdown({
         data-testid={testId}
         onClick={() => !disabled && setIsOpen(!isOpen)}
         disabled={disabled}
-        className={`w-full ${TRIGGER_SIZE[size]} bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 justify-between disabled:opacity-50 disabled:cursor-not-allowed`}
+        className={`w-full ${TRIGGER_SIZE[size]} bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 justify-between disabled:opacity-50 disabled:cursor-not-allowed`}
       >
         <span className="flex items-center gap-2 font-medium truncate">
           {selected?.icon && <span className="text-base shrink-0">{selected.icon}</span>}
@@ -121,7 +121,7 @@ export default function CustomDropdown({
                     setIsOpen(false)
                   }
                 }}
-                className={`w-full px-4 py-2.5 text-left text-sm text-white ${hasListHints ? 'whitespace-nowrap' : ''} hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg ${
+                className={`w-full px-4 py-2.5 text-left text-sm text-ink ${hasListHints ? 'whitespace-nowrap' : ''} hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg ${
                   opt.disabled ? 'opacity-40 cursor-not-allowed' : opt.muted ? 'opacity-50' : ''
                 }`}
               >

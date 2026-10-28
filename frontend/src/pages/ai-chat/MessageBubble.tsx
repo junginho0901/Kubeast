@@ -34,7 +34,7 @@ export function MessageBubble({ message, idx, copiedMessageKey, onCopy, onDownlo
     <div className={`flex gap-3 p-6 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}>
       {message.role === 'user' ? (
         <div className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-primary-500">
-          <User className="w-5 h-5 text-white" />
+          <User className="w-5 h-5 text-ink" />
         </div>
       ) : (
         <img src="/icon.svg" alt="" className="shrink-0 w-8 h-8" data-testid="assistant-avatar" />

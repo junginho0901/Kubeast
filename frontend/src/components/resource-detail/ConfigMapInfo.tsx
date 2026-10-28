@@ -115,7 +115,7 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
               placeholder={dl('Search keys...')}
               value={dataSearch}
               onChange={(e) => { setDataSearch(e.target.value); setDataPage(1) }}
-              className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-sm text-xs text-white placeholder-slate-500 focus:outline-hidden focus:ring-1 focus:ring-primary-500"
+              className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-sm text-xs text-ink placeholder-slate-500 focus:outline-hidden focus:ring-1 focus:ring-primary-500"
             />
           </div>
         )}

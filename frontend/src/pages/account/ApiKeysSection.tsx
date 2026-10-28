@@ -104,7 +104,7 @@ export default function ApiKeysSection() {
             <KeySquare className="w-5 h-5 text-primary-400" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-white">{tr('apiKeys.title', 'API keys')}</h2>
+            <h2 className="text-xl font-semibold text-ink">{tr('apiKeys.title', 'API keys')}</h2>
             <p className="text-slate-400 text-sm">
               {tr('apiKeys.subtitle', 'For scripts and CI. A key is exchanged for a short access token and never grants more than you hold.')}
             </p>
@@ -140,7 +140,7 @@ export default function ApiKeysSection() {
             {tr('apiKeys.onceWarning', 'Copy the key now — it is shown only this once.')}
           </div>
           <div className="flex items-center gap-2">
-            <code className="flex-1 break-all rounded-sm bg-slate-950/60 px-2 py-1.5 font-mono text-xs text-white" data-testid="api-key-value">
+            <code className="flex-1 break-all rounded-sm bg-slate-950/60 px-2 py-1.5 font-mono text-xs text-ink" data-testid="api-key-value">
               {created.key}
             </code>
             <button
@@ -170,7 +170,7 @@ export default function ApiKeysSection() {
           {keys.map((k) => (
             <div key={k.id} className="flex items-center justify-between gap-3 rounded-lg bg-slate-900/40 px-3 py-2" data-testid={`api-key-row-${k.id}`}>
               <div className="min-w-0">
-                <div className="text-sm text-white truncate">
+                <div className="text-sm text-ink truncate">
                   <span className="font-medium">{k.name}</span>
                   <span className="ml-2 font-mono text-xs text-slate-400">{k.key_prefix}…</span>
                 </div>
@@ -250,7 +250,7 @@ export default function ApiKeysSection() {
                   onChange={(e) => setName(e.target.value)}
                   maxLength={64}
                   placeholder={tr('apiKeys.namePlaceholder', 'e.g. deploy pipeline')}
-                  className="w-full h-10 rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-sm text-white"
+                  className="w-full h-10 rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-sm text-ink"
                 />
               </div>
               <div>
@@ -265,7 +265,7 @@ export default function ApiKeysSection() {
                   max={maxDays}
                   value={days}
                   onChange={(e) => setDays(Number(e.target.value))}
-                  className="w-full h-10 rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-sm text-white"
+                  className="w-full h-10 rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-sm text-ink"
                 />
               </div>
               <div>

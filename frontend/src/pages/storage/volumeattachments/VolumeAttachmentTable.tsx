@@ -131,7 +131,7 @@ export function VolumeAttachmentTable({
                   className="hover:bg-slate-800/30 cursor-pointer"
                   onClick={() => openDetail({ kind: 'VolumeAttachment', name: va.name, rawJson: volumeAttachmentToRawJson(va) })}
                 >
-                  <td className="py-3 px-4 text-white font-mono break-all">{va.name}</td>
+                  <td className="py-3 px-4 text-ink font-mono break-all">{va.name}</td>
                   <td className="py-3 px-4 text-slate-300 break-all">{va.attacher || '-'}</td>
                   <td className="py-3 px-4 text-slate-300">
                     {va.persistent_volume_name ? (

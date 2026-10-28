@@ -181,7 +181,7 @@ export default function MonitoringPods({
             <Box className="w-6 h-6 text-slate-300" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-white">{t('monitoring.pods.title')}</h2>
+            <h2 className="text-xl font-semibold text-ink">{t('monitoring.pods.title')}</h2>
             <p className="text-sm text-slate-400">{t('monitoring.pods.subtitle')}</p>
           </div>
         </div>
@@ -236,7 +236,7 @@ export default function MonitoringPods({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-400">{t('monitoring.pods.totalPods')}</p>
-                <p className="text-2xl font-bold text-white mt-1">{podStats.totalPods}</p>
+                <p className="text-2xl font-bold text-ink mt-1">{podStats.totalPods}</p>
               </div>
               <Box className="w-8 h-8 text-slate-500" />
             </div>
@@ -245,7 +245,7 @@ export default function MonitoringPods({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-400">{t('monitoring.pods.totalCpu')}</p>
-                <p className="text-2xl font-bold text-white mt-1">{podStats.totalCpu}m</p>
+                <p className="text-2xl font-bold text-ink mt-1">{podStats.totalCpu}m</p>
               </div>
               <Cpu className="w-8 h-8 text-slate-500" />
             </div>
@@ -254,7 +254,7 @@ export default function MonitoringPods({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-400">{t('monitoring.pods.totalMemory')}</p>
-                <p className="text-2xl font-bold text-white mt-1">{podStats.totalMemory}Mi</p>
+                <p className="text-2xl font-bold text-ink mt-1">{podStats.totalMemory}Mi</p>
               </div>
               <HardDrive className="w-8 h-8 text-slate-500" />
             </div>
@@ -312,7 +312,7 @@ export default function MonitoringPods({
                   data-testid="monitoring-pod-row"
                   className="border-b border-slate-700/50 hover:bg-slate-700/30 cursor-pointer"
                 >
-                  <td className="py-3 px-4 text-white font-mono text-sm">{podMetric.name}</td>
+                  <td className="py-3 px-4 text-ink font-mono text-sm">{podMetric.name}</td>
                   <td className="py-3 px-4 font-mono text-xs text-slate-300">{podMetric.namespace}</td>
                   <td className="py-3 px-4">
                     <span className={`font-mono ${usageTone(cpuPct)}`} data-testid="monitoring-pod-cpu">{podMetric.cpu}</span>

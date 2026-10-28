@@ -130,7 +130,7 @@ export function StorageClassTable({
                   rawJson: storageClassToRawJson(sc),
                 })}
               >
-                <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{sc.name}</span></td>
+                <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{sc.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{sc.provisioner || '-'}</span></td>
                 <td className="py-3 px-4 text-xs">{sc.is_default ? tr('common.yes', 'Yes') : tr('common.no', 'No')}</td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{sc.reclaim_policy || '-'}</span></td>

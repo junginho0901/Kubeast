@@ -134,7 +134,7 @@ export function ServiceTable({
                 })}
               >
                 {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={svc.namespace}>{svc.namespace}</td>}
-                <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{svc.name}</span></td>
+                <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{svc.name}</span></td>
                 <td className="py-3 px-4"><span className="badge badge-info">{svc.type || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{svc.cluster_ip || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{svc.external_ip || '-'}</span></td>

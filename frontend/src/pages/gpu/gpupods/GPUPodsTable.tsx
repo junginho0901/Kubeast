@@ -147,7 +147,7 @@ export function GPUPodsTable({
                 onClick={() => openDetail({ kind: 'Pod', name: pod.name, namespace: pod.namespace })}
               >
                 <td className="col-low py-3 px-4 text-xs font-mono" title={pod.namespace}><span className="block truncate">{pod.namespace}</span></td>
-                <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{pod.name}</span></td>
+                <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{pod.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{pod.node_name ?? '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{pod.gpu_requested}</td>
                 <td className="py-3 px-4">
@@ -161,7 +161,7 @@ export function GPUPodsTable({
                         <div className="flex items-center gap-2">
                           <div className="w-16 h-2 bg-slate-800 rounded-full overflow-hidden">
                             <div
-                              className={`h-full rounded-full ${podMetric.gpu_util >= 80 ? 'bg-red-500' : podMetric.gpu_util >= 50 ? 'bg-amber-500' : 'bg-primary-400'}`}
+                              className={`h-full rounded-full ${podMetric.gpu_util >= 80 ? 'bg-red-500' : podMetric.gpu_util >= 50 ? 'bg-amber-500' : 'bg-primary-bright'}`}
                               style={{ width: `${Math.min(podMetric.gpu_util, 100)}%` }}
                             />
                           </div>
@@ -176,7 +176,7 @@ export function GPUPodsTable({
                         <div className="flex items-center gap-2">
                           <div className="w-16 h-2 bg-slate-800 rounded-full overflow-hidden">
                             <div
-                              className={`h-full rounded-full ${podMetric.memory_util_percent >= 80 ? 'bg-red-500' : podMetric.memory_util_percent >= 50 ? 'bg-amber-500' : 'bg-primary-400'}`}
+                              className={`h-full rounded-full ${podMetric.memory_util_percent >= 80 ? 'bg-red-500' : podMetric.memory_util_percent >= 50 ? 'bg-amber-500' : 'bg-primary-bright'}`}
                               style={{ width: `${Math.min(podMetric.memory_util_percent, 100)}%` }}
                             />
                           </div>

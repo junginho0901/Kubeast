@@ -137,7 +137,7 @@ export function GatewayTable({
                 })}
               >
                 {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={gateway.namespace}><span className="block truncate">{gateway.namespace}</span></td>}
-                <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{gateway.name}</span></td>
+                <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{gateway.name}</span></td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{gateway.gateway_class_name || '-'}</span></td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{gateway.status || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{gateway.listeners_count || 0}</td>

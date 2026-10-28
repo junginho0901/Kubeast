@@ -9,7 +9,7 @@ export function TypeToConfirm({ expected, value, onChange }: { expected: string;
       <label className="block text-xs font-semibold text-slate-400 mb-1" htmlFor="type-to-confirm">
         {t('common.typeToConfirm', { defaultValue: 'Type the name to confirm' })}
       </label>
-      <p className="mb-2 font-mono text-sm text-white break-all">{expected}</p>
+      <p className="mb-2 font-mono text-sm text-ink break-all">{expected}</p>
       <input
         id="type-to-confirm"
         data-testid="type-to-confirm"
@@ -18,7 +18,7 @@ export function TypeToConfirm({ expected, value, onChange }: { expected: string;
         autoComplete="off"
         spellCheck={false}
         placeholder={expected}
-        className="w-full h-10 rounded-lg bg-slate-950/60 border border-slate-700 px-3 text-sm text-white font-mono placeholder:text-slate-600 focus:outline-hidden focus:border-red-500"
+        className="w-full h-10 rounded-lg bg-slate-950/60 border border-slate-700 px-3 text-sm text-ink font-mono placeholder:text-slate-600 focus:outline-hidden focus:border-red-500"
       />
     </div>
   )

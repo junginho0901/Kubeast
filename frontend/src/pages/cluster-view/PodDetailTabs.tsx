@@ -38,7 +38,7 @@ export function PodDetailTabs({ isAdmin }: Props) {
     `px-4 py-2 font-medium transition-colors flex items-center gap-2 ${
       activeTab === t
         ? 'text-primary-400 border-b-2 border-primary-400'
-        : 'text-slate-400 hover:text-white'
+        : 'text-slate-400 hover:text-ink'
     }`
 
   return (

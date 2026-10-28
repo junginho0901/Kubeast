@@ -25,14 +25,14 @@ export function TrafficPanel({ line, result, onClose, onWhy, onOpen }: {
   const end = (e: TrafficEnd) => (
     <span className="min-w-0">
       {e.kind && <span className="text-slate-400 mr-1">{e.kind}</span>}
-      <span className="font-mono text-white break-all">{endText(e)}</span>
+      <span className="font-mono text-ink break-all">{endText(e)}</span>
     </span>
   )
   return (
     <div className="absolute top-3 right-3 bottom-3 z-20 w-[360px] max-w-[calc(100%-24px)] overflow-y-auto rounded-lg border border-slate-600 bg-slate-800/95 p-3 text-xs shadow-2xl backdrop-blur-xs" data-testid="traffic-panel">
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="font-semibold text-slate-200">{tr('resourceGraph.traffic.panelTitle', 'Traffic')}</div>
-        <button type="button" onClick={onClose} className="text-slate-400 hover:text-white" aria-label={tr('common.close', 'Close')} data-testid="traffic-panel-close">
+        <button type="button" onClick={onClose} className="text-slate-400 hover:text-ink" aria-label={tr('common.close', 'Close')} data-testid="traffic-panel-close">
           <X className="w-4 h-4" />
         </button>
       </div>

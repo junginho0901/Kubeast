@@ -30,7 +30,7 @@ export function StatsGrid({ stats, onStatClick }: Props) {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-sm font-medium text-slate-400">{stat.name}</p>
-              <p data-testid={`stat-value-${stat.resourceType}`} className="mt-2 text-2xl font-semibold text-white tabular-nums">
+              <p data-testid={`stat-value-${stat.resourceType}`} className="mt-2 text-2xl font-semibold text-ink tabular-nums">
                 {stat.value}
               </p>
             </div>

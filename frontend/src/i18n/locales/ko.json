@@ -2302,7 +2302,8 @@
       "metricsError": "Node 메트릭을 가져오지 못했습니다"
     },
     "nodes": {
-      "title": "Node"
+      "title": "Node",
+      "viewAll": "노드 {{count}}개 모두 보기"
     },
     "nodeCard": {
       "versionLabel": "버전",
@@ -2935,6 +2936,13 @@
       "korean": "한국어",
       "hint": "변경 사항은 즉시 적용됩니다."
     },
+    "colorMode": {
+      "title": "색 모드",
+      "subtitle": "콘솔 색을 고르세요. 고른 값은 이 브라우저에 저장됩니다.",
+      "default": "기본",
+      "dark": "다크",
+      "light": "라이트"
+    },
     "password": {
       "changed": "비밀번호가 변경되었습니다.",
       "required": "현재 비밀번호와 새 비밀번호를 입력하세요.",
@@ -2954,7 +2962,7 @@
       "submit": "비밀번호 변경"
     },
     "title": "Settings",
-    "subtitle": "프로필, 비밀번호, 언어를 관리합니다.",
+    "subtitle": "프로필, 비밀번호, 언어, 색 모드를 관리합니다.",
     "profile": {
       "title": "내 정보",
       "subtitle": "로그인한 계정의 정보입니다.",

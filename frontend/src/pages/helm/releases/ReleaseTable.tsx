@@ -123,7 +123,7 @@ export default function ReleaseTable({
                   onClick={() => navigate(to)}
                 >
                   <td className="col-low py-3 px-4 text-xs font-mono" title={r.namespace}>{r.namespace}</td>
-                  <td className="py-3 px-4 font-medium text-white">
+                  <td className="py-3 px-4 font-medium text-ink">
                     {/* Link kept for cmd/middle-click new-tab;
                         stopPropagation so the row onClick does not
                         double-fire. */}
@@ -160,7 +160,7 @@ function EmptyState() {
   return (
     <div className="w-full flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-slate-700 bg-slate-800/20 py-16 text-center">
       <Package className="w-10 h-10 text-slate-500" />
-      <div className="text-lg font-semibold text-white">{t('helmReleases.empty.title')}</div>
+      <div className="text-lg font-semibold text-ink">{t('helmReleases.empty.title')}</div>
       <div className="max-w-md text-sm text-slate-400">
         {t('helmReleases.empty.description')}
       </div>

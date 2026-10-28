@@ -16,7 +16,7 @@ export default function GPUNodesRealtimeMetrics({ gpusByHost }: Props) {
     <div className="card shrink-0">
       <div className="flex items-center gap-2 mb-4">
         <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-        <h2 className="text-sm font-semibold text-white">
+        <h2 className="text-sm font-semibold text-ink">
           {tr('gpuNodes.realtimeMetrics', 'Real-time GPU Utilization')}
         </h2>
       </div>
@@ -26,7 +26,7 @@ export default function GPUNodesRealtimeMetrics({ gpusByHost }: Props) {
           const avgMem = gpus.reduce((s, g) => s + g.memory_util_percent, 0) / gpus.length
           return (
             <div key={hostname} className="rounded-lg border border-slate-700 bg-slate-900/40 px-4 py-3">
-              <div className="flex items-center justify-between text-sm text-white mb-3">
+              <div className="flex items-center justify-between text-sm text-ink mb-3">
                 <span className="font-medium">{hostname}</span>
                 <span className="text-xs text-slate-400">{gpus.length} GPU{gpus.length !== 1 ? 's' : ''}</span>
               </div>
@@ -39,7 +39,7 @@ export default function GPUNodesRealtimeMetrics({ gpusByHost }: Props) {
                         <span className="text-[10px] text-slate-500 w-7">{tr('gpuDashboardPage.realtime.core', 'Core')}</span>
                         <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
                           <div
-                            className={`h-full rounded-full ${gpu.gpu_util >= 80 ? 'bg-red-500' : gpu.gpu_util >= 50 ? 'bg-amber-500' : 'bg-primary-400'}`}
+                            className={`h-full rounded-full ${gpu.gpu_util >= 80 ? 'bg-red-500' : gpu.gpu_util >= 50 ? 'bg-amber-500' : 'bg-primary-bright'}`}
                             style={{ width: `${Math.min(gpu.gpu_util, 100)}%` }}
                           />
                         </div>
@@ -49,7 +49,7 @@ export default function GPUNodesRealtimeMetrics({ gpusByHost }: Props) {
                         <span className="text-[10px] text-slate-500 w-7">{tr('gpuDashboardPage.realtime.mem', 'Mem')}</span>
                         <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
                           <div
-                            className={`h-full rounded-full ${gpu.memory_util_percent >= 80 ? 'bg-red-500' : gpu.memory_util_percent >= 50 ? 'bg-amber-500' : 'bg-primary-400'}`}
+                            className={`h-full rounded-full ${gpu.memory_util_percent >= 80 ? 'bg-red-500' : gpu.memory_util_percent >= 50 ? 'bg-amber-500' : 'bg-primary-bright'}`}
                             style={{ width: `${Math.min(gpu.memory_util_percent, 100)}%` }}
                           />
                         </div>

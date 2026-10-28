@@ -24,7 +24,7 @@ export default function SecretDetail({ name, namespace, rawJson }: { name: strin
           <div className="space-y-2">
             {Object.entries(data).map(([key, value]) => (
               <div key={key} className="flex items-center gap-2 text-xs">
-                <span className="font-medium text-white min-w-[140px]">{key}</span>
+                <span className="font-medium text-ink min-w-[140px]">{key}</span>
                 <span className="text-slate-400 font-mono">{value ? `${value.length} bytes (base64)` : <Tx>(empty)</Tx>}</span>
               </div>
             ))}

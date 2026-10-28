@@ -114,7 +114,7 @@ export default function SavedSearches({ query, resources, namespace, onLoad }: P
                     className="flex-1 min-w-0 text-left"
                     data-testid="saved-search-load"
                   >
-                    <span className="block truncate text-sm font-medium text-white">{s.name}</span>
+                    <span className="block truncate text-sm font-medium text-ink">{s.name}</span>
                     <span className="block truncate font-mono text-xs text-slate-400" title={s.query}>{s.query}</span>
                   </button>
                   <button
@@ -126,7 +126,7 @@ export default function SavedSearches({ query, resources, namespace, onLoad }: P
                     title={t('advancedSearch.saved.rename', 'Rename')}
                     aria-label={t('advancedSearch.saved.rename', 'Rename')}
                     data-testid="saved-search-rename"
-                    className="p-1 rounded-sm text-slate-400 hover:text-white hover:bg-slate-600"
+                    className="p-1 rounded-sm text-slate-400 hover:text-ink hover:bg-slate-600"
                   >
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
@@ -180,7 +180,7 @@ export default function SavedSearches({ query, resources, namespace, onLoad }: P
               if (e.key === 'Enter') submit()
             }}
             data-testid="saved-search-name"
-            className="h-10 w-full px-3 rounded-lg border border-slate-600 bg-slate-900 text-sm text-white focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+            className="h-10 w-full px-3 rounded-lg border border-slate-600 bg-slate-900 text-sm text-ink focus:outline-hidden focus:ring-2 focus:ring-primary-500"
           />
         </ModalFrame>
       )}
