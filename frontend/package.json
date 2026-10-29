@@ -64,7 +64,7 @@
   },
   "overrides": {
     "dompurify": "^3.4.17",
-    "seroval": "^1.6.8",
+    "seroval": "^1.7.3",
     "seroval-plugins": "^1.6.8",
     "postcss-selector-parser": "^7.1.6"
   }
