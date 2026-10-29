@@ -25,6 +25,15 @@ describe('trafficSources', () => {
 })
 
 describe('anchorOf', () => {
+  it('puts a pod that sits in a group on the group', () => {
+    const group: ResourceGraphNode = { id: 'group:Pod/shop/1f', kind: 'Pod', name: 'api-rs', namespace: 'shop', status: 'Running', group: true, count: 2, members: ['api-rs-a', 'api-rs-b'] }
+    const withGroup = new Map([...shown, [group.id, group]])
+    const placed = buildTraffic([line({ namespace: 'shop', kind: 'Pod', name: 'api-rs-b' }, web, 3)], withGroup)
+    expect(placed.edges.map((e) => [e.source, e.target])).toEqual([['group:Pod/shop/1f', 'Deployment/shop/web']])
+    expect(placed.peers).toEqual([])
+    // a pod no group holds is still a stand-in
+    expect(buildTraffic([line({ namespace: 'shop', kind: 'Pod', name: 'api-rs-c' }, web, 1)], withGroup).peers).toHaveLength(1)
+  })
   it('puts an end on the node the graph shows', () => {
     expect(anchorOf(web, shown)).toEqual({ id: 'Deployment/shop/web' })
     // a metric's "namespace/name" without a kind: the pod, else a workload of that name

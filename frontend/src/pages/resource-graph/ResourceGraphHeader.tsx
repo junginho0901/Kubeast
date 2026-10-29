@@ -50,6 +50,10 @@ interface Props {
   setEdgeTypeFilters: Dispatch<SetStateAction<Set<string>>>
   // controls after the grouping (the traffic switch)
   extra?: ReactNode
+  // the pods the graph holds (a group counts its members) and the pod grouping: grouped, some groups expanded, all
+  podCounts?: { pods: number; groups: number; apart: number }
+  groupPods?: 'grouped' | 'some' | 'all'
+  setGroupPods?: (on: boolean) => void
 }
 
 export function ResourceGraphHeader({
@@ -74,6 +78,9 @@ export function ResourceGraphHeader({
   edgeTypeFilters,
   setEdgeTypeFilters,
   extra,
+  podCounts,
+  groupPods,
+  setGroupPods,
 }: Props) {
   const { t } = useTranslation()
   const nsDropdownRef = useRef<HTMLDivElement>(null)
@@ -133,6 +140,16 @@ export function ResourceGraphHeader({
           <span>{t('resourceGraph.nodeCount', { defaultValue: '{{n}} nodes', n: nodeCount })}</span>
           <span>·</span>
           <span>{t('resourceGraph.edgeCount', { defaultValue: '{{n}} edges', n: edgeCount })}</span>
+          {podCounts && podCounts.pods > 0 && (
+            <>
+              <span>·</span>
+              <span data-testid="graph-pod-count" data-pods={podCounts.pods} data-groups={podCounts.groups} data-apart={podCounts.apart}>
+                {podCounts.groups > 0
+                  ? t('resourceGraph.group.count', { defaultValue: '{{pods}} pods ({{groups}} groups · {{apart}} apart)', pods: podCounts.pods.toLocaleString(), groups: podCounts.groups, apart: podCounts.apart })
+                  : t('resourceGraph.group.countPlain', { defaultValue: '{{pods}} pods', pods: podCounts.pods.toLocaleString() })}
+              </span>
+            </>
+          )}
           {trafficLineCount !== undefined && (
             <>
               <span>·</span>
@@ -215,6 +232,25 @@ export function ResourceGraphHeader({
             </button>
           ))}
         </div>
+
+        {/* Pod grouping: groups of a large owner's pods, or every pod a box */}
+        {groupPods && setGroupPods && (
+          <div className="flex items-center gap-1 bg-slate-700 rounded-lg p-0.5" data-testid="pod-grouping">
+            {([[true, 'grouped', 'Group pods'], [false, 'all', 'Expand all']] as const).map(([on, state, label]) => (
+              <button
+                key={state}
+                type="button"
+                onClick={() => setGroupPods(on)}
+                aria-pressed={groupPods === state}
+                className={`px-2.5 py-1.5 rounded-md text-xs transition-colors ${
+                  groupPods === state ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-ink'
+                }`}
+              >
+                {t(on ? 'resourceGraph.group.groupPods' : 'resourceGraph.group.expandAll', label)}
+              </button>
+            ))}
+          </div>
+        )}
 
         {extra}
 

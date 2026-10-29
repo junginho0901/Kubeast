@@ -2,7 +2,7 @@
 // the per-namespace / per-resource event timeline.
 
 import { client } from './client'
-import type { ResourceGraphResponse, TimelineResult, TopologyGraph } from './types'
+import type { ResourceGraphOptions, ResourceGraphResponse, TimelineResult, TopologyGraph } from './types'
 
 export const topologyApi = {
   // Topology (graph)
@@ -39,9 +39,15 @@ export const topologyApi = {
   },
 
   // Resource Graph
-  getResourceGraph: async (namespaces?: string[]): Promise<ResourceGraphResponse> => {
-    const params = namespaces?.length ? `?namespaces=${namespaces.join(',')}` : ''
-    const { data } = await client.get(`/resource-graph${params}`)
+  getResourceGraph: async (namespaces?: string[], opts: ResourceGraphOptions = {}): Promise<ResourceGraphResponse> => {
+    const params: Record<string, string> = {}
+    if (namespaces?.length) params.namespaces = namespaces.join(',')
+    if (opts.groupPods) {
+      params.group_pods = '1'
+      if (opts.groupBy && opts.groupBy !== 'none') params.group_by = opts.groupBy
+      if (opts.expand?.length) params.expand = opts.expand.join(',')
+    }
+    const { data } = await client.get('/resource-graph', { params })
     return data
   },
 

@@ -3159,6 +3159,28 @@
       "selfLoops_one": "{{n}} line inside one workload is not drawn.",
       "lineCount": "{{n}} traffic lines",
       "lineCount_one": "{{n}} traffic line"
+    },
+    "group": {
+      "all": "All",
+      "ok": "Healthy",
+      "warn": "Warning",
+      "error": "Error",
+      "title": "{{kind}} group",
+      "inGraph": "{{count}} in this box of the graph",
+      "searchPods": "Search name, node or IP",
+      "searchMembers": "Search name",
+      "search": "Search this group",
+      "expand": "Expand this group in the graph",
+      "pods": "Pod group · {{owner}}",
+      "hits": "{{n}} match",
+      "legend": "Pod group: healthy pods of one owner with the same lines (more than 10)",
+      "expandAllTitle": "Draw every pod",
+      "expandAllMessage": "The graph will draw {{n}} pods one by one, which can be slow.",
+      "expandAllConfirm": "Draw them",
+      "count": "{{pods}} pods ({{groups}} groups · {{apart}} apart)",
+      "countPlain": "{{pods}} pods",
+      "groupPods": "Group pods",
+      "expandAll": "Expand all"
     }
   },
   "advancedSearch": {
