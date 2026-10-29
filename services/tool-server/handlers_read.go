@@ -193,6 +193,9 @@ func handleGetEvents(ctx context.Context, args map[string]interface{}, headers h
 
 	var selectors []string
 	if fs := strings.TrimSpace(argString(args, "field_selector", "")); fs != "" {
+		if err := checkEventSelector(fs); err != nil {
+			return "", err
+		}
 		selectors = append(selectors, fs)
 	}
 	if kind := argString(args, "kind", ""); kind != "" {
