@@ -29,15 +29,9 @@ func (h *Handler) GetGenericResources(w http.ResponseWriter, r *http.Request) {
 		namespace = ""
 	}
 
-	// If output=json, return full K8s objects (for Advanced Search)
+	// If output=json, return full K8s objects (for Advanced Search), written as the pages come
 	if output == "json" {
-		data, err := h.svc.GetGenericResourcesRaw(ctx, resourceType, namespace, labelSelector)
-		if err != nil {
-			h.handleError(w, err)
-			return
-		}
-		maskSecretList(data) // lists never carry Secret values
-		response.JSON(w, http.StatusOK, data)
+		h.streamRawList(w, r, resourceType, namespace, labelSelector)
 		return
 	}
 

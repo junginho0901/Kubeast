@@ -255,13 +255,15 @@ export const clusterApi = {
   },
 
   // Advanced Search
-  searchResources: async (resourceType: string, namespace?: string, signal?: AbortSignal): Promise<any> => {
+  // The server lists in pages and stops at limit objects (at most 10 000), saying truncated (and remaining when known).
+  searchResources: async (resourceType: string, namespace?: string, signal?: AbortSignal, limit?: number): Promise<any> => {
     const { data } = await client.get('/cluster/resources', {
       params: {
         resource_type: resourceType,
         all_namespaces: !namespace,
         namespace: namespace || undefined,
         output: 'json',
+        limit,
       },
       timeout: 30000,
       signal,

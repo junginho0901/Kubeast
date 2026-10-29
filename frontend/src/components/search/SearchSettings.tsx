@@ -22,7 +22,7 @@ export default function SearchSettings({
   const [refetchDraft, setRefetchDraft] = useState(refetchIntervalMs)
 
   const save = () => {
-    if (maxItemsRef.current) setMaxItemsPerResource(parseInt(maxItemsRef.current.value) || 10000)
+    if (maxItemsRef.current) setMaxItemsPerResource(Math.min(10000, Math.max(1, parseInt(maxItemsRef.current.value) || 10000)))
     setRefetchIntervalMs(refetchDraft)
     setOpen(false)
   }
@@ -48,6 +48,8 @@ export default function SearchSettings({
               <input
                 ref={maxItemsRef}
                 type="number"
+                min={1}
+                max={10000}
                 defaultValue={maxItemsPerResource}
                 className="w-full h-10 px-3 rounded-lg bg-slate-900 border border-slate-600 text-ink text-sm focus:outline-hidden focus:border-primary-500"
               />

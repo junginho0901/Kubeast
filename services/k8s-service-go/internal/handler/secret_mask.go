@@ -42,37 +42,6 @@ func maskSecretValues(obj map[string]interface{}) bool {
 	return true
 }
 
-// maskSecretItems masks every Secret in a list payload; returns how many.
-func maskSecretItems(items []map[string]interface{}) int {
-	n := 0
-	for _, it := range items {
-		if maskSecretValues(it) {
-			n++
-		}
-	}
-	return n
-}
-
-// maskSecretList masks the items of a {"items": [...]} payload in place.
-func maskSecretList(data map[string]interface{}) int {
-	if data == nil {
-		return 0
-	}
-	switch items := data["items"].(type) {
-	case []map[string]interface{}:
-		return maskSecretItems(items)
-	case []interface{}:
-		n := 0
-		for _, it := range items {
-			if m, ok := it.(map[string]interface{}); ok && maskSecretValues(m) {
-				n++
-			}
-		}
-		return n
-	}
-	return 0
-}
-
 // isSecretResourceType says whether resource_type names core/v1 Secrets
 // (whatever spelling: secret, secrets, v1/secrets ...).
 func (h *Handler) isSecretResourceType(r *http.Request, resourceType string) bool {
