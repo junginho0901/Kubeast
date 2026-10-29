@@ -37,6 +37,8 @@ interface Props {
   searchQuery: string
   setSearchQuery: (q: string) => void
   filteredResources: any[]
+  // the Pods window: filteredResources is already the server's page; total and the page come from the server
+  serverPage?: { total: number; page: number; setPage: (page: number) => void }
 }
 
 export function ResourceModal({
@@ -48,6 +50,7 @@ export function ResourceModal({
   searchQuery,
   setSearchQuery,
   filteredResources,
+  serverPage,
 }: Props) {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
@@ -55,13 +58,16 @@ export function ResourceModal({
   const na = tr('common.notAvailable', 'N/A')
   const none = tr('common.none', 'None')
   const { open: openDetail } = useResourceDetail()
-  const [page, setPage] = useState(1)
-  const totalPages = Math.max(1, Math.ceil(filteredResources.length / ITEMS_PER_PAGE))
-  useEffect(() => setPage(1), [selectedResourceType, searchQuery])
+  const [localPage, setLocalPage] = useState(1)
+  const page = serverPage ? serverPage.page : localPage
+  const setPage = serverPage ? serverPage.setPage : setLocalPage
+  const listTotal = serverPage ? serverPage.total : filteredResources.length
+  const totalPages = Math.max(1, Math.ceil(listTotal / ITEMS_PER_PAGE))
+  useEffect(() => setLocalPage(1), [selectedResourceType, searchQuery])
   useEffect(() => {
     if (page > totalPages) setPage(totalPages)
-  }, [page, totalPages])
-  const pageItems = filteredResources.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE)
+  }, [page, totalPages, setPage])
+  const pageItems = serverPage ? filteredResources : filteredResources.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE)
 
   useAIContext(selectedResourceType && !isLoading ? {
     source: 'ResourceModal',
@@ -370,7 +376,7 @@ export function ResourceModal({
           <ListPager
             currentPage={page}
             totalPages={totalPages}
-            total={filteredResources.length}
+            total={listTotal}
             rowsPerPage={ITEMS_PER_PAGE}
             onPageChange={setPage}
             showPageSize={false}

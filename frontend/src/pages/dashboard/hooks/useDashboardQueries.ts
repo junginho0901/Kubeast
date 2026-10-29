@@ -12,7 +12,7 @@
 // genuinely about the data layer).
 
 import { useEffect, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
   api,
@@ -25,6 +25,8 @@ import { useCluster } from '@/contexts/ClusterContext'
 
 import type { ResourceType } from '../types'
 
+export const DASHBOARD_POD_PAGE = 50
+
 interface Args {
   selectedResourceType: ResourceType | null
   selectedPodStatus: string | null
@@ -35,6 +37,8 @@ interface Args {
   isOptimizationModalOpen: boolean
   optimizationNamespace: string
   storageActiveTab: 'pvcs' | 'pvs' | 'topology'
+  // the Pods window's search (after a pause) and page; the server filters and cuts it
+  podQuery: { q: string; page: number }
 }
 
 export function useDashboardQueries({
@@ -47,6 +51,7 @@ export function useDashboardQueries({
   isOptimizationModalOpen,
   optimizationNamespace,
   storageActiveTab,
+  podQuery,
 }: Args) {
   const queryClient = useQueryClient()
   const { currentCluster } = useCluster()
@@ -54,7 +59,7 @@ export function useDashboardQueries({
   // are shared across clusters: a switch shows the previous cluster's cached
   // totals (and `placeholderData` queries keep them) until a background refetch.
   // Appended as a suffix so existing prefix-based invalidate/removeQueries that
-  // reference e.g. ['all-pods'] still match. 'default' mirrors the server fallback.
+  // reference e.g. ['cluster-overview'] still match. 'default' mirrors the server fallback.
   const ck = currentCluster || 'default'
   const [metricsUnavailable, setMetricsUnavailable] = useState(() => isMetricsDisabled())
 
@@ -73,11 +78,23 @@ export function useDashboardQueries({
     enabled: selectedResourceType === 'namespaces',
   })
 
-  // 전체 Pod 목록
-  const { data: allPods, isLoading: isLoadingPods } = useQuery({
-    queryKey: ['all-pods', ck],
-    queryFn: () => api.getAllPods(false), // 자동 갱신은 캐시 사용
+  // The Pods window: a page of 50 from the Pods list's server page, the phase the chart picked and the search
+  // worked out on the server — not every pod of the cluster.
+  const { data: podPage, isLoading: isLoadingPods } = useQuery({
+    queryKey: ['dashboard-pods-page', ck, podQuery.q, selectedPodStatus, podQuery.page],
+    queryFn: () => api.getPodPage({
+      q: podQuery.q || undefined, phase: selectedPodStatus ?? undefined, offset: (podQuery.page - 1) * DASHBOARD_POD_PAGE, limit: DASHBOARD_POD_PAGE,
+    }),
     enabled: selectedResourceType === 'pods' || selectedPodStatus !== null,
+    placeholderData: keepPreviousData,
+    refetchInterval: 15000,
+  })
+  // The problem pods the floating chat is told about: errors, then warnings, first (sort=health), with the counts.
+  const { data: problemPods } = useQuery({
+    queryKey: ['dashboard-problem-pods', ck],
+    queryFn: () => api.getPodPage({ sort: 'health', offset: 0, limit: 10 }),
+    staleTime: 15000,
+    refetchInterval: 30000,
   })
 
   // Issues 모달 — k8s-service 가 파드·워크로드·노드·PVC·Warning 이벤트를 집계.
@@ -260,7 +277,8 @@ export function useDashboardQueries({
     isLoading,
     namespaces,
     isLoadingNamespaces,
-    allPods,
+    podPage,
+    problemPods,
     isLoadingPods,
     clusterIssues,
     isLoadingIssues,

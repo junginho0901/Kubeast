@@ -19,4 +19,7 @@ export interface PodMetric {
   cpu: string
   memory: string
   timestamp?: string
+  // asked with with_limits: the pod's limits, null without one
+  cpu_limit_millicores?: number | null
+  memory_limit_bytes?: number | null
 }

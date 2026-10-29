@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { Server, Box, Database, HardDrive, TrendingUp } from 'lucide-react'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useClusterFeatures, usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
@@ -60,6 +60,15 @@ export function DashboardBody() {
     closeStorageModal,
   } = useDashboard()
 
+  // The Pods window's search reaches the server after a pause; its page goes back to 1 when what it shows changes.
+  const [podSearch, setPodSearch] = useState('')
+  const [podPageNo, setPodPageNo] = useState(1)
+  useEffect(() => {
+    const id = setTimeout(() => setPodSearch(modalSearchQuery.trim()), 250)
+    return () => clearTimeout(id)
+  }, [modalSearchQuery])
+  useEffect(() => setPodPageNo(1), [selectedResourceType, podSearch, selectedPodStatus])
+
   const {
     isOptimizationModalOpen,
     setIsOptimizationModalOpen,
@@ -87,7 +96,8 @@ export function DashboardBody() {
     isLoading,
     namespaces,
     isLoadingNamespaces,
-    allPods,
+    podPage,
+    problemPods,
     isLoadingPods,
     clusterIssues,
     isLoadingIssues,
@@ -126,11 +136,12 @@ export function DashboardBody() {
     isOptimizationModalOpen,
     optimizationNamespace,
     storageActiveTab,
+    podQuery: { q: podSearch, page: podPageNo },
   })
   const defaultIssuesWindowMinutes = useClusterFeatures().data?.issues?.eventWindowMinutes ?? 60
 
   // 플로팅 AI 위젯의 "현재 화면 컨텍스트" snapshot — useDashboardAIContext hook 으로 분리
-  useDashboardAIContext({ overview, nodes, topResources, allPods })
+  useDashboardAIContext({ overview, nodes, topResources, problemPods })
 
   // Prometheus cluster-wide metrics
   const promCluster = usePrometheusQueries(
@@ -257,7 +268,7 @@ export function DashboardBody() {
   // 리소스 개수 가져오기
   const getResourceCount = () => {
     if (selectedResourceType === 'namespaces') return Array.isArray(namespaces) ? namespaces.length : 0
-    if (selectedResourceType === 'pods') return Array.isArray(allPods) ? allPods.length : 0
+    if (selectedResourceType === 'pods') return podPage?.stats.total ?? 0
     if (selectedResourceType === 'services') return Array.isArray(allServices) ? allServices.length : 0
     if (selectedResourceType === 'deployments') return Array.isArray(allDeployments) ? allDeployments.length : 0
     if (selectedResourceType === 'pvcs') return Array.isArray(allPVCs) ? allPVCs.length : 0
@@ -282,16 +293,12 @@ export function DashboardBody() {
 
     // 리소스 타입별 기본 데이터 - 항상 배열 보장
     if (selectedResourceType === 'namespaces') resources = Array.isArray(namespaces) ? namespaces : []
-    else if (selectedResourceType === 'pods') resources = Array.isArray(allPods) ? allPods : []
+    // already filtered (phase, search) and cut to the page by the server
+    else if (selectedResourceType === 'pods') return podPage?.items ?? []
     else if (selectedResourceType === 'services') resources = Array.isArray(allServices) ? allServices : []
     else if (selectedResourceType === 'deployments') resources = Array.isArray(allDeployments) ? allDeployments : []
     else if (selectedResourceType === 'pvcs') resources = Array.isArray(allPVCs) ? allPVCs : []
     else if (selectedResourceType === 'nodes') resources = Array.isArray(modalNodes) ? modalNodes : []
-
-    // Pod 상태 필터링
-    if (selectedPodStatus && selectedResourceType === 'pods') {
-      resources = resources.filter((pod: any) => pod.phase === selectedPodStatus)
-    }
 
     // Node 상태 필터링
     if (selectedNodeStatus && selectedResourceType === 'nodes') {
@@ -306,14 +313,6 @@ export function DashboardBody() {
     if (selectedResourceType === 'namespaces') {
       return resources.filter((ns: any) =>
         ns.name.toLowerCase().includes(query)
-      )
-    }
-
-    if (selectedResourceType === 'pods') {
-      return resources.filter((pod: any) =>
-        pod.name.toLowerCase().includes(query) ||
-        pod.namespace.toLowerCase().includes(query) ||
-        (pod.node_name && pod.node_name.toLowerCase().includes(query))
       )
     }
 
@@ -590,6 +589,7 @@ export function DashboardBody() {
         searchQuery={modalSearchQuery}
         setSearchQuery={setModalSearchQuery}
         filteredResources={filteredResources}
+        serverPage={selectedResourceType === 'pods' ? { total: podPage?.total ?? 0, page: podPageNo, setPage: setPodPageNo } : undefined}
       />
     </div>
   )

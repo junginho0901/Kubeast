@@ -23,10 +23,11 @@ export function useDashboardRefresh() {
       const namespacesData = await api.getNamespaces()
 
       // 나머지를 병렬로 호출 (네임스페이스별 리소스 조회 포함)
-      const [overviewData, nodesData, allPodsData, allServicesData, allDeploymentsData, allPVCsData] = await Promise.all([
+      const [overviewData, nodesData, podPageData, allServicesData, allDeploymentsData, allPVCsData] = await Promise.all([
         api.getClusterOverview(true),
         api.getNodes(true),
-        api.getAllPods(true),
+        // the pods the caller may see, counted by the server (one row asked)
+        api.getPodPage({ offset: 0, limit: 1 }),
         // 모든 네임스페이스의 Services 조회
         Promise.all(namespacesData.map((ns: any) => api.getServices(ns.name, true))).then(results => results.flat()),
         // 모든 네임스페이스의 Deployments 조회
@@ -39,7 +40,7 @@ export function useDashboardRefresh() {
       // 실제 데이터로 overview 보정 (타이밍 이슈 방지)
       const correctedOverview = {
         ...overviewData,
-        total_pods: allPodsData.length,
+        total_pods: podPageData.stats.total,
         total_namespaces: namespacesData.length,
         total_services: allServicesData.length,
         total_deployments: allDeploymentsData.length,
@@ -53,7 +54,8 @@ export function useDashboardRefresh() {
       queryClient.removeQueries({ queryKey: ['all-namespaces'] })
       queryClient.removeQueries({ queryKey: ['nodes'] })
       queryClient.removeQueries({ queryKey: ['modal-nodes'] })
-      queryClient.removeQueries({ queryKey: ['all-pods'] })
+      queryClient.removeQueries({ queryKey: ['dashboard-pods-page'] })
+      queryClient.removeQueries({ queryKey: ['dashboard-problem-pods'] })
       queryClient.removeQueries({ queryKey: ['all-services'] })
       queryClient.removeQueries({ queryKey: ['all-deployments'] })
       queryClient.removeQueries({ queryKey: ['all-pvcs'] })
@@ -64,7 +66,6 @@ export function useDashboardRefresh() {
       queryClient.setQueryData(['all-namespaces'], namespacesData)
       queryClient.setQueryData(['nodes'], nodesData)
       queryClient.setQueryData(['modal-nodes'], nodesData)
-      queryClient.setQueryData(['all-pods'], allPodsData)
       queryClient.setQueryData(['all-services'], allServicesData)
       queryClient.setQueryData(['all-deployments'], allDeploymentsData)
       queryClient.setQueryData(['all-pvcs'], allPVCsData)

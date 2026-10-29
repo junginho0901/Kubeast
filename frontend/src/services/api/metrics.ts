@@ -24,10 +24,11 @@ export const metricsApi = {
     }
   },
 
-  getPodMetrics: async (namespace?: string): Promise<any[]> => {
+  /** withLimits: each row with its pod's cpu_limit_millicores and memory_limit_bytes (null without a limit) */
+  getPodMetrics: async (namespace?: string, withLimits = false): Promise<any[]> => {
     try {
       const { data } = await client.get('/cluster/metrics/pods', {
-        params: { namespace },
+        params: { namespace, with_limits: withLimits ? '1' : undefined },
         timeout: 20000,
       })
       return data

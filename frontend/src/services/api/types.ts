@@ -1535,6 +1535,7 @@ export interface PodListRow {
   pod_ip: string
   created_at: string
   deletion_timestamp?: string
+  service_account_name?: string
 }
 
 /** The Pods list's summary cards, over the namespace chosen (not the search). */
@@ -1595,6 +1596,11 @@ export interface PodPageParams {
   /** one owner's pods, `<kind>/<name>` */
   owner?: string
   health?: 'ok' | 'warn' | 'error'
+  phase?: string
+  runtime_class?: string
+  priority_class?: string
+  /** `<namespace>/<name>,…`: pods running as any of these service accounts */
+  service_account?: string
 }
 
 export interface PodRbacRule {

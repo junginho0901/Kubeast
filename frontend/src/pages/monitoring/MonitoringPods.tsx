@@ -13,13 +13,12 @@ import {
 import { ListPager } from '@/components/ListPager'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { cpuToMillis, memoryToBytes } from '@/utils/resourceQuantity'
-import { podLimit, usageTone } from './podUsage'
+import { usageTone } from './podUsage'
 import {
   api,
   disableMetrics,
   isMetricsDisabled,
   isMetricsUnavailableError,
-  type PodInfo,
 } from '@/services/api'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useCluster } from '@/contexts/ClusterContext'
@@ -70,7 +69,8 @@ export default function MonitoringPods({
   // Pod 리소스 사용량 (네임스페이스 선택 시에만 활성화, 5초마다 자동 갱신)
   const { data: podMetrics, isLoading, error } = useQuery<PodMetric[], Error>({
     queryKey: ['pod-metrics', currentCluster, selectedNamespace],
-    queryFn: () => api.getPodMetrics(selectedNamespace === 'all' ? undefined : selectedNamespace),
+    // with each pod's limits from k8s-service's pod rows, so the page takes no pod list
+    queryFn: () => api.getPodMetrics(selectedNamespace === 'all' ? undefined : selectedNamespace, true),
     staleTime: 5000,
     refetchInterval: () => {
       if (metricsUnavailable || isMetricsDisabled()) return false
@@ -84,15 +84,6 @@ export default function MonitoringPods({
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
     placeholderData: (prev, prevQuery) =>
       prevQuery && prevQuery.queryKey[1] === currentCluster ? prev : undefined,
-  })
-
-  // Pod 상세 정보 (Limit/Request 포함) — 네임스페이스 선택 시에만 활성화
-  const { data: allPods } = useQuery<PodInfo[], Error>({
-    queryKey: ['all-pods-detail', currentCluster],
-    queryFn: () => api.getAllPods(false),
-    staleTime: 10000,
-    refetchInterval: 10000,
-    enabled: !!selectedNamespace,
   })
 
   useEffect(() => {
@@ -133,13 +124,12 @@ export default function MonitoringPods({
 
   const rows = useMemo(() => {
     if (!Array.isArray(podMetrics)) return []
-    const details = new Map((allPods ?? []).map((p) => [`${p.namespace}/${p.name}`, p]))
     return podMetrics.map((m) => {
-      const detail = details.get(`${m.namespace}/${m.name}`)
       const cpu = cpuToMillis(m.cpu)
       const memory = memoryToBytes(m.memory)
-      const cpuLimit = podLimit(detail?.containers, 'cpu')
-      const memoryLimit = podLimit(detail?.containers, 'memory')
+      // the containers' sums, null when one sets none (k8s-service podLimits, the rule of podUsage.ts podLimit)
+      const cpuLimit = m.cpu_limit_millicores ?? null
+      const memoryLimit = m.memory_limit_bytes ?? null
       return {
         metric: m,
         cpu,
@@ -150,7 +140,7 @@ export default function MonitoringPods({
         memoryPct: memory !== null && memoryLimit ? (memory / memoryLimit) * 100 : null,
       }
     })
-  }, [podMetrics, allPods])
+  }, [podMetrics])
 
   const podStats = podMetrics
     ? {

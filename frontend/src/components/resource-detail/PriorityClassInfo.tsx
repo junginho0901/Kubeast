@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { InfoSection, InfoRow, InfoGrid, SummaryBadge, StatusBadge, KeyValueTags, EventsTable, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
-import { usePagination } from './usePagination'
+import { useServerPods } from './useServerPods'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -22,15 +22,7 @@ export default function PriorityClassInfo({ name }: Props) {
 
   // Cluster-wide Pod scan for spec.priorityClassName matches. max 50 cap since
   // a system PriorityClass can be referenced by hundreds of pods.
-  const { data: allPods } = useQuery({
-    queryKey: ['priorityclass-using-pods', name],
-    queryFn: () => api.getAllPods(),
-    enabled: !!name,
-    staleTime: 30_000,
-  })
-  const usingPods = (Array.isArray(allPods) ? allPods : [])
-    .filter((p: any) => p?.priority_class_name === name)
-  const { items: pagedPods, nav: podsNav } = usePagination(usingPods, 10)
+  const { items: pagedPods, total: usingTotal, nav: podsNav } = useServerPods(name ? { priority_class: name } : null)
 
   // globalDefault 충돌 검출용: cluster-wide PriorityClass list 를 가져옴
   const { data: allPriorityClasses } = useQuery({
@@ -105,8 +97,8 @@ export default function PriorityClassInfo({ name }: Props) {
         </InfoSection>
       )}
 
-      <InfoSection title="Used By Pods ({{n}})" titleValues={{ n: usingPods.length }}>
-        {usingPods.length === 0 ? (
+      <InfoSection title="Used By Pods ({{n}})" titleValues={{ n: usingTotal }}>
+        {usingTotal === 0 ? (
           <p className="text-xs text-slate-400"><Tx>No pod in the cluster uses this PriorityClass.</Tx></p>
         ) : (
           <div className="overflow-x-auto">

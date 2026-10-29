@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useAIContext } from '@/hooks/useAIContext'
+import type { PodPage } from '@/services/api'
 
 // Floating AI assistant 의 "현재 화면 컨텍스트" snapshot 을 빌드하고
 // useAIContext 로 등록하는 hook. Dashboard.tsx 의 80줄 inline useMemo +
@@ -11,10 +12,10 @@ interface Params {
   overview: any
   nodes: any
   topResources: any
-  allPods: any
+  problemPods: PodPage | undefined
 }
 
-export function useDashboardAIContext({ overview, nodes, topResources, allPods }: Params): void {
+export function useDashboardAIContext({ overview, nodes, topResources, problemPods }: Params): void {
   const aiSnapshot = useMemo(() => {
     if (!overview) return null
     const podStatus = overview.pod_status || {}
@@ -75,26 +76,18 @@ export function useDashboardAIContext({ overview, nodes, topResources, allPods }
               memory_percent: n.memory_percent,
             }))
           : undefined,
-        // 문제 있는 Pod 의 이름·이유 — allPods 가 fetch 된 상태에서만 (lazy)
-        failed_pods: Array.isArray(allPods)
-          ? (allPods as Array<{ name: string; namespace: string; phase?: string; status?: string; restart_count?: number }>)
-              .filter((p) => {
-                const ph = p.phase || p.status || ''
-                return ph !== 'Running' && ph !== 'Succeeded'
-              })
-              .slice(0, 10)
-              .map((p) => ({
-                name: p.name,
-                namespace: p.namespace,
-                phase: p.phase,
-                status: p.status,
-                restart_count: p.restart_count,
-              }))
+        // the problem pods, errors then warnings first (the server's sort=health), and how many there are by
+        // card colour — the whole cluster's, not only what a window has loaded
+        failed_pods: problemPods
+          ? problemPods.items
+              .filter((p) => !['Running', 'Completed', 'Succeeded'].includes(p.status))
+              .map((p) => ({ name: p.name, namespace: p.namespace, phase: p.phase, status: p.status, restart_count: p.restart_count }))
           : undefined,
+        pod_health: problemPods?.stats.health,
         ...(interpretations.length > 0 ? { interpretations } : {}),
       },
     }
-  }, [overview, nodes, topResources, allPods])
+  }, [overview, nodes, topResources, problemPods])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 }
