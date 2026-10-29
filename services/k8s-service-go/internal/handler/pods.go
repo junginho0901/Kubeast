@@ -43,6 +43,18 @@ func (h *Handler) GetPodPage(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, "sort must be one of "+strings.Join(k8s.PodSortKeys, ", "))
 		return
 	}
+	if owner := queryParam(r, "owner", ""); owner != "" {
+		kind, name, ok := strings.Cut(owner, "/")
+		if !ok || kind == "" || name == "" {
+			response.Error(w, http.StatusBadRequest, "owner must be <kind>/<name>")
+			return
+		}
+		q.OwnerKind, q.OwnerName = kind, name
+	}
+	if q.Health = queryParam(r, "health", ""); q.Health != "" && !slices.Contains(k8s.PodHealthNames, q.Health) {
+		response.Error(w, http.StatusBadRequest, "health must be one of "+strings.Join(k8s.PodHealthNames, ", "))
+		return
+	}
 	switch dir := queryParam(r, "dir", "asc"); dir {
 	case "asc":
 	case "desc":

@@ -218,6 +218,22 @@ func TestPodStats_MatchThePagesOldCounts(t *testing.T) {
 	}
 	rng.Shuffle(len(rows), func(a, b int) { rows[a], rows[b] = rows[b], rows[a] }) // the store's order is a map's
 	got := buildPodPage(rows, PodPageQuery{Search: "team-01", Limit: 10}, time.Now())
+	// the card colour counts came after the page's counts: each pod in one colour, as podHealth gives it
+	health := PodHealthCounts{}
+	for _, p := range pods {
+		switch h, _ := podHealth(p); h {
+		case podHealthOK:
+			health.OK++
+		case podHealthWarn:
+			health.Warn++
+		default:
+			health.Error++
+		}
+	}
+	if got.Stats.Health != health {
+		t.Fatalf("health counts %+v, want %+v", got.Stats.Health, health)
+	}
+	got.Stats.Health = PodHealthCounts{}
 	if want := oldStats(maps); !reflect.DeepEqual(got.Stats, want) {
 		t.Fatalf("stats\n got %+v\nwant %+v", got.Stats, want)
 	}
@@ -553,5 +569,34 @@ func TestPodRow_SameViewIgnoresResourceVersion(t *testing.T) {
 	}
 	if !strings.HasPrefix((&clusterInformers{epoch: "e"}).podRevision(), "e-") {
 		t.Error("the revision must carry the informer set's epoch")
+	}
+}
+
+// The Resource Graph's group list: one owner's pods, counted by card colour, filtered by one, problems first.
+func TestPodPage_OwnerHealthFilterAndProblemsFirst(t *testing.T) {
+	own := func(kind, name string, health uint8) func(r *podRow) {
+		return func(r *podRow) { r.ownerKind, r.ownerName, r.health = kind, name, health }
+	}
+	rows := []*podRow{
+		row("shop", "web-a", own("ReplicaSet", "web-rs", podHealthOK)),
+		row("shop", "web-b", own("ReplicaSet", "web-rs", podHealthError)),
+		row("shop", "web-c", own("ReplicaSet", "web-rs", podHealthWarn)),
+		row("shop", "web-d", own("ReplicaSet", "web-rs", podHealthOK)),
+		row("shop", "api-a", own("ReplicaSet", "api-rs", podHealthError)),
+	}
+	mine := rowsOfOwner(rows, "ReplicaSet", "web-rs")
+	if len(mine) != 4 || len(rowsOfOwner(rows, "", "")) != 5 || len(rowsOfOwner(rows, "StatefulSet", "web-rs")) != 0 {
+		t.Fatalf("owner rows = %d", len(mine))
+	}
+	page := buildPodPage(mine, PodPageQuery{Sort: "health", Limit: 50}, time.Now())
+	if want := []string{"shop/web-b", "shop/web-c", "shop/web-a", "shop/web-d"}; !reflect.DeepEqual(names(page), want) {
+		t.Fatalf("problems first = %v, want %v", names(page), want)
+	}
+	if page.Stats.Health != (PodHealthCounts{OK: 2, Warn: 1, Error: 1}) || page.Stats.Total != 4 {
+		t.Fatalf("stats = %+v", page.Stats)
+	}
+	page = buildPodPage(mine, PodPageQuery{Health: "ok", Limit: 50}, time.Now())
+	if want := []string{"shop/web-a", "shop/web-d"}; !reflect.DeepEqual(names(page), want) || page.Total != 2 || page.Stats.Total != 4 {
+		t.Fatalf("health=ok: %v total %d stats %d — the summary counts before the filter", names(page), page.Total, page.Stats.Total)
 	}
 }
