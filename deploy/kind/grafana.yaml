@@ -62,7 +62,7 @@ spec:
         seccompProfile: {type: RuntimeDefault}
       containers:
         - name: grafana
-          image: grafana/grafana:13.2.4
+          image: grafana/grafana:13.3.0
           imagePullPolicy: IfNotPresent
           env:
             - name: GF_SECURITY_ADMIN_PASSWORD

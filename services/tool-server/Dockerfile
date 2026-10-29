@@ -1,4 +1,4 @@
-ARG AWS_IAM_AUTHENTICATOR_VERSION=0.7.23
+ARG AWS_IAM_AUTHENTICATOR_VERSION=0.7.24
 
 # Build context is services/ (shared pkg module is pulled in via replace),
 # same layout as the other Go services. Runs on the build host and

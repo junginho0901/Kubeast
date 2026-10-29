@@ -146,7 +146,7 @@ kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator 
 
 ### VictoriaMetrics
 
-VictoriaMetrics는 Prometheus 질의 API를 그대로 제공하므로 화면과 AI 도구 모두 같은 질의로 읽습니다(검증: v1.154.1 단일판·클러스터판, 2번 클러스터 Prometheus와 같은 값). 아래는 Prometheus와 다른 점입니다.
+VictoriaMetrics는 Prometheus 질의 API를 그대로 제공하므로 화면과 AI 도구 모두 같은 질의로 읽습니다(검증: v1.155.0 단일판·클러스터판, 2번 클러스터 Prometheus와 같은 값). 아래는 Prometheus와 다른 점입니다.
 
 - **찾기**: Prometheus가 없으면 단일판을 자동으로 찾습니다. Prometheus가 있으면 Prometheus를 먼저 씁니다.
   - 먼저 VM operator의 `app.kubernetes.io/name=vmsingle` 레이블과 Helm 차트의 `app.kubernetes.io/name=victoria-metrics-single` 레이블을 봅니다.
@@ -213,7 +213,7 @@ VictoriaMetrics는 Prometheus 질의 API를 그대로 제공하므로 화면과 
 - **호스트 읽기**: 호스트 `/`를 `root_path: /hostfs`에 읽기 전용으로 마운트합니다(opentelemetry-collector 차트의 hostMetrics 프리셋과 같음).
   - 네트워크 값은 `hostNetwork: true`일 때만 노드 인터페이스의 값입니다. 그렇지 않으면 수집기 파드 자신의 트래픽이 되므로 `network` 스크레이퍼를 끄세요. Kubeast는 그 칸을 숨깁니다.
   - 디스크는 node-exporter의 기본 제외 대상(파티션·loop·ram)과 같은 장치를 뺍니다.
-- **예시**: [`deploy/kind/hostmetrics-collector.yaml`](../../deploy/kind/hostmetrics-collector.yaml)(contrib 0.163.1, `scripts/kind-hostmetrics.sh`).
+- **예시**: [`deploy/kind/hostmetrics-collector.yaml`](../../deploy/kind/hostmetrics-collector.yaml)(contrib 0.164.0, `scripts/kind-hostmetrics.sh`).
 
 **AI 도구가 추가로 읽는 경로**: Prometheus 찾기 도구는 질의와 같은 저장소, 같은 클러스터 범위에서 다음 경로를 읽습니다. 모두 GET이므로 Grafana 데이터소스 프록시로도 읽을 수 있습니다.
 
@@ -230,7 +230,7 @@ VictoriaMetrics는 Prometheus 질의 API를 그대로 제공하므로 화면과 
   - 기본 수집 작업(cAdvisor·kubelet·kube-state-metrics·node-exporter)에 OpenCost를 추가합니다.
 
   ```bash
-  helm install prometheus prometheus-community/prometheus --version 29.37.0 \
+  helm install prometheus prometheus-community/prometheus --version 29.39.0 \
     -n monitoring --create-namespace -f deploy/examples/target-cluster/prometheus-values.yaml
   ```
 
@@ -336,7 +336,7 @@ kube-proxy 설정 점검은 `kube-system`의 ConfigMap `kube-proxy`·`kube-proxy
 Argo CD가 배포한 객체에 추적 어노테이션(`argocd.argoproj.io/tracking-id`, Argo CD 3.x 기본 추적 방식)이 있어야 배지와 경고가 붙습니다.
 라벨 방식(`app.kubernetes.io/instance` 등)으로 추적하는 설치라면 `gitops.argocd.instanceLabel`에 그 키를 적으세요. Argo CD 자체는 대상 클러스터에 없어도 됩니다.
 
-- **검증**: Argo CD 3.5.6 core 설치가 실제로 동기화한 Deployment(`scripts/kind-argocd.sh`, podinfo 차트 6.15.0)로 다음을 확인했습니다(e2e `argocd-real.spec.ts`).
+- **검증**: Argo CD 3.5.6 core 설치가 실제로 동기화한 Deployment(`scripts/kind-argocd.sh`, podinfo 차트 6.17.0)로 다음을 확인했습니다(e2e `argocd-real.spec.ts`).
   - 이 Deployment에 `<앱>:apps/Deployment:<NS>/<이름>` 어노테이션이 붙습니다.
   - Kubeast는 그 객체의 삭제·롤백을 409로 막고 `k8s.gitops.refuse` 행을 남깁니다.
   - 드로어에 배지가 뜹니다.
@@ -442,7 +442,7 @@ Loki는 최근 3시간치 중 창 안에서 30줄 이상 나온 패턴만 돌려
   - 트레이스 저장소(Jaeger·Tempo)는 브라우저가 링크로 여는 곳이므로 Kubeast와 직접 통신하지 않습니다.
 
 ```yaml
-# OpenTelemetry Collector contrib 0.163.1 — 노드의 컨테이너 로그를 Loki로 (DaemonSet, /var/log/pods 읽기 전용 마운트)
+# OpenTelemetry Collector contrib 0.164.0 — 노드의 컨테이너 로그를 Loki로 (DaemonSet, /var/log/pods 읽기 전용 마운트)
 receivers:
   file_log:
     include: [/var/log/pods/*/*/*.log]
@@ -631,17 +631,17 @@ Resource Graph의 통신·둘 다 보기는 두 출처 중 하나로 선을 그�
 
 | 구성 | 버전 | 검증 방법 |
 | --- | --- | --- |
-| prometheus-community/prometheus | 차트 29.37.0(Prometheus v3.15.0) | 예시 값 그대로 kind에 설치(29.36.1) → Kubeast가 `monitoring/prometheus-server:9090` 발견, cAdvisor·node-exporter·kube-state-metrics 지표 조회, 최적화 source `prometheus`. 29.37.0은 예시 값 렌더 결과에서 차트 레이블만 다릅니다 |
+| prometheus-community/prometheus | 차트 29.39.0(Prometheus v3.15.1) | 예시 값 그대로 kind에 설치(29.36.1) → Kubeast가 `monitoring/prometheus-server:9090` 발견, cAdvisor·node-exporter·kube-state-metrics 지표 조회, 최적화 source `prometheus`. 29.39.0은 예시 값 렌더 결과에서 차트 레이블만 다릅니다 |
 | opencost/opencost | 차트 2.5.33(OpenCost 1.121.3) | 예시 값 그대로 설치(2.5.32) → `opencost/opencost:9003` 발견, 비용 Namespace별 행. 2.5.33은 예시 값 렌더 결과에서 차트 레이블만 다릅니다 |
 | `scripts/render-target-rbac.sh` + `cluster-values.yaml` | — | 적용 전 Read 비용·Prometheus 조회 403 → 적용 뒤 200 |
 | kube-prometheus-stack | 92.3.0 | 렌더로 Service 이름·포트만 확인 |
 | metrics-server | 0.9.0 | 개발용 2번 클러스터(`deploy/kind/second-cluster.yaml`) |
 | Kyverno | 1.19.2(차트 3.9.2) | 개발용 2번 클러스터 |
 | Alertmanager | v0.34.1 | 개발용 2번 클러스터 — `amtool alert add`로 넣은 알림이 웹훅으로 들어와 조사됩니다(e2e `alert-investigation.spec.ts`) |
-| Loki · OpenTelemetry Collector contrib | 3.7.9 · 0.163.1 | 10-14에 3.7.8 · 0.162.0으로 검증하고 10-21에 올렸습니다. 개발용 2번 클러스터의 Loki 하나에 두 클러스터의 수집기가 로그를 보냅니다 — Job 로그를 텍스트와 워크로드로 찾을 수 있고, 다른 클러스터에서는 0줄이며, Job을 삭제한 뒤에도 찾습니다(e2e `log-search.spec.ts`) |
-| OpenTelemetry Collector contrib `host_metrics` | 0.163.1 | 10-17에 0.162.0으로 검증하고 10-21에 올렸습니다. 개발용 1번 클러스터(node-exporter 없음, `scripts/kind-hostmetrics.sh`)에서 2번 클러스터 Prometheus로 remote write합니다 — 같은 커널을 보는 2번 클러스터 node-exporter와 비교해 메모리 70.6% / 70.7%, 전체 메모리는 같은 바이트, Load 6.72 / 6.66, CPU 13.3% / 13.5%였고, 노드 드로어와 대시보드가 채워졌습니다(e2e `node-hostmetrics.spec.ts`). 0.162에서는 `hostmetrics`·`prometheusremotewrite`가 폐기 예정 별칭이라 `host_metrics`·`prometheus_remote_write` 이름을 씁니다 |
-| VictoriaMetrics | v1.154.1(단일판·클러스터판, vmagent) | 10-20에 v1.154.0으로 검증하고 10-21에 올렸습니다. 개발용 2번 클러스터(`scripts/kind-victoriametrics.sh` — 2번 클러스터 Prometheus와 같은 수집 설정)에서 노드 메모리 합계가 Prometheus·단일판·클러스터판 모두 같은 바이트였습니다. 단일판과 경로를 붙인 vmselect의 `/-/healthy`는 200, 규칙·알림은 빈 자리표시, vmselect 대상 API는 400이라 `up`으로 대신하고, 메타데이터 타입·설명도 읽힙니다(e2e `victoriametrics.spec.ts`) |
-| Grafana | 13.2.4 | 10-17, 개발용 2번 클러스터(`scripts/kind-grafana.sh`). 데이터소스 프록시로 읽은 지표·로그가 직접 읽은 값과 같고 대시보드·노드 드로어가 채워집니다. 틀린 토큰은 상태에 401로 나오고, 웹훅 연락처 시험으로 보낸 알림이 조사됩니다(e2e `grafana.spec.ts`) |
+| Loki · OpenTelemetry Collector contrib | 3.7.9 · 0.164.0 | 10-14에 3.7.8 · 0.162.0으로 검증하고 10-21에 올렸습니다. 개발용 2번 클러스터의 Loki 하나에 두 클러스터의 수집기가 로그를 보냅니다 — Job 로그를 텍스트와 워크로드로 찾을 수 있고, 다른 클러스터에서는 0줄이며, Job을 삭제한 뒤에도 찾습니다(e2e `log-search.spec.ts`) |
+| OpenTelemetry Collector contrib `host_metrics` | 0.164.0 | 10-17에 0.162.0으로 검증하고 10-21에 올렸습니다. 개발용 1번 클러스터(node-exporter 없음, `scripts/kind-hostmetrics.sh`)에서 2번 클러스터 Prometheus로 remote write합니다 — 같은 커널을 보는 2번 클러스터 node-exporter와 비교해 메모리 70.6% / 70.7%, 전체 메모리는 같은 바이트, Load 6.72 / 6.66, CPU 13.3% / 13.5%였고, 노드 드로어와 대시보드가 채워졌습니다(e2e `node-hostmetrics.spec.ts`). 0.162에서는 `hostmetrics`·`prometheusremotewrite`가 폐기 예정 별칭이라 `host_metrics`·`prometheus_remote_write` 이름을 씁니다 |
+| VictoriaMetrics | v1.155.0(단일판·클러스터판, vmagent) | 10-20에 v1.154.0으로 검증하고 10-21에 올렸습니다. 개발용 2번 클러스터(`scripts/kind-victoriametrics.sh` — 2번 클러스터 Prometheus와 같은 수집 설정)에서 노드 메모리 합계가 Prometheus·단일판·클러스터판 모두 같은 바이트였습니다. 단일판과 경로를 붙인 vmselect의 `/-/healthy`는 200, 규칙·알림은 빈 자리표시, vmselect 대상 API는 400이라 `up`으로 대신하고, 메타데이터 타입·설명도 읽힙니다(e2e `victoriametrics.spec.ts`) |
+| Grafana | 13.3.0 | 10-17, 개발용 2번 클러스터(`scripts/kind-grafana.sh`). 데이터소스 프록시로 읽은 지표·로그가 직접 읽은 값과 같고 대시보드·노드 드로어가 채워집니다. 틀린 토큰은 상태에 401로 나오고, 웹훅 연락처 시험으로 보낸 알림이 조사됩니다(e2e `grafana.spec.ts`) |
 | Argo CD | 3.5.6(core 설치) | 10-21, 개발용 2번 클러스터(`scripts/kind-argocd.sh`). Application이 podinfo 차트를 동기화하고, 추적 어노테이션·409·감사 행·드로어 배지·`gitops_status`를 확인했습니다(e2e `argocd-real.spec.ts`) |
 | Cilium(Hubble Relay) | 1.20.4 | 10-24, 기본 CNI 없이 만든 별도 kind 클러스터(`scripts/kind-cilium.sh`, Relay TLS 켬). Read 사용자로 `proxy` 모드에서 읽었습니다 — client → web 80 포트는 FORWARDED이고 `ingress_allowed_by`에 NetworkPolicy `web-only-client`가 있으며 응답이 합쳐졌고, stranger → web은 정책대로 ingress에서 `POLICY_DENIED`로 DROPPED였습니다. 네임스페이스가 정해진 사용자는 클러스터에서 403을 받고, 드로어의 "왜?"가 규칙을 알려 주며, MCP도 같은 묶음을 줍니다(e2e `network-flows.spec.ts`). 10-25: 같은 클러스터에서 §17 레이블로 켠 `drop` 지표를 Prometheus v3.15.0(`deploy/kind/cilium-prometheus.yaml`)이 수집합니다 — 드로어와 `network_drops`가 직접 질의와 같은 상대·사유·수를 주고, 네임스페이스가 정해진 사용자는 클러스터에서 403을 받습니다(e2e `network-drops.spec.ts`) |
 | Microsoft Retina(Hubble 컨트롤 플레인) | 1.3.0 | 10-25, kindnet kind 클러스터(`scripts/kind-retina.sh`, `deploy/kind/retina-values.yaml`, 1.3.1 이미지는 공개되지 않음). `proxy` 모드로 읽음: Deployment의 최근 흐름이 파드 이름으로 찾아지고 워크로드는 파드에서 붙음 · client → web은 Service cluster IP가 아니라 web의 ingress에서 센 선 하나 · 파드 레이블을 더한 지표 선이 web ingress의 SYN 직접 질의와 같음(e2e `network-retina.spec.ts`). 그곳(kindnet)에서는 정책 차단이 차단으로 오지 않음 |

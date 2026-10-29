@@ -1,7 +1,7 @@
 # Trace store for the AI's traces_* tools (features.traceStore) on kind: one Tempo
 # 3.1.0 single binary in the second cluster (kubeast-b), the way a central trace
 # store serves several clusters. Local storage in an emptyDir (traces go with the
-# pod), OTLP intake on 4317/4318. Based on Tempo v3.1.0
+# pod), OTLP intake on 4317/4318. Based on Tempo v3.1.1
 # example/docker-compose/single-binary/tempo.yaml. Applied by scripts/kind-tracing.sh.
 # NodePort 31200 is the query API Kubeast's k8s-service reads
 # (http://kubeast-b-control-plane:31200), 31318 the OTLP/HTTP intake the first
@@ -61,7 +61,7 @@ spec:
         seccompProfile: {type: RuntimeDefault}
       containers:
         - name: tempo
-          image: grafana/tempo:3.1.0
+          image: grafana/tempo:3.1.1
           imagePullPolicy: IfNotPresent
           args: ["-config.file=/etc/tempo/tempo.yaml"]
           ports:

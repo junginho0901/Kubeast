@@ -17,7 +17,7 @@ STORE="${LOGSEARCH_STORE_CLUSTER:-kubeast-b}"
 NAMESPACE="${NAMESPACE:-kubeast}"
 RELEASE="${RELEASE:-kubeast}"
 LOKI_IMAGE="grafana/loki:3.7.9"
-COLLECTOR_IMAGE="otel/opentelemetry-collector-contrib:0.163.1"
+COLLECTOR_IMAGE="otel/opentelemetry-collector-contrib:0.164.0"
 
 main_kubectl() { kubectl --kubeconfig "$KUBECONFIG_PATH" --context "kind-$MAIN" "$@"; }
 store_kubectl() { kubectl --kubeconfig <(kind get kubeconfig --name "$STORE") "$@"; }
