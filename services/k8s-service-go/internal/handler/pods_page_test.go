@@ -10,7 +10,7 @@ import (
 // A page query the server cannot answer as asked is refused before the cluster is read.
 func TestGetPodPageRefusesBadQueries(t *testing.T) {
 	h := &Handler{} // no service: a query that passed the checks would panic here
-	for _, q := range []string{"sort=image", "dir=up", "limit=0", "limit=501", "offset=-1", "owner=web-rs", "owner=/web-rs", "health=red", "service_account=app", "service_account=a/app,/b"} {
+	for _, q := range []string{"sort=image", "dir=up", "limit=0", "limit=501", "offset=-1", "owner=web-rs", "owner=/web-rs", "health=red", "service_account=app", "service_account=a/app,/b", "group_top=-1", "group_top=1001", "label_selector=app%20in%20(web", "label_selector=a=b=c"} {
 		rec := httptest.NewRecorder()
 		h.GetPodPage(rec, httptest.NewRequest(http.MethodGet, "/api/v1/pods/page?"+q, nil))
 		if rec.Code != http.StatusBadRequest {

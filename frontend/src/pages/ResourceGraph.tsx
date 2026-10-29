@@ -26,6 +26,7 @@ import {
   ALL_EDGE_TYPES,
   DEFAULT_KINDS,
   edgeStyles,
+  isIssueStatus,
   statusColor,
   type GroupBy,
 } from './resource-graph/constants'
@@ -201,18 +202,12 @@ export default function ResourceGraph() {
     const filteredNodes = allNodes.filter((n) => {
       if (kindFilters.size > 0 && !kindFilters.has(n.kind)) return false
       if (q && !(n.name?.toLowerCase().includes(q) || n.namespace?.toLowerCase().includes(q) || n.members?.some((m) => m.toLowerCase().includes(q)))) return false
-      if (statusFilter === 'issues') {
-        const s = (n.status || '').toLowerCase()
-        if (s === '' || s === 'running' || s === 'ready' || s === 'active' || s === 'bound' || s === 'succeeded') return false
-      }
+      if (statusFilter === 'issues' && !isIssueStatus(n.status)) return false
       return true
     })
 
-    // 문제 있는 노드를 앞쪽으로 정렬 → 상위 30개
-    const isProblem = (n: { status?: string }) => {
-      const s = (n.status || '').toLowerCase()
-      return s !== '' && s !== 'running' && s !== 'ready' && s !== 'active' && s !== 'bound' && s !== 'succeeded'
-    }
+    // 문제 있는 노드(Issues 필터와 같은 상태)를 앞쪽으로 정렬 → 상위 30개
+    const isProblem = (n: { status?: string }) => isIssueStatus(n.status)
     const sorted = [...filteredNodes].sort((a, b) => {
       const ap = isProblem(a) ? 0 : 1
       const bp = isProblem(b) ? 0 : 1

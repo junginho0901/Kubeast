@@ -65,6 +65,10 @@ func getJSONList(ctx context.Context, headers http.Header, cmd []string, kind, n
 		}
 		return nil, "", err
 	}
+	if outputCut(out) {
+		res, err := tooLarge(kind, namespace)
+		return nil, res, err
+	}
 	// Warnings kubectl prints before the JSON (deprecations) are skipped.
 	if i := strings.Index(out, "{"); i > 0 {
 		out = out[i:]
@@ -74,6 +78,22 @@ func getJSONList(ctx context.Context, headers http.Header, cmd []string, kind, n
 		return nil, "", fmt.Errorf("kubectl get -o json: unreadable output: %w", err)
 	}
 	return list, "", nil
+}
+
+// outputCut: runKubectl stopped the output at outputMaxBytes.
+func outputCut(out string) bool { return strings.Contains(out, truncatedMarkerLead) }
+
+// tooLarge answers a list that kubectl's output cap cut: decoding it would fail, counting it would be wrong.
+func tooLarge(kind, namespace string) (string, error) {
+	scope := "all namespaces"
+	if namespace != "" {
+		scope = namespace
+	}
+	return marshalJSON(map[string]interface{}{
+		"status": "too_large", "resource_type": kind, "scope": scope,
+		"reason": fmt.Sprintf("the list is larger than the tool output holds (%d bytes), so it was not read", outputMaxBytes),
+		"hint":   "Narrow with namespace, label_selector or field_selector. For pods, k8s_count and k8s_get_resources answer from the pod rows at any size.",
+	})
 }
 
 func itemsOf(list map[string]interface{}) []interface{} {
@@ -109,6 +129,9 @@ func handleJQQuery(ctx context.Context, args map[string]interface{}, headers htt
 	cmd, scope, err := listArgs(ctx, args)
 	if err != nil {
 		return "", err
+	}
+	if out, stop, err := podsTooMany(ctx, headers, args); stop {
+		return out, err
 	}
 	list, res, err := getJSONList(ctx, headers, cmd, argString(args, "resource_type", ""), argString(args, "namespace", ""))
 	if err != nil || res != "" {
@@ -173,6 +196,9 @@ func handleTabularQuery(ctx context.Context, args map[string]interface{}, header
 	if err != nil {
 		return "", err
 	}
+	if out, stop, err := podsTooMany(ctx, headers, args); stop {
+		return out, err
+	}
 	cmd = append(cmd, "-o", "custom-columns="+columns)
 	if v := argString(args, "sort_by", ""); v != "" {
 		cmd = append(cmd, "--sort-by="+v)
@@ -187,6 +213,11 @@ func handleTabularQuery(ctx context.Context, args map[string]interface{}, header
 	}
 	if limit > tabularRowsCap {
 		limit = tabularRowsCap
+	}
+	cut := outputCut(out)
+	if cut {
+		// the rows up to the last whole line before the cap
+		out = out[:strings.LastIndex(out[:strings.Index(out, truncatedMarkerLead)], "\n")+1]
 	}
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
 	header := ""
@@ -203,6 +234,11 @@ func handleTabularQuery(ctx context.Context, args map[string]interface{}, header
 		text += "\n" + strings.Join(rows, "\n")
 	}
 	summary := fmt.Sprintf("# %s in %s: %d rows", argString(args, "resource_type", ""), scope, total)
+	if cut {
+		summary = fmt.Sprintf("# %s in %s: more rows than the tool output holds (%d bytes); the first %d read. "+
+			"The total is not known: narrow with namespace, label_selector or field_selector, or count with k8s_count",
+			argString(args, "resource_type", ""), scope, outputMaxBytes, total)
+	}
 	if total > limit {
 		summary += fmt.Sprintf(", showing the first %d", limit)
 	}
@@ -218,6 +254,11 @@ func handleCount(ctx context.Context, args map[string]interface{}, headers http.
 	cmd, scope, err := listArgs(ctx, args)
 	if err != nil {
 		return "", err
+	}
+	if isPodsKind(argString(args, "resource_type", "")) {
+		if out, ok, err := podsCount(ctx, headers, args); ok {
+			return out, err
+		}
 	}
 	list, res, err := getJSONList(ctx, headers, cmd, argString(args, "resource_type", ""), argString(args, "namespace", ""))
 	if err != nil || res != "" {

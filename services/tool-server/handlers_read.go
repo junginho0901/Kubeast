@@ -36,6 +36,16 @@ func handleGetResources(ctx context.Context, args map[string]interface{}, header
 	allNamespaces := argBool(args, "all_namespaces")
 	output := argString(args, "output", "wide")
 
+	if isPodsKind(resourceType) && resourceName == "" {
+		ns := namespace
+		if allNamespaces {
+			ns = ""
+		}
+		if out, ok, err := podsList(ctx, headers, ns, argInt(args, "offset", 0)); ok {
+			return out, err
+		}
+	}
+
 	cmdArgs := []string{"get", resourceType}
 	if resourceName != "" {
 		cmdArgs = append(cmdArgs, resourceName)
@@ -362,7 +372,7 @@ func handleCheckServiceConnectivity(ctx context.Context, args map[string]interfa
 		}
 		if f, ok := classifyKubectlFailure(err); ok && f.Status == "not_found" {
 			result["namespace_exists"] = namespaceExists(ctx, headers, namespace)
-			candidates, scope, _ := listNames(ctx, headers, "services", scopedNamespaces(ctx))
+			candidates, scope, _ := listNames(ctx, headers, "services", scopedNamespaces(ctx), "")
 			result["similar"] = similarNames(serviceName, candidates)
 			result["searched"] = scope
 		}

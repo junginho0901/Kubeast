@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { kindWeight, pointsUp } from './constants'
+import { isIssueStatus, kindWeight, pointsUp } from './constants'
 
 // Every edge k8s-service draws (internal/k8s/resource_graph*.go), source → target.
 const SERVER_EDGES: Array<[string, string]> = [
@@ -35,5 +35,16 @@ describe('resource graph rows', () => {
 
   it('puts a Service on the row of the workloads it selects for', () => {
     expect(kindWeight.Service).toBe(kindWeight.Deployment)
+  })
+})
+
+// Every status the server gives a node (internal/k8s/resource_graph*.go): the Issues filter and the floating chat's
+// problem count keep the same ones — a Service's type, a StorageClass's provisioner or "Active" is not a problem.
+describe('resource graph issues', () => {
+  it('counts as problems only the statuses the Issues filter keeps', () => {
+    const issues = ['Pending', 'Failed', 'CrashLoopBackOff', 'ImagePullBackOff', 'Error', 'Terminating']
+    const fine = ['Running', 'Succeeded', 'Active', 'Bound', 'ClusterIP', 'NodePort', 'LoadBalancer', 'ExternalName', 'rancher.io/local-path', 'Available', 'Progressing', 'Complete', '', undefined]
+    expect(issues.filter((s) => !isIssueStatus(s))).toEqual([])
+    expect(fine.filter((s) => isIssueStatus(s))).toEqual([])
   })
 })

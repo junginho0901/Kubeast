@@ -257,3 +257,16 @@ async def test_new_read_tools_are_cached_like_the_others():
     await execute_function_with_context(service, "k8s_explain", {"resource": "pods"}, ctx)
     await execute_function_with_context(service, "k8s_explain", {"resource": "pods"}, ctx)
     assert service._call_tool_server.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_get_resources_passes_the_pods_offset():
+    service = _service()
+    await execute_function_with_context(service, "k8s_get_resources", {"resource_type": "pods", "offset": "25"}, _ctx())
+    service._call_tool_server.assert_awaited_once_with(
+        "k8s_get_resources",
+        {"resource_type": "pods", "resource_name": None, "namespace": None, "all_namespaces": True, "output": "wide", "offset": 25},
+    )
+    service._call_tool_server.reset_mock()
+    await execute_function_with_context(service, "k8s_get_resources", {"resource_type": "pods", "namespace": "shop"}, _ctx())
+    assert "offset" not in service._call_tool_server.await_args.args[1]

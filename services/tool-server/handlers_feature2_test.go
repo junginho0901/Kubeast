@@ -299,6 +299,29 @@ func TestCanI_And_ResourceGraph(t *testing.T) {
 	if _, err := handleResourceGraph(ctxFor("c1"), map[string]interface{}{}, bearer()); !errors.Is(err, errBadRequest) {
 		t.Fatalf("namespace required: %v", err)
 	}
+	if (*seen)[0].URL.Query().Get("group_pods") != "1" {
+		t.Fatalf("the tool asks for the grouped graph: %s", (*seen)[0].URL.RawQuery)
+	}
+
+	// a group stands for its count in the counts by kind, and names only its first members
+	members := make([]string, 300)
+	for i := range members {
+		members[i] = `"web-` + strconv.Itoa(i) + `"`
+	}
+	fakeK8sService(t, func(r *http.Request) (int, string) {
+		return 200, `{"nodes":[{"id":"g1","kind":"Pod","group":true,"count":300,"members":[` + strings.Join(members, ",") + `]},` +
+			`{"id":"p1","kind":"Pod","name":"web-x"},{"id":"d1","kind":"Deployment","name":"web"}],"edges":[]}`
+	})
+	out, err = handleResourceGraph(ctxFor("c1"), map[string]interface{}{"namespace": "shop"}, bearer())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = decode(t, out)
+	counts = m["counts_by_kind"].(map[string]interface{})
+	group := m["nodes"].([]interface{})[0].(map[string]interface{})
+	if counts["Pod"] != float64(301) || counts["Deployment"] != float64(1) || len(group["members"].([]interface{})) != graphGroupMembers || m["groups"] == nil {
+		t.Fatalf("groups: counts=%v members=%d", counts, len(group["members"].([]interface{})))
+	}
 }
 
 func TestFeatureArgs2AndGate(t *testing.T) {

@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"k8s.io/apimachinery/pkg/labels"
+
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
@@ -50,6 +52,20 @@ func (h *Handler) GetPodPage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		q.OwnerKind, q.OwnerName = kind, name
+	}
+	q.Tokens = queryParam(r, "match", "") == "tokens"
+	q.Groups = queryParam(r, "groups", "") == "1"
+	if q.GroupTop = queryParamInt(r, "group_top", 0); q.GroupTop < 0 || q.GroupTop > k8s.PodGroupTopMax {
+		response.Error(w, http.StatusBadRequest, fmt.Sprintf("group_top must be 1 to %d", k8s.PodGroupTopMax))
+		return
+	}
+	if v := queryParam(r, "label_selector", ""); v != "" {
+		sel, err := labels.Parse(v)
+		if err != nil {
+			response.Error(w, http.StatusBadRequest, "label_selector: "+err.Error())
+			return
+		}
+		q.LabelSelector = sel
 	}
 	q.Phase = queryParam(r, "phase", "")
 	q.RuntimeClass = queryParam(r, "runtime_class", "")

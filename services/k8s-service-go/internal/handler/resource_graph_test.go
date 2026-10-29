@@ -15,3 +15,12 @@ func TestGetResourceGraphRefusesUnknownGrouping(t *testing.T) {
 		t.Fatalf("%d %s", rec.Code, rec.Body.String())
 	}
 }
+
+// The namespace route (the AI tool resource_graph) reads the same options: an unknown grouping is refused there too.
+func TestGetNamespaceResourceGraphReadsTheOptions(t *testing.T) {
+	rec := httptest.NewRecorder()
+	(&Handler{}).GetNamespaceResourceGraph(rec, httptest.NewRequest(http.MethodGet, "/api/v1/namespaces/a/resource-graph?group_pods=1&group_by=owner", nil))
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "node or instance") {
+		t.Fatalf("%d %s", rec.Code, rec.Body.String())
+	}
+}

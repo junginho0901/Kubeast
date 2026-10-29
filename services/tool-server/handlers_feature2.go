@@ -24,6 +24,7 @@ const (
 	helmValuesCap       = 32 << 10
 	graphNodesCap       = 200
 	graphEdgesCap       = 400
+	graphGroupMembers   = 5
 	hygieneFindCap      = 200
 	policyRowsCap       = 200
 	netpolChecksCap     = 40
@@ -415,7 +416,8 @@ func handleResourceGraph(ctx context.Context, args map[string]interface{}, heade
 	if namespace == "" {
 		return "", wrapBadRequest("namespace parameter is required")
 	}
-	status, body, err := k8sServiceGet(ctx, headers, "/namespaces/"+url.PathEscape(namespace)+"/resource-graph", nil)
+	// the healthy pods of a large owner as one node, as the page draws them
+	status, body, err := k8sServiceGet(ctx, headers, "/namespaces/"+url.PathEscape(namespace)+"/resource-graph", url.Values{"group_pods": {"1"}})
 	if err != nil {
 		return "", err
 	}
@@ -425,6 +427,7 @@ func handleResourceGraph(ctx context.Context, args map[string]interface{}, heade
 	}
 	if nodes, ok := reply["nodes"].([]interface{}); ok {
 		counts := map[string]int{}
+		grouped := false
 		for _, n := range nodes {
 			m, _ := n.(map[string]interface{})
 			kind := fmt.Sprint(m["kind"])
@@ -433,9 +436,22 @@ func handleResourceGraph(ctx context.Context, args map[string]interface{}, heade
 					kind = fmt.Sprint(data["kind"])
 				}
 			}
+			if c, ok := m["count"].(float64); ok && m["group"] == true {
+				counts[kind] += int(c)
+				grouped = true
+				if members, ok := m["members"].([]interface{}); ok && len(members) > graphGroupMembers {
+					m["members"] = members[:graphGroupMembers]
+				}
+				continue
+			}
 			counts[kind]++
 		}
 		reply["counts_by_kind"] = counts
+		if grouped {
+			reply["groups"] = "A node with group=true stands for count objects of its kind (the healthy pods of an owner with many, " +
+				"and a StatefulSet's volumes), members names the first few; a group's edge stands for count edges. " +
+				"k8s_find_resource or k8s_get_resources lists the others."
+		}
 	}
 	capList(reply, "nodes", graphNodesCap)
 	capList(reply, "edges", graphEdgesCap)

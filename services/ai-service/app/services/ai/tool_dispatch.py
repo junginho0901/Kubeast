@@ -285,6 +285,8 @@ async def execute_function_with_context(
                 "all_namespaces": all_namespaces,
                 "output": output if isinstance(output, str) else "wide",
             }
+            if function_args.get("offset") is not None:
+                tool_args["offset"] = resolvers._coerce_limit(service, function_args.get("offset"), default=0, max_value=1_000_000)
             result = await service._call_tool_server(function_name, tool_args)
 
         elif function_name == "k8s_get_resource_yaml":
