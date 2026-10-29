@@ -45,13 +45,20 @@ type rgNode struct {
 	NodeName      string            `json:"nodeName,omitempty"`
 	OwnerKind     string            `json:"ownerKind,omitempty"`
 	InstanceLabel string            `json:"instanceLabel,omitempty"`
+	// a group of objects drawn as one (resource_graph_groups.go): its kind stays the members' kind
+	Group     bool     `json:"group,omitempty"`
+	Count     int      `json:"count,omitempty"`
+	Members   []string `json:"members,omitempty"`
+	OwnerName string   `json:"ownerName,omitempty"`
+	Restarted int      `json:"restarted,omitempty"`
 }
 
-// rgEdge represents an edge in the resource graph.
+// rgEdge represents an edge in the resource graph. Count is how many edges a group's edge stands for.
 type rgEdge struct {
 	Source string `json:"source"`
 	Target string `json:"target"`
 	Type   string `json:"type"`
+	Count  int    `json:"count,omitempty"`
 }
 
 func rgNodeID(kind, namespace, name string) string {
@@ -179,7 +186,18 @@ func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string, opt
 	if err != nil {
 		return nil, err
 	}
+	nodeMap, edges := buildResourceGraph(res, namespaces, opts)
+	result := buildResourceGraphResponse(nodeMap, edges)
+	if len(res.forbidden) > 0 {
+		result["forbidden_kinds"] = res.forbidden
+	}
 
+	s.cache.Set(ctx, cacheKey, result, 30*time.Second)
+	return result, nil
+}
+
+// buildResourceGraph draws the nodes and edges of what was fetched, the pods grouped when opts asks.
+func buildResourceGraph(res *rgResources, namespaces []string, opts ResourceGraphOptions) (map[string]rgNode, []rgEdge) {
 	// Filter by namespaces if multiple specified
 	nsFilter := make(map[string]bool)
 	if len(namespaces) > 1 {
@@ -211,13 +229,10 @@ func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string, opt
 
 	edges = buildStorageRBACGraph(res, nodeMap, addNode, edges, inScope)
 
-	result := buildResourceGraphResponse(nodeMap, edges)
-	if len(res.forbidden) > 0 {
-		result["forbidden_kinds"] = res.forbidden
+	if opts.GroupPods {
+		edges = groupPods(nodeMap, edges, res.pods, opts)
 	}
-
-	s.cache.Set(ctx, cacheKey, result, 30*time.Second)
-	return result, nil
+	return nodeMap, edges
 }
 
 // selectorMatchesStr checks if all key-value pairs in selector exist in labels.
