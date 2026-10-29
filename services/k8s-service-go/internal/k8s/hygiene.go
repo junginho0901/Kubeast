@@ -20,6 +20,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/kubernetes"
 )
 
 // Cluster hygiene report: configuration risks read from the API as the
@@ -215,8 +216,8 @@ func (s *Service) CollectHygiene(ctx context.Context, opts HygieneOptions) (Hygi
 		return true
 	}
 	all := metav1.ListOptions{}
-	if l, err := cs.CoreV1().Pods("").List(ctx, all); ok("pods", err) {
-		in.Pods = l.Items
+	if pods, err := hygienePods(ctx, cs); ok("pods", err) {
+		in.Pods = pods
 	}
 	if l, err := cs.CoreV1().Namespaces().List(ctx, all); ok("namespaces", err) {
 		in.Namespaces = l.Items
@@ -311,6 +312,45 @@ func (s *Service) CollectHygiene(ctx context.Context, opts HygieneOptions) (Hygi
 }
 
 // EvaluateHygiene runs every check over the input.
+// hygienePods lists the pods podListChunk at a time and keeps what the pod checks read (name, namespace, labels,
+// annotations, owners and the spec without env, command and args), so a large cluster is not held whole.
+func hygienePods(ctx context.Context, cs kubernetes.Interface) ([]corev1.Pod, error) {
+	var out []corev1.Pod
+	opts := metav1.ListOptions{Limit: podListChunk}
+	for {
+		l, err := cs.CoreV1().Pods("").List(ctx, opts)
+		if err != nil {
+			return nil, err
+		}
+		for i := range l.Items {
+			out = append(out, hygienePod(&l.Items[i]))
+		}
+		if l.Continue == "" {
+			return out, nil
+		}
+		opts.Continue = l.Continue
+	}
+}
+
+func hygienePod(p *corev1.Pod) corev1.Pod {
+	spec := *p.Spec.DeepCopy()
+	trim := func(cs []corev1.Container) {
+		for i := range cs {
+			cs[i].Env, cs[i].EnvFrom, cs[i].Command, cs[i].Args = nil, nil, nil, nil
+		}
+	}
+	trim(spec.Containers)
+	trim(spec.InitContainers)
+	for i := range spec.EphemeralContainers {
+		c := &spec.EphemeralContainers[i].EphemeralContainerCommon
+		c.Env, c.EnvFrom, c.Command, c.Args = nil, nil, nil, nil
+	}
+	return corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: p.Name, Namespace: p.Namespace, Labels: p.Labels, Annotations: p.Annotations, OwnerReferences: p.OwnerReferences},
+		Spec:       spec,
+	}
+}
+
 func EvaluateHygiene(in HygieneInput, opts HygieneOptions) HygieneReport {
 	now := opts.Now
 	if now.IsZero() {

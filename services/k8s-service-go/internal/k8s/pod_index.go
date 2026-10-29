@@ -21,10 +21,17 @@ type podRow struct {
 	podIP                string
 	ownerKind, ownerName string
 	healthReason         string
-	created, deleted     int64 // unix seconds; deleted 0 = not being deleted
-	ready, containers    uint16
-	restarts             int32
-	health               uint8 // podHealthOK, podHealthWarn, podHealthError
+	// for the RuntimeClass, PriorityClass and ClusterRoleBinding drawers' pod lists
+	runtimeClass, priorityClass, serviceAccount string
+	// the workload the Hubble agent names (agentWorkload) and the GenerateName Calico names a pod set by, for the
+	// network flows' lookup
+	generateName, workloadKind, workloadName string
+	// the sums of the containers' limits, -1 when a container sets none (Monitoring Pods)
+	cpuLimitMilli, memLimitBytes int64
+	created, deleted             int64 // unix seconds; deleted 0 = not being deleted
+	ready, containers            uint16
+	restarts                     int32
+	health                       uint8 // podHealthOK, podHealthWarn, podHealthError
 }
 
 // GetObjectMeta lets the store key and index the row (meta.Accessor).
@@ -88,6 +95,16 @@ func toPodRow(p *corev1.Pod, in *interner) *podRow {
 		r.restarts += cs.RestartCount
 	}
 	r.status = in.get(podListStatus(p, int(r.ready), int(r.containers)))
+	if p.Spec.RuntimeClassName != nil {
+		r.runtimeClass = in.get(*p.Spec.RuntimeClassName)
+	}
+	r.priorityClass = in.get(p.Spec.PriorityClassName)
+	r.serviceAccount = in.get(p.Spec.ServiceAccountName)
+	r.cpuLimitMilli, r.memLimitBytes = podLimits(p)
+	r.generateName = in.get(p.GenerateName)
+	if w, ok := agentWorkload(p); ok {
+		r.workloadKind, r.workloadName = in.get(w.Kind), in.get(w.Name)
+	}
 	h, reason := podHealth(p)
 	r.health, r.healthReason = h, in.get(reason)
 	if ref := metav1.GetControllerOfNoCopy(p); ref != nil {
@@ -96,6 +113,28 @@ func toPodRow(p *corev1.Pod, in *interner) *podRow {
 		r.ownerKind, r.ownerName = in.get(p.OwnerReferences[0].Kind), p.OwnerReferences[0].Name
 	}
 	return r
+}
+
+// podLimits sums the containers' cpu and memory limits; a container without one leaves the pod without a limit
+// (-1), as the Monitoring page reads it (podUsage.ts podLimit).
+func podLimits(p *corev1.Pod) (cpuMilli, memBytes int64) {
+	if len(p.Spec.Containers) == 0 {
+		return -1, -1
+	}
+	cpuMilli, memBytes = 0, 0
+	for _, c := range p.Spec.Containers {
+		if q, ok := c.Resources.Limits[corev1.ResourceCPU]; ok && cpuMilli >= 0 && q.MilliValue() > 0 {
+			cpuMilli += q.MilliValue()
+		} else {
+			cpuMilli = -1
+		}
+		if q, ok := c.Resources.Limits[corev1.ResourceMemory]; ok && memBytes >= 0 && q.Value() > 0 {
+			memBytes += q.Value()
+		} else {
+			memBytes = -1
+		}
+	}
+	return cpuMilli, memBytes
 }
 
 // podListStatus is the Status column of the Pods list as the page used to work

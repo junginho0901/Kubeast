@@ -15,6 +15,11 @@ func (h *Handler) GetPodMetrics(w http.ResponseWriter, r *http.Request) {
 		h.handleError(w, err)
 		return
 	}
+	// with_limits=1 (Monitoring Pods): each row with its pod's cpu and memory limits, from the pod rows the
+	// caller may see, so the page needs no pod list
+	if queryParam(r, "with_limits", "") == "1" {
+		h.svc.AddPodLimits(ctx, namespace, data)
+	}
 	response.JSON(w, http.StatusOK, data)
 }
 

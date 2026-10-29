@@ -8,6 +8,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"math/big"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -397,5 +398,41 @@ func TestHygieneTLSExpiry(t *testing.T) {
 		if strings.Contains(f.Message, "unused") {
 			t.Fatalf("a key byte leaked into the report: %+v", f)
 		}
+	}
+}
+
+// The pods Hygiene keeps (hygienePod) give the same report as the pods as listed: what is left out (env, command,
+// args, status, managed fields) is read by no check.
+func TestHygienePod_SameReportAsTheFullPod(t *testing.T) {
+	risky := compliantPod("shop", "web-5d8f7c9b6-x2k9p")
+	risky.Labels = map[string]string{"app": "web", "pod-template-hash": "5d8f7c9b6"}
+	risky.Annotations = map[string]string{"kubeast.io/hygiene-exempt": "image.latest"}
+	risky.OwnerReferences = []metav1.OwnerReference{{Kind: "ReplicaSet", Name: "web-5d8f7c9b6", Controller: ptr(true)}}
+	risky.Spec.Containers[0].Image = "nginx:latest"
+	risky.Spec.Containers[0].SecurityContext.Privileged = ptr(true)
+	risky.Spec.Containers[0].Env = []corev1.EnvVar{{Name: "DB_PASSWORD", Value: "x"}}
+	risky.Spec.Containers[0].Command = []string{"sh", "-c", "sleep 1"}
+	risky.Spec.InitContainers = []corev1.Container{{Name: "init", Image: "busybox", Args: []string{"true"}, EnvFrom: []corev1.EnvFromSource{{SecretRef: &corev1.SecretEnvSource{LocalObjectReference: corev1.LocalObjectReference{Name: "s"}}}}}}
+	risky.Spec.Volumes = append(risky.Spec.Volumes, corev1.Volume{Name: "host", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/var/run"}}})
+	risky.Spec.HostNetwork = true
+	risky.Status = corev1.PodStatus{Phase: corev1.PodRunning, Reason: "x"}
+	risky.ManagedFields = []metav1.ManagedFieldsEntry{{Manager: "kubectl"}}
+	pods := []corev1.Pod{risky, compliantPod("shop", "api-0")}
+
+	trimmed := make([]corev1.Pod, len(pods))
+	for i := range pods {
+		trimmed[i] = hygienePod(&pods[i])
+	}
+	if trimmed[0].Spec.Containers[0].Env != nil || trimmed[0].Spec.InitContainers[0].EnvFrom != nil || trimmed[0].ManagedFields != nil || trimmed[0].Status.Phase != "" {
+		t.Fatal("the kept pod still holds env, managed fields or status")
+	}
+	opts := HygieneOptions{TargetMinor: 38}
+	full := EvaluateHygiene(HygieneInput{Pods: pods, Namespaces: []corev1.Namespace{labeledNS("shop")}, Failed: map[string]bool{}}, opts)
+	kept := EvaluateHygiene(HygieneInput{Pods: trimmed, Namespaces: []corev1.Namespace{labeledNS("shop")}, Failed: map[string]bool{}}, opts)
+	if len(full.Findings) == 0 {
+		t.Fatal("the risky pod has no findings: the test checks nothing")
+	}
+	if !reflect.DeepEqual(full.Findings, kept.Findings) || !reflect.DeepEqual(full.Checks, kept.Checks) {
+		t.Fatalf("reports differ\nfull %+v\nkept %+v", full.Findings, kept.Findings)
 	}
 }

@@ -51,6 +51,16 @@ func (h *Handler) GetPodPage(w http.ResponseWriter, r *http.Request) {
 		}
 		q.OwnerKind, q.OwnerName = kind, name
 	}
+	q.Phase = queryParam(r, "phase", "")
+	q.RuntimeClass = queryParam(r, "runtime_class", "")
+	q.PriorityClass = queryParam(r, "priority_class", "")
+	for _, sa := range splitList(queryParam(r, "service_account", "")) {
+		if ns, name, ok := strings.Cut(sa, "/"); !ok || ns == "" || name == "" {
+			response.Error(w, http.StatusBadRequest, "service_account must be <namespace>/<name>[,…]")
+			return
+		}
+		q.ServiceAccounts = append(q.ServiceAccounts, sa)
+	}
 	if q.Health = queryParam(r, "health", ""); q.Health != "" && !slices.Contains(k8s.PodHealthNames, q.Health) {
 		response.Error(w, http.StatusBadRequest, "health must be one of "+strings.Join(k8s.PodHealthNames, ", "))
 		return
