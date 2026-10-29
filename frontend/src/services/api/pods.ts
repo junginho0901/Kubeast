@@ -3,7 +3,7 @@
 // the dedicated WebSocket multiplexer in /api/v1/ws).
 
 import { client } from './client'
-import type { LogFileContent, LogFileList, LogQLParams, LogSearchParams, LogSearchResult, LogSearchStatus, PodInfo, PodPage, PodPageParams, PodRbacResponse } from './types'
+import type { LogFileContent, LogFileList, LogQLParams, LogSearchParams, LogSearchResult, LogSearchStatus, PodInfo, PodNodeSummary, PodPage, PodPageParams, PodRbacResponse } from './types'
 
 export const podsApi = {
   getPods: async (namespace: string, labelSelector?: string, forceRefresh = false): Promise<PodInfo[]> => {
@@ -23,6 +23,18 @@ export const podsApi = {
   /** One page of the Pods list: the server filters, sorts and counts (k8s-service pods_page.go). */
   getPodPage: async (params: PodPageParams): Promise<PodPage> => {
     const { data } = await client.get('/cluster/pods/page', { params })
+    return data
+  },
+
+  /** The Cluster View node map: each node's pods by colour (k8s-service pods_nodes.go). */
+  getPodNodeSummary: async (params: { namespace?: string; q?: string; revision?: string }): Promise<PodNodeSummary> => {
+    const { data } = await client.get('/cluster/pods/nodes', { params })
+    return data
+  },
+
+  /** The pods on one node ("" = not scheduled), listed as the caller. */
+  getPodsOnNode: async (node: string, namespace?: string): Promise<PodInfo[]> => {
+    const { data } = await client.get('/cluster/pods/on-node', { params: { node, namespace } })
     return data
   },
 

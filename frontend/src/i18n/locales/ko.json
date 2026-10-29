@@ -2629,6 +2629,14 @@
     },
     "manifest": {
       "loading": "불러오는 중..."
+    },
+    "map": {
+      "aria": "노드 지도: 노드 {{nodes}}개, Pod {{pods}}개(오류 {{error}}, 주의 {{warn}})",
+      "hover": "{{node}} · Pod {{total}}개 · 오류 {{error}} · 주의 {{warn}}",
+      "error": "오류",
+      "warn": "주의",
+      "ok": "정상",
+      "hint": "칸 하나가 노드, 점 하나가 Pod입니다. 칸을 누르면 그 노드로 이동합니다."
     }
   },
   "namespaces": {

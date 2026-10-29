@@ -159,15 +159,10 @@ func (s *Service) DescribeNode(ctx context.Context, name string) (map[string]int
 	return result, nil
 }
 
-// GetNodePods returns pods running on a node.
+// GetNodePods returns pods running on a node (GetPodsOnNode, every namespace
+// the caller may list).
 func (s *Service) GetNodePods(ctx context.Context, nodeName string) ([]map[string]interface{}, error) {
-	pods, err := s.clientsetCtx(ctx).CoreV1().Pods("").List(ctx, metav1.ListOptions{
-		FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("list pods on node %s: %w", nodeName, err)
-	}
-	return formatPodList(pods.Items), nil
+	return s.GetPodsOnNode(ctx, nodeName, "")
 }
 
 // GetNodeEvents returns events for a node.

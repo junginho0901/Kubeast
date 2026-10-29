@@ -149,6 +149,9 @@
   - 줄을 보내기 전에 사용자 신원이 파드를 list할 수 있는지(SelfSubjectAccessReview, 60초 캐시) 묻습니다. 모든 네임스페이스에서 안 되면 고른 네임스페이스, 또는 네임스페이스로 한정된 권한의 네임스페이스마다 묻습니다. 클러스터가 거부한 네임스페이스는 빼고, 전부 거부하면 403을 돌려줍니다.
   - 검색·정렬·요약 카드·페이지는 서버가 계산합니다. 화면은 3초마다(파드 1만 개 넘으면 10초) 다시 묻고, 볼 수 있는 줄이 바뀌었을 때만 줄을 다시 받습니다.
   - 캐시가 동기화되기 전이나 `kubeast:cache`가 파드를 watch할 수 없을 때는 사용자 신원으로 500개씩 나눠 받습니다.
+- **Cluster View**는 노드 지도에 노드마다 칸 하나, 파드마다 점 하나를 카드와 같은 색(오류·주의·정상)으로 그립니다. 서버가 같은 줄과 같은 사용자 확인으로 세어 주므로, 큰 클러스터도 파드 전체를 브라우저로 받지 않고 한눈에 봅니다.
+  - 지도 아래 노드 상자는 화면에 들어올 때 그 노드의 파드를 받고 그 노드를 watch합니다(`fieldSelector=spec.nodeName`). 그래서 화면에 보이는 상자에서는 파드가 뜨고, 끝나고, 다른 노드에 다시 뜨는 것이 바로 보이고, 지도는 2초 안에 따라옵니다.
+  - 검색은 서버가 셉니다(이름·네임스페이스, 전과 같음). 맞는 파드가 있는 노드는 어디에 있든 지도와 상자에 나옵니다.
 - **YAML 생성·편집**은 문서마다 그 Kind의 `resource.<이름>.create`(편집은 대상의 `resource.<이름>.edit`)를 확인합니다.
   - 이름은 Kind의 소문자 형태이고, 자기 이름이 없는 Kind(CR 등)는 `customresource`를 씁니다.
     단, HorizontalPodAutoscaler·VerticalPodAutoscaler·PodDisruptionBudget·PersistentVolume·PersistentVolumeClaim·CustomResourceDefinition은 `hpa`·`vpa`·`pdb`·`pv`·`pvc`·`crd`를 씁니다.

@@ -2625,6 +2625,14 @@
     },
     "manifest": {
       "loading": "Loading..."
+    },
+    "map": {
+      "aria": "Node map: {{nodes}} nodes, {{pods}} pods ({{error}} errors, {{warn}} warnings)",
+      "hover": "{{node}} · {{total}} pods · {{error}} errors · {{warn}} warnings",
+      "error": "Error",
+      "warn": "Warning",
+      "ok": "Healthy",
+      "hint": "A cell is a node, a dot a pod. Click a cell to go to the node."
     }
   },
   "namespaces": {

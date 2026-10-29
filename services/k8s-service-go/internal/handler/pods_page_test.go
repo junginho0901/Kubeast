@@ -21,3 +21,12 @@ func TestGetPodPageRefusesBadQueries(t *testing.T) {
 		}
 	}
 }
+
+// The pods of one node need the node named; "" (the pods not scheduled) is a value, a missing one is refused.
+func TestGetPodsOnNodeNeedsNode(t *testing.T) {
+	rec := httptest.NewRecorder()
+	(&Handler{}).GetPodsOnNode(rec, httptest.NewRequest(http.MethodGet, "/api/v1/pods/on-node?namespace=a", nil))
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "node is required") {
+		t.Fatalf("%d %s", rec.Code, rec.Body.String())
+	}
+}

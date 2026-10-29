@@ -87,6 +87,8 @@ export const getPodHealth = (pod: any): PodHealth => {
     'NotReady',
   ]
 
+  // A reason the warning list names (ContainerCreating, PodInitializing …) is
+  // not an error, also when no error reason is there to come first.
   const errorReason = pickReason(
     [
       ...(statusReason ? [statusReason] : []),
@@ -94,7 +96,7 @@ export const getPodHealth = (pod: any): PodHealth => {
       ...initTerminatedReasons,
       ...waitingReasons,
       ...terminatedReasons,
-    ],
+    ].filter((r) => !warnPriority.includes(r)),
     errorPriority
   )
   if (errorReason || phase === 'Failed') {

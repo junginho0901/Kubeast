@@ -63,6 +63,32 @@ func (h *Handler) GetPodPage(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, page)
 }
 
+// GetPodNodeSummary handles GET /api/v1/pods/nodes: the Cluster View node
+// map — each node's pods by card colour (namespace, q, revision).
+func (h *Handler) GetPodNodeSummary(w http.ResponseWriter, r *http.Request) {
+	sum, err := h.svc.GetPodNodeSummary(r.Context(), queryParam(r, "namespace", ""), queryParam(r, "q", ""), queryParam(r, "revision", ""))
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, sum)
+}
+
+// GetPodsOnNode handles GET /api/v1/pods/on-node?node=<name>: the pods of one
+// node ("" = not scheduled), optionally in one namespace, listed as the caller.
+func (h *Handler) GetPodsOnNode(w http.ResponseWriter, r *http.Request) {
+	if !r.URL.Query().Has("node") {
+		response.Error(w, http.StatusBadRequest, "node is required (empty for the pods not scheduled)")
+		return
+	}
+	data, err := h.svc.GetPodsOnNode(r.Context(), r.URL.Query().Get("node"), queryParam(r, "namespace", ""))
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, data)
+}
+
 // GetPods handles GET /api/v1/namespaces/{namespace}/pods.
 func (h *Handler) GetPods(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()

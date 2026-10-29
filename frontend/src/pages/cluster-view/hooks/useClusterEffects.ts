@@ -1,5 +1,4 @@
 import { useEffect } from 'react'
-import type { PodInfo } from '@/services/api'
 import { useClusterView } from '../ClusterViewContext'
 
 // ClusterView 의 5 useEffect 묶음:
@@ -7,13 +6,9 @@ import { useClusterView } from '../ClusterViewContext'
 // 2) context-menu 가 떠 있을 때 resize/scroll 발생하면 close
 // 3) namespace dropdown 외부 클릭 close
 // 4) exec container/shell dropdown 외부 클릭 close
-// 5) allPods 가 새로 fetch 되면 deletingPods Set 에서 더 이상 없는 키 제거 (reconciliation)
+// (deletingPods 재조정은 노드 상자마다 — PodNodeGrid NodeBox: 그 노드 목록에서 사라진 pod 의 키 제거)
 
-interface Params {
-  allPods: PodInfo[] | undefined
-}
-
-export function useClusterEffects({ allPods }: Params) {
+export function useClusterEffects() {
   const {
     podContextMenu, setPodContextMenu,
     deleteTargetPod, closeDeleteModal,
@@ -23,7 +18,6 @@ export function useClusterEffects({ allPods }: Params) {
     isExecContainerDropdownOpen, setIsExecContainerDropdownOpen,
     isExecShellDropdownOpen, setIsExecShellDropdownOpen,
     execContainerDropdownRef, execShellDropdownRef,
-    setDeletingPods,
   } = useClusterView()
 
   // 1) ESC 키 — 메뉴 → 삭제 모달 → 상세 모달 순으로 닫는다.
@@ -79,17 +73,4 @@ export function useClusterEffects({ allPods }: Params) {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [isExecContainerDropdownOpen, isExecShellDropdownOpen, execContainerDropdownRef, execShellDropdownRef, setIsExecContainerDropdownOpen, setIsExecShellDropdownOpen])
-
-  // 5) deletingPods 재조정 — list 갱신 후 사라진 pod 의 키 제거
-  useEffect(() => {
-    if (!allPods) return
-    setDeletingPods((prev) => {
-      const remaining = new Set<string>()
-      const keys = new Set(allPods.map((pod) => `${pod.namespace}/${pod.name}`))
-      for (const key of prev) {
-        if (keys.has(key)) remaining.add(key)
-      }
-      return remaining
-    })
-  }, [allPods, setDeletingPods])
 }

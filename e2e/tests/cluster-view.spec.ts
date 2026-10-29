@@ -33,6 +33,9 @@ test.describe('ClusterView', () => {
       mask: [
         // 노드 카드 안의 pod 그리드 (가장 변동 큼)
         page.locator('[class*="grid"]').filter({ hasText: /running|pending|completed/i }),
+        // the node map's dots and counts follow the pods
+        page.getByTestId('cluster-view-map').locator('canvas'),
+        page.getByTestId('cluster-view-map-legend'),
       ],
     })
   })
