@@ -22,6 +22,7 @@ const kubectl = kubectlFor('kubeast')
 const tryKubectl = (args: string) => { try { return kubectl(args) } catch { return null } }
 
 type Cell = [node: string, ok: number, warn: number, error: number]
+const total = (c: Cell) => c[1] + c[2] + c[3]
 const mapCells = async (page: Page): Promise<Cell[]> =>
   JSON.parse((await page.getByTestId('cluster-view-map').locator('canvas').getAttribute('data-cells')) ?? '[]')
 const box = (page: Page, node: string) => page.locator(`[data-testid="cluster-view-node"][data-node="${node}"]`)
@@ -53,11 +54,15 @@ test.describe('Cluster View — node map, boxes on screen, live', () => {
   test('a pod made, deleted and replaced shows in its node\'s box at once, and the map follows', async ({ page }) => {
     const name = `e2e-cvlive-${Date.now().toString(36)}`
     const node = kubectl('get nodes -o jsonpath={.items[0].metadata.name}')
+    const leaving = () => kubectl(`get namespaces,pods -A -o 'jsonpath={.items[?(@.metadata.deletionTimestamp)].metadata.name}'`)
+    const onNode = () => kubectl(`get pods -A --field-selector spec.nodeName=${node} -o name`).split('\n').filter(Boolean).length
     try {
+      // earlier specs delete their namespaces without waiting: a pod still leaving would move the count on its own
+      await expect.poll(leaving, { timeout: 90_000 }).toBe('')
       await page.goto(`/cluster-view?cluster=${CLUSTER}`)
       await expect(box(page, node).locator('button').first()).toBeVisible()
+      await expect.poll(async () => total((await mapCells(page)).find(([n]) => n === node)!), { timeout: 10_000 }).toBe(onNode())
       const before = (await mapCells(page)).find(([n]) => n === node)!
-      const total = (c: Cell) => c[1] + c[2] + c[3]
 
       kubectl(`-n default create deployment ${name} --image=registry.k8s.io/pause:3.10`)
       await expect(card(page, name)).toHaveCount(1, { timeout: 15_000 })
