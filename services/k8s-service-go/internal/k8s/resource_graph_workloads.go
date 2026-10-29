@@ -150,79 +150,37 @@ func buildWorkloadGraph(
 	// --- Pods ---
 	for i := range res.pods {
 		pod := &res.pods[i]
-		if !inScope(pod.Namespace) {
+		if !inScope(pod.namespace) {
 			continue
 		}
-		status := string(pod.Status.Phase)
-		ready := podReadyCount(pod)
-		podID := rgNodeID("Pod", pod.Namespace, pod.Name)
+		podID := rgNodeID("Pod", pod.namespace, pod.name)
 
 		ownerKind := ""
-		if len(pod.OwnerReferences) > 0 {
-			ownerKind = pod.OwnerReferences[0].Kind
+		if len(pod.owners) > 0 {
+			ownerKind = pod.owners[0].Kind
 		}
 
 		addNode(rgNode{
 			ID: podID, Kind: "Pod",
-			Name: pod.Name, Namespace: pod.Namespace,
-			Status: status, Ready: ready, Labels: pod.Labels,
-			NodeName: pod.Spec.NodeName, OwnerKind: ownerKind,
-			InstanceLabel: pod.Labels["app.kubernetes.io/instance"],
+			Name: pod.name, Namespace: pod.namespace,
+			Status: pod.phase, Ready: pod.ready, Labels: pod.labels,
+			NodeName: pod.node, OwnerKind: ownerKind,
+			InstanceLabel: pod.labels["app.kubernetes.io/instance"],
 		})
 
 		// ownerReferences → owns edges
-		for _, ref := range pod.OwnerReferences {
-			ownerID := rgNodeID(ref.Kind, pod.Namespace, ref.Name)
+		for _, ref := range pod.owners {
+			ownerID := rgNodeID(ref.Kind, pod.namespace, ref.Name)
 			edges = append(edges, rgEdge{Source: ownerID, Target: podID, Type: RGEdgeOwns})
 		}
 
-		// volume mounts → ConfigMap, Secret, PVC
-		for _, vol := range pod.Spec.Volumes {
-			if vol.ConfigMap != nil {
-				cmID := rgNodeID("ConfigMap", pod.Namespace, vol.ConfigMap.Name)
-				addNode(rgNode{ID: cmID, Kind: "ConfigMap", Name: vol.ConfigMap.Name, Namespace: pod.Namespace, Status: "Active"})
-				edges = append(edges, rgEdge{Source: podID, Target: cmID, Type: RGEdgeMounts})
+		// volumes and env references → ConfigMap, Secret, PVC (a PVC is a node only when listed)
+		for _, ref := range pod.refs {
+			id := rgNodeID(ref.kind, pod.namespace, ref.name)
+			if ref.kind != "PersistentVolumeClaim" {
+				addNode(rgNode{ID: id, Kind: ref.kind, Name: ref.name, Namespace: pod.namespace, Status: "Active"})
 			}
-			if vol.Secret != nil {
-				sID := rgNodeID("Secret", pod.Namespace, vol.Secret.SecretName)
-				addNode(rgNode{ID: sID, Kind: "Secret", Name: vol.Secret.SecretName, Namespace: pod.Namespace, Status: "Active"})
-				edges = append(edges, rgEdge{Source: podID, Target: sID, Type: RGEdgeMounts})
-			}
-			if vol.PersistentVolumeClaim != nil {
-				pvcID := rgNodeID("PersistentVolumeClaim", pod.Namespace, vol.PersistentVolumeClaim.ClaimName)
-				edges = append(edges, rgEdge{Source: podID, Target: pvcID, Type: RGEdgeMounts})
-			}
-		}
-
-		// env references → ConfigMap, Secret
-		for _, c := range pod.Spec.Containers {
-			for _, ef := range c.EnvFrom {
-				if ef.ConfigMapRef != nil {
-					cmID := rgNodeID("ConfigMap", pod.Namespace, ef.ConfigMapRef.Name)
-					addNode(rgNode{ID: cmID, Kind: "ConfigMap", Name: ef.ConfigMapRef.Name, Namespace: pod.Namespace, Status: "Active"})
-					edges = append(edges, rgEdge{Source: podID, Target: cmID, Type: RGEdgeMounts})
-				}
-				if ef.SecretRef != nil {
-					sID := rgNodeID("Secret", pod.Namespace, ef.SecretRef.Name)
-					addNode(rgNode{ID: sID, Kind: "Secret", Name: ef.SecretRef.Name, Namespace: pod.Namespace, Status: "Active"})
-					edges = append(edges, rgEdge{Source: podID, Target: sID, Type: RGEdgeMounts})
-				}
-			}
-			for _, env := range c.Env {
-				if env.ValueFrom == nil {
-					continue
-				}
-				if env.ValueFrom.ConfigMapKeyRef != nil {
-					cmID := rgNodeID("ConfigMap", pod.Namespace, env.ValueFrom.ConfigMapKeyRef.Name)
-					addNode(rgNode{ID: cmID, Kind: "ConfigMap", Name: env.ValueFrom.ConfigMapKeyRef.Name, Namespace: pod.Namespace, Status: "Active"})
-					edges = append(edges, rgEdge{Source: podID, Target: cmID, Type: RGEdgeMounts})
-				}
-				if env.ValueFrom.SecretKeyRef != nil {
-					sID := rgNodeID("Secret", pod.Namespace, env.ValueFrom.SecretKeyRef.Name)
-					addNode(rgNode{ID: sID, Kind: "Secret", Name: env.ValueFrom.SecretKeyRef.Name, Namespace: pod.Namespace, Status: "Active"})
-					edges = append(edges, rgEdge{Source: podID, Target: sID, Type: RGEdgeMounts})
-				}
-			}
+			edges = append(edges, rgEdge{Source: podID, Target: id, Type: RGEdgeMounts})
 		}
 	}
 

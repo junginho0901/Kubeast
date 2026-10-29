@@ -3,6 +3,7 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	storagev1 "k8s.io/api/storage/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // Resource Graph edge types
@@ -59,9 +61,90 @@ func rgNodeID(kind, namespace, name string) string {
 	return fmt.Sprintf("%s/%s/%s", kind, namespace, name)
 }
 
+// rgPod is what the graph reads from a pod. Pods are listed podListChunk at a time and kept in this form, so a
+// namespace of many pods never holds the full objects.
+type rgPod struct {
+	name, namespace string
+	labels          map[string]string
+	owners          []metav1.OwnerReference
+	node, phase     string
+	ready           string
+	health          uint8
+	restarts        int32
+	// what the pod mounts or reads env from, in the order the graph adds its edges
+	refs []rgPodRef
+}
+
+type rgPodRef struct{ kind, name string }
+
+func toRGPod(p *corev1.Pod) rgPod {
+	health, _ := podHealth(p)
+	out := rgPod{
+		name: p.Name, namespace: p.Namespace, labels: p.Labels, node: p.Spec.NodeName,
+		phase: string(p.Status.Phase), ready: podReadyCount(p), health: health,
+	}
+	for _, ref := range p.OwnerReferences {
+		out.owners = append(out.owners, metav1.OwnerReference{Kind: ref.Kind, Name: ref.Name})
+	}
+	for _, cs := range p.Status.ContainerStatuses {
+		out.restarts += cs.RestartCount
+	}
+	for _, vol := range p.Spec.Volumes {
+		if vol.ConfigMap != nil {
+			out.refs = append(out.refs, rgPodRef{"ConfigMap", vol.ConfigMap.Name})
+		}
+		if vol.Secret != nil {
+			out.refs = append(out.refs, rgPodRef{"Secret", vol.Secret.SecretName})
+		}
+		if vol.PersistentVolumeClaim != nil {
+			out.refs = append(out.refs, rgPodRef{"PersistentVolumeClaim", vol.PersistentVolumeClaim.ClaimName})
+		}
+	}
+	for _, c := range p.Spec.Containers {
+		for _, ef := range c.EnvFrom {
+			if ef.ConfigMapRef != nil {
+				out.refs = append(out.refs, rgPodRef{"ConfigMap", ef.ConfigMapRef.Name})
+			}
+			if ef.SecretRef != nil {
+				out.refs = append(out.refs, rgPodRef{"Secret", ef.SecretRef.Name})
+			}
+		}
+		for _, env := range c.Env {
+			if env.ValueFrom == nil {
+				continue
+			}
+			if env.ValueFrom.ConfigMapKeyRef != nil {
+				out.refs = append(out.refs, rgPodRef{"ConfigMap", env.ValueFrom.ConfigMapKeyRef.Name})
+			}
+			if env.ValueFrom.SecretKeyRef != nil {
+				out.refs = append(out.refs, rgPodRef{"Secret", env.ValueFrom.SecretKeyRef.Name})
+			}
+		}
+	}
+	return out
+}
+
+// ResourceGraphOptions: GroupPods folds the healthy pods of an owner with more than podGroupMin pods into
+// groups (resource_graph_groups.go); GroupBy is the page's grouping, which a group does not cross; Expand names
+// groups drawn pod by pod.
+type ResourceGraphOptions struct {
+	GroupPods bool
+	GroupBy   string
+	Expand    []string
+}
+
+func (o ResourceGraphOptions) cacheKey() string {
+	if !o.GroupPods {
+		return ""
+	}
+	expand := slices.Clone(o.Expand)
+	slices.Sort(expand)
+	return fmt.Sprintf("|groups:%s|%s", o.GroupBy, strings.Join(expand, ","))
+}
+
 // rgResources holds all fetched Kubernetes resources.
 type rgResources struct {
-	pods            []corev1.Pod
+	pods            []rgPod
 	services        []corev1.Service
 	configMaps      []corev1.ConfigMap
 	secrets         []corev1.Secret
@@ -85,8 +168,8 @@ type rgResources struct {
 
 // GetResourceGraph returns a comprehensive resource graph for given namespaces.
 // If namespaces is empty, it fetches across all namespaces.
-func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string) (map[string]interface{}, error) {
-	cacheKey := s.clusterCacheKey(ctx, fmt.Sprintf("resource-graph|%s", strings.Join(namespaces, ",")))
+func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string, opts ResourceGraphOptions) (map[string]interface{}, error) {
+	cacheKey := s.clusterCacheKey(ctx, fmt.Sprintf("resource-graph|%s%s", strings.Join(namespaces, ","), opts.cacheKey()))
 	var cached map[string]interface{}
 	if s.cache.Get(ctx, cacheKey, &cached) {
 		return cached, nil

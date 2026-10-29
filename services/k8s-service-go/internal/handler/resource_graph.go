@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -24,7 +25,7 @@ func (h *Handler) GetResourceGraph(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	data, err := h.svc.GetResourceGraph(ctx, namespaces)
+	data, err := h.svc.GetResourceGraph(ctx, namespaces, k8s.ResourceGraphOptions{})
 	if err != nil {
 		h.handleError(w, err)
 		return
@@ -38,7 +39,7 @@ func (h *Handler) GetNamespaceResourceGraph(w http.ResponseWriter, r *http.Reque
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 
-	data, err := h.svc.GetResourceGraph(ctx, []string{namespace})
+	data, err := h.svc.GetResourceGraph(ctx, []string{namespace}, k8s.ResourceGraphOptions{})
 	if err != nil {
 		h.handleError(w, err)
 		return

@@ -45,13 +45,13 @@ func buildNetworkConfigGraph(
 		}
 		for j := range res.pods {
 			pod := &res.pods[j]
-			if pod.Namespace != svc.Namespace {
+			if pod.namespace != svc.Namespace {
 				continue
 			}
-			if selectorMatches(svc.Spec.Selector, pod.Labels) {
+			if selectorMatches(svc.Spec.Selector, pod.labels) {
 				edges = append(edges, rgEdge{
 					Source: svcID,
-					Target: rgNodeID("Pod", pod.Namespace, pod.Name),
+					Target: rgNodeID("Pod", pod.namespace, pod.name),
 					Type:   RGEdgeSelects,
 				})
 			}
@@ -143,11 +143,11 @@ func buildNetworkConfigGraph(
 		if np.Spec.PodSelector.MatchLabels != nil {
 			for j := range res.pods {
 				pod := &res.pods[j]
-				if pod.Namespace != np.Namespace {
+				if pod.namespace != np.Namespace {
 					continue
 				}
-				if selectorMatchesStr(np.Spec.PodSelector.MatchLabels, pod.Labels) {
-					edges = append(edges, rgEdge{Source: npID, Target: rgNodeID("Pod", pod.Namespace, pod.Name), Type: RGEdgeNetworkPolicy})
+				if selectorMatchesStr(np.Spec.PodSelector.MatchLabels, pod.labels) {
+					edges = append(edges, rgEdge{Source: npID, Target: rgNodeID("Pod", pod.namespace, pod.name), Type: RGEdgeNetworkPolicy})
 				}
 			}
 		}
