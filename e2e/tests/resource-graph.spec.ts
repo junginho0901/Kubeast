@@ -179,7 +179,8 @@ test.describe('resource graph for a Read user', () => {
     try {
       userId = await createReader(request, admin, email)
       const reader = await login(request, email, READER_PW)
-      const res = await request.get(`/api/v1/resource-graph?namespaces=${NS}&cluster=self`, { headers: bearer(reader) })
+      // the page's own query (it asks for pod groups), so both read the same cached graph
+      const res = await request.get(`/api/v1/resource-graph?namespaces=${NS}&cluster=self&group_pods=1`, { headers: bearer(reader) })
       const expected = ((await res.json()) as Graph).nodes.length
 
       const page = await ctx.newPage()

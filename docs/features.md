@@ -148,6 +148,11 @@
 - **Cluster View** draws every node as a cell of the node map with a dot per pod, in the colour its card has (error, warning, healthy — counted by the server from the same rows and the same user check), so a large cluster is seen whole without its pods coming to the browser.
   - Below the map, a node's box fetches its pods when it comes on screen and watches that node (`fieldSelector=spec.nodeName`), so a pod that starts, ends or comes back on another node shows at once in the boxes on screen; the map follows within 2 seconds.
   - The search is counted on the server (name or namespace, as before): the map and the boxes show the nodes with a match, wherever they are.
+- **The Resource Graph** groups the pods of an owner (ReplicaSet, StatefulSet, DaemonSet, Job) with more than 10 pods: its healthy pods with the same lines are one box ("Running 98" with a dot per pod), and a line of that box stands for every pod in it, with the count on the line. A pod that is not healthy, or whose lines differ, stays a box of its own; the header counts every pod (groups and apart).
+  - A StatefulSet's PVCs made for each pod, and their PVs, are grouped with its pods. The grouping by node or instance is kept: a group never crosses it.
+  - A group opens every pod of its owner — the ones apart too — counted by card colour, searchable, problems first, and a pod opens its drawer. A search finds a pod inside a group.
+  - Expand this group (from its window) or Expand all draws the pods one by one, as before; above 2,000 pods Expand all asks first.
+  - The pods are read 500 at a time and kept as short rows, so a namespace of many pods is not held whole.
 - **YAML create and edit** check the Kind's `resource.<name>.create` for each document (edit checks the target's `resource.<name>.edit`).
   - The name is the Kind in lowercase, with two exceptions:
     - HorizontalPodAutoscaler, VerticalPodAutoscaler, PodDisruptionBudget, PersistentVolume, PersistentVolumeClaim and CustomResourceDefinition are `hpa`, `vpa`, `pdb`, `pv`, `pvc` and `crd`, in that order.

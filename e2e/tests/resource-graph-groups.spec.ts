@@ -160,7 +160,9 @@ test.describe('Resource Graph — pod groups', () => {
     // apart: db-3 and the 3 pods of an owner with no more than 10
     expect(g.nodes.filter((n) => n.kind === 'Pod' && !n.group).map((n) => n.name).sort()).toEqual(['db-3', ...podsOf('ReplicaSet', 'small-')].sort())
 
-    const linesOf = (id: string) => Object.fromEntries(g.edges.filter((e) => e.source === id || e.target === id).map((e) => [`${e.source === id ? 'group' : e.source.split('/')[0]} ${e.type} ${e.target === id ? 'group' : e.target.split('/')[0]}`, e.count]))
+    // an end by its kind ("group" for this group, the kind for another group)
+    const end = (other: string, id: string) => (other === id ? 'group' : other.replace(/^group:/, '').split('/')[0])
+    const linesOf = (id: string) => Object.fromEntries(g.edges.filter((e) => e.source === id || e.target === id).map((e) => [`${end(e.source, id)} ${e.type} ${end(e.target, id)}`, e.count]))
     expect(linesOf(web.id)).toEqual({ 'ReplicaSet owns group': 12, 'Service selects group': 12, 'NetworkPolicy network_policy group': 12, 'group mounts ConfigMap': 12 })
 
     // the StatefulSet's PVCs and PVs of the grouped pods are groups too; db-3's are apart
