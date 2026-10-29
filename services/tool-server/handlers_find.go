@@ -62,6 +62,19 @@ func handleFindResource(ctx context.Context, args map[string]interface{}, header
 		if truncated {
 			break
 		}
+		if isPodsKind(kind) {
+			if found, total, note, ok := podsFind(ctx, headers, query, namespace, limit-len(matches)); ok {
+				if note != "" {
+					notes = append(notes, note)
+				}
+				matches = append(matches, found...)
+				if total > len(found) {
+					truncated = true
+					notes = append(notes, fmt.Sprintf("pods: %d matched, %d listed", total, len(found)))
+				}
+				continue
+			}
+		}
 		for _, ns := range nsTargets(namespaces) {
 			cmd := []string{"get", kind}
 			cmd = append(cmd, ns...)

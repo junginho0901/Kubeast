@@ -64,6 +64,13 @@ class K8sServiceClient:
         response.raise_for_status()
         return response.json()
     
+    async def get_pod_page(self, **params: object) -> Dict:
+        """One page of the Pods list (k8s-service GET /pods/page: q, match, sort, namespace, offset, limit, …),
+        from the pod rows k8s-service keeps, as the caller."""
+        response = await self.client.get("/pods/page", params={k: v for k, v in params.items() if v not in (None, "")})
+        response.raise_for_status()
+        return response.json()
+
     async def get_pods(self, namespace: str) -> List[Dict]:
         """특정 네임스페이스의 Pod 목록 조회"""
         response = await self.client.get(f"/namespaces/{namespace}/pods")

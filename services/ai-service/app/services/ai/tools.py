@@ -19,7 +19,9 @@ K8S_READONLY_TOOLS: List[Dict] = [
                 "Kubernetes 리소스를 조회합니다 (kubectl get). 출력 형식(wide/json) 요청 시 우선 사용. "
                 "A named object that does not exist answers {\"status\":\"not_found\",\"namespace_exists\":…,\"similar\":[...]} — "
                 "pick from similar or call k8s_find_resource once; do not retry the name in other namespaces. "
-                "An unknown resource_type answers {\"status\":\"unknown_kind\",\"similar_kinds\":[...]}."
+                "An unknown resource_type answers {\"status\":\"unknown_kind\",\"similar_kinds\":[...]}. "
+                "Pods without resource_name, when more than 25: the counts over all of them (total, by phase, status, "
+                "namespace, node) and 25 pods in order of need — errors and warnings first — with next_offset to read on."
             ),
             "parameters": {
                 "type": "object",
@@ -43,6 +45,10 @@ K8S_READONLY_TOOLS: List[Dict] = [
                     "output": {
                         "type": "string",
                         "description": "출력 포맷 (json, wide). 기본값: wide",
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "Pods only: where the next 25 start, the next_offset of the last answer",
                     },
                 },
                 "required": ["resource_type"],

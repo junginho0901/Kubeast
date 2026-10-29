@@ -26,6 +26,9 @@ type podRow struct {
 	// the workload the Hubble agent names (agentWorkload) and the GenerateName Calico names a pod set by, for the
 	// network flows' lookup
 	generateName, workloadKind, workloadName string
+	// the labels as sorted "key\x1fvalue" pairs joined by "\x1e" — the same string for a set's pods, stored once — for
+	// the AI's pod search, which matches label keys and values as it matches names
+	labels string
 	// the sums of the containers' limits, -1 when a container sets none (Monitoring Pods)
 	cpuLimitMilli, memLimitBytes int64
 	created, deleted             int64 // unix seconds; deleted 0 = not being deleted
@@ -102,6 +105,7 @@ func toPodRow(p *corev1.Pod, in *interner) *podRow {
 	r.serviceAccount = in.get(p.Spec.ServiceAccountName)
 	r.cpuLimitMilli, r.memLimitBytes = podLimits(p)
 	r.generateName = in.get(p.GenerateName)
+	r.labels = in.get(podLabelPairs(p.Labels))
 	if w, ok := agentWorkload(p); ok {
 		r.workloadKind, r.workloadName = in.get(w.Kind), in.get(w.Name)
 	}
@@ -113,6 +117,18 @@ func toPodRow(p *corev1.Pod, in *interner) *podRow {
 		r.ownerKind, r.ownerName = in.get(p.OwnerReferences[0].Kind), p.OwnerReferences[0].Name
 	}
 	return r
+}
+
+func podLabelPairs(labels map[string]string) string {
+	if len(labels) == 0 {
+		return ""
+	}
+	pairs := make([]string, 0, len(labels))
+	for k, v := range labels {
+		pairs = append(pairs, k+"\x1f"+v)
+	}
+	slices.Sort(pairs)
+	return strings.Join(pairs, "\x1e")
 }
 
 // podLimits sums the containers' cpu and memory limits; a container without one leaves the pod without a limit

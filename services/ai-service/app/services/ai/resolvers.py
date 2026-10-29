@@ -8,7 +8,7 @@
 #   / _query_in_mapping — 검색용 helper
 # - _find_resource_matches — generic 매칭
 # - _locate_resource_for_yaml — YAML 조회용 리소스 위치 결정
-# - _find_pods / _find_services / _find_deployments — 종류별 검색
+# - _find_pods / _find_services / _find_deployments — 종류별 검색 (_find_pods 는 k8s-service /pods/page 로)
 # - _resolve_single — 후보 중 1개 선택
 # - _pick_log_container — pod 의 container 중 logs 대상 결정
 
@@ -207,47 +207,24 @@ def _query_in_mapping(service, query: str, mapping: object) -> bool:
             return True
     return False
 
+class _PodMatches(list):
+    """The pods a search found, best first, with how many matched in all (the page holds `limit`)."""
+
+    total = 0
+
+
 async def _find_pods(service, query_raw: str, namespace: Optional[str] = None, limit: int = 20) -> List[Dict]:
+    """Pods whose name, or one label's key and value, holds every word of the query — running and ready first,
+    then fewer restarts. k8s-service searches its pod rows with the same rule (/pods/page match=tokens), so a
+    large cluster's pods are not listed here; tests/test_find_pods_cases.py holds the two rules equal."""
     query = query_raw.strip()
-    if not query:
+    if not query or not _query_tokens(service, query):
         return []
-
-    if namespace and namespace.strip():
-        pods = await service.k8s_service.get_pods(namespace.strip())
-    else:
-        pods = await service.k8s_service.get_all_pods()
-
-    def _matches(p: Dict) -> bool:
-        name = str(p.get("name", ""))
-        if _all_tokens_in_text(service, query, name):
-            return True
-        return _query_in_mapping(service, query, p.get("labels") or {})
-
-    matches = [p for p in pods if isinstance(p, dict) and _matches(p)]
-
-    def _ready_score(p: Dict) -> int:
-        status = str(p.get("status", "")).lower()
-        ready = str(p.get("ready", "")).strip()
-        is_running = 1 if status == "running" else 0
-        is_ready = 1 if "/" in ready and ready.split("/", 1)[0] == ready.split("/", 1)[1] else 0
-        return is_running * 10 + is_ready
-
-    def _restart_count(p: Dict) -> int:
-        try:
-            return int(p.get("restart_count", 0))
-        except Exception:
-            return 0
-
-    matches.sort(
-        key=lambda p: (
-            -_ready_score(p),
-            _restart_count(p),
-            str(p.get("namespace", "")),
-            str(p.get("name", "")),
-        )
-    )
-
-    return matches[:limit]
+    ns = namespace.strip() if isinstance(namespace, str) and namespace.strip() else None
+    page = await service.k8s_service.get_pod_page(q=query, match="tokens", sort="find", namespace=ns, limit=limit)
+    matches = _PodMatches(page.get("items") or [])
+    matches.total = int(page.get("total") or len(matches))
+    return matches
 
 async def _find_services(service, query_raw: str, namespace: Optional[str] = None, limit: int = 20) -> List[Dict]:
     query = query_raw.strip()
@@ -349,7 +326,8 @@ async def _find_deployments(service, query_raw: str, namespace: Optional[str] = 
     return matches[:limit]
 
 async def _resolve_single(service, kind: str, query: str, matches: List[Dict]) -> Dict:
-    if len(matches) == 1:
+    # a page of matches may hold fewer than matched (_PodMatches.total)
+    if len(matches) == 1 and getattr(matches, "total", 1) <= 1:
         return matches[0]
     if not matches:
         raise Exception(f"No {kind} matched query '{query}'. Try a more specific name.")
@@ -365,7 +343,9 @@ async def _resolve_single(service, kind: str, query: str, matches: List[Dict]) -
             extra += f" ready={ready}"
         preview.append(f"{ns}/{name}{extra}".strip())
 
+    total = max(getattr(matches, "total", 0), len(matches))
+    shown = f" ({total} in all, the first {len(preview)} here)" if total > len(preview) else ""
     raise Exception(
-        f"Multiple {kind} matched query '{query}'. Please specify namespace or choose one: "
+        f"Multiple {kind} matched query '{query}'{shown}. Please specify namespace or choose one: "
         + "; ".join(preview)
     )

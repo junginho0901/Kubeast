@@ -13,7 +13,7 @@ import {
 } from '@xyflow/react'
 import i18next from 'i18next'
 import type { ResourceGraphNode, ResourceGraphEdge, TrafficEnd, TrafficLine } from '@/services/api'
-import { edgeStyles, kindIcon, pointsUp, statusColor, type GroupBy } from './constants'
+import { edgeStyles, isIssueStatus, kindIcon, pointsUp, statusColor, type GroupBy } from './constants'
 import { applyElkLayout } from './elkLayout'
 import { boxHeight, buildTraffic, byPort, endText, lineColor, portText, BOX_HEIGHT, ROW_HEIGHT, ROWS_PADDING, type GraphView, type PortEdge, type PortRow, type TrafficEdge } from './traffic'
 
@@ -150,8 +150,7 @@ export function useResourceGraphLayout({
     let gNodes = graphData.nodes.filter(n => kindFilters.has(n.kind))
 
     if (statusFilter === 'issues') {
-      const issueStatuses = ['failed', 'error', 'crashloopbackoff', 'imagepullbackoff', 'pending', 'terminating']
-      gNodes = gNodes.filter(n => issueStatuses.some(s => n.status.toLowerCase().includes(s)))
+      gNodes = gNodes.filter(n => isIssueStatus(n.status))
     }
 
     // Traffic lines: their ends on the nodes shown, or on stand-ins. The traffic view keeps only the nodes

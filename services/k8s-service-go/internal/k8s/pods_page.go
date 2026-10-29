@@ -14,6 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/cache"
@@ -37,7 +38,7 @@ const (
 )
 
 // PodSortKeys are the columns the Pods list sorts by.
-var PodSortKeys = []string{"name", "ready", "status", "restarts", "pod_ip", "node_name", "age", "health"}
+var PodSortKeys = []string{"name", "ready", "status", "restarts", "pod_ip", "node_name", "age", "health", "find"}
 
 // PodHealthNames are the health filter's values: the Cluster View card colours.
 var PodHealthNames = []string{"ok", "warn", "error"}
@@ -57,7 +58,27 @@ type PodPageQuery struct {
 	// the Dashboard pod window and the drawers' pod lists, counted before them like the search
 	Phase, RuntimeClass, PriorityClass string
 	ServiceAccounts                    []string // <namespace>/<name>; a pod running as any of them
+	// Tokens: the search as the AI's find_pods matches — every word of it in the name, or in one label's key and value
+	Tokens bool
+	// Groups: the page counts the pods it matched per namespace, node and phase (the AI's summary and counts), the
+	// GroupTop largest of each (podGroupTop when 0) and "(other)" for the rest
+	Groups   bool
+	GroupTop int
+	// LabelSelector keeps the rows whose labels it selects (nil: no selector)
+	LabelSelector labels.Selector
 }
+
+// PodGroupCount is the pods of one namespace, node or phase; "(other)" sums the ones past the largest.
+type PodGroupCount struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
+const (
+	podGroupTop = 20
+	// PodGroupTopMax caps group_top
+	PodGroupTopMax = 1000
+)
 
 type PodListItem struct {
 	Name              string `json:"name"`
@@ -100,9 +121,12 @@ type PodHealthCounts struct {
 }
 
 type PodPage struct {
-	Items []PodListItem `json:"items"`
-	Total int           `json:"total"` // rows the search matched
-	Stats PodStats      `json:"stats"`
+	ByNamespace []PodGroupCount `json:"by_namespace,omitempty"`
+	ByNode      []PodGroupCount `json:"by_node,omitempty"`
+	ByPhase     []PodGroupCount `json:"by_phase,omitempty"`
+	Items       []PodListItem   `json:"items"`
+	Total       int             `json:"total"` // rows the search matched
+	Stats       PodStats        `json:"stats"`
 	// Revision changes when a row the caller may see could show something new;
 	// "" when the rows were listed (no informer to say).
 	Revision  string `json:"revision"`
@@ -125,6 +149,101 @@ func (s *Service) GetPodPage(ctx context.Context, q PodPageQuery) (*PodPage, err
 	page := buildPodPage(rowsOfOwner(set.rows, q.OwnerKind, q.OwnerName), q, time.Now())
 	page.Revision, page.Source = set.revision, set.source
 	return page, nil
+}
+
+// searchWords splits a search as the AI's find_pods does: lower case, everything but letters and digits a separator.
+func searchWords(q string) []string {
+	return strings.FieldsFunc(strings.ToLower(q), func(c rune) bool { return !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9') })
+}
+
+func normalizeWords(s string) string { return strings.Join(searchWords(s), " ") }
+
+// wordsMatchPod: every word in the pod's name, or every word in one label's "key value".
+func wordsMatchPod(words []string, r *podRow) bool {
+	all := func(hay string) bool {
+		for _, w := range words {
+			if !strings.Contains(hay, w) {
+				return false
+			}
+		}
+		return true
+	}
+	if all(normalizeWords(r.name)) {
+		return true
+	}
+	if r.labels == "" {
+		return false
+	}
+	for _, pair := range strings.Split(r.labels, "\x1e") {
+		if all(normalizeWords(strings.Replace(pair, "\x1f", " ", 1))) {
+			return true
+		}
+	}
+	return false
+}
+
+func findScore(r *podRow) int32 {
+	score := int32(0)
+	if strings.EqualFold(r.status, "running") {
+		score = 10
+	}
+	if r.containers > 0 && r.ready == r.containers {
+		score++
+	}
+	return score
+}
+
+func podGroupCounts(rows []*podRow, top int, key func(*podRow) string) []PodGroupCount {
+	counts := map[string]int{}
+	for _, r := range rows {
+		counts[key(r)]++
+	}
+	out := make([]PodGroupCount, 0, len(counts))
+	for k, n := range counts {
+		if k == "" {
+			k = "(none)"
+		}
+		out = append(out, PodGroupCount{Name: k, Count: n})
+	}
+	slices.SortFunc(out, func(a, b PodGroupCount) int {
+		if a.Count != b.Count {
+			return b.Count - a.Count
+		}
+		return strings.Compare(a.Name, b.Name)
+	})
+	if len(out) > top {
+		rest := 0
+		for _, g := range out[top:] {
+			rest += g.Count
+		}
+		out = append(out[:top], PodGroupCount{Name: "(other)", Count: rest})
+	}
+	return out
+}
+
+// rowLabels reads a row's labels for a label selector (labels.Labels).
+type rowLabels string
+
+func (l rowLabels) Lookup(key string) (string, bool) {
+	if l == "" {
+		return "", false
+	}
+	for _, pair := range strings.Split(string(l), "\x1e") {
+		if k, v, _ := strings.Cut(pair, "\x1f"); k == key {
+			return v, true
+		}
+	}
+	return "", false
+}
+
+func (l rowLabels) Get(key string) string {
+	v, _ := l.Lookup(key)
+	return v
+}
+
+func (l rowLabels) Has(key string) bool {
+	_, ok := l.Lookup(key)
+	return ok
 }
 
 // rowsOfOwner keeps one owner's rows; no kind keeps them all.
@@ -348,7 +467,14 @@ func listPodRows(ctx context.Context, pods typedcorev1.PodsGetter, namespaces []
 func buildPodPage(rows []*podRow, q PodPageQuery, now time.Time) *PodPage {
 	page := &PodPage{Stats: podStats(rows), Items: []PodListItem{}}
 	matched := rows
-	if needle := strings.ToLower(strings.TrimSpace(q.Search)); needle != "" {
+	if words := searchWords(q.Search); q.Tokens && len(words) > 0 {
+		matched = make([]*podRow, 0)
+		for _, r := range rows {
+			if wordsMatchPod(words, r) {
+				matched = append(matched, r)
+			}
+		}
+	} else if needle := strings.ToLower(strings.TrimSpace(q.Search)); needle != "" {
 		matched = make([]*podRow, 0, len(rows))
 		for _, r := range rows {
 			// names, namespaces and nodes are lower-case DNS names
@@ -376,6 +502,18 @@ func buildPodPage(rows []*podRow, q PodPageQuery, now time.Time) *PodPage {
 		matched = slices.DeleteFunc(matched, func(r *podRow) bool {
 			return r.serviceAccount == "" || !slices.Contains(q.ServiceAccounts, r.namespace+"/"+r.serviceAccount)
 		})
+	}
+	if q.LabelSelector != nil {
+		matched = slices.DeleteFunc(matched, func(r *podRow) bool { return !q.LabelSelector.Matches(rowLabels(r.labels)) })
+	}
+	if q.Groups {
+		top := q.GroupTop
+		if top <= 0 {
+			top = podGroupTop
+		}
+		page.ByNamespace = podGroupCounts(matched, top, func(r *podRow) string { return r.namespace })
+		page.ByNode = podGroupCounts(matched, top, func(r *podRow) string { return r.node })
+		page.ByPhase = podGroupCounts(matched, top, func(r *podRow) string { return r.phase })
 	}
 	sortPodRows(matched, q.Sort, q.Desc, now)
 	page.Total = len(matched)
@@ -523,6 +661,12 @@ func sortPodRows(rows []*podRow, key string, desc bool, now time.Time) {
 		case "health":
 			// errors first, then warnings
 			c = compareOrdered(int32(b.health), int32(a.health))
+		case "find":
+			// as find_pods ranks: running and every container ready first, then fewer restarts, namespace, name
+			c = compareOrdered(findScore(b), findScore(a))
+			if c == 0 {
+				c = compareOrdered(a.restarts, b.restarts)
+			}
 		}
 		if c != 0 {
 			return c * dir

@@ -58,7 +58,7 @@
     - `network_flows`: recent connections of a namespace, pod or workload from the cluster's Hubble Relay, folded per connection, with the drop reason and the policies that decided (see [Recent flows](#recent-flows-hubble))
     - `network_drops`: drops of a namespace, pod or workload counted by the Hubble agents, from the cluster's Prometheus, by reason and peer, up to a day back (see [Network drops](#network-drops-hubble-metrics))
     - `network_top_flows`: the peers a namespace, pod or workload exchanges the most data with, or has the most retransmissions or timeouts with, from the cluster's Network Flow Monitor on EKS (see [Top talkers](#top-talkers-network-flow-monitor))
-    - `resource_graph`: namespace objects and their connections
+    - `resource_graph`: namespace objects and their connections, with the healthy pods of an owner that has more than 10 as one node and a count, as the page draws them
     - `hygiene`: the hygiene report (Admin)
   - A tool is left out of the tool list (`/api/v1/features`, 1-minute cache) when:
     - the cluster does not have the feature: Prometheus is not set up, there is no log, trace or alert store, network flows are off, or cost or policy reports are off
@@ -74,6 +74,11 @@
     - `k8s_jq_query` filters `kubectl get -o json` with jq down to the needed fields. It has no environment or file access and a 5-second cap.
     - `k8s_tabular_query` returns a table of chosen columns only.
     - `k8s_count` returns counts, and counts per group.
+  - Pods come from the rows k8s-service keeps for the Pods list (`/pods/page`), not from kubectl, so a large cluster is read whole:
+    - `k8s_get_resources` for more than 25 pods without a name answers the counts over all of them (by phase, status, card colour, namespace and node) and 25 pods in order of need, errors and warnings first, with `next_offset` to read on. 25 or fewer come from kubectl as before.
+    - `k8s_find_resource` searches every pod: `key=value` as a label selector, anything else by its words in the name or in one label. The log tool places a pod named without a namespace by the same rule.
+    - `k8s_count` counts pods from the rows, grouped by nothing, namespace, node or phase, with or without a label selector. A field selector or another field goes to kubectl.
+  - A kubectl list longer than the tool output (`TOOL_OUTPUT_MAX_BYTES`, 1 MiB) is answered as cut: `too_large` from `k8s_jq_query` and `k8s_count`, and "the total is not known" from `k8s_tabular_query`, instead of a read error or a wrong count.
   - Before a write, `k8s_diff` shows what will change. It diffs the server dry-run result against the live object, and **nothing is applied**. Only users with write permission see it.
 - **Floating AI widget (AI Chat)** — a widget floating on every page understands the **current screen context (the resource you are looking at)** and answers, limited to read-only tools.
   - It shows waiting dots before the first character and a small copy icon next to a finished answer (no token row). Wide tables scroll inside a box with a fixed header row.

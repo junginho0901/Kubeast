@@ -9,14 +9,17 @@ from app.services.ai import resolvers, tool_dispatch
 
 
 class _K8s:
+    """k8s-service's /pods/page: the search itself is the server's (tests/test_find_pods_cases.py)."""
+
     def __init__(self, pods):
         self._pods = pods
+        self.asked = []
 
-    async def get_pods(self, namespace):
-        return [p for p in self._pods if p.get("namespace") == namespace]
-
-    async def get_all_pods(self):
-        return list(self._pods)
+    async def get_pod_page(self, **params):
+        self.asked.append(params)
+        items = [p for p in self._pods if not params.get("namespace") or p.get("namespace") == params["namespace"]]
+        items = [p for p in items if resolvers._all_tokens_in_text(None, params["q"], p["name"]) or resolvers._query_in_mapping(None, params["q"], p.get("labels"))]
+        return {"items": items[: params["limit"]], "total": len(items)}
 
 
 class _Service:
@@ -41,14 +44,24 @@ def test_tool_dispatch_imports_resolvers():
 
 
 @pytest.mark.asyncio
-async def test_find_pods_by_name_and_label():
+async def test_find_pods_asks_the_pod_rows():
     service = _Service(PODS)
     matches = await resolvers._find_pods(service, "web", namespace="app")
-    assert [p["name"] for p in matches][:1] == ["web-7d9f-abc12"]  # running+ready ranks first
-    assert len(matches) == 2
-    by_label = await resolvers._find_pods(service, "app=db")
-    assert [p["name"] for p in by_label] == ["db-0"]
-    assert await resolvers._find_pods(service, "   ") == []
+    assert service.k8s_service.asked == [{"q": "web", "match": "tokens", "sort": "find", "namespace": "app", "limit": 20}]
+    assert [p["name"] for p in matches] == ["web-7d9f-abc12", "web-7d9f-def34"] and matches.total == 2
+    by_label = await resolvers._find_pods(service, "app=db", limit=1)
+    assert service.k8s_service.asked[-1]["namespace"] is None and [p["name"] for p in by_label] == ["db-0"]
+    # nothing to search for: k8s-service is not asked
+    assert await resolvers._find_pods(service, "   ") == [] and await resolvers._find_pods(service, "!!") == []
+    assert len(service.k8s_service.asked) == 2
+
+
+@pytest.mark.asyncio
+async def test_resolve_single_says_how_many_matched():
+    service = _Service(PODS)
+    matches = await resolvers._find_pods(service, "web", limit=1)
+    with pytest.raises(Exception, match=r"\(2 in all, the first 1 here\)"):
+        await resolvers._resolve_single(service, "pods", "web", matches)
 
 
 @pytest.mark.asyncio

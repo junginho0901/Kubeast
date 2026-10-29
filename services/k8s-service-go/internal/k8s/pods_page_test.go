@@ -29,6 +29,9 @@ import (
 // the store entry and the namespace index entry. 100 000 pods ≈ 60 MB.
 const podRowMaxBytes = 600
 
+// podRowUniqueLabelsMaxBytes is the same for a pod whose labels are its own (a StatefulSet's).
+const podRowUniqueLabelsMaxBytes = 750
+
 // randomPod makes a pod of a Deployment with container states drawn from what
 // kubelet writes, so the row's status can be compared with the page's old
 // computation.
@@ -350,6 +353,50 @@ func TestPodRowMemory(t *testing.T) {
 	t.Logf("%.0f bytes per pod (%d pods: %.1f MiB)", per, n, float64(after-before)/(1<<20))
 	if per > podRowMaxBytes {
 		t.Errorf("a pod costs %.0f bytes in the index, more than %d", per, podRowMaxBytes)
+	}
+}
+
+// A StatefulSet's pods each carry labels of their own (pod-name, pod-index), which the row keeps for the word
+// search: they cost what those labels take, at most podRowUniqueLabelsMaxBytes with the ones a StatefulSet sets.
+func TestPodRowMemory_LabelsOfTheirOwn(t *testing.T) {
+	if testing.Short() {
+		t.Skip("allocates 50 000 rows")
+	}
+	const n = 50_000
+	in := newInterner()
+	idx := cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	add := func(i int) {
+		sts := fmt.Sprintf("service-%04d", i/50)
+		name := fmt.Sprintf("%s-%d", sts, i%50)
+		p := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: fmt.Sprintf("team-%03d", i/1000), Name: name, GenerateName: sts + "-",
+				UID: "0b6b2f4e-6c2a-4c55-9a3e-2f1d8e7c5a10", ResourceVersion: fmt.Sprint(10_000_000 + i),
+				CreationTimestamp: metav1.Now(),
+				OwnerReferences:   []metav1.OwnerReference{{Kind: "StatefulSet", Name: sts, Controller: ptrTo(true)}},
+				Labels: map[string]string{"app": sts, "controller-revision-hash": sts + "-6d8f7b9c5d",
+					"statefulset.kubernetes.io/pod-name": name, "apps.kubernetes.io/pod-index": fmt.Sprint(i % 50)},
+			},
+			Spec: corev1.PodSpec{NodeName: fmt.Sprintf("ip-10-0-%d-%d.ap-northeast-2.compute.internal", i%1000/250, i%250),
+				Containers: []corev1.Container{{Name: "app", Image: "registry.example.com/team/service:1.2.3"}}},
+			Status: corev1.PodStatus{Phase: corev1.PodRunning, PodIP: fmt.Sprintf("10.1.%d.%d", i/250%250, i%250),
+				ContainerStatuses: []corev1.ContainerStatus{{Name: "app", Ready: true, State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}}}},
+		}
+		if err := idx.Add(toPodRow(p, in)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	add(0)
+	before := heapInUse()
+	for i := 1; i <= n; i++ {
+		add(i)
+	}
+	after := heapInUse()
+	runtime.KeepAlive(idx)
+	per := float64(after-before) / n
+	t.Logf("%.0f bytes per StatefulSet pod (%d pods: %.1f MiB)", per, n, float64(after-before)/(1<<20))
+	if per > podRowUniqueLabelsMaxBytes {
+		t.Errorf("a StatefulSet pod costs %.0f bytes in the index, more than %d", per, podRowUniqueLabelsMaxBytes)
 	}
 }
 

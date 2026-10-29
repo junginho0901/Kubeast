@@ -27,7 +27,10 @@ import (
 // (second review M30). TOOL_OUTPUT_MAX_BYTES overrides the 1 MiB default.
 var outputMaxBytes = envInt("TOOL_OUTPUT_MAX_BYTES", 1<<20)
 
-const truncatedMarker = "\n… [output truncated by tool-server: %d bytes limit]\n"
+const (
+	truncatedMarker     = "\n… [output truncated by tool-server: %d bytes limit]\n"
+	truncatedMarkerLead = "\n… [output truncated by tool-server:"
+)
 
 func envInt(name string, def int) int {
 	if v := strings.TrimSpace(os.Getenv(name)); v != "" {
