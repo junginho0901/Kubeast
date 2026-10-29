@@ -1,53 +1,40 @@
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import type { PodInfo } from '@/services/api'
-import { useKubeWatchList } from '@/services/useKubeWatchList'
+import type { PodNodeSummary } from '@/services/api'
 
-// namespaces + all-pods + nodes 3개 query 를 묶어 한 hook 으로.
-// useKubeWatchList queryKey 는 useQuery 와 정확히 일치 (둘이 drift 하면 watch
-// 이벤트가 잘못된 cache 를 update 함).
+// The namespaces, the nodes and the node map: how many pods each node has and their colours, counted by k8s-service
+// (pods_nodes.go) so the page never holds every pod of a large cluster. Each node box fetches and watches its own
+// pods when it comes on screen (PodNodeGrid). The map asks again every 2 s with the revision it has; while nothing a
+// row shows changed the server answers "unchanged".
 
 interface Params {
   selectedNamespace: string
+  search: string
 }
 
-interface Result {
-  namespaces: { name: string }[] | undefined
-  allPods: PodInfo[] | undefined
-  nodes: any[] | undefined
-  isLoading: boolean
-}
-
-export function useClusterPodsQuery({ selectedNamespace }: Params): Result {
+export function useClusterPodsQuery({ selectedNamespace, search }: Params) {
+  const queryClient = useQueryClient()
   const { data: namespaces } = useQuery({
     queryKey: ['namespaces'],
     queryFn: () => api.getNamespaces(),
   })
 
-  const { data: allPods, isLoading } = useQuery({
-    queryKey: ['all-pods', selectedNamespace],
+  const params = { namespace: selectedNamespace === 'all' ? undefined : selectedNamespace, q: search || undefined }
+  const key = ['cluster-view', 'nodes', params]
+  const { data: summary, isLoading } = useQuery({
+    queryKey: key,
     queryFn: async () => {
-      const forceRefresh = true
-      if (selectedNamespace === 'all') {
-        const pods = await Promise.all(
-          (namespaces || []).map((ns) => api.getPods(ns.name, undefined, forceRefresh)),
-        )
-        return pods.flat()
-      } else {
-        return await api.getPods(selectedNamespace, undefined, forceRefresh)
-      }
+      const prev = queryClient.getQueryData<PodNodeSummary>(key)
+      const next = await api.getPodNodeSummary({ ...params, revision: prev?.revision || undefined })
+      return next.unchanged && prev ? prev : next
     },
-    enabled: !!namespaces,
-  })
-
-  useKubeWatchList({
-    enabled: !!namespaces,
-    queryKey: ['all-pods', selectedNamespace],
-    path:
-      selectedNamespace === 'all'
-        ? '/api/v1/pods'
-        : `/api/v1/namespaces/${selectedNamespace}/pods`,
-    query: 'watch=1',
+    placeholderData: keepPreviousData,
+    // listed counts (no revision) cost the cluster a list: ask less often
+    refetchInterval: (query) => {
+      const d = query.state.data
+      if (!d) return false
+      return d.revision ? 2000 : 30000
+    },
   })
 
   const { data: nodes } = useQuery({
@@ -55,5 +42,5 @@ export function useClusterPodsQuery({ selectedNamespace }: Params): Result {
     queryFn: () => api.getNodes(false),
   })
 
-  return { namespaces, allPods, nodes, isLoading }
+  return { namespaces, summary, nodes, isLoading }
 }

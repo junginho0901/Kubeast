@@ -96,42 +96,75 @@ var errPodsForbidden = apierrors.NewForbidden(schema.GroupResource{Resource: "po
 
 // GetPodPage returns one page of the Pods list.
 func (s *Service) GetPodPage(ctx context.Context, q PodPageQuery) (*PodPage, error) {
+	set, err := s.callerPodRows(ctx, q.Namespace, q.Revision)
+	if err != nil {
+		return nil, err
+	}
+	if set.unchanged {
+		return &PodPage{Items: []PodListItem{}, Stats: PodStats{TopReasons: []PodReasonCount{}}, Revision: set.revision, Unchanged: true, Source: set.source}, nil
+	}
+	page := buildPodPage(set.rows, q, time.Now())
+	page.Revision, page.Source = set.revision, set.source
+	return page, nil
+}
+
+// podRowSet is the rows a caller may see for one namespace choice.
+type podRowSet struct {
+	rows      []*podRow
+	revision  string // "" when the rows were listed
+	unchanged bool   // the caller's revision is current: no rows
+	source    string // "index" or "list"
+}
+
+// callerPodRows returns the pod rows the caller may see in namespace ("" =
+// every namespace it may see): from the informer after podListAccess, or
+// listed as the caller until the informer can serve. A revision equal to the
+// current one returns unchanged and no rows.
+func (s *Service) callerPodRows(ctx context.Context, namespace, revision string) (*podRowSet, error) {
 	b := s.bundleForCtx(ctx)
 	if b == nil {
 		return nil, errNotLoaded
 	}
 	if ci := b.overviewInformers(); ci != nil && ci.waitSynced(ctx, podPageSyncWait) {
-		all, namespaces, err := s.podListAccess(ctx, b, q.Namespace)
+		all, namespaces, err := s.podListAccess(ctx, b, namespace)
 		if err != nil {
 			return nil, err
 		}
 		rev := ci.podRevision() + "." + accessPrint(all, namespaces)
-		if q.Revision != "" && q.Revision == rev {
-			return &PodPage{Items: []PodListItem{}, Stats: PodStats{TopReasons: []PodReasonCount{}}, Revision: rev, Unchanged: true, Source: "index"}, nil
+		if revision != "" && revision == rev {
+			return &podRowSet{revision: rev, unchanged: true, source: "index"}, nil
 		}
 		accesstrail.Cached(ctx, "pod rows (watched as "+overviewCacheUser+")")
-		page := buildPodPage(ci.podRows(all, namespaces), q, time.Now())
-		page.Revision, page.Source = rev, "index"
-		return page, nil
+		return &podRowSet{rows: ci.podRows(all, namespaces), revision: rev, source: "index"}, nil
 	}
 	cs := s.clientsetCtx(ctx)
 	if cs == nil {
 		return nil, errNotLoaded
 	}
-	namespaces := []string{q.Namespace}
-	if q.Namespace == "" {
-		namespaces = scopeFromCtx(ctx)
-	} else if scope := scopeFromCtx(ctx); len(scope) > 0 && !slices.Contains(scope, q.Namespace) {
-		return nil, apierrors.NewForbidden(schema.GroupResource{Resource: "pods"}, "",
-			fmt.Errorf("namespace %q is outside your grant on this cluster", q.Namespace))
+	namespaces, err := callerNamespaces(ctx, namespace)
+	if err != nil {
+		return nil, err
 	}
 	rows, err := listPodRows(ctx, cs.CoreV1(), namespaces)
 	if err != nil {
 		return nil, err
 	}
-	page := buildPodPage(rows, q, time.Now())
-	page.Source = "list"
-	return page, nil
+	return &podRowSet{rows: rows, source: "list"}, nil
+}
+
+// callerNamespaces is what a list as the caller covers: the namespace chosen
+// (inside a namespace-scoped grant), else the grant's namespaces, else nil
+// (every namespace).
+func callerNamespaces(ctx context.Context, namespace string) ([]string, error) {
+	scope := scopeFromCtx(ctx)
+	if namespace == "" {
+		return scope, nil
+	}
+	if len(scope) > 0 && !slices.Contains(scope, namespace) {
+		return nil, apierrors.NewForbidden(schema.GroupResource{Resource: "pods"}, "",
+			fmt.Errorf("namespace %q is outside your grant on this cluster", namespace))
+	}
+	return []string{namespace}, nil
 }
 
 // podRevision names the pod rows' state: it changes when a row shows

@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"slices"
 	"strings"
 	"sync"
 
@@ -19,9 +20,11 @@ type podRow struct {
 	node, phase, status  string
 	podIP                string
 	ownerKind, ownerName string
+	healthReason         string
 	created, deleted     int64 // unix seconds; deleted 0 = not being deleted
 	ready, containers    uint16
 	restarts             int32
+	health               uint8 // podHealthOK, podHealthWarn, podHealthError
 }
 
 // GetObjectMeta lets the store key and index the row (meta.Accessor).
@@ -85,6 +88,8 @@ func toPodRow(p *corev1.Pod, in *interner) *podRow {
 		r.restarts += cs.RestartCount
 	}
 	r.status = in.get(podListStatus(p, int(r.ready), int(r.containers)))
+	h, reason := podHealth(p)
+	r.health, r.healthReason = h, in.get(reason)
 	if ref := metav1.GetControllerOfNoCopy(p); ref != nil {
 		r.ownerKind, r.ownerName = in.get(ref.Kind), ref.Name
 	} else if len(p.OwnerReferences) > 0 {
@@ -133,4 +138,166 @@ func podListStatus(p *corev1.Pod, ready, total int) string {
 		return "NotReady"
 	}
 	return phase
+}
+
+// Cluster View's card colour (frontend pages/cluster-view/podHealth.tsx
+// getPodHealth), kept on the row so the node map can colour every pod without
+// the pods: TestPodHealthFixture writes the cases the page's own function is
+// checked against.
+const (
+	podHealthOK uint8 = iota
+	podHealthWarn
+	podHealthError
+)
+
+var (
+	podErrorReasons = []string{
+		"CrashLoopBackOff", "ImagePullBackOff", "ErrImagePull", "CreateContainerConfigError", "CreateContainerError",
+		"RunContainerError", "ContainerCannotRun", "InvalidImageName", "ImageInspectError", "RegistryUnavailable",
+		"ErrImageNeverPull", "OOMKilled", "Error",
+	}
+	podWarnReasons = []string{"ContainerCreating", "PodInitializing", "Pending", "NotReady"}
+)
+
+func pickReason(reasons, priority []string) string {
+	for _, p := range priority {
+		if slices.Contains(reasons, p) {
+			return p
+		}
+	}
+	if len(reasons) > 0 {
+		return reasons[0]
+	}
+	return ""
+}
+
+func isCompletedReason(r string) bool { return r == "Completed" || r == "Succeeded" }
+
+// podHealth is getPodHealth over the pod as formatPodDetail sends it: being
+// deleted is a warning; an error reason (or phase Failed) is an error, where a
+// reason the warning list names is never taken for one; Pending and Unknown
+// warn; a Succeeded pod is fine; init containers not done, containers not
+// ready or a waiting reason warn.
+func podHealth(p *corev1.Pod) (uint8, string) {
+	phase := listPhase(p)
+	if p.DeletionTimestamp != nil {
+		return podHealthWarn, "Terminating"
+	}
+	statusReason := ""
+	if r := formattedReason(p); !isCompletedReason(r) {
+		statusReason = r
+	}
+	byName := func(statuses []corev1.ContainerStatus, name string) *corev1.ContainerStatus {
+		for i := range statuses {
+			if statuses[i].Name == name {
+				return &statuses[i]
+			}
+		}
+		return nil
+	}
+	reasonsOf := func(containers []corev1.Container, statuses []corev1.ContainerStatus) (waiting, terminated []string) {
+		for _, c := range containers {
+			cs := byName(statuses, c.Name)
+			if cs == nil {
+				continue
+			}
+			if w := cs.State.Waiting; w != nil && strings.TrimSpace(w.Reason) != "" {
+				waiting = append(waiting, w.Reason)
+			}
+			if t := cs.State.Terminated; t != nil && strings.TrimSpace(t.Reason) != "" && !isCompletedReason(t.Reason) {
+				terminated = append(terminated, t.Reason)
+			}
+		}
+		return waiting, terminated
+	}
+	waiting, terminated := reasonsOf(p.Spec.Containers, p.Status.ContainerStatuses)
+	initWaiting, initTerminated := reasonsOf(p.Spec.InitContainers, p.Status.InitContainerStatuses)
+
+	var candidates []string
+	for _, list := range [][]string{{statusReason}, initWaiting, initTerminated, waiting, terminated} {
+		for _, r := range list {
+			if r != "" && !slices.Contains(podWarnReasons, r) {
+				candidates = append(candidates, r)
+			}
+		}
+	}
+	if r := pickReason(candidates, podErrorReasons); r != "" || phase == string(corev1.PodFailed) {
+		if r == "" {
+			r = "Failed"
+		}
+		return podHealthError, r
+	}
+
+	ready, total := 0, len(p.Spec.Containers)
+	for _, c := range p.Spec.Containers {
+		if cs := byName(p.Status.ContainerStatuses, c.Name); cs != nil && cs.Ready {
+			ready++
+		}
+	}
+	initNotReady := false
+	for _, c := range p.Spec.InitContainers {
+		cs := byName(p.Status.InitContainerStatuses, c.Name)
+		if cs == nil {
+			continue
+		}
+		s := cs.State
+		if s.Waiting != nil || s.Running != nil || (s.Terminated != nil && s.Terminated.ExitCode != 0) {
+			initNotReady = true
+			break
+		}
+	}
+	switch {
+	case phase == string(corev1.PodPending) || phase == string(corev1.PodUnknown):
+		return podHealthWarn, phase
+	case phase == string(corev1.PodSucceeded):
+		return podHealthOK, "Succeeded"
+	case initNotReady:
+		if r := pickReason(initWaiting, podWarnReasons); r != "" {
+			return podHealthWarn, r
+		}
+		return podHealthWarn, "PodInitializing"
+	case total > 0 && ready < total:
+		if r := pickReason(waiting, podWarnReasons); r != "" {
+			return podHealthWarn, r
+		}
+		return podHealthWarn, "NotReady"
+	}
+	if r := pickReason(waiting, podWarnReasons); r != "" {
+		return podHealthWarn, r
+	}
+	return podHealthOK, phase
+}
+
+// listPhase is the page's `pod.phase || pod.status || 'Unknown'` over
+// formatPodDetail's fields.
+func listPhase(p *corev1.Pod) string {
+	if p.Status.Phase != "" {
+		return string(p.Status.Phase)
+	}
+	for _, cs := range p.Status.ContainerStatuses {
+		if w := cs.State.Waiting; w != nil && w.Reason != "" {
+			return w.Reason
+		}
+		if t := cs.State.Terminated; t != nil && t.Reason != "" {
+			return t.Reason
+		}
+	}
+	return "Unknown"
+}
+
+// formattedReason is formatPodDetail's status_reason: the pod's reason, else
+// the first container status waiting before any terminated one.
+func formattedReason(p *corev1.Pod) string {
+	if p.Status.Reason != "" {
+		return p.Status.Reason
+	}
+	for _, cs := range p.Status.ContainerStatuses {
+		if w := cs.State.Waiting; w != nil && w.Reason != "" {
+			return w.Reason
+		}
+		if t := cs.State.Terminated; t != nil && t.Reason != "" {
+			break
+		}
+	}
+	return ""
 }

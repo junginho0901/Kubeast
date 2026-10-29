@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { usePermission } from '@/hooks/usePermission'
 import { useClusterView } from './ClusterViewContext'
@@ -35,18 +36,25 @@ export function ClusterViewBody() {
   const isAdmin = has('resource.pod.create')
   const canDeletePod = has('resource.pod.delete')
 
+  // The search goes to the server after a pause (it counts every pod; the page holds only those on screen).
+  const [search, setSearch] = useState('')
+  useEffect(() => {
+    const id = setTimeout(() => setSearch(searchQuery.trim()), 250)
+    return () => clearTimeout(id)
+  }, [searchQuery])
+
   // Data queries
-  const { namespaces, allPods, nodes, isLoading } = useClusterPodsQuery({ selectedNamespace })
+  const { namespaces, summary, nodes, isLoading } = useClusterPodsQuery({ selectedNamespace, search })
   const { manifest, describeData } = usePodDetailQueries({ selectedPod, showManifest, showDescribe })
 
   // AI floating widget snapshot
-  useClusterAIContext({ nodes, allPods, selectedNamespace })
+  useClusterAIContext({ nodes, summary, selectedNamespace })
 
-  // Derived: filteredPods / sortedNodeEntries
-  const { filteredPods, sortedNodeEntries } = useClusterDerived({ allPods, nodes, searchQuery })
+  // Derived: the node boxes and map cells in order
+  const entries = useClusterDerived({ summary, nodes })
 
-  // 5 useEffects (ESC, context-menu auto-close, outside-click 2개, deletingPods reconcile)
-  useClusterEffects({ allPods })
+  // 4 useEffects (ESC, context-menu auto-close, outside-click 2개)
+  useClusterEffects()
 
   // Delete handler
   const { handleDeletePod } = usePodDelete()
@@ -62,12 +70,11 @@ export function ClusterViewBody() {
         </div>
       ) : (
         <PodNodeGrid
-          sortedNodeEntries={sortedNodeEntries}
-          filteredPods={filteredPods}
-          allPodsLen={allPods?.length || 0}
+          entries={entries}
+          matched={summary?.total ?? 0}
+          all={summary?.all ?? 0}
           isLoading={isLoading}
           canDeletePod={canDeletePod}
-          allPods={allPods}
         />
       )}
 

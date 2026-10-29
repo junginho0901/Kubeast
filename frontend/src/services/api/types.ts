@@ -1561,6 +1561,27 @@ export interface PodPage {
   source: 'index' | 'list'
 }
 
+/** One node on the Cluster View node map: its pods by the cards' colour (getPodHealth); node "" = not scheduled. */
+export interface PodNodeCount {
+  node: string
+  total: number
+  ok: number
+  warn: number
+  error: number
+}
+
+export interface PodNodeSummary {
+  /** nodes with at least one pod the search matched, by name */
+  nodes: PodNodeCount[]
+  /** pods the search matched */
+  total: number
+  /** pods of the namespace choice before the search */
+  all: number
+  revision: string
+  unchanged?: boolean
+  source: 'index' | 'list'
+}
+
 export interface PodPageParams {
   namespace?: string
   q?: string

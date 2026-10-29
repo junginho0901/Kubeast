@@ -1,47 +1,35 @@
 import { useMemo } from 'react'
-import type { PodInfo } from '@/services/api'
+import type { PodNodeCount, PodNodeSummary } from '@/services/api'
 
-// filteredPods / podsByNode / sortedNodeEntries 의 derived 계산. useMemo 안정화.
-// 정렬: control-plane 먼저 → 워커 → Unscheduled 마지막, 같은 그룹 내 이름 순.
+// The node boxes and map cells in one order: control planes first, then workers, the pods not scheduled last, by name
+// within each. Only nodes with a pod the search matched (the server counted them).
+
+export interface NodeEntry {
+  /** the node's name; '' for the pods not scheduled */
+  node: string
+  label: string
+  counts: PodNodeCount
+}
 
 interface Params {
-  allPods: PodInfo[] | undefined
+  summary: PodNodeSummary | undefined
   nodes: any[] | undefined
-  searchQuery: string
 }
 
-interface Result {
-  filteredPods: PodInfo[]
-  sortedNodeEntries: Array<[string, PodInfo[]]>
-}
+export const UNSCHEDULED = 'Unscheduled'
 
-export function useClusterDerived({ allPods, nodes, searchQuery }: Params): Result {
+export function useClusterDerived({ summary, nodes }: Params): NodeEntry[] {
   return useMemo(() => {
-    const list = Array.isArray(allPods) ? allPods : []
-    const q = searchQuery.trim().toLowerCase()
-    const filteredPods = q
-      ? list.filter((pod) => pod.name.toLowerCase().includes(q) || pod.namespace.toLowerCase().includes(q))
-      : list
-
-    const podsByNode = filteredPods.reduce((acc, pod) => {
-      const nodeName = pod.node_name || 'Unscheduled'
-      if (!acc[nodeName]) acc[nodeName] = []
-      acc[nodeName].push(pod)
-      return acc
-    }, {} as Record<string, PodInfo[]>)
-
-    const sortedNodeEntries = Object.entries(podsByNode).sort(([a], [b]) => {
-      const nodeInfoA = nodes?.find((n: any) => n.name === a)
-      const nodeInfoB = nodes?.find((n: any) => n.name === b)
-      if (a === 'Unscheduled') return 1
-      if (b === 'Unscheduled') return -1
-      const cpA = nodeInfoA?.roles?.includes('control-plane') || false
-      const cpB = nodeInfoB?.roles?.includes('control-plane') || false
+    const controlPlane = new Set((nodes ?? []).filter((n: any) => n?.roles?.includes('control-plane')).map((n: any) => n.name))
+    const entries = (summary?.nodes ?? []).map((c) => ({ node: c.node, label: c.node || UNSCHEDULED, counts: c }))
+    return entries.sort((a, b) => {
+      if (a.node === '') return 1
+      if (b.node === '') return -1
+      const cpA = controlPlane.has(a.node)
+      const cpB = controlPlane.has(b.node)
       if (cpA && !cpB) return -1
       if (!cpA && cpB) return 1
-      return a.localeCompare(b)
+      return a.node.localeCompare(b.node)
     })
-
-    return { filteredPods, sortedNodeEntries }
-  }, [allPods, nodes, searchQuery])
+  }, [summary?.nodes, nodes])
 }

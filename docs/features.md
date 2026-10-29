@@ -145,6 +145,9 @@
   - Before the rows go out, Kubeast asks whether the user identity can list pods (SelfSubjectAccessReview, 60-second cache): in every namespace, or else in the namespace chosen or in each namespace of a namespace-scoped grant. A namespace the cluster refuses is left out; if all are refused, the answer is 403.
   - The search, the sort, the summary cards and the page are worked out on the server. The page asks again every 3 seconds (10 seconds above 10 000 pods), and only gets rows back when one it may see has changed.
   - Until the cache has synced, or when `kubeast:cache` may not watch pods, the rows are listed as the user, 500 at a time.
+- **Cluster View** draws every node as a cell of the node map with a dot per pod, in the colour its card has (error, warning, healthy — counted by the server from the same rows and the same user check), so a large cluster is seen whole without its pods coming to the browser.
+  - Below the map, a node's box fetches its pods when it comes on screen and watches that node (`fieldSelector=spec.nodeName`), so a pod that starts, ends or comes back on another node shows at once in the boxes on screen; the map follows within 2 seconds.
+  - The search is counted on the server (name or namespace, as before): the map and the boxes show the nodes with a match, wherever they are.
 - **YAML create and edit** check the Kind's `resource.<name>.create` for each document (edit checks the target's `resource.<name>.edit`).
   - The name is the Kind in lowercase, with two exceptions:
     - HorizontalPodAutoscaler, VerticalPodAutoscaler, PodDisruptionBudget, PersistentVolume, PersistentVolumeClaim and CustomResourceDefinition are `hpa`, `vpa`, `pdb`, `pv`, `pvc` and `crd`, in that order.
