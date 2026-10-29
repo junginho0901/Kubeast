@@ -13,8 +13,8 @@ type Lookup interface {
 	// Workloads names the workload of each pod of a namespace as the Hubble agent does, by the pod's name and
 	// by its set as Calico names it (<generateName>*).
 	Workloads(ctx context.Context, namespace string) (map[string]Workload, error)
-	// ServiceIPs are the cluster IPs of a namespace's Services.
-	ServiceIPs(ctx context.Context, namespace string) (map[string]bool, error)
+	// ServiceIPs are the cluster IPs of a namespace's Services, each with its Service's name.
+	ServiceIPs(ctx context.Context, namespace string) (map[string]string, error)
 	// PodSet is a pod's set as Calico names it: <generateName>*, or the pod's name when it has none.
 	PodSet(ctx context.Context, namespace, pod string) (string, error)
 }
@@ -50,15 +50,15 @@ func fill(ctx context.Context, l Lookup, flows []Flow) {
 			}
 		}
 	}
-	serviceIPs := map[string]bool{}
+	serviceIPs := map[string]string{}
 	n := 0
 	for ns := range serviceNamespaces {
 		if n++; n > MaxLookupNamespaces {
 			break
 		}
 		ips, _ := l.ServiceIPs(ctx, ns)
-		for ip := range ips {
-			serviceIPs[ip] = true
+		for ip, name := range ips {
+			serviceIPs[ip] = name
 		}
 	}
 	if len(serviceIPs) == 0 {
@@ -66,7 +66,7 @@ func fill(ctx context.Context, l Lookup, flows []Flow) {
 	}
 	for i := range flows {
 		for _, e := range []*End{&flows[i].Source, &flows[i].Destination} {
-			if e.Pod == "" && serviceIPs[e.IP] {
+			if e.Pod == "" && serviceIPs[e.IP] != "" {
 				e.ServiceAddress = true
 			}
 		}

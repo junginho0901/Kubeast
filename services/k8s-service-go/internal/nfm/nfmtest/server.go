@@ -35,9 +35,9 @@ type Server struct {
 	limits   map[string]int
 }
 
-// NewServer answers for the monitor shop-monitor, in Bytes.
+// NewServer answers for the monitor shop-monitor with no unit, as NFM answered on EKS (10-29).
 func NewServer() *Server {
-	return &Server{Monitor: "shop-monitor", Rows: map[string][]map[string]any{}, Unit: "Bytes",
+	return &Server{Monitor: "shop-monitor", Rows: map[string][]map[string]any{},
 		queries: map[string]string{}, limits: map[string]int{}, Polls: map[string]int{}}
 }
 
@@ -92,7 +92,10 @@ func (f *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if f.PageSize > 0 && from+f.PageSize < to {
 			to = from + f.PageSize
 		}
-		out := map[string]any{"topContributors": rows[from:to], "unit": f.Unit}
+		out := map[string]any{"topContributors": rows[from:to], "unit": nil}
+		if f.Unit != "" {
+			out["unit"] = f.Unit
+		}
 		if to < len(rows) {
 			out["nextToken"] = strconv.Itoa(to)
 		}
@@ -140,8 +143,9 @@ func (f *Server) Categories() []string {
 	return out
 }
 
-// Row is one top contributor as NFM writes it; an empty pod leaves kubernetesMetadata's pod fields out.
-func Row(cat, localNS, localPod, localIP, localAZ, remoteNS, remotePod, remoteIP, remoteAZ string, port, value int) map[string]any {
+// Row is one top contributor as NFM writes it on EKS: no destination category (the query has it); an empty pod
+// leaves kubernetesMetadata's pod fields out.
+func Row(localNS, localPod, localIP, localAZ, remoteNS, remotePod, remoteIP, remoteAZ string, port, value int) map[string]any {
 	k := map[string]any{}
 	if localPod != "" {
 		k["localPodNamespace"], k["localPodName"] = localNS, localPod
@@ -149,10 +153,26 @@ func Row(cat, localNS, localPod, localIP, localAZ, remoteNS, remotePod, remoteIP
 	if remotePod != "" {
 		k["remotePodNamespace"], k["remotePodName"] = remoteNS, remotePod
 	}
-	r := map[string]any{"destinationCategory": cat, "localIp": localIP, "localAz": localAZ, "localVpcId": "vpc-0a1", "localInstanceId": "i-0local",
+	r := map[string]any{"localIp": localIP, "localAz": localAZ, "localVpcId": "vpc-0a1", "localInstanceId": "i-0local",
 		"remoteIp": remoteIP, "remoteAz": remoteAZ, "remoteVpcId": "vpc-0a1", "targetPort": port, "value": value}
 	if len(k) > 0 {
 		r["kubernetesMetadata"] = k
 	}
 	return r
+}
+
+// Services names the Services of a row's ends, as kubernetesMetadata does for a pod a Service selects.
+func Services(row map[string]any, local, remote string) map[string]any {
+	k, _ := row["kubernetesMetadata"].(map[string]any)
+	if k == nil {
+		k = map[string]any{}
+		row["kubernetesMetadata"] = k
+	}
+	if local != "" {
+		k["localServiceName"] = local
+	}
+	if remote != "" {
+		k["remoteServiceName"] = remote
+	}
+	return row
 }

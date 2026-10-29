@@ -38,6 +38,10 @@ var Metrics = map[string]types.MonitorMetric{
 	"TIMEOUTS":         types.MonitorMetricTimeouts,
 }
 
+// units of the metrics when NFM leaves the answer's unit empty, as it did for all of them on EKS (10-29): the
+// CloudWatch metrics page gives DataTransferred in bytes and the other two as counts.
+var units = map[string]string{"DATA_TRANSFERRED": "Bytes", "RETRANSMISSIONS": "Count", "TIMEOUTS": "Count"}
+
 // Views group the categories the EKS agent sorts flows into as the EKS console's flow table does: within the
 // cluster, to AWS services, and to the internet or on-premises.
 var Views = map[string][]types.DestinationCategory{
@@ -190,16 +194,18 @@ func (s *Store) Normalize(r *Request) error {
 	return nil
 }
 
-// End is one side of a row: a pod (namespace, name, workload), a Service name, an address.
+// End is one side of a row: a pod (namespace, name, workload), a Service name, an address. ServiceAddress: the
+// address is the Service's own cluster IP (named through the reader's list of the namespace's Services).
 type End struct {
-	Namespace string             `json:"namespace,omitempty"`
-	Pod       string             `json:"pod,omitempty"`
-	Workload  *netflows.Workload `json:"workload,omitempty"`
-	Service   string             `json:"service,omitempty"`
-	IP        string             `json:"ip,omitempty"`
-	AZ        string             `json:"az,omitempty"`
-	VPC       string             `json:"vpc,omitempty"`
-	Instance  string             `json:"instance,omitempty"`
+	Namespace      string             `json:"namespace,omitempty"`
+	Pod            string             `json:"pod,omitempty"`
+	Workload       *netflows.Workload `json:"workload,omitempty"`
+	Service        string             `json:"service,omitempty"`
+	ServiceAddress bool               `json:"service_address,omitempty"`
+	IP             string             `json:"ip,omitempty"`
+	AZ             string             `json:"az,omitempty"`
+	VPC            string             `json:"vpc,omitempty"`
+	Instance       string             `json:"instance,omitempty"`
 }
 
 // Row is one top contributor: the local end (where the NFM agent measured) and the remote one.
@@ -251,8 +257,15 @@ func (s *Store) Read(ctx context.Context, cluster string, req Request) (*Result,
 		}
 		res.Truncated = res.Truncated || full
 		for _, r := range rows {
-			all = append(all, rowOf(r))
+			row := rowOf(r)
+			if row.Category == "" { // EKS rows carry no category: the query's
+				row.Category = string(cat)
+			}
+			all = append(all, row)
 		}
+	}
+	if res.Unit == "" {
+		res.Unit = units[req.Metric]
 	}
 	var near []Row // a row of the namespace at either end, before its workloads are known
 	for _, r := range all {
@@ -261,6 +274,7 @@ func (s *Store) Read(ctx context.Context, cluster string, req Request) (*Result,
 		}
 	}
 	hidden := fill(ctx, req.Lookup, near)
+	near = fold(near)
 	for _, r := range near {
 		if !req.side(r.Local) && !req.side(r.Remote) {
 			continue
@@ -414,7 +428,57 @@ func fill(ctx context.Context, l netflows.Lookup, rows []Row) map[string]bool {
 			}
 		}
 	}
+	// An end with neither pod nor namespace whose address is a Service's cluster IP in a namespace listed above:
+	// the agent saw a connection's receiving side at a pod on the same node before the address went back to the
+	// pod's own.
+	ips := map[string][2]string{}
+	for ns := range byNamespace {
+		names, err := l.ServiceIPs(ctx, ns)
+		if err != nil {
+			continue
+		}
+		for ip, name := range names {
+			ips[ip] = [2]string{ns, name}
+		}
+	}
+	for i := range rows {
+		for _, e := range []*End{&rows[i].Local, &rows[i].Remote} {
+			if s, ok := ips[e.IP]; ok && e.Pod == "" && e.Namespace == "" {
+				e.Namespace, e.Service, e.ServiceAddress = s[0], s[1], true
+			}
+		}
+	}
 	return hidden
+}
+
+// fold keeps one row per connection. NFM lists a connection whose two ends both run the agent twice: from the
+// sending end with the port it called, and from the receiving end with port 0 and the ends swapped (on EKS,
+// 38 of 83 rows on 10-29) — at a pod reached through a Service on the same node, that row's local end is the
+// Service's own address. The receiving end's row goes when the sending end's is there.
+func fold(rows []Row) []Row {
+	sent := func(s, r Row) bool {
+		if s.Port == 0 || s.Local.IP != r.Remote.IP {
+			return false
+		}
+		return s.Remote.IP == r.Local.IP ||
+			(r.Local.ServiceAddress && s.Remote.Service == r.Local.Service && s.Remote.Namespace == r.Local.Namespace)
+	}
+	out := make([]Row, 0, len(rows))
+	for _, r := range rows {
+		folded := false
+		if r.Port == 0 {
+			for _, s := range rows {
+				if sent(s, r) {
+					folded = true
+					break
+				}
+			}
+		}
+		if !folded {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 func (r Request) side(e End) bool {

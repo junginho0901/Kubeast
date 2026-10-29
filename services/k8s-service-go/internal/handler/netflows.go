@@ -106,7 +106,7 @@ func (l svcLookup) Workloads(ctx context.Context, namespace string) (map[string]
 	return l.s.NetflowsWorkloads(ctx, namespace)
 }
 
-func (l svcLookup) ServiceIPs(ctx context.Context, namespace string) (map[string]bool, error) {
+func (l svcLookup) ServiceIPs(ctx context.Context, namespace string) (map[string]string, error) {
 	return l.s.NetflowsServiceIPs(ctx, namespace)
 }
 

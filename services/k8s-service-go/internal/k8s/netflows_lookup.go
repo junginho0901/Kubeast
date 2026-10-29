@@ -69,8 +69,8 @@ func netflowsPodSet(ctx context.Context, cs kubernetes.Interface, namespace, pod
 	return p.GenerateName + "*", nil
 }
 
-// NetflowsServiceIPs lists the cluster IPs of a namespace's Services as the signed-in user.
-func (s *Service) NetflowsServiceIPs(ctx context.Context, namespace string) (map[string]bool, error) {
+// NetflowsServiceIPs lists the cluster IPs of a namespace's Services, each with its Service's name, as the signed-in user.
+func (s *Service) NetflowsServiceIPs(ctx context.Context, namespace string) (map[string]string, error) {
 	cs := s.clientsetCtx(ctx)
 	if cs == nil {
 		return nil, ErrNoUser
@@ -78,16 +78,16 @@ func (s *Service) NetflowsServiceIPs(ctx context.Context, namespace string) (map
 	return netflowsServiceIPs(ctx, cs, namespace)
 }
 
-func netflowsServiceIPs(ctx context.Context, cs kubernetes.Interface, namespace string) (map[string]bool, error) {
+func netflowsServiceIPs(ctx context.Context, cs kubernetes.Interface, namespace string) (map[string]string, error) {
 	list, err := cs.CoreV1().Services(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
-	out := map[string]bool{}
+	out := map[string]string{}
 	for _, svc := range list.Items {
 		for _, ip := range append([]string{svc.Spec.ClusterIP}, svc.Spec.ClusterIPs...) {
 			if ip != "" && ip != corev1.ClusterIPNone {
-				out[ip] = true
+				out[ip] = svc.Name
 			}
 		}
 	}

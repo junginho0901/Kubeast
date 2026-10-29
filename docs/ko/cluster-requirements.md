@@ -595,13 +595,17 @@ Resource Graph의 통신·둘 다 보기는 두 출처 중 하나로 선을 그�
 
 - **AWS 쪽**: EKS 콘솔에서 클러스터의 Container Network Observability를 켜거나, NFM 범위(scope)와 로컬 리소스가 그 클러스터인 모니터, 애드온 `aws-network-flow-monitoring-agent` 1.1.0 이상을 만듭니다(Terraform AWS provider 6.21.0 이상). 콘솔은 모니터 이름을 `<클러스터>-monitor`로 짓습니다.
   - 에이전트는 자기 네트워크 네임스페이스가 있는 파드만 이름을 붙입니다. 호스트 네트워크 파드는 노드 주소로 보입니다.
-- **설정**: `features.networkFlowMonitor.region`(모니터의 리전), `clusters`(`<Kubeast 클러스터 ID>: <모니터 이름>`).
+  - 애드온 권한은 EKS Pod Identity나 IRSA로 줍니다(애드온의 `service_account_role_arn`, 정책 `CloudWatchNetworkFlowMonitorAgentPublishPolicy`, 서비스 어카운트 `amazon-network-flow-monitor/aws-network-flow-monitor-agent-service-account`). IRSA는 EKS 1.35에서 확인했습니다.
+  - 에이전트가 뜬 뒤 15~20분쯤 지나야 첫 줄을 조회할 수 있습니다.
+  - NFM은 맺어진 연결을 잽니다. NetworkPolicy가 막은 연결은 어떤 지표에도 나오지 않습니다(막힘은 Hubble·Calico가 보여 줍니다, §17·§18).
+- **설정**: `features.networkFlowMonitor.region`(모니터의 리전), `clusters`(`<Kubeast 클러스터 ID>: <모니터 이름>`). 새로 설치하고 첫 설정 마법사로 등록한 자기 클러스터의 ID는 `default`입니다.
 - **Kubeast가 읽는 것**: 고른 보기의 구분마다 상위 기여자 쿼리 하나를 시작하고, 성공할 때까지 상태를 묻고, 줄을 읽습니다. `timeout`(15초) 안에 끝나지 않은 쿼리는 멈춥니다.
   - 보기는 콘솔과 같습니다. 클러스터 안(`INTRA_AZ`, `INTER_AZ`), AWS 서비스(`AMAZON_S3`, `AMAZON_DYNAMODB`), AWS 밖(`UNCLASSIFIED`, 인터넷 또는 온프레미스).
-  - 지표는 `DATA_TRANSFERRED`(바이트), `RETRANSMISSIONS`(재전송), `TIMEOUTS`(재전송 시간 초과)입니다. EKS 에이전트의 흐름에 이 세 가지가 있습니다.
+  - 지표는 `DATA_TRANSFERRED`(바이트), `RETRANSMISSIONS`(재전송), `TIMEOUTS`(재전송 시간 초과)입니다. EKS 에이전트의 흐름에 이 세 가지가 있습니다. NFM 응답은 단위를 비워 두고 줄에 구분(category)도 없습니다. Kubeast는 단위를 지표로(CloudWatch NFM 지표처럼 바이트·횟수), 구분은 쿼리로 정합니다.
   - NFM 쿼리에는 네임스페이스·파드 조건이 없어서, 쿼리마다 모니터 전체에서 `limit`(500, NFM 최대)줄까지 돌려받습니다. Kubeast는 그중 네임스페이스·파드·워크로드가 어느 한쪽 끝에 있는 줄만 남기고, 사용자가 볼 수 있는 파드 목록으로 워크로드 이름을 붙입니다. 같은 분에 같은 질문은 기억해 둔 답을 씁니다.
   - 기간은 `defaultRange`(1시간), 최대 `maxRange`(2시간)입니다. 콘솔도 1시간·2시간을 읽습니다.
-  - 노드마다 에이전트가 잰 것을 보내므로, 두 파드 사이의 연결은 양쪽에서 한 번씩 나올 수 있습니다.
+  - NFM은 두 파드 사이의 연결을 노드마다 에이전트가 잰 대로 두 번 줍니다. 연결을 연 쪽은 부른 포트와 함께, 받은 쪽은 포트 0에 양 끝을 바꿔서 줍니다. Kubeast는 연 쪽에서 잰 한 줄로 보여 줍니다. 포트가 없는 줄은 연 쪽 줄이 응답에 없는 연결의 받은 쪽입니다.
+  - 같은 노드에서 Service를 거쳐 받은 파드는 받은 쪽 줄의 로컬 주소가 Service의 cluster IP로 옵니다. Kubeast는 사용자가 볼 수 있는 그 네임스페이스의 Service 목록으로 Service 이름을 붙입니다.
 - **Kubeast의 AWS 신원**(k8s-service): `aws.irsaRoleArn` 롤, `serviceAccounts.k8sService.annotations`의 롤(IRSA), 또는 `accessKeyId`·`secretAccessKey`가 든 `existingSecret`. 모니터에 대해 다음 네 동작이 필요합니다(IAM은 시작·중지를 Write로 분류합니다. 쿼리를 시작하고 멈출 뿐 모니터는 바꾸지 않습니다).
 
   ```json

@@ -813,7 +813,7 @@ K8S_READONLY_TOOLS: List[Dict] = [
                 "destination picks the EKS console's view: cluster (within the cluster, INTRA_AZ and INTER_AZ, default), aws (Amazon S3 "
                 "and DynamoDB) or external (internet or on-premises). Each row has local (where the agent measured) and remote: pod, "
                 "workload, Service, IP, zone, port, value, category. Use it for \"who does this talk to the most\", \"where do "
-                "retransmissions come from\", \"how much crosses zones\"; a connection can be listed once from each end."
+                "retransmissions come from\", \"how much crosses zones\"; a connection measured at both ends is listed once."
             ),
             "parameters": {
                 "type": "object",

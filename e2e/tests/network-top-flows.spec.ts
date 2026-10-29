@@ -37,7 +37,7 @@ async function login(request: APIRequestContext, email: string, password: string
   return (await res.json()).access_token
 }
 
-type End = { namespace?: string; pod?: string; workload?: { kind: string; name: string }; service?: string; ip?: string; az?: string }
+type End = { namespace?: string; pod?: string; workload?: { kind: string; name: string }; service?: string; service_address?: boolean; ip?: string; az?: string }
 type Row = { local: End; remote: End; port?: number; value: number; category: string }
 
 test.describe('Top talkers (Network Flow Monitor)', () => {
@@ -48,7 +48,7 @@ test.describe('Top talkers (Network Flow Monitor)', () => {
   let admin = ''
   let ready = false
   let kubectl: ((...args: string[]) => string) | null = null
-  const pods = { gateway: '', k8s: '', dns: '', gatewayIP: '', k8sIP: '', dnsIP: '' }
+  const pods = { gateway: '', k8s: '', dns: '', gatewayIP: '', k8sIP: '', dnsIP: '', gatewaySvcIP: '' }
   const owners: Record<string, string> = {}
 
   // the stand-in, asked from inside its pod
@@ -63,11 +63,12 @@ test.describe('Top talkers (Network Flow Monitor)', () => {
     return 'Deployment/' + kubectl!('-n', namespace, 'get', 'replicaset', rs, '-o', 'jsonpath={.metadata.ownerReferences[0].name}')
   }
 
-  const row = (cat: string, l: [string, string, string, string], r: [string, string, string, string], port: number, value: number) => {
+  // a row as NFM writes it on EKS: no category (the query has it)
+  const row = (l: [string, string, string, string], r: [string, string, string, string], port: number, value: number) => {
     const k: Record<string, string> = {}
     if (l[1]) Object.assign(k, { localPodNamespace: l[0], localPodName: l[1] })
     if (r[1]) Object.assign(k, { remotePodNamespace: r[0], remotePodName: r[1] })
-    return { destinationCategory: cat, localIp: l[2], localAz: l[3], remoteIp: r[2], remoteAz: r[3], targetPort: port, value, ...(Object.keys(k).length ? { kubernetesMetadata: k } : {}) }
+    return { localIp: l[2], localAz: l[3], remoteIp: r[2], remoteAz: r[3], targetPort: port, value, ...(Object.keys(k).length ? { kubernetesMetadata: k } : {}) }
   }
 
   async function user(request: APIRequestContext, name: string, grant: object): Promise<{ email: string; token: string }> {
@@ -106,18 +107,22 @@ test.describe('Top talkers (Network Flow Monitor)', () => {
     owners.gateway = owner(NS, pods.gateway)
     owners.k8s = owner(NS, pods.k8s)
     owners.dns = owner('kube-system', pods.dns)
+    pods.gatewaySvcIP = kubectl!('-n', NS, 'get', 'service', 'gateway', '-o', 'jsonpath={.spec.clusterIP}')
     const az1 = 'use1-az1'
     const az2 = 'use1-az2'
     stub('PUT', '/_rows', {
       rows: {
         INTRA_AZ: [
-          row('INTRA_AZ', [NS, pods.gateway, pods.gatewayIP, az1], [NS, pods.k8s, pods.k8sIP, az1], 8002, 5_000_000),
-          row('INTRA_AZ', [NS, pods.k8s, pods.k8sIP, az1], [NS, pods.gateway, pods.gatewayIP, az1], 8002, 4_900_000),
-          row('INTRA_AZ', ['', '', '10.244.0.1', az1], ['', '', '10.244.0.2', az1], 10250, 9_999_999),
-          row('INTRA_AZ', ['kube-system', pods.dns, pods.dnsIP, az1], ['kube-system', 'other-0', '10.244.0.99', az1], 9153, 7_000_000),
+          row([NS, pods.gateway, pods.gatewayIP, az1], [NS, pods.k8s, pods.k8sIP, az1], 8002, 5_000_000),
+          // the receiving end of that call, as k8s-service's node lists it: port 0, ends swapped — shown once, as gateway's
+          row([NS, pods.k8s, pods.k8sIP, az1], [NS, pods.gateway, pods.gatewayIP, az1], 0, 4_900_000),
+          // a receiving end whose other row is not here, its local end the gateway Service's own cluster IP
+          row(['', '', pods.gatewaySvcIP, az1], [NS, pods.k8s, pods.k8sIP, az1], 0, 1_000_000),
+          row(['', '', '10.244.0.1', az1], ['', '', '10.244.0.2', az1], 10250, 9_999_999),
+          row(['kube-system', pods.dns, pods.dnsIP, az1], ['kube-system', 'other-0', '10.244.0.99', az1], 9153, 7_000_000),
         ],
-        INTER_AZ: [row('INTER_AZ', [NS, pods.k8s, pods.k8sIP, az1], ['kube-system', pods.dns, pods.dnsIP, az2], 53, 30_000)],
-        AMAZON_S3: [row('AMAZON_S3', [NS, pods.k8s, pods.k8sIP, az1], ['', '', '52.95.1.1', ''], 443, 800)],
+        INTER_AZ: [row([NS, pods.k8s, pods.k8sIP, az1], ['kube-system', pods.dns, pods.dnsIP, az2], 53, 30_000)],
+        AMAZON_S3: [row([NS, pods.k8s, pods.k8sIP, az1], ['', '', '52.95.1.1', ''], 443, 800)],
       },
     })
   })
@@ -138,10 +143,12 @@ test.describe('Top talkers (Network Flow Monitor)', () => {
     expect(body).toMatchObject({ cluster: CLUSTER, monitor: 'kubeast-monitor', metric: 'DATA_TRANSFERRED', unit: 'Bytes', view: 'cluster', truncated: false })
     const rows = body.rows as Row[]
     // largest first; the host-network flow and kube-system's own flow are not k8s-service's
-    expect(rows.map((r) => r.value)).toEqual([5_000_000, 4_900_000, 30_000])
+    expect(rows.map((r) => r.value)).toEqual([5_000_000, 1_000_000, 30_000])
     expect(rows[0]).toMatchObject({ category: 'INTRA_AZ', port: 8002, local: { namespace: NS, pod: pods.gateway, ip: pods.gatewayIP }, remote: { namespace: NS, pod: pods.k8s } })
     expect(`${rows[0].local.workload?.kind}/${rows[0].local.workload?.name}`).toBe(owners.gateway)
     expect(`${rows[0].remote.workload?.kind}/${rows[0].remote.workload?.name}`).toBe(owners.k8s)
+    expect(rows[1]).toMatchObject({ category: 'INTRA_AZ', local: { namespace: NS, service: 'gateway', service_address: true, ip: pods.gatewaySvcIP } })
+    expect(rows[1].port).toBeUndefined()
     expect(rows[2]).toMatchObject({ category: 'INTER_AZ', port: 53, remote: { namespace: 'kube-system', pod: pods.dns, az: 'use1-az2' } })
     expect(`${rows[2].remote.workload?.kind}/${rows[2].remote.workload?.name}`).toBe(owners.dns)
 
@@ -204,7 +211,7 @@ test.describe('Top talkers (Network Flow Monitor)', () => {
     await expect(section).toBeVisible({ timeout: 20_000 })
     await section.getByTestId('toptalkers-load').click()
     await expect(section.getByTestId('toptalkers-row')).toHaveCount(3, { timeout: 20_000 })
-    await expect(section.getByTestId('toptalkers-peer')).toHaveText([owners.gateway, owners.gateway, `kube-system/${owners.dns}`])
+    await expect(section.getByTestId('toptalkers-peer')).toHaveText([owners.gateway, 'Service/gateway', `kube-system/${owners.dns}`])
     await expect(section.getByTestId('toptalkers-value').first()).toHaveText('4.8 MB')
     await expect(section.getByTestId('toptalkers-category')).toHaveText(['same zone', 'same zone', 'across zones'])
 
@@ -242,7 +249,7 @@ test.describe('Top talkers (Network Flow Monitor)', () => {
     const answer = JSON.parse(result.content[0].text)
     expect((answer.rows as Row[]).map((r) => r.value)).toEqual([5_000_000, 4_900_000])
     expect(answer.unit).toBe('Bytes')
-    expect(answer.note).toContain('once from each end')
+    expect(answer.note).toContain('listed once')
     // the second cluster has no monitor: the tool is not offered there
     const list = await request.post(MCP, {
       headers: { Accept: 'application/json, text/event-stream', 'Content-Type': 'application/json', Authorization: `Bearer ${admin}` },

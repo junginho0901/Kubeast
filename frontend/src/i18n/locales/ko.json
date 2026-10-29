@@ -1889,7 +1889,7 @@
     "zones": "가용 영역",
     "truncated": "Network Flow Monitor가 한 구분에서 요청한 만큼 줄을 돌려주었습니다. 이 {{kind}}의 줄이 더 있을 수 있습니다.",
     "redacted": "파드를 볼 수 없는 네임스페이스의 상대는 네임스페이스와 주소만 보입니다.",
-    "source": "각 노드의 Network Flow Monitor 에이전트가 최근 {{w}} 동안 잰 값입니다(모니터 {{monitor}}). 두 파드 사이의 연결은 양쪽에서 한 번씩 나올 수 있습니다."
+    "source": "각 노드의 Network Flow Monitor 에이전트가 최근 {{w}} 동안 잰 값입니다(모니터 {{monitor}}). 양쪽 끝에서 잰 연결은 연결을 연 쪽에서 잰 한 줄로 보여 줍니다."
   },
   "netpolCheck": {
     "open": "연결 확인",
@@ -3278,12 +3278,13 @@
     "manual": "수동",
     "settings": "설정",
     "maxItemsLabel": "리소스당 최대 항목 수",
-    "maxItemsHelp": "이 수를 초과하는 리소스는 성능 저하 방지를 위해 제외됩니다.",
+    "maxItemsHelp": "서버가 리소스마다 이 수(최대 10,000)까지만 가져오고, 멈추면 알려 줍니다.",
     "refetchLabel": "새로고침 간격",
     "seconds": "초",
     "minute": "분",
     "minutes": "분",
     "save": "저장",
+    "truncated": "{{types}}: 앞의 {{limit}}개만 가져왔습니다 — 나머지는 네임스페이스를 골라 검색하세요",
     "someErrors": "{{count}}개 실패",
     "close": "닫기",
     "tabInfo": "정보",
