@@ -587,7 +587,7 @@ export default function ResourceGraph() {
             {podCounts.groups > 0 && (
               <div className="flex items-center gap-2" data-testid="legend-group">
                 <span className="flex w-3 flex-wrap gap-px">{[0, 1, 2, 3].map((i) => <span key={i} className="block h-[3px] w-[5px] bg-green-500" />)}</span>
-                <span className="text-slate-400 max-w-[160px]">{t('resourceGraph.group.legend', 'Pod group: healthy pods of one owner with the same lines (more than 10)')}</span>
+                <span className="text-slate-400 max-w-[160px]">{t('resourceGraph.group.legend', 'Pod group (healthy, same lines)')}</span>
               </div>
             )}
             <div className="flex items-center gap-2">

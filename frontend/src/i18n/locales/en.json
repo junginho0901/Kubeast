@@ -3173,7 +3173,7 @@
       "expand": "Expand this group in the graph",
       "pods": "Pod group · {{owner}}",
       "hits": "{{n}} match",
-      "legend": "Pod group: healthy pods of one owner with the same lines (more than 10)",
+      "legend": "Pod group (healthy, same lines)",
       "expandAllTitle": "Draw every pod",
       "expandAllMessage": "The graph will draw {{n}} pods one by one, which can be slow.",
       "expandAllConfirm": "Draw them",

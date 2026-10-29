@@ -3257,7 +3257,7 @@
       "expand": "그래프에 이 묶음 펼치기",
       "pods": "Pod 묶음 · {{owner}}",
       "hits": "{{n}}개 맞음",
-      "legend": "Pod 묶음: 한 소유자의 정상 Pod 중 선이 같은 것(10개 넘을 때)",
+      "legend": "Pod 묶음(정상·선이 같음)",
       "expandAllTitle": "모든 Pod 그리기",
       "expandAllMessage": "Pod {{n}}개를 하나씩 그립니다. 느려질 수 있습니다.",
       "expandAllConfirm": "그리기",
