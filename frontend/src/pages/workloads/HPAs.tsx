@@ -15,6 +15,7 @@ import { parseAgeSeconds, type SortKey } from './hpas/hpaHelpers'
 import { applyHPAWatchEvent } from './hpas/hpaWatchNormalize'
 import { HPAFilters } from './hpas/HPAFilters'
 import { HPATable } from './hpas/HPATable'
+import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 
 export default function HPAs() {
   const queryClient = useQueryClient()
@@ -24,7 +25,7 @@ export default function HPAs() {
   const { open: openDetail } = useResourceDetail()
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedNamespace, setSelectedNamespace] = useState<string>('all')
+  const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')

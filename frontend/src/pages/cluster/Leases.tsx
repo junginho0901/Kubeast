@@ -19,6 +19,7 @@ import {
 import { applyLeaseWatchEvent } from './leases/leaseWatchNormalize'
 import { LeaseFilters } from './leases/LeaseFilters'
 import { LeaseTable } from './leases/LeaseTable'
+import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 
 export default function Leases() {
   const queryClient = useQueryClient()
@@ -28,7 +29,7 @@ export default function Leases() {
   const { open: openDetail } = useResourceDetail()
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedNamespace, setSelectedNamespace] = useState<string>('all')
+  const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')

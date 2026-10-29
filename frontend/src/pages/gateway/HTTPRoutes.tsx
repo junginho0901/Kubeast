@@ -20,6 +20,7 @@ import {
 import { applyHTTPRouteWatchEvent } from './httproutes/httpRouteWatchNormalize'
 import { HTTPRouteFilters } from './httproutes/HTTPRouteFilters'
 import { HTTPRouteTable } from './httproutes/HTTPRouteTable'
+import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 
 export default function HTTPRoutes() {
   const queryClient = useQueryClient()
@@ -29,7 +30,7 @@ export default function HTTPRoutes() {
   const { open: openDetail } = useResourceDetail()
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedNamespace, setSelectedNamespace] = useState<string>('all')
+  const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')

@@ -21,6 +21,7 @@ import {
 import { applyEndpointSliceWatchEvent } from './endpointslices/endpointSliceWatchNormalize'
 import { EndpointSliceFilters } from './endpointslices/EndpointSliceFilters'
 import { EndpointSliceTable } from './endpointslices/EndpointSliceTable'
+import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 
 type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
 
@@ -31,7 +32,7 @@ export default function EndpointSlices() {
   const { open: openDetail } = useResourceDetail()
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedNamespace, setSelectedNamespace] = useState<string>('all')
+  const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
