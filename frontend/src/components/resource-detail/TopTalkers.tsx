@@ -136,7 +136,7 @@ export default function TopTalkers({ kind, namespace, name }: { kind: string; na
         )}
         {res?.truncated && <p className="text-slate-500">{tr('toptalkers.truncated', 'Network Flow Monitor gave as many rows as were asked in a category: this {{kind}} may have more than these.', { kind })}</p>}
         {res?.redacted && <p className="text-slate-500">{tr('toptalkers.redacted', 'Peers in namespaces whose pods you cannot list show their namespace and address only.')}</p>}
-        {res && <p className="text-slate-500">{tr('toptalkers.source', 'Measured by the Network Flow Monitor agent on each node over the last {{w}}, monitor {{monitor}}. A connection between two pods can be listed once from each end.', { w: range, monitor: res.monitor })}</p>}
+        {res && <p className="text-slate-500">{tr('toptalkers.source', 'Measured by the Network Flow Monitor agent on each node over the last {{w}}, monitor {{monitor}}. A connection measured at both ends is listed once, as the end that opened it measured it.', { w: range, monitor: res.monitor })}</p>}
       </div>
     </InfoSection>
   )

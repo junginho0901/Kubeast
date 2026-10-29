@@ -36,15 +36,15 @@ func (nfmLookup) Workloads(_ context.Context, ns string) (map[string]netflows.Wo
 	}
 	return map[string]netflows.Workload{"web-6d9f7c8b5-abcde": {Kind: "Deployment", Name: "web"}, "api-5c8b9d7f4-klmno": {Kind: "Deployment", Name: "api"}}, nil
 }
-func (nfmLookup) ServiceIPs(context.Context, string) (map[string]bool, error) { return nil, nil }
-func (nfmLookup) PodSet(context.Context, string, string) (string, error)      { return "", nil }
+func (nfmLookup) ServiceIPs(context.Context, string) (map[string]string, error) { return nil, nil }
+func (nfmLookup) PodSet(context.Context, string, string) (string, error)        { return "", nil }
 
 func newNFMFixture(t *testing.T, perMinute int) *nfmFixture {
 	t.Helper()
 	f := &nfmFixture{store: &memAudit{}, srv: nfmtest.NewServer(), canI: true}
 	f.srv.Rows["INTRA_AZ"] = []map[string]any{
-		nfmtest.Row("INTRA_AZ", "shop", "web-6d9f7c8b5-abcde", "10.0.1.10", "apne2-az1", "shop", "api-5c8b9d7f4-klmno", "10.0.1.20", "apne2-az1", 8080, 5000),
-		nfmtest.Row("INTRA_AZ", "pay", "pay-7f8e6d5c4-xyzab", "10.0.1.40", "apne2-az1", "shop", "web-6d9f7c8b5-abcde", "10.0.1.10", "apne2-az1", 80, 700),
+		nfmtest.Row("shop", "web-6d9f7c8b5-abcde", "10.0.1.10", "apne2-az1", "shop", "api-5c8b9d7f4-klmno", "10.0.1.20", "apne2-az1", 8080, 5000),
+		nfmtest.Row("pay", "pay-7f8e6d5c4-xyzab", "10.0.1.40", "apne2-az1", "shop", "web-6d9f7c8b5-abcde", "10.0.1.10", "apne2-az1", 80, 700),
 	}
 	srv := httptest.NewServer(f.srv)
 	t.Cleanup(srv.Close)

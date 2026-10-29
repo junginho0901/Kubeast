@@ -28,19 +28,19 @@ const (
 	pay  = "pay-7f8e6d5c4-xyzab"
 )
 
-// shopRows: web talks to api (seen by both agents), web to db, pay to web, web to pay across zones, a
-// host-network flow with no pod names and a flow of another namespace.
+// shopRows: web talks to api (seen by both agents: api's agent lists it with port 0, the ends swapped), web to
+// db, pay to web, web to pay across zones, a host-network flow with no pod names and a flow of another namespace.
 func shopRows(f *nfmtest.Server) {
 	f.Rows["INTRA_AZ"] = []map[string]any{
-		nfmtest.Row("INTRA_AZ", "shop", webA, "10.0.1.10", "apne2-az1", "shop", api, "10.0.1.20", "apne2-az1", 8080, 5000),
-		nfmtest.Row("INTRA_AZ", "shop", api, "10.0.1.20", "apne2-az1", "shop", webA, "10.0.1.10", "apne2-az1", 8080, 4900),
-		nfmtest.Row("INTRA_AZ", "shop", webB, "10.0.1.11", "apne2-az1", "shop", db, "10.0.1.30", "apne2-az1", 5432, 3000),
-		nfmtest.Row("INTRA_AZ", "pay", pay, "10.0.1.40", "apne2-az1", "shop", webA, "10.0.1.10", "apne2-az1", 80, 700),
-		nfmtest.Row("INTRA_AZ", "", "", "10.0.1.5", "apne2-az1", "", "", "10.0.1.9", "apne2-az1", 10250, 9999),
-		nfmtest.Row("INTRA_AZ", "ops", "agent-x1", "10.0.1.50", "apne2-az1", "ops", "collector-0", "10.0.1.51", "apne2-az1", 4317, 100),
+		nfmtest.Row("shop", webA, "10.0.1.10", "apne2-az1", "shop", api, "10.0.1.20", "apne2-az1", 8080, 5000),
+		nfmtest.Row("shop", api, "10.0.1.20", "apne2-az1", "shop", webA, "10.0.1.10", "apne2-az1", 0, 4900),
+		nfmtest.Row("shop", webB, "10.0.1.11", "apne2-az1", "shop", db, "10.0.1.30", "apne2-az1", 5432, 3000),
+		nfmtest.Row("pay", pay, "10.0.1.40", "apne2-az1", "shop", webA, "10.0.1.10", "apne2-az1", 80, 700),
+		nfmtest.Row("", "", "10.0.1.5", "apne2-az1", "", "", "10.0.1.9", "apne2-az1", 10250, 9999),
+		nfmtest.Row("ops", "agent-x1", "10.0.1.50", "apne2-az1", "ops", "collector-0", "10.0.1.51", "apne2-az1", 4317, 100),
 	}
 	f.Rows["INTER_AZ"] = []map[string]any{
-		nfmtest.Row("INTER_AZ", "shop", webA, "10.0.1.10", "apne2-az1", "pay", pay, "10.0.3.40", "apne2-az3", 9000, 1200),
+		nfmtest.Row("shop", webA, "10.0.1.10", "apne2-az1", "pay", pay, "10.0.3.40", "apne2-az3", 9000, 1200),
 	}
 }
 
@@ -63,8 +63,8 @@ func (l *lookup) Workloads(_ context.Context, ns string) (map[string]netflows.Wo
 	}
 	return nil, nil
 }
-func (l *lookup) ServiceIPs(context.Context, string) (map[string]bool, error) { return nil, nil }
-func (l *lookup) PodSet(context.Context, string, string) (string, error)      { return "", nil }
+func (l *lookup) ServiceIPs(context.Context, string) (map[string]string, error) { return nil, nil }
+func (l *lookup) PodSet(context.Context, string, string) (string, error)        { return "", nil }
 
 var testNow = time.Date(2026, 10, 26, 3, 17, 42, 0, time.UTC)
 
@@ -141,8 +141,9 @@ func TestReadWorkloadKeepsItsRowsAtEitherEnd(t *testing.T) {
 		t.Fatalf("maxResults %v, stopped %v", f.MaxAsked, f.Stopped)
 	}
 
-	// the host-network row has no pod and pay's own row to pay is not web's; largest first
-	want := []string{webA + ">" + api + ":5000", api + ">" + webA + ":4900", webB + ">" + db + ":3000", webA + ">" + pay + ":1200", pay + ">" + webA + ":700"}
+	// the host-network row has no pod and pay's own row to pay is not web's; api's row of web's call goes into
+	// web's; largest first
+	want := []string{webA + ">" + api + ":5000", webB + ">" + db + ":3000", webA + ">" + pay + ":1200", pay + ">" + webA + ":700"}
 	if got := ends(res); !reflect.DeepEqual(got, want) {
 		t.Fatalf("rows\n got %v\nwant %v", got, want)
 	}
@@ -168,7 +169,7 @@ func TestReadPodAndNamespace(t *testing.T) {
 	f := nfmtest.NewServer()
 	shopRows(f)
 	s := newTestStore(t, f, nil)
-	if got := ends(read(t, s, Request{Namespace: "shop", Kind: "Pod", Name: api})); !reflect.DeepEqual(got, []string{webA + ">" + api + ":5000", api + ">" + webA + ":4900"}) {
+	if got := ends(read(t, s, Request{Namespace: "shop", Kind: "Pod", Name: api})); !reflect.DeepEqual(got, []string{webA + ">" + api + ":5000"}) {
 		t.Fatalf("pod rows %v", got)
 	}
 	if got := ends(read(t, s, Request{Namespace: "pay", Lookup: &lookup{}})); !reflect.DeepEqual(got, []string{webA + ">" + pay + ":1200", pay + ">" + webA + ":700"}) {
@@ -205,7 +206,7 @@ func TestReadHidesPeersInNamespacesTheReaderCannotList(t *testing.T) {
 	shopRows(f)
 	s := newTestStore(t, f, nil)
 	res := read(t, s, Request{Namespace: "shop", Kind: "Pod", Name: webA, Lookup: &lookup{deny: map[string]bool{"pay": true}}})
-	if !res.Redacted || len(res.Rows) != 4 {
+	if !res.Redacted || len(res.Rows) != 3 {
 		t.Fatalf("redacted %v, rows %v", res.Redacted, ends(res))
 	}
 	for _, r := range res.Rows {
@@ -217,7 +218,7 @@ func TestReadHidesPeersInNamespacesTheReaderCannotList(t *testing.T) {
 	f2 := nfmtest.NewServer()
 	for i := 0; i <= netflows.MaxLookupNamespaces; i++ {
 		ns := "peer-" + strconv.Itoa(i)
-		f2.Rows["INTRA_AZ"] = append(f2.Rows["INTRA_AZ"], nfmtest.Row("INTRA_AZ", "shop", webA, "10.0.1.10", "apne2-az1", ns, "p-"+ns, "10.0.9."+strconv.Itoa(i), "apne2-az1", 80, 1000-i))
+		f2.Rows["INTRA_AZ"] = append(f2.Rows["INTRA_AZ"], nfmtest.Row("shop", webA, "10.0.1.10", "apne2-az1", ns, "p-"+ns, "10.0.9."+strconv.Itoa(i), "apne2-az1", 80, 1000-i))
 	}
 	res = read(t, newTestStore(t, f2, nil), Request{Namespace: "shop", Kind: "Pod", Name: webA, Lookup: &lookup{}})
 	for i, r := range res.Rows {
@@ -230,7 +231,7 @@ func TestReadHidesPeersInNamespacesTheReaderCannotList(t *testing.T) {
 func TestReadAsksEachCategoryOfTheView(t *testing.T) {
 	for view, want := range map[string][]string{"aws": {"AMAZON_S3", "AMAZON_DYNAMODB"}, "external": {"UNCLASSIFIED"}} {
 		f := nfmtest.NewServer()
-		f.Rows["AMAZON_S3"] = []map[string]any{nfmtest.Row("AMAZON_S3", "shop", webA, "10.0.1.10", "apne2-az1", "", "", "52.95.1.1", "", 443, 800)}
+		f.Rows["AMAZON_S3"] = []map[string]any{nfmtest.Row("shop", webA, "10.0.1.10", "apne2-az1", "", "", "52.95.1.1", "", 443, 800)}
 		s := newTestStore(t, f, nil)
 		res := read(t, s, Request{Namespace: "shop", Kind: "Pod", Name: webA, View: view, Metric: "RETRANSMISSIONS"})
 		if got := f.Categories(); !reflect.DeepEqual(got, want) {
@@ -250,7 +251,7 @@ func TestReadPagesAndTruncates(t *testing.T) {
 	shopRows(f)
 	f.PageSize = 2
 	s := newTestStore(t, f, nil)
-	if got := ends(read(t, s, Request{Namespace: "shop"})); len(got) != 5 {
+	if got := ends(read(t, s, Request{Namespace: "shop"})); len(got) != 4 {
 		t.Fatalf("every page read: %v", got)
 	}
 	if len(f.MaxAsked) != 4 { // INTRA_AZ: 2+2+1, INTER_AZ: 1
@@ -413,5 +414,92 @@ func TestNewKeysFromTheSecret(t *testing.T) {
 	cfg.SecretDir = t.TempDir() // no files: the SDK's default chain (IRSA)
 	if _, err := New(cfg); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// labLookup: the shop of the Playground EKS check (10-29) — four Deployments behind Services of their names.
+type labLookup struct{}
+
+func (labLookup) Workloads(_ context.Context, ns string) (map[string]netflows.Workload, error) {
+	if ns != "shop" {
+		return nil, nil
+	}
+	return map[string]netflows.Workload{
+		"storefront-cb5fbd85-jtj2j": {Kind: "Deployment", Name: "storefront"}, "recommendations-7b97c94d-zhs4m": {Kind: "Deployment", Name: "recommendations"},
+		"checkout-api-675f6dc5dc-bkh28": {Kind: "Deployment", Name: "checkout-api"}, "payments-57b646767c-qhgps": {Kind: "Deployment", Name: "payments"},
+	}, nil
+}
+func (labLookup) ServiceIPs(_ context.Context, ns string) (map[string]string, error) {
+	if ns != "shop" {
+		return nil, nil
+	}
+	return map[string]string{"10.99.164.245": "storefront", "10.99.238.20": "recommendations", "10.99.134.117": "checkout-api", "10.99.38.106": "payments"}, nil
+}
+func (labLookup) PodSet(context.Context, string, string) (string, error) { return "", nil }
+
+// Rows as NFM gave them on EKS (raw/20261029/n4-plan/raw-t7, t8): no category, no unit, every connection
+// between two agents listed from both ends — the receiving end with port 0 and, for a pod reached through a
+// Service on the same node, the Service's cluster IP as its local address.
+func TestReadOfEKSRowsFoldsTheReceivingEndAndNamesServiceAddresses(t *testing.T) {
+	const (
+		front = "storefront-cb5fbd85-jtj2j"
+		recs  = "recommendations-7b97c94d-zhs4m"
+		check = "checkout-api-675f6dc5dc-bkh28"
+		pays  = "payments-57b646767c-qhgps"
+	)
+	f := nfmtest.NewServer()
+	f.Rows["INTRA_AZ"] = []map[string]any{
+		nfmtest.Services(nfmtest.Row("shop", front, "100.112.23.55", "apne2-az2", "shop", recs, "100.112.23.177", "apne2-az2", 80, 20655), "storefront", "recommendations"),
+		nfmtest.Services(nfmtest.Row("", "", "10.99.238.20", "apne2-az2", "shop", front, "100.112.23.55", "apne2-az2", 0, 20638), "", "storefront"),
+		nfmtest.Services(nfmtest.Row("shop", check, "100.112.20.21", "apne2-az1", "shop", pays, "100.112.20.22", "apne2-az1", 80, 15704), "checkout-api", "payments"),
+		// the receiving end of a call whose sending row is not in this answer: kept, its local end named as the Service
+		nfmtest.Services(nfmtest.Row("", "", "10.99.38.106", "apne2-az1", "shop", front, "100.112.23.55", "apne2-az1", 0, 8449), "", "storefront"),
+	}
+	f.Rows["INTER_AZ"] = []map[string]any{
+		nfmtest.Services(nfmtest.Row("shop", front, "100.112.23.55", "apne2-az2", "shop", check, "100.112.20.21", "apne2-az1", 80, 84840), "storefront", "checkout-api"),
+		nfmtest.Services(nfmtest.Row("shop", check, "100.112.20.21", "apne2-az1", "shop", front, "100.112.23.55", "apne2-az2", 0, 22990), "checkout-api", "storefront"),
+	}
+	s := newTestStore(t, f, nil)
+	res := read(t, s, Request{Namespace: "shop", Kind: "Deployment", Name: "storefront", Lookup: labLookup{}})
+	type line struct {
+		local, remote, category string
+		port                    int32
+		value                   int64
+	}
+	var got []line
+	for _, r := range res.Rows {
+		name := func(e End) string {
+			if e.ServiceAddress {
+				return "Service/" + e.Service
+			}
+			return e.Pod
+		}
+		got = append(got, line{name(r.Local), name(r.Remote), r.Category, r.Port, r.Value})
+	}
+	want := []line{
+		{front, check, "INTER_AZ", 80, 84840},
+		{front, recs, "INTRA_AZ", 80, 20655},
+		{"Service/payments", front, "INTRA_AZ", 0, 8449},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("rows\n got %+v\nwant %+v", got, want)
+	}
+	if res.Unit != "Bytes" {
+		t.Fatalf("unit %q", res.Unit)
+	}
+	if e := res.Rows[2].Local; e.Namespace != "shop" || e.IP != "10.99.38.106" {
+		t.Fatalf("service address end %+v", e)
+	}
+	for metric, unit := range map[string]string{"RETRANSMISSIONS": "Count", "TIMEOUTS": "Count"} {
+		if r := read(t, s, Request{Namespace: "shop", Kind: "Deployment", Name: "storefront", Metric: metric, Lookup: labLookup{}}); r.Unit != unit {
+			t.Fatalf("%s unit %q", metric, r.Unit)
+		}
+	}
+	// a unit NFM does give is kept
+	f2 := nfmtest.NewServer()
+	f2.Unit = "Kilobytes"
+	f2.Rows["INTRA_AZ"] = f.Rows["INTRA_AZ"][:1]
+	if r := read(t, newTestStore(t, f2, nil), Request{Namespace: "shop", Lookup: labLookup{}}); r.Unit != "Kilobytes" {
+		t.Fatalf("given unit %q", r.Unit)
 	}
 }

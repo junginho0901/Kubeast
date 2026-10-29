@@ -38,9 +38,9 @@ func (l *retinaLookup) PodSet(context.Context, string, string) (string, error) {
 	return "", errors.New("not used on Retina")
 }
 
-func (l *retinaLookup) ServiceIPs(_ context.Context, ns string) (map[string]bool, error) {
+func (l *retinaLookup) ServiceIPs(_ context.Context, ns string) (map[string]string, error) {
 	l.asked = append(l.asked, "services "+ns)
-	return map[string]map[string]bool{"flows-demo": {"10.96.228.69": true}, "kube-system": {"10.96.0.10": true}}[ns], nil
+	return map[string]map[string]string{"flows-demo": {"10.96.228.69": "web"}, "kube-system": {"10.96.0.10": "kube-dns"}}[ns], nil
 }
 
 var retinaRecorded = time.Date(2026, 10, 25, 11, 31, 30, 0, time.UTC)

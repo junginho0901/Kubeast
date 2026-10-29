@@ -1893,7 +1893,7 @@
     "zones": "Zones",
     "truncated": "Network Flow Monitor gave as many rows as were asked in a category: this {{kind}} may have more than these.",
     "redacted": "Peers in namespaces whose pods you cannot list show their namespace and address only.",
-    "source": "Measured by the Network Flow Monitor agent on each node over the last {{w}}, monitor {{monitor}}. A connection between two pods can be listed once from each end."
+    "source": "Measured by the Network Flow Monitor agent on each node over the last {{w}}, monitor {{monitor}}. A connection measured at both ends is listed once, as the end that opened it measured it."
   },
   "netpolCheck": {
     "open": "Check a connection",
@@ -3194,12 +3194,13 @@
     "page": "Page {{current}} of {{total}}",
     "settings": "Settings",
     "maxItemsLabel": "Max items per resource",
-    "maxItemsHelp": "Resources exceeding this limit will be excluded to prevent slowdowns.",
+    "maxItemsHelp": "The server stops each resource's list at this many objects (at most 10,000) and says when it did.",
     "refetchLabel": "Refetch interval",
     "seconds": "seconds",
     "minute": "minute",
     "minutes": "minutes",
     "save": "Save",
+    "truncated": "{{types}}: the first {{limit}} only — choose a namespace to search the rest",
     "someErrors": "{{count}} failed",
     "close": "Close",
     "tabInfo": "Info",

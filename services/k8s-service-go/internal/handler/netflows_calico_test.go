@@ -30,7 +30,7 @@ func (calicoLookup) Workloads(_ context.Context, ns string) (map[string]netflows
 	return nil, errors.New("forbidden")
 }
 
-func (calicoLookup) ServiceIPs(context.Context, string) (map[string]bool, error) { return nil, nil }
+func (calicoLookup) ServiceIPs(context.Context, string) (map[string]string, error) { return nil, nil }
 
 func (calicoLookup) PodSet(_ context.Context, ns, pod string) (string, error) {
 	if ns == "flows-demo" && strings.HasPrefix(pod, "web-787b7df48d-") {

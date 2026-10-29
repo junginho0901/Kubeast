@@ -465,7 +465,7 @@ func TestNetworkTopFlows(t *testing.T) {
 		t.Fatalf("request %s %s", (*seen)[0].URL.Path, (*seen)[0].URL.RawQuery)
 	}
 	m := decode(t, out)
-	if len(m["rows"].([]interface{})) != nfmRowsCap || m["rows_total"] != float64(60) || m["truncated"] != true || !strings.Contains(m["note"].(string), "once from each end") {
+	if len(m["rows"].([]interface{})) != nfmRowsCap || m["rows_total"] != float64(60) || m["truncated"] != true || !strings.Contains(m["note"].(string), "listed once") {
 		t.Fatalf("reply: rows %d total %v truncated %v", len(m["rows"].([]interface{})), m["rows_total"], m["truncated"])
 	}
 	for _, bad := range []map[string]interface{}{{"namespace": "shop", "metric": "ROUND_TRIP_TIME"}, {"namespace": "shop", "destination": "INTER_VPC"}} {

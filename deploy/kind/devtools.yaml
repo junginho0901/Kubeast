@@ -402,7 +402,8 @@ data:
             args = parse_qs(url.query)
             start = int((args.get("nextToken") or ["0"])[0])
             size = int((args.get("maxResults") or ["500"])[0])
-            page = {"topContributors": rows[start:start + size], "unit": "Bytes" if q["metricName"] == "DATA_TRANSFERRED" else "Count"}
+            # no unit, as NFM answered on EKS (10-29); Kubeast takes it from the metric
+            page = {"topContributors": rows[start:start + size], "unit": None}
             if start + size < len(rows):
                 page["nextToken"] = str(start + size)
             self.send_json(200, page)

@@ -600,8 +600,8 @@ func handleNetworkTopFlows(ctx context.Context, args map[string]interface{}, hea
 	}
 	capList(reply, "rows", nfmRowsCap)
 	reply["note"] = "Top contributors of the cluster's Amazon CloudWatch Network Flow Monitor monitor over the range, largest value first, read with Kubeast's AWS identity " +
-		"for a user who may list the namespace's pods. local is where the NFM agent measured, remote the other end; a connection between two pods can be listed " +
-		"once from each end, so do not add the two. value is in unit (Bytes for data_transferred, Count for retransmissions and timeouts). category: INTRA_AZ and " +
+		"for a user who may list the namespace's pods. local is where the NFM agent measured, remote the other end; a connection measured at both ends is listed once, as " +
+		"the end that opened it measured it (a row with no port is a receiving end whose other row is not listed; service_address marks a Service's cluster IP). value is in unit (Bytes for data_transferred, Count for retransmissions and timeouts). category: INTRA_AZ and " +
 		"INTER_AZ (within the cluster; INTER_AZ crosses zones and costs data transfer), AMAZON_S3, AMAZON_DYNAMODB, UNCLASSIFIED (internet or on-premises). " +
 		"truncated: NFM gave as many rows as asked in a category; redacted: peers in namespaces whose pods the user cannot list show namespace and address only."
 	return marshalJSON(reply)

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 // GetGenericResources lists any resource type by name.
@@ -57,40 +58,79 @@ func (s *Service) GetGenericResources(ctx context.Context, resourceType, namespa
 	return result, nil
 }
 
-// GetGenericResourcesRaw lists resources returning full unstructured K8s objects.
-func (s *Service) GetGenericResourcesRaw(ctx context.Context, resourceType, namespace, labelSelector string) (map[string]interface{}, error) {
+// Advanced Search lists in pages, as kubectl does (--chunk-size 500), so one list of a large cluster no longer
+// holds every object in k8s-service's memory (10 000 pods took it past its 512Mi limit, 10-29), and stops after
+// the page's own limit of objects of a type — at most SearchMaxItems, the most the page lets a person ask for.
+const (
+	SearchPageSize = 500
+	SearchMaxItems = 10000
+)
+
+// StreamGenericResourcesRaw lists resources page by page as full unstructured objects without managedFields:
+// head once with the list's kind and apiVersion after the first page and before any item, then item for each
+// object, up to max of them. truncated says more were there; remaining counts them when the API server tells.
+func (s *Service) StreamGenericResourcesRaw(ctx context.Context, resourceType, namespace, labelSelector string, max int,
+	head func(kind, apiVersion string) error, item func(map[string]interface{}) error) (truncated bool, remaining int64, err error) {
 	gvr, namespaced, err := s.ResolveResource(ctx, resourceType)
 	if err != nil {
-		return nil, err
+		return false, 0, err
 	}
-
-	opts := metav1.ListOptions{}
-	if labelSelector != "" {
-		opts.LabelSelector = labelSelector
-	}
-
-	ns := namespace
 	if !namespaced {
-		ns = ""
+		namespace = ""
 	}
-
-	list, err := s.ListResources(ctx, gvr, ns, opts)
-	if err != nil {
-		return nil, fmt.Errorf("list %s: %w", resourceType, err)
+	list := func(opts metav1.ListOptions) (*unstructured.UnstructuredList, error) {
+		l, err := s.ListResources(ctx, gvr, namespace, opts)
+		if err != nil {
+			return nil, fmt.Errorf("list %s: %w", resourceType, err)
+		}
+		return l, nil
 	}
+	return streamPages(list, metav1.ListOptions{LabelSelector: labelSelector}, SearchPageSize, max, head, item)
+}
 
-	// Return full objects, strip managedFields to reduce size
-	items := make([]map[string]interface{}, 0, len(list.Items))
-	for _, item := range list.Items {
-		item.SetManagedFields(nil)
-		items = append(items, item.Object)
+// streamPages runs a list in pages of size (limit and continue) and hands its objects on, up to max.
+func streamPages(list func(metav1.ListOptions) (*unstructured.UnstructuredList, error), opts metav1.ListOptions, size, max int,
+	head func(kind, apiVersion string) error, item func(map[string]interface{}) error) (bool, int64, error) {
+	opts.Limit = int64(size)
+	sent := 0
+	for first := true; ; first = false {
+		page, err := list(opts)
+		if err != nil {
+			return false, 0, err
+		}
+		if first {
+			if err := head(page.GetKind(), page.GetAPIVersion()); err != nil {
+				return false, 0, err
+			}
+		}
+		for i := range page.Items {
+			if sent == max {
+				remaining := int64(len(page.Items) - i)
+				if rc := page.GetRemainingItemCount(); rc != nil {
+					remaining += *rc
+				} else if page.GetContinue() != "" {
+					remaining = 0 // more pages, count unknown
+				}
+				return true, remaining, nil
+			}
+			page.Items[i].SetManagedFields(nil)
+			if err := item(page.Items[i].Object); err != nil {
+				return false, 0, err
+			}
+			sent++
+		}
+		if page.GetContinue() == "" {
+			return false, 0, nil
+		}
+		if sent == max { // a full page ended at max: the API server's count of the rest, if it gave one
+			var remaining int64
+			if rc := page.GetRemainingItemCount(); rc != nil {
+				remaining = *rc
+			}
+			return true, remaining, nil
+		}
+		opts.Continue = page.GetContinue()
 	}
-
-	return map[string]interface{}{
-		"kind":       list.GetKind(),
-		"apiVersion": list.GetAPIVersion(),
-		"items":      items,
-	}, nil
 }
 
 // GetGenericResourceRaw fetches a single resource returning the full unstructured K8s object.

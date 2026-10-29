@@ -821,6 +821,8 @@ export interface NfmEnd {
   pod?: string
   workload?: { kind: string; name: string }
   service?: string
+  // the address is the Service's own cluster IP: a connection's receiving end at a pod on the same node
+  service_address?: boolean
   ip?: string
   az?: string
   vpc?: string

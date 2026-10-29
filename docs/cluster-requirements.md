@@ -578,13 +578,17 @@ For the drawers' "Top Talkers" and the AI tool `network_top_flows` (`features.ne
 
 - **On AWS**: turn on Container Network Observability for the cluster in the EKS console, or create an NFM scope, a monitor whose local resource is the cluster and the add-on `aws-network-flow-monitoring-agent` 1.1.0 or later (Terraform AWS provider 6.21.0 or later). The console names the monitor `<cluster>-monitor`.
   - The agent names only pods that have their own network namespace; a host-network pod shows as its node's address.
-- **Settings**: `features.networkFlowMonitor.region` (the monitors' Region) and `clusters` (`<Kubeast cluster ID>: <monitor name>`).
+  - The add-on takes its permissions through EKS Pod Identity or IRSA (`service_account_role_arn` on the add-on, the policy `CloudWatchNetworkFlowMonitorAgentPublishPolicy`, the service account `amazon-network-flow-monitor/aws-network-flow-monitor-agent-service-account`); IRSA was checked on EKS 1.35.
+  - The first rows can be queried some 15 to 20 minutes after the agents start.
+  - NFM measures connections that were made: one a NetworkPolicy drops does not appear in any metric (Hubble and Calico show drops, §17·§18).
+- **Settings**: `features.networkFlowMonitor.region` (the monitors' Region) and `clusters` (`<Kubeast cluster ID>: <monitor name>`). A fresh install's own cluster, registered by the first-run wizard, has the ID `default`.
 - **What Kubeast reads**: one top contributors query per category of the chosen view: start it, ask its status until it has succeeded, read its rows. A query that has not finished within `timeout` (15 seconds) is stopped.
   - Views, as in the console: within the cluster (`INTRA_AZ`, `INTER_AZ`), AWS services (`AMAZON_S3`, `AMAZON_DYNAMODB`), outside AWS (`UNCLASSIFIED`, the internet or on-premises).
-  - Metrics: `DATA_TRANSFERRED` (bytes), `RETRANSMISSIONS`, `TIMEOUTS` (retransmission timeouts). The EKS agent's flows carry these three.
+  - Metrics: `DATA_TRANSFERRED` (bytes), `RETRANSMISSIONS`, `TIMEOUTS` (retransmission timeouts). The EKS agent's flows carry these three. NFM's answer leaves the unit empty and its rows carry no category; Kubeast takes the unit from the metric (bytes, counts, as CloudWatch's NFM metrics are) and the category from the query.
   - NFM takes no namespace or pod: each query returns up to `limit` rows (500, NFM's maximum) for the whole monitor. Kubeast keeps the rows with the namespace, pod or workload at either end and names the pods' workloads as the user lists them. The same question in the same minute is answered from memory.
   - The range is `defaultRange` (1 hour), at most `maxRange` (2 hours) — the console reads 1 and 2 hours.
-  - A connection between two pods can be listed once from each end, since each node's agent reports what it measured.
+  - NFM lists a connection between two pods from each node's agent: from the end that opened it, with the port it called, and from the receiving end with port 0 and the ends swapped. Kubeast shows it once, as the opening end measured it. A row with no port is the receiving end of a connection whose other row is not in the answer.
+  - At a pod reached through a Service on the same node, the receiving end's row has the Service's cluster IP as its local address; Kubeast names it as the Service (from the user's list of the namespace's Services).
 - **Kubeast's AWS identity** (k8s-service): the `aws.irsaRoleArn` role, a role in `serviceAccounts.k8sService.annotations` (IRSA), or `existingSecret` with `accessKeyId` and `secretAccessKey`. It needs these four actions on the monitors (IAM lists the start and stop actions as Write; they start and stop a query, the monitor is not changed):
 
   ```json

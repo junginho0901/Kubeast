@@ -265,7 +265,7 @@ EKS 클러스터에 `features.networkFlowMonitor`를 켜면 Pod·워크로드 �
   - 워크로드는 그중 어느 파드였는지도 보여 줍니다.
 - AWS에 묻고 감사 로그(`k8s.networkflows.query`, `provider: nfm`)에 남으므로 "상위 통신 보기"를 눌러야 읽습니다.
 - Kubeast가 자기 AWS 신원으로 읽으므로, 사용자가 그 네임스페이스의 파드를 볼 수 있어야 합니다. 파드를 볼 수 없는 네임스페이스의 상대는 네임스페이스와 주소만 보입니다.
-- 노드마다 에이전트가 잰 것을 보내므로, 두 파드 사이의 연결은 양쪽에서 한 번씩 나올 수 있습니다.
+- 양쪽 끝에서 잰 연결(노드마다 에이전트가 잰 것을 보냄)은 연결을 연 쪽에서 잰 한 줄로 보여 줍니다. 포트가 없는 줄은 연 쪽 줄이 응답에 없는 연결의 받은 쪽이며, 그 끝의 Service cluster IP는 Service 이름으로 보여 줍니다.
 - AI 도구 `network_top_flows`도 같은 줄을 읽습니다.
 - 클러스터와 AWS에 필요한 것은 [클러스터 요구사항 §19](cluster-requirements.md#19-network-flow-monitor-상위-통신-eks)에 있습니다.
 
@@ -304,7 +304,7 @@ EKS 클러스터에 `features.networkFlowMonitor`를 켜면 Pod·워크로드 �
 - **Node Shell** — 웹 기반 노드 터미널
 - **로그 파일** — 로그를 파일로 쓰는 앱의 컨테이너 안 로그를 허용된 경로에서만 읽고 따라가기(고정 `tail`, 기본 off, [자세히](operations.md#컨테이너-안-로그-파일-log-files))
 - **로그 검색** — 재시작·삭제된 파드의 로그까지 Loki에서 텍스트·기간으로 찾기, 클러스터 RBAC(`pods/log`) 기준(기본 off, [자세히](operations.md#로그-검색-loki))
-- **Advanced Search** — 표현식 기반 전역 리소스 탐색
+- **Advanced Search** — 표현식 기반 전역 리소스 탐색. 고른 리소스마다 나눠 받아 화면 설정 "Max items per resource"(최대 10,000)에서 멈추고, 멈추면 알려 줍니다. 네임스페이스를 고르면 좁혀집니다
 
 ## 🔐 인증 · 감사
 

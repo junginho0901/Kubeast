@@ -262,7 +262,7 @@ With `features.networkFlowMonitor` on for an EKS cluster, the Pod and workload d
   - A workload's rows also name which of its pods it was.
 - It loads only after "Show top talkers": the read goes to AWS and is recorded in the audit log (`k8s.networkflows.query`, `provider: nfm`).
 - Kubeast reads AWS with its own identity, so the user must be able to list the namespace's pods. Peers in namespaces whose pods the user cannot list show their namespace and address only.
-- A connection between two pods can be listed once from each end, since each node's agent reports what it measured.
+- A connection measured at both ends (each node's agent reports what it measured) is shown once, as the end that opened it measured it; a row with no port is the receiving end of a connection whose other row is not in the answer, and a Service's cluster IP at that end is named as the Service.
 - The AI tool `network_top_flows` reads the same rows.
 - What the cluster and AWS need is in [Cluster requirements §19](cluster-requirements.md#19-network-flow-monitor-top-talkers-eks).
 
@@ -301,7 +301,7 @@ Where the cluster has Recent flows or the Hubble metrics, the Resource Graph hea
 - **Node Shell** — web-based node terminal
 - **Log files** — read and follow the in-container logs of apps that write logs to files, only from allowed paths (fixed `tail`, default off, [details](operations.md#log-files-inside-containers))
 - **Log search** — find logs in Loki by text and time range, even for restarted or deleted pods. It follows cluster RBAC (`pods/log`) and is off by default ([details](operations.md#log-search-loki)).
-- **Advanced Search** — expression-based global resource search
+- **Advanced Search** — expression-based global resource search. Each chosen resource is listed in pages and stops at the page's "Max items per resource" (at most 10,000); a list that stops says so, and a namespace narrows it
 
 ## 🔐 Authentication · Audit
 

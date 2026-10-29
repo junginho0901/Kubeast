@@ -26,7 +26,7 @@ const (
 // fakeLookup answers from maps and counts what it was asked.
 type fakeLookup struct {
 	workloads map[string]map[string]Workload
-	ips       map[string]map[string]bool
+	ips       map[string]map[string]string
 	sets      map[string]string
 	fail      map[string]bool
 	asked     []string
@@ -45,7 +45,7 @@ func (f *fakeLookup) PodSet(_ context.Context, ns, pod string) (string, error) {
 	return f.sets[ns+"/"+pod], nil
 }
 
-func (f *fakeLookup) ServiceIPs(_ context.Context, ns string) (map[string]bool, error) {
+func (f *fakeLookup) ServiceIPs(_ context.Context, ns string) (map[string]string, error) {
 	f.asked = append(f.asked, "services "+ns)
 	if f.fail[ns] {
 		return nil, errors.New("forbidden")
@@ -63,7 +63,7 @@ func retinaLookup() *fakeLookup {
 			},
 			"kube-system": {retinaCoreDNS: {Kind: "Deployment", Name: "coredns"}, "coredns-559f6c778d-7nrtm": {Kind: "Deployment", Name: "coredns"}},
 		},
-		ips: map[string]map[string]bool{"flows-demo": {retinaWebIP: true}, "kube-system": {retinaDNSIP: true}},
+		ips: map[string]map[string]string{"flows-demo": {retinaWebIP: "web"}, "kube-system": {retinaDNSIP: "kube-dns"}},
 	}
 }
 

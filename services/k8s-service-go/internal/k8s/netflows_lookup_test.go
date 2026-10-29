@@ -76,7 +76,7 @@ func TestNetflowsLookupLists(t *testing.T) {
 		t.Fatalf("a pod named by hand is its own set: %q", set)
 	}
 	ips, err := netflowsServiceIPs(context.Background(), cs, "shop")
-	if err != nil || !reflect.DeepEqual(ips, map[string]bool{"10.96.0.20": true, "fd00::20": true}) {
+	if err != nil || !reflect.DeepEqual(ips, map[string]string{"10.96.0.20": "web", "fd00::20": "web"}) {
 		t.Fatalf("service IPs %v %v", ips, err)
 	}
 	cs.PrependReactor("list", "*", func(k8stesting.Action) (bool, runtime.Object, error) {

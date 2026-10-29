@@ -81,7 +81,8 @@ export default function Login() {
 
   const redirectTo = useMemo(() => {
     const state = location.state as any
-    const from = (state?.from?.pathname as string) || ''
+    // The whole location: a shared link's ?cluster= and ?detail= come back with it, as on a session expiry.
+    const from = state?.from?.pathname ? `${state.from.pathname}${state.from.search ?? ''}${state.from.hash ?? ''}` : ''
     if (from) return from
     return getRedirectAfterLogin() || '/'
   }, [location.state])

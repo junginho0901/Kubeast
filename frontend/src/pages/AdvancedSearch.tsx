@@ -93,6 +93,7 @@ export default function AdvancedSearch() {
 
       const items: Record<string, unknown>[] = []
       const errors: { type: string; error: string }[] = []
+      const cut: { type: string; limit: number; remaining?: number }[] = []
 
       const typesToFetch = resourceTypes.filter(t => !failedTypesRef.current.has(t))
 
@@ -102,7 +103,8 @@ export default function AdvancedSearch() {
         const batch = typesToFetch.slice(i, i + CONCURRENCY)
         const fetches = batch.map(async (type) => {
           try {
-            const resp = await api.searchResources(type, namespace || undefined, controller.signal)
+            const resp = await api.searchResources(type, namespace || undefined, controller.signal, maxItemsPerResource)
+            if (resp?.truncated) cut.push({ type, limit: resp.limit, remaining: resp.remaining })
             const extractItems = (obj: any): any[] => {
               if (Array.isArray(obj)) return obj
               if (obj && typeof obj === 'object') {
@@ -140,7 +142,7 @@ export default function AdvancedSearch() {
         return true
       })
 
-      return { items: filtered, errors }
+      return { items: filtered, errors, cut }
     },
     enabled: resourceTypes.length > 0,
     staleTime: 30_000,
@@ -149,6 +151,7 @@ export default function AdvancedSearch() {
 
   const items = useMemo(() => fetchResult?.items ?? [], [fetchResult])
   const fetchErrors = fetchResult?.errors ?? []
+  const cutTypes = fetchResult?.cut ?? []
 
   // Strip managedFields for autocomplete perf
   const jsonItems = useMemo(() => {
@@ -315,6 +318,19 @@ export default function AdvancedSearch() {
               t('advancedSearch.loaded', '{{count}} items loaded', { count: items.length })
             )}
           </span>
+          {cutTypes.length > 0 && (
+            <span
+              className="flex items-center gap-1 text-amber-400 cursor-help"
+              data-testid="search-truncated"
+              title={cutTypes.map(c => `${c.type}: ${c.limit.toLocaleString('en-US')}${c.remaining ? ` (+${c.remaining.toLocaleString('en-US')})` : ''}`).join(', ')}
+            >
+              <AlertTriangle className="w-3.5 h-3.5" />
+              {t('advancedSearch.truncated', '{{types}}: the first {{limit}} only — choose a namespace to search the rest', {
+                types: cutTypes.map(c => c.type).join(', '),
+                limit: cutTypes[0].limit.toLocaleString('en-US'),
+              })}
+            </span>
+          )}
           {fetchErrors.length > 0 && (
             <span
               className="flex items-center gap-1 text-amber-400 cursor-help"
