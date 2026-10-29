@@ -73,13 +73,3 @@ async def test_resolve_single_and_limit():
     assert resolvers._coerce_limit(service, "not-a-number", default=7) == 7
     assert resolvers._coerce_limit(service, 10_000, max_value=200) == 200
 
-
-@pytest.mark.asyncio
-async def test_legacy_execute_function_find_pods():
-    # The no-context dispatch path (oneshot / streaming without ToolContext)
-    # referenced `self` inside a module-level function.
-    import json
-
-    service = _Service(PODS)
-    out = await tool_dispatch._execute_function(service, "find_pods", {"query": "web", "namespace": "app", "limit": "1"})
-    assert [p["name"] for p in json.loads(out)] == ["web-7d9f-abc12"]

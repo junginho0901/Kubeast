@@ -8,7 +8,7 @@
 #   / _query_in_mapping — 검색용 helper
 # - _find_resource_matches — generic 매칭
 # - _locate_resource_for_yaml — YAML 조회용 리소스 위치 결정
-# - _find_pods / _find_services / _find_deployments — 종류별 검색 (_find_pods 는 k8s-service /pods/page 로)
+# - _find_pods / _find_services — 종류별 검색 (_find_pods 는 k8s-service /pods/page 로)
 # - _resolve_single — 후보 중 1개 선택
 # - _pick_log_container — pod 의 container 중 logs 대상 결정
 
@@ -261,68 +261,6 @@ async def _find_services(service, query_raw: str, namespace: Optional[str] = Non
 
     matches = [s for s in svc_dicts if isinstance(s, dict) and _matches(s)]
     matches.sort(key=lambda s: (str(s.get("namespace", "")), str(s.get("name", ""))))
-    return matches[:limit]
-
-async def _find_deployments(service, query_raw: str, namespace: Optional[str] = None, limit: int = 20) -> List[Dict]:
-    query = query_raw.strip()
-    if not query:
-        return []
-
-    if namespace and namespace.strip():
-        deployments = await service.k8s_service.get_deployments(namespace.strip())
-        dep_dicts = [d if isinstance(d, dict) else getattr(d, "model_dump", lambda: d)() for d in deployments]  # type: ignore[misc]
-    else:
-        namespaces = await service.k8s_service.get_namespaces()
-        dep_dicts = []
-        for ns in namespaces:
-            ns_name = ns.get("name") if isinstance(ns, dict) else getattr(ns, "name", None)
-            if not ns_name:
-                continue
-            deps = await service.k8s_service.get_deployments(str(ns_name))
-            for d in deps:
-                if isinstance(d, dict):
-                    dep_dicts.append(d)
-                else:
-                    try:
-                        dep_dicts.append(d.model_dump())  # type: ignore[attr-defined]
-                    except Exception:
-                        dep_dicts.append(dict(d))  # type: ignore[arg-type]
-            if len(dep_dicts) >= limit * 5:
-                break
-
-    def _matches(d: Dict) -> bool:
-        if _all_tokens_in_text(service, query, str(d.get("name", ""))):
-            return True
-        if _query_in_mapping(service, query, d.get("labels") or {}):
-            return True
-        if _query_in_mapping(service, query, d.get("selector") or {}):
-            return True
-        return False
-
-    matches = [d for d in dep_dicts if isinstance(d, dict) and _matches(d)]
-
-    def _status_score(d: Dict) -> int:
-        status = str(d.get("status", "")).lower()
-        return 2 if status == "healthy" else (1 if status == "degraded" else 0)
-
-    def _ready_ratio(d: Dict) -> float:
-        try:
-            replicas = int(d.get("replicas", 0))
-            ready = int(d.get("ready_replicas", 0))
-        except Exception:
-            return 0.0
-        if replicas <= 0:
-            return 0.0
-        return ready / replicas
-
-    matches.sort(
-        key=lambda d: (
-            -_status_score(d),
-            -_ready_ratio(d),
-            str(d.get("namespace", "")),
-            str(d.get("name", "")),
-        )
-    )
     return matches[:limit]
 
 async def _resolve_single(service, kind: str, query: str, matches: List[Dict]) -> Dict:

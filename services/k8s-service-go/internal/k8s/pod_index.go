@@ -132,8 +132,8 @@ func podLabelPairs(labels map[string]string) string {
 	return strings.Join(pairs, "\x1e")
 }
 
-// podLimits sums the containers' cpu and memory limits; a container without one leaves the pod without a limit
-// (-1), as the Monitoring page reads it (podUsage.ts podLimit).
+// podLimits sums the containers' cpu and memory limits; a container without one (or with 0) leaves the pod without
+// a limit (-1): the Monitoring page's limit columns (/metrics/pods?with_limits=1).
 func podLimits(p *corev1.Pod) (cpuMilli, memBytes int64) {
 	if len(p.Spec.Containers) == 0 {
 		return -1, -1
