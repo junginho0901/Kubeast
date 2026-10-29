@@ -49,7 +49,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "StartError",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -81,7 +81,7 @@
     }
    ],
    "phase": "Running",
-   "status": "ContainerCreating",
+   "status": "Init:0/1",
    "status_reason": "ContainerCreating"
   },
   "level": "warn",
@@ -137,7 +137,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Failed",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -172,7 +172,7 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:Error",
    "status_reason": ""
   },
   "level": "error",
@@ -214,7 +214,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Init:CrashLoopBackOff",
    "status_reason": ""
   },
   "level": "error",
@@ -277,7 +277,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "Succeeded",
+   "status": "Init:ErrImagePull",
    "status_reason": ""
   },
   "level": "error",
@@ -448,7 +448,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "CreateContainerConfigError",
+   "status": "Init:CrashLoopBackOff",
    "status_reason": "CreateContainerConfigError"
   },
   "level": "error",
@@ -534,11 +534,11 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
-  "reason": "Unknown"
+  "reason": "PodInitializing"
  },
  {
   "pod": {
@@ -567,7 +567,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Failed",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -667,7 +667,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Pending",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -735,11 +735,11 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
-  "reason": "Unknown"
+  "reason": "PodInitializing"
  },
  {
   "pod": {
@@ -776,7 +776,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "ErrImagePull",
+   "status": "Init:0/2",
    "status_reason": "ErrImagePull"
   },
   "level": "error",
@@ -819,7 +819,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "ContainerStatusUnknown",
+   "status": "Init:0/1",
    "status_reason": "ContainerStatusUnknown"
   },
   "level": "warn",
@@ -872,7 +872,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Succeeded",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -920,7 +920,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "Completed",
+   "status": "Init:CreateContainerConfigError",
    "status_reason": ""
   },
   "level": "error",
@@ -1003,7 +1003,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "ContainerCannotRun",
+   "status": "Init:0/1",
    "status_reason": "NodeLost"
   },
   "level": "error",
@@ -1047,7 +1047,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Init:1/2",
    "status_reason": ""
   },
   "level": "error",
@@ -1130,7 +1130,7 @@
     }
    ],
    "phase": "",
-   "status": "Succeeded",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -1174,7 +1174,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "CreateContainerConfigError",
+   "status": "Init:0/1",
    "status_reason": "Evicted"
   },
   "level": "error",
@@ -1221,7 +1221,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Succeeded",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "warn",
@@ -1294,7 +1294,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "OOMKilled",
+   "status": "Init:Completed",
    "status_reason": ""
   },
   "level": "error",
@@ -1473,11 +1473,11 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
-  "reason": "Unknown"
+  "reason": "PodInitializing"
  },
  {
   "pod": {
@@ -1545,7 +1545,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "ErrImagePull",
+   "status": "Init:0/2",
    "status_reason": "ErrImagePull"
   },
   "level": "error",
@@ -1639,7 +1639,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "CrashLoopBackOff",
+   "status": "Init:0/1",
    "status_reason": "CrashLoopBackOff"
   },
   "level": "error",
@@ -1704,11 +1704,11 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
-  "reason": "Unknown"
+  "reason": "PodInitializing"
  },
  {
   "pod": {
@@ -1959,7 +1959,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Pending",
+   "status": "Init:ContainerCannotRun",
    "status_reason": ""
   },
   "level": "error",
@@ -2047,7 +2047,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Pending",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -2153,7 +2153,7 @@
     }
    ],
    "phase": "",
-   "status": "Completed",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -2244,7 +2244,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "ImagePullBackOff",
+   "status": "Init:0/2",
    "status_reason": "ImagePullBackOff"
   },
   "level": "error",
@@ -2289,7 +2289,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "ImagePullBackOff",
+   "status": "Init:0/2",
    "status_reason": "ImagePullBackOff"
   },
   "level": "error",
@@ -2378,7 +2378,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Completed",
+   "status": "Init:StartError",
    "status_reason": ""
   },
   "level": "error",
@@ -2486,7 +2486,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Failed",
+   "status": "Init:CrashLoopBackOff",
    "status_reason": ""
   },
   "level": "error",
@@ -2551,7 +2551,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "Succeeded",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "ok",
@@ -2696,7 +2696,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "ContainerCannotRun",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -2733,7 +2733,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "Succeeded",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "ok",
@@ -2783,7 +2783,7 @@
     }
    ],
    "phase": "Running",
-   "status": "CrashLoopBackOff",
+   "status": "Init:0/1",
    "status_reason": "CrashLoopBackOff"
   },
   "level": "error",
@@ -2840,7 +2840,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "PodInitializing",
+   "status": "Init:ContainerCannotRun",
    "status_reason": "PodInitializing"
   },
   "level": "error",
@@ -2881,7 +2881,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "ImagePullBackOff",
+   "status": "Init:0/1",
    "status_reason": "Evicted"
   },
   "level": "error",
@@ -2946,7 +2946,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/1",
    "status_reason": "Completed"
   },
   "level": "error",
@@ -3028,7 +3028,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "PodInitializing",
+   "status": "Init:ContainerStatusUnknown",
    "status_reason": "PodInitializing"
   },
   "level": "error",
@@ -3062,7 +3062,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Pending",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -3121,7 +3121,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "warn",
@@ -3170,7 +3170,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Completed",
+   "status": "Init:CreateContainerConfigError",
    "status_reason": ""
   },
   "level": "error",
@@ -3221,7 +3221,7 @@
     }
    ],
    "phase": "",
-   "status": "ImagePullBackOff",
+   "status": "Init:CreateContainerConfigError",
    "status_reason": "ImagePullBackOff"
   },
   "level": "error",
@@ -3259,7 +3259,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "StartError",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -3299,7 +3299,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Pending",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -3331,7 +3331,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "ContainerStatusUnknown",
+   "status": "Init:0/1",
    "status_reason": "ContainerStatusUnknown"
   },
   "level": "error",
@@ -3362,11 +3362,11 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
-  "reason": "Unknown"
+  "reason": "PodInitializing"
  },
  {
   "pod": {
@@ -3457,7 +3457,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Failed",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -3536,7 +3536,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "ContainerCreating",
+   "status": "Init:ContainerCreating",
    "status_reason": "ContainerCreating"
   },
   "level": "ok",
@@ -3615,7 +3615,7 @@
     }
    ],
    "phase": "Running",
-   "status": "PodInitializing",
+   "status": "Init:0/1",
    "status_reason": "PodInitializing"
   },
   "level": "warn",
@@ -3697,7 +3697,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "OOMKilled",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -3742,7 +3742,7 @@
     }
    ],
    "phase": "Running",
-   "status": "ContainerCreating",
+   "status": "Init:StartError",
    "status_reason": "ContainerCreating"
   },
   "level": "error",
@@ -3768,7 +3768,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Failed",
+   "status": "Init:ContainerCreating",
    "status_reason": ""
   },
   "level": "error",
@@ -3831,7 +3831,7 @@
     }
    ],
    "phase": "",
-   "status": "Completed",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -3906,11 +3906,11 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "warn",
-  "reason": "Unknown"
+  "reason": "PodInitializing"
  },
  {
   "pod": {
@@ -4020,7 +4020,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Completed",
+   "status": "Init:CrashLoopBackOff",
    "status_reason": ""
   },
   "level": "error",
@@ -4048,7 +4048,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -4091,7 +4091,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "Succeeded",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "ok",
@@ -4161,7 +4161,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "ErrImagePull",
+   "status": "Init:1/2",
    "status_reason": "ErrImagePull"
   },
   "level": "error",
@@ -4236,7 +4236,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "PodInitializing",
+   "status": "Init:0/1",
    "status_reason": "Completed"
   },
   "level": "warn",
@@ -4323,7 +4323,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "StartError",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "error",
@@ -4410,7 +4410,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "ErrImagePull",
+   "status": "Init:ErrImagePull",
    "status_reason": "ErrImagePull"
   },
   "level": "error",
@@ -4489,7 +4489,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -4518,7 +4518,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:ContainerStatusUnknown",
    "status_reason": ""
   },
   "level": "error",
@@ -4553,7 +4553,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -4588,7 +4588,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Pending",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -4680,7 +4680,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "ErrImagePull",
+   "status": "Init:0/2",
    "status_reason": "ErrImagePull"
   },
   "level": "error",
@@ -4777,7 +4777,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "PodInitializing",
+   "status": "Init:0/1",
    "status_reason": "PodInitializing"
   },
   "level": "warn",
@@ -4864,7 +4864,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Pending",
+   "status": "Init:0/1",
    "status_reason": "Completed"
   },
   "level": "warn",
@@ -4943,7 +4943,7 @@
     }
    ],
    "phase": "Running",
-   "status": "ContainerCreating",
+   "status": "Init:CreateContainerConfigError",
    "status_reason": "ContainerCreating"
   },
   "level": "error",
@@ -4983,7 +4983,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Failed",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -5031,7 +5031,7 @@
     }
    ],
    "phase": "",
-   "status": "Error",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -5076,7 +5076,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -5113,7 +5113,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "warn",
@@ -5168,7 +5168,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Pending",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -5211,11 +5211,11 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
-  "reason": "Unknown"
+  "reason": "PodInitializing"
  },
  {
   "pod": {
@@ -5259,7 +5259,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Succeeded",
+   "status": "Init:CrashLoopBackOff",
    "status_reason": ""
   },
   "level": "error",
@@ -5302,7 +5302,7 @@
     }
    ],
    "phase": "Running",
-   "status": "ErrImagePull",
+   "status": "Init:ContainerStatusUnknown",
    "status_reason": "ErrImagePull"
   },
   "level": "error",
@@ -5343,7 +5343,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Pending",
+   "status": "Init:Completed",
    "status_reason": ""
   },
   "level": "warn",
@@ -5406,7 +5406,7 @@
     }
    ],
    "phase": "",
-   "status": "PodInitializing",
+   "status": "Init:0/2",
    "status_reason": "NodeLost"
   },
   "level": "error",
@@ -5474,7 +5474,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Failed",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "error",
@@ -5733,7 +5733,7 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:CrashLoopBackOff",
    "status_reason": ""
   },
   "level": "error",
@@ -5826,7 +5826,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "PodInitializing",
+   "status": "Init:0/1",
    "status_reason": "PodInitializing"
   },
   "level": "ok",
@@ -5932,7 +5932,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "Succeeded",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "ok",
@@ -6048,7 +6048,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Succeeded",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -6099,7 +6099,7 @@
     }
    ],
    "phase": "Running",
-   "status": "ErrImagePull",
+   "status": "Init:0/1",
    "status_reason": "NodeLost"
   },
   "level": "warn",
@@ -6130,7 +6130,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -6163,7 +6163,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "CrashLoopBackOff",
+   "status": "Init:0/1",
    "status_reason": "CrashLoopBackOff"
   },
   "level": "error",
@@ -6192,7 +6192,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "Succeeded",
+   "status": "Init:Succeeded",
    "status_reason": ""
   },
   "level": "ok",
@@ -6258,7 +6258,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "CrashLoopBackOff",
+   "status": "Init:0/1",
    "status_reason": "CrashLoopBackOff"
   },
   "level": "error",
@@ -6326,7 +6326,7 @@
     }
    ],
    "phase": "Running",
-   "status": "ContainerCreating",
+   "status": "Init:Completed",
    "status_reason": "Completed"
   },
   "level": "error",
@@ -6383,7 +6383,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Init:OOMKilled",
    "status_reason": ""
   },
   "level": "error",
@@ -6544,7 +6544,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "warn",
@@ -6586,7 +6586,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -6665,7 +6665,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "ErrImagePull",
+   "status": "Init:0/1",
    "status_reason": "ErrImagePull"
   },
   "level": "error",
@@ -6696,7 +6696,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -6728,7 +6728,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "ContainerStatusUnknown",
+   "status": "Init:0/1",
    "status_reason": "ContainerStatusUnknown"
   },
   "level": "error",
@@ -6947,7 +6947,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -7021,7 +7021,7 @@
     }
    ],
    "phase": "Running",
-   "status": "ErrImagePull",
+   "status": "Init:Succeeded",
    "status_reason": "ErrImagePull"
   },
   "level": "error",
@@ -7055,7 +7055,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "warn",
@@ -7086,7 +7086,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -7177,11 +7177,11 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
-  "reason": "Unknown"
+  "reason": "PodInitializing"
  },
  {
   "pod": {
@@ -7228,7 +7228,7 @@
     }
    ],
    "phase": "Running",
-   "status": "CreateContainerConfigError",
+   "status": "Init:ContainerStatusUnknown",
    "status_reason": "CreateContainerConfigError"
   },
   "level": "error",
@@ -7308,7 +7308,7 @@
     }
    ],
    "phase": "",
-   "status": "Succeeded",
+   "status": "Init:ErrImagePull",
    "status_reason": ""
   },
   "level": "error",
@@ -7362,7 +7362,7 @@
     }
    ],
    "phase": "",
-   "status": "ContainerStatusUnknown",
+   "status": "Init:0/2",
    "status_reason": "ContainerStatusUnknown"
   },
   "level": "error",
@@ -7391,7 +7391,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:Completed",
    "status_reason": ""
   },
   "level": "warn",
@@ -7586,7 +7586,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "warn",
@@ -7650,7 +7650,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -7690,7 +7690,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Pending",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -7789,7 +7789,7 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:CrashLoopBackOff",
    "status_reason": ""
   },
   "level": "error",
@@ -7842,7 +7842,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Succeeded",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -7969,7 +7969,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:Completed",
    "status_reason": ""
   },
   "level": "error",
@@ -8011,7 +8011,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Error",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -8049,7 +8049,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "OOMKilled",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "error",
@@ -8108,7 +8108,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Succeeded",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -8181,7 +8181,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Init:0/1",
    "status_reason": "Completed"
   },
   "level": "warn",
@@ -8212,7 +8212,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Failed",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -8278,7 +8278,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -8334,7 +8334,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -8378,7 +8378,7 @@
     }
    ],
    "phase": "",
-   "status": "ContainerCannotRun",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -8469,11 +8469,11 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "warn",
-  "reason": "Unknown"
+  "reason": "PodInitializing"
  },
  {
   "pod": {
@@ -8504,7 +8504,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Failed",
+   "status": "Init:ErrImagePull",
    "status_reason": ""
   },
   "level": "error",
@@ -8564,7 +8564,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "ContainerCreating",
+   "status": "Init:0/1",
    "status_reason": "ContainerCreating"
   },
   "level": "warn",
@@ -8617,7 +8617,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "Succeeded",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "ok",
@@ -8671,7 +8671,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "Succeeded",
+   "status": "Init:1/2",
    "status_reason": "Completed"
   },
   "level": "error",
@@ -8734,7 +8734,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "warn",
@@ -8782,7 +8782,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:CreateContainerConfigError",
    "status_reason": ""
   },
   "level": "error",
@@ -8850,7 +8850,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Init:Completed",
    "status_reason": ""
   },
   "level": "warn",
@@ -8889,7 +8889,7 @@
     }
    ],
    "phase": "",
-   "status": "ContainerCreating",
+   "status": "Init:Error",
    "status_reason": "ContainerCreating"
   },
   "level": "error",
@@ -8927,7 +8927,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "StartError",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -8974,7 +8974,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -9055,7 +9055,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "StartError",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -9131,7 +9131,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "ContainerStatusUnknown",
+   "status": "Init:ImagePullBackOff",
    "status_reason": "ContainerStatusUnknown"
   },
   "level": "error",
@@ -9203,7 +9203,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Failed",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -9260,7 +9260,7 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "error",
@@ -9302,7 +9302,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:CreateContainerConfigError",
    "status_reason": ""
   },
   "level": "error",
@@ -9380,7 +9380,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "CreateContainerConfigError",
+   "status": "Init:ErrImagePull",
    "status_reason": "CreateContainerConfigError"
   },
   "level": "error",
@@ -9446,7 +9446,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:ImagePullBackOff",
    "status_reason": ""
   },
   "level": "error",
@@ -9517,7 +9517,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "warn",
@@ -9549,7 +9549,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "Succeeded",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -9597,7 +9597,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "ContainerCannotRun",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "error",
@@ -9798,7 +9798,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Succeeded",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "error",
@@ -9873,7 +9873,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Pending",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -9946,7 +9946,7 @@
     }
    ],
    "phase": "",
-   "status": "CrashLoopBackOff",
+   "status": "Init:Succeeded",
    "status_reason": "CrashLoopBackOff"
   },
   "level": "error",
@@ -9977,11 +9977,11 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
-  "reason": "Unknown"
+  "reason": "PodInitializing"
  },
  {
   "pod": {
@@ -10051,11 +10051,11 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "warn",
-  "reason": "Unknown"
+  "reason": "PodInitializing"
  },
  {
   "pod": {
@@ -10121,7 +10121,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "ContainerCannotRun",
+   "status": "Init:ErrImagePull",
    "status_reason": "NodeLost"
   },
   "level": "error",
@@ -10156,7 +10156,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "Succeeded",
+   "status": "Init:Succeeded",
    "status_reason": ""
   },
   "level": "ok",
@@ -10236,7 +10236,7 @@
     }
    ],
    "phase": "Running",
-   "status": "PodInitializing",
+   "status": "Init:0/1",
    "status_reason": "PodInitializing"
   },
   "level": "warn",
@@ -10288,7 +10288,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "warn",
@@ -10328,7 +10328,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "Succeeded",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "ok",
@@ -10411,7 +10411,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "OOMKilled",
+   "status": "Init:ContainerCannotRun",
    "status_reason": ""
   },
   "level": "warn",
@@ -10499,7 +10499,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Failed",
+   "status": "Init:ErrImagePull",
    "status_reason": ""
   },
   "level": "error",
@@ -10530,7 +10530,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -10605,7 +10605,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Failed",
+   "status": "Init:ContainerCreating",
    "status_reason": ""
   },
   "level": "error",
@@ -10649,7 +10649,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Failed",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "error",
@@ -10688,7 +10688,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Succeeded",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -10776,7 +10776,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Pending",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -10883,7 +10883,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "warn",
@@ -10923,7 +10923,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "warn",
@@ -11001,7 +11001,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Succeeded",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "warn",
@@ -11033,7 +11033,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -11119,7 +11119,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "ContainerCannotRun",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -11163,7 +11163,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "OOMKilled",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -11302,7 +11302,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "ContainerCreating",
+   "status": "Init:0/1",
    "status_reason": "ContainerCreating"
   },
   "level": "warn",
@@ -11381,7 +11381,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:ContainerCreating",
    "status_reason": ""
   },
   "level": "warn",
@@ -11441,7 +11441,7 @@
     }
    ],
    "phase": "Running",
-   "status": "PodInitializing",
+   "status": "Init:Error",
    "status_reason": "PodInitializing"
   },
   "level": "error",
@@ -11512,7 +11512,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "PodInitializing",
+   "status": "Init:0/1",
    "status_reason": "PodInitializing"
   },
   "level": "ok",
@@ -11638,7 +11638,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:ContainerCreating",
    "status_reason": ""
   },
   "level": "error",
@@ -11678,7 +11678,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Pending",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -11729,7 +11729,7 @@
     }
    ],
    "phase": "",
-   "status": "Error",
+   "status": "Init:Error",
    "status_reason": "Completed"
   },
   "level": "error",
@@ -11760,7 +11760,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -11807,7 +11807,7 @@
     }
    ],
    "phase": "",
-   "status": "StartError",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -11858,7 +11858,7 @@
     }
    ],
    "phase": "Running",
-   "status": "ContainerCreating",
+   "status": "Init:0/2",
    "status_reason": "ContainerCreating"
   },
   "level": "error",
@@ -11900,7 +11900,7 @@
     }
    ],
    "phase": "",
-   "status": "ImagePullBackOff",
+   "status": "Init:0/1",
    "status_reason": "ImagePullBackOff"
   },
   "level": "warn",
@@ -11941,7 +11941,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -11982,7 +11982,7 @@
     }
    ],
    "phase": "Running",
-   "status": "ErrImagePull",
+   "status": "Init:0/1",
    "status_reason": "ErrImagePull"
   },
   "level": "error",
@@ -12075,7 +12075,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:ContainerCreating",
    "status_reason": ""
   },
   "level": "warn",
@@ -12129,7 +12129,7 @@
     }
    ],
    "phase": "",
-   "status": "StartError",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "error",
@@ -12198,7 +12198,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Failed",
+   "status": "Init:ErrImagePull",
    "status_reason": ""
   },
   "level": "error",
@@ -12304,7 +12304,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "error",
@@ -12339,7 +12339,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "OOMKilled",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -12396,7 +12396,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:Completed",
    "status_reason": ""
   },
   "level": "warn",
@@ -12456,7 +12456,7 @@
     }
    ],
    "phase": "Running",
-   "status": "ContainerCreating",
+   "status": "Init:0/2",
    "status_reason": "ContainerCreating"
   },
   "level": "warn",
@@ -12497,7 +12497,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "warn",
@@ -12580,7 +12580,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -12622,7 +12622,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:CreateContainerConfigError",
    "status_reason": ""
   },
   "level": "error",
@@ -12653,7 +12653,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -12745,7 +12745,7 @@
     }
    ],
    "phase": "Running",
-   "status": "PodInitializing",
+   "status": "Init:0/1",
    "status_reason": "PodInitializing"
   },
   "level": "error",
@@ -12788,7 +12788,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "Succeeded",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "ok",
@@ -12823,11 +12823,11 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:ContainerCreating",
    "status_reason": ""
   },
   "level": "warn",
-  "reason": "Unknown"
+  "reason": "ContainerCreating"
  },
  {
   "pod": {
@@ -12872,7 +12872,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Pending",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -12900,11 +12900,11 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
-  "reason": "Unknown"
+  "reason": "PodInitializing"
  },
  {
   "pod": {
@@ -13028,7 +13028,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -13064,7 +13064,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Error",
+   "status": "Init:ContainerStatusUnknown",
    "status_reason": ""
   },
   "level": "error",
@@ -13199,7 +13199,7 @@
     }
    ],
    "phase": "Running",
-   "status": "ImagePullBackOff",
+   "status": "Init:1/2",
    "status_reason": "ImagePullBackOff"
   },
   "level": "error",
@@ -13248,7 +13248,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "Completed",
+   "status": "Init:CrashLoopBackOff",
    "status_reason": ""
   },
   "level": "error",
@@ -13283,7 +13283,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "ContainerCannotRun",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -13333,7 +13333,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Error",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "error",
@@ -13373,7 +13373,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Failed",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "error",
@@ -13435,7 +13435,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "CrashLoopBackOff",
+   "status": "Init:0/1",
    "status_reason": "Completed"
   },
   "level": "error",
@@ -13480,7 +13480,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "OOMKilled",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "error",
@@ -13545,7 +13545,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -13621,7 +13621,7 @@
     }
    ],
    "phase": "",
-   "status": "ErrImagePull",
+   "status": "Init:StartError",
    "status_reason": "ErrImagePull"
   },
   "level": "error",
@@ -13724,7 +13724,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "CreateContainerConfigError",
+   "status": "Init:0/2",
    "status_reason": "CreateContainerConfigError"
   },
   "level": "error",
@@ -13813,7 +13813,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Failed",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -13879,7 +13879,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "ContainerCannotRun",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -13913,7 +13913,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "Succeeded",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "ok",
@@ -13951,7 +13951,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Pending",
+   "status": "Init:ContainerCannotRun",
    "status_reason": ""
   },
   "level": "error",
@@ -13985,7 +13985,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -14016,7 +14016,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Failed",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -14081,7 +14081,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "CreateContainerConfigError",
+   "status": "Init:0/2",
    "status_reason": "CreateContainerConfigError"
   },
   "level": "error",
@@ -14147,7 +14147,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "OOMKilled",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -14178,7 +14178,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "Succeeded",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "ok",
@@ -14231,7 +14231,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "ContainerCannotRun",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -14538,7 +14538,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Error",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -14569,7 +14569,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -14644,7 +14644,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Pending",
+   "status": "Init:ContainerCannotRun",
    "status_reason": ""
   },
   "level": "error",
@@ -14669,11 +14669,11 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
-  "reason": "Unknown"
+  "reason": "PodInitializing"
  },
  {
   "pod": {
@@ -14700,7 +14700,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -14775,7 +14775,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Init:0/2",
    "status_reason": "Evicted"
   },
   "level": "warn",
@@ -14970,7 +14970,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -15037,7 +15037,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "CreateContainerConfigError",
+   "status": "Init:ContainerCannotRun",
    "status_reason": "CreateContainerConfigError"
   },
   "level": "error",
@@ -15163,7 +15163,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "ContainerStatusUnknown",
+   "status": "Init:Completed",
    "status_reason": "ContainerStatusUnknown"
   },
   "level": "error",
@@ -15210,7 +15210,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "ContainerCannotRun",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -15249,7 +15249,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Init:CreateContainerConfigError",
    "status_reason": ""
   },
   "level": "error",
@@ -15281,11 +15281,11 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
-  "reason": "Unknown"
+  "reason": "PodInitializing"
  },
  {
   "pod": {
@@ -15322,7 +15322,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "error",
@@ -15381,7 +15381,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -15426,7 +15426,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Error",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "error",
@@ -15467,7 +15467,7 @@
     }
    ],
    "phase": "Running",
-   "status": "ErrImagePull",
+   "status": "Init:0/1",
    "status_reason": "ErrImagePull"
   },
   "level": "error",
@@ -15522,7 +15522,7 @@
     }
    ],
    "phase": "Running",
-   "status": "ErrImagePull",
+   "status": "Init:0/2",
    "status_reason": "ErrImagePull"
   },
   "level": "error",
@@ -15558,7 +15558,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "ErrImagePull",
+   "status": "Init:Completed",
    "status_reason": "ErrImagePull"
   },
   "level": "error",
@@ -15670,7 +15670,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Error",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "error",
@@ -15702,7 +15702,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Failed",
+   "status": "Init:CrashLoopBackOff",
    "status_reason": ""
   },
   "level": "error",
@@ -15743,7 +15743,7 @@
     }
    ],
    "phase": "",
-   "status": "ErrImagePull",
+   "status": "Init:0/2",
    "status_reason": "ErrImagePull"
   },
   "level": "error",
@@ -15781,7 +15781,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Completed",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -15827,7 +15827,7 @@
     }
    ],
    "phase": "",
-   "status": "ErrImagePull",
+   "status": "Init:ContainerCannotRun",
    "status_reason": "ErrImagePull"
   },
   "level": "error",
@@ -15887,7 +15887,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Pending",
+   "status": "Init:StartError",
    "status_reason": ""
   },
   "level": "error",
@@ -15962,7 +15962,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "ContainerStatusUnknown",
+   "status": "Init:Completed",
    "status_reason": "ContainerStatusUnknown"
   },
   "level": "error",
@@ -16025,7 +16025,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "Succeeded",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "ok",
@@ -16093,7 +16093,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "ContainerCannotRun",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "error",
@@ -16133,7 +16133,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Completed",
+   "status": "Init:CrashLoopBackOff",
    "status_reason": ""
   },
   "level": "warn",
@@ -16177,7 +16177,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/2",
    "status_reason": "Completed"
   },
   "level": "error",
@@ -16273,7 +16273,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "ContainerStatusUnknown",
+   "status": "Init:0/2",
    "status_reason": "ContainerStatusUnknown"
   },
   "level": "error",
@@ -16327,7 +16327,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "Succeeded",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "error",
@@ -16371,7 +16371,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "Completed",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "ok",
@@ -16431,7 +16431,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "StartError",
+   "status": "Init:OOMKilled",
    "status_reason": ""
   },
   "level": "error",
@@ -16550,7 +16550,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Pending",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -16593,7 +16593,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Failed",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "error",
@@ -16635,7 +16635,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:StartError",
    "status_reason": ""
   },
   "level": "error",
@@ -16709,7 +16709,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -16755,7 +16755,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -16800,7 +16800,7 @@
     }
    ],
    "phase": "",
-   "status": "ImagePullBackOff",
+   "status": "Init:Completed",
    "status_reason": "ImagePullBackOff"
   },
   "level": "error",
@@ -16836,7 +16836,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "OOMKilled",
+   "status": "Init:CreateContainerConfigError",
    "status_reason": ""
   },
   "level": "error",
@@ -16952,7 +16952,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "Succeeded",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "ok",
@@ -16989,11 +16989,11 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "warn",
-  "reason": "Unknown"
+  "reason": "PodInitializing"
  },
  {
   "pod": {
@@ -17033,7 +17033,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "OOMKilled",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -17110,7 +17110,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "StartError",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "error",
@@ -17162,7 +17162,7 @@
     }
    ],
    "phase": "Running",
-   "status": "ContainerCreating",
+   "status": "Init:0/2",
    "status_reason": "ContainerCreating"
   },
   "level": "warn",
@@ -17203,7 +17203,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Init:ContainerStatusUnknown",
    "status_reason": "Completed"
   },
   "level": "error",
@@ -17278,7 +17278,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "StartError",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -17322,7 +17322,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:ContainerStatusUnknown",
    "status_reason": ""
   },
   "level": "error",
@@ -17398,7 +17398,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Init:ContainerCannotRun",
    "status_reason": ""
   },
   "level": "error",
@@ -17433,7 +17433,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Pending",
+   "status": "Init:Completed",
    "status_reason": ""
   },
   "level": "warn",
@@ -17492,7 +17492,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "warn",
@@ -17583,7 +17583,7 @@
     }
    ],
    "phase": "Running",
-   "status": "CreateContainerConfigError",
+   "status": "Init:0/2",
    "status_reason": "CreateContainerConfigError"
   },
   "level": "error",
@@ -17741,11 +17741,11 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "warn",
-  "reason": "Unknown"
+  "reason": "PodInitializing"
  },
  {
   "pod": {
@@ -17773,7 +17773,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Pending",
+   "status": "Init:ContainerStatusUnknown",
    "status_reason": ""
   },
   "level": "error",
@@ -17798,7 +17798,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Failed",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -17830,7 +17830,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "PodInitializing",
+   "status": "Init:0/1",
    "status_reason": "PodInitializing"
   },
   "level": "warn",
@@ -17888,11 +17888,11 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "warn",
-  "reason": "Unknown"
+  "reason": "PodInitializing"
  },
  {
   "pod": {
@@ -17960,7 +17960,7 @@
     }
    ],
    "phase": "Running",
-   "status": "ContainerStatusUnknown",
+   "status": "Init:1/2",
    "status_reason": "ContainerStatusUnknown"
   },
   "level": "error",
@@ -18005,7 +18005,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:CreateContainerConfigError",
    "status_reason": ""
   },
   "level": "error",
@@ -18045,7 +18045,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "warn",
@@ -18111,7 +18111,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "Completed",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "ok",
@@ -18209,7 +18209,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -18238,7 +18238,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Init:Completed",
    "status_reason": ""
   },
   "level": "warn",
@@ -18292,7 +18292,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "ContainerStatusUnknown",
+   "status": "Init:Completed",
    "status_reason": "ContainerStatusUnknown"
   },
   "level": "error",
@@ -18344,7 +18344,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Succeeded",
+   "status": "Init:Completed",
    "status_reason": ""
   },
   "level": "error",
@@ -18424,7 +18424,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -18540,7 +18540,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "ContainerStatusUnknown",
+   "status": "Init:0/2",
    "status_reason": "ContainerStatusUnknown"
   },
   "level": "error",
@@ -18626,7 +18626,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Pending",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -18710,7 +18710,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Init:CreateContainerConfigError",
    "status_reason": ""
   },
   "level": "error",
@@ -18742,7 +18742,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "ContainerStatusUnknown",
+   "status": "Init:0/1",
    "status_reason": "ContainerStatusUnknown"
   },
   "level": "error",
@@ -18807,7 +18807,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -18835,7 +18835,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "warn",
@@ -18861,7 +18861,7 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:ErrImagePull",
    "status_reason": "Evicted"
   },
   "level": "error",
@@ -18905,7 +18905,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Completed",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -19002,7 +19002,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "ContainerCannotRun",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -19111,7 +19111,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:OOMKilled",
    "status_reason": ""
   },
   "level": "error",
@@ -19142,7 +19142,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Failed",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -19211,11 +19211,11 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
-  "reason": "Unknown"
+  "reason": "PodInitializing"
  },
  {
   "pod": {
@@ -19301,7 +19301,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "Completed",
+   "status": "Init:ErrImagePull",
    "status_reason": ""
   },
   "level": "error",
@@ -19389,7 +19389,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "warn",
@@ -19444,11 +19444,11 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
-  "reason": "Unknown"
+  "reason": "PodInitializing"
  },
  {
   "pod": {
@@ -19483,7 +19483,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Init:CreateContainerConfigError",
    "status_reason": ""
   },
   "level": "error",
@@ -19536,7 +19536,7 @@
     }
    ],
    "phase": "Running",
-   "status": "PodInitializing",
+   "status": "Init:0/2",
    "status_reason": "PodInitializing"
   },
   "level": "warn",
@@ -19605,7 +19605,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "ImagePullBackOff",
+   "status": "Init:0/1",
    "status_reason": "ImagePullBackOff"
   },
   "level": "warn",
@@ -19640,7 +19640,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "Succeeded",
+   "status": "Init:ImagePullBackOff",
    "status_reason": ""
   },
   "level": "error",
@@ -19717,7 +19717,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:CreateContainerConfigError",
    "status_reason": ""
   },
   "level": "error",
@@ -19765,7 +19765,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/2",
    "status_reason": "Evicted"
   },
   "level": "error",
@@ -19814,7 +19814,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "Completed",
+   "status": "Init:CreateContainerConfigError",
    "status_reason": ""
   },
   "level": "error",
@@ -19899,7 +19899,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "ContainerCannotRun",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -19937,7 +19937,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "error",
@@ -20079,7 +20079,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Error",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -20143,11 +20143,11 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
-  "reason": "Unknown"
+  "reason": "PodInitializing"
  },
  {
   "pod": {
@@ -20174,7 +20174,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Pending",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -20265,7 +20265,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Init:ContainerCannotRun",
    "status_reason": ""
   },
   "level": "error",
@@ -20299,7 +20299,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "warn",
@@ -20339,11 +20339,11 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
-  "reason": "Unknown"
+  "reason": "PodInitializing"
  },
  {
   "pod": {
@@ -20444,7 +20444,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "ImagePullBackOff",
+   "status": "Init:Error",
    "status_reason": "ImagePullBackOff"
   },
   "level": "error",
@@ -20476,7 +20476,7 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:ContainerStatusUnknown",
    "status_reason": ""
   },
   "level": "error",
@@ -20509,7 +20509,7 @@
     }
    ],
    "phase": "",
-   "status": "CrashLoopBackOff",
+   "status": "Init:0/1",
    "status_reason": "CrashLoopBackOff"
   },
   "level": "warn",
@@ -20665,7 +20665,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:ContainerCannotRun",
    "status_reason": ""
   },
   "level": "error",
@@ -20709,7 +20709,7 @@
     }
    ],
    "phase": "Running",
-   "status": "ErrImagePull",
+   "status": "Init:0/2",
    "status_reason": "ErrImagePull"
   },
   "level": "error",
@@ -20904,7 +20904,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "ImagePullBackOff",
+   "status": "Init:0/1",
    "status_reason": "ImagePullBackOff"
   },
   "level": "error",
@@ -20970,7 +20970,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "error",
@@ -21022,7 +21022,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",
@@ -21068,7 +21068,7 @@
     }
    ],
    "phase": "",
-   "status": "CrashLoopBackOff",
+   "status": "Init:0/2",
    "status_reason": "CrashLoopBackOff"
   },
   "level": "error",
@@ -21317,7 +21317,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "warn",
@@ -21455,7 +21455,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "Succeeded",
+   "status": "Init:0/2",
    "status_reason": ""
   },
   "level": "ok",
@@ -21585,7 +21585,7 @@
     }
    ],
    "phase": "Failed",
-   "status": "StartError",
+   "status": "Init:ImagePullBackOff",
    "status_reason": ""
   },
   "level": "error",
@@ -21679,7 +21679,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Pending",
+   "status": "Init:0/1",
    "status_reason": "Completed"
   },
   "level": "warn",
@@ -21711,7 +21711,7 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Init:Error",
    "status_reason": ""
   },
   "level": "error",
@@ -21764,7 +21764,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Init:0/1",
    "status_reason": ""
   },
   "level": "warn",

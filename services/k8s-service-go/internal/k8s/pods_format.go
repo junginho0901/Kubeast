@@ -26,10 +26,6 @@ func formatPodDetail(p *corev1.Pod) map[string]interface{} {
 		statusMap[cs.Name] = cs
 	}
 
-	totalReady := 0
-	totalContainers := len(p.Spec.Containers)
-	totalRestarts := int32(0)
-
 	for _, c := range p.Spec.Containers {
 		container := map[string]interface{}{
 			"name":  c.Name,
@@ -156,10 +152,6 @@ func formatPodDetail(p *corev1.Pod) map[string]interface{} {
 			container["restart_count"] = cs.RestartCount
 			container["state"] = containerStateStr(cs.State)
 			container["last_state"] = containerStateStr(cs.LastTerminationState)
-			if cs.Ready {
-				totalReady++
-			}
-			totalRestarts += cs.RestartCount
 		}
 
 		containers = append(containers, container)
@@ -181,6 +173,10 @@ func formatPodDetail(p *corev1.Pod) map[string]interface{} {
 		}
 		initContainers = append(initContainers, ic)
 	}
+
+	// READY, RESTARTS and an initializing pod's Status as kubectl prints them (pod_init.go)
+	iv := podInitState(p)
+	totalReady, totalContainers, totalRestarts := podCounts(p, iv)
 
 	status := string(p.Status.Phase)
 	reason := p.Status.Reason
@@ -204,6 +200,10 @@ func formatPodDetail(p *corev1.Pod) map[string]interface{} {
 			}
 			break
 		}
+	}
+
+	if iv.status != "" {
+		status = iv.status
 	}
 
 	out := map[string]interface{}{
