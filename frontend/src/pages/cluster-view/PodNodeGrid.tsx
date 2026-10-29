@@ -94,7 +94,7 @@ export function PodNodeGrid({ sortedNodeEntries, filteredPods, allPodsLen, isLoa
             key={row.key}
             data-index={row.index}
             ref={virtualizer.measureElement}
-            className="absolute left-0 top-0 w-full pb-6"
+            className={`absolute left-0 top-0 w-full ${row.index < sortedNodeEntries.length - 1 ? 'pb-6' : ''}`}
             style={{ transform: `translateY(${row.start - virtualizer.options.scrollMargin}px)` }}
           >
           <div className="card" data-testid="cluster-view-node">

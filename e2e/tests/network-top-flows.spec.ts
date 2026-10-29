@@ -247,7 +247,8 @@ test.describe('Top talkers (Network Flow Monitor)', () => {
     const result = await call(CLUSTER)
     expect(result.isError ?? false, result.content?.[0]?.text).toBe(false)
     const answer = JSON.parse(result.content[0].text)
-    expect((answer.rows as Row[]).map((r) => r.value)).toEqual([5_000_000, 4_900_000])
+    // k8s-service's row of gateway's call is the same connection: once
+    expect((answer.rows as Row[]).map((r) => r.value)).toEqual([5_000_000])
     expect(answer.unit).toBe('Bytes')
     expect(answer.note).toContain('listed once')
     // the second cluster has no monitor: the tool is not offered there
