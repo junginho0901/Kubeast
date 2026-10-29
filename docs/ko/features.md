@@ -145,6 +145,10 @@
 - **대시보드 개수**(네임스페이스·파드·노드 …)는 클러스터별 informer 캐시(`kubeast:cache` 신원)에서 셉니다.
   그래서 사용자 신원이 네임스페이스를 list할 수 있는지(SelfSubjectAccessReview, 60초 캐시) 먼저 묻고, 안 되면 403을 돌려줍니다.
   그룹이 아직 바인딩되지 않은 커스텀 역할이나 네임스페이스 하나에만 묶인 사용자가 클러스터 전체 개수를 보지 못하게 하기 위해서입니다.
+- **Pods 목록**은 같은 캐시에서 서버가 페이지로 나눠 보냅니다. 캐시는 파드마다 작은 줄 하나(약 0.4KB)를 들고 있어서, 파드 10만 개 클러스터에서도 브라우저는 파드 전체가 아니라 한 페이지만 받습니다.
+  - 줄을 보내기 전에 사용자 신원이 파드를 list할 수 있는지(SelfSubjectAccessReview, 60초 캐시) 묻습니다. 모든 네임스페이스에서 안 되면 고른 네임스페이스, 또는 네임스페이스로 한정된 권한의 네임스페이스마다 묻습니다. 클러스터가 거부한 네임스페이스는 빼고, 전부 거부하면 403을 돌려줍니다.
+  - 검색·정렬·요약 카드·페이지는 서버가 계산합니다. 화면은 3초마다(파드 1만 개 넘으면 10초) 다시 묻고, 볼 수 있는 줄이 바뀌었을 때만 줄을 다시 받습니다.
+  - 캐시가 동기화되기 전이나 `kubeast:cache`가 파드를 watch할 수 없을 때는 사용자 신원으로 500개씩 나눠 받습니다.
 - **YAML 생성·편집**은 문서마다 그 Kind의 `resource.<이름>.create`(편집은 대상의 `resource.<이름>.edit`)를 확인합니다.
   - 이름은 Kind의 소문자 형태이고, 자기 이름이 없는 Kind(CR 등)는 `customresource`를 씁니다.
     단, HorizontalPodAutoscaler·VerticalPodAutoscaler·PodDisruptionBudget·PersistentVolume·PersistentVolumeClaim·CustomResourceDefinition은 `hpa`·`vpa`·`pdb`·`pv`·`pvc`·`crd`를 씁니다.

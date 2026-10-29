@@ -179,7 +179,8 @@ class WebSocketMultiplexer {
     if (socket.readyState !== WebSocket.OPEN) {
       await this.waitForOpen(socket)
     }
-    if (wasOpenBefore && wasNewSubscription) {
+    // dropped while connecting (unsubscribe ran first): nothing to ask for
+    if (wasOpenBefore && wasNewSubscription && this.listeners.get(key)?.has(onMessage)) {
       socket.send(JSON.stringify(msg))
     }
 

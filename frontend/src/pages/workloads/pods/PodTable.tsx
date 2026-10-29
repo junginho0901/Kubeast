@@ -6,11 +6,11 @@
 
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
-import type { PodInfo } from '@/services/api'
+import type { PodListRow } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
-import { formatAge, getStatusColor, pickPodDisplayStatus, type SortKey } from './podHelpers'
+import { formatAge, getStatusColor, type SortKey } from './podHelpers'
 import { Trans } from 'react-i18next'
 
 interface OpenDetailArgs {
@@ -21,7 +21,7 @@ interface OpenDetailArgs {
 }
 
 interface Props {
-  pagedPods: PodInfo[]
+  pagedPods: PodListRow[]
   sortedPodsLength: number
   isLoadingPods: boolean
   showNamespaceColumn: boolean
@@ -133,7 +133,7 @@ export function PodTable({
           </thead>
           <tbody className="divide-y divide-slate-700">
             {pagedPods.map((pod, idx) => {
-              const displayStatus = pickPodDisplayStatus(pod)
+              const displayStatus = pod.status || '-'
               return (
                 <tr
                   ref={idx === 0 ? firstRowRef : undefined}

@@ -9,6 +9,7 @@ import (
 // RegisterPods — Pod list / detail / logs / exec.
 func RegisterPods(r chi.Router, h *handler.Handler) {
 	r.Get("/api/v1/pods/all", h.GetAllPods)
+	r.Get("/api/v1/pods/page", h.GetPodPage)
 	r.Get("/api/v1/namespaces/{namespace}/pods", h.GetPods)
 	r.Get("/api/v1/namespaces/{namespace}/pods/{name}/describe", h.DescribePod)
 	r.Get("/api/v1/namespaces/{namespace}/pods/{name}/yaml", h.GetPodYAML)

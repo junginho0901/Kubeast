@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState, useCallback } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { api, type PodInfo } from '@/services/api'
-import { useKubeWatchList } from '@/services/useKubeWatchList'
+import { api, type PodListRow, type PodPage, type PodPageParams } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
@@ -11,10 +10,11 @@ import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Plus, RefreshCw } from 'lucide-react'
-import { parseAgeSeconds, parseReadyPair, pickPodDisplayStatus, type SortKey, type SummaryCard } from './pods/podHelpers'
-import { applyPodWatchEvent } from './pods/podWatchNormalize'
+import { type SortKey, type SummaryCard } from './pods/podHelpers'
 import { PodFilters } from './pods/PodFilters'
 import { PodTable } from './pods/PodTable'
+
+const PAGE_BLOCK = 50
 
 export default function Pods() {
   const queryClient = useQueryClient()
@@ -28,6 +28,7 @@ export default function Pods() {
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
+  const [totalRows, setTotalRows] = useState(0)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
 
   const { data: namespaces } = useQuery({
@@ -36,93 +37,81 @@ export default function Pods() {
     staleTime: 30000,
   })
 
-  const { data: pods, isLoading: isLoadingPods } = useQuery({
-    queryKey: ['workloads', 'pods', selectedNamespace],
-    queryFn: () => (selectedNamespace === 'all'
-      ? api.getAllPods(false)
-      : api.getPods(selectedNamespace, undefined, false)),
-  })
   const { has } = usePermission()
   const canCreate = has('resource.pod.create')
 
-  useKubeWatchList({
-    enabled: true,
-    queryKey: ['workloads', 'pods', selectedNamespace],
-    path: selectedNamespace === 'all' ? '/api/v1/pods' : `/api/v1/namespaces/${selectedNamespace}/pods`,
-    query: 'watch=1',
-    applyEvent: (prev, event) => applyPodWatchEvent(prev as PodInfo[] | undefined, event),
-    onEvent: (event) => {
-      if (event?.type === 'DELETED') return
-      const obj = event?.object
-      const name = obj?.name || obj?.metadata?.name
-      const namespace = obj?.namespace || obj?.metadata?.namespace
-      if (name && namespace) {
-        queryClient.invalidateQueries({ queryKey: ['pod-describe', namespace, name] })
-      }
-    },
+  // The server filters, sorts, counts and pages (k8s-service pods_page.go): a large
+  // cluster's pods never come to the browser whole. The search goes out after a pause.
+  const [search, setSearch] = useState('')
+  useEffect(() => {
+    const id = setTimeout(() => setSearch(searchQuery.trim()), 250)
+    return () => clearTimeout(id)
+  }, [searchQuery])
+
+  const { containerRef: tableContainerRef, bodyRef: tableBodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({
+    recalculationKey: totalRows,
   })
 
-  const filteredPods = useMemo(() => {
-    if (!Array.isArray(pods)) return [] as PodInfo[]
-    if (!searchQuery.trim()) return pods
-    const q = searchQuery.toLowerCase()
-    return pods.filter((pod) =>
-      pod.name.toLowerCase().includes(q) ||
-      pod.namespace.toLowerCase().includes(q) ||
-      (pod.node_name || '').toLowerCase().includes(q) ||
-      (pod.pod_ip || '').toLowerCase().includes(q)
-    )
-  }, [pods, searchQuery])
+  // Rows are asked in blocks of PAGE_BLOCK, so the Fit row count settling while the
+  // cards appear does not ask again; the page is cut from the block.
+  const firstRow = (currentPage - 1) * rowsPerPage
+  const blockStart = Math.floor(firstRow / PAGE_BLOCK) * PAGE_BLOCK
+  const blockLimit = Math.min(500, Math.ceil((firstRow + rowsPerPage - blockStart) / PAGE_BLOCK) * PAGE_BLOCK)
+  const pageParams = useMemo<PodPageParams>(() => ({
+    namespace: selectedNamespace === 'all' ? undefined : selectedNamespace,
+    q: search || undefined,
+    sort: sortKey ?? undefined,
+    dir: sortKey ? sortDir : undefined,
+    offset: blockStart,
+    limit: blockLimit,
+  }), [selectedNamespace, search, sortKey, sortDir, blockStart, blockLimit])
+  const pageKey = useMemo(() => ['workloads', 'pods-page', pageParams], [pageParams])
+
+  // A poll sends the revision it has; while nothing a row shows changed the server
+  // answers "unchanged" and the page keeps what it has.
+  const { data: page, isLoading: isLoadingPods } = useQuery({
+    queryKey: pageKey,
+    queryFn: async () => {
+      const prev = queryClient.getQueryData<PodPage>(pageKey)
+      const next = await api.getPodPage({ ...pageParams, revision: prev?.revision || undefined })
+      return next.unchanged && prev ? prev : next
+    },
+    placeholderData: keepPreviousData,
+    // listed rows (no revision) cost the cluster a list: ask less often
+    refetchInterval: (query) => {
+      const d = query.state.data
+      if (!d) return false
+      if (!d.revision) return 30000
+      return d.stats.total > 10000 ? 10000 : 3000
+    },
+  })
+  useEffect(() => {
+    if (page && page.total !== totalRows) setTotalRows(page.total)
+  }, [page, totalRows])
+
+  // An open Pod drawer follows the list: when a row changed, its describe is read again.
+  const lastRevision = useRef('')
+  useEffect(() => {
+    const rev = page?.revision ?? ''
+    if (rev && lastRevision.current && rev !== lastRevision.current) {
+      queryClient.invalidateQueries({ queryKey: ['pod-describe'] })
+    }
+    lastRevision.current = rev
+  }, [page?.revision, queryClient])
 
   const podStats = useMemo(() => {
-    const sourcePods = Array.isArray(pods) ? pods : []
-    const total = sourcePods.length
-    let ready = 0
-    let notReady = 0
-    let pending = 0
-    let error = 0
-    let restarted = 0
-    let completed = 0
-    const reasonMap = new Map<string, number>()
-
-    for (const pod of sourcePods) {
-      const phase = (pod.phase || pod.status || 'Unknown').toString()
-      const statusText = pickPodDisplayStatus(pod)
-      const [readyCount, totalCount] = parseReadyPair(pod.ready)
-
-      if (phase === 'Pending') pending += 1
-      // restarted at least once (not necessarily restarting now)
-      if (pod.restart_count > 0) restarted += 1
-      // Job/CronJob 의 종료된 pod (phase Succeeded). K8s 의 정상 종료 상태.
-      // 이전엔 어느 카드에도 안 잡혀 total 과 카드 합이 어긋남.
-      if (phase === 'Succeeded') completed += 1
-
-      const isReadyRunning = phase === 'Running' && totalCount > 0 && readyCount === totalCount
-      if (isReadyRunning) {
-        ready += 1
-      } else if (phase === 'Running') {
-        notReady += 1
-      }
-
-      const lower = statusText.toLowerCase()
-      const isError =
-        phase === 'Failed' ||
-        lower.includes('error') ||
-        lower.includes('failed') ||
-        lower.includes('backoff') ||
-        lower.includes('errimagepull') ||
-        lower.includes('oomkilled')
-      if (isError) error += 1
-
-      reasonMap.set(statusText, (reasonMap.get(statusText) || 0) + 1)
+    const st = page?.stats
+    return {
+      total: st?.total ?? 0,
+      ready: st?.ready ?? 0,
+      notReady: st?.not_ready ?? 0,
+      pending: st?.pending ?? 0,
+      error: st?.error ?? 0,
+      restarted: st?.restarted ?? 0,
+      completed: st?.completed ?? 0,
+      topReasons: (st?.top_reasons ?? []).map((r) => [r.reason, r.count] as [string, number]),
     }
-
-    const topReasons = [...reasonMap.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 4)
-
-    return { total, ready, notReady, pending, error, restarted, completed, topReasons }
-  }, [pods])
+  }, [page?.stats])
 
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
@@ -155,50 +144,7 @@ spec:
 `
   }, [selectedNamespace])
 
-  const sortedPods = useMemo(() => {
-    if (!sortKey) return filteredPods
-    const list = [...filteredPods]
-
-    const getValue = (pod: PodInfo): string | number => {
-      switch (sortKey) {
-        case 'name':
-          return pod.name
-        case 'ready': {
-          const [readyCount, total] = parseReadyPair(pod.ready)
-          return total === 0 ? 0 : readyCount / total
-        }
-        case 'status':
-          return pickPodDisplayStatus(pod)
-        case 'restarts':
-          return pod.restart_count || 0
-        case 'pod_ip':
-          return pod.pod_ip || ''
-        case 'node_name':
-          return pod.node_name || ''
-        case 'age':
-          return parseAgeSeconds(pod.created_at)
-        default:
-          return ''
-      }
-    }
-
-    list.sort((a, b) => {
-      const av = getValue(a)
-      const bv = getValue(b)
-      if (typeof av === 'number' && typeof bv === 'number') {
-        return sortDir === 'asc' ? av - bv : bv - av
-      }
-      const as = String(av)
-      const bs = String(bv)
-      return sortDir === 'asc' ? as.localeCompare(bs) : bs.localeCompare(as)
-    })
-    return list
-  }, [filteredPods, sortDir, sortKey])
-
-  const { containerRef: tableContainerRef, bodyRef: tableBodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({
-    recalculationKey: sortedPods.length,
-  })
-  const totalPages = Math.max(1, Math.ceil(sortedPods.length / rowsPerPage))
+  const totalPages = Math.max(1, Math.ceil(totalRows / rowsPerPage))
 
   useEffect(() => {
     setCurrentPage(1)
@@ -210,14 +156,14 @@ spec:
     }
   }, [currentPage, totalPages])
 
-  const pagedPods = useMemo(() => {
-    const start = (currentPage - 1) * rowsPerPage
-    return sortedPods.slice(start, start + rowsPerPage)
-  }, [sortedPods, currentPage, rowsPerPage])
+  const pagedPods = useMemo<PodListRow[]>(
+    () => (page?.items ?? []).slice(firstRow - blockStart, firstRow - blockStart + rowsPerPage),
+    [page?.items, firstRow, blockStart, rowsPerPage],
+  )
 
   // 플로팅 AI 위젯용 스냅샷 — Pod 목록 요약 + 문제 항목 + interpretations
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(pods)) return null
+    if (!page) return null
     const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
     const alertParts: string[] = []
     if (podStats.error > 0) alertParts.push(`오류 ${podStats.error}`)
@@ -227,11 +173,10 @@ spec:
     const alert = alertParts.length ? `, ${alertParts.join(', ')}` : ''
     const summary = `${prefix}${nsLabel} Pod ${podStats.total}개 (Ready ${podStats.ready}${alert})`
 
-    const problematic = (p: PodInfo) => {
+    const problematic = (p: PodListRow) => {
       if (p.phase && p.phase !== 'Running') return true
       if ((p.restart_count ?? 0) > 5) return true
-      const s = pickPodDisplayStatus(p)
-      return /error|crashloop|oomkilled|errimagepull|backoff/i.test(s)
+      return /error|crashloop|oomkilled|errimagepull|backoff/i.test(p.status)
     }
 
     return {
@@ -252,31 +197,31 @@ spec:
           top_reasons: podStats.topReasons.map(([reason, count]) => ({ reason, count })),
         },
         ...summarizeList(pagedPods as unknown as Record<string, unknown>[], {
-          total: sortedPods.length,
+          total: totalRows,
           currentPage,
           pageSize: rowsPerPage,
           topN: rowsPerPage,
           pickFields: ['name', 'namespace', 'phase', 'status', 'ready', 'restart_count', 'node_name'],
-          filterProblematic: (p) => problematic(p as unknown as PodInfo),
+          filterProblematic: (p) => problematic(p as unknown as PodListRow),
           interpret: (items) => {
             const out: string[] = []
-            const podsArr = items as unknown as PodInfo[]
-            const crashLoop = podsArr.filter((p) => /crashloop/i.test(pickPodDisplayStatus(p))).length
+            const podsArr = items as unknown as PodListRow[]
+            const crashLoop = podsArr.filter((p) => /crashloop/i.test(p.status)).length
             if (crashLoop > 0) out.push(`⚠️ ${crashLoop}개 Pod 이 CrashLoopBackOff 상태`)
-            const oom = podsArr.filter((p) => /oomkilled/i.test(pickPodDisplayStatus(p))).length
+            const oom = podsArr.filter((p) => /oomkilled/i.test(p.status)).length
             if (oom > 0) out.push(`⚠️ ${oom}개 Pod 이 OOMKilled`)
             const highRestart = podsArr.filter((p) => (p.restart_count ?? 0) > 5).length
             if (highRestart > 0) out.push(`⚠️ ${highRestart}개 Pod 의 재시작 횟수 5회 초과`)
             return out
           },
           linkBuilder: (p) => {
-            const pod = p as unknown as PodInfo
+            const pod = p as unknown as PodListRow
             return buildResourceLink('Pod', pod.namespace, pod.name)
           },
         }),
       },
     }
-  }, [pods, pagedPods, sortedPods.length, currentPage, rowsPerPage, selectedNamespace, searchQuery, podStats])
+  }, [page, pagedPods, totalRows, currentPage, rowsPerPage, selectedNamespace, searchQuery, podStats])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
@@ -284,11 +229,8 @@ spec:
     if (isRefreshing) return
     setIsRefreshing(true)
     try {
-      const data = selectedNamespace === 'all'
-        ? await api.getAllPods(true)
-        : await api.getPods(selectedNamespace, undefined, true)
-      queryClient.removeQueries({ queryKey: ['workloads', 'pods', selectedNamespace] })
-      queryClient.setQueryData(['workloads', 'pods', selectedNamespace], data)
+      // no revision: the page comes whole whatever changed
+      queryClient.setQueryData(pageKey, await api.getPodPage(pageParams))
     } catch (error) {
       console.error('Pods refresh failed:', error)
     }
@@ -339,11 +281,11 @@ spec:
         allNamespacesLabel={tr('pods.allNamespaces', 'All namespaces')}
       />
 
-      {searchQuery && (
+      {search && (
         <p className="text-sm text-slate-400 shrink-0">
           {tr('pods.matchCount', '{{count}} pod{{suffix}} match.', {
-            count: filteredPods.length,
-            suffix: filteredPods.length === 1 ? '' : 's',
+            count: totalRows,
+            suffix: totalRows === 1 ? '' : 's',
           })}
         </p>
       )}
@@ -372,7 +314,7 @@ spec:
 
       <PodTable
         pagedPods={pagedPods}
-        sortedPodsLength={sortedPods.length}
+        sortedPodsLength={totalRows}
         isLoadingPods={isLoadingPods}
         showNamespaceColumn={showNamespaceColumn}
         sortKey={sortKey}
@@ -381,7 +323,7 @@ spec:
         setSortDir={setSortDir}
         currentPage={currentPage}
         setCurrentPage={setCurrentPage}
-        searching={!!searchQuery.trim()}
+        searching={!!search}
         totalPages={totalPages}
         rowsPerPage={rowsPerPage}
         tableContainerRef={tableContainerRef}
@@ -399,7 +341,7 @@ spec:
           namespace={selectedNamespace !== 'all' ? selectedNamespace : undefined}
           onClose={() => setCreateDialogOpen(false)}
           onCreated={() => {
-            queryClient.invalidateQueries({ queryKey: ['workloads', 'pods'] })
+            queryClient.invalidateQueries({ queryKey: ['workloads', 'pods-page'] })
           }}
         />
       )}

@@ -43,7 +43,14 @@ func (s *Service) listAcrossNamespaces(ctx context.Context, list func(namespace 
 	if len(scope) == 0 {
 		return list("")
 	}
-	results := make([][]map[string]interface{}, len(scope))
+	return fanOutNamespaces(scope, list)
+}
+
+// fanOutNamespaces runs list once per namespace of scope, in parallel, and
+// merges the results in the scope's order, skipping a namespace the cluster
+// refuses or does not have unless none could be read (listAcrossNamespaces).
+func fanOutNamespaces[T any](scope []string, list func(namespace string) ([]T, error)) ([]T, error) {
+	results := make([][]T, len(scope))
 	read := make([]bool, len(scope))
 	refused := make([]error, len(scope))
 	errs := make([]error, len(scope))
@@ -84,7 +91,7 @@ func (s *Service) listAcrossNamespaces(ctx context.Context, list func(namespace 
 			}
 		}
 	}
-	out := make([]map[string]interface{}, 0)
+	out := make([]T, 0)
 	for _, items := range results {
 		out = append(out, items...)
 	}
