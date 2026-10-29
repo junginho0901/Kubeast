@@ -187,3 +187,59 @@ func TestQueryTools_CutListIsSaidToBeCut(t *testing.T) {
 		t.Fatalf("tabular: %s", out)
 	}
 }
+
+// A pod that is not there: its similar names come from the pod rows near its name, not from a kubectl list of
+// every pod (which does not fit tool-server's memory on a large cluster).
+func TestNotFound_PodSimilarNamesFromThePodRows(t *testing.T) {
+	seen := fakeK8sService(t, func(r *http.Request) (int, string) {
+		switch r.URL.Query().Get("q") {
+		case "auth":
+			return 200, `{"items":[{"name":"auth-service-69dd8954dc-tk2gm","namespace":"kubeast"},{"name":"oauth2-proxy-0","namespace":"ops"}],"total":2,"stats":{"total":50010}}`
+		case "service":
+			return 200, `{"items":[{"name":"auth-service-69dd8954dc-tk2gm","namespace":"kubeast"},{"name":"k8s-service-5d4f-x2k9p","namespace":"kubeast"}],"total":900,"stats":{"total":50010}}`
+		}
+		return 200, `{"items":[],"total":0,"stats":{"total":50010}}`
+	})
+	calls := fakeKubectl(t, func(args []string) (string, error) {
+		v := verb(args)
+		switch {
+		case v[0] == "describe":
+			return kubectlErr(`Error from server (NotFound): pods "auth-service-69dd8954dc-zzzzz" not found`)
+		case v[0] == "get" && v[1] == "namespace":
+			return "namespace/default\n", nil
+		}
+		t.Fatalf("kubectl listed pods: %v", v)
+		return "", nil
+	})
+	out, err := handleDescribeResource(ctxFor("c1"), map[string]interface{}{"resource_type": "pods", "resource_name": "auth-service-69dd8954dc-zzzzz", "namespace": "default"}, bearer())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var asked []string
+	for _, r := range *seen {
+		asked = append(asked, r.URL.Query().Get("q")+"/"+r.URL.Query().Get("match")+"/"+r.URL.Query().Get("limit"))
+	}
+	if strings.Join(asked, " ") != "auth/tokens/500 service/tokens/500" || len(*calls) != 2 {
+		t.Fatalf("asked %v, kubectl %v", asked, *calls)
+	}
+	m := decode(t, out)
+	similar, _ := json.Marshal(m["similar"])
+	if m["status"] != "not_found" || m["searched_truncated"] != true || !strings.HasPrefix(string(similar), `[{"name":"auth-service-69dd8954dc-tk2gm","namespace":"kubeast"}`) {
+		t.Fatalf("result: %s", out)
+	}
+
+	// a stem without a word of three letters is searched whole
+	*seen = nil
+	fakeKubectl(t, func(args []string) (string, error) {
+		if verb(args)[0] == "describe" {
+			return kubectlErr(`Error from server (NotFound): pods "db" not found`)
+		}
+		return "namespace/default\n", nil
+	})
+	if _, err := handleDescribeResource(ctxFor("c1"), map[string]interface{}{"resource_type": "pods", "resource_name": "db", "namespace": "default"}, bearer()); err != nil {
+		t.Fatal(err)
+	}
+	if q := (*seen)[0].URL.Query(); q.Get("q") != "db" || q.Has("match") {
+		t.Fatalf("short stem: %s", (*seen)[0].URL.RawQuery)
+	}
+}

@@ -20,6 +20,8 @@ const (
 	// podsInlineRows: a pods list longer than this is answered with its counts and a page of it.
 	podsInlineRows = 25
 	podsGroupTop   = 10
+	// podsCandidatePage: the pods page's largest page, per word of a missing pod's name
+	podsCandidatePage = 500
 )
 
 type podGroup struct {
@@ -261,4 +263,44 @@ func podsCount(ctx context.Context, headers http.Header, args map[string]interfa
 	}
 	s, err := marshalJSON(reply)
 	return s, true, err
+}
+
+// podNameCandidates is what similarNames ranks for a pod that was not found, from the pod rows instead of listing
+// every pod with kubectl: the pods holding a word of three or more letters of the name's stem (ReplicaSet hash and
+// suffix stripped), or the stem itself when it has no such word — the names similarNames scores by stem, prefix,
+// substring or shared token. ok is false when k8s-service could not be asked (kubectl lists them as before).
+func podNameCandidates(ctx context.Context, headers http.Header, name string) (out []namedObject, truncated, ok bool) {
+	stem := strings.ToLower(stripHash(name))
+	var queries []url.Values
+	for _, word := range tokens(stem) {
+		if len(word) >= 3 {
+			queries = append(queries, url.Values{"q": {word}, "match": {"tokens"}})
+		}
+	}
+	if len(queries) == 0 && stem != "" {
+		queries = append(queries, url.Values{"q": {stem}})
+	}
+	seen := map[namedObject]bool{}
+	for _, q := range queries {
+		q.Set("limit", strconv.Itoa(podsCandidatePage))
+		p, refusal, err := podPage(ctx, headers, q)
+		if err != nil || refusal != "" {
+			return nil, false, false
+		}
+		if p.Total > len(p.Items) {
+			truncated = true
+		}
+		for _, it := range p.Items {
+			o := namedObject{Namespace: it.Namespace, Name: it.Name}
+			if seen[o] {
+				continue
+			}
+			if len(out) >= candidateListCap {
+				return out, true, true
+			}
+			seen[o] = true
+			out = append(out, o)
+		}
+	}
+	return out, truncated, true
 }

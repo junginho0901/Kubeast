@@ -372,7 +372,7 @@ func handleCheckServiceConnectivity(ctx context.Context, args map[string]interfa
 		}
 		if f, ok := classifyKubectlFailure(err); ok && f.Status == "not_found" {
 			result["namespace_exists"] = namespaceExists(ctx, headers, namespace)
-			candidates, scope, _ := listNames(ctx, headers, "services", scopedNamespaces(ctx))
+			candidates, scope, _ := listNames(ctx, headers, "services", scopedNamespaces(ctx), "")
 			result["similar"] = similarNames(serviceName, candidates)
 			result["searched"] = scope
 		}

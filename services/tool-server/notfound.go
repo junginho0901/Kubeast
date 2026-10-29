@@ -95,7 +95,7 @@ func failureResult(ctx context.Context, headers http.Header, err error, kind, na
 		if namespace != "" {
 			result["namespace_exists"] = namespaceExists(ctx, headers, namespace)
 		}
-		candidates, scope, truncated := listNames(ctx, headers, kind, scopedNamespaces(ctx))
+		candidates, scope, truncated := listNames(ctx, headers, kind, scopedNamespaces(ctx), name)
 		result["similar"] = similarNames(name, candidates)
 		result["searched"] = scope
 		if truncated {
@@ -169,8 +169,19 @@ type namedObject struct {
 }
 
 // listNames lists kind across the scope (all namespaces, or the granted ones)
-// as namespace/name pairs. scope is what the result reports as searched.
-func listNames(ctx context.Context, headers http.Header, kind string, namespaces []string) ([]namedObject, interface{}, bool) {
+// as namespace/name pairs, for pods only the ones near the name looked for.
+// scope is what the result reports as searched.
+func listNames(ctx context.Context, headers http.Header, kind string, namespaces []string, near string) ([]namedObject, interface{}, bool) {
+	var scope interface{} = "all namespaces"
+	if len(namespaces) > 0 {
+		scope = namespaces
+	}
+	// pods from the pod rows: listing every pod with kubectl does not fit tool-server's memory on a large cluster
+	if isPodsKind(kind) && near != "" {
+		if out, truncated, ok := podNameCandidates(ctx, headers, near); ok {
+			return out, scope, truncated
+		}
+	}
 	var out []namedObject
 	truncated := false
 	collect := func(args ...string) {
