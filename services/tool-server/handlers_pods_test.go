@@ -243,3 +243,41 @@ func TestNotFound_PodSimilarNamesFromThePodRows(t *testing.T) {
 		t.Fatalf("short stem: %s", (*seen)[0].URL.RawQuery)
 	}
 }
+
+// The jq and table tools do not run kubectl over more pods than it can hold: the pod rows count them first.
+func TestQueryTools_TooManyPodsForKubectl(t *testing.T) {
+	total := 50010
+	seen := fakeK8sService(t, func(r *http.Request) (int, string) {
+		return 200, fmt.Sprintf(`{"items":[],"total":%d,"stats":{"total":%d}}`, total, total)
+	})
+	calls := fakeKubectl(t, func([]string) (string, error) { return `{"items":[]}`, nil })
+	for _, h := range []func() (string, error){
+		func() (string, error) {
+			return handleJQQuery(ctxFor("c1"), map[string]interface{}{"resource_type": "pods", "namespace": "bulk", "jq": ".items | length"}, bearer())
+		},
+		func() (string, error) {
+			return handleTabularQuery(ctxFor("c1"), map[string]interface{}{"resource_type": "pods", "label_selector": "app=web"}, bearer())
+		},
+	} {
+		out, err := h()
+		m := decode(t, out)
+		if err != nil || m["status"] != "too_large" || m["count"] != float64(50010) || !strings.Contains(m["hint"].(string), "k8s_count") {
+			t.Fatalf("out %s err %v", out, err)
+		}
+	}
+	if len(*calls) != 0 {
+		t.Fatalf("kubectl ran: %v", *calls)
+	}
+	if q := (*seen)[0].URL.Query(); q.Get("namespace") != "bulk" || q.Get("limit") != "1" || (*seen)[1].URL.Query().Get("label_selector") != "app=web" {
+		t.Fatalf("asked %s · %s", (*seen)[0].URL.RawQuery, (*seen)[1].URL.RawQuery)
+	}
+	// few enough: kubectl as before; other kinds never ask
+	total = podsKubectlMax
+	if _, err := handleJQQuery(ctxFor("c1"), map[string]interface{}{"resource_type": "pods", "namespace": "bulk", "jq": ".items | length"}, bearer()); err != nil || len(*calls) != 1 {
+		t.Fatalf("kubectl did not run for %d pods: %v", total, err)
+	}
+	n := len(*seen)
+	if _, err := handleTabularQuery(ctxFor("c1"), map[string]interface{}{"resource_type": "deployments"}, bearer()); err != nil || len(*seen) != n || len(*calls) != 2 {
+		t.Fatalf("deployments asked k8s-service or skipped kubectl: %v", err)
+	}
+}

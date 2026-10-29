@@ -22,6 +22,9 @@ const (
 	podsGroupTop   = 10
 	// podsCandidatePage: the pods page's largest page, per word of a missing pod's name
 	podsCandidatePage = 500
+	// podsKubectlMax: the most pods kubectl lists for the jq and table tools — kubectl holds every pod it lists
+	// (about 5 KB each; 50 000 took 246 MB and tool-server's 256 Mi limit with it)
+	podsKubectlMax = 5000
 )
 
 type podGroup struct {
@@ -303,4 +306,45 @@ func podNameCandidates(ctx context.Context, headers http.Header, name string) (o
 		}
 	}
 	return out, truncated, true
+}
+
+// podsTooMany answers the jq and table tools for pods without running kubectl when the namespace and label
+// selector cover more than podsKubectlMax pods: how many, and the tools that answer at any size. ok is false
+// when kubectl may run (few enough, or k8s-service could not be asked).
+func podsTooMany(ctx context.Context, headers http.Header, args map[string]interface{}) (string, bool, error) {
+	if !isPodsKind(argString(args, "resource_type", "")) {
+		return "", false, nil
+	}
+	q := url.Values{"limit": {"1"}}
+	namespace := argString(args, "namespace", "")
+	if namespace != "" {
+		q.Set("namespace", namespace)
+	}
+	if v := argString(args, "label_selector", ""); v != "" {
+		q.Set("label_selector", v)
+	}
+	p, refusal, err := podPage(ctx, headers, q)
+	if err != nil {
+		if errors.Is(err, errBadRequest) {
+			return "", true, err
+		}
+		return "", false, nil
+	}
+	if refusal != "" {
+		return refusal, true, nil
+	}
+	if p.Total <= podsKubectlMax {
+		return "", false, nil
+	}
+	scope := "all namespaces"
+	if namespace != "" {
+		scope = namespace
+	}
+	out, err := marshalJSON(map[string]interface{}{
+		"status": "too_large", "resource_type": "pods", "scope": scope, "count": p.Total,
+		"reason": fmt.Sprintf("%d pods match; this tool lists them whole with kubectl, which holds at most %d", p.Total, podsKubectlMax),
+		"hint": "Narrow with namespace or label_selector, or use k8s_count (counts by namespace, node or phase), " +
+			"k8s_get_resources (the counts and the pods that need attention, page by page) or k8s_find_resource (by name or label).",
+	})
+	return out, true, err
 }

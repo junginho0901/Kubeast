@@ -130,6 +130,9 @@ func handleJQQuery(ctx context.Context, args map[string]interface{}, headers htt
 	if err != nil {
 		return "", err
 	}
+	if out, stop, err := podsTooMany(ctx, headers, args); stop {
+		return out, err
+	}
 	list, res, err := getJSONList(ctx, headers, cmd, argString(args, "resource_type", ""), argString(args, "namespace", ""))
 	if err != nil || res != "" {
 		return res, err
@@ -192,6 +195,9 @@ func handleTabularQuery(ctx context.Context, args map[string]interface{}, header
 	cmd, scope, err := listArgs(ctx, args)
 	if err != nil {
 		return "", err
+	}
+	if out, stop, err := podsTooMany(ctx, headers, args); stop {
+		return out, err
 	}
 	cmd = append(cmd, "-o", "custom-columns="+columns)
 	if v := argString(args, "sort_by", ""); v != "" {
