@@ -3,7 +3,7 @@
 // the dedicated WebSocket multiplexer in /api/v1/ws).
 
 import { client } from './client'
-import type { LogFileContent, LogFileList, LogQLParams, LogSearchParams, LogSearchResult, LogSearchStatus, PodInfo, PodRbacResponse } from './types'
+import type { LogFileContent, LogFileList, LogQLParams, LogSearchParams, LogSearchResult, LogSearchStatus, PodInfo, PodPage, PodPageParams, PodRbacResponse } from './types'
 
 export const podsApi = {
   getPods: async (namespace: string, labelSelector?: string, forceRefresh = false): Promise<PodInfo[]> => {
@@ -17,6 +17,12 @@ export const podsApi = {
     const { data } = await client.get('/cluster/pods/all', {
       params: { force_refresh: forceRefresh },
     })
+    return data
+  },
+
+  /** One page of the Pods list: the server filters, sorts and counts (k8s-service pods_page.go). */
+  getPodPage: async (params: PodPageParams): Promise<PodPage> => {
+    const { data } = await client.get('/cluster/pods/page', { params })
     return data
   },
 

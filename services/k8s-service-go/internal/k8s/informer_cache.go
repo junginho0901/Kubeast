@@ -3,6 +3,7 @@ package k8s
 import (
 	"context"
 	"log/slog"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -22,7 +23,8 @@ import (
 // PVCs, PVs and nodes on every poll of every open dashboard. clusterInformers
 // keeps those seven kinds in memory through list+watch instead, so the overview
 // is computed from the store and is current at every poll. Objects are stripped
-// to the fields the overview reads (stripForOverview) to bound memory.
+// to the fields the overview reads (stripForOverview) to bound memory; pods are
+// kept as podRows (pod_index.go), which the Pods list pages from (pods_page.go).
 //
 // Lifecycle: started on the first overview request for a cluster, stopped after
 // overviewIdleTimeout without a request, and with the client bundle (kubeconfig
@@ -47,7 +49,13 @@ type clusterInformers struct {
 	stopped sync.Once
 	lastUse atomic.Int64 // unix nanoseconds
 
-	pods, namespaces, services, deployments, pvcs, pvs, nodes cache.Store
+	pods                                                cache.Indexer
+	namespaces, services, deployments, pvcs, pvs, nodes cache.Store
+
+	// podRev counts changes to what a pod row shows; epoch tells this set's
+	// count from the one before it (podRevision).
+	podRev atomic.Uint64
+	epoch  string
 
 	versionMu sync.Mutex
 	version   string
@@ -58,8 +66,14 @@ type clusterInformers struct {
 // once when the set stops on its own: idle, or forbidden=true when the identity
 // may not list/watch. It is not called for stopNow.
 func newClusterInformers(client kubernetes.Interface, idle time.Duration, onStop func(ci *clusterInformers, forbidden bool)) *clusterInformers {
-	f := informers.NewSharedInformerFactoryWithOptions(client, 0, informers.WithTransform(stripForOverview))
-	ci := &clusterInformers{factory: f, stop: make(chan struct{}), synced: make(chan struct{})}
+	in := newInterner()
+	f := informers.NewSharedInformerFactoryWithOptions(client, 0, informers.WithTransform(func(obj interface{}) (interface{}, error) {
+		if p, ok := obj.(*corev1.Pod); ok {
+			return toPodRow(p, in), nil
+		}
+		return stripForOverview(obj)
+	}))
+	ci := &clusterInformers{factory: f, stop: make(chan struct{}), synced: make(chan struct{}), epoch: strconv.FormatInt(time.Now().UnixNano(), 36)}
 	ci.touch()
 
 	infs := []cache.SharedIndexInformer{
@@ -72,8 +86,20 @@ func newClusterInformers(client kubernetes.Interface, idle time.Duration, onStop
 		f.Core().V1().Nodes().Informer(),
 	}
 	ci.pods, ci.namespaces, ci.services, ci.deployments, ci.pvcs, ci.pvs, ci.nodes =
-		infs[0].GetStore(), infs[1].GetStore(), infs[2].GetStore(), infs[3].GetStore(),
+		infs[0].GetIndexer(), infs[1].GetStore(), infs[2].GetStore(), infs[3].GetStore(),
 		infs[4].GetStore(), infs[5].GetStore(), infs[6].GetStore()
+	bump := func() { ci.podRev.Add(1) }
+	_, _ = infs[0].AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    func(interface{}) { bump() },
+		DeleteFunc: func(interface{}) { bump() },
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			o, ok1 := oldObj.(*podRow)
+			n, ok2 := newObj.(*podRow)
+			if !ok1 || !ok2 || !o.sameView(n) {
+				bump()
+			}
+		},
+	})
 
 	var forbiddenOnce sync.Once
 	for _, inf := range infs {
@@ -190,18 +216,14 @@ func (ci *clusterInformers) overviewFor(scope []string) map[string]interface{} {
 	ci.touch()
 	in := func(namespace string) bool { return len(scope) == 0 || containsString(scope, namespace) }
 	podStatus := map[string]int{"Running": 0, "Pending": 0, "Failed": 0, "Succeeded": 0, "Unknown": 0}
-	var pods []interface{}
+	pods := 0
 	for _, o := range ci.pods.List() {
-		if p, ok := o.(*corev1.Pod); ok && in(p.Namespace) {
-			pods = append(pods, o)
-		}
-	}
-	for _, o := range pods {
-		p, ok := o.(*corev1.Pod)
-		if !ok {
+		p, ok := o.(*podRow)
+		if !ok || !in(p.namespace) {
 			continue
 		}
-		switch p.Status.Phase {
+		pods++
+		switch corev1.PodPhase(p.phase) {
 		case corev1.PodRunning:
 			podStatus["Running"]++
 		case corev1.PodPending:
@@ -217,7 +239,7 @@ func (ci *clusterInformers) overviewFor(scope []string) map[string]interface{} {
 	if len(scope) == 0 {
 		return map[string]interface{}{
 			"total_namespaces":  len(ci.namespaces.ListKeys()),
-			"total_pods":        len(pods),
+			"total_pods":        pods,
 			"total_services":    len(ci.services.ListKeys()),
 			"total_deployments": len(ci.deployments.ListKeys()),
 			"total_pvcs":        len(ci.pvcs.ListKeys()),
@@ -238,7 +260,7 @@ func (ci *clusterInformers) overviewFor(scope []string) map[string]interface{} {
 	return map[string]interface{}{
 		"scoped":            true,
 		"total_namespaces":  countIn(ci.namespaces.ListKeys(), scope),
-		"total_pods":        len(pods),
+		"total_pods":        pods,
 		"total_services":    namespaced(ci.services.ListKeys()),
 		"total_deployments": namespaced(ci.deployments.ListKeys()),
 		"total_pvcs":        namespaced(ci.pvcs.ListKeys()),
@@ -279,11 +301,10 @@ func (ci *clusterInformers) serverVersion(disc discovery.DiscoveryInterface) str
 }
 
 // stripForOverview keeps only what overview and nodeCapacities read; the
-// informer stores the returned object instead of the full one.
+// informer stores the returned object instead of the full one. Pods become
+// podRows before this (newClusterInformers).
 func stripForOverview(obj interface{}) (interface{}, error) {
 	switch o := obj.(type) {
-	case *corev1.Pod:
-		return &corev1.Pod{ObjectMeta: keyMeta(o.ObjectMeta), Status: corev1.PodStatus{Phase: o.Status.Phase}}, nil
 	case *corev1.Node:
 		return &corev1.Node{ObjectMeta: keyMeta(o.ObjectMeta), Status: corev1.NodeStatus{Capacity: o.Status.Capacity}}, nil
 	case *corev1.Namespace:

@@ -141,6 +141,10 @@
 - **Dashboard counts** (namespaces, pods, nodes …) are counted from the per-cluster informer cache, which uses the `kubeast:cache` identity.
   - Kubeast therefore first asks whether the user identity can list namespaces (SelfSubjectAccessReview, 60-second cache), and returns 403 if not.
   - This way, custom roles whose group is not yet bound, or users bound to a single namespace, do not see cluster-wide counts.
+- **The Pods list** is paged by the server from the same cache, which keeps a small row per pod (about 0.4 KB), so a cluster of 100 000 pods sends the browser one page, not every pod.
+  - Before the rows go out, Kubeast asks whether the user identity can list pods (SelfSubjectAccessReview, 60-second cache): in every namespace, or else in the namespace chosen or in each namespace of a namespace-scoped grant. A namespace the cluster refuses is left out; if all are refused, the answer is 403.
+  - The search, the sort, the summary cards and the page are worked out on the server. The page asks again every 3 seconds (10 seconds above 10 000 pods), and only gets rows back when one it may see has changed.
+  - Until the cache has synced, or when `kubeast:cache` may not watch pods, the rows are listed as the user, 500 at a time.
 - **YAML create and edit** check the Kind's `resource.<name>.create` for each document (edit checks the target's `resource.<name>.edit`).
   - The name is the Kind in lowercase, with two exceptions:
     - HorizontalPodAutoscaler, VerticalPodAutoscaler, PodDisruptionBudget, PersistentVolume, PersistentVolumeClaim and CustomResourceDefinition are `hpa`, `vpa`, `pdb`, `pv`, `pvc` and `crd`, in that order.

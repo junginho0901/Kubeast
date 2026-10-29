@@ -8,10 +8,12 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -24,6 +26,41 @@ func (h *Handler) GetAllPods(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.JSON(w, http.StatusOK, data)
+}
+
+// GetPodPage handles GET /api/v1/pods/page: one page of the Pods list
+// (namespace, q, sort, dir, offset, limit up to 500, revision).
+func (h *Handler) GetPodPage(w http.ResponseWriter, r *http.Request) {
+	q := k8s.PodPageQuery{
+		Namespace: queryParam(r, "namespace", ""),
+		Search:    queryParam(r, "q", ""),
+		Sort:      queryParam(r, "sort", ""),
+		Offset:    queryParamInt(r, "offset", 0),
+		Limit:     queryParamInt(r, "limit", 50),
+		Revision:  queryParam(r, "revision", ""),
+	}
+	if q.Sort != "" && !slices.Contains(k8s.PodSortKeys, q.Sort) {
+		response.Error(w, http.StatusBadRequest, "sort must be one of "+strings.Join(k8s.PodSortKeys, ", "))
+		return
+	}
+	switch dir := queryParam(r, "dir", "asc"); dir {
+	case "asc":
+	case "desc":
+		q.Desc = true
+	default:
+		response.Error(w, http.StatusBadRequest, "dir must be asc or desc")
+		return
+	}
+	if q.Offset < 0 || q.Limit < 1 || q.Limit > k8s.PodPageMaxLimit {
+		response.Error(w, http.StatusBadRequest, fmt.Sprintf("offset must be 0 or more and limit 1 to %d", k8s.PodPageMaxLimit))
+		return
+	}
+	page, err := h.svc.GetPodPage(r.Context(), q)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, page)
 }
 
 // GetPods handles GET /api/v1/namespaces/{namespace}/pods.

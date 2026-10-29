@@ -1523,6 +1523,54 @@ export interface PodInfo {
   resource_claim_templates?: string[]
 }
 
+/** One row of the Pods list as k8s-service pages it (`/cluster/pods/page`); `status` is the Status column. */
+export interface PodListRow {
+  name: string
+  namespace: string
+  status: string
+  phase: string
+  ready: string
+  restart_count: number
+  node_name: string
+  pod_ip: string
+  created_at: string
+  deletion_timestamp?: string
+}
+
+/** The Pods list's summary cards, over the namespace chosen (not the search). */
+export interface PodListStats {
+  total: number
+  ready: number
+  not_ready: number
+  pending: number
+  error: number
+  restarted: number
+  completed: number
+  top_reasons: Array<{ reason: string; count: number }>
+}
+
+export interface PodPage {
+  items: PodListRow[]
+  /** rows the search matched */
+  total: number
+  stats: PodListStats
+  /** changes when a row could show something new; "" when the server listed the cluster */
+  revision: string
+  /** the revision sent is current: no rows came */
+  unchanged?: boolean
+  source: 'index' | 'list'
+}
+
+export interface PodPageParams {
+  namespace?: string
+  q?: string
+  sort?: string
+  dir?: 'asc' | 'desc'
+  offset: number
+  limit: number
+  revision?: string
+}
+
 export interface PodRbacRule {
   verbs: string[]
   api_groups: string[]

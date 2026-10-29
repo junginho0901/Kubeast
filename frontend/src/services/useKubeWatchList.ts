@@ -83,11 +83,13 @@ export function useKubeWatchList(options: {
     if (!options.enabled) return
 
     const paths = scopedPaths(options.path, (JSON.parse(scopeKey) as string[] | null) ?? undefined)
+    // the list this subscription feeds; a later key gets its own subscription
+    const queryKey = queryKeyRef.current
 
     const handle = (message: any) => {
       if (message?.type !== 'DATA') return
       const event = message?.data as WatchEvent
-      queryClient.setQueryData(queryKeyRef.current, (prev: any[] | undefined) => {
+      queryClient.setQueryData(queryKey, (prev: any[] | undefined) => {
         // list 가 도착하기 전 (prev=undefined) 의 watch event 는 무시.
         // K8s watch with resourceVersion="" 는 LIST 의 모든 item 을 ADDED
         // event 로 stream 하는데, list 응답보다 일부 event 가 먼저 도착하면
@@ -100,16 +102,14 @@ export function useKubeWatchList(options: {
       onEventRef.current?.(event)
     }
 
-    const cleanups: (() => void)[] = []
-    for (const path of paths) {
-      const msg = { type: 'REQUEST' as const, clusterId, path, query }
-      watchMultiplexer.subscribe(msg, handle).then((fn) => {
-        cleanups.push(fn)
-      })
-    }
+    // Unsubscribed by message, not by the function subscribe resolves to: that
+    // comes only once the socket is open, and a cleanup before it (the key
+    // changing while the socket connects) would leave this watch feeding the list.
+    const msgs = paths.map((path) => ({ type: 'REQUEST' as const, clusterId, path, query }))
+    for (const msg of msgs) void watchMultiplexer.subscribe(msg, handle)
 
     return () => {
-      for (const fn of cleanups) fn()
+      for (const msg of msgs) watchMultiplexer.unsubscribe(msg, handle)
     }
   }, [options.enabled, options.path, query, queryClient, queryKeyDep, clusterId, scopeKey])
 }

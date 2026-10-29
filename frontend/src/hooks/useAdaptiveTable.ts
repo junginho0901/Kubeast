@@ -7,16 +7,37 @@ import { usePageSize } from '@/utils/pageSize'
 // ports …), narrow the columns left by up to a fifth, then fold the col-low
 // columns too (Namespace, Age, IPs) and narrow again. Measured with every column
 // shown in the same frame, so nothing paints in between.
+//
+// In a table-fixed table, a column with no width of its own (the alert, the name)
+// gets what the others leave, which is nothing once their widths add up to more
+// than the box. Before any fold it is held only from going under a fifth less than
+// MIN_AUTO_COLUMN (a wide screen keeps every column); once folding has started it
+// is held at MIN_AUTO_COLUMN, so the steps go on and, past the last, the table scrolls.
 const MIN_SCALE = 0.8
+const MIN_AUTO_COLUMN = 160
+const OWN_WIDTH = /(^|\s)w-(?!auto\b)\S+/
 
 function fitTable(body: HTMLElement) {
-  const head = (body.firstElementChild as HTMLTableElement | null)?.tHead?.rows[0]
+  const table = body.firstElementChild as HTMLTableElement | null
+  const head = table?.tHead?.rows[0]
   const cells = head ? Array.from(head.cells) : []
+  const fixed = !!table && getComputedStyle(table).tableLayout === 'fixed'
+  const auto = fixed ? cells.filter((cell) => !OWN_WIDTH.test(cell.className)) : []
+  const holdAuto = (min: number) => {
+    const fold = body.getAttribute('data-fold')
+    for (const cell of auto) {
+      cell.style.width = ''
+      const folded = (fold && cell.classList.contains('col-optional')) || (fold === 'low' && cell.classList.contains('col-low'))
+      if (!folded && cell.getBoundingClientRect().width < min) cell.style.width = `${min}px`
+    }
+  }
   for (const cell of cells) cell.style.width = ''
   body.removeAttribute('data-fold')
+  holdAuto(MIN_AUTO_COLUMN * MIN_SCALE)
   if (body.scrollWidth <= body.clientWidth + 1) return
   for (const level of ['optional', 'low']) {
     body.setAttribute('data-fold', level)
+    holdAuto(MIN_AUTO_COLUMN)
     const scale = body.clientWidth / body.scrollWidth
     if (scale >= 1) return
     if (scale >= MIN_SCALE) {

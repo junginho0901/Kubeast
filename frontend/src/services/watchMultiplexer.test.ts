@@ -264,4 +264,47 @@ describe('WebSocketMultiplexer', () => {
       query: 'watch=1',
     })
   })
+
+  // A screen that changes what it watches while the socket is still connecting (a drawer whose selector arrives
+  // after it opens) unsubscribes before subscribe() resolves: that watch must not be asked for, nor keep a listener.
+  it('a subscription dropped while the socket connects is never requested and gets no messages', async () => {
+    const mux = new WebSocketMultiplexer()
+    const all = { type: 'REQUEST' as const, clusterId: 'self', path: '/api/v1/namespaces/a/pods', query: 'watch=1&labelSelector=' }
+    const web = { ...all, query: 'watch=1&labelSelector=app%3Dweb' }
+    const first = vi.fn()
+    const second = vi.fn()
+    void mux.subscribe(all, first)
+    await flush()
+    mux.unsubscribe(all, first)
+    void mux.subscribe(web, second)
+    await flush()
+
+    const ws = MockWebSocket.instances[0]
+    ws.simulateOpen()
+    await flush()
+    expect(ws.sent.map((m) => JSON.parse(m))).toEqual([web])
+
+    ws.simulateMessage({ type: 'DATA', path: all.path, query: all.query, data: { type: 'ADDED', object: { name: 'client' } } })
+    ws.simulateMessage({ type: 'DATA', path: web.path, query: web.query, data: { type: 'ADDED', object: { name: 'web' } } })
+    expect(first).not.toHaveBeenCalled()
+    expect(second).toHaveBeenCalledTimes(1)
+  })
+
+  it('a subscription dropped before its REQUEST goes out on an open socket sends no REQUEST', async () => {
+    const mux = new WebSocketMultiplexer()
+    const pods = { type: 'REQUEST' as const, clusterId: 'self', path: '/api/v1/pods', query: 'watch=1' }
+    const nodes = { ...pods, path: '/api/v1/nodes' }
+    const p = mux.subscribe(pods, vi.fn())
+    await flush()
+    MockWebSocket.instances[0].simulateOpen()
+    await p
+    const ws = MockWebSocket.instances[0]
+    ws.sent = []
+
+    const listener = vi.fn()
+    void mux.subscribe(nodes, listener)
+    mux.unsubscribe(nodes, listener) // before subscribe() gets past its await
+    await flush()
+    expect(ws.sent.map((m) => JSON.parse(m).type)).not.toContain('REQUEST')
+  })
 })

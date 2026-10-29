@@ -111,14 +111,13 @@ func TestClusterInformers_OverviewFromStore(t *testing.T) {
 		t.Errorf("total_pods after create = %v, want 5", ci.overview()["total_pods"])
 	}
 
-	// Stored objects are stripped to key + phase.
+	// Pods are stored as rows (pod_index.go).
 	o, ok, _ := ci.pods.GetByKey("a/p1")
 	if !ok {
 		t.Fatal("a/p1 not in store")
 	}
-	p := o.(*corev1.Pod)
-	if p.Labels != nil || len(p.Spec.Containers) != 0 || p.Status.Phase != corev1.PodRunning {
-		t.Errorf("stored pod not stripped: labels=%v containers=%d phase=%s", p.Labels, len(p.Spec.Containers), p.Status.Phase)
+	if r, ok := o.(*podRow); !ok || r.phase != "Running" || r.containers != 1 {
+		t.Errorf("stored pod is %T %+v, want a row", o, o)
 	}
 }
 
