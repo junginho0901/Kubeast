@@ -89,7 +89,7 @@ func newClusterInformers(client kubernetes.Interface, idle time.Duration, onStop
 		infs[0].GetIndexer(), infs[1].GetStore(), infs[2].GetStore(), infs[3].GetStore(),
 		infs[4].GetStore(), infs[5].GetStore(), infs[6].GetStore()
 	bump := func() { ci.podRev.Add(1) }
-	_, _ = infs[0].AddEventHandler(cache.ResourceEventHandlerFuncs{
+	podEvents, err := infs[0].AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    func(interface{}) { bump() },
 		DeleteFunc: func(interface{}) { bump() },
 		UpdateFunc: func(oldObj, newObj interface{}) {
@@ -124,6 +124,10 @@ func newClusterInformers(client kubernetes.Interface, idle time.Duration, onStop
 			if !ok {
 				return
 			}
+		}
+		// the stores are full; the pod revision is final once the handler has had the first list too
+		if err == nil && !cache.WaitForCacheSync(ci.stop, podEvents.HasSynced) {
+			return
 		}
 		close(ci.synced)
 	}()
