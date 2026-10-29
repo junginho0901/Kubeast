@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"sort"
 	"strings"
+	"sync"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -15,22 +17,30 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-// The graph lists pods podListChunk at a time and keeps only the chosen namespaces' pods: two pages, a pod of a
-// namespace not chosen left out.
+// The graph lists each chosen namespace's pods podListChunk at a time, never the cluster's: two pages in one
+// namespace, one in the other, and no request to the other namespaces.
 func TestFetchResourceGraphData_PodsInPagesWithinTheNamespaces(t *testing.T) {
 	pod := func(ns, name string) corev1.Pod {
 		return corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name}}
 	}
-	var limits []string
+	var asked []string
+	var mu sync.Mutex
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if !strings.HasSuffix(r.URL.Path, "/pods") {
 			_, _ = w.Write([]byte(`{"items":[]}`))
 			return
 		}
-		limits = append(limits, r.URL.Query().Get("limit"))
-		list := corev1.PodList{Items: []corev1.Pod{pod("a", "a-1"), pod("c", "c-1")}, ListMeta: metav1.ListMeta{Continue: "next"}}
-		if r.URL.Query().Get("continue") == "next" {
+		mu.Lock()
+		asked = append(asked, r.URL.Path+"?limit="+r.URL.Query().Get("limit")+"&continue="+r.URL.Query().Get("continue"))
+		mu.Unlock()
+		var list corev1.PodList
+		switch {
+		case r.URL.Path == "/api/v1/namespaces/a/pods" && r.URL.Query().Get("continue") == "":
+			list = corev1.PodList{Items: []corev1.Pod{pod("a", "a-1")}, ListMeta: metav1.ListMeta{Continue: "next"}}
+		case r.URL.Path == "/api/v1/namespaces/a/pods":
+			list = corev1.PodList{Items: []corev1.Pod{pod("a", "a-2")}}
+		case r.URL.Path == "/api/v1/namespaces/b/pods":
 			list = corev1.PodList{Items: []corev1.Pod{pod("b", "b-1")}}
 		}
 		_ = json.NewEncoder(w).Encode(list)
@@ -51,11 +61,13 @@ func TestFetchResourceGraphData_PodsInPagesWithinTheNamespaces(t *testing.T) {
 	for _, p := range res.pods {
 		got = append(got, p.namespace+"/"+p.name)
 	}
-	if want := []string{"a/a-1", "b/b-1"}; !reflect.DeepEqual(got, want) {
+	sort.Strings(got)
+	if want := []string{"a/a-1", "a/a-2", "b/b-1"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("pods = %v, want %v", got, want)
 	}
-	if want := []string{"500", "500"}; !reflect.DeepEqual(limits, want) {
-		t.Fatalf("limits = %v, want %v", limits, want)
+	sort.Strings(asked)
+	if want := []string{"/api/v1/namespaces/a/pods?limit=500&continue=", "/api/v1/namespaces/a/pods?limit=500&continue=next", "/api/v1/namespaces/b/pods?limit=500&continue="}; !reflect.DeepEqual(asked, want) {
+		t.Fatalf("asked %v, want %v", asked, want)
 	}
 }
 
