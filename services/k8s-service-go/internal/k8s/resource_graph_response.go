@@ -45,16 +45,29 @@ func buildResourceGraphResponse(nodeMap map[string]rgNode, edges []rgEdge) map[s
 		if n.InstanceLabel != "" {
 			node["instanceLabel"] = n.InstanceLabel
 		}
+		if n.Group {
+			node["group"] = true
+			node["count"] = n.Count
+			node["members"] = n.Members
+			node["restarted"] = n.Restarted
+			if n.OwnerName != "" {
+				node["ownerName"] = n.OwnerName
+			}
+		}
 		nodeList = append(nodeList, node)
 	}
 
 	edgeList := make([]map[string]interface{}, 0, len(uniqueEdges))
 	for _, e := range uniqueEdges {
-		edgeList = append(edgeList, map[string]interface{}{
+		edge := map[string]interface{}{
 			"source": e.Source,
 			"target": e.Target,
 			"type":   e.Type,
-		})
+		}
+		if e.Count > 0 {
+			edge["count"] = e.Count
+		}
+		edgeList = append(edgeList, edge)
 	}
 
 	return map[string]interface{}{

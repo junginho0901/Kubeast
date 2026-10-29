@@ -1547,6 +1547,8 @@ export interface PodListStats {
   restarted: number
   completed: number
   top_reasons: Array<{ reason: string; count: number }>
+  // by the Cluster View card colour
+  health?: { ok: number; warn: number; error: number }
 }
 
 export interface PodPage {
@@ -1590,6 +1592,9 @@ export interface PodPageParams {
   offset: number
   limit: number
   revision?: string
+  /** one owner's pods, `<kind>/<name>` */
+  owner?: string
+  health?: 'ok' | 'warn' | 'error'
 }
 
 export interface PodRbacRule {
@@ -1840,12 +1845,27 @@ export interface ResourceGraphNode {
   nodeName?: string
   ownerKind?: string
   instanceLabel?: string
+  // a group of pods (or their per-pod PVCs and PVs) drawn as one box, asked with group_pods: the kind stays
+  // the members' kind, members are their names
+  group?: boolean
+  count?: number
+  members?: string[]
+  ownerName?: string
+  restarted?: number
 }
 
 export interface ResourceGraphEdge {
   source: string
   target: string
   type: ResourceGraphEdgeType
+  // how many edges an edge of a group stands for
+  count?: number
+}
+
+export interface ResourceGraphOptions {
+  groupPods?: boolean
+  groupBy?: 'none' | 'namespace' | 'node' | 'instance'
+  expand?: string[]
 }
 
 export interface ResourceGraphResponse {

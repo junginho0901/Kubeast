@@ -3172,7 +3172,9 @@
       "namespace": "Namespace",
       "node": "Node",
       "owner": "소유자",
-      "instance": "인스턴스"
+      "instance": "인스턴스",
+      "members": "이 상자에",
+      "restarted": "재시작한 Pod"
     },
     "nodeCount": "리소스 {{n}}개",
     "edgeCount": "연결 {{n}}개",
@@ -3241,6 +3243,28 @@
       "redacted": "내 네임스페이스 밖의 상대는 네임스페이스만 보입니다.",
       "selfLoops": "한 워크로드 안의 선 {{n}}개는 그리지 않습니다.",
       "lineCount": "통신 선 {{n}}개"
+    },
+    "group": {
+      "all": "전체",
+      "ok": "정상",
+      "warn": "주의",
+      "error": "오류",
+      "title": "{{kind}} 묶음",
+      "inGraph": "그래프의 이 상자에 {{count}}개",
+      "searchPods": "이름·노드·IP 검색",
+      "searchMembers": "이름 검색",
+      "search": "이 묶음에서 검색",
+      "expand": "그래프에 이 묶음 펼치기",
+      "pods": "Pod 묶음 · {{owner}}",
+      "hits": "{{n}}개 맞음",
+      "legend": "Pod 묶음(정상·선이 같음)",
+      "expandAllTitle": "모든 Pod 그리기",
+      "expandAllMessage": "Pod {{n}}개를 하나씩 그립니다. 느려질 수 있습니다.",
+      "expandAllConfirm": "그리기",
+      "count": "Pod {{pods}}개 (묶음 {{groups}} · 따로 {{apart}})",
+      "countPlain": "Pod {{pods}}개",
+      "groupPods": "Pod 묶기",
+      "expandAll": "모두 펼치기"
     }
   },
   "advancedSearch": {

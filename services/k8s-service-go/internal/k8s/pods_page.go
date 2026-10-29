@@ -37,7 +37,10 @@ const (
 )
 
 // PodSortKeys are the columns the Pods list sorts by.
-var PodSortKeys = []string{"name", "ready", "status", "restarts", "pod_ip", "node_name", "age"}
+var PodSortKeys = []string{"name", "ready", "status", "restarts", "pod_ip", "node_name", "age", "health"}
+
+// PodHealthNames are the health filter's values: the Cluster View card colours.
+var PodHealthNames = []string{"ok", "warn", "error"}
 
 type PodPageQuery struct {
 	Namespace string // "" = every namespace the caller may list
@@ -47,6 +50,10 @@ type PodPageQuery struct {
 	Offset    int
 	Limit     int
 	Revision  string // the revision the caller's page is from
+	// OwnerKind and OwnerName keep one owner's pods (the Resource Graph's pod group list); the summary
+	// counts them only
+	OwnerKind, OwnerName string
+	Health               string // one of PodHealthNames: the rows of that card colour, counted before it
 }
 
 type PodListItem struct {
@@ -78,6 +85,14 @@ type PodStats struct {
 	Restarted  int              `json:"restarted"`
 	Completed  int              `json:"completed"`
 	TopReasons []PodReasonCount `json:"top_reasons"`
+	Health     PodHealthCounts  `json:"health"`
+}
+
+// PodHealthCounts counts the rows by the Cluster View card colour (podHealth).
+type PodHealthCounts struct {
+	OK    int `json:"ok"`
+	Warn  int `json:"warn"`
+	Error int `json:"error"`
 }
 
 type PodPage struct {
@@ -103,9 +118,23 @@ func (s *Service) GetPodPage(ctx context.Context, q PodPageQuery) (*PodPage, err
 	if set.unchanged {
 		return &PodPage{Items: []PodListItem{}, Stats: PodStats{TopReasons: []PodReasonCount{}}, Revision: set.revision, Unchanged: true, Source: set.source}, nil
 	}
-	page := buildPodPage(set.rows, q, time.Now())
+	page := buildPodPage(rowsOfOwner(set.rows, q.OwnerKind, q.OwnerName), q, time.Now())
 	page.Revision, page.Source = set.revision, set.source
 	return page, nil
+}
+
+// rowsOfOwner keeps one owner's rows; no kind keeps them all.
+func rowsOfOwner(rows []*podRow, kind, name string) []*podRow {
+	if kind == "" {
+		return rows
+	}
+	out := make([]*podRow, 0)
+	for _, r := range rows {
+		if r.ownerKind == kind && r.ownerName == name {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // podRowSet is the rows a caller may see for one namespace choice.
@@ -327,6 +356,9 @@ func buildPodPage(rows []*podRow, q PodPageQuery, now time.Time) *PodPage {
 	} else {
 		matched = slices.Clone(rows)
 	}
+	if h := slices.Index(PodHealthNames, q.Health); h >= 0 {
+		matched = slices.DeleteFunc(matched, func(r *podRow) bool { return int(r.health) != h })
+	}
 	sortPodRows(matched, q.Sort, q.Desc, now)
 	page.Total = len(matched)
 	limit := q.Limit
@@ -386,6 +418,14 @@ func podStats(rows []*podRow) PodStats {
 		}
 		if r.restarts > 0 {
 			st.Restarted++
+		}
+		switch r.health {
+		case podHealthOK:
+			st.Health.OK++
+		case podHealthWarn:
+			st.Health.Warn++
+		default:
+			st.Health.Error++
 		}
 		if phase == string(corev1.PodFailed) || statusNamesError(r.status) {
 			st.Error++
@@ -462,6 +502,9 @@ func sortPodRows(rows []*podRow, key string, desc bool, now time.Time) {
 			c = foldCompare(a.node, b.node)
 		case "age":
 			c = compareOrdered(age(a), age(b))
+		case "health":
+			// errors first, then warnings
+			c = compareOrdered(int32(b.health), int32(a.health))
 		}
 		if c != 0 {
 			return c * dir

@@ -152,6 +152,11 @@
 - **Cluster View**는 노드 지도에 노드마다 칸 하나, 파드마다 점 하나를 카드와 같은 색(오류·주의·정상)으로 그립니다. 서버가 같은 줄과 같은 사용자 확인으로 세어 주므로, 큰 클러스터도 파드 전체를 브라우저로 받지 않고 한눈에 봅니다.
   - 지도 아래 노드 상자는 화면에 들어올 때 그 노드의 파드를 받고 그 노드를 watch합니다(`fieldSelector=spec.nodeName`). 그래서 화면에 보이는 상자에서는 파드가 뜨고, 끝나고, 다른 노드에 다시 뜨는 것이 바로 보이고, 지도는 2초 안에 따라옵니다.
   - 검색은 서버가 셉니다(이름·네임스페이스, 전과 같음). 맞는 파드가 있는 노드는 어디에 있든 지도와 상자에 나옵니다.
+- **Resource Graph**는 파드가 10개 넘는 소유자(ReplicaSet·StatefulSet·DaemonSet·Job)의 파드를 묶습니다. 정상이고 선이 같은 파드는 상자 하나("Running 98", 파드마다 점 하나)가 되고, 그 상자의 선은 안의 파드 모두의 선이며 선에 개수가 붙습니다. 정상이 아니거나 선이 다른 파드는 따로 그립니다. 머리줄은 모든 파드 수(묶음·따로)를 보여 줍니다.
+  - StatefulSet이 파드마다 만든 PVC와 그 PV도 파드와 함께 묶습니다. Node·Instance로 묶기는 그대로이며, 묶음은 그 경계를 넘지 않습니다.
+  - 묶음을 누르면 그 소유자의 파드 전부(따로 그린 것도)가 카드 색별 개수·검색·문제 먼저로 나오고, 파드를 누르면 상세 창이 열립니다. 검색은 묶음 안의 파드도 찾습니다.
+  - 창의 "그래프에 이 묶음 펼치기"나 "모두 펼치기"를 누르면 전처럼 파드를 하나씩 그립니다. 파드가 2,000개를 넘으면 모두 펼치기 전에 한 번 묻습니다.
+  - 파드는 500개씩 받아 짧은 줄로 들고 있으므로, 파드가 많은 네임스페이스도 통째로 들지 않습니다.
 - **YAML 생성·편집**은 문서마다 그 Kind의 `resource.<이름>.create`(편집은 대상의 `resource.<이름>.edit`)를 확인합니다.
   - 이름은 Kind의 소문자 형태이고, 자기 이름이 없는 Kind(CR 등)는 `customresource`를 씁니다.
     단, HorizontalPodAutoscaler·VerticalPodAutoscaler·PodDisruptionBudget·PersistentVolume·PersistentVolumeClaim·CustomResourceDefinition은 `hpa`·`vpa`·`pdb`·`pv`·`pvc`·`crd`를 씁니다.

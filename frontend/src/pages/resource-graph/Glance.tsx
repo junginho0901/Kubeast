@@ -26,8 +26,8 @@ export function Glance({ node, position }: Props) {
       <div className="flex items-center gap-2 mb-2">
         <span className="text-base">{kindIcon[node.kind] || '📄'}</span>
         <div className="min-w-0 flex-1">
-          <div className="text-[10px] text-slate-400">{node.kind}</div>
-          <div className="text-xs font-semibold text-ink truncate">{node.name}</div>
+          <div className="text-[10px] text-slate-400">{node.group ? t('resourceGraph.group.title', { defaultValue: '{{kind}} group', kind: node.kind }) : node.kind}</div>
+          <div className="text-xs font-semibold text-ink truncate">{node.group && node.kind === 'Pod' ? node.ownerName : node.name}</div>
         </div>
         <span className="w-2 h-2 rounded-full shrink-0" style={{ background: borderColor, boxShadow: `0 0 6px ${borderColor}` }} />
       </div>
@@ -37,7 +37,9 @@ export function Glance({ node, position }: Props) {
         {node.ready && <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.ready', 'Ready')}</span><span className="text-ink">{node.ready}</span></div>}
         {node.namespace && <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.namespace', 'Namespace')}</span><span className="text-ink">{node.namespace}</span></div>}
         {node.nodeName && <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.node', 'Node')}</span><span className="text-ink">{node.nodeName}</span></div>}
-        {node.ownerKind && <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.owner', 'Owner')}</span><span className="text-ink">{node.ownerKind}</span></div>}
+        {node.ownerKind && <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.owner', 'Owner')}</span><span className="text-ink">{node.group ? `${node.ownerKind}/${node.ownerName}` : node.ownerKind}</span></div>}
+        {node.group && <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.members', 'In this box')}</span><span className="text-ink">{node.count}</span></div>}
+        {node.group && (node.restarted ?? 0) > 0 && <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.restarted', 'Restarted')}</span><span className="text-ink">{node.restarted}</span></div>}
         {node.instanceLabel && <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.instance', 'Instance')}</span><span className="text-ink">{node.instanceLabel}</span></div>}
       </div>
     </div>

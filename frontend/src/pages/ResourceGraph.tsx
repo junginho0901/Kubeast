@@ -10,11 +10,12 @@ import {
   BackgroundVariant,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Info, ShieldAlert } from 'lucide-react'
 import { api, ResourceGraphNode, type TrafficEnd, type TrafficLine, type TrafficResult } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { useConfirm } from '@/services/confirm'
 import NetworkPolicyCheckModal from '@/components/resource-detail/NetworkPolicyCheckModal'
 import { useCluster } from '@/contexts/ClusterContext'
 import { useAIContext } from '@/hooks/useAIContext'
@@ -29,6 +30,7 @@ import {
   type GroupBy,
 } from './resource-graph/constants'
 import { Glance } from './resource-graph/Glance'
+import { PodGroupList } from './resource-graph/PodGroupList'
 import { ResourceGraphHeader } from './resource-graph/ResourceGraphHeader'
 import { useResourceGraphLayout } from './resource-graph/useResourceGraphLayout'
 import { TrafficControls } from './resource-graph/TrafficControls'
@@ -112,6 +114,11 @@ export default function ResourceGraph() {
   const [hoverEdge, setHoverEdge] = useState<string | null>(null)
   const [hoverNode, setHoverNode] = useState<string | null>(null)
   const [why, setWhy] = useState<LineCheck | null>(null)
+  // pods of a large owner come as groups (resource_graph_groups.go): all of them drawn pod by pod, or some
+  const [groupPods, setGroupPods] = useState(true)
+  const [expanded, setExpanded] = useState<string[]>([])
+  const [openGroup, setOpenGroup] = useState<ResourceGraphNode | null>(null)
+  const confirm = useConfirm()
 
   // Data fetching
   const { data: namespaces } = useQuery({
@@ -137,11 +144,29 @@ export default function ResourceGraph() {
 
   const hasSelection = selectedNamespaces.size > 0
 
+  // a group never crosses the page's node or instance grouping, so those are asked of the server
+  const serverGroupBy = groupBy === 'node' || groupBy === 'instance' ? groupBy : 'none'
   const { data: graphData, isLoading, error: graphError, refetch: refetchGraph } = useQuery({
-    queryKey: ['resource-graph', nsArray],
-    queryFn: () => api.getResourceGraph(nsArray),
+    queryKey: ['resource-graph', nsArray, groupPods, serverGroupBy, expanded],
+    queryFn: () => api.getResourceGraph(nsArray, { groupPods, groupBy: serverGroupBy, expand: expanded }),
     enabled: hasSelection,
+    placeholderData: keepPreviousData,
   })
+  // the pods the graph holds: a group counts its members
+  const podCounts = useMemo(() => {
+    let pods = 0, groups = 0, apart = 0
+    for (const n of graphData?.nodes ?? []) {
+      if (n.kind !== 'Pod') continue
+      if (n.group) {
+        groups++
+        pods += n.count ?? 0
+      } else {
+        apart++
+        pods++
+      }
+    }
+    return { pods, groups, apart }
+  }, [graphData])
   const graphErrorCode = (graphError as { response?: { status?: number } } | null)?.response?.status
   const forbiddenKinds = graphData?.forbidden_kinds ?? []
 
@@ -167,7 +192,7 @@ export default function ResourceGraph() {
     const totalEdges = graphData.edges?.length ?? 0
     const byKind: Record<string, number> = {}
     for (const n of graphData.nodes ?? []) {
-      byKind[n.kind] = (byKind[n.kind] ?? 0) + 1
+      byKind[n.kind] = (byKind[n.kind] ?? 0) + (n.group ? n.count ?? 0 : 1)
     }
 
     // 사용자가 화면에서 적용 중인 필터를 그대로 LLM 컨텍스트에도 반영
@@ -175,7 +200,7 @@ export default function ResourceGraph() {
     const q = (searchQuery || '').trim().toLowerCase()
     const filteredNodes = allNodes.filter((n) => {
       if (kindFilters.size > 0 && !kindFilters.has(n.kind)) return false
-      if (q && !(n.name?.toLowerCase().includes(q) || n.namespace?.toLowerCase().includes(q))) return false
+      if (q && !(n.name?.toLowerCase().includes(q) || n.namespace?.toLowerCase().includes(q) || n.members?.some((m) => m.toLowerCase().includes(q)))) return false
       if (statusFilter === 'issues') {
         const s = (n.status || '').toLowerCase()
         if (s === '' || s === 'running' || s === 'ready' || s === 'active' || s === 'bound' || s === 'succeeded') return false
@@ -194,7 +219,17 @@ export default function ResourceGraph() {
       return ap - bp
     })
     const TOP_N = 30
-    const visibleItems = sorted.slice(0, TOP_N).map((n) => ({
+    const visibleItems = sorted.slice(0, TOP_N).map((n) => (n.group ? {
+      kind: n.kind,
+      group: true,
+      count: n.count,
+      owner: n.ownerKind && n.ownerName ? `${n.ownerKind}/${n.ownerName}` : undefined,
+      name: n.name,
+      namespace: n.namespace || undefined,
+      status: n.status,
+      restarted: n.restarted || undefined,
+      _link: n.ownerKind && n.ownerName ? buildResourceLink(n.ownerKind, n.namespace, n.ownerName) : undefined,
+    } : {
       kind: n.kind,
       name: n.name,
       namespace: n.namespace || undefined,
@@ -216,13 +251,13 @@ export default function ResourceGraph() {
           group_by: groupBy,
           status_filter: statusFilter,
         },
-        stats: { total_nodes: totalNodes, total_edges: totalEdges, by_kind: byKind, filtered_total: filteredNodes.length, problematic: problematicCount },
+        stats: { total_nodes: totalNodes, total_edges: totalEdges, by_kind: byKind, filtered_total: filteredNodes.length, problematic: problematicCount, pod_groups: podCounts.groups || undefined },
         visible_items: visibleItems,
         // the traffic lines on screen, counted only: the AI reads flows itself (network_flows)
         traffic: traffic ? { view, source, lines: traffic.lines.length, dropped_lines: traffic.lines.filter((l) => l.dropped > 0).length, truncated: traffic.truncated || undefined } : undefined,
       },
     }
-  }, [graphData, nsArray, kindFilters, edgeTypeFilters, searchQuery, groupBy, statusFilter, traffic, view, source])
+  }, [graphData, nsArray, kindFilters, edgeTypeFilters, searchQuery, groupBy, statusFilter, traffic, view, source, podCounts])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
@@ -262,6 +297,7 @@ export default function ResourceGraph() {
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     const raw = node.data?.raw as ResourceGraphNode | undefined
     if (raw && isPeer(raw)) openEnd(raw.end)
+    else if (raw?.group) setOpenGroup(raw)
     else if (raw) {
       openDetail({ kind: raw.kind, name: raw.name, namespace: raw.namespace })
     }
@@ -293,6 +329,21 @@ export default function ResourceGraph() {
     setHoverNode(null)
   }, [])
 
+  const setGrouping = useCallback(async (on: boolean) => {
+    if (on) {
+      setGroupPods(true)
+      setExpanded([])
+      return
+    }
+    // every pod a box: past a few thousand the layout takes long, said once
+    if (podCounts.pods > 2000 && !(await confirm({
+      title: t('resourceGraph.group.expandAllTitle', 'Draw every pod'),
+      message: t('resourceGraph.group.expandAllMessage', { defaultValue: 'The graph will draw {{n}} pods one by one, which can be slow.', n: podCounts.pods }),
+      confirmLabel: t('resourceGraph.group.expandAllConfirm', 'Draw them'),
+    }))) return
+    setGroupPods(false)
+  }, [confirm, podCounts.pods, t])
+
   const nodeCount = graphData?.nodes?.length || 0
   const edgeCount = graphData?.edges?.length || 0
 
@@ -319,6 +370,9 @@ export default function ResourceGraph() {
         setKindFilters={setKindFilters}
         edgeTypeFilters={edgeTypeFilters}
         setEdgeTypeFilters={setEdgeTypeFilters}
+        podCounts={podCounts}
+        groupPods={groupPods && expanded.length === 0 ? 'grouped' : groupPods ? 'some' : 'all'}
+        setGroupPods={(on) => void setGrouping(on)}
         extra={sources.length > 0 && source ? (
           <TrafficControls
             view={view}
@@ -462,6 +516,20 @@ export default function ResourceGraph() {
           <TrafficPanel line={selectedLine} result={traffic} onClose={() => setSelected(null)} onWhy={setWhy} onOpen={openEnd} />
         )}
         {why && <NetworkPolicyCheckModal self={why.self} selfName={why.selfName} namespace={why.namespace} initial={why.initial} onClose={() => setWhy(null)} />}
+        {openGroup && (
+          <PodGroupList
+            group={openGroup}
+            onClose={() => setOpenGroup(null)}
+            onExpand={(id) => {
+              setExpanded((prev) => (prev.includes(id) ? prev : [...prev, id]))
+              setOpenGroup(null)
+            }}
+            onOpen={(target) => {
+              setOpenGroup(null)
+              openDetail(target)
+            }}
+          />
+        )}
 
         {/* Glance */}
         <Glance node={glanceNode} position={glancePos} />
@@ -516,6 +584,12 @@ export default function ResourceGraph() {
           )}
           {legendOpen && (
           <div className="border-t border-slate-700 pt-1.5 mt-1.5 space-y-1">
+            {podCounts.groups > 0 && (
+              <div className="flex items-center gap-2" data-testid="legend-group">
+                <span className="flex w-3 flex-wrap gap-px">{[0, 1, 2, 3].map((i) => <span key={i} className="block h-[3px] w-[5px] bg-green-500" />)}</span>
+                <span className="text-slate-400 max-w-[160px]">{t('resourceGraph.group.legend', 'Pod group (healthy, same lines)')}</span>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-sm border-2 border-green-500" />
               <span className="text-slate-400">{t('resourceGraph.legendRunning', 'Running / Active')}</span>

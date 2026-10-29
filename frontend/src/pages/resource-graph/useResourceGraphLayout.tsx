@@ -88,6 +88,36 @@ function rowsBlock(rows: PortRow[]) {
   )
 }
 
+const GROUP_DOTS = 50
+
+// groupLabel: the box of a group — what it holds, how many, a dot per member (up to GROUP_DOTS, then the rest as a
+// number), the members a search found and the pods that restarted.
+function groupLabel(n: ResourceGraphNode, icon: string, memberHits: number) {
+  const count = n.count ?? 0
+  const kindText = n.kind === 'Pod'
+    ? i18next.t('resourceGraph.group.pods', { defaultValue: 'Pod group · {{owner}}', owner: n.ownerKind ?? '' })
+    : i18next.t('resourceGraph.group.title', { defaultValue: '{{kind}} group', kind: n.kind })
+  return (
+    <div className="flex items-center gap-1.5 px-2 py-1 min-w-0" data-testid="graph-group" data-count={count}>
+      <span className="text-base shrink-0">{icon}</span>
+      <div className="min-w-0 flex-1">
+        <div className="text-[10px] text-slate-400 leading-tight truncate">{kindText}</div>
+        <div className="text-xs font-medium text-ink truncate leading-tight" title={n.kind === 'Pod' ? n.ownerName : n.name}>
+          {n.status} {count}
+          {memberHits > 0 && <span className="ml-1 text-[10px] text-primary-300">{i18next.t('resourceGraph.group.hits', { defaultValue: '{{n}} match', n: memberHits })}</span>}
+          {(n.restarted ?? 0) > 0 && <span className="ml-1 text-[10px] text-slate-400">↻ {n.restarted}</span>}
+        </div>
+        <div className="mt-0.5 flex flex-wrap items-center gap-px" aria-hidden="true">
+          {Array.from({ length: Math.min(count, GROUP_DOTS) }, (_, i) => (
+            <span key={i} className="block h-[3px] w-[5px] rounded-[1px]" style={{ background: statusColor(n.status) }} />
+          ))}
+          {count > GROUP_DOTS && <span className="ml-0.5 text-[9px] leading-none text-slate-400">+{count - GROUP_DOTS}</span>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // withRows puts the head in BOX_HEIGHT and the rows under it, when the box has rows.
 function withRows(head: ReactElement, rows: PortRow[] | undefined) {
   if (!rows) return head
@@ -165,14 +195,18 @@ export function useResourceGraphLayout({
       position: { x: 0, y: 0 },
       style: { background: 'var(--color-slate-900)', border: '2px dashed var(--color-slate-500)', borderRadius: '8px', padding: 0, width: 200, ...boxSize(p.id) },
     }))
+    const q = searchQuery.toLowerCase()
     const rfNodes: Node[] = gNodes.map(n => {
       const icon = kindIcon[n.kind] || '📄'
       const borderColor = statusColor(n.status)
-      const isHighlighted = searchQuery && n.name.toLowerCase().includes(searchQuery.toLowerCase())
+      // a group is found by its members' names too
+      const memberHits = q && n.group ? (n.members ?? []).filter(m => m.toLowerCase().includes(q)).length : 0
+      const isHighlighted = searchQuery && (n.name.toLowerCase().includes(q) || memberHits > 0)
       return {
         id: n.id,
         data: {
           label: withRows(
+            n.group ? groupLabel(n, icon, memberHits) : (
             <div className="flex items-center gap-1.5 px-2 py-1 min-w-0">
               <span className="text-base shrink-0">{icon}</span>
               <div className="min-w-0 flex-1">
@@ -182,7 +216,7 @@ export function useResourceGraphLayout({
                 </div>
                 {n.ready && <div className="text-[10px] text-slate-400 leading-tight">{n.ready}</div>}
               </div>
-            </div>,
+            </div>),
             rowsOf.get(n.id),
           ),
           raw: n,
@@ -217,7 +251,7 @@ export function useResourceGraphLayout({
           animated: e.type === 'selects',
           style: { stroke: style.stroke, strokeDasharray: style.strokeDasharray, strokeWidth: 1.5 },
           ...(up ? { markerStart: arrow } : { markerEnd: arrow }),
-          label: style.label,
+          label: e.count && e.count > 1 ? `${style.label} · ${e.count}` : style.label,
           labelStyle: { fill: style.stroke, fontSize: 10 },
           labelBgStyle: { fill: 'var(--color-slate-900)', fillOpacity: 0.8 },
           labelBgPadding: [4, 2] as [number, number],

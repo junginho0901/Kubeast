@@ -8,6 +8,7 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"sync"
 
@@ -49,12 +50,28 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 
 	// --- Namespaced resources ---
 	fetch("Pod", func() error {
-		list, err := s.clientsetCtx(ctx).CoreV1().Pods(ns).List(ctx, metav1.ListOptions{})
-		if err != nil {
-			return err
+		// podListChunk at a time, each page cut to rgPod and pods outside the chosen namespaces dropped, so a
+		// large cluster is never held whole (two or more namespaces are listed across all of them)
+		var pods []rgPod
+		opts := metav1.ListOptions{Limit: podListChunk}
+		for {
+			list, err := s.clientsetCtx(ctx).CoreV1().Pods(ns).List(ctx, opts)
+			if err != nil {
+				return err
+			}
+			for i := range list.Items {
+				if len(namespaces) > 1 && !slices.Contains(namespaces, list.Items[i].Namespace) {
+					continue
+				}
+				pods = append(pods, toRGPod(&list.Items[i]))
+			}
+			if list.Continue == "" {
+				break
+			}
+			opts.Continue = list.Continue
 		}
 		mu.Lock()
-		res.pods = list.Items
+		res.pods = pods
 		mu.Unlock()
 		return nil
 	})

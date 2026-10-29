@@ -48,12 +48,14 @@ export function isPeer(n: ResourceGraphNode): n is TrafficPeerNode {
 // Kinds a line end can be, in the order a "namespace/name" end without a kind is looked up.
 const END_KINDS = ['Pod', 'Deployment', 'StatefulSet', 'DaemonSet', 'ReplicaSet', 'Job', 'CronJob']
 
-// anchorOf is where an end goes: a node the graph shows, else a stand-in.
-export function anchorOf(e: TrafficEnd, shown: Map<string, ResourceGraphNode>): { id: string; peer?: TrafficPeerNode } {
+// anchorOf is where an end goes: a node the graph shows (a pod in a group: the group), else a stand-in.
+export function anchorOf(e: TrafficEnd, shown: Map<string, ResourceGraphNode>, inGroup?: Map<string, string>): { id: string; peer?: TrafficPeerNode } {
   if (e.namespace && e.name) {
     for (const kind of e.kind ? [e.kind] : END_KINDS) {
       const id = `${kind}/${e.namespace}/${e.name}`
       if (shown.has(id)) return { id }
+      const group = inGroup?.get(id)
+      if (group && shown.has(group)) return { id: group }
     }
     const id = `traffic:${e.namespace}/${e.kind ?? ''}/${e.name}`
     return { id, peer: { id, kind: PEER_KIND, name: e.name, namespace: e.namespace, status: '', end: e } }
@@ -83,9 +85,13 @@ export function buildTraffic(lines: TrafficLine[], shown: Map<string, ResourceGr
   const edges: TrafficEdge[] = []
   let selfLoops = 0
   const busiest = Math.max(1, ...lines.map((l) => l.allowed + l.dropped))
+  const inGroup = new Map<string, string>()
+  for (const n of shown.values()) {
+    if (n.group) for (const m of n.members ?? []) inGroup.set(`${n.kind}/${n.namespace}/${m}`, n.id)
+  }
   lines.forEach((line, i) => {
-    const from = anchorOf(line.from, shown)
-    const to = anchorOf(line.to, shown)
+    const from = anchorOf(line.from, shown, inGroup)
+    const to = anchorOf(line.to, shown, inGroup)
     if (from.id === to.id) {
       selfLoops++
       return
