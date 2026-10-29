@@ -12,7 +12,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STORE="${GRAFANA_CLUSTER:-kubeast-b}"
-IMAGE="grafana/grafana:13.2.4"
+IMAGE="grafana/grafana:13.3.0"
 
 store_kubectl() { kubectl --kubeconfig <(kind get kubeconfig --name "$STORE") "$@"; }
 

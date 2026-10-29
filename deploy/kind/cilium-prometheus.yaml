@@ -1,4 +1,4 @@
-# A one-pod Prometheus v3.15.0 in `monitoring` on the Cilium kind cluster (scripts/kind-cilium.sh), and on the
+# A one-pod Prometheus v3.15.1 in `monitoring` on the Cilium kind cluster (scripts/kind-cilium.sh), and on the
 # Retina one (scripts/kind-retina.sh): it scrapes only the Hubble metrics of each agent (Service
 # kube-system/hubble-metrics, enabled by deploy/kind/cilium-values.yaml, or network-observability, by
 # deploy/kind/retina-values.yaml) and keeps a day in memory. Kubeast finds it as monitoring/prometheus:9090;
@@ -82,7 +82,7 @@ spec:
       serviceAccountName: prometheus
       containers:
         - name: prometheus
-          image: prom/prometheus:v3.15.0
+          image: prom/prometheus:v3.15.1
           args:
             - --config.file=/etc/prometheus/prometheus.yml
             - --storage.tsdb.path=/prometheus

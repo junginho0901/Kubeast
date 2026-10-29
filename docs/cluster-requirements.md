@@ -143,7 +143,7 @@ These read Prometheus:
 
 ### VictoriaMetrics
 
-VictoriaMetrics serves the Prometheus query API as is, so the screens and the AI tools read it with the same queries (verified: v1.154.1 single-node and cluster versions, which return the same values as cluster 2's Prometheus).
+VictoriaMetrics serves the Prometheus query API as is, so the screens and the AI tools read it with the same queries (verified: v1.155.0 single-node and cluster versions, which return the same values as cluster 2's Prometheus).
 The list below covers only the differences.
 
 - **Discovery**: when there is no Prometheus, Kubeast finds the single-node version automatically. If there is a Prometheus, Prometheus comes first.
@@ -203,7 +203,7 @@ What to match when you use hostmetrics:
 - **Host reads**: mount the host `/` read-only at `root_path: /hostfs`, the same as the hostMetrics preset of the opentelemetry-collector chart.
   - Network values are the node interfaces' only with `hostNetwork: true`. Otherwise they are the collector pod's own traffic, so turn off the `network` scraper in that case. Kubeast then hides that cell.
   - Disk leaves out the same devices as node-exporter's default exclusions (partitions, loop, ram).
-- **Example**: [`deploy/kind/hostmetrics-collector.yaml`](../deploy/kind/hostmetrics-collector.yaml) (contrib 0.163.1, `scripts/kind-hostmetrics.sh`).
+- **Example**: [`deploy/kind/hostmetrics-collector.yaml`](../deploy/kind/hostmetrics-collector.yaml) (contrib 0.164.0, `scripts/kind-hostmetrics.sh`).
 
 **Additional paths the AI tools read**: the Prometheus discovery tools use the same store and the same cluster scope as the queries.
 All are GET, so they can also be read through the Grafana data source proxy.
@@ -220,7 +220,7 @@ All are GET, so they can also be read through the Grafana data source proxy.
   It adds OpenCost to the default scrape jobs (cAdvisor, kubelet, kube-state-metrics, node-exporter).
 
   ```bash
-  helm install prometheus prometheus-community/prometheus --version 29.37.0 \
+  helm install prometheus prometheus-community/prometheus --version 29.39.0 \
     -n monitoring --create-namespace -f deploy/examples/target-cluster/prometheus-values.yaml
   ```
 
@@ -324,7 +324,7 @@ Badges and warnings appear only when objects Argo CD deployed carry the tracking
 For installs that use the label method (`app.kubernetes.io/instance`, etc.), put that key in `gitops.argocd.instanceLabel`.
 Argo CD itself does not have to be on the target cluster.
 
-- **Verification** (e2e `argocd-real.spec.ts`): a Deployment actually synced by an Argo CD 3.5.6 core install (`scripts/kind-argocd.sh`, podinfo chart 6.15.0) carries the annotation `<app>:apps/Deployment:<NS>/<name>`. On that object:
+- **Verification** (e2e `argocd-real.spec.ts`): a Deployment actually synced by an Argo CD 3.5.6 core install (`scripts/kind-argocd.sh`, podinfo chart 6.17.0) carries the annotation `<app>:apps/Deployment:<NS>/<name>`. On that object:
   - Kubeast blocks deleting and rolling back with 409, and writes a `k8s.gitops.refuse` row.
   - The drawer shows a badge.
   - `gitops_status` reads that Application the same as kubectl does.
@@ -410,7 +410,7 @@ Loki returns only patterns with 30 or more lines in the window, for the last 3 h
   - Read permission is the same as for log search: `get pods/log` as the user's identity.
 - **AI alert reading** (`features.alertStore`, when used): Kubeast reads the alert store's `/api/v2/alerts` (matcher `filter`) and `/api/v2/silences` with GET. When silence writing is on, it also writes (next item).
   - The store can be Alertmanager API v2, an Alertmanager through the Grafana data source proxy, or Grafana alerting's Alertmanager-compatible API (`/api/alertmanager/grafana/api/v2/…`).
-  - On Grafana 13.2.4, that API was confirmed to answer 200 with Viewer. `…/status` is 403 for Viewer, so it is not used.
+  - On Grafana 13.2.4 and again on 13.3.0, that API was confirmed to answer 200 with Viewer. `…/status` is 403 for Viewer, so it is not used.
   - For a store shared by several clusters, each alert needs a **cluster label** so that only that cluster's alerts are selected.
     The default label is `cluster`, set with Prometheus `external_labels` or Grafana alert rule labels (value = `features.alertStore.clusters`).
   - Check: `curl -G <url>/api/v2/alerts --data-urlencode 'filter=cluster="<value>"'`.
@@ -425,7 +425,7 @@ Loki returns only patterns with 30 or more lines in the window, for the last 3 h
   - The trace store (Jaeger, Tempo) is a place the browser opens through a link, so Kubeast does not talk to it.
 
 ```yaml
-# OpenTelemetry Collector contrib 0.163.1 — the node's container logs to Loki (DaemonSet, /var/log/pods mounted read-only)
+# OpenTelemetry Collector contrib 0.164.0 — the node's container logs to Loki (DaemonSet, /var/log/pods mounted read-only)
 receivers:
   file_log:
     include: [/var/log/pods/*/*/*.log]
@@ -614,17 +614,17 @@ For the drawers' "Top Talkers" and the AI tool `network_top_flows` (`features.ne
 
 | Component | Version | How |
 | --- | --- | --- |
-| prometheus-community/prometheus | chart 29.37.0 (Prometheus v3.15.0) | Installed on kind with the example values as is (29.36.1) → Kubeast discovered `monitoring/prometheus-server:9090`, queried cAdvisor, node-exporter and kube-state-metrics metrics, optimization source `prometheus`. With 29.37.0 the render of the example values differs only in chart labels |
+| prometheus-community/prometheus | chart 29.39.0 (Prometheus v3.15.1) | Installed on kind with the example values as is (29.36.1) → Kubeast discovered `monitoring/prometheus-server:9090`, queried cAdvisor, node-exporter and kube-state-metrics metrics, optimization source `prometheus`. With 29.39.0 the render of the example values differs only in chart labels |
 | opencost/opencost | chart 2.5.33 (OpenCost 1.121.3) | Installed with the example values as is (2.5.32) → discovered `opencost/opencost:9003`, cost rows per namespace. With 2.5.33 the render of the example values differs only in chart labels |
 | `scripts/render-target-rbac.sh` + `cluster-values.yaml` | — | Before applying, Read cost and Prometheus queries got 403 → after applying, 200 |
 | kube-prometheus-stack | 92.3.0 | Only the Service name and port, checked by render |
 | metrics-server | 0.9.0 | Development cluster 2 (`deploy/kind/second-cluster.yaml`) |
 | Kyverno | 1.19.2 (chart 3.9.2) | Development cluster 2 |
 | Alertmanager | v0.34.1 | Development cluster 2 — an alert added with `amtool alert add` came in through the webhook and was investigated (e2e `alert-investigation.spec.ts`) |
-| Loki · OpenTelemetry Collector contrib | 3.7.9 · 0.163.1 | 10-14 (3.7.8 · 0.162.0), raised 10-21. Collectors of two clusters write to one Loki in development cluster 2: Job logs found by text and by workload, 0 lines from the other cluster, and still found after the Job was deleted (e2e `log-search.spec.ts`) |
-| OpenTelemetry Collector contrib `host_metrics` | 0.163.1 | 10-17 (0.162.0), raised 10-21. Development cluster 1 (no node-exporter, `scripts/kind-hostmetrics.sh`) remote-writes to cluster 2's Prometheus. Compared with cluster 2's node-exporter, which sees the same kernel: memory 70.6% / 70.7%, the same total memory bytes, Load 6.72 / 6.66, CPU 13.3% / 13.5%; the node drawer and dashboard filled (e2e `node-hostmetrics.spec.ts`). In 0.162 the names `hostmetrics` and `prometheusremotewrite` are deprecated aliases, so `host_metrics` and `prometheus_remote_write` are used |
-| VictoriaMetrics | v1.154.1 (single-node, cluster, vmagent) | 10-20 (v1.154.0), raised 10-21. Development cluster 2 (`scripts/kind-victoriametrics.sh`, with the same scrape config as cluster 2's Prometheus): node memory total is the same bytes in Prometheus and in the single-node and cluster versions; `/-/healthy` is 200 on the single-node version and on vmselect with its path; rules and alerts are empty placeholders; the vmselect targets API gives 400 → `up`; metadata types and descriptions are present (e2e `victoriametrics.spec.ts`) |
-| Grafana | 13.2.4 | 10-17, development cluster 2 (`scripts/kind-grafana.sh`). Metrics and logs read through the data source proxy equal the values read directly, and the dashboard and node drawer fill. A wrong token gives 401 in the status. An alert sent by a webhook contact point test is investigated (e2e `grafana.spec.ts`) |
+| Loki · OpenTelemetry Collector contrib | 3.7.9 · 0.164.0 | 10-14 (3.7.8 · 0.162.0), raised 10-21. Collectors of two clusters write to one Loki in development cluster 2: Job logs found by text and by workload, 0 lines from the other cluster, and still found after the Job was deleted (e2e `log-search.spec.ts`) |
+| OpenTelemetry Collector contrib `host_metrics` | 0.164.0 | 10-17 (0.162.0), raised 10-21. Development cluster 1 (no node-exporter, `scripts/kind-hostmetrics.sh`) remote-writes to cluster 2's Prometheus. Compared with cluster 2's node-exporter, which sees the same kernel: memory 70.6% / 70.7%, the same total memory bytes, Load 6.72 / 6.66, CPU 13.3% / 13.5%; the node drawer and dashboard filled (e2e `node-hostmetrics.spec.ts`). In 0.162 the names `hostmetrics` and `prometheusremotewrite` are deprecated aliases, so `host_metrics` and `prometheus_remote_write` are used |
+| VictoriaMetrics | v1.155.0 (single-node, cluster, vmagent) | 10-20 (v1.154.0), raised 10-21. Development cluster 2 (`scripts/kind-victoriametrics.sh`, with the same scrape config as cluster 2's Prometheus): node memory total is the same bytes in Prometheus and in the single-node and cluster versions; `/-/healthy` is 200 on the single-node version and on vmselect with its path; rules and alerts are empty placeholders; the vmselect targets API gives 400 → `up`; metadata types and descriptions are present (e2e `victoriametrics.spec.ts`) |
+| Grafana | 13.3.0 | 10-17, development cluster 2 (`scripts/kind-grafana.sh`). Metrics and logs read through the data source proxy equal the values read directly, and the dashboard and node drawer fill. A wrong token gives 401 in the status. An alert sent by a webhook contact point test is investigated (e2e `grafana.spec.ts`) |
 | Argo CD | 3.5.6 (core install) | 10-21, development cluster 2 (`scripts/kind-argocd.sh`). An Application syncs the podinfo chart. Checked: tracking annotation, 409, audit row, drawer badge, `gitops_status` (e2e `argocd-real.spec.ts`) |
 | Cilium (Hubble Relay) | 1.20.4 | 10-24, a kind cluster of its own without the default CNI (`scripts/kind-cilium.sh`, Relay TLS on). Read in `proxy` mode as a Read user: client → web on port 80 is FORWARDED with the NetworkPolicy `web-only-client` in `ingress_allowed_by` and the replies folded in, and stranger → web is DROPPED with `POLICY_DENIED` at ingress, as the policy says. A namespace-limited user gets 403 from the cluster; the drawer's "Why?" names the rule; MCP gives the same groups (e2e `network-flows.spec.ts`). 10-25: the `drop` metric with the labels of §17, scraped by Prometheus v3.15.0 on that cluster (`deploy/kind/cilium-prometheus.yaml`): the drawer and `network_drops` give the peers, reasons and counts of a direct query, and a namespace-limited user gets 403 from the cluster (e2e `network-drops.spec.ts`) |
 | Microsoft Retina (Hubble control plane) | 1.3.0 | 10-25, a kind cluster with kindnet (`scripts/kind-retina.sh`, `deploy/kind/retina-values.yaml`; the 1.3.1 images were not published). Read in `proxy` mode: a Deployment's recent flows find its pods by name, with the workloads named from the pods; client → web is one line, counted at web's ingress, not at the Service's cluster IP; with the pod labels, the metric lines equal a direct query of the SYNs at web's ingress (e2e `network-retina.spec.ts`). Policy drops were not reported as drops there (kindnet) |

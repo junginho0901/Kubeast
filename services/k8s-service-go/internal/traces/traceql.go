@@ -30,7 +30,7 @@ type Matcher struct {
 
 var scopeAttribute = regexp.MustCompile(`^resource\.[A-Za-z0-9_][A-Za-z0-9_.\-]*$`)
 
-// Token kinds of the Tempo TraceQL lexer (pkg/traceql/lexer.go, v3.1.0) that
+// Token kinds of the Tempo TraceQL lexer (pkg/traceql/lexer.go, v3.1.1) that
 // the injector needs to tell apart; everything else is "other".
 const (
 	tokOther = iota

@@ -41,7 +41,7 @@ dependencies:
   # Built from source into the tool-server and k8s-service images (their Dockerfiles), so the
   # release image scan sees this toolchain rather than the project's release binary.
   - name: aws-iam-authenticator
-    version: 0.7.23
+    version: 0.7.24
     upstream:
       flavour: github
       url: kubernetes-sigs/aws-iam-authenticator
@@ -63,7 +63,7 @@ dependencies:
         match: 'ZEITGEIST_VERSION:'
 
   - name: prometheus
-    version: v3.15.0
+    version: v3.15.1
     upstream:
       flavour: github
       url: prometheus/prometheus
@@ -84,7 +84,7 @@ dependencies:
         match: '\| prometheus-community/prometheus \|'
 
   - name: prometheus-chart
-    version: 29.37.0
+    version: 29.39.0
     upstream:
       flavour: helm
       repo: https://prometheus-community.github.io/helm-charts
@@ -203,7 +203,7 @@ dependencies:
         match: '(# Alertmanager v|\| Alertmanager \|)'
 
   - name: grafana
-    version: 13.2.4
+    version: 13.3.0
     upstream:
       flavour: github
       url: grafana/grafana
@@ -235,7 +235,7 @@ dependencies:
         match: '\| Loki · OpenTelemetry Collector contrib \|'
 
   - name: otel-collector-contrib
-    version: 0.163.1
+    version: 0.164.0
     upstream:
       flavour: github
       url: open-telemetry/opentelemetry-collector-releases
@@ -254,7 +254,7 @@ dependencies:
         match: '(\(contrib [0-9]|# OpenTelemetry Collector contrib [0-9]|\| Loki · OpenTelemetry Collector contrib \||\| OpenTelemetry Collector contrib `host_metrics` \|)'
 
   - name: telemetrygen
-    version: v0.163.0
+    version: v0.164.1
     upstream:
       flavour: github
       url: open-telemetry/opentelemetry-collector-contrib
@@ -267,7 +267,7 @@ dependencies:
         match: 'telemetrygen:v'
 
   - name: tempo
-    version: 3.1.0
+    version: 3.1.1
     upstream:
       flavour: github
       url: grafana/tempo
@@ -294,7 +294,7 @@ dependencies:
         match: '^JAEGER_IMAGE='
 
   - name: victoriametrics
-    version: v1.154.1
+    version: v1.155.0
     upstream:
       flavour: github
       url: VictoriaMetrics/VictoriaMetrics
@@ -404,7 +404,7 @@ dependencies:
         match: '(Argo CD [0-9.]+ core 설치가|\| Argo CD \|)'
 
   - name: podinfo
-    version: 6.15.0
+    version: 6.17.0
     upstream:
       flavour: github
       url: stefanprodan/podinfo

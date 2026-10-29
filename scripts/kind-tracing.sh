@@ -18,9 +18,9 @@ STORE="${LOGSEARCH_STORE_CLUSTER:-kubeast-b}"
 NAMESPACE="${NAMESPACE:-kubeast}"
 RELEASE="${RELEASE:-kubeast}"
 JAEGER_IMAGE="jaegertracing/jaeger:2.22.0"
-TEMPO_IMAGE="grafana/tempo:3.1.0"
+TEMPO_IMAGE="grafana/tempo:3.1.1"
 # e2e/tests/ai-traces-tools.spec.ts sends its traces with this from the first cluster
-TELEMETRYGEN_IMAGE="ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:v0.163.0"
+TELEMETRYGEN_IMAGE="ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:v0.164.1"
 
 store_kubectl() { kubectl --kubeconfig <(kind get kubeconfig --name "$STORE") "$@"; }
 
