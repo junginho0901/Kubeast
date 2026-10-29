@@ -80,6 +80,7 @@
     - 이름 없는 `k8s_get_resources`가 파드 25개를 넘으면 전체에 대한 개수(phase·상태·카드 색·네임스페이스·노드별)와, 오류·경고부터 손볼 순서로 파드 25개를 답하고 `next_offset`으로 이어 읽습니다. 25개 이하는 지금처럼 kubectl로 답합니다.
     - `k8s_find_resource`는 파드 전부를 찾습니다. `키=값`은 레이블 셀렉터로, 그 밖에는 단어가 모두 이름이나 레이블 하나에 있는 파드를 찾습니다. 네임스페이스 없이 이름만 받은 로그 도구도 같은 규칙으로 파드를 찾습니다.
     - `k8s_count`는 파드를 줄에서 셉니다(묶지 않거나 네임스페이스·노드·phase로, 레이블 셀렉터 있어도 됨). 필드 셀렉터나 다른 필드는 kubectl로 셉니다.
+  - 질의 도구는 API 서버가 받는 필드 셀렉터를 모두 받습니다(`status.phase!=Running`·`spec.nodeName=node-1`). `k8s_get_events`는 이벤트 필드만 받습니다.
     - 없는 파드 이름의 비슷한 이름은 파드 전부를 받지 않고, 그 이름의 단어를 가진 파드에서 찾습니다.
     - `k8s_jq_query`·`k8s_tabular_query`는 지금도 kubectl로 파드를 받는데, kubectl은 받은 파드를 전부 메모리에 듭니다. 그래서 네임스페이스·레이블 셀렉터 범위의 파드가 5,000개를 넘으면 개수와 크기 상관없이 답하는 도구를 알려 주며 `too_large`로 답합니다.
   - kubectl 목록이 도구 출력 상한(`TOOL_OUTPUT_MAX_BYTES`, 1 MiB)보다 길면 잘렸다고 답합니다. `k8s_jq_query`·`k8s_count`는 `too_large`, `k8s_tabular_query`는 "전체 수는 모름"으로 답하며, 읽기 오류나 틀린 개수를 내지 않습니다.
@@ -165,6 +166,9 @@
   - 창의 "그래프에 이 묶음 펼치기"나 "모두 펼치기"를 누르면 전처럼 파드를 하나씩 그립니다. 파드가 2,000개를 넘으면 모두 펼치기 전에 한 번 묻습니다.
   - 파드는 500개씩 받아 짧은 줄로 들고 있으므로, 파드가 많은 네임스페이스도 통째로 들지 않습니다.
 - **그 밖의 파드 목록**도 같은 서버 페이지에서 보여 줄 것만 받습니다. RuntimeClass·PriorityClass·ClusterRoleBinding 상세 창은 그것을 쓰는 파드를 10개씩, Dashboard의 Pods 창은 그림에서 고른 phase와 검색을 서버가 거른 50개씩, Monitoring Pods는 사용량과 함께 파드마다 limit을 받습니다. Cluster Hygiene는 파드를 500개씩 받는 대로 점검하고 결과만 남기며, 네트워크 흐름은 모든 파드의 워크로드 이름을 붙입니다(전에는 네임스페이스당 5,000개까지).
+- **초기화 중인 파드**는 Pods 목록·다른 파드 목록·상세 창에서 kubectl과 같은 STATUS·READY·RESTARTS로 보입니다. `Init:Error`·`Init:CrashLoopBackOff`·`Init:1/2`와 init 컨테이너의 재시작 수입니다(`PodInitializing`·0이 아님). 네이티브 사이드카(`restartPolicy: Always`인 init 컨테이너)도 kubectl처럼 READY에 셉니다.
+- **목록 화면은 네임스페이스를 주소(`?namespace=`)에 둡니다.** 링크나 새로고침으로 같은 네임스페이스가 열리고, All namespaces를 고르면 빠집니다.
+- **Resource Graph에서 네임스페이스를 여러 개 고르면** 클러스터 전체가 아니라 고른 네임스페이스마다 받습니다. 그래서 네임스페이스 권한만 있는 계정도 볼 수 있고, 일부 네임스페이스에서만 거부된 종류는 그 네임스페이스와 함께 알려 줍니다. **Issues** 필터는 노랑·빨강으로 그려진 것(아직 `Progressing`인 Deployment 포함)을 남기고, 떠 있는 채팅도 같은 것을 문제로 셉니다.
 - **YAML 생성·편집**은 문서마다 그 Kind의 `resource.<이름>.create`(편집은 대상의 `resource.<이름>.edit`)를 확인합니다.
   - 이름은 Kind의 소문자 형태이고, 자기 이름이 없는 Kind(CR 등)는 `customresource`를 씁니다.
     단, HorizontalPodAutoscaler·VerticalPodAutoscaler·PodDisruptionBudget·PersistentVolume·PersistentVolumeClaim·CustomResourceDefinition은 `hpa`·`vpa`·`pdb`·`pv`·`pvc`·`crd`를 씁니다.
