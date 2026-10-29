@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { InfoSection, InfoRow, StatusBadge, KeyValueTags, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
-import { usePagination } from './usePagination'
+import { useServerPods } from './useServerPods'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -34,21 +34,13 @@ export default function ClusterRoleBindingInfo({ name, rawJson }: Props) {
   const subjects = Array.isArray(describe?.subjects) ? describe.subjects : []
 
   // ClusterRoleBinding 의 ServiceAccount subjects 는 (kind=SA, name, namespace=
-  // 명시필수). cluster-wide Pod scan 후 (sa.namespace, sa.name) tuple 매칭.
-  // 큰 cluster 에선 무거우니 max 50.
+  // 명시필수). 그 SA 로 도는 파드만 서버가 골라 한 쪽씩 준다(/pods/page service_account).
   const saSubjects: Array<{ name: string; namespace: string }> = subjects
     .filter((s: any) => s?.kind === 'ServiceAccount' && s?.namespace && s?.name)
     .map((s: any) => ({ name: s.name, namespace: s.namespace }))
-  const { data: allPods } = useQuery({
-    queryKey: ['clusterrolebinding-bound-pods', name],
-    queryFn: () => api.getAllPods(),
-    enabled: saSubjects.length > 0,
-    staleTime: 30_000,
-  })
-  const saKeys = new Set(saSubjects.map((s) => `${s.namespace}/${s.name}`))
-  const boundPods = (Array.isArray(allPods) ? allPods : [])
-    .filter((p: any) => p?.service_account_name && saKeys.has(`${p.namespace}/${p.service_account_name}`))
-  const { items: pagedBoundPods, nav: boundPodsNav } = usePagination(boundPods, 10)
+  const { items: pagedBoundPods, total: boundTotal, nav: boundPodsNav } = useServerPods(
+    saSubjects.length > 0 ? { service_account: saSubjects.map((s) => `${s.namespace}/${s.name}`).join(',') } : null,
+  )
 
   if (isLoading) return <p className="text-slate-400">{tr('common.loading', 'Loading...')}</p>
 
@@ -130,8 +122,8 @@ export default function ClusterRoleBindingInfo({ name, rawJson }: Props) {
       )}
 
       {saSubjects.length > 0 && (
-        <InfoSection title="Bound Pods via ServiceAccount Subjects ({{n}})" titleValues={{ n: boundPods.length }}>
-          {boundPods.length === 0 ? (
+        <InfoSection title="Bound Pods via ServiceAccount Subjects ({{n}})" titleValues={{ n: boundTotal }}>
+          {boundTotal === 0 ? (
             <p className="text-xs text-slate-400"><Tx>No pod uses any of the bound ServiceAccounts.</Tx></p>
           ) : (
             <div className="overflow-x-auto">

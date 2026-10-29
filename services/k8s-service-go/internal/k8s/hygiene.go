@@ -20,6 +20,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/kubernetes"
 )
 
 // Cluster hygiene report: configuration risks read from the API as the
@@ -175,6 +176,7 @@ type HygieneOptions struct {
 // be read; checks that need them are skipped instead of reporting false gaps.
 type HygieneInput struct {
 	Pods                []corev1.Pod
+	podSummary          *hygienePodSummary // the pods as CollectHygiene folded them while listing (instead of Pods)
 	Namespaces          []corev1.Namespace
 	NetworkPolicies     []networkingv1.NetworkPolicy
 	ClusterRoleBindings []rbacv1.ClusterRoleBinding
@@ -215,8 +217,14 @@ func (s *Service) CollectHygiene(ctx context.Context, opts HygieneOptions) (Hygi
 		return true
 	}
 	all := metav1.ListOptions{}
-	if l, err := cs.CoreV1().Pods("").List(ctx, all); ok("pods", err) {
-		in.Pods = l.Items
+	// Upgrade readiness. The server version decides the target; without it the
+	// upgrade checks do not run (and say so through the collector list). Read
+	// first: the pods are checked as they are listed.
+	if sv, err := cs.Discovery().ServerVersion(); ok("serverversion", err) {
+		in.ServerVersion = sv.GitVersion
+	}
+	if sum, err := hygienePodSummaryOf(ctx, cs, hygieneTarget(opts, in.ServerVersion)); ok("pods", err) {
+		in.podSummary = sum
 	}
 	if l, err := cs.CoreV1().Namespaces().List(ctx, all); ok("namespaces", err) {
 		in.Namespaces = l.Items
@@ -240,11 +248,6 @@ func (s *Service) CollectHygiene(ctx context.Context, opts HygieneOptions) (Hygi
 		in.TLSSecrets = l.Items
 	}
 
-	// Upgrade readiness. The server version decides the target; without it the
-	// upgrade checks do not run (and say so through the collector list).
-	if sv, err := cs.Discovery().ServerVersion(); ok("serverversion", err) {
-		in.ServerVersion = sv.GitVersion
-	}
 	if l, err := cs.CoreV1().Nodes().List(ctx, all); ok("nodes", err) {
 		in.Nodes = l.Items
 	}
@@ -311,6 +314,74 @@ func (s *Service) CollectHygiene(ctx context.Context, opts HygieneOptions) (Hygi
 }
 
 // EvaluateHygiene runs every check over the input.
+// hygienePodFinding is what the report keeps of one owner's finding (addPod): the first pod's finding and its own
+// exemption, and how many pods gave it.
+type hygienePodFinding struct {
+	finding HygieneFinding
+	own     hygieneExemption
+	pods    int
+}
+
+// hygienePodSummary folds the pods' findings as they are read — per check, owner and container, as the report
+// groups them — and counts each namespace's pods, so the pods need not be held.
+type hygienePodSummary struct {
+	target   int
+	findings []hygienePodFinding
+	index    map[string]int
+	perNS    map[string]int
+}
+
+func newHygienePodSummary(target int) *hygienePodSummary {
+	return &hygienePodSummary{target: target, index: map[string]int{}, perNS: map[string]int{}}
+}
+
+func (s *hygienePodSummary) add(p *corev1.Pod) {
+	s.perNS[p.Namespace]++
+	kind, name := podOwner(*p)
+	own := parseExemption(p.Annotations)
+	for _, f := range append(podHygieneFindings(*p), podUpgradeFindings(*p, s.target)...) {
+		f.Kind, f.Namespace, f.Name = kind, p.Namespace, name
+		key := hygieneFindingKey(f)
+		if i, seen := s.index[key]; seen {
+			s.findings[i].pods++
+			continue
+		}
+		s.index[key] = len(s.findings)
+		s.findings = append(s.findings, hygienePodFinding{finding: f, own: own, pods: 1})
+	}
+}
+
+// hygienePodSummaryOf lists the pods podListChunk at a time and checks each page as it comes.
+func hygienePodSummaryOf(ctx context.Context, cs kubernetes.Interface, target int) (*hygienePodSummary, error) {
+	sum := newHygienePodSummary(target)
+	opts := metav1.ListOptions{Limit: podListChunk}
+	for {
+		l, err := cs.CoreV1().Pods("").List(ctx, opts)
+		if err != nil {
+			return nil, err
+		}
+		for i := range l.Items {
+			sum.add(&l.Items[i])
+		}
+		if l.Continue == "" {
+			return sum, nil
+		}
+		opts.Continue = l.Continue
+	}
+}
+
+// hygieneTarget is the minor the upgrade checks judge against: the option, else the server's next.
+func hygieneTarget(opts HygieneOptions, serverVersion string) int {
+	if opts.TargetMinor == 0 && minorOf(serverVersion) > 0 {
+		return minorOf(serverVersion) + 1
+	}
+	return opts.TargetMinor
+}
+
+func hygieneFindingKey(f HygieneFinding) string {
+	return strings.Join([]string{f.Check, f.Kind, f.Namespace, f.Name, f.Container}, "|")
+}
+
 func EvaluateHygiene(in HygieneInput, opts HygieneOptions) HygieneReport {
 	now := opts.Now
 	if now.IsZero() {
@@ -325,24 +396,28 @@ func EvaluateHygiene(in HygieneInput, opts HygieneOptions) HygieneReport {
 		nsAnnotations[n.Name] = n.Annotations
 	}
 	b := &hygieneBuilder{index: map[string]int{}}
-	target := opts.TargetMinor
-	if target == 0 && minorOf(in.ServerVersion) > 0 {
-		target = minorOf(in.ServerVersion) + 1
-	}
+	target := hygieneTarget(opts, in.ServerVersion)
 
+	// the pods, folded as the collector read them (podSummary) or here from in.Pods — one path for both
 	podsPerNS := map[string]int{}
 	if !in.Failed["pods"] {
-		for _, p := range in.Pods {
-			if excluded[p.Namespace] {
+		sum := in.podSummary
+		if sum == nil || sum.target != target {
+			sum = newHygienePodSummary(target)
+			for i := range in.Pods {
+				sum.add(&in.Pods[i])
+			}
+		}
+		for ns, n := range sum.perNS {
+			if !excluded[ns] {
+				podsPerNS[ns] = n
+			}
+		}
+		for _, pf := range sum.findings {
+			if excluded[pf.finding.Namespace] {
 				continue
 			}
-			podsPerNS[p.Namespace]++
-			kind, name := podOwner(p)
-			ex := mergeExemptions(parseExemption(p.Annotations), parseExemption(nsAnnotations[p.Namespace]))
-			for _, f := range append(podHygieneFindings(p), podUpgradeFindings(p, target)...) {
-				f.Kind, f.Namespace, f.Name = kind, p.Namespace, name
-				b.addPod(f, ex)
-			}
+			b.addPods(pf.finding, mergeExemptions(pf.own, parseExemption(nsAnnotations[pf.finding.Namespace])), pf.pods)
 		}
 	}
 
@@ -923,8 +998,16 @@ func (b *hygieneBuilder) add(f HygieneFinding, ex hygieneExemption) {
 	b.addPod(f, []hygieneExemption{ex})
 }
 
+// addPods adds a finding n pods gave.
+func (b *hygieneBuilder) addPods(f HygieneFinding, exs []hygieneExemption, n int) {
+	b.addPod(f, exs)
+	if i := b.index[hygieneFindingKey(f)]; b.findings[i].Pods > 0 {
+		b.findings[i].Pods += n - 1
+	}
+}
+
 func (b *hygieneBuilder) addPod(f HygieneFinding, exs []hygieneExemption) {
-	key := strings.Join([]string{f.Check, f.Kind, f.Namespace, f.Name, f.Container}, "|")
+	key := hygieneFindingKey(f)
 	if i, seen := b.index[key]; seen {
 		if b.findings[i].Pods > 0 {
 			b.findings[i].Pods++

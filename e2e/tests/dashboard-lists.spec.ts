@@ -62,7 +62,20 @@ test.describe('Dashboard lists', () => {
       node_name: 'e2e-node',
       containers: [],
     }))
-    await page.route(/\/api\/v1\/cluster\/pods\/all(\?|$)/, (route) => route.fulfill({ json: pods }))
+    // the window asks the Pods list's server page: the stand-in cuts the 120 pods as the server would
+    await page.route(/\/api\/v1\/cluster\/pods\/page(\?|$)/, (route) => {
+      const u = new URL(route.request().url())
+      const q = (u.searchParams.get('q') ?? '').toLowerCase()
+      const offset = Number(u.searchParams.get('offset') ?? 0)
+      const limit = Number(u.searchParams.get('limit') ?? 50)
+      const matched = pods.filter((p) => p.name.includes(q))
+      return route.fulfill({ json: {
+        items: matched.slice(offset, offset + limit).map((p) => ({ ...p, ready: '1/1', restart_count: 0, pod_ip: '', created_at: '' })),
+        total: matched.length,
+        stats: { total: pods.length, ready: pods.length, not_ready: 0, pending: 0, error: 0, restarted: 0, completed: 0, top_reasons: [] },
+        revision: '', source: 'index',
+      } })
+    })
     await page.goto('/')
     await page.getByTestId('stat-pods').click()
     const pager = page.getByTestId('resource-modal-pager')

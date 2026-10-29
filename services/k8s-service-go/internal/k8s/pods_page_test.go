@@ -14,6 +14,7 @@ import (
 	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -598,5 +599,64 @@ func TestPodPage_OwnerHealthFilterAndProblemsFirst(t *testing.T) {
 	page = buildPodPage(mine, PodPageQuery{Health: "ok", Limit: 50}, time.Now())
 	if want := []string{"shop/web-a", "shop/web-d"}; !reflect.DeepEqual(names(page), want) || page.Total != 2 || page.Stats.Total != 4 {
 		t.Fatalf("health=ok: %v total %d stats %d — the summary counts before the filter", names(page), page.Total, page.Stats.Total)
+	}
+}
+
+// The drawers' and the Dashboard window's filters: phase, RuntimeClass, PriorityClass and the service accounts a
+// ClusterRoleBinding binds; the summary counts before them.
+func TestPodPage_PhaseClassAndServiceAccountFilters(t *testing.T) {
+	rows := []*podRow{
+		row("a", "p1", func(r *podRow) { r.runtimeClass, r.priorityClass, r.serviceAccount = "gvisor", "high", "app" }),
+		row("a", "p2", func(r *podRow) { r.phase, r.priorityClass, r.serviceAccount = "Pending", "high", "other" }),
+		row("b", "p3", func(r *podRow) { r.runtimeClass, r.serviceAccount = "gvisor", "app" }),
+		row("b", "p4", nil),
+	}
+	cases := []struct {
+		q    PodPageQuery
+		want []string
+	}{
+		{PodPageQuery{Phase: "Pending"}, []string{"a/p2"}},
+		{PodPageQuery{RuntimeClass: "gvisor"}, []string{"a/p1", "b/p3"}},
+		{PodPageQuery{PriorityClass: "high"}, []string{"a/p1", "a/p2"}},
+		{PodPageQuery{ServiceAccounts: []string{"a/app", "b/app"}}, []string{"a/p1", "b/p3"}},
+		{PodPageQuery{ServiceAccounts: []string{"a/app"}}, []string{"a/p1"}},
+	}
+	for _, c := range cases {
+		c.q.Limit = 50
+		page := buildPodPage(rows, c.q, time.Now())
+		if !reflect.DeepEqual(names(page), c.want) || page.Total != len(c.want) || page.Stats.Total != 4 {
+			t.Errorf("%+v: %v total %d stats %d", c.q, names(page), page.Total, page.Stats.Total)
+		}
+	}
+	if it := buildPodPage(rows, PodPageQuery{ServiceAccounts: []string{"a/app"}, Limit: 50}, time.Now()).Items[0]; it.ServiceAccount != "app" {
+		t.Fatalf("the row names its service account: %+v", it)
+	}
+}
+
+// A pod's limits are the containers' sums, and none when a container sets none (Monitoring Pods' rule).
+func TestPodLimits(t *testing.T) {
+	ctr := func(cpu, mem string) corev1.Container {
+		c := corev1.Container{Name: "c", Resources: corev1.ResourceRequirements{Limits: corev1.ResourceList{}}}
+		if cpu != "" {
+			c.Resources.Limits[corev1.ResourceCPU] = resource.MustParse(cpu)
+		}
+		if mem != "" {
+			c.Resources.Limits[corev1.ResourceMemory] = resource.MustParse(mem)
+		}
+		return c
+	}
+	for _, c := range []struct {
+		containers []corev1.Container
+		cpu, mem   int64
+	}{
+		{[]corev1.Container{ctr("500m", "256Mi"), ctr("1", "1Gi")}, 1500, (256 + 1024) << 20},
+		{[]corev1.Container{ctr("500m", "256Mi"), ctr("", "1Gi")}, -1, (256 + 1024) << 20},
+		{[]corev1.Container{ctr("500m", "")}, 500, -1},
+		{nil, -1, -1},
+	} {
+		cpu, mem := podLimits(&corev1.Pod{Spec: corev1.PodSpec{Containers: c.containers}})
+		if cpu != c.cpu || mem != c.mem {
+			t.Errorf("%d containers: cpu %d mem %d, want %d %d", len(c.containers), cpu, mem, c.cpu, c.mem)
+		}
 	}
 }

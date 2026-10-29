@@ -1,13 +1,16 @@
 package k8s
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"fmt"
 	"math/big"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +20,8 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8sruntime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes/fake"
 )
 
 var hygieneNow = time.Date(2026, 10, 8, 0, 0, 0, 0, time.UTC)
@@ -397,5 +402,80 @@ func TestHygieneTLSExpiry(t *testing.T) {
 		if strings.Contains(f.Message, "unused") {
 			t.Fatalf("a key byte leaked into the report: %+v", f)
 		}
+	}
+}
+
+// The report from the pods folded page by page while listing (hygienePodSummaryOf) is the report from the pods as a
+// list: owners grouped across pages, pod counts, a pod's own exemption and its namespace's, an excluded namespace.
+func TestHygienePodSummary_SameReportAsThePods(t *testing.T) {
+	var pods []corev1.Pod
+	for i := 0; i < 3; i++ {
+		p := compliantPod("shop", fmt.Sprintf("web-5d8f7c9b6-%d", i))
+		p.Labels = map[string]string{"app": "web", "pod-template-hash": "5d8f7c9b6"}
+		p.OwnerReferences = []metav1.OwnerReference{{Kind: "ReplicaSet", Name: "web-5d8f7c9b6", Controller: ptr(true)}}
+		p.Spec.Containers[0].Image = "nginx:latest"
+		p.Spec.Containers[0].SecurityContext.Privileged = ptr(true)
+		if i == 0 {
+			p.Annotations = map[string]string{HygieneExemptAnnotation: "image.latest"}
+		}
+		pods = append(pods, p)
+	}
+	host := compliantPod("ops", "agent-x")
+	host.Spec.Volumes = append(host.Spec.Volumes, corev1.Volume{Name: "host", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/var/run"}}})
+	host.Spec.HostNetwork = true
+	skipped := compliantPod("kube-system", "debug")
+	skipped.Spec.Containers[0].Image = "busybox"
+	pods = append(pods, host, skipped, compliantPod("shop", "api-0"))
+
+	objs := make([]k8sruntime.Object, len(pods))
+	for i := range pods {
+		objs[i] = &pods[i]
+	}
+	ns := []corev1.Namespace{labeledNS("shop"), labeledNS("ops"), labeledNS("kube-system")}
+	ns[1].Annotations = map[string]string{HygieneExemptAnnotation: "pss.host-namespaces", HygieneExemptReasonAnnotation: "node agent"}
+	opts := HygieneOptions{TargetMinor: 38, ExcludeNamespaces: []string{"kube-system"}}
+
+	sum, err := hygienePodSummaryOf(context.Background(), fake.NewClientset(objs...), hygieneTarget(opts, ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed := EvaluateHygiene(HygieneInput{Pods: pods, Namespaces: ns, Failed: map[string]bool{}}, opts)
+	folded := EvaluateHygiene(HygieneInput{podSummary: sum, Namespaces: ns, Failed: map[string]bool{}}, opts)
+	if len(listed.Findings) == 0 {
+		t.Fatal("no findings: the test checks nothing")
+	}
+	if !reflect.DeepEqual(listed.Findings, folded.Findings) || !reflect.DeepEqual(listed.Checks, folded.Checks) {
+		t.Fatalf("reports differ\nlisted %+v\nfolded %+v", listed.Findings, folded.Findings)
+	}
+	grouped := false
+	for _, f := range folded.Findings {
+		if f.Kind == "Deployment" && f.Name == "web" && f.Pods == 3 {
+			grouped = true
+		}
+		if f.Namespace == "kube-system" {
+			t.Fatalf("a finding of an excluded namespace: %+v", f)
+		}
+	}
+	if !grouped {
+		t.Fatalf("the three web pods are not one Deployment finding of 3 pods: %+v", folded.Findings)
+	}
+	// the first pod's own exemption covers its owner's finding; the namespace's covers its pods'
+	seen := map[string]bool{}
+	for _, f := range folded.Findings {
+		if f.Name == "web" && f.Check == "image.latest" {
+			seen["latest"] = true
+			if !f.ExemptNoReason && !f.Exempt {
+				t.Fatalf("web's image.latest is not exempt from its first pod's annotation: %+v", f)
+			}
+		}
+		if f.Namespace == "ops" && f.Check == "pss.host-namespaces" {
+			seen["host"] = true
+			if f.ExemptReason != "node agent" {
+				t.Fatalf("ops' host namespaces finding does not carry the namespace's exemption: %+v", f)
+			}
+		}
+	}
+	if !seen["latest"] || !seen["host"] {
+		t.Fatalf("the findings the test looks for are missing: %v", seen)
 	}
 }

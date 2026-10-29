@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strings"
@@ -100,6 +101,34 @@ func (s *Service) GetPodMetrics(ctx context.Context, namespace string) ([]map[st
 		})
 	}
 	return result, nil
+}
+
+// AddPodLimits puts each pod's cpu_limit_millicores and memory_limit_bytes (nil without a limit) on the metric
+// rows, from the pod rows the caller may see in namespace. A caller who may not list pods gets the rows as they are.
+func (s *Service) AddPodLimits(ctx context.Context, namespace string, rows []map[string]interface{}) {
+	set, err := s.callerPodRows(ctx, namespace, "")
+	if err != nil {
+		slog.Debug("pod metrics: no limits", "namespace", namespace, "err", err)
+		return
+	}
+	byName := make(map[string]*podRow, len(set.rows))
+	for _, r := range set.rows {
+		byName[r.namespace+"/"+r.name] = r
+	}
+	orNil := func(v int64) interface{} {
+		if v < 0 {
+			return nil
+		}
+		return v
+	}
+	for _, row := range rows {
+		ns, _ := row["namespace"].(string)
+		name, _ := row["name"].(string)
+		if r := byName[ns+"/"+name]; r != nil {
+			row["cpu_limit_millicores"] = orNil(r.cpuLimitMilli)
+			row["memory_limit_bytes"] = orNil(r.memLimitBytes)
+		}
+	}
 }
 
 // GetNodeMetrics returns node metrics with cpu_percent and memory_percent.

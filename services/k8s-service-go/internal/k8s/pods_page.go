@@ -54,6 +54,9 @@ type PodPageQuery struct {
 	// counts them only
 	OwnerKind, OwnerName string
 	Health               string // one of PodHealthNames: the rows of that card colour, counted before it
+	// the Dashboard pod window and the drawers' pod lists, counted before them like the search
+	Phase, RuntimeClass, PriorityClass string
+	ServiceAccounts                    []string // <namespace>/<name>; a pod running as any of them
 }
 
 type PodListItem struct {
@@ -67,6 +70,7 @@ type PodListItem struct {
 	PodIP             string `json:"pod_ip"`
 	CreatedAt         string `json:"created_at"`
 	DeletionTimestamp string `json:"deletion_timestamp,omitempty"`
+	ServiceAccount    string `json:"service_account_name,omitempty"`
 }
 
 type PodReasonCount struct {
@@ -359,6 +363,20 @@ func buildPodPage(rows []*podRow, q PodPageQuery, now time.Time) *PodPage {
 	if h := slices.Index(PodHealthNames, q.Health); h >= 0 {
 		matched = slices.DeleteFunc(matched, func(r *podRow) bool { return int(r.health) != h })
 	}
+	if q.Phase != "" {
+		matched = slices.DeleteFunc(matched, func(r *podRow) bool { return r.phase != q.Phase })
+	}
+	if q.RuntimeClass != "" {
+		matched = slices.DeleteFunc(matched, func(r *podRow) bool { return r.runtimeClass != q.RuntimeClass })
+	}
+	if q.PriorityClass != "" {
+		matched = slices.DeleteFunc(matched, func(r *podRow) bool { return r.priorityClass != q.PriorityClass })
+	}
+	if len(q.ServiceAccounts) > 0 {
+		matched = slices.DeleteFunc(matched, func(r *podRow) bool {
+			return r.serviceAccount == "" || !slices.Contains(q.ServiceAccounts, r.namespace+"/"+r.serviceAccount)
+		})
+	}
 	sortPodRows(matched, q.Sort, q.Desc, now)
 	page.Total = len(matched)
 	limit := q.Limit
@@ -377,7 +395,7 @@ func (r *podRow) item() PodListItem {
 	it := PodListItem{
 		Name: r.name, Namespace: r.namespace, Status: r.status, Phase: r.phase,
 		Ready:        strconv.Itoa(int(r.ready)) + "/" + strconv.Itoa(int(r.containers)),
-		RestartCount: r.restarts, NodeName: r.node, PodIP: r.podIP,
+		RestartCount: r.restarts, NodeName: r.node, PodIP: r.podIP, ServiceAccount: r.serviceAccount,
 	}
 	if r.created != 0 {
 		it.CreatedAt = time.Unix(r.created, 0).UTC().Format(time.RFC3339)

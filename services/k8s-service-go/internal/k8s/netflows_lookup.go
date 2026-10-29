@@ -12,40 +12,38 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/netflows"
 )
 
-// maxLookupPods caps the pods one namespace lookup lists; the rest stay as the flows name them.
-const maxLookupPods = 5000
-
-// NetflowsWorkloads lists a namespace's pods as the signed-in user, each with its workload as the Hubble
-// agent names it (agentWorkload), keyed by the pod's name and by <generateName>* (Calico's name for the pods
-// of one GenerateName). Pods without one are left out.
+// NetflowsWorkloads lists a namespace's pods the signed-in user may see — from the pod rows (callerPodRows: the
+// overview informers, or listed as the user until they can serve) — each with its workload as the Hubble agent
+// names it (agentWorkload), keyed by the pod's name and by <generateName>* (Calico's name for the pods of one
+// GenerateName). Pods without one are left out; there is no cap on the pods.
 func (s *Service) NetflowsWorkloads(ctx context.Context, namespace string) (map[string]netflows.Workload, error) {
-	cs := s.clientsetCtx(ctx)
-	if cs == nil {
-		return nil, ErrNoUser
+	set, err := s.callerPodRows(ctx, namespace, "")
+	if err != nil {
+		return nil, err
 	}
-	return netflowsWorkloads(ctx, cs, namespace)
+	return netflowsWorkloadsOf(set.rows), nil
 }
 
+// netflowsWorkloads lists the namespace's pods as the client's identity, 500 at a time, into the same map.
 func netflowsWorkloads(ctx context.Context, cs kubernetes.Interface, namespace string) (map[string]netflows.Workload, error) {
-	out := map[string]netflows.Workload{}
-	opts := metav1.ListOptions{Limit: 500}
-	for n := 0; n < maxLookupPods; {
-		list, err := cs.CoreV1().Pods(namespace).List(ctx, opts)
-		if err != nil {
-			return out, err
-		}
-		for i := range list.Items {
-			if w, ok := agentWorkload(&list.Items[i]); ok {
-				out[list.Items[i].Name] = w
-				out[list.Items[i].GenerateName+"*"] = w
-			}
-		}
-		n += len(list.Items)
-		if opts.Continue = list.Continue; opts.Continue == "" {
-			break
-		}
+	rows, err := listPodRows(ctx, cs.CoreV1(), []string{namespace})
+	if err != nil {
+		return map[string]netflows.Workload{}, err
 	}
-	return out, nil
+	return netflowsWorkloadsOf(rows), nil
+}
+
+func netflowsWorkloadsOf(rows []*podRow) map[string]netflows.Workload {
+	out := map[string]netflows.Workload{}
+	for _, r := range rows {
+		if r.workloadKind == "" {
+			continue
+		}
+		w := netflows.Workload{Kind: r.workloadKind, Name: r.workloadName}
+		out[r.name] = w
+		out[r.generateName+"*"] = w
+	}
+	return out
 }
 
 // NetflowsPodSet reads a pod as the signed-in user and names its set as Calico does: <generateName>*, or the

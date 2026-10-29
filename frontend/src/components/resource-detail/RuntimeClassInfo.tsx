@@ -3,7 +3,7 @@ import { api } from '@/services/api'
 import { InfoSection, InfoRow, InfoGrid, SummaryBadge, StatusBadge, KeyValueTags, EventsTable, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { useDetailLabel } from './useDetailLabel'
-import { usePagination } from './usePagination'
+import { useServerPods } from './useServerPods'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -23,15 +23,7 @@ export default function RuntimeClassInfo({ name }: Props) {
     retry: 1,
   })
 
-  const { data: allPods } = useQuery({
-    queryKey: ['runtimeclass-using-pods', name],
-    queryFn: () => api.getAllPods(),
-    enabled: !!name,
-    staleTime: 30_000,
-  })
-  const usingPods = (Array.isArray(allPods) ? allPods : [])
-    .filter((p: any) => p?.runtime_class_name === name)
-  const { items: pagedPods, nav: podsNav } = usePagination(usingPods, 10)
+  const { items: pagedPods, total: usingTotal, nav: podsNav } = useServerPods(name ? { runtime_class: name } : null)
 
   // scheduling.node_selector 가 있을 때만 cluster-wide Node 목록을 fetch (equality match 로 필터)
   const { data: allNodes } = useQuery({
@@ -150,8 +142,8 @@ export default function RuntimeClassInfo({ name }: Props) {
         </InfoSection>
       )}
 
-      <InfoSection title="Used By Pods ({{n}})" titleValues={{ n: usingPods.length }}>
-        {usingPods.length === 0 ? (
+      <InfoSection title="Used By Pods ({{n}})" titleValues={{ n: usingTotal }}>
+        {usingTotal === 0 ? (
           <p className="text-xs text-slate-400"><Tx>No pod in the cluster uses this RuntimeClass.</Tx></p>
         ) : (
           <div className="overflow-x-auto">
