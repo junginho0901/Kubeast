@@ -410,7 +410,7 @@ Loki returns only patterns with 30 or more lines in the window, for the last 3 h
   - Read permission is the same as for log search: `get pods/log` as the user's identity.
 - **AI alert reading** (`features.alertStore`, when used): Kubeast reads the alert store's `/api/v2/alerts` (matcher `filter`) and `/api/v2/silences` with GET. When silence writing is on, it also writes (next item).
   - The store can be Alertmanager API v2, an Alertmanager through the Grafana data source proxy, or Grafana alerting's Alertmanager-compatible API (`/api/alertmanager/grafana/api/v2/…`).
-  - On Grafana 13.2.4, that API was confirmed to answer 200 with Viewer. `…/status` is 403 for Viewer, so it is not used.
+  - On Grafana 13.2.4 and again on 13.3.0, that API was confirmed to answer 200 with Viewer. `…/status` is 403 for Viewer, so it is not used.
   - For a store shared by several clusters, each alert needs a **cluster label** so that only that cluster's alerts are selected.
     The default label is `cluster`, set with Prometheus `external_labels` or Grafana alert rule labels (value = `features.alertStore.clusters`).
   - Check: `curl -G <url>/api/v2/alerts --data-urlencode 'filter=cluster="<value>"'`.

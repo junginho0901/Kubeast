@@ -426,7 +426,7 @@ Loki는 최근 3시간치 중 창 안에서 30줄 이상 나온 패턴만 돌려
   - 읽을 수 있는 저장소는 다음과 같습니다.
     - Alertmanager API v2
     - Grafana 데이터소스 프록시를 거치는 Alertmanager
-    - Grafana 알림의 Alertmanager 호환 API(`/api/alertmanager/grafana/api/v2/…`). Grafana 13.2.4에서 Viewer로 200 응답을 확인했고, `…/status`는 Viewer에게 403이라 쓰지 않습니다.
+    - Grafana 알림의 Alertmanager 호환 API(`/api/alertmanager/grafana/api/v2/…`). Grafana 13.2.4와 13.3.0에서 Viewer로 200 응답을 확인했고, `…/status`는 Viewer에게 403이라 쓰지 않습니다.
   - 여러 클러스터가 함께 쓰는 저장소라면, 알림마다 **클러스터 레이블**(기본 `cluster` — Prometheus `external_labels` 또는 Grafana 알림 규칙 레이블)이 있어야 그 클러스터의 알림만 골라낼 수 있습니다(값 = `features.alertStore.clusters`).
   - 확인: `curl -G <url>/api/v2/alerts --data-urlencode 'filter=cluster="<값>"'`.
 - **무음 쓰기**(`features.alertStore.silences: true`를 쓸 때): `resource.alert.silence` 권한이 있는 사람이 Alerts 화면에서 무음을 만들거나 끝내면 Kubeast가 다음 요청을 보냅니다.
