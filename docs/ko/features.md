@@ -157,6 +157,7 @@
   - 묶음을 누르면 그 소유자의 파드 전부(따로 그린 것도)가 카드 색별 개수·검색·문제 먼저로 나오고, 파드를 누르면 상세 창이 열립니다. 검색은 묶음 안의 파드도 찾습니다.
   - 창의 "그래프에 이 묶음 펼치기"나 "모두 펼치기"를 누르면 전처럼 파드를 하나씩 그립니다. 파드가 2,000개를 넘으면 모두 펼치기 전에 한 번 묻습니다.
   - 파드는 500개씩 받아 짧은 줄로 들고 있으므로, 파드가 많은 네임스페이스도 통째로 들지 않습니다.
+- **그 밖의 파드 목록**도 같은 서버 페이지에서 보여 줄 것만 받습니다. RuntimeClass·PriorityClass·ClusterRoleBinding 상세 창은 그것을 쓰는 파드를 10개씩, Dashboard의 Pods 창은 그림에서 고른 phase와 검색을 서버가 거른 50개씩, Monitoring Pods는 사용량과 함께 파드마다 limit을 받습니다. Cluster Hygiene는 파드를 500개씩 받아 점검이 읽는 것만 들고, 네트워크 흐름은 모든 파드의 워크로드 이름을 붙입니다(전에는 네임스페이스당 5,000개까지).
 - **YAML 생성·편집**은 문서마다 그 Kind의 `resource.<이름>.create`(편집은 대상의 `resource.<이름>.edit`)를 확인합니다.
   - 이름은 Kind의 소문자 형태이고, 자기 이름이 없는 Kind(CR 등)는 `customresource`를 씁니다.
     단, HorizontalPodAutoscaler·VerticalPodAutoscaler·PodDisruptionBudget·PersistentVolume·PersistentVolumeClaim·CustomResourceDefinition은 `hpa`·`vpa`·`pdb`·`pv`·`pvc`·`crd`를 씁니다.
