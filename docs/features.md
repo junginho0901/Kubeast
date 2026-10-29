@@ -78,6 +78,7 @@
     - `k8s_get_resources` for more than 25 pods without a name answers the counts over all of them (by phase, status, card colour, namespace and node) and 25 pods in order of need, errors and warnings first, with `next_offset` to read on. 25 or fewer come from kubectl as before.
     - `k8s_find_resource` searches every pod: `key=value` as a label selector, anything else by its words in the name or in one label. The log tool places a pod named without a namespace by the same rule.
     - `k8s_count` counts pods from the rows, grouped by nothing, namespace, node or phase, with or without a label selector. A field selector or another field goes to kubectl.
+  - The query tools take any field selector the API server supports (`status.phase!=Running`, `spec.nodeName=node-1`); `k8s_get_events` keeps to the events fields.
     - A pod name that is not found gets its similar names from the pods holding a word of that name, not from a list of every pod.
     - `k8s_jq_query` and `k8s_tabular_query` still list pods with kubectl, which holds every pod it lists: above 5,000 pods in their namespace and label selector they answer `too_large` with the count and the tools that answer at any size.
   - A kubectl list longer than the tool output (`TOOL_OUTPUT_MAX_BYTES`, 1 MiB) is answered as cut: `too_large` from `k8s_jq_query` and `k8s_count`, and "the total is not known" from `k8s_tabular_query`, instead of a read error or a wrong count.
@@ -161,6 +162,9 @@
   - Expand this group (from its window) or Expand all draws the pods one by one, as before; above 2,000 pods Expand all asks first.
   - The pods are read 500 at a time and kept as short rows, so a namespace of many pods is not held whole.
 - **The other pod lists** take only what they show from the same server page: the RuntimeClass, PriorityClass and ClusterRoleBinding drawers list the pods that use them ten at a time, the Dashboard's Pods window takes 50 at a time with the chart's phase and the search worked out on the server, and Monitoring Pods gets each pod's limits with its usage. Cluster Hygiene checks pods 500 at a time as they come and keeps only the findings; the network flows name the workloads of every pod (there was a limit of 5,000 a namespace).
+- **A pod that is initializing** shows kubectl's STATUS, READY and RESTARTS in the Pods list, the other pod lists and its drawer: `Init:Error`, `Init:CrashLoopBackOff`, `Init:1/2` and the init containers' restarts (not `PodInitializing` and 0), and a native sidecar (an init container with `restartPolicy: Always`) counts in READY as kubectl counts it.
+- **List pages keep the namespace in the address** (`?namespace=`): a link or a reload opens the same namespace, and choosing All namespaces drops it.
+- **The Resource Graph with several namespaces chosen** lists each of them, not the whole cluster: a namespace-scoped account sees them, and a kind refused in only some of them is named with those namespaces. Its **Issues** filter keeps what is drawn yellow or red, a Deployment still `Progressing` included, and the floating chat counts the same ones as problems.
 - **YAML create and edit** check the Kind's `resource.<name>.create` for each document (edit checks the target's `resource.<name>.edit`).
   - The name is the Kind in lowercase, with two exceptions:
     - HorizontalPodAutoscaler, VerticalPodAutoscaler, PodDisruptionBudget, PersistentVolume, PersistentVolumeClaim and CustomResourceDefinition are `hpa`, `vpa`, `pdb`, `pv`, `pvc` and `crd`, in that order.

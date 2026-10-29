@@ -14,6 +14,7 @@ import { buildResourceLink } from '@/utils/resourceLink'
 import { parseAgeSeconds, type SortKey } from './statefulsets/statefulSetHelpers'
 import { StatefulSetFilters } from './statefulsets/StatefulSetFilters'
 import { StatefulSetTable } from './statefulsets/StatefulSetTable'
+import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 
 export default function StatefulSets() {
   const queryClient = useQueryClient()
@@ -23,7 +24,7 @@ export default function StatefulSets() {
   const { open: openDetail } = useResourceDetail()
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedNamespace, setSelectedNamespace] = useState<string>('all')
+  const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)

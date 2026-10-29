@@ -19,6 +19,7 @@ import {
 import { applyResourceQuotaWatchEvent } from './resourcequotas/resourceQuotaWatchNormalize'
 import { ResourceQuotaFilters } from './resourcequotas/ResourceQuotaFilters'
 import { ResourceQuotaTable } from './resourcequotas/ResourceQuotaTable'
+import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 
 export default function ResourceQuotas() {
   const queryClient = useQueryClient()
@@ -28,7 +29,7 @@ export default function ResourceQuotas() {
   const { open: openDetail } = useResourceDetail()
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedNamespace, setSelectedNamespace] = useState<string>('all')
+  const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')

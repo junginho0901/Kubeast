@@ -699,6 +699,9 @@ func TestPodLimits(t *testing.T) {
 		{[]corev1.Container{ctr("500m", "256Mi"), ctr("1", "1Gi")}, 1500, (256 + 1024) << 20},
 		{[]corev1.Container{ctr("500m", "256Mi"), ctr("", "1Gi")}, -1, (256 + 1024) << 20},
 		{[]corev1.Container{ctr("500m", "")}, 500, -1},
+		// a limit of 0 is none (the Monitoring page's former podLimit), units add up
+		{[]corev1.Container{ctr("0", "170Mi")}, -1, 170 << 20},
+		{[]corev1.Container{ctr("500m", "256Mi"), ctr("1.5", "1Gi")}, 2000, (256 + 1024) << 20},
 		{nil, -1, -1},
 	} {
 		cpu, mem := podLimits(&corev1.Pod{Spec: corev1.PodSpec{Containers: c.containers}})

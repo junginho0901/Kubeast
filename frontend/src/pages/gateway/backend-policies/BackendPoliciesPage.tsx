@@ -15,6 +15,7 @@ import {
   type SortKey,
 } from './helpers'
 import { useBackendPoliciesData, type BackendPolicyConfig } from './useBackendPoliciesData'
+import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 
 interface PageStrings {
   title: string
@@ -58,7 +59,7 @@ export default function BackendPoliciesPage<T extends BackendPolicyLike>({
   const { open: openDetail } = useResourceDetail()
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedNamespace, setSelectedNamespace] = useState<string>('all')
+  const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)

@@ -258,10 +258,6 @@ class AIService:
         from app.services.ai.optimization import build_optimization_observations
         return await build_optimization_observations(self, namespace, lang)
 
-    async def _execute_function(self, function_name: str, function_args: dict):
-        from app.services.ai.tool_dispatch import execute_function
-        return await execute_function(self, function_name, function_args)
-
     def _detect_output_preference(self, text: Optional[str]) -> Optional[str]:
         from app.services.ai.intent import detect_output_preference
         return detect_output_preference(text)

@@ -225,6 +225,8 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
   const terminatedCount = containers.filter((c: any) => Boolean(c?.state?.terminated)).length
   const crashLoopCount = containers.filter((c: any) => c?.state?.waiting?.reason === 'CrashLoopBackOff').length
   const statusReason = useMemo(() => {
+    // an initializing pod's status as kubectl prints it (Init:Error, Init:0/2 …), from the server
+    if (typeof podDescribe?.status === 'string' && podDescribe.status.startsWith('Init:')) return podDescribe.status
     if (typeof podDescribe?.status_reason === 'string' && podDescribe.status_reason) return podDescribe.status_reason
     const reasons = containers
       .map((c: any) => c?.state?.waiting?.reason || c?.state?.terminated?.reason || c?.last_state?.terminated?.reason)
@@ -232,7 +234,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
     if (reasons.length > 0) return String(reasons[0])
     if (phase === 'Running' && totalContainers > 0 && readyContainers < totalContainers) return 'NotReady'
     return phase
-  }, [podDescribe?.status_reason, containers, phase, totalContainers, readyContainers])
+  }, [podDescribe?.status, podDescribe?.status_reason, containers, phase, totalContainers, readyContainers])
 
   const containerNames = useMemo(() => {
     if (containers.length > 0) return containers.map((c: any) => c.name)

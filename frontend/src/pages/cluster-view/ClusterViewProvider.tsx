@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { PodInfo } from '@/services/api'
 import type { PodDetail, DetailTab } from './types'
 import { ClusterViewContext, type ClusterViewContextValue, type PodContextMenuPosition } from './ClusterViewContext'
+import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 
 export function ClusterViewProvider({ children }: { children: ReactNode }) {
   const { t, i18n } = useTranslation()
@@ -15,7 +16,7 @@ export function ClusterViewProvider({ children }: { children: ReactNode }) {
   const na = tr('common.notAvailable', 'N/A')
   const emptyValue = tr('common.empty', '-')
 
-  const [selectedNamespace, setSelectedNamespace] = useState<string>('all')
+  const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
   const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
   const namespaceDropdownRef = useRef<HTMLDivElement>(null)
   const [searchQuery, setSearchQuery] = useState<string>('')
@@ -94,7 +95,7 @@ export function ClusterViewProvider({ children }: { children: ReactNode }) {
     closeDetailModal, closeContextMenu, openDeleteModal, closeDeleteModal,
   }), [
     tr, locale, na, emptyValue,
-    selectedNamespace, isNamespaceDropdownOpen, searchQuery,
+    selectedNamespace, setSelectedNamespace, isNamespaceDropdownOpen, searchQuery,
     selectedPod, selectedContainer, containerSearchQuery,
     activeTab, selectTab,
     showLogs, showManifest, showDescribe, showRbac, showExec,

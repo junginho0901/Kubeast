@@ -16,6 +16,7 @@ import { applyDaemonSetWatchEvent } from './daemonsets/daemonSetWatchNormalize'
 import { DaemonSetFilters } from './daemonsets/DaemonSetFilters'
 import { DaemonSetTable } from './daemonsets/DaemonSetTable'
 import { workloadStatusText } from '@/utils/workloadStatus'
+import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 
 export default function DaemonSets() {
   const queryClient = useQueryClient()
@@ -25,7 +26,7 @@ export default function DaemonSets() {
   const { open: openDetail } = useResourceDetail()
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedNamespace, setSelectedNamespace] = useState<string>('all')
+  const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')

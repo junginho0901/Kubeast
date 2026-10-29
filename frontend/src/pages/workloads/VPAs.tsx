@@ -16,6 +16,7 @@ import { parseAgeSeconds, type SortKey } from './vpas/vpaHelpers'
 import { applyVPAWatchEvent } from './vpas/vpaWatchNormalize'
 import { VPAFilters } from './vpas/VPAFilters'
 import { VPATable } from './vpas/VPATable'
+import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 
 export default function VPAs() {
   const queryClient = useQueryClient()
@@ -25,7 +26,7 @@ export default function VPAs() {
   const { open: openDetail } = useResourceDetail()
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedNamespace, setSelectedNamespace] = useState<string>('all')
+  const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')

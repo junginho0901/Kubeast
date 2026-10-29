@@ -42,10 +42,6 @@ export const kindWeight: Record<string, number> = {
 export const pointsUp = (sourceKind: string, targetKind: string) =>
   (kindWeight[sourceKind] || 0) < (kindWeight[targetKind] || 0)
 
-// The statuses the Issues filter keeps; the floating chat counts the same ones as problems.
-const ISSUE_STATUSES = ['failed', 'error', 'crashloopbackoff', 'imagepullbackoff', 'pending', 'terminating']
-export const isIssueStatus = (status?: string) => ISSUE_STATUSES.some(s => (status || '').toLowerCase().includes(s))
-
 // Status → border color
 export function statusColor(status: string): string {
   const s = status.toLowerCase()
@@ -54,6 +50,9 @@ export function statusColor(status: string): string {
   if (['failed', 'error', 'crashloopbackoff', 'imagepullbackoff'].some(k => s.includes(k))) return '#ef4444'
   return '#64748b'
 }
+
+// The Issues filter keeps the boxes drawn yellow or red; the floating chat counts the same ones as problems.
+export const isIssueStatus = (status?: string) => ['#eab308', '#ef4444'].includes(statusColor(status || ''))
 
 // Edge type → style
 export const edgeStyles: Record<string, { stroke: string; strokeDasharray?: string; label: string }> = {

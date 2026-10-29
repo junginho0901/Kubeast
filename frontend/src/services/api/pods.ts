@@ -13,13 +13,6 @@ export const podsApi = {
     return data
   },
 
-  getAllPods: async (forceRefresh: boolean = false): Promise<PodInfo[]> => {
-    const { data } = await client.get('/cluster/pods/all', {
-      params: { force_refresh: forceRefresh },
-    })
-    return data
-  },
-
   /** One page of the Pods list: the server filters, sorts and counts (k8s-service pods_page.go). */
   getPodPage: async (params: PodPageParams): Promise<PodPage> => {
     const { data } = await client.get('/cluster/pods/page', { params })

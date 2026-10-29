@@ -13,6 +13,7 @@ import { Plus, RefreshCw } from 'lucide-react'
 import { type SortKey, type SummaryCard } from './pods/podHelpers'
 import { PodFilters } from './pods/PodFilters'
 import { PodTable } from './pods/PodTable'
+import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 
 const PAGE_BLOCK = 50
 
@@ -23,7 +24,7 @@ export default function Pods() {
   const { open: openDetail } = useResourceDetail()
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedNamespace, setSelectedNamespace] = useState<string>('all')
+  const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')

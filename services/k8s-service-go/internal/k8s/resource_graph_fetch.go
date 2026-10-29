@@ -1,4 +1,4 @@
-// resource_graph_fetch.go — resource-graph 빌드에 필요한 K8s 리소스 병렬 fetch.
+// resource_graph_fetch.go — resource-graph 빌드에 필요한 K8s 리소스 병렬 fetch (네임스페이스를 고르면 그 네임스페이스마다).
 //
 // resource_graph.go 에서 분리. 20개 K8s 리스트 호출 (Namespaced 18 + Cluster-scoped 2)
 // 을 goroutine fan-out 으로 동시 수행. 첫 에러를 firstErr 로 보존.
@@ -8,8 +8,8 @@ package k8s
 import (
 	"context"
 	"fmt"
-	"slices"
 	"sort"
+	"strings"
 	"sync"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -19,10 +19,11 @@ import (
 // fetchResourceGraphData fetches all Kubernetes resources used in the resource
 // graph in parallel goroutines. Returns the first error other than Forbidden.
 func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []string) (*rgResources, error) {
-	// Determine namespace for queries ("" means all namespaces)
-	ns := ""
-	if len(namespaces) == 1 {
-		ns = namespaces[0]
+	// One list across the cluster with no namespace chosen, else one per chosen namespace: a namespace-scoped
+	// grant reaches its namespaces only, and a large cluster's other namespaces are not read.
+	targets := namespaces
+	if len(targets) == 0 {
+		targets = []string{""}
 	}
 
 	var res rgResources
@@ -30,28 +31,57 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 	var wg sync.WaitGroup
 	var firstErr error
 
-	// A kind the identity may not list is left out of the graph and named in
-	// res.forbidden; any other error fails the graph.
-	fetch := func(kind string, fn func() error) {
+	// A kind the identity may not list is left out of the graph and named in res.forbidden — with the
+	// namespaces when only some of the chosen ones refused it; any other error fails the graph.
+	fetch := func(kind string, fn func(ns string) error) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			var refused []string
+			for _, ns := range targets {
+				if err := fn(ns); err != nil {
+					if apierrors.IsForbidden(err) {
+						refused = append(refused, ns)
+						continue
+					}
+					mu.Lock()
+					if firstErr == nil {
+						firstErr = fmt.Errorf("%s: %w", kind, err)
+					}
+					mu.Unlock()
+					return
+				}
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			switch {
+			case len(refused) == len(targets):
+				res.forbidden = append(res.forbidden, kind)
+			case len(refused) > 0:
+				res.forbidden = append(res.forbidden, kind+" ("+strings.Join(refused, ", ")+")")
+			}
+		}()
+	}
+	// cluster-scoped kinds are listed once
+	fetchCluster := func(kind string, fn func() error) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			if err := fn(); err != nil {
 				mu.Lock()
+				defer mu.Unlock()
 				if apierrors.IsForbidden(err) {
 					res.forbidden = append(res.forbidden, kind)
 				} else if firstErr == nil {
 					firstErr = fmt.Errorf("%s: %w", kind, err)
 				}
-				mu.Unlock()
 			}
 		}()
 	}
 
 	// --- Namespaced resources ---
-	fetch("Pod", func() error {
-		// podListChunk at a time, each page cut to rgPod and pods outside the chosen namespaces dropped, so a
-		// large cluster is never held whole (two or more namespaces are listed across all of them)
+	fetch("Pod", func(ns string) error {
+		// podListChunk at a time, each page cut to rgPod, so a large cluster is never held whole
 		var pods []rgPod
 		opts := metav1.ListOptions{Limit: podListChunk}
 		for {
@@ -60,9 +90,6 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 				return err
 			}
 			for i := range list.Items {
-				if len(namespaces) > 1 && !slices.Contains(namespaces, list.Items[i].Namespace) {
-					continue
-				}
 				pods = append(pods, toRGPod(&list.Items[i]))
 			}
 			if list.Continue == "" {
@@ -71,206 +98,206 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 			opts.Continue = list.Continue
 		}
 		mu.Lock()
-		res.pods = pods
+		res.pods = append(res.pods, pods...)
 		mu.Unlock()
 		return nil
 	})
 
-	fetch("Service", func() error {
+	fetch("Service", func(ns string) error {
 		list, err := s.clientsetCtx(ctx).CoreV1().Services(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
 		mu.Lock()
-		res.services = list.Items
+		res.services = append(res.services, list.Items...)
 		mu.Unlock()
 		return nil
 	})
 
-	fetch("ConfigMap", func() error {
+	fetch("ConfigMap", func(ns string) error {
 		list, err := s.clientsetCtx(ctx).CoreV1().ConfigMaps(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
 		mu.Lock()
-		res.configMaps = list.Items
+		res.configMaps = append(res.configMaps, list.Items...)
 		mu.Unlock()
 		return nil
 	})
 
-	fetch("Secret", func() error {
+	fetch("Secret", func(ns string) error {
 		list, err := s.clientsetCtx(ctx).CoreV1().Secrets(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
 		mu.Lock()
-		res.secrets = list.Items
+		res.secrets = append(res.secrets, list.Items...)
 		mu.Unlock()
 		return nil
 	})
 
-	fetch("PersistentVolumeClaim", func() error {
+	fetch("PersistentVolumeClaim", func(ns string) error {
 		list, err := s.clientsetCtx(ctx).CoreV1().PersistentVolumeClaims(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
 		mu.Lock()
-		res.pvcs = list.Items
+		res.pvcs = append(res.pvcs, list.Items...)
 		mu.Unlock()
 		return nil
 	})
 
-	fetch("Ingress", func() error {
+	fetch("Ingress", func(ns string) error {
 		list, err := s.clientsetCtx(ctx).NetworkingV1().Ingresses(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
 		mu.Lock()
-		res.ingresses = list.Items
+		res.ingresses = append(res.ingresses, list.Items...)
 		mu.Unlock()
 		return nil
 	})
 
-	fetch("RoleBinding", func() error {
+	fetch("RoleBinding", func(ns string) error {
 		list, err := s.clientsetCtx(ctx).RbacV1().RoleBindings(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
 		mu.Lock()
-		res.roleBindings = list.Items
+		res.roleBindings = append(res.roleBindings, list.Items...)
 		mu.Unlock()
 		return nil
 	})
 
-	fetch("ServiceAccount", func() error {
+	fetch("ServiceAccount", func(ns string) error {
 		list, err := s.clientsetCtx(ctx).CoreV1().ServiceAccounts(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
 		mu.Lock()
-		res.serviceAccounts = list.Items
+		res.serviceAccounts = append(res.serviceAccounts, list.Items...)
 		mu.Unlock()
 		return nil
 	})
 
-	fetch("ReplicaSet", func() error {
+	fetch("ReplicaSet", func(ns string) error {
 		list, err := s.clientsetCtx(ctx).AppsV1().ReplicaSets(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
 		mu.Lock()
-		res.replicaSets = list.Items
+		res.replicaSets = append(res.replicaSets, list.Items...)
 		mu.Unlock()
 		return nil
 	})
 
-	fetch("Deployment", func() error {
+	fetch("Deployment", func(ns string) error {
 		list, err := s.clientsetCtx(ctx).AppsV1().Deployments(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
 		mu.Lock()
-		res.deployments = list.Items
+		res.deployments = append(res.deployments, list.Items...)
 		mu.Unlock()
 		return nil
 	})
 
-	fetch("StatefulSet", func() error {
+	fetch("StatefulSet", func(ns string) error {
 		list, err := s.clientsetCtx(ctx).AppsV1().StatefulSets(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
 		mu.Lock()
-		res.statefulSets = list.Items
+		res.statefulSets = append(res.statefulSets, list.Items...)
 		mu.Unlock()
 		return nil
 	})
 
-	fetch("DaemonSet", func() error {
+	fetch("DaemonSet", func(ns string) error {
 		list, err := s.clientsetCtx(ctx).AppsV1().DaemonSets(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
 		mu.Lock()
-		res.daemonSets = list.Items
+		res.daemonSets = append(res.daemonSets, list.Items...)
 		mu.Unlock()
 		return nil
 	})
 
-	fetch("Job", func() error {
+	fetch("Job", func(ns string) error {
 		list, err := s.clientsetCtx(ctx).BatchV1().Jobs(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
 		mu.Lock()
-		res.jobs = list.Items
+		res.jobs = append(res.jobs, list.Items...)
 		mu.Unlock()
 		return nil
 	})
 
-	fetch("CronJob", func() error {
+	fetch("CronJob", func(ns string) error {
 		list, err := s.clientsetCtx(ctx).BatchV1().CronJobs(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
 		mu.Lock()
-		res.cronJobs = list.Items
+		res.cronJobs = append(res.cronJobs, list.Items...)
 		mu.Unlock()
 		return nil
 	})
 
-	fetch("HorizontalPodAutoscaler", func() error {
+	fetch("HorizontalPodAutoscaler", func(ns string) error {
 		list, err := s.clientsetCtx(ctx).AutoscalingV2().HorizontalPodAutoscalers(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
 		mu.Lock()
-		res.hpas = list.Items
+		res.hpas = append(res.hpas, list.Items...)
 		mu.Unlock()
 		return nil
 	})
 
-	fetch("NetworkPolicy", func() error {
+	fetch("NetworkPolicy", func(ns string) error {
 		list, err := s.clientsetCtx(ctx).NetworkingV1().NetworkPolicies(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
 		mu.Lock()
-		res.networkPolicies = list.Items
+		res.networkPolicies = append(res.networkPolicies, list.Items...)
 		mu.Unlock()
 		return nil
 	})
 
-	fetch("EndpointSlice", func() error {
+	fetch("EndpointSlice", func(ns string) error {
 		list, err := s.clientsetCtx(ctx).DiscoveryV1().EndpointSlices(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
 		mu.Lock()
-		res.endpointSlices = list.Items
+		res.endpointSlices = append(res.endpointSlices, list.Items...)
 		mu.Unlock()
 		return nil
 	})
 
 	// --- Cluster-scoped resources ---
-	fetch("PersistentVolume", func() error {
+	fetchCluster("PersistentVolume", func() error {
 		list, err := s.clientsetCtx(ctx).CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
 		mu.Lock()
-		res.pvs = list.Items
+		res.pvs = append(res.pvs, list.Items...)
 		mu.Unlock()
 		return nil
 	})
 
-	fetch("StorageClass", func() error {
+	fetchCluster("StorageClass", func() error {
 		list, err := s.clientsetCtx(ctx).StorageV1().StorageClasses().List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
 		mu.Lock()
-		res.storageClasses = list.Items
+		res.storageClasses = append(res.storageClasses, list.Items...)
 		mu.Unlock()
 		return nil
 	})

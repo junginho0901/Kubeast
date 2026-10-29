@@ -282,105 +282,6 @@ def _format_age_value(value) -> str:
     except Exception:
         return "-"
 
-def _format_namespaces_display(raw_text: str) -> Optional[str]:
-    try:
-        data = json.loads(raw_text)
-    except Exception:
-        return None
-    if not isinstance(data, list):
-        return None
-    headers = ["NAME", "STATUS", "AGE", "PODS", "SERVICES", "DEPLOYMENTS", "PVCS"]
-    rows = []
-    for ns in data:
-        rc = ns.get("resource_count") or {}
-        rows.append([
-            str(ns.get("name", "")),
-            str(ns.get("status", "")),
-            _format_age_value(ns.get("created_at")),
-            str(rc.get("pods", 0)),
-            str(rc.get("services", 0)),
-            str(rc.get("deployments", 0)),
-            str(rc.get("pvcs", 0)),
-        ])
-    return _format_table(headers, rows)
-
-def _format_pods_display(raw_text: str, include_namespace: bool) -> Optional[str]:
-    try:
-        data = json.loads(raw_text)
-    except Exception:
-        return None
-    if not isinstance(data, list):
-        return None
-    headers = ["NAME", "READY", "STATUS", "RESTARTS", "AGE"]
-    if include_namespace:
-        headers = ["NAMESPACE"] + headers
-    rows = []
-    for pod in data:
-        row = [
-            str(pod.get("name", "")),
-            str(pod.get("ready", "")),
-            str(pod.get("status", "")),
-            str(pod.get("restart_count", 0)),
-            _format_age_value(pod.get("created_at")),
-        ]
-        if include_namespace:
-            row = [str(pod.get("namespace", ""))] + row
-        rows.append(row)
-    return _format_table(headers, rows)
-
-def _format_deployments_display(raw_text: str) -> Optional[str]:
-    try:
-        data = json.loads(raw_text)
-    except Exception:
-        return None
-    if not isinstance(data, list):
-        return None
-    headers = ["NAME", "READY", "UP-TO-DATE", "AVAILABLE", "AGE"]
-    rows = []
-    for dep in data:
-        replicas = int(dep.get("replicas") or 0)
-        ready = int(dep.get("ready_replicas") or 0)
-        updated = int(dep.get("updated_replicas") or 0)
-        available = int(dep.get("available_replicas") or 0)
-        rows.append([
-            str(dep.get("name", "")),
-            f"{ready}/{replicas}",
-            str(updated),
-            str(available),
-            _format_age_value(dep.get("created_at")),
-        ])
-    return _format_table(headers, rows)
-
-def _format_services_display(raw_text: str) -> Optional[str]:
-    try:
-        data = json.loads(raw_text)
-    except Exception:
-        return None
-    if not isinstance(data, list):
-        return None
-    headers = ["NAME", "TYPE", "CLUSTER-IP", "EXTERNAL-IP", "PORT(S)", "AGE"]
-    rows = []
-    for svc in data:
-        ports = svc.get("ports") or []
-        port_texts = []
-        for p in ports:
-            port = p.get("port")
-            node_port = p.get("node_port")
-            proto = p.get("protocol") or ""
-            if node_port:
-                port_texts.append(f"{port}:{node_port}/{proto}")
-            else:
-                port_texts.append(f"{port}/{proto}")
-        rows.append([
-            str(svc.get("name", "")),
-            str(svc.get("type", "")),
-            str(svc.get("cluster_ip") or ""),
-            str(svc.get("external_ip") or "<none>"),
-            ",".join(port_texts) if port_texts else "",
-            _format_age_value(svc.get("created_at")),
-        ])
-    return _format_table(headers, rows)
-
 def _format_service_connectivity_display(raw_text: str) -> Optional[str]:
     try:
         data = json.loads(raw_text)
@@ -425,87 +326,6 @@ def _format_service_connectivity_display(raw_text: str) -> Optional[str]:
         f"{ready}/{total}",
         str(data.get("status", "")),
     ]]
-    return _format_table(headers, rows)
-
-def _format_nodes_display(raw_text: str) -> Optional[str]:
-    try:
-        data = json.loads(raw_text)
-    except Exception:
-        return None
-    if not isinstance(data, list):
-        return None
-    headers = ["NAME", "STATUS", "ROLES", "AGE", "VERSION", "INTERNAL-IP", "EXTERNAL-IP"]
-    rows = []
-    for node in data:
-        roles = node.get("roles") or []
-        roles_text = ",".join(roles) if roles else "<none>"
-        rows.append([
-            str(node.get("name", "")),
-            str(node.get("status", "")),
-            roles_text,
-            _format_age_value(node.get("age")),
-            str(node.get("version", "")),
-            str(node.get("internal_ip") or ""),
-            str(node.get("external_ip") or "<none>"),
-        ])
-    return _format_table(headers, rows)
-
-def _format_pvcs_display(raw_text: str) -> Optional[str]:
-    try:
-        data = json.loads(raw_text)
-    except Exception:
-        return None
-    if not isinstance(data, list):
-        return None
-    include_namespace = len({str(p.get("namespace", "")) for p in data}) > 1
-    headers = ["NAME", "STATUS", "VOLUME", "CAPACITY", "ACCESS MODES", "STORAGECLASS", "AGE"]
-    if include_namespace:
-        headers = ["NAMESPACE"] + headers
-    rows = []
-    for pvc in data:
-        access_modes = pvc.get("access_modes") or []
-        row = [
-            str(pvc.get("name", "")),
-            str(pvc.get("status", "")),
-            str(pvc.get("volume_name") or ""),
-            str(pvc.get("capacity") or ""),
-            ",".join(access_modes) if access_modes else "",
-            str(pvc.get("storage_class") or ""),
-            _format_age_value(pvc.get("created_at")),
-        ]
-        if include_namespace:
-            row = [str(pvc.get("namespace", ""))] + row
-        rows.append(row)
-    return _format_table(headers, rows)
-
-def _format_pvs_display(raw_text: str) -> Optional[str]:
-    try:
-        data = json.loads(raw_text)
-    except Exception:
-        return None
-    if not isinstance(data, list):
-        return None
-    headers = ["NAME", "CAPACITY", "ACCESS MODES", "RECLAIM POLICY", "STATUS", "CLAIM", "STORAGECLASS", "AGE"]
-    rows = []
-    for pv in data:
-        access_modes = pv.get("access_modes") or []
-        claim = pv.get("claim_ref") or {}
-        claim_text = ""
-        if isinstance(claim, dict):
-            ns = claim.get("namespace")
-            name = claim.get("name")
-            if ns or name:
-                claim_text = f"{ns}/{name}" if ns and name else str(name or "")
-        rows.append([
-            str(pv.get("name", "")),
-            str(pv.get("capacity", "")),
-            ",".join(access_modes) if access_modes else "",
-            str(pv.get("reclaim_policy") or ""),
-            str(pv.get("status") or ""),
-            claim_text or "<none>",
-            str(pv.get("storage_class") or ""),
-            _format_age_value(pv.get("created_at")),
-        ])
     return _format_table(headers, rows)
 
 def _format_api_resources_display(raw_text: str) -> Optional[str]:
@@ -575,30 +395,8 @@ def _build_tool_display(
     is_json: bool,
     is_yaml: bool,
 ) -> Optional[str]:
-    if function_name == "get_namespaces":
-        return _format_namespaces_display(formatted_result)
-    if function_name == "get_pods":
-        return _format_pods_display(formatted_result, include_namespace=False)
-    if function_name == "get_all_pods":
-        return _format_pods_display(formatted_result, include_namespace=True)
-    if function_name == "find_pods":
-        return _format_pods_display(formatted_result, include_namespace=True)
-    if function_name == "get_deployments":
-        return _format_deployments_display(formatted_result)
-    if function_name == "find_deployments":
-        return _format_deployments_display(formatted_result)
-    if function_name == "get_services":
-        return _format_services_display(formatted_result)
-    if function_name == "find_services":
-        return _format_services_display(formatted_result)
     if function_name == "k8s_check_service_connectivity":
         return _format_service_connectivity_display(formatted_result)
-    if function_name == "get_node_list":
-        return _format_nodes_display(formatted_result)
-    if function_name == "get_pvcs":
-        return _format_pvcs_display(formatted_result)
-    if function_name == "get_pvs":
-        return _format_pvs_display(formatted_result)
     if function_name == "get_pod_metrics":
         return _format_pod_metrics_display(formatted_result)
     if function_name == "get_node_metrics":

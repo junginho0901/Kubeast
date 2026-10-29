@@ -16,6 +16,7 @@ import { useCanCreate } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
+import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 
 type SortKey = null | 'name' | 'namespace' | 'roleRef' | 'subjects' | 'age'
 type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
@@ -79,7 +80,7 @@ export default function RoleBindings() {
   const { open: openDetail } = useResourceDetail()
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedNamespace, setSelectedNamespace] = useState<string>('all')
+  const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
   const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)

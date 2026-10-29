@@ -76,14 +76,13 @@ func (in *interner) get(s string) string {
 
 func toPodRow(p *corev1.Pod, in *interner) *podRow {
 	r := &podRow{
-		name:       p.Name,
-		namespace:  in.get(p.Namespace),
-		rv:         p.ResourceVersion,
-		node:       in.get(p.Spec.NodeName),
-		phase:      in.get(string(p.Status.Phase)),
-		podIP:      p.Status.PodIP,
-		created:    p.CreationTimestamp.Unix(),
-		containers: uint16(len(p.Spec.Containers)),
+		name:      p.Name,
+		namespace: in.get(p.Namespace),
+		rv:        p.ResourceVersion,
+		node:      in.get(p.Spec.NodeName),
+		phase:     in.get(string(p.Status.Phase)),
+		podIP:     p.Status.PodIP,
+		created:   p.CreationTimestamp.Unix(),
 	}
 	if p.CreationTimestamp.IsZero() {
 		r.created = 0
@@ -91,13 +90,15 @@ func toPodRow(p *corev1.Pod, in *interner) *podRow {
 	if p.DeletionTimestamp != nil {
 		r.deleted = p.DeletionTimestamp.Unix()
 	}
-	for _, cs := range p.Status.ContainerStatuses {
-		if cs.Ready {
-			r.ready++
-		}
-		r.restarts += cs.RestartCount
+	// READY, RESTARTS and an initializing pod's Status as kubectl prints them (pod_init.go)
+	iv := podInitState(p)
+	ready, total, restarts := podCounts(p, iv)
+	r.ready, r.containers, r.restarts = uint16(ready), uint16(total), restarts
+	status := iv.status
+	if status == "" {
+		status = podListStatus(p, ready, total)
 	}
-	r.status = in.get(podListStatus(p, int(r.ready), int(r.containers)))
+	r.status = in.get(status)
 	if p.Spec.RuntimeClassName != nil {
 		r.runtimeClass = in.get(*p.Spec.RuntimeClassName)
 	}
@@ -131,8 +132,8 @@ func podLabelPairs(labels map[string]string) string {
 	return strings.Join(pairs, "\x1e")
 }
 
-// podLimits sums the containers' cpu and memory limits; a container without one leaves the pod without a limit
-// (-1), as the Monitoring page reads it (podUsage.ts podLimit).
+// podLimits sums the containers' cpu and memory limits; a container without one (or with 0) leaves the pod without
+// a limit (-1): the Monitoring page's limit columns (/metrics/pods?with_limits=1).
 func podLimits(p *corev1.Pod) (cpuMilli, memBytes int64) {
 	if len(p.Spec.Containers) == 0 {
 		return -1, -1
@@ -328,6 +329,9 @@ func podHealth(p *corev1.Pod) (uint8, string) {
 func listPhase(p *corev1.Pod) string {
 	if p.Status.Phase != "" {
 		return string(p.Status.Phase)
+	}
+	if iv := podInitState(p); iv.status != "" {
+		return iv.status
 	}
 	for _, cs := range p.Status.ContainerStatuses {
 		if w := cs.State.Waiting; w != nil && w.Reason != "" {

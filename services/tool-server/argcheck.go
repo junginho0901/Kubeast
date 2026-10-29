@@ -46,6 +46,8 @@ var (
 	explainResourceRe = regexp.MustCompile(`^[A-Za-z0-9]([-A-Za-z0-9]*[A-Za-z0-9])?(\.[A-Za-z0-9_-]+)*$`)
 	apiVersionRe      = regexp.MustCompile(`^([a-z0-9]([-a-z0-9.]*[a-z0-9])?/)?v[0-9]+((alpha|beta)[0-9]+)?$`)
 	kindNameRe        = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]*$`)
+	// A field selector's field: a dotted path of names (status.phase, spec.nodeName, involvedObject.kind).
+	selectorFieldRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]*(\.[A-Za-z][A-Za-z0-9]*)*$`)
 	// A k8s_find_resource query: a name fragment, or key=value for a label.
 	findQueryRe = regexp.MustCompile(`^[A-Za-z0-9._/-]+(=[A-Za-z0-9._-]*)?$`)
 	// Event field selectors: key(=|==|!=)value pairs separated by commas; the keys
@@ -326,8 +328,10 @@ func checkFieldSelector(field, v string) error {
 		default:
 			return badArg(field, v, "a field selector using =, == or !=")
 		}
-		if !eventSelectorKeys[key] {
-			return badArg(field, v, "a field selector on an events field (involvedObject.kind/name/namespace/uid, reason, type, source, reportingComponent)")
+		// which fields a kind supports is the API server's to say (400 "field label not supported"); the events
+		// tool keeps to the events fields (checkEventSelector)
+		if !selectorFieldRe.MatchString(key) {
+			return badArg(field, v, "a field selector on a field path such as status.phase or spec.nodeName")
 		}
 		if strings.ContainsAny(rest, " \t\r\n,") || len(rest) > dns1123SubdomainMaxLength {
 			return badArg(field, v, "a field selector value without spaces or commas")
@@ -604,6 +608,20 @@ func checkPatchType(field, v string) error {
 func checkTimeout(field, v string) error {
 	if !timeoutRe.MatchString(v) {
 		return badArg(field, v, "a duration such as 30s or 5m")
+	}
+	return nil
+}
+
+// checkEventSelector keeps k8s_get_events's field selector to the fields the events API selects on.
+func checkEventSelector(v string) error {
+	for _, part := range strings.Split(v, ",") {
+		key := part
+		if i := strings.IndexAny(part, "=!"); i > 0 {
+			key = part[:i]
+		}
+		if !eventSelectorKeys[key] {
+			return badArg("field_selector", v, "a field selector on an events field (involvedObject.kind/name/namespace/uid, reason, type, source, reportingComponent)")
+		}
 	}
 	return nil
 }

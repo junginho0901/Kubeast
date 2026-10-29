@@ -25,7 +25,6 @@ def _make_service(*, allowed: bool = True, role: str = "admin"):
     service._call_tool_server = AsyncMock(return_value='{"ok": true}')
     service._find_pods = AsyncMock(return_value=[])
     service._find_services = AsyncMock(return_value=[])
-    service._find_deployments = AsyncMock(return_value=[])
     service._locate_resource_for_yaml = AsyncMock(return_value=None)
     service._pick_log_container = AsyncMock(return_value=None)
     service._resolve_single = AsyncMock(return_value={})
@@ -106,20 +105,15 @@ async def test_read_tool_get_cluster_overview_routes_to_tool_server():
 
 
 @pytest.mark.asyncio
-async def test_get_namespaces_routes_to_k8s_service():
-    """get_namespaces 는 k8s_service 직접 호출 분기"""
+async def test_names_no_tool_list_offers_are_unknown():
+    """The old branches (get_pods, find_pods, get_namespaces …) were in no tool list the model or MCP gets and
+    are gone: such a name answers Unknown function, without a cluster call."""
     service = _make_service()
-    service.k8s_service.get_namespaces = AsyncMock(
-        return_value=[{"name": "default"}, {"name": "kube-system"}]
-    )
     ctx = _make_context()
-
-    result = await execute_function_with_context(service, "get_namespaces", {}, ctx)
-
-    service.k8s_service.get_namespaces.assert_awaited_once()
-    parsed = json.loads(result)
-    assert isinstance(parsed, list)
-    assert any(ns.get("name") == "default" for ns in parsed)
+    for name in ("get_namespaces", "get_pods", "get_all_pods", "find_pods", "describe_pod", "get_pod_logs"):
+        result = await execute_function_with_context(service, name, {"namespace": "default", "query": "web"}, ctx)
+        assert json.loads(result) == {"error": f"Unknown function: {name}"}
+    service._call_tool_server.assert_not_called()
 
 
 @pytest.mark.asyncio
