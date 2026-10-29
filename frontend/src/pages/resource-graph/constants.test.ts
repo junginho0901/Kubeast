@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { isIssueStatus, kindWeight, pointsUp } from './constants'
+import { isIssueStatus, kindWeight, pointsUp, statusColor } from './constants'
 
 // Every edge k8s-service draws (internal/k8s/resource_graph*.go), source → target.
 const SERVER_EDGES: Array<[string, string]> = [
@@ -42,9 +42,15 @@ describe('resource graph rows', () => {
 // problem count keep the same ones — a Service's type, a StorageClass's provisioner or "Active" is not a problem.
 describe('resource graph issues', () => {
   it('counts as problems only the statuses the Issues filter keeps', () => {
-    const issues = ['Pending', 'Failed', 'CrashLoopBackOff', 'ImagePullBackOff', 'Error', 'Terminating']
-    const fine = ['Running', 'Succeeded', 'Active', 'Bound', 'ClusterIP', 'NodePort', 'LoadBalancer', 'ExternalName', 'rancher.io/local-path', 'Available', 'Progressing', 'Complete', '', undefined]
+    // a Deployment not yet ready ("Progressing") is drawn yellow, so the Issues filter keeps it too
+    const issues = ['Pending', 'Failed', 'CrashLoopBackOff', 'ImagePullBackOff', 'Error', 'Terminating', 'Progressing']
+    const fine = ['Running', 'Succeeded', 'Active', 'Bound', 'ClusterIP', 'NodePort', 'LoadBalancer', 'ExternalName', 'rancher.io/local-path', 'Available', 'Complete', '', undefined]
     expect(issues.filter((s) => !isIssueStatus(s))).toEqual([])
     expect(fine.filter((s) => isIssueStatus(s))).toEqual([])
+    // every status drawn yellow or red is an issue, and no other
+    for (const s of [...issues, ...fine]) {
+      const c = statusColor(s ?? '')
+      expect(isIssueStatus(s), `${s} is ${c}`).toBe(c === '#eab308' || c === '#ef4444')
+    }
   })
 })
