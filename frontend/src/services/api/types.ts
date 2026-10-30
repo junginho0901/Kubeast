@@ -16,6 +16,8 @@ export interface ModelConfigCreate {
   tier?: 'default' | 'economy'        // economy: history summaries and the floating assistant
 }
 
+export type ModelUse = 'chat' | 'floating' | 'summary' | 'investigation'
+
 export interface ModelConfigResponse {
   id: number
   name: string
@@ -32,6 +34,8 @@ export interface ModelConfigResponse {
   enabled: boolean
   is_default: boolean
   tier: 'default' | 'economy'
+  /** what ai-service runs on this config now, by its own rules */
+  used_for?: ModelUse[]
   created_at: string
   updated_at: string
 }

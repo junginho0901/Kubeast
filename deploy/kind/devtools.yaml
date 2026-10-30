@@ -198,7 +198,10 @@ spec:
 # case = credit (429 insufficient_quota / 402 billing_error), rate (429 rate_limit_exceeded), auth (401) or down
 # (503 / 529). Under /ok/ it is a working OpenAI-compatible API instead — GET …/models lists stub-large and stub-small,
 # POST …/chat/completions answers "ok", streamed when asked — for the specs that need a second model endpoint
-# (ai-model-list, ai-azure-openai, ai-model-tier). ai-service reaches it as
+# (ai-model-list, ai-azure-openai, ai-model-tier). /reasoning/ is the same but refuses max_tokens and temperature
+# with OpenAI's 400 for a reasoning model, and /tool/ first calls k8s_get_resources (services of all namespaces as
+# JSON), then answers "ok" (ai-model-limits). GET /_calls lists what the chat requests under these three asked
+# (the length parameters, a temperature, the length of each tool result); DELETE /_calls forgets them. ai-service reaches it as
 # http://model-stub.kubeast-devtools.svc.cluster.local:8090 (dev values: ai.baseUrlAllowedHosts and
 # networkPolicy.allowExternalEgressCIDRs).
 apiVersion: v1
@@ -209,7 +212,29 @@ metadata:
 data:
   stub.py: |
     import json
+    import threading
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    LOCK = threading.Lock()
+    CALLS = []
+    WORKING = ("ok", "reasoning", "tool")
+    REASONING = {
+        "max_tokens": {"message": "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.",
+                       "type": "invalid_request_error", "param": "max_tokens", "code": "unsupported_parameter"},
+        "temperature": {"message": "Unsupported value: 'temperature' does not support 0.7 with this model. Only the default (1) value is supported.",
+                        "type": "invalid_request_error", "param": "temperature", "code": "unsupported_value"},
+    }
+    TOOL_CALL = {"id": "call_stub", "type": "function",
+                 "function": {"name": "k8s_get_resources", "arguments": json.dumps({"resource_type": "services", "all_namespaces": True, "output": "json"})}}
+
+    def record(case, body):
+        tools = [m.get("content") or "" for m in body.get("messages", []) if m.get("role") == "tool"]
+        with LOCK:
+            CALLS.append({"case": case, "model": body.get("model"), "stream": bool(body.get("stream")),
+                          "max_tokens": body.get("max_tokens"), "max_completion_tokens": body.get("max_completion_tokens"),
+                          "temperature": "temperature" in body, "tool_results": [len(t) for t in tools],
+                          "tool_truncated": [t.endswith("... (truncated for LLM) ...") for t in tools]})
+            del CALLS[:-50]
 
     OPENAI = {
         "credit": (429, {"error": {"message": "You exceeded your current quota, please check your plan and billing details.", "type": "insufficient_quota", "code": "insufficient_quota"}}),
@@ -226,15 +251,18 @@ data:
 
     MODELS = {"object": "list", "data": [{"id": m, "object": "model", "created": 0, "owned_by": "kubeast-dev"} for m in ("stub-large", "stub-small")]}
 
-    def completion(model, chunk):
+    def completion(model, chunk, call=False):
         usage = {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}
+        message = {"role": "assistant", "content": None, "tool_calls": [TOOL_CALL]} if call else {"role": "assistant", "content": "ok"}
+        finish = "tool_calls" if call else "stop"
         if not chunk:
             return {"id": "stub-1", "object": "chat.completion", "created": 0, "model": model, "usage": usage,
-                    "choices": [{"index": 0, "message": {"role": "assistant", "content": "ok"}, "finish_reason": "stop"}]}
+                    "choices": [{"index": 0, "message": message, "finish_reason": finish}]}
+        delta = {"role": "assistant", "tool_calls": [dict(TOOL_CALL, index=0)]} if call else {"role": "assistant", "content": "ok"}
         return [{"id": "stub-1", "object": "chat.completion.chunk", "created": 0, "model": model,
-                 "choices": [{"index": 0, "delta": {"role": "assistant", "content": "ok"}, "finish_reason": None}]},
+                 "choices": [{"index": 0, "delta": delta, "finish_reason": None}]},
                 {"id": "stub-1", "object": "chat.completion.chunk", "created": 0, "model": model, "usage": usage,
-                 "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]}]
+                 "choices": [{"index": 0, "delta": {}, "finish_reason": finish}]}]
 
     class H(BaseHTTPRequestHandler):
         def send_json(self, code, body):
@@ -248,19 +276,30 @@ data:
         def do_POST(self):
             req = self.rfile.read(int(self.headers.get("Content-Length") or 0))
             parts = self.path.strip("/").split("/")
-            if parts and parts[0] == "ok":
+            if self.path.split("?")[0].rstrip("/") == "/_calls":
+                with LOCK:
+                    if self.command == "DELETE":
+                        CALLS.clear()
+                    return self.send_json(200, {"calls": list(CALLS)})
+            if parts and parts[0] in WORKING:
                 path = self.path.split("?")[0].rstrip("/")
                 if path.endswith("/models"):
                     return self.send_json(200, MODELS)
                 if path.endswith("/chat/completions"):
                     body = json.loads(req or b"{}")
+                    record(parts[0], body)
+                    if parts[0] == "reasoning":
+                        for p in ("max_tokens", "temperature"):
+                            if p in body:
+                                return self.send_json(400, {"error": REASONING[p]})
                     model = body.get("model") or "stub-small"
+                    call = parts[0] == "tool" and not any(m.get("role") == "tool" for m in body.get("messages", []))
                     if not body.get("stream"):
-                        return self.send_json(200, completion(model, False))
+                        return self.send_json(200, completion(model, False, call))
                     self.send_response(200)
                     self.send_header("Content-Type", "text/event-stream")
                     self.end_headers()
-                    for c in completion(model, True):
+                    for c in completion(model, True, call):
                         self.wfile.write(f"data: {json.dumps(c)}\n\n".encode())
                     self.wfile.write(b"data: [DONE]\n\n")
                     return
@@ -268,7 +307,7 @@ data:
             table = ANTHROPIC if self.path.endswith("/messages") else OPENAI
             code, body = table.get(parts[0] if parts else "", (404, {"error": {"message": "no such case"}}))
             self.send_json(code, body)
-        do_GET = do_POST
+        do_GET = do_DELETE = do_POST
         def log_message(self, *a):
             pass
 

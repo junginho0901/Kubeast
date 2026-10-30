@@ -4063,6 +4063,24 @@
       "deleteConfirm": "Delete model \"{{name}}\"?",
       "deleteTitle": "Delete model",
       "advanced": "Advanced (local / self-hosted)",
+      "maxTokens": "Answer length (tokens)",
+      "maxTokensHint": "Empty: 4,096 for chat answers, 2,048 for each alert investigation step. A reasoning model counts its reasoning in it.",
+      "maxTokensSubscription": "Claude Code sets the answer length for the subscription; this is not used.",
+      "toolResultChars": "Tool result length (characters)",
+      "toolResultCharsHint": "Empty: 6,000. A longer tool result is cut to this before the model reads it (1,000 to 200,000).",
+      "limitsError": {
+        "max_tokens": "Enter the answer length as a whole number from 1 to 1,000,000.",
+        "tool_result_chars": "Enter the tool result length as a whole number from 1,000 to 200,000.",
+        "in_json": "Set max_tokens and tool_result_chars in the fields above, not in the generation options."
+      },
+      "usedFor": "Used for",
+      "usedForNone": "Not used now",
+      "use": {
+        "chat": "Chat",
+        "floating": "Floating assistant",
+        "summary": "History summaries",
+        "investigation": "Alert investigations"
+      },
       "caCert": "CA certificate (PEM)",
       "caCertHint": "Trust a self-signed CA for HTTPS self-hosted endpoints. Leave empty to use system CAs.",
       "edit": "Edit Model",
