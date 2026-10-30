@@ -37,7 +37,7 @@ export default function Monitoring() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="page-head items-start">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{t('monitoring.title')}</h1>
           <p className="mt-2 text-slate-400">{t('monitoring.subtitle')}</p>

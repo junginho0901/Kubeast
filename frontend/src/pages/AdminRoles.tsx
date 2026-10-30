@@ -149,7 +149,7 @@ export default function AdminRoles() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="page-head items-center">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('adminRoles.title', 'Role Management')}</h1>
           <p className="mt-2 text-slate-400">

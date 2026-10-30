@@ -124,7 +124,7 @@ export default function GPUDashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="page-head items-center">
         <div>
           <h1 className="text-3xl font-semibold text-ink">
             {tr('gpuDashboardPage.title', 'GPU Dashboard')}

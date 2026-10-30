@@ -168,7 +168,7 @@ export default function AccessReview() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-4">
+      <div className="page-head items-start gap-4">
         <div>
           <div className="flex items-center gap-2">
             <ClipboardCheck className="w-6 h-6 text-primary-400" />

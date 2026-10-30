@@ -60,7 +60,7 @@ export default function GPUNodes() {
   return (
     <div className={`flex flex-col gap-4 ${showCharts ? 'min-h-[calc(100vh-4rem)] overflow-y-auto' : 'h-[calc(100vh-4rem)]'}`}>
       {/* Header */}
-      <div className="flex items-center justify-between shrink-0">
+      <div className="page-head items-center shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('gpuNodes.title', 'GPU Nodes')}</h1>
           <p className="mt-2 text-slate-400">{tr('gpuNodes.subtitle', 'GPU node status, capacity, and model information.')}</p>

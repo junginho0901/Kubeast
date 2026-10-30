@@ -426,6 +426,19 @@ body {
     padding-bottom: 4rem;
   }
 
+  /* A page's header row, the title block and its buttons: where both do not fit on one line (a portrait monitor,
+     the longest titles), the buttons go to the next line, still on the right, instead of pushing the page sideways.
+     The title block keeps 20rem, or its longest word if wider, before they go; on a wide window nothing moves. */
+  .page-head {
+    @apply flex flex-wrap justify-between gap-3;
+  }
+  .page-head > :first-child {
+    flex: 1 1 20rem;
+  }
+  .page-head > :last-child:not(:first-child) {
+    margin-left: auto;
+  }
+
   /* The sidebar menu scrolls: a fade over its bottom 24px shows that items go on below the account box. At the
      end of the list only the menu's own bottom padding (py-6 = 24px) sits under the fade. */
   .sidebar-nav {

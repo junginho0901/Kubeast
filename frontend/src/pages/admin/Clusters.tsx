@@ -64,7 +64,7 @@ export default function AdminClusters() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="page-head items-center">
         <div>
           <h1 className="text-3xl font-semibold text-ink flex items-center gap-2">
             <Server className="w-6 h-6 text-primary-500" />

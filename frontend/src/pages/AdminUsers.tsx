@@ -372,7 +372,7 @@ export default function AdminUsers() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
+      <div className="page-head items-start">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('adminUsers.title', 'User management')}</h1>
           <p className="mt-2 text-slate-400">

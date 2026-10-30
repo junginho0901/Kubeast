@@ -17,7 +17,7 @@ export function DashboardHeader({ clusterVersion, isRefreshing, onRefresh }: Pro
     t(key, { defaultValue: fallback, ...options })
 
   return (
-    <div className="flex items-start justify-between">
+    <div className="page-head items-start">
       <div>
         <h1 className="text-3xl font-semibold text-ink">{tr('dashboard.title', 'Cluster Dashboard')}</h1>
         <p className="mt-2 text-slate-400">

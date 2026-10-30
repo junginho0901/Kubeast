@@ -279,7 +279,7 @@ export default function CustomResourceInstances() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
-      <div className="flex items-center justify-between shrink-0">
+      <div className="page-head items-center shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('crInstancesPage.title', 'Custom Resource Instances')}</h1>
           <p className="mt-2 text-slate-400">{tr('crInstancesPage.subtitle', 'Browse all custom resource instances across CRDs.')}</p>

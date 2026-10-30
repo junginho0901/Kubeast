@@ -44,7 +44,7 @@ interface ErrorEmptyProps {
 export function GPUDashboardError({ tr, onRefetch, forbidden }: ErrorEmptyProps & { forbidden?: string }) {
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="page-head items-center">
         <div>
           <h1 className="text-3xl font-semibold text-ink">
             {tr('gpuDashboardPage.title', 'GPU Dashboard')}
@@ -80,7 +80,7 @@ export function GPUDashboardError({ tr, onRefetch, forbidden }: ErrorEmptyProps 
 export function GPUDashboardEmpty({ tr, onRefetch }: ErrorEmptyProps) {
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="page-head items-center">
         <div>
           <h1 className="text-3xl font-semibold text-ink">
             {tr('gpuDashboardPage.title', 'GPU Dashboard')}

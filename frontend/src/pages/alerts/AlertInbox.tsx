@@ -133,7 +133,7 @@ export default function AlertInbox() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
-      <div className="flex items-start justify-between gap-3 shrink-0">
+      <div className="page-head items-start shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('alertInbox.title', 'Alerts')}</h1>
           <p className="mt-2 text-slate-400">

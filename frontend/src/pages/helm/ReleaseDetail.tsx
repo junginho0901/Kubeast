@@ -189,7 +189,7 @@ export default function HelmReleaseDetailPage() {
         </Link>
       </div>
 
-      <div className="flex items-start justify-between gap-4">
+      <div className="page-head items-start gap-4">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{rel.name}</h1>
           <p className="text-slate-400 text-sm mt-1">

@@ -51,3 +51,41 @@ test.describe('list tables in a narrow window', () => {
     for (const w of widths) expect(w).toBeGreaterThan(80)
   })
 })
+
+// A header row whose title and buttons did not fit on one line pushed the whole page sideways in a portrait window:
+// the title went under the sidebar and the buttons past the right edge (Mutating- and ValidatingWebhookConfigurations
+// at 1 070 px). The row (.page-head) now sends the buttons to the next line.
+test.describe('page headers in a narrow window', () => {
+  test('at 1070 px no screen of the sidebar slides sideways', async ({ page }) => {
+    test.setTimeout(300_000)
+    await page.setViewportSize({ width: 1070, height: 1000 })
+    await page.goto('/?cluster=self')
+    const nav = page.getByTestId('sidebar-nav')
+    await expect(nav.locator('a[href^="/"]').first()).toBeAttached()
+    const paths = [...new Set(await nav.locator('a[href^="/"]').evaluateAll((as) => as.map((a) => a.getAttribute('href') ?? '')))]
+    expect(paths.length, 'the sidebar lists every screen, the admin ones too').toBeGreaterThan(70)
+    const slid: string[] = []
+    for (const path of [...paths, '/account']) {
+      await page.goto(`${path}${path.includes('?') ? '&' : '?'}cluster=self`)
+      await expect(page.locator('main h1').first()).toBeVisible()
+      await page.waitForTimeout(300)
+      const r = await page.evaluate(() => {
+        const h1 = document.querySelector('main h1')!
+        const main = document.querySelector('main')!
+        const row = h1.closest('.page-head') ?? h1.parentElement?.parentElement
+        const controls = row ? [...row.querySelectorAll('button, a, input, select')].filter((e) => e.getBoundingClientRect().width > 0) : []
+        return {
+          pageOver: document.documentElement.scrollWidth - innerWidth,
+          mainOver: main.scrollWidth - main.clientWidth,
+          titleLeft: h1.getBoundingClientRect().left,
+          titleOver: h1.scrollWidth - h1.clientWidth, // the title's longest word past its block, under the buttons
+          controlsRight: controls.reduce((m, e) => Math.max(m, e.getBoundingClientRect().right), 0),
+        }
+      })
+      if (r.pageOver > 1 || r.mainOver > 1 || r.titleLeft < 256 || r.titleOver > 1 || r.controlsRight > 1071) {
+        slid.push(`${path}: page +${r.pageOver}, main +${r.mainOver}, title at ${Math.round(r.titleLeft)} +${r.titleOver}, buttons end ${Math.round(r.controlsRight)}`)
+      }
+    }
+    expect(slid).toEqual([])
+  })
+})

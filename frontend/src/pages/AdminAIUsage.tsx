@@ -85,7 +85,7 @@ export default function AdminAIUsage() {
 
   return (
     <div className="page-scrolls space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="page-head items-center">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('adminAIUsage.title', 'AI 사용량')}</h1>
           <p className="text-slate-400 text-sm mt-1">
