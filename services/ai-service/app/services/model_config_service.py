@@ -190,3 +190,36 @@ def invalidate_model_config_cache() -> None:
     _cached_resolved = None
     _cached_at = 0.0
     _cached_economy, _cached_economy_found, _cached_economy_at = None, False, 0.0
+
+
+async def usage(db) -> Dict[int, list]:
+    """What the server runs on each config now, by the rules it picks them with: the chat on the active config;
+    the floating assistant and chat summaries on the economy config when it can be used, else the active one;
+    alert investigations, while they are on, on the config ALERT_INVESTIGATION_MODEL names, else the active one."""
+    from app.services.investigation import settings as inv_settings
+    from app.services.investigation import store as inv_store
+
+    out: Dict[int, list] = {}
+
+    def add(config: Optional[ModelConfig], use: str) -> None:
+        if config is not None:
+            out.setdefault(config.id, []).append(use)
+
+    active = await db.get_active_model_config()
+    economy = await db.get_economy_model_config()
+    if economy is not None:
+        try:
+            _build_resolved(economy)
+        except ValueError:
+            economy = None
+    add(active, "chat")
+    add(economy or active, "floating")
+    add(economy or active, "summary")
+    inv = inv_settings.load()
+    if inv.enabled:
+        investigation = active
+        if inv.model:
+            config_id = await inv_store.model_config_id(db, inv.model)
+            investigation = await db.get_model_config(config_id) if config_id is not None else None
+        add(investigation, "investigation")
+    return out

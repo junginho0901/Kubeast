@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sort"
+	"strings"
 )
 
 var errBadRequest = errors.New("bad request")
@@ -22,6 +24,45 @@ func marshalJSON(value interface{}) (string, error) {
 		return "", err
 	}
 	return string(data), nil
+}
+
+// marshalOrdered writes the keys of first, then the others in name order (as json.Marshal does), then those of
+// last: the model reads a long reply cut at its tool result length, so what comes first is what it gets.
+func marshalOrdered(m map[string]interface{}, first, last []string) (string, error) {
+	placed := map[string]bool{}
+	for _, k := range append(append([]string{}, first...), last...) {
+		placed[k] = true
+	}
+	var rest []string
+	for k := range m {
+		if !placed[k] {
+			rest = append(rest, k)
+		}
+	}
+	sort.Strings(rest)
+	var b strings.Builder
+	b.WriteByte('{')
+	n := 0
+	for _, k := range append(append(append([]string{}, first...), rest...), last...) {
+		v, ok := m[k]
+		if !ok {
+			continue
+		}
+		key, _ := json.Marshal(k)
+		value, err := json.Marshal(v)
+		if err != nil {
+			return "", err
+		}
+		if n > 0 {
+			b.WriteByte(',')
+		}
+		b.Write(key)
+		b.WriteByte(':')
+		b.Write(value)
+		n++
+	}
+	b.WriteByte('}')
+	return b.String(), nil
 }
 
 func wrapBadRequest(message string) error {

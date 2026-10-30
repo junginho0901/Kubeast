@@ -120,6 +120,7 @@ class AIService:
             options=options,
         )
         self.model = resolved_model
+        self.options = dict(options or {})  # the model's limits (app/services/ai/limits.py) are read from here
         self.provider = resolved_provider  # public name used in streamed model_info
         self._provider_name = resolved_provider
         self.cluster_name = cluster_name  # step 14: active cluster, threaded to tools

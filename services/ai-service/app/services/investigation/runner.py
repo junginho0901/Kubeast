@@ -24,6 +24,7 @@ import httpx
 
 from app.database import get_db_service, utcnow
 from app.services.ai import access as access_mod
+from app.services.ai import limits
 from app.services.ai.debug_dump import safe_error
 from app.services.ai.model_errors import classify
 from app.services.audit_target import tool_target
@@ -153,7 +154,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row) -> dict[str,
             try:
                 raw = await asyncio.wait_for(service._execute_function_with_context(name, args, context), timeout=remaining())
                 formatted, _is_json, _is_yaml = formatters._format_tool_result(name, args, raw)
-                result = formatters._truncate_tool_result_for_llm(formatted)
+                result = formatters._truncate_tool_result_for_llm(formatted, limits.tool_result_chars(service))
                 entry["result_chars"] = len(formatted)
                 # a refusal or an error the tool answered with, read as the chat reads it
                 _outcome, problem, _status = tool_outcome(raw)

@@ -13,6 +13,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Optional, Sequence
 
+from app.services.ai import limits
 from app.services.ai import usage as usage_acct
 
 # (tool name, arguments, step) -> the text the model reads back
@@ -48,7 +49,8 @@ async def run_tool_turn(service, messages: list[dict[str, Any]], tools: Sequence
         final = step == max_steps
         if final:
             messages.append({"role": "user", "content": final_message})
-        kwargs: dict[str, Any] = dict(model=service.model, messages=messages, temperature=0.2, max_tokens=2048)
+        kwargs: dict[str, Any] = dict(model=service.model, messages=messages, temperature=0.2,
+                                 max_tokens=limits.answer_tokens(service, 2048))
         if not final and tools:
             kwargs.update(tools=tools, tool_choice="auto")
         resp = await asyncio.wait_for(service.client.chat.completions.create(**kwargs, timeout=min(120.0, remaining())),

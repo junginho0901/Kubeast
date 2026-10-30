@@ -43,9 +43,12 @@ async def _test_openai_compatible(
     model: str,
     base_url: str,
     verify: Union[bool, ssl.SSLContext] = True,
+    provider: str = "",
 ) -> dict:
-    """Test OpenAI-compatible endpoints (OpenAI, Groq, DeepSeek, Mistral, etc.)"""
+    """Test OpenAI-compatible endpoints (OpenAI, Groq, DeepSeek, Mistral, etc.) — with the chat's parameter handling
+    (OpenAI's max_completion_tokens, a refused parameter left out), so a reasoning model passes as it chats."""
     from openai import AsyncOpenAI
+    from app.services.provider_adapter import _CompletionsProxy
 
     client = AsyncOpenAI(
         api_key=api_key,
@@ -53,7 +56,7 @@ async def _test_openai_compatible(
         http_client=httpx.AsyncClient(verify=verify),
         timeout=15.0,
     )
-    resp = await client.chat.completions.create(
+    resp = await _CompletionsProxy(client.chat.completions, provider, None, base_url).create(
         model=model,
         messages=[{"role": "user", "content": "ping"}],
         max_tokens=5,
@@ -298,7 +301,7 @@ async def _test_model_connection(request: dict) -> dict:
                     status_code=400,
                     detail=f"base_url is required for provider '{provider}'",
                 )
-            return await _test_openai_compatible(api_key, model, base, verify)
+            return await _test_openai_compatible(api_key, model, base, verify, provider=provider)
 
     except HTTPException:
         raise

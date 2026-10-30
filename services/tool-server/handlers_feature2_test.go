@@ -296,6 +296,16 @@ func TestCanI_And_ResourceGraph(t *testing.T) {
 	if len(m["nodes"].([]interface{})) != graphNodesCap || len(m["edges"].([]interface{})) != graphEdgesCap || m["truncated"] != true || counts["Service"] != float64(21) || counts["Pod"] != float64(189) {
 		t.Fatalf("graph caps/counts: nodes=%d edges=%d counts=%v", len(m["nodes"].([]interface{})), len(m["edges"].([]interface{})), counts)
 	}
+	// the model gets the reply cut at its tool result length (6 000 characters unless the model says otherwise):
+	// the summary and the start of the objects come before the edges
+	at := func(key string) int { return strings.Index(out, `"`+key+`":`) }
+	if !(at("namespace") == 1 && at("namespace") < at("counts_by_kind") && at("counts_by_kind") < at("truncated") &&
+		at("truncated") < at("nodes") && at("nodes") < at("edges")) || at("nodes") > 6000 {
+		t.Fatalf("order: namespace %d counts %d truncated %d nodes %d edges %d", at("namespace"), at("counts_by_kind"), at("truncated"), at("nodes"), at("edges"))
+	}
+	if plain, _ := marshalJSON(m); plain == out {
+		t.Fatal("the reply is in name order, edges before nodes")
+	}
 	if _, err := handleResourceGraph(ctxFor("c1"), map[string]interface{}{}, bearer()); !errors.Is(err, errBadRequest) {
 		t.Fatalf("namespace required: %v", err)
 	}

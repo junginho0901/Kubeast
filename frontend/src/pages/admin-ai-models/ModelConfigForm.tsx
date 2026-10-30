@@ -38,6 +38,9 @@ export default function ModelConfigForm({ form, inModal }: Props) {
     formCaCert, setFormCaCert,
     formOptions, setFormOptions,
     formOptionsError,
+    formMaxTokens, setFormMaxTokens,
+    formToolResultChars, setFormToolResultChars,
+    formLimitsError,
     testing,
     testResult,
     currentProviderDef,
@@ -205,6 +208,48 @@ export default function ModelConfigForm({ form, inModal }: Props) {
         return null
       })()}
 
+      {/* Limits — every provider (options.max_tokens, options.tool_result_chars) */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2" data-testid="model-limits">
+        <div>
+          <label className="block text-xs font-semibold text-slate-400 mb-1">{tr('admin.aiModels.maxTokens', 'Answer length (tokens)')}</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={formMaxTokens}
+            onChange={(e) => setFormMaxTokens(e.target.value)}
+            disabled={formProvider === 'claude-code'}
+            placeholder="4096"
+            data-testid="max-tokens-input"
+            className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600 disabled:opacity-50"
+          />
+          <p className="mt-1 text-[10px] text-slate-500">
+            {formProvider === 'claude-code'
+              ? tr('admin.aiModels.maxTokensSubscription', 'Claude Code sets the answer length for the subscription; this is not used.')
+              : tr('admin.aiModels.maxTokensHint', 'Empty: 4,096 for chat answers, 2,048 for each alert investigation step. A reasoning model counts its reasoning in it.')}
+          </p>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-400 mb-1">{tr('admin.aiModels.toolResultChars', 'Tool result length (characters)')}</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={formToolResultChars}
+            onChange={(e) => setFormToolResultChars(e.target.value)}
+            placeholder="6000"
+            data-testid="tool-result-chars-input"
+            className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
+          />
+          <p className="mt-1 text-[10px] text-slate-500">
+            {tr('admin.aiModels.toolResultCharsHint', 'Empty: 6,000. A longer tool result is cut to this before the model reads it (1,000 to 200,000).')}
+          </p>
+        </div>
+        {formLimitsError && (
+          <p className="text-[10px] text-red-400 flex items-center gap-1 sm:col-span-2" data-testid="limits-error">
+            <AlertCircle className="h-3 w-3" /> {tr(`admin.aiModels.limitsError.${formLimitsError}`, formLimitsError)}
+          </p>
+        )}
+      </div>
+
       {/* Advanced — local / self-hosted models (options + CA cert) */}
       {(currentProviderDef.needsApiKey === false ||
         currentProviderDef.id === 'custom' ||
@@ -262,8 +307,8 @@ export default function ModelConfigForm({ form, inModal }: Props) {
       <CustomDropdown
         label={tr('admin.aiModels.tier', 'Tier')}
         options={[
-          { value: 'default', label: tr('admin.aiModels.tierDefault', 'Default'), hint: tr('admin.aiModels.tierDefaultHint', 'the chat') },
-          { value: 'economy', label: tr('admin.aiModels.tierEconomy', 'Economy'), hint: tr('admin.aiModels.tierEconomyHint', 'history summaries and the floating assistant') },
+          { value: 'default', label: tr('admin.aiModels.tierDefault', 'Default'), hint: tr('admin.aiModels.tierDefaultHint', 'the chat'), testId: 'tier-option-default' },
+          { value: 'economy', label: tr('admin.aiModels.tierEconomy', 'Economy'), hint: tr('admin.aiModels.tierEconomyHint', 'history summaries and the floating assistant'), testId: 'tier-option-economy' },
         ]}
         value={formTier}
         onChange={(v) => setFormTier(v === 'economy' ? 'economy' : 'default')}

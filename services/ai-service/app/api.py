@@ -536,9 +536,12 @@ async def list_model_configs(
 
     _require_admin(payload)
 
+    from app.services.model_config_service import usage
+
     db = await get_db_service()
     configs = await db.list_model_configs(enabled_only=enabled_only)
-    return [ModelConfigResponse.model_validate(c) for c in configs]
+    used = await usage(db)
+    return [ModelConfigResponse.model_validate(c).model_copy(update={"used_for": used.get(c.id, [])}) for c in configs]
 
 
 @router.get("/model-configs/active")

@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ModelConfigResponse } from '@/services/api'
 import { PROVIDER_CATALOG, getProvider, type ProviderDef } from '@/constants/modelCatalog'
-import { modelOptions } from './helpers'
+import { buildOptions, modelOptions, splitLimits, type LimitsError } from './helpers'
 
 export function useModelForm() {
   const qc = useQueryClient()
@@ -24,6 +24,10 @@ export function useModelForm() {
   const [formCaCert, setFormCaCert] = useState('')          // 자체 서명 CA (PEM)
   const [formOptions, setFormOptions] = useState('')        // 생성 옵션 (JSON 문자열)
   const [formOptionsError, setFormOptionsError] = useState<string | null>(null)
+  // the model's own limits (options.max_tokens, options.tool_result_chars), for every provider
+  const [formMaxTokens, setFormMaxTokens] = useState('')
+  const [formToolResultChars, setFormToolResultChars] = useState('')
+  const [formLimitsError, setFormLimitsError] = useState<LimitsError | null>(null)
 
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
@@ -116,6 +120,9 @@ export function useModelForm() {
     setFormCaCert('')
     setFormOptions('')
     setFormOptionsError(null)
+    setFormMaxTokens('')
+    setFormToolResultChars('')
+    setFormLimitsError(null)
     setTestResult(null)
   }
 
@@ -134,8 +141,12 @@ export function useModelForm() {
     setFormIsDefault(cfg.is_default)
     setFormTier(cfg.tier === 'economy' ? 'economy' : 'default')
     setFormCaCert(cfg.ca_cert || '')
-    setFormOptions(cfg.options ? JSON.stringify(cfg.options, null, 2) : '')
+    const limits = splitLimits(cfg.options)
+    setFormOptions(limits.rest ? JSON.stringify(limits.rest, null, 2) : '')
     setFormOptionsError(null)
+    setFormMaxTokens(limits.maxTokens)
+    setFormToolResultChars(limits.toolResultChars)
+    setFormLimitsError(null)
     setTestResult(null)
   }
 
@@ -177,6 +188,7 @@ export function useModelForm() {
     }
     // 생성 옵션(JSON) — 파싱 검증
     const optsRaw = formOptions.trim()
+    let rest: Record<string, unknown> | null = null
     if (optsRaw) {
       try {
         const parsed = JSON.parse(optsRaw)
@@ -184,12 +196,21 @@ export function useModelForm() {
           setFormOptionsError('Options must be a JSON object, e.g. {"temperature": 0.7}')
           return
         }
-        payload.options = parsed
+        rest = parsed
         setFormOptionsError(null)
       } catch {
         setFormOptionsError('Invalid JSON')
         return
       }
+    }
+    const built = buildOptions(rest, formMaxTokens, formToolResultChars)
+    if ('error' in built) {
+      setFormLimitsError(built.error)
+      return
+    }
+    setFormLimitsError(null)
+    if (built.options) {
+      payload.options = built.options
     } else if (editingId) {
       payload.options = null  // 편집 중 비우면 제거
     }
@@ -244,6 +265,9 @@ export function useModelForm() {
     formCaCert, setFormCaCert,
     formOptions, setFormOptions,
     formOptionsError,
+    formMaxTokens, setFormMaxTokens,
+    formToolResultChars, setFormToolResultChars,
+    formLimitsError,
     testing,
     testResult,
     currentProviderDef,

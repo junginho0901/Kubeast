@@ -2769,6 +2769,24 @@
       "edit": "모델 편집",
       "empty": "등록된 모델이 없습니다.",
       "advanced": "고급 (로컬 / 셀프호스트)",
+      "maxTokens": "답 최대 길이(토큰)",
+      "maxTokensHint": "비우면 채팅 답 4,096, 알림 조사 한 단계 2,048입니다. 추론 모델은 추론에 쓴 토큰도 여기에 셉니다.",
+      "maxTokensSubscription": "구독은 Claude Code가 답 길이를 정하므로 이 값을 쓰지 않습니다.",
+      "toolResultChars": "도구 결과 최대 길이(글자)",
+      "toolResultCharsHint": "비우면 6,000입니다. 이보다 긴 도구 결과는 모델이 읽기 전에 잘립니다(1,000~200,000).",
+      "limitsError": {
+        "max_tokens": "답 최대 길이는 1~1,000,000 사이의 정수로 입력하세요.",
+        "tool_result_chars": "도구 결과 최대 길이는 1,000~200,000 사이의 정수로 입력하세요.",
+        "in_json": "max_tokens와 tool_result_chars는 생성 옵션이 아니라 위 칸에서 정하세요."
+      },
+      "usedFor": "쓰는 곳",
+      "usedForNone": "지금 쓰는 곳 없음",
+      "use": {
+        "chat": "채팅",
+        "floating": "플로팅 어시스턴트",
+        "summary": "이력 요약",
+        "investigation": "알림 조사"
+      },
       "options": "생성 옵션 (JSON)",
       "optionsHint": "표준 파라미터(temperature, top_p, seed, max_tokens)는 모든 프로바이더에 전달됩니다. 프로바이더 전용 키(예: num_ctx)는 best-effort이며 OpenAI 호환 Endpoints에서는 무시될 수 있습니다.",
       "caCert": "CA 인증서 (PEM)",

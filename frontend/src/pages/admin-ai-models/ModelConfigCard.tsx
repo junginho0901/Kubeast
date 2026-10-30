@@ -26,7 +26,8 @@ export default function ModelConfigCard({
   const tr = (key: string, fb: string, o?: Record<string, unknown>) => t(key, { defaultValue: fb, ...o })
   const confirm = useConfirm()
   const provDef = getProvider(cfg.provider)
-  const isActive = cfg.is_default && cfg.enabled
+  const usedFor = cfg.used_for ?? []
+  const isActive = usedFor.includes('chat')
 
   return (
     <div
@@ -81,6 +82,11 @@ export default function ModelConfigCard({
                   ? null
                   : <span className="text-red-400 ml-1">· ⚠ {tr('admin.aiModels.noKeyEnv', 'No key env')}</span>}
               {cfg.base_url && <span className="text-slate-500"> · {cfg.base_url}</span>}
+            </div>
+            <div className="text-[11px] text-slate-500 mt-0.5" data-testid="model-used-for">
+              {usedFor.length
+                ? `${tr('admin.aiModels.usedFor', 'Used for')}: ${usedFor.map((u) => tr(`admin.aiModels.use.${u}`, u)).join(' · ')}`
+                : tr('admin.aiModels.usedForNone', 'Not used now')}
             </div>
           </div>
         </div>
