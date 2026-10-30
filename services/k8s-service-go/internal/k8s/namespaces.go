@@ -47,6 +47,36 @@ func (s *Service) GetNamespaces(ctx context.Context) ([]map[string]interface{}, 
 	return result, nil
 }
 
+// namespacePodSummary is what the Namespace drawer shows of its pods without listing them: how many, how many per
+// phase, and the containers' cpu and memory requests and limits summed (init containers left out, as the drawer
+// summed them).
+type namespacePodSummary struct {
+	Total          int            `json:"total"`
+	Phases         map[string]int `json:"phases"`
+	CPURequestsM   int64          `json:"cpu_requests_millicores"`
+	CPULimitsM     int64          `json:"cpu_limits_millicores"`
+	MemoryRequests int64          `json:"memory_requests_bytes"`
+	MemoryLimits   int64          `json:"memory_limits_bytes"`
+}
+
+func (n *namespacePodSummary) add(p *corev1.Pod) {
+	if n.Phases == nil {
+		n.Phases = map[string]int{}
+	}
+	n.Total++
+	phase := string(p.Status.Phase)
+	if phase == "" {
+		phase = "Unknown"
+	}
+	n.Phases[phase]++
+	for _, c := range p.Spec.Containers {
+		n.CPURequestsM += c.Resources.Requests.Cpu().MilliValue()
+		n.CPULimitsM += c.Resources.Limits.Cpu().MilliValue()
+		n.MemoryRequests += c.Resources.Requests.Memory().Value()
+		n.MemoryLimits += c.Resources.Limits.Memory().Value()
+	}
+}
+
 // DescribeNamespace returns detailed info about a namespace.
 func (s *Service) DescribeNamespace(ctx context.Context, name string) (map[string]interface{}, error) {
 	// Fetch all data in parallel using WaitGroup
@@ -55,43 +85,62 @@ func (s *Service) DescribeNamespace(ctx context.Context, name string) (map[strin
 	var quotas *corev1.ResourceQuotaList
 	var limits *corev1.LimitRangeList
 	var nsErr, eventsErr, quotasErr, limitsErr error
-	podCount, svcCount, depCount, cmCount, secretCount := 0, 0, 0, 0, 0
+	svcCount, depCount, cmCount, secretCount := 0, 0, 0, 0
+	var pods namespacePodSummary
+	var podsErr error
 
+	// The counts come from one item and the API server's remaining count, the pods a page at a time: a namespace of
+	// 50 000 pods listed whole took k8s-service past 512 Mi from one drawer.
+	cs := s.clientsetCtx(ctx)
 	var wg sync.WaitGroup
 	wg.Add(9)
 	go func() {
 		defer wg.Done()
-		ns, nsErr = s.clientsetCtx(ctx).CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
+		ns, nsErr = cs.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		if pods, err := s.clientsetCtx(ctx).CoreV1().Pods(name).List(ctx, metav1.ListOptions{}); err == nil {
-			podCount = len(pods.Items)
-		}
+		podsErr = eachPod(ctx, cs.CoreV1(), name, metav1.ListOptions{}, pods.add)
 	}()
 	go func() {
 		defer wg.Done()
-		if svcs, err := s.clientsetCtx(ctx).CoreV1().Services(name).List(ctx, metav1.ListOptions{}); err == nil {
-			svcCount = len(svcs.Items)
-		}
+		svcCount, _ = countList(func(o metav1.ListOptions) (int, metav1.ListMeta, error) {
+			l, err := cs.CoreV1().Services(name).List(ctx, o)
+			if err != nil {
+				return 0, metav1.ListMeta{}, err
+			}
+			return len(l.Items), l.ListMeta, nil
+		})
 	}()
 	go func() {
 		defer wg.Done()
-		if deps, err := s.clientsetCtx(ctx).AppsV1().Deployments(name).List(ctx, metav1.ListOptions{}); err == nil {
-			depCount = len(deps.Items)
-		}
+		depCount, _ = countList(func(o metav1.ListOptions) (int, metav1.ListMeta, error) {
+			l, err := cs.AppsV1().Deployments(name).List(ctx, o)
+			if err != nil {
+				return 0, metav1.ListMeta{}, err
+			}
+			return len(l.Items), l.ListMeta, nil
+		})
 	}()
 	go func() {
 		defer wg.Done()
-		if cms, err := s.clientsetCtx(ctx).CoreV1().ConfigMaps(name).List(ctx, metav1.ListOptions{}); err == nil {
-			cmCount = len(cms.Items)
-		}
+		cmCount, _ = countList(func(o metav1.ListOptions) (int, metav1.ListMeta, error) {
+			l, err := cs.CoreV1().ConfigMaps(name).List(ctx, o)
+			if err != nil {
+				return 0, metav1.ListMeta{}, err
+			}
+			return len(l.Items), l.ListMeta, nil
+		})
 	}()
 	go func() {
 		defer wg.Done()
-		if secrets, err := s.clientsetCtx(ctx).CoreV1().Secrets(name).List(ctx, metav1.ListOptions{}); err == nil {
-			secretCount = len(secrets.Items)
-		}
+		secretCount, _ = countList(func(o metav1.ListOptions) (int, metav1.ListMeta, error) {
+			l, err := cs.CoreV1().Secrets(name).List(ctx, o)
+			if err != nil {
+				return 0, metav1.ListMeta{}, err
+			}
+			return len(l.Items), l.ListMeta, nil
+		})
 	}()
 	go func() {
 		defer wg.Done()
@@ -132,7 +181,7 @@ func (s *Service) DescribeNamespace(ctx context.Context, name string) (map[strin
 		"resource_version": ns.ResourceVersion,
 		"finalizers":       ns.Finalizers,
 		"resource_counts": map[string]int{
-			"pods":        podCount,
+			"pods":        pods.Total,
 			"services":    svcCount,
 			"deployments": depCount,
 			"configmaps":  cmCount,
@@ -140,6 +189,9 @@ func (s *Service) DescribeNamespace(ctx context.Context, name string) (map[strin
 		},
 		"resource_quotas": quotaList,
 		"limit_ranges":    limitList,
+	}
+	if podsErr == nil {
+		res["pod_summary"] = pods
 	}
 
 	// Deletion timestamp
@@ -263,15 +315,11 @@ func (s *Service) GetNamespaceLimitRanges(ctx context.Context, namespace string)
 	return result, nil
 }
 
-// GetNamespaceOwnedPods lists pods in a namespace.
+// GetNamespaceOwnedPods lists pods in a namespace, a page at a time: only the rows stay, not the pods (50 000 pods
+// as one list took k8s-service past 512 Mi).
 func (s *Service) GetNamespaceOwnedPods(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	pods, err := s.clientsetCtx(ctx).CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list pods in %s: %w", namespace, err)
-	}
-
-	result := make([]map[string]interface{}, 0, len(pods.Items))
-	for _, p := range pods.Items {
+	result := make([]map[string]interface{}, 0)
+	err := eachPod(ctx, s.clientsetCtx(ctx).CoreV1(), namespace, metav1.ListOptions{}, func(p *corev1.Pod) {
 		ready := 0
 		total := len(p.Spec.Containers)
 		restarts := int32(0)
@@ -292,6 +340,9 @@ func (s *Service) GetNamespaceOwnedPods(ctx context.Context, namespace string) (
 			"node":          p.Spec.NodeName,
 			"created_at":    toISO(&p.CreationTimestamp),
 		})
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list pods in %s: %w", namespace, err)
 	}
 	return result, nil
 }

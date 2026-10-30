@@ -86,10 +86,6 @@ func (s *Service) CollectOptimization(ctx context.Context, namespace string, win
 	if cs == nil {
 		return nil, errNotLoaded
 	}
-	podList, err := cs.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list pods: %w", err)
-	}
 	owner, err := s.workloadOwner(ctx, namespace)
 	if err != nil {
 		return nil, err
@@ -115,7 +111,12 @@ func (s *Service) CollectOptimization(ctx context.Context, namespace string, win
 		}
 	}
 
-	rows := optimizationRows(podList.Items, owner, usage)
+	// the pods a page at a time into the rows (the whole namespace in one list took k8s-service past 512 Mi)
+	acc := newOptimizationAcc(owner, usage)
+	if err := eachPod(ctx, cs.CoreV1(), namespace, metav1.ListOptions{}, acc.add); err != nil {
+		return nil, fmt.Errorf("list pods: %w", err)
+	}
+	rows := acc.rows()
 	res := &OptimizationResult{Namespace: namespace, WindowHours: windowHours, Source: source, GeneratedAt: time.Now().UTC().Format(time.RFC3339), Rows: rows}
 	for _, r := range rows {
 		n := int64(r.Pods)
@@ -173,44 +174,64 @@ func (s *Service) workloadOwner(ctx context.Context, namespace string) (func(cor
 // container name, keeps the largest request/limit seen and the heaviest
 // usage sample across the pods, and flags and sizes each row.
 func optimizationRows(pods []corev1.Pod, owner func(corev1.Pod) (string, string), usage map[usageKey]usageSample) []OptimizationRow {
-	type acc struct {
-		row  OptimizationRow
-		pods map[string]bool
-		use  usageSample
+	a := newOptimizationAcc(owner, usage)
+	for i := range pods {
+		a.add(&pods[i])
 	}
-	byKey := map[string]*acc{}
-	var order []string
-	for _, p := range pods {
-		if p.Status.Phase != corev1.PodRunning {
-			continue
+	return a.rows()
+}
+
+// optimizationAcc folds pods into the rows one at a time, so the namespace can be read a page at a time.
+type optimizationAcc struct {
+	owner func(corev1.Pod) (string, string)
+	usage map[usageKey]usageSample
+	byKey map[string]*optimizationRowAcc
+	order []string
+}
+
+type optimizationRowAcc struct {
+	row  OptimizationRow
+	pods map[string]bool
+	use  usageSample
+}
+
+func newOptimizationAcc(owner func(corev1.Pod) (string, string), usage map[usageKey]usageSample) *optimizationAcc {
+	return &optimizationAcc{owner: owner, usage: usage, byKey: map[string]*optimizationRowAcc{}}
+}
+
+func (o *optimizationAcc) add(p *corev1.Pod) {
+	if p.Status.Phase != corev1.PodRunning {
+		return
+	}
+	kind, name := o.owner(*p)
+	for _, c := range p.Spec.Containers {
+		key := kind + "/" + name + "/" + c.Name
+		a, ok := o.byKey[key]
+		if !ok {
+			a = &optimizationRowAcc{row: OptimizationRow{Kind: kind, Namespace: p.Namespace, Name: name, Container: c.Name}, pods: map[string]bool{}}
+			o.byKey[key] = a
+			o.order = append(o.order, key)
 		}
-		kind, name := owner(p)
-		for _, c := range p.Spec.Containers {
-			key := kind + "/" + name + "/" + c.Name
-			a, ok := byKey[key]
-			if !ok {
-				a = &acc{row: OptimizationRow{Kind: kind, Namespace: p.Namespace, Name: name, Container: c.Name}, pods: map[string]bool{}}
-				byKey[key] = a
-				order = append(order, key)
+		a.pods[p.Name] = true
+		a.row.CPURequestM = maxInt64(a.row.CPURequestM, c.Resources.Requests.Cpu().MilliValue())
+		a.row.CPULimitM = maxInt64(a.row.CPULimitM, c.Resources.Limits.Cpu().MilliValue())
+		a.row.MemRequestBytes = maxInt64(a.row.MemRequestBytes, c.Resources.Requests.Memory().Value())
+		a.row.MemLimitBytes = maxInt64(a.row.MemLimitBytes, c.Resources.Limits.Memory().Value())
+		if u, ok := o.usage[usageKey{p.Name, c.Name}]; ok {
+			if u.hasCPU && (!a.use.hasCPU || u.cpuM > a.use.cpuM) {
+				a.use.cpuM, a.use.hasCPU = u.cpuM, true
 			}
-			a.pods[p.Name] = true
-			a.row.CPURequestM = maxInt64(a.row.CPURequestM, c.Resources.Requests.Cpu().MilliValue())
-			a.row.CPULimitM = maxInt64(a.row.CPULimitM, c.Resources.Limits.Cpu().MilliValue())
-			a.row.MemRequestBytes = maxInt64(a.row.MemRequestBytes, c.Resources.Requests.Memory().Value())
-			a.row.MemLimitBytes = maxInt64(a.row.MemLimitBytes, c.Resources.Limits.Memory().Value())
-			if u, ok := usage[usageKey{p.Name, c.Name}]; ok {
-				if u.hasCPU && (!a.use.hasCPU || u.cpuM > a.use.cpuM) {
-					a.use.cpuM, a.use.hasCPU = u.cpuM, true
-				}
-				if u.hasMem && (!a.use.hasMem || u.memBytes > a.use.memBytes) {
-					a.use.memBytes, a.use.hasMem = u.memBytes, true
-				}
+			if u.hasMem && (!a.use.hasMem || u.memBytes > a.use.memBytes) {
+				a.use.memBytes, a.use.hasMem = u.memBytes, true
 			}
 		}
 	}
-	rows := make([]OptimizationRow, 0, len(order))
-	for _, key := range order {
-		a := byKey[key]
+}
+
+func (o *optimizationAcc) rows() []OptimizationRow {
+	rows := make([]OptimizationRow, 0, len(o.order))
+	for _, key := range o.order {
+		a := o.byKey[key]
 		r := a.row
 		r.Pods = len(a.pods)
 		r.Flags = []string{}

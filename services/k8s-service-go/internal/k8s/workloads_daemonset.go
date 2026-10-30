@@ -127,7 +127,7 @@ func (s *Service) DescribeDaemonSet(ctx context.Context, namespace, name string)
 	result["conditions"] = conditions
 
 	// Owned pods (Pods whose ownerReferences include this DaemonSet)
-	if ownedPods, err := s.listOwnedPods(ctx, namespace, "DaemonSet", name); err == nil {
+	if ownedPods, err := s.listOwnedPods(ctx, namespace, "DaemonSet", name, ds.Spec.Selector); err == nil {
 		result["owned_pods"] = ownedPods
 	}
 

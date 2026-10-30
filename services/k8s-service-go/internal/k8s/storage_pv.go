@@ -39,7 +39,7 @@ func (s *Service) DescribePV(ctx context.Context, name string) (map[string]inter
 
 	// Fetch bound PVC, pods, and events in parallel
 	var boundPVC *corev1.PersistentVolumeClaim
-	var pods *corev1.PodList
+	var pods []corev1.Pod
 	var events *corev1.EventList
 	var pvcErr, podsErr, eventsErr error
 
@@ -54,7 +54,17 @@ func (s *Service) DescribePV(ctx context.Context, name string) (map[string]inter
 	go func() {
 		defer wg.Done()
 		if pv.Spec.ClaimRef != nil && pv.Spec.ClaimRef.Name != "" {
-			pods, podsErr = s.clientsetCtx(ctx).CoreV1().Pods(pv.Spec.ClaimRef.Namespace).List(ctx, metav1.ListOptions{})
+			// a page at a time, keeping the pods that mount the claim (the whole namespace in one list took
+			// k8s-service past 512 Mi)
+			claim := pv.Spec.ClaimRef.Name
+			podsErr = eachPod(ctx, s.clientsetCtx(ctx).CoreV1(), pv.Spec.ClaimRef.Namespace, metav1.ListOptions{}, func(p *corev1.Pod) {
+				for _, vol := range p.Spec.Volumes {
+					if vol.PersistentVolumeClaim != nil && vol.PersistentVolumeClaim.ClaimName == claim {
+						pods = append(pods, *p.DeepCopy())
+						return
+					}
+				}
+			})
 		}
 	}()
 	go func() {
@@ -126,8 +136,8 @@ func (s *Service) DescribePV(ctx context.Context, name string) (map[string]inter
 	}
 
 	// Used by pods (pods using the PVC bound to this PV)
-	if podsErr == nil && pods != nil && pv.Spec.ClaimRef != nil {
-		usedByPods := findPodsUsingPVC(pods.Items, pv.Spec.ClaimRef.Name)
+	if podsErr == nil && pv.Spec.ClaimRef != nil && pv.Spec.ClaimRef.Name != "" {
+		usedByPods := findPodsUsingPVC(pods, pv.Spec.ClaimRef.Name)
 		result["used_by_pods"] = usedByPods
 	}
 
