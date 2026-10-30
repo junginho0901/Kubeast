@@ -208,7 +208,7 @@ function NodeBox({ entry, canDeletePod }: { entry: NodeEntry; canDeletePod: bool
                 <div className="text-sm font-medium text-ink truncate" title={pod.name}>
                   {pod.name}
                 </div>
-                <div className="text-xs text-slate-400 mt-1">{pod.namespace}</div>
+                <div className="text-xs text-slate-300 mt-1">{pod.namespace}</div>
                 <div className={`text-xs mt-1 min-h-[16px] ${isDeleting ? 'text-amber-400' : 'text-slate-300'}`}>
                   {isDeleting ? tr('clusterView.podDeleting', 'Deleting...') : health.reason}
                 </div>

@@ -230,7 +230,7 @@ export default function AdminAudit() {
 
   return (
     <div className="page-scrolls space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="page-head items-center">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('adminAudit.title', '감사 로그')}</h1>
           <p className="text-slate-400 text-sm mt-1">
@@ -241,7 +241,7 @@ export default function AdminAudit() {
           <button
             onClick={exportCsv}
             data-testid="audit-export-csv"
-            className="btn btn-secondary flex items-center gap-2"
+            className="btn btn-primary flex items-center gap-2"
           >
             {tr('adminAudit.exportCsv', 'CSV 내보내기')}
           </button>

@@ -252,7 +252,7 @@ export default function AdvancedSearch() {
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4 p-6 max-w-[1200px] mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="page-head items-center">
         <div>
           <h1 className="text-3xl font-semibold text-ink flex items-center gap-3">
             <Search className="w-7 h-7 text-primary-400" />

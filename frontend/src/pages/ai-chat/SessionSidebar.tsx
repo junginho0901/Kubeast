@@ -114,9 +114,7 @@ export function SessionSidebar({
           {sessionsList.length > 0 && (
             <button
               onClick={handleToggleMultiSelect}
-              className={`w-full btn flex items-center justify-center gap-2 text-sm ${
-                isMultiSelectMode ? 'bg-slate-600 hover:bg-slate-500 text-ink' : 'btn-secondary'
-              }`}
+              className={`w-full justify-center ${isMultiSelectMode ? 'btn-row' : 'btn-row-danger'}`}
             >
               {isMultiSelectMode ? (
                 <>
@@ -137,20 +135,20 @@ export function SessionSidebar({
             <div className="flex gap-2">
               <button
                 onClick={handleSelectAll}
-                className="flex-1 px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 rounded-sm text-slate-300"
+                className="btn-row flex-1 justify-center"
               >
                 {t('aiChat.selectAll')}
               </button>
               <button
                 onClick={handleDeselectAll}
-                className="flex-1 px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 rounded-sm text-slate-300"
+                className="btn-row flex-1 justify-center"
               >
                 {t('aiChat.deselectAll')}
               </button>
               <button
                 onClick={handleDeleteSelected}
                 disabled={selectedSessionIds.size === 0}
-                className="flex-1 px-2 py-1 text-xs bg-red-600 hover:bg-red-700 disabled:bg-slate-700 disabled:text-slate-500 rounded-sm text-white"
+                className="btn-row-danger flex-1 justify-center"
               >
                 {t('aiChat.deleteWithCount', { count: selectedSessionIds.size })}
               </button>
@@ -266,7 +264,7 @@ export function SessionSidebar({
                           <div className="text-sm font-medium truncate" title={session.title}>
                             {session.title}
                           </div>
-                          <div className={`text-xs mt-1 ${isSelected ? 'text-white/80' : 'text-slate-400'}`}>
+                          <div className={`text-xs mt-1 ${isSelected ? 'text-white' : 'text-slate-400'}`}>
                             {t('aiChat.messageCount', { count: session.message_count })}
                           </div>
                         </div>

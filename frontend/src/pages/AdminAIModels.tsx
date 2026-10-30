@@ -27,7 +27,7 @@ export default function AdminAIModels() {
   return (
     <div className="space-y-6">
       {/* header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="page-head items-center mb-6">
         <div>
           <h1 className="text-3xl font-semibold text-ink flex items-center gap-2">
             <Bot className="h-5 w-5 text-primary-400" />

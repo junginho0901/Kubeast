@@ -33,7 +33,7 @@ export function DashboardSkeleton() {
   return (
     <div className="space-y-8">
       {/* Header — identical to real, version line is a pulse placeholder */}
-      <div className="flex items-start justify-between">
+      <div className="page-head items-start">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('dashboard.title', 'Cluster Dashboard')}</h1>
           <p className="mt-2 text-slate-400">
@@ -44,7 +44,7 @@ export function DashboardSkeleton() {
             <span className="inline-block h-3.5 w-20 align-middle ml-0.5 rounded-sm bg-slate-700/60 animate-pulse" />
           </p>
         </div>
-        <button disabled className="btn btn-secondary flex items-center gap-2 opacity-50 cursor-not-allowed">
+        <button disabled className="btn btn-primary flex items-center gap-2 opacity-50 cursor-not-allowed">
           <RefreshCw className="w-4 h-4" />
           {tr('dashboard.refresh', 'Refresh')}
         </button>

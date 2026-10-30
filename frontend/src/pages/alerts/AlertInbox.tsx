@@ -127,13 +127,13 @@ export default function AlertInbox() {
       data-testid={`alert-tab-${value || 'all'}`}
       className={`h-10 rounded-lg border px-3 text-sm ${!showSilences && status === value ? 'border-primary-600 bg-primary-600 text-white' : 'border-slate-700 text-slate-300 hover:border-slate-500'}`}
     >
-      {label}{count !== undefined && <span className={`ml-2 text-xs ${!showSilences && status === value ? 'text-white/80' : 'text-slate-400'}`}>{count}</span>}
+      {label}{count !== undefined && <span className={`ml-2 text-xs ${!showSilences && status === value ? 'text-white' : 'text-slate-400'}`}>{count}</span>}
     </button>
   )
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
-      <div className="flex items-start justify-between gap-3 shrink-0">
+      <div className="page-head items-start shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('alertInbox.title', 'Alerts')}</h1>
           <p className="mt-2 text-slate-400">

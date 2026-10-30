@@ -145,6 +145,27 @@ func TestClusterInformers_StopsWhenIdle(t *testing.T) {
 	}
 }
 
+// A sync slower than the idle time: the set is in use while a caller waits for it, so it is not stopped under the
+// caller (on a slow CI runner the test above failed so, after 40 ms). It stops when idle after the wait.
+func TestClusterInformers_NotStoppedWhileASyncIsAwaited(t *testing.T) {
+	cs := fake.NewSimpleClientset(overviewObjects()...)
+	cs.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		time.Sleep(200 * time.Millisecond)
+		return false, nil, nil
+	})
+	stopped := make(chan bool, 1)
+	ci := newClusterInformers(cs, 40*time.Millisecond, func(_ *clusterInformers, forbidden bool) { stopped <- forbidden })
+	t.Cleanup(ci.stopNow)
+	if !ci.waitSynced(context.Background(), 5*time.Second) {
+		t.Fatal("stopped while a caller waited for the sync")
+	}
+	select {
+	case <-stopped:
+	case <-time.After(3 * time.Second):
+		t.Fatal("informers did not stop when idle after the wait")
+	}
+}
+
 func forbiddenClientset() *fake.Clientset {
 	cs := fake.NewSimpleClientset(overviewObjects()...)
 	cs.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {

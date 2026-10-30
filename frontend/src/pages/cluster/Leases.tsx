@@ -204,7 +204,7 @@ spec:
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
-      <div className="flex items-center justify-between shrink-0">
+      <div className="page-head items-center shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('leases.title', 'Leases')}</h1>
           <p className="mt-2 text-slate-400">
@@ -216,7 +216,7 @@ spec:
             <button
               type="button"
               onClick={() => setCreateDialogOpen(true)}
-              className="btn btn-secondary flex items-center gap-2"
+              className="btn btn-primary flex items-center gap-2"
               title={tr('common.controllerManaged', 'Kubernetes usually creates this object itself')}
             >
               <Plus className="w-4 h-4" />

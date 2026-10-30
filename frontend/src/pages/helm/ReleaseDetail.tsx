@@ -189,7 +189,7 @@ export default function HelmReleaseDetailPage() {
         </Link>
       </div>
 
-      <div className="flex items-start justify-between gap-4">
+      <div className="page-head items-start gap-4">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{rel.name}</h1>
           <p className="text-slate-400 text-sm mt-1">
@@ -201,7 +201,7 @@ export default function HelmReleaseDetailPage() {
             <button
               type="button"
               onClick={() => setTestOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-sm border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700"
+              className="btn btn-primary flex items-center gap-2"
             >
               <FlaskConical className="w-4 h-4" />
               {t('helmReleaseDetail.test.button')}
@@ -211,7 +211,7 @@ export default function HelmReleaseDetailPage() {
             <button
               type="button"
               onClick={() => setUninstallOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-sm border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-sm text-red-200 hover:bg-red-500/20"
+              className="btn flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white"
             >
               <Trash2 className="w-4 h-4" />
               {t('helmReleaseDetail.uninstall.button')}

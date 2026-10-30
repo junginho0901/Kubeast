@@ -172,7 +172,7 @@ export default function AdmissionPolicies({ kind }: { kind: AdmissionPolicyKind 
   const columnCount = 6
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
-      <div className="flex items-center justify-between shrink-0">
+      <div className="page-head items-center shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink">
             {validating

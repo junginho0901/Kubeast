@@ -64,7 +64,7 @@ export default function AdminClusters() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="page-head items-center">
         <div>
           <h1 className="text-3xl font-semibold text-ink flex items-center gap-2">
             <Server className="w-6 h-6 text-primary-500" />
@@ -159,7 +159,7 @@ export default function AdminClusters() {
                         type="button"
                         onClick={() => runTest(c.id)}
                         disabled={testingId === c.id}
-                        className="flex items-center gap-1 rounded-lg border border-slate-600 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-slate-700/40 disabled:opacity-50"
+                        className="btn-row"
                         title={tr('cluster.admin.test', 'Test connection')}
                       >
                         {testingId === c.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5" />}
@@ -169,7 +169,7 @@ export default function AdminClusters() {
                         type="button"
                         data-testid={`access-cluster-${c.id}`}
                         onClick={() => setAccessTarget(c)}
-                        className="flex items-center gap-1 rounded-lg border border-slate-600 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-slate-700/40"
+                        className="btn-row"
                         title={tr('cluster.admin.access', 'Manage access')}
                       >
                         <Users className="w-3.5 h-3.5" />
@@ -179,7 +179,7 @@ export default function AdminClusters() {
                         type="button"
                         data-testid={`edit-cluster-${c.id}`}
                         onClick={() => setEditTarget(c)}
-                        className="flex items-center gap-1 rounded-lg border border-slate-600 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-slate-700/40"
+                        className="btn-row"
                         title={tr('cluster.admin.edit', 'Edit')}
                       >
                         <Pencil className="w-3.5 h-3.5" />
@@ -189,7 +189,7 @@ export default function AdminClusters() {
                         type="button"
                         data-testid={`delete-cluster-${c.id}`}
                         onClick={() => setDeleteTarget(c)}
-                        className="flex items-center gap-1 rounded-lg border border-red-900/60 px-2.5 py-1.5 text-xs text-red-300 hover:bg-red-900/20"
+                        className="btn-row-danger"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                         {tr('cluster.admin.delete', 'Delete')}

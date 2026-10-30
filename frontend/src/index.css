@@ -426,6 +426,28 @@ body {
     padding-bottom: 4rem;
   }
 
+  /* A page's header row, the title block and its buttons: where both do not fit on one line (a portrait monitor,
+     the longest titles), the buttons go to the next line, still on the right, instead of pushing the page sideways.
+     The title block keeps 20rem, or its longest word if wider, before they go; on a wide window nothing moves. */
+  .page-head {
+    @apply flex flex-wrap justify-between gap-3;
+  }
+  .page-head > :first-child {
+    flex: 1 1 20rem;
+  }
+  .page-head > :last-child:not(:first-child) {
+    margin-left: auto;
+  }
+
+  /* A small action in a table row, on a card or in a drawer header (Test, Edit, Delete …): one size and shape on every
+     screen; btn-row-danger is the one that deletes. */
+  .btn-row {
+    @apply inline-flex items-center gap-1.5 rounded-lg border border-slate-600 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-slate-700/40 disabled:opacity-50;
+  }
+  .btn-row-danger {
+    @apply inline-flex items-center gap-1.5 rounded-lg border border-red-800/60 bg-red-950/20 px-2.5 py-1.5 text-xs text-red-200 hover:bg-red-950/40 disabled:opacity-50;
+  }
+
   /* The sidebar menu scrolls: a fade over its bottom 24px shows that items go on below the account box. At the
      end of the list only the menu's own bottom padding (py-6 = 24px) sits under the fade. */
   .sidebar-nav {
@@ -486,6 +508,29 @@ body {
   .badge-neutral {
     @apply bg-slate-500/20 text-slate-300 border border-slate-500/30;
   }
+}
+
+/* Text the AI writes (chat answers, the floating chat, investigation reports, the optimization answer) is prose-invert,
+   whose colours are for a dark ground only: on the light mode's off-white the headings, bold text, code, table headers
+   and tool boxes were near white. Its colours follow the colour mode's tokens, the same values in the default mode. */
+.prose {
+  --tw-prose-invert-body: var(--color-slate-300);
+  --tw-prose-invert-headings: var(--color-ink);
+  --tw-prose-invert-lead: var(--color-slate-400);
+  --tw-prose-invert-links: var(--color-primary-400);
+  --tw-prose-invert-bold: var(--color-ink);
+  --tw-prose-invert-counters: var(--color-slate-400);
+  --tw-prose-invert-bullets: var(--color-slate-600);
+  --tw-prose-invert-hr: var(--color-slate-700);
+  --tw-prose-invert-quotes: var(--color-slate-200);
+  --tw-prose-invert-quote-borders: var(--color-slate-700);
+  --tw-prose-invert-captions: var(--color-slate-400);
+  --tw-prose-invert-kbd: var(--color-ink);
+  --tw-prose-invert-code: var(--color-ink);
+  --tw-prose-invert-pre-code: var(--color-slate-200);
+  --tw-prose-invert-pre-bg: color-mix(in srgb, var(--color-slate-950) 50%, transparent);
+  --tw-prose-invert-th-borders: var(--color-slate-600);
+  --tw-prose-invert-td-borders: var(--color-slate-700);
 }
 
 /* Tables in chat answers (AI chat, floating): row and column lines; a wide table scrolls sideways in its own box

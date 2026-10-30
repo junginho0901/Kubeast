@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { RefreshCw, Search, BarChart3 } from 'lucide-react'
+import { RefreshCw, Search, BarChart3, ChevronDown, ChevronUp } from 'lucide-react'
 import { useGPUNodesData } from './gpu-nodes/useGPUNodesData'
 import type { SortKey } from './gpu-nodes/gpuNodesHelpers'
 import GPUNodesModelDistribution from './gpu-nodes/GPUNodesModelDistribution'
@@ -60,7 +60,7 @@ export default function GPUNodes() {
   return (
     <div className={`flex flex-col gap-4 ${showCharts ? 'min-h-[calc(100vh-4rem)] overflow-y-auto' : 'h-[calc(100vh-4rem)]'}`}>
       {/* Header */}
-      <div className="flex items-center justify-between shrink-0">
+      <div className="page-head items-center shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('gpuNodes.title', 'GPU Nodes')}</h1>
           <p className="mt-2 text-slate-400">{tr('gpuNodes.subtitle', 'GPU node status, capacity, and model information.')}</p>
@@ -68,10 +68,12 @@ export default function GPUNodes() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowCharts((prev) => !prev)}
-            className={`btn flex items-center gap-2 ${showCharts ? 'btn-primary' : 'btn-secondary'}`}
+            aria-pressed={showCharts}
+            className="btn btn-primary flex items-center gap-2"
           >
             <BarChart3 className="w-4 h-4" />
             {tr('gpuNodes.metrics', 'Metrics')}
+            {showCharts ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
           <button
             onClick={handleRefresh}

@@ -48,6 +48,7 @@ type clusterInformers struct {
 	synced  chan struct{} // closed once every store has synced
 	stopped sync.Once
 	lastUse atomic.Int64 // unix nanoseconds
+	waiting atomic.Int32 // callers in waitSynced: the set is in use while they wait, however long the sync takes
 
 	pods                                                cache.Indexer
 	namespaces, services, deployments, pvcs, pvs, nodes cache.Store
@@ -147,7 +148,7 @@ func newClusterInformers(client kubernetes.Interface, idle time.Duration, onStop
 			case <-ci.stop:
 				return
 			case <-t.C:
-				if time.Since(ci.lastUsed()) < idle {
+				if ci.waiting.Load() > 0 || time.Since(ci.lastUsed()) < idle {
 					continue
 				}
 				slog.Info("overview informers: idle, stopping")
@@ -192,6 +193,9 @@ func (ci *clusterInformers) waitSynced(ctx context.Context, d time.Duration) boo
 	if ci.isSynced() {
 		return !ci.isStopped()
 	}
+	ci.waiting.Add(1)
+	defer ci.touch()
+	defer ci.waiting.Add(-1)
 	t := time.NewTimer(d)
 	defer t.Stop()
 	select {

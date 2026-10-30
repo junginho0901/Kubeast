@@ -190,7 +190,7 @@ spec:
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
-      <div className="flex items-center justify-between shrink-0">
+      <div className="page-head items-center shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('gatewayClassesPage.title', 'Gateway Classes')}</h1>
           <p className="mt-2 text-slate-400">{tr('gatewayClassesPage.subtitle', 'Inspect and manage cluster-scoped GatewayClass resources.')}</p>

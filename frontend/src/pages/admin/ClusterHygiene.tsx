@@ -167,7 +167,7 @@ export default function ClusterHygiene() {
 
   return (
     <div className="page-scrolls space-y-4">
-      <div className="flex items-start justify-between gap-4">
+      <div className="page-head items-start gap-4">
         <div>
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-6 h-6 text-primary-400" />
@@ -286,11 +286,11 @@ export default function ClusterHygiene() {
         {!viewId && (
           <div className="ml-auto flex items-center gap-2">
             <button onClick={() => download('csv')} disabled={!live} data-testid="hygiene-export-csv"
-              className="h-9 rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 text-sm text-ink flex items-center gap-2">
+              className="btn btn-primary flex items-center gap-2 disabled:opacity-50">
               <Download className="w-4 h-4" /> CSV
             </button>
             <button onClick={() => download('json')} disabled={!live} data-testid="hygiene-export-json"
-              className="h-9 rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 text-sm text-ink flex items-center gap-2">
+              className="btn btn-primary flex items-center gap-2 disabled:opacity-50">
               <Download className="w-4 h-4" /> JSON
             </button>
           </div>
