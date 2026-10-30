@@ -568,7 +568,9 @@ resources:
     limits: { memory: 128Mi }
   gateway:
     requests: { cpu: 20m, memory: 32Mi }
-    limits: { memory: 128Mi }
+    # each request in flight holds proxy buffers: 400 people opening Cluster
+    # View at once took it past 128Mi
+    limits: { memory: 256Mi }
   postgres:
     requests: { cpu: 100m, memory: 256Mi }
     limits: { memory: 1Gi }
@@ -1010,6 +1012,12 @@ multicluster:
   rateLimitBurst: 20
   breakerConsecutiveFails: 5
   breakerOpenSec: 30
+  # Live updates: each screen's watch is one watch on the cluster as the user.
+  # wsMaxSubscriptions caps them across all users of one k8s-service (2 000 =
+  # 500 people with four Cluster View node boxes each),
+  # wsMaxSubscriptionsPerConn those of one browser tab.
+  wsMaxSubscriptions: 2000
+  wsMaxSubscriptionsPerConn: 50
   # Credential plugins a registered kubeconfig may run (exec.command base
   # names). They execute inside the k8s-service and tool-server pods, so only
   # known binaries are allowed; an empty list forbids exec plugins.
