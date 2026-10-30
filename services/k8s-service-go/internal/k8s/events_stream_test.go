@@ -166,7 +166,7 @@ func TestGetEventsNewestAndTheTotal(t *testing.T) {
 	now := time.Now()
 	api := &pagedAPI{events: someEvents(1234, now)}
 	s := api.serve(t)
-	rows, total, err := s.GetEvents(context.Background(), "bulk", "", 10)
+	rows, total, err := s.GetEvents(context.Background(), "bulk", "", "", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,6 +175,14 @@ func TestGetEventsNewestAndTheTotal(t *testing.T) {
 	}
 	if api.asked[0].path != "/api/v1/namespaces/bulk/events" {
 		t.Fatalf("path %s", api.asked[0].path)
+	}
+	// a resource name and a field selector go to the API server together
+	api.asked = nil
+	if _, _, err := s.GetEvents(context.Background(), "", "web-1", "type=Warning", 10); err != nil {
+		t.Fatal(err)
+	}
+	if api.asked[0].path != "/api/v1/events" || api.asked[0].fieldSelector != "involvedObject.name=web-1,type=Warning" {
+		t.Fatalf("asked %+v", api.asked[0])
 	}
 }
 

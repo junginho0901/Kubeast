@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -285,29 +286,25 @@ func TestPodLogs_NoPreviousAndContainerRequired(t *testing.T) {
 }
 
 func TestGetEvents_SelectorsAndScope(t *testing.T) {
-	calls := fakeKubectl(t, func(args []string) (string, error) { return `{"items":[]}`, nil })
+	seen := fakeK8sService(t, func(*http.Request) (int, string) { return 200, `{"items":[],"total":0}` })
 	if _, err := handleGetEvents(context.Background(), map[string]interface{}{
 		"namespace": "shop", "field_selector": "type=Warning", "kind": "pods", "name": "web-1",
 	}, nil); err != nil {
 		t.Fatal(err)
 	}
-	v := verb((*calls)[0])
-	if !has(v, "--field-selector=type=Warning,involvedObject.kind=Pod,involvedObject.name=web-1") || !has(v, "shop") || has(v, "--all-namespaces") {
-		t.Fatalf("argv: %v", v)
+	q := (*seen)[0].URL.Query()
+	if (*seen)[0].URL.Path != "/api/v1/events" || q.Get("field_selector") != "type=Warning,involvedObject.kind=Pod,involvedObject.name=web-1" ||
+		q.Get("namespace") != "shop" || q.Get("with_total") != "1" || q.Get("limit") != "200" {
+		t.Fatalf("asked %s", (*seen)[0].URL)
 	}
 
-	calls = fakeKubectl(t, func(args []string) (string, error) { return `{"items":[]}`, nil })
+	*seen = nil
 	if _, err := handleGetEvents(context.Background(), map[string]interface{}{"namespace": "shop", "all_namespaces": true}, nil); err != nil {
 		t.Fatal(err)
 	}
-	v = verb((*calls)[0])
-	if !has(v, "--all-namespaces") || has(v, "-n") {
-		t.Fatalf("all_namespaces wins: %v", v)
-	}
-	for _, c := range v {
-		if strings.HasPrefix(c, "--field-selector") {
-			t.Fatalf("no selector when none asked: %v", v)
-		}
+	q = (*seen)[0].URL.Query()
+	if q.Has("namespace") || q.Has("field_selector") {
+		t.Fatalf("all_namespaces wins, no selector when none asked: %s", (*seen)[0].URL)
 	}
 }
 

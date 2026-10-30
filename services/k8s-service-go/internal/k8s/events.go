@@ -3,19 +3,25 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// GetEvents lists the newest limit events in a namespace ("" for all), optionally filtered by resource name, and how
-// many there are. The events are read a page at a time (eachEvent), never as one list.
-func (s *Service) GetEvents(ctx context.Context, namespace string, resourceName string, limit int) ([]map[string]interface{}, int, error) {
-	opts := metav1.ListOptions{}
+// GetEvents lists the newest limit events in a namespace ("" for all), optionally filtered by resource name and an
+// events field selector (the API server checks it), and how many there are. The events are read a page at a time
+// (eachEvent), never as one list.
+func (s *Service) GetEvents(ctx context.Context, namespace, resourceName, fieldSelector string, limit int) ([]map[string]interface{}, int, error) {
+	var selectors []string
 	if resourceName != "" {
-		opts.FieldSelector = fmt.Sprintf("involvedObject.name=%s", resourceName)
+		selectors = append(selectors, fmt.Sprintf("involvedObject.name=%s", resourceName))
 	}
+	if fieldSelector != "" {
+		selectors = append(selectors, fieldSelector)
+	}
+	opts := metav1.ListOptions{FieldSelector: strings.Join(selectors, ",")}
 	items, counts, err := s.newestEventsSince(ctx, namespace, opts, time.Time{}, limit)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list events: %w", err)

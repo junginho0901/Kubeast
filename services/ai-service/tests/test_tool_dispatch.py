@@ -140,3 +140,13 @@ async def test_unknown_tool_returns_error_json():
 
     parsed = json.loads(result)
     assert "error" in parsed
+
+
+@pytest.mark.asyncio
+async def test_events_tool_forwards_its_limit():
+    """k8s_get_events lists the newest events: the model's limit goes to tool-server, a non-number does not"""
+    service = _make_service()
+    await execute_function_with_context(service, "k8s_get_events", {"namespace": "bulk", "limit": 50}, _make_context())
+    service._call_tool_server.assert_awaited_with("k8s_get_events", {"namespace": "bulk", "limit": 50})
+    await execute_function_with_context(service, "k8s_get_events", {"namespace": "bulk", "limit": "50"}, _make_context())
+    service._call_tool_server.assert_awaited_with("k8s_get_events", {"namespace": "bulk"})
