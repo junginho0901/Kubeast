@@ -169,6 +169,7 @@
 - **초기화 중인 파드**는 Pods 목록·다른 파드 목록·상세 창에서 kubectl과 같은 STATUS·READY·RESTARTS로 보입니다. `Init:Error`·`Init:CrashLoopBackOff`·`Init:1/2`와 init 컨테이너의 재시작 수입니다(`PodInitializing`·0이 아님). 네이티브 사이드카(`restartPolicy: Always`인 init 컨테이너)도 kubectl처럼 READY에 셉니다.
 - **목록 화면은 네임스페이스를 주소(`?namespace=`)에 둡니다.** 링크나 새로고침으로 같은 네임스페이스가 열리고, All namespaces를 고르면 빠집니다.
 - **Resource Graph에서 네임스페이스를 여러 개 고르면** 클러스터 전체가 아니라 고른 네임스페이스마다 받습니다. 그래서 네임스페이스 권한만 있는 계정도 볼 수 있고, 일부 네임스페이스에서만 거부된 종류는 그 네임스페이스와 함께 알려 줍니다. **Issues** 필터는 노랑·빨강으로 그려진 것(아직 `Progressing`인 Deployment 포함)을 남기고, 떠 있는 채팅도 같은 것을 문제로 셉니다.
+- **선택 칸은 너비가 바뀌지 않습니다.** Resource Graph의 네임스페이스 칸은 여러 개를 고르면 첫 이름과 개수로 보이고(마우스를 올리면 전부), Cluster View의 네임스페이스 칸과 로그 파일 칸은 너비가 고정이며, 목록 화면 칸의 긴 네임스페이스 이름은 말줄임으로 줄입니다. 그래서 뒤의 칸들이 밀리지 않습니다.
 - **YAML 생성·편집**은 문서마다 그 Kind의 `resource.<이름>.create`(편집은 대상의 `resource.<이름>.edit`)를 확인합니다.
   - 이름은 Kind의 소문자 형태이고, 자기 이름이 없는 Kind(CR 등)는 `customresource`를 씁니다.
     단, HorizontalPodAutoscaler·VerticalPodAutoscaler·PodDisruptionBudget·PersistentVolume·PersistentVolumeClaim·CustomResourceDefinition은 `hpa`·`vpa`·`pdb`·`pv`·`pvc`·`crd`를 씁니다.
@@ -301,6 +302,7 @@ EKS 클러스터에 `features.networkFlowMonitor`를 켜면 Pod·워크로드 �
 - 출처는 두 가지입니다.
   - **최근 흐름**: 고른 네임스페이스 전체를 Hubble Relay에서 한 번에 읽습니다. 드로어처럼 감사 로그에 남습니다(`k8s.networkflows.query`, `graph: true`와 네임스페이스 목록). 최근 15분, 흐름 최대 `features.networkFlows.graphMaxFlows`개(2,000)입니다.
   - **지표 1시간·24시간**: 클러스터 Prometheus의 Hubble TCP 지표(연 연결, `flag="SYN"`)와 차단 지표입니다. 드로어의 차단처럼 감사 로그에 남기지 않습니다. DNS 같은 UDP 통신은 세지 않습니다.
+  - 지표가 파드만 나타내고 차단의 한쪽만 이름을 붙이면(remote context를 끈 Microsoft Retina는 그 차단을 본 노드의 파드만 나타냄), 다른 쪽은 파드 밖이 아니라 "지표에 이름이 없는 상대" 상자로 그리고 상태 줄에 그 까닭을 적습니다. 양쪽 끝 모두 파드 이름이 없는 차단은 어느 네임스페이스에도 넣을 수 없어 그 수를 상태 줄에 알립니다.
 - 선은 연결을 연 워크로드에서 닿은 워크로드로 갑니다. 허용은 초록, 차단은 빨강, 둘 다면 주황입니다. 많이 쓰일수록 굵고, 숫자는 흐름 수(최근 흐름) 또는 연결 수·차단된 패킷 수(지표)입니다.
 - 선은 상자를 피해 직각으로 돌아가고, 숫자는 아무것도 가리지 않는 자리에 놓입니다. 상자나 선에 마우스를 올리면 그 선만 밝게 남고 나머지는 흐려져 끝까지 따라갈 수 있습니다. 드로어를 연 상자는 열려 있는 동안 그 선이 밝게 남습니다. 통신 보기에서는 받는 상자에 선들이 가는 포트와 그 수를 줄마다 적고, 선은 자기 포트 줄로 들어갑니다(Hubble UI 서비스 맵과 같은 방식). 많이 쓰인 포트 6개만 줄을 갖고 나머지는 마지막 `+n` 줄에 모입니다. 둘 다 보기에서는 선의 숫자를 포트부터 적습니다(`80 · 1.0k`, `UDP 53 · 420`). 선이 보이는 동안 상자는 배치된 자리에 고정됩니다.
 - 그래프에 없는 상대(다른 네임스페이스, 클러스터의 파드 밖, 필터로 숨긴 종류)는 점선 상자로 그립니다. 드로어가 있는 상대는 누르면 열립니다.
