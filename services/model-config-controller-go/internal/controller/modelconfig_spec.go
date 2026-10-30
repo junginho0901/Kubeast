@@ -24,7 +24,7 @@ type modelConfigData struct {
 	ExtraHeaders map[string]string
 	TLSVerify    bool
 	CACert       string
-	Options      map[string]string
+	Options      map[string]interface{}
 	Enabled      bool
 	IsDefault    bool
 	Tier         string
@@ -81,10 +81,27 @@ func (r *ModelConfigReconciler) parseSpec(mc *v1alpha1.ModelConfig) (modelConfig
 		extraHeaders = map[string]string{}
 	}
 
-	// 생성 옵션: ollama.options 를 DB 로 동기화 (kagent parity).
-	var options map[string]string
-	if provider == "ollama" && spec.Ollama != nil && len(spec.Ollama.Options) > 0 {
-		options = spec.Ollama.Options
+	// 생성 옵션: ollama.options 를 DB 로 동기화 (kagent parity) + the model's limits as numbers (ai-service limits.py).
+	options := map[string]interface{}{}
+	if provider == "ollama" && spec.Ollama != nil {
+		for k, v := range spec.Ollama.Options {
+			options[k] = v
+		}
+	}
+	if n := maxTokensOf(provider, spec); n != nil {
+		if *n < 1 || *n > 1_000_000 {
+			return modelConfigData{}, fmt.Errorf("spec.maxTokens must be from 1 to 1000000")
+		}
+		options["max_tokens"] = *n
+	}
+	if n := spec.ToolResultChars; n != nil {
+		if *n < 1_000 || *n > 200_000 {
+			return modelConfigData{}, fmt.Errorf("spec.toolResultChars must be from 1000 to 200000")
+		}
+		options["tool_result_chars"] = *n
+	}
+	if len(options) == 0 {
+		options = nil
 	}
 
 	return modelConfigData{
@@ -157,4 +174,17 @@ func providerLabel(mc *v1alpha1.ModelConfig) string {
 		return "unknown"
 	}
 	return strings.ToLower(value)
+}
+
+// maxTokensOf: spec.maxTokens, else the provider section's maxTokens (openAI, anthropic).
+func maxTokensOf(provider string, spec v1alpha1.ModelConfigSpec) *int64 {
+	switch {
+	case spec.MaxTokens != nil:
+		return spec.MaxTokens
+	case provider == "openai" && spec.OpenAI != nil:
+		return spec.OpenAI.MaxTokens
+	case provider == "anthropic" && spec.Anthropic != nil:
+		return spec.Anthropic.MaxTokens
+	}
+	return nil
 }

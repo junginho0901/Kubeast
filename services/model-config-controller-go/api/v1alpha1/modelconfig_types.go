@@ -35,10 +35,14 @@ type ModelConfigSpec struct {
 	ExtraHeaders    map[string]string `json:"extraHeaders,omitempty"`
 	TLSVerify       *bool             `json:"tlsVerify,omitempty"`
 	// CACert: 자체 서명 CA 인증서(PEM). 셀프호스트 HTTPS 엔드포인트용.
-	CACert            string                   `json:"caCert,omitempty"`
-	Enabled           *bool                    `json:"enabled,omitempty"`
-	IsDefault         *bool                    `json:"isDefault,omitempty"`
-	Tier              string                   `json:"tier,omitempty"` // "default" (empty) or "economy": the model chat summaries and the floating assistant use
+	CACert    string `json:"caCert,omitempty"`
+	Enabled   *bool  `json:"enabled,omitempty"`
+	IsDefault *bool  `json:"isDefault,omitempty"`
+	Tier      string `json:"tier,omitempty"` // "default" (empty) or "economy": the model chat summaries and the floating assistant use
+	// The model's own limits, as the AI Models fields set them: the longest answer in tokens and the longest tool result
+	// the model is given, in characters. Empty: ai-service's defaults (4 096 or 2 048 tokens, 6 000 characters).
+	MaxTokens         *int64                   `json:"maxTokens,omitempty"`
+	ToolResultChars   *int64                   `json:"toolResultChars,omitempty"`
 	ModelInfo         *ModelInfo               `json:"modelInfo,omitempty"`
 	OpenAI            *OpenAIConfig            `json:"openAI,omitempty"`
 	Anthropic         *AnthropicConfig         `json:"anthropic,omitempty"`
