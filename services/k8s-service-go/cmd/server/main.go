@@ -51,6 +51,7 @@ func main() {
 	logger.Setup(cfg.AppName, cfg.Debug)
 
 	slog.Info("starting k8s-service-go", "port", cfg.Port, "debug", cfg.Debug)
+	setMemoryLimit()
 
 	// The /internal routes (kubeconfig for tool-server, validate/invalidate for
 	// auth-service) need the shared service token; without one they answer 503

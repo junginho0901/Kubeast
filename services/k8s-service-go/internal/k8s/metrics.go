@@ -111,6 +111,7 @@ func (s *Service) AddPodLimits(ctx context.Context, namespace string, rows []map
 		slog.Debug("pod metrics: no limits", "namespace", namespace, "err", err)
 		return
 	}
+	defer set.done()
 	byName := make(map[string]*podRow, len(set.rows))
 	for _, r := range set.rows {
 		byName[r.namespace+"/"+r.name] = r

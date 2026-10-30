@@ -42,6 +42,7 @@ func (s *Service) GetPodNodeSummary(ctx context.Context, namespace, q, revision 
 	if err != nil {
 		return nil, err
 	}
+	defer set.done()
 	if set.unchanged {
 		return &PodNodeSummary{Nodes: []PodNodeCount{}, Revision: set.revision, Unchanged: true, Source: set.source}, nil
 	}

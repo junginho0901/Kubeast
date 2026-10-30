@@ -2,7 +2,9 @@ package k8s
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -11,6 +13,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/discovery"
@@ -58,6 +61,14 @@ type clusterInformers struct {
 	podRev atomic.Uint64
 	epoch  string
 
+	// nodeRev counts changes to what the node list shows; the list is built
+	// once per change and second and shared by every caller (nodeSummaries).
+	nodeRev     atomic.Uint64
+	nodeMu      sync.Mutex
+	nodeList    *nodeList
+	nodeListRev uint64
+	nodeListSec int64
+
 	versionMu sync.Mutex
 	version   string
 	versionAt time.Time
@@ -98,6 +109,18 @@ func newClusterInformers(client kubernetes.Interface, idle time.Duration, onStop
 			n, ok2 := newObj.(*podRow)
 			if !ok1 || !ok2 || !o.sameView(n) {
 				bump()
+			}
+		},
+	})
+	nodeBump := func() { ci.nodeRev.Add(1) }
+	_, _ = infs[6].AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    func(interface{}) { nodeBump() },
+		DeleteFunc: func(interface{}) { nodeBump() },
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			o, ok1 := oldObj.(*corev1.Node)
+			n, ok2 := newObj.(*corev1.Node)
+			if !ok1 || !ok2 || !sameNodeView(o, n) {
+				nodeBump()
 			}
 		},
 	})
@@ -308,13 +331,91 @@ func (ci *clusterInformers) serverVersion(disc discovery.DiscoveryInterface) str
 	return ci.version
 }
 
-// stripForOverview keeps only what overview and nodeCapacities read; the
-// informer stores the returned object instead of the full one. Pods become
-// podRows before this (newClusterInformers).
+// nodeList is one build of the node list and, encoded once when first asked,
+// the JSON the handler sends: 200 people opening it at once each encoded the
+// 964 KB of 1 001 nodes again.
+type nodeList struct {
+	items []map[string]interface{}
+	once  sync.Once
+	raw   []byte
+}
+
+// JSON is what json.Encoder writes for the items.
+func (l *nodeList) JSON() []byte {
+	l.once.Do(func() {
+		b, err := json.Marshal(l.items)
+		if err != nil { // the items are strings, lists and maps of them
+			b = []byte("[]")
+		}
+		l.raw = append(b, '\n')
+	})
+	return l.raw
+}
+
+// nodeSummaries is the node list — formatNodeSummary of every node, by name as
+// a List returns them — built once per change and second (the age column moves
+// by the second) and shared by every caller, who must not change it: 100
+// people opening the node list of 1 001 nodes at once each listed and decoded
+// the nodes before, 6 MiB a request.
+func (ci *clusterInformers) nodeSummaries(now time.Time) *nodeList {
+	ci.touch()
+	rev, sec := ci.nodeRev.Load(), now.Unix()
+	ci.nodeMu.Lock()
+	defer ci.nodeMu.Unlock()
+	if ci.nodeList != nil && ci.nodeListRev == rev && ci.nodeListSec == sec {
+		return ci.nodeList
+	}
+	objs := ci.nodes.List()
+	nodes := make([]*corev1.Node, 0, len(objs))
+	for _, o := range objs {
+		if n, ok := o.(*corev1.Node); ok {
+			nodes = append(nodes, n)
+		}
+	}
+	sort.Slice(nodes, func(i, j int) bool { return nodes[i].Name < nodes[j].Name })
+	out := make([]map[string]interface{}, 0, len(nodes))
+	for _, n := range nodes {
+		out = append(out, formatNodeSummary(n))
+	}
+	ci.nodeList, ci.nodeListRev, ci.nodeListSec = &nodeList{items: out}, rev, sec
+	return ci.nodeList
+}
+
+// stripNode keeps what overview, nodeCapacities and formatNodeSummary read;
+// the condition times and messages go, so a status heartbeat changes only the
+// resourceVersion (sameNodeView).
+func stripNode(o *corev1.Node) *corev1.Node {
+	meta := keyMeta(o.ObjectMeta)
+	meta.Labels, meta.CreationTimestamp = o.Labels, o.CreationTimestamp
+	conds := make([]corev1.NodeCondition, len(o.Status.Conditions))
+	for i, c := range o.Status.Conditions {
+		conds[i] = corev1.NodeCondition{Type: c.Type, Status: c.Status, Reason: c.Reason}
+	}
+	info := o.Status.NodeInfo
+	return &corev1.Node{
+		ObjectMeta: meta,
+		Spec:       corev1.NodeSpec{Unschedulable: o.Spec.Unschedulable, Taints: o.Spec.Taints},
+		Status: corev1.NodeStatus{
+			Capacity: o.Status.Capacity, Allocatable: o.Status.Allocatable, Conditions: conds, Addresses: o.Status.Addresses,
+			NodeInfo: corev1.NodeSystemInfo{KubeletVersion: info.KubeletVersion, OSImage: info.OSImage, KernelVersion: info.KernelVersion, ContainerRuntimeVersion: info.ContainerRuntimeVersion},
+		},
+	}
+}
+
+// sameNodeView: two stripped nodes show the same in the node list.
+func sameNodeView(a, b *corev1.Node) bool {
+	ac, bc := *a, *b
+	ac.ResourceVersion, bc.ResourceVersion = "", ""
+	return equality.Semantic.DeepEqual(&ac, &bc)
+}
+
+// stripForOverview keeps only what overview, nodeCapacities and the node list
+// read; the informer stores the returned object instead of the full one. Pods
+// become podRows before this (newClusterInformers).
 func stripForOverview(obj interface{}) (interface{}, error) {
 	switch o := obj.(type) {
 	case *corev1.Node:
-		return &corev1.Node{ObjectMeta: keyMeta(o.ObjectMeta), Status: corev1.NodeStatus{Capacity: o.Status.Capacity}}, nil
+		return stripNode(o), nil
 	case *corev1.Namespace:
 		return &corev1.Namespace{ObjectMeta: keyMeta(o.ObjectMeta)}, nil
 	case *corev1.Service:

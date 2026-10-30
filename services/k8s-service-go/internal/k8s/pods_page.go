@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -143,6 +144,7 @@ func (s *Service) GetPodPage(ctx context.Context, q PodPageQuery) (*PodPage, err
 	if err != nil {
 		return nil, err
 	}
+	defer set.done()
 	if set.unchanged {
 		return &PodPage{Items: []PodListItem{}, Stats: PodStats{TopReasons: []PodReasonCount{}}, Revision: set.revision, Unchanged: true, Source: set.source}, nil
 	}
@@ -266,6 +268,31 @@ type podRowSet struct {
 	revision  string // "" when the rows were listed
 	unchanged bool   // the caller's revision is current: no rows
 	source    string // "index" or "list"
+	release   func() // gives back the podRowSlots place the rows took
+}
+
+// done gives back the set's place; every caller defers it.
+func (p *podRowSet) done() {
+	if p.release != nil {
+		p.release()
+		p.release = nil
+	}
+}
+
+// podRowSlots bounds the callers holding every pod row at once to the CPUs:
+// the work on the rows is CPU-bound, so more at once only multiplied the
+// copies — 400 people opening the Pods page at once took k8s-service from 93
+// to 482 MiB. A place is taken after the access check, so callers waiting on
+// the cluster's answer do not hold one.
+var podRowSlots = make(chan struct{}, runtime.GOMAXPROCS(0))
+
+func takePodRowSlot(ctx context.Context) (func(), error) {
+	select {
+	case podRowSlots <- struct{}{}:
+		return func() { <-podRowSlots }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // callerPodRows returns the pod rows the caller may see in namespace ("" =
@@ -287,7 +314,11 @@ func (s *Service) callerPodRows(ctx context.Context, namespace, revision string)
 			return &podRowSet{revision: rev, unchanged: true, source: "index"}, nil
 		}
 		accesstrail.Cached(ctx, "pod rows (watched as "+overviewCacheUser+")")
-		return &podRowSet{rows: ci.podRows(all, namespaces), revision: rev, source: "index"}, nil
+		release, err := takePodRowSlot(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &podRowSet{rows: ci.podRows(all, namespaces), revision: rev, source: "index", release: release}, nil
 	}
 	cs := s.clientsetCtx(ctx)
 	if cs == nil {
@@ -297,11 +328,16 @@ func (s *Service) callerPodRows(ctx context.Context, namespace, revision string)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := listPodRows(ctx, cs.CoreV1(), namespaces)
+	release, err := takePodRowSlot(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return &podRowSet{rows: rows, source: "list"}, nil
+	rows, err := listPodRows(ctx, cs.CoreV1(), namespaces)
+	if err != nil {
+		release()
+		return nil, err
+	}
+	return &podRowSet{rows: rows, source: "list", release: release}, nil
 }
 
 // callerNamespaces is what a list as the caller covers: the namespace chosen
@@ -397,17 +433,23 @@ func (s *Service) podListAccess(ctx context.Context, b *clientBundle, namespace 
 // mayListPods asks whether the caller may list pods in namespace ("" = every
 // namespace), from the cache or by a SelfSubjectAccessReview.
 func (s *Service) mayListPods(ctx context.Context, b *clientBundle, namespace string) (bool, error) {
+	return s.mayList(ctx, b, "pods", namespace)
+}
+
+// mayList asks whether the caller may list resource (core group) in namespace
+// ("" = every namespace, or a cluster-scoped kind), remembered podAccessTTL.
+func (s *Service) mayList(ctx context.Context, b *clientBundle, resource, namespace string) (bool, error) {
 	if b.authz == nil {
 		return true, nil
 	}
-	key := s.clusterCacheKey(ctx, "pods_list_allowed:"+namespace)
+	key := s.clusterCacheKey(ctx, resource+"_list_allowed:"+namespace)
 	var allowed bool
 	if s.cache != nil && s.cache.Get(ctx, key, &allowed) {
 		return allowed, nil
 	}
 	review, err := b.authz.SelfSubjectAccessReviews().Create(ctx, &authorizationv1.SelfSubjectAccessReview{
 		Spec: authorizationv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authorizationv1.ResourceAttributes{
-			Verb: "list", Resource: "pods", Namespace: namespace,
+			Verb: "list", Resource: resource, Namespace: namespace,
 		}},
 	}, metav1.CreateOptions{})
 	if err != nil {
