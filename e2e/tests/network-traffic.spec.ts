@@ -35,7 +35,7 @@ async function login(request: APIRequestContext, email: string, password: string
   return (await res.json()).access_token
 }
 
-type End = { namespace?: string; kind?: string; name?: string; outside?: string }
+type End = { namespace?: string; kind?: string; name?: string; outside?: string; unnamed?: boolean }
 type Line = { from: End; to: End; allowed: number; dropped: number; ports?: { protocol?: string; port?: number }[]; reasons?: { reason: string; count: number }[] }
 const endText = (e: End) => (e.namespace && e.name ? `${e.namespace}/${e.name}` : e.namespace || e.outside || 'unknown')
 const key = (l: Line) => `${endText(l.from)} → ${endText(l.to)}`
@@ -206,12 +206,19 @@ test.describe('Resource Graph traffic lines (Hubble)', () => {
     await expect(page.getByTestId('traffic-legend')).toContainText('port · number of flows')
     // the port starts each line's number
     await expect(page.locator(`[aria-label="${NS}/client → ${NS}/web"] .react-flow__edge-text`)).toContainText('80 ·')
-    // the metrics: no DNS line (UDP), the dropped line still there
+    // the metrics: no DNS line (UDP), the dropped line still there, and a box for each end the metric lines have
+    // outside this graph — right after the cluster starts, Cilium drops some packets to pod IPs that are gone
+    // (STALE_OR_UNROUTABLE_IP) with no labels for the destination, which is "outside the pods"
     if (metricsReady) {
       await page.getByTestId('traffic-source-1h').click()
       await expect(page.getByTestId('traffic-status-source')).toContainText('Hubble metrics', { timeout: 20_000 })
       await expect(page.locator(`[aria-label="${NS}/stranger → ${NS}/web"]`)).toHaveCount(1)
-      await expect(page.getByTestId('traffic-peer')).toHaveCount(0)
+      await expect(page.getByTestId('traffic-peer').filter({ hasText: 'kube-system' })).toHaveCount(0)
+      const metricLines = (await traffic(request, admin, { source: 'metrics', range: '1h' })).body.lines as Line[]
+      const peers = new Set(metricLines.flatMap((l) => [l.from, l.to])
+        .filter((e) => !(e.namespace === NS && e.name))
+        .map((e) => e.namespace && e.name ? `${e.namespace}/${e.name}` : e.namespace ? `ns:${e.namespace}` : e.unnamed ? 'unnamed' : `out:${e.outside || 'unknown'}`))
+      await expect(page.getByTestId('traffic-peer')).toHaveCount(peers.size)
     }
   })
 
