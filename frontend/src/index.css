@@ -510,6 +510,29 @@ body {
   }
 }
 
+/* Text the AI writes (chat answers, the floating chat, investigation reports, the optimization answer) is prose-invert,
+   whose colours are for a dark ground only: on the light mode's off-white the headings, bold text, code, table headers
+   and tool boxes were near white. Its colours follow the colour mode's tokens, the same values in the default mode. */
+.prose {
+  --tw-prose-invert-body: var(--color-slate-300);
+  --tw-prose-invert-headings: var(--color-ink);
+  --tw-prose-invert-lead: var(--color-slate-400);
+  --tw-prose-invert-links: var(--color-primary-400);
+  --tw-prose-invert-bold: var(--color-ink);
+  --tw-prose-invert-counters: var(--color-slate-400);
+  --tw-prose-invert-bullets: var(--color-slate-600);
+  --tw-prose-invert-hr: var(--color-slate-700);
+  --tw-prose-invert-quotes: var(--color-slate-200);
+  --tw-prose-invert-quote-borders: var(--color-slate-700);
+  --tw-prose-invert-captions: var(--color-slate-400);
+  --tw-prose-invert-kbd: var(--color-ink);
+  --tw-prose-invert-code: var(--color-ink);
+  --tw-prose-invert-pre-code: var(--color-slate-200);
+  --tw-prose-invert-pre-bg: color-mix(in srgb, var(--color-slate-950) 50%, transparent);
+  --tw-prose-invert-th-borders: var(--color-slate-600);
+  --tw-prose-invert-td-borders: var(--color-slate-700);
+}
+
 /* Tables in chat answers (AI chat, floating): row and column lines; a wide table scrolls sideways in its own box
    (components/MarkdownTable.tsx), and in the narrow floating panel a tall one scrolls under a fixed header row. */
 .prose .chat-table-wrap {

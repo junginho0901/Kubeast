@@ -264,7 +264,7 @@ export function SessionSidebar({
                           <div className="text-sm font-medium truncate" title={session.title}>
                             {session.title}
                           </div>
-                          <div className={`text-xs mt-1 ${isSelected ? 'text-white/80' : 'text-slate-400'}`}>
+                          <div className={`text-xs mt-1 ${isSelected ? 'text-white' : 'text-slate-400'}`}>
                             {t('aiChat.messageCount', { count: session.message_count })}
                           </div>
                         </div>

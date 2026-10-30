@@ -266,7 +266,7 @@ export default function Timeline() {
             <p className="text-sm text-gray-500 dark:text-gray-400">
               {t('timeline.noEvents', 'No events in this period')}
             </p>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+            <p className="text-xs text-slate-400 mt-1">
               {t('timeline.noEventsHint', 'K8s events typically have a ~1 hour TTL.')}
             </p>
           </div>
@@ -358,7 +358,7 @@ function EventRow({
       {/* Time */}
       <div className="w-[120px] shrink-0 text-right hidden md:block">
         <span
-          className="text-xs text-gray-400 dark:text-gray-500 cursor-default"
+          className="text-xs text-slate-400 cursor-default"
           title={fmtAbsolute(event.timestamp)}
         >
           {fmtRelative(event.timestamp)}
@@ -385,7 +385,7 @@ function EventRow({
               {t('timeline.repeated', '{{count}} times').replace('{{count}}', String(event.count))}
             </span>
           )}
-          <span className="text-xs text-gray-400 dark:text-gray-500 md:hidden">
+          <span className="text-xs text-slate-400 md:hidden">
             {fmtRelative(event.timestamp)}
           </span>
         </div>
@@ -400,7 +400,7 @@ function EventRow({
             {showNamespace && event.resource.namespace ? `${event.resource.namespace} · ` : ''}{event.resource.kind}/{event.resource.name}
           </button>
           {event.source && (
-            <span className="text-[11px] text-gray-400 dark:text-gray-500">
+            <span className="text-[11px] text-slate-400">
               {t('timeline.via', { defaultValue: 'via {{source}}', source: event.source })}
             </span>
           )}
@@ -426,7 +426,7 @@ function RolloutRow({
       {/* Time */}
       <div className="w-[120px] shrink-0 text-right hidden md:block">
         <span
-          className="text-xs text-gray-400 dark:text-gray-500 cursor-default"
+          className="text-xs text-slate-400 cursor-default"
           title={fmtAbsolute(rollout.created_at)}
         >
           {fmtRelative(rollout.created_at)}
@@ -444,7 +444,7 @@ function RolloutRow({
           <span className="text-sm font-medium text-primary-800 dark:text-primary-300">
             {t('timeline.revision', 'Revision')} #{rollout.revision}
           </span>
-          <span className="text-xs text-gray-400 dark:text-gray-500 md:hidden">
+          <span className="text-xs text-slate-400 md:hidden">
             {fmtRelative(rollout.created_at)}
           </span>
         </div>
