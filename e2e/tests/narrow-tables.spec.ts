@@ -52,20 +52,26 @@ test.describe('list tables in a narrow window', () => {
   })
 })
 
+// every screen the sidebar lists (the admin ones too) and the account page
+async function screens(page: Page) {
+  await page.goto('/?cluster=self')
+  const nav = page.getByTestId('sidebar-nav')
+  await expect(nav.locator('a[href^="/"]').first()).toBeAttached()
+  const paths = [...new Set(await nav.locator('a[href^="/"]').evaluateAll((as) => as.map((a) => a.getAttribute('href') ?? '')))]
+  expect(paths.length, 'the sidebar lists every screen').toBeGreaterThan(70)
+  return [...paths, '/account']
+}
+
 // A header row whose title and buttons did not fit on one line pushed the whole page sideways in a portrait window:
 // the title went under the sidebar and the buttons past the right edge (Mutating- and ValidatingWebhookConfigurations
-// at 1 070 px). The row (.page-head) now sends the buttons to the next line.
-test.describe('page headers in a narrow window', () => {
+// at 1 070 px). The row (.page-head) now sends the buttons to the next line. Its buttons were not all alike either:
+// grey Create on the kinds a controller makes, grey export and bulk upload, a grey Metrics toggle, smaller Helm ones.
+test.describe('page headers', () => {
   test('at 1070 px no screen of the sidebar slides sideways', async ({ page }) => {
     test.setTimeout(300_000)
     await page.setViewportSize({ width: 1070, height: 1000 })
-    await page.goto('/?cluster=self')
-    const nav = page.getByTestId('sidebar-nav')
-    await expect(nav.locator('a[href^="/"]').first()).toBeAttached()
-    const paths = [...new Set(await nav.locator('a[href^="/"]').evaluateAll((as) => as.map((a) => a.getAttribute('href') ?? '')))]
-    expect(paths.length, 'the sidebar lists every screen, the admin ones too').toBeGreaterThan(70)
     const slid: string[] = []
-    for (const path of [...paths, '/account']) {
+    for (const path of await screens(page)) {
       await page.goto(`${path}${path.includes('?') ? '&' : '?'}cluster=self`)
       await expect(page.locator('main h1').first()).toBeVisible()
       await page.waitForTimeout(300)
@@ -88,4 +94,34 @@ test.describe('page headers in a narrow window', () => {
     }
     expect(slid).toEqual([])
   })
+
+  for (const mode of ['default', 'dark', 'light']) {
+    test(`in the ${mode} colour mode every header button is the same blue`, async ({ page }) => {
+      test.setTimeout(300_000)
+      await page.setViewportSize({ width: 1440, height: 900 })
+      const paths = await screens(page)
+      await page.evaluate((m) => (m === 'default' ? localStorage.removeItem('kubeast.colorMode') : localStorage.setItem('kubeast.colorMode', m)), mode)
+      const odd: string[] = []
+      const looks = new Map<string, string>()
+      for (const path of paths) {
+        await page.goto(`${path}${path.includes('?') ? '&' : '?'}cluster=self`)
+        await expect(page.locator('main h1').first()).toBeVisible()
+        expect(await page.evaluate(() => document.documentElement.dataset.colorMode ?? 'default')).toBe(mode)
+        // the buttons placed in the header row itself; a dropdown's or a tab group's buttons sit one level down
+        const buttons = await page.evaluate(() => {
+          const head = document.querySelector('main h1')!.closest('.page-head')
+          const areas = head ? [...head.children].slice(1) : []
+          return areas
+            .flatMap((a) => (a.matches('button, a.btn') ? [a] : [...a.children].filter((e) => e.matches('button, a.btn'))))
+            .map((b) => ({ text: (b.textContent ?? '').trim().slice(0, 30), primary: b.classList.contains('btn-primary'), bg: getComputedStyle(b).backgroundColor, fg: getComputedStyle(b).color }))
+        })
+        for (const b of buttons) {
+          if (!b.primary) odd.push(`${path} "${b.text}" is not btn-primary`)
+          looks.set(`${b.bg} / ${b.fg}`, `${path} "${b.text}"`)
+        }
+      }
+      expect(odd).toEqual([])
+      expect([...looks.keys()], `header buttons by background / text: ${[...looks.values()].join(', ')}`).toHaveLength(1)
+    })
+  }
 })

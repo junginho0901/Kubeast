@@ -387,11 +387,11 @@ export default function AdminUsers() {
             <button
               type="button"
               onClick={() => { setPendingSelectedIds(new Set()); setPendingModalOpen(true) }}
-              className="inline-flex items-center gap-2 rounded-lg border border-amber-700/40 bg-amber-950/20 px-4 py-2.5 text-sm text-amber-300 hover:bg-amber-950/40 transition-colors"
+              className="btn btn-primary flex items-center gap-2"
             >
               <Clock className="w-4 h-4" />
               {tr('adminUsers.pendingBtn', 'Pending')}
-              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-500/20 text-xs font-bold text-amber-400">
+              <span className="rounded-full bg-amber-500/90 px-1.5 text-[10px] font-semibold text-slate-900">
                 {pendingRows.length}
               </span>
             </button>
@@ -402,7 +402,7 @@ export default function AdminUsers() {
               onClick={() => sweepMutation.mutate()}
               disabled={sweepMutation.isPending}
               data-testid="dormant-sweep-now"
-              className="btn btn-secondary flex items-center gap-2 disabled:opacity-50"
+              className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
               title={tr('adminUsers.sweepTitle', 'Lock accounts with no sign-in or API key use for {{days}} days (runs daily on its own)', { days: dormantConfig.days })}
             >
               <Lock className="w-4 h-4" />
@@ -412,7 +412,7 @@ export default function AdminUsers() {
           <button
             type="button"
             onClick={() => { setBulkUploadResult(null); setBulkUploadModalOpen(true) }}
-            className="btn btn-secondary flex items-center gap-2"
+            className="btn btn-primary flex items-center gap-2"
           >
             <Upload className="w-4 h-4" />
             {tr('adminUsers.bulkUpload', 'Bulk upload')}

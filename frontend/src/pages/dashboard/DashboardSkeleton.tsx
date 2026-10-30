@@ -44,7 +44,7 @@ export function DashboardSkeleton() {
             <span className="inline-block h-3.5 w-20 align-middle ml-0.5 rounded-sm bg-slate-700/60 animate-pulse" />
           </p>
         </div>
-        <button disabled className="btn btn-secondary flex items-center gap-2 opacity-50 cursor-not-allowed">
+        <button disabled className="btn btn-primary flex items-center gap-2 opacity-50 cursor-not-allowed">
           <RefreshCw className="w-4 h-4" />
           {tr('dashboard.refresh', 'Refresh')}
         </button>

@@ -241,7 +241,7 @@ export default function AdminAudit() {
           <button
             onClick={exportCsv}
             data-testid="audit-export-csv"
-            className="btn btn-secondary flex items-center gap-2"
+            className="btn btn-primary flex items-center gap-2"
           >
             {tr('adminAudit.exportCsv', 'CSV 내보내기')}
           </button>

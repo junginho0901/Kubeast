@@ -7,7 +7,7 @@ import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
-import { RefreshCw, BarChart3 } from 'lucide-react'
+import { RefreshCw, BarChart3, ChevronDown, ChevronUp } from 'lucide-react'
 
 import type { GPUDashboardData, GPUMetricsData, GPUPodInfo } from '@/services/api'
 import { parseAgeSeconds, type SortKey, type SummaryCard } from './gpupods/gpuPodsHelpers'
@@ -222,10 +222,12 @@ export default function GPUPods() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowCharts((prev) => !prev)}
-            className={`btn flex items-center gap-2 ${showCharts ? 'btn-primary' : 'btn-secondary'}`}
+            aria-pressed={showCharts}
+            className="btn btn-primary flex items-center gap-2"
           >
             <BarChart3 className="w-4 h-4" />
             {tr('gpuPods.metrics', 'Metrics')}
+            {showCharts ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
           <button
             onClick={handleRefresh}
