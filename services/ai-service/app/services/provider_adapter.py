@@ -16,11 +16,16 @@ OpenAI-compatible 엔드포인트를 사용하여,
 
 from __future__ import annotations
 
+import logging
+import re
 from typing import Optional, Dict, Any
 import httpx
 
+from app.services.ai.limits import KUBEAST_KEYS
 from app.services.model_config_policy import AZURE_PROVIDERS, AZURE_V1_URL_HINT
 from app.services.tls import build_verify
+
+logger = logging.getLogger(__name__)
 
 
 # 프로바이더별 기본 OpenAI-compatible 엔드포인트
@@ -44,6 +49,35 @@ _STANDARD_PARAMS = frozenset({
 })
 
 
+# OpenAI's own API and Azure's take the answer's length as max_completion_tokens: max_tokens is deprecated there and
+# refused by the reasoning models (o-series, GPT-5).
+_COMPLETION_TOKENS_PROVIDERS = frozenset({"openai"}) | AZURE_PROVIDERS
+# Parameters a model may refuse (reasoning models refuse sampling): named by the provider's 400, dropped and retried.
+_DROPPABLE = frozenset({
+    "temperature", "top_p", "presence_penalty", "frequency_penalty", "logprobs", "top_logprobs", "logit_bias",
+    "max_tokens", "seed", "stop",
+})
+_REFUSED_IN_MESSAGE = re.compile(r"Unsupported (?:parameter|value): '(\w+)'")
+# (provider, base URL, model) → the parameters it refused, so later calls leave them out.
+_refused: Dict[tuple, set] = {}
+
+
+def _refused_param(err: Exception) -> Optional[str]:
+    if getattr(err, "status_code", None) != 400:
+        return None
+    param = getattr(err, "param", None)
+    if not param:
+        m = _REFUSED_IN_MESSAGE.search(str(err))
+        param = m.group(1) if m else None
+    return param if param in _DROPPABLE else None
+
+
+def _leave_out(kwargs: Dict[str, Any], param: str) -> None:
+    value = kwargs.pop(param, None)
+    if param == "max_tokens" and value is not None:
+        kwargs.setdefault("max_completion_tokens", value)
+
+
 class _CompletionsProxy:
     """chat.completions.create 호출에 기본 생성 옵션을 주입하는 얇은 래퍼.
 
@@ -52,22 +86,39 @@ class _CompletionsProxy:
     best-effort 전달한다. Ollama /v1 은 비표준 파라미터를 무시할 수 있다.
     """
 
-    def __init__(self, inner, provider: str, default_options: Optional[Dict[str, Any]]):
+    def __init__(self, inner, provider: str, default_options: Optional[Dict[str, Any]], base_url: str = ""):
         self._inner = inner
         self._provider = provider
         self._default_options = default_options or None
+        self._base_url = base_url
 
     async def create(self, **kwargs: Any):
         if self._default_options:
             extra_body = dict(kwargs.get("extra_body") or {})
             for key, value in self._default_options.items():
+                if key in KUBEAST_KEYS:
+                    continue
                 if key in _STANDARD_PARAMS:
                     kwargs.setdefault(key, value)
                 else:
                     extra_body.setdefault(key, value)
             if extra_body:
                 kwargs["extra_body"] = extra_body
-        return await self._inner.create(**kwargs)
+        if self._provider in _COMPLETION_TOKENS_PROVIDERS:
+            _leave_out(kwargs, "max_tokens")
+        key = (self._provider, self._base_url, kwargs.get("model"))
+        for param in _refused.get(key, ()):
+            _leave_out(kwargs, param)
+        while True:
+            try:
+                return await self._inner.create(**kwargs)
+            except Exception as e:
+                param = _refused_param(e)
+                if param is None or param not in kwargs:
+                    raise
+                logger.info("model %s refused %s; leaving it out", kwargs.get("model"), param)
+                _refused.setdefault(key, set()).add(param)
+                _leave_out(kwargs, param)
 
     def __getattr__(self, name):
         # create 외 다른 속성(list 등)은 원본으로 위임
@@ -77,9 +128,9 @@ class _CompletionsProxy:
 class _ChatProxy:
     """self.chat 자리를 대체하며 completions 만 래핑."""
 
-    def __init__(self, inner_chat, provider: str, default_options: Optional[Dict[str, Any]]):
+    def __init__(self, inner_chat, provider: str, default_options: Optional[Dict[str, Any]], base_url: str = ""):
         self._inner_chat = inner_chat
-        self.completions = _CompletionsProxy(inner_chat.completions, provider, default_options)
+        self.completions = _CompletionsProxy(inner_chat.completions, provider, default_options, base_url)
 
     def __getattr__(self, name):
         return getattr(self._inner_chat, name)
@@ -186,7 +237,7 @@ class ProviderAdapter:
         )
 
         # 생성 옵션(num_ctx 등)을 매 요청에 주입하는 프록시로 chat 인터페이스 노출
-        self.chat = _ChatProxy(self._openai_client.chat, self.provider, self._default_options)
+        self.chat = _ChatProxy(self._openai_client.chat, self.provider, self._default_options, resolved_base_url)
 
         print(
             f"[Provider Adapter] provider={self.provider}, "

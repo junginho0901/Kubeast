@@ -52,7 +52,7 @@ async def test_connection_test_resolves_api_key_env(monkeypatch):
 
     seen = {}
 
-    async def fake_openai(api_key, model, base, tls_verify):
+    async def fake_openai(api_key, model, base, tls_verify, provider=""):
         seen["key"] = api_key
         return {"success": True, "message": "ok"}
 

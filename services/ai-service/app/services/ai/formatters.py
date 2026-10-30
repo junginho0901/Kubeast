@@ -14,11 +14,10 @@ from typing import Dict, List, Optional, Tuple
 LLM_RESULT_CHARS = 6000
 
 
-def _truncate_tool_result_for_llm(content: Optional[str]) -> str:
-    """Tool 결과를 LLM 입력용으로 축약"""
+def _truncate_tool_result_for_llm(content: Optional[str], max_chars: int = LLM_RESULT_CHARS) -> str:
+    """Tool 결과를 LLM 입력용으로 축약 (max_chars = 모델의 tool_result_chars, 없으면 6000)"""
     if not isinstance(content, str):
         content = "" if content is None else str(content)
-    max_chars = LLM_RESULT_CHARS
     if len(content) > max_chars:
         return content[:max_chars] + "\n... (truncated for LLM) ..."
     return content

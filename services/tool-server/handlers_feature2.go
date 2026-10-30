@@ -456,7 +456,9 @@ func handleResourceGraph(ctx context.Context, args map[string]interface{}, heade
 	capList(reply, "nodes", graphNodesCap)
 	capList(reply, "edges", graphEdgesCap)
 	reply["namespace"] = namespace
-	return marshalJSON(reply)
+	// the summary first, then the objects, the edges last
+	return marshalOrdered(reply, []string{"namespace", "counts_by_kind", "nodes_total", "edges_total", "truncated", "groups"},
+		[]string{"nodes", "edges"})
 }
 
 // handleNetworkPolicyCheck asks k8s-service whether NetworkPolicy allows src

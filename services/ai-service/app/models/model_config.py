@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, Dict, Any, Literal
-from pydantic import BaseModel, Field, ConfigDict, field_serializer, model_validator
+from pydantic import BaseModel, Field, ConfigDict, field_serializer, field_validator, model_validator
 
 
 # API keys are never stored in the database. ai-service reads the key from
@@ -16,6 +16,13 @@ def _reject_plaintext_key(values):
     if isinstance(values, dict) and values.get("api_key"):
         raise ValueError(API_KEY_NOT_STORED)
     return values
+
+
+def _check_limits(options):
+    from app.services.ai import limits
+
+    limits.check(options)
+    return options
 
 
 class ModelConfigCreate(BaseModel):
@@ -46,6 +53,11 @@ class ModelConfigCreate(BaseModel):
     def _no_plaintext_key(cls, values):
         return _reject_plaintext_key(values)
 
+    @field_validator("options")
+    @classmethod
+    def _limits_in_range(cls, options):
+        return _check_limits(options)
+
 
 class ModelConfigUpdate(BaseModel):
     name: Optional[str] = None
@@ -71,6 +83,11 @@ class ModelConfigUpdate(BaseModel):
     def _no_plaintext_key(cls, values):
         return _reject_plaintext_key(values)
 
+    @field_validator("options")
+    @classmethod
+    def _limits_in_range(cls, options):
+        return _check_limits(options)
+
 
 class ModelConfigResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -93,6 +110,8 @@ class ModelConfigResponse(BaseModel):
     enabled: bool
     is_default: bool
     tier: str = "default"
+    # what the server runs on this config now (model_config_service.usage): chat, floating, summary, investigation
+    used_for: list[str] = Field(default_factory=list)
 
     created_at: datetime
     updated_at: datetime

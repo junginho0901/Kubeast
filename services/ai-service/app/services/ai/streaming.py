@@ -20,6 +20,7 @@ from app.services.ai import budget as budget_mod
 from app.services.ai import charts
 from app.services.ai import formatters
 from app.services.ai import history as history_mod
+from app.services.ai import limits
 from app.services.ai import usage as usage_acct
 from app.services.ai.debug_dump import dump, log, safe_error
 
@@ -574,11 +575,12 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
 
     if chart is not None:
         return events, log_entry, charts.for_model(chart)
-    if function_name in charts.CHART_TOOLS and len(formatted_result or "") > formatters.LLM_RESULT_CHARS:
+    result_chars = limits.tool_result_chars(service)
+    if function_name in charts.CHART_TOOLS and len(formatted_result or "") > result_chars:
         summed = charts.chart_from_result({"chart": True}, function_response)
         if summed is not None:
             return events, log_entry, charts.for_model(summed, shown_to_user=False)
-    return events, log_entry, formatters._truncate_tool_result_for_llm(formatted_result)
+    return events, log_entry, formatters._truncate_tool_result_for_llm(formatted_result, result_chars)
 
 
 async def session_chat_stream(
@@ -869,7 +871,7 @@ async def session_chat_stream(
                     messages=messages,
                     tools=tools,
                     temperature=0.7,
-                    max_tokens=4096,
+                    max_tokens=limits.answer_tokens(service, 4096),
                     timeout=60.0,
                     stream=True,
                 )
@@ -1033,13 +1035,13 @@ async def session_chat_stream(
                         try:
                             cont_stream = await service.client.chat.completions.create(
                                 model=service.model, messages=messages,
-                                temperature=0.7, max_tokens=4096,
+                                temperature=0.7, max_tokens=limits.answer_tokens(service, 4096),
                                 stream=True, stream_options={"include_usage": True},
                             )
                         except Exception:
                             cont_stream = await service.client.chat.completions.create(
                                 model=service.model, messages=messages,
-                                temperature=0.7, max_tokens=4096, stream=True,
+                                temperature=0.7, max_tokens=limits.answer_tokens(service, 4096), stream=True,
                             )
 
                         continuation_text = ""

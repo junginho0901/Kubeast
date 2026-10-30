@@ -156,7 +156,7 @@ async def test_connection_test_and_model_list_use_the_model_ca(monkeypatch, ca):
         seen["list"] = verify
         return []
 
-    async def fake_test(api_key, model, base, verify):
+    async def fake_test(api_key, model, base, verify, provider=""):
         seen["test"] = verify
         return {"success": True}
 
