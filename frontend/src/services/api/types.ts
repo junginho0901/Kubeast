@@ -134,6 +134,15 @@ export interface NamespaceDescribe {
     first_timestamp?: string
     last_timestamp?: string
   }>
+  // The pods counted and their containers' requests and limits summed on the server, a page at a time.
+  pod_summary?: {
+    total: number
+    phases: Record<string, number> | null
+    cpu_requests_millicores: number
+    cpu_limits_millicores: number
+    memory_requests_bytes: number
+    memory_limits_bytes: number
+  }
 }
 
 export interface NamespaceResourceQuota {
