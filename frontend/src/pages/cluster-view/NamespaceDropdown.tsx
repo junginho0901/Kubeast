@@ -19,9 +19,9 @@ export function NamespaceDropdown({ namespaces }: Props) {
     <div className="relative" ref={namespaceDropdownRef}>
       <button
         onClick={() => setIsNamespaceDropdownOpen(!isNamespaceDropdownOpen)}
-        className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[200px] justify-between"
+        className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 w-[220px] justify-between"
       >
-        <span className="text-sm font-medium">
+        <span className="text-sm font-medium truncate min-w-0">
           {selectedNamespace === 'all'
             ? tr('clusterView.allNamespaces', 'All namespaces')
             : selectedNamespace}

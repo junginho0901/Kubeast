@@ -162,20 +162,25 @@ export function ResourceGraphHeader({
       <div className="flex items-center gap-3 flex-wrap">
         {/* Namespace selector (multi-select) */}
         <div className="relative" ref={nsDropdownRef}>
+          {/* a fixed width: many namespaces chosen read as the first and a count, so the controls after it stay put */}
           <button
             type="button"
             onClick={() => setIsNsDropdownOpen(!isNsDropdownOpen)}
-            className="h-9 px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink focus:outline-hidden focus:ring-2 focus:ring-primary-500 flex items-center gap-2 min-w-[180px] justify-between"
+            title={[...selectedNamespaces].join(', ') || undefined}
+            data-testid="resource-graph-namespaces"
+            className="h-9 w-[220px] px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink focus:outline-hidden focus:ring-2 focus:ring-primary-500 flex items-center gap-2 justify-between"
           >
-            <span className="truncate">
+            <span className="truncate min-w-0">
               {selectedNamespaces.size === 0
                 ? t('resourceGraph.selectNamespace', 'Select Namespace...')
-                : [...selectedNamespaces].join(', ')}
+                : selectedNamespaces.size === 1
+                  ? [...selectedNamespaces][0]
+                  : t('resourceGraph.namespacesChosen', { defaultValue: '{{first}} +{{more}}', first: [...selectedNamespaces][0], more: selectedNamespaces.size - 1 })}
             </span>
             <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isNsDropdownOpen ? 'rotate-180' : ''}`} />
           </button>
           {isNsDropdownOpen && (
-            <div className="absolute top-full left-0 mt-1 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-100 max-h-[280px] overflow-y-auto">
+            <div className="absolute top-full left-0 mt-1 min-w-full w-max max-w-[360px] bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-100 max-h-[280px] overflow-y-auto">
               {selectedNamespaces.size > 0 && (
                 <button
                   type="button"

@@ -195,7 +195,7 @@ export function LogFilesView({ namespace, pod, container, size = 'md', leading }
         {leading}
         <CustomDropdown
           size={sm ? 'sm' : 'md'}
-          className={sm ? 'w-56' : 'min-w-[260px]'}
+          className={sm ? 'w-56' : 'w-[320px] max-w-full'}
           label={labelFor(t('clusterView.logFiles.fileLabel', 'File'))}
           testId="logfile-select"
           value={path}

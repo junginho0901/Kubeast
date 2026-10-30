@@ -66,7 +66,7 @@ export function NamespaceFilter({ namespaces, value, onChange }: NamespaceFilter
           data-testid="monitoring-namespace"
           className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 justify-between"
         >
-          <span className="text-sm font-medium">{label}</span>
+          <span className="text-sm font-medium truncate min-w-0">{label}</span>
           <ChevronDown
             className={`w-4 h-4 text-slate-400 transition-transform ${
               isOpen ? 'rotate-180' : ''

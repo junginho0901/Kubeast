@@ -3178,6 +3178,7 @@
     },
     "nodeCount": "리소스 {{n}}개",
     "edgeCount": "연결 {{n}}개",
+    "namespacesChosen": "{{first}} 외 {{more}}개",
     "selectNamespace": "Namespace 선택...",
     "clearSelection": "선택 해제",
     "groupBy": {

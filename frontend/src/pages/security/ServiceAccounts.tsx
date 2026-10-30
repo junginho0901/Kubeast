@@ -300,7 +300,7 @@ metadata:
         </div>
         <div className="relative" ref={namespaceDropdownRef}>
           <button type="button" onClick={() => setIsNamespaceDropdownOpen((v) => !v)} className="h-12 w-full px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent flex items-center justify-between gap-2">
-            <span className="text-sm font-medium">{selectedNamespace === 'all' ? tr('serviceAccountsPage.allNamespaces', 'All namespaces') : selectedNamespace}</span>
+            <span className="text-sm font-medium truncate min-w-0">{selectedNamespace === 'all' ? tr('serviceAccountsPage.allNamespaces', 'All namespaces') : selectedNamespace}</span>
             <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isNamespaceDropdownOpen ? 'rotate-180' : ''}`} />
           </button>
           {isNamespaceDropdownOpen && (

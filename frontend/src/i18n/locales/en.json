@@ -3072,6 +3072,7 @@
     }
   },
   "resourceGraph": {
+    "namespacesChosen": "{{first}} +{{more}}",
     "title": "Resource Graph",
     "allNamespaces": "All namespaces",
     "search": "Search resources...",
