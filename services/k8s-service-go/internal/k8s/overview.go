@@ -8,6 +8,7 @@ import (
 	"time"
 
 	authorizationv1 "k8s.io/api/authorization/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -70,7 +71,24 @@ func (s *Service) getClusterOverviewUncached(ctx context.Context) (map[string]in
 		return nil, fmt.Errorf("list namespaces: %w", err)
 	}
 
-	podList, err := s.clientsetCtx(ctx).CoreV1().Pods("").List(ctx, metav1.ListOptions{})
+	// the pods counted a page at a time (every pod in one list took k8s-service past 512 Mi)
+	podStatus := map[string]int{
+		"Running":   0,
+		"Pending":   0,
+		"Failed":    0,
+		"Succeeded": 0,
+		"Unknown":   0,
+	}
+	totalPods := 0
+	err = eachPod(ctx, s.clientsetCtx(ctx).CoreV1(), "", metav1.ListOptions{}, func(p *corev1.Pod) {
+		totalPods++
+		switch p.Status.Phase {
+		case "Running", "Pending", "Failed", "Succeeded":
+			podStatus[string(p.Status.Phase)]++
+		default:
+			podStatus["Unknown"]++
+		}
+	})
 	if err != nil {
 		return nil, fmt.Errorf("list pods: %w", err)
 	}
@@ -100,28 +118,6 @@ func (s *Service) getClusterOverviewUncached(ctx context.Context) (map[string]in
 		return nil, fmt.Errorf("list nodes: %w", err)
 	}
 
-	podStatus := map[string]int{
-		"Running":   0,
-		"Pending":   0,
-		"Failed":    0,
-		"Succeeded": 0,
-		"Unknown":   0,
-	}
-	for _, p := range podList.Items {
-		switch p.Status.Phase {
-		case "Running":
-			podStatus["Running"]++
-		case "Pending":
-			podStatus["Pending"]++
-		case "Failed":
-			podStatus["Failed"]++
-		case "Succeeded":
-			podStatus["Succeeded"]++
-		default:
-			podStatus["Unknown"]++
-		}
-	}
-
 	clusterVersion := ""
 	sv, err := s.clientsetCtx(ctx).Discovery().ServerVersion()
 	if err == nil {
@@ -130,7 +126,7 @@ func (s *Service) getClusterOverviewUncached(ctx context.Context) (map[string]in
 
 	return map[string]interface{}{
 		"total_namespaces":  len(nsList.Items),
-		"total_pods":        len(podList.Items),
+		"total_pods":        totalPods,
 		"total_services":    len(svcList.Items),
 		"total_deployments": len(depList.Items),
 		"total_pvcs":        len(pvcList.Items),
@@ -221,17 +217,16 @@ func (s *Service) getScopedOverviewUncached(ctx context.Context, scope []string)
 		if _, err := cs.CoreV1().Namespaces().Get(ctx, ns, metav1.GetOptions{}); err == nil {
 			namespaces++
 		}
-		if pods, err := cs.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{}); err == nil {
-			totalPods += len(pods.Items)
-			for _, p := range pods.Items {
-				switch p.Status.Phase {
-				case "Running", "Pending", "Failed", "Succeeded":
-					podStatus[string(p.Status.Phase)]++
-				default:
-					podStatus["Unknown"]++
-				}
+		// counted a page at a time; a namespace refused part-way counts what was read, as a refused list counted none
+		_ = eachPod(ctx, cs.CoreV1(), ns, metav1.ListOptions{}, func(p *corev1.Pod) {
+			totalPods++
+			switch p.Status.Phase {
+			case "Running", "Pending", "Failed", "Succeeded":
+				podStatus[string(p.Status.Phase)]++
+			default:
+				podStatus["Unknown"]++
 			}
-		}
+		})
 		if l, err := cs.CoreV1().Services(ns).List(ctx, metav1.ListOptions{}); err == nil {
 			totalServices += len(l.Items)
 		}

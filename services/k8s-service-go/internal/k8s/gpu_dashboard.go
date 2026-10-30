@@ -27,11 +27,12 @@ func (s *Service) GetGPUDashboard(ctx context.Context) (map[string]interface{}, 
 
 	var (
 		nodeList           *corev1.NodeList
-		podList            *corev1.PodList
 		nodeErr            error
 		podErr             error
 		devicePluginStatus map[string]interface{}
 		timeSlicingConfig  map[string]interface{}
+		gpuPods            = make([]map[string]interface{}, 0)
+		totalUsed          int
 	)
 
 	// Fetch nodes, pods, device plugin, and time-slicing config all in parallel
@@ -43,7 +44,25 @@ func (s *Service) GetGPUDashboard(ctx context.Context) (map[string]interface{}, 
 	}()
 	go func() {
 		defer wg.Done()
-		podList, podErr = s.clientsetCtx(ctx).CoreV1().Pods("").List(dashCtx, metav1.ListOptions{})
+		// a page at a time, keeping the pods that ask for a GPU (every pod in one list took k8s-service past 512 Mi)
+		podErr = eachPod(dashCtx, s.clientsetCtx(ctx).CoreV1(), "", metav1.ListOptions{}, func(pod *corev1.Pod) {
+			gpuReq := getPodGPURequest(pod)
+			if gpuReq == 0 {
+				return
+			}
+			// Only count running/pending pods toward used GPUs
+			if pod.Status.Phase == corev1.PodRunning || pod.Status.Phase == corev1.PodPending {
+				totalUsed += gpuReq
+			}
+			gpuPods = append(gpuPods, map[string]interface{}{
+				"name":          pod.Name,
+				"namespace":     pod.Namespace,
+				"node_name":     pod.Spec.NodeName,
+				"gpu_requested": gpuReq,
+				"status":        string(pod.Status.Phase),
+				"created_at":    toISO(&pod.CreationTimestamp),
+			})
+		})
 	}()
 	go func() {
 		defer wg.Done()
@@ -99,30 +118,6 @@ func (s *Service) GetGPUDashboard(ctx context.Context) (map[string]interface{}, 
 		}
 
 		gpuNodes = append(gpuNodes, gpuNode)
-	}
-
-	// Filter GPU pods and calculate used GPUs
-	gpuPods := make([]map[string]interface{}, 0)
-	totalUsed := 0
-
-	for _, pod := range podList.Items {
-		gpuReq := getPodGPURequest(&pod)
-		if gpuReq == 0 {
-			continue
-		}
-		// Only count running/pending pods toward used GPUs
-		if pod.Status.Phase == corev1.PodRunning || pod.Status.Phase == corev1.PodPending {
-			totalUsed += gpuReq
-		}
-
-		gpuPods = append(gpuPods, map[string]interface{}{
-			"name":          pod.Name,
-			"namespace":     pod.Namespace,
-			"node_name":     pod.Spec.NodeName,
-			"gpu_requested": gpuReq,
-			"status":        string(pod.Status.Phase),
-			"created_at":    toISO(&pod.CreationTimestamp),
-		})
 	}
 
 	// MIG / Time-Slicing detection

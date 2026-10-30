@@ -73,20 +73,23 @@ func (s *Service) ResizeWorkload(ctx context.Context, namespace string, req Resi
 	if cs == nil {
 		return nil, errNotLoaded
 	}
-	podList, err := cs.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list pods: %w", err)
-	}
 	owner, err := s.workloadOwner(ctx, namespace)
 	if err != nil {
 		return nil, err
 	}
-	res := &ResizeResult{Kind: req.Kind, Namespace: namespace, Name: req.Name, Container: req.Container, Pods: []PodResizeResult{}}
-	for i := range podList.Items {
-		p := &podList.Items[i]
-		if !matchesResizeTarget(p, req, owner) {
-			continue
+	// the namespace a page at a time, keeping the workload's pods (the whole namespace in one list took k8s-service
+	// past 512 Mi)
+	var targets []*corev1.Pod
+	err = eachPod(ctx, cs.CoreV1(), namespace, metav1.ListOptions{}, func(p *corev1.Pod) {
+		if matchesResizeTarget(p, req, owner) {
+			targets = append(targets, p.DeepCopy())
 		}
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list pods: %w", err)
+	}
+	res := &ResizeResult{Kind: req.Kind, Namespace: namespace, Name: req.Name, Container: req.Container, Pods: []PodResizeResult{}}
+	for _, p := range targets {
 		r := PodResizeResult{Pod: p.Name}
 		idx := containerIndex(p.Spec.Containers, req.Container)
 		switch {

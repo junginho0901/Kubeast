@@ -19,7 +19,7 @@ const kubectl = kubectlFor('kubeast')
 
 const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
 
-type Pod = { metadata: { name: string }; spec: Record<string, any> }
+type Pod = { metadata: { name: string }; spec: Record<string, any>; status?: { phase?: string } }
 const pods = (ns: string): Pod[] => JSON.parse(kubectl(`-n ${ns} get pods -o json`)).items
 
 // The list on `self` once its rows are in, searched for `name`; the drawer of that row (in `namespace` when given).
@@ -86,10 +86,35 @@ test.describe('Phase 5 — detail modal sections', () => {
     await expectCount(page, 'Used By Pods', expected)
   })
 
-  test('5.5 #2 — Namespace Resource Summary (kubeast)', async ({ page }) => {
+  test('5.5 #2 — Namespace Resource Summary (kubeast) is the containers\' requests and limits kubectl reads', async ({ page }) => {
+    // The sums the drawer shows, from the pods kubectl lists, in the drawer's format; they read 0 before (10-30).
+    const quantity = (s: string | undefined, milli: boolean): number => {
+      if (!s) return 0
+      const units: Array<[string, number]> = [['Ki', 1024], ['Mi', 1024 ** 2], ['Gi', 1024 ** 3], ['Ti', 1024 ** 4], ['m', 0.001], ['k', 1e3], ['K', 1e3], ['M', 1e6], ['G', 1e9], ['T', 1e12]]
+      const u = units.find(([suffix]) => s.endsWith(suffix))
+      const value = u ? parseFloat(s.slice(0, -u[0].length)) * u[1] : parseFloat(s)
+      return milli ? value * 1000 : value
+    }
+    const list = pods('kubeast')
+    let cpuReq = 0, cpuLim = 0, memReq = 0, memLim = 0
+    for (const p of list) {
+      for (const c of p.spec.containers ?? []) {
+        cpuReq += quantity(c.resources?.requests?.cpu, true)
+        cpuLim += quantity(c.resources?.limits?.cpu, true)
+        memReq += quantity(c.resources?.requests?.memory, false)
+        memLim += quantity(c.resources?.limits?.memory, false)
+      }
+    }
+    expect(cpuReq, 'kubeast pods ask for CPU').toBeGreaterThan(0)
+    const cpu = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(2)} cores` : `${Math.round(m)}m`)
+    const mem = (b: number) => (b >= 1024 ** 3 ? `${(b / 1024 ** 3).toFixed(2)} GiB` : `${(b / 1024 ** 2).toFixed(0)} MiB`)
     const drawer = await openDrawer(page, '/cluster/namespaces', 'kubeast')
-    await expect(drawer.locator('text=/Resource Summary/').first()).toBeVisible({ timeout: 30000 })
-    await expect(drawer).toContainText(/Running/)
+    await expect(drawer.locator('text=/Resource Summary/').first()).toHaveText(new RegExp(`\\b${list.length} pods`), { timeout: 30000 })
+    const row = (name: string) => drawer.locator('tr').filter({ has: page.getByRole('cell', { name, exact: true }) }).first()
+    await expect(row('CPU')).toHaveText(new RegExp(`CPU\\s*${cpu(cpuReq)}\\s*${cpu(cpuLim)}`))
+    await expect(row('Memory')).toHaveText(new RegExp(`Memory\\s*${mem(memReq)}\\s*${mem(memLim)}`))
+    const running = list.filter((p) => p.status?.phase === 'Running').length
+    await expect(drawer).toContainText(`Running: ${running}`)
   })
 
   test('5.7 — ClusterRoleBinding Bound Pods (kubeast impersonator)', async ({ page }) => {

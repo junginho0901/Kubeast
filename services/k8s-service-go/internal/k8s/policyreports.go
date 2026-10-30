@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -359,14 +360,14 @@ func (s *Service) PolicyReportsForResource(ctx context.Context, namespace, kind,
 		if err != nil {
 			return nil, err
 		}
-		podList, err := cs.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
-		if err != nil {
-			return nil, fmt.Errorf("list pods: %w", err)
-		}
-		for _, p := range podList.Items {
-			if k, n := owner(p); k == kind && n == name {
+		// a page at a time, keeping the workload's pod names (the whole namespace in one list took k8s-service past 512 Mi)
+		err = eachPod(ctx, cs.CoreV1(), namespace, metav1.ListOptions{}, func(p *corev1.Pod) {
+			if k, n := owner(*p); k == kind && n == name {
 				pods[p.Name] = true
 			}
+		})
+		if err != nil {
+			return nil, fmt.Errorf("list pods: %w", err)
 		}
 	}
 	out := &PolicyReportResource{GeneratedAt: set.at.UTC().Format(time.RFC3339), Kind: kind, Name: name, Namespace: namespace, Rows: []PolicyReportResult{}}

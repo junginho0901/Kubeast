@@ -100,11 +100,13 @@ test.describe('Phase 5.8 — detail modal polish 24 additions', () => {
     await expect(drawer).toContainText(clusterIP)
   })
 
-  test('MEDIUM Namespace pod phase 배지 + Resource Summary (kube-system)', async ({ page }) => {
+  test('MEDIUM Namespace pod phase 배지 + Resource Summary (kube-system) count the pods kubectl lists', async ({ page }) => {
+    const phases = kubectl(`-n kube-system get pods -o jsonpath='{range .items[*]}{.status.phase}{"\\n"}{end}'`).split('\n').filter(Boolean)
+    const running = phases.filter((p) => p === 'Running').length
+    expect(running, 'kube-system always runs pods').toBeGreaterThan(0)
     const drawer = await openDrawer(page, '/cluster/namespaces', 'kube-system')
-    await expect(drawer.locator('text=/Resource Summary/').first()).toBeVisible({ timeout: 15000 })
-    // kube-system always runs pods
-    await expect(drawer).toContainText(/Running/)
+    await expect(drawer.locator('text=/Resource Summary/').first()).toHaveText(new RegExp(`\\b${phases.length} pods`), { timeout: 15000 })
+    await expect(drawer).toContainText(`Running: ${running}`)
   })
 
   test('MEDIUM StatefulSet volumeClaimTemplates 표시 (있으면)', async ({ page }) => {

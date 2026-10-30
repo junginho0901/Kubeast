@@ -40,7 +40,7 @@ func (s *Service) DescribePVC(ctx context.Context, namespace, name string) (map[
 
 	// Fetch bound PV, pods, and events in parallel
 	var boundPV *corev1.PersistentVolume
-	var pods *corev1.PodList
+	var pods []corev1.Pod
 	var events *corev1.EventList
 	var pvErr, podsErr, eventsErr error
 
@@ -54,7 +54,16 @@ func (s *Service) DescribePVC(ctx context.Context, namespace, name string) (map[
 	}()
 	go func() {
 		defer wg.Done()
-		pods, podsErr = s.clientsetCtx(ctx).CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
+		// a page at a time, keeping the pods that mount the claim, as kubectl describe's getPodsForPVC reads it
+		// (the whole namespace in one list took k8s-service past 512 Mi)
+		podsErr = eachPod(ctx, s.clientsetCtx(ctx).CoreV1(), namespace, metav1.ListOptions{}, func(p *corev1.Pod) {
+			for _, vol := range p.Spec.Volumes {
+				if vol.PersistentVolumeClaim != nil && vol.PersistentVolumeClaim.ClaimName == name {
+					pods = append(pods, *p.DeepCopy())
+					return
+				}
+			}
+		})
 	}()
 	go func() {
 		defer wg.Done()
@@ -140,8 +149,8 @@ func (s *Service) DescribePVC(ctx context.Context, namespace, name string) (map[
 	}
 
 	// Used by pods
-	if podsErr == nil && pods != nil {
-		usedByPods := findPodsUsingPVC(pods.Items, name)
+	if podsErr == nil {
+		usedByPods := findPodsUsingPVC(pods, name)
 		result["used_by_pods"] = usedByPods
 	}
 

@@ -176,54 +176,25 @@ export default function NamespaceInfo({ name }: Props) {
     return 'badge-info'
   }
 
-  // Aggregate CPU (millicores) and memory (bytes) across all containers of all pods.
-  // Parses k8s quantity strings ("100m", "1", "128Mi", "1Gi"). Unknown units → 0.
+  // CPU (millicores) and memory (bytes) requests and limits summed across the containers of every pod, and the pods
+  // per phase: the server sums them from its pages (pod_summary). The pod rows carry no container resources, so the
+  // sum taken from them here read 0 before.
   const resourceSummary = useMemo(() => {
-    if (!Array.isArray(nsPods)) return null
-    const parseCpu = (s: any): number => {
-      if (typeof s !== 'string' || s.length === 0) return 0
-      if (s.endsWith('m')) return parseFloat(s.slice(0, -1)) || 0
-      return (parseFloat(s) || 0) * 1000
-    }
-    const memUnits: Array<[string, number]> = [
-      ['Ki', 1024], ['Mi', 1024 ** 2], ['Gi', 1024 ** 3], ['Ti', 1024 ** 4],
-      ['K', 1000], ['M', 1000 ** 2], ['G', 1000 ** 3], ['T', 1000 ** 4],
-    ]
-    const parseMem = (s: any): number => {
-      if (typeof s !== 'string' || s.length === 0) return 0
-      for (const [u, mult] of memUnits) {
-        if (s.endsWith(u)) return (parseFloat(s.slice(0, -u.length)) || 0) * mult
-      }
-      return parseFloat(s) || 0
-    }
-    let cpuReq = 0, cpuLim = 0, memReq = 0, memLim = 0
-    // Phase 별 Pod count — Resource Summary 옆에 시각적으로 표시.
-    const phaseCounts: Record<string, number> = {}
-    for (const p of nsPods as any[]) {
-      const ph = String(p?.phase ?? p?.status ?? 'Unknown')
-      phaseCounts[ph] = (phaseCounts[ph] || 0) + 1
-      for (const c of p?.containers ?? []) {
-        const req = c?.resources?.requests ?? {}
-        const lim = c?.resources?.limits ?? {}
-        cpuReq += parseCpu(req.cpu)
-        cpuLim += parseCpu(lim.cpu)
-        memReq += parseMem(req.memory)
-        memLim += parseMem(lim.memory)
-      }
-    }
+    const sum = nsDescribe?.pod_summary
+    if (!sum) return null
     const fmtCpu = (m: number) => m >= 1000 ? `${(m / 1000).toFixed(2)} cores` : `${Math.round(m)}m`
     const fmtMem = (b: number) => b >= 1024 ** 3
       ? `${(b / 1024 ** 3).toFixed(2)} GiB`
       : `${(b / 1024 ** 2).toFixed(0)} MiB`
     return {
-      cpuReq: fmtCpu(cpuReq),
-      cpuLim: fmtCpu(cpuLim),
-      memReq: fmtMem(memReq),
-      memLim: fmtMem(memLim),
-      podCount: nsPods.length,
-      phaseCounts,
+      cpuReq: fmtCpu(sum.cpu_requests_millicores),
+      cpuLim: fmtCpu(sum.cpu_limits_millicores),
+      memReq: fmtMem(sum.memory_requests_bytes),
+      memLim: fmtMem(sum.memory_limits_bytes),
+      podCount: sum.total,
+      phaseCounts: sum.phases ?? {},
     }
-  }, [nsPods])
+  }, [nsDescribe?.pod_summary])
 
   if (isLoading) return <p className="text-slate-400">{tr('namespaces.detail.loading', 'Loading...')}</p>
   if (isError) return <p className="text-red-400">{tr('namespaces.detail.error', 'Failed to load.')}</p>

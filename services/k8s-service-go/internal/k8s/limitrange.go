@@ -99,14 +99,9 @@ func (s *Service) ListPodsViolatingLimitRange(ctx context.Context, namespace, na
 	if err != nil {
 		return nil, fmt.Errorf("get limit range %s/%s: %w", namespace, name, err)
 	}
-	pods, err := s.clientsetCtx(ctx).CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list pods in %s: %w", namespace, err)
-	}
-
+	// a page at a time, keeping the violations (the whole namespace in one list took k8s-service past 512 Mi)
 	out := make([]map[string]interface{}, 0)
-	for i := range pods.Items {
-		p := &pods.Items[i]
+	err = eachPod(ctx, s.clientsetCtx(ctx).CoreV1(), namespace, metav1.ListOptions{}, func(p *corev1.Pod) {
 		for _, c := range p.Spec.Containers {
 			violations := checkLimitRangeViolations(lr, &c)
 			for _, v := range violations {
@@ -120,6 +115,9 @@ func (s *Service) ListPodsViolatingLimitRange(ctx context.Context, namespace, na
 				})
 			}
 		}
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list pods in %s: %w", namespace, err)
 	}
 	return out, nil
 }

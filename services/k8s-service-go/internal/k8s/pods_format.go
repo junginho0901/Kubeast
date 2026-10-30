@@ -372,16 +372,17 @@ func podStatusString(pod *corev1.Pod) string {
 // listOwnedPods returns pods directly owned by the given controller
 // (matched via metadata.ownerReferences kind/name). Used by DescribeDaemonSet
 // / DescribeReplicaSet / DescribeStatefulSet to embed an owned_pods list in
-// the detail response so the UI can show + link to children.
-func (s *Service) listOwnedPods(ctx context.Context, namespace, ownerKind, ownerName string) ([]map[string]interface{}, error) {
-	pods, err := s.clientsetCtx(ctx).CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list pods in %s: %w", namespace, err)
+// the detail response so the UI can show + link to children. The pods are
+// listed by the controller's selector a page at a time, as kubectl describe
+// does (getPodStatusForController): the whole namespace in one list took
+// k8s-service past 512 Mi for one ReplicaSet of a 50 000-pod namespace.
+func (s *Service) listOwnedPods(ctx context.Context, namespace, ownerKind, ownerName string, selector *metav1.LabelSelector) ([]map[string]interface{}, error) {
+	opts := metav1.ListOptions{}
+	if sel, err := metav1.LabelSelectorAsSelector(selector); err == nil && !sel.Empty() {
+		opts.LabelSelector = sel.String()
 	}
-
 	result := make([]map[string]interface{}, 0)
-	for i := range pods.Items {
-		pod := &pods.Items[i]
+	err := eachPod(ctx, s.clientsetCtx(ctx).CoreV1(), namespace, opts, func(pod *corev1.Pod) {
 		owned := false
 		for _, ref := range pod.OwnerReferences {
 			if ref.Kind == ownerKind && ref.Name == ownerName {
@@ -390,7 +391,7 @@ func (s *Service) listOwnedPods(ctx context.Context, namespace, ownerKind, owner
 			}
 		}
 		if !owned {
-			continue
+			return
 		}
 
 		restartCount := int32(0)
@@ -408,6 +409,9 @@ func (s *Service) listOwnedPods(ctx context.Context, namespace, ownerKind, owner
 			"pod_ip":        pod.Status.PodIP,
 			"created_at":    toISO(&pod.CreationTimestamp),
 		})
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list pods in %s: %w", namespace, err)
 	}
 	return result, nil
 }
