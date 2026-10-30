@@ -4231,7 +4231,8 @@
       "applying": "삭제 중..."
     },
     "error": {
-      "notFound": "Release를 찾을 수 없습니다.",
+      "notFound": "{{cluster}} 클러스터에는 {{namespace}} 네임스페이스의 {{name}} Release가 없습니다. 다른 클러스터를 고르거나 Release 목록에서 찾으세요.",
+      "openList": "{{cluster}}의 Release 목록",
       "forbidden": "Helm은 이 Release의 기록을 Secret에 둡니다. 이 클러스터에서 지금 역할로는 Secret을 읽을 수 없어(Read는 못 읽음) 볼 수 없습니다. Write 이상이나 Secret을 읽는 역할이 필요합니다.",
       "loadFailed": "Release를 불러오지 못했습니다(서버 오류 {{code}})."
     }

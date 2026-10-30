@@ -3870,7 +3870,8 @@
       "applying": "Uninstalling..."
     },
     "error": {
-      "notFound": "Release not found.",
+      "notFound": "Cluster {{cluster}} has no release {{name}} in namespace {{namespace}}. Pick another cluster or find it in the release list.",
+      "openList": "Releases of {{cluster}}",
       "forbidden": "Helm keeps this release's records in Secrets, and your role in this cluster cannot read Secrets (Read cannot). Viewing it needs Write or a role that reads Secrets.",
       "loadFailed": "Could not load the release (server error {{code}})."
     }

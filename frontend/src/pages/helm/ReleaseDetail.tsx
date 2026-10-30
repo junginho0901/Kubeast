@@ -160,17 +160,40 @@ export default function HelmReleaseDetailPage() {
     )
   }
 
+  const backToReleases = (
+    <div className="flex items-center gap-3">
+      <Link
+        to="/helm/releases"
+        className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-ink"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        {t('helmReleases.title', 'Helm Releases')}
+      </Link>
+    </div>
+  )
+
   if (detailQuery.isError || !detailQuery.data) {
     // Not found, no permission and a failed request read differently (re-QA #44).
+    // Switching clusters keeps this page, so "not found" names the cluster and offers its list.
     const status = (detailQuery.error as { response?: { status?: number } } | null)?.response?.status
     const key = status === 403 ? 'forbidden' : !detailQuery.isError || status === 404 ? 'notFound' : 'loadFailed'
     return (
-      <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200" data-testid={`helm-release-${key}`}>
-        {key === 'forbidden'
-          ? t('helmReleaseDetail.error.forbidden')
-          : key === 'notFound'
-            ? t('helmReleaseDetail.error.notFound')
-            : t('helmReleaseDetail.error.loadFailed', { code: status ?? '-', defaultValue: 'Could not load the release (server error {{code}}).' })}
+      <div className="space-y-4">
+        {backToReleases}
+        <div className="flex flex-col items-start gap-3 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200" data-testid={`helm-release-${key}`}>
+          <p>
+            {key === 'forbidden'
+              ? t('helmReleaseDetail.error.forbidden')
+              : key === 'notFound'
+                ? t('helmReleaseDetail.error.notFound', { namespace, name, cluster: currentCluster || 'default' })
+                : t('helmReleaseDetail.error.loadFailed', { code: status ?? '-', defaultValue: 'Could not load the release (server error {{code}}).' })}
+          </p>
+          {key === 'notFound' && (
+            <Link to="/helm/releases" className="btn btn-secondary" data-testid="helm-release-notFound-list">
+              {t('helmReleaseDetail.error.openList', { cluster: currentCluster || 'default' })}
+            </Link>
+          )}
+        </div>
       </div>
     )
   }
@@ -179,15 +202,7 @@ export default function HelmReleaseDetailPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <Link
-          to="/helm/releases"
-          className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-ink"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          {t('helmReleases.title', 'Helm Releases')}
-        </Link>
-      </div>
+      {backToReleases}
 
       <div className="page-head items-start gap-4">
         <div>
