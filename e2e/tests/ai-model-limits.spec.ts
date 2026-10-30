@@ -153,7 +153,10 @@ test.describe('AI model limits', () => {
     await page.getByTestId('max-tokens-input').fill('')
     await page.getByTestId('tool-result-chars-input').fill('')
     await page.getByRole('button', { name: /^(Update|수정)$/ }).click()
-    await expect.poll(async () => (await byName())?.options ?? 'missing').toBeNull()
+    await expect.poll(async () => {
+      const c = await byName()
+      return c ? c.options : 'missing'
+    }).toBeNull()
   })
 
   test("the floating assistant asks for its model's answer length and gets tool results cut to its length", async ({ request }) => {
