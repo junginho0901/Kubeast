@@ -6,6 +6,9 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // Issue is one thing wrong in the cluster, for the dashboard's "Check issues"
@@ -45,7 +48,7 @@ func (s *Service) CollectIssues(ctx context.Context, opts IssuesOptions) ([]Issu
 	if opts.Now.IsZero() {
 		opts.Now = time.Now()
 	}
-	pods, err := s.GetAllPods(ctx)
+	podIssues, err := s.podIssues(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -68,15 +71,69 @@ func (s *Service) CollectIssues(ctx context.Context, opts IssuesOptions) ([]Issu
 	cronjobs := collect("cronjobs", s.GetAllCronJobs)
 	hpas := collect("hpas", s.GetAllHPAs)
 	pvcs := collect("pvcs", s.GetAllPVCs)
-	events := collect("events", func(ctx context.Context) ([]map[string]interface{}, error) { return s.GetEvents(ctx, "", "") })
+	events := collect("events", func(ctx context.Context) ([]map[string]interface{}, error) {
+		return s.warningEventRows(ctx, opts.Now.Add(-opts.Window))
+	})
 
 	issues = append(issues, issuesFromNodes(nodes)...)
-	issues = append(issues, issuesFromPods(pods, opts)...)
+	issues = append(issues, podIssues...)
 	issues = append(issues, issuesFromWorkloads(deployments, statefulsets, daemonsets)...)
 	issues = append(issues, issuesFromJobs(jobs, cronjobs)...)
 	issues = append(issues, issuesFromHPAs(hpas)...)
 	issues = append(issues, issuesFromPVCs(pvcs)...)
 	return mergeEvents(issues, events, opts.Now, opts.Window), nil
+}
+
+// podIssues reads the pods podListChunk at a time — in each namespace of a namespace-limited user's scope, as
+// listAcrossNamespaces — and keeps each page's issues only: 50 000 pods as one list took k8s-service past 512 Mi.
+func (s *Service) podIssues(ctx context.Context, opts IssuesOptions) ([]Issue, error) {
+	list := func(namespace string) ([]Issue, error) {
+		var out []Issue
+		lo := metav1.ListOptions{Limit: podListChunk}
+		for {
+			l, err := s.clientsetCtx(ctx).CoreV1().Pods(namespace).List(ctx, lo)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, issuesFromPods(formatPodList(l.Items), opts)...)
+			if l.Continue == "" {
+				return out, nil
+			}
+			lo.Continue = l.Continue
+		}
+	}
+	if scope := scopeFromCtx(ctx); len(scope) > 0 {
+		return fanOutNamespaces(scope, list)
+	}
+	return list("")
+}
+
+// warningEventRows: the Warning events since since (the API server selects type=Warning), read a page at a time,
+// the newest of each object kept — what mergeEvents takes from them.
+func (s *Service) warningEventRows(ctx context.Context, since time.Time) ([]map[string]interface{}, error) {
+	newest := map[string]*corev1.Event{}
+	var order []string
+	err := s.eachEvent(ctx, "", metav1.ListOptions{FieldSelector: "type=" + corev1.EventTypeWarning}, func(e *corev1.Event) {
+		if eventTimestamp(*e).Before(since) {
+			return
+		}
+		id := issueID(e.InvolvedObject.Kind, e.InvolvedObject.Namespace, e.InvolvedObject.Name)
+		if prev, ok := newest[id]; ok && !eventTimestamp(*e).After(eventTimestamp(*prev)) {
+			return
+		} else if !ok {
+			order = append(order, id)
+		}
+		c := *e
+		newest[id] = &c
+	})
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]map[string]interface{}, 0, len(order))
+	for _, id := range order {
+		rows = append(rows, eventRow(newest[id]))
+	}
+	return rows, nil
 }
 
 func mapInt(m map[string]interface{}, key string) int {
