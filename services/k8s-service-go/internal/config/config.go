@@ -194,7 +194,7 @@ func Load() Config {
 		RedisPassword: pkgconfig.GetEnv("REDIS_PASSWORD", ""),
 
 		WSHeartbeatInterval:       pkgconfig.GetEnvInt("WS_HEARTBEAT_INTERVAL", 30),
-		WSMaxSubscriptions:        pkgconfig.GetEnvInt("WS_MAX_SUBSCRIPTIONS", 200),
+		WSMaxSubscriptions:        pkgconfig.GetEnvInt("WS_MAX_SUBSCRIPTIONS", 2000),
 		WSMaxSubscriptionsPerConn: pkgconfig.GetEnvInt("WS_MAX_SUBSCRIPTIONS_PER_CONN", 50),
 		MaxRequestBodyBytes:       pkgconfig.GetEnvInt("MAX_REQUEST_BODY_BYTES", 4<<20),
 

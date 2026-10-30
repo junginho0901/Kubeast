@@ -60,10 +60,12 @@ type subscription struct {
 }
 
 const (
-	// defaultMaxSubscriptions caps watches across every connection;
-	// defaultMaxSubscriptionsPerConn caps one browser tab so a single client
-	// cannot exhaust the global budget (second review L22).
-	defaultMaxSubscriptions        = 200
+	// defaultMaxSubscriptions caps watches across every connection — 2 000
+	// is 500 people with four node boxes of Cluster View each (200 cut the
+	// live updates past 50 of them); defaultMaxSubscriptionsPerConn caps one
+	// browser tab so a single client cannot exhaust the global budget (second
+	// review L22).
+	defaultMaxSubscriptions        = 2000
 	defaultMaxSubscriptionsPerConn = 50
 	// maxFrameBytes bounds a client → server frame: a REQUEST/CLOSE message
 	// is a few hundred bytes; anything larger is not ours (M30).

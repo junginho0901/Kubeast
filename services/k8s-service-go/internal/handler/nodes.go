@@ -10,13 +10,14 @@ import (
 
 // GetNodes handles GET /api/v1/nodes.
 func (h *Handler) GetNodes(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	data, err := h.svc.GetNodes(ctx)
+	raw, err := h.svc.GetNodesJSON(r.Context())
 	if err != nil {
 		h.handleError(w, err)
 		return
 	}
-	response.JSON(w, http.StatusOK, data)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(raw)
 }
 
 // DescribeNode handles GET /api/v1/nodes/{name}/describe.

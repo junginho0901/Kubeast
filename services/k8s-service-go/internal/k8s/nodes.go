@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -14,8 +16,30 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-// GetNodes lists all nodes.
+// GetNodes lists all nodes: from the overview informers for a caller the
+// cluster lets list nodes (one list shared by every caller), else as the caller.
 func (s *Service) GetNodes(ctx context.Context) ([]map[string]interface{}, error) {
+	if l, ok := s.cachedNodes(ctx); ok {
+		return l.items, nil
+	}
+	return s.listNodes(ctx)
+}
+
+// GetNodesJSON is GetNodes as the JSON the handler sends — for the callers
+// served from the informers, the bytes encoded once for all of them.
+func (s *Service) GetNodesJSON(ctx context.Context) ([]byte, error) {
+	if l, ok := s.cachedNodes(ctx); ok {
+		return l.JSON(), nil
+	}
+	items, err := s.listNodes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return (&nodeList{items: items}).JSON(), nil
+}
+
+// listNodes lists the nodes as the caller.
+func (s *Service) listNodes(ctx context.Context) ([]map[string]interface{}, error) {
 	nodeList, err := s.clientsetCtx(ctx).CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list nodes: %w", err)
@@ -26,6 +50,30 @@ func (s *Service) GetNodes(ctx context.Context) ([]map[string]interface{}, error
 		result = append(result, formatNodeSummary(&node))
 	}
 	return result, nil
+}
+
+// cachedNodes is the informers' node list when they have synced and the caller
+// may list nodes (asked of the cluster as the caller, remembered
+// podAccessTTL). ok=false leaves it to a List as the caller, which brings the
+// cluster's own answer — its refusal too. A namespace-scoped grant lists as
+// itself, as before.
+func (s *Service) cachedNodes(ctx context.Context) (*nodeList, bool) {
+	if len(scopeFromCtx(ctx)) > 0 {
+		return nil, false
+	}
+	b := s.bundleForCtx(ctx)
+	if b == nil {
+		return nil, false
+	}
+	ci := b.overviewInformers()
+	if ci == nil || !ci.waitSynced(ctx, podPageSyncWait) {
+		return nil, false
+	}
+	if ok, err := s.mayList(ctx, b, "nodes", ""); err != nil || !ok {
+		return nil, false
+	}
+	accesstrail.Cached(ctx, "nodes (watched as "+overviewCacheUser+")")
+	return ci.nodeSummaries(time.Now()), true
 }
 
 // DescribeNode returns detailed info about a node.

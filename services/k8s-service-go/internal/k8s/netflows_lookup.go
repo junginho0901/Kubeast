@@ -21,6 +21,7 @@ func (s *Service) NetflowsWorkloads(ctx context.Context, namespace string) (map[
 	if err != nil {
 		return nil, err
 	}
+	defer set.done()
 	return netflowsWorkloadsOf(set.rows), nil
 }
 

@@ -133,3 +133,19 @@ To measure again, run these steps. They create a `kubeast-fp` cluster, separate 
 3. `load <name> 2`
 4. `step <name> 15 --set ai.enabled=true`
 5. `down`
+
+## Many users
+
+Measured on 2026-10-30 with one k8s-service at the chart's limits (512 Mi; gateway 256 Mi), on a laptop kind cluster, against a KWOK cluster of 1 001 nodes and 50 000 pods. The requests were sent from inside the kind network; the laptop's Docker port forwarding drops connections under a crowd and was not used for these numbers.
+
+| What | Result |
+| --- | --- |
+| 500 people keeping the Pods page or Cluster View open (polls every 2 s, 8 node boxes each — 2 000 live watches), pods restarted during the run | 0 errors · p95 325 ms · every socket got the changes · k8s-service at most 427 MiB, CPU 1.9 cores on average |
+| 300, 400, 500 people opening the Pods page and Cluster View at the same instant (11 requests each) | 0 errors, no restart · k8s-service at most 413 MiB · gateway at most 103 MiB · the last answer after 17, 30 and 29 s |
+
+What sets these limits:
+
+- `multicluster.wsMaxSubscriptions` (2 000): every live watch on a screen is one watch on the cluster as the user. Past the limit, a screen loads but does not update.
+- The node boxes of Cluster View and the namespace list are read from the cluster as each user, so a crowd queues on the client's rate to that cluster (100 a second, burst 200). Raising that rate moved the queue to the test cluster's API Priority and Fairness and the node boxes waited longer. These requests decide how long a crowd waits.
+- The Pods page, the node map and the node list are answered from what k8s-service keeps (measured up to 500 people at once). Their work on the rows runs on as many at once as there are CPUs.
+- The gateway holds proxy buffers for every request in flight, about 30–90 KB each.

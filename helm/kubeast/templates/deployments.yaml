@@ -261,6 +261,10 @@ spec:
               value: "{{ .Values.multicluster.breakerConsecutiveFails }}"
             - name: MC_BREAKER_OPEN_SEC
               value: "{{ .Values.multicluster.breakerOpenSec }}"
+            - name: WS_MAX_SUBSCRIPTIONS
+              value: "{{ .Values.multicluster.wsMaxSubscriptions | default 2000 }}"
+            - name: WS_MAX_SUBSCRIPTIONS_PER_CONN
+              value: "{{ .Values.multicluster.wsMaxSubscriptionsPerConn | default 50 }}"
             {{- with .Values.features.prometheus.auth.existingSecret }}
             - name: PROMETHEUS_AUTH_HEADER
               valueFrom:
