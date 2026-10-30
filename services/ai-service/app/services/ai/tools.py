@@ -106,10 +106,10 @@ K8S_READONLY_TOOLS: List[Dict] = [
         "function": {
             "name": "k8s_get_events",
             "description": (
-                "이벤트 조회 (kubectl get events). Returns events of one namespace, or of every namespace when none is given "
-                "or all_namespaces=true. Narrow to one object with kind and name (the events of pod web-1: kind=Pod, name=web-1) "
-                "or with field_selector (type=Warning, reason=BackOff, involvedObject.name=web-1); without a filter a busy "
-                "namespace returns hundreds of events, so filter when you know the object."
+                "이벤트 조회. Returns the newest events (newest first, limit, default 200) of one namespace, or of every "
+                "namespace when none is given or all_namespaces=true. Narrow to one object with kind and name (the events of "
+                "pod web-1: kind=Pod, name=web-1) or with field_selector (type=Warning, reason=BackOff, involvedObject.name=web-1). "
+                "When more events match than are listed the answer is {events, total, shown, note}."
             ),
             "parameters": {
                 "type": "object",
@@ -122,6 +122,7 @@ K8S_READONLY_TOOLS: List[Dict] = [
                         "type": "string",
                         "description": "Events field selector, comma-separated: type=Warning, reason=BackOff, involvedObject.kind/name/namespace, source, reportingComponent",
                     },
+                    "limit": {"type": "integer", "description": "The newest events to list (default 200, at most 1000)"},
                 },
             },
         },

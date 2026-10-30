@@ -26,13 +26,14 @@ func (s *Service) GetNamespaceTimeline(ctx context.Context, namespace string, ho
 
 	var wg sync.WaitGroup
 	var events []map[string]interface{}
+	var counts eventCounts
 	var rollouts []map[string]interface{}
 	var eventsErr, rolloutsErr error
 
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.getTimelineEvents(ctx, namespace, "", "", cutoff, limit)
+		events, counts, eventsErr = s.getTimelineEvents(ctx, namespace, "", "", cutoff, limit)
 	}()
 	go func() {
 		defer wg.Done()
@@ -48,7 +49,7 @@ func (s *Service) GetNamespaceTimeline(ctx context.Context, namespace string, ho
 		rollouts = []map[string]interface{}{}
 	}
 
-	return buildTimelineResult(events, rollouts, cutoff), nil
+	return buildTimelineResult(events, counts, rollouts, cutoff), nil
 }
 
 // GetResourceTimeline returns events and rollout history for a specific resource.
@@ -57,13 +58,14 @@ func (s *Service) GetResourceTimeline(ctx context.Context, namespace, kind, name
 
 	var wg sync.WaitGroup
 	var events []map[string]interface{}
+	var counts eventCounts
 	var rollouts []map[string]interface{}
 	var eventsErr, rolloutsErr error
 
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.getTimelineEvents(ctx, namespace, kind, name, cutoff, limit)
+		events, counts, eventsErr = s.getTimelineEvents(ctx, namespace, kind, name, cutoff, limit)
 	}()
 	go func() {
 		defer wg.Done()
@@ -83,7 +85,7 @@ func (s *Service) GetResourceTimeline(ctx context.Context, namespace, kind, name
 		rollouts = []map[string]interface{}{}
 	}
 
-	return buildTimelineResult(events, rollouts, cutoff), nil
+	return buildTimelineResult(events, counts, rollouts, cutoff), nil
 }
 
 // getResourceRolloutHistory returns rollout history for a specific workload resource.
@@ -95,25 +97,17 @@ func (s *Service) getResourceRolloutHistory(ctx context.Context, namespace, kind
 	return s.getControllerRevisionTimeline(ctx, namespace, kind, name, cutoff)
 }
 
-// buildTimelineResult constructs the final timeline response with summary.
-func buildTimelineResult(events, rollouts []map[string]interface{}, cutoff time.Time) *TimelineResult {
-	normalCount := 0
-	warningCount := 0
-	for _, e := range events {
-		if e["type"] == "Warning" {
-			warningCount++
-		} else {
-			normalCount++
-		}
-	}
-
+// buildTimelineResult constructs the final timeline response with summary: the counts are of every event in the
+// window, the list holds the newest limit of them (events_shown).
+func buildTimelineResult(events []map[string]interface{}, counts eventCounts, rollouts []map[string]interface{}, cutoff time.Time) *TimelineResult {
 	return &TimelineResult{
 		Events:         events,
 		RolloutHistory: rollouts,
 		Summary: map[string]interface{}{
-			"total_events":  len(events),
-			"normal_count":  normalCount,
-			"warning_count": warningCount,
+			"total_events":  counts.Total,
+			"events_shown":  len(events),
+			"normal_count":  counts.Total - counts.Warning,
+			"warning_count": counts.Warning,
 			"time_range": map[string]interface{}{
 				"start": cutoff.UTC().Format(time.RFC3339),
 				"end":   time.Now().UTC().Format(time.RFC3339),
@@ -142,8 +136,9 @@ func extractContainerImages(containers []corev1.Container) []string {
 	return images
 }
 
-// getTimelineEvents fetches K8s events with optional resource filter and time cutoff.
-func (s *Service) getTimelineEvents(ctx context.Context, namespace, kind, name string, cutoff time.Time, limit int) ([]map[string]interface{}, error) {
+// getTimelineEvents fetches K8s events with optional resource filter and time cutoff: read a page at a time, the newest
+// limit kept, every event in the window counted.
+func (s *Service) getTimelineEvents(ctx context.Context, namespace, kind, name string, cutoff time.Time, limit int) ([]map[string]interface{}, eventCounts, error) {
 	opts := metav1.ListOptions{}
 	if name != "" && kind != "" {
 		opts.FieldSelector = fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=%s", name, kind)
@@ -151,29 +146,9 @@ func (s *Service) getTimelineEvents(ctx context.Context, namespace, kind, name s
 		opts.FieldSelector = fmt.Sprintf("involvedObject.name=%s", name)
 	}
 
-	eventList, err := s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, opts)
+	filtered, counts, err := s.newestEventsSince(ctx, namespace, opts, cutoff, limit)
 	if err != nil {
-		return nil, fmt.Errorf("list timeline events: %w", err)
-	}
-
-	// Filter by time and sort
-	filtered := make([]corev1.Event, 0, len(eventList.Items))
-	for _, e := range eventList.Items {
-		ts := eventTimestamp(e)
-		if !ts.Before(cutoff) {
-			filtered = append(filtered, e)
-		}
-	}
-
-	sort.Slice(filtered, func(i, j int) bool {
-		ti := eventTimestamp(filtered[i])
-		tj := eventTimestamp(filtered[j])
-		return ti.After(tj)
-	})
-
-	// Apply limit
-	if limit > 0 && len(filtered) > limit {
-		filtered = filtered[:limit]
+		return nil, eventCounts{}, fmt.Errorf("list timeline events: %w", err)
 	}
 
 	result := make([]map[string]interface{}, 0, len(filtered))
@@ -200,7 +175,7 @@ func (s *Service) getTimelineEvents(ctx context.Context, namespace, kind, name s
 			"last_seen":  toISO(&e.LastTimestamp),
 		})
 	}
-	return result, nil
+	return result, counts, nil
 }
 
 // getNamespaceRolloutHistory collects rollout history for all Deployments in a namespace.

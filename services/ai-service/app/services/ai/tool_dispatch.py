@@ -277,6 +277,9 @@ async def execute_function_with_context(
                 value = function_args.get(key)
                 if isinstance(value, str) and value.strip():
                     tool_args[key] = value.strip()
+            limit = function_args.get("limit")
+            if isinstance(limit, int) and not isinstance(limit, bool) and limit > 0:
+                tool_args["limit"] = limit
             result = await service._call_tool_server(function_name, tool_args)
 
         elif function_name == "k8s_find_resource":

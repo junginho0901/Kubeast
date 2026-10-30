@@ -11,8 +11,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -43,6 +46,19 @@ func handleGetResources(ctx context.Context, args map[string]interface{}, header
 		}
 		if out, ok, err := podsList(ctx, headers, ns, argInt(args, "offset", 0)); ok {
 			return out, err
+		}
+	}
+
+	if resourceName == "" && !isPodsKind(resourceType) {
+		scope := namespace
+		switch {
+		case allNamespaces:
+			scope = "all namespaces"
+		case scope == "":
+			scope = "default"
+		}
+		if size, ok, err := listSize(ctx, headers, resourceType, namespace, allNamespaces, "", ""); err == nil && ok && size.count > listMax {
+			return listTooLarge(resourceType, scope, size)
 		}
 	}
 
@@ -205,23 +221,72 @@ func handleGetEvents(ctx context.Context, args map[string]interface{}, headers h
 		selectors = append(selectors, "involvedObject.name="+name)
 	}
 
-	cmdArgs := []string{"get", "events", "-o", "json"}
+	// k8s-service reads the events a page at a time and keeps the newest: kubectl would hold every event it lists
+	// (a namespace of 76 000 events took tool-server past 256 Mi).
+	q := url.Values{"with_total": {"1"}}
 	if namespace != "" && !allNamespaces {
-		cmdArgs = append(cmdArgs, "-n", namespace)
-	} else {
-		cmdArgs = append(cmdArgs, "--all-namespaces")
+		q.Set("namespace", namespace)
 	}
 	if len(selectors) > 0 {
-		cmdArgs = append(cmdArgs, "--field-selector="+strings.Join(selectors, ","))
+		q.Set("field_selector", strings.Join(selectors, ","))
 	}
-
-	output, err := runKubectl(ctx, headers, cmdArgs...)
+	limit := argInt(args, "limit", eventsLimitDefault)
+	if limit <= 0 || limit > eventsLimitMax {
+		limit = eventsLimitMax
+	}
+	q.Set("limit", strconv.Itoa(limit))
+	status, body, err := k8sServiceGet(ctx, headers, "/events", q)
 	if err != nil {
-		return explainFailure(ctx, headers, err, "events", "", namespace)
+		return "", err
 	}
-	events := parseEvents(output)
+	if status != http.StatusOK {
+		out, ok, err := featureFailure("events", "", status, body)
+		if ok {
+			return out, nil
+		}
+		return "", err
+	}
+	var reply struct {
+		Items []struct {
+			Namespace      string `json:"namespace"`
+			Type           string `json:"type"`
+			Reason         string `json:"reason"`
+			Message        string `json:"message"`
+			Count          int    `json:"count"`
+			FirstTimestamp string `json:"first_timestamp"`
+			LastTimestamp  string `json:"last_timestamp"`
+			InvolvedObject struct {
+				Kind string `json:"kind"`
+				Name string `json:"name"`
+			} `json:"involved_object"`
+		} `json:"items"`
+		Total int `json:"total"`
+	}
+	if err := json.Unmarshal(body, &reply); err != nil {
+		return "", fmt.Errorf("events: unreadable reply: %w", err)
+	}
+	events := make([]map[string]interface{}, 0, len(reply.Items))
+	for _, ev := range reply.Items {
+		events = append(events, map[string]interface{}{
+			"type": ev.Type, "reason": ev.Reason, "message": ev.Message, "namespace": ev.Namespace,
+			"object":          map[string]interface{}{"kind": ev.InvolvedObject.Kind, "name": ev.InvolvedObject.Name},
+			"first_timestamp": ev.FirstTimestamp, "last_timestamp": ev.LastTimestamp, "count": ev.Count,
+		})
+	}
+	if reply.Total > len(events) {
+		return marshalJSON(map[string]interface{}{
+			"events": events, "total": reply.Total, "shown": len(events),
+			"note": fmt.Sprintf("the newest %d of %d events, newest first; narrow with kind and name, or field_selector type=Warning", len(events), reply.Total),
+		})
+	}
 	return marshalJSON(events)
 }
+
+// eventsLimitDefault, eventsLimitMax: the newest events k8s_get_events lists.
+const (
+	eventsLimitDefault = 200
+	eventsLimitMax     = 1000
+)
 
 // eventKindName turns what the model wrote (pods, deployment, Pod) into the
 // involvedObject.kind the API stores (Pod, Deployment).

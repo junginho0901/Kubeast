@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"net/http"
 	"testing"
 )
 
@@ -45,17 +46,17 @@ func TestValidateToolArgs_NewArguments(t *testing.T) {
 // The query tools take any field selector the API server supports, as their descriptions say; the events tool
 // keeps to the events fields.
 func TestFieldSelector_EventsToolKeepsToEventFields(t *testing.T) {
-	calls := fakeKubectl(t, func([]string) (string, error) { return `{"items":[]}`, nil })
+	seen := fakeK8sService(t, func(*http.Request) (int, string) { return 200, `{"items":[],"total":0}` })
 	if _, err := handleGetEvents(context.Background(), map[string]interface{}{"field_selector": "spec.nodeName=a"}, nil); !errors.Is(err, errBadRequest) {
 		t.Fatalf("events took a pod field: %v", err)
 	}
-	if len(*calls) != 0 {
-		t.Fatalf("kubectl ran: %v", *calls)
+	if len(*seen) != 0 {
+		t.Fatalf("k8s-service asked: %v", (*seen)[0].URL)
 	}
-	if _, err := handleGetEvents(context.Background(), map[string]interface{}{"field_selector": "type=Warning,involvedObject.kind=Pod"}, nil); err != nil || len(*calls) != 1 {
+	if _, err := handleGetEvents(context.Background(), map[string]interface{}{"field_selector": "type=Warning,involvedObject.kind=Pod"}, nil); err != nil || len(*seen) != 1 {
 		t.Fatalf("events field selector refused: %v", err)
 	}
-	if !has((*calls)[0], "--field-selector=type=Warning,involvedObject.kind=Pod") {
-		t.Fatalf("kubectl args: %v", (*calls)[0])
+	if got := (*seen)[0].URL.Query().Get("field_selector"); got != "type=Warning,involvedObject.kind=Pod" {
+		t.Fatalf("field_selector %q", got)
 	}
 }

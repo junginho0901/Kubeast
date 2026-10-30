@@ -239,6 +239,15 @@ export default function Timeline() {
           })}
         </p>
       )}
+      {timeline && (timeline.summary.events_shown ?? timeline.summary.total_events) < timeline.summary.total_events && (
+        <p className="text-xs text-slate-400" data-testid="timeline-events-capped">
+          {t('timeline.eventsCapped', {
+            shown: timeline.summary.events_shown,
+            total: timeline.summary.total_events,
+            defaultValue: 'The newest {{shown}} of the {{total}} events in this range are listed.',
+          })}
+        </p>
+      )}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
         {isLoading ? (
           <div className="flex items-center justify-center py-20">

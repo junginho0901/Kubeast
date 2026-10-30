@@ -67,31 +67,6 @@ type endpointSliceList struct {
 	} `json:"items"`
 }
 
-type eventList struct {
-	Items []eventItem `json:"items"`
-}
-
-type eventItem struct {
-	Type           string `json:"type"`
-	Reason         string `json:"reason"`
-	Message        string `json:"message"`
-	FirstTimestamp string `json:"firstTimestamp"`
-	LastTimestamp  string `json:"lastTimestamp"`
-	EventTime      string `json:"eventTime"`
-	Count          int    `json:"count"`
-	Series         *struct {
-		Count            int    `json:"count"`
-		LastObservedTime string `json:"lastObservedTime"`
-	} `json:"series"`
-	Metadata struct {
-		Namespace string `json:"namespace"`
-	} `json:"metadata"`
-	InvolvedObject struct {
-		Kind string `json:"kind"`
-		Name string `json:"name"`
-	} `json:"involvedObject"`
-}
-
 func countKubectlItems(ctx context.Context, headers http.Header, args ...string) (int, error) {
 	output, err := runKubectl(ctx, headers, args...)
 	if err != nil {
@@ -257,47 +232,6 @@ func applyUsageFields(metric map[string]interface{}, fields []string) {
 	metric["cpu_percent"] = fields[0]
 	metric["memory"] = fields[1]
 	metric["memory_percent"] = fields[2]
-}
-
-func parseEvents(output string) []map[string]interface{} {
-	var list eventList
-	if err := json.Unmarshal([]byte(output), &list); err != nil {
-		return nil
-	}
-	results := make([]map[string]interface{}, 0, len(list.Items))
-	for _, ev := range list.Items {
-		first := ev.FirstTimestamp
-		last := ev.LastTimestamp
-		if last == "" {
-			if ev.EventTime != "" {
-				last = ev.EventTime
-			} else if ev.Series != nil && ev.Series.LastObservedTime != "" {
-				last = ev.Series.LastObservedTime
-			}
-		}
-		if first == "" {
-			if ev.EventTime != "" {
-				first = ev.EventTime
-			} else if ev.Series != nil && ev.Series.LastObservedTime != "" {
-				first = ev.Series.LastObservedTime
-			}
-		}
-		count := ev.Count
-		if count == 0 && ev.Series != nil {
-			count = ev.Series.Count
-		}
-		results = append(results, map[string]interface{}{
-			"type":            ev.Type,
-			"reason":          ev.Reason,
-			"message":         ev.Message,
-			"namespace":       ev.Metadata.Namespace,
-			"object":          map[string]interface{}{"kind": ev.InvolvedObject.Kind, "name": ev.InvolvedObject.Name},
-			"first_timestamp": first,
-			"last_timestamp":  last,
-			"count":           count,
-		})
-	}
-	return results
 }
 
 func parseAPIResources(output string) []map[string]interface{} {

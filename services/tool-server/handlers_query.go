@@ -133,6 +133,9 @@ func handleJQQuery(ctx context.Context, args map[string]interface{}, headers htt
 	if out, stop, err := podsTooMany(ctx, headers, args); stop {
 		return out, err
 	}
+	if out, stop, err := listTooMany(ctx, headers, args, scope); stop {
+		return out, err
+	}
 	list, res, err := getJSONList(ctx, headers, cmd, argString(args, "resource_type", ""), argString(args, "namespace", ""))
 	if err != nil || res != "" {
 		return res, err
@@ -199,6 +202,9 @@ func handleTabularQuery(ctx context.Context, args map[string]interface{}, header
 	if out, stop, err := podsTooMany(ctx, headers, args); stop {
 		return out, err
 	}
+	if out, stop, err := listTooMany(ctx, headers, args, scope); stop {
+		return out, err
+	}
 	cmd = append(cmd, "-o", "custom-columns="+columns)
 	if v := argString(args, "sort_by", ""); v != "" {
 		cmd = append(cmd, "--sort-by="+v)
@@ -259,6 +265,22 @@ func handleCount(ctx context.Context, args map[string]interface{}, headers http.
 		if out, ok, err := podsCount(ctx, headers, args); ok {
 			return out, err
 		}
+	} else if argString(args, "group_by", "") == "" {
+		// how many is what the API server answers without the objects: any size, no kubectl list
+		namespace := argString(args, "namespace", "")
+		if size, ok, err := listSize(ctx, headers, argString(args, "resource_type", ""), namespace, namespace == "",
+			argString(args, "label_selector", ""), argString(args, "field_selector", "")); err == nil && ok {
+			out := map[string]interface{}{"resource_type": argString(args, "resource_type", ""), "scope": scope}
+			if size.atLeast {
+				out["count_at_least"] = size.count
+				out["note"] = fmt.Sprintf("more than %d match; with a selector the API server counts only by reading the matches", listMax)
+			} else {
+				out["count"] = size.count
+			}
+			return marshalJSON(out)
+		}
+	} else if out, stop, err := listTooMany(ctx, headers, args, scope); stop {
+		return out, err
 	}
 	list, res, err := getJSONList(ctx, headers, cmd, argString(args, "resource_type", ""), argString(args, "namespace", ""))
 	if err != nil || res != "" {

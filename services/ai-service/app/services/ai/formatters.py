@@ -242,6 +242,11 @@ def _format_k8s_get_events_display(raw_text: str) -> Optional[str]:
         data = json.loads(raw_text)
     except Exception:
         return None
+    note = ""
+    if isinstance(data, dict) and isinstance(data.get("events"), list):
+        # more events matched than were listed: the newest, with the total
+        note = str(data.get("note") or "")
+        data = data["events"]
     if not isinstance(data, list):
         return None
     include_namespace = any(isinstance(ev, dict) and ev.get("namespace") for ev in data)
@@ -266,7 +271,8 @@ def _format_k8s_get_events_display(raw_text: str) -> Optional[str]:
         if include_namespace:
             row = [str(ev.get("namespace", ""))] + row
         rows.append(row)
-    return _format_table(headers, rows)
+    table = _format_table(headers, rows)
+    return f"{table}\n{note}" if note else table
 
 def _format_age_value(value) -> str:
     if not value:

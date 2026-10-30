@@ -69,7 +69,9 @@ export interface TimelineResult {
   events: TimelineEvent[]
   rollout_history: RolloutRevision[]
   summary: {
+    /** every event in the window; the list holds the newest events_shown of them */
     total_events: number
+    events_shown?: number
     normal_count: number
     warning_count: number
     time_range: { start: string; end: string }

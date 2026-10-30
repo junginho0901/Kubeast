@@ -3578,7 +3578,8 @@
     "resourceFilter": "Resource Kind",
     "refresh": "Refresh",
     "closeSummary": "Close Summary",
-    "listCount": "{{rows}} items ({{events}} events · {{rollouts}} rollouts)"
+    "listCount": "{{rows}} items ({{events}} events · {{rollouts}} rollouts)",
+    "eventsCapped": "The newest {{shown}} of the {{total}} events in this range are listed."
   },
   "adminOrg": {
     "title": "Teams",
