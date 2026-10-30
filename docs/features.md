@@ -64,7 +64,7 @@
     - the cluster does not have the feature: Prometheus is not set up, there is no log, trace or alert store, network flows are off, or cost or policy reports are off
     - the person lacks the permission k8s-service checks: `admin.hygiene.read`, `resource.helm.read`, `resource.policyreport.read`, `resource.cost.read` or `resource.networkflow.read`
   - Results are cut at 100 series, 120 points, 200 log lines, 200 rows, 200 graph nodes/400 edges and 64 KB of text.
-  - A range result (`prometheus_query` and `loki_query` metric queries) can be longer than what the model reads at once (6,000 characters). Then it is not cut.
+  - A range result (`prometheus_query` and `loki_query` metric queries) can be longer than what the model reads at once (the model's tool result length, 6,000 characters unless set). Then it is not cut.
   - Instead, it is reduced to the 10 series with the largest values, each with its min, max, average and last value and a 12-point overview. Results drawn as graphs get the same summary.
   - `gitops_status` reads Argo CD Application CRs with that person's permissions. It summarizes sync, health, the last operation, error conditions and OutOfSync resources per app.
   - That tool is unavailable on a cluster without Argo CD. With a central Argo CD, ask on the management cluster.
@@ -113,6 +113,9 @@
   - A setting can have the tier `economy` (`tier`, CRD `spec.tier`). When such a setting is enabled, the chat history summary and the floating assistant use that model, which is usually cheaper. Chat keeps the default model.
   - `model_info.tier` in the stream shows which one is used.
   - If there is no economy setting, or it cannot be used because it has no key, both use the default model.
+  - Each setting can have its own **answer length** (`max_tokens`; empty: 4,096 for chat answers, 2,048 for each alert investigation step) and **tool result length** (`tool_result_chars`, 1,000–200,000 characters; empty: 6,000), set in the edit window for every provider. They are kept in the setting's options, and the tool result length is never sent to the provider. The Claude subscription leaves the answer length to Claude Code.
+  - Each card says what the server runs on it now — Chat, Floating assistant, History summaries, Alert investigations — worked out by the rules ai-service picks models with. "Active" is the one that runs the chat.
+  - OpenAI and Azure OpenAI get the answer length as `max_completion_tokens`: their reasoning models (o-series, GPT-5) refuse `max_tokens`. When a model answers 400 naming a parameter it does not take (reasoning models refuse `temperature`, `top_p` and others), the request is sent again once without it, and that model is sent it no more.
 
 ## 🌐 Multi-cluster & RBAC
 
