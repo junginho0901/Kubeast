@@ -195,10 +195,11 @@ export default function Timeline() {
         {/* Refresh */}
         <button
           onClick={() => refetch()}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+          className="btn btn-primary flex items-center gap-2"
           title={t('timeline.refresh', 'Refresh')}
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+          {t('timeline.refresh', 'Refresh')}
         </button>
       </div>
 

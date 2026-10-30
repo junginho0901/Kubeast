@@ -277,7 +277,7 @@ export default function AccessReview() {
               onClick={() => download(tab)}
               disabled={!report}
               data-testid="access-review-export"
-              className="rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 py-1.5 text-sm text-ink flex items-center gap-2"
+              className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
             >
               <Download className="w-4 h-4" /> CSV
             </button>

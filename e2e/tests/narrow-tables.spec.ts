@@ -95,14 +95,23 @@ test.describe('page headers', () => {
     expect(slid).toEqual([])
   })
 
+  // the job of a button with words on it, from the words (English or Korean); null for any other button
+  const JOBS: [string, RegExp][] = [
+    ['refresh', /^(Refresh|새로고침)$/],
+    ['create', /^(Create|New|Add|Register)\b|(생성|추가|등록)$/],
+    ['delete', /^(Delete|Remove|Uninstall)\b|삭제/],
+    ['export', /^(CSV|JSON|Export CSV|CSV 내보내기)$/],
+  ]
+
   for (const mode of ['default', 'dark', 'light']) {
-    test(`in the ${mode} colour mode every header button is the same blue`, async ({ page }) => {
+    test(`in the ${mode} colour mode every header button is the same blue and buttons of one job look alike`, async ({ page }) => {
       test.setTimeout(300_000)
       await page.setViewportSize({ width: 1440, height: 900 })
       const paths = await screens(page)
       await page.evaluate((m) => (m === 'default' ? localStorage.removeItem('kubeast.colorMode') : localStorage.setItem('kubeast.colorMode', m)), mode)
       const odd: string[] = []
       const looks = new Map<string, string>()
+      const jobLooks = new Map<string, Map<string, string>>()
       for (const path of paths) {
         await page.goto(`${path}${path.includes('?') ? '&' : '?'}cluster=self`)
         await expect(page.locator('main h1').first()).toBeVisible()
@@ -119,9 +128,26 @@ test.describe('page headers', () => {
           if (!b.primary) odd.push(`${path} "${b.text}" is not btn-primary`)
           looks.set(`${b.bg} / ${b.fg}`, `${path} "${b.text}"`)
         }
+        // every button with words on it in the page: its look as drawn, grouped by its job
+        const worded = await page.locator('main button').evaluateAll((bs) => bs
+          .filter((b) => b.getBoundingClientRect().width > 0 && (b.textContent ?? '').trim() !== '')
+          .map((b) => {
+            const s = getComputedStyle(b)
+            return { text: (b.textContent ?? '').replace(/\s+/g, ' ').trim(), look: `${s.backgroundColor} | ${s.color} | ${s.borderTopColor} ${s.borderTopWidth} | ${s.borderTopLeftRadius} | ${Math.round(b.getBoundingClientRect().height)}px | ${s.fontSize}` }
+          }))
+        for (const b of worded) {
+          const job = JOBS.find(([, re]) => re.test(b.text))?.[0]
+          if (!job) continue
+          if (!jobLooks.has(job)) jobLooks.set(job, new Map())
+          jobLooks.get(job)!.set(b.look, `${path} "${b.text.slice(0, 30)}"`)
+        }
       }
       expect(odd).toEqual([])
       expect([...looks.keys()], `header buttons by background / text: ${[...looks.values()].join(', ')}`).toHaveLength(1)
+      for (const [job, byLook] of jobLooks) {
+        expect([...byLook.keys()], `${job} buttons look different: ${[...byLook.entries()].map(([l, w]) => `${w} = ${l}`).join(' · ')}`).toHaveLength(1)
+      }
+      expect(jobLooks.size, 'refresh, create, delete and export buttons were seen').toBe(4)
     })
   }
 })
