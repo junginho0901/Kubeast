@@ -12,7 +12,7 @@ import (
 func TestTheSyncRowKeepsNoSecretsAndOnlyChangesCount(t *testing.T) {
 	d := modelConfigData{Name: "haiku", Provider: "anthropic", Model: "claude-haiku-5-5", APIKeyEnv: "ANTHROPIC_API_KEY",
 		SecretName: "ai-keys", SecretKey: "anthropic", ExtraHeaders: map[string]string{"X-Team": "header-secret", "A": "b"},
-		TLSVerify: true, CACert: "-----BEGIN CERTIFICATE-----", Options: map[string]string{"temperature": "0"}, Enabled: true, Tier: "default"}
+		TLSVerify: true, CACert: "-----BEGIN CERTIFICATE-----", Options: map[string]interface{}{"temperature": "0"}, Enabled: true, Tier: "default"}
 	v := viewOf(d)
 	raw, _ := json.Marshal(v)
 	if strings.Contains(string(raw), "header-secret") || strings.Contains(string(raw), "CERTIFICATE") {

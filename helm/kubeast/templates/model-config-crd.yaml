@@ -57,6 +57,19 @@ spec:
                   type: object
                   additionalProperties: { type: string }
                 tlsVerify: { type: boolean }
+                caCert:
+                  type: string
+                  description: a self-signed CA certificate (PEM) the model's HTTPS endpoint is verified with, for this model only
+                maxTokens:
+                  type: integer
+                  minimum: 1
+                  maximum: 1000000
+                  description: the longest answer in tokens (empty = 4096 for chat answers, 2048 for an alert investigation step)
+                toolResultChars:
+                  type: integer
+                  minimum: 1000
+                  maximum: 200000
+                  description: the longest tool result the model is given, in characters (empty = 6000)
                 enabled: { type: boolean }
                 isDefault: { type: boolean }
                 tier:

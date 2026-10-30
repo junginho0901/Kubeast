@@ -220,3 +220,63 @@ func TestProviderLabel(t *testing.T) {
 		t.Fatalf("expected unknown for empty provider")
 	}
 }
+
+func TestParseSpec_LimitsAndCACert(t *testing.T) {
+	r := &ModelConfigReconciler{}
+	n := func(v int64) *int64 { return &v }
+	parse := func(spec v1alpha1.ModelConfigSpec) (modelConfigData, error) {
+		return r.parseSpec(&v1alpha1.ModelConfig{ObjectMeta: metav1.ObjectMeta{Name: "mc"}, Spec: spec})
+	}
+
+	// the two limits as numbers in the options, next to Ollama's options; the CA certificate trimmed
+	data, err := parse(v1alpha1.ModelConfigSpec{Provider: "ollama", Model: "llama3", MaxTokens: n(8000), ToolResultChars: n(3000),
+		CACert: " -----BEGIN CERTIFICATE-----\n", Ollama: &v1alpha1.OllamaConfig{Options: map[string]string{"num_ctx": "8192"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := map[string]interface{}{"num_ctx": "8192", "max_tokens": int64(8000), "tool_result_chars": int64(3000)}; fmt.Sprint(data.Options) != fmt.Sprint(want) {
+		t.Fatalf("options: %v, want %v", data.Options, want)
+	}
+	if data.CACert != "-----BEGIN CERTIFICATE-----" {
+		t.Fatalf("caCert: %q", data.CACert)
+	}
+
+	// the provider section's maxTokens when spec.maxTokens is empty; spec.maxTokens first
+	for _, c := range []struct {
+		spec v1alpha1.ModelConfigSpec
+		want interface{}
+	}{
+		{v1alpha1.ModelConfigSpec{Model: "m", OpenAI: &v1alpha1.OpenAIConfig{MaxTokens: n(900)}}, int64(900)},
+		{v1alpha1.ModelConfigSpec{Provider: "anthropic", Model: "m", Anthropic: &v1alpha1.AnthropicConfig{MaxTokens: n(700)}}, int64(700)},
+		{v1alpha1.ModelConfigSpec{Model: "m", MaxTokens: n(32000), OpenAI: &v1alpha1.OpenAIConfig{MaxTokens: n(900)}}, int64(32000)},
+		// another provider's section is not this provider's
+		{v1alpha1.ModelConfigSpec{Provider: "anthropic", Model: "m", OpenAI: &v1alpha1.OpenAIConfig{MaxTokens: n(900)}}, nil},
+	} {
+		data, err := parse(c.spec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := interface{}(nil)
+		if data.Options != nil {
+			got = data.Options["max_tokens"]
+		}
+		if got != c.want {
+			t.Fatalf("%+v: max_tokens %v, want %v", c.spec, got, c.want)
+		}
+	}
+
+	// nothing set: no options at all (the row's options stay NULL)
+	if data, _ := parse(v1alpha1.ModelConfigSpec{Model: "m"}); data.Options != nil {
+		t.Fatalf("options without limits: %v", data.Options)
+	}
+
+	// out of range (a resource stored before the schema had the bounds): refused with the field's name
+	for _, spec := range []v1alpha1.ModelConfigSpec{
+		{Model: "m", MaxTokens: n(0)}, {Model: "m", MaxTokens: n(1_000_001)},
+		{Model: "m", ToolResultChars: n(999)}, {Model: "m", ToolResultChars: n(200_001)},
+	} {
+		if _, err := parse(spec); err == nil {
+			t.Fatalf("%+v must be refused", spec)
+		}
+	}
+}

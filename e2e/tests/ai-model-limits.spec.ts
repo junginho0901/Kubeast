@@ -186,8 +186,36 @@ test.describe('AI model limits', () => {
     expect(plain.result.tool_results).toEqual([6000 + CUT.length])
   })
 
+  test('a ModelConfig resource carries the two limits and its CA certificate to the config', async ({ request }) => {
+    const name = `e2e-limits-cr-${id}`
+    const pem = '-----BEGIN CERTIFICATE-----\nMIIBe2e\n-----END CERTIFICATE-----'
+    const resource = (spec: Record<string, unknown>) => JSON.stringify({
+      apiVersion: 'ai.kubeast.io/v1alpha1', kind: 'ModelConfig', metadata: { name, namespace: 'kubeast' },
+      spec: { provider: 'ollama', model: 'stub-small', baseURL: `${STUB}/ok`, enabled: false, ...spec },
+    })
+    const apply = (spec: Record<string, unknown>) => {
+      const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-limits-cr-')), 'mc.json')
+      fs.writeFileSync(file, resource(spec))
+      return kubectl!('apply', '-f', file)
+    }
+    try {
+      // out of the schema's range: the API server refuses it, nothing is stored
+      expect(() => apply({ toolResultChars: 500 })).toThrow(/toolResultChars/)
+      apply({ maxTokens: 2048, toolResultChars: 4000, caCert: pem, ollama: { options: { num_ctx: '8192' } } })
+      await expect.poll(async () => {
+        const c = (await list(request)).find((x) => x.name === name) as (Config & { ca_cert?: string }) | undefined
+        return c ? { options: c.options, ca_cert: c.ca_cert } : 'missing'
+      }, { timeout: 30_000 }).toEqual({ options: { num_ctx: '8192', max_tokens: 2048, tool_result_chars: 4000 }, ca_cert: pem })
+    } finally {
+      kubectl!('-n', 'kubeast', 'delete', 'modelconfig', name, '--ignore-not-found')
+    }
+    await expect.poll(async () => (await list(request)).some((x) => x.name === name), { timeout: 30_000 }).toBe(false)
+  })
+
   test('a reasoning model: the chat leaves out what it refuses, the length goes as max_completion_tokens', async ({ request }) => {
-    await economy(request, { name: `e2e-limits-reasoning-${id}`, provider: 'custom', base_url: `${STUB}/reasoning/v1` })
+    // a model name of this run's own: ai-service keeps what a model refused while it runs, so an earlier run's
+    // stub-small would skip the refusals
+    await economy(request, { name: `e2e-limits-reasoning-${id}`, provider: 'custom', model: `reasoning-${id}`, base_url: `${STUB}/reasoning/v1` })
     stub('DELETE')
     expect(await floating(request)).toContain('"content": "ok"')
     const calls = stub('GET').filter((c) => c.case === 'reasoning')
@@ -201,11 +229,11 @@ test.describe('AI model limits', () => {
       .toEqual([[null, 4096, false]])
 
     // the connection test: Azure sends max_completion_tokens from the start, an OpenAI-compatible one after the refusal
-    // (another model name: what stub-small refused is remembered for it)
+    // (another model name: what the chat's model refused is remembered for it)
     stub('DELETE')
     for (const data of [
-      { provider: 'azure', model: 'stub-small', base_url: `${STUB}/reasoning/openai/v1`, api_key: 'e2e-azure-key' },
-      { provider: 'custom', model: 'stub-large', base_url: `${STUB}/reasoning/v1`, api_key: 'e2e-key' },
+      { provider: 'azure', model: `reasoning-${id}-azure`, base_url: `${STUB}/reasoning/openai/v1`, api_key: 'e2e-azure-key' },
+      { provider: 'custom', model: `reasoning-${id}-test`, base_url: `${STUB}/reasoning/v1`, api_key: 'e2e-key' },
     ]) {
       const res = await request.post('/api/v1/ai/model-configs/test', { headers: admin, data, timeout: 120_000 })
       expect(await res.json(), data.provider).toMatchObject({ success: true, message: 'Connection successful' })
