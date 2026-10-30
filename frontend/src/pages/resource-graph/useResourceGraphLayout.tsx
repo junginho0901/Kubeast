@@ -39,6 +39,7 @@ export function count(n: number): string {
 function peerKindText(e: TrafficEnd): string {
   if (e.name) return e.kind || i18next.t('resourceGraph.traffic.peerPodOrWorkload', 'Pod or workload')
   if (e.namespace) return 'Namespace'
+  if (e.unnamed) return i18next.t('resourceGraph.traffic.peerUnnamed', 'Peer the metric did not name')
   return i18next.t('resourceGraph.traffic.peerOutside', 'Outside the pods')
 }
 
@@ -179,10 +180,10 @@ export function useResourceGraphLayout({
       data: {
         label: withRows(
           <div className="flex items-center gap-1.5 px-2 py-1 min-w-0" data-testid="traffic-peer">
-            <span className="text-base shrink-0">{p.end.name ? kindIcon[p.end.kind ?? ''] || '📄' : p.end.namespace ? '🗂' : '🌐'}</span>
+            <span className="text-base shrink-0">{p.end.name ? kindIcon[p.end.kind ?? ''] || '📄' : p.end.namespace ? '🗂' : p.end.unnamed ? '❔' : '🌐'}</span>
             <div className="min-w-0 flex-1">
               <div className="text-[10px] text-slate-400 leading-tight">{peerKindText(p.end)}</div>
-              <div className="text-xs font-medium text-ink truncate leading-tight" title={p.name}>{p.name}</div>
+              <div className="text-xs font-medium text-ink truncate leading-tight" title={p.name}>{p.end.unnamed ? i18next.t('resourceGraph.traffic.unnamed', 'not named') : p.name}</div>
               {p.end.name && p.namespace && <div className="text-[10px] text-slate-400 leading-tight truncate">{p.namespace}</div>}
             </div>
           </div>,

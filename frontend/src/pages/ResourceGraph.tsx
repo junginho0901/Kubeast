@@ -631,6 +631,7 @@ function TrafficStatus({ error, result, selfLoops }: { error?: string; result?: 
     })
     if (result.truncated) lines.push({ key: 'truncated', text: t('resourceGraph.traffic.truncated', 'Only the latest flows the Relay returned: older traffic is not drawn.'), warn: true })
     if (result.lines_truncated) lines.push({ key: 'lines', text: t('resourceGraph.traffic.linesTruncated', 'Only the busiest 300 lines are drawn.'), warn: true })
+    if ((result.unplaced_drops ?? 0) > 0) lines.push({ key: 'unplaced', text: t('resourceGraph.traffic.unplacedDrops', { defaultValue: '{{n}} drops in the cluster (last {{w}}) name no pod at either end, so they are in no line.', n: result.unplaced_drops, count: result.unplaced_drops, w: result.range }), warn: true })
     for (const n of result.notes ?? []) lines.push({ key: n, text: t(`resourceGraph.traffic.note.${n}`, noteText[n] ?? n), warn: n !== 'counted_at_both_ends' })
     if ((result.lost_events ?? 0) > 0) lines.push({ key: 'lost', text: t('netflows.lost', { defaultValue: 'Hubble reported {{n}} lost events: some flows may be missing.', n: result.lost_events, count: result.lost_events }), warn: true })
     if (result.redacted) lines.push({ key: 'redacted', text: t('resourceGraph.traffic.redacted', 'Peers outside your namespaces show their namespace only.') })
@@ -649,4 +650,5 @@ const noteText: Record<string, string> = {
   no_drop_metric: "The cluster's Hubble drop metric is missing or has no workload labels: drops are not drawn.",
   counted_at_both_ends: 'The metric has no traffic_direction label: a connection seen at both ends counts twice.',
   pods_only_no_outside: "The metric names pods only and cannot tell a Service's address from one outside the pods: connections leaving towards an unnamed address are not drawn.",
+  drop_peer_unnamed: 'The drop metric names one side of a drop only — the pod on the node that saw it (Retina without remote context) — so the other side is shown as not named, not as outside the pods.',
 }

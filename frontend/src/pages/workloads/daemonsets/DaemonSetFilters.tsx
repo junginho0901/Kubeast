@@ -65,7 +65,7 @@ export function DaemonSetFilters({
           onClick={() => setIsNamespaceDropdownOpen((value) => !value)}
           className="h-12 w-full px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent flex items-center justify-between gap-2"
         >
-          <span className="text-sm font-medium">
+          <span className="text-sm font-medium truncate min-w-0">
             {selectedNamespace === 'all' ? allNamespacesLabel : selectedNamespace}
           </span>
           <ChevronDown

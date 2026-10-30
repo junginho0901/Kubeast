@@ -61,7 +61,10 @@ async function box(l: Locator) {
 // links use it); both of these always exist on the dev cluster.
 async function openGraph(page: Page) {
   await page.goto('/cluster/resource-graph?cluster=self&namespace=kube-system,kubeast')
-  await expect(page.getByRole('button', { name: 'kube-system, kubeast' })).toBeVisible({ timeout: 15000 })
+  // the picker keeps its width: the first namespace and a count, every one in its title
+  const picker = page.getByTestId('resource-graph-namespaces')
+  await expect(picker).toHaveText(/kube-system \+1|kube-system 외 1개/, { timeout: 15000 })
+  await expect(picker).toHaveAttribute('title', 'kube-system, kubeast')
   await expect(page.locator(NODES).first()).toBeVisible({ timeout: 30000 })
 }
 

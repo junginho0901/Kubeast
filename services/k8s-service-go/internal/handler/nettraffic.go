@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 
@@ -135,7 +136,19 @@ func (h *Handler) networkTrafficMetrics(w http.ResponseWriter, r *http.Request, 
 	if l := h.flowsLookup(); l != nil && (tcp.NoWorkload || drop.NoWorkload) {
 		owners = podOwners(ctx, l)
 	}
-	response.JSON(w, http.StatusOK, nettraffic.FromMetrics(tcp, tcpOK, rows[nettraffic.TCPMetric], drop, dropOK, rows[netdrops.Metric], namespaces, scope, rng, owners))
+	res := nettraffic.FromMetrics(tcp, tcpOK, rows[nettraffic.TCPMetric], drop, dropOK, rows[netdrops.Metric], namespaces, scope, rng, owners)
+	// a metric that names pods only (Retina) may name neither end of a drop: those are in no line, so count them
+	if dropOK && drop.NoWorkload {
+		answer, err := src.PrometheusQuery(ctx, nettraffic.UnplacedDropsQuery(netdrops.Metric, rng))
+		if err != nil {
+			h.handleError(w, err)
+			return
+		}
+		if len(answer) > 0 {
+			res.UnplacedDrops = int64(math.Round(answer[0].Value))
+		}
+	}
+	response.JSON(w, http.StatusOK, res)
 }
 
 // podOwners names a pod's workload through the lookup, one namespace list at most each (netflows.MaxLookupNamespaces).

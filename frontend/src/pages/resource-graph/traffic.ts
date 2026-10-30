@@ -64,6 +64,10 @@ export function anchorOf(e: TrafficEnd, shown: Map<string, ResourceGraphNode>, i
     const id = `traffic:ns:${e.namespace}`
     return { id, peer: { id, kind: PEER_KIND, name: e.namespace, namespace: e.namespace, status: '', end: e } }
   }
+  if (e.unnamed) {
+    const id = 'traffic:unnamed'
+    return { id, peer: { id, kind: PEER_KIND, name: 'not named', namespace: '', status: '', end: e } }
+  }
   const outside = e.outside || 'unknown'
   const id = `traffic:out:${outside}`
   return { id, peer: { id, kind: PEER_KIND, name: outside, namespace: '', status: '', end: e } }
@@ -103,9 +107,11 @@ export function buildTraffic(lines: TrafficLine[], shown: Map<string, ResourceGr
   return { peers: [...peers.values()], edges, selfLoops }
 }
 
-// endText names an end in one line: namespace/name for a pod or workload, the namespace alone, or what is outside.
+// endText names an end in one line: namespace/name for a pod or workload, the namespace alone, what is outside,
+// or "not named" for a peer the metric left unnamed.
 export function endText(e: TrafficEnd): string {
   if (e.namespace && e.name) return `${e.namespace}/${e.name}`
+  if (e.unnamed) return 'not named'
   return e.namespace || e.outside || 'unknown'
 }
 

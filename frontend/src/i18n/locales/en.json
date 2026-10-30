@@ -3072,6 +3072,7 @@
     }
   },
   "resourceGraph": {
+    "namespacesChosen": "{{first}} +{{more}}",
     "title": "Resource Graph",
     "allNamespaces": "All namespaces",
     "search": "Search resources...",
@@ -3100,6 +3101,9 @@
       "peerGroup": "outside this view",
       "peerPodOrWorkload": "Pod or workload",
       "peerOutside": "Outside the pods",
+      "unplacedDrops": "{{n}} drops in the cluster (last {{w}}) name no pod at either end, so they are in no line.",
+      "peerUnnamed": "Peer the metric did not name",
+      "unnamed": "not named",
       "viewLabel": "What the lines show",
       "view": {
         "structure": "Structure",
@@ -3152,7 +3156,8 @@
         "no_tcp_metric": "The cluster's Hubble TCP metric is missing or has no workload labels: only drops are drawn.",
         "no_drop_metric": "The cluster's Hubble drop metric is missing or has no workload labels: drops are not drawn.",
         "counted_at_both_ends": "The metric has no traffic_direction label: a connection seen at both ends counts twice.",
-        "pods_only_no_outside": "The metric names pods only and cannot tell a Service's address from one outside the pods: connections leaving towards an unnamed address are not drawn."
+        "pods_only_no_outside": "The metric names pods only and cannot tell a Service's address from one outside the pods: connections leaving towards an unnamed address are not drawn.",
+        "drop_peer_unnamed": "The drop metric names one side of a drop only — the pod on the node that saw it (Retina without remote context) — so the other side is shown as not named, not as outside the pods."
       },
       "redacted": "Peers outside your namespaces show their namespace only.",
       "selfLoops": "{{n}} lines inside one workload are not drawn.",
