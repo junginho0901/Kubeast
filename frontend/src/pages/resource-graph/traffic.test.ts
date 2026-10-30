@@ -202,3 +202,16 @@ describe('byPort', () => {
     expect(rowCenter(1)).toBe(90)
   })
 })
+
+describe('a peer the metric did not name', () => {
+  it('gets its own stand-in, not the outside one, and no NetworkPolicy check', () => {
+    const shown = new Map<string, ResourceGraphNode>()
+    const unnamed = anchorOf({ unnamed: true }, shown)
+    const outside = anchorOf({ outside: 'unknown' }, shown)
+    expect(unnamed.id).toBe('traffic:unnamed')
+    expect(unnamed.id).not.toBe(outside.id)
+    expect(endText({ unnamed: true })).toBe('not named')
+    const line = { from: { unnamed: true }, to: { namespace: 'shop', kind: 'Deployment', name: 'web' }, allowed: 0, dropped: 3 }
+    expect(checkFor(line as TrafficLine)).toBeNull()
+  })
+})

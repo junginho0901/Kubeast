@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -310,4 +311,42 @@ func TestNetworkTrafficMetricsNotAvailable(t *testing.T) {
 	if w, _ := getTraffic(&Handler{netdropsSrc: failing}, "/api/v1/networktraffic?namespaces=flows-demo&source=metrics", flowReader); w.Code < 500 {
 		t.Fatalf("query error: %d", w.Code)
 	}
+}
+
+// Retina's metrics name pods only: a drop naming neither end is in no line, so the answer counts them; the
+// one naming the destination only is drawn from a peer not named.
+func TestNetworkTrafficMetricsRetinaDrops(t *testing.T) {
+	src := &retinaDropsTraffic{}
+	h := &Handler{netdropsSrc: src}
+	w, res := getTraffic(h, "/api/v1/networktraffic?namespaces=flows-demo&source=metrics&range=1h", flowReader)
+	if w.Code != http.StatusOK || res.UnplacedDrops != 26737 || !slices.Contains(res.Notes, nettraffic.NoteDropPeerUnnamed) {
+		t.Fatalf("status %d %s", w.Code, w.Body)
+	}
+	if len(res.Lines) != 1 || !res.Lines[0].From.Unnamed || res.Lines[0].To.Name != "web-1" || res.Lines[0].Dropped != 4 {
+		t.Fatalf("lines %+v", res.Lines)
+	}
+	if !strings.Contains(src.queries[len(src.queries)-1], `source_namespace=""`) {
+		t.Fatalf("queries %v", src.queries)
+	}
+}
+
+// retinaDropsTraffic answers like the Retina kind cluster's Prometheus: drops named on the destination only, and
+// drops naming no pod.
+type retinaDropsTraffic struct{ fakeTraffic }
+
+func (f *retinaDropsTraffic) PrometheusAvailable(context.Context) bool { return true }
+
+func (f *retinaDropsTraffic) PrometheusLabels(_ context.Context, _, selector string, _ time.Duration, _ int) ([]string, error) {
+	if selector == netdrops.Metric {
+		return []string{"__name__", "destination_namespace", "destination_pod", "reason", "traffic_direction"}, nil
+	}
+	return nil, nil
+}
+
+func (f *retinaDropsTraffic) PrometheusQuery(_ context.Context, q string) ([]k8s.PrometheusQueryResult, error) {
+	f.queries = append(f.queries, q)
+	if strings.Contains(q, `source_namespace=""`) {
+		return []k8s.PrometheusQueryResult{{Metric: map[string]interface{}{}, Value: 26736.9}}, nil
+	}
+	return []k8s.PrometheusQueryResult{{Metric: map[string]interface{}{"destination_namespace": "flows-demo", "destination_pod": "web-1", "reason": "POLICY_DENIED", "traffic_direction": "ingress"}, Value: 4}}, nil
 }

@@ -33,6 +33,9 @@ const (
 	// NotePodsOnlyNoOutside: metrics that name pods only (Retina) leave the destination of a connection to a
 	// Service unnamed where it leaves the client, as for one leaving the pods; those are not drawn.
 	NotePodsOnlyNoOutside = "pods_only_no_outside"
+	// NoteDropPeerUnnamed: the drop metric names pods only and one side of a drop — the pod on the node that saw
+	// it — so the other side is drawn as a peer not named (End.Unnamed), not outside the pods.
+	NoteDropPeerUnnamed = "drop_peer_unnamed"
 )
 
 // Caps of an answer.
@@ -79,9 +82,18 @@ type End struct {
 	// Outside: world, host, kube-apiserver, remote-node, ingress, health…, the DNS name of a world
 	// address, or unknown when the source did not say.
 	Outside string `json:"outside,omitempty"`
+	// Unnamed: a metric that names pods only left this end empty — Retina without remote context labels only
+	// the pod on the node that saw the packet (its docs' "local context") — so it is a peer not named, not an
+	// end outside the pods.
+	Unnamed bool `json:"unnamed,omitempty"`
 }
 
-func (e End) key() string { return e.Namespace + "/" + e.Kind + "/" + e.Name + "/" + e.Outside }
+func (e End) key() string {
+	if e.Unnamed {
+		return "//unnamed"
+	}
+	return e.Namespace + "/" + e.Kind + "/" + e.Name + "/" + e.Outside
+}
 
 // Port is a destination port of a line.
 type Port struct {
@@ -136,6 +148,9 @@ type Result struct {
 	Relay     string   `json:"relay,omitempty"`
 	// Provider is what served the recent flows: hubble or calico.
 	Provider string `json:"provider,omitempty"`
+	// UnplacedDrops: drops in the range of a metric that names pods only with no pod at either end (Retina's
+	// drops it could not attribute), counted across the cluster since no namespace holds them.
+	UnplacedDrops int64 `json:"unplaced_drops,omitempty"`
 }
 
 // reserved names Cilium's reserved identities (pkg/identity/numericidentity.go), stable numbers.
@@ -323,7 +338,9 @@ func DetectShape(labels []string) (Shape, bool) {
 	}
 	s, ok := netdrops.DetectShape(labels)
 	noWorkload := false
-	if !ok && has["source_namespace"] && has["destination_namespace"] && has["source_pod"] && has["destination_pod"] {
+	// pods only (Retina): both sides, or one when every series so far was seen on one side (local context labels
+	// the destination of incoming traffic and the source of outgoing)
+	if !ok && (has["source_namespace"] && has["source_pod"] || has["destination_namespace"] && has["destination_pod"]) {
 		s, ok, noWorkload = netdrops.Shape{Style: netdrops.StyleLabels, Pod: true}, true, true
 	}
 	if !ok {
@@ -374,6 +391,12 @@ func Query(metric string, shape Shape, namespaces []string, rng time.Duration) s
 		return fmt.Sprintf("sum by (%s) (increase(%s{%s}[%ds]))", strings.Join(by, ", "), metric, strings.Join(append(append([]string{}, sel...), m), ", "), int(rng.Seconds()))
 	}
 	return half(src) + " or " + half(dst)
+}
+
+// UnplacedDropsQuery counts the range's drops of a metric that names pods only whose series name no namespace at
+// either end: they belong to no line of any namespace, so the screen says how many there are.
+func UnplacedDropsQuery(metric string, rng time.Duration) string {
+	return fmt.Sprintf(`sum(increase(%s{source_namespace="", destination_namespace=""}[%ds]))`, metric, int(rng.Seconds()))
 }
 
 // metricEnd is an end as a metric names it.
@@ -492,14 +515,27 @@ func FromMetrics(tcp Shape, tcpOK bool, tcpRows []Sample, drop Shape, dropOK boo
 			l.Allowed = bySide["ingress"]
 		}
 	}
+	peerUnnamed := false
 	for _, s := range dropRows {
 		n := int64(math.Round(s.Value))
 		if n <= 0 {
 			continue
 		}
-		l := get(metricEnd(drop, "source", s.Labels), metricEnd(drop, "destination", s.Labels))
+		from, to := metricEnd(drop, "source", s.Labels), metricEnd(drop, "destination", s.Labels)
+		if drop.NoWorkload {
+			for _, e := range []*End{&from, &to} {
+				if e.Outside != "" {
+					*e = End{Unnamed: true}
+					peerUnnamed = true
+				}
+			}
+		}
+		l := get(from, to)
 		l.Dropped += n
 		l.reasons[s.Labels["reason"]] += n
+	}
+	if peerUnnamed {
+		out.Notes = append(out.Notes, NoteDropPeerUnnamed)
 	}
 	all := make([]*line, 0, len(lines))
 	for _, l := range lines {

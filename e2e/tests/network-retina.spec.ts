@@ -28,11 +28,11 @@ function retinaKubectl(): ((args: string) => string) | null {
   }
 }
 
-type End = { namespace?: string; kind?: string; name?: string; outside?: string }
+type End = { namespace?: string; kind?: string; name?: string; outside?: string; unnamed?: boolean }
 type Line = { from: End; to: End; allowed: number; dropped: number; ports?: { protocol?: string; port?: number }[] }
 type FlowEnd = { namespace?: string; pod?: string; workload?: { kind: string; name: string }; ip?: string; service?: string; service_address?: boolean }
 type Group = { source: FlowEnd; destination: FlowEnd; count: number }
-const endText = (e: End) => (e.namespace && e.name ? `${e.namespace}/${e.name}` : e.namespace || e.outside || 'unknown')
+const endText = (e: End) => (e.namespace && e.name ? `${e.namespace}/${e.name}` : e.unnamed ? 'not named' : e.namespace || e.outside || 'unknown')
 const key = (l: Line) => `${endText(l.from)} → ${endText(l.to)}`
 
 test.describe('Recent flows and traffic lines from Retina', () => {
@@ -113,7 +113,21 @@ test.describe('Recent flows and traffic lines from Retina', () => {
     const syn = promDirect(`sum(increase(hubble_tcp_flags_total{flag="SYN",source_namespace="${NS}",source_pod=~"client-.+",destination_pod=~"web-.+",traffic_direction="ingress"}[3600s]))`)
     const opened = Math.round(Number(syn[0].value[1]))
     expect(Math.abs(line!.allowed - opened), `Kubeast ${line!.allowed}, Prometheus ${opened}`).toBeLessThanOrEqual(Math.max(20, opened / 10))
-    expect([...byKey.values()].filter((l) => l.to.outside)).toEqual([])
+    // Retina without remote context names one side of a packet — the pod on the node that saw it (its docs'
+    // "local context") — so no end is outside the pods: a drop's other side is a peer not named
+    const lines = body.lines as Line[]
+    expect(lines.filter((l) => l.from.outside || l.to.outside), [...byKey.keys()].join('; ')).toEqual([])
+    const total = (expr: string) => Math.round(promDirect(expr).reduce((n, s) => n + Number(s.value[1]), 0))
+    const drops = total(`sum(increase(hubble_drop_total{destination_namespace="${NS}"}[3600s])) or sum(increase(hubble_drop_total{source_namespace="${NS}"}[3600s]))`)
+    if (drops > 0) expect(body.notes, 'a drop metric with series is not reported missing').not.toContain('no_drop_metric')
+    // the drops Retina named on one side only, as Prometheus counts them, are Kubeast's lines to or from a peer not named
+    const unnamedIn = total(`sum(increase(hubble_drop_total{destination_namespace="${NS}",source_pod=""}[3600s]))`)
+    const unnamedOut = total(`sum(increase(hubble_drop_total{source_namespace="${NS}",destination_pod=""}[3600s]))`)
+    const shownIn = lines.filter((l) => l.from.unnamed && l.to.namespace === NS).reduce((n, l) => n + l.dropped, 0)
+    const shownOut = lines.filter((l) => l.to.unnamed && l.from.namespace === NS).reduce((n, l) => n + l.dropped, 0)
+    expect(Math.abs(shownIn - unnamedIn), `into ${NS}: Kubeast ${shownIn}, Prometheus ${unnamedIn}`).toBeLessThanOrEqual(Math.max(2, unnamedIn / 10))
+    expect(Math.abs(shownOut - unnamedOut), `out of ${NS}: Kubeast ${shownOut}, Prometheus ${unnamedOut}`).toBeLessThanOrEqual(Math.max(2, unnamedOut / 10))
+    if (lines.some((l) => l.from.unnamed || l.to.unnamed)) expect(body.notes).toContain('drop_peer_unnamed')
   })
 
   test('the graph draws the line between the Deployments', async ({ page }) => {

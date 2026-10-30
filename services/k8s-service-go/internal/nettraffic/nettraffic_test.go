@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -263,8 +264,18 @@ func TestDetectShape(t *testing.T) {
 	if !ok || s.Style != netdrops.StyleLabels || !s.Pod || !s.NoWorkload || s.Kind || !s.Direction {
 		t.Fatalf("%+v %v", s, ok)
 	}
-	if _, ok := DetectShape([]string{"source_namespace", "destination_namespace", "source_pod", "traffic_direction"}); ok {
-		t.Fatal("a destination named by namespace only names no line")
+	// Retina's local context: the source of outgoing traffic, the destination of incoming — a metric seen on one
+	// side so far has that side's labels only, and is still a metric of pods
+	for _, labels := range [][]string{
+		{"source_namespace", "destination_namespace", "source_pod", "traffic_direction"},
+		{"destination_namespace", "destination_pod", "traffic_direction", "reason"},
+	} {
+		if s, ok := DetectShape(labels); !ok || !s.NoWorkload || !s.Pod {
+			t.Fatalf("%v: %+v %v", labels, s, ok)
+		}
+	}
+	if _, ok := DetectShape([]string{"source_namespace", "destination_namespace", "traffic_direction"}); ok {
+		t.Fatal("namespaces only name no line")
 	}
 }
 
@@ -433,13 +444,13 @@ func TestFromMetrics(t *testing.T) {
 		t.Fatalf("result %+v", got)
 	}
 	want := []Line{
-		{From: End{"shop", "Deployment", "client", ""}, To: End{"shop", "Deployment", "web", ""}, Allowed: 12},
-		{From: End{"shop", "Deployment", "stranger", ""}, To: End{"shop", "Deployment", "web", ""}, Dropped: 6,
+		{From: End{Namespace: "shop", Kind: "Deployment", Name: "client"}, To: End{Namespace: "shop", Kind: "Deployment", Name: "web"}, Allowed: 12},
+		{From: End{Namespace: "shop", Kind: "Deployment", Name: "stranger"}, To: End{Namespace: "shop", Kind: "Deployment", Name: "web"}, Dropped: 6,
 			Reasons: []netdrops.Reason{{Reason: "POLICY_DENIED", Count: 5}, {Reason: "CT_MAP_INSERTION_FAILED", Count: 1}}},
 		// ops is outside the reader's namespaces: its namespace only
-		{From: End{"shop", "Deployment", "client", ""}, To: End{Namespace: "ops"}, Allowed: 4},
-		{From: End{Outside: "unknown"}, To: End{"shop", "Deployment", "web", ""}, Allowed: 3},
-		{From: End{"shop", "Deployment", "web", ""}, To: End{Outside: "unknown"}, Allowed: 2},
+		{From: End{Namespace: "shop", Kind: "Deployment", Name: "client"}, To: End{Namespace: "ops"}, Allowed: 4},
+		{From: End{Outside: "unknown"}, To: End{Namespace: "shop", Kind: "Deployment", Name: "web"}, Allowed: 3},
+		{From: End{Namespace: "shop", Kind: "Deployment", Name: "web"}, To: End{Outside: "unknown"}, Allowed: 2},
 	}
 	if !reflect.DeepEqual(got.Lines, want) {
 		t.Fatalf("lines\n%+v\nwant\n%+v", got.Lines, want)
@@ -464,5 +475,70 @@ func TestFromMetrics(t *testing.T) {
 		{From: End{Namespace: "shop", Name: "client-1"}, To: End{Outside: "unknown"}, Allowed: 1},
 	}) {
 		t.Fatalf("pod style %+v", got.Lines)
+	}
+}
+
+// Retina without remote context names one side of a drop — the pod on the node that saw it — so the other side
+// is a peer not named, said so, not an end outside the pods; Cilium's empty ends (world, host) stay outside.
+func TestFromMetricsDropPeerUnnamed(t *testing.T) {
+	drop, ok := DetectShape([]string{"destination_namespace", "destination_pod", "traffic_direction", "reason"})
+	if !ok {
+		t.Fatal("one-sided drop metric not taken")
+	}
+	rows := []Sample{
+		{Labels: map[string]string{"destination_namespace": "shop", "destination_pod": "web-1", "reason": "POLICY_DENIED", "traffic_direction": "ingress"}, Value: 3},
+		{Labels: map[string]string{"source_namespace": "shop", "source_pod": "client-1", "reason": "POLICY_DENIED", "traffic_direction": "egress"}, Value: 2},
+		// neither side: dropped, from and to a peer not named
+		{Labels: map[string]string{"reason": "DROP_REASON_UNKNOWN", "traffic_direction": "ingress"}, Value: 1},
+	}
+	owners := func(ns, pod string) *netflows.Workload {
+		return &netflows.Workload{Kind: "Deployment", Name: strings.TrimSuffix(pod, "-1")}
+	}
+	got := FromMetrics(Shape{}, false, nil, drop, true, rows, []string{"shop"}, nil, time.Hour, owners)
+	if !slices.Contains(got.Notes, NoteDropPeerUnnamed) {
+		t.Fatalf("notes %v", got.Notes)
+	}
+	byKey := map[string]Line{}
+	for _, l := range got.Lines {
+		if l.From.Outside != "" || l.To.Outside != "" {
+			t.Fatalf("a drop Retina half-named is drawn outside the pods: %+v", l)
+		}
+		byKey[l.From.key()+"→"+l.To.key()] = l
+	}
+	web := End{Namespace: "shop", Kind: "Deployment", Name: "web"}
+	client := End{Namespace: "shop", Kind: "Deployment", Name: "client"}
+	unnamed := End{Unnamed: true}
+	if byKey[unnamed.key()+"→"+web.key()].Dropped != 3 || byKey[client.key()+"→"+unnamed.key()].Dropped != 2 || byKey[unnamed.key()+"→"+unnamed.key()].Dropped != 1 {
+		t.Fatalf("lines %+v", got.Lines)
+	}
+
+	// Cilium's metrics name workloads: an empty end is world or host, outside the pods, as before
+	cilium, _ := DetectShape(labelsShape)
+	got = FromMetrics(Shape{}, false, nil, cilium, true, []Sample{{Labels: map[string]string{"destination_namespace": "shop", "destination_workload": "web", "destination_workload_kind": "Deployment", "reason": "POLICY_DENIED"}, Value: 4}}, []string{"shop"}, nil, time.Hour, nil)
+	if len(got.Lines) != 1 || got.Lines[0].From.Outside != "unknown" || got.Lines[0].From.Unnamed || slices.Contains(got.Notes, NoteDropPeerUnnamed) {
+		t.Fatalf("cilium %+v %v", got.Lines, got.Notes)
+	}
+}
+
+// The drops naming no pod at either end: one sum over the range, the matchers on both namespaces empty.
+func TestUnplacedDropsQuery(t *testing.T) {
+	e, err := parser.NewParser(parser.Options{}).ParseExpr(UnplacedDropsQuery(netdrops.Metric, time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	agg, ok := e.(*parser.AggregateExpr)
+	if !ok || agg.Op != parser.SUM || len(agg.Grouping) != 0 {
+		t.Fatalf("not one sum: %s", e)
+	}
+	sel := agg.Expr.(*parser.Call).Args[0].(*parser.MatrixSelector)
+	vs := sel.VectorSelector.(*parser.VectorSelector)
+	empty := 0
+	for _, m := range vs.LabelMatchers {
+		if (m.Name == "source_namespace" || m.Name == "destination_namespace") && m.Type == labels.MatchEqual && m.Value == "" {
+			empty++
+		}
+	}
+	if vs.Name != netdrops.Metric || empty != 2 || sel.Range != time.Hour {
+		t.Fatalf("query %s", e)
 	}
 }

@@ -888,12 +888,14 @@ export interface NetdropResult {
 
 // GET /api/v1/cluster/networktraffic?namespaces=a,b&source=relay|metrics&since=&range= — the Resource Graph's
 // traffic lines. An end is a workload or pod (kind empty when a metric named it "namespace/name" only), a
-// namespace alone (outside a namespace-limited reader's namespaces), or outside the cluster's pods.
+// namespace alone (outside a namespace-limited reader's namespaces), outside the cluster's pods, or a peer a
+// metric that names pods only left unnamed (Retina without remote context names one side of a drop).
 export interface TrafficEnd {
   namespace?: string
   kind?: string
   name?: string
   outside?: string
+  unnamed?: boolean
 }
 
 // allowed/dropped: flows (relay — both ways, at each end seen) or TCP connections opened / packets dropped (metrics).
@@ -920,6 +922,8 @@ export interface TrafficResult {
   range?: string
   lines: TrafficLine[]
   lines_truncated?: boolean
+  // metrics naming pods only (Retina): drops in the range naming no pod at either end, cluster-wide
+  unplaced_drops?: number
   flows?: number
   truncated?: boolean
   lost_events?: number
