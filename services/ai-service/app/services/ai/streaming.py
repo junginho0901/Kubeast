@@ -63,9 +63,12 @@ def model_error(service, err: Exception) -> dict:
     """The chat's error event for a failed model call: one wording on every provider, naming the one in use, with
     the kind of refusal (credit, rate, auth, unavailable) as its catalog key and values next to the English text so
     the screen shows it in its language."""
-    from app.services.ai.model_errors import classify
+    from app.services.ai.model_errors import classify, provider_code
     provider = (getattr(service, "provider", None) or "").strip().lower()
     label, detail = PROVIDER_LABELS.get(provider, provider or "unknown"), safe_error(err)
+    code = provider_code(err)
+    if code and code.lower() not in detail.lower():
+        detail = f"{detail} ({code})"  # the provider's code stays in its words whatever the SDK writes
     refusal = classify(err)
     args = {"provider": label, "detail": detail}
     text = f"AI model call failed ({label}): {detail}"
