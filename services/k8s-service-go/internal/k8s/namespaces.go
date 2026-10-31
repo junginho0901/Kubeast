@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	resourcehelper "k8s.io/component-helpers/resource"
 )
 
 // GetNamespaces returns all namespaces.
@@ -48,10 +49,11 @@ func (s *Service) GetNamespaces(ctx context.Context) ([]map[string]interface{}, 
 }
 
 // namespacePodSummary is what the Namespace drawer shows of its pods without listing them: how many, how many per
-// phase, and the containers' cpu and memory requests and limits summed (init containers left out, as the drawer
-// summed them).
+// phase, and the cpu and memory requests and limits of the pods still running or waiting (Summed of them), summed
+// as the namespace's ResourceQuota counts them in its used.
 type namespacePodSummary struct {
 	Total          int            `json:"total"`
+	Summed         int            `json:"summed_pods"`
 	Phases         map[string]int `json:"phases"`
 	CPURequestsM   int64          `json:"cpu_requests_millicores"`
 	CPULimitsM     int64          `json:"cpu_limits_millicores"`
@@ -69,12 +71,19 @@ func (n *namespacePodSummary) add(p *corev1.Pod) {
 		phase = "Unknown"
 	}
 	n.Phases[phase]++
-	for _, c := range p.Spec.Containers {
-		n.CPURequestsM += c.Resources.Requests.Cpu().MilliValue()
-		n.CPULimitsM += c.Resources.Limits.Cpu().MilliValue()
-		n.MemoryRequests += c.Resources.Requests.Memory().Value()
-		n.MemoryLimits += c.Resources.Limits.Memory().Value()
+	// A finished pod holds nothing: as the quota's used and kubectl describe node count, only pods not Succeeded or
+	// Failed are summed, each with Kubernetes' own effective requests and limits (init and sidecar containers, pod
+	// overhead and pod-level resources included).
+	if p.Status.Phase == corev1.PodSucceeded || p.Status.Phase == corev1.PodFailed {
+		return
 	}
+	n.Summed++
+	req := resourcehelper.PodRequests(p, resourcehelper.PodResourcesOptions{})
+	lim := resourcehelper.PodLimits(p, resourcehelper.PodResourcesOptions{})
+	n.CPURequestsM += req.Cpu().MilliValue()
+	n.CPULimitsM += lim.Cpu().MilliValue()
+	n.MemoryRequests += req.Memory().Value()
+	n.MemoryLimits += lim.Memory().Value()
 }
 
 // DescribeNamespace returns detailed info about a namespace.
