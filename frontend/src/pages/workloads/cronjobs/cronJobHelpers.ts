@@ -20,14 +20,16 @@ export type SortKey =
 
 export { ageSeconds as parseAgeSeconds, formatAge, formatTime as formatTimestamp } from '@/utils/time'
 
-/** The next run of a CronJob that is not suspended (D11, utils/cron). */
-export function nextRunOf(cronjob: Pick<CronJobInfo, 'schedule' | 'suspend' | 'time_zone'>): Date | null {
-  return cronjob.suspend ? null : nextCronRun(cronjob.schedule, cronjob.time_zone)
+type NextRunFields = Pick<CronJobInfo, 'schedule' | 'suspend' | 'time_zone'> & Partial<Pick<CronJobInfo, 'last_schedule_time' | 'created_at'>>
+
+/** The next run of a CronJob that is not suspended (D11, utils/cron); `@every` counts from the last schedule. */
+export function nextRunOf(cronjob: NextRunFields): Date | null {
+  return cronjob.suspend ? null : nextCronRun(cronjob.schedule, cronjob.time_zone, new Date(), cronjob.last_schedule_time ?? cronjob.created_at)
 }
 
 /** Tooltip of the next run: the UTC value and the zone the schedule is read in. */
 export function nextRunTitle(
-  cronjob: Pick<CronJobInfo, 'schedule' | 'suspend' | 'time_zone'>,
+  cronjob: NextRunFields,
   tr: (key: string, fallback: string, options?: Record<string, unknown>) => string,
 ): string | undefined {
   const next = nextRunOf(cronjob)

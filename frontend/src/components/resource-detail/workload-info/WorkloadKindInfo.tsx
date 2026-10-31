@@ -112,6 +112,8 @@ export default function WorkloadKindInfo({
                   schedule: String(describe?.schedule ?? spec.schedule ?? ''),
                   suspend: Boolean(describe?.suspend ?? spec.suspend),
                   time_zone: describe?.time_zone ? String(describe.time_zone) : null,
+                  last_schedule_time: (describe?.last_schedule_time ?? status.lastScheduleTime ?? null) as string | null,
+                  created_at: describe?.created_at ? String(describe.created_at) : null,
                 }
                 const next = nextRunOf(cronjob)
                 return next ? <span title={nextRunTitle(cronjob, tr)}>{`${fmtTs(next.toISOString())} (${humanDuration((next.getTime() - Date.now()) / 1000)})`}</span> : '-'
