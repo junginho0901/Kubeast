@@ -83,12 +83,15 @@ function qty(v: unknown): number {
   const m = /^(\d+(?:\.\d+)?)([a-zA-Z]*)$/.exec(s)
   return m && m[2] in SUFFIX ? Number(m[1]) * SUFFIX[m[2]] : NaN
 }
-// a value shown rounded (to 2 decimals, or a whole MiB) is the cluster's when it is within that rounding
-const near = (screen: unknown, cluster: unknown) => {
+// a value shown rounded is the cluster's when it is within that rounding: cores to 2 decimals ("1.23 cores"), bytes to
+// a whole MiB or 3 figures ("15.6Gi"), a count exactly
+const near = (screen: unknown, cluster: unknown, unit: 'cores' | 'bytes' | 'count') => {
   const a = qty(screen)
   const b = qty(cluster)
-  return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= Math.max(Math.abs(b) * 0.006, 2 ** 19, 0.005)
+  const tol = unit === 'cores' ? 0.005 : unit === 'bytes' ? Math.max(2 ** 19, Math.abs(b) * 0.006) : 0
+  return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= tol
 }
+const unitOf = (resource: string) => (resource === 'cpu' ? 'cores' : resource === 'pods' ? 'count' : 'bytes')
 // an age as kubectl writes it ("4m3s", "24d") in seconds; two reads a few seconds apart are the same within 15 %
 function ageSeconds(s: string): number {
   const units: Record<string, number> = { y: 31536000, d: 86400, h: 3600, m: 60, s: 1 }
@@ -175,7 +178,8 @@ function differences(d: Drawer, w: Want): string[] {
   for (const [label, value] of Object.entries(w.rows ?? {})) {
     const want = Array.isArray(value) ? value : [value]
     const got = (shown[label] ?? []).slice(0, want.length)
-    if (got.length < want.length || want.some((v, i) => !sameValue(got[i], v))) out.push(`row ${label}: drawer ${JSON.stringify(shown[label] ?? null)}, cluster ${JSON.stringify(want)}`)
+    // a row with no value shows "-" (the console's rule), not a blank
+    if (got.length < want.length || want.some((v, i) => (v === '-' ? got[i] !== '-' : !sameValue(got[i], v)))) out.push(`row ${label}: drawer ${JSON.stringify(shown[label] ?? null)}, cluster ${JSON.stringify(want)}`)
   }
   for (const [label, value] of Object.entries(w.ifShown ?? {})) {
     if (shown[label] && !sameValue(shown[label][0], value)) out.push(`row ${label}: drawer ${JSON.stringify(shown[label])}, cluster "${value}"`)
@@ -364,9 +368,9 @@ const TARGETS: Target[] = [
           const sum = table(d, 'Resource', 'Requests', 'Limits')[0]?.rows ?? []
           const cpu = sum.find((r) => r[0] === 'CPU')
           const mem = sum.find((r) => r[0] === 'Memory')
-          for (const [label, screen, cluster] of [['CPU requests', cpu?.[1], used['requests.cpu']], ['CPU limits', cpu?.[2], used['limits.cpu']],
-            ['Memory requests', mem?.[1], used['requests.memory']], ['Memory limits', mem?.[2], used['limits.memory']]]) {
-            if (!near(screen, cluster)) out.push(`Resource Summary ${label}: drawer ${screen ?? 'none'}, quota used ${cluster ?? 'none'}`)
+          for (const [label, screen, cluster, unit] of [['CPU requests', cpu?.[1], used['requests.cpu'], 'cores'], ['CPU limits', cpu?.[2], used['limits.cpu'], 'cores'],
+            ['Memory requests', mem?.[1], used['requests.memory'], 'bytes'], ['Memory limits', mem?.[2], used['limits.memory'], 'bytes']] as const) {
+            if (!near(screen, cluster, unit)) out.push(`Resource Summary ${label}: drawer ${screen ?? 'none'}, quota used ${cluster ?? 'none'}`)
           }
           const sorted = (o: Record<string, string>) => JSON.stringify(Object.entries(o).sort())
           if (sorted(d.phases) !== sorted(phases)) out.push(`phases: drawer ${JSON.stringify(d.phases)}, cluster ${JSON.stringify(phases)}`)
@@ -393,7 +397,7 @@ const TARGETS: Target[] = [
           const cap = table(d, 'Resource', 'Allocatable', 'Capacity')[0]?.rows ?? []
           for (const k of Object.keys(o.status.capacity)) {
             const row = cap.find((r) => r[0] === k)
-            if (!row || !near(row[1], o.status.allocatable[k]) || !near(row[2], o.status.capacity[k])) out.push(`${k}: drawer ${JSON.stringify(row ?? null)}, node allocatable ${o.status.allocatable[k]} capacity ${o.status.capacity[k]}`)
+            if (!row || !near(row[1], o.status.allocatable[k], unitOf(k)) || !near(row[2], o.status.capacity[k], unitOf(k))) out.push(`${k}: drawer ${JSON.stringify(row ?? null)}, node allocatable ${o.status.allocatable[k]} capacity ${o.status.capacity[k]}`)
           }
           // the pods list is paged: its total is the pods on the node, and the page shows pods that are on it
           const podTable = table(d, 'Name', 'Namespace', 'Ready', 'Status')[0]
