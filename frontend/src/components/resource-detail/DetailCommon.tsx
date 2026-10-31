@@ -48,7 +48,7 @@ export function InfoRow({ label, value, asIs }: { label: string; value: ReactNod
   return (
     <div className="grid grid-cols-1 md:grid-cols-[140px_1fr] gap-1 text-xs text-slate-200">
       <span className="text-slate-400 shrink-0">{asIs ? label : dl(label)}</span>
-      <span className="text-ink font-medium break-all">{isYesNo(value) ? dl(value) : typeof value === 'string' || typeof value === 'number' ? value : value ?? '-'}</span>
+      <span className="text-ink font-medium break-all">{isYesNo(value) ? dl(value) : typeof value === 'string' ? value.trim() || '-' : typeof value === 'number' ? value : value ?? '-'}</span>
     </div>
   )
 }

@@ -3,42 +3,12 @@ import { api } from '@/services/api'
 import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsTable, Th, NoneText, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
+import { quotaPercent } from '@/utils/resourceQuantity'
 
 interface Props {
   name: string
   namespace: string
   rawJson?: Record<string, unknown>
-}
-
-// Parse k8s quantity strings to a numeric value usable for ratios. Returns null
-// for unparseable inputs (count-only quotas like "5" are parsed as 5, percentages
-// remain meaningful). For CPU keys returns millicores; for memory returns bytes.
-function parseQuantity(s: string | undefined | null): number | null {
-  if (typeof s !== 'string' || s.length === 0) return null
-  if (s.endsWith('m')) {
-    const n = parseFloat(s.slice(0, -1))
-    return Number.isFinite(n) ? n : null
-  }
-  const memUnits: Array<[string, number]> = [
-    ['Ki', 1024], ['Mi', 1024 ** 2], ['Gi', 1024 ** 3], ['Ti', 1024 ** 4],
-    ['Pi', 1024 ** 5], ['Ei', 1024 ** 6],
-    ['K', 1000], ['M', 1000 ** 2], ['G', 1000 ** 3], ['T', 1000 ** 4],
-  ]
-  for (const [u, mult] of memUnits) {
-    if (s.endsWith(u)) {
-      const n = parseFloat(s.slice(0, -u.length))
-      return Number.isFinite(n) ? n * mult : null
-    }
-  }
-  const n = parseFloat(s)
-  return Number.isFinite(n) ? n : null
-}
-
-function computeQuotaPct(used: string | undefined, hard: string | undefined): number | null {
-  const u = parseQuantity(used)
-  const h = parseQuantity(hard)
-  if (u == null || h == null || h === 0) return null
-  return Math.round((u / h) * 100)
 }
 
 export default function ResourceQuotaInfo({ name, namespace }: Props) {
@@ -105,7 +75,7 @@ export default function ResourceQuotaInfo({ name, namespace }: Props) {
                 {resourceKeys.map((key) => {
                   const used = statusUsed[key]
                   const hard = statusHard[key]
-                  const pct = computeQuotaPct(used, hard)
+                  const pct = quotaPercent(used, hard)
                   const cls = pct == null ? '' : pct > 90 ? 'badge-error' : pct > 70 ? 'badge-warning' : 'badge-success'
                   return (
                     <tr key={key} className="text-slate-200">

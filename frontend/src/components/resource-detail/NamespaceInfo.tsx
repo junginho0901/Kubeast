@@ -176,9 +176,9 @@ export default function NamespaceInfo({ name }: Props) {
     return 'badge-info'
   }
 
-  // CPU (millicores) and memory (bytes) requests and limits summed across the containers of every pod, and the pods
-  // per phase: the server sums them from its pages (pod_summary). The pod rows carry no container resources, so the
-  // sum taken from them here read 0 before.
+  // CPU (millicores) and memory (bytes) requests and limits of the pods not finished, as the namespace's ResourceQuota
+  // counts them used, and every pod per phase: the server sums them from its pages (pod_summary). The pod rows carry
+  // no container resources, so the sum taken from them here read 0 before.
   const resourceSummary = useMemo(() => {
     const sum = nsDescribe?.pod_summary
     if (!sum) return null
@@ -192,6 +192,7 @@ export default function NamespaceInfo({ name }: Props) {
       memReq: fmtMem(sum.memory_requests_bytes),
       memLim: fmtMem(sum.memory_limits_bytes),
       podCount: sum.total,
+      summedPods: sum.summed_pods ?? sum.total,
       phaseCounts: sum.phases ?? {},
     }
   }, [nsDescribe?.pod_summary])
@@ -267,7 +268,7 @@ export default function NamespaceInfo({ name }: Props) {
       </InfoSection>
 
       {resourceSummary && resourceSummary.podCount > 0 && (
-        <InfoSection title="Resource Summary (sum across {{n}} pods)" titleValues={{ n: resourceSummary.podCount }}>
+        <InfoSection title="Resource Summary (sum across {{n}} pods)" titleValues={{ n: resourceSummary.summedPods }}>
           {/* Phase 별 Pod count 배지 — Running 초록, Pending/Failed 등 amber/red */}
           <div className="flex flex-wrap gap-1.5 mb-2">
             {Object.entries(resourceSummary.phaseCounts).map(([phase, count]) => {
@@ -328,18 +329,18 @@ export default function NamespaceInfo({ name }: Props) {
       <InfoSection title={tr('namespaces.detail.resourceQuotas', 'Resource Quotas')}>
         {Array.isArray(resourceQuotas) && resourceQuotas.length > 0 ? (
           <div className="space-y-3">
-            {resourceQuotas.map((rq: any) => (
+            {resourceQuotas.map(rq => (
               <div key={rq.name} className="rounded-sm border border-slate-800 p-3">
                 <p className="text-xs text-ink font-medium mb-2">{rq.name}</p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs table-fixed min-w-[360px]">
                     <thead className="text-slate-400"><tr><Th className="text-left py-1 w-[40%]">Resource</Th><Th className="text-left py-1 w-[30%]">Used</Th><Th className="text-left py-1 w-[30%]">Hard</Th></tr></thead>
                     <tbody className="divide-y divide-slate-800">
-                      {Object.keys({ ...rq.status_hard, ...rq.spec_hard }).map(res => (
+                      {Object.keys(rq.hard ?? {}).sort().map(res => (
                         <tr key={res} className="text-slate-200">
                           <td className="py-1 pr-2 font-mono">{res}</td>
-                          <td className="py-1 pr-2">{rq.status_used?.[res] || '-'}</td>
-                          <td className="py-1 pr-2">{rq.status_hard?.[res] || rq.spec_hard?.[res] || '-'}</td>
+                          <td className="py-1 pr-2">{rq.used?.[res] || '-'}</td>
+                          <td className="py-1 pr-2">{rq.hard[res]}</td>
                         </tr>
                       ))}
                     </tbody>
