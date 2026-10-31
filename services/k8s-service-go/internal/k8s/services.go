@@ -11,6 +11,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/endpointslice"
 )
 
 // GetServices lists services in a namespace.
@@ -158,7 +160,7 @@ func (s *Service) DescribeService(ctx context.Context, namespace, name string) (
 	if esErr == nil {
 		endpointSlices := make([]map[string]interface{}, 0, len(slices))
 		for i := range slices {
-			endpointSlices = append(endpointSlices, formatEndpointSliceDetail(&slices[i]))
+			endpointSlices = append(endpointSlices, endpointslice.Info(&slices[i]))
 		}
 		result["endpoint_slices"] = endpointSlices
 	} else {

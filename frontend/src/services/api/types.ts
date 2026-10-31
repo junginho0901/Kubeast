@@ -298,6 +298,10 @@ export interface EndpointSliceInfo {
       serving?: boolean | null
       terminating?: boolean | null
     }
+    hints?: {
+      for_zones?: string[]
+      for_nodes?: string[]
+    } | null
     target_ref?: {
       kind?: string | null
       name?: string | null

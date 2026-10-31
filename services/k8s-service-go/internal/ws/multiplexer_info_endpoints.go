@@ -1,12 +1,17 @@
 package ws
 
-import "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+import (
+	discoveryv1 "k8s.io/api/discovery/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 
-// Endpoints and EndpointSlice keep their payload at the top level (`subsets`,
-// `endpoints`, `ports`, `addressType`) — not under spec/status — so the generic
-// summary dropped it and every watch event reset the ready counts to 0 in the
-// list. Pass those fields through; the frontend normalisers already compute the
-// counts from them.
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/endpointslice"
+)
+
+// Endpoints keep their payload at the top level (`subsets`), not under
+// spec/status — so the generic summary dropped it and every watch event reset
+// the ready counts to 0 in the list. Pass it through; the frontend normaliser
+// computes the counts from it.
 
 func endpointsToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 	out := genericToInfo(obj)
@@ -16,12 +21,12 @@ func endpointsToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 	return out
 }
 
+// endpointSliceToInfo is the list's row (endpointslice.Info), so a live update carries the endpoints, labels and
+// annotations the list and its drawer show.
 func endpointSliceToInfo(obj *unstructured.Unstructured) map[string]interface{} {
-	out := genericToInfo(obj)
-	for _, key := range []string{"addressType", "endpoints", "ports"} {
-		if v, ok := obj.Object[key]; ok {
-			out[key] = v
-		}
+	var es discoveryv1.EndpointSlice
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, &es); err != nil {
+		return genericToInfo(obj)
 	}
-	return out
+	return endpointslice.Info(&es)
 }

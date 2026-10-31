@@ -7,7 +7,6 @@
 // topology zone + conditions.ready (null=true 처리) 정규화, ports 의 appProtocol
 // camelCase/snake_case 둘 다 지원.
 
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import type { EndpointSliceInfo } from '@/services/api'
 
 export function normalizeWatchEndpointSliceObject(obj: any): EndpointSliceInfo {
@@ -32,10 +31,18 @@ export function normalizeWatchEndpointSliceObject(obj: any): EndpointSliceInfo {
   const rawEndpoints = Array.isArray(obj?.endpoints) ? obj.endpoints : []
   const rawPorts = Array.isArray(obj?.ports) ? obj.ports : []
 
+  // hints.forZones / forNodes are [{ name }] in the object, names in the list API
+  const hintNames = (raw: any, list: any): string[] | undefined => {
+    const names = (Array.isArray(raw) ? raw.map((h: any) => h?.name) : Array.isArray(list) ? list : []).filter(Boolean)
+    return names.length > 0 ? names : undefined
+  }
+
   const endpoints = rawEndpoints.map((ep: any) => {
     const cond = ep?.conditions ?? {}
     const ref = ep?.targetRef ?? ep?.target_ref
     const topology = ep?.topology ?? {}
+    const forZones = hintNames(ep?.hints?.forZones, ep?.hints?.for_zones)
+    const forNodes = hintNames(ep?.hints?.forNodes, ep?.hints?.for_nodes)
     return {
       addresses: Array.isArray(ep?.addresses) ? ep.addresses : [],
       hostname: ep?.hostname,
@@ -46,6 +53,7 @@ export function normalizeWatchEndpointSliceObject(obj: any): EndpointSliceInfo {
         serving: cond?.serving,
         terminating: cond?.terminating,
       },
+      hints: forZones || forNodes ? { for_zones: forZones, for_nodes: forNodes } : null,
       target_ref: ref
         ? {
             kind: ref?.kind,
@@ -107,7 +115,9 @@ export function applyEndpointSliceWatchEvent(prev: EndpointSliceInfo[] | undefin
     return items
   }
 
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
+  // the server sends the whole row (endpointslice.Info), so it replaces: a slice whose endpoints or labels went
+  // away shows that instead of keeping the old ones
+  if (index >= 0) items[index] = normalized
   else items.push(normalized)
 
   return items

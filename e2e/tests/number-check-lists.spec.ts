@@ -50,6 +50,7 @@ const items = (plural: string): Obj[] => JSON.parse(kubectl(`get ${plural} -n ${
 const cond = (o: Obj, type: string) => (o.status?.conditions ?? []).find((c: Obj) => c.type === type)?.status
 
 const FIXTURE = fs.readFileSync(path.join(__dirname, 'number-check.fixture.yaml'), 'utf8')
+const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
 
 // a screen value and the cluster's are the same when they say the same thing in Kubeast's words: an empty value
 // is "-", booleans are Yes/No, access modes are spelled out, RESTARTS without kubectl's "(… ago)"
@@ -465,6 +466,105 @@ test.describe('number check — list screens', () => {
           expect.soft(cards[label], `${s.path} · card "${label}" (cards on screen: ${JSON.stringify(cards)})`).toBe(value)
         }
       }
+    })
+  })
+
+  // An EndpointSlice row and its drawer are the slice the cluster has whichever way they came: from the list API (live
+  // updates held back), from a live update, and by link (the object itself). Last in the file: it changes num-hand.
+  test('an EndpointSlice row and drawer show the slice from the list API, a live update and a link alike', async ({ page }) => {
+    test.setTimeout(180_000)
+    await page.context().addInitScript(() => localStorage.setItem('kubeast.listPageSize', '100'))
+    const slice = () => JSON.parse(kubectl(`get endpointslice num-hand -n ${NS} -o json`))
+    const list = `/network/endpointslices?cluster=self&namespace=${NS}`
+    const squash = (s: string) => s.replace(/\s+/g, '')
+    const ready = (o: Obj) => (o.endpoints ?? []).filter((e: Obj) => e.conditions?.ready !== false).length
+    // the row's Endpoints preview and counts, read by column header
+    const rowShows = async (p: Page = page) => {
+      const { heads, rows } = await readScreen(p)
+      const r = rows.find((cells) => cells[heads.findIndex((h) => /^name$/i.test(h))] === 'num-hand') ?? []
+      return Object.fromEntries(['Endpoints', 'Total', 'Ready', 'Not Ready'].map((h) => [h, r[heads.indexOf(h)]]))
+    }
+    const rowWants = (o: Obj) => {
+      const addresses = (o.endpoints ?? []).flatMap((e: Obj) => e.addresses)
+      const total = (o.endpoints ?? []).length
+      return { Endpoints: addresses.length ? addresses.join(', ') : '-', Total: String(total), Ready: String(ready(o)), 'Not Ready': String(total - ready(o)) }
+    }
+    // what the drawer says of the slice, whitespace aside: its info rows, each endpoint, each port, labels, annotations
+    const drawerWants = (o: Obj): string[] => [
+      `AddressType${o.addressType}`,
+      `ManagedBy${o.metadata.labels?.['endpointslice.kubernetes.io/managed-by'] ?? '-'}`,
+      `Endpoints(Ready/Total)${ready(o)}/${(o.endpoints ?? []).length}`,
+      ...(o.endpoints ?? []).flatMap((e: Obj) => [
+        `Addresses:${e.addresses.join(',')}`,
+        ...(e.hostname ? [`Hostname:${e.hostname}`] : []),
+        ...(e.nodeName ? [`Node:${e.nodeName}`] : []),
+        ...(e.zone ? [`Zone:${e.zone}`] : []),
+        ...(e.targetRef ? [`TargetRef:${e.targetRef.kind}:${e.targetRef.name}`] : []),
+        ...(e.hints?.forZones ? [`Hints(forzones):${e.hints.forZones.map((z: Obj) => z.name).join(',')}`] : []),
+        ...(e.hints?.forNodes ? [`Hints(fornodes):${e.hints.forNodes.map((z: Obj) => z.name).join(',')}`] : []),
+      ]),
+      ...(o.ports ?? []).map((p: Obj) => `${p.name}${p.port}${p.protocol}${p.appProtocol ?? '-'}`),
+      ...Object.entries({ ...o.metadata.labels, ...o.metadata.annotations }).map(([k, v]) => squash(`${k}:${v}`)),
+    ]
+    const openDrawer = async (p: Page = page) => {
+      await p.locator('main tbody tr').getByRole('cell', { name: 'num-hand', exact: true }).click()
+      return drawerText(p)
+    }
+    const drawerText = async (p: Page = page) => {
+      const drawer = p.locator(DRAWER).last()
+      await expect(drawer).toContainText('EndpointSlice Info', { timeout: 20_000 })
+      await expect(drawer).toContainText('num-hand')
+      return squash(await drawer.innerText())
+    }
+    const missing = (text: string, o: Obj) => drawerWants(o).filter((w) => !text.includes(w))
+    const patch = (ops: Obj[]) => kubectl(`patch endpointslice num-hand -n ${NS} --type=json -p=${JSON.stringify(JSON.stringify(ops))}`)
+
+    await test.step('from the list API, live updates held back', async () => {
+      // a page of its own: a WebSocket route lasts as long as its page (unrouteAll leaves it)
+      const held = await page.context().newPage()
+      await held.routeWebSocket(/wsMultiplexer/, () => {})
+      await held.goto(list)
+      const o = slice()
+      await expect(held.locator('main tbody tr').getByRole('cell', { name: 'num-hand', exact: true })).toBeVisible({ timeout: 20_000 })
+      expect.soft(await rowShows(held), 'row from the list API').toEqual(rowWants(o))
+      expect.soft(missing(await openDrawer(held), o), 'drawer from a list API row').toEqual([])
+      await held.close()
+    })
+
+    await test.step('from a live update', async () => {
+      // the watch has sent the slice (its first events are the objects there are) before the slice changes
+      const socket = page.waitForEvent('websocket', (ws) => /wsMultiplexer/.test(ws.url()))
+      await page.goto(list)
+      await (await socket).waitForEvent('framereceived', { predicate: (f) => String(f.payload).includes('num-hand'), timeout: 20_000 })
+      // a new address, a zone hint and a label gone, an annotation added
+      patch([
+        { op: 'replace', path: '/endpoints/1/addresses/0', value: '10.255.0.9' },
+        { op: 'replace', path: '/endpoints/0/hints/forZones', value: [{ name: 'zone-b' }] },
+        { op: 'remove', path: '/metadata/labels/team' },
+        { op: 'add', path: '/metadata/annotations/numbers.kubeast.io~1live', value: 'yes' },
+      ])
+      const changed = slice()
+      await expect.poll(rowShows, { timeout: 20_000, message: 'row after a live update' }).toEqual(rowWants(changed))
+      const text = await openDrawer()
+      expect.soft(missing(text, changed), 'drawer from a live-updated row').toEqual([])
+      expect.soft(text, 'the removed label is gone').not.toContain('team:numbers')
+      expect.soft(text, 'the replaced zone hint is gone').not.toContain('zone-a,zone-b')
+      await page.keyboard.press('Escape')
+
+      // then every endpoint gone
+      patch([{ op: 'replace', path: '/endpoints', value: [] }])
+      const emptied = slice()
+      await expect.poll(rowShows, { timeout: 20_000, message: 'row after its endpoints went' }).toEqual(rowWants(emptied))
+      expect.soft(await openDrawer(), 'a slice with no endpoints lists none').not.toContain('Addresses:')
+      await page.keyboard.press('Escape')
+      kubectl('apply -f -', FIXTURE)
+    })
+
+    await test.step('by link', async () => {
+      const o = slice()
+      expect(o.endpoints.length, 'num-hand back as in the fixture').toBe(2)
+      await page.goto(`${list}&detail=${encodeURIComponent(`EndpointSlice/${NS}/num-hand`)}`)
+      expect.soft(missing(await drawerText(), o), 'drawer opened by link').toEqual([])
     })
   })
 })
