@@ -30,6 +30,7 @@ jobs:
           - services/tool-server
           - services/tool-server/kubectl
           - services/model-config-controller-go
+          - services/deploy-service-go
           # tests only: services/pkg/netpol against netpol-analyzer
           - services/netpol-oracle
     steps:
@@ -157,7 +158,7 @@ jobs:
         with:
           go-version: "stable"
       - run: |
-          cd services && files=$(gofmt -l pkg auth-service-go k8s-service-go session-service-go tool-server model-config-controller-go)
+          cd services && files=$(gofmt -l pkg auth-service-go k8s-service-go session-service-go tool-server model-config-controller-go deploy-service-go)
           if [ -n "$files" ]; then echo "gofmt needed:"; echo "$files"; exit 1; fi
 
   e2e-assertions:
@@ -203,6 +204,7 @@ jobs:
           - services/tool-server
           - services/tool-server/kubectl
           - services/model-config-controller-go
+          - services/deploy-service-go
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # govulncheck also reports standard-library advisories for the toolchain
