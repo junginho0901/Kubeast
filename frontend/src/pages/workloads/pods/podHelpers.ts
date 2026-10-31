@@ -7,6 +7,16 @@ export type SummaryCard = [label: string, value: number, boxClass: string, label
 
 export { formatAge } from '@/utils/time'
 
+/**
+ * A Running pod whose containers are not all ready. kubectl's STATUS says Running there (readiness is the READY
+ * column), so the list keeps that word and draws it yellow, with the ready count on hover.
+ */
+export function runningNotReady(pod: { status?: string | null; ready?: string | null }): boolean {
+  if ((pod.status || '').toLowerCase() !== 'running') return false
+  const m = /^(\d+)\/(\d+)$/.exec(pod.ready || '')
+  return !!m && Number(m[2]) > 0 && Number(m[1]) !== Number(m[2])
+}
+
 export function getStatusColor(status: string): string {
   const lower = (status || '').toLowerCase()
   if (lower.includes('running') || lower.includes('succeeded') || lower.includes('completed')) return 'badge-success'

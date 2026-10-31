@@ -511,7 +511,8 @@
       "restarts": "재시작",
       "age": "경과 시간",
       "node": "Node",
-      "podIp": "Pod IP"
+      "podIp": "Pod IP",
+      "notReadyHint": "준비 안 됨 ({{ready}})"
     },
     "stats": {
       "total": "전체",

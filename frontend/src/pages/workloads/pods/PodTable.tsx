@@ -10,7 +10,7 @@ import type { PodListRow } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
-import { formatAge, getStatusColor, type SortKey } from './podHelpers'
+import { formatAge, getStatusColor, runningNotReady, type SortKey } from './podHelpers'
 import { Trans } from 'react-i18next'
 
 interface OpenDetailArgs {
@@ -150,7 +150,13 @@ export function PodTable({
                   <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{pod.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{pod.ready || '-'}</td>
                   <td className="py-3 px-4">
-                    <span className={`badge ${getStatusColor(displayStatus)}`}>{displayStatus}</span>
+                    {runningNotReady(pod) ? (
+                      <span className="badge badge-warning" title={tr('pods.table.notReadyHint', 'Not ready ({{ready}})', { ready: pod.ready })} data-testid="pod-status-not-ready">
+                        {displayStatus}
+                      </span>
+                    ) : (
+                      <span className={`badge ${getStatusColor(displayStatus)}`}>{displayStatus}</span>
+                    )}
                   </td>
                   <td className="py-3 px-4 text-xs font-mono">{pod.restart_count ?? 0}</td>
                   <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{pod.pod_ip || '-'}</span></td>

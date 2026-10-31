@@ -116,13 +116,8 @@ func oldDisplayStatus(m map[string]interface{}) string {
 	if phase == "" {
 		phase = "Unknown"
 	}
-	if phase == "Running" {
-		var ready, total int
-		fmt.Sscanf(m["ready"].(string), "%d/%d", &ready, &total)
-		if total > 0 && ready != total {
-			return "NotReady"
-		}
-	}
+	// the page said NotReady for a Running pod not ready until 10-31; it says
+	// Running now, as kubectl does (the READY column carries readiness)
 	return phase
 }
 
