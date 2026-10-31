@@ -186,7 +186,9 @@ func wordsMatchPod(words []string, r *podRow) bool {
 
 func findScore(r *podRow) int32 {
 	score := int32(0)
-	if strings.EqualFold(r.status, "running") {
+	// running and every container ready first — a Running pod not ready ranks as
+	// before, when its status read NotReady
+	if strings.EqualFold(r.status, "running") && (r.containers == 0 || r.ready == r.containers) {
 		score = 10
 	}
 	if r.containers > 0 && r.ready == r.containers {

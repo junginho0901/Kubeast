@@ -98,12 +98,7 @@ const SCREENS: Screen[] = [
   {
     path: '/workloads/pods', api: `/api/v1/namespaces/${NS}/pods`, plural: 'pods',
     alias: { 'Pod IP': 'IP' },
-    shape: {
-      Restarts: (v) => v.replace(/\s*\(.*\)$/, ''),
-      // Kubeast's list says NotReady for a Running pod whose containers are not all ready (podListStatus, since the
-      // page began); kubectl says Running there
-      Status: (v, o) => (v === 'Running' && (o.status.containerStatuses ?? []).some((c: Obj) => !c.ready) ? 'NotReady' : v),
-    },
+    shape: { Restarts: (v) => v.replace(/\s*\(.*\)$/, '') },
     skip: { Age: AGE },
     cards: (list) => {
       const running = list.filter((p) => p.status.phase === 'Running')
@@ -375,8 +370,30 @@ test.describe('number check — list screens', () => {
     }
   })
 
+  // waits, so a worker started after a failure does not apply into a namespace still being removed
   test.afterAll(() => {
-    kubectl(`delete namespace ${NS} --wait=false --ignore-not-found`)
+    kubectl(`delete namespace ${NS} --wait=true --timeout=180s --ignore-not-found`)
+  })
+
+  test('a Running pod that is not ready reads Running, drawn yellow with its ready count on hover', async ({ page }) => {
+    const pods = items('pods').filter((p) => p.metadata.labels?.app === 'num-notready')
+    expect(pods.map((p) => p.status.phase)).toEqual(pods.map(() => 'Running'))
+    await page.addInitScript(() => localStorage.setItem('kubeast.listPageSize', '100'))
+    await page.goto(`/workloads/pods?cluster=self&namespace=${NS}`)
+    for (const p of pods) {
+      const statuses: Obj[] = p.status.containerStatuses ?? []
+      const ready = `${statuses.filter((c) => c.ready).length}/${statuses.length}`
+      const badge = page.locator('main tbody tr').filter({ hasText: p.metadata.name }).getByTestId('pod-status-not-ready')
+      await expect(badge).toHaveText('Running', { timeout: 20_000 })
+      await expect(badge).toHaveClass(/badge-warning/)
+      await expect(badge).toHaveAttribute('title', new RegExp(`(Not ready|준비 안 됨) \\(${ready}\\)`))
+    }
+    // the Pod drawer's Status tile says the same
+    const first = pods[0]
+    await page.goto(`/workloads/pods?cluster=self&namespace=${NS}&detail=${encodeURIComponent(`Pod/${NS}/${first.metadata.name}`)}`)
+    const tile = page.getByTestId('pod-drawer-status-not-ready')
+    await expect(tile).toHaveText('Running', { timeout: 20_000 })
+    await expect(tile).toHaveClass(/badge-warning/)
   })
 
   // one test, a step per screen: the fixture is made once and a screen that differs does not stop the others

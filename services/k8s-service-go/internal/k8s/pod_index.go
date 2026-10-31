@@ -158,8 +158,10 @@ func podLimits(p *corev1.Pod) (cpuMilli, memBytes int64) {
 // it out from formatPodDetail's fields (pickPodDisplayStatus): the pod's
 // reason, else the first container status waiting before any terminated one
 // (status_reason), else the first container in spec order that is waiting or
-// terminated with a reason, else NotReady for a Running pod with containers
-// not ready, else the phase.
+// terminated with a reason, else the phase. A Running pod whose containers are
+// not all ready stays Running, as kubectl's STATUS (printPod) says: readiness is
+// the READY column, and the list draws that Running yellow (it said NotReady
+// until 10-31).
 func podListStatus(p *corev1.Pod, ready, total int) string {
 	if p.Status.Reason != "" {
 		return p.Status.Reason
@@ -189,9 +191,6 @@ func podListStatus(p *corev1.Pod, ready, total int) string {
 	phase := string(p.Status.Phase)
 	if phase == "" {
 		return "Unknown"
-	}
-	if p.Status.Phase == corev1.PodRunning && total > 0 && ready != total {
-		return "NotReady"
 	}
 	return phase
 }

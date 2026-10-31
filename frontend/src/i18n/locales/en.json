@@ -507,7 +507,8 @@
       "restarts": "Restarts",
       "age": "Age",
       "node": "Node",
-      "podIp": "Pod IP"
+      "podIp": "Pod IP",
+      "notReadyHint": "Not ready ({{ready}})"
     },
     "stats": {
       "total": "Total",
