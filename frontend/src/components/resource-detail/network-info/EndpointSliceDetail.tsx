@@ -22,6 +22,12 @@ function ConditionBadge({ label, value }: { label: string; value: unknown }) {
   return <span className={`inline-flex items-center rounded-sm px-2 py-0.5 border ${cls}`}>{label}: <Tx>{isUnknown ? 'Unknown' : isOn ? 'Yes' : 'No'}</Tx></span>
 }
 
+// an endpoint's zone or node hints: names from a list row, [{ name }] from the object opened by link
+function hintNames(listed: unknown, raw: unknown): string[] {
+  if (Array.isArray(listed)) return listed.filter(Boolean)
+  return Array.isArray(raw) ? raw.map((h: any) => h?.name).filter(Boolean) : []
+}
+
 export default function EndpointSliceDetail({ name, namespace, rawJson }: Props) {
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const labels = ((rawJson?.labels as Record<string, string>) ?? (meta.labels as Record<string, string>) ?? {}) as Record<string, string>
@@ -97,6 +103,8 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
               const addresses = Array.isArray(ep?.addresses) ? ep.addresses : []
               const ref = ep?.target_ref || ep?.targetRef
               const refText = ref?.name ? `${ref?.kind || 'Target'}:${ref.name}` : '-'
+              const forZones = hintNames(ep?.hints?.for_zones, ep?.hints?.forZones)
+              const forNodes = hintNames(ep?.hints?.for_nodes, ep?.hints?.forNodes)
               return (
                 <div key={i} className="rounded-sm border border-slate-800 p-3 space-y-2">
                   <div className="text-xs text-slate-200 break-all">
@@ -109,10 +117,16 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
                     <div className="text-slate-200 break-all"><span className="text-slate-400"><Tx>TargetRef:</Tx></span> {refText}</div>
                   </div>
                   {/* topology-aware-routing hints — Service annotation 의 topology-aware-hints 가 켜져 있으면 EndpointSlice 에 hints.forZones 가 채워짐 */}
-                  {Array.isArray(ep?.hints?.for_zones) && ep.hints.for_zones.length > 0 && (
+                  {forZones.length > 0 && (
                     <div className="text-xs text-slate-200 break-all">
                       <span className="text-slate-400"><Tx>Hints (for zones):</Tx></span>{' '}
-                      <span className="font-mono">{ep.hints.for_zones.join(', ')}</span>
+                      <span className="font-mono">{forZones.join(', ')}</span>
+                    </div>
+                  )}
+                  {forNodes.length > 0 && (
+                    <div className="text-xs text-slate-200 break-all">
+                      <span className="text-slate-400"><Tx>Hints (for nodes):</Tx></span>{' '}
+                      <span className="font-mono">{forNodes.join(', ')}</span>
                     </div>
                   )}
                   <div className="flex flex-wrap gap-1.5 text-[11px]">

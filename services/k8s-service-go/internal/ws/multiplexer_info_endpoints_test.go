@@ -7,7 +7,8 @@ import (
 )
 
 // Endpoints / EndpointSlice carry their payload at the top level; the watch
-// summary has to pass it through or the list resets ready counts to 0.
+// summary has to keep it or the list resets ready counts to 0. An EndpointSlice
+// update is the list's row, labels and annotations included.
 func TestObjectToInfoEndpointsKeepsTopLevelPayload(t *testing.T) {
 	ep := &unstructured.Unstructured{Object: map[string]interface{}{
 		"kind":     "Endpoints",
@@ -23,17 +24,25 @@ func TestObjectToInfoEndpointsKeepsTopLevelPayload(t *testing.T) {
 	}
 
 	slice := &unstructured.Unstructured{Object: map[string]interface{}{
-		"kind":        "EndpointSlice",
-		"metadata":    map[string]interface{}{"name": "web-abc", "namespace": "qa"},
+		"kind": "EndpointSlice",
+		"metadata": map[string]interface{}{
+			"name": "web-abc", "namespace": "qa",
+			"labels":      map[string]interface{}{"kubernetes.io/service-name": "web"},
+			"annotations": map[string]interface{}{"note": "kept"},
+		},
 		"addressType": "IPv4",
 		"endpoints":   []interface{}{map[string]interface{}{"addresses": []interface{}{"10.0.0.1"}, "conditions": map[string]interface{}{"ready": true}}},
 		"ports":       []interface{}{map[string]interface{}{"port": int64(80)}},
 	}}
 	info = objectToInfo("endpointslices", slice)
-	for _, key := range []string{"addressType", "endpoints", "ports"} {
-		if _, ok := info[key]; !ok {
-			t.Fatalf("endpointslice info lost %s: %v", key, info)
-		}
+	if info["address_type"] != "IPv4" || info["service_name"] != "web" || info["endpoints_ready"] != 1 {
+		t.Fatalf("endpointslice row: %v", info)
+	}
+	if eps := info["endpoints"].([]map[string]interface{}); len(eps) != 1 || eps[0]["addresses"].([]string)[0] != "10.0.0.1" {
+		t.Fatalf("endpointslice endpoints: %v", info["endpoints"])
+	}
+	if info["annotations"].(map[string]string)["note"] != "kept" {
+		t.Fatalf("endpointslice annotations: %v", info["annotations"])
 	}
 }
 

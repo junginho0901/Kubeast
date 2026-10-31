@@ -232,6 +232,28 @@ kind: Service
 metadata: { name: num-nodeport, namespace: e2e-numbers }
 spec: { type: NodePort, selector: { app: num-db }, ports: [{ port: 5432 }] }
 ---
+# written by hand, with what a controller's slice in kind (no zones) leaves out: zone and node hints, an app protocol,
+# annotations. No service-name label, so no Service routes to it.
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: num-hand
+  namespace: e2e-numbers
+  labels: { endpointslice.kubernetes.io/managed-by: e2e.kubeast.io, team: numbers }
+  annotations: { numbers.kubeast.io/note: by-hand }
+addressType: IPv4
+ports: [{ name: grpc, port: 7070, protocol: TCP, appProtocol: kubernetes.io/h2c }]
+endpoints:
+  - addresses: [10.255.0.1]
+    conditions: { ready: true, serving: true, terminating: false }
+    hostname: hand-0
+    nodeName: kubeast-control-plane
+    zone: zone-a
+    targetRef: { kind: Pod, name: num-crash, namespace: e2e-numbers }
+    hints: { forZones: [{ name: zone-a }, { name: zone-b }], forNodes: [{ name: kubeast-control-plane }] }
+  - addresses: [10.255.0.2]
+    conditions: { ready: false }
+---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata: { name: num-ing, namespace: e2e-numbers }

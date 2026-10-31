@@ -74,6 +74,7 @@ export function endpointSliceToRawJson(slice: EndpointSliceInfo): Record<string,
         terminating: ep.conditions?.terminating,
       },
       targetRef: ep.target_ref || undefined,
+      hints: ep.hints || undefined,
     })),
     ports: (slice.ports || []).map((p) => ({
       name: p.name,

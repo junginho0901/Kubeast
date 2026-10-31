@@ -5,6 +5,8 @@ import (
 
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/endpointslice"
 )
 
 // A Service's addresses come from its EndpointSlices (label
@@ -22,17 +24,12 @@ func (s *Service) serviceEndpointSlices(ctx context.Context, namespace, service 
 	return list.Items, nil
 }
 
-// endpointReady follows the API: an unset ready condition reads as ready.
-func endpointReady(e discoveryv1.Endpoint) bool {
-	return e.Conditions.Ready == nil || *e.Conditions.Ready
-}
-
 // readyAddresses splits the slices' addresses by the ready condition.
 func readyAddresses(slices []discoveryv1.EndpointSlice) (ready, notReady []string) {
 	ready, notReady = []string{}, []string{}
 	for i := range slices {
 		for _, e := range slices[i].Endpoints {
-			if endpointReady(e) {
+			if endpointslice.Ready(e) {
 				ready = append(ready, e.Addresses...)
 			} else {
 				notReady = append(notReady, e.Addresses...)
@@ -50,7 +47,7 @@ func sliceAddresses(slices []discoveryv1.EndpointSlice) []map[string]interface{}
 		ports := slicePorts(&slices[i])
 		for _, e := range slices[i].Endpoints {
 			for _, ip := range e.Addresses {
-				entry := map[string]interface{}{"ip": ip, "ports": ports, "ready": endpointReady(e)}
+				entry := map[string]interface{}{"ip": ip, "ports": ports, "ready": endpointslice.Ready(e)}
 				if e.TargetRef != nil {
 					entry["target_ref"] = map[string]interface{}{
 						"kind":      e.TargetRef.Kind,
