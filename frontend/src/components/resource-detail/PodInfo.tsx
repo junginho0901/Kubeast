@@ -17,6 +17,7 @@ import { usePermission } from '@/hooks/usePermission'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { getVolumeDetail } from './pod-info/podInfoFormatters'
 import ContainerCard from './pod-info/ContainerCard'
+import { runningNotReady } from '@/pages/workloads/pods/podHelpers'
 import ContainerResizeModal from './pod-info/ContainerResizeModal'
 import { LogFilesView, LogSourceToggle, type LogSource } from '@/components/LogFilesView'
 import { LogSearchView } from '@/components/LogSearchView'
@@ -232,9 +233,10 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
       .map((c: any) => c?.state?.waiting?.reason || c?.state?.terminated?.reason || c?.last_state?.terminated?.reason)
       .filter(Boolean)
     if (reasons.length > 0) return String(reasons[0])
-    if (phase === 'Running' && totalContainers > 0 && readyContainers < totalContainers) return 'NotReady'
+    // a Running pod not ready stays Running, as kubectl and the Pods list say; the tile draws it yellow
     return phase
-  }, [podDescribe?.status, podDescribe?.status_reason, containers, phase, totalContainers, readyContainers])
+  }, [podDescribe?.status, podDescribe?.status_reason, containers, phase])
+  const statusNotReady = runningNotReady({ status: statusReason, ready: `${readyContainers}/${totalContainers}` })
 
   const containerNames = useMemo(() => {
     if (containers.length > 0) return containers.map((c: any) => c.name)
@@ -347,7 +349,13 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <div className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
             <div className="text-[11px] text-slate-400"><Tx>Status</Tx></div>
-            <div className="mt-1 text-xs text-ink font-medium truncate" title={statusReason}>{statusReason || '-'}</div>
+            <div className="mt-1 text-xs text-ink font-medium truncate" title={statusNotReady ? undefined : statusReason}>
+              {statusNotReady ? (
+                <span className="badge badge-warning" title={t('pods.table.notReadyHint', { ready: `${readyContainers}/${totalContainers}`, defaultValue: 'Not ready ({{ready}})' })} data-testid="pod-drawer-status-not-ready">
+                  {statusReason}
+                </span>
+              ) : (statusReason || '-')}
+            </div>
           </div>
           <div className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
             <div className="text-[11px] text-slate-400"><Tx>Ready</Tx></div>

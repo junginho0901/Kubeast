@@ -378,6 +378,7 @@ test.describe('number check — list screens', () => {
   test('a Running pod that is not ready reads Running, drawn yellow with its ready count on hover', async ({ page }) => {
     const pods = items('pods').filter((p) => p.metadata.labels?.app === 'num-notready')
     expect(pods.map((p) => p.status.phase)).toEqual(pods.map(() => 'Running'))
+    await page.addInitScript(() => localStorage.setItem('kubeast.listPageSize', '100'))
     await page.goto(`/workloads/pods?cluster=self&namespace=${NS}`)
     for (const p of pods) {
       const statuses: Obj[] = p.status.containerStatuses ?? []
@@ -387,6 +388,12 @@ test.describe('number check — list screens', () => {
       await expect(badge).toHaveClass(/badge-warning/)
       await expect(badge).toHaveAttribute('title', new RegExp(`(Not ready|준비 안 됨) \\(${ready}\\)`))
     }
+    // the Pod drawer's Status tile says the same
+    const first = pods[0]
+    await page.goto(`/workloads/pods?cluster=self&namespace=${NS}&detail=${encodeURIComponent(`Pod/${NS}/${first.metadata.name}`)}`)
+    const tile = page.getByTestId('pod-drawer-status-not-ready')
+    await expect(tile).toHaveText('Running', { timeout: 20_000 })
+    await expect(tile).toHaveClass(/badge-warning/)
   })
 
   // one test, a step per screen: the fixture is made once and a screen that differs does not stop the others
