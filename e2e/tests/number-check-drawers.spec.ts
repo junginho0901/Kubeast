@@ -599,9 +599,9 @@ test.describe('number check — drawers', () => {
         return first.length ? differences(d, want(await snapshot())) : first
       }
       // a drawer shows the object as it was when it opened (it does not refresh): one that still differs after 20 s is
-      // opened again once, so a value that moved meanwhile (a crashing pod restarting) is read anew
+      // opened again, up to twice, so a value that moved meanwhile (a crashing pod restarting) is read anew
       let same = false
-      for (let attempt = 0; attempt < 2 && !same; attempt++) {
+      for (let attempt = 0; attempt < 3 && !same; attempt++) {
         await page.goto(`/?cluster=self&detail=${encodeURIComponent(`${t.kind}/${t.ref}`)}`)
         await page.locator(DRAWER).last().waitFor({ timeout: 20_000 })
         same = await expect.poll(diff, { timeout: 20_000, intervals: [1000] }).toEqual([]).then(() => true, () => false)
