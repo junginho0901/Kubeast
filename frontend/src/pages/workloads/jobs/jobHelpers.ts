@@ -25,6 +25,18 @@ export function formatDuration(durationSeconds?: number | null): string {
   return humanDuration(durationSeconds)
 }
 
+/**
+ * A Job's run time in seconds as kubectl's printJob computes DURATION: start to completion, or start to now while
+ * it has no completion time (running, or failed — a failed Job never gets one).
+ */
+export function jobDurationSeconds(job: { start_time?: string | null; completion_time?: string | null }, now = Date.now()): number | null {
+  if (!job.start_time) return null
+  const start = new Date(job.start_time).getTime()
+  const end = job.completion_time ? new Date(job.completion_time).getTime() : now
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null
+  return Math.floor((end - start) / 1000)
+}
+
 // backend workloads_job.go 는 condition 기반으로 "Active" / "Complete" / "Failed" 를
 // 보내는데, watch event 의 raw object 는 status 가 비어있어 active/succeeded/failed
 // 카운터로 추정해야 함. summary 분류 (running 카드에 Active 매칭) 도 이 status

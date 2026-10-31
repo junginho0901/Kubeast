@@ -1,0 +1,277 @@
+# e2e-numbers: objects whose numbers are not zero and not alike, for the number check (records/number-check-20261031.md
+# §2). busybox:1.37 is already on the kind node (kind pods do not trust a TLS-inspecting proxy's CA, so nothing new
+# is pulled). The LimitRange comes first so pods without requests get them and the ResourceQuota admits them.
+apiVersion: v1
+kind: Namespace
+metadata: { name: e2e-numbers }
+---
+apiVersion: v1
+kind: LimitRange
+metadata: { name: num-limits, namespace: e2e-numbers }
+spec:
+  limits:
+    - type: Container
+      default: { cpu: 30m, memory: 24Mi }
+      defaultRequest: { cpu: 10m, memory: 12Mi }
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata: { name: num-quota, namespace: e2e-numbers }
+spec:
+  hard: { pods: "20", requests.cpu: "1", requests.memory: 1Gi, limits.memory: 2Gi, configmaps: "10", secrets: "10", services: "6" }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: num-ready, namespace: e2e-numbers }
+spec:
+  replicas: 3
+  selector: { matchLabels: { app: num-ready } }
+  template:
+    metadata: { labels: { app: num-ready } }
+    spec:
+      terminationGracePeriodSeconds: 0
+      containers:
+        - name: app
+          image: busybox:1.37
+          imagePullPolicy: IfNotPresent
+          command: [sleep, "86400"]
+          resources: { requests: { cpu: 20m, memory: 16Mi }, limits: { cpu: 40m, memory: 32Mi } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: num-notready, namespace: e2e-numbers }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: num-notready } }
+  template:
+    metadata: { labels: { app: num-notready } }
+    spec:
+      terminationGracePeriodSeconds: 0
+      containers:
+        - name: app
+          image: busybox:1.37
+          imagePullPolicy: IfNotPresent
+          command: [sleep, "86400"]
+          readinessProbe: { exec: { command: ["false"] }, periodSeconds: 5 }
+          resources: { requests: { cpu: 15m, memory: 8Mi }, limits: { memory: 20Mi } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: num-db, namespace: e2e-numbers }
+spec: { clusterIP: None, selector: { app: num-db }, ports: [{ port: 5432 }] }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: num-db, namespace: e2e-numbers }
+spec:
+  replicas: 2
+  serviceName: num-db
+  selector: { matchLabels: { app: num-db } }
+  template:
+    metadata: { labels: { app: num-db } }
+    spec:
+      terminationGracePeriodSeconds: 0
+      containers:
+        - name: db
+          image: busybox:1.37
+          imagePullPolicy: IfNotPresent
+          command: [sleep, "86400"]
+          resources: { requests: { cpu: 25m, memory: 24Mi }, limits: { memory: 48Mi } }
+          volumeMounts: [{ name: data, mountPath: /data }]
+        - name: sidecar
+          image: busybox:1.37
+          imagePullPolicy: IfNotPresent
+          command: [sleep, "86400"]
+          resources: { requests: { cpu: 5m, memory: 4Mi }, limits: { cpu: 10m, memory: 8Mi } }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec: { accessModes: [ReadWriteOnce], resources: { requests: { storage: 64Mi } } }
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata: { name: num-agent, namespace: e2e-numbers }
+spec:
+  selector: { matchLabels: { app: num-agent } }
+  template:
+    metadata: { labels: { app: num-agent } }
+    spec:
+      terminationGracePeriodSeconds: 0
+      containers:
+        - name: agent
+          image: busybox:1.37
+          imagePullPolicy: IfNotPresent
+          command: [sleep, "86400"]
+          resources: { requests: { cpu: 5m, memory: 8Mi }, limits: { cpu: 10m, memory: 16Mi } }
+---
+# a StatefulSet and a DaemonSet with no replica ever ready: the list must count them Unavailable, not Degraded
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: num-db-down, namespace: e2e-numbers }
+spec:
+  replicas: 1
+  serviceName: num-db
+  selector: { matchLabels: { app: num-db-down } }
+  template:
+    metadata: { labels: { app: num-db-down } }
+    spec:
+      terminationGracePeriodSeconds: 0
+      containers:
+        - name: db
+          image: busybox:1.37
+          imagePullPolicy: IfNotPresent
+          command: [sleep, "86400"]
+          readinessProbe: { exec: { command: ["false"] }, periodSeconds: 5 }
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata: { name: num-agent-down, namespace: e2e-numbers }
+spec:
+  selector: { matchLabels: { app: num-agent-down } }
+  template:
+    metadata: { labels: { app: num-agent-down } }
+    spec:
+      terminationGracePeriodSeconds: 0
+      containers:
+        - name: agent
+          image: busybox:1.37
+          imagePullPolicy: IfNotPresent
+          command: [sleep, "86400"]
+          readinessProbe: { exec: { command: ["false"] }, periodSeconds: 5 }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: num-crash, namespace: e2e-numbers, labels: { app: num-crash } }
+spec:
+  terminationGracePeriodSeconds: 0
+  containers:
+    - { name: app, image: busybox:1.37, imagePullPolicy: IfNotPresent, command: [sh, -c, "sleep 2; exit 1"] }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: num-pending, namespace: e2e-numbers, labels: { app: num-pending } }
+spec:
+  nodeSelector: { e2e-numbers/nowhere: "true" }
+  containers:
+    - { name: app, image: busybox:1.37, imagePullPolicy: IfNotPresent, command: [sleep, "86400"] }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: num-init, namespace: e2e-numbers, labels: { app: num-init } }
+spec:
+  terminationGracePeriodSeconds: 0
+  initContainers:
+    - { name: prepare, image: busybox:1.37, imagePullPolicy: IfNotPresent, command: ["true"] }
+  containers:
+    - name: app
+      image: busybox:1.37
+      imagePullPolicy: IfNotPresent
+      command: [sleep, "86400"]
+      resources: { requests: { cpu: 12m, memory: 10Mi }, limits: { cpu: 24m, memory: 20Mi } }
+---
+apiVersion: batch/v1
+kind: Job
+metadata: { name: num-done, namespace: e2e-numbers }
+spec:
+  completions: 2
+  parallelism: 2
+  template:
+    spec:
+      restartPolicy: Never
+      containers: [{ name: job, image: busybox:1.37, imagePullPolicy: IfNotPresent, command: ["true"] }]
+---
+apiVersion: batch/v1
+kind: Job
+metadata: { name: num-fail, namespace: e2e-numbers }
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers: [{ name: job, image: busybox:1.37, imagePullPolicy: IfNotPresent, command: [sh, -c, "exit 1"] }]
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata: { name: num-cron, namespace: e2e-numbers }
+spec:
+  schedule: "0 0 1 1 *"
+  suspend: true
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers: [{ name: job, image: busybox:1.37, imagePullPolicy: IfNotPresent, command: ["true"] }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: num-web, namespace: e2e-numbers }
+spec: { selector: { app: num-ready }, ports: [{ name: http, port: 80, targetPort: 8080 }, { name: metrics, port: 9090 }] }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: num-nodeport, namespace: e2e-numbers }
+spec: { type: NodePort, selector: { app: num-db }, ports: [{ port: 5432 }] }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata: { name: num-ing, namespace: e2e-numbers }
+spec:
+  rules:
+    - host: a.numbers.example.com
+      http: { paths: [{ path: /, pathType: Prefix, backend: { service: { name: num-web, port: { number: 80 } } } }] }
+    - host: b.numbers.example.com
+      http: { paths: [{ path: /api, pathType: Prefix, backend: { service: { name: num-web, port: { number: 80 } } } }] }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: num-unbound, namespace: e2e-numbers }
+spec: { storageClassName: e2e-numbers-none, accessModes: [ReadWriteOnce], resources: { requests: { storage: 128Mi } } }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: { name: num-hpa, namespace: e2e-numbers }
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: num-ready }
+  minReplicas: 3
+  maxReplicas: 5
+  metrics: [{ type: Resource, resource: { name: cpu, target: { type: Utilization, averageUtilization: 80 } } }]
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: num-pdb, namespace: e2e-numbers }
+spec: { minAvailable: 2, selector: { matchLabels: { app: num-ready } } }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: num-cm, namespace: e2e-numbers }
+data: { a.properties: "x=1", b.properties: "y=2", c.json: "{}" }
+---
+apiVersion: v1
+kind: Secret
+metadata: { name: num-secret, namespace: e2e-numbers }
+type: Opaque
+stringData: { user: e2e, pass: fixture-only }
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: num-sa, namespace: e2e-numbers }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: { name: num-role, namespace: e2e-numbers }
+rules:
+  - { apiGroups: [""], resources: [pods, services], verbs: [get, list] }
+  - { apiGroups: [apps], resources: [deployments], verbs: [get] }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: { name: num-rb, namespace: e2e-numbers }
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: num-role }
+subjects:
+  - { kind: ServiceAccount, name: num-sa, namespace: e2e-numbers }
+  - { kind: ServiceAccount, name: default, namespace: e2e-numbers }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: num-np, namespace: e2e-numbers }
+spec: { podSelector: { matchLabels: { app: num-db } }, policyTypes: [Ingress], ingress: [{ from: [{ podSelector: { matchLabels: { app: num-ready } } }] }] }

@@ -14,6 +14,7 @@ import { Plus, RefreshCw } from 'lucide-react'
 import {
   parseAgeSeconds,
   computeJobStatus,
+  jobDurationSeconds,
   type SortKey,
 } from './jobs/jobHelpers'
 import { applyJobWatchEvent } from './jobs/jobWatchNormalize'
@@ -112,7 +113,7 @@ export default function Jobs() {
         case 'status':
           return job.status || ''
         case 'duration':
-          return Number(job.duration_seconds || -1)
+          return jobDurationSeconds(job) ?? -1
         case 'containers':
           return (job.containers || []).join(',')
         case 'images':

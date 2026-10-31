@@ -13,8 +13,10 @@ export const storageApi = {
   // PVCs
   // usage = true adds each claim's kubelet usage from Prometheus (PVCInfo.usage).
   getPVCs: async (namespace?: string, forceRefresh: boolean = false, usage: boolean = false): Promise<PVCInfo[]> => {
-    const { data } = await client.get('/cluster/pvcs', {
-      params: { namespace, force_refresh: forceRefresh, usage: usage || undefined },
+    // the all-namespaces route takes no namespace; one namespace has its own path
+    const path = namespace ? `/cluster/namespaces/${encodeURIComponent(namespace)}/pvcs` : '/cluster/pvcs'
+    const { data } = await client.get(path, {
+      params: { force_refresh: forceRefresh, usage: usage || undefined },
     })
     return data
   },

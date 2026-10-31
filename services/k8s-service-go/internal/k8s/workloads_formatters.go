@@ -60,10 +60,10 @@ func formatStatefulSetDetail(sts *appsv1.StatefulSet) map[string]interface{} {
 	stsStatus := "Healthy"
 	if replicas == 0 {
 		stsStatus = "Idle"
-	} else if sts.Status.ReadyReplicas < replicas {
-		stsStatus = "Degraded"
 	} else if sts.Status.AvailableReplicas == 0 && replicas > 0 {
 		stsStatus = "Unavailable"
+	} else if sts.Status.ReadyReplicas < replicas {
+		stsStatus = "Degraded"
 	}
 
 	return map[string]interface{}{
@@ -112,10 +112,10 @@ func formatDaemonSetDetail(ds *appsv1.DaemonSet) map[string]interface{} {
 	dsStatus := "Healthy"
 	if ds.Status.DesiredNumberScheduled == 0 {
 		dsStatus = "Idle"
-	} else if ds.Status.NumberReady < ds.Status.DesiredNumberScheduled {
-		dsStatus = "Degraded"
 	} else if ds.Status.NumberAvailable == 0 && ds.Status.DesiredNumberScheduled > 0 {
 		dsStatus = "Unavailable"
+	} else if ds.Status.NumberReady < ds.Status.DesiredNumberScheduled {
+		dsStatus = "Degraded"
 	}
 
 	return map[string]interface{}{
@@ -181,10 +181,10 @@ func formatReplicaSetDetail(rs *appsv1.ReplicaSet) map[string]interface{} {
 	rsStatus := "Healthy"
 	if replicas == 0 {
 		rsStatus = "Idle"
-	} else if rs.Status.ReadyReplicas < replicas {
-		rsStatus = "Degraded"
 	} else if rs.Status.AvailableReplicas == 0 && replicas > 0 {
 		rsStatus = "Unavailable"
+	} else if rs.Status.ReadyReplicas < replicas {
+		rsStatus = "Degraded"
 	}
 
 	ownerRefs := make([]map[string]interface{}, 0, len(rs.OwnerReferences))
