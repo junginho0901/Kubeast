@@ -65,6 +65,15 @@ function sameValue(screen: string, cluster: string): boolean {
   return a.replace(/\s+/g, ' ') === b.replace(/\s+/g, ' ')
 }
 const norm = (h: string) => h.toLowerCase().replace(/[\s_()-]/g, '')
+// a span that grows while it is read ("16s" then "17s"): kubectl's HumanDuration in seconds, the same within 15 s or 15 %
+function spanSeconds(s: string): number {
+  const units: Record<string, number> = { y: 31536000, d: 86400, h: 3600, m: 60, s: 1 }
+  let total = 0
+  for (const m of s.matchAll(/(\d+)([ydhms])/g)) total += Number(m[1]) * units[m[2]]
+  return /\d/.test(s) ? total : NaN
+}
+const sameSpan = (screen: string, cluster: string) =>
+  Math.abs(spanSeconds(screen) - spanSeconds(cluster)) <= Math.max(15, spanSeconds(cluster) * 0.15)
 
 type Screen = {
   path: string
@@ -78,6 +87,8 @@ type Screen = {
   extra?: Record<string, (o: Obj) => string>
   // not compared, with why
   skip?: Record<string, string>
+  // columns whose value is a span still growing for this object (a Job not complete): compared within sameSpan
+  spans?: Record<string, (o: Obj) => boolean>
   // summary card label → the count that label means, over the namespace's objects
   cards?: (list: Obj[]) => Record<string, number>
 }
@@ -148,6 +159,8 @@ const SCREENS: Screen[] = [
   },
   {
     path: '/workloads/jobs', api: `/apis/batch/v1/namespaces/${NS}/jobs`, plural: 'jobs',
+    // num-fail's Duration runs on (start to now, as kubectl's printJob) — to the second while the Job is new
+    spans: { Duration: (o) => !o.status.completionTime },
     skip: { Age: AGE },
     cards: (list) => ({
       Total: list.length,
@@ -441,7 +454,8 @@ test.describe('number check — list screens', () => {
             return
           }
           const cluster = s.shape?.[h] ? s.shape[h](byName[name][j], o) : byName[name][j]
-          expect.soft(sameValue(row[i], cluster), `${s.path} · ${name} · ${h}: screen "${row[i]}", kubectl "${byName[name][j]}"`).toBe(true)
+          const same = s.spans?.[h]?.(o) ? sameSpan(row[i], cluster) : sameValue(row[i], cluster)
+          expect.soft(same, `${s.path} · ${name} · ${h}: screen "${row[i]}", kubectl "${byName[name][j]}"`).toBe(true)
         })
       }
       expect.soft(unknown, `${s.path}: columns with nothing to compare against`).toEqual([])

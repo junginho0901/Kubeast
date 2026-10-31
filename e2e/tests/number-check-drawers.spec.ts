@@ -53,12 +53,13 @@ const KINDS = 'deploy,sts,ds,rs,job,cronjob,pod,svc,endpointslices.discovery.k8s
 const NODE = 'kubeast-control-plane'
 
 // Everything in the namespace in one read, and what kubectl prints of the pods, Jobs and the events
-type Snap = { by: Record<string, Obj[]>; node: Obj; nodePods: Obj[]; podTable: Record<string, string>[]; jobTable: Record<string, string>[]; events: Record<string, string>[] }
+type Snap = { by: Record<string, Obj[]>; namespace: Obj; node: Obj; nodePods: Obj[]; podTable: Record<string, string>[]; jobTable: Record<string, string>[]; events: Record<string, string>[] }
 async function snapshot(): Promise<Snap> {
   const by: Record<string, Obj[]> = {}
   for (const o of JSON.parse(kubectl(`get ${KINDS} -n ${NS} -o json`)).items) (by[o.kind] ??= []).push(o)
   return {
     by,
+    namespace: JSON.parse(kubectl(`get namespace ${NS} -o json`)),
     node: JSON.parse(kubectl(`get node ${NODE} -o json`)),
     nodePods: JSON.parse(kubectl(`get pods -A --field-selector spec.nodeName=${NODE} -o json`)).items,
     podTable: await tableRows(`/api/v1/namespaces/${NS}/pods`),
@@ -96,6 +97,8 @@ function ageSeconds(s: string): number {
   return /\d/.test(s) ? total : NaN
 }
 const sameAge = (a: string, b: string) => Math.abs(ageSeconds(a) - ageSeconds(b)) <= Math.max(15, ageSeconds(b) * 0.15)
+// seconds from a time the API writes to now (or to `to`)
+const since = (t: string | undefined, to?: string) => ((to ? Date.parse(to) : Date.now()) - Date.parse(t ?? '')) / 1000
 
 type Drawer = { rows: [string, string][]; pairs: Record<string, string>; phases: Record<string, string>; counts: Record<string, number>; text: string; tables: { head: string[]; rows: string[][]; total: number | null }[] }
 async function readDrawer(page: Page): Promise<Drawer> {
@@ -149,6 +152,10 @@ function sameValue(screen: string, cluster: string): boolean {
 type Want = {
   // label → value, or the values in order for a label the drawer shows more than once
   rows?: Record<string, string | string[]>
+  // rows compared only on the drawers that show them (the object's resourceVersion)
+  ifShown?: Record<string, string>
+  // rows that hold a time span, where shown: label → seconds (an age as "63s" or "… (63s)", a Job's duration)
+  spans?: Record<string, number>
   pairs?: Record<string, string>
   counts?: Record<string, number>
   // the rest (tables, titles): each returns the differences it found
@@ -170,6 +177,18 @@ function differences(d: Drawer, w: Want): string[] {
     const got = (shown[label] ?? []).slice(0, want.length)
     if (got.length < want.length || want.some((v, i) => !sameValue(got[i], v))) out.push(`row ${label}: drawer ${JSON.stringify(shown[label] ?? null)}, cluster ${JSON.stringify(want)}`)
   }
+  for (const [label, value] of Object.entries(w.ifShown ?? {})) {
+    if (shown[label] && !sameValue(shown[label][0], value)) out.push(`row ${label}: drawer ${JSON.stringify(shown[label])}, cluster "${value}"`)
+  }
+  for (const [label, secs] of Object.entries(w.spans ?? {})) {
+    const v = shown[label]?.[0]
+    if (v === undefined) continue
+    // "63s", "… (63s)", or a time alone in the viewer's zone (the browser runs on this machine)
+    const span = (/\(([^)]+)\)\s*$/.exec(v)?.[1] ?? v).trim()
+    const at = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})$/.exec(span)
+    const got = at ? (Date.now() - new Date(`${at[1]}T${at[2]}`).getTime()) / 1000 : ageSeconds(span)
+    if (!(Math.abs(got - secs) <= Math.max(15, secs * 0.15))) out.push(`row ${label}: drawer "${v}", cluster ${Math.round(secs)}s`)
+  }
   for (const [label, value] of Object.entries(w.pairs ?? {})) {
     if (!sameValue(d.pairs[label] ?? '(none)', value)) out.push(`badge ${label}: drawer ${JSON.stringify(d.pairs[label] ?? null)}, cluster "${value}"`)
   }
@@ -178,7 +197,7 @@ function differences(d: Drawer, w: Want): string[] {
   }
   out.push(...(w.more?.(d) ?? []))
   // a number nothing compares
-  const covered = (label: string) => label in (w.rows ?? {}) || label in (w.pairs ?? {}) || label in (w.counts ?? {}) || label in (w.skip ?? {})
+  const covered = (label: string) => label in (w.rows ?? {}) || label in (w.ifShown ?? {}) || label in (w.spans ?? {}) || label in (w.pairs ?? {}) || label in (w.counts ?? {}) || label in (w.skip ?? {})
   for (const [label, values] of Object.entries(shown)) if (values.some((v) => NUMBER.test(v)) && !covered(label)) out.push(`row ${label} = ${values.join(' | ')} is not compared`)
   for (const [label, v] of Object.entries(d.pairs)) if (NUMBER.test(v) && !covered(label)) out.push(`badge ${label} = ${v} is not compared`)
   for (const label of Object.keys(d.counts)) if (!covered(label)) out.push(`count ${label} (${d.counts[label]}) is not compared`)
@@ -277,6 +296,11 @@ const TARGETS: Target[] = [
           'Backoff Limit': String(o.spec.backoffLimit), 'Completion Mode': o.spec.completionMode, Suspend: yesNo(o.spec.suspend),
           ...(o.status.completionTime ? { Duration: kube.Duration } : {}),
         },
+        // a Job not complete (num-fail) runs on, as kubectl's printJob counts it: start to now
+        spans: {
+          Duration: since(o.status.startTime, o.status.completionTime), 'Start Time': since(o.status.startTime),
+          ...(o.status.completionTime ? { 'Completion Time': since(o.status.completionTime) } : {}),
+        },
         counts: { Pods: pods(s).filter((p) => p.metadata.labels?.['batch.kubernetes.io/job-name'] === name).length },
       }
     },
@@ -304,6 +328,7 @@ const TARGETS: Target[] = [
           'Restart Policy': o.spec.restartPolicy,
         },
         pairs: { Phase: o.status.phase, Restarts: restarts, Containers: String(o.spec.containers.length) },
+        spans: { 'Start Time': since(o.status.startTime) },
         more: (d) => {
           const out = eventDifferences(d, s, name)
           // pulls in the last hour, as the section's title counts them
@@ -317,7 +342,7 @@ const TARGETS: Target[] = [
   })),
   {
     kind: 'Namespace', ref: NS, want: (s) => {
-      const ns = JSON.parse(kubectl(`get namespace ${NS} -o json`))
+      const ns = s.namespace
       const all = pods(s)
       const live = all.filter((p) => !terminal(p))
       const quota = one(s, 'ResourceQuota', 'num-quota')
@@ -556,20 +581,28 @@ test.describe('number check — drawers', () => {
   test('every drawer shows the numbers the cluster has', async ({ page }) => {
     test.setTimeout(600_000)
     for (const t of TARGETS) await test.step(`${t.kind}/${t.ref}`, async () => {
-      await page.goto(`/?cluster=self&detail=${encodeURIComponent(`${t.kind}/${t.ref}`)}`)
-      await page.locator(DRAWER).last().waitFor({ timeout: 20_000 })
+      // what the drawer must show, and the object's resourceVersion wherever the drawer shows it
+      const want = (s: Snap): Want => {
+        const o = t.kind === 'Node' ? s.node : t.kind === 'Namespace' ? s.namespace : one(s, t.kind, t.ref.split('/')[1])
+        const w = t.want(s)
+        return { ...w, ifShown: { 'Resource Version': o?.metadata.resourceVersion ?? '', ...w.ifShown }, spans: { Created: since(o?.metadata.creationTimestamp), ...w.spans } }
+      }
       // the cluster read before and after the drawer, so a value that moves (a crashing pod's restarts) matches one of them
       const diff = async () => {
         const before = await snapshot()
         const d = await readDrawer(page)
-        const first = differences(d, t.want(before))
-        return first.length ? differences(d, t.want(await snapshot())) : first
+        const first = differences(d, want(before))
+        return first.length ? differences(d, want(await snapshot())) : first
       }
-      try {
-        await expect.poll(diff, { timeout: 20_000, intervals: [1000] }).toEqual([])
-      } catch {
-        expect.soft(await diff(), `${t.kind}/${t.ref}`).toEqual([])
+      // a drawer shows the object as it was when it opened (it does not refresh): one that still differs after 20 s is
+      // opened again once, so a value that moved meanwhile (a crashing pod restarting) is read anew
+      let same = false
+      for (let attempt = 0; attempt < 2 && !same; attempt++) {
+        await page.goto(`/?cluster=self&detail=${encodeURIComponent(`${t.kind}/${t.ref}`)}`)
+        await page.locator(DRAWER).last().waitFor({ timeout: 20_000 })
+        same = await expect.poll(diff, { timeout: 20_000, intervals: [1000] }).toEqual([]).then(() => true, () => false)
       }
+      if (!same) expect.soft(await diff(), `${t.kind}/${t.ref}`).toEqual([])
     })
   })
 })
