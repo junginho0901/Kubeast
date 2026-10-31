@@ -113,7 +113,7 @@ func newClusterInformers(client kubernetes.Interface, idle time.Duration, onStop
 		},
 	})
 	nodeBump := func() { ci.nodeRev.Add(1) }
-	_, _ = infs[6].AddEventHandler(cache.ResourceEventHandlerFuncs{
+	nodeEvents, nodeErr := infs[6].AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    func(interface{}) { nodeBump() },
 		DeleteFunc: func(interface{}) { nodeBump() },
 		UpdateFunc: func(oldObj, newObj interface{}) {
@@ -149,8 +149,12 @@ func newClusterInformers(client kubernetes.Interface, idle time.Duration, onStop
 				return
 			}
 		}
-		// the stores are full; the pod revision is final once the handler has had the first list too
+		// the stores are full; the pod and node revisions are final once their handlers have had the first list too
+		// (a node's first add counted after the first node list rebuilt it)
 		if err == nil && !cache.WaitForCacheSync(ci.stop, podEvents.HasSynced) {
+			return
+		}
+		if nodeErr == nil && !cache.WaitForCacheSync(ci.stop, nodeEvents.HasSynced) {
 			return
 		}
 		close(ci.synced)

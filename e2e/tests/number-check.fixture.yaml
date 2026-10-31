@@ -1,6 +1,7 @@
 # e2e-numbers: objects whose numbers are not zero and not alike, for the number check (records/number-check-20261031.md
 # §2). busybox:1.37 is already on the kind node (kind pods do not trust a TLS-inspecting proxy's CA, so nothing new
-# is pulled). The LimitRange comes first so pods without requests get them and the ResourceQuota admits them.
+# is pulled). The LimitRange comes first so pods without requests get them and the ResourceQuota admits them, then
+# the ConfigMap, Secret and ServiceAccount num-init uses (a Pod naming a ServiceAccount not made yet is refused).
 apiVersion: v1
 kind: Namespace
 metadata: { name: e2e-numbers }
@@ -18,7 +19,22 @@ apiVersion: v1
 kind: ResourceQuota
 metadata: { name: num-quota, namespace: e2e-numbers }
 spec:
-  hard: { pods: "20", requests.cpu: "1", requests.memory: 1Gi, limits.memory: 2Gi, configmaps: "10", secrets: "10", services: "6" }
+  hard: { pods: "20", requests.cpu: "1", limits.cpu: "2", requests.memory: 1Gi, limits.memory: 2Gi, configmaps: "10", secrets: "10", services: "6" }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: num-cm, namespace: e2e-numbers }
+data: { a.properties: "x=1", b.properties: "y=2", c.json: "{}" }
+---
+apiVersion: v1
+kind: Secret
+metadata: { name: num-secret, namespace: e2e-numbers }
+type: Opaque
+stringData: { user: e2e, pass: fixture-only }
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: num-sa, namespace: e2e-numbers }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -159,6 +175,8 @@ kind: Pod
 metadata: { name: num-init, namespace: e2e-numbers, labels: { app: num-init } }
 spec:
   terminationGracePeriodSeconds: 0
+  serviceAccountName: num-sa
+  volumes: [{ name: cfg, configMap: { name: num-cm } }]
   initContainers:
     - { name: prepare, image: busybox:1.37, imagePullPolicy: IfNotPresent, command: ["true"] }
   containers:
@@ -167,6 +185,8 @@ spec:
       imagePullPolicy: IfNotPresent
       command: [sleep, "86400"]
       resources: { requests: { cpu: 12m, memory: 10Mi }, limits: { cpu: 24m, memory: 20Mi } }
+      envFrom: [{ secretRef: { name: num-secret } }]
+      volumeMounts: [{ name: cfg, mountPath: /cfg }]
 ---
 apiVersion: batch/v1
 kind: Job
@@ -240,21 +260,6 @@ apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata: { name: num-pdb, namespace: e2e-numbers }
 spec: { minAvailable: 2, selector: { matchLabels: { app: num-ready } } }
----
-apiVersion: v1
-kind: ConfigMap
-metadata: { name: num-cm, namespace: e2e-numbers }
-data: { a.properties: "x=1", b.properties: "y=2", c.json: "{}" }
----
-apiVersion: v1
-kind: Secret
-metadata: { name: num-secret, namespace: e2e-numbers }
-type: Opaque
-stringData: { user: e2e, pass: fixture-only }
----
-apiVersion: v1
-kind: ServiceAccount
-metadata: { name: num-sa, namespace: e2e-numbers }
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role

@@ -86,24 +86,41 @@ test.describe('Phase 5 — detail modal sections', () => {
     await expectCount(page, 'Used By Pods', expected)
   })
 
-  test('5.5 #2 — Namespace Resource Summary (kubeast) is the containers\' requests and limits kubectl reads', async ({ page }) => {
-    // The sums the drawer shows, from the pods kubectl lists, in the drawer's format; they read 0 before (10-30).
+  test('5.5 #2 — Namespace Resource Summary (kubeast) is what a ResourceQuota counts used', async ({ page }) => {
+    // The sums the drawer shows, from the pods kubectl lists, in the drawer's format; they read 0 before (10-30). Only
+    // the pods not finished count, each as Kubernetes computes its requests and limits (component-helpers PodRequests):
+    // the app containers and sidecars, or a larger init container with the sidecars started before it, plus overhead.
     const quantity = (s: string | undefined, milli: boolean): number => {
       if (!s) return 0
-      const units: Array<[string, number]> = [['Ki', 1024], ['Mi', 1024 ** 2], ['Gi', 1024 ** 3], ['Ti', 1024 ** 4], ['m', 0.001], ['k', 1e3], ['K', 1e3], ['M', 1e6], ['G', 1e9], ['T', 1e12]]
+      const units: Array<[string, number]> = [['Ki', 1024], ['Mi', 1024 ** 2], ['Gi', 1024 ** 3], ['Ti', 1024 ** 4], ['m', 0.001], ['k', 1e3], ['M', 1e6], ['G', 1e9], ['T', 1e12]]
       const u = units.find(([suffix]) => s.endsWith(suffix))
       const value = u ? parseFloat(s.slice(0, -u[0].length)) * u[1] : parseFloat(s)
       return milli ? value * 1000 : value
     }
-    const list = pods('kubeast')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const effective = (p: any, kind: 'requests' | 'limits', res: 'cpu' | 'memory') => {
+      const milli = res === 'cpu'
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const of = (c: any) => quantity(c.resources?.[kind]?.[res], milli)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const regular = (p.spec.containers ?? []).reduce((s: number, c: any) => s + of(c), 0)
+      let sidecars = 0
+      let initMax = 0
+      for (const c of p.spec.initContainers ?? []) {
+        if (c.restartPolicy === 'Always') sidecars += of(c)
+        else initMax = Math.max(initMax, of(c) + sidecars)
+      }
+      const total = Math.max(regular + sidecars, initMax)
+      const overhead = quantity(p.spec.overhead?.[res], milli)
+      return kind === 'limits' && total === 0 ? 0 : total + overhead
+    }
+    const list = pods('kubeast').filter((p) => p.status?.phase !== 'Succeeded' && p.status?.phase !== 'Failed')
     let cpuReq = 0, cpuLim = 0, memReq = 0, memLim = 0
     for (const p of list) {
-      for (const c of p.spec.containers ?? []) {
-        cpuReq += quantity(c.resources?.requests?.cpu, true)
-        cpuLim += quantity(c.resources?.limits?.cpu, true)
-        memReq += quantity(c.resources?.requests?.memory, false)
-        memLim += quantity(c.resources?.limits?.memory, false)
-      }
+      cpuReq += effective(p, 'requests', 'cpu')
+      cpuLim += effective(p, 'limits', 'cpu')
+      memReq += effective(p, 'requests', 'memory')
+      memLim += effective(p, 'limits', 'memory')
     }
     expect(cpuReq, 'kubeast pods ask for CPU').toBeGreaterThan(0)
     const cpu = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(2)} cores` : `${Math.round(m)}m`)

@@ -4,6 +4,8 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/eventtime"
 )
 
 // Formatting helpers — turn typed K8s objects into the
@@ -12,18 +14,25 @@ import (
 
 func formatEventList(events []corev1.Event) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(events))
-	for _, e := range events {
-		result = append(result, map[string]interface{}{
-			"type":       e.Type,
-			"reason":     e.Reason,
-			"message":    e.Message,
-			"count":      e.Count,
-			"first_time": toISO(&e.FirstTimestamp),
-			"last_time":  toISO(&e.LastTimestamp),
-			"source":     e.Source.Component,
-		})
+	for i := range events {
+		result = append(result, formatDrawerEvent(&events[i]))
 	}
 	return result
+}
+
+// formatDrawerEvent is an event as a drawer lists it: its times and count as kubectl prints them (eventtime.Seen),
+// under the names the events API gives them.
+func formatDrawerEvent(e *corev1.Event) map[string]interface{} {
+	first, last, count := eventtime.Seen(e)
+	return map[string]interface{}{
+		"type":            e.Type,
+		"reason":          e.Reason,
+		"message":         e.Message,
+		"count":           count,
+		"first_timestamp": eventtime.ISO(first),
+		"last_timestamp":  eventtime.ISO(last),
+		"source":          e.Source.Component,
+	}
 }
 
 func formatStatefulSetList(items []appsv1.StatefulSet) []map[string]interface{} {

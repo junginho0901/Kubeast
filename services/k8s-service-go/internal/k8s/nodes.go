@@ -187,19 +187,7 @@ func (s *Service) DescribeNode(ctx context.Context, name string) (map[string]int
 	// Events
 	if eventsErr == nil {
 		sortEventsByTime(events.Items)
-		eventList := make([]map[string]interface{}, 0, len(events.Items))
-		for _, e := range events.Items {
-			eventList = append(eventList, map[string]interface{}{
-				"type":       e.Type,
-				"reason":     e.Reason,
-				"message":    e.Message,
-				"count":      e.Count,
-				"first_time": toISO(&e.FirstTimestamp),
-				"last_time":  toISO(&e.LastTimestamp),
-				"source":     e.Source.Component,
-			})
-		}
-		result["events"] = eventList
+		result["events"] = formatEventList(events.Items)
 	}
 
 	result["annotations"] = node.Annotations
@@ -223,19 +211,7 @@ func (s *Service) GetNodeEvents(ctx context.Context, nodeName string) ([]map[str
 	}
 	sortEventsByTime(events.Items)
 
-	result := make([]map[string]interface{}, 0, len(events.Items))
-	for _, e := range events.Items {
-		result = append(result, map[string]interface{}{
-			"type":       e.Type,
-			"reason":     e.Reason,
-			"message":    e.Message,
-			"count":      e.Count,
-			"first_time": toISO(&e.FirstTimestamp),
-			"last_time":  toISO(&e.LastTimestamp),
-			"source":     e.Source.Component,
-		})
-	}
-	return result, nil
+	return formatEventList(events.Items), nil
 }
 
 // DeleteNode deletes a node.

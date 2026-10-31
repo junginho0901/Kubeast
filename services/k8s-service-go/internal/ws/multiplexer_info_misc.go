@@ -4,7 +4,11 @@ import (
 	"fmt"
 	"strings"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/eventtime"
 )
 
 // namespaceToInfo — list endpoint: GetNamespaces inline (namespaces.go).
@@ -168,15 +172,20 @@ func eventToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 		reportingComponent = rc
 	}
 
+	// The times and count as the list writes them (eventtime), so an update of an events.k8s.io event does not blank them.
+	var ev corev1.Event
+	_ = runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, &ev)
+	first, _, count := eventtime.Seen(&ev)
+
 	return map[string]interface{}{
 		"name":                metadata["name"],
 		"namespace":           metadata["namespace"],
 		"type":                obj.Object["type"],
 		"reason":              obj.Object["reason"],
 		"message":             obj.Object["message"],
-		"count":               obj.Object["count"],
-		"first_timestamp":     obj.Object["firstTimestamp"],
-		"last_timestamp":      obj.Object["lastTimestamp"],
+		"count":               count,
+		"first_timestamp":     eventtime.ISO(first),
+		"last_timestamp":      eventtime.ISO(eventtime.Last(&ev)),
 		"reporting_component": reportingComponent,
 		"involved_object":     involved,
 		"source":              source,

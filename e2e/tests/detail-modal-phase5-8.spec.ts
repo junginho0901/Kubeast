@@ -105,7 +105,9 @@ test.describe('Phase 5.8 — detail modal polish 24 additions', () => {
     const running = phases.filter((p) => p === 'Running').length
     expect(running, 'kube-system always runs pods').toBeGreaterThan(0)
     const drawer = await openDrawer(page, '/cluster/namespaces', 'kube-system')
-    await expect(drawer.locator('text=/Resource Summary/').first()).toHaveText(new RegExp(`\\b${phases.length} pods`), { timeout: 15000 })
+    // the sum is over the pods not finished, as a ResourceQuota counts them; the phase badges count every pod
+    const summed = phases.filter((p) => p !== 'Succeeded' && p !== 'Failed').length
+    await expect(drawer.locator('text=/Resource Summary/').first()).toHaveText(new RegExp(`\\b${summed} pods`), { timeout: 15000 })
     await expect(drawer).toContainText(`Running: ${running}`)
   })
 

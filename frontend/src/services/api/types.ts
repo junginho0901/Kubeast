@@ -134,9 +134,11 @@ export interface NamespaceDescribe {
     first_timestamp?: string
     last_timestamp?: string
   }>
-  // The pods counted and their containers' requests and limits summed on the server, a page at a time.
+  // The pods counted per phase, and the requests and limits of the summed_pods not Succeeded or Failed added up as the
+  // ResourceQuota counts them, on the server a page at a time.
   pod_summary?: {
     total: number
+    summed_pods?: number
     phases: Record<string, number> | null
     cpu_requests_millicores: number
     cpu_limits_millicores: number
@@ -149,9 +151,9 @@ export interface NamespaceResourceQuota {
   name: string
   namespace: string
   created_at?: string
-  spec_hard: Record<string, string>
-  status_hard: Record<string, string>
-  status_used: Record<string, string>
+  // status.hard and status.used, as kubectl describe quota reads them
+  hard: Record<string, string>
+  used: Record<string, string>
 }
 
 export interface NamespaceLimitRange {
