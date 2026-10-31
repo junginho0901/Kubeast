@@ -1,0 +1,24 @@
+# services/web/patches/*.yaml: changes to rendered objects the Score file
+# and the environment cannot say.
+- target: {kind: Deployment, name: web}
+  op: set
+  path: spec.template.spec.containers.0.resources.limits.cpu
+  value: "2"
+  description: CPU bursts while resizing images
+- target: {kind: Deployment}
+  op: set
+  path: spec.template.spec.terminationGracePeriodSeconds
+  value: 60
+- target: {kind: Deployment, name: web}
+  op: delete
+  path: spec.template.spec.containers.0.livenessProbe
+- target: {kind: Service, name: web}
+  op: set
+  path: metadata.annotations.service\.beta\.kubernetes\.io/aws-load-balancer-internal
+  value: "true"
+- target: {kind: HorizontalPodAutoscaler}
+  op: set
+  path: spec.behavior
+  value:
+    scaleDown:
+      stabilizationWindowSeconds: 600

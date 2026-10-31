@@ -31,6 +31,10 @@ type Input struct {
 	// Peers are the other workloads of the environment for service-port
 	// resources: workload name → service port name → port.
 	Peers map[string]map[string]int
+	// Patches change rendered objects (services/<name>/patches/*.yaml).
+	Patches []File
+	// Raw adds objects the renderer does not make (services/<name>/raw/*.yaml).
+	Raw []File
 }
 
 // Result is the rendered objects in apply order, with notes on what was left
@@ -38,6 +42,9 @@ type Input struct {
 type Result struct {
 	Objects []Object
 	Notes   []string
+	// ClusterScoped are raw objects without a namespace. They are not
+	// applied with the workload's identity; they wait for a platform admin.
+	ClusterScoped []Object
 }
 
 const (
@@ -62,9 +69,10 @@ type renderer struct {
 	name string
 	ns   string
 
-	objects []Object
-	notes   []string
-	errs    []error
+	objects       []Object
+	clusterScoped []Object
+	notes         []string
+	errs          []error
 
 	outputs     map[string]framework.OutputLookupFunc
 	lookup      func(string) (string, error)
@@ -96,7 +104,8 @@ func Render(in Input) (*Result, error) {
 		return nil, errors.Join(r.errs...)
 	}
 	sortObjects(r.objects)
-	return &Result{Objects: r.objects, Notes: r.notes}, nil
+	sortObjects(r.clusterScoped)
+	return &Result{Objects: r.objects, Notes: r.notes, ClusterScoped: r.clusterScoped}, nil
 }
 
 func (r *renderer) run() {
@@ -123,6 +132,11 @@ func (r *renderer) run() {
 	r.autoscaler()
 	r.disruptionBudget()
 	r.serviceMonitor()
+	if len(r.errs) > 0 {
+		return // patches would be aimed at objects that are not all there
+	}
+	r.applyPatches(r.in.Patches) // rendered objects only, before raw ones join
+	r.addRaw(r.in.Raw)
 }
 
 func (r *renderer) fail(format string, args ...interface{}) {

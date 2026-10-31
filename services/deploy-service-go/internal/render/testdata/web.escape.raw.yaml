@@ -1,0 +1,40 @@
+# services/web/raw/*.yaml: objects the renderer does not make.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: web-cleanup
+spec:
+  schedule: "0 3 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: cleanup
+              image: ghcr.io/example/web:2.0.1
+              args: ["rake", "cleanup"]
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: web-queue
+  labels:
+    team.example.com/owner: storefront
+spec:
+  scaleTargetRef:
+    name: web
+  triggers:
+    - type: redis
+      metadata:
+        listName: jobs
+        listLength: "10"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: web-node-reader
+rules:
+  - apiGroups: [""]
+    resources: [nodes]
+    verbs: [get, list]
