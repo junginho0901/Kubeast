@@ -410,11 +410,24 @@ test.describe('number check — list screens', () => {
     await expect(tile).toHaveClass(/badge-warning/)
   })
 
-  // one test, a step per screen: the fixture is made once and a screen that differs does not stop the others
+  // one test, a step per screen and way: the fixture is made once and a screen that differs does not stop the others.
+  // Each screen is read twice: from the list API alone (a page whose live updates are held back), and with the live
+  // updates the page applies on top (a watch first sends every object as ADDED, so a plain read can be either). The
+  // window is wide enough that no column folds: a folded column's header reads empty and would not be compared.
   test('every list screen shows the rows, columns and cards the cluster has', async ({ page }) => {
-    test.setTimeout(600_000)
-    await page.addInitScript(() => localStorage.setItem('kubeast.listPageSize', '100'))
-    for (const s of SCREENS) await test.step(s.path, async () => {
+    test.setTimeout(900_000)
+    await page.context().addInitScript(() => localStorage.setItem('kubeast.listPageSize', '100'))
+    const held = await page.context().newPage()
+    await held.routeWebSocket(/wsMultiplexer/, () => {})
+    for (const p of [held, page]) await p.setViewportSize({ width: 2560, height: 1200 })
+    for (const s of SCREENS) {
+      for (const [way, p] of [['list API', held], ['live', page]] as const) await test.step(`${s.path} · ${way}`, () => compareScreen(p, s, way))
+    }
+    await held.close()
+  })
+
+  async function compareScreen(page: Page, s: Screen, way: string) {
+    {
       await page.goto(`${s.path}${s.path.includes('?') ? '&' : '?'}cluster=self&namespace=${NS}`)
       const table = await apiTable(s.api)
       const want = table.rows.map((r) => r.object.metadata.name).sort()
@@ -427,8 +440,9 @@ test.describe('number check — list screens', () => {
       try {
         await expect.poll(names, { timeout: 20_000 }).toEqual(want)
       } catch {
-        expect.soft(await names(), `${s.path}: names on screen`).toEqual(want)
+        expect.soft(await names(), `${s.path} (${way}): names on screen`).toEqual(want)
       }
+      expect.soft(await page.locator('main [data-fold]').count(), `${s.path} (${way}): a column folded at 2560 px`).toBe(0)
 
       // the cluster again, then the screen, so a value that moves (RESTARTS) is read close together
       const fresh = await apiTable(s.api)
@@ -446,7 +460,7 @@ test.describe('number check — list screens', () => {
           const o = objects[name]
           const extra = s.extra?.[h]
           if (extra) {
-            expect.soft(row[i], `${s.path} · ${name} · ${h} (from the object)`).toBe(extra(o))
+            expect.soft(row[i], `${s.path} (${way}) · ${name} · ${h} (from the object)`).toBe(extra(o))
             return
           }
           const j = tableCols.indexOf(norm(s.alias?.[h] ?? h))
@@ -456,18 +470,18 @@ test.describe('number check — list screens', () => {
           }
           const cluster = s.shape?.[h] ? s.shape[h](byName[name][j], o) : byName[name][j]
           const same = s.spans?.[h]?.(o) ? sameSpan(row[i], cluster) : sameValue(row[i], cluster)
-          expect.soft(same, `${s.path} · ${name} · ${h}: screen "${row[i]}", kubectl "${byName[name][j]}"`).toBe(true)
+          expect.soft(same, `${s.path} (${way}) · ${name} · ${h}: screen "${row[i]}", kubectl "${byName[name][j]}"`).toBe(true)
         })
       }
-      expect.soft(unknown, `${s.path}: columns with nothing to compare against`).toEqual([])
+      expect.soft(unknown, `${s.path} (${way}): columns with nothing to compare against`).toEqual([])
       if (s.cards) {
         const expected = s.cards(Object.values(objects))
         for (const [label, value] of Object.entries(expected)) {
-          expect.soft(cards[label], `${s.path} · card "${label}" (cards on screen: ${JSON.stringify(cards)})`).toBe(value)
+          expect.soft(cards[label], `${s.path} (${way}) · card "${label}" (cards on screen: ${JSON.stringify(cards)})`).toBe(value)
         }
       }
-    })
-  })
+    }
+  }
 
   // An EndpointSlice row and its drawer are the slice the cluster has whichever way they came: from the list API (live
   // updates held back), from a live update, and by link (the object itself). Last in the file: it changes num-hand.
