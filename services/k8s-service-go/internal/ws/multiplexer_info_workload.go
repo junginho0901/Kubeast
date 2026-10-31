@@ -105,10 +105,10 @@ func statefulsetToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 	stsStatus := "Healthy"
 	if replicas == 0 {
 		stsStatus = "Idle"
-	} else if readyReplicas < replicas {
-		stsStatus = "Degraded"
 	} else if availableReplicas == 0 && replicas > 0 {
 		stsStatus = "Unavailable"
+	} else if readyReplicas < replicas {
+		stsStatus = "Degraded"
 	}
 
 	return map[string]interface{}{
@@ -166,10 +166,10 @@ func daemonsetToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 	dsStatus := "Healthy"
 	if desired == 0 {
 		dsStatus = "Idle"
-	} else if ready < desired {
-		dsStatus = "Degraded"
 	} else if available == 0 && desired > 0 {
 		dsStatus = "Unavailable"
+	} else if ready < desired {
+		dsStatus = "Degraded"
 	}
 
 	return map[string]interface{}{
@@ -245,10 +245,10 @@ func replicasetToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 	rsStatus := "Healthy"
 	if replicas == 0 {
 		rsStatus = "Idle"
-	} else if readyReplicas < replicas {
-		rsStatus = "Degraded"
 	} else if availableReplicas == 0 && replicas > 0 {
 		rsStatus = "Unavailable"
+	} else if readyReplicas < replicas {
+		rsStatus = "Degraded"
 	}
 
 	out := map[string]interface{}{
