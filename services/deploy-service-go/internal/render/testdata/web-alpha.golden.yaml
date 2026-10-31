@@ -1,0 +1,314 @@
+apiVersion: v1
+automountServiceAccountToken: false
+kind: ServiceAccount
+metadata:
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/web
+    kubeast.io/owner: alpha/web/ServiceAccount/web
+  labels:
+    app.kubernetes.io/managed-by: kubeast-deploy
+    app.kubernetes.io/name: web
+    kubeast.io/environment: alpha
+    kubeast.io/service: web
+  name: web
+  namespace: web-alpha
+---
+apiVersion: v1
+data:
+  app-0-config.yaml: |
+    name: web
+    listen: 8080
+  app-1-motd.txt: |
+    Welcome to ${not expanded}
+kind: ConfigMap
+metadata:
+  annotations:
+    kubeast.io/owner: alpha/web/ConfigMap/web-files
+  labels:
+    app.kubernetes.io/managed-by: kubeast-deploy
+    app.kubernetes.io/name: web
+    kubeast.io/environment: alpha
+    kubeast.io/service: web
+  name: web-files
+  namespace: web-alpha
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  annotations:
+    kubeast.io/owner: alpha/web/ExternalSecret/web-db
+  labels:
+    app.kubernetes.io/managed-by: kubeast-deploy
+    app.kubernetes.io/name: web
+    kubeast.io/environment: alpha
+    kubeast.io/service: web
+  name: web-db
+  namespace: web-alpha
+spec:
+  data:
+    - remoteRef:
+        key: web/alpha-db
+        property: password
+      secretKey: password
+    - remoteRef:
+        key: web/alpha-db
+        property: username
+      secretKey: username
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: vault
+  target:
+    creationPolicy: Owner
+    name: web-db
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    kubeast.io/owner: alpha/web/Service/web
+  labels:
+    app.kubernetes.io/managed-by: kubeast-deploy
+    app.kubernetes.io/name: web
+    kubeast.io/environment: alpha
+    kubeast.io/service: web
+  name: web
+  namespace: web-alpha
+spec:
+  ports:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8080
+  selector:
+    app.kubernetes.io/name: web
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kubeast.io/owner: alpha/web/Deployment/web
+  labels:
+    app.kubernetes.io/managed-by: kubeast-deploy
+    app.kubernetes.io/name: web
+    kubeast.io/environment: alpha
+    kubeast.io/service: web
+  name: web
+  namespace: web-alpha
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: web
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        kubeast.io/files-hash: 8f6934acebeeaa5e
+      labels:
+        app.kubernetes.io/managed-by: kubeast-deploy
+        app.kubernetes.io/name: web
+        kubeast.io/environment: alpha
+        kubeast.io/service: web
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - env:
+            - name: KUBEAST_SECRET_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: password
+                  name: web-db
+            - name: KUBEAST_SECRET_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  key: username
+                  name: web-db
+            - name: API_ADDR
+              value: api:9090
+            - name: DATABASE_URL
+              value: postgres://$(KUBEAST_SECRET_DB_USERNAME):$(KUBEAST_SECRET_DB_PASSWORD)@db.internal:5432/web
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  key: username
+                  name: web-db
+            - name: LOG_LEVEL
+              value: info
+            - name: PUBLIC_URL
+              value: https://web.alpha.example.com
+            - name: SA_NAME
+              value: web
+          image: ghcr.io/example/web:2.0.1
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+          name: app
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+          resources:
+            limits:
+              memory: 1Gi
+            requests:
+              cpu: 250m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - mountPath: /etc/web/config.yaml
+              name: files
+              readOnly: true
+              subPath: app-0-config.yaml
+            - mountPath: /etc/web/motd.txt
+              name: files
+              readOnly: true
+              subPath: app-1-motd.txt
+            - mountPath: /tmp
+              name: tmp
+            - mountPath: /var/cache/web
+              name: vol-cache
+      hostUsers: false
+      nodeSelector:
+        kubernetes.io/arch: arm64
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: web
+      tolerations:
+        - effect: NoSchedule
+          key: arch
+          operator: Equal
+          value: arm64
+      topologySpreadConstraints:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: web
+          maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: web
+          maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+      volumes:
+        - configMap:
+            items:
+              - key: app-0-config.yaml
+                path: app-0-config.yaml
+              - key: app-1-motd.txt
+                mode: 292
+                path: app-1-motd.txt
+            name: web-files
+          name: files
+        - emptyDir:
+            sizeLimit: 64Mi
+          name: tmp
+        - emptyDir:
+            sizeLimit: 1Gi
+          name: vol-cache
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  annotations:
+    kubeast.io/owner: alpha/web/HorizontalPodAutoscaler/web
+  labels:
+    app.kubernetes.io/managed-by: kubeast-deploy
+    app.kubernetes.io/name: web
+    kubeast.io/environment: alpha
+    kubeast.io/service: web
+  name: web
+  namespace: web-alpha
+spec:
+  maxReplicas: 6
+  metrics:
+    - resource:
+        name: cpu
+        target:
+          averageUtilization: 70
+          type: Utilization
+      type: Resource
+  minReplicas: 2
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: web
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  annotations:
+    kubeast.io/owner: alpha/web/PodDisruptionBudget/web
+  labels:
+    app.kubernetes.io/managed-by: kubeast-deploy
+    app.kubernetes.io/name: web
+    kubeast.io/environment: alpha
+    kubeast.io/service: web
+  name: web
+  namespace: web-alpha
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: web
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  annotations:
+    kubeast.io/owner: alpha/web/HTTPRoute/web-route
+  labels:
+    app.kubernetes.io/managed-by: kubeast-deploy
+    app.kubernetes.io/name: web
+    kubeast.io/environment: alpha
+    kubeast.io/service: web
+  name: web-route
+  namespace: web-alpha
+spec:
+  hostnames:
+    - web.alpha.example.com
+  parentRefs:
+    - name: public
+      namespace: gateway-system
+      sectionName: https
+  rules:
+    - backendRefs:
+        - name: web
+          port: 80
+      matches:
+        - path:
+            type: PathPrefix
+            value: /
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  annotations:
+    kubeast.io/owner: alpha/web/ServiceMonitor/web
+  labels:
+    app.kubernetes.io/managed-by: kubeast-deploy
+    app.kubernetes.io/name: web
+    kubeast.io/environment: alpha
+    kubeast.io/service: web
+  name: web
+  namespace: web-alpha
+spec:
+  endpoints:
+    - path: /metrics
+      port: http
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: web

@@ -1,0 +1,115 @@
+# note: resource "route" (route): no HTTPRoute, the target cluster of environment "dev" has no Gateway API
+# note: resource "unused" (volume): not mounted by any container
+# note: annotation kubeast.io/pdb: min-available=1 with at least 1 replica(s) lets no pod be evicted, so drains wait
+# note: annotation kubeast.io/scrape: no ServiceMonitor, the target cluster of environment "dev" has no prometheus-operator
+apiVersion: v1
+automountServiceAccountToken: false
+kind: ServiceAccount
+metadata:
+  annotations:
+    kubeast.io/owner: dev/shop/ServiceAccount/shop
+  labels:
+    app.kubernetes.io/managed-by: kubeast-deploy
+    app.kubernetes.io/name: shop
+    kubeast.io/environment: dev
+    kubeast.io/service: shop
+  name: shop
+  namespace: apps
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    kubeast.io/owner: dev/shop/Service/shop
+  labels:
+    app.kubernetes.io/managed-by: kubeast-deploy
+    app.kubernetes.io/name: shop
+    kubeast.io/environment: dev
+    kubeast.io/service: shop
+  name: shop
+  namespace: apps
+spec:
+  ports:
+    - name: web
+      port: 8080
+      protocol: TCP
+      targetPort: 8080
+  selector:
+    app.kubernetes.io/name: shop
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kubeast.io/owner: dev/shop/Deployment/shop
+  labels:
+    app.kubernetes.io/managed-by: kubeast-deploy
+    app.kubernetes.io/name: shop
+    kubeast.io/environment: dev
+    kubeast.io/service: shop
+  name: shop
+  namespace: apps
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: shop
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/managed-by: kubeast-deploy
+        app.kubernetes.io/name: shop
+        kubeast.io/environment: dev
+        kubeast.io/service: shop
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - image: ghcr.io/example/shop:1.0.0
+          name: main
+          resources:
+            limits:
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: shop
+      volumes:
+        - emptyDir:
+            sizeLimit: 64Mi
+          name: tmp
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  annotations:
+    kubeast.io/owner: dev/shop/PodDisruptionBudget/shop
+  labels:
+    app.kubernetes.io/managed-by: kubeast-deploy
+    app.kubernetes.io/name: shop
+    kubeast.io/environment: dev
+    kubeast.io/service: shop
+  name: shop
+  namespace: apps
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: shop

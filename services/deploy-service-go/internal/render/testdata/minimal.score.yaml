@@ -1,0 +1,8 @@
+apiVersion: score.dev/v1b1
+metadata:
+  name: worker
+containers:
+  main:
+    image: ghcr.io/example/worker:1.4.2
+    command: ["/worker"]
+    args: ["--queue", "default"]

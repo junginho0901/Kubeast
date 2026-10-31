@@ -1,0 +1,21 @@
+name: prod
+namespace: "{service}-prod"
+replicas: 2
+resources:
+  requests: {cpu: 200m, memory: 256Mi}
+  limits: {memory: 512Mi}
+maxSurge: "1"
+tmpSize: 128Mi
+gateway: {name: public, namespace: gateway-system, sectionName: https}
+domain: "{service}.example.com"
+secretStore: {kind: SecretStore, name: vault-prod, refreshInterval: 15m}
+serviceAccountClass: aws-irsa
+profiles:
+  general:
+    nodeSelector: {node-pool: general}
+  arm:
+    nodeSelector: {kubernetes.io/arch: arm64}
+    tolerations:
+      - {key: arch, operator: Equal, value: arm64, effect: NoSchedule}
+defaultProfile: general
+capabilities: {gatewayAPI: true, externalSecrets: true, serviceMonitor: true}
