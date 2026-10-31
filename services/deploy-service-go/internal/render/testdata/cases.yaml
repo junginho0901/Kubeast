@@ -1,0 +1,152 @@
+# Each case renders a Score file in an environment. A case with `error`
+# expects every listed text in the error; the others compare with
+# <name>.golden.yaml (go test ./internal/render -update rewrites them).
+- name: minimal
+  score: minimal.score.yaml
+  env: env-alpha.yaml
+- name: web-alpha
+  score: web.score.yaml
+  env: env-alpha.yaml
+- name: web-prod
+  score: web.score.yaml
+  overrides: [web.prod.overrides.yaml]
+  env: env-prod.yaml
+- name: options
+  score: options.score.yaml
+  env: env-prod.yaml
+- name: routed-bare-cluster
+  score: routed.score.yaml
+  env: env-bare.yaml
+
+- name: error-unknown-key
+  env: env-alpha.yaml
+  error: ["annotation kubeast.io/replica: unknown key"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app, annotations: {kubeast.io/replica: "2"}}
+    containers: {main: {image: nginx:1.27}}
+- name: error-schema
+  env: env-alpha.yaml
+  error: ["score schema", "containers"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app}
+- name: error-before
+  env: env-alpha.yaml
+  error: ["`before` is not supported"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app}
+    containers:
+      init: {image: busybox:1.37}
+      main: {image: nginx:1.27, before: {init: {ready: complete}}}
+- name: error-statefulset
+  env: env-alpha.yaml
+  error: ["StatefulSet is not supported"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app, annotations: {k8s.score.dev/kind: StatefulSet}}
+    containers: {main: {image: nginx:1.27}}
+- name: error-read-only-root-without-reason
+  env: env-alpha.yaml
+  error: ["kubeast.io/read-only-root-reason"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app, annotations: {kubeast.io/read-only-root: "false"}}
+    containers: {main: {image: nginx:1.27}}
+- name: error-replicas-and-autoscale
+  env: env-alpha.yaml
+  error: ["not both"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app, annotations: {kubeast.io/replicas: "2", kubeast.io/autoscale: "2-4"}}
+    containers: {main: {image: nginx:1.27}}
+- name: error-exception-without-reason
+  env: env-alpha.yaml
+  error: ["kubeast.io/policy-exception-reason"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app, annotations: {kubeast.io/policy-exception: "no-latest-tag"}}
+    containers: {main: {image: nginx:1.27}}
+- name: error-canary
+  env: env-alpha.yaml
+  error: ["\"canary\" is not supported in this version"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app, annotations: {kubeast.io/strategy: canary}}
+    containers: {main: {image: nginx:1.27}}
+- name: error-unknown-resource-type
+  env: env-alpha.yaml
+  error: ["type \"postgres\" is not supported"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app}
+    containers: {main: {image: nginx:1.27}}
+    resources: {db: {type: postgres}}
+- name: error-image-from-environment
+  env: env-alpha.yaml
+  error: ["needs the image from the environment values file"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app}
+    containers: {main: {image: .}}
+- name: error-route-port
+  env: env-alpha.yaml
+  error: ["params.port admin is not a port in service.ports"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app}
+    service: {ports: {http: {port: 80}}}
+    containers: {main: {image: nginx:1.27}}
+    resources: {route: {type: route, params: {host: a.example.com, port: admin}}}
+- name: error-secret-in-file
+  env: env-alpha.yaml
+  error: ["a secret output cannot go into a file"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app}
+    containers:
+      main:
+        image: nginx:1.27
+        files: {/etc/a.conf: {content: "password=${resources.db.password}"}}
+    resources: {db: {type: secret, params: {key: a/db}}}
+- name: error-secret-without-external-secrets
+  env: env-bare.yaml
+  error: ["has no External Secrets"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app}
+    containers: {main: {image: nginx:1.27, variables: {P: "${resources.db.password}"}}}
+    resources: {db: {type: secret, params: {key: a/db}}}
+- name: error-shared-resource
+  env: env-alpha.yaml
+  error: ["shared resources (`id`) are not supported"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app}
+    containers: {main: {image: nginx:1.27}}
+    resources: {cache: {type: volume, id: shared-cache}}
+- name: error-unknown-param
+  env: env-alpha.yaml
+  error: ["unknown param \"hostname\""]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app}
+    containers: {main: {image: nginx:1.27}}
+    resources: {dns: {type: dns, params: {hostname: a.example.com}}}
+- name: error-unknown-profile
+  env: env-alpha.yaml
+  error: ["\"gpu\" is not a profile of environment \"alpha\""]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app, annotations: {kubeast.io/profile: gpu}}
+    containers: {main: {image: nginx:1.27}}
+- name: error-every-problem-at-once
+  env: env-alpha.yaml
+  error: ["kubeast.io/autoscale", "kubeast.io/spread", "kubeast.io/run-as-user"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata:
+      name: app
+      annotations: {kubeast.io/autoscale: "6-2", kubeast.io/spread: "rack", kubeast.io/run-as-user: "0"}
+    containers: {main: {image: nginx:1.27}}

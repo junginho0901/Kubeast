@@ -1,0 +1,22 @@
+apiVersion: score.dev/v1b1
+metadata:
+  name: shop
+  annotations:
+    kubeast.io/scrape: "web:/metrics"
+    kubeast.io/pdb: "min-available=1"
+service:
+  ports:
+    web:
+      port: 8080
+containers:
+  main:
+    image: ghcr.io/example/shop:1.0.0
+resources:
+  route:
+    type: route
+    params:
+      host: shop.dev.example.com
+      port: 8080
+      path: /shop
+  unused:
+    type: volume

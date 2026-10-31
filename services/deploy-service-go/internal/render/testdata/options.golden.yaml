@@ -1,0 +1,124 @@
+apiVersion: v1
+automountServiceAccountToken: false
+kind: ServiceAccount
+metadata:
+  annotations:
+    kubeast.io/owner: prod/legacy/ServiceAccount/legacy
+  labels:
+    app.kubernetes.io/managed-by: kubeast-deploy
+    app.kubernetes.io/name: legacy
+    kubeast.io/environment: prod
+    kubeast.io/service: legacy
+  name: legacy
+  namespace: legacy-prod
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kubeast.io/owner: prod/legacy/Deployment/legacy
+    kubeast.io/policy-exception: allowed-registry,no-latest-tag
+    kubeast.io/policy-exception-reason: vendor image until 2026-12
+    kubeast.io/read-only-root-reason: writes translations under /app/public at request time
+  labels:
+    app.kubernetes.io/managed-by: kubeast-deploy
+    app.kubernetes.io/name: legacy
+    kubeast.io/environment: prod
+    kubeast.io/service: legacy
+  name: legacy
+  namespace: legacy-prod
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: legacy
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/managed-by: kubeast-deploy
+        app.kubernetes.io/name: legacy
+        kubeast.io/environment: prod
+        kubeast.io/service: legacy
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - env:
+            - name: TARGET
+              value: legacy
+          image: ghcr.io/example/log-shipper:0.3.0
+          name: sidecar
+          resources:
+            limits:
+              memory: 512Mi
+            requests:
+              cpu: 200m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: false
+            runAsUser: 1000
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp
+        - image: registry.vendor.example/legacy:9.1
+          name: web
+          resources:
+            limits:
+              memory: 1Gi
+            requests:
+              cpu: 200m
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: false
+            runAsUser: 1000
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp
+      nodeSelector:
+        node-pool: general
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: legacy
+      topologySpreadConstraints:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: legacy
+          maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+      volumes:
+        - emptyDir:
+            sizeLimit: 128Mi
+          name: tmp
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  annotations:
+    kubeast.io/owner: prod/legacy/PodDisruptionBudget/legacy
+  labels:
+    app.kubernetes.io/managed-by: kubeast-deploy
+    app.kubernetes.io/name: legacy
+    kubeast.io/environment: prod
+    kubeast.io/service: legacy
+  name: legacy
+  namespace: legacy-prod
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: legacy

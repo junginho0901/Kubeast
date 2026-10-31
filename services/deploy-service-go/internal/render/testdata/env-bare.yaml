@@ -1,0 +1,7 @@
+# A single cluster with none of the optional APIs and nodes that cannot run
+# user namespaces (before Kubernetes 1.36).
+name: dev
+namespace: apps
+hostUsers: true
+spread: []
+readinessFromPort: false

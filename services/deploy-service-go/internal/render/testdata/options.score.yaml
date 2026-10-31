@@ -1,0 +1,22 @@
+apiVersion: score.dev/v1b1
+metadata:
+  name: legacy
+  annotations:
+    kubeast.io/replicas: "3"
+    kubeast.io/read-only-root: "false"
+    kubeast.io/read-only-root-reason: "writes translations under /app/public at request time"
+    kubeast.io/run-as-user: "1000"
+    kubeast.io/host-users: "true"
+    kubeast.io/spread: "hostname"
+    kubeast.io/policy-exception: "no-latest-tag, allowed-registry"
+    kubeast.io/policy-exception-reason: "vendor image until 2026-12"
+containers:
+  web:
+    image: registry.vendor.example/legacy:9.1
+    resources:
+      requests:
+        memory: 1Gi
+  sidecar:
+    image: ghcr.io/example/log-shipper:0.3.0
+    variables:
+      TARGET: "${metadata.name}"
