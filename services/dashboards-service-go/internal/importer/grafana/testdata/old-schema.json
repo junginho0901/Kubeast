@@ -1,0 +1,5 @@
+{
+  "title": "Grafana 4 dashboard",
+  "schemaVersion": 14,
+  "rows": [{"title": "Row", "panels": [{"id": 1, "type": "graph", "span": 12}]}]
+}
