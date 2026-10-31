@@ -14,6 +14,7 @@ import {
   formatAge,
   formatDuration,
   getJobStatusColor,
+  jobDurationSeconds,
   jobToWorkloadRawJson,
   type SortKey,
 } from './jobHelpers'
@@ -140,7 +141,7 @@ export function JobTable({
                 <td className="py-3 px-4">
                   <span className={`badge ${getJobStatusColor(job.status)}`}>{job.status || '-'}</span>
                 </td>
-                <td className="py-3 px-4 text-xs font-mono">{job.duration || formatDuration(job.duration_seconds)}</td>
+                <td className="py-3 px-4 text-xs font-mono">{formatDuration(jobDurationSeconds(job))}</td>
                 <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{(job.containers || []).join(', ') || '-'}</span></td>
                 <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{(job.images || []).join(', ') || '-'}</span></td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(job.created_at)}</td>

@@ -4,6 +4,7 @@ import { InfoSection, InfoRow, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { nextRunOf, nextRunTitle } from '@/pages/workloads/cronjobs/cronJobHelpers'
 import { humanDuration } from '@/utils/time'
+import { formatDuration, jobDurationSeconds } from '@/pages/workloads/jobs/jobHelpers'
 
 interface Props {
   isJob: boolean
@@ -46,7 +47,7 @@ export default function WorkloadKindInfo({
             {describe?.status && <InfoRow label="Status" value={String(describe.status)} />}
             {describe?.start_time && <InfoRow label="Start Time" value={`${fmtTs(String(describe.start_time))} (${fmtRel(String(describe.start_time))})`} />}
             {describe?.completion_time && <InfoRow label="Completion Time" value={`${fmtTs(String(describe.completion_time))} (${fmtRel(String(describe.completion_time))})`} />}
-            {describe?.duration_seconds != null && <InfoRow label="Duration" value={`${String(describe.duration_seconds)}s`} />}
+            {describe?.start_time && <InfoRow label="Duration" value={formatDuration(jobDurationSeconds({ start_time: String(describe.start_time), completion_time: describe?.completion_time ? String(describe.completion_time) : null }))} />}
             {describe?.backoff_limit != null && <InfoRow label="Backoff Limit" value={String(describe.backoff_limit)} />}
             {describe?.active_deadline_seconds != null && <InfoRow label="Active Deadline" value={`${String(describe.active_deadline_seconds)}s`} />}
             {describe?.ttl_seconds_after_finished != null && <InfoRow label="TTL After Finished" value={`${String(describe.ttl_seconds_after_finished)}s`} />}
@@ -150,7 +151,7 @@ export default function WorkloadKindInfo({
                           <td className="py-1 pr-2 font-mono">{j.name}</td>
                           <td className="py-1 pr-2">{j.status || '-'}</td>
                           <td className="py-1 pr-2 text-slate-400">{fmtRel(j.start_time)}</td>
-                          <td className="py-1 pr-2">{j.duration_seconds != null ? `${j.duration_seconds}s` : '-'}</td>
+                          <td className="py-1 pr-2">{formatDuration(jobDurationSeconds(j))}</td>
                         </tr>
                       ))}
                     </tbody>
