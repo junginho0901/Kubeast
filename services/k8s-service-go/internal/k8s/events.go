@@ -8,6 +8,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/eventtime"
 )
 
 // GetEvents lists the newest limit events in a namespace ("" for all), optionally filtered by resource name and an
@@ -36,17 +38,8 @@ func (s *Service) GetEvents(ctx context.Context, namespace, resourceName, fieldS
 // eventRow is an event as the events API and the issues read it.
 func eventRow(e *corev1.Event) map[string]interface{} {
 	// events.k8s.io/v1 writers (the scheduler among them) fill eventTime and
-	// series instead of lastTimestamp and count.
-	last := metav1.NewTime(eventTimestamp(*e))
-	count := e.Count
-	if e.Series != nil {
-		if !e.Series.LastObservedTime.IsZero() {
-			last = metav1.NewTime(e.Series.LastObservedTime.Time)
-		}
-		if count == 0 {
-			count = e.Series.Count
-		}
-	}
+	// series instead of the timestamps and count: read as kubectl prints them.
+	first, _, count := eventtime.Seen(e)
 	return map[string]interface{}{
 		"name":                e.Name,
 		"namespace":           e.Namespace,
@@ -54,8 +47,8 @@ func eventRow(e *corev1.Event) map[string]interface{} {
 		"reason":              e.Reason,
 		"message":             e.Message,
 		"count":               count,
-		"first_timestamp":     toISO(&e.FirstTimestamp),
-		"last_timestamp":      toISO(&last),
+		"first_timestamp":     eventtime.ISO(first),
+		"last_timestamp":      eventtime.ISO(eventtime.Last(e)),
 		"reporting_component": e.ReportingController,
 		"involved_object": map[string]interface{}{
 			"kind":      e.InvolvedObject.Kind,

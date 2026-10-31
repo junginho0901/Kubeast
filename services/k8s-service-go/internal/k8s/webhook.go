@@ -62,19 +62,7 @@ func (s *Service) DescribeMutatingWebhookConfiguration(ctx context.Context, name
 	result["webhooks"] = formatMutatingWebhooks(mwc.Webhooks)
 
 	// Events
-	eventList := make([]map[string]interface{}, 0, len(events.Items))
-	for _, e := range events.Items {
-		eventList = append(eventList, map[string]interface{}{
-			"type":       e.Type,
-			"reason":     e.Reason,
-			"message":    e.Message,
-			"count":      e.Count,
-			"first_time": toISO(&e.FirstTimestamp),
-			"last_time":  toISO(&e.LastTimestamp),
-			"source":     e.Source.Component,
-		})
-	}
-	result["events"] = eventList
+	result["events"] = formatEventList(events.Items)
 
 	return result, nil
 }
@@ -208,19 +196,7 @@ func (s *Service) DescribeValidatingWebhookConfiguration(ctx context.Context, na
 	result["webhooks"] = formatValidatingWebhooks(vwc.Webhooks)
 
 	// Events
-	eventList := make([]map[string]interface{}, 0, len(events.Items))
-	for _, e := range events.Items {
-		eventList = append(eventList, map[string]interface{}{
-			"type":       e.Type,
-			"reason":     e.Reason,
-			"message":    e.Message,
-			"count":      e.Count,
-			"first_time": toISO(&e.FirstTimestamp),
-			"last_time":  toISO(&e.LastTimestamp),
-			"source":     e.Source.Component,
-		})
-	}
-	result["events"] = eventList
+	result["events"] = formatEventList(events.Items)
 
 	return result, nil
 }

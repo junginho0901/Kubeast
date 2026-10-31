@@ -11,6 +11,8 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/eventtime"
 )
 
 // TimelineResult holds merged events and rollout history for a timeline view.
@@ -116,15 +118,9 @@ func buildTimelineResult(events []map[string]interface{}, counts eventCounts, ro
 	}
 }
 
-// eventTimestamp returns the most relevant timestamp for an event.
+// eventTimestamp is when an event was last seen, as kubectl prints it (eventtime.Last).
 func eventTimestamp(e corev1.Event) time.Time {
-	if !e.LastTimestamp.IsZero() {
-		return e.LastTimestamp.Time
-	}
-	if !e.EventTime.IsZero() {
-		return e.EventTime.Time
-	}
-	return e.CreationTimestamp.Time
+	return eventtime.Last(&e)
 }
 
 // extractContainerImages returns image names from containers.
@@ -154,6 +150,7 @@ func (s *Service) getTimelineEvents(ctx context.Context, namespace, kind, name s
 	result := make([]map[string]interface{}, 0, len(filtered))
 	for _, e := range filtered {
 		ts := eventTimestamp(e)
+		first, last, count := eventtime.Seen(&e)
 		result = append(result, map[string]interface{}{
 			"timestamp": ts.UTC().Format(time.RFC3339),
 			"type":      e.Type,
@@ -170,9 +167,9 @@ func (s *Service) getTimelineEvents(ctx context.Context, namespace, kind, name s
 				"name":      e.InvolvedObject.Name,
 				"namespace": e.InvolvedObject.Namespace,
 			},
-			"count":      e.Count,
-			"first_seen": toISO(&e.FirstTimestamp),
-			"last_seen":  toISO(&e.LastTimestamp),
+			"count":      count,
+			"first_seen": eventtime.ISO(first),
+			"last_seen":  eventtime.ISO(last),
 		})
 	}
 	return result, counts, nil

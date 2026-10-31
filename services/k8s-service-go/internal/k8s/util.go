@@ -11,6 +11,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/eventtime"
 )
 
 // toISO converts a metav1.Time to ISO 8601 string.
@@ -128,19 +130,9 @@ func containerStateStr(state corev1.ContainerState) map[string]interface{} {
 	return result
 }
 
-// sortEventsByTime sorts events newest first.
+// sortEventsByTime sorts events newest first, by when each was last seen (eventtime.Last).
 func sortEventsByTime(events []corev1.Event) {
-	sort.Slice(events, func(i, j int) bool {
-		ti := events[i].LastTimestamp.Time
-		tj := events[j].LastTimestamp.Time
-		if ti.IsZero() {
-			ti = events[i].CreationTimestamp.Time
-		}
-		if tj.IsZero() {
-			tj = events[j].CreationTimestamp.Time
-		}
-		return ti.After(tj)
-	})
+	sort.SliceStable(events, func(i, j int) bool { return eventtime.Last(&events[i]).After(eventtime.Last(&events[j])) })
 }
 
 // formatPodTemplate formats a PodTemplateSpec into the structure the frontend expects.
