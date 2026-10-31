@@ -46,7 +46,7 @@ function apiTable(apiPath: string): Promise<Table> {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Obj = any
-const items = (plural: string): Obj[] => JSON.parse(kubectl(`get ${plural} -n ${NS} -o json`)).items
+const items = (plural: string, clusterScoped = false): Obj[] => JSON.parse(kubectl(`get ${plural} ${clusterScoped ? '' : `-n ${NS} `}-o json`)).items
 const cond = (o: Obj, type: string) => (o.status?.conditions ?? []).find((c: Obj) => c.type === type)?.status
 
 const FIXTURE = fs.readFileSync(path.join(__dirname, 'number-check.fixture.yaml'), 'utf8')
@@ -80,6 +80,8 @@ type Screen = {
   path: string
   api: string
   plural: string
+  // a cluster-scoped kind: the screen is opened without a namespace and holds every object of the kind
+  clusterScoped?: boolean
   // screen header → Table column, where the names differ
   alias?: Record<string, string>
   // how a screen column differs from kubectl's on purpose: the cluster value is turned into Kubeast's first
@@ -428,7 +430,7 @@ test.describe('number check — list screens', () => {
 
   async function compareScreen(page: Page, s: Screen, way: string) {
     {
-      await page.goto(`${s.path}${s.path.includes('?') ? '&' : '?'}cluster=self&namespace=${NS}`)
+      await page.goto(`${s.path}${s.path.includes('?') ? '&' : '?'}cluster=self${s.clusterScoped ? '' : `&namespace=${NS}`}`)
       const table = await apiTable(s.api)
       const want = table.rows.map((r) => r.object.metadata.name).sort()
       // the rows on screen are the cluster's objects (re-read until the list has caught up)
@@ -446,7 +448,7 @@ test.describe('number check — list screens', () => {
 
       // the cluster again, then the screen, so a value that moves (RESTARTS) is read close together
       const fresh = await apiTable(s.api)
-      const objects = Object.fromEntries(items(s.plural).map((o) => [o.metadata.name, o]))
+      const objects = Object.fromEntries(items(s.plural, s.clusterScoped).map((o) => [o.metadata.name, o]))
       const { heads, rows, cards } = await readScreen(page)
       const nameAt = heads.findIndex((h) => /^name$/i.test(h))
       const tableCols = fresh.columnDefinitions.map((c) => norm(c.name))
