@@ -19,7 +19,13 @@ export function computeDeploymentStatus(replicas: number, readyReplicas: number)
 // "Available" / "Progressing" / "Failed" 를, frontend 의 computeDeploymentStatus
 // fallback 은 "Healthy" / "Degraded" / "Unavailable" 을 만들어내므로 양쪽 모두 매핑.
 // "available" 은 "unavailable" 부분문자열이라 검사 순서 주의 (unavailable 먼저).
-export function getDeploymentStatusColor(status: string): string {
+// A Deployment that wants replicas and has none available is Unavailable whatever its status text: the Progressing
+// condition stays True for progressDeadlineSeconds (10 minutes) while no Pod becomes ready.
+type ReplicaCounts = { replicas?: number | null; available_replicas?: number | null }
+const noneAvailable = (c?: ReplicaCounts) => !!c && (c.replicas ?? 0) > 0 && (c.available_replicas ?? 0) === 0
+
+export function getDeploymentStatusColor(status: string, counts?: ReplicaCounts): string {
+  if (noneAvailable(counts)) return 'badge-error'
   const lower = String(status || '').toLowerCase()
   if (lower.includes('unavailable') || lower.includes('failed')) return 'badge-error'
   if (lower.includes('healthy') || lower.includes('available')) return 'badge-success'
@@ -29,7 +35,8 @@ export function getDeploymentStatusColor(status: string): string {
 
 // summary 4 카드 (Total/Healthy/Degraded/Unavailable) 분류.
 // getDeploymentStatusColor 와 같은 키워드 매핑 사용.
-export function classifyDeploymentStatus(status: string): 'healthy' | 'degraded' | 'unavailable' {
+export function classifyDeploymentStatus(status: string, counts?: ReplicaCounts): 'healthy' | 'degraded' | 'unavailable' {
+  if (noneAvailable(counts)) return 'unavailable'
   const lower = String(status || '').toLowerCase()
   if (lower.includes('unavailable') || lower.includes('failed')) return 'unavailable'
   if (lower.includes('healthy') || lower.includes('available')) return 'healthy'

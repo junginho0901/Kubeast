@@ -86,7 +86,7 @@ export default function Deployments() {
 
     for (const dep of filteredDeployments) {
       const status = dep.status || computeDeploymentStatus(dep.replicas || 0, dep.ready_replicas || 0)
-      const bucket = classifyDeploymentStatus(status)
+      const bucket = classifyDeploymentStatus(status, dep)
       if (bucket === 'healthy') healthy += 1
       else if (bucket === 'unavailable') unavailable += 1
       else degraded += 1
@@ -163,7 +163,7 @@ export default function Deployments() {
 
     const problematic = (d: DeploymentInfo) => {
       const status = d.status || computeDeploymentStatus(d.replicas || 0, d.ready_replicas || 0)
-      return classifyDeploymentStatus(status) !== 'healthy'
+      return classifyDeploymentStatus(status, d) !== 'healthy'
     }
 
     return {
@@ -190,7 +190,7 @@ export default function Deployments() {
           interpret: (items) => {
             const out: string[] = []
             const arr = items as unknown as DeploymentInfo[]
-            const unavail = arr.filter((d) => classifyDeploymentStatus(d.status || '') === 'unavailable').length
+            const unavail = arr.filter((d) => classifyDeploymentStatus(d.status || '', d) === 'unavailable').length
             if (unavail > 0) out.push(`⚠️ ${unavail}개 Deployment 가 Unavailable`)
             const partial = arr.filter((d) => {
               const ready = d.ready_replicas ?? 0

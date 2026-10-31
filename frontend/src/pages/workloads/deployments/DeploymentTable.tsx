@@ -156,7 +156,7 @@ export function DeploymentTable({
                 <td className="py-3 px-4 text-xs font-mono">{dep.available_replicas ?? 0}</td>
                 <td className="py-3 px-4">
                   <span
-                    className={`badge ${getDeploymentStatusColor(dep.status || computeDeploymentStatus(dep.replicas || 0, dep.ready_replicas || 0))}`}
+                    className={`badge ${getDeploymentStatusColor(dep.status || computeDeploymentStatus(dep.replicas || 0, dep.ready_replicas || 0), dep)}`}
                     title={workloadStatusTitle(dep.status, dep.progressing_reason)}
                   >
                     {workloadStatusLabel(tr, dep.status || computeDeploymentStatus(dep.replicas || 0, dep.ready_replicas || 0))}
