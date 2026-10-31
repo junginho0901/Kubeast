@@ -17,12 +17,16 @@ import (
 var update = flag.Bool("update", false, "rewrite testdata/*.golden.yaml")
 
 type testCase struct {
-	Name      string   `json:"name"`
-	Score     string   `json:"score,omitempty"`
-	Inline    string   `json:"inline,omitempty"`
-	Overrides []string `json:"overrides,omitempty"`
-	Env       string   `json:"env"`
-	Error     []string `json:"error,omitempty"`
+	Name          string   `json:"name"`
+	Score         string   `json:"score,omitempty"`
+	Inline        string   `json:"inline,omitempty"`
+	Overrides     []string `json:"overrides,omitempty"`
+	Env           string   `json:"env"`
+	Patches       []string `json:"patches,omitempty"`
+	PatchesInline string   `json:"patchesInline,omitempty"`
+	Raw           []string `json:"raw,omitempty"`
+	RawInline     string   `json:"rawInline,omitempty"`
+	Error         []string `json:"error,omitempty"`
 }
 
 // peers stands for the other workloads of the environment.
@@ -69,7 +73,20 @@ func caseInput(t testing.TB, c testCase) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	return Render(Input{Spec: s, Env: env, Peers: peers})
+	ri := Input{Spec: s, Env: env, Peers: peers}
+	for _, p := range c.Patches {
+		ri.Patches = append(ri.Patches, File{Name: p, Data: readTestdata(t, p)})
+	}
+	if c.PatchesInline != "" {
+		ri.Patches = append(ri.Patches, File{Name: "inline", Data: []byte(c.PatchesInline)})
+	}
+	for _, p := range c.Raw {
+		ri.Raw = append(ri.Raw, File{Name: p, Data: readTestdata(t, p)})
+	}
+	if c.RawInline != "" {
+		ri.Raw = append(ri.Raw, File{Name: "inline", Data: []byte(c.RawInline)})
+	}
+	return Render(ri)
 }
 
 func goldenText(t testing.TB, res *Result) string {
@@ -83,6 +100,14 @@ func goldenText(t testing.TB, res *Result) string {
 		fmt.Fprintf(&b, "# note: %s\n", n)
 	}
 	b.Write(y)
+	if len(res.ClusterScoped) > 0 {
+		waiting, err := (&Result{Objects: res.ClusterScoped}).YAML()
+		if err != nil {
+			t.Fatal(err)
+		}
+		b.WriteString("# ---- cluster-scoped, waiting for a platform admin's approval ----\n---\n")
+		b.Write(waiting)
+	}
 	return b.String()
 }
 
@@ -172,7 +197,7 @@ func TestEveryObjectCarriesItsOwner(t *testing.T) {
 			t.Fatal(err)
 		}
 		env, _ := target.Parse(readTestdata(t, c.Env))
-		for _, o := range res.Objects {
+		check := func(o Object, cluster bool) {
 			md := o["metadata"].(Object)
 			kind, name := o["kind"].(string), md["name"].(string)
 			labels := md["labels"].(Object)
@@ -182,12 +207,22 @@ func TestEveryObjectCarriesItsOwner(t *testing.T) {
 				t.Errorf("%s %s %s: owner %v, want %s", c.Name, kind, name, got, want)
 			}
 			ns, _ := env.NamespaceFor(svc)
-			if md["namespace"] != ns {
+			if cluster {
+				if _, has := md["namespace"]; has {
+					t.Errorf("%s %s %s: a cluster-scoped object has a namespace", c.Name, kind, name)
+				}
+			} else if md["namespace"] != ns {
 				t.Errorf("%s %s %s: namespace %v, want %s", c.Name, kind, name, md["namespace"], ns)
 			}
 			if labels[labelManagedBy] != managedBy || labels[labelEnv] != env.Name || labels[labelName] != svc {
 				t.Errorf("%s %s %s: labels %v", c.Name, kind, name, labels)
 			}
+		}
+		for _, o := range res.Objects {
+			check(o, false)
+		}
+		for _, o := range res.ClusterScoped {
+			check(o, true)
 		}
 	}
 }

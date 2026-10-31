@@ -17,6 +17,11 @@
 - name: routed-bare-cluster
   score: routed.score.yaml
   env: env-bare.yaml
+- name: web-alpha-escape
+  score: web.score.yaml
+  env: env-alpha.yaml
+  patches: [web.escape.patches.yaml]
+  raw: [web.escape.raw.yaml]
 
 - name: error-unknown-key
   env: env-alpha.yaml
@@ -150,3 +155,169 @@
       name: app
       annotations: {kubeast.io/autoscale: "6-2", kubeast.io/spread: "rack", kubeast.io/run-as-user: "0"}
     containers: {main: {image: nginx:1.27}}
+- name: error-patch-protected
+  env: env-alpha.yaml
+  error: ["metadata.name is the platform's"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app}
+    service: {ports: {http: {port: 80}}}
+    containers: {main: {image: nginx:1.27}}
+  patchesInline: |
+    - {target: {kind: Deployment}, op: set, path: metadata.name, value: other}
+- name: error-patch-selector
+  env: env-alpha.yaml
+  error: ["spec.selector is the platform's"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app}
+    service: {ports: {http: {port: 80}}}
+    containers: {main: {image: nginx:1.27}}
+  patchesInline: |
+    - {target: {kind: Service}, op: delete, path: spec.selector}
+- name: error-patch-no-target
+  env: env-alpha.yaml
+  error: ["no rendered StatefulSet"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app}
+    service: {ports: {http: {port: 80}}}
+    containers: {main: {image: nginx:1.27}}
+  patchesInline: |
+    - {target: {kind: StatefulSet}, op: set, path: spec.replicas, value: 2}
+- name: error-patch-index-out-of-range
+  env: env-alpha.yaml
+  error: ["has 1 items; index 3 is out of range"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app}
+    service: {ports: {http: {port: 80}}}
+    containers: {main: {image: nginx:1.27}}
+  patchesInline: |
+    - {target: {kind: Deployment}, op: set, path: spec.template.spec.containers.3.image, value: x}
+- name: error-patch-delete-missing
+  env: env-alpha.yaml
+  error: ["spec.template.spec.priorityClassName does not exist"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app}
+    service: {ports: {http: {port: 80}}}
+    containers: {main: {image: nginx:1.27}}
+  patchesInline: |
+    - {target: {kind: Deployment}, op: delete, path: spec.template.spec.priorityClassName}
+- name: error-patch-list-from-nothing
+  env: env-alpha.yaml
+  error: ["set the list itself"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app}
+    service: {ports: {http: {port: 80}}}
+    containers: {main: {image: nginx:1.27}}
+  patchesInline: |
+    - {target: {kind: Deployment}, op: set, path: spec.template.spec.initContainers.0.image, value: busybox:1.37}
+- name: error-patch-unknown-field
+  env: env-alpha.yaml
+  error: ["field targett not found"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app}
+    service: {ports: {http: {port: 80}}}
+    containers: {main: {image: nginx:1.27}}
+  patchesInline: |
+    - {targett: {kind: Deployment}, op: set, path: spec.replicas, value: 2}
+- name: error-patch-op
+  env: env-alpha.yaml
+  error: ["op \"replace\" is not set or delete"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app}
+    service: {ports: {http: {port: 80}}}
+    containers: {main: {image: nginx:1.27}}
+  patchesInline: |
+    - {target: {kind: Deployment}, op: replace, path: spec.replicas, value: 2}
+- name: error-raw-namespace
+  env: env-alpha.yaml
+  error: ["namespace \"kube-system\"; the workload's objects stay in \"app-alpha\""]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app}
+    service: {ports: {http: {port: 80}}}
+    containers: {main: {image: nginx:1.27}}
+  rawInline: |
+    apiVersion: v1
+    kind: ConfigMap
+    metadata: {name: extra, namespace: kube-system}
+- name: error-raw-secret
+  env: env-alpha.yaml
+  error: ["use a secret resource"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app}
+    service: {ports: {http: {port: 80}}}
+    containers: {main: {image: nginx:1.27}}
+  rawInline: |
+    apiVersion: v1
+    kind: Secret
+    metadata: {name: creds}
+    stringData: {password: hunter2}
+- name: error-raw-collision
+  env: env-alpha.yaml
+  error: ["Service app is already rendered or listed"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app}
+    service: {ports: {http: {port: 80}}}
+    containers: {main: {image: nginx:1.27}}
+  rawInline: |
+    apiVersion: v1
+    kind: Service
+    metadata: {name: app}
+    spec: {ports: [{port: 81}]}
+- name: error-raw-owner
+  env: env-alpha.yaml
+  error: ["annotation kubeast.io/owner is the platform's"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app}
+    service: {ports: {http: {port: 80}}}
+    containers: {main: {image: nginx:1.27}}
+  rawInline: |
+    apiVersion: v1
+    kind: ConfigMap
+    metadata: {name: extra, annotations: {kubeast.io/owner: alpha/other/ConfigMap/extra}}
+- name: error-raw-label
+  env: env-alpha.yaml
+  error: ["label app.kubernetes.io/name is the platform's"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app}
+    service: {ports: {http: {port: 80}}}
+    containers: {main: {image: nginx:1.27}}
+  rawInline: |
+    apiVersion: v1
+    kind: ConfigMap
+    metadata: {name: extra, labels: {app.kubernetes.io/name: other}}
+- name: error-raw-no-kind
+  env: env-alpha.yaml
+  error: ["needs apiVersion, kind and metadata.name"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app}
+    service: {ports: {http: {port: 80}}}
+    containers: {main: {image: nginx:1.27}}
+  rawInline: |
+    apiVersion: v1
+    metadata: {name: extra}
+- name: error-raw-list
+  env: env-alpha.yaml
+  error: ["write the items as separate documents"]
+  inline: |
+    apiVersion: score.dev/v1b1
+    metadata: {name: app}
+    service: {ports: {http: {port: 80}}}
+    containers: {main: {image: nginx:1.27}}
+  rawInline: |
+    apiVersion: v1
+    kind: List
+    metadata: {name: things}
+    items: []
