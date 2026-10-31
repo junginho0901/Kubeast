@@ -171,8 +171,11 @@ test.describe('Usability and routes', () => {
     await page.getByRole('button', { name: /^(Search|조회)$/ }).first().click()
     const firstRow = page.locator('main tbody tr').first()
     await expect(firstRow).toBeVisible({ timeout: 15_000 })
+    // the rows of the search, not the unfiltered list still on screen: every Action cell is the one searched for
+    const cells = (i: number) => page.locator('main tbody tr').evaluateAll((rows, n) => rows.map((r) => (r as HTMLTableRowElement).cells[n]?.innerText.trim() ?? ''), i)
+    await expect.poll(async () => (await cells(3)).every((a) => a === 'admin.roles.create') || /No results|검색 결과/.test(await firstRow.innerText()), { timeout: 15_000 }).toBe(true)
     test.skip((await page.locator('main tbody tr').count()) < 1 || /No results|검색 결과/.test(await firstRow.innerText()), 'no admin.roles.create rows yet')
-    const targets = await page.locator('main tbody tr').evaluateAll((rows) => rows.map((r) => (r as HTMLTableRowElement).cells[4]?.innerText.trim()))
+    const targets = await cells(4)
     expect(targets.filter((t) => /^\d+$/.test(t ?? ''))).toEqual([])
     expect(targets.some((t) => /^role\/\d+$/.test(t ?? ''))).toBe(true)
   })
