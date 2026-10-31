@@ -473,14 +473,14 @@ test.describe('number check — list screens', () => {
   // updates held back), from a live update, and by link (the object itself). Last in the file: it changes num-hand.
   test('an EndpointSlice row and drawer show the slice from the list API, a live update and a link alike', async ({ page }) => {
     test.setTimeout(180_000)
-    await page.addInitScript(() => localStorage.setItem('kubeast.listPageSize', '100'))
+    await page.context().addInitScript(() => localStorage.setItem('kubeast.listPageSize', '100'))
     const slice = () => JSON.parse(kubectl(`get endpointslice num-hand -n ${NS} -o json`))
     const list = `/network/endpointslices?cluster=self&namespace=${NS}`
     const squash = (s: string) => s.replace(/\s+/g, '')
     const ready = (o: Obj) => (o.endpoints ?? []).filter((e: Obj) => e.conditions?.ready !== false).length
     // the row's Endpoints preview and counts, read by column header
-    const rowShows = async () => {
-      const { heads, rows } = await readScreen(page)
+    const rowShows = async (p: Page = page) => {
+      const { heads, rows } = await readScreen(p)
       const r = rows.find((cells) => cells[heads.findIndex((h) => /^name$/i.test(h))] === 'num-hand') ?? []
       return Object.fromEntries(['Endpoints', 'Total', 'Ready', 'Not Ready'].map((h) => [h, r[heads.indexOf(h)]]))
     }
@@ -506,12 +506,12 @@ test.describe('number check — list screens', () => {
       ...(o.ports ?? []).map((p: Obj) => `${p.name}${p.port}${p.protocol}${p.appProtocol ?? '-'}`),
       ...Object.entries({ ...o.metadata.labels, ...o.metadata.annotations }).map(([k, v]) => squash(`${k}:${v}`)),
     ]
-    const openDrawer = async () => {
-      await page.locator('main tbody tr').getByRole('cell', { name: 'num-hand', exact: true }).click()
-      return drawerText()
+    const openDrawer = async (p: Page = page) => {
+      await p.locator('main tbody tr').getByRole('cell', { name: 'num-hand', exact: true }).click()
+      return drawerText(p)
     }
-    const drawerText = async () => {
-      const drawer = page.locator(DRAWER).last()
+    const drawerText = async (p: Page = page) => {
+      const drawer = p.locator(DRAWER).last()
       await expect(drawer).toContainText('EndpointSlice Info', { timeout: 20_000 })
       await expect(drawer).toContainText('num-hand')
       return squash(await drawer.innerText())
@@ -520,14 +520,15 @@ test.describe('number check — list screens', () => {
     const patch = (ops: Obj[]) => kubectl(`patch endpointslice num-hand -n ${NS} --type=json -p=${JSON.stringify(JSON.stringify(ops))}`)
 
     await test.step('from the list API, live updates held back', async () => {
-      await page.routeWebSocket(/wsMultiplexer/, () => {})
-      await page.goto(list)
+      // a page of its own: a WebSocket route lasts as long as its page (unrouteAll leaves it)
+      const held = await page.context().newPage()
+      await held.routeWebSocket(/wsMultiplexer/, () => {})
+      await held.goto(list)
       const o = slice()
-      await expect(page.locator('main tbody tr').getByRole('cell', { name: 'num-hand', exact: true })).toBeVisible({ timeout: 20_000 })
-      expect.soft(await rowShows(), 'row from the list API').toEqual(rowWants(o))
-      expect.soft(missing(await openDrawer(), o), 'drawer from a list API row').toEqual([])
-      await page.keyboard.press('Escape')
-      await page.unrouteAll({ behavior: 'ignoreErrors' })
+      await expect(held.locator('main tbody tr').getByRole('cell', { name: 'num-hand', exact: true })).toBeVisible({ timeout: 20_000 })
+      expect.soft(await rowShows(held), 'row from the list API').toEqual(rowWants(o))
+      expect.soft(missing(await openDrawer(held), o), 'drawer from a list API row').toEqual([])
+      await held.close()
     })
 
     await test.step('from a live update', async () => {
