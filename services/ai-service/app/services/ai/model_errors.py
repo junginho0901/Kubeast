@@ -67,6 +67,12 @@ def _code(err: Exception) -> str:
     return ""
 
 
+def provider_code(err: BaseException) -> str:
+    """The provider's own error code or type (insufficient_quota, invalid_api_key …), or "". The OpenAI SDK's text
+    for an error carried its whole body up to 3.35 and only the message from 3.38, so the code is read here."""
+    return _code(err)
+
+
 def _status(err: Exception) -> Optional[int]:
     for attr in ("status_code", "api_error_status", "status"):
         value = getattr(err, attr, None)

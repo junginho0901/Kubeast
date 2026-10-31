@@ -357,6 +357,26 @@ def test_a_failed_model_call_says_the_kind_of_refusal():
     assert model_error(SimpleNamespace(provider=None), RuntimeError("x"))["error_args"]["provider"] == "unknown"
 
 
+def test_a_failed_model_call_keeps_the_providers_code_in_its_words():
+    """The OpenAI SDK writes an error as "Error code: 429 - <message>" since 3.38 (its whole body before), so the
+    provider's code (insufficient_quota) is added to the detail when the SDK's text leaves it out — and not twice."""
+    import httpx
+    import openai
+    from app.services.ai.streaming import model_error
+
+    client = openai.OpenAI(api_key="k", base_url="http://stub/v1")
+    req = httpx.Request("POST", "http://stub/v1/chat/completions")
+    quota = {"error": {"message": "You exceeded your current quota, please check your plan and billing details.",
+                       "type": "insufficient_quota", "code": "insufficient_quota"}}
+    err = client._make_status_error_from_response(httpx.Response(429, request=req, json=quota))
+    got = model_error(SimpleNamespace(provider="openai"), err)
+    assert got["error_key"] == "modelCredit"
+    assert "You exceeded your current quota" in got["error_args"]["detail"]
+    assert got["error_args"]["detail"].count("insufficient_quota") == 1
+    plain = model_error(SimpleNamespace(provider="openai"), RuntimeError("Error code: 429 - insufficient_quota"))
+    assert plain["error_args"]["detail"] == "Error code: 429 - insufficient_quota"
+
+
 @pytest.mark.asyncio
 async def test_optimization_over_the_daily_budget_shows_the_table_without_the_model(monkeypatch):
     """The user's daily chat budget covers the explanation: the observed table comes, the model is not called."""
