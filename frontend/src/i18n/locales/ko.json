@@ -3576,7 +3576,7 @@
     "table": {
       "name": "이름",
       "group": "그룹",
-      "version": "버전",
+      "versions": "버전",
       "scope": "범위",
       "kind": "Kind",
       "age": "경과 시간"

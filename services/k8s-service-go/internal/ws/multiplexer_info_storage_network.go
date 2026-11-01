@@ -4,10 +4,12 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	pvcrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/pvc"
+	scrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/storageclass"
 )
 
 // pvcToInfo is the list's row (pvcrow.Info), so a live update says what the list says.
@@ -131,59 +133,13 @@ func pvToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 	}
 }
 
-// storageclassToInfo — list endpoint: formatStorageClassDetail (storage_class.go).
+// storageclassToInfo is the list's row (scrow.Info), so a live update says what the list says.
 func storageclassToInfo(obj *unstructured.Unstructured) map[string]interface{} {
-	metadata := obj.Object["metadata"].(map[string]interface{})
-
-	provisioner := ""
-	if p, ok := obj.Object["provisioner"].(string); ok {
-		provisioner = p
+	var sc storagev1.StorageClass
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, &sc); err != nil {
+		return genericToInfo(obj)
 	}
-	reclaimPolicy := ""
-	if rp, ok := obj.Object["reclaimPolicy"].(string); ok {
-		reclaimPolicy = rp
-	}
-	volumeBindingMode := ""
-	if vb, ok := obj.Object["volumeBindingMode"].(string); ok {
-		volumeBindingMode = vb
-	}
-	allowExpansion := false
-	if a, ok := obj.Object["allowVolumeExpansion"].(bool); ok {
-		allowExpansion = a
-	}
-
-	annotations, _ := metadata["annotations"].(map[string]interface{})
-	isDefault := false
-	if annotations != nil {
-		if v, ok := annotations["storageclass.kubernetes.io/is-default-class"].(string); ok && v == "true" {
-			isDefault = true
-		}
-	}
-
-	parameters, _ := obj.Object["parameters"].(map[string]interface{})
-
-	mountOptions := []string{}
-	if mo, ok := obj.Object["mountOptions"].([]interface{}); ok {
-		for _, m := range mo {
-			if s, ok := m.(string); ok {
-				mountOptions = append(mountOptions, s)
-			}
-		}
-	}
-
-	return map[string]interface{}{
-		"name":                   metadata["name"],
-		"provisioner":            provisioner,
-		"reclaim_policy":         reclaimPolicy,
-		"volume_binding_mode":    volumeBindingMode,
-		"allow_volume_expansion": allowExpansion,
-		"is_default":             isDefault,
-		"parameters":             parameters,
-		"mount_options":          mountOptions,
-		"labels":                 metadata["labels"],
-		"annotations":            metadata["annotations"],
-		"created_at":             metadata["creationTimestamp"],
-	}
+	return scrow.Info(&sc)
 }
 
 // ingressToInfo — list endpoint: formatIngressDetail (networking.go).

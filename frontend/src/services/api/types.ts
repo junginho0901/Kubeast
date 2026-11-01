@@ -1822,7 +1822,10 @@ export interface SecretInfo {
 export interface CRDInfo {
   name: string
   group: string
+  // the storage version, which the instance pages ask the API for
   version: string
+  // the versions the API serves, sorted (kubectl's VERSIONS)
+  served_versions?: string[]
   scope: string
   kind: string
   created_at?: string | null

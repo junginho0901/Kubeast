@@ -5,9 +5,11 @@ import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	crdrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/crd"
 )
 
-// GetCRDs lists all CustomResourceDefinitions.
+// GetCRDs lists all CustomResourceDefinitions, each the row crdrow.Info builds.
 func (s *Service) GetCRDs(ctx context.Context) ([]map[string]interface{}, error) {
 	list, err := s.dynamicCtx(ctx).Resource(crdGVR).List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -15,48 +17,8 @@ func (s *Service) GetCRDs(ctx context.Context) ([]map[string]interface{}, error)
 	}
 
 	result := make([]map[string]interface{}, 0, len(list.Items))
-	for _, item := range list.Items {
-		spec, _ := item.Object["spec"].(map[string]interface{})
-		names, _ := spec["names"].(map[string]interface{})
-		group, _ := spec["group"].(string)
-		scope, _ := spec["scope"].(string)
-
-		kind := ""
-		if names != nil {
-			kind, _ = names["kind"].(string)
-		}
-
-		// Get the storage version
-		version := ""
-		if versions, ok := spec["versions"].([]interface{}); ok {
-			for _, v := range versions {
-				vm, _ := v.(map[string]interface{})
-				if storage, _ := vm["storage"].(bool); storage {
-					version, _ = vm["name"].(string)
-					break
-				}
-			}
-			if version == "" && len(versions) > 0 {
-				vm, _ := versions[0].(map[string]interface{})
-				version, _ = vm["name"].(string)
-			}
-		}
-
-		createdAt := ""
-		if ts := item.GetCreationTimestamp(); !ts.IsZero() {
-			createdAt = ts.UTC().Format("2006-01-02T15:04:05Z")
-		}
-
-		result = append(result, map[string]interface{}{
-			"name":        item.GetName(),
-			"group":       group,
-			"version":     version,
-			"scope":       scope,
-			"kind":        kind,
-			"created_at":  createdAt,
-			"labels":      item.GetLabels(),
-			"annotations": item.GetAnnotations(),
-		})
+	for i := range list.Items {
+		result = append(result, crdrow.Info(&list.Items[i]))
 	}
 	return result, nil
 }

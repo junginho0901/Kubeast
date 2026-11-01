@@ -1,0 +1,165 @@
+# Cluster-scoped objects for the number check on `self`, made and removed by number-check-lists.spec.ts. None of them
+# acts on anything: the webhooks and admission policies match a resource no API serves, the IngressClass names a
+# controller nobody runs, the VolumeAttachment names an attacher nobody runs, the volumes are of a class no claim asks
+# for. For the test's minutes num-sc-beta is the cluster's default StorageClass and num-ic-default its default
+# IngressClass; the test makes no claim and no Ingress.
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata: { name: num-ic }
+spec:
+  controller: numbers.kubeast.io/ingress
+  parameters: { apiGroup: numbers.kubeast.io, kind: IngressParameters, name: num-params }
+---
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: num-ic-default
+  annotations: { ingressclass.kubernetes.io/is-default-class: "true" }
+spec: { controller: numbers.kubeast.io/ingress }
+---
+# the default annotation in its beta form, newer than `standard`: kubectl marks this class "(default)" and not the other
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: num-sc-beta
+  annotations: { storageclass.beta.kubernetes.io/is-default-class: "true" }
+provisioner: numbers.kubeast.io/none
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+parameters: { tier: one, zone: two }
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata: { name: num-pv-nfs }
+spec:
+  capacity: { storage: 1Mi }
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: num-pv-none
+  nfs: { server: numbers.invalid, path: /none }
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata: { name: num-pv-csi }
+spec:
+  capacity: { storage: 1Mi }
+  accessModes: [ReadWriteOnce]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: num-pv-none
+  csi: { driver: numbers.kubeast.io, volumeHandle: none }
+---
+# served versions v1 (storage) and v1beta1, v1alpha1 not served
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata: { name: numberchecks.numbers.kubeast.io }
+spec:
+  group: numbers.kubeast.io
+  scope: Cluster
+  names: { kind: NumberCheck, plural: numberchecks, singular: numbercheck, listKind: NumberCheckList }
+  versions:
+    - { name: v1beta1, served: true, storage: false, schema: { openAPIV3Schema: { type: object, x-kubernetes-preserve-unknown-fields: true } } }
+    - { name: v1alpha1, served: false, storage: false, schema: { openAPIV3Schema: { type: object, x-kubernetes-preserve-unknown-fields: true } } }
+    - { name: v1, served: true, storage: true, schema: { openAPIV3Schema: { type: object, x-kubernetes-preserve-unknown-fields: true } } }
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata: { name: num-priority }
+value: 1234
+preemptionPolicy: Never
+description: number check
+---
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata: { name: num-runtime }
+handler: num-handler
+---
+# the handler e2e-fixture has too: two classes, one handler
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata: { name: num-runtime-runc }
+handler: runc
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata: { name: num-validating }
+webhooks:
+  - name: one.numbers.kubeast.io
+    admissionReviewVersions: [v1]
+    sideEffects: None
+    failurePolicy: Ignore
+    clientConfig: { url: "https://numbers.invalid/one" }
+    rules: [{ apiGroups: [numbers.kubeast.io], apiVersions: [v1], operations: [CREATE], resources: [nothing] }]
+  - name: two.numbers.kubeast.io
+    admissionReviewVersions: [v1]
+    sideEffects: None
+    failurePolicy: Ignore
+    clientConfig: { url: "https://numbers.invalid/two" }
+    rules: [{ apiGroups: [numbers.kubeast.io], apiVersions: [v1], operations: [CREATE], resources: [nothing] }]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata: { name: num-mutating }
+webhooks:
+  - name: one.numbers.kubeast.io
+    admissionReviewVersions: [v1]
+    sideEffects: None
+    failurePolicy: Ignore
+    clientConfig: { url: "https://numbers.invalid/mutate" }
+    rules: [{ apiGroups: [numbers.kubeast.io], apiVersions: [v1], operations: [CREATE], resources: [nothing] }]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata: { name: num-vap }
+spec:
+  failurePolicy: Ignore
+  paramKind: { apiVersion: v1, kind: ConfigMap }
+  matchConstraints:
+    resourceRules: [{ apiGroups: [numbers.kubeast.io], apiVersions: [v1], operations: [CREATE], resources: [nothing] }]
+  validations:
+    - expression: "true"
+    - expression: "object.metadata.name != ''"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata: { name: num-vap }
+spec:
+  policyName: num-vap
+  validationActions: [Audit]
+  paramRef: { name: num-params, namespace: default, parameterNotFoundAction: Allow }
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicy
+metadata: { name: num-map }
+spec:
+  failurePolicy: Ignore
+  reinvocationPolicy: Never
+  matchConstraints:
+    resourceRules: [{ apiGroups: [numbers.kubeast.io], apiVersions: [v1], operations: [CREATE], resources: [nothing] }]
+  mutations:
+    - patchType: ApplyConfiguration
+      applyConfiguration:
+        expression: 'Object{metadata: Object.metadata{labels: {"numbers.kubeast.io/seen": "true"}}}'
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicyBinding
+metadata: { name: num-map }
+spec: { policyName: num-map }
+---
+apiVersion: coordination.k8s.io/v1
+kind: Lease
+metadata: { name: num-lease, namespace: default }
+spec: { holderIdentity: numbers-holder, leaseDurationSeconds: 37, leaseTransitions: 2 }
+---
+apiVersion: coordination.k8s.io/v1
+kind: Lease
+metadata: { name: num-lease-free, namespace: default }
+spec: {}
+---
+apiVersion: storage.k8s.io/v1
+kind: VolumeAttachment
+metadata: { name: num-va }
+spec:
+  attacher: numbers.kubeast.io
+  nodeName: kubeast-control-plane
+  source: { persistentVolumeName: num-pv-csi }

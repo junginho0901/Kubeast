@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation, Trans } from 'react-i18next'
 import { api, type CRDInfo } from '@/services/api'
@@ -16,6 +15,7 @@ import { useCanCreate } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
+import { crdVersionsText, servedVersions } from './crdVersions'
 
 type SortKey = null | 'name' | 'group' | 'version' | 'scope' | 'kind' | 'age'
 type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
@@ -42,6 +42,7 @@ function normalizeWatchCRDObject(obj: any): CRDInfo {
     name: metadata?.name ?? obj?.name ?? '',
     group: spec?.group ?? '',
     version,
+    served_versions: servedVersions(spec?.versions),
     scope: spec?.scope ?? '',
     kind: names?.kind ?? '',
     created_at: metadata?.creationTimestamp ?? obj?.created_at ?? '',
@@ -69,7 +70,8 @@ function applyCRDWatchEvent(
     return items
   }
 
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
+  // the server sends the whole row (crdrow.Info), so it replaces: a version no longer served goes from the list
+  if (index >= 0) items[index] = normalized
   else items.push(normalized)
 
   return items
@@ -161,7 +163,7 @@ export default function CustomResourceDefinitions() {
       switch (sortKey) {
         case 'name': return crd.name
         case 'group': return crd.group
-        case 'version': return crd.version
+        case 'version': return crdVersionsText(crd)
         case 'scope': return crd.scope
         case 'kind': return crd.kind
         case 'age': return parseAgeSeconds(crd.created_at)
@@ -203,7 +205,7 @@ export default function CustomResourceDefinitions() {
           currentPage,
           pageSize: rowsPerPage,
           topN: rowsPerPage,
-          pickFields: ['name', 'group', 'kind', 'scope'],
+          pickFields: ['name', 'group', 'kind', 'scope', 'version', 'served_versions'],
           linkBuilder: (c) => {
             const crd = c as unknown as CRDInfo
             return buildResourceLink('CustomResourceDefinition', undefined, crd.name)
@@ -309,8 +311,8 @@ spec:
                 <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('group')}>
                   <span className="inline-flex items-center gap-1">{tr('crdPage.table.group', 'Group')}{renderSortIcon('group')}</span>
                 </th>
-                <th className="col-optional text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('version')}>
-                  <span className="inline-flex items-center gap-1">{tr('crdPage.table.version', 'Version')}{renderSortIcon('version')}</span>
+                <th className="col-optional text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => handleSort('version')}>
+                  <span className="inline-flex items-center gap-1">{tr('crdPage.table.versions', 'Versions')}{renderSortIcon('version')}</span>
                 </th>
                 <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('scope')}>
                   <span className="inline-flex items-center gap-1">{tr('crdPage.table.scope', 'Scope')}{renderSortIcon('scope')}</span>
@@ -329,7 +331,7 @@ spec:
                       ref={idx === 0 ? firstRowRef : undefined} key={crd.name} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'CustomResourceDefinition', name: crd.name })}>
                   <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{crd.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{crd.group}</span></td>
-                  <td className="col-optional py-3 px-4 text-xs font-mono">{crd.version}</td>
+                  <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate" title={crdVersionsText(crd)}>{crdVersionsText(crd)}</span></td>
                   <td className="py-3 px-4 text-xs">
                     <span className={`inline-flex px-2 py-0.5 rounded-sm text-[11px] font-medium bg-slate-700 text-slate-300`}>
                       {crd.scope}
