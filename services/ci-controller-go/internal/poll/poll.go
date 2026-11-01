@@ -26,9 +26,13 @@ const (
 	// DefaultBudget is the share of the installation's hourly limit polling
 	// may use, the CI design's pass line (at most 50% with 500 repositories).
 	DefaultBudget = 0.5
-	// DefaultRequestsPerRepo is one poll of one repository: its branches
-	// and its open pull requests.
+	// DefaultRequestsPerRepo is one REST poll of one repository: its
+	// branches and its open pull requests.
 	DefaultRequestsPerRepo = 2
+	// GraphQLBatch repositories are asked in one GraphQL query, which costs
+	// GraphQLPointsPerBatch points (package github's heads query).
+	GraphQLBatch          = 100
+	GraphQLPointsPerBatch = 3
 )
 
 // Input describes one GitHub App installation.
@@ -41,7 +45,11 @@ type Input struct {
 	// InstallationLimit's estimate.
 	Limit    int
 	Webhooks bool
-	// RequestsPerRepo per poll; zero: DefaultRequestsPerRepo.
+	// GraphQL: polls go through the GraphQL API, GraphQLBatch repositories
+	// to a query, counted in points against the GraphQL limit. Otherwise
+	// they are REST requests, RequestsPerRepo for each repository.
+	GraphQL bool
+	// RequestsPerRepo per REST poll; zero: DefaultRequestsPerRepo.
 	RequestsPerRepo int
 	// Settings are the installer's (zero value: the defaults).
 	Settings Settings
@@ -52,8 +60,9 @@ type Input struct {
 // Plan is the interval at which every repository of the installation is
 // polled once.
 type Plan struct {
-	Interval        time.Duration
-	Limit           int
+	Interval time.Duration
+	Limit    int
+	// RequestsPerHour is REST requests, or GraphQL points with GraphQL.
 	RequestsPerHour int
 	// Stretched: the budget, not the setting, set the interval; the screen
 	// shows the interval actually used.
@@ -75,6 +84,17 @@ func InstallationLimit(repos, users int, enterpriseCloud bool) int {
 	return min(limit, 12_500)
 }
 
+// GraphQLLimit is the GraphQL API's primary limit of an app installation
+// ("Rate limits and query limits for the GraphQL API"): the same as the
+// REST one, except 10,000 points an hour on a GitHub Enterprise Cloud
+// organization.
+func GraphQLLimit(repos, users int, enterpriseCloud bool) int {
+	if enterpriseCloud {
+		return 10_000
+	}
+	return InstallationLimit(repos, users, false)
+}
+
 // Make plans the interval: the setting for the mode, stretched as far as
 // the budget needs, and never below GitHub's x-poll-interval. Settings
 // outside their bounds are refused, not corrected.
@@ -85,7 +105,11 @@ func Make(in Input) (Plan, error) {
 	s := in.Settings.withDefaults()
 	limit := in.Limit
 	if limit <= 0 {
-		limit = InstallationLimit(in.Repos, in.Users, in.EnterpriseCloud)
+		if in.GraphQL {
+			limit = GraphQLLimit(in.Repos, in.Users, in.EnterpriseCloud)
+		} else {
+			limit = InstallationLimit(in.Repos, in.Users, in.EnterpriseCloud)
+		}
 	}
 	if s.Off {
 		return Plan{Limit: limit, Off: true, Warning: OffWarning}, nil
@@ -104,6 +128,9 @@ func Make(in Input) (Plan, error) {
 	}
 	if in.Repos > 0 {
 		perPoll := float64(in.Repos * perRepo)
+		if in.GraphQL {
+			perPoll = float64((in.Repos + GraphQLBatch - 1) / GraphQLBatch * GraphQLPointsPerBatch)
+		}
 		allowedPerHour := float64(limit) * s.Budget
 		need := time.Duration(math.Ceil(perPoll*3600/allowedPerHour)) * time.Second
 		if need > interval {
