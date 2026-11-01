@@ -383,8 +383,15 @@ func TestExport_PositionsOfKeptWholes(t *testing.T) {
 // with rows is tried that way.
 func TestExport_OrderFromPositions(t *testing.T) {
 	tried := 0
+	docs := map[string][]byte{}
 	for _, f := range corpusFiles(t) {
-		d, _, err := Import(mustRead(t, f))
+		docs[f] = mustRead(t, f)
+	}
+	for _, p := range append(nativePairs(t), corpusPairs(t)...) {
+		docs[p.name+" (Grafana's v1)"] = p.v1 // v2-rows-mixed: panels after a folded row placed above an open one
+	}
+	for _, f := range sortedKeys(docs) {
+		d, _, err := Import(docs[f])
 		if err != nil || len(d.Spec.Layout.Rows) == 0 {
 			continue
 		}
@@ -408,6 +415,87 @@ func TestExport_OrderFromPositions(t *testing.T) {
 	}
 	if tried < 10 {
 		t.Fatalf("%d dashboards with rows, want the corpus's", tried)
+	}
+}
+
+// topLevel lists an exported top level: row titles and panel ids.
+func topLevel(t *testing.T, raw []byte) []string {
+	t.Helper()
+	var d struct {
+		Panels []struct {
+			ID    int    `json:"id"`
+			Type  string `json:"type"`
+			Title string `json:"title"`
+		} `json:"panels"`
+		Spec *struct {
+			Panels []struct {
+				ID    int    `json:"id"`
+				Type  string `json:"type"`
+				Title string `json:"title"`
+			} `json:"panels"`
+		} `json:"spec"`
+	}
+	if err := json.Unmarshal(raw, &d); err != nil {
+		t.Fatal(err)
+	}
+	if d.Spec != nil {
+		d.Panels = d.Spec.Panels
+	}
+	var out []string
+	for _, p := range d.Panels {
+		if p.Type == "row" {
+			out = append(out, "row "+p.Title)
+		} else {
+			out = append(out, fmt.Sprint(p.ID))
+		}
+	}
+	return out
+}
+
+// An imported dashboard keeps the order of its source file, also where the
+// positions say otherwise (Grafana's v1 of a v2 file with panels after a
+// folded row at y 0 and 3).
+func TestExport_KeepsSourceOrder(t *testing.T) {
+	raw := mustRead(t, "testdata/grafana-13.3.0-v2/native/v2-rows-mixed.v1.json")
+	_, _, out := importExport(t, "rows-mixed", raw)
+	if got, want := strings.Join(topLevel(t, out), "|"), strings.Join(topLevel(t, raw), "|"); got != want {
+		t.Errorf("top level\n got  %s\n want %s", got, want)
+	}
+}
+
+// A layout changed in Kubeast no longer matches the source's order, which is
+// then not used: a panel moved into an open row stays there.
+func TestExport_ChangedLayoutLeavesTheSourceOrder(t *testing.T) {
+	d, _, err := Import(mustRead(t, "testdata/grafana-13.3.0-v2/native/v2-rows-mixed.v1.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	l := &d.Spec.Layout
+	open := -1
+	for i, r := range l.Rows {
+		if !r.Collapsed {
+			open = i
+			break
+		}
+	}
+	if open < 0 || len(l.Items) == 0 {
+		t.Fatal("the sample should have an open row and panels outside the rows")
+	}
+	moved := l.Items[0]
+	l.Items = l.Items[1:]
+	moved.Y = l.Rows[open].Y + 20
+	l.Rows[open].Items = append(l.Rows[open].Items, moved)
+	out, _, err := Export(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	back, _, err := Import(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff := diffPaths("", withoutSource(t, d).(map[string]any)["spec"].(map[string]any)["layout"],
+		withoutSource(t, back).(map[string]any)["spec"].(map[string]any)["layout"], 5); len(diff) > 0 {
+		t.Errorf("the changed layout comes back differently at %v", diff)
 	}
 }
 
