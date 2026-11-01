@@ -20,7 +20,8 @@
      "timeFrom": "now-1h", "timeShift": "1h", "timeCompare": "1d",
      "transformations": [
        {"id": "organize", "options": {"excludeByName": {"x": true}}, "refId": "A", "disabled": true, "filter": {"id": "byRefId", "options": "A", "scope": "series"}},
-       {"id": "reduce"}
+       {"id": "reduce"},
+       {"id": "merge", "disabled": false}
      ],
      "fieldConfig": {"defaults": {
         "decimals": 2, "min": 0, "max": 100, "description": "d", "displayName": "n", "displayNameFromDS": "ds", "path": "p",
@@ -39,6 +40,7 @@
           {"type": "range", "options": {"from": 1, "to": 5, "result": {"text": "low", "index": 1}}},
           {"type": "range", "options": {"from": null, "to": null}},
           {"type": "range", "options": {"to": 9}},
+          {"type": "range", "options": {"result": {"text": "no bounds"}}},
           {"type": "regex", "options": {"pattern": "^a", "result": {"color": "blue"}}},
           {"type": "special", "options": {"match": "null", "result": {"text": "none"}}},
           {"type": "special", "options": {}},
@@ -70,7 +72,12 @@
      "targets": [], "repeatPanelId": 0, "transformations": []},
     {"id": 8, "type": "logs", "title": "a repeated copy", "gridPos": {"x": 6, "y": 11, "w": 6, "h": 4}, "repeatPanelId": 3},
     {"id": 9, "type": "timeseries", "title": "library", "gridPos": {"x": 12, "y": 11, "w": 6, "h": 4},
-     "libraryPanel": {"uid": "lib-1", "name": "Shared"}, "targets": [{"refId": "A"}], "options": {"a": 1}},
+     "libraryPanel": {"uid": "lib-1", "name": "Shared"}, "targets": [{"refId": "A"}], "options": {"a": 1}, "repeat": "env"},
+    {"id": 19, "type": "timeseries", "title": "expression under a panel data source", "gridPos": {"x": 18, "y": 11, "w": 6, "h": 4},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "targets": [{"refId": "A", "expr": "up"}, {"refId": "B", "datasource": {"type": "__expr__", "uid": "__expr__"}, "type": "math", "expression": "$A * 2"},
+                 {"refId": "C", "datasource": "Named DS"}],
+     "fieldConfig": {"defaults": {"thresholds": {"mode": "percentage"}}, "overrides": []}},
     {"id": 10, "type": "row", "title": "closed row", "collapsed": true, "repeat": "region", "gridPos": {"x": 0, "y": 15, "w": 24, "h": 1}, "panels": [
       {"id": 11, "type": "graph", "title": "old graph", "gridPos": {"x": 0, "y": 16, "w": 12, "h": 5}, "targets": [{"refId": "A", "expr": "up"}],
        "xaxis": {"mode": "time"}, "lines": true, "fieldConfig": {"defaults": {"custom": {}}, "overrides": []}, "transformations": []},

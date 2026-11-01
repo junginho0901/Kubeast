@@ -18,11 +18,12 @@ import (
 
 // grafanaDataSources are the data sources of the Grafana 13.3.0 that wrote
 // the test data: one per store, its uid and name the plugin id, Prometheus
-// the default.
+// the default, and one whose name is not its uid (testdata/convert only).
 var grafanaDataSources = DataSources{
 	{UID: "prometheus", Name: "prometheus", Type: "prometheus", Default: true},
 	{UID: "loki", Name: "loki", Type: "loki"},
 	{UID: "tempo", Name: "tempo", Type: "tempo"},
+	{UID: "named-uid", Name: "Named DS", Type: "tempo"},
 }
 
 // converted reads converted.tar.gz: direct/<key>.json is the v2 spec Grafana
