@@ -1,0 +1,121 @@
+{
+  "apiVersion": "kubeast.io/dashboards/v1alpha1",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "web-red",
+    "title": "Web service RED",
+    "description": "Rate, errors and duration of one HTTP service, with its error logs.",
+    "tags": ["red", "http"],
+    "scope": { "cluster": "*" }
+  },
+  "spec": {
+    "time": { "from": "now-1h", "to": "now" },
+    "refresh": "30s",
+    "cursorSync": "shared",
+    "variables": [
+      { "name": "cluster", "label": "Cluster", "kind": "cluster", "store": "prometheus" },
+      {
+        "name": "namespace",
+        "label": "Namespace",
+        "kind": "query",
+        "store": "prometheus",
+        "query": { "fn": "label_values", "expr": "kube_pod_info", "label": "namespace" },
+        "refresh": "load"
+      },
+      {
+        "name": "service",
+        "label": "Service",
+        "kind": "query",
+        "store": "prometheus",
+        "query": { "fn": "label_values", "expr": "http_requests_total{namespace=\"$namespace\"}", "label": "service" },
+        "refresh": "timeRange"
+      }
+    ],
+    "panels": {
+      "error-ratio": {
+        "title": "Errors (5xx share)",
+        "kind": "stat",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "sum(rate(http_requests_total{namespace=\"$namespace\",service=\"$service\",code=~\"5..\"}[$__rate_interval])) / sum(rate(http_requests_total{namespace=\"$namespace\",service=\"$service\"}[$__rate_interval]))"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "percentunit",
+          "decimals": 2,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "state-ok" },
+              { "value": 0.01, "color": "state-warn" },
+              { "value": 0.05, "color": "state-crit" }
+            ]
+          }
+        },
+        "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } }
+      },
+      "req-rate": {
+        "title": "Requests per second",
+        "kind": "timeseries",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "sum by (route) (rate(http_requests_total{namespace=\"$namespace\",service=\"$service\"}[$__rate_interval]))",
+            "legend": "{{route}}"
+          }
+        ],
+        "fieldDefaults": { "unit": "reqps", "color": { "mode": "palette-classic" } }
+      },
+      "latency": {
+        "title": "Latency",
+        "kind": "timeseries",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"$namespace\",service=\"$service\"}[$__rate_interval])))",
+            "legend": "p95"
+          },
+          {
+            "refId": "B",
+            "store": "prometheus",
+            "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"$namespace\",service=\"$service\"}[$__rate_interval])))",
+            "legend": "p50"
+          }
+        ],
+        "fieldDefaults": { "unit": "s", "color": { "mode": "fixed", "token": "series-2" } },
+        "overrides": [
+          { "matcher": { "kind": "byRefId", "value": "A" }, "set": { "color": { "mode": "fixed", "token": "state-warn" } } }
+        ]
+      },
+      "error-logs": {
+        "title": "Error logs",
+        "kind": "logs",
+        "queries": [
+          { "refId": "A", "store": "loki", "expr": "{namespace=\"$namespace\", app=\"$service\"} |= \"error\"" }
+        ]
+      }
+    },
+    "layout": {
+      "items": [
+        { "panel": "error-ratio", "x": 0, "y": 0, "w": 6, "h": 8 },
+        { "panel": "req-rate", "x": 6, "y": 0, "w": 18, "h": 8 },
+        { "panel": "latency", "x": 0, "y": 8, "w": 24, "h": 8 },
+        { "panel": "error-logs", "x": 0, "y": 16, "w": 24, "h": 10 }
+      ]
+    },
+    "annotations": [
+      {
+        "name": "Rollouts",
+        "store": "prometheus",
+        "expr": "changes(kube_deployment_status_observed_generation{namespace=\"$namespace\",deployment=\"$service\"}[2m]) > 0",
+        "color": "state-info",
+        "enable": true
+      }
+    ]
+  }
+}

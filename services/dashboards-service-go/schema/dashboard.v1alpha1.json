@@ -1,0 +1,795 @@
+{
+  "$defs": {
+    "Annotation": {
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "enum": [
+            "neutral",
+            "series-1",
+            "series-10",
+            "series-2",
+            "series-3",
+            "series-4",
+            "series-5",
+            "series-6",
+            "series-7",
+            "series-8",
+            "series-9",
+            "state-crit",
+            "state-info",
+            "state-ok",
+            "state-warn"
+          ],
+          "type": "string"
+        },
+        "enable": {
+          "type": "boolean"
+        },
+        "expr": {
+          "type": "string"
+        },
+        "ext": {
+          "additionalProperties": {},
+          "type": "object"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "store": {
+          "enum": [
+            "alertmanager",
+            "loki",
+            "prometheus",
+            "tempo"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "enable",
+        "name"
+      ],
+      "type": "object"
+    },
+    "Color": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string"
+        },
+        "token": {
+          "enum": [
+            "neutral",
+            "series-1",
+            "series-10",
+            "series-2",
+            "series-3",
+            "series-4",
+            "series-5",
+            "series-6",
+            "series-7",
+            "series-8",
+            "series-9",
+            "state-crit",
+            "state-info",
+            "state-ok",
+            "state-warn"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "type": "object"
+    },
+    "Dashboard": {
+      "additionalProperties": false,
+      "properties": {
+        "apiVersion": {
+          "const": "kubeast.io/dashboards/v1alpha1",
+          "type": "string"
+        },
+        "kind": {
+          "const": "Dashboard",
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/$defs/Metadata"
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "spec": {
+          "$ref": "#/$defs/Spec"
+        }
+      },
+      "required": [
+        "apiVersion",
+        "kind",
+        "metadata",
+        "spec"
+      ],
+      "type": "object"
+    },
+    "FieldConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "$ref": "#/$defs/Color"
+        },
+        "decimals": {
+          "type": "integer"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "links": {
+          "items": {
+            "$ref": "#/$defs/Link"
+          },
+          "type": "array"
+        },
+        "mappings": {
+          "items": {},
+          "type": "array"
+        },
+        "max": {
+          "type": "number"
+        },
+        "min": {
+          "type": "number"
+        },
+        "noValue": {
+          "type": "string"
+        },
+        "thresholds": {
+          "$ref": "#/$defs/Thresholds"
+        },
+        "unit": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "Layout": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/LayoutItem"
+          },
+          "type": "array"
+        },
+        "rows": {
+          "items": {
+            "$ref": "#/$defs/LayoutRow"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "LayoutItem": {
+      "additionalProperties": false,
+      "properties": {
+        "h": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "panel": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$",
+          "type": "string"
+        },
+        "w": {
+          "maximum": 24,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "x": {
+          "maximum": 23,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "y": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "h",
+        "panel",
+        "w",
+        "x",
+        "y"
+      ],
+      "type": "object"
+    },
+    "LayoutRow": {
+      "additionalProperties": false,
+      "properties": {
+        "collapsed": {
+          "type": "boolean"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/LayoutItem"
+          },
+          "type": "array"
+        },
+        "repeat": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "y": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "y"
+      ],
+      "type": "object"
+    },
+    "Link": {
+      "additionalProperties": false,
+      "properties": {
+        "newTab": {
+          "type": "boolean"
+        },
+        "title": {
+          "type": "string"
+        },
+        "url": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "type": "object"
+    },
+    "Matcher": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "byName",
+            "byRefId",
+            "byRegexp",
+            "byType",
+            "byValue"
+          ],
+          "type": "string"
+        },
+        "value": {}
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "Metadata": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "folder": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "scope",
+        "title"
+      ],
+      "type": "object"
+    },
+    "Override": {
+      "additionalProperties": false,
+      "properties": {
+        "matcher": {
+          "$ref": "#/$defs/Matcher"
+        },
+        "set": {
+          "additionalProperties": {},
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "matcher",
+        "set"
+      ],
+      "type": "object"
+    },
+    "Panel": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "ext": {
+          "additionalProperties": {},
+          "type": "object"
+        },
+        "fieldDefaults": {
+          "$ref": "#/$defs/FieldConfig"
+        },
+        "kind": {
+          "enum": [
+            "alertlist",
+            "annolist",
+            "barchart",
+            "bargauge",
+            "candlestick",
+            "canvas",
+            "dashlist",
+            "flamegraph",
+            "gauge",
+            "geomap",
+            "heatmap",
+            "histogram",
+            "logs",
+            "news",
+            "nodeGraph",
+            "piechart",
+            "stat",
+            "state-timeline",
+            "status-history",
+            "table",
+            "text",
+            "timeseries",
+            "traces",
+            "trend",
+            "unsupported",
+            "xychart"
+          ],
+          "type": "string"
+        },
+        "options": {},
+        "overrides": {
+          "items": {
+            "$ref": "#/$defs/Override"
+          },
+          "type": "array"
+        },
+        "queries": {
+          "items": {
+            "$ref": "#/$defs/Query"
+          },
+          "type": "array"
+        },
+        "repeat": {
+          "$ref": "#/$defs/Repeat"
+        },
+        "title": {
+          "type": "string"
+        },
+        "transforms": {
+          "items": {
+            "$ref": "#/$defs/Transform"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "Query": {
+      "additionalProperties": false,
+      "properties": {
+        "expr": {
+          "type": "string"
+        },
+        "ext": {
+          "additionalProperties": {},
+          "type": "object"
+        },
+        "hide": {
+          "type": "boolean"
+        },
+        "instant": {
+          "type": "boolean"
+        },
+        "legend": {
+          "type": "string"
+        },
+        "minStep": {
+          "type": "string"
+        },
+        "refId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "store": {
+          "enum": [
+            "alertmanager",
+            "loki",
+            "prometheus",
+            "tempo"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "refId"
+      ],
+      "type": "object"
+    },
+    "Repeat": {
+      "additionalProperties": false,
+      "properties": {
+        "direction": {
+          "enum": [
+            "h",
+            "v"
+          ],
+          "type": "string"
+        },
+        "maxPerRow": {
+          "type": "integer"
+        },
+        "variable": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "variable"
+      ],
+      "type": "object"
+    },
+    "Scope": {
+      "additionalProperties": false,
+      "properties": {
+        "cluster": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "namespaces": {
+          "items": {
+            "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$",
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "cluster"
+      ],
+      "type": "object"
+    },
+    "Source": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "grafana-v1",
+          "type": "string"
+        },
+        "raw": {},
+        "schemaVersion": {
+          "type": "integer"
+        },
+        "uid": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "Spec": {
+      "additionalProperties": false,
+      "properties": {
+        "annotations": {
+          "items": {
+            "$ref": "#/$defs/Annotation"
+          },
+          "type": "array"
+        },
+        "cursorSync": {
+          "enum": [
+            "none",
+            "shared",
+            "sharedTooltip"
+          ],
+          "type": "string"
+        },
+        "ext": {
+          "additionalProperties": {},
+          "type": "object"
+        },
+        "layout": {
+          "$ref": "#/$defs/Layout"
+        },
+        "links": {
+          "items": {
+            "$ref": "#/$defs/Link"
+          },
+          "type": "array"
+        },
+        "panels": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Panel"
+          },
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$"
+          },
+          "type": "object"
+        },
+        "refresh": {
+          "pattern": "^([0-9]+)(s|m|h|d)$",
+          "type": "string"
+        },
+        "time": {
+          "$ref": "#/$defs/TimeRange"
+        },
+        "timezone": {
+          "type": "string"
+        },
+        "variables": {
+          "items": {
+            "$ref": "#/$defs/Variable"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "layout",
+        "panels",
+        "time"
+      ],
+      "type": "object"
+    },
+    "ThresholdStep": {
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "enum": [
+            "neutral",
+            "series-1",
+            "series-10",
+            "series-2",
+            "series-3",
+            "series-4",
+            "series-5",
+            "series-6",
+            "series-7",
+            "series-8",
+            "series-9",
+            "state-crit",
+            "state-info",
+            "state-ok",
+            "state-warn"
+          ],
+          "type": "string"
+        },
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "color"
+      ],
+      "type": "object"
+    },
+    "Thresholds": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "absolute",
+            "percentage"
+          ],
+          "type": "string"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/ThresholdStep"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "mode",
+        "steps"
+      ],
+      "type": "object"
+    },
+    "TimeRange": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "to": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "type": "object"
+    },
+    "Transform": {
+      "additionalProperties": false,
+      "properties": {
+        "disabled": {
+          "type": "boolean"
+        },
+        "ext": {
+          "additionalProperties": {},
+          "type": "object"
+        },
+        "id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "options": {}
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "Variable": {
+      "additionalProperties": false,
+      "properties": {
+        "allValue": {
+          "type": "string"
+        },
+        "current": {},
+        "ext": {
+          "additionalProperties": {},
+          "type": "object"
+        },
+        "hide": {
+          "type": "integer"
+        },
+        "includeAll": {
+          "type": "boolean"
+        },
+        "kind": {
+          "enum": [
+            "adhoc",
+            "cluster",
+            "constant",
+            "custom",
+            "interval",
+            "query",
+            "switch",
+            "textbox"
+          ],
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "multi": {
+          "type": "boolean"
+        },
+        "name": {
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$",
+          "type": "string"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/VariableOption"
+          },
+          "type": "array"
+        },
+        "query": {
+          "$ref": "#/$defs/VariableQuery"
+        },
+        "refresh": {
+          "enum": [
+            "load",
+            "timeRange"
+          ],
+          "type": "string"
+        },
+        "regex": {
+          "type": "string"
+        },
+        "sort": {
+          "type": "integer"
+        },
+        "store": {
+          "enum": [
+            "alertmanager",
+            "loki",
+            "prometheus",
+            "tempo"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "name"
+      ],
+      "type": "object"
+    },
+    "VariableOption": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "value"
+      ],
+      "type": "object"
+    },
+    "VariableQuery": {
+      "additionalProperties": false,
+      "properties": {
+        "expr": {
+          "type": "string"
+        },
+        "fn": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "fn"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://raw.githubusercontent.com/junginho0901/Kubeast/main/services/dashboards-service-go/schema/dashboard.v1alpha1.json",
+  "$ref": "#/$defs/Dashboard",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "A Kubeast dashboard document (kubeast.io/dashboards/v1alpha1). Generated from services/dashboards-service-go/internal/model; values the model has no field for go in the ext map of their object.",
+  "title": "Kubeast dashboard"
+}
