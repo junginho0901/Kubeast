@@ -38,7 +38,9 @@ const shareV2Case = `{
     "variables": [{"kind": "DatasourceVariable", "spec": {"name": "secds", "pluginId": "loki", "current": {"text": "Logs", "value": "L1"}}},
                   {"kind": "QueryVariable", "spec": {"name": "secq", "query": {"kind": "DataQuery", "group": "loki", "datasource": {"name": "$secds"}, "spec": {}}, "options": [{"text": "x", "value": "x"}]}}],
     "annotations": [{"kind": "AnnotationQuery", "spec": {"name": "in a row", "query": {"kind": "DataQuery", "group": "tempo", "datasource": {"name": "T1"}, "spec": {}}}}],
-    "layout": {"kind": "GridLayout", "spec": {"items": []}}}}]}},
+    "layout": {"kind": "TabsLayout", "spec": {"tabs": [{"kind": "TabsLayoutTab", "spec": {
+      "annotations": [{"kind": "AnnotationQuery", "spec": {"name": "in a tab", "query": {"kind": "DataQuery", "group": "tempo", "datasource": {"name": "T2"}, "spec": {}}}}],
+      "layout": {"kind": "GridLayout", "spec": {"items": []}}}}]}}}}]}},
   "annotations": [
     {"kind": "AnnotationQuery", "spec": {"name": "built in", "query": {"kind": "DataQuery", "group": "grafana", "datasource": {"name": "-- Grafana --"}, "spec": {}}}},
     {"kind": "AnnotationQuery", "spec": {"name": "deploys", "query": {"kind": "DataQuery", "group": "loki", "datasource": {"name": "L1"}, "spec": {}}}}
@@ -77,6 +79,7 @@ func TestExportV2Shared_Rules(t *testing.T) {
 		"built-in annotation": js(at(spec, "annotations", 0, "spec", "query")),
 		"annotation":          js(at(spec, "annotations", 1, "spec", "query")),
 		"section annotation":  js(at(spec, "layout", "spec", "rows", 0, "spec", "annotations", 0, "spec", "query")),
+		"nested annotation":   js(at(spec, "layout", "spec", "rows", 0, "spec", "layout", "spec", "tabs", 0, "spec", "annotations", 0, "spec", "query")),
 	}
 	want := map[string]string{
 		"panel query on P2":   `{"group":"prometheus","kind":"DataQuery","labels":{"grafana.app/export-label":"prometheus-1","team":"a"},"spec":{}}`,
@@ -96,6 +99,7 @@ func TestExportV2Shared_Rules(t *testing.T) {
 		"built-in annotation": `{"group":"grafana","kind":"DataQuery","labels":{"grafana.app/export-label":"grafana-1"},"spec":{}}`,
 		"annotation":          `{"group":"loki","kind":"DataQuery","labels":{"grafana.app/export-datasource-name":"Logs","grafana.app/export-label":"loki-1"},"spec":{}}`,
 		"section annotation":  `{"group":"tempo","kind":"DataQuery","labels":{"grafana.app/export-label":"tempo-1"},"spec":{}}`,
+		"nested annotation":   `{"group":"tempo","kind":"DataQuery","labels":{"grafana.app/export-label":"tempo-2"},"spec":{}}`,
 	}
 	for k, w := range want {
 		if got[k] != w {
@@ -108,6 +112,24 @@ func TestExportV2Shared_Rules(t *testing.T) {
 	}
 	if strings.Join(adj, " ") != "spec.elements.panel-3" {
 		t.Errorf("adjusted = %v, want the library panel", rep.Adjusted)
+	}
+}
+
+// Elements are met in the order of their names, as Grafana's served JSON
+// lists them.
+func TestExportV2Shared_ElementOrder(t *testing.T) {
+	spec := map[string]any{"elements": map[string]any{}}
+	for i, uid := range []string{"A", "B", "C", "D", "E", "F"} {
+		spec["elements"].(map[string]any)[fmt.Sprintf("panel-%d", i)] = map[string]any{"kind": "Panel", "spec": map[string]any{"data": map[string]any{"spec": map[string]any{
+			"queries": []any{map[string]any{"spec": map[string]any{"query": map[string]any{"group": "prometheus", "datasource": map[string]any{"name": uid}}}}}}}}}
+	}
+	s := &v2sharer{rep: &ExportReport{}, numbers: map[string]map[string]int{}, vars: map[string]string{}, names: map[string]string{}}
+	s.share(spec)
+	for i := 0; i < 6; i++ {
+		got := at(spec, "elements", fmt.Sprintf("panel-%d", i), "spec", "data", "spec", "queries", 0, "spec", "query", "labels", exportLabel)
+		if got != fmt.Sprintf("prometheus-%d", i+1) {
+			t.Errorf("panel-%d: %v, want prometheus-%d", i, got, i+1)
+		}
 	}
 }
 
@@ -151,6 +173,15 @@ func TestExportV2Shared_Corpus(t *testing.T) {
 		}
 		if after.labelled < len(before.kept)-countKeptAsIs(before.kept) {
 			t.Errorf("%s: %d references labelled, want at least %d", c.key, after.labelled, len(before.kept)-countKeptAsIs(before.kept))
+		}
+		if strings.HasPrefix(c.key, "kubeast/") {
+			queries := 0
+			for _, p := range d.Spec.Panels {
+				queries += len(p.Queries)
+			}
+			if after.labelled < queries {
+				t.Errorf("%s: %d references labelled, want each of the %d queries (inputs included)", c.key, after.labelled, queries)
+			}
 		}
 		for _, v := range anyMaps(mapOr(sh["spec"])["variables"]) {
 			if v["kind"] == "QueryVariable" && len(anyList(mapOr(v["spec"])["options"])) != 0 {
