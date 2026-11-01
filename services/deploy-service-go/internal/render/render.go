@@ -15,7 +15,7 @@ import (
 
 	"github.com/score-spec/score-go/framework"
 	"github.com/score-spec/score-go/types"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 
 	"github.com/junginho0901/kubeast/services/deploy-service-go/internal/spec"
 	"github.com/junginho0901/kubeast/services/deploy-service-go/internal/target"
