@@ -162,13 +162,13 @@ func Render(in Input) (*Result, error) {
 
 	labels := buildLabels(in)
 	annotations := map[string]string{
-		"kubeast.io/ci-repo":   in.Build.Repo,
-		"kubeast.io/ci-commit": in.Build.CommitSHA,
-		"kubeast.io/ci-ref":    in.Build.Ref,
-		"kubeast.io/ci-event":  in.Build.Event,
+		AnnotationRepo:   in.Build.Repo,
+		AnnotationCommit: in.Build.CommitSHA,
+		AnnotationRef:    in.Build.Ref,
+		AnnotationEvent:  in.Build.Event,
 	}
 	if in.Untrusted {
-		annotations["kubeast.io/ci-untrusted"] = "true"
+		annotations[AnnotationUntrusted] = "true"
 	}
 	ttl := in.TTL
 	if ttl == 0 {
@@ -598,7 +598,7 @@ func buildLabels(in Input) map[string]string {
 	return map[string]string{
 		"app.kubernetes.io/managed-by": "kubeast",
 		"app.kubernetes.io/component":  "ci-build",
-		"kubeast.io/ci-build":          in.Build.ID,
+		LabelBuild:                     in.Build.ID,
 		"kubeast.io/ci-profile":        in.Profile.Name,
 	}
 }
