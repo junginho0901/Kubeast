@@ -26,7 +26,7 @@ type remote struct {
 	bare string
 }
 
-func gitEnv(t *testing.T) {
+func gitEnv(t testing.TB) {
 	t.Helper()
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Fatal("these tests need git on PATH")
@@ -43,7 +43,7 @@ func gitEnv(t *testing.T) {
 	}
 }
 
-func gitRun(t *testing.T, dir string, args ...string) string {
+func gitRun(t testing.TB, dir string, args ...string) string {
 	t.Helper()
 	cmd := exec.Command("git", append([]string{"-c", "init.defaultBranch=main", "-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false", "-c", "core.symlinks=true"}, args...)...)
 	cmd.Dir = dir
@@ -56,7 +56,7 @@ func gitRun(t *testing.T, dir string, args ...string) string {
 
 // newRemote makes a bare repository whose main holds the plan package's
 // sample layout, and a checkout of it.
-func newRemote(t *testing.T) *remote {
+func newRemote(t testing.TB) *remote {
 	t.Helper()
 	gitEnv(t)
 	r := &remote{work: t.TempDir(), bare: t.TempDir()}
@@ -72,7 +72,7 @@ func newRemote(t *testing.T) *remote {
 
 // commit writes files (an empty value removes one), commits everything and
 // pushes the branch it is on; it returns the commit.
-func (r *remote) commit(t *testing.T, msg string, files map[string]string) string {
+func (r *remote) commit(t testing.TB, msg string, files map[string]string) string {
 	t.Helper()
 	for name, data := range files {
 		p := filepath.Join(r.work, filepath.FromSlash(name))
@@ -95,7 +95,7 @@ func (r *remote) commit(t *testing.T, msg string, files map[string]string) strin
 	return gitRun(t, r.work, "rev-parse", "HEAD")
 }
 
-func (r *remote) open(t *testing.T, o RepoOptions) *Repo {
+func (r *remote) open(t testing.TB, o RepoOptions) *Repo {
 	t.Helper()
 	o.URL, o.AllowLocal = r.bare, true
 	repo, err := OpenRepo(t.TempDir(), o)
@@ -105,7 +105,7 @@ func (r *remote) open(t *testing.T, o RepoOptions) *Repo {
 	return repo
 }
 
-func fetch(t *testing.T, repo *Repo, ref Ref) string {
+func fetch(t testing.TB, repo *Repo, ref Ref) string {
 	t.Helper()
 	c, err := repo.Fetch(context.Background(), ref)
 	if err != nil {
@@ -114,7 +114,7 @@ func fetch(t *testing.T, repo *Repo, ref Ref) string {
 	return c
 }
 
-func snapshot(t *testing.T, repo *Repo, commit, dir string) *FS {
+func snapshot(t testing.TB, repo *Repo, commit, dir string) *FS {
 	t.Helper()
 	s, err := repo.Snapshot(commit, dir)
 	if err != nil {
