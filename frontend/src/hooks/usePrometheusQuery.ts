@@ -58,13 +58,15 @@ export function usePrometheusQuery(
 ) {
   const features = useClusterFeatures()
   const promEnabled = prometheusReadable(features.data)
+  // the features' placeholder says "on" while they load: ask once they have come (or failed)
+  const featuresIn = features.isFetched
   // Scope to the selected cluster so metrics never bleed across a switch.
   const { currentCluster } = useCluster()
   return useQuery<PrometheusQueryResponse>({
     queryKey: ['prometheus', currentCluster || 'default', ...queryKey],
     queryFn: () => api.prometheusQuery(promql),
     refetchInterval: options?.refetchInterval ?? 30000,
-    enabled: (options?.enabled ?? true) && promEnabled,
+    enabled: (options?.enabled ?? true) && featuresIn && promEnabled,
     retry: 1,
     retryDelay: 2000,
     staleTime: 10000,
@@ -87,13 +89,15 @@ export function usePrometheusQueries(
   // (a hook per array element would break the Rules of Hooks).
   const features = useClusterFeatures()
   const promEnabled = prometheusReadable(features.data)
+  // the features' placeholder says "on" while they load: ask once they have come (or failed)
+  const featuresIn = features.isFetched
   const { currentCluster } = useCluster()
   const results = useQueries({
     queries: queries.map((q) => ({
       queryKey: ['prometheus', currentCluster || 'default', ...queryKey, q.name],
       queryFn: () => api.prometheusQuery(q.promql),
       refetchInterval: options?.refetchInterval ?? 30000,
-      enabled: (options?.enabled ?? true) && promEnabled,
+      enabled: (options?.enabled ?? true) && featuresIn && promEnabled,
       retry: 1,
       retryDelay: 2000,
       staleTime: 10000,
@@ -133,6 +137,8 @@ export function usePrometheusRangeQuery(
 ) {
   const features = useClusterFeatures()
   const promEnabled = prometheusReadable(features.data)
+  // the features' placeholder says "on" while they load: ask once they have come (or failed)
+  const featuresIn = features.isFetched
   const { currentCluster } = useCluster()
   return useQuery<PrometheusRangeResponse>({
     queryKey: ['prometheus-range', currentCluster || 'default', ...queryKey, options?.step ?? 'step-default'],
@@ -142,7 +148,7 @@ export function usePrometheusRangeQuery(
       step: options?.step,
     }),
     refetchInterval: options?.refetchInterval ?? 5 * 60 * 1000, // 5 min — range data is slow-moving
-    enabled: (options?.enabled ?? true) && promEnabled,
+    enabled: (options?.enabled ?? true) && featuresIn && promEnabled,
     retry: 1,
     retryDelay: 2000,
     staleTime: 60 * 1000,
