@@ -26,7 +26,7 @@ const (
 // build renders the Job jobspec makes for the default pipeline (build
 // "image", then "scan") and a pod of its template, so the containers are
 // the real ones in the real order: checkout, image, scan, then report.
-func build(t *testing.T, id string) (*batchv1.Job, *corev1.Pod) {
+func build(t testing.TB, id string) (*batchv1.Job, *corev1.Pod) {
 	t.Helper()
 	p := pipeline.Default("ghcr.io/example/web", "registry")
 	if err := p.Normalize(); err != nil {
