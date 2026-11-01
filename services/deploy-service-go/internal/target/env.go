@@ -51,6 +51,22 @@ type Env struct {
 	DefaultProfile string             `json:"defaultProfile,omitempty"`
 	// Capabilities says which optional APIs the target cluster has.
 	Capabilities Capabilities `json:"capabilities,omitempty"`
+	// Policy is the gate's knobs for this environment.
+	Policy Policy `json:"policy,omitempty"`
+}
+
+// Policy turns the gate per environment instead of fixing it in code.
+type Policy struct {
+	// Modes set a rule to enforce, warn or off (rule IDs of the gate's
+	// policy, schema and schema-missing).
+	Modes map[string]string `json:"modes,omitempty"`
+	// AllowedRegistries, when set, are the image prefixes allowed.
+	AllowedRegistries []string `json:"allowedRegistries,omitempty"`
+	// SchemaLocations are more kubeconform schema locations for kinds that
+	// raw files bring.
+	SchemaLocations []string `json:"schemaLocations,omitempty"`
+	// KubernetesVersion fills the version in those locations.
+	KubernetesVersion string `json:"kubernetesVersion,omitempty"`
 }
 
 // Resources are container requests and limits.
@@ -183,6 +199,13 @@ func (e *Env) fill() error {
 	default:
 		errs = append(errs, fmt.Errorf("environment serviceAccountClass %q: none or aws-irsa", e.ServiceAccountClass))
 	}
+	for _, rule := range sortedModeRules(e.Policy.Modes) {
+		switch e.Policy.Modes[rule] {
+		case "enforce", "warn", "off":
+		default:
+			errs = append(errs, fmt.Errorf("environment policy mode %s: %q is not enforce, warn or off", rule, e.Policy.Modes[rule]))
+		}
+	}
 	if e.DefaultProfile != "" {
 		if _, ok := e.Profiles[e.DefaultProfile]; !ok {
 			errs = append(errs, fmt.Errorf("environment defaultProfile %q is not in profiles (%s)", e.DefaultProfile, strings.Join(e.ProfileNames(), ", ")))
@@ -207,6 +230,15 @@ func (e *Env) HostFor(service, resource string) string {
 		return ""
 	}
 	return e.expand(e.Domain, service, resource)
+}
+
+func sortedModeRules(m map[string]string) []string {
+	rules := make([]string, 0, len(m))
+	for r := range m {
+		rules = append(rules, r)
+	}
+	sort.Strings(rules)
+	return rules
 }
 
 // ProfileNames lists the profiles in order.

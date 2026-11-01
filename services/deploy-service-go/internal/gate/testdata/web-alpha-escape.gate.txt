@@ -1,0 +1,12 @@
+blocked: true
+warn    ClusterRole web-node-reader schema-missing: no schema for ClusterRole in any schema location
+enforce CronJob web-cleanup drop-all-capabilities: container cleanup: capabilities.drop must hold ALL
+warn    CronJob web-cleanup host-users: hostUsers must be false (a user namespace per pod)
+enforce CronJob web-cleanup memory-limit: container cleanup: resources.limits.memory is required
+enforce CronJob web-cleanup no-privilege-escalation: container cleanup: allowPrivilegeEscalation must be false
+enforce CronJob web-cleanup read-only-root: container cleanup: readOnlyRootFilesystem must be true, or the object carries kubeast.io/read-only-root-reason
+enforce CronJob web-cleanup resource-requests: container cleanup: resources.requests.cpu is required
+enforce CronJob web-cleanup resource-requests: container cleanup: resources.requests.memory is required
+enforce CronJob web-cleanup run-as-non-root: container cleanup: runAsNonRoot must be true (on the container or the pod)
+enforce CronJob web-cleanup seccomp-profile: container cleanup: seccompProfile.type must be RuntimeDefault or Localhost (on the container or the pod)
+warn    ScaledObject web-queue schema-missing: no schema for ScaledObject in any schema location

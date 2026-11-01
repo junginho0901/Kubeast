@@ -5,3 +5,6 @@ namespace: apps
 hostUsers: true
 spread: []
 readinessFromPort: false
+policy:
+  modes:
+    host-users: "off"

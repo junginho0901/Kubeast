@@ -19,3 +19,5 @@ profiles:
       - {key: arch, operator: Equal, value: arm64, effect: NoSchedule}
 defaultProfile: general
 capabilities: {gatewayAPI: true, externalSecrets: true, serviceMonitor: true}
+policy:
+  allowedRegistries: [ghcr.io/example/]
