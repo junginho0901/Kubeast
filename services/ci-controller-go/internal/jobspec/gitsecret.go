@@ -74,7 +74,7 @@ func WithOwner(secret *corev1.Secret, job *batchv1.Job) error {
 		return errors.New("the Job has no UID; use the Job the API server returned")
 	case job.Namespace != secret.Namespace:
 		return fmt.Errorf("the Job is in %q, the Secret in %q", job.Namespace, secret.Namespace)
-	case job.Labels["kubeast.io/ci-build"] == "" || job.Labels["kubeast.io/ci-build"] != secret.Labels["kubeast.io/ci-build"]:
+	case job.Labels[LabelBuild] == "" || job.Labels[LabelBuild] != secret.Labels[LabelBuild]:
 		return errors.New("the Job and the Secret belong to different builds")
 	}
 	secret.OwnerReferences = []metav1.OwnerReference{{
