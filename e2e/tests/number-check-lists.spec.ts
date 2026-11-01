@@ -624,6 +624,17 @@ test.describe('number check — list screens', () => {
   test.beforeAll(async () => {
     test.setTimeout(200_000)
     kubectl('apply -f -', FIXTURE)
+    // a ReplicaSet whose controller is not a Deployment (an Argo Rollout's is not): an owner needs the uid of an object
+    // that exists, so it is made here with num-cm's
+    const cm = JSON.parse(kubectl(`get configmap num-cm -n ${NS} -o json`))
+    kubectl('apply -f -', JSON.stringify({
+      apiVersion: 'apps/v1', kind: 'ReplicaSet',
+      metadata: { name: 'num-owned', namespace: NS, ownerReferences: [{ apiVersion: 'v1', kind: 'ConfigMap', name: 'num-cm', uid: cm.metadata.uid, controller: true }] },
+      spec: {
+        replicas: 0, selector: { matchLabels: { app: 'num-owned' } },
+        template: { metadata: { labels: { app: 'num-owned' } }, spec: { containers: [{ name: 'app', image: 'busybox:1.37', imagePullPolicy: 'IfNotPresent' }] } },
+      },
+    }))
     // settled: the ready Deployment and the StatefulSet ready, both Jobs finished, the crashing Pod restarted
     const deadline = Date.now() + 150_000
     for (;;) {
