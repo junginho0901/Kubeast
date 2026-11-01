@@ -28,14 +28,15 @@ func corpusFiles(t *testing.T) []string {
 	return files
 }
 
-// droppable: Grafana's database id, and the envelope Grafana 12+ wraps a
-// served dashboard in (its instance record; source.raw keeps it).
-var droppable = map[string]bool{"id": true, "apiVersion": true, "kind": true, "metadata": true, "status": true}
+// droppable: Grafana's database id and save counter, and the envelope Grafana
+// 12+ wraps a served dashboard in (its instance record; source.raw keeps it).
+var droppable = map[string]bool{"id": true, "version": true, "apiVersion": true, "kind": true, "metadata": true, "status": true}
 
 // TestCorpus imports every published dashboard: each must import, validate,
 // account for every key it has, give the same bytes twice and drop nothing but
-// Grafana's database id. SUMMARY.txt records what each one needed, so a
-// change in what the importer keeps, adjusts or cannot draw shows in review.
+// Grafana's database id and save counter. SUMMARY.txt records what each one
+// needed, so a change in what the importer keeps, adjusts or cannot draw shows
+// in review.
 func TestCorpus(t *testing.T) {
 	var summary bytes.Buffer
 	unsupported := map[string]int{}
@@ -62,7 +63,7 @@ func TestCorpus(t *testing.T) {
 		}
 		for _, p := range rep.Dropped {
 			if !droppable[p] {
-				t.Errorf("%s: dropped %s; only Grafana's database id and resource envelope may be dropped", name, p)
+				t.Errorf("%s: dropped %s; only Grafana's database id, save counter and resource envelope may be dropped", name, p)
 			}
 		}
 		first, _ := json.Marshal(d)

@@ -131,6 +131,126 @@ func TestExport_RestoresKeptValues(t *testing.T) {
 	}
 }
 
+// Every value of a classic dashboard comes back in its export, at the same
+// path: the corpus, edge-cases and Grafana's v1 of each v2 sample. Not counted:
+// values Grafana reads as not set (empty, and the few defaults in absentMeans),
+// the database id and save counter the import drops, the resource envelope.
+func TestExport_EveryValueComesBack(t *testing.T) {
+	type doc struct {
+		name string
+		raw  []byte
+	}
+	docs := []doc{{"edge-cases", mustRead(t, "testdata/edge-cases.json")}}
+	for _, f := range corpusFiles(t) {
+		docs = append(docs, doc{strings.TrimPrefix(f, "testdata/corpus/"), mustRead(t, f)})
+	}
+	for _, p := range append(nativePairs(t), corpusPairs(t)...) {
+		docs = append(docs, doc{p.name + " (Grafana's v1)", p.v1})
+	}
+	if len(docs) < 119 {
+		t.Fatalf("%d documents, want the whole corpus", len(docs))
+	}
+	for _, dc := range docs {
+		var root map[string]any
+		if err := json.Unmarshal(dc.raw, &root); err != nil {
+			t.Fatal(err)
+		}
+		if spec, ok := root["spec"].(map[string]any); ok && root["apiVersion"] != nil {
+			root = spec
+		}
+		delete(root, "id")
+		delete(root, "version")
+		_, _, out := importExport(t, dc.name, dc.raw)
+		var got any
+		if err := json.Unmarshal(out, &got); err != nil {
+			t.Fatal(err)
+		}
+		want, have := map[string]int{}, map[string]int{}
+		leaves(root, "", want)
+		leaves(got, "", have)
+		var missing []string
+		for k, n := range want {
+			if have[k] < n {
+				missing = append(missing, k)
+			}
+		}
+		sort.Strings(missing)
+		if len(missing) > 0 {
+			t.Errorf("%s: %d values do not come back, e.g. %v", dc.name, len(missing), missing[:min(len(missing), 5)])
+		}
+	}
+}
+
+// absentMeans: values Grafana reads the same as no key (v1_to_v2alpha1.go,
+// v13.3.0), by the end of their path.
+var absentMeans = map[string]string{
+	".templating.list[].hide": "0", ".templating.list[].includeAll": "false", ".templating.list[].multi": "false",
+	".templating.list[].refresh": "0", ".templating.list[].sort": "0",
+	".targets[].hide": "false", ".targets[].instant": "false",
+}
+
+// leaves counts each value under its path, list positions as [].
+func leaves(v any, path string, into map[string]int) {
+	switch x := v.(type) {
+	case map[string]any:
+		for k, e := range x {
+			leaves(e, path+"."+k, into)
+		}
+	case []any:
+		for _, e := range x {
+			leaves(e, path+"[]", into)
+		}
+	case nil:
+	default:
+		b, _ := json.Marshal(x)
+		if string(b) == `""` {
+			return
+		}
+		for end, v := range absentMeans {
+			if strings.HasSuffix(path, end) && string(b) == v {
+				return
+			}
+		}
+		into[path+" = "+string(b)]++
+	}
+}
+
+// A row keeps its id unless a panel or an earlier row has it; then it gets a
+// free one and the report says so.
+func TestExport_RowIDs(t *testing.T) {
+	raw := []byte(`{"title": "rows", "schemaVersion": 42, "panels": [
+		{"type": "row", "id": 7, "title": "a", "collapsed": false, "gridPos": {"x": 0, "y": 0, "w": 24, "h": 1}, "panels": []},
+		{"type": "timeseries", "id": 1, "title": "p", "gridPos": {"x": 0, "y": 1, "w": 12, "h": 8}},
+		{"type": "row", "id": 1, "title": "b", "collapsed": false, "gridPos": {"x": 0, "y": 9, "w": 24, "h": 1}, "panels": []},
+		{"type": "row", "id": 7, "title": "c", "collapsed": true, "gridPos": {"x": 0, "y": 10, "w": 24, "h": 1}, "panels": []}]}`)
+	d, _, err := Import(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, rep, err := Export(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct{ Panels []struct{ ID int } }
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatal(err)
+	}
+	var ids []int
+	for _, p := range got.Panels {
+		ids = append(ids, p.ID)
+	}
+	if fmt.Sprint(ids) != "[7 1 2 3]" {
+		t.Errorf("ids = %v, want [7 1 2 3]", ids)
+	}
+	var paths []string
+	for _, f := range rep.Adjusted {
+		paths = append(paths, f.Path)
+	}
+	if strings.Join(paths, " ") != "layout.rows[1].id layout.rows[2].id" {
+		t.Errorf("adjusted = %v, want the two rows whose id was taken", rep.Adjusted)
+	}
+}
+
 // A colour that is not the one Grafana name of its token comes back as it was.
 func TestExport_ColoursKeepTheirName(t *testing.T) {
 	raw := []byte(`{"schemaVersion": 39, "title": "c", "panels": [{"id": 1, "type": "stat", "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},

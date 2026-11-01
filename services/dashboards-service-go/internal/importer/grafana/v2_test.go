@@ -120,7 +120,7 @@ func TestV2_Imports(t *testing.T) {
 			t.Errorf("%s: keys read by nobody (lost on import): %v", p.name, missing)
 		}
 		for _, dp := range rep.Dropped {
-			if !droppable[dp] || dp == "id" {
+			if !droppable[dp] || dp == "id" || dp == "version" {
 				t.Errorf("%s: dropped %s; only the resource envelope may be dropped", p.name, dp)
 			}
 		}

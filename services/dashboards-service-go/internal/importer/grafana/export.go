@@ -47,6 +47,7 @@ type exporter struct {
 	inputs   map[string]bool   // stores given a ${DS_…} input
 	dsVar    map[string]string // store → name of a cluster variable of that store (native)
 	panelIDs map[int]bool
+	rowIDs   map[int]int // row index → the id the import kept for it
 	nextID   int
 }
 
@@ -55,7 +56,7 @@ func Export(d *model.Dashboard) ([]byte, *ExportReport, error) {
 	if d == nil {
 		return nil, nil, fmt.Errorf("no dashboard")
 	}
-	ex := &exporter{d: d, rep: &ExportReport{}, native: d.Source == nil, inputs: map[string]bool{}, dsVar: map[string]string{}, panelIDs: map[int]bool{}}
+	ex := &exporter{d: d, rep: &ExportReport{}, native: d.Source == nil, inputs: map[string]bool{}, dsVar: map[string]string{}, panelIDs: map[int]bool{}, rowIDs: map[int]int{}}
 	ex.src = sourceClassic(d)
 	ex.srcVars = sourceVariables(ex.src)
 	root := ex.dashboard()
@@ -152,6 +153,13 @@ func (ex *exporter) dashboard() obj {
 		if m := rePanelName.FindStringSubmatch(name); m != nil {
 			id, _ := strconv.Atoi(m[1])
 			ex.panelIDs[id] = true
+		}
+	}
+	for i, r := range d.Spec.Layout.Rows {
+		var id int
+		if json.Unmarshal(r.Ext["id"], &id) == nil && id > 0 && !ex.panelIDs[id] {
+			ex.panelIDs[id] = true
+			ex.rowIDs[i] = id
 		}
 	}
 
@@ -260,7 +268,7 @@ func (ex *exporter) panels() []json.RawMessage {
 				inner = append(inner, ex.panel(it))
 			}
 		}
-		out = append(out, ex.row(r, inner))
+		out = append(out, ex.row(t.row, inner))
 	}
 	return out
 }
@@ -450,13 +458,21 @@ func (ex *exporter) id(name string) int {
 	return ex.nextID
 }
 
-func (ex *exporter) row(r model.LayoutRow, inner []json.RawMessage) json.RawMessage {
+func (ex *exporter) row(i int, inner []json.RawMessage) json.RawMessage {
+	r := ex.d.Spec.Layout.Rows[i]
 	o := obj{}
 	for k, v := range r.Ext {
 		o[k] = v
 	}
 	o["type"] = mustJSON("row")
-	o["id"] = mustJSON(ex.id(""))
+	id, ok := ex.rowIDs[i]
+	if !ok {
+		id = ex.id("")
+		if kept, had := r.Ext["id"]; had {
+			ex.rep.Adjusted = append(ex.rep.Adjusted, Finding{Path: fmt.Sprintf("layout.rows[%d].id", i), Reason: fmt.Sprintf("row id %s is taken by a panel or another row: written as %d", kept, id)})
+		}
+	}
+	o["id"] = mustJSON(id)
 	o["title"] = mustJSON(r.Title)
 	o["collapsed"] = mustJSON(r.Collapsed)
 	o["gridPos"] = mustJSON(map[string]int{"x": 0, "y": r.Y, "w": model.GridColumns, "h": 1})
