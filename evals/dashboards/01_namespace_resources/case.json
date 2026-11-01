@@ -14,7 +14,12 @@
       "functions": [
         "rate",
         "irate"
-      ]
+      ],
+      "same_as": {
+        "panel": "cpu-total",
+        "ref": "A",
+        "tolerance": 0.15
+      }
     },
     {
       "what": "메모리 사용량",
@@ -26,7 +31,12 @@
       "units": [
         "bytes",
         "decbytes"
-      ]
+      ],
+      "same_as": {
+        "panel": "mem-total",
+        "ref": "A",
+        "tolerance": 0.15
+      }
     }
   ],
   "vars": {

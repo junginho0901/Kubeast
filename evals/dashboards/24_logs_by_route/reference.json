@@ -1,0 +1,46 @@
+{
+  "apiVersion": "kubeast.io/dashboards/v1alpha1",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "shop-routes-logs",
+    "title": "shop 라우트별 요청 (로그)",
+    "scope": {
+      "cluster": "*"
+    }
+  },
+  "spec": {
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "panels": {
+      "by-route": {
+        "title": "라우트별 요청 수",
+        "kind": "timeseries",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "loki",
+            "expr": "sum by (route) (count_over_time({k8s_namespace_name=\"kubeast-eval\", service_name=\"kubeast-eval-shop\"} | logfmt [$__interval]))",
+            "legend": "{{route}}"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "short"
+        }
+      }
+    },
+    "layout": {
+      "items": [
+        {
+          "panel": "by-route",
+          "x": 0,
+          "y": 0,
+          "w": 24,
+          "h": 8
+        }
+      ]
+    }
+  }
+}

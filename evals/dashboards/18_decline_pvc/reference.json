@@ -1,0 +1,3 @@
+{
+  "declined": "이 클러스터의 Prometheus에는 볼륨 사용량 지표(kubelet_volume_stats_*)와 PVC 지표(kube_persistentvolumeclaim_*)가 없습니다."
+}

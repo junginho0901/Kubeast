@@ -1,0 +1,33 @@
+{
+  "question": "응답 시간 패널을 평균 말고 p99로 바꿔 줘",
+  "cluster": "default",
+  "panels": {
+    "min": 3,
+    "max": 3
+  },
+  "expect": [
+    {
+      "what": "p99 응답 시간",
+      "metrics": [
+        "prometheus_http_request_duration_seconds_bucket"
+      ],
+      "functions": [
+        "histogram_quantile"
+      ],
+      "contains": [
+        [
+          "0.99",
+          ".99"
+        ]
+      ],
+      "units": [
+        "s"
+      ]
+    }
+  ],
+  "kind": "edit",
+  "keep": [
+    "reqs",
+    "errors"
+  ]
+}

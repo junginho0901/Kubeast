@@ -1,0 +1,68 @@
+{
+  "apiVersion": "kubeast.io/dashboards/v1alpha1",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "log-volume",
+    "title": "네임스페이스별 로그 양",
+    "scope": {
+      "cluster": "*"
+    }
+  },
+  "spec": {
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "panels": {
+      "lines": {
+        "title": "줄 수 (초당)",
+        "kind": "timeseries",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "loki",
+            "expr": "sum by (k8s_namespace_name) (rate({k8s_namespace_name=~\".+\"} [$__rate_interval]))",
+            "legend": "{{k8s_namespace_name}}"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "short"
+        }
+      },
+      "bytes": {
+        "title": "바이트 (초당)",
+        "kind": "timeseries",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "loki",
+            "expr": "sum by (k8s_namespace_name) (bytes_rate({k8s_namespace_name=~\".+\"} [$__rate_interval]))",
+            "legend": "{{k8s_namespace_name}}"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "Bps"
+        }
+      }
+    },
+    "layout": {
+      "items": [
+        {
+          "panel": "lines",
+          "x": 0,
+          "y": 0,
+          "w": 12,
+          "h": 8
+        },
+        {
+          "panel": "bytes",
+          "x": 12,
+          "y": 0,
+          "w": 12,
+          "h": 8
+        }
+      ]
+    }
+  }
+}

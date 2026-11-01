@@ -1,0 +1,68 @@
+{
+  "apiVersion": "kubeast.io/dashboards/v1alpha1",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "shop-routes-traces",
+    "title": "shop 라우트별 (트레이스)",
+    "scope": {
+      "cluster": "*"
+    }
+  },
+  "spec": {
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "panels": {
+      "rate": {
+        "title": "라우트별 요청 (초당)",
+        "kind": "timeseries",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "tempo",
+            "expr": "{ resource.service.name = \"kubeast-eval-shop\" && kind = server } | rate() by (span.http.route)",
+            "legend": "{{span.http.route}}"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "reqps"
+        }
+      },
+      "p95": {
+        "title": "라우트별 p95",
+        "kind": "timeseries",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "tempo",
+            "expr": "{ resource.service.name = \"kubeast-eval-shop\" && kind = server } | quantile_over_time(duration, .95) by (span.http.route)",
+            "legend": "{{span.http.route}}"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "s"
+        }
+      }
+    },
+    "layout": {
+      "items": [
+        {
+          "panel": "rate",
+          "x": 0,
+          "y": 0,
+          "w": 12,
+          "h": 8
+        },
+        {
+          "panel": "p95",
+          "x": 12,
+          "y": 0,
+          "w": 12,
+          "h": 8
+        }
+      ]
+    }
+  }
+}

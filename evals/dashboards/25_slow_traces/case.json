@@ -1,0 +1,31 @@
+{
+  "question": "kubeast-eval-shop 서비스에서 1초 넘게 걸린 요청의 트레이스 목록을 보여 줘",
+  "cluster": "default",
+  "panels": {
+    "min": 1,
+    "max": 4
+  },
+  "expect": [
+    {
+      "what": "느린 트레이스",
+      "store": "tempo",
+      "kinds": [
+        "traces",
+        "table"
+      ],
+      "labels": [
+        "duration"
+      ],
+      "contains": [
+        [
+          "kubeast-eval-shop"
+        ],
+        [
+          "1s",
+          "1000ms"
+        ]
+      ]
+    }
+  ],
+  "seed": true
+}

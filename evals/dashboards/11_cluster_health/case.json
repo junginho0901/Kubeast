@@ -1,0 +1,67 @@
+{
+  "question": "클러스터 전체 상태를 보는 대시보드 만들어 줘",
+  "cluster": "default",
+  "panels": {
+    "min": 3,
+    "max": 16
+  },
+  "expect_any": {
+    "need": 3,
+    "of": [
+      {
+        "what": "노드 상태",
+        "metrics": [
+          "kube_node_status_condition",
+          "kube_node_spec_unschedulable"
+        ]
+      },
+      {
+        "what": "파드 상태",
+        "metrics": [
+          "kube_pod_status_phase",
+          "kube_pod_status_ready"
+        ]
+      },
+      {
+        "what": "CPU",
+        "metrics": [
+          "node_cpu_seconds_total",
+          "container_cpu_usage_seconds_total"
+        ],
+        "functions": [
+          "rate",
+          "irate"
+        ]
+      },
+      {
+        "what": "메모리",
+        "metrics": [
+          "node_memory_MemAvailable_bytes",
+          "node_memory_MemFree_bytes",
+          "container_memory_working_set_bytes"
+        ]
+      },
+      {
+        "what": "파드 재시작",
+        "metrics": [
+          "kube_pod_container_status_restarts_total"
+        ],
+        "functions": [
+          "increase",
+          "rate",
+          "irate",
+          "changes",
+          "resets"
+        ]
+      },
+      {
+        "what": "레플리카",
+        "metrics": [
+          "kube_deployment_status_replicas_available",
+          "kube_deployment_status_replicas_unavailable",
+          "kube_deployment_status_replicas_ready"
+        ]
+      }
+    ]
+  }
+}

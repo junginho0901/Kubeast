@@ -1,0 +1,23 @@
+{
+  "question": "파드 재시작",
+  "cluster": "default",
+  "panels": {
+    "min": 1,
+    "max": 6
+  },
+  "expect": [
+    {
+      "what": "파드 재시작",
+      "metrics": [
+        "kube_pod_container_status_restarts_total"
+      ],
+      "functions": [
+        "increase",
+        "rate",
+        "irate",
+        "changes",
+        "resets"
+      ]
+    }
+  ]
+}

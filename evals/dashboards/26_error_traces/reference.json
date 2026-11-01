@@ -1,0 +1,64 @@
+{
+  "apiVersion": "kubeast.io/dashboards/v1alpha1",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "shop-error-traces",
+    "title": "shop 에러 트레이스",
+    "scope": {
+      "cluster": "*"
+    }
+  },
+  "spec": {
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "panels": {
+      "error-rate": {
+        "title": "에러 수 (초당)",
+        "kind": "timeseries",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "tempo",
+            "expr": "{ resource.service.name = \"kubeast-eval-shop\" && status = error } | rate()",
+            "legend": "에러"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "reqps"
+        }
+      },
+      "errors": {
+        "title": "에러 트레이스",
+        "kind": "traces",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "tempo",
+            "expr": "{ resource.service.name = \"kubeast-eval-shop\" && status = error }"
+          }
+        ]
+      }
+    },
+    "layout": {
+      "items": [
+        {
+          "panel": "error-rate",
+          "x": 0,
+          "y": 0,
+          "w": 24,
+          "h": 7
+        },
+        {
+          "panel": "errors",
+          "x": 0,
+          "y": 7,
+          "w": 24,
+          "h": 12
+        }
+      ]
+    }
+  }
+}

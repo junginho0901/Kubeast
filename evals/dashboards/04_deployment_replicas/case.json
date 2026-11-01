@@ -10,14 +10,24 @@
       "what": "원하는 레플리카",
       "metrics": [
         "kube_deployment_spec_replicas"
-      ]
+      ],
+      "same_as": {
+        "panel": "table",
+        "ref": "A",
+        "tolerance": 0.01
+      }
     },
     {
       "what": "준비된 레플리카",
       "metrics": [
         "kube_deployment_status_replicas_available",
         "kube_deployment_status_replicas_ready"
-      ]
+      ],
+      "same_as": {
+        "panel": "table",
+        "ref": "B",
+        "tolerance": 0.01
+      }
     }
   ]
 }

@@ -1,0 +1,42 @@
+{
+  "apiVersion": "kubeast.io/dashboards/v1alpha1",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "shop-slow-traces",
+    "title": "shop 느린 트레이스",
+    "scope": {
+      "cluster": "*"
+    }
+  },
+  "spec": {
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "panels": {
+      "slow": {
+        "title": "1초 넘은 트레이스",
+        "kind": "traces",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "tempo",
+            "expr": "{ resource.service.name = \"kubeast-eval-shop\" && duration > 1s }"
+          }
+        ]
+      }
+    },
+    "layout": {
+      "items": [
+        {
+          "panel": "slow",
+          "x": 0,
+          "y": 0,
+          "w": 24,
+          "h": 12
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "question": "네임스페이스를 골라 볼 수 있게 변수를 추가해 줘. 지금은 kube-system으로 고정돼 있어",
+  "cluster": "default",
+  "panels": {
+    "min": 3,
+    "max": 3
+  },
+  "expect": [
+    {
+      "what": "CPU 사용량",
+      "metrics": [
+        "container_cpu_usage_seconds_total"
+      ],
+      "functions": [
+        "rate",
+        "irate"
+      ],
+      "uses_var": "namespace"
+    },
+    {
+      "what": "메모리 사용량",
+      "metrics": [
+        "container_memory_working_set_bytes",
+        "container_memory_usage_bytes",
+        "container_memory_rss"
+      ],
+      "units": [
+        "bytes",
+        "decbytes"
+      ],
+      "uses_var": "namespace"
+    }
+  ],
+  "kind": "edit",
+  "keep": [
+    "nodes"
+  ],
+  "variables": [
+    "namespace"
+  ],
+  "vars": {
+    "namespace": "kube-system"
+  }
+}

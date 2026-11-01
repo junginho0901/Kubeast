@@ -151,6 +151,51 @@ func analyse(expr string) (*facts, error) {
 	return f, nil
 }
 
+// unfiltered is expr without its comparisons of a vector with a scalar
+// (x > 0 keeps the series above zero), and whether it had one: an empty query
+// whose unfiltered form returns data reads real series, of which none passes
+// the comparison now.
+func unfiltered(expr string) (string, bool) {
+	root, err := promParser.ParseExpr(expr)
+	if err != nil {
+		return "", false
+	}
+	changed := false
+	var walk func(parser.Expr) parser.Expr
+	walk = func(e parser.Expr) parser.Expr {
+		switch n := e.(type) {
+		case *parser.BinaryExpr:
+			n.LHS, n.RHS = walk(n.LHS), walk(n.RHS)
+			if n.Op.IsComparisonOperator() && !n.ReturnBool {
+				switch {
+				case n.LHS.Type() == parser.ValueTypeVector && n.RHS.Type() == parser.ValueTypeScalar:
+					changed = true
+					return n.LHS
+				case n.LHS.Type() == parser.ValueTypeScalar && n.RHS.Type() == parser.ValueTypeVector:
+					changed = true
+					return n.RHS
+				}
+			}
+		case *parser.AggregateExpr:
+			n.Expr = walk(n.Expr)
+		case *parser.Call:
+			for i := range n.Args {
+				n.Args[i] = walk(n.Args[i])
+			}
+		case *parser.ParenExpr:
+			n.Expr = walk(n.Expr)
+		case *parser.SubqueryExpr:
+			n.Expr = walk(n.Expr)
+		case *parser.UnaryExpr:
+			n.Expr = walk(n.Expr)
+		case *parser.StepInvariantExpr:
+			n.Expr = walk(n.Expr)
+		}
+		return e
+	}
+	return walk(root).String(), changed
+}
+
 func unparen(e parser.Expr) parser.Expr {
 	for {
 		p, ok := e.(*parser.ParenExpr)

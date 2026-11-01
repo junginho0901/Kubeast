@@ -1,0 +1,30 @@
+{
+  "question": "kube-system 네임스페이스 로그를 보는 대시보드 만들어 줘",
+  "cluster": "default",
+  "panels": {
+    "min": 1,
+    "max": 6
+  },
+  "expect": [
+    {
+      "what": "로그",
+      "store": "loki",
+      "kinds": [
+        "logs"
+      ],
+      "labels": [
+        "k8s_namespace_name"
+      ],
+      "contains": [
+        [
+          "kube-system",
+          "$namespace",
+          "${namespace"
+        ]
+      ]
+    }
+  ],
+  "vars": {
+    "namespace": "kube-system"
+  }
+}

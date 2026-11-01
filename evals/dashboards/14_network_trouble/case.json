@@ -1,0 +1,41 @@
+{
+  "question": "네트워크가 이상한지 보고 싶어",
+  "cluster": "default",
+  "panels": {
+    "min": 1,
+    "max": 10
+  },
+  "expect_any": {
+    "need": 1,
+    "of": [
+      {
+        "what": "노드 오류·드롭",
+        "metrics": [
+          "node_network_receive_errs_total",
+          "node_network_transmit_errs_total",
+          "node_network_receive_drop_total",
+          "node_network_transmit_drop_total"
+        ],
+        "functions": [
+          "rate",
+          "irate",
+          "increase"
+        ]
+      },
+      {
+        "what": "파드 오류·드롭",
+        "metrics": [
+          "container_network_receive_errors_total",
+          "container_network_transmit_errors_total",
+          "container_network_receive_packets_dropped_total",
+          "container_network_transmit_packets_dropped_total"
+        ],
+        "functions": [
+          "rate",
+          "irate",
+          "increase"
+        ]
+      }
+    ]
+  }
+}
