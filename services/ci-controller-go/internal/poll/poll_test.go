@@ -32,7 +32,10 @@ func TestInstallationLimit(t *testing.T) {
 func TestPassLine(t *testing.T) {
 	for _, repos := range []int{1, 20, 100, 500, 2_000} {
 		for _, webhooks := range []bool{false, true} {
-			p := Make(Input{Repos: repos, Users: 50, Webhooks: webhooks})
+			p, err := Make(Input{Repos: repos, Users: 50, Webhooks: webhooks})
+			if err != nil {
+				t.Fatal(err)
+			}
 			if float64(p.RequestsPerHour) > float64(p.Limit)*DefaultBudget {
 				t.Errorf("%d repos, webhooks %v: %d requests an hour of %d", repos, webhooks, p.RequestsPerHour, p.Limit)
 			}
@@ -63,8 +66,9 @@ func TestMake(t *testing.T) {
 		{"no repositories", Input{}, Plan{Interval: time.Minute, Limit: 5_000}},
 	}
 	for _, c := range cases {
-		if got := Make(c.in); got != c.want {
-			t.Errorf("%s: %+v, want %+v", c.name, got, c.want)
+		got, err := Make(c.in)
+		if err != nil || got != c.want {
+			t.Errorf("%s: %+v, %v; want %+v", c.name, got, err, c.want)
 		}
 	}
 }

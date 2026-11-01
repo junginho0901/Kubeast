@@ -6,7 +6,8 @@
 // GitHub's REST guidance: poll on a fixed schedule only as often as needed,
 // honour x-poll-interval, avoid concurrent requests, and make conditional
 // requests — a 304 Not Modified does not count against the primary rate
-// limit. The plan here assumes the worst case, every request counted.
+// limit. The plan here assumes the worst case, every request counted. How
+// much polling there is, or none, is the installer's (Settings).
 package poll
 
 import (
@@ -17,9 +18,10 @@ import (
 
 // Defaults of a plan.
 const (
-	// IntervalAlone is the interval without webhooks.
+	// IntervalAlone is the default interval without webhooks.
 	IntervalAlone = time.Minute
-	// IntervalWithWebhooks is the fallback interval when webhooks deliver.
+	// IntervalWithWebhooks is the default fallback interval when webhooks
+	// deliver.
 	IntervalWithWebhooks = 10 * time.Minute
 	// DefaultBudget is the share of the installation's hourly limit polling
 	// may use, the CI design's pass line (at most 50% with 500 repositories).
@@ -41,8 +43,8 @@ type Input struct {
 	Webhooks bool
 	// RequestsPerRepo per poll; zero: DefaultRequestsPerRepo.
 	RequestsPerRepo int
-	// Budget is the share of the limit polling may use; zero: DefaultBudget.
-	Budget float64
+	// Settings are the installer's (zero value: the defaults).
+	Settings Settings
 	// PollInterval is the largest x-poll-interval GitHub sent, if any.
 	PollInterval time.Duration
 }
@@ -53,8 +55,12 @@ type Plan struct {
 	Interval        time.Duration
 	Limit           int
 	RequestsPerHour int
-	// Stretched: the budget, not the default, set the interval.
+	// Stretched: the budget, not the setting, set the interval; the screen
+	// shows the interval actually used.
 	Stretched bool
+	// Off: the installer turned polling off; Warning says what that means.
+	Off     bool
+	Warning string
 }
 
 // InstallationLimit is GitHub's primary rate limit of an app installation
@@ -69,24 +75,28 @@ func InstallationLimit(repos, users int, enterpriseCloud bool) int {
 	return min(limit, 12_500)
 }
 
-// Make plans the interval: the default for the mode, stretched as far as
-// the budget needs, and never below GitHub's x-poll-interval.
-func Make(in Input) Plan {
+// Make plans the interval: the setting for the mode, stretched as far as
+// the budget needs, and never below GitHub's x-poll-interval. Settings
+// outside their bounds are refused, not corrected.
+func Make(in Input) (Plan, error) {
+	if err := in.Settings.Validate(); err != nil {
+		return Plan{}, err
+	}
+	s := in.Settings.withDefaults()
 	limit := in.Limit
 	if limit <= 0 {
 		limit = InstallationLimit(in.Repos, in.Users, in.EnterpriseCloud)
+	}
+	if s.Off {
+		return Plan{Limit: limit, Off: true, Warning: OffWarning}, nil
 	}
 	perRepo := in.RequestsPerRepo
 	if perRepo <= 0 {
 		perRepo = DefaultRequestsPerRepo
 	}
-	budget := in.Budget
-	if budget <= 0 || budget > 1 {
-		budget = DefaultBudget
-	}
-	interval := IntervalAlone
+	interval := s.Interval
 	if in.Webhooks {
-		interval = IntervalWithWebhooks
+		interval = s.IntervalWithWebhooks
 	}
 	p := Plan{Limit: limit}
 	if in.PollInterval > interval {
@@ -94,7 +104,7 @@ func Make(in Input) Plan {
 	}
 	if in.Repos > 0 {
 		perPoll := float64(in.Repos * perRepo)
-		allowedPerHour := float64(limit) * budget
+		allowedPerHour := float64(limit) * s.Budget
 		need := time.Duration(math.Ceil(perPoll*3600/allowedPerHour)) * time.Second
 		if need > interval {
 			interval, p.Stretched = need, true
@@ -102,7 +112,7 @@ func Make(in Input) Plan {
 		p.RequestsPerHour = int(math.Ceil(perPoll * float64(time.Hour) / float64(interval)))
 	}
 	p.Interval = interval
-	return p
+	return p, nil
 }
 
 // Offset spreads repositories over the interval by a hash of their name,
