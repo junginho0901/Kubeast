@@ -1,0 +1,587 @@
+{
+  "apiVersion": "dashboard.grafana.app/v1",
+  "kind": "Dashboard",
+  "metadata": {
+    "annotations": {
+      "grafana.app/createdBy": "user:bg2ycj4a4wbuoe",
+      "grafana.app/updatedBy": "user:bg2ycj4a4wbuoe"
+    },
+    "creationTimestamp": "2026-11-01T04:24:08Z",
+    "generation": 1,
+    "labels": {
+      "grafana.app/deprecatedInternalID": "56275128025088"
+    },
+    "managedFields": [
+      {
+        "apiVersion": "dashboard.grafana.app/v0alpha1",
+        "fieldsType": "FieldsV1",
+        "fieldsV1": {
+          "f:metadata": {
+            "f:annotations": {
+              ".": {},
+              "f:grafana.app/grant-permissions": {}
+            }
+          },
+          "f:spec": {
+            "f:annotations": {
+              ".": {},
+              "f:list": {}
+            },
+            "f:description": {},
+            "f:editable": {},
+            "f:fiscalYearStartMonth": {},
+            "f:graphTooltip": {},
+            "f:links": {},
+            "f:liveNow": {},
+            "f:panels": {},
+            "f:refresh": {},
+            "f:schemaVersion": {},
+            "f:tags": {},
+            "f:templating": {
+              ".": {},
+              "f:list": {}
+            },
+            "f:time": {
+              ".": {},
+              "f:from": {},
+              "f:to": {}
+            },
+            "f:timepicker": {
+              ".": {},
+              "f:refresh_intervals": {}
+            },
+            "f:timezone": {},
+            "f:title": {},
+            "f:weekStart": {}
+          }
+        },
+        "manager": "grafana",
+        "operation": "Update",
+        "time": "2026-11-01T04:24:08Z"
+      }
+    ],
+    "name": "b845bc217421",
+    "namespace": "default",
+    "resourceVersion": "1793507048973982",
+    "uid": "fb332b70-9b86-49b1-9bcb-b2cb9dfcc1e7"
+  },
+  "spec": {
+    "annotations": {
+      "list": [
+        {
+          "builtIn": 1,
+          "datasource": {
+            "type": "grafana",
+            "uid": "-- Grafana --"
+          },
+          "enable": true,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "type": "dashboard"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "enable": true,
+          "expr": "changes(kube_deployment_status_observed_generation{namespace=~\"$namespace\"}[2m]) > 0",
+          "iconColor": "#5794F2",
+          "name": "Deploys",
+          "step": "60s",
+          "titleFormat": "deploy"
+        }
+      ]
+    },
+    "description": "Hand-written fixture covering the cases the importer must handle.",
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 1,
+    "links": [
+      {
+        "icon": "doc",
+        "targetBlank": true,
+        "title": "Runbook",
+        "type": "link",
+        "url": "https://runbooks.example.com/web"
+      },
+      {
+        "asDropdown": true,
+        "tags": [
+          "web"
+        ],
+        "title": "Related",
+        "type": "dashboards"
+      }
+    ],
+    "liveNow": false,
+    "panels": [
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${ds}"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "fixedColor": "semi-dark-green",
+              "mode": "fixed"
+            },
+            "custom": {
+              "fillOpacity": 10,
+              "lineWidth": 1
+            },
+            "decimals": 1,
+            "min": 0,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green"
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "reqps"
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "5xx"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "red",
+                    "mode": "fixed"
+                  }
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byFrameRefID",
+                "options": "B"
+              },
+              "properties": [
+                {
+                  "id": "custom.lineStyle",
+                  "value": {
+                    "fill": "dash"
+                  }
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byNames",
+                "options": {
+                  "mode": "exclude",
+                  "names": [
+                    "2xx"
+                  ]
+                }
+              },
+              "properties": []
+            }
+          ]
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 0
+        },
+        "id": 1,
+        "options": {
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "multi"
+          }
+        },
+        "pluginVersion": "13.0.1",
+        "targets": [
+          {
+            "editorMode": "code",
+            "expr": "sum by (code) (rate(http_requests_total{namespace=~\"$namespace\"}[$__rate_interval]))",
+            "legendFormat": "{{code}}",
+            "range": true,
+            "refId": "A"
+          },
+          {
+            "expr": "sum(rate(http_requests_total[$__rate_interval]))",
+            "hide": true,
+            "legendFormat": "total",
+            "refId": "B"
+          }
+        ],
+        "title": "Requests per second",
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "renameByName": {
+                "Value": "rps"
+              }
+            }
+          },
+          {
+            "disabled": true,
+            "id": "spatial",
+            "options": {}
+          }
+        ],
+        "type": "timeseries"
+      },
+      {
+        "autoMigrateFrom": "singlestat",
+        "colorBackground": true,
+        "datasource": {
+          "uid": "${ds}"
+        },
+        "format": "percentunit",
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 12,
+          "y": 0
+        },
+        "id": 2,
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{code=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m]))",
+            "refId": "A"
+          }
+        ],
+        "title": "Error ratio",
+        "type": "stat",
+        "valueName": "current"
+      },
+      {
+        "autoMigrateFrom": "graph",
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 18,
+          "y": 0
+        },
+        "id": 3,
+        "lines": true,
+        "linewidth": 2,
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))",
+            "interval": "30s",
+            "refId": "A"
+          }
+        ],
+        "title": "Latency p99",
+        "type": "timeseries",
+        "yaxes": [
+          {
+            "format": "s"
+          },
+          {
+            "format": "short"
+          }
+        ]
+      },
+      {
+        "gridPos": {
+          "h": 4,
+          "w": 4,
+          "x": 12,
+          "y": 4
+        },
+        "id": 9,
+        "options": {
+          "mode": "time"
+        },
+        "title": "Clock",
+        "type": "grafana-clock-panel"
+      },
+      {
+        "datasource": {
+          "type": "elasticsearch",
+          "uid": "es-logs"
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 8,
+          "x": 16,
+          "y": 4
+        },
+        "id": 10,
+        "targets": [
+          {
+            "bucketAggs": [],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "duration_ms:>1000",
+            "refId": "A"
+          }
+        ],
+        "title": "Slow requests (Elasticsearch)",
+        "type": "table"
+      },
+      {
+        "gridPos": {
+          "h": 3,
+          "w": 6,
+          "x": 0,
+          "y": 8
+        },
+        "id": 11,
+        "options": {
+          "content": "Runbook: see the link above.",
+          "mode": "markdown"
+        },
+        "title": "Notes",
+        "type": "text"
+      },
+      {
+        "gridPos": {
+          "h": 3,
+          "w": 6,
+          "x": 6,
+          "y": 8
+        },
+        "id": 12,
+        "libraryPanel": {
+          "name": "CPU by pod",
+          "uid": "lib-cpu"
+        },
+        "title": "Shared CPU panel"
+      },
+      {
+        "collapsed": false,
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 11
+        },
+        "id": 4,
+        "panels": [],
+        "title": "Pods",
+        "type": "row"
+      },
+      {
+        "datasource": "Loki",
+        "gridPos": {
+          "h": 6,
+          "w": 24,
+          "x": 0,
+          "y": 12
+        },
+        "id": 5,
+        "targets": [
+          {
+            "expr": "sum by (pod) (count_over_time({namespace=~\"$namespace\"} |= \"error\" [5m]))",
+            "queryType": "range",
+            "refId": "A"
+          }
+        ],
+        "title": "Error logs by pod",
+        "type": "table"
+      },
+      {
+        "collapsed": true,
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 18
+        },
+        "id": 6,
+        "panels": [
+          {
+            "datasource": {
+              "type": "loki",
+              "uid": "loki"
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 16,
+              "x": 0,
+              "y": 19
+            },
+            "id": 7,
+            "options": {
+              "showTime": true,
+              "wrapLogMessage": true
+            },
+            "targets": [
+              {
+                "expr": "{namespace=~\"$namespace\"} |= \"$filter\"",
+                "refId": "A"
+              }
+            ],
+            "title": "Logs",
+            "type": "logs"
+          },
+          {
+            "fieldConfig": {
+              "defaults": {
+                "max": 1,
+                "thresholds": {
+                  "mode": "percentage",
+                  "steps": [
+                    {
+                      "color": "#73BF69"
+                    },
+                    {
+                      "color": "#FF9830",
+                      "value": 70
+                    },
+                    {
+                      "color": "#F2495C",
+                      "value": 90
+                    }
+                  ]
+                },
+                "unit": "percentunit"
+              },
+              "overrides": []
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 8,
+              "x": 16,
+              "y": 19
+            },
+            "id": 8,
+            "maxPerRow": 3,
+            "repeat": "namespace",
+            "repeatDirection": "h",
+            "targets": [
+              {
+                "expr": "sum(container_memory_working_set_bytes{namespace=~\"$namespace\"}) / sum(kube_pod_container_resource_limits{resource=\"memory\", namespace=~\"$namespace\"})",
+                "instant": true,
+                "refId": "A"
+              }
+            ],
+            "title": "Memory used",
+            "type": "gauge"
+          }
+        ],
+        "title": "Details",
+        "type": "row"
+      }
+    ],
+    "refresh": "5s",
+    "schemaVersion": 42,
+    "tags": [
+      "web",
+      "red"
+    ],
+    "templating": {
+      "list": [
+        {
+          "current": {
+            "text": "Prometheus",
+            "value": "prom"
+          },
+          "hide": 0,
+          "name": "ds",
+          "options": [],
+          "query": "prometheus",
+          "skipUrlSync": false,
+          "type": "datasource"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "definition": "label_values(up, cluster)",
+          "name": "cluster",
+          "options": [],
+          "query": {
+            "query": "label_values(up, cluster)",
+            "refId": "PrometheusVariableQueryEditor-VariableQuery"
+          },
+          "refresh": 1,
+          "type": "query"
+        },
+        {
+          "allValue": ".*",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "includeAll": true,
+          "label": "Namespace",
+          "multi": true,
+          "name": "namespace",
+          "options": [],
+          "query": "label_values(kube_pod_info{cluster=\"$cluster\"}, namespace)",
+          "refresh": 2,
+          "regex": "/^web-.*/",
+          "sort": 1,
+          "type": "query"
+        },
+        {
+          "name": "env",
+          "options": [],
+          "query": "prod,staging",
+          "type": "custom"
+        },
+        {
+          "auto": true,
+          "auto_count": 30,
+          "auto_min": "10s",
+          "name": "interval",
+          "query": "1m,5m,10m",
+          "type": "interval"
+        },
+        {
+          "name": "filter",
+          "query": "error",
+          "type": "textbox"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "name": "Filters",
+          "type": "adhoc"
+        }
+      ]
+    },
+    "time": {
+      "from": "now-3h",
+      "to": "now"
+    },
+    "timepicker": {
+      "refresh_intervals": [
+        "5s",
+        "30s",
+        "1m"
+      ]
+    },
+    "timezone": "",
+    "title": "Web \u2014 RED",
+    "weekStart": ""
+  },
+  "status": {
+    "conversion": {
+      "failed": false,
+      "storedVersion": "v0alpha1"
+    }
+  }
+}
