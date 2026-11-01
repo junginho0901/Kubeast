@@ -390,3 +390,78 @@ func TestExportV2_ReportsLayoutItCannotWrite(t *testing.T) {
 }
 
 func reflectEqual(a, b any) bool { return len(diffPaths("", a, b, 1)) == 0 }
+
+// What the file has and the converted dashboards do not stays: an element's
+// sub header, a time setting the classic model has no field for, a removed
+// panel's element and items both go, and a move is written as the amount
+// moved in the file's own frame.
+func TestV2Patcher_KeepsWhatTheChangeDoesNotTouch(t *testing.T) {
+	parse := func(s string) map[string]any {
+		var m map[string]any
+		if err := json.Unmarshal([]byte(s), &m); err != nil {
+			t.Fatal(err)
+		}
+		return m
+	}
+	r := parse(`{"title": "T", "timeSettings": {"from": "now-6h", "to": "now", "nowDelay": "1m"},
+		"elements": {"a": {"kind": "Panel", "spec": {"id": 1, "title": "A", "subtitle": "kept"}},
+		             "b": {"kind": "Panel", "spec": {"id": 2, "title": "B"}}},
+		"layout": {"kind": "TabsLayout", "spec": {"tabs": [{"kind": "TabsLayoutTab", "spec": {"layout": {"kind": "GridLayout", "spec": {"items": [
+			{"kind": "GridLayoutItem", "spec": {"x": 0, "y": 2, "width": 12, "height": 8, "element": {"kind": "ElementReference", "name": "a"}}},
+			{"kind": "GridLayoutItem", "spec": {"x": 12, "y": 2, "width": 12, "height": 8, "element": {"kind": "ElementReference", "name": "b"}}}]}}}}]}}}`)
+	c0 := parse(`{"title": "T", "timeSettings": {"from": "now-6h", "to": "now"},
+		"elements": {"panel-1": {"kind": "Panel", "spec": {"id": 1, "title": "A"}}, "panel-2": {"kind": "Panel", "spec": {"id": 2, "title": "B"}}},
+		"layout": {"kind": "GridLayout", "spec": {"items": [
+			{"kind": "GridLayoutItem", "spec": {"x": 0, "y": 10, "width": 12, "height": 8, "element": {"kind": "ElementReference", "name": "panel-1"}}},
+			{"kind": "GridLayoutItem", "spec": {"x": 12, "y": 10, "width": 12, "height": 8, "element": {"kind": "ElementReference", "name": "panel-2"}}}]}}}`)
+	c1 := parse(`{"title": "T", "timeSettings": {"from": "now-3h", "to": "now"},
+		"elements": {"panel-1": {"kind": "Panel", "spec": {"id": 1, "title": "A edited"}}},
+		"layout": {"kind": "GridLayout", "spec": {"items": [
+			{"kind": "GridLayoutItem", "spec": {"x": 0, "y": 13, "width": 12, "height": 8, "element": {"kind": "ElementReference", "name": "panel-1"}}}]}}}`)
+	p := &v2patcher{r: r, c0: c0, c1: c1, rep: &ExportReport{}}
+	p.patch()
+	want := `{"elements":{"a":{"kind":"Panel","spec":{"id":1,"subtitle":"kept","title":"A edited"}}},` +
+		`"layout":{"kind":"TabsLayout","spec":{"tabs":[{"kind":"TabsLayoutTab","spec":{"layout":{"kind":"GridLayout","spec":{"items":[` +
+		`{"kind":"GridLayoutItem","spec":{"element":{"kind":"ElementReference","name":"a"},"height":8,"width":12,"x":0,"y":5}}]}}}}]}},` +
+		`"timeSettings":{"from":"now-3h","nowDelay":"1m","to":"now"},"title":"T"}`
+	if got := js(r); got != want {
+		t.Errorf("patched:\n got %s\nwant %s", got, want)
+	}
+}
+
+// Every element the layout of a patched file names is in its elements, and
+// every panel element is placed.
+func TestExportV2_PatchedFilesHold(t *testing.T) {
+	for _, p := range append(nativePairs(t), corpusPairs(t)...) {
+		for _, e := range []v2Edit{v2Edits[7], v2Edits[8]} { // panel removed, panel added
+			d, _, _ := Import(p.v2)
+			if !e.edit(d) {
+				continue
+			}
+			out, _, err := ExportV2(d)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got map[string]any
+			_ = json.Unmarshal(out, &got)
+			spec := mapOr(got["spec"])
+			elements := mapOr(spec["elements"])
+			placed := places(spec["layout"])
+			for name := range placed {
+				if elements[name] == nil {
+					t.Errorf("%s / %s: the layout names %s, which is no element", p.name, e.name, name)
+				}
+			}
+			var orig map[string]any
+			_ = json.Unmarshal(p.v2, &orig)
+			before := places(mapOr(orig["spec"])["layout"])
+			for name := range elements {
+				if _, ok := placed[name]; !ok {
+					if _, was := before[name]; was || mapOr(elements[name])["kind"] == "Panel" && !strings.Contains(js(orig), `"`+name+`"`) {
+						t.Errorf("%s / %s: element %s is not placed", p.name, e.name, name)
+					}
+				}
+			}
+		}
+	}
+}
