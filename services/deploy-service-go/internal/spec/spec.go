@@ -16,11 +16,13 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/santhosh-tekuri/jsonschema/v5"
+	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/score-spec/score-go/framework"
 	"github.com/score-spec/score-go/loader"
 	"github.com/score-spec/score-go/schema"
 	"github.com/score-spec/score-go/types"
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
 )
 
 // Input is one workload as one environment sees it.
@@ -54,7 +56,15 @@ func (s *Spec) Name() string {
 // The schema is compiled once; score-go's schema.Validate compiles it on
 // every call, which alone costs more than a render.
 var compiledSchema = sync.OnceValues(func() (*jsonschema.Schema, error) {
-	return jsonschema.CompileString("score-v1b1.json", schema.ScoreSchemaV1b1)
+	doc, err := jsonschema.UnmarshalJSON(strings.NewReader(schema.ScoreSchemaV1b1))
+	if err != nil {
+		return nil, err
+	}
+	c := jsonschema.NewCompiler()
+	if err := c.AddResource("score-v1b1.json", doc); err != nil {
+		return nil, err
+	}
+	return c.Compile("score-v1b1.json")
 })
 
 // Load parses the Score file, merges the overrides, validates the result
@@ -111,23 +121,28 @@ func Load(in Input) (*Spec, error) {
 }
 
 // schemaError lists each failing location instead of jsonschema's nested
-// summary, so a person sees every problem in one answer.
+// summary, so a person sees every problem in one answer. It reads the
+// leaves of the error tree: v6's flat BasicOutput labels a check reached
+// through $ref only "validation failed" and would hide what failed.
 func schemaError(err error) error {
 	var ve *jsonschema.ValidationError
 	if !errors.As(err, &ve) {
 		return fmt.Errorf("score schema: %w", err)
 	}
+	en := message.NewPrinter(language.English)
 	var lines []string
-	for _, u := range ve.BasicOutput().Errors {
-		if u.Error == "" || strings.HasPrefix(u.Error, "doesn't validate with") {
-			continue
+	var walk func(*jsonschema.ValidationError)
+	walk = func(e *jsonschema.ValidationError) {
+		if len(e.Causes) > 0 {
+			for _, c := range e.Causes {
+				walk(c)
+			}
+			return
 		}
-		loc := u.InstanceLocation
-		if loc == "" {
-			loc = "/"
-		}
-		lines = append(lines, fmt.Sprintf("%s: %s", loc, u.Error))
+		loc := "/" + strings.Join(e.InstanceLocation, "/")
+		lines = append(lines, fmt.Sprintf("%s: %s", loc, e.ErrorKind.LocalizedString(en)))
 	}
+	walk(ve)
 	sort.Strings(lines)
 	if len(lines) == 0 {
 		return fmt.Errorf("score schema: %w", err)

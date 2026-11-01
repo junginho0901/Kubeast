@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/score-spec/score-go/framework"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 // The escape hatch for what a Score file and the environment cannot say:

@@ -65,7 +65,7 @@ type File struct {
 // Config sets up a gate.
 type Config struct {
 	// KubernetesVersion fills {{.NormalizedKubernetesVersion}} in extra
-	// schema locations. The embedded schemas are 1.36.0's.
+	// schema locations. The embedded schemas are 1.37.2's (schemas/sources.txt).
 	KubernetesVersion string
 	// SchemaLocations are kubeconform locations (a path or URL template)
 	// tried after the embedded schemas, for kinds raw files bring.
@@ -103,7 +103,7 @@ func New(ctx context.Context, cfg Config) (*Gate, error) {
 		modes[r] = m
 	}
 	if cfg.KubernetesVersion == "" {
-		cfg.KubernetesVersion = "1.36.0"
+		cfg.KubernetesVersion = "1.37.2"
 	}
 
 	dir, err := unpackSchemas()
