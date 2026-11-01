@@ -48,7 +48,7 @@ func (f *fakeMeta) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Write(f.body)
 }
 
-func newMeta(t *testing.T) (*fakeMeta, *Ranges) {
+func newMeta(t testing.TB) (*fakeMeta, *Ranges) {
 	t.Helper()
 	f := &fakeMeta{body: payload(t, "github-meta-20261101.json"), etag: `"v1"`}
 	srv := httptest.NewServer(f)
