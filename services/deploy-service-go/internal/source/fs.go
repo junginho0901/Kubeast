@@ -17,8 +17,9 @@ const MaxFileSize = 1 << 20
 
 var name = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
 
-// FS reads the layout from a file system: a git checkout (the git source
-// clones or fetches, then reads through this), or an fstest.MapFS in tests.
+// FS reads the layout from a file system: a commit's tree (Repo.Snapshot,
+// read from git's objects without a checkout), a folder on disk, or an
+// fstest.MapFS in tests.
 type FS struct {
 	fsys     fs.FS
 	revision string
@@ -50,10 +51,17 @@ func (s *FS) list(dir, marker string) ([]string, error) {
 		return nil, err
 	}
 	var out []string
-	var bad []string
+	var bad, links []string
 	for _, e := range entries {
 		n := e.Name()
-		if !e.IsDir() || strings.HasPrefix(n, ".") || strings.HasPrefix(n, "_") {
+		if strings.HasPrefix(n, ".") || strings.HasPrefix(n, "_") {
+			continue
+		}
+		if e.Type()&(fs.ModeSymlink|fs.ModeIrregular) != 0 {
+			links = append(links, n)
+			continue
+		}
+		if !e.IsDir() {
 			continue
 		}
 		if !name.MatchString(n) || len(n) > 63 {
@@ -65,11 +73,16 @@ func (s *FS) list(dir, marker string) ([]string, error) {
 		}
 	}
 	sort.Strings(out)
+	var errs []error
 	if len(bad) > 0 {
 		sort.Strings(bad)
-		return out, fmt.Errorf("%s: folder names %q are not DNS labels", dir, bad)
+		errs = append(errs, fmt.Errorf("%s: folder names %q are not DNS labels", dir, bad))
 	}
-	return out, nil
+	if len(links) > 0 {
+		sort.Strings(links)
+		errs = append(errs, fmt.Errorf("%s: %q are links or submodules, which are not followed", dir, links))
+	}
+	return out, errors.Join(errs...)
 }
 
 // Load reads one workload in one environment.
