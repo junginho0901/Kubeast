@@ -250,6 +250,18 @@ func TestExportV2_WritesChangesIntoTheV2File(t *testing.T) {
 			if a, b := layoutKinds(got["spec"]), layoutKinds(orig["spec"]); a != b {
 				t.Errorf("%s / %s: layout kinds %s, want the file's %s", dc.name, e.name, a, b)
 			}
+			if _, kept := got["status"]; kept || len(mapOr(got["metadata"])) != 1 {
+				t.Errorf("%s / %s: the Grafana instance's record kept (metadata %v)", dc.name, e.name, got["metadata"])
+			}
+			if _, had := orig["status"]; had {
+				told := false
+				for _, f := range rep.Adjusted {
+					told = told || f.Path == "status"
+				}
+				if !told {
+					t.Errorf("%s / %s: status left out without saying so", dc.name, e.name)
+				}
+			}
 			again, _, err := Import(out)
 			if err != nil {
 				t.Errorf("%s / %s: the file does not import: %v", dc.name, e.name, err)
@@ -464,4 +476,50 @@ func TestExportV2_PatchedFilesHold(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestExportV2Shared_ChangedV2File(t *testing.T) {
+	shared := 0
+	for _, p := range append(nativePairs(t), corpusPairs(t)...) {
+		for _, e := range []v2Edit{v2Edits[3], v2Edits[6], v2Edits[8], v2MoreEdits[0]} { // query, new variable, panel added, variable removed
+			d, _, _ := Import(p.v2)
+			if !e.edit(d) {
+				continue
+			}
+			out, rep, err := ExportV2Shared(d)
+			if err != nil {
+				t.Fatalf("%s / %s: %v", p.name, e.name, err)
+			}
+			shared++
+			var got map[string]any
+			_ = json.Unmarshal(out, &got)
+			for _, r := range refsOf(got["spec"]).kept {
+				if !strings.HasPrefix(r, "$") && r != "-- Dashboard --" {
+					t.Errorf("%s / %s: a reference to %q is left", p.name, e.name, r)
+				}
+			}
+			again, _, err := Import(out)
+			if err != nil {
+				t.Fatalf("%s / %s: the shared file does not import: %v", p.name, e.name, err)
+			}
+			auto := strings.Contains(layoutKinds(got["spec"]), "AutoGrid")
+			if a, b := editView(withoutOptions(again), auto), editView(withoutOptions(d), auto); a != b {
+				t.Errorf("%s / %s: imports back differently:\n got  %s\n want %s\n(report %v)", p.name, e.name, a, b, rep.Adjusted)
+			}
+		}
+	}
+	if shared < 235 {
+		t.Errorf("%d changed v2 dashboards shared, want every v2 document with each edit", shared)
+	}
+}
+
+// withoutOptions: a shared file leaves out the options of its variables.
+func withoutOptions(d *model.Dashboard) *model.Dashboard {
+	c := *d
+	c.Spec.Variables = make([]model.Variable, len(d.Spec.Variables))
+	for i, v := range d.Spec.Variables {
+		v.Options = nil
+		c.Spec.Variables[i] = v
+	}
+	return &c
 }

@@ -35,18 +35,14 @@ func patchedV2(d, orig *model.Dashboard, raw []byte) (*v2Res, *ExportReport, err
 		APIVersion string         `json:"apiVersion"`
 		Metadata   map[string]any `json:"metadata"`
 		Spec       map[string]any `json:"spec"`
+		Status     any            `json:"status"`
 	}
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.UseNumber()
 	if err := dec.Decode(&root); err != nil || root.Spec == nil {
 		return nil, nil, ErrNotJSON
 	}
-	rep := &ExportReport{}
-	for _, k := range sortedSet(root.Metadata) {
-		if k != "name" {
-			rep.Adjusted = append(rep.Adjusted, Finding{Path: "metadata." + k, Reason: "the Grafana instance's record of the dashboard, left out"})
-		}
-	}
+	rep := leftOut(root.Metadata, root.Status)
 	p := &v2patcher{r: root.Spec, c0: c0, c1: c1, rep: rep}
 	p.patch()
 	rep.Adjusted = append(rep.Adjusted, Finding{Path: "spec", Reason: fmt.Sprintf(
