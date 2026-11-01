@@ -121,6 +121,15 @@ func (s *FS) Load(ctx context.Context, service, env string) (*Bundle, error) {
 	return b, nil
 }
 
+// File reads one file of the layout, within MaxFileSize; a missing file is
+// ErrNotFound.
+func (s *FS) File(p string) ([]byte, error) {
+	if !fs.ValidPath(p) {
+		return nil, fmt.Errorf("path %q is not a clean relative path", p)
+	}
+	return s.read(p, true)
+}
+
 func (s *FS) read(p string, required bool) ([]byte, error) {
 	st, err := fs.Stat(s.fsys, p)
 	if errors.Is(err, fs.ErrNotExist) {
