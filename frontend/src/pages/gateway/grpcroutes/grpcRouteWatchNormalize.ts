@@ -7,7 +7,6 @@
 // + status.parents.conditions 순회해서 Accepted/ResolvedRefs 판정.
 // HTTPRoutes 와 동일한 정규화 로직 (Gateway API 공통 패턴).
 
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import type { GRPCRouteInfo } from '@/services/api'
 
 export function normalizeWatchGRPCRouteObject(obj: any): GRPCRouteInfo {
@@ -111,7 +110,8 @@ export function applyGRPCRouteWatchEvent(
     return items
   }
 
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
+  // the server sends the whole row (gatewayrow.Route), so it replaces: a value that went empty shows empty
+  if (index >= 0) items[index] = normalized
   else items.push(normalized)
 
   return items

@@ -1,5 +1,3 @@
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
-
 export interface BackendPolicyLike {
   name: string
   namespace: string
@@ -68,7 +66,8 @@ export function applyWatchEvent<T extends BackendPolicyLike>(
     if (index >= 0) items.splice(index, 1)
     return items
   }
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized) as T
+  // the server sends the whole row (gatewayrow.Policy), so it replaces: a value that went empty shows empty
+  if (index >= 0) items[index] = normalized
   else items.push(normalized)
   return items
 }

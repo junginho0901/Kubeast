@@ -6,7 +6,6 @@
 // spec.rules/parentRefs/hostnames + status.parents.conditions 순회해서
 // Accepted/ResolvedRefs 판정 + backend_refs_count 합산.
 
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import type { HTTPRouteInfo } from '@/services/api'
 
 export function normalizeWatchHTTPRouteObject(obj: any): HTTPRouteInfo {
@@ -110,7 +109,8 @@ export function applyHTTPRouteWatchEvent(
     return items
   }
 
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
+  // the server sends the whole row (gatewayrow.Route), so it replaces: a value that went empty shows empty
+  if (index >= 0) items[index] = normalized
   else items.push(normalized)
 
   return items
