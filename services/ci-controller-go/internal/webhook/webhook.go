@@ -23,17 +23,23 @@ import (
 	"strings"
 )
 
-// Event kinds a Verifier passes on.
+// Event kinds a Verifier passes on. A check run or check suite event is a
+// rerun asked for on GitHub ("Re-run" on a check, "Re-run all checks");
+// GitHub sends those only to the app that made the checks, so only a
+// GitHub App installation gets them, not a repository webhook.
 const (
 	KindPush        = "push"
 	KindPullRequest = "pull_request"
+	KindCheckRun    = "check_run"
+	KindCheckSuite  = "check_suite"
 )
 
 // Event is the signal one delivery carries.
 type Event struct {
 	Delivery string `json:"delivery"`
 	Kind     string `json:"kind"`
-	// Action is a pull request's action: opened, reopened or synchronize.
+	// Action is a pull request's action (opened, reopened or synchronize),
+	// or rerequested for a check run or suite.
 	Action       string `json:"action,omitempty"`
 	Installation int64  `json:"installation,omitempty"`
 	RepoID       int64  `json:"repoId"`
@@ -52,6 +58,16 @@ type Event struct {
 	Fork bool `json:"fork,omitempty"`
 	// Sender is the account GitHub names, for the audit record only.
 	Sender string `json:"sender,omitempty"`
+	// CheckRunID or CheckSuiteID is the check run or suite a rerun was
+	// asked for, and App the GitHub App that owns it.
+	CheckRunID   int64 `json:"checkRunId,omitempty"`
+	CheckSuiteID int64 `json:"checkSuiteId,omitempty"`
+	App          int64 `json:"app,omitempty"`
+	// Build is a check run's external_id: the ID of the build Kubeast
+	// reported in it, which the rerun repeats with that build's settings —
+	// fork or not included, since GitHub leaves a fork's pull requests out
+	// of these payloads.
+	Build string `json:"build,omitempty"`
 }
 
 // Outcome is what a delivery came to.
@@ -73,7 +89,7 @@ type Result struct {
 	Event   Event
 	// Reason is a short code for Ignored and Rejected deliveries, for the
 	// answer and the audit record: bad-signature, no-signature, malformed,
-	// event, action, deleted, ping.
+	// event, action, deleted, ping, external-id.
 	Reason string
 }
 
@@ -156,6 +172,8 @@ func (v *Verifier) Check(event, delivery, signature string, body []byte) Result 
 		return parsePush(delivery, body)
 	case KindPullRequest:
 		return parsePullRequest(delivery, body)
+	case KindCheckRun, KindCheckSuite:
+		return parseRerun(delivery, event, body)
 	default:
 		return Result{Outcome: Ignored, Reason: "event"}
 	}
@@ -252,7 +270,75 @@ func parsePullRequest(delivery string, body []byte) Result {
 	return Result{Outcome: Accepted, Event: e}
 }
 
+// checkPayload is what a check run and a check suite carry alike.
+type checkPayload struct {
+	ID         int64  `json:"id"`
+	HeadSHA    string `json:"head_sha"`
+	HeadBranch string `json:"head_branch"`
+	ExternalID string `json:"external_id"`
+	App        *struct {
+		ID int64 `json:"id"`
+	} `json:"app"`
+	PullRequests []struct {
+		Number int `json:"number"`
+	} `json:"pull_requests"`
+	CheckSuite *struct {
+		ID         int64  `json:"id"`
+		HeadBranch string `json:"head_branch"`
+	} `json:"check_suite"`
+}
+
+// parseRerun reads check_run and check_suite deliveries; only rerequested
+// is a signal. A check run must name the build it reported (external_id).
+func parseRerun(delivery, kind string, body []byte) Result {
+	var p struct {
+		common
+		Action     string        `json:"action"`
+		CheckRun   *checkPayload `json:"check_run"`
+		CheckSuite *checkPayload `json:"check_suite"`
+	}
+	if err := json.Unmarshal(body, &p); err != nil {
+		return Result{Outcome: Rejected, Reason: "malformed"}
+	}
+	if p.Action != "rerequested" {
+		return Result{Outcome: Ignored, Reason: "action"}
+	}
+	c := p.CheckSuite
+	if kind == KindCheckRun {
+		c = p.CheckRun
+	}
+	e, ok := p.event(delivery, kind)
+	if !ok || c == nil || c.ID <= 0 || !shaRe.MatchString(c.HeadSHA) || c.App == nil || c.App.ID <= 0 {
+		return Result{Outcome: Rejected, Reason: "malformed"}
+	}
+	e.Action, e.SHA, e.App = p.Action, c.HeadSHA, c.App.ID
+	branch := c.HeadBranch
+	if kind == KindCheckRun {
+		if len(c.ExternalID) > 63 || !buildRe.MatchString(c.ExternalID) {
+			return Result{Outcome: Ignored, Reason: "external-id"}
+		}
+		e.CheckRunID, e.Build = c.ID, c.ExternalID
+		if c.CheckSuite != nil {
+			e.CheckSuiteID, branch = c.CheckSuite.ID, c.CheckSuite.HeadBranch
+		}
+	} else {
+		e.CheckSuiteID = c.ID
+	}
+	if branch != "" {
+		if !branchRe.MatchString(branch) {
+			return Result{Outcome: Rejected, Reason: "malformed"}
+		}
+		e.Ref = "refs/heads/" + branch
+	}
+	if len(c.PullRequests) > 0 && c.PullRequests[0].Number > 0 {
+		e.Number = c.PullRequests[0].Number
+	}
+	return Result{Outcome: Accepted, Event: e}
+}
+
 var (
+	// buildRe: Kubeast's build IDs are DNS labels (the Job is ci-<ID>).
+	buildRe = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
 	// deliveryRe: GitHub sends a GUID; anything short of letters, digits
 	// and hyphens is taken as malformed.
 	deliveryRe = regexp.MustCompile(`^[A-Za-z0-9-]{1,64}$`)

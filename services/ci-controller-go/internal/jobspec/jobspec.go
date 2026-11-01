@@ -160,12 +160,7 @@ func Render(in Input) (*Result, error) {
 		}
 	}
 
-	labels := map[string]string{
-		"app.kubernetes.io/managed-by": "kubeast",
-		"app.kubernetes.io/component":  "ci-build",
-		"kubeast.io/ci-build":          in.Build.ID,
-		"kubeast.io/ci-profile":        in.Profile.Name,
-	}
+	labels := buildLabels(in)
 	annotations := map[string]string{
 		"kubeast.io/ci-repo":   in.Build.Repo,
 		"kubeast.io/ci-commit": in.Build.CommitSHA,
@@ -595,6 +590,16 @@ func (r *renderer) scan(s pipeline.Step) corev1.Container {
 		Resources:       r.resources(),
 		SecurityContext: stepSecurity(),
 		VolumeMounts:    mounts,
+	}
+}
+
+// buildLabels are on a build's Job, its pod and its git Secret.
+func buildLabels(in Input) map[string]string {
+	return map[string]string{
+		"app.kubernetes.io/managed-by": "kubeast",
+		"app.kubernetes.io/component":  "ci-build",
+		"kubeast.io/ci-build":          in.Build.ID,
+		"kubeast.io/ci-profile":        in.Profile.Name,
 	}
 }
 
