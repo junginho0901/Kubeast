@@ -1,0 +1,45 @@
+{
+  "question": "default 클러스터에서 kube-system 네임스페이스의 CPU와 메모리 사용량을 보는 대시보드 만들어 줘",
+  "cluster": "default",
+  "panels": {
+    "min": 2,
+    "max": 10
+  },
+  "expect": [
+    {
+      "what": "CPU 사용량",
+      "metrics": [
+        "container_cpu_usage_seconds_total"
+      ],
+      "functions": [
+        "rate",
+        "irate"
+      ]
+    },
+    {
+      "what": "메모리 사용량",
+      "metrics": [
+        "container_memory_working_set_bytes",
+        "container_memory_usage_bytes",
+        "container_memory_rss"
+      ],
+      "units": [
+        "bytes",
+        "decbytes"
+      ]
+    }
+  ],
+  "vars": {
+    "namespace": "kube-system"
+  },
+  "scope": [
+    {
+      "label": "namespace",
+      "value": "kube-system",
+      "prefixes": [
+        "container_",
+        "kube_pod_"
+      ]
+    }
+  ]
+}

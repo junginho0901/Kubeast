@@ -1,0 +1,26 @@
+{
+  "question": "CPU 요청량 대비 실제 사용량을 보여 줘. 요청을 너무 많이 잡은 파드를 찾고 싶어",
+  "cluster": "default",
+  "panels": {
+    "min": 1,
+    "max": 8
+  },
+  "expect": [
+    {
+      "what": "CPU 사용량",
+      "metrics": [
+        "container_cpu_usage_seconds_total"
+      ],
+      "functions": [
+        "rate",
+        "irate"
+      ]
+    },
+    {
+      "what": "CPU 요청량",
+      "metrics": [
+        "kube_pod_container_resource_requests"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "question": "디플로이먼트별로 원하는 레플리카 수와 준비된 수를 비교해 줘",
+  "cluster": "default",
+  "panels": {
+    "min": 1,
+    "max": 8
+  },
+  "expect": [
+    {
+      "what": "원하는 레플리카",
+      "metrics": [
+        "kube_deployment_spec_replicas"
+      ]
+    },
+    {
+      "what": "준비된 레플리카",
+      "metrics": [
+        "kube_deployment_status_replicas_available",
+        "kube_deployment_status_replicas_ready"
+      ]
+    }
+  ]
+}

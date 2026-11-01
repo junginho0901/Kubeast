@@ -150,6 +150,25 @@ func TestImportedCorpusPassesSchema(t *testing.T) {
 	}
 }
 
+// The reference answers of the AI builder evaluation are dashboards the
+// builder should write: they pass the schema as they are.
+func TestEvalReferencesPassSchema(t *testing.T) {
+	s := load(t)
+	files, _ := filepath.Glob("../../../../evals/dashboards/*/reference.json")
+	if len(files) == 0 {
+		t.Fatal("no reference answers")
+	}
+	for _, f := range files {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if errs := check(s, decode(t, b)); len(errs) != 0 {
+			t.Errorf("%s fails the schema:\n%s", f, strings.Join(errs, "\n"))
+		}
+	}
+}
+
 // Each broken example must fail the schema and the server alike: the server
 // decodes strictly (unknown fields are an error) and then runs Validate.
 func TestBrokenFailsBoth(t *testing.T) {

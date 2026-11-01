@@ -1,0 +1,66 @@
+{
+  "apiVersion": "kubeast.io/dashboards/v1alpha1",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "firing-alerts",
+    "title": "울리는 알림",
+    "scope": {
+      "cluster": "*"
+    }
+  },
+  "spec": {
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "panels": {
+      "count": {
+        "title": "울리는 알림 수",
+        "kind": "stat",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "count(ALERTS{alertstate=\"firing\"})"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "short"
+        }
+      },
+      "list": {
+        "title": "울리는 알림",
+        "kind": "table",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "ALERTS{alertstate=\"firing\"}"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "short"
+        }
+      }
+    },
+    "layout": {
+      "items": [
+        {
+          "panel": "count",
+          "x": 0,
+          "y": 0,
+          "w": 6,
+          "h": 4
+        },
+        {
+          "panel": "list",
+          "x": 6,
+          "y": 0,
+          "w": 18,
+          "h": 8
+        }
+      ]
+    }
+  }
+}

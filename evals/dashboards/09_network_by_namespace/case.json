@@ -1,0 +1,30 @@
+{
+  "question": "네임스페이스별 네트워크 송수신량 대시보드 만들어 줘",
+  "cluster": "default",
+  "panels": {
+    "min": 1,
+    "max": 8
+  },
+  "expect": [
+    {
+      "what": "수신",
+      "metrics": [
+        "container_network_receive_bytes_total"
+      ],
+      "functions": [
+        "rate",
+        "irate"
+      ]
+    },
+    {
+      "what": "송신",
+      "metrics": [
+        "container_network_transmit_bytes_total"
+      ],
+      "functions": [
+        "rate",
+        "irate"
+      ]
+    }
+  ]
+}
