@@ -599,9 +599,10 @@ func fieldConfigSource(fc map[string]any) v2FieldConfigSource {
 	return s
 }
 
+// fieldDefaults keeps Grafana's field config fields only. Grafana also sets an
+// empty custom object when none is there, which the JSON leaves out.
 func fieldDefaults(d map[string]any) v2FieldConfig {
 	f := v2FieldConfig{}
-	has := false
 	if c, ok := mapOf(d["color"]); ok {
 		fc := &v2FieldColor{}
 		fc.Mode, _ = c["mode"].(string)
@@ -611,36 +612,35 @@ func fieldDefaults(d map[string]any) v2FieldConfig {
 		if s, ok := c["seriesBy"].(string); ok {
 			fc.SeriesBy = &s
 		}
-		f.Color, has = fc, true
+		f.Color = fc
 	}
 	if m, ok := mapOf(d["custom"]); ok {
-		f.Custom, has = m, true
+		f.Custom = m
 	}
 	for k, dst := range map[string]**float64{"decimals": &f.Decimals, "max": &f.Max, "min": &f.Min} {
 		if v, ok := d[k].(float64); ok {
-			*dst, has = &v, true
+			*dst = &v
 		}
 	}
 	for k, dst := range map[string]**string{"description": &f.Description, "displayName": &f.DisplayName,
 		"displayNameFromDS": &f.DisplayNameFromDS, "noValue": &f.NoValue, "path": &f.Path, "unit": &f.Unit, "nullValueMode": &f.NullValueMode} {
 		if v, ok := d[k].(string); ok {
-			*dst, has = &v, true
+			*dst = &v
 		}
 	}
 	for k, dst := range map[string]**bool{"filterable": &f.Filterable, "writeable": &f.Writeable, "fieldMinMax": &f.FieldMinMax} {
 		if v, ok := d[k].(bool); ok {
-			*dst, has = &v, true
+			*dst = &v
 		}
 	}
 	if l, ok := d["links"].([]any); ok {
 		f.Links, _ = stripBOMs(l).([]any)
-		has = true
 	}
 	if l, ok := d["actions"].([]any); ok {
-		f.Actions, has = actions(l), true
+		f.Actions = actions(l)
 	}
 	if m, ok := d["mappings"]; ok {
-		f.Mappings, has = valueMappings(m), true
+		f.Mappings = valueMappings(m)
 	}
 	if t, ok := mapOf(d["thresholds"]); ok {
 		th := &v2Thresholds{}
@@ -659,10 +659,7 @@ func fieldDefaults(d map[string]any) v2FieldConfig {
 				th.Steps = append(th.Steps, s)
 			}
 		}
-		f.Thresholds, has = th, true
-	}
-	if !has {
-		f.Custom = map[string]any{}
+		f.Thresholds = th
 	}
 	return f
 }
