@@ -36,6 +36,7 @@
     {"name": "q3", "type": "query", "datasource": "loki", "query": "", "staticOptionsOrder": "nope"},
     {"name": "q4", "type": "query", "datasource": null, "current": {"text": {"__legacyStringValue": "x"}, "value": {"other": 1}}},
     {"name": "q5", "type": "query", "datasource": {}, "query": 7},
+    {"name": "q6", "type": "query", "datasource": "Named DS", "query": "x"},
     {"name": "ds", "type": "datasource", "query": "loki", "regex": "/l/", "refresh": 1, "multi": false, "current": {"text": "loki", "value": "loki"}, "options": [{"text": "loki", "value": "loki"}]},
     {"name": "ds2", "type": "datasource"},
     {"name": "c", "type": "custom", "query": "a,b", "valuesFormat": "csv", "current": {"text": "a", "value": "a"}, "allValue": "*"},

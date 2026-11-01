@@ -78,6 +78,8 @@
      "targets": [{"refId": "A", "expr": "up"}, {"refId": "B", "datasource": {"type": "__expr__", "uid": "__expr__"}, "type": "math", "expression": "$A * 2"},
                  {"refId": "C", "datasource": "Named DS"}],
      "fieldConfig": {"defaults": {"thresholds": {"mode": "percentage"}}, "overrides": []}},
+    {"id": 20, "type": "timeseries", "title": "panel data source by name", "gridPos": {"x": 0, "y": 15, "w": 6, "h": 4},
+     "datasource": "Named DS", "targets": [{"refId": "A"}]},
     {"id": 10, "type": "row", "title": "closed row", "collapsed": true, "repeat": "region", "gridPos": {"x": 0, "y": 15, "w": 24, "h": 1}, "panels": [
       {"id": 11, "type": "graph", "title": "old graph", "gridPos": {"x": 0, "y": 16, "w": 12, "h": 5}, "targets": [{"refId": "A", "expr": "up"}],
        "xaxis": {"mode": "time"}, "lines": true, "fieldConfig": {"defaults": {"custom": {}}, "overrides": []}, "transformations": []},
