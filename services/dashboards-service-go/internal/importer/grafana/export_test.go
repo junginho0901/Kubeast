@@ -215,14 +215,14 @@ func leaves(v any, path string, into map[string]int) {
 	}
 }
 
-// A row keeps its id unless a panel or an earlier row has it; then it gets a
-// free one and the report says so.
+// A row keeps its id unless a panel or an earlier row has it; then it gets one
+// no panel or row has, kept ones included, and the report says so.
 func TestExport_RowIDs(t *testing.T) {
 	raw := []byte(`{"title": "rows", "schemaVersion": 42, "panels": [
-		{"type": "row", "id": 7, "title": "a", "collapsed": false, "gridPos": {"x": 0, "y": 0, "w": 24, "h": 1}, "panels": []},
+		{"type": "row", "id": 2, "title": "a", "collapsed": false, "gridPos": {"x": 0, "y": 0, "w": 24, "h": 1}, "panels": []},
 		{"type": "timeseries", "id": 1, "title": "p", "gridPos": {"x": 0, "y": 1, "w": 12, "h": 8}},
 		{"type": "row", "id": 1, "title": "b", "collapsed": false, "gridPos": {"x": 0, "y": 9, "w": 24, "h": 1}, "panels": []},
-		{"type": "row", "id": 7, "title": "c", "collapsed": true, "gridPos": {"x": 0, "y": 10, "w": 24, "h": 1}, "panels": []}]}`)
+		{"type": "row", "id": 2, "title": "c", "collapsed": true, "gridPos": {"x": 0, "y": 10, "w": 24, "h": 1}, "panels": []}]}`)
 	d, _, err := Import(raw)
 	if err != nil {
 		t.Fatal(err)
@@ -239,8 +239,8 @@ func TestExport_RowIDs(t *testing.T) {
 	for _, p := range got.Panels {
 		ids = append(ids, p.ID)
 	}
-	if fmt.Sprint(ids) != "[7 1 2 3]" {
-		t.Errorf("ids = %v, want [7 1 2 3]", ids)
+	if fmt.Sprint(ids) != "[2 1 3 4]" {
+		t.Errorf("ids = %v, want [2 1 3 4]: row a keeps 2, rows b and c get ids no one has", ids)
 	}
 	var paths []string
 	for _, f := range rep.Adjusted {
