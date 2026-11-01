@@ -268,11 +268,13 @@ type repoData struct {
 
 var repoNameRe = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$`)
 
+// splitRepo also refuses "." and ".." as either part: the parts go into
+// REST paths (/repos/{owner}/{name}/…), where they would move the path.
 func splitRepo(repo string) (string, string, error) {
-	if !repoNameRe.MatchString(repo) {
+	owner, name, _ := strings.Cut(repo, "/")
+	if !repoNameRe.MatchString(repo) || strings.Trim(owner, ".") == "" || strings.Trim(name, ".") == "" {
 		return "", "", fmt.Errorf("github: %q is not owner/name", repo)
 	}
-	owner, name, _ := strings.Cut(repo, "/")
 	return owner, name, nil
 }
 

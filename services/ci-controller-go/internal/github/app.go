@@ -149,7 +149,11 @@ func (a *App) InstallationToken(ctx context.Context, installation int64) (Token,
 	if t, ok := a.tokens[installation]; ok && a.now().Before(t.ExpiresAt.Add(-RefreshBefore)) {
 		return t, nil
 	}
-	t, err := a.fetchToken(ctx, installation)
+	var body map[string]any
+	if len(a.Permissions) > 0 {
+		body = map[string]any{"permissions": a.Permissions}
+	}
+	t, err := a.fetchToken(ctx, installation, body)
 	if err != nil {
 		return Token{}, err
 	}
@@ -167,14 +171,16 @@ func (a *App) Forget(installation int64) {
 	delete(a.tokens, installation)
 }
 
-func (a *App) fetchToken(ctx context.Context, installation int64) (Token, error) {
+// fetchToken asks for an installation token; fields, when set, narrow it
+// (permissions, repositories).
+func (a *App) fetchToken(ctx context.Context, installation int64, fields map[string]any) (Token, error) {
 	jwt, err := a.JWT()
 	if err != nil {
 		return Token{}, err
 	}
 	var body io.Reader
-	if len(a.Permissions) > 0 {
-		b, err := json.Marshal(map[string]any{"permissions": a.Permissions})
+	if len(fields) > 0 {
+		b, err := json.Marshal(fields)
 		if err != nil {
 			return Token{}, err
 		}
