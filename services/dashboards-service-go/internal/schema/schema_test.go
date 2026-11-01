@@ -123,6 +123,30 @@ func TestImportedPassesSchema(t *testing.T) {
 	}
 }
 
+// The published dashboards in the importer's corpus pass the schema once imported.
+func TestImportedCorpusPassesSchema(t *testing.T) {
+	s := load(t)
+	files, _ := filepath.Glob("../importer/grafana/testdata/corpus/*/*.json")
+	if len(files) == 0 {
+		t.Fatal("no corpus")
+	}
+	for _, f := range files {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		d, _, err := grafana.Import(b)
+		if err != nil {
+			t.Errorf("%s: %v", f, err)
+			continue
+		}
+		out, _ := json.Marshal(d)
+		if errs := check(s, decode(t, out)); len(errs) != 0 {
+			t.Errorf("%s fails the schema:\n%s", f, strings.Join(errs, "\n"))
+		}
+	}
+}
+
 // Each broken example must fail the schema and the server alike: the server
 // decodes strictly (unknown fields are an error) and then runs Validate.
 func TestBrokenFailsBoth(t *testing.T) {

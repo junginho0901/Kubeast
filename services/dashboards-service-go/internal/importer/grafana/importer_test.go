@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"testing"
 
@@ -57,63 +57,9 @@ func TestImport_EveryKeyIsAccounted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var root map[string]any
-	if err := json.Unmarshal(raw, &root); err != nil {
+	missing, err := unaccounted(raw, rep)
+	if err != nil {
 		t.Fatal(err)
-	}
-	var missing []string
-	need := func(path string, o map[string]any) {
-		for k := range o {
-			p := k
-			if path != "" {
-				p = path + "." + k
-			}
-			if rep.Accounted(p) == "" {
-				missing = append(missing, p)
-			}
-		}
-	}
-	need("", root)
-	need("time", root["time"].(map[string]any))
-	tpl := root["templating"].(map[string]any)
-	need("templating", tpl)
-	for i, v := range tpl["list"].([]any) {
-		need(fmt.Sprintf("templating.list[%d]", i), v.(map[string]any))
-	}
-	ann := root["annotations"].(map[string]any)
-	need("annotations", ann)
-	for i, a := range ann["list"].([]any) {
-		need(fmt.Sprintf("annotations.list[%d]", i), a.(map[string]any))
-	}
-	for i, l := range root["links"].([]any) {
-		need(fmt.Sprintf("links[%d]", i), l.(map[string]any))
-	}
-	var walkPanel func(path string, p map[string]any)
-	walkPanel = func(path string, p map[string]any) {
-		need(path, p)
-		for j, tg := range asList(p["targets"]) {
-			need(fmt.Sprintf("%s.targets[%d]", path, j), tg.(map[string]any))
-		}
-		if fc, ok := p["fieldConfig"].(map[string]any); ok {
-			need(path+".fieldConfig", fc)
-			if def, ok := fc["defaults"].(map[string]any); ok {
-				need(path+".fieldConfig.defaults", def)
-			}
-			for k, o := range asList(fc["overrides"]) {
-				need(fmt.Sprintf("%s.fieldConfig.overrides[%d]", path, k), o.(map[string]any))
-			}
-		}
-		for k, tr := range asList(p["transformations"]) {
-			need(fmt.Sprintf("%s.transformations[%d]", path, k), tr.(map[string]any))
-		}
-		if p["type"] == "row" {
-			for j, inner := range asList(p["panels"]) {
-				walkPanel(fmt.Sprintf("%s.panels[%d]", path, j), inner.(map[string]any))
-			}
-		}
-	}
-	for i, p := range root["panels"].([]any) {
-		walkPanel(fmt.Sprintf("panels[%d]", i), p.(map[string]any))
 	}
 	if len(missing) > 0 {
 		t.Fatalf("keys read by nobody (lost on import): %v", missing)
@@ -419,4 +365,49 @@ func keysOf[V any](m map[string]V) []string {
 		out = append(out, k)
 	}
 	return out
+}
+
+func TestRefID_AsGrafanaCountsThem(t *testing.T) {
+	for n, want := range map[int]string{0: "A", 25: "Z", 26: "AA", 27: "AB", 51: "AZ", 52: "BA", 701: "ZZ", 702: "AAA"} {
+		if got := refID(n); got != want {
+			t.Errorf("refID(%d) = %q, want %q", n, got, want)
+		}
+	}
+}
+
+func TestImport_NamesQueriesWithoutRefID(t *testing.T) {
+	raw := []byte(`{"schemaVersion": 39, "title": "q", "panels": [{"type": "timeseries", "id": 1,
+		"gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+		"datasource": {"type": "prometheus", "uid": "p"},
+		"targets": [{"expr": "up"}, {"expr": "up", "refId": "A"}, {"expr": "up"}],
+		"fieldConfig": {"defaults": {"thresholds": {"steps": [{"color": "green", "value": null}]}}, "overrides": []}}]}`)
+	d, rep, err := Import(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, p := range d.Spec.Panels {
+		for _, q := range p.Queries {
+			got = append(got, q.RefID)
+		}
+		if p.FieldDefaults.Thresholds == nil || p.FieldDefaults.Thresholds.Mode != "absolute" {
+			t.Errorf("threshold mode = %+v, want absolute when the source has none", p.FieldDefaults.Thresholds)
+		}
+	}
+	// Grafana skips names any query of the panel already has: A is taken by the second.
+	if strings.Join(got, ",") != "B,A,C" {
+		t.Errorf("refIds = %v, want B,A,C", got)
+	}
+	if probs := model.Validate(d); len(probs) != 0 {
+		t.Errorf("not valid: %v", probs)
+	}
+	var adjusted []string
+	for _, a := range rep.Adjusted {
+		adjusted = append(adjusted, a.Path)
+	}
+	sort.Strings(adjusted)
+	want := "panels[0].fieldConfig.defaults.thresholds.mode,panels[0].targets[0].refId,panels[0].targets[2].refId"
+	if strings.Join(adjusted, ",") != want {
+		t.Errorf("adjusted = %v, want %s", adjusted, want)
+	}
 }

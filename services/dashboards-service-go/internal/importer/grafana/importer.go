@@ -23,11 +23,14 @@ import (
 // once in Grafana, which upgrades them, then imported.
 const MinSchemaVersion = 16
 
+// resourceGroup prefixes the apiVersion of a dashboard Grafana serves as a resource.
+const resourceGroup = "dashboard.grafana.app/"
+
 var (
 	ErrNotJSON     = errors.New("not a JSON object")
 	ErrNoPanels    = errors.New("not a Grafana dashboard: no panels")
 	ErrTooOld      = fmt.Errorf("dashboard schemaVersion is below %d: open it in Grafana and save it once, then export it again", MinSchemaVersion)
-	ErrNotV1Schema = errors.New("this looks like a Grafana dashboard schema v2 document, which is not imported yet")
+	ErrNotV1Schema = errors.New("this is a Grafana dashboard schema v2 document, which is not imported yet: export it from Grafana as Classic or V1 Resource")
 )
 
 // Report is what Import did with the source.
@@ -64,6 +67,21 @@ func Import(raw []byte) (*model.Dashboard, *Report, error) {
 		}
 		raw = inner
 	}
+	// Grafana 12 and later serve a dashboard as a Kubernetes-style resource:
+	// apiVersion dashboard.grafana.app/<version>, metadata and spec. In
+	// v0alpha1, v1beta1 and v1 the spec is the classic dashboard; v2alpha1,
+	// v2beta1 and v2 hold the new schema (Grafana 13's default export).
+	var envelope obj
+	if av := strOf(root["apiVersion"]); strings.HasPrefix(av, resourceGroup) {
+		if strings.HasPrefix(strings.TrimPrefix(av, resourceGroup), "v2") {
+			return nil, nil, ErrNotV1Schema
+		}
+		var spec obj
+		if err := json.Unmarshal(root["spec"], &spec); err != nil || spec == nil {
+			return nil, nil, ErrNoPanels
+		}
+		envelope, root = root, spec
+	}
 	sv := intOf(root["schemaVersion"])
 	if sv > 0 && sv < MinSchemaVersion {
 		return nil, nil, ErrTooOld
@@ -80,11 +98,29 @@ func Import(raw []byte) (*model.Dashboard, *Report, error) {
 
 	im := &importer{rep: &Report{accounted: map[string]string{}}, dsVars: map[string]string{}, names: map[string]bool{}}
 	d := im.dashboard(root)
+	uid := strOf(root["uid"])
+	if envelope != nil {
+		// The envelope is the Grafana instance's record of the dashboard (its
+		// name, resource version, who changed it); source.raw keeps all of it.
+		for k := range envelope {
+			if k == "spec" {
+				im.mark(k, "mapped")
+				continue
+			}
+			im.mark(k, "dropped")
+			im.rep.Dropped = append(im.rep.Dropped, k)
+		}
+		if uid == "" {
+			var meta obj
+			_ = json.Unmarshal(envelope["metadata"], &meta)
+			uid = strOf(meta["name"])
+		}
+	}
 	var compact bytes.Buffer
 	if err := json.Compact(&compact, raw); err == nil {
 		raw = compact.Bytes()
 	}
-	d.Source = &model.Source{Kind: model.SourceGrafanaV1, SchemaVersion: sv, UID: strOf(root["uid"]), Raw: json.RawMessage(raw)}
+	d.Source = &model.Source{Kind: model.SourceGrafanaV1, SchemaVersion: sv, UID: uid, Raw: json.RawMessage(raw)}
 	sort.Strings(im.rep.Preserved)
 	sort.Strings(im.rep.Dropped)
 	return d, im.rep, nil
@@ -323,11 +359,15 @@ func (im *importer) panel(p obj, path string) (string, model.Panel, model.Layout
 	panelStore, _ := im.storeOf(p["datasource"], path+".datasource")
 	var targets []json.RawMessage
 	_ = json.Unmarshal(p["targets"], &targets)
+	var queryPaths []string
 	for j, raw := range targets {
 		if t, ok := asObj(raw); ok {
-			out.Queries = append(out.Queries, im.query(t, fmt.Sprintf("%s.targets[%d]", path, j), panelStore))
+			qp := fmt.Sprintf("%s.targets[%d]", path, j)
+			out.Queries = append(out.Queries, im.query(t, qp, panelStore))
+			queryPaths = append(queryPaths, qp)
 		}
 	}
+	im.nameQueries(out.Queries, queryPaths)
 
 	if fc, ok := asObj(p["fieldConfig"]); ok {
 		im.fieldConfig(fc, path+".fieldConfig", &out)
@@ -405,9 +445,6 @@ func (im *importer) query(t obj, path, panelStore string) model.Query {
 			q.Ext["query"] = raw
 		}
 	}
-	if q.RefID == "" {
-		q.RefID = "A"
-	}
 	if store == "" {
 		im.unsupported(path, "data source the console has no store for; the query is kept but not run")
 	}
@@ -455,6 +492,14 @@ func (im *importer) fieldConfig(fc obj, path string, out *model.Panel) {
 		}
 		if th, ok := asObj(def["thresholds"]); ok {
 			t := &model.Thresholds{Mode: strOf(th["mode"])}
+			if t.Mode != "percentage" && t.Mode != "absolute" {
+				// Grafana draws every mode but percentage as absolute (thresholds.ts, v13.3.0).
+				if t.Mode != "" {
+					out.Ext["fieldConfig.defaults.thresholds.mode"] = th["mode"]
+				}
+				im.adjusted(dp+".thresholds.mode", fmt.Sprintf("mode %q read as absolute, as Grafana draws it", t.Mode))
+				t.Mode = "absolute"
+			}
 			var steps []obj
 			_ = json.Unmarshal(th["steps"], &steps)
 			changed := false
@@ -781,6 +826,38 @@ func (im *importer) markAll(o obj, path, how string) {
 }
 
 func (im *importer) mark(path, how string) { im.rep.accounted[path] = how }
+
+// nameQueries gives a query without a refId the name Grafana gives it when it
+// loads the panel (PanelModel.ensureQueryIds with getNextRefId, v13.3.0): in
+// order, the first of A…Z, AA… that no query of the panel has. Generated
+// dashboards such as the kubernetes-mixin's leave refId out.
+func (im *importer) nameQueries(qs []model.Query, paths []string) {
+	used := map[string]bool{}
+	for _, q := range qs {
+		used[q.RefID] = true
+	}
+	for i := range qs {
+		if qs[i].RefID != "" {
+			continue
+		}
+		for n := 0; ; n++ {
+			if id := refID(n); !used[id] {
+				qs[i].RefID, used[id] = id, true
+				im.adjusted(paths[i]+".refId", "no refId: named "+id+", as Grafana names it")
+				break
+			}
+		}
+	}
+}
+
+// refID is Grafana's getRefId: 0 → A, 25 → Z, 26 → AA.
+func refID(n int) string {
+	const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	if n < len(letters) {
+		return letters[n : n+1]
+	}
+	return refID(n/len(letters)-1) + letters[n%len(letters):n%len(letters)+1]
+}
 
 func (im *importer) adjusted(path, reason string) {
 	im.rep.Adjusted = append(im.rep.Adjusted, Finding{Path: path, Reason: reason})
