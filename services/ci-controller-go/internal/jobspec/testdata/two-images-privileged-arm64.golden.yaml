@@ -1,0 +1,268 @@
+# deploy: step deploy-api, api/prod manual, image registry.example.com:5000/team/api:0123456789abcdef0123456789abcdef01234567 (from api)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  annotations:
+    kubeast.io/ci-commit: 0123456789abcdef0123456789abcdef01234567
+    kubeast.io/ci-event: push
+    kubeast.io/ci-ref: refs/heads/main
+    kubeast.io/ci-repo: example/web
+  labels:
+    app.kubernetes.io/component: ci-build
+    app.kubernetes.io/managed-by: kubeast
+    kubeast.io/ci-build: b1
+    kubeast.io/ci-profile: arm64-spot
+  name: ci-b1
+  namespace: ci-builds
+spec:
+  activeDeadlineSeconds: 2700
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: ci-build
+        app.kubernetes.io/managed-by: kubeast
+        kubeast.io/ci-build: b1
+        kubeast.io/ci-profile: arm64-spot
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - command:
+        - /bin/sh
+        - -e
+        - -c
+        - |
+          for f in /kubeast/out/*.json; do
+            [ -e "$f" ] || continue
+            printf '%s=%s\n' "$(basename "$f" .json)" "$(sed -n 's/^ *"containerimage.digest": *"\(sha256:[0-9a-f]*\)".*/\1/p' "$f")"
+          done > /tmp/result
+          cat /tmp/result
+          cat /tmp/result 2>/dev/null >/dev/termination-log || echo "kubeast: the termination log is not writable; the result is in the log above" >&2
+        image: docker.io/alpine/git:v2.54.0
+        name: report
+        resources:
+          limits:
+            ephemeral-storage: 50Gi
+            memory: 16Gi
+          requests:
+            cpu: "4"
+            ephemeral-storage: 50Gi
+            memory: 16Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsGroup: 1000
+          runAsNonRoot: true
+          runAsUser: 1000
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+        - mountPath: /kubeast/out
+          name: out
+          readOnly: true
+        - mountPath: /tmp
+          name: tmp
+      enableServiceLinks: false
+      initContainers:
+      - command:
+        - /bin/sh
+        - -e
+        - -c
+        - |
+          git init -q /workspace
+          cd /workspace
+          git remote add origin "$KUBEAST_REPO_URL"
+          git fetch -q --no-tags --depth=1 origin "$KUBEAST_COMMIT_SHA"
+          git checkout -q --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$KUBEAST_COMMIT_SHA"
+        env:
+        - name: GIT_CONFIG_COUNT
+          value: "1"
+        - name: GIT_CONFIG_KEY_0
+          value: safe.directory
+        - name: GIT_CONFIG_VALUE_0
+          value: /workspace
+        - name: GIT_TERMINAL_PROMPT
+          value: "0"
+        - name: HOME
+          value: /tmp
+        - name: KUBEAST_COMMIT_SHA
+          value: 0123456789abcdef0123456789abcdef01234567
+        - name: KUBEAST_REPO_URL
+          value: https://github.com/example/web.git
+        image: docker.io/alpine/git:v2.54.0
+        name: checkout
+        resources:
+          limits:
+            ephemeral-storage: 50Gi
+            memory: 16Gi
+          requests:
+            cpu: "4"
+            ephemeral-storage: 50Gi
+            memory: 16Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsGroup: 1000
+          runAsNonRoot: true
+          runAsUser: 1000
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+        - mountPath: /workspace
+          name: workspace
+        - mountPath: /tmp
+          name: tmp
+      - args:
+        - build
+        - --frontend
+        - dockerfile.v0
+        - --local
+        - context=/workspace/api
+        - --local
+        - dockerfile=/workspace/api
+        - --opt
+        - filename=Dockerfile
+        - --output
+        - type=image,name=registry.example.com:5000/team/api:0123456789abcdef0123456789abcdef01234567,push=true
+        - --export-cache
+        - type=registry,ref=registry.example.com:5000/team/api:buildcache,mode=max
+        - --import-cache
+        - type=registry,ref=registry.example.com:5000/team/api:buildcache
+        - --metadata-file
+        - /kubeast/out/api.json
+        command:
+        - buildctl-daemonless.sh
+        env:
+        - name: DOCKER_CONFIG
+          value: /run/kubeast/registry/registry
+        image: docker.io/moby/buildkit:v0.34.1
+        name: api
+        resources:
+          limits:
+            ephemeral-storage: 50Gi
+            memory: 16Gi
+          requests:
+            cpu: "4"
+            ephemeral-storage: 50Gi
+            memory: 16Gi
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - mountPath: /workspace
+          name: workspace
+          readOnly: true
+        - mountPath: /var/lib/buildkit
+          name: buildkitd
+        - mountPath: /kubeast/out
+          name: out
+        - mountPath: /run/kubeast/registry/registry
+          name: reg-registry
+          readOnly: true
+      - args:
+        - build
+        - --frontend
+        - dockerfile.v0
+        - --local
+        - context=/workspace/worker
+        - --local
+        - dockerfile=/workspace/build
+        - --opt
+        - filename=worker.Dockerfile
+        - --opt
+        - target=release
+        - --output
+        - type=image,name=registry.example.com:5000/team/worker:0123456789abcdef0123456789abcdef01234567,push=true
+        - --export-cache
+        - type=registry,ref=registry.example.com:5000/team/worker:buildcache,mode=max
+        - --import-cache
+        - type=registry,ref=registry.example.com:5000/team/worker:buildcache
+        - --metadata-file
+        - /kubeast/out/worker.json
+        command:
+        - buildctl-daemonless.sh
+        image: docker.io/moby/buildkit:v0.34.1
+        name: worker
+        resources:
+          limits:
+            ephemeral-storage: 50Gi
+            memory: 16Gi
+          requests:
+            cpu: "4"
+            ephemeral-storage: 50Gi
+            memory: 16Gi
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - mountPath: /workspace
+          name: workspace
+          readOnly: true
+        - mountPath: /var/lib/buildkit
+          name: buildkitd
+        - mountPath: /kubeast/out
+          name: out
+      - args:
+        - image
+        - --exit-code
+        - "1"
+        - --severity
+        - CRITICAL
+        - --no-progress
+        - --image-src
+        - remote
+        - registry.example.com:5000/team/api:0123456789abcdef0123456789abcdef01234567
+        command:
+        - trivy
+        env:
+        - name: DOCKER_CONFIG
+          value: /run/kubeast/registry/registry
+        image: docker.io/aquasec/trivy:0.76.1
+        name: scan-api
+        resources:
+          limits:
+            ephemeral-storage: 50Gi
+            memory: 16Gi
+          requests:
+            cpu: "4"
+            ephemeral-storage: 50Gi
+            memory: 16Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+        - mountPath: /run/kubeast/registry/registry
+          name: reg-registry
+          readOnly: true
+      nodeSelector:
+        karpenter.sh/capacity-type: spot
+        kubeast.io/pool: ci
+        kubernetes.io/arch: arm64
+      restartPolicy: Never
+      tolerations:
+      - effect: NoSchedule
+        key: kubeast.io/ci
+        operator: Exists
+      volumes:
+      - emptyDir: {}
+        name: buildkitd
+      - emptyDir: {}
+        name: out
+      - name: reg-registry
+        secret:
+          items:
+          - key: .dockerconfigjson
+            path: config.json
+          secretName: ci-b1-registry
+      - emptyDir: {}
+        name: tmp
+      - emptyDir: {}
+        name: workspace
+  ttlSecondsAfterFinished: 3600
+status: {}

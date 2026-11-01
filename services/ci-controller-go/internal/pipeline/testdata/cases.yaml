@@ -1,0 +1,351 @@
+# Each case parses one pipeline file. A case with `error` expects every
+# listed text in the error; the others must parse. `schema` says what the
+# public JSON Schema answers: empty = the same as Parse, accepts = the schema
+# accepts a file Parse refuses (a rule JSON Schema cannot say, listed in the
+# schema's description), skip = not a document the schema can judge.
+- name: doc-example
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    on:
+      push: {branches: [main]}
+      pull_request: {}
+    profile: default
+    steps:
+      - name: test
+        image: golang:1.27
+        commands: ["go test ./..."]
+      - name: image
+        build: {context: ., dockerfile: Dockerfile, image: ghcr.io/example/web}
+      - name: scan
+        scan: {severity: HIGH}
+      - name: deploy
+        deploy: {service: web, env: alpha, mode: auto}
+- name: commands-only
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps:
+      - {name: lint, image: node:24, commands: [npm ci, npm run lint]}
+- name: two-images
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    timeout: 2h
+    env: {GOFLAGS: -mod=mod}
+    steps:
+      - name: api
+        build: {image: registry.example.com:5000/team/api, context: api, registrySecret: registry}
+      - name: worker
+        build: {image: registry.example.com:5000/team/worker, context: worker, dockerfile: build/worker.Dockerfile, target: release, args: {VERSION: "1.0"}}
+      - {name: scan-api, scan: {from: api, severity: CRITICAL}}
+      - {name: deploy-api, deploy: {from: api, service: api, env: prod}}
+      - {name: deploy-worker, deploy: {from: worker, service: worker, env: prod, mode: auto}}
+- name: triggers
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    on:
+      push: {branches: [main, "release/*"], tags: ["v*"]}
+      pull_request: {branches: [main]}
+    steps:
+      - {name: test, image: golang:1.27, commands: [go test ./...], env: {CGO_ENABLED: "0"}, secrets: [npm-token]}
+
+- name: error-unknown-key
+  error: ["field stages not found"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    stages: [build]
+    steps: [{name: a, image: x, commands: [y]}]
+- name: error-unknown-step-key
+  error: ["field run not found"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: a, image: x, run: y}]
+- name: error-api-version
+  error: ["apiVersion: must be kubeast.io/pipeline/v1alpha1"]
+  pipeline: |
+    apiVersion: v1
+    steps: [{name: a, image: x, commands: [y]}]
+- name: error-no-steps
+  error: ["steps: at least one step is needed"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: []
+- name: error-too-many-steps
+  error: ["steps: 21 steps, at most 20"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps:
+      - {name: s01, image: x, commands: [y]}
+      - {name: s02, image: x, commands: [y]}
+      - {name: s03, image: x, commands: [y]}
+      - {name: s04, image: x, commands: [y]}
+      - {name: s05, image: x, commands: [y]}
+      - {name: s06, image: x, commands: [y]}
+      - {name: s07, image: x, commands: [y]}
+      - {name: s08, image: x, commands: [y]}
+      - {name: s09, image: x, commands: [y]}
+      - {name: s10, image: x, commands: [y]}
+      - {name: s11, image: x, commands: [y]}
+      - {name: s12, image: x, commands: [y]}
+      - {name: s13, image: x, commands: [y]}
+      - {name: s14, image: x, commands: [y]}
+      - {name: s15, image: x, commands: [y]}
+      - {name: s16, image: x, commands: [y]}
+      - {name: s17, image: x, commands: [y]}
+      - {name: s18, image: x, commands: [y]}
+      - {name: s19, image: x, commands: [y]}
+      - {name: s20, image: x, commands: [y]}
+      - {name: s21, image: x, commands: [y]}
+- name: error-step-name-case
+  error: ["steps[0] Test: name must be a DNS label of at most 40 characters"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: Test, image: x, commands: [y]}]
+- name: error-step-name-long
+  error: ["name must be a DNS label of at most 40 characters"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, image: x, commands: [y]}]
+- name: error-step-name-missing
+  error: ["steps[0]: name is required"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{image: x, commands: [y]}]
+- name: error-step-name-reserved
+  error: ["name \"checkout\" is kept for the step Kubeast adds"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: checkout, image: x, commands: [y]}]
+- name: error-step-name-twice
+  error: ["steps[1] a: name is used by an earlier step"]
+  schema: accepts
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: a, image: x, commands: [y]}, {name: a, image: x, commands: [z]}]
+- name: error-two-kinds
+  error: ["steps[0] a: write exactly one of commands (with image), build, scan or deploy"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: a, image: x, commands: [y], build: {image: ghcr.io/o/a}}]
+- name: error-no-kind
+  error: ["steps[0] a: write exactly one of"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: a}]
+- name: error-image-without-commands
+  error: ["a commands step needs commands"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: a, image: x}]
+- name: error-commands-without-image
+  error: ["a commands step needs an image"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: a, commands: [y]}]
+- name: error-image-space
+  error: ["image \"golang 1.27\" is not an image reference"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: a, image: golang 1.27, commands: [y]}]
+- name: error-empty-command
+  error: ["a command is empty or longer than 4096"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: a, image: x, commands: ["  "]}]
+- name: error-commands-string
+  error: ["cannot unmarshal !!str"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: a, image: x, commands: go test}]
+- name: error-env-reserved
+  error: ["env: KUBEAST_REF is set by Kubeast", "steps[0] a env: CI is set by Kubeast"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    env: {KUBEAST_REF: x}
+    steps: [{name: a, image: x, commands: [y], env: {CI: "false"}}]
+- name: error-env-name
+  error: ["\"1A\" is not a variable name"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: a, image: x, commands: [y], env: {1A: x}}]
+- name: error-secrets-on-build
+  error: ["env and secrets belong to commands steps"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: a, build: {image: ghcr.io/o/a}, secrets: [registry]}]
+- name: error-secret-twice
+  error: ["secret npm is listed twice"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: a, image: x, commands: [y], secrets: [npm, npm]}]
+- name: error-secret-name
+  error: ["secret \"NPM\" is not a DNS label of at most 40 characters"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: a, image: x, commands: [y], secrets: [NPM]}]
+- name: error-build-image-tag
+  error: ["build.image must be a repository without a tag or digest"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: a, build: {image: "ghcr.io/o/a:1.0"}}]
+- name: error-build-image-digest
+  error: ["build.image must be a repository without a tag or digest"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: a, build: {image: "ghcr.io/o/a@sha256:0000000000000000000000000000000000000000000000000000000000000000"}}]
+- name: error-build-image-upper
+  error: ["build.image must be a repository"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: a, build: {image: ghcr.io/Org/a}}]
+- name: error-build-image-bare
+  error: ["build.image must be a repository"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: a, build: {image: app}}]
+- name: error-build-context-up
+  error: ["build.context \"../x\" must stay inside the repository"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: a, build: {image: ghcr.io/o/a, context: ../x}}]
+- name: error-build-context-up-inside
+  error: ["build.context \"a/../../x\" must stay inside the repository"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: a, build: {image: ghcr.io/o/a, context: a/../../x}}]
+- name: error-build-dockerfile-absolute
+  error: ["build.dockerfile \"/Dockerfile\" must stay inside the repository"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: a, build: {image: ghcr.io/o/a, dockerfile: /Dockerfile}}]
+- name: error-build-dockerfile-comma
+  error: ["build.dockerfile \"a,b/Dockerfile\" must stay inside the repository"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: a, build: {image: ghcr.io/o/a, dockerfile: "a,b/Dockerfile"}}]
+- name: error-build-dockerfile-dot
+  error: ["build.dockerfile must name a file"]
+  schema: accepts
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: a, build: {image: ghcr.io/o/a, dockerfile: .}}]
+- name: error-build-target
+  error: ["build.target \"a b\" is not a stage name"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: a, build: {image: ghcr.io/o/a, target: a b}}]
+- name: error-build-arg-name
+  error: ["build arg \"A-B\" is not a name"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: a, build: {image: ghcr.io/o/a, args: {A-B: x}}}]
+- name: error-scan-before-build
+  error: ["steps[0] scan: needs a build step before it"]
+  schema: accepts
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: scan, scan: {}}, {name: image, build: {image: ghcr.io/o/a}}]
+- name: error-scan-from-unknown
+  error: ["from \"nope\" is not a build step before it"]
+  schema: accepts
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: image, build: {image: ghcr.io/o/a}}, {name: scan, scan: {from: nope}}]
+- name: error-scan-from-commands
+  error: ["from \"test\" is not a build step before it"]
+  schema: accepts
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: test, image: x, commands: [y]}, {name: image, build: {image: ghcr.io/o/a}}, {name: scan, scan: {from: test}}]
+- name: error-scan-two-builds
+  error: ["steps[2] scan: 2 build steps come before it: say which with from"]
+  schema: accepts
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: a, build: {image: ghcr.io/o/a}}, {name: b, build: {image: ghcr.io/o/b}}, {name: scan, scan: {}}]
+- name: error-scan-severity
+  error: ["severity must be one of LOW, MEDIUM, HIGH, CRITICAL"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: image, build: {image: ghcr.io/o/a}}, {name: scan, scan: {severity: high}}]
+- name: error-deploy-mode
+  error: ["deploy.mode must be auto or manual"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: image, build: {image: ghcr.io/o/a}}, {name: d, deploy: {service: web, env: alpha, mode: always}}]
+- name: error-deploy-env-missing
+  error: ["deploy.env must be a DNS label"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: image, build: {image: ghcr.io/o/a}}, {name: d, deploy: {service: web}}]
+- name: error-deploy-not-last
+  error: ["steps[1] d: deploy steps go last"]
+  schema: accepts
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: image, build: {image: ghcr.io/o/a}}, {name: d, deploy: {service: web, env: alpha}}, {name: test, image: x, commands: [y]}]
+- name: error-deploy-twice
+  error: ["steps[2] d2: web/alpha is deployed by an earlier step"]
+  schema: accepts
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: image, build: {image: ghcr.io/o/a}}, {name: d1, deploy: {service: web, env: alpha}}, {name: d2, deploy: {service: web, env: alpha, mode: auto}}]
+- name: error-deploy-only
+  error: ["steps: a pipeline needs a step that runs", "steps[0] d: needs a build step before it"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: d, deploy: {service: web, env: alpha}}]
+- name: error-timeout-format
+  error: ["timeout: \"90\" is not <minutes>m or <hours>h"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    timeout: "90"
+    steps: [{name: a, image: x, commands: [y]}]
+- name: error-timeout-long
+  error: ["timeout: 25h is above the limit of 24h0m0s"]
+  schema: accepts
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    timeout: 25h
+    steps: [{name: a, image: x, commands: [y]}]
+- name: error-pattern
+  error: ["on.push.branches: \"[main\" is not a valid pattern"]
+  schema: accepts
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    on: {push: {branches: ["[main"]}}
+    steps: [{name: a, image: x, commands: [y]}]
+- name: error-event
+  error: ["field tag not found"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    on: {tag: {}}
+    steps: [{name: a, image: x, commands: [y]}]
+- name: error-profile
+  error: ["profile: \"Big\" is not a DNS label"]
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    profile: Big
+    steps: [{name: a, image: x, commands: [y]}]
+- name: error-two-documents
+  error: ["more than one YAML document"]
+  schema: skip
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: a, image: x, commands: [y]}]
+    ---
+    apiVersion: kubeast.io/pipeline/v1alpha1
+- name: error-empty
+  error: ["pipeline file: empty"]
+  schema: skip
+  pipeline: ""
+- name: error-yaml
+  error: ["pipeline file: yaml:"]
+  schema: skip
+  pipeline: |
+    steps: [
+- name: error-duplicate-key
+  error: ["already defined"]
+  schema: skip
+  pipeline: |
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    apiVersion: kubeast.io/pipeline/v1alpha1
+    steps: [{name: a, image: x, commands: [y]}]

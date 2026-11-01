@@ -1,0 +1,10 @@
+apiVersion: kubeast.io/pipeline/v1alpha1
+profile: arm64-spot
+timeout: 45m
+steps:
+  - name: api
+    build: {image: registry.example.com:5000/team/api, context: api, registrySecret: registry}
+  - name: worker
+    build: {image: registry.example.com:5000/team/worker, context: worker, dockerfile: build/worker.Dockerfile, target: release}
+  - {name: scan-api, scan: {from: api, severity: CRITICAL}}
+  - {name: deploy-api, deploy: {from: api, service: api, env: prod}}
