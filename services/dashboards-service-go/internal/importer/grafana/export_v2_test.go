@@ -122,15 +122,27 @@ func TestExportV2_ConvertsClassicAndKubeastMade(t *testing.T) {
 		if got.APIVersion != "dashboard.grafana.app/v2" || got.Kind != "Dashboard" || len(got.Metadata) != 1 || got.Metadata["name"] == "" {
 			t.Errorf("%s: %s %s %v", c.key, got.APIVersion, got.Kind, got.Metadata)
 		}
-		classic, _, _ := Export(d)
+		classic, crep, _ := Export(d)
 		want, _ := ConvertV2(classic, exportDataSources(d))
 		native := strings.HasPrefix(c.key, "kubeast/")
+		var uid struct{ UID string }
+		_ = json.Unmarshal(classic, &uid)
+		if wantName := map[bool]string{true: d.Metadata.Name, false: uid.UID}[uid.UID == ""]; got.Metadata["name"] != wantName {
+			t.Errorf("%s: metadata name %q, want %q (the classic uid, else the dashboard name)", c.key, got.Metadata["name"], wantName)
+		}
 		if !native && !jsonEqual(t, got.Spec, want) {
 			t.Errorf("%s: the spec is not the classic export converted", c.key)
 		}
 		if native {
 			if strings.Contains(string(out), "${DS_") || len(rep.Inputs) != 0 {
 				t.Errorf("%s: an input is left: %v", c.key, rep.Inputs)
+			}
+			reported := false
+			for _, f := range rep.Adjusted {
+				reported = reported || strings.Contains(f.Reason, "written without a data source")
+			}
+			if reported != (len(crep.Inputs) > 0) {
+				t.Errorf("%s: removed input references reported %v, inputs %v", c.key, reported, crep.Inputs)
 			}
 			var stores, groups []string
 			for _, p := range d.Spec.Panels {
