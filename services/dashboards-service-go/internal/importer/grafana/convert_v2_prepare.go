@@ -8,10 +8,8 @@ import (
 
 // prepareV1 does to a classic dashboard what Grafana 13.3.0 does before it
 // converts one to v2 (migration.Migrate): the defaults the frontend's
-// DashboardModel and PanelModel set, unique panel ids, the built-in
-// annotation, and what the frontend's save model drops. Only a dashboard at
-// schemaVersion 42 is taken; Grafana first runs its schema migrations on an
-// older one.
+// DashboardModel and PanelModel set, unique panel ids, the schema migrations
+// up to 42, the built-in annotation, and what the frontend's save model drops.
 func prepareV1(dash map[string]any) error {
 	delete(dash, "__elements")
 	delete(dash, "__inputs")
@@ -25,9 +23,10 @@ func prepareV1(dash map[string]any) error {
 	}
 	uniquePanelIDs(dash)
 	sv := schemaVersionOf(dash)
-	if sv != LatestSchemaVersion {
+	if sv < minSchemaVersion || sv > LatestSchemaVersion {
 		return fmt.Errorf("%w: this one is at %d", ErrV2SchemaVersion, sv)
 	}
+	migrate(dash, sv)
 	addBuiltInAnnotation(dash)
 	cleanupForSave(dash)
 	return nil
