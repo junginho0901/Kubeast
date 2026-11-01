@@ -17,6 +17,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/vektah/gqlparser/v2"
 	"github.com/vektah/gqlparser/v2/ast"
@@ -103,6 +104,9 @@ type fakeGitHub struct {
 	documents   []string
 	// fail answers the next requests with these statuses (and headers).
 	fail []failure
+	// checkRuns are the check runs created, by ID, as their last body set them.
+	checkRuns   map[int64]map[string]any
+	checkBodies []map[string]any
 }
 
 type failure struct {
@@ -132,6 +136,8 @@ func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		f.token(w, r)
 	case r.Method == http.MethodPost && r.URL.Path == "/graphql":
 		f.graphql(w, r)
+	case strings.HasPrefix(r.URL.Path, "/repos/") && strings.Contains(r.URL.Path, "/check-runs"):
+		f.checkRun(w, r)
 	default:
 		http.NotFound(w, r)
 	}
@@ -342,4 +348,91 @@ func (f *fakeGitHub) pipelineJSON(repo *fakeRepo, oid, expr string) map[string]a
 		out["file"] = map[string]any{"__typename": "Blob", "byteSize": len(content), "isBinary": false, "isTruncated": false, "text": content}
 	}
 	return out
+}
+
+// checkRun answers "Create a check run" (POST /repos/{o}/{r}/check-runs)
+// and "Update a check run" (PATCH …/check-runs/{id}) with the rules the
+// REST reference states.
+func (f *fakeGitHub) checkRun(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("X-GitHub-Api-Version") != APIVersion || r.Header.Get("Accept") != "application/vnd.github+json" {
+		f.t.Errorf("check run headers: version %q, accept %q", r.Header.Get("X-GitHub-Api-Version"), r.Header.Get("Accept"))
+	}
+	tok, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if _, ok := f.tokens[tok]; !ok {
+		w.WriteHeader(http.StatusUnauthorized)
+		io.WriteString(w, `{"message":"Bad credentials"}`)
+		return
+	}
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/repos/"), "/")
+	if len(parts) < 3 || parts[2] != "check-runs" || f.repos[parts[0]+"/"+parts[1]] == nil {
+		http.NotFound(w, r)
+		return
+	}
+	var body map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		f.t.Errorf("check run body: %v", err)
+		return
+	}
+	f.checkBodies = append(f.checkBodies, body)
+	refuse := func(msg string) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		fmt.Fprintf(w, `{"message":%q}`, msg)
+	}
+	status, _ := body["status"].(string)
+	conclusion, hasConclusion := body["conclusion"].(string)
+	_, hasCompleted := body["completed_at"]
+	switch {
+	case status == "waiting" || status == "pending" || status == "requested":
+		refuse("Only GitHub Actions can set a status of waiting, pending, or requested")
+		return
+	case status != "" && status != "queued" && status != "in_progress" && status != "completed":
+		refuse("Invalid status")
+		return
+	case (status == "completed" || hasCompleted) && !hasConclusion:
+		refuse("conclusion is required if completed_at or a status of completed is provided")
+		return
+	case hasConclusion && !map[string]bool{"action_required": true, "cancelled": true, "failure": true, "neutral": true, "success": true, "skipped": true, "timed_out": true}[conclusion]:
+		refuse("Invalid conclusion")
+		return
+	}
+	if out, ok := body["output"].(map[string]any); ok {
+		title, _ := out["title"].(string)
+		summary, hasSummary := out["summary"].(string)
+		text, _ := out["text"].(string)
+		if title == "" || !hasSummary || utf8.RuneCountInString(summary) > 65535 || utf8.RuneCountInString(text) > 65535 {
+			refuse("Invalid output")
+			return
+		}
+	}
+	if f.checkRuns == nil {
+		f.checkRuns = map[int64]map[string]any{}
+	}
+	switch {
+	case r.Method == http.MethodPost && len(parts) == 3:
+		if body["name"] == nil || body["head_sha"] == nil {
+			refuse("name and head_sha are required")
+			return
+		}
+		id := int64(4000 + len(f.checkRuns))
+		run := map[string]any{}
+		for k, v := range body {
+			run[k] = v
+		}
+		f.checkRuns[id] = run
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]any{"id": id, "status": body["status"]})
+	case r.Method == http.MethodPatch && len(parts) == 4:
+		id, _ := strconv.ParseInt(parts[3], 10, 64)
+		run, ok := f.checkRuns[id]
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		for k, v := range body {
+			run[k] = v
+		}
+		json.NewEncoder(w).Encode(map[string]any{"id": id, "status": run["status"]})
+	default:
+		http.NotFound(w, r)
+	}
 }
