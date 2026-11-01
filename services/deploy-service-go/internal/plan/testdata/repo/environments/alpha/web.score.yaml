@@ -1,0 +1,3 @@
+containers:
+  app:
+    image: ghcr.io/example/web:2.0.1

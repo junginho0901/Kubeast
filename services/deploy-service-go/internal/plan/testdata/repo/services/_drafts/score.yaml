@@ -1,0 +1,4 @@
+# not a workload: folders starting with _ are skipped
+apiVersion: score.dev/v1b1
+metadata: {name: drafts}
+containers: {main: {image: nginx:1.27}}

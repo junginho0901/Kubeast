@@ -1,0 +1,27 @@
+apiVersion: score.dev/v1b1
+metadata:
+  name: web
+  annotations:
+    kubeast.io/autoscale: "2-6"
+service:
+  ports:
+    http: {port: 80, targetPort: 8080}
+containers:
+  app:
+    image: .
+    variables:
+      API_ADDR: "${resources.api.hostname}:${resources.api.port}"
+      DB_PASSWORD: "${resources.db.password}"
+    files:
+      /etc/web/motd.txt:
+        source: motd.txt
+resources:
+  api:
+    type: service-port
+    params: {workload: api, port: grpc}
+  db:
+    type: secret
+    params: {key: web/db}
+  route:
+    type: route
+    params: {host: web.example.com, port: http}

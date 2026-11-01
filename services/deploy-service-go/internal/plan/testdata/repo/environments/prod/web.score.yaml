@@ -1,0 +1,6 @@
+metadata:
+  annotations:
+    kubeast.io/autoscale: "4-20"
+containers:
+  app:
+    image: ghcr.io/example/web@sha256:3f6c0e0bdb3b2f9e1a6c6f5a9b0d4e8c7a1b2c3d4e5f60718293a4b5c6d7e8f9

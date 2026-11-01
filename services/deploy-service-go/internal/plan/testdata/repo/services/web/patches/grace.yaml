@@ -1,0 +1,4 @@
+- target: {kind: Deployment, name: web}
+  op: set
+  path: spec.template.spec.terminationGracePeriodSeconds
+  value: 45
