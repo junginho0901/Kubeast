@@ -44,6 +44,8 @@ test.describe('ai_service refactor regression', () => {
     await input.fill('안녕')
     await send.click()
 
+    // the answer starts (right after the click the input can still be enabled), then ends
+    await expect(input).toBeDisabled({ timeout: 15_000 })
     await expect(input).toBeEnabled({ timeout: 60_000 })
     const lastAssistant = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)').last()
     const text = (await lastAssistant.innerText()).trim()
@@ -61,6 +63,7 @@ test.describe('ai_service refactor regression', () => {
     await page.getByRole('button', { name: SEND_RE }).click()
 
     // tool 호출 포함이라 일반 query 보다 길 수 있음
+    await expect(input).toBeDisabled({ timeout: 15_000 })
     await expect(input).toBeEnabled({ timeout: 90_000 })
 
     const lastAssistant = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)').last()
@@ -102,6 +105,7 @@ test.describe('ai_service refactor regression', () => {
     const pods = kubeSystemPods()
     await input.fill(POD_QUERY)
     await page.getByRole('button', { name: SEND_RE }).click()
+    await expect(input).toBeDisabled({ timeout: 15_000 })
     await expect(input).toBeEnabled({ timeout: 90_000 })
 
     const copyBtn = page.getByRole('button', { name: /^copy$|^복사$/i }).last()
@@ -128,6 +132,7 @@ test.describe('ai_service refactor regression', () => {
     // the stream manager still streams after the route change: a short question gets an answer
     await input.fill('hi')
     await page.getByRole('button', { name: SEND_RE }).click()
+    await expect(input).toBeDisabled({ timeout: 15_000 })
     await expect(input).toBeEnabled({ timeout: 60_000 })
     const answer = (await page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)').last().innerText()).trim()
     expect(answer.length).toBeGreaterThan(0)

@@ -89,7 +89,9 @@ test.describe('AI Chat', () => {
     await input.fill(POD_QUERY)
     await sendButton.click()
 
-    // streaming 끝까지 — tool 호출 포함이라 일반 query 보다 길 수 있음
+    // streaming 끝까지 — tool 호출 포함이라 일반 query 보다 길 수 있음 (the answer starts before it ends: right after the
+    // click the input can still be enabled)
+    await expect(input).toBeDisabled({ timeout: 15_000 })
     await expect(input).toBeEnabled({ timeout: 90_000 })
 
     const lastAssistant = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)').last()
@@ -144,6 +146,7 @@ test.describe('AI Chat', () => {
     const pods = kubeSystemPods()
     await input.fill(POD_QUERY)
     await sendButton.click()
+    await expect(input).toBeDisabled({ timeout: 15_000 })
     await expect(input).toBeEnabled({ timeout: 90_000 })
 
     // Copy 버튼 클릭 (마지막 assistant message). 영어 i18n: "Copy" / 한국어: "복사".
@@ -167,6 +170,7 @@ test.describe('AI Chat', () => {
     const input = page.getByPlaceholder(PLACEHOLDER_RE)
     await input.fill('hi')
     await page.getByRole('button', { name: SEND_RE }).click()
+    await expect(input).toBeDisabled({ timeout: 15_000 })
     await expect(input).toBeEnabled({ timeout: 30_000 })
 
     // 좌측 sidebar 의 첫 번째 세션 (방금 생성된 것) 찾아서 두 번 연달아 클릭

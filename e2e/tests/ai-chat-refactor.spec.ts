@@ -63,6 +63,7 @@ test.describe('AIChat refactor — Context / hook 분리 회귀', () => {
     const input = page.getByPlaceholder(PLACEHOLDER_RE)
     await input.fill('hi')
     await page.getByRole('button', { name: SEND_RE }).click()
+    await expect(input).toBeDisabled({ timeout: 15_000 })
     await expect(input).toBeEnabled({ timeout: 30_000 })
 
     // 다중 선택 토글 버튼 — i18n: "채팅 내역 선택 삭제" / "Delete selected chats"
@@ -94,6 +95,7 @@ test.describe('AIChat refactor — Context / hook 분리 회귀', () => {
     const input = page.getByPlaceholder(PLACEHOLDER_RE)
     await input.fill('hi')
     await page.getByRole('button', { name: SEND_RE }).click()
+    await expect(input).toBeDisabled({ timeout: 15_000 })
     await expect(input).toBeEnabled({ timeout: 30_000 })
 
     const messages = page.locator('div.flex.gap-3.p-6')
@@ -137,6 +139,7 @@ test.describe('AIChat refactor — Context / hook 분리 회귀', () => {
     const input = page.getByPlaceholder(PLACEHOLDER_RE)
     await input.fill('hi')
     await page.getByRole('button', { name: SEND_RE }).click()
+    await expect(input).toBeDisabled({ timeout: 15_000 })
     await expect(input).toBeEnabled({ timeout: 30_000 })
 
     // 첫 세션 행 우클릭
