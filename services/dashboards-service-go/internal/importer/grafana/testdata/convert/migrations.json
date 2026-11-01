@@ -1,0 +1,46 @@
+{
+  "uid": "conv-migrations",
+  "title": "Converter cases: schema migrations 37-42",
+  "schemaVersion": 36,
+  "refresh": false,
+  "timepicker": {"time_options": ["5m", "1h"], "refresh_intervals": ["1m"]},
+  "panels": [
+    {"id": 1, "type": "timeseries", "title": "hidden legend", "gridPos": {"x": 0, "y": 0, "w": 8, "h": 6},
+     "options": {"legend": {"displayMode": "hidden", "placement": "bottom"}},
+     "fieldConfig": {"defaults": {}, "overrides": [
+       {"matcher": {"id": "byName", "options": "a"}, "properties": [{"id": "custom.hideFrom", "value": {"viz": true, "legend": false}}]},
+       {"matcher": {"id": "byName", "options": "b"}, "properties": [{"id": "custom.hideFrom", "value": {"viz": false}}, {"id": "custom.hideFrom", "value": "x"}]}
+     ]}},
+    {"id": 2, "type": "timeseries", "title": "legend not shown", "gridPos": {"x": 8, "y": 0, "w": 8, "h": 6},
+     "options": {"legend": {"displayMode": "table", "showLegend": false}}},
+    {"id": 3, "type": "timeseries", "title": "legend shown", "gridPos": {"x": 16, "y": 0, "w": 8, "h": 6},
+     "options": {"legend": {"displayMode": "list"}, "tooltip": {"mode": "single"}}},
+    {"id": 4, "type": "table", "title": "table modes", "gridPos": {"x": 0, "y": 6, "w": 12, "h": 6},
+     "fieldConfig": {"defaults": {"custom": {"displayMode": "lcd-gauge", "align": "auto"}}, "overrides": [
+       {"matcher": {"id": "byName", "options": "a"}, "properties": [{"id": "custom.displayMode", "value": "color-background"}]},
+       {"matcher": {"id": "byName", "options": "b"}, "properties": [{"id": "custom.displayMode", "value": "color-background-solid"}]},
+       {"matcher": {"id": "byName", "options": "c"}, "properties": [{"id": "custom.displayMode", "value": "gradient-gauge"}]},
+       {"matcher": {"id": "byName", "options": "d"}, "properties": [{"id": "custom.displayMode", "value": "basic"}]},
+       {"matcher": {"id": "byName", "options": "e"}, "properties": [{"id": "custom.displayMode", "value": "json-view"}]},
+       {"matcher": {"id": "byName", "options": "f"}, "properties": [{"id": "custom.displayMode"}]},
+       {"matcher": {"id": "byName", "options": "g"}, "properties": [{"id": "custom.displayMode", "value": 3}]}
+     ]},
+     "transformations": [
+       {"id": "timeSeriesTable", "options": {"refIdToStat": {"A": "mean", "B": "max"}}},
+       {"id": "timeSeriesTable", "options": {}},
+       {"id": "organize", "options": {"refIdToStat": {"A": "mean"}}}
+     ]},
+    {"id": 5, "type": "table", "title": "table without custom", "gridPos": {"x": 12, "y": 6, "w": 12, "h": 6},
+     "fieldConfig": {"defaults": {"custom": {"displayMode": 7}}, "overrides": []}},
+    {"id": 6, "type": "stat", "title": "not a table", "gridPos": {"x": 0, "y": 12, "w": 6, "h": 4},
+     "fieldConfig": {"defaults": {"custom": {"displayMode": "basic"}}, "overrides": []}},
+    {"id": 7, "type": "row", "title": "closed", "collapsed": true, "gridPos": {"x": 0, "y": 16, "w": 24, "h": 1}, "panels": [
+      {"id": 8, "type": "timeseries", "title": "in a row", "gridPos": {"x": 0, "y": 17, "w": 12, "h": 6},
+       "options": {"legend": {"displayMode": "hidden"}},
+       "fieldConfig": {"defaults": {}, "overrides": [{"matcher": {"id": "byName", "options": "z"}, "properties": [{"id": "custom.hideFrom", "value": {"viz": true}}]}]}},
+      {"id": 9, "type": "table", "title": "table in a row", "gridPos": {"x": 12, "y": 17, "w": 12, "h": 6},
+       "fieldConfig": {"defaults": {"custom": {"displayMode": "gradient-gauge"}}, "overrides": []},
+       "transformations": [{"id": "timeSeriesTable", "options": {"refIdToStat": {"A": "last"}}}]}
+    ]}
+  ]
+}

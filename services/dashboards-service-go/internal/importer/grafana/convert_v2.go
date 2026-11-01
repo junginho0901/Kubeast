@@ -8,9 +8,9 @@ import (
 	"strings"
 )
 
-// ErrV2SchemaVersion: ConvertV2 takes a classic dashboard at schemaVersion 42
-// only; Grafana runs its schema migrations on an older one first.
-var ErrV2SchemaVersion = errors.New("only a classic dashboard at schemaVersion 42 is converted to v2 so far")
+// ErrV2SchemaVersion: ConvertV2 takes a classic dashboard from schemaVersion 36
+// to 42; Grafana's migrations from older versions are not ported yet.
+var ErrV2SchemaVersion = errors.New("only a classic dashboard at schemaVersion 36 to 42 is converted to v2 so far")
 
 // DataSource is one data source of the Grafana a conversion is done for.
 type DataSource struct {

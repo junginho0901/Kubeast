@@ -88,11 +88,12 @@ type convCase struct {
 // samples themselves, the Kubeast-made dashboards as Export writes them with
 // each ${DS_…} input answered by the data source of its plugin, and
 // testdata/convert, which holds what the others do not (every variable kind,
-// actions, value mappings, data sources by name, old panels, repeats).
+// actions, value mappings, data sources by name, old panels, repeats, and a
+// dashboard at schemaVersion 36 for each branch of the migrations to 42).
 func convCases(t *testing.T) []convCase {
 	t.Helper()
 	cases := []convCase{{key: "edge-cases", raw: mustRead(t, "testdata/edge-cases.json")}}
-	for _, n := range []string{"panels", "variables"} {
+	for _, n := range []string{"panels", "variables", "migrations"} {
 		cases = append(cases, convCase{key: "convert/" + n, raw: mustRead(t, "testdata/convert/"+n+".json"), direct: true})
 	}
 	for _, f := range corpusFiles(t) {
@@ -153,13 +154,13 @@ func classicOf(t *testing.T, raw []byte) []byte {
 }
 
 // checkConverted converts raw and compares the spec with Grafana's, every
-// value and every key, or expects the refusal of a schemaVersion before 42.
+// value and every key, or expects the refusal of a schemaVersion before 36.
 func checkConverted(t *testing.T, key string, raw []byte, want any) (compared bool) {
 	t.Helper()
 	got, err := ConvertV2(raw, grafanaDataSources)
 	var probe struct{ SchemaVersion int }
 	_ = json.Unmarshal(raw, &probe)
-	if probe.SchemaVersion < LatestSchemaVersion {
+	if probe.SchemaVersion < minSchemaVersion {
 		if !errors.Is(err, ErrV2SchemaVersion) {
 			t.Errorf("%s: schemaVersion %d gave %v, want ErrV2SchemaVersion", key, probe.SchemaVersion, err)
 		}
@@ -202,8 +203,20 @@ func TestConvertV2_AsGrafana(t *testing.T) {
 			refused++
 		}
 	}
-	if compared != 97 || refused != 52 {
-		t.Errorf("compared %d, refused %d; want 97 and the 52 files before schemaVersion 42", compared, refused)
+	if compared != 150 || refused != 0 {
+		t.Errorf("compared %d, refused %d; want every one of the 150 files", compared, refused)
+	}
+}
+
+// A schemaVersion before 36 is refused, and one after 42, on which Grafana
+// 13.3.0's conversion fails too (status.conversion.failed).
+func TestConvertV2_SchemaVersionRange(t *testing.T) {
+	raw := string(mustRead(t, "testdata/convert/migrations.json"))
+	for _, sv := range []string{"35", "43"} {
+		_, err := ConvertV2([]byte(strings.Replace(raw, `"schemaVersion": 36`, `"schemaVersion": `+sv, 1)), grafanaDataSources)
+		if !errors.Is(err, ErrV2SchemaVersion) || !strings.Contains(err.Error(), "at "+sv) {
+			t.Errorf("schemaVersion %s: err = %v, want ErrV2SchemaVersion naming it", sv, err)
+		}
 	}
 }
 
@@ -249,7 +262,7 @@ func TestConvertV2_ExportAsGrafana(t *testing.T) {
 			refused++
 		}
 	}
-	if compared != 155 || refused != 52 {
-		t.Errorf("compared %d, refused %d; want 155 and the 52 exports before schemaVersion 42", compared, refused)
+	if compared != 207 || refused != 0 {
+		t.Errorf("compared %d, refused %d; want every one of the 207 exports", compared, refused)
 	}
 }
