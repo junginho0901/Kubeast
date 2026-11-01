@@ -201,6 +201,36 @@ func contents(d *model.Dashboard) string {
 	return strings.Join(items, " | ") + " || " + parts[1]
 }
 
+// A query variable on a data source named without a type keeps the type the
+// import read from its name: the v2 query is of that group, on that name.
+func TestExportV2_VariableOnANamedDataSource(t *testing.T) {
+	d, _, err := Import([]byte(`{"uid": "named", "title": "Named", "schemaVersion": 42, "panels": [],
+		"templating": {"list": [{"name": "app", "type": "query", "datasource": "Loki logs", "query": "label_values(app)", "refresh": 1}]}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, _, err := ExportV2(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Spec struct {
+			Variables []struct {
+				Spec struct {
+					Query v2DataQuery `json:"query"`
+				} `json:"spec"`
+			} `json:"variables"`
+		} `json:"spec"`
+	}
+	if err := json.Unmarshal(out, &got); err != nil || len(got.Spec.Variables) != 1 {
+		t.Fatalf("%v %s", err, out)
+	}
+	q := got.Spec.Variables[0].Spec.Query
+	if q.Group != "loki" || q.Datasource == nil || q.Datasource.Name == nil || *q.Datasource.Name != "Loki logs" {
+		t.Errorf("query group %q datasource %+v, want loki on \"Loki logs\"", q.Group, q.Datasource)
+	}
+}
+
 // nativeByKey reads a Kubeast-made dashboard of convCases by its key.
 func nativeByKey(t *testing.T, key string) *model.Dashboard {
 	t.Helper()

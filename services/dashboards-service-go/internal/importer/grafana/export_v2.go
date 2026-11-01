@@ -119,10 +119,7 @@ func exportDataSources(d *model.Dashboard) DataSources {
 	for _, v := range d.Spec.Variables {
 		add(v.Ext["datasource"], v.Store)
 	}
-	for _, a := range d.Spec.Annotations {
-		add(a.Ext["datasource"], a.Store)
-	}
-	return out
+	return out // an annotation's reference needs its type and uid both (ConvertV2), so none is looked up
 }
 
 // convertedV2 is ExportV2 for a classic or Kubeast-made dashboard.
