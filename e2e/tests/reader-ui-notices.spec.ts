@@ -51,29 +51,72 @@ test.describe('non-admin UI notices', () => {
     }
   })
 
-  // Every other list page has no notice of its own: the banner above the page
-  // (fed by the API client's 403 event) names the kinds the viewer cannot list,
-  // instead of the page passing a 403 off as an empty list. Leases: the built-in view role leaves them out.
-  test('a viewer sees the permission banner on a page without its own notice (Leases)', async ({ browser, request }) => {
+  // The banner above the page (fed by the API client's 403 event) names the kinds the viewer cannot list, instead of
+  // the page passing a 403 off as an empty list. Secrets are what the Read role does not read (view leaves them out).
+  test('a viewer sees the permission banner naming the kind it cannot list (Secrets)', async ({ browser, request }) => {
     const admin = await adminHeaders(request)
     const user = await createUser(request, admin, 'viewer-roles')
     try {
       const grant = await request.put(`/api/v1/auth/admin/users/${user.id}/cluster-roles/self`, { headers: admin, data: { role: 'Read' } })
       expect(grant.status()).toBe(200)
       const { ctx, page } = await userPage(browser, user.email, user.password)
-      await page.goto('/cluster/leases?cluster=self')
+      await page.goto('/configuration/secrets?cluster=self')
       const banner = page.getByTestId('forbidden-banner')
       await expect(banner).toBeVisible({ timeout: 20000 })
       await expect(banner).toContainText(/permission|권한/)
-      // the Kubernetes kind name (re-QA #42), not "leases"
-      await expect(banner).toContainText('Lease')
-      await expect(banner).not.toContainText('leases')
+      // the Kubernetes kind name (re-QA #42), not "secrets"
+      await expect(banner).toContainText('Secret')
+      await expect(banner).not.toContainText('secrets')
       // a built-in role acts as a group the chart binds: no custom-role hint
       await expect(page.getByTestId('forbidden-custom-role-hint')).toHaveCount(0)
       // another page resets the banner; a page the viewer may read shows none
       await page.goto('/workloads/pods?cluster=self')
       await expect(page.getByRole('heading', { level: 1, name: /^(Pods|파드)$/ })).toBeVisible()
       await expect(page.getByTestId('forbidden-banner')).toHaveCount(0)
+      await ctx.close()
+    } finally {
+      await request.delete(`/api/v1/auth/admin/users/${user.id}`, { headers: admin })
+    }
+  })
+
+  // The Read role reads every kind but Secrets (docs/features.md): a viewer opens every screen of the sidebar it sees on
+  // test2 — the dev cluster that also serves the Gateway API and VPA — and the cluster refuses no list request but the
+  // Secret-backed ones (Secrets, Helm releases). Every refused request is listed, so a kind kubeast:cluster-reader
+  // leaves out names itself, a new screen's included.
+  test('a viewer is refused nothing but Secrets on every screen of its sidebar', async ({ browser, request }) => {
+    test.setTimeout(600_000)
+    const admin = await adminHeaders(request)
+    const body = await (await request.get('/api/v1/clusters', { headers: admin })).json()
+    const registered = (Array.isArray(body) ? body : body.items ?? []).some((c: { id: string }) => c.id === 'test2')
+    test.skip(!registered, 'needs the dev cluster test2 registered (scripts/add-kind-cluster.sh test2)')
+    const user = await createUser(request, admin, 'viewer-all')
+    try {
+      const grant = await request.put(`/api/v1/auth/admin/users/${user.id}/cluster-roles/test2`, { headers: admin, data: { role: 'Read' } })
+      expect(grant.status()).toBe(200)
+      const { ctx, page } = await userPage(browser, user.email, user.password)
+      await page.setViewportSize({ width: 1600, height: 1000 })
+      const refused: string[] = []
+      page.on('response', (r) => {
+        const url = new URL(r.url())
+        if (r.status() === 403 && url.pathname.startsWith('/api/')) refused.push(`${new URL(page.url()).pathname} → ${url.pathname}`)
+      })
+      await page.goto('/?cluster=test2')
+      const nav = page.getByTestId('sidebar-nav')
+      await expect(nav).toBeVisible({ timeout: 20000 })
+      const screens = [...new Set(await nav.locator('a[href^="/"]').evaluateAll((as) => as.map((a) => a.getAttribute('href') as string)))]
+      expect(screens.length, `screens on a viewer's sidebar: ${screens.join(' ')}`).toBeGreaterThan(40)
+      for (const href of screens) {
+        await page.goto(`${href}${href.includes('?') ? '&' : '?'}cluster=test2`)
+        await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+      }
+      const secretBacked = (r: string) => /\/secrets(\/|$)|\/helm\//.test(r)
+      expect(refused.filter((r) => !secretBacked(r)), 'requests the cluster refused a viewer, Secrets aside').toEqual([])
+      expect(refused.some((r) => r.startsWith('/configuration/secrets') && secretBacked(r)), 'the Secrets page is refused').toBe(true)
+      // Gateway → Policies answers every policy kind it scanned in one 200, a refused kind with its error
+      const policies = await (await ctx.request.get('/api/v1/cluster/gateway-policies/all?cluster=test2')).json()
+      const kinds: { plural: string; error?: string }[] = policies.kinds ?? []
+      expect(kinds.length, 'policy kinds test2 serves').toBeGreaterThan(0)
+      expect(kinds.filter((k) => k.error).map((k) => `${k.plural}: ${k.error}`), 'policy kinds refused a viewer').toEqual([])
       await ctx.close()
     } finally {
       await request.delete(`/api/v1/auth/admin/users/${user.id}`, { headers: admin })

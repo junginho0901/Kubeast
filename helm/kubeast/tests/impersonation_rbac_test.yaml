@@ -59,3 +59,63 @@ tests:
               - mutatingadmissionpolicybindings
             verbs: ["get", "list", "watch"]
         documentIndex: 1
+
+  - it: lets the Read group read the kinds the list pages show that view leaves out, and never Secrets
+    asserts:
+      - contains:
+          path: rules
+          content:
+            apiGroups: ["gateway.networking.k8s.io"]
+            resources: ["gatewayclasses", "gateways", "httproutes", "grpcroutes", "referencegrants", "backendtlspolicies"]
+            verbs: ["get", "list", "watch"]
+        documentIndex: 1
+      - contains:
+          path: rules
+          content:
+            apiGroups: ["gateway.networking.x-k8s.io"]
+            resources: ["xbackendtrafficpolicies", "xtelemetrypolicies"]
+            verbs: ["get", "list", "watch"]
+        documentIndex: 1
+      - contains:
+          path: rules
+          content:
+            apiGroups: ["networking.k8s.io"]
+            resources: ["ingressclasses"]
+            verbs: ["get", "list", "watch"]
+        documentIndex: 1
+      - contains:
+          path: rules
+          content:
+            apiGroups: ["coordination.k8s.io"]
+            resources: ["leases"]
+            verbs: ["get", "list", "watch"]
+        documentIndex: 1
+      - contains:
+          path: rules
+          content:
+            apiGroups: ["resource.k8s.io"]
+            resources: ["deviceclasses", "resourceslices"]
+            verbs: ["get", "list", "watch"]
+        documentIndex: 1
+      - contains:
+          path: rules
+          content:
+            apiGroups: ["autoscaling.k8s.io"]
+            resources: ["verticalpodautoscalers"]
+            verbs: ["get", "list", "watch"]
+        documentIndex: 1
+      - contains:
+          path: rules
+          content:
+            apiGroups: ["wgpolicyk8s.io"]
+            resources: ["policyreports", "clusterpolicyreports"]
+            verbs: ["get", "list", "watch"]
+        documentIndex: 1
+      - equal:
+          path: rules[0].apiGroups
+          value: [""]
+        documentIndex: 1
+      - notContains:
+          path: rules[0].resources
+          content: secrets
+        documentIndex: 1

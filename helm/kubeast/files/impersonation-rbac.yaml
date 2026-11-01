@@ -38,9 +38,10 @@ rules:
     verbs: ["impersonate"]
     resourceNames: ["kubeast:authenticated", "kubeast:viewer", "kubeast:operator", "kubeast:admin", "kubeast:role:read", "kubeast:role:write", "kubeast:role:admin"]
 ---
-# Read-only view of cluster-scoped objects the console shows (the built-in
-# "view" role is namespaced only), and of Roles and RoleBindings, which "view"
-# leaves out while the console lists them next to ClusterRoles.
+# Read-only view of what the console lists and the built-in "view" role leaves
+# out: cluster-scoped objects (view is namespaced only), Roles and RoleBindings,
+# Leases, and custom resources whose installers do not aggregate them into view
+# (Gateway API, VPA; policy reports where Kyverno does not). Secrets stay out.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -79,10 +80,28 @@ rules:
     resources: ["nodes", "pods"]
     verbs: ["get", "list"]
   - apiGroups: ["gateway.networking.k8s.io"]
-    resources: ["gatewayclasses"]
+    resources: ["gatewayclasses", "gateways", "httproutes", "grpcroutes", "referencegrants", "backendtlspolicies"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["gateway.networking.x-k8s.io"]
+    resources: ["xbackendtrafficpolicies", "xtelemetrypolicies"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["policy"]
     resources: ["poddisruptionbudgets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingressclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["resource.k8s.io"]
+    resources: ["deviceclasses", "resourceslices"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["autoscaling.k8s.io"]
+    resources: ["verticalpodautoscalers"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["wgpolicyk8s.io"]
+    resources: ["policyreports", "clusterpolicyreports"]
     verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
