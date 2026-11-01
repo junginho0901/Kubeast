@@ -21,6 +21,7 @@ const shareCase = `{
   "templating": {"list": [
     {"name": "ds", "type": "datasource", "query": "prometheus", "current": {"text": "Main Prom", "value": "P1"}},
     {"name": "unused", "type": "datasource", "query": "loki", "current": {"text": "Logs", "value": "L1"}},
+    {"name": "ds2", "type": "datasource", "query": "prometheus", "current": {"text": "default", "value": "P1"}},
     {"name": "ns", "type": "query", "datasource": {"type": "prometheus", "uid": "${ds}"}, "query": "label_values(up, namespace)",
      "refresh": 0, "current": {"text": "a", "value": "a"}, "options": [{"text": "a", "value": "a"}]},
     {"name": "job", "type": "query", "datasource": {"type": "prometheus", "uid": "P2"}, "query": "label_values(up, job)", "refresh": 2},
@@ -40,7 +41,9 @@ const shareCase = `{
     {"id": 5, "type": "row", "title": "closed", "collapsed": true, "gridPos": {"x": 0, "y": 16, "w": 24, "h": 1}, "panels": [
       {"id": 6, "type": "gauge", "title": "inside", "gridPos": {"x": 0, "y": 17, "w": 12, "h": 8},
        "datasource": {"type": "prometheus", "uid": "P1"}, "targets": [{"refId": "A", "expr": "up"}]}
-    ]}
+    ]},
+    {"id": 7, "type": "stat", "title": "same data source, other variable", "gridPos": {"x": 0, "y": 17, "w": 12, "h": 8},
+     "datasource": {"type": "prometheus", "uid": "${ds2}"}, "targets": [{"refId": "A", "expr": "up"}]}
   ]
 }`
 
@@ -97,10 +100,11 @@ func TestExportShared_Rules(t *testing.T) {
 		"panel 3":          js(at(m, "panels", 2, "datasource")),
 		"panel 4":          js(at(m, "panels", 3, "datasource")) + " " + js(at(m, "panels", 3, "targets", 0, "datasource")),
 		"row panel":        js(at(m, "panels", 4, "panels", 0, "datasource")),
-		"query variable":   js(at(m, "templating", "list", 2, "datasource")) + " " + js(at(m, "templating", "list", 2, "options")) + " " + js(at(m, "templating", "list", 2, "current")) + " " + js(at(m, "templating", "list", 2, "refresh")),
-		"query variable 2": js(at(m, "templating", "list", 3, "datasource")) + " " + js(at(m, "templating", "list", 3, "refresh")),
-		"adhoc":            js(at(m, "templating", "list", 4, "datasource")),
-		"constant":         js(at(m, "templating", "list", 5, "query")) + " " + js(at(m, "templating", "list", 5, "current")) + " " + js(at(m, "templating", "list", 5, "options")),
+		"second variable":  js(at(m, "templating", "list", 2, "current")),
+		"query variable":   js(at(m, "templating", "list", 3, "datasource")) + " " + js(at(m, "templating", "list", 3, "options")) + " " + js(at(m, "templating", "list", 3, "current")) + " " + js(at(m, "templating", "list", 3, "refresh")),
+		"query variable 2": js(at(m, "templating", "list", 4, "datasource")) + " " + js(at(m, "templating", "list", 4, "refresh")),
+		"adhoc":            js(at(m, "templating", "list", 5, "datasource")),
+		"constant":         js(at(m, "templating", "list", 6, "query")) + " " + js(at(m, "templating", "list", 6, "current")) + " " + js(at(m, "templating", "list", 6, "options")),
 		"annotations":      js(at(m, "annotations", "list", 0, "datasource")) + " " + js(at(m, "annotations", "list", 1, "datasource")),
 		"elements":         js(m["__elements"]),
 	}
@@ -108,6 +112,7 @@ func TestExportShared_Rules(t *testing.T) {
 		"panel 1":          `{"type":"prometheus","uid":"${ds}"} {"selected":true,"text":"","value":"${DS_MAIN_PROM}"}`,
 		"panel 1 query":    `{"type":"prometheus","uid":"${ds}"}`,
 		"unused variable":  `{}`,
+		"second variable":  `{"selected":true,"text":"","value":"${DS_MAIN_PROM}"}`, // the same data source as ds, though named "default" there
 		"panel 2":          `{"type":"prometheus","uid":"${DS_PROMETHEUS}"}`,
 		"panel 2 query A":  `{"type":"prometheus","uid":"${DS_PROMETHEUS}"}`,
 		"panel 2 query B":  `{"type":"prometheus","uid":"${DS_PROMETHEUS_2}"}`,
@@ -164,12 +169,20 @@ func TestExportShared_Rules(t *testing.T) {
 	}
 }
 
-// A null reference, which the import does not keep, stays as it is and is
-// reported, as Grafana would resolve it to its own default.
-func TestExportShared_NullReference(t *testing.T) {
-	root := map[string]any{"panels": []any{map[string]any{"id": 1, "type": "stat", "datasource": nil}}}
+// What an import never hands over, given to the sharer directly: a null
+// reference stays as it is and is reported, as Grafana would resolve it to its
+// own default; a query variable that never refreshes is set to refresh on load,
+// since it loses its options.
+func TestExportShared_Direct(t *testing.T) {
+	root := map[string]any{
+		"panels":     []any{map[string]any{"id": 1, "type": "stat", "datasource": nil}},
+		"templating": map[string]any{"list": []any{map[string]any{"name": "q", "type": "query", "refresh": json.Number("0")}}},
+	}
 	rep := &ExportReport{}
 	newSharer(root, rep).share()
+	if got := js(at(root, "templating", "list", 0, "refresh")); got != "1" {
+		t.Errorf("refresh = %s, want 1", got)
+	}
 	if got := js(at(root, "panels", 0, "datasource")); got != "null" {
 		t.Errorf("datasource = %s", got)
 	}
@@ -329,6 +342,9 @@ func TestExportShared_Corpus(t *testing.T) {
 		}
 		reported := false
 		for _, f := range rep.Adjusted {
+			if strings.Contains(f.Reason, "is no data source variable or input") {
+				t.Errorf("%s: %s", dc.name, f.Reason) // every ${…} here is a variable or an input (checked above)
+			}
 			reported = reported || (f.Path == "datasource" && !strings.Contains(f.Reason, "default data source"))
 		}
 		if concrete > 0 && !reported {
