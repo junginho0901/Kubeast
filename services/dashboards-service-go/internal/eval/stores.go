@@ -225,12 +225,15 @@ func (t Tempo) Query(ctx context.Context, expr string, metric bool) (int, error)
 // SeedService names the evaluation's own traces and logs.
 const SeedService = "kubeast-eval-shop"
 
-// SeedLogs pushes the evaluation's log lines for the last ten minutes: a
-// shop whose /pay route fails a third of the time.
+// SeedLogs pushes the evaluation's log lines: 120 over the last ten minutes,
+// a shop whose /pay route fails a third of the time, and one line inside each
+// seeded trace's server span (SeedTraces with the same now) carrying the
+// trace's trace_id and span_id as structured metadata, as an OpenTelemetry
+// SDK writes them — what a trace-to-logs link finds.
 func SeedLogs(ctx context.Context, lokiBase string, now time.Time) error {
 	type stream struct {
 		Stream map[string]string `json:"stream"`
-		Values [][2]string       `json:"values"`
+		Values [][]any           `json:"values"`
 	}
 	s := stream{Stream: map[string]string{
 		"k8s_cluster_name": "kubeast-b", "k8s_namespace_name": "kubeast-eval", "k8s_pod_name": "shop-7c9f5-x2kq4",
@@ -245,8 +248,18 @@ func SeedLogs(ctx context.Context, lokiBase string, now time.Time) error {
 		case "WARN":
 			msg = "slow checkout"
 		}
-		s.Values = append(s.Values, [2]string{strconv.FormatInt(at.UnixNano(), 10),
+		s.Values = append(s.Values, []any{strconv.FormatInt(at.UnixNano(), 10),
 			fmt.Sprintf("level=%s route=%s msg=%q", level, route, msg)})
+	}
+	for i := 0; i < seedTraces; i++ {
+		start, _, route, level := seedSpan(now, i)
+		msg := map[string]string{"/cart": "cart shown", "/checkout": "checked out", "/pay": "paid"}[route]
+		if level == "ERROR" {
+			msg = "payment failed: card declined"
+		}
+		s.Values = append(s.Values, []any{strconv.FormatInt(start.Add(10*time.Millisecond).UnixNano(), 10),
+			fmt.Sprintf("level=%s route=%s msg=%q", level, route, msg),
+			map[string]string{"trace_id": seedTraceID(now, i), "span_id": seedSpanID(i)}})
 	}
 	body, _ := json.Marshal(map[string]any{"streams": []stream{s}})
 	return post(ctx, strings.TrimRight(lokiBase, "/")+"/loki/api/v1/push", body)
@@ -279,18 +292,9 @@ func SeedTraces(ctx context.Context, otlpBase string, now time.Time) error {
 		return map[string]any{"key": k, "value": map[string]any{"stringValue": v}}
 	}
 	var spans []map[string]any
-	for i := 0; i < 60; i++ {
-		start := now.Add(-90 * time.Second).Add(time.Duration(i) * 1450 * time.Millisecond)
-		route, level, _ := seedRoute(i)
-		dur := 80 * time.Millisecond
-		switch route {
-		case "/checkout":
-			dur = time.Duration(1100+(i%5)*100) * time.Millisecond
-		case "/pay":
-			dur = 300 * time.Millisecond
-		}
-		trace := fmt.Sprintf("%016x%016x", now.Unix(), i)
-		root := fmt.Sprintf("%016x", 0xa000+i)
+	for i := 0; i < seedTraces; i++ {
+		start, dur, route, level := seedSpan(now, i)
+		trace, root := seedTraceID(now, i), seedSpanID(i)
 		status := map[string]any{"code": 1}
 		if level == "ERROR" {
 			status = map[string]any{"code": 2, "message": "card declined"}
@@ -313,6 +317,28 @@ func SeedTraces(ctx context.Context, otlpBase string, now time.Time) error {
 	}}})
 	return post(ctx, strings.TrimRight(otlpBase, "/")+"/v1/traces", body)
 }
+
+// seedTraces is how many traces SeedTraces sends.
+const seedTraces = 60
+
+// seedSpan is trace i's server span: its start, duration, route and level.
+func seedSpan(now time.Time, i int) (start time.Time, dur time.Duration, route, level string) {
+	start = now.Add(-90 * time.Second).Add(time.Duration(i) * 1450 * time.Millisecond)
+	route, level, _ = seedRoute(i)
+	dur = 80 * time.Millisecond
+	switch route {
+	case "/checkout":
+		dur = time.Duration(1100+(i%5)*100) * time.Millisecond
+	case "/pay":
+		dur = 300 * time.Millisecond
+	}
+	return start, dur, route, level
+}
+
+// seedTraceID carries the run's time, so a second run makes new traces.
+func seedTraceID(now time.Time, i int) string { return fmt.Sprintf("%016x%016x", now.Unix(), i) }
+
+func seedSpanID(i int) string { return fmt.Sprintf("%016x", 0xa000+i) }
 
 func post(ctx context.Context, u string, body []byte) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(body))
