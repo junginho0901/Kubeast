@@ -47,12 +47,21 @@ var (
 	cursorSyncs   = map[string]bool{"": true, CursorSyncNone: true, CursorSyncShared: true, CursorSyncSharedTooltip: true}
 	refreshPoints = map[string]bool{"": true, RefreshOnLoad: true, RefreshOnTimeRange: true}
 
-	slugRe      = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
-	panelNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$`)
-	varNameRe   = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,63}$`)
-	dnsLabelRe  = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$`)
+	slugRe      = regexp.MustCompile(SlugPattern)
+	panelNameRe = regexp.MustCompile(PanelNamePattern)
+	varNameRe   = regexp.MustCompile(VariableNamePattern)
+	dnsLabelRe  = regexp.MustCompile(NamespacePattern)
+	refreshRe   = regexp.MustCompile(RefreshPattern)
+)
+
+// Patterns the validator checks; the JSON Schema carries the same strings.
+const (
+	SlugPattern         = `^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`
+	PanelNamePattern    = `^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$`
+	VariableNamePattern = `^[A-Za-z_][A-Za-z0-9_]{0,63}$`
+	NamespacePattern    = `^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$`
 	// Grafana-style durations: 30s, 5m, 1h, 1d.
-	refreshRe = regexp.MustCompile(`^([0-9]+)(s|m|h|d)$`)
+	RefreshPattern = `^([0-9]+)(s|m|h|d)$`
 )
 
 // Validate lists every problem in d; nil means the document is valid. The order
@@ -63,6 +72,9 @@ func Validate(d *Dashboard) []Problem {
 	v.check(d.Kind == Kind, "kind", fmt.Sprintf("must be %q", Kind))
 	v.metadata(&d.Metadata)
 	v.spec(&d.Spec)
+	if d.Source != nil {
+		v.check(d.Source.Kind == SourceGrafanaV1, "source.kind", fmt.Sprintf("must be %q", SourceGrafanaV1))
+	}
 	sort.SliceStable(v.problems, func(i, j int) bool { return v.problems[i].Path < v.problems[j].Path })
 	return v.problems
 }
@@ -174,12 +186,12 @@ func (v *validator) panel(path, name string, p *Panel, vars map[string]bool) {
 	}
 	if p.Repeat != nil {
 		v.check(vars[p.Repeat.Variable], path+".repeat.variable", "names no variable of this dashboard")
-		v.check(p.Repeat.Direction == "" || p.Repeat.Direction == "h" || p.Repeat.Direction == "v", path+".repeat.direction", "must be h or v")
+		v.check(p.Repeat.Direction == "" || repeatDirections[p.Repeat.Direction], path+".repeat.direction", "must be h or v")
 	}
 }
 
 func (v *validator) thresholds(path string, t *Thresholds) {
-	v.check(t.Mode == "absolute" || t.Mode == "percentage", path+".mode", "must be absolute or percentage")
+	v.check(thresholdModes[t.Mode], path+".mode", "must be absolute or percentage")
 	var last *float64
 	for i, s := range t.Steps {
 		sp := fmt.Sprintf("%s.steps[%d]", path, i)
