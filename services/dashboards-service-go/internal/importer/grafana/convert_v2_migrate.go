@@ -5,6 +5,8 @@ package grafana
 // v42.go); each brings a dashboard from the version before to its own.
 const minSchemaVersion = 36
 
+// 40 and 41 change keys the v2 conversion does not read; they keep the
+// migrated classic dashboard Grafana's.
 var schemaMigrations = map[int]func(map[string]any){
 	37: func(d map[string]any) { eachPanel(d["panels"], legendShown) },
 	38: func(d map[string]any) { eachPanel(d["panels"], tableCellOptions) },
