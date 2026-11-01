@@ -133,10 +133,11 @@ func TestV2_Imports(t *testing.T) {
 	}
 }
 
-// TestV2_LayoutAsGrafanaConverts: the classic panels the conversion builds
-// from each v2 document — rows, tabs, auto grids, nesting, collapsed and
-// header-less rows, repeats — are the ones Grafana 13.3.0's own v2 → v1
-// conversion serves for it, panel by panel.
+// TestV2_LayoutAsGrafanaConverts: the classic dashboard the conversion builds
+// from each v2 document is the one Grafana 13.3.0's own v2 → v1 conversion
+// serves for it: the panels' places — rows, tabs, auto grids, nesting,
+// collapsed and header-less rows, repeats — panel by panel, and the data
+// sources and queries of the panels, the variables and the annotations.
 func TestV2_LayoutAsGrafanaConverts(t *testing.T) {
 	for _, p := range append(nativePairs(t), corpusPairs(t)...) {
 		var env, v1 struct {
@@ -150,13 +151,38 @@ func TestV2_LayoutAsGrafanaConverts(t *testing.T) {
 			t.Fatal(err)
 		}
 		spec, _ := asObj(mustJSON(env.Spec))
-		ours := newV2conv(false).dashboard(spec)
-		got := layoutView(roundTrip(ours["panels"]))
-		want := layoutView(v1.Spec["panels"])
-		if !reflect.DeepEqual(got, want) {
-			t.Errorf("%s: layout differs from Grafana's\n got: %v\nwant: %v", p.name, got, want)
+		ours := roundTrip(newV2conv(false).dashboard(spec)).(map[string]any)
+		for _, part := range []struct {
+			name string
+			view func(map[string]any) []string
+		}{{"layout", func(d map[string]any) []string { return layoutView(d["panels"]) }},
+			{"queries", queriesView}, {"variables", variablesView}, {"annotations", annotationsView}} {
+			got, want := part.view(ours), part.view(v1.Spec)
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("%s: %s differ from Grafana's:%s", p.name, part.name, lineDiff(got, want))
+			}
 		}
 	}
+}
+
+// lineDiff shows the first lines where got and want differ.
+func lineDiff(got, want []string) string {
+	var out strings.Builder
+	shown := 0
+	for i := 0; i < len(got) || i < len(want); i++ {
+		var g, w string
+		if i < len(got) {
+			g = got[i]
+		}
+		if i < len(want) {
+			w = want[i]
+		}
+		if g != w && shown < 4 {
+			fmt.Fprintf(&out, "\n  line %d\n   got: %s\n  want: %s", i, g, w)
+			shown++
+		}
+	}
+	return out.String()
 }
 
 func roundTrip(v any) any {
@@ -189,6 +215,56 @@ func layoutView(panels any) []string {
 		}
 	}
 	walk("", panels)
+	return out
+}
+
+// queriesView: each panel's data source and its queries' refId, data source
+// and query text — what ext keeps and the model comparison leaves out.
+func queriesView(d map[string]any) []string {
+	var out []string
+	var walk func(list any)
+	walk = func(list any) {
+		for _, raw := range asList(list) {
+			p := asMap(raw)
+			out = append(out, fmt.Sprintf("panel %v ds=%s", p["id"], short(p["datasource"])))
+			for _, tr := range asList(p["targets"]) {
+				t := asMap(tr)
+				out = append(out, fmt.Sprintf("  %v ds=%s expr=%s query=%s hide=%v", t["refId"], short(t["datasource"]), short(t["expr"]), short(t["query"]), t["hide"]))
+			}
+			walk(p["panels"])
+		}
+	}
+	walk(d["panels"])
+	return out
+}
+
+func variablesView(d map[string]any) []string {
+	var out []string
+	for _, raw := range asList(asMap(d["templating"])["list"]) {
+		v := asMap(raw)
+		line := fmt.Sprintf("%v %v ds=%s query=%s", v["name"], v["type"], short(v["datasource"]), short(v["query"]))
+		for _, k := range []string{"hide", "refresh", "sort", "multi", "includeAll", "allValue", "regex", "current", "options"} {
+			if x, ok := v[k]; ok {
+				line += fmt.Sprintf(" %s=%s", k, short(x))
+			}
+		}
+		out = append(out, line)
+	}
+	return out
+}
+
+func annotationsView(d map[string]any) []string {
+	var out []string
+	for _, raw := range asList(asMap(d["annotations"])["list"]) {
+		a := asMap(raw)
+		line := fmt.Sprintf("%v ds=%s target=%s", a["name"], short(a["datasource"]), short(a["target"]))
+		for _, k := range []string{"enable", "hide", "iconColor", "builtIn", "type", "filter"} {
+			if x, ok := a[k]; ok {
+				line += fmt.Sprintf(" %s=%s", k, short(x))
+			}
+		}
+		out = append(out, line)
+	}
 	return out
 }
 
@@ -438,5 +514,41 @@ func TestV2_OddDocuments(t *testing.T) {
 	}
 	if _, _, err := Import([]byte(`{"apiVersion": "dashboard.grafana.app/v2", "kind": "Dashboard", "metadata": {"name": "x"}}`)); err != ErrNoPanels {
 		t.Errorf("no spec: err = %v, want ErrNoPanels", err)
+	}
+}
+
+// TestV2_TransformationNames: v2 names a transformation in group (a spec.id
+// beside it is kept, not used); v2beta1 in spec.id or, without one, in kind.
+func TestV2_TransformationNames(t *testing.T) {
+	doc := func(apiVersion, transformation string) []byte {
+		return []byte(`{"apiVersion": "dashboard.grafana.app/` + apiVersion + `", "kind": "Dashboard", "metadata": {"name": "t"}, "spec": {
+			"title": "T", "cursorSync": "Off", "preload": false, "tags": [], "links": [], "annotations": [], "variables": [],
+			"timeSettings": {"from": "now-1h", "to": "now", "autoRefresh": "", "autoRefreshIntervals": [], "hideTimepicker": false, "fiscalYearStartMonth": 0},
+			"elements": {"panel-1": {"kind": "Panel", "spec": {"id": 1, "title": "P", "links": [],
+				"data": {"kind": "QueryGroup", "spec": {"queries": [], "transformations": [` + transformation + `], "queryOptions": {}}},
+				"vizConfig": {"kind": "VizConfig", "group": "table", "version": "13.3.0", "spec": {"options": {}, "fieldConfig": {"defaults": {}, "overrides": []}}}}}},
+			"layout": {"kind": "GridLayout", "spec": {"items": [{"kind": "GridLayoutItem", "spec": {"x": 0, "y": 0, "width": 24, "height": 8,
+				"element": {"kind": "ElementReference", "name": "panel-1"}}}]}}}}`)
+	}
+	for _, c := range []struct {
+		name, apiVersion, transformation, want string
+	}{
+		{"v2 group", "v2", `{"kind": "Transformation", "group": "organize", "spec": {"options": {}}}`, "organize"},
+		{"v2 group beside spec.id", "v2", `{"kind": "Transformation", "group": "organize", "spec": {"id": "merge", "options": {}}}`, "organize"},
+		{"v2beta1 spec.id", "v2beta1", `{"kind": "organize", "spec": {"id": "organize", "options": {}}}`, "organize"},
+		{"v2beta1 kind only", "v2beta1", `{"kind": "organize", "spec": {"options": {}}}`, "organize"},
+	} {
+		raw := doc(c.apiVersion, c.transformation)
+		d, rep, err := Import(raw)
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		p := d.Spec.Panels["p1"]
+		if len(p.Transforms) != 1 || p.Transforms[0].ID != c.want {
+			t.Errorf("%s: transforms = %+v, want %s", c.name, p.Transforms, c.want)
+		}
+		if missing, _ := unaccountedV2(raw, rep); len(missing) != 0 {
+			t.Errorf("%s: keys read by nobody: %v", c.name, missing)
+		}
 	}
 }

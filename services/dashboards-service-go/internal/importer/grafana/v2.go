@@ -281,8 +281,18 @@ func (c *v2conv) timeSettings(raw json.RawMessage) {
 	}
 }
 
-// dsRef is the classic data source of a v2 query: its group is the data
-// source type and its datasource.name the uid.
+// queryDS is the classic data source of a v2 query, variable or annotation:
+// its group is the data source type and its datasource.name the uid. Grafana
+// writes the type next to a uid even when it is empty.
+func queryDS(group, name string) map[string]any {
+	if name != "" {
+		return map[string]any{"uid": name, "type": group}
+	}
+	return dsRef(group, "")
+}
+
+// dsRef is a data source of a type and uid, each left out when empty (a
+// panel's, as Grafana derives it).
 func dsRef(group, name string) map[string]any {
 	switch {
 	case name != "":
@@ -367,7 +377,7 @@ func (c *v2conv) variables(raw json.RawMessage) {
 				c.stash(p+"."+k, x)
 			}
 		}
-		if ds := dsRef(group, dsName); ds != nil {
+		if ds := queryDS(group, dsName); ds != nil {
 			m["datasource"] = ds
 		}
 		spec, _ := asObj(v["spec"])
@@ -398,7 +408,7 @@ func (c *v2conv) variables(raw json.RawMessage) {
 				q, _ := asObj(x)
 				c.mark(sp, "mapped")
 				g, n := c.dataQuery(q, sp)
-				if ds := dsRef(g, n); ds != nil {
+				if ds := queryDS(g, n); ds != nil {
 					m["datasource"] = ds
 				}
 				qs, _ := asObj(q["spec"])
@@ -478,7 +488,7 @@ func (c *v2conv) annotations(raw json.RawMessage) {
 				q, _ := asObj(x)
 				c.mark(sp, "mapped")
 				g, n := c.dataQuery(q, sp)
-				if ds := dsRef(g, n); ds != nil {
+				if ds := queryDS(g, n); ds != nil {
 					m["datasource"] = ds
 				}
 				if qs, _ := asObj(q["spec"]); len(qs) > 0 {
@@ -1246,7 +1256,7 @@ func (c *v2conv) query(pq obj, qp string, first bool) (t map[string]any, legacy 
 				}
 				t[qk] = qv
 			}
-			if ds := dsRef(g, n); ds != nil {
+			if ds := queryDS(g, n); ds != nil {
 				t["datasource"] = ds
 			}
 		default:
