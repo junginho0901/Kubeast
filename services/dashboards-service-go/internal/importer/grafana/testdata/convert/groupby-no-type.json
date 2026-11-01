@@ -1,0 +1,2 @@
+{"uid": "conv-groupby", "title": "Converter cases: group by without a data source type", "schemaVersion": 42,
+ "templating": {"list": [{"name": "g", "type": "groupby", "datasource": "$ds"}]}, "panels": []}
