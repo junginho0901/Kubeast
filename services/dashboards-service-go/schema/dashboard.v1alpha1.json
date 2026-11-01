@@ -213,6 +213,10 @@
         "collapsed": {
           "type": "boolean"
         },
+        "ext": {
+          "additionalProperties": {},
+          "type": "object"
+        },
         "items": {
           "items": {
             "$ref": "#/$defs/LayoutItem"

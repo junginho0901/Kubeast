@@ -11,7 +11,9 @@ func TestToken(t *testing.T) {
 		{"green", "state-ok", true},
 		{"semi-dark-red", "state-crit", false},
 		{"dark-orange", "state-warn", false},
-		{"yellow", "state-warn", true},
+		{"yellow", "state-warn", false}, // orange is state-warn's name
+		{"orange", "state-warn", true},
+		{"white", "neutral", false},
 		{"blue", "state-info", true},
 		{"text", "neutral", true},
 		{"#73BF69", "state-ok", false},   // Grafana's green
