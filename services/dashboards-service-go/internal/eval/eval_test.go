@@ -612,6 +612,7 @@ func TestSeed(t *testing.T) {
 				Spans []struct {
 					Name    string `json:"name"`
 					TraceID string `json:"traceId"`
+					SpanID  string `json:"spanId"`
 					Start   string `json:"startTimeUnixNano"`
 					End     string `json:"endTimeUnixNano"`
 					Status  struct {
@@ -628,6 +629,11 @@ func TestSeed(t *testing.T) {
 		t.Errorf("service = %+v", a)
 	}
 	slow, failed, roots := 0, 0, 0
+	type window struct {
+		span       string
+		start, end int64
+	}
+	rootOf := map[string]window{} // trace id → its server span
 	for _, s := range traces.ResourceSpans[0].ScopeSpans[0].Spans {
 		start, _ := strconv.ParseInt(s.Start, 10, 64)
 		end, _ := strconv.ParseInt(s.End, 10, 64)
@@ -641,6 +647,7 @@ func TestSeed(t *testing.T) {
 			t.Errorf("trace id %s does not carry the run's time", s.TraceID)
 		}
 		roots++
+		rootOf[s.TraceID] = window{s.SpanID, start, end}
 		if time.Duration(end-start) > time.Second {
 			slow++
 		}
@@ -654,8 +661,8 @@ func TestSeed(t *testing.T) {
 
 	var logs struct {
 		Streams []struct {
-			Stream map[string]string `json:"stream"`
-			Values [][2]string       `json:"values"`
+			Stream map[string]string   `json:"stream"`
+			Values [][]json.RawMessage `json:"values"`
 		} `json:"streams"`
 	}
 	if err := json.Unmarshal(got["/loki/api/v1/push"], &logs); err != nil {
@@ -665,14 +672,35 @@ func TestSeed(t *testing.T) {
 	if st.Stream["service_name"] != SeedService || st.Stream["k8s_namespace_name"] != "kubeast-eval" {
 		t.Errorf("stream = %v", st.Stream)
 	}
-	errorsN := 0
+	errorsN, plain, traced := 0, 0, 0
+	seen := map[string]bool{}
+	strOf := func(raw json.RawMessage) string {
+		var v string
+		_ = json.Unmarshal(raw, &v)
+		return v
+	}
 	for _, v := range st.Values {
-		if strings.Contains(v[1], "level=ERROR") && strings.Contains(v[1], "route=/pay") {
+		line := strOf(v[1])
+		if strings.Contains(line, "level=ERROR") && strings.Contains(line, "route=/pay") {
 			errorsN++
 		}
+		if len(v) == 2 {
+			plain++
+			continue
+		}
+		// a line inside a trace: its trace_id and span_id are that trace's server span
+		var meta map[string]string
+		_ = json.Unmarshal(v[2], &meta)
+		ts, _ := strconv.ParseInt(strOf(v[0]), 10, 64)
+		w, ok := rootOf[meta["trace_id"]]
+		if !ok || meta["span_id"] != w.span || ts < w.start || ts > w.end || seen[meta["trace_id"]] {
+			t.Errorf("line %s %s does not sit in its trace's server span %+v", strOf(v[0]), meta, w)
+		}
+		seen[meta["trace_id"]] = true
+		traced++
 	}
-	if len(st.Values) != 120 || errorsN == 0 {
-		t.Errorf("%d lines, %d /pay errors", len(st.Values), errorsN)
+	if plain != 120 || traced != 60 || errorsN != 14+7 {
+		t.Errorf("%d plain lines, %d inside traces, %d /pay errors; want 120, 60, 21", plain, traced, errorsN)
 	}
 
 	if err := SeedLogs(ctx, srv.URL+"/nope", now); err != nil {

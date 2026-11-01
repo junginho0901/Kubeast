@@ -21,7 +21,12 @@ go run ./cmd/dasheval -cases ../../evals/dashboards -prometheus http://127.0.0.1
   -loki http://127.0.0.1:13100 -tempo http://127.0.0.1:13200 -seed -tempo-otlp http://127.0.0.1:14318
 ```
 
-`-seed` first sends the evaluation's own data, service `kubeast-eval-shop` in namespace `kubeast-eval`, and waits 30 s for the stores to serve it. The data is 60 traces over the last 90 seconds: /cart takes 80 ms, /checkout 1.1–1.5 s and /pay 300 ms, and one /pay in three fails. Each trace has a server span with `http.route` and a database child. It also sends 120 logfmt lines over the last ten minutes: `level=… route=… msg=…`, with 14 lines at `level=ERROR`. The seeded cases (22, 24–27) read only this data. Tempo searches a span by its time only within `ingestion_time_range_slack` (2m) of its arrival, hence the 90 seconds; each run's trace ids carry its time. Kill the port-forwards afterwards.
+`-seed` first sends the evaluation's own data, service `kubeast-eval-shop` in namespace `kubeast-eval`, and waits 30 s for the stores to serve it. The data is 60 traces over the last 90 seconds: /cart takes 80 ms, /checkout 1.1–1.5 s and /pay 300 ms, and one /pay in three fails. Each trace has a server span with `http.route` and a database child. It also sends logfmt lines, `level=… route=… msg=…`:
+
+- 120 over the last ten minutes, 14 of them at `level=ERROR`;
+- one inside each trace's server span, carrying that trace's `trace_id` and `span_id` as structured metadata, as an OpenTelemetry SDK writes them (7 at `level=ERROR`). A trace-to-logs link finds them with `| trace_id="…"`.
+
+The seeded cases (22, 24–27) read only this data. Tempo searches a span by its time only within `ingestion_time_range_slack` (2m) of its arrival, hence the 90 seconds; each run's trace ids carry its time. Kill the port-forwards afterwards.
 
 ## A case
 
@@ -103,6 +108,7 @@ An answer passes when every check does. The checks follow what an AI builder mus
 - 30/30 without a store.
 - 30/30 with every query run on the dev second cluster's Prometheus 3.15.1, Loki 3.7.9 and Tempo v3.1.1 after `-seed`. Every panel returned data, every variable had values, the compared numbers matched, and the three declines' data was missing. The 12 problems panel (`> 0`) was empty only by its comparison, and the waiting reasons were empty.
 - Tempo served this run's traces as seeded: 60, of which 20 took over a second and 7 failed.
+- After the trace ids were added to the logs (2026-11-01 18:03), 30/30 again. Loki held the 60 lines carrying a `trace_id`. An error line's `trace_id` found its one line in Loki and its trace in Tempo (`GET /pay`, error "card declined", the same span id).
 
 Six wrong answers failed live, each on the check named for its fault:
 
