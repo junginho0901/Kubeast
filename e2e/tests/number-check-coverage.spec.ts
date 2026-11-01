@@ -27,10 +27,12 @@ const WHERE: Record<string, string> = {
   '/cluster/mutatingwebhookconfigurations': 'number-check-lists', '/cluster/validatingwebhookconfigurations': 'number-check-lists',
   '/cluster/validatingadmissionpolicies': 'number-check-lists', '/cluster/mutatingadmissionpolicies': 'number-check-lists',
   '/custom-resources/groups': 'number-check-lists',
-  // lists whose kinds self does not serve (Gateway API, VPA) or other specs expect it not to (PolicyReport): another cluster
-  '/workloads/vpas': 'N3-a', '/custom-resources/instances': 'N3-a', '/security/policyreports': 'N3-a',
-  '/gateway/gatewayclasses': 'N3-a', '/gateway/gateways': 'N3-a', '/gateway/httproutes': 'N3-a', '/gateway/grpcroutes': 'N3-a',
-  '/gateway/referencegrants': 'N3-a', '/gateway/backendtlspolicies': 'N3-a', '/gateway/policies': 'N3-a',
+  // the Gateway API lists, on test2
+  '/gateway/gatewayclasses': 'number-check-lists', '/gateway/gateways': 'number-check-lists', '/gateway/httproutes': 'number-check-lists',
+  '/gateway/grpcroutes': 'number-check-lists', '/gateway/referencegrants': 'number-check-lists',
+  '/gateway/backendtlspolicies': 'number-check-lists',
+  // lists whose kinds self does not serve (VPA, policy kinds) or other specs expect it not to (PolicyReport): another cluster
+  '/workloads/vpas': 'N3-a', '/custom-resources/instances': 'N3-a', '/security/policyreports': 'N3-a', '/gateway/policies': 'N3-a',
   // summary screens
   '/': 'N3-b', '/cluster-view': 'N3-b', '/helm/releases': 'N3-b', '/timeline': 'N3-b', '/monitoring': 'N3-b', '/cluster/search': 'N3-b',
   '/admin/cluster-hygiene': 'N3-b', '/cluster/resource-graph': 'N3-b', '/cost': 'N3-b',
