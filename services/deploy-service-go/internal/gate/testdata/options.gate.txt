@@ -1,0 +1,4 @@
+blocked: true
+enforce Deployment legacy allowed-registry: container web: image registry.vendor.example/legacy:9.1 is not from ["ghcr.io/example/"] (an exception is asked for and waits for a platform admin's approval) [exception waiting]
+warn    Deployment legacy host-users: hostUsers must be false (a user namespace per pod)
+note: exception "no-latest-tag" matched no finding

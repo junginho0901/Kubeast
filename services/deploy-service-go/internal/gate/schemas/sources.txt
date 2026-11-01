@@ -1,0 +1,18 @@
+# Schemas embedded in the gate (schemas.tar.gz), one per kind the renderer
+# makes plus CronJob, the most common raw kind. File names follow
+# kubeconform's template {{.ResourceKind}}{{.KindSuffix}}.json.
+# Fetched 2026-11-01. Kubernetes kinds: yannh/kubernetes-json-schema
+# v1.36.0-standalone-strict (repository updated 2026-10-31). Custom resources:
+# datreeio/CRDs-catalog (HTTPRoute updated 2026-08-19).
+# To refresh: download each URL to its file name, then rebuild the archive
+# with sorted names, mtime 0 and gzip mtime 0 so it is the same bytes.
+deployment-apps-v1.json https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.36.0-standalone-strict/deployment-apps-v1.json
+service-v1.json https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.36.0-standalone-strict/service-v1.json
+serviceaccount-v1.json https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.36.0-standalone-strict/serviceaccount-v1.json
+configmap-v1.json https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.36.0-standalone-strict/configmap-v1.json
+horizontalpodautoscaler-autoscaling-v2.json https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.36.0-standalone-strict/horizontalpodautoscaler-autoscaling-v2.json
+poddisruptionbudget-policy-v1.json https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.36.0-standalone-strict/poddisruptionbudget-policy-v1.json
+cronjob-batch-v1.json https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.36.0-standalone-strict/cronjob-batch-v1.json
+httproute-gateway-v1.json https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/gateway.networking.k8s.io/httproute_v1.json
+externalsecret-external-secrets-v1.json https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/external-secrets.io/externalsecret_v1.json
+servicemonitor-monitoring-v1.json https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/monitoring.coreos.com/servicemonitor_v1.json
