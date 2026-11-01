@@ -263,9 +263,14 @@ func TestExportShared_Corpus(t *testing.T) {
 		if probs := model.Validate(again); len(probs) != 0 {
 			t.Errorf("%s: shared file imports as an invalid dashboard: %v", dc.name, probs)
 		}
-		twice, _, err := ExportShared(again)
+		twice, rep2, err := ExportShared(again)
 		if err != nil {
 			t.Fatal(err)
+		}
+		for _, f := range rep2.Adjusted {
+			if strings.Contains(f.Reason, "is no data source variable or input") {
+				t.Errorf("%s: sharing the shared file: %s", dc.name, f.Reason) // its ${DS_…} are its own inputs
+			}
 		}
 		if !bytes.Equal(normalUID(out), normalUID(twice)) {
 			t.Errorf("%s: sharing the shared file again gives different bytes", dc.name)
