@@ -31,8 +31,8 @@ import (
 // place in v2: those queries go without a data source, which Grafana fills
 // with its default one of the query's type.
 //
-// A dashboard changed since its v2 import is refused (ErrV2Changed) until its
-// changes are written into the v2 file it came from.
+// A dashboard changed since its v2 import is its v2 file with the changes
+// written in (patchedV2).
 func ExportV2(d *model.Dashboard) ([]byte, *ExportReport, error) {
 	r, rep, err := v2Resource(d)
 	if err != nil {
@@ -49,7 +49,7 @@ func ExportV2(d *model.Dashboard) ([]byte, *ExportReport, error) {
 // v2Res is a v2 resource before it is written.
 type v2Res struct {
 	apiVersion, name string
-	spec             any             // the v2 file's spec as it is (json.RawMessage), or the converted one decoded
+	spec             any             // the v2 file's spec as it is (json.RawMessage), or decoded: with changes written in, or converted
 	inputs           map[string]bool // ${…} references to the inputs of a Kubeast-made dashboard
 	ds               DataSources     // the data sources the conversion assumed
 }
@@ -77,7 +77,7 @@ func v2Resource(d *model.Dashboard) (*v2Res, *ExportReport, error) {
 		return nil, nil, fmt.Errorf("the source v2 file no longer imports: %w", err)
 	}
 	if !sameModel(d, again) {
-		return nil, nil, ErrV2Changed
+		return patchedV2(d, again, d.Source.Raw)
 	}
 	var root struct {
 		APIVersion string          `json:"apiVersion"`
@@ -88,20 +88,27 @@ func v2Resource(d *model.Dashboard) (*v2Res, *ExportReport, error) {
 	if err := json.Unmarshal(d.Source.Raw, &root); err != nil {
 		return nil, nil, ErrNotJSON
 	}
-	rep := &ExportReport{}
-	for _, k := range sortedSet(root.Metadata) {
-		if k != "name" {
-			rep.Adjusted = append(rep.Adjusted, Finding{Path: "metadata." + k, Reason: "the Grafana instance's record of the dashboard, left out"})
-		}
-	}
-	if root.Status != nil {
-		rep.Adjusted = append(rep.Adjusted, Finding{Path: "status", Reason: "the Grafana instance's record of the dashboard, left out"})
-	}
+	rep := leftOut(root.Metadata, root.Status)
 	name, _ := root.Metadata["name"].(string)
 	if name == "" {
 		name = d.Metadata.Name
 	}
 	return &v2Res{apiVersion: root.APIVersion, name: name, spec: root.Spec}, rep, nil
+}
+
+// leftOut reports what of a v2 file's resource is the Grafana instance's
+// record of the dashboard, which an export leaves out.
+func leftOut(metadata map[string]any, status any) *ExportReport {
+	rep := &ExportReport{}
+	for _, k := range sortedSet(metadata) {
+		if k != "name" {
+			rep.Adjusted = append(rep.Adjusted, Finding{Path: "metadata." + k, Reason: "the Grafana instance's record of the dashboard, left out"})
+		}
+	}
+	if status != nil {
+		rep.Adjusted = append(rep.Adjusted, Finding{Path: "status", Reason: "the Grafana instance's record of the dashboard, left out"})
+	}
+	return rep
 }
 
 // sortedSet lists a map's keys in order.
@@ -113,9 +120,6 @@ func sortedSet[V any](m map[string]V) []string {
 	sort.Strings(out)
 	return out
 }
-
-// ErrV2Changed: the dashboard came from a v2 file and has changed since.
-var ErrV2Changed = errors.New("this dashboard has changed since it was imported from its v2 file, and writing the change into that file is not built yet: export it as classic")
 
 // exportDataSources stand for the Grafana ExportV2 writes for: Prometheus as
 // its default data source, and each data source the dashboard names without
