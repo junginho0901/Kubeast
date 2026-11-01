@@ -1,0 +1,56 @@
+# Each case renders one build. A case with `error` expects every listed text
+# in the error; the others compare with <name>.golden.yaml (go test
+# ./internal/jobspec -update rewrites them). The build is example/web at
+# commit 0123…4567 on refs/heads/main unless the case says otherwise.
+- name: default
+  default: {image: ghcr.io/example/web, registrySecret: registry}
+  secrets: {registry: ci-b1-registry}
+  gitSecret: ci-b1-git
+- name: full
+  pipeline: full.pipeline.yaml
+  secrets: {npm-token: ci-b1-npm-token, registry: ci-b1-registry}
+  gitSecret: ci-b1-git
+- name: full-fork
+  pipeline: full.pipeline.yaml
+  untrusted: true
+  event: pull_request
+  ref: refs/pull/7/head
+  gitSecret: ci-b1-git
+- name: two-images-privileged-arm64
+  pipeline: two-images.pipeline.yaml
+  profile: arm64-spot
+  secrets: {registry: ci-b1-registry}
+- name: commands-public-repo
+  pipeline: commands-only.pipeline.yaml
+
+- name: error-secret-not-set
+  pipeline: full.pipeline.yaml
+  secrets: {registry: ci-b1-registry}
+  error: ["build secrets not set for this repository: npm-token"]
+- name: error-profile-mismatch
+  pipeline: two-images.pipeline.yaml
+  secrets: {registry: ci-b1-registry}
+  error: ["the pipeline asks for profile \"arm64-spot\", the input is \"default\""]
+- name: error-timeout-above-profile
+  pipeline: two-images.pipeline.yaml
+  profile: arm64-spot-short
+  error: ["timeout 45m is above profile arm64-spot's limit of 30m0s"]
+- name: error-build-facts
+  pipeline: commands-only.pipeline.yaml
+  id: B_1
+  sha: abc
+  ref: main
+  event: tag
+  repoURL: "https://token@github.com/example/web.git"
+  namespace: CI
+  error:
+    - "build id \"B_1\" is not a DNS label"
+    - "commit \"abc\" is not a full commit hash"
+    - "ref \"main\" does not start with refs/"
+    - "event \"tag\" is not push or pull_request"
+    - "repo URL must be http(s) without credentials"
+    - "namespace \"CI\" is not a DNS label"
+- name: error-file-url
+  pipeline: commands-only.pipeline.yaml
+  repoURL: "file:///etc"
+  error: ["repo URL must be http(s) without credentials"]

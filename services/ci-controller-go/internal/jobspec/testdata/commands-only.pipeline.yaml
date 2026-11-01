@@ -1,0 +1,3 @@
+apiVersion: kubeast.io/pipeline/v1alpha1
+steps:
+  - {name: lint, image: node:24, commands: [npm ci, npm run lint]}

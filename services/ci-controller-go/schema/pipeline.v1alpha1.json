@@ -1,0 +1,177 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/junginho0901/kubeast/services/ci-controller-go/schema/pipeline.v1alpha1.json",
+  "title": "Kubeast pipeline (.kubeast/pipeline.yaml)",
+  "description": "The steps a Kubeast build runs in order; the first step that fails stops the build. Without a deploy step a pipeline only builds. Some rules need more than JSON Schema says and are checked by Kubeast only: step names are unique, scan and deploy steps name an earlier build step (from, which may be left out when exactly one build step comes before), deploy steps come last, one service and environment is deployed once, glob patterns are valid and a timeout is at most 24h.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "steps"],
+  "properties": {
+    "apiVersion": {"const": "kubeast.io/pipeline/v1alpha1"},
+    "on": {
+      "description": "The events that start a build. Left out: pushes to the default branch and every pull request.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "push": {
+          "description": "Pushed branches and tags (globs). Both left out: every branch.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "branches": {"$ref": "#/$defs/patterns"},
+            "tags": {"$ref": "#/$defs/patterns"}
+          }
+        },
+        "pull_request": {
+          "description": "A pull request's target branch (globs). Left out: every target branch.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "branches": {"$ref": "#/$defs/patterns"}
+          }
+        }
+      }
+    },
+    "profile": {"description": "The runner profile of the build pod. Left out: default.", "$ref": "#/$defs/dnsLabel63"},
+    "timeout": {"description": "The whole build's limit, <minutes>m or <hours>h. Left out: 60m.", "type": "string", "pattern": "^[1-9][0-9]{0,3}[mh]$"},
+    "env": {"description": "Variables of every commands step; a step's own env wins.", "$ref": "#/$defs/env"},
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": {"$ref": "#/$defs/step"},
+      "contains": {"not": {"required": ["deploy"]}}
+    }
+  },
+  "$defs": {
+    "dnsLabel63": {"type": "string", "maxLength": 63, "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"},
+    "dnsLabel40": {"type": "string", "maxLength": 40, "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"},
+    "patterns": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {"type": "string", "minLength": 1, "maxLength": 255}
+    },
+    "env": {
+      "type": "object",
+      "maxProperties": 50,
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+        "not": {"anyOf": [{"const": "CI"}, {"pattern": "^KUBEAST_"}]}
+      },
+      "additionalProperties": {"type": "string", "maxLength": 4096}
+    },
+    "stepName": {
+      "description": "A DNS label of at most 40 characters; checkout and report are the steps Kubeast adds.",
+      "allOf": [{"$ref": "#/$defs/dnsLabel40"}, {"not": {"enum": ["checkout", "report"]}}]
+    },
+    "from": {"description": "The build step whose image this step uses. Left out: the only build step before it.", "$ref": "#/$defs/dnsLabel40"},
+    "path": {
+      "description": "Relative to the repository root and inside it: no leading /, no .. segment, no comma or backslash.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(\\.|[^./,\\\\][^/,\\\\]*|\\.[^./,\\\\][^/,\\\\]*|\\.\\.[^/,\\\\]+)(/(\\.|[^./,\\\\][^/,\\\\]*|\\.[^./,\\\\][^/,\\\\]*|\\.\\.[^/,\\\\]+))*/?$"
+    },
+    "step": {
+      "description": "Exactly one of: commands (with image), build, scan, deploy.",
+      "oneOf": [
+        {
+          "title": "commands",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "image", "commands"],
+          "properties": {
+            "name": {"$ref": "#/$defs/stepName"},
+            "image": {"type": "string", "maxLength": 255, "pattern": "^[^\\s]+$"},
+            "commands": {
+              "description": "Shell lines run by /bin/sh -e in /workspace.",
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 50,
+              "items": {"type": "string", "maxLength": 4096, "pattern": "\\S"}
+            },
+            "env": {"$ref": "#/$defs/env"},
+            "secrets": {
+              "description": "Build secrets mounted into this step only, as files under /run/secrets/<name>.",
+              "type": "array",
+              "maxItems": 10,
+              "uniqueItems": true,
+              "items": {"$ref": "#/$defs/dnsLabel40"}
+            }
+          }
+        },
+        {
+          "title": "build",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "build"],
+          "properties": {
+            "name": {"$ref": "#/$defs/stepName"},
+            "build": {
+              "description": "Build an image with BuildKit and push it tagged with the commit SHA.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["image"],
+              "properties": {
+                "image": {
+                  "description": "A repository without a tag or digest, such as ghcr.io/org/app.",
+                  "type": "string",
+                  "maxLength": 255,
+                  "pattern": "^[a-z0-9]+([.-][a-z0-9]+)*(:[0-9]+)?(/[a-z0-9]+(([._]|__|-+)[a-z0-9]+)*)+$"
+                },
+                "context": {"description": "Left out: the repository root.", "$ref": "#/$defs/path"},
+                "dockerfile": {"description": "Relative to the repository root, not to the context. Left out: <context>/Dockerfile.", "$ref": "#/$defs/path"},
+                "target": {"type": "string", "maxLength": 63, "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"},
+                "args": {
+                  "type": "object",
+                  "maxProperties": 50,
+                  "propertyNames": {"pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+                  "additionalProperties": {"type": "string", "maxLength": 4096}
+                },
+                "registrySecret": {"description": "The build secret with the registry's Docker config; this image's scan and deploy steps use it too.", "$ref": "#/$defs/dnsLabel40"}
+              }
+            }
+          }
+        },
+        {
+          "title": "scan",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "scan"],
+          "properties": {
+            "name": {"$ref": "#/$defs/stepName"},
+            "scan": {
+              "description": "Scan an image this pipeline built (Trivy) and fail at severity or above.",
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "from": {"$ref": "#/$defs/from"},
+                "severity": {"description": "Left out: HIGH.", "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]}
+              }
+            }
+          }
+        },
+        {
+          "title": "deploy",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "deploy"],
+          "properties": {
+            "name": {"$ref": "#/$defs/stepName"},
+            "deploy": {
+              "description": "Hand an image this pipeline built to the deploy module once every other step passed.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["service", "env"],
+              "properties": {
+                "from": {"$ref": "#/$defs/from"},
+                "service": {"$ref": "#/$defs/dnsLabel63"},
+                "env": {"$ref": "#/$defs/dnsLabel63"},
+                "mode": {"description": "auto applies at once, manual waits for a person. Left out: manual. An environment set to manual promotion makes auto wait too.", "enum": ["auto", "manual"]}
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

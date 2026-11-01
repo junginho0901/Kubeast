@@ -1,0 +1,279 @@
+# deploy: step deploy, web/alpha auto, image ghcr.io/example/web:0123456789abcdef0123456789abcdef01234567 (from image)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  annotations:
+    kubeast.io/ci-commit: 0123456789abcdef0123456789abcdef01234567
+    kubeast.io/ci-event: push
+    kubeast.io/ci-ref: refs/heads/main
+    kubeast.io/ci-repo: example/web
+  labels:
+    app.kubernetes.io/component: ci-build
+    app.kubernetes.io/managed-by: kubeast
+    kubeast.io/ci-build: b1
+    kubeast.io/ci-profile: default
+  name: ci-b1
+  namespace: ci-builds
+spec:
+  activeDeadlineSeconds: 3600
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: ci-build
+        app.kubernetes.io/managed-by: kubeast
+        kubeast.io/ci-build: b1
+        kubeast.io/ci-profile: default
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - command:
+        - /bin/sh
+        - -e
+        - -c
+        - |
+          for f in /kubeast/out/*.json; do
+            [ -e "$f" ] || continue
+            printf '%s=%s\n' "$(basename "$f" .json)" "$(sed -n 's/^ *"containerimage.digest": *"\(sha256:[0-9a-f]*\)".*/\1/p' "$f")"
+          done > /tmp/result
+          cat /tmp/result
+          cat /tmp/result 2>/dev/null >/dev/termination-log || echo "kubeast: the termination log is not writable; the result is in the log above" >&2
+        image: docker.io/alpine/git:v2.54.0
+        name: report
+        resources:
+          limits:
+            memory: 8Gi
+          requests:
+            cpu: "2"
+            memory: 8Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsGroup: 1000
+          runAsNonRoot: true
+          runAsUser: 1000
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+        - mountPath: /kubeast/out
+          name: out
+          readOnly: true
+        - mountPath: /tmp
+          name: tmp
+      enableServiceLinks: false
+      initContainers:
+      - command:
+        - /bin/sh
+        - -e
+        - -c
+        - |
+          git init -q /workspace
+          cd /workspace
+          git remote add origin "$KUBEAST_REPO_URL"
+          git -c credential.helper= -c 'credential.helper=!f() { test "$1" = get || exit 0; echo username=x-access-token; echo "password=$(cat /run/kubeast/git/token)"; }; f' fetch -q --no-tags --depth=1 origin "$KUBEAST_COMMIT_SHA"
+          git checkout -q --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$KUBEAST_COMMIT_SHA"
+        env:
+        - name: GIT_CONFIG_COUNT
+          value: "1"
+        - name: GIT_CONFIG_KEY_0
+          value: safe.directory
+        - name: GIT_CONFIG_VALUE_0
+          value: /workspace
+        - name: GIT_TERMINAL_PROMPT
+          value: "0"
+        - name: HOME
+          value: /tmp
+        - name: KUBEAST_COMMIT_SHA
+          value: 0123456789abcdef0123456789abcdef01234567
+        - name: KUBEAST_REPO_URL
+          value: https://github.com/example/web.git
+        image: docker.io/alpine/git:v2.54.0
+        name: checkout
+        resources:
+          limits:
+            memory: 8Gi
+          requests:
+            cpu: "2"
+            memory: 8Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsGroup: 1000
+          runAsNonRoot: true
+          runAsUser: 1000
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+        - mountPath: /workspace
+          name: workspace
+        - mountPath: /tmp
+          name: tmp
+        - mountPath: /run/kubeast/git
+          name: git-token
+          readOnly: true
+      - command:
+        - /bin/sh
+        - -e
+        - -c
+        - |-
+          go vet ./...
+          go test ./...
+        env:
+        - name: CI
+          value: "true"
+        - name: KUBEAST_BUILD_ID
+          value: b1
+        - name: KUBEAST_COMMIT_SHA
+          value: 0123456789abcdef0123456789abcdef01234567
+        - name: KUBEAST_EVENT
+          value: push
+        - name: KUBEAST_REF
+          value: refs/heads/main
+        - name: KUBEAST_REPO
+          value: example/web
+        - name: CGO_ENABLED
+          value: "0"
+        - name: GOFLAGS
+          value: -mod=mod
+        image: golang:1.27
+        name: test
+        resources:
+          limits:
+            memory: 8Gi
+          requests:
+            cpu: "2"
+            memory: 8Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+        - mountPath: /workspace
+          name: workspace
+        - mountPath: /run/secrets/npm-token
+          name: sec-npm-token
+          readOnly: true
+        workingDir: /workspace
+      - args:
+        - build
+        - --frontend
+        - dockerfile.v0
+        - --local
+        - context=/workspace
+        - --local
+        - dockerfile=/workspace
+        - --opt
+        - filename=Dockerfile
+        - --opt
+        - build-arg:BASE=alpine
+        - --opt
+        - build-arg:VERSION=1.0
+        - --output
+        - type=image,name=ghcr.io/example/web:0123456789abcdef0123456789abcdef01234567,push=true
+        - --export-cache
+        - type=registry,ref=ghcr.io/example/web:buildcache,mode=max
+        - --import-cache
+        - type=registry,ref=ghcr.io/example/web:buildcache
+        - --metadata-file
+        - /kubeast/out/image.json
+        command:
+        - buildctl-daemonless.sh
+        env:
+        - name: BUILDKITD_FLAGS
+          value: --oci-worker-no-process-sandbox
+        - name: DOCKER_CONFIG
+          value: /run/kubeast/registry/registry
+        image: docker.io/moby/buildkit:v0.34.1-rootless
+        name: image
+        resources:
+          limits:
+            memory: 8Gi
+          requests:
+            cpu: "2"
+            memory: 8Gi
+        securityContext:
+          appArmorProfile:
+            type: Unconfined
+          runAsGroup: 1000
+          runAsUser: 1000
+          seccompProfile:
+            type: Unconfined
+        volumeMounts:
+        - mountPath: /workspace
+          name: workspace
+          readOnly: true
+        - mountPath: /home/user/.local/share/buildkit
+          name: buildkitd
+        - mountPath: /kubeast/out
+          name: out
+        - mountPath: /run/kubeast/registry/registry
+          name: reg-registry
+          readOnly: true
+      - args:
+        - image
+        - --exit-code
+        - "1"
+        - --severity
+        - HIGH,CRITICAL
+        - --no-progress
+        - --image-src
+        - remote
+        - ghcr.io/example/web:0123456789abcdef0123456789abcdef01234567
+        command:
+        - trivy
+        env:
+        - name: DOCKER_CONFIG
+          value: /run/kubeast/registry/registry
+        image: docker.io/aquasec/trivy:0.76.1
+        name: scan
+        resources:
+          limits:
+            memory: 8Gi
+          requests:
+            cpu: "2"
+            memory: 8Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+        - mountPath: /run/kubeast/registry/registry
+          name: reg-registry
+          readOnly: true
+      nodeSelector:
+        karpenter.sh/capacity-type: on-demand
+        kubernetes.io/arch: amd64
+      restartPolicy: Never
+      volumes:
+      - emptyDir: {}
+        name: buildkitd
+      - name: git-token
+        secret:
+          items:
+          - key: token
+            path: token
+          secretName: ci-b1-git
+      - emptyDir: {}
+        name: out
+      - name: reg-registry
+        secret:
+          items:
+          - key: .dockerconfigjson
+            path: config.json
+          secretName: ci-b1-registry
+      - name: sec-npm-token
+        secret:
+          secretName: ci-b1-npm-token
+      - emptyDir: {}
+        name: tmp
+      - emptyDir: {}
+        name: workspace
+  ttlSecondsAfterFinished: 3600
+status: {}
