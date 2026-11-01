@@ -1,0 +1,4 @@
+name: alpha
+gateway: {name: public, namespace: gateway-system}
+secretStore: {name: vault}
+capabilities: {gatewayAPI: true, externalSecrets: true}

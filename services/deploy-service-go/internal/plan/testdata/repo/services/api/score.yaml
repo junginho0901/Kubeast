@@ -1,0 +1,9 @@
+apiVersion: score.dev/v1b1
+metadata:
+  name: api
+service:
+  ports:
+    grpc: {port: 9090}
+containers:
+  main:
+    image: ghcr.io/example/api:3.1.0

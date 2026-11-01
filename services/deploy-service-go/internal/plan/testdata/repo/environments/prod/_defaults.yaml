@@ -1,0 +1,9 @@
+name: prod
+replicas: 2
+gateway: {name: public, namespace: gateway-system}
+secretStore: {name: vault-prod}
+capabilities: {gatewayAPI: true, externalSecrets: true}
+policy:
+  allowedRegistries: [ghcr.io/example/]
+  modes:
+    team-label: warn
