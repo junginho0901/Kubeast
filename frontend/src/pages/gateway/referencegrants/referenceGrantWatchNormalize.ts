@@ -7,7 +7,6 @@
 // {group, kind, namespace} 또는 {group, kind, name}). conditions 없음
 // (ReferenceGrant 는 RBAC-only, status 부재).
 
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import type { ReferenceGrantInfo } from '@/services/api'
 
 export function normalizeWatchReferenceGrantObject(obj: any): ReferenceGrantInfo {
@@ -61,7 +60,8 @@ export function applyReferenceGrantWatchEvent(
     return items
   }
 
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
+  // the server sends the whole row (gatewayrow.ReferenceGrant), so it replaces: a value that went empty shows empty
+  if (index >= 0) items[index] = normalized
   else items.push(normalized)
 
   return items

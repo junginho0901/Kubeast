@@ -7,7 +7,6 @@
 // 의 attachedRoutes (camelCase/snake_case 둘 다) 합산 + status.addresses +
 // status.conditions 기반 Programmed/Accepted 판정.
 
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import type { GatewayInfo } from '@/services/api'
 import { inferGatewayStatus } from './gatewayHelpers'
 
@@ -87,7 +86,8 @@ export function applyGatewayWatchEvent(
     return items
   }
 
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
+  // the server sends the whole row (gatewayrow.Gateway), so it replaces: a value that went empty shows empty
+  if (index >= 0) items[index] = normalized
   else items.push(normalized)
 
   return items

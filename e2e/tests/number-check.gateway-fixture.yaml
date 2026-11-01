@@ -1,0 +1,231 @@
+# The number check's Gateway API objects, on test2 (the dev cluster serving the Gateway API): no two alike, made by
+# number-check-lists.spec.ts and removed after. No controller runs there: the test writes the statuses
+# (GATEWAY_STATUS). {{referencegrants}} and {{backendtlspolicies}} are the versions the cluster serves those kinds at.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: e2e-numbers
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: num-gc-ready
+  annotations:
+    numbers.kubeast.io/note: accepted by the test
+spec:
+  controllerName: numbers.kubeast.io/gateway
+  description: a class the test marks accepted
+  parametersRef:
+    group: ""
+    kind: ConfigMap
+    name: num-gc-params
+    namespace: e2e-numbers
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: num-gc-plain
+spec:
+  controllerName: numbers.kubeast.io/other
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: num-gw-a
+  namespace: e2e-numbers
+spec:
+  gatewayClassName: num-gc-ready
+  listeners:
+  - name: http
+    port: 80
+    protocol: HTTP
+  - name: alt
+    port: 8080
+    protocol: HTTP
+    hostname: alt.numbers.example
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: num-gw-b
+  namespace: e2e-numbers
+spec:
+  gatewayClassName: num-gc-plain
+  listeners:
+  - name: http
+    port: 80
+    protocol: HTTP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: num-gw-c
+  namespace: e2e-numbers
+  labels:
+    team: numbers
+spec:
+  gatewayClassName: num-gc-ready
+  listeners:
+  - name: web
+    port: 80
+    protocol: HTTP
+  - name: api
+    port: 8081
+    protocol: HTTP
+  - name: admin
+    port: 9090
+    protocol: HTTP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: num-http-a
+  namespace: e2e-numbers
+spec:
+  parentRefs:
+  - name: num-gw-a
+  - name: num-gw-c
+  hostnames:
+  - a.numbers.example
+  - b.numbers.example
+  rules:
+  - backendRefs:
+    - name: web
+      port: 80
+    - name: web-canary
+      port: 80
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /api
+    backendRefs:
+    - name: api
+      port: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: num-http-b
+  namespace: e2e-numbers
+spec:
+  parentRefs:
+  - name: num-gw-a
+  rules:
+  - matches:
+    - path:
+        type: Exact
+        value: /health
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: num-http-c
+  namespace: e2e-numbers
+spec:
+  parentRefs:
+  - name: num-gw-b
+  hostnames:
+  - "*.numbers.example"
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  name: num-grpc-a
+  namespace: e2e-numbers
+spec:
+  parentRefs:
+  - name: num-gw-a
+  hostnames:
+  - grpc.numbers.example
+  rules:
+  - backendRefs:
+    - name: grpc
+      port: 9000
+  - backendRefs:
+    - name: grpc-v2
+      port: 9000
+    - name: grpc-v3
+      port: 9000
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  name: num-grpc-b
+  namespace: e2e-numbers
+spec:
+  parentRefs:
+  - name: num-gw-c
+  - name: num-gw-b
+  rules:
+  - backendRefs:
+    - name: grpc
+      port: 9000
+---
+apiVersion: gateway.networking.k8s.io/{{referencegrants}}
+kind: ReferenceGrant
+metadata:
+  name: num-rg-a
+  namespace: e2e-numbers
+  labels:
+    team: numbers
+spec:
+  from:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    namespace: web
+  - group: gateway.networking.k8s.io
+    kind: GRPCRoute
+    namespace: api
+  to:
+  - group: ""
+    kind: Service
+    name: api
+---
+apiVersion: gateway.networking.k8s.io/{{referencegrants}}
+kind: ReferenceGrant
+metadata:
+  name: num-rg-b
+  namespace: e2e-numbers
+spec:
+  from:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    namespace: edge
+  to:
+  - group: ""
+    kind: Secret
+  - group: ""
+    kind: Service
+    name: web
+---
+apiVersion: gateway.networking.k8s.io/{{backendtlspolicies}}
+kind: BackendTLSPolicy
+metadata:
+  name: num-btls-a
+  namespace: e2e-numbers
+spec:
+  targetRefs:
+  - group: ""
+    kind: Service
+    name: api
+  validation:
+    hostname: api.numbers.example
+    wellKnownCACertificates: System
+---
+apiVersion: gateway.networking.k8s.io/{{backendtlspolicies}}
+kind: BackendTLSPolicy
+metadata:
+  name: num-btls-b
+  namespace: e2e-numbers
+spec:
+  targetRefs:
+  - group: ""
+    kind: Service
+    name: web
+  - group: ""
+    kind: Service
+    name: web-canary
+    sectionName: https
+  validation:
+    hostname: web.numbers.example
+    wellKnownCACertificates: System

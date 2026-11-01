@@ -7,7 +7,6 @@
 // 판정 (Gateway 와 달리 Programmed 없이 Accepted 만, statusText 4단계 우선순위).
 // cluster-scoped 라 namespace 부재.
 
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import type { GatewayClassInfo } from '@/services/api'
 
 export function normalizeWatchGatewayClassObject(obj: any): GatewayClassInfo {
@@ -47,7 +46,7 @@ export function normalizeWatchGatewayClassObject(obj: any): GatewayClassInfo {
   return {
     name: metadata?.name ?? obj?.name ?? '',
     controller_name: spec?.controllerName ?? obj?.controller_name ?? null,
-    description: metadata?.annotations?.['gateway.networking.k8s.io/description'] ?? obj?.description ?? null,
+    description: spec?.description ?? obj?.description ?? null,
     accepted,
     status: statusText,
     parameters_ref: spec?.parametersRef ?? obj?.parameters_ref ?? null,
@@ -79,7 +78,8 @@ export function applyGatewayClassWatchEvent(
     return items
   }
 
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
+  // the server sends the whole row (gatewayrow.GatewayClass), so it replaces: a value that went empty shows empty
+  if (index >= 0) items[index] = normalized
   else items.push(normalized)
 
   return items
