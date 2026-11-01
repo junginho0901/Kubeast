@@ -387,8 +387,8 @@ const bindingsOf = (plural: string) => {
   const list = items(plural, true)
   return (policy: Obj) => list.filter((b) => b.spec?.policyName === policy.metadata.name).length
 }
-const policyScreen = (path: string, plural: string, bindings: string): Screen => ({
-  path, api: `/apis/admissionregistration.k8s.io/v1/${plural}`, plural, clusterScoped: true,
+const policyScreen = (plural: string, bindings: string): Omit<Screen, 'path'> => ({
+  api: `/apis/admissionregistration.k8s.io/v1/${plural}`, plural, clusterScoped: true,
   extra: {
     Bindings: (o) => String(bindingsOf(bindings)(o)),
     'Failure policy': (o) => o.spec.failurePolicy ?? 'Fail',
@@ -399,8 +399,8 @@ const policyScreen = (path: string, plural: string, bindings: string): Screen =>
     return { 'Total Policies': list.length, 'Total Bindings': list.reduce((s, p) => s + count(p), 0) }
   },
 })
-const webhookScreen = (path: string, plural: string): Screen => ({
-  path, api: `/apis/admissionregistration.k8s.io/v1/${plural}`, plural, clusterScoped: true,
+const webhookScreen = (plural: string): Omit<Screen, 'path'> => ({
+  api: `/apis/admissionregistration.k8s.io/v1/${plural}`, plural, clusterScoped: true,
   skip: { Age: AGE },
   cards: (list) => ({ 'Total Configurations': list.length, 'Total Webhooks': list.reduce((s, c) => s + (c.webhooks ?? []).length, 0) }),
 })
@@ -522,10 +522,10 @@ const SCREENS_CLUSTER: Screen[] = [
       'Without Holder': list.filter((o) => !o.spec.holderIdentity).length,
     }),
   },
-  webhookScreen('/cluster/mutatingwebhookconfigurations', 'mutatingwebhookconfigurations'),
-  webhookScreen('/cluster/validatingwebhookconfigurations', 'validatingwebhookconfigurations'),
-  policyScreen('/cluster/validatingadmissionpolicies', 'validatingadmissionpolicies', 'validatingadmissionpolicybindings'),
-  policyScreen('/cluster/mutatingadmissionpolicies', 'mutatingadmissionpolicies', 'mutatingadmissionpolicybindings'),
+  { path: '/cluster/mutatingwebhookconfigurations', ...webhookScreen('mutatingwebhookconfigurations') },
+  { path: '/cluster/validatingwebhookconfigurations', ...webhookScreen('validatingwebhookconfigurations') },
+  { path: '/cluster/validatingadmissionpolicies', ...policyScreen('validatingadmissionpolicies', 'validatingadmissionpolicybindings') },
+  { path: '/cluster/mutatingadmissionpolicies', ...policyScreen('mutatingadmissionpolicies', 'mutatingadmissionpolicybindings') },
   {
     path: '/custom-resources/groups', api: '/apis/apiextensions.k8s.io/v1/customresourcedefinitions', plural: 'customresourcedefinitions', clusterScoped: true,
     // kubectl lists the served versions as "v1(storage),v1beta1"; Kubeast spaces them

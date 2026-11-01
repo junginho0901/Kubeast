@@ -20,12 +20,15 @@ const WHERE: Record<string, string> = {
   '/security/roles': 'number-check-lists', '/security/rolebindings': 'number-check-lists', '/cluster/resourcequotas': 'number-check-lists',
   '/cluster/limitranges': 'number-check-lists',
   // cluster-scoped lists
-  '/cluster/namespaces': 'N3-a', '/cluster/nodes': 'N3-a', '/storage?tab=pvs': 'N3-a', '/storage?tab=storageclasses': 'N3-a',
-  '/storage?tab=volumeattachments': 'N3-a', '/network/ingressclasses': 'N3-a', '/cluster/priorityclasses': 'N3-a', '/cluster/runtimeclasses': 'N3-a',
-  '/security/clusterroles': 'N3-a', '/security/clusterrolebindings': 'N3-a', '/cluster/leases': 'N3-a',
-  '/cluster/mutatingwebhookconfigurations': 'N3-a', '/cluster/validatingwebhookconfigurations': 'N3-a',
-  '/cluster/validatingadmissionpolicies': 'N3-a', '/cluster/mutatingadmissionpolicies': 'N3-a', '/workloads/vpas': 'N3-a',
-  '/custom-resources/groups': 'N3-a', '/custom-resources/instances': 'N3-a', '/security/policyreports': 'N3-a',
+  '/cluster/namespaces': 'number-check-lists', '/cluster/nodes': 'number-check-lists', '/storage?tab=pvs': 'number-check-lists',
+  '/storage?tab=storageclasses': 'number-check-lists', '/storage?tab=volumeattachments': 'number-check-lists',
+  '/network/ingressclasses': 'number-check-lists', '/cluster/priorityclasses': 'number-check-lists', '/cluster/runtimeclasses': 'number-check-lists',
+  '/security/clusterroles': 'number-check-lists', '/security/clusterrolebindings': 'number-check-lists', '/cluster/leases': 'number-check-lists',
+  '/cluster/mutatingwebhookconfigurations': 'number-check-lists', '/cluster/validatingwebhookconfigurations': 'number-check-lists',
+  '/cluster/validatingadmissionpolicies': 'number-check-lists', '/cluster/mutatingadmissionpolicies': 'number-check-lists',
+  '/custom-resources/groups': 'number-check-lists',
+  // lists whose kinds self does not serve (Gateway API, VPA) or other specs expect it not to (PolicyReport): another cluster
+  '/workloads/vpas': 'N3-a', '/custom-resources/instances': 'N3-a', '/security/policyreports': 'N3-a',
   '/gateway/gatewayclasses': 'N3-a', '/gateway/gateways': 'N3-a', '/gateway/httproutes': 'N3-a', '/gateway/grpcroutes': 'N3-a',
   '/gateway/referencegrants': 'N3-a', '/gateway/backendtlspolicies': 'N3-a', '/gateway/policies': 'N3-a',
   // summary screens
