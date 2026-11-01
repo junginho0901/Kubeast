@@ -156,7 +156,15 @@ const SCREENS: Screen[] = [
   },
   {
     path: '/workloads/replicasets', api: `/apis/apps/v1/namespaces/${NS}/replicasets`, plural: 'replicasets',
-    extra: { Available: (o) => String(n(o.status.availableReplicas)) },
+    extra: {
+      Available: (o) => String(n(o.status.availableReplicas)),
+      // the controller: a Deployment by name, another kind as kind/name
+      Owner: (o) => {
+        const refs: Obj[] = o.metadata.ownerReferences ?? []
+        const ref = refs.find((r) => r.controller) ?? refs[0]
+        return !ref ? '-' : ref.kind === 'Deployment' ? ref.name : `${ref.kind}/${ref.name}`
+      },
+    },
     skip: { Status: 'the cards check the buckets', Age: AGE },
     cards: replicaCards((o) => n(o.spec.replicas), (o) => n(o.status.readyReplicas), (o) => n(o.status.availableReplicas)),
   },
@@ -243,6 +251,8 @@ const SCREENS: Screen[] = [
     path: '/network/endpointslices', api: `/apis/discovery.k8s.io/v1/namespaces/${NS}/endpointslices`, plural: 'endpointslices',
     extra: {
       Service: (o) => o.metadata.labels?.['kubernetes.io/service-name'] ?? '-',
+      // kubectl prints the port numbers; Kubeast name:port/protocol and the app protocol
+      Ports: (o) => (o.ports ?? []).map((p: Obj) => `${p.name || '-'}:${p.port ?? '-'}${p.protocol ? `/${p.protocol}` : ''}${p.appProtocol ? ` (${p.appProtocol})` : ''}`).join(', ') || '-',
       Total: (o) => String((o.endpoints ?? []).length),
       Ready: (o) => String((o.endpoints ?? []).filter((e: Obj) => e.conditions?.ready !== false).length),
       'Not Ready': (o) => String((o.endpoints ?? []).filter((e: Obj) => e.conditions?.ready === false).length),

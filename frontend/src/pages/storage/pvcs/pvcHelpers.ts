@@ -65,7 +65,7 @@ export function pvcToRawJson(pvc: PVCInfo): Record<string, unknown> {
       creationTimestamp: pvc.created_at,
     },
     spec: {
-      accessModes: pvc.access_modes || [],
+      accessModes: pvc.requested_access_modes || [],
       storageClassName: pvc.storage_class,
       volumeName: pvc.volume_name,
       resources: {
@@ -76,6 +76,7 @@ export function pvcToRawJson(pvc: PVCInfo): Record<string, unknown> {
     },
     status: {
       phase: pvc.status,
+      accessModes: pvc.access_modes || [],
       capacity: {
         storage: pvc.capacity,
       },

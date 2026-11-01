@@ -13,6 +13,7 @@ import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAge,
   getReplicaSetStatusColor,
+  replicaSetOwner,
   replicaSetToWorkloadRawJson,
   type SortKey,
 } from './replicaSetHelpers'
@@ -152,7 +153,7 @@ export function ReplicaSetTable({
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{(rs.containers || []).join(', ') || '-'}</span></td>
                 <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{(rs.images || [rs.image]).filter(Boolean).join(', ') || '-'}</span></td>
                 <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{Object.entries(rs.selector || {}).map(([k, v]) => `${k}=${v}`).join(', ') || '-'}</span></td>
-                <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{rs.owner_deployment || '-'}</span></td>
+                <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{replicaSetOwner(rs)}</span></td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(rs.created_at)}</td>
               </tr>
             ))}

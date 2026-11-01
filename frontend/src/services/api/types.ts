@@ -1688,7 +1688,9 @@ export interface PVCInfo {
   storage_class?: string
   capacity?: string
   requested?: string
+  // the volume's modes once bound (kubectl's ACCESS MODES), and what the claim asks for
   access_modes: string[]
+  requested_access_modes?: string[]
   created_at: string
   usage?: PVCUsage | null // only with getPVCs(..., usage = true)
 }

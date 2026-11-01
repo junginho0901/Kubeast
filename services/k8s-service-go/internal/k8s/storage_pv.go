@@ -8,6 +8,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	pvcrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/pvc"
 )
 
 // --- PersistentVolumes ---
@@ -99,10 +101,8 @@ func (s *Service) DescribePV(ctx context.Context, name string) (map[string]inter
 
 	// Bound PVC summary
 	if pvcErr == nil && boundPVC != nil {
-		pvcAccessModes := make([]string, 0, len(boundPVC.Spec.AccessModes))
-		for _, am := range boundPVC.Spec.AccessModes {
-			pvcAccessModes = append(pvcAccessModes, string(am))
-		}
+		// the claim's row's access modes: the volume's, as the claims list shows them
+		pvcAccessModes, _ := pvcrow.Info(boundPVC)["access_modes"].([]string)
 		pvcCapacity := ""
 		if boundPVC.Status.Capacity != nil {
 			if q, ok := boundPVC.Status.Capacity[corev1.ResourceStorage]; ok {

@@ -6,7 +6,6 @@
 // status, spec.volumeName + spec.storageClassName + spec.accessModes +
 // status.capacity.storage + spec.resources.requests.storage 정규화.
 
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import type { PVCInfo } from '@/services/api'
 
 export function normalizeWatchPvcObject(obj: any): PVCInfo {
@@ -20,7 +19,9 @@ export function normalizeWatchPvcObject(obj: any): PVCInfo {
   const metadata = obj?.metadata ?? {}
   const spec = obj?.spec ?? {}
   const status = obj?.status ?? {}
-  const capacity = status?.capacity?.storage
+  // the volume's capacity and modes once the claim is bound (kubectl's printPersistentVolumeClaim), as the server's row
+  const bound = !!spec?.volumeName
+  const capacity = bound ? status?.capacity?.storage : undefined
   const requested = spec?.resources?.requests?.storage
 
   return {
@@ -31,7 +32,8 @@ export function normalizeWatchPvcObject(obj: any): PVCInfo {
     storage_class: spec?.storageClassName ?? obj?.storage_class ?? null,
     capacity: capacity != null ? String(capacity) : (obj?.capacity ?? null),
     requested: requested != null ? String(requested) : (obj?.requested ?? null),
-    access_modes: Array.isArray(spec?.accessModes) ? spec.accessModes : (Array.isArray(obj?.access_modes) ? obj.access_modes : []),
+    access_modes: bound && Array.isArray(status?.accessModes) ? status.accessModes : [],
+    requested_access_modes: Array.isArray(spec?.accessModes) ? spec.accessModes : [],
     created_at: metadata?.creationTimestamp ?? obj?.created_at ?? null,
   }
 }
@@ -54,7 +56,8 @@ export function applyPvcWatchEvent(prev: PVCInfo[] | undefined, event: { type?: 
     return items
   }
 
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
+  // the server sends the whole row (pvcrow.Info), so it replaces: a value that went empty shows empty
+  if (index >= 0) items[index] = normalized
   else items.push(normalized)
   return items
 }

@@ -13,6 +13,7 @@ import { buildResourceLink } from '@/utils/resourceLink'
 import { Plus, RefreshCw } from 'lucide-react'
 import {
   parseAgeSeconds,
+  replicaSetOwner,
   type SortKey,
 } from './replicasets/replicaSetHelpers'
 import { applyReplicaSetWatchEvent } from './replicasets/replicaSetWatchNormalize'
@@ -74,7 +75,7 @@ export default function ReplicaSets() {
       const selectorText = Object.entries(rs.selector || {}).map(([k, v]) => `${k}=${v}`).join(',')
       return rs.name.toLowerCase().includes(q)
         || rs.namespace.toLowerCase().includes(q)
-        || (rs.owner_deployment || '').toLowerCase().includes(q)
+        || replicaSetOwner(rs).toLowerCase().includes(q)
         || workloadStatusText(label, rs.status).includes(q)
         || imagesText.toLowerCase().includes(q)
         || containersText.toLowerCase().includes(q)

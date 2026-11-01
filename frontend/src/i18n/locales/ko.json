@@ -4899,6 +4899,7 @@
     "Provided": "제공됨",
     "Provisioning Success Rate": "프로비저닝 성공률",
     "Requested": "요청 용량",
+    "Requested Access Modes": "요청 접근 모드",
     "Resize State": "크기 조정 상태",
     "Resource Types (apiGroup/resource)": "리소스 유형 (apiGroup/resource)",
     "Revision": "리비전",

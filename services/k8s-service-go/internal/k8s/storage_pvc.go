@@ -7,6 +7,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	pvcrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/pvc"
 )
 
 // --- PersistentVolumeClaims ---
@@ -201,42 +203,9 @@ func formatPVCList(pvcs []corev1.PersistentVolumeClaim) []map[string]interface{}
 	return result
 }
 
-func formatPVCDetail(pvc *corev1.PersistentVolumeClaim) map[string]interface{} {
-	capacity := ""
-	if pvc.Status.Capacity != nil {
-		if q, ok := pvc.Status.Capacity[corev1.ResourceStorage]; ok {
-			capacity = q.String()
-		}
-	}
-
-	request := ""
-	if pvc.Spec.Resources.Requests != nil {
-		if q, ok := pvc.Spec.Resources.Requests[corev1.ResourceStorage]; ok {
-			request = q.String()
-		}
-	}
-
-	accessModes := make([]string, 0, len(pvc.Spec.AccessModes))
-	for _, am := range pvc.Spec.AccessModes {
-		accessModes = append(accessModes, string(am))
-	}
-
-	storageClass := ""
-	if pvc.Spec.StorageClassName != nil {
-		storageClass = *pvc.Spec.StorageClassName
-	}
-
-	return map[string]interface{}{
-		"name":          pvc.Name,
-		"namespace":     pvc.Namespace,
-		"status":        string(pvc.Status.Phase),
-		"volume_name":   pvc.Spec.VolumeName,
-		"capacity":      capacity,
-		"requested":     request,
-		"access_modes":  accessModes,
-		"storage_class": storageClass,
-		"created_at":    toISO(&pvc.CreationTimestamp),
-	}
+// formatPVCDetail is the claim's row (pvcrow.Info), the same for the list, describe and the live updates.
+func formatPVCDetail(c *corev1.PersistentVolumeClaim) map[string]interface{} {
+	return pvcrow.Info(c)
 }
 
 // findPodsUsingPVC finds pods that reference a given PVC name.
