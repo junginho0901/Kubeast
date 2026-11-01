@@ -1,0 +1,23 @@
+{
+  "question": "재시작이 잦은 파드를 찾는 대시보드 만들어 줘",
+  "cluster": "default",
+  "panels": {
+    "min": 1,
+    "max": 8
+  },
+  "expect": [
+    {
+      "what": "파드 재시작",
+      "metrics": [
+        "kube_pod_container_status_restarts_total"
+      ],
+      "functions": [
+        "increase",
+        "rate",
+        "irate",
+        "changes",
+        "resets"
+      ]
+    }
+  ]
+}

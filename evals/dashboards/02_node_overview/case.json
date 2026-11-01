@@ -1,0 +1,46 @@
+{
+  "question": "노드 상태를 한눈에 보는 대시보드 만들어 줘: CPU, 메모리, 디스크, 네트워크",
+  "cluster": "default",
+  "panels": {
+    "min": 4,
+    "max": 12
+  },
+  "expect": [
+    {
+      "what": "노드 CPU",
+      "metrics": [
+        "node_cpu_seconds_total"
+      ],
+      "functions": [
+        "rate",
+        "irate"
+      ]
+    },
+    {
+      "what": "노드 메모리",
+      "metrics": [
+        "node_memory_MemAvailable_bytes",
+        "node_memory_MemFree_bytes"
+      ]
+    },
+    {
+      "what": "노드 디스크",
+      "metrics": [
+        "node_filesystem_avail_bytes",
+        "node_filesystem_free_bytes",
+        "node_filesystem_size_bytes"
+      ]
+    },
+    {
+      "what": "노드 네트워크",
+      "metrics": [
+        "node_network_receive_bytes_total",
+        "node_network_transmit_bytes_total"
+      ],
+      "functions": [
+        "rate",
+        "irate"
+      ]
+    }
+  ]
+}

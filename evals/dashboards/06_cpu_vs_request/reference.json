@@ -1,0 +1,45 @@
+{
+  "apiVersion": "kubeast.io/dashboards/v1alpha1",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "cpu-vs-request",
+    "title": "CPU 요청 대비 사용",
+    "scope": {
+      "cluster": "*"
+    }
+  },
+  "spec": {
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "panels": {
+      "low": {
+        "title": "요청 대비 사용률 낮은 파드 10",
+        "kind": "table",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "bottomk(10, sum by (namespace, pod) (rate(container_cpu_usage_seconds_total{container!=\"\"}[$__rate_interval])) / sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\"}))"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "percentunit"
+        }
+      }
+    },
+    "layout": {
+      "items": [
+        {
+          "panel": "low",
+          "x": 0,
+          "y": 0,
+          "w": 24,
+          "h": 9
+        }
+      ]
+    }
+  }
+}

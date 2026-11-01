@@ -1,0 +1,67 @@
+{
+  "apiVersion": "kubeast.io/dashboards/v1alpha1",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "pod-phase",
+    "title": "파드 상태",
+    "scope": {
+      "cluster": "*"
+    }
+  },
+  "spec": {
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "panels": {
+      "by-phase": {
+        "title": "상태별 파드 수",
+        "kind": "piechart",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "sum by (phase) (kube_pod_status_phase)",
+            "legend": "{{phase}}"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "short"
+        }
+      },
+      "pending": {
+        "title": "Pending 파드",
+        "kind": "stat",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "sum(kube_pod_status_phase{phase=\"Pending\"})"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "short"
+        }
+      }
+    },
+    "layout": {
+      "items": [
+        {
+          "panel": "by-phase",
+          "x": 0,
+          "y": 0,
+          "w": 12,
+          "h": 8
+        },
+        {
+          "panel": "pending",
+          "x": 12,
+          "y": 0,
+          "w": 6,
+          "h": 4
+        }
+      ]
+    }
+  }
+}

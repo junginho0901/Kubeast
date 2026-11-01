@@ -23,6 +23,7 @@ updates:
       - /services/netpol-oracle
       - /services/deploy-service-go
       - /services/ci-controller-go
+      - /services/dashboards-service-go
     schedule:
       interval: weekly
     groups:

@@ -1,0 +1,46 @@
+{
+  "apiVersion": "kubeast.io/dashboards/v1alpha1",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "memory-vs-limit",
+    "title": "메모리 제한 대비 사용률",
+    "scope": {
+      "cluster": "*"
+    }
+  },
+  "spec": {
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "panels": {
+      "ratio": {
+        "title": "제한 대비 사용률 상위 10",
+        "kind": "bargauge",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "topk(10, sum by (namespace, pod, container) (container_memory_working_set_bytes{container!=\"\"}) / sum by (namespace, pod, container) (kube_pod_container_resource_limits{resource=\"memory\"}))",
+            "legend": "{{namespace}}/{{pod}}/{{container}}"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "percentunit"
+        }
+      }
+    },
+    "layout": {
+      "items": [
+        {
+          "panel": "ratio",
+          "x": 0,
+          "y": 0,
+          "w": 24,
+          "h": 10
+        }
+      ]
+    }
+  }
+}

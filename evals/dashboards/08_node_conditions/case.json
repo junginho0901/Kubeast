@@ -1,0 +1,16 @@
+{
+  "question": "노드가 준비 상태인지, 메모리나 디스크 압박은 없는지 보는 대시보드",
+  "cluster": "default",
+  "panels": {
+    "min": 1,
+    "max": 6
+  },
+  "expect": [
+    {
+      "what": "노드 상태 조건",
+      "metrics": [
+        "kube_node_status_condition"
+      ]
+    }
+  ]
+}

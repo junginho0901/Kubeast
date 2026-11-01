@@ -1,0 +1,71 @@
+{
+  "apiVersion": "kubeast.io/dashboards/v1alpha1",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "deployment-replicas",
+    "title": "디플로이먼트 레플리카",
+    "scope": {
+      "cluster": "*"
+    }
+  },
+  "spec": {
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "panels": {
+      "missing": {
+        "title": "모자란 레플리카 합계",
+        "kind": "stat",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "sum(kube_deployment_spec_replicas - kube_deployment_status_replicas_available)"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "short"
+        }
+      },
+      "table": {
+        "title": "디플로이먼트별 원하는 수 · 준비된 수",
+        "kind": "table",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "sum by (namespace, deployment) (kube_deployment_spec_replicas)"
+          },
+          {
+            "refId": "B",
+            "store": "prometheus",
+            "expr": "sum by (namespace, deployment) (kube_deployment_status_replicas_available)"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "short"
+        }
+      }
+    },
+    "layout": {
+      "items": [
+        {
+          "panel": "missing",
+          "x": 0,
+          "y": 0,
+          "w": 6,
+          "h": 4
+        },
+        {
+          "panel": "table",
+          "x": 6,
+          "y": 0,
+          "w": 18,
+          "h": 8
+        }
+      ]
+    }
+  }
+}

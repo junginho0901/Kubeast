@@ -1,0 +1,22 @@
+{
+  "question": "메모리 제한 대비 사용률이 높은 컨테이너 보여줘",
+  "cluster": "default",
+  "panels": {
+    "min": 1,
+    "max": 8
+  },
+  "expect": [
+    {
+      "what": "메모리 사용량",
+      "metrics": [
+        "container_memory_working_set_bytes"
+      ]
+    },
+    {
+      "what": "메모리 제한",
+      "metrics": [
+        "kube_pod_container_resource_limits"
+      ]
+    }
+  ]
+}

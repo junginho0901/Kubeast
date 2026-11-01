@@ -1,0 +1,16 @@
+{
+  "question": "파드 상태별 개수를 보여 줘 (Running, Pending, Failed 같은 것)",
+  "cluster": "default",
+  "panels": {
+    "min": 1,
+    "max": 6
+  },
+  "expect": [
+    {
+      "what": "파드 상태",
+      "metrics": [
+        "kube_pod_status_phase"
+      ]
+    }
+  ]
+}
