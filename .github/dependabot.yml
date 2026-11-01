@@ -22,6 +22,7 @@ updates:
       - /services/model-config-controller-go
       - /services/netpol-oracle
       - /services/deploy-service-go
+      - /services/ci-controller-go
     schedule:
       interval: weekly
     groups:
