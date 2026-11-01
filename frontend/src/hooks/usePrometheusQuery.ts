@@ -33,6 +33,12 @@ export function useClusterFeatures() {
   })
 }
 
+// The hooks ask only while the cluster's toggle is on and the caller's grant covers the whole cluster: a grant
+// limited to namespaces is refused the cluster's Prometheus (features.prometheus.namespaceLimited).
+export function prometheusReadable(features: ClusterFeatures | undefined): boolean {
+  return features?.prometheus?.enabled !== false && features?.prometheus?.namespaceLimited !== true
+}
+
 /**
  * Generic hook for querying Prometheus via the backend proxy.
  * Returns { available, results } or undefined while loading.
@@ -51,7 +57,7 @@ export function usePrometheusQuery(
   options?: { enabled?: boolean; refetchInterval?: number },
 ) {
   const features = useClusterFeatures()
-  const promEnabled = features.data?.prometheus?.enabled !== false
+  const promEnabled = prometheusReadable(features.data)
   // Scope to the selected cluster so metrics never bleed across a switch.
   const { currentCluster } = useCluster()
   return useQuery<PrometheusQueryResponse>({
@@ -80,7 +86,7 @@ export function usePrometheusQueries(
   // each PromQL is its own query. useQueries keeps the hook count constant
   // (a hook per array element would break the Rules of Hooks).
   const features = useClusterFeatures()
-  const promEnabled = features.data?.prometheus?.enabled !== false
+  const promEnabled = prometheusReadable(features.data)
   const { currentCluster } = useCluster()
   const results = useQueries({
     queries: queries.map((q) => ({
@@ -126,7 +132,7 @@ export function usePrometheusRangeQuery(
   },
 ) {
   const features = useClusterFeatures()
-  const promEnabled = features.data?.prometheus?.enabled !== false
+  const promEnabled = prometheusReadable(features.data)
   const { currentCluster } = useCluster()
   return useQuery<PrometheusRangeResponse>({
     queryKey: ['prometheus-range', currentCluster || 'default', ...queryKey, options?.step ?? 'step-default'],

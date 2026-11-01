@@ -3,7 +3,6 @@ package k8s
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"sync"
 )
 
@@ -99,11 +98,13 @@ func (s *Service) GetGPUMetrics(ctx context.Context) (map[string]interface{}, er
 		return g
 	}
 
+	// a query that failed (the store refused the caller, timed out) is the answer: zeros would read as "no GPUs"
 	for _, qr := range results {
 		if qr.err != nil {
-			slog.Debug("GPU metric query failed", "metric", qr.name, "err", qr.err)
-			continue
+			return nil, fmt.Errorf("GPU metric %s: %w", qr.name, qr.err)
 		}
+	}
+	for _, qr := range results {
 		for _, r := range qr.results {
 			g := getOrCreate(r)
 			if g == nil {

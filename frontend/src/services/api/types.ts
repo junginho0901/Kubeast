@@ -652,7 +652,9 @@ export interface PrometheusRangeResponse {
 // /api/v1/cluster/features — operator-opt-in toggles, read once at boot
 // and cached on the React Query client. See helm values.yaml `features.*`.
 export interface ClusterFeatures {
-  prometheus: { enabled: boolean }
+  // namespaceLimited: the caller's grant on this cluster is limited to namespaces, and the cluster's Prometheus,
+  // which answers for the whole cluster, refuses it
+  prometheus: { enabled: boolean; namespaceLimited?: boolean }
   gitops?: {
     argocd: { enabled: boolean; mode: 'warn' | 'block'; url: string; trackingAnnotation: string; instanceLabel: string }
   }
