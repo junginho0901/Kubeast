@@ -136,6 +136,45 @@ var v2Edits = []v2Edit{
 	}, []string{".layout."}},
 }
 
+var v2MoreEdits = []v2Edit{
+	{"variable removed", func(d *model.Dashboard) bool {
+		if len(d.Spec.Variables) == 0 {
+			return false
+		}
+		d.Spec.Variables = append([]model.Variable(nil), d.Spec.Variables[1:]...)
+		return true
+	}, []string{".variables", ".layout."}},
+	{"variables reordered", func(d *model.Dashboard) bool {
+		if len(d.Spec.Variables) < 2 {
+			return false
+		}
+		vs := append([]model.Variable(nil), d.Spec.Variables...)
+		vs[0], vs[1] = vs[1], vs[0]
+		d.Spec.Variables = vs
+		return true
+	}, []string{".variables[", ".layout."}},
+	{"bottom panel moved down", func(d *model.Dashboard) bool { // nothing below it to push
+		var low *model.LayoutItem
+		for _, it := range layoutItems(d) {
+			if low == nil || it.Y+it.H > low.Y+low.H {
+				low = it
+			}
+		}
+		if low == nil {
+			return false
+		}
+		low.Y += 3
+		return true
+	}, []string{".layout."}},
+	{"row renamed", func(d *model.Dashboard) bool {
+		if len(d.Spec.Layout.Rows) == 0 {
+			return false
+		}
+		d.Spec.Layout.Rows[0].Title += " (edited)"
+		return true
+	}, []string{".layout."}},
+}
+
 func without(items []model.LayoutItem, panel string) []model.LayoutItem {
 	var out []model.LayoutItem
 	for _, it := range items {
@@ -191,7 +230,7 @@ func TestExportV2_WritesChangesIntoTheV2File(t *testing.T) {
 	}
 	tried := 0
 	for _, dc := range docs {
-		for _, e := range v2Edits {
+		for _, e := range append(append([]v2Edit(nil), v2Edits...), v2MoreEdits...) {
 			d, _, err := Import(dc.raw)
 			if err != nil {
 				t.Fatal(err)
@@ -227,6 +266,16 @@ func TestExportV2_WritesChangesIntoTheV2File(t *testing.T) {
 				}
 			}
 			auto := strings.Contains(layoutKinds(orig["spec"]), "AutoGrid")
+			rowsKept := false
+			for _, f := range rep.Adjusted {
+				rowsKept = rowsKept || strings.Contains(f.Reason, "has no such row") || strings.Contains(f.Reason, "rows added or removed")
+			}
+			if !rowsKept && rowTitles(again) != rowTitles(d) {
+				t.Errorf("%s / %s: row titles %s, want %s", dc.name, e.name, rowTitles(again), rowTitles(d))
+			}
+			if e.name == "row renamed" && rowsKept && strings.Contains(layoutKinds(orig["spec"]), "RowsLayout") && !strings.Contains(layoutKinds(orig["spec"]), "Tabs") {
+				t.Errorf("%s / %s: a rows file did not take the new title: %v", dc.name, e.name, rep.Adjusted)
+			}
 			if a, b := editView(again, auto), editView(d, auto); a != b {
 				t.Errorf("%s / %s: imports back differently:\n got  %s\n want %s\n(report %v)", dc.name, e.name, a, b, rep.Adjusted)
 			}
@@ -235,6 +284,14 @@ func TestExportV2_WritesChangesIntoTheV2File(t *testing.T) {
 	if tried < 400 {
 		t.Errorf("%d edits tried, want each kind on every v2 document", tried)
 	}
+}
+
+func rowTitles(d *model.Dashboard) string {
+	var out []string
+	for _, r := range d.Spec.Layout.Rows {
+		out = append(out, fmt.Sprintf("%q", r.Title))
+	}
+	return strings.Join(out, ",")
 }
 
 // editView is what the edits change, in a fixed order: the title, the time,
