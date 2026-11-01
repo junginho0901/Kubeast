@@ -56,14 +56,18 @@ func TestExportV2_GivesBackTheV2File(t *testing.T) {
 		if _, ok := got["status"]; ok {
 			t.Errorf("%s: status kept", dc.name)
 		}
-		dropped += len(rep.Adjusted)
+		for _, f := range rep.Adjusted {
+			if f.Path == "metadata.uid" || f.Path == "metadata.resourceVersion" {
+				dropped++
+			}
+		}
 		again, _, err := Import(out)
 		if err != nil || !sameModel(d, again) {
 			t.Errorf("%s: the export imports differently (%v)", dc.name, err)
 		}
 	}
 	if dropped == 0 {
-		t.Error("Grafana's metadata (uid, resource version, timestamps) should be reported as left out")
+		t.Error("Grafana's metadata (uid, resource version) should be reported as left out, by name")
 	}
 }
 
