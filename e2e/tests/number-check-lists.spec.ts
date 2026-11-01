@@ -802,14 +802,17 @@ test.describe('number check — list screens', () => {
         template: { metadata: { labels: { app: 'num-owned' } }, spec: { containers: [{ name: 'app', image: 'busybox:1.37', imagePullPolicy: 'IfNotPresent' }] } },
       },
     }))
-    // settled: the ready Deployment and the StatefulSet ready, both Jobs finished, the crashing Pod restarted
+    // settled: the ready Deployment and the StatefulSet ready, both Jobs finished, the crashing Pod restarted, the two
+    // pods that are never ready Running (the first test reads their phase)
     const deadline = Date.now() + 150_000
     for (;;) {
       const got = kubectl(`get deploy/num-ready sts/num-db job/num-done job/num-fail pod/num-crash -n ${NS} -o jsonpath='{.items[*].status.readyReplicas} {.items[*].status.succeeded} {.items[*].status.failed} {.items[4].status.containerStatuses[0].restartCount}'`)
       const [deployReady, stsReady, , , restarts] = got.split(/\s+/)
       const jobs = items('jobs')
       const done = jobs.every((j) => cond(j, 'Complete') === 'True' || cond(j, 'Failed') === 'True')
-      if (deployReady === '3' && stsReady === '2' && done && Number(restarts) >= 1) break
+      const notReady = items('pods').filter((p) => p.metadata.labels?.app === 'num-notready')
+      const notReadyRunning = notReady.length === 2 && notReady.every((p) => p.status.phase === 'Running')
+      if (deployReady === '3' && stsReady === '2' && done && Number(restarts) >= 1 && notReadyRunning) break
       if (Date.now() > deadline) throw new Error(`fixture did not settle: ${got}`)
       await new Promise((r) => setTimeout(r, 2000))
     }
