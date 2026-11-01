@@ -2,7 +2,6 @@ package grafana
 
 import (
 	"encoding/json"
-	"errors"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -68,21 +67,6 @@ func TestExportV2_GivesBackTheV2File(t *testing.T) {
 	}
 	if dropped == 0 {
 		t.Error("Grafana's metadata (uid, resource version) should be reported as left out, by name")
-	}
-}
-
-// A dashboard changed since its v2 import is refused: writing the change
-// into its v2 file is not built yet.
-func TestExportV2_RefusesAChangedV2(t *testing.T) {
-	d, _, err := Import(mustRead(t, "testdata/grafana-13.3.0-v2/native/v2-tabs.v2.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	p := d.Spec.Panels["p1"]
-	p.Title = "changed in Kubeast"
-	d.Spec.Panels["p1"] = p
-	if _, _, err := ExportV2(d); !errors.Is(err, ErrV2Changed) {
-		t.Errorf("changed: %v, want ErrV2Changed", err)
 	}
 }
 

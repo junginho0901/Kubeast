@@ -31,8 +31,8 @@ import (
 // place in v2: those queries go without a data source, which Grafana fills
 // with its default one of the query's type.
 //
-// A dashboard changed since its v2 import is refused (ErrV2Changed) until its
-// changes are written into the v2 file it came from.
+// A dashboard changed since its v2 import is its v2 file with the changes
+// written in (patchedV2).
 func ExportV2(d *model.Dashboard) ([]byte, *ExportReport, error) {
 	r, rep, err := v2Resource(d)
 	if err != nil {
@@ -77,7 +77,7 @@ func v2Resource(d *model.Dashboard) (*v2Res, *ExportReport, error) {
 		return nil, nil, fmt.Errorf("the source v2 file no longer imports: %w", err)
 	}
 	if !sameModel(d, again) {
-		return nil, nil, ErrV2Changed
+		return patchedV2(d, again, d.Source.Raw)
 	}
 	var root struct {
 		APIVersion string          `json:"apiVersion"`
@@ -113,9 +113,6 @@ func sortedSet[V any](m map[string]V) []string {
 	sort.Strings(out)
 	return out
 }
-
-// ErrV2Changed: the dashboard came from a v2 file and has changed since.
-var ErrV2Changed = errors.New("this dashboard has changed since it was imported from its v2 file, and writing the change into that file is not built yet: export it as classic")
 
 // exportDataSources stand for the Grafana ExportV2 writes for: Prometheus as
 // its default data source, and each data source the dashboard names without
