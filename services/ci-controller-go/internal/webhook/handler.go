@@ -45,6 +45,9 @@ type Handler struct {
 	// AllowedSources, when set, are the only source addresses taken —
 	// GitHub's hook ranges from GET /meta (ParseMetaHooks).
 	AllowedSources []netip.Prefix
+	// Ranges, when set, is used instead of AllowedSources: the same list,
+	// kept current by reading /meta again.
+	Ranges *Ranges
 	// TrustedProxies are the peers whose ClientIPHeader is believed, such
 	// as a Cloudflare Tunnel connector (CF-Connecting-IP). Anyone else's
 	// header is ignored and the peer address is the source.
@@ -78,7 +81,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reject(http.StatusMethodNotAllowed, "method")
 		return
 	}
-	if len(h.AllowedSources) > 0 && !inAny(h.AllowedSources, src) {
+	if (h.Ranges != nil && !h.Ranges.Contains(src)) || (h.Ranges == nil && len(h.AllowedSources) > 0 && !inAny(h.AllowedSources, src)) {
 		reject(http.StatusForbidden, "source")
 		return
 	}
