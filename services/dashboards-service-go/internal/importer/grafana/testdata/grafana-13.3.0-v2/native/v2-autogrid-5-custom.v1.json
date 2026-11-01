@@ -1,0 +1,243 @@
+{
+ "apiVersion": "dashboard.grafana.app/v1",
+ "kind": "Dashboard",
+ "metadata": {
+  "annotations": {
+   "grafana.app/createdBy": "user:fg2ygmaa82t4wf",
+   "grafana.app/updatedBy": "user:fg2ygmaa82t4wf"
+  },
+  "creationTimestamp": "2026-11-01T05:10:42Z",
+  "generation": 1,
+  "labels": {
+   "grafana.app/deprecatedInternalID": "67991444385792"
+  },
+  "name": "v2-autogrid-5-custom",
+  "namespace": "default",
+  "resourceVersion": "1793509842361003",
+  "uid": "d7064d5b-3524-446f-a840-b62ace841973"
+ },
+ "spec": {
+  "annotations": {
+   "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "panels": [
+   {
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "gridPos": {
+     "h": 6,
+     "w": 4,
+     "x": 0,
+     "y": 0
+    },
+    "id": 1,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "refId": "A"
+     }
+    ],
+    "title": "Panel 1",
+    "type": "timeseries"
+   },
+   {
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "gridPos": {
+     "h": 6,
+     "w": 4,
+     "x": 4,
+     "y": 0
+    },
+    "id": 2,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "refId": "A"
+     }
+    ],
+    "title": "Panel 2",
+    "type": "timeseries"
+   },
+   {
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "gridPos": {
+     "h": 6,
+     "w": 4,
+     "x": 8,
+     "y": 0
+    },
+    "id": 3,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "refId": "A"
+     }
+    ],
+    "title": "Panel 3",
+    "type": "timeseries"
+   },
+   {
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "gridPos": {
+     "h": 6,
+     "w": 4,
+     "x": 12,
+     "y": 0
+    },
+    "id": 4,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "refId": "A"
+     }
+    ],
+    "title": "Panel 4",
+    "type": "timeseries"
+   },
+   {
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "gridPos": {
+     "h": 6,
+     "w": 4,
+     "x": 16,
+     "y": 0
+    },
+    "id": 5,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "refId": "A"
+     }
+    ],
+    "title": "Panel 5",
+    "type": "timeseries"
+   },
+   {
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "gridPos": {
+     "h": 6,
+     "w": 4,
+     "x": 20,
+     "y": 0
+    },
+    "id": 6,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "refId": "A"
+     }
+    ],
+    "title": "Panel 6",
+    "type": "timeseries"
+   },
+   {
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "gridPos": {
+     "h": 6,
+     "w": 4,
+     "x": 0,
+     "y": 6
+    },
+    "id": 7,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "refId": "A"
+     }
+    ],
+    "title": "Panel 7",
+    "type": "timeseries"
+   }
+  ],
+  "preload": false,
+  "refresh": "",
+  "schemaVersion": 42,
+  "tags": [
+   "kubeast-v2-sample"
+  ],
+  "time": {
+   "from": "now-6h",
+   "to": "now"
+  },
+  "timepicker": {
+   "refresh_intervals": [
+    "10s",
+    "30s",
+    "1m"
+   ]
+  },
+  "timezone": "browser",
+  "title": "Auto grid 5 custom"
+ },
+ "status": {
+  "conversion": {
+   "failed": false,
+   "storedVersion": "v2"
+  }
+ }
+}

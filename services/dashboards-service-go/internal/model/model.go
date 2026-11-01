@@ -267,5 +267,9 @@ type Source struct {
 	Raw           json.RawMessage `json:"raw,omitempty"`
 }
 
-// SourceGrafanaV1 is a Grafana classic/v1 dashboard JSON.
-const SourceGrafanaV1 = "grafana-v1"
+// Source kinds: a Grafana classic/v1 dashboard JSON, or a schema v2 resource
+// (Grafana 13's default export).
+const (
+	SourceGrafanaV1 = "grafana-v1"
+	SourceGrafanaV2 = "grafana-v2"
+)

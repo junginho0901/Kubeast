@@ -79,7 +79,7 @@ var rules = map[string]rule{
 	"Annotation.name":      {nonEmpty: true},
 	"Annotation.store":     {enum: model.EnumStore},
 	"Annotation.color":     {enum: model.EnumColorToken},
-	"Source.kind":          {konst: model.SourceGrafanaV1},
+	"Source.kind":          {enum: model.EnumSourceKind},
 }
 
 var rawMessage = reflect.TypeOf(json.RawMessage{})

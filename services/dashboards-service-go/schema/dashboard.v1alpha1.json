@@ -497,7 +497,10 @@
       "additionalProperties": false,
       "properties": {
         "kind": {
-          "const": "grafana-v1",
+          "enum": [
+            "grafana-v1",
+            "grafana-v2"
+          ],
           "type": "string"
         },
         "raw": {},

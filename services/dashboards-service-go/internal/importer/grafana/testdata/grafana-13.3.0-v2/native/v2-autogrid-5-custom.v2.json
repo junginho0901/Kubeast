@@ -1,0 +1,450 @@
+{
+ "apiVersion": "dashboard.grafana.app/v2",
+ "kind": "Dashboard",
+ "metadata": {
+  "annotations": {
+   "grafana.app/createdBy": "user:fg2ygmaa82t4wf",
+   "grafana.app/updatedBy": "user:fg2ygmaa82t4wf"
+  },
+  "creationTimestamp": "2026-11-01T05:10:42Z",
+  "generation": 1,
+  "labels": {
+   "grafana.app/deprecatedInternalID": "67991444385792"
+  },
+  "name": "v2-autogrid-5-custom",
+  "namespace": "default",
+  "resourceVersion": "1793509842361003",
+  "uid": "d7064d5b-3524-446f-a840-b62ace841973"
+ },
+ "spec": {
+  "annotations": [],
+  "cursorSync": "Off",
+  "editable": true,
+  "elements": {
+   "panel-1": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 1,
+     "links": [],
+     "title": "Panel 1",
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   },
+   "panel-2": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 2,
+     "links": [],
+     "title": "Panel 2",
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   },
+   "panel-3": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 3,
+     "links": [],
+     "title": "Panel 3",
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   },
+   "panel-4": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 4,
+     "links": [],
+     "title": "Panel 4",
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   },
+   "panel-5": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 5,
+     "links": [],
+     "title": "Panel 5",
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   },
+   "panel-6": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 6,
+     "links": [],
+     "title": "Panel 6",
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   },
+   "panel-7": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 7,
+     "links": [],
+     "title": "Panel 7",
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   }
+  },
+  "layout": {
+   "kind": "AutoGridLayout",
+   "spec": {
+    "columnWidthMode": "standard",
+    "items": [
+     {
+      "kind": "AutoGridLayoutItem",
+      "spec": {
+       "element": {
+        "kind": "ElementReference",
+        "name": "panel-1"
+       }
+      }
+     },
+     {
+      "kind": "AutoGridLayoutItem",
+      "spec": {
+       "element": {
+        "kind": "ElementReference",
+        "name": "panel-2"
+       }
+      }
+     },
+     {
+      "kind": "AutoGridLayoutItem",
+      "spec": {
+       "element": {
+        "kind": "ElementReference",
+        "name": "panel-3"
+       }
+      }
+     },
+     {
+      "kind": "AutoGridLayoutItem",
+      "spec": {
+       "element": {
+        "kind": "ElementReference",
+        "name": "panel-4"
+       }
+      }
+     },
+     {
+      "kind": "AutoGridLayoutItem",
+      "spec": {
+       "element": {
+        "kind": "ElementReference",
+        "name": "panel-5"
+       }
+      }
+     },
+     {
+      "kind": "AutoGridLayoutItem",
+      "spec": {
+       "element": {
+        "kind": "ElementReference",
+        "name": "panel-6"
+       }
+      }
+     },
+     {
+      "kind": "AutoGridLayoutItem",
+      "spec": {
+       "element": {
+        "kind": "ElementReference",
+        "name": "panel-7"
+       }
+      }
+     }
+    ],
+    "maxColumnCount": 5,
+    "rowHeight": 200,
+    "rowHeightMode": "custom"
+   }
+  },
+  "links": [],
+  "preload": false,
+  "tags": [
+   "kubeast-v2-sample"
+  ],
+  "timeSettings": {
+   "autoRefresh": "",
+   "autoRefreshIntervals": [
+    "10s",
+    "30s",
+    "1m"
+   ],
+   "fiscalYearStartMonth": 0,
+   "from": "now-6h",
+   "hideTimepicker": false,
+   "timezone": "browser",
+   "to": "now"
+  },
+  "title": "Auto grid 5 custom",
+  "variables": []
+ },
+ "status": {}
+}

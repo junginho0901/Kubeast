@@ -1,0 +1,325 @@
+{
+ "apiVersion": "dashboard.grafana.app/v2beta1",
+ "kind": "Dashboard",
+ "metadata": {
+  "annotations": {
+   "grafana.app/createdBy": "user:fg2ygmaa82t4wf",
+   "grafana.app/updatedBy": "user:fg2ygmaa82t4wf"
+  },
+  "creationTimestamp": "2026-11-01T05:10:42Z",
+  "generation": 1,
+  "labels": {
+   "grafana.app/deprecatedInternalID": "67993084358656"
+  },
+  "name": "v2-tabs",
+  "namespace": "default",
+  "resourceVersion": "1793509842752994",
+  "uid": "70d19961-e98a-413e-b319-8fee306e528d"
+ },
+ "spec": {
+  "annotations": [],
+  "cursorSync": "Off",
+  "editable": true,
+  "elements": {
+   "panel-1": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 1,
+     "links": [],
+     "title": "Panel 1",
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   },
+   "panel-2": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 2,
+     "links": [],
+     "title": "Panel 2",
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   },
+   "panel-3": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 3,
+     "links": [],
+     "title": "Panel 3",
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   },
+   "panel-4": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 4,
+     "links": [],
+     "title": "Panel 4",
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   }
+  },
+  "layout": {
+   "kind": "TabsLayout",
+   "spec": {
+    "tabs": [
+     {
+      "kind": "TabsLayoutTab",
+      "spec": {
+       "layout": {
+        "kind": "GridLayout",
+        "spec": {
+         "items": [
+          {
+           "kind": "GridLayoutItem",
+           "spec": {
+            "element": {
+             "kind": "ElementReference",
+             "name": "panel-1"
+            },
+            "height": 8,
+            "width": 12,
+            "x": 0,
+            "y": 0
+           }
+          },
+          {
+           "kind": "GridLayoutItem",
+           "spec": {
+            "element": {
+             "kind": "ElementReference",
+             "name": "panel-2"
+            },
+            "height": 8,
+            "width": 12,
+            "x": 12,
+            "y": 0
+           }
+          }
+         ]
+        }
+       },
+       "title": "Overview"
+      }
+     },
+     {
+      "kind": "TabsLayoutTab",
+      "spec": {
+       "layout": {
+        "kind": "GridLayout",
+        "spec": {
+         "items": [
+          {
+           "kind": "GridLayoutItem",
+           "spec": {
+            "element": {
+             "kind": "ElementReference",
+             "name": "panel-3"
+            },
+            "height": 6,
+            "width": 24,
+            "x": 0,
+            "y": 0
+           }
+          },
+          {
+           "kind": "GridLayoutItem",
+           "spec": {
+            "element": {
+             "kind": "ElementReference",
+             "name": "panel-4"
+            },
+            "height": 4,
+            "width": 8,
+            "x": 0,
+            "y": 6
+           }
+          }
+         ]
+        }
+       },
+       "title": "Detail"
+      }
+     }
+    ]
+   }
+  },
+  "links": [],
+  "preload": false,
+  "tags": [
+   "kubeast-v2-sample"
+  ],
+  "timeSettings": {
+   "autoRefresh": "",
+   "autoRefreshIntervals": [
+    "10s",
+    "30s",
+    "1m"
+   ],
+   "fiscalYearStartMonth": 0,
+   "from": "now-6h",
+   "hideTimepicker": false,
+   "timezone": "browser",
+   "to": "now"
+  },
+  "title": "Tabs",
+  "variables": []
+ },
+ "status": {
+  "conversion": {
+   "failed": false,
+   "storedVersion": "v2"
+  }
+ }
+}

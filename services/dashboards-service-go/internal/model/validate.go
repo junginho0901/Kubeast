@@ -73,7 +73,7 @@ func Validate(d *Dashboard) []Problem {
 	v.metadata(&d.Metadata)
 	v.spec(&d.Spec)
 	if d.Source != nil {
-		v.check(d.Source.Kind == SourceGrafanaV1, "source.kind", fmt.Sprintf("must be %q", SourceGrafanaV1))
+		v.check(sourceKinds[d.Source.Kind], "source.kind", fmt.Sprintf("must be %q or %q", SourceGrafanaV1, SourceGrafanaV2))
 	}
 	sort.SliceStable(v.problems, func(i, j int) bool { return v.problems[i].Path < v.problems[j].Path })
 	return v.problems

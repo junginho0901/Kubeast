@@ -17,10 +17,12 @@ const (
 	EnumRefreshPoint  Enum = "refreshPoint"
 	EnumThresholdMode Enum = "thresholdMode"
 	EnumRepeatDir     Enum = "repeatDirection"
+	EnumSourceKind    Enum = "sourceKind"
 )
 
 var thresholdModes = map[string]bool{"absolute": true, "percentage": true}
 var repeatDirections = map[string]bool{"h": true, "v": true}
+var sourceKinds = map[string]bool{SourceGrafanaV1: true, SourceGrafanaV2: true}
 
 // Values lists an enum's accepted values, without the empty string that some
 // optional fields allow by being left out.
@@ -28,7 +30,7 @@ func Values(e Enum) []string {
 	src := map[Enum]map[string]bool{
 		EnumPanelKind: PanelKinds, EnumStore: stores, EnumVariableKind: variableKinds, EnumMatcherKind: matcherKinds,
 		EnumColorToken: ColorTokens, EnumCursorSync: cursorSyncs, EnumRefreshPoint: refreshPoints,
-		EnumThresholdMode: thresholdModes, EnumRepeatDir: repeatDirections,
+		EnumThresholdMode: thresholdModes, EnumRepeatDir: repeatDirections, EnumSourceKind: sourceKinds,
 	}[e]
 	out := make([]string, 0, len(src))
 	for v := range src {
