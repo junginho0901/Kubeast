@@ -224,7 +224,7 @@
 | --- | --- |
 | **Workloads** | Pod, Deployment, StatefulSet, DaemonSet, ReplicaSet, Job, CronJob, HPA, VPA, PDB |
 | **Network** | Service, Endpoint(1.33부터 폐기된 API — 객체 화면은 남기고, Service 상세·리소스 그래프·AI 서비스 점검은 EndpointSlice를 읽음), EndpointSlice, Ingress, IngressClass, NetworkPolicy |
-| **Gateway API** | Gateway, GatewayClass, HTTPRoute, GRPCRoute, ReferenceGrant, BackendTLSPolicy, Policies(모든 구현체의 정책 한 화면 — `gateway.networking.k8s.io/policy` 라벨 CRD 자동 탐색 + Envoy Gateway·Istio 내장 + `gatewayApi.policyKinds`) |
+| **Gateway API** | Gateway, GatewayClass, HTTPRoute, GRPCRoute, ReferenceGrant, BackendTLSPolicy, Policies(모든 구현체의 정책 한 화면 — `gateway.networking.k8s.io/policy` 라벨 CRD 자동 탐색 + Envoy Gateway·Istio 내장 + `gatewayApi.policyKinds`). 여섯 목록의 열·카드는 서버가 만든 한 줄(`internal/gatewayrow`)에서 오고 실시간 갱신도 같은 줄이며, 실시간 갱신은 여섯 종류 모두 클러스터가 제공하는 버전으로 받습니다 |
 | **Storage** | PV, PVC, StorageClass, VolumeAttachment |
 | **Configuration** | ConfigMap, Secret, ResourceQuota, LimitRange, PriorityClass, RuntimeClass, Lease |
 | **Security (RBAC)** | Role, ClusterRole, RoleBinding, ClusterRoleBinding, ServiceAccount · Policy Reports(`wgpolicyk8s.io` 보고서 모음, CRD 있을 때) |

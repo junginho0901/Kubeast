@@ -228,7 +228,7 @@
 | --- | --- |
 | **Workloads** | Pod, Deployment, StatefulSet, DaemonSet, ReplicaSet, Job, CronJob, HPA, VPA, PDB |
 | **Network** | Service, Endpoint (API deprecated since 1.33 — the object screens remain, while Service details, the resource graph and the AI service check read EndpointSlice), EndpointSlice, Ingress, IngressClass, NetworkPolicy |
-| **Gateway API** | Gateway, GatewayClass, HTTPRoute, GRPCRoute, ReferenceGrant, BackendTLSPolicy, Policies (policies of all implementations on one screen — automatic discovery of CRDs labeled `gateway.networking.k8s.io/policy` + built-in Envoy Gateway · Istio + `gatewayApi.policyKinds`) |
+| **Gateway API** | Gateway, GatewayClass, HTTPRoute, GRPCRoute, ReferenceGrant, BackendTLSPolicy, Policies (policies of all implementations on one screen — automatic discovery of CRDs labeled `gateway.networking.k8s.io/policy` + built-in Envoy Gateway · Istio + `gatewayApi.policyKinds`). The six lists take their columns and cards from one server row (`internal/gatewayrow`), the same in live updates, which every kind gets at the version the cluster serves it |
 | **Storage** | PV, PVC, StorageClass, VolumeAttachment |
 | **Configuration** | ConfigMap, Secret, ResourceQuota, LimitRange, PriorityClass, RuntimeClass, Lease |
 | **Security (RBAC)** | Role, ClusterRole, RoleBinding, ClusterRoleBinding, ServiceAccount · Policy Reports (collection of `wgpolicyk8s.io` reports, when the CRD exists) |
