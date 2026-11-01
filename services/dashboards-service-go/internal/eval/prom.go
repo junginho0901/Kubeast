@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -19,6 +20,8 @@ type Querier interface {
 	Query(ctx context.Context, expr string) (int, error)
 	// LabelValues counts a label's values on the series of match ("" = all).
 	LabelValues(ctx context.Context, label, match string) (int, error)
+	// Sum runs an instant query and adds up its values (with the count).
+	Sum(ctx context.Context, expr string) (float64, int, error)
 }
 
 // Prometheus is a Querier on Prometheus' HTTP API at a base URL.
@@ -80,6 +83,51 @@ func (p Prometheus) Query(ctx context.Context, expr string) (int, error) {
 		return len(list), nil
 	}
 	return 1, nil
+}
+
+func (p Prometheus) Sum(ctx context.Context, expr string) (float64, int, error) {
+	data, err := p.get(ctx, "/api/v1/query", url.Values{"query": {expr}})
+	if err != nil {
+		return 0, 0, err
+	}
+	var res struct {
+		ResultType string          `json:"resultType"`
+		Result     json.RawMessage `json:"result"`
+	}
+	if err := json.Unmarshal(data, &res); err != nil {
+		return 0, 0, err
+	}
+	var pairs [][2]json.RawMessage
+	switch res.ResultType {
+	case "vector":
+		var list []struct {
+			Value [2]json.RawMessage `json:"value"`
+		}
+		if err := json.Unmarshal(res.Result, &list); err != nil {
+			return 0, 0, err
+		}
+		for _, v := range list {
+			pairs = append(pairs, v.Value)
+		}
+	case "scalar":
+		var v [2]json.RawMessage
+		if err := json.Unmarshal(res.Result, &v); err != nil {
+			return 0, 0, err
+		}
+		pairs = append(pairs, v)
+	default:
+		return 0, 0, fmt.Errorf("sum of a %s result", res.ResultType)
+	}
+	sum := 0.0
+	for _, p := range pairs {
+		var s string
+		if json.Unmarshal(p[1], &s) == nil {
+			if f, err := strconv.ParseFloat(s, 64); err == nil {
+				sum += f
+			}
+		}
+	}
+	return sum, len(pairs), nil
 }
 
 func (p Prometheus) LabelValues(ctx context.Context, label, match string) (int, error) {

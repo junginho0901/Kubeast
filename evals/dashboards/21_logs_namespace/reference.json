@@ -1,0 +1,82 @@
+{
+  "apiVersion": "kubeast.io/dashboards/v1alpha1",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "logs-namespace",
+    "title": "kube-system 로그",
+    "scope": {
+      "cluster": "*"
+    }
+  },
+  "spec": {
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "panels": {
+      "volume": {
+        "title": "로그 양 (파드별)",
+        "kind": "timeseries",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "loki",
+            "expr": "sum by (k8s_pod_name) (count_over_time({k8s_namespace_name=\"$namespace\"} [$__interval]))",
+            "legend": "{{k8s_pod_name}}"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "short"
+        }
+      },
+      "logs": {
+        "title": "로그",
+        "kind": "logs",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "loki",
+            "expr": "{k8s_namespace_name=\"$namespace\"}"
+          }
+        ]
+      }
+    },
+    "layout": {
+      "items": [
+        {
+          "panel": "volume",
+          "x": 0,
+          "y": 0,
+          "w": 24,
+          "h": 7
+        },
+        {
+          "panel": "logs",
+          "x": 0,
+          "y": 7,
+          "w": 24,
+          "h": 12
+        }
+      ]
+    },
+    "variables": [
+      {
+        "name": "namespace",
+        "label": "Namespace",
+        "kind": "query",
+        "store": "prometheus",
+        "query": {
+          "fn": "label_values",
+          "expr": "kube_pod_info",
+          "label": "namespace"
+        },
+        "refresh": "load",
+        "current": {
+          "text": "kube-system",
+          "value": "kube-system"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "apiVersion": "kubeast.io/dashboards/v1alpha1",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "prometheus-http",
+    "title": "Prometheus HTTP",
+    "scope": {
+      "cluster": "*"
+    }
+  },
+  "spec": {
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "panels": {
+      "reqs": {
+        "title": "핸들러별 요청 (초당)",
+        "kind": "timeseries",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "sum by (handler) (rate(prometheus_http_requests_total[$__rate_interval]))",
+            "legend": "{{handler}}"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "reqps"
+        }
+      },
+      "latency": {
+        "title": "p99 응답 시간",
+        "kind": "timeseries",
+        "fieldDefaults": {
+          "unit": "s"
+        },
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "histogram_quantile(0.99, sum by (le) (rate(prometheus_http_request_duration_seconds_bucket[$__rate_interval])))",
+            "legend": "p99"
+          }
+        ]
+      },
+      "errors": {
+        "title": "5xx 응답 (초당)",
+        "kind": "stat",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "sum(rate(prometheus_http_requests_total{code=~\"5..\"}[$__rate_interval]))"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "reqps"
+        }
+      }
+    },
+    "layout": {
+      "items": [
+        {
+          "panel": "reqs",
+          "x": 0,
+          "y": 0,
+          "w": 12,
+          "h": 8
+        },
+        {
+          "panel": "latency",
+          "x": 12,
+          "y": 0,
+          "w": 12,
+          "h": 8
+        },
+        {
+          "panel": "errors",
+          "x": 0,
+          "y": 8,
+          "w": 6,
+          "h": 4
+        }
+      ]
+    }
+  }
+}

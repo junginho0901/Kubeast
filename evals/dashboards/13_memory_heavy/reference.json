@@ -1,0 +1,68 @@
+{
+  "apiVersion": "kubeast.io/dashboards/v1alpha1",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "memory-heavy",
+    "title": "메모리 많이 쓰는 것",
+    "scope": {
+      "cluster": "*"
+    }
+  },
+  "spec": {
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "panels": {
+      "pods": {
+        "title": "메모리 많이 쓰는 파드 10",
+        "kind": "bargauge",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "topk(10, sum by (namespace, pod) (container_memory_working_set_bytes{container!=\"\"}))",
+            "legend": "{{namespace}}/{{pod}}"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "bytes"
+        }
+      },
+      "nodes": {
+        "title": "노드 메모리 사용률",
+        "kind": "bargauge",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes",
+            "legend": "{{instance}}"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "percentunit"
+        }
+      }
+    },
+    "layout": {
+      "items": [
+        {
+          "panel": "pods",
+          "x": 0,
+          "y": 0,
+          "w": 12,
+          "h": 9
+        },
+        {
+          "panel": "nodes",
+          "x": 12,
+          "y": 0,
+          "w": 12,
+          "h": 9
+        }
+      ]
+    }
+  }
+}

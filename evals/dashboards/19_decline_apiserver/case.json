@@ -1,0 +1,12 @@
+{
+  "question": "API 서버 요청 지연 시간을 보는 대시보드 만들어 줘",
+  "cluster": "default",
+  "panels": {
+    "min": 0,
+    "max": 0
+  },
+  "kind": "decline",
+  "forbid": [
+    "apiserver_request_"
+  ]
+}

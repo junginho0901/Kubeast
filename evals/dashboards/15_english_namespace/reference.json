@@ -1,0 +1,128 @@
+{
+  "apiVersion": "kubeast.io/dashboards/v1alpha1",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "namespace-resources",
+    "title": "kube-system CPU·메모리",
+    "scope": {
+      "cluster": "*"
+    }
+  },
+  "spec": {
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "panels": {
+      "cpu-total": {
+        "title": "CPU 합계 (코어)",
+        "kind": "stat",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"$namespace\", container!=\"\"}[$__rate_interval]))"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "short"
+        }
+      },
+      "mem-total": {
+        "title": "메모리 합계",
+        "kind": "stat",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "sum(container_memory_working_set_bytes{namespace=\"$namespace\", container!=\"\"})"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "bytes"
+        }
+      },
+      "cpu-by-pod": {
+        "title": "파드별 CPU (코어)",
+        "kind": "timeseries",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"$namespace\", container!=\"\"}[$__rate_interval]))",
+            "legend": "{{pod}}"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "short"
+        }
+      },
+      "mem-by-pod": {
+        "title": "파드별 메모리",
+        "kind": "timeseries",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"$namespace\", container!=\"\"})",
+            "legend": "{{pod}}"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "bytes"
+        }
+      }
+    },
+    "layout": {
+      "items": [
+        {
+          "panel": "cpu-total",
+          "x": 0,
+          "y": 0,
+          "w": 6,
+          "h": 4
+        },
+        {
+          "panel": "mem-total",
+          "x": 6,
+          "y": 0,
+          "w": 6,
+          "h": 4
+        },
+        {
+          "panel": "cpu-by-pod",
+          "x": 12,
+          "y": 0,
+          "w": 12,
+          "h": 8
+        },
+        {
+          "panel": "mem-by-pod",
+          "x": 0,
+          "y": 8,
+          "w": 12,
+          "h": 8
+        }
+      ]
+    },
+    "variables": [
+      {
+        "name": "namespace",
+        "label": "Namespace",
+        "kind": "query",
+        "store": "prometheus",
+        "query": {
+          "fn": "label_values",
+          "expr": "kube_pod_info",
+          "label": "namespace"
+        },
+        "refresh": "load",
+        "current": {
+          "text": "kube-system",
+          "value": "kube-system"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "apiVersion": "kubeast.io/dashboards/v1alpha1",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "shop-errors",
+    "title": "shop 에러",
+    "scope": {
+      "cluster": "*"
+    }
+  },
+  "spec": {
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "panels": {
+      "errors-over-time": {
+        "title": "에러 개수",
+        "kind": "timeseries",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "loki",
+            "expr": "sum(count_over_time({k8s_namespace_name=\"kubeast-eval\", service_name=\"kubeast-eval-shop\"} | logfmt | level=\"ERROR\" [$__interval]))",
+            "legend": "에러"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "short"
+        }
+      },
+      "error-logs": {
+        "title": "에러 로그",
+        "kind": "logs",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "loki",
+            "expr": "{k8s_namespace_name=\"kubeast-eval\", service_name=\"kubeast-eval-shop\"} | logfmt | level=\"ERROR\""
+          }
+        ]
+      }
+    },
+    "layout": {
+      "items": [
+        {
+          "panel": "errors-over-time",
+          "x": 0,
+          "y": 0,
+          "w": 24,
+          "h": 7
+        },
+        {
+          "panel": "error-logs",
+          "x": 0,
+          "y": 7,
+          "w": 24,
+          "h": 12
+        }
+      ]
+    }
+  }
+}

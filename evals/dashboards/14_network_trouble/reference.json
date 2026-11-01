@@ -1,0 +1,90 @@
+{
+  "apiVersion": "kubeast.io/dashboards/v1alpha1",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "network-trouble",
+    "title": "네트워크 이상",
+    "scope": {
+      "cluster": "*"
+    }
+  },
+  "spec": {
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "panels": {
+      "node-errs": {
+        "title": "노드 수신·송신 오류",
+        "kind": "timeseries",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "sum by (instance) (rate(node_network_receive_errs_total[$__rate_interval]) + rate(node_network_transmit_errs_total[$__rate_interval]))",
+            "legend": "{{instance}}"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "pps"
+        }
+      },
+      "node-drops": {
+        "title": "노드 드롭",
+        "kind": "timeseries",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "sum by (instance) (rate(node_network_receive_drop_total[$__rate_interval]) + rate(node_network_transmit_drop_total[$__rate_interval]))",
+            "legend": "{{instance}}"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "pps"
+        }
+      },
+      "pod-drops": {
+        "title": "파드 드롭 (네임스페이스별)",
+        "kind": "timeseries",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "sum by (namespace) (rate(container_network_receive_packets_dropped_total[$__rate_interval]) + rate(container_network_transmit_packets_dropped_total[$__rate_interval]))",
+            "legend": "{{namespace}}"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "pps"
+        }
+      }
+    },
+    "layout": {
+      "items": [
+        {
+          "panel": "node-errs",
+          "x": 0,
+          "y": 0,
+          "w": 12,
+          "h": 8
+        },
+        {
+          "panel": "node-drops",
+          "x": 12,
+          "y": 0,
+          "w": 12,
+          "h": 8
+        },
+        {
+          "panel": "pod-drops",
+          "x": 0,
+          "y": 8,
+          "w": 24,
+          "h": 8
+        }
+      ]
+    }
+  }
+}

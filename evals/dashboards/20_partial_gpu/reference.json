@@ -1,0 +1,46 @@
+{
+  "apiVersion": "kubeast.io/dashboards/v1alpha1",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "node-cpu",
+    "title": "노드 CPU 사용률",
+    "scope": {
+      "cluster": "*"
+    }
+  },
+  "spec": {
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "panels": {
+      "cpu-busy": {
+        "title": "노드 CPU 사용률",
+        "kind": "timeseries",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "1 - avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[$__rate_interval]))",
+            "legend": "{{instance}}"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "percentunit"
+        }
+      }
+    },
+    "layout": {
+      "items": [
+        {
+          "panel": "cpu-busy",
+          "x": 0,
+          "y": 0,
+          "w": 24,
+          "h": 8
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "question": "메모리 많이 쓰는 거 보여 줘",
+  "cluster": "default",
+  "panels": {
+    "min": 1,
+    "max": 8
+  },
+  "expect_any": {
+    "need": 1,
+    "of": [
+      {
+        "what": "파드·컨테이너 메모리",
+        "metrics": [
+          "container_memory_working_set_bytes",
+          "container_memory_usage_bytes",
+          "container_memory_rss"
+        ],
+        "units": []
+      },
+      {
+        "what": "노드 메모리",
+        "metrics": [
+          "node_memory_MemAvailable_bytes",
+          "node_memory_MemFree_bytes",
+          "node_memory_MemTotal_bytes"
+        ]
+      }
+    ]
+  }
+}

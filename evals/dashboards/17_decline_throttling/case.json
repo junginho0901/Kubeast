@@ -1,0 +1,12 @@
+{
+  "question": "CPU 스로틀링 당하는 컨테이너 보여 줘",
+  "cluster": "default",
+  "panels": {
+    "min": 0,
+    "max": 0
+  },
+  "kind": "decline",
+  "forbid": [
+    "container_cpu_cfs_"
+  ]
+}

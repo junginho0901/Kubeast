@@ -1,0 +1,45 @@
+{
+  "question": "Build a dashboard with the CPU and memory usage of the pods in the kube-system namespace",
+  "cluster": "default",
+  "panels": {
+    "min": 2,
+    "max": 10
+  },
+  "expect": [
+    {
+      "what": "CPU 사용량",
+      "metrics": [
+        "container_cpu_usage_seconds_total"
+      ],
+      "functions": [
+        "rate",
+        "irate"
+      ]
+    },
+    {
+      "what": "메모리 사용량",
+      "metrics": [
+        "container_memory_working_set_bytes",
+        "container_memory_usage_bytes",
+        "container_memory_rss"
+      ],
+      "units": [
+        "bytes",
+        "decbytes"
+      ]
+    }
+  ],
+  "vars": {
+    "namespace": "kube-system"
+  },
+  "scope": [
+    {
+      "label": "namespace",
+      "value": "kube-system",
+      "prefixes": [
+        "container_",
+        "kube_pod_"
+      ]
+    }
+  ]
+}

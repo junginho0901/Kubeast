@@ -151,21 +151,32 @@ func TestImportedCorpusPassesSchema(t *testing.T) {
 }
 
 // The reference answers of the AI builder evaluation are dashboards the
-// builder should write: they pass the schema as they are.
+// builder should write, and an edit case's base.json one it is given: they
+// pass the schema as they are. A decline case's answer is not a dashboard.
 func TestEvalReferencesPassSchema(t *testing.T) {
 	s := load(t)
-	files, _ := filepath.Glob("../../../../evals/dashboards/*/reference.json")
-	if len(files) == 0 {
-		t.Fatal("no reference answers")
+	refs, _ := filepath.Glob("../../../../evals/dashboards/*/reference.json")
+	bases, _ := filepath.Glob("../../../../evals/dashboards/*/base.json")
+	if len(refs) == 0 || len(bases) == 0 {
+		t.Fatal("no reference answers or bases")
 	}
-	for _, f := range files {
+	declined := 0
+	for _, f := range append(refs, bases...) {
 		b, err := os.ReadFile(f)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if errs := check(s, decode(t, b)); len(errs) != 0 {
+		doc := decode(t, b)
+		if m, ok := doc.(map[string]any); ok && len(m) == 1 && m["declined"] != nil {
+			declined++
+			continue
+		}
+		if errs := check(s, doc); len(errs) != 0 {
 			t.Errorf("%s fails the schema:\n%s", f, strings.Join(errs, "\n"))
 		}
+	}
+	if declined == len(refs) {
+		t.Error("every reference is a decline")
 	}
 }
 

@@ -1,0 +1,63 @@
+{
+  "question": "워크로드에 문제 있는 거 한눈에 보고 싶어",
+  "cluster": "default",
+  "panels": {
+    "min": 2,
+    "max": 12
+  },
+  "expect_any": {
+    "need": 2,
+    "of": [
+      {
+        "what": "파드 재시작",
+        "metrics": [
+          "kube_pod_container_status_restarts_total"
+        ],
+        "functions": [
+          "increase",
+          "rate",
+          "irate",
+          "changes",
+          "resets"
+        ]
+      },
+      {
+        "what": "준비 안 된 레플리카",
+        "metrics": [
+          "kube_deployment_status_replicas_unavailable",
+          "kube_deployment_status_replicas_available",
+          "kube_deployment_status_replicas_ready"
+        ]
+      },
+      {
+        "what": "Pending 파드",
+        "metrics": [
+          "kube_pod_status_phase"
+        ],
+        "contains": [
+          [
+            "pending"
+          ]
+        ]
+      },
+      {
+        "what": "대기 중인 컨테이너",
+        "metrics": [
+          "kube_pod_container_status_waiting_reason",
+          "kube_pod_container_status_waiting"
+        ]
+      },
+      {
+        "what": "OOM·비정상 종료",
+        "metrics": [
+          "container_oom_events_total",
+          "kube_pod_container_status_last_terminated_reason",
+          "kube_pod_container_status_last_terminated_exitcode"
+        ]
+      }
+    ]
+  },
+  "may_be_empty": [
+    "kube_pod_container_status_waiting_reason"
+  ]
+}

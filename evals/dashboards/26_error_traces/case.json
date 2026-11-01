@@ -1,0 +1,46 @@
+{
+  "question": "kubeast-eval-shop 서비스의 에러 난 트레이스와 에러 수 추이를 보여 줘",
+  "cluster": "default",
+  "panels": {
+    "min": 2,
+    "max": 6
+  },
+  "expect": [
+    {
+      "what": "에러 트레이스",
+      "store": "tempo",
+      "kinds": [
+        "traces",
+        "table"
+      ],
+      "labels": [
+        "status"
+      ],
+      "contains": [
+        [
+          "kubeast-eval-shop"
+        ],
+        [
+          "error"
+        ]
+      ]
+    },
+    {
+      "what": "에러 수 추이",
+      "store": "tempo",
+      "functions": [
+        "rate",
+        "count_over_time"
+      ],
+      "contains": [
+        [
+          "kubeast-eval-shop"
+        ],
+        [
+          "error"
+        ]
+      ]
+    }
+  ],
+  "seed": true
+}

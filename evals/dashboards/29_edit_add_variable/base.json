@@ -1,0 +1,89 @@
+{
+  "apiVersion": "kubeast.io/dashboards/v1alpha1",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "kube-system-pods",
+    "title": "kube-system 파드",
+    "scope": {
+      "cluster": "*"
+    }
+  },
+  "spec": {
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "panels": {
+      "nodes": {
+        "title": "노드 수",
+        "kind": "stat",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "count(kube_node_info)"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "short"
+        }
+      },
+      "cpu": {
+        "title": "파드별 CPU (코어)",
+        "kind": "timeseries",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"kube-system\", container!=\"\"}[$__rate_interval]))",
+            "legend": "{{pod}}"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "short"
+        }
+      },
+      "mem": {
+        "title": "파드별 메모리",
+        "kind": "timeseries",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"kube-system\", container!=\"\"})",
+            "legend": "{{pod}}"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "bytes"
+        }
+      }
+    },
+    "layout": {
+      "items": [
+        {
+          "panel": "nodes",
+          "x": 0,
+          "y": 0,
+          "w": 6,
+          "h": 4
+        },
+        {
+          "panel": "cpu",
+          "x": 6,
+          "y": 0,
+          "w": 12,
+          "h": 8
+        },
+        {
+          "panel": "mem",
+          "x": 0,
+          "y": 8,
+          "w": 12,
+          "h": 8
+        }
+      ]
+    }
+  }
+}

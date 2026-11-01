@@ -1,0 +1,67 @@
+{
+  "apiVersion": "kubeast.io/dashboards/v1alpha1",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "pod-restarts",
+    "title": "파드 재시작",
+    "scope": {
+      "cluster": "*"
+    }
+  },
+  "spec": {
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "panels": {
+      "top": {
+        "title": "최근 1시간 재시작 많은 파드",
+        "kind": "table",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "topk(10, sum by (namespace, pod) (increase(kube_pod_container_status_restarts_total[1h])))"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "short"
+        }
+      },
+      "trend": {
+        "title": "재시작 추이",
+        "kind": "timeseries",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "sum by (namespace) (increase(kube_pod_container_status_restarts_total[$__rate_interval]))",
+            "legend": "{{namespace}}"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "short"
+        }
+      }
+    },
+    "layout": {
+      "items": [
+        {
+          "panel": "top",
+          "x": 0,
+          "y": 0,
+          "w": 24,
+          "h": 8
+        },
+        {
+          "panel": "trend",
+          "x": 0,
+          "y": 8,
+          "w": 24,
+          "h": 8
+        }
+      ]
+    }
+  }
+}

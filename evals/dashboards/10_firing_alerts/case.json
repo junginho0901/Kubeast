@@ -10,7 +10,12 @@
       "what": "울리는 알림",
       "metrics": [
         "ALERTS"
-      ]
+      ],
+      "same_as": {
+        "panel": "count",
+        "ref": "A",
+        "tolerance": 0.01
+      }
     }
   ]
 }

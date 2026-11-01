@@ -10,7 +10,12 @@
       "what": "파드 상태",
       "metrics": [
         "kube_pod_status_phase"
-      ]
+      ],
+      "same_as": {
+        "panel": "by-phase",
+        "ref": "A",
+        "tolerance": 0.01
+      }
     }
   ]
 }

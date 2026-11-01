@@ -1,0 +1,34 @@
+{
+  "question": "kubeast-eval 네임스페이스 kubeast-eval-shop 앱 로그로 라우트별 요청 수를 보여 줘",
+  "cluster": "default",
+  "panels": {
+    "min": 1,
+    "max": 6
+  },
+  "expect": [
+    {
+      "what": "라우트별 요청 수",
+      "store": "loki",
+      "functions": [
+        "count_over_time",
+        "rate"
+      ],
+      "contains": [
+        [
+          "kubeast-eval"
+        ],
+        [
+          "logfmt",
+          "regexp",
+          "pattern",
+          "json",
+          "label_format"
+        ],
+        [
+          "route"
+        ]
+      ]
+    }
+  ],
+  "seed": true
+}

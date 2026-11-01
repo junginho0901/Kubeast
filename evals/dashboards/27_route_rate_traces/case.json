@@ -1,0 +1,47 @@
+{
+  "question": "트레이스로 kubeast-eval-shop 서비스의 라우트별 요청 비율과 p95 지연을 보여 줘",
+  "cluster": "default",
+  "panels": {
+    "min": 2,
+    "max": 6
+  },
+  "expect": [
+    {
+      "what": "라우트별 요청 비율",
+      "store": "tempo",
+      "functions": [
+        "rate",
+        "count_over_time"
+      ],
+      "contains": [
+        [
+          "kubeast-eval-shop"
+        ],
+        [
+          "http.route"
+        ]
+      ]
+    },
+    {
+      "what": "라우트별 p95",
+      "store": "tempo",
+      "functions": [
+        "quantile_over_time",
+        "histogram_over_time"
+      ],
+      "contains": [
+        [
+          "kubeast-eval-shop"
+        ],
+        [
+          "http.route"
+        ],
+        [
+          ".95",
+          "0.95"
+        ]
+      ]
+    }
+  ],
+  "seed": true
+}

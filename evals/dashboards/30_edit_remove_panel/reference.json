@@ -1,0 +1,90 @@
+{
+  "apiVersion": "kubeast.io/dashboards/v1alpha1",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "node-overview",
+    "title": "노드 개요",
+    "scope": {
+      "cluster": "*"
+    }
+  },
+  "spec": {
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "panels": {
+      "cpu-busy": {
+        "title": "CPU 사용률",
+        "kind": "timeseries",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "1 - avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[$__rate_interval]))",
+            "legend": "{{instance}}"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "percentunit"
+        }
+      },
+      "mem-used": {
+        "title": "메모리 사용률",
+        "kind": "timeseries",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes",
+            "legend": "{{instance}}"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "percentunit"
+        }
+      },
+      "disk-used": {
+        "title": "디스크 사용률",
+        "kind": "timeseries",
+        "queries": [
+          {
+            "refId": "A",
+            "store": "prometheus",
+            "expr": "1 - node_filesystem_avail_bytes{fstype!~\"tmpfs|ramfs\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|ramfs\"}",
+            "legend": "{{instance}} {{mountpoint}}"
+          }
+        ],
+        "fieldDefaults": {
+          "unit": "percentunit"
+        }
+      }
+    },
+    "layout": {
+      "items": [
+        {
+          "panel": "cpu-busy",
+          "x": 0,
+          "y": 0,
+          "w": 12,
+          "h": 8
+        },
+        {
+          "panel": "mem-used",
+          "x": 12,
+          "y": 0,
+          "w": 12,
+          "h": 8
+        },
+        {
+          "panel": "disk-used",
+          "x": 0,
+          "y": 8,
+          "w": 12,
+          "h": 8
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "question": "네임스페이스별로 로그가 얼마나 쌓이는지 비교해 줘",
+  "cluster": "default",
+  "panels": {
+    "min": 1,
+    "max": 6
+  },
+  "expect": [
+    {
+      "what": "네임스페이스별 로그 양",
+      "store": "loki",
+      "functions": [
+        "count_over_time",
+        "rate",
+        "bytes_over_time",
+        "bytes_rate"
+      ],
+      "contains": [
+        [
+          "k8s_namespace_name"
+        ]
+      ]
+    }
+  ]
+}
