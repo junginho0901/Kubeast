@@ -50,9 +50,10 @@ type Scope struct {
 }
 
 type Spec struct {
-	Time        TimeRange                  `json:"time"`
-	Refresh     string                     `json:"refresh,omitempty"`
-	Timezone    string                     `json:"timezone,omitempty"`
+	Time     TimeRange `json:"time"`
+	Refresh  string    `json:"refresh,omitempty"`
+	Timezone string    `json:"timezone,omitempty"` // "" = the viewer's default
+
 	CursorSync  string                     `json:"cursorSync,omitempty"`
 	Variables   []Variable                 `json:"variables,omitempty"`
 	Panels      map[string]Panel           `json:"panels"`
@@ -236,11 +237,12 @@ type LayoutItem struct {
 }
 
 type LayoutRow struct {
-	Title     string       `json:"title,omitempty"`
-	Y         int          `json:"y"`
-	Collapsed bool         `json:"collapsed,omitempty"`
-	Items     []LayoutItem `json:"items,omitempty"`
-	Repeat    string       `json:"repeat,omitempty"`
+	Title     string                     `json:"title,omitempty"`
+	Y         int                        `json:"y"`
+	Collapsed bool                       `json:"collapsed,omitempty"`
+	Items     []LayoutItem               `json:"items,omitempty"`
+	Repeat    string                     `json:"repeat,omitempty"`
+	Ext       map[string]json.RawMessage `json:"ext,omitempty"`
 }
 
 type Link struct {

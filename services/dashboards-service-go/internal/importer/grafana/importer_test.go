@@ -41,7 +41,7 @@ func TestImport_ResultIsAValidDashboard(t *testing.T) {
 	if d.Metadata.Name != "web-red" || d.Metadata.Title != "Web — RED" || d.Metadata.Scope.Cluster != "*" {
 		t.Errorf("metadata = %+v", d.Metadata)
 	}
-	if d.Spec.CursorSync != model.CursorSyncShared || d.Spec.Timezone != "browser" || d.Spec.Time.From != "now-3h" {
+	if d.Spec.CursorSync != model.CursorSyncShared || d.Spec.Timezone != "" || d.Spec.Time.From != "now-3h" {
 		t.Errorf("spec basics = cursor %q tz %q from %q", d.Spec.CursorSync, d.Spec.Timezone, d.Spec.Time.From)
 	}
 	if d.Source == nil || d.Source.Kind != model.SourceGrafanaV1 || d.Source.SchemaVersion != 39 || d.Source.UID != "web-red-01" {

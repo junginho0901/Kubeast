@@ -15,9 +15,24 @@ var namedTokens = map[string]string{
 	"text": "neutral", "transparent": "neutral", "white": "neutral", "black": "neutral",
 }
 
+// tokenColors is the one Grafana name each token is written back as. A
+// colour is exact only when it is that name, so an export gives back what was
+// imported: "yellow" reads as state-warn, and the import keeps "yellow" too.
+var tokenColors = map[string]string{
+	"state-ok": "green", "state-crit": "red", "state-warn": "orange", "state-info": "blue",
+	"series-5": "purple", "neutral": "text",
+	// Grafana's classic palette for the series tokens without a name
+	"series-1": "#7EB26D", "series-2": "#EAB839", "series-3": "#6ED0E0", "series-4": "#EF843C",
+	"series-6": "#1F78C1", "series-7": "#BA43A6", "series-8": "#705DA0", "series-9": "#508642", "series-10": "#CCA300",
+}
+
+// ColorOf is the Grafana colour a theme token is exported as.
+func ColorOf(token string) string { return tokenColors[token] }
+
 // Token turns a Grafana colour (a name, #rgb/#rrggbb or rgb()/rgba()) into a
 // theme token. exact is false when the token is the nearest match of a fixed
-// colour; the caller keeps the original value next to it.
+// colour, or a name other than the one the token is written back as; the
+// caller keeps the original value next to it.
 func Token(c string) (token string, exact bool) {
 	s := strings.ToLower(strings.TrimSpace(c))
 	if s == "" {
@@ -28,7 +43,7 @@ func Token(c string) (token string, exact bool) {
 		base = strings.TrimPrefix(base, p)
 	}
 	if t, ok := namedTokens[base]; ok {
-		return t, base == s
+		return t, base == s && tokenColors[t] == s
 	}
 	r, g, b, ok := parseRGB(s)
 	if !ok {

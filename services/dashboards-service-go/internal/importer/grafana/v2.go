@@ -657,6 +657,13 @@ func (c *v2conv) gridItem(it obj, ip string, offset int) (*cpanel, int) {
 				}
 			}
 		default:
+			if what, ok := v2SectionOnly[k]; ok {
+				// v2 only: not a classic panel key, which Grafana would read
+				// back as an old panel option
+				c.stash(ip+".spec."+k, v)
+				c.unsupport(ip+".spec."+k, what+" is kept but not applied")
+				continue
+			}
 			extra[k] = v
 		}
 	}
@@ -718,10 +725,12 @@ func (c *v2conv) autoGrid(spec obj, sp string, offset int) []*cpanel {
 					}
 				}
 			default:
-				extra[k] = v
 				if what, ok := v2SectionOnly[k]; ok {
+					c.stash(ip+".spec."+k, v)
 					c.unsupport(ip+".spec."+k, what+" is kept but not applied")
+					continue
 				}
+				extra[k] = v
 			}
 		}
 		if p := c.panelFor(name, ip, x, y, width, height, extra); p != nil {
@@ -1108,6 +1117,13 @@ func (c *v2conv) fill(p *cpanel, el obj, ep, name string, first bool) *cpanel {
 				c.data(v, ep+".spec.data", p, first)
 			case "vizConfig":
 				c.vizConfig(v, ep+".spec.vizConfig", p, first)
+			case "subtitle":
+				// v2's sub header has no classic place (Grafana 13.3.0's v2 → v1
+				// drops it); kept as a v2 value, not as a panel key Grafana would
+				// read back as an old panel option.
+				if first {
+					c.stash(ep+".spec.subtitle", v)
+				}
 			default:
 				p.m[k] = v
 			}
@@ -1124,9 +1140,8 @@ func (c *v2conv) fill(p *cpanel, el obj, ep, name string, first bool) *cpanel {
 		}
 		p.m["type"] = model.Unsupported
 	}
-	if want := fmt.Sprintf("panel-%d", intOf(spec["id"])); name != want {
-		p.m["v2Element"] = name
-	}
+	// An element name other than panel-<id> stays in source.raw, where a v2
+	// export reads it; the classic panel has no key for it.
 	return p
 }
 

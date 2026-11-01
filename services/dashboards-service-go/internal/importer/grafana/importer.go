@@ -4,6 +4,7 @@
 // the object it came from (preserved), or left out on purpose (dropped — only
 // Grafana's database id). The whole original also stays in Source.Raw. The
 // Report says which, so the screen can show what will and will not be drawn.
+// Export (export.go) writes a dashboard back as a classic Grafana JSON.
 package grafana
 
 import (
@@ -164,10 +165,9 @@ func (im *importer) dashboard(root obj) *model.Dashboard {
 	_ = json.Unmarshal(root["tags"], &d.Metadata.Tags)
 	d.Metadata.Scope.Cluster = "*"
 
+	// "" is not "browser": Grafana reads it as the viewer's default (the
+	// organisation's or user's preference), so it stays empty.
 	d.Spec.Timezone = strOf(root["timezone"])
-	if d.Spec.Timezone == "" {
-		d.Spec.Timezone = "browser"
-	}
 	d.Spec.CursorSync = map[int]string{0: model.CursorSyncNone, 1: model.CursorSyncShared, 2: model.CursorSyncSharedTooltip}[intOf(root["graphTooltip"])]
 	d.Spec.Time = model.TimeRange{From: "now-6h", To: "now"}
 	if t, ok := asObj(root["time"]); ok {
@@ -312,14 +312,10 @@ func (im *importer) panels(list []json.RawMessage, d *model.Dashboard) {
 var rowKeys = keys("type", "title", "collapsed", "gridPos", "panels", "repeat", "id")
 
 func (im *importer) row(p obj, path string, d *model.Dashboard) model.LayoutRow {
-	ext := im.split(p, rowKeys, path, nil)
-	for k, v := range ext {
-		if d.Spec.Ext == nil {
-			d.Spec.Ext = obj{}
-		}
-		d.Spec.Ext[path+"."+k] = v
-	}
 	r := model.LayoutRow{Title: strOf(p["title"]), Collapsed: boolOf(p["collapsed"]), Repeat: strOf(p["repeat"])}
+	if ext := im.split(p, rowKeys, path, nil); len(ext) > 0 {
+		r.Ext = ext
+	}
 	if g, ok := asObj(p["gridPos"]); ok {
 		r.Y = intOf(g["y"])
 	}
@@ -506,6 +502,9 @@ func (im *importer) fieldConfig(fc obj, path string, out *model.Panel) {
 					im.adjusted(dp+".color.fixedColor", fmt.Sprintf("%s drawn as the theme colour %s (original kept)", fixed, token))
 				}
 			}
+			if !onlyKeys(c, "mode", "fixedColor") {
+				out.Ext["fieldConfig.defaults.color"] = def["color"] // seriesBy and the like, kept with the colour
+			}
 		}
 		if th, ok := asObj(def["thresholds"]); ok {
 			t := &model.Thresholds{Mode: strOf(th["mode"])}
@@ -520,7 +519,9 @@ func (im *importer) fieldConfig(fc obj, path string, out *model.Panel) {
 			var steps []obj
 			_ = json.Unmarshal(th["steps"], &steps)
 			changed := false
+			whole := !onlyKeys(th, "mode", "steps")
 			for _, s := range steps {
+				whole = whole || !onlyKeys(s, "color", "value")
 				token, exact := Token(strOf(s["color"]))
 				if token == "" {
 					token = "neutral"
@@ -531,6 +532,8 @@ func (im *importer) fieldConfig(fc obj, path string, out *model.Panel) {
 			if changed {
 				out.Ext["fieldConfig.defaults.thresholds"] = def["thresholds"]
 				im.adjusted(dp+".thresholds", "threshold colours drawn as the nearest theme colours (original kept)")
+			} else if whole {
+				out.Ext["fieldConfig.defaults.thresholds"] = def["thresholds"] // keys beyond mode, steps, color and value
 			}
 			f.Thresholds = t
 		}
@@ -611,6 +614,12 @@ func (im *importer) variable(v obj, path string) model.Variable {
 	if def := strOf(v["definition"]); def != "" {
 		out.Ext["definition"] = v["definition"]
 	}
+	if raw, ok := v["datasource"]; ok {
+		// kept for every type: the model reads it only for a query variable's
+		// store, and Grafana needs it back (a group by without one stops its
+		// v2 conversion)
+		out.Ext["datasource"] = raw
+	}
 
 	typ := strOf(v["type"])
 	switch typ {
@@ -621,9 +630,6 @@ func (im *importer) variable(v obj, path string) model.Variable {
 		im.adjusted(path, "data source variable becomes the Kubeast cluster selector")
 	case "query":
 		store, _ := im.storeOf(v["datasource"], path+".datasource")
-		if raw, ok := v["datasource"]; ok && string(raw) != "null" {
-			out.Ext["datasource"] = raw
-		}
 		if isClusterVar(out.Name) {
 			out.Kind = model.VarCluster
 			out.Store = store
@@ -656,9 +662,6 @@ func (im *importer) variable(v obj, path string) model.Variable {
 		}
 	case "adhoc":
 		out.Kind = model.VarAdhoc
-		if raw, ok := v["datasource"]; ok {
-			out.Ext["datasource"] = raw
-		}
 	default:
 		out.Kind = model.VarConstant
 		out.Ext["grafanaType"] = mustJSON(typ)
@@ -885,6 +888,17 @@ func (im *importer) unsupported(path, reason string) {
 }
 
 // ---- small JSON helpers ----
+
+// onlyKeys says whether o has no key but these.
+func onlyKeys(o obj, ks ...string) bool {
+	allowed := keys(ks...)
+	for k := range o {
+		if !allowed[k] {
+			return false
+		}
+	}
+	return true
+}
 
 func keys(ks ...string) map[string]bool {
 	m := make(map[string]bool, len(ks))
