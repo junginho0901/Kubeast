@@ -294,6 +294,9 @@ func TestExportShared_Corpus(t *testing.T) {
 							uid = r
 						case map[string]any:
 							uid, _ = r["uid"].(string)
+							if n, ok := r["name"].(string); ok && len(r) == 1 {
+								uid = n // a v2 query's reference, carried for a v2 import
+							}
 							if k == "current" {
 								uid, _ = r["value"].(string)
 							}

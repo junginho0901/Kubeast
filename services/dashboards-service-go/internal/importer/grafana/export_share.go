@@ -163,6 +163,7 @@ func (s *sharer) share() {
 		am, _ := a.(map[string]any)
 		s.templatize(am, nil, "annotation "+fmt.Sprint(am["name"]))
 	}
+	s.v2Queries(s.root)
 	s.require("grafana", "grafana", "Grafana", grafanaVersion)
 	for _, v := range s.variables() {
 		if v["type"] != "constant" {
@@ -284,6 +285,33 @@ func (s *sharer) templatize(o map[string]any, fallback any, where string) {
 		return
 	}
 	o["datasource"] = map[string]any{"type": typ, "uid": "${" + in + "}"}
+}
+
+// v2Queries shares the v2 queries that v2-only values carry for a v2 import
+// (Grafana's classic reads none of them): {group, datasource: {name: uid}}.
+func (s *sharer) v2Queries(v any) {
+	switch x := v.(type) {
+	case map[string]any:
+		typ, _ := x["group"].(string)
+		ref, _ := x["datasource"].(map[string]any)
+		if uid, ok := ref["name"].(string); ok && len(ref) == 1 && typ != "" && typ != "datasource" && typ != "grafana" &&
+			!builtInDS[uid] && varUse.FindStringSubmatch(uid) == nil {
+			_, name := s.byCurrent(uid)
+			ref["name"] = "${" + s.input(dsInput{typ: typ, uid: uid, name: name}, false) + "}"
+		}
+		keys := make([]string, 0, len(x))
+		for k := range x {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys) // inputs are named in the order data sources are met
+		for _, k := range keys {
+			s.v2Queries(x[k])
+		}
+	case []any:
+		for _, e := range x {
+			s.v2Queries(e)
+		}
+	}
 }
 
 // byCurrent finds the data source variable whose current value is uid: its
