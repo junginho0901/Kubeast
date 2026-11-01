@@ -1,0 +1,531 @@
+{
+ "apiVersion": "dashboard.grafana.app/v1",
+ "kind": "Dashboard",
+ "metadata": {
+  "annotations": {
+   "grafana.app/createdBy": "user:fg2ygmaa82t4wf",
+   "grafana.app/updatedBy": "user:fg2ygmaa82t4wf"
+  },
+  "creationTimestamp": "2026-11-01T05:10:42Z",
+  "generation": 1,
+  "labels": {
+   "grafana.app/deprecatedInternalID": "67992409075712"
+  },
+  "name": "v2-rows-mixed",
+  "namespace": "default",
+  "resourceVersion": "1793509842591981",
+  "uid": "e7f355a0-b709-4f37-9a92-27350465a210"
+ },
+ "spec": {
+  "annotations": {
+   "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "panels": [
+   {
+    "gridPos": {
+     "h": 1,
+     "w": 24,
+     "x": 0,
+     "y": 0
+    },
+    "id": 13,
+    "title": "Expanded",
+    "type": "row"
+   },
+   {
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "gridPos": {
+     "h": 8,
+     "w": 12,
+     "x": 0,
+     "y": 1
+    },
+    "id": 1,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "refId": "A"
+     }
+    ],
+    "title": "Panel 1",
+    "type": "timeseries"
+   },
+   {
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "gridPos": {
+     "h": 8,
+     "w": 12,
+     "x": 12,
+     "y": 1
+    },
+    "id": 2,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "refId": "A"
+     }
+    ],
+    "title": "Panel 2",
+    "type": "timeseries"
+   },
+   {
+    "collapsed": true,
+    "gridPos": {
+     "h": 1,
+     "w": 24,
+     "x": 0,
+     "y": 9
+    },
+    "id": 14,
+    "panels": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "gridPos": {
+       "h": 6,
+       "w": 24,
+       "x": 0,
+       "y": 10
+      },
+      "id": 3,
+      "options": {},
+      "pluginVersion": "13.3.0",
+      "targets": [
+       {
+        "datasource": {
+         "type": "prometheus",
+         "uid": "prometheus"
+        },
+        "expr": "up",
+        "refId": "A"
+       }
+      ],
+      "title": "Panel 3",
+      "type": "timeseries"
+     }
+    ],
+    "title": "Collapsed",
+    "type": "row"
+   },
+   {
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "gridPos": {
+     "h": 5,
+     "w": 12,
+     "x": 0,
+     "y": 0
+    },
+    "id": 4,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "refId": "A"
+     }
+    ],
+    "title": "Panel 4",
+    "type": "timeseries"
+   },
+   {
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "gridPos": {
+     "h": 5,
+     "w": 12,
+     "x": 12,
+     "y": 3
+    },
+    "id": 5,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "refId": "A"
+     }
+    ],
+    "title": "Panel 5",
+    "type": "timeseries"
+   },
+   {
+    "gridPos": {
+     "h": 1,
+     "w": 24,
+     "x": 0,
+     "y": 8
+    },
+    "id": 15,
+    "title": "Auto grid inside",
+    "type": "row"
+   },
+   {
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "gridPos": {
+     "h": 9,
+     "w": 12,
+     "x": 0,
+     "y": 9
+    },
+    "id": 6,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "refId": "A"
+     }
+    ],
+    "title": "Panel 6",
+    "type": "timeseries"
+   },
+   {
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "gridPos": {
+     "h": 9,
+     "w": 12,
+     "x": 12,
+     "y": 9
+    },
+    "id": 7,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "refId": "A"
+     }
+    ],
+    "title": "Panel 7",
+    "type": "timeseries"
+   },
+   {
+    "collapsed": false,
+    "gridPos": {
+     "h": 1,
+     "w": 24,
+     "x": 0,
+     "y": 18
+    },
+    "id": 16,
+    "panels": [],
+    "title": "Rows inside",
+    "type": "row"
+   },
+   {
+    "gridPos": {
+     "h": 1,
+     "w": 24,
+     "x": 0,
+     "y": 19
+    },
+    "id": 17,
+    "title": "Child A",
+    "type": "row"
+   },
+   {
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "gridPos": {
+     "h": 4,
+     "w": 24,
+     "x": 0,
+     "y": 20
+    },
+    "id": 8,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "refId": "A"
+     }
+    ],
+    "title": "Panel 8",
+    "type": "timeseries"
+   },
+   {
+    "collapsed": true,
+    "gridPos": {
+     "h": 1,
+     "w": 24,
+     "x": 0,
+     "y": 24
+    },
+    "id": 18,
+    "panels": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "gridPos": {
+       "h": 4,
+       "w": 24,
+       "x": 0,
+       "y": 25
+      },
+      "id": 9,
+      "options": {},
+      "pluginVersion": "13.3.0",
+      "targets": [
+       {
+        "datasource": {
+         "type": "prometheus",
+         "uid": "prometheus"
+        },
+        "expr": "up",
+        "refId": "A"
+       }
+      ],
+      "title": "Panel 9",
+      "type": "timeseries"
+     }
+    ],
+    "title": "Child B",
+    "type": "row"
+   },
+   {
+    "collapsed": false,
+    "gridPos": {
+     "h": 1,
+     "w": 24,
+     "x": 0,
+     "y": 25
+    },
+    "id": 19,
+    "panels": [],
+    "title": "Tabs inside",
+    "type": "row"
+   },
+   {
+    "collapsed": false,
+    "gridPos": {
+     "h": 1,
+     "w": 24,
+     "x": 0,
+     "y": 26
+    },
+    "id": 20,
+    "panels": [],
+    "title": "T1",
+    "type": "row"
+   },
+   {
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "gridPos": {
+     "h": 4,
+     "w": 24,
+     "x": 0,
+     "y": 27
+    },
+    "id": 10,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "refId": "A"
+     }
+    ],
+    "title": "Panel 10",
+    "type": "timeseries"
+   },
+   {
+    "collapsed": false,
+    "gridPos": {
+     "h": 1,
+     "w": 24,
+     "x": 0,
+     "y": 31
+    },
+    "id": 21,
+    "panels": [],
+    "title": "T2",
+    "type": "row"
+   },
+   {
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "gridPos": {
+     "h": 4,
+     "w": 24,
+     "x": 0,
+     "y": 32
+    },
+    "id": 11,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "refId": "A"
+     }
+    ],
+    "title": "Panel 11",
+    "type": "timeseries"
+   },
+   {
+    "collapsed": false,
+    "gridPos": {
+     "h": 1,
+     "w": 24,
+     "x": 0,
+     "y": 36
+    },
+    "id": 22,
+    "panels": [],
+    "repeat": "instance",
+    "title": "Repeated parent",
+    "type": "row"
+   },
+   {
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "gridPos": {
+     "h": 4,
+     "w": 24,
+     "x": 0,
+     "y": 38
+    },
+    "id": 12,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "refId": "A"
+     }
+    ],
+    "title": "Panel 12",
+    "type": "timeseries"
+   }
+  ],
+  "preload": false,
+  "refresh": "",
+  "schemaVersion": 42,
+  "tags": [
+   "kubeast-v2-sample"
+  ],
+  "templating": {
+   "list": [
+    {
+     "allowCustomValue": true,
+     "current": {
+      "text": "",
+      "value": ""
+     },
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "hide": 0,
+     "includeAll": false,
+     "multi": true,
+     "name": "instance",
+     "options": [],
+     "query": "label_values(up, instance)",
+     "refresh": 2,
+     "regex": "",
+     "skipUrlSync": false,
+     "sort": 1,
+     "type": "query"
+    }
+   ]
+  },
+  "time": {
+   "from": "now-6h",
+   "to": "now"
+  },
+  "timepicker": {
+   "refresh_intervals": [
+    "10s",
+    "30s",
+    "1m"
+   ]
+  },
+  "timezone": "browser",
+  "title": "Rows mixed"
+ },
+ "status": {
+  "conversion": {
+   "failed": false,
+   "storedVersion": "v2"
+  }
+ }
+}

@@ -32,27 +32,6 @@ func corpusFiles(t *testing.T) []string {
 // served dashboard in (its instance record; source.raw keeps it).
 var droppable = map[string]bool{"id": true, "apiVersion": true, "kind": true, "metadata": true, "status": true}
 
-// TestGrafana13V2_RefusedWithGuidance: Grafana 13's default export (schema
-// v2) is not imported yet; the error says how to export a form that is.
-func TestGrafana13V2_RefusedWithGuidance(t *testing.T) {
-	files, _ := filepath.Glob("testdata/grafana-13.3.0-v2/*.json")
-	if len(files) == 0 {
-		t.Fatal("no v2 samples")
-	}
-	for _, f := range files {
-		raw, err := os.ReadFile(f)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, _, err := Import(raw); err != ErrNotV1Schema {
-			t.Errorf("%s: err = %v, want ErrNotV1Schema", f, err)
-		}
-	}
-	if !strings.Contains(ErrNotV1Schema.Error(), "Classic or V1 Resource") {
-		t.Errorf("the error should say how to export an importable form: %v", ErrNotV1Schema)
-	}
-}
-
 // TestCorpus imports every published dashboard: each must import, validate,
 // account for every key it has, give the same bytes twice and drop nothing but
 // Grafana's database id. SUMMARY.txt records what each one needed, so a

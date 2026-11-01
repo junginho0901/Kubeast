@@ -27,10 +27,11 @@ const MinSchemaVersion = 16
 const resourceGroup = "dashboard.grafana.app/"
 
 var (
-	ErrNotJSON     = errors.New("not a JSON object")
-	ErrNoPanels    = errors.New("not a Grafana dashboard: no panels")
-	ErrTooOld      = fmt.Errorf("dashboard schemaVersion is below %d: open it in Grafana and save it once, then export it again", MinSchemaVersion)
-	ErrNotV1Schema = errors.New("this is a Grafana dashboard schema v2 document, which is not imported yet: export it from Grafana as Classic or V1 Resource")
+	ErrNotJSON      = errors.New("not a JSON object")
+	ErrNoPanels     = errors.New("not a Grafana dashboard: no panels")
+	ErrTooOld       = fmt.Errorf("dashboard schemaVersion is below %d: open it in Grafana and save it once, then export it again", MinSchemaVersion)
+	ErrV2Alpha1     = errors.New("this is Grafana 12's experimental dashboard schema v2alpha1, which is not imported: open it in Grafana 13 and export it again")
+	ErrV2NoEnvelope = errors.New("this is a Grafana dashboard schema v2 spec without its resource envelope: export the whole resource (apiVersion, kind, metadata, spec)")
 )
 
 // Report is what Import did with the source.
@@ -42,6 +43,9 @@ type Report struct {
 	Unsupported []Finding `json:"unsupported"` // kept, but the console will not draw or run them
 
 	accounted map[string]string // every object key read: "mapped", "preserved" or "dropped"
+	// A schema v2 import accounts through the classic dashboard it was turned into.
+	alias   []pathAlias
+	classic map[string]string
 }
 
 type Finding struct {
@@ -50,12 +54,22 @@ type Finding struct {
 }
 
 // Accounted reports how one source key path was handled ("" if it was not read).
-func (r *Report) Accounted(path string) string { return r.accounted[path] }
+func (r *Report) Accounted(path string) string {
+	if how := r.accounted[path]; how != "" || r.alias == nil {
+		return how
+	}
+	to, ok := r.toClassic(path)
+	if !ok {
+		return ""
+	}
+	return classicHow(r.classic, to)
+}
 
 type obj = map[string]json.RawMessage
 
-// Import converts a Grafana v1 dashboard. It accepts the dashboard itself or an
-// API envelope ({"dashboard": {...}, "meta": {...}}).
+// Import converts a Grafana dashboard: the classic JSON (the dashboard itself
+// or an API envelope {"dashboard": {...}, "meta": {...}}), or a resource Grafana
+// 12+ serves (v1 with the classic spec, or schema v2 — see v2.go).
 func Import(raw []byte) (*model.Dashboard, *Report, error) {
 	var root obj
 	if err := json.Unmarshal(raw, &root); err != nil || root == nil {
@@ -73,8 +87,11 @@ func Import(raw []byte) (*model.Dashboard, *Report, error) {
 	// v2beta1 and v2 hold the new schema (Grafana 13's default export).
 	var envelope obj
 	if av := strOf(root["apiVersion"]); strings.HasPrefix(av, resourceGroup) {
-		if strings.HasPrefix(strings.TrimPrefix(av, resourceGroup), "v2") {
-			return nil, nil, ErrNotV1Schema
+		switch version := strings.TrimPrefix(av, resourceGroup); {
+		case version == "v2" || version == "v2beta1":
+			return importV2(root, raw, version == "v2beta1")
+		case strings.HasPrefix(version, "v2"):
+			return nil, nil, ErrV2Alpha1
 		}
 		var spec obj
 		if err := json.Unmarshal(root["spec"], &spec); err != nil || spec == nil {
@@ -89,7 +106,7 @@ func Import(raw []byte) (*model.Dashboard, *Report, error) {
 	if _, ok := root["panels"]; !ok {
 		switch {
 		case root["elements"] != nil:
-			return nil, nil, ErrNotV1Schema
+			return nil, nil, ErrV2NoEnvelope
 		case root["rows"] != nil:
 			return nil, nil, ErrTooOld // pre-grid layout without a schemaVersion
 		}

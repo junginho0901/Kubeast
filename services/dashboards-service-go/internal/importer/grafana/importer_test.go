@@ -282,7 +282,7 @@ func TestImport_Refusals(t *testing.T) {
 	}{
 		{"not JSON", `[1, 2]`, ErrNotJSON},
 		{"no panels", `{"title": "x"}`, ErrNoPanels},
-		{"schema v2", `{"elements": {}, "layout": {}}`, ErrNotV1Schema},
+		{"bare schema v2 spec", `{"elements": {}, "layout": {}}`, ErrV2NoEnvelope},
 		{"pre-grid rows", `{"title": "x", "rows": []}`, ErrTooOld},
 	}
 	for _, c := range cases {

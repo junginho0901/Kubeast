@@ -1,0 +1,964 @@
+{
+ "apiVersion": "dashboard.grafana.app/v2",
+ "kind": "Dashboard",
+ "metadata": {
+  "annotations": {
+   "grafana.app/createdBy": "user:fg2ygmaa82t4wf",
+   "grafana.app/updatedBy": "user:fg2ygmaa82t4wf"
+  },
+  "creationTimestamp": "2026-11-01T05:10:42Z",
+  "generation": 1,
+  "labels": {
+   "grafana.app/deprecatedInternalID": "67992409075712"
+  },
+  "name": "v2-rows-mixed",
+  "namespace": "default",
+  "resourceVersion": "1793509842591981",
+  "uid": "e7f355a0-b709-4f37-9a92-27350465a210"
+ },
+ "spec": {
+  "annotations": [],
+  "cursorSync": "Off",
+  "editable": true,
+  "elements": {
+   "panel-1": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 1,
+     "links": [],
+     "title": "Panel 1",
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   },
+   "panel-10": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 10,
+     "links": [],
+     "title": "Panel 10",
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   },
+   "panel-11": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 11,
+     "links": [],
+     "title": "Panel 11",
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   },
+   "panel-12": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 12,
+     "links": [],
+     "title": "Panel 12",
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   },
+   "panel-2": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 2,
+     "links": [],
+     "title": "Panel 2",
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   },
+   "panel-3": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 3,
+     "links": [],
+     "title": "Panel 3",
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   },
+   "panel-4": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 4,
+     "links": [],
+     "title": "Panel 4",
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   },
+   "panel-5": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 5,
+     "links": [],
+     "title": "Panel 5",
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   },
+   "panel-6": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 6,
+     "links": [],
+     "title": "Panel 6",
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   },
+   "panel-7": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 7,
+     "links": [],
+     "title": "Panel 7",
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   },
+   "panel-8": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 8,
+     "links": [],
+     "title": "Panel 8",
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   },
+   "panel-9": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 9,
+     "links": [],
+     "title": "Panel 9",
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   }
+  },
+  "layout": {
+   "kind": "RowsLayout",
+   "spec": {
+    "rows": [
+     {
+      "kind": "RowsLayoutRow",
+      "spec": {
+       "layout": {
+        "kind": "GridLayout",
+        "spec": {
+         "items": [
+          {
+           "kind": "GridLayoutItem",
+           "spec": {
+            "element": {
+             "kind": "ElementReference",
+             "name": "panel-1"
+            },
+            "height": 8,
+            "width": 12,
+            "x": 0,
+            "y": 0
+           }
+          },
+          {
+           "kind": "GridLayoutItem",
+           "spec": {
+            "element": {
+             "kind": "ElementReference",
+             "name": "panel-2"
+            },
+            "height": 8,
+            "width": 12,
+            "x": 12,
+            "y": 0
+           }
+          }
+         ]
+        }
+       },
+       "title": "Expanded"
+      }
+     },
+     {
+      "kind": "RowsLayoutRow",
+      "spec": {
+       "collapse": true,
+       "layout": {
+        "kind": "GridLayout",
+        "spec": {
+         "items": [
+          {
+           "kind": "GridLayoutItem",
+           "spec": {
+            "element": {
+             "kind": "ElementReference",
+             "name": "panel-3"
+            },
+            "height": 6,
+            "width": 24,
+            "x": 0,
+            "y": 0
+           }
+          }
+         ]
+        }
+       },
+       "title": "Collapsed"
+      }
+     },
+     {
+      "kind": "RowsLayoutRow",
+      "spec": {
+       "hideHeader": true,
+       "layout": {
+        "kind": "GridLayout",
+        "spec": {
+         "items": [
+          {
+           "kind": "GridLayoutItem",
+           "spec": {
+            "element": {
+             "kind": "ElementReference",
+             "name": "panel-4"
+            },
+            "height": 5,
+            "width": 12,
+            "x": 0,
+            "y": 0
+           }
+          },
+          {
+           "kind": "GridLayoutItem",
+           "spec": {
+            "element": {
+             "kind": "ElementReference",
+             "name": "panel-5"
+            },
+            "height": 5,
+            "width": 12,
+            "x": 12,
+            "y": 3
+           }
+          }
+         ]
+        }
+       },
+       "title": "Hidden header"
+      }
+     },
+     {
+      "kind": "RowsLayoutRow",
+      "spec": {
+       "layout": {
+        "kind": "AutoGridLayout",
+        "spec": {
+         "columnWidthMode": "standard",
+         "items": [
+          {
+           "kind": "AutoGridLayoutItem",
+           "spec": {
+            "element": {
+             "kind": "ElementReference",
+             "name": "panel-6"
+            }
+           }
+          },
+          {
+           "kind": "AutoGridLayoutItem",
+           "spec": {
+            "element": {
+             "kind": "ElementReference",
+             "name": "panel-7"
+            }
+           }
+          }
+         ],
+         "maxColumnCount": 2,
+         "rowHeightMode": "standard"
+        }
+       },
+       "title": "Auto grid inside"
+      }
+     },
+     {
+      "kind": "RowsLayoutRow",
+      "spec": {
+       "layout": {
+        "kind": "RowsLayout",
+        "spec": {
+         "rows": [
+          {
+           "kind": "RowsLayoutRow",
+           "spec": {
+            "layout": {
+             "kind": "GridLayout",
+             "spec": {
+              "items": [
+               {
+                "kind": "GridLayoutItem",
+                "spec": {
+                 "element": {
+                  "kind": "ElementReference",
+                  "name": "panel-8"
+                 },
+                 "height": 4,
+                 "width": 24,
+                 "x": 0,
+                 "y": 0
+                }
+               }
+              ]
+             }
+            },
+            "title": "Child A"
+           }
+          },
+          {
+           "kind": "RowsLayoutRow",
+           "spec": {
+            "collapse": true,
+            "layout": {
+             "kind": "GridLayout",
+             "spec": {
+              "items": [
+               {
+                "kind": "GridLayoutItem",
+                "spec": {
+                 "element": {
+                  "kind": "ElementReference",
+                  "name": "panel-9"
+                 },
+                 "height": 4,
+                 "width": 24,
+                 "x": 0,
+                 "y": 0
+                }
+               }
+              ]
+             }
+            },
+            "title": "Child B"
+           }
+          }
+         ]
+        }
+       },
+       "title": "Rows inside"
+      }
+     },
+     {
+      "kind": "RowsLayoutRow",
+      "spec": {
+       "layout": {
+        "kind": "TabsLayout",
+        "spec": {
+         "tabs": [
+          {
+           "kind": "TabsLayoutTab",
+           "spec": {
+            "layout": {
+             "kind": "GridLayout",
+             "spec": {
+              "items": [
+               {
+                "kind": "GridLayoutItem",
+                "spec": {
+                 "element": {
+                  "kind": "ElementReference",
+                  "name": "panel-10"
+                 },
+                 "height": 4,
+                 "width": 24,
+                 "x": 0,
+                 "y": 0
+                }
+               }
+              ]
+             }
+            },
+            "title": "T1"
+           }
+          },
+          {
+           "kind": "TabsLayoutTab",
+           "spec": {
+            "layout": {
+             "kind": "GridLayout",
+             "spec": {
+              "items": [
+               {
+                "kind": "GridLayoutItem",
+                "spec": {
+                 "element": {
+                  "kind": "ElementReference",
+                  "name": "panel-11"
+                 },
+                 "height": 4,
+                 "width": 24,
+                 "x": 0,
+                 "y": 0
+                }
+               }
+              ]
+             }
+            },
+            "title": "T2"
+           }
+          }
+         ]
+        }
+       },
+       "title": "Tabs inside"
+      }
+     },
+     {
+      "kind": "RowsLayoutRow",
+      "spec": {
+       "layout": {
+        "kind": "RowsLayout",
+        "spec": {
+         "rows": [
+          {
+           "kind": "RowsLayoutRow",
+           "spec": {
+            "collapse": true,
+            "layout": {
+             "kind": "GridLayout",
+             "spec": {
+              "items": [
+               {
+                "kind": "GridLayoutItem",
+                "spec": {
+                 "element": {
+                  "kind": "ElementReference",
+                  "name": "panel-12"
+                 },
+                 "height": 4,
+                 "width": 24,
+                 "x": 0,
+                 "y": 0
+                }
+               }
+              ]
+             }
+            },
+            "title": "Child C"
+           }
+          }
+         ]
+        }
+       },
+       "repeat": {
+        "mode": "variable",
+        "value": "instance"
+       },
+       "title": "Repeated parent"
+      }
+     }
+    ]
+   }
+  },
+  "links": [],
+  "preload": false,
+  "tags": [
+   "kubeast-v2-sample"
+  ],
+  "timeSettings": {
+   "autoRefresh": "",
+   "autoRefreshIntervals": [
+    "10s",
+    "30s",
+    "1m"
+   ],
+   "fiscalYearStartMonth": 0,
+   "from": "now-6h",
+   "hideTimepicker": false,
+   "timezone": "browser",
+   "to": "now"
+  },
+  "title": "Rows mixed",
+  "variables": [
+   {
+    "kind": "QueryVariable",
+    "spec": {
+     "allowCustomValue": true,
+     "current": {
+      "text": "",
+      "value": ""
+     },
+     "hide": "dontHide",
+     "includeAll": false,
+     "multi": true,
+     "name": "instance",
+     "options": [],
+     "query": {
+      "datasource": {
+       "name": "prometheus"
+      },
+      "group": "prometheus",
+      "kind": "DataQuery",
+      "spec": {
+       "__legacyStringValue": "label_values(up, instance)"
+      },
+      "version": "v0"
+     },
+     "refresh": "onTimeRangeChanged",
+     "regex": "",
+     "skipUrlSync": false,
+     "sort": "alphabeticalAsc"
+    }
+   }
+  ]
+ },
+ "status": {}
+}

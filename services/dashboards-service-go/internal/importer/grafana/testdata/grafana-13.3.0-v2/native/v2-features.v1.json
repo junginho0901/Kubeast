@@ -1,0 +1,549 @@
+{
+ "apiVersion": "dashboard.grafana.app/v1",
+ "kind": "Dashboard",
+ "metadata": {
+  "annotations": {
+   "grafana.app/createdBy": "user:fg2ygmaa82t4wf",
+   "grafana.app/updatedBy": "user:fg2ygmaa82t4wf"
+  },
+  "creationTimestamp": "2026-11-01T05:10:42Z",
+  "generation": 1,
+  "labels": {
+   "grafana.app/deprecatedInternalID": "67992094502912"
+  },
+  "name": "v2-features",
+  "namespace": "default",
+  "resourceVersion": "1793509842516987",
+  "uid": "4e8fcf46-ff7c-43da-9416-79fe022ab08e"
+ },
+ "spec": {
+  "annotations": {
+   "list": [
+    {
+     "builtIn": 1,
+     "datasource": {
+      "type": "grafana",
+      "uid": "-- Grafana --"
+     },
+     "enable": true,
+     "hide": true,
+     "iconColor": "rgba(0, 211, 255, 1)",
+     "name": "Annotations & Alerts",
+     "type": "dashboard"
+    },
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "enable": true,
+     "filter": {
+      "exclude": false,
+      "ids": [
+       2,
+       3
+      ]
+     },
+     "hide": false,
+     "iconColor": "blue",
+     "name": "Rollouts",
+     "step": "60s",
+     "target": {
+      "expr": "changes(kube_deployment_status_observed_generation[2m]) > 0"
+     },
+     "titleFormat": "rollout"
+    }
+   ]
+  },
+  "description": "every v2-only feature",
+  "editable": true,
+  "fiscalYearStartMonth": 3,
+  "graphTooltip": 2,
+  "links": [
+   {
+    "asDropdown": false,
+    "icon": "doc",
+    "includeVars": true,
+    "keepTime": true,
+    "placement": "inControlsMenu",
+    "tags": [],
+    "targetBlank": true,
+    "title": "Runbook",
+    "tooltip": "rb",
+    "type": "link",
+    "url": "https://example.invalid/runbook"
+   },
+   {
+    "asDropdown": true,
+    "icon": "external link",
+    "includeVars": false,
+    "keepTime": false,
+    "tags": [
+     "kubeast-v2-sample"
+    ],
+    "targetBlank": false,
+    "title": "Related",
+    "tooltip": "",
+    "type": "dashboards"
+   }
+  ],
+  "liveNow": true,
+  "panels": [
+   {
+    "gridPos": {
+     "h": 1,
+     "w": 24,
+     "x": 0,
+     "y": 0
+    },
+    "id": 9,
+    "title": "Section",
+    "type": "row"
+   },
+   {
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "description": "desc",
+    "gridPos": {
+     "h": 6,
+     "w": 12,
+     "x": 0,
+     "y": 1
+    },
+    "id": 1,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "refId": "A"
+     }
+    ],
+    "title": "Subtitle and transparent",
+    "transparent": true,
+    "type": "timeseries"
+   },
+   {
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "gridPos": {
+     "h": 6,
+     "w": 12,
+     "x": 12,
+     "y": 1
+    },
+    "hideTimeOverride": true,
+    "id": 2,
+    "interval": "1m",
+    "maxDataPoints": 500,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "sum(rate(http_requests_total[5m]))",
+      "legendFormat": "rps",
+      "refId": "A"
+     },
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "hide": true,
+      "refId": "B"
+     }
+    ],
+    "timeFrom": "1h",
+    "timeShift": "1d",
+    "title": "Custom element name",
+    "transformations": [
+     {
+      "disabled": true,
+      "filter": {
+       "id": "byRefId",
+       "options": "A"
+      },
+      "id": "reduce",
+      "options": {
+       "reducers": [
+        "last"
+       ]
+      }
+     }
+    ],
+    "type": "stat"
+   },
+   {
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "gridPos": {
+     "h": 4,
+     "w": 24,
+     "x": 0,
+     "y": 7
+    },
+    "id": 5,
+    "maxPerRow": 2,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "repeat": "env",
+    "repeatDirection": "v",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "refId": "A"
+     }
+    ],
+    "title": "Repeated item",
+    "type": "timeseries"
+   },
+   {
+    "gridPos": {
+     "h": 1,
+     "w": 24,
+     "x": 0,
+     "y": 11
+    },
+    "id": 10,
+    "title": "More",
+    "type": "row"
+   },
+   {
+    "datasource": {
+     "type": "loki",
+     "uid": "loki"
+    },
+    "gridPos": {
+     "h": 9,
+     "w": 12,
+     "x": 0,
+     "y": 12
+    },
+    "id": 3,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "loki",
+       "uid": "loki"
+      },
+      "expr": "{app=\"web\"} |= \"error\"",
+      "refId": "A"
+     }
+    ],
+    "title": "Loki logs",
+    "type": "logs"
+   },
+   {
+    "datasource": {
+     "type": "mixed",
+     "uid": "-- Mixed --"
+    },
+    "gridPos": {
+     "h": 9,
+     "w": 12,
+     "x": 12,
+     "y": 12
+    },
+    "id": 4,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "refId": "A"
+     },
+     {
+      "datasource": {
+       "type": "loki",
+       "uid": "loki"
+      },
+      "expr": "count_over_time({app=\"web\"}[5m])",
+      "refId": "B"
+     }
+    ],
+    "title": "Mixed sources",
+    "type": "timeseries"
+   },
+   {
+    "gridPos": {
+     "h": 9,
+     "w": 12,
+     "x": 0,
+     "y": 21
+    },
+    "id": 7,
+    "libraryPanel": {
+     "name": "Shared CPU",
+     "uid": "lib-uid-1"
+    },
+    "title": "Library",
+    "type": "library-panel-ref"
+   },
+   {
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "gridPos": {
+     "h": 9,
+     "w": 12,
+     "x": 12,
+     "y": 21
+    },
+    "id": 6,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "refId": "A"
+     }
+    ],
+    "title": "Conditional",
+    "type": "timeseries"
+   }
+  ],
+  "preload": false,
+  "refresh": "30s",
+  "schemaVersion": 42,
+  "tags": [
+   "kubeast-v2-sample"
+  ],
+  "templating": {
+   "list": [
+    {
+     "allowCustomValue": true,
+     "current": {
+      "text": "prod",
+      "value": "prod"
+     },
+     "hide": 0,
+     "includeAll": false,
+     "multi": false,
+     "name": "env",
+     "options": [
+      {
+       "selected": true,
+       "text": "prod",
+       "value": "prod"
+      },
+      {
+       "selected": false,
+       "text": "stage",
+       "value": "stage"
+      }
+     ],
+     "query": "prod,stage",
+     "skipUrlSync": false,
+     "type": "custom"
+    },
+    {
+     "allowCustomValue": true,
+     "current": {
+      "text": "",
+      "value": ""
+     },
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "definition": "label_values(up, job)",
+     "hide": 1,
+     "includeAll": false,
+     "multi": false,
+     "name": "job",
+     "options": [],
+     "query": "label_values(up, job)",
+     "refresh": 1,
+     "regex": "/(.*)/",
+     "skipUrlSync": false,
+     "sort": 4,
+     "type": "query"
+    },
+    {
+     "allowCustomValue": true,
+     "current": {
+      "text": "prometheus",
+      "value": "prometheus"
+     },
+     "hide": 0,
+     "includeAll": false,
+     "multi": false,
+     "name": "ds",
+     "options": [],
+     "query": "prometheus",
+     "refresh": 1,
+     "regex": "",
+     "skipUrlSync": false,
+     "type": "datasource"
+    },
+    {
+     "auto": true,
+     "auto_count": 30,
+     "auto_min": "10s",
+     "current": {
+      "text": "5m",
+      "value": "5m"
+     },
+     "hide": 0,
+     "name": "interval",
+     "options": [
+      {
+       "text": "1m",
+       "value": "1m"
+      },
+      {
+       "selected": true,
+       "text": "5m",
+       "value": "5m"
+      },
+      {
+       "text": "10m",
+       "value": "10m"
+      }
+     ],
+     "query": "1m,5m,10m",
+     "skipUrlSync": false,
+     "type": "interval"
+    },
+    {
+     "current": {
+      "text": "ap-northeast-2",
+      "value": "ap-northeast-2"
+     },
+     "hide": 2,
+     "name": "region",
+     "query": "ap-northeast-2",
+     "skipUrlSync": false,
+     "type": "constant"
+    },
+    {
+     "current": {
+      "text": "",
+      "value": ""
+     },
+     "hide": 0,
+     "name": "search",
+     "query": "",
+     "skipUrlSync": false,
+     "type": "textbox"
+    },
+    {
+     "current": {
+      "text": "false",
+      "value": "false"
+     },
+     "hide": 0,
+     "name": "debug",
+     "options": [
+      {
+       "selected": false,
+       "text": "true",
+       "value": "true"
+      },
+      {
+       "selected": true,
+       "text": "false",
+       "value": "false"
+      }
+     ],
+     "query": "",
+     "skipUrlSync": false,
+     "type": "switch"
+    },
+    {
+     "allowCustomValue": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "filters": [
+      {
+       "key": "namespace",
+       "operator": "=",
+       "value": "web"
+      }
+     ],
+     "hide": 0,
+     "name": "filters",
+     "skipUrlSync": false,
+     "type": "adhoc"
+    },
+    {
+     "current": {
+      "text": "job",
+      "value": "job"
+     },
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "hide": 0,
+     "multi": true,
+     "name": "groupby",
+     "options": [],
+     "skipUrlSync": false,
+     "type": "groupby"
+    }
+   ]
+  },
+  "time": {
+   "from": "now-6h",
+   "to": "now"
+  },
+  "timepicker": {
+   "hidden": true,
+   "nowDelay": "1m",
+   "quick_ranges": [
+    {
+     "display": "Last 2 hours",
+     "from": "now-2h",
+     "to": "now"
+    }
+   ],
+   "refresh_intervals": [
+    "10s",
+    "30s",
+    "1m"
+   ]
+  },
+  "timezone": "utc",
+  "title": "Features",
+  "weekStart": "monday"
+ },
+ "status": {
+  "conversion": {
+   "failed": false,
+   "storedVersion": "v2"
+  }
+ }
+}

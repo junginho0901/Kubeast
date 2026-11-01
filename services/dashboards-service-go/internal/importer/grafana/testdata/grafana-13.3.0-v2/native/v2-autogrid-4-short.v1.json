@@ -1,0 +1,216 @@
+{
+ "apiVersion": "dashboard.grafana.app/v1",
+ "kind": "Dashboard",
+ "metadata": {
+  "annotations": {
+   "grafana.app/createdBy": "user:fg2ygmaa82t4wf",
+   "grafana.app/updatedBy": "user:fg2ygmaa82t4wf"
+  },
+  "creationTimestamp": "2026-11-01T05:10:42Z",
+  "generation": 1,
+  "labels": {
+   "grafana.app/deprecatedInternalID": "67991121424384"
+  },
+  "name": "v2-autogrid-4-short",
+  "namespace": "default",
+  "resourceVersion": "1793509842289991",
+  "uid": "ef03b88d-95e5-48e1-813a-34063182654e"
+ },
+ "spec": {
+  "annotations": {
+   "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "panels": [
+   {
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "gridPos": {
+     "h": 5,
+     "w": 6,
+     "x": 0,
+     "y": 0
+    },
+    "id": 1,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "refId": "A"
+     }
+    ],
+    "title": "Panel 1",
+    "type": "timeseries"
+   },
+   {
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "gridPos": {
+     "h": 5,
+     "w": 6,
+     "x": 6,
+     "y": 0
+    },
+    "id": 2,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "refId": "A"
+     }
+    ],
+    "title": "Panel 2",
+    "type": "timeseries"
+   },
+   {
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "gridPos": {
+     "h": 5,
+     "w": 6,
+     "x": 12,
+     "y": 0
+    },
+    "id": 3,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "refId": "A"
+     }
+    ],
+    "title": "Panel 3",
+    "type": "timeseries"
+   },
+   {
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "gridPos": {
+     "h": 5,
+     "w": 6,
+     "x": 18,
+     "y": 0
+    },
+    "id": 4,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "refId": "A"
+     }
+    ],
+    "title": "Panel 4",
+    "type": "timeseries"
+   },
+   {
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "gridPos": {
+     "h": 5,
+     "w": 6,
+     "x": 0,
+     "y": 5
+    },
+    "id": 5,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "refId": "A"
+     }
+    ],
+    "title": "Panel 5",
+    "type": "timeseries"
+   },
+   {
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "gridPos": {
+     "h": 5,
+     "w": 6,
+     "x": 6,
+     "y": 5
+    },
+    "id": 6,
+    "options": {},
+    "pluginVersion": "13.3.0",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "prometheus"
+      },
+      "expr": "up",
+      "refId": "A"
+     }
+    ],
+    "title": "Panel 6",
+    "type": "timeseries"
+   }
+  ],
+  "preload": false,
+  "refresh": "",
+  "schemaVersion": 42,
+  "tags": [
+   "kubeast-v2-sample"
+  ],
+  "time": {
+   "from": "now-6h",
+   "to": "now"
+  },
+  "timepicker": {
+   "refresh_intervals": [
+    "10s",
+    "30s",
+    "1m"
+   ]
+  },
+  "timezone": "browser",
+  "title": "Auto grid 4 short"
+ },
+ "status": {
+  "conversion": {
+   "failed": false,
+   "storedVersion": "v2"
+  }
+ }
+}

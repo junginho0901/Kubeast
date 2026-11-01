@@ -1,0 +1,926 @@
+{
+ "apiVersion": "dashboard.grafana.app/v2beta1",
+ "kind": "Dashboard",
+ "metadata": {
+  "annotations": {
+   "grafana.app/createdBy": "user:fg2ygmaa82t4wf",
+   "grafana.app/updatedBy": "user:fg2ygmaa82t4wf"
+  },
+  "creationTimestamp": "2026-11-01T05:10:42Z",
+  "generation": 1,
+  "labels": {
+   "grafana.app/deprecatedInternalID": "67992094502912"
+  },
+  "name": "v2-features",
+  "namespace": "default",
+  "resourceVersion": "1793509842516987",
+  "uid": "4e8fcf46-ff7c-43da-9416-79fe022ab08e"
+ },
+ "spec": {
+  "annotations": [
+   {
+    "kind": "AnnotationQuery",
+    "spec": {
+     "builtIn": true,
+     "enable": true,
+     "hide": true,
+     "iconColor": "rgba(0, 211, 255, 1)",
+     "legacyOptions": {
+      "type": "dashboard"
+     },
+     "name": "Annotations & Alerts",
+     "query": {
+      "datasource": {
+       "name": "-- Grafana --"
+      },
+      "group": "grafana",
+      "kind": "DataQuery",
+      "spec": {},
+      "version": "v0"
+     }
+    }
+   },
+   {
+    "kind": "AnnotationQuery",
+    "spec": {
+     "enable": true,
+     "filter": {
+      "exclude": false,
+      "ids": [
+       2,
+       3
+      ]
+     },
+     "hide": false,
+     "iconColor": "blue",
+     "legacyOptions": {
+      "step": "60s",
+      "titleFormat": "rollout"
+     },
+     "name": "Rollouts",
+     "query": {
+      "datasource": {
+       "name": "prometheus"
+      },
+      "group": "prometheus",
+      "kind": "DataQuery",
+      "spec": {
+       "expr": "changes(kube_deployment_status_observed_generation[2m]) > 0"
+      },
+      "version": "v0"
+     }
+    }
+   }
+  ],
+  "cursorSync": "Tooltip",
+  "description": "every v2-only feature",
+  "editable": true,
+  "elements": {
+   "lib": {
+    "kind": "LibraryPanel",
+    "spec": {
+     "id": 7,
+     "libraryPanel": {
+      "name": "Shared CPU",
+      "uid": "lib-uid-1"
+     },
+     "title": "Library"
+    }
+   },
+   "my-custom-name": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "sum(rate(http_requests_total[5m]))",
+            "legendFormat": "rps"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        },
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": true,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "B"
+         }
+        }
+       ],
+       "queryOptions": {
+        "hideTimeOverride": true,
+        "interval": "1m",
+        "maxDataPoints": 500,
+        "timeFrom": "1h",
+        "timeShift": "1d"
+       },
+       "transformations": [
+        {
+         "kind": "reduce",
+         "spec": {
+          "disabled": true,
+          "filter": {
+           "id": "byRefId",
+           "options": "A"
+          },
+          "id": "reduce",
+          "options": {
+           "reducers": [
+            "last"
+           ]
+          },
+          "topic": "series"
+         }
+        }
+       ]
+      }
+     },
+     "id": 2,
+     "links": [],
+     "title": "Custom element name",
+     "vizConfig": {
+      "group": "stat",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   },
+   "panel-1": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "description": "desc",
+     "id": 1,
+     "links": [],
+     "subtitle": "a subtitle",
+     "title": "Subtitle and transparent",
+     "transparent": true,
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   },
+   "panel-3": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "loki"
+           },
+           "group": "loki",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "{app=\"web\"} |= \"error\""
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 3,
+     "links": [],
+     "title": "Loki logs",
+     "vizConfig": {
+      "group": "logs",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   },
+   "panel-4": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        },
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "loki"
+           },
+           "group": "loki",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "count_over_time({app=\"web\"}[5m])"
+           },
+           "version": "v0"
+          },
+          "refId": "B"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 4,
+     "links": [],
+     "title": "Mixed sources",
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   },
+   "panel-5": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 5,
+     "links": [],
+     "title": "Repeated item",
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   },
+   "panel-6": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 6,
+     "links": [],
+     "title": "Conditional",
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   },
+   "panel-8": {
+    "kind": "Panel",
+    "spec": {
+     "data": {
+      "kind": "QueryGroup",
+      "spec": {
+       "queries": [
+        {
+         "kind": "PanelQuery",
+         "spec": {
+          "hidden": false,
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "up"
+           },
+           "version": "v0"
+          },
+          "refId": "A"
+         }
+        }
+       ],
+       "queryOptions": {},
+       "transformations": []
+      }
+     },
+     "id": 8,
+     "links": [],
+     "title": "Not placed anywhere",
+     "vizConfig": {
+      "group": "timeseries",
+      "kind": "VizConfig",
+      "spec": {
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {}
+      },
+      "version": "13.3.0"
+     }
+    }
+   }
+  },
+  "layout": {
+   "kind": "RowsLayout",
+   "spec": {
+    "rows": [
+     {
+      "kind": "RowsLayoutRow",
+      "spec": {
+       "annotations": [
+        {
+         "kind": "AnnotationQuery",
+         "spec": {
+          "enable": true,
+          "hide": false,
+          "iconColor": "red",
+          "name": "Section deploys",
+          "query": {
+           "datasource": {
+            "name": "prometheus"
+           },
+           "group": "prometheus",
+           "kind": "DataQuery",
+           "spec": {
+            "expr": "changes(up[5m]) > 0"
+           },
+           "version": "v0"
+          }
+         }
+        }
+       ],
+       "conditionalRendering": {
+        "kind": "ConditionalRenderingGroup",
+        "spec": {
+         "condition": "and",
+         "items": [
+          {
+           "kind": "ConditionalRenderingVariable",
+           "spec": {
+            "operator": "equals",
+            "value": "prod",
+            "variable": "env"
+           }
+          }
+         ],
+         "visibility": "show"
+        }
+       },
+       "fillScreen": true,
+       "layout": {
+        "kind": "GridLayout",
+        "spec": {
+         "items": [
+          {
+           "kind": "GridLayoutItem",
+           "spec": {
+            "element": {
+             "kind": "ElementReference",
+             "name": "panel-1"
+            },
+            "height": 6,
+            "width": 12,
+            "x": 0,
+            "y": 0
+           }
+          },
+          {
+           "kind": "GridLayoutItem",
+           "spec": {
+            "element": {
+             "kind": "ElementReference",
+             "name": "my-custom-name"
+            },
+            "height": 6,
+            "width": 12,
+            "x": 12,
+            "y": 0
+           }
+          },
+          {
+           "kind": "GridLayoutItem",
+           "spec": {
+            "element": {
+             "kind": "ElementReference",
+             "name": "panel-5"
+            },
+            "height": 4,
+            "repeat": {
+             "direction": "v",
+             "maxPerRow": 2,
+             "mode": "variable",
+             "value": "env"
+            },
+            "width": 24,
+            "x": 0,
+            "y": 6
+           }
+          }
+         ]
+        }
+       },
+       "title": "Section",
+       "variables": [
+        {
+         "kind": "TextVariable",
+         "spec": {
+          "current": {
+           "text": "x",
+           "value": "x"
+          },
+          "hide": "dontHide",
+          "name": "section_note",
+          "query": "x",
+          "skipUrlSync": false
+         }
+        }
+       ]
+      }
+     },
+     {
+      "kind": "RowsLayoutRow",
+      "spec": {
+       "layout": {
+        "kind": "AutoGridLayout",
+        "spec": {
+         "columnWidthMode": "standard",
+         "fillScreen": true,
+         "items": [
+          {
+           "kind": "AutoGridLayoutItem",
+           "spec": {
+            "element": {
+             "kind": "ElementReference",
+             "name": "panel-3"
+            }
+           }
+          },
+          {
+           "kind": "AutoGridLayoutItem",
+           "spec": {
+            "element": {
+             "kind": "ElementReference",
+             "name": "panel-4"
+            }
+           }
+          },
+          {
+           "kind": "AutoGridLayoutItem",
+           "spec": {
+            "element": {
+             "kind": "ElementReference",
+             "name": "lib"
+            }
+           }
+          },
+          {
+           "kind": "AutoGridLayoutItem",
+           "spec": {
+            "conditionalRendering": {
+             "kind": "ConditionalRenderingGroup",
+             "spec": {
+              "condition": "and",
+              "items": [
+               {
+                "kind": "ConditionalRenderingVariable",
+                "spec": {
+                 "operator": "equals",
+                 "value": "prod",
+                 "variable": "env"
+                }
+               }
+              ],
+              "visibility": "show"
+             }
+            },
+            "element": {
+             "kind": "ElementReference",
+             "name": "panel-6"
+            }
+           }
+          }
+         ],
+         "maxColumnCount": 2,
+         "rowHeightMode": "standard"
+        }
+       },
+       "title": "More"
+      }
+     }
+    ]
+   }
+  },
+  "links": [
+   {
+    "asDropdown": false,
+    "icon": "doc",
+    "includeVars": true,
+    "keepTime": true,
+    "placement": "inControlsMenu",
+    "tags": [],
+    "targetBlank": true,
+    "title": "Runbook",
+    "tooltip": "rb",
+    "type": "link",
+    "url": "https://example.invalid/runbook"
+   },
+   {
+    "asDropdown": true,
+    "icon": "external link",
+    "includeVars": false,
+    "keepTime": false,
+    "tags": [
+     "kubeast-v2-sample"
+    ],
+    "targetBlank": false,
+    "title": "Related",
+    "tooltip": "",
+    "type": "dashboards"
+   }
+  ],
+  "liveNow": true,
+  "preload": false,
+  "tags": [
+   "kubeast-v2-sample"
+  ],
+  "timeSettings": {
+   "autoRefresh": "30s",
+   "autoRefreshIntervals": [
+    "10s",
+    "30s",
+    "1m"
+   ],
+   "fiscalYearStartMonth": 3,
+   "from": "now-6h",
+   "hideTimepicker": true,
+   "nowDelay": "1m",
+   "quickRanges": [
+    {
+     "display": "Last 2 hours",
+     "from": "now-2h",
+     "to": "now"
+    }
+   ],
+   "timezone": "utc",
+   "to": "now",
+   "weekStart": "monday"
+  },
+  "title": "Features",
+  "variables": [
+   {
+    "kind": "CustomVariable",
+    "spec": {
+     "allowCustomValue": true,
+     "current": {
+      "text": "prod",
+      "value": "prod"
+     },
+     "hide": "dontHide",
+     "includeAll": false,
+     "multi": false,
+     "name": "env",
+     "options": [
+      {
+       "selected": true,
+       "text": "prod",
+       "value": "prod"
+      },
+      {
+       "selected": false,
+       "text": "stage",
+       "value": "stage"
+      }
+     ],
+     "query": "prod,stage",
+     "skipUrlSync": false
+    }
+   },
+   {
+    "kind": "QueryVariable",
+    "spec": {
+     "allowCustomValue": true,
+     "current": {
+      "text": "",
+      "value": ""
+     },
+     "definition": "label_values(up, job)",
+     "hide": "hideLabel",
+     "includeAll": false,
+     "multi": false,
+     "name": "job",
+     "options": [],
+     "query": {
+      "datasource": {
+       "name": "prometheus"
+      },
+      "group": "prometheus",
+      "kind": "DataQuery",
+      "spec": {
+       "__legacyStringValue": "label_values(up, job)"
+      },
+      "version": "v0"
+     },
+     "refresh": "onDashboardLoad",
+     "regex": "/(.*)/",
+     "skipUrlSync": false,
+     "sort": "numericalDesc"
+    }
+   },
+   {
+    "kind": "DatasourceVariable",
+    "spec": {
+     "allowCustomValue": true,
+     "current": {
+      "text": "prometheus",
+      "value": "prometheus"
+     },
+     "hide": "dontHide",
+     "includeAll": false,
+     "multi": false,
+     "name": "ds",
+     "options": [],
+     "pluginId": "prometheus",
+     "refresh": "onDashboardLoad",
+     "regex": "",
+     "skipUrlSync": false
+    }
+   },
+   {
+    "kind": "IntervalVariable",
+    "spec": {
+     "auto": true,
+     "auto_count": 30,
+     "auto_min": "10s",
+     "current": {
+      "text": "5m",
+      "value": "5m"
+     },
+     "hide": "dontHide",
+     "name": "interval",
+     "options": [
+      {
+       "text": "1m",
+       "value": "1m"
+      },
+      {
+       "selected": true,
+       "text": "5m",
+       "value": "5m"
+      },
+      {
+       "text": "10m",
+       "value": "10m"
+      }
+     ],
+     "query": "1m,5m,10m",
+     "refresh": "onTimeRangeChanged",
+     "skipUrlSync": false
+    }
+   },
+   {
+    "kind": "ConstantVariable",
+    "spec": {
+     "current": {
+      "text": "ap-northeast-2",
+      "value": "ap-northeast-2"
+     },
+     "hide": "hideVariable",
+     "name": "region",
+     "query": "ap-northeast-2",
+     "skipUrlSync": false
+    }
+   },
+   {
+    "kind": "TextVariable",
+    "spec": {
+     "current": {
+      "text": "",
+      "value": ""
+     },
+     "hide": "dontHide",
+     "name": "search",
+     "query": "",
+     "skipUrlSync": false
+    }
+   },
+   {
+    "kind": "SwitchVariable",
+    "spec": {
+     "current": "false",
+     "disabledValue": "false",
+     "enabledValue": "true",
+     "hide": "dontHide",
+     "name": "debug",
+     "skipUrlSync": false
+    }
+   },
+   {
+    "datasource": {
+     "name": "prometheus"
+    },
+    "group": "prometheus",
+    "kind": "AdhocVariable",
+    "spec": {
+     "allowCustomValue": true,
+     "baseFilters": [],
+     "defaultKeys": [],
+     "filters": [
+      {
+       "key": "namespace",
+       "operator": "=",
+       "value": "web"
+      }
+     ],
+     "hide": "dontHide",
+     "name": "filters",
+     "skipUrlSync": false
+    }
+   },
+   {
+    "datasource": {
+     "name": "prometheus"
+    },
+    "group": "prometheus",
+    "kind": "GroupByVariable",
+    "spec": {
+     "current": {
+      "text": "job",
+      "value": "job"
+     },
+     "hide": "dontHide",
+     "multi": true,
+     "name": "groupby",
+     "options": [],
+     "skipUrlSync": false
+    }
+   }
+  ]
+ },
+ "status": {
+  "conversion": {
+   "failed": false,
+   "storedVersion": "v2"
+  }
+ }
+}

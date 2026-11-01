@@ -7,7 +7,7 @@ import (
 
 func TestValues(t *testing.T) {
 	for _, e := range []Enum{EnumPanelKind, EnumStore, EnumVariableKind, EnumMatcherKind, EnumColorToken,
-		EnumCursorSync, EnumRefreshPoint, EnumThresholdMode, EnumRepeatDir} {
+		EnumCursorSync, EnumRefreshPoint, EnumThresholdMode, EnumRepeatDir, EnumSourceKind} {
 		got := Values(e)
 		if len(got) == 0 {
 			t.Errorf("%s: no values", e)

@@ -123,10 +123,13 @@ func TestImportedPassesSchema(t *testing.T) {
 	}
 }
 
-// The published dashboards in the importer's corpus pass the schema once imported.
+// The published dashboards in the importer's corpus, and the Grafana 13 schema
+// v2 samples, pass the schema once imported.
 func TestImportedCorpusPassesSchema(t *testing.T) {
 	s := load(t)
 	files, _ := filepath.Glob("../importer/grafana/testdata/corpus/*/*.json")
+	v2, _ := filepath.Glob("../importer/grafana/testdata/grafana-13.3.0-v2/native/*.v2*.json")
+	files = append(files, v2...)
 	if len(files) == 0 {
 		t.Fatal("no corpus")
 	}
@@ -207,7 +210,7 @@ func TestBrokenFailsBoth(t *testing.T) {
 		{"no annotation enable", func(d map[string]any) {
 			delete(obj(d, "spec")["annotations"].([]any)[0].(map[string]any), "enable")
 		}},
-		{"bad source kind", func(d map[string]any) { d["source"] = map[string]any{"kind": "grafana-v2"} }},
+		{"bad source kind", func(d map[string]any) { d["source"] = map[string]any{"kind": "grafana-v9"} }},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

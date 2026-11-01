@@ -123,7 +123,7 @@ func TestValidate_FindsEachProblem(t *testing.T) {
 			d.Spec.Layout.Items = append(d.Spec.Layout.Items, LayoutItem{Panel: "note", X: 12, Y: 0, W: 12, H: 8})
 		}, "spec.panels.note", "placed 2 times"},
 		{"annotation hex colour", func(d *Dashboard) { d.Spec.Annotations[0].Color = "#00ff00" }, "spec.annotations[0].color", "theme token"},
-		{"unknown source kind", func(d *Dashboard) { d.Source = &Source{Kind: "grafana-v2"} }, "source.kind", "must be"},
+		{"unknown source kind", func(d *Dashboard) { d.Source = &Source{Kind: "grafana-v9"} }, "source.kind", "must be"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
