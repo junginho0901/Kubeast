@@ -37,6 +37,9 @@ func (h *Handler) GetGPUDashboard(w http.ResponseWriter, r *http.Request) {
 // --- GPU Metrics (Prometheus / DCGM) ---
 
 func (h *Handler) GetGPUMetrics(w http.ResponseWriter, r *http.Request) {
+	if !promClusterWide(w, r) {
+		return
+	}
 	ctx := r.Context()
 	data, err := h.svc.GetGPUMetrics(ctx)
 	if err != nil {
@@ -55,6 +58,9 @@ func (h *Handler) GetPrometheusStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) PrometheusQuery(w http.ResponseWriter, r *http.Request) {
+	if !promClusterWide(w, r) {
+		return
+	}
 	ctx := r.Context()
 	query := r.URL.Query().Get("query")
 	if query == "" {
@@ -96,6 +102,9 @@ func (h *Handler) PrometheusQuery(w http.ResponseWriter, r *http.Request) {
 // of a single `value`. Used by feature detail modals (HPA scaling history,
 // Node 24h CPU/Mem trend) — see refactor-plan.md.
 func (h *Handler) PrometheusQueryRange(w http.ResponseWriter, r *http.Request) {
+	if !promClusterWide(w, r) {
+		return
+	}
 	ctx := r.Context()
 	q := r.URL.Query().Get("query")
 	if q == "" {
@@ -165,6 +174,9 @@ func (h *Handler) GetClusterFeatures(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, map[string]interface{}{
 		"prometheus": map[string]interface{}{
 			"enabled": k8s.PrometheusFeatureEnabled(),
+			// the cluster has a Prometheus and the caller's grant on it is limited to namespaces: the Prometheus reads
+			// refuse it (promClusterWide), which the drawers say instead of leaving their metrics out
+			"namespaceLimited": len(promScope(r)) > 0 && h.svc.PrometheusAvailable(r.Context()),
 		},
 		"gitops": map[string]interface{}{
 			"argocd": map[string]interface{}{"enabled": g.Enabled, "mode": g.Mode, "url": g.URL, "trackingAnnotation": g.TrackingAnnotation, "instanceLabel": g.InstanceLabel},

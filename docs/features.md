@@ -189,6 +189,9 @@
     - An "all namespaces" query goes through the list one by one and merges the results.
     - Dashboard counts are counted only within the list (`scoped: true`). Nodes and PVs are 0.
   - AI tools and MCP require `namespace` and refuse cluster-wide tools: overview, node metrics, apply, create, API list and cluster settings.
+  - The cluster's Prometheus answers for the whole cluster, so its reads answer 403 to such grants. This covers `/prometheus/query`, `query_range`, `metrics`, `labels`, `rules`, `targets` and `/gpu/metrics`, whether the cluster reaches the store through the API server's proxy or as an external store with Kubeast's own credentials. Alerts and silences are refused the same way.
+    - `/cluster/features` reports `prometheus.namespaceLimited`, and the drawers' Prometheus sections then say the metrics need a grant on the whole cluster instead of asking.
+    - The proxy path's short query cache is kept per identity (`CacheIdentity`), so no one is served an answer read for someone else.
   - The cluster-side identity is the `kubeast:role:<slug>` group, so **the cluster refuses until a RoleBinding is bound in each of those namespaces**.
   - Writing `{name: Read, namespaces: [a, b], clusterRoles: [view]}` in the chart's `auth.impersonation.customRoles` renders those RoleBindings. They are applied on each registered cluster.
   - In the UI:

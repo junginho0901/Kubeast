@@ -33,6 +33,12 @@ export function useClusterFeatures() {
   })
 }
 
+// The hooks ask only while the cluster's toggle is on and the caller's grant covers the whole cluster: a grant
+// limited to namespaces is refused the cluster's Prometheus (features.prometheus.namespaceLimited).
+export function prometheusReadable(features: ClusterFeatures | undefined): boolean {
+  return features?.prometheus?.enabled !== false && features?.prometheus?.namespaceLimited !== true
+}
+
 /**
  * Generic hook for querying Prometheus via the backend proxy.
  * Returns { available, results } or undefined while loading.
@@ -51,14 +57,16 @@ export function usePrometheusQuery(
   options?: { enabled?: boolean; refetchInterval?: number },
 ) {
   const features = useClusterFeatures()
-  const promEnabled = features.data?.prometheus?.enabled !== false
+  const promEnabled = prometheusReadable(features.data)
+  // the features' placeholder says "on" while they load: ask once they have come (or failed)
+  const featuresIn = features.isFetched
   // Scope to the selected cluster so metrics never bleed across a switch.
   const { currentCluster } = useCluster()
   return useQuery<PrometheusQueryResponse>({
     queryKey: ['prometheus', currentCluster || 'default', ...queryKey],
     queryFn: () => api.prometheusQuery(promql),
     refetchInterval: options?.refetchInterval ?? 30000,
-    enabled: (options?.enabled ?? true) && promEnabled,
+    enabled: (options?.enabled ?? true) && featuresIn && promEnabled,
     retry: 1,
     retryDelay: 2000,
     staleTime: 10000,
@@ -80,14 +88,16 @@ export function usePrometheusQueries(
   // each PromQL is its own query. useQueries keeps the hook count constant
   // (a hook per array element would break the Rules of Hooks).
   const features = useClusterFeatures()
-  const promEnabled = features.data?.prometheus?.enabled !== false
+  const promEnabled = prometheusReadable(features.data)
+  // the features' placeholder says "on" while they load: ask once they have come (or failed)
+  const featuresIn = features.isFetched
   const { currentCluster } = useCluster()
   const results = useQueries({
     queries: queries.map((q) => ({
       queryKey: ['prometheus', currentCluster || 'default', ...queryKey, q.name],
       queryFn: () => api.prometheusQuery(q.promql),
       refetchInterval: options?.refetchInterval ?? 30000,
-      enabled: (options?.enabled ?? true) && promEnabled,
+      enabled: (options?.enabled ?? true) && featuresIn && promEnabled,
       retry: 1,
       retryDelay: 2000,
       staleTime: 10000,
@@ -126,7 +136,9 @@ export function usePrometheusRangeQuery(
   },
 ) {
   const features = useClusterFeatures()
-  const promEnabled = features.data?.prometheus?.enabled !== false
+  const promEnabled = prometheusReadable(features.data)
+  // the features' placeholder says "on" while they load: ask once they have come (or failed)
+  const featuresIn = features.isFetched
   const { currentCluster } = useCluster()
   return useQuery<PrometheusRangeResponse>({
     queryKey: ['prometheus-range', currentCluster || 'default', ...queryKey, options?.step ?? 'step-default'],
@@ -136,7 +148,7 @@ export function usePrometheusRangeQuery(
       step: options?.step,
     }),
     refetchInterval: options?.refetchInterval ?? 5 * 60 * 1000, // 5 min — range data is slow-moving
-    enabled: (options?.enabled ?? true) && promEnabled,
+    enabled: (options?.enabled ?? true) && featuresIn && promEnabled,
     retry: 1,
     retryDelay: 2000,
     staleTime: 60 * 1000,

@@ -15,6 +15,7 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql/parser"
 
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 )
 
@@ -236,13 +237,32 @@ func (s *Service) getPromSource(ctx context.Context) *promSource {
 }
 
 // promFetch coalesces + caches identical calls per cluster (as the proxy path
-// always did) and sends them to whichever source the cluster has.
+// always did) and sends them to whichever source the cluster has. Through the
+// API server's proxy the answer is what the caller's identity may read, so that
+// key carries the identity (CacheIdentity) and a hit never serves one user's
+// answer to another; an external store answers Kubeast's own credentials alike
+// for everyone the handlers let ask.
 func (s *Service) promFetch(ctx context.Context, src *promSource, promPath string) ([]map[string]interface{}, error) {
-	key := string(ctxClusterID(ctx)) + "|" + promPath
+	key := promCacheKey(ctx, src, promPath)
 	return s.promQ.do(key, func() ([]map[string]interface{}, error) {
 		if src.ext != nil {
 			return s.prometheusExternal(ctx, src.ext, promPath)
 		}
 		return s.prometheusViaProxyUncached(ctx, src.proxy, promPath)
 	})
+}
+
+// promCacheKey is promFetch's cache and singleflight key: the cluster and the path, and on the proxy path the
+// identity the request reaches the cluster as (none for Kubeast's own, without a signed-in caller).
+func promCacheKey(ctx context.Context, src *promSource, promPath string) string {
+	id := string(ctxClusterID(ctx))
+	key := id + "|" + promPath
+	if src.ext != nil {
+		return key
+	}
+	identity := ""
+	if p, ok := auth.FromContext(ctx); ok {
+		identity = p.CacheIdentity(id)
+	}
+	return key + "|as:" + identity
 }

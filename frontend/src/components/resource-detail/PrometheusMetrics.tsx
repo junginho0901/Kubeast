@@ -1,3 +1,4 @@
+import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
 import { Tx } from './DetailCommon'
 
 /**
@@ -85,6 +86,15 @@ export function PrometheusSection({
   title: string
   children: React.ReactNode
 }) {
+  const features = useClusterFeatures()
+  if (features.data?.prometheus?.namespaceLimited) {
+    return (
+      <div className="mt-4 rounded-lg border border-slate-700/50 bg-slate-800/30 p-4" data-testid="prometheus-namespace-limited">
+        <h3 className="text-xs font-semibold text-slate-300 mb-2"><Tx>{title}</Tx></h3>
+        <p className="text-xs text-slate-400"><Tx>Metrics from the cluster's Prometheus need a grant on the whole cluster.</Tx></p>
+      </div>
+    )
+  }
   if (!available) return null
   return (
     <div className="mt-4 rounded-lg border border-slate-700/50 bg-slate-800/30 p-4">

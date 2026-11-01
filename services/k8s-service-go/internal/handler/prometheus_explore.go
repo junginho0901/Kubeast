@@ -35,7 +35,12 @@ func boundedInt(raw string, def, max int) int {
 	return n
 }
 
+// promUnavailable answers (and returns true) for a caller refused the cluster's Prometheus (promClusterWide) or a
+// cluster without one.
 func (h *Handler) promUnavailable(w http.ResponseWriter, r *http.Request) bool {
+	if !promClusterWide(w, r) {
+		return true
+	}
 	if h.svc.PrometheusAvailable(r.Context()) {
 		return false
 	}
