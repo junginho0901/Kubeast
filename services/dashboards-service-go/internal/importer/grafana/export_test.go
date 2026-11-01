@@ -600,3 +600,33 @@ func TestExport_V2OnlyValuesStayOffThePanel(t *testing.T) {
 		t.Error("an item's conditional rendering should be reported as kept but not applied")
 	}
 }
+
+// A grid item's conditional rendering is a v2 value too.
+func TestExport_GridItemConditionalRendering(t *testing.T) {
+	var doc map[string]any
+	if err := json.Unmarshal(mustRead(t, "testdata/grafana-13.3.0-v2/native/v2-tabs.v2.json"), &doc); err != nil {
+		t.Fatal(err)
+	}
+	tab := doc["spec"].(map[string]any)["layout"].(map[string]any)["spec"].(map[string]any)["tabs"].([]any)[0].(map[string]any)
+	item := tab["spec"].(map[string]any)["layout"].(map[string]any)["spec"].(map[string]any)["items"].([]any)[0].(map[string]any)
+	item["spec"].(map[string]any)["conditionalRendering"] = map[string]any{"kind": "ConditionalRenderingGroup", "spec": map[string]any{"condition": "and", "items": []any{}}}
+	raw, _ := json.Marshal(doc)
+	d, rep, err := Import(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := d.Spec.Panels["p1"].Ext["conditionalRendering"]; ok {
+		t.Error("the grid item's conditional rendering went onto the panel")
+	}
+	const path = "spec.layout.spec.tabs[0].spec.layout.spec.items[0].spec.conditionalRendering"
+	if _, ok := d.Spec.Ext["v2:"+path]; !ok {
+		t.Errorf("not kept as a v2 value: %v", sortedKeys(d.Spec.Ext))
+	}
+	found := false
+	for _, f := range rep.Unsupported {
+		found = found || f.Path == path
+	}
+	if !found {
+		t.Errorf("not reported: %+v", rep.Unsupported)
+	}
+}
