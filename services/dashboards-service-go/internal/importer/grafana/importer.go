@@ -151,11 +151,12 @@ type importer struct {
 }
 
 var dashboardKeys = keys("uid", "id", "title", "tags", "description", "timezone", "graphTooltip", "time", "refresh",
-	"templating", "annotations", "links", "panels", "schemaVersion", "version")
+	"templating", "annotations", "links", "panels", "schemaVersion")
 
 func (im *importer) dashboard(root obj) *model.Dashboard {
 	d := &model.Dashboard{APIVersion: model.APIVersion, Kind: model.Kind}
-	d.Spec.Ext = im.split(root, dashboardKeys, "", map[string]bool{"id": true})
+	// id and version are the database id and save counter of the Grafana it came from.
+	d.Spec.Ext = im.split(root, dashboardKeys, "", map[string]bool{"id": true, "version": true})
 	d.Metadata.Title = strOf(root["title"])
 	if d.Metadata.Title == "" {
 		d.Metadata.Title = "Imported dashboard"
@@ -309,7 +310,7 @@ func (im *importer) panels(list []json.RawMessage, d *model.Dashboard) {
 	}
 }
 
-var rowKeys = keys("type", "title", "collapsed", "gridPos", "panels", "repeat", "id")
+var rowKeys = keys("type", "title", "collapsed", "gridPos", "panels", "repeat")
 
 func (im *importer) row(p obj, path string, d *model.Dashboard) model.LayoutRow {
 	r := model.LayoutRow{Title: strOf(p["title"]), Collapsed: boolOf(p["collapsed"]), Repeat: strOf(p["repeat"])}

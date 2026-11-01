@@ -64,8 +64,8 @@ func TestImport_EveryKeyIsAccounted(t *testing.T) {
 	if len(missing) > 0 {
 		t.Fatalf("keys read by nobody (lost on import): %v", missing)
 	}
-	if strings.Join(rep.Dropped, ",") != "id" {
-		t.Errorf("dropped = %v, want only Grafana's database id", rep.Dropped)
+	if strings.Join(rep.Dropped, ",") != "id,version" {
+		t.Errorf("dropped = %v, want only Grafana's database id and save counter", rep.Dropped)
 	}
 }
 
