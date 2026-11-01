@@ -48,7 +48,6 @@ const READS = [
 ]
 
 test.describe('the cluster\'s Prometheus and a grant limited to namespaces', () => {
-  test.describe.configure({ mode: 'serial' })
   let admin = ''
   let full = ''
   let scoped = ''
@@ -131,7 +130,7 @@ test.describe('the cluster\'s Prometheus and a grant limited to namespaces', () 
     // a pod the limited grant may open: the second cluster lets kubeast:role:read view namespace default for the test
     kubectlSecond('apply -f -', JSON.stringify({
       apiVersion: 'v1', kind: 'List', items: [
-        { apiVersion: 'v1', kind: 'Pod', metadata: { name: POD, namespace: NS }, spec: { containers: [{ name: 'app', image: 'busybox:1.37', imagePullPolicy: 'IfNotPresent', command: ['sleep', '3600'] }] } },
+        { apiVersion: 'v1', kind: 'Pod', metadata: { name: POD, namespace: NS }, spec: { terminationGracePeriodSeconds: 0, containers: [{ name: 'app', image: 'busybox:1.37', imagePullPolicy: 'IfNotPresent', command: ['sleep', '3600'] }] } },
         { apiVersion: 'rbac.authorization.k8s.io/v1', kind: 'RoleBinding', metadata: { name: BINDING, namespace: NS },
           roleRef: { apiGroup: 'rbac.authorization.k8s.io', kind: 'ClusterRole', name: 'view' },
           subjects: [{ apiGroup: 'rbac.authorization.k8s.io', kind: 'Group', name: 'kubeast:role:read' }] },
@@ -153,7 +152,7 @@ test.describe('the cluster\'s Prometheus and a grant limited to namespaces', () 
       expect(promReads, 'the page does not ask the cluster\'s Prometheus for a limited grant').toEqual([])
     } finally {
       await ctx.close()
-      kubectlSecond(`delete pod ${POD} rolebinding ${BINDING} -n ${NS} --ignore-not-found --wait=false`)
+      kubectlSecond(`delete pod/${POD} rolebinding/${BINDING} -n ${NS} --ignore-not-found --wait=false`)
     }
   })
 })
