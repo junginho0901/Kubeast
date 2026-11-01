@@ -123,3 +123,44 @@ func TestWait(t *testing.T) {
 		t.Errorf("no limit known: wait %s", w)
 	}
 }
+
+// TestGraphQLPolling: asking 100 repositories a query keeps even 1,000 or
+// 10,000 repositories at the setting's interval, far inside the budget.
+func TestGraphQLPolling(t *testing.T) {
+	cases := []struct {
+		name string
+		in   Input
+		want Plan
+	}{
+		{"1,000 repositories alone: every minute", Input{Repos: 1_000, Users: 50, GraphQL: true},
+			Plan{Interval: time.Minute, Limit: 12_500, RequestsPerHour: 1_800}},
+		{"1,000 repositories with webhooks: every 10 minutes", Input{Repos: 1_000, Users: 50, GraphQL: true, Webhooks: true},
+			Plan{Interval: 10 * time.Minute, Limit: 12_500, RequestsPerHour: 180}},
+		{"10,000 repositories alone: stretched a little", Input{Repos: 10_000, Users: 50, GraphQL: true},
+			Plan{Interval: 173 * time.Second, Limit: 12_500, RequestsPerHour: 6_243, Stretched: true}},
+		{"Enterprise Cloud: 10,000 points", Input{Repos: 1_000, GraphQL: true, EnterpriseCloud: true},
+			Plan{Interval: time.Minute, Limit: 10_000, RequestsPerHour: 1_800}},
+		{"one repository is one batch", Input{Repos: 1, GraphQL: true}, Plan{Interval: time.Minute, Limit: 5_000, RequestsPerHour: 180}},
+	}
+	for _, c := range cases {
+		got, err := Make(c.in)
+		if err != nil || got != c.want {
+			t.Errorf("%s: %+v, %v\nwant %+v", c.name, got, err, c.want)
+		}
+	}
+	for _, repos := range []int{1, 1_000, 10_000, 100_000} {
+		p, _ := Make(Input{Repos: repos, Users: 50, GraphQL: true})
+		if float64(p.RequestsPerHour) > float64(p.Limit)*DefaultBudget {
+			t.Errorf("%d repositories: %d points an hour of %d", repos, p.RequestsPerHour, p.Limit)
+		}
+	}
+}
+
+func TestGraphQLLimit(t *testing.T) {
+	if got := GraphQLLimit(500, 50, false); got != 12_500 {
+		t.Errorf("not Enterprise Cloud: %d, want the REST formula's 12,500", got)
+	}
+	if got := GraphQLLimit(500, 50, true); got != 10_000 {
+		t.Errorf("Enterprise Cloud: %d, want 10,000", got)
+	}
+}

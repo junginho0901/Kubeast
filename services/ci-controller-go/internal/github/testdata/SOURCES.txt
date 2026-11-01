@@ -1,0 +1,10 @@
+github-schema-20261027.graphql.gz
+  GitHub's public GraphQL schema for github.com, gzip of
+  https://raw.githubusercontent.com/github/docs/c6f68e2527c324d52226d7de8bc49cf8e5c0e954/src/graphql/data/fpt/schema.docs.graphql
+  (github/docs commit c6f68e2527c324d52226d7de8bc49cf8e5c0e954, "GraphQL schema update (#64431)", 2026-10-27).
+  The same file docs.github.com serves at /public/fpt/schema.docs.graphql.
+  github/docs licenses its code under MIT (LICENSE-CODE.github-docs) and its
+  documentation under CC BY 4.0; this file is used for testing only, with
+  this attribution. octokit/graphql-schema v15.26.1 (2025-11-24) was tried
+  first; it defines EnterpriseOwnerInfo.repositoryDeployKeySetting twice and
+  a GraphQL validator refuses it.

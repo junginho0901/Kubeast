@@ -4,6 +4,7 @@ go 1.26.0
 
 require (
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
+	github.com/vektah/gqlparser/v2 v2.5.64
 	go.yaml.in/yaml/v3 v3.0.6
 	k8s.io/api v0.37.2
 	k8s.io/apimachinery v0.37.2
@@ -11,6 +12,7 @@ require (
 )
 
 require (
+	github.com/agnivade/levenshtein v1.2.2 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
