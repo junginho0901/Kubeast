@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/gatewayrow"
 )
 
 // GetGRPCRoutes lists GRPC routes in a namespace.
@@ -14,7 +16,7 @@ func (s *Service) GetGRPCRoutes(ctx context.Context, namespace string) ([]map[st
 	if err != nil {
 		return nil, fmt.Errorf("list grpcroutes: %w", err)
 	}
-	return formatUnstructuredList(list), nil
+	return gatewayRows(list, gatewayrow.Route), nil
 }
 
 // GetAllGRPCRoutes lists GRPC routes across all namespaces.
@@ -25,7 +27,7 @@ func (s *Service) GetAllGRPCRoutes(ctx context.Context) ([]map[string]interface{
 		if err != nil {
 			return nil, fmt.Errorf("list all grpcroutes: %w", err)
 		}
-		return formatUnstructuredList(list), nil
+		return gatewayRows(list, gatewayrow.Route), nil
 	})
 }
 

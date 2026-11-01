@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/gatewayrow"
 )
 
 // GetGateways lists gateways in a namespace.
@@ -14,7 +16,7 @@ func (s *Service) GetGateways(ctx context.Context, namespace string) ([]map[stri
 	if err != nil {
 		return nil, fmt.Errorf("list gateways: %w", err)
 	}
-	return formatUnstructuredList(list), nil
+	return gatewayRows(list, gatewayrow.Gateway), nil
 }
 
 // GetAllGateways lists gateways across all namespaces.
@@ -25,7 +27,7 @@ func (s *Service) GetAllGateways(ctx context.Context) ([]map[string]interface{},
 		if err != nil {
 			return nil, fmt.Errorf("list all gateways: %w", err)
 		}
-		return formatUnstructuredList(list), nil
+		return gatewayRows(list, gatewayrow.Gateway), nil
 	})
 }
 

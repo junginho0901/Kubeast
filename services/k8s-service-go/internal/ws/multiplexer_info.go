@@ -4,6 +4,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	crdrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/crd"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/gatewayrow"
 )
 
 // objectToInfo dispatcher — per-resource-kind ToInfo helpers live in sibling
@@ -69,6 +70,16 @@ func objectToInfo(resource string, obj *unstructured.Unstructured) map[string]in
 		return endpointSliceToInfo(obj)
 	case "customresourcedefinitions":
 		return crdrow.Info(obj)
+	case "gatewayclasses":
+		return gatewayrow.GatewayClass(obj)
+	case "gateways":
+		return gatewayrow.Gateway(obj)
+	case "httproutes", "grpcroutes":
+		return gatewayrow.Route(obj)
+	case "referencegrants":
+		return gatewayrow.ReferenceGrant(obj)
+	case "backendtlspolicies":
+		return gatewayrow.Policy(obj)
 	default:
 		// Generic: return metadata + spec summary
 		return genericToInfo(obj)

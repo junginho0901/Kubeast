@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/gatewayrow"
 )
 
 // GetReferenceGrants lists reference grants in a namespace.
@@ -14,7 +16,7 @@ func (s *Service) GetReferenceGrants(ctx context.Context, namespace string) ([]m
 	if err != nil {
 		return nil, fmt.Errorf("list referencegrants: %w", err)
 	}
-	return formatReferenceGrantList(list), nil
+	return gatewayRows(list, gatewayrow.ReferenceGrant), nil
 }
 
 // GetAllReferenceGrants lists reference grants across all namespaces.
@@ -25,7 +27,7 @@ func (s *Service) GetAllReferenceGrants(ctx context.Context) ([]map[string]inter
 		if err != nil {
 			return nil, fmt.Errorf("list all referencegrants: %w", err)
 		}
-		return formatReferenceGrantList(list), nil
+		return gatewayRows(list, gatewayrow.ReferenceGrant), nil
 	})
 }
 

@@ -81,6 +81,24 @@ type ClientProvider interface {
 	DynamicForCtx(ctx context.Context) dynamic.Interface
 }
 
+// GVRResolver, which the k8s Service implements, names the version the cluster in ctx serves a resource at.
+type GVRResolver interface {
+	ResolveGVR(ctx context.Context, group, resource string) (schema.GroupVersionResource, bool)
+}
+
+// servedVersion watches a Gateway API resource at the version the cluster serves (the group mixes versions and
+// moves them between releases), as the list API reads it; other resources keep their fixed version.
+func (m *Multiplexer) servedVersion(ctx context.Context, gvr schema.GroupVersionResource) schema.GroupVersionResource {
+	r, ok := m.provider.(GVRResolver)
+	if !ok || gvr.Group != "gateway.networking.k8s.io" {
+		return gvr
+	}
+	if served, ok := r.ResolveGVR(ctx, gvr.Group, gvr.Resource); ok {
+		return served
+	}
+	return gvr
+}
+
 // Multiplexer handles multiplexed WebSocket watch connections.
 type Multiplexer struct {
 	// MaxSubscriptions / MaxSubscriptionsPerConn: 0 = the defaults above.
@@ -307,6 +325,7 @@ func (m *Multiplexer) runWatch(ctx context.Context, path, queryStr string, sendC
 		sendCh <- ResponseMessage{Type: "ERROR", Path: path, Query: queryStr, Error: map[string]string{"message": "unsupported resource: " + resource}}
 		return
 	}
+	gvr = m.servedVersion(ctx, gvr)
 
 	var lastResourceVersion string
 
@@ -456,6 +475,9 @@ func resourceToGVR(resource string) (schema.GroupVersionResource, bool) {
 		"gateways":                 {Group: "gateway.networking.k8s.io", Version: "v1", Resource: "gateways"},
 		"gatewayclasses":           {Group: "gateway.networking.k8s.io", Version: "v1", Resource: "gatewayclasses"},
 		"httproutes":               {Group: "gateway.networking.k8s.io", Version: "v1", Resource: "httproutes"},
+		"grpcroutes":               {Group: "gateway.networking.k8s.io", Version: "v1", Resource: "grpcroutes"},
+		"referencegrants":          {Group: "gateway.networking.k8s.io", Version: "v1beta1", Resource: "referencegrants"},
+		"backendtlspolicies":       {Group: "gateway.networking.k8s.io", Version: "v1alpha3", Resource: "backendtlspolicies"},
 		"serviceaccounts":          {Group: "", Version: "v1", Resource: "serviceaccounts"},
 		"roles":                    {Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "roles"},
 		"horizontalpodautoscalers": {Group: "autoscaling", Version: "v2", Resource: "horizontalpodautoscalers"},

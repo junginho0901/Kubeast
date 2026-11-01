@@ -7,6 +7,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	fakediscovery "k8s.io/client-go/discovery/fake"
 	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/ws"
 )
 
 // A cluster like kind 1.37 with Gateway API 1.3 experimental installed: the
@@ -57,6 +59,14 @@ func TestResolveResource_PerKindVersion(t *testing.T) {
 		if res.GVR.Version != tc.wantVersion || res.Kind != tc.wantKind || res.Namespaced != tc.wantNamespaced {
 			t.Errorf("%s/%s: got %s %s namespaced=%v, want %s %s namespaced=%v", tc.group, tc.resource, res.GVR.Version, res.Kind, res.Namespaced, tc.wantVersion, tc.wantKind, tc.wantNamespaced)
 		}
+	}
+}
+
+// The live list updates (main.go hands the multiplexer the Service) watch at the version the list reads.
+func TestServiceIsTheLiveUpdatesResolver(t *testing.T) {
+	var r ws.GVRResolver = newDiscoveryService(t)
+	if gvr, ok := r.ResolveGVR(context.Background(), "gateway.networking.k8s.io", "referencegrants"); !ok || gvr.Version != "v1beta1" {
+		t.Fatalf("referencegrants: %v %v", gvr, ok)
 	}
 }
 

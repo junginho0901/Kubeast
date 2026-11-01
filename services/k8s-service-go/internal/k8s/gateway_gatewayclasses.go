@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/gatewayrow"
 )
 
 // GetGatewayClasses lists all gateway classes.
@@ -14,7 +16,7 @@ func (s *Service) GetGatewayClasses(ctx context.Context) ([]map[string]interface
 	if err != nil {
 		return nil, fmt.Errorf("list gateway classes: %w", err)
 	}
-	return formatUnstructuredList(list), nil
+	return gatewayRows(list, gatewayrow.GatewayClass), nil
 }
 
 // DescribeGatewayClass returns detailed info about a gateway class.

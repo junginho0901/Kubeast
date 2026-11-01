@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/gatewayrow"
 )
 
 // GetBackendTLSPolicies lists BackendTLSPolicies in a namespace.
@@ -14,7 +16,7 @@ func (s *Service) GetBackendTLSPolicies(ctx context.Context, namespace string) (
 	if err != nil {
 		return nil, fmt.Errorf("list backendtlspolicies: %w", err)
 	}
-	return formatPolicyList(list), nil
+	return gatewayRows(list, gatewayrow.Policy), nil
 }
 
 // GetAllBackendTLSPolicies lists BackendTLSPolicies across all namespaces.
@@ -25,7 +27,7 @@ func (s *Service) GetAllBackendTLSPolicies(ctx context.Context) ([]map[string]in
 		if err != nil {
 			return nil, fmt.Errorf("list all backendtlspolicies: %w", err)
 		}
-		return formatPolicyList(list), nil
+		return gatewayRows(list, gatewayrow.Policy), nil
 	})
 }
 

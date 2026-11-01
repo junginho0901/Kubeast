@@ -108,6 +108,11 @@ func (s *Service) resolveGVR(ctx context.Context, group, resource string) (schem
 	return res.GVR, ok
 }
 
+// ResolveGVR is resolveGVR for the live list updates (ws.GVRResolver), so a watch reads the version the list does.
+func (s *Service) ResolveGVR(ctx context.Context, group, resource string) (schema.GroupVersionResource, bool) {
+	return s.resolveGVR(ctx, group, resource)
+}
+
 // invalidateResolveCache forgets every discovery answer (kubeconfig reload).
 func (s *Service) invalidateResolveCache() {
 	s.resolveMu.Lock()
