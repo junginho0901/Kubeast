@@ -9,7 +9,6 @@
 // volumeBindingMode / allowVolumeExpansion / mountOptions camelCase/snake_case
 // 둘 다 지원.
 
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import type { StorageClassInfo } from '@/services/api'
 
 export function normalizeWatchStorageClassObject(obj: any): StorageClassInfo {
@@ -63,7 +62,8 @@ export function applyStorageClassWatchEvent(prev: StorageClassInfo[] | undefined
     return items
   }
 
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
+  // the server sends the whole row (scrow.Info), so it replaces: a value that went empty shows empty
+  if (index >= 0) items[index] = normalized
   else items.push(normalized)
   return items
 }

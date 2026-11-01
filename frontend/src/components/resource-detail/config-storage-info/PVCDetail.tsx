@@ -44,6 +44,7 @@ interface PVCDescribeResponse {
   volume_mode?: string
   volume_name?: string
   access_modes?: string[]
+  requested_access_modes?: string[]
   labels?: Record<string, string>
   annotations?: Record<string, string>
   finalizers?: string[]
@@ -84,7 +85,9 @@ export default function PVCDetail({ name, namespace, rawJson }: { name: string; 
   const status = (rawJson?.status ?? {}) as Record<string, unknown>
   const labels = (describe?.labels ?? (meta.labels as Record<string, string> | undefined) ?? {})
   const annotations = (describe?.annotations ?? (meta.annotations as Record<string, string> | undefined) ?? {})
-  const accessModes = (describe?.access_modes ?? (spec.accessModes as string[] | undefined) ?? [])
+  // the volume's modes once bound (kubectl's Access Modes), and what the claim asks for
+  const accessModes = (describe?.access_modes ?? (spec.volumeName ? (status.accessModes as string[] | undefined) : undefined) ?? [])
+  const requestedAccessModes = (describe?.requested_access_modes ?? (spec.accessModes as string[] | undefined) ?? [])
   const capacity = (status.capacity as Record<string, string>) ?? {}
   const requested =
     (((spec.resources as Record<string, unknown> | undefined)?.requests as Record<string, string> | undefined) ?? {})
@@ -136,6 +139,7 @@ export default function PVCDetail({ name, namespace, rawJson }: { name: string; 
           <InfoRow label="Capacity" value={capacityStorage} />
           <InfoRow label="Requested" value={requestedStorage} />
           <InfoRow label="Access Modes" value={accessModes.join(', ') || '-'} />
+          <InfoRow label="Requested Access Modes" value={requestedAccessModes.join(', ') || '-'} />
           <InfoRow label="Storage Class" value={storageClass && storageClass !== '-' ? <ResourceLink kind="StorageClass" name={storageClass} /> : '-'} />
           <InfoRow label="Volume Mode" value={volumeMode} />
           <InfoRow label="Volume Name" value={volumeName && volumeName !== '-' ? <ResourceLink kind="PersistentVolume" name={volumeName} /> : '-'} />

@@ -2,6 +2,8 @@ package ws
 
 import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
+	crdrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/crd"
 )
 
 // objectToInfo dispatcher — per-resource-kind ToInfo helpers live in sibling
@@ -65,6 +67,8 @@ func objectToInfo(resource string, obj *unstructured.Unstructured) map[string]in
 		return endpointsToInfo(obj)
 	case "endpointslices":
 		return endpointSliceToInfo(obj)
+	case "customresourcedefinitions":
+		return crdrow.Info(obj)
 	default:
 		// Generic: return metadata + spec summary
 		return genericToInfo(obj)

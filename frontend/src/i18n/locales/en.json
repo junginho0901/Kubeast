@@ -3468,7 +3468,7 @@
     "table": {
       "name": "Name",
       "group": "Group",
-      "version": "Version",
+      "versions": "Versions",
       "scope": "Scope",
       "kind": "Kind",
       "age": "Age"

@@ -1688,7 +1688,9 @@ export interface PVCInfo {
   storage_class?: string
   capacity?: string
   requested?: string
+  // the volume's modes once bound (kubectl's ACCESS MODES), and what the claim asks for
   access_modes: string[]
+  requested_access_modes?: string[]
   created_at: string
   usage?: PVCUsage | null // only with getPVCs(..., usage = true)
 }
@@ -1820,7 +1822,10 @@ export interface SecretInfo {
 export interface CRDInfo {
   name: string
   group: string
+  // the storage version, which the instance pages ask the API for
   version: string
+  // the versions the API serves, sorted (kubectl's VERSIONS)
+  served_versions?: string[]
   scope: string
   kind: string
   created_at?: string | null

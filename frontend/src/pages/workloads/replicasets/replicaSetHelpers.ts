@@ -20,6 +20,17 @@ export type SortKey =
 
 export { ageSeconds as parseAgeSeconds, formatAge } from '@/utils/time'
 
+/**
+ * The Owner column: the ReplicaSet's controller — a Deployment by its name, another kind (an Argo Rollout, a custom
+ * controller) as kind/name, so a ReplicaSet with an owner never reads "-".
+ */
+export function replicaSetOwner(rs: Pick<ReplicaSetInfo, 'owner_deployment' | 'owner_references'>): string {
+  const refs = rs.owner_references ?? []
+  const ref = refs.find((r) => r.controller) ?? refs[0]
+  if (!ref?.name) return rs.owner_deployment || '-'
+  return ref.kind === 'Deployment' ? ref.name : `${ref.kind}/${ref.name}`
+}
+
 export function computeReplicaSetStatus(rs: {
   replicas: number
   ready_replicas: number

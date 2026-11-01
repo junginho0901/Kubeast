@@ -456,10 +456,13 @@ const TARGETS: Target[] = [
     kind: 'PersistentVolumeClaim', ref: `${NS}/${name}`, want: (s) => {
       const o = one(s, 'PersistentVolumeClaim', name)
       const usedBy = pods(s).filter((p) => (p.spec.volumes ?? []).some((v: Obj) => v.persistentVolumeClaim?.claimName === name)).length
+      // kubectl describe: the volume's access modes once bound, none before; the requested ones apart
+      const granted = o.spec.volumeName ? (o.status.accessModes ?? []).join(', ') : ''
       return {
         rows: {
           Status: o.status.phase, Capacity: str(o.status.capacity?.storage), Requested: o.spec.resources.requests.storage,
-          'Access Modes': o.spec.accessModes.join(', '), 'Storage Class': str(o.spec.storageClassName), 'Volume Mode': o.spec.volumeMode,
+          'Access Modes': str(granted || undefined), 'Requested Access Modes': o.spec.accessModes.join(', '),
+          'Storage Class': str(o.spec.storageClassName), 'Volume Mode': o.spec.volumeMode,
           'Volume Name': str(o.spec.volumeName), 'Selected Node': str(o.metadata.annotations?.['volume.kubernetes.io/selected-node']),
         },
         ...(o.status.phase === 'Bound' ? { counts: { 'Used By Pods': usedBy } } : {}),

@@ -46,7 +46,8 @@ function apiTable(apiPath: string): Promise<Table> {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Obj = any
-const items = (plural: string): Obj[] => JSON.parse(kubectl(`get ${plural} -n ${NS} -o json`)).items
+const items = (plural: string, clusterScoped = false, allNamespaces = false): Obj[] =>
+  JSON.parse(kubectl(`get ${plural} ${allNamespaces ? '-A ' : clusterScoped ? '' : `-n ${NS} `}-o json`)).items
 const cond = (o: Obj, type: string) => (o.status?.conditions ?? []).find((c: Obj) => c.type === type)?.status
 
 const FIXTURE = fs.readFileSync(path.join(__dirname, 'number-check.fixture.yaml'), 'utf8')
@@ -80,6 +81,10 @@ type Screen = {
   path: string
   api: string
   plural: string
+  // a cluster-scoped kind: the screen is opened without a namespace and holds every object of the kind
+  clusterScoped?: boolean
+  // a namespaced kind listed over every namespace (rows told apart by namespace/name)
+  allNamespaces?: boolean
   // screen header → Table column, where the names differ
   alias?: Record<string, string>
   // how a screen column differs from kubectl's on purpose: the cluster value is turned into Kubeast's first
@@ -154,7 +159,15 @@ const SCREENS: Screen[] = [
   },
   {
     path: '/workloads/replicasets', api: `/apis/apps/v1/namespaces/${NS}/replicasets`, plural: 'replicasets',
-    extra: { Available: (o) => String(n(o.status.availableReplicas)) },
+    extra: {
+      Available: (o) => String(n(o.status.availableReplicas)),
+      // the controller: a Deployment by name, another kind as kind/name
+      Owner: (o) => {
+        const refs: Obj[] = o.metadata.ownerReferences ?? []
+        const ref = refs.find((r) => r.controller) ?? refs[0]
+        return !ref ? '-' : ref.kind === 'Deployment' ? ref.name : `${ref.kind}/${ref.name}`
+      },
+    },
     skip: { Status: 'the cards check the buckets', Age: AGE },
     cards: replicaCards((o) => n(o.spec.replicas), (o) => n(o.status.readyReplicas), (o) => n(o.status.availableReplicas)),
   },
@@ -241,6 +254,8 @@ const SCREENS: Screen[] = [
     path: '/network/endpointslices', api: `/apis/discovery.k8s.io/v1/namespaces/${NS}/endpointslices`, plural: 'endpointslices',
     extra: {
       Service: (o) => o.metadata.labels?.['kubernetes.io/service-name'] ?? '-',
+      // kubectl prints the port numbers; Kubeast name:port/protocol and the app protocol
+      Ports: (o) => (o.ports ?? []).map((p: Obj) => `${p.name || '-'}:${p.port ?? '-'}${p.protocol ? `/${p.protocol}` : ''}${p.appProtocol ? ` (${p.appProtocol})` : ''}`).join(', ') || '-',
       Total: (o) => String((o.endpoints ?? []).length),
       Ready: (o) => String((o.endpoints ?? []).filter((e: Obj) => e.conditions?.ready !== false).length),
       'Not Ready': (o) => String((o.endpoints ?? []).filter((e: Obj) => e.conditions?.ready === false).length),
@@ -352,6 +367,178 @@ const SCREENS: Screen[] = [
   },
 ]
 
+// cluster screens on `self`: every object of the kind, with number-check.cluster-fixture.yaml so none is empty
+const CLUSTER_FIXTURE = fs.readFileSync(path.join(__dirname, 'number-check.cluster-fixture.yaml'), 'utf8')
+// kubectl marks a default class by its name: "standard (default)"
+const defaultByName = (v: string) => (v.endsWith(' (default)') ? 'Yes' : 'No')
+// storageutil.IsDefaultAnnotation, and kubectl's printStorageClassList: of the annotated classes the newest, at equal
+// times the first name, is the default
+const scAnnotated = (o: Obj) => ['storageclass.kubernetes.io/is-default-class', 'storageclass.beta.kubernetes.io/is-default-class']
+  .some((k) => o.metadata.annotations?.[k] === 'true')
+const scDefault = (list: Obj[]) => list.filter(scAnnotated).sort((a, b) =>
+  Date.parse(b.metadata.creationTimestamp) - Date.parse(a.metadata.creationTimestamp) || a.metadata.name.localeCompare(b.metadata.name))[0]?.metadata.name
+const vaError = (o: Obj) => {
+  const attach = o.status?.attachError?.message ?? ''
+  const detach = o.status?.detachError?.message ?? ''
+  return attach && detach ? `${attach} | ${detach}` : attach || detach
+}
+// the bindings that name a policy (spec.policyName), as the Bindings column counts them
+const bindingsOf = (plural: string) => {
+  const list = items(plural, true)
+  return (policy: Obj) => list.filter((b) => b.spec?.policyName === policy.metadata.name).length
+}
+const policyScreen = (plural: string, bindings: string): Omit<Screen, 'path'> => ({
+  api: `/apis/admissionregistration.k8s.io/v1/${plural}`, plural, clusterScoped: true,
+  extra: {
+    Bindings: (o) => String(bindingsOf(bindings)(o)),
+    'Failure policy': (o) => o.spec.failurePolicy ?? 'Fail',
+  },
+  skip: { Age: AGE },
+  cards: (list) => {
+    const count = bindingsOf(bindings)
+    return { 'Total Policies': list.length, 'Total Bindings': list.reduce((s, p) => s + count(p), 0) }
+  },
+})
+const webhookScreen = (plural: string): Omit<Screen, 'path'> => ({
+  api: `/apis/admissionregistration.k8s.io/v1/${plural}`, plural, clusterScoped: true,
+  skip: { Age: AGE },
+  cards: (list) => ({ 'Total Configurations': list.length, 'Total Webhooks': list.reduce((s, c) => s + (c.webhooks ?? []).length, 0) }),
+})
+
+const SCREENS_CLUSTER: Screen[] = [
+  {
+    path: '/cluster/namespaces', api: '/api/v1/namespaces', plural: 'namespaces', clusterScoped: true,
+    extra: {
+      // the labels but the one every namespace has, two of them and a count of the rest
+      Labels: (o) => {
+        const labels = Object.entries(o.metadata.labels ?? {}).filter(([k]) => k !== 'kubernetes.io/metadata.name')
+        if (labels.length === 0) return '-'
+        return [...labels.slice(0, 2).map(([k, v]) => `${k}=${v}`), ...(labels.length > 2 ? [`+${labels.length - 2}`] : [])].join(' ')
+      },
+    },
+    skip: { Age: AGE },
+    cards: (list) => ({
+      Total: list.length,
+      Active: list.filter((o) => o.status.phase === 'Active').length,
+      Terminating: list.filter((o) => o.status.phase === 'Terminating').length,
+    }),
+  },
+  {
+    path: '/cluster/nodes', api: '/api/v1/nodes', plural: 'nodes', clusterScoped: true,
+    // usage comes from metrics.k8s.io, which self does not serve (kind without metrics-server): nothing to show
+    extra: { CPU: () => '-', Memory: () => '-' },
+    skip: { Age: AGE },
+  },
+  {
+    path: '/storage?tab=pvs', api: '/api/v1/persistentvolumes', plural: 'persistentvolumes', clusterScoped: true,
+    // the volume's source by type; one Kubeast does not name shows "-"
+    extra: { Source: (o) => (o.spec.csi ? 'CSI' : o.spec.nfs ? 'NFS' : o.spec.local ? 'Local' : o.spec.hostPath ? 'HostPath' : '-') },
+    skip: { Age: AGE },
+    cards: (list) => ({
+      Total: list.length,
+      ...Object.fromEntries(['Bound', 'Available', 'Released', 'Failed'].map((p) => [p, list.filter((o) => o.status.phase === p).length])),
+    }),
+  },
+  {
+    path: '/storage?tab=storageclasses', api: '/apis/storage.k8s.io/v1/storageclasses', plural: 'storageclasses', clusterScoped: true,
+    alias: { Default: 'Name' },
+    shape: { Default: defaultByName },
+    extra: { Parameters: (o) => String(Object.keys(o.parameters ?? {}).length) },
+    skip: { Age: AGE },
+    cards: (list) => ({
+      Total: list.length,
+      Default: list.filter((o) => o.metadata.name === scDefault(list)).length,
+      Expandable: list.filter((o) => o.allowVolumeExpansion === true).length,
+      'Binding mode: WaitForFirstConsumer': list.filter((o) => o.volumeBindingMode === 'WaitForFirstConsumer').length,
+    }),
+  },
+  {
+    path: '/storage?tab=volumeattachments', api: '/apis/storage.k8s.io/v1/volumeattachments', plural: 'volumeattachments', clusterScoped: true,
+    alias: { 'Persistent Volume': 'PV' },
+    // the column is a state badge: an error first, then attached or not
+    shape: { Attached: (v, o) => (vaError(o) ? 'Error' : v === 'true' ? 'Attached' : 'Detached') },
+    extra: { Error: (o) => vaError(o) || '-' },
+    skip: { Age: AGE },
+    cards: (list) => ({
+      Total: list.length,
+      Attached: list.filter((o) => o.status?.attached === true).length,
+      Detached: list.filter((o) => o.status?.attached !== true).length,
+      Errors: list.filter((o) => vaError(o) !== '').length,
+    }),
+  },
+  {
+    path: '/network/ingressclasses', api: '/apis/networking.k8s.io/v1/ingressclasses', plural: 'ingressclasses', clusterScoped: true,
+    alias: { Default: 'Name' },
+    // Kubeast adds the parameters' scope and namespace to kubectl's Kind.group/name
+    shape: {
+      Default: defaultByName,
+      Parameters: (v, o) => {
+        const p = o.spec.parameters
+        return p ? `${v}${p.scope ? ` (${p.scope})` : ''}${p.namespace ? ` ns=${p.namespace}` : ''}` : v
+      },
+    },
+    skip: { Age: AGE },
+    cards: (list) => ({
+      Total: list.length,
+      Default: list.filter((o) => o.metadata.annotations?.['ingressclass.kubernetes.io/is-default-class'] === 'true').length,
+      'With Parameters': list.filter((o) => o.spec.parameters).length,
+      'With Annotations': list.filter((o) => Object.keys(o.metadata.annotations ?? {}).length > 0).length,
+    }),
+  },
+  {
+    path: '/cluster/priorityclasses', api: '/apis/scheduling.k8s.io/v1/priorityclasses', plural: 'priorityclasses', clusterScoped: true,
+    skip: { Age: AGE },
+    cards: (list) => ({
+      Total: list.length,
+      'Global Default': list.filter((o) => o.globalDefault === true).length,
+      Preempting: list.filter((o) => (o.preemptionPolicy ?? 'PreemptLowerPriority') === 'PreemptLowerPriority').length,
+    }),
+  },
+  {
+    path: '/cluster/runtimeclasses', api: '/apis/node.k8s.io/v1/runtimeclasses', plural: 'runtimeclasses', clusterScoped: true,
+    skip: { Age: AGE },
+    cards: (list) => ({ Total: list.length, 'Unique Handlers': new Set(list.map((o) => o.handler)).size }),
+  },
+  {
+    path: '/security/clusterroles', api: '/apis/rbac.authorization.k8s.io/v1/clusterroles', plural: 'clusterroles', clusterScoped: true,
+    extra: { Rules: (o) => String((o.rules ?? []).length) },
+    skip: { Age: AGE },
+    cards: (list) => ({ Total: list.length, 'Total Rules': list.reduce((s, r) => s + (r.rules ?? []).length, 0) }),
+  },
+  {
+    path: '/security/clusterrolebindings', api: '/apis/rbac.authorization.k8s.io/v1/clusterrolebindings', plural: 'clusterrolebindings', clusterScoped: true,
+    alias: { 'Role Ref': 'Role' },
+    extra: { Subjects: (o) => String((o.subjects ?? []).length) },
+    skip: { Age: AGE },
+    cards: (list) => ({ Total: list.length, 'Total Subjects': list.reduce((s, r) => s + (r.subjects ?? []).length, 0) }),
+  },
+  {
+    path: '/cluster/leases', api: '/apis/coordination.k8s.io/v1/leases', plural: 'leases', allNamespaces: true,
+    extra: { 'Duration (s)': (o) => (o.spec.leaseDurationSeconds === undefined ? '-' : String(o.spec.leaseDurationSeconds)) },
+    skip: { Age: AGE },
+    cards: (list) => ({
+      Total: list.length,
+      'With Holder': list.filter((o) => o.spec.holderIdentity).length,
+      'Without Holder': list.filter((o) => !o.spec.holderIdentity).length,
+    }),
+  },
+  { path: '/cluster/mutatingwebhookconfigurations', ...webhookScreen('mutatingwebhookconfigurations') },
+  { path: '/cluster/validatingwebhookconfigurations', ...webhookScreen('validatingwebhookconfigurations') },
+  { path: '/cluster/validatingadmissionpolicies', ...policyScreen('validatingadmissionpolicies', 'validatingadmissionpolicybindings') },
+  { path: '/cluster/mutatingadmissionpolicies', ...policyScreen('mutatingadmissionpolicies', 'mutatingadmissionpolicybindings') },
+  {
+    path: '/custom-resources/groups', api: '/apis/apiextensions.k8s.io/v1/customresourcedefinitions', plural: 'customresourcedefinitions', clusterScoped: true,
+    // kubectl lists the served versions as "v1(storage),v1beta1"; Kubeast spaces them
+    shape: { Versions: (v) => v.split(',').filter(Boolean).map((x) => x.replace('(storage)', ' (storage)')).join(', ') },
+    skip: { Age: AGE },
+    cards: (list) => ({
+      Total: list.length,
+      Namespaced: list.filter((o) => o.spec.scope === 'Namespaced').length,
+      'Cluster-scoped': list.filter((o) => o.spec.scope !== 'Namespaced').length,
+    }),
+  },
+]
+
 type ScreenRead = { heads: string[]; rows: string[][]; cards: Record<string, number> }
 async function readScreen(page: Page): Promise<ScreenRead> {
   return page.evaluate(() => {
@@ -367,10 +554,87 @@ async function readScreen(page: Page): Promise<ScreenRead> {
   })
 }
 
+// one screen read one way: its rows, every column and every card against the cluster, each difference a soft failure
+async function compareScreen(page: Page, s: Screen, way: string) {
+  await page.goto(`${s.path}${s.path.includes('?') ? '&' : '?'}cluster=self${s.clusterScoped || s.allNamespaces ? '' : `&namespace=${NS}`}`)
+  // a row is its name, or namespace/name on a screen of every namespace
+  const metaKey = (m: { name: string; namespace?: string }) => (s.allNamespaces ? `${m.namespace}/${m.name}` : m.name)
+  const rowKey = (heads: string[], r: string[]) => {
+    const name = r[heads.findIndex((h) => /^name$/i.test(h))]
+    return s.allNamespaces && name ? `${r[heads.findIndex((h) => /^namespace$/i.test(h))]}/${name}` : name
+  }
+  const table = await apiTable(s.api)
+  const want = table.rows.map((r) => metaKey(r.object.metadata)).sort()
+  // the rows on screen are the cluster's objects (re-read until the list has caught up)
+  const names = async () => {
+    const { heads, rows } = await readScreen(page)
+    return rows.map((r) => rowKey(heads, r)).filter(Boolean).sort()
+  }
+  try {
+    await expect.poll(names, { timeout: 20_000 }).toEqual(want)
+  } catch {
+    expect.soft(await names(), `${s.path} (${way}): names on screen`).toEqual(want)
+  }
+  expect.soft(await page.locator('main [data-fold]').count(), `${s.path} (${way}): a column folded at 2560 px`).toBe(0)
+
+  // the cluster again, then the screen, so a value that moves (RESTARTS) is read close together
+  const fresh = await apiTable(s.api)
+  const objects = Object.fromEntries(items(s.plural, s.clusterScoped, s.allNamespaces).map((o) => [metaKey(o.metadata), o]))
+  const { heads, rows, cards } = await readScreen(page)
+  // a screen with cards and no expectation for them fails, so a card cannot go unchecked
+  if (!s.cards) expect.soft(cards, `${s.path} (${way}): summary cards with nothing to compare against`).toEqual({})
+  const nameAt = heads.findIndex((h) => /^name$/i.test(h))
+  const nsAt = s.allNamespaces ? heads.findIndex((h) => /^namespace$/i.test(h)) : -1
+  const tableCols = fresh.columnDefinitions.map((c) => norm(c.name))
+  const byName = Object.fromEntries(fresh.rows.map((r) => [metaKey(r.object.metadata), r.cells.map((c) => String(c ?? ''))]))
+  const unknown: string[] = []
+  for (const row of rows) {
+    const name = rowKey(heads, row)
+    if (!name || !byName[name]) continue
+    heads.forEach((h, i) => {
+      if (!h || i === nameAt || i === nsAt || s.skip?.[h] !== undefined) return
+      const o = objects[name]
+      const extra = s.extra?.[h]
+      if (extra) {
+        // chips in one cell read with line breaks between them
+        const squash = (v: string) => v.replace(/\s+/g, ' ').trim()
+        expect.soft(squash(row[i]), `${s.path} (${way}) · ${name} · ${h} (from the object)`).toBe(squash(extra(o)))
+        return
+      }
+      const j = tableCols.indexOf(norm(s.alias?.[h] ?? h))
+      if (j < 0) {
+        if (!unknown.includes(h)) unknown.push(h)
+        return
+      }
+      const cluster = s.shape?.[h] ? s.shape[h](byName[name][j], o) : byName[name][j]
+      const same = s.spans?.[h]?.(o) ? sameSpan(row[i], cluster) : sameValue(row[i], cluster)
+      expect.soft(same, `${s.path} (${way}) · ${name} · ${h}: screen "${row[i]}", kubectl "${byName[name][j]}"`).toBe(true)
+    })
+  }
+  expect.soft(unknown, `${s.path} (${way}): columns with nothing to compare against`).toEqual([])
+  if (s.cards) {
+    const expected = s.cards(Object.values(objects))
+    for (const [label, value] of Object.entries(expected)) {
+      expect.soft(cards[label], `${s.path} (${way}) · card "${label}" (cards on screen: ${JSON.stringify(cards)})`).toBe(value)
+    }
+  }
+}
+
 test.describe('number check — list screens', () => {
   test.beforeAll(async () => {
     test.setTimeout(200_000)
     kubectl('apply -f -', FIXTURE)
+    // a ReplicaSet whose controller is not a Deployment (an Argo Rollout's is not): an owner needs the uid of an object
+    // that exists, so it is made here with num-cm's
+    const cm = JSON.parse(kubectl(`get configmap num-cm -n ${NS} -o json`))
+    kubectl('apply -f -', JSON.stringify({
+      apiVersion: 'apps/v1', kind: 'ReplicaSet',
+      metadata: { name: 'num-owned', namespace: NS, ownerReferences: [{ apiVersion: 'v1', kind: 'ConfigMap', name: 'num-cm', uid: cm.metadata.uid, controller: true }] },
+      spec: {
+        replicas: 0, selector: { matchLabels: { app: 'num-owned' } },
+        template: { metadata: { labels: { app: 'num-owned' } }, spec: { containers: [{ name: 'app', image: 'busybox:1.37', imagePullPolicy: 'IfNotPresent' }] } },
+      },
+    }))
     // settled: the ready Deployment and the StatefulSet ready, both Jobs finished, the crashing Pod restarted
     const deadline = Date.now() + 150_000
     for (;;) {
@@ -410,63 +674,38 @@ test.describe('number check — list screens', () => {
     await expect(tile).toHaveClass(/badge-warning/)
   })
 
-  // one test, a step per screen: the fixture is made once and a screen that differs does not stop the others
+  // one test, a step per screen and way: the fixture is made once and a screen that differs does not stop the others.
+  // Each screen is read twice: from the list API alone (a page whose live updates are held back), and with the live
+  // updates the page applies on top (a watch first sends every object as ADDED, so a plain read can be either). The
+  // window is wide enough that no column folds: a folded column's header reads empty and would not be compared.
   test('every list screen shows the rows, columns and cards the cluster has', async ({ page }) => {
-    test.setTimeout(600_000)
-    await page.addInitScript(() => localStorage.setItem('kubeast.listPageSize', '100'))
-    for (const s of SCREENS) await test.step(s.path, async () => {
-      await page.goto(`${s.path}${s.path.includes('?') ? '&' : '?'}cluster=self&namespace=${NS}`)
-      const table = await apiTable(s.api)
-      const want = table.rows.map((r) => r.object.metadata.name).sort()
-      // the rows on screen are the cluster's objects (re-read until the list has caught up)
-      const names = async () => {
-        const { heads, rows } = await readScreen(page)
-        const nameAt = heads.findIndex((h) => /^name$/i.test(h))
-        return rows.map((r) => r[nameAt]).filter(Boolean).sort()
-      }
-      try {
-        await expect.poll(names, { timeout: 20_000 }).toEqual(want)
-      } catch {
-        expect.soft(await names(), `${s.path}: names on screen`).toEqual(want)
-      }
+    test.setTimeout(900_000)
+    await page.context().addInitScript(() => localStorage.setItem('kubeast.listPageSize', '100'))
+    const held = await page.context().newPage()
+    await held.routeWebSocket(/wsMultiplexer/, () => {})
+    for (const p of [held, page]) await p.setViewportSize({ width: 2560, height: 1200 })
+    for (const s of SCREENS) {
+      for (const [way, p] of [['list API', held], ['live', page]] as const) await test.step(`${s.path} · ${way}`, () => compareScreen(p, s, way))
+    }
+    await held.close()
+  })
 
-      // the cluster again, then the screen, so a value that moves (RESTARTS) is read close together
-      const fresh = await apiTable(s.api)
-      const objects = Object.fromEntries(items(s.plural).map((o) => [o.metadata.name, o]))
-      const { heads, rows, cards } = await readScreen(page)
-      const nameAt = heads.findIndex((h) => /^name$/i.test(h))
-      const tableCols = fresh.columnDefinitions.map((c) => norm(c.name))
-      const byName = Object.fromEntries(fresh.rows.map((r) => [r.object.metadata.name, r.cells.map((c) => String(c ?? ''))]))
-      const unknown: string[] = []
-      for (const row of rows) {
-        const name = row[nameAt]
-        if (!name || !byName[name]) continue
-        heads.forEach((h, i) => {
-          if (!h || i === nameAt || s.skip?.[h] !== undefined) return
-          const o = objects[name]
-          const extra = s.extra?.[h]
-          if (extra) {
-            expect.soft(row[i], `${s.path} · ${name} · ${h} (from the object)`).toBe(extra(o))
-            return
-          }
-          const j = tableCols.indexOf(norm(s.alias?.[h] ?? h))
-          if (j < 0) {
-            if (!unknown.includes(h)) unknown.push(h)
-            return
-          }
-          const cluster = s.shape?.[h] ? s.shape[h](byName[name][j], o) : byName[name][j]
-          const same = s.spans?.[h]?.(o) ? sameSpan(row[i], cluster) : sameValue(row[i], cluster)
-          expect.soft(same, `${s.path} · ${name} · ${h}: screen "${row[i]}", kubectl "${byName[name][j]}"`).toBe(true)
-        })
+  // the cluster screens the same way, with the cluster-scoped fixture made for the test and removed after it
+  test('every cluster list screen shows the rows, columns and cards the cluster has', async ({ page }) => {
+    test.setTimeout(900_000)
+    kubectl('apply -f -', CLUSTER_FIXTURE)
+    try {
+      await page.context().addInitScript(() => localStorage.setItem('kubeast.listPageSize', '100'))
+      const held = await page.context().newPage()
+      await held.routeWebSocket(/wsMultiplexer/, () => {})
+      for (const p of [held, page]) await p.setViewportSize({ width: 2560, height: 1200 })
+      for (const s of SCREENS_CLUSTER) {
+        for (const [way, p] of [['list API', held], ['live', page]] as const) await test.step(`${s.path} · ${way}`, () => compareScreen(p, s, way))
       }
-      expect.soft(unknown, `${s.path}: columns with nothing to compare against`).toEqual([])
-      if (s.cards) {
-        const expected = s.cards(Object.values(objects))
-        for (const [label, value] of Object.entries(expected)) {
-          expect.soft(cards[label], `${s.path} · card "${label}" (cards on screen: ${JSON.stringify(cards)})`).toBe(value)
-        }
-      }
-    })
+      await held.close()
+    } finally {
+      kubectl('delete -f - --ignore-not-found --wait=false', CLUSTER_FIXTURE)
+    }
   })
 
   // An EndpointSlice row and its drawer are the slice the cluster has whichever way they came: from the list API (live

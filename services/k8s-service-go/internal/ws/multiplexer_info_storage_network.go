@@ -3,78 +3,22 @@ package ws
 import (
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+
+	pvcrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/pvc"
+	scrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/storageclass"
 )
 
-// pvcToInfo — list endpoint: formatPVCDetail (storage_pvc.go).
+// pvcToInfo is the list's row (pvcrow.Info), so a live update says what the list says.
 func pvcToInfo(obj *unstructured.Unstructured) map[string]interface{} {
-	metadata := obj.Object["metadata"].(map[string]interface{})
-	spec, _ := obj.Object["spec"].(map[string]interface{})
-	status, _ := obj.Object["status"].(map[string]interface{})
-
-	phase := ""
-	if status != nil {
-		if p, ok := status["phase"].(string); ok {
-			phase = p
-		}
+	var c corev1.PersistentVolumeClaim
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, &c); err != nil {
+		return genericToInfo(obj)
 	}
-
-	capacity := ""
-	if status != nil {
-		if cap, ok := status["capacity"].(map[string]interface{}); ok {
-			if s, ok := cap["storage"].(string); ok {
-				capacity = s
-			}
-		}
-	}
-
-	requested := ""
-	if spec != nil {
-		if res, ok := spec["resources"].(map[string]interface{}); ok {
-			if req, ok := res["requests"].(map[string]interface{}); ok {
-				if s, ok := req["storage"].(string); ok {
-					requested = s
-				}
-			}
-		}
-	}
-
-	accessModes := []string{}
-	if spec != nil {
-		if am, ok := spec["accessModes"].([]interface{}); ok {
-			for _, m := range am {
-				if s, ok := m.(string); ok {
-					accessModes = append(accessModes, s)
-				}
-			}
-		}
-	}
-
-	storageClass := ""
-	if spec != nil {
-		if sc, ok := spec["storageClassName"].(string); ok {
-			storageClass = sc
-		}
-	}
-
-	volumeName := ""
-	if spec != nil {
-		if vn, ok := spec["volumeName"].(string); ok {
-			volumeName = vn
-		}
-	}
-
-	return map[string]interface{}{
-		"name":          metadata["name"],
-		"namespace":     metadata["namespace"],
-		"status":        phase,
-		"volume_name":   volumeName,
-		"capacity":      capacity,
-		"requested":     requested,
-		"access_modes":  accessModes,
-		"storage_class": storageClass,
-		"created_at":    metadata["creationTimestamp"],
-	}
+	return pvcrow.Info(&c)
 }
 
 // pvToInfo — list endpoint: formatPVDetail (storage_pv.go).
@@ -189,59 +133,13 @@ func pvToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 	}
 }
 
-// storageclassToInfo — list endpoint: formatStorageClassDetail (storage_class.go).
+// storageclassToInfo is the list's row (scrow.Info), so a live update says what the list says.
 func storageclassToInfo(obj *unstructured.Unstructured) map[string]interface{} {
-	metadata := obj.Object["metadata"].(map[string]interface{})
-
-	provisioner := ""
-	if p, ok := obj.Object["provisioner"].(string); ok {
-		provisioner = p
+	var sc storagev1.StorageClass
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, &sc); err != nil {
+		return genericToInfo(obj)
 	}
-	reclaimPolicy := ""
-	if rp, ok := obj.Object["reclaimPolicy"].(string); ok {
-		reclaimPolicy = rp
-	}
-	volumeBindingMode := ""
-	if vb, ok := obj.Object["volumeBindingMode"].(string); ok {
-		volumeBindingMode = vb
-	}
-	allowExpansion := false
-	if a, ok := obj.Object["allowVolumeExpansion"].(bool); ok {
-		allowExpansion = a
-	}
-
-	annotations, _ := metadata["annotations"].(map[string]interface{})
-	isDefault := false
-	if annotations != nil {
-		if v, ok := annotations["storageclass.kubernetes.io/is-default-class"].(string); ok && v == "true" {
-			isDefault = true
-		}
-	}
-
-	parameters, _ := obj.Object["parameters"].(map[string]interface{})
-
-	mountOptions := []string{}
-	if mo, ok := obj.Object["mountOptions"].([]interface{}); ok {
-		for _, m := range mo {
-			if s, ok := m.(string); ok {
-				mountOptions = append(mountOptions, s)
-			}
-		}
-	}
-
-	return map[string]interface{}{
-		"name":                   metadata["name"],
-		"provisioner":            provisioner,
-		"reclaim_policy":         reclaimPolicy,
-		"volume_binding_mode":    volumeBindingMode,
-		"allow_volume_expansion": allowExpansion,
-		"is_default":             isDefault,
-		"parameters":             parameters,
-		"mount_options":          mountOptions,
-		"labels":                 metadata["labels"],
-		"annotations":            metadata["annotations"],
-		"created_at":             metadata["creationTimestamp"],
-	}
+	return scrow.Info(&sc)
 }
 
 // ingressToInfo — list endpoint: formatIngressDetail (networking.go).

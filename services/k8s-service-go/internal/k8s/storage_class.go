@@ -8,6 +8,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	scrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/storageclass"
 )
 
 // --- StorageClasses ---
@@ -187,38 +189,7 @@ func formatStorageClassList(scs []storagev1.StorageClass) []map[string]interface
 	return result
 }
 
+// formatStorageClassDetail is the class's row (scrow.Info), the same for the list, describe and the live updates.
 func formatStorageClassDetail(sc *storagev1.StorageClass) map[string]interface{} {
-	reclaimPolicy := ""
-	if sc.ReclaimPolicy != nil {
-		reclaimPolicy = string(*sc.ReclaimPolicy)
-	}
-
-	volumeBindingMode := ""
-	if sc.VolumeBindingMode != nil {
-		volumeBindingMode = string(*sc.VolumeBindingMode)
-	}
-
-	allowExpansion := false
-	if sc.AllowVolumeExpansion != nil {
-		allowExpansion = *sc.AllowVolumeExpansion
-	}
-
-	isDefault := false
-	if v, ok := sc.Annotations["storageclass.kubernetes.io/is-default-class"]; ok && v == "true" {
-		isDefault = true
-	}
-
-	return map[string]interface{}{
-		"name":                   sc.Name,
-		"provisioner":            sc.Provisioner,
-		"reclaim_policy":         reclaimPolicy,
-		"volume_binding_mode":    volumeBindingMode,
-		"allow_volume_expansion": allowExpansion,
-		"is_default":             isDefault,
-		"parameters":             sc.Parameters,
-		"mount_options":          sc.MountOptions,
-		"labels":                 sc.Labels,
-		"annotations":            sc.Annotations,
-		"created_at":             toISO(&sc.CreationTimestamp),
-	}
+	return scrow.Info(sc)
 }

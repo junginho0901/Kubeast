@@ -12,6 +12,7 @@ import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Plus, RefreshCw } from 'lucide-react'
 import {
+  markEffectiveDefault,
   parseAgeSeconds,
   type SortKey,
 } from './storageclasses/storageClassHelpers'
@@ -33,10 +34,11 @@ export default function StorageClasses() {
   const [currentPage, setCurrentPage] = useState(1)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
 
-  const { data: storageClasses, isLoading } = useQuery({
+  const { data: listed, isLoading } = useQuery({
     queryKey: ['storage', 'storageclasses'],
     queryFn: () => api.getStorageClasses(false),
   })
+  const storageClasses = useMemo(() => markEffectiveDefault(listed), [listed])
   const canCreate = useCanCreate('resource.storageclass.create', { group: 'storage.k8s.io', resource: 'storageclasses' })
 
   useKubeWatchList({
