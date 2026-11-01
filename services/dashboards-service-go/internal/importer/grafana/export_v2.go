@@ -1,6 +1,7 @@
 package grafana
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,6 +34,38 @@ import (
 // A dashboard changed since its v2 import is refused (ErrV2Changed) until its
 // changes are written into the v2 file it came from.
 func ExportV2(d *model.Dashboard) ([]byte, *ExportReport, error) {
+	r, rep, err := v2Resource(d)
+	if err != nil {
+		return nil, nil, err
+	}
+	if n := dropInputRefs(r.spec, r.inputs); len(r.inputs) > 0 && n > 0 {
+		rep.Adjusted = append(rep.Adjusted, Finding{Path: "spec", Reason: fmt.Sprintf(
+			"%d references to an input (%s) written without a data source: Grafana uses its default one of the query's type", n, strings.Join(sortedSet(r.inputs), ", "))})
+	}
+	b, err := r.marshal()
+	return b, rep, err
+}
+
+// v2Res is a v2 resource before it is written.
+type v2Res struct {
+	apiVersion, name string
+	spec             any             // the v2 file's spec as it is (json.RawMessage), or the converted one decoded
+	inputs           map[string]bool // ${…} references to the inputs of a Kubeast-made dashboard
+	ds               DataSources     // the data sources the conversion assumed
+}
+
+func (r *v2Res) marshal() ([]byte, error) {
+	return json.MarshalIndent(map[string]any{
+		"apiVersion": r.apiVersion,
+		"kind":       "Dashboard",
+		"metadata":   map[string]string{"name": r.name},
+		"spec":       r.spec,
+	}, "", "  ")
+}
+
+// v2Resource is the v2 resource of d: its v2 file, or its classic export
+// converted.
+func v2Resource(d *model.Dashboard) (*v2Res, *ExportReport, error) {
 	if d == nil {
 		return nil, nil, errors.New("no dashboard")
 	}
@@ -46,36 +79,39 @@ func ExportV2(d *model.Dashboard) ([]byte, *ExportReport, error) {
 	if !sameModel(d, again) {
 		return nil, nil, ErrV2Changed
 	}
-	var root obj
+	var root struct {
+		APIVersion string          `json:"apiVersion"`
+		Metadata   map[string]any  `json:"metadata"`
+		Spec       json.RawMessage `json:"spec"` // written back byte for byte
+		Status     any             `json:"status"`
+	}
 	if err := json.Unmarshal(d.Source.Raw, &root); err != nil {
 		return nil, nil, ErrNotJSON
 	}
 	rep := &ExportReport{}
-	var meta obj
-	_ = json.Unmarshal(root["metadata"], &meta)
-	for _, k := range sortedKeys(meta) {
+	for _, k := range sortedSet(root.Metadata) {
 		if k != "name" {
 			rep.Adjusted = append(rep.Adjusted, Finding{Path: "metadata." + k, Reason: "the Grafana instance's record of the dashboard, left out"})
 		}
 	}
-	if _, ok := root["status"]; ok {
+	if root.Status != nil {
 		rep.Adjusted = append(rep.Adjusted, Finding{Path: "status", Reason: "the Grafana instance's record of the dashboard, left out"})
 	}
-	name := strOf(meta["name"])
+	name, _ := root.Metadata["name"].(string)
 	if name == "" {
 		name = d.Metadata.Name
 	}
-	out := obj{
-		"apiVersion": root["apiVersion"],
-		"kind":       mustJSON("Dashboard"),
-		"metadata":   mustJSON(map[string]string{"name": name}),
-		"spec":       root["spec"],
+	return &v2Res{apiVersion: root.APIVersion, name: name, spec: root.Spec}, rep, nil
+}
+
+// sortedSet lists a map's keys in order.
+func sortedSet[V any](m map[string]V) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
 	}
-	b, err := json.MarshalIndent(out, "", "  ")
-	if err != nil {
-		return nil, nil, err
-	}
-	return b, rep, nil
+	sort.Strings(out)
+	return out
 }
 
 // ErrV2Changed: the dashboard came from a v2 file and has changed since.
@@ -122,13 +158,14 @@ func exportDataSources(d *model.Dashboard) DataSources {
 	return out // an annotation's reference needs its type and uid both (ConvertV2), so none is looked up
 }
 
-// convertedV2 is ExportV2 for a classic or Kubeast-made dashboard.
-func convertedV2(d *model.Dashboard) ([]byte, *ExportReport, error) {
+// convertedV2 is the v2 resource of a classic or Kubeast-made dashboard.
+func convertedV2(d *model.Dashboard) (*v2Res, *ExportReport, error) {
 	classic, rep, err := Export(d)
 	if err != nil {
 		return nil, nil, err
 	}
-	spec, err := ConvertV2(classic, exportDataSources(d))
+	ds := exportDataSources(d)
+	spec, err := ConvertV2(classic, ds)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -136,39 +173,20 @@ func convertedV2(d *model.Dashboard) ([]byte, *ExportReport, error) {
 		UID string `json:"uid"`
 	}
 	_ = json.Unmarshal(classic, &root)
-	name := root.UID
-	if name == "" {
-		name = d.Metadata.Name
+	r := &v2Res{apiVersion: resourceGroup + "v2", name: root.UID, ds: ds, inputs: map[string]bool{}}
+	if r.name == "" {
+		r.name = d.Metadata.Name
 	}
-	if len(rep.Inputs) > 0 {
-		var s any
-		if err := json.Unmarshal(spec, &s); err != nil {
-			return nil, nil, err
-		}
-		inputs := map[string]bool{}
-		for _, in := range rep.Inputs {
-			inputs["${"+in+"}"] = true
-		}
-		if n := dropInputRefs(s, inputs); n > 0 {
-			rep.Adjusted = append(rep.Adjusted, Finding{Path: "spec", Reason: fmt.Sprintf(
-				"%d references to an input (%s) written without a data source: Grafana uses its default one of the query's type", n, strings.Join(rep.Inputs, ", "))})
-		}
-		rep.Inputs = nil
-		if spec, err = json.Marshal(s); err != nil {
-			return nil, nil, err
-		}
+	for _, in := range rep.Inputs {
+		r.inputs["${"+in+"}"] = true
 	}
-	out := obj{
-		"apiVersion": mustJSON(resourceGroup + "v2"),
-		"kind":       mustJSON("Dashboard"),
-		"metadata":   mustJSON(map[string]string{"name": name}),
-		"spec":       spec,
-	}
-	b, err := json.MarshalIndent(out, "", "  ")
-	if err != nil {
+	rep.Inputs = nil
+	dec := json.NewDecoder(bytes.NewReader(spec))
+	dec.UseNumber()
+	if err := dec.Decode(&r.spec); err != nil {
 		return nil, nil, err
 	}
-	return b, rep, nil
+	return r, rep, nil
 }
 
 // dropInputRefs removes each data source reference ({name: ${input}}) to one
