@@ -183,6 +183,41 @@ func TestMetrics_Unread(t *testing.T) {
 	}
 }
 
+// The rules the mimirtool cases do not reach: what counts as a name, the
+// variable functions, info() with a name, and the order.
+func TestMetrics_Rules(t *testing.T) {
+	for _, c := range []struct {
+		expr string
+		want []string
+	}{
+		{`{__name__=~"node_.+"}`, nil},
+		{`{__name__!="neg_a", job="a"} or {__name__!~"neg_b", job="b"}`, nil},
+		{`{__name__=~"a_total|b_total"}`, []string{"a_total", "b_total"}},
+		{`info(x, {__name__="build_info"})`, []string{"build_info", "x"}},
+		{`zz + aa + mm`, []string{"aa", "mm", "zz"}},
+	} {
+		d := &model.Dashboard{Spec: model.Spec{Panels: map[string]model.Panel{"p": {Queries: []model.Query{{Store: model.StorePrometheus, Expr: c.expr}}}}}}
+		if got, unread := Metrics(d); !slices.Equal(got, c.want) || len(unread) != 0 {
+			t.Errorf("%s: %v (unread %q), want %v", c.expr, got, unread, c.want)
+		}
+	}
+	for _, c := range []struct {
+		fn, expr string
+		want     []string
+	}{
+		{"label_values", `kube_pod_info{namespace="$ns"}`, []string{"kube_pod_info"}},
+		{"label_names", `kube_node_info`, []string{"kube_node_info"}},
+		{"query_result", `topk(5, qr_total)`, []string{"qr_total"}},
+		{"raw", `sum(raw_total)`, []string{"raw_total"}},
+		{"metrics", `node_.*`, nil},
+	} {
+		d := &model.Dashboard{Spec: model.Spec{Variables: []model.Variable{{Name: "v", Kind: model.VarQuery, Store: model.StorePrometheus, Query: &model.VariableQuery{Fn: c.fn, Expr: c.expr}}}}}
+		if got, unread := Metrics(d); !slices.Equal(got, c.want) || len(unread) != 0 {
+			t.Errorf("%s(%s): %v (unread %q), want %v", c.fn, c.expr, got, unread, c.want)
+		}
+	}
+}
+
 func TestMetrics_VariablesByPosition(t *testing.T) {
 	for _, c := range []struct{ expr, want string }{
 		{`rate(x[$__rate_interval])`, `rate(x[5m])`},
