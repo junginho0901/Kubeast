@@ -1440,6 +1440,45 @@ test.describe('number check — list screens', () => {
     }
   })
 
+  // the Helm releases screen's Refresh reads the cluster past the server's 30-second list cache (a release written
+  // outside Kubeast does not clear it), and its namespace picker offers every namespace with the choice in the address
+  test('the Helm releases Refresh reads the cluster again, and the namespace picker keeps every namespace', async ({ page }) => {
+    test.setTimeout(180_000)
+    const k = on(HELM.cluster)
+    const names = async (force: boolean) => ((await (await page.request.get(
+      `/api/v1/helm/releases?cluster=${HELM.cluster}&namespace=${NS}${force ? '&force_refresh=true' : ''}`)).json()).items ?? []).map((r: Obj) => r.name)
+    try {
+      await test.step('the API: a list read now is kept; a release written right after shows on a forced read', async () => {
+        expect(await names(false)).not.toContain('num-ext')
+        k.kubectl('apply -f -', JSON.stringify(helmSecret('num-ext', 1, 'deployed')))
+        expect(await names(false), 'the cached list, read again within 30 s').not.toContain('num-ext')
+        expect.soft(await names(true), 'a forced read').toContain('num-ext')
+      })
+      await page.goto(`${HELM.path}?cluster=${HELM.cluster}&namespace=${NS}`)
+      await test.step('the Refresh button asks for the forced read', async () => {
+        const [req] = await Promise.all([
+          page.waitForRequest((r) => r.url().includes('/helm/releases?') && r.url().includes('force_refresh=true'), { timeout: 10_000 }).catch(() => null),
+          page.getByRole('button', { name: 'Refresh', exact: true }).click(),
+        ])
+        expect.soft(req?.url() ?? 'no forced request', 'the Refresh request').toContain(`namespace=${NS}`)
+      })
+      await test.step('the picker: the namespace from the address, every namespace offered, the next choice kept on reload', async () => {
+        await expect.soft(page.getByTestId('helm-namespace'), 'the address picks the namespace').toHaveText(NS)
+        await page.getByTestId('helm-namespace').click()
+        const offered = await page.locator('[data-testid^="helm-namespace-opt-"]').evaluateAll((els) =>
+          els.map((el) => el.getAttribute('data-testid')!.replace('helm-namespace-opt-', '')).filter((n) => n !== 'all').sort())
+        const all = k.kubectl(`get namespaces -o jsonpath='{range .items[*]}{.metadata.name}{"\\n"}{end}'`).split('\n').filter(Boolean).sort()
+        expect.soft(offered, 'every namespace of the cluster, whichever is picked').toEqual(all)
+        await page.getByTestId('helm-namespace-opt-kubeast').click()
+        await expect.poll(() => new URL(page.url()).searchParams.get('namespace'), { timeout: 10_000 }).toBe('kubeast')
+        await page.reload()
+        await expect(page.getByTestId('helm-namespace')).toHaveText('kubeast')
+      })
+    } finally {
+      k.kubectl(`delete secrets -n ${NS} -l owner=helm --ignore-not-found`)
+    }
+  })
+
   // An EndpointSlice row and its drawer are the slice the cluster has whichever way they came: from the list API (live
   // updates held back), from a live update, and by link (the object itself). Last in the file: it changes num-hand.
   test('an EndpointSlice row and drawer show the slice from the list API, a live update and a link alike', async ({ page }) => {

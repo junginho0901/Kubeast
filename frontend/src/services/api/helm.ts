@@ -105,7 +105,8 @@ export interface HelmTestResponse {
 // ===== Helm API =====
 
 export const helmApi = {
-  listReleases: async (params?: { namespace?: string; status?: string }): Promise<HelmReleaseSummary[]> => {
+  // force_refresh: read the cluster again instead of the server's 30-second list cache (the page's Refresh).
+  listReleases: async (params?: { namespace?: string; status?: string; force_refresh?: boolean }): Promise<HelmReleaseSummary[]> => {
     const { data } = await client.get('/helm/releases', { params })
     return Array.isArray(data?.items) ? data.items : []
   },
