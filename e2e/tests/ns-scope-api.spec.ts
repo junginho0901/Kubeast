@@ -75,6 +75,13 @@ test.describe('namespace-scoped grant enforcement', () => {
       expect(unbound.status()).toBe(403)
       expect(await unbound.text()).toMatch(/impersonate|forbidden/)
 
+      // The timeline keeps an answer 30 s per identity: right after the admin read the same timelines the user still
+      // gets the cluster's answer for itself — refused across the cluster and, before its group is bound, in A too.
+      for (const p of [`/api/v1/cluster/timeline?probe=${s}`, `/api/v1/cluster/namespaces/${nsA}/timeline?probe=${s}`]) {
+        expect((await get(request, admin, p)).status(), `admin, ${p}`).toBe(200)
+        expect((await get(request, user, p)).status(), `the user right after the admin, ${p}`).toBe(403)
+      }
+
       // What A-3's chart will render, done by hand here: the scoped groups (Read now, Write for the MCP part below)
       // may be impersonated, and they read (view) in A only.
       kubectl(`create clusterrole ${rbac}-imp --verb=impersonate --resource=groups --resource-name=kubeast:role:read --resource-name=kubeast:role:write`)
@@ -85,6 +92,8 @@ test.describe('namespace-scoped grant enforcement', () => {
       await expect.poll(async () => (await get(request, user, `/api/v1/cluster/namespaces/${nsA}/configmaps`)).status(), { timeout: 20_000 }).toBe(200)
       const inside = await (await get(request, user, `/api/v1/cluster/namespaces/${nsA}/configmaps`)).json()
       expect(JSON.stringify(inside)).toContain('cm-a')
+      // bound now: A's timeline is the user's own read
+      expect((await get(request, user, `/api/v1/cluster/namespaces/${nsA}/timeline?probe=${s}-bound`)).status()).toBe(200)
 
       // The namespace list is the grant; the all-namespaces list fans out over it (B never appears).
       const namespaces = await get(request, user, '/api/v1/cluster/namespaces')

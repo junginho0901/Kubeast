@@ -573,6 +573,12 @@ func (s *Service) clusterCacheKey(ctx context.Context, key string) string {
 	return id + "|" + key
 }
 
+// IdentityCacheKey is clusterCacheKey for a handler that caches an answer it
+// read as the caller.
+func (s *Service) IdentityCacheKey(ctx context.Context, key string) string {
+	return s.clusterCacheKey(ctx, key)
+}
+
 // dropCached removes key for every identity that cached it, after a write
 // changed what it holds.
 func (s *Service) dropCached(ctx context.Context, key string) {

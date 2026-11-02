@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -26,8 +25,8 @@ func (h *Handler) serveNamespaceTimeline(w http.ResponseWriter, r *http.Request,
 	hours := queryParamInt(r, "hours", 24)
 	limit := queryParamInt(r, "limit", 500)
 
-	cid, _ := cluster.FromContext(ctx)
-	cacheKey := "timeline|ns|" + string(cid) + "|" + namespace + "|" + r.URL.RawQuery
+	// read as the caller, so kept per identity: another user's answer is never served
+	cacheKey := h.svc.IdentityCacheKey(ctx, "timeline|ns|"+namespace+"|"+r.URL.RawQuery)
 
 	var cached interface{}
 	if h.svc.Cache().Get(ctx, cacheKey, &cached) {
@@ -54,8 +53,7 @@ func (h *Handler) GetResourceTimeline(w http.ResponseWriter, r *http.Request) {
 	hours := queryParamInt(r, "hours", 24)
 	limit := queryParamInt(r, "limit", 500)
 
-	cid, _ := cluster.FromContext(ctx)
-	cacheKey := "timeline|res|" + string(cid) + "|" + namespace + "|" + kind + "|" + name + "|" + r.URL.RawQuery
+	cacheKey := h.svc.IdentityCacheKey(ctx, "timeline|res|"+namespace+"|"+kind+"|"+name+"|"+r.URL.RawQuery)
 
 	var cached interface{}
 	if h.svc.Cache().Get(ctx, cacheKey, &cached) {
