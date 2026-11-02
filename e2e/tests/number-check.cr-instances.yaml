@@ -1,0 +1,39 @@
+# Instances of number-check.cr-crd.yaml's Widget, on test2 — no two alike; the spec writes their statuses and bumps
+# num-w1's generation.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: e2e-numbers
+---
+apiVersion: numbers.kubeast.io/v1
+kind: Widget
+metadata:
+  name: num-w1
+  namespace: e2e-numbers
+spec:
+  size: large
+  replicas: 3
+  enabled: true
+  tags: [a, b]
+  owner: team-a
+---
+apiVersion: numbers.kubeast.io/v1
+kind: Widget
+metadata:
+  name: num-w2
+  namespace: e2e-numbers
+spec:
+  size: small
+  replicas: 0
+  enabled: false
+---
+apiVersion: numbers.kubeast.io/v1
+kind: Widget
+metadata:
+  name: num-w3
+  namespace: e2e-numbers
+spec:
+  size: medium
+  replicas: 1
+  tags: [solo]
+  owner: team-b

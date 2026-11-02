@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation, Trans } from 'react-i18next'
-import { JSONPath } from 'jsonpath-plus'
 import { api, type CustomResourceInstanceInfo } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
@@ -12,28 +11,13 @@ import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
+import { printerCellText, type PrinterCell, type PrinterColumn } from './printerCells'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
 import CustomDropdown from '@/components/CustomDropdown'
 
 type SortKey = null | 'name' | 'namespace' | 'kind' | 'group' | 'age' | string
 type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
 
-interface PrinterColumn {
-  name: string
-  type: string
-  jsonPath: string
-  description?: string
-}
-
-function getValueWithJSONPath(json: object, jsonPath: string): string {
-  try {
-    const result = JSONPath({ path: '$' + jsonPath, json, wrap: false })
-    if (result === undefined || result === null) return ''
-    return String(result)
-  } catch {
-    return ''
-  }
-}
 
 export default function CustomResourceInstances() {
   const queryClient = useQueryClient()
@@ -53,64 +37,38 @@ export default function CustomResourceInstances() {
     queryFn: () => api.getAllCustomResourceInstances(false),
   })
 
-  // When kind is selected, find the corresponding CRD and fetch its describe for printer columns
-  const selectedCRDName = useMemo(() => {
-    if (!kindFilter || !Array.isArray(instances)) return ''
-    const match = instances.find((inst) => inst.kind === kindFilter)
-    return match?.crd_name || ''
-  }, [kindFilter, instances])
+  // the chosen kind is a CRD (crd_name, plural.group): a Kind of one name in two groups stays apart
+  const selected = useMemo(
+    () => (kindFilter && Array.isArray(instances) ? instances.find((inst) => inst.crd_name === kindFilter) : undefined),
+    [kindFilter, instances],
+  )
+  const selectedGroup = selected?.group || ''
+  const selectedVersion = selected?.version || ''
+  const selectedPlural = kindFilter ? kindFilter.split('.')[0] : ''
 
-  const { data: selectedCRDDescribe } = useQuery({
-    queryKey: ['crd-describe', selectedCRDName],
-    queryFn: () => api.describeCRD(selectedCRDName),
-    enabled: !!selectedCRDName,
-    retry: false,
-  })
-
-  // Extract printer columns from the selected CRD
-  const printerColumns = useMemo<PrinterColumn[]>(() => {
-    if (!selectedCRDDescribe?.versions) return []
-    const versions = Array.isArray(selectedCRDDescribe.versions) ? selectedCRDDescribe.versions : []
-    const storageVer = versions.find((v: any) => v.storage) || versions[0]
-    if (!storageVer?.additionalPrinterColumns) return []
-    return (storageVer.additionalPrinterColumns as any[]).filter(
-      (col: any) => col.jsonPath !== '.metadata.creationTimestamp',
-    )
-  }, [selectedCRDDescribe?.versions])
-
-  // When kind filter changes, also fetch full instances with rawJson for JSONPath
-  const selectedGroup = useMemo(() => {
-    if (!kindFilter || !Array.isArray(instances)) return ''
-    const match = instances.find((inst) => inst.kind === kindFilter)
-    return match?.group || ''
-  }, [kindFilter, instances])
-
-  const selectedVersion = useMemo(() => {
-    if (!kindFilter || !Array.isArray(instances)) return ''
-    const match = instances.find((inst) => inst.kind === kindFilter)
-    return match?.version || ''
-  }, [kindFilter, instances])
-
-  const selectedPlural = useMemo(() => {
-    if (!selectedCRDName) return ''
-    return selectedCRDName.split('.')[0] || ''
-  }, [selectedCRDName])
-
-  // Fetch full CR instances with spec/status for JSONPath evaluation
+  // the CRD's rows as the API server prints them for kubectl, each with its printer columns' cells
   const { data: fullInstances } = useQuery({
     queryKey: ['custom-resources', 'full-instances', selectedGroup, selectedVersion, selectedPlural],
     queryFn: () => api.getCustomResourceInstances(selectedGroup, selectedVersion, selectedPlural),
-    enabled: !!selectedGroup && !!selectedVersion && !!selectedPlural && printerColumns.length > 0,
+    enabled: !!selectedGroup && !!selectedVersion && !!selectedPlural,
     retry: false,
   })
 
-  const uniqueKinds = useMemo(() => {
-    if (!Array.isArray(instances)) return [] as string[]
-    const kinds = new Set<string>()
-    for (const inst of instances) {
-      if (inst.kind) kinds.add(inst.kind)
-    }
-    return Array.from(kinds).sort()
+  const printerColumns = useMemo<PrinterColumn[]>(() => {
+    const first = Array.isArray(fullInstances) ? fullInstances.find((inst: any) => Array.isArray(inst.printer_cells)) : undefined
+    return first ? (first.printer_cells as PrinterCell[]).map(({ name, type, priority, description }) => ({ name, type, priority, description })) : []
+  }, [fullInstances])
+
+  // one entry per CRD; a Kind whose name another group also uses shows its group
+  const kindOptions = useMemo(() => {
+    if (!Array.isArray(instances)) return [] as { value: string; label: string }[]
+    const byCRD = new Map<string, CustomResourceInstanceInfo>()
+    for (const inst of instances) if (inst.crd_name && !byCRD.has(inst.crd_name)) byCRD.set(inst.crd_name, inst)
+    const named = new Map<string, number>()
+    for (const inst of byCRD.values()) named.set(inst.kind, (named.get(inst.kind) ?? 0) + 1)
+    return [...byCRD.entries()]
+      .map(([crd, inst]) => ({ value: crd, label: (named.get(inst.kind) ?? 0) > 1 ? `${inst.kind} (${inst.group})` : inst.kind }))
+      .sort((a, b) => a.label.localeCompare(b.label))
   }, [instances])
 
   const filteredItems = useMemo(() => {
@@ -118,7 +76,7 @@ export default function CustomResourceInstances() {
     let result = instances
 
     if (kindFilter) {
-      result = result.filter((inst) => inst.kind === kindFilter)
+      result = result.filter((inst) => inst.crd_name === kindFilter)
     }
 
     if (searchQuery.trim()) {
@@ -140,7 +98,7 @@ export default function CustomResourceInstances() {
     const kinds = new Set<string>()
     const namespaces = new Set<string>()
     for (const inst of filteredItems) {
-      if (inst.kind) kinds.add(inst.kind)
+      if (inst.crd_name) kinds.add(inst.crd_name)
       if (inst.namespace) namespaces.add(inst.namespace)
     }
     return { total, kinds: kinds.size, namespaces: namespaces.size }
@@ -228,7 +186,7 @@ export default function CustomResourceInstances() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  // Build a lookup from name+namespace to full instance for JSONPath
+  // the CRD's rows by namespace/name, for their printer cells
   const fullInstanceMap = useMemo(() => {
     if (!Array.isArray(fullInstances)) return new Map<string, any>()
     const map = new Map<string, any>()
@@ -239,25 +197,9 @@ export default function CustomResourceInstances() {
   }, [fullInstances])
 
   const getColumnValue = (inst: CustomResourceInstanceInfo, col: PrinterColumn): string => {
-    const key = `${inst.namespace || '-'}/${inst.name}`
-    const full = fullInstanceMap.get(key)
-    if (!full) return '-'
-    // Build a minimal k8s-like object for JSONPath
-    const json = {
-      metadata: { name: full.name, namespace: full.namespace, creationTimestamp: full.created_at, labels: full.labels, annotations: full.annotations },
-      spec: full.spec || {},
-      status: full.status || {},
-      ...full,
-    }
-    const value = getValueWithJSONPath(json, col.jsonPath)
-    if (!value) return '-'
-    if (col.type === 'date') {
-      try {
-        const d = new Date(value)
-        if (!isNaN(d.getTime())) return formatAge(value)
-      } catch { /* fall through */ }
-    }
-    return value
+    const full = fullInstanceMap.get(`${inst.namespace || '-'}/${inst.name}`)
+    const cell = (full?.printer_cells as PrinterCell[] | undefined)?.find((c) => c.name === col.name)
+    return printerCellText(cell, tr('common.yes', 'Yes'), tr('common.no', 'No'))
   }
 
   const handleRefresh = async () => {
@@ -305,7 +247,7 @@ export default function CustomResourceInstances() {
           onChange={(v) => { setKindFilter(v); setSortKey(null) }}
           options={[
             { value: '', label: tr('crInstancesPage.allKinds', 'All kinds') },
-            ...uniqueKinds.map((k) => ({ value: k, label: k })),
+            ...kindOptions,
           ]}
         />
       </div>

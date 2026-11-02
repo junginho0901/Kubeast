@@ -86,6 +86,8 @@ type Screen = {
   plural: string
   // the registered cluster the screen is read on (self when not set)
   cluster?: string
+  // what to do on the screen after opening it (pick a kind)
+  prepare?: (page: Page) => Promise<void>
   // a cluster-scoped kind: the screen is opened without a namespace and holds every object of the kind
   clusterScoped?: boolean
   // a namespaced kind listed over every namespace (rows told apart by namespace/name)
@@ -730,6 +732,32 @@ const registeredOn = async (page: Page, id: string) => {
   return (Array.isArray(body) ? body : body.items ?? []).some((c: Obj) => c.id === id)
 }
 
+// the custom resource instances screen on test2: number-check.cr-crd.yaml's Widget sits next to test2's
+// widgets.qa.example.com, whose Kind is Widget too; one CRD's columns are its printer columns as the API server prints them
+const CR_CRD = fs.readFileSync(path.join(__dirname, 'number-check.cr-crd.yaml'), 'utf8')
+const CR_INSTANCES = fs.readFileSync(path.join(__dirname, 'number-check.cr-instances.yaml'), 'utf8')
+const CR_SCREEN: Screen = {
+  path: '/custom-resources/instances', api: '/apis/numbers.kubeast.io/v1/widgets', plural: 'widgets.numbers.kubeast.io', allNamespaces: true, cluster: 'test2',
+  prepare: async (page) => {
+    await page.getByTestId('cr-instances-kind').click()
+    await page.getByRole('button', { name: 'Widget (numbers.kubeast.io)', exact: true }).click()
+  },
+  // the API server's table holds a date column's timestamp; kubectl and Kubeast print its age
+  shape: { Seen: (v) => (v ? `${Math.round((Date.now() - Date.parse(v)) / 1000)}s` : '') },
+  spans: { Seen: (o) => !!o.status?.lastSeen },
+  skip: { Age: AGE },
+  cards: (list) => ({ 'Total Instances': list.length, 'Unique Kinds': 1, Namespaces: new Set(list.map((o) => o.metadata.namespace)).size }),
+}
+// every custom resource instance of a cluster, each CRD's as kubectl lists them
+function allCustomResources(cluster: string) {
+  const k = on(cluster)
+  return (JSON.parse(k.kubectl('get crd -o json')).items as Obj[]).flatMap((crd) =>
+    (JSON.parse(k.kubectl(`get ${crd.metadata.name} -A -o json`)).items as Obj[]).map((o) => ({
+      key: `${o.metadata.namespace || '-'}/${o.metadata.name}/${crd.spec.names.kind}/${crd.spec.group}`,
+      crd: crd.metadata.name as string, namespace: (o.metadata.namespace ?? '') as string,
+    })))
+}
+
 type ScreenRead = { heads: string[]; rows: string[][]; cards: Record<string, number> }
 async function readScreen(page: Page): Promise<ScreenRead> {
   return page.evaluate(() => {
@@ -752,7 +780,10 @@ const screenUrl = (s: Screen) =>
 // (open = false: the screen already on the page, as live updates left it)
 async function compareScreen(page: Page, s: Screen, way: string, open = true) {
   const { apiTable } = on(s.cluster)
-  if (open) await page.goto(screenUrl(s))
+  if (open) {
+    await page.goto(screenUrl(s))
+    await s.prepare?.(page)
+  }
   // a row is its name, or namespace/name on a screen of every namespace
   const metaKey = (m: { name: string; namespace?: string }) => (s.allNamespaces ? `${m.namespace}/${m.name}` : m.name)
   const rowKey = (heads: string[], r: string[]) => {
@@ -1001,6 +1032,49 @@ test.describe('number check — list screens', () => {
       })
     } finally {
       t2.kubectl(`delete namespace ${NS} --wait=true --timeout=180s --ignore-not-found`)
+    }
+  })
+
+  // the custom resource instances screen on test2: every instance with its Kind and group, then one CRD's instances with
+  // its printer columns as the API server prints them — a Kind of the same name in another group kept apart
+  test('the custom resource instances screen shows what the cluster has, one CRD at a time', async ({ page }) => {
+    test.setTimeout(300_000)
+    test.skip(!(await registeredOn(page, 'test2')), 'needs the kind cluster test2, registered as test2')
+    const t2 = on('test2')
+    t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', CR_CRD)
+    try {
+      t2.kubectl('wait --for=condition=Established crd/widgets.numbers.kubeast.io --timeout=60s')
+      t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', CR_INSTANCES)
+      const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString().replace(/\.\d+Z$/, 'Z')
+      // num-w1 changed once (generation 2), two statuses with the Ready condition after another one
+      t2.kubectl(`patch widget.numbers.kubeast.io num-w1 -n ${NS} --type=merge -p=${arg({ spec: { size: 'xlarge' } })}`)
+      t2.kubectl(`patch widget.numbers.kubeast.io num-w1 -n ${NS} --subresource=status --type=merge -p=${arg({ status: { conditions: [condition('Ready', 'True')], lastSeen: ago(5) } })}`)
+      t2.kubectl(`patch widget.numbers.kubeast.io num-w3 -n ${NS} --subresource=status --type=merge -p=${arg({ status: { conditions: [condition('Synced', 'True'), condition('Ready', 'False')], lastSeen: ago(90) } })}`)
+      await page.context().addInitScript(() => localStorage.setItem('kubeast.listPageSize', '100'))
+      await page.setViewportSize({ width: 2560, height: 1200 })
+
+      await test.step(`${CR_SCREEN.path} · every kind: each instance with its Kind and group, and the cards`, async () => {
+        await page.goto('/custom-resources/instances?cluster=test2')
+        const want = allCustomResources('test2')
+        const shown = async () => {
+          const { heads, rows } = await readScreen(page)
+          const at = (h: string) => heads.indexOf(h)
+          return rows.filter((r) => r[at('Name')]).map((r) => `${r[at('Namespace')] || '-'}/${r[at('Name')]}/${r[at('Kind')]}/${r[at('Group')]}`).sort()
+        }
+        try {
+          await expect.poll(shown, { timeout: 20_000 }).toEqual(want.map((w) => w.key).sort())
+        } catch {
+          expect.soft(await shown(), 'every instance with its Kind and group').toEqual(want.map((w) => w.key).sort())
+        }
+        const { cards } = await readScreen(page)
+        expect.soft(cards['Total Instances'], 'card Total Instances').toBe(want.length)
+        expect.soft(cards['Unique Kinds'], 'card Unique Kinds — one per CRD').toBe(new Set(want.map((w) => w.crd)).size)
+        expect.soft(cards.Namespaces, 'card Namespaces').toBe(new Set(want.filter((w) => w.namespace).map((w) => w.namespace)).size)
+      })
+      await test.step(`${CR_SCREEN.path} · Widget (numbers.kubeast.io)`, () => compareScreen(page, CR_SCREEN, 'one CRD'))
+    } finally {
+      t2.kubectl(`delete namespace ${NS} --wait=true --timeout=180s --ignore-not-found`)
+      t2.kubectl('delete crd/widgets.numbers.kubeast.io --ignore-not-found')
     }
   })
 
