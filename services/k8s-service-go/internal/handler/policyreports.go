@@ -51,7 +51,7 @@ func (h *Handler) GetPolicyReportSummary(w http.ResponseWriter, r *http.Request)
 	response.JSON(w, http.StatusOK, res)
 }
 
-// GetPolicyReportResults handles GET /api/v1/policyreports/results?namespace=&policy=&result=&severity=&kind=&search=&limit=.
+// GetPolicyReportResults handles GET /api/v1/policyreports/results?namespace=&policy=&source=&result=&severity=&kind=&search=&offset=&limit=&sort=&dir=.
 func (h *Handler) GetPolicyReportResults(w http.ResponseWriter, r *http.Request) {
 	if !h.policyReportsGate(w, r) {
 		return
@@ -59,12 +59,20 @@ func (h *Handler) GetPolicyReportResults(w http.ResponseWriter, r *http.Request)
 	f := k8s.PolicyReportFilter{
 		Namespace:  queryParam(r, "namespace", ""),
 		Policy:     queryParam(r, "policy", ""),
+		Source:     queryParam(r, "source", ""),
 		Kind:       queryParam(r, "kind", ""),
 		Search:     queryParam(r, "search", ""),
 		Results:    splitList(queryParam(r, "result", "")),
 		Severities: splitList(queryParam(r, "severity", "")),
+		Offset:     queryParamInt(r, "offset", 0),
 		Limit:      queryParamInt(r, "limit", 0),
+		Sort:       queryParam(r, "sort", ""),
+		Desc:       queryParam(r, "dir", "") == "desc",
 		Force:      queryParamBool(r, "force_refresh", false),
+	}
+	if !policyReportSorts[f.Sort] {
+		response.Error(w, http.StatusBadRequest, "sort must be result, policy, namespace or name")
+		return
 	}
 	res, err := h.svc.PolicyReportResults(r.Context(), f)
 	if err != nil {
@@ -91,6 +99,8 @@ func (h *Handler) GetResourcePolicyReports(w http.ResponseWriter, r *http.Reques
 	}
 	response.JSON(w, http.StatusOK, res)
 }
+
+var policyReportSorts = map[string]bool{"": true, "result": true, "policy": true, "namespace": true, "name": true}
 
 func splitList(v string) []string {
 	if strings.TrimSpace(v) == "" {

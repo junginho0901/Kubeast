@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -185,12 +186,120 @@ func TestPolicyReportResults_FilterSortAndCap(t *testing.T) {
 			t.Errorf("%s: total %d rows %d, want %d", c.name, r.Total, len(r.Rows), c.want)
 		}
 	}
+	// A page is the rows after offset: total still counts every match, and the cluster read was whole.
 	capped, err := s.PolicyReportResults(ctx, PolicyReportFilter{Limit: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if capped.Total != 4 || len(capped.Rows) != 1 || !capped.Truncated || capped.Rows[0].Kind != "Deployment" {
+	if capped.Total != 4 || len(capped.Rows) != 1 || capped.Truncated || capped.Rows[0].Kind != "Deployment" {
 		t.Fatalf("capped = %+v", capped)
+	}
+	var paged []string
+	for offset := 0; offset < 5; offset += 3 {
+		page, err := s.PolicyReportResults(ctx, PolicyReportFilter{Offset: offset, Limit: 3})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if page.Total != 4 {
+			t.Fatalf("offset %d: total %d", offset, page.Total)
+		}
+		for _, r := range page.Rows {
+			paged = append(paged, r.Result+":"+r.Namespace+"/"+r.Kind+"/"+r.Name+"/"+r.Policy)
+		}
+	}
+	if !reflect.DeepEqual(paged, want) {
+		t.Fatalf("pages of 3 = %v, want the default order %v", paged, want)
+	}
+	if past, _ := s.PolicyReportResults(ctx, PolicyReportFilter{Offset: 9}); past.Total != 4 || len(past.Rows) != 0 {
+		t.Fatalf("past the end = %+v", past)
+	}
+}
+
+// Sorting by a column orders every match before the page is cut; ties keep the default order.
+func TestPolicyReportResults_SortBeforeThePage(t *testing.T) {
+	s, _ := newPolicyReportService(t)
+	ctx := context.Background()
+	all := []string{"pass", "fail", "warn", "error", "skip"}
+	order := func(f PolicyReportFilter) []string {
+		t.Helper()
+		f.Results = all
+		var out []string
+		for offset := 0; ; offset += 2 {
+			f.Offset, f.Limit = offset, 2
+			page, err := s.PolicyReportResults(ctx, f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, r := range page.Rows {
+				out = append(out, r.Result+" "+r.Policy+" "+r.Kind+"/"+r.Name)
+			}
+			if offset+2 >= page.Total {
+				return out
+			}
+		}
+	}
+	if got, want := order(PolicyReportFilter{Sort: "policy"}), []string{
+		"warn custom-check Pod/kube-proxy-x",
+		"pass disallow-latest-tag Pod/web-1",
+		"pass ns-policy Namespace/apps",
+		"fail require-labels Deployment/web", "fail require-labels Pod/web-1", "fail require-labels Pod/kube-proxy-x",
+	}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("by policy = %v, want %v", got, want)
+	}
+	if got, want := order(PolicyReportFilter{Sort: "result", Desc: true}), []string{
+		"pass ns-policy Namespace/apps", "pass disallow-latest-tag Pod/web-1",
+		"warn custom-check Pod/kube-proxy-x",
+		"fail require-labels Deployment/web", "fail require-labels Pod/web-1", "fail require-labels Pod/kube-proxy-x",
+	}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("by result, best first = %v, want %v", got, want)
+	}
+	if got, want := order(PolicyReportFilter{Sort: "name"}), []string{
+		"fail require-labels Deployment/web",
+		"pass ns-policy Namespace/apps",
+		"fail require-labels Pod/kube-proxy-x", "warn custom-check Pod/kube-proxy-x",
+		"fail require-labels Pod/web-1", "pass disallow-latest-tag Pod/web-1",
+	}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("by resource = %v, want %v", got, want)
+	}
+}
+
+// Two engines may give a policy the same name: each is its own row, with its
+// own source, counts and namespaces, and the results filter keeps them apart.
+func TestPolicyReports_SamePolicyNameFromTwoSources(t *testing.T) {
+	s, _ := newPolicyReportService(t)
+	ctx := context.Background()
+	c := policyReportCacheFor("default")
+	c.mu.Lock()
+	c.sets["|as:"] = policyReportSet{at: time.Now(), reports: 2, results: []PolicyReportResult{
+		{Namespace: "a", Kind: "Pod", Name: "p1", Policy: "no-root", Result: "fail", Source: "kyverno", Report: "r1"},
+		{Namespace: "a", Kind: "Pod", Name: "p1", Policy: "no-root", Result: "pass", Source: "kubewarden", Category: "PSS", Severity: "high", Report: "r1"},
+		{Namespace: "b", Kind: "Pod", Name: "p2", Policy: "no-root", Result: "fail", Source: "kubewarden", Severity: "low", Report: "r2"},
+	}}
+	c.mu.Unlock()
+	sum, err := s.PolicyReportSummary(ctx, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]PolicyReportPolicyRow{}
+	for _, p := range sum.Policies {
+		got[p.Source] = p
+	}
+	if len(sum.Policies) != 2 || got["kyverno"].PolicyReportCounts != counts(0, 1, 0, 0, 0) || !reflect.DeepEqual(got["kyverno"].Namespaces, []string{"a"}) {
+		t.Fatalf("policies = %+v", sum.Policies)
+	}
+	// category and severity are the first ones the rows give
+	if w := got["kubewarden"]; w.PolicyReportCounts != counts(1, 1, 0, 0, 0) || w.Category != "PSS" || w.Severity != "high" || !reflect.DeepEqual(w.Namespaces, []string{"a", "b"}) {
+		t.Fatalf("kubewarden row = %+v", w)
+	}
+	if sum.Namespaces[0].Namespace != "a" || sum.Namespaces[0].Policies != 2 {
+		t.Fatalf("namespace a counts both engines' policies: %+v", sum.Namespaces)
+	}
+	res, err := s.PolicyReportResults(ctx, PolicyReportFilter{Policy: "no-root", Source: "kubewarden", Results: []string{"pass", "fail"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Total != 2 || res.Rows[0].Source != "kubewarden" || res.Rows[1].Source != "kubewarden" {
+		t.Fatalf("results of one source = %+v", res)
 	}
 }
 

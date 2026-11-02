@@ -6,11 +6,15 @@ import type { PolicyReportResource, PolicyReportResults, PolicyReportStatus, Pol
 export interface PolicyReportResultsQuery {
   namespace?: string
   policy?: string
+  source?: string
   kind?: string
   search?: string
   result?: string
   severity?: string
+  offset?: number
   limit?: number
+  sort?: 'result' | 'policy' | 'namespace' | 'name'
+  dir?: 'asc' | 'desc'
 }
 
 // force: read the cluster again instead of the server's one-minute cache (the refresh button).
@@ -30,11 +34,15 @@ export const policyReportsApi = {
       params: {
         namespace: q.namespace || undefined,
         policy: q.policy || undefined,
+        source: q.source || undefined,
         kind: q.kind || undefined,
         search: q.search || undefined,
         result: q.result || undefined,
         severity: q.severity || undefined,
+        offset: q.offset || undefined,
         limit: q.limit,
+        sort: q.sort || undefined,
+        dir: q.sort ? q.dir : undefined,
         force_refresh: force || undefined,
       },
     })

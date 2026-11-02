@@ -33,7 +33,7 @@ const WHERE: Record<string, string> = {
   '/gateway/backendtlspolicies': 'number-check-lists',
   '/custom-resources/instances': 'number-check-lists',
   // lists whose kinds self does not serve (policy kinds) or other specs expect it not to (PolicyReport): another cluster
-  '/workloads/vpas': 'number-check-lists', '/security/policyreports': 'N3-a', '/gateway/policies': 'N3-a',
+  '/workloads/vpas': 'number-check-lists', '/security/policyreports': 'number-check-lists', '/gateway/policies': 'N3-a',
   // summary screens
   '/': 'N3-b', '/cluster-view': 'N3-b', '/helm/releases': 'N3-b', '/timeline': 'N3-b', '/monitoring': 'N3-b', '/cluster/search': 'N3-b',
   '/admin/cluster-hygiene': 'N3-b', '/cluster/resource-graph': 'N3-b', '/cost': 'N3-b',
