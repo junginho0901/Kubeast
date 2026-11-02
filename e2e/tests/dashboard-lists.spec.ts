@@ -1,13 +1,29 @@
+import { execSync } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+
 import { test, expect, type Page } from '@playwright/test'
 
 // Dashboard lists: right after a sign-in (which clears the stored cluster) the Nodes card shows the nodes of the
 // cluster the picker selects, not of the server's default cluster asked while the selection was empty; the card
-// shows at most 8 nodes, those not Ready first, and links to the Nodes page; the window behind a stat card pages
-// its list 50 at a time. The last two give the page a list longer than dev has, through page.route.
+// shows at most 8 nodes, those not Ready first, and links to the Nodes page; the node bars put every node under its
+// readiness as kubectl prints it (a cordoned node under Ready, its card and window rows with both parts); the window
+// behind a stat card pages its list 50 at a time. The stand-in tests give the page lists dev does not have, through
+// page.route; the cordon test cordons test2's node for its run.
 
 const nodesCard = (page: Page) => page.locator('.card').filter({ has: page.getByRole('heading', { name: 'Nodes', exact: true }) })
 const nodeNames = (page: Page) => nodesCard(page).locator('button p[title]').evaluateAll((els) => els.map((e) => e.getAttribute('title')))
 const pagerText = (page: Page) => page.getByTestId('resource-modal-pager').locator('div').first().innerText()
+const nodeBars = (page: Page) => page.locator('.card').filter({ has: page.getByRole('heading', { name: /^Node (status|상태)$/ }) }).locator('svg title').allTextContents()
+const readiness = (status: string) => { const first = status.split(',')[0]; return first === 'Ready' || first === 'NotReady' ? first : 'Unknown' }
+
+function kubectlFor(kindName: string) {
+  const kubeconfig = execSync(`kind get kubeconfig --name ${kindName}`, { encoding: 'utf8' })
+  const kcPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-dashlists-')), 'kubeconfig')
+  fs.writeFileSync(kcPath, kubeconfig, { mode: 0o600 })
+  return (args: string) => execSync(`kubectl --kubeconfig ${kcPath} ${args}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
+}
 
 test.describe('Dashboard lists', () => {
   test('after a fresh sign-in the Nodes card shows the selected cluster’s nodes and opens them', async ({ browser }) => {
@@ -51,6 +67,52 @@ test.describe('Dashboard lists', () => {
     const all = page.getByTestId('dashboard-nodes-all')
     await expect(all).toHaveAttribute('href', '/cluster/nodes')
     await expect(all).toContainText('12')
+  })
+
+  test('the node bars put every node under its readiness as kubectl prints it, cordoned ones under Ready with their own badge', async ({ page }) => {
+    // every STATUS kubectl's printNode writes; soft, so a run on old code records each difference
+    const statuses = ['Ready', 'NotReady', 'Unknown', 'Ready,SchedulingDisabled', 'NotReady,SchedulingDisabled', 'Ready']
+    const nodes = statuses.map((status, i) => ({ name: `e2e-node-${i + 1}`, status, version: 'v1.37.0', roles: ['worker'], internal_ip: `10.0.0.${i + 1}` }))
+    await page.route(/\/api\/v1\/cluster\/nodes(\?|$)/, (route) => route.fulfill({ json: nodes }))
+    await page.goto('/')
+    await expect.poll(() => nodeNames(page)).toHaveLength(nodes.length)
+    expect.soft(await nodeBars(page), 'one bar per readiness, adding up to the nodes').toEqual(['Ready: 3', 'NotReady: 2', 'Unknown: 1'])
+    // not Ready first, then the cordoned Ready one, then the rest
+    expect.soft(await nodeNames(page)).toEqual(['e2e-node-2', 'e2e-node-3', 'e2e-node-5', 'e2e-node-4', 'e2e-node-1', 'e2e-node-6'])
+    const badges = await nodesCard(page).getByTestId('dashboard-node-status').evaluateAll((els) => els.map((e) => [...e.querySelectorAll('.badge')].map((b) => `${b.textContent}:${b.className.match(/badge-\w+/)?.[0]}`).join(' ')))
+    expect.soft(badges).toEqual([
+      'NotReady:badge-error', 'Unknown:badge-error', 'NotReady:badge-error SchedulingDisabled:badge-warning',
+      'Ready:badge-success SchedulingDisabled:badge-warning', 'Ready:badge-success', 'Ready:badge-success',
+    ])
+    // the Ready bar opens the window with the three Ready nodes, the cordoned one among them
+    await page.locator('.card').filter({ has: page.getByRole('heading', { name: /^Node (status|상태)$/ }) }).locator('svg g').filter({ has: page.locator('title', { hasText: /^Ready:/ }) }).first().click()
+    const rows = page.getByTestId('resource-modal-node-status')
+    await expect.soft(rows).toHaveCount(3)
+    expect.soft((await rows.evaluateAll((els) => els.map((e) => [...e.querySelectorAll('.badge')].map((b) => b.textContent).join(' ')))).sort())
+      .toEqual(['Ready', 'Ready', 'Ready SchedulingDisabled'])
+  })
+
+  test('a cordoned node of a real cluster is counted under Ready, as kubectl get nodes prints it', async ({ page }) => {
+    let kubectl: ((args: string) => string) | null = null
+    try { kubectl = kubectlFor('test2') } catch { test.skip(true, 'kind cluster test2 not found') }
+    const k = kubectl!
+    const kubectlNodes = () => k('get nodes --no-headers').split('\n').filter(Boolean).map((l) => { const [name, status] = l.split(/\s+/); return { name, status } })
+    const node = kubectlNodes()[0].name
+    try {
+      k(`cordon ${node}`)
+      const want = kubectlNodes()
+      expect(want.find((n) => n.name === node)?.status).toBe('Ready,SchedulingDisabled')
+      const bars = ['Ready', 'NotReady', 'Unknown'].map((r) => `${r}: ${want.filter((n) => readiness(n.status) === r).length}`)
+      await expect(async () => {
+        await page.goto('/?cluster=test2')
+        await expect.poll(() => nodeNames(page), { timeout: 10_000 }).toHaveLength(want.length)
+        expect(await nodeBars(page), 'the bars as kubectl counts the nodes').toEqual(bars)
+      }).toPass({ timeout: 60_000 })
+      const card = nodesCard(page).locator('button').filter({ hasText: node }).getByTestId('dashboard-node-status')
+      expect.soft(await card.locator('.badge').allInnerTexts()).toEqual(want.find((n) => n.name === node)!.status.split(','))
+    } finally {
+      k(`uncordon ${node}`)
+    }
   })
 
   test('the window behind a stat card pages its list 50 at a time', async ({ page }) => {

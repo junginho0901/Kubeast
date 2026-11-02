@@ -33,18 +33,29 @@ test.describe('Dashboard', () => {
     })
   })
 
-  test('refresh button is clickable and triggers refetch', async ({ page }) => {
+  test('Refresh reads the page again for this cluster with the cards kept on screen and no list per namespace', async ({ page }) => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
+    const pods = page.getByTestId('stat-value-pods')
+    await expect(pods).toBeVisible()
+    // note whether the card ever leaves the page (the skeleton replacing it) after the click
+    await page.evaluate(() => {
+      const w = window as unknown as { __statGone: boolean }
+      w.__statGone = false
+      new MutationObserver(() => { if (!document.querySelector('[data-testid="stat-value-pods"]')) w.__statGone = true })
+        .observe(document.body, { childList: true, subtree: true })
+    })
+    const asked: string[] = []
+    page.on('request', (r) => { if (r.url().includes('/api/v1/')) asked.push(new URL(r.url()).pathname) })
 
     const refresh = page.getByRole('button', { name: /refresh|새로고침/i })
-    await expect(refresh).toBeVisible()
-    await expect(refresh).toBeEnabled()
-    // the click re-reads the overview past the server cache
-    const refetch = page.waitForResponse((r) => r.url().includes('/api/v1/cluster/overview') && r.url().includes('force_refresh=true'))
+    const overview = page.waitForResponse((r) => r.url().includes('/api/v1/cluster/overview'))
     await refresh.click()
-    expect((await refetch).status()).toBe(200)
-    // After click the page should still render the title — no error toast.
-    await expect(page.locator('h1.text-3xl').first()).toBeVisible()
+    expect((await overview).status()).toBe(200)
+    await expect(refresh).toBeEnabled()
+    // soft, so a run on old code records each difference
+    expect.soft(await page.evaluate(() => (window as unknown as { __statGone: boolean }).__statGone), 'the cards stay while the page reads again').toBe(false)
+    expect.soft(asked.filter((p) => /\/namespaces\/[^/]+\/(services|deployments)$/.test(p)), 'no Services or Deployments list per namespace').toEqual([])
+    expect.soft(asked.filter((p) => p.endsWith('/cluster/nodes')).length, 'the nodes read again').toBeGreaterThan(0)
   })
 })

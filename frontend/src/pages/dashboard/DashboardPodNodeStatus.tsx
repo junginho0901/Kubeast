@@ -17,6 +17,8 @@ const STATE_COLOR: Record<string, string> = {
   NotReady: 'var(--color-red-400)',
 }
 const stateColor = (name: string) => STATE_COLOR[name] ?? 'var(--color-slate-500)'
+// a node without a Ready condition is red, as on the Nodes list
+const nodeColor = (name: string) => (name === 'Unknown' ? STATE_COLOR.NotReady : stateColor(name))
 
 interface BarDatum {
   name: string
@@ -58,7 +60,7 @@ export function DashboardPodNodeStatus({
           <p className="text-sm text-slate-400 mt-1 mb-4">
             {tr('dashboard.nodeStatus.subtitle', 'Click to view nodes in each status')}
           </p>
-          <StatusBarChart data={nodeStatusChartData} colorFor={stateColor} onBarClick={onNodeStatusClick} />
+          <StatusBarChart data={nodeStatusChartData} colorFor={nodeColor} onBarClick={onNodeStatusClick} />
         </div>
       )}
     </div>

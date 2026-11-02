@@ -1,13 +1,18 @@
 // Dashboard "Nodes" card — compact grid of node cards (status icon /
-// name / version / roles / IP / status badge). Click a card to open
-// the node detail drawer (handled by the parent). Nodes that are not Ready
-// come first and the card shows at most SHOWN; the Nodes page lists them all.
+// name / version / roles / IP / status badges as the Nodes list draws them).
+// Click a card to open the node detail drawer (handled by the parent). Nodes
+// that are not Ready come first, then cordoned ones, and the card shows at
+// most SHOWN; the Nodes page lists them all.
 
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { CheckCircle, Info, XCircle } from 'lucide-react'
 
+import { nodeCordoned, nodeReadiness, nodeStatusBadge, nodeStatusParts } from '@/utils/nodeStatus'
+
 const SHOWN = 8
+
+const attention = (status?: string) => (nodeReadiness(status) !== 'Ready' ? 0 : nodeCordoned(status) ? 1 : 2)
 
 interface Props {
   nodes: any[]
@@ -21,7 +26,7 @@ export function DashboardNodeList({ nodes, onNodeClick }: Props) {
   const na = tr('common.notAvailable', 'N/A')
 
   if (!Array.isArray(nodes) || nodes.length === 0) return null
-  const shown = [...nodes].sort((a, b) => Number(a.status === 'Ready') - Number(b.status === 'Ready')).slice(0, SHOWN)
+  const shown = [...nodes].sort((a, b) => attention(a.status) - attention(b.status)).slice(0, SHOWN)
 
   return (
     <div className="card">
@@ -41,7 +46,7 @@ export function DashboardNodeList({ nodes, onNodeClick }: Props) {
             className="p-3 border border-slate-700 rounded-md hover:bg-slate-700/50 transition-colors text-left cursor-pointer"
           >
             <div className="flex items-start gap-2 mb-2">
-              {node.status === 'Ready' ? (
+              {nodeReadiness(node.status) === 'Ready' ? (
                 <CheckCircle className="w-4 h-4 text-green-400 shrink-0 mt-0.5" />
               ) : (
                 <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
@@ -68,11 +73,10 @@ export function DashboardNodeList({ nodes, onNodeClick }: Props) {
                 </p>
               )}
             </div>
-            <div className="mt-2">
-              <span className={`badge text-xs ${node.status === 'Ready' ? 'badge-success' : 'badge-error'
-                }`}>
-                {node.status}
-              </span>
+            <div className="mt-2" data-testid="dashboard-node-status">
+              {nodeStatusParts(node.status).map((part) => (
+                <span key={part} className={`badge text-xs mr-1 last:mr-0 ${nodeStatusBadge(part)}`}>{part}</span>
+              ))}
             </div>
           </button>
         ))}
