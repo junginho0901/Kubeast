@@ -231,8 +231,11 @@ function eventDifferences(d: Drawer, s: Snap, involved: string): string[] {
   const kube = s.events.filter((e) => e.Object.endsWith(`/${involved}`))
   const shown = table(d, 'Type', 'Reason', 'Message', 'Last Seen', 'Count')[0]?.rows ?? []
   const key = (reason: string, message: string) => `${reason}|${message.trim()}`
-  const want = kube.map((e) => ({ k: key(e.Reason, e.Message), last: e['Last Seen'], count: e.Count })).sort((a, b) => a.k.localeCompare(b.k))
-  const got = shown.map((r) => ({ k: key(r[1], r[2]), last: r[3], count: r[4] })).sort((a, b) => a.k.localeCompare(b.k))
+  // events of one reason and message (one per container: "Container created") pair by count, then by last seen
+  const order = (a: { k: string; last: string; count: string }, b: { k: string; last: string; count: string }) =>
+    a.k.localeCompare(b.k) || Number(a.count) - Number(b.count) || ageSeconds(a.last) - ageSeconds(b.last)
+  const want = kube.map((e) => ({ k: key(e.Reason, e.Message), last: e['Last Seen'], count: e.Count })).sort(order)
+  const got = shown.map((r) => ({ k: key(r[1], r[2]), last: r[3], count: r[4] })).sort(order)
   if (got.map((g) => g.k).join('\n') !== want.map((x) => x.k).join('\n')) out.push(`events of ${involved}: drawer ${JSON.stringify(got.map((g) => g.k))}, kubectl ${JSON.stringify(want.map((x) => x.k))}`)
   else got.forEach((g, i) => {
     if (!sameAge(g.last, want[i].last) || g.count !== want[i].count) out.push(`event ${g.k}: drawer last seen ${g.last} count ${g.count}, kubectl ${want[i].last} count ${want[i].count}`)
