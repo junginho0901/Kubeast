@@ -25,7 +25,7 @@ function kube(kindName: string): Kube {
   const pick = (k: string) => (kc.match(new RegExp(`${k}: (\\S+)`)) ?? [])[1] ?? ''
   const server = new URL(pick('server'))
   return {
-    kubectl: (args, input) => execSync(`kubectl --kubeconfig ${kcPath} ${args}`, { encoding: 'utf8', input, stdio: ['pipe', 'pipe', 'pipe'] }).trim(),
+    kubectl: (args, input) => execSync(`kubectl --kubeconfig ${kcPath} ${args}`, { encoding: 'utf8', input, stdio: ['pipe', 'pipe', 'pipe'], maxBuffer: 256 * 1024 * 1024 }).trim(),
     apiTable: (apiPath) => new Promise((resolve, reject) => {
       https.request({
         host: server.hostname, port: server.port, path: apiPath, method: 'GET',
@@ -742,8 +742,7 @@ const CR_SCREEN: Screen = {
     await page.getByTestId('cr-instances-kind').click()
     await page.getByRole('button', { name: 'Widget (numbers.kubeast.io)', exact: true }).click()
   },
-  // the API server's table holds a date column's timestamp; kubectl and Kubeast print its age
-  shape: { Seen: (v) => (v ? `${Math.round((Date.now() - Date.parse(v)) / 1000)}s` : '') },
+  // the API server prints a date column as its age ("5m1s"), which grows while it is read
   spans: { Seen: (o) => !!o.status?.lastSeen },
   skip: { Age: AGE },
   cards: (list) => ({ 'Total Instances': list.length, 'Unique Kinds': 1, Namespaces: new Set(list.map((o) => o.metadata.namespace)).size }),
@@ -751,10 +750,13 @@ const CR_SCREEN: Screen = {
 // every custom resource instance of a cluster, each CRD's as kubectl lists them
 function allCustomResources(cluster: string) {
   const k = on(cluster)
-  return (JSON.parse(k.kubectl('get crd -o json')).items as Obj[]).flatMap((crd) =>
-    (JSON.parse(k.kubectl(`get ${crd.metadata.name} -A -o json`)).items as Obj[]).map((o) => ({
-      key: `${o.metadata.namespace || '-'}/${o.metadata.name}/${crd.spec.names.kind}/${crd.spec.group}`,
-      crd: crd.metadata.name as string, namespace: (o.metadata.namespace ?? '') as string,
+  // the CRDs by name, Kind and group only: their schemas run to megabytes (the Gateway API's)
+  const crds = k.kubectl(`get crd -o jsonpath='{range .items[*]}{.metadata.name} {.spec.names.kind} {.spec.group}{"\\n"}{end}'`)
+    .split('\n').filter(Boolean).map((line) => line.split(' '))
+  return crds.flatMap(([crd, kind, group]) =>
+    (JSON.parse(k.kubectl(`get ${crd} -A -o json`)).items as Obj[]).map((o) => ({
+      key: `${o.metadata.namespace || '-'}/${o.metadata.name}/${kind}/${group}`,
+      crd, namespace: (o.metadata.namespace ?? '') as string,
     })))
 }
 
