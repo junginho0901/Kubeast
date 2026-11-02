@@ -5,6 +5,7 @@ import (
 
 	crdrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/crd"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/gatewayrow"
+	vparow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/vpa"
 )
 
 // objectToInfo dispatcher — per-resource-kind ToInfo helpers live in sibling
@@ -63,7 +64,7 @@ func objectToInfo(resource string, obj *unstructured.Unstructured) map[string]in
 	case "horizontalpodautoscalers":
 		return hpaToInfo(obj)
 	case "verticalpodautoscalers":
-		return vpaToInfo(obj)
+		return vparow.Info(obj)
 	case "endpoints":
 		return endpointsToInfo(obj)
 	case "endpointslices":

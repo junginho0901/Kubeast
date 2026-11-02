@@ -31,8 +31,8 @@ const WHERE: Record<string, string> = {
   '/gateway/gatewayclasses': 'number-check-lists', '/gateway/gateways': 'number-check-lists', '/gateway/httproutes': 'number-check-lists',
   '/gateway/grpcroutes': 'number-check-lists', '/gateway/referencegrants': 'number-check-lists',
   '/gateway/backendtlspolicies': 'number-check-lists',
-  // lists whose kinds self does not serve (VPA, policy kinds) or other specs expect it not to (PolicyReport): another cluster
-  '/workloads/vpas': 'N3-a', '/custom-resources/instances': 'N3-a', '/security/policyreports': 'N3-a', '/gateway/policies': 'N3-a',
+  // lists whose kinds self does not serve (CR instances, policy kinds) or other specs expect it not to (PolicyReport): another cluster
+  '/workloads/vpas': 'number-check-lists', '/custom-resources/instances': 'N3-a', '/security/policyreports': 'N3-a', '/gateway/policies': 'N3-a',
   // summary screens
   '/': 'N3-b', '/cluster-view': 'N3-b', '/helm/releases': 'N3-b', '/timeline': 'N3-b', '/monitoring': 'N3-b', '/cluster/search': 'N3-b',
   '/admin/cluster-hygiene': 'N3-b', '/cluster/resource-graph': 'N3-b', '/cost': 'N3-b',
