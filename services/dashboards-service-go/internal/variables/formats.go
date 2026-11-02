@@ -339,10 +339,7 @@ func percent(s, keep string) string {
 // backslashes and single quotes escaped; otherwise each value is escaped for a
 // regex and several are joined as (a|b).
 func prometheusFormat(v value, multi, includeAll bool) string {
-	if !multi && !includeAll {
-		if v.list {
-			return v.str() // not a string: left as it is
-		}
+	if !multi && !includeAll { // one value: neither several nor All
 		return strings.NewReplacer(`\`, `\\`, `'`, `\\'`).Replace(v.str())
 	}
 	if !v.list {
