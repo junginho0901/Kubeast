@@ -675,7 +675,8 @@ func TestPodPage_PhaseClassAndServiceAccountFilters(t *testing.T) {
 	}
 }
 
-// A pod's limits are the containers' sums, and none when a container sets none (Monitoring Pods' rule).
+// Without init containers or a pod-level limit, a pod's limits are the containers' sums, and none when a container
+// sets none (Monitoring Pods' limit columns).
 func TestPodLimits(t *testing.T) {
 	ctr := func(cpu, mem string) corev1.Container {
 		c := corev1.Container{Name: "c", Resources: corev1.ResourceRequirements{Limits: corev1.ResourceList{}}}
@@ -702,6 +703,51 @@ func TestPodLimits(t *testing.T) {
 		cpu, mem := podLimits(&corev1.Pod{Spec: corev1.PodSpec{Containers: c.containers}})
 		if cpu != c.cpu || mem != c.mem {
 			t.Errorf("%d containers: cpu %d mem %d, want %d %d", len(c.containers), cpu, mem, c.cpu, c.mem)
+		}
+	}
+}
+
+func TestPodLimits_AsTheKubeletSizesTheCgroup(t *testing.T) {
+	ctr := func(cpu, mem string) corev1.Container {
+		c := corev1.Container{Name: "c", Resources: corev1.ResourceRequirements{Limits: corev1.ResourceList{}}}
+		if cpu != "" {
+			c.Resources.Limits[corev1.ResourceCPU] = resource.MustParse(cpu)
+		}
+		if mem != "" {
+			c.Resources.Limits[corev1.ResourceMemory] = resource.MustParse(mem)
+		}
+		return c
+	}
+	always := corev1.ContainerRestartPolicyAlways
+	sidecar := func(cpu, mem string) corev1.Container {
+		c := ctr(cpu, mem)
+		c.RestartPolicy = &always
+		return c
+	}
+	podLevel := func(cpu, mem string) *corev1.ResourceRequirements {
+		r := ctr(cpu, mem).Resources
+		return &r
+	}
+	for _, c := range []struct {
+		name       string
+		init, apps []corev1.Container
+		pod        *corev1.ResourceRequirements
+		cpu, mem   int64
+	}{
+		{"sidecar added", []corev1.Container{sidecar("200m", "128Mi")}, []corev1.Container{ctr("500m", "256Mi")}, nil, 700, 384 << 20},
+		{"init container at its peak", []corev1.Container{ctr("2", "1Gi")}, []corev1.Container{ctr("500m", "256Mi")}, nil, 2000, 1 << 30},
+		// a sidecar started before an init container runs next to it
+		{"sidecar then init", []corev1.Container{sidecar("300m", "64Mi"), ctr("1", "512Mi")}, []corev1.Container{ctr("500m", "256Mi")}, nil, 1300, 576 << 20},
+		{"init then sidecar", []corev1.Container{ctr("1", "512Mi"), sidecar("300m", "64Mi")}, []corev1.Container{ctr("500m", "256Mi")}, nil, 1000, 512 << 20},
+		{"init container without a limit", []corev1.Container{ctr("", "")}, []corev1.Container{ctr("500m", "256Mi")}, nil, -1, -1},
+		{"sidecar without a cpu limit", []corev1.Container{sidecar("", "64Mi")}, []corev1.Container{ctr("500m", "256Mi")}, nil, -1, 320 << 20},
+		{"pod-level limit", nil, []corev1.Container{ctr("", ""), ctr("500m", "")}, podLevel("3", "2Gi"), 3000, 2 << 30},
+		{"pod-level cpu only", nil, []corev1.Container{ctr("500m", "256Mi"), ctr("", "")}, podLevel("1", ""), 1000, -1},
+	} {
+		p := &corev1.Pod{Spec: corev1.PodSpec{InitContainers: c.init, Containers: c.apps, Resources: c.pod}}
+		cpu, mem := podLimits(p)
+		if cpu != c.cpu || mem != c.mem {
+			t.Errorf("%s: cpu %d mem %d, want %d %d", c.name, cpu, mem, c.cpu, c.mem)
 		}
 	}
 }

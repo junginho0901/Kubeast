@@ -100,10 +100,21 @@ export default function MonitoringNodes({
     }
   }, [error, onMetricsUnavailable])
 
+  // kubectl top nodes lists every node, those the metrics-server has no sample for last with <unknown>: the cards are
+  // the node list's nodes, one without a sample showing -, so the count, the cards and the pager agree
+  const allNodes = useMemo(() => {
+    const metrics = Array.isArray(nodeMetrics) ? nodeMetrics : []
+    const seen = new Set(metrics.map((m) => m.name))
+    const missing = (Array.isArray(nodeList) ? nodeList : [])
+      .filter((n) => n?.name && !seen.has(n.name))
+      .map((n): NodeMetric => ({ name: n.name, cpu: '-', cpu_percent: '-', memory: '-', memory_percent: '-' }))
+    return [...metrics, ...missing]
+  }, [nodeMetrics, nodeList])
+
   // 플로팅 AI 위젯용 스냅샷 — 노드 메트릭 요약
   const aiSnapshot = useMemo(() => {
     if (!Array.isArray(nodeMetrics)) return null
-    const items = [...nodeMetrics].sort(
+    const items = [...allNodes].sort(
       (a, b) => (parsePercent(b.cpu_percent) ?? 0) - (parsePercent(a.cpu_percent) ?? 0),
     )
     const highCpu = items.filter((n) => (parsePercent(n.cpu_percent) ?? 0) > 85)
@@ -150,7 +161,7 @@ export default function MonitoringNodes({
         }),
       },
     }
-  }, [nodeMetrics])
+  }, [nodeMetrics, allNodes])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
@@ -158,9 +169,8 @@ export default function MonitoringNodes({
 
   const filteredNodes = useMemo(() => {
     const q = search.trim().toLowerCase()
-    const list = Array.isArray(nodeMetrics) ? nodeMetrics : []
-    return q ? list.filter((n) => n.name.toLowerCase().includes(q)) : list
-  }, [nodeMetrics, search])
+    return q ? allNodes.filter((n) => n.name.toLowerCase().includes(q)) : allNodes
+  }, [allNodes, search])
   const totalPages = Math.max(1, Math.ceil(filteredNodes.length / NODES_PER_PAGE))
   useEffect(() => setPage(1), [search, currentCluster])
   useEffect(() => {
@@ -197,7 +207,7 @@ export default function MonitoringNodes({
           <p className="text-xs text-slate-500">{t('monitoring.fetchNote')}</p>
           {(nodeList || nodeMetrics) && (
             <p className="text-xs text-slate-400">
-              {t('monitoring.nodes.total', { count: Array.isArray(nodeList) ? nodeList.length : (nodeMetrics?.length ?? 0) })}
+              {t('monitoring.nodes.total', { count: allNodes.length })}
             </p>
           )}
         </div>
@@ -216,8 +226,9 @@ export default function MonitoringNodes({
         )}
         <div className="space-y-6">
           {pagedNodes.map((node) => {
-            const cpuPercent = parseFloat(node.cpu_percent)
-            const memoryPercent = parseFloat(node.memory_percent)
+            // a node without a sample ('-') draws empty bars
+            const cpuPercent = parseFloat(node.cpu_percent) || 0
+            const memoryPercent = parseFloat(node.memory_percent) || 0
 
             return (
               <button

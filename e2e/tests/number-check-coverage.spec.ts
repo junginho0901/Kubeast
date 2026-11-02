@@ -35,7 +35,7 @@ const WHERE: Record<string, string> = {
   // lists whose kinds self does not serve (policy kinds) or other specs expect it not to (PolicyReport): another cluster
   '/workloads/vpas': 'number-check-lists', '/security/policyreports': 'number-check-lists', '/gateway/policies': 'number-check-lists',
   // summary screens
-  '/': 'N3-b', '/cluster-view': 'N3-b', '/helm/releases': 'number-check-lists', '/timeline': 'N3-b', '/monitoring': 'N3-b', '/cluster/search': 'N3-b',
+  '/': 'N3-b', '/cluster-view': 'N3-b', '/helm/releases': 'number-check-lists', '/timeline': 'N3-b', '/monitoring': 'number-check-monitoring', '/cluster/search': 'N3-b',
   '/admin/cluster-hygiene': 'N3-b', '/cluster/resource-graph': 'number-check-graph', '/cost': 'N3-b',
   '/gpu/dashboard': 'N3-c (GPU)', '/gpu/nodes': 'N3-c (GPU)', '/gpu/pods': 'N3-c (GPU)', '/gpu/deviceclasses': 'N3-c (GPU)',
   '/gpu/resourceclaims': 'N3-c (GPU)', '/gpu/resourceclaimtemplates': 'N3-c (GPU)', '/gpu/resourceslices': 'N3-c (GPU)',

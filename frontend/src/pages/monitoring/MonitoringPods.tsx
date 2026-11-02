@@ -127,7 +127,7 @@ export default function MonitoringPods({
     return podMetrics.map((m) => {
       const cpu = cpuToMillis(m.cpu)
       const memory = memoryToBytes(m.memory)
-      // the containers' sums, null when one sets none (k8s-service podLimits, the rule of podUsage.ts podLimit)
+      // the pod's limits as the kubelet sizes its cgroup, null when it sets none (k8s-service podLimits)
       const cpuLimit = m.cpu_limit_millicores ?? null
       const memoryLimit = m.memory_limit_bytes ?? null
       return {

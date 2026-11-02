@@ -7,6 +7,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	resourcehelper "k8s.io/component-helpers/resource"
 )
 
 // The pod informer (informer_cache.go) keeps a podRow per pod instead of the
@@ -126,24 +127,36 @@ func podLabelPairs(labels map[string]string) string {
 	return strings.Join(pairs, "\x1e")
 }
 
-// podLimits sums the containers' cpu and memory limits; a container without one (or with 0) leaves the pod without
-// a limit (-1): the Monitoring page's limit columns (/metrics/pods?with_limits=1).
+// podLimits is the pod's cpu and memory limit as the kubelet sizes its cgroup (component-helpers PodLimits: the
+// pod-level limit when spec.resources sets one, else the containers' with sidecars added and init containers at
+// their peak; the RuntimeClass overhead the kubelet adds is left out, as the containers' usage it is shown against
+// leaves it out), or -1 when the kubelet sets none (ResourceConfigForPod, release-1.37: no pod-level
+// limit and any container, init containers included, without one or with 0) — the pod may use what the node has:
+// the Monitoring page's limit columns (/metrics/pods?with_limits=1).
 func podLimits(p *corev1.Pod) (cpuMilli, memBytes int64) {
 	if len(p.Spec.Containers) == 0 {
 		return -1, -1
 	}
-	cpuMilli, memBytes = 0, 0
-	for _, c := range p.Spec.Containers {
-		if q, ok := c.Resources.Limits[corev1.ResourceCPU]; ok && cpuMilli >= 0 && q.MilliValue() > 0 {
-			cpuMilli += q.MilliValue()
-		} else {
-			cpuMilli = -1
+	lim := resourcehelper.PodLimits(p, resourcehelper.PodResourcesOptions{ExcludeOverhead: true})
+	bounded := func(name corev1.ResourceName) bool {
+		if p.Spec.Resources != nil {
+			if q, ok := p.Spec.Resources.Limits[name]; ok && !q.IsZero() {
+				return true
+			}
 		}
-		if q, ok := c.Resources.Limits[corev1.ResourceMemory]; ok && memBytes >= 0 && q.Value() > 0 {
-			memBytes += q.Value()
-		} else {
-			memBytes = -1
+		for _, c := range slices.Concat(p.Spec.InitContainers, p.Spec.Containers) {
+			if q, ok := c.Resources.Limits[name]; !ok || q.IsZero() {
+				return false
+			}
 		}
+		return true
+	}
+	cpuMilli, memBytes = -1, -1
+	if q, ok := lim[corev1.ResourceCPU]; ok && bounded(corev1.ResourceCPU) {
+		cpuMilli = q.MilliValue()
+	}
+	if q, ok := lim[corev1.ResourceMemory]; ok && bounded(corev1.ResourceMemory) {
+		memBytes = q.Value()
 	}
 	return cpuMilli, memBytes
 }
