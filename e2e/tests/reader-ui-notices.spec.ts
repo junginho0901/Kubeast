@@ -138,6 +138,8 @@ test.describe('non-admin UI notices', () => {
       await expect(page.getByTestId('helm-forbidden')).toBeVisible({ timeout: 20000 })
       // says why: Helm keeps its records in Secrets, which Read cannot read
       await expect(page.getByTestId('helm-forbidden')).toContainText(/Secrets?.*Read cannot|Secret을 읽을 수 없어/)
+      // a refused list counts nothing: the five cards say "-", not 0
+      await expect(page.locator('main div.md\\:grid-cols-5 > div > div:nth-child(2)')).toHaveText(['-', '-', '-', '-', '-'])
       await ctx.close()
     } finally {
       await request.delete(`/api/v1/auth/admin/users/${user.id}`, { headers: admin })

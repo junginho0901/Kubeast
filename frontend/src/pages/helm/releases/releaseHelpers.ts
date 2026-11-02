@@ -14,7 +14,7 @@ export type SortKey =
 
 export type SortDir = 'asc' | 'desc'
 
-export type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
+export type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
 
 // Empty state buttons point at Helm's public docs. The "install guide"
 // link targets the subchapter most useful to a first-time user

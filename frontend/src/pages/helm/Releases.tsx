@@ -93,16 +93,17 @@ export default function HelmReleasesPage() {
     return { total, deployed, failed, pending, superseded }
   }, [items])
 
-  const summaryCards = useMemo<SummaryCard[]>(
-    () => [
-      [t('helmReleases.stats.total'), stats.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [t('helmReleases.stats.deployed'), stats.deployed, 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
-      [t('helmReleases.stats.failed'), stats.failed, 'border-rose-700/40 bg-rose-900/10', 'text-rose-300'],
-      [t('helmReleases.stats.pending'), stats.pending, 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
-      [t('helmReleases.stats.superseded'), stats.superseded, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-    ],
-    [stats, t],
-  )
+  const summaryCards = useMemo<SummaryCard[]>(() => {
+    // a list the cluster refused counts nothing: the cards say "-", not 0
+    const n = (v: number) => (helmForbidden ? '-' : v)
+    return [
+      [t('helmReleases.stats.total'), n(stats.total), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [t('helmReleases.stats.deployed'), n(stats.deployed), 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
+      [t('helmReleases.stats.failed'), n(stats.failed), 'border-rose-700/40 bg-rose-900/10', 'text-rose-300'],
+      [t('helmReleases.stats.pending'), n(stats.pending), 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
+      [t('helmReleases.stats.superseded'), n(stats.superseded), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+    ]
+  }, [stats, t, helmForbidden])
 
   // Derive namespace dropdown from the release list itself — no need
   // for a separate /namespaces call, and it keeps the selector in sync
