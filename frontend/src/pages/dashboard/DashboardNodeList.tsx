@@ -73,9 +73,9 @@ export function DashboardNodeList({ nodes, onNodeClick }: Props) {
                 </p>
               )}
             </div>
-            <div className="mt-2 flex flex-wrap gap-1" data-testid="dashboard-node-status">
+            <div className="mt-2" data-testid="dashboard-node-status">
               {nodeStatusParts(node.status).map((part) => (
-                <span key={part} className={`badge text-xs ${nodeStatusBadge(part)}`}>{part}</span>
+                <span key={part} className={`badge text-xs mr-1 last:mr-0 ${nodeStatusBadge(part)}`}>{part}</span>
               ))}
             </div>
           </button>
