@@ -2365,6 +2365,7 @@
     "resourceModal": {
       "loading": "Loading...",
       "total": "Total {{count}}",
+      "totalFiltered": "{{shown}} of {{count}}",
       "searchPlaceholder": "Search...",
       "namespaceSummary": "Pods: {{pods}} | Services: {{services}} | Deployments: {{deployments}}",
       "noSearchResults": "No results found",

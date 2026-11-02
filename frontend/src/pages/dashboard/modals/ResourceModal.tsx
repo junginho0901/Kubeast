@@ -13,6 +13,7 @@ import { ModalOverlay } from '@/components/ModalOverlay'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAIContext } from '@/hooks/useAIContext'
 import { nodeStatusBadge, nodeStatusParts } from '@/utils/nodeStatus'
+import type { NamespaceCounts } from '../namespaceCounts'
 import { buildResourceLink } from '@/utils/resourceLink'
 import type { ResourceType } from '../types'
 
@@ -40,6 +41,8 @@ interface Props {
   filteredResources: any[]
   // the Pods window: filteredResources is already the server's page; total and the page come from the server
   serverPage?: { total: number; page: number; setPage: (page: number) => void }
+  // the Namespaces window: each namespace's pods, Services and Deployments (a count it has not got shows -)
+  namespaceCounts?: Record<string, NamespaceCounts>
 }
 
 export function ResourceModal({
@@ -52,6 +55,7 @@ export function ResourceModal({
   setSearchQuery,
   filteredResources,
   serverPage,
+  namespaceCounts,
 }: Props) {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
@@ -104,10 +108,13 @@ export function ResourceModal({
                 <h2 className="text-xl font-semibold text-ink">
                   {selectedStat?.name || selectedResourceType}
                 </h2>
-                <p className="text-sm text-slate-400">
+                <p className="text-sm text-slate-400" data-testid="resource-modal-total">
                   {isLoading
                     ? tr('dashboard.resourceModal.loading', 'Loading...')
-                    : tr('dashboard.resourceModal.total', 'Total {{count}}', { count: resourceCount })}
+                    : listTotal !== resourceCount
+                      // a search or a chart bar narrows the list: how many it keeps of how many there are
+                      ? tr('dashboard.resourceModal.totalFiltered', '{{shown}} of {{count}}', { shown: listTotal, count: resourceCount })
+                      : tr('dashboard.resourceModal.total', 'Total {{count}}', { count: resourceCount })}
                 </p>
               </div>
             </div>
@@ -160,11 +167,11 @@ export function ResourceModal({
                         <div className="flex items-center justify-between">
                           <div>
                             <h3 className="font-medium text-ink">{ns.name}</h3>
-                            <p className="text-sm text-slate-400 mt-1">
+                            <p className="text-sm text-slate-400 mt-1" data-testid="resource-modal-namespace-counts">
                               {tr('dashboard.resourceModal.namespaceSummary', 'Pods: {{pods}} | Services: {{services}} | Deployments: {{deployments}}', {
-                                pods: ns.resource_count?.pods || 0,
-                                services: ns.resource_count?.services || 0,
-                                deployments: ns.resource_count?.deployments || 0,
+                                pods: namespaceCounts?.[ns.name]?.pods ?? '-',
+                                services: namespaceCounts?.[ns.name]?.services ?? '-',
+                                deployments: namespaceCounts?.[ns.name]?.deployments ?? '-',
                               })}
                             </p>
                           </div>

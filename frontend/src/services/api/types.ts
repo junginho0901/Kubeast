@@ -1590,6 +1590,8 @@ export interface PodPage {
   /** the revision sent is current: no rows came */
   unchanged?: boolean
   source: 'index' | 'list'
+  /** with `groups`: the matched pods per namespace, largest first, the rest as "(other)" */
+  by_namespace?: { name: string; count: number }[]
 }
 
 /** One node on the Cluster View node map: its pods by the cards' colour (getPodHealth); node "" = not scheduled. */
@@ -1629,6 +1631,10 @@ export interface PodPageParams {
   priority_class?: string
   /** `<namespace>/<name>,…`: pods running as any of these service accounts */
   service_account?: string
+  /** 1: also count the matched pods per namespace, node and phase (`by_namespace` …) */
+  groups?: 1
+  /** how many of each group before "(other)" (server default 20, at most 1000) */
+  group_top?: number
 }
 
 export interface PodRbacRule {

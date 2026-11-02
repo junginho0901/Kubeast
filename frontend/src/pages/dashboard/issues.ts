@@ -36,7 +36,8 @@ export interface DerivedIssues {
   sortedIssues: IssueItem[]
   issuesByKind: Record<IssueKind, IssueItem[]>
   kinds: IssueKind[]
-  issuesSummary: { total: number; critical: number; warning: number; info: number }
+  // total and the severities count what the search kept; all is every issue the check found
+  issuesSummary: { total: number; critical: number; warning: number; info: number; all: number }
 }
 
 export function deriveIssues(issues: ClusterIssue[] | undefined, query: string): DerivedIssues {
@@ -56,7 +57,7 @@ export function deriveIssues(issues: ClusterIssue[] | undefined, query: string):
   const kinds = Object.keys(issuesByKind).sort((a, b) => kindRank(a) - kindRank(b) || a.localeCompare(b))
   const issuesSummary = sortedIssues.reduce(
     (acc, it) => { acc.total += 1; acc[it.severity] += 1; return acc },
-    { total: 0, critical: 0, warning: 0, info: 0 },
+    { total: 0, critical: 0, warning: 0, info: 0, all: issues?.length ?? 0 },
   )
   return { sortedIssues, issuesByKind, kinds, issuesSummary }
 }

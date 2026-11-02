@@ -32,7 +32,7 @@ describe('deriveIssues', () => {
       'Node/n1', 'Deployment/a/api', 'Pod/a/web', 'HorizontalPodAutoscaler/a/h', 'Collector/jobs',
     ])
     expect(d.kinds).toEqual(['Node', 'Deployment', 'HorizontalPodAutoscaler', 'Pod', 'Collector'])
-    expect(d.issuesSummary).toEqual({ total: 5, critical: 2, warning: 1, info: 2 })
+    expect(d.issuesSummary).toEqual({ total: 5, critical: 2, warning: 1, info: 2, all: 5 })
     expect(d.issuesByKind.Pod).toHaveLength(1)
   })
 
@@ -40,6 +40,8 @@ describe('deriveIssues', () => {
     expect(deriveIssues(rows, 'readiness').sortedIssues.map((i) => i.id)).toEqual(['Pod/a/web'])
     expect(deriveIssues(rows, 'CRITICAL').sortedIssues).toHaveLength(2)
     expect(deriveIssues(rows, 'nothing-matches').issuesSummary.total).toBe(0)
+    // the search narrows the counts, not what the check found
+    expect(deriveIssues(rows, 'CRITICAL').issuesSummary).toMatchObject({ total: 2, critical: 2, all: 5 })
   })
 
   it('handles no data', () => {
