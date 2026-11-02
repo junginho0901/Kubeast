@@ -62,12 +62,22 @@ test.describe('number check — resource graph', () => {
       })
 
       await test.step('the API: every pod and workload node has its list\'s status and colour', async () => {
-        await expect(async () => {
+        const both = async () => {
           const want = await lists(page)
           const nodes = (await api(page, `/api/v1/cluster/resource-graph?namespaces=${NS}`)).nodes as Box[]
           const got = new Map(nodes.filter((n) => want.has(n.id)).map((n) => [n.id, `${n.status} ${n.health ?? ''}`.trim()]))
-          expect([...got].sort()).toEqual([...want].sort())
-        }).toPass({ timeout: 60_000 })
+          return { got: [...got].sort(), want: [...want].sort() }
+        }
+        try {
+          await expect(async () => {
+            const { got, want } = await both()
+            expect(got).toEqual(want)
+          }).toPass({ timeout: 60_000 })
+        } catch {
+          // record the difference and go on to the screen
+          const { got, want } = await both()
+          expect.soft(got, 'the graph nodes against the lists').toEqual(want)
+        }
       })
 
       await test.step('the screen: each box\'s border is its colour, and Issues keeps the yellow and red ones', async () => {
