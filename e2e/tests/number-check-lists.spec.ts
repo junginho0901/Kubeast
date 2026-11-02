@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import https from 'node:https'
 import os from 'node:os'
 import path from 'node:path'
+import zlib from 'node:zlib'
 
 import { test, expect, type Page } from '@playwright/test'
 
@@ -808,6 +809,35 @@ const policyTarget = (spec: Obj = {}) => {
   const refs: Obj[] = spec.targetRefs?.length ? spec.targetRefs : spec.targetRef ? [spec.targetRef] : []
   return refs.map((t) => `${t.kind || '?'} ${t.namespace ? `${t.namespace}/` : ''}${t.name ?? ''}${t.sectionName ? `#${t.sectionName}` : ''}`).join(', ') || '-'
 }
+// the Helm releases screen on self: Helm keeps each revision of a release in its own Secret (type helm.sh/release.v1,
+// labels name, owner=helm, status, version), the payload base64 of gzipped JSON — written here by hand in e2e-numbers,
+// so the dev install's own release is not touched; the screen shows each release's newest revision
+const HELM = { path: '/helm/releases', cluster: 'self' }
+const helmSecret = (name: string, version: number, status: string) => {
+  const at = new Date().toISOString()
+  const release = {
+    name, namespace: NS, version, config: {}, manifest: '',
+    info: { status, first_deployed: at, last_deployed: at, description: `number check ${status}` },
+    chart: { metadata: { apiVersion: 'v2', name: 'num-chart', version: '0.1.0', appVersion: '1.0.0' } },
+  }
+  const payload = zlib.gzipSync(Buffer.from(JSON.stringify(release))).toString('base64')
+  return {
+    apiVersion: 'v1', kind: 'Secret', type: 'helm.sh/release.v1',
+    metadata: { name: `sh.helm.release.v1.${name}.v${version}`, namespace: NS, labels: { name, owner: 'helm', status, version: String(version) } },
+    data: { release: Buffer.from(payload).toString('base64') },
+  }
+}
+// every release's newest revision on the cluster, from the Secrets' labels
+function helmReleases(): { key: string; ns: string; name: string; revision: number; status: string }[] {
+  const newest = new Map<string, { key: string; ns: string; name: string; revision: number; status: string }>()
+  for (const line of on(HELM.cluster).kubectl(`get secrets -A -l owner=helm -o jsonpath='{range .items[*]}{.metadata.namespace} {.metadata.labels.name} {.metadata.labels.version} {.metadata.labels.status}{"\\n"}{end}'`).split('\n').filter(Boolean)) {
+    const [ns, name, version, status] = line.split(' ')
+    const key = `${ns}/${name}`
+    if ((newest.get(key)?.revision ?? 0) < Number(version)) newest.set(key, { key, ns, name, revision: Number(version), status })
+  }
+  return [...newest.values()]
+}
+
 // Accepted on the object or on each ancestor (PolicyAncestorStatus): Yes when every one says True
 const policyAccepted = (status: Obj = {}) => {
   const conds = [...(status.conditions ?? []), ...(status.ancestors ?? []).flatMap((a: Obj) => a.conditions ?? [])].filter((c: Obj) => c.type === 'Accepted')
@@ -1350,6 +1380,63 @@ test.describe('number check — list screens', () => {
     } finally {
       t2.kubectl(`delete namespace ${NS} --wait=true --timeout=180s --ignore-not-found`)
       t2.kubectl('delete crd/backendtlspolicies.numbers.kubeast.io --ignore-not-found')
+    }
+  })
+
+  // the Helm releases screen on self: its cards and rows are each release's newest revision, it follows the release
+  // Secrets live, and a revision Helm prunes past --history-max (the oldest) leaves its release on screen
+  test('the Helm releases screen counts each release by its newest revision, and a pruned old revision keeps it', async ({ page }) => {
+    test.setTimeout(300_000)
+    const k = on(HELM.cluster)
+    const put = (...secrets: Obj[]) => k.kubectl('apply -f -', JSON.stringify({ apiVersion: 'v1', kind: 'List', items: secrets }))
+    const drop = (name: string, ...versions: number[]) => k.kubectl(`delete -n ${NS} ${versions.map((v) => `secret/sh.helm.release.v1.${name}.v${v}`).join(' ')}`)
+    put(
+      helmSecret('num-rel', 1, 'superseded'), helmSecret('num-rel', 2, 'superseded'), helmSecret('num-rel', 3, 'deployed'),
+      helmSecret('num-fail', 1, 'failed'), helmSecret('num-pend', 1, 'deployed'), helmSecret('num-pend', 2, 'pending-upgrade'),
+      helmSecret('num-old', 1, 'uninstalled'),
+    )
+    try {
+      const want = () => {
+        const all = helmReleases()
+        const count = (f: (s: string) => boolean) => all.filter((r) => f(r.status)).length
+        return {
+          cards: { Total: all.length, Deployed: count((s) => s === 'deployed'), Failed: count((s) => s === 'failed'), Pending: count((s) => s.startsWith('pending')), Superseded: count((s) => s === 'superseded') },
+          rows: all.filter((r) => r.ns === NS).map((r) => `${r.name} | ${r.revision} | ${r.status}`).sort(),
+        }
+      }
+      const shown = async () => {
+        const { heads, rows, cards } = await readScreen(page)
+        const at = (h: string) => heads.indexOf(h)
+        return {
+          cards: { Total: cards.Total, Deployed: cards.Deployed, Failed: cards.Failed, Pending: cards.Pending, Superseded: cards.Superseded },
+          rows: rows.filter((r) => r[at('Namespace')] === NS).map((r) => `${r[at('Name')]} | ${r[at('Revision')]} | ${r[at('Status')]}`).sort(),
+        }
+      }
+      const compare = async (what: string) => {
+        try {
+          await expect.poll(shown, { timeout: 20_000 }).toEqual(want())
+        } catch {
+          expect.soft(await shown(), what).toEqual(want())
+        }
+      }
+      await page.context().addInitScript(() => localStorage.setItem('kubeast.listPageSize', '100'))
+      await page.setViewportSize({ width: 2560, height: 1200 })
+      await page.goto(`${HELM.path}?cluster=${HELM.cluster}`)
+
+      await test.step('every release by its newest revision: the rows and the cards', () => compare('the list'))
+      await test.step('Helm prunes num-rel revision 1 (the oldest): the release stays at revision 3', async () => {
+        drop('num-rel', 1)
+        // a later change in the same stream: once it shows, the pruning before it has been taken in
+        put(helmSecret('num-fail', 2, 'deployed'))
+        await expect.poll(async () => (await shown()).rows, { timeout: 20_000 }).toContain('num-fail | 2 | deployed')
+        await compare('after an old revision was pruned')
+      })
+      await test.step('num-rel uninstalled (every revision deleted): the release leaves the list', async () => {
+        drop('num-rel', 2, 3)
+        await compare('after an uninstall')
+      })
+    } finally {
+      k.kubectl(`delete secrets -n ${NS} -l owner=helm --ignore-not-found`)
     }
   })
 

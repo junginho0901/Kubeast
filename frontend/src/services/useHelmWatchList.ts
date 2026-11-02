@@ -56,7 +56,7 @@ const buildHelmWatchURL = (cluster: string, namespace?: string): string => {
 const releaseKey = (rel: HelmReleaseSummary): string =>
   `${rel.namespace}/${rel.name}`
 
-const applyHelmWatchEvent = (
+export const applyHelmWatchEvent = (
   prev: HelmReleaseSummary[] | undefined,
   event: HelmWatchEvent,
 ): HelmReleaseSummary[] => {
@@ -66,8 +66,10 @@ const applyHelmWatchEvent = (
   const key = releaseKey(obj)
   const idx = items.findIndex((item) => releaseKey(item) === key)
 
+  // Each revision is its own Secret: Helm prunes the oldest ones past --history-max (10 by default), so a deleted
+  // revision below the one on screen leaves the release; the one on screen deleted (uninstall) removes it.
   if (event.type === 'DELETED') {
-    if (idx >= 0) items.splice(idx, 1)
+    if (idx >= 0 && obj.revision >= items[idx].revision) items.splice(idx, 1)
     return items
   }
 
