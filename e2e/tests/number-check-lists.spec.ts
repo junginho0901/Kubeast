@@ -1226,8 +1226,11 @@ test.describe('number check — list screens', () => {
           const want = rows.filter((r) => r.policy === 'num-no-root' && r.source === 'kubewarden').map(resultKey).sort()
           await expect.poll(async () => (await shownResults()).sort(), { timeout: 20_000 }).toEqual(want)
           await page.getByTestId('policy-reports-policy').click()
+          await page.getByRole('button', { name: 'All policies', exact: true }).click()
+        } else {
+          // nothing picked: close the list, the picker still reads All policies
+          await page.getByTestId('policy-reports-policy').click()
         }
-        await page.getByRole('button', { name: 'All policies', exact: true }).click()
         try {
           await expect.poll(() => pagerTotal(page), { timeout: 20_000 }).toBe(rows.length)
         } catch {
