@@ -2040,7 +2040,7 @@
     "pods": {
       "title": "Pod resource usage",
       "subtitle": "Namespace filtering supported",
-      "totalPods": "Total pods",
+      "totalPods": "Pods with metrics",
       "totalCpu": "Total CPU usage",
       "totalMemory": "Total memory usage",
       "errorTitle": "Failed to load pod metrics",

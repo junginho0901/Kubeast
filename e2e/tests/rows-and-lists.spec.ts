@@ -12,7 +12,7 @@ const MIB = 1024 ** 2
 
 type NodeMetric = { name: string }
 type PodMetric = { name: string; namespace: string }
-type PodInfo = { name: string; namespace: string; containers?: { resources?: { limits?: Record<string, string> } }[] }
+type PodInfo = { name: string; namespace: string; containers?: { resources?: { limits?: Record<string, string> } }[]; init_containers?: unknown[] }
 type CostRow = { name: string; namespace: string; kind?: string }
 
 async function headers(request: APIRequestContext) {
@@ -21,10 +21,11 @@ async function headers(request: APIRequestContext) {
   return { Authorization: `Bearer ${(await res.json()).access_token}`, 'X-Requested-With': 'XMLHttpRequest' }
 }
 
-// The same rule as frontend/src/pages/monitoring/podUsage.ts: a limit only when every container sets one.
+// A pod without init containers (kind's kube-system sets no pod-level limit): its containers' limits add up to the
+// kubelet's, none when one sets none; number-check-monitoring holds the other cases to the node's cgroup.
 function memoryLimitMiB(pod: PodInfo | undefined): number | null {
   const units: Record<string, number> = { Ki: 1024, Mi: MIB, Gi: 1024 ** 3 }
-  if (!pod?.containers?.length) return null
+  if (!pod?.containers?.length || pod.init_containers?.length) return null
   let total = 0
   for (const c of pod.containers) {
     const m = /^(\d+(?:\.\d+)?)(Ki|Mi|Gi)?$/.exec(c.resources?.limits?.memory ?? '')
