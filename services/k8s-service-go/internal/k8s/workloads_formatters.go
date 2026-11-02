@@ -65,15 +65,7 @@ func formatStatefulSetDetail(sts *appsv1.StatefulSet) map[string]interface{} {
 		selector = map[string]string{}
 	}
 
-	// Compute status
-	stsStatus := "Healthy"
-	if replicas == 0 {
-		stsStatus = "Idle"
-	} else if sts.Status.AvailableReplicas == 0 && replicas > 0 {
-		stsStatus = "Unavailable"
-	} else if sts.Status.ReadyReplicas < replicas {
-		stsStatus = "Degraded"
-	}
+	stsStatus := replicaStatus(replicas, sts.Status.AvailableReplicas, sts.Status.ReadyReplicas)
 
 	return map[string]interface{}{
 		"name":               sts.Name,
@@ -117,15 +109,7 @@ func formatDaemonSetDetail(ds *appsv1.DaemonSet) map[string]interface{} {
 		selector = map[string]string{}
 	}
 
-	// Compute status
-	dsStatus := "Healthy"
-	if ds.Status.DesiredNumberScheduled == 0 {
-		dsStatus = "Idle"
-	} else if ds.Status.NumberAvailable == 0 && ds.Status.DesiredNumberScheduled > 0 {
-		dsStatus = "Unavailable"
-	} else if ds.Status.NumberReady < ds.Status.DesiredNumberScheduled {
-		dsStatus = "Degraded"
-	}
+	dsStatus := replicaStatus(ds.Status.DesiredNumberScheduled, ds.Status.NumberAvailable, ds.Status.NumberReady)
 
 	return map[string]interface{}{
 		"name":          ds.Name,
@@ -186,15 +170,7 @@ func formatReplicaSetDetail(rs *appsv1.ReplicaSet) map[string]interface{} {
 		}
 	}
 
-	// Compute status
-	rsStatus := "Healthy"
-	if replicas == 0 {
-		rsStatus = "Idle"
-	} else if rs.Status.AvailableReplicas == 0 && replicas > 0 {
-		rsStatus = "Unavailable"
-	} else if rs.Status.ReadyReplicas < replicas {
-		rsStatus = "Degraded"
-	}
+	rsStatus := replicaStatus(replicas, rs.Status.AvailableReplicas, rs.Status.ReadyReplicas)
 
 	ownerRefs := make([]map[string]interface{}, 0, len(rs.OwnerReferences))
 	for _, or := range rs.OwnerReferences {
@@ -254,17 +230,7 @@ func formatJobDetail(job *batchv1.Job) map[string]interface{} {
 		image = images[0]
 	}
 
-	status := "Running"
-	for _, c := range job.Status.Conditions {
-		if c.Type == batchv1.JobComplete && c.Status == corev1.ConditionTrue {
-			status = "Complete"
-			break
-		}
-		if c.Type == batchv1.JobFailed && c.Status == corev1.ConditionTrue {
-			status = "Failed"
-			break
-		}
-	}
+	status := jobStatus(job)
 
 	ownerRefs := make([]map[string]interface{}, 0, len(job.OwnerReferences))
 	for _, ref := range job.OwnerReferences {

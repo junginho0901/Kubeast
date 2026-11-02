@@ -1879,6 +1879,9 @@ export interface ResourceGraphNode {
   name: string
   namespace: string
   status: string
+  // how the lists draw that status (a pod's Pods-list colour, a workload's summary status); absent for kinds the lists
+  // give no colour
+  health?: 'ok' | 'warn' | 'error'
   ready?: string
   labels?: Record<string, string>
   nodeName?: string

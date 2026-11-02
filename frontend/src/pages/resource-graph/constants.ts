@@ -51,8 +51,14 @@ export function statusColor(status: string): string {
   return '#64748b'
 }
 
+const HEALTH_COLOR: Record<string, string> = { ok: '#22c55e', warn: '#eab308', error: '#ef4444' }
+
+// A box's colour: how the lists draw it (the server's health — a pod's Pods-list colour, a workload's summary
+// status), else by its status text (Services, PVCs and the other kinds the lists give no colour).
+export const nodeColor = (n: { status?: string; health?: string }) => HEALTH_COLOR[n.health ?? ''] ?? statusColor(n.status || '')
+
 // The Issues filter keeps the boxes drawn yellow or red; the floating chat counts the same ones as problems.
-export const isIssueStatus = (status?: string) => ['#eab308', '#ef4444'].includes(statusColor(status || ''))
+export const isIssueNode = (n: { status?: string; health?: string }) => ['#eab308', '#ef4444'].includes(nodeColor(n))
 
 // Edge type → style
 export const edgeStyles: Record<string, { stroke: string; strokeDasharray?: string; label: string }> = {

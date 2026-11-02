@@ -26,8 +26,8 @@ import {
   ALL_EDGE_TYPES,
   DEFAULT_KINDS,
   edgeStyles,
-  isIssueStatus,
-  statusColor,
+  isIssueNode,
+  nodeColor,
   type GroupBy,
 } from './resource-graph/constants'
 import { Glance } from './resource-graph/Glance'
@@ -202,12 +202,12 @@ export default function ResourceGraph() {
     const filteredNodes = allNodes.filter((n) => {
       if (kindFilters.size > 0 && !kindFilters.has(n.kind)) return false
       if (q && !(n.name?.toLowerCase().includes(q) || n.namespace?.toLowerCase().includes(q) || n.members?.some((m) => m.toLowerCase().includes(q)))) return false
-      if (statusFilter === 'issues' && !isIssueStatus(n.status)) return false
+      if (statusFilter === 'issues' && !isIssueNode(n)) return false
       return true
     })
 
     // 문제 있는 노드(Issues 필터와 같은 상태)를 앞쪽으로 정렬 → 상위 30개
-    const isProblem = (n: { status?: string }) => isIssueStatus(n.status)
+    const isProblem = (n: { status?: string; health?: string }) => isIssueNode(n)
     const sorted = [...filteredNodes].sort((a, b) => {
       const ap = isProblem(a) ? 0 : 1
       const bp = isProblem(b) ? 0 : 1
@@ -229,6 +229,7 @@ export default function ResourceGraph() {
       name: n.name,
       namespace: n.namespace || undefined,
       status: n.status,
+      health: n.health,
       ready: n.ready,
       _link: buildResourceLink(n.kind, n.namespace, n.name),
     }))
@@ -479,7 +480,7 @@ export default function ResourceGraph() {
               <MiniMap
                 nodeColor={node => {
                   const raw = node.data?.raw as ResourceGraphNode | undefined
-                  return raw ? statusColor(raw.status) : 'var(--color-slate-500)'
+                  return raw ? nodeColor(raw) : 'var(--color-slate-500)'
                 }}
                 maskColor="color-mix(in srgb, var(--color-slate-900) 70%, transparent)"
                 style={{ background: 'var(--color-slate-800)', border: '1px solid var(--color-slate-700)', borderRadius: '8px' }}

@@ -24,11 +24,11 @@ import (
 const podGroupMin = 10
 
 type rgGroup struct {
-	id, namespace     string
-	ownerKind, owner  string
-	phase, groupValue string
-	members           []string // pod IDs
-	pvcTemplates      []string // the per-pod PVC templates of the members' edges
+	id, namespace      string
+	ownerKind, owner   string
+	status, groupValue string   // the members' Pods list Status
+	members            []string // pod IDs
+	pvcTemplates       []string // the per-pod PVC templates of the members' edges
 }
 
 func groupID(kind, namespace, key string) string {
@@ -101,14 +101,14 @@ func groupPods(nodeMap map[string]rgNode, edges []rgEdge, pods []rgPod, opts Res
 		case "instance":
 			value = p.labels["app.kubernetes.io/instance"]
 		}
-		key := strings.Join(append([]string{info.ownerID, p.phase, value}, parts...), "\n")
+		key := strings.Join(append([]string{info.ownerID, p.status, value}, parts...), "\n")
 		id := groupID("Pod", p.namespace, key)
 		if expand[id] {
 			continue
 		}
 		g := groups[id]
 		if g == nil {
-			g = &rgGroup{id: id, namespace: p.namespace, ownerKind: p.owners[0].Kind, owner: p.owners[0].Name, phase: p.phase, groupValue: value}
+			g = &rgGroup{id: id, namespace: p.namespace, ownerKind: p.owners[0].Kind, owner: p.owners[0].Name, status: p.status, groupValue: value}
 			sort.Strings(templates)
 			g.pvcTemplates = slices.Compact(templates)
 			groups[id] = g
@@ -126,7 +126,7 @@ func groupPods(nodeMap map[string]rgNode, edges []rgEdge, pods []rgPod, opts Res
 		}
 		sort.Strings(g.members)
 		node := rgNode{
-			ID: g.id, Kind: "Pod", Name: g.owner, Namespace: g.namespace, Status: g.phase,
+			ID: g.id, Kind: "Pod", Name: g.owner, Namespace: g.namespace, Status: g.status, Health: "ok",
 			Group: true, Count: len(g.members), OwnerKind: g.ownerKind, OwnerName: g.owner,
 		}
 		switch opts.GroupBy {

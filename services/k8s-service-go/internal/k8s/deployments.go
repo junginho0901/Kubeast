@@ -177,19 +177,7 @@ func formatDeploymentDetail(d *appsv1.Deployment) map[string]interface{} {
 		image = images[0]
 	}
 
-	status := "Progressing"
-	progressingReason := ""
-	for _, c := range d.Status.Conditions {
-		if c.Type == appsv1.DeploymentAvailable && c.Status == corev1.ConditionTrue {
-			status = "Available"
-			break
-		}
-		if c.Type == appsv1.DeploymentProgressing && c.Status == corev1.ConditionFalse {
-			status = "Failed"
-			progressingReason = c.Reason
-			break
-		}
-	}
+	status, progressingReason := deploymentStatus(d)
 
 	var selector interface{}
 	if d.Spec.Selector != nil && d.Spec.Selector.MatchLabels != nil {
