@@ -52,12 +52,12 @@ test.describe('number check — resource graph', () => {
     try {
       await test.step('the objects reach the states the check is about', async () => {
         const jp = (args: string) => { try { return kubectl(args) } catch { return '' } }
-        await expect.poll(() => Number(jp(`get pods -n ${NS} -l app=num-crash -o jsonpath={.items[0].status.containerStatuses[0].restartCount}`) || 0),
+        await expect.poll(() => Number(jp(`get pods -n ${NS} -l app=num-crash -o jsonpath='{.items[0].status.containerStatuses[0].restartCount}'`) || 0),
           { timeout: 150_000, message: 'num-crash restarted 3 times (its back-off now 40 s)' }).toBeGreaterThanOrEqual(3)
-        await expect.poll(() => jp(`get deploy num-stuck -n ${NS} -o jsonpath={.status.conditions[?(@.type=="Progressing")].reason}`),
+        await expect.poll(() => jp(`get deploy num-stuck -n ${NS} -o jsonpath='{.status.conditions[?(@.type=="Progressing")].reason}'`),
           { timeout: 90_000 }).toBe('ProgressDeadlineExceeded')
-        await expect.poll(() => jp(`get sts num-sts -n ${NS} -o jsonpath={.status.readyReplicas}/{.status.replicas}`), { timeout: 90_000 }).toBe('1/2')
-        await expect.poll(() => jp(`get job num-job-fail num-job-ok -n ${NS} -o jsonpath={range .items[*]}{.status.conditions[?(@.status=="True")].type}{" "}{end}`),
+        await expect.poll(() => jp(`get sts num-sts -n ${NS} -o jsonpath='{.status.readyReplicas}/{.status.replicas}'`), { timeout: 90_000 }).toBe('1/2')
+        await expect.poll(() => jp(`get job num-job-fail num-job-ok -n ${NS} -o jsonpath='{range .items[*]}{.status.conditions[?(@.status=="True")].type}{" "}{end}'`),
           { timeout: 90_000 }).toMatch(/Failed.*Complete/)
       })
 

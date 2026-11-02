@@ -102,4 +102,15 @@ func TestBuildWorkloadGraph_StatusesAreTheLists(t *testing.T) {
 	if got := nodes["Pod/ns/pod-unready"].Ready; got != "0/1" {
 		t.Errorf("pod-unready READY = %q, want the Pods list's 0/1", got)
 	}
+	// the answer the page and the AI tool get carries the same status and health
+	sent := map[string]string{}
+	for _, m := range buildResourceGraphResponse(nodes, nil)["nodes"].([]map[string]interface{}) {
+		health, _ := m["health"].(string)
+		sent[m["id"].(string)] = m["status"].(string) + " " + health
+	}
+	for id, w := range want {
+		if sent[id] != w {
+			t.Errorf("%s: answer %q, want %q", id, sent[id], w)
+		}
+	}
 }
