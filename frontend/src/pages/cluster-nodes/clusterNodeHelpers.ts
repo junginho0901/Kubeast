@@ -45,14 +45,7 @@ metadata:
     node-role.kubernetes.io/worker: ""
 `
 
-export function getStatusColor(status: string): string {
-  const lower = (status || '').toLowerCase().trim()
-  if (lower === 'ready') return 'badge-success'
-  if (lower === 'schedulingdisabled') return 'badge-warning'
-  if (lower.includes('notready') || lower.includes('unknown')) return 'badge-error'
-  if (lower.includes('ready')) return 'badge-success'
-  return 'badge-info'
-}
+export { nodeStatusBadge as getStatusColor } from '@/utils/nodeStatus'
 
 export function sortNodes(
   nodes: NodeInfo[],

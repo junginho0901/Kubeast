@@ -12,6 +12,7 @@ import { ListPager } from '@/components/ListPager'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAIContext } from '@/hooks/useAIContext'
+import { nodeStatusBadge, nodeStatusParts } from '@/utils/nodeStatus'
 import { buildResourceLink } from '@/utils/resourceLink'
 import type { ResourceType } from '../types'
 
@@ -351,10 +352,11 @@ export function ResourceModal({
                               {node.roles && node.roles.length > 0 && ` | ${tr('dashboard.resourceModal.rolesLabel', 'Roles')}: ${node.roles.join(', ')}`}
                             </p>
                           </div>
-                          <span className={`badge ${node.status === 'Ready' ? 'badge-success' : 'badge-error'
-                            }`}>
-                            {node.status}
-                          </span>
+                          <div className="flex flex-wrap justify-end gap-1" data-testid="resource-modal-node-status">
+                            {nodeStatusParts(node.status).map((part) => (
+                              <span key={part} className={`badge ${nodeStatusBadge(part)}`}>{part}</span>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     ))

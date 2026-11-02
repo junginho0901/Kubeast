@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { useClusterFeatures, usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { clusterNodeQueries } from '@/utils/nodeMetrics'
+import { NODE_READINESS, nodeReadiness } from '@/utils/nodeStatus'
 import { useDashboard } from './DashboardContext'
 import { DashboardSkeleton } from './DashboardSkeleton'
 import { DashboardHeader } from './DashboardHeader'
@@ -302,7 +303,7 @@ export function DashboardBody() {
 
     // Node 상태 필터링
     if (selectedNodeStatus && selectedResourceType === 'nodes') {
-      resources = resources.filter((node: any) => node.status === selectedNodeStatus)
+      resources = resources.filter((node: any) => nodeReadiness(node.status) === selectedNodeStatus)
     }
 
     // 검색어 필터링
@@ -387,7 +388,6 @@ export function DashboardBody() {
   // Pod/Node 상태는 Kubernetes 스펙상 가능한 값이 제한적이므로
   // 차트에서 항상 전체 상태를 보여주기 위해 고정 목록 사용
   const POD_PHASES = ['Running', 'Succeeded', 'Failed', 'Pending', 'Unknown']
-  const NODE_STATUSES = ['Ready', 'NotReady']
 
   // A refused overview (403: the user's cluster identity may not list namespaces) shows no number at all — 0 would read as an empty cluster.
   const count = (n?: number) => (isOverviewError ? '—' : n || 0)
@@ -439,19 +439,11 @@ export function DashboardBody() {
     }))
     : []
 
-  // 노드 상태 차트 데이터
-  const nodeStatusData = nodes && Array.isArray(nodes)
-    ? nodes.reduce((acc: Record<string, number>, node) => {
-      const status = node.status || 'Unknown'
-      acc[status] = (acc[status] || 0) + 1
-      return acc
-    }, {} as Record<string, number>)
-    : {}
-
+  // one bar per readiness, so every node is in one of them — a cordoned node counts by its readiness
   const nodeStatusChartData = nodes && Array.isArray(nodes)
-    ? NODE_STATUSES.map((status) => ({
-      name: status,
-      value: nodeStatusData[status] ?? 0,
+    ? NODE_READINESS.map((readiness) => ({
+      name: readiness,
+      value: nodes.filter((node) => nodeReadiness(node.status) === readiness).length,
     }))
     : []
 
