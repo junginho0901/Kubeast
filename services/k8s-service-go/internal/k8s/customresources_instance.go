@@ -136,49 +136,13 @@ func (s *Service) GetAllCustomResourceInstances(ctx context.Context) ([]map[stri
 
 // GetCustomResourceInstances lists instances of a specific CR type.
 func (s *Service) GetCustomResourceInstances(ctx context.Context, group, version, plural string) ([]map[string]interface{}, error) {
-	gvr := schema.GroupVersionResource{
-		Group:    group,
-		Version:  version,
-		Resource: plural,
-	}
-
-	list, err := s.dynamicCtx(ctx).Resource(gvr).List(ctx, metav1.ListOptions{})
+	t, err := s.customResourceTable(ctx, group, version, plural)
 	if err != nil {
 		return nil, fmt.Errorf("list custom resources %s/%s/%s: %w", group, version, plural, err)
 	}
-
-	result := make([]map[string]interface{}, 0, len(list.Items))
-	for _, item := range list.Items {
-		createdAt := ""
-		if ts := item.GetCreationTimestamp(); !ts.IsZero() {
-			createdAt = ts.UTC().Format("2006-01-02T15:04:05Z")
-		}
-
-		entry := map[string]interface{}{
-			"name":        item.GetName(),
-			"namespace":   item.GetNamespace(),
-			"kind":        item.GetKind(),
-			"group":       group,
-			"version":     version,
-			"created_at":  createdAt,
-			"labels":      item.GetLabels(),
-			"annotations": item.GetAnnotations(),
-		}
-
-		// Include spec and status for JSONPath evaluation
-		if spec, ok := item.Object["spec"]; ok {
-			entry["spec"] = spec
-		}
-		if status, ok := item.Object["status"]; ok {
-			entry["status"] = status
-		}
-
-		result = append(result, entry)
-	}
-	return result, nil
+	return customResourceRows(t, group, version), nil
 }
 
-// DescribeCustomResourceInstance returns detailed info about a custom resource instance.
 func (s *Service) DescribeCustomResourceInstance(ctx context.Context, group, version, plural, namespace, name string) (map[string]interface{}, error) {
 	gvr := schema.GroupVersionResource{
 		Group:    group,
