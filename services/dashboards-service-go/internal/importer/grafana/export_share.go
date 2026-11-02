@@ -200,7 +200,7 @@ func (s *sharer) panel(p map[string]any) {
 			s.templatize(tm, p["datasource"], where+" query "+fmt.Sprint(tm["refId"]))
 		}
 	}
-	if lp, ok := p["libraryPanel"].(map[string]any); ok {
+	if lp, ok := p["libraryPanel"].(map[string]any); ok && !s.defined(lp["uid"]) {
 		s.rep.Adjusted = append(s.rep.Adjusted, Finding{Path: where, Reason: fmt.Sprintf(
 			"library panel %v (%v) is referenced, not included: the importing Grafana needs it", lp["name"], lp["uid"])})
 	}
@@ -208,6 +208,18 @@ func (s *sharer) panel(p map[string]any) {
 	if name, ok := panelPlugins[t]; ok {
 		s.require("panel", t, name, "")
 	}
+}
+
+// defined says whether the file carries the library panel's definition in
+// __elements, as the shared file it was imported from did.
+func (s *sharer) defined(uid any) bool {
+	id, _ := uid.(string)
+	for key, el := range mapOr(s.root["__elements"]) {
+		if u, _ := mapOr(el)["uid"].(string); id != "" && (u == id || (u == "" && key == id)) {
+			return true
+		}
+	}
+	return false
 }
 
 // templatize is Grafana's templateizeDatasourceUsage on o.

@@ -1,0 +1,150 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "prometheus",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus"
+    },
+    {
+      "name": "DS_PROMETHEUS-FOR-LIBRARY-PANEL",
+      "label": "prometheus",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus",
+      "usage": {
+        "libraryPanels": [
+          { "name": "CPU by pod", "uid": "lib-cpu" },
+          { "name": "Memory", "uid": "lib-mem" }
+        ]
+      }
+    }
+  ],
+  "__elements": {
+    "lib-cpu": {
+      "name": "CPU by pod",
+      "uid": "lib-cpu",
+      "kind": 1,
+      "model": {
+        "type": "timeseries",
+        "title": "CPU (library)",
+        "description": "Kept in the library",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS-FOR-LIBRARY-PANEL}" },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum(rate(container_cpu_usage_seconds_total[5m])) by (pod)",
+            "legendFormat": "{{pod}}",
+            "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS-FOR-LIBRARY-PANEL}" }
+          }
+        ],
+        "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
+        "options": { "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" } },
+        "pluginVersion": "13.3.0"
+      }
+    },
+    "lib-mem": {
+      "name": "Memory",
+      "uid": "lib-mem",
+      "kind": 1,
+      "model": {
+        "type": "stat",
+        "title": "Memory (library)",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS-FOR-LIBRARY-PANEL}" },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum(container_memory_working_set_bytes)",
+            "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS-FOR-LIBRARY-PANEL}" }
+          }
+        ],
+        "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+        "options": {},
+        "maxDataPoints": 100
+      }
+    },
+    "lib-var": {
+      "name": "A library variable",
+      "uid": "lib-var",
+      "kind": 2,
+      "model": { "type": "query", "name": "namespace" }
+    }
+  },
+  "__requires": [
+    { "type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0" },
+    { "type": "grafana", "id": "grafana", "name": "Grafana", "version": "13.3.0" },
+    { "type": "panel", "id": "stat", "name": "Stat", "version": "" },
+    { "type": "panel", "id": "timeseries", "name": "Time series", "version": "" }
+  ],
+  "uid": "library-panels",
+  "title": "Library panels",
+  "tags": [],
+  "timezone": "browser",
+  "graphTooltip": 0,
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "",
+  "schemaVersion": 42,
+  "templating": { "list": [] },
+  "annotations": { "list": [] },
+  "links": [],
+  "panels": [
+    {
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "id": 1,
+      "libraryPanel": { "uid": "lib-cpu", "name": "CPU by pod" }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Requests",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(http_requests_total[5m]))", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" } }
+      ],
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": {}
+    },
+    {
+      "id": 3,
+      "type": "row",
+      "title": "Open row",
+      "collapsed": false,
+      "gridPos": { "x": 0, "y": 8, "w": 24, "h": 1 },
+      "panels": []
+    },
+    {
+      "id": 4,
+      "title": "CPU, this dashboard's title",
+      "gridPos": { "x": 0, "y": 9, "w": 12, "h": 8 },
+      "libraryPanel": { "name": "CPU by pod", "uid": "lib-cpu" },
+      "type": "library-panel-ref"
+    },
+    {
+      "id": 5,
+      "title": "Not in this file",
+      "gridPos": { "x": 12, "y": 9, "w": 12, "h": 8 },
+      "libraryPanel": { "name": "Disk", "uid": "lib-disk" },
+      "type": "library-panel-ref"
+    },
+    {
+      "id": 6,
+      "type": "row",
+      "title": "Folded row",
+      "collapsed": true,
+      "gridPos": { "x": 0, "y": 17, "w": 24, "h": 1 },
+      "panels": [
+        {
+          "id": 7,
+          "title": "Memory",
+          "gridPos": { "x": 0, "y": 18, "w": 8, "h": 4 },
+          "libraryPanel": { "name": "Memory", "uid": "lib-mem" },
+          "type": "library-panel-ref"
+        }
+      ]
+    }
+  ]
+}

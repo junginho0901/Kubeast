@@ -114,7 +114,7 @@ func Import(raw []byte) (*model.Dashboard, *Report, error) {
 		return nil, nil, ErrNoPanels
 	}
 
-	im := &importer{rep: &Report{accounted: map[string]string{}}, dsVars: map[string]string{}, names: map[string]bool{}}
+	im := &importer{rep: &Report{accounted: map[string]string{}}, dsVars: map[string]string{}, names: map[string]bool{}, library: libraryDefinitions(root["__elements"])}
 	d := im.dashboard(root)
 	uid := strOf(root["uid"])
 	if envelope != nil {
@@ -145,9 +145,10 @@ func Import(raw []byte) (*model.Dashboard, *Report, error) {
 }
 
 type importer struct {
-	rep    *Report
-	dsVars map[string]string // data source variable name → store
-	names  map[string]bool   // panel names taken
+	rep     *Report
+	dsVars  map[string]string // data source variable name → store
+	names   map[string]bool   // panel names taken
+	library map[string]obj    // library panel uid → its definition, from __elements
 }
 
 var dashboardKeys = keys("uid", "id", "title", "tags", "description", "timezone", "graphTooltip", "time", "refresh",
@@ -344,6 +345,15 @@ var legacyKinds = map[string]string{
 
 func (im *importer) panel(p obj, path string) (string, model.Panel, model.LayoutItem) {
 	im.rep.Panels++
+	stub := p
+	def, inline := im.definition(p)
+	var accounted map[string]string
+	var preserved int
+	if inline {
+		p = inlined(stub, def)
+		accounted, preserved = im.rep.accounted, len(im.rep.Preserved)
+		im.rep.accounted = map[string]string{}
+	}
 	out := model.Panel{Title: strOf(p["title"]), Description: strOf(p["description"])}
 	out.Ext = im.split(p, panelKeys, path, nil)
 	if raw, ok := p["datasource"]; ok && string(raw) != "null" {
@@ -358,9 +368,12 @@ func (im *importer) panel(p obj, path string) (string, model.Panel, model.Layout
 		out.Kind = legacyKinds[typ]
 		out.Ext["legacyType"] = mustJSON(typ)
 		im.adjusted(path+".type", fmt.Sprintf("%s is drawn as %s, as Grafana migrates it; its old settings are kept", typ, out.Kind))
-	case typ == "" && p["libraryPanel"] != nil:
+	case p["libraryPanel"] != nil && (typ == "" || typ == libraryPanelRef):
 		out.Kind = model.Unsupported
-		im.unsupported(path, "library panel that was not inlined: export the dashboard with \"Export for sharing externally\"")
+		if typ != "" {
+			out.Ext["pluginType"] = mustJSON(typ)
+		}
+		im.unsupported(path, "library panel whose definition is not in this file: Grafana adds it under __elements when it exports the dashboard for sharing externally")
 	default:
 		out.Kind = model.Unsupported
 		out.Ext["pluginType"] = mustJSON(typ)
@@ -410,11 +423,97 @@ func (im *importer) panel(p obj, path string) (string, model.Panel, model.Layout
 			item.H = 8
 		}
 	}
+	if inline {
+		// The definition is kept whole in __elements: only the reference's
+		// own keys are accounted, under its path.
+		im.rep.accounted, im.rep.Preserved = accounted, im.rep.Preserved[:preserved]
+		out.Ext["libraryPanelStub"] = mustJSON(im.accountStub(stub, path))
+		lp, _ := asObj(stub["libraryPanel"])
+		im.adjusted(path, fmt.Sprintf("library panel %q (%s) drawn from its definition in __elements, as Grafana draws it; it goes out again as the reference",
+			strOf(lp["name"]), strOf(lp["uid"])))
+	}
 	if len(out.Ext) == 0 {
 		out.Ext = nil
 	}
 	item.Panel = im.panelName(p, out.Title)
 	return item.Panel, out, item
+}
+
+// libraryPanelRef is the type Grafana 13 saves a library panel reference with
+// (transformSceneToSaveModel vizPanelToPanel, v13.3.0).
+const libraryPanelRef = "library-panel-ref"
+
+// libraryDefinitions reads the library panel definitions that Grafana's
+// export for sharing externally puts in __elements (makeExportableV1,
+// v13.3.0): {uid: {name, uid, kind: 1, model}} → uid → model.
+func libraryDefinitions(raw json.RawMessage) map[string]obj {
+	var els map[string]json.RawMessage
+	if json.Unmarshal(raw, &els) != nil {
+		return nil // absent, or the empty list some exports write
+	}
+	out := map[string]obj{}
+	for key, e := range els {
+		el, ok := asObj(e)
+		if !ok || (el["kind"] != nil && intOf(el["kind"]) != 1) {
+			continue
+		}
+		m, ok := asObj(el["model"])
+		if !ok {
+			continue
+		}
+		uid := strOf(el["uid"])
+		if uid == "" {
+			uid = key
+		}
+		out[uid] = m
+	}
+	return out
+}
+
+// definition finds the definition of a library panel reference in the file.
+func (im *importer) definition(p obj) (obj, bool) {
+	lp, ok := asObj(p["libraryPanel"])
+	if !ok || strOf(lp["uid"]) == "" {
+		return nil, false
+	}
+	def, ok := im.library[strOf(lp["uid"])]
+	return def, ok
+}
+
+// inlined is the panel Grafana draws for a library panel reference
+// (LibraryPanelBehavior, transformSaveModelToScene, v13.3.0): the definition
+// without its id and gridPos, at the reference's id and gridPos, under the
+// reference's title when it has one.
+func inlined(stub, def obj) obj {
+	p := obj{}
+	for k, v := range def {
+		if k != "id" && k != "gridPos" && k != "libraryPanel" {
+			p[k] = v
+		}
+	}
+	for _, k := range []string{"id", "gridPos", "title"} {
+		if v, ok := stub[k]; ok {
+			p[k] = v
+		}
+	}
+	return p
+}
+
+// accountStub accounts a library panel reference's keys and returns the ones
+// an export writes back as they came (all but id and gridPos).
+func (im *importer) accountStub(stub obj, path string) obj {
+	kept := obj{}
+	for k, v := range stub {
+		switch k {
+		case "id", "gridPos":
+			im.mark(join(path, k), "mapped")
+		default:
+			kept[k] = v
+			im.mark(join(path, k), "preserved")
+			im.rep.Preserved = append(im.rep.Preserved, join(path, k))
+		}
+	}
+	return kept
 }
 
 func (im *importer) panelName(p obj, title string) string {

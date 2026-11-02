@@ -140,7 +140,7 @@ func TestExport_EveryValueComesBack(t *testing.T) {
 		name string
 		raw  []byte
 	}
-	docs := []doc{{"edge-cases", mustRead(t, "testdata/edge-cases.json")}}
+	docs := []doc{{"edge-cases", mustRead(t, "testdata/edge-cases.json")}, {"library-panels", mustRead(t, "testdata/library-panels.json")}}
 	for _, f := range corpusFiles(t) {
 		docs = append(docs, doc{strings.TrimPrefix(f, "testdata/corpus/"), mustRead(t, f)})
 	}

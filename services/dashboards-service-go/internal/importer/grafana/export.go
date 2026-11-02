@@ -49,6 +49,8 @@ type exporter struct {
 	panelIDs map[int]bool
 	rowIDs   map[int]int // row index → the id the import kept for it
 	nextID   int
+
+	importedPanels map[string]model.Panel // the source file's panels, read when a library panel needs them
 }
 
 // Export writes d; see the comment above.
@@ -485,12 +487,19 @@ func (ex *exporter) row(i int, inner []json.RawMessage) json.RawMessage {
 
 func (ex *exporter) panel(it model.LayoutItem) json.RawMessage {
 	p := ex.d.Spec.Panels[it.Panel]
+	if raw := p.Ext["libraryPanelStub"]; raw != nil {
+		if ref, ok := ex.libraryReference(it, p, raw); ok {
+			return mustJSON(ref)
+		}
+	}
 	o := obj{}
 	fc := obj{}
 	defs := obj{}
 	wholeOverrides := map[int]json.RawMessage{}
 	for k, v := range p.Ext {
 		switch {
+		case k == "libraryPanelStub":
+			// a library panel changed since the import goes out unlinked
 		case k == "legacyType" || k == "pluginType":
 			// written as the type below
 		case strings.HasPrefix(k, "fieldConfig.defaults."):
@@ -585,6 +594,52 @@ func (ex *exporter) panel(it model.LayoutItem) json.RawMessage {
 		}
 	}
 	return mustJSON(o)
+}
+
+// libraryReference writes a panel the import drew from a library panel
+// definition back as the reference it came as, at its place and under its
+// title, when nothing else of it changed since the import (the definition
+// goes out in the __elements the import kept). A panel changed in Kubeast goes
+// out as a plain panel, unlinked: the importing Grafana makes a library panel
+// from __elements only when it has none of that uid, so a changed definition
+// would not show there (dashboardimport, librarypanels, v13.3.0).
+func (ex *exporter) libraryReference(it model.LayoutItem, p model.Panel, raw json.RawMessage) (obj, bool) {
+	var ref obj
+	if json.Unmarshal(raw, &ref) != nil {
+		return nil, false
+	}
+	lp, _ := asObj(ref["libraryPanel"])
+	orig, found := ex.imported()[it.Panel]
+	now, then := p, orig
+	now.Title, then.Title = "", ""
+	a, errA := json.Marshal(now) // as sameModel: kept values compare as JSON, not as the bytes they came in
+	b, errB := json.Marshal(then)
+	if !found || errA != nil || errB != nil || string(a) != string(b) {
+		ex.rep.Adjusted = append(ex.rep.Adjusted, Finding{Path: "panels." + it.Panel, Reason: fmt.Sprintf(
+			"changed since the import: written as a plain panel, unlinked from library panel %q (%s), so that the importing Grafana shows the change",
+			strOf(lp["name"]), strOf(lp["uid"]))})
+		return nil, false
+	}
+	if p.Title != orig.Title {
+		ref["title"] = mustJSON(p.Title) // Grafana draws the reference's title over the definition's
+	}
+	ref["id"] = mustJSON(ex.id(it.Panel))
+	ref["gridPos"] = mustJSON(map[string]int{"x": it.X, "y": it.Y, "w": it.W, "h": it.H})
+	return ref, true
+}
+
+// imported is the panels of the file the dashboard was imported from, as the
+// import read them.
+func (ex *exporter) imported() map[string]model.Panel {
+	if ex.importedPanels == nil {
+		ex.importedPanels = map[string]model.Panel{}
+		if ex.d.Source != nil {
+			if d, _, err := Import(ex.d.Source.Raw); err == nil {
+				ex.importedPanels = d.Spec.Panels
+			}
+		}
+	}
+	return ex.importedPanels
 }
 
 // query writes one target; own says whether it names its data source (a
