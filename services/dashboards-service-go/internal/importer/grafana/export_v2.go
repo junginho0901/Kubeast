@@ -34,7 +34,7 @@ import (
 // A dashboard changed since its v2 import is its v2 file with the changes
 // written in (patchedV2).
 func ExportV2(d *model.Dashboard) ([]byte, *ExportReport, error) {
-	r, rep, err := v2Resource(d)
+	r, rep, err := v2Resource(d, false)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -64,13 +64,13 @@ func (r *v2Res) marshal() ([]byte, error) {
 }
 
 // v2Resource is the v2 resource of d: its v2 file, or its classic export
-// converted.
-func v2Resource(d *model.Dashboard) (*v2Res, *ExportReport, error) {
+// converted (with inlineLibrary, library panels written inline first).
+func v2Resource(d *model.Dashboard, inlineLibrary bool) (*v2Res, *ExportReport, error) {
 	if d == nil {
 		return nil, nil, errors.New("no dashboard")
 	}
 	if d.Source == nil || d.Source.Kind != model.SourceGrafanaV2 || len(d.Source.Raw) == 0 {
-		return convertedV2(d)
+		return convertedV2(d, inlineLibrary)
 	}
 	again, _, err := Import(d.Source.Raw)
 	if err != nil {
@@ -163,8 +163,8 @@ func exportDataSources(d *model.Dashboard) DataSources {
 }
 
 // convertedV2 is the v2 resource of a classic or Kubeast-made dashboard.
-func convertedV2(d *model.Dashboard) (*v2Res, *ExportReport, error) {
-	classic, rep, err := Export(d)
+func convertedV2(d *model.Dashboard, inlineLibrary bool) (*v2Res, *ExportReport, error) {
+	classic, rep, err := exportClassic(d, inlineLibrary)
 	if err != nil {
 		return nil, nil, err
 	}
