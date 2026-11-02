@@ -41,8 +41,9 @@ function kube(kindName: string): Kube {
     }),
   }
 }
-// the registered clusters the screens are read on, by kind cluster: self, and test2, the one serving the Gateway API
-const KIND: Record<string, string> = { self: 'kubeast', test2: 'test2' }
+// the registered clusters the screens are read on, by kind cluster: self, test2, the one serving the Gateway API, and
+// default, the second cluster, whose Kyverno serves PolicyReports
+const KIND: Record<string, string> = { self: 'kubeast', test2: 'test2', default: 'kubeast-b' }
 const kubes: Record<string, Kube> = {}
 const on = (cluster = 'self') => (kubes[cluster] ??= kube(KIND[cluster]))
 const { kubectl } = on()
@@ -764,6 +765,55 @@ function allCustomResources(cluster: string) {
     })))
 }
 
+// the policy reports screen on default: number-check.polr-fixture.yaml and num-polr-bulk, counted as the reports hold them
+// — a policy is its name within its source, a result is about its first resource or else the report's scope
+const POLR = { path: '/security/policyreports', cluster: 'default' }
+const POLR_FIXTURE = fs.readFileSync(path.join(__dirname, 'number-check.polr-fixture.yaml'), 'utf8')
+const POLR_BULK = 520
+const polrBulk = () => JSON.stringify({
+  apiVersion: 'wgpolicyk8s.io/v1alpha2', kind: 'PolicyReport', metadata: { name: 'num-polr-bulk', namespace: NS },
+  scope: { apiVersion: 'apps/v1', kind: 'Deployment', name: 'num-d', namespace: NS },
+  summary: { pass: 0, fail: POLR_BULK, warn: 0, error: 0, skip: 0 },
+  results: Array.from({ length: POLR_BULK }, (_, i) => ({
+    policy: 'num-bulk', rule: `r-${String(i).padStart(3, '0')}`, result: 'fail', source: 'e2e', category: 'Bulk', severity: 'medium',
+  })),
+})
+type PolrRow = { result: string; policy: string; source: string; resource: string; rule: string; category: string; severity: string; namespace: string }
+function polrRows(reports: Obj[]): PolrRow[] {
+  return reports.flatMap((rep) => (rep.results ?? []).map((r: Obj) => {
+    const at = r.resources?.[0] ?? rep.scope ?? {}
+    return {
+      result: r.result, policy: r.policy, source: r.source ?? '', rule: r.rule ?? '', category: r.category ?? '', severity: r.severity ?? '',
+      resource: at.kind ? `${at.kind}/${at.name}` : '', namespace: at.namespace ?? rep.scope?.namespace ?? rep.metadata.namespace ?? '',
+    }
+  }))
+}
+const RESULTS = ['fail', 'warn', 'error', 'pass', 'skip'] as const
+const countBy = (rows: PolrRow[]) => Object.fromEntries(RESULTS.map((k) => [k, rows.filter((r) => r.result === k).length]))
+const pagerTotal = async (page: Page) => Number((await page.getByTestId('list-pager').innerText()).match(/of (\d+)/)?.[1] ?? 0)
+
+// the Gateway → Policies screen on test2: every object of every policy kind (the CRDs labelled as policies, GEP-713)
+// with its target and whether it was accepted; number-check.gwpol-crd.yaml's BackendTLSPolicy shares its Kind with the
+// Gateway API's, so the screen names it with its group
+const GWPOL = { path: '/gateway/policies', cluster: 'test2' }
+const GWPOL_CRD = fs.readFileSync(path.join(__dirname, 'number-check.gwpol-crd.yaml'), 'utf8')
+type PolicyKind = { plural: string; kind: string; group: string; version: string }
+const policyKinds = (): PolicyKind[] => on(GWPOL.cluster)
+  .kubectl(`get crd -l gateway.networking.k8s.io/policy -o jsonpath='{range .items[*]}{.spec.names.plural} {.spec.names.kind} {.spec.group} {.spec.versions[?(@.storage==true)].name}{"\\n"}{end}'`)
+  .split('\n').filter(Boolean).map((line) => {
+    const [plural, kind, group, version] = line.split(' ')
+    return { plural, kind, group, version }
+  })
+const policyTarget = (spec: Obj = {}) => {
+  const refs: Obj[] = spec.targetRefs?.length ? spec.targetRefs : spec.targetRef ? [spec.targetRef] : []
+  return refs.map((t) => `${t.kind || '?'} ${t.namespace ? `${t.namespace}/` : ''}${t.name ?? ''}${t.sectionName ? `#${t.sectionName}` : ''}`).join(', ') || '-'
+}
+// Accepted on the object or on each ancestor (PolicyAncestorStatus): Yes when every one says True
+const policyAccepted = (status: Obj = {}) => {
+  const conds = [...(status.conditions ?? []), ...(status.ancestors ?? []).flatMap((a: Obj) => a.conditions ?? [])].filter((c: Obj) => c.type === 'Accepted')
+  return conds.length === 0 ? '-' : conds.every((c: Obj) => c.status === 'True') ? 'Yes' : 'No'
+}
+
 type ScreenRead = { heads: string[]; rows: string[][]; cards: Record<string, number> }
 async function readScreen(page: Page): Promise<ScreenRead> {
   return page.evaluate(() => {
@@ -1081,6 +1131,225 @@ test.describe('number check — list screens', () => {
     } finally {
       t2.kubectl(`delete namespace ${NS} --wait=true --timeout=180s --ignore-not-found`)
       t2.kubectl('delete crd/widgets.numbers.kubeast.io --ignore-not-found')
+    }
+  })
+
+  // the policy reports screen on default: the cards, the rows by policy (a name within its source) and by namespace as
+  // the reports hold them, and every result row reachable page by page, sorted over all of them, not one page
+  test('the policy reports screen counts what the reports hold, and every result page is reachable', async ({ page }) => {
+    test.setTimeout(300_000)
+    const b = on(POLR.cluster)
+    test.skip(!b.kubectl('api-resources --api-group=wgpolicyk8s.io -o name').includes('policyreports'), 'needs the PolicyReport CRD on the second cluster')
+    b.kubectl('apply --server-side --field-manager=e2e-numbers -f -', POLR_FIXTURE)
+    try {
+      b.kubectl('apply --server-side --field-manager=e2e-numbers -f -', polrBulk())
+      const reports: Obj[] = JSON.parse(b.kubectl(`get policyreports -n ${NS} -o json`)).items
+      const rows = polrRows(reports)
+      const groups = new Map<string, PolrRow[]>()
+      for (const r of rows) groups.set(`${r.source}\n${r.policy}`, [...(groups.get(`${r.source}\n${r.policy}`) ?? []), r])
+      const resultKey = (r: { result: string; policy: string; resource: string; rule: string }) => `${r.result} | ${r.policy} | ${r.resource || '-'} | ${r.rule || '-'}`
+      const shownRows = async (...columns: string[]) => {
+        const { heads, rows: shown } = await readScreen(page)
+        return shown.filter((r) => r.length > 1 && r[0]).map((r) => columns.map((c) => r[heads.indexOf(c)]).join(' | '))
+      }
+      const shownResults = async () => (await shownRows('Result', 'Policy', 'Resource', 'Rule')).map((r) => r.replace(/^\w+/, (w) => w.toLowerCase()))
+      const shownCards = async () => {
+        const { cards } = await readScreen(page)
+        const lower = Object.fromEntries(Object.entries(cards).map(([k, v]) => [k.toLowerCase(), v]))
+        return Object.fromEntries(RESULTS.map((k) => [k, lower[k]]))
+      }
+      const refreshed = () => Promise.all([
+        page.waitForResponse((r) => r.url().includes('/policyreports/summary') && r.url().includes('force_refresh=true')),
+        page.getByRole('button', { name: 'Refresh', exact: true }).click(),
+      ])
+      await page.context().addInitScript(() => localStorage.setItem('kubeast.listPageSize', '100'))
+      await page.setViewportSize({ width: 2560, height: 1200 })
+      await page.goto(`${POLR.path}?cluster=${POLR.cluster}`)
+      await page.getByTestId('policy-reports-namespace').click()
+      await page.getByTestId(`policy-reports-namespace-opt-${NS}`).click()
+      // the server keeps a read for a minute: the refresh reads the reports now
+      await refreshed()
+
+      await test.step('cards: the summaries of the namespace\'s reports added up', async () => {
+        const held = Object.fromEntries(RESULTS.map((k) => [k, reports.reduce((sum, rep) => sum + (rep.summary?.[k] ?? 0), 0)]))
+        expect(held, 'the summaries the fixture writes agree with its results').toEqual(countBy(rows))
+        await expect.poll(shownCards, { timeout: 20_000 }).toEqual(held)
+      })
+      await test.step('by policy: a row per policy and source, its first category and severity, counts and namespaces', async () => {
+        const want = [...groups.values()].map((g) => [
+          g[0].policy, g.find((r) => r.category)?.category || '-', g.find((r) => r.severity)?.severity || '-', g[0].source || '-',
+          ...RESULTS.map((k) => String(g.filter((r) => r.result === k).length)), String(new Set(g.map((r) => r.namespace).filter(Boolean)).size),
+        ].join(' | ')).sort()
+        const shown = async () => (await shownRows('Policy', 'Category', 'Severity', 'Source', 'Fail', 'Warn', 'Error', 'Pass', 'Skip', 'Namespaces')).sort()
+        try {
+          await expect.poll(shown, { timeout: 20_000 }).toEqual(want)
+        } catch {
+          expect.soft(await shown(), 'by policy').toEqual(want)
+        }
+      })
+      await test.step('by namespace: its policies and counts', async () => {
+        await page.getByTestId('policy-reports-tab-namespaces').click()
+        const all = countBy(rows)
+        const want = [[NS, String(groups.size), ...RESULTS.map((k) => String(all[k]))].join(' | ')]
+        const shown = () => shownRows('Namespace', 'Policies', 'Fail', 'Warn', 'Error', 'Pass', 'Skip')
+        try {
+          await expect.poll(shown, { timeout: 20_000 }).toEqual(want)
+        } catch {
+          expect.soft(await shown(), 'by namespace').toEqual(want)
+        }
+      })
+      await test.step(`results: the pager counts every fail, warn and error row, and the pages hold each once`, async () => {
+        await page.getByTestId('policy-reports-tab-results').click()
+        const problems = rows.filter((r) => ['fail', 'warn', 'error'].includes(r.result))
+        await expect.poll(() => pagerTotal(page), { timeout: 20_000 }).toBeGreaterThan(0)
+        expect.soft(await pagerTotal(page), 'the pager counts every matching row').toBe(problems.length)
+        const pages = Math.ceil((await pagerTotal(page)) / 100)
+        await expect.poll(async () => (await shownResults()).length, { timeout: 20_000 }).toBe(Math.min(100, await pagerTotal(page)))
+        const seen = await shownResults()
+        for (let p = 2; p <= pages; p++) {
+          const before = (await shownResults())[0]
+          await page.getByTestId('list-pager').getByRole('button', { name: 'Next' }).click()
+          await expect.poll(async () => (await shownResults())[0], { timeout: 20_000 }).not.toBe(before)
+          seen.push(...await shownResults())
+        }
+        expect.soft(seen.sort(), 'every row on some page, none twice').toEqual(problems.map(resultKey).sort())
+      })
+      await test.step('the policy picker keeps one policy name of two sources apart', async () => {
+        await page.getByTestId('policy-reports-result').click()
+        await page.getByTestId('policy-reports-result-opt-all').click()
+        await page.getByTestId('policy-reports-policy').click()
+        const named = page.getByRole('button', { name: 'num-no-root (kubewarden)', exact: true })
+        const told = await named.waitFor({ timeout: 10_000 }).then(() => true, () => false)
+        expect.soft(told, 'the picker names the source of a policy name two sources share').toBe(true)
+        if (told) {
+          await named.click()
+          const want = rows.filter((r) => r.policy === 'num-no-root' && r.source === 'kubewarden').map(resultKey).sort()
+          await expect.poll(async () => (await shownResults()).sort(), { timeout: 20_000 }).toEqual(want)
+          await page.getByTestId('policy-reports-policy').click()
+          await page.getByRole('button', { name: 'All policies', exact: true }).click()
+        } else {
+          // nothing picked: close the list, the picker still reads All policies
+          await page.getByTestId('policy-reports-policy').click()
+        }
+        try {
+          await expect.poll(() => pagerTotal(page), { timeout: 20_000 }).toBe(rows.length)
+        } catch {
+          expect.soft(await pagerTotal(page), 'the pager counts every result of every policy').toBe(rows.length)
+        }
+      })
+      await test.step('sorting the results by policy orders all of them before the page', async () => {
+        const names = [...new Set(rows.map((r) => r.policy))].sort()
+        const header = page.locator('main thead th', { hasText: /^Policy$/ })
+        await header.click()
+        await expect.poll(async () => (await shownResults())[0]?.split(' | ')[1], { timeout: 20_000 }).toBe(names[0])
+        await header.click()
+        await expect.poll(async () => (await shownResults())[0]?.split(' | ')[1], { timeout: 20_000 }).toBe(names[names.length - 1])
+      })
+      await test.step('cards of every namespace: the summaries of every report in the cluster', async () => {
+        await page.getByTestId('policy-reports-tab-policies').click()
+        await page.getByTestId('policy-reports-namespace').click()
+        await page.getByRole('button', { name: 'All namespaces', exact: true }).click()
+        // Kyverno writes its reports as it goes: read both again until they meet
+        await expect(async () => {
+          await refreshed()
+          const all = [
+            ...JSON.parse(b.kubectl('get policyreports -A -o json')).items,
+            ...JSON.parse(b.kubectl('get clusterpolicyreports -o json')).items,
+          ] as Obj[]
+          const held = Object.fromEntries(RESULTS.map((k) => [k, all.reduce((sum, rep) => sum + (rep.summary?.[k] ?? 0), 0)]))
+          expect(await shownCards()).toEqual(held)
+        }).toPass({ timeout: 60_000 })
+      })
+    } finally {
+      b.kubectl(`delete namespace ${NS} --wait=true --timeout=180s --ignore-not-found`)
+    }
+  })
+
+  // the Gateway policies screen on test2: every object of every policy kind with its target and acceptance, the cards
+  // and the scanned kinds, and the kind picker telling a Kind two groups share apart
+  test('the Gateway policies screen shows every policy object, a Kind of two groups kept apart', async ({ page }) => {
+    test.setTimeout(300_000)
+    test.skip(!(await registeredOn(page, GWPOL.cluster)), 'needs the kind cluster test2, registered as test2')
+    const served = gatewayVersions()
+    test.skip(!served || !policyKinds().some((k) => k.plural === 'xbackendtrafficpolicies'), 'needs the Gateway API experimental-channel CRDs on test2')
+    const t2 = on(GWPOL.cluster)
+    t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', GWPOL_CRD)
+    try {
+      t2.kubectl('wait --for=condition=Established crd/backendtlspolicies.numbers.kubeast.io --timeout=60s')
+      const xbtp = policyKinds().find((k) => k.plural === 'xbackendtrafficpolicies')!
+      const svc = { group: '', kind: 'Service', name: 'num-svc' }
+      const objects = [
+        { apiVersion: 'v1', kind: 'Namespace', metadata: { name: NS } },
+        { apiVersion: 'numbers.kubeast.io/v1', kind: 'BackendTLSPolicy', metadata: { name: 'num-gp-1', namespace: NS }, spec: { targetRefs: [{ ...svc, sectionName: 'https' }] } },
+        { apiVersion: 'numbers.kubeast.io/v1', kind: 'BackendTLSPolicy', metadata: { name: 'num-gp-2', namespace: NS }, spec: { targetRef: { group: GW, kind: 'Gateway', name: 'num-gw-a' } } },
+        { apiVersion: `${GW}/${served!.backendtlspolicies}`, kind: 'BackendTLSPolicy', metadata: { name: 'num-gp-up', namespace: NS },
+          spec: { targetRefs: [svc], validation: { hostname: 'num-svc.e2e-numbers.svc', wellKnownCACertificates: 'System' } } },
+        { apiVersion: `${xbtp.group}/${xbtp.version}`, kind: xbtp.kind, metadata: { name: 'num-gp-x', namespace: NS }, spec: { targetRefs: [svc] } },
+      ]
+      t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', JSON.stringify({ apiVersion: 'v1', kind: 'List', items: objects }))
+      // what an implementation would write: accepted by its one Gateway, by one of two, by the other; num-gp-x says nothing
+      const status = (plural: string, group: string, name: string, s: Obj) =>
+        t2.kubectl(`patch ${plural}.${group} ${name} -n ${NS} --subresource=status --type=merge -p=${arg({ status: s })}`)
+      status('backendtlspolicies', 'numbers.kubeast.io', 'num-gp-1', { ancestors: [ancestor('num-gw-a', [condition('Accepted', 'True')])] })
+      status('backendtlspolicies', 'numbers.kubeast.io', 'num-gp-2', {
+        ancestors: [ancestor('num-gw-a', [condition('Accepted', 'True')]), ancestor('num-gw-b', [condition('Accepted', 'False', 'Conflicted')])],
+      })
+      status('backendtlspolicies', GW, 'num-gp-up', { ancestors: [ancestor('num-gw-a', [condition('Accepted', 'True')])] })
+
+      const kinds = policyKinds()
+      const shared = new Set(kinds.filter((k) => kinds.some((o) => o.kind === k.kind && o.group !== k.group)).map((k) => k.kind))
+      const label = (k: PolicyKind) => (shared.has(k.kind) ? `${k.kind} (${k.group})` : k.kind)
+      const held = kinds.map((k) => ({
+        k, items: (JSON.parse(t2.kubectl(`get ${k.plural}.${k.group} -A -o json`)).items as Obj[]).map((o) => ({
+          row: [label(k), o.metadata.name, o.metadata.namespace || '-', policyTarget(o.spec), policyAccepted(o.status)].join(' | '),
+          accepted: policyAccepted(o.status) === 'Yes',
+        })),
+      }))
+      const shown = async () => {
+        const { heads, rows } = await readScreen(page)
+        const at = (h: string) => heads.indexOf(h)
+        return rows.filter((r) => r.length > 1 && r[at('Name')]).map((r) => ['Kind', 'Name', 'Namespace', 'Target', 'Accepted'].map((h) => r[at(h)]).join(' | ')).sort()
+      }
+      const chips = () => page.locator('[data-testid="policy-kinds"] > span.rounded-full').evaluateAll((els) =>
+        els.map((el) => (el as HTMLElement).innerText.replace(/\s+/g, ' ').trim()).sort())
+      const expectCards = async (items: { accepted: boolean }[], kindCount: number, what: string) => {
+        const { cards } = await readScreen(page)
+        expect.soft(cards.Total, `${what}: card Total`).toBe(items.length)
+        expect.soft(cards.Kinds, `${what}: card Kinds — a Kind of two groups counts twice`).toBe(kindCount)
+        expect.soft(cards.Accepted, `${what}: card Accepted`).toBe(items.filter((i) => i.accepted).length)
+      }
+      await page.context().addInitScript(() => localStorage.setItem('kubeast.listPageSize', '100'))
+      await page.setViewportSize({ width: 2560, height: 1200 })
+      await page.goto(`${GWPOL.path}?cluster=${GWPOL.cluster}`)
+
+      await test.step('every policy object of every kind, its target and acceptance; the cards and the scanned kinds', async () => {
+        const want = held.flatMap((h) => h.items.map((i) => i.row)).sort()
+        try {
+          await expect.poll(shown, { timeout: 20_000 }).toEqual(want)
+        } catch {
+          expect.soft(await shown(), 'every policy object').toEqual(want)
+        }
+        await expectCards(held.flatMap((h) => h.items), held.filter((h) => h.items.length).length, 'every kind')
+        expect.soft(await chips(), 'the scanned kinds, each with its count').toEqual(held.map((h) => `${label(h.k)} ${h.items.length}`).sort())
+      })
+      await test.step('the kind picker names the shared Kind with its group and keeps to that kind', async () => {
+        const mine = held.find((h) => h.k.group === 'numbers.kubeast.io')!
+        await page.getByTestId('policies-kind').click()
+        const named = page.getByRole('button', { name: label(mine.k), exact: true })
+        const told = await named.waitFor({ timeout: 10_000 }).then(() => true, () => false)
+        expect.soft(told, 'the kind picker names the group of a Kind two groups share').toBe(true)
+        await (told ? named : page.getByRole('button', { name: mine.k.kind, exact: true })).click()
+        const want = mine.items.map((i) => i.row).sort()
+        try {
+          await expect.poll(shown, { timeout: 20_000 }).toEqual(want)
+        } catch {
+          expect.soft(await shown(), `${label(mine.k)} only`).toEqual(want)
+        }
+        await expectCards(mine.items, 1, label(mine.k))
+      })
+    } finally {
+      t2.kubectl(`delete namespace ${NS} --wait=true --timeout=180s --ignore-not-found`)
+      t2.kubectl('delete crd/backendtlspolicies.numbers.kubeast.io --ignore-not-found')
     }
   })
 

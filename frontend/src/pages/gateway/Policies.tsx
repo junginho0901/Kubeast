@@ -22,6 +22,8 @@ import CustomDropdown from '@/components/CustomDropdown'
 
 type SortKey = null | 'kind' | 'name' | 'namespace' | 'target' | 'age'
 type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
+// a kind is its Kind within its group: two implementations may name a policy kind alike
+const kindKey = (k: { group: string; kind: string }) => `${k.group}/${k.kind}`
 
 const QUERY_KEY = ['gateway', 'policies'] as const
 
@@ -58,12 +60,23 @@ export default function Policies() {
   const items = useMemo(() => (Array.isArray(data?.items) ? data.items : []), [data])
   const kinds = useMemo<GatewayPolicyKindInfo[]>(() => (Array.isArray(data?.kinds) ? data.kinds : []), [data])
 
-  const uniqueKinds = useMemo(() => Array.from(new Set(items.map((i) => i.kind))).sort(), [items])
+  // the Kind alone names a kind; one two groups share is named with its group
+  const sharedKinds = useMemo(() => {
+    const groups = new Map<string, Set<string>>()
+    for (const k of kinds) groups.set(k.kind, (groups.get(k.kind) ?? new Set()).add(k.group))
+    return new Set([...groups].filter(([, g]) => g.size > 1).map(([kind]) => kind))
+  }, [kinds])
+  const kindLabel = useCallback((k: { group: string; kind: string }) => (sharedKinds.has(k.kind) ? `${k.kind} (${k.group})` : k.kind), [sharedKinds])
+  const kindOptions = useMemo(() => {
+    const seen = new Map<string, GatewayPolicyItem>()
+    for (const i of items) if (!seen.has(kindKey(i))) seen.set(kindKey(i), i)
+    return [...seen.values()].map((i) => ({ value: kindKey(i), label: kindLabel(i) })).sort((a, b) => a.label.localeCompare(b.label))
+  }, [items, kindLabel])
   const uniqueNamespaces = useMemo(() => Array.from(new Set(items.map((i) => i.namespace).filter(Boolean))).sort(), [items])
 
   const filteredItems = useMemo(() => {
     let result = items
-    if (kindFilter) result = result.filter((i) => i.kind === kindFilter)
+    if (kindFilter) result = result.filter((i) => kindKey(i) === kindFilter)
     if (namespaceFilter) result = result.filter((i) => i.namespace === namespaceFilter)
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
@@ -82,7 +95,7 @@ export default function Policies() {
     const kindSet = new Set<string>()
     let accepted = 0
     for (const i of filteredItems) {
-      kindSet.add(i.kind)
+      kindSet.add(kindKey(i))
       if (i.accepted === true) accepted += 1
     }
     return { total: filteredItems.length, kinds: kindSet.size, accepted }
@@ -214,7 +227,7 @@ export default function Policies() {
           testId="policies-kind"
           value={kindFilter}
           onChange={setKindFilter}
-          options={[{ value: '', label: tr('policiesPage.allKinds', 'All kinds') }, ...uniqueKinds.map((k) => ({ value: k, label: k }))]}
+          options={[{ value: '', label: tr('policiesPage.allKinds', 'All kinds') }, ...kindOptions]}
         />
         <CustomDropdown
           size="lg"
@@ -247,7 +260,7 @@ export default function Policies() {
             title={`${k.plural}.${k.group}/${k.version} · ${sourceLabel(k.source)}${k.error ? ` · ${k.error}` : ''}`}
             className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${k.error ? 'border-amber-700/60 bg-amber-900/20 text-amber-300' : 'border-slate-700 bg-slate-800/60 text-slate-300'}`}
           >
-            <span className="font-mono">{k.kind}</span>
+            <span className="font-mono">{kindLabel(k)}</span>
             <span className="text-slate-500">{k.error ? (k.error === 'forbidden' ? tr('policiesPage.kinds.forbidden', 'no permission') : k.error) : k.count}</span>
           </span>
         ))}
@@ -297,7 +310,7 @@ export default function Policies() {
                         rawJson: { kind: item.kind, group: item.group, version: item.version, crd_name: `${item.plural}.${item.group}`, scope: item.scope },
                       })}
                 >
-                  <td className="py-3 px-4 text-xs font-mono" title={`${item.plural}.${item.group}/${item.version}`}><span className="block truncate">{item.kind}</span></td>
+                  <td className="py-3 px-4 text-xs font-mono" title={`${item.plural}.${item.group}/${item.version}`}><span className="block truncate">{kindLabel(item)}</span></td>
                   <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{item.name}</span></td>
                   <td className="py-3 px-4 text-xs"><span className="block truncate">{item.namespace || '-'}</span></td>
                   <td className="py-3 px-4 text-xs font-mono"><span className="block truncate" title={formatPolicyTargets(item)}>{formatPolicyTargets(item)}</span></td>

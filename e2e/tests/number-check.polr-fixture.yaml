@@ -1,0 +1,46 @@
+# The number check's policy reports, on the second cluster (`default`, Kyverno 1.19), written by hand — Kyverno's
+# report controller keeps to the reports it labels app.kubernetes.io/managed-by=kyverno. One policy name comes from
+# two sources, two results name their resources instead of a scope, and every result appears once.
+# number-check-lists.spec.ts adds num-polr-bulk (520 results) and removes the namespace after.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: e2e-numbers
+---
+apiVersion: wgpolicyk8s.io/v1alpha2
+kind: PolicyReport
+metadata:
+  name: num-polr-cm
+  namespace: e2e-numbers
+summary: {pass: 0, fail: 2, warn: 0, error: 0, skip: 0}
+results:
+- policy: num-labels
+  rule: need-team
+  result: fail
+  source: kyverno
+  category: Best Practices
+  message: num-cm-a and num-cm-b need the label team
+  resources:
+  - {apiVersion: v1, kind: ConfigMap, name: num-cm-a, namespace: e2e-numbers}
+  - {apiVersion: v1, kind: ConfigMap, name: num-cm-b, namespace: e2e-numbers}
+- policy: num-no-root
+  rule: run-as-non-root
+  result: fail
+  source: kubewarden
+  message: num-cm-a is mounted by a pod running as root
+  resources:
+  - {apiVersion: v1, kind: ConfigMap, name: num-cm-a, namespace: e2e-numbers}
+---
+apiVersion: wgpolicyk8s.io/v1alpha2
+kind: PolicyReport
+metadata:
+  name: num-polr-pod
+  namespace: e2e-numbers
+scope: {apiVersion: v1, kind: Pod, name: num-p1, namespace: e2e-numbers}
+summary: {pass: 1, fail: 1, warn: 1, error: 1, skip: 1}
+results:
+- {policy: num-no-root, rule: run-as-non-root, result: fail, source: kyverno, category: Pod Security, severity: high, message: num-p1 runs as root, timestamp: {seconds: 1793000000, nanos: 0}}
+- {policy: num-no-root, rule: run-as-non-root, result: pass, source: kubewarden, category: Pod Security Standards, severity: medium}
+- {policy: num-labels, rule: need-team, result: warn, source: kyverno, category: Best Practices, severity: low, message: num-p1 has no label team}
+- {policy: num-labels, rule: need-owner, result: error, source: kyverno, message: the rule could not run}
+- {policy: num-labels, rule: need-cost, result: skip, source: kyverno}
