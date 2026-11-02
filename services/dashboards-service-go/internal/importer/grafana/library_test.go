@@ -248,3 +248,23 @@ func layoutHas(items []model.LayoutItem, name string) bool {
 	}
 	return false
 }
+
+func TestLibraryDefinitions(t *testing.T) {
+	got := libraryDefinitions(json.RawMessage(`{
+		"by-key": {"name": "A", "kind": 1, "model": {"type": "stat"}},
+		"other-key": {"name": "B", "uid": "by-uid", "kind": 1, "model": {"type": "gauge"}},
+		"no-kind": {"name": "C", "model": {"type": "table"}},
+		"variable": {"name": "D", "uid": "variable", "kind": 2, "model": {"type": "query"}},
+		"no-model": {"name": "E", "uid": "no-model", "kind": 1}
+	}`))
+	kinds := map[string]string{}
+	for uid, m := range got {
+		kinds[uid] = strOf(m["type"])
+	}
+	if want := map[string]string{"by-key": "stat", "by-uid": "gauge", "no-kind": "table"}; !reflect.DeepEqual(kinds, want) {
+		t.Errorf("definitions %v, want %v", kinds, want)
+	}
+	if got := libraryDefinitions(json.RawMessage(`[]`)); len(got) != 0 {
+		t.Errorf("an empty list gave %v", got)
+	}
+}
