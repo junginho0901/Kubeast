@@ -1,0 +1,44 @@
+# The number check's VerticalPodAutoscalers, on test2 (self serves no VPA): made by number-check-lists.spec.ts and
+# removed after. No recommender runs there: the test writes the statuses (VPA_STATUS) — num-vpa-b lists another
+# condition before RecommendationProvided, num-vpa-c has none.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: e2e-numbers
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: num-vpa-a
+  namespace: e2e-numbers
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: web
+  updatePolicy:
+    updateMode: "Off"
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: num-vpa-b
+  namespace: e2e-numbers
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    name: db
+  updatePolicy:
+    updateMode: Recreate
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: num-vpa-c
+  namespace: e2e-numbers
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: DaemonSet
+    name: agent

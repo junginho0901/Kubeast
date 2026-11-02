@@ -6,7 +6,7 @@ import path from 'node:path'
 
 import { test, expect, type Page } from '@playwright/test'
 
-// Every list screen's numbers are the cluster's: in namespace e2e-numbers of `self`, or of test2 for the Gateway API
+// Every list screen's numbers are the cluster's: in namespace e2e-numbers of `self`, or of test2 for the Gateway API and VPA
 // (objects whose numbers are not zero and not alike, made here and removed after), each screen's rows are the cluster's objects, each column the
 // API server also prints (the Table of `kubectl get`, Accept as=Table) holds the same value, the columns only Kubeast
 // prints hold what the objects say, and the summary cards count what their labels mean. All values of a screen are
@@ -701,6 +701,35 @@ const GATEWAY_LIVE: { path: string; name: string; column: string; want: string; 
   { path: '/gateway/backendtlspolicies', name: 'num-btls-a', column: 'Status', want: '-', change: `patch backendtlspolicy num-btls-a -n ${NS} --subresource=status --type=merge -p=${arg({ status: { ancestors: [] } })}` },
 ]
 
+// the VPA screen on test2, with number-check.vpa-fixture.yaml: Provided is the RecommendationProvided condition, as
+// the CRD's printer column reads it (num-vpa-b lists another condition first)
+const VPA_FIXTURE = fs.readFileSync(path.join(__dirname, 'number-check.vpa-fixture.yaml'), 'utf8')
+const vpaProvided = (o: Obj) => (o.status?.conditions ?? []).find((c: Obj) => c.type === 'RecommendationProvided')?.status === 'True'
+const VPA_SCREEN: Screen = {
+  path: '/workloads/vpas', api: `/apis/autoscaling.k8s.io/v1/namespaces/${NS}/verticalpodautoscalers`, plural: 'verticalpodautoscalers', cluster: 'test2',
+  alias: { Memory: 'Mem' },
+  extra: { Reference: (o) => (o.spec.targetRef ? `${o.spec.targetRef.kind}/${o.spec.targetRef.name}` : '-') },
+  skip: { Age: AGE },
+  cards: (list) => ({ Total: list.length, Provided: list.filter(vpaProvided).length, 'Not Provided': list.filter((o) => !vpaProvided(o)).length }),
+}
+const VPA_STATUS: [string, Obj][] = [
+  ['num-vpa-a', {
+    conditions: [condition('RecommendationProvided', 'True')],
+    recommendation: { containerRecommendations: [{ containerName: 'app', target: { cpu: '25m', memory: '64Mi' } }] },
+  }],
+  ['num-vpa-b', {
+    conditions: [condition('LowConfidence', 'True'), condition('RecommendationProvided', 'False', 'NotEnoughData')],
+    recommendation: { containerRecommendations: [
+      { containerName: 'db', target: { cpu: '100m', memory: '256Mi' } },
+      { containerName: 'sidecar', target: { cpu: '10m', memory: '16Mi' } },
+    ] },
+  }],
+]
+const registeredOn = async (page: Page, id: string) => {
+  const body = await (await page.request.get('/api/v1/clusters')).json()
+  return (Array.isArray(body) ? body : body.items ?? []).some((c: Obj) => c.id === id)
+}
+
 type ScreenRead = { heads: string[]; rows: string[][]; cards: Record<string, number> }
 async function readScreen(page: Page): Promise<ScreenRead> {
   return page.evaluate(() => {
@@ -926,6 +955,52 @@ test.describe('number check — list screens', () => {
     } finally {
       t2.kubectl(`delete namespace ${NS} --wait=true --timeout=180s --ignore-not-found`)
       t2.kubectl('delete gatewayclass/num-gc-ready gatewayclass/num-gc-plain --ignore-not-found')
+    }
+  })
+
+  // the VPA screen the same way on test2, then a live update that empties a value
+  test('the VPA list screen shows the rows, columns and cards the cluster has', async ({ page }) => {
+    test.setTimeout(300_000)
+    let served = false
+    try {
+      served = /^verticalpodautoscalers\./m.test(on('test2').kubectl('api-resources --api-group=autoscaling.k8s.io -o name'))
+    } catch {
+      served = false
+    }
+    test.skip(!served || !(await registeredOn(page, 'test2')), 'needs the kind cluster test2, registered as test2, serving the VPA CRD')
+    const t2 = on('test2')
+    const cellOf = async (p: Page, name: string, column: string) => {
+      const { heads, rows } = await readScreen(p)
+      return rows.find((r) => r[heads.findIndex((h) => /^name$/i.test(h))] === name)?.[heads.indexOf(column)]
+    }
+    t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', VPA_FIXTURE)
+    try {
+      for (const [name, status] of VPA_STATUS) {
+        t2.kubectl(`patch verticalpodautoscaler ${name} -n ${NS} --subresource=status --type=merge -p=${arg({ status })}`)
+      }
+      await page.context().addInitScript(() => localStorage.setItem('kubeast.listPageSize', '100'))
+      const held = await page.context().newPage()
+      await held.routeWebSocket(/wsMultiplexer/, () => {})
+      for (const p of [held, page]) await p.setViewportSize({ width: 2560, height: 1200 })
+      for (const [way, p] of [['list API', held], ['live', page]] as const) await test.step(`${VPA_SCREEN.path} · ${way}`, () => compareScreen(p, VPA_SCREEN, way))
+      await held.close()
+
+      await test.step(`${VPA_SCREEN.path} · a live update that empties Provided and the recommendation`, async () => {
+        const socket = page.waitForEvent('websocket', (ws) => /wsMultiplexer/.test(ws.url()))
+        await page.goto(screenUrl(VPA_SCREEN))
+        const sent = await (await socket).waitForEvent('framereceived', { predicate: (f) => String(f.payload).includes('num-vpa-a'), timeout: 20_000 }).then(() => true, () => false)
+        expect.soft(sent, 'the live updates send num-vpa-a').toBe(true)
+        if (!sent) return
+        t2.kubectl(`patch verticalpodautoscaler num-vpa-a -n ${NS} --subresource=status --type=merge -p=${arg({ status: { conditions: [], recommendation: null } })}`)
+        try {
+          await expect.poll(() => cellOf(page, 'num-vpa-a', 'Provided'), { timeout: 20_000 }).toBe('-')
+        } catch {
+          expect.soft(await cellOf(page, 'num-vpa-a', 'Provided'), 'num-vpa-a · Provided after the live update').toBe('-')
+        }
+        await compareScreen(page, VPA_SCREEN, 'live, after the update', false)
+      })
+    } finally {
+      t2.kubectl(`delete namespace ${NS} --wait=true --timeout=180s --ignore-not-found`)
     }
   })
 

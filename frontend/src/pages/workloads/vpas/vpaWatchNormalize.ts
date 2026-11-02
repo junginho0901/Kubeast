@@ -4,7 +4,6 @@
 // applyVPAWatchEvent 추출. raw k8s VPA object 를 API list 형태 (VPAInfo) 로
 // 정규화하고, watch event (ADDED/MODIFIED/DELETED) 를 cache 배열에 머지.
 
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import type { VPAInfo } from '@/services/api'
 
 export function normalizeWatchVPAObject(obj: any): VPAInfo {
@@ -21,9 +20,11 @@ export function normalizeWatchVPAObject(obj: any): VPAInfo {
   let memoryTarget = ''
   let provided = ''
 
-  if (status?.conditions?.[0]?.status) {
-    provided = status.conditions[0].status
-  }
+  // the RecommendationProvided condition, as the CRD's printer column reads it (not the first condition)
+  const recommendationProvided = Array.isArray(status?.conditions)
+    ? status.conditions.find((c: any) => c?.type === 'RecommendationProvided')
+    : undefined
+  if (recommendationProvided?.status) provided = String(recommendationProvided.status)
   const recs = status?.recommendation?.containerRecommendations
   if (Array.isArray(recs) && recs.length > 0) {
     cpuTarget = recs[0]?.target?.cpu ?? ''
@@ -66,7 +67,8 @@ export function applyVPAWatchEvent(
     return items
   }
 
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
+  // the server sends the whole row (internal/vpa), so it replaces: a value that went empty shows empty
+  if (index >= 0) items[index] = normalized
   else items.push(normalized)
 
   return items
