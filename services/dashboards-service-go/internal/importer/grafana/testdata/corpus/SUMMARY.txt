@@ -59,7 +59,7 @@ node-exporter-full/node-exporter-full.json	panels 124	preserved 1431	adjusted 8	
 unsupported	1	Grafana plugin panel "grafana-clock-panel" is kept but not drawn
 unsupported	16	Grafana's built-in annotations and alerts are kept but not shown
 unsupported	1	data source the console has no store for; the query is kept but not run
-unsupported	1	library panel that was not inlined: export the dashboard with "Export for sharing externally"
+unsupported	1	library panel whose definition is not in this file: Grafana adds it under __elements when it exports the dashboard for sharing externally
 unsupported	37	links to dashboards by tag are kept but not shown yet
 unsupported	1	override matcher "byNames" is kept but not applied
 unsupported	2	transformation "seriesToColumns" is kept but not run yet
