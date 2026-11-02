@@ -9,6 +9,9 @@
 // searched across it (Grafana's whole-title match stops at a line break, so it
 // finds such a title only by a single word), and a long text is searched as
 // any other (Grafana fails a text too large for its index's automaton).
+//
+// Grafana does not search by the metrics a dashboard reads; here Query.Metrics
+// does, with the names Metrics finds.
 package search
 
 import (
@@ -23,11 +26,23 @@ type Query struct {
 	Text    string   // in the title, in any case: * stands for any run of characters, ? for any one
 	Tags    []string // every one of them, as written
 	Folders []string // one of them ("" is the top level), not their subfolders
+	Metrics []string // every one of them read by the dashboard's queries (Metrics), as written
 }
 
 // Match says whether q finds d.
 func Match(d *model.Dashboard, q Query) bool {
-	return matchText(strings.ToLower(d.Metadata.Title), q.Text) && hasTags(d.Metadata.Tags, q.Tags) && inFolders(d.Metadata.Folder, q.Folders)
+	return q.finds(d, strings.ToLower(d.Metadata.Title))
+}
+
+func (q Query) finds(d *model.Dashboard, title string) bool {
+	if !matchText(title, q.Text) || !hasAll(d.Metadata.Tags, q.Tags) || !inFolders(d.Metadata.Folder, q.Folders) {
+		return false
+	}
+	if len(q.Metrics) == 0 {
+		return true
+	}
+	names, _ := Metrics(d)
+	return hasAll(names, q.Metrics)
 }
 
 // Search is the dashboards q finds, by title in lower case; Grafana leaves the
@@ -40,7 +55,7 @@ func Search(ds []*model.Dashboard, q Query) []*model.Dashboard {
 	var hits []hit
 	for _, d := range ds {
 		title := strings.ToLower(d.Metadata.Title)
-		if matchText(title, q.Text) && hasTags(d.Metadata.Tags, q.Tags) && inFolders(d.Metadata.Folder, q.Folders) {
+		if q.finds(d, title) {
 			hits = append(hits, hit{d, title})
 		}
 	}
@@ -93,7 +108,7 @@ func matchText(title, text string) bool {
 	return pi == len(p)
 }
 
-func hasTags(have, want []string) bool {
+func hasAll(have, want []string) bool {
 	for _, w := range want {
 		found := false
 		for _, h := range have {
