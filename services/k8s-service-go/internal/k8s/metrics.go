@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
@@ -88,7 +89,7 @@ func (s *Service) GetPodMetrics(ctx context.Context, namespace string) ([]map[st
 			})
 		}
 
-		cpuMillis := totalCPUNano / 1000000
+		cpuMillis := topMillicores(totalCPUNano)
 		memMi := totalMemBytes / (1 << 20)
 
 		result = append(result, map[string]interface{}{
@@ -148,36 +149,11 @@ func (s *Service) GetNodeMetrics(ctx context.Context) ([]map[string]interface{},
 		return nil, fmt.Errorf("parse node metrics: %w", err)
 	}
 
-	capacities := s.nodeCapacities(ctx)
+	alloc := s.nodeAllocatables(ctx)
 
 	result := make([]map[string]interface{}, 0, len(resp.Items))
 	for _, item := range resp.Items {
-		usageCPUNano := cpuToNanoCores(item.Usage["cpu"])
-		usageMemBytes := memoryToBytes(item.Usage["memory"])
-
-		cpuMillis := usageCPUNano / 1000000
-		memMi := usageMemBytes / (1 << 20)
-
-		entry := map[string]interface{}{
-			"name":      item.Metadata.Name,
-			"cpu":       fmt.Sprintf("%dm", cpuMillis),
-			"memory":    fmt.Sprintf("%dMi", memMi),
-			"timestamp": item.Timestamp,
-		}
-
-		// Calculate percentages if capacity is available
-		if cap, ok := capacities[item.Metadata.Name]; ok {
-			if cap.cpuNano > 0 {
-				cpuPct := float64(usageCPUNano) / float64(cap.cpuNano) * 100
-				entry["cpu_percent"] = fmt.Sprintf("%.0f%%", cpuPct)
-			}
-			if cap.memBytes > 0 {
-				memPct := float64(usageMemBytes) / float64(cap.memBytes) * 100
-				entry["memory_percent"] = fmt.Sprintf("%.0f%%", memPct)
-			}
-		}
-
-		result = append(result, entry)
+		result = append(result, nodeUsage(item.Metadata.Name, cpuToNanoCores(item.Usage["cpu"]), memoryToBytes(item.Usage["memory"]), item.Timestamp, alloc))
 	}
 	return result, nil
 }
@@ -209,7 +185,7 @@ func (s *Service) GetTopResources(ctx context.Context, podLimit, nodeLimit int) 
 				pods = append(pods, map[string]interface{}{
 					"name":      item.Metadata.Name,
 					"namespace": item.Metadata.Namespace,
-					"cpu":       fmt.Sprintf("%dm", totalCPUNano/1000000),
+					"cpu":       fmt.Sprintf("%dm", topMillicores(totalCPUNano)),
 					"memory":    fmt.Sprintf("%dMi", totalMemBytes/(1<<20)),
 					"timestamp": item.Timestamp,
 				})
@@ -232,32 +208,16 @@ func (s *Service) GetTopResources(ctx context.Context, podLimit, nodeLimit int) 
 		result["pod_metrics_error"] = podErr.Error()
 	}
 
-	// Node metrics with capacity percentages
+	// Node metrics with their share of the allocatable
 	nodeBody, _, nodeErr := s.RawRequest(ctx, "GET", "/apis/metrics.k8s.io/v1beta1/nodes")
 	if nodeErr == nil {
 		var nodeResp nodeMetricsResponse
 		if err := json.Unmarshal(nodeBody, &nodeResp); err == nil {
-			capacities := s.nodeCapacities(ctx)
+			alloc := s.nodeAllocatables(ctx)
 
 			nodes := make([]map[string]interface{}, 0, len(nodeResp.Items))
 			for _, item := range nodeResp.Items {
-				cpuNano := cpuToNanoCores(item.Usage["cpu"])
-				memBytes := memoryToBytes(item.Usage["memory"])
-				entry := map[string]interface{}{
-					"name":      item.Metadata.Name,
-					"cpu":       fmt.Sprintf("%dm", cpuNano/1000000),
-					"memory":    fmt.Sprintf("%dMi", memBytes/(1<<20)),
-					"timestamp": item.Timestamp,
-				}
-				if cap, ok := capacities[item.Metadata.Name]; ok {
-					if cap.cpuNano > 0 {
-						entry["cpu_percent"] = fmt.Sprintf("%.0f%%", float64(cpuNano)/float64(cap.cpuNano)*100)
-					}
-					if cap.memBytes > 0 {
-						entry["memory_percent"] = fmt.Sprintf("%.0f%%", float64(memBytes)/float64(cap.memBytes)*100)
-					}
-				}
-				nodes = append(nodes, entry)
+				nodes = append(nodes, nodeUsage(item.Metadata.Name, cpuToNanoCores(item.Usage["cpu"]), memoryToBytes(item.Usage["memory"]), item.Timestamp, alloc))
 			}
 
 			sort.Slice(nodes, func(i, j int) bool {
@@ -279,30 +239,60 @@ func (s *Service) GetTopResources(ctx context.Context, podLimit, nodeLimit int) 
 	return result, nil
 }
 
-// nodeCapacity is a node's CPU (nanocores) and memory (bytes) capacity.
-type nodeCapacity struct{ cpuNano, memBytes int64 }
+// nodeAllocatable is a node's allocatable CPU (millicores) and memory (bytes).
+type nodeAllocatable struct{ cpuMilli, memBytes int64 }
 
-// nodeCapacities reads node capacity from the cluster's informer store when it
-// is running, otherwise lists nodes. Errors yield an empty map (no percentages).
-func (s *Service) nodeCapacities(ctx context.Context) map[string]nodeCapacity {
+func allocatableOf(n *corev1.Node) nodeAllocatable {
+	return nodeAllocatable{cpuMilli: n.Status.Allocatable.Cpu().MilliValue(), memBytes: n.Status.Allocatable.Memory().Value()}
+}
+
+// nodeAllocatables reads the nodes' allocatable resources from the cluster's informer store when it is running,
+// otherwise lists nodes. Errors yield an empty map (no percentages).
+func (s *Service) nodeAllocatables(ctx context.Context) map[string]nodeAllocatable {
 	if b := s.bundleForCtx(ctx); b != nil {
 		if ci := b.syncedInformers(); ci != nil {
-			accesstrail.Cached(ctx, "node capacities from the overview informers (watched as "+overviewCacheUser+")")
-			return ci.nodeCapacities()
+			accesstrail.Cached(ctx, "node allocatable from the overview informers (watched as "+overviewCacheUser+")")
+			return ci.nodeAllocatables()
 		}
 	}
-	out := map[string]nodeCapacity{}
+	out := map[string]nodeAllocatable{}
 	nodes, err := s.clientsetCtx(ctx).CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return out
 	}
-	for _, n := range nodes.Items {
-		out[n.Name] = nodeCapacity{
-			cpuNano:  n.Status.Capacity.Cpu().MilliValue() * 1000000,
-			memBytes: n.Status.Capacity.Memory().Value(),
-		}
+	for i := range nodes.Items {
+		out[nodes.Items[i].Name] = allocatableOf(&nodes.Items[i])
 	}
 	return out
+}
+
+// The numbers kubectl top prints (k8s.io/kubectl metricsutil, release-1.37): CPU as the quantity's MilliValue — the
+// nanocores rounded up to a millicore, a pod's containers summed first — memory in Mi rounded down, and a node's
+// share of its Allocatable (Capacity only with --show-capacity) cut to a whole percent.
+func topMillicores(nano int64) int64 { return (nano + 999_999) / 1_000_000 }
+
+func topPercent(used, available int64) string {
+	return fmt.Sprintf("%d%%", int64(float64(used)/float64(available)*100))
+}
+
+// nodeUsage is a node's metric row as kubectl top node prints it.
+func nodeUsage(name string, cpuNano, memBytes int64, timestamp string, alloc map[string]nodeAllocatable) map[string]interface{} {
+	cpuMilli := topMillicores(cpuNano)
+	entry := map[string]interface{}{
+		"name":      name,
+		"cpu":       fmt.Sprintf("%dm", cpuMilli),
+		"memory":    fmt.Sprintf("%dMi", memBytes/(1<<20)),
+		"timestamp": timestamp,
+	}
+	if a, ok := alloc[name]; ok {
+		if a.cpuMilli > 0 {
+			entry["cpu_percent"] = topPercent(cpuMilli, a.cpuMilli)
+		}
+		if a.memBytes > 0 {
+			entry["memory_percent"] = topPercent(memBytes, a.memBytes)
+		}
+	}
+	return entry
 }
 
 // cpuToNanoCores converts a Kubernetes CPU quantity string to nanocores for sorting.

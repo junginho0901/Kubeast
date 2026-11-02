@@ -39,10 +39,10 @@ func overviewObjects() []runtime.Object {
 		&corev1.PersistentVolume{ObjectMeta: metav1.ObjectMeta{Name: "pv1"}},
 		&corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{Name: "n1"},
-			Status: corev1.NodeStatus{Capacity: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("4"),
-				corev1.ResourceMemory: resource.MustParse("8Gi"),
-			}},
+			Status: corev1.NodeStatus{
+				Capacity:    corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("4"), corev1.ResourceMemory: resource.MustParse("8Gi")},
+				Allocatable: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("3900m"), corev1.ResourceMemory: resource.MustParse("7Gi")},
+			},
 		},
 	}
 }
@@ -78,9 +78,9 @@ func TestClusterInformers_OverviewFromStore(t *testing.T) {
 	if status["Running"] != 2 || status["Pending"] != 1 || status["Failed"] != 1 || status["Succeeded"] != 0 {
 		t.Errorf("pod_status = %v", status)
 	}
-	caps := ci.nodeCapacities()
-	if c := caps["n1"]; c.cpuNano != 4_000_000_000 || c.memBytes != 8<<30 {
-		t.Errorf("n1 capacity = %+v", c)
+	alloc := ci.nodeAllocatables()
+	if c := alloc["n1"]; c.cpuMilli != 3900 || c.memBytes != 7<<30 {
+		t.Errorf("n1 allocatable = %+v", c)
 	}
 
 	// Reads are served from memory: no list per overview (the reflectors' own
@@ -97,7 +97,7 @@ func TestClusterInformers_OverviewFromStore(t *testing.T) {
 	before := lists()
 	for i := 0; i < 50; i++ {
 		ci.overview()
-		ci.nodeCapacities()
+		ci.nodeAllocatables()
 	}
 	if got := lists(); got != before {
 		t.Errorf("overview issued %d list calls", got-before)
@@ -245,9 +245,9 @@ func TestService_GetClusterOverview_FromInformers(t *testing.T) {
 	if _, ok := ov["cluster_version"]; !ok {
 		t.Error("cluster_version missing")
 	}
-	caps := s.nodeCapacities(context.Background())
-	if caps["n1"].cpuNano != 4_000_000_000 {
-		t.Errorf("nodeCapacities = %+v", caps)
+	alloc := s.nodeAllocatables(context.Background())
+	if alloc["n1"].cpuMilli != 3900 {
+		t.Errorf("nodeAllocatables = %+v", alloc)
 	}
 }
 

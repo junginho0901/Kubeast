@@ -305,19 +305,16 @@ func (ci *clusterInformers) overviewFor(scope []string) map[string]interface{} {
 	}
 }
 
-// nodeCapacities returns each node's CPU (nanocores) and memory (bytes) capacity.
-func (ci *clusterInformers) nodeCapacities() map[string]nodeCapacity {
+// nodeAllocatables returns each node's allocatable CPU and memory, what kubectl top divides by.
+func (ci *clusterInformers) nodeAllocatables() map[string]nodeAllocatable {
 	ci.touch()
-	out := map[string]nodeCapacity{}
+	out := map[string]nodeAllocatable{}
 	for _, o := range ci.nodes.List() {
 		n, ok := o.(*corev1.Node)
 		if !ok {
 			continue
 		}
-		out[n.Name] = nodeCapacity{
-			cpuNano:  n.Status.Capacity.Cpu().MilliValue() * 1000000,
-			memBytes: n.Status.Capacity.Memory().Value(),
-		}
+		out[n.Name] = allocatableOf(n)
 	}
 	return out
 }
@@ -385,7 +382,7 @@ func (ci *clusterInformers) nodeSummaries(now time.Time) *nodeList {
 	return ci.nodeList
 }
 
-// stripNode keeps what overview, nodeCapacities and formatNodeSummary read;
+// stripNode keeps what overview, nodeAllocatables and formatNodeSummary read;
 // the condition times and messages go, so a status heartbeat changes only the
 // resourceVersion (sameNodeView).
 func stripNode(o *corev1.Node) *corev1.Node {
@@ -413,7 +410,7 @@ func sameNodeView(a, b *corev1.Node) bool {
 	return equality.Semantic.DeepEqual(&ac, &bc)
 }
 
-// stripForOverview keeps only what overview, nodeCapacities and the node list
+// stripForOverview keeps only what overview, nodeAllocatables and the node list
 // read; the informer stores the returned object instead of the full one. Pods
 // become podRows before this (newClusterInformers).
 func stripForOverview(obj interface{}) (interface{}, error) {

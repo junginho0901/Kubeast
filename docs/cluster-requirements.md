@@ -96,6 +96,7 @@ kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator 
 
 The node list, the Monitoring screen and the node drawer read their usage from `metrics.k8s.io`.
 So does the optimization table when there is no Prometheus (point-in-time values).
+A node's CPU, memory and percents are what `kubectl top nodes` prints: the share of the node's allocatable, not its capacity.
 
 - Install: [metrics-server chart](https://artifacthub.io/packages/helm/metrics-server/metrics-server) `3.14.0` (app 0.9.0), with `helm install metrics-server metrics-server/metrics-server --version 3.14.0 -n kube-system`.
   - On EKS the metrics-server add-on also works.
