@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"os"
@@ -128,20 +129,27 @@ type PolicyReportSummary struct {
 	Namespaces  []PolicyReportNamespaceRow `json:"namespaces"`
 }
 
-// PolicyReportFilter narrows GET /api/v1/policyreports/results. Force reads
-// the cluster again instead of the minute cache (the page's refresh button).
+// PolicyReportFilter narrows GET /api/v1/policyreports/results and picks a
+// page: Offset rows skipped, Limit rows kept, in Sort order ("result",
+// "policy", "namespace" or "name", else worst first). Force reads the cluster
+// again instead of the minute cache (the page's refresh button).
 type PolicyReportFilter struct {
 	Namespace  string
 	Policy     string
+	Source     string
 	Kind       string
 	Search     string
 	Results    []string
 	Severities []string
+	Offset     int
 	Limit      int
+	Sort       string
+	Desc       bool
 	Force      bool
 }
 
-// PolicyReportResults is the filtered rows; Total counts the matches before Limit.
+// PolicyReportResults is one page of the filtered rows; Total counts every
+// match. Truncated says the cluster held more reports than one read takes.
 type PolicyReportResults struct {
 	GeneratedAt string               `json:"generated_at"`
 	Truncated   bool                 `json:"truncated"`
@@ -205,21 +213,29 @@ func (s *Service) PolicyReportSummary(ctx context.Context, namespace string, for
 		Policies:    []PolicyReportPolicyRow{},
 		Namespaces:  []PolicyReportNamespaceRow{},
 	}
+	// a policy is its name within its source: two engines may name a policy alike
 	policies := map[string]*PolicyReportPolicyRow{}
 	policyNS := map[string]map[string]bool{}
 	namespaces := map[string]*PolicyReportNamespaceRow{}
 	nsPolicies := map[string]map[string]bool{}
 	for _, r := range set.results {
 		out.Totals.add(r.Result)
-		p, ok := policies[r.Policy]
+		key := r.Source + "\x00" + r.Policy
+		p, ok := policies[key]
 		if !ok {
-			p = &PolicyReportPolicyRow{Policy: r.Policy, Category: r.Category, Severity: r.Severity, Source: r.Source}
-			policies[r.Policy] = p
-			policyNS[r.Policy] = map[string]bool{}
+			p = &PolicyReportPolicyRow{Policy: r.Policy, Source: r.Source}
+			policies[key] = p
+			policyNS[key] = map[string]bool{}
+		}
+		if p.Category == "" {
+			p.Category = r.Category
+		}
+		if p.Severity == "" {
+			p.Severity = r.Severity
 		}
 		p.add(r.Result)
 		if r.Namespace != "" {
-			policyNS[r.Policy][r.Namespace] = true
+			policyNS[key][r.Namespace] = true
 		}
 		n, ok := namespaces[r.Namespace]
 		if !ok {
@@ -228,10 +244,10 @@ func (s *Service) PolicyReportSummary(ctx context.Context, namespace string, for
 			nsPolicies[r.Namespace] = map[string]bool{}
 		}
 		n.add(r.Result)
-		nsPolicies[r.Namespace][r.Policy] = true
+		nsPolicies[r.Namespace][key] = true
 	}
-	for name, p := range policies {
-		for ns := range policyNS[name] {
+	for key, p := range policies {
+		for ns := range policyNS[key] {
 			p.Namespaces = append(p.Namespaces, ns)
 		}
 		sort.Strings(p.Namespaces)
@@ -248,7 +264,10 @@ func (s *Service) PolicyReportSummary(ctx context.Context, namespace string, for
 		if a.Warn != b.Warn {
 			return a.Warn > b.Warn
 		}
-		return a.Policy < b.Policy
+		if a.Policy != b.Policy {
+			return a.Policy < b.Policy
+		}
+		return a.Source < b.Source
 	})
 	for ns, n := range namespaces {
 		n.Policies = len(nsPolicies[ns])
@@ -297,6 +316,9 @@ func (s *Service) PolicyReportResults(ctx context.Context, f PolicyReportFilter)
 		if f.Policy != "" && r.Policy != f.Policy {
 			continue
 		}
+		if f.Source != "" && r.Source != f.Source {
+			continue
+		}
 		if kind != "" && strings.ToLower(r.Kind) != kind {
 			continue
 		}
@@ -309,20 +331,13 @@ func (s *Service) PolicyReportResults(ctx context.Context, f PolicyReportFilter)
 		rows = append(rows, r)
 	}
 	sort.SliceStable(rows, func(i, j int) bool {
-		a, b := rows[i], rows[j]
-		if policyReportResultRank[a.Result] != policyReportResultRank[b.Result] {
-			return policyReportResultRank[a.Result] < policyReportResultRank[b.Result]
+		if c := policyReportCompare(rows[i], rows[j], f.Sort); c != 0 {
+			if f.Desc {
+				return c > 0
+			}
+			return c < 0
 		}
-		if a.Namespace != b.Namespace {
-			return a.Namespace < b.Namespace
-		}
-		if a.Kind != b.Kind {
-			return a.Kind < b.Kind
-		}
-		if a.Name != b.Name {
-			return a.Name < b.Name
-		}
-		return a.Policy < b.Policy
+		return policyReportCompare(rows[i], rows[j], "") < 0
 	})
 	out := &PolicyReportResults{GeneratedAt: set.at.UTC().Format(time.RFC3339), Truncated: set.truncated, Scoped: scoped, Total: len(rows)}
 	limit := f.Limit
@@ -332,12 +347,33 @@ func (s *Service) PolicyReportResults(ctx context.Context, f PolicyReportFilter)
 	if limit > PolicyReportResultsCap {
 		limit = PolicyReportResultsCap
 	}
-	if len(rows) > limit {
-		rows = rows[:limit]
-		out.Truncated = true
-	}
-	out.Rows = rows
+	start := min(max(f.Offset, 0), len(rows))
+	out.Rows = rows[start:min(start+limit, len(rows))]
 	return out, nil
+}
+
+// policyReportCompare orders two rows by one column — "result" (worst first),
+// "policy", "namespace" or "name" (kind/name) — or, for "", worst first, then
+// namespace, resource, policy and the rest, so every page cuts the same order.
+func policyReportCompare(a, b PolicyReportResult, by string) int {
+	switch by {
+	case "result":
+		return cmp.Compare(policyReportResultRank[a.Result], policyReportResultRank[b.Result])
+	case "policy":
+		return cmp.Or(cmp.Compare(a.Policy, b.Policy), cmp.Compare(a.Source, b.Source))
+	case "namespace":
+		return cmp.Compare(a.Namespace, b.Namespace)
+	case "name":
+		return cmp.Or(cmp.Compare(a.Kind, b.Kind), cmp.Compare(a.Name, b.Name))
+	case "":
+		return cmp.Or(
+			cmp.Compare(policyReportResultRank[a.Result], policyReportResultRank[b.Result]),
+			cmp.Compare(a.Namespace, b.Namespace), cmp.Compare(a.Kind, b.Kind), cmp.Compare(a.Name, b.Name),
+			cmp.Compare(a.Policy, b.Policy), cmp.Compare(a.Source, b.Source), cmp.Compare(a.Rule, b.Rule),
+			cmp.Compare(a.Report, b.Report), cmp.Compare(a.Message, b.Message),
+		)
+	}
+	return 0
 }
 
 var policyReportWorkloadKinds = map[string]bool{"Deployment": true, "StatefulSet": true, "DaemonSet": true, "ReplicaSet": true, "Job": true, "CronJob": true}

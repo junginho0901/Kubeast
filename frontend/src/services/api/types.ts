@@ -738,7 +738,8 @@ export interface PolicyReportSummary {
   namespaces: PolicyReportNamespaceRow[]
 }
 
-// GET /api/v1/cluster/policyreports/results — total counts the matches before the limit.
+// GET /api/v1/cluster/policyreports/results — one page (offset, limit) of the matches; total counts them all.
+// truncated: the cluster held more reports than one read takes, as the summary's.
 export interface PolicyReportResults {
   generated_at: string
   truncated: boolean

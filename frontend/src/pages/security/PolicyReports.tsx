@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation, Trans } from 'react-i18next'
 import { api } from '@/services/api'
 import type { PolicyReportNamespaceRow, PolicyReportPolicyRow, PolicyReportResult, PolicyReportResults, PolicyReportSummary } from '@/services/api/types'
@@ -16,7 +16,7 @@ import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react
 
 // Security → Policy Reports: what the cluster's policy engine (Kyverno, Trivy Operator, …) wrote into
 // wgpolicyk8s.io PolicyReports, aggregated by policy and by namespace, with the rows behind them.
-// Read-only; a cluster without the CRD says so.
+// Read-only; a cluster without the CRD says so. The results are paged and sorted by the server.
 
 type Tab = 'policies' | 'namespaces' | 'results'
 type ResultFilter = 'problems' | 'fail' | 'warn' | 'error' | 'pass' | 'skip' | 'all'
@@ -24,7 +24,8 @@ type SortKey = null | 'name' | 'fail' | 'warn' | 'pass' | 'result' | 'policy' | 
 const RESULT_PARAM: Record<ResultFilter, string> = { problems: '', fail: 'fail', warn: 'warn', error: 'error', pass: 'pass', skip: 'skip', all: 'pass,fail,warn,error,skip' }
 const RESULT_BADGE: Record<string, string> = { fail: 'badge-error', error: 'badge-error', warn: 'badge-warning', pass: 'badge-success', skip: 'badge-neutral' }
 const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info']
-const RESULTS_LIMIT = 500
+// a policy is its name within its source (two engines may name a policy alike)
+const policyKey = (p: { policy: string; source?: string }) => `${p.source ?? ''}\n${p.policy}`
 
 export default function PolicyReports() {
   const { t } = useTranslation()
@@ -36,7 +37,10 @@ export default function PolicyReports() {
   const [namespace, setNamespace] = useState('')
   const [resultFilter, setResultFilter] = useState<ResultFilter>('problems')
   const [severity, setSeverity] = useState('')
-  const [policy, setPolicy] = useState('')
+  const [policyFilter, setPolicyFilter] = useState('')
+  const cut = policyFilter.indexOf('\n')
+  const policySource = cut < 0 ? '' : policyFilter.slice(0, cut)
+  const policy = cut < 0 ? '' : policyFilter.slice(cut + 1)
   const [searchQuery, setSearchQuery] = useState('')
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
@@ -61,18 +65,6 @@ export default function PolicyReports() {
     () => (summaryQuery.data && !Array.isArray(summaryQuery.data) ? (summaryQuery.data as PolicyReportSummary) : null),
     [summaryQuery.data],
   )
-  const resultsKey = ['cluster', 'policyreports', 'results', namespace, policy, resultFilter, severity, searchQuery]
-  const resultsParams = { namespace, policy, result: RESULT_PARAM[resultFilter], severity, search: searchQuery, limit: RESULTS_LIMIT }
-  const resultsQuery = useQuery({
-    queryKey: resultsKey,
-    queryFn: () => api.getPolicyReportResults(resultsParams),
-    enabled: installed && tab === 'results',
-    retry: false,
-  })
-  const results = useMemo<PolicyReportResults | null>(
-    () => (resultsQuery.data && !Array.isArray(resultsQuery.data) ? (resultsQuery.data as PolicyReportResults) : null),
-    [resultsQuery.data],
-  )
   const { data: namespaceList } = useQuery({
     queryKey: ['namespaces'],
     queryFn: () => api.getNamespaces(),
@@ -89,7 +81,12 @@ export default function PolicyReports() {
     const rows = summary?.namespaces ?? []
     return search ? rows.filter((r) => r.namespace.toLowerCase().includes(search)) : rows
   }, [summary, search])
-  const resultRows = useMemo<PolicyReportResult[]>(() => results?.rows ?? [], [results])
+  // the same policy name from two sources: the picker names the source
+  const sharedPolicyNames = useMemo(() => {
+    const seen = new Map<string, number>()
+    for (const p of summary?.policies ?? []) seen.set(p.policy, (seen.get(p.policy) ?? 0) + 1)
+    return new Set([...seen].filter(([, n]) => n > 1).map(([name]) => name))
+  }, [summary])
 
   const handleSort = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) {
@@ -138,32 +135,45 @@ export default function PolicyReports() {
       default: return ''
     }
   }), [namespaceRows, sortKey, sortDir]) // eslint-disable-line react-hooks/exhaustive-deps
-  const sortedResults = useMemo(() => sortBy(resultRows, (r) => {
-    switch (sortKey) {
-      case 'result': return r.result
-      case 'policy': return r.policy
-      case 'namespace': return r.namespace
-      case 'name': return `${r.kind}/${r.name}`
-      default: return ''
-    }
-  }), [resultRows, sortKey, sortDir]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const rowCount = tab === 'policies' ? sortedPolicies.length : tab === 'namespaces' ? sortedNamespaces.length : sortedResults.length
   const { containerRef: tableContainerRef, bodyRef: tableBodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({
-    recalculationKey: `${tab}:${rowCount}`,
+    recalculationKey: tab === 'results' ? tab : `${tab}:${tab === 'policies' ? sortedPolicies.length : sortedNamespaces.length}`,
   })
+  // the results tab asks the server for the page on screen, in the order of its header
+  const resultsSort = sortKey === 'result' || sortKey === 'policy' || sortKey === 'namespace' || sortKey === 'name' ? sortKey : undefined
+  const resultsParams = {
+    namespace, policy, source: policySource, result: RESULT_PARAM[resultFilter], severity, search: searchQuery,
+    offset: (currentPage - 1) * rowsPerPage, limit: rowsPerPage, sort: resultsSort, dir: sortDir,
+  }
+  const resultsKey = ['cluster', 'policyreports', 'results', resultsParams]
+  const resultsQuery = useQuery({
+    queryKey: resultsKey,
+    queryFn: () => api.getPolicyReportResults(resultsParams),
+    enabled: installed && tab === 'results',
+    placeholderData: keepPreviousData,
+    retry: false,
+  })
+  const results = useMemo<PolicyReportResults | null>(
+    () => (resultsQuery.data && !Array.isArray(resultsQuery.data) ? (resultsQuery.data as PolicyReportResults) : null),
+    [resultsQuery.data],
+  )
+  const pagedResults = useMemo<PolicyReportResult[]>(() => results?.rows ?? [], [results])
+
+  const rowCount = tab === 'policies' ? sortedPolicies.length : tab === 'namespaces' ? sortedNamespaces.length : (results?.total ?? 0)
   const totalPages = Math.max(1, Math.ceil(rowCount / rowsPerPage))
   useEffect(() => {
     setCurrentPage(1)
     setSortKey(null)
-  }, [tab, namespace, policy, resultFilter, severity, searchQuery])
+  }, [tab, namespace, policyFilter, resultFilter, severity, searchQuery])
+  useEffect(() => {
+    if (tab === 'results') setCurrentPage(1)
+  }, [sortKey, sortDir]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages)
   }, [currentPage, totalPages])
   const pageSlice = <T,>(list: T[]): T[] => list.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage)
   const pagedPolicies = useMemo(() => pageSlice(sortedPolicies), [sortedPolicies, currentPage, rowsPerPage]) // eslint-disable-line react-hooks/exhaustive-deps
   const pagedNamespaces = useMemo(() => pageSlice(sortedNamespaces), [sortedNamespaces, currentPage, rowsPerPage]) // eslint-disable-line react-hooks/exhaustive-deps
-  const pagedResults = useMemo(() => pageSlice(sortedResults), [sortedResults, currentPage, rowsPerPage]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const aiSnapshot = useMemo(() => {
     if (!summary) return null
@@ -172,7 +182,7 @@ export default function PolicyReports() {
       source: 'base' as const,
       summary: `Policy reports: ${summary.totals.fail} fail, ${summary.totals.warn} warn, ${summary.totals.error} error over ${summary.reports} reports (${tab})`,
       data: {
-        filters: { tab, namespace: namespace || undefined, policy: policy || undefined, result: resultFilter, severity: severity || undefined, search: searchQuery || undefined, scoped: summary.scoped },
+        filters: { tab, namespace: namespace || undefined, policy: policy || undefined, policySource: policySource || undefined, result: resultFilter, severity: severity || undefined, search: searchQuery || undefined, scoped: summary.scoped },
         stats: { ...summary.totals, reports: summary.reports, truncated: summary.truncated },
         ...summarizeList(list as unknown as Record<string, unknown>[], {
           total: rowCount,
@@ -185,7 +195,7 @@ export default function PolicyReports() {
         }),
       },
     }
-  }, [summary, tab, pagedPolicies, pagedNamespaces, pagedResults, rowCount, currentPage, rowsPerPage, namespace, policy, resultFilter, severity, searchQuery])
+  }, [summary, tab, pagedPolicies, pagedNamespaces, pagedResults, rowCount, currentPage, rowsPerPage, namespace, policy, policySource, resultFilter, severity, searchQuery])
   useAIContext(aiSnapshot, [aiSnapshot])
 
   // Force refresh: past the server's one-minute cache, so a fix shows up as soon as the engine reports it.
@@ -208,8 +218,8 @@ export default function PolicyReports() {
     if (!r.kind || !r.name) return
     openDetail(r.namespace ? { kind: r.kind, namespace: r.namespace, name: r.name } : { kind: r.kind, name: r.name })
   }
-  const showPolicy = (name: string) => {
-    setPolicy(name)
+  const showPolicy = (p: PolicyReportPolicyRow) => {
+    setPolicyFilter(policyKey(p))
     setTab('results')
   }
   const showNamespace = (ns: string) => {
@@ -328,10 +338,13 @@ export default function PolicyReports() {
                 <CustomDropdown
                   size="sm"
                   testId="policy-reports-policy"
-                  value={policy}
-                  onChange={setPolicy}
+                  value={policyFilter}
+                  onChange={setPolicyFilter}
                   className="w-56"
-                  options={[{ value: '', label: tr('policyReports.allPolicies', 'All policies') }, ...(summary?.policies ?? []).map((p) => ({ value: p.policy, label: p.policy, testId: `policy-reports-policy-opt-${p.policy}` }))]}
+                  options={[{ value: '', label: tr('policyReports.allPolicies', 'All policies') }, ...(summary?.policies ?? []).map((p) => {
+                    const shared = sharedPolicyNames.has(p.policy)
+                    return { value: policyKey(p), label: shared ? `${p.policy} (${p.source || '-'})` : p.policy, testId: shared ? `policy-reports-policy-opt-${p.policy}-${p.source || ''}` : `policy-reports-policy-opt-${p.policy}` }
+                  })]}
                 />
               </>
             )}
@@ -418,7 +431,7 @@ export default function PolicyReports() {
                 </thead>
                 <tbody className="divide-y divide-slate-700">
                   {tab === 'policies' && pagedPolicies.map((r, idx) => (
-                    <tr ref={idx === 0 ? firstRowRef : undefined} key={r.policy} data-testid="policy-report-row" className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => showPolicy(r.policy)}>
+                    <tr ref={idx === 0 ? firstRowRef : undefined} key={policyKey(r)} data-testid="policy-report-row" className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => showPolicy(r)}>
                       <td className="py-3 px-4 font-medium text-ink"><span className="block truncate" title={r.policy}>{r.policy}</span></td>
                       <td className="col-optional py-3 px-4 text-xs"><span className="block truncate" title={r.category}>{r.category || '-'}</span></td>
                       <td className="py-3 px-4 text-xs">{r.severity || '-'}</td>

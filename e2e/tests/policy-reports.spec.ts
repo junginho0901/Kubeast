@@ -87,6 +87,8 @@ test.describe('policy reports', () => {
     expect(await missing.json()).toEqual([])
     const bad = await request.get(`/api/v1/cluster/namespaces/${NS}/policyreports/resource?cluster=default`, { headers: bearer(admin), failOnStatusCode: false })
     expect(bad.status()).toBe(400)
+    const badSort = await request.get('/api/v1/cluster/policyreports/results?cluster=default&sort=age', { headers: bearer(admin), failOnStatusCode: false })
+    expect(badSort.status()).toBe(400)
   })
 
   test('the summary counts what the cluster holds, per policy and per namespace, and the fixture shows up with both failures', async ({ request }) => {
