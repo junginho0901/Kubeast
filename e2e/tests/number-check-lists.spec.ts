@@ -740,7 +740,11 @@ const CR_SCREEN: Screen = {
   path: '/custom-resources/instances', api: '/apis/numbers.kubeast.io/v1/widgets', plural: 'widgets.numbers.kubeast.io', allNamespaces: true, cluster: 'test2',
   prepare: async (page) => {
     await page.getByTestId('cr-instances-kind').click()
-    await page.getByRole('button', { name: 'Widget (numbers.kubeast.io)', exact: true }).click()
+    // the picker tells the two Widget kinds apart by group; without that entry the plain "Widget" is read on
+    const named = page.getByRole('button', { name: 'Widget (numbers.kubeast.io)', exact: true })
+    const told = await named.waitFor({ timeout: 10_000 }).then(() => true, () => false)
+    expect.soft(told, 'the kind picker names the group of a Kind two CRDs share').toBe(true)
+    await (told ? named : page.getByRole('button', { name: 'Widget', exact: true })).click()
   },
   // the API server prints a date column as its age ("5m1s"), which grows while it is read
   spans: { Seen: (o) => !!o.status?.lastSeen },
