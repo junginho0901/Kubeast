@@ -47,6 +47,7 @@ export default function ReleaseFilters({
       <div className="relative" ref={nsRef}>
         <button
           type="button"
+          data-testid="helm-namespace"
           onClick={() => setNsOpen(!nsOpen)}
           className="h-12 w-full px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent flex items-center justify-between gap-2"
         >
@@ -61,6 +62,7 @@ export default function ReleaseFilters({
           <div className="absolute top-full left-0 mt-2 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-100 max-h-[260px] overflow-y-auto">
             <button
               type="button"
+              data-testid="helm-namespace-opt-all"
               onClick={() => {
                 onNamespaceChange('')
                 setNsOpen(false)
@@ -76,6 +78,7 @@ export default function ReleaseFilters({
               <button
                 key={ns}
                 type="button"
+                data-testid={`helm-namespace-opt-${ns}`}
                 onClick={() => {
                   onNamespaceChange(ns)
                   setNsOpen(false)

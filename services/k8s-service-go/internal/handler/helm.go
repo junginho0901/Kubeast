@@ -19,7 +19,7 @@ import (
 // Write endpoints (rollback / upgrade / uninstall / test) live in
 // helm_write.go and will land as part of v1.1.
 
-// GetHelmReleases handles GET /api/v1/helm/releases.
+// GetHelmReleases handles GET /api/v1/helm/releases?namespace=&status=&force_refresh=.
 func (h *Handler) GetHelmReleases(w http.ResponseWriter, r *http.Request) {
 	if err := h.requirePermissionForCluster(r, "resource.helm.read"); err != nil {
 		h.handleError(w, err)
@@ -27,7 +27,7 @@ func (h *Handler) GetHelmReleases(w http.ResponseWriter, r *http.Request) {
 	}
 	namespace := queryParam(r, "namespace", "")
 	status := queryParam(r, "status", "")
-	items, err := h.helmSvc.ListReleases(r.Context(), namespace, status)
+	items, err := h.helmSvc.ListReleases(r.Context(), namespace, status, queryParamBool(r, "force_refresh", false))
 	if err != nil {
 		h.handleHelmError(w, err)
 		return

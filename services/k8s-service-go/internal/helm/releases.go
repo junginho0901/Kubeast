@@ -36,16 +36,17 @@ func listCacheKey(ctx context.Context, clusterID, namespace, status string) stri
 //
 // The status filter is applied by Helm SDK before the cache is consulted,
 // so per-status queries are cached under distinct keys.
-func (s *Service) ListReleases(ctx context.Context, namespace, status string) ([]ReleaseSummary, error) {
+func (s *Service) ListReleases(ctx context.Context, namespace, status string, force bool) ([]ReleaseSummary, error) {
 	// Scope the cache by cluster — otherwise one cluster's release list is served
 	// for another (the list page would show the prior cluster's releases after a
-	// switch, then 404 on click).
+	// switch, then 404 on click). force (the page's Refresh) reads the cluster
+	// again: a change made outside Kubeast does not clear the cache.
 	clusterID := "default"
 	if id, ok := cluster.FromContext(ctx); ok && id != "" {
 		clusterID = string(id)
 	}
 	cacheKey := listCacheKey(ctx, clusterID, namespace, status)
-	if s.cache != nil {
+	if s.cache != nil && !force {
 		var cached []ReleaseSummary
 		if s.cache.Get(ctx, cacheKey, &cached) {
 			return cached, nil

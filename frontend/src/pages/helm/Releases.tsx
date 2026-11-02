@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Loader2, RefreshCw } from 'lucide-react'
 import { api, type HelmReleaseSummary } from '@/services/api'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useHelmWatchList } from '@/services/useHelmWatchList'
 import { useCluster } from '@/contexts/ClusterContext'
+import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 import {
   sortReleases,
   type SortKey,
@@ -20,7 +21,10 @@ export default function HelmReleasesPage() {
   const { t } = useTranslation()
   const { currentCluster } = useCluster()
   const cluster = currentCluster || 'default'
-  const [namespace, setNamespace] = useState<string>('')
+  // the namespace sits in the address (?namespace=), as on the other list pages
+  const [namespaceParam, setNamespaceParam] = useNamespaceParam()
+  const namespace = namespaceParam === 'all' ? '' : namespaceParam
+  const setNamespace = (ns: string) => setNamespaceParam(ns || 'all')
   const [q, setQ] = useState<string>('')
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<SortDir>('asc')
@@ -28,16 +32,22 @@ export default function HelmReleasesPage() {
 
   // Initial REST fetch primes the cache; the watch below keeps it fresh
   // event-by-event, so refetchInterval is gone and staleTime is Infinity.
-  // refetch() (used by the manual "Refresh" button) still does a full
-  // list which is useful as a recovery hatch if the WS ever desyncs.
+  // The Refresh button reads the cluster again past the server's 30-second
+  // list cache — the recovery hatch if the stream ever desyncs.
   // Cluster is part of the key so a switch is a distinct query (no cross-cluster
   // bleed) and the watch below writes events into the right cluster's cache.
   const queryKey = useMemo(
     () => ['helm-releases', cluster, namespace] as const,
     [cluster, namespace],
   )
+  const queryClient = useQueryClient()
+  const refresh = () => queryClient.fetchQuery({
+    queryKey,
+    queryFn: () => api.helm.listReleases({ ...(namespace ? { namespace } : {}), force_refresh: true }),
+    staleTime: 0,
+  }).catch(() => undefined)
 
-  const { data, isLoading, isFetching, refetch, error } = useQuery({
+  const { data, isLoading, isFetching, error } = useQuery({
     queryKey,
     queryFn: () => api.helm.listReleases(namespace ? { namespace } : undefined),
     // keepPreviousData for smooth namespace-filter changes, but only within the
@@ -105,14 +115,20 @@ export default function HelmReleasesPage() {
     ]
   }, [stats, t, helmForbidden])
 
-  // Derive namespace dropdown from the release list itself — no need
-  // for a separate /namespaces call, and it keeps the selector in sync
-  // with what the user can actually pick.
+  // The picker offers the cluster's namespaces, as the other list pages do: a list read for one namespace holds that
+  // namespace only, so picking from it left no way to the others.
+  const { data: namespaceList } = useQuery({
+    queryKey: ['namespaces'],
+    queryFn: () => api.getNamespaces(),
+    staleTime: 30_000,
+    enabled: !helmForbidden,
+  })
   const namespaces = useMemo(() => {
-    const set = new Set<string>()
+    const set = new Set<string>((namespaceList ?? []).map((n) => n.name))
     for (const r of items) set.add(r.namespace)
+    if (namespace) set.add(namespace)
     return Array.from(set).sort()
-  }, [items])
+  }, [namespaceList, items, namespace])
 
   const handleSort = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) {
@@ -172,7 +188,7 @@ export default function HelmReleasesPage() {
           <p className="mt-2 text-slate-400">{t('helmReleases.subtitle')}</p>
         </div>
         <button
-          onClick={() => refetch()}
+          onClick={() => void refresh()}
           disabled={isFetching}
           className="btn btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
