@@ -214,7 +214,8 @@ test.describe('Dashboard refactor — UI verification', () => {
 
     const refresh = page.getByRole('button', { name: /refresh|새로고침/i })
     await expect(refresh).toBeVisible()
-    const refetch = page.waitForResponse((r) => r.url().includes('/api/v1/cluster/overview') && r.url().includes('force_refresh=true'))
+    // Refresh reads this cluster's queries again (the list endpoints read no force_refresh)
+    const refetch = page.waitForResponse((r) => r.url().includes('/api/v1/cluster/overview'))
     await refresh.click()
     expect((await refetch).status()).toBe(200)
 
