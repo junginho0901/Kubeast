@@ -41,18 +41,15 @@ type IssuesOptions struct {
 	Now                   time.Time
 }
 
-// CollectIssues gathers the issues of the ctx cluster. Pods and nodes are
-// required; a list that fails elsewhere becomes an info issue of kind
-// Collector so the gap is visible instead of silent.
+// CollectIssues gathers the issues of the ctx cluster. Pods are required; a
+// list that fails elsewhere — nodes too, which a grant limited to namespaces
+// may not list — becomes an info issue of kind Collector so the gap is
+// visible instead of silent.
 func (s *Service) CollectIssues(ctx context.Context, opts IssuesOptions) ([]Issue, error) {
 	if opts.Now.IsZero() {
 		opts.Now = time.Now()
 	}
 	podIssues, err := s.podIssues(ctx, opts)
-	if err != nil {
-		return nil, err
-	}
-	nodes, err := s.GetNodes(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -64,6 +61,7 @@ func (s *Service) CollectIssues(ctx context.Context, opts IssuesOptions) ([]Issu
 		}
 		return items
 	}
+	nodes := collect("nodes", s.GetNodes)
 	deployments := collect("deployments", s.GetAllDeployments)
 	statefulsets := collect("statefulsets", s.GetAllStatefulSets)
 	daemonsets := collect("daemonsets", s.GetAllDaemonSets)
@@ -108,12 +106,19 @@ func (s *Service) podIssues(ctx context.Context, opts IssuesOptions) ([]Issue, e
 	return list("")
 }
 
-// warningEventRows: the Warning events since since (the API server selects type=Warning), read a page at a time,
-// the newest of each object kept — what mergeEvents takes from them.
+// warningEventRows: the Warning events since since (the API server selects type=Warning), read a page at a time —
+// in each namespace of a namespace-limited user's scope, as listAcrossNamespaces — the newest of each object kept:
+// what mergeEvents takes from them.
 func (s *Service) warningEventRows(ctx context.Context, since time.Time) ([]map[string]interface{}, error) {
+	return s.listAcrossNamespaces(ctx, func(namespace string) ([]map[string]interface{}, error) {
+		return s.warningEventRowsIn(ctx, namespace, since)
+	})
+}
+
+func (s *Service) warningEventRowsIn(ctx context.Context, namespace string, since time.Time) ([]map[string]interface{}, error) {
 	newest := map[string]*corev1.Event{}
 	var order []string
-	err := s.eachEvent(ctx, "", metav1.ListOptions{FieldSelector: "type=" + corev1.EventTypeWarning}, func(e *corev1.Event) {
+	err := s.eachEvent(ctx, namespace, metav1.ListOptions{FieldSelector: "type=" + corev1.EventTypeWarning}, func(e *corev1.Event) {
 		if eventTimestamp(*e).Before(since) {
 			return
 		}

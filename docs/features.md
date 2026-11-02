@@ -188,6 +188,7 @@
     - The namespace list is the grant list as is.
     - An "all namespaces" query goes through the list one by one and merges the results.
     - Dashboard counts are counted only within the list (`scoped: true`). Nodes and PVs are 0.
+    - The dashboard's issue check reads pods, workloads and Warning events in each namespace of the list. Nodes, which such a grant cannot list, show as an info row saying they were not read.
   - AI tools and MCP require `namespace` and refuse cluster-wide tools: overview, node metrics, apply, create, API list and cluster settings.
   - The cluster's Prometheus answers for the whole cluster, so its reads answer 403 to such grants. This covers `/prometheus/query`, `query_range`, `metrics`, `labels`, `rules`, `targets` and `/gpu/metrics`, whether the cluster reaches the store through the API server's proxy or as an external store with Kubeast's own credentials. Alerts and silences are refused the same way.
     - `/cluster/features` reports `prometheus.namespaceLimited`, and the drawers' Prometheus sections then say the metrics need a grant on the whole cluster instead of asking.

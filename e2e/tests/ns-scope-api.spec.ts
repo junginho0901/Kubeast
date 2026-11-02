@@ -23,7 +23,7 @@ function kubectlFor(kindName: string) {
   const kubeconfig = execSync(`kind get kubeconfig --name ${kindName}`, { encoding: 'utf8' })
   const kcPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-nsapi-')), 'kubeconfig')
   fs.writeFileSync(kcPath, kubeconfig, { mode: 0o600 })
-  return (args: string) => execSync(`kubectl --kubeconfig ${kcPath} ${args}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
+  return (args: string, input?: string) => execSync(`kubectl --kubeconfig ${kcPath} ${args}`, { encoding: 'utf8', input, stdio: ['pipe', 'pipe', 'pipe'] }).trim()
 }
 const kubectl = kubectlFor('kubeast')
 const tryKubectl = (args: string) => { try { return kubectl(args) } catch { return null } }
@@ -143,6 +143,83 @@ test.describe('namespace-scoped grant enforcement', () => {
         const ok = await rpc('k8s_get_resources', { cluster: CLUSTER, resource_type: 'configmaps', namespace: nsA })
         expect(ok.isError, ok.content?.[0]?.text).toBeFalsy()
         expect(ok.content[0].text).toContain('cm-a')
+      }
+    } finally {
+      if (userId) await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: bearer(admin), failOnStatusCode: false })
+      tryKubectl(`delete clusterrolebinding ${rbac}-imp --ignore-not-found`)
+      tryKubectl(`delete clusterrole ${rbac}-imp --ignore-not-found`)
+      tryKubectl(`delete namespace ${nsA} ${nsB} --ignore-not-found --wait=false`)
+    }
+  })
+
+  // The dashboard's "Check issues" for the same kind of grant: the namespace's issues and Warning events, the same as
+  // the admin's issues in that namespace, nothing of the namespace beside it, and the nodes — which the grant cannot
+  // list — as a row saying they were not read; on screen the rows, not "Failed to collect issues".
+  test('a Read grant limited to one namespace gets that namespace\'s issues, with the nodes as not read', async ({ request, browser }) => {
+    test.setTimeout(180_000)
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const s = Date.now().toString(36)
+    const nsA = `e2e-nsiss-a-${s}`
+    const nsB = `e2e-nsiss-b-${s}`
+    const email = `e2e-nsiss-${s}@kubeast.local`
+    const rbac = `e2e-nsiss-${s}`
+    let userId = ''
+    const warning = (ns: string, cm: string) => JSON.stringify({
+      apiVersion: 'v1', kind: 'Event',
+      metadata: { name: `${cm}.e2e`, namespace: ns },
+      involvedObject: { apiVersion: 'v1', kind: 'ConfigMap', namespace: ns, name: cm },
+      type: 'Warning', reason: 'E2EScopedWarning', message: `e2e warning on ${cm}`, count: 1,
+      firstTimestamp: new Date().toISOString(), lastTimestamp: new Date().toISOString(),
+      source: { component: 'e2e' },
+    })
+    const ids = (issues: { id: string }[]) => issues.map((i) => i.id).sort()
+    try {
+      kubectl(`create namespace ${nsA}`)
+      kubectl(`create namespace ${nsB}`)
+      kubectl(`-n ${nsA} create configmap cm-a --from-literal=k=a`)
+      kubectl(`-n ${nsB} create configmap cm-b --from-literal=k=b`)
+      kubectl('create -f -', warning(nsA, 'cm-a'))
+      kubectl('create -f -', warning(nsB, 'cm-b'))
+      kubectl(`create clusterrole ${rbac}-imp --verb=impersonate --resource=groups --resource-name=kubeast:role:read`)
+      kubectl(`create clusterrolebinding ${rbac}-imp --clusterrole=${rbac}-imp --serviceaccount=kubeast:k8s-service`)
+      kubectl(`-n ${nsA} create rolebinding ${rbac}-view --clusterrole=view --group=kubeast:role:read`)
+      userId = await createUser(request, admin, email)
+      const grant = await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/${CLUSTER}`, { headers: bearer(admin), data: { role: 'Read', namespaces: [nsA] } })
+      expect(grant.status(), await grant.text()).toBe(200)
+      const user = await login(request, email, PW)
+
+      type Issue = { id: string; kind: string; namespace?: string; name: string; reason?: string }
+      const adminIssues = (await (await get(request, admin, '/api/v1/cluster/issues?window=60')).json()).issues as Issue[]
+      expect(ids(adminIssues), 'the admin sees both warnings').toEqual(expect.arrayContaining([`ConfigMap/${nsA}/cm-a`, `ConfigMap/${nsB}/cm-b`]))
+      // the binding has reached the cluster once the namespace's own list answers
+      await expect.poll(async () => (await get(request, user, `/api/v1/cluster/namespaces/${nsA}/configmaps`)).status(), { timeout: 20_000 }).toBe(200)
+      // soft from here, so a run on the old code records every place it differs
+      const res = await get(request, user, '/api/v1/cluster/issues?window=60')
+      expect.soft(res.status(), `the limited user's issue check: ${(await res.text()).slice(0, 300)}`).toBe(200)
+      const mine: Issue[] = res.status() === 200 ? (await res.json()).issues : []
+      const objects = mine.filter((i) => i.kind !== 'Collector')
+      expect.soft(ids(objects), 'the issues of the granted namespace, as the admin sees them there')
+        .toEqual(ids(adminIssues.filter((i) => i.namespace === nsA)))
+      expect.soft(objects.find((i) => i.id === `ConfigMap/${nsA}/cm-a`)?.reason).toBe('E2EScopedWarning')
+      expect.soft(ids(mine).filter((id) => id.includes(nsB)), 'nothing of the namespace beside it').toEqual([])
+      expect.soft(mine.filter((i) => i.kind === 'Collector').map((i) => i.name), 'the nodes as not read, the events read').toEqual(['nodes'])
+
+      const ctx = await browser.newContext({ baseURL: process.env.E2E_BASE_URL || 'http://localhost:30080' })
+      try {
+        const page = await ctx.newPage()
+        await page.goto('/login')
+        await page.locator('input[autocomplete="email"]').first().fill(email)
+        await page.locator('input[type="password"]').first().fill(PW)
+        await page.locator('button[type="submit"]').first().click()
+        await page.waitForFunction(() => !document.querySelector('input[autocomplete="email"]'), { timeout: 20_000 })
+        await page.goto(`/?cluster=${CLUSTER}`)
+        await page.locator('button').filter({ hasText: /Check issues|이슈 확인/ }).first().click()
+        await expect.soft(page.getByTestId('issues-kind-ConfigMap')).toContainText('cm-a', { timeout: 20_000 })
+        await expect.soft(page.getByTestId('issues-kind-Collector')).toContainText('nodes')
+        await expect.soft(page.getByTestId('issues-error')).toHaveCount(0)
+        await expect.soft(page.getByTestId('issue-row')).toHaveCount(2)
+      } finally {
+        await ctx.close()
       }
     } finally {
       if (userId) await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: bearer(admin), failOnStatusCode: false })
