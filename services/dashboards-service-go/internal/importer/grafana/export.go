@@ -51,14 +51,21 @@ type exporter struct {
 	nextID   int
 
 	importedPanels map[string]model.Panel // the source file's panels, read when a library panel needs them
+	inlineLibrary  bool                   // library panels with their definition go out as plain panels
 }
 
 // Export writes d; see the comment above.
 func Export(d *model.Dashboard) ([]byte, *ExportReport, error) {
+	return exportClassic(d, false)
+}
+
+// exportClassic is Export; with inlineLibrary, a library panel the import drew
+// from its definition goes out as a plain panel (for the v2 export for sharing).
+func exportClassic(d *model.Dashboard, inlineLibrary bool) ([]byte, *ExportReport, error) {
 	if d == nil {
 		return nil, nil, fmt.Errorf("no dashboard")
 	}
-	ex := &exporter{d: d, rep: &ExportReport{}, native: d.Source == nil, inputs: map[string]bool{}, dsVar: map[string]string{}, panelIDs: map[int]bool{}, rowIDs: map[int]int{}}
+	ex := &exporter{d: d, rep: &ExportReport{}, native: d.Source == nil, inputs: map[string]bool{}, dsVar: map[string]string{}, panelIDs: map[int]bool{}, rowIDs: map[int]int{}, inlineLibrary: inlineLibrary}
 	ex.src = sourceClassic(d)
 	ex.srcVars = sourceVariables(ex.src)
 	root := ex.dashboard()
@@ -488,7 +495,11 @@ func (ex *exporter) row(i int, inner []json.RawMessage) json.RawMessage {
 func (ex *exporter) panel(it model.LayoutItem) json.RawMessage {
 	p := ex.d.Spec.Panels[it.Panel]
 	if raw := p.Ext["libraryPanelStub"]; raw != nil {
-		if ref, ok := ex.libraryReference(it, p, raw); ok {
+		if ex.inlineLibrary {
+			name, uid := libraryName(raw)
+			ex.rep.Adjusted = append(ex.rep.Adjusted, Finding{Path: "panels." + it.Panel, Reason: fmt.Sprintf(
+				"library panel %q (%s) written inline from its definition, as Grafana's v2 export for sharing externally does, under the title the dashboard shows", name, uid)})
+		} else if ref, ok := ex.libraryReference(it, p, raw); ok {
 			return mustJSON(ref)
 		}
 	}
@@ -608,16 +619,15 @@ func (ex *exporter) libraryReference(it model.LayoutItem, p model.Panel, raw jso
 	if json.Unmarshal(raw, &ref) != nil {
 		return nil, false
 	}
-	lp, _ := asObj(ref["libraryPanel"])
 	orig, found := ex.imported()[it.Panel]
 	now, then := p, orig
 	now.Title, then.Title = "", ""
 	a, errA := json.Marshal(now) // as sameModel: kept values compare as JSON, not as the bytes they came in
 	b, errB := json.Marshal(then)
 	if !found || errA != nil || errB != nil || string(a) != string(b) {
+		name, uid := libraryName(raw)
 		ex.rep.Adjusted = append(ex.rep.Adjusted, Finding{Path: "panels." + it.Panel, Reason: fmt.Sprintf(
-			"changed since the import: written as a plain panel, unlinked from library panel %q (%s), so that the importing Grafana shows the change",
-			strOf(lp["name"]), strOf(lp["uid"]))})
+			"changed since the import: written as a plain panel, unlinked from library panel %q (%s), so that the importing Grafana shows the change", name, uid)})
 		return nil, false
 	}
 	if p.Title != orig.Title {
@@ -626,6 +636,13 @@ func (ex *exporter) libraryReference(it model.LayoutItem, p model.Panel, raw jso
 	ref["id"] = mustJSON(ex.id(it.Panel))
 	ref["gridPos"] = mustJSON(map[string]int{"x": it.X, "y": it.Y, "w": it.W, "h": it.H})
 	return ref, true
+}
+
+// libraryName is the name and uid of the library panel a kept reference names.
+func libraryName(ref json.RawMessage) (name, uid string) {
+	r, _ := asObj(ref)
+	lp, _ := asObj(r["libraryPanel"])
+	return strOf(lp["name"]), strOf(lp["uid"])
 }
 
 // imported is the panels of the file the dashboard was imported from, as the

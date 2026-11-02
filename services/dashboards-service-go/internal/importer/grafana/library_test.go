@@ -268,3 +268,68 @@ func TestLibraryDefinitions(t *testing.T) {
 		t.Errorf("an empty list gave %v", got)
 	}
 }
+
+func TestExportV2Shared_LibraryPanelsGoInline(t *testing.T) {
+	d, _, _ := Import(mustRead(t, "testdata/library-panels.json"))
+	out, rep, err := ExportV2Shared(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	_ = json.Unmarshal(out, &got)
+	type el struct{ kind, title, group, expr, label string }
+	byID := map[string]el{}
+	for _, e := range mapOr(mapOr(got["spec"])["elements"]) {
+		m := mapOr(e)
+		spec := mapOr(m["spec"])
+		x := el{kind: fmtAny(m["kind"]), title: fmtAny(spec["title"])}
+		if qs := anyMaps(mapOr(mapOr(spec["data"])["spec"])["queries"]); len(qs) == 1 {
+			q := mapOr(mapOr(qs[0]["spec"])["query"])
+			if q["datasource"] != nil {
+				t.Errorf("panel %s keeps its data source: %s", js(spec["id"]), js(q))
+			}
+			x.group, x.expr, x.label = fmtAny(q["group"]), fmtAny(mapOr(q["spec"])["expr"]), fmtAny(mapOr(q["labels"])[exportLabel])
+		}
+		byID[js(spec["id"])] = x
+	}
+	cpu := "sum(rate(container_cpu_usage_seconds_total[5m])) by (pod)"
+	want := map[string]el{
+		"1": {"Panel", "CPU (library)", "prometheus", cpu, "prometheus-1"},
+		"2": {"Panel", "Requests", "prometheus", "sum(rate(http_requests_total[5m]))", "prometheus-2"},
+		"4": {"Panel", "CPU, this dashboard's title", "prometheus", cpu, "prometheus-1"},
+		"5": {"LibraryPanel", "Not in this file", "", "", ""},
+		"7": {"Panel", "Memory", "prometheus", "sum(container_memory_working_set_bytes)", "prometheus-1"},
+	}
+	if !reflect.DeepEqual(byID, want) {
+		t.Errorf("elements:\n got  %+v\n want %+v", byID, want)
+	}
+	inline, kept := 0, 0
+	for _, f := range rep.Adjusted {
+		if strings.Contains(f.Reason, "written inline from its definition") {
+			inline++
+		}
+		if strings.Contains(f.Reason, "stays a reference") {
+			kept++
+			if !strings.Contains(f.Reason, "lib-disk") {
+				t.Errorf("a library panel with its definition stayed a reference: %v", f)
+			}
+		}
+	}
+	if inline != 3 || kept != 1 {
+		t.Errorf("%d written inline and %d kept as references, want 3 and 1: %v", inline, kept, rep.Adjusted)
+	}
+	again, _, err := Import(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{"p1", "p4", "p7"} {
+		p := again.Spec.Panels[n]
+		if p.Kind == model.Unsupported || p.Ext["libraryPanelStub"] != nil || len(p.Queries) != 1 || p.Queries[0].Expr != d.Spec.Panels[n].Queries[0].Expr {
+			t.Errorf("%s imports back as %s %+v %v", n, p.Kind, p.Queries, sortedKeys(p.Ext))
+		}
+	}
+	plain, _, _ := ExportV2(d) // the export that is not for sharing keeps the references
+	if !strings.Contains(string(plain), `"kind": "LibraryPanel"`) || strings.Count(string(plain), `"kind": "LibraryPanel"`) != 4 {
+		t.Errorf("ExportV2 should keep the 4 library panel references")
+	}
+}

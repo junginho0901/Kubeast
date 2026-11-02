@@ -30,12 +30,15 @@ const (
 // ships their data source.
 //
 // A Kubeast-made dashboard's ${DS_…} inputs are shared the same way, one
-// <type>-<n> per store. Grafana inlines library panels from its library;
-// here none is at hand, so they stay references and are reported. A data
-// source's name is known where the dashboard names it (a bare name, a data
-// source variable's current text).
+// <type>-<n> per store. Grafana inlines library panels from its library
+// (convertLibraryPanelToInlinePanel) and then shares them as panels; here a
+// library panel goes inline where the import read its definition (a classic
+// file shared externally carries it in __elements), under the title the
+// dashboard shows (Grafana writes the definition's), and one without stays a
+// reference and is reported. A data source's name is known where the
+// dashboard names it (a bare name, a data source variable's current text).
 func ExportV2Shared(d *model.Dashboard) ([]byte, *ExportReport, error) {
-	r, rep, err := v2Resource(d)
+	r, rep, err := v2Resource(d, true)
 	if err != nil {
 		return nil, nil, err
 	}
