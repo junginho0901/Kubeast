@@ -1452,7 +1452,7 @@ test.describe('number check — list screens', () => {
         expect(await names(false)).not.toContain('num-ext')
         k.kubectl('apply -f -', JSON.stringify(helmSecret('num-ext', 1, 'deployed')))
         expect(await names(false), 'the cached list, read again within 30 s').not.toContain('num-ext')
-        expect(await names(true), 'a forced read').toContain('num-ext')
+        expect.soft(await names(true), 'a forced read').toContain('num-ext')
       })
       await page.goto(`${HELM.path}?cluster=${HELM.cluster}&namespace=${NS}`)
       await test.step('the Refresh button asks for the forced read', async () => {
