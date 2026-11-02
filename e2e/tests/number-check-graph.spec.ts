@@ -47,7 +47,9 @@ async function lists(page: Page): Promise<Map<string, string>> {
 
 test.describe('number check — resource graph', () => {
   test('the Resource Graph draws each pod and workload as its list does, and Issues keeps the ones drawn yellow or red', async ({ page }) => {
-    test.setTimeout(300_000)
+    test.setTimeout(420_000)
+    // a namespace left by an earlier run would hand over its settled objects: start from none
+    kubectl(`delete namespace ${NS} --wait=true --timeout=120s --ignore-not-found`)
     kubectl('apply -f -', FIXTURE)
     try {
       await test.step('the objects reach the states the check is about', async () => {
@@ -72,6 +74,8 @@ test.describe('number check — resource graph', () => {
           await expect(async () => {
             const { got, want } = await both()
             expect(got).toEqual(want)
+            // between its restarts the pod is a problem, as the Pods list says
+            expect(got.find(([id]) => id.startsWith(`Pod/${NS}/num-crash`))?.[1]).toMatch(/ error$/)
           }).toPass({ timeout: 60_000 })
         } catch {
           // record the difference and go on to the screen
@@ -82,8 +86,10 @@ test.describe('number check — resource graph', () => {
 
       await test.step('the screen: each box\'s border is its colour, and Issues keeps the yellow and red ones', async () => {
         await page.setViewportSize({ width: 2560, height: 1400 })
+        // the boxes against the answer the page itself drew them from (the crash-looping pod moves between reads)
+        const answer = page.waitForResponse((r) => r.url().includes('/api/') && r.url().includes('/resource-graph') && r.status() === 200)
         await page.goto(`${GRAPH.path}?cluster=${GRAPH.cluster}&namespace=${NS}`)
-        const nodes = (await api(page, `/api/v1/cluster/resource-graph?namespaces=${NS}`)).nodes as Box[]
+        const nodes = (await (await answer).json()).nodes as Box[]
         const boxes = () => page.locator('.react-flow__node[data-id]').evaluateAll((els) =>
           els.map((el) => ({ id: el.getAttribute('data-id') ?? '', border: getComputedStyle(el).borderTopColor })))
         await expect.poll(async () => (await boxes()).length, { timeout: 30_000 }).toBeGreaterThan(0)
@@ -97,12 +103,11 @@ test.describe('number check — resource graph', () => {
         })
         expect.soft(wrong, 'a box drawn other than its list').toEqual([])
         const problems = shown.filter((b) => b.border === COLOR.warn || b.border === COLOR.error).map((b) => b.id).sort()
-        expect.soft(problems, 'the crash-looping pod is among the problems').toContain(nodes.find((n) => n.id.startsWith(`Pod/${NS}/num-crash`))?.id)
         await page.getByRole('button', { name: /Issues/ }).click()
         await expect.poll(async () => (await boxes()).map((b) => b.id).sort(), { timeout: 20_000 }).toEqual(problems)
       })
     } finally {
-      kubectl(`delete namespace ${NS} --wait=false --ignore-not-found`)
+      kubectl(`delete namespace ${NS} --wait=true --timeout=120s --ignore-not-found`)
     }
   })
 })
