@@ -154,4 +154,55 @@ test.describe('Dashboard lists', () => {
     await page.getByPlaceholder(/Search|검색/).last().fill('e2e-pod-1')
     await expect.poll(() => pagerText(page)).toMatch(/1-21 of 21|21개 중 1-21/)
   })
+
+  test('the Namespaces window counts each namespace’s pods, Services and Deployments as kubectl lists them, and a search says how many of how many', async ({ page }) => {
+    const k = kubectlFor('kubeast')
+    const perNs = (kind: string) => {
+      const m = new Map<string, number>()
+      for (const ns of k(`get ${kind} -A --no-headers -o custom-columns=NS:.metadata.namespace`).split('\n').filter(Boolean)) m.set(ns, (m.get(ns) ?? 0) + 1)
+      return m
+    }
+    const names = k('get namespaces --no-headers -o custom-columns=N:.metadata.name').split('\n').filter(Boolean).sort()
+    await page.goto('/?cluster=self')
+    await page.getByTestId('stat-namespaces').click()
+    const rows = page.getByTestId('resource-modal-namespace-counts')
+    // pods come and go while the suite runs: read kubectl and the window again until they agree
+    await expect(async () => {
+      const [pods, svc, dep] = [perNs('pods'), perNs('services'), perNs('deployments')]
+      const want = Object.fromEntries(names.map((n) => [n, [pods.get(n) ?? 0, svc.get(n) ?? 0, dep.get(n) ?? 0].join(' ')]))
+      // each row: the namespace (its h3) and the three numbers of its summary line
+      const seen = await rows.evaluateAll((els) => els.map((e) => [
+        e.parentElement?.querySelector('h3')?.textContent ?? '',
+        (e.textContent ?? '').match(/\d+|-/g)?.join(' ') ?? '',
+      ]))
+      expect(seen.length, 'a row per namespace').toBe(names.length)
+      expect(Object.fromEntries(seen), 'pods, Services and Deployments per namespace').toEqual(want)
+    }).toPass({ timeout: 60_000 })
+
+    // a search keeps some of them: the header says how many of how many, as the pager does
+    await page.getByPlaceholder(/Search|검색/).last().fill('kube')
+    const kept = names.filter((n) => n.includes('kube')).length
+    expect(kept).toBeGreaterThan(0)
+    await expect(page.getByTestId('resource-modal-total')).toHaveText(new RegExp(`^(${kept} of ${names.length}|${names.length}개 중 ${kept}개)$`))
+    await page.getByPlaceholder(/Search|검색/).last().fill('')
+    await expect(page.getByTestId('resource-modal-total')).toHaveText(new RegExp(`^(Total ${names.length}|총 ${names.length})$`))
+  })
+
+  test('the Issues total says how many of how many while a search narrows the list', async ({ page }) => {
+    await page.goto('/?cluster=self')
+    // the answer the modal draws from
+    const answer = page.waitForResponse((r) => r.url().includes('/api/v1/cluster/issues'))
+    await page.locator('button').filter({ hasText: /Check issues|이슈 확인/ }).first().click()
+    const res = await answer
+    expect(res.ok(), `issues ${res.status()}`).toBe(true)
+    type Row = { kind: string; severity: string; namespace?: string; name: string; reason?: string; message?: string }
+    const all = (await res.json()).issues as Row[]
+    // the modal's search: kind, severity, namespace, name, reason and message
+    const failing = all.filter((i) => [i.kind, i.severity, i.namespace, i.name, i.reason, i.message].filter(Boolean).join(' ').toLowerCase().includes('e2e-failing-job')).length
+    expect(failing, 'the fixture\'s failed Job is an issue').toBeGreaterThan(0)
+    const total = page.getByTestId('issues-total')
+    await expect(total).toHaveText(String(all.length), { timeout: 20_000 })
+    await page.getByPlaceholder(/Search issues|이슈 검색/).fill('e2e-failing-job')
+    await expect(total).toHaveText(new RegExp(`^(${failing} of ${all.length}|${all.length}개 중 ${failing}개)$`))
+  })
 })

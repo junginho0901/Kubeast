@@ -15,6 +15,7 @@ import { DashboardPodNodeStatus } from './DashboardPodNodeStatus'
 import { DashboardNodeList } from './DashboardNodeList'
 import { StatsGrid } from './StatsGrid'
 import { PrometheusClusterMetrics } from './PrometheusClusterMetrics'
+import { namespaceCounts } from './namespaceCounts'
 import { IssuesModal } from './modals/IssuesModal'
 import { OptimizationModal } from './modals/OptimizationModal'
 import { ResourceModal } from './modals/ResourceModal'
@@ -110,8 +111,11 @@ export function DashboardBody() {
     isLoadingAllNamespaces,
     allServices,
     isLoadingServices,
+    isServicesError,
     allDeployments,
     isLoadingDeployments,
+    isDeploymentsError,
+    namespacePods,
     allPVCs,
     isLoadingPVCs,
     allPVs,
@@ -281,8 +285,8 @@ export function DashboardBody() {
   const isLoadingResource = () => {
     if (selectedResourceType === 'namespaces') return isLoadingNamespaces
     if (selectedResourceType === 'pods') return isLoadingPods
-    if (selectedResourceType === 'services') return isLoadingAllNamespaces || isLoadingServices
-    if (selectedResourceType === 'deployments') return isLoadingAllNamespaces || isLoadingDeployments
+    if (selectedResourceType === 'services') return isLoadingServices
+    if (selectedResourceType === 'deployments') return isLoadingDeployments
     if (selectedResourceType === 'pvcs') return isLoadingPVCs
     if (selectedResourceType === 'nodes') return isLoadingNodes
     return false
@@ -582,6 +586,14 @@ export function DashboardBody() {
         setSearchQuery={setModalSearchQuery}
         filteredResources={filteredResources}
         serverPage={selectedResourceType === 'pods' ? { total: podPage?.total ?? 0, page: podPageNo, setPage: setPodPageNo } : undefined}
+        namespaceCounts={selectedResourceType === 'namespaces' && Array.isArray(namespaces)
+          ? namespaceCounts(
+            namespaces.map((ns: { name: string }) => ns.name),
+            namespacePods,
+            isServicesError ? undefined : allServices,
+            isDeploymentsError ? undefined : allDeployments,
+          )
+          : undefined}
       />
     </div>
   )

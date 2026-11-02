@@ -26,6 +26,8 @@ import { useCluster } from '@/contexts/ClusterContext'
 import type { ResourceType } from '../types'
 
 export const DASHBOARD_POD_PAGE = 50
+// the server's most groups (PodGroupTopMax): past it the rest is one "(other)" and those namespaces get no pod count
+const NAMESPACE_POD_GROUPS = 1000
 
 interface Args {
   selectedResourceType: ResourceType | null
@@ -127,29 +129,29 @@ export function useDashboardQueries({
       isOptimizationModalOpen,
   })
 
-  const { data: allServices, isLoading: isLoadingServices } = useQuery({
+  // Every namespace's Services and Deployments in one request each (the server lists them as the caller, per
+  // namespace for a grant limited to namespaces); the Namespaces window counts them per namespace.
+  const { data: allServices, isLoading: isLoadingServices, isError: isServicesError } = useQuery({
     queryKey: ['all-services', ck],
-    queryFn: async () => {
-      if (!allNamespaces || !Array.isArray(allNamespaces)) return []
-      const services = await Promise.all(
-        allNamespaces.map((ns: any) => api.getServices(ns.name)),
-      )
-      return services.flat()
-    },
-    enabled: selectedResourceType === 'services' && !!allNamespaces,
+    queryFn: () => api.getAllServices(),
+    enabled: selectedResourceType === 'services' || selectedResourceType === 'namespaces',
+    retry: false,
   })
 
   // 전체 Deployments 목록
-  const { data: allDeployments, isLoading: isLoadingDeployments } = useQuery({
+  const { data: allDeployments, isLoading: isLoadingDeployments, isError: isDeploymentsError } = useQuery({
     queryKey: ['all-deployments', ck],
-    queryFn: async () => {
-      if (!allNamespaces || !Array.isArray(allNamespaces)) return []
-      const deployments = await Promise.all(
-        allNamespaces.map((ns: any) => api.getDeployments(ns.name)),
-      )
-      return deployments.flat()
-    },
-    enabled: (selectedResourceType === 'deployments' || isStorageModalOpen) && !!allNamespaces,
+    queryFn: () => api.getAllDeployments(),
+    enabled: selectedResourceType === 'deployments' || selectedResourceType === 'namespaces' || isStorageModalOpen,
+    retry: false,
+  })
+
+  // The Namespaces window's pod counts: the pods the caller may see, counted per namespace by the server.
+  const { data: namespacePods, isError: isNamespacePodsError } = useQuery({
+    queryKey: ['dashboard-namespace-pods', ck],
+    queryFn: () => api.getPodPage({ offset: 0, limit: 1, groups: 1, group_top: NAMESPACE_POD_GROUPS }),
+    enabled: selectedResourceType === 'namespaces',
+    retry: false,
   })
 
   // 전체 PVC 목록 — Storage 모달이 열려 있을 때는 사용률(Prometheus)까지.
@@ -290,8 +292,11 @@ export function useDashboardQueries({
     isLoadingAllNamespaces,
     allServices,
     isLoadingServices,
+    isServicesError,
     allDeployments,
     isLoadingDeployments,
+    isDeploymentsError,
+    namespacePods: isNamespacePodsError ? undefined : namespacePods?.by_namespace,
     allPVCs,
     isLoadingPVCs,
     allPVs,

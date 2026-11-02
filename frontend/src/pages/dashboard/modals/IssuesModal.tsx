@@ -32,7 +32,7 @@ interface Props {
   sortedIssues: IssueItem[]
   issuesByKind: Record<IssueKind, IssueItem[]>
   kinds: IssueKind[]
-  issuesSummary: { total: number; critical: number; warning: number; info: number }
+  issuesSummary: { total: number; critical: number; warning: number; info: number; all: number }
   onOpenIssue: (issue: IssueItem) => void
 }
 
@@ -61,7 +61,7 @@ export function IssuesModal({
 
   useAIContext(open && !isLoading ? {
     source: 'IssuesModal',
-    summary: `클러스터 문제 목록 — 전체 ${issuesSummary.total}건 (critical ${issuesSummary.critical}, warning ${issuesSummary.warning}, info ${issuesSummary.info})`,
+    summary: `클러스터 문제 목록 — 전체 ${issuesSummary.all}건${issuesSummary.total !== issuesSummary.all ? `, 검색으로 ${issuesSummary.total}건` : ''} (critical ${issuesSummary.critical}, warning ${issuesSummary.warning}, info ${issuesSummary.info})`,
     data: {
       filters: { search: searchQuery || undefined, window_minutes: windowMinutes ?? defaultWindowMinutes, include_restart_history: includeRestartHistory },
       generated_at: generatedAt,
@@ -116,7 +116,11 @@ export function IssuesModal({
 
           <div className="flex flex-wrap items-center gap-2 mb-4">
             <span className="text-xs text-slate-400">{tr('dashboard.issues.totalLabel', 'Total')}</span>
-            <span className="badge badge-info">{tr('dashboard.issues.totalCount', '{{count}}', { count: issuesSummary.total })}</span>
+            <span className="badge badge-info" data-testid="issues-total">
+              {issuesSummary.total !== issuesSummary.all
+                ? tr('dashboard.resourceModal.totalFiltered', '{{shown}} of {{count}}', { shown: issuesSummary.total, count: issuesSummary.all })
+                : tr('dashboard.issues.totalCount', '{{count}}', { count: issuesSummary.total })}
+            </span>
             <span className="badge badge-error">{tr('dashboard.issues.criticalLabel', 'Critical')} {issuesSummary.critical}</span>
             <span className="badge badge-warning">{tr('dashboard.issues.warningLabel', 'Warning')} {issuesSummary.warning}</span>
             <span className="badge badge-info">{tr('dashboard.issues.infoLabel', 'Info')} {issuesSummary.info}</span>

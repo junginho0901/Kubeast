@@ -2367,6 +2367,7 @@
     "resourceModal": {
       "loading": "불러오는 중...",
       "total": "총 {{count}}",
+      "totalFiltered": "{{count}}개 중 {{shown}}개",
       "searchPlaceholder": "검색...",
       "namespaceSummary": "Pod: {{pods}} | Service: {{services}} | Deployment: {{deployments}}",
       "noSearchResults": "검색 결과가 없습니다",
