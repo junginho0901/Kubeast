@@ -13,7 +13,7 @@ import {
 } from '@xyflow/react'
 import i18next from 'i18next'
 import type { ResourceGraphNode, ResourceGraphEdge, TrafficEnd, TrafficLine } from '@/services/api'
-import { edgeStyles, isIssueStatus, kindIcon, pointsUp, statusColor, type GroupBy } from './constants'
+import { edgeStyles, isIssueNode, kindIcon, nodeColor, pointsUp, type GroupBy } from './constants'
 import { applyElkLayout } from './elkLayout'
 import { boxHeight, buildTraffic, byPort, endText, lineColor, portText, BOX_HEIGHT, ROW_HEIGHT, ROWS_PADDING, type GraphView, type PortEdge, type PortRow, type TrafficEdge } from './traffic'
 
@@ -110,7 +110,7 @@ function groupLabel(n: ResourceGraphNode, icon: string, memberHits: number) {
         </div>
         <div className="mt-0.5 flex flex-wrap items-center gap-px" aria-hidden="true">
           {Array.from({ length: Math.min(count, GROUP_DOTS) }, (_, i) => (
-            <span key={i} className="block h-[3px] w-[5px] rounded-[1px]" style={{ background: statusColor(n.status) }} />
+            <span key={i} className="block h-[3px] w-[5px] rounded-[1px]" style={{ background: nodeColor(n) }} />
           ))}
           {count > GROUP_DOTS && <span className="ml-0.5 text-[9px] leading-none text-slate-400">+{count - GROUP_DOTS}</span>}
         </div>
@@ -151,7 +151,7 @@ export function useResourceGraphLayout({
     let gNodes = graphData.nodes.filter(n => kindFilters.has(n.kind))
 
     if (statusFilter === 'issues') {
-      gNodes = gNodes.filter(n => isIssueStatus(n.status))
+      gNodes = gNodes.filter(n => isIssueNode(n))
     }
 
     // Traffic lines: their ends on the nodes shown, or on stand-ins. The traffic view keeps only the nodes
@@ -198,7 +198,7 @@ export function useResourceGraphLayout({
     const q = searchQuery.toLowerCase()
     const rfNodes: Node[] = gNodes.map(n => {
       const icon = kindIcon[n.kind] || '📄'
-      const borderColor = statusColor(n.status)
+      const borderColor = nodeColor(n)
       // a group is found by its members' names too
       const memberHits = q && n.group ? (n.members ?? []).filter(m => m.toLowerCase().includes(q)).length : 0
       const isHighlighted = searchQuery && (n.name.toLowerCase().includes(q) || memberHits > 0)

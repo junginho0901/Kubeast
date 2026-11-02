@@ -35,11 +35,14 @@ const (
 
 // rgNode represents a node in the resource graph.
 type rgNode struct {
-	ID            string            `json:"id"`
-	Kind          string            `json:"kind"`
-	Name          string            `json:"name"`
-	Namespace     string            `json:"namespace"`
-	Status        string            `json:"status"`
+	ID        string `json:"id"`
+	Kind      string `json:"kind"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	Status    string `json:"status"`
+	// how the lists draw that status — ok, warn or error (a pod's podHealth, a workload's workloadHealth); empty for a
+	// kind the lists give no colour
+	Health        string            `json:"health,omitempty"`
 	Ready         string            `json:"ready,omitempty"`
 	Labels        map[string]string `json:"labels,omitempty"`
 	NodeName      string            `json:"nodeName,omitempty"`
@@ -74,8 +77,8 @@ type rgPod struct {
 	name, namespace string
 	labels          map[string]string
 	owners          []metav1.OwnerReference
-	node, phase     string
-	ready           string
+	node            string
+	status, ready   string // the Pods list's Status and READY (podListView)
 	health          uint8
 	restarts        int32
 	// what the pod mounts or reads env from, in the order the graph adds its edges
@@ -86,9 +89,10 @@ type rgPodRef struct{ kind, name string }
 
 func toRGPod(p *corev1.Pod) rgPod {
 	health, _ := podHealth(p)
+	status, ready, total, _ := podListView(p)
 	out := rgPod{
 		name: p.Name, namespace: p.Namespace, labels: p.Labels, node: p.Spec.NodeName,
-		phase: string(p.Status.Phase), ready: podReadyCount(p), health: health,
+		status: status, ready: fmt.Sprintf("%d/%d", ready, total), health: health,
 	}
 	for _, ref := range p.OwnerReferences {
 		out.owners = append(out.owners, metav1.OwnerReference{Kind: ref.Kind, Name: ref.Name})

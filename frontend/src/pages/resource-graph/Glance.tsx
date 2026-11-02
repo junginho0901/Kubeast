@@ -5,7 +5,7 @@
 
 import { useTranslation } from 'react-i18next'
 import type { ResourceGraphNode } from '@/services/api'
-import { kindIcon, statusColor } from './constants'
+import { kindIcon, nodeColor } from './constants'
 
 interface Props {
   node: ResourceGraphNode | null
@@ -16,7 +16,7 @@ export function Glance({ node, position }: Props) {
   const { t } = useTranslation()
   if (!node) return null
 
-  const borderColor = statusColor(node.status)
+  const borderColor = nodeColor(node)
 
   return (
     <div

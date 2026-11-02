@@ -30,6 +30,9 @@ func buildResourceGraphResponse(nodeMap map[string]rgNode, edges []rgEdge) map[s
 			"namespace": n.Namespace,
 			"status":    n.Status,
 		}
+		if n.Health != "" {
+			node["health"] = n.Health
+		}
 		if n.Ready != "" {
 			node["ready"] = n.Ready
 		}

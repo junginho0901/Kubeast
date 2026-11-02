@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { isIssueStatus, kindWeight, pointsUp, statusColor } from './constants'
+import { isIssueNode, kindWeight, nodeColor, pointsUp, statusColor } from './constants'
 
 // Every edge k8s-service draws (internal/k8s/resource_graph*.go), source → target.
 const SERVER_EDGES: Array<[string, string]> = [
@@ -45,12 +45,24 @@ describe('resource graph issues', () => {
     // a Deployment not yet ready ("Progressing") is drawn yellow, so the Issues filter keeps it too
     const issues = ['Pending', 'Failed', 'CrashLoopBackOff', 'ImagePullBackOff', 'Error', 'Terminating', 'Progressing']
     const fine = ['Running', 'Succeeded', 'Active', 'Bound', 'ClusterIP', 'NodePort', 'LoadBalancer', 'ExternalName', 'rancher.io/local-path', 'Available', 'Complete', '', undefined]
-    expect(issues.filter((s) => !isIssueStatus(s))).toEqual([])
-    expect(fine.filter((s) => isIssueStatus(s))).toEqual([])
+    expect(issues.filter((status) => !isIssueNode({ status }))).toEqual([])
+    expect(fine.filter((status) => isIssueNode({ status }))).toEqual([])
     // every status drawn yellow or red is an issue, and no other
-    for (const s of [...issues, ...fine]) {
-      const c = statusColor(s ?? '')
-      expect(isIssueStatus(s), `${s} is ${c}`).toBe(c === '#eab308' || c === '#ef4444')
+    for (const status of [...issues, ...fine]) {
+      const c = statusColor(status ?? '')
+      expect(isIssueNode({ status }), `${status} is ${c}`).toBe(c === '#eab308' || c === '#ef4444')
     }
+  })
+
+  // A pod or workload box is drawn as its list draws it (the server's health): a pod Running but not ready is yellow,
+  // CrashLoopBackOff red whatever its phase, a StatefulSet short of ready yellow, an Idle one grey.
+  it('takes the lists\' health over the status text', () => {
+    expect(nodeColor({ status: 'Running', health: 'warn' })).toBe('#eab308')
+    expect(isIssueNode({ status: 'Running', health: 'warn' })).toBe(true)
+    expect(isIssueNode({ status: 'CrashLoopBackOff', health: 'error' })).toBe(true)
+    expect(isIssueNode({ status: 'Degraded', health: 'warn' })).toBe(true)
+    expect(isIssueNode({ status: 'Completed', health: 'ok' })).toBe(false)
+    expect(nodeColor({ status: 'Idle' })).toBe('#64748b')
+    expect(isIssueNode({ status: 'Idle' })).toBe(false)
   })
 })

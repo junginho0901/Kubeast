@@ -90,14 +90,8 @@ func toPodRow(p *corev1.Pod, in *interner) *podRow {
 	if p.DeletionTimestamp != nil {
 		r.deleted = p.DeletionTimestamp.Unix()
 	}
-	// READY, RESTARTS and an initializing pod's Status as kubectl prints them (pod_init.go)
-	iv := podInitState(p)
-	ready, total, restarts := podCounts(p, iv)
+	status, ready, total, restarts := podListView(p)
 	r.ready, r.containers, r.restarts = uint16(ready), uint16(total), restarts
-	status := iv.status
-	if status == "" {
-		status = podListStatus(p, ready, total)
-	}
 	r.status = in.get(status)
 	if p.Spec.RuntimeClassName != nil {
 		r.runtimeClass = in.get(*p.Spec.RuntimeClassName)
@@ -162,6 +156,18 @@ func podLimits(p *corev1.Pod) (cpuMilli, memBytes int64) {
 // not all ready stays Running, as kubectl's STATUS (printPod) says: readiness is
 // the READY column, and the list draws that Running yellow (it said NotReady
 // until 10-31).
+// podListView is the Pods list's Status, READY and RESTARTS of a pod as kubectl prints them (pod_init.go for an
+// initializing pod); the Resource Graph's pod boxes show the same.
+func podListView(p *corev1.Pod) (status string, ready, total int, restarts int32) {
+	iv := podInitState(p)
+	ready, total, restarts = podCounts(p, iv)
+	status = iv.status
+	if status == "" {
+		status = podListStatus(p, ready, total)
+	}
+	return status, ready, total, restarts
+}
+
 func podListStatus(p *corev1.Pod, ready, total int) string {
 	if p.Status.Reason != "" {
 		return p.Status.Reason

@@ -1,0 +1,122 @@
+# The Resource Graph number check's objects, on self (number-check-graph.spec.ts makes them and removes the namespace):
+# a pod in CrashLoopBackOff (its phase stays Running), a Deployment whose pod never gets ready and that runs out of its
+# progress deadline, a StatefulSet with one of two pods ready, a Job that fails, and next to them ones that are fine.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: e2e-graph
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: num-crash
+  namespace: e2e-graph
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: num-crash}
+  template:
+    metadata:
+      labels: {app: num-crash}
+    spec:
+      terminationGracePeriodSeconds: 0
+      containers:
+      - name: app
+        image: busybox:1.37
+        command: [sh, -c, "exit 1"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: num-stuck
+  namespace: e2e-graph
+spec:
+  replicas: 1
+  progressDeadlineSeconds: 10
+  selector:
+    matchLabels: {app: num-stuck}
+  template:
+    metadata:
+      labels: {app: num-stuck}
+    spec:
+      terminationGracePeriodSeconds: 0
+      containers:
+      - name: app
+        image: busybox:1.37
+        command: [sleep, "3600"]
+        readinessProbe:
+          exec: {command: ["false"]}
+          periodSeconds: 2
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: num-fine
+  namespace: e2e-graph
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: num-fine}
+  template:
+    metadata:
+      labels: {app: num-fine}
+    spec:
+      terminationGracePeriodSeconds: 0
+      containers:
+      - name: app
+        image: busybox:1.37
+        command: [sleep, "3600"]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: num-sts
+  namespace: e2e-graph
+spec:
+  serviceName: num-sts
+  replicas: 2
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels: {app: num-sts}
+  template:
+    metadata:
+      labels: {app: num-sts}
+    spec:
+      terminationGracePeriodSeconds: 0
+      containers:
+      - name: app
+        image: busybox:1.37
+        command: [sleep, "3600"]
+        readinessProbe:
+          exec: {command: [sh, -c, 'test "$(hostname)" = num-sts-0']}
+          periodSeconds: 2
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: num-job-fail
+  namespace: e2e-graph
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: app
+        image: busybox:1.37
+        command: [sh, -c, "exit 1"]
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: num-job-ok
+  namespace: e2e-graph
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: app
+        image: busybox:1.37
+        command: ["true"]

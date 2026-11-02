@@ -8,8 +8,6 @@ package k8s
 
 import (
 	"fmt"
-
-	corev1 "k8s.io/api/core/v1"
 )
 
 // buildWorkloadGraph populates the resource graph with workload-related nodes
@@ -31,14 +29,16 @@ func buildWorkloadGraph(
 		if !inScope(d.Namespace) {
 			continue
 		}
-		ready := fmt.Sprintf("%d/%d", d.Status.ReadyReplicas, *d.Spec.Replicas)
-		status := "Running"
-		if d.Status.ReadyReplicas < *d.Spec.Replicas {
-			status = "Progressing"
+		replicas := int32(1)
+		if d.Spec.Replicas != nil {
+			replicas = *d.Spec.Replicas
 		}
+		ready := fmt.Sprintf("%d/%d", d.Status.ReadyReplicas, replicas)
+		// the boxes say what the lists say (workload_status.go)
+		status, _ := deploymentStatus(d)
 		addNode(rgNode{
 			ID: rgNodeID("Deployment", d.Namespace, d.Name), Kind: "Deployment",
-			Name: d.Name, Namespace: d.Namespace, Status: status, Ready: ready,
+			Name: d.Name, Namespace: d.Namespace, Status: status, Health: workloadHealth(status), Ready: ready,
 			Labels: d.Labels, InstanceLabel: d.Labels["app.kubernetes.io/instance"],
 		})
 	}
@@ -54,9 +54,10 @@ func buildWorkloadGraph(
 			replicas = *ss.Spec.Replicas
 		}
 		ready := fmt.Sprintf("%d/%d", ss.Status.ReadyReplicas, replicas)
+		status := replicaStatus(replicas, ss.Status.AvailableReplicas, ss.Status.ReadyReplicas)
 		addNode(rgNode{
 			ID: rgNodeID("StatefulSet", ss.Namespace, ss.Name), Kind: "StatefulSet",
-			Name: ss.Name, Namespace: ss.Namespace, Status: "Running", Ready: ready,
+			Name: ss.Name, Namespace: ss.Namespace, Status: status, Health: workloadHealth(status), Ready: ready,
 			Labels: ss.Labels, InstanceLabel: ss.Labels["app.kubernetes.io/instance"],
 		})
 	}
@@ -68,9 +69,10 @@ func buildWorkloadGraph(
 			continue
 		}
 		ready := fmt.Sprintf("%d/%d", ds.Status.NumberReady, ds.Status.DesiredNumberScheduled)
+		status := replicaStatus(ds.Status.DesiredNumberScheduled, ds.Status.NumberAvailable, ds.Status.NumberReady)
 		addNode(rgNode{
 			ID: rgNodeID("DaemonSet", ds.Namespace, ds.Name), Kind: "DaemonSet",
-			Name: ds.Name, Namespace: ds.Namespace, Status: "Running", Ready: ready,
+			Name: ds.Name, Namespace: ds.Namespace, Status: status, Health: workloadHealth(status), Ready: ready,
 			Labels: ds.Labels, InstanceLabel: ds.Labels["app.kubernetes.io/instance"],
 		})
 	}
@@ -92,9 +94,10 @@ func buildWorkloadGraph(
 		ready := fmt.Sprintf("%d/%d", rs.Status.ReadyReplicas, replicas)
 		rsID := rgNodeID("ReplicaSet", rs.Namespace, rs.Name)
 		ownerKind := ""
+		status := replicaStatus(replicas, rs.Status.AvailableReplicas, rs.Status.ReadyReplicas)
 		addNode(rgNode{
 			ID: rsID, Kind: "ReplicaSet",
-			Name: rs.Name, Namespace: rs.Namespace, Status: "Running", Ready: ready,
+			Name: rs.Name, Namespace: rs.Namespace, Status: status, Health: workloadHealth(status), Ready: ready,
 			Labels: rs.Labels,
 		})
 		for _, ref := range rs.OwnerReferences {
@@ -114,16 +117,11 @@ func buildWorkloadGraph(
 		if !inScope(job.Namespace) {
 			continue
 		}
-		status := "Running"
-		if job.Status.Succeeded > 0 {
-			status = "Succeeded"
-		} else if job.Status.Failed > 0 {
-			status = "Failed"
-		}
+		status := jobStatus(job)
 		jobID := rgNodeID("Job", job.Namespace, job.Name)
 		addNode(rgNode{
 			ID: jobID, Kind: "Job",
-			Name: job.Name, Namespace: job.Namespace, Status: status,
+			Name: job.Name, Namespace: job.Namespace, Status: status, Health: workloadHealth(status),
 			Labels: job.Labels,
 		})
 		for _, ref := range job.OwnerReferences {
@@ -163,7 +161,7 @@ func buildWorkloadGraph(
 		addNode(rgNode{
 			ID: podID, Kind: "Pod",
 			Name: pod.name, Namespace: pod.namespace,
-			Status: pod.phase, Ready: pod.ready, Labels: pod.labels,
+			Status: pod.status, Health: podHealthName(pod.health), Ready: pod.ready, Labels: pod.labels,
 			NodeName: pod.node, OwnerKind: ownerKind,
 			InstanceLabel: pod.labels["app.kubernetes.io/instance"],
 		})
@@ -185,16 +183,4 @@ func buildWorkloadGraph(
 	}
 
 	return edges
-}
-
-// podReadyCount returns "ready/total" for a pod's containers.
-func podReadyCount(pod *corev1.Pod) string {
-	total := len(pod.Spec.Containers)
-	ready := 0
-	for _, cs := range pod.Status.ContainerStatuses {
-		if cs.Ready {
-			ready++
-		}
-	}
-	return fmt.Sprintf("%d/%d", ready, total)
 }
