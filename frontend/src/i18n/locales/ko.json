@@ -2228,7 +2228,8 @@
       "services": "Service",
       "deployments": "Deployment",
       "pvcs": "PVC",
-      "nodes": "Node"
+      "nodes": "Node",
+      "refused": "이 클러스터에서 내 신원은 {{kind}} 목록을 볼 수 없어 세지 않습니다."
     },
     "issues": {
       "kind": {

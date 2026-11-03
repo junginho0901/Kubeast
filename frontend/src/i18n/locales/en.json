@@ -2226,7 +2226,8 @@
       "services": "Services",
       "deployments": "Deployments",
       "pvcs": "PVCs",
-      "nodes": "Nodes"
+      "nodes": "Nodes",
+      "refused": "Your identity in this cluster may not list {{kind}}, so they are not counted."
     },
     "issues": {
       "kind": {

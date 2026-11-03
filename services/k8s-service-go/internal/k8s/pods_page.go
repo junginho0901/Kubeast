@@ -441,17 +441,26 @@ func (s *Service) mayListPods(ctx context.Context, b *clientBundle, namespace st
 // mayList asks whether the caller may list resource (core group) in namespace
 // ("" = every namespace, or a cluster-scoped kind), remembered podAccessTTL.
 func (s *Service) mayList(ctx context.Context, b *clientBundle, resource, namespace string) (bool, error) {
+	return s.mayListGroup(ctx, b, "", resource, namespace)
+}
+
+// mayListGroup is mayList for a resource of any API group.
+func (s *Service) mayListGroup(ctx context.Context, b *clientBundle, group, resource, namespace string) (bool, error) {
 	if b.authz == nil {
 		return true, nil
 	}
-	key := s.clusterCacheKey(ctx, resource+"_list_allowed:"+namespace)
+	name := resource
+	if group != "" {
+		name = group + "/" + resource
+	}
+	key := s.clusterCacheKey(ctx, name+"_list_allowed:"+namespace)
 	var allowed bool
 	if s.cache != nil && s.cache.Get(ctx, key, &allowed) {
 		return allowed, nil
 	}
 	review, err := b.authz.SelfSubjectAccessReviews().Create(ctx, &authorizationv1.SelfSubjectAccessReview{
 		Spec: authorizationv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authorizationv1.ResourceAttributes{
-			Verb: "list", Resource: resource, Namespace: namespace,
+			Verb: "list", Group: group, Resource: resource, Namespace: namespace,
 		}},
 	}, metav1.CreateOptions{})
 	if err != nil {

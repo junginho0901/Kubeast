@@ -9,6 +9,8 @@ export interface StatItem {
   name: string
   resourceType: ResourceType
   value: number | string
+  /** why the value is not a number (a kind the caller may not list) */
+  title?: string
   icon: LucideIcon
 }
 
@@ -25,6 +27,7 @@ export function StatsGrid({ stats, onStatClick }: Props) {
           key={stat.name}
           data-testid={`stat-${stat.resourceType}`}
           onClick={() => onStatClick(stat.resourceType)}
+          title={stat.title}
           className="card hover:border-primary-500 transition-colors text-left cursor-pointer"
         >
           <div className="flex items-start justify-between">

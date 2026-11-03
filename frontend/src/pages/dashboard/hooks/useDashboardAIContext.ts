@@ -26,7 +26,9 @@ export function useDashboardAIContext({ overview, nodes, topResources, problemPo
     const nodeLabel = typeof overview.node_count === 'number'
       ? `노드 ${overview.node_count}개`
       : '노드 정보 없음'
-    const summary = `${prefix}클러스터 — ${nodeLabel}, Pod ${running}/${total} Running${unhealthy > 0 ? `, 문제 ${unhealthy}` : ''}`
+    // pods the caller's identity may not list are not counted (null), not "0 pods"
+    const podLabel = overview.total_pods === null ? 'Pod 목록 볼 권한 없음' : `Pod ${running}/${total} Running${unhealthy > 0 ? `, 문제 ${unhealthy}` : ''}`
+    const summary = `${prefix}클러스터 — ${nodeLabel}, ${podLabel}`
 
     const interpretations: string[] = []
     for (const [phase, count] of Object.entries(podStatus)) {
@@ -48,6 +50,7 @@ export function useDashboardAIContext({ overview, nodes, topResources, problemPo
           total_deployments: overview.total_deployments,
           total_pvcs: overview.total_pvcs,
           total_pvs: overview.total_pvs,
+          refused: overview.refused,
         },
         pod_status: podStatus,
         nodes: Array.isArray(nodes)
