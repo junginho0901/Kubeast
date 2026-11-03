@@ -8,7 +8,7 @@ import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useCanCreate } from '@/hooks/useCanCreate'
-import { useNotInstalled } from '@/services/listStatusStore'
+import { useKindServed } from '@/services/listStatusStore'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Plus, RefreshCw } from 'lucide-react'
@@ -52,8 +52,8 @@ export default function ReferenceGrants() {
         : api.getReferenceGrants(selectedNamespace, false)
     ),
   })
-  const notInstalled = useNotInstalled('referencegrants')
-  const canCreate = useCanCreate('resource.referencegrant.create', { group: 'gateway.networking.k8s.io', resource: 'referencegrants', namespace: selectedNamespace }) && !notInstalled
+  const served = useKindServed('referencegrants')
+  const canCreate = useCanCreate('resource.referencegrant.create', { group: 'gateway.networking.k8s.io', resource: 'referencegrants', namespace: selectedNamespace }) && served
 
   useKubeWatchList({
     enabled: true,

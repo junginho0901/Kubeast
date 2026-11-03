@@ -8,7 +8,7 @@ import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useCanCreate } from '@/hooks/useCanCreate'
-import { useNotInstalled } from '@/services/listStatusStore'
+import { useKindServed } from '@/services/listStatusStore'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Plus, RefreshCw } from 'lucide-react'
@@ -51,8 +51,8 @@ export default function HTTPRoutes() {
         : api.getHTTPRoutes(selectedNamespace, false)
     ),
   })
-  const notInstalled = useNotInstalled('httproutes')
-  const canCreate = useCanCreate('resource.httproute.create', { group: 'gateway.networking.k8s.io', resource: 'httproutes', namespace: selectedNamespace }) && !notInstalled
+  const served = useKindServed('httproutes')
+  const canCreate = useCanCreate('resource.httproute.create', { group: 'gateway.networking.k8s.io', resource: 'httproutes', namespace: selectedNamespace }) && served
 
   useKubeWatchList({
     enabled: true,

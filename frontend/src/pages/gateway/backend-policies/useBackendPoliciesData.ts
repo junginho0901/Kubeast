@@ -5,7 +5,7 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useCanCreate } from '@/hooks/useCanCreate'
-import { useNotInstalled } from '@/services/listStatusStore'
+import { useKindServed } from '@/services/listStatusStore'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import {
@@ -66,8 +66,8 @@ export function useBackendPoliciesData<T extends BackendPolicyLike>({
         : config.list(selectedNamespace, false)
     ),
   })
-  const notInstalled = useNotInstalled(config.queryKeyPrefix[1])
-  const canCreate = useCanCreate(config.permissionCreate, { group: 'gateway.networking.k8s.io', resource: config.queryKeyPrefix[1], namespace: selectedNamespace }) && !notInstalled
+  const served = useKindServed(config.queryKeyPrefix[1])
+  const canCreate = useCanCreate(config.permissionCreate, { group: 'gateway.networking.k8s.io', resource: config.queryKeyPrefix[1], namespace: selectedNamespace }) && served
 
   useKubeWatchList({
     enabled: true,

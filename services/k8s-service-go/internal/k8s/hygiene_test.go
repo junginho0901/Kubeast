@@ -504,14 +504,14 @@ func TestHygienePodSummary_SameReportAsThePods(t *testing.T) {
 	if !grouped {
 		t.Fatalf("the three web pods are not one Deployment finding of 3 pods: %+v", folded.Findings)
 	}
-	// the first pod's own exemption covers its owner's finding; the namespace's covers its pods'
+	// a pod's own exemption covers its own finding — the one annotated web pod is a row of its own, the other two
+	// are not exempt — and the namespace's covers its pods'
 	seen := map[string]bool{}
+	latest := map[bool]int{}
 	for _, f := range folded.Findings {
 		if f.Name == "web" && f.Check == "image.latest" {
 			seen["latest"] = true
-			if !f.ExemptNoReason && !f.Exempt {
-				t.Fatalf("web's image.latest is not exempt from its first pod's annotation: %+v", f)
-			}
+			latest[f.ExemptNoReason || f.Exempt] += f.Pods
 		}
 		if f.Namespace == "ops" && f.Check == "pss.host-namespaces" {
 			seen["host"] = true
@@ -522,5 +522,35 @@ func TestHygienePodSummary_SameReportAsThePods(t *testing.T) {
 	}
 	if !seen["latest"] || !seen["host"] {
 		t.Fatalf("the findings the test looks for are missing: %v", seen)
+	}
+	if !reflect.DeepEqual(latest, map[bool]int{true: 1, false: 2}) {
+		t.Fatalf("web's image.latest pods by exemption = %v, want 1 exempt and 2 not", latest)
+	}
+}
+
+// A rollout's old and new pods are one owner whose findings can read differently: each message is a row with the
+// pods that gave it, not the first pod's message with every pod counted under it.
+func TestHygienePodSummary_OwnerRowsPerMessage(t *testing.T) {
+	var pods []corev1.Pod
+	for i, image := range []string{"shop/web:latest", "shop/web:latest", "shop/web"} {
+		hash := "old111"
+		if i == 2 {
+			hash = "new222"
+		}
+		p := compliantPod("shop", fmt.Sprintf("web-%s-%d", hash, i))
+		p.OwnerReferences = []metav1.OwnerReference{{Kind: "ReplicaSet", Name: "web-" + hash, Controller: ptr(true)}}
+		p.Labels = map[string]string{"pod-template-hash": hash}
+		p.Spec.Containers[0].Image = image
+		pods = append(pods, p)
+	}
+	rep := EvaluateHygiene(HygieneInput{Pods: pods, Namespaces: []corev1.Namespace{labeledNS("shop")}, Failed: map[string]bool{}}, HygieneOptions{TargetMinor: 38})
+	got := map[string]int{}
+	for _, f := range rep.Findings {
+		if f.Check == "image.latest" && f.Kind == "Deployment" && f.Name == "web" {
+			got[f.Message] += f.Pods
+		}
+	}
+	if want := map[string]int{"image shop/web:latest": 2, "image shop/web": 1}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("web's image.latest rows = %v, want %v", got, want)
 	}
 }

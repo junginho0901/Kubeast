@@ -8,7 +8,7 @@ import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useCanCreate } from '@/hooks/useCanCreate'
-import { useNotInstalled } from '@/services/listStatusStore'
+import { useKindServed } from '@/services/listStatusStore'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Plus, RefreshCw } from 'lucide-react'
@@ -50,8 +50,8 @@ export default function Gateways() {
         : api.getGateways(selectedNamespace, false)
     ),
   })
-  const notInstalled = useNotInstalled('gateways')
-  const canCreate = useCanCreate('resource.gateway.create', { group: 'gateway.networking.k8s.io', resource: 'gateways', namespace: selectedNamespace }) && !notInstalled
+  const served = useKindServed('gateways')
+  const canCreate = useCanCreate('resource.gateway.create', { group: 'gateway.networking.k8s.io', resource: 'gateways', namespace: selectedNamespace }) && served
 
   useKubeWatchList({
     enabled: true,

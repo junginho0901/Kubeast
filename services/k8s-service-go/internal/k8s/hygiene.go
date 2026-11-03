@@ -317,16 +317,17 @@ func (s *Service) CollectHygiene(ctx context.Context, opts HygieneOptions) (Hygi
 }
 
 // EvaluateHygiene runs every check over the input.
-// hygienePodFinding is what the report keeps of one owner's finding (addPod): the first pod's finding and its own
-// exemption, and how many pods gave it.
+// hygienePodFinding is what the report keeps of one owner's finding (addPod): the finding, the pods' own exemption,
+// and how many pods gave it. The owner's pods are one row only where their finding reads the same and their own
+// exemption covers it the same way, so a rollout's old and new pods that differ are rows of their own.
 type hygienePodFinding struct {
 	finding HygieneFinding
 	own     hygieneExemption
 	pods    int
 }
 
-// hygienePodSummary folds the pods' findings as they are read — per check, owner and container, as the report
-// groups them — and counts each namespace's pods, so the pods need not be held.
+// hygienePodSummary folds the pods' findings as they are read — per check, owner, container, message and own
+// exemption, as the report groups them — and counts each namespace's pods, so the pods need not be held.
 type hygienePodSummary struct {
 	target   int
 	findings []hygienePodFinding
@@ -344,7 +345,7 @@ func (s *hygienePodSummary) add(p *corev1.Pod) {
 	own := parseExemption(p.Annotations)
 	for _, f := range append(podHygieneFindings(*p), podUpgradeFindings(*p, s.target)...) {
 		f.Kind, f.Namespace, f.Name = kind, p.Namespace, name
-		key := hygieneFindingKey(f)
+		key := hygieneRowKey(f, []hygieneExemption{own})
 		if i, seen := s.index[key]; seen {
 			s.findings[i].pods++
 			continue
@@ -383,6 +384,19 @@ func hygieneTarget(opts HygieneOptions, serverVersion string) int {
 
 func hygieneFindingKey(f HygieneFinding) string {
 	return strings.Join([]string{f.Check, f.Kind, f.Namespace, f.Name, f.Container}, "|")
+}
+
+// hygieneRowKey is a report row: the finding, its message and the exemption that covers it (the first of exs, as
+// addPod applies them).
+func hygieneRowKey(f HygieneFinding, exs []hygieneExemption) string {
+	covered := "-"
+	for _, ex := range exs {
+		if ex.covers(f.Check) {
+			covered = "exempt:" + ex.reason
+			break
+		}
+	}
+	return hygieneFindingKey(f) + "|" + f.Message + "|" + covered
 }
 
 func EvaluateHygiene(in HygieneInput, opts HygieneOptions) HygieneReport {
@@ -1004,13 +1018,13 @@ func (b *hygieneBuilder) add(f HygieneFinding, ex hygieneExemption) {
 // addPods adds a finding n pods gave.
 func (b *hygieneBuilder) addPods(f HygieneFinding, exs []hygieneExemption, n int) {
 	b.addPod(f, exs)
-	if i := b.index[hygieneFindingKey(f)]; b.findings[i].Pods > 0 {
+	if i := b.index[hygieneRowKey(f, exs)]; b.findings[i].Pods > 0 {
 		b.findings[i].Pods += n - 1
 	}
 }
 
 func (b *hygieneBuilder) addPod(f HygieneFinding, exs []hygieneExemption) {
-	key := hygieneFindingKey(f)
+	key := hygieneRowKey(f, exs)
 	if i, seen := b.index[key]; seen {
 		if b.findings[i].Pods > 0 {
 			b.findings[i].Pods++

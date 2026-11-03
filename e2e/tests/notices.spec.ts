@@ -104,6 +104,51 @@ test.describe('notices instead of "nothing here"', () => {
     }
   })
 
+  test('the create button of a kind the cluster lacks is not shown either for the moment before the list answers', async ({ page, request }) => {
+    test.setTimeout(120_000)
+    const admin = await adminHeaders(request)
+    // every page that hides its create button when the cluster does not serve its kind (useKindServed)
+    const pages = [
+      ['gateway/gateways', 'gateways'], ['gateway/gatewayclasses', 'gatewayclasses'], ['gateway/httproutes', 'httproutes'],
+      ['gateway/grpcroutes', 'grpcroutes'], ['gateway/referencegrants', 'referencegrants'],
+      ['gateway/backendtlspolicies', 'backendtlspolicies'], ['workloads/vpas', 'vpas'],
+    ]
+    for (const [, kind] of pages) {
+      // GatewayClass is cluster-scoped: its list has no /all
+      const probe = await request.get(`/api/v1/cluster/${kind}${kind === 'gatewayclasses' ? '' : '/all'}?cluster=self`, { headers: admin })
+      expect(probe.headers()['x-kubeast-not-installed'], `self does not serve ${kind}`).toBeTruthy()
+    }
+    // the list answers 1.5 s late (the permission check does not), and the page records every create button it shows
+    const listPath = new RegExp(`^/api/v1/cluster/(namespaces/[^/]+/)?(${pages.map(([, k]) => k).join('|')})(/all)?$`)
+    await page.route((u) => listPath.test(u.pathname), async (route) => {
+      await new Promise((r) => setTimeout(r, 1_500))
+      await route.continue()
+    })
+    await page.addInitScript((selector) => {
+      const w = window as unknown as { __createShown: number }
+      w.__createShown = 0
+      new MutationObserver(() => { if (document.querySelector(selector)) w.__createShown += 1 }).observe(document, { subtree: true, childList: true })
+    }, CREATE_BUTTON)
+    const shown: Record<string, number> = {}
+    for (const [route, kind] of pages) {
+      const answered = page.waitForResponse((r) => listPath.test(new URL(r.url()).pathname) && new URL(r.url()).pathname.includes(`/${kind}`))
+      await page.goto(`/${route}?cluster=self`)
+      expect((await answered).headers()['x-kubeast-not-installed'], `${kind} answered "not installed"`).toBeTruthy()
+      await expect(page.getByTestId('table-not-installed')).toBeVisible({ timeout: 20_000 })
+      shown[kind] = await page.evaluate(() => (window as unknown as { __createShown: number }).__createShown)
+    }
+    expect(shown, 'a create button shown on each page').toEqual(Object.fromEntries(pages.map(([, k]) => [k, 0])))
+
+    // where the cluster serves the kind, the button comes once the list has answered
+    const test2 = await request.get('/api/v1/cluster/gateways/all?cluster=test2', { headers: admin, failOnStatusCode: false })
+    if (test2.ok() && !test2.headers()['x-kubeast-not-installed']) {
+      for (const [route] of pages) {
+        await page.goto(`/${route}?cluster=test2`)
+        await expect(page.locator(CREATE_BUTTON), `${route} on test2`).toBeVisible({ timeout: 20_000 })
+      }
+    }
+  })
+
   test('a cluster-scoped create button shows only where the cluster allows it', async ({ browser, page, request }) => {
     const admin = await adminHeaders(request)
     await page.goto('/cluster/priorityclasses?cluster=self')
