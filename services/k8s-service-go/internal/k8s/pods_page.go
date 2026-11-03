@@ -543,7 +543,10 @@ func buildPodPage(rows []*podRow, q PodPageQuery, now time.Time) *PodPage {
 		matched = slices.DeleteFunc(matched, func(r *podRow) bool { return int(r.health) != h })
 	}
 	if q.Phase != "" {
-		matched = slices.DeleteFunc(matched, func(r *podRow) bool { return r.phase != q.Phase })
+		// the dashboard counts a pod with no phase yet as Unknown (overviewFor), so its Unknown bar lists those too
+		matched = slices.DeleteFunc(matched, func(r *podRow) bool {
+			return r.phase != q.Phase && !(q.Phase == string(corev1.PodUnknown) && r.phase == "")
+		})
 	}
 	if q.RuntimeClass != "" {
 		matched = slices.DeleteFunc(matched, func(r *podRow) bool { return r.runtimeClass != q.RuntimeClass })

@@ -47,6 +47,13 @@ def test_render_table_keeps_the_numbers_and_marks_unset_values():
     assert "| `Pod/bare` | sh | 1 | -/- | - | - | -/- | - | - | - |" in md
 
 
+def test_render_totals_say_how_many_rows_are_kept_at_their_requests():
+    totals = {**SAMPLE["totals"], "unmeasured_rows": 1}
+    assert "recommended 560Mi (rows without usage: 1, kept at their requests)" in render_optimization_table({**SAMPLE, "totals": totals})
+    assert "추천 560Mi (사용량 없는 1행은 요청값 그대로)" in render_optimization_table({**SAMPLE, "totals": totals}, lang="ko")
+    assert "without usage" not in render_optimization_table(SAMPLE)
+
+
 def test_render_table_without_usage_says_so():
     md = render_optimization_table({**SAMPLE, "source": "none", "totals": {"pods": 3}})
     assert "no usage data" in md

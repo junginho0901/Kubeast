@@ -140,7 +140,7 @@ export function StorageModal({
             <span className="badge badge-info">
               {tr('dashboard.storage.pvCount', 'PV {{count}}', { count: sortedPVs.length })}
             </span>
-            {Object.entries(pvcStatusCounts).slice(0, 4).map(([status, count]) => (
+            {Object.entries(pvcStatusCounts).map(([status, count]) => (
               <span
                 key={`pvc-${status}`}
                 className={`badge ${status === 'Bound' ? 'badge-success' : status === 'Pending' ? 'badge-warning' : status === 'Lost' ? 'badge-error' : 'badge-info'}`}
@@ -149,7 +149,7 @@ export function StorageModal({
                 {tr('dashboard.storage.pvcStatusCount', 'PVC {{status}} {{count}}', { status, count })}
               </span>
             ))}
-            {Object.entries(pvStatusCounts).slice(0, 4).map(([status, count]) => (
+            {Object.entries(pvStatusCounts).map(([status, count]) => (
               <span
                 key={`pv-${status}`}
                 className={`badge ${status === 'Bound' ? 'badge-success' : status === 'Available' ? 'badge-info' : status === 'Released' ? 'badge-warning' : status === 'Failed' ? 'badge-error' : 'badge-info'}`}

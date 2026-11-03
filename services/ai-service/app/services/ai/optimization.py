@@ -56,6 +56,7 @@ TEXT = {
         "source": "Usage source",
         "count": "Workload containers: {rows}, pods: {pods}",
         "totals": "Totals (all pods): CPU request {cpu} → recommended {cpu_rec}; memory request {mem} → recommended {mem_rec}",
+        "unmeasured": " (rows without usage: {n}, kept at their requests)",
         "head": "| workload | container | pods | cpu req/lim | cpu usage | cpu recommend | mem req/lim | mem usage | mem recommend | flags |",
         "numbers": "request {req}, usage {use}, recommended {rec}",
         "start": "start from {rec}",
@@ -65,6 +66,7 @@ TEXT = {
         "source": "사용량 출처",
         "count": "워크로드 컨테이너 {rows}개, Pod {pods}개",
         "totals": "합계(전체 Pod): CPU request {cpu} → 추천 {cpu_rec}; 메모리 request {mem} → 추천 {mem_rec}",
+        "unmeasured": " (사용량 없는 {n}행은 요청값 그대로)",
         "head": "| 워크로드 | 컨테이너 | Pod | CPU req/lim | CPU 사용량 | CPU 추천 | 메모리 req/lim | 메모리 사용량 | 메모리 추천 | 플래그 |",
         "numbers": "request {req}, 사용량 {use}, 추천 {rec}",
         "start": "{rec}부터 시작",
@@ -170,7 +172,7 @@ def render_optimization_table(data: Dict, lang: str = "en") -> str:
         lines.append("- " + text["totals"].format(
             cpu=_m(totals.get("cpu_request_m")), cpu_rec=_m(totals.get("cpu_recommend_m")),
             mem=_mi(totals.get("mem_request_bytes")), mem_rec=_mi(totals.get("mem_recommend_bytes")),
-        ))
+        ) + (text["unmeasured"].format(n=totals["unmeasured_rows"]) if totals.get("unmeasured_rows") else ""))
     lines += [
         "",
         text["head"],

@@ -2164,6 +2164,8 @@
         "none": "No usage data (no Prometheus or metrics-server in this cluster)"
       },
       "totals": "Requests {{cpuReq}} CPU · {{memReq}} memory → recommended {{cpuRec}} · {{memRec}}",
+      "totalsUnmeasured": "({{count}} rows without usage kept at their requests)",
+      "totalsUnmeasured_one": "({{count}} row without usage kept at its requests)",
       "totalsCost": "→ requests cost {{cost}}/mo, the recommendation saves {{saving}}/mo",
       "pricing": "OpenCost prices · CPU {{cpu}}/core-h · memory {{ram}}/GiB-h · requests × 730 h",
       "table": {

@@ -108,3 +108,21 @@ func TestRecommendRounding(t *testing.T) {
 		t.Errorf("recommendMem(1Gi+1) = %dMi, want 1178Mi", got>>20)
 	}
 }
+
+// The totals compare the same pods: a row without usage counts at its requests in the recommendation too (nothing
+// to change on no data) and is counted as unmeasured, instead of dropping out of one side only.
+func TestOptimizationTotals_SamePodsOnBothSides(t *testing.T) {
+	rows := []OptimizationRow{
+		{Pods: 2, CPURequestM: 500, MemRequestBytes: 512 << 20, CPURecommendM: ptrTo[int64](55), MemRecommendBytes: ptrTo[int64](230 << 20)},
+		{Pods: 1, CPURequestM: 300, MemRequestBytes: 256 << 20},                                  // no usage
+		{Pods: 3, CPURequestM: 100, MemRequestBytes: 128 << 20, CPURecommendM: ptrTo[int64](40)}, // CPU only
+	}
+	got := optimizationTotals(rows)
+	want := OptimizationTotals{
+		Pods: 6, CPURequestM: 2*500 + 300 + 3*100, MemRequestBytes: 2*(512<<20) + 256<<20 + 3*(128<<20),
+		CPURecommendM: 2*55 + 300 + 3*40, MemRecommendBytes: 2*(230<<20) + 256<<20 + 3*(128<<20), Unmeasured: 2,
+	}
+	if got != want {
+		t.Fatalf("totals = %+v\nwant     %+v", got, want)
+	}
+}

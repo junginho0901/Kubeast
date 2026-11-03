@@ -1258,6 +1258,8 @@ export interface OptimizationResponse {
     cpu_recommend_m: number
     mem_request_bytes: number
     mem_recommend_bytes: number
+    // Rows without usage: the recommended totals count them at their requests.
+    unmeasured_rows: number
     cost_month_usd?: number
     saving_month_usd?: number
   }
