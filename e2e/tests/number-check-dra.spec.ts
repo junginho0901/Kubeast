@@ -562,7 +562,8 @@ test.describe('number check — DRA screens', () => {
       await expect.poll(async () => {
         const { heads, rows, cards } = await readScreen(user)
         const at = (h: string) => heads.findIndex((x) => x === h)
-        return { rows: rows.filter((r) => r.length === heads.length).map((r) => `${r[at('Namespace')]}/${r[at('Name')]}`).sort(), cards }
+        // the table's filler rows (empty cells) are not rows of the list
+        return { rows: rows.filter((r) => r.length === heads.length && r[at('Name')]).map((r) => `${r[at('Namespace')]}/${r[at('Name')]}`).sort(), cards }
       }, { timeout: 20_000, message: 'ResourceClaims of every namespace, as the grant' }).toEqual({ rows: claims, cards: want })
     } finally {
       await ctx.close()
@@ -581,6 +582,8 @@ test.describe('number check — DRA screens', () => {
       const resource = /\/cluster\/(\w+)/.exec(new URL(route.request().url()).pathname)![1]
       return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'X-Kubeast-Not-Installed': resource }, body: '[]' })
     })
+    // such a cluster sends no live updates of these kinds either: the list API's answer alone
+    await page.routeWebSocket(/wsMultiplexer/, () => {})
     const kinds: Record<string, string> = { deviceclasses: 'DeviceClass', resourceclaims: 'ResourceClaim', resourceclaimtemplates: 'ResourceClaimTemplate', resourceslices: 'ResourceSlice' }
     for (const [p, resource] of Object.entries(lists)) {
       await page.goto(url(p))
