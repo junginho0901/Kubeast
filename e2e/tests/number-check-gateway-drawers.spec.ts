@@ -147,7 +147,9 @@ function settle(got: unknown, want: unknown): unknown {
 
 // What the drawer must show, in Kubeast's words: an empty value is "-"
 const dash = (v: unknown) => (v === undefined || v === null || v === '' ? '-' : String(v))
-const at = (t?: string) => (t ? `@${t}` : '-')
+// the Unix epoch a CRD's default condition carries (Gateway API: "Waiting for controller") is no time on screen
+// (utils/time), as an absent one
+const at = (t?: string) => (t && new Date(t).getUTCFullYear() >= 1980 ? `@${t}` : '-')
 const section = (s: Partial<Section> = {}): Section => ({ cards: [], tables: [], chips: [], notes: [], lines: {}, ...s })
 const rowsOf = (rows: Record<string, string>) => Object.fromEntries(Object.entries(rows).map(([k, v]) => [k, [v]]))
 // a condition's status as kubectl's column prints it; a route's parents pooled — True when one says so, else the first
