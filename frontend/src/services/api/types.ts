@@ -85,13 +85,16 @@ export interface TimelineResult {
 // Types
 export interface ClusterOverview {
   total_namespaces: number
-  total_pods: number
-  total_services: number
-  total_deployments: number
-  total_pvcs: number
-  total_pvs: number
-  pod_status: Record<string, number>
-  node_count: number
+  /** null: the caller's identity in the cluster may not list that kind (named in `refused`) */
+  total_pods: number | null
+  total_services: number | null
+  total_deployments: number | null
+  total_pvcs: number | null
+  total_pvs: number | null
+  pod_status: Record<string, number> | null
+  node_count: number | null
+  /** the resources (pods, services, deployments, persistentvolumeclaims, persistentvolumes, nodes) not counted */
+  refused?: string[]
   /** counted within a namespace-scoped grant: cluster-wide numbers (nodes, PVs) are not counted */
   scoped?: boolean
   cluster_version?: string

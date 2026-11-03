@@ -1316,6 +1316,8 @@ CLUSTER_METRICS_TOOLS: List[Dict] = [
                     - Total counts: namespaces, pods, services, deployments, PVCs, PVs
                     - Pod status breakdown (Running, Pending, Failed, etc.)
                     - Node count and cluster version
+                    A count the user's identity in the cluster may not list is null and its resource is named in
+                    "refused": it is not counted, not zero.
                     
                     Use this FIRST when user asks about cluster health or wants a general status check.""",
                 "parameters": {"type": "object", "properties": {}}

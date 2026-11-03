@@ -393,8 +393,11 @@ export function DashboardBody() {
   // 차트에서 항상 전체 상태를 보여주기 위해 고정 목록 사용
   const POD_PHASES = ['Running', 'Succeeded', 'Failed', 'Pending', 'Unknown']
 
-  // A refused overview (403: the user's cluster identity may not list namespaces) shows no number at all — 0 would read as an empty cluster.
-  const count = (n?: number) => (isOverviewError ? '—' : n || 0)
+  // A refused overview (403: the user's cluster identity may not list namespaces) shows no number at all — 0 would read as an empty cluster;
+  // so does a kind that identity may not list (null, named in `refused`).
+  const count = (n?: number | null) => (isOverviewError || n === null ? '—' : n || 0)
+  const refusedTitle = (resource: string, kind: string) =>
+    overview?.refused?.includes(resource) ? tr('dashboard.stats.refused', 'Your identity in this cluster may not list {{kind}}, so they are not counted.', { kind }) : undefined
   const stats = [
     {
       name: tr('dashboard.stats.namespaces', 'Namespaces'),
@@ -406,24 +409,28 @@ export function DashboardBody() {
       name: tr('dashboard.stats.pods', 'Pods'),
       resourceType: 'pods' as ResourceType,
       value: count(overview?.total_pods),
+      title: refusedTitle('pods', 'Pods'),
       icon: Box,
     },
     {
       name: tr('dashboard.stats.services', 'Services'),
       resourceType: 'services' as ResourceType,
       value: count(overview?.total_services),
+      title: refusedTitle('services', 'Services'),
       icon: Database,
     },
     {
       name: tr('dashboard.stats.deployments', 'Deployments'),
       resourceType: 'deployments' as ResourceType,
       value: count(overview?.total_deployments),
+      title: refusedTitle('deployments', 'Deployments'),
       icon: TrendingUp,
     },
     {
       name: tr('dashboard.stats.pvcs', 'PVCs'),
       resourceType: 'pvcs' as ResourceType,
       value: count(overview?.total_pvcs),
+      title: refusedTitle('persistentvolumeclaims', 'PersistentVolumeClaims'),
       icon: HardDrive,
     },
     {
@@ -431,12 +438,13 @@ export function DashboardBody() {
       resourceType: 'nodes' as ResourceType,
       // a namespace-scoped grant cannot read nodes: the scoped overview's 0 means "not counted", not "no nodes"
       value: overview?.scoped ? '—' : count(overview?.node_count),
+      title: refusedTitle('nodes', 'Nodes'),
       icon: Server,
     },
   ]
 
-  // Pod 상태 차트 데이터
-  const podStatusData = overview
+  // Pod 상태 차트 데이터 (pods the caller may not list: no chart)
+  const podStatusData = overview?.pod_status
     ? POD_PHASES.map((phase) => ({
       name: phase,
       value: overview?.pod_status?.[phase] ?? 0,
