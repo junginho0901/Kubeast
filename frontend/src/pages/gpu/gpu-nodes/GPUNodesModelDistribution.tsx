@@ -5,6 +5,7 @@ interface ModelEntry {
   count: number
   totalCapacity: number
   totalAllocatable: number
+  totalUsed: number
 }
 
 interface Props {
@@ -28,11 +29,12 @@ export default function GPUNodesModelDistribution({ modelDistribution }: Props) 
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         {modelDistribution.map(([model, info]) => {
-          const utilization = info.totalAllocatable > 0
-            ? Math.round(((info.totalCapacity - info.totalAllocatable) / info.totalCapacity) * 100)
+          // the share of the allocatable GPUs in use, as the dashboard's node bars
+          const usedPct = info.totalAllocatable > 0
+            ? Math.round((info.totalUsed / info.totalAllocatable) * 100)
             : 0
           return (
-            <div key={model} className="rounded-lg border border-slate-700 bg-slate-900/40 px-4 py-3">
+            <div key={model} className="rounded-lg border border-slate-700 bg-slate-900/40 px-4 py-3" data-testid="gpu-nodes-model" data-model={model}>
               <div className="flex items-center justify-between text-sm text-ink">
                 <span className="font-medium truncate">{model}</span>
                 <span className="text-xs text-slate-400 ml-2 whitespace-nowrap">
@@ -48,10 +50,14 @@ export default function GPUNodesModelDistribution({ modelDistribution }: Props) 
                   <span>{tr('gpuNodes.allocatable', 'Allocatable')}</span>
                   <span className="font-medium text-slate-200">{info.totalAllocatable}</span>
                 </div>
+                <div className="text-xs text-slate-400 flex items-center justify-between">
+                  <span>{tr('gpuNodes.stats.used', 'Used')}</span>
+                  <span className="font-medium text-slate-200">{info.totalUsed} ({usedPct}%)</span>
+                </div>
                 <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full ${utilization >= 80 ? 'bg-red-500' : utilization >= 60 ? 'bg-amber-500' : 'bg-primary-bright'}`}
-                    style={{ width: `${Math.min(utilization, 100)}%` }}
+                    className={`h-full rounded-full ${usedPct >= 80 ? 'bg-red-500' : usedPct >= 60 ? 'bg-amber-500' : 'bg-primary-bright'}`}
+                    style={{ width: `${Math.min(usedPct, 100)}%` }}
                   />
                 </div>
               </div>

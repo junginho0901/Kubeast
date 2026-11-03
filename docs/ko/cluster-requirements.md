@@ -279,13 +279,15 @@ Read 사용자에게도 열어 주려면 이 주소를 §1의 `viewerProxyServic
 
 | 구성 요소 | Kubeast가 보는 것 | 쓰는 화면 |
 | --- | --- | --- |
-| NVIDIA device plugin | 노드의 `nvidia.com/gpu`·`nvidia.com/mig-*` 자원, DaemonSet `nvidia-device-plugin-daemonset`(`kube-system`·`gpu-operator`·`nvidia-gpu-operator`) 또는 `kube-system/nvidia-device-plugin` | GPU 수·할당, 플러그인 상태 |
-| GPU Feature Discovery | 노드 라벨 `nvidia.com/gpu.product`·`gpu.memory`·`mig.strategy`·`cuda.driver.*` | GPU 모델·메모리 |
+| NVIDIA device plugin | 노드의 `nvidia.com/gpu`·`nvidia.com/mig-*` 자원을 더한 값(둘 중 어느 장치든 GPU 하나로 셉니다). 사용 중은 `kubectl describe node`가 Allocated resources에 더하는 값(그 노드의 Succeeded·Failed 아닌 Pod의 요청)이고, 노드가 정해지지 않은 Pod의 요청은 따로 보여 줍니다. DaemonSet `nvidia-device-plugin-daemonset`(`kube-system`·`gpu-operator`·`nvidia-gpu-operator`) 또는 `kube-system/nvidia-device-plugin` — 어느 것도 없으면 "찾지 못함"이고 비정상이 아닙니다 | GPU 수·할당, 플러그인 상태 |
+| GPU Feature Discovery | 노드 라벨 `nvidia.com/gpu.product`·`gpu.memory`·`mig.strategy`(`single`·`mixed`면 MIG 사용, `none`이거나 라벨이 없으면 미사용)·`cuda.driver-version.*` 또는 예전 `cuda.driver.*`(드라이버 버전)·`cuda.runtime-version.*` 또는 `cuda.runtime.*`(CUDA 버전)·`gpu.family`·`gpu.compute.*` | GPU 모델·메모리, Node 상세 창 |
 | time-slicing 설정 | ConfigMap `time-slicing-config`·`nvidia-plugin-configs`·`time-slicing`(위 Namespace) | 시분할 설정 |
-| DCGM exporter | §3 표의 `DCGM_FI_DEV_*` 지표 | 사용률·메모리·온도 |
+| DCGM exporter | §3 표의 `DCGM_FI_DEV_*` 지표와 라벨 `UUID`(또는 `uuid`)·`hostname`(dcgm-exporter 4.6.0 전에는 `Hostname`)·`gpu`·`modelName`, GPU를 쓰는 Pod는 스크레이프가 이름을 바꿨으면(`honor_labels: false`이고 대상에 자기 `pod` 라벨이 있을 때) `exported_pod`·`exported_namespace`, 아니면 `pod`·`namespace` | 사용률·메모리·온도, GPU Pod별 사용률 |
 | DRA | `resource.k8s.io`(1.34+ v1, 1.32–1.33 v1beta2/v1beta1, 1.31 v1alpha3) — API 탐색으로 버전 선택. 네 종류의 목록과 실시간 갱신(watch), 상세 창용으로 ResourceClaim(Used By·Device Allocations)과 그 Namespace의 Pod(Using Pods·Related ResourceClaims)를 사용자로 읽습니다 — `view`와 `kubeast:cluster-reader`가 덮습니다 | DeviceClass·ResourceClaim·ResourceClaimTemplate·ResourceSlice |
 
-NVIDIA GPU Operator를 쓰면 위 구성 요소가 한 번에 설치됩니다. 이 절은 코드를 기준으로 썼으며, 실제 GPU 클러스터에서는 검증하지 않았습니다.
+NVIDIA GPU Operator를 쓰면 위 구성 요소가 한 번에 설치됩니다. 이 절은 코드를 기준으로 썼으며, 실제 GPU 클러스터에서는 검증하지 않았습니다. 위의 수·라벨·지표 라벨은 `nvidia.com/gpu`·`nvidia.com/mig-1g.5gb`를 확장 자원으로 받은 kind 노드와 대역 exporter로 확인합니다(e2e `number-check-gpu.spec.ts`).
+
+- **확인**: `kubectl describe node <node>`(Allocated resources), `kubectl get node <node> --show-labels`, Prometheus에서 `DCGM_FI_DEV_GPU_UTIL`과 그 라벨.
 
 ## 7. 있으면 보여 주는 API
 

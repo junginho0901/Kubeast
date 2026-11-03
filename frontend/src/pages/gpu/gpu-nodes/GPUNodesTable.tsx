@@ -6,6 +6,7 @@ import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import type { GPUNodeInfo } from '@/services/api'
 import { getStatusColor, type SortKey } from './gpuNodesHelpers'
+import { nodeStatusParts } from '@/utils/nodeStatus'
 
 interface Props {
   sortedNodes: GPUNodeInfo[]
@@ -101,7 +102,11 @@ export default function GPUNodesTable({
                 <td className="py-3 px-4 text-xs font-mono">{node.gpu_capacity}</td>
                 <td className="py-3 px-4 text-xs font-mono">{node.gpu_allocatable}</td>
                 <td className="py-3 px-4">
-                  <span className={`badge ${getStatusColor(node.status)}`}>{node.status}</span>
+                  <div className="flex flex-wrap gap-1">
+                    {nodeStatusParts(node.status).map((part) => (
+                      <span key={part} className={`badge ${getStatusColor(part)}`}>{part}</span>
+                    ))}
+                  </div>
                 </td>
                 <td className="col-optional py-3 px-4 text-xs font-mono">{node.mig_strategy ?? '-'}</td>
               </tr>

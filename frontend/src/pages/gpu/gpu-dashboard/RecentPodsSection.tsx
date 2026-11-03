@@ -18,7 +18,7 @@ export function RecentPodsSection({ recentPods, openDetail, tr }: Props) {
   if (recentPods.length === 0) return null
 
   return (
-    <div className="rounded-xl border border-slate-700/50 bg-slate-800/30">
+    <div className="rounded-xl border border-slate-700/50 bg-slate-800/30" data-testid="gpu-recent-pods">
       <div className="flex items-center justify-between border-b border-slate-700/50 px-5 py-3">
         <div className="flex items-center gap-2">
           <Box className="h-4 w-4 text-slate-400" />
@@ -55,7 +55,7 @@ export function RecentPodsSection({ recentPods, openDetail, tr }: Props) {
               >
                 <td className="truncate px-5 py-3 text-xs font-mono">{pod.namespace}</td>
                 <td className="truncate px-5 py-3 font-medium text-ink">{pod.name}</td>
-                <td className="truncate px-5 py-3 text-xs font-mono">{pod.node_name ?? '-'}</td>
+                <td className="truncate px-5 py-3 text-xs font-mono">{pod.node_name || '-'}</td>
                 <td className="truncate px-5 py-3 text-xs font-mono">{pod.gpu_requested}</td>
                 <td className="px-5 py-3">
                   <span className={`badge ${getStatusColor(pod.status)}`}>{pod.status}</span>

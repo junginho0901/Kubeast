@@ -2,7 +2,7 @@
 //
 // gpu.go 에서 분리. GetGPUDashboard 가 4-fan-out goroutine (Nodes / Pods /
 // DevicePlugin DS / TimeSlicing CM) 로 모은 데이터를 노드·포드 단위로 정제.
-// GPU 수량 계산은 nvidia.com/gpu + nvidia.com/mig-* 합산 정책.
+// GPU 수량은 nvidia.com/gpu 와 nvidia.com/mig-* 를 더한 값 (isGPUResource).
 
 package k8s
 
@@ -16,6 +16,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	resourcehelper "k8s.io/component-helpers/resource"
 )
 
 // ========== GPU Dashboard ==========
@@ -32,7 +33,9 @@ func (s *Service) GetGPUDashboard(ctx context.Context) (map[string]interface{}, 
 		devicePluginStatus map[string]interface{}
 		timeSlicingConfig  map[string]interface{}
 		gpuPods            = make([]map[string]interface{}, 0)
+		usedByNode         = map[string]int{}
 		totalUsed          int
+		totalWaiting       int
 	)
 
 	// Fetch nodes, pods, device plugin, and time-slicing config all in parallel
@@ -50,18 +53,28 @@ func (s *Service) GetGPUDashboard(ctx context.Context) (map[string]interface{}, 
 			if gpuReq == 0 {
 				return
 			}
-			// Only count running/pending pods toward used GPUs
-			if pod.Status.Phase == corev1.PodRunning || pod.Status.Phase == corev1.PodPending {
-				totalUsed += gpuReq
+			// in use = kubectl describe node's "Allocated resources": the pods on a node that have not ended; a pod
+			// no node has taken yet waits for one and is counted apart
+			if pod.Status.Phase != corev1.PodSucceeded && pod.Status.Phase != corev1.PodFailed {
+				if pod.Spec.NodeName != "" {
+					usedByNode[pod.Spec.NodeName] += gpuReq
+				} else {
+					totalWaiting += gpuReq
+				}
 			}
-			gpuPods = append(gpuPods, map[string]interface{}{
+			status, _, _, _ := podListView(pod)
+			row := map[string]interface{}{
 				"name":          pod.Name,
 				"namespace":     pod.Namespace,
-				"node_name":     pod.Spec.NodeName,
 				"gpu_requested": gpuReq,
-				"status":        string(pod.Status.Phase),
+				"status":        status,
+				"phase":         string(pod.Status.Phase),
 				"created_at":    toISO(&pod.CreationTimestamp),
-			})
+			}
+			if pod.Spec.NodeName != "" {
+				row["node_name"] = pod.Spec.NodeName
+			}
+			gpuPods = append(gpuPods, row)
 		})
 	}()
 	go func() {
@@ -79,6 +92,9 @@ func (s *Service) GetGPUDashboard(ctx context.Context) (map[string]interface{}, 
 	}
 	if podErr != nil {
 		return nil, fmt.Errorf("list pods for GPU dashboard: %w", podErr)
+	}
+	for _, n := range usedByNode {
+		totalUsed += n
 	}
 
 	// Filter GPU nodes
@@ -99,7 +115,8 @@ func (s *Service) GetGPUDashboard(ctx context.Context) (map[string]interface{}, 
 			"name":            node.Name,
 			"gpu_capacity":    gpuCap,
 			"gpu_allocatable": gpuAlloc,
-			"status":          nodeReadyStatus(&node),
+			"gpu_used":        usedByNode[node.Name],
+			"status":          nodeStatusText(&node),
 		}
 
 		labels := node.Labels
@@ -112,9 +129,8 @@ func (s *Service) GetGPUDashboard(ctx context.Context) (map[string]interface{}, 
 		if v, ok := labels["nvidia.com/mig.strategy"]; ok {
 			gpuNode["mig_strategy"] = v
 		}
-		if v, ok := labels["nvidia.com/cuda.driver.major"]; ok {
-			minor := labels["nvidia.com/cuda.driver.minor"]
-			gpuNode["driver_version"] = v + "." + minor
+		if v := gpuDriverVersion(labels); v != "" {
+			gpuNode["driver_version"] = v
 		}
 
 		gpuNodes = append(gpuNodes, gpuNode)
@@ -124,7 +140,8 @@ func (s *Service) GetGPUDashboard(ctx context.Context) (map[string]interface{}, 
 	migEnabled := false
 	timeSlicingEnabled := false
 	for _, gn := range gpuNodes {
-		if _, ok := gn["mig_strategy"]; ok {
+		// GPU Feature Discovery's strategies are none, single and mixed; none (its default) uses no MIG device
+		if v, _ := gn["mig_strategy"].(string); v != "" && v != "none" {
 			migEnabled = true
 			break
 		}
@@ -137,6 +154,7 @@ func (s *Service) GetGPUDashboard(ctx context.Context) (map[string]interface{}, 
 		"total_gpu_capacity":    totalCapacity,
 		"total_gpu_allocatable": totalAllocatable,
 		"total_gpu_used":        totalUsed,
+		"total_gpu_waiting":     totalWaiting,
 		"gpu_nodes":             gpuNodes,
 		"gpu_pods":              gpuPods,
 		"device_plugin_status":  devicePluginStatus,
@@ -148,69 +166,45 @@ func (s *Service) GetGPUDashboard(ctx context.Context) (map[string]interface{}, 
 
 // ========== GPU helpers ==========
 
+// isGPUResource names the NVIDIA device plugin's resources: whole GPUs (nvidia.com/gpu) and, under the mixed MIG
+// strategy, each MIG profile (nvidia.com/mig-<profile>) next to them. Each device of either is one GPU here.
+func isGPUResource(name corev1.ResourceName) bool {
+	n := string(name)
+	return n == "nvidia.com/gpu" || strings.HasPrefix(n, "nvidia.com/mig-")
+}
+
 func getGPUQuantity(resources corev1.ResourceList) int {
-	// Check nvidia.com/gpu first (primary GPU resource)
-	if qty, ok := resources["nvidia.com/gpu"]; ok {
-		val, _ := qty.AsInt64()
-		if val > 0 {
-			return int(val)
-		}
-	}
-	// Fall back to MIG resources
 	total := 0
-	for key, qty := range resources {
-		k := string(key)
-		if strings.HasPrefix(k, "nvidia.com/mig-") {
-			val, _ := qty.AsInt64()
-			total += int(val)
+	for name, qty := range resources {
+		if isGPUResource(name) {
+			total += int(qty.Value())
 		}
 	}
 	return total
 }
 
+// getPodGPURequest is the GPUs the scheduler holds for the pod, which kubectl describe node adds up under
+// "Allocated resources" (component-helpers PodRequests: the containers and sidecars summed, an init container's
+// peak when higher). The API server sets a request to the limit where only the limit was written.
 func getPodGPURequest(pod *corev1.Pod) int {
-	total := 0
-	for _, c := range pod.Spec.Containers {
-		containerGPU := 0
-		// Check requests first
-		if qty, ok := c.Resources.Requests["nvidia.com/gpu"]; ok {
-			val, _ := qty.AsInt64()
-			containerGPU += int(val)
-		}
-		for key, qty := range c.Resources.Requests {
-			if strings.HasPrefix(string(key), "nvidia.com/mig-") {
-				val, _ := qty.AsInt64()
-				containerGPU += int(val)
-			}
-		}
-		// Fall back to limits if no requests found
-		if containerGPU == 0 {
-			if qty, ok := c.Resources.Limits["nvidia.com/gpu"]; ok {
-				val, _ := qty.AsInt64()
-				containerGPU += int(val)
-			}
-			for key, qty := range c.Resources.Limits {
-				if strings.HasPrefix(string(key), "nvidia.com/mig-") {
-					val, _ := qty.AsInt64()
-					containerGPU += int(val)
-				}
-			}
-		}
-		total += containerGPU
-	}
-	return total
+	return getGPUQuantity(resourcehelper.PodRequests(pod, resourcehelper.PodResourcesOptions{}))
 }
 
-func nodeReadyStatus(node *corev1.Node) string {
-	for _, c := range node.Status.Conditions {
-		if c.Type == corev1.NodeReady {
-			if c.Status == corev1.ConditionTrue {
-				return "Ready"
-			}
-			return "NotReady"
-		}
+// gpuDriverVersion is the NVIDIA driver's version from GPU Feature Discovery's labels: cuda.driver-version.full, or
+// the deprecated cuda.driver.major, .minor and .rev ("" when GFD wrote no revision).
+func gpuDriverVersion(labels map[string]string) string {
+	if v := labels["nvidia.com/cuda.driver-version.full"]; v != "" {
+		return v
 	}
-	return "Unknown"
+	major, ok := labels["nvidia.com/cuda.driver.major"]
+	if !ok {
+		return ""
+	}
+	v := major + "." + labels["nvidia.com/cuda.driver.minor"]
+	if rev := labels["nvidia.com/cuda.driver.rev"]; rev != "" {
+		v += "." + rev
+	}
+	return v
 }
 
 func getDevicePluginStatus(ctx context.Context, s *Service) map[string]interface{} {

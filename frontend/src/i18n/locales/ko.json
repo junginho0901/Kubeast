@@ -3932,12 +3932,14 @@
       "capacity": "총 용량",
       "allocatable": "할당 가능",
       "used": "사용 중",
+      "waiting": "+{{n}}개는 Node 배정을 기다리는 Pod의 요청",
       "allocationRate": "할당률"
     },
     "status": {
       "ready": "정상",
       "pluginHealthy": "디바이스 플러그인 정상",
       "pluginUnhealthy": "디바이스 플러그인 비정상",
+      "pluginNotFound": "디바이스 플러그인 찾지 못함",
       "pluginDetail": "플러그인",
       "migEnabled": "MIG 사용",
       "migDisabled": "MIG 미사용",
@@ -4021,6 +4023,7 @@
     "refresh": "새로고침",
     "searchPlaceholder": "Pod 이름, Namespace 또는 Node로 검색...",
     "nodeUsage": "Node별 GPU 사용량",
+    "noNode": "Node 배정 전",
     "statusDistribution": "상태 분포",
     "stats": {
       "total": "전체 Pod",

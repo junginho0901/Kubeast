@@ -25,14 +25,14 @@ export default function GPUNodesRealtimeMetrics({ gpusByHost }: Props) {
           const avgUtil = gpus.reduce((s, g) => s + g.gpu_util, 0) / gpus.length
           const avgMem = gpus.reduce((s, g) => s + g.memory_util_percent, 0) / gpus.length
           return (
-            <div key={hostname} className="rounded-lg border border-slate-700 bg-slate-900/40 px-4 py-3">
+            <div key={hostname} className="rounded-lg border border-slate-700 bg-slate-900/40 px-4 py-3" data-testid="gpu-nodes-host" data-host={hostname}>
               <div className="flex items-center justify-between text-sm text-ink mb-3">
                 <span className="font-medium">{hostname}</span>
                 <span className="text-xs text-slate-400">{gpus.length} GPU{gpus.length !== 1 ? 's' : ''}</span>
               </div>
               <div className="space-y-2">
                 {gpus.map((gpu) => (
-                  <div key={gpu.uuid} className="flex items-center gap-3">
+                  <div key={gpu.uuid} className="flex items-center gap-3" data-testid="gpu-nodes-gpu" data-uuid={gpu.uuid}>
                     <span className="text-xs text-slate-400 w-16 shrink-0">GPU {gpu.gpu}</span>
                     <div className="flex-1 space-y-1">
                       <div className="flex items-center gap-2">
@@ -43,7 +43,7 @@ export default function GPUNodesRealtimeMetrics({ gpusByHost }: Props) {
                             style={{ width: `${Math.min(gpu.gpu_util, 100)}%` }}
                           />
                         </div>
-                        <span className="text-[10px] font-mono text-slate-300 w-10 text-right">{Math.round(gpu.gpu_util)}%</span>
+                        <span className="text-[10px] font-mono text-slate-300 w-10 text-right" data-testid="gpu-nodes-core">{Math.round(gpu.gpu_util)}%</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] text-slate-500 w-7">{tr('gpuDashboardPage.realtime.mem', 'Mem')}</span>
@@ -53,7 +53,7 @@ export default function GPUNodesRealtimeMetrics({ gpusByHost }: Props) {
                             style={{ width: `${Math.min(gpu.memory_util_percent, 100)}%` }}
                           />
                         </div>
-                        <span className="text-[10px] font-mono text-slate-300 w-10 text-right">{Math.round(gpu.memory_util_percent)}%</span>
+                        <span className="text-[10px] font-mono text-slate-300 w-10 text-right" data-testid="gpu-nodes-mem">{Math.round(gpu.memory_util_percent)}%</span>
                       </div>
                     </div>
                     {gpu.memory_temp > 0 && (
@@ -65,8 +65,8 @@ export default function GPUNodesRealtimeMetrics({ gpusByHost }: Props) {
                 ))}
               </div>
               <div className="mt-2 pt-2 border-t border-slate-700/50 flex gap-4 text-[10px] text-slate-500">
-                <span>{tr('gpuNodes.avgCore', 'Avg Core')}: {Math.round(avgUtil)}%</span>
-                <span>{tr('gpuNodes.avgMem', 'Avg Mem')}: {Math.round(avgMem)}%</span>
+                <span data-testid="gpu-nodes-avg-core">{tr('gpuNodes.avgCore', 'Avg Core')}: {Math.round(avgUtil)}%</span>
+                <span data-testid="gpu-nodes-avg-mem">{tr('gpuNodes.avgMem', 'Avg Mem')}: {Math.round(avgMem)}%</span>
               </div>
             </div>
           )

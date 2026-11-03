@@ -1,13 +1,15 @@
 import { useMemo, useState, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { api } from '@/services/api'
+import { api, isForbiddenError } from '@/services/api'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import type { GPUDashboardData, GPUMetricsData, GPUDeviceMetric, GPUNodeInfo } from '@/services/api'
 import type { SortKey, SummaryCard } from './gpuNodesHelpers'
+import { gpuNodeCounts } from '../gpuNumbers'
+import { nodeReadiness } from '@/utils/nodeStatus'
 
 interface UseGPUNodesDataParams {
   searchQuery: string
@@ -22,7 +24,7 @@ export function useGPUNodesData({ searchQuery, sortKey, sortDir, currentPage }: 
 
   const [isRefreshing, setIsRefreshing] = useState(false)
 
-  const { data, isLoading, refetch } = useQuery<GPUDashboardData>({
+  const { data, isLoading, error, refetch } = useQuery<GPUDashboardData>({
     queryKey: ['gpu', 'dashboard'],
     queryFn: () => api.getGPUDashboard(),
     refetchInterval: 30000,
@@ -64,10 +66,12 @@ export function useGPUNodesData({ searchQuery, sortKey, sortDir, currentPage }: 
     )
   }, [nodes, searchQuery])
 
+  // the cluster refused the list (a grant limited to namespaces): the cards count nothing
+  const forbidden = isForbiddenError(error)
+
   const stats = useMemo(() => {
-    const total = nodes.length
-    const ready = nodes.filter((n) => n.status === 'Ready').length
-    const notReady = total - ready
+    // Ready as kubectl's STATUS starts (a cordoned node is Ready,SchedulingDisabled); Not Ready is every other node
+    const { total, ready, notReady } = gpuNodeCounts(nodes)
     const totalCapacity = nodes.reduce((sum, n) => sum + n.gpu_capacity, 0)
     const totalAllocatable = nodes.reduce((sum, n) => sum + n.gpu_allocatable, 0)
     const totalUsed = data?.total_gpu_used ?? 0
@@ -76,30 +80,34 @@ export function useGPUNodesData({ searchQuery, sortKey, sortDir, currentPage }: 
   }, [nodes, data])
 
   const summaryCards = useMemo<SummaryCard[]>(
-    () => [
-      [tr('gpuNodes.stats.total', 'Total Nodes'), stats.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('gpuNodes.stats.ready', 'Ready'), stats.ready, 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
-      [tr('gpuNodes.stats.notReady', 'Not Ready'), stats.notReady, 'border-rose-700/40 bg-rose-900/10', 'text-rose-300'],
-      [tr('gpuNodes.stats.capacity', 'GPU Capacity'), stats.totalCapacity, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('gpuNodes.stats.allocatable', 'Allocatable'), stats.totalAllocatable, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('gpuNodes.stats.used', 'Used'), stats.totalUsed, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-    ],
-    [stats, tr],
+    () => {
+      const n = (v: number) => (forbidden ? '-' : v)
+      return [
+        [tr('gpuNodes.stats.total', 'Total Nodes'), n(stats.total), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+        [tr('gpuNodes.stats.ready', 'Ready'), n(stats.ready), 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
+        [tr('gpuNodes.stats.notReady', 'Not Ready'), n(stats.notReady), 'border-rose-700/40 bg-rose-900/10', 'text-rose-300'],
+        [tr('gpuNodes.stats.capacity', 'GPU Capacity'), n(stats.totalCapacity), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+        [tr('gpuNodes.stats.allocatable', 'Allocatable'), n(stats.totalAllocatable), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+        [tr('gpuNodes.stats.used', 'Used'), n(stats.totalUsed), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      ]
+    },
+    [stats, tr, forbidden],
   )
 
+  // every model, its nodes' capacity, allocatable and GPUs in use (kubectl describe node's Allocated resources)
   const modelDistribution = useMemo(() => {
-    const map = new Map<string, { count: number; totalCapacity: number; totalAllocatable: number }>()
+    const map = new Map<string, { count: number; totalCapacity: number; totalAllocatable: number; totalUsed: number }>()
     for (const node of nodes) {
       const model = node.gpu_model ?? 'Unknown'
-      const entry = map.get(model) ?? { count: 0, totalCapacity: 0, totalAllocatable: 0 }
+      const entry = map.get(model) ?? { count: 0, totalCapacity: 0, totalAllocatable: 0, totalUsed: 0 }
       entry.count += 1
       entry.totalCapacity += node.gpu_capacity
       entry.totalAllocatable += node.gpu_allocatable
+      entry.totalUsed += node.gpu_used ?? 0
       map.set(model, entry)
     }
     return [...map.entries()]
       .sort((a, b) => b[1].totalCapacity - a[1].totalCapacity)
-      .slice(0, 4)
   }, [nodes])
 
   const sortedNodes = useMemo(() => {
@@ -145,21 +153,21 @@ export function useGPUNodesData({ searchQuery, sortKey, sortDir, currentPage }: 
     const total = nodes.length
     const totalCapacity = nodes.reduce((s, n) => s + (n.gpu_capacity ?? 0), 0)
     const totalAlloc = nodes.reduce((s, n) => s + (n.gpu_allocatable ?? 0), 0)
-    const notReady = nodes.filter((n) => !/ready/i.test(n.status)).length
+    const { ready, notReady } = gpuNodeCounts(nodes)
     const prefix = notReady > 0 ? '⚠️ ' : ''
     return {
       source: 'base' as const,
       summary: `${prefix}GPU 노드 ${total}개 (capacity ${totalCapacity}, allocatable ${totalAlloc}${notReady ? `, NotReady ${notReady}` : ''})`,
       data: {
         filters: { search: searchQuery || undefined },
-        stats: { total, total_capacity: totalCapacity, total_allocatable: totalAlloc, not_ready: notReady },
+        stats: { total, ready, not_ready: notReady, total_capacity: totalCapacity, total_allocatable: totalAlloc, total_used: data.total_gpu_used },
         ...summarizeList(pagedNodes as unknown as Record<string, unknown>[], {
           total: sortedNodes.length,
           currentPage,
           pageSize: rowsPerPage,
           topN: rowsPerPage,
-          pickFields: ['name', 'gpu_model', 'gpu_capacity', 'gpu_allocatable', 'status', 'mig_strategy'],
-          filterProblematic: (n) => !/ready/i.test((n as unknown as GPUNodeInfo).status),
+          pickFields: ['name', 'gpu_model', 'gpu_capacity', 'gpu_allocatable', 'gpu_used', 'status', 'mig_strategy'],
+          filterProblematic: (n) => nodeReadiness((n as unknown as GPUNodeInfo).status) !== 'Ready',
           linkBuilder: (n) => {
             const node = n as unknown as GPUNodeInfo
             return buildResourceLink('Node', undefined, node.name)

@@ -5,7 +5,7 @@
 
 import { Link } from 'react-router-dom'
 import { Server, ArrowRight } from 'lucide-react'
-import { getStatusColor } from './helpers'
+import { nodeStatusBadge, nodeStatusParts } from '@/utils/nodeStatus'
 
 type NodeAllocItem = {
   name: string
@@ -34,7 +34,7 @@ export function NodeAllocationSection({ nodeAllocation, nodeReadyCount, nodeNotR
           <h2 className="text-sm font-semibold text-ink">
             {tr('gpuDashboardPage.nodeAllocation.title', 'Node GPU Allocation')}
           </h2>
-          <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-300">
+          <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-300" data-testid="gpu-node-readiness">
             {nodeReadyCount} {tr('gpuDashboardPage.nodeAllocation.ready', 'ready')}
             {nodeNotReadyCount > 0 && (
               <span className="text-red-400"> / {nodeNotReadyCount} {tr('gpuDashboardPage.nodeAllocation.notReady', 'not ready')}</span>
@@ -58,13 +58,17 @@ export function NodeAllocationSection({ nodeAllocation, nodeReadyCount, nodeNotR
             return (
               <div
                 key={node.name}
+                data-testid="gpu-node-allocation"
+                data-node={node.name}
                 className="rounded-lg border border-slate-700/50 bg-slate-900/40 p-3 cursor-pointer hover:bg-slate-800/60 transition-colors"
                 onClick={() => openDetail({ kind: 'Node', name: node.name })}
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-ink">{node.name}</span>
-                    <span className={`badge ${getStatusColor(node.status)}`}>{node.status}</span>
+                    {nodeStatusParts(node.status).map((part) => (
+                      <span key={part} className={`badge ${nodeStatusBadge(part)}`}>{part}</span>
+                    ))}
                   </div>
                   <span className="text-xs text-slate-400">
                     {node.gpu_model ?? tr('common.unknown', 'Unknown')} {node.gpu_memory ? `• ${node.gpu_memory}` : ''}
@@ -79,7 +83,7 @@ export function NodeAllocationSection({ nodeAllocation, nodeReadyCount, nodeNotR
                       style={{ width: `${Math.min(usedPct, 100)}%` }}
                     />
                   </div>
-                  <span className="text-xs font-mono text-slate-300 whitespace-nowrap">
+                  <span className="text-xs font-mono text-slate-300 whitespace-nowrap" data-testid="gpu-node-allocation-value">
                     {node.gpu_used}/{node.gpu_allocatable}
                     <span className="text-slate-500 ml-1">({usedPct}%)</span>
                   </span>

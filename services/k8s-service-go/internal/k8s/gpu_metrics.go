@@ -69,31 +69,21 @@ func (s *Service) GetGPUMetrics(ctx context.Context) (map[string]interface{}, er
 		if m == nil {
 			return nil
 		}
-		uuid, _ := m["UUID"].(string)
+		uuid := dcgmLabel(m, "UUID", "uuid")
 		if uuid == "" {
-			device, _ := m["device"].(string)
-			hostname, _ := m["Hostname"].(string)
-			uuid = hostname + "/" + device
+			uuid = dcgmLabel(m, "hostname", "Hostname") + "/" + dcgmLabel(m, "device")
 		}
 		if g, ok := gpuMap[uuid]; ok {
 			return g
 		}
 		g := &gpuMetric{UUID: uuid}
-		if v, ok := m["gpu"].(string); ok {
-			g.GPU = v
-		}
-		if v, ok := m["Hostname"].(string); ok {
-			g.Hostname = v
-		}
-		if v, ok := m["modelName"].(string); ok {
-			g.ModelName = v
-		}
-		if v, ok := m["exported_pod"].(string); ok {
-			g.ExportedPod = v
-		}
-		if v, ok := m["exported_namespace"].(string); ok {
-			g.ExportedNamespace = v
-		}
+		g.GPU = dcgmLabel(m, "gpu")
+		g.Hostname = dcgmLabel(m, "hostname", "Hostname")
+		g.ModelName = dcgmLabel(m, "modelName")
+		// the GPU's pod: exported_pod where the scrape renamed the exporter's pod label for its own target label
+		// (honor_labels false), else pod (honor_labels true, or a target without one)
+		g.ExportedPod = dcgmLabel(m, "exported_pod", "pod")
+		g.ExportedNamespace = dcgmLabel(m, "exported_namespace", "namespace")
 		gpuMap[uuid] = g
 		return g
 	}
@@ -175,6 +165,17 @@ func (s *Service) GetGPUMetrics(ctx context.Context) (map[string]interface{}, er
 		"total_memory_mb":      totalMem,
 		"gpus":                 gpus,
 	}, nil
+}
+
+// dcgmLabel is the first of names a DCGM series carries: dcgm-exporter writes UUID (uuid with
+// --use-old-namespace) and, since 4.6.0, hostname where it wrote Hostname.
+func dcgmLabel(m map[string]interface{}, names ...string) string {
+	for _, n := range names {
+		if v, _ := m[n].(string); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // placeholder to keep fmt imported (used in prometheus.go via Sscanf)

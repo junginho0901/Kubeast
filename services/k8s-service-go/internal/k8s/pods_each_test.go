@@ -251,7 +251,9 @@ func TestGPUDashboard_PodsAPageAtATime(t *testing.T) {
 	for i := 0; i < 1200; i++ {
 		p := bulkPod(i, "a", corev1.PodRunning, "", "")
 		if i%400 == 0 {
-			p.Spec.Containers[0].Resources.Limits = corev1.ResourceList{"nvidia.com/gpu": resource.MustParse("2")}
+			// the request the API server sets from a limit written alone
+			gpu := corev1.ResourceList{"nvidia.com/gpu": resource.MustParse("2")}
+			p.Spec.Containers[0].Resources = corev1.ResourceRequirements{Limits: gpu, Requests: gpu}
 		}
 		api.pods = append(api.pods, p)
 	}

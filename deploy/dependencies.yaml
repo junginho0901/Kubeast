@@ -76,6 +76,12 @@ dependencies:
         match: 'prom/prometheus:v'
       - path: deploy/kind/cilium-prometheus.yaml
         match: 'one-pod Prometheus v'
+      - path: deploy/kind/gpu-metrics.yaml
+        match: 'prom/prometheus:v'
+      - path: deploy/kind/gpu-metrics.yaml
+        match: 'one-pod Prometheus v'
+      - path: scripts/kind-gpu.sh
+        match: '^PROM_IMAGE='
       - path: deploy/examples/target-cluster/prometheus-values.yaml
         match: '\(Prometheus v'
       - path: docs/cluster-requirements.md
