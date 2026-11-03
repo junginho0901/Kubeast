@@ -172,11 +172,24 @@ func buildWorkloadGraph(
 			edges = append(edges, rgEdge{Source: ownerID, Target: podID, Type: RGEdgeOwns})
 		}
 
-		// volumes and env references → ConfigMap, Secret, PVC (a PVC is a node only when listed)
+		// volumes and env references → ConfigMap, Secret, PVC (a PVC is a node only when listed). A ConfigMap or
+		// Secret is Missing until the namespace's list has it (buildNetworkConfigGraph marks it Active, and
+		// markUnlistedRefs Unknown where it could not be listed); one a pod needs to start is a warning.
 		for _, ref := range pod.refs {
 			id := rgNodeID(ref.kind, pod.namespace, ref.name)
 			if ref.kind != "PersistentVolumeClaim" {
-				addNode(rgNode{ID: id, Kind: ref.kind, Name: ref.name, Namespace: pod.namespace, Status: "Active"})
+				health := ""
+				if !ref.optional {
+					health = "warn"
+				}
+				if n, ok := nodeMap[id]; ok {
+					if n.Status == "Missing" && health != "" {
+						n.Health = health
+						nodeMap[id] = n
+					}
+				} else {
+					addNode(rgNode{ID: id, Kind: ref.kind, Name: ref.name, Namespace: pod.namespace, Status: "Missing", Health: health})
+				}
 			}
 			edges = append(edges, rgEdge{Source: podID, Target: id, Type: RGEdgeMounts})
 		}

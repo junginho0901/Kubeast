@@ -22,9 +22,9 @@ interface NamespaceLite {
 }
 
 interface Props {
-  // counts
-  nodeCount: number
-  edgeCount: number
+  // counts: the boxes and lines drawn (the filters' result) of the graph's (graphTotals)
+  shown: { nodes: number; edges: number }
+  totals: { nodes: number; edges: number }
   trafficLineCount?: number
   // namespaces
   namespaces: NamespaceLite[] | undefined
@@ -57,8 +57,8 @@ interface Props {
 }
 
 export function ResourceGraphHeader({
-  nodeCount,
-  edgeCount,
+  shown,
+  totals,
   trafficLineCount,
   namespaces,
   selectedNamespaces,
@@ -137,9 +137,17 @@ export function ResourceGraphHeader({
           {t('resourceGraph.title', 'Resource Graph')}
         </h1>
         <div className="flex items-center gap-2 text-xs text-slate-400">
-          <span>{t('resourceGraph.nodeCount', { defaultValue: '{{n}} nodes', n: nodeCount })}</span>
+          <span data-testid="graph-node-count" data-shown={shown.nodes} data-total={totals.nodes}>
+            {shown.nodes < totals.nodes
+              ? t('resourceGraph.nodeCountOf', { defaultValue: '{{shown}} of {{n}} nodes', shown: shown.nodes, n: totals.nodes })
+              : t('resourceGraph.nodeCount', { defaultValue: '{{n}} nodes', n: totals.nodes })}
+          </span>
           <span>·</span>
-          <span>{t('resourceGraph.edgeCount', { defaultValue: '{{n}} edges', n: edgeCount })}</span>
+          <span data-testid="graph-edge-count" data-shown={shown.edges} data-total={totals.edges}>
+            {shown.edges < totals.edges
+              ? t('resourceGraph.edgeCountOf', { defaultValue: '{{shown}} of {{n}} edges', shown: shown.edges, n: totals.edges })
+              : t('resourceGraph.edgeCount', { defaultValue: '{{n}} edges', n: totals.edges })}
+          </span>
           {podCounts && podCounts.pods > 0 && (
             <>
               <span>·</span>

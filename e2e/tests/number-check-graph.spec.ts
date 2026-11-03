@@ -110,4 +110,80 @@ test.describe('number check — resource graph', () => {
       kubectl(`delete namespace ${NS} --wait=true --timeout=120s --ignore-not-found`)
     }
   })
+
+  // A box the graph adds for a reference says what the lists have (Active, Missing — a warning when the pod needs it
+  // — or no status where the graph lists nothing of that kind, a Role), and the header counts the boxes and lines
+  // drawn of the graph's, a line to an object with no box (a claim that does not exist) not among them.
+  test('referenced objects say what the lists have, and the header counts what is drawn', async ({ page }) => {
+    test.setTimeout(120_000)
+    const RNS = 'e2e-graph-refs'
+    const refs = `
+apiVersion: v1
+kind: Namespace
+metadata: {name: ${RNS}}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: refs-present, namespace: ${RNS}}
+data: {k: v}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: refs, namespace: ${RNS}}
+spec:
+  terminationGracePeriodSeconds: 0
+  containers:
+  - {name: app, image: registry.k8s.io/pause:3.10}
+  volumes:
+  - {name: a, configMap: {name: refs-present}}
+  - {name: b, configMap: {name: refs-gone}}
+  - {name: c, configMap: {name: refs-maybe, optional: true}}
+  - {name: d, persistentVolumeClaim: {claimName: refs-noclaim}}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: refs-rb, namespace: ${RNS}}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: refs-nope}
+subjects:
+- {kind: ServiceAccount, name: default, namespace: ${RNS}}
+- {kind: ServiceAccount, name: refs-ghost, namespace: ${RNS}}
+`
+    kubectl(`delete namespace/${RNS} --ignore-not-found --timeout=120s`)
+    kubectl('apply -f -', refs)
+    try {
+      // the cluster: which referenced objects exist
+      await expect.poll(() => kubectl(`get serviceaccount/default -n ${RNS} -o name --ignore-not-found`), { timeout: 30_000 }).toBe('serviceaccount/default')
+      const exists = (what: string) => kubectl(`get ${what} -n ${RNS} -o name --ignore-not-found`) !== ''
+      expect([exists('configmap/refs-present'), exists('configmap/refs-gone'), exists('configmap/refs-maybe'), exists('pvc/refs-noclaim'), exists('role/refs-nope'), exists('serviceaccount/refs-ghost')],
+        'present, gone, maybe, claim, role, ghost').toEqual([true, false, false, false, false, false])
+
+      type Graph = { nodes: Box[]; edges: { source: string; target: string }[] }
+      const graph = (await api(page, `/api/v1/cluster/resource-graph?namespaces=${RNS}`)) as Graph
+      const state = (id: string) => { const n = graph.nodes.find((x) => x.id === id); return n ? `${n.status}|${n.health ?? ''}` : 'no box' }
+      expect.soft({
+        present: state(`ConfigMap/${RNS}/refs-present`), gone: state(`ConfigMap/${RNS}/refs-gone`), maybe: state(`ConfigMap/${RNS}/refs-maybe`),
+        role: state(`Role/${RNS}/refs-nope`), sa: state(`ServiceAccount/${RNS}/default`), ghost: state(`ServiceAccount/${RNS}/refs-ghost`),
+      }, 'the boxes the references made').toEqual({
+        present: 'Active|', gone: 'Missing|warn', maybe: 'Missing|', role: '|', sa: 'Active|', ghost: 'Missing|',
+      })
+
+      // the header against the screen: boxes and lines drawn, of the graph's (lines to a missing claim never drawn)
+      const ids = new Set(graph.nodes.map((n) => n.id))
+      const whole = graph.edges.filter((e) => ids.has(e.source) && ids.has(e.target)).length
+      expect(graph.edges.length - whole, 'a line to the missing claim').toBeGreaterThan(0)
+      await page.goto(`${GRAPH.path}?cluster=${GRAPH.cluster}&namespace=${RNS}`)
+      await expect.poll(() => page.locator('.react-flow__node[data-id]').count(), { timeout: 30_000 }).toBeGreaterThan(0)
+      const header = async (re: RegExp) => {
+        const text = (await page.locator('span').filter({ hasText: re }).first().innerText()).trim()
+        const nums = (text.match(/\d+/g) ?? []).map(Number)
+        // "12 of 20 nodes" / "리소스 20개 중 12개": shown and the whole; "20 nodes" / "리소스 20개": both the same
+        return nums.length === 2 ? (/ of /.test(text) ? { shown: nums[0], total: nums[1] } : { shown: nums[1], total: nums[0] }) : { shown: nums[0], total: nums[0] }
+      }
+      const drawn = { nodes: await page.locator('.react-flow__node[data-id]').count(), edges: await page.locator('.react-flow__edge').count() }
+      expect.soft(await header(/^(\d+ of )?\d+ nodes$|^리소스 \d+개( 중 \d+개)?$/), 'the node count').toEqual({ shown: drawn.nodes, total: graph.nodes.length })
+      expect.soft(await header(/^(\d+ of )?\d+ edges$|^연결 \d+개( 중 \d+개)?$/), 'the edge count').toEqual({ shown: drawn.edges, total: whole })
+    } finally {
+      kubectl(`delete namespace/${RNS} --wait=false --ignore-not-found`)
+    }
+  })
 })

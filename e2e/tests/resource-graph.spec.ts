@@ -196,7 +196,8 @@ test.describe('resource graph for a Read user', () => {
 
       // a reader lists RoleBindings through kubeast:cluster-reader; Secrets stay refused
       await expect(page.getByTestId('resource-graph-forbidden')).toHaveText(/^Secret[:\s]|view Secret in this cluster/, { timeout: 30000 })
-      await expect(page.getByText(new RegExp(`^(${expected} nodes?|리소스 ${expected}개)$`))).toHaveCount(1)
+      // the header's whole is the graph's boxes (it shows "drawn of whole" while filters hide some)
+      await expect(page.getByTestId('graph-node-count')).toHaveAttribute('data-total', String(expected))
       await expect(page.locator(NODES).first()).toBeVisible({ timeout: 30000 })
     } finally {
       await ctx.close()

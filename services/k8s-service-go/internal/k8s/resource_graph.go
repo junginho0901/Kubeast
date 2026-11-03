@@ -85,7 +85,13 @@ type rgPod struct {
 	refs []rgPodRef
 }
 
-type rgPodRef struct{ kind, name string }
+// optional: the pod starts without it (configMap/secret optional: true)
+type rgPodRef struct {
+	kind, name string
+	optional   bool
+}
+
+func isTrue(b *bool) bool { return b != nil && *b }
 
 func toRGPod(p *corev1.Pod) rgPod {
 	health, _ := podHealth(p)
@@ -102,22 +108,22 @@ func toRGPod(p *corev1.Pod) rgPod {
 	}
 	for _, vol := range p.Spec.Volumes {
 		if vol.ConfigMap != nil {
-			out.refs = append(out.refs, rgPodRef{"ConfigMap", vol.ConfigMap.Name})
+			out.refs = append(out.refs, rgPodRef{"ConfigMap", vol.ConfigMap.Name, isTrue(vol.ConfigMap.Optional)})
 		}
 		if vol.Secret != nil {
-			out.refs = append(out.refs, rgPodRef{"Secret", vol.Secret.SecretName})
+			out.refs = append(out.refs, rgPodRef{"Secret", vol.Secret.SecretName, isTrue(vol.Secret.Optional)})
 		}
 		if vol.PersistentVolumeClaim != nil {
-			out.refs = append(out.refs, rgPodRef{"PersistentVolumeClaim", vol.PersistentVolumeClaim.ClaimName})
+			out.refs = append(out.refs, rgPodRef{"PersistentVolumeClaim", vol.PersistentVolumeClaim.ClaimName, false})
 		}
 	}
 	for _, c := range p.Spec.Containers {
 		for _, ef := range c.EnvFrom {
 			if ef.ConfigMapRef != nil {
-				out.refs = append(out.refs, rgPodRef{"ConfigMap", ef.ConfigMapRef.Name})
+				out.refs = append(out.refs, rgPodRef{"ConfigMap", ef.ConfigMapRef.Name, isTrue(ef.ConfigMapRef.Optional)})
 			}
 			if ef.SecretRef != nil {
-				out.refs = append(out.refs, rgPodRef{"Secret", ef.SecretRef.Name})
+				out.refs = append(out.refs, rgPodRef{"Secret", ef.SecretRef.Name, isTrue(ef.SecretRef.Optional)})
 			}
 		}
 		for _, env := range c.Env {
@@ -125,10 +131,10 @@ func toRGPod(p *corev1.Pod) rgPod {
 				continue
 			}
 			if env.ValueFrom.ConfigMapKeyRef != nil {
-				out.refs = append(out.refs, rgPodRef{"ConfigMap", env.ValueFrom.ConfigMapKeyRef.Name})
+				out.refs = append(out.refs, rgPodRef{"ConfigMap", env.ValueFrom.ConfigMapKeyRef.Name, isTrue(env.ValueFrom.ConfigMapKeyRef.Optional)})
 			}
 			if env.ValueFrom.SecretKeyRef != nil {
-				out.refs = append(out.refs, rgPodRef{"Secret", env.ValueFrom.SecretKeyRef.Name})
+				out.refs = append(out.refs, rgPodRef{"Secret", env.ValueFrom.SecretKeyRef.Name, isTrue(env.ValueFrom.SecretKeyRef.Optional)})
 			}
 		}
 	}
@@ -233,10 +239,36 @@ func buildResourceGraph(res *rgResources, namespaces []string, opts ResourceGrap
 
 	edges = buildStorageRBACGraph(res, nodeMap, addNode, edges, inScope)
 
+	markUnlistedRefs(nodeMap, res.forbidden, namespaces)
+
 	if opts.GroupPods {
 		edges = groupPods(nodeMap, edges, res.pods, opts)
 	}
 	return nodeMap, edges
+}
+
+// markUnlistedRefs leaves a referenced node the graph could not check without a status: a Missing ConfigMap,
+// Secret or ServiceAccount is one its namespace's list did not have, unless the identity may not list that kind
+// there (forbidden: the kind, or "Kind (ns, …)") or the graph did not read that namespace (namespaces, all when empty).
+func markUnlistedRefs(nodeMap map[string]rgNode, forbidden []string, namespaces []string) {
+	read := func(ns string) bool { return len(namespaces) == 0 || slices.Contains(namespaces, ns) }
+	refused := func(kind, ns string) bool {
+		for _, f := range forbidden {
+			if f == kind {
+				return true
+			}
+			if rest, ok := strings.CutPrefix(f, kind+" ("); ok && slices.Contains(strings.Split(strings.TrimSuffix(rest, ")"), ", "), ns) {
+				return true
+			}
+		}
+		return false
+	}
+	for id, n := range nodeMap {
+		if n.Status == "Missing" && (!read(n.Namespace) || refused(n.Kind, n.Namespace)) {
+			n.Status, n.Health = "", ""
+			nodeMap[id] = n
+		}
+	}
 }
 
 // selectorMatchesStr checks if all key-value pairs in selector exist in labels.
