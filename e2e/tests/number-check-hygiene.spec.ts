@@ -109,6 +109,60 @@ test.describe('Number check — Cluster hygiene', () => {
     await expect.soft(cell, 'warning in tls.expiry').toContainText(new RegExp(`(Warning|경고) ${tlsBy('warning')}(?!\\d)`))
   })
 
+  test('an owner whose pods differ mid-rollout has a row per finding as each pod gives it, with its pods', async ({ page }) => {
+    test.setTimeout(180_000)
+    // two Deployments stuck mid-rollout: no scheduler takes their pods, so the new one never becomes available and
+    // the two old pods stay — one changes the image, the other only adds its own exemption to the new pods
+    const deployment = (name: string, image: string, annotations?: Record<string, string>) => JSON.stringify({
+      apiVersion: 'apps/v1', kind: 'Deployment', metadata: { name, namespace: NS },
+      spec: {
+        replicas: 2, selector: { matchLabels: { app: name } },
+        strategy: { type: 'RollingUpdate', rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } },
+        template: {
+          metadata: { labels: { app: name }, ...(annotations ? { annotations } : {}) },
+          spec: { schedulerName: 'e2e-none', containers: [{ name: 'app', image }] },
+        },
+      },
+    })
+    const exempt = { 'kubeast.io/hygiene-exempt': 'image.latest', 'kubeast.io/hygiene-exempt-reason': 'e2e new template' }
+    kubectl('apply -f -', deployment('rollout-image', 'e2e.local/web:latest'))
+    kubectl('apply -f -', deployment('rollout-exempt', 'e2e.local/api:latest'))
+    const pods = (name: string) => kubectl(`get pods -n ${NS} -l app=${name} -o jsonpath='{range .items[*]}{.spec.containers[0].image}{" "}{.metadata.annotations.kubeast\\.io/hygiene-exempt}{"\\n"}{end}'`).split('\n').filter(Boolean)
+    await expect.poll(() => [pods('rollout-image').length, pods('rollout-exempt').length], { timeout: 60_000 }).toEqual([2, 2])
+    kubectl('apply -f -', deployment('rollout-image', 'e2e.local/web'))
+    kubectl('apply -f -', deployment('rollout-exempt', 'e2e.local/api:latest', exempt))
+    await expect.poll(() => [pods('rollout-image').length, pods('rollout-exempt').length], { timeout: 60_000 }).toEqual([3, 3])
+    // what kubectl lists: the pods by image, and by whether their own annotation exempts image.latest
+    const count = (xs: string[]) => xs.reduce<Record<string, number>>((m, x) => ({ ...m, [x]: (m[x] ?? 0) + 1 }), {})
+    const wantImage = count(pods('rollout-image').map((l) => `image ${l.split(' ')[0]}`))
+    const wantExempt = count(pods('rollout-exempt').map((l) => (l.split(' ')[1] ? 'exempt' : 'not exempt')))
+    expect(wantImage, 'kubectl: two old pods and one new').toEqual({ 'image e2e.local/web:latest': 2, 'image e2e.local/web': 1 })
+    expect(wantExempt, 'kubectl: one exempt new pod').toEqual({ exempt: 1, 'not exempt': 2 })
+
+    const rows = (rep: Report, name: string) => (rep.findings as (Finding & { kind: string; message: string; pods?: number })[])
+      .filter((f) => f.namespace === NS && f.kind === 'Deployment' && f.name === name && f.check === 'image.latest')
+    const rep = await reportOf(page)
+    const byImage: Record<string, number> = {}
+    for (const f of rows(rep, 'rollout-image')) byImage[f.message] = (byImage[f.message] ?? 0) + (f.pods ?? 1)
+    const byExempt: Record<string, number> = {}
+    for (const f of rows(rep, 'rollout-exempt')) byExempt[f.exempt ? 'exempt' : 'not exempt'] = (byExempt[f.exempt ? 'exempt' : 'not exempt'] ?? 0) + (f.pods ?? 1)
+    expect.soft(byImage, 'a row per image, with its pods').toEqual(wantImage)
+    expect.soft(byExempt, 'a row per own exemption, with its pods').toEqual(wantExempt)
+
+    // the screen: the rows of rollout-image, each message with its pods ("N Pods" above one)
+    await open(page)
+    await page.getByPlaceholder(/Search Namespace, name, message|Namespace, 이름, 내용 검색/).fill('rollout-image')
+    const onScreen: Record<string, number> = {}
+    for (const row of await page.getByTestId('hygiene-finding-row').filter({ hasText: /image e2e\.local\/web/ }).all()) {
+      const cells = row.locator('td')
+      const object = await cells.nth(3).innerText()
+      const message = (await cells.nth(4).innerText()).split('\n')[0].trim()
+      const n = object.match(/(\d+) Pods|Pod (\d+)개/)
+      onScreen[message] = (onScreen[message] ?? 0) + Number(n?.[1] ?? n?.[2] ?? 1)
+    }
+    expect.soft(onScreen, 'the screen rows').toEqual(wantImage)
+  })
+
   test('with more findings than the report lists, the tab counts all of them and the note says how many are listed', async ({ page }) => {
     test.setTimeout(420_000)
     // 5100 unreadable certificates, a warning finding each

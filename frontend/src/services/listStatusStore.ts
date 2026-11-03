@@ -4,16 +4,19 @@
 // list) and "error" when the request failed on the server or the network
 // (5xx, timeout). A later successful read of the segment clears it. Fed by
 // LIST_STATUS_EVENT from the API client; read by the list tables' empty row
-// and by the create buttons of CRD-backed pages. Reset with the forbidden
-// store on every route or cluster change.
+// and by the create buttons of CRD-backed pages, which wait for the segment's
+// first answer (a 403 counts, FORBIDDEN_EVENT) so a cluster without the CRD
+// never shows them for the moment before its list says so. Reset with the
+// forbidden store on every route or cluster change.
 
 import { useSyncExternalStore } from 'react'
-import { LIST_STATUS_EVENT, type ListStatusDetail } from './api/client'
+import { FORBIDDEN_EVENT, LIST_STATUS_EVENT, type ListStatusDetail } from './api/client'
 import { listSegmentFromUrl } from '@/utils/forbiddenResource'
 
 export type ListStatus = { state: 'notInstalled' } | { state: 'error'; code?: number }
 
 const statuses = new Map<string, ListStatus>()
+const answered = new Set<string>()
 const listeners = new Set<() => void>()
 let version = 0
 
@@ -22,21 +25,35 @@ const notify = () => {
   for (const l of listeners) l()
 }
 
+// the segment's list has answered on this page; true when that is news
+const markAnswered = (seg: string): boolean => {
+  if (answered.has(seg)) return false
+  answered.add(seg)
+  return true
+}
+
 export function recordListStatus(d: ListStatusDetail): void {
   const seg = listSegmentFromUrl(d.url)
   if (!seg) return
+  const first = markAnswered(seg)
   const prev = statuses.get(seg)
   if (d.state === 'ok') {
-    if (!prev) return
-    statuses.delete(seg)
+    if (prev) statuses.delete(seg)
+    else if (!first) return
   } else if (d.state === 'notInstalled') {
-    if (prev?.state === 'notInstalled') return
+    if (prev?.state === 'notInstalled' && !first) return
     statuses.set(seg, { state: 'notInstalled' })
   } else {
-    if (prev?.state === 'error' && prev.code === d.code) return
+    if (prev?.state === 'error' && prev.code === d.code && !first) return
     statuses.set(seg, { state: 'error', code: d.code })
   }
   notify()
+}
+
+/** A 403 on the segment's list: answered, with no status of its own (forbiddenStore keeps it). */
+export function recordListForbidden(url: string): void {
+  const seg = listSegmentFromUrl(url)
+  if (seg && markAnswered(seg)) notify()
 }
 
 if (typeof window !== 'undefined') {
@@ -44,11 +61,16 @@ if (typeof window !== 'undefined') {
     const d = (e as CustomEvent<ListStatusDetail>).detail
     if (d?.url) recordListStatus(d)
   })
+  window.addEventListener(FORBIDDEN_EVENT, (e: Event) => {
+    const url = (e as CustomEvent<{ url?: string }>).detail?.url
+    if (url) recordListForbidden(url)
+  })
 }
 
 export function resetListStatus(): void {
-  if (statuses.size === 0) return
+  if (statuses.size === 0 && answered.size === 0) return
   statuses.clear()
+  answered.clear()
   notify()
 }
 
@@ -68,7 +90,13 @@ export function useListStatus(segment: string): ListStatus | undefined {
   return getListStatus(segment)
 }
 
-/** True when the cluster does not serve this segment's kind (CRD not installed). */
-export function useNotInstalled(segment: string): boolean {
-  return useListStatus(segment)?.state === 'notInstalled'
+/** True once this segment's list has answered on the page and the cluster serves its kind (its CRD is installed). */
+export function isKindServed(segment: string): boolean {
+  return answered.has(segment) && statuses.get(segment)?.state !== 'notInstalled'
+}
+
+/** isKindServed for a CRD-backed page's create button, which shows only then. */
+export function useKindServed(segment: string): boolean {
+  useSyncExternalStore(subscribe, getVersion, getVersion)
+  return isKindServed(segment)
 }

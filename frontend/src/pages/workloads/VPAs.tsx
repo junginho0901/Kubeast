@@ -8,7 +8,7 @@ import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useCanCreate } from '@/hooks/useCanCreate'
-import { useNotInstalled } from '@/services/listStatusStore'
+import { useKindServed } from '@/services/listStatusStore'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Plus, RefreshCw } from 'lucide-react'
@@ -47,8 +47,8 @@ export default function VPAs() {
         : api.getVPAs(selectedNamespace, false)
     ),
   })
-  const notInstalled = useNotInstalled('vpas')
-  const canCreate = useCanCreate('resource.vpa.create', { group: 'autoscaling.k8s.io', resource: 'verticalpodautoscalers', namespace: selectedNamespace }) && !notInstalled
+  const served = useKindServed('vpas')
+  const canCreate = useCanCreate('resource.vpa.create', { group: 'autoscaling.k8s.io', resource: 'verticalpodautoscalers', namespace: selectedNamespace }) && served
 
   useKubeWatchList({
     enabled: true,
