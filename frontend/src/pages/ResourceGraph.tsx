@@ -34,6 +34,7 @@ import { Glance } from './resource-graph/Glance'
 import { PodGroupList } from './resource-graph/PodGroupList'
 import { ResourceGraphHeader } from './resource-graph/ResourceGraphHeader'
 import { useResourceGraphLayout } from './resource-graph/useResourceGraphLayout'
+import { graphTotals } from './resource-graph/counts'
 import { TrafficControls } from './resource-graph/TrafficControls'
 import { TrafficPanel } from './resource-graph/TrafficPanel'
 import { RoutedEdge } from './resource-graph/RoutedEdge'
@@ -185,12 +186,25 @@ export default function ResourceGraph() {
   const trafficErrorText = trafficError ? trafficError.response?.data?.detail ?? trafficError.response?.data?.error ?? trafficError.message : undefined
 
   // 플로팅 AI 위젯용 스냅샷
+  const { nodes: laidNodes, edges: laidEdges, onNodesChange, onEdgesChange, layoutReady, selfLoops, routed, shown } = useResourceGraphLayout({
+    graphData,
+    kindFilters,
+    edgeTypeFilters,
+    searchQuery,
+    statusFilter,
+    groupBy,
+    view,
+    traffic: traffic?.lines,
+  })
+  // the header and the floating chat count the same: the boxes and lines drawn of the graph's (graphTotals)
+  const totals = useMemo(() => graphTotals(graphData), [graphData])
+
   // visible_items: 화면에 그려진 노드 중 (1) 검색·필터 통과 + (2) 문제 있는 것 우선,
   // 토큰 한도 안에서 30 개 cap. 사용자가 그래프에 보이는 박스에 대해 묻기 위함.
   const aiSnapshot = useMemo(() => {
     if (!graphData) return null
-    const totalNodes = graphData.nodes?.length ?? 0
-    const totalEdges = graphData.edges?.length ?? 0
+    const totalNodes = totals.nodes
+    const totalEdges = totals.edges
     const byKind: Record<string, number> = {}
     for (const n of graphData.nodes ?? []) {
       byKind[n.kind] = (byKind[n.kind] ?? 0) + (n.group ? n.count ?? 0 : 1)
@@ -237,7 +251,7 @@ export default function ResourceGraph() {
 
     return {
       source: 'base' as const,
-      summary: `리소스 그래프 · ${nsArray?.join(', ') ?? '선택 없음'} · 노드 ${totalNodes}개, 엣지 ${totalEdges}개${problematicCount > 0 ? `, 문제 ${problematicCount}` : ''}`,
+      summary: `리소스 그래프 · ${nsArray?.join(', ') ?? '선택 없음'} · 노드 ${totalNodes}개 중 ${shown.nodes}개, 엣지 ${totalEdges}개 중 ${shown.edges}개 표시${problematicCount > 0 ? `, 문제 ${problematicCount}` : ''}`,
       data: {
         filters: {
           namespaces: nsArray,
@@ -247,26 +261,15 @@ export default function ResourceGraph() {
           group_by: groupBy,
           status_filter: statusFilter,
         },
-        stats: { total_nodes: totalNodes, total_edges: totalEdges, by_kind: byKind, filtered_total: filteredNodes.length, problematic: problematicCount, pod_groups: podCounts.groups || undefined },
+        stats: { total_nodes: totalNodes, total_edges: totalEdges, shown_nodes: shown.nodes, shown_edges: shown.edges, by_kind: byKind, filtered_total: filteredNodes.length, problematic: problematicCount, pod_groups: podCounts.groups || undefined },
         visible_items: visibleItems,
         // the traffic lines on screen, counted only: the AI reads flows itself (network_flows)
         traffic: traffic ? { view, source, lines: traffic.lines.length, dropped_lines: traffic.lines.filter((l) => l.dropped > 0).length, truncated: traffic.truncated || undefined } : undefined,
       },
     }
-  }, [graphData, nsArray, kindFilters, edgeTypeFilters, searchQuery, groupBy, statusFilter, traffic, view, source, podCounts])
+  }, [graphData, nsArray, kindFilters, edgeTypeFilters, searchQuery, groupBy, statusFilter, traffic, view, source, podCounts, totals, shown])
 
   useAIContext(aiSnapshot, [aiSnapshot])
-
-  const { nodes: laidNodes, edges: laidEdges, onNodesChange, onEdgesChange, layoutReady, selfLoops, routed } = useResourceGraphLayout({
-    graphData,
-    kindFilters,
-    edgeTypeFilters,
-    searchQuery,
-    statusFilter,
-    groupBy,
-    view,
-    traffic: traffic?.lines,
-  })
   // the box whose drawer is open keeps its lines lit (a stand-in by the end it stands for)
   const drawerNode = useMemo(() => {
     if (!routed || !drawerTarget) return undefined
@@ -340,14 +343,13 @@ export default function ResourceGraph() {
     setGroupPods(false)
   }, [confirm, podCounts.pods, t])
 
-  const nodeCount = graphData?.nodes?.length || 0
-  const edgeCount = graphData?.edges?.length || 0
+  const nodeCount = totals.nodes
 
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 64px)' }}>
       <ResourceGraphHeader
-        nodeCount={nodeCount}
-        edgeCount={edgeCount}
+        shown={shown}
+        totals={totals}
         trafficLineCount={traffic?.lines.length}
         namespaces={namespaces}
         selectedNamespaces={selectedNamespaces}

@@ -58,28 +58,22 @@ func buildNetworkConfigGraph(
 		}
 	}
 
-	// --- ConfigMaps (ensure nodes exist) ---
+	// --- ConfigMaps and Secrets: the listed ones are Active, also where a pod's reference made the node first (Missing)
 	for i := range res.configMaps {
 		cm := &res.configMaps[i]
 		if !inScope(cm.Namespace) {
 			continue
 		}
-		addNode(rgNode{
-			ID: rgNodeID("ConfigMap", cm.Namespace, cm.Name), Kind: "ConfigMap",
-			Name: cm.Name, Namespace: cm.Namespace, Status: "Active",
-		})
+		id := rgNodeID("ConfigMap", cm.Namespace, cm.Name)
+		nodeMap[id] = rgNode{ID: id, Kind: "ConfigMap", Name: cm.Name, Namespace: cm.Namespace, Status: "Active"}
 	}
-
-	// --- Secrets (ensure nodes exist) ---
 	for i := range res.secrets {
 		sec := &res.secrets[i]
 		if !inScope(sec.Namespace) {
 			continue
 		}
-		addNode(rgNode{
-			ID: rgNodeID("Secret", sec.Namespace, sec.Name), Kind: "Secret",
-			Name: sec.Name, Namespace: sec.Namespace, Status: "Active",
-		})
+		id := rgNodeID("Secret", sec.Namespace, sec.Name)
+		nodeMap[id] = rgNode{ID: id, Kind: "Secret", Name: sec.Name, Namespace: sec.Namespace, Status: "Active"}
 	}
 
 	// --- Ingresses → Service ---

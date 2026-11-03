@@ -144,8 +144,8 @@ export function useResourceGraphLayout({
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
 
-  const { filteredNodes, filteredEdges, routed, layoutData, selfLoops } = useMemo(() => {
-    if (!graphData?.nodes || !graphData?.edges) return { filteredNodes: [] as Node[], filteredEdges: [] as Edge[], routed: false, layoutData: graphData, selfLoops: 0 }
+  const { filteredNodes, filteredEdges, routed, layoutData, selfLoops, shown } = useMemo(() => {
+    if (!graphData?.nodes || !graphData?.edges) return { filteredNodes: [] as Node[], filteredEdges: [] as Edge[], routed: false, layoutData: graphData, selfLoops: 0, shown: { nodes: 0, edges: 0 } }
 
     // Filter nodes
     let gNodes = graphData.nodes.filter(n => kindFilters.has(n.kind))
@@ -262,7 +262,9 @@ export function useResourceGraphLayout({
     // with traffic on, every line is laid out and routed around the boxes
     const lines = (split?.edges ?? placed.edges).map(trafficEdge)
     const data = placed.peers.length > 0 ? { nodes: [...graphData.nodes, ...placed.peers], edges: graphData.edges } : graphData
-    return { filteredNodes: [...rfNodes, ...peerNodes], filteredEdges: [...rfEdges, ...lines], routed: withTraffic, layoutData: data, selfLoops: placed.selfLoops }
+    // the boxes and relationship lines drawn (the search only dims; stand-ins and traffic lines are counted apart)
+    const shown = { nodes: rfNodes.length, edges: rfEdges.length }
+    return { filteredNodes: [...rfNodes, ...peerNodes], filteredEdges: [...rfEdges, ...lines], routed: withTraffic, layoutData: data, selfLoops: placed.selfLoops, shown }
   }, [graphData, kindFilters, edgeTypeFilters, searchQuery, statusFilter, view, traffic])
 
   useEffect(() => {
@@ -297,5 +299,5 @@ export function useResourceGraphLayout({
     return () => { stale = true }
   }, [filteredNodes, filteredEdges, routed, groupBy, layoutData, view, setNodes, setEdges])
 
-  return { nodes, edges, onNodesChange, onEdgesChange, layoutReady, selfLoops, routed }
+  return { nodes, edges, onNodesChange, onEdgesChange, layoutReady, selfLoops, routed, shown }
 }

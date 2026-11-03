@@ -83,8 +83,9 @@ func buildStorageRBACGraph(
 			roleNS = ""
 		}
 		roleID := rgNodeID(roleKind, roleNS, roleName)
+		// the graph does not list Roles or ClusterRoles: whether the role exists is not known (no status)
 		addNode(rgNode{
-			ID: roleID, Kind: roleKind, Name: roleName, Namespace: roleNS, Status: "Active",
+			ID: roleID, Kind: roleKind, Name: roleName, Namespace: roleNS,
 		})
 		edges = append(edges, rgEdge{Source: rbID, Target: roleID, Type: RGEdgeBinds})
 
@@ -95,24 +96,23 @@ func buildStorageRBACGraph(
 					subjNS = rb.Namespace
 				}
 				saID := rgNodeID("ServiceAccount", subjNS, subj.Name)
+				// Missing until the ServiceAccount list below has it (markUnlistedRefs: unknown where not read)
 				addNode(rgNode{
-					ID: saID, Kind: "ServiceAccount", Name: subj.Name, Namespace: subjNS, Status: "Active",
+					ID: saID, Kind: "ServiceAccount", Name: subj.Name, Namespace: subjNS, Status: "Missing",
 				})
 				edges = append(edges, rgEdge{Source: rbID, Target: saID, Type: RGEdgeBinds})
 			}
 		}
 	}
 
-	// --- ServiceAccounts (ensure nodes exist) ---
+	// --- ServiceAccounts: the listed ones are Active, also where a binding's subject made the node first (Missing)
 	for i := range res.serviceAccounts {
 		sa := &res.serviceAccounts[i]
 		if !inScope(sa.Namespace) {
 			continue
 		}
-		addNode(rgNode{
-			ID: rgNodeID("ServiceAccount", sa.Namespace, sa.Name), Kind: "ServiceAccount",
-			Name: sa.Name, Namespace: sa.Namespace, Status: "Active",
-		})
+		id := rgNodeID("ServiceAccount", sa.Namespace, sa.Name)
+		nodeMap[id] = rgNode{ID: id, Kind: "ServiceAccount", Name: sa.Name, Namespace: sa.Namespace, Status: "Active"}
 	}
 
 	// --- ServiceAccount used by Deployments/DaemonSets ---
