@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compareResults, toSearchResult } from './searchEngine'
+import { compareResults, rememberPrinterStatus, toSearchResult } from './searchEngine'
 
 const NOW = Date.now()
 const made = (name: string, agoMs?: number) =>
@@ -21,5 +21,27 @@ describe('compareResults', () => {
   it('orders the other columns as text', () => {
     const rows = [made('web-2'), made('api'), made('web-10')]
     expect([...rows].sort((a, b) => compareResults(a, b, 'name')).map((r) => r.name)).toEqual(['api', 'web-10', 'web-2'])
+  })
+})
+
+describe('the Status column', () => {
+  const pod = () => ({ kind: 'Pod', metadata: { name: 'crash', namespace: 'default' }, status: { phase: 'Running' } })
+
+  it("shows kubectl's STATUS the server sent for the object, not its phase", () => {
+    const item = pod()
+    rememberPrinterStatus(item, 'CrashLoopBackOff')
+    expect(toSearchResult(item).status).toBe('CrashLoopBackOff')
+  })
+
+  it('shows an empty STATUS cell as -', () => {
+    const item = pod()
+    rememberPrinterStatus(item, '')
+    expect(toSearchResult(item).status).toBe('-')
+  })
+
+  it('reads the phase or the Ready condition where the kind prints no STATUS', () => {
+    expect(toSearchResult(pod()).status).toBe('Running')
+    const deploy = { kind: 'Deployment', metadata: { name: 'web' }, status: { conditions: [{ type: 'Available', status: 'False' }] } }
+    expect(toSearchResult(deploy).status).toBe('NotReady')
   })
 })
