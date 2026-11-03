@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown, Check, Search } from 'lucide-react'
 import { NON_LISTABLE } from './nonListable'
+import { withSearchTypes } from './apiResources'
 
 export interface ResourceTypeOption {
   name: string
@@ -44,15 +45,8 @@ export default function ResourceTypePicker({ selected, onChange, extraResources 
   const [filter, setFilter] = useState('')
 
   const allResources = useMemo(() => {
-    const extra = extraResources ?? []
-    const seen = new Set(BUILTIN_RESOURCES.map(r => r.name))
-    const deduped = extra.filter(r => {
-      if (seen.has(r.name) || NON_LISTABLE.has(r.name)) return false
-      if (r.verbs && !r.verbs.includes('list')) return false
-      seen.add(r.name)
-      return true
-    })
-    return [...BUILTIN_RESOURCES, ...deduped]
+    const extra = (extraResources ?? []).filter(r => !NON_LISTABLE.has(r.name) && (!r.verbs || r.verbs.includes('list')))
+    return withSearchTypes([...BUILTIN_RESOURCES, ...extra])
   }, [extraResources])
 
   const filtered = useMemo(() => {
@@ -64,7 +58,7 @@ export default function ResourceTypePicker({ selected, onChange, extraResources 
   }, [allResources, filter])
 
   const grouped = useMemo(() => {
-    const map = new Map<string, ResourceTypeOption[]>()
+    const map = new Map<string, typeof filtered>()
     for (const r of filtered) {
       const g = r.group || 'core'
       if (!map.has(g)) map.set(g, [])
@@ -85,7 +79,7 @@ export default function ResourceTypePicker({ selected, onChange, extraResources 
     onChange(next)
   }
 
-  const selectAll = () => onChange(new Set(filtered.map(r => r.name)))
+  const selectAll = () => onChange(new Set(filtered.map(r => r.type)))
   const clearAll = () => onChange(new Set())
 
   return (
@@ -136,11 +130,12 @@ export default function ResourceTypePicker({ selected, onChange, extraResources 
                     {group}
                   </div>
                   {resources.map(r => {
-                    const checked = selected.has(r.name)
+                    const checked = selected.has(r.type)
                     return (
                       <button
-                        key={r.name}
-                        onClick={() => toggle(r.name)}
+                        key={r.type}
+                        data-testid={`search-type-${r.type}`}
+                        onClick={() => toggle(r.type)}
                         className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
                           checked ? 'bg-primary-500/10 text-primary-300' : 'text-slate-300 hover:bg-slate-700'
                         }`}

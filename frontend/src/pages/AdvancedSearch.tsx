@@ -40,13 +40,11 @@ export default function AdvancedSearch() {
   const [namespace, setNamespace] = useState<string>('')
   const [maxItemsPerResource, setMaxItemsPerResource] = useState(10_000)
   const [refetchIntervalMs, setRefetchIntervalMs] = useState(0)
-  const failedTypesRef = useRef(new Set<string>())
 
   const deferredQuery = useDeferredValue(rawQuery)
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_RESOURCES, JSON.stringify([...selectedResources]))
-    failedTypesRef.current.clear()
   }, [selectedResources])
 
   // Fetch namespace list
@@ -92,19 +90,18 @@ export default function AdvancedSearch() {
       signal?.addEventListener('abort', () => controller.abort())
 
       const items: Record<string, unknown>[] = []
-      const errors: { type: string; error: string }[] = []
+      // loaded: the objects the list gave before it failed on a later page
+      const errors: { type: string; error: string; loaded?: number }[] = []
       const cut: { type: string; limit: number; remaining?: number }[] = []
 
-      const typesToFetch = resourceTypes.filter(t => !failedTypesRef.current.has(t))
-
+      // every selected type on every read, so a type that failed once is tried and reported again
       const CONCURRENCY = 4
-      for (let i = 0; i < typesToFetch.length; i += CONCURRENCY) {
+      for (let i = 0; i < resourceTypes.length; i += CONCURRENCY) {
         if (controller.signal.aborted) break
-        const batch = typesToFetch.slice(i, i + CONCURRENCY)
+        const batch = resourceTypes.slice(i, i + CONCURRENCY)
         const fetches = batch.map(async (type) => {
           try {
             const resp = await api.searchResources(type, namespace || undefined, controller.signal, maxItemsPerResource)
-            if (resp?.truncated) cut.push({ type, limit: resp.limit, remaining: resp.remaining })
             const extractItems = (obj: any): any[] => {
               if (Array.isArray(obj)) return obj
               if (obj && typeof obj === 'object') {
@@ -122,27 +119,23 @@ export default function AdvancedSearch() {
               }
               return []
             }
-            failedTypesRef.current.delete(type)
-            items.push(...extractItems(resp))
+            const got = extractItems(resp)
+            items.push(...got)
+            // the server ends a list that fails on a later page with truncated and error: a failure, not the limit
+            if (resp?.error) errors.push({ type, error: String(resp.error), loaded: got.length })
+            else if (resp?.truncated) cut.push({ type, limit: resp.limit, remaining: resp.remaining })
           } catch (err: any) {
             if (err?.name === 'CanceledError' || err?.name === 'AbortError') return
-            failedTypesRef.current.add(type)
             errors.push({ type, error: err?.message ?? 'Failed' })
           }
         })
         await Promise.all(fetches)
       }
 
-      const grouped = new Map<string, number>()
-      const filtered = items.filter(item => {
-        const kind = (item.kind as string) ?? 'Unknown'
-        const count = grouped.get(kind) ?? 0
-        if (count >= maxItemsPerResource) return false
-        grouped.set(kind, count + 1)
-        return true
-      })
-
-      return { items: filtered, errors, cut }
+      // each type is cut to the limit by the server (`limit`), and two types of one Kind name are two lists; the
+      // notices list the types in the order chosen, not in the order the answers came
+      const order = (a: { type: string }, b: { type: string }) => resourceTypes.indexOf(a.type) - resourceTypes.indexOf(b.type)
+      return { items, errors: errors.sort(order), cut: cut.sort(order) }
     },
     enabled: resourceTypes.length > 0,
     staleTime: 30_000,
@@ -334,7 +327,8 @@ export default function AdvancedSearch() {
           {fetchErrors.length > 0 && (
             <span
               className="flex items-center gap-1 text-amber-400 cursor-help"
-              title={fetchErrors.map(e => `${e.type}: ${e.error}`).join(', ')}
+              data-testid="search-failed"
+              title={fetchErrors.map(e => `${e.type}: ${e.loaded === undefined ? e.error : t('advancedSearch.stoppedAt', { count: e.loaded, error: e.error })}`).join(', ')}
             >
               <AlertTriangle className="w-3.5 h-3.5" />
               {t('advancedSearch.someErrors', '{{count}} failed', { count: fetchErrors.length })}

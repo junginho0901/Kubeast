@@ -83,6 +83,24 @@ export function extractStatus(item: Record<string, unknown>): string {
   return '-'
 }
 
+export type SearchSortKey = 'kind' | 'name' | 'namespace' | 'status' | 'age'
+
+const createdAt = (r: SearchResult) => {
+  const ts = Date.parse(String((r.raw?.metadata as Record<string, unknown> | undefined)?.creationTimestamp ?? ''))
+  return Number.isNaN(ts) ? -Infinity : ts
+}
+
+// The results table's ascending order: Age by creation time, the youngest first as a smaller AGE (an object without
+// one last), the other columns as text — the Age text ("9h", "10d") does not sort as text.
+export function compareResults(a: SearchResult, b: SearchResult, key: SearchSortKey): number {
+  if (key === 'age') {
+    const ta = createdAt(a)
+    const tb = createdAt(b)
+    return ta === tb ? 0 : tb > ta ? 1 : -1
+  }
+  return String(a[key] ?? '').localeCompare(String(b[key] ?? ''))
+}
+
 export function toSearchResult(item: Record<string, unknown>): SearchResult {
   const meta = (item.metadata ?? {}) as Record<string, unknown>
   return {

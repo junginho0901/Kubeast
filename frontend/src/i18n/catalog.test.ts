@@ -53,6 +53,25 @@ describe('Korean catalog', () => {
     expect([...bad, ...calls]).toEqual([])
   })
 
+  // A call's English default and its catalog entries take the same placeholders: Advanced Search passed start, end
+  // and total to a pager entry written with current and total ("Page  / 523"), and two loading lines lost their count.
+  // `suffix` is an English plural ending ("lease{{suffix}}") the Korean entries leave out.
+  it("gives each call's default and its catalog entries the same placeholders", () => {
+    const names = (s: string) => [...s.matchAll(/\{\{\s*(\w+)\s*\}\}/g)].map((m) => m[1]).filter((n) => n !== 'suffix').sort().join(',')
+    const at = (cat: unknown, key: string) =>
+      key.split('.').reduce<unknown>((o, p) => (o && typeof o === 'object' ? (o as Record<string, unknown>)[p] : undefined), cat)
+    const bad: string[] = []
+    for (const f of files) {
+      for (const m of readFileSync(f, 'utf8').matchAll(/\b(?:tr|t)\(\s*'([\w.:-]+)'\s*,\s*'((?:[^'\\]|\\.)*)'/g)) {
+        for (const [lang, cat] of [['en', en], ['ko', ko]] as const) {
+          const entry = at(cat, m[1])
+          if (typeof entry === 'string' && names(entry) !== names(m[2])) bad.push(`${lang} ${m[1]} (${relative(SRC, f)})`)
+        }
+      }
+    }
+    expect(bad).toEqual([])
+  })
+
   it('never uses a key both as a label and as the parent of other keys', () => {
     const keys = [...used.keys()]
     expect(keys.filter((k) => keys.some((o) => o.startsWith(`${k}.`)))).toEqual([])

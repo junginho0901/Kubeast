@@ -335,7 +335,7 @@ EKS 클러스터에 `features.networkFlowMonitor`를 켜면 Pod·워크로드 �
 - **Node Shell** — 웹 기반 노드 터미널
 - **로그 파일** — 로그를 파일로 쓰는 앱의 컨테이너 안 로그를 허용된 경로에서만 읽고 따라가기(고정 `tail`, 기본 off, [자세히](operations.md#컨테이너-안-로그-파일-log-files))
 - **로그 검색** — 재시작·삭제된 파드의 로그까지 Loki에서 텍스트·기간으로 찾기, 클러스터 RBAC(`pods/log`) 기준(기본 off, [자세히](operations.md#로그-검색-loki))
-- **Advanced Search** — 표현식 기반 전역 리소스 탐색. 고른 리소스마다 나눠 받아 화면 설정 "Max items per resource"(최대 10,000)에서 멈추고, 멈추면 알려 줍니다. 네임스페이스를 고르면 좁혀집니다
+- **Advanced Search** — 표현식 기반 전역 리소스 탐색. 고른 리소스마다 나눠 받아 화면 설정 "Max items per resource"(최대 10,000)에서 멈추고, 멈추면 알려 줍니다. 네임스페이스를 고르면 좁혀집니다. 두 API 그룹이 같은 이름으로 내는 리소스(core와 events.k8s.io의 Event)는 따로 고르고 따로 읽습니다. 실패한 종류는 새로고침마다 다시 읽고 매번 알리며, 중간에 실패한 목록은 몇 개를 읽었는지 알려 줍니다
 
 ## 🔐 인증 · 감사
 
