@@ -48,7 +48,7 @@ export function ClusterViewBody() {
   const { manifest, describeData } = usePodDetailQueries({ selectedPod, showManifest, showDescribe })
 
   // AI floating widget snapshot
-  useClusterAIContext({ nodes, summary, selectedNamespace })
+  useClusterAIContext({ nodes, summary, selectedNamespace, search })
 
   // Derived: the node boxes and map cells in order
   const entries = useClusterDerived({ summary, nodes })

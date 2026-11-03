@@ -35,7 +35,7 @@ const WHERE: Record<string, string> = {
   // lists whose kinds self does not serve (policy kinds) or other specs expect it not to (PolicyReport): another cluster
   '/workloads/vpas': 'number-check-lists', '/security/policyreports': 'number-check-lists', '/gateway/policies': 'number-check-lists',
   // summary screens
-  '/': 'number-check-dashboard', '/cluster-view': 'N3-b', '/helm/releases': 'number-check-lists', '/timeline': 'number-check-timeline', '/monitoring': 'number-check-monitoring', '/cluster/search': 'number-check-search',
+  '/': 'number-check-dashboard', '/cluster-view': 'number-check-cluster-view', '/helm/releases': 'number-check-lists', '/timeline': 'number-check-timeline', '/monitoring': 'number-check-monitoring', '/cluster/search': 'number-check-search',
   '/admin/cluster-hygiene': 'number-check-hygiene', '/cluster/resource-graph': 'number-check-graph', '/cost': 'number-check-cost',
   '/gpu/dashboard': 'N3-c (GPU)', '/gpu/nodes': 'N3-c (GPU)', '/gpu/pods': 'N3-c (GPU)',
   // the DRA lists, on test2 with the DRA example driver
