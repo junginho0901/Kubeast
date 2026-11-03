@@ -47,7 +47,7 @@
     "exemptReason": "Exempt: {{reason}}",
     "pods": "{{count}} Pods",
     "search": "Search Namespace, name, message...",
-    "truncated": "Only the first 5000 findings are shown; the counts include all of them.",
+    "truncated": "Only the {{shown}} most severe of the {{total}} findings are listed; the cards and the Checks tab count all of them.",
     "collectors": "Could not read these lists, so their checks were skipped:",
     "lastReview": "Last sign-off {{when}} by {{who}}",
     "noReview": "Not signed off yet",

@@ -16,6 +16,8 @@ export interface HygieneCheck {
   refs: string
   findings: number
   exempt: number
+  // the findings (not exempt) by their own severity, which can be above the check's (an expired certificate)
+  severities?: Partial<Record<HygieneSeverity, number>>
   // upgrade checks: the target minor the check starts at, and whether it ran for this report's target
   since?: number
   applies: boolean

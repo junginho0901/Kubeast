@@ -101,17 +101,24 @@ export default function ClusterHygiene() {
   const checkTitle = (id: string) => tr(`clusterHygiene.checks.${id}`, id)
   const severityLabel = (s: HygieneSeverity) => tr(`clusterHygiene.severity.${s}`, s)
 
-  const findings = useMemo(() => {
+  // the rows under the severity filter and the search; the check filter picks from them
+  const matching = useMemo(() => {
     if (!report) return []
     const q = search.trim().toLowerCase()
     const label: Tr = (key, fallback, opts) => t(key, { defaultValue: fallback, ...opts })
     return report.findings.filter((f: HygieneFinding) => {
       if (severity === 'exempt' ? !f.exempt : severity !== 'all' && (f.exempt || f.severity !== severity)) return false
-      if (check !== 'all' && f.check !== check) return false
       if (!q) return true
       return [f.namespace, f.kind, f.name, f.container, f.message, findingText(label, f), f.exempt_reason].join(' ').toLowerCase().includes(q)
     })
-  }, [report, severity, check, search, t])
+  }, [report, severity, search, t])
+  const findings = useMemo(() => (check === 'all' ? matching : matching.filter((f) => f.check === check)), [matching, check])
+  // a check's "(N)" is the rows picking it lists
+  const perCheck = useMemo(() => {
+    const n: Record<string, number> = {}
+    for (const f of matching) n[f.check] = (n[f.check] ?? 0) + 1
+    return n
+  }, [matching])
   const totalPages = Math.max(1, Math.ceil(findings.length / FINDINGS_PER_PAGE))
   useEffect(() => setPage(1), [report, severity, check, search])
   const pagedFindings = findings.slice((page - 1) * FINDINGS_PER_PAGE, page * FINDINGS_PER_PAGE)
@@ -136,9 +143,11 @@ export default function ClusterHygiene() {
   }))
   const checkOptions = [
     { value: 'all', label: tr('clusterHygiene.filter.allChecks', 'All checks') },
-    ...(report?.checks ?? []).map((c) => ({ value: c.id, label: `${checkTitle(c.id)} (${c.findings})` })),
+    ...(report?.checks ?? []).map((c) => ({ value: c.id, label: `${checkTitle(c.id)} (${perCheck[c.id] ?? 0})` })),
   ]
   const counts = report?.counts
+  // every finding the scan found; the report lists at most 5000 of them
+  const total = counts ? counts.critical + counts.warning + counts.info + counts.exempt : 0
 
   // who signed off and the sign-off notes stay out (people's names, free text)
   useAIContext(report ? {
@@ -148,22 +157,30 @@ export default function ClusterHygiene() {
       server_version: report.server_version, target_version: report.target_version,
       next_due: live?.next_due, due: live?.due, last_reviewed_at: live?.last_review?.reviewed_at,
       reviewed_at: tab === 'history' ? history.map((r) => r.reviewed_at) : undefined,
-      checks: report.checks.map((c) => ({ id: c.id, severity: c.severity, findings: c.findings, exempt: c.exempt })),
+      checks: report.checks.map((c) => ({ id: c.id, severity: c.severity, findings: c.findings, exempt: c.exempt, severities: c.severities })),
+      findings_total: total, listed_findings: report.findings.length, truncated: report.truncated || undefined,
       filters: { severity, check, search: search || undefined },
       findings: findings.slice(0, 30).map((f) => ({
         check: f.check, severity: f.severity, kind: f.kind, namespace: f.namespace, name: f.name, container: f.container,
         message: f.message, exempt: f.exempt, exempt_reason: f.exempt_reason,
       })),
     },
-  } : null, [report, cluster, viewId, tab, live, history, severity, check, search, findings])
+  } : null, [report, cluster, viewId, tab, live, history, severity, check, search, findings, total])
 
   const tabClass = (active: boolean) =>
     `rounded-sm px-3 py-1.5 text-sm flex items-center gap-1 ${active ? 'bg-primary-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'}`
-  const badge = (f: { severity: HygieneSeverity; exempt?: boolean }) => (
+  const badge = (f: { severity: HygieneSeverity; exempt?: boolean }, count?: number) => (
     <span className={`inline-flex rounded-sm px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap ${f.exempt ? 'bg-slate-700 text-slate-300' : SEVERITY_TONE[f.severity]}`}>
-      {f.exempt ? tr('clusterHygiene.exempt', 'Exempt') : severityLabel(f.severity)}
+      {f.exempt ? tr('clusterHygiene.exempt', 'Exempt') : severityLabel(f.severity)}{count !== undefined ? ` ${count}` : ''}
     </span>
   )
+  // a check's severity, or the severities its findings have when one is not the check's (an expired certificate
+  // is critical), each with its count as the cards count them
+  const checkSeverity = (c: HygieneReport['checks'][number]) => {
+    const found = (['critical', 'warning', 'info'] as const).filter((s) => (c.severities?.[s] ?? 0) > 0)
+    if (found.length === 0 || (found.length === 1 && found[0] === c.severity)) return badge({ severity: c.severity })
+    return <span className="inline-flex flex-wrap gap-1">{found.map((s) => <span key={s}>{badge({ severity: s }, c.severities?.[s])}</span>)}</span>
+  }
 
   return (
     <div className="page-scrolls space-y-4">
@@ -275,7 +292,7 @@ export default function ClusterHygiene() {
 
       <div className="flex flex-wrap items-center gap-2">
         <button onClick={() => setTab('findings')} className={tabClass(tab === 'findings')} data-testid="hygiene-tab-findings">
-          {tr('clusterHygiene.tab.findings', 'Findings')} {report ? <span className="text-xs">({report.findings.length})</span> : null}
+          {tr('clusterHygiene.tab.findings', 'Findings')} {report ? <span className="text-xs">({total})</span> : null}
         </button>
         <button onClick={() => setTab('checks')} className={tabClass(tab === 'checks')} data-testid="hygiene-tab-checks">
           {tr('clusterHygiene.tab.checks', 'Checks')}
@@ -314,6 +331,11 @@ export default function ClusterHygiene() {
               className="h-10 px-3 bg-slate-700 text-ink rounded-sm border border-slate-600 focus:outline-hidden focus:border-primary-500 text-sm flex-1 min-w-48"
             />
           </div>
+          {report?.truncated && (
+            <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3 text-sm text-yellow-100">
+              {tr('clusterHygiene.truncated', 'Only the {{shown}} most severe of the {{total}} findings are listed; the cards and the Checks tab count all of them.', { shown: report.findings.length, total })}
+            </div>
+          )}
           <div className="rounded-lg bg-slate-800/50 border border-slate-700 overflow-x-auto">
             {isLoading || (viewId && !viewed) ? (
               <div className="p-6 text-slate-400 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> {tr('clusterHygiene.scanning', 'Scanning...')}</div>
@@ -362,7 +384,6 @@ export default function ClusterHygiene() {
             {findings.length > 0 && (
               <ListPager currentPage={page} totalPages={totalPages} total={findings.length} rowsPerPage={FINDINGS_PER_PAGE} onPageChange={setPage} showPageSize={false} testId="hygiene-pager" />
             )}
-            {report?.truncated && <div className="p-3 text-xs text-yellow-300">{tr('clusterHygiene.truncated', 'Only the first 5000 findings are shown; the counts include all of them.')}</div>}
           </div>
         </>
       )}
@@ -389,7 +410,7 @@ export default function ClusterHygiene() {
                       {c.applies === false && c.since ? <span className="ml-2 font-sans">{tr('clusterHygiene.fromTarget', 'from target v1.{{since}}', { since: c.since })}</span> : null}
                     </div>
                   </td>
-                  <td className="px-3 py-2">{badge({ severity: c.severity })}</td>
+                  <td className="px-3 py-2">{checkSeverity(c)}</td>
                   <td className="px-3 py-2 text-right">{c.findings}</td>
                   <td className="px-3 py-2 text-right">{c.exempt}</td>
                   <td className="px-3 py-2 text-xs text-slate-400">{c.refs}</td>

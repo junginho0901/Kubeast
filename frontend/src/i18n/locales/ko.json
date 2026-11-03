@@ -47,7 +47,7 @@
     "exemptReason": "예외: {{reason}}",
     "pods": "Pod {{count}}개",
     "search": "Namespace, 이름, 내용 검색...",
-    "truncated": "앞의 5000건만 표시합니다. 건수에는 전부 들어 있습니다.",
+    "truncated": "발견 {{total}}건 중 심각한 순으로 {{shown}}건만 목록에 넣었습니다. 카드와 점검 항목 탭은 전부 셉니다.",
     "collectors": "다음 목록을 읽지 못해 해당 점검을 건너뛰었습니다:",
     "lastReview": "마지막 서명 {{when}} · {{who}}",
     "noReview": "아직 서명 없음",
