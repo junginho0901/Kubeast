@@ -405,6 +405,51 @@ func TestHygieneTLSExpiry(t *testing.T) {
 	}
 }
 
+// A check's row counts its findings by their own severity, as the summary cards do: two certificates past the
+// critical line are critical though tls.expiry is a warning check, and the exempt one is in neither.
+func TestHygieneChecksCountEachSeverity(t *testing.T) {
+	exempt := tlsSecret("apps", "exempt", selfSigned(t, hygieneNow.Add(-24*time.Hour)))
+	exempt.Annotations = map[string]string{HygieneExemptAnnotation: "tls.expiry", HygieneExemptReasonAnnotation: "test CA"}
+	pod := compliantPod("apps", "web")
+	pod.Spec.Containers[0].Image = "nginx:latest"
+	rep := evaluate(HygieneInput{
+		Pods: []corev1.Pod{pod},
+		TLSSecrets: []corev1.Secret{
+			tlsSecret("apps", "expired", selfSigned(t, hygieneNow.Add(-24*time.Hour))),
+			tlsSecret("apps", "five-days", selfSigned(t, hygieneNow.Add(5*24*time.Hour+time.Hour))),
+			tlsSecret("apps", "twenty-days", selfSigned(t, hygieneNow.Add(20*24*time.Hour+time.Hour))),
+			tlsSecret("apps", "garbage", []byte("not a cert")),
+			exempt,
+		},
+	})
+	sums := map[string]int{}
+	for _, c := range rep.Checks {
+		n := 0
+		for s, v := range c.Severities {
+			sums[s] += v
+			n += v
+		}
+		if n != c.Findings {
+			t.Errorf("%s: severities %v add up to %d, findings %d", c.ID, c.Severities, n, c.Findings)
+		}
+		if c.ID == "tls.expiry" && (c.Findings != 4 || c.Exempt != 1 || c.Severities[HygieneCritical] != 2 || c.Severities[HygieneWarning] != 2) {
+			t.Errorf("tls.expiry = findings %d, exempt %d, severities %v; want 4, 1, critical 2 and warning 2", c.Findings, c.Exempt, c.Severities)
+		}
+		if c.ID == "image.latest" && (c.Findings != 1 || c.Severities[HygieneWarning] != 1) {
+			t.Errorf("image.latest = findings %d, severities %v", c.Findings, c.Severities)
+		}
+	}
+	want := map[string]int{HygieneCritical: rep.Counts.Critical, HygieneWarning: rep.Counts.Warning, HygieneInfo: rep.Counts.Info}
+	for s, n := range want {
+		if sums[s] != n {
+			t.Errorf("the checks' %s findings add up to %d, the %s card counts %d", s, sums[s], s, n)
+		}
+	}
+	if rep.Counts.Critical < 2 {
+		t.Fatalf("counts = %+v, want the two critical certificates", rep.Counts)
+	}
+}
+
 // The report from the pods folded page by page while listing (hygienePodSummaryOf) is the report from the pods as a
 // list: owners grouped across pages, pod counts, a pod's own exemption and its namespace's, an excluded namespace.
 func TestHygienePodSummary_SameReportAsThePods(t *testing.T) {

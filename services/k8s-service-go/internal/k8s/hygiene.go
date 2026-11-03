@@ -127,6 +127,9 @@ type HygieneCheckSummary struct {
 	HygieneCheck
 	Findings int `json:"findings"`
 	Exempt   int `json:"exempt"`
+	// Severities counts the findings (not exempt) by their own severity: a check's findings can be more severe
+	// than the check (an expired certificate is critical), and the summary cards count them that way.
+	Severities map[string]int `json:"severities,omitempty"`
 	// Since is the target minor an upgrade check starts at; Applies is false
 	// when this report's target is below it (the check did not run).
 	Since   int  `json:"since,omitempty"`
@@ -1081,6 +1084,10 @@ func (b *hygieneBuilder) report(now time.Time, excluded []string, collectors []H
 				s.Exempt++
 			} else {
 				s.Findings++
+				if s.Severities == nil {
+					s.Severities = map[string]int{}
+				}
+				s.Severities[f.Severity]++
 			}
 		}
 		switch {
