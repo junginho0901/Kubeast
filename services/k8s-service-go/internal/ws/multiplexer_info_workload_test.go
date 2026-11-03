@@ -40,3 +40,30 @@ func TestWorkloadInfoStatus_NoneAvailableIsUnavailable(t *testing.T) {
 		}
 	}
 }
+
+// A watch event's Deployment status and reason are the list's (deploystatus.Of): a rollout past its progress deadline
+// is Failed with the reason even while Available=True comes first, as the controller writes them.
+func TestDeploymentToInfo_StatusAsTheList(t *testing.T) {
+	cond := func(typ, status, reason string) interface{} {
+		return map[string]interface{}{"type": typ, "status": status, "reason": reason}
+	}
+	for _, c := range []struct {
+		name           string
+		conds          []interface{}
+		status, reason string
+	}{
+		{"stuck rollout, old pods available", []interface{}{cond("Available", "True", "MinimumReplicasAvailable"), cond("Progressing", "False", "ProgressDeadlineExceeded")}, "Failed", "ProgressDeadlineExceeded"},
+		{"rolled out", []interface{}{cond("Available", "True", "MinimumReplicasAvailable"), cond("Progressing", "True", "NewReplicaSetAvailable")}, "Available", ""},
+		{"starting", []interface{}{cond("Available", "False", "MinimumReplicasUnavailable"), cond("Progressing", "True", "ReplicaSetUpdated")}, "Progressing", ""},
+	} {
+		obj := &unstructured.Unstructured{Object: map[string]interface{}{
+			"metadata": map[string]interface{}{"name": "d", "namespace": "ns"},
+			"spec":     map[string]interface{}{"replicas": int64(1)},
+			"status":   map[string]interface{}{"availableReplicas": int64(1), "unavailableReplicas": int64(1), "conditions": c.conds},
+		}}
+		info := deploymentToInfo(obj)
+		if info["status"] != c.status || info["progressing_reason"] != c.reason || info["unavailable_replicas"] != int64(1) {
+			t.Errorf("%s: status %v reason %v unavailable %v, want %q %q 1", c.name, info["status"], info["progressing_reason"], info["unavailable_replicas"], c.status, c.reason)
+		}
+	}
+}

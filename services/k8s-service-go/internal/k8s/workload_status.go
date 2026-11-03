@@ -4,6 +4,8 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/deploystatus"
 )
 
 // The workload lists' summary statuses (frontend utils/workloadStatus), one set
@@ -24,18 +26,10 @@ func replicaStatus(want, available, ready int32) string {
 }
 
 // deploymentStatus is a Deployment's by its conditions: Available, Failed (the
-// rollout stopped, with the reason) or Progressing.
+// rollout stopped, with the reason) or Progressing (deploystatus.Of, which the
+// live list updates read too).
 func deploymentStatus(d *appsv1.Deployment) (status, reason string) {
-	status = "Progressing"
-	for _, c := range d.Status.Conditions {
-		if c.Type == appsv1.DeploymentAvailable && c.Status == corev1.ConditionTrue {
-			return "Available", ""
-		}
-		if c.Type == appsv1.DeploymentProgressing && c.Status == corev1.ConditionFalse {
-			return "Failed", c.Reason
-		}
-	}
-	return status, ""
+	return deploystatus.Of(d)
 }
 
 // jobStatus is a Job's by its conditions: Complete, Failed or Running.

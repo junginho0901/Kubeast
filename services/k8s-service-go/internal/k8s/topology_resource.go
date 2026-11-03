@@ -116,13 +116,7 @@ func (s *Service) GetDeploymentTopology(ctx context.Context, namespace, deployme
 	edges := make([]map[string]interface{}, 0)
 	edgeID := 0
 
-	depStatus := "Progressing"
-	for _, c := range dep.Status.Conditions {
-		if c.Type == "Available" && c.Status == "True" {
-			depStatus = "Available"
-			break
-		}
-	}
+	depStatus, _ := deploymentStatus(dep)
 
 	nodes = append(nodes, map[string]interface{}{
 		"id":        fmt.Sprintf("dep-%s", dep.Name),
