@@ -31,69 +31,13 @@ func (s *Service) GetAllReferenceGrants(ctx context.Context) ([]map[string]inter
 	})
 }
 
-// DescribeReferenceGrant returns detailed info about a reference grant.
+// DescribeReferenceGrant is a reference grant as its drawer shows it: the list's row (gatewayrow.ReferenceGrant), its
+// metadata and events. A ReferenceGrant has no status.
 func (s *Service) DescribeReferenceGrant(ctx context.Context, namespace, name string) (map[string]interface{}, error) {
-	gvr := s.gatewayGVR(ctx, "referencegrants")
-	obj, err := s.GetResource(ctx, gvr, namespace, name)
+	result, _, err := s.describeGatewayObject(ctx, "referencegrants", "ReferenceGrant", namespace, name, gatewayrow.ReferenceGrant)
 	if err != nil {
 		return nil, fmt.Errorf("get referencegrant %s/%s: %w", namespace, name, err)
 	}
-
-	result := map[string]interface{}{
-		"name":        obj.GetName(),
-		"namespace":   obj.GetNamespace(),
-		"labels":      obj.GetLabels(),
-		"annotations": obj.GetAnnotations(),
-		"created_at":  toISO(&metav1.Time{Time: obj.GetCreationTimestamp().Time}),
-	}
-	addObjectMetaFields(result, obj)
-
-	spec := mapMap(obj.Object, "spec")
-	if spec != nil {
-		from := mapSlice(spec, "from")
-		fromList := make([]map[string]interface{}, 0, len(from))
-		for _, f := range from {
-			if fm, ok := f.(map[string]interface{}); ok {
-				fromList = append(fromList, map[string]interface{}{
-					"group":     mapStr(fm, "group"),
-					"kind":      mapStr(fm, "kind"),
-					"namespace": mapStr(fm, "namespace"),
-				})
-			}
-		}
-		result["from"] = fromList
-
-		to := mapSlice(spec, "to")
-		toList := make([]map[string]interface{}, 0, len(to))
-		for _, t := range to {
-			if tm, ok := t.(map[string]interface{}); ok {
-				toList = append(toList, map[string]interface{}{
-					"group": mapStr(tm, "group"),
-					"kind":  mapStr(tm, "kind"),
-					"name":  mapStr(tm, "name"),
-				})
-			}
-		}
-		result["to"] = toList
-	}
-
-	if status := mapMap(obj.Object, "status"); status != nil {
-		conditions := mapSlice(status, "conditions")
-		condList := make([]map[string]interface{}, 0, len(conditions))
-		for _, c := range conditions {
-			if cm, ok := c.(map[string]interface{}); ok {
-				condList = append(condList, map[string]interface{}{
-					"type":                 mapStr(cm, "type"),
-					"status":               mapStr(cm, "status"),
-					"reason":               mapStr(cm, "reason"),
-					"message":              mapStr(cm, "message"),
-					"last_transition_time": mapStr(cm, "lastTransitionTime"),
-				})
-			}
-		}
-		result["conditions"] = condList
-	}
-
 	return result, nil
 }
 

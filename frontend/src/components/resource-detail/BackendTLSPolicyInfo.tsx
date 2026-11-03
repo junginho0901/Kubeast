@@ -1,13 +1,22 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, KeyValueTags, Th, Tx } from './DetailCommon'
+import type { BackendTLSPolicyInfo as BackendTLSPolicyRow } from '@/services/api'
+import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
+import { formatParentRef } from './gatewayDetail'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface Props {
   name: string
   namespace?: string
   rawJson?: Record<string, unknown>
+}
+
+// the list's row (gatewayrow.Policy) with the object's metadata and events, spec.validation and status.ancestors
+type BackendTLSPolicyDescribe = BackendTLSPolicyRow & {
+  validation?: Record<string, any>
+  ancestors?: Array<Record<string, any>>
+  events?: Array<Record<string, unknown>>
 }
 
 function text(value: unknown): string {
@@ -20,7 +29,7 @@ export default function BackendTLSPolicyInfo({ name, namespace, rawJson }: Props
   const enabled = !!name && !!namespace
   const { data: describe, isLoading, isError } = useQuery({
     queryKey: ['backendtlspolicy-describe', namespace, name],
-    queryFn: () => api.describeBackendTLSPolicy(namespace as string, name),
+    queryFn: () => api.describeBackendTLSPolicy(namespace as string, name) as Promise<BackendTLSPolicyDescribe>,
     enabled,
     retry: false,
   })
@@ -40,7 +49,8 @@ export default function BackendTLSPolicyInfo({ name, namespace, rawJson }: Props
   const annotations = (describe?.annotations ?? (meta.annotations as Record<string, string> | undefined) ?? {})
   const createdAt = describe?.created_at ?? (meta.creationTimestamp as string | undefined)
 
-  const ancestorStatuses = Array.isArray(describe?.ancestor_statuses) ? describe.ancestor_statuses : []
+  const ancestors = Array.isArray(describe?.ancestors) ? describe.ancestors : []
+  const events = Array.isArray(describe?.events) ? describe.events : []
 
   return (
     <>
@@ -118,43 +128,25 @@ export default function BackendTLSPolicyInfo({ name, namespace, rawJson }: Props
         </InfoSection>
       )}
 
-      {ancestorStatuses.length > 0 && (
+      {ancestors.length > 0 && (
         <InfoSection title="Status">
-          {ancestorStatuses.map((as: Record<string, any>, idx: number) => (
-            <div key={`ancestor-${idx}`} className="mb-3">
-              {as.ancestor_ref && (
-                <p className="text-xs text-slate-400 mb-1">
-                  Ancestor: {text(as.ancestor_ref.kind)}/{text(as.ancestor_ref.name)}
-                </p>
-              )}
-              {Array.isArray(as.conditions) && as.conditions.length > 0 && (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs table-fixed min-w-[400px]">
-                    <thead className="text-slate-400">
-                      <tr>
-                        <Th className="text-left py-1 w-[25%]">Type</Th>
-                        <Th className="text-left py-1 w-[15%]">Status</Th>
-                        <Th className="text-left py-1 w-[25%]">Reason</Th>
-                        <Th className="text-left py-1 w-[35%]">Message</Th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800">
-                      {as.conditions.map((c: Record<string, any>, ci: number) => (
-                        <tr key={`cond-${ci}`} className="text-slate-200">
-                          <td className="py-1 pr-2 wrap-break-word">{text(c.type)}</td>
-                          <td className="py-1 pr-2">{text(c.status)}</td>
-                          <td className="py-1 pr-2 wrap-break-word">{text(c.reason)}</td>
-                          <td className="py-1 pr-2 wrap-break-word whitespace-pre-wrap">{text(c.message)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+          <div className="space-y-3">
+            {ancestors.map((ancestor: Record<string, any>, idx: number) => (
+              <div key={`ancestor-${idx}`} className="rounded-sm border border-slate-800 p-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs mb-2">
+                  <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Controller:</Tx></span> {text(ancestor?.controllerName)}</div>
+                  <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Ancestor:</Tx></span> {formatParentRef(ancestor?.ancestorRef || {})}</div>
                 </div>
-              )}
-            </div>
-          ))}
+                <ConditionsTable conditions={Array.isArray(ancestor?.conditions) ? ancestor.conditions : []} />
+              </div>
+            ))}
+          </div>
         </InfoSection>
       )}
+
+      <InfoSection title="Events">
+        <EventsTable events={events} />
+      </InfoSection>
 
       {Object.keys(labels).length > 0 && (
         <InfoSection title="Labels">

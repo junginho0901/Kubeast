@@ -1,6 +1,7 @@
 # The number check's Gateway API objects, on test2 (the dev cluster serving the Gateway API): no two alike, made by
-# number-check-lists.spec.ts and removed after. No controller runs there: the test writes the statuses
-# (GATEWAY_STATUS). {{referencegrants}} and {{backendtlspolicies}} are the versions the cluster serves those kinds at.
+# number-check-lists.spec.ts and number-check-gateway-drawers.spec.ts (in a namespace of its own) and removed after.
+# No controller runs there: the tests write the statuses (GATEWAY_STATUS, number-check.gateway-shared.ts).
+# {{referencegrants}} and {{backendtlspolicies}} are the versions the cluster serves those kinds at.
 apiVersion: v1
 kind: Namespace
 metadata:

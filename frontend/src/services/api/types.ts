@@ -481,6 +481,7 @@ export interface ReferenceGrantInfo {
   to?: Array<Record<string, any>>
   labels?: Record<string, string>
   annotations?: Record<string, string>
+  finalizers?: string[]
   created_at?: string | null
   api_version?: string | null
 }
@@ -492,7 +493,9 @@ export interface BackendTLSPolicyInfo {
   conditions?: Array<Record<string, any>>
   labels?: Record<string, string>
   annotations?: Record<string, string>
+  finalizers?: string[]
   created_at?: string | null
+  api_version?: string | null
 }
 
 // Gateway → Policies (every implementation's policy kinds in one list)

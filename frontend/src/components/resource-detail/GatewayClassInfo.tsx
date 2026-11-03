@@ -1,32 +1,23 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { ConditionsTable, InfoSection, InfoRow, KeyValueTags, SummaryBadge, Tx } from './DetailCommon'
+import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, SummaryBadge, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
+import { conditionStatus, conditionSummary } from './gatewayDetail'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
+import type { GatewayClassInfo as GatewayClassRow } from '@/services/api'
 
 interface Props {
   name: string
   rawJson?: Record<string, unknown>
 }
 
-type GatewayClassDescribe = {
+// the list's row (gatewayrow.GatewayClass) with the object's metadata, events and supported features
+type GatewayClassDescribe = GatewayClassRow & {
   uid?: string | null
   resource_version?: string | null
-  controller_name?: string | null
-  description?: string | null
-  accepted?: boolean
-  status?: string | null
-  parameters_ref?: Record<string, unknown> | null
-  conditions?: Array<Record<string, unknown>>
-  labels?: Record<string, string>
-  annotations?: Record<string, string>
-  finalizers?: string[]
-  created_at?: string | null
-  apiVersion?: string
-  metadata?: Record<string, unknown>
-  spec?: Record<string, unknown>
-  status_detail?: Record<string, unknown>
+  generation?: number
+  events?: Array<Record<string, unknown>>
   supported_features?: Array<{ name?: string }>
 }
 
@@ -64,26 +55,12 @@ export default function GatewayClassInfo({ name, rawJson }: Props) {
 
   const conditions = useMemo(() => {
     if (Array.isArray(describe?.conditions)) return describe.conditions
-    if (Array.isArray((describe?.status_detail as any)?.conditions)) return (describe?.status_detail as any).conditions
     return Array.isArray(status?.conditions) ? (status.conditions as Array<Record<string, unknown>>) : []
-  }, [describe?.conditions, describe?.status_detail, status?.conditions])
+  }, [describe?.conditions, status?.conditions])
 
-  const accepted = Boolean(
-    describe?.accepted
-    || conditions.some((c: any) => String(c?.type) === 'Accepted' && String(c?.status).toLowerCase() === 'true'),
-  )
-
-  const statusText = describe?.status || (
-    accepted
-      ? 'Accepted'
-      : (() => {
-          const firstTrue = conditions.find((c: any) => String(c?.status).toLowerCase() === 'true')
-          if (firstTrue?.type) return String(firstTrue.type)
-          const firstFalse = conditions.find((c: any) => String(c?.status).toLowerCase() === 'false')
-          if (firstFalse?.type) return `${String(firstFalse.type)}(False)`
-          return 'Unknown'
-        })()
-  )
+  const accepted = conditionStatus(conditions, 'Accepted')
+  const statusText = describe?.status || conditionSummary(conditions, 'Accepted')
+  const events = Array.isArray(describe?.events) ? describe.events : []
 
   const labels = (describe?.labels ?? (meta.labels as Record<string, string> | undefined) ?? {})
   const annotations = (describe?.annotations ?? (meta.annotations as Record<string, string> | undefined) ?? {})
@@ -102,12 +79,12 @@ export default function GatewayClassInfo({ name, rawJson }: Props) {
         {isError && <p className="text-xs text-red-400 mb-2"><Tx>Failed to load describe data. Showing summary from list.</Tx></p>}
         <div className="flex flex-wrap gap-2 mb-3">
           <SummaryBadge label="Status" value={statusText} color="default" />
-          <SummaryBadge label="Accepted" value={accepted ? 'Yes' : 'No'} color={accepted ? 'green' : 'amber'} />
+          <SummaryBadge label="Accepted" value={accepted} color={accepted === 'True' ? 'green' : 'amber'} />
         </div>
         <div className="space-y-2">
           <InfoRow label="Name" value={name} />
           <InfoRow label="Controller" value={controllerName || '-'} />
-          <InfoRow label="Description" value={describe?.description || text(annotations['gateway.networking.k8s.io/description'])} />
+          <InfoRow label="Description" value={text(describe?.description ?? spec?.description)} />
           <InfoRow label="Parameters Ref" value={formatParametersRef(parametersRef)} />
           <InfoRow label="Created" value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />
         </div>
@@ -129,11 +106,15 @@ export default function GatewayClassInfo({ name, rawJson }: Props) {
         </InfoSection>
       )}
 
+      <InfoSection title="Events">
+        <EventsTable events={events} />
+      </InfoSection>
+
       <InfoSection title="Lifecycle">
         <div className="space-y-2">
-          <InfoRow label="UID" value={describe?.uid || text((describe?.metadata as any)?.uid)} />
-          <InfoRow label="Resource Version" value={describe?.resource_version || text((describe?.metadata as any)?.resourceVersion)} />
-          <InfoRow label="API Version" value={describe?.apiVersion || text(rawJson?.apiVersion)} />
+          <InfoRow label="UID" value={text(describe?.uid)} />
+          <InfoRow label="Resource Version" value={text(describe?.resource_version)} />
+          <InfoRow label="API Version" value={describe?.api_version || text(rawJson?.apiVersion)} />
           <InfoRow label="Finalizers" value={finalizers.join(', ') || '-'} />
         </div>
       </InfoSection>

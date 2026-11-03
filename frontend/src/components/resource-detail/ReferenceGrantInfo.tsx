@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { ConditionsTable, InfoSection, InfoRow, KeyValueTags, Th, Tx } from './DetailCommon'
+import { EventsTable, InfoSection, InfoRow, KeyValueTags, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
+import type { ReferenceGrantInfo as ReferenceGrantRow } from '@/services/api'
 
 interface Props {
   name: string
@@ -10,18 +11,12 @@ interface Props {
   rawJson?: Record<string, unknown>
 }
 
-type ReferenceGrantDescribe = {
+// the list's row (gatewayrow.ReferenceGrant) with the object's metadata and events; a ReferenceGrant has no status
+type ReferenceGrantDescribe = ReferenceGrantRow & {
   uid?: string | null
   resource_version?: string | null
-  from?: Array<Record<string, any>>
-  to?: Array<Record<string, any>>
-  labels?: Record<string, string>
-  annotations?: Record<string, string>
-  finalizers?: string[]
-  created_at?: string | null
-  apiVersion?: string
-  metadata?: Record<string, unknown>
-  conditions?: Array<Record<string, unknown>>
+  generation?: number
+  events?: Array<Record<string, unknown>>
 }
 
 function text(value: unknown): string {
@@ -59,6 +54,7 @@ export default function ReferenceGrantInfo({ name, namespace, rawJson }: Props) 
     : (Array.isArray(meta?.finalizers) ? (meta.finalizers as string[]) : [])
 
   const createdAt = describe?.created_at ?? (meta.creationTimestamp as string | undefined)
+  const events = Array.isArray(describe?.events) ? describe.events : []
 
   // Detect duplicated (group, kind, namespace) in `from` and (group, kind, name) in `to`.
   // ReferenceGrant unions duplicates at admission time so duplicates are redundant
@@ -165,17 +161,15 @@ export default function ReferenceGrantInfo({ name, namespace, rawJson }: Props) 
         </InfoSection>
       )}
 
-      {Array.isArray(describe?.conditions) && describe.conditions.length > 0 && (
-        <InfoSection title="Conditions">
-          <ConditionsTable conditions={describe.conditions} />
-        </InfoSection>
-      )}
+      <InfoSection title="Events">
+        <EventsTable events={events} />
+      </InfoSection>
 
       <InfoSection title="Lifecycle">
         <div className="space-y-2">
-          <InfoRow label="UID" value={describe?.uid || text((describe?.metadata as any)?.uid)} />
-          <InfoRow label="Resource Version" value={describe?.resource_version || text((describe?.metadata as any)?.resourceVersion)} />
-          <InfoRow label="API Version" value={describe?.apiVersion || text(rawJson?.apiVersion)} />
+          <InfoRow label="UID" value={text(describe?.uid)} />
+          <InfoRow label="Resource Version" value={text(describe?.resource_version)} />
+          <InfoRow label="API Version" value={describe?.api_version || text(rawJson?.apiVersion)} />
           <InfoRow label="Finalizers" value={finalizers.join(', ') || '-'} />
         </div>
       </InfoSection>

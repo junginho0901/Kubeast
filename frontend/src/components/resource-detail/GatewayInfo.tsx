@@ -1,10 +1,12 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { ConditionsTable, InfoSection, InfoRow, KeyValueTags, SummaryBadge, Th, NoneText, Tx } from './DetailCommon'
+import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, SummaryBadge, Th, NoneText, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
+import { conditionStatus, conditionSummary } from './gatewayDetail'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
+import type { GatewayInfo as GatewayRow } from '@/services/api'
 
 interface Props {
   name: string
@@ -12,28 +14,12 @@ interface Props {
   rawJson?: Record<string, unknown>
 }
 
-type GatewayDescribe = {
+// the list's row (gatewayrow.Gateway) with the object's metadata and events
+type GatewayDescribe = GatewayRow & {
   uid?: string | null
   resource_version?: string | null
-  gateway_class_name?: string | null
-  status?: string | null
-  programmed?: boolean
-  accepted?: boolean
-  listeners_count?: number
-  attached_routes?: number
-  addresses_count?: number
-  listeners?: Array<Record<string, any>>
-  status_listeners?: Array<Record<string, any>>
-  addresses?: Array<Record<string, any>>
-  conditions?: Array<Record<string, unknown>>
-  labels?: Record<string, string>
-  annotations?: Record<string, string>
-  finalizers?: string[]
-  created_at?: string | null
-  apiVersion?: string
-  metadata?: Record<string, unknown>
-  spec?: Record<string, unknown>
-  status_detail?: Record<string, unknown>
+  generation?: number
+  events?: Array<Record<string, unknown>>
 }
 
 function text(value: unknown): string {
@@ -64,24 +50,18 @@ export default function GatewayInfo({ name, namespace, rawJson }: Props) {
 
   const statusListeners = useMemo(() => {
     if (Array.isArray(describe?.status_listeners)) return describe?.status_listeners || []
-    const detailListeners = (describe?.status_detail as any)?.listeners
-    if (Array.isArray(detailListeners)) return detailListeners
     return Array.isArray(status?.listeners) ? (status.listeners as Array<Record<string, any>>) : []
-  }, [describe?.status_detail, describe?.status_listeners, status?.listeners])
+  }, [describe?.status_listeners, status?.listeners])
 
   const addresses = useMemo(() => {
     if (Array.isArray(describe?.addresses)) return describe?.addresses || []
-    const detailAddresses = (describe?.status_detail as any)?.addresses
-    if (Array.isArray(detailAddresses)) return detailAddresses
     return Array.isArray(status?.addresses) ? (status.addresses as Array<Record<string, any>>) : []
-  }, [describe?.addresses, describe?.status_detail, status?.addresses])
+  }, [describe?.addresses, status?.addresses])
 
   const conditions = useMemo(() => {
     if (Array.isArray(describe?.conditions)) return describe?.conditions || []
-    const detailConditions = (describe?.status_detail as any)?.conditions
-    if (Array.isArray(detailConditions)) return detailConditions
     return Array.isArray(status?.conditions) ? (status.conditions as Array<Record<string, unknown>>) : []
-  }, [describe?.conditions, describe?.status_detail, status?.conditions])
+  }, [describe?.conditions, status?.conditions])
 
   const labels = (describe?.labels ?? (meta?.labels as Record<string, string> | undefined) ?? {})
   const annotations = (describe?.annotations ?? (meta?.annotations as Record<string, string> | undefined) ?? {})
@@ -91,15 +71,16 @@ export default function GatewayInfo({ name, namespace, rawJson }: Props) {
 
   const className = describe?.gateway_class_name ?? (spec?.gatewayClassName as string | undefined) ?? '-'
   const createdAt = describe?.created_at ?? (meta?.creationTimestamp as string | undefined)
-  const statusText = describe?.status || 'Unknown'
+  const statusText = describe?.status || conditionSummary(conditions, 'Programmed', 'Accepted')
   const listenersCount = Number(describe?.listeners_count ?? listeners.length ?? 0)
   const attachedRoutes = Number(
     describe?.attached_routes
       ?? statusListeners.reduce((sum, item) => sum + Number(item?.attachedRoutes || item?.attached_routes || 0), 0),
   )
   const addressesCount = Number(describe?.addresses_count ?? addresses.length ?? 0)
-  const isProgrammed = Boolean(describe?.programmed || conditions.some((c: any) => c?.type === 'Programmed' && String(c?.status).toLowerCase() === 'true'))
-  const isAccepted = Boolean(describe?.accepted || conditions.some((c: any) => c?.type === 'Accepted' && String(c?.status).toLowerCase() === 'true'))
+  const programmed = conditionStatus(conditions, 'Programmed')
+  const accepted = conditionStatus(conditions, 'Accepted')
+  const events = Array.isArray(describe?.events) ? describe.events : []
 
   const statusByListenerName = useMemo(() => {
     const map = new Map<string, Record<string, any>>()
@@ -117,8 +98,8 @@ export default function GatewayInfo({ name, namespace, rawJson }: Props) {
         {isError && <p className="text-xs text-red-400 mb-2"><Tx>Failed to load describe data. Showing summary from list.</Tx></p>}
         <div className="flex flex-wrap gap-2 mb-3">
           <SummaryBadge label="Status" value={statusText} color="default" />
-          <SummaryBadge label="Programmed" value={isProgrammed ? 'Yes' : 'No'} color={isProgrammed ? 'green' : 'amber'} />
-          <SummaryBadge label="Accepted" value={isAccepted ? 'Yes' : 'No'} color={isAccepted ? 'green' : 'amber'} />
+          <SummaryBadge label="Programmed" value={programmed} color={programmed === 'True' ? 'green' : 'amber'} />
+          <SummaryBadge label="Accepted" value={accepted} color={accepted === 'True' ? 'green' : 'amber'} />
         </div>
         <div className="space-y-2">
           <InfoRow label="Name" value={name} />
@@ -236,11 +217,15 @@ export default function GatewayInfo({ name, namespace, rawJson }: Props) {
         <ConditionsTable conditions={conditions as any[]} />
       </InfoSection>
 
+      <InfoSection title="Events">
+        <EventsTable events={events} />
+      </InfoSection>
+
       <InfoSection title="Lifecycle">
         <div className="space-y-2">
-          <InfoRow label="UID" value={describe?.uid || text((describe?.metadata as any)?.uid)} />
-          <InfoRow label="Resource Version" value={describe?.resource_version || text((describe?.metadata as any)?.resourceVersion)} />
-          <InfoRow label="API Version" value={describe?.apiVersion || text(rawJson?.apiVersion)} />
+          <InfoRow label="UID" value={text(describe?.uid)} />
+          <InfoRow label="Resource Version" value={text(describe?.resource_version)} />
+          <InfoRow label="API Version" value={describe?.api_version || text(rawJson?.apiVersion)} />
           <InfoRow label="Finalizers" value={finalizers.join(', ') || '-'} />
         </div>
       </InfoSection>

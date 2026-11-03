@@ -19,49 +19,16 @@ func (s *Service) GetGatewayClasses(ctx context.Context) ([]map[string]interface
 	return gatewayRows(list, gatewayrow.GatewayClass), nil
 }
 
-// DescribeGatewayClass returns detailed info about a gateway class.
+// DescribeGatewayClass is a gateway class as its drawer shows it: the list's row (gatewayrow.GatewayClass), its
+// metadata and events, and the features the controller says it supports.
 func (s *Service) DescribeGatewayClass(ctx context.Context, name string) (map[string]interface{}, error) {
-	gvr := s.gatewayGVR(ctx, "gatewayclasses")
-	obj, err := s.GetResource(ctx, gvr, "", name)
+	result, obj, err := s.describeGatewayObject(ctx, "gatewayclasses", "GatewayClass", "", name, gatewayrow.GatewayClass)
 	if err != nil {
 		return nil, fmt.Errorf("get gateway class %s: %w", name, err)
 	}
 
-	result := map[string]interface{}{
-		"name":        obj.GetName(),
-		"labels":      obj.GetLabels(),
-		"annotations": obj.GetAnnotations(),
-		"created_at":  toISO(&metav1.Time{Time: obj.GetCreationTimestamp().Time}),
-	}
-	addObjectMetaFields(result, obj)
-
-	spec := mapMap(obj.Object, "spec")
-	if spec != nil {
-		result["controller_name"] = mapStr(spec, "controllerName")
-		result["description"] = mapStr(spec, "description")
-
-		if paramRef := mapMap(spec, "parametersRef"); paramRef != nil {
-			result["parameters_ref"] = paramRef
-		}
-	}
-
 	status := mapMap(obj.Object, "status")
 	if status != nil {
-		conditions := mapSlice(status, "conditions")
-		condList := make([]map[string]interface{}, 0, len(conditions))
-		for _, c := range conditions {
-			if cm, ok := c.(map[string]interface{}); ok {
-				condList = append(condList, map[string]interface{}{
-					"type":                 mapStr(cm, "type"),
-					"status":               mapStr(cm, "status"),
-					"reason":               mapStr(cm, "reason"),
-					"message":              mapStr(cm, "message"),
-					"last_transition_time": mapStr(cm, "lastTransitionTime"),
-				})
-			}
-		}
-		result["conditions"] = condList
-
 		supported := mapSlice(status, "supportedFeatures")
 		features := make([]map[string]interface{}, 0, len(supported))
 		for _, f := range supported {

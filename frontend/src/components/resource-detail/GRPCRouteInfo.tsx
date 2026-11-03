@@ -1,10 +1,12 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { ConditionsTable, InfoSection, InfoRow, KeyValueTags, SummaryBadge, Th, NoneText, Tx } from './DetailCommon'
+import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, SummaryBadge, Th, NoneText, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
+import { conditionStatus, conditionSummary, formatParentRef } from './gatewayDetail'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
+import type { GRPCRouteInfo as GRPCRouteRow } from '@/services/api'
 
 interface Props {
   name: string
@@ -12,53 +14,18 @@ interface Props {
   rawJson?: Record<string, unknown>
 }
 
-type GRPCRouteDescribe = {
+// the list's row (gatewayrow.Route) with the object's metadata and events
+type GRPCRouteDescribe = GRPCRouteRow & {
   uid?: string | null
   resource_version?: string | null
-  hostnames?: string[]
-  parent_refs?: Array<Record<string, any>>
-  rules?: Array<Record<string, any>>
-  parents?: Array<Record<string, any>>
-  parent_statuses?: Array<Record<string, any>>
-  rule_count?: number
-  parent_refs_count?: number
-  backend_refs_count?: number
-  status?: string | null
-  accepted?: boolean
-  resolved_refs?: boolean
-  conditions?: Array<Record<string, unknown>>
-  labels?: Record<string, string>
-  annotations?: Record<string, string>
-  finalizers?: string[]
-  created_at?: string | null
-  apiVersion?: string
-  metadata?: Record<string, unknown>
+  generation?: number
+  events?: Array<Record<string, unknown>>
 }
 
 function text(value: unknown): string {
   if (value == null) return '-'
   const s = String(value)
   return s.length > 0 ? s : '-'
-}
-
-function formatParentRef(parentRef: Record<string, any>): string {
-  if (!parentRef || typeof parentRef !== 'object') return '-'
-  const group = text(parentRef.group)
-  const kind = text(parentRef.kind)
-  const namespace = text(parentRef.namespace)
-  const name = text(parentRef.name)
-  const sectionName = text(parentRef.sectionName || parentRef.section_name)
-  const port = text(parentRef.port)
-
-  const head = [kind, group !== '-' ? `.${group}` : '', `/${name}`].join('')
-  const extras = [
-    namespace !== '-' ? `ns=${namespace}` : '',
-    sectionName !== '-' ? `section=${sectionName}` : '',
-    port !== '-' ? `port=${port}` : '',
-  ].filter(Boolean)
-
-  if (extras.length === 0) return head
-  return `${head} (${extras.join(', ')})`
 }
 
 export default function GRPCRouteInfo({ name, namespace, rawJson }: Props) {
@@ -92,9 +59,9 @@ export default function GRPCRouteInfo({ name, namespace, rawJson }: Props) {
   }, [describe?.rules, spec?.rules])
 
   const parentStatuses = useMemo(() => {
-    if (Array.isArray(describe?.parent_statuses)) return describe.parent_statuses
+    if (Array.isArray(describe?.parents)) return describe.parents
     return Array.isArray(status?.parents) ? (status.parents as Array<Record<string, any>>) : []
-  }, [describe?.parent_statuses, status?.parents])
+  }, [describe?.parents, status?.parents])
 
   const conditions = useMemo(() => {
     if (Array.isArray(describe?.conditions)) return describe.conditions
@@ -108,28 +75,10 @@ export default function GRPCRouteInfo({ name, namespace, rawJson }: Props) {
     return collected
   }, [describe?.conditions, parentStatuses])
 
-  const accepted = Boolean(
-    describe?.accepted
-    || conditions.some((c: any) => String(c?.type) === 'Accepted' && String(c?.status).toLowerCase() === 'true'),
-  )
-  const resolvedRefs = Boolean(
-    describe?.resolved_refs
-    || conditions.some((c: any) => String(c?.type) === 'ResolvedRefs' && String(c?.status).toLowerCase() === 'true'),
-  )
-
-  const statusText = describe?.status || (
-    accepted
-      ? 'Accepted'
-      : resolvedRefs
-        ? 'ResolvedRefs'
-        : (() => {
-            const firstTrue = conditions.find((c: any) => String(c?.status).toLowerCase() === 'true')
-            if (firstTrue?.type) return String(firstTrue.type)
-            const firstFalse = conditions.find((c: any) => String(c?.status).toLowerCase() === 'false')
-            if (firstFalse?.type) return `${String(firstFalse.type)}(False)`
-            return 'Unknown'
-          })()
-  )
+  const accepted = conditionStatus(conditions, 'Accepted')
+  const resolvedRefs = conditionStatus(conditions, 'ResolvedRefs')
+  const statusText = describe?.status || conditionSummary(conditions, 'Accepted', 'ResolvedRefs')
+  const events = Array.isArray(describe?.events) ? describe.events : []
 
   const labels = (describe?.labels ?? (meta.labels as Record<string, string> | undefined) ?? {})
   const annotations = (describe?.annotations ?? (meta.annotations as Record<string, string> | undefined) ?? {})
@@ -153,8 +102,8 @@ export default function GRPCRouteInfo({ name, namespace, rawJson }: Props) {
         {isError && <p className="text-xs text-red-400 mb-2"><Tx>Failed to load describe data. Showing summary from list.</Tx></p>}
         <div className="flex flex-wrap gap-2 mb-3">
           <SummaryBadge label="Status" value={statusText} color="default" />
-          <SummaryBadge label="Accepted" value={accepted ? 'Yes' : 'No'} color={accepted ? 'green' : 'amber'} />
-          <SummaryBadge label="ResolvedRefs" value={resolvedRefs ? 'Yes' : 'No'} color={resolvedRefs ? 'green' : 'amber'} />
+          <SummaryBadge label="Accepted" value={accepted} color={accepted === 'True' ? 'green' : 'amber'} />
+          <SummaryBadge label="ResolvedRefs" value={resolvedRefs} color={resolvedRefs === 'True' ? 'green' : 'amber'} />
         </div>
         <div className="space-y-2">
           <InfoRow label="Name" value={name} />
@@ -285,8 +234,9 @@ export default function GRPCRouteInfo({ name, namespace, rawJson }: Props) {
           <div className="space-y-3">
             {parentStatuses.map((parent, idx) => (
               <div key={`parent-status-${idx}`} className="rounded-sm border border-slate-800 p-3">
-                <div className="text-xs mb-2 text-slate-200 wrap-break-word">
-                  <span className="text-slate-400"><Tx>Parent Ref:</Tx></span> {formatParentRef(parent?.parent_ref || parent?.parentRef || {})}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs mb-2">
+                  <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Controller:</Tx></span> {text(parent?.controllerName)}</div>
+                  <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Parent Ref:</Tx></span> {formatParentRef(parent?.parentRef || {})}</div>
                 </div>
                 <ConditionsTable conditions={Array.isArray(parent?.conditions) ? parent.conditions : []} />
               </div>
@@ -299,11 +249,15 @@ export default function GRPCRouteInfo({ name, namespace, rawJson }: Props) {
         <ConditionsTable conditions={conditions as any[]} />
       </InfoSection>
 
+      <InfoSection title="Events">
+        <EventsTable events={events} />
+      </InfoSection>
+
       <InfoSection title="Lifecycle">
         <div className="space-y-2">
-          <InfoRow label="UID" value={describe?.uid || text((describe?.metadata as any)?.uid)} />
-          <InfoRow label="Resource Version" value={describe?.resource_version || text((describe?.metadata as any)?.resourceVersion)} />
-          <InfoRow label="API Version" value={describe?.apiVersion || text(rawJson?.apiVersion)} />
+          <InfoRow label="UID" value={text(describe?.uid)} />
+          <InfoRow label="Resource Version" value={text(describe?.resource_version)} />
+          <InfoRow label="API Version" value={describe?.api_version || text(rawJson?.apiVersion)} />
           <InfoRow label="Finalizers" value={finalizers.join(', ') || '-'} />
         </div>
       </InfoSection>
