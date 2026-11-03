@@ -1574,7 +1574,8 @@ test.describe('number check — list screens', () => {
       const o = slice()
       expect(o.endpoints.length, 'num-hand back as in the fixture').toBe(2)
       await page.goto(`${list}&detail=${encodeURIComponent(`EndpointSlice/${NS}/num-hand`)}`)
-      expect.soft(missing(await drawerText(), o), 'drawer opened by link').toEqual([])
+      // the drawer's header comes before its fields: read it until every field is there, not once
+      await expect.poll(async () => missing(await drawerText(), o), { timeout: 20_000, message: 'drawer opened by link' }).toEqual([])
     })
   })
 })
