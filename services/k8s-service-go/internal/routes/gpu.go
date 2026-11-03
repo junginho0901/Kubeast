@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"net/http"
+
 	"github.com/go-chi/chi/v5"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/handler"
@@ -31,25 +33,30 @@ func RegisterGPU(r chi.Router, h *handler.Handler) {
 	r.Post("/api/v1/alertstore/silences", h.CreateAlertSilence)
 	r.Delete("/api/v1/alertstore/silences/{silenceID}", h.ExpireAlertSilence)
 
+	// DRA (resource.k8s.io): lists answer "not installed" on a cluster that does not serve the kind
+	dra := func(resource string) func(http.Handler) http.Handler {
+		return h.ListIfServed("resource.k8s.io", resource)
+	}
+
 	// DRA - DeviceClasses (cluster-scoped)
-	r.Get("/api/v1/deviceclasses", h.GetDeviceClasses)
+	r.With(dra("deviceclasses")).Get("/api/v1/deviceclasses", h.GetDeviceClasses)
 	r.Get("/api/v1/deviceclasses/{name}/describe", h.DescribeDeviceClass)
 	r.Delete("/api/v1/deviceclasses/{name}", h.DeleteDeviceClass)
 
 	// DRA - ResourceClaims (namespace-scoped)
-	r.Get("/api/v1/resourceclaims/all", h.GetAllResourceClaims)
-	r.Get("/api/v1/namespaces/{namespace}/resourceclaims", h.GetResourceClaims)
+	r.With(dra("resourceclaims")).Get("/api/v1/resourceclaims/all", h.GetAllResourceClaims)
+	r.With(dra("resourceclaims")).Get("/api/v1/namespaces/{namespace}/resourceclaims", h.GetResourceClaims)
 	r.Get("/api/v1/namespaces/{namespace}/resourceclaims/{name}/describe", h.DescribeResourceClaim)
 	r.Delete("/api/v1/namespaces/{namespace}/resourceclaims/{name}", h.DeleteResourceClaim)
 
 	// DRA - ResourceClaimTemplates (namespace-scoped)
-	r.Get("/api/v1/resourceclaimtemplates/all", h.GetAllResourceClaimTemplates)
-	r.Get("/api/v1/namespaces/{namespace}/resourceclaimtemplates", h.GetResourceClaimTemplates)
+	r.With(dra("resourceclaimtemplates")).Get("/api/v1/resourceclaimtemplates/all", h.GetAllResourceClaimTemplates)
+	r.With(dra("resourceclaimtemplates")).Get("/api/v1/namespaces/{namespace}/resourceclaimtemplates", h.GetResourceClaimTemplates)
 	r.Get("/api/v1/namespaces/{namespace}/resourceclaimtemplates/{name}/describe", h.DescribeResourceClaimTemplate)
 	r.Delete("/api/v1/namespaces/{namespace}/resourceclaimtemplates/{name}", h.DeleteResourceClaimTemplate)
 
 	// DRA - ResourceSlices (cluster-scoped)
-	r.Get("/api/v1/resourceslices", h.GetResourceSlices)
+	r.With(dra("resourceslices")).Get("/api/v1/resourceslices", h.GetResourceSlices)
 	r.Get("/api/v1/resourceslices/{name}/describe", h.DescribeResourceSlice)
 	r.Delete("/api/v1/resourceslices/{name}", h.DeleteResourceSlice)
 }

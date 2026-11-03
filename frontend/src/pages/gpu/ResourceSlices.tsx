@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation, Trans } from 'react-i18next'
 import { api, type ResourceSliceItem } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
+import { useForbidden } from '@/services/forbiddenStore'
+import { applyResourceSliceWatchEvent } from './resourceslices/resourceSlicesWatch'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { ageSeconds as parseAgeSeconds, formatAge } from '@/utils/time'
@@ -16,57 +17,6 @@ import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'node' | 'driver' | 'pool' | 'devices' | 'age'
-
-function normalizeWatchResourceSliceObject(obj: any): ResourceSliceItem {
-  if (
-    typeof obj?.name === 'string'
-    && Object.prototype.hasOwnProperty.call(obj, 'driver_name')
-  ) {
-    return {
-      ...obj,
-      labels: obj.labels || {},
-    } as ResourceSliceItem
-  }
-
-  const metadata = obj?.metadata ?? {}
-  const spec = obj?.spec ?? {}
-  const devices = Array.isArray(spec?.devices) ? spec.devices : []
-
-  return {
-    name: metadata?.name ?? obj?.name ?? '',
-    labels: metadata?.labels ?? obj?.labels ?? {},
-    created_at: metadata?.creationTimestamp ?? obj?.created_at ?? null,
-    node_name: spec?.nodeName ?? obj?.node_name ?? null,
-    driver_name: spec?.driver ?? obj?.driver_name ?? null,
-    pool_name: spec?.pool?.name ?? obj?.pool_name ?? null,
-    device_count: devices.length || (obj?.device_count ?? 0),
-  }
-}
-
-function applyResourceSliceWatchEvent(
-  prev: ResourceSliceItem[] | undefined,
-  event: { type?: string; object?: any },
-): ResourceSliceItem[] {
-  const items = Array.isArray(prev) ? [...prev] : []
-  const obj = event?.object
-  if (!obj) return items
-
-  const normalized = normalizeWatchResourceSliceObject(obj)
-  const name = normalized?.name
-  if (!name) return items
-
-  const index = items.findIndex((item) => item.name === name)
-
-  if (event.type === 'DELETED') {
-    if (index >= 0) items.splice(index, 1)
-    return items
-  }
-
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
-  else items.push(normalized)
-
-  return items
-}
 
 export default function ResourceSlices() {
   const queryClient = useQueryClient()
@@ -86,8 +36,11 @@ export default function ResourceSlices() {
     queryFn: () => api.getResourceSlices(false),
   })
 
+  // a list the cluster refused (a grant limited to namespaces) counts nothing: the cards say "-"
+  const forbidden = useForbidden('resourceslices')
+
   useKubeWatchList({
-    enabled: true,
+    enabled: !forbidden,
     queryKey: ['gpu', 'resourceslices'],
     path: '/api/v1/resourceslices',
     query: 'watch=1',
@@ -121,8 +74,8 @@ export default function ResourceSlices() {
       totalDevices += item.device_count ?? 0
     }
 
-    return { total, totalDevices }
-  }, [filteredResourceSlices])
+    return forbidden ? { total: '-', totalDevices: '-' } : { total, totalDevices }
+  }, [filteredResourceSlices, forbidden])
 
   const handleSort = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) {
@@ -328,9 +281,9 @@ export default function ResourceSlices() {
                   })}
                 >
                   <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{item.name}</span></td>
-                  <td className="py-3 px-4 text-xs"><span className="block truncate">{item.node_name ?? '-'}</span></td>
-                  <td className="col-optional py-3 px-4 text-xs"><span className="block truncate">{item.driver_name ?? '-'}</span></td>
-                  <td className="py-3 px-4 text-xs"><span className="block truncate">{item.pool_name ?? '-'}</span></td>
+                  <td className="py-3 px-4 text-xs"><span className="block truncate">{item.node_name || '-'}</span></td>
+                  <td className="col-optional py-3 px-4 text-xs"><span className="block truncate">{item.driver_name || '-'}</span></td>
+                  <td className="py-3 px-4 text-xs"><span className="block truncate">{item.pool_name || '-'}</span></td>
                   <td className="py-3 px-4 text-xs">{item.device_count ?? 0}</td>
                   <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
                 </tr>

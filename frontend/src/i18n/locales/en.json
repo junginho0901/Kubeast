@@ -4192,13 +4192,11 @@
     "refreshTitle": "Force refresh",
     "searchPlaceholder": "Search by device class name...",
     "stats": {
-      "total": "Total",
-      "withConditions": "With Conditions"
+      "total": "Total"
     },
     "subtitle": "Manage DeviceClass resources for Dynamic Resource Allocation (DRA).",
     "table": {
       "age": "Age",
-      "conditions": "Conditions",
       "name": "Name",
       "selectors": "Selectors"
     },
@@ -4355,7 +4353,7 @@
       "name": "Name",
       "namespace": "Namespace",
       "requests": "Requests",
-      "status": "Status"
+      "state": "State"
     },
     "title": "ResourceClaims"
   },

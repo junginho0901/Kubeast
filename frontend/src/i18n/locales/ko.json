@@ -4053,13 +4053,11 @@
     "searchPlaceholder": "DeviceClass 이름으로 검색...",
     "matchCount": "{{count}}개의 DeviceClass가 일치합니다.",
     "stats": {
-      "total": "전체",
-      "withConditions": "Condition 있음"
+      "total": "전체"
     },
     "table": {
       "name": "이름",
       "selectors": "Selector",
-      "conditions": "Condition",
       "age": "경과 시간"
     }
   },
@@ -4083,7 +4081,7 @@
       "namespace": "Namespace",
       "name": "이름",
       "requests": "요청",
-      "status": "상태",
+      "state": "상태",
       "age": "경과 시간"
     }
   },
@@ -4754,6 +4752,11 @@
     "Related PersistentVolumes ({{n}})": "관련 PersistentVolume ({{n}})",
     "Related PersistentVolumeClaims ({{n}})": "관련 PersistentVolumeClaim ({{n}})",
     "Related ResourceClaims": "관련 ResourceClaim",
+    "Related ResourceClaims ({{n}})": "관련 ResourceClaim ({{n}})",
+    "No pod in this namespace has a ResourceClaim made from this template.": "이 Namespace에 이 템플릿으로 만든 ResourceClaim을 가진 Pod가 없습니다.",
+    "Extended Resource Name": "확장 리소스 이름",
+    "All Nodes": "모든 Node",
+    "Node Selector": "Node 셀렉터",
     "Binary Data Keys ({{n}})": "바이너리 데이터 키 ({{n}})",
     "Data": "데이터",
     "Data ({{n}}{{total}})": "데이터 ({{n}}{{total}})",

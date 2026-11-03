@@ -4,6 +4,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { InfoSection, InfoRow, KeyValueTags, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
+import { configParameterMap } from './draText'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface Props {
@@ -16,15 +17,16 @@ type DeviceClassDescribe = {
   uid?: string | null
   resource_version?: string | null
   selectors?: Array<Record<string, unknown>>
-  suitable_nodes?: Record<string, unknown>
-  config?: Array<Record<string, unknown>> | Record<string, unknown>
+  config?: Array<Record<string, unknown>>
+  extended_resource_name?: string
+  // the claims whose requests ask for this class, worked out on the server
+  used_by?: Array<{ namespace: string; name: string; state: string; requests: string[] }>
+  used_by_error?: string
   labels?: Record<string, string>
   annotations?: Record<string, string>
   created_at?: string | null
   metadata?: Record<string, unknown>
 }
-
-const text = (v: unknown) => (v != null && v !== '' ? String(v) : '-')
 
 export default function DeviceClassInfo({ name, rawJson }: Props) {
   const { open: openDetail } = useResourceDetail()
@@ -37,18 +39,7 @@ export default function DeviceClassInfo({ name, rawJson }: Props) {
 
   useResourceDetailOverlay({ kind: 'DeviceClass', name, describe })
 
-  // Cluster-wide ResourceClaim scan + filter by deviceClassName. K8s 1.30+
-  // DRA: claim.spec.devices.requests[].deviceClassName references the class.
-  const { data: allClaims } = useQuery({
-    queryKey: ['deviceclass-using-claims', name],
-    queryFn: () => api.getAllResourceClaims(),
-    enabled: !!name,
-    staleTime: 30_000,
-  })
-  const usingClaims = (Array.isArray(allClaims) ? allClaims : []).filter((c: any) => {
-    const requests = c?.spec?.devices?.requests ?? c?.devices?.requests ?? []
-    return Array.isArray(requests) && requests.some((r: any) => (r?.deviceClassName ?? r?.device_class_name) === name)
-  })
+  const usingClaims = describe?.used_by ?? []
   const { items: pagedUsingClaims, nav: usingClaimsNav } = usePagination(usingClaims, 10)
 
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
@@ -65,36 +56,12 @@ export default function DeviceClassInfo({ name, rawJson }: Props) {
     if (cel?.expression) selectorExpressions.push(String(cel.expression))
   }
 
-  /* ── Parse suitable nodes ── */
-  const suitableNodes = describe?.suitable_nodes as Record<string, unknown> | undefined
-  const nodeSelectorTerms = (suitableNodes?.nodeSelectorTerms ?? suitableNodes?.node_selector_terms) as Array<Record<string, unknown>> | undefined
-  const matchExpressions: Array<{ key: string; operator: string; values: string }> = []
-  if (nodeSelectorTerms) {
-    for (const term of nodeSelectorTerms) {
-      const exprs = (term.matchExpressions ?? term.match_expressions) as Array<Record<string, unknown>> | undefined
-      if (exprs) {
-        for (const expr of exprs) {
-          matchExpressions.push({
-            key: String(expr.key ?? ''),
-            operator: String(expr.operator ?? ''),
-            values: Array.isArray(expr.values) ? expr.values.join(', ') : text(expr.values),
-          })
-        }
-      }
-    }
-  }
-
-  /* ── Parse config ── */
-  const rawConfig = describe?.config
-  const configItems: Array<{ driver: string; parameters: Record<string, unknown> }> = []
-  const configArr = Array.isArray(rawConfig) ? rawConfig : rawConfig ? [rawConfig] : []
-  for (const item of configArr) {
+  /* ── Parse config (v1: spec.config[].opaque) ── */
+  const configItems: Array<{ driver: string; parameters: Record<string, string> }> = []
+  for (const item of describe?.config ?? []) {
     const opaque = item.opaque as Record<string, unknown> | undefined
     if (opaque) {
-      configItems.push({
-        driver: String(opaque.driver ?? '-'),
-        parameters: (opaque.parameters ?? {}) as Record<string, unknown>,
-      })
+      configItems.push({ driver: String(opaque.driver ?? '-'), parameters: configParameterMap(opaque.parameters) })
     }
   }
 
@@ -105,6 +72,7 @@ export default function DeviceClassInfo({ name, rawJson }: Props) {
         {isError && <p className="text-xs text-red-400 mb-2"><Tx>Failed to load describe data. Showing summary from list.</Tx></p>}
         <div className="space-y-2">
           <InfoRow label="Name" value={describe?.name || name} />
+          <InfoRow label="Extended Resource Name" value={describe?.extended_resource_name || '-'} />
           <InfoRow label="Created" value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />
         </div>
       </InfoSection>
@@ -130,31 +98,6 @@ export default function DeviceClassInfo({ name, rawJson }: Props) {
         </InfoSection>
       )}
 
-      {matchExpressions.length > 0 && (
-        <InfoSection title="Suitable Nodes">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs table-fixed min-w-[400px]">
-              <thead className="text-slate-400">
-                <tr>
-                  <Th className="text-left py-1 w-[35%]">Key</Th>
-                  <Th className="text-left py-1 w-[20%]">Operator</Th>
-                  <Th className="text-left py-1 w-[45%]">Values</Th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800">
-                {matchExpressions.map((me, idx) => (
-                  <tr key={idx} className="text-slate-200">
-                    <td className="py-1 pr-2 wrap-break-word font-mono">{me.key}</td>
-                    <td className="py-1 pr-2 wrap-break-word">{me.operator}</td>
-                    <td className="py-1 pr-2 wrap-break-word">{me.values}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </InfoSection>
-      )}
-
       {configItems.length > 0 && (
         <InfoSection title="Config">
           <div className="space-y-3">
@@ -163,7 +106,7 @@ export default function DeviceClassInfo({ name, rawJson }: Props) {
                 <InfoRow label="Driver" value={cfg.driver} />
                 {Object.keys(cfg.parameters).length > 0 && (
                   <div className="mt-1">
-                    <KeyValueTags data={Object.fromEntries(Object.entries(cfg.parameters).map(([k, v]) => [k, String(v)]))} />
+                    <KeyValueTags data={cfg.parameters} />
                   </div>
                 )}
               </div>
@@ -172,8 +115,10 @@ export default function DeviceClassInfo({ name, rawJson }: Props) {
         </InfoSection>
       )}
 
-      <InfoSection title="Used By ResourceClaims ({{n}})" titleValues={{ n: usingClaims.length }}>
-        {usingClaims.length === 0 ? (
+      <InfoSection title="Used By ResourceClaims ({{n}})" titleValues={{ n: describe?.used_by ? usingClaims.length : '-' }}>
+        {describe?.used_by_error ? (
+          <p className="text-xs text-red-400">{describe.used_by_error}</p>
+        ) : usingClaims.length === 0 ? (
           <p className="text-xs text-slate-400"><Tx>No ResourceClaim in the cluster references this DeviceClass.</Tx></p>
         ) : (
           <div className="overflow-x-auto">
@@ -182,17 +127,21 @@ export default function DeviceClassInfo({ name, rawJson }: Props) {
                 <tr>
                   <Th className="text-left py-1">Namespace</Th>
                   <Th className="text-left py-1">ResourceClaim</Th>
+                  <Th className="text-left py-1">Requests</Th>
+                  <Th className="text-left py-1">State</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {pagedUsingClaims.map((c: any) => (
+                {pagedUsingClaims.map((c) => (
                   <tr
                     key={`${c.namespace}/${c.name}`}
                     className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
                     onClick={() => openDetail({ kind: 'ResourceClaim', name: c.name, namespace: c.namespace })}
                   >
-                    <td className="py-1 pr-2 font-mono">{c.namespace ?? '-'}</td>
+                    <td className="py-1 pr-2 font-mono">{c.namespace || '-'}</td>
                     <td className="py-1 pr-2 font-mono">{c.name}</td>
+                    <td className="py-1 pr-2 font-mono">{c.requests.join(', ') || '-'}</td>
+                    <td className="py-1 pr-2 font-mono">{c.state || '-'}</td>
                   </tr>
                 ))}
               </tbody>

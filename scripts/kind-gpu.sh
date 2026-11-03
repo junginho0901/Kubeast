@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fake GPUs on the dev cluster test2 for the GPU screens' number checks (e2e/tests/number-check-gpu*.spec.ts):
+# Fake GPUs on the dev cluster test2 for the DRA screens' number check (e2e/tests/number-check-dra.spec.ts):
 # the DRA example driver v0.5.0 (deploy/kind/dra-example-driver.yaml — eight mock GPUs on the node as a ResourceSlice
 # of gpu.example.com, the DeviceClass gpu.example.com; pods that claim one run with it injected through CDI, which
 # kind's containerd 2 enables).

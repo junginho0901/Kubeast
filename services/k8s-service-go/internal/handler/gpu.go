@@ -11,14 +11,14 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
-// isDRAAPINotAvailable checks if the error indicates DRA API is not installed.
+// isDRAAPINotAvailable checks if the error indicates DRA API is not installed: the API server's answer for a resource
+// it does not serve, or the service's own check. An object that is not there (`… "name" not found`) is a 404 of its own.
 func isDRAAPINotAvailable(err error) bool {
 	if err == nil {
 		return false
 	}
 	msg := err.Error()
 	return strings.Contains(msg, "could not find the requested resource") ||
-		strings.Contains(msg, "not found") ||
 		strings.Contains(msg, "DRA API not available")
 }
 

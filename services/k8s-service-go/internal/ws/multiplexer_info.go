@@ -4,6 +4,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	crdrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/crd"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/drarow"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/gatewayrow"
 	vparow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/vpa"
 )
@@ -81,6 +82,14 @@ func objectToInfo(resource string, obj *unstructured.Unstructured) map[string]in
 		return gatewayrow.ReferenceGrant(obj)
 	case "backendtlspolicies":
 		return gatewayrow.Policy(obj)
+	case "deviceclasses":
+		return drarow.DeviceClass(obj)
+	case "resourceclaims":
+		return drarow.Claim(obj)
+	case "resourceclaimtemplates":
+		return drarow.ClaimTemplate(obj)
+	case "resourceslices":
+		return drarow.Slice(obj)
 	default:
 		// Generic: return metadata + spec summary
 		return genericToInfo(obj)

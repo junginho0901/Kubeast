@@ -5,11 +5,12 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useCanCreate } from '@/hooks/useCanCreate'
+import { useForbidden } from '@/services/forbiddenStore'
+import { useKindServed } from '@/services/listStatusStore'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import {
   applyDeviceClassWatchEvent,
-  formatConditions,
   parseAgeSeconds,
   type SortKey,
 } from './deviceClassesHelpers'
@@ -29,10 +30,13 @@ export function useDeviceClassesData({ searchQuery, sortKey, sortDir, currentPag
     queryKey: ['gpu', 'deviceclasses'],
     queryFn: () => api.getDeviceClasses(false),
   })
-  const canCreate = useCanCreate('resource.deviceclass.create', { group: 'resource.k8s.io', resource: 'deviceclasses' })
+  // a list the cluster refused (a grant limited to namespaces) counts nothing: the cards say "-"
+  const forbidden = useForbidden('deviceclasses')
+  const served = useKindServed('deviceclasses')
+  const canCreate = useCanCreate('resource.deviceclass.create', { group: 'resource.k8s.io', resource: 'deviceclasses' }) && served
 
   useKubeWatchList({
-    enabled: true,
+    enabled: !forbidden,
     queryKey: ['gpu', 'deviceclasses'],
     path: '/api/v1/deviceclasses',
     query: 'watch=1',
@@ -55,16 +59,7 @@ export function useDeviceClassesData({ searchQuery, sortKey, sortDir, currentPag
     ))
   }, [deviceClasses, searchQuery])
 
-  const summary = useMemo(() => {
-    const total = filteredDeviceClasses.length
-    let withConditions = 0
-
-    for (const item of filteredDeviceClasses) {
-      if (Array.isArray(item.conditions) && item.conditions.length > 0) withConditions += 1
-    }
-
-    return { total, withConditions }
-  }, [filteredDeviceClasses])
+  const summary = useMemo(() => ({ total: forbidden ? '-' : filteredDeviceClasses.length }), [filteredDeviceClasses, forbidden])
 
   const sortedDeviceClasses = useMemo(() => {
     if (!sortKey) return filteredDeviceClasses
@@ -76,8 +71,6 @@ export function useDeviceClassesData({ searchQuery, sortKey, sortDir, currentPag
           return item.name
         case 'selectors':
           return item.selector_count ?? 0
-        case 'conditions':
-          return formatConditions(item.conditions)
         case 'age':
           return parseAgeSeconds(item.created_at)
         default:

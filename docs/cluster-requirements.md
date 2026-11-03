@@ -27,7 +27,7 @@ A "target cluster" is a cluster Kubeast manages, including the cluster it is ins
 | Drawer and dashboard graphs, optimization, storage analysis | Prometheus + metric collectors — §3 | `features.prometheus.enabled` (**off**) | Graph areas are hidden and optimization uses metrics-server point-in-time values |
 | Cost, optimization cost column | OpenCost — §4 | `features.cost.enabled` (on) | "OpenCost is not installed on this cluster" notice, no cost column |
 | Policy reports | The PolicyReport CRD and a tool that creates reports — §5 | `features.policyReports.enabled` (on) | "Not installed" notice |
-| GPU and DRA | NVIDIA device plugin, GFD labels, DCGM exporter, DRA API — §6 | — | GPU counts and utilization are empty, or DRA shows "unavailable" |
+| GPU and DRA | NVIDIA device plugin, GFD labels, DCGM exporter, DRA API — §6 | — | GPU counts and utilization are empty, or the DRA lists say "not installed" |
 | VPA, Gateway API, Admission Policy, Ingress latency | The matching CRDs and controllers — §7 | — | Lists are empty with "not installed" |
 | Apply without restart (resize) | Kubernetes 1.35 or later — §8 | `features.inPlaceResize.enabled` (on) | The button is hidden and the API returns 409 |
 | Node shell | Privileged pods allowed, and the image — §9 | `nodeShell.enabled` (off) | Pod creation fails |
@@ -270,7 +270,7 @@ The PolicyReport and ClusterPolicyReport CRDs of `wgpolicyk8s.io/v1alpha2` and a
 | GPU Feature Discovery | Node labels `nvidia.com/gpu.product`, `gpu.memory`, `mig.strategy`, `cuda.driver.*` | GPU model and memory |
 | time-slicing settings | ConfigMaps `time-slicing-config`, `nvidia-plugin-configs`, `time-slicing` (in the namespaces above) | Time-slicing settings |
 | DCGM exporter | The `DCGM_FI_DEV_*` metrics in the §3 table | Utilization, memory, temperature |
-| DRA | `resource.k8s.io` (v1 on 1.34+, v1beta2/v1beta1 on 1.32–1.33, v1alpha3 on 1.31), chosen through API discovery | DeviceClass, ResourceClaim, ResourceSlice |
+| DRA | `resource.k8s.io` (v1 on 1.34+, v1beta2/v1beta1 on 1.32–1.33, v1alpha3 on 1.31), chosen through API discovery; the lists and their live updates (watch) of the four kinds, and for the drawers the ResourceClaims (Used By, Device Allocations) and the namespace's pods (Using Pods, Related ResourceClaims) as the user — `view` and `kubeast:cluster-reader` cover them | DeviceClass, ResourceClaim, ResourceClaimTemplate, ResourceSlice |
 
 With the NVIDIA GPU Operator, all of the above comes in at once. This section is based on the code and has not been verified on a real GPU cluster.
 

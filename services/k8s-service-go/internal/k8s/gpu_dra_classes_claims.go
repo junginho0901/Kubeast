@@ -1,8 +1,8 @@
 // gpu_dra_classes_claims.go — DRA (Dynamic Resource Allocation) 의 DeviceClass /
 // ResourceClaim / ResourceClaimTemplate 도메인 CRUD.
 //
-// gpu.go 에서 분리. 모든 메서드는 본체의 `isDRAUnavailable` 가드 + `draGVR` 헬퍼
-// + `formatDRAList` 공유 포매터를 사용 (byte-equal 이동).
+// gpu.go 에서 분리. 모든 메서드는 본체의 `isDRAUnavailable` 가드 + `draGVR` 헬퍼를
+// 쓰고, 행은 internal/drarow 가 목록·describe·실시간 갱신에 같은 모양으로 만든다.
 
 package k8s
 
@@ -10,7 +10,10 @@ import (
 	"context"
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/drarow"
 )
 
 // ========== DeviceClasses (cluster-scoped) ==========
@@ -24,7 +27,7 @@ func (s *Service) GetDeviceClasses(ctx context.Context) ([]map[string]interface{
 	if err != nil {
 		return nil, fmt.Errorf("list deviceclasses: %w", err)
 	}
-	return formatDRAList(list), nil
+	return draRows(list, drarow.DeviceClass), nil
 }
 
 func (s *Service) DescribeDeviceClass(ctx context.Context, name string) (map[string]interface{}, error) {
@@ -49,12 +52,19 @@ func (s *Service) DescribeDeviceClass(ctx context.Context, name string) (map[str
 		if selectors := mapSlice(spec, "selectors"); len(selectors) > 0 {
 			result["selectors"] = selectors
 		}
-		if config := mapMap(spec, "config"); config != nil {
+		if config := mapSlice(spec, "config"); len(config) > 0 {
 			result["config"] = config
 		}
-		if suitableNodes := mapMap(spec, "suitableNodes"); suitableNodes != nil {
-			result["suitable_nodes"] = suitableNodes
+		if v := mapStr(spec, "extendedResourceName"); v != "" {
+			result["extended_resource_name"] = v
 		}
+	}
+
+	// the claims whose requests ask for this class, read here so the drawer does not list every claim itself
+	if claims, err := s.draClaims(ctx); err != nil {
+		result["used_by_error"] = err.Error()
+	} else {
+		result["used_by"] = drarow.UsedBy(name, claims)
 	}
 
 	return result, nil
@@ -79,7 +89,7 @@ func (s *Service) GetResourceClaims(ctx context.Context, namespace string) ([]ma
 	if err != nil {
 		return nil, fmt.Errorf("list resourceclaims: %w", err)
 	}
-	return formatDRAList(list), nil
+	return draRows(list, drarow.Claim), nil
 }
 
 func (s *Service) GetAllResourceClaims(ctx context.Context) ([]map[string]interface{}, error) {
@@ -92,7 +102,7 @@ func (s *Service) GetAllResourceClaims(ctx context.Context) ([]map[string]interf
 		if err != nil {
 			return nil, fmt.Errorf("list all resourceclaims: %w", err)
 		}
-		return formatDRAList(list), nil
+		return draRows(list, drarow.Claim), nil
 	})
 }
 
@@ -112,6 +122,7 @@ func (s *Service) DescribeResourceClaim(ctx context.Context, namespace, name str
 		"labels":      obj.GetLabels(),
 		"annotations": obj.GetAnnotations(),
 		"created_at":  toISO(&metav1.Time{Time: obj.GetCreationTimestamp().Time}),
+		"state":       drarow.ClaimState(obj),
 	}
 
 	spec := mapMap(obj.Object, "spec")
@@ -129,9 +140,20 @@ func (s *Service) DescribeResourceClaim(ctx context.Context, namespace, name str
 		if reservedFor := mapSlice(status, "reservedFor"); len(reservedFor) > 0 {
 			result["reserved_for"] = reservedFor
 		}
-		if deallocationRequested, ok := status["deallocationRequested"]; ok {
-			result["deallocation_requested"] = deallocationRequested
+	}
+
+	// the namespace's pods that refer to the claim, by name or as the claim made for them from a template
+	using := []map[string]interface{}{}
+	err = eachPod(ctx, s.clientsetCtx(ctx).CoreV1(), namespace, metav1.ListOptions{}, func(p *corev1.Pod) {
+		if drarow.PodUsesClaim(p, name) {
+			st, _, _, _ := podListView(p)
+			using = append(using, map[string]interface{}{"name": p.Name, "namespace": p.Namespace, "status": st, "node_name": p.Spec.NodeName})
 		}
+	})
+	if err != nil {
+		result["using_pods_error"] = err.Error()
+	} else {
+		result["using_pods"] = using
 	}
 
 	return result, nil
@@ -156,7 +178,7 @@ func (s *Service) GetResourceClaimTemplates(ctx context.Context, namespace strin
 	if err != nil {
 		return nil, fmt.Errorf("list resourceclaimtemplates: %w", err)
 	}
-	return formatDRAList(list), nil
+	return draRows(list, drarow.ClaimTemplate), nil
 }
 
 func (s *Service) GetAllResourceClaimTemplates(ctx context.Context) ([]map[string]interface{}, error) {
@@ -169,7 +191,7 @@ func (s *Service) GetAllResourceClaimTemplates(ctx context.Context) ([]map[strin
 		if err != nil {
 			return nil, fmt.Errorf("list all resourceclaimtemplates: %w", err)
 		}
-		return formatDRAList(list), nil
+		return draRows(list, drarow.ClaimTemplate), nil
 	})
 }
 
@@ -196,6 +218,20 @@ func (s *Service) DescribeResourceClaimTemplate(ctx context.Context, namespace, 
 		if claimSpec := mapMap(spec, "spec"); claimSpec != nil {
 			result["claim_spec"] = claimSpec
 		}
+	}
+
+	// the claims made from the template: the namespace's pods name them in status.resourceClaimStatuses (a claim made
+	// from a template is owned by its pod and does not name the template)
+	related := []map[string]interface{}{}
+	err = eachPod(ctx, s.clientsetCtx(ctx).CoreV1(), namespace, metav1.ListOptions{}, func(p *corev1.Pod) {
+		for _, claim := range drarow.PodTemplateClaims(p, name) {
+			related = append(related, map[string]interface{}{"name": claim, "namespace": p.Namespace, "pod": p.Name})
+		}
+	})
+	if err != nil {
+		result["related_claims_error"] = err.Error()
+	} else {
+		result["related_claims"] = related
 	}
 
 	return result, nil

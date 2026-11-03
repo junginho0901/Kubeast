@@ -13,7 +13,7 @@ import type { ResourceClaimItem } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
-import { formatAge, type SortKey } from './resourceClaimsHelpers'
+import { formatAge, stateWords, type SortKey } from './resourceClaimsHelpers'
 import { Trans } from 'react-i18next'
 
 interface OpenDetailArgs {
@@ -44,14 +44,16 @@ interface Props {
   tr: (key: string, fallback: string, options?: Record<string, any>) => string
 }
 
-function renderStatusBadge(status?: string | null) {
-  if (status === 'Allocated') {
-    return <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-emerald-900/40 text-emerald-300 border border-emerald-700/40">Allocated</span>
-  }
-  if (status === 'Reserved') {
-    return <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-primary-500/15 text-primary-300 border border-primary-500/30">Reserved</span>
-  }
-  return <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-amber-900/40 text-amber-300 border border-amber-700/40">Pending</span>
+// kubectl's STATE as it prints it: allocated (in use or not) green, pending amber, being deleted neutral
+function renderStateBadge(state?: string) {
+  const words = stateWords(state)
+  if (words.length === 0) return '-'
+  const cls = words.includes('deleted')
+    ? 'badge-neutral'
+    : words.includes('allocated')
+      ? 'bg-emerald-900/40 text-emerald-300 border border-emerald-700/40'
+      : 'bg-amber-900/40 text-amber-300 border border-amber-700/40'
+  return <span className={`inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium ${cls}`}>{state}</span>
 }
 
 export function ResourceClaimsTable({
@@ -109,8 +111,8 @@ export function ResourceClaimsTable({
               <th className="text-left py-3 px-4 w-[280px] cursor-pointer" onClick={() => handleSort('name')}>
                 <span className="inline-flex items-center gap-1">{tr('resourceClaimsPage.table.name', 'Name')}{renderSortIcon('name')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => handleSort('status')}>
-                <span className="inline-flex items-center gap-1">{tr('resourceClaimsPage.table.status', 'Status')}{renderSortIcon('status')}</span>
+              <th className="text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => handleSort('state')}>
+                <span className="inline-flex items-center gap-1">{tr('resourceClaimsPage.table.state', 'State')}{renderSortIcon('state')}</span>
               </th>
               <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('requests')}>
                 <span className="inline-flex items-center gap-1">{tr('resourceClaimsPage.table.requests', 'Requests')}{renderSortIcon('requests')}</span>
@@ -134,7 +136,7 @@ export function ResourceClaimsTable({
               >
                 {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={item.namespace}><span className="block truncate">{item.namespace}</span></td>}
                 <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{item.name}</span></td>
-                <td className="py-3 px-4 text-xs">{renderStatusBadge(item.allocation_status)}</td>
+                <td className="py-3 px-4 text-xs">{renderStateBadge(item.state)}</td>
                 <td className="py-3 px-4 text-xs font-mono">{item.request_count || 0}</td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
               </tr>
