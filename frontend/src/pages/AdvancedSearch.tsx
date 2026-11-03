@@ -14,7 +14,7 @@ import SearchExamples from '@/components/search/SearchExamples'
 import SearchSettings from '@/components/search/SearchSettings'
 import SavedSearches from '@/components/search/SavedSearches'
 import type { SavedSearch } from '@/components/search/savedSearchStore'
-import { searchWithExpression, toSearchResult, SearchResult } from '@/components/search/searchEngine'
+import { rememberPrinterStatus, searchWithExpression, toSearchResult, SearchResult } from '@/components/search/searchEngine'
 import { useAIContext } from '@/hooks/useAIContext'
 import { buildResourceLink } from '@/utils/resourceLink'
 
@@ -110,11 +110,12 @@ export default function AdvancedSearch() {
                   const listKind = (inner.kind as string) ?? ''
                   const itemKind = listKind.endsWith('List') ? listKind.slice(0, -4) : listKind
                   const apiVersion = (inner.apiVersion as string) ?? ''
-                  return inner.items.map((it: any) => ({
-                    ...it,
-                    kind: it.kind || itemKind,
-                    apiVersion: it.apiVersion || apiVersion,
-                  }))
+                  const printed: unknown[] = Array.isArray(inner.printer_status) ? inner.printer_status : []
+                  return inner.items.map((it: any, i: number) => {
+                    const item = { ...it, kind: it.kind || itemKind, apiVersion: it.apiVersion || apiVersion }
+                    if (typeof printed[i] === 'string') rememberPrinterStatus(item, printed[i] as string)
+                    return item
+                  })
                 }
               }
               return []

@@ -255,7 +255,8 @@ export const clusterApi = {
   },
 
   // Advanced Search
-  // The server lists in pages and stops at limit objects (at most 10 000), saying truncated (and remaining when known).
+  // The server lists in pages and stops at limit objects (at most 10 000), saying truncated (and remaining when known),
+  // with each object's kubectl STATUS in printer_status (null where the kind prints none).
   searchResources: async (resourceType: string, namespace?: string, signal?: AbortSignal, limit?: number): Promise<any> => {
     const { data } = await client.get('/cluster/resources', {
       params: {

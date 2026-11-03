@@ -71,7 +71,18 @@ export async function searchWithExpression(
 
 export { formatAge }
 
+// The server sends each object's kubectl STATUS beside the list (printer_status, the Status column of kubectl get's
+// table); it is kept per object here because the objects go into the expressions as the API wrote them.
+const printerStatus = new WeakMap<object, string>()
+
+export function rememberPrinterStatus(item: object, status: string) {
+  printerStatus.set(item, status)
+}
+
+// kubectl's STATUS where the kind prints one; otherwise the phase or the Ready/Available condition.
 export function extractStatus(item: Record<string, unknown>): string {
+  const printed = printerStatus.get(item)
+  if (printed !== undefined) return printed || '-'
   const status = item.status as Record<string, unknown> | undefined
   if (!status) return '-'
   if (typeof status.phase === 'string') return status.phase
