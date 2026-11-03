@@ -3581,7 +3581,9 @@
     "refresh": "Refresh",
     "closeSummary": "Close Summary",
     "listCount": "{{rows}} items ({{events}} events · {{rollouts}} rollouts)",
-    "eventsCapped": "The newest {{shown}} of the {{total}} events in this range are listed."
+    "eventsCapped": "The newest {{shown}} of the {{total}} events in this range are listed.",
+    "eventsCappedType": "The newest {{shown}} of the {{total}} {{type}} events in this range are listed.",
+    "rolloutsError": "The rollouts could not be read, so none are listed."
   },
   "adminOrg": {
     "title": "Teams",

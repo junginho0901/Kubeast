@@ -24,7 +24,7 @@ func (s *Service) GetEvents(ctx context.Context, namespace, resourceName, fieldS
 		selectors = append(selectors, fieldSelector)
 	}
 	opts := metav1.ListOptions{FieldSelector: strings.Join(selectors, ",")}
-	items, counts, err := s.newestEventsSince(ctx, namespace, opts, time.Time{}, limit)
+	items, counts, err := s.newestEventsSince(ctx, namespace, opts, time.Time{}, limit, "")
 	if err != nil {
 		return nil, 0, fmt.Errorf("list events: %w", err)
 	}

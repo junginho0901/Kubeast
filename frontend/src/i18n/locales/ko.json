@@ -3694,7 +3694,9 @@
     "via": "{{source}} 경유",
     "namespace": "Namespace",
     "listCount": "{{rows}}개 항목(이벤트 {{events}} · 롤아웃 {{rollouts}})",
-    "eventsCapped": "이 기간의 이벤트 {{total}}개 중 최신 {{shown}}개를 보여 줍니다."
+    "eventsCapped": "이 기간의 이벤트 {{total}}개 중 최신 {{shown}}개를 보여 줍니다.",
+    "eventsCappedType": "이 기간의 {{type}} 이벤트 {{total}}개 중 최신 {{shown}}개를 보여 줍니다.",
+    "rolloutsError": "롤아웃을 읽지 못해 목록에 넣지 못했습니다."
   },
   "adminOrg": {
     "title": "Teams",

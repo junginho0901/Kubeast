@@ -1,6 +1,8 @@
 package k8s
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -59,5 +61,36 @@ func TestRolloutHistoryFromLists_AllNamespaces(t *testing.T) {
 		if e["namespace"] == "beta" && e["name"] == "web" {
 			t.Errorf("beta/web-9 was paired with alpha's Deployment: %v", e)
 		}
+	}
+}
+
+// A namespace's rollouts are the StatefulSets' and DaemonSets' too: each ControllerRevision created in the window,
+// named by its controlling owner (a revision owned by something else, or older, is not one).
+func TestControllerRevisionRollouts(t *testing.T) {
+	now := time.Now()
+	cutoff := now.Add(-time.Hour)
+	yes := true
+	cr := func(name, ownerKind, owner string, rev int64, created time.Time) appsv1.ControllerRevision {
+		return appsv1.ControllerRevision{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "shop", CreationTimestamp: metav1.NewTime(created),
+				OwnerReferences: []metav1.OwnerReference{{Kind: ownerKind, Name: owner, Controller: &yes}}},
+			Revision: rev,
+		}
+	}
+	list := &appsv1.ControllerRevisionList{Items: []appsv1.ControllerRevision{
+		cr("db-1", "StatefulSet", "db", 1, now.Add(-30*time.Minute)),
+		cr("db-2", "StatefulSet", "db", 2, now.Add(-10*time.Minute)),
+		cr("agent-1", "DaemonSet", "agent", 1, now.Add(-20*time.Minute)),
+		cr("db-0", "StatefulSet", "db", 0, now.Add(-2*time.Hour)),
+		cr("other-1", "Something", "other", 1, now.Add(-5*time.Minute)),
+	}}
+	got := controllerRevisionRollouts(list, cutoff)
+	sortRolloutsNewestFirst(got)
+	var names []string
+	for _, e := range got {
+		names = append(names, fmt.Sprintf("%s/%s#%d", e["kind"], e["name"], e["revision"]))
+	}
+	if want := "StatefulSet/db#2 DaemonSet/agent#1 StatefulSet/db#1"; strings.Join(names, " ") != want {
+		t.Fatalf("rollouts %v, want %s", names, want)
 	}
 }
