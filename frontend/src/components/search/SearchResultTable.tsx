@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Eye, ChevronLeft, ChevronRight, Copy, Check, ArrowUpDown } from 'lucide-react'
-import { SearchResult } from './searchEngine'
+import { SearchResult, SearchSortKey, compareResults } from './searchEngine'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 
 interface Props {
@@ -9,7 +9,7 @@ interface Props {
   maxDisplay?: number
 }
 
-type SortKey = 'kind' | 'name' | 'namespace' | 'status' | 'age'
+type SortKey = SearchSortKey
 type SortDir = 'asc' | 'desc'
 
 const ROW_HEIGHT = 41
@@ -44,9 +44,7 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
   }, [calcPageSize])
 
   const sorted = [...results].sort((a, b) => {
-    const va = a[sortKey] ?? ''
-    const vb = b[sortKey] ?? ''
-    const cmp = String(va).localeCompare(String(vb))
+    const cmp = compareResults(a, b, sortKey)
     return sortDir === 'asc' ? cmp : -cmp
   })
 
@@ -194,11 +192,12 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
 
       {/* Pagination */}
       <div className="shrink-0 flex items-center justify-between pt-2 px-1">
-        <span className="text-xs text-slate-500">
-          {t('advancedSearch.pageInfo', '{{start}}-{{end}} of {{total}}', {
+        <span className="text-xs text-slate-500" data-testid="search-page-info">
+          {t('common.paginationRange', {
             start: safePage * pageSize + 1,
             end: Math.min((safePage + 1) * pageSize, capped),
             total: capped,
+            defaultValue: 'Showing {{start}}-{{end}} of {{total}}',
           })}
           {totalPages > 1 && ` (${t('advancedSearch.page', 'Page {{current}} of {{total}}', { current: safePage + 1, total: totalPages })})`}
         </span>
