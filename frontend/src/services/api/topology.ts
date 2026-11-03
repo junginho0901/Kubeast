@@ -17,16 +17,17 @@ export const topologyApi = {
   },
 
   // Timeline
-  getClusterTimeline: async (hours: number = 24, limit: number = 500): Promise<TimelineResult> => {
+  // type (Normal, Warning) lists only those events, the newest of them; the counts stay the window's
+  getClusterTimeline: async (hours: number = 24, limit: number = 500, type?: string): Promise<TimelineResult> => {
     const { data } = await client.get('/cluster/timeline', {
-      params: { hours, limit },
+      params: { hours, limit, type },
     })
     return data
   },
 
-  getNamespaceTimeline: async (namespace: string, hours: number = 24, limit: number = 500): Promise<TimelineResult> => {
+  getNamespaceTimeline: async (namespace: string, hours: number = 24, limit: number = 500, type?: string): Promise<TimelineResult> => {
     const { data } = await client.get(`/cluster/namespaces/${namespace}/timeline`, {
-      params: { hours, limit },
+      params: { hours, limit, type },
     })
     return data
   },

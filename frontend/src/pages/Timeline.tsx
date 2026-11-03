@@ -52,9 +52,12 @@ export default function Timeline() {
   const namespace = selectedNamespace
   const allNamespaces = namespace === ''
 
+  // the server lists the newest events of the type chosen, so a Warning list is the newest warnings, not the
+  // warnings among the newest events
+  const eventType = eventFilter === 'all' ? undefined : eventFilter
   const { data: timeline, isLoading, error, refetch } = useQuery({
-    queryKey: ['timeline', allNamespaces ? '*' : namespace, hours],
-    queryFn: () => (allNamespaces ? api.getClusterTimeline(hours) : api.getNamespaceTimeline(namespace, hours)),
+    queryKey: ['timeline', allNamespaces ? '*' : namespace, hours, eventFilter],
+    queryFn: () => (allNamespaces ? api.getClusterTimeline(hours, 500, eventType) : api.getNamespaceTimeline(namespace, hours, 500, eventType)),
     staleTime: 15000,
   })
 
@@ -84,16 +87,21 @@ export default function Timeline() {
   // 플로팅 AI 위젯용 스냅샷
   const aiSnapshot = useMemo(() => {
     if (!timeline) return null
-    const totalEvents = timeline.events?.length ?? 0
+    // the cards' numbers: every event of the window, not the ones listed
+    const totalEvents = timeline.summary.total_events
     const totalRollouts = timeline.rollout_history?.length ?? 0
-    const warnings = timeline.events?.filter((e) => e.type === 'Warning').length ?? 0
+    const warnings = timeline.summary.warning_count
     const prefix = warnings > 0 ? '⚠️ ' : ''
     return {
       source: 'base' as const,
       summary: `${prefix}타임라인 · ${allNamespaces ? '전체 네임스페이스' : namespace} · 최근 ${hours}h · 이벤트 ${totalEvents}, 롤아웃 ${totalRollouts}${warnings ? `, Warning ${warnings}` : ''}`,
       data: {
         filters: { namespace: allNamespaces ? '*' : namespace, hours, event_filter: eventFilter },
-        stats: { total_events: totalEvents, total_rollouts: totalRollouts, warnings },
+        stats: {
+          total_events: totalEvents, total_rollouts: totalRollouts, warnings,
+          listed_events: timeline.events?.length ?? 0, events_matching: timeline.summary.events_matching,
+          rollouts_error: timeline.summary.rollouts_error,
+        },
         recent_items: visibleItems.slice(0, 15).map((it) =>
           it.type === 'event'
             ? {
@@ -240,13 +248,25 @@ export default function Timeline() {
           })}
         </p>
       )}
-      {timeline && (timeline.summary.events_shown ?? timeline.summary.total_events) < timeline.summary.total_events && (
+      {timeline && (timeline.summary.events_shown ?? 0) < (timeline.summary.events_matching ?? timeline.summary.total_events) && (
         <p className="text-xs text-slate-400" data-testid="timeline-events-capped">
-          {t('timeline.eventsCapped', {
-            shown: timeline.summary.events_shown,
-            total: timeline.summary.total_events,
-            defaultValue: 'The newest {{shown}} of the {{total}} events in this range are listed.',
-          })}
+          {eventFilter === 'all'
+            ? t('timeline.eventsCapped', {
+                shown: timeline.summary.events_shown,
+                total: timeline.summary.events_matching ?? timeline.summary.total_events,
+                defaultValue: 'The newest {{shown}} of the {{total}} events in this range are listed.',
+              })
+            : t('timeline.eventsCappedType', {
+                shown: timeline.summary.events_shown,
+                total: timeline.summary.events_matching,
+                type: eventFilter,
+                defaultValue: 'The newest {{shown}} of the {{total}} {{type}} events in this range are listed.',
+              })}
+        </p>
+      )}
+      {timeline?.summary.rollouts_error && (
+        <p className="text-xs text-amber-400" data-testid="timeline-rollouts-error" title={timeline.summary.rollouts_error}>
+          {t('timeline.rolloutsError', 'The rollouts could not be read, so none are listed.')}
         </p>
       )}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">

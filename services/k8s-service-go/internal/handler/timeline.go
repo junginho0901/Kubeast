@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/junginho0901/kubeast/services/pkg/response"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -34,7 +35,7 @@ func (h *Handler) serveNamespaceTimeline(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	result, err := h.svc.GetNamespaceTimeline(ctx, namespace, hours, limit)
+	result, err := h.svc.GetNamespaceTimeline(ctx, namespace, hours, limit, timelineEventType(r))
 	if err != nil {
 		h.handleError(w, err)
 		return
@@ -61,7 +62,7 @@ func (h *Handler) GetResourceTimeline(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.svc.GetResourceTimeline(ctx, namespace, kind, name, hours, limit)
+	result, err := h.svc.GetResourceTimeline(ctx, namespace, kind, name, hours, limit, timelineEventType(r))
 	if err != nil {
 		h.handleError(w, err)
 		return
@@ -69,4 +70,13 @@ func (h *Handler) GetResourceTimeline(w http.ResponseWriter, r *http.Request) {
 
 	h.svc.Cache().Set(ctx, cacheKey, result, 30*time.Second)
 	response.JSON(w, http.StatusOK, result)
+}
+
+// timelineEventType is the events a timeline lists (type=Normal or Warning); anything else lists both.
+func timelineEventType(r *http.Request) string {
+	switch t := queryParam(r, "type", ""); t {
+	case corev1.EventTypeNormal, corev1.EventTypeWarning:
+		return t
+	}
+	return ""
 }

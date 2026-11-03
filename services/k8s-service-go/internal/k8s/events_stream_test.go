@@ -119,7 +119,7 @@ func TestNewestEventsAreReadAPageAtATime(t *testing.T) {
 	api := &pagedAPI{events: someEvents(1234, now)}
 	s := api.serve(t)
 	// the newest 100 of the last 600 minutes (events 0 … 599 are inside)
-	got, counts, err := s.newestEventsSince(context.Background(), "", metav1.ListOptions{}, now.Add(-599*time.Minute-time.Second), 100)
+	got, counts, err := s.newestEventsSince(context.Background(), "", metav1.ListOptions{}, now.Add(-599*time.Minute-time.Second), 100, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestNewestEventsAreReadAPageAtATime(t *testing.T) {
 		}
 	}
 	// no limit: all of the window
-	all, _, err := s.newestEventsSince(context.Background(), "", metav1.ListOptions{}, time.Time{}, 0)
+	all, _, err := s.newestEventsSince(context.Background(), "", metav1.ListOptions{}, time.Time{}, 0, "")
 	if err != nil || len(all) != 1234 {
 		t.Fatalf("no limit: %d, %v", len(all), err)
 	}
@@ -151,7 +151,7 @@ func TestNewestEventsAreReadAPageAtATime(t *testing.T) {
 func TestAnExpiredPageIsAnErrorNotOneFullList(t *testing.T) {
 	api := &pagedAPI{events: someEvents(1600, time.Now()), expireAfter: 500}
 	s := api.serve(t)
-	_, _, err := s.newestEventsSince(context.Background(), "", metav1.ListOptions{}, time.Time{}, 10)
+	_, _, err := s.newestEventsSince(context.Background(), "", metav1.ListOptions{}, time.Time{}, 10, "")
 	if err == nil {
 		t.Fatal("an expired continue token must be an error")
 	}
@@ -190,15 +190,49 @@ func TestTimelineCountsEveryEventInTheWindow(t *testing.T) {
 	now := time.Now()
 	api := &pagedAPI{events: someEvents(1234, now)}
 	s := api.serve(t)
-	events, counts, err := s.getTimelineEvents(context.Background(), "", "", "", now.Add(-24*time.Hour), 500)
+	events, counts, err := s.getTimelineEvents(context.Background(), "", "", "", now.Add(-24*time.Hour), 500, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	res := buildTimelineResult(events, counts, nil, now.Add(-24*time.Hour))
+	res := buildTimelineResult(events, counts, nil, nil, now.Add(-24*time.Hour), "")
 	// 1 234 minutes is under a day: every event is in the window; the list holds the newest 500
 	if res.Summary["total_events"] != 1234 || res.Summary["events_shown"] != 500 || res.Summary["warning_count"] != 412 ||
 		res.Summary["normal_count"] != 822 || len(res.Events) != 500 {
 		t.Fatalf("summary %v, events %d", res.Summary, len(res.Events))
+	}
+}
+
+// The Warning list is the newest warnings of the window, not the warnings among the newest events: 1 234 events, a
+// third of them warnings — the newest 100 events hold about 34 of them, the newest 100 warnings go back 300 minutes.
+func TestTimelineWarningsListTheNewestWarnings(t *testing.T) {
+	now := time.Now()
+	api := &pagedAPI{events: someEvents(1234, now)}
+	s := api.serve(t)
+	events, counts, err := s.getTimelineEvents(context.Background(), "", "", "", now.Add(-24*time.Hour), 100, corev1.EventTypeWarning)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := buildTimelineResult(events, counts, nil, nil, now.Add(-24*time.Hour), corev1.EventTypeWarning)
+	warnings := 0
+	for _, e := range res.Events {
+		if e["type"] == corev1.EventTypeWarning {
+			warnings++
+		}
+	}
+	if len(res.Events) != 100 || warnings != 100 || res.Summary["events_matching"] != 412 || res.Summary["total_events"] != 1234 ||
+		res.Summary["warning_count"] != 412 || res.Summary["events_shown"] != 100 {
+		t.Fatalf("listed %d (%d warnings), summary %v", len(res.Events), warnings, res.Summary)
+	}
+}
+
+// A rollout list that could not be read is no rollouts with its reason, not a silent zero.
+func TestTimelineRolloutsErrorIsReported(t *testing.T) {
+	res := buildTimelineResult(nil, eventCounts{}, nil, fmt.Errorf("list replicasets for timeline: forbidden"), time.Now(), "")
+	if len(res.RolloutHistory) != 0 || res.Summary["rollouts_error"] != "list replicasets for timeline: forbidden" {
+		t.Fatalf("rollouts %v, summary %v", res.RolloutHistory, res.Summary)
+	}
+	if _, ok := buildTimelineResult(nil, eventCounts{}, nil, nil, time.Now(), "").Summary["rollouts_error"]; ok {
+		t.Fatal("rollouts_error without an error")
 	}
 }
 

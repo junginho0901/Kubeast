@@ -72,9 +72,13 @@ export interface TimelineResult {
     /** every event in the window; the list holds the newest events_shown of them */
     total_events: number
     events_shown?: number
+    /** the events of the type listed (all, Normal or Warning) in the window: events_shown is the newest of them */
+    events_matching?: number
     normal_count: number
     warning_count: number
     time_range: { start: string; end: string }
+    /** the rollout lists could not be read: why (the rollouts are then none, not zero) */
+    rollouts_error?: string
   }
 }
 

@@ -69,8 +69,9 @@ type eventCounts struct {
 }
 
 // newestEventsSince reads the events of namespace that opts selects and keeps the newest limit with a time at or after
-// cutoff (no cutoff when zero), counting every one in the window.
-func (s *Service) newestEventsSince(ctx context.Context, namespace string, opts metav1.ListOptions, cutoff time.Time, limit int) ([]corev1.Event, eventCounts, error) {
+// cutoff (no cutoff when zero), counting every one in the window. With eventType (Normal, Warning) only that type is
+// kept, so a list of warnings is the newest warnings, not the warnings among the newest events.
+func (s *Service) newestEventsSince(ctx context.Context, namespace string, opts metav1.ListOptions, cutoff time.Time, limit int, eventType string) ([]corev1.Event, eventCounts, error) {
 	keep := newestEvents{limit: limit}
 	var counts eventCounts
 	err := s.eachEvent(ctx, namespace, opts, func(e *corev1.Event) {
@@ -81,7 +82,9 @@ func (s *Service) newestEventsSince(ctx context.Context, namespace string, opts 
 		if e.Type == corev1.EventTypeWarning {
 			counts.Warning++
 		}
-		keep.add(e)
+		if eventType == "" || e.Type == eventType {
+			keep.add(e)
+		}
 	})
 	if err != nil {
 		return nil, eventCounts{}, err
