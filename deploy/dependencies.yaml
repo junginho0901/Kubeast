@@ -428,3 +428,18 @@ dependencies:
         match: 'Verified \(2026-10-21, Keycloak [0-9]'
       - path: docs/ko/oidc.md
         match: '확인함\(2026-10-21, Keycloak [0-9]'
+
+  - name: dra-example-driver
+    version: v0.5.0
+    upstream:
+      flavour: github
+      url: kubernetes-sigs/dra-example-driver
+    refPaths:
+      - path: scripts/kind-gpu.sh
+        match: '^DRA_IMAGE='
+      - path: scripts/kind-gpu.sh
+        match: 'the DRA example driver v[0-9]'
+      - path: deploy/kind/dra-example-driver.yaml
+        match: '^# The DRA example driver v[0-9]'
+      - path: deploy/kind/dra-example-driver.yaml
+        match: 'dra-example-driver/dra-example-driver:v[0-9]'

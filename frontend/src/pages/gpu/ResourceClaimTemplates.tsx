@@ -8,6 +8,8 @@ import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { useForbidden } from '@/services/forbiddenStore'
+import { useKindServed } from '@/services/listStatusStore'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Plus, RefreshCw } from 'lucide-react'
@@ -47,10 +49,13 @@ export default function ResourceClaimTemplates() {
     ),
   })
   const { has } = usePermission()
-  const canCreate = has('resource.resourceclaimtemplate.create')
+  // a list the cluster refused counts nothing: the card says "-"
+  const forbidden = useForbidden('resourceclaimtemplates')
+  const served = useKindServed('resourceclaimtemplates')
+  const canCreate = has('resource.resourceclaimtemplate.create') && served
 
   useKubeWatchList({
-    enabled: true,
+    enabled: !forbidden,
     queryKey: ['gpu', 'resourceclaimtemplates', selectedNamespace],
     path: selectedNamespace === 'all'
       ? '/api/v1/resourceclaimtemplates'
@@ -78,8 +83,8 @@ export default function ResourceClaimTemplates() {
   }, [resourceClaimTemplates, searchQuery])
 
   const summary = useMemo(() => {
-    return { total: filteredResourceClaimTemplates.length }
-  }, [filteredResourceClaimTemplates])
+    return { total: forbidden ? '-' : filteredResourceClaimTemplates.length }
+  }, [filteredResourceClaimTemplates, forbidden])
 
   const sortedResourceClaimTemplates = useMemo(() => {
     if (!sortKey) return filteredResourceClaimTemplates

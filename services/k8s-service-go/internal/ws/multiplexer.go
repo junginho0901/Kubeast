@@ -86,11 +86,12 @@ type GVRResolver interface {
 	ResolveGVR(ctx context.Context, group, resource string) (schema.GroupVersionResource, bool)
 }
 
-// servedVersion watches a Gateway API resource at the version the cluster serves (the group mixes versions and
-// moves them between releases), as the list API reads it; other resources keep their fixed version.
+// servedVersion watches a Gateway API or DRA resource at the version the cluster serves (Gateway API mixes versions
+// and moves them between releases; resource.k8s.io is v1 since 1.34, a beta before), as the list API reads it; other
+// resources keep their fixed version.
 func (m *Multiplexer) servedVersion(ctx context.Context, gvr schema.GroupVersionResource) schema.GroupVersionResource {
 	r, ok := m.provider.(GVRResolver)
-	if !ok || gvr.Group != "gateway.networking.k8s.io" {
+	if !ok || (gvr.Group != "gateway.networking.k8s.io" && gvr.Group != "resource.k8s.io") {
 		return gvr
 	}
 	if served, ok := r.ResolveGVR(ctx, gvr.Group, gvr.Resource); ok {
@@ -482,6 +483,10 @@ func resourceToGVR(resource string) (schema.GroupVersionResource, bool) {
 		"roles":                    {Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "roles"},
 		"horizontalpodautoscalers": {Group: "autoscaling", Version: "v2", Resource: "horizontalpodautoscalers"},
 		"verticalpodautoscalers":   {Group: "autoscaling.k8s.io", Version: "v1", Resource: "verticalpodautoscalers"},
+		"deviceclasses":            {Group: "resource.k8s.io", Version: "v1", Resource: "deviceclasses"},
+		"resourceclaims":           {Group: "resource.k8s.io", Version: "v1", Resource: "resourceclaims"},
+		"resourceclaimtemplates":   {Group: "resource.k8s.io", Version: "v1", Resource: "resourceclaimtemplates"},
+		"resourceslices":           {Group: "resource.k8s.io", Version: "v1", Resource: "resourceslices"},
 	}
 	gvr, ok := gvrMap[resource]
 	return gvr, ok

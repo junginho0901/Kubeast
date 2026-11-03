@@ -1277,12 +1277,12 @@ export interface PVCUsage {
   source: string
 }
 
+// The DRA rows the list API and the live updates send alike (k8s-service internal/drarow, resource.k8s.io/v1).
 export interface DeviceClassItem {
   name: string
   labels?: Record<string, string>
   created_at?: string | null
   selector_count?: number
-  conditions?: Array<Record<string, any>>
 }
 
 export interface ResourceClaimItem {
@@ -1291,7 +1291,8 @@ export interface ResourceClaimItem {
   labels?: Record<string, string>
   created_at?: string | null
   request_count?: number
-  allocation_status?: string | null
+  /** kubectl's STATE: pending, allocated, allocated,reserved, with deleted first while it is deleted */
+  state?: string
 }
 
 export interface ResourceClaimTemplateItem {
@@ -1306,10 +1307,12 @@ export interface ResourceSliceItem {
   name: string
   labels?: Record<string, string>
   created_at?: string | null
+  /** kubectl's NODE: spec.nodeName, empty for a slice of all nodes or a node selector */
   node_name?: string | null
   driver_name?: string | null
   pool_name?: string | null
   device_count?: number
+  all_nodes?: boolean
 }
 
 export interface DeploymentInfo {

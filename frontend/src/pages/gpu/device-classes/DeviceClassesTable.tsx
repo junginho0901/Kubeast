@@ -66,9 +66,6 @@ export default function DeviceClassesTable({
               <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('selectors')}>
                 <span className="inline-flex items-center gap-1">{tr('deviceClassesPage.table.selectors', 'Selectors')}{renderSortIcon('selectors')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[320px] cursor-pointer" onClick={() => onSort('conditions')}>
-                <span className="inline-flex items-center gap-1">{tr('deviceClassesPage.table.conditions', 'Conditions')}{renderSortIcon('conditions')}</span>
-              </th>
               <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => onSort('age')}>
                 <span className="inline-flex items-center gap-1">{tr('deviceClassesPage.table.age', 'Age')}{renderSortIcon('age')}</span>
               </th>
@@ -88,35 +85,12 @@ export default function DeviceClassesTable({
               >
                 <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{item.name}</span></td>
                 <td className="py-3 px-4 text-xs">{item.selector_count ?? 0}</td>
-                <td className="py-3 px-4 text-xs">
-                  <span className="block truncate">
-                    {Array.isArray(item.conditions) && item.conditions.length > 0
-                      ? item.conditions.map((c, i) => {
-                          const type = String(c?.type || 'Unknown')
-                          const status = String(c?.status || '').toLowerCase()
-                          const isTrue = status === 'true'
-                          return (
-                            <span
-                              key={i}
-                              className={`inline-flex items-center px-1.5 py-0.5 rounded-sm text-[11px] font-medium mr-1 ${
-                                isTrue
-                                  ? 'bg-emerald-900/40 text-emerald-300 border border-emerald-700/40'
-                                  : 'bg-red-900/40 text-red-300 border border-red-700/40'
-                              }`}
-                            >
-                              {type}
-                            </span>
-                          )
-                        })
-                      : '-'}
-                  </span>
-                </td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
               <tr>
-                <td colSpan={4} className="py-10 px-4 text-center text-slate-400">
+                <td colSpan={3} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     
@@ -127,10 +101,10 @@ export default function DeviceClassesTable({
             )}
 
             {sortedDeviceClasses.length === 0 && !isLoading && (
-              <TableEmptyRow colSpan={4} resource="deviceclasses" searching={searching} />
+              <TableEmptyRow colSpan={3} resource="deviceclasses" searching={searching} />
             )}
           </tbody>
-          <AdaptiveTableFillerRows count={rowsPerPage - pagedDeviceClasses.length} columnCount={4} />
+          <AdaptiveTableFillerRows count={rowsPerPage - pagedDeviceClasses.length} columnCount={3} />
         </table>
       </div>
 

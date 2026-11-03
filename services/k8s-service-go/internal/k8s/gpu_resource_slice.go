@@ -1,7 +1,7 @@
-// gpu_resource_slice.go — DRA ResourceSlice (cluster-scoped) CRUD + 리스트 포매터.
+// gpu_resource_slice.go — DRA ResourceSlice (cluster-scoped) CRUD.
 //
-// gpu.go 에서 분리. ResourceSlice 는 driver 가 광고하는 device pool 묶음.
-// formatResourceSliceList 는 본 도메인 전용이라 함께 둠.
+// gpu.go 에서 분리. ResourceSlice 는 driver 가 광고하는 device pool 묶음. 행은
+// internal/drarow (v1 spec.driver·spec.nodeName·spec.pool·spec.devices).
 
 package k8s
 
@@ -10,7 +10,8 @@ import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/drarow"
 )
 
 // ========== ResourceSlices (cluster-scoped) ==========
@@ -24,7 +25,7 @@ func (s *Service) GetResourceSlices(ctx context.Context) ([]map[string]interface
 	if err != nil {
 		return nil, fmt.Errorf("list resourceslices: %w", err)
 	}
-	return formatResourceSliceList(list), nil
+	return draRows(list, drarow.Slice), nil
 }
 
 func (s *Service) DescribeResourceSlice(ctx context.Context, name string) (map[string]interface{}, error) {
@@ -37,27 +38,23 @@ func (s *Service) DescribeResourceSlice(ctx context.Context, name string) (map[s
 		return nil, fmt.Errorf("get resourceslice %s: %w", name, err)
 	}
 
-	result := map[string]interface{}{
-		"name":        obj.GetName(),
-		"labels":      obj.GetLabels(),
-		"annotations": obj.GetAnnotations(),
-		"created_at":  toISO(&metav1.Time{Time: obj.GetCreationTimestamp().Time}),
-	}
+	result := drarow.Slice(obj)
+	result["annotations"] = obj.GetAnnotations()
 
-	if v := mapStr(obj.Object, "nodeName"); v != "" {
-		result["node_name"] = v
-	}
-	if v := mapStr(obj.Object, "driverName"); v != "" {
-		result["driver_name"] = v
-	}
-
-	pool := mapMap(obj.Object, "pool")
-	if pool != nil {
+	spec := mapMap(obj.Object, "spec")
+	if pool := mapMap(spec, "pool"); pool != nil {
 		result["pool"] = pool
 	}
+	if sel := mapMap(spec, "nodeSelector"); sel != nil {
+		result["node_selector"] = sel
+	}
+	result["devices"] = mapSlice(spec, "devices")
 
-	if devices := mapSlice(obj.Object, "devices"); len(devices) > 0 {
-		result["devices"] = devices
+	// the claims holding this slice's devices, read here so the drawer does not list every claim itself
+	if claims, err := s.draClaims(ctx); err != nil {
+		result["allocations_error"] = err.Error()
+	} else {
+		result["allocations"] = drarow.SliceAllocations(obj, claims)
 	}
 
 	return result, nil
@@ -69,48 +66,4 @@ func (s *Service) DeleteResourceSlice(ctx context.Context, name string) error {
 	}
 	gvr := s.draGVR(ctx, "resourceslices")
 	return s.DeleteResource(ctx, gvr, "", name)
-}
-
-// formatResourceSliceList converts an unstructured list of ResourceSlices into
-// the flattened API response shape. Each entry exposes node/driver/pool meta
-// plus a device_count summary for the list view.
-func formatResourceSliceList(list *unstructured.UnstructuredList) []map[string]interface{} {
-	if list == nil {
-		return []map[string]interface{}{}
-	}
-	result := make([]map[string]interface{}, 0, len(list.Items))
-	for _, item := range list.Items {
-		entry := map[string]interface{}{
-			"name":       item.GetName(),
-			"labels":     item.GetLabels(),
-			"created_at": toISO(&metav1.Time{Time: item.GetCreationTimestamp().Time}),
-		}
-
-		if v := mapStr(item.Object, "nodeName"); v != "" {
-			entry["node_name"] = v
-		}
-		if v := mapStr(item.Object, "driverName"); v != "" {
-			entry["driver_name"] = v
-		}
-
-		pool := mapMap(item.Object, "pool")
-		if pool != nil {
-			if v := mapStr(pool, "name"); v != "" {
-				entry["pool_name"] = v
-			}
-			if v, ok := pool["generation"]; ok {
-				entry["pool_generation"] = v
-			}
-			if v, ok := pool["resourceSliceCount"]; ok {
-				entry["resource_slice_count"] = v
-			}
-		}
-
-		if devices := mapSlice(item.Object, "devices"); len(devices) > 0 {
-			entry["device_count"] = len(devices)
-		}
-
-		result = append(result, entry)
-	}
-	return result
 }

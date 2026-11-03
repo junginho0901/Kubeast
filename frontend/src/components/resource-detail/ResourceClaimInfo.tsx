@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, KeyValueTags, StatusBadge, SummaryBadge, Th, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
+import { DeviceRequestsTable } from './DeviceRequestsTable'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -20,7 +21,11 @@ type ResourceClaimDescribe = {
   devices?: Record<string, unknown>
   allocation?: Record<string, unknown>
   reserved_for?: Array<Record<string, unknown>>
-  allocation_status?: string
+  /** kubectl's STATE */
+  state?: string
+  // the namespace's pods that refer to the claim (by name, or as the claim made for them from a template)
+  using_pods?: Array<{ name: string; namespace: string; status: string; node_name: string }>
+  using_pods_error?: string
   labels?: Record<string, string>
   annotations?: Record<string, string>
   created_at?: string | null
@@ -42,24 +47,7 @@ export default function ResourceClaimInfo({ name, namespace, rawJson }: Props) {
 
   useResourceDetailOverlay({ kind: 'ResourceClaim', name, namespace, describe })
 
-  // ns Pod 중 spec.resourceClaims 에서 이 RC 이름을 직접 참조 또는 RCTemplate
-  // 를 거쳐 자동 생성된 RC (template name 매칭) 인 경우. backend Pod formatter
-  // 가 resource_claims / resource_claim_templates 두 string array 노출 — 두
-  // 케이스 모두 cover.
-  const { data: nsPods } = useQuery({
-    queryKey: ['rc-using-pods', namespace, name],
-    queryFn: () => api.getPods(namespace),
-    enabled,
-    staleTime: 30_000,
-  })
-  const usingPods = (Array.isArray(nsPods) ? nsPods : []).filter((p: any) => {
-    const direct = Array.isArray(p?.resource_claims) ? p.resource_claims : []
-    if (direct.includes(name)) return true
-    // RCT 자동 생성 RC 의 K8s naming convention: "<podName>-<rcKey>-<random>"
-    // 직접 매칭은 어려우므로 RCT 이름이 RC name prefix 인지로 휴리스틱.
-    const templates = Array.isArray(p?.resource_claim_templates) ? p.resource_claim_templates : []
-    return templates.some((tmpl: string) => name.startsWith(`${tmpl}-`) || name.includes(tmpl))
-  })
+  const usingPods = describe?.using_pods ?? []
   const { items: pagedUsingPods, nav: usingPodsNav } = usePagination(usingPods, 10)
 
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
@@ -68,7 +56,6 @@ export default function ResourceClaimInfo({ name, namespace, rawJson }: Props) {
   const annotations = (describe?.annotations ?? (meta.annotations as Record<string, string> | undefined) ?? {})
   const createdAt = describe?.created_at ?? (meta.creationTimestamp as string | undefined)
 
-  const allocationStatus = describe?.allocation_status
   const allocation = describe?.allocation ?? (describe?.status as Record<string, unknown> | undefined)?.allocation as Record<string, unknown> | undefined
   const reservedFor = describe?.reserved_for ?? (describe?.status as Record<string, unknown> | undefined)?.reservedFor as Array<Record<string, unknown>> | undefined
 
@@ -92,45 +79,13 @@ export default function ResourceClaimInfo({ name, namespace, rawJson }: Props) {
           <InfoRow label="Name" value={describe?.name || name} />
           <InfoRow label="Namespace" value={describe?.namespace || namespace} />
           <InfoRow label="Created" value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />
-          {allocationStatus && (
-            <InfoRow label="Allocation Status" value={<SummaryBadge label="Status" value={allocationStatus} color={allocationStatus.toLowerCase() === 'allocated' ? 'green' : 'default'} />} />
-          )}
+          <InfoRow label="State" value={describe?.state || '-'} />
         </div>
       </InfoSection>
 
       {deviceRequests.length > 0 && (
         <InfoSection title="Devices">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs table-fixed min-w-[500px]">
-              <thead className="text-slate-400">
-                <tr>
-                  <Th className="text-left py-1 w-[20%]">Name</Th>
-                  <Th className="text-left py-1 w-[20%]">Device Class</Th>
-                  <Th className="text-left py-1 w-[30%]">Selectors</Th>
-                  <Th className="text-left py-1 w-[10%]">Count</Th>
-                  <Th className="text-left py-1 w-[20%]">Allocation Mode</Th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800">
-                {deviceRequests.map((req, idx) => {
-                  const selectors = (req.selectors ?? []) as Array<Record<string, unknown>>
-                  const selectorStrs = selectors.map(s => {
-                    const cel = s.cel as Record<string, unknown> | undefined
-                    return cel?.expression ? String(cel.expression) : JSON.stringify(s)
-                  })
-                  return (
-                    <tr key={idx} className="text-slate-200">
-                      <td className="py-1 pr-2 wrap-break-word">{text(req.name)}</td>
-                      <td className="py-1 pr-2 wrap-break-word">{text(req.deviceClassName ?? req.device_class_name)}</td>
-                      <td className="py-1 pr-2 wrap-break-word font-mono text-[11px]">{selectorStrs.length > 0 ? selectorStrs.join('; ') : '-'}</td>
-                      <td className="py-1 pr-2">{text(req.count)}</td>
-                      <td className="py-1 pr-2 wrap-break-word">{text(req.allocationMode ?? req.allocation_mode)}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+          <DeviceRequestsTable requests={deviceRequests} />
         </InfoSection>
       )}
 
@@ -186,8 +141,10 @@ export default function ResourceClaimInfo({ name, namespace, rawJson }: Props) {
         </InfoSection>
       )}
 
-      <InfoSection title="Using Pods ({{n}})" titleValues={{ n: usingPods.length }}>
-        {usingPods.length === 0 ? (
+      <InfoSection title="Using Pods ({{n}})" titleValues={{ n: describe?.using_pods ? usingPods.length : '-' }}>
+        {describe?.using_pods_error ? (
+          <p className="text-xs text-red-400">{describe.using_pods_error}</p>
+        ) : usingPods.length === 0 ? (
           <p className="text-xs text-slate-400"><Tx>No pod in this namespace references this ResourceClaim.</Tx></p>
         ) : (
           <div className="overflow-x-auto">
@@ -200,15 +157,15 @@ export default function ResourceClaimInfo({ name, namespace, rawJson }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {pagedUsingPods.map((p: any) => (
+                {pagedUsingPods.map((p) => (
                   <tr
                     key={`${p.namespace}/${p.name}`}
                     className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
                     onClick={() => openDetail({ kind: 'Pod', name: p.name, namespace: p.namespace })}
                   >
                     <td className="py-1 pr-2 font-mono">{p.name}</td>
-                    <td className="py-1 pr-2"><StatusBadge status={String(p.phase ?? p.status ?? '-')} /></td>
-                    <td className="py-1 pr-2 font-mono">{p.node_name ?? '-'}</td>
+                    <td className="py-1 pr-2"><StatusBadge status={p.status || '-'} /></td>
+                    <td className="py-1 pr-2 font-mono">{p.node_name || '-'}</td>
                   </tr>
                 ))}
               </tbody>

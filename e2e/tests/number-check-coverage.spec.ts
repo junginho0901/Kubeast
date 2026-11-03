@@ -37,8 +37,10 @@ const WHERE: Record<string, string> = {
   // summary screens
   '/': 'number-check-dashboard', '/cluster-view': 'N3-b', '/helm/releases': 'number-check-lists', '/timeline': 'number-check-timeline', '/monitoring': 'number-check-monitoring', '/cluster/search': 'number-check-search',
   '/admin/cluster-hygiene': 'number-check-hygiene', '/cluster/resource-graph': 'number-check-graph', '/cost': 'number-check-cost',
-  '/gpu/dashboard': 'N3-c (GPU)', '/gpu/nodes': 'N3-c (GPU)', '/gpu/pods': 'N3-c (GPU)', '/gpu/deviceclasses': 'N3-c (GPU)',
-  '/gpu/resourceclaims': 'N3-c (GPU)', '/gpu/resourceclaimtemplates': 'N3-c (GPU)', '/gpu/resourceslices': 'N3-c (GPU)',
+  '/gpu/dashboard': 'N3-c (GPU)', '/gpu/nodes': 'N3-c (GPU)', '/gpu/pods': 'N3-c (GPU)',
+  // the DRA lists, on test2 with the DRA example driver
+  '/gpu/deviceclasses': 'number-check-dra', '/gpu/resourceclaims': 'number-check-dra', '/gpu/resourceclaimtemplates': 'number-check-dra',
+  '/gpu/resourceslices': 'number-check-dra',
   // Kubeast's own data: screen = API and database
   '/admin/users': 'N4', '/admin/roles': 'N4', '/admin/organizations': 'N4', '/admin/clusters': 'N4', '/admin/ai-models': 'N4',
   '/admin/ai-usage': 'N4', '/admin/audit': 'N4', '/admin/access-requests': 'N4', '/admin/access-review': 'N4',

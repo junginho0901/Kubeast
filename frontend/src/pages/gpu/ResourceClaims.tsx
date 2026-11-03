@@ -8,10 +8,12 @@ import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { useForbidden } from '@/services/forbiddenStore'
+import { useKindServed } from '@/services/listStatusStore'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Plus, RefreshCw } from 'lucide-react'
-import { parseAgeSeconds, type SortKey } from './resourceclaims/resourceClaimsHelpers'
+import { claimCards, parseAgeSeconds, type SortKey } from './resourceclaims/resourceClaimsHelpers'
 import { applyResourceClaimWatchEvent } from './resourceclaims/resourceClaimsWatchNormalize'
 import { ResourceClaimsFilters } from './resourceclaims/ResourceClaimsFilters'
 import { ResourceClaimsTable } from './resourceclaims/ResourceClaimsTable'
@@ -47,10 +49,13 @@ export default function ResourceClaims() {
     ),
   })
   const { has } = usePermission()
-  const canCreate = has('resource.resourceclaim.create')
+  // a list the cluster refused counts nothing: the cards say "-"
+  const forbidden = useForbidden('resourceclaims')
+  const served = useKindServed('resourceclaims')
+  const canCreate = has('resource.resourceclaim.create') && served
 
   useKubeWatchList({
-    enabled: true,
+    enabled: !forbidden,
     queryKey: ['gpu', 'resourceclaims', selectedNamespace],
     path: selectedNamespace === 'all'
       ? '/api/v1/resourceclaims'
@@ -74,24 +79,14 @@ export default function ResourceClaims() {
     return resourceClaims.filter((item) => (
       item.name.toLowerCase().includes(q)
       || item.namespace.toLowerCase().includes(q)
-      || String(item.allocation_status || 'Pending').toLowerCase().includes(q)
+      || String(item.state ?? '').toLowerCase().includes(q)
     ))
   }, [resourceClaims, searchQuery])
 
   const summary = useMemo(() => {
-    const total = filteredResourceClaims.length
-    let allocated = 0
-    let reserved = 0
-    let pending = 0
-
-    for (const item of filteredResourceClaims) {
-      if (item.allocation_status === 'Allocated') allocated += 1
-      else if (item.allocation_status === 'Reserved') reserved += 1
-      else pending += 1
-    }
-
-    return { total, allocated, reserved, pending }
-  }, [filteredResourceClaims])
+    const cards = claimCards(filteredResourceClaims)
+    return forbidden ? { total: '-', allocated: '-', reserved: '-', pending: '-' } : cards
+  }, [filteredResourceClaims, forbidden])
 
   const sortedResourceClaims = useMemo(() => {
     if (!sortKey) return filteredResourceClaims
@@ -103,8 +98,8 @@ export default function ResourceClaims() {
           return item.name
         case 'namespace':
           return item.namespace
-        case 'status':
-          return item.allocation_status || 'Pending'
+        case 'state':
+          return item.state ?? ''
         case 'requests':
           return item.request_count || 0
         case 'age':
@@ -162,7 +157,7 @@ export default function ResourceClaims() {
           currentPage,
           pageSize: rowsPerPage,
           topN: rowsPerPage,
-          pickFields: ['name', 'namespace', 'status'],
+          pickFields: ['name', 'namespace', 'state'],
           linkBuilder: (r) => {
             const rc = r as unknown as ResourceClaimItem
             return buildResourceLink('ResourceClaim', rc.namespace, rc.name)

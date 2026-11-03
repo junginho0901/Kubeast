@@ -27,7 +27,7 @@ Kubeast는 등록한 클러스터에 아무것도 설치하지 않습니다. 예
 | 드로어·대시보드 그래프, 최적화, 스토리지 분석 | Prometheus + 지표 수집기 — §3 | `features.prometheus.enabled`(**끔**) | 그래프 영역이 숨겨지고, 최적화는 metrics-server 순간값 사용 |
 | 비용(Cost), 최적화 비용 열 | OpenCost — §4 | `features.cost.enabled`(켬) | "OpenCost 없음" 안내, 비용 열 없음 |
 | 정책 보고서 | PolicyReport CRD와 보고서를 만드는 도구 — §5 | `features.policyReports.enabled`(켬) | "설치 안 됨" 안내 |
-| GPU·DRA | NVIDIA device plugin·GFD 라벨·DCGM exporter, DRA API — §6 | — | GPU 수·사용률이 비거나 DRA가 "unavailable" |
+| GPU·DRA | NVIDIA device plugin·GFD 라벨·DCGM exporter, DRA API — §6 | — | GPU 수·사용률이 비거나 DRA 목록이 "설치되어 있지 않음" |
 | VPA·Gateway API·Admission Policy·Ingress 지연 | 해당 CRD·컨트롤러 — §7 | — | 목록이 비고 "설치 안 됨" 표시 |
 | 재시작 없이 적용(resize) | Kubernetes 1.35 이상 — §8 | `features.inPlaceResize.enabled`(켬) | 버튼이 숨겨지고 API는 409 |
 | 노드 셸 | 특권 파드 허용과 이미지 — §9 | `nodeShell.enabled`(끔) | 파드 생성 실패 |
@@ -283,7 +283,7 @@ Read 사용자에게도 열어 주려면 이 주소를 §1의 `viewerProxyServic
 | GPU Feature Discovery | 노드 라벨 `nvidia.com/gpu.product`·`gpu.memory`·`mig.strategy`·`cuda.driver.*` | GPU 모델·메모리 |
 | time-slicing 설정 | ConfigMap `time-slicing-config`·`nvidia-plugin-configs`·`time-slicing`(위 Namespace) | 시분할 설정 |
 | DCGM exporter | §3 표의 `DCGM_FI_DEV_*` 지표 | 사용률·메모리·온도 |
-| DRA | `resource.k8s.io`(1.34+ v1, 1.32–1.33 v1beta2/v1beta1, 1.31 v1alpha3) — API 탐색으로 버전 선택 | DeviceClass·ResourceClaim·ResourceSlice |
+| DRA | `resource.k8s.io`(1.34+ v1, 1.32–1.33 v1beta2/v1beta1, 1.31 v1alpha3) — API 탐색으로 버전 선택. 네 종류의 목록과 실시간 갱신(watch), 상세 창용으로 ResourceClaim(Used By·Device Allocations)과 그 Namespace의 Pod(Using Pods·Related ResourceClaims)를 사용자로 읽습니다 — `view`와 `kubeast:cluster-reader`가 덮습니다 | DeviceClass·ResourceClaim·ResourceClaimTemplate·ResourceSlice |
 
 NVIDIA GPU Operator를 쓰면 위 구성 요소가 한 번에 설치됩니다. 이 절은 코드를 기준으로 썼으며, 실제 GPU 클러스터에서는 검증하지 않았습니다.
 

@@ -1,7 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
+import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { InfoSection, InfoRow, KeyValueTags, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
+import { usePagination } from './usePagination'
+import { DeviceRequestsTable } from './DeviceRequestsTable'
+import { configParameterMap } from './draText'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface Props {
@@ -16,6 +20,9 @@ type ResourceClaimTemplateDescribe = {
   uid?: string | null
   resource_version?: string | null
   claim_spec?: Record<string, unknown>
+  // the claims made from this template: what its pods' status.resourceClaimStatuses name, worked out on the server
+  related_claims?: Array<{ name: string; namespace: string; pod: string }>
+  related_claims_error?: string
   labels?: Record<string, string>
   annotations?: Record<string, string>
   created_at?: string | null
@@ -27,6 +34,7 @@ const text = (v: unknown) => (v != null && v !== '' ? String(v) : '-')
 
 export default function ResourceClaimTemplateInfo({ name, namespace, rawJson }: Props) {
   const enabled = !!name && !!namespace
+  const { open: openDetail } = useResourceDetail()
   const { data: describe, isLoading, isError } = useQuery({
     queryKey: ['resourceclaimtemplate-describe', namespace, name],
     queryFn: () => api.describeResourceClaimTemplate(namespace, name) as Promise<ResourceClaimTemplateDescribe>,
@@ -36,19 +44,8 @@ export default function ResourceClaimTemplateInfo({ name, namespace, rawJson }: 
 
   useResourceDetailOverlay({ kind: 'ResourceClaimTemplate', name, namespace, describe })
 
-  // Count ResourceClaims spawned from this template. K8s sets
-  // ownerReference.name = template name + .kind = ResourceClaimTemplate when
-  // the claim is auto-created by a Pod's resourceClaims block.
-  const { data: nsClaims } = useQuery({
-    queryKey: ['rct-related-claims', namespace, name],
-    queryFn: () => api.getResourceClaims(namespace),
-    enabled,
-    staleTime: 30_000,
-  })
-  const relatedClaimCount = (Array.isArray(nsClaims) ? nsClaims : []).filter((c: any) => {
-    const refs = Array.isArray(c?.owner_references) ? c.owner_references : []
-    return refs.some((r: any) => r?.kind === 'ResourceClaimTemplate' && r?.name === name)
-  }).length
+  const relatedClaims = describe?.related_claims ?? []
+  const { items: pagedRelated, nav: relatedNav } = usePagination(relatedClaims, 10)
 
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
 
@@ -75,46 +72,44 @@ export default function ResourceClaimTemplateInfo({ name, namespace, rawJson }: 
           <InfoRow label="Name" value={describe?.name || name} />
           <InfoRow label="Namespace" value={describe?.namespace || namespace} />
           <InfoRow label="Created" value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />
-          <InfoRow
-            label="Related ResourceClaims"
-            value={<span className={`badge ${relatedClaimCount > 0 ? 'badge-success' : 'badge-info'}`}>{relatedClaimCount}</span>}
-          />
         </div>
+      </InfoSection>
+
+      <InfoSection title="Related ResourceClaims ({{n}})" titleValues={{ n: describe?.related_claims ? relatedClaims.length : '-' }}>
+        {describe?.related_claims_error ? (
+          <p className="text-xs text-red-400">{describe.related_claims_error}</p>
+        ) : relatedClaims.length === 0 ? (
+          <p className="text-xs text-slate-400"><Tx>No pod in this namespace has a ResourceClaim made from this template.</Tx></p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="text-slate-400">
+                <tr>
+                  <Th className="text-left py-1">ResourceClaim</Th>
+                  <Th className="text-left py-1">Pod</Th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {pagedRelated.map((c) => (
+                  <tr
+                    key={`${c.name}/${c.pod}`}
+                    className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
+                    onClick={() => openDetail({ kind: 'ResourceClaim', name: c.name, namespace: c.namespace })}
+                  >
+                    <td className="py-1 pr-2 font-mono">{c.name}</td>
+                    <td className="py-1 pr-2 font-mono">{c.pod}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {relatedNav}
+          </div>
+        )}
       </InfoSection>
 
       {requests.length > 0 && (
         <InfoSection title="Claim Spec - Requests">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs table-fixed min-w-[500px]">
-              <thead className="text-slate-400">
-                <tr>
-                  <Th className="text-left py-1 w-[20%]">Name</Th>
-                  <Th className="text-left py-1 w-[20%]">Device Class</Th>
-                  <Th className="text-left py-1 w-[30%]">Selectors</Th>
-                  <Th className="text-left py-1 w-[10%]">Count</Th>
-                  <Th className="text-left py-1 w-[20%]">Allocation Mode</Th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800">
-                {requests.map((req, idx) => {
-                  const selectors = (req.selectors ?? []) as Array<Record<string, unknown>>
-                  const selectorStrs = selectors.map(s => {
-                    const cel = s.cel as Record<string, unknown> | undefined
-                    return cel?.expression ? String(cel.expression) : JSON.stringify(s)
-                  })
-                  return (
-                    <tr key={idx} className="text-slate-200">
-                      <td className="py-1 pr-2 wrap-break-word">{text(req.name)}</td>
-                      <td className="py-1 pr-2 wrap-break-word">{text(req.deviceClassName ?? req.device_class_name)}</td>
-                      <td className="py-1 pr-2 wrap-break-word font-mono text-[11px]">{selectorStrs.length > 0 ? selectorStrs.join('; ') : '-'}</td>
-                      <td className="py-1 pr-2">{text(req.count)}</td>
-                      <td className="py-1 pr-2 wrap-break-word">{text(req.allocationMode ?? req.allocation_mode)}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+          <DeviceRequestsTable requests={requests} />
         </InfoSection>
       )}
 
@@ -157,7 +152,7 @@ export default function ResourceClaimTemplateInfo({ name, namespace, rawJson }: 
                     <InfoRow label="Driver" value={text(opaque.driver)} />
                     {Object.keys(params).length > 0 && (
                       <div className="mt-1">
-                        <KeyValueTags data={Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)]))} />
+                        <KeyValueTags data={configParameterMap(params)} />
                       </div>
                     )}
                   </div>
