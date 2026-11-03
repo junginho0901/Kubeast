@@ -63,15 +63,15 @@ func TestIssuesFromPods(t *testing.T) {
 			t.Errorf("%s: got %s %q, want %s %q", is.ID, is.Severity, is.Reason, w[0], w[1])
 		}
 	}
-	if is := findIssue(t, got, "Pod/a/crash"); is.Count != 7 {
-		t.Errorf("crash count = %d, want 7", is.Count)
+	if is := findIssue(t, got, "Pod/a/crash"); is.Restarts != 7 || is.Events != 0 || is.Failed != 0 {
+		t.Errorf("crash restarts = %d (events %d, failed %d), want 7", is.Restarts, is.Events, is.Failed)
 	}
 	if is := findIssue(t, got, "Pod/a/failed"); is.Message != "evicted" {
 		t.Errorf("failed message = %q", is.Message)
 	}
 
 	withHistory := issuesFromPods(toMaps(pods), IssuesOptions{Now: issuesNow, IncludeRestartHistory: true})
-	if is := findIssue(t, withHistory, "Pod/a/old"); is.Severity != severityInfo || is.Count != 3 {
+	if is := findIssue(t, withHistory, "Pod/a/old"); is.Severity != severityInfo || is.Restarts != 3 {
 		t.Errorf("old restart with history: %+v", is)
 	}
 }
@@ -142,7 +142,7 @@ func TestIssuesFromJobsAndCronJobs(t *testing.T) {
 	if len(got) != 4 {
 		t.Fatalf("got %d: %+v", len(got), got)
 	}
-	if is := findIssue(t, got, "Job/a/boom"); is.Severity != severityWarning || is.Reason != "Failed" || is.Count != 4 {
+	if is := findIssue(t, got, "Job/a/boom"); is.Severity != severityWarning || is.Reason != "Failed" || is.Failed != 4 || is.Restarts != 0 {
 		t.Errorf("boom: %+v", is)
 	}
 	if is := findIssue(t, got, "Job/a/retry"); is.Severity != severityInfo || is.Reason != "Retrying" {
@@ -200,7 +200,7 @@ func TestMergeEvents(t *testing.T) {
 		t.Fatalf("got %d: %+v", len(got), got)
 	}
 	web := findIssue(t, got, "Pod/a/web")
-	if web.Message != "Unhealthy: Readiness probe failed: 503" || web.Count != 12 || web.LastSeen != iso(issuesNow.Add(-5*time.Minute)) || web.Reason != "Ready 0/1" {
+	if web.Message != "Unhealthy: Readiness probe failed: 503" || web.Events != 12 || web.LastSeen != iso(issuesNow.Add(-5*time.Minute)) || web.Reason != "Ready 0/1" {
 		t.Errorf("web: %+v", web)
 	}
 	orphan := findIssue(t, got, "Pod/a/orphan")
@@ -225,4 +225,37 @@ func toMaps(in []m) []map[string]interface{} {
 		out[i] = map[string]interface{}(it)
 	}
 	return out
+}
+
+// Each number counts one thing: a pod's restarts stay its restarts when its newest Warning event attaches (the event's
+// count is its own field), a node's events attach to its pressure row instead of a row of their own, and an event
+// about another group's kind of the same name is another object.
+func TestMergeEvents_EachNumberCountsOneThing(t *testing.T) {
+	issues := []Issue{
+		{ID: "Pod/a/crash", Kind: "Pod", Namespace: "a", Name: "crash", Severity: severityCritical, Reason: "CrashLoopBackOff", Restarts: 5},
+		{ID: "Node/n2/MemoryPressure", Kind: "Node", Name: "n2", Severity: severityWarning, Reason: "MemoryPressure"},
+		{ID: "Deployment/a/web", Kind: "Deployment", Namespace: "a", Name: "web", Severity: severityWarning, Reason: "Unavailable"},
+	}
+	events := []m{
+		{"type": "Warning", "reason": "BackOff", "message": "Back-off restarting", "count": int32(12), "last_timestamp": iso(issuesNow.Add(-2 * time.Minute)), "involved_object": m{"kind": "Pod", "namespace": "a", "name": "crash", "api_version": "v1"}},
+		{"type": "Warning", "reason": "EvictionThresholdMet", "message": "memory", "count": int32(3), "last_timestamp": iso(issuesNow.Add(-4 * time.Minute)), "involved_object": m{"kind": "Node", "name": "n2", "api_version": "v1"}},
+		{"type": "Warning", "reason": "ScalingReplicaSet", "message": "apps one", "count": int32(2), "last_timestamp": iso(issuesNow.Add(-3 * time.Minute)), "involved_object": m{"kind": "Deployment", "namespace": "a", "name": "web", "api_version": "apps/v1"}},
+		{"type": "Warning", "reason": "Synced", "message": "another group", "count": int32(9), "last_timestamp": iso(issuesNow.Add(-1 * time.Minute)), "involved_object": m{"kind": "Deployment", "namespace": "a", "name": "web", "api_version": "example.com/v1"}},
+	}
+	got := mergeEvents(issues, toMaps(events), issuesNow, time.Hour)
+	if crash := findIssue(t, got, "Pod/a/crash"); crash.Restarts != 5 || crash.Events != 12 {
+		t.Errorf("crash = restarts %d, events %d; want 5 and 12", crash.Restarts, crash.Events)
+	}
+	if node := findIssue(t, got, "Node/n2/MemoryPressure"); node.Events != 3 || node.Message != "EvictionThresholdMet: memory" {
+		t.Errorf("the node's event on its pressure row: %+v", node)
+	}
+	if web := findIssue(t, got, "Deployment/a/web"); web.Events != 2 || web.Message != "ScalingReplicaSet: apps one" {
+		t.Errorf("apps Deployment: %+v", web)
+	}
+	if other := findIssue(t, got, "Deployment.example.com/a/web"); other.Events != 9 || other.Kind != "Deployment" {
+		t.Errorf("the other group's Deployment: %+v", other)
+	}
+	if len(got) != 4 {
+		t.Errorf("got %d rows (no row for the node's event of its own): %+v", len(got), got)
+	}
 }

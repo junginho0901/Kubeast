@@ -23,7 +23,11 @@ type Issue struct {
 	Reason    string `json:"reason,omitempty"`
 	Message   string `json:"message,omitempty"`
 	LastSeen  string `json:"last_seen,omitempty"`
-	Count     int    `json:"count,omitempty"`
+	// Each number counts one thing: a pod's restarts (kubectl's RESTARTS), a Job's failed pods, and how many times the
+	// issue's newest Warning event happened (kubectl get events' COUNT).
+	Restarts int `json:"restarts,omitempty"`
+	Failed   int `json:"failed,omitempty"`
+	Events   int `json:"events,omitempty"`
 }
 
 const (
@@ -286,7 +290,7 @@ func issuesFromPods(pods []map[string]interface{}, opts IssuesOptions) []Issue {
 				reasons = append(reasons, "Ready "+mapStr(p, "ready"))
 			}
 			out = append(out, Issue{ID: issueID("Pod", ns, name), Kind: "Pod", Namespace: ns, Name: name, Severity: severity,
-				Reason: strings.Join(uniqueStrings(reasons), ", "), Message: mapStr(p, "message"), Count: restarts})
+				Reason: strings.Join(uniqueStrings(reasons), ", "), Message: mapStr(p, "message"), Restarts: restarts})
 			continue
 		}
 		if restarts == 0 || lastRestart.IsZero() {
@@ -302,7 +306,7 @@ func issuesFromPods(pods []map[string]interface{}, opts IssuesOptions) []Issue {
 			continue
 		}
 		out = append(out, Issue{ID: issueID("Pod", ns, name), Kind: "Pod", Namespace: ns, Name: name, Severity: severity,
-			Reason: "Restarted: " + lastRestartReason, LastSeen: lastRestart.UTC().Format(time.RFC3339), Count: restarts})
+			Reason: "Restarted: " + lastRestartReason, LastSeen: lastRestart.UTC().Format(time.RFC3339), Restarts: restarts})
 	}
 	return out
 }
@@ -356,9 +360,9 @@ func issuesFromJobs(jobs, cronjobs []map[string]interface{}) []Issue {
 		failed := mapInt(j, "failed")
 		switch {
 		case mapStr(j, "status") == "Failed":
-			out = append(out, Issue{ID: issueID("Job", ns, name), Kind: "Job", Namespace: ns, Name: name, Severity: severityWarning, Reason: "Failed", Message: fmt.Sprintf("failed %d, succeeded %d", failed, mapInt(j, "succeeded")), Count: failed})
+			out = append(out, Issue{ID: issueID("Job", ns, name), Kind: "Job", Namespace: ns, Name: name, Severity: severityWarning, Reason: "Failed", Message: fmt.Sprintf("failed %d, succeeded %d", failed, mapInt(j, "succeeded")), Failed: failed})
 		case failed > 0 && mapInt(j, "active") > 0:
-			out = append(out, Issue{ID: issueID("Job", ns, name), Kind: "Job", Namespace: ns, Name: name, Severity: severityInfo, Reason: "Retrying", Message: fmt.Sprintf("failed %d, active %d", failed, mapInt(j, "active")), Count: failed})
+			out = append(out, Issue{ID: issueID("Job", ns, name), Kind: "Job", Namespace: ns, Name: name, Severity: severityInfo, Reason: "Retrying", Message: fmt.Sprintf("failed %d, active %d", failed, mapInt(j, "active")), Failed: failed})
 		}
 	}
 	for _, c := range cronjobs {
@@ -404,13 +408,37 @@ func issuesFromPVCs(pvcs []map[string]interface{}) []Issue {
 	return out
 }
 
-// mergeEvents attaches the newest Warning event inside the window to the
-// issue about the same object and lists the rest as warnings of their own,
-// then sorts critical → warning → info, kind, id.
+// issueKindGroups are the API groups of the kinds the check reads itself: an event about a kind of the same name in
+// another group is about another object.
+var issueKindGroups = map[string]string{
+	"Pod": "", "Node": "", "PersistentVolumeClaim": "", "Deployment": "apps", "StatefulSet": "apps", "DaemonSet": "apps",
+	"Job": "batch", "CronJob": "batch", "HorizontalPodAutoscaler": "autoscaling",
+}
+
+// eventObjectKind is the kind an event's object is keyed by: the kind, with its group when that is not the group of
+// the check's own kind of that name.
+func eventObjectKind(kind, apiVersion string) string {
+	group := ""
+	if i := strings.Index(apiVersion, "/"); i > 0 {
+		group = apiVersion[:i]
+	}
+	if g, ok := issueKindGroups[kind]; group == "" || (ok && g == group) {
+		return kind
+	}
+	return kind + "." + group
+}
+
+// mergeEvents attaches the newest Warning event inside the window to the most
+// severe issue about the same object (a node's pressure rows too) and lists the
+// rest as warnings of their own, then sorts critical → warning → info, kind, id.
 func mergeEvents(issues []Issue, events []map[string]interface{}, now time.Time, window time.Duration) []Issue {
-	byID := map[string]int{}
+	rank := map[string]int{severityCritical: 0, severityWarning: 1, severityInfo: 2}
+	byObj := map[string]int{}
 	for i, is := range issues {
-		byID[is.ID] = i
+		key := issueID(is.Kind, is.Namespace, is.Name)
+		if j, ok := byObj[key]; !ok || rank[is.Severity] < rank[issues[j].Severity] {
+			byObj[key] = i
+		}
 	}
 	extra := map[string]Issue{}
 	for _, e := range events {
@@ -426,26 +454,22 @@ func mergeEvents(issues []Issue, events []map[string]interface{}, now time.Time,
 		if kind == "" || name == "" {
 			continue
 		}
-		id := issueID(kind, ns, name)
+		id := issueID(eventObjectKind(kind, mapStr(obj, "api_version")), ns, name)
 		reason, msg, count, ts := mapStr(e, "reason"), mapStr(e, "message"), mapInt(e, "count"), last.UTC().Format(time.RFC3339)
-		if i, ok := byID[id]; ok {
+		if i, ok := byObj[id]; ok {
 			is := &issues[i]
 			if is.LastSeen == "" || ts > is.LastSeen {
-				is.LastSeen, is.Message = ts, reason+": "+msg
-				if count > is.Count {
-					is.Count = count
-				}
+				is.LastSeen, is.Message, is.Events = ts, reason+": "+msg, count
 			}
 			continue
 		}
 		if prev, ok := extra[id]; !ok || ts > prev.LastSeen {
-			extra[id] = Issue{ID: id, Kind: kind, Namespace: ns, Name: name, Severity: severityWarning, Reason: reason, Message: msg, LastSeen: ts, Count: count}
+			extra[id] = Issue{ID: id, Kind: kind, Namespace: ns, Name: name, Severity: severityWarning, Reason: reason, Message: msg, LastSeen: ts, Events: count}
 		}
 	}
 	for _, is := range extra {
 		issues = append(issues, is)
 	}
-	rank := map[string]int{severityCritical: 0, severityWarning: 1, severityInfo: 2}
 	sort.SliceStable(issues, func(i, j int) bool {
 		if rank[issues[i].Severity] != rank[issues[j].Severity] {
 			return rank[issues[i].Severity] < rank[issues[j].Severity]

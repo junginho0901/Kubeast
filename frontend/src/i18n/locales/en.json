@@ -2266,7 +2266,9 @@
       "noneHint": "Check your filters/search terms",
       "count": "{{count}}",
       "lastSeen": "last {{age}} ago",
-      "countTimes": "×{{count}}",
+      "restarts": "Restarts {{count}}",
+      "failed": "Failed {{count}}",
+      "eventTimes": "Event ×{{count}}",
       "openHint": "Open details"
     },
     "metricsServerHint": "metrics-server is missing or not answering.",

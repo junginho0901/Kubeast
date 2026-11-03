@@ -68,7 +68,7 @@ export function IssuesModal({
       error,
       visible_items: sortedIssues.slice(0, 30).map((i) => ({
         kind: i.kind, name: i.name, namespace: i.namespace, severity: i.severity, title: i.title, detail: i.subtitle,
-        count: i.count, last_seen: i.lastSeen, _link: i.name ? buildResourceLink(i.kind, i.namespace, i.name) : undefined,
+        restarts: i.restarts, failed: i.failed, events: i.events, last_seen: i.lastSeen, _link: i.name ? buildResourceLink(i.kind, i.namespace, i.name) : undefined,
       })),
     },
   } : null, [open, isLoading, issuesSummary, sortedIssues, searchQuery, windowMinutes, defaultWindowMinutes, includeRestartHistory, generatedAt, error])
@@ -268,13 +268,15 @@ export function IssuesModal({
                                 <p className="mt-1 text-xs text-slate-400 line-clamp-2 wrap-break-word">{issue.subtitle}</p>
                               )}
                             </div>
-                            {(issue.lastSeen || issue.count) && (
+                            {(issue.lastSeen || issue.restarts || issue.failed || issue.events) && (
                               <div className="shrink-0 text-right text-xs text-slate-500 space-y-0.5">
                                 {issue.lastSeen && (
                                   <p>{tr('dashboard.issues.lastSeen', 'last {{age}} ago', { age: formatAge(nowMs - Date.parse(issue.lastSeen)) })}</p>
                                 )}
-                                {!!issue.count && issue.count > 1 && (
-                                  <p>{tr('dashboard.issues.countTimes', '×{{count}}', { count: issue.count })}</p>
+                                {!!issue.restarts && <p>{tr('dashboard.issues.restarts', 'Restarts {{count}}', { count: issue.restarts })}</p>}
+                                {!!issue.failed && <p>{tr('dashboard.issues.failed', 'Failed {{count}}', { count: issue.failed })}</p>}
+                                {!!issue.events && issue.events > 1 && (
+                                  <p>{tr('dashboard.issues.eventTimes', 'Event ×{{count}}', { count: issue.events })}</p>
                                 )}
                               </div>
                             )}
