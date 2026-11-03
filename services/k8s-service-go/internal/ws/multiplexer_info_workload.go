@@ -3,7 +3,11 @@ package ws
 import (
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/deploystatus"
 )
 
 // deploymentToInfo — list endpoint: formatDeploymentDetail (deployments.go).
@@ -28,44 +32,30 @@ func deploymentToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 		image = images[0]
 	}
 
-	// status — formatDeploymentDetail 과 동일 logic (Available/Failed/Progressing)
-	depStatus := "Progressing"
+	// status and its reason as the list endpoint writes them (deploystatus.Of)
+	var st appsv1.DeploymentStatus
 	if status != nil {
-		if conds, ok := status["conditions"].([]interface{}); ok {
-			for _, c := range conds {
-				cm, _ := c.(map[string]interface{})
-				if cm == nil {
-					continue
-				}
-				ctype, _ := cm["type"].(string)
-				cstatus, _ := cm["status"].(string)
-				if ctype == "Available" && cstatus == "True" {
-					depStatus = "Available"
-					break
-				}
-				if ctype == "Progressing" && cstatus == "False" {
-					depStatus = "Failed"
-					break
-				}
-			}
-		}
+		_ = runtime.DefaultUnstructuredConverter.FromUnstructured(status, &st)
 	}
+	depStatus, progressingReason := deploystatus.Of(&appsv1.Deployment{Status: st})
 
 	selector := selectorMatchLabels(spec)
 
 	return map[string]interface{}{
-		"name":               metadata["name"],
-		"namespace":          metadata["namespace"],
-		"replicas":           replicas,
-		"ready_replicas":     readyReplicas,
-		"available_replicas": availableReplicas,
-		"updated_replicas":   updatedReplicas,
-		"image":              image,
-		"images":             images,
-		"labels":             metadata["labels"],
-		"selector":           selector,
-		"status":             depStatus,
-		"created_at":         metadata["creationTimestamp"],
+		"name":                 metadata["name"],
+		"namespace":            metadata["namespace"],
+		"replicas":             replicas,
+		"ready_replicas":       readyReplicas,
+		"available_replicas":   availableReplicas,
+		"updated_replicas":     updatedReplicas,
+		"unavailable_replicas": int64(st.UnavailableReplicas),
+		"progressing_reason":   progressingReason,
+		"image":                image,
+		"images":               images,
+		"labels":               metadata["labels"],
+		"selector":             selector,
+		"status":               depStatus,
+		"created_at":           metadata["creationTimestamp"],
 	}
 }
 
