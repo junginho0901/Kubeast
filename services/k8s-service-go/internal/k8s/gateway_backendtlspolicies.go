@@ -31,121 +31,21 @@ func (s *Service) GetAllBackendTLSPolicies(ctx context.Context) ([]map[string]in
 	})
 }
 
-// DescribeBackendTLSPolicy returns detailed info about a BackendTLSPolicy.
+// DescribeBackendTLSPolicy is a BackendTLSPolicy as its drawer shows it: the list's row (gatewayrow.Policy), its
+// metadata and events, the TLS validation and every ancestor's status as the object writes them.
 func (s *Service) DescribeBackendTLSPolicy(ctx context.Context, namespace, name string) (map[string]interface{}, error) {
-	gvr := s.gatewayGVR(ctx, "backendtlspolicies")
-	obj, err := s.GetResource(ctx, gvr, namespace, name)
+	result, obj, err := s.describeGatewayObject(ctx, "backendtlspolicies", "BackendTLSPolicy", namespace, name, gatewayrow.Policy)
 	if err != nil {
 		return nil, fmt.Errorf("get backendtlspolicy %s/%s: %w", namespace, name, err)
 	}
-
-	result := map[string]interface{}{
-		"name":        obj.GetName(),
-		"namespace":   obj.GetNamespace(),
-		"labels":      obj.GetLabels(),
-		"annotations": obj.GetAnnotations(),
-		"created_at":  toISO(&metav1.Time{Time: obj.GetCreationTimestamp().Time}),
+	if validation := mapMap(mapMap(obj.Object, "spec"), "validation"); validation != nil {
+		result["validation"] = validation
 	}
-	addObjectMetaFields(result, obj)
-
-	spec := mapMap(obj.Object, "spec")
-	if spec != nil {
-		// targetRefs
-		targetRefs := mapSlice(spec, "targetRefs")
-		if len(targetRefs) == 0 {
-			// Some versions use singular targetRef
-			if tr := mapMap(spec, "targetRef"); tr != nil {
-				targetRefs = []interface{}{tr}
-			}
-		}
-		refs := make([]map[string]interface{}, 0, len(targetRefs))
-		for _, tr := range targetRefs {
-			if tm, ok := tr.(map[string]interface{}); ok {
-				ref := map[string]interface{}{
-					"name": mapStr(tm, "name"),
-				}
-				if v := mapStr(tm, "group"); v != "" {
-					ref["group"] = v
-				}
-				if v := mapStr(tm, "kind"); v != "" {
-					ref["kind"] = v
-				}
-				if v := mapStr(tm, "namespace"); v != "" {
-					ref["namespace"] = v
-				}
-				if v := mapStr(tm, "sectionName"); v != "" {
-					ref["section_name"] = v
-				}
-				refs = append(refs, ref)
-			}
-		}
-		result["target_refs"] = refs
-
-		// validation (TLS validation config)
-		if validation := mapMap(spec, "validation"); validation != nil {
-			valResult := map[string]interface{}{}
-			if hostname := mapStr(validation, "hostname"); hostname != "" {
-				valResult["hostname"] = hostname
-			}
-			if wke := mapStr(validation, "wellKnownCACertificates"); wke != "" {
-				valResult["well_known_ca_certificates"] = wke
-			}
-			caCertRefs := mapSlice(validation, "caCertificateRefs")
-			certRefs := make([]map[string]interface{}, 0, len(caCertRefs))
-			for _, cr := range caCertRefs {
-				if cm, ok := cr.(map[string]interface{}); ok {
-					certRef := map[string]interface{}{
-						"name": mapStr(cm, "name"),
-					}
-					if v := mapStr(cm, "group"); v != "" {
-						certRef["group"] = v
-					}
-					if v := mapStr(cm, "kind"); v != "" {
-						certRef["kind"] = v
-					}
-					if v := mapStr(cm, "namespace"); v != "" {
-						certRef["namespace"] = v
-					}
-					certRefs = append(certRefs, certRef)
-				}
-			}
-			if len(certRefs) > 0 {
-				valResult["ca_certificate_refs"] = certRefs
-			}
-			result["validation"] = valResult
-		}
+	ancestors := []interface{}{}
+	if status := mapMap(obj.Object, "status"); status != nil {
+		ancestors = append(ancestors, mapSlice(status, "ancestors")...)
 	}
-
-	// status conditions
-	status := mapMap(obj.Object, "status")
-	if status != nil {
-		ancestors := mapSlice(status, "ancestors")
-		ancestorStatuses := make([]map[string]interface{}, 0, len(ancestors))
-		for _, a := range ancestors {
-			if am, ok := a.(map[string]interface{}); ok {
-				as := map[string]interface{}{}
-				if ancestorRef := mapMap(am, "ancestorRef"); ancestorRef != nil {
-					as["ancestor_ref"] = ancestorRef
-				}
-				conditions := mapSlice(am, "conditions")
-				condList := make([]map[string]interface{}, 0, len(conditions))
-				for _, c := range conditions {
-					if cm, ok := c.(map[string]interface{}); ok {
-						condList = append(condList, map[string]interface{}{
-							"type":    mapStr(cm, "type"),
-							"status":  mapStr(cm, "status"),
-							"reason":  mapStr(cm, "reason"),
-							"message": mapStr(cm, "message"),
-						})
-					}
-				}
-				as["conditions"] = condList
-				ancestorStatuses = append(ancestorStatuses, as)
-			}
-		}
-		result["ancestor_statuses"] = ancestorStatuses
-	}
-
+	result["ancestors"] = ancestors
 	return result, nil
 }
 

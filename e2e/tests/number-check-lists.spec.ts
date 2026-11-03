@@ -7,6 +7,8 @@ import zlib from 'node:zlib'
 
 import { test, expect, type Page } from '@playwright/test'
 
+import { GW, ancestor, arg, condition, gatewayFixture, gatewayVersions, routeConds, summary, writeGatewayStatus } from './number-check.gateway-shared'
+
 // Every list screen's numbers are the cluster's: in namespace e2e-numbers of `self`, or of test2 for the Gateway API and VPA
 // (objects whose numbers are not zero and not alike, made here and removed after), each screen's rows are the cluster's objects, each column the
 // API server also prints (the Table of `kubectl get`, Accept as=Table) holds the same value, the columns only Kubeast
@@ -548,32 +550,9 @@ const SCREENS_CLUSTER: Screen[] = [
   },
 ]
 
-// Gateway API screens on test2, with number-check.gateway-fixture.yaml: the CRDs print few columns (Hostnames, a
-// GatewayClass's Controller, a Gateway's Class), so most are compared with what the objects say
-const GATEWAY_FIXTURE = fs.readFileSync(path.join(__dirname, 'number-check.gateway-fixture.yaml'), 'utf8')
-const GW = 'gateway.networking.k8s.io'
-// the versions test2 serves the kinds at (they move between Gateway API releases), or null without them
-function gatewayVersions(): Record<string, string> | null {
-  try {
-    const served = Object.fromEntries(on('test2').kubectl(`api-resources --api-group=${GW} --no-headers`).split('\n')
-      .map((line) => line.trim().split(/\s+/))
-      .map((cols) => [cols[0], cols.find((c) => c.startsWith(`${GW}/`))?.split('/')[1] ?? '']))
-    const kinds = ['gatewayclasses', 'gateways', 'httproutes', 'grpcroutes', 'referencegrants', 'backendtlspolicies']
-    return kinds.every((k) => served[k]) ? served : null
-  } catch {
-    return null
-  }
-}
-// a condition list summed up as the list pages show it: the named conditions that hold first, then the first that
-// holds, then the first that does not as "<type>(False)", else Unknown
-const summary = (conds: Obj[] = [], ...first: string[]) => {
-  const named = first.find((t) => conds.some((c) => c.type === t && c.status === 'True'))
-  const yes = conds.find((c) => c.status === 'True')
-  const no = conds.find((c) => c.status === 'False')
-  return named ?? yes?.type ?? (no ? `${no.type}(False)` : 'Unknown')
-}
-// a route's conditions over every parent it reports on
-const routeConds = (o: Obj): Obj[] => (o.status?.parents ?? []).flatMap((p: Obj) => p.conditions ?? [])
+// Gateway API screens on test2, with number-check.gateway-fixture.yaml (number-check.gateway-shared.ts): the CRDs
+// print few columns (Hostnames, a GatewayClass's Controller, a Gateway's Class), so most are compared with what the
+// objects say
 const routeHolds = (o: Obj, type: string) => routeConds(o).some((c) => c.type === type && c.status === 'True')
 // a policy's conditions: the first ancestor that reports any
 const policyConds = (o: Obj): Obj[] => (o.status?.ancestors ?? []).find((a: Obj) => (a.conditions ?? []).length)?.conditions ?? []
@@ -667,34 +646,6 @@ const gatewayScreens = (served: Record<string, string>): Screen[] => [
     }),
   },
 ]
-// the statuses a controller would write (none runs on test2); num-gc-plain, num-gw-b and the routes not named keep
-// the CRDs' default or none
-const condition = (type: string, status: string, reason = status === 'True' ? type : 'Pending') =>
-  ({ type, status, reason, message: '', lastTransitionTime: '2026-11-01T00:00:00Z' })
-const CONTROLLER = 'numbers.kubeast.io/gateway'
-const listener = (name: string, attachedRoutes: number) =>
-  ({ name, attachedRoutes, supportedKinds: [{ group: GW, kind: 'HTTPRoute' }], conditions: [condition('Programmed', 'True')] })
-const parent = (name: string, conditions: Obj[]) => ({ parentRef: { name }, controllerName: CONTROLLER, conditions })
-const ancestor = (name: string, conditions: Obj[]) => ({ ancestorRef: { name }, controllerName: CONTROLLER, conditions })
-const GATEWAY_STATUS: [string, string, Obj][] = [
-  ['gatewayclass', 'num-gc-ready', { conditions: [condition('Accepted', 'True')] }],
-  ['gateway', 'num-gw-a', {
-    conditions: [condition('Accepted', 'True'), condition('Programmed', 'True')],
-    listeners: [listener('http', 2), listener('alt', 1)],
-    addresses: [{ type: 'IPAddress', value: '10.0.0.7' }, { type: 'Hostname', value: 'gw.numbers.example' }],
-  }],
-  ['gateway', 'num-gw-c', {
-    conditions: [condition('Accepted', 'True'), condition('Programmed', 'False')],
-    listeners: [listener('web', 1), listener('api', 0), listener('admin', 0)],
-  }],
-  ['httproute', 'num-http-a', { parents: [parent('num-gw-a', [condition('Accepted', 'False')]), parent('num-gw-c', [condition('Accepted', 'True'), condition('ResolvedRefs', 'True')])] }],
-  ['httproute', 'num-http-b', { parents: [parent('num-gw-a', [condition('ResolvedRefs', 'False'), condition('Accepted', 'False')])] }],
-  ['grpcroute', 'num-grpc-a', { parents: [parent('num-gw-a', [condition('Accepted', 'True'), condition('ResolvedRefs', 'False')])] }],
-  ['backendtlspolicy', 'num-btls-a', { ancestors: [ancestor('num-gw-a', [condition('Accepted', 'True')])] }],
-  ['backendtlspolicy', 'num-btls-b', { ancestors: [ancestor('num-gw-c', [condition('Accepted', 'False', 'NoValidCACertificate')])] }],
-]
-// a JSON patch or body as one shell word
-const arg = (v: unknown) => JSON.stringify(JSON.stringify(v))
 // live updates that empty a value, which a row merged with the update kept (and three kinds had no live updates)
 const GATEWAY_LIVE: { path: string; name: string; column: string; want: string; change: string }[] = [
   { path: '/gateway/gatewayclasses', name: 'num-gc-ready', column: 'Parameters Ref', want: '-', change: `patch gatewayclass num-gc-ready --type=json -p=${arg([{ op: 'remove', path: '/spec/parametersRef' }])}` },
@@ -1027,7 +978,7 @@ test.describe('number check — list screens', () => {
   // the Gateway API screens the same way on test2, then a live update on each that empties a value
   test('every Gateway API list screen shows the rows, columns and cards the cluster has', async ({ page }) => {
     test.setTimeout(600_000)
-    const served = gatewayVersions()
+    const served = gatewayVersions((args) => on('test2').kubectl(args))
     const clusters = await (await page.request.get('/api/v1/clusters')).json()
     const registered = (Array.isArray(clusters) ? clusters : clusters.items ?? []).some((c: Obj) => c.id === 'test2')
     test.skip(!served || !registered, 'needs the kind cluster test2, registered as test2, serving the Gateway API (experimental channel CRDs)')
@@ -1037,11 +988,9 @@ test.describe('number check — list screens', () => {
       const { heads, rows } = await readScreen(p)
       return rows.find((r) => r[heads.findIndex((h) => /^name$/i.test(h))] === name)?.[heads.indexOf(column)]
     }
-    t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', GATEWAY_FIXTURE.replace(/\{\{(\w+)\}\}/g, (_, k) => served![k]))
+    t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', gatewayFixture(served!, NS))
     try {
-      for (const [kind, name, status] of GATEWAY_STATUS) {
-        t2.kubectl(`patch ${kind} ${name}${kind === 'gatewayclass' ? '' : ` -n ${NS}`} --subresource=status --type=merge -p=${arg({ status })}`)
-      }
+      writeGatewayStatus(t2.kubectl, NS)
       await page.context().addInitScript(() => localStorage.setItem('kubeast.listPageSize', '100'))
       const held = await page.context().newPage()
       await held.routeWebSocket(/wsMultiplexer/, () => {})
@@ -1300,7 +1249,7 @@ test.describe('number check — list screens', () => {
   test('the Gateway policies screen shows every policy object, a Kind of two groups kept apart', async ({ page }) => {
     test.setTimeout(300_000)
     test.skip(!(await registeredOn(page, GWPOL.cluster)), 'needs the kind cluster test2, registered as test2')
-    const served = gatewayVersions()
+    const served = gatewayVersions((args) => on('test2').kubectl(args))
     test.skip(!served || !policyKinds().some((k) => k.plural === 'xbackendtrafficpolicies'), 'needs the Gateway API experimental-channel CRDs on test2')
     const t2 = on(GWPOL.cluster)
     t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', GWPOL_CRD)

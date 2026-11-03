@@ -2,7 +2,11 @@ package k8s
 
 import (
 	"context"
+	"fmt"
+	"sync"
 
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -43,4 +47,41 @@ func gatewayRows(list *unstructured.UnstructuredList, row func(*unstructured.Uns
 		result = append(result, row(&list.Items[i]))
 	}
 	return result
+}
+
+// describeGatewayObject is a Gateway API object as its drawer shows it: the row the list shows (gatewayrow), the
+// metadata the Lifecycle section reads and the events about it, found as kubectl describe finds them (involvedObject
+// name and kind, in every namespace for a cluster-scoped kind). The object comes back for what only a drawer shows.
+func (s *Service) describeGatewayObject(ctx context.Context, resource, kind, namespace, name string, row func(*unstructured.Unstructured) map[string]interface{}) (map[string]interface{}, *unstructured.Unstructured, error) {
+	gvr := s.gatewayGVR(ctx, resource)
+	var obj *unstructured.Unstructured
+	var events *corev1.EventList
+	var objErr, eventsErr error
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		obj, objErr = s.GetResource(ctx, gvr, namespace, name)
+	}()
+	go func() {
+		defer wg.Done()
+		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=%s", name, kind),
+		})
+	}()
+	wg.Wait()
+
+	if objErr != nil {
+		return nil, nil, objErr
+	}
+	if eventsErr != nil {
+		events = &corev1.EventList{}
+	}
+	sortEventsByTime(events.Items)
+
+	result := row(obj)
+	addObjectMetaFields(result, obj)
+	result["events"] = formatEventList(events.Items)
+	return result, obj, nil
 }
