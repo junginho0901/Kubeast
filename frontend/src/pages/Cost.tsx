@@ -12,6 +12,7 @@ import CustomDropdown from '@/components/CustomDropdown'
 import { useAIContext } from '@/hooks/useAIContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { formatMoney, formatPercent } from '@/utils/money'
+import { costOutsideCards, hasCostOutside, type CostOutside } from '@/utils/costParts'
 import { formatTime } from '@/utils/time'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
 
@@ -140,7 +141,7 @@ export default function Cost() {
           currentPage,
           pageSize: rowsPerPage,
           topN: rowsPerPage,
-          pickFields: ['name', 'namespace', 'kind', 'total_cost', 'cpu_cost', 'ram_cost', 'pv_cost', 'network_cost', 'total_efficiency'],
+          pickFields: ['name', 'namespace', 'kind', 'total_cost', 'cpu_cost', 'ram_cost', 'pv_cost', 'network_cost', 'gpu_cost', 'load_balancer_cost', 'total_efficiency'],
         }),
       },
     }
@@ -153,7 +154,9 @@ export default function Cost() {
     setIsRefreshing(true)
     try {
       await queryClient.invalidateQueries({ queryKey: ['cluster', 'cost-status'] })
-      await queryClient.invalidateQueries({ queryKey: ['cluster', 'cost'] })
+      // the server keeps an answer a minute: ask it to read OpenCost again for the window and grouping on screen
+      queryClient.setQueryData(['cluster', 'cost', win, aggregate], await api.getCost(win, aggregate, true))
+      await queryClient.invalidateQueries({ queryKey: ['cluster', 'cost'], predicate: (q) => q.queryKey[2] !== win || q.queryKey[3] !== aggregate })
     } catch (error) {
       console.error('cost refresh failed:', error)
     }
@@ -164,6 +167,12 @@ export default function Cost() {
   // The server's reason (a cluster that refused the proxy for this user, OpenCost not answering): shown under the error row.
   const errorDetail = (cost.error as { response?: { data?: { detail?: string } } } | null)?.response?.data?.detail
   const money = (v: number | undefined) => formatMoney(v, currency)
+  // What a total holds besides the cards' and columns' parts (GPU, load balancers), as one sentence.
+  const outsideText = (o: CostOutside) => [
+    o.gpu ? tr('cost.part.gpu', 'GPU {{amount}}', { amount: money(o.gpu) }) : '',
+    o.loadBalancers ? tr('cost.part.lb', 'load balancers {{amount}}', { amount: money(o.loadBalancers) }) : '',
+  ].filter(Boolean).join(', ')
+  const totalsOutside = totals ? costOutsideCards(totals) : null
   // A namespace row opens that Namespace, a workload row its workload; OpenCost's own buckets (__unallocated__ …) open nothing.
   const openRow = (r: CostRow) => {
     if (r.name.startsWith('__')) return null
@@ -277,6 +286,12 @@ export default function Cost() {
             ))}
           </div>
 
+          {totalsOutside && hasCostOutside(totalsOutside) && (
+            <p className="text-sm text-slate-400 shrink-0" data-testid="cost-outside-cards">
+              {tr('cost.outsideCards', 'The total also has {{parts}}.', { parts: outsideText(totalsOutside) })}
+            </p>
+          )}
+
           {cost.data?.scoped && (
             <p className="text-sm text-amber-300 shrink-0" data-testid="cost-scoped">
               {tr('cost.scoped', 'Only the namespaces of your grant are shown; the totals add up those rows.')}
@@ -355,7 +370,13 @@ export default function Cost() {
                       <td className="py-3 px-4 text-right text-xs font-mono whitespace-nowrap">{money(row.ram_cost)}</td>
                       <td className="col-optional py-3 px-4 text-right text-xs font-mono whitespace-nowrap">{money(row.pv_cost)}</td>
                       <td className="col-optional py-3 px-4 text-right text-xs font-mono whitespace-nowrap">{money(row.network_cost)}</td>
-                      <td className="py-3 px-4 text-right text-xs font-mono text-ink whitespace-nowrap" data-testid="cost-row-total">{money(row.total_cost)}</td>
+                      <td
+                        className="py-3 px-4 text-right text-xs font-mono text-ink whitespace-nowrap"
+                        data-testid="cost-row-total"
+                        title={hasCostOutside(costOutsideCards(row)) ? tr('cost.outsideCards', 'The total also has {{parts}}.', { parts: outsideText(costOutsideCards(row)) }) : undefined}
+                      >
+                        {money(row.total_cost)}
+                      </td>
                       <td className="col-optional py-3 px-4 text-right text-xs font-mono whitespace-nowrap">{formatPercent(row.total_efficiency)}</td>
                     </tr>
                     )

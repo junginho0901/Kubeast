@@ -8,8 +8,9 @@ export const costApi = {
     return data
   },
 
-  getCost: async (window: CostWindow, aggregate: CostAggregate): Promise<CostResponse> => {
-    const { data } = await client.get('/cluster/cost', { params: { window, aggregate } })
+  // refresh: read OpenCost again instead of the server's answer of the last minute (the page's Refresh)
+  getCost: async (window: CostWindow, aggregate: CostAggregate, refresh = false): Promise<CostResponse> => {
+    const { data } = await client.get('/cluster/cost', { params: { window, aggregate, ...(refresh ? { refresh: '1' } : {}) } })
     return data
   },
 }

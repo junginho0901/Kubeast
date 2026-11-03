@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"k8s.io/client-go/kubernetes"
@@ -365,5 +366,40 @@ func TestCostKind(t *testing.T) {
 		if got := costKind(in); got != want {
 			t.Errorf("costKind(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// The page's Refresh reads OpenCost again within the minute the server keeps an answer, and that answer is the one
+// the next reads get.
+func TestCostAllocationNow_ReadsOpenCostAgain(t *testing.T) {
+	s, srv := newCostServer(t, true)
+	ctx := context.Background()
+	first, err := s.CostAllocation(ctx, "1h", CostAggregateNamespace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CostAllocation(ctx, "1h", CostAggregateNamespace); err != nil {
+		t.Fatal(err)
+	}
+	if _, allocs := srv.counts(); allocs != 1 {
+		t.Fatalf("allocation calls after two reads = %d, want 1 (the minute's answer)", allocs)
+	}
+	time.Sleep(1100 * time.Millisecond) // generated_at is to the second
+	now, err := s.CostAllocationNow(ctx, "1h", CostAggregateNamespace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, allocs := srv.counts(); allocs != 2 {
+		t.Fatalf("allocation calls after Refresh = %d, want 2", allocs)
+	}
+	if now.GeneratedAt == first.GeneratedAt {
+		t.Fatalf("Refresh answered the kept answer of %s", first.GeneratedAt)
+	}
+	after, err := s.CostAllocation(ctx, "1h", CostAggregateNamespace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, allocs := srv.counts(); allocs != 2 || after.GeneratedAt != now.GeneratedAt {
+		t.Fatalf("the read after Refresh = calls %d, generated %s; want 2 and the Refresh's %s", allocs, after.GeneratedAt, now.GeneratedAt)
 	}
 }
