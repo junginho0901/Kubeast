@@ -7,6 +7,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	pvcrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/pvc"
 )
@@ -56,14 +57,12 @@ func (s *Service) DescribePVC(ctx context.Context, namespace, name string) (map[
 	}()
 	go func() {
 		defer wg.Done()
-		// a page at a time, keeping the pods that mount the claim, as kubectl describe's getPodsForPVC reads it
-		// (the whole namespace in one list took k8s-service past 512 Mi)
+		// a page at a time, keeping the pods kubectl describe's getPodsForPVC keeps (the whole namespace in one list
+		// took k8s-service past 512 Mi)
+		users := newPVCUsers(name, pvc)
 		podsErr = eachPod(ctx, s.clientsetCtx(ctx).CoreV1(), namespace, metav1.ListOptions{}, func(p *corev1.Pod) {
-			for _, vol := range p.Spec.Volumes {
-				if vol.PersistentVolumeClaim != nil && vol.PersistentVolumeClaim.ClaimName == name {
-					pods = append(pods, *p.DeepCopy())
-					return
-				}
+			if users.keeps(p) {
+				pods = append(pods, *p.DeepCopy())
 			}
 		})
 	}()
@@ -152,8 +151,7 @@ func (s *Service) DescribePVC(ctx context.Context, namespace, name string) (map[
 
 	// Used by pods
 	if podsErr == nil {
-		usedByPods := findPodsUsingPVC(pods, name)
-		result["used_by_pods"] = usedByPods
+		result["used_by_pods"] = findPodsUsingPVC(pods, newPVCUsers(name, pvc))
 	}
 
 	// Conditions
@@ -208,38 +206,84 @@ func formatPVCDetail(c *corev1.PersistentVolumeClaim) map[string]interface{} {
 	return pvcrow.Info(c)
 }
 
-// findPodsUsingPVC finds pods that reference a given PVC name.
-func findPodsUsingPVC(pods []corev1.Pod, pvcName string) []map[string]interface{} {
-	result := make([]map[string]interface{}, 0)
-	for _, pod := range pods {
-		volumeNames := make([]string, 0)
-		for _, vol := range pod.Spec.Volumes {
-			if vol.PersistentVolumeClaim != nil && vol.PersistentVolumeClaim.ClaimName == pvcName {
-				volumeNames = append(volumeNames, vol.Name)
+// pvcUsers are the pods kubectl describe pvc lists as "Used By" (v1.37 getPodsForPVC): the pods with a
+// persistentVolumeClaim volume of the claim, and a pod the claim names as its owner — a generic ephemeral volume's
+// claim, which its pod mounts through spec.volumes[].ephemeral, not by the claim's name.
+type pvcUsers struct {
+	claim  string
+	owners map[types.UID]bool
+}
+
+// newPVCUsers reads the owners from the claim; without the claim (it could not be read) only the mounts count.
+func newPVCUsers(claim string, pvc *corev1.PersistentVolumeClaim) pvcUsers {
+	u := pvcUsers{claim: claim, owners: map[types.UID]bool{}}
+	if pvc != nil {
+		for _, ref := range pvc.OwnerReferences {
+			if ref.Kind == "Pod" {
+				u.owners[ref.UID] = true
 			}
 		}
-		if len(volumeNames) == 0 {
-			continue
-		}
+	}
+	return u
+}
 
-		ready := 0
-		total := len(pod.Spec.Containers)
-		restarts := int32(0)
-		for _, cs := range pod.Status.ContainerStatuses {
-			if cs.Ready {
-				ready++
+// mounts are the pod's volumes of the claim: persistentVolumeClaim volumes by name, and the ephemeral volume whose
+// claim it is (named <pod>-<volume>, as k8s.io/component-helpers ephemeral.VolumeClaimName names it).
+func (u pvcUsers) mounts(p *corev1.Pod) []string {
+	names := make([]string, 0)
+	for _, vol := range p.Spec.Volumes {
+		if vol.PersistentVolumeClaim != nil && vol.PersistentVolumeClaim.ClaimName == u.claim {
+			names = append(names, vol.Name)
+		}
+	}
+	if u.owners[p.UID] {
+		for _, vol := range p.Spec.Volumes {
+			if vol.Ephemeral != nil && p.Name+"-"+vol.Name == u.claim {
+				names = append(names, vol.Name)
 			}
-			restarts += cs.RestartCount
 		}
+	}
+	return names
+}
 
+func (u pvcUsers) byName(p *corev1.Pod) bool {
+	for _, vol := range p.Spec.Volumes {
+		if vol.PersistentVolumeClaim != nil && vol.PersistentVolumeClaim.ClaimName == u.claim {
+			return true
+		}
+	}
+	return false
+}
+
+func (u pvcUsers) keeps(p *corev1.Pod) bool { return u.byName(p) || u.owners[p.UID] }
+
+// findPodsUsingPVC lists the claim's users in kubectl's order — the pods that mount it by name in the list's order,
+// then the owner pods not among them — with their STATUS, READY and RESTARTS as kubectl get pods prints them. A pod
+// is one row whatever the number of its volumes of the claim (kubectl repeats it per volume).
+func findPodsUsingPVC(pods []corev1.Pod, users pvcUsers) []map[string]interface{} {
+	ordered := make([]*corev1.Pod, 0, len(pods))
+	for i := range pods {
+		if users.byName(&pods[i]) {
+			ordered = append(ordered, &pods[i])
+		}
+	}
+	for i := range pods {
+		if users.owners[pods[i].UID] && !users.byName(&pods[i]) {
+			ordered = append(ordered, &pods[i])
+		}
+	}
+	result := make([]map[string]interface{}, 0, len(ordered))
+	for _, pod := range ordered {
+		status, ready, total, restarts := podTableView(pod)
 		result = append(result, map[string]interface{}{
 			"name":          pod.Name,
 			"namespace":     pod.Namespace,
+			"status":        status,
 			"phase":         string(pod.Status.Phase),
 			"node_name":     pod.Spec.NodeName,
 			"ready":         fmt.Sprintf("%d/%d", ready, total),
 			"restart_count": restarts,
-			"volume_names":  volumeNames,
+			"volume_names":  users.mounts(pod),
 			"created_at":    toISO(&pod.CreationTimestamp),
 		})
 	}

@@ -94,9 +94,9 @@ func (s *Service) DeleteIngress(ctx context.Context, namespace, name string) err
 	return s.clientsetCtx(ctx).NetworkingV1().Ingresses(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
-// ListIngressesByClass returns ingresses cluster-wide whose ingressClassName
-// matches the given class. Capped at 50 to bound the response when an
-// IngressClass is widely referenced.
+// ListIngressesByClass returns every Ingress of the cluster whose class is the given one (ingressClassName, else the
+// kubernetes.io/ingress.class annotation), in the list's order. The drawer pages them and counts them all: it cut
+// at 50 before, with the title saying 50.
 func (s *Service) ListIngressesByClass(ctx context.Context, className string) ([]map[string]interface{}, error) {
 	list, err := s.clientsetCtx(ctx).NetworkingV1().Ingresses("").List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -119,9 +119,6 @@ func (s *Service) ListIngressesByClass(ctx context.Context, className string) ([
 			"namespace":  ing.Namespace,
 			"created_at": toISO(&ing.CreationTimestamp),
 		})
-		if len(out) >= 50 {
-			break
-		}
 	}
 	return out, nil
 }
@@ -141,15 +138,38 @@ func (s *Service) GetIngressClasses(ctx context.Context) ([]map[string]interface
 	return result, nil
 }
 
-// DescribeIngressClass returns detailed info about an ingress class.
+// DescribeIngressClass returns the list's row of an IngressClass with its events, which kubectl describe lists
+// (searchEvents: a cluster-scoped object's events in any namespace).
 func (s *Service) DescribeIngressClass(ctx context.Context, name string) (map[string]interface{}, error) {
-	ic, err := s.clientsetCtx(ctx).NetworkingV1().IngressClasses().Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("get ingress class %s: %w", name, err)
+	var wg sync.WaitGroup
+	var ic *networkingv1.IngressClass
+	var events *corev1.EventList
+	var icErr, eventsErr error
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		ic, icErr = s.clientsetCtx(ctx).NetworkingV1().IngressClasses().Get(ctx, name, metav1.GetOptions{})
+	}()
+	go func() {
+		defer wg.Done()
+		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events("").List(ctx, metav1.ListOptions{
+			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=IngressClass", name),
+		})
+	}()
+	wg.Wait()
+	if icErr != nil {
+		return nil, fmt.Errorf("get ingress class %s: %w", name, icErr)
 	}
 	result := formatIngressClassDetail(ic)
+	result["uid"] = string(ic.UID)
+	result["resource_version"] = ic.ResourceVersion
 	result["labels"] = ic.Labels
 	result["annotations"] = ic.Annotations
+	result["events"] = []map[string]interface{}{}
+	if eventsErr == nil {
+		sortEventsByTime(events.Items)
+		result["events"] = formatEventList(events.Items)
+	}
 	if ic.Spec.Parameters != nil {
 		params := map[string]interface{}{
 			"kind": ic.Spec.Parameters.Kind,

@@ -3,6 +3,7 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,18 +39,40 @@ func (s *Service) GetAllEndpoints(ctx context.Context) ([]map[string]interface{}
 	})
 }
 
-// DescribeEndpoints returns detailed info about an endpoints resource.
+// DescribeEndpoints returns the list's row of an Endpoints with what kubectl describe adds: the metadata, each
+// subset's ready and not-ready addresses and ports, and the events. The drawer reads it however it was opened.
 func (s *Service) DescribeEndpoints(ctx context.Context, namespace, name string) (map[string]interface{}, error) {
-	ep, err := s.clientsetCtx(ctx).CoreV1().Endpoints(namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("get endpoints %s/%s: %w", namespace, name, err)
+	var wg sync.WaitGroup
+	var ep *corev1.Endpoints
+	var events *corev1.EventList
+	var epErr, eventsErr error
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		ep, epErr = s.clientsetCtx(ctx).CoreV1().Endpoints(namespace).Get(ctx, name, metav1.GetOptions{})
+	}()
+	go func() {
+		defer wg.Done()
+		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Endpoints", name),
+		})
+	}()
+	wg.Wait()
+	if epErr != nil {
+		return nil, fmt.Errorf("get endpoints %s/%s: %w", namespace, name, epErr)
 	}
 
 	result := formatEndpointsFull(ep)
+	result["uid"] = string(ep.UID)
 	result["labels"] = ep.Labels
 	result["annotations"] = ep.Annotations
 	result["generation"] = ep.Generation
 	result["resource_version"] = ep.ResourceVersion
+	result["events"] = []map[string]interface{}{}
+	if eventsErr == nil {
+		sortEventsByTime(events.Items)
+		result["events"] = formatEventList(events.Items)
+	}
 
 	// Also include raw subsets for detailed view
 	subsets := make([]map[string]interface{}, 0, len(ep.Subsets))

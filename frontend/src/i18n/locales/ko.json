@@ -4852,6 +4852,7 @@
     "Allocation": "할당",
     "Allocation Status": "할당 상태",
     "Attach Error": "연결 오류",
+    "Attached": "연결됨",
     "Detach Error": "분리 오류",
     "Attach/Detach Errors": "연결/분리 오류",
     "Backend Pod Resource Usage": "백엔드 Pod 리소스 사용량",

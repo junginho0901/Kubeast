@@ -68,7 +68,7 @@ export const networkApi = {
     return data
   },
 
-  describeIngressClass: async (name: string): Promise<IngressClassInfo> => {
+  describeIngressClass: async (name: string): Promise<IngressClassInfo & { uid?: string; resource_version?: string; events?: Array<Record<string, unknown>> }> => {
     const { data } = await client.get(`/cluster/ingressclasses/${name}/describe`)
     return data
   },

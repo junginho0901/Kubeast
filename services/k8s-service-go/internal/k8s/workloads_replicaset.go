@@ -77,13 +77,8 @@ func (s *Service) DescribeReplicaSet(ctx context.Context, namespace, name string
 		"available": rs.Status.AvailableReplicas,
 	}
 
-	// Owner
-	for _, or := range rs.OwnerReferences {
-		if or.Kind == "Deployment" {
-			result["owner"] = or.Name
-			break
-		}
-	}
+	// The owner is the list's: the row's owner_references (with `controller`), which the page reads with
+	// replicaSetOwner.
 
 	// Revision from annotations
 	if rev, ok := rs.Annotations["deployment.kubernetes.io/revision"]; ok {
@@ -116,17 +111,6 @@ func (s *Service) DescribeReplicaSet(ctx context.Context, namespace, name string
 		})
 	}
 	result["conditions"] = conditions
-
-	// Owner references
-	owners := make([]map[string]interface{}, 0, len(rs.OwnerReferences))
-	for _, or := range rs.OwnerReferences {
-		owners = append(owners, map[string]interface{}{
-			"kind": or.Kind,
-			"name": or.Name,
-			"uid":  string(or.UID),
-		})
-	}
-	result["owner_references"] = owners
 
 	// Owned pods (Pods whose ownerReferences include this ReplicaSet)
 	if ownedPods, err := s.listOwnedPods(ctx, namespace, "ReplicaSet", name, rs.Spec.Selector); err == nil {
