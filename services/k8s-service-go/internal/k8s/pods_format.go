@@ -3,7 +3,6 @@ package k8s
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -344,29 +343,19 @@ func formatPodDetail(p *corev1.Pod) map[string]interface{} {
 	return out
 }
 
-// podReadyString returns a "ready/total" string for a pod.
-func podReadyString(statuses []corev1.ContainerStatus, total int) string {
-	ready := 0
-	for _, cs := range statuses {
-		if cs.Ready {
-			ready++
+// podTableView is a pod's STATUS, READY and RESTARTS in a drawer's pod table: the Pods list's (podListView — sidecars
+// counted, an initializing pod's Init:…), and as kubectl v1.37 printPod ends, Unknown for a pod being deleted on a
+// node that stopped answering, Terminating for another one being deleted that has not finished.
+func podTableView(p *corev1.Pod) (status string, ready, total int, restarts int32) {
+	status, ready, total, restarts = podListView(p)
+	if p.DeletionTimestamp != nil {
+		if p.Status.Reason == "NodeLost" {
+			status = "Unknown"
+		} else if p.Status.Phase != corev1.PodSucceeded && p.Status.Phase != corev1.PodFailed {
+			status = "Terminating"
 		}
 	}
-	return fmt.Sprintf("%d/%d", ready, total)
-}
-
-// podStatusString returns the effective status for a pod.
-func podStatusString(pod *corev1.Pod) string {
-	if pod.DeletionTimestamp != nil {
-		return "Terminating"
-	}
-	status := string(pod.Status.Phase)
-	for _, cs := range pod.Status.ContainerStatuses {
-		if cs.State.Waiting != nil && cs.State.Waiting.Reason != "" {
-			return cs.State.Waiting.Reason
-		}
-	}
-	return strings.TrimSpace(status)
+	return status, ready, total, restarts
 }
 
 // listOwnedPods returns pods directly owned by the given controller
@@ -394,17 +383,13 @@ func (s *Service) listOwnedPods(ctx context.Context, namespace, ownerKind, owner
 			return
 		}
 
-		restartCount := int32(0)
-		for _, cs := range pod.Status.ContainerStatuses {
-			restartCount += cs.RestartCount
-		}
-
+		status, ready, total, restarts := podTableView(pod)
 		result = append(result, map[string]interface{}{
 			"name":          pod.Name,
 			"namespace":     pod.Namespace,
-			"status":        podStatusString(pod),
-			"ready":         podReadyString(pod.Status.ContainerStatuses, len(pod.Spec.Containers)),
-			"restart_count": restartCount,
+			"status":        status,
+			"ready":         fmt.Sprintf("%d/%d", ready, total),
+			"restart_count": restarts,
 			"node_name":     pod.Spec.NodeName,
 			"pod_ip":        pod.Status.PodIP,
 			"created_at":    toISO(&pod.CreationTimestamp),

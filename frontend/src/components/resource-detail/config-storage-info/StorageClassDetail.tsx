@@ -3,6 +3,8 @@ import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
+import { usePagination } from '../usePagination'
+import { allowedTopologyLines } from '../netstoreDetail'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface StorageClassRelatedPV {
@@ -33,7 +35,7 @@ interface StorageClassDescribeResponse {
   is_default?: boolean
   parameters?: Record<string, string>
   mount_options?: string[]
-  allowed_topologies?: string[]
+  allowed_topologies?: Array<{ match_label_expressions?: Array<{ key?: string; values?: string[] }> }>
   labels?: Record<string, string>
   annotations?: Record<string, string>
   finalizers?: string[]
@@ -67,10 +69,13 @@ export default function StorageClassDetail({ name, rawJson }: { name: string; ra
   const mountOptions = Array.isArray(describe?.mount_options)
     ? describe.mount_options
     : (Array.isArray(rawJson?.mountOptions) ? rawJson?.mountOptions : [])
-  const allowedTopologies = Array.isArray(describe?.allowed_topologies) ? describe.allowed_topologies : []
+  const allowedTopologies = allowedTopologyLines(describe?.allowed_topologies)
   const finalizers = Array.isArray(describe?.finalizers) ? describe.finalizers : []
   const relatedPVs = Array.isArray(describe?.related_pvs) ? describe.related_pvs : []
   const relatedPVCs = Array.isArray(describe?.related_pvcs) ? describe.related_pvcs : []
+  // every related volume and claim, paged (the tables cut at 50 without a word before)
+  const { items: pagedPVs, nav: pvsNav } = usePagination(relatedPVs, 10)
+  const { items: pagedPVCs, nav: pvcsNav } = usePagination(relatedPVCs, 10)
   const events = Array.isArray(describe?.events) ? describe.events : []
   const createdAt = describe?.created_at ?? (meta.creationTimestamp as string | undefined)
 
@@ -133,8 +138,8 @@ export default function StorageClassDetail({ name, rawJson }: { name: string; ra
       {allowedTopologies.length > 0 && (
         <InfoSection title="Allowed Topologies">
           <div className="space-y-1 text-xs text-slate-200">
-            {allowedTopologies.map((topology, idx) => (
-              <div key={`${topology}-${idx}`} className="wrap-break-word">{String(topology)}</div>
+            {allowedTopologies.map((line) => (
+              <div key={line} className="font-mono text-[11px] wrap-break-word">{line}</div>
             ))}
           </div>
         </InfoSection>
@@ -153,7 +158,7 @@ export default function StorageClassDetail({ name, rawJson }: { name: string; ra
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {relatedPVs.slice(0, 50).map((pv, idx) => {
+                {pagedPVs.map((pv, idx) => {
                   const claimText = pv.claim_ref?.name
                     ? `${pv.claim_ref?.namespace || '-'}/${pv.claim_ref?.name}`
                     : '-'
@@ -178,6 +183,7 @@ export default function StorageClassDetail({ name, rawJson }: { name: string; ra
                 })}
               </tbody>
             </table>
+            {pvsNav}
           </div>
         </InfoSection>
       )}
@@ -196,7 +202,7 @@ export default function StorageClassDetail({ name, rawJson }: { name: string; ra
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {relatedPVCs.slice(0, 50).map((pvc, idx) => (
+                {pagedPVCs.map((pvc, idx) => (
                   <tr
                     key={`${pvc.namespace || '-'}-${pvc.name || '-'}-${idx}`}
                     className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
@@ -219,6 +225,7 @@ export default function StorageClassDetail({ name, rawJson }: { name: string; ra
                 ))}
               </tbody>
             </table>
+            {pvcsNav}
           </div>
         </InfoSection>
       )}

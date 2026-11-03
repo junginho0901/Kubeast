@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { InfoSection, InfoRow, KeyValueTags, Th, Tx } from '../DetailCommon'
+import { EventsTable, InfoSection, InfoRow, KeyValueTags, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
 
@@ -12,12 +12,21 @@ interface Props {
 
 export default function IngressClassDetail({ name, rawJson }: Props) {
   const { open: openDetail } = useResourceDetail()
+  // every Ingress of the class (the server cut at 50 before), paged here
   const { data: usedByIngresses } = useQuery({
     queryKey: ['ingressclass-used-by', name],
     queryFn: () => api.listIngressesByClass(name),
     enabled: !!name,
     staleTime: 10_000,
   })
+  // the events kubectl describe lists about the class
+  const { data: describe } = useQuery({
+    queryKey: ['ingressclass-describe', name],
+    queryFn: () => api.describeIngressClass(name),
+    enabled: !!name,
+    retry: false,
+  })
+  const events = Array.isArray(describe?.events) ? describe.events : []
   const usedList = Array.isArray(usedByIngresses) ? usedByIngresses : []
   const { items: pagedUsedList, nav: usedListNav } = usePagination(usedList, 10)
 
@@ -96,6 +105,7 @@ export default function IngressClassDetail({ name, rawJson }: Props) {
 
       {Object.keys(labels).length > 0 && <InfoSection title="Labels"><KeyValueTags data={labels} /></InfoSection>}
       {Object.keys(annotations).length > 0 && <InfoSection title="Annotations"><KeyValueTags data={annotations} /></InfoSection>}
+      {events.length > 0 && <InfoSection title="Events"><EventsTable events={events} /></InfoSection>}
     </>
   )
 }

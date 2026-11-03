@@ -26,6 +26,7 @@ interface PVCBoundPVSummary {
 interface PVCUsedByPod {
   name?: string | null
   namespace?: string | null
+  status?: string | null
   phase?: string | null
   node_name?: string | null
   ready?: string | null
@@ -213,7 +214,7 @@ export default function PVCDetail({ name, namespace, rawJson }: { name: string; 
                       <span className="block truncate font-mono" title={String(pod.name ?? '-')}>{String(pod.name ?? '-')}</span>
                     </td>
                     <td className="py-2 pr-2">
-                      <StatusBadge status={String(pod.phase ?? '-')} />
+                      <StatusBadge status={String(pod.status ?? pod.phase ?? '-')} />
                     </td>
                     <td className="py-2 pr-2">{pod.ready || '-'}</td>
                     <td className="py-2 pr-2">{String(pod.restart_count ?? 0)}</td>

@@ -39,35 +39,33 @@ func (s *Service) DescribePV(ctx context.Context, name string) (map[string]inter
 		return nil, fmt.Errorf("get pv %s: %w", name, err)
 	}
 
-	// Fetch bound PVC, pods, and events in parallel
+	// The bound claim and then its pods, beside the events
 	var boundPVC *corev1.PersistentVolumeClaim
 	var pods []corev1.Pod
 	var events *corev1.EventList
 	var pvcErr, podsErr, eventsErr error
 
 	var wg sync.WaitGroup
-	wg.Add(3)
+	var users pvcUsers
+	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		if pv.Spec.ClaimRef != nil && pv.Spec.ClaimRef.Name != "" {
-			boundPVC, pvcErr = s.clientsetCtx(ctx).CoreV1().PersistentVolumeClaims(pv.Spec.ClaimRef.Namespace).Get(ctx, pv.Spec.ClaimRef.Name, metav1.GetOptions{})
+		if pv.Spec.ClaimRef == nil || pv.Spec.ClaimRef.Name == "" {
+			return
 		}
-	}()
-	go func() {
-		defer wg.Done()
-		if pv.Spec.ClaimRef != nil && pv.Spec.ClaimRef.Name != "" {
-			// a page at a time, keeping the pods that mount the claim (the whole namespace in one list took
-			// k8s-service past 512 Mi)
-			claim := pv.Spec.ClaimRef.Name
-			podsErr = eachPod(ctx, s.clientsetCtx(ctx).CoreV1(), pv.Spec.ClaimRef.Namespace, metav1.ListOptions{}, func(p *corev1.Pod) {
-				for _, vol := range p.Spec.Volumes {
-					if vol.PersistentVolumeClaim != nil && vol.PersistentVolumeClaim.ClaimName == claim {
-						pods = append(pods, *p.DeepCopy())
-						return
-					}
-				}
-			})
+		// the claim first: its users are the PVC drawer's (kubectl's getPodsForPVC), its owner pod among them
+		boundPVC, pvcErr = s.clientsetCtx(ctx).CoreV1().PersistentVolumeClaims(pv.Spec.ClaimRef.Namespace).Get(ctx, pv.Spec.ClaimRef.Name, metav1.GetOptions{})
+		var claim *corev1.PersistentVolumeClaim
+		if pvcErr == nil {
+			claim = boundPVC
 		}
+		users = newPVCUsers(pv.Spec.ClaimRef.Name, claim)
+		// a page at a time (the whole namespace in one list took k8s-service past 512 Mi)
+		podsErr = eachPod(ctx, s.clientsetCtx(ctx).CoreV1(), pv.Spec.ClaimRef.Namespace, metav1.ListOptions{}, func(p *corev1.Pod) {
+			if users.keeps(p) {
+				pods = append(pods, *p.DeepCopy())
+			}
+		})
 	}()
 	go func() {
 		defer wg.Done()
@@ -85,6 +83,11 @@ func (s *Service) DescribePV(ctx context.Context, name string) (map[string]inter
 	result["finalizers"] = pv.Finalizers
 	result["labels"] = pv.Labels
 	result["annotations"] = pv.Annotations
+
+	// the CSI volume's attributes, which the list's row leaves out: the drawer shows the same opened from the list
+	if pv.Spec.CSI != nil && len(pv.Spec.CSI.VolumeAttributes) > 0 {
+		result["volume_attributes"] = pv.Spec.CSI.VolumeAttributes
+	}
 
 	// Node affinity
 	if pv.Spec.NodeAffinity != nil {
@@ -137,8 +140,7 @@ func (s *Service) DescribePV(ctx context.Context, name string) (map[string]inter
 
 	// Used by pods (pods using the PVC bound to this PV)
 	if podsErr == nil && pv.Spec.ClaimRef != nil && pv.Spec.ClaimRef.Name != "" {
-		usedByPods := findPodsUsingPVC(pods, pv.Spec.ClaimRef.Name)
-		result["used_by_pods"] = usedByPods
+		result["used_by_pods"] = findPodsUsingPVC(pods, users)
 	}
 
 	// Conditions

@@ -1,6 +1,7 @@
 import { InfoSection, InfoRow } from '../DetailCommon'
 import { ResourceLink } from '../ResourceLink'
 import { boolText } from './workloadInfoFormatters'
+import { replicaSetOwnerRow } from '../netstoreDetail'
 
 interface Props {
   namespace?: string
@@ -87,7 +88,7 @@ export default function WorkloadStrategySection({
             )}
             {showReplicaSetSettings && (
               <>
-                {describe?.owner && <InfoRow label="Owner" value={String(describe.owner)} />}
+                {replicaSetOwnerRow(describe) && <InfoRow label="Owner" value={replicaSetOwnerRow(describe)!} />}
                 {describe?.revision && <InfoRow label="Revision" value={String(describe.revision)} />}
                 {describe?.min_ready_seconds != null && <InfoRow label="Min Ready Seconds" value={String(describe.min_ready_seconds)} />}
                 {describe?.fully_labeled_replicas != null && <InfoRow label="Fully Labeled Replicas" value={String(describe.fully_labeled_replicas)} />}

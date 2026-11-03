@@ -4,6 +4,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
+import { volumeAttachmentState } from '../netstoreDetail'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface VolumeAttachmentDescribeResponse {
@@ -59,13 +60,19 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
   const pvSummary = describe?.pv_summary ?? null
   const createdAt = describe?.created_at ?? (meta.creationTimestamp as string | undefined)
   const attached = describe?.attached ?? (status.attached as boolean | null | undefined) ?? null
-  const attachedStatus = attached === true ? 'Attached' : attached === false ? 'Detached' : 'Unknown'
-  const nodeName = String(describe?.node_name ?? spec.nodeName ?? '-')
-  const attacher = String(describe?.attacher ?? spec.attacher ?? '-')
-  const pvName = String(describe?.persistent_volume_name ?? source.persistentVolumeName ?? '-')
+  const nodeName = String(describe?.node_name || spec.nodeName || '-')
+  const attacher = String(describe?.attacher || spec.attacher || '-')
+  // an inline volume (spec.source.inlineVolumeSpec) names no PersistentVolume: "-"
+  const pvName = String(describe?.persistent_volume_name || source.persistentVolumeName || '-')
 
   const rawAttachError = (status.attachError ?? status.attach_error) as Record<string, unknown> | undefined
   const rawDetachError = (status.detachError ?? status.detach_error) as Record<string, unknown> | undefined
+  // Status as the list's column says it (an attach or detach error first), and kubectl's ATTACHED beside it
+  const state = volumeAttachmentState({
+    attached,
+    attach_error: describe ? describe.attach_error : (rawAttachError as VolumeAttachmentDescribeResponse['attach_error']),
+    detach_error: describe ? describe.detach_error : (rawDetachError as VolumeAttachmentDescribeResponse['detach_error']),
+  })
   const attachErrorMessage = String(describe?.attach_error?.message ?? rawAttachError?.message ?? '')
   const attachErrorTime = describe?.attach_error?.time ?? (rawAttachError?.time as string | undefined) ?? null
   const detachErrorMessage = String(describe?.detach_error?.message ?? rawDetachError?.message ?? '')
@@ -99,7 +106,8 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
       <InfoSection title="VolumeAttachment Info">
         <div className="space-y-2">
           <InfoRow label="Name" value={name} />
-          <InfoRow label="Status" value={<StatusBadge status={attachedStatus} />} />
+          <InfoRow label="Status" value={<StatusBadge status={state.status} />} />
+          <InfoRow label="Attached" value={state.attached} />
           <InfoRow label="Attacher" value={attacher} />
           <InfoRow
             label="Node"

@@ -6,6 +6,7 @@ import { buildResourceLink } from '@/utils/resourceLink'
 import { api } from '@/services/api'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { usePermission } from '@/hooks/usePermission'
+import { replicaSetOwnerRow } from '../netstoreDetail'
 
 interface UseWorkloadDataParams {
   name: string
@@ -387,7 +388,7 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
 
   const showReplicaSetSettings =
     isReplicaSet && (
-      describe?.owner != null ||
+      replicaSetOwnerRow(describe) != null ||
       describe?.revision != null ||
       describe?.min_ready_seconds != null ||
       describe?.fully_labeled_replicas != null

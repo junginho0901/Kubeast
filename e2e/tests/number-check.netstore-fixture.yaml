@@ -1,0 +1,167 @@
+# e2e-netstore and cluster-scoped nsd-* objects for number-check-netstore-drawers.spec.ts on `self`, made and removed
+# by that spec (it adds the 12 Ingresses, 10 more volumes, the ReplicaSet with a ConfigMap owner, the attachments and
+# the events). busybox:1.37 is already on the kind node. Nothing here acts on anything: the IngressClasses and the
+# StorageClass name controllers nobody runs, the volumes are of a class no pod asks for, the attachments name an
+# attacher nobody runs; nsd-claim and the ephemeral volume are kind's local-path volumes.
+apiVersion: v1
+kind: Namespace
+metadata: { name: e2e-netstore }
+---
+# Endpoints the controller writes: two ready pods and one never ready behind one Service
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: nsd-web, namespace: e2e-netstore }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: nsd-web } }
+  template:
+    metadata: { labels: { app: nsd-web, tier: nsd } }
+    spec:
+      terminationGracePeriodSeconds: 0
+      containers: [{ name: app, image: busybox:1.37, imagePullPolicy: IfNotPresent, command: [sleep, "86400"] }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: nsd-web-down, namespace: e2e-netstore }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: nsd-web-down } }
+  template:
+    metadata: { labels: { app: nsd-web-down, tier: nsd } }
+    spec:
+      terminationGracePeriodSeconds: 0
+      containers:
+        - name: app
+          image: busybox:1.37
+          imagePullPolicy: IfNotPresent
+          command: [sleep, "86400"]
+          readinessProbe: { exec: { command: ["false"] }, periodSeconds: 5 }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: nsd-web, namespace: e2e-netstore }
+spec: { selector: { tier: nsd }, ports: [{ name: http, port: 80, targetPort: 8080 }, { name: metrics, port: 9090 }] }
+---
+# Endpoints written by hand, no Service of its name: two subsets, a port without a name, not-ready addresses
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: nsd-hand
+  namespace: e2e-netstore
+  labels: { team: numbers }
+  annotations: { numbers.kubeast.io/note: by-hand }
+subsets:
+  - addresses: [{ ip: 10.255.1.1, nodeName: kubeast-control-plane, targetRef: { kind: Pod, name: nsd-ghost, namespace: e2e-netstore } }]
+    notReadyAddresses: [{ ip: 10.255.1.2 }, { ip: 10.255.1.3 }]
+    ports: [{ port: 7070, protocol: TCP }]
+  - addresses: [{ ip: 10.255.2.1 }]
+    ports: [{ name: dns, port: 53, protocol: UDP }, { name: grpc, port: 7070, protocol: TCP }]
+---
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata: { name: nsd-ic, labels: { numbers.kubeast.io/check: netstore } }
+spec:
+  controller: numbers.kubeast.io/ingress
+  parameters: { apiGroup: numbers.kubeast.io, kind: IngressParameters, name: nsd-params, scope: Namespace, namespace: e2e-netstore }
+---
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata: { name: nsd-ic-unused }
+spec: { controller: numbers.kubeast.io/other }
+---
+# two terms of allowed topologies, mount options; WaitForFirstConsumer so nsd-sc-claim stays Pending
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata: { name: nsd-sc-topo }
+provisioner: numbers.kubeast.io/none
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+parameters: { tier: one }
+mountOptions: [ro, noatime]
+allowedTopologies:
+  - matchLabelExpressions:
+      - { key: topology.kubernetes.io/zone, values: [zone-a, zone-b] }
+      - { key: kubernetes.io/hostname, values: [kubeast-control-plane] }
+  - matchLabelExpressions:
+      - { key: topology.kubernetes.io/region, values: [region-1] }
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata: { name: nsd-pv-nfs }
+spec:
+  capacity: { storage: 1Mi }
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: nsd-sc-topo
+  nfs: { server: numbers.invalid, path: /none }
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata: { name: nsd-pv-csi }
+spec:
+  capacity: { storage: 2Mi }
+  accessModes: [ReadWriteOnce]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: nsd-sc-topo
+  csi: { driver: numbers.kubeast.io, volumeHandle: nsd-handle, volumeAttributes: { tier: one, zone: two } }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: nsd-sc-claim, namespace: e2e-netstore }
+spec: { storageClassName: nsd-sc-topo, accessModes: [ReadWriteOnce], resources: { requests: { storage: 1Gi } } }
+---
+# one claim, two pods: one with a sidecar (READY counts it), one whose init container never ends (STATUS Init:0/1)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: nsd-claim, namespace: e2e-netstore }
+spec: { storageClassName: standard, accessModes: [ReadWriteOnce], resources: { requests: { storage: 16Mi } } }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: nsd-user, namespace: e2e-netstore }
+spec:
+  terminationGracePeriodSeconds: 0
+  volumes: [{ name: data, persistentVolumeClaim: { claimName: nsd-claim } }]
+  initContainers:
+    - { name: side, image: busybox:1.37, imagePullPolicy: IfNotPresent, restartPolicy: Always, command: [sleep, "86400"] }
+  containers:
+    - { name: app, image: busybox:1.37, imagePullPolicy: IfNotPresent, command: [sleep, "86400"], volumeMounts: [{ name: data, mountPath: /data }] }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: nsd-wait, namespace: e2e-netstore }
+spec:
+  terminationGracePeriodSeconds: 0
+  volumes: [{ name: data, persistentVolumeClaim: { claimName: nsd-claim } }]
+  initContainers:
+    - { name: wait, image: busybox:1.37, imagePullPolicy: IfNotPresent, command: [sleep, "86400"] }
+  containers:
+    - { name: app, image: busybox:1.37, imagePullPolicy: IfNotPresent, command: [sleep, "86400"] }
+---
+# a generic ephemeral volume: its claim nsd-eph-scratch names this pod as its owner and no pod mounts it by name
+apiVersion: v1
+kind: Pod
+metadata: { name: nsd-eph, namespace: e2e-netstore }
+spec:
+  terminationGracePeriodSeconds: 0
+  volumes:
+    - name: scratch
+      ephemeral:
+        volumeClaimTemplate:
+          spec: { storageClassName: standard, accessModes: [ReadWriteOnce], resources: { requests: { storage: 8Mi } } }
+  containers:
+    - { name: app, image: busybox:1.37, imagePullPolicy: IfNotPresent, command: [sleep, "86400"], volumeMounts: [{ name: scratch, mountPath: /scratch }] }
+---
+# an attachment of a pod's inline CSI volume: it names no PersistentVolume
+apiVersion: storage.k8s.io/v1
+kind: VolumeAttachment
+metadata: { name: nsd-va-inline }
+spec:
+  attacher: numbers.kubeast.io
+  nodeName: kubeast-control-plane
+  source:
+    inlineVolumeSpec:
+      accessModes: [ReadWriteOnce]
+      persistentVolumeReclaimPolicy: Retain
+      csi: { driver: numbers.kubeast.io, volumeHandle: nsd-inline }

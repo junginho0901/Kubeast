@@ -42,6 +42,7 @@ interface PVBoundClaimSummary {
 interface PVUsedByPod {
   name?: string | null
   namespace?: string | null
+  status?: string | null
   phase?: string | null
   node_name?: string | null
   ready?: string | null
@@ -64,6 +65,7 @@ interface PVDescribeResponse {
   driver?: string | null
   volume_handle?: string | null
   node_affinity?: string | null
+  volume_attributes?: Record<string, string> | null
   labels?: Record<string, string>
   annotations?: Record<string, string>
   finalizers?: string[]
@@ -91,9 +93,9 @@ export default function PVDetail({ name, rawJson }: { name: string; rawJson?: Re
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const spec = (rawJson?.spec ?? {}) as Record<string, unknown>
   const status = (rawJson?.status ?? {}) as Record<string, unknown>
-  // CSI volumeAttributes는 spec.csi.volumeAttributes 에서 직접 읽음 (describe 는 평탄화하지 않음)
+  // the CSI volume's attributes from describe (the list's row has none), the object's until it comes
   const csiSpec = (spec.csi as Record<string, unknown> | undefined) ?? undefined
-  const csiVolumeAttributes = (csiSpec?.volumeAttributes as Record<string, string> | undefined) ?? undefined
+  const csiVolumeAttributes = describe ? (describe.volume_attributes ?? undefined) : ((csiSpec?.volumeAttributes as Record<string, string> | undefined) ?? undefined)
   const rawClaimRef = (spec.claimRef as Record<string, unknown> | undefined) ?? undefined
   const claimRef = (describe?.claim_ref ?? {
     namespace: rawClaimRef?.namespace as string | undefined,
@@ -148,7 +150,7 @@ export default function PVDetail({ name, rawJson }: { name: string; rawJson?: Re
             ) : claimText}
           />
           <InfoRow label="Source" value={sourceText} />
-          <InfoRow label="Volume Handle" value={volumeHandle !== '-' ? <span className="font-mono break-all text-[11px]">{volumeHandle}</span> : '-'} />
+          <InfoRow label="Volume Handle" value={volumeHandle && volumeHandle !== '-' ? <span className="font-mono break-all text-[11px]">{volumeHandle}</span> : '-'} />
           <InfoRow
             label="Node Affinity"
             value={nodeAffinityLines(nodeAffinity)?.map((line) => <div key={line} className="font-mono text-[11px]">{line}</div>) ?? nodeAffinity}
@@ -236,7 +238,7 @@ export default function PVDetail({ name, rawJson }: { name: string; rawJson?: Re
                       <span className="block truncate font-mono" title={String(pod.name ?? '-')}>{String(pod.name ?? '-')}</span>
                     </td>
                     <td className="py-2 pr-2">
-                      <StatusBadge status={String(pod.phase ?? '-')} />
+                      <StatusBadge status={String(pod.status ?? pod.phase ?? '-')} />
                     </td>
                     <td className="py-2 pr-2">{pod.ready || '-'}</td>
                     <td className="py-2 pr-2">{String(pod.restart_count ?? 0)}</td>
