@@ -88,13 +88,22 @@ test.describe('ai_service refactor regression', () => {
     await stop.click()
     await expect(input).toBeEnabled({ timeout: 5_000 })
     // the SSE really stopped: the answer does not grow any more (stopped before the first word, there is no answer
-    // bubble at all)
+    // bubble at all). The answer is measured without the action row under it, which opens after the stop and adds
+    // "Stopped · usage not available"
     const assistants = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)')
+    const answerLength = () => assistants.last().evaluate((el) => {
+      const copy = el.cloneNode(true) as HTMLElement
+      copy.querySelectorAll('[data-testid="message-actions-row"]').forEach((row) => row.remove())
+      return (copy.textContent ?? '').length
+    })
     const before = await assistants.count()
-    const stopped = before ? (await assistants.last().innerText()).length : 0
+    const stopped = before ? await answerLength() : 0
     await page.waitForTimeout(3000)
     expect(await assistants.count()).toBe(before)
-    if (before) expect((await assistants.last().innerText()).length).toBe(stopped)
+    if (before) {
+      expect(await answerLength(), 'the answer stopped growing').toBe(stopped)
+      await expect(assistants.last().getByTestId('message-actions-row'), 'the row under it says it stopped').toContainText(/Stopped|멈춤/, { timeout: 10_000 })
+    }
   })
 
   test('Copy 버튼 — intent.py 의 stripToolDetails 가 클립보드에서 tool 메타 제거', async ({ page }) => {
