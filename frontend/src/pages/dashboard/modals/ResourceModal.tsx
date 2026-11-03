@@ -218,7 +218,7 @@ export function ResourceModal({
                           <div className="flex items-center gap-2">
                             <span className={`badge ${pod.phase === 'Running' ? 'badge-success' : 'badge-warning'
                               }`}>
-                              {pod.phase}
+                              {pod.phase || '-'}
                             </span>
                             {pod.node_name && (
                               <span className="text-xs text-slate-400">{pod.node_name}</span>

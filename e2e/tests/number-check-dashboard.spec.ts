@@ -126,3 +126,152 @@ test.describe('Number check — dashboard counts as the user may list them', () 
     }
   })
 })
+
+// The dashboard's smaller numbers, each held to what kubectl lists: the Unknown bar and the window it opens (a pod
+// with no phase yet is counted there), the Storage window's status badges (one per status, however many) and the
+// Optimization totals (a row without usage kept at its requests, and said so).
+test.describe('Number check — the Unknown bar, the storage badges and the optimization totals', () => {
+  const NS = `e2e-dash-small-${stamp}`
+  const PVS = ['available', 'released', 'failed', 'pending'].map((s) => `${NS}-${s}`)
+  let kcB = ''
+  const kubectlB = (args: string) => {
+    if (!kcB) {
+      kcB = path.join(path.dirname(kcPath), 'kubeconfig-b')
+      fs.writeFileSync(kcB, execSync('kind get kubeconfig --name kubeast-b', { encoding: 'utf8' }), { mode: 0o600 })
+    }
+    return execSync(`kubectl --kubeconfig ${kcB} ${args}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
+  }
+  const ensureNamespace = (k: (args: string) => string) => {
+    if (!k(`get namespace ${NS} --ignore-not-found -o name`)) k(`create namespace ${NS}`)
+  }
+  const apply = (k: (args: string) => string, yaml: string) => {
+    const file = path.join(path.dirname(kcPath), `apply-${Date.now()}.yaml`)
+    fs.writeFileSync(file, yaml)
+    k(`apply -f ${file}`)
+  }
+  // no scheduler takes these pods and no kubelet runs them, so a status written by hand stays
+  const runNowhere = (k: (args: string) => string, name: string, cpu: string, mem: string) =>
+    k(`run ${name} -n ${NS} --image=registry.k8s.io/pause:3.10 --overrides='${JSON.stringify({ spec: { schedulerName: 'e2e-none', containers: [{ name, image: 'registry.k8s.io/pause:3.10', resources: { requests: { cpu, memory: mem } } }] } })}'`)
+  const countBy = (values: string[]) => values.reduce<Record<string, number>>((m, v) => ({ ...m, [v]: (m[v] ?? 0) + 1 }), {})
+  // the page's formatMillicores and formatBytes
+  const fmtM = (m: number) => (m < 1000 ? `${m}m` : `${(m / 1000).toFixed(m % 1000 === 0 ? 0 : 2).replace(/0+$/, '').replace(/\.$/, '')}`)
+  const fmtB = (b: number) => {
+    const units = ['B', 'Ki', 'Mi', 'Gi', 'Ti']
+    let v = b
+    let i = 0
+    while (v >= 1024 && i < units.length - 1) { v /= 1024; i += 1 }
+    return `${i === 0 || v >= 100 ? v.toFixed(0) : v.toFixed(1).replace(/\.0$/, '')}${units[i]}`
+  }
+
+  test.afterAll(() => {
+    kubectl(`delete namespace ${NS} --ignore-not-found --wait=false`)
+    kubectl(`delete pv ${PVS.join(' ')} --ignore-not-found --wait=false`)
+    if (kcB) kubectlB(`delete namespace ${NS} --ignore-not-found --wait=false`)
+  })
+
+  test('the Unknown bar counts the pods with no phase yet, and its window lists those pods', async ({ page }) => {
+    test.setTimeout(120_000)
+    ensureNamespace(kubectl)
+    runNowhere(kubectl, 'e2e-no-phase', '10m', '8Mi')
+    kubectl(`patch pod e2e-no-phase -n ${NS} --subresource=status --type=json -p '[{"op":"remove","path":"/status/phase"}]'`)
+    const want = kubectl(`get pods -A -o jsonpath='{range .items[*]}{.metadata.namespace}/{.metadata.name}{" "}{.status.phase}{"\\n"}{end}'`)
+      .split('\n').filter(Boolean).map((l) => l.split(' ')).filter(([, phase]) => !phase || phase === 'Unknown').map(([name]) => name).sort()
+    expect(want, 'kubectl lists the pod with no phase').toContain(`${NS}/e2e-no-phase`)
+
+    const podCard = page.locator('.card').filter({ has: page.getByRole('heading', { name: /^Pod (status|상태)$/ }) })
+    await expect(async () => {
+      await page.goto(`${DASHBOARD.path}?cluster=${CLUSTER}`)
+      await expect(podCard.locator('svg title').filter({ hasText: /^Unknown:/ })).toHaveText(`Unknown: ${want.length}`, { timeout: 15_000 })
+    }).toPass({ timeout: 60_000 })
+    await podCard.locator('svg g').filter({ has: page.locator('title', { hasText: /^Unknown:/ }) }).first().click()
+    const modal = page.locator('div.fixed.inset-0').filter({ has: page.getByTestId('resource-modal-total') })
+    await expect(modal.getByTestId('resource-modal-total')).not.toHaveText(/Loading|불러오는/)
+    const listed = async () => (await modal.locator('h3').evaluateAll((els) => els.map((e) => `${e.nextElementSibling?.textContent}/${e.textContent}`))).sort()
+    await expect.poll(listed, { message: 'the window lists the pods the bar counts' }).toEqual(want)
+  })
+
+  test('the Storage window has a badge for every PV and PVC status, each with its count', async ({ page }) => {
+    test.setTimeout(150_000)
+    ensureNamespace(kubectl)
+    const pv = (name: string, storageClass: string, extra: string) => `apiVersion: v1
+kind: PersistentVolume
+metadata: {name: ${name}}
+spec: {storageClassName: ${storageClass}, capacity: {storage: 1Mi}, accessModes: [ReadWriteOnce], persistentVolumeReclaimPolicy: Retain, hostPath: {path: /e2e-none}${extra}}
+`
+    // a claim no volume matches, a volume that is free, and two whose claim is gone (Retain keeps them Released)
+    apply(kubectl, [
+      `apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: e2e-claim, namespace: ${NS}}
+spec: {storageClassName: ${NS}-claim, accessModes: [ReadWriteOnce], resources: {requests: {storage: 1Mi}}}
+`,
+      pv(PVS[0], `${NS}-pv`, ''),
+      pv(PVS[1], `${NS}-pv`, `, claimRef: {namespace: ${NS}, name: e2e-gone, uid: 00000000-0000-0000-0000-000000000001}`),
+      pv(PVS[2], `${NS}-pv`, `, claimRef: {namespace: ${NS}, name: e2e-gone, uid: 00000000-0000-0000-0000-000000000002}`),
+    ].join('---\n'))
+    const phase = (name: string) => kubectl(`get pv ${name} -o jsonpath='{.status.phase}'`)
+    await expect.poll(() => phase(PVS[2]), { timeout: 60_000 }).toBe('Released')
+    // the controller leaves Failed alone under Retain, and a volume promised to a claim of another volume mode as it is
+    kubectl(`patch pv ${PVS[2]} --subresource=status --type=merge -p '{"status":{"phase":"Failed"}}'`)
+    const uid = kubectl(`get pvc e2e-claim -n ${NS} -o jsonpath='{.metadata.uid}'`)
+    apply(kubectl, pv(PVS[3], `${NS}-claim`, `, volumeMode: Block, claimRef: {namespace: ${NS}, name: e2e-claim, uid: ${uid}}`))
+    kubectl(`patch pv ${PVS[3]} --subresource=status --type=merge -p '{"status":{"phase":"Pending"}}'`)
+    await expect.poll(() => PVS.map(phase), { timeout: 60_000 }).toEqual(['Available', 'Released', 'Failed', 'Pending'])
+
+    const phases = (args: string) => countBy(kubectl(`get ${args} -o jsonpath='{range .items[*]}{.status.phase}{"\\n"}{end}'`).split('\n').filter(Boolean))
+    const badges = (page_: typeof page, kind: 'PV' | 'PVC') =>
+      page_.locator(`span.badge[title="${kind} Status"], span.badge[title="${kind} 상태"]`).allTextContents()
+        .then((texts) => Object.fromEntries(texts.map((t) => t.trim().split(/\s+/)).map(([, status, n]) => [status, Number(n)])))
+    await expect(async () => {
+      const wantPV = phases('pv')
+      const wantPVC = phases('pvc -A')
+      expect(Object.keys(wantPV), 'kubectl lists five PV statuses').toHaveLength(5)
+      await page.goto(`${DASHBOARD.path}?cluster=${CLUSTER}`)
+      await page.locator('button').filter({ hasText: /Storage analysis|스토리지 분석/ }).first().click()
+      await expect(page.locator('h2').filter({ hasText: /Storage analysis|스토리지 분석/ })).toBeVisible()
+      await expect.poll(() => badges(page, 'PV'), { timeout: 15_000, message: 'a badge per PV status' }).toEqual(wantPV)
+      expect(await badges(page, 'PVC'), 'a badge per PVC status').toEqual(wantPVC)
+    }).toPass({ timeout: 60_000 })
+  })
+
+  test('the Optimization totals keep a row without usage at its requests and say how many there are', async ({ page, request }) => {
+    test.setTimeout(300_000)
+    try { kubectlB('version') } catch { test.skip(true, 'kind cluster kubeast-b not found') }
+    ensureNamespace(kubectlB)
+    // one pod the cluster measures, so the namespace has usage, and one that runs nowhere, which never has any
+    kubectlB(`run e2e-measured -n ${NS} --image=registry.k8s.io/pause:3.10 --overrides='${JSON.stringify({ spec: { containers: [{ name: 'e2e-measured', image: 'registry.k8s.io/pause:3.10', resources: { requests: { cpu: '50m', memory: '32Mi' } } }] } })}'`)
+    runNowhere(kubectlB, 'e2e-unmeasured', '70m', '40Mi')
+    kubectlB(`patch pod e2e-unmeasured -n ${NS} --subresource=status --type=merge -p '{"status":{"phase":"Running"}}'`)
+    kubectlB(`wait --for=condition=Ready pod/e2e-measured -n ${NS} --timeout=120s`)
+    expect(kubectlB(`get pods -n ${NS} -o jsonpath='{.items[*].status.phase}'`).split(' ').filter((p) => p === 'Running'), 'kubectl lists both Running').toHaveLength(2)
+
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const table = async () => (await request.get(`/api/v1/cluster/optimization?cluster=default&namespace=${NS}`, { headers: bearer(admin) })).json()
+    // Prometheus scrapes every 30 s: the measured pod has usage within a few minutes
+    await expect.poll(async () => {
+      const t = await table()
+      return t.rows?.find((r: { name: string }) => r.name === 'e2e-measured')?.cpu_usage_m != null && t.source !== 'none'
+    }, { timeout: 240_000, intervals: [10_000] }).toBe(true)
+
+    await expect(async () => {
+      const t = await table()
+      const measured = t.rows.find((r: { name: string }) => r.name === 'e2e-measured')
+      const unmeasured = t.rows.find((r: { name: string }) => r.name === 'e2e-unmeasured')
+      expect(unmeasured.cpu_recommend_m ?? null, 'no usage, no recommendation').toBeNull()
+      const want = {
+        pods: 2, cpu_request_m: 50 + 70, mem_request_bytes: (32 + 40) << 20, unmeasured_rows: 1,
+        cpu_recommend_m: measured.cpu_recommend_m + 70, mem_recommend_bytes: measured.mem_recommend_bytes + (40 << 20),
+      }
+      expect(Object.fromEntries(Object.keys(want).map((k) => [k, t.totals[k]])), 'the totals, the unmeasured row at its requests').toEqual(want)
+
+      await page.goto('/?cluster=default')
+      await page.locator('button').filter({ hasText: /Optimization suggestions|최적화 제안/ }).first().click()
+      await page.locator('button[title="Select namespace"], button[title="Namespace 선택"]').first().click()
+      await page.getByRole('button', { name: NS, exact: true }).click()
+      const totals = page.getByTestId('optimization-totals')
+      await expect(totals).toContainText(`${fmtM(want.cpu_request_m)}`, { timeout: 20_000 })
+      await expect(totals, 'the recommended totals count the unmeasured row at its requests').toContainText(`${fmtM(want.cpu_recommend_m)} · ${fmtB(want.mem_recommend_bytes)}`)
+      await expect(totals, 'and say so').toContainText(/\(1 row without usage kept at its requests\)|\(사용량 없는 1행은 요청값 그대로\)/)
+    }).toPass({ timeout: 90_000 })
+  })
+})

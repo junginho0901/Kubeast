@@ -52,13 +52,16 @@ type OptimizationResult struct {
 
 // OptimizationTotals sums requests and recommendations over all pods of the rows.
 type OptimizationTotals struct {
-	Pods              int      `json:"pods"`
-	CPURequestM       int64    `json:"cpu_request_m"`
-	CPURecommendM     int64    `json:"cpu_recommend_m"`
-	MemRequestBytes   int64    `json:"mem_request_bytes"`
-	MemRecommendBytes int64    `json:"mem_recommend_bytes"`
-	CostMonthUSD      *float64 `json:"cost_month_usd,omitempty"`
-	SavingMonthUSD    *float64 `json:"saving_month_usd,omitempty"`
+	Pods              int   `json:"pods"`
+	CPURequestM       int64 `json:"cpu_request_m"`
+	CPURecommendM     int64 `json:"cpu_recommend_m"`
+	MemRequestBytes   int64 `json:"mem_request_bytes"`
+	MemRecommendBytes int64 `json:"mem_recommend_bytes"`
+	// Unmeasured is the rows without usage: their recommendation totals count them at their requests (nothing to
+	// change on no data), so the two totals compare the same pods.
+	Unmeasured     int      `json:"unmeasured_rows"`
+	CostMonthUSD   *float64 `json:"cost_month_usd,omitempty"`
+	SavingMonthUSD *float64 `json:"saving_month_usd,omitempty"`
 }
 
 const (
@@ -117,21 +120,35 @@ func (s *Service) CollectOptimization(ctx context.Context, namespace string, win
 		return nil, fmt.Errorf("list pods: %w", err)
 	}
 	rows := acc.rows()
-	res := &OptimizationResult{Namespace: namespace, WindowHours: windowHours, Source: source, GeneratedAt: time.Now().UTC().Format(time.RFC3339), Rows: rows}
-	for _, r := range rows {
-		n := int64(r.Pods)
-		res.Totals.Pods += r.Pods
-		res.Totals.CPURequestM += r.CPURequestM * n
-		res.Totals.MemRequestBytes += r.MemRequestBytes * n
-		if r.CPURecommendM != nil {
-			res.Totals.CPURecommendM += *r.CPURecommendM * n
-		}
-		if r.MemRecommendBytes != nil {
-			res.Totals.MemRecommendBytes += *r.MemRecommendBytes * n
-		}
-	}
+	res := &OptimizationResult{Namespace: namespace, WindowHours: windowHours, Source: source, GeneratedAt: time.Now().UTC().Format(time.RFC3339), Rows: rows, Totals: optimizationTotals(rows)}
 	applyCostPricing(res, s.costUnitPricesForCtx(ctx, windowHours))
 	return res, nil
+}
+
+// optimizationTotals adds the rows up: the requests of every pod, and the recommendations of the same pods, a row
+// without usage at its requests (nothing to change on no data) and counted in Unmeasured.
+func optimizationTotals(rows []OptimizationRow) OptimizationTotals {
+	var t OptimizationTotals
+	for _, r := range rows {
+		n := int64(r.Pods)
+		t.Pods += r.Pods
+		t.CPURequestM += r.CPURequestM * n
+		t.MemRequestBytes += r.MemRequestBytes * n
+		if r.CPURecommendM == nil || r.MemRecommendBytes == nil {
+			t.Unmeasured++
+		}
+		if r.CPURecommendM != nil {
+			t.CPURecommendM += *r.CPURecommendM * n
+		} else {
+			t.CPURecommendM += r.CPURequestM * n
+		}
+		if r.MemRecommendBytes != nil {
+			t.MemRecommendBytes += *r.MemRecommendBytes * n
+		} else {
+			t.MemRecommendBytes += r.MemRequestBytes * n
+		}
+	}
+	return t
 }
 
 // workloadOwner maps a pod to the workload it belongs to: ReplicaSets fold

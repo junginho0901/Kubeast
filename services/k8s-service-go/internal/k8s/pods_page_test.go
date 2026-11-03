@@ -751,3 +751,20 @@ func TestPodLimits_AsTheKubeletSizesTheCgroup(t *testing.T) {
 		}
 	}
 }
+
+// The dashboard's Unknown bar counts a pod with no phase yet as Unknown (overviewFor), so the list it opens
+// (phase=Unknown) has those pods too; the other phases are only their own.
+func TestBuildPodPage_UnknownPhaseHasThePodsWithoutAPhase(t *testing.T) {
+	now := time.Unix(1_700_001_000, 0)
+	rows := []*podRow{
+		row("a", "running", nil),
+		row("a", "lost", func(r *podRow) { r.phase = "Unknown"; r.status = "Unknown" }),
+		row("a", "new", func(r *podRow) { r.phase = ""; r.status = "ContainerCreating" }),
+	}
+	if got := names(buildPodPage(rows, PodPageQuery{Phase: "Unknown", Limit: 50}, now)); !reflect.DeepEqual(got, []string{"a/lost", "a/new"}) {
+		t.Errorf("phase=Unknown lists %v, want a/lost and a/new", got)
+	}
+	if got := names(buildPodPage(rows, PodPageQuery{Phase: "Running", Limit: 50}, now)); !reflect.DeepEqual(got, []string{"a/running"}) {
+		t.Errorf("phase=Running lists %v", got)
+	}
+}

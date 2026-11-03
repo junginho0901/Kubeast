@@ -414,6 +414,11 @@ export function OptimizationModal({
                   cpuRec: formatMillicores(table.totals.cpu_recommend_m),
                   memRec: formatBytes(table.totals.mem_recommend_bytes),
                 })}
+                {table.totals.unmeasured_rows > 0 && (
+                  <> {tr('dashboard.optimization.totalsUnmeasured', '({{count}} rows without usage kept at their requests)', {
+                    count: table.totals.unmeasured_rows,
+                  })}</>
+                )}
                 {priced && table.totals.cost_month_usd != null && (
                   <> {tr('dashboard.optimization.totalsCost', '→ requests cost {{cost}}/mo, the recommendation saves {{saving}}/mo', {
                     cost: formatMoney(table.totals.cost_month_usd),
