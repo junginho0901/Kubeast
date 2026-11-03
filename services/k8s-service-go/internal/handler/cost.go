@@ -27,7 +27,11 @@ func (h *Handler) GetCost(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, "window must be one of "+strings.Join(k8s.CostWindows(), ", ")+" and aggregate namespace or controller")
 		return
 	}
-	res, err := h.svc.CostAllocation(r.Context(), window, aggregate)
+	allocation := h.svc.CostAllocation
+	if r.URL.Query().Get("refresh") == "1" { // the page's Refresh: OpenCost again, not the last minute's answer
+		allocation = h.svc.CostAllocationNow
+	}
+	res, err := allocation(r.Context(), window, aggregate)
 	if errors.Is(err, k8s.ErrCostNotFound) {
 		response.Error(w, http.StatusNotFound, err.Error())
 		return

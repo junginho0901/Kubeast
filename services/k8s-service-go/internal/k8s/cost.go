@@ -256,6 +256,16 @@ func (s *Service) CostStatus(ctx context.Context) map[string]interface{} {
 // by workload (OpenCost aggregate namespace,controller), narrowed to the
 // caller's namespace scope. ErrCostNotFound when the cluster has no OpenCost.
 func (s *Service) CostAllocation(ctx context.Context, window, aggregate string) (*CostResult, error) {
+	return s.costAllocation(ctx, window, aggregate, false)
+}
+
+// CostAllocationNow is CostAllocation read from OpenCost again, not from the caller's last minute of answers (the
+// page's Refresh); the new answer is kept for the next reads.
+func (s *Service) CostAllocationNow(ctx context.Context, window, aggregate string) (*CostResult, error) {
+	return s.costAllocation(ctx, window, aggregate, true)
+}
+
+func (s *Service) costAllocation(ctx context.Context, window, aggregate string, fresh bool) (*CostResult, error) {
 	if !CostWindowAllowed(window) || !CostAggregateAllowed(aggregate) {
 		return nil, fmt.Errorf("window %q or aggregate %q not allowed", window, aggregate)
 	}
@@ -267,7 +277,7 @@ func (s *Service) CostAllocation(ctx context.Context, window, aggregate string) 
 	if info == nil {
 		return nil, ErrCostNotFound
 	}
-	entry, err := s.costAllocationCached(ctx, b.cost, *info, window, aggregate)
+	entry, err := s.costAllocationCached(ctx, b.cost, *info, window, aggregate, fresh)
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +317,7 @@ func (s *Service) costUnitPricesForCtx(ctx context.Context, windowHours int) *Co
 		return nil
 	}
 	window := costWindowForHours(windowHours)
-	entry, err := s.costAllocationCached(ctx, b.cost, *info, window, CostAggregateNamespace)
+	entry, err := s.costAllocationCached(ctx, b.cost, *info, window, CostAggregateNamespace, false)
 	if err != nil {
 		slog.Warn("OpenCost allocation for the optimization table failed", "err", err)
 		return nil
@@ -400,9 +410,9 @@ func costCacheIdentity(ctx context.Context, clusterID string) string {
 	return ""
 }
 
-func (s *Service) costAllocationCached(ctx context.Context, c *costCache, info costServiceInfo, window, aggregate string) (costAllocEntry, error) {
+func (s *Service) costAllocationCached(ctx context.Context, c *costCache, info costServiceInfo, window, aggregate string, fresh bool) (costAllocEntry, error) {
 	key := window + "|" + aggregate + "|as:" + costCacheIdentity(ctx, string(ctxClusterID(ctx)))
-	if c != nil {
+	if c != nil && !fresh {
 		c.mu.RLock()
 		e, ok := c.alloc[key]
 		c.mu.RUnlock()

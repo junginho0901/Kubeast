@@ -1821,7 +1821,12 @@
     "source": "OpenCost {{endpoint}} · {{currency}} · window {{start}} – {{end}}",
     "loadError": "Could not load the cost table",
     "matchCount": "{{count}} rows match.",
-    "matchCount_one": "{{count}} row matches."
+    "matchCount_one": "{{count}} row matches.",
+    "outsideCards": "The total also has {{parts}}.",
+    "part": {
+      "gpu": "GPU {{amount}}",
+      "lb": "load balancers {{amount}}"
+    }
   },
   "netflows": {
     "intro": "Connections the cluster's Hubble Relay saw to and from this {{kind}}. Reading them is recorded in the audit log.",

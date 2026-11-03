@@ -1819,7 +1819,12 @@
     "scoped": "부여된 Namespace만 표시하며 합계도 그 행만 더한 값입니다.",
     "source": "OpenCost {{endpoint}} · {{currency}} · 구간 {{start}} – {{end}}",
     "loadError": "비용 표를 불러오지 못했습니다",
-    "matchCount": "{{count}}개 행이 일치합니다."
+    "matchCount": "{{count}}개 행이 일치합니다.",
+    "outsideCards": "합계에는 {{parts}}도 들어 있습니다.",
+    "part": {
+      "gpu": "GPU {{amount}}",
+      "lb": "로드 밸런서 {{amount}}"
+    }
   },
   "netflows": {
     "intro": "클러스터의 Hubble Relay가 본 이 {{kind}}의 들어오고 나가는 연결입니다. 읽으면 감사 로그에 남습니다.",
