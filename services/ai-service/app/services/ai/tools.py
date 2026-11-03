@@ -232,7 +232,8 @@ K8S_READONLY_TOOLS: List[Dict] = [
             "description": (
                 "Kubeast's issue check for the cluster in one call: failing or pending pods (CrashLoopBackOff, ImagePullBackOff, OOMKilled, "
                 "unschedulable), workloads below their desired replicas, failed Jobs, unhealthy nodes (pressure, NotReady), unbound PVCs and the "
-                "Warning events of the last window — each with kind, namespace, name, severity (critical | warning | info), reason, message, count and last_seen, "
+                "Warning events of the last window — each with kind, namespace, name, severity (critical | warning | info), reason, message, last_seen and "
+                "its numbers, each its own: restarts (a pod's), failed (a Job's failed pods), events (how many times its newest Warning event happened), "
                 "plus counts per severity. Call it FIRST when the user asks what is wrong, whether something is failing, or for a health check, and only then "
                 "describe/logs on the objects it names. namespace narrows to one namespace, severity to one level, window_minutes changes the event window. "
                 "An empty list means nothing is failing in that scope right now."

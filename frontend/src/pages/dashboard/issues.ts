@@ -28,7 +28,9 @@ export function toIssueItem(issue: ClusterIssue): IssueItem {
     namespace: issue.namespace || undefined,
     name: issue.name,
     lastSeen: issue.last_seen,
-    count: issue.count,
+    restarts: issue.restarts,
+    failed: issue.failed,
+    events: issue.events,
   }
 }
 

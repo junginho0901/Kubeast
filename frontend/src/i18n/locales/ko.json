@@ -2268,7 +2268,9 @@
       "noneHint": "필터/검색어를 확인하세요.",
       "count": "{{count}}",
       "lastSeen": "마지막 {{age}} 전",
-      "countTimes": "×{{count}}",
+      "restarts": "재시작 {{count}}회",
+      "failed": "실패 {{count}}",
+      "eventTimes": "이벤트 ×{{count}}",
       "openHint": "상세 열기"
     },
     "metricsServerHint": "metrics-server가 없거나 응답하지 않습니다.",

@@ -1146,7 +1146,12 @@ export interface ClusterIssue {
   reason?: string
   message?: string
   last_seen?: string
-  count?: number
+  /** a pod's restarts (kubectl's RESTARTS) */
+  restarts?: number
+  /** a Job's failed pods */
+  failed?: number
+  /** how many times the issue's newest Warning event happened (kubectl get events' COUNT) */
+  events?: number
 }
 
 export interface ClusterIssuesResponse {

@@ -28,7 +28,9 @@ export interface IssueItem {
   namespace?: string
   name?: string
   lastSeen?: string
-  count?: number
+  restarts?: number
+  failed?: number
+  events?: number
 }
 
 export interface OptimizationUsage {

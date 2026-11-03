@@ -51,9 +51,10 @@ func eventRow(e *corev1.Event) map[string]interface{} {
 		"last_timestamp":      eventtime.ISO(eventtime.Last(e)),
 		"reporting_component": e.ReportingController,
 		"involved_object": map[string]interface{}{
-			"kind":      e.InvolvedObject.Kind,
-			"name":      e.InvolvedObject.Name,
-			"namespace": e.InvolvedObject.Namespace,
+			"kind":        e.InvolvedObject.Kind,
+			"name":        e.InvolvedObject.Name,
+			"namespace":   e.InvolvedObject.Namespace,
+			"api_version": e.InvolvedObject.APIVersion,
 		},
 		"source": map[string]interface{}{
 			"component": e.Source.Component,
