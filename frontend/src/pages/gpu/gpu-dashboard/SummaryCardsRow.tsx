@@ -7,10 +7,12 @@
 
 import { Monitor, Cpu, Activity, Gauge, CheckCircle, XCircle } from 'lucide-react'
 import type { GPUDashboardData } from '@/services/api'
+import type { DevicePluginState } from '../gpuNumbers'
 
-function StatusBadge({ enabled, label }: { enabled: boolean; label: string }) {
+function StatusBadge({ enabled, label, testId }: { enabled: boolean; label: string; testId?: string }) {
   return (
     <span
+      data-testid={testId}
       className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
         enabled
           ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20'
@@ -26,11 +28,11 @@ function StatusBadge({ enabled, label }: { enabled: boolean; label: string }) {
 interface Props {
   data: GPUDashboardData
   allocationRate: number
-  devicePluginHealthy: boolean
-  tr: (key: string, fallback: string) => string
+  devicePlugin: DevicePluginState
+  tr: (key: string, fallback: string, options?: Record<string, unknown>) => string
 }
 
-export function SummaryCardsRow({ data, allocationRate, devicePluginHealthy, tr }: Props) {
+export function SummaryCardsRow({ data, allocationRate, devicePlugin, tr }: Props) {
   const summaryCards = [
     {
       label: tr('gpuDashboardPage.summary.capacity', 'Total Capacity'),
@@ -55,6 +57,10 @@ export function SummaryCardsRow({ data, allocationRate, devicePluginHealthy, tr 
       border: 'border-slate-700',
       iconBg: 'bg-slate-700/60',
       iconColor: 'text-slate-300',
+      // pods no node has taken yet: asked for, not counted in use
+      note: data.total_gpu_waiting > 0
+        ? tr('gpuDashboardPage.summary.waiting', '+{{n}} requested by pods waiting for a node', { n: data.total_gpu_waiting })
+        : undefined,
     },
     {
       label: tr('gpuDashboardPage.summary.allocationRate', 'Allocation Rate'),
@@ -67,6 +73,12 @@ export function SummaryCardsRow({ data, allocationRate, devicePluginHealthy, tr 
     },
   ]
 
+  const pluginLabel = {
+    healthy: tr('gpuDashboardPage.status.pluginHealthy', 'Device Plugin Healthy'),
+    unhealthy: tr('gpuDashboardPage.status.pluginUnhealthy', 'Device Plugin Unhealthy'),
+    missing: tr('gpuDashboardPage.status.pluginNotFound', 'Device Plugin Not Found'),
+  }[devicePlugin]
+
   return (
     <>
       {/* Summary Cards */}
@@ -76,6 +88,7 @@ export function SummaryCardsRow({ data, allocationRate, devicePluginHealthy, tr 
           return (
             <div
               key={card.label}
+              data-testid="gpu-summary-card"
               className={`rounded-xl border ${card.border} bg-slate-800/50 p-5 transition-colors hover:bg-slate-800/80`}
             >
               <div className="flex items-center justify-between">
@@ -84,7 +97,8 @@ export function SummaryCardsRow({ data, allocationRate, devicePluginHealthy, tr 
                   <Icon className={`h-4 w-4 ${card.iconColor}`} />
                 </div>
               </div>
-              <p className="mt-2 text-3xl font-bold text-ink">{card.value}</p>
+              <p className="mt-2 text-3xl font-bold text-ink" data-testid="gpu-summary-value">{card.value}</p>
+              {card.note && <p className="mt-1 text-xs text-slate-400" data-testid="gpu-summary-note">{card.note}</p>}
               {card.bar && (
                 <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-700">
                   <div
@@ -106,15 +120,9 @@ export function SummaryCardsRow({ data, allocationRate, devicePluginHealthy, tr 
 
       {/* Status Badges */}
       <div className="flex flex-wrap items-center gap-3">
+        <StatusBadge testId="gpu-badge-plugin" enabled={devicePlugin === 'healthy'} label={pluginLabel} />
         <StatusBadge
-          enabled={devicePluginHealthy}
-          label={
-            devicePluginHealthy
-              ? tr('gpuDashboardPage.status.pluginHealthy', 'Device Plugin Healthy')
-              : tr('gpuDashboardPage.status.pluginUnhealthy', 'Device Plugin Unhealthy')
-          }
-        />
-        <StatusBadge
+          testId="gpu-badge-mig"
           enabled={data.mig_enabled}
           label={
             data.mig_enabled
@@ -123,6 +131,7 @@ export function SummaryCardsRow({ data, allocationRate, devicePluginHealthy, tr 
           }
         />
         <StatusBadge
+          testId="gpu-badge-timeslicing"
           enabled={data.time_slicing_enabled}
           label={
             data.time_slicing_enabled
@@ -131,7 +140,7 @@ export function SummaryCardsRow({ data, allocationRate, devicePluginHealthy, tr 
           }
         />
         {data.device_plugin_status && (
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-slate-500" data-testid="gpu-plugin-detail">
             {tr('gpuDashboardPage.status.pluginDetail', 'Plugin')}: {data.device_plugin_status.ready}/{data.device_plugin_status.desired}{' '}
             {tr('gpuDashboardPage.status.ready', 'ready')}
           </span>

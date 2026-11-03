@@ -546,6 +546,9 @@ export interface GPUNodeInfo {
   gpu_memory?: string | null
   gpu_capacity: number
   gpu_allocatable: number
+  // the GPUs the node's pods not Succeeded or Failed request (kubectl describe node's Allocated resources)
+  gpu_used: number
+  // kubectl's STATUS (utils/nodeStatus)
   status: string
   mig_strategy?: string | null
   driver_version?: string | null
@@ -556,7 +559,9 @@ export interface GPUPodInfo {
   namespace: string
   node_name?: string | null
   gpu_requested: number
+  // kubectl's STATUS; phase is the pod's status.phase
   status: string
+  phase?: string | null
   created_at?: string | null
 }
 
@@ -564,6 +569,8 @@ export interface GPUDashboardData {
   total_gpu_capacity: number
   total_gpu_allocatable: number
   total_gpu_used: number
+  // requested by pods no node has taken yet (not in total_gpu_used)
+  total_gpu_waiting: number
   gpu_nodes: GPUNodeInfo[]
   gpu_pods: GPUPodInfo[]
   device_plugin_status: {

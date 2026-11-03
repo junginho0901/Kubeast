@@ -307,9 +307,9 @@ func (s *Service) ApplyNodeYAML(ctx context.Context, name string, yamlStr string
 	return nil
 }
 
-// formatNodeSummary formats a node for list/detail views.
-func formatNodeSummary(node *corev1.Node) map[string]interface{} {
-	// Status
+// nodeStatusText is a node's STATUS as kubectl prints it (printers.go printNode): Ready or NotReady from the Ready
+// condition, Unknown without one, then SchedulingDisabled when the node is cordoned.
+func nodeStatusText(node *corev1.Node) string {
 	status := "Unknown"
 	for _, c := range node.Status.Conditions {
 		if c.Type == corev1.NodeReady {
@@ -324,6 +324,12 @@ func formatNodeSummary(node *corev1.Node) map[string]interface{} {
 	if node.Spec.Unschedulable {
 		status += ",SchedulingDisabled"
 	}
+	return status
+}
+
+// formatNodeSummary formats a node for list/detail views.
+func formatNodeSummary(node *corev1.Node) map[string]interface{} {
+	status := nodeStatusText(node)
 
 	// Roles
 	roles := make([]string, 0)

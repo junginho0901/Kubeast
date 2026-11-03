@@ -4241,6 +4241,7 @@
       "migEnabled": "MIG Enabled",
       "pluginDetail": "Plugin",
       "pluginHealthy": "Device Plugin Healthy",
+      "pluginNotFound": "Device Plugin Not Found",
       "pluginUnhealthy": "Device Plugin Unhealthy",
       "ready": "Ready",
       "timeSlicingDisabled": "Time-Slicing Disabled",
@@ -4251,7 +4252,8 @@
       "allocatable": "Allocatable",
       "allocationRate": "Allocation Rate",
       "capacity": "Total Capacity",
-      "used": "In Use"
+      "used": "In Use",
+      "waiting": "+{{n}} requested by pods waiting for a node"
     },
     "title": "GPU Dashboard",
     "viewAll": "View All"
@@ -4286,6 +4288,7 @@
   },
   "gpuPods": {
     "metrics": "Metrics",
+    "noNode": "Not scheduled",
     "nodeUsage": "GPU Usage by Node",
     "refresh": "Refresh",
     "searchPlaceholder": "Search by pod name, namespace, or node...",

@@ -266,13 +266,15 @@ The PolicyReport and ClusterPolicyReport CRDs of `wgpolicyk8s.io/v1alpha2` and a
 
 | What | What Kubeast looks at | Used by |
 | --- | --- | --- |
-| NVIDIA device plugin | The node resources `nvidia.com/gpu`, `nvidia.com/mig-*`, the DaemonSet `nvidia-device-plugin-daemonset` (`kube-system`, `gpu-operator`, `nvidia-gpu-operator`) or `kube-system/nvidia-device-plugin` | GPU count and allocation, plugin status |
-| GPU Feature Discovery | Node labels `nvidia.com/gpu.product`, `gpu.memory`, `mig.strategy`, `cuda.driver.*` | GPU model and memory |
+| NVIDIA device plugin | The node resources `nvidia.com/gpu` and `nvidia.com/mig-*`, added together (each device of either is one GPU); in use is what `kubectl describe node` adds up under Allocated resources (the requests of the node's pods not Succeeded or Failed), and the requests of pods no node has taken are shown apart. The DaemonSet `nvidia-device-plugin-daemonset` (`kube-system`, `gpu-operator`, `nvidia-gpu-operator`) or `kube-system/nvidia-device-plugin`; none of these is "not found", not unhealthy | GPU count and allocation, plugin status |
+| GPU Feature Discovery | Node labels `nvidia.com/gpu.product`, `gpu.memory`, `mig.strategy` (`single` or `mixed` is MIG on; `none` or no label is off), `cuda.driver-version.*` or the older `cuda.driver.*` (driver version), `cuda.runtime-version.*` or `cuda.runtime.*` (CUDA version), `gpu.family`, `gpu.compute.*` | GPU model and memory, node drawer |
 | time-slicing settings | ConfigMaps `time-slicing-config`, `nvidia-plugin-configs`, `time-slicing` (in the namespaces above) | Time-slicing settings |
-| DCGM exporter | The `DCGM_FI_DEV_*` metrics in the §3 table | Utilization, memory, temperature |
+| DCGM exporter | The `DCGM_FI_DEV_*` metrics in the §3 table with the labels `UUID` (or `uuid`), `hostname` (`Hostname` before dcgm-exporter 4.6.0), `gpu`, `modelName`, and the GPU's pod as `exported_pod`/`exported_namespace` when the scrape renamed them (`honor_labels: false` and a target with its own `pod` label), else `pod`/`namespace` | Utilization, memory, temperature, each GPU pod's utilization |
 | DRA | `resource.k8s.io` (v1 on 1.34+, v1beta2/v1beta1 on 1.32–1.33, v1alpha3 on 1.31), chosen through API discovery; the lists and their live updates (watch) of the four kinds, and for the drawers the ResourceClaims (Used By, Device Allocations) and the namespace's pods (Using Pods, Related ResourceClaims) as the user — `view` and `kubeast:cluster-reader` cover them | DeviceClass, ResourceClaim, ResourceClaimTemplate, ResourceSlice |
 
-With the NVIDIA GPU Operator, all of the above comes in at once. This section is based on the code and has not been verified on a real GPU cluster.
+With the NVIDIA GPU Operator, all of the above comes in at once. This section is based on the code and has not been verified on a real GPU cluster; the counts, labels and metric labels above are checked on a kind node given `nvidia.com/gpu` and `nvidia.com/mig-1g.5gb` as extended resources and a stand-in exporter (e2e `number-check-gpu.spec.ts`).
+
+- **Check**: `kubectl describe node <node>` (Allocated resources), `kubectl get node <node> --show-labels`, and in Prometheus `DCGM_FI_DEV_GPU_UTIL` with its labels.
 
 ## 7. APIs shown when present
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { api } from '@/services/api'
+import { api, isForbiddenError } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
@@ -14,6 +14,7 @@ import { parseAgeSeconds, type SortKey, type SummaryCard } from './gpupods/gpuPo
 import { GPUPodsFilters } from './gpupods/GPUPodsFilters'
 import { GPUPodsTable } from './gpupods/GPUPodsTable'
 import { GPUPodsCharts } from './gpupods/GPUPodsCharts'
+import { gpuPodCounts, podGpuUsage } from './gpuNumbers'
 
 export default function GPUPods() {
   const { t } = useTranslation()
@@ -27,7 +28,7 @@ export default function GPUPods() {
   const [currentPage, setCurrentPage] = useState(1)
   const [showCharts, setShowCharts] = useState(false)
 
-  const { data, isLoading, refetch } = useQuery<GPUDashboardData>({
+  const { data, isLoading, error, refetch } = useQuery<GPUDashboardData>({
     queryKey: ['gpu', 'dashboard'],
     queryFn: () => api.getGPUDashboard(),
     refetchInterval: 30000,
@@ -44,24 +45,10 @@ export default function GPUPods() {
 
   const metricsAvailable = metrics?.available ?? false
 
-  // Build pod→GPU metrics lookup
-  const podMetricsMap = useMemo(() => {
-    if (!metrics?.gpus) return new Map<string, { gpu_util: number; memory_util_percent: number; memory_used_mb: number; memory_total_mb: number; model_name: string }>()
-    const map = new Map<string, { gpu_util: number; memory_util_percent: number; memory_used_mb: number; memory_total_mb: number; model_name: string }>()
-    for (const gpu of metrics.gpus) {
-      if (gpu.exported_pod && gpu.exported_namespace) {
-        const key = `${gpu.exported_namespace}/${gpu.exported_pod}`
-        map.set(key, {
-          gpu_util: gpu.gpu_util,
-          memory_util_percent: gpu.memory_util_percent,
-          memory_used_mb: gpu.memory_used_mb,
-          memory_total_mb: gpu.memory_total_mb,
-          model_name: gpu.model_name,
-        })
-      }
-    }
-    return map
-  }, [metrics])
+  // Build pod→GPU metrics lookup (every GPU of a pod, not the last one seen)
+  const podMetricsMap = useMemo(() => podGpuUsage(metrics?.gpus), [metrics])
+  // the cluster refused the list (a grant limited to namespaces): the cards count nothing
+  const forbidden = isForbiddenError(error)
 
   const pods = useMemo(() => data?.gpu_pods ?? [], [data?.gpu_pods])
 
@@ -77,15 +64,7 @@ export default function GPUPods() {
   }, [pods, searchQuery])
 
   const stats = useMemo(() => {
-    const total = pods.length
-    const running = pods.filter((p) => p.status === 'Running').length
-    const pending = pods.filter((p) => p.status === 'Pending').length
-    const failed = pods.filter((p) => {
-      const s = p.status.toLowerCase()
-      return s === 'failed' || s.includes('error') || s.includes('backoff')
-    }).length
-    const totalGpuRequested = pods.reduce((sum, p) => sum + p.gpu_requested, 0)
-    const namespaces = new Set(pods.map((p) => p.namespace)).size
+    const { total, running, pending, failed, requested: totalGpuRequested, namespaces } = gpuPodCounts(pods)
 
     // Status distribution
     const statusMap = new Map<string, number>()
@@ -100,22 +79,25 @@ export default function GPUPods() {
   }, [pods])
 
   const summaryCards = useMemo<SummaryCard[]>(
-    () => [
-      [tr('gpuPods.stats.total', 'Total Pods'), stats.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('gpuPods.stats.running', 'Running'), stats.running, 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
-      [tr('gpuPods.stats.pending', 'Pending'), stats.pending, 'border-yellow-700/40 bg-yellow-900/10', 'text-yellow-300'],
-      [tr('gpuPods.stats.failed', 'Failed'), stats.failed, 'border-rose-700/40 bg-rose-900/10', 'text-rose-300'],
-      [tr('gpuPods.stats.gpuRequested', 'GPUs Requested'), stats.totalGpuRequested, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('gpuPods.stats.namespaces', 'Namespaces'), stats.namespaces, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-    ],
-    [stats, tr],
+    () => {
+      const n = (v: number) => (forbidden ? '-' : v)
+      return [
+        [tr('gpuPods.stats.total', 'Total Pods'), n(stats.total), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+        [tr('gpuPods.stats.running', 'Running'), n(stats.running), 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
+        [tr('gpuPods.stats.pending', 'Pending'), n(stats.pending), 'border-yellow-700/40 bg-yellow-900/10', 'text-yellow-300'],
+        [tr('gpuPods.stats.failed', 'Failed'), n(stats.failed), 'border-rose-700/40 bg-rose-900/10', 'text-rose-300'],
+        [tr('gpuPods.stats.gpuRequested', 'GPUs Requested'), n(stats.totalGpuRequested), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+        [tr('gpuPods.stats.namespaces', 'Namespaces'), n(stats.namespaces), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      ]
+    },
+    [stats, tr, forbidden],
   )
 
   // GPU usage per node for the top section
   const nodeGpuUsage = useMemo(() => {
     const map = new Map<string, { podCount: number; totalGpu: number }>()
     for (const pod of pods) {
-      const node = pod.node_name ?? 'Unassigned'
+      const node = pod.node_name || ''
       const entry = map.get(node) ?? { podCount: 0, totalGpu: 0 }
       entry.podCount += 1
       entry.totalGpu += pod.gpu_requested
@@ -133,7 +115,7 @@ export default function GPUPods() {
       switch (sortKey) {
         case 'namespace': return pod.namespace
         case 'name': return pod.name
-        case 'node_name': return pod.node_name ?? ''
+        case 'node_name': return pod.node_name || ''
         case 'gpu_requested': return pod.gpu_requested
         case 'status': return pod.status
         case 'age': return parseAgeSeconds(pod.created_at)
@@ -173,8 +155,8 @@ export default function GPUPods() {
   const aiSnapshot = useMemo(() => {
     if (!data) return null
     const total = pods.length
-    const totalGpuRequested = pods.reduce((s, p) => s + (p.gpu_requested ?? 0), 0)
-    const notRunning = pods.filter((p) => !/running/i.test(p.status)).length
+    const { requested: totalGpuRequested } = gpuPodCounts(pods)
+    const notRunning = pods.filter((p) => p.phase !== 'Running').length
     const prefix = notRunning > 0 ? '⚠️ ' : ''
     return {
       source: 'base' as const,
@@ -188,7 +170,7 @@ export default function GPUPods() {
           pageSize: rowsPerPage,
           topN: rowsPerPage,
           pickFields: ['name', 'namespace', 'node_name', 'gpu_requested', 'status'],
-          filterProblematic: (p) => !/running/i.test((p as unknown as GPUPodInfo).status),
+          filterProblematic: (p) => (p as unknown as GPUPodInfo).phase !== 'Running',
           linkBuilder: (p) => {
             const pod = p as unknown as GPUPodInfo
             return buildResourceLink('Pod', pod.namespace, pod.name)

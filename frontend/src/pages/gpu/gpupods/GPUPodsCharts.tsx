@@ -5,6 +5,7 @@
 // status 분포 top 5 (count 내림차순) — bar 색상 status 별 분기.
 
 import { Box } from 'lucide-react'
+import { statusNamesError } from '../gpuNumbers'
 
 interface NodeUsageEntry {
   podCount: number
@@ -38,9 +39,9 @@ export function GPUPodsCharts({
           </div>
           <div className="space-y-3">
             {nodeGpuUsage.map(([node, info]) => (
-              <div key={node} className="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-900/40 px-4 py-2.5">
+              <div key={node} className="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-900/40 px-4 py-2.5" data-testid="gpu-pods-node-usage" data-node={node}>
                 <div>
-                  <span className="text-sm font-medium text-ink">{node}</span>
+                  <span className="text-sm font-medium text-ink">{node || tr('gpuPods.noNode', 'Not scheduled')}</span>
                   <span className="ml-2 text-xs text-slate-400">
                     {info.podCount === 1 ? tr('gpuPods.podCountOne', '{{n}} pod', { n: info.podCount }) : tr('gpuPods.podCount', '{{n}} pods', { n: info.podCount })}
                   </span>
@@ -65,7 +66,7 @@ export function GPUPodsCharts({
             {topStatuses.map(([status, count]) => {
               const pct = total > 0 ? Math.round((count / total) * 100) : 0
               return (
-                <div key={status}>
+                <div key={status} data-testid="gpu-pods-status-row">
                   <div className="flex items-center justify-between text-sm mb-1">
                     <span className="text-slate-300">{status}</span>
                     <span className="text-xs text-slate-400">{count} ({pct}%)</span>
@@ -75,8 +76,8 @@ export function GPUPodsCharts({
                       className={`h-full rounded-full ${
                         status === 'Running' ? 'bg-emerald-500'
                         : status === 'Pending' ? 'bg-yellow-500'
-                        : status === 'Succeeded' ? 'bg-slate-500'
-                        : status === 'Failed' ? 'bg-red-500'
+                        : status === 'Succeeded' || status === 'Completed' ? 'bg-slate-500'
+                        : statusNamesError(status) ? 'bg-red-500'
                         : 'bg-slate-500'
                       }`}
                       style={{ width: `${pct}%` }}

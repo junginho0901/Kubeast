@@ -1,0 +1,202 @@
+# DCGM metrics of fake GPUs on the dev cluster test2 (scripts/kind-gpu.sh): a one-pod Prometheus v3.15.1 in `monitoring`
+# that Kubeast finds as monitoring/prometheus:9090, and a stand-in for NVIDIA's dcgm-exporter — busybox httpd serving
+# two files of DCGM series whose values e2e/tests/number-check-gpu.spec.ts writes (kubectl exec, `cat >` a file; the
+# seed below is what they hold until then). The labels are dcgm-exporter 4.8.4's (gpu, UUID, pci_bus_id, device,
+# modelName, hostname, and pod, namespace, container for a GPU a pod holds). Two jobs scrape it every 5 s:
+#   dcgm           /metrics           static target with no labels of its own: the series keep pod and namespace
+#   dcgm-exported  /exported/metrics  a target labelled as the exporter's own pod (as a ServiceMonitor's endpoints
+#                                     give one): honor_labels false renames the series' pod and namespace to
+#                                     exported_pod and exported_namespace, and a GPU no pod holds carries the
+#                                     target's pod
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dcgm-seed
+  namespace: monitoring
+data:
+  # four idle GPUs of the node
+  metrics: |
+    # HELP DCGM_FI_DEV_GPU_UTIL GPU utilization (in %).
+    # TYPE DCGM_FI_DEV_GPU_UTIL gauge
+    DCGM_FI_DEV_GPU_UTIL{gpu="0",UUID="GPU-e2e-seed-0",pci_bus_id="00000000:07:00.0",device="nvidia0",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane"} 0
+    DCGM_FI_DEV_GPU_UTIL{gpu="1",UUID="GPU-e2e-seed-1",pci_bus_id="00000000:0F:00.0",device="nvidia1",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane"} 0
+    # HELP DCGM_FI_DEV_FB_USED Framebuffer memory used (in MiB).
+    # TYPE DCGM_FI_DEV_FB_USED gauge
+    DCGM_FI_DEV_FB_USED{gpu="0",UUID="GPU-e2e-seed-0",pci_bus_id="00000000:07:00.0",device="nvidia0",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane"} 0
+    DCGM_FI_DEV_FB_USED{gpu="1",UUID="GPU-e2e-seed-1",pci_bus_id="00000000:0F:00.0",device="nvidia1",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane"} 0
+    # HELP DCGM_FI_DEV_FB_FREE Framebuffer memory free (in MiB).
+    # TYPE DCGM_FI_DEV_FB_FREE gauge
+    DCGM_FI_DEV_FB_FREE{gpu="0",UUID="GPU-e2e-seed-0",pci_bus_id="00000000:07:00.0",device="nvidia0",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane"} 81050
+    DCGM_FI_DEV_FB_FREE{gpu="1",UUID="GPU-e2e-seed-1",pci_bus_id="00000000:0F:00.0",device="nvidia1",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane"} 81050
+    # HELP DCGM_FI_DEV_MEMORY_TEMP Memory temperature (in C).
+    # TYPE DCGM_FI_DEV_MEMORY_TEMP gauge
+    DCGM_FI_DEV_MEMORY_TEMP{gpu="0",UUID="GPU-e2e-seed-0",pci_bus_id="00000000:07:00.0",device="nvidia0",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane"} 30
+    DCGM_FI_DEV_MEMORY_TEMP{gpu="1",UUID="GPU-e2e-seed-1",pci_bus_id="00000000:0F:00.0",device="nvidia1",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane"} 30
+  exported-metrics: |
+    # HELP DCGM_FI_DEV_GPU_UTIL GPU utilization (in %).
+    # TYPE DCGM_FI_DEV_GPU_UTIL gauge
+    DCGM_FI_DEV_GPU_UTIL{gpu="2",UUID="GPU-e2e-seed-2",pci_bus_id="00000000:47:00.0",device="nvidia2",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane"} 0
+    DCGM_FI_DEV_GPU_UTIL{gpu="3",UUID="GPU-e2e-seed-3",pci_bus_id="00000000:4E:00.0",device="nvidia3",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane"} 0
+    # HELP DCGM_FI_DEV_FB_USED Framebuffer memory used (in MiB).
+    # TYPE DCGM_FI_DEV_FB_USED gauge
+    DCGM_FI_DEV_FB_USED{gpu="2",UUID="GPU-e2e-seed-2",pci_bus_id="00000000:47:00.0",device="nvidia2",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane"} 0
+    DCGM_FI_DEV_FB_USED{gpu="3",UUID="GPU-e2e-seed-3",pci_bus_id="00000000:4E:00.0",device="nvidia3",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane"} 0
+    # HELP DCGM_FI_DEV_FB_FREE Framebuffer memory free (in MiB).
+    # TYPE DCGM_FI_DEV_FB_FREE gauge
+    DCGM_FI_DEV_FB_FREE{gpu="2",UUID="GPU-e2e-seed-2",pci_bus_id="00000000:47:00.0",device="nvidia2",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane"} 81050
+    DCGM_FI_DEV_FB_FREE{gpu="3",UUID="GPU-e2e-seed-3",pci_bus_id="00000000:4E:00.0",device="nvidia3",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane"} 81050
+    # HELP DCGM_FI_DEV_MEMORY_TEMP Memory temperature (in C).
+    # TYPE DCGM_FI_DEV_MEMORY_TEMP gauge
+    DCGM_FI_DEV_MEMORY_TEMP{gpu="2",UUID="GPU-e2e-seed-2",pci_bus_id="00000000:47:00.0",device="nvidia2",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane"} 30
+    DCGM_FI_DEV_MEMORY_TEMP{gpu="3",UUID="GPU-e2e-seed-3",pci_bus_id="00000000:4E:00.0",device="nvidia3",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane"} 30
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dcgm-exporter
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dcgm-exporter
+  template:
+    metadata:
+      labels:
+        app: dcgm-exporter
+    spec:
+      terminationGracePeriodSeconds: 0
+      containers:
+        - name: exporter
+          image: busybox:1.37
+          imagePullPolicy: IfNotPresent
+          # the files start as the seed; a file is replaced whole (written next to it, then moved)
+          command: ["sh", "-c", "mkdir -p /www/exported && cp /seed/metrics /www/metrics && cp /seed/exported-metrics /www/exported/metrics && exec httpd -f -p 9400 -h /www"]
+          ports:
+            - name: metrics
+              containerPort: 9400
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+          resources:
+            requests:
+              cpu: 5m
+              memory: 8Mi
+            limits:
+              memory: 32Mi
+          volumeMounts:
+            - name: seed
+              mountPath: /seed
+            - name: www
+              mountPath: /www
+      volumes:
+        - name: seed
+          configMap:
+            name: dcgm-seed
+        - name: www
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dcgm-exporter
+  namespace: monitoring
+spec:
+  selector:
+    app: dcgm-exporter
+  ports:
+    - name: metrics
+      port: 9400
+      targetPort: metrics
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 5s
+      scrape_timeout: 4s
+    scrape_configs:
+      # busybox httpd answers without a Prometheus content type
+      - job_name: dcgm
+        fallback_scrape_protocol: PrometheusText0.0.4
+        static_configs:
+          - targets: ['dcgm-exporter.monitoring.svc:9400']
+      - job_name: dcgm-exported
+        metrics_path: /exported/metrics
+        fallback_scrape_protocol: PrometheusText0.0.4
+        static_configs:
+          - targets: ['dcgm-exporter.monitoring.svc:9400']
+            labels:
+              namespace: monitoring
+              pod: dcgm-exporter
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v3.15.1
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --storage.tsdb.retention.time=6h
+          ports:
+            - name: http
+              containerPort: 9090
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: http
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 384Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+            - name: data
+              mountPath: /prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  selector:
+    app: prometheus
+  ports:
+    - name: http
+      port: 9090
+      targetPort: http

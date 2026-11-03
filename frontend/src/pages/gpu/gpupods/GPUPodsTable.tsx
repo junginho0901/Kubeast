@@ -14,15 +14,8 @@ import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatAge, getStatusColor, type SortKey } from './gpuPodsHelpers'
+import type { PodGpuUsage } from '../gpuNumbers'
 import { Trans } from 'react-i18next'
-
-interface PodMetric {
-  gpu_util: number
-  memory_util_percent: number
-  memory_used_mb: number
-  memory_total_mb: number
-  model_name: string
-}
 
 interface OpenDetailArgs {
   kind: string
@@ -35,7 +28,7 @@ interface Props {
   sortedPodsLength: number
   isLoading: boolean
   metricsAvailable: boolean
-  podMetricsMap: Map<string, PodMetric>
+  podMetricsMap: Map<string, PodGpuUsage>
   showCharts: boolean
   sortKey: SortKey
   setSortKey: Dispatch<SetStateAction<SortKey>>
@@ -148,7 +141,7 @@ export function GPUPodsTable({
               >
                 <td className="col-low py-3 px-4 text-xs font-mono" title={pod.namespace}><span className="block truncate">{pod.namespace}</span></td>
                 <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{pod.name}</span></td>
-                <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{pod.node_name ?? '-'}</span></td>
+                <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{pod.node_name || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{pod.gpu_requested}</td>
                 <td className="py-3 px-4">
                   <span className={`badge ${getStatusColor(pod.status)}`}>{pod.status}</span>
