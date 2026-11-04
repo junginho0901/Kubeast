@@ -148,10 +148,10 @@ export const alertInboxApi = {
     await client.delete(`/alertstore/silences/${encodeURIComponent(id)}`)
   },
 
-  listAlertStoreAlerts: async (): Promise<{ alerts: AlertStoreAlert[]; truncated: boolean }> => {
+  listAlertStoreAlerts: async (): Promise<{ alerts: AlertStoreAlert[]; total: number; truncated: boolean }> => {
     const { data } = await client.get('/alertstore/alerts', { params: { state: 'all' } })
     // anything but the store's answer (an older gateway serving the page) says nothing about the alerts
     if (!data || typeof data !== 'object' || !Array.isArray(data.alerts)) throw new Error('not an alert store answer')
-    return { alerts: data.alerts, truncated: !!data.truncated }
+    return { alerts: data.alerts, total: Number(data.total ?? data.alerts.length), truncated: !!data.truncated }
   },
 }

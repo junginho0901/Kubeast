@@ -27,7 +27,7 @@ export default function AdminOrganizations() {
 
   const { data: allUsers = [] } = useQuery<Member[]>({
     queryKey: ['admin-users', 'all'],
-    queryFn: () => api.adminListUsers({ limit: 200, offset: 0 }),
+    queryFn: api.adminListAllUsers,
     enabled: canListUsers,
     staleTime: 10000,
   })

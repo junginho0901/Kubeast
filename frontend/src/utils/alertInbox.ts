@@ -44,3 +44,10 @@ export function liveStateOf(
   if (found.state === 'silenced' || found.state === 'inhibited') return found.state
   return 'firing'
 }
+
+// An alert store answer cut at its limit (alertStore.maxAlerts): how many alerts it listed and how many match in
+// all. The limit itself is not in the answer; a cut list is as long as the limit. Null when nothing was cut.
+export function storeCut(answer: { alerts: unknown[]; total: number; truncated: boolean } | undefined): { listed: number; total: number } | null {
+  if (!answer?.truncated) return null
+  return { listed: answer.alerts.length, total: answer.total }
+}
