@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, StatusBadge, KeyValueTags, EventsTable, Th, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, StatusBadge, KeyValueTags, EventsSection, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
@@ -33,7 +33,6 @@ export default function RoleBindingInfo({ name, namespace, rawJson }: Props) {
   const annotations = (describe?.annotations as Record<string, string> | undefined) ?? (meta.annotations as Record<string, string> | undefined) ?? {}
   const createdAt = (describe?.created_at as string | undefined) ?? (meta.creationTimestamp as string | undefined)
   const subjects = Array.isArray(describe?.subjects) ? describe.subjects : []
-  const events = Array.isArray(describe?.events) ? describe.events : []
 
   // ServiceAccount subjects 가 가리키는 SA 의 ns 의 Pod (serviceAccountName 매칭).
   // RoleBinding 은 ns-scoped 이라 subjects.namespace 가 binding ns 와 같다고 가정.
@@ -180,11 +179,7 @@ export default function RoleBindingInfo({ name, namespace, rawJson }: Props) {
         </InfoSection>
       )}
 
-      {events.length > 0 && (
-        <InfoSection title="Events">
-          <EventsTable events={events} />
-        </InfoSection>
-      )}
+      <EventsSection events={describe?.events} error={describe?.events_error} loading={isLoading} />
     </div>
   )
 }

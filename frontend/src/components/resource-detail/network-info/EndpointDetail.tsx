@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { formatPorts } from '@/pages/network/endpoints/endpointHelpers'
-import { EventsTable, InfoSection, InfoRow, KeyValueTags, Th, Tx } from '../DetailCommon'
+import { EventsSection, InfoSection, InfoRow, KeyValueTags, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { endpointsView } from '../netstoreDetail'
 
@@ -30,7 +30,6 @@ export default function EndpointDetail({ name, namespace, kind, rawJson }: Props
   const subsets = view?.subsets ?? []
   const labels = view?.labels ?? {}
   const annotations = view?.annotations ?? {}
-  const events = view?.events ?? []
 
   const renderTargets = (targets: any[], fallbackIps: string[], tone: 'ready' | 'notReady') => {
     if (!Array.isArray(targets) || targets.length === 0) {
@@ -138,7 +137,7 @@ export default function EndpointDetail({ name, namespace, kind, rawJson }: Props
 
       {Object.keys(labels).length > 0 && <InfoSection title="Labels"><KeyValueTags data={labels} /></InfoSection>}
       {Object.keys(annotations).length > 0 && <InfoSection title="Annotations"><KeyValueTags data={annotations} /></InfoSection>}
-      {events.length > 0 && <InfoSection title="Events"><EventsTable events={events} /></InfoSection>}
+      <EventsSection events={describe?.events} error={describe?.events_error} loading={isLoading} />
     </>
   )
 }

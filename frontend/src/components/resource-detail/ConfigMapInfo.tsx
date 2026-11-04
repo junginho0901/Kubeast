@@ -6,7 +6,7 @@ import type { PodInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
-import { InfoSection, InfoRow, KeyValueTags, EventsTable, StatusBadge, Th, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, EventsSection, StatusBadge, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useDetailLabel } from './useDetailLabel'
 import { usePagination } from './usePagination'
@@ -61,7 +61,6 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
   const dataEntries = (describe?.data as Record<string, string> | undefined) ?? {}
   const dataKeys = Array.isArray(describe?.data_keys) ? describe.data_keys : Object.keys(dataEntries)
   const binaryKeys = Array.isArray(describe?.binary_keys) ? describe.binary_keys : []
-  const events = Array.isArray(describe?.events) ? describe.events : []
 
   const [dataSearch, setDataSearch] = useState('')
   const [dataPage, setDataPage] = useState(1)
@@ -227,11 +226,7 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
         </InfoSection>
       )}
 
-      {events.length > 0 && (
-        <InfoSection title="Events">
-          <EventsTable events={events} />
-        </InfoSection>
-      )}
+      <EventsSection events={describe?.events} error={describe?.events_error} loading={isLoading} />
     </div>
   )
 }

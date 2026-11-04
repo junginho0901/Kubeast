@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx } from '../DetailCommon'
+import { EventsSection, InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
 import { allowedTopologyLines } from '../netstoreDetail'
@@ -49,6 +49,7 @@ interface StorageClassDescribeResponse {
   related_pvs?: StorageClassRelatedPV[]
   related_pvcs?: StorageClassRelatedPVC[]
   events?: Array<Record<string, unknown>>
+  events_error?: string
 }
 
 export default function StorageClassDetail({ name, rawJson }: { name: string; rawJson?: Record<string, unknown> }) {
@@ -76,7 +77,6 @@ export default function StorageClassDetail({ name, rawJson }: { name: string; ra
   // every related volume and claim, paged (the tables cut at 50 without a word before)
   const { items: pagedPVs, nav: pvsNav } = usePagination(relatedPVs, 10)
   const { items: pagedPVCs, nav: pvcsNav } = usePagination(relatedPVCs, 10)
-  const events = Array.isArray(describe?.events) ? describe.events : []
   const createdAt = describe?.created_at ?? (meta.creationTimestamp as string | undefined)
 
   const usage = describe?.usage ?? {}
@@ -240,11 +240,7 @@ export default function StorageClassDetail({ name, rawJson }: { name: string; ra
       )}
       {Object.keys(labels).length > 0 && <InfoSection title="Labels"><KeyValueTags data={labels} /></InfoSection>}
       {Object.keys(annotations).length > 0 && <InfoSection title="Annotations"><KeyValueTags data={annotations} /></InfoSection>}
-      {events.length > 0 && (
-        <InfoSection title="Events">
-          <EventsTable events={events} />
-        </InfoSection>
-      )}
+      <EventsSection events={describe?.events} error={describe?.events_error} loading={isLoading} />
     </>
   )
 }

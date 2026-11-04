@@ -53,11 +53,6 @@ func (s *Service) DescribeLimitRange(ctx context.Context, namespace, name string
 	if lrErr != nil {
 		return nil, fmt.Errorf("get limit range %s/%s: %w", namespace, name, lrErr)
 	}
-	if eventsErr != nil {
-		events = &corev1.EventList{}
-	}
-	sortEventsByTime(events.Items)
-
 	result := formatLimitRangeDetail(lr)
 
 	result["uid"] = string(lr.UID)
@@ -66,7 +61,7 @@ func (s *Service) DescribeLimitRange(ctx context.Context, namespace, name string
 	result["labels"] = lr.Labels
 
 	// Events
-	result["events"] = formatEventList(events.Items)
+	setEvents(result, events, eventsErr)
 
 	return result, nil
 }

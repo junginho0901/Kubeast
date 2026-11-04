@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, KeyValueTags, EventsTable, Th, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, EventsSection, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
@@ -47,7 +47,6 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
   const rules = Array.isArray(describe?.rules) ? describe.rules : []
   // the rule as the API writes it: { clusterRoleSelectors: [{ matchLabels, matchExpressions }] }
   const aggregationRule = Array.isArray(describe?.aggregation_rule?.clusterRoleSelectors) ? describe.aggregation_rule.clusterRoleSelectors : []
-  const events = Array.isArray(describe?.events) ? describe.events : []
 
   if (isLoading) return <p className="text-slate-400">{tr('common.loading', 'Loading...')}</p>
 
@@ -239,9 +238,7 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
         </InfoSection>
       )}
 
-      <InfoSection title="Events">
-        <EventsTable events={events} />
-      </InfoSection>
+      <EventsSection events={describe?.events} error={describe?.events_error} loading={isLoading} />
     </div>
   )
 }

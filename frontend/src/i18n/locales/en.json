@@ -2633,7 +2633,9 @@
       "conditionsType": "Type",
       "conditionsStatus": "Status",
       "conditionsLastTransition": "Last Transition",
-      "events": "Events"
+      "events": "Events",
+      "eventsUnread": "Could not load the events.",
+      "eventsError": "Could not load the events: {{error}}"
     },
     "manifest": {
       "loading": "Loading..."

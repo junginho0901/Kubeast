@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { CheckCircle, ChevronDown, Download, RefreshCw, Terminal, Waypoints } from 'lucide-react'
 import CustomDropdown from '@/components/CustomDropdown'
-import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, SummaryBadge, StatusBadge, Th, NoneText, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsSection, SummaryBadge, StatusBadge, Th, NoneText, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
 import { useDetailLabel } from './useDetailLabel'
@@ -829,11 +829,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
       <PodImagePullHistory events={events} />
 
       {/* Events */}
-      {events.length > 0 && (
-        <InfoSection title="Events">
-          <EventsTable events={events} />
-        </InfoSection>
-      )}
+      <EventsSection events={podDescribe?.events} error={podDescribe?.events_error} loading={isLoading} />
 
       {/* Logs Viewer */}
       <div ref={logSectionRef}>

@@ -93,10 +93,7 @@ func (s *Service) DescribeCronJob(ctx context.Context, namespace, name string) (
 	result["pod_template"] = formatPodTemplate(cj.Spec.JobTemplate.Spec.Template)
 
 	// Events
-	if eventsErr == nil {
-		sortEventsByTime(events.Items)
-		result["events"] = formatEventList(events.Items)
-	}
+	setEvents(result, events, eventsErr)
 
 	// Active jobs
 	activeJobs := make([]map[string]interface{}, 0, len(cj.Status.Active))

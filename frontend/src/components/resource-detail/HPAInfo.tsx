@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, InfoGrid, SummaryBadge, KeyValueTags, ConditionsTable, EventsTable, Th, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, InfoGrid, SummaryBadge, KeyValueTags, ConditionsTable, EventsSection, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { useDetailLabel } from './useDetailLabel'
 import { ResourceLink } from './ResourceLink'
@@ -42,7 +42,6 @@ export default function HPAInfo({ name, namespace }: Props) {
   const metricsSpec: any[] = desc.metrics_spec || []
   const metricsStatus: any[] = desc.metrics_status || []
   const conditions: any[] = desc.conditions || []
-  const events: any[] = desc.events || []
   const behavior = desc.behavior || null
 
   return (
@@ -173,9 +172,7 @@ export default function HPAInfo({ name, namespace }: Props) {
       </InfoSection>
 
       {/* Events */}
-      <InfoSection title="Events">
-        <EventsTable events={events} />
-      </InfoSection>
+      <EventsSection events={desc.events} error={desc.events_error} />
 
       {/* Labels & Annotations */}
       <InfoSection title="Labels">

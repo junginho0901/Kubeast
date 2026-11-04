@@ -1,9 +1,12 @@
 package k8s
 
 import (
+	"errors"
+
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/eventtime"
 )
@@ -18,6 +21,26 @@ func formatEventList(events []corev1.Event) []map[string]interface{} {
 		result = append(result, formatDrawerEvent(&events[i]))
 	}
 	return result
+}
+
+// setEvents puts an object's events on its describe answer, newest first, or, when they could not be listed, the
+// reason as events_error and no events: the drawer then says so instead of showing "None" for events it never read.
+func setEvents(result map[string]interface{}, events *corev1.EventList, err error) {
+	if err == nil && events == nil {
+		err = errors.New("events not read")
+	}
+	if err != nil {
+		reason := err.Error()
+		if reason == "" {
+			// an API error whose Status carries no message
+			reason = "events could not be listed: " + string(apierrors.ReasonForError(err))
+		}
+		delete(result, "events")
+		result["events_error"] = reason
+		return
+	}
+	sortEventsByTime(events.Items)
+	result["events"] = formatEventList(events.Items)
 }
 
 // formatDrawerEvent is an event as a drawer lists it: its times and count as kubectl prints them (eventtime.Seen),

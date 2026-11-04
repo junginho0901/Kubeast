@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { EventsTable, InfoSection, InfoRow, KeyValueTags, NoneText, Th, Tx } from './DetailCommon'
+import { EventsSection, InfoSection, InfoRow, KeyValueTags, NoneText, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import type { ReferenceGrantInfo as ReferenceGrantRow } from '@/services/api'
@@ -17,6 +17,7 @@ type ReferenceGrantDescribe = ReferenceGrantRow & {
   resource_version?: string | null
   generation?: number
   events?: Array<Record<string, unknown>>
+  events_error?: string
 }
 
 function text(value: unknown): string {
@@ -54,7 +55,6 @@ export default function ReferenceGrantInfo({ name, namespace, rawJson }: Props) 
     : (Array.isArray(meta?.finalizers) ? (meta.finalizers as string[]) : [])
 
   const createdAt = describe?.created_at ?? (meta.creationTimestamp as string | undefined)
-  const events = Array.isArray(describe?.events) ? describe.events : []
 
   // Detect duplicated (group, kind, namespace) in `from` and (group, kind, name) in `to`.
   // ReferenceGrant unions duplicates at admission time so duplicates are redundant
@@ -161,9 +161,7 @@ export default function ReferenceGrantInfo({ name, namespace, rawJson }: Props) 
         </InfoSection>
       )}
 
-      <InfoSection title="Events">
-        <EventsTable events={events} />
-      </InfoSection>
+      <EventsSection events={describe?.events} error={describe?.events_error} loading={isLoading} />
 
       <InfoSection title="Lifecycle">
         <div className="space-y-2">

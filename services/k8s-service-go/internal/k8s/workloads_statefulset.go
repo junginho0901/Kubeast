@@ -147,10 +147,7 @@ func (s *Service) DescribeStatefulSet(ctx context.Context, namespace, name strin
 	result["volume_claim_templates"] = vcts
 
 	// Events
-	if eventsErr == nil {
-		sortEventsByTime(events.Items)
-		result["events"] = formatEventList(events.Items)
-	}
+	setEvents(result, events, eventsErr)
 
 	// Conditions
 	conditions := make([]map[string]interface{}, 0, len(sts.Status.Conditions))

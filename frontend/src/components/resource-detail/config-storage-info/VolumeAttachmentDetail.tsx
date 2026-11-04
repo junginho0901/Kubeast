@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx } from '../DetailCommon'
+import { EventsSection, InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
 import { volumeAttachmentState } from '../netstoreDetail'
@@ -35,6 +35,7 @@ interface VolumeAttachmentDescribeResponse {
     volume_handle?: string | null
   } | null
   events?: Array<Record<string, unknown>>
+  events_error?: string
 }
 
 export default function VolumeAttachmentDetail({ name, rawJson }: { name: string; rawJson?: Record<string, unknown> }) {
@@ -56,7 +57,6 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
   const labels = (describe?.labels ?? (meta.labels as Record<string, string> | undefined) ?? {})
   const annotations = (describe?.annotations ?? (meta.annotations as Record<string, string> | undefined) ?? {})
   const finalizers = Array.isArray(describe?.finalizers) ? describe.finalizers : []
-  const events = Array.isArray(describe?.events) ? describe.events : []
   const pvSummary = describe?.pv_summary ?? null
   const createdAt = describe?.created_at ?? (meta.creationTimestamp as string | undefined)
   const attached = describe?.attached ?? (status.attached as boolean | null | undefined) ?? null
@@ -259,11 +259,7 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
       )}
       {Object.keys(labels).length > 0 && <InfoSection title="Labels"><KeyValueTags data={labels} /></InfoSection>}
       {Object.keys(annotations).length > 0 && <InfoSection title="Annotations"><KeyValueTags data={annotations} /></InfoSection>}
-      {events.length > 0 && (
-        <InfoSection title="Events">
-          <EventsTable events={events} />
-        </InfoSection>
-      )}
+      <EventsSection events={describe?.events} error={describe?.events_error} loading={isLoading} />
     </>
   )
 }

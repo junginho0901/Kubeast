@@ -165,12 +165,20 @@ export function PodDescribeTab({ data, na, tr }: Props) {
         </div>
       )}
 
-      {/* Events */}
-      {data.events && data.events.length > 0 && (
-        <div>
-          <h3 className="text-lg font-semibold text-ink mb-4">
-            {tr('clusterView.describe.events', 'Events')}
-          </h3>
+      {/* Events: always shown — "None" without events, and why when they could not be read */}
+      <div>
+        <h3 className="text-lg font-semibold text-ink mb-4">
+          {tr('clusterView.describe.events', 'Events')}
+        </h3>
+        {!Array.isArray(data.events) ? (
+          <p className="text-red-400 text-sm">
+            {data.events_error
+              ? tr('clusterView.describe.eventsError', 'Could not load the events: {{error}}', { error: data.events_error })
+              : tr('clusterView.describe.eventsUnread', 'Could not load the events.')}
+          </p>
+        ) : data.events.length === 0 ? (
+          <p className="text-slate-400 text-sm">{tr('common.none', 'None')}</p>
+        ) : (
           <div className="bg-slate-800 rounded-lg p-4 space-y-3 max-h-96 overflow-y-auto">
             {data.events.map((event: any, idx: number) => (
               <div key={idx} className="border-l-2 border-slate-600 pl-3">
@@ -193,8 +201,8 @@ export function PodDescribeTab({ data, na, tr }: Props) {
               </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsSection } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
 import { boolText, formatToleration } from './workload-info/workloadInfoFormatters'
@@ -88,7 +88,6 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlo
     strategyType,
     strategyRolling,
     conditions,
-    events,
     volumeClaimTemplates,
     promWorkloadMetrics,
     getWorkloadMetric,
@@ -323,11 +322,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlo
         </InfoSection>
       )}
 
-      {events.length > 0 && (
-        <InfoSection title="Events">
-          <EventsTable events={events} />
-        </InfoSection>
-      )}
+      <EventsSection events={describe?.events} error={describe?.events_error} loading={isLoading} />
 
       <WorkloadDialogs
         target={`${kind} ${namespace}/${name}`}

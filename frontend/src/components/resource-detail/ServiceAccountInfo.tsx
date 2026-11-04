@@ -5,7 +5,7 @@ import type { PodInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
-import { InfoSection, InfoRow, KeyValueTags, EventsTable, StatusBadge, Th, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, EventsSection, StatusBadge, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
@@ -65,7 +65,6 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
   const secretsList = Array.isArray(describe?.secrets_list) ? describe.secrets_list as string[] : []
   const imagePullSecrets = Array.isArray(describe?.image_pull_secrets) ? describe.image_pull_secrets as string[] : []
   const automount = describe?.automount_service_account_token
-  const events = Array.isArray(describe?.events) ? describe.events : []
 
   if (isLoading) return <p className="text-slate-400">{tr('common.loading', 'Loading...')}</p>
 
@@ -230,11 +229,7 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
         </InfoSection>
       )}
 
-      {events.length > 0 && (
-        <InfoSection title="Events">
-          <EventsTable events={events} />
-        </InfoSection>
-      )}
+      <EventsSection events={describe?.events} error={describe?.events_error} loading={isLoading} />
     </div>
   )
 }

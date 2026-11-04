@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { EventsTable, InfoSection, InfoRow, KeyValueTags, Th, Tx } from '../DetailCommon'
+import { EventsSection, InfoSection, InfoRow, KeyValueTags, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
 
@@ -20,13 +20,12 @@ export default function IngressClassDetail({ name, rawJson }: Props) {
     staleTime: 10_000,
   })
   // the events kubectl describe lists about the class
-  const { data: describe } = useQuery({
+  const { data: describe, isLoading } = useQuery({
     queryKey: ['ingressclass-describe', name],
     queryFn: () => api.describeIngressClass(name),
     enabled: !!name,
     retry: false,
   })
-  const events = Array.isArray(describe?.events) ? describe.events : []
   const usedList = Array.isArray(usedByIngresses) ? usedByIngresses : []
   const { items: pagedUsedList, nav: usedListNav } = usePagination(usedList, 10)
 
@@ -105,7 +104,7 @@ export default function IngressClassDetail({ name, rawJson }: Props) {
 
       {Object.keys(labels).length > 0 && <InfoSection title="Labels"><KeyValueTags data={labels} /></InfoSection>}
       {Object.keys(annotations).length > 0 && <InfoSection title="Annotations"><KeyValueTags data={annotations} /></InfoSection>}
-      {events.length > 0 && <InfoSection title="Events"><EventsTable events={events} /></InfoSection>}
+      <EventsSection events={describe?.events} error={describe?.events_error} loading={isLoading} />
     </>
   )
 }

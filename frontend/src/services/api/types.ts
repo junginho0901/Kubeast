@@ -133,7 +133,8 @@ export interface NamespaceDescribe {
   labels: Record<string, string>
   annotations: Record<string, string>
   conditions: NamespaceCondition[]
-  events: Array<{
+  // absent when the events could not be listed, with the reason in events_error
+  events?: Array<{
     type?: string
     reason?: string
     message?: string
@@ -141,6 +142,7 @@ export interface NamespaceDescribe {
     first_timestamp?: string
     last_timestamp?: string
   }>
+  events_error?: string
   // The pods counted per phase, and the requests and limits of the summed_pods not Succeeded or Failed added up as the
   // ResourceQuota counts them, on the server a page at a time.
   pod_summary?: {

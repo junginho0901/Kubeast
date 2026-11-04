@@ -405,7 +405,5 @@ func TestDescribeGatewayAPI_Events(t *testing.T) {
 	if err != nil {
 		t.Fatalf("a refused events list failed the drawer: %v", err)
 	}
-	if got, ok := rg["events"].([]map[string]interface{}); !ok || len(got) != 0 {
-		t.Errorf("events after a refusal = %#v, want an empty list", rg["events"])
-	}
+	checkEventsRefused(t, rg)
 }

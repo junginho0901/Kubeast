@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, SummaryBadge, Th, NoneText, Tx } from './DetailCommon'
+import { ConditionsTable, EventsSection, InfoSection, InfoRow, KeyValueTags, SummaryBadge, Th, NoneText, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { conditionStatus, conditionSummary } from './gatewayDetail'
 import { ResourceLink } from './ResourceLink'
@@ -20,6 +20,7 @@ type GatewayDescribe = GatewayRow & {
   resource_version?: string | null
   generation?: number
   events?: Array<Record<string, unknown>>
+  events_error?: string
 }
 
 function text(value: unknown): string {
@@ -80,7 +81,6 @@ export default function GatewayInfo({ name, namespace, rawJson }: Props) {
   const addressesCount = Number(describe?.addresses_count ?? addresses.length ?? 0)
   const programmed = conditionStatus(conditions, 'Programmed')
   const accepted = conditionStatus(conditions, 'Accepted')
-  const events = Array.isArray(describe?.events) ? describe.events : []
 
   const statusByListenerName = useMemo(() => {
     const map = new Map<string, Record<string, any>>()
@@ -217,9 +217,7 @@ export default function GatewayInfo({ name, namespace, rawJson }: Props) {
         <ConditionsTable conditions={conditions as any[]} />
       </InfoSection>
 
-      <InfoSection title="Events">
-        <EventsTable events={events} />
-      </InfoSection>
+      <EventsSection events={describe?.events} error={describe?.events_error} loading={isLoading} />
 
       <InfoSection title="Lifecycle">
         <div className="space-y-2">

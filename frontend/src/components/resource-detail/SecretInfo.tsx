@@ -7,7 +7,7 @@ import type { PodInfo, ServiceAccountInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
-import { InfoSection, InfoRow, KeyValueTags, EventsTable, StatusBadge, Th, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, EventsSection, StatusBadge, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useDetailLabel } from './useDetailLabel'
 import { usePagination } from './usePagination'
@@ -144,7 +144,6 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
   const canReveal = describe?.can_reveal === true
   const immutable = describe?.immutable as boolean | undefined
   const ownerRefs = Array.isArray(describe?.owner_references) ? describe.owner_references as Array<{ kind: string; name: string; uid: string }> : []
-  const events = Array.isArray(describe?.events) ? describe.events : []
 
   const [dataSearch, setDataSearch] = useState('')
   const [dataPage, setDataPage] = useState(1)
@@ -415,11 +414,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
         </InfoSection>
       )}
 
-      {events.length > 0 && (
-        <InfoSection title="Events">
-          <EventsTable events={events} />
-        </InfoSection>
-      )}
+      <EventsSection events={describe?.events} error={describe?.events_error} loading={isLoading} />
     </div>
   )
 }

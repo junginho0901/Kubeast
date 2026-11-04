@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsTable, Th, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsSection, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
 import { webhookAffected, type WebhookRule } from './clusterDetail'
@@ -41,7 +41,6 @@ export default function WebhookConfigInfo({ name, kind }: Props) {
     return <div className="text-xs text-slate-400 py-4 text-center"><Tx>No data</Tx></div>
   }
 
-  const events: any[] = desc.events || []
 
   return (
     <div className="space-y-4">
@@ -133,9 +132,7 @@ export default function WebhookConfigInfo({ name, kind }: Props) {
       )}
 
       {/* Events */}
-      <InfoSection title="Events">
-        <EventsTable events={events} />
-      </InfoSection>
+      <EventsSection events={desc.events} error={desc.events_error} />
 
       {/* Labels & Annotations */}
       <InfoSection title="Labels">

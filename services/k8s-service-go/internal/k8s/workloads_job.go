@@ -119,10 +119,7 @@ func (s *Service) DescribeJob(ctx context.Context, namespace, name string) (map[
 	result["pod_template"] = formatPodTemplate(job.Spec.Template)
 
 	// Events
-	if eventsErr == nil {
-		sortEventsByTime(events.Items)
-		result["events"] = formatEventList(events.Items)
-	}
+	setEvents(result, events, eventsErr)
 
 	// Conditions
 	conditions := make([]map[string]interface{}, 0, len(job.Status.Conditions))

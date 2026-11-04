@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, SummaryBadge, Tx } from './DetailCommon'
+import { ConditionsTable, EventsSection, InfoSection, InfoRow, KeyValueTags, SummaryBadge, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { conditionStatus, conditionSummary } from './gatewayDetail'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -18,6 +18,7 @@ type GatewayClassDescribe = GatewayClassRow & {
   resource_version?: string | null
   generation?: number
   events?: Array<Record<string, unknown>>
+  events_error?: string
   supported_features?: Array<{ name?: string }>
 }
 
@@ -60,7 +61,6 @@ export default function GatewayClassInfo({ name, rawJson }: Props) {
 
   const accepted = conditionStatus(conditions, 'Accepted')
   const statusText = describe?.status || conditionSummary(conditions, 'Accepted')
-  const events = Array.isArray(describe?.events) ? describe.events : []
 
   const labels = (describe?.labels ?? (meta.labels as Record<string, string> | undefined) ?? {})
   const annotations = (describe?.annotations ?? (meta.annotations as Record<string, string> | undefined) ?? {})
@@ -106,9 +106,7 @@ export default function GatewayClassInfo({ name, rawJson }: Props) {
         </InfoSection>
       )}
 
-      <InfoSection title="Events">
-        <EventsTable events={events} />
-      </InfoSection>
+      <EventsSection events={describe?.events} error={describe?.events_error} loading={isLoading} />
 
       <InfoSection title="Lifecycle">
         <div className="space-y-2">

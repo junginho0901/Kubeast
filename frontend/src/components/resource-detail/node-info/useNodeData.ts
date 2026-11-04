@@ -7,6 +7,7 @@ import { useAIContext } from '@/hooks/useAIContext'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { formatBytes } from '@/pages/dashboard/utils'
 import { parseQuantityToBytes } from '@/pages/storage/pvcs/pvcHelpers'
+import { eventsNewestFirst } from '../detailFormat'
 
 // Byte-valued node resources shown in binary units ("977896124416" → "910.7Gi").
 export function formatCapacity(key: string, value: string | undefined): string {
@@ -50,7 +51,7 @@ export function useNodeData(name: string) {
     enabled: !!name,
   })
 
-  const { data: nodeEvents } = useQuery({
+  const { data: nodeEvents, isLoading: eventsLoading, error: eventsError } = useQuery({
     queryKey: ['cluster', 'nodes', 'events', name],
     queryFn: () => api.getNodeEvents(name),
     enabled: !!name,
@@ -239,14 +240,7 @@ export function useNodeData(name: string) {
     }))
   }, [nodeDescribe?.capacity, nodeDescribe?.allocatable])
 
-  const sortedEvents = useMemo(() => {
-    if (!Array.isArray(nodeEvents)) return []
-    return [...nodeEvents].sort((a: any, b: any) => {
-      const ta = new Date(a.last_timestamp || a.first_timestamp || 0).getTime()
-      const tb = new Date(b.last_timestamp || b.first_timestamp || 0).getTime()
-      return tb - ta
-    })
-  }, [nodeEvents])
+  const sortedEvents = useMemo(() => eventsNewestFirst(nodeEvents), [nodeEvents])
 
   const filteredPods = useMemo(() => {
     if (!Array.isArray(nodePods)) return []
@@ -268,6 +262,8 @@ export function useNodeData(name: string) {
     nodeRoles,
     capacityRows,
     sortedEvents,
+    eventsLoading,
+    eventsError: eventsError ? ((eventsError as any)?.response?.data?.detail ?? eventsError.message) : undefined,
     filteredPods,
     pagedPods,
     pageSize: PAGE_SIZE,

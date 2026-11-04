@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, InfoGrid, SummaryBadge, KeyValueTags, EventsTable, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, InfoGrid, SummaryBadge, KeyValueTags, EventsSection, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { leaseHolderState } from './clusterDetail'
 import { useDetailLabel } from './useDetailLabel'
@@ -46,7 +46,6 @@ export default function LeaseInfo({ name, namespace }: Props) {
   const leaseTransitions = desc.lease_transitions
   const renewTime = desc.renew_time
   const acquireTime = desc.acquire_time
-  const events: any[] = desc.events || []
 
   const holder = leaseHolderState(desc, nowMs)
   const ageSeconds = acquireTime ? Math.max(0, Math.floor((nowMs - new Date(acquireTime).getTime()) / 1000)) : null
@@ -102,9 +101,7 @@ export default function LeaseInfo({ name, namespace }: Props) {
       </InfoSection>
 
       {/* Events */}
-      <InfoSection title="Events">
-        <EventsTable events={events} />
-      </InfoSection>
+      <EventsSection events={desc.events} error={desc.events_error} />
 
       {/* Labels & Annotations */}
       <InfoSection title="Labels">

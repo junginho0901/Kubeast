@@ -42,11 +42,6 @@ func (s *Service) DescribeRuntimeClass(ctx context.Context, name string) (map[st
 	if rcErr != nil {
 		return nil, fmt.Errorf("get runtimeclass %s: %w", name, rcErr)
 	}
-	if eventsErr != nil {
-		events = &corev1.EventList{}
-	}
-	sortEventsByTime(events.Items)
-
 	result := formatRuntimeClassDetail(rc)
 
 	// Additional metadata
@@ -57,7 +52,7 @@ func (s *Service) DescribeRuntimeClass(ctx context.Context, name string) (map[st
 	result["labels"] = rc.Labels
 
 	// Events
-	result["events"] = formatEventList(events.Items)
+	setEvents(result, events, eventsErr)
 
 	return result, nil
 }

@@ -80,11 +80,6 @@ func (s *Service) DescribeVPA(ctx context.Context, namespace, name string) (map[
 	if vpaErr != nil {
 		return nil, fmt.Errorf("get vpa %s/%s: %w", namespace, name, vpaErr)
 	}
-	if eventsErr != nil {
-		events = &corev1.EventList{}
-	}
-	sortEventsByTime(events.Items)
-
 	result := vparow.Info(vpa)
 
 	// Additional metadata
@@ -94,7 +89,7 @@ func (s *Service) DescribeVPA(ctx context.Context, namespace, name string) (map[
 	result["annotations"] = vpa.GetAnnotations()
 
 	// Events
-	result["events"] = formatEventList(events.Items)
+	setEvents(result, events, eventsErr)
 
 	return result, nil
 }

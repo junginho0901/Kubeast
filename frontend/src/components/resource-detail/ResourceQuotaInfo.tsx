@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsTable, Th, NoneText, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsSection, Th, NoneText, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { quotaPercent } from '@/utils/resourceQuantity'
@@ -33,7 +33,6 @@ export default function ResourceQuotaInfo({ name, namespace }: Props) {
   const statusUsed: Record<string, string> = desc.status_used || {}
   const scopes: string[] = desc.scopes || []
   const scopeSelector: any[] = desc.scope_selector || []
-  const events: any[] = desc.events || []
   const resourceKeys = Object.keys(statusHard)
 
   return (
@@ -125,9 +124,7 @@ export default function ResourceQuotaInfo({ name, namespace }: Props) {
       )}
 
       {/* Events */}
-      <InfoSection title="Events">
-        <EventsTable events={events} />
-      </InfoSection>
+      <EventsSection events={desc.events} error={desc.events_error} />
 
       {/* Labels & Annotations */}
       <InfoSection title="Labels">

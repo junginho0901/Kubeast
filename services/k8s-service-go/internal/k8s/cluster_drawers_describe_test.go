@@ -154,9 +154,9 @@ func TestDescribeClusterRole_RulesAndAggregationAsTheAPIWritesThem(t *testing.T)
 	}
 }
 
-// The drawers of a ClusterRole and a ClusterRoleBinding always get an events list: the events about them, or an empty
-// list when the events cannot be read (the drawer opens all the same).
-func TestDescribeClusterRBAC_EventsAlwaysAList(t *testing.T) {
+// The drawers of a ClusterRole and a ClusterRoleBinding get the events about them, or, when the events cannot be read,
+// no list and the reason (events_error) — not an empty list the drawer would show as "None" — and open all the same.
+func TestDescribeClusterRBAC_EventsOrWhyNot(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	objects := map[string]interface{}{
 		"/apis/rbac.authorization.k8s.io/v1/clusterroles/view":        rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "view"}},
@@ -177,15 +177,16 @@ func TestDescribeClusterRBAC_EventsAlwaysAList(t *testing.T) {
 			t.Fatalf("DescribeClusterRoleBinding: %v", err)
 		}
 		want := [2][]string{{"Seen"}, {"Bound"}}
-		if refuse {
-			want = [2][]string{{}, {}}
-		}
 		for i, out := range []map[string]interface{}{cr, crb} {
-			if _, ok := out["events"].([]map[string]interface{}); !ok {
-				t.Errorf("refused=%v: events = %#v, want a list", refuse, out["events"])
+			if refuse {
+				checkEventsRefused(t, out)
+				continue
+			}
+			if _, ok := out["events"].([]map[string]interface{}); !ok || out["events_error"] != nil {
+				t.Errorf("events = %#v, events_error = %#v, want a list and no error", out["events"], out["events_error"])
 			}
 			if got := reasons(out); !reflect.DeepEqual(got, want[i]) {
-				t.Errorf("refused=%v: events = %v, want %v", refuse, got, want[i])
+				t.Errorf("events = %v, want %v", got, want[i])
 			}
 		}
 	}
@@ -241,14 +242,27 @@ func TestDescribeAdmissionPolicies_Events(t *testing.T) {
 		t.Errorf("MAP events = %v", got)
 	}
 
-	// events refused: an empty list, the policy all the same
+	// events refused: no list but the reason, the policy all the same
 	api.refuseEvents = true
 	v, err = s.DescribeValidatingAdmissionPolicy(context.Background(), "guard")
 	if err != nil {
 		t.Fatalf("DescribeValidatingAdmissionPolicy (events refused): %v", err)
 	}
-	if got := reasons(v); len(got) != 0 || v["events"] == nil {
-		t.Errorf("events refused: %#v", v["events"])
+	checkEventsRefused(t, v)
+	if v["bindings_count"] != 1 {
+		t.Errorf("VAP bindings_count with events refused = %v", v["bindings_count"])
+	}
+}
+
+// checkEventsRefused: a describe answer whose events list was refused has no events but the reason, so the drawer says
+// they could not be read instead of "None".
+func checkEventsRefused(t *testing.T, out map[string]interface{}) {
+	t.Helper()
+	if _, has := out["events"]; has {
+		t.Errorf("events refused: events = %#v, want none", out["events"])
+	}
+	if msg, _ := out["events_error"].(string); msg == "" {
+		t.Errorf("events refused: events_error = %#v, want the reason", out["events_error"])
 	}
 }
 

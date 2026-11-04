@@ -33,11 +33,6 @@ func (s *Service) DescribePod(ctx context.Context, namespace, name string) (map[
 	if podErr != nil {
 		return nil, fmt.Errorf("get pod %s/%s: %w", namespace, name, podErr)
 	}
-	if eventsErr != nil {
-		events = &corev1.EventList{}
-	}
-	sortEventsByTime(events.Items)
-
 	result := formatPodDetail(pod)
 
 	// Additional describe-only fields (matching Python output)
@@ -114,7 +109,7 @@ func (s *Service) DescribePod(ctx context.Context, namespace, name string) (map[
 	result["annotations"] = pod.Annotations
 
 	// Events
-	result["events"] = formatEventList(events.Items)
+	setEvents(result, events, eventsErr)
 
 	// Conditions
 	conditions := make([]map[string]interface{}, 0, len(pod.Status.Conditions))

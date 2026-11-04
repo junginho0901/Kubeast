@@ -4,8 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { Search } from 'lucide-react'
-import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, SummaryBadge, Th, NoneText, Tx } from './DetailCommon'
-import { fmtRel, fmtTs } from './detailFormat'
+import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsSection, SummaryBadge, Th, NoneText, Tx } from './DetailCommon'
+import { eventsNewestFirst, fmtRel, fmtTs } from './detailFormat'
 import { useDetailLabel } from './useDetailLabel'
 import { ResourceLink } from './ResourceLink'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
@@ -119,14 +119,7 @@ export default function NamespaceInfo({ name }: Props) {
     applyEvent: applyNsEvent,
   })
 
-  const sortedEvents = useMemo(() => {
-    if (!nsDescribe?.events || !Array.isArray(nsDescribe.events)) return []
-    return [...nsDescribe.events].sort((a: any, b: any) => {
-      const ta = new Date(a.last_timestamp || a.first_timestamp || 0).getTime()
-      const tb = new Date(b.last_timestamp || b.first_timestamp || 0).getTime()
-      return tb - ta
-    })
-  }, [nsDescribe?.events])
+  const sortedEvents = useMemo(() => eventsNewestFirst(nsDescribe?.events), [nsDescribe?.events])
 
   // Prometheus namespace-level metrics
   const promNsMetrics = usePrometheusQueries(
@@ -451,9 +444,7 @@ export default function NamespaceInfo({ name }: Props) {
       </InfoSection>
 
       {/* Events */}
-      <InfoSection title={tr('namespaces.detail.eventsTitle', 'Events')}>
-        <EventsTable events={sortedEvents} />
-      </InfoSection>
+      <EventsSection title={tr('namespaces.detail.eventsTitle', 'Events')} events={sortedEvents} error={nsDescribe.events_error} />
     </>
   )
 }

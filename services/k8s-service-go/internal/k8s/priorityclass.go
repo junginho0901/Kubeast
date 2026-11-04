@@ -42,11 +42,6 @@ func (s *Service) DescribePriorityClass(ctx context.Context, name string) (map[s
 	if pcErr != nil {
 		return nil, fmt.Errorf("get priorityclass %s: %w", name, pcErr)
 	}
-	if eventsErr != nil {
-		events = &corev1.EventList{}
-	}
-	sortEventsByTime(events.Items)
-
 	result := formatPriorityClassDetail(pc)
 
 	// Additional metadata
@@ -57,7 +52,7 @@ func (s *Service) DescribePriorityClass(ctx context.Context, name string) (map[s
 	result["labels"] = pc.Labels
 
 	// Events
-	result["events"] = formatEventList(events.Items)
+	setEvents(result, events, eventsErr)
 
 	return result, nil
 }

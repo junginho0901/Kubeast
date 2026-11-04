@@ -57,10 +57,7 @@ func (s *Service) DescribeRole(ctx context.Context, namespace, name string) (map
 	result := formatRoleDetail(role)
 
 	// Events
-	if eventsErr == nil {
-		sortEventsByTime(events.Items)
-		result["events"] = formatEventList(events.Items)
-	}
+	setEvents(result, events, eventsErr)
 
 	return result, nil
 }

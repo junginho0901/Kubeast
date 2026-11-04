@@ -44,11 +44,6 @@ func (s *Service) DescribeMutatingWebhookConfiguration(ctx context.Context, name
 	if mwcErr != nil {
 		return nil, fmt.Errorf("get mutatingwebhookconfiguration %s: %w", name, mwcErr)
 	}
-	if eventsErr != nil {
-		events = &corev1.EventList{}
-	}
-	sortEventsByTime(events.Items)
-
 	result := formatMutatingWebhookConfigSummary(mwc)
 
 	// Additional metadata
@@ -62,7 +57,7 @@ func (s *Service) DescribeMutatingWebhookConfiguration(ctx context.Context, name
 	result["webhooks"] = formatMutatingWebhooks(mwc.Webhooks)
 
 	// Events
-	result["events"] = formatEventList(events.Items)
+	setEvents(result, events, eventsErr)
 
 	return result, nil
 }
@@ -178,11 +173,6 @@ func (s *Service) DescribeValidatingWebhookConfiguration(ctx context.Context, na
 	if vwcErr != nil {
 		return nil, fmt.Errorf("get validatingwebhookconfiguration %s: %w", name, vwcErr)
 	}
-	if eventsErr != nil {
-		events = &corev1.EventList{}
-	}
-	sortEventsByTime(events.Items)
-
 	result := formatValidatingWebhookConfigSummary(vwc)
 
 	// Additional metadata
@@ -196,7 +186,7 @@ func (s *Service) DescribeValidatingWebhookConfiguration(ctx context.Context, na
 	result["webhooks"] = formatValidatingWebhooks(vwc.Webhooks)
 
 	// Events
-	result["events"] = formatEventList(events.Items)
+	setEvents(result, events, eventsErr)
 
 	return result, nil
 }

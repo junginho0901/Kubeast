@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx } from '../DetailCommon'
+import { ConditionsTable, EventsSection, InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { ResourceLink } from '../ResourceLink'
 import { usePagination } from '../usePagination'
@@ -76,6 +76,7 @@ interface PVDescribeResponse {
   used_by_pods?: PVUsedByPod[]
   conditions?: Array<Record<string, unknown>>
   events?: Array<Record<string, unknown>>
+  events_error?: string
   reason?: string | null
   message?: string | null
 }
@@ -121,7 +122,6 @@ export default function PVDetail({ name, rawJson }: { name: string; rawJson?: Re
   const conditions = Array.isArray(describe?.conditions)
     ? describe.conditions
     : (Array.isArray(status.conditions) ? status.conditions : [])
-  const events = Array.isArray(describe?.events) ? describe.events : []
   const boundClaim = describe?.bound_claim ?? null
   const usedByPods = Array.isArray(describe?.used_by_pods) ? describe.used_by_pods : []
   const { items: displayedUsedByPods, nav: usedByPodsNav } = usePagination(usedByPods, 10)
@@ -267,11 +267,7 @@ export default function PVDetail({ name, rawJson }: { name: string; rawJson?: Re
       )}
       {Object.keys(labels).length > 0 && <InfoSection title="Labels"><KeyValueTags data={labels} /></InfoSection>}
       {Object.keys(annotations).length > 0 && <InfoSection title="Annotations"><KeyValueTags data={annotations} /></InfoSection>}
-      {events.length > 0 && (
-        <InfoSection title="Events">
-          <EventsTable events={events} />
-        </InfoSection>
-      )}
+      <EventsSection events={describe?.events} error={describe?.events_error} loading={isLoading} />
     </>
   )
 }
