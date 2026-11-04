@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, KeyValueTags, Th, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, EventsTable, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
@@ -34,7 +34,9 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
   const annotations = (describe?.annotations as Record<string, string> | undefined) ?? (meta.annotations as Record<string, string> | undefined) ?? {}
   const createdAt = (describe?.created_at as string | undefined) ?? (meta.creationTimestamp as string | undefined)
   const rules = Array.isArray(describe?.rules) ? describe.rules : []
-  const aggregationRule = Array.isArray(describe?.aggregation_rule) ? describe.aggregation_rule : []
+  // the rule as the API writes it: { clusterRoleSelectors: [{ matchLabels, matchExpressions }] }
+  const aggregationRule = Array.isArray(describe?.aggregation_rule?.clusterRoleSelectors) ? describe.aggregation_rule.clusterRoleSelectors : []
+  const events = Array.isArray(describe?.events) ? describe.events : []
 
   if (isLoading) return <p className="text-slate-400">{tr('common.loading', 'Loading...')}</p>
 
@@ -56,8 +58,9 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
           <div className="space-y-2">
             {aggregationRule.map((sel: any, idx: number) => {
               const matchLabels = sel.matchLabels as Record<string, string> | undefined
+              const matchExpressions: any[] = Array.isArray(sel.matchExpressions) ? sel.matchExpressions : []
               return (
-                <div key={idx} className="rounded-sm border border-slate-800 bg-slate-900/40 p-3">
+                <div key={idx} className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 space-y-1.5">
                   <div className="text-xs text-slate-300">
                     <span className="text-[11px] text-slate-500 mr-2"><Tx>Match Labels:</Tx></span>
                     {matchLabels && Object.keys(matchLabels).length > 0 ? (
@@ -72,6 +75,18 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
                       <span className="font-mono">-</span>
                     )}
                   </div>
+                  {matchExpressions.length > 0 && (
+                    <div className="text-xs text-slate-300">
+                      <span className="text-[11px] text-slate-500 mr-2"><Tx>Match Expressions:</Tx></span>
+                      <div className="inline-flex flex-wrap gap-1 mt-0.5">
+                        {matchExpressions.map((e: any, i: number) => (
+                          <span key={i} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                            {`${e?.key} ${e?.operator} [${Array.isArray(e?.values) ? e.values.join(', ') : ''}]`}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -180,6 +195,10 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
           <KeyValueTags data={annotations} />
         </InfoSection>
       )}
+
+      <InfoSection title="Events">
+        <EventsTable events={events} />
+      </InfoSection>
     </div>
   )
 }

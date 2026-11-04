@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import { useForbidden } from '@/services/forbiddenStore'
 import { useListStatus } from '@/services/listStatusStore'
-import { forbiddenResourceFromUrl } from '@/utils/forbiddenResource'
+import { forbiddenResourceFromUrl, isBuiltinApi } from '@/utils/forbiddenResource'
 
 interface Props {
   colSpan: number
@@ -18,9 +18,10 @@ interface Props {
 
 // The empty row of a list table. "No items" would read as "the cluster has
 // none", so the row says what really happened when it knows: the kind is not
-// installed on the cluster (its CRD is missing), the list failed on the
-// server (with a retry), or the request answered 403. Otherwise one shared
-// text: no items, or no search results while the search box has text.
+// installed on the cluster (its CRD is missing — or, for a built-in API such
+// as DRA or the admission policies, the cluster does not serve it), the list
+// failed on the server (with a retry), or the request answered 403. Otherwise
+// one shared text: no items, or no search results while the search box has text.
 export function TableEmptyRow({ colSpan, resource, searching = false, children, className = 'py-6 px-4 text-center text-slate-400' }: Props) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -33,10 +34,15 @@ export function TableEmptyRow({ colSpan, resource, searching = false, children, 
   let testId: string | undefined
   if (status?.state === 'notInstalled') {
     testId = 'table-not-installed'
-    body = t('common.notInstalledEmpty', {
-      resource: kind,
-      defaultValue: '{{resource}} is not installed on this cluster (no CustomResourceDefinition).',
-    })
+    body = isBuiltinApi(resource)
+      ? t('common.notServedEmpty', {
+        resource: kind,
+        defaultValue: '{{resource}} is not served by this cluster (a built-in Kubernetes API that its version does not have or that is turned off).',
+      })
+      : t('common.notInstalledEmpty', {
+        resource: kind,
+        defaultValue: '{{resource}} is not installed on this cluster (no CustomResourceDefinition).',
+      })
   } else if (status?.state === 'error') {
     testId = 'table-load-error'
     body = (

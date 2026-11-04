@@ -3,6 +3,7 @@ import { api } from '@/services/api'
 import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsTable, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
+import { webhookAffected, type WebhookRule } from './clusterDetail'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface Props {
@@ -37,27 +38,8 @@ export default function WebhookConfigInfo({ name, kind }: Props) {
   const webhooks: any[] = desc.webhooks || []
   const events: any[] = desc.events || []
 
-  // Aggregate affected (apiGroup, resource) tuples and operation set across all
-  // webhook rules. K8s evaluates rules with OR semantics, so anything listed
-  // here can be intercepted by this webhook configuration.
-  const affectedSet = new Set<string>()
-  const operationSet = new Set<string>()
-  for (const wh of webhooks) {
-    const rules = Array.isArray(wh?.rules) ? wh.rules : []
-    for (const r of rules) {
-      const groups: string[] = Array.isArray(r?.apiGroups) ? r.apiGroups : ['']
-      const resources: string[] = Array.isArray(r?.resources) ? r.resources : []
-      const ops: string[] = Array.isArray(r?.operations) ? r.operations : []
-      for (const g of groups.length === 0 ? [''] : groups) {
-        for (const res of resources) {
-          affectedSet.add(`${g || '""'}/${res}`)
-        }
-      }
-      for (const op of ops) operationSet.add(op)
-    }
-  }
-  const affectedList = Array.from(affectedSet).sort()
-  const operationsList = Array.from(operationSet).sort()
+  // what this configuration's webhooks can intercept, from the rules as describe sends them
+  const { resources: affectedList, operations: operationsList } = webhookAffected(webhooks)
 
   return (
     <div className="space-y-4">
@@ -233,7 +215,7 @@ function SelectorRow({ label, selector }: { label: string; selector?: any }) {
   )
 }
 
-function WebhookRulesTable({ rules }: { rules?: any[] }) {
+function WebhookRulesTable({ rules }: { rules?: WebhookRule[] }) {
   if (!Array.isArray(rules) || rules.length === 0) {
     return <InfoRow label="Rules" value="-" />
   }

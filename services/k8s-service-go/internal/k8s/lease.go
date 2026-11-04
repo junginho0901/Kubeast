@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -103,11 +104,12 @@ func formatLeaseDetail(lease *coordinationv1.Lease) map[string]interface{} {
 	if lease.Spec.LeaseTransitions != nil {
 		result["lease_transitions"] = *lease.Spec.LeaseTransitions
 	}
+	// in UTC: a decoded MicroTime is in the process's local zone, which the literal "Z" used to mislabel
 	if lease.Spec.RenewTime != nil {
-		result["renew_time"] = lease.Spec.RenewTime.Time.Format("2006-01-02T15:04:05Z")
+		result["renew_time"] = lease.Spec.RenewTime.UTC().Format(time.RFC3339)
 	}
 	if lease.Spec.AcquireTime != nil {
-		result["acquire_time"] = lease.Spec.AcquireTime.Time.Format("2006-01-02T15:04:05Z")
+		result["acquire_time"] = lease.Spec.AcquireTime.UTC().Format(time.RFC3339)
 	}
 
 	return result

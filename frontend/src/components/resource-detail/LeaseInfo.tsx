@@ -1,7 +1,10 @@
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { InfoSection, InfoRow, InfoGrid, SummaryBadge, KeyValueTags, EventsTable, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
+import { leaseHolderState } from './clusterDetail'
+import { useDetailLabel } from './useDetailLabel'
 import { humanDuration } from '@/utils/time'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -12,12 +15,21 @@ interface Props {
 }
 
 export default function LeaseInfo({ name, namespace }: Props) {
+  const dl = useDetailLabel()
+  // a holder renews its lease every few seconds: the lease is read again every 5 s and the holder state, the
+  // durations and the ages follow the clock, so an open drawer does not keep the moment it was opened
   const { data: desc, isLoading } = useQuery({
     queryKey: ['lease-describe', namespace, name],
     queryFn: () => api.describeLease(namespace, name),
-    staleTime: 10_000,
+    staleTime: 5_000,
+    refetchInterval: 5_000,
     retry: 1,
   })
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), 1_000)
+    return () => window.clearInterval(id)
+  }, [])
 
   useResourceDetailOverlay({ kind: 'Lease', name, namespace, describe: desc })
 
@@ -36,9 +48,7 @@ export default function LeaseInfo({ name, namespace }: Props) {
   const acquireTime = desc.acquire_time
   const events: any[] = desc.events || []
 
-  // Derived from acquire/renew times. Computed at render — not "real time", but
-  // close enough for a detail drawer (refreshes on next describe poll).
-  const nowMs = Date.now()
+  const holder = leaseHolderState(desc, nowMs)
   const ageSeconds = acquireTime ? Math.max(0, Math.floor((nowMs - new Date(acquireTime).getTime()) / 1000)) : null
   const expiresInSeconds = (renewTime && leaseDuration != null)
     ? Math.floor((new Date(renewTime).getTime() + (leaseDuration as number) * 1000 - nowMs) / 1000)
@@ -50,7 +60,7 @@ export default function LeaseInfo({ name, namespace }: Props) {
     <div className="space-y-4">
       {/* Summary Badges */}
       <div className="flex flex-wrap gap-2">
-        <SummaryBadge label="Holder" value={holderIdentity !== '-' ? 'Active' : 'None'} color={holderIdentity !== '-' ? 'green' : 'default'} />
+        <SummaryBadge label="Holder" value={dl(holder)} color={holder === 'Active' ? 'green' : holder === 'Expired' ? 'amber' : 'default'} />
         {leaseDuration != null && (
           <SummaryBadge label="Lease Time" value={`${leaseDuration}s`} color="default" />
         )}
