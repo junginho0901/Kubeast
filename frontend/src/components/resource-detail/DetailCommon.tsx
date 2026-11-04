@@ -1,6 +1,7 @@
 import type { ReactNode, ThHTMLAttributes } from 'react'
 import type { LabelValues } from './detailLabel'
 import { fmtRel } from './detailFormat'
+import { usePagination } from './usePagination'
 import { useDetailLabel, useDetailSection } from './useDetailLabel'
 
 /* ── Shared UI primitives for resource detail views ── */
@@ -133,8 +134,10 @@ export function ConditionsTable({ conditions }: { conditions: any[] }) {
   )
 }
 
+// Every event, ten to a page (kubectl describe lists them all)
 export function EventsTable({ events }: { events: any[] }) {
   const dl = useDetailLabel()
+  const { items: paged, page, nav } = usePagination(Array.isArray(events) ? events : [], 10)
   if (!events || events.length === 0) return <span className="text-slate-400 text-xs">{dl('None')}</span>
   const badge = (type?: string | null) => {
     const t = (type || '').toLowerCase()
@@ -155,8 +158,8 @@ export function EventsTable({ events }: { events: any[] }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-800">
-          {events.slice(0, 50).map((e: any, idx: number) => (
-            <tr key={`${e.reason}-${idx}`} className="text-slate-200">
+          {paged.map((e: any, idx: number) => (
+            <tr key={`${e.reason}-${(page - 1) * 10 + idx}`} className="text-slate-200">
               <td className="py-2 pr-2"><span className={`badge ${badge(e.type)}`}>{e.type || '-'}</span></td>
               <td className="py-2 pr-2 align-top"><span className="block wrap-break-word whitespace-normal">{e.reason || '-'}</span></td>
               <td className="py-2 pr-2 align-top"><span className="block wrap-break-word whitespace-normal">{e.message || '-'}</span></td>
@@ -166,6 +169,7 @@ export function EventsTable({ events }: { events: any[] }) {
           ))}
         </tbody>
       </table>
+      {nav}
     </div>
   )
 }

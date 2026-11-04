@@ -393,7 +393,7 @@ export function StorageModal({
                   </div>
                   {Array.isArray(storageTopology.edges) && storageTopology.edges.length > 0 ? (
                     <div className="divide-y divide-slate-700 rounded-lg border border-slate-700 overflow-hidden">
-                      {storageTopology.edges.slice(0, 50).map((edge: any) => (
+                      {storageTopology.edges.map((edge: any) => (
                         <div key={edge.id} className="p-3 bg-slate-900/20">
                           <p className="text-xs text-slate-300">
                             {edge.source} → {edge.target}
@@ -408,11 +408,6 @@ export function StorageModal({
                         {tr('dashboard.storage.noTopologyEdges', 'No topology edges to display')}
                       </p>
                     </div>
-                  )}
-                  {Array.isArray(storageTopology.edges) && storageTopology.edges.length > 50 && (
-                    <p className="text-xs text-slate-500">
-                      {tr('dashboard.storage.topologyLimit', 'Showing up to 50 edges')}
-                    </p>
                   )}
                 </div>
               ) : isLoadingStorageTopology ? (

@@ -29,7 +29,7 @@ export interface BoundRole {
   error?: string
 }
 
-interface NormalizedBinding {
+export interface NormalizedBinding {
   kind: 'RoleBinding' | 'ClusterRoleBinding'
   name: string
   namespace?: string
@@ -71,6 +71,15 @@ function bindsServiceAccount(b: NormalizedBinding, ns: string, saName: string): 
   return false
 }
 
+// Every RoleBinding, then every ClusterRoleBinding, that binds the ServiceAccount (the drawer pages them)
+export function serviceAccountBindings(rbList: unknown, crbList: unknown, namespace: string, name: string): NormalizedBinding[] {
+  const matched = (list: unknown, kind: 'RoleBinding' | 'ClusterRoleBinding') => (Array.isArray(list) ? list : [])
+    .map((b: any) => normalizeRb(b, kind))
+    .filter((b): b is NormalizedBinding => b !== null)
+    .filter((b) => bindsServiceAccount(b, namespace, name))
+  return [...matched(rbList, 'RoleBinding'), ...matched(crbList, 'ClusterRoleBinding')]
+}
+
 function normalizeRules(rulesRaw: any): RuleEntry[] {
   const list = Array.isArray(rulesRaw) ? rulesRaw : []
   return list.map((r: any) => ({
@@ -95,10 +104,6 @@ export function useEffectivePermissions({ namespace, name }: Params): {
   unreadable: { kinds: string[]; forbidden: boolean }
 } {
   const enabled = !!namespace && !!name
-
-  // Cluster-wide CRB fan-out cap matches useReverseRoleBindings (50). Keeps
-  // describe storm bounded if SA is bound via system-wide patterns.
-  const MAX_BINDINGS = 50
 
   const rbKey = ['sa-effperm-rb', namespace, name]
   const crbKey = ['sa-effperm-crb', name]
@@ -199,17 +204,8 @@ export function useEffectivePermissions({ namespace, name }: Params): {
     },
   })
 
-  const matchedRbs: NormalizedBinding[] = (Array.isArray(rbList) ? rbList : [])
-    .map((b: any) => normalizeRb(b, 'RoleBinding'))
-    .filter((b): b is NormalizedBinding => b !== null)
-    .filter((b) => bindsServiceAccount(b, namespace, name))
-
-  const matchedCrbs: NormalizedBinding[] = (Array.isArray(crbList) ? crbList : [])
-    .map((b: any) => normalizeRb(b, 'ClusterRoleBinding'))
-    .filter((b): b is NormalizedBinding => b !== null)
-    .filter((b) => bindsServiceAccount(b, namespace, name))
-
-  const allMatched = [...matchedRbs, ...matchedCrbs].slice(0, MAX_BINDINGS)
+  // queries of one role share their key, so a role is read once however many bindings name it
+  const allMatched = serviceAccountBindings(rbList, crbList, namespace, name)
 
   // Fan out describe for each unique (role_kind, role_name, role_ns) referenced.
   // Use binding's namespace for Role kind (RoleBinding can only reference Role

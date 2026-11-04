@@ -10,8 +10,9 @@ import { test, expect, type Page } from '@playwright/test'
 // ClusterRole, ClusterRoleBinding, PriorityClass, RuntimeClass, Lease, Mutating/ValidatingWebhookConfiguration and
 // Validating/MutatingAdmissionPolicy — opened from its list (search, then the row) and by link — shows in its rows,
 // badges, "(n)" titles, cards, chips, tables and notes what the object says (kubectl's columns of these kinds are fields
-// of the object, printers.go), the pods `kubectl get pods -A` lists for it and the events kubectl describe lists about
-// it (name, kind and uid). The whole drawer is compared, so a number on it that nothing here expects fails too.
+// of the object, printers.go), the pods `kubectl get pods -A` lists for it, the ClusterRoleBindings and the RoleBindings
+// of every namespace whose roleRef is a ClusterRole, and the events kubectl describe lists about it (name, kind and
+// uid). The whole drawer is compared, so a number on it that nothing here expects fails too.
 
 const NS = 'e2e-rbac-drawers'
 const CLUSTER = 'self'
@@ -150,10 +151,22 @@ const section = (s: Partial<Section> = {}): Section => ({ rows: {}, cards: [], t
 const rowsOf = (rows: Record<string, string>) => Object.fromEntries(Object.entries(rows).map(([k, v]) => [k, [v]]))
 const tagsOf = (m?: Record<string, string>) => Object.entries(m ?? {}).map(([k, v]) => `${k}=${v}`)
 const card = (lines: Record<string, string>, tables: TableView[] = []): Card => ({ lines, tables })
-// newest first, as kubectl's printEvent dates them
+// a list longer than its page shows the first page and the pager's range and buttons (usePagination)
+const pagerMarks = (total: number, size: number) => (total > size ? [`1-${size} / ${total}`, 'Prev', 'Next'] : [])
+// newest first, as kubectl's printEvent dates them, ten to a page
 const eventsSection = (events: Obj[]) => (events.length
-  ? section({ tables: [{ head: ['Type', 'Reason', 'Message', 'Last Seen', 'Count'], rows: events.map((e) => [dash(e.type), dash(e.reason), dash(e.message), at(e.lastTimestamp ?? e.firstTimestamp), String(e.count ?? 1)]) }] })
+  ? section({
+    tables: [{ head: ['Type', 'Reason', 'Message', 'Last Seen', 'Count'], rows: events.slice(0, 10).map((e) => [dash(e.type), dash(e.reason), dash(e.message), at(e.lastTimestamp ?? e.firstTimestamp), String(e.count ?? 1)]) }],
+    marks: pagerMarks(events.length, 10),
+  })
   : section({ marks: ['None'] }))
+// a binding's Subjects cell
+const subjectsText = (b: Obj) => ((b.subjects ?? []).length ? b.subjects.map((s: Obj) => `${s.kind || '?'}/${s.name || '-'}`).join(', ') : '-')
+// namespace/name in byte order, as the API lists objects of every namespace
+const byKey = (a: Obj, b: Obj) => {
+  const [x, y] = [`${a.metadata.namespace ?? ''}/${a.metadata.name}`, `${b.metadata.namespace ?? ''}/${b.metadata.name}`]
+  return x < y ? -1 : x > y ? 1 : 0
+}
 // Labels and Annotations: the tags, or "None" where the drawer always shows the section
 const tagSection = (m?: Record<string, string>) => (Object.keys(m ?? {}).length ? section({ tags: tagsOf(m) }) : section({ marks: ['None'] }))
 const tagSectionsIfAny = (o: Obj) => ({
@@ -169,7 +182,7 @@ const selectorTerms = (s?: Obj) => [
   ...(s?.matchExpressions ?? []).map((e: Obj) => `${e.key} ${e.operator} [${(e.values ?? []).join(', ')}]`),
 ]
 
-type Ctx = { o: Obj; events: Obj[]; pods: Obj[]; nodes: Obj[]; bindings: Obj[] }
+type Ctx = { o: Obj; events: Obj[]; pods: Obj[]; nodes: Obj[]; bindings: Obj[]; roleBindings: Obj[] }
 type Kind = { kind: string; plural: string; list: string; namespaced: boolean; names: string[]; want: (c: Ctx) => View }
 
 // [webhook drawer] one webhook's section
@@ -223,7 +236,7 @@ function webhookWant(c: Ctx, mutating: boolean): View {
       Summary: section({ rows: rowsOf({ Name: o.metadata.name, UID: o.metadata.uid, Created: at(o.metadata.creationTimestamp), 'Resource Version': o.metadata.resourceVersion }) }),
       ...Object.fromEntries(webhooks.map((wh) => [`Webhook: ${wh.name}`, webhookSection(wh, mutating)])),
       ...(webhooks.length ? {} : { Webhooks: section({ marks: ['-'] }) }),
-      ...(affected.length ? { [`Affected Resources (${affected.length} kinds, ${ops.length} ops)`]: section({ notes: ['Resource Types (apiGroup/resource)', 'Operations'], chips: [...affected.slice(0, 50), ...ops] }) } : {}),
+      ...(affected.length ? { [`Affected Resources (${affected.length} kinds, ${ops.length} ops)`]: section({ notes: ['Resource Types (apiGroup/resource)', 'Operations'], chips: [...affected.slice(0, 50), ...ops], marks: pagerMarks(affected.length, 50) }) } : {}),
       Events: eventsSection(c.events),
       Labels: tagSection(o.metadata.labels),
       Annotations: tagSection(o.metadata.annotations),
@@ -364,7 +377,7 @@ const KINDS: Kind[] = [
       const labelTerms = (s: Obj) => Object.entries(s.matchLabels ?? {}).map(([k, v]) => `${k}=${v}`)
       return {
         badges: {},
-        counts: { 'Referenced By ClusterRoleBindings': c.bindings.length },
+        counts: { 'Referenced By ClusterRoleBindings': c.bindings.length, 'Referenced By RoleBindings': c.roleBindings.length },
         sections: {
           'Basic Info': section({ rows: rowsOf({ Kind: 'ClusterRole', Name: o.metadata.name, Created: at(o.metadata.creationTimestamp), UID: o.metadata.uid, 'Resource Version': o.metadata.resourceVersion, 'Rules Count': String(rules.length) }) }),
           ...(selectors.length ? {
@@ -389,8 +402,12 @@ const KINDS: Kind[] = [
             }),
           } : {}),
           'Referenced By ClusterRoleBindings': c.bindings.length
-            ? section({ tables: [{ head: ['ClusterRoleBinding', 'Subjects'], rows: c.bindings.map((b) => [b.metadata.name, (b.subjects ?? []).length ? b.subjects.map((s: Obj) => `${s.kind || '?'}/${s.name || '-'}`).join(', ') : '-']) }] })
+            ? section({ tables: [{ head: ['ClusterRoleBinding', 'Subjects'], rows: c.bindings.slice(0, 10).map((b) => [b.metadata.name, subjectsText(b)]) }], marks: pagerMarks(c.bindings.length, 10) })
             : section({ notes: ['No ClusterRoleBinding references this ClusterRole.'] }),
+          // `kubectl get rolebindings -A` whose ROLE is ClusterRole/<name> (RBAC: a RoleBinding can reference a ClusterRole)
+          'Referenced By RoleBindings': c.roleBindings.length
+            ? section({ tables: [{ head: ['Namespace', 'RoleBinding', 'Subjects'], rows: c.roleBindings.slice(0, 10).map((b) => [b.metadata.namespace, b.metadata.name, subjectsText(b)]) }], marks: pagerMarks(c.roleBindings.length, 10) })
+            : section({ notes: ['No RoleBinding references this ClusterRole.'] }),
           ...tagSectionsIfAny(o),
           Events: eventsSection(c.events),
         },
@@ -477,7 +494,7 @@ const KINDS: Kind[] = [
             }),
           } : {}),
           ...(Object.keys(nodeSelector).length ? {
-            'Schedulable Nodes': matching.length ? section({ marks: matching.slice(0, 20).map((n) => n.metadata.name) }) : section({ notes: ['No Node matches scheduling.nodeSelector.'] }),
+            'Schedulable Nodes': matching.length ? section({ marks: [...matching.slice(0, 20).map((n) => n.metadata.name), ...pagerMarks(matching.length, 20)] }) : section({ notes: ['No Node matches scheduling.nodeSelector.'] }),
           } : {}),
           'Used By Pods': c.pods.length
             ? section({ tables: podTable(['Namespace', 'Pod', 'Status', 'Node'], c.pods, (p) => [p.metadata.namespace, p.metadata.name, dash(p.status.phase), dash(p.spec.nodeName)]) })
@@ -629,7 +646,11 @@ test.describe('number check — cluster configuration, RBAC and admission drawer
             ? JSON.parse(k(`get ${x.plural.replace(/ies$/, 'ybindings')} -o json`)).items.filter((b: Obj) => b.spec?.policyName === name)
             : []
         bindings.sort((a, b) => (a.metadata.name < b.metadata.name ? -1 : 1))
-        return { o, events, pods, nodes, bindings }
+        // a ClusterRole's RoleBindings of every namespace (roleRef kind and name — not a Role of the same name)
+        const roleBindings: Obj[] = x.kind === 'ClusterRole'
+          ? JSON.parse(k('get rolebindings -A -o json')).items.filter((b: Obj) => b.roleRef.kind === 'ClusterRole' && b.roleRef.name === name).sort(byKey)
+          : []
+        return { o, events, pods, nodes, bindings, roleBindings }
       }
       const open = async (x: Kind, name: string, way: string) => {
         if (way === 'link') {

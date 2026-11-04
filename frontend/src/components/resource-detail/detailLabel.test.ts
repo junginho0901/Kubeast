@@ -63,7 +63,7 @@ describe('labels through i18next (the app registers the catalog as the detail na
 
   it('looks up labels holding "." or ":" as whole keys', () => {
     expect(translateDetailLabel(t('ko'), 'No data')).toBe(catalog['No data'])
-    expect(translateDetailLabel(t('ko'), 'Showing first {{n}} pods.', { n: 5 })).toBe(catalog['Showing first {{n}} pods.'].replace('{{n}}', '5'))
+    expect(translateDetailLabel(t('ko'), 'No other instance of {{kind}} in the cluster.', { kind: 'Widget' })).toBe(catalog['No other instance of {{kind}} in the cluster.'].replace('{{kind}}', 'Widget'))
     expect(translateDetailLabel(t('ko'), 'Webhook: {{name}}', { name: 'w1' })).toBe(catalog['Webhook: {{name}}'].replace('{{name}}', 'w1'))
     expect(translateDetailLabel(t('ko'), 'tls.crt')).toBe('tls.crt')
   })

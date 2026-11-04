@@ -4,6 +4,7 @@ import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsTable, Th, Tx }
 import { fmtRel } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
 import { webhookAffected, type WebhookRule } from './clusterDetail'
+import { usePagination } from './usePagination'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface Props {
@@ -27,6 +28,11 @@ export default function WebhookConfigInfo({ name, kind }: Props) {
 
   useResourceDetailOverlay({ kind, name, describe: desc })
 
+  const webhooks: any[] = desc?.webhooks || []
+  // what this configuration's webhooks can intercept, from the rules as describe sends them
+  const { resources: affectedList, operations: operationsList } = webhookAffected(webhooks)
+  const { items: pagedAffected, nav: affectedNav } = usePagination(affectedList, 50)
+
   if (isLoading) {
     return <div className="text-xs text-slate-400 py-4 text-center"><Tx>Loading...</Tx></div>
   }
@@ -35,11 +41,7 @@ export default function WebhookConfigInfo({ name, kind }: Props) {
     return <div className="text-xs text-slate-400 py-4 text-center"><Tx>No data</Tx></div>
   }
 
-  const webhooks: any[] = desc.webhooks || []
   const events: any[] = desc.events || []
-
-  // what this configuration's webhooks can intercept, from the rules as describe sends them
-  const { resources: affectedList, operations: operationsList } = webhookAffected(webhooks)
 
   return (
     <div className="space-y-4">
@@ -112,13 +114,11 @@ export default function WebhookConfigInfo({ name, kind }: Props) {
             <div>
               <p className="text-[11px] text-slate-400 mb-1"><Tx>Resource Types (apiGroup/resource)</Tx></p>
               <div className="flex flex-wrap gap-1.5">
-                {affectedList.slice(0, 50).map((s) => (
+                {pagedAffected.map((s) => (
                   <span key={s} className="rounded-sm border border-slate-700 bg-slate-800/60 px-2 py-0.5 font-mono text-[11px] text-slate-200">{s}</span>
                 ))}
-                {affectedList.length > 50 && (
-                  <span className="text-[11px] text-amber-300"><Tx text="+{{n}} more" values={{ n: affectedList.length - 50 }} /></span>
-                )}
               </div>
+              {affectedNav}
             </div>
             <div>
               <p className="text-[11px] text-slate-400 mb-1"><Tx>Operations</Tx></p>

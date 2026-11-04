@@ -2367,7 +2367,6 @@
       "topologyTitle": "Storage Topology",
       "topologySummary": "Nodes: {{nodes}} · Edges: {{edges}}",
       "noTopologyEdges": "No topology edges to display",
-      "topologyLimit": "Showing up to 50 edges",
       "topologyLoading": "Loading topology...",
       "topologyError": "Failed to load topology",
       "topologyUnavailable": "Topology data is unavailable"
