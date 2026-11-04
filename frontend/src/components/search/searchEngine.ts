@@ -112,12 +112,13 @@ export function compareResults(a: SearchResult, b: SearchResult, key: SearchSort
   return String(a[key] ?? '').localeCompare(String(b[key] ?? ''))
 }
 
+// A cluster-scoped object's namespace is '' (the table shows "-"), so its drawer opens as <Kind>/<name>.
 export function toSearchResult(item: Record<string, unknown>): SearchResult {
   const meta = (item.metadata ?? {}) as Record<string, unknown>
   return {
     kind: (item.kind as string) ?? '-',
     name: (meta.name as string) ?? '-',
-    namespace: (meta.namespace as string) ?? '-',
+    namespace: (meta.namespace as string) ?? '',
     status: extractStatus(item),
     age: formatAge(meta.creationTimestamp as string | undefined),
     raw: item,

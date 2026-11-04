@@ -31,6 +31,7 @@ export interface IssueItem {
   restarts?: number
   failed?: number
   events?: number
+  apiVersion?: string
 }
 
 export interface OptimizationUsage {

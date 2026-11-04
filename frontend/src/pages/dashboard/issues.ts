@@ -2,6 +2,8 @@
 // ordering (severity, then kind, then id) and the per-kind grouping.
 
 import type { ClusterIssue } from '@/services/api/types'
+import type { ResourceDetailTarget } from '@/components/ResourceDetailContext'
+import { detailTarget } from '@/components/resource-detail/crDetail'
 import type { IssueItem, IssueKind, IssueSeverity } from './types'
 
 export const SEVERITY_RANK: Record<IssueSeverity, number> = { critical: 0, warning: 1, info: 2 }
@@ -31,7 +33,15 @@ export function toIssueItem(issue: ClusterIssue): IssueItem {
     restarts: issue.restarts,
     failed: issue.failed,
     events: issue.events,
+    apiVersion: issue.api_version,
   }
+}
+
+// The drawer an issue row opens: its object, with the apiVersion an event named (a Kind two groups serve opens the
+// right group's object); a Collector row (a list that failed) opens none.
+export function issueTarget(issue: IssueItem): ResourceDetailTarget | null {
+  if (issue.kind === 'Collector' || !issue.name) return null
+  return detailTarget(issue.kind, issue.name, issue.namespace, issue.apiVersion)
 }
 
 export interface DerivedIssues {

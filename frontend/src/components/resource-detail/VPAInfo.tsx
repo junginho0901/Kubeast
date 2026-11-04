@@ -89,7 +89,7 @@ export default function VPAInfo({ name, namespace }: Props) {
       <InfoSection title="Target Reference">
         <div className="space-y-2">
           <InfoRow label="Kind" value={desc.target_ref_kind || '-'} />
-          <InfoRow label="Name" value={desc.target_ref_name ? <ResourceLink kind={desc.target_ref_kind || 'Deployment'} name={desc.target_ref_name} namespace={namespace} /> : '-'} />
+          <InfoRow label="Name" value={desc.target_ref_name ? <ResourceLink kind={desc.target_ref_kind || 'Deployment'} name={desc.target_ref_name} namespace={namespace} apiVersion={desc.target_ref_api_version} /> : '-'} />
           {targetStatus && (
             <InfoRow
               label="Target Status"

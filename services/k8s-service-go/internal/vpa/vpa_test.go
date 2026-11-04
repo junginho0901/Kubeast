@@ -65,3 +65,15 @@ func TestRow(t *testing.T) {
 		t.Errorf("a VPA without spec or status: %v", none)
 	}
 }
+
+// The target's apiVersion goes with its Kind and name, so the drawer's link opens that group's object (a custom
+// resource with a scale subresource of a Kind another group serves too).
+func TestTargetRefAPIVersion(t *testing.T) {
+	u := vpa(nil)
+	spec := u.Object["spec"].(map[string]interface{})
+	spec["targetRef"] = map[string]interface{}{"apiVersion": "links-b.kubeast.io/v1", "kind": "Widget", "name": "dl-w"}
+	r := Info(u)
+	if got := []interface{}{r["target_ref_kind"], r["target_ref_name"], r["target_ref_api_version"]}; got[0] != "Widget" || got[1] != "dl-w" || got[2] != "links-b.kubeast.io/v1" {
+		t.Fatalf("target (kind, name, apiVersion) = %v", got)
+	}
+}

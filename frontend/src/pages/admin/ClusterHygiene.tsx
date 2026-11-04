@@ -13,6 +13,7 @@ import { api, clustersApi } from '@/services/api'
 import type { HygieneFinding, HygieneReport, HygieneReview, HygieneSeverity } from '@/services/api/hygiene'
 import { getCurrentClusterID } from '@/services/clusterRef'
 import { formatWhen } from './accessRequestFormat'
+import { hygieneFindingTarget } from '@/utils/detailTargets'
 import { utcTitle } from '@/utils/time'
 
 // Admin → Cluster hygiene: configuration risks of one cluster (Pod Security
@@ -124,8 +125,10 @@ export default function ClusterHygiene() {
   const pagedFindings = findings.slice((page - 1) * FINDINGS_PER_PAGE, page * FINDINGS_PER_PAGE)
   // A finding opens its object in the drawer, which reads the selected cluster: only while this page shows that
   // cluster's report. "API" findings name an API version, not an object.
-  const openFinding = (f: HygieneFinding) =>
-    cluster === currentCluster && f.kind !== 'API' && f.name ? () => openDetail({ kind: f.kind, name: f.name, namespace: f.namespace || undefined }) : null
+  const openFinding = (f: HygieneFinding) => {
+    const target = cluster === currentCluster ? hygieneFindingTarget(f) : null
+    return target ? () => openDetail(target) : null
+  }
 
   const download = (format: 'csv' | 'json') => {
     const a = document.createElement('a')
@@ -161,7 +164,7 @@ export default function ClusterHygiene() {
       findings_total: total, listed_findings: report.findings.length, truncated: report.truncated || undefined,
       filters: { severity, check, search: search || undefined },
       findings: findings.slice(0, 30).map((f) => ({
-        check: f.check, severity: f.severity, kind: f.kind, namespace: f.namespace, name: f.name, container: f.container,
+        check: f.check, severity: f.severity, kind: f.kind, api_version: f.api_version, namespace: f.namespace, name: f.name, container: f.container,
         message: f.message, exempt: f.exempt, exempt_reason: f.exempt_reason,
       })),
     },

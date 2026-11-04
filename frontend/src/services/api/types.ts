@@ -757,6 +757,8 @@ export interface PolicyReportResult {
   source?: string
   timestamp?: string
   report: string
+  /** the resource's apiVersion (the result's resources, else the report's scope) */
+  api_version?: string
 }
 
 export interface PolicyReportPolicyRow extends PolicyReportCounts {
@@ -1191,6 +1193,8 @@ export interface ClusterIssue {
   failed?: number
   /** how many times the issue's newest Warning event happened (kubectl get events' COUNT) */
   events?: number
+  /** the event's object's apiVersion, on a row an event made */
+  api_version?: string
 }
 
 export interface ClusterIssuesResponse {
@@ -1204,6 +1208,8 @@ export interface ClusterIssuesResponse {
 // and memory peak + 15%. Usage fields are absent when source is "none".
 export interface OptimizationRow {
   kind: string
+  /** the workload's apiVersion */
+  api_version?: string
   namespace: string
   name: string
   container: string

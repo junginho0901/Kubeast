@@ -28,6 +28,7 @@ import type { OptimizationResponse, OptimizationRow, ResizeResult } from '@/serv
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
 import { usePermission } from '@/hooks/usePermission'
 import { useAIContext } from '@/hooks/useAIContext'
+import { optimizationRowTarget } from '@/utils/detailTargets'
 import { aiEnabled } from '@/utils/features'
 import { useConfirm } from '@/services/confirm'
 
@@ -130,7 +131,7 @@ export function OptimizationModal({
   const canResize = !!features?.inPlaceResize?.enabled && !!features?.inPlaceResize?.serverSupports && has('resource.pod.edit')
   // The cluster has an OpenCost: the server priced each row's requests (cost.go).
   const priced = !!table?.pricing
-  const rowKey = (row: OptimizationRow) => `${row.kind}/${row.name}/${row.container}`
+  const rowKey = (row: OptimizationRow) => `${row.kind}/${row.api_version ?? ''}/${row.name}/${row.container}`
   const [resizeResults, setResizeResults] = useState<Record<string, ResizeResult | { error: string }>>({})
   const resize = useMutation({
     mutationFn: (row: OptimizationRow) =>
@@ -201,7 +202,7 @@ export function OptimizationModal({
     data: {
       totals: table.totals,
       rows: table.rows.slice(0, 30).map((r) => ({
-        kind: r.kind, name: r.name, container: r.container, pods: r.pods, flags: r.flags,
+        kind: r.kind, api_version: r.api_version, name: r.name, container: r.container, pods: r.pods, flags: r.flags,
         cpu_request_m: r.cpu_request_m, cpu_usage_m: r.cpu_usage_m, cpu_recommend_m: r.cpu_recommend_m,
         mem_request_bytes: r.mem_request_bytes, mem_usage_bytes: r.mem_usage_bytes, mem_recommend_bytes: r.mem_recommend_bytes,
         saving_month_usd: r.saving_month_usd,
@@ -223,10 +224,10 @@ export function OptimizationModal({
         : tr('dashboard.optimization.source.none', 'No usage data (no Prometheus or metrics-server in this cluster)')
 
   const renderRow = (row: OptimizationRow) => (
-    <tr key={`${row.kind}/${row.name}/${row.container}`} data-testid="optimization-row" className="border-t border-slate-700/60">
+    <tr key={rowKey(row)} data-testid="optimization-row" className="border-t border-slate-700/60">
       <td className="px-2 py-1.5 whitespace-nowrap">
         {/* the drawer opens over this window (the modal stack) */}
-        <button type="button" onClick={() => openDetail({ kind: row.kind, name: row.name, namespace: row.namespace })} className="text-left hover:underline" data-testid="optimization-open">
+        <button type="button" onClick={() => openDetail(optimizationRowTarget(row))} className="text-left hover:underline" data-testid="optimization-open">
           <span className="text-slate-400">{row.kind}/</span>
           <span className="text-slate-100 font-medium">{row.name}</span>
         </button>

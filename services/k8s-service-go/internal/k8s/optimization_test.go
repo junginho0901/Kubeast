@@ -33,15 +33,15 @@ func rl(cpu, mem string) corev1.ResourceList {
 	return out
 }
 
-func testOwner(p corev1.Pod) (string, string) {
+func testOwner(p corev1.Pod) (string, string, string) {
 	c := metav1.GetControllerOf(&p)
 	if c == nil || c.Kind == "Node" {
-		return "Pod", p.Name
+		return "Pod", p.Name, "v1"
 	}
 	if c.Kind == "ReplicaSet" {
-		return "Deployment", "web"
+		return "Deployment", "web", "apps/v1"
 	}
-	return c.Kind, c.Name
+	return c.Kind, c.Name, c.APIVersion
 }
 
 func TestOptimizationRows(t *testing.T) {

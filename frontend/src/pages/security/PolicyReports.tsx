@@ -11,6 +11,7 @@ import { TableEmptyRow } from '@/components/TableEmptyRow'
 import CustomDropdown from '@/components/CustomDropdown'
 import { useAIContext } from '@/hooks/useAIContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { policyResultTarget } from '@/utils/detailTargets'
 import { formatTime, utcTitle } from '@/utils/time'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
 
@@ -190,7 +191,7 @@ export default function PolicyReports() {
           pageSize: rowsPerPage,
           topN: rowsPerPage,
           pickFields: tab === 'results'
-            ? ['result', 'severity', 'policy', 'rule', 'kind', 'name', 'namespace', 'message']
+            ? ['result', 'severity', 'policy', 'rule', 'kind', 'api_version', 'name', 'namespace', 'message']
             : tab === 'policies' ? ['policy', 'category', 'severity', 'source', 'fail', 'warn', 'error', 'pass', 'skip'] : ['namespace', 'policies', 'fail', 'warn', 'error', 'pass', 'skip'],
         }),
       },
@@ -215,8 +216,8 @@ export default function PolicyReports() {
   }
 
   const openRow = (r: PolicyReportResult) => {
-    if (!r.kind || !r.name) return
-    openDetail(r.namespace ? { kind: r.kind, namespace: r.namespace, name: r.name } : { kind: r.kind, name: r.name })
+    const target = policyResultTarget(r)
+    if (target) openDetail(target)
   }
   const showPolicy = (p: PolicyReportPolicyRow) => {
     setPolicyFilter(policyKey(p))

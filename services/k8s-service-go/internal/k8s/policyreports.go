@@ -76,6 +76,9 @@ type PolicyReportResult struct {
 	Source    string `json:"source,omitempty"`
 	Timestamp string `json:"timestamp,omitempty"`
 	Report    string `json:"report"`
+	// APIVersion is the resource's (the result's resources, else the report's scope), so a Kind two groups serve
+	// opens the right group's object.
+	APIVersion string `json:"api_version,omitempty"`
 }
 
 // PolicyReportCounts are result counts in the order the report API names them.
@@ -398,7 +401,7 @@ func (s *Service) PolicyReportsForResource(ctx context.Context, namespace, kind,
 		}
 		// a page at a time, keeping the workload's pod names (the whole namespace in one list took k8s-service past 512 Mi)
 		err = eachPod(ctx, cs.CoreV1(), namespace, metav1.ListOptions{}, func(p *corev1.Pod) {
-			if k, n := owner(*p); k == kind && n == name {
+			if k, n, _ := owner(*p); k == kind && n == name {
 				pods[p.Name] = true
 			}
 		})
@@ -512,6 +515,7 @@ func (s *Service) readPolicyReportKind(ctx context.Context, gvr schema.GroupVers
 // policyReportRows flattens one report. The resource a row is about comes from
 // the result's own resources list, else from the report's scope.
 func policyReportRows(obj *unstructured.Unstructured) []PolicyReportResult {
+	scopeAPIVersion, _, _ := unstructured.NestedString(obj.Object, "scope", "apiVersion")
 	scopeKind, _, _ := unstructured.NestedString(obj.Object, "scope", "kind")
 	scopeName, _, _ := unstructured.NestedString(obj.Object, "scope", "name")
 	scopeNS, _, _ := unstructured.NestedString(obj.Object, "scope", "namespace")
@@ -526,7 +530,7 @@ func policyReportRows(obj *unstructured.Unstructured) []PolicyReportResult {
 			continue
 		}
 		row := PolicyReportResult{
-			Namespace: scopeNS, Kind: scopeKind, Name: scopeName,
+			Namespace: scopeNS, Kind: scopeKind, Name: scopeName, APIVersion: scopeAPIVersion,
 			Policy:   str(m["policy"]),
 			Rule:     str(m["rule"]),
 			Result:   strings.ToLower(str(m["result"])),
@@ -539,7 +543,7 @@ func policyReportRows(obj *unstructured.Unstructured) []PolicyReportResult {
 		if res, ok := m["resources"].([]interface{}); ok && len(res) > 0 {
 			if first, ok := res[0].(map[string]interface{}); ok {
 				if k := str(first["kind"]); k != "" {
-					row.Kind = k
+					row.Kind, row.APIVersion = k, str(first["apiVersion"])
 				}
 				if n := str(first["name"]); n != "" {
 					row.Name = n

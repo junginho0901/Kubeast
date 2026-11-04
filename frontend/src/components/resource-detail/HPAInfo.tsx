@@ -71,7 +71,7 @@ export default function HPAInfo({ name, namespace }: Props) {
       <InfoSection title="Scale Target Reference">
         <div className="space-y-2">
           <InfoRow label="Kind" value={scaleTargetRef.kind || '-'} />
-          <InfoRow label="Name" value={scaleTargetRef.name ? <ResourceLink kind={scaleTargetRef.kind || 'Deployment'} name={scaleTargetRef.name} namespace={namespace} /> : '-'} />
+          <InfoRow label="Name" value={scaleTargetRef.name ? <ResourceLink kind={scaleTargetRef.kind || 'Deployment'} name={scaleTargetRef.name} namespace={namespace} apiVersion={scaleTargetRef.api_version} /> : '-'} />
           <InfoRow label="API Version" value={scaleTargetRef.api_version || '-'} />
         </div>
       </InfoSection>

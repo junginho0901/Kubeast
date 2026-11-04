@@ -31,6 +31,8 @@ type OptimizationRow struct {
 	MemUsageBytes     *int64   `json:"mem_usage_bytes,omitempty"`
 	MemRecommendBytes *int64   `json:"mem_recommend_bytes,omitempty"`
 	Flags             []string `json:"flags"`
+	// APIVersion is the workload's, so a Kind two groups serve opens the right object.
+	APIVersion string `json:"api_version,omitempty"`
 	// With an OpenCost in the cluster (Pricing set): what the row's requests
 	// cost a month and what its recommendation would save (cost.go).
 	CostMonthUSD   *float64 `json:"cost_month_usd,omitempty"`
@@ -153,8 +155,9 @@ func optimizationTotals(rows []OptimizationRow) OptimizationTotals {
 
 // workloadOwner maps a pod to the workload it belongs to: ReplicaSets fold
 // into their Deployment, Jobs into their CronJob, anything else keeps its
-// controller; a bare pod and a static (Node-owned mirror) pod are their own "Pod".
-func (s *Service) workloadOwner(ctx context.Context, namespace string) (func(corev1.Pod) (string, string), error) {
+// controller; a bare pod and a static (Node-owned mirror) pod are their own "Pod". The owner's apiVersion comes
+// along: an owner of another group with the same Kind and name is another workload.
+func (s *Service) workloadOwner(ctx context.Context, namespace string) (func(corev1.Pod) (string, string, string), error) {
 	cs := s.clientsetCtx(ctx)
 	rsList, err := cs.AppsV1().ReplicaSets(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -164,33 +167,33 @@ func (s *Service) workloadOwner(ctx context.Context, namespace string) (func(cor
 	if err != nil {
 		return nil, fmt.Errorf("list jobs: %w", err)
 	}
-	parent := map[string][2]string{}
+	parent := map[string][3]string{}
 	for _, rs := range rsList.Items {
 		if c := metav1.GetControllerOf(&rs); c != nil {
-			parent["ReplicaSet/"+rs.Name] = [2]string{c.Kind, c.Name}
+			parent["ReplicaSet/"+rs.Name] = [3]string{c.Kind, c.Name, c.APIVersion}
 		}
 	}
 	for _, j := range jobList.Items {
 		if c := metav1.GetControllerOf(&j); c != nil {
-			parent["Job/"+j.Name] = [2]string{c.Kind, c.Name}
+			parent["Job/"+j.Name] = [3]string{c.Kind, c.Name, c.APIVersion}
 		}
 	}
-	return func(p corev1.Pod) (string, string) {
+	return func(p corev1.Pod) (string, string, string) {
 		c := metav1.GetControllerOf(&p)
 		if c == nil || c.Kind == "Node" {
-			return "Pod", p.Name
+			return "Pod", p.Name, "v1"
 		}
 		if up, ok := parent[c.Kind+"/"+c.Name]; ok {
-			return up[0], up[1]
+			return up[0], up[1], up[2]
 		}
-		return c.Kind, c.Name
+		return c.Kind, c.Name, c.APIVersion
 	}, nil
 }
 
 // optimizationRows groups the running pods' containers by workload and
 // container name, keeps the largest request/limit seen and the heaviest
 // usage sample across the pods, and flags and sizes each row.
-func optimizationRows(pods []corev1.Pod, owner func(corev1.Pod) (string, string), usage map[usageKey]usageSample) []OptimizationRow {
+func optimizationRows(pods []corev1.Pod, owner func(corev1.Pod) (string, string, string), usage map[usageKey]usageSample) []OptimizationRow {
 	a := newOptimizationAcc(owner, usage)
 	for i := range pods {
 		a.add(&pods[i])
@@ -200,7 +203,7 @@ func optimizationRows(pods []corev1.Pod, owner func(corev1.Pod) (string, string)
 
 // optimizationAcc folds pods into the rows one at a time, so the namespace can be read a page at a time.
 type optimizationAcc struct {
-	owner func(corev1.Pod) (string, string)
+	owner func(corev1.Pod) (string, string, string)
 	usage map[usageKey]usageSample
 	byKey map[string]*optimizationRowAcc
 	order []string
@@ -212,7 +215,7 @@ type optimizationRowAcc struct {
 	use  usageSample
 }
 
-func newOptimizationAcc(owner func(corev1.Pod) (string, string), usage map[usageKey]usageSample) *optimizationAcc {
+func newOptimizationAcc(owner func(corev1.Pod) (string, string, string), usage map[usageKey]usageSample) *optimizationAcc {
 	return &optimizationAcc{owner: owner, usage: usage, byKey: map[string]*optimizationRowAcc{}}
 }
 
@@ -220,12 +223,12 @@ func (o *optimizationAcc) add(p *corev1.Pod) {
 	if p.Status.Phase != corev1.PodRunning {
 		return
 	}
-	kind, name := o.owner(*p)
+	kind, name, apiVersion := o.owner(*p)
 	for _, c := range p.Spec.Containers {
-		key := kind + "/" + name + "/" + c.Name
+		key := kind + "/" + apiGroup(apiVersion) + "/" + name + "/" + c.Name
 		a, ok := o.byKey[key]
 		if !ok {
-			a = &optimizationRowAcc{row: OptimizationRow{Kind: kind, Namespace: p.Namespace, Name: name, Container: c.Name}, pods: map[string]bool{}}
+			a = &optimizationRowAcc{row: OptimizationRow{Kind: kind, APIVersion: apiVersion, Namespace: p.Namespace, Name: name, Container: c.Name}, pods: map[string]bool{}}
 			o.byKey[key] = a
 			o.order = append(o.order, key)
 		}

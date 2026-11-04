@@ -135,11 +135,11 @@ func (s *Service) ResizeWorkload(ctx context.Context, namespace string, req Resi
 
 // matchesResizeTarget picks the pods a request means: kind Pod names one pod
 // whoever owns it (the Pod drawer); a workload kind names every pod it owns.
-func matchesResizeTarget(p *corev1.Pod, req ResizeRequest, owner func(corev1.Pod) (string, string)) bool {
+func matchesResizeTarget(p *corev1.Pod, req ResizeRequest, owner func(corev1.Pod) (string, string, string)) bool {
 	if req.Kind == "Pod" {
 		return p.Name == req.Name
 	}
-	kind, name := owner(*p)
+	kind, name, _ := owner(*p)
 	return kind == req.Kind && name == req.Name
 }
 

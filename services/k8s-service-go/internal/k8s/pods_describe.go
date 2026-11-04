@@ -99,9 +99,10 @@ func (s *Service) DescribePod(ctx context.Context, namespace, name string) (map[
 	owners := make([]map[string]interface{}, 0, len(pod.OwnerReferences))
 	for _, or := range pod.OwnerReferences {
 		owners = append(owners, map[string]interface{}{
-			"kind": or.Kind,
-			"name": or.Name,
-			"uid":  string(or.UID),
+			"api_version": or.APIVersion,
+			"kind":        or.Kind,
+			"name":        or.Name,
+			"uid":         string(or.UID),
 		})
 	}
 	result["owner_references"] = owners

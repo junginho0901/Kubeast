@@ -212,8 +212,9 @@ export default function AdvancedSearch() {
           const link = buildResourceLink(r.kind, r.namespace, r.name)
           return {
             kind: r.kind,
+            api_version: typeof r.raw?.apiVersion === 'string' ? r.raw.apiVersion : undefined,
             name: r.name,
-            namespace: r.namespace,
+            namespace: r.namespace || undefined,
             status: r.status,
             age: r.age,
             ...(link ? { _link: link } : {}),
