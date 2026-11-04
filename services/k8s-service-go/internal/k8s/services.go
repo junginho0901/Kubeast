@@ -168,10 +168,7 @@ func (s *Service) DescribeService(ctx context.Context, namespace, name string) (
 	}
 
 	// Events
-	if eventsErr == nil {
-		sortEventsByTime(events.Items)
-		result["events"] = formatEventList(events.Items)
-	}
+	setEvents(result, events, eventsErr)
 
 	result["labels"] = svc.Labels
 	result["annotations"] = svc.Annotations

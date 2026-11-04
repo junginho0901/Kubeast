@@ -81,10 +81,7 @@ func (s *Service) DescribeIngress(ctx context.Context, namespace, name string) (
 		}
 	}
 
-	if eventsErr == nil {
-		sortEventsByTime(events.Items)
-		result["events"] = formatEventList(events.Items)
-	}
+	setEvents(result, events, eventsErr)
 
 	return result, nil
 }
@@ -165,11 +162,7 @@ func (s *Service) DescribeIngressClass(ctx context.Context, name string) (map[st
 	result["resource_version"] = ic.ResourceVersion
 	result["labels"] = ic.Labels
 	result["annotations"] = ic.Annotations
-	result["events"] = []map[string]interface{}{}
-	if eventsErr == nil {
-		sortEventsByTime(events.Items)
-		result["events"] = formatEventList(events.Items)
-	}
+	setEvents(result, events, eventsErr)
 	if ic.Spec.Parameters != nil {
 		params := map[string]interface{}{
 			"kind": ic.Spec.Parameters.Kind,

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, KeyValueTags, EventsTable, Th, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, EventsSection, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
@@ -36,7 +36,6 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
   const annotations = (describe?.annotations as Record<string, string> | undefined) ?? (meta.annotations as Record<string, string> | undefined) ?? {}
   const createdAt = (describe?.created_at as string | undefined) ?? (meta.creationTimestamp as string | undefined)
   const rules = Array.isArray(describe?.rules) ? describe.rules : []
-  const events = Array.isArray(describe?.events) ? describe.events : []
 
   // Detect overlapping rules — same (apiGroup, resource) covered by multiple
   // rules. Often unintentional duplication that obscures the effective verb set
@@ -198,11 +197,7 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
         </InfoSection>
       )}
 
-      {events.length > 0 && (
-        <InfoSection title="Events">
-          <EventsTable events={events} />
-        </InfoSection>
-      )}
+      <EventsSection events={describe?.events} error={describe?.events_error} loading={isLoading} />
     </div>
   )
 }

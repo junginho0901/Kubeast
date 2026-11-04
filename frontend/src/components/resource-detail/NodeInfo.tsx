@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { InfoSection, InfoRow, KeyValueTags, UsageCard, EventsTable, SummaryBadge, Th, NoneText, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, UsageCard, EventsSection, SummaryBadge, Th, NoneText, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { useNodeData } from './node-info/useNodeData'
@@ -25,6 +25,8 @@ export default function NodeInfo({ name }: Props) {
     nodeRoles,
     capacityRows,
     sortedEvents,
+    eventsLoading,
+    eventsError,
     filteredPods,
     pagedPods,
     pageSize,
@@ -209,9 +211,7 @@ export default function NodeInfo({ name }: Props) {
       />
 
       {/* Events */}
-      <InfoSection title={tr('nodes.detail.eventsTitle', 'Events')}>
-        <EventsTable events={sortedEvents} />
-      </InfoSection>
+      <EventsSection title={tr('nodes.detail.eventsTitle', 'Events')} events={sortedEvents} error={eventsError} loading={eventsLoading} />
     </>
   )
 }

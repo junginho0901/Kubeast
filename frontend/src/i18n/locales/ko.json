@@ -2636,7 +2636,9 @@
       "conditionsType": "Type",
       "conditionsStatus": "Status",
       "conditionsLastTransition": "Last Transition",
-      "events": "이벤트"
+      "events": "이벤트",
+      "eventsUnread": "이벤트를 불러오지 못했습니다.",
+      "eventsError": "이벤트를 불러오지 못했습니다: {{error}}"
     },
     "manifest": {
       "loading": "불러오는 중..."
@@ -4614,6 +4616,8 @@
     "Resource Usage": "리소스 사용량",
     "Metrics": "메트릭",
     "Events": "이벤트",
+    "Could not load the events.": "이벤트를 불러오지 못했습니다.",
+    "Could not load the events: {{error}}": "이벤트를 불러오지 못했습니다: {{error}}",
     "Logs": "로그",
     "Labels": "레이블",
     "Annotations": "어노테이션",

@@ -174,6 +174,18 @@ export function EventsTable({ events }: { events: any[] }) {
   )
 }
 
+// Every drawer's Events section, drawn with or without events: the events ("None" when there are none), "Loading..."
+// until they come, and otherwise that they could not be read (the describe's events_error) — never "None" unread.
+export function EventsSection({ events, error, loading, title = 'Events' }: { events: unknown; error?: unknown; loading?: boolean; title?: string }) {
+  const dl = useDetailLabel()
+  const reason = typeof error === 'string' ? error.trim() : ''
+  let body: ReactNode
+  if (Array.isArray(events)) body = <EventsTable events={events} />
+  else if (loading) body = <span className="text-slate-400 text-xs">{dl('Loading...')}</span>
+  else body = <p className="text-xs text-red-400">{reason ? dl('Could not load the events: {{error}}', { error: reason }) : dl('Could not load the events.')}</p>
+  return <InfoSection title={title}>{body}</InfoSection>
+}
+
 export function UsageCard({ label, value, percent, color }: { label: string; value: string; percent: number; color: string }) {
   const dl = useDetailLabel()
   return (

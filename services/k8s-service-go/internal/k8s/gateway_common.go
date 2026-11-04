@@ -75,13 +75,8 @@ func (s *Service) describeGatewayObject(ctx context.Context, resource, kind, nam
 	if objErr != nil {
 		return nil, nil, objErr
 	}
-	if eventsErr != nil {
-		events = &corev1.EventList{}
-	}
-	sortEventsByTime(events.Items)
-
 	result := row(obj)
 	addObjectMetaFields(result, obj)
-	result["events"] = formatEventList(events.Items)
+	setEvents(result, events, eventsErr)
 	return result, obj, nil
 }

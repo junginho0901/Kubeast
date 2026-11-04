@@ -56,10 +56,7 @@ func (s *Service) DescribeServiceAccount(ctx context.Context, namespace, name st
 	result := formatServiceAccountDetail(sa)
 
 	// Events
-	if eventsErr == nil {
-		sortEventsByTime(events.Items)
-		result["events"] = formatEventList(events.Items)
-	}
+	setEvents(result, events, eventsErr)
 
 	return result, nil
 }

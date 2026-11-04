@@ -43,13 +43,8 @@ func (s *Service) DescribeClusterRole(ctx context.Context, name string) (map[str
 		return nil, fmt.Errorf("get clusterrole %s: %w", name, crErr)
 	}
 
-	if eventsErr != nil {
-		events = &corev1.EventList{}
-	}
-	sortEventsByTime(events.Items)
-
 	result := formatClusterRoleDetail(cr)
-	result["events"] = formatEventList(events.Items)
+	setEvents(result, events, eventsErr)
 
 	return result, nil
 }

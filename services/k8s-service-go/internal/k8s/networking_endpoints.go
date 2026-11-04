@@ -68,11 +68,7 @@ func (s *Service) DescribeEndpoints(ctx context.Context, namespace, name string)
 	result["annotations"] = ep.Annotations
 	result["generation"] = ep.Generation
 	result["resource_version"] = ep.ResourceVersion
-	result["events"] = []map[string]interface{}{}
-	if eventsErr == nil {
-		sortEventsByTime(events.Items)
-		result["events"] = formatEventList(events.Items)
-	}
+	setEvents(result, events, eventsErr)
 
 	// Also include raw subsets for detailed view
 	subsets := make([]map[string]interface{}, 0, len(ep.Subsets))

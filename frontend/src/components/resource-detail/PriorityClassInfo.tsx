@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, InfoGrid, SummaryBadge, StatusBadge, KeyValueTags, EventsTable, Th, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, InfoGrid, SummaryBadge, StatusBadge, KeyValueTags, EventsSection, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { useServerPods } from './useServerPods'
 import { preemptionPolicy } from './clusterDetail'
@@ -47,7 +47,6 @@ export default function PriorityClassInfo({ name }: Props) {
   const globalDefault = desc.global_default ?? false
   const preemption = preemptionPolicy(desc)
   const description = desc.description || '-'
-  const events: any[] = desc.events || []
 
   // 현재 PC 가 globalDefault=true 일 때만 cluster-wide 에서 다른 globalDefault=true PC 들 찾기
   const collidingGlobalDefaults = globalDefault && Array.isArray(allPriorityClasses)
@@ -142,9 +141,7 @@ export default function PriorityClassInfo({ name }: Props) {
       </InfoSection>
 
       {/* Events */}
-      <InfoSection title="Events">
-        <EventsTable events={events} />
-      </InfoSection>
+      <EventsSection events={desc.events} error={desc.events_error} />
 
       {/* Labels & Annotations */}
       <InfoSection title="Labels">

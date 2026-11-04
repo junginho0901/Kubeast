@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, InfoGrid, SummaryBadge, StatusBadge, KeyValueTags, EventsTable, Th, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, InfoGrid, SummaryBadge, StatusBadge, KeyValueTags, EventsSection, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { useDetailLabel } from './useDetailLabel'
 import { useServerPods } from './useServerPods'
@@ -59,7 +59,6 @@ export default function RuntimeClassInfo({ name }: Props) {
   const handler = desc.handler || '-'
   const overhead = desc.overhead || {}
   const scheduling = desc.scheduling || {}
-  const events: any[] = desc.events || []
 
   const hasOverhead = Object.keys(overhead).length > 0
   const hasScheduling = Object.keys(scheduling).length > 0
@@ -177,9 +176,7 @@ export default function RuntimeClassInfo({ name }: Props) {
       </InfoSection>
 
       {/* Events */}
-      <InfoSection title="Events">
-        <EventsTable events={events} />
-      </InfoSection>
+      <EventsSection events={desc.events} error={desc.events_error} />
 
       {/* Labels & Annotations */}
       <InfoSection title="Labels">

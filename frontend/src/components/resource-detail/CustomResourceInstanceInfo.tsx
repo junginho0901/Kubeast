@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, Th, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsSection, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { formatAge, formatTime } from '@/utils/time'
@@ -164,7 +164,6 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
   const conditions = Array.isArray(status?.conditions) ? status.conditions : []
   const statusFields = Object.entries(status ?? {}).filter(([k]) => k !== 'conditions')
   const topFields = otherFields(describe?.fields)
-  const events = Array.isArray(describe?.events) ? describe.events : []
 
   if (isLoading) return <p className="text-slate-400">{tr('common.loading', 'Loading...')}</p>
 
@@ -293,9 +292,7 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
       )}
 
       {/* Events */}
-      <InfoSection title={tr('crInstanceInfo.events', 'Events')}>
-        <EventsTable events={events} />
-      </InfoSection>
+      <EventsSection title={tr('crInstanceInfo.events', 'Events')} events={describe?.events} error={describe?.events_error} loading={isLoading} />
 
       {plural && (
         <InfoSection title="Peer Instances ({{n}})" titleValues={{ n: peerInstances.length }}>

@@ -54,11 +54,6 @@ func (s *Service) DescribeLease(ctx context.Context, namespace, name string) (ma
 	if leaseErr != nil {
 		return nil, fmt.Errorf("get lease %s/%s: %w", namespace, name, leaseErr)
 	}
-	if eventsErr != nil {
-		events = &corev1.EventList{}
-	}
-	sortEventsByTime(events.Items)
-
 	result := formatLeaseDetail(lease)
 
 	// Additional metadata
@@ -69,7 +64,7 @@ func (s *Service) DescribeLease(ctx context.Context, namespace, name string) (ma
 	result["labels"] = lease.Labels
 
 	// Events
-	result["events"] = formatEventList(events.Items)
+	setEvents(result, events, eventsErr)
 
 	return result, nil
 }

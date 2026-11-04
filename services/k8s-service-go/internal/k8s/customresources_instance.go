@@ -7,7 +7,6 @@ import (
 	"sort"
 	"sync"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -169,16 +168,12 @@ func (s *Service) DescribeCustomResourceInstance(ctx context.Context, group, ver
 	events, eventsErr := s.clientsetCtx(ctx).CoreV1().Events(evtNs).List(ctx, metav1.ListOptions{
 		FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=%s", name, item.GetKind()),
 	})
-	if eventsErr != nil {
-		events = &corev1.EventList{}
-	}
-	sortEventsByTime(events.Items)
 
 	result := rows[0]
 	result["uid"] = string(item.GetUID())
 	result["resource_version"] = item.GetResourceVersion()
 	result["api_version"] = item.GetAPIVersion()
-	result["events"] = formatEventList(events.Items)
+	setEvents(result, events, eventsErr)
 
 	if fields := topLevelFields(item.Object); len(fields) > 0 {
 		result["fields"] = fields

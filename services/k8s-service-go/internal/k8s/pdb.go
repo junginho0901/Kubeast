@@ -53,11 +53,6 @@ func (s *Service) DescribePDB(ctx context.Context, namespace, name string) (map[
 	if pdbErr != nil {
 		return nil, fmt.Errorf("get pdb %s/%s: %w", namespace, name, pdbErr)
 	}
-	if eventsErr != nil {
-		events = &corev1.EventList{}
-	}
-	sortEventsByTime(events.Items)
-
 	result := formatPDBDetail(pdb)
 
 	// Additional metadata
@@ -81,7 +76,7 @@ func (s *Service) DescribePDB(ctx context.Context, namespace, name string) (map[
 	result["conditions"] = conditions
 
 	// Events
-	result["events"] = formatEventList(events.Items)
+	setEvents(result, events, eventsErr)
 
 	return result, nil
 }

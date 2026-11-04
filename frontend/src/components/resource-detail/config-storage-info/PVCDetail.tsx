@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx } from '../DetailCommon'
+import { ConditionsTable, EventsSection, InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { ResourceLink } from '../ResourceLink'
 import { usePagination } from '../usePagination'
@@ -60,6 +60,7 @@ interface PVCDescribeResponse {
   resize_conditions?: Array<Record<string, unknown>>
   filesystem_resize_pending?: boolean
   events?: Array<Record<string, unknown>>
+  events_error?: string
 }
 
 function formatDataSourceRef(ref?: PVCDataSourceRef | null): string {
@@ -103,7 +104,6 @@ export default function PVCDetail({ name, namespace, rawJson }: { name: string; 
   const finalizers = Array.isArray(describe?.finalizers) ? describe.finalizers : []
   const conditions = Array.isArray(describe?.conditions) ? describe.conditions : (Array.isArray(status.conditions) ? status.conditions : [])
   const resizeConditions = Array.isArray(describe?.resize_conditions) ? describe.resize_conditions : []
-  const events = Array.isArray(describe?.events) ? describe.events : []
   const selectedNode = describe?.selected_node || annotations['volume.kubernetes.io/selected-node'] || '-'
   // describe 가 비어있을 수 있으므로 rawJson spec 도 fallback 으로 사용
   const rawDataSource = (spec.dataSource as Record<string, unknown> | undefined)
@@ -243,11 +243,7 @@ export default function PVCDetail({ name, namespace, rawJson }: { name: string; 
       )}
       {Object.keys(labels).length > 0 && <InfoSection title="Labels"><KeyValueTags data={labels} /></InfoSection>}
       {Object.keys(annotations).length > 0 && <InfoSection title="Annotations"><KeyValueTags data={annotations} /></InfoSection>}
-      {events.length > 0 && (
-        <InfoSection title="Events">
-          <EventsTable events={events} />
-        </InfoSection>
-      )}
+      <EventsSection events={describe?.events} error={describe?.events_error} loading={isLoading} />
     </>
   )
 }

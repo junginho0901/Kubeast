@@ -52,11 +52,6 @@ func (s *Service) DescribeResourceQuota(ctx context.Context, namespace, name str
 	if rqErr != nil {
 		return nil, fmt.Errorf("get resource quota %s/%s: %w", namespace, name, rqErr)
 	}
-	if eventsErr != nil {
-		events = &corev1.EventList{}
-	}
-	sortEventsByTime(events.Items)
-
 	result := formatResourceQuotaDetail(rq)
 
 	result["uid"] = string(rq.UID)
@@ -94,7 +89,7 @@ func (s *Service) DescribeResourceQuota(ctx context.Context, namespace, name str
 	}
 
 	// Events
-	result["events"] = formatEventList(events.Items)
+	setEvents(result, events, eventsErr)
 
 	return result, nil
 }

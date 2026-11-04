@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsTable, Th, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsSection, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -35,7 +35,6 @@ export default function AdmissionPolicyInfo({ name, kind }: Props) {
   const spec: any = desc.spec || {}
   const status: any = desc.status || {}
   const bindings: any[] = Array.isArray(desc.bindings) ? desc.bindings : []
-  const events: any[] = Array.isArray(desc.events) ? desc.events : []
   const match: any = spec.matchConstraints || {}
   const rules: any[] = Array.isArray(match.resourceRules) ? match.resourceRules : []
   const exclude: any[] = Array.isArray(match.excludeResourceRules) ? match.excludeResourceRules : []
@@ -176,9 +175,7 @@ export default function AdmissionPolicyInfo({ name, kind }: Props) {
         )}
       </InfoSection>
 
-      <InfoSection title="Events">
-        <EventsTable events={events} />
-      </InfoSection>
+      <EventsSection events={desc.events} error={desc.events_error} />
 
       <InfoSection title="Labels">
         <KeyValueTags data={desc.labels} />

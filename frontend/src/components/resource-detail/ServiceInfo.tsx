@@ -5,7 +5,7 @@ import type { PodInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
-import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge, SummaryBadge, Th, Tx } from './DetailCommon'
+import { ConditionsTable, EventsSection, InfoSection, InfoRow, KeyValueTags, StatusBadge, SummaryBadge, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
@@ -76,6 +76,7 @@ type ServiceDescribe = {
   endpoint_summary?: EndpointSummary | null
   endpoint_slices?: EndpointSliceSummary[]
   events?: Array<Record<string, unknown>>
+  events_error?: string
 }
 
 function toPortDisplay(ports: DescribePort[]): string {
@@ -192,7 +193,6 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
   const endpointSlices = Array.isArray(describe?.endpoint_slices) ? describe.endpoint_slices : []
 
   const conditions = Array.isArray(describe?.conditions) ? describe.conditions : []
-  const events = Array.isArray(describe?.events) ? describe.events : []
 
   return (
     <>
@@ -392,11 +392,7 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
         </InfoSection>
       )}
 
-      {events.length > 0 && (
-        <InfoSection title="Events">
-          <EventsTable events={events as any[]} />
-        </InfoSection>
-      )}
+      <EventsSection events={describe?.events} error={describe?.events_error} loading={isLoading} />
 
       {Object.keys(labels).length > 0 && (
         <InfoSection title="Labels">

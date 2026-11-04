@@ -341,8 +341,6 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
     ? describe.conditions
     : (Array.isArray(status.conditions) ? status.conditions : [])
 
-  const events = Array.isArray(describe?.events) ? describe.events : []
-
   const volumeClaimTemplates = Array.isArray(describe?.volume_claim_templates)
     ? describe.volume_claim_templates
     : (Array.isArray(spec.volumeClaimTemplates) ? spec.volumeClaimTemplates : [])
@@ -452,7 +450,6 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
     strategyType,
     strategyRolling,
     conditions,
-    events,
     volumeClaimTemplates,
     // prometheus
     promWorkloadMetrics,

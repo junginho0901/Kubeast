@@ -48,10 +48,6 @@ func (s *Service) DescribeCRD(ctx context.Context, name string) (map[string]inte
 	if err != nil {
 		return nil, fmt.Errorf("get crd %s: %w", name, err)
 	}
-	if eventsErr != nil {
-		events = &corev1.EventList{}
-	}
-	sortEventsByTime(events.Items)
 
 	spec, _ := item.Object["spec"].(map[string]interface{})
 	status, _ := item.Object["status"].(map[string]interface{})
@@ -154,8 +150,8 @@ func (s *Service) DescribeCRD(ctx context.Context, name string) (map[string]inte
 		"accepted_names":   acceptedNames,
 		"stored_versions":  storedVersions,
 		"subresources":     subresourcesToList(subresources),
-		"events":           formatEventList(events.Items),
 	}
+	setEvents(result, events, eventsErr)
 
 	return result, nil
 }

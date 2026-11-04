@@ -9,8 +9,9 @@ import { test, expect, type Page } from '@playwright/test'
 // Every drawer's numbers are the cluster's: for each object of namespace e2e-numbers on `self` (the list check's
 // fixture, made here and removed after) and for the node, the drawer's rows, summary badges, "(n)" counts and
 // tables hold what the object says, what kubectl prints of it (the API server's Table, kubectl's printEvent rules) or
-// what its ResourceQuota counts. A drawer is read until it matches or 20 s pass, then every difference is listed
-// (expect.soft), and a number on a drawer that nothing here compares fails too.
+// what its ResourceQuota counts, and every drawer but the node's, the Ingress's and the NetworkPolicy's has its Events
+// section — "None" when kubectl lists no event about the object. A drawer is read until it matches or 20 s pass, then
+// every difference is listed (expect.soft), and a number on a drawer that nothing here compares fails too.
 
 const NS = 'e2e-numbers'
 const kindName = 'kubeast'
@@ -103,7 +104,9 @@ const sameAge = (a: string, b: string) => Math.abs(ageSeconds(a) - ageSeconds(b)
 // seconds from a time the API writes to now (or to `to`)
 const since = (t: string | undefined, to?: string) => ((to ? Date.parse(to) : Date.now()) - Date.parse(t ?? '')) / 1000
 
-type Drawer = { rows: [string, string][]; pairs: Record<string, string>; phases: Record<string, string>; counts: Record<string, number>; text: string; tables: { head: string[]; rows: string[][]; total: number | null }[] }
+// events: the Events section, null when the drawer has none — its table's rows and pager total, or its text without one
+type EventsPart = { rows: number; total: number | null; text: string } | null
+type Drawer = { rows: [string, string][]; pairs: Record<string, string>; phases: Record<string, string>; counts: Record<string, number>; text: string; tables: { head: string[]; rows: string[][]; total: number | null }[]; events: EventsPart }
 async function readDrawer(page: Page): Promise<Drawer> {
   return page.locator(DRAWER).last().evaluate((root) => {
     const rows: [string, string][] = []
@@ -136,7 +139,16 @@ async function readDrawer(page: Page): Promise<Drawer> {
       rows: [...tb.querySelectorAll('tbody tr')].map((tr) => [...tr.querySelectorAll('td')].map((td) => (td as HTMLElement).innerText.trim())),
       total: total(tb),
     }))
-    return { rows, pairs: labelled('span[class*="rounded-full"]'), phases: labelled('span[class*="rounded-sm"][class*="border"]'), counts, text, tables }
+    const evTitle = [...root.querySelectorAll('div.rounded-lg.border > div > p:first-child')].find((p) => (p as HTMLElement).innerText.trim() === 'Events')
+    const evSec = evTitle?.closest('div.rounded-lg.border')
+    const evTable = evSec?.querySelector('table')
+    const evPager = evSec ? /\b\d+-\d+ \/ (\d+)\b/.exec((evSec as HTMLElement).innerText) : null
+    const events = !evSec ? null : {
+      rows: evTable ? evTable.querySelectorAll('tbody tr').length : 0,
+      total: evPager ? Number(evPager[1]) : null,
+      text: evTable ? '' : (evSec as HTMLElement).innerText.replace(/^\s*Events\s*/, '').trim(),
+    }
+    return { rows, pairs: labelled('span[class*="rounded-full"]'), phases: labelled('span[class*="rounded-sm"][class*="border"]'), counts, text, tables, events }
   })
 }
 const table = (d: Drawer, ...head: string[]) => d.tables.filter((t) => head.every((h, i) => t.head[i] === h))
@@ -163,6 +175,9 @@ type Want = {
   counts?: Record<string, number>
   // the rest (tables, titles): each returns the differences it found
   more?: (d: Drawer) => string[]
+  // how many events kubectl lists about the object (involvedObject kind and name): the drawer's Events section is
+  // always there, "None" when there are none, else a row each (ten to a page)
+  events?: number
   // numbers on the drawer not compared, with why
   skip?: Record<string, string>
 }
@@ -200,6 +215,12 @@ function differences(d: Drawer, w: Want): string[] {
     if (d.counts[label] !== n) out.push(`count ${label}: drawer ${d.counts[label] ?? 'none'}, cluster ${n}`)
   }
   out.push(...(w.more?.(d) ?? []))
+  if (w.events !== undefined) {
+    const ev = d.events
+    const want = w.events ? `${Math.min(w.events, 10)} rows${w.events > 10 ? ` of ${w.events}` : ''}` : 'None'
+    const got = !ev ? 'no Events section' : ev.rows ? `${ev.rows} rows${ev.total !== null ? ` of ${ev.total}` : ''}` : ev.text
+    if (got !== want) out.push(`Events: drawer ${JSON.stringify(got)}, kubectl ${JSON.stringify(want)}`)
+  }
   // a number nothing compares
   const covered = (label: string) => label in (w.rows ?? {}) || label in (w.ifShown ?? {}) || label in (w.spans ?? {}) || label in (w.pairs ?? {}) || label in (w.counts ?? {}) || label in (w.skip ?? {})
   for (const [label, values] of Object.entries(shown)) if (values.some((v) => NUMBER.test(v)) && !covered(label)) out.push(`row ${label} = ${values.join(' | ')} is not compared`)
@@ -595,7 +616,11 @@ test.describe('number check — drawers', () => {
       const want = (s: Snap): Want => {
         const o = t.kind === 'Node' ? s.node : t.kind === 'Namespace' ? s.namespace : one(s, t.kind, t.ref.split('/')[1])
         const w = t.want(s)
-        return { ...w, ifShown: { 'Resource Version': o?.metadata.resourceVersion ?? '', ...w.ifShown }, spans: { Created: since(o?.metadata.creationTimestamp), ...w.spans } }
+        // the events kubectl lists about it in the namespace (a node's are recorded elsewhere; Ingress and NetworkPolicy
+        // drawers list none)
+        const about = `${t.kind.toLowerCase()}/${o?.metadata.name}`
+        const events = ['Node', 'Ingress', 'NetworkPolicy'].includes(t.kind) ? {} : { events: s.events.filter((e) => e.Object === about).length }
+        return { ...w, ...events, ifShown: { 'Resource Version': o?.metadata.resourceVersion ?? '', ...w.ifShown }, spans: { Created: since(o?.metadata.creationTimestamp), ...w.spans } }
       }
       // the cluster read before and after the drawer, so a value that moves (a crashing pod's restarts) matches one of them
       const diff = async () => {

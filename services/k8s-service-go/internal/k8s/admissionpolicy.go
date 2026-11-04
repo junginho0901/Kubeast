@@ -50,7 +50,7 @@ func (s *Service) DescribeValidatingAdmissionPolicy(ctx context.Context, name st
 	if cs == nil {
 		return nil, errNotLoaded
 	}
-	events := make(chan []map[string]interface{}, 1)
+	events := make(chan func(map[string]interface{}), 1)
 	go func() { events <- s.clusterObjectEvents(ctx, "ValidatingAdmissionPolicy", name) }()
 	p, err := cs.AdmissionregistrationV1().ValidatingAdmissionPolicies().Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
@@ -73,7 +73,7 @@ func (s *Service) DescribeValidatingAdmissionPolicy(ctx context.Context, name st
 	out["validations_count"] = len(p.Spec.Validations)
 	out["spec"] = asJSON(p.Spec)
 	out["status"] = asJSON(p.Status)
-	out["events"] = <-events
+	(<-events)(out)
 	return out, nil
 }
 
@@ -112,7 +112,7 @@ func (s *Service) DescribeMutatingAdmissionPolicy(ctx context.Context, name stri
 	if cs == nil {
 		return nil, errNotLoaded
 	}
-	events := make(chan []map[string]interface{}, 1)
+	events := make(chan func(map[string]interface{}), 1)
 	go func() { events <- s.clusterObjectEvents(ctx, "MutatingAdmissionPolicy", name) }()
 	p, err := cs.AdmissionregistrationV1().MutatingAdmissionPolicies().Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
@@ -135,21 +135,17 @@ func (s *Service) DescribeMutatingAdmissionPolicy(ctx context.Context, name stri
 	out["mutations_count"] = len(p.Spec.Mutations)
 	out["reinvocation_policy"] = string(p.Spec.ReinvocationPolicy)
 	out["spec"] = asJSON(p.Spec)
-	out["events"] = <-events
+	(<-events)(out)
 	return out, nil
 }
 
-// clusterObjectEvents are the events about a cluster-scoped object as the other drawers find them (involvedObject name
-// and kind, in every namespace), newest first; none when they cannot be read.
-func (s *Service) clusterObjectEvents(ctx context.Context, kind, name string) []map[string]interface{} {
+// clusterObjectEvents lists the events about a cluster-scoped object as the other drawers find them (involvedObject name
+// and kind, in every namespace); the func it returns puts them, or why they could not be listed, on a describe answer.
+func (s *Service) clusterObjectEvents(ctx context.Context, kind, name string) func(map[string]interface{}) {
 	events, err := s.clientsetCtx(ctx).CoreV1().Events("").List(ctx, metav1.ListOptions{
 		FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=%s", name, kind),
 	})
-	if err != nil {
-		return formatEventList(nil)
-	}
-	sortEventsByTime(events.Items)
-	return formatEventList(events.Items)
+	return func(result map[string]interface{}) { setEvents(result, events, err) }
 }
 
 func admissionPolicyRow(meta *metav1.ObjectMeta, failure *admissionregistrationv1.FailurePolicyType, param *admissionregistrationv1.ParamKind, bindings []string) map[string]interface{} {

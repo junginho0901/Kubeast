@@ -5,7 +5,7 @@ import type { PodInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
-import { InfoSection, InfoRow, InfoGrid, SummaryBadge, KeyValueTags, ConditionsTable, EventsTable, StatusBadge, Th, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, InfoGrid, SummaryBadge, KeyValueTags, ConditionsTable, EventsSection, StatusBadge, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { usePagination } from './usePagination'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -73,7 +73,6 @@ export default function PDBInfo({ name, namespace }: Props) {
   const selector: Record<string, string> = desc.selector || {}
   const matchExpressions: any[] = desc.match_expressions || []
   const conditions: any[] = desc.conditions || []
-  const events: any[] = desc.events || []
   const unhealthyPodEvictionPolicy = desc.unhealthy_pod_eviction_policy || null
 
   const isHealthy = disruptionsAllowed > 0 || currentHealthy >= desiredHealthy
@@ -201,9 +200,7 @@ export default function PDBInfo({ name, namespace }: Props) {
       </InfoSection>
 
       {/* Events */}
-      <InfoSection title="Events">
-        <EventsTable events={events} />
-      </InfoSection>
+      <EventsSection events={desc.events} error={desc.events_error} />
 
       {/* Labels & Annotations */}
       <InfoSection title="Labels">

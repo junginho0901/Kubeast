@@ -54,11 +54,6 @@ func (s *Service) DescribeDeployment(ctx context.Context, namespace, name string
 	if depErr != nil {
 		return nil, fmt.Errorf("get deployment %s/%s: %w", namespace, name, depErr)
 	}
-	if eventsErr != nil {
-		events = &corev1.EventList{}
-	}
-	sortEventsByTime(events.Items)
-
 	result := formatDeploymentDetail(dep)
 
 	// Additional metadata fields for the info modal
@@ -141,7 +136,7 @@ func (s *Service) DescribeDeployment(ctx context.Context, namespace, name string
 	result["conditions"] = conditions
 
 	// Events
-	result["events"] = formatEventList(events.Items)
+	setEvents(result, events, eventsErr)
 
 	return result, nil
 }

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsTable, Th, NoneText, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsSection, Th, NoneText, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { usePagination } from './usePagination'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
@@ -47,7 +47,6 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
   }
 
   const limits: any[] = desc.limits || []
-  const events: any[] = desc.events || []
   const uniqueTypes = [...new Set(limits.map((l: any) => l.type).filter(Boolean))]
 
   return (
@@ -149,9 +148,7 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
       </InfoSection>
 
       {/* Events */}
-      <InfoSection title="Events">
-        <EventsTable events={events} />
-      </InfoSection>
+      <EventsSection events={desc.events} error={desc.events_error} />
 
       {/* Labels & Annotations */}
       <InfoSection title="Labels">

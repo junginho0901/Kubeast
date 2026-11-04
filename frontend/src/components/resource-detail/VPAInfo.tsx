@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, ConditionsTable, EventsTable, Th, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, ConditionsTable, EventsSection, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -60,7 +60,6 @@ export default function VPAInfo({ name, namespace }: Props) {
   const containerPolicies: any[] = desc.container_policies || []
   const conditions: any[] = desc.conditions || []
   const recommendations: any[] = desc.recommendations || []
-  const events: any[] = desc.events || []
 
   return (
     <div className="space-y-4">
@@ -186,9 +185,7 @@ export default function VPAInfo({ name, namespace }: Props) {
       </InfoSection>
 
       {/* Events */}
-      <InfoSection title="Events">
-        <EventsTable events={events} />
-      </InfoSection>
+      <EventsSection events={desc.events} error={desc.events_error} />
 
       {/* Labels & Annotations */}
       <InfoSection title="Labels">

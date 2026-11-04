@@ -193,18 +193,16 @@ function seen(e: Obj): { last: string; count: number } {
   const last = e.series?.lastObservedTime ?? e.lastTimestamp ?? first
   return { last, count: e.series ? e.series.count : (e.count || 1) }
 }
-// the sections every one of these drawers ends with, where the object has them: labels, annotations, events newest
-// first
+// the sections every one of these drawers ends with: labels and annotations where the object has them, and the events
+// newest first — the Events section always, its "None" (a span, which a section here reads as nothing) without events
 function closing(o: Obj, events: Obj[]): Record<string, Section> {
   const out: Record<string, Section> = {}
   if (Object.keys(o.metadata.labels ?? {}).length) out.Labels = section({ tags: tagsOf(o.metadata.labels) })
   if (Object.keys(o.metadata.annotations ?? {}).length) out.Annotations = section({ tags: tagsOf(o.metadata.annotations) })
-  if (events.length) {
-    const rows = events.map((e) => ({ e, ...seen(e) })).sort((a, b) => Date.parse(b.last) - Date.parse(a.last))
-      .map(({ e, last, count }) => [dash(e.type), dash(e.reason), dash(e.message), at(last), String(count)])
-    const { page, pagers } = paged(rows)
-    out.Events = section({ tables: [{ head: ['Type', 'Reason', 'Message', 'Last Seen', 'Count'], rows: page }], pagers })
-  }
+  const rows = events.map((e) => ({ e, ...seen(e) })).sort((a, b) => Date.parse(b.last) - Date.parse(a.last))
+    .map(({ e, last, count }) => [dash(e.type), dash(e.reason), dash(e.message), at(last), String(count)])
+  const { page, pagers } = paged(rows)
+  out.Events = rows.length ? section({ tables: [{ head: ['Type', 'Reason', 'Message', 'Last Seen', 'Count'], rows: page }], pagers }) : section()
   return out
 }
 // pods as kubectl get pods prints them (the API server's Table): STATUS, READY, RESTARTS without "(… ago)"

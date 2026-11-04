@@ -57,10 +57,7 @@ func (s *Service) DescribeRoleBinding(ctx context.Context, namespace, name strin
 	result := formatRoleBindingDetail(rb)
 
 	// Events
-	if eventsErr == nil {
-		sortEventsByTime(events.Items)
-		result["events"] = formatEventList(events.Items)
-	}
+	setEvents(result, events, eventsErr)
 
 	return result, nil
 }

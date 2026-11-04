@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import type { BackendTLSPolicyInfo as BackendTLSPolicyRow } from '@/services/api'
-import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, NoneText, Th, Tx } from './DetailCommon'
+import { ConditionsTable, EventsSection, InfoSection, InfoRow, KeyValueTags, NoneText, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { formatParentRef } from './gatewayDetail'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -17,6 +17,7 @@ type BackendTLSPolicyDescribe = BackendTLSPolicyRow & {
   validation?: Record<string, any>
   ancestors?: Array<Record<string, any>>
   events?: Array<Record<string, unknown>>
+  events_error?: string
 }
 
 function text(value: unknown): string {
@@ -50,7 +51,6 @@ export default function BackendTLSPolicyInfo({ name, namespace, rawJson }: Props
   const createdAt = describe?.created_at ?? (meta.creationTimestamp as string | undefined)
 
   const ancestors = Array.isArray(describe?.ancestors) ? describe.ancestors : []
-  const events = Array.isArray(describe?.events) ? describe.events : []
 
   return (
     <>
@@ -144,9 +144,7 @@ export default function BackendTLSPolicyInfo({ name, namespace, rawJson }: Props
         </InfoSection>
       )}
 
-      <InfoSection title="Events">
-        <EventsTable events={events} />
-      </InfoSection>
+      <EventsSection events={describe?.events} error={describe?.events_error} loading={isLoading} />
 
       {Object.keys(labels).length > 0 && (
         <InfoSection title="Labels">

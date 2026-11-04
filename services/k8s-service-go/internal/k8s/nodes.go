@@ -185,10 +185,7 @@ func (s *Service) DescribeNode(ctx context.Context, name string) (map[string]int
 	result["volumes_in_use"] = volumesInUse
 
 	// Events
-	if eventsErr == nil {
-		sortEventsByTime(events.Items)
-		result["events"] = formatEventList(events.Items)
-	}
+	setEvents(result, events, eventsErr)
 
 	result["annotations"] = node.Annotations
 

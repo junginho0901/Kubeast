@@ -237,10 +237,7 @@ func (s *Service) DescribeNamespace(ctx context.Context, name string) (map[strin
 	res["conditions"] = conditions
 
 	// Events
-	if eventsErr == nil && events != nil {
-		sortEventsByTime(events.Items)
-		res["events"] = formatEventList(events.Items)
-	}
+	setEvents(res, events, eventsErr)
 
 	return res, nil
 }

@@ -130,10 +130,7 @@ func (s *Service) DescribeVolumeAttachment(ctx context.Context, name string) (ma
 	}
 
 	// Events
-	if eventsErr == nil {
-		sortEventsByTime(events.Items)
-		result["events"] = formatEventList(events.Items)
-	}
+	setEvents(result, events, eventsErr)
 
 	return result, nil
 }
