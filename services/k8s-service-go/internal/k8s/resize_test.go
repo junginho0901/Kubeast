@@ -93,7 +93,7 @@ func TestResizePendingReasonAndKinds(t *testing.T) {
 // Kind Pod names one pod whatever owns it (the Pod drawer); a workload kind
 // takes the owner's word.
 func TestMatchesResizeTarget(t *testing.T) {
-	owner := func(p corev1.Pod) (string, string) { return "Deployment", "web" }
+	owner := func(p corev1.Pod) (string, string, string) { return "Deployment", "web", "apps/v1" }
 	owned := &corev1.Pod{}
 	owned.Name = "web-abc-1"
 	other := &corev1.Pod{}

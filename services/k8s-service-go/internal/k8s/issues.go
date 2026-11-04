@@ -23,6 +23,8 @@ type Issue struct {
 	Reason    string `json:"reason,omitempty"`
 	Message   string `json:"message,omitempty"`
 	LastSeen  string `json:"last_seen,omitempty"`
+	// APIVersion is the event's object's, on a row an event made, so a Kind two groups serve opens the right object.
+	APIVersion string `json:"api_version,omitempty"`
 	// Each number counts one thing: a pod's restarts (kubectl's RESTARTS), a Job's failed pods, and how many times the
 	// issue's newest Warning event happened (kubectl get events' COUNT).
 	Restarts int `json:"restarts,omitempty"`
@@ -111,8 +113,8 @@ func (s *Service) podIssues(ctx context.Context, opts IssuesOptions) ([]Issue, e
 }
 
 // warningEventRows: the Warning events since since (the API server selects type=Warning), read a page at a time —
-// in each namespace of a namespace-limited user's scope, as listAcrossNamespaces — the newest of each object kept:
-// what mergeEvents takes from them.
+// in each namespace of a namespace-limited user's scope, as listAcrossNamespaces — the newest of each object kept (by
+// eventObjectKind, as mergeEvents keys them): what mergeEvents takes from them.
 func (s *Service) warningEventRows(ctx context.Context, since time.Time) ([]map[string]interface{}, error) {
 	return s.listAcrossNamespaces(ctx, func(namespace string) ([]map[string]interface{}, error) {
 		return s.warningEventRowsIn(ctx, namespace, since)
@@ -126,7 +128,7 @@ func (s *Service) warningEventRowsIn(ctx context.Context, namespace string, sinc
 		if eventTimestamp(*e).Before(since) {
 			return
 		}
-		id := issueID(e.InvolvedObject.Kind, e.InvolvedObject.Namespace, e.InvolvedObject.Name)
+		id := issueID(eventObjectKind(e.InvolvedObject.Kind, e.InvolvedObject.APIVersion), e.InvolvedObject.Namespace, e.InvolvedObject.Name)
 		if prev, ok := newest[id]; ok && !eventTimestamp(*e).After(eventTimestamp(*prev)) {
 			return
 		} else if !ok {
@@ -415,13 +417,18 @@ var issueKindGroups = map[string]string{
 	"Job": "batch", "CronJob": "batch", "HorizontalPodAutoscaler": "autoscaling",
 }
 
+// apiGroup is an apiVersion's group ("" for the core v1).
+func apiGroup(apiVersion string) string {
+	if i := strings.Index(apiVersion, "/"); i > 0 {
+		return apiVersion[:i]
+	}
+	return ""
+}
+
 // eventObjectKind is the kind an event's object is keyed by: the kind, with its group when that is not the group of
 // the check's own kind of that name.
 func eventObjectKind(kind, apiVersion string) string {
-	group := ""
-	if i := strings.Index(apiVersion, "/"); i > 0 {
-		group = apiVersion[:i]
-	}
+	group := apiGroup(apiVersion)
 	if g, ok := issueKindGroups[kind]; group == "" || (ok && g == group) {
 		return kind
 	}
@@ -464,7 +471,7 @@ func mergeEvents(issues []Issue, events []map[string]interface{}, now time.Time,
 			continue
 		}
 		if prev, ok := extra[id]; !ok || ts > prev.LastSeen {
-			extra[id] = Issue{ID: id, Kind: kind, Namespace: ns, Name: name, Severity: severityWarning, Reason: reason, Message: msg, LastSeen: ts, Events: count}
+			extra[id] = Issue{ID: id, Kind: kind, APIVersion: mapStr(obj, "api_version"), Namespace: ns, Name: name, Severity: severityWarning, Reason: reason, Message: msg, LastSeen: ts, Events: count}
 		}
 	}
 	for _, is := range extra {

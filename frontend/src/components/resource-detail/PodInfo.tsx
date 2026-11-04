@@ -806,7 +806,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                     {ownerRefs.map((ref: any, idx: number) => (
                       <div key={`${ref.kind || 'Owner'}-${ref.name || idx}`}>
                         <span className="font-medium">{ref.kind || '-'}</span>/
-                        {ref.name ? <ResourceLink kind={ref.kind} name={ref.name} namespace={namespace} /> : '-'}
+                        {ref.name ? <ResourceLink kind={ref.kind} name={ref.name} namespace={namespace} apiVersion={ref.api_version ?? ref.apiVersion} /> : '-'}
                         {ref.controller ? ` ${dl('(controller)')}` : ''}
                       </div>
                     ))}

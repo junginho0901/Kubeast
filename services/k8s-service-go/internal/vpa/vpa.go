@@ -36,9 +36,9 @@ func Info(u *unstructured.Unstructured) map[string]interface{} {
 	spec := object(u.Object, "spec")
 	status := object(u.Object, "status")
 
-	targetRef, kind, name := "", "", ""
+	targetRef, kind, name, apiVersion := "", "", "", ""
 	if ref := object(spec, "targetRef"); ref != nil {
-		kind, name = str(ref, "kind"), str(ref, "name")
+		kind, name, apiVersion = str(ref, "kind"), str(ref, "name"), str(ref, "apiVersion")
 		targetRef = fmt.Sprintf("%s/%s", kind, name)
 	}
 
@@ -115,5 +115,7 @@ func Info(u *unstructured.Unstructured) map[string]interface{} {
 		"provided":           provided,
 		"labels":             u.GetLabels(),
 		"created_at":         u.GetCreationTimestamp().UTC().Format(time.RFC3339),
+		// the target's apiVersion, so a Kind two groups serve opens the right object
+		"target_ref_api_version": apiVersion,
 	}
 }

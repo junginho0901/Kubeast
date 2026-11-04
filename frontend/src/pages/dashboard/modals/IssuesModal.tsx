@@ -67,7 +67,7 @@ export function IssuesModal({
       generated_at: generatedAt,
       error,
       visible_items: sortedIssues.slice(0, 30).map((i) => ({
-        kind: i.kind, name: i.name, namespace: i.namespace, severity: i.severity, title: i.title, detail: i.subtitle,
+        kind: i.kind, api_version: i.apiVersion, name: i.name, namespace: i.namespace, severity: i.severity, title: i.title, detail: i.subtitle,
         restarts: i.restarts, failed: i.failed, events: i.events, last_seen: i.lastSeen, _link: i.name ? buildResourceLink(i.kind, i.namespace, i.name) : undefined,
       })),
     },

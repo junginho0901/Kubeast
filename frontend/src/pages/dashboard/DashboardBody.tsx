@@ -16,6 +16,7 @@ import { DashboardNodeList } from './DashboardNodeList'
 import { StatsGrid } from './StatsGrid'
 import { PrometheusClusterMetrics } from './PrometheusClusterMetrics'
 import { namespaceCounts } from './namespaceCounts'
+import { issueTarget } from './issues'
 import { IssuesModal } from './modals/IssuesModal'
 import { OptimizationModal } from './modals/OptimizationModal'
 import { ResourceModal } from './modals/ResourceModal'
@@ -210,9 +211,10 @@ export function DashboardBody() {
 
   // 이슈 행 클릭 → 그 객체의 드로어 (Collector 행은 열 곳이 없음).
   const handleOpenIssue = (issue: IssueItem) => {
-    if (issue.kind === 'Collector' || !issue.name) return
+    const target = issueTarget(issue)
+    if (!target) return
     closeIssuesModal()
-    openDetail({ kind: issue.kind, name: issue.name, namespace: issue.namespace })
+    openDetail(target)
   }
 
   useEffect(() => {

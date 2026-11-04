@@ -27,6 +27,8 @@ export interface HygieneFinding {
   check: string
   severity: HygieneSeverity
   kind: string
+  // a pod finding's owner's apiVersion
+  api_version?: string
   namespace?: string
   name: string
   container?: string

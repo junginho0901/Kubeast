@@ -1,5 +1,6 @@
 import type { AlertInboxItem, AlertStoreAlert } from '@/services/api/alertInbox'
 import type { ResourceDetailTarget } from '@/components/ResourceDetailContext'
+import { detailTarget } from '@/components/resource-detail/crDetail'
 
 // The object an alert is about, from the labels kube-state-metrics and the kube-prometheus rules put on it:
 // the most specific one first. `service` is left out (it names the scrape target there, not the object).
@@ -12,6 +13,14 @@ const CLUSTER_SCOPED: [string, string][] = [['node', 'Node'], ['persistentvolume
 
 export function alertResource(labels: Record<string, string>): ResourceDetailTarget | null {
   const namespace = labels.namespace
+  // a custom resource's: kube-state-metrics' custom resource state metrics label every series with
+  // customresource_group, _version and _kind, and name the object as their config's labelsFromPath does — `name`, or
+  // the kind in lower case as its own metrics do
+  const crKind = labels.customresource_kind
+  const crName = crKind ? labels[crKind.toLowerCase()] || labels.name : ''
+  if (crKind && crName && labels.customresource_group && labels.customresource_version) {
+    return detailTarget(crKind, crName, namespace, `${labels.customresource_group}/${labels.customresource_version}`)
+  }
   if (namespace) {
     for (const [label, kind] of NAMESPACED) if (labels[label]) return { kind, namespace, name: labels[label] }
   }

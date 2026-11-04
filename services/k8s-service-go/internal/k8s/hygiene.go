@@ -102,6 +102,9 @@ type HygieneFinding struct {
 	Container string `json:"container,omitempty"`
 	Pods      int    `json:"pods,omitempty"`
 	Message   string `json:"message"`
+	// APIVersion is a pod finding's owner's (its controller reference), so a Kind two groups serve opens the right
+	// object.
+	APIVersion string `json:"api_version,omitempty"`
 	// MessageKey and MessageArgs are the same sentence for the UI catalog (clusterHygiene.message.<key>), so
 	// the screen shows it in its own language; Message stays English for the API, CSV and sign-off snapshots.
 	MessageKey     string            `json:"message_key,omitempty"`
@@ -341,10 +344,10 @@ func newHygienePodSummary(target int) *hygienePodSummary {
 
 func (s *hygienePodSummary) add(p *corev1.Pod) {
 	s.perNS[p.Namespace]++
-	kind, name := podOwner(*p)
+	kind, name, apiVersion := podOwner(*p)
 	own := parseExemption(p.Annotations)
 	for _, f := range append(podHygieneFindings(*p), podUpgradeFindings(*p, s.target)...) {
-		f.Kind, f.Namespace, f.Name = kind, p.Namespace, name
+		f.Kind, f.APIVersion, f.Namespace, f.Name = kind, apiVersion, p.Namespace, name
 		key := hygieneRowKey(f, []hygieneExemption{own})
 		if i, seen := s.index[key]; seen {
 			s.findings[i].pods++
@@ -382,8 +385,9 @@ func hygieneTarget(opts HygieneOptions, serverVersion string) int {
 	return opts.TargetMinor
 }
 
+// hygieneFindingKey: an owner of another API group with the same Kind and name is another object.
 func hygieneFindingKey(f HygieneFinding) string {
-	return strings.Join([]string{f.Check, f.Kind, f.Namespace, f.Name, f.Container}, "|")
+	return strings.Join([]string{f.Check, f.Kind, apiGroup(f.APIVersion), f.Namespace, f.Name, f.Container}, "|")
 }
 
 // hygieneRowKey is a report row: the finding, its message and the exemption that covers it (the first of exs, as
@@ -855,24 +859,24 @@ func mountsServiceAccountToken(spec corev1.PodSpec) bool {
 	return false
 }
 
-// podOwner names the workload a pod belongs to (a ReplicaSet's Deployment by
+// podOwner names the workload a pod belongs to, with its apiVersion (a ReplicaSet's Deployment by
 // its pod-template-hash; static pods stay pods).
-func podOwner(p corev1.Pod) (string, string) {
+func podOwner(p corev1.Pod) (string, string, string) {
 	for _, o := range p.OwnerReferences {
 		if o.Controller == nil || !*o.Controller {
 			continue
 		}
 		switch o.Kind {
 		case "Node":
-			return "Pod", p.Name
+			return "Pod", p.Name, "v1"
 		case "ReplicaSet":
 			if h := p.Labels["pod-template-hash"]; h != "" && strings.HasSuffix(o.Name, "-"+h) {
-				return "Deployment", strings.TrimSuffix(o.Name, "-"+h)
+				return "Deployment", strings.TrimSuffix(o.Name, "-"+h), "apps/v1"
 			}
 		}
-		return o.Kind, o.Name
+		return o.Kind, o.Name, o.APIVersion
 	}
-	return "Pod", p.Name
+	return "Pod", p.Name, "v1"
 }
 
 // --- RBAC and TLS ---------------------------------------------------------
