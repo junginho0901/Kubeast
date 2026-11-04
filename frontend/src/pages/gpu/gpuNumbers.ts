@@ -1,7 +1,7 @@
 // The numbers the three GPU screens (Dashboard, Nodes, Pods) count from /cluster/gpu/dashboard and /cluster/gpu/metrics.
 // The server counts the GPUs as kubectl describe node does (gpu_dashboard.go); these count the rows.
 
-import type { GPUDevicePlugin, GPUDeviceMetric, GPUNodeInfo, GPUNodeVendor, GPUPodInfo, GPUVendor } from '@/services/api'
+import type { GPUDashboardData, GPUDevicePlugin, GPUDeviceMetric, GPUNodeInfo, GPUNodeVendor, GPUPodInfo, GPUVendor } from '@/services/api'
 import { nodeReadiness } from '@/utils/nodeStatus'
 
 // The companies Kubernetes' "Schedule GPUs" names, in the order the screens list them (gpu_dashboard.go gpuVendors).
@@ -153,6 +153,35 @@ export function gpuPodCounts(pods: GPUPodInfo[]) {
     requested: pods.filter((p) => !ended(p)).reduce((sum, p) => sum + p.gpu_requested, 0),
     namespaces: new Set(pods.map((p) => p.namespace)).size,
   }
+}
+
+// The GPU Pods charts: each STATUS and its pods, and each node ('' for the pods no node has taken) with its pods and
+// the GPUs they ask for, the most first — every one of them.
+export function gpuPodStatuses(pods: GPUPodInfo[]): [string, number][] {
+  const by = new Map<string, number>()
+  for (const p of pods) by.set(p.status, (by.get(p.status) ?? 0) + 1)
+  return [...by].sort((a, b) => b[1] - a[1])
+}
+
+export function gpuPodsByNode(pods: GPUPodInfo[]): [string, { podCount: number; totalGpu: number }][] {
+  const by = new Map<string, { podCount: number; totalGpu: number }>()
+  for (const p of pods) {
+    const e = by.get(p.node_name || '') ?? { podCount: 0, totalGpu: 0 }
+    by.set(p.node_name || '', { podCount: e.podCount + 1, totalGpu: e.totalGpu + p.gpu_requested })
+  }
+  return [...by].sort((a, b) => b[1].totalGpu - a[1].totalGpu)
+}
+
+// The pods a GPU's DCGM series may name (namespace/name): those asking for GPUs and those an allocated DRA claim is
+// reserved for. An exporter scraped as its own pod labels an idle GPU's series with that pod, which is neither.
+export function gpuHolderPods(data: Pick<GPUDashboardData, 'gpu_pods' | 'dra_pods'>): Set<string> {
+  return new Set([...data.gpu_pods, ...(data.dra_pods ?? [])].map((p) => `${p.namespace}/${p.name}`))
+}
+
+// The pod a GPU's series names when it is one of those, else ''.
+export function gpuSeriesPod(gpu: GPUDeviceMetric, holders: Set<string>): string {
+  const key = `${gpu.exported_namespace}/${gpu.exported_pod}`
+  return gpu.exported_pod && holders.has(key) ? key : ''
 }
 
 export type DevicePluginState = 'healthy' | 'unhealthy' | 'missing'

@@ -1,7 +1,7 @@
 // gpu_dashboard.go — GPU 대시보드 (노드/포드/디바이스플러그인/타임슬라이싱) 통합 응답.
 //
-// gpu.go 에서 분리. GetGPUDashboard 가 4-fan-out goroutine (Nodes / Pods /
-// DevicePlugin DS / TimeSlicing CM) 로 모은 데이터를 노드·포드 단위로 정제.
+// gpu.go 에서 분리. GetGPUDashboard 가 5-fan-out goroutine (Nodes / Pods /
+// DevicePlugin DS / TimeSlicing CM / DRA ResourceClaims) 로 모은 데이터를 노드·포드 단위로 정제.
 // GPU 수량은 "Schedule GPUs" 문서의 세 회사(NVIDIA·AMD·Intel) device plugin 이
 // 장치 하나씩 광고하는 이름을 더한 값 (gpuVendorOf).
 
@@ -20,6 +20,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	resourcehelper "k8s.io/component-helpers/resource"
+
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/drarow"
 )
 
 // ========== GPU Dashboard ==========
@@ -35,14 +37,15 @@ func (s *Service) GetGPUDashboard(ctx context.Context) (map[string]interface{}, 
 		podErr            error
 		devicePlugins     map[string]map[string]interface{}
 		timeSlicingConfig map[string]interface{}
+		draPods           = []map[string]interface{}{}
 		gpuPods           = make([]map[string]interface{}, 0)
 		usedByNode        = map[string]map[string]int{}
 		waitingByVendor   = map[string]int{}
 	)
 
-	// Fetch nodes, pods, device plugins, and time-slicing config all in parallel
+	// Fetch nodes, pods, device plugins, time-slicing config and the DRA claims all in parallel
 	var wg sync.WaitGroup
-	wg.Add(4)
+	wg.Add(5)
 	go func() {
 		defer wg.Done()
 		nodeList, nodeErr = s.clientsetCtx(ctx).CoreV1().Nodes().List(dashCtx, metav1.ListOptions{})
@@ -97,6 +100,16 @@ func (s *Service) GetGPUDashboard(ctx context.Context) (map[string]interface{}, 
 	go func() {
 		defer wg.Done()
 		timeSlicingConfig = getTimeSlicingConfig(dashCtx, s)
+	}()
+	go func() {
+		defer wg.Done()
+		// the pods that hold devices through DRA, which a GPU's DCGM series may name (none when the claims cannot be read)
+		if s.isDRAUnavailable(dashCtx) {
+			return
+		}
+		if claims, err := s.draClaims(dashCtx); err == nil {
+			draPods = drarow.ReservedPods(claims)
+		}
 	}()
 	wg.Wait()
 
@@ -235,6 +248,7 @@ func (s *Service) GetGPUDashboard(ctx context.Context) (map[string]interface{}, 
 		"mig_enabled":           migEnabled,
 		"time_slicing_enabled":  timeSlicingEnabled,
 		"time_slicing_config":   timeSlicingConfig,
+		"dra_pods":              draPods,
 	}, nil
 }
 
@@ -385,15 +399,18 @@ func gpuDriverVersion(labels map[string]string) string {
 type dsRef struct{ namespace, name string }
 
 // devicePluginNames are the DaemonSets each company's device plugin runs as when installed its documented ways:
-// NVIDIA's (static manifest, GPU Operator); AMD's manifest k8s-ds-amdgpu-dp.yaml, its amd-gpu chart in kube-system
-// and its GPU Operator's DeviceConfig of the example name; Intel's kustomize base in default or kube-system and its
-// operator's GpuDevicePlugin of the example and chart name.
+// NVIDIA's (static manifest, GPU Operator, its nvidia-device-plugin chart as release nvdp in the namespace its README
+// and Amazon EKS's guide use); AMD's manifest k8s-ds-amdgpu-dp.yaml, its amd-gpu chart in kube-system and its GPU
+// Operator's DeviceConfig of the example name; Intel's kustomize base in default or kube-system and its operator's
+// GpuDevicePlugin of the example and chart name.
 var devicePluginNames = map[string][]dsRef{
 	"NVIDIA": {
 		{"kube-system", "nvidia-device-plugin-daemonset"},
 		{"gpu-operator", "nvidia-device-plugin-daemonset"},
 		{"nvidia-gpu-operator", "nvidia-device-plugin-daemonset"},
 		{"kube-system", "nvidia-device-plugin"},
+		{"nvidia-device-plugin", "nvdp-nvidia-device-plugin"},
+		{"nvidia", "nvdp-nvidia-device-plugin"},
 	},
 	"AMD": {
 		{"kube-system", "amdgpu-device-plugin-daemonset"},

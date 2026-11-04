@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { GPUDeviceMetric, GPUNodeInfo, GPUPodInfo, GPUVendor } from '@/services/api'
 import {
-  cudaVersion, devicePluginBadges, devicePluginState, driverVersion, gpuCountOf, gpuCountsByVendor, gpuModels, gpuNodeCounts, gpuPodCounts,
-  gpuPodVendorCounts, gpuVendorCounts, gpuVendorLabels, gpuVendorOf, nodeGpuRows, nodeVendorText, podGpuUsage,
+  cudaVersion, devicePluginBadges, devicePluginState, driverVersion, gpuCountOf, gpuCountsByVendor, gpuHolderPods, gpuModels, gpuNodeCounts,
+  gpuPodCounts, gpuPodStatuses, gpuPodsByNode, gpuPodVendorCounts, gpuSeriesPod, gpuVendorCounts, gpuVendorLabels, gpuVendorOf, nodeGpuRows,
+  nodeVendorText, podGpuUsage,
 } from './gpuNumbers'
 
 const node = (name: string, status: string): GPUNodeInfo => ({ name, status, gpu_capacity: 1, gpu_allocatable: 1, gpu_used: 0 })
@@ -148,6 +149,37 @@ describe('GPU screen numbers', () => {
     expect(gpuPodVendorCounts(pods)).toEqual([
       { vendor: 'NVIDIA', pods: 1, requested: 1 }, { vendor: 'AMD', pods: 2, requested: 2 }, { vendor: 'Intel', pods: 1, requested: 1 },
     ])
+  })
+
+  // the GPU Pods charts list every status and every node (the pods no node took as ''), the most first — not the top
+  // five statuses and four nodes
+  it('lists every status and every node of the GPU pods, the most first', () => {
+    const on = (p: GPUPodInfo, node?: string): GPUPodInfo => (node ? { ...p, node_name: node } : p)
+    const pods = [
+      on(pod('r1', 'Running', 'Running', 1), 'n1'), on(pod('r2', 'Running', 'Running', 2), 'n1'), on(pod('r3', 'Running', 'Running', 1), 'n2'),
+      on(pod('crash', 'Running', 'CrashLoopBackOff', 1), 'n3'), on(pod('init', 'Pending', 'Init:0/1', 1), 'n4'),
+      on(pod('ierr', 'Failed', 'Init:Error', 3), 'n5'), on(pod('done', 'Succeeded', 'Completed', 1), 'n6'),
+      on(pod('err', 'Failed', 'Error', 1), 'n2'), pod('wait', 'Pending', 'Pending', 2),
+    ]
+    expect(gpuPodStatuses(pods)).toEqual([
+      ['Running', 3], ['CrashLoopBackOff', 1], ['Init:0/1', 1], ['Init:Error', 1], ['Completed', 1], ['Error', 1], ['Pending', 1],
+    ])
+    expect(gpuPodsByNode(pods)).toEqual([
+      ['n1', { podCount: 2, totalGpu: 3 }], ['n5', { podCount: 1, totalGpu: 3 }], ['n2', { podCount: 2, totalGpu: 2 }], ['', { podCount: 1, totalGpu: 2 }],
+      ['n3', { podCount: 1, totalGpu: 1 }], ['n4', { podCount: 1, totalGpu: 1 }], ['n6', { podCount: 1, totalGpu: 1 }],
+    ])
+  })
+
+  // a GPU's pod is named when the pod asks for GPUs or an allocated DRA claim is reserved for it; the exporter's own pod
+  // on an idle GPU's series, and a series of no pod, name none
+  it('names a GPU\'s pod when it asks for GPUs or holds a DRA claim', () => {
+    const holders = gpuHolderPods({ gpu_pods: [pod('asks', 'Running', 'Running', 1)], dra_pods: [{ namespace: 'ml', name: 'claims' }] })
+    expect([...holders].sort()).toEqual(['ml/asks', 'ml/claims'])
+    expect(gpuSeriesPod(gpu('g0', 'asks', 1, 1, 1), holders)).toBe('ml/asks')
+    expect(gpuSeriesPod(gpu('g1', 'claims', 1, 1, 1), holders)).toBe('ml/claims')
+    expect(gpuSeriesPod({ ...gpu('g2', '', 0, 0, 1), exported_pod: 'dcgm-exporter', exported_namespace: 'monitoring' }, holders)).toBe('')
+    expect(gpuSeriesPod(gpu('g3', '', 0, 0, 1), holders)).toBe('')
+    expect([...gpuHolderPods({ gpu_pods: [] })]).toEqual([])
   })
 
   // GPU Feature Discovery: cuda.driver-version is the driver (550.107.02), cuda.runtime-version the CUDA (12.5)

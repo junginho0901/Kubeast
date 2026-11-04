@@ -6,6 +6,7 @@
 package drarow
 
 import (
+	"sort"
 	"strings"
 	"time"
 
@@ -168,6 +169,38 @@ func SliceAllocations(slice *unstructured.Unstructured, claims []unstructured.Un
 				"request": str(r, "request"), "device": str(r, "device"), "driver": driver, "pool": pool,
 			})
 		}
+	}
+	return out
+}
+
+// ReservedPods are the pods holding allocated devices: the status.reservedFor entries of resource pods (core group)
+// of each claim with an allocation, in the claim's namespace, once each and sorted.
+func ReservedPods(claims []unstructured.Unstructured) []map[string]interface{} {
+	seen := map[[2]string]bool{}
+	var keys [][2]string
+	for i := range claims {
+		status := object(claims[i].Object, "status")
+		if object(status, "allocation") == nil {
+			continue
+		}
+		for _, c := range maps(list(status, "reservedFor")) {
+			k := [2]string{claims[i].GetNamespace(), str(c, "name")}
+			if str(c, "resource") != "pods" || str(c, "apiGroup") != "" || k[1] == "" || seen[k] {
+				continue
+			}
+			seen[k] = true
+			keys = append(keys, k)
+		}
+	}
+	sort.Slice(keys, func(a, b int) bool {
+		if keys[a][0] != keys[b][0] {
+			return keys[a][0] < keys[b][0]
+		}
+		return keys[a][1] < keys[b][1]
+	})
+	out := make([]map[string]interface{}, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, map[string]interface{}{"namespace": k[0], "name": k[1]})
 	}
 	return out
 }

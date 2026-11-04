@@ -307,6 +307,26 @@ func TestGPUDashboard_DevicePluginPerVendor(t *testing.T) {
 	}
 }
 
+// NVIDIA's chart installed as its README and Amazon EKS's guide install it (release nvdp, DaemonSet
+// <release>-nvidia-device-plugin) is found by name, with its states.
+func TestGPUDashboard_NVIDIAPluginOfItsHelmChart(t *testing.T) {
+	for _, ns := range []string{"nvidia-device-plugin", "nvidia"} {
+		ds := appsv1.DaemonSet{ObjectMeta: metav1.ObjectMeta{Name: "nvdp-nvidia-device-plugin", Namespace: ns}, Status: appsv1.DaemonSetStatus{DesiredNumberScheduled: 3, NumberReady: 2, NumberAvailable: 2}}
+		api := &listAPI{objects: map[string]any{
+			"/api/v1/nodes": corev1.NodeList{Items: []corev1.Node{gpuNodeObj("nv", corev1.ConditionTrue, false, nil, gpuList("nvidia.com/gpu", "1"))}},
+			"/apis/apps/v1/namespaces/" + ns + "/daemonsets/nvdp-nvidia-device-plugin": ds,
+		}}
+		res, err := api.serve(t).GetGPUDashboard(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []map[string]interface{}{{"vendor": "NVIDIA", "found": true, "name": "nvdp-nvidia-device-plugin", "namespace": ns, "desired": int32(3), "ready": int32(2), "available": int32(2)}}
+		if got := res["device_plugins"]; !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: device plugins %v, want %v", ns, got, want)
+		}
+	}
+}
+
 // MIG is off when no GPU node names a strategy or each names none.
 func TestGPUDashboard_MIGNoneIsOff(t *testing.T) {
 	api := &listAPI{objects: map[string]any{"/api/v1/nodes": corev1.NodeList{Items: []corev1.Node{

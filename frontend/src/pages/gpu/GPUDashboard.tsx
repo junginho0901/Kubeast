@@ -7,7 +7,7 @@ import { buildResourceLink } from '@/utils/resourceLink'
 import { forbiddenResourceFromUrl } from '@/utils/forbiddenResource'
 import { isForbiddenError } from '@/services/api'
 import { nodeReadiness } from '@/utils/nodeStatus'
-import { devicePluginState, gpuNodeCounts } from './gpuNumbers'
+import { devicePluginState, gpuHolderPods, gpuNodeCounts } from './gpuNumbers'
 import type { GPUDevicePlugin } from '@/services/api'
 import { RefreshCw } from 'lucide-react'
 
@@ -131,7 +131,7 @@ export default function GPUDashboard() {
   if (!data || (data.total_gpu_capacity === 0 && data.gpu_pods.length === 0)) return <GPUDashboardEmpty tr={tr} onRefetch={() => refetch()} />
 
   const { ready: nodeReadyCount, notReady: nodeNotReadyCount } = gpuNodeCounts(data.gpu_nodes)
-  const gpuPodKeys = new Set(data.gpu_pods.map((p) => `${p.namespace}/${p.name}`))
+  const gpuPodKeys = gpuHolderPods(data)
 
   return (
     <div className="space-y-6">

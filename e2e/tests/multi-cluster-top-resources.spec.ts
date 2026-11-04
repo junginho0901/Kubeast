@@ -11,6 +11,11 @@ import { test, expect, type Page } from '@playwright/test'
 //
 // The test needs one registered cluster that serves metrics (its top node name
 // is the marker) and one that does not; which is which comes from the API.
+//
+// The switch is the render that gives the picker the new cluster: the router
+// moves ?cluster= in a transition, so the click returns before it, and until
+// then the page rightly shows the prior cluster. Every DOM change from that
+// render on is checked, so a bleed of one render is caught too.
 
 async function topNodeName(page: Page, cluster: string): Promise<string | null | undefined> {
   const res = await page.request.get(`/api/v1/cluster/metrics/top-resources?cluster=${cluster}`)
@@ -22,6 +27,9 @@ async function topNodeName(page: Page, cluster: string): Promise<string | null |
 async function pageHas(page: Page, text: string): Promise<boolean> {
   return (await page.content()).includes(text)
 }
+
+type Watch = { switched: boolean; bled: string[] }
+const watched = (page: Page) => page.evaluate(() => (window as unknown as { __topN: Watch }).__topN)
 
 test.describe('multi-cluster top-resources', () => {
   test('switching to a metrics-less cluster never shows the prior cluster top-N', async ({ page }) => {
@@ -41,9 +49,28 @@ test.describe('multi-cluster top-resources', () => {
     // sanity: the metrics cluster surfaces its own top node
     await expect.poll(() => pageHas(page, marker), { timeout: 15000 }).toBe(true)
 
+    // from the render where the picker stops naming the prior cluster, note every state of the page that holds the
+    // prior cluster's top node — read once the picker names it as the cluster list does (before, it shows the id)
+    const picker = page.getByTestId('cluster-picker')
+    const listed = await page.request.get('/api/v1/clusters?accessibleOnly=true')
+    const items = (listed.ok() ? (await listed.json()).items ?? [] : []) as Array<{ id: string; display_name?: string }>
+    await expect(picker).toContainText(items.find((c) => c.id === withMetrics)?.display_name || withMetrics!)
+    const prior = (await picker.innerText()).trim()
+    await page.evaluate(({ marker, prior }) => {
+      const w = window as unknown as { __topN: Watch }
+      w.__topN = { switched: false, bled: [] }
+      const check = () => {
+        const now = (document.querySelector('[data-testid="cluster-picker"]') as HTMLElement | null)?.innerText.trim() ?? ''
+        if (now !== prior) w.__topN.switched = true
+        if (w.__topN.switched && w.__topN.bled.length < 10 && document.documentElement.outerHTML.includes(marker)) w.__topN.bled.push(now)
+      }
+      new MutationObserver(check).observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true })
+    }, { marker, prior })
+
     // switch to the cluster without metrics-server
-    await page.getByTestId('cluster-picker').click()
+    await picker.click()
     await page.getByTestId(`cluster-option-${without}`).click()
+    await expect.poll(async () => (await watched(page)).switched, { timeout: 10_000, message: 'the picker names the new cluster' }).toBe(true)
 
     // over the next several seconds the prior cluster's top-N must never appear
     // (covers the flicker: it would otherwise blink in and out on each refetch).
@@ -51,5 +78,6 @@ test.describe('multi-cluster top-resources', () => {
       expect(await pageHas(page, marker), 'prior cluster top-N bled onto the new cluster').toBe(false)
       await page.waitForTimeout(300)
     }
+    expect((await watched(page)).bled, 'prior cluster top-N in a render after the switch (the picker text then)').toEqual([])
   })
 })

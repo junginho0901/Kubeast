@@ -7,23 +7,21 @@
 
 import { Activity } from 'lucide-react'
 import type { GPUMetricsData, GPUDeviceMetric } from '@/services/api'
+import { gpuSeriesPod } from '../gpuNumbers'
 
 interface Props {
   metricsAvailable: boolean
   metrics: GPUMetricsData | undefined
   gpusByHost: Map<string, GPUDeviceMetric[]>
-  // namespace/name of the pods that ask for a GPU: a GPU's pod is named only when it is one of them (an exporter
-  // scraped as its own pod labels an idle GPU's series with that pod)
+  // namespace/name of the pods that ask for a GPU or hold a DRA claim's devices (gpuHolderPods): a GPU's pod is named
+  // only when it is one of them
   gpuPodKeys: Set<string>
   tr: (key: string, fallback: string, options?: Record<string, unknown>) => string
 }
 
 export function RealtimeMetricsSection({ metricsAvailable, metrics, gpusByHost, gpuPodKeys, tr }: Props) {
   if (!metricsAvailable || !metrics) return null
-  const podOf = (gpu: GPUDeviceMetric) => {
-    const key = `${gpu.exported_namespace}/${gpu.exported_pod}`
-    return gpu.exported_pod && gpuPodKeys.has(key) ? key : ''
-  }
+  const podOf = (gpu: GPUDeviceMetric) => gpuSeriesPod(gpu, gpuPodKeys)
 
   return (
     <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-5" data-testid="gpu-realtime">
