@@ -12,6 +12,7 @@ import { api, isForbiddenError, TimelineEvent, RolloutRevision } from '@/service
 import { forbiddenResourceFromUrl } from '@/utils/forbiddenResource'
 import CustomDropdown from '@/components/CustomDropdown'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { detailTarget } from '@/components/resource-detail/crDetail'
 import { useAIContext } from '@/hooks/useAIContext'
 import { absoluteTitle, formatAge, formatDate } from '@/utils/time'
 
@@ -127,8 +128,9 @@ export default function Timeline() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleResourceClick = useCallback((kind: string, name: string, ns: string) => {
-    openDetail({ kind, name, namespace: ns })
+  // an event's object goes with its apiVersion, so a Kind two groups serve opens the right group's object
+  const handleResourceClick = useCallback((kind: string, name: string, ns: string, apiVersion?: string) => {
+    openDetail(detailTarget(kind, name, ns, apiVersion))
   }, [openDetail])
 
   // Collect unique namespaces from the list
@@ -368,7 +370,7 @@ function EventRow({
   t,
 }: {
   event: TimelineEvent
-  onResourceClick: (kind: string, name: string, ns: string) => void
+  onResourceClick: (kind: string, name: string, ns: string, apiVersion?: string) => void
   showNamespace?: boolean
   t: any
 }) {
@@ -414,7 +416,7 @@ function EventRow({
         </p>
         <div className="flex items-center gap-2 mt-1">
           <button
-            onClick={() => onResourceClick(event.resource.kind, event.resource.name, event.resource.namespace)}
+            onClick={() => onResourceClick(event.resource.kind, event.resource.name, event.resource.namespace, event.resource.api_version)}
             className="text-[11px] text-primary-600 dark:text-primary-400 hover:underline"
           >
             {showNamespace && event.resource.namespace ? `${event.resource.namespace} · ` : ''}{event.resource.kind}/{event.resource.name}

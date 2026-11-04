@@ -380,7 +380,7 @@ test.describe('number check — no drawer row out of reach', () => {
           await openDrawer(page, 'RuntimeClass/hr-rc')
           await expect.poll(() => stood.length, { timeout: 20_000 }).toBeGreaterThan(NODES)
           const matching = stood.filter((n) => Object.entries(selector).every(([key, v]) => n.labels?.[key] === v)).map((n) => [String(n.name)])
-          await compare(page, pagesOf(`Schedulable Nodes (${matching.length})`, matching, 20), 'links')
+          await compare(page, pagesOf(`Nodes Matching scheduling.nodeSelector (${matching.length})`, matching, 20), 'links')
         } finally {
           await page.unroute(/\/api\/v1\/cluster\/nodes(\?|$)/)
         }

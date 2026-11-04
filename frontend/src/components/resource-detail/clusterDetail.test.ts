@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { leaseHolderState, webhookAffected } from './clusterDetail'
+import { leaseHolderState, preemptionPolicy, webhookAffected } from './clusterDetail'
 
 // The rules as describe sends them (snake keys, formatWebhookRules): the drawer used to read apiGroups and counted
 // every resource in the core group, so one resource name in two groups was one kind.
@@ -45,5 +45,16 @@ describe('leaseHolderState', () => {
   it('is None without a holder, also an emptied one (a released lease)', () => {
     expect(leaseHolderState({ ...held, holder_identity: undefined }, now)).toBe('None')
     expect(leaseHolderState({ ...held, holder_identity: '' }, now)).toBe('None')
+  })
+})
+
+// kubectl describe priorityclass prints PreemptionPolicy as the API writes it; the badge said "Enabled", a word of
+// Kubeast's own (scheduling/v1: "One of Never, PreemptLowerPriority. Defaults to PreemptLowerPriority if unset.")
+describe('preemptionPolicy', () => {
+  it('is the API value, unset the API default', () => {
+    expect(preemptionPolicy({ preemption_policy: 'PreemptLowerPriority' })).toBe('PreemptLowerPriority')
+    expect(preemptionPolicy({ preemption_policy: 'Never' })).toBe('Never')
+    expect(preemptionPolicy({})).toBe('PreemptLowerPriority')
+    expect(preemptionPolicy({ preemption_policy: null })).toBe('PreemptLowerPriority')
   })
 })

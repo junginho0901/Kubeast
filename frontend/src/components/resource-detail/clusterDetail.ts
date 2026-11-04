@@ -44,3 +44,11 @@ export function leaseHolderState(
   if (Number.isNaN(renewed) || lease.lease_duration_seconds == null) return 'Expired'
   return renewed + lease.lease_duration_seconds * 1000 < nowMs ? 'Expired' : 'Active'
 }
+
+/**
+ * A PriorityClass's preemption policy as the API writes it (`PreemptLowerPriority` or `Never`, what kubectl describe
+ * prints) — unset is the API's default, PreemptLowerPriority.
+ */
+export function preemptionPolicy(desc: { preemption_policy?: string | null } | null | undefined): string {
+  return desc?.preemption_policy || 'PreemptLowerPriority'
+}

@@ -230,7 +230,7 @@
 | **Configuration** | ConfigMap, Secret, ResourceQuota, LimitRange, PriorityClass, RuntimeClass, Lease |
 | **Security (RBAC)** | Role, ClusterRole, RoleBinding, ClusterRoleBinding, ServiceAccount · Policy Reports(`wgpolicyk8s.io` 보고서 모음, CRD 있을 때) |
 | **Cluster** | Node, Namespace, Webhook Configuration(Mutating/Validating), Admission Policy(Validating/Mutating — `admissionregistration.k8s.io/v1`, 읽기 전용, API가 없으면 "API를 제공하지 않음"; `features.admissionPolicies.readOnly: true`면 공용 YAML 적용과 AI 쓰기 도구도 정책·바인딩 4종을 거부하므로 Git으로만 바꿀 수 있습니다) |
-| **Custom Resources** | CRD 동적 탐색 및 인스턴스 편집. 인스턴스의 출력 열은 목록과 상세 창 모두 API 서버가 CRD 열로 만든 Table(읽은 버전, 서버 함수 하나)이고, 상세 창은 링크로도 열립니다(`detailApi=<group>/<version>/<plural>`) |
+| **Custom Resources** | CRD 동적 탐색 및 인스턴스 편집. 인스턴스의 출력 열은 목록과 상세 창 모두 API 서버가 CRD 열로 만든 Table(읽은 버전, 서버 함수 하나)이고, 상세 창은 링크로도 열립니다(`detailApi=<group>/<version>/<plural>`). 고급 검색·Timeline·Helm 릴리스의 리소스는 개체를 apiVersion과 함께 열고, 상세 창은 kubectl describe처럼 그룹과 Kind로 고릅니다: 전용 창의 그룹이 아닌 Kind를 CRD가 내면(두 그룹의 같은 Kind, Istio의 Gateway) 그 CRD의 커스텀 리소스로 엽니다. 상세 창은 spec·status 밖 필드(PolicyReport의 results·scope·summary)도 보여 주고, CRD 상세 창은 이벤트도 보여 줍니다 |
 
 - **YAML 편집** (Monaco), **Pod Exec / 로그** (xterm.js, WebSocket)
 - **실시간 갱신** — WebSocket 멀티플렉서로 리소스 변경 스트리밍

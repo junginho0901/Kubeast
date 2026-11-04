@@ -12,13 +12,14 @@ import { CR_CRD, GWPOL_CRD, crInstances, numbersPolicies, vpaFixture, writeNumbe
 // The VPA, CustomResourceDefinition and custom resource drawers, the drawer of a kind Kubeast has no view for, and the
 // policy violations of a drawer opened from Policy Reports show what the cluster has: on test2, in a namespace of its
 // own, number-check.vpa-fixture.yaml with its statuses and target workloads, number-check.cr-crd.yaml's Widget with
-// number-check.cr-instances.yaml and more instances, number-check.gwpol-crd.yaml's policies and a
-// VerticalPodAutoscalerCheckpoint with many annotations, and events about them; on default, number-check.polr-fixture.yaml
-// and the pod it names. Each drawer — opened from its list (a custom resource also from Gateway → Policies, the
-// checkpoint from Advanced Search, the pod from Policy Reports) and by link — is read whole and compared with the
-// object, what kubectl prints of it (the API server's Table of the CRD's columns) and the events kubectl describe lists,
-// so a number on it that nothing here expects fails too; the pod's drawer is held to the reports in its policy
-// violations only (the rest of a Pod drawer is number-check-drawers.spec.ts's).
+// number-check.cr-instances.yaml and more instances, a Widget of a third group with fields beside spec and status,
+// number-check.gwpol-crd.yaml's policies and a VerticalPodAutoscalerCheckpoint with many annotations, and events about
+// them and the CRDs; on default, number-check.polr-fixture.yaml and the pod it names. Each drawer — opened from its list
+// (a custom resource also from Gateway → Policies, Advanced Search and the Timeline, which pass its apiVersion; the pod
+// from Policy Reports) and by link — is read whole and compared with the object, what kubectl prints of it (the API
+// server's Table of the CRD's columns) and the events kubectl describe lists, so a number on it that nothing here
+// expects fails too; the pod's drawer is held to the reports in its policy violations only (the rest of a Pod drawer
+// is number-check-drawers.spec.ts's), a PolicyReport's drawer to its fields beside spec and status.
 
 const NS = 'e2e-cr-drawers'
 const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
@@ -29,7 +30,7 @@ const say = (key: string, fallback: string): string => key.split('.').reduce((o:
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Obj = any
-type TableJSON = { columnDefinitions: { name: string; type: string }[]; rows: { cells: unknown[]; object: { metadata: { name: string; namespace?: string } } }[] }
+type TableJSON = { columnDefinitions: { name: string; type: string; format?: string }[]; rows: { cells: unknown[]; object: { metadata: { name: string; namespace?: string } } }[] }
 type Kube = { kubectl: (args: string, input?: string) => string; table: (apiPath: string) => Promise<TableJSON> }
 
 // a kind cluster's kubectl and the API server's Table — what `kubectl get` prints; null without it
@@ -215,15 +216,23 @@ function cellText(column: { name: string; type: string; jsonPath?: string }, val
 // a list's first page under its pager (usePagination: shown above ten rows)
 const pager = (n: number) => (n > 10 ? `1-10 / ${n} ${say('detail.Prev', 'Prev')} ${say('detail.Next', 'Next')}` : '')
 
-type CR = { o: Obj; crd: Obj; cells: unknown[]; columns: { name: string; type: string }[]; events: Obj[]; peers: Obj[] }
-// a custom resource's drawer: its row of the instances list (the API server's Table at the version it is read at),
-// spec, status, conditions, metadata, events and the other instances of its CRD
+type CR = { o: Obj; crd: Obj; cells: unknown[]; columns: { name: string; type: string; format?: string }[]; events: Obj[]; peers: Obj[] }
+// what a custom resource keeps beside apiVersion, kind, metadata, spec and status (a PolicyReport's results, scope,
+// summary), each field a row as the spec's are — kubectl describe prints them all
+const OTHER_FIELDS = say('crInstanceInfo.otherFields', 'Other Fields')
+function otherFieldsWant(o: Obj): Record<string, Section> {
+  const rest = sorted(Object.fromEntries(Object.entries(o).filter(([k]) => !['apiVersion', 'kind', 'metadata', 'spec', 'status'].includes(k)))) as Record<string, unknown>
+  return Object.keys(rest).length ? { [OTHER_FIELDS]: section({ rows: Object.fromEntries(Object.entries(rest).map(([k, v]) => [k, shown(v)])) }) } : {}
+}
+// a custom resource's drawer: its row of the instances list (the API server's Table at the version it is read at, the
+// name column — format "name" — and Age left out, a CRD column also called Name kept), spec, status, the other fields,
+// conditions, metadata, events and the other instances of its CRD
 function customResourceWant(c: CR): View {
   const { o, crd } = c
   const m = o.metadata
   const version = o.apiVersion.split('/')[1]
   const printer = (crd.spec.versions.find((v: Obj) => v.name === version)?.additionalPrinterColumns ?? []) as { name: string; type: string; jsonPath: string }[]
-  const cells = c.columns.map((col, i) => ({ col, value: c.cells[i] })).filter(({ col }) => col.name !== 'Name' && !(col.name === 'Age' && col.type === 'date'))
+  const cells = c.columns.map((col, i) => ({ col, value: c.cells[i] })).filter(({ col }) => col.format !== 'name' && !(col.name === 'Age' && col.type === 'date'))
   const spec = sorted(o.spec ?? {}) as Record<string, unknown>
   const status = sorted(o.status ?? {}) as Record<string, unknown>
   const statusFields = Object.keys(status).filter((k) => k !== 'conditions')
@@ -248,6 +257,7 @@ function customResourceWant(c: CR): View {
       } : {}),
       ...(Object.keys(spec).length ? { [t('spec', 'Spec')]: section({ rows: Object.fromEntries(Object.entries(spec).map(([k, v]) => [k, shown(v)])) }) } : {}),
       ...(statusFields.length ? { [t('status', 'Status')]: section({ rows: Object.fromEntries(statusFields.map((k) => [k, shown(status[k])])) }) } : {}),
+      ...otherFieldsWant(o),
       ...(conds.length ? { [t('conditions', 'Conditions')]: section({ tables: [conditionsTable(conds)] }) } : {}),
       ...((m.ownerReferences ?? []).length ? {
         [t('ownerReferences', 'Owner References')]: section({ cards: m.ownerReferences.map((r: Obj) => ({ text: `Kind: ${r.kind} Name: ${r.name}`, tables: [] })) }),
@@ -321,12 +331,12 @@ function vpaWant(c: VPA): View {
   }
 }
 
-// the CRD's drawer: its names, versions with their printer columns, stored versions, conditions and its instances in
-// every namespace, ten to a page
-function crdWant(crd: Obj, instances: Obj[]): View {
+// the CRD's drawer: its names, subresources by name (kubectl describe's order), versions with their printer columns,
+// stored versions, conditions, its instances in every namespace, ten to a page, and the events about it
+function crdWant(crd: Obj, instances: Obj[], events: Obj[]): View {
   const names = crd.spec.names
   const versions = crd.spec.versions as Obj[]
-  const subresources = [...new Set(versions.flatMap((v) => Object.keys(v.subresources ?? {})))]
+  const subresources = [...new Set(versions.flatMap((v) => Object.keys(v.subresources ?? {})))].sort()
   const t = (key: string, en: string) => say(`crdInfo.${key}`, en)
   return {
     badges: {},
@@ -360,6 +370,7 @@ function crdWant(crd: Obj, instances: Obj[]): View {
           rest: pager(instances.length),
         })
         : section({ notes: [NONE] }),
+      Events: eventsSection(events),
       ...(Object.keys(crd.metadata.labels ?? {}).length ? { Labels: section({ tags: tags(crd.metadata.labels) }) } : {}),
       ...(Object.keys(crd.metadata.annotations ?? {}).length ? { Annotations: section({ tags: tags(crd.metadata.annotations) }) } : {}),
     },
@@ -418,6 +429,50 @@ const CHECKPOINT = {
 }
 // more Widgets, so the CRD's instances and a Widget's peers run past one page
 const MORE_WIDGETS = Array.from({ length: 9 }, (_, i) => ({ apiVersion: 'numbers.kubeast.io/v1', kind: 'Widget', metadata: { name: `num-w${i + 4}`, namespace: NS }, spec: { size: 'small', replicas: i } }))
+// a Widget of a third group (test2 has its own qa.example.com one) with columns of its own, both subresources and
+// fields beside spec and status, so Advanced Search and a link must name the group to open it with its CRD
+const ALT_CRD_NAME = 'widgets.alt.kubeast.io'
+const ALT_CRD = {
+  apiVersion: 'apiextensions.k8s.io/v1', kind: 'CustomResourceDefinition', metadata: { name: ALT_CRD_NAME },
+  spec: {
+    group: 'alt.kubeast.io', scope: 'Namespaced', names: { kind: 'Widget', plural: 'widgets', singular: 'widget', listKind: 'WidgetList' },
+    versions: [{
+      name: 'v1', served: true, storage: true,
+      subresources: { status: {}, scale: { specReplicasPath: '.spec.replicas', statusReplicasPath: '.status.replicas' } },
+      additionalPrinterColumns: [
+        { name: 'Color', type: 'string', jsonPath: '.spec.color' },
+        { name: 'Replicas', type: 'integer', jsonPath: '.spec.replicas' },
+        { name: 'Owner', type: 'string', jsonPath: '.owner' },
+        { name: 'Ready', type: 'boolean', jsonPath: '.status.ready', priority: 1 },
+      ],
+      schema: {
+        openAPIV3Schema: {
+          type: 'object',
+          properties: {
+            spec: { type: 'object', 'x-kubernetes-preserve-unknown-fields': true },
+            status: { type: 'object', 'x-kubernetes-preserve-unknown-fields': true },
+            owner: { type: 'string' },
+            results: { type: 'array', items: { type: 'object', 'x-kubernetes-preserve-unknown-fields': true } },
+            summary: { type: 'object', properties: { pass: { type: 'integer' }, fail: { type: 'integer' } } },
+          },
+        },
+      },
+    }],
+  },
+}
+const ALT_WIDGET = {
+  apiVersion: 'alt.kubeast.io/v1', kind: 'Widget', metadata: { name: 'num-alt-1', namespace: NS, labels: { app: 'alt' } },
+  spec: { color: 'teal', replicas: 3 }, owner: 'team-alt',
+  results: [{ policy: 'alt-size', result: 'pass' }, { policy: 'alt-color', result: 'fail', message: 'teal is not allowed' }], summary: { pass: 1, fail: 1 },
+}
+// events about the two CRDs — cluster-scoped objects, so the events are in default (number-check-rbac-drawers.spec.ts)
+// [CRD, reason, type, count, last seen and first seen, seconds ago]
+const CRD_EVENTS: [string, string, string, number, number, number][] = [
+  ['widgets.numbers.kubeast.io', 'NumbersEstablished', 'Normal', 1, 200, 200],
+  [ALT_CRD_NAME, 'AltEstablished', 'Normal', 1, 400, 400],
+  [ALT_CRD_NAME, 'AltNamesConflict', 'Warning', 2, 30, 500],
+]
+const crdEventName = (crdName: string, reason: string) => `${crdName}.${reason.toLowerCase()}`
 
 // events about the objects as a controller records them: two about a Widget, one about a ConfigMap of its name (the
 // Widget's drawer leaves it out), one about a VPA seen three times, a Warning about a policy.
@@ -485,21 +540,24 @@ test.describe('number check — VPA, CRD, custom resource and fallback drawers',
     const k = t2!
     const cleanup = () => {
       k.kubectl(`delete namespace ${NS} --wait=true --timeout=180s --ignore-not-found`)
-      k.kubectl('delete crd/widgets.numbers.kubeast.io crd/backendtlspolicies.numbers.kubeast.io --ignore-not-found --wait=true')
+      k.kubectl(`delete crd/widgets.numbers.kubeast.io crd/backendtlspolicies.numbers.kubeast.io crd/${ALT_CRD_NAME} --ignore-not-found --wait=true`)
+      k.kubectl(`delete events -n default ${CRD_EVENTS.map(([crdName, reason]) => crdEventName(crdName, reason)).join(' ')} --ignore-not-found`)
     }
     cleanup()
     try {
       // the objects, their statuses, the VPAs' targets and the events
       k.kubectl('apply --server-side --field-manager=e2e-cr-drawers -f -', CR_CRD)
       k.kubectl('apply --server-side --field-manager=e2e-cr-drawers -f -', GWPOL_CRD)
-      k.kubectl('wait --for=condition=Established crd/widgets.numbers.kubeast.io crd/backendtlspolicies.numbers.kubeast.io --timeout=60s')
+      k.kubectl('apply --server-side --field-manager=e2e-cr-drawers -f -', JSON.stringify(ALT_CRD))
+      k.kubectl(`wait --for=condition=Established crd/widgets.numbers.kubeast.io crd/backendtlspolicies.numbers.kubeast.io crd/${ALT_CRD_NAME} --timeout=60s`)
       k.kubectl('apply --server-side --field-manager=e2e-cr-drawers -f -', vpaFixture(NS))
       writeVpaStatus(k.kubectl, NS)
       k.kubectl(`patch verticalpodautoscaler num-vpa-b -n ${NS} --type=merge -p=${arg({ spec: { resourcePolicy: { containerPolicies: POLICIES } } })}`)
       k.kubectl('apply --server-side --field-manager=e2e-cr-drawers -f -', crInstances(NS))
       writeWidgetStatus(k.kubectl, NS)
-      k.kubectl('apply --server-side --field-manager=e2e-cr-drawers -f -', JSON.stringify({ apiVersion: 'v1', kind: 'List', items: [...numbersPolicies(NS), ...MORE_WIDGETS, ...TARGETS, CHECKPOINT] }))
+      k.kubectl('apply --server-side --field-manager=e2e-cr-drawers -f -', JSON.stringify({ apiVersion: 'v1', kind: 'List', items: [...numbersPolicies(NS), ...MORE_WIDGETS, ...TARGETS, CHECKPOINT, ALT_WIDGET] }))
       writeNumbersPolicyStatus(k.kubectl, NS)
+      k.kubectl(`patch widgets.alt.kubeast.io num-alt-1 -n ${NS} --subresource=status --type=merge -p=${arg({ status: { replicas: 3, ready: true } })}`)
       for (const w of ['deployment/web', 'daemonset/agent']) k.kubectl(`rollout status ${w} -n ${NS} --timeout=120s`)
       const uidOf = (apiVersion: string, kind: string, name: string) => {
         const group = apiVersion.includes('/') ? apiVersion.split('/')[0] : ''
@@ -516,12 +574,19 @@ test.describe('number check — VPA, CRD, custom resource and fallback drawers',
         reason, message: `${reason} by the number check`, type, count, firstTimestamp: ago(first), lastTimestamp: ago(last),
         source: { component: 'e2e-cr-drawers' },
       }))
-      k.kubectl('create -f -', JSON.stringify({ apiVersion: 'v1', kind: 'List', items: events }))
+      const crdEvents = CRD_EVENTS.map(([crdName, reason, type, count, last, first]) => ({
+        apiVersion: 'v1', kind: 'Event',
+        metadata: { name: crdEventName(crdName, reason), namespace: 'default' },
+        involvedObject: { apiVersion: 'apiextensions.k8s.io/v1', kind: 'CustomResourceDefinition', name: crdName, uid: JSON.parse(k.kubectl(`get crd ${crdName} -o json`)).metadata.uid },
+        reason, message: `${reason} by the number check`, type, count, firstTimestamp: ago(first), lastTimestamp: ago(last),
+        source: { component: 'e2e-cr-drawers' },
+      }))
+      k.kubectl('create -f -', JSON.stringify({ apiVersion: 'v1', kind: 'List', items: [...events, ...crdEvents] }))
 
       // what the cluster has: the object (managed fields too), kubectl's columns of it, the events kubectl describe
-      // lists about it (its name, kind and uid, newest first)
+      // lists about it (its name, kind and uid, newest first; a cluster-scoped object's in every namespace)
       const get = (resource: string, name: string, ns = NS) => JSON.parse(k.kubectl(`get ${resource} ${name}${ns ? ` -n ${ns}` : ''} --show-managed-fields -o json`))
-      const eventsAbout = (o: Obj) => (JSON.parse(k.kubectl(`get events -n ${NS} --field-selector involvedObject.name=${o.metadata.name},involvedObject.kind=${o.kind} -o json`)).items as Obj[])
+      const eventsAbout = (o: Obj) => (JSON.parse(k.kubectl(`get events ${o.metadata.namespace ? `-n ${o.metadata.namespace}` : '-A'} --field-selector involvedObject.name=${o.metadata.name},involvedObject.kind=${o.kind} -o json`)).items as Obj[])
         .filter((e) => e.involvedObject.uid === o.metadata.uid)
         .sort((a, b) => Date.parse(b.lastTimestamp ?? b.firstTimestamp) - Date.parse(a.lastTimestamp ?? a.firstTimestamp))
       const customResource = async (crdName: string, name: string): Promise<CR> => {
@@ -530,6 +595,30 @@ test.describe('number check — VPA, CRD, custom resource and fallback drawers',
         const [group, version, plural] = [crd.spec.group, o.apiVersion.split('/')[1], crd.spec.names.plural]
         const t = await k.table(`/apis/${group}/${version}/namespaces/${NS}/${plural}/${name}`)
         return { o, crd, cells: t.rows[0]?.cells ?? [], columns: t.columnDefinitions, events: eventsAbout(o), peers: JSON.parse(k.kubectl(`get ${crdName} -A -o json`)).items }
+      }
+      const crdView = (crdName: string) => {
+        const crd = JSON.parse(k.kubectl(`get crd ${crdName} -o json`))
+        return crdWant(crd, JSON.parse(k.kubectl(`get ${crdName} -A -o json`)).items, eventsAbout(crd))
+      }
+      // Advanced Search with the given types (name.group where two groups serve the name), in the spec's namespace,
+      // every loaded object matching; then the object's name in the results
+      const searchFor = (cluster: string, types: string[], name: string) => async (p: Page) => {
+        // the server keeps a cluster's API resources for a minute: wait until it lists the kinds the spec just made
+        await expect.poll(async () => {
+          const lists = await (await p.request.get(`/api/v1/cluster/api-resources?cluster=${cluster}`)).json() as { groupVersion: string; resources: { name: string }[] }[]
+          // a type is <plural>[.<group>]
+          return types.every((t) => {
+            const [plural, ...g] = t.split('.')
+            return lists.some((l) => (g.length === 0 || l.groupVersion.startsWith(`${g.join('.')}/`)) && l.resources.some((r) => r.name === plural))
+          })
+        }, { timeout: 75_000, message: `the API resources of ${cluster} list ${types.join(', ')}` }).toBe(true)
+        await p.addInitScript((t) => localStorage.setItem('advanced-search-resources', JSON.stringify(t)), types)
+        await p.goto(`/cluster/search?cluster=${cluster}`)
+        await p.getByTestId('advanced-search-namespace').click()
+        await p.getByRole('button', { name: NS, exact: true }).click()
+        await p.locator('.monaco-editor').first().click()
+        await p.keyboard.type('true')
+        await p.locator('table tbody tr').getByRole('button', { name, exact: true }).click({ timeout: 20_000 })
       }
       const vpa = async (name: string): Promise<VPA> => {
         const o = get('verticalpodautoscalers.autoscaling.k8s.io', name)
@@ -552,6 +641,26 @@ test.describe('number check — VPA, CRD, custom resource and fallback drawers',
           link('test2', `Widget/${NS}/${name}`, 'numbers.kubeast.io/v1/widgets'),
         ]) await compare(page, way, `Widget/${name}`, async () => customResourceWant(await customResource('widgets.numbers.kubeast.io', name)))
       }
+      // one Kind of two groups, each opened from Advanced Search (the object's apiVersion goes with it) and by the link
+      // that leaves (detailApi=<group>/<version>) — each with its own CRD's columns; the number check's Widget also
+      // from the Timeline (the event names its object's apiVersion)
+      const WIDGET_TYPES = ['widgets.numbers.kubeast.io', 'widgets.alt.kubeast.io']
+      for (const [crdName, name] of [['widgets.numbers.kubeast.io', 'num-w1'], [ALT_CRD_NAME, 'num-alt-1']]) {
+        const apiVersion = `${crdName.slice('widgets.'.length)}/v1`
+        for (const way of [
+          { name: 'Advanced Search', open: searchFor('test2', WIDGET_TYPES, name) },
+          link('test2', `Widget/${NS}/${name}`, apiVersion),
+        ]) await compare(page, way, `Widget.${crdName.slice('widgets.'.length)}/${name}`, async () => customResourceWant(await customResource(crdName, name)))
+      }
+      await compare(page, {
+        name: 'Timeline',
+        open: async (p: Page) => {
+          await p.goto('/timeline?cluster=test2')
+          await p.getByTestId('timeline-namespace').click()
+          await p.locator('.absolute.top-full button', { hasText: new RegExp(`^\\s*${NS}\\s*$`) }).click()
+          await p.getByRole('button', { name: 'Widget/num-w1', exact: true }).first().click({ timeout: 20_000 })
+        },
+      }, 'Widget.numbers.kubeast.io/num-w1', async () => customResourceWant(await customResource('widgets.numbers.kubeast.io', 'num-w1')))
       for (const name of ['num-gp-1', 'num-gp-2']) {
         for (const way of [
           { name: 'Gateway → Policies', open: (p: Page) => clickRow(p, '/gateway/policies?cluster=test2', name, NS) },
@@ -564,29 +673,23 @@ test.describe('number check — VPA, CRD, custom resource and fallback drawers',
           link('test2', `VerticalPodAutoscaler/${NS}/${name}`),
         ]) await compare(page, way, `VerticalPodAutoscaler/${name}`, async () => vpaWant(await vpa(name)))
       }
-      for (const way of [
-        { name: 'list', open: (p: Page) => clickRow(p, '/custom-resources/groups?cluster=test2', 'widgets.numbers.kubeast.io') },
-        link('test2', 'CustomResourceDefinition/widgets.numbers.kubeast.io'),
-      ]) {
-        await compare(page, way, 'CustomResourceDefinition/widgets.numbers.kubeast.io', () =>
-          crdWant(JSON.parse(k.kubectl('get crd widgets.numbers.kubeast.io -o json')), JSON.parse(k.kubectl('get widgets.numbers.kubeast.io -A -o json')).items))
+      for (const crdName of ['widgets.numbers.kubeast.io', ALT_CRD_NAME]) {
+        for (const way of [
+          { name: 'list', open: (p: Page) => clickRow(p, '/custom-resources/groups?cluster=test2', crdName) },
+          link('test2', `CustomResourceDefinition/${crdName}`),
+        ]) await compare(page, way, `CustomResourceDefinition/${crdName}`, () => crdView(crdName))
       }
+      // the checkpoint's kind has no drawer of its own: from Advanced Search (its apiVersion goes with it) and by that
+      // link it is its CRD's custom resource; a link naming only the Kind opens the drawer of a kind Kubeast has no view for
       for (const way of [
-        {
-          name: 'Advanced Search',
-          open: async (p: Page) => {
-            await p.addInitScript(() => localStorage.setItem('advanced-search-resources', JSON.stringify(['verticalpodautoscalercheckpoints'])))
-            await p.goto('/cluster/search?cluster=test2')
-            await p.getByTestId('advanced-search-namespace').click()
-            await p.getByRole('button', { name: NS, exact: true }).click()
-            // every loaded object matches
-            await p.locator('.monaco-editor').first().click()
-            await p.keyboard.type('true')
-            await p.locator('table tbody tr').getByRole('button', { name: 'num-vpacp', exact: true }).click({ timeout: 20_000 })
-          },
-        },
-        link('test2', `VerticalPodAutoscalerCheckpoint/${NS}/num-vpacp`),
-      ]) await compare(page, way, 'VerticalPodAutoscalerCheckpoint/num-vpacp', () => genericWant(get('verticalpodautoscalercheckpoints.autoscaling.k8s.io', 'num-vpacp')))
+        { name: 'Advanced Search', open: searchFor('test2', ['verticalpodautoscalercheckpoints'], 'num-vpacp') },
+        link('test2', `VerticalPodAutoscalerCheckpoint/${NS}/num-vpacp`, 'autoscaling.k8s.io/v1'),
+      ]) {
+        await compare(page, way, 'VerticalPodAutoscalerCheckpoint/num-vpacp',
+          async () => customResourceWant(await customResource('verticalpodautoscalercheckpoints.autoscaling.k8s.io', 'num-vpacp')))
+      }
+      await compare(page, { ...link('test2', `VerticalPodAutoscalerCheckpoint/${NS}/num-vpacp`), name: 'link without apiVersion' },
+        'VerticalPodAutoscalerCheckpoint/num-vpacp', () => genericWant(get('verticalpodautoscalercheckpoints.autoscaling.k8s.io', 'num-vpacp')))
 
       // a pod's policy violations on default, from Policy Reports and by link
       const b = kube('kubeast-b')
@@ -618,6 +721,16 @@ test.describe('number check — VPA, CRD, custom resource and fallback drawers',
             await compare(page, way, 'Pod/num-p1 · policy violations', () => ({
               badges: {}, counts: {}, sections: { 'Policy violations': violationsWant(JSON.parse(bk.kubectl(`get policyreports -n ${NS} -o json`)).items, 'num-p1') },
             }), 'Policy violations')
+          }
+          // the report's own fields beside spec and status (results, scope, summary) on its custom resource drawer,
+          // from Advanced Search and by link (the rest of the drawer is the Widget steps')
+          for (const way of [
+            { name: 'Advanced Search', open: searchFor('default', ['policyreports'], 'num-polr-pod') },
+            link('default', `PolicyReport/${NS}/num-polr-pod`, 'wgpolicyk8s.io/v1alpha2/policyreports'),
+          ]) {
+            await compare(page, way, 'PolicyReport/num-polr-pod · other fields', () => ({
+              badges: {}, counts: {}, sections: otherFieldsWant(JSON.parse(bk.kubectl(`get policyreports.wgpolicyk8s.io num-polr-pod -n ${NS} -o json`))),
+            }), OTHER_FIELDS)
           }
         } finally {
           bk.kubectl(`delete namespace ${NS} --wait=true --timeout=180s --ignore-not-found`)

@@ -3641,7 +3641,8 @@
     "ownerReferences": "소유자 참조",
     "finalizers": "파이널라이저",
     "events": "이벤트",
-    "printerColumns": "추가 정보"
+    "printerColumns": "추가 정보",
+    "otherFields": "그 밖의 필드"
   },
   "cronjob": {
     "suspend": "일시정지",
@@ -4743,7 +4744,7 @@
     "Affected Pods ({{n}})": "적용 대상 Pod ({{n}})",
     "Protected Pods ({{n}})": "보호 대상 Pod ({{n}})",
     "Violating Pods ({{n}})": "위반 Pod ({{n}})",
-    "Schedulable Nodes ({{n}})": "스케줄 가능한 Node ({{n}})",
+    "Nodes Matching scheduling.nodeSelector ({{n}})": "scheduling.nodeSelector에 맞는 Node ({{n}})",
     "Device Allocations ({{n}})": "디바이스 할당 ({{n}})",
     "Pods Using This ServiceAccount ({{n}})": "이 ServiceAccount를 쓰는 Pod ({{n}})",
     "Bound Pods via ServiceAccount Subjects ({{n}})": "ServiceAccount Subject로 묶인 Pod ({{n}})",

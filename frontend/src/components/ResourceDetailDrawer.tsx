@@ -28,6 +28,7 @@ import { ModalFrame } from './ModalFrame'
 import { modalButton } from './modalStyles'
 import { TypeToConfirm, WarningBox } from './TypeToConfirm'
 import { systemObject, type SystemReason } from './resource-detail/systemObject'
+import { customResourceTarget, needsCustomResourceLookup } from './resource-detail/crDetail'
 import { useConfirm } from '@/services/confirm'
 
 import NodeInfo from './resource-detail/NodeInfo'
@@ -80,7 +81,19 @@ const SYSTEM_REASON_EN: Record<SystemReason, string> = {
 
 export default function ResourceDetailDrawer() {
   const { t } = useTranslation()
-  const { target, close, goBack, canGoBack } = useResourceDetail()
+  const { target: asked, close, goBack, canGoBack } = useResourceDetail()
+  // An object named with an apiVersion of another group than its Kind's drawer (a second group's Widget, opened from
+  // Advanced Search, the Timeline or a link) is a custom resource when a CRD of that group serves the Kind.
+  const crLookup = !!asked && needsCustomResourceLookup(asked)
+  const { data: crds, isLoading: crdsLoading } = useQuery({
+    queryKey: ['custom-resources', 'crds'],
+    queryFn: () => api.getCRDs(false),
+    enabled: crLookup,
+    staleTime: 60_000,
+    retry: false,
+  })
+  const resolving = crLookup && crdsLoading
+  const target = useMemo(() => (asked && crLookup ? customResourceTarget(asked, crds) : asked), [asked, crLookup, crds])
   const { isTop: isTopModal, zIndex } = useModalStackEntry(!!target)
   const [tab, setTab] = useState<TabId>('info')
   const [applyToast, setApplyToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
@@ -134,7 +147,7 @@ export default function ResourceDetailDrawer() {
   const argoCfg = features?.gitops?.argocd
   const rawJsonLacksAnnotations = !!target?.rawJson && !((target.rawJson as Record<string, unknown>).metadata as Record<string, unknown> | undefined)?.annotations
   // the delete window's system-object check reads labels and annotations too
-  const needsRawJsonFetch = !!target
+  const needsRawJsonFetch = !!target && !resolving
     && (!target.rawJson || ((!!argoCfg?.enabled || deleteDialogOpen) && rawJsonLacksAnnotations))
     && !SELF_LOADING_KINDS.has(kind)
     && !UNRESOLVABLE_KINDS.has(kind)
@@ -292,6 +305,7 @@ export default function ResourceDetailDrawer() {
   if (!target) return null
 
   const renderInfoContent = () => {
+    if (resolving) return <p className="text-slate-400">{t('common.loading', 'Loading...')}</p>
     if (kind === 'Node') return <NodeInfo name={name} />
     if (kind === 'Namespace') return <NamespaceInfo name={name} />
     if (kind === 'Pod' && ns) return <PodInfo name={name} namespace={ns} rawJson={effectiveRawJson} />

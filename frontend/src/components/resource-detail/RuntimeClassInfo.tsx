@@ -126,7 +126,7 @@ export default function RuntimeClassInfo({ name }: Props) {
       )}
 
       {schedulableNodes && (
-        <InfoSection title="Schedulable Nodes ({{n}})" titleValues={{ n: schedulableNodes.length }}>
+        <InfoSection title="Nodes Matching scheduling.nodeSelector ({{n}})" titleValues={{ n: schedulableNodes.length }}>
           {schedulableNodes.length === 0 ? (
             <p className="text-xs text-slate-400"><Tx>No Node matches scheduling.nodeSelector.</Tx></p>
           ) : (
