@@ -1,13 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { JSONPath } from 'jsonpath-plus'
 import { api } from '@/services/api'
 import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
-import { printerColumnObject } from './customResourceFields'
 import { usePagination } from './usePagination'
 import { formatAge, formatTime } from '@/utils/time'
+import { printerCellText, type PrinterCell } from '@/pages/custom-resources/printerCells'
 
 const RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/
 import { useResourceDetail } from '@/components/ResourceDetailContext'
@@ -115,26 +114,6 @@ function renderValue(value: unknown, depth = 0): React.ReactNode {
   return <span className="font-mono text-[11px]">{String(value)}</span>
 }
 
-function getValueWithJSONPath(json: object, jsonPath: string): string {
-  try {
-    const result = JSONPath({ path: '$' + jsonPath, json, wrap: false })
-    if (result === undefined || result === null) return ''
-    return String(result)
-  } catch {
-    return ''
-  }
-}
-
-function formatDateValue(value: string): string {
-  try {
-    const d = new Date(value)
-    if (isNaN(d.getTime())) return value
-    return `${fmtTs(value)} (${fmtRel(value)})`
-  } catch {
-    return value
-  }
-}
-
 export default function CustomResourceInstanceInfo({ name, namespace, rawJson }: Props) {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
@@ -152,15 +131,7 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
     retry: false,
   })
 
-  // Fetch CRD to get additionalPrinterColumns
-  const { data: crdDescribe } = useQuery({
-    queryKey: ['crd-describe', crdName],
-    queryFn: () => api.describeCRD(crdName),
-    enabled: !!crdName,
-    retry: false,
-  })
-
-  const crKind = (describe?.kind as string | undefined) || (crdDescribe?.kind as string | undefined) || 'CustomResource'
+  const crKind = (describe?.kind as string | undefined) || (rawJson?.kind as string | undefined) || 'CustomResource'
   useResourceDetailOverlay({ kind: crKind, name, namespace, describe })
 
   // Peer instances — same CRD's other instances (exclude self).
@@ -179,18 +150,8 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
     })
   const { items: pagedPeerInstances, nav: peerInstancesNav } = usePagination(peerInstances, 10)
 
-  // Extract printer columns from the CRD's storage version
-  const printerColumns = useMemo(() => {
-    if (!crdDescribe?.versions) return []
-    const versions = Array.isArray(crdDescribe.versions) ? crdDescribe.versions : []
-    const storageVer = versions.find((v: any) => v.storage) || versions[0]
-    if (!storageVer?.additionalPrinterColumns) return []
-    return (storageVer.additionalPrinterColumns as any[]).filter(
-      (col: any) => col.jsonPath !== '.metadata.creationTimestamp',
-    )
-  }, [crdDescribe?.versions])
-
-  const fullJson = useMemo(() => (describe ? printerColumnObject(describe) : null), [describe])
+  // the CRD's printer columns as the API server printed this object for kubectl at this version — the list's row
+  const printerCells = (Array.isArray(describe?.printer_cells) ? describe.printer_cells : []) as PrinterCell[]
 
   const labels = (describe?.labels as Record<string, string> | undefined) ?? {}
   const annotations = (describe?.annotations as Record<string, string> | undefined) ?? {}
@@ -200,6 +161,7 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
   const ownerRefs = Array.isArray(describe?.owner_references) ? describe.owner_references : []
   const finalizers = Array.isArray(describe?.finalizers) ? describe.finalizers : []
   const conditions = Array.isArray(status?.conditions) ? status.conditions : []
+  const statusFields = Object.entries(status ?? {}).filter(([k]) => k !== 'conditions')
   const events = Array.isArray(describe?.events) ? describe.events : []
 
   if (isLoading) return <p className="text-slate-400">{tr('common.loading', 'Loading...')}</p>
@@ -219,22 +181,18 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
         </div>
       </InfoSection>
 
-      {/* Additional Printer Columns (from CRD) */}
-      {printerColumns.length > 0 && fullJson && (
+      {/* Additional Printer Columns (the API server's Table of the CRD's columns) */}
+      {printerCells.length > 0 && (
         <InfoSection title={tr('crInstanceInfo.printerColumns', 'Additional Info')}>
           <div className="space-y-2">
-            {printerColumns.map((col: any) => {
-              const raw = getValueWithJSONPath(fullJson, col.jsonPath)
-              const displayValue = col.type === 'date' && raw ? formatDateValue(raw) : (raw || '-')
-              return (
-                <InfoRow
-                  key={col.name}
-                  label={col.name}
-                  asIs
-                  value={<span className="font-mono text-[11px]">{displayValue}</span>}
-                />
-              )
-            })}
+            {printerCells.map((cell) => (
+              <InfoRow
+                key={cell.name}
+                label={cell.name}
+                asIs
+                value={<span className="font-mono text-[11px]">{printerCellText(cell, tr('common.yes', 'Yes'), tr('common.no', 'No'))}</span>}
+              />
+            ))}
           </div>
         </InfoSection>
       )}
@@ -251,10 +209,10 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
       )}
 
       {/* Status */}
-      {status && Object.keys(status).length > 0 && (
+      {statusFields.length > 0 && (
         <InfoSection title={tr('crInstanceInfo.status', 'Status')}>
           <div className="space-y-2">
-            {Object.entries(status).filter(([k]) => k !== 'conditions').map(([key, value]) => (
+            {statusFields.map(([key, value]) => (
               <InfoRow key={key} label={key} value={renderValue(value)} />
             ))}
           </div>
@@ -309,9 +267,9 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
               <tbody className="divide-y divide-slate-800">
                 {(describe.managed_fields as Array<Record<string, unknown>>).map((mf, i) => (
                   <tr key={i} className="text-slate-200">
-                    <td className="py-1 pr-2 font-mono">{String(mf?.manager ?? '-')}</td>
-                    <td className="py-1 pr-2">{String(mf?.operation ?? '-')}</td>
-                    <td className="py-1 pr-2">{String(mf?.subresource ?? '-')}</td>
+                    <td className="py-1 pr-2 font-mono">{String(mf?.manager || '-')}</td>
+                    <td className="py-1 pr-2">{String(mf?.operation || '-')}</td>
+                    <td className="py-1 pr-2">{String(mf?.subresource || '-')}</td>
                     <td className="py-1 pr-2 text-slate-400">{mf?.time ? fmtRel(String(mf.time)) : '-'}</td>
                   </tr>
                 ))}
@@ -322,11 +280,9 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
       )}
 
       {/* Events */}
-      {events.length > 0 && (
-        <InfoSection title={tr('crInstanceInfo.events', 'Events')}>
-          <EventsTable events={events} />
-        </InfoSection>
-      )}
+      <InfoSection title={tr('crInstanceInfo.events', 'Events')}>
+        <EventsTable events={events} />
+      </InfoSection>
 
       {plural && (
         <InfoSection title="Peer Instances ({{n}})" titleValues={{ n: peerInstances.length }}>

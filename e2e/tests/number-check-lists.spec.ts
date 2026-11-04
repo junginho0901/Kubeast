@@ -8,6 +8,7 @@ import zlib from 'node:zlib'
 import { test, expect, type Page } from '@playwright/test'
 
 import { GW, ancestor, arg, condition, gatewayFixture, gatewayVersions, routeConds, summary, writeGatewayStatus } from './number-check.gateway-shared'
+import { CR_CRD, GWPOL_CRD, NUM_SVC, crInstances, numbersPolicies, vpaFixture, writeNumbersPolicyStatus, writeVpaStatus, writeWidgetStatus } from './number-check.cr-shared'
 
 // Every list screen's numbers are the cluster's: in namespace e2e-numbers of `self`, or of test2 for the Gateway API and VPA
 // (objects whose numbers are not zero and not alike, made here and removed after), each screen's rows are the cluster's objects, each column the
@@ -656,9 +657,8 @@ const GATEWAY_LIVE: { path: string; name: string; column: string; want: string; 
   { path: '/gateway/backendtlspolicies', name: 'num-btls-a', column: 'Status', want: '-', change: `patch backendtlspolicy num-btls-a -n ${NS} --subresource=status --type=merge -p=${arg({ status: { ancestors: [] } })}` },
 ]
 
-// the VPA screen on test2, with number-check.vpa-fixture.yaml: Provided is the RecommendationProvided condition, as
-// the CRD's printer column reads it (num-vpa-b lists another condition first)
-const VPA_FIXTURE = fs.readFileSync(path.join(__dirname, 'number-check.vpa-fixture.yaml'), 'utf8')
+// the VPA screen on test2, with number-check.vpa-fixture.yaml (number-check.cr-shared.ts): Provided is the
+// RecommendationProvided condition, as the CRD's printer column reads it (num-vpa-b lists another condition first)
 const vpaProvided = (o: Obj) => (o.status?.conditions ?? []).find((c: Obj) => c.type === 'RecommendationProvided')?.status === 'True'
 const VPA_SCREEN: Screen = {
   path: '/workloads/vpas', api: `/apis/autoscaling.k8s.io/v1/namespaces/${NS}/verticalpodautoscalers`, plural: 'verticalpodautoscalers', cluster: 'test2',
@@ -667,28 +667,14 @@ const VPA_SCREEN: Screen = {
   skip: { Age: AGE },
   cards: (list) => ({ Total: list.length, Provided: list.filter(vpaProvided).length, 'Not Provided': list.filter((o) => !vpaProvided(o)).length }),
 }
-const VPA_STATUS: [string, Obj][] = [
-  ['num-vpa-a', {
-    conditions: [condition('RecommendationProvided', 'True')],
-    recommendation: { containerRecommendations: [{ containerName: 'app', target: { cpu: '25m', memory: '64Mi' } }] },
-  }],
-  ['num-vpa-b', {
-    conditions: [condition('LowConfidence', 'True'), condition('RecommendationProvided', 'False', 'NotEnoughData')],
-    recommendation: { containerRecommendations: [
-      { containerName: 'db', target: { cpu: '100m', memory: '256Mi' } },
-      { containerName: 'sidecar', target: { cpu: '10m', memory: '16Mi' } },
-    ] },
-  }],
-]
 const registeredOn = async (page: Page, id: string) => {
   const body = await (await page.request.get('/api/v1/clusters')).json()
   return (Array.isArray(body) ? body : body.items ?? []).some((c: Obj) => c.id === id)
 }
 
-// the custom resource instances screen on test2: number-check.cr-crd.yaml's Widget sits next to test2's
-// widgets.qa.example.com, whose Kind is Widget too; one CRD's columns are its printer columns as the API server prints them
-const CR_CRD = fs.readFileSync(path.join(__dirname, 'number-check.cr-crd.yaml'), 'utf8')
-const CR_INSTANCES = fs.readFileSync(path.join(__dirname, 'number-check.cr-instances.yaml'), 'utf8')
+// the custom resource instances screen on test2: number-check.cr-crd.yaml's Widget (number-check.cr-shared.ts) sits next
+// to test2's widgets.qa.example.com, whose Kind is Widget too; one CRD's columns are its printer columns as the API
+// server prints them
 const CR_SCREEN: Screen = {
   path: '/custom-resources/instances', api: '/apis/numbers.kubeast.io/v1/widgets', plural: 'widgets.numbers.kubeast.io', allNamespaces: true, cluster: 'test2',
   prepare: async (page) => {
@@ -746,9 +732,8 @@ const pagerTotal = async (page: Page) => Number((await page.getByTestId('list-pa
 
 // the Gateway → Policies screen on test2: every object of every policy kind (the CRDs labelled as policies, GEP-713)
 // with its target and whether it was accepted; number-check.gwpol-crd.yaml's BackendTLSPolicy shares its Kind with the
-// Gateway API's, so the screen names it with its group
+// Gateway API's, so the screen names it with its group (number-check.cr-shared.ts)
 const GWPOL = { path: '/gateway/policies', cluster: 'test2' }
-const GWPOL_CRD = fs.readFileSync(path.join(__dirname, 'number-check.gwpol-crd.yaml'), 'utf8')
 type PolicyKind = { plural: string; kind: string; group: string; version: string }
 const policyKinds = (): PolicyKind[] => on(GWPOL.cluster)
   .kubectl(`get crd -l gateway.networking.k8s.io/policy -o jsonpath='{range .items[*]}{.spec.names.plural} {.spec.names.kind} {.spec.group} {.spec.versions[?(@.storage==true)].name}{"\\n"}{end}'`)
@@ -1039,11 +1024,9 @@ test.describe('number check — list screens', () => {
       const { heads, rows } = await readScreen(p)
       return rows.find((r) => r[heads.findIndex((h) => /^name$/i.test(h))] === name)?.[heads.indexOf(column)]
     }
-    t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', VPA_FIXTURE)
+    t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', vpaFixture(NS))
     try {
-      for (const [name, status] of VPA_STATUS) {
-        t2.kubectl(`patch verticalpodautoscaler ${name} -n ${NS} --subresource=status --type=merge -p=${arg({ status })}`)
-      }
+      writeVpaStatus(t2.kubectl, NS)
       await page.context().addInitScript(() => localStorage.setItem('kubeast.listPageSize', '100'))
       const held = await page.context().newPage()
       await held.routeWebSocket(/wsMultiplexer/, () => {})
@@ -1079,12 +1062,8 @@ test.describe('number check — list screens', () => {
     t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', CR_CRD)
     try {
       t2.kubectl('wait --for=condition=Established crd/widgets.numbers.kubeast.io --timeout=60s')
-      t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', CR_INSTANCES)
-      const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString().replace(/\.\d+Z$/, 'Z')
-      // num-w1 changed once (generation 2), two statuses with the Ready condition after another one
-      t2.kubectl(`patch widget.numbers.kubeast.io num-w1 -n ${NS} --type=merge -p=${arg({ spec: { size: 'xlarge' } })}`)
-      t2.kubectl(`patch widget.numbers.kubeast.io num-w1 -n ${NS} --subresource=status --type=merge -p=${arg({ status: { conditions: [condition('Ready', 'True')], lastSeen: ago(5) } })}`)
-      t2.kubectl(`patch widget.numbers.kubeast.io num-w3 -n ${NS} --subresource=status --type=merge -p=${arg({ status: { conditions: [condition('Synced', 'True'), condition('Ready', 'False')], lastSeen: ago(90) } })}`)
+      t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', crInstances(NS))
+      writeWidgetStatus(t2.kubectl, NS)
       await page.context().addInitScript(() => localStorage.setItem('kubeast.listPageSize', '100'))
       await page.setViewportSize({ width: 2560, height: 1200 })
 
@@ -1256,23 +1235,18 @@ test.describe('number check — list screens', () => {
     try {
       t2.kubectl('wait --for=condition=Established crd/backendtlspolicies.numbers.kubeast.io --timeout=60s')
       const xbtp = policyKinds().find((k) => k.plural === 'xbackendtrafficpolicies')!
-      const svc = { group: '', kind: 'Service', name: 'num-svc' }
       const objects = [
         { apiVersion: 'v1', kind: 'Namespace', metadata: { name: NS } },
-        { apiVersion: 'numbers.kubeast.io/v1', kind: 'BackendTLSPolicy', metadata: { name: 'num-gp-1', namespace: NS }, spec: { targetRefs: [{ ...svc, sectionName: 'https' }] } },
-        { apiVersion: 'numbers.kubeast.io/v1', kind: 'BackendTLSPolicy', metadata: { name: 'num-gp-2', namespace: NS }, spec: { targetRef: { group: GW, kind: 'Gateway', name: 'num-gw-a' } } },
+        ...numbersPolicies(NS),
         { apiVersion: `${GW}/${served!.backendtlspolicies}`, kind: 'BackendTLSPolicy', metadata: { name: 'num-gp-up', namespace: NS },
-          spec: { targetRefs: [svc], validation: { hostname: 'num-svc.e2e-numbers.svc', wellKnownCACertificates: 'System' } } },
-        { apiVersion: `${xbtp.group}/${xbtp.version}`, kind: xbtp.kind, metadata: { name: 'num-gp-x', namespace: NS }, spec: { targetRefs: [svc] } },
+          spec: { targetRefs: [NUM_SVC], validation: { hostname: 'num-svc.e2e-numbers.svc', wellKnownCACertificates: 'System' } } },
+        { apiVersion: `${xbtp.group}/${xbtp.version}`, kind: xbtp.kind, metadata: { name: 'num-gp-x', namespace: NS }, spec: { targetRefs: [NUM_SVC] } },
       ]
       t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', JSON.stringify({ apiVersion: 'v1', kind: 'List', items: objects }))
       // what an implementation would write: accepted by its one Gateway, by one of two, by the other; num-gp-x says nothing
       const status = (plural: string, group: string, name: string, s: Obj) =>
         t2.kubectl(`patch ${plural}.${group} ${name} -n ${NS} --subresource=status --type=merge -p=${arg({ status: s })}`)
-      status('backendtlspolicies', 'numbers.kubeast.io', 'num-gp-1', { ancestors: [ancestor('num-gw-a', [condition('Accepted', 'True')])] })
-      status('backendtlspolicies', 'numbers.kubeast.io', 'num-gp-2', {
-        ancestors: [ancestor('num-gw-a', [condition('Accepted', 'True')]), ancestor('num-gw-b', [condition('Accepted', 'False', 'Conflicted')])],
-      })
+      writeNumbersPolicyStatus(t2.kubectl, NS)
       status('backendtlspolicies', GW, 'num-gp-up', { ancestors: [ancestor('num-gw-a', [condition('Accepted', 'True')])] })
 
       const kinds = policyKinds()

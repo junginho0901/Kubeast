@@ -18,6 +18,11 @@ export default function GenericInfo({ name, namespace, kind, rawJson }: Props) {
 
   useResourceDetailOverlay({ kind, name, namespace, extras: { spec, status } })
 
+  // the fields this view knows how to show; a section with none of them is left out (the YAML tab has the rest)
+  const statusShown = typeof status.phase === 'string' || typeof status.replicas === 'number' || Array.isArray(status.conditions)
+  const specShown = typeof spec.replicas === 'number' || ['type', 'clusterIP', 'nodeName', 'serviceAccountName'].some((k) => typeof spec[k] === 'string') ||
+    Array.isArray(spec.containers) || Array.isArray(spec.ports)
+
   return (
     <>
       <InfoSection title="Basic Info">
@@ -31,7 +36,7 @@ export default function GenericInfo({ name, namespace, kind, rawJson }: Props) {
         </div>
       </InfoSection>
 
-      {status && Object.keys(status).length > 0 && (
+      {statusShown && (
         <InfoSection title="Status">
           <div className="space-y-2">
             {typeof status.phase === 'string' && (
@@ -49,7 +54,7 @@ export default function GenericInfo({ name, namespace, kind, rawJson }: Props) {
         </InfoSection>
       )}
 
-      {spec && Object.keys(spec).length > 0 && (
+      {specShown && (
         <InfoSection title="Spec">
           <div className="space-y-2">
             {typeof spec.replicas === 'number' && <InfoRow label="Desired Replicas" value={String(spec.replicas)} />}
@@ -93,15 +98,7 @@ export default function GenericInfo({ name, namespace, kind, rawJson }: Props) {
 
       {Object.keys(annotations).length > 0 && (
         <InfoSection title="Annotations">
-          <div className="space-y-1 text-xs">
-            {Object.entries(annotations).slice(0, 20).map(([k, v]) => (
-              <div key={k} className="break-all">
-                <span className="text-slate-500">{k}</span>
-                <span className="text-slate-600 mx-1">=</span>
-                <span className="text-slate-300">{String(v).slice(0, 200)}</span>
-              </div>
-            ))}
-          </div>
+          <KeyValueTags data={annotations} />
         </InfoSection>
       )}
     </>

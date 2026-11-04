@@ -3631,7 +3631,6 @@
     "storedVersions": "저장된 버전",
     "conditions": "컨디션",
     "subresources": "서브리소스",
-    "instances": "커스텀 리소스",
     "searchInstances": "인스턴스 검색...",
     "noInstances": "인스턴스가 없습니다."
   },
@@ -4752,6 +4751,7 @@
     "Rule Conflict Warnings ({{n}})": "규칙 충돌 경고 ({{n}})",
     "Owned ReplicaSets ({{n}})": "소유한 ReplicaSet ({{n}})",
     "Peer Instances ({{n}})": "같은 종류의 인스턴스 ({{n}})",
+    "Custom Resources ({{n}})": "커스텀 리소스 ({{n}})",
     "Peer EndpointSlices for {{service}} ({{n}})": "{{service}}의 다른 EndpointSlice ({{n}})",
     "Related PersistentVolumes ({{n}})": "관련 PersistentVolume ({{n}})",
     "Related PersistentVolumeClaims ({{n}})": "관련 PersistentVolumeClaim ({{n}})",

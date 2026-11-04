@@ -346,8 +346,8 @@ const KINDS: Kind[] = [
         counts: {},
         sections: {
           'ReferenceGrant Info': section(),
-          From: from.length ? section({ tables: [{ head: ['Group', 'Kind', 'Namespace'], rows: from.map((f) => [dash(f.group), dash(f.kind), dash(f.namespace)]) }] }) : section({ notes: ['No data'] }),
-          To: to.length ? section({ tables: [{ head: ['Group', 'Kind', 'Name'], rows: to.map((t) => [dash(t.group), dash(t.kind), dash(t.name)]) }] }) : section({ notes: ['No data'] }),
+          From: from.length ? section({ tables: [{ head: ['Group', 'Kind', 'Namespace'], rows: from.map((f) => [dash(f.group), dash(f.kind), dash(f.namespace)]) }] }) : section({ notes: ['None'] }),
+          To: to.length ? section({ tables: [{ head: ['Group', 'Kind', 'Name'], rows: to.map((t) => [dash(t.group), dash(t.kind), dash(t.name)]) }] }) : section({ notes: ['None'] }),
           ...closing(c),
         },
       }
@@ -372,7 +372,7 @@ const KINDS: Kind[] = [
           'BackendTLSPolicy Info': section(),
           'Target Refs': refs.length
             ? section({ tables: [{ head: ['Group', 'Kind', 'Name', 'Section'], rows: refs.map((r) => [dash(r.group), dash(r.kind), dash(r.name), dash(r.sectionName)]) }] })
-            : section({ notes: ['No data'] }),
+            : section({ notes: ['None'] }),
           ...(v ? {
             'TLS Validation': section(cas.length ? { notes: ['CA Certificate Refs'], tables: [{ head: ['Group', 'Kind', 'Name'], rows: cas.map((r) => [dash(r.group), dash(r.kind), dash(r.name)]) }] } : {}),
           } : {}),

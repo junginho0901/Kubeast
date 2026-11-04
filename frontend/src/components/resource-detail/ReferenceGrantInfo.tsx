@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { EventsTable, InfoSection, InfoRow, KeyValueTags, Th, Tx } from './DetailCommon'
+import { EventsTable, InfoSection, InfoRow, KeyValueTags, NoneText, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import type { ReferenceGrantInfo as ReferenceGrantRow } from '@/services/api'
@@ -92,7 +92,7 @@ export default function ReferenceGrantInfo({ name, namespace, rawJson }: Props) 
 
       <InfoSection title="From">
         {from.length === 0 ? (
-          <p className="text-xs text-slate-400"><Tx>No data</Tx></p>
+          <p className="text-xs text-slate-400"><NoneText className="" /></p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs table-fixed min-w-[400px]">
@@ -119,7 +119,7 @@ export default function ReferenceGrantInfo({ name, namespace, rawJson }: Props) 
 
       <InfoSection title="To">
         {to.length === 0 ? (
-          <p className="text-xs text-slate-400"><Tx>No data</Tx></p>
+          <p className="text-xs text-slate-400"><NoneText className="" /></p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs table-fixed min-w-[400px]">
