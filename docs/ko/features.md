@@ -230,7 +230,7 @@
 | **Configuration** | ConfigMap, Secret, ResourceQuota, LimitRange, PriorityClass, RuntimeClass, Lease |
 | **Security (RBAC)** | Role, ClusterRole, RoleBinding, ClusterRoleBinding, ServiceAccount · Policy Reports(`wgpolicyk8s.io` 보고서 모음, CRD 있을 때) |
 | **Cluster** | Node, Namespace, Webhook Configuration(Mutating/Validating), Admission Policy(Validating/Mutating — `admissionregistration.k8s.io/v1`, 읽기 전용, API가 없으면 "API를 제공하지 않음"; `features.admissionPolicies.readOnly: true`면 공용 YAML 적용과 AI 쓰기 도구도 정책·바인딩 4종을 거부하므로 Git으로만 바꿀 수 있습니다) |
-| **Custom Resources** | CRD 동적 탐색 및 인스턴스 편집 |
+| **Custom Resources** | CRD 동적 탐색 및 인스턴스 편집. 인스턴스의 출력 열은 목록과 상세 창 모두 API 서버가 CRD 열로 만든 Table(읽은 버전, 서버 함수 하나)이고, 상세 창은 링크로도 열립니다(`detailApi=<group>/<version>/<plural>`) |
 
 - **YAML 편집** (Monaco), **Pod Exec / 로그** (xterm.js, WebSocket)
 - **실시간 갱신** — WebSocket 멀티플렉서로 리소스 변경 스트리밍

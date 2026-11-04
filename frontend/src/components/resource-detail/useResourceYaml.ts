@@ -39,11 +39,11 @@ export function useResourceYaml({ target, tab, canEditYaml }: Args) {
       if (kind === 'Namespace') return api.getNamespaceYaml(name, yamlRefreshNonce > 0)
       if (kind === 'Secret' && ns) return api.getSecretYaml(ns, name)
       if (kind === 'CustomResourceDefinition') return api.getResourceYaml('customresourcedefinitions', name, undefined)
+      // a custom resource by its CRD's name (plural.group): another group may serve the same plural
       if (kind === 'CustomResourceInstance') {
         const rj = target?.rawJson as Record<string, unknown> | undefined
         const crdN = (rj?.crd_name as string) || ''
-        const plural = crdN ? crdN.split('.')[0] : ''
-        if (plural) return api.getResourceYaml(plural, name, ns || undefined)
+        if (crdN) return api.getResourceYaml(crdN, name, ns || undefined)
       }
       return api.getResourceYaml(kindToPlural(kind), name, ns || undefined)
     },
@@ -60,8 +60,7 @@ export function useResourceYaml({ target, tab, canEditYaml }: Args) {
     else if (kind === 'CustomResourceInstance') {
       const rj = target?.rawJson as Record<string, unknown> | undefined
       const crdN = (rj?.crd_name as string) || ''
-      const plural = crdN ? crdN.split('.')[0] : ''
-      if (plural) await api.applyResourceYaml(plural, name, yaml, ns || undefined)
+      if (crdN) await api.applyResourceYaml(crdN, name, yaml, ns || undefined)
     }
     else await api.applyResourceYaml(kindToPlural(kind), name, yaml, ns || undefined)
   }

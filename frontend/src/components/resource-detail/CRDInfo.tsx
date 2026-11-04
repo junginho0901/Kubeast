@@ -2,8 +2,9 @@ import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, Th, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, NoneText, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
+import { usePagination } from './usePagination'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { formatAge } from '@/utils/time'
 
@@ -42,8 +43,6 @@ export default function CRDInfo({ name, rawJson }: Props) {
   })
 
   const [instanceSearch, setInstanceSearch] = useState('')
-  const [instancePage, setInstancePage] = useState(1)
-  const instancesPerPage = 10
 
   const filteredInstances = useMemo(() => {
     if (!Array.isArray(crInstances)) return []
@@ -55,11 +54,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
     )
   }, [crInstances, instanceSearch])
 
-  const instanceTotalPages = Math.max(1, Math.ceil(filteredInstances.length / instancesPerPage))
-  const pagedInstances = useMemo(() => {
-    const start = (instancePage - 1) * instancesPerPage
-    return filteredInstances.slice(start, start + instancesPerPage)
-  }, [filteredInstances, instancePage])
+  const { items: pagedInstances, nav: instancesNav } = usePagination(filteredInstances, 10)
 
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const labels = (describe?.labels as Record<string, string> | undefined) ?? (meta.labels as Record<string, string> | undefined) ?? {}
@@ -226,19 +221,21 @@ export default function CRDInfo({ name, rawJson }: Props) {
 
       {/* CR Instances sub-list */}
       {Array.isArray(crInstances) && (
-        <InfoSection title={tr('crdInfo.instances', `Custom Resources (${filteredInstances.length})`)}>
+        <InfoSection title="Custom Resources ({{n}})" titleValues={{ n: crInstances.length }}>
           {crInstances.length > 5 && (
             <div className="mb-2">
               <input
                 type="text"
                 placeholder={tr('crdInfo.searchInstances', 'Search instances...')}
                 value={instanceSearch}
-                onChange={(e) => { setInstanceSearch(e.target.value); setInstancePage(1) }}
+                onChange={(e) => setInstanceSearch(e.target.value)}
                 className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-sm text-xs text-ink placeholder-slate-500 focus:outline-hidden focus:ring-1 focus:ring-primary-500"
               />
             </div>
           )}
-          {filteredInstances.length === 0 ? (
+          {crInstances.length === 0 ? (
+            <p className="text-xs text-slate-400"><NoneText className="" /></p>
+          ) : filteredInstances.length === 0 ? (
             <p className="text-xs text-slate-500">{tr('crdInfo.noInstances', 'No instances found.')}</p>
           ) : (
             <>
@@ -262,16 +259,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
                   </tbody>
                 </table>
               </div>
-              {instanceTotalPages > 1 && (
-                <div className="flex items-center justify-between mt-2 text-xs text-slate-400">
-                  <span><Tx text="{{n}} total" values={{ n: filteredInstances.length }} /></span>
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => setInstancePage(p => Math.max(1, p - 1))} disabled={instancePage <= 1} className="px-2 py-0.5 rounded-sm border border-slate-700 text-slate-400 disabled:opacity-40 hover:text-ink"><Tx>Prev</Tx></button>
-                    <span className="min-w-[48px] text-center">{instancePage}/{instanceTotalPages}</span>
-                    <button onClick={() => setInstancePage(p => Math.min(instanceTotalPages, p + 1))} disabled={instancePage >= instanceTotalPages} className="px-2 py-0.5 rounded-sm border border-slate-700 text-slate-400 disabled:opacity-40 hover:text-ink"><Tx>Next</Tx></button>
-                  </div>
-                </div>
-              )}
+              {instancesNav}
             </>
           )}
         </InfoSection>

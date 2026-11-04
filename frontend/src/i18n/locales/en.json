@@ -3522,7 +3522,6 @@
     "storedVersions": "Stored Versions",
     "conditions": "Conditions",
     "subresources": "Subresources",
-    "instances": "Custom Resources",
     "searchInstances": "Search instances...",
     "noInstances": "No instances found."
   },

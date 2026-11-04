@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, ConditionsTable, EventsTable, Th, Tx } from './DetailCommon'
-import { fmtRel } from './detailFormat'
+import { fmtRel, fmtTs } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -72,8 +72,8 @@ export default function VPAInfo({ name, namespace }: Props) {
           value={desc.provided || '-'}
           color={desc.provided === 'True' ? 'green' : 'amber'}
         />
-        {desc.cpu_target && <SummaryBadge label="CPU" value={desc.cpu_target} color="default" />}
-        {desc.memory_target && <SummaryBadge label="Memory" value={desc.memory_target} color="default" />}
+        <SummaryBadge label="CPU" value={desc.cpu_target || '-'} color="default" />
+        <SummaryBadge label="Memory" value={desc.memory_target || '-'} color="default" />
       </div>
 
       {/* Basic Info */}
@@ -82,7 +82,7 @@ export default function VPAInfo({ name, namespace }: Props) {
           <InfoRow label="Name" value={name} />
           <InfoRow label="Namespace" value={namespace} />
           <InfoRow label="UID" value={desc.uid || '-'} />
-          <InfoRow label="Created" value={fmtRel(desc.created_at)} />
+          <InfoRow label="Created" value={fmtTs(desc.created_at) === '-' ? '-' : `${fmtTs(desc.created_at)} (${fmtRel(desc.created_at)})`} />
         </div>
       </InfoSection>
 
@@ -116,24 +116,26 @@ export default function VPAInfo({ name, namespace }: Props) {
       {containerPolicies.length > 0 && (
         <InfoSection title="Container Policies">
           <div className="overflow-x-auto">
-            <table className="w-full text-xs table-fixed min-w-[600px]">
+            <table className="w-full text-xs table-fixed min-w-[700px]">
               <thead className="text-slate-400">
                 <tr>
-                  <Th className="text-left py-2 w-[20%]">Container</Th>
-                  <Th className="text-left py-2 w-[15%]">Mode</Th>
-                  <Th className="text-left py-2 w-[20%]">Controlled</Th>
-                  <Th className="text-left py-2 w-[22%]">Min Allowed</Th>
-                  <Th className="text-left py-2 w-[23%]">Max Allowed</Th>
+                  <Th className="text-left py-2 w-[17%]">Container</Th>
+                  <Th className="text-left py-2 w-[11%]">Mode</Th>
+                  <Th className="text-left py-2 w-[17%]">Controlled Resources</Th>
+                  <Th className="text-left py-2 w-[17%]">Controlled Values</Th>
+                  <Th className="text-left py-2 w-[19%]">Min Allowed</Th>
+                  <Th className="text-left py-2 w-[19%]">Max Allowed</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {containerPolicies.map((cp: any, idx: number) => (
                   <tr key={idx} className="text-slate-200">
-                    <td className="py-2 pr-2 align-top break-all whitespace-normal">{cp.container_name || '*'}</td>
+                    <td className="py-2 pr-2 align-top break-all whitespace-normal">{cp.container_name || '-'}</td>
                     <td className="py-2 pr-2 align-top">{cp.mode || '-'}</td>
                     <td className="py-2 pr-2 align-top break-all whitespace-normal">
-                      {Array.isArray(cp.controlled_resources) ? cp.controlled_resources.join(', ') : cp.controlled_values || '-'}
+                      {Array.isArray(cp.controlled_resources) && cp.controlled_resources.length ? cp.controlled_resources.join(', ') : '-'}
                     </td>
+                    <td className="py-2 pr-2 align-top break-all whitespace-normal">{cp.controlled_values || '-'}</td>
                     <td className="py-2 pr-2 align-top break-all whitespace-normal">
                       {formatResourceMap(cp.min_allowed)}
                     </td>

@@ -16,11 +16,24 @@ const tableAccept = "application/json;as=Table;v=v1;g=meta.k8s.io"
 // customResourceTable lists group/version/plural over every namespace as the API server prints it for kubectl, each
 // row carrying its whole object.
 func (s *Service) customResourceTable(ctx context.Context, group, version, plural string) (*metav1.Table, error) {
+	return s.tableAt(ctx, "/apis", group, version, plural)
+}
+
+// customResourceObjectTable is one object as the API server prints it for kubectl get <plural> <name>: a table of one
+// row, with the whole object.
+func (s *Service) customResourceObjectTable(ctx context.Context, group, version, plural, namespace, name string) (*metav1.Table, error) {
+	if namespace != "" && namespace != "-" {
+		return s.tableAt(ctx, "/apis", group, version, "namespaces", namespace, plural, name)
+	}
+	return s.tableAt(ctx, "/apis", group, version, plural, name)
+}
+
+func (s *Service) tableAt(ctx context.Context, segments ...string) (*metav1.Table, error) {
 	cs := s.clientsetCtx(ctx)
 	if cs == nil {
 		return nil, errNotLoaded
 	}
-	raw, err := cs.RESTClient().Get().AbsPath("/apis", group, version, plural).
+	raw, err := cs.RESTClient().Get().AbsPath(segments...).
 		Param("includeObject", "Object").SetHeader("Accept", tableAccept).Do(ctx).Raw()
 	if err != nil {
 		return nil, err

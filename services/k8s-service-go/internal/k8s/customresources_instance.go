@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"sync"
@@ -143,71 +144,42 @@ func (s *Service) GetCustomResourceInstances(ctx context.Context, group, version
 	return customResourceRows(t, group, version), nil
 }
 
+// DescribeCustomResourceInstance is a custom resource as its drawer shows it: the row the instances list shows (the
+// API server's Table of the CRD's columns at this version, for this one object — customResourceRows), the object's
+// metadata and the events about it, found as kubectl describe finds them (involvedObject name and kind, in every
+// namespace for a cluster-scoped kind).
 func (s *Service) DescribeCustomResourceInstance(ctx context.Context, group, version, plural, namespace, name string) (map[string]interface{}, error) {
-	gvr := schema.GroupVersionResource{
-		Group:    group,
-		Version:  version,
-		Resource: plural,
+	t, err := s.customResourceObjectTable(ctx, group, version, plural, namespace, name)
+	if err != nil {
+		return nil, fmt.Errorf("get custom resource %s/%s: %w", namespace, name, err)
+	}
+	rows := customResourceRows(t, group, version)
+	if len(t.Rows) != 1 || len(rows) != 1 {
+		return nil, fmt.Errorf("get custom resource %s/%s: the API server answered %d rows", namespace, name, len(t.Rows))
+	}
+	item := &unstructured.Unstructured{}
+	if err := json.Unmarshal(t.Rows[0].Object.Raw, &item.Object); err != nil {
+		return nil, fmt.Errorf("get custom resource %s/%s: %w", namespace, name, err)
 	}
 
-	var item *unstructured.Unstructured
-	var itemErr error
-	var events *corev1.EventList
-	var eventsErr error
-
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	go func() {
-		defer wg.Done()
-		if namespace != "" && namespace != "-" {
-			item, itemErr = s.dynamicCtx(ctx).Resource(gvr).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
-		} else {
-			item, itemErr = s.dynamicCtx(ctx).Resource(gvr).Get(ctx, name, metav1.GetOptions{})
-		}
-	}()
-
-	go func() {
-		defer wg.Done()
-		evtNs := namespace
-		if evtNs == "" || evtNs == "-" {
-			evtNs = ""
-		}
-		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events(evtNs).List(ctx, metav1.ListOptions{
-			FieldSelector: fmt.Sprintf("involvedObject.name=%s", name),
-		})
-	}()
-
-	wg.Wait()
-
-	if itemErr != nil {
-		return nil, fmt.Errorf("get custom resource %s/%s: %w", namespace, name, itemErr)
+	evtNs := namespace
+	if evtNs == "-" {
+		evtNs = ""
 	}
+	events, eventsErr := s.clientsetCtx(ctx).CoreV1().Events(evtNs).List(ctx, metav1.ListOptions{
+		FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=%s", name, item.GetKind()),
+	})
+	if eventsErr != nil {
+		events = &corev1.EventList{}
+	}
+	sortEventsByTime(events.Items)
 
-	createdAt := ""
-	if ts := item.GetCreationTimestamp(); !ts.IsZero() {
-		createdAt = ts.UTC().Format("2006-01-02T15:04:05Z")
-	}
+	result := rows[0]
+	result["uid"] = string(item.GetUID())
+	result["resource_version"] = item.GetResourceVersion()
+	result["api_version"] = item.GetAPIVersion()
+	result["events"] = formatEventList(events.Items)
 
-	result := map[string]interface{}{
-		"name":             item.GetName(),
-		"namespace":        item.GetNamespace(),
-		"uid":              string(item.GetUID()),
-		"resource_version": item.GetResourceVersion(),
-		"created_at":       createdAt,
-		"labels":           item.GetLabels(),
-		"annotations":      item.GetAnnotations(),
-		"kind":             item.GetKind(),
-		"api_version":      item.GetAPIVersion(),
-	}
-
-	// Include spec and status if present
-	if spec, ok := item.Object["spec"]; ok {
-		result["spec"] = spec
-	}
-	if status, ok := item.Object["status"]; ok {
-		result["status"] = status
-	}
 	if fields := topLevelFields(item.Object); len(fields) > 0 {
 		result["fields"] = fields
 	}
@@ -246,12 +218,6 @@ func (s *Service) DescribeCustomResourceInstance(ctx context.Context, group, ver
 			mfs = append(mfs, entry)
 		}
 		result["managed_fields"] = mfs
-	}
-
-	// Events
-	if eventsErr == nil && events != nil {
-		sortEventsByTime(events.Items)
-		result["events"] = formatEventList(events.Items)
 	}
 
 	return result, nil

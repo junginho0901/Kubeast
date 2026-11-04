@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import type { BackendTLSPolicyInfo as BackendTLSPolicyRow } from '@/services/api'
-import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, Th, Tx } from './DetailCommon'
+import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, NoneText, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { formatParentRef } from './gatewayDetail'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -67,7 +67,7 @@ export default function BackendTLSPolicyInfo({ name, namespace, rawJson }: Props
 
       <InfoSection title="Target Refs">
         {targetRefs.length === 0 ? (
-          <p className="text-xs text-slate-400"><Tx>No data</Tx></p>
+          <p className="text-xs text-slate-400"><NoneText className="" /></p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs table-fixed min-w-[400px]">
