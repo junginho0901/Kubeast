@@ -7,6 +7,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import type { GPUNodeInfo } from '@/services/api'
 import { getStatusColor, type SortKey } from './gpuNodesHelpers'
 import { nodeStatusParts } from '@/utils/nodeStatus'
+import { vendorNames } from '../gpuNumbers'
 
 interface Props {
   sortedNodes: GPUNodeInfo[]
@@ -62,11 +63,14 @@ export default function GPUNodesTable({
   return (
     <div ref={tableContainerRef} className={`card flex flex-col ${showCharts ? 'min-h-[420px]' : 'flex-1 min-h-0'}`}>
       <div ref={tableBodyRef} className="overflow-x-auto flex-1 min-h-0">
-        <table className="w-full text-sm min-w-[980px] table-fixed">
+        <table className="w-full text-sm min-w-[1090px] table-fixed">
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => onSort('name')}>
                 <span className="inline-flex items-center gap-1">{tr('gpuNodes.table.name', 'Name')}{renderSortIcon('name')}</span>
+              </th>
+              <th className="text-left py-3 px-4 w-[110px] cursor-pointer" onClick={() => onSort('gpu_vendor')}>
+                <span className="inline-flex items-center gap-1">{tr('gpuNodes.table.vendor', 'Vendor')}{renderSortIcon('gpu_vendor')}</span>
               </th>
               <th className="text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => onSort('gpu_model')}>
                 <span className="inline-flex items-center gap-1">{tr('gpuNodes.table.gpuModel', 'GPU Model')}{renderSortIcon('gpu_model')}</span>
@@ -97,6 +101,7 @@ export default function GPUNodesTable({
                 onClick={() => openDetail({ kind: 'Node', name: node.name })}
               >
                 <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{node.name}</span></td>
+                <td className="py-3 px-4 text-xs"><span className="block truncate">{vendorNames(node.gpu_vendors) || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{node.gpu_model ?? '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{node.gpu_memory ?? '-'}</td>
                 <td className="py-3 px-4 text-xs font-mono">{node.gpu_capacity}</td>
@@ -113,7 +118,7 @@ export default function GPUNodesTable({
             ))}
             {isLoading && (
               <tr>
-                <td colSpan={7} className="py-10 px-4 text-center text-slate-400">
+                <td colSpan={8} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     
@@ -123,10 +128,10 @@ export default function GPUNodesTable({
               </tr>
             )}
             {sortedNodes.length === 0 && !isLoading && (
-              <TableEmptyRow colSpan={7} resource="gpu" searching={searching} />
+              <TableEmptyRow colSpan={8} resource="gpu" searching={searching} />
             )}
           </tbody>
-          <AdaptiveTableFillerRows count={rowsPerPage - pagedNodes.length} columnCount={7} />
+          <AdaptiveTableFillerRows count={rowsPerPage - pagedNodes.length} columnCount={8} />
         </table>
       </div>
       <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedNodes.length} rowsPerPage={rowsPerPage} onPageChange={(p) => setCurrentPage(() => p)} />

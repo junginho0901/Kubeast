@@ -27,7 +27,7 @@ Kubeast는 등록한 클러스터에 아무것도 설치하지 않습니다. 예
 | 드로어·대시보드 그래프, 최적화, 스토리지 분석 | Prometheus + 지표 수집기 — §3 | `features.prometheus.enabled`(**끔**) | 그래프 영역이 숨겨지고, 최적화는 metrics-server 순간값 사용 |
 | 비용(Cost), 최적화 비용 열 | OpenCost — §4 | `features.cost.enabled`(켬) | "OpenCost 없음" 안내, 비용 열 없음 |
 | 정책 보고서 | PolicyReport CRD와 보고서를 만드는 도구 — §5 | `features.policyReports.enabled`(켬) | "설치 안 됨" 안내 |
-| GPU·DRA | NVIDIA device plugin·GFD 라벨·DCGM exporter, DRA API — §6 | — | GPU 수·사용률이 비거나 DRA 목록이 "설치되어 있지 않음" |
+| GPU·DRA | NVIDIA·AMD·Intel device plugin과 노드 라벨·DCGM exporter, DRA API — §6 | — | GPU 수·사용률이 비거나 DRA 목록이 "설치되어 있지 않음" |
 | VPA·Gateway API·Admission Policy·Ingress 지연 | 해당 CRD·컨트롤러 — §7 | — | 목록이 비고 "설치 안 됨" 표시 |
 | 재시작 없이 적용(resize) | Kubernetes 1.35 이상 — §8 | `features.inPlaceResize.enabled`(켬) | 버튼이 숨겨지고 API는 409 |
 | 노드 셸 | 특권 파드 허용과 이미지 — §9 | `nodeShell.enabled`(끔) | 파드 생성 실패 |
@@ -279,13 +279,17 @@ Read 사용자에게도 열어 주려면 이 주소를 §1의 `viewerProxyServic
 
 | 구성 요소 | Kubeast가 보는 것 | 쓰는 화면 |
 | --- | --- | --- |
-| NVIDIA device plugin | 노드의 `nvidia.com/gpu`·`nvidia.com/mig-*` 자원을 더한 값(둘 중 어느 장치든 GPU 하나로 셉니다). 사용 중은 `kubectl describe node`가 Allocated resources에 더하는 값(그 노드의 Succeeded·Failed 아닌 Pod의 요청)이고, 노드가 정해지지 않은 Pod의 요청은 따로 보여 줍니다. DaemonSet `nvidia-device-plugin-daemonset`(`kube-system`·`gpu-operator`·`nvidia-gpu-operator`) 또는 `kube-system/nvidia-device-plugin` — 어느 것도 없으면 "찾지 못함"이고 비정상이 아닙니다 | GPU 수·할당, 플러그인 상태 |
+| NVIDIA device plugin | 노드의 `nvidia.com/gpu`·`nvidia.com/mig-*` 자원(공유 설정이 `renameByDefault`면 `nvidia.com/gpu.shared`·`nvidia.com/mig-*.shared`)을 더한 값(어느 장치든 GPU 하나로 셉니다). 사용 중은 `kubectl describe node`가 Allocated resources에 더하는 값(그 노드의 Succeeded·Failed 아닌 Pod의 요청)이고, 노드가 정해지지 않은 Pod의 요청은 따로 보여 줍니다. DaemonSet `nvidia-device-plugin-daemonset`(`kube-system`·`gpu-operator`·`nvidia-gpu-operator`) 또는 `kube-system/nvidia-device-plugin` — 어느 것도 없으면 "찾지 못함"이고 비정상이 아닙니다 | GPU 수·할당, 플러그인 상태 |
 | GPU Feature Discovery | 노드 라벨 `nvidia.com/gpu.product`·`gpu.memory`·`mig.strategy`(`single`·`mixed`면 MIG 사용, `none`이거나 라벨이 없으면 미사용)·`cuda.driver-version.*` 또는 예전 `cuda.driver.*`(드라이버 버전)·`cuda.runtime-version.*` 또는 `cuda.runtime.*`(CUDA 버전)·`gpu.family`·`gpu.compute.*` | GPU 모델·메모리, Node 상세 창 |
+| AMD device plugin(ROCm `k8s-device-plugin`, AMD GPU Operator) | 노드의 `amd.com/gpu` 자원과, `mixed` 이름 전략이면 파티션 방식 이름 `amd.com/<compute>_<memory>`(`amd.com/cpx_nps4`·`amd.com/spx_nps1` 등) — 장치 하나가 GPU 하나이고 NVIDIA와 같은 규칙으로 셉니다. DaemonSet `kube-system/amdgpu-device-plugin-daemonset`(매니페스트)·`kube-system/amd-gpu-device-plugin-daemonset`(차트 `amd-gpu`)·`kube-amd-gpu/gpu-operator-device-plugin`(DeviceConfig `gpu-operator`인 GPU Operator) | GPU 수·할당, 플러그인 상태 |
+| AMD node labeller | 노드 라벨 `amd.com/gpu.product-name`·`gpu.vram`·`gpu.driver-version`·`gpu.family` — 또는 `beta.amd.com/gpu.*` 사본, 노드의 GPU가 서로 다르면 `amd.com/gpu.<이름>.<값>` | GPU 모델·메모리·드라이버, Node 상세 창 |
+| Intel GPU plugin | 노드의 `gpu.intel.com/i915`·`gpu.intel.com/xe` 자원을 NVIDIA와 같은 규칙으로 셉니다. `gpu.intel.com/monitoring`(`i915_monitoring`·`xe_monitoring`)과 v0.32까지 플러그인의 `millicores`·`memory.max`·`tiles`는 장치가 아니라 세지 않습니다. DaemonSet `default` 또는 `kube-system`의 `intel-gpu-plugin`(kustomize 기본)·`inteldeviceplugins-system/intel-gpu-plugin-gpudeviceplugin-sample`(예제·차트 이름의 GpuDevicePlugin인 오퍼레이터) | GPU 수·할당, 플러그인 상태 |
+| Intel NFD 규칙 | 노드 라벨 `gpu.intel.com/product`·`gpu.intel.com/family`(메모리·드라이버 라벨 없음) | GPU 모델, Node 상세 창 |
 | time-slicing 설정 | ConfigMap `time-slicing-config`·`nvidia-plugin-configs`·`time-slicing`(위 Namespace) | 시분할 설정 |
 | DCGM exporter | §3 표의 `DCGM_FI_DEV_*` 지표와 라벨 `UUID`(또는 `uuid`)·`hostname`(dcgm-exporter 4.6.0 전에는 `Hostname`)·`gpu`·`modelName`, GPU를 쓰는 Pod는 스크레이프가 이름을 바꿨으면(`honor_labels: false`이고 대상에 자기 `pod` 라벨이 있을 때) `exported_pod`·`exported_namespace`, 아니면 `pod`·`namespace` | 사용률·메모리·온도, GPU Pod별 사용률 |
 | DRA | `resource.k8s.io`(1.34+ v1, 1.32–1.33 v1beta2/v1beta1, 1.31 v1alpha3) — API 탐색으로 버전 선택. 네 종류의 목록과 실시간 갱신(watch), 상세 창용으로 ResourceClaim(Used By·Device Allocations)과 그 Namespace의 Pod(Using Pods·Related ResourceClaims)를 사용자로 읽습니다 — `view`와 `kubeast:cluster-reader`가 덮습니다 | DeviceClass·ResourceClaim·ResourceClaimTemplate·ResourceSlice |
 
-NVIDIA GPU Operator를 쓰면 위 구성 요소가 한 번에 설치됩니다. 이 절은 코드를 기준으로 썼으며, 실제 GPU 클러스터에서는 검증하지 않았습니다. 위의 수·라벨·지표 라벨은 `nvidia.com/gpu`·`nvidia.com/mig-1g.5gb`를 확장 자원으로 받은 kind 노드와 대역 exporter로 확인합니다(e2e `number-check-gpu.spec.ts`).
+NVIDIA GPU Operator를 쓰면 위 구성 요소가 한 번에 설치됩니다. 회사는 Kubernetes "Schedule GPUs"가 드는 셋이며, 다른 가속기(`habana.ai/gaudi`·`aws.amazon.com/neuron` 등)는 GPU로 세지 않고, 사용률·메모리·온도는 NVIDIA DCGM exporter에서만 읽습니다. 이 절은 코드를 기준으로 썼으며, 실제 GPU 클러스터에서는 검증하지 않았습니다. 위의 수·라벨·지표 라벨은 `nvidia.com/gpu`·`nvidia.com/mig-1g.5gb`를 확장 자원으로 받은 kind 노드와 대역 exporter로(e2e `number-check-gpu.spec.ts`), AMD·Intel은 그 자원과 라벨을 받은 kubelet 없는 Node 객체 2개로 확인합니다(e2e `number-check-gpu-vendors.spec.ts`).
 
 - **확인**: `kubectl describe node <node>`(Allocated resources), `kubectl get node <node> --show-labels`, Prometheus에서 `DCGM_FI_DEV_GPU_UTIL`과 그 라벨.
 

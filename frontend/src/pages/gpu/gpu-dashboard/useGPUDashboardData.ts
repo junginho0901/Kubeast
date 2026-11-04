@@ -1,7 +1,7 @@
 // GPUDashboard 의 데이터 fetching + 파생 계산 묶음 hook.
 //
 // 추출 출처: GPUDashboard.tsx (Phase 4.11) — useQuery × 2 (gpu/dashboard,
-// gpu/metrics) + useMemo × 7 (gpusByHost / allocationRate / devicePlugin
+// gpu/metrics) + useMemo × 7 (gpusByHost / allocationRate / devicePlugins
 // / nodeAllocation / modelDistribution / podStatusDist / recentPods).
 // 본체는 destructuring 한 번으로 모든 파생 값을 받고 JSX orchestration 만 담당.
 
@@ -9,7 +9,7 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import type { GPUDashboardData, GPUMetricsData, GPUDeviceMetric } from '@/services/api'
-import { devicePluginState } from '../gpuNumbers'
+import { devicePluginBadges, gpuModels } from '../gpuNumbers'
 
 export function useGPUDashboardData() {
   const { data, isLoading, isError, error, refetch } = useQuery<GPUDashboardData>({
@@ -48,7 +48,7 @@ export function useGPUDashboardData() {
     return Math.round((data.total_gpu_used / data.total_gpu_allocatable) * 100)
   }, [data])
 
-  const devicePlugin = useMemo(() => devicePluginState(data?.device_plugin_status ?? null), [data])
+  const devicePlugins = useMemo(() => devicePluginBadges(data?.device_plugins), [data])
 
   // Per-node GPU allocation bars: each node's gpu_used is kubectl describe node's Allocated resources (server)
   const nodeAllocation = useMemo(() => {
@@ -56,15 +56,10 @@ export function useGPUDashboardData() {
     return [...data.gpu_nodes].sort((a, b) => b.gpu_capacity - a.gpu_capacity)
   }, [data])
 
-  // GPU model distribution
-  const modelDistribution = useMemo(() => {
+  // GPU model distribution: each company's GPUs of a node under its own model
+  const modelDistribution = useMemo<[string, number][]>(() => {
     if (!data) return []
-    const map = new Map<string, number>()
-    for (const node of data.gpu_nodes) {
-      const model = node.gpu_model ?? 'Unknown'
-      map.set(model, (map.get(model) || 0) + node.gpu_capacity)
-    }
-    return [...map.entries()].sort((a, b) => b[1] - a[1])
+    return gpuModels(data.gpu_nodes).map(([model, e]) => [model, e.totalCapacity])
   }, [data])
 
   // Pod status distribution
@@ -95,7 +90,7 @@ export function useGPUDashboardData() {
     metricsAvailable,
     gpusByHost,
     allocationRate,
-    devicePlugin,
+    devicePlugins,
     nodeAllocation,
     modelDistribution,
     podStatusDist,

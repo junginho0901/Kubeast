@@ -6,6 +6,8 @@
 import { Link } from 'react-router-dom'
 import { Server, ArrowRight } from 'lucide-react'
 import { nodeStatusBadge, nodeStatusParts } from '@/utils/nodeStatus'
+import type { GPUNodeVendor } from '@/services/api'
+import { nodeVendorText } from '../gpuNumbers'
 
 type NodeAllocItem = {
   name: string
@@ -14,6 +16,7 @@ type NodeAllocItem = {
   gpu_capacity: number
   gpu_allocatable: number
   gpu_used: number
+  gpu_vendors?: GPUNodeVendor[]
   status: string
 }
 
@@ -70,8 +73,9 @@ export function NodeAllocationSection({ nodeAllocation, nodeReadyCount, nodeNotR
                       <span key={part} className={`badge ${nodeStatusBadge(part)}`}>{part}</span>
                     ))}
                   </div>
-                  <span className="text-xs text-slate-400">
-                    {node.gpu_model ?? tr('common.unknown', 'Unknown')} {node.gpu_memory ? `• ${node.gpu_memory}` : ''}
+                  {/* each company's GPUs of the node: its name (unless the model starts with it), model and memory */}
+                  <span className="text-xs text-slate-400" data-testid="gpu-node-allocation-models">
+                    {(node.gpu_vendors ?? []).map((v) => nodeVendorText(v, tr('common.unknown', 'Unknown'))).join(' / ')}
                   </span>
                 </div>
                 <div className="flex items-center gap-3">

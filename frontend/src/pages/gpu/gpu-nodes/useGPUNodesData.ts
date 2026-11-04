@@ -8,7 +8,7 @@ import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import type { GPUDashboardData, GPUMetricsData, GPUDeviceMetric, GPUNodeInfo } from '@/services/api'
 import type { SortKey, SummaryCard } from './gpuNodesHelpers'
-import { gpuNodeCounts } from '../gpuNumbers'
+import { gpuModels, gpuNodeCounts, gpuVendorCounts, vendorNames } from '../gpuNumbers'
 import { nodeReadiness } from '@/utils/nodeStatus'
 
 interface UseGPUNodesDataParams {
@@ -61,6 +61,7 @@ export function useGPUNodesData({ searchQuery, sortKey, sortDir, currentPage }: 
     return nodes.filter(
       (node) =>
         node.name.toLowerCase().includes(q) ||
+        vendorNames(node.gpu_vendors).toLowerCase().includes(q) ||
         (node.gpu_model ?? '').toLowerCase().includes(q) ||
         (node.driver_version ?? '').toLowerCase().includes(q),
     )
@@ -94,21 +95,9 @@ export function useGPUNodesData({ searchQuery, sortKey, sortDir, currentPage }: 
     [stats, tr, forbidden],
   )
 
-  // every model, its nodes' capacity, allocatable and GPUs in use (kubectl describe node's Allocated resources)
-  const modelDistribution = useMemo(() => {
-    const map = new Map<string, { count: number; totalCapacity: number; totalAllocatable: number; totalUsed: number }>()
-    for (const node of nodes) {
-      const model = node.gpu_model ?? 'Unknown'
-      const entry = map.get(model) ?? { count: 0, totalCapacity: 0, totalAllocatable: 0, totalUsed: 0 }
-      entry.count += 1
-      entry.totalCapacity += node.gpu_capacity
-      entry.totalAllocatable += node.gpu_allocatable
-      entry.totalUsed += node.gpu_used ?? 0
-      map.set(model, entry)
-    }
-    return [...map.entries()]
-      .sort((a, b) => b[1].totalCapacity - a[1].totalCapacity)
-  }, [nodes])
+  // every model, its nodes' capacity, allocatable and GPUs in use (kubectl describe node's Allocated resources), each
+  // company's GPUs of a node under its own model
+  const modelDistribution = useMemo(() => gpuModels(nodes), [nodes])
 
   const sortedNodes = useMemo(() => {
     if (!sortKey) return filteredNodes
@@ -116,6 +105,7 @@ export function useGPUNodesData({ searchQuery, sortKey, sortDir, currentPage }: 
     const getValue = (node: GPUNodeInfo): string | number => {
       switch (sortKey) {
         case 'name': return node.name
+        case 'gpu_vendor': return vendorNames(node.gpu_vendors)
         case 'gpu_model': return node.gpu_model ?? ''
         case 'gpu_memory': return node.gpu_memory ?? ''
         case 'gpu_capacity': return node.gpu_capacity
@@ -160,13 +150,17 @@ export function useGPUNodesData({ searchQuery, sortKey, sortDir, currentPage }: 
       summary: `${prefix}GPU 노드 ${total}개 (capacity ${totalCapacity}, allocatable ${totalAlloc}${notReady ? `, NotReady ${notReady}` : ''})`,
       data: {
         filters: { search: searchQuery || undefined },
-        stats: { total, ready, not_ready: notReady, total_capacity: totalCapacity, total_allocatable: totalAlloc, total_used: data.total_gpu_used },
+        stats: {
+          total, ready, not_ready: notReady, total_capacity: totalCapacity, total_allocatable: totalAlloc, total_used: data.total_gpu_used,
+          // each company's nodes and GPUs
+          by_vendor: gpuVendorCounts(nodes),
+        },
         ...summarizeList(pagedNodes as unknown as Record<string, unknown>[], {
           total: sortedNodes.length,
           currentPage,
           pageSize: rowsPerPage,
           topN: rowsPerPage,
-          pickFields: ['name', 'gpu_model', 'gpu_capacity', 'gpu_allocatable', 'gpu_used', 'status', 'mig_strategy'],
+          pickFields: ['name', 'gpu_vendors', 'gpu_model', 'gpu_capacity', 'gpu_allocatable', 'gpu_used', 'status', 'mig_strategy'],
           filterProblematic: (n) => nodeReadiness((n as unknown as GPUNodeInfo).status) !== 'Ready',
           linkBuilder: (n) => {
             const node = n as unknown as GPUNodeInfo

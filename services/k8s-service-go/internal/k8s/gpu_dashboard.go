@@ -2,13 +2,16 @@
 //
 // gpu.go 에서 분리. GetGPUDashboard 가 4-fan-out goroutine (Nodes / Pods /
 // DevicePlugin DS / TimeSlicing CM) 로 모은 데이터를 노드·포드 단위로 정제.
-// GPU 수량은 nvidia.com/gpu 와 nvidia.com/mig-* 를 더한 값 (isGPUResource).
+// GPU 수량은 "Schedule GPUs" 문서의 세 회사(NVIDIA·AMD·Intel) device plugin 이
+// 장치 하나씩 광고하는 이름을 더한 값 (gpuVendorOf).
 
 package k8s
 
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -27,18 +30,17 @@ func (s *Service) GetGPUDashboard(ctx context.Context) (map[string]interface{}, 
 	defer cancel()
 
 	var (
-		nodeList           *corev1.NodeList
-		nodeErr            error
-		podErr             error
-		devicePluginStatus map[string]interface{}
-		timeSlicingConfig  map[string]interface{}
-		gpuPods            = make([]map[string]interface{}, 0)
-		usedByNode         = map[string]int{}
-		totalUsed          int
-		totalWaiting       int
+		nodeList          *corev1.NodeList
+		nodeErr           error
+		podErr            error
+		devicePlugins     map[string]map[string]interface{}
+		timeSlicingConfig map[string]interface{}
+		gpuPods           = make([]map[string]interface{}, 0)
+		usedByNode        = map[string]map[string]int{}
+		waitingByVendor   = map[string]int{}
 	)
 
-	// Fetch nodes, pods, device plugin, and time-slicing config all in parallel
+	// Fetch nodes, pods, device plugins, and time-slicing config all in parallel
 	var wg sync.WaitGroup
 	wg.Add(4)
 	go func() {
@@ -49,24 +51,35 @@ func (s *Service) GetGPUDashboard(ctx context.Context) (map[string]interface{}, 
 		defer wg.Done()
 		// a page at a time, keeping the pods that ask for a GPU (every pod in one list took k8s-service past 512 Mi)
 		podErr = eachPod(dashCtx, s.clientsetCtx(ctx).CoreV1(), "", metav1.ListOptions{}, func(pod *corev1.Pod) {
-			gpuReq := getPodGPURequest(pod)
+			byVendor := getPodGPURequests(pod)
+			gpuReq := sumVendors(byVendor)
 			if gpuReq == 0 {
 				return
 			}
 			// in use = kubectl describe node's "Allocated resources": the pods on a node that have not ended; a pod
 			// no node has taken yet waits for one and is counted apart
 			if pod.Status.Phase != corev1.PodSucceeded && pod.Status.Phase != corev1.PodFailed {
-				if pod.Spec.NodeName != "" {
-					usedByNode[pod.Spec.NodeName] += gpuReq
-				} else {
-					totalWaiting += gpuReq
+				for vendor, n := range byVendor {
+					if pod.Spec.NodeName != "" {
+						if usedByNode[pod.Spec.NodeName] == nil {
+							usedByNode[pod.Spec.NodeName] = map[string]int{}
+						}
+						usedByNode[pod.Spec.NodeName][vendor] += n
+					} else {
+						waitingByVendor[vendor] += n
+					}
 				}
 			}
 			status, _, _, _ := podListView(pod)
+			requested := make([]map[string]interface{}, 0, len(byVendor))
+			for _, vendor := range gpuVendorOrder(byVendor) {
+				requested = append(requested, map[string]interface{}{"vendor": vendor, "requested": byVendor[vendor]})
+			}
 			row := map[string]interface{}{
 				"name":          pod.Name,
 				"namespace":     pod.Namespace,
 				"gpu_requested": gpuReq,
+				"gpu_vendors":   requested,
 				"status":        status,
 				"phase":         string(pod.Status.Phase),
 				"created_at":    toISO(&pod.CreationTimestamp),
@@ -79,7 +92,7 @@ func (s *Service) GetGPUDashboard(ctx context.Context) (map[string]interface{}, 
 	}()
 	go func() {
 		defer wg.Done()
-		devicePluginStatus = getDevicePluginStatus(dashCtx, s)
+		devicePlugins = getDevicePlugins(dashCtx, s)
 	}()
 	go func() {
 		defer wg.Done()
@@ -93,8 +106,25 @@ func (s *Service) GetGPUDashboard(ctx context.Context) (map[string]interface{}, 
 	if podErr != nil {
 		return nil, fmt.Errorf("list pods for GPU dashboard: %w", podErr)
 	}
-	for _, n := range usedByNode {
-		totalUsed += n
+	// every node's Allocated resources (a pod on a node that no longer advertises GPUs counts there too)
+	totalUsed := 0
+	totals := map[string]*gpuVendorTotal{}
+	total := func(vendor string) *gpuVendorTotal {
+		if totals[vendor] == nil {
+			totals[vendor] = &gpuVendorTotal{}
+		}
+		return totals[vendor]
+	}
+	for _, byVendor := range usedByNode {
+		for vendor, n := range byVendor {
+			totalUsed += n
+			total(vendor).used += n
+		}
+	}
+	totalWaiting := 0
+	for vendor, n := range waitingByVendor {
+		totalWaiting += n
+		total(vendor).waiting += n
 	}
 
 	// Filter GPU nodes
@@ -103,34 +133,56 @@ func (s *Service) GetGPUDashboard(ctx context.Context) (map[string]interface{}, 
 	totalAllocatable := 0
 
 	for _, node := range nodeList.Items {
-		gpuCap := getGPUQuantity(node.Status.Capacity)
+		capByVendor := gpuByVendor(node.Status.Capacity)
+		gpuCap := sumVendors(capByVendor)
 		if gpuCap == 0 {
 			continue
 		}
-		gpuAlloc := getGPUQuantity(node.Status.Allocatable)
+		allocByVendor := gpuByVendor(node.Status.Allocatable)
+		gpuAlloc := sumVendors(allocByVendor)
 		totalCapacity += gpuCap
 		totalAllocatable += gpuAlloc
+		used := usedByNode[node.Name]
 
 		gpuNode := map[string]interface{}{
 			"name":            node.Name,
 			"gpu_capacity":    gpuCap,
 			"gpu_allocatable": gpuAlloc,
-			"gpu_used":        usedByNode[node.Name],
+			"gpu_used":        sumVendors(used),
 			"status":          nodeStatusText(&node),
 		}
 
+		// each company's GPUs on the node, with the model, memory and driver its labeller writes
 		labels := node.Labels
-		if v, ok := labels["nvidia.com/gpu.product"]; ok {
-			gpuNode["gpu_model"] = v
+		vendors := make([]map[string]interface{}, 0, len(capByVendor))
+		var models, memories, drivers []string
+		for _, vendor := range gpuVendors {
+			if capByVendor[vendor] == 0 && allocByVendor[vendor] == 0 && used[vendor] == 0 {
+				continue
+			}
+			t := total(vendor)
+			t.capacity += capByVendor[vendor]
+			t.allocatable += allocByVendor[vendor]
+			entry := map[string]interface{}{"vendor": vendor, "capacity": capByVendor[vendor], "allocatable": allocByVendor[vendor], "used": used[vendor]}
+			info := gpuNodeLabels(vendor, labels)
+			for key, v := range map[string]string{"model": info.model, "memory": info.memory, "driver_version": info.driver} {
+				if v != "" {
+					entry[key] = v
+				}
+			}
+			models = appendNonEmpty(models, info.model)
+			memories = appendNonEmpty(memories, info.memory)
+			drivers = appendNonEmpty(drivers, info.driver)
+			vendors = append(vendors, entry)
 		}
-		if v, ok := labels["nvidia.com/gpu.memory"]; ok {
-			gpuNode["gpu_memory"] = v
+		gpuNode["gpu_vendors"] = vendors
+		for key, v := range map[string][]string{"gpu_model": models, "gpu_memory": memories, "driver_version": drivers} {
+			if len(v) > 0 {
+				gpuNode[key] = strings.Join(v, ", ")
+			}
 		}
 		if v, ok := labels["nvidia.com/mig.strategy"]; ok {
 			gpuNode["mig_strategy"] = v
-		}
-		if v := gpuDriverVersion(labels); v != "" {
-			gpuNode["driver_version"] = v
 		}
 
 		gpuNodes = append(gpuNodes, gpuNode)
@@ -150,14 +202,36 @@ func (s *Service) GetGPUDashboard(ctx context.Context) (map[string]interface{}, 
 		timeSlicingEnabled = true
 	}
 
+	// each company with GPUs on a node or asked for, or a device plugin found: its counts and its plugin
+	vendorTotals := make([]map[string]interface{}, 0, len(gpuVendors))
+	plugins := make([]map[string]interface{}, 0, len(gpuVendors))
+	for _, vendor := range gpuVendors {
+		t, counted := totals[vendor]
+		plugin := devicePlugins[vendor]
+		if counted {
+			vendorTotals = append(vendorTotals, map[string]interface{}{
+				"vendor": vendor, "capacity": t.capacity, "allocatable": t.allocatable, "used": t.used, "waiting": t.waiting,
+			})
+		}
+		if !counted && plugin == nil {
+			continue
+		}
+		entry := map[string]interface{}{"vendor": vendor, "found": plugin != nil}
+		for k, v := range plugin {
+			entry[k] = v
+		}
+		plugins = append(plugins, entry)
+	}
+
 	return map[string]interface{}{
 		"total_gpu_capacity":    totalCapacity,
 		"total_gpu_allocatable": totalAllocatable,
 		"total_gpu_used":        totalUsed,
 		"total_gpu_waiting":     totalWaiting,
+		"vendors":               vendorTotals,
 		"gpu_nodes":             gpuNodes,
 		"gpu_pods":              gpuPods,
-		"device_plugin_status":  devicePluginStatus,
+		"device_plugins":        plugins,
 		"mig_enabled":           migEnabled,
 		"time_slicing_enabled":  timeSlicingEnabled,
 		"time_slicing_config":   timeSlicingConfig,
@@ -166,28 +240,129 @@ func (s *Service) GetGPUDashboard(ctx context.Context) (map[string]interface{}, 
 
 // ========== GPU helpers ==========
 
-// isGPUResource names the NVIDIA device plugin's resources: whole GPUs (nvidia.com/gpu) and, under the mixed MIG
-// strategy, each MIG profile (nvidia.com/mig-<profile>) next to them. Each device of either is one GPU here.
-func isGPUResource(name corev1.ResourceName) bool {
+// gpuVendors are the companies Kubernetes' "Schedule GPUs" names, in the order the screens list them.
+var gpuVendors = []string{"NVIDIA", "AMD", "Intel"}
+
+// amdPartition is a partition kind the AMD device plugin advertises under its mixed naming strategy: the GPU's compute
+// and memory partition as sysfs writes them, lower-cased (amd.com/cpx_nps4).
+var amdPartition = regexp.MustCompile(`^amd\.com/(spx|dpx|tpx|qpx|cpx)_nps[0-9]+$`)
+
+// gpuVendorOf names the company of a resource each of whose devices is one GPU, "" for any other: NVIDIA's whole GPUs
+// (nvidia.com/gpu, or nvidia.com/gpu.shared when its sharing config renames them) and MIG profiles
+// (nvidia.com/mig-<profile>, .shared too), AMD's GPUs and partitions (amd.com/gpu, or
+// amd.com/<compute>_<memory> under the mixed strategy), and Intel's GPUs by kernel driver (gpu.intel.com/i915,
+// gpu.intel.com/xe). Intel's monitoring resources and its older plugin's millicores, memory.max and tiles are not
+// devices, and other accelerators (habana.ai/gaudi, aws.amazon.com/neuron…) are not GPUs.
+func gpuVendorOf(name corev1.ResourceName) string {
 	n := string(name)
-	return n == "nvidia.com/gpu" || strings.HasPrefix(n, "nvidia.com/mig-")
+	switch {
+	case n == "nvidia.com/gpu" || n == "nvidia.com/gpu.shared" || strings.HasPrefix(n, "nvidia.com/mig-"):
+		return "NVIDIA"
+	case n == "amd.com/gpu" || amdPartition.MatchString(n):
+		return "AMD"
+	case n == "gpu.intel.com/i915" || n == "gpu.intel.com/xe":
+		return "Intel"
+	}
+	return ""
+}
+
+func isGPUResource(name corev1.ResourceName) bool {
+	return gpuVendorOf(name) != ""
+}
+
+// gpuByVendor is each company's GPUs in a resource list.
+func gpuByVendor(resources corev1.ResourceList) map[string]int {
+	out := map[string]int{}
+	for name, qty := range resources {
+		if vendor := gpuVendorOf(name); vendor != "" {
+			out[vendor] += int(qty.Value())
+		}
+	}
+	return out
 }
 
 func getGPUQuantity(resources corev1.ResourceList) int {
+	return sumVendors(gpuByVendor(resources))
+}
+
+func sumVendors(byVendor map[string]int) int {
 	total := 0
-	for name, qty := range resources {
-		if isGPUResource(name) {
-			total += int(qty.Value())
-		}
+	for _, n := range byVendor {
+		total += n
 	}
 	return total
 }
 
-// getPodGPURequest is the GPUs the scheduler holds for the pod, which kubectl describe node adds up under
+// gpuVendorOrder is the companies of a count, in the screens' order.
+func gpuVendorOrder(byVendor map[string]int) []string {
+	out := make([]string, 0, len(byVendor))
+	for _, vendor := range gpuVendors {
+		if byVendor[vendor] > 0 {
+			out = append(out, vendor)
+		}
+	}
+	return out
+}
+
+type gpuVendorTotal struct{ capacity, allocatable, used, waiting int }
+
+// getPodGPURequests is each company's GPUs the scheduler holds for the pod, which kubectl describe node adds up under
 // "Allocated resources" (component-helpers PodRequests: the containers and sidecars summed, an init container's
 // peak when higher). The API server sets a request to the limit where only the limit was written.
+func getPodGPURequests(pod *corev1.Pod) map[string]int {
+	return gpuByVendor(resourcehelper.PodRequests(pod, resourcehelper.PodResourcesOptions{}))
+}
+
 func getPodGPURequest(pod *corev1.Pod) int {
-	return getGPUQuantity(resourcehelper.PodRequests(pod, resourcehelper.PodResourcesOptions{}))
+	return sumVendors(getPodGPURequests(pod))
+}
+
+type gpuLabelInfo struct{ model, memory, driver string }
+
+// gpuNodeLabels reads a company's GPU model, memory and driver from the labels its tools write: NVIDIA's GPU Feature
+// Discovery, AMD's node labeller (amd.com/gpu.*, the beta.amd.com/gpu.* copies, and <name>.<value> when the node's
+// GPUs differ) and Intel's NFD rules (gpu.intel.com/product; no memory or driver label).
+func gpuNodeLabels(vendor string, labels map[string]string) gpuLabelInfo {
+	switch vendor {
+	case "NVIDIA":
+		return gpuLabelInfo{labels["nvidia.com/gpu.product"], labels["nvidia.com/gpu.memory"], gpuDriverVersion(labels)}
+	case "AMD":
+		return gpuLabelInfo{amdLabel(labels, "product-name"), amdLabel(labels, "vram"), labels["amd.com/gpu.driver-version"]}
+	case "Intel":
+		return gpuLabelInfo{model: labels["gpu.intel.com/product"]}
+	}
+	return gpuLabelInfo{}
+}
+
+// amdLabel is the AMD node labeller's value of a property: amd.com/gpu.<name> (or its beta.amd.com copy) when the
+// node's GPUs agree, else the values it writes as amd.com/gpu.<name>.<value>.
+func amdLabel(labels map[string]string, name string) string {
+	prefixes := []string{"amd.com/gpu.", "beta.amd.com/gpu."}
+	for _, prefix := range prefixes {
+		if v := labels[prefix+name]; v != "" {
+			return v
+		}
+	}
+	for _, prefix := range prefixes {
+		var values []string
+		for k := range labels {
+			if v, ok := strings.CutPrefix(k, prefix+name+"."); ok {
+				values = append(values, v)
+			}
+		}
+		if len(values) > 0 {
+			sort.Strings(values)
+			return strings.Join(values, ", ")
+		}
+	}
+	return ""
+}
+
+func appendNonEmpty(list []string, v string) []string {
+	if v == "" {
+		return list
+	}
+	return append(list, v)
 }
 
 // gpuDriverVersion is the NVIDIA driver's version from GPU Feature Discovery's labels: cuda.driver-version.full, or
@@ -207,18 +382,53 @@ func gpuDriverVersion(labels map[string]string) string {
 	return v
 }
 
-func getDevicePluginStatus(ctx context.Context, s *Service) map[string]interface{} {
-	// Try common NVIDIA device plugin DaemonSet names and namespaces
-	candidates := []struct {
-		namespace string
-		name      string
-	}{
+type dsRef struct{ namespace, name string }
+
+// devicePluginNames are the DaemonSets each company's device plugin runs as when installed its documented ways:
+// NVIDIA's (static manifest, GPU Operator); AMD's manifest k8s-ds-amdgpu-dp.yaml, its amd-gpu chart in kube-system
+// and its GPU Operator's DeviceConfig of the example name; Intel's kustomize base in default or kube-system and its
+// operator's GpuDevicePlugin of the example and chart name.
+var devicePluginNames = map[string][]dsRef{
+	"NVIDIA": {
 		{"kube-system", "nvidia-device-plugin-daemonset"},
 		{"gpu-operator", "nvidia-device-plugin-daemonset"},
 		{"nvidia-gpu-operator", "nvidia-device-plugin-daemonset"},
 		{"kube-system", "nvidia-device-plugin"},
-	}
+	},
+	"AMD": {
+		{"kube-system", "amdgpu-device-plugin-daemonset"},
+		{"kube-system", "amd-gpu-device-plugin-daemonset"},
+		{"kube-amd-gpu", "gpu-operator-device-plugin"},
+	},
+	"Intel": {
+		{"default", "intel-gpu-plugin"},
+		{"kube-system", "intel-gpu-plugin"},
+		{"inteldeviceplugins-system", "intel-gpu-plugin-gpudeviceplugin-sample"},
+	},
+}
 
+// getDevicePlugins is each company's device plugin DaemonSet found under one of its names (a company without one is
+// left out).
+func getDevicePlugins(ctx context.Context, s *Service) map[string]map[string]interface{} {
+	var mu sync.Mutex
+	out := map[string]map[string]interface{}{}
+	var wg sync.WaitGroup
+	for vendor, names := range devicePluginNames {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if st := getDevicePluginStatus(ctx, s, names); st != nil {
+				mu.Lock()
+				out[vendor] = st
+				mu.Unlock()
+			}
+		}()
+	}
+	wg.Wait()
+	return out
+}
+
+func getDevicePluginStatus(ctx context.Context, s *Service, candidates []dsRef) map[string]interface{} {
 	for _, c := range candidates {
 		// Short timeout per candidate so we don't block if the namespace doesn't exist
 		tryCtx, cancel := context.WithTimeout(ctx, 3*time.Second)

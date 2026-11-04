@@ -540,14 +540,30 @@ export interface GatewayPoliciesResponse {
 }
 
 // GPU / DRA types
+// the companies whose GPUs Kubeast counts (gpu_dashboard.go gpuVendorOf), in the screens' order
+export type GPUVendor = 'NVIDIA' | 'AMD' | 'Intel'
+
+// one company's GPUs on a node, with the model, memory and driver its labeller writes
+export interface GPUNodeVendor {
+  vendor: GPUVendor
+  capacity: number
+  allocatable: number
+  used: number
+  model?: string | null
+  memory?: string | null
+  driver_version?: string | null
+}
+
 export interface GPUNodeInfo {
   name: string
+  // each company's model, memory and driver joined, in the order of gpu_vendors
   gpu_model?: string | null
   gpu_memory?: string | null
   gpu_capacity: number
   gpu_allocatable: number
   // the GPUs the node's pods not Succeeded or Failed request (kubectl describe node's Allocated resources)
   gpu_used: number
+  gpu_vendors?: GPUNodeVendor[]
   // kubectl's STATUS (utils/nodeStatus)
   status: string
   mig_strategy?: string | null
@@ -559,10 +575,22 @@ export interface GPUPodInfo {
   namespace: string
   node_name?: string | null
   gpu_requested: number
+  gpu_vendors?: { vendor: GPUVendor; requested: number }[]
   // kubectl's STATUS; phase is the pod's status.phase
   status: string
   phase?: string | null
   created_at?: string | null
+}
+
+// a company's device plugin DaemonSet, found under one of its names or not
+export interface GPUDevicePlugin {
+  vendor: GPUVendor
+  found: boolean
+  name?: string | null
+  namespace?: string | null
+  desired?: number
+  ready?: number
+  available?: number
 }
 
 export interface GPUDashboardData {
@@ -571,15 +599,12 @@ export interface GPUDashboardData {
   total_gpu_used: number
   // requested by pods no node has taken yet (not in total_gpu_used)
   total_gpu_waiting: number
+  // each company with GPUs on a node or asked for
+  vendors?: { vendor: GPUVendor; capacity: number; allocatable: number; used: number; waiting: number }[]
   gpu_nodes: GPUNodeInfo[]
   gpu_pods: GPUPodInfo[]
-  device_plugin_status: {
-    name?: string | null
-    namespace?: string | null
-    desired: number
-    ready: number
-    available: number
-  } | null
+  // each company with GPUs or a plugin found
+  device_plugins?: GPUDevicePlugin[]
   mig_enabled: boolean
   time_slicing_enabled: boolean
   time_slicing_config: Record<string, any> | null

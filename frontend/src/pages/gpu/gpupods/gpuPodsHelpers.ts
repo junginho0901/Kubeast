@@ -10,6 +10,7 @@ export type SortKey =
   | 'name'
   | 'node_name'
   | 'gpu_requested'
+  | 'gpu_vendor'
   | 'status'
   | 'age'
 

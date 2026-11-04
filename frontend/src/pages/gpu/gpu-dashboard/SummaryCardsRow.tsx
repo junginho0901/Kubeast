@@ -7,7 +7,7 @@
 
 import { Monitor, Cpu, Activity, Gauge, CheckCircle, XCircle } from 'lucide-react'
 import type { GPUDashboardData } from '@/services/api'
-import type { DevicePluginState } from '../gpuNumbers'
+import type { DevicePluginBadge } from '../gpuNumbers'
 
 function StatusBadge({ enabled, label, testId }: { enabled: boolean; label: string; testId?: string }) {
   return (
@@ -28,11 +28,13 @@ function StatusBadge({ enabled, label, testId }: { enabled: boolean; label: stri
 interface Props {
   data: GPUDashboardData
   allocationRate: number
-  devicePlugin: DevicePluginState
+  devicePlugins: DevicePluginBadge[]
   tr: (key: string, fallback: string, options?: Record<string, unknown>) => string
 }
 
-export function SummaryCardsRow({ data, allocationRate, devicePlugin, tr }: Props) {
+export function SummaryCardsRow({ data, allocationRate, devicePlugins, tr }: Props) {
+  // each company's GPUs on the nodes ("NVIDIA 12 · AMD 4")
+  const vendors = (data.vendors ?? []).filter((v) => v.capacity > 0)
   const summaryCards = [
     {
       label: tr('gpuDashboardPage.summary.capacity', 'Total Capacity'),
@@ -41,6 +43,7 @@ export function SummaryCardsRow({ data, allocationRate, devicePlugin, tr }: Prop
       border: 'border-slate-700',
       iconBg: 'bg-slate-700/60',
       iconColor: 'text-slate-300',
+      vendors: vendors.length > 0 ? vendors.map((v) => `${v.vendor} ${v.capacity}`).join(' · ') : undefined,
     },
     {
       label: tr('gpuDashboardPage.summary.allocatable', 'Allocatable'),
@@ -77,7 +80,9 @@ export function SummaryCardsRow({ data, allocationRate, devicePlugin, tr }: Prop
     healthy: tr('gpuDashboardPage.status.pluginHealthy', 'Device Plugin Healthy'),
     unhealthy: tr('gpuDashboardPage.status.pluginUnhealthy', 'Device Plugin Unhealthy'),
     missing: tr('gpuDashboardPage.status.pluginNotFound', 'Device Plugin Not Found'),
-  }[devicePlugin]
+  }
+  // the company before the badge's words when the badges are of more than one
+  const named = (b: DevicePluginBadge, text: string) => (b.vendor ? `${b.vendor} ${text}` : text)
 
   return (
     <>
@@ -98,6 +103,7 @@ export function SummaryCardsRow({ data, allocationRate, devicePlugin, tr }: Prop
                 </div>
               </div>
               <p className="mt-2 text-3xl font-bold text-ink" data-testid="gpu-summary-value">{card.value}</p>
+              {card.vendors && <p className="mt-1 text-xs text-slate-400" data-testid="gpu-summary-vendors">{card.vendors}</p>}
               {card.note && <p className="mt-1 text-xs text-slate-400" data-testid="gpu-summary-note">{card.note}</p>}
               {card.bar && (
                 <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-700">
@@ -120,7 +126,9 @@ export function SummaryCardsRow({ data, allocationRate, devicePlugin, tr }: Prop
 
       {/* Status Badges */}
       <div className="flex flex-wrap items-center gap-3">
-        <StatusBadge testId="gpu-badge-plugin" enabled={devicePlugin === 'healthy'} label={pluginLabel} />
+        {devicePlugins.map((b) => (
+          <StatusBadge key={b.vendor ?? 'plugin'} testId="gpu-badge-plugin" enabled={b.state === 'healthy'} label={named(b, pluginLabel[b.state])} />
+        ))}
         <StatusBadge
           testId="gpu-badge-mig"
           enabled={data.mig_enabled}
@@ -139,12 +147,12 @@ export function SummaryCardsRow({ data, allocationRate, devicePlugin, tr }: Prop
               : tr('gpuDashboardPage.status.timeSlicingDisabled', 'Time-Slicing Disabled')
           }
         />
-        {data.device_plugin_status && (
-          <span className="text-xs text-slate-500" data-testid="gpu-plugin-detail">
-            {tr('gpuDashboardPage.status.pluginDetail', 'Plugin')}: {data.device_plugin_status.ready}/{data.device_plugin_status.desired}{' '}
+        {devicePlugins.filter((b) => b.plugin?.found).map((b) => (
+          <span key={b.vendor ?? 'plugin'} className="text-xs text-slate-500" data-testid="gpu-plugin-detail">
+            {named(b, tr('gpuDashboardPage.status.pluginDetail', 'Plugin'))}: {b.plugin?.ready ?? 0}/{b.plugin?.desired ?? 0}{' '}
             {tr('gpuDashboardPage.status.ready', 'ready')}
           </span>
-        )}
+        ))}
       </div>
     </>
   )
