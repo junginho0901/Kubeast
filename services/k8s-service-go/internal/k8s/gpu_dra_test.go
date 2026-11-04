@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -55,6 +56,8 @@ func newDRAService(t *testing.T) (*Service, *[]string) {
 		"/apis/resource.k8s.io/v1/deviceclasses/gpu.example.com":                draClass,
 		"/apis/resource.k8s.io/v1/namespaces/ml/resourceclaimtemplates/one-gpu": draTemplate,
 		"/api/v1/namespaces/ml/pods":                                            draPods,
+		"/api/v1/pods":                                                          draPods,
+		"/api/v1/nodes":                                                         `{"apiVersion":"v1","kind":"NodeList","metadata":{},"items":[]}`,
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -167,5 +170,24 @@ func TestResourceClaimTemplate_DescribeRelatedClaims(t *testing.T) {
 	want := []map[string]interface{}{{"name": "p-gpu-x7k2q", "namespace": "ml", "pod": "p"}}
 	if !reflect.DeepEqual(d["related_claims"], want) {
 		t.Fatalf("related claims %v, want %v", d["related_claims"], want)
+	}
+}
+
+// The GPU Dashboard names the pods an allocated claim is reserved for (p, from the claim made for it), not a pod whose
+// claim is not made yet (q) or a pod naming none; a cluster without DRA names none.
+func TestGPUDashboard_NamesThePodsHoldingDRADevices(t *testing.T) {
+	s, _ := newDRAService(t)
+	res, err := s.GetGPUDashboard(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []map[string]interface{}{{"namespace": "ml", "name": "p"}}
+	if !reflect.DeepEqual(res["dra_pods"], want) {
+		t.Fatalf("dra pods %v, want %v", res["dra_pods"], want)
+	}
+
+	none, err := (&listAPI{objects: map[string]any{"/api/v1/nodes": corev1.NodeList{}}}).serve(t).GetGPUDashboard(context.Background())
+	if got, ok := none["dra_pods"].([]map[string]interface{}); err != nil || !ok || len(got) != 0 {
+		t.Fatalf("no DRA: %#v %v", none["dra_pods"], err)
 	}
 }

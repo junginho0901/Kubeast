@@ -136,6 +136,32 @@ func TestSliceAllocations_DriverPoolAndDevice(t *testing.T) {
 	}
 }
 
+// The pods holding devices are the pods an allocated claim is reserved for, in the claim's namespace: not a claim
+// without an allocation, not a consumer of another resource, each pod once.
+func TestReservedPods_AllocatedClaimsPods(t *testing.T) {
+	pod := func(name string) interface{} { return o{"resource": "pods", "name": name, "uid": name} }
+	claims := []unstructured.Unstructured{
+		*obj("shared", "ml", nil, o{"allocation": o{}, "reservedFor": l(pod("train-1"), pod("train-0"))}),
+		*obj("again", "ml", nil, o{"allocation": o{}, "reservedFor": l(pod("train-0"))}),
+		*obj("made", "a", nil, o{"allocation": o{}, "reservedFor": l(pod("infer"))}),
+		*obj("by-a-set", "a", nil, o{"allocation": o{}, "reservedFor": l(o{"apiGroup": "apps", "resource": "statefulsets", "name": "db", "uid": "s"})}),
+		*obj("same-name-group", "a", nil, o{"allocation": o{}, "reservedFor": l(o{"apiGroup": "example.com", "resource": "pods", "name": "x", "uid": "x"})}),
+		*obj("not-allocated", "a", nil, o{"reservedFor": l(pod("waiting"))}),
+		*obj("pending", "a", nil, nil),
+	}
+	want := []map[string]interface{}{
+		{"namespace": "a", "name": "infer"},
+		{"namespace": "ml", "name": "train-0"},
+		{"namespace": "ml", "name": "train-1"},
+	}
+	if got := ReservedPods(claims); !reflect.DeepEqual(got, want) {
+		t.Errorf("reserved pods %v, want %v", got, want)
+	}
+	if got := ReservedPods(nil); got == nil || len(got) != 0 {
+		t.Errorf("no claims %#v, want an empty list", got)
+	}
+}
+
 func strp(s string) *string { return &s }
 
 // A pod uses a claim it names or the claim made for it from a template; a template's claims are what its pods'

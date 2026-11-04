@@ -10,7 +10,8 @@
 #   (deploy/kind/gpu-metrics.yaml), which Read users may GET through the API server proxy
 #   (templates/impersonation-viewer-proxy.yaml).
 # - AMD's and Intel's GPUs (e2e/tests/number-check-gpu-vendors.spec.ts): that spec makes two Node objects without a
-#   kubelet for its run (label kubeast.dev/e2e-fake-gpu-node) and removes them; `down` removes any a stopped run left.
+#   kubelet for its run (label kubeast.dev/e2e-fake-gpu-node) and removes them, as number-check-gpu.spec.ts does three
+#   for its GPU Pods charts; `down` removes any a stopped run left.
 #
 #   scripts/kind-gpu.sh up
 #   scripts/kind-gpu.sh down
@@ -84,8 +85,10 @@ case "${1:-}" in
       | k apply -f - >/dev/null
     ;;
   down)
-    # what a stopped number-check-gpu-vendors run left: its pods (no kubelet confirms their deletion), then its nodes
+    # what a stopped number-check-gpu-vendors or number-check-gpu run left: the pods on the nodes without a kubelet (no
+    # kubelet confirms their deletion), then the nodes
     k delete pods -n e2e-gpu-vendors --all --grace-period=0 --force --ignore-not-found >/dev/null 2>&1 || true
+    k delete pods -A -l kubeast.dev/e2e-fake-gpu-node --grace-period=0 --force --ignore-not-found >/dev/null 2>&1 || true
     k delete namespace e2e-gpu-vendors --ignore-not-found
     k delete nodes -l kubeast.dev/e2e-fake-gpu-node --ignore-not-found
     k delete --ignore-not-found -f "$ROOT/deploy/kind/gpu-metrics.yaml"

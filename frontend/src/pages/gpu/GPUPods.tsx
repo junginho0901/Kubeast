@@ -14,7 +14,7 @@ import { parseAgeSeconds, type SortKey, type SummaryCard } from './gpupods/gpuPo
 import { GPUPodsFilters } from './gpupods/GPUPodsFilters'
 import { GPUPodsTable } from './gpupods/GPUPodsTable'
 import { GPUPodsCharts } from './gpupods/GPUPodsCharts'
-import { gpuPodCounts, gpuPodVendorCounts, podGpuUsage, vendorNames } from './gpuNumbers'
+import { gpuPodCounts, gpuPodStatuses, gpuPodsByNode, gpuPodVendorCounts, podGpuUsage, vendorNames } from './gpuNumbers'
 
 export default function GPUPods() {
   const { t } = useTranslation()
@@ -66,17 +66,8 @@ export default function GPUPods() {
 
   const stats = useMemo(() => {
     const { total, running, pending, failed, requested: totalGpuRequested, namespaces } = gpuPodCounts(pods)
-
-    // Status distribution
-    const statusMap = new Map<string, number>()
-    for (const pod of pods) {
-      statusMap.set(pod.status, (statusMap.get(pod.status) || 0) + 1)
-    }
-    const topStatuses = [...statusMap.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-
-    return { total, running, pending, failed, totalGpuRequested, namespaces, topStatuses }
+    // Status distribution: every status
+    return { total, running, pending, failed, totalGpuRequested, namespaces, topStatuses: gpuPodStatuses(pods) }
   }, [pods])
 
   const summaryCards = useMemo<SummaryCard[]>(
@@ -94,20 +85,8 @@ export default function GPUPods() {
     [stats, tr, forbidden],
   )
 
-  // GPU usage per node for the top section
-  const nodeGpuUsage = useMemo(() => {
-    const map = new Map<string, { podCount: number; totalGpu: number }>()
-    for (const pod of pods) {
-      const node = pod.node_name || ''
-      const entry = map.get(node) ?? { podCount: 0, totalGpu: 0 }
-      entry.podCount += 1
-      entry.totalGpu += pod.gpu_requested
-      map.set(node, entry)
-    }
-    return [...map.entries()]
-      .sort((a, b) => b[1].totalGpu - a[1].totalGpu)
-      .slice(0, 4)
-  }, [pods])
+  // GPU usage per node: every node
+  const nodeGpuUsage = useMemo(() => gpuPodsByNode(pods), [pods])
 
   const sortedPods = useMemo(() => {
     if (!sortKey) return filteredPods
@@ -165,8 +144,12 @@ export default function GPUPods() {
       summary: `${prefix}GPU Pod ${total}개 (요청 ${totalGpuRequested}개${notRunning ? `, NotRunning ${notRunning}` : ''})`,
       data: {
         filters: { search: searchQuery || undefined },
-        // each company's pods and the GPUs they still ask for
-        stats: { total, total_gpu_requested: totalGpuRequested, not_running: notRunning, by_vendor: gpuPodVendorCounts(pods) },
+        // each company's pods and the GPUs they still ask for; the charts' statuses and nodes, every one
+        stats: {
+          total, total_gpu_requested: totalGpuRequested, not_running: notRunning, by_vendor: gpuPodVendorCounts(pods),
+          by_status: stats.topStatuses.map(([status, n]) => ({ status, pods: n })),
+          by_node: nodeGpuUsage.map(([node, e]) => ({ node: node || null, pods: e.podCount, gpus: e.totalGpu })),
+        },
         ...summarizeList(pagedPods as unknown as Record<string, unknown>[], {
           total: sortedPods.length,
           currentPage,
@@ -181,7 +164,7 @@ export default function GPUPods() {
         }),
       },
     }
-  }, [data, pods, pagedPods, sortedPods.length, currentPage, rowsPerPage, searchQuery])
+  }, [data, pods, stats, nodeGpuUsage, pagedPods, sortedPods.length, currentPage, rowsPerPage, searchQuery])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 

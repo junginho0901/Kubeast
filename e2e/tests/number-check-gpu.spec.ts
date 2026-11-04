@@ -12,10 +12,13 @@ import { test, expect, type APIRequestContext, type Page } from '@playwright/tes
 // GPUs in use are kubectl describe node's "Allocated resources" (the pods on a node that have not ended, init
 // containers at their peak, sidecars added), pods no node has taken are waiting apart; a pod's Status is kubectl's
 // STATUS and a node's too; the real-time numbers are what that Prometheus answers, a pod's GPUs read whether the
-// scrape kept the exporter's pod label or renamed it exported_pod. The node drawer's GPU rows, the floating chat's
-// numbers, the device plugin badge, MIG none, a cordoned node and a grant limited to namespaces ("-") too. The pods
-// live in namespace e2e-gpu-num, made here and removed after; what the spec changes on the node and the exporter is
-// put back.
+// scrape kept the exporter's pod label or renamed it exported_pod, and a GPU's pod is named when it asks for GPUs or
+// holds a DRA claim (a pod of the DRA example driver's gpu.example.com). The GPU Pods charts list every status and
+// node: for that test and the floating chat's, three Node objects without a kubelet and pods whose init container
+// waits or fails are made and removed. The node drawer's GPU rows, the floating chat's numbers, the device plugin
+// badge (the DaemonSet of NVIDIA's helm chart as its README installs it), MIG none, a cordoned node and a grant
+// limited to namespaces ("-") too. The pods live in namespace e2e-gpu-num, made here and removed after; what the spec
+// changes on the node and the exporter is put back.
 
 const SCREENS = [
   { path: '/gpu/dashboard', cluster: 'test2' },
@@ -26,7 +29,9 @@ const CLUSTER = SCREENS[0].cluster
 const NODE = `${CLUSTER}-control-plane`
 const NS = 'e2e-gpu-num'
 const READ_GROUP = 'kubeast:role:read'
-const PLUGIN = { namespace: 'kube-system', name: 'nvidia-device-plugin' } // the last name Kubeast looks for
+// NVIDIA k8s-device-plugin's chart as its README installs it: release nvdp, DaemonSet <release>-nvidia-device-plugin
+const PLUGIN = { namespace: 'nvidia-device-plugin', name: 'nvdp-nvidia-device-plugin', release: 'nvdp' }
+const DRA_CLASS = 'gpu.example.com' // the DRA example driver's (scripts/kind-gpu.sh up)
 const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
 // the badges and the counts next to a section title, found by what main's page shows too, so a reverse check on its
 // build fails on the value and not on a test id it never had
@@ -167,18 +172,26 @@ const RUNNING = [
   pod('no-gpu', { containers: [box('app', SLEEP)] }),
 ]
 const WAITING = pod('gpu-waiting', { nodeSelector: { 'e2e-gpu-num': 'no-such-node' }, containers: [box('app', SLEEP, GPU(1))] })
+// a pod that asks for no extended resource and gets a GPU through a DRA claim (one of the example driver's devices)
+const DRA = [
+  { apiVersion: 'resource.k8s.io/v1', kind: 'ResourceClaim', metadata: { name: 'gpu-dra', namespace: NS },
+    spec: { devices: { requests: [{ name: 'gpu', exactly: { deviceClassName: DRA_CLASS } }] } } },
+  pod('gpu-dra', { resourceClaims: [{ name: 'gpu', resourceClaimName: 'gpu-dra' }],
+    containers: [box('app', SLEEP, undefined, { resources: { claims: [{ name: 'gpu' }] } })] }),
+]
 const list = (items: Obj[]) => JSON.stringify({ apiVersion: 'v1', kind: 'List', items })
 
 // DCGM series the stand-in exporter serves: /metrics as dcgm-exporter 4.8.4 writes them (hostname), scraped with the
 // pod labels kept; /exported/metrics with the older Hostname, scraped by a target labelled as the exporter's own pod,
 // so the pod labels become exported_pod and an idle GPU carries the exporter's pod. A pod on two GPUs, a GPU at 0 °C
-// with a pod, idle GPUs on both.
+// with a pod, idle GPUs on both, a GPU of the pod holding a DRA claim.
 type G = { gpu: number; pod?: string; container?: string; util: number; used: number; free: number; temp: number }
 const PLAIN: G[] = [
   { gpu: 0, pod: 'gpu-one', util: 30, used: 20000, free: 60000, temp: 41 },
   { gpu: 1, pod: 'gpu-two-cards', util: 50, used: 40000, free: 40000, temp: 0 },
   { gpu: 2, pod: 'gpu-two-cards', util: 70, used: 60000, free: 20000, temp: 55 },
   { gpu: 3, util: 0, used: 0, free: 80000, temp: 33 },
+  { gpu: 8, pod: 'gpu-dra', util: 15, used: 8000, free: 72000, temp: 38 },
 ]
 const EXPORTED: G[] = [
   { gpu: 4, pod: 'gpu-two-boxes', container: 'a', util: 90, used: 10000, free: 70000, temp: 60 },
@@ -220,27 +233,82 @@ const podsOf = (): Obj[] => JSON.parse(kubectl(`get pods -n ${NS} -o json`)).ite
 const settled = () => {
   const by = Object.fromEntries(podsOf().map((p) => [p.metadata.name, p]))
   const ready = (n: string) => by[n]?.status?.conditions?.some((c: Obj) => c.type === 'Ready' && c.status === 'True')
-  return RUNNING.every((p) => ready(p.metadata.name)) && by['gpu-done']?.status?.phase === 'Succeeded' && by['gpu-failed']?.status?.phase === 'Failed' &&
+  return [...RUNNING, DRA[1]].every((p) => ready(p.metadata.name)) && by['gpu-done']?.status?.phase === 'Succeeded' && by['gpu-failed']?.status?.phase === 'Failed' &&
     by['gpu-waiting']?.status?.conditions?.some((c: Obj) => c.type === 'PodScheduled' && c.status === 'False')
+}
+// the pods an allocated claim is reserved for (status.reservedFor), as kubectl has the claims
+const draHolders = () => new Set((JSON.parse(kubectl('get resourceclaims -A -o json')).items as Obj[])
+  .filter((c) => c.status?.allocation)
+  .flatMap((c) => (c.status.reservedFor ?? []).filter((r: Obj) => r.resource === 'pods' && !r.apiGroup).map((r: Obj) => `${c.metadata.namespace}/${r.name}`)))
+
+// More statuses and nodes than the GPU Pods charts used to show (five and four): three Node objects without a kubelet,
+// made as number-check-gpu-vendors.spec.ts makes its own (NotReady, a NoSchedule taint of their own and no
+// kubernetes.io/os label so no DaemonSet lands there, nvidia.com/gpu 4 so kubectl describe node counts what is bound
+// there), a pod bound to each (Pending), and two pods on test2's node whose init container waits (Init:0/1) or fails
+// (Init:Error) — six statuses, five nodes with the pods no node took. Made for a test and removed after.
+const FAKE = 'kubeast.dev/e2e-fake-gpu-node'
+const FAR = [1, 2, 3].map((n) => ({ node: `${CLUSTER}-gpu-pods-${n}`, pod: `gpu-far-${n}`, gpus: n }))
+const MORE_PODS = [
+  pod('gpu-init-waits', { initContainers: [box('prep', SLEEP, MIG(1))], containers: [box('app', SLEEP, MIG(1))] }),
+  pod('gpu-init-fails', { restartPolicy: 'Never', initContainers: [box('prep', ['sh', '-c', 'exit 1'], MIG(1))], containers: [box('app', SLEEP, MIG(1))] }),
+  ...FAR.map((f) => {
+    const p = pod(f.pod, { nodeName: f.node, tolerations: [{ operator: 'Exists' }], containers: [box('app', SLEEP, GPU(f.gpus))] })
+    return { ...p, metadata: { ...p.metadata, labels: { [FAKE]: 'true' } } }
+  }),
+]
+const fakeNode = (name: string) => ({
+  apiVersion: 'v1', kind: 'Node', metadata: { name, labels: { 'kubernetes.io/hostname': name, [FAKE]: 'true' } },
+  spec: { taints: [{ key: FAKE, value: 'true', effect: 'NoSchedule' }] },
+})
+function dropMore() {
+  for (const s of [
+    `delete pods -n ${NS} -l ${FAKE} --grace-period=0 --force --ignore-not-found`,
+    `delete pods -n ${NS} gpu-init-waits gpu-init-fails --ignore-not-found --wait=true`,
+    `delete nodes ${FAR.map((f) => f.node).join(' ')} --ignore-not-found --wait=true --timeout=120s`,
+  ]) { try { kubectl(s) } catch { /* the next step still runs */ } }
+}
+async function addMore() {
+  dropMore()
+  try {
+    kubectl('create -f -', list(FAR.map((f) => fakeNode(f.node))))
+    const now = new Date().toISOString().replace(/\.\d+Z$/, 'Z')
+    const r = { cpu: '8', memory: '64Gi', pods: '110', 'nvidia.com/gpu': '4' }
+    const file = path.join(path.dirname(kcPath), 'fake-node-status.json')
+    fs.writeFileSync(file, JSON.stringify({ status: { capacity: r, allocatable: r,
+      conditions: [{ type: 'Ready', status: 'False', reason: 'KubeletNotReady', message: 'no kubelet (e2e)', lastHeartbeatTime: now, lastTransitionTime: now }] } }))
+    for (const f of FAR) kubectl(`patch node ${f.node} --subresource=status --type=merge --patch-file ${file}`)
+    kubectl('apply -f -', list(MORE_PODS))
+    await waitFor('the pods of more statuses and nodes', () => {
+      const by = Object.fromEntries(podsOf().map((p) => [p.metadata.name, p]))
+      return !!by['gpu-init-waits']?.status?.initContainerStatuses?.[0]?.state?.running && by['gpu-init-fails']?.status?.phase === 'Failed' &&
+        FAR.every((f) => by[f.pod]?.spec?.nodeName === f.node && by[f.pod]?.status?.phase === 'Pending')
+    }, 120_000)
+  } catch (e) {
+    dropMore()
+    throw e
+  }
 }
 
 let prepared = ''
 const nodeGpus = () => { try { return kubectl(`get node ${NODE} -o jsonpath='{.status.allocatable.nvidia\\.com/gpu}'`) } catch { return '' } }
 const exporterThere = () => { try { return kubectl('-n monitoring get deploy dcgm-exporter -o name') !== '' } catch { return false } }
+const draThere = () => { try { return kubectl(`get deviceclass ${DRA_CLASS} -o name`) !== '' } catch { return false } }
 
 test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
   test.beforeAll(async () => {
     test.setTimeout(400_000)
-    if (!kc || !nodeGpus() || !exporterThere()) return
+    if (!kc || !nodeGpus() || !exporterThere() || !draThere()) return
+    // a stopped run's pods on the nodes without a kubelet would hold the namespace's deletion
+    dropMore()
     kubectl(`delete namespace ${NS} --wait=true --timeout=180s --ignore-not-found`)
     kubectl('apply -f -', list([{ apiVersion: 'v1', kind: 'Namespace', metadata: { name: NS } }, ...ENDED]))
     await waitFor('the ended pods', () => podsOf().filter((p) => ended(p)).length === ENDED.length)
-    kubectl('apply -f -', list([...RUNNING, WAITING]))
+    kubectl('apply -f -', list([...RUNNING, WAITING, ...DRA]))
     await waitFor('the GPU pods settled', settled)
     writeMetrics('/www/metrics', exposition(PLAIN, 'hostname'))
     writeMetrics('/www/exported/metrics', exposition(EXPORTED, 'Hostname'))
-    // the seed's GPUs gone and the eight here scraped
-    await waitFor('the DCGM series in Prometheus', () => promValue(`count(${ALL_DCGM.replace('}', ',UUID=~"GPU-e2e-num-.*"}')})`) === 32 && promValue(`count(${ALL_DCGM})`) === 32, 60_000)
+    // the seed's GPUs gone and the nine here scraped
+    await waitFor('the DCGM series in Prometheus', () => promValue(`count(${ALL_DCGM.replace('}', ',UUID=~"GPU-e2e-num-.*"}')})`) === 36 && promValue(`count(${ALL_DCGM})`) === 36, 60_000)
     prepared = 'yes'
   })
 
@@ -384,24 +452,31 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
     test.setTimeout(180_000)
     await prepare(page)
     const badge = pluginBadge(page)
+    // the chart's selector labels (templateLabels in its _helpers.tpl)
+    const labels = { 'app.kubernetes.io/name': 'nvidia-device-plugin', 'app.kubernetes.io/instance': PLUGIN.release }
     const ds = JSON.stringify({
-      apiVersion: 'apps/v1', kind: 'DaemonSet', metadata: { name: PLUGIN.name, namespace: PLUGIN.namespace },
+      apiVersion: 'apps/v1', kind: 'DaemonSet', metadata: { name: PLUGIN.name, namespace: PLUGIN.namespace, labels },
       spec: {
-        selector: { matchLabels: { app: 'e2e-gpu-num-plugin' } },
+        selector: { matchLabels: labels },
         template: {
-          metadata: { labels: { app: 'e2e-gpu-num-plugin' } },
+          metadata: { labels },
           spec: { terminationGracePeriodSeconds: 0, containers: [box('plugin', SLEEP, undefined, { readinessProbe: { exec: { command: ['test', '-f', '/tmp/ready'] }, periodSeconds: 2 } })] },
         },
       },
     })
     const dsStatus = () => JSON.parse(kubectl(`-n ${PLUGIN.namespace} get ds ${PLUGIN.name} -o json`)).status
     let made = false
+    let madeNamespace = false
     try {
       test.skip(kubectl(`-n ${PLUGIN.namespace} get ds ${PLUGIN.name} --ignore-not-found -o name`) !== '', `${PLUGIN.namespace}/${PLUGIN.name} is there already`)
       await page.goto(url('/gpu/dashboard'))
       await expect(badge, 'no DaemonSet of the names Kubeast looks for').toHaveText('Device Plugin Not Found', { timeout: 30_000 })
       await expect(page.getByTestId('gpu-plugin-detail')).toHaveCount(0)
 
+      if (kubectl(`get namespace ${PLUGIN.namespace} --ignore-not-found -o name`) === '') {
+        kubectl(`create namespace ${PLUGIN.namespace}`)
+        madeNamespace = true
+      }
       kubectl('apply -f -', ds)
       made = true
       await waitFor('the plugin pod scheduled, not ready', () => { const s = dsStatus(); return s.desiredNumberScheduled === 1 && s.numberReady === 0 }, 60_000)
@@ -412,7 +487,7 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
       }).toPass({ timeout: 60_000 })
 
       // scheduled is not started: exec needs the container running
-      await waitFor('the plugin container running', () => kubectl(`-n ${PLUGIN.namespace} get pods -l app=e2e-gpu-num-plugin -o jsonpath={.items[0].status.containerStatuses[0].state.running.startedAt}`) !== '', 60_000)
+      await waitFor('the plugin container running', () => kubectl(`-n ${PLUGIN.namespace} get pods -l app.kubernetes.io/instance=${PLUGIN.release} -o jsonpath={.items[0].status.containerStatuses[0].state.running.startedAt}`) !== '', 60_000)
       kubectl(`-n ${PLUGIN.namespace} exec ds/${PLUGIN.name} -- touch /tmp/ready`)
       await waitFor('the plugin pod ready', () => dsStatus().numberReady === 1, 60_000)
       await expect(async () => {
@@ -422,6 +497,7 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
       }).toPass({ timeout: 60_000 })
     } finally {
       if (made) kubectl(`-n ${PLUGIN.namespace} delete ds ${PLUGIN.name} --ignore-not-found --wait=true`)
+      if (madeNamespace) kubectl(`delete namespace ${PLUGIN.namespace} --ignore-not-found --wait=true --timeout=120s`)
     }
   })
 
@@ -511,8 +587,8 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
 
   // ── GPU Pods ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
-  test('GPU Pods: the cards, rows with each pod\'s GPUs from Prometheus, and the charts are the cluster\'s', async ({ page }) => {
-    test.setTimeout(180_000)
+  test('GPU Pods: the cards, rows with each pod\'s GPUs from Prometheus, and the charts of every status and node are the cluster\'s', async ({ page }) => {
+    test.setTimeout(300_000)
     await prepare(page)
     // each pod's GPUs: the utilization their mean, the memory the used of their total — the pod as exported_pod or pod
     const util = Object.fromEntries(promQuery(`avg by (p_namespace, p_pod) (${coalesce('DCGM_FI_DEV_GPU_UTIL')})`)
@@ -520,8 +596,18 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
     const used = `sum by (p_namespace, p_pod) (${coalesce('DCGM_FI_DEV_FB_USED')})`
     const mem = Object.fromEntries(promQuery(`${used} / (${used} + sum by (p_namespace, p_pod) (${coalesce('DCGM_FI_DEV_FB_FREE')})) * 100`)
       .map((s) => [`${s.metric.p_namespace}/${s.metric.p_pod}`, `${Math.round(Number(s.value[1]))}%`]))
-    expect(Object.keys(util).filter((k) => k.startsWith(`${NS}/`)).sort(), 'pods named by pod and by exported_pod').toEqual([`${NS}/gpu-init`, `${NS}/gpu-one`, `${NS}/gpu-two-boxes`, `${NS}/gpu-two-cards`])
+    expect(Object.keys(util).filter((k) => k.startsWith(`${NS}/`)).sort(), 'pods named by pod and by exported_pod')
+      .toEqual([`${NS}/gpu-dra`, `${NS}/gpu-init`, `${NS}/gpu-one`, `${NS}/gpu-two-boxes`, `${NS}/gpu-two-cards`])
 
+    await addMore()
+    try {
+      await gpuPodsMatch(page, util, mem)
+    } finally {
+      dropMore()
+    }
+  })
+
+  async function gpuPodsMatch(page: Page, util: Record<string, string>, mem: Record<string, string>) {
     await page.goto(url('/gpu/pods'))
     const want = async () => {
       const c = await cluster()
@@ -547,34 +633,42 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
     expect(last.got, 'GPU Pods: cards and rows').toEqual(last.want)
     expect((last.want as Obj).rows.find((r: string[]) => r[1] === 'gpu-waiting'), 'the pod no node fits').toEqual([NS, 'gpu-waiting', '-', '1', 'Pending', '-', '-'])
 
-    // Metrics: GPUs and pods by node (the pods no node has taken as one row), the statuses kubectl prints
+    // Metrics: GPUs and pods by node (the pods no node has taken as one row), the statuses kubectl prints — every one
     await page.getByRole('button', { name: /^(Metrics|메트릭)/ }).click()
     const c = await cluster()
-    const byNode = new Map<string, { pods: number; gpus: number }>()
-    for (const p of c.pods) { const e = byNode.get(p.node) ?? { pods: 0, gpus: 0 }; byNode.set(p.node, { pods: e.pods + 1, gpus: e.gpus + p.gpus }) }
-    const statuses = new Map<string, number>()
-    for (const p of c.pods) statuses.set(p.status, (statuses.get(p.status) ?? 0) + 1)
+    const { byNode, statuses } = chartsOf(c)
+    // more than the five statuses and four nodes the charts used to cut to
+    expect({ statuses: [...statuses.keys()].sort(), nodes: byNode.size }, 'the fixture\'s statuses and nodes')
+      .toEqual({ statuses: ['Completed', 'Error', 'Init:0/1', 'Init:Error', 'Pending', 'Running'], nodes: 5 })
     const charts = () => page.evaluate(() => ({
       nodes: [...document.querySelectorAll('[data-testid="gpu-pods-node-usage"]')].map((r) => [r.getAttribute('data-node'), (r as HTMLElement).innerText.replace(/\s+/g, '')]).sort(),
       statuses: [...document.querySelectorAll('[data-testid="gpu-pods-status-row"]')].map((r) => (r as HTMLElement).innerText.replace(/\s+/g, '')).sort(),
     }))
     await expect.poll(charts, { timeout: 20_000, message: 'GPU Pods charts' }).toEqual({
-      nodes: [...byNode].sort((a, b) => b[1].gpus - a[1].gpus).slice(0, 4)
-        .map(([n, e]) => [n, `${n || 'Notscheduled'}${e.pods}pod${e.pods === 1 ? '' : 's'}${e.gpus}GPU${e.gpus === 1 ? '' : 's'}`]).sort(),
-      statuses: [...statuses].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([s, n]) => `${s}${n}(${pct(n, c.pods.length)}%)`).sort(),
+      nodes: [...byNode].map(([n, e]) => [n, `${n || 'Notscheduled'}${e.pods}pod${e.pods === 1 ? '' : 's'}${e.gpus}GPU${e.gpus === 1 ? '' : 's'}`]).sort(),
+      statuses: [...statuses].map(([s, n]) => `${s}${n}(${pct(n, c.pods.length)}%)`).sort(),
     })
-  })
+  }
+  // the GPU Pods charts as kubectl has the pods: GPUs and pods by node ('' for no node), pods by STATUS
+  function chartsOf(c: Cluster) {
+    const byNode = new Map<string, { pods: number; gpus: number }>()
+    for (const p of c.pods) { const e = byNode.get(p.node) ?? { pods: 0, gpus: 0 }; byNode.set(p.node, { pods: e.pods + 1, gpus: e.gpus + p.gpus }) }
+    const statuses = new Map<string, number>()
+    for (const p of c.pods) statuses.set(p.status, (statuses.get(p.status) ?? 0) + 1)
+    return { byNode, statuses }
+  }
 
   // ── real-time metrics on the dashboard ───────────────────────────────────────────────────────────────────────────
 
-  test('GPU Dashboard: the real-time GPU numbers are what Prometheus answers, a GPU\'s pod named only when it asks for GPUs', async ({ page }) => {
+  test('GPU Dashboard: the real-time GPU numbers are what Prometheus answers, a GPU\'s pod named only when it asks for GPUs or holds a DRA claim', async ({ page }) => {
     test.setTimeout(150_000)
     await prepare(page)
     const q = (expr: string) => promValue(expr)
     const usedMiB = q('sum(DCGM_FI_DEV_FB_USED)')
     const totalMiB = usedMiB + q('sum(DCGM_FI_DEV_FB_FREE)')
     const c = await cluster()
-    const gpuPods = new Set(c.pods.map((p) => p.key))
+    // the pods asking for GPUs and those an allocated ResourceClaim is reserved for
+    const gpuPods = new Set([...c.pods.map((p) => p.key), ...draHolders()])
     const series = promQuery(coalesce('DCGM_FI_DEV_GPU_UTIL'))
     const temps = Object.fromEntries(promQuery('DCGM_FI_DEV_MEMORY_TEMP').map((s) => [s.metric.UUID, Number(s.value[1])]))
     const memPct = Object.fromEntries(promQuery('DCGM_FI_DEV_FB_USED / (DCGM_FI_DEV_FB_USED + DCGM_FI_DEV_FB_FREE) * 100').map((s) => [s.metric.UUID, Number(s.value[1])]))
@@ -594,9 +688,12 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
         }]
       })),
     }
-    // the fixture's edges: a GPU at 0 °C still names its pod; an idle GPU scraped as the exporter's pod names none
+    // the fixture's edges: a GPU at 0 °C still names its pod; an idle GPU scraped as the exporter's pod names none; the
+    // GPU of a pod asking for none but holding a DRA claim names it
     expect(want.gpus['GPU-e2e-num-1'], 'GPU 1').toMatchObject({ temp: null, pod: `Pod: ${NS}/gpu-two-cards` })
     expect(want.gpus['GPU-e2e-num-7'], 'GPU 7').toMatchObject({ pod: null })
+    expect({ asks: c.pods.some((p) => p.key === `${NS}/gpu-dra`), gpu8: want.gpus['GPU-e2e-num-8']?.pod }, 'GPU 8')
+      .toEqual({ asks: false, gpu8: `Pod: ${NS}/gpu-dra` })
     await page.goto(url('/gpu/dashboard'))
     await expect.poll(() => page.evaluate(() => {
       const text = (sel: string, root: ParentNode = document) => (root.querySelector(sel) as HTMLElement | null)?.innerText.trim() ?? null
@@ -657,7 +754,7 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
   const everyStatus = (real: Obj) => ({ ...real, gpu_nodes: NODE_STATUSES.map((status, i) => ({ ...real.gpu_nodes[0], name: i ? `e2e-gpu-node-${i}` : real.gpu_nodes[0].name, status })) })
 
   test('the floating chat is told each screen\'s numbers, a node ready as kubectl prints it', async ({ page }) => {
-    test.setTimeout(180_000)
+    test.setTimeout(300_000)
     await prepare(page)
     await standIn(page, everyStatus)
     const sent: { base?: { data?: Obj } | null }[] = []
@@ -700,12 +797,28 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
     await expect.poll(async () => (await readPage(page)).cards, { timeout: 30_000 }).toMatchObject({ 'Total Nodes': '5', Ready: '2', 'Not Ready': '3' })
     await expect.poll(async () => (await ask())?.stats, { timeout: 30_000 }).toMatchObject({ total: 5, ready: 2, not_ready: 3, total_used: c.used })
 
-    await page.goto(url('/gpu/pods'))
-    await expect.poll(async () => (await ask())?.stats, { timeout: 30_000 }).toEqual({
-      total: c.pods.length, total_gpu_requested: c.used + c.waiting, not_running: c.pods.filter((p) => p.phase !== 'Running').length,
-      // every GPU pod here asks for NVIDIA's
-      by_vendor: [{ vendor: 'NVIDIA', pods: c.pods.length, requested: c.used + c.waiting }],
-    })
+    // GPU Pods with more statuses and nodes than the charts used to show: the chat is told every one (compared by name)
+    await addMore()
+    try {
+      const m = await cluster()
+      const { byNode, statuses } = chartsOf(m)
+      const byName = (s: Obj) => s && {
+        ...s,
+        by_status: s.by_status && [...s.by_status].sort((a: Obj, b: Obj) => a.status.localeCompare(b.status)),
+        by_node: s.by_node && [...s.by_node].sort((a: Obj, b: Obj) => String(a.node ?? '').localeCompare(String(b.node ?? ''))),
+      }
+      await page.goto(url('/gpu/pods'))
+      await expect.poll(async () => byName((await ask())?.stats), { timeout: 30_000 }).toEqual(byName({
+        total: m.pods.length, total_gpu_requested: m.used + m.waiting, not_running: m.pods.filter((p) => p.phase !== 'Running').length,
+        // every GPU pod here asks for NVIDIA's
+        by_vendor: [{ vendor: 'NVIDIA', pods: m.pods.length, requested: m.used + m.waiting }],
+        by_status: [...statuses].map(([status, pods]) => ({ status, pods })),
+        by_node: [...byNode].map(([node, e]) => ({ node: node || null, pods: e.pods, gpus: e.gpus })),
+      }))
+      expect({ statuses: statuses.size, nodes: byNode.size }, 'more than five statuses and four nodes').toEqual({ statuses: 6, nodes: 5 })
+    } finally {
+      dropMore()
+    }
   })
 
   test('GPU Dashboard: no GPU on any node but pods asking for one shows the pods; nothing at all says so', async ({ page }) => {

@@ -1,8 +1,8 @@
 // GPUPods 페이지의 차트 패널 (GPU Usage per Node + Status Distribution)
 //
 // frontend/src/pages/gpu/GPUPods.tsx 의 showCharts 토글 패널 추출.
-// 두 카드: ① 노드별 GPU 사용량 top 4 (totalGpu 내림차순) ②
-// status 분포 top 5 (count 내림차순) — bar 색상 status 별 분기.
+// 두 카드: ① 노드별 GPU 사용량 전부 (totalGpu 내림차순) ②
+// status 분포 전부 (count 내림차순) — bar 색상 status 별 분기.
 
 import { Box } from 'lucide-react'
 import { statusNamesError } from '../gpuNumbers'

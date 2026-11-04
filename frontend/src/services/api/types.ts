@@ -605,6 +605,8 @@ export interface GPUDashboardData {
   gpu_pods: GPUPodInfo[]
   // each company with GPUs or a plugin found
   device_plugins?: GPUDevicePlugin[]
+  // the pods an allocated DRA ResourceClaim is reserved for (they hold its devices)
+  dra_pods?: { namespace: string; name: string }[]
   mig_enabled: boolean
   time_slicing_enabled: boolean
   time_slicing_config: Record<string, any> | null
