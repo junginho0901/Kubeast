@@ -31,6 +31,8 @@ const KIND_LABELS: Record<string, string> = {
   limitranges: 'LimitRange',
   mutatingwebhookconfigurations: 'MutatingWebhookConfiguration',
   validatingwebhookconfigurations: 'ValidatingWebhookConfiguration',
+  validatingadmissionpolicies: 'ValidatingAdmissionPolicy',
+  mutatingadmissionpolicies: 'MutatingAdmissionPolicy',
   pvcs: 'PersistentVolumeClaim',
   pvs: 'PersistentVolume',
   storageclasses: 'StorageClass',
@@ -72,6 +74,18 @@ export function forbiddenResourceFromUrl(url: string): string {
 }
 
 const label = (segment: string) => KIND_LABELS[segment] || segment
+
+// The lists the server answers "not installed" for (ListIfServed) that are Kubernetes' own APIs, not a CRD: a cluster
+// without one runs a version before the API or has it turned off (--runtime-config, a feature gate).
+const BUILTIN_SEGMENTS = new Set([
+  'deviceclasses', 'resourceclaims', 'resourceclaimtemplates', 'resourceslices',
+  'validatingadmissionpolicies', 'mutatingadmissionpolicies',
+])
+
+/** The list segment is a built-in Kubernetes API that a cluster may not serve (no CRD to install). */
+export function isBuiltinApi(segment: string): boolean {
+  return BUILTIN_SEGMENTS.has(segment)
+}
 
 /** The list's API segment a table keys on: /cluster/vpas/all → "vpas", /cluster/namespaces/web/rolebindings → "rolebindings". */
 export function listSegmentFromUrl(url: string): string {

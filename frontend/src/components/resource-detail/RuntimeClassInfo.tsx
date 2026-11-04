@@ -68,7 +68,7 @@ export default function RuntimeClassInfo({ name }: Props) {
       <div className="flex flex-wrap gap-2">
         <SummaryBadge label="Handler" value={handler} color="green" />
         <SummaryBadge label="Overhead" value={hasOverhead ? dl('Configured') : '-'} color={hasOverhead ? 'amber' : 'default'} />
-        <SummaryBadge label="Scheduling" value={hasScheduling ? 'Configured' : 'None'} color={hasScheduling ? 'amber' : 'default'} />
+        <SummaryBadge label="Scheduling" value={hasScheduling ? dl('Configured') : '-'} color={hasScheduling ? 'amber' : 'default'} />
       </div>
 
       {/* Basic Info */}

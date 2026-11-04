@@ -43,13 +43,13 @@ func (s *Service) DescribeClusterRole(ctx context.Context, name string) (map[str
 		return nil, fmt.Errorf("get clusterrole %s: %w", name, crErr)
 	}
 
-	result := formatClusterRoleDetail(cr)
-
-	// Events
-	if eventsErr == nil {
-		sortEventsByTime(events.Items)
-		result["events"] = formatEventList(events.Items)
+	if eventsErr != nil {
+		events = &corev1.EventList{}
 	}
+	sortEventsByTime(events.Items)
+
+	result := formatClusterRoleDetail(cr)
+	result["events"] = formatEventList(events.Items)
 
 	return result, nil
 }
@@ -73,30 +73,16 @@ func formatClusterRoleList(items []rbacv1.ClusterRole) []map[string]interface{} 
 	return result
 }
 
+// formatClusterRoleDetail hands the rules and the aggregation rule over as the API writes them, so a rule's
+// nonResourceURLs and a selector's matchExpressions reach the drawer as kubectl describe shows them.
 func formatClusterRoleDetail(cr *rbacv1.ClusterRole) map[string]interface{} {
-	// Format rules
-	rules := make([]map[string]interface{}, 0, len(cr.Rules))
-	for _, r := range cr.Rules {
-		rules = append(rules, map[string]interface{}{
-			"apiGroups":     r.APIGroups,
-			"resources":     r.Resources,
-			"verbs":         r.Verbs,
-			"resourceNames": r.ResourceNames,
-		})
+	rules := cr.Rules
+	if rules == nil {
+		rules = []rbacv1.PolicyRule{}
 	}
-
-	// Format aggregation rule (ClusterRole-only — Role 에 없는 필드)
-	var aggregation map[string]interface{}
+	var aggregation interface{}
 	if cr.AggregationRule != nil {
-		selectors := make([]map[string]interface{}, 0, len(cr.AggregationRule.ClusterRoleSelectors))
-		for _, sel := range cr.AggregationRule.ClusterRoleSelectors {
-			selectors = append(selectors, map[string]interface{}{
-				"matchLabels": sel.MatchLabels,
-			})
-		}
-		aggregation = map[string]interface{}{
-			"clusterRoleSelectors": selectors,
-		}
+		aggregation = asJSON(cr.AggregationRule)
 	}
 
 	return map[string]interface{}{
@@ -107,7 +93,7 @@ func formatClusterRoleDetail(cr *rbacv1.ClusterRole) map[string]interface{} {
 		"annotations":      cr.Annotations,
 		"uid":              string(cr.UID),
 		"resource_version": cr.ResourceVersion,
-		"rules":            rules,
+		"rules":            asJSON(rules),
 		"aggregation_rule": aggregation,
 	}
 }

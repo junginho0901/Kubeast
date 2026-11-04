@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { forbiddenResourceFromUrl, joinResources } from './forbiddenResource'
+import { forbiddenResourceFromUrl, isBuiltinApi, joinResources } from './forbiddenResource'
 
 describe('forbiddenResourceFromUrl', () => {
   // Re-QA #42: Kubernetes kind names, not lowercase plurals ("vertical pod autoscalers을(를)")
@@ -20,11 +20,27 @@ describe('forbiddenResourceFromUrl', () => {
     expect(forbiddenResourceFromUrl('/cluster/gateway-policies/all')).toBe('gateway policies')
   })
 
+  it('names the admission policy kinds', () => {
+    expect(forbiddenResourceFromUrl('/cluster/validatingadmissionpolicies?cluster=self')).toBe('ValidatingAdmissionPolicy')
+    expect(forbiddenResourceFromUrl('/cluster/mutatingadmissionpolicies')).toBe('MutatingAdmissionPolicy')
+  })
+
   it('falls back to the path segment', () => {
     expect(forbiddenResourceFromUrl('/cluster/somethingnew/all')).toBe('somethingnew')
   })
 
   it('joins unique names in a stable order', () => {
     expect(joinResources(['RoleBinding', 'Role', 'Role'])).toBe('Role, RoleBinding')
+  })
+})
+
+// The lists ListIfServed answers "not installed" for: Kubernetes' own APIs (DRA, the admission policies) are not served
+// rather than missing a CRD, the CRD-backed kinds keep the CRD text.
+describe('isBuiltinApi', () => {
+  it('is true for the built-in APIs a cluster may not serve, false for the CRD-backed kinds', () => {
+    const builtin = ['deviceclasses', 'resourceclaims', 'resourceclaimtemplates', 'resourceslices', 'validatingadmissionpolicies', 'mutatingadmissionpolicies']
+    const crd = ['vpas', 'gateways', 'gatewayclasses', 'httproutes', 'grpcroutes', 'referencegrants', 'backendtlspolicies', 'policyreports']
+    expect(builtin.filter(isBuiltinApi)).toEqual(builtin)
+    expect(crd.filter(isBuiltinApi)).toEqual([])
   })
 })

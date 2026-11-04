@@ -573,9 +573,9 @@ test.describe('number check — DRA screens', () => {
   })
 
   // a cluster that does not serve resource.k8s.io (before 1.31, or the API turned off): the server answers each list
-  // empty with X-Kubeast-Not-Installed (ListIfServed), the page says "not installed" and offers no Create — the answer
-  // stood in for here, since every dev cluster serves DRA
-  test('a cluster without DRA says "not installed" on the four lists', async ({ page }) => {
+  // empty with X-Kubeast-Not-Installed (ListIfServed), the page says the cluster does not serve the kind — a built-in
+  // API, so not the CRD text — and offers no Create; the answer stood in for here, since every dev cluster serves DRA
+  test('a cluster without DRA says it does not serve the kind on the four lists', async ({ page }) => {
     test.skip(!(await registeredOn(page, CLUSTER)), `needs the kind cluster ${CLUSTER}, registered as ${CLUSTER}`)
     const lists: Record<string, string> = { '/gpu/deviceclasses': 'deviceclasses', '/gpu/resourceclaims': 'resourceclaims', '/gpu/resourceclaimtemplates': 'resourceclaimtemplates', '/gpu/resourceslices': 'resourceslices' }
     await page.route((u) => /\/api\/v1\/cluster\/(deviceclasses|resourceslices|resourceclaims\/all|resourceclaimtemplates\/all)$/.test(u.pathname), (route) => {
@@ -587,7 +587,7 @@ test.describe('number check — DRA screens', () => {
     const kinds: Record<string, string> = { deviceclasses: 'DeviceClass', resourceclaims: 'ResourceClaim', resourceclaimtemplates: 'ResourceClaimTemplate', resourceslices: 'ResourceSlice' }
     for (const [p, resource] of Object.entries(lists)) {
       await page.goto(url(p))
-      await expect(page.getByTestId('table-not-installed'), p).toHaveText(new RegExp(`${kinds[resource]} is not installed`), { timeout: 20_000 })
+      await expect(page.getByTestId('table-not-installed'), p).toHaveText(new RegExp(`^${kinds[resource]} is not served by this cluster \\(a built-in Kubernetes API`), { timeout: 20_000 })
       await expect(page.getByRole('button', { name: /^Create / }), `${p}: no Create`).toHaveCount(0)
     }
   })

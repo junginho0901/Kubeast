@@ -215,6 +215,7 @@
   - Without permission (403): "You do not have permission to view", in a banner at the top and in the table.
   - On a server error or no response: "Could not load (server error 503)" with Retry.
   - If the cluster does not have that CRD (Gateway API, VPA): "is not installed on this cluster". k8s-service checks via discovery and adds the `X-Kubeast-Not-Installed` header to the empty list. The answer is the same regardless of role, and there is no create button.
+  - If the kind is a built-in Kubernetes API the cluster does not serve (DRA, the admission policies — an older version or the API turned off): "is not served by this cluster", not the CRD text.
   - Otherwise: "No items".
   - An address that does not exist shows the 404 screen.
 - Regression checks:
@@ -233,7 +234,7 @@
 | **Storage** | PV, PVC, StorageClass, VolumeAttachment |
 | **Configuration** | ConfigMap, Secret, ResourceQuota, LimitRange, PriorityClass, RuntimeClass, Lease |
 | **Security (RBAC)** | Role, ClusterRole, RoleBinding, ClusterRoleBinding, ServiceAccount · Policy Reports (collection of `wgpolicyk8s.io` reports, when the CRD exists) |
-| **Cluster** | Node, Namespace, Webhook Configuration (Mutating/Validating), Admission Policy (Validating/Mutating — `admissionregistration.k8s.io/v1`, read-only, "not installed" if the API is missing; with `features.admissionPolicies.readOnly: true`, the shared YAML apply and AI write tools also refuse the 4 policy and binding kinds, so they change only through Git) |
+| **Cluster** | Node, Namespace, Webhook Configuration (Mutating/Validating), Admission Policy (Validating/Mutating — `admissionregistration.k8s.io/v1`, read-only, "not served" if the API is missing; with `features.admissionPolicies.readOnly: true`, the shared YAML apply and AI write tools also refuse the 4 policy and binding kinds, so they change only through Git) |
 | **Custom Resources** | Dynamic CRD discovery and instance editing |
 
 - **YAML editing** (Monaco), **Pod Exec / logs** (xterm.js, WebSocket)

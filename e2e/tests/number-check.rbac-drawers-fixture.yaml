@@ -1,0 +1,226 @@
+# Objects for number-check-rbac-drawers.spec.ts on `self`, made and removed by it (the Leases and the events it writes
+# itself, with times of the run). None of them acts on anything: the webhooks and admission policies match resources of
+# a group no API serves and would be ignored if called (failurePolicy Ignore, no such host or service), the roles grant
+# reads of objects nobody makes and are bound to a user and a group nobody signs in as and to this namespace's two
+# service accounts, whose pods sleep; the priority classes are not the default, the runtime class uses the node's runc.
+apiVersion: v1
+kind: Namespace
+metadata: { name: e2e-rbac-drawers }
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: rbacd-sa, namespace: e2e-rbac-drawers }
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: rbacd-sa2, namespace: e2e-rbac-drawers }
+---
+# resource rules of two groups with resource names, and a rule of non-resource URLs only (system:discovery's kind)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rbacd-plain
+  labels: { rbacd.kubeast.io/aggregate: "true", rbacd.kubeast.io/tier: a }
+  annotations: { rbacd.kubeast.io/note: number check }
+rules:
+  - apiGroups: ["", apps]
+    resources: [configmaps, deployments]
+    verbs: [get, list, watch]
+    resourceNames: [rbacd-one]
+  - nonResourceURLs: [/rbacd, /rbacd/*]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rbacd-part
+  labels: { rbacd.kubeast.io/tier: b }
+rules:
+  - apiGroups: [rbacd.kubeast.io]
+    resources: [nothings]
+    verbs: [get]
+---
+# aggregated: the controller fills its rules from rbacd-plain (matchLabels) and rbacd-part (matchExpressions)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: { name: rbacd-agg }
+aggregationRule:
+  clusterRoleSelectors:
+    - matchLabels: { rbacd.kubeast.io/aggregate: "true" }
+    - matchExpressions: [{ key: rbacd.kubeast.io/tier, operator: In, values: [b, c] }]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rbacd-crb-a
+  labels: { rbacd.kubeast.io/binding: a }
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: rbacd-plain }
+subjects:
+  - { kind: ServiceAccount, name: rbacd-sa, namespace: e2e-rbac-drawers }
+  - { kind: User, name: rbacd-user@kubeast.invalid, apiGroup: rbac.authorization.k8s.io }
+  - { kind: Group, name: rbacd-group, apiGroup: rbac.authorization.k8s.io }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: { name: rbacd-crb-b }
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: rbacd-plain }
+subjects:
+  - { kind: ServiceAccount, name: rbacd-sa, namespace: e2e-rbac-drawers }
+  - { kind: ServiceAccount, name: rbacd-sa2, namespace: e2e-rbac-drawers }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: { name: rbacd-crb-empty }
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: rbacd-agg }
+---
+# a RoleBinding of rbacd-plain: the ClusterRole drawer counts the ClusterRoleBindings only
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: { name: rbacd-rb, namespace: e2e-rbac-drawers }
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: rbacd-plain }
+subjects: [{ kind: ServiceAccount, name: rbacd-sa2, namespace: e2e-rbac-drawers }]
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: rbacd-pc
+  labels: { rbacd.kubeast.io/kind: priority }
+value: 4321
+preemptionPolicy: Never
+description: number check of the drawer
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata: { name: rbacd-pc-plain }
+value: 7
+---
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata: { name: rbacd-rc }
+handler: runc
+overhead: { podFixed: { cpu: 10m, memory: 1Mi } }
+scheduling:
+  nodeSelector: { kubernetes.io/os: linux }
+  tolerations:
+    - { key: rbacd.kubeast.io/taint, operator: Equal, value: "yes", effect: NoSchedule }
+    - { key: rbacd.kubeast.io/other, operator: Exists, effect: NoExecute, tolerationSeconds: 30 }
+---
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata: { name: rbacd-rc-plain }
+handler: rbacd-none
+---
+# one resource name in two groups (two kinds, not one), a URL and a service client, selectors and a match condition
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: rbacd-vwc
+  labels: { rbacd.kubeast.io/kind: webhook }
+webhooks:
+  - name: one.rbacd.kubeast.io
+    admissionReviewVersions: [v1, v1beta1]
+    sideEffects: None
+    failurePolicy: Ignore
+    matchPolicy: Exact
+    timeoutSeconds: 5
+    clientConfig: { url: "https://rbacd.invalid/validate" }
+    namespaceSelector: { matchLabels: { rbacd.kubeast.io/watched: "true" } }
+    objectSelector: { matchExpressions: [{ key: rbacd.kubeast.io/tier, operator: In, values: [a, b] }] }
+    rules:
+      - { apiGroups: [rbacd.kubeast.io, other.rbacd.kubeast.io], apiVersions: [v1], operations: [CREATE, UPDATE], resources: [nothings], scope: Cluster }
+    matchConditions:
+      - { name: not-a-node, expression: "!('system:nodes' in request.userInfo.groups)" }
+  - name: two.rbacd.kubeast.io
+    admissionReviewVersions: [v1]
+    sideEffects: NoneOnDryRun
+    failurePolicy: Ignore
+    clientConfig:
+      service: { namespace: e2e-rbac-drawers, name: rbacd-none, path: /validate, port: 8443 }
+    rules:
+      - { apiGroups: [rbacd.kubeast.io], apiVersions: ["*"], operations: [DELETE], resources: [nothings, somethings/status] }
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata: { name: rbacd-mwc }
+webhooks:
+  - name: mutate.rbacd.kubeast.io
+    admissionReviewVersions: [v1]
+    sideEffects: None
+    failurePolicy: Ignore
+    reinvocationPolicy: IfNeeded
+    clientConfig: { url: "https://rbacd.invalid/mutate" }
+    rules:
+      - { apiGroups: [rbacd.kubeast.io], apiVersions: [v1], operations: ["*"], resources: ["*"] }
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata: { name: rbacd-vap }
+spec:
+  failurePolicy: Ignore
+  paramKind: { apiVersion: v1, kind: ConfigMap }
+  matchConstraints:
+    resourceRules:
+      - { apiGroups: [rbacd.kubeast.io], apiVersions: [v1], operations: [CREATE, UPDATE], resources: [nothings], resourceNames: [one] }
+    excludeResourceRules:
+      - { apiGroups: [rbacd.kubeast.io], apiVersions: [v1], operations: [CREATE], resources: [nothings], resourceNames: [skip] }
+  matchConditions:
+    - { name: has-name, expression: "has(object.metadata.name)" }
+  variables:
+    - { name: nameLength, expression: "size(object.metadata.name)" }
+  validations:
+    - { expression: "variables.nameLength < 64", message: name too long, reason: Invalid }
+    - { expression: "object.metadata.name != ''", messageExpression: "'empty name: ' + string(object.metadata.name)" }
+  auditAnnotations:
+    - { key: rbacd-name, valueExpression: "string(object.metadata.name)" }
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata: { name: rbacd-vap-b }
+spec:
+  policyName: rbacd-vap
+  validationActions: [Warn, Audit]
+  paramRef: { name: rbacd-params, namespace: e2e-rbac-drawers, parameterNotFoundAction: Allow }
+  matchResources: { namespaceSelector: { matchLabels: { rbacd.kubeast.io/watched: "true" } } }
+---
+# no binding: Bindings 0
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicy
+metadata: { name: rbacd-map }
+spec:
+  failurePolicy: Ignore
+  reinvocationPolicy: IfNeeded
+  matchConstraints:
+    resourceRules: [{ apiGroups: [rbacd.kubeast.io], apiVersions: [v1], operations: [CREATE], resources: [nothings] }]
+  mutations:
+    - patchType: ApplyConfiguration
+      applyConfiguration:
+        expression: 'Object{metadata: Object.metadata{labels: {"rbacd.kubeast.io/seen": "true"}}}'
+---
+# the pods last: the service accounts, the priority class and the runtime class they name come first
+apiVersion: v1
+kind: Pod
+metadata: { name: rbacd-pod, namespace: e2e-rbac-drawers }
+spec:
+  serviceAccountName: rbacd-sa
+  priorityClassName: rbacd-pc
+  runtimeClassName: rbacd-rc
+  terminationGracePeriodSeconds: 0
+  containers:
+    - name: app
+      image: busybox:1.37
+      imagePullPolicy: IfNotPresent
+      command: [sleep, "86400"]
+      resources: { requests: { cpu: 5m, memory: 8Mi }, limits: { memory: 16Mi } }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: rbacd-pod2, namespace: e2e-rbac-drawers }
+spec:
+  serviceAccountName: rbacd-sa2
+  terminationGracePeriodSeconds: 0
+  containers:
+    - name: app
+      image: busybox:1.37
+      imagePullPolicy: IfNotPresent
+      command: [sleep, "86400"]
+      resources: { requests: { cpu: 5m, memory: 8Mi }, limits: { memory: 16Mi } }

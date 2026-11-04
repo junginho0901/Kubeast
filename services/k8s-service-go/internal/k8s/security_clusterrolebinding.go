@@ -43,13 +43,13 @@ func (s *Service) DescribeClusterRoleBinding(ctx context.Context, name string) (
 		return nil, fmt.Errorf("get clusterrolebinding %s: %w", name, crbErr)
 	}
 
-	result := formatClusterRoleBindingDetail(crb)
-
-	// Events
-	if eventsErr == nil {
-		sortEventsByTime(events.Items)
-		result["events"] = formatEventList(events.Items)
+	if eventsErr != nil {
+		events = &corev1.EventList{}
 	}
+	sortEventsByTime(events.Items)
+
+	result := formatClusterRoleBindingDetail(crb)
+	result["events"] = formatEventList(events.Items)
 
 	return result, nil
 }

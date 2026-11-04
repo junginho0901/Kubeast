@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, StatusBadge, KeyValueTags, Th, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, StatusBadge, KeyValueTags, EventsTable, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useServerPods } from './useServerPods'
 import { ResourceLink } from './ResourceLink'
@@ -32,6 +32,7 @@ export default function ClusterRoleBindingInfo({ name, rawJson }: Props) {
   const annotations = (describe?.annotations as Record<string, string> | undefined) ?? (meta.annotations as Record<string, string> | undefined) ?? {}
   const createdAt = (describe?.created_at as string | undefined) ?? (meta.creationTimestamp as string | undefined)
   const subjects = Array.isArray(describe?.subjects) ? describe.subjects : []
+  const events = Array.isArray(describe?.events) ? describe.events : []
 
   // ClusterRoleBinding 의 ServiceAccount subjects 는 (kind=SA, name, namespace=
   // 명시필수). 그 SA 로 도는 파드만 서버가 골라 한 쪽씩 준다(/pods/page service_account).
@@ -168,6 +169,10 @@ export default function ClusterRoleBindingInfo({ name, rawJson }: Props) {
           <KeyValueTags data={annotations} />
         </InfoSection>
       )}
+
+      <InfoSection title="Events">
+        <EventsTable events={events} />
+      </InfoSection>
     </div>
   )
 }

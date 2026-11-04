@@ -2082,6 +2082,7 @@
     "empty": "-",
     "forbiddenEmpty": "You do not have permission to view {{resource}} in this cluster.",
     "notInstalledEmpty": "{{resource}} is not installed on this cluster (no CustomResourceDefinition).",
+    "notServedEmpty": "{{resource}} is not served by this cluster (a built-in Kubernetes API that its version does not have or that is turned off).",
     "loadErrorEmpty": "Could not load {{resource}} (server error {{code}}).",
     "loadErrorEmptyNetwork": "Could not load {{resource}} (no response from the server).",
     "retry": "Retry",

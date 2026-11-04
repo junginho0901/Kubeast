@@ -210,6 +210,7 @@
   - 서버 오류나 응답 없음: "불러오지 못했습니다(서버 오류 503)"와 다시 시도
   - 클러스터에 그 CRD가 없으면(Gateway API·VPA): "설치되어 있지 않습니다"
     - k8s-service가 discovery로 확인해 빈 목록에 `X-Kubeast-Not-Installed` 헤더를 붙입니다. 역할과 상관없이 같은 답이고, 생성 버튼은 없습니다.
+  - 그 종류가 클러스터가 제공하지 않는 Kubernetes 내장 API면(DRA·Admission Policy — 버전이 낮거나 API가 꺼짐): CRD 문구 대신 "API를 제공하지 않습니다"
   - 그 밖의 경우: "없습니다"
   - 없는 주소는 404 화면을 보여 줍니다.
 - 회귀 확인용 스펙
@@ -228,7 +229,7 @@
 | **Storage** | PV, PVC, StorageClass, VolumeAttachment |
 | **Configuration** | ConfigMap, Secret, ResourceQuota, LimitRange, PriorityClass, RuntimeClass, Lease |
 | **Security (RBAC)** | Role, ClusterRole, RoleBinding, ClusterRoleBinding, ServiceAccount · Policy Reports(`wgpolicyk8s.io` 보고서 모음, CRD 있을 때) |
-| **Cluster** | Node, Namespace, Webhook Configuration(Mutating/Validating), Admission Policy(Validating/Mutating — `admissionregistration.k8s.io/v1`, 읽기 전용, API가 없으면 "설치 안 됨"; `features.admissionPolicies.readOnly: true`면 공용 YAML 적용과 AI 쓰기 도구도 정책·바인딩 4종을 거부하므로 Git으로만 바꿀 수 있습니다) |
+| **Cluster** | Node, Namespace, Webhook Configuration(Mutating/Validating), Admission Policy(Validating/Mutating — `admissionregistration.k8s.io/v1`, 읽기 전용, API가 없으면 "API를 제공하지 않음"; `features.admissionPolicies.readOnly: true`면 공용 YAML 적용과 AI 쓰기 도구도 정책·바인딩 4종을 거부하므로 Git으로만 바꿀 수 있습니다) |
 | **Custom Resources** | CRD 동적 탐색 및 인스턴스 편집 |
 
 - **YAML 편집** (Monaco), **Pod Exec / 로그** (xterm.js, WebSocket)

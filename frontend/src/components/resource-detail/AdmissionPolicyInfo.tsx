@@ -1,12 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, Th, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsTable, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 // ValidatingAdmissionPolicy / MutatingAdmissionPolicy drawer: the policy's
 // spec as the API writes it (match constraints, conditions, variables, the
-// CEL validations or mutations), the type-checking status and its bindings.
+// CEL validations or mutations), the type-checking status, its bindings and the events about it.
 
 interface Props {
   name: string
@@ -35,6 +35,7 @@ export default function AdmissionPolicyInfo({ name, kind }: Props) {
   const spec: any = desc.spec || {}
   const status: any = desc.status || {}
   const bindings: any[] = Array.isArray(desc.bindings) ? desc.bindings : []
+  const events: any[] = Array.isArray(desc.events) ? desc.events : []
   const match: any = spec.matchConstraints || {}
   const rules: any[] = Array.isArray(match.resourceRules) ? match.resourceRules : []
   const exclude: any[] = Array.isArray(match.excludeResourceRules) ? match.excludeResourceRules : []
@@ -173,6 +174,10 @@ export default function AdmissionPolicyInfo({ name, kind }: Props) {
             </table>
           </div>
         )}
+      </InfoSection>
+
+      <InfoSection title="Events">
+        <EventsTable events={events} />
       </InfoSection>
 
       <InfoSection title="Labels">

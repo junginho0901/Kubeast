@@ -13,7 +13,8 @@ import (
 // Admission policies (admissionregistration.k8s.io/v1): ValidatingAdmissionPolicy
 // and MutatingAdmissionPolicy with their bindings, read-only. The list carries
 // the kubectl columns plus the bindings; describe hands the spec, status and
-// bindings over as the API writes them (camelCase), the drawer lays them out.
+// bindings over as the API writes them (camelCase) with the events about the
+// policy, the drawer lays them out.
 
 // GetValidatingAdmissionPolicies lists the policies with their bindings.
 func (s *Service) GetValidatingAdmissionPolicies(ctx context.Context) ([]map[string]interface{}, error) {
@@ -43,12 +44,14 @@ func (s *Service) GetValidatingAdmissionPolicies(ctx context.Context) ([]map[str
 	return out, nil
 }
 
-// DescribeValidatingAdmissionPolicy returns one policy with its bindings.
+// DescribeValidatingAdmissionPolicy returns one policy with its bindings and the events about it.
 func (s *Service) DescribeValidatingAdmissionPolicy(ctx context.Context, name string) (map[string]interface{}, error) {
 	cs := s.clientsetCtx(ctx)
 	if cs == nil {
 		return nil, errNotLoaded
 	}
+	events := make(chan []map[string]interface{}, 1)
+	go func() { events <- s.clusterObjectEvents(ctx, "ValidatingAdmissionPolicy", name) }()
 	p, err := cs.AdmissionregistrationV1().ValidatingAdmissionPolicies().Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get validatingadmissionpolicy %s: %w", name, err)
@@ -70,6 +73,7 @@ func (s *Service) DescribeValidatingAdmissionPolicy(ctx context.Context, name st
 	out["validations_count"] = len(p.Spec.Validations)
 	out["spec"] = asJSON(p.Spec)
 	out["status"] = asJSON(p.Status)
+	out["events"] = <-events
 	return out, nil
 }
 
@@ -102,12 +106,14 @@ func (s *Service) GetMutatingAdmissionPolicies(ctx context.Context) ([]map[strin
 	return out, nil
 }
 
-// DescribeMutatingAdmissionPolicy returns one policy with its bindings.
+// DescribeMutatingAdmissionPolicy returns one policy with its bindings and the events about it.
 func (s *Service) DescribeMutatingAdmissionPolicy(ctx context.Context, name string) (map[string]interface{}, error) {
 	cs := s.clientsetCtx(ctx)
 	if cs == nil {
 		return nil, errNotLoaded
 	}
+	events := make(chan []map[string]interface{}, 1)
+	go func() { events <- s.clusterObjectEvents(ctx, "MutatingAdmissionPolicy", name) }()
 	p, err := cs.AdmissionregistrationV1().MutatingAdmissionPolicies().Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get mutatingadmissionpolicy %s: %w", name, err)
@@ -129,7 +135,21 @@ func (s *Service) DescribeMutatingAdmissionPolicy(ctx context.Context, name stri
 	out["mutations_count"] = len(p.Spec.Mutations)
 	out["reinvocation_policy"] = string(p.Spec.ReinvocationPolicy)
 	out["spec"] = asJSON(p.Spec)
+	out["events"] = <-events
 	return out, nil
+}
+
+// clusterObjectEvents are the events about a cluster-scoped object as the other drawers find them (involvedObject name
+// and kind, in every namespace), newest first; none when they cannot be read.
+func (s *Service) clusterObjectEvents(ctx context.Context, kind, name string) []map[string]interface{} {
+	events, err := s.clientsetCtx(ctx).CoreV1().Events("").List(ctx, metav1.ListOptions{
+		FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=%s", name, kind),
+	})
+	if err != nil {
+		return formatEventList(nil)
+	}
+	sortEventsByTime(events.Items)
+	return formatEventList(events.Items)
 }
 
 func admissionPolicyRow(meta *metav1.ObjectMeta, failure *admissionregistrationv1.FailurePolicyType, param *admissionregistrationv1.ParamKind, bindings []string) map[string]interface{} {
