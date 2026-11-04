@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
@@ -6,7 +7,9 @@ import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
+import { usePermission } from '@/hooks/usePermission'
 import { useReverseRoleBindings } from './role-info/useReverseRoleBindings'
+import { referencedByContext, subjectsText, unreadableText } from './role-info/referencedBy'
 
 interface Props {
   name: string
@@ -24,10 +27,18 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
     retry: false,
   })
 
-  useResourceDetailOverlay({ kind: 'ClusterRole', name, describe })
-
-  const { bindings: referencedBy, truncated } = useReverseRoleBindings({ kind: 'ClusterRole', name })
+  const { bindings: referencedBy, error: crbError } = useReverseRoleBindings({ kind: 'ClusterRole', name })
   const { items: pagedReferencedBy, nav: referencedByNav } = usePagination(referencedBy, 10)
+  // RoleBindings of every namespace may grant this ClusterRole there too (RBAC: "A RoleBinding can also reference a ClusterRole")
+  const { bindings: roleBindings, error: rbError } = useReverseRoleBindings({ kind: 'ClusterRole', name, via: 'RoleBinding' })
+  const { items: pagedRoleBindings, nav: roleBindingsNav } = usePagination(roleBindings, 10)
+  const { clusterNamespaces } = usePermission()
+
+  const extras = useMemo(
+    () => referencedByContext({ bindings: referencedBy, error: crbError?.message }, { bindings: roleBindings, error: rbError?.message }, clusterNamespaces),
+    [referencedBy, crbError, roleBindings, rbError, clusterNamespaces],
+  )
+  useResourceDetailOverlay({ kind: 'ClusterRole', name, describe, extras })
 
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const labels = (describe?.labels as Record<string, string> | undefined) ?? (meta.labels as Record<string, string> | undefined) ?? {}
@@ -149,8 +160,10 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
         </InfoSection>
       )}
 
-      <InfoSection title="Referenced By ClusterRoleBindings ({{n}}{{more}})" titleValues={{ n: referencedBy.length, more: truncated ? '+' : '' }}>
-        {referencedBy.length === 0 ? (
+      <InfoSection title={crbError ? 'Referenced By ClusterRoleBindings' : 'Referenced By ClusterRoleBindings ({{n}})'} titleValues={{ n: referencedBy.length }}>
+        {crbError ? (
+          <p className="text-xs text-amber-300"><Tx text={unreadableText(crbError.forbidden)} values={{ kind: 'ClusterRoleBindings', role: 'ClusterRole' }} /></p>
+        ) : referencedBy.length === 0 ? (
           <p className="text-xs text-slate-400"><Tx>No ClusterRoleBinding references this ClusterRole.</Tx></p>
         ) : (
           <div className="overflow-x-auto">
@@ -167,19 +180,49 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
                     <td className="py-1 pr-2">
                       <ResourceLink kind="ClusterRoleBinding" name={b.name} />
                     </td>
-                    <td className="py-1 pr-2 text-slate-300">
-                      {b.subjects.length === 0
-                        ? '-'
-                        : b.subjects.map((s) => `${s.kind || '?'}/${s.name || '-'}`).join(', ')}
-                    </td>
+                    <td className="py-1 pr-2 text-slate-300">{subjectsText(b.subjects)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
             {referencedByNav}
-            {truncated && (
-              <p className="text-[11px] text-amber-300 mt-1"><Tx>Showing first 50 ClusterRoleBindings (truncated for performance).</Tx></p>
-            )}
+          </div>
+        )}
+      </InfoSection>
+
+      <InfoSection title={rbError ? 'Referenced By RoleBindings' : 'Referenced By RoleBindings ({{n}})'} titleValues={{ n: roleBindings.length }}>
+        {clusterNamespaces && clusterNamespaces.length > 0 && (
+          <p className="mb-2 text-xs text-amber-300">
+            <Tx text="Your access to this cluster covers only the namespaces {{namespaces}}, so only RoleBindings there are listed; how many RoleBindings in other namespaces reference this ClusterRole is not known." values={{ namespaces: clusterNamespaces.join(', ') }} />
+          </p>
+        )}
+        {rbError ? (
+          <p className="text-xs text-amber-300"><Tx text={unreadableText(rbError.forbidden)} values={{ kind: 'RoleBindings', role: 'ClusterRole' }} /></p>
+        ) : roleBindings.length === 0 ? (
+          <p className="text-xs text-slate-400"><Tx>No RoleBinding references this ClusterRole.</Tx></p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="text-slate-400">
+                <tr>
+                  <Th className="text-left py-1">Namespace</Th>
+                  <Th className="text-left py-1">RoleBinding</Th>
+                  <Th className="text-left py-1">Subjects</Th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {pagedRoleBindings.map((b) => (
+                  <tr key={`${b.namespace}/${b.name}`} className="text-slate-200">
+                    <td className="py-1 pr-2">{b.namespace || '-'}</td>
+                    <td className="py-1 pr-2">
+                      <ResourceLink kind="RoleBinding" name={b.name} namespace={b.namespace} />
+                    </td>
+                    <td className="py-1 pr-2 text-slate-300">{subjectsText(b.subjects)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {roleBindingsNav}
           </div>
         )}
       </InfoSection>

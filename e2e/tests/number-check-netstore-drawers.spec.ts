@@ -202,7 +202,8 @@ function closing(o: Obj, events: Obj[]): Record<string, Section> {
   if (events.length) {
     const rows = events.map((e) => ({ e, ...seen(e) })).sort((a, b) => Date.parse(b.last) - Date.parse(a.last))
       .map(({ e, last, count }) => [dash(e.type), dash(e.reason), dash(e.message), at(last), String(count)])
-    out.Events = section({ tables: [{ head: ['Type', 'Reason', 'Message', 'Last Seen', 'Count'], rows }] })
+    const { page, pagers } = paged(rows)
+    out.Events = section({ tables: [{ head: ['Type', 'Reason', 'Message', 'Last Seen', 'Count'], rows: page }], pagers })
   }
   return out
 }
@@ -403,15 +404,16 @@ const KINDS: Kind[] = [
         })
       }
       if (users.length) {
+        const { page, pagers } = paged(users)
         out['Used By Pods'] = section({
           tables: [{
             head: ['Pod', 'Status', 'Ready', 'Restarts', 'Node', 'Mounted As', 'Age'],
-            rows: users.slice(0, 50).map(({ pod, mounts }) => {
+            rows: page.map(({ pod, mounts }) => {
               const c = podCells(podTable, pod.metadata.name)
               return [pod.metadata.name, c.status, c.ready, c.restarts, dash(pod.spec.nodeName), mounts.join(', ') || '-', at(pod.metadata.creationTimestamp)]
             }),
           }],
-          notes: users.length > 50 ? ['Showing first 50 pods.'] : [],
+          pagers,
         })
       }
       if ((o.metadata.finalizers ?? []).length) out.Finalizers = section({ notes: o.metadata.finalizers })

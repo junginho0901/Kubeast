@@ -7,6 +7,7 @@ import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { useReverseRoleBindings } from './role-info/useReverseRoleBindings'
+import { subjectsText, unreadableText } from './role-info/referencedBy'
 
 interface Props {
   name: string
@@ -27,7 +28,7 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
 
   useResourceDetailOverlay({ kind: 'Role', name, namespace, describe })
 
-  const { bindings: referencedBy, truncated } = useReverseRoleBindings({ kind: 'Role', namespace, name })
+  const { bindings: referencedBy, error: rbError } = useReverseRoleBindings({ kind: 'Role', namespace, name })
   const { items: pagedReferencedBy, nav: referencedByNav } = usePagination(referencedBy, 10)
 
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
@@ -155,8 +156,10 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
         </InfoSection>
       )}
 
-      <InfoSection title="Referenced By RoleBindings ({{n}}{{more}})" titleValues={{ n: referencedBy.length, more: truncated ? '+' : '' }}>
-        {referencedBy.length === 0 ? (
+      <InfoSection title={rbError ? 'Referenced By RoleBindings' : 'Referenced By RoleBindings ({{n}})'} titleValues={{ n: referencedBy.length }}>
+        {rbError ? (
+          <p className="text-xs text-amber-300"><Tx text={unreadableText(rbError.forbidden)} values={{ kind: 'RoleBindings', role: 'Role' }} /></p>
+        ) : referencedBy.length === 0 ? (
           <p className="text-xs text-slate-400"><Tx>No RoleBinding in this namespace references this Role.</Tx></p>
         ) : (
           <div className="overflow-x-auto">
@@ -173,11 +176,7 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
                     <td className="py-1 pr-2">
                       <ResourceLink kind="RoleBinding" name={b.name} namespace={b.namespace} />
                     </td>
-                    <td className="py-1 pr-2 text-slate-300">
-                      {b.subjects.length === 0
-                        ? '-'
-                        : b.subjects.map((s) => `${s.kind || '?'}/${s.name || '-'}`).join(', ')}
-                    </td>
+                    <td className="py-1 pr-2 text-slate-300">{subjectsText(b.subjects)}</td>
                   </tr>
                 ))}
               </tbody>

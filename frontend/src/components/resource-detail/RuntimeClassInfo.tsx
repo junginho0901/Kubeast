@@ -4,6 +4,7 @@ import { InfoSection, InfoRow, InfoGrid, SummaryBadge, StatusBadge, KeyValueTags
 import { fmtRel } from './detailFormat'
 import { useDetailLabel } from './useDetailLabel'
 import { useServerPods } from './useServerPods'
+import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -35,6 +36,18 @@ export default function RuntimeClassInfo({ name }: Props) {
 
   useResourceDetailOverlay({ kind: 'RuntimeClass', name, describe: desc })
 
+  const nodeSelector = (desc?.scheduling?.node_selector as Record<string, string> | undefined) ?? undefined
+  // nodeSelector 없으면 cluster-wide schedulable 로 간주, 별도 표시 X
+  const schedulableNodes = (() => {
+    if (!nodeSelector || Object.keys(nodeSelector).length === 0) return null
+    const nodes = Array.isArray(allNodes) ? allNodes : []
+    return nodes.filter((n: any) => {
+      const labels = (n?.labels as Record<string, string> | undefined) ?? {}
+      return Object.entries(nodeSelector).every(([k, v]) => labels[k] === v)
+    })
+  })()
+  const { items: pagedNodes, nav: nodesNav } = usePagination(schedulableNodes ?? [], 20)
+
   if (isLoading) {
     return <div className="text-xs text-slate-400 py-4 text-center"><Tx>Loading...</Tx></div>
   }
@@ -50,17 +63,6 @@ export default function RuntimeClassInfo({ name }: Props) {
 
   const hasOverhead = Object.keys(overhead).length > 0
   const hasScheduling = Object.keys(scheduling).length > 0
-
-  const nodeSelector = (scheduling.node_selector as Record<string, string> | undefined) ?? undefined
-  // nodeSelector 없으면 cluster-wide schedulable 로 간주, 별도 표시 X
-  const schedulableNodes = (() => {
-    if (!nodeSelector || Object.keys(nodeSelector).length === 0) return null
-    const nodes = Array.isArray(allNodes) ? allNodes : []
-    return nodes.filter((n: any) => {
-      const labels = (n?.labels as Record<string, string> | undefined) ?? {}
-      return Object.entries(nodeSelector).every(([k, v]) => labels[k] === v)
-    })
-  })()
 
   return (
     <div className="space-y-4">
@@ -129,14 +131,12 @@ export default function RuntimeClassInfo({ name }: Props) {
             <p className="text-xs text-slate-400"><Tx>No Node matches scheduling.nodeSelector.</Tx></p>
           ) : (
             <>
-              {schedulableNodes.length > 20 && (
-                <p className="text-[11px] text-slate-400 mb-2"><Tx text="Showing first 20 of {{n}} nodes." values={{ n: schedulableNodes.length }} /></p>
-              )}
               <div className="flex flex-wrap gap-1.5">
-                {schedulableNodes.slice(0, 20).map((n: any) => (
+                {pagedNodes.map((n: any) => (
                   <ResourceLink key={n.name} kind="Node" name={String(n.name)} />
                 ))}
               </div>
+              {nodesNav}
             </>
           )}
         </InfoSection>

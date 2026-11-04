@@ -4,6 +4,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { ResourceLink } from '../ResourceLink'
+import { usePagination } from '../usePagination'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface PVCDataSourceRef {
@@ -120,7 +121,7 @@ export default function PVCDetail({ name, namespace, rawJson }: { name: string; 
     : null)
   const boundPv = describe?.bound_pv ?? null
   const usedByPods = Array.isArray(describe?.used_by_pods) ? describe.used_by_pods : []
-  const displayedUsedByPods = usedByPods.slice(0, 50)
+  const { items: displayedUsedByPods, nav: usedByPodsNav } = usePagination(usedByPods, 10)
   const hasResizePending = !!describe?.filesystem_resize_pending
   const resizeState = hasResizePending
     ? 'Pending (FileSystemResizePending)'
@@ -181,11 +182,6 @@ export default function PVCDetail({ name, namespace, rawJson }: { name: string; 
       )}
       {usedByPods.length > 0 && (
         <InfoSection title="Used By Pods ({{n}})" titleValues={{ n: usedByPods.length }}>
-          {usedByPods.length > displayedUsedByPods.length && (
-            <p className="text-[11px] text-slate-400 mb-2">
-              <Tx text="Showing first {{n}} pods." values={{ n: displayedUsedByPods.length }} />
-            </p>
-          )}
           <div className="overflow-x-auto">
             <table className="w-full text-xs table-fixed min-w-[760px]">
               <thead className="text-slate-400">
@@ -227,6 +223,7 @@ export default function PVCDetail({ name, namespace, rawJson }: { name: string; 
                 ))}
               </tbody>
             </table>
+            {usedByPodsNav}
           </div>
         </InfoSection>
       )}
