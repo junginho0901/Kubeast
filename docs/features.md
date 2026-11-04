@@ -105,7 +105,7 @@
   - Permission `resource.cost.read`. A Namespace-scoped grant covers only those Namespaces.
 - **Policy Reports** — reads the `wgpolicyk8s.io` PolicyReport and ClusterPolicyReport written by Kyverno, Trivy Operator and others (`features.policyReports`).
   - Security → Policy Reports shows pass/fail/warn/error/skip per policy and per Namespace, with result rows.
-  - Workload and Pod drawers have a "Policy violations" section.
+  - Every drawer of an object the reports can name has a "Policy violations" section (a cluster-scoped object's from the ClusterPolicyReports).
   - Without the CRD, the screen says "is not installed on this cluster".
   - Permission `resource.policyreport.read`. A Namespace-scoped grant covers only those Namespaces.
 - **AI agent connection (MCP server)** — off by default. Claude Code and Cursor connect with an API key instead of a kubeconfig. They use the same read tools **only with that person's permissions**, through masking and audit.

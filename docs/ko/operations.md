@@ -11,18 +11,22 @@ Kubeast는 정책을 만들거나 데이터를 저장하지 않습니다.
   - fail·warn·error·pass·skip 합계
   - 정책별(분류·심각도·출처·Namespace 수) 탭과 Namespace별 탭
   - 결과 탭 — 결과·심각도·정책·Namespace·검색 필터가 있고, 행을 누르면 그 리소스 드로어가 열립니다.
-  - 워크로드·Pod 드로어의 "Policy violations" 절은 그 리소스의 fail/warn/error 행을 보여 줍니다. 대부분의 정책이 Pod를 보기 때문에 워크로드는 자기 파드의 행도 함께 보여 줍니다.
+  - 드로어의 "Policy violations" 절은 그 리소스의 fail/warn/error 행을 보여 줍니다. 대부분의 정책이 Pod를 보기 때문에 워크로드는 자기 파드의 행도 함께 보여 줍니다.
+  - 리소스 여럿을 가리키는 결과는 그 리소스마다 드로어에 한 행으로 나옵니다.
+  - 그 밖의 모든 드로어(ConfigMap·Service·Namespace·커스텀 리소스 등)는 자기 절들 뒤에 이 절을 둡니다. 클러스터 범위 개체의 행은 ClusterPolicyReport에서 읽습니다.
+  - 보고서를 읽지 못하면 그 이유를 보여 줍니다.
   - CRD가 없는 클러스터에서는 "설치되어 있지 않습니다"라고 표시하고 드로어 절은 숨깁니다.
 - **API**:
   - `GET /api/v1/cluster/policyreports/status` — 켜짐·CRD 유무
   - `…/summary?namespace=` — 보고서의 `summary`가 아니라 결과 행을 세어 만든 정책별·Namespace별 집계
   - `…/results?namespace=&policy=&result=fail,warn&severity=&kind=&search=&limit=` — 기본 fail·warn·error, 최대 2,000행, `total`은 자르기 전 수
   - `GET /api/v1/cluster/namespaces/{ns}/policyreports/resource?kind=&name=`
+  - `GET /api/v1/cluster/policyreports/resource?kind=&name=` — 클러스터 범위 리소스의 행(ClusterPolicyReport에서)
   - CRD가 없으면 데이터 라우트는 빈 목록과 `X-Kubeast-Not-Installed`를 돌려줍니다.
 - **신원·범위** — 보고서는 **로그인 사용자로** 읽으므로 클러스터 RBAC이 상한입니다.
   - Kyverno 차트 기본값(`rbac.roles.aggregate.view: true`)이 `view`에 보고서 읽기 권한을 붙이므로 Read(`kubeast:viewer`)로도 읽을 수 있습니다.
   - Namespace 범위로 부여받은 사용자는 전체 목록 없이 그 Namespace들의 보고서만 Namespace마다 따로 읽습니다.
-  - ClusterPolicyReport는 클러스터 전체 보기에서만 보입니다.
+  - ClusterPolicyReport는 클러스터 전체 보기에서만 보입니다. Namespace 범위로 부여받은 사용자가 클러스터 범위 개체의 드로어를 열면 그 보고서가 범위 밖이라고 알려 줍니다.
 - **부하** — 화면을 열 때만 읽고, 결과를 클러스터·Namespace·사용자별로 60초 동안 캐시합니다.
   - 화면의 새로고침(`force_refresh=true`)은 이 캐시를 건너뛰고 다시 읽어 캐시를 바꿉니다. Kyverno는 새 객체의 보고서를 Pod·Deployment는 약 20초, ReplicaSet은 약 40초 뒤에 씁니다.
   - 보고서 5,000개나 결과 50,000행에 이르면 읽기를 멈추고 `truncated: true`를 돌려주며, 화면은 Namespace나 정책으로 좁히라고 안내합니다.

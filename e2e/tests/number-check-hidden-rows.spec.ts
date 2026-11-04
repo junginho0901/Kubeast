@@ -372,9 +372,13 @@ test.describe('number check — no drawer row out of reach', () => {
         const selector: Record<string, string> = o.scheduling.nodeSelector
         let stood: Obj[] = []
         await page.route(/\/api\/v1\/cluster\/nodes(\?|$)/, async (route) => {
-          const real = await (await route.fetch()).json() as Obj[]
-          stood = [...real, ...range(NODES).map((i) => ({ ...real[0], name: `hr-node-${pad(i)}`, labels: { ...(real[0]?.labels ?? {}), ...selector } }))]
-          return route.fulfill({ json: stood })
+          try {
+            const real = await (await route.fetch()).json() as Obj[]
+            stood = [...real, ...range(NODES).map((i) => ({ ...real[0], name: `hr-node-${pad(i)}`, labels: { ...(real[0]?.labels ?? {}), ...selector } }))]
+            await route.fulfill({ json: stood })
+          } catch {
+            // let go by the unroute below while a refetch was still here ("Route is already handled")
+          }
         })
         try {
           await openDrawer(page, 'RuntimeClass/hr-rc')

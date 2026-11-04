@@ -64,6 +64,15 @@ func Info(u *unstructured.Unstructured) map[string]interface{} {
 		if v := object(p, "maxAllowed"); v != nil {
 			cp["max_allowed"] = v
 		}
+		// fields of VPA 1.6 and 1.7 (vpa-v1-crd-gen.yaml) as written: a quantity int or string, startupBoost an object
+		for from, to := range map[string]string{
+			"oomBumpUpRatio": "oom_bump_up_ratio", "oomMinBumpUp": "oom_min_bump_up", "startupBoost": "startup_boost",
+			"memoryAggregationIntervalSeconds": "memory_aggregation_interval_seconds", "memoryAggregationIntervalCount": "memory_aggregation_interval_count",
+		} {
+			if v, ok := p[from]; ok && v != nil {
+				cp[to] = v
+			}
+		}
 		containerPolicies = append(containerPolicies, cp)
 	}
 
@@ -99,8 +108,14 @@ func Info(u *unstructured.Unstructured) map[string]interface{} {
 			memory, _ = target["memory"].(string)
 		}
 	}
+	updatePolicy := object(spec, "updatePolicy")
 
 	return map[string]interface{}{
+		// the CRD's wide columns MinReplicas and OOMSeconds (VPA 1.7) and the pod's startupBoost, as written; nil without
+		"min_replicas":            updatePolicy["minReplicas"],
+		"evict_after_oom_seconds": updatePolicy["evictAfterOOMSeconds"],
+		"startup_boost":           spec["startupBoost"],
+
 		"name":               u.GetName(),
 		"namespace":          u.GetNamespace(),
 		"target_ref":         targetRef,

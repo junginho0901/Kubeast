@@ -68,6 +68,8 @@ import AdmissionPolicyInfo from './resource-detail/AdmissionPolicyInfo'
 import CRDInfo from './resource-detail/CRDInfo'
 import CustomResourceInstanceInfo from './resource-detail/CustomResourceInstanceInfo'
 import GenericInfo from './resource-detail/GenericInfo'
+import PolicyViolations from './resource-detail/PolicyViolations'
+import { violationsAfterInfo } from './resource-detail/violationsView'
 
 const SYSTEM_REASON_EN: Record<SystemReason, string> = {
   immortalNamespace: 'Kubernetes keeps this namespace.',
@@ -398,6 +400,7 @@ export default function ResourceDetailDrawer() {
                     : t('common.objectForbidden', { defaultValue: 'You are not allowed to see this object.' })}
                 </p>
               ) : renderInfoContent()}
+              {!unreadable && !resolving && violationsAfterInfo(kind, ns) && <PolicyViolations kind={displayKind} namespace={ns ?? ''} name={name} />}
             </div>
           )}
 

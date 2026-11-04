@@ -7,7 +7,7 @@ import path from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
 
 import { arg } from './number-check.gateway-shared'
-import { CR_CRD, GWPOL_CRD, crInstances, numbersPolicies, vpaFixture, writeNumbersPolicyStatus, writeVpaStatus, writeWidgetStatus } from './number-check.cr-shared'
+import { CR_CRD, GWPOL_CRD, VPA17_MISSING, crInstances, numbersPolicies, vpa17, vpaFixture, vpaPrintsWideColumns, writeNumbersPolicyStatus, writeVpaStatus, writeWidgetStatus } from './number-check.cr-shared'
 
 // The VPA, CustomResourceDefinition and custom resource drawers, the drawer of a kind Kubeast has no view for, and the
 // policy violations of a drawer opened from Policy Reports show what the cluster has: on test2, in a namespace of its
@@ -282,6 +282,15 @@ function customResourceWant(c: CR): View {
 }
 
 type VPA = { o: Obj; cells: Record<string, unknown>; events: Obj[]; target: Obj | null }
+// a container policy's fields of VPA 1.6 and 1.7, in the drawer's column order
+const VPA17_POLICY_FIELDS = ['oomBumpUpRatio', 'oomMinBumpUp', 'memoryAggregationIntervalSeconds', 'memoryAggregationIntervalCount', 'startupBoost']
+// a startupBoost as the drawer writes it: per resource (by name) its fields in the API's order, the rest after by name
+function boostText(boost: Obj): string {
+  const order = ['type', 'factor', 'quantity', 'durationSeconds']
+  const rank = (k: string) => (order.includes(k) ? order.indexOf(k) : order.length)
+  const parts = Object.keys(boost ?? {}).sort().map((r) => `${r} (${Object.keys(boost[r]).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b)).map((k) => `${k}: ${boost[r][k]}`).join(', ')})`)
+  return parts.join('; ') || '-'
+}
 // a VPA's drawer: kubectl's columns as badges, its target and how that workload stands, its policies, recommendations,
 // conditions, events and metadata
 function vpaWant(c: VPA): View {
@@ -306,13 +315,24 @@ function vpaWant(c: VPA): View {
           ...(targetStatus ? { 'Target Status': `Desired: ${targetStatus[0]} · Ready: ${targetStatus[1]} · Available: ${targetStatus[2]}` } : {}),
         },
       }),
-      'Update Policy': section({ rows: { 'Update Mode': dash(spec.updatePolicy?.updateMode) } }),
+      'Update Policy': section({
+        rows: {
+          'Update Mode': dash(spec.updatePolicy?.updateMode),
+          // VPA 1.7's wide columns as the API server prints them (the object's value on an older CRD), the pod's startupBoost
+          'Min Replicas': 'MinReplicas' in cells ? dash(cells.MinReplicas) : dash(spec.updatePolicy?.minReplicas),
+          'Evict After OOM Seconds': 'OOMSeconds' in cells ? dash(cells.OOMSeconds) : dash(spec.updatePolicy?.evictAfterOOMSeconds),
+          'Startup Boost': boostText(spec.startupBoost),
+        },
+      }),
       ...(policies.length ? {
         'Container Policies': section({
           tables: [{
             head: ['Container', 'Mode', 'Controlled Resources', 'Controlled Values', 'Min Allowed', 'Max Allowed'],
             rows: policies.map((p) => [dash(p.containerName), dash(p.mode), (p.controlledResources ?? []).join(', ') || '-', dash(p.controlledValues), resources(p.minAllowed), resources(p.maxAllowed)]),
-          }],
+          }, ...(policies.some((p) => VPA17_POLICY_FIELDS.some((f) => p[f] !== undefined)) ? [{
+            head: ['Container', 'OOM Bump Up Ratio', 'OOM Min Bump Up', 'Memory Aggregation Interval Seconds', 'Memory Aggregation Interval Count', 'Startup Boost'],
+            rows: policies.map((p) => [dash(p.containerName), ...VPA17_POLICY_FIELDS.slice(0, 4).map((f) => dash(p[f])), boostText(p.startupBoost)]),
+          }] : [])],
         }),
       } : {}),
       ...(recs.length ? {
@@ -391,10 +411,11 @@ function genericWant(o: Obj): View {
   }
 }
 
-// a Pod drawer's policy violations: the fail, warn and error results the namespace's reports hold about the pod (its
-// resources, else the report's scope), in no particular order
-function violationsWant(reports: Obj[], pod: string): Section {
-  const about = (rep: Obj, r: Obj) => ((r.resources ?? []).length ? r.resources : [rep.scope ?? {}]).some((x: Obj) => x.kind === 'Pod' && x.name === pod)
+// a drawer's policy violations: the fail, warn and error results the reports hold about the object — any of the
+// resources a result names, else the report's scope — in no particular order; a namespaced object's from its
+// namespace's PolicyReports, a cluster-scoped one's from the ClusterPolicyReports
+function violationsWant(reports: Obj[], kind: string, name: string): Section {
+  const about = (rep: Obj, r: Obj) => ((r.resources ?? []).length ? r.resources : [rep.scope ?? {}]).some((x: Obj) => x.kind === kind && x.name === name)
   const rows = reports.flatMap((rep) => (rep.results ?? []).filter((r: Obj) => ['fail', 'warn', 'error'].includes(r.result) && about(rep, r)).map((r: Obj) => [
     say(`policyReports.result.${r.result}`, r.result), r.rule ? `${r.policy} /${r.rule}` : r.policy, dash(r.severity), dash(r.message),
   ]))
@@ -667,7 +688,12 @@ test.describe('number check — VPA, CRD, custom resource and fallback drawers',
           link('test2', `BackendTLSPolicy/${NS}/${name}`, 'numbers.kubeast.io/v1/backendtlspolicies'),
         ]) await compare(page, way, `BackendTLSPolicy.numbers.kubeast.io/${name}`, async () => customResourceWant(await customResource('backendtlspolicies.numbers.kubeast.io', name)))
       }
-      for (const name of ['num-vpa-a', 'num-vpa-b', 'num-vpa-c']) {
+      // VPA 1.7's fields on a VPA that sets them, where the CRD has them (an older CRD refuses them)
+      const vpaWide = `num-vpa-wide-${Date.now().toString(36)}`
+      const wide = vpaPrintsWideColumns(k.kubectl)
+      if (wide) k.kubectl('apply --server-side --field-manager=e2e-cr-drawers -f -', JSON.stringify(vpa17(NS, vpaWide)))
+      else test.info().annotations.push({ type: 'skip', description: `VPA 1.7 fields: ${VPA17_MISSING}` })
+      for (const name of ['num-vpa-a', 'num-vpa-b', 'num-vpa-c', ...(wide ? [vpaWide] : [])]) {
         for (const way of [
           { name: 'list', open: (p: Page) => clickRow(p, `/workloads/vpas?cluster=test2&namespace=${NS}`, name) },
           link('test2', `VerticalPodAutoscaler/${NS}/${name}`),
@@ -691,36 +717,76 @@ test.describe('number check — VPA, CRD, custom resource and fallback drawers',
       await compare(page, { ...link('test2', `VerticalPodAutoscalerCheckpoint/${NS}/num-vpacp`), name: 'link without apiVersion' },
         'VerticalPodAutoscalerCheckpoint/num-vpacp', () => genericWant(get('verticalpodautoscalercheckpoints.autoscaling.k8s.io', 'num-vpacp')))
 
-      // a pod's policy violations on default, from Policy Reports and by link
+      // policy violations on default, from Policy Reports and by link: a pod's, two ConfigMaps' (num-cm-b only the second
+      // resource one result names, so by link), one without any (None), a Service's and the namespace's — a cluster-scoped
+      // object, from a ClusterPolicyReport made for this run
       const b = kube('kubeast-b')
       const polr = !!b && registered('default') && b.kubectl('api-resources --api-group=wgpolicyk8s.io -o name').includes('policyreports')
       if (!polr) test.info().annotations.push({ type: 'skip', description: 'policy violations: needs the second cluster (default) serving PolicyReports' })
       if (polr) {
         const bk = b!
+        const run = Date.now().toString(36)
+        const cpolr = `num-cpolr-${run}`
+        const nsPolicy = `num-ns-owner-${run}`
         try {
           bk.kubectl('apply --server-side --field-manager=e2e-cr-drawers -f -', POLR_FIXTURE)
+          const configMap = (name: string) => ({ apiVersion: 'v1', kind: 'ConfigMap', metadata: { name, namespace: NS }, data: { k: 'v' } })
           bk.kubectl('apply --server-side --field-manager=e2e-cr-drawers -f -', JSON.stringify({
-            apiVersion: 'v1', kind: 'Pod', metadata: { name: 'num-p1', namespace: NS, labels: { 'app.kubernetes.io/name': 'num-p1' } },
-            spec: { terminationGracePeriodSeconds: 0, containers: [{ name: 'app', image: 'nginx:1.31-alpine', imagePullPolicy: 'IfNotPresent' }] },
-          }))
-          for (const way of [
-            {
-              name: 'Policy Reports',
-              open: async (p: Page) => {
-                await p.goto('/security/policyreports?cluster=default')
-                await p.getByTestId('policy-reports-namespace').click()
-                await p.getByTestId(`policy-reports-namespace-opt-${NS}`).click()
-                await p.getByTestId('policy-reports-tab-results').click()
-                // the server keeps a read for a minute: the refresh reads the reports now
-                await p.getByRole('button', { name: 'Refresh', exact: true }).click()
-                await p.getByTestId('policy-report-row').filter({ hasText: 'num-p1' }).first().click({ timeout: 20_000 })
+            apiVersion: 'v1', kind: 'List', items: [
+              {
+                apiVersion: 'v1', kind: 'Pod', metadata: { name: 'num-p1', namespace: NS, labels: { 'app.kubernetes.io/name': 'num-p1' } },
+                spec: { terminationGracePeriodSeconds: 0, containers: [{ name: 'app', image: 'nginx:1.31-alpine', imagePullPolicy: 'IfNotPresent' }] },
               },
+              configMap('num-cm-a'), configMap('num-cm-b'), configMap('num-cm-clean'),
+              { apiVersion: 'v1', kind: 'Service', metadata: { name: 'num-svc-polr', namespace: NS }, spec: { ports: [{ port: 80 }] } },
+              {
+                apiVersion: 'wgpolicyk8s.io/v1alpha2', kind: 'ClusterPolicyReport', metadata: { name: cpolr },
+                scope: { apiVersion: 'v1', kind: 'Namespace', name: NS },
+                summary: { pass: 1, fail: 1, warn: 1, error: 0, skip: 0 },
+                results: [
+                  { policy: nsPolicy, rule: 'need-owner', result: 'fail', source: 'kyverno', severity: 'high', message: `${NS} has no owner label` },
+                  { policy: nsPolicy, rule: 'need-cost', result: 'warn', source: 'kyverno', message: `${NS} has no cost centre` },
+                  { policy: nsPolicy, rule: 'need-quota', result: 'pass', source: 'kyverno' },
+                ],
+              },
+            ],
+          }))
+          // Policy Reports' results (one namespace, or every one with the search) and the row about the object
+          const fromPolicyReports = (rowText: string, opts: { namespace?: string; search?: string }) => ({
+            name: 'Policy Reports',
+            open: async (p: Page) => {
+              await p.goto('/security/policyreports?cluster=default')
+              if (opts.namespace) {
+                await p.getByTestId('policy-reports-namespace').click()
+                await p.getByTestId(`policy-reports-namespace-opt-${opts.namespace}`).click()
+              }
+              await p.getByTestId('policy-reports-tab-results').click()
+              if (opts.search) await p.getByTestId('policy-reports-search').fill(opts.search)
+              // the server keeps a read for a minute: the refresh reads the reports now
+              await p.getByRole('button', { name: 'Refresh', exact: true }).click()
+              await p.getByTestId('policy-report-row').filter({ hasText: rowText }).first().click({ timeout: 20_000 })
             },
-            link('default', `Pod/${NS}/num-p1`),
-          ]) {
-            await compare(page, way, 'Pod/num-p1 · policy violations', () => ({
-              badges: {}, counts: {}, sections: { 'Policy violations': violationsWant(JSON.parse(bk.kubectl(`get policyreports -n ${NS} -o json`)).items, 'num-p1') },
-            }), 'Policy violations')
+          })
+          const targets: { kind: string; name: string; namespaced: boolean; reports?: Way }[] = [
+            { kind: 'Pod', name: 'num-p1', namespaced: true, reports: fromPolicyReports('num-p1', { namespace: NS }) },
+            { kind: 'ConfigMap', name: 'num-cm-a', namespaced: true, reports: fromPolicyReports('num-cm-a', { namespace: NS }) },
+            { kind: 'ConfigMap', name: 'num-cm-b', namespaced: true },
+            { kind: 'ConfigMap', name: 'num-cm-clean', namespaced: true },
+            { kind: 'Service', name: 'num-svc-polr', namespaced: true, reports: fromPolicyReports('num-svc-polr', { namespace: NS }) },
+            { kind: 'Namespace', name: NS, namespaced: false, reports: fromPolicyReports(nsPolicy, { search: nsPolicy }) },
+          ]
+          for (const t of targets) {
+            // the drawer's read too is kept a minute: read it now, as the page's refresh does
+            await page.request.get(t.namespaced
+              ? `/api/v1/cluster/namespaces/${NS}/policyreports/resource?cluster=default&kind=${t.kind}&name=${t.name}&force_refresh=true`
+              : `/api/v1/cluster/policyreports/resource?cluster=default&kind=${t.kind}&name=${t.name}&force_refresh=true`)
+            for (const way of [...(t.reports ? [t.reports] : []), link('default', t.namespaced ? `${t.kind}/${NS}/${t.name}` : `${t.kind}/${t.name}`)]) {
+              await compare(page, way, `${t.kind}/${t.name} · policy violations`, () => ({
+                badges: {}, counts: {}, sections: {
+                  'Policy violations': violationsWant(JSON.parse(bk.kubectl(t.namespaced ? `get policyreports -n ${NS} -o json` : 'get clusterpolicyreports -o json')).items, t.kind, t.name),
+                },
+              }), 'Policy violations')
+            }
           }
           // the report's own fields beside spec and status (results, scope, summary) on its custom resource drawer,
           // from Advanced Search and by link (the rest of the drawer is the Widget steps')
@@ -733,6 +799,7 @@ test.describe('number check — VPA, CRD, custom resource and fallback drawers',
             }), OTHER_FIELDS)
           }
         } finally {
+          bk.kubectl(`delete clusterpolicyreport ${cpolr} --ignore-not-found`)
           bk.kubectl(`delete namespace ${NS} --wait=true --timeout=180s --ignore-not-found`)
         }
       }

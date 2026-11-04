@@ -89,6 +89,8 @@ test.describe('Grafana in front of the stores', () => {
   })
 
   test('metrics through the data source proxy match the direct path and fill the dashboard and the node drawer', async ({ request, page }) => {
+    // the waits below add up past the default 30 s
+    test.setTimeout(240_000)
     // the direct path has answered with no series for a moment in full runs, so it is asked until it has some
     let direct = { results: [] as any[] }
     await expect

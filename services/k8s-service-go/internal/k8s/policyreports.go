@@ -64,6 +64,9 @@ func (s *Service) PolicyReportsInstalled(ctx context.Context) bool {
 
 // PolicyReportResult is one row of a report: what one policy rule said about one resource.
 type PolicyReportResult struct {
+	// also holds the resources a result names after its first: the row is about them too (a drawer's rows)
+	also []policyReportRef
+
 	Namespace string `json:"namespace"`
 	Kind      string `json:"kind"`
 	Name      string `json:"name"`
@@ -409,15 +412,59 @@ func (s *Service) PolicyReportsForResource(ctx context.Context, namespace, kind,
 			return nil, fmt.Errorf("list pods: %w", err)
 		}
 	}
-	out := &PolicyReportResource{GeneratedAt: set.at.UTC().Format(time.RFC3339), Kind: kind, Name: name, Namespace: namespace, Rows: []PolicyReportResult{}}
-	for _, r := range set.results {
-		if r.Namespace != namespace {
+	out := &PolicyReportResource{GeneratedAt: set.at.UTC().Format(time.RFC3339), Kind: kind, Name: name, Namespace: namespace}
+	out.keep(set.results, func(ref policyReportRef) bool {
+		return ref.Namespace == namespace && ((ref.Kind == kind && ref.Name == name) || (ref.Kind == "Pod" && pods[ref.Name]))
+	})
+	return out, nil
+}
+
+// PolicyReportsForClusterResource returns the rows about one cluster-scoped
+// resource (a Namespace, a Node, a ClusterRole, …) from the
+// ClusterPolicyReports, read as the caller and kept a minute like the others.
+func (s *Service) PolicyReportsForClusterResource(ctx context.Context, kind, name string, force bool) (*PolicyReportResource, error) {
+	if len(scopeFromCtx(ctx)) > 0 {
+		// as the summary, which leaves the cluster reports out of a grant limited to namespaces
+		return nil, apierrors.NewForbidden(schema.GroupResource{Group: clusterPolicyReportGVR.Group, Resource: clusterPolicyReportGVR.Resource}, "", fmt.Errorf("cluster reports are outside a grant limited to namespaces"))
+	}
+	// "*" starts no namespace name, so the cluster reports keep a cache entry of their own
+	set, err := s.cachedPolicyReports(ctx, "*cluster", force, func() (policyReportSet, error) {
+		set := policyReportSet{at: time.Now(), results: []PolicyReportResult{}}
+		return set, s.readPolicyReportKind(ctx, clusterPolicyReportGVR, "", &set)
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := &PolicyReportResource{GeneratedAt: set.at.UTC().Format(time.RFC3339), Kind: kind, Name: name}
+	out.keep(set.results, func(ref policyReportRef) bool {
+		return ref.Namespace == "" && ref.Kind == kind && ref.Name == name
+	})
+	return out, nil
+}
+
+// policyReportRef is a resource a result names.
+type policyReportRef struct{ Namespace, Kind, Name, APIVersion string }
+
+// keep takes the rows about the resource match picks — a result naming several
+// resources counts for each, its row named after the one that matched — worst
+// result first, then by policy and resource name.
+func (out *PolicyReportResource) keep(results []PolicyReportResult, match func(policyReportRef) bool) {
+	out.Rows = []PolicyReportResult{}
+	for _, r := range results {
+		ref := policyReportRef{r.Namespace, r.Kind, r.Name, r.APIVersion}
+		ok := match(ref)
+		for _, other := range r.also {
+			if ok {
+				break
+			}
+			ref, ok = other, match(other)
+		}
+		if !ok {
 			continue
 		}
-		if (r.Kind == kind && r.Name == name) || (r.Kind == "Pod" && pods[r.Name]) {
-			out.Rows = append(out.Rows, r)
-			out.Totals.add(r.Result)
-		}
+		r.Namespace, r.Kind, r.Name, r.APIVersion, r.also = ref.Namespace, ref.Kind, ref.Name, ref.APIVersion, nil
+		out.Rows = append(out.Rows, r)
+		out.Totals.add(r.Result)
 	}
 	sort.SliceStable(out.Rows, func(i, j int) bool {
 		a, b := out.Rows[i], out.Rows[j]
@@ -429,7 +476,6 @@ func (s *Service) PolicyReportsForResource(ctx context.Context, namespace, kind,
 		}
 		return a.Name < b.Name
 	})
-	return out, nil
 }
 
 // policyReportSet reads (or serves from the minute cache, unless force) the
@@ -441,30 +487,40 @@ func (s *Service) policyReportSet(ctx context.Context, namespace string, force b
 	if scoped && namespace != "" && !containsString(scope, namespace) {
 		return policyReportSet{}, true, apierrors.NewForbidden(schema.GroupResource{Group: policyReportGVR.Group, Resource: policyReportGVR.Resource}, "", fmt.Errorf("namespace %q is outside your grant", namespace))
 	}
+	set, err := s.cachedPolicyReports(ctx, namespace, force, func() (policyReportSet, error) {
+		return s.readPolicyReports(ctx, namespace, scope)
+	})
+	return set, scoped, err
+}
+
+// cachedPolicyReports serves one read (a namespace, "" for the whole view) from
+// the minute cache of the cluster and the caller's identity, unless force; else
+// it reads and keeps the answer.
+func (s *Service) cachedPolicyReports(ctx context.Context, what string, force bool, read func() (policyReportSet, error)) (policyReportSet, error) {
 	cluster := string(ctxClusterID(ctx))
 	identity := ""
 	if p, ok := auth.FromContext(ctx); ok {
 		identity = p.CacheIdentity(cluster)
 	}
-	key := namespace + "|as:" + identity
+	key := what + "|as:" + identity
 	c := policyReportCacheFor(cluster)
 	if !force {
 		c.mu.Lock()
 		if set, ok := c.sets[key]; ok && time.Since(set.at) < policyReportCacheTTL {
 			c.mu.Unlock()
-			return set, scoped, nil
+			return set, nil
 		}
 		c.mu.Unlock()
 	}
 
-	set, err := s.readPolicyReports(ctx, namespace, scope)
+	set, err := read()
 	if err != nil {
-		return policyReportSet{}, scoped, err
+		return policyReportSet{}, err
 	}
 	c.mu.Lock()
 	c.sets[key] = set
 	c.mu.Unlock()
-	return set, scoped, nil
+	return set, nil
 }
 
 func (s *Service) readPolicyReports(ctx context.Context, namespace string, scope []string) (policyReportSet, error) {
@@ -553,6 +609,7 @@ func policyReportRows(obj *unstructured.Unstructured) []PolicyReportResult {
 				}
 			}
 		}
+		row.also = policyReportOthers(m["resources"], scopeNS)
 		if ts, ok := m["timestamp"].(map[string]interface{}); ok {
 			if secs, ok := ts["seconds"].(int64); ok && secs > 0 {
 				row.Timestamp = time.Unix(secs, 0).UTC().Format(time.RFC3339)
@@ -566,6 +623,25 @@ func policyReportRows(obj *unstructured.Unstructured) []PolicyReportResult {
 		rows = append(rows, row)
 	}
 	return rows
+}
+
+// policyReportOthers lists the resources a result names after the first (which
+// its row names), each in the report's namespace unless it names its own.
+func policyReportOthers(raw interface{}, namespace string) []policyReportRef {
+	res, _ := raw.([]interface{})
+	var out []policyReportRef
+	for i := 1; i < len(res); i++ {
+		m, _ := res[i].(map[string]interface{})
+		ref := policyReportRef{Namespace: str(m["namespace"]), Kind: str(m["kind"]), Name: str(m["name"]), APIVersion: str(m["apiVersion"])}
+		if ref.Kind == "" || ref.Name == "" {
+			continue
+		}
+		if ref.Namespace == "" {
+			ref.Namespace = namespace
+		}
+		out = append(out, ref)
+	}
+	return out
 }
 
 func str(v interface{}) string {

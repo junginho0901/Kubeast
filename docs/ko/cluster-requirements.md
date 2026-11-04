@@ -299,7 +299,7 @@ CRD가 없으면 Kubeast는 빈 목록과 "설치 안 됨"(`X-Kubeast-Not-Instal
 
 | 화면 | 있어야 하는 것 |
 | --- | --- |
-| VerticalPodAutoscalers | `autoscaling.k8s.io/v1` CRD. 추천값은 VPA recommender가 채웁니다 |
+| VerticalPodAutoscalers | `autoscaling.k8s.io/v1` CRD. 추천값은 VPA recommender가 채웁니다. MinReplicas·OOMSeconds 열과 startup boost·OOM·메모리 집계 필드는 vertical-pod-autoscaler 1.7.0 이상의 CRD(`vpa-v1-crd-gen.yaml`)가 있어야 하고, 그보다 옛 CRD면 "-"로 보입니다 |
 | Gateway API | `gateway.networking.k8s.io/v1` CRD(GatewayClass·Gateway·HTTPRoute 등)와 구현체 |
 | Gateway 정책 | 라벨 `gateway.networking.k8s.io/policy`가 붙은 CRD(GEP-713), 또는 기본 목록 — BackendTLSPolicy, Envoy Gateway(`gateway.envoyproxy.io`의 BackendTraffic·ClientTraffic·Security·EnvoyPatch·EnvoyExtension Policy), Istio(AuthorizationPolicy·RequestAuthentication·PeerAuthentication·Telemetry·WasmPlugin·EnvoyFilter·DestinationRule). 읽기 그룹은 Gateway API 자체 정책 종류를 `kubeast:cluster-reader`로 읽습니다. 다른 구현체의 종류는 그 설치본의 `aggregate-to-view` ClusterRole이나 커스텀 역할이 있어야 하며, 없으면 화면에 거절로 표시됩니다 |
 | Admission Policies | ValidatingAdmissionPolicy(`admissionregistration.k8s.io/v1`), MutatingAdmissionPolicy(`admissionregistration.k8s.io/v1`) — 이 API를 제공하지 않는 클러스터는 "설치 안 됨". Read 그룹은 `kubeast:cluster-reader`로 정책과 바인딩을 읽습니다. 이 권한은 2026-10-22에 추가되었고 `view`에는 없으므로, 그 전에 RBAC를 적용한 클러스터는 다시 적용하세요 |

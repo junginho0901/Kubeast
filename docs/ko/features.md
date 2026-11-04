@@ -107,7 +107,7 @@
   권한은 `resource.cost.read`이고, Namespace 범위로 부여받았다면 그 Namespace만 봅니다.
 - **정책 보고서(Policy Reports)** — Kyverno·Trivy Operator 등이 쓰는 `wgpolicyk8s.io` PolicyReport/ClusterPolicyReport를 읽어 보여 줍니다(`features.policyReports`).
   - Security → Policy Reports: 정책별·Namespace별 pass/fail/warn/error/skip과 결과 행
-  - 워크로드·Pod 드로어: "Policy violations" 절
+  - 보고서가 가리킬 수 있는 개체의 모든 드로어: "Policy violations" 절(클러스터 범위 개체는 ClusterPolicyReport에서)
   - CRD가 없으면 "설치되어 있지 않습니다"가 나옵니다.
   - 권한은 `resource.policyreport.read`이고, Namespace 범위로 부여받았다면 그 Namespace만 봅니다.
 - **AI 에이전트 연결(MCP 서버)** — Claude Code·Cursor가 kubeconfig 대신 API 키로 연결해 같은 읽기 도구를

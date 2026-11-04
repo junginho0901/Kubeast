@@ -53,4 +53,10 @@ export const policyReportsApi = {
     const { data } = await client.get(`/cluster/namespaces/${encodeURIComponent(namespace)}/policyreports/resource`, { params: { kind, name, force_refresh: force || undefined } })
     return data
   },
+
+  // A cluster-scoped resource (a Namespace, a Node, a ClusterRole …): the ClusterPolicyReports' rows about it.
+  getClusterResourcePolicyReports: async (kind: string, name: string, force = false): Promise<PolicyReportResource | unknown[]> => {
+    const { data } = await client.get('/cluster/policyreports/resource', { params: { kind, name, force_refresh: force || undefined } })
+    return data
+  },
 }
