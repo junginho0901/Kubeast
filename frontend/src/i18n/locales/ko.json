@@ -5101,6 +5101,7 @@
     "refresh": "새로고침",
     "disabled": "이 설치에서 알림 웹훅이 꺼져 있어(features.alertInvestigation.enabled) 알림이 들어오지 않습니다.",
     "forbidden": "알림은 클러스터 전체에 걸쳐 있어, 이 클러스터를 네임스페이스 제한 없이 읽을 수 있는 사용자에게만 보입니다.",
+    "storeCut": "알림 저장소가 이 클러스터 알림 {{total}}건 중 앞의 {{listed}}건만 보냈습니다(저장소 한도, alertStore.maxAlerts). 그 밖의 알림은 Alertmanager 지금 상태를 보이지 않습니다.",
     "status": {
       "firing": "울리는 중",
       "stale": "상태 확인 안 됨",
@@ -5184,7 +5185,8 @@
       "expire": "지금 끝내기",
       "expireTitle": "무음 끝내기",
       "expireConfirm": "이 무음을 지금 끝낼까요? 맞는 알림이 다시 전송됩니다.",
-      "listFailed": "알림 저장소가 답하지 않았습니다."
+      "listFailed": "알림 저장소가 답하지 않았습니다.",
+      "storeCut": "알림 저장소가 {{total}}건 중 앞의 {{listed}}건만 보냈습니다(저장소 한도, alertStore.maxAlerts). 나머지는 수에만 들고 목록에는 없습니다."
     },
     "ackedBy": "{{who}} 확인 · {{when}}",
     "assignee": "담당: {{who}}",

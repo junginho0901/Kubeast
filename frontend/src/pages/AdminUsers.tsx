@@ -23,11 +23,8 @@ export default function AdminUsers() {
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
   const confirm = useConfirm()
-  // the server's largest page; search and pages work on what it returns
-  const [limit] = useState(200)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
-  const [offset] = useState(0)
   const [roleDrafts, setRoleDrafts] = useState<Record<string, number>>({})
   const [openRoleDropdownUserId, setOpenRoleDropdownUserId] = useState<string | null>(null)
   const roleDropdownRef = useRef<HTMLDivElement | null>(null)
@@ -60,11 +57,7 @@ export default function AdminUsers() {
   const { has: hasPerm } = usePermission()
   const canEditUsers = hasPerm('admin.users.update')
 
-  const { teamOptions, roles, me, users, isLoading, isError } = useAdminUserData({
-    reauthModalOpen,
-    limit,
-    offset,
-  })
+  const { teamOptions, roles, me, users, isLoading, isError } = useAdminUserData({ reauthModalOpen })
 
   const updateRoleMutation = useMutation({
     mutationFn: ({ userId, roleId }: { userId: string; roleId: number }) => api.adminUpdateUserRole(userId, roleId),

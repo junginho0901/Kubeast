@@ -21,7 +21,7 @@ import InvestigationReportModal from '@/components/InvestigationReportModal'
 import SilenceList from './SilenceList'
 import SilenceModal from './SilenceModal'
 import { alertInvestigationEnabled } from '@/utils/features'
-import { alertResource, liveStateOf, silenceStart, type LiveState } from '@/utils/alertInbox'
+import { alertResource, liveStateOf, silenceStart, storeCut, type LiveState } from '@/utils/alertInbox'
 import { severityClass, statusClass as investigationClass } from '@/utils/investigationFormat'
 import { formatAge, formatTime, utcTitle } from '@/utils/time'
 
@@ -88,6 +88,7 @@ export default function AlertInbox() {
     refetchInterval: 60_000,
     retry: false,
   })
+  const cut = storeCut(store)
   const rows = data?.items ?? []
   const total = data?.total ?? 0
   const counts = data?.counts ?? { firing: 0, stale: 0, resolved: 0 }
@@ -109,6 +110,8 @@ export default function AlertInbox() {
       cluster: currentCluster,
       filters: { status: status || undefined, severity: severity || undefined, mine: mine || undefined, open: openOnly || undefined, search: search || undefined, page },
       counts,
+      // the store's list was cut at its limit: "live" is left out for the alerts it did not send
+      alert_store_cut: cut ?? undefined,
       items: rows.map((r) => ({
         alertname: r.alertname, severity: r.severity, namespace: r.namespace || undefined, status: r.status,
         live: liveStateOf(r, store) ?? undefined, summary: r.summary || undefined, starts_at: r.starts_at,
@@ -153,6 +156,11 @@ export default function AlertInbox() {
       {forbidden && (
         <div className="shrink-0 rounded-lg border border-amber-800/60 bg-amber-900/20 px-3 py-2 text-sm text-amber-200" data-testid="alert-inbox-forbidden">
           {tr('alertInbox.forbidden', 'Alerts cover the whole cluster: they are shown to users who can read this cluster without a namespace limit.')}
+        </div>
+      )}
+      {cut && !showSilences && (
+        <div className="shrink-0 rounded-lg border border-amber-800/60 bg-amber-900/20 px-3 py-2 text-sm text-amber-200">
+          {tr('alertInbox.storeCut', 'The alert store sent the first {{listed}} of its {{total}} alerts for this cluster (its limit, alertStore.maxAlerts): for an alert not among them, what Alertmanager says now is not shown.', cut)}
         </div>
       )}
 

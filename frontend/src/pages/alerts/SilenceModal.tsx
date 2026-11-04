@@ -4,10 +4,12 @@ import { useTranslation } from 'react-i18next'
 import { BellOff, Plus, X } from 'lucide-react'
 
 import { api } from '@/services/api'
-import type { SilenceMatcher } from '@/services/api/alertInbox'
+import type { SilenceMatcher, SilencePreview } from '@/services/api/alertInbox'
 import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
 import CustomDropdown from '@/components/CustomDropdown'
+import { usePagination } from '@/components/resource-detail/usePagination'
+import { storeCut } from '@/utils/alertInbox'
 
 // A silence in the cluster's alert store (features.alertStore.silences, resource.alert.silence): label conditions,
 // how long, why. The server adds the cluster's own condition, so the conditions here never need it; what the silence
@@ -132,16 +134,7 @@ export default function SilenceModal({ initial, maxHours, onClose }: {
           {previewError ? (
             <p className="text-sm text-amber-300">{previewError.detail || tr('alertInbox.silence.previewFailed', 'The conditions could not be checked.')}</p>
           ) : preview.data ? (
-            <>
-              <p className="mb-2 text-sm text-slate-200" data-testid="silence-preview-count">
-                {tr('alertInbox.silence.affectedCount', '{{count}} alert(s)', { count: preview.data.total })}
-              </p>
-              <ul className="space-y-1 text-xs">
-                {preview.data.alerts.slice(0, 10).map((a) => (
-                  <li key={a.fingerprint} className="flex gap-2 text-slate-300"><span className="font-mono text-slate-100">{a.alertname}</span><span className="text-slate-500">{a.labels.namespace ?? ''}</span><span>{a.state}</span></li>
-                ))}
-              </ul>
-            </>
+            <SilencePreviewAlerts preview={preview.data} />
           ) : (
             <p className="text-sm text-slate-500">-</p>
           )}
@@ -154,5 +147,32 @@ export default function SilenceModal({ initial, maxHours, onClose }: {
         )}
       </div>
     </ModalFrame>
+  )
+}
+
+// The count is every matching alert; the list pages through the alerts the store sent, and says so when the store
+// cut them at its limit.
+export function SilencePreviewAlerts({ preview }: { preview: SilencePreview }) {
+  const { t } = useTranslation()
+  const tr = (key: string, fallback: string, opts?: Record<string, unknown>) => t(key, { defaultValue: fallback, ...opts })
+  const { items, nav } = usePagination(preview.alerts, 10)
+  const cut = storeCut(preview)
+  return (
+    <>
+      <p className="mb-2 text-sm text-slate-200" data-testid="silence-preview-count">
+        {tr('alertInbox.silence.affectedCount', '{{count}} alert(s)', { count: preview.total })}
+      </p>
+      <ul className="space-y-1 text-xs">
+        {items.map((a) => (
+          <li key={a.fingerprint} className="flex gap-2 text-slate-300"><span className="font-mono text-slate-100">{a.alertname}</span><span className="text-slate-500">{a.labels.namespace ?? ''}</span><span>{a.state}</span></li>
+        ))}
+      </ul>
+      {nav}
+      {cut && (
+        <p className="mt-2 text-xs text-amber-300">
+          {tr('alertInbox.silence.storeCut', 'The alert store sent the first {{listed}} of {{total}} (its limit, alertStore.maxAlerts); the rest are counted but not listed.', cut)}
+        </p>
+      )}
+    </>
   )
 }

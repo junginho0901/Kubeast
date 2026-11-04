@@ -39,8 +39,8 @@ export default function ClusterAccessModal({
   })
   const { data: roles = [] } = useQuery({ queryKey: ['roles'], queryFn: api.listRoles, staleTime: 60_000 })
   const { data: allUsers = [] } = useQuery({
-    queryKey: ['admin-users-all'],
-    queryFn: () => api.adminListUsers({ limit: 500 }),
+    queryKey: ['admin-users', 'all'],
+    queryFn: api.adminListAllUsers,
     staleTime: 30_000,
   })
 

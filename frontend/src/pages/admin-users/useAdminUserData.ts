@@ -7,11 +7,9 @@ import { api, RoleWithDetails } from '@/services/api'
 
 interface Args {
   reauthModalOpen: boolean
-  limit: number
-  offset: number
 }
 
-export function useAdminUserData({ reauthModalOpen, limit, offset }: Args) {
+export function useAdminUserData({ reauthModalOpen }: Args) {
   const { data: teamOptions = [] } = useQuery({
     queryKey: ['organizations', 'team'],
     queryFn: () => api.listOrganizations('team'),
@@ -32,9 +30,10 @@ export function useAdminUserData({ reauthModalOpen, limit, offset }: Args) {
     enabled: !reauthModalOpen,
   })
 
+  // every user: the page searches, sorts, pages and counts them in the browser
   const { data: users, isLoading, isError } = useQuery({
-    queryKey: ['admin-users', limit, offset],
-    queryFn: () => api.adminListUsers({ limit, offset }),
+    queryKey: ['admin-users', 'all'],
+    queryFn: api.adminListAllUsers,
     staleTime: 5000,
     retry: false,
     enabled: !reauthModalOpen,

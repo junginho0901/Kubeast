@@ -40,6 +40,30 @@ export interface UserClusterGrant {
   namespaces?: string[]
 }
 
+// GET /auth/admin/users answers at most 200 users a page, newest first, with no total and no next-page mark,
+// so every user is read page by page until a page comes back empty (a short page is not taken as the end).
+// A user listed twice (one made while reading) is kept once; a full page with no new user means the offset
+// was not applied, and that is an error rather than a short list.
+export const ADMIN_USERS_PAGE = 200
+
+export async function readAllUsers(fetchPage: (offset: number) => Promise<Member[]>): Promise<Member[]> {
+  const seen = new Set<string>()
+  const out: Member[] = []
+  let offset = 0
+  for (;;) {
+    const page = await fetchPage(offset)
+    if (page.length === 0) return out
+    const before = out.length
+    for (const u of page) {
+      if (seen.has(u.id)) continue
+      seen.add(u.id)
+      out.push(u)
+    }
+    if (out.length === before) throw new Error('The user list did not move past offset ' + offset)
+    offset += page.length
+  }
+}
+
 export const adminApi = {
   adminCreateOrganization: async (type: 'team', name: string): Promise<Organization> => {
     const { data } = await client.post('/auth/admin/organizations', { type, name })
@@ -70,6 +94,10 @@ export const adminApi = {
     if (!Array.isArray(data)) throw new Error('Invalid users response')
     return data as Member[]
   },
+
+  // Every user (counts per team and role, the user pickers): see readAllUsers.
+  adminListAllUsers: (): Promise<Member[]> =>
+    readAllUsers((offset) => adminApi.adminListUsers({ limit: ADMIN_USERS_PAGE, offset })),
 
   adminUpdateUserRole: async (userId: string, roleId: number): Promise<Member> => {
     const { data } = await client.patch(`/auth/admin/users/${userId}`, { role_id: roleId })
