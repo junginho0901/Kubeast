@@ -286,7 +286,7 @@ Without the CRD, Kubeast answers with an empty list and "not installed" (`X-Kube
 
 | Screen | What must be present |
 | --- | --- |
-| VerticalPodAutoscalers | The `autoscaling.k8s.io/v1` CRD. The VPA recommender fills in the recommendations |
+| VerticalPodAutoscalers | The `autoscaling.k8s.io/v1` CRD. The VPA recommender fills in the recommendations. The MinReplicas and OOMSeconds columns and the startup boost, OOM and memory aggregation fields need the CRD of vertical-pod-autoscaler 1.7.0 or later (`vpa-v1-crd-gen.yaml`); with an older one they show "-" |
 | Gateway API | The `gateway.networking.k8s.io/v1` CRDs (GatewayClass, Gateway, HTTPRoute, etc.) and an implementation |
 | Gateway policies | CRDs labelled `gateway.networking.k8s.io/policy` (GEP-713), or the default list: BackendTLSPolicy; Envoy Gateway (BackendTraffic, ClientTraffic, Security, EnvoyPatch and EnvoyExtension Policy of `gateway.envoyproxy.io`); Istio (AuthorizationPolicy, RequestAuthentication, PeerAuthentication, Telemetry, WasmPlugin, EnvoyFilter, DestinationRule). The Read group reads the Gateway API's own policy kinds through `kubeast:cluster-reader`; another implementation's kinds need its installer's `aggregate-to-view` ClusterRole or a custom role, or the page shows them refused |
 | Admission Policies | ValidatingAdmissionPolicy (`admissionregistration.k8s.io/v1`) and MutatingAdmissionPolicy (`admissionregistration.k8s.io/v1`). Clusters that do not serve them show "not installed". The Read group reads policies and bindings through `kubeast:cluster-reader`, which `view` does not have. It was added 2026-10-22, so re-apply the RBAC on clusters where it was applied before that |

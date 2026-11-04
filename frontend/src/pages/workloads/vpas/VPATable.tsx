@@ -12,6 +12,7 @@ import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAge,
+  vpaCount,
   vpaToRawJson,
   type SortKey,
 } from './vpaHelpers'
@@ -90,7 +91,7 @@ export function VPATable({
   return (
     <div ref={tableContainerRef} className="card flex-1 min-h-0 flex flex-col">
       <div ref={tableBodyRef} className="overflow-x-auto flex-1 min-h-0">
-        <table className="w-full text-sm min-w-[1040px] table-fixed">
+        <table className="w-full text-sm min-w-[1300px] table-fixed">
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               {showNamespaceColumn && (
@@ -124,6 +125,17 @@ export function VPATable({
               <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('provided')}>
                 <span className="inline-flex items-center gap-1">
                   {tr('vpas.table.provided', 'Provided')}{renderSortIcon('provided')}
+                </span>
+              </th>
+              {/* the CRD's wide columns MinReplicas and OOMSeconds (VPA 1.7) */}
+              <th className="col-optional text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('minReplicas')}>
+                <span className="inline-flex items-center gap-1">
+                  {tr('vpas.table.minReplicas', 'Min Replicas')}{renderSortIcon('minReplicas')}
+                </span>
+              </th>
+              <th className="col-optional text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('oomSeconds')}>
+                <span className="inline-flex items-center gap-1">
+                  {tr('vpas.table.oomSeconds', 'OOM Seconds')}{renderSortIcon('oomSeconds')}
                 </span>
               </th>
               <th className="col-low text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('age')}>
@@ -161,12 +173,14 @@ export function VPATable({
                     <span className="text-xs font-mono text-slate-500">-</span>
                   )}
                 </td>
+                <td className="col-optional py-3 px-4 text-xs font-mono">{vpaCount(v.min_replicas)}</td>
+                <td className="col-optional py-3 px-4 text-xs font-mono">{vpaCount(v.evict_after_oom_seconds)}</td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(v.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
               <tr>
-                <td colSpan={showNamespaceColumn ? 8 : 7} className="py-10 px-4 text-center text-slate-400">
+                <td colSpan={showNamespaceColumn ? 10 : 9} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     
@@ -177,10 +191,10 @@ export function VPATable({
             )}
 
             {sortedVPAsLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={showNamespaceColumn ? 8 : 7} resource="vpas" searching={searching} />
+              <TableEmptyRow colSpan={showNamespaceColumn ? 10 : 9} resource="vpas" searching={searching} />
             )}
           </tbody>
-            <AdaptiveTableFillerRows count={rowsPerPage - pagedVPAs.length} columnCount={7 + (showNamespaceColumn ? 1 : 0)} />
+            <AdaptiveTableFillerRows count={rowsPerPage - pagedVPAs.length} columnCount={9 + (showNamespaceColumn ? 1 : 0)} />
         </table>
       </div>
       <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedVPAsLength} rowsPerPage={rowsPerPage} onPageChange={setCurrentPage} />

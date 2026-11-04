@@ -36,6 +36,32 @@ export function writeVpaStatus(kubectl: Kubectl, ns: string) {
   }
 }
 
+// The fields of VPA 1.6 and 1.7 (vertical-pod-autoscaler-1.8.1's vpa-v1-crd-gen.yaml has the same): the wide columns
+// MinReplicas and OOMSeconds (spec.updatePolicy.minReplicas, evictAfterOOMSeconds), the pod's startupBoost and a
+// container policy's OOM, memory aggregation and startup boost settings. An older CRD refuses them, so the VPA that
+// sets them is made only where the CRD prints those columns.
+export const VPA17_MISSING = 'test2\'s VPA CRD prints no MinReplicas or OOMSeconds column (older than vertical-pod-autoscaler-1.7.0): apply vpa-v1-crd-gen.yaml of vertical-pod-autoscaler-1.8.1 there'
+export function vpaPrintsWideColumns(kubectl: Kubectl): boolean {
+  const crd = JSON.parse(kubectl('get crd verticalpodautoscalers.autoscaling.k8s.io -o json'))
+  const v1 = (crd.spec.versions as Obj[]).find((v) => v.name === 'v1')
+  const names = (v1?.additionalPrinterColumns ?? []).map((c: Obj) => c.name)
+  return names.includes('MinReplicas') && names.includes('OOMSeconds')
+}
+export const vpa17 = (ns: string, name: string): Obj => ({
+  apiVersion: 'autoscaling.k8s.io/v1', kind: 'VerticalPodAutoscaler', metadata: { name, namespace: ns },
+  spec: {
+    targetRef: { apiVersion: 'apps/v1', kind: 'Deployment', name: 'web' },
+    updatePolicy: { updateMode: 'InPlace', minReplicas: 2, evictAfterOOMSeconds: 300 },
+    startupBoost: { cpu: { type: 'Factor', factor: 2, durationSeconds: 10 } },
+    resourcePolicy: {
+      containerPolicies: [
+        { containerName: 'app', oomBumpUpRatio: '1.5', oomMinBumpUp: '100Mi', memoryAggregationIntervalSeconds: 3600, memoryAggregationIntervalCount: 8, startupBoost: { cpu: { type: 'Quantity', quantity: '500m' } } },
+        { containerName: '*', mode: 'Off', oomBumpUpRatio: 2 },
+      ],
+    },
+  },
+})
+
 // the Widget kind (cluster-scoped CRD, one for both specs) and its instances in namespace ns
 export const CR_CRD = read('number-check.cr-crd.yaml')
 export const crInstances = (ns: string) => inNamespace(read('number-check.cr-instances.yaml'), ns)

@@ -1192,7 +1192,9 @@
       "cpu": "CPU",
       "memory": "메모리",
       "provided": "제공 상태",
-      "age": "경과 시간"
+      "age": "경과 시간",
+      "minReplicas": "Min Replicas",
+      "oomSeconds": "OOM Seconds"
     },
     "stats": {
       "total": "전체",
@@ -2020,7 +2022,8 @@
     "notInstalled": "이 클러스터에는 PolicyReport(wgpolicyk8s.io)가 설치되어 있지 않습니다. Kyverno에 Audit 정책을 두는 식으로 정책 보고서를 쓰는 엔진을 설치하면 이 화면이 채워집니다.",
     "scoped": "부여된 Namespace의 결과만 셉니다.",
     "truncated": "이 화면이 한 번에 읽는 양보다 보고서가 많습니다. Namespace나 정책으로 좁히면 전부 보입니다.",
-    "loadError": "정책 보고서를 불러오지 못했습니다"
+    "loadError": "정책 보고서를 불러오지 못했습니다",
+    "violationsError": "정책 보고서를 불러오지 못했습니다: {{error}}"
   },
   "monitoring": {
     "title": "Monitoring",

@@ -4,6 +4,7 @@ import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, ConditionsTable, Even
 import { fmtRel, fmtTs } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
+import { VPA_POLICY_EXTRA_HEAD, vpaPolicyExtraRows, vpaStartupBoostText, vpaValue } from './vpaDetail'
 
 interface Props {
   name: string
@@ -60,6 +61,7 @@ export default function VPAInfo({ name, namespace }: Props) {
   const containerPolicies: any[] = desc.container_policies || []
   const conditions: any[] = desc.conditions || []
   const recommendations: any[] = desc.recommendations || []
+  const policyExtras = vpaPolicyExtraRows(containerPolicies)
 
   return (
     <div className="space-y-4">
@@ -108,7 +110,13 @@ export default function VPAInfo({ name, namespace }: Props) {
 
       {/* Update Policy */}
       <InfoSection title="Update Policy">
-        <InfoRow label="Update Mode" value={desc.update_mode || '-'} />
+        <div className="space-y-2">
+          <InfoRow label="Update Mode" value={desc.update_mode || '-'} />
+          {/* the CRD's wide columns MinReplicas and OOMSeconds, and the pod's startupBoost (VPA 1.7) */}
+          <InfoRow label="Min Replicas" value={vpaValue(desc.min_replicas)} />
+          <InfoRow label="Evict After OOM Seconds" value={vpaValue(desc.evict_after_oom_seconds)} />
+          <InfoRow label="Startup Boost" value={vpaStartupBoostText(desc.startup_boost)} />
+        </div>
       </InfoSection>
 
       {/* Container Policies */}
@@ -146,6 +154,24 @@ export default function VPAInfo({ name, namespace }: Props) {
               </tbody>
             </table>
           </div>
+          {policyExtras.length > 0 && (
+            <div className="overflow-x-auto mt-3">
+              <table className="w-full text-xs table-fixed min-w-[700px]">
+                <thead className="text-slate-400">
+                  <tr>
+                    {VPA_POLICY_EXTRA_HEAD.map((h, i) => <Th key={h} className={`text-left py-2 ${['w-[15%]', 'w-[13%]', 'w-[13%]', 'w-[17%]', 'w-[17%]', 'w-[25%]'][i]}`}>{h}</Th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {policyExtras.map((row, idx) => (
+                    <tr key={idx} className="text-slate-200">
+                      {row.map((cell, i) => <td key={i} className="py-2 pr-2 align-top break-all whitespace-normal">{cell}</td>)}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </InfoSection>
       )}
 

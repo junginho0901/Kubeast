@@ -1,7 +1,9 @@
 # The number check's policy reports, on the second cluster (`default`, Kyverno 1.19), written by hand — Kyverno's
 # report controller keeps to the reports it labels app.kubernetes.io/managed-by=kyverno. One policy name comes from
-# two sources, two results name their resources instead of a scope, and every result appears once.
-# number-check-lists.spec.ts adds num-polr-bulk (520 results) and removes the namespace after.
+# two sources, two results name their resources instead of a scope (one names two ConfigMaps), a report is about a
+# Service, and every result appears once.
+# number-check-lists.spec.ts adds num-polr-bulk (520 results) and removes the namespace after;
+# number-check-cr-drawers.spec.ts makes the objects they name and opens their drawers.
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -44,3 +46,15 @@ results:
 - {policy: num-labels, rule: need-team, result: warn, source: kyverno, category: Best Practices, severity: low, message: num-p1 has no label team}
 - {policy: num-labels, rule: need-owner, result: error, source: kyverno, message: the rule could not run}
 - {policy: num-labels, rule: need-cost, result: skip, source: kyverno}
+---
+apiVersion: wgpolicyk8s.io/v1alpha2
+kind: PolicyReport
+metadata:
+  name: num-polr-svc
+  namespace: e2e-numbers
+scope: {apiVersion: v1, kind: Service, name: num-svc-polr, namespace: e2e-numbers}
+summary: {pass: 1, fail: 1, warn: 1, error: 0, skip: 0}
+results:
+- {policy: num-svc-type, rule: no-external-ip, result: fail, source: kyverno, category: Best Practices, severity: medium, message: num-svc-polr may not set externalIPs}
+- {policy: num-svc-type, rule: need-selector, result: warn, source: kyverno, severity: low, message: num-svc-polr selects no pods}
+- {policy: num-labels, rule: need-team, result: pass, source: kyverno, category: Best Practices}

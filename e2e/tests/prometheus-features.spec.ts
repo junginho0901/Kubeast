@@ -105,7 +105,14 @@ test.describe('AdminAudit — custom dropdown + 가로 스크롤', () => {
     expect(await filters.count()).toBeGreaterThanOrEqual(3)
     // the first one opens its options and closes on Escape
     const buttons = page.locator('main button')
-    const closed = await buttons.count()
+    // the page's lists come after the filters: count once a second passes without a new button
+    let closed = -1
+    await expect.poll(async () => {
+      const before = await buttons.count()
+      await page.waitForTimeout(1_000)
+      closed = await buttons.count()
+      return closed === before
+    }, { timeout: 20_000 }).toBe(true)
     await filters.first().locator('button').first().click()
     await expect.poll(() => buttons.count()).toBeGreaterThan(closed)
     await page.keyboard.press('Escape')

@@ -100,6 +100,24 @@ func (h *Handler) GetResourcePolicyReports(w http.ResponseWriter, r *http.Reques
 	response.JSON(w, http.StatusOK, res)
 }
 
+// GetClusterResourcePolicyReports handles GET /api/v1/policyreports/resource?kind=&name= — a cluster-scoped resource's rows.
+func (h *Handler) GetClusterResourcePolicyReports(w http.ResponseWriter, r *http.Request) {
+	if !h.policyReportsGate(w, r) {
+		return
+	}
+	kind, name := queryParam(r, "kind", ""), queryParam(r, "name", "")
+	if kind == "" || name == "" {
+		response.Error(w, http.StatusBadRequest, "kind and name are required")
+		return
+	}
+	res, err := h.svc.PolicyReportsForClusterResource(r.Context(), kind, name, queryParamBool(r, "force_refresh", false))
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, res)
+}
+
 var policyReportSorts = map[string]bool{"": true, "result": true, "policy": true, "namespace": true, "name": true}
 
 func splitList(v string) []string {

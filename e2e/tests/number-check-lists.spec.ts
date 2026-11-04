@@ -8,7 +8,7 @@ import zlib from 'node:zlib'
 import { test, expect, type Page } from '@playwright/test'
 
 import { GW, ancestor, arg, condition, gatewayFixture, gatewayVersions, routeConds, summary, writeGatewayStatus } from './number-check.gateway-shared'
-import { CR_CRD, GWPOL_CRD, NUM_SVC, crInstances, numbersPolicies, vpaFixture, writeNumbersPolicyStatus, writeVpaStatus, writeWidgetStatus } from './number-check.cr-shared'
+import { CR_CRD, GWPOL_CRD, NUM_SVC, VPA17_MISSING, crInstances, numbersPolicies, vpa17, vpaFixture, vpaPrintsWideColumns, writeNumbersPolicyStatus, writeVpaStatus, writeWidgetStatus } from './number-check.cr-shared'
 
 // Every list screen's numbers are the cluster's: in namespace e2e-numbers of `self`, or of test2 for the Gateway API and VPA
 // (objects whose numbers are not zero and not alike, made here and removed after), each screen's rows are the cluster's objects, each column the
@@ -109,6 +109,8 @@ type Screen = {
   spans?: Record<string, (o: Obj) => boolean>
   // summary card label → the count that label means, over the namespace's objects
   cards?: (list: Obj[]) => Record<string, number>
+  // every column the API server's Table prints — the wide ones (priority 1) too — is on the screen
+  allColumns?: boolean
 }
 
 // Healthy = all wanted replicas ready, Unavailable = none available, Degraded = the rest that want replicas, Idle =
@@ -658,10 +660,12 @@ const GATEWAY_LIVE: { path: string; name: string; column: string; want: string; 
 ]
 
 // the VPA screen on test2, with number-check.vpa-fixture.yaml (number-check.cr-shared.ts): Provided is the
-// RecommendationProvided condition, as the CRD's printer column reads it (num-vpa-b lists another condition first)
+// RecommendationProvided condition, as the CRD's printer column reads it (num-vpa-b lists another condition first);
+// the wide columns MinReplicas and OOMSeconds (VPA 1.7) are on the screen too
 const vpaProvided = (o: Obj) => (o.status?.conditions ?? []).find((c: Obj) => c.type === 'RecommendationProvided')?.status === 'True'
 const VPA_SCREEN: Screen = {
   path: '/workloads/vpas', api: `/apis/autoscaling.k8s.io/v1/namespaces/${NS}/verticalpodautoscalers`, plural: 'verticalpodautoscalers', cluster: 'test2',
+  allColumns: true,
   alias: { Memory: 'Mem' },
   extra: { Reference: (o) => (o.spec.targetRef ? `${o.spec.targetRef.kind}/${o.spec.targetRef.name}` : '-') },
   skip: { Age: AGE },
@@ -861,6 +865,11 @@ async function compareScreen(page: Page, s: Screen, way: string, open = true) {
     })
   }
   expect.soft(unknown, `${s.path} (${way}): columns with nothing to compare against`).toEqual([])
+  if (s.allColumns) {
+    const shownCols = heads.map((h) => norm(s.alias?.[h] ?? h))
+    const missing = fresh.columnDefinitions.map((c) => c.name).filter((c) => !shownCols.includes(norm(c)) && s.skip?.[c] === undefined)
+    expect.soft(missing, `${s.path} (${way}): kubectl's columns (-o wide too) not on the screen`).toEqual([])
+  }
   if (s.cards) {
     const expected = s.cards(Object.values(objects))
     for (const [label, value] of Object.entries(expected)) {
@@ -1027,12 +1036,32 @@ test.describe('number check — list screens', () => {
     t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', vpaFixture(NS))
     try {
       writeVpaStatus(t2.kubectl, NS)
+      // VPA 1.7's wide columns: a VPA that sets them, where the CRD has them; on an older CRD the two columns are left out
+      const wide = vpaPrintsWideColumns(t2.kubectl)
+      const vpaWide = `num-vpa-wide-${Date.now().toString(36)}`
+      if (wide) t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', JSON.stringify(vpa17(NS, vpaWide)))
+      else test.info().annotations.push({ type: 'skip', description: `MinReplicas and OOMSeconds: ${VPA17_MISSING}` })
+      const screen: Screen = wide ? VPA_SCREEN : { ...VPA_SCREEN, allColumns: false, skip: { ...VPA_SCREEN.skip, 'Min Replicas': VPA17_MISSING, 'OOM Seconds': VPA17_MISSING } }
       await page.context().addInitScript(() => localStorage.setItem('kubeast.listPageSize', '100'))
       const held = await page.context().newPage()
       await held.routeWebSocket(/wsMultiplexer/, () => {})
       for (const p of [held, page]) await p.setViewportSize({ width: 2560, height: 1200 })
-      for (const [way, p] of [['list API', held], ['live', page]] as const) await test.step(`${VPA_SCREEN.path} · ${way}`, () => compareScreen(p, VPA_SCREEN, way))
+      for (const [way, p] of [['list API', held], ['live', page]] as const) await test.step(`${VPA_SCREEN.path} · ${way}`, () => compareScreen(p, screen, way))
       await held.close()
+
+      if (wide) {
+        await test.step(`${VPA_SCREEN.path} · a live update that removes ${vpaWide}'s minReplicas`, async () => {
+          await page.goto(screenUrl(VPA_SCREEN))
+          await expect.poll(() => cellOf(page, vpaWide, 'Min Replicas'), { timeout: 20_000 }).toBe('2')
+          t2.kubectl(`patch verticalpodautoscaler ${vpaWide} -n ${NS} --type=json -p=${arg([{ op: 'remove', path: '/spec/updatePolicy/minReplicas' }])}`)
+          try {
+            await expect.poll(() => cellOf(page, vpaWide, 'Min Replicas'), { timeout: 20_000 }).toBe('-')
+          } catch {
+            expect.soft(await cellOf(page, vpaWide, 'Min Replicas'), `${vpaWide} · Min Replicas after the live update`).toBe('-')
+          }
+          await compareScreen(page, screen, 'live, after minReplicas went', false)
+        })
+      }
 
       await test.step(`${VPA_SCREEN.path} · a live update that empties Provided and the recommendation`, async () => {
         const socket = page.waitForEvent('websocket', (ws) => /wsMultiplexer/.test(ws.url()))
@@ -1046,7 +1075,7 @@ test.describe('number check — list screens', () => {
         } catch {
           expect.soft(await cellOf(page, 'num-vpa-a', 'Provided'), 'num-vpa-a · Provided after the live update').toBe('-')
         }
-        await compareScreen(page, VPA_SCREEN, 'live, after the update', false)
+        await compareScreen(page, screen, 'live, after the update', false)
       })
     } finally {
       t2.kubectl(`delete namespace ${NS} --wait=true --timeout=180s --ignore-not-found`)

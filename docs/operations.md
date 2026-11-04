@@ -10,18 +10,22 @@ Collects and shows the `wgpolicyk8s.io/v1alpha2` `PolicyReport` (namespaced) and
   - Totals of fail, warn, error, pass and skip.
   - A by-policy tab (category, severity, source, Namespace count) and a by-Namespace tab.
   - A results tab with result, severity, policy, Namespace and search filters. Clicking a row opens that resource's drawer.
-  - The "Policy violations" section of workload and Pod drawers lists that resource's fail/warn/error rows. A workload also shows its pods' rows, because most policies look at Pods.
+  - The "Policy violations" section of a drawer lists that resource's fail/warn/error rows. A workload also shows its pods' rows, because most policies look at Pods.
+  - A result that names several resources is a row in each one's drawer.
+  - Every other drawer (ConfigMap, Service, Namespace, a custom resource …) has the section after its own; a cluster-scoped object's rows come from the ClusterPolicyReports.
+  - Reports that could not be read show the reason.
   - A cluster without the CRD shows "is not installed", and the drawer section is hidden.
 - **API**:
   - `GET /api/v1/cluster/policyreports/status`: enabled, CRD present.
   - `…/summary?namespace=`: by-policy and by-Namespace totals. It counts result rows, not the reports' `summary`.
   - `…/results?namespace=&policy=&result=fail,warn&severity=&kind=&search=&limit=`: default fail, warn, error. At most 2,000 rows; `total` is the count before truncation.
   - `GET /api/v1/cluster/namespaces/{ns}/policyreports/resource?kind=&name=`.
+  - `GET /api/v1/cluster/policyreports/resource?kind=&name=`: a cluster-scoped resource's rows, from the ClusterPolicyReports.
   - Without the CRD, the data routes return an empty list and `X-Kubeast-Not-Installed`.
 - **Identity and scope** — reports are read **as the signed-in user**, so cluster RBAC is the ceiling.
   - The Kyverno chart default (`rbac.roles.aggregate.view: true`) adds report reads to `view`, so Read (`kubeast:viewer`) can read them too.
   - A Namespace-scoped grant reads only the reports of those Namespaces, one Namespace at a time, with no full list.
-  - ClusterPolicyReports appear only in the whole-cluster view.
+  - ClusterPolicyReports appear only in the whole-cluster view; a cluster-scoped object's drawer tells a Namespace-scoped grant that they are outside it.
 - **Load** — reads only when opened, and keeps the result for 60 seconds per cluster, Namespace and user.
   - `force_refresh=true` is the screen's refresh: it skips that cache, reads again and replaces the cache. Kyverno writes a new object's report after about 20 seconds for Pods and Deployments, and after about 40 seconds for ReplicaSets.
   - Reading stops at 5,000 reports or 50,000 result rows with `truncated: true`. The screen says so; narrow by Namespace or policy.

@@ -96,6 +96,9 @@ export default function VPAs() {
         case 'cpu': return v.cpu_target || ''
         case 'memory': return v.memory_target || ''
         case 'provided': return v.provided || ''
+        // a VPA that leaves it out sorts before every number
+        case 'minReplicas': return v.min_replicas ?? -1
+        case 'oomSeconds': return v.evict_after_oom_seconds ?? -1
         case 'age': return parseAgeSeconds(v.created_at)
         default: return ''
       }
@@ -150,7 +153,7 @@ export default function VPAs() {
           currentPage,
           pageSize: rowsPerPage,
           topN: rowsPerPage,
-          pickFields: ['name', 'namespace', 'target_ref_kind', 'target_ref_name', 'update_mode', 'cpu_target', 'memory_target', 'provided'],
+          pickFields: ['name', 'namespace', 'target_ref_kind', 'target_ref_name', 'update_mode', 'cpu_target', 'memory_target', 'provided', 'min_replicas', 'evict_after_oom_seconds'],
           linkBuilder: (v) => {
             const vpa = v as unknown as VPAInfo
             return buildResourceLink('VerticalPodAutoscaler', vpa.namespace, vpa.name)

@@ -1192,7 +1192,9 @@
       "cpu": "CPU",
       "memory": "Memory",
       "provided": "Provided",
-      "age": "Age"
+      "age": "Age",
+      "minReplicas": "Min Replicas",
+      "oomSeconds": "OOM Seconds"
     },
     "stats": {
       "total": "Total",
@@ -2025,7 +2027,8 @@
     "notInstalled": "PolicyReport (wgpolicyk8s.io) is not installed on this cluster. Install a policy engine that writes policy reports, such as Kyverno with Audit policies, and this page fills in.",
     "scoped": "Only the namespaces of your grant are counted.",
     "truncated": "The cluster has more reports than this page reads at once; narrow by namespace or policy to see them all.",
-    "loadError": "Could not load the policy reports"
+    "loadError": "Could not load the policy reports",
+    "violationsError": "Could not load the policy reports: {{error}}"
   },
   "monitoring": {
     "title": "Monitoring",

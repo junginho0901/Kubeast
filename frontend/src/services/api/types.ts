@@ -1054,7 +1054,9 @@ export interface NetpolCheckResult {
   truncated?: boolean
 }
 
-// GET /api/v1/cluster/namespaces/{ns}/policyreports/resource?kind=&name= — a workload includes its pods.
+// GET /api/v1/cluster/namespaces/{ns}/policyreports/resource?kind=&name= — a workload includes its pods;
+// GET /api/v1/cluster/policyreports/resource?kind=&name= — a cluster-scoped resource (namespace "").
+// A result naming several resources is a row of each, named after it.
 export interface PolicyReportResource {
   generated_at: string
   kind: string
@@ -1499,6 +1501,11 @@ export interface VPAInfo {
   provided: string
   labels?: Record<string, string>
   created_at: string
+  // spec.updatePolicy.minReplicas / evictAfterOOMSeconds (the CRD's wide columns MinReplicas, OOMSeconds) and
+  // spec.startupBoost, as written; null when the VPA leaves them out
+  min_replicas?: number | null
+  evict_after_oom_seconds?: number | null
+  startup_boost?: Record<string, Record<string, unknown>> | null
 }
 
 export interface PDBInfo {

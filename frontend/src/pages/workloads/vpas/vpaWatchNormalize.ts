@@ -43,6 +43,9 @@ export function normalizeWatchVPAObject(obj: any): VPAInfo {
     provided,
     labels: metadata?.labels ?? obj?.labels,
     created_at: metadata?.creationTimestamp ?? obj?.created_at ?? '',
+    min_replicas: updatePolicy?.minReplicas ?? null,
+    evict_after_oom_seconds: updatePolicy?.evictAfterOOMSeconds ?? null,
+    startup_boost: spec?.startupBoost ?? null,
   }
 }
 

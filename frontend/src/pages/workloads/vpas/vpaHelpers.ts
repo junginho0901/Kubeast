@@ -5,9 +5,14 @@
 
 import type { VPAInfo } from '@/services/api'
 
-export type SortKey = null | 'name' | 'target' | 'updateMode' | 'cpu' | 'memory' | 'provided' | 'age'
+export type SortKey = null | 'name' | 'target' | 'updateMode' | 'cpu' | 'memory' | 'provided' | 'minReplicas' | 'oomSeconds' | 'age'
 
 export { ageSeconds as parseAgeSeconds, formatAge } from '@/utils/time'
+
+// a whole number of the VPA's spec as written (MinReplicas, OOMSeconds), "-" when it leaves it out
+export function vpaCount(v: number | null | undefined): string {
+  return v === null || v === undefined ? '-' : String(v)
+}
 
 export function vpaToRawJson(vpa: VPAInfo): Record<string, unknown> {
   return {
