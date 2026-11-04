@@ -325,7 +325,7 @@ EKS 클러스터에 `features.networkFlowMonitor`를 켜면 Pod·워크로드 �
 
 ## 🎮 GPU & DRA (Dynamic Resource Allocation)
 
-- GPU 노드 / Pod / 사용률 대시보드, NVIDIA GPU 메트릭
+- NVIDIA·AMD·Intel GPU를 세는 GPU 노드 / Pod / 사용률 대시보드(노드·Pod마다 제조사), NVIDIA GPU 메트릭
 - DeviceClass, ResourceClaim, ResourceClaimTemplate, ResourceSlice 관리
 
 ## 📊 관측성 (Observability)

@@ -14,7 +14,7 @@ import { parseAgeSeconds, type SortKey, type SummaryCard } from './gpupods/gpuPo
 import { GPUPodsFilters } from './gpupods/GPUPodsFilters'
 import { GPUPodsTable } from './gpupods/GPUPodsTable'
 import { GPUPodsCharts } from './gpupods/GPUPodsCharts'
-import { gpuPodCounts, podGpuUsage } from './gpuNumbers'
+import { gpuPodCounts, gpuPodVendorCounts, podGpuUsage, vendorNames } from './gpuNumbers'
 
 export default function GPUPods() {
   const { t } = useTranslation()
@@ -59,7 +59,8 @@ export default function GPUPods() {
       (pod) =>
         pod.name.toLowerCase().includes(q) ||
         pod.namespace.toLowerCase().includes(q) ||
-        (pod.node_name ?? '').toLowerCase().includes(q),
+        (pod.node_name ?? '').toLowerCase().includes(q) ||
+        vendorNames(pod.gpu_vendors).toLowerCase().includes(q),
     )
   }, [pods, searchQuery])
 
@@ -117,6 +118,7 @@ export default function GPUPods() {
         case 'name': return pod.name
         case 'node_name': return pod.node_name || ''
         case 'gpu_requested': return pod.gpu_requested
+        case 'gpu_vendor': return vendorNames(pod.gpu_vendors)
         case 'status': return pod.status
         case 'age': return parseAgeSeconds(pod.created_at)
         default: return ''
@@ -163,13 +165,14 @@ export default function GPUPods() {
       summary: `${prefix}GPU Pod ${total}개 (요청 ${totalGpuRequested}개${notRunning ? `, NotRunning ${notRunning}` : ''})`,
       data: {
         filters: { search: searchQuery || undefined },
-        stats: { total, total_gpu_requested: totalGpuRequested, not_running: notRunning },
+        // each company's pods and the GPUs they still ask for
+        stats: { total, total_gpu_requested: totalGpuRequested, not_running: notRunning, by_vendor: gpuPodVendorCounts(pods) },
         ...summarizeList(pagedPods as unknown as Record<string, unknown>[], {
           total: sortedPods.length,
           currentPage,
           pageSize: rowsPerPage,
           topN: rowsPerPage,
-          pickFields: ['name', 'namespace', 'node_name', 'gpu_requested', 'status'],
+          pickFields: ['name', 'namespace', 'node_name', 'gpu_requested', 'gpu_vendors', 'status'],
           filterProblematic: (p) => (p as unknown as GPUPodInfo).phase !== 'Running',
           linkBuilder: (p) => {
             const pod = p as unknown as GPUPodInfo
@@ -225,7 +228,7 @@ export default function GPUPods() {
       <GPUPodsFilters
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
-        searchPlaceholder={tr('gpuPods.searchPlaceholder', 'Search by pod name, namespace, or node...')}
+        searchPlaceholder={tr('gpuPods.searchPlaceholder', 'Search by pod name, namespace, node, or vendor...')}
       />
 
       {/* Summary Cards */}

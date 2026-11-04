@@ -9,6 +9,8 @@
 #   Feature Discovery's labels; DCGM series from a stand-in exporter scraped by a Prometheus in `monitoring`
 #   (deploy/kind/gpu-metrics.yaml), which Read users may GET through the API server proxy
 #   (templates/impersonation-viewer-proxy.yaml).
+# - AMD's and Intel's GPUs (e2e/tests/number-check-gpu-vendors.spec.ts): that spec makes two Node objects without a
+#   kubelet for its run (label kubeast.dev/e2e-fake-gpu-node) and removes them; `down` removes any a stopped run left.
 #
 #   scripts/kind-gpu.sh up
 #   scripts/kind-gpu.sh down
@@ -82,6 +84,10 @@ case "${1:-}" in
       | k apply -f - >/dev/null
     ;;
   down)
+    # what a stopped number-check-gpu-vendors run left: its pods (no kubelet confirms their deletion), then its nodes
+    k delete pods -n e2e-gpu-vendors --all --grace-period=0 --force --ignore-not-found >/dev/null 2>&1 || true
+    k delete namespace e2e-gpu-vendors --ignore-not-found
+    k delete nodes -l kubeast.dev/e2e-fake-gpu-node --ignore-not-found
     k delete --ignore-not-found -f "$ROOT/deploy/kind/gpu-metrics.yaml"
     # the kubelet drops a name from the allocatable once it is gone from the capacity
     for r in nvidia.com~1gpu nvidia.com~1mig-1g.5gb; do

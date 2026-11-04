@@ -3,9 +3,9 @@
 // frontend/src/pages/gpu/GPUPods.tsx 의 table JSX (sort header + tbody +
 // 빈/로딩 상태 + metrics 컬럼 + pagination footer) 추출. useAdaptiveTable
 // 의 ref/rowsPerPage 는 부모에서 hook 호출 후 props 로 전달.
-// 6 sortable 컬럼 (namespace + name + node + GPUs + status + age) +
+// 7 sortable 컬럼 (namespace + name + node + GPUs + vendor + status + age) +
 // 2 optional 컬럼 (GPU Util + Mem Util, metricsAvailable 일 때만).
-// min-w-[980px].
+// min-w-[1090px].
 
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
@@ -14,7 +14,7 @@ import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatAge, getStatusColor, type SortKey } from './gpuPodsHelpers'
-import type { PodGpuUsage } from '../gpuNumbers'
+import { vendorNames, type PodGpuUsage } from '../gpuNumbers'
 import { Trans } from 'react-i18next'
 
 interface OpenDetailArgs {
@@ -95,7 +95,7 @@ export function GPUPodsTable({
   return (
     <div ref={tableContainerRef} className={`card flex flex-col ${showCharts ? 'min-h-[420px]' : 'flex-1 min-h-0'}`}>
       <div ref={tableBodyRef} className="overflow-x-auto flex-1 min-h-0">
-        <table className="w-full text-sm min-w-[980px] table-fixed">
+        <table className="w-full text-sm min-w-[1090px] table-fixed">
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               <th className="col-low text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('namespace')}>
@@ -109,6 +109,9 @@ export function GPUPodsTable({
               </th>
               <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('gpu_requested')}>
                 <span className="inline-flex items-center gap-1">{tr('gpuPods.table.gpus', 'GPUs')}{renderSortIcon('gpu_requested')}</span>
+              </th>
+              <th className="text-left py-3 px-4 w-[110px] cursor-pointer" onClick={() => handleSort('gpu_vendor')}>
+                <span className="inline-flex items-center gap-1">{tr('gpuPods.table.vendor', 'Vendor')}{renderSortIcon('gpu_vendor')}</span>
               </th>
               <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('status')}>
                 <span className="inline-flex items-center gap-1">{tr('gpuPods.table.status', 'Status')}{renderSortIcon('status')}</span>
@@ -143,6 +146,7 @@ export function GPUPodsTable({
                 <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{pod.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{pod.node_name || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{pod.gpu_requested}</td>
+                <td className="py-3 px-4 text-xs"><span className="block truncate">{vendorNames(pod.gpu_vendors) || '-'}</span></td>
                 <td className="py-3 px-4">
                   <span className={`badge ${getStatusColor(pod.status)}`}>{pod.status}</span>
                 </td>
@@ -186,7 +190,7 @@ export function GPUPodsTable({
             })}
             {isLoading && (
               <tr>
-                <td colSpan={metricsAvailable ? 8 : 6} className="py-10 px-4 text-center text-slate-400">
+                <td colSpan={metricsAvailable ? 9 : 7} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     
@@ -196,10 +200,10 @@ export function GPUPodsTable({
               </tr>
             )}
             {sortedPodsLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={metricsAvailable ? 8 : 6} resource="gpu" searching={searching} />
+              <TableEmptyRow colSpan={metricsAvailable ? 9 : 7} resource="gpu" searching={searching} />
             )}
           </tbody>
-            <AdaptiveTableFillerRows count={rowsPerPage - pagedPods.length} columnCount={metricsAvailable ? 8 : 6} />
+            <AdaptiveTableFillerRows count={rowsPerPage - pagedPods.length} columnCount={metricsAvailable ? 9 : 7} />
         </table>
       </div>
       <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedPodsLength} rowsPerPage={rowsPerPage} onPageChange={setCurrentPage} />

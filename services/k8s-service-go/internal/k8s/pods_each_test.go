@@ -42,6 +42,12 @@ func (a *listAPI) serve(t *testing.T) *Service {
 			_ = json.NewEncoder(w).Encode(o)
 			return
 		}
+		// a DaemonSet asked for by name and not given is not there
+		if strings.Contains(r.URL.Path, "/daemonsets/") {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"kind":"Status","apiVersion":"v1","status":"Failure","reason":"NotFound","code":404}`))
+			return
+		}
 		limit, _ := strconv.Atoi(q.Get("limit"))
 		from, _ := strconv.Atoi(q.Get("continue"))
 		page := func(n int) (int, int, metav1.ListMeta) {

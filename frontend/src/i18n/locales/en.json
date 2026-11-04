@@ -4264,7 +4264,7 @@
     "modelDistribution": "GPU Model Distribution",
     "realtimeMetrics": "Real-time GPU Utilization",
     "refresh": "Refresh",
-    "searchPlaceholder": "Search by node name, GPU model, or driver version...",
+    "searchPlaceholder": "Search by node name, vendor, GPU model, or driver version...",
     "stats": {
       "allocatable": "Allocatable",
       "capacity": "GPU Capacity",
@@ -4281,7 +4281,8 @@
       "gpuModel": "GPU Model",
       "migStrategy": "MIG Strategy",
       "name": "Name",
-      "status": "Status"
+      "status": "Status",
+      "vendor": "Vendor"
     },
     "title": "GPU Nodes"
   },
@@ -4290,7 +4291,7 @@
     "noNode": "Not scheduled",
     "nodeUsage": "GPU Usage by Node",
     "refresh": "Refresh",
-    "searchPlaceholder": "Search by pod name, namespace, or node...",
+    "searchPlaceholder": "Search by pod name, namespace, node, or vendor...",
     "stats": {
       "failed": "Failed",
       "gpuRequested": "GPUs Requested",
@@ -4309,7 +4310,8 @@
       "name": "Name",
       "namespace": "Namespace",
       "node": "Node",
-      "status": "Status"
+      "status": "Status",
+      "vendor": "Vendor"
     },
     "title": "GPU Pods"
   },

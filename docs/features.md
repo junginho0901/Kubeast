@@ -326,7 +326,7 @@ Where the cluster has Recent flows or the Hubble metrics, the Resource Graph hea
 
 ## 🎮 GPU & DRA (Dynamic Resource Allocation)
 
-- GPU node, Pod and utilization dashboard, and NVIDIA GPU metrics
+- GPU node, Pod and utilization dashboard counting NVIDIA, AMD and Intel GPUs (each node's and Pod's vendor), and NVIDIA GPU metrics
 - DeviceClass, ResourceClaim, ResourceClaimTemplate, ResourceSlice management
 
 ## 📊 Observability

@@ -623,6 +623,8 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
     const n = JSON.parse(kubectl(`get node ${NODE} -o json`))
     const l = n.metadata.labels
     const want: [string, string][] = [
+      // the node's GPUs are NVIDIA's (AMD's and Intel's: number-check-gpu-vendors.spec.ts)
+      ['GPU Vendor', gpusIn(n.status.capacity) > 0 ? 'NVIDIA' : '-'],
       ['GPU Product', l['nvidia.com/gpu.product']],
       ['GPU Memory', l['nvidia.com/gpu.memory']],
       ['GPU Count (Capacity)', String(gpusIn(n.status.capacity))],
@@ -633,7 +635,7 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
       ['GPU Family', l['nvidia.com/gpu.family']],
       ['GPU Compute Capability', `${l['nvidia.com/gpu.compute.major']}.${l['nvidia.com/gpu.compute.minor']}`],
     ]
-    expect(want.slice(4, 7), 'the labels kind-gpu.sh writes').toEqual([['MIG Strategy', 'mixed'], ['CUDA Version', '13.0'], ['Driver Version', '580.95.05']])
+    expect(want.slice(5, 8), 'the labels kind-gpu.sh writes').toEqual([['MIG Strategy', 'mixed'], ['CUDA Version', '13.0'], ['Driver Version', '580.95.05']])
     await page.goto(url('/gpu/nodes', `&detail=${encodeURIComponent(`Node/${NODE}`)}`))
     await page.locator(DRAWER).last().waitFor({ timeout: 20_000 })
     await expect.poll(() => page.locator(DRAWER).last().evaluate((root) => {
@@ -701,6 +703,8 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
     await page.goto(url('/gpu/pods'))
     await expect.poll(async () => (await ask())?.stats, { timeout: 30_000 }).toEqual({
       total: c.pods.length, total_gpu_requested: c.used + c.waiting, not_running: c.pods.filter((p) => p.phase !== 'Running').length,
+      // every GPU pod here asks for NVIDIA's
+      by_vendor: [{ vendor: 'NVIDIA', pods: c.pods.length, requested: c.used + c.waiting }],
     })
   })
 

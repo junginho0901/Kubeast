@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { GPUDeviceMetric, GPUNodeInfo, GPUPodInfo } from '@/services/api'
-import { cudaVersion, devicePluginState, driverVersion, gpuCountOf, gpuNodeCounts, gpuPodCounts, podGpuUsage } from './gpuNumbers'
+import type { GPUDeviceMetric, GPUNodeInfo, GPUPodInfo, GPUVendor } from '@/services/api'
+import {
+  cudaVersion, devicePluginBadges, devicePluginState, driverVersion, gpuCountOf, gpuCountsByVendor, gpuModels, gpuNodeCounts, gpuPodCounts,
+  gpuPodVendorCounts, gpuVendorCounts, gpuVendorLabels, gpuVendorOf, nodeGpuRows, nodeVendorText, podGpuUsage,
+} from './gpuNumbers'
 
 const node = (name: string, status: string): GPUNodeInfo => ({ name, status, gpu_capacity: 1, gpu_allocatable: 1, gpu_used: 0 })
 const pod = (name: string, phase: string, status: string, gpus: number, namespace = 'ml'): GPUPodInfo =>
@@ -34,8 +37,20 @@ describe('GPU screen numbers', () => {
 
   it('says a device plugin not found apart from one not ready', () => {
     expect(devicePluginState(null)).toBe('missing')
-    expect(devicePluginState({ desired: 2, ready: 1, available: 1 })).toBe('unhealthy')
-    expect(devicePluginState({ desired: 2, ready: 2, available: 2 })).toBe('healthy')
+    expect(devicePluginState({ vendor: 'NVIDIA', found: false })).toBe('missing')
+    expect(devicePluginState({ vendor: 'NVIDIA', found: true, desired: 2, ready: 1, available: 1 })).toBe('unhealthy')
+    expect(devicePluginState({ vendor: 'NVIDIA', found: true, desired: 2, ready: 2, available: 2 })).toBe('healthy')
+  })
+
+  // one badge per company the server lists, named only when there are several; none listed is one "not found"
+  it('gives each company its device plugin badge', () => {
+    expect(devicePluginBadges(undefined).map((b) => [b.vendor, b.state])).toEqual([[undefined, 'missing']])
+    expect(devicePluginBadges([{ vendor: 'AMD', found: true, desired: 1, ready: 1 }]).map((b) => [b.vendor, b.state])).toEqual([[undefined, 'healthy']])
+    expect(devicePluginBadges([
+      { vendor: 'NVIDIA', found: false },
+      { vendor: 'AMD', found: true, desired: 2, ready: 1 },
+      { vendor: 'Intel', found: true, desired: 1, ready: 1 },
+    ]).map((b) => [b.vendor, b.state])).toEqual([['NVIDIA', 'missing'], ['AMD', 'unhealthy'], ['Intel', 'healthy']])
   })
 
   // a pod on two GPUs: the utilization the mean of both, the memory the used of their total — not the last GPU's
@@ -52,6 +67,87 @@ describe('GPU screen numbers', () => {
     expect(gpuCountOf({ cpu: '4', 'nvidia.com/gpu': '8', 'nvidia.com/mig-1g.5gb': '4', 'nvidia.com/mig-3g.20gb': '1' })).toBe(13)
     expect(gpuCountOf({ 'nvidia.com/mig-1g.5gb': '7' })).toBe(7)
     expect(gpuCountOf({ cpu: '4' })).toBeUndefined()
+  })
+
+  // AMD's GPUs and mixed-strategy partitions, Intel's GPUs by kernel driver; Intel's monitoring resources and its older
+  // plugin's millicores, memory.max and tiles are no GPUs, nor are other accelerators
+  it('counts every company\'s GPUs and only the names that count devices', () => {
+    expect(gpuCountsByVendor({
+      'gpu.intel.com/i915': '2', 'gpu.intel.com/xe': '1', 'gpu.intel.com/millicores': '3000', 'gpu.intel.com/memory.max': '68719476736',
+      'gpu.intel.com/tiles': '4', 'gpu.intel.com/monitoring': '1', 'gpu.intel.com/i915_monitoring': '1',
+      'amd.com/cpx_nps4': '16', 'amd.com/spx_nps1': '1', 'amd.com/gpu': '2', 'nvidia.com/gpu': '1',
+      'habana.ai/gaudi': '8', 'aws.amazon.com/neuron': '2', cpu: '64',
+    })).toEqual([['NVIDIA', 1], ['AMD', 19], ['Intel', 3]])
+    expect(gpuCountOf({ 'gpu.intel.com/millicores': '1000', 'gpu.intel.com/xe_monitoring': '1', 'habana.ai/gaudi': '8' })).toBeUndefined()
+    // NVIDIA's sharing config with renameByDefault advertises each replica as nvidia.com/gpu.shared (and mig-*.shared)
+    expect(gpuCountsByVendor({ 'nvidia.com/gpu.shared': '40', 'nvidia.com/mig-1g.5gb.shared': '8' })).toEqual([['NVIDIA', 48]])
+    expect(['amd.com/qpx_nps8', 'amd.com/dpx_nps2', 'amd.com/cpx', 'amd.com/xilinx_u250'].map(gpuVendorOf)).toEqual(['AMD', 'AMD', undefined, undefined])
+  })
+
+  // AMD's labeller: the value, its beta copy, or one label per value when the node's GPUs differ; Intel's product label
+  it('reads each company\'s model, memory, driver and family from its own labels', () => {
+    expect(gpuVendorLabels('AMD', { 'amd.com/gpu.product-name': 'AMD_Instinct_MI300X', 'amd.com/gpu.vram': '192G', 'amd.com/gpu.driver-version': '6.12.12', 'amd.com/gpu.family': 'AI' }))
+      .toEqual({ model: 'AMD_Instinct_MI300X', memory: '192G', driver: '6.12.12', family: 'AI' })
+    expect(gpuVendorLabels('AMD', { 'beta.amd.com/gpu.product-name.AMD_Instinct_MI325X': '1', 'beta.amd.com/gpu.product-name.AMD_Instinct_MI300X': '1', 'beta.amd.com/gpu.vram': '256G' }))
+      .toEqual({ model: 'AMD_Instinct_MI300X, AMD_Instinct_MI325X', memory: '256G', driver: undefined, family: undefined })
+    expect(gpuVendorLabels('Intel', { 'gpu.intel.com/product': 'Max_1550', 'gpu.intel.com/family': 'Max_Series' }))
+      .toEqual({ model: 'Max_1550', memory: undefined, driver: undefined, family: 'Max_Series' })
+  })
+
+  // a node bar names the company before the model, not twice when the model's label starts with it (any case)
+  it('names the company on a node bar once', () => {
+    const g = (vendor: GPUVendor, model?: string, memory?: string) => ({ vendor, capacity: 1, allocatable: 1, used: 0, model, memory })
+    expect([
+      nodeVendorText(g('NVIDIA', 'NVIDIA-A100-SXM4-40GB', '40960')), nodeVendorText(g('AMD', 'AMD_Instinct_MI300X', '192G')),
+      nodeVendorText(g('NVIDIA', 'nvidia-l4')), nodeVendorText(g('Intel', 'Max_1550')), nodeVendorText(g('NVIDIA', 'Tesla-T4')),
+      nodeVendorText(g('AMD'), '알 수 없음'),
+    ]).toEqual(['NVIDIA-A100-SXM4-40GB • 40960', 'AMD_Instinct_MI300X • 192G', 'nvidia-l4', 'Intel Max_1550', 'NVIDIA Tesla-T4', 'AMD 알 수 없음'])
+  })
+
+  // the drawer: whose GPUs, each company's labels, the GPUs of all of them (not Intel's millicores)
+  it('gives the Node drawer each company\'s GPU rows', () => {
+    const amd = { 'amd.com/gpu.product-name': 'AMD_Instinct_MI300X', 'amd.com/gpu.vram': '192G', 'amd.com/gpu.driver-version': '6.12.12', 'amd.com/gpu.family': 'AI' }
+    expect(nodeGpuRows(amd, { 'amd.com/gpu': '8', cpu: '64' }, { 'amd.com/gpu': '7' })).toEqual([
+      ['GPU Vendor', 'AMD'], ['GPU Product', 'AMD_Instinct_MI300X'], ['GPU Memory', '192G'], ['GPU Count (Capacity)', '8'],
+      ['GPU Count (Allocatable)', '7'], ['Driver Version', '6.12.12'], ['GPU Family', 'AI'],
+    ])
+    const mixed = { 'nvidia.com/gpu.product': 'NVIDIA-L4', 'nvidia.com/gpu.memory': '23034', 'nvidia.com/cuda.driver-version.full': '580.95.05', 'gpu.intel.com/product': 'Arc_Pro_B60', 'gpu.intel.com/family': 'B_Series' }
+    const res = { 'nvidia.com/gpu': '1', 'gpu.intel.com/xe': '1', 'gpu.intel.com/millicores': '1000' }
+    expect(nodeGpuRows(mixed, res, res)).toEqual([
+      ['GPU Vendor', 'NVIDIA, Intel'], ['GPU Product', 'NVIDIA-L4, Arc_Pro_B60'], ['GPU Memory', '23034'], ['GPU Count (Capacity)', '2'],
+      ['GPU Count (Allocatable)', '2'], ['Driver Version', '580.95.05'], ['GPU Family', 'B_Series'],
+    ])
+    expect(nodeGpuRows({}, { cpu: '4' }, { cpu: '4' })).toEqual([])
+  })
+
+  // a node of two companies is in two models, each with its own GPUs; the company counts add up per company
+  it('counts each company\'s GPUs of a node under its own model and company', () => {
+    const nodes: GPUNodeInfo[] = [
+      { ...node('mixed', 'Ready'), gpu_capacity: 2, gpu_vendors: [
+        { vendor: 'NVIDIA', capacity: 1, allocatable: 1, used: 1, model: 'NVIDIA-L4' },
+        { vendor: 'Intel', capacity: 1, allocatable: 1, used: 0 },
+      ] },
+      { ...node('amd', 'NotReady'), gpu_capacity: 8, gpu_vendors: [{ vendor: 'AMD', capacity: 8, allocatable: 8, used: 3, model: 'AMD_Instinct_MI300X' }] },
+      { ...node('l4', 'Ready'), gpu_capacity: 2, gpu_vendors: [{ vendor: 'NVIDIA', capacity: 2, allocatable: 2, used: 0, model: 'NVIDIA-L4' }] },
+    ]
+    expect(gpuModels(nodes)).toEqual([
+      ['AMD_Instinct_MI300X', { count: 1, totalCapacity: 8, totalAllocatable: 8, totalUsed: 3 }],
+      ['NVIDIA-L4', { count: 2, totalCapacity: 3, totalAllocatable: 3, totalUsed: 1 }],
+      ['Unknown', { count: 1, totalCapacity: 1, totalAllocatable: 1, totalUsed: 0 }],
+    ])
+    expect(gpuVendorCounts(nodes)).toEqual([
+      { vendor: 'NVIDIA', nodes: 2, capacity: 3, allocatable: 3, used: 1 },
+      { vendor: 'AMD', nodes: 1, capacity: 8, allocatable: 8, used: 3 },
+      { vendor: 'Intel', nodes: 1, capacity: 1, allocatable: 1, used: 0 },
+    ])
+    const pods: GPUPodInfo[] = [
+      { ...pod('a', 'Running', 'Running', 2), gpu_vendors: [{ vendor: 'AMD', requested: 2 }] },
+      { ...pod('done', 'Succeeded', 'Completed', 4), gpu_vendors: [{ vendor: 'AMD', requested: 4 }] },
+      { ...pod('both', 'Pending', 'Pending', 2), gpu_vendors: [{ vendor: 'NVIDIA', requested: 1 }, { vendor: 'Intel', requested: 1 }] },
+    ]
+    expect(gpuPodVendorCounts(pods)).toEqual([
+      { vendor: 'NVIDIA', pods: 1, requested: 1 }, { vendor: 'AMD', pods: 2, requested: 2 }, { vendor: 'Intel', pods: 1, requested: 1 },
+    ])
   })
 
   // GPU Feature Discovery: cuda.driver-version is the driver (550.107.02), cuda.runtime-version the CUDA (12.5)

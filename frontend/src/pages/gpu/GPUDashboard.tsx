@@ -8,6 +8,7 @@ import { forbiddenResourceFromUrl } from '@/utils/forbiddenResource'
 import { isForbiddenError } from '@/services/api'
 import { nodeReadiness } from '@/utils/nodeStatus'
 import { devicePluginState, gpuNodeCounts } from './gpuNumbers'
+import type { GPUDevicePlugin } from '@/services/api'
 import { RefreshCw } from 'lucide-react'
 
 import { useGPUDashboardData } from './gpu-dashboard/useGPUDashboardData'
@@ -29,7 +30,7 @@ export default function GPUDashboard() {
     metricsAvailable,
     gpusByHost,
     allocationRate,
-    devicePlugin,
+    devicePlugins,
     nodeAllocation,
     modelDistribution,
     podStatusDist,
@@ -43,16 +44,16 @@ export default function GPUDashboard() {
   // 플로팅 AI 위젯용 스냅샷
   const aiSnapshot = useMemo(() => {
     if (!data) return null
-    const dpStatus = data.device_plugin_status
+    const plugins: GPUDevicePlugin[] = data.device_plugins ?? []
     // a plugin not found is not an unhealthy one
-    const dpUnhealthy = devicePluginState(dpStatus) === 'unhealthy'
+    const unhealthy = plugins.filter((p) => devicePluginState(p) === 'unhealthy')
     const freeCount = Math.max(0, data.total_gpu_allocatable - data.total_gpu_used)
-    const prefix = dpUnhealthy || allocationRate >= 90 ? '⚠️ ' : ''
+    const prefix = unhealthy.length > 0 || allocationRate >= 90 ? '⚠️ ' : ''
     const summary = `${prefix}GPU ${data.total_gpu_used}/${data.total_gpu_allocatable} 할당 (${allocationRate}%), 노드 ${data.gpu_nodes.length}개, Pod ${data.gpu_pods.length}개`
 
     const interpretations: string[] = []
-    if (dpUnhealthy && dpStatus) {
-      interpretations.push(`⚠️ NVIDIA device plugin 비정상 (ready ${dpStatus.ready}/${dpStatus.desired})`)
+    for (const p of unhealthy) {
+      interpretations.push(`⚠️ ${p.vendor} device plugin 비정상 (ready ${p.ready}/${p.desired})`)
     }
     if (allocationRate >= 90) {
       interpretations.push(`⚠️ GPU 할당률 ${allocationRate}% — 여유 ${freeCount}개`)
@@ -79,10 +80,11 @@ export default function GPUDashboard() {
           total_waiting: data.total_gpu_waiting,
           allocation_rate: allocationRate,
           ready_nodes: gpuNodeCounts(data.gpu_nodes).ready,
+          // each company's GPUs: capacity, allocatable, in use and waiting
+          vendors: data.vendors ?? [],
           mig_enabled: data.mig_enabled,
           time_slicing_enabled: data.time_slicing_enabled,
-          device_plugin_ready: dpStatus?.ready,
-          device_plugin_desired: dpStatus?.desired,
+          device_plugins: plugins.map((p) => ({ vendor: p.vendor, state: devicePluginState(p), ready: p.ready, desired: p.desired })),
           avg_gpu_util: metrics?.avg_gpu_util,
           avg_memory_util: metrics?.avg_memory_util,
         },
@@ -91,8 +93,8 @@ export default function GPUDashboard() {
         top_consumers: [...data.gpu_pods].sort((a, b) => b.gpu_requested - a.gpu_requested) as Array<typeof data.gpu_pods[number] & Record<string, unknown>>,
       },
       {
-        nodePickFields: ['name', 'gpu_model', 'gpu_capacity', 'gpu_allocatable', 'gpu_used', 'status', 'mig_strategy'],
-        consumerPickFields: ['name', 'namespace', 'node_name', 'gpu_requested', 'status'],
+        nodePickFields: ['name', 'gpu_vendors', 'gpu_model', 'gpu_capacity', 'gpu_allocatable', 'gpu_used', 'status', 'mig_strategy'],
+        consumerPickFields: ['name', 'namespace', 'node_name', 'gpu_requested', 'gpu_vendors', 'status'],
         topN: { nodes: 10, consumers: 10 },
       },
     )
@@ -155,7 +157,7 @@ export default function GPUDashboard() {
       <SummaryCardsRow
         data={data}
         allocationRate={allocationRate}
-        devicePlugin={devicePlugin}
+        devicePlugins={devicePlugins}
         tr={tr}
       />
 
