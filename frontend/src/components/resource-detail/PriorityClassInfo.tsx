@@ -3,6 +3,7 @@ import { api } from '@/services/api'
 import { InfoSection, InfoRow, InfoGrid, SummaryBadge, StatusBadge, KeyValueTags, EventsTable, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { useServerPods } from './useServerPods'
+import { preemptionPolicy } from './clusterDetail'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -44,7 +45,7 @@ export default function PriorityClassInfo({ name }: Props) {
 
   const value = desc.value ?? 0
   const globalDefault = desc.global_default ?? false
-  const preemptionPolicy = desc.preemption_policy || 'PreemptLowerPriority'
+  const preemption = preemptionPolicy(desc)
   const description = desc.description || '-'
   const events: any[] = desc.events || []
 
@@ -59,7 +60,7 @@ export default function PriorityClassInfo({ name }: Props) {
       <div className="flex flex-wrap gap-2">
         <SummaryBadge label="Value" value={value} color={value > 0 ? 'green' : 'default'} />
         <SummaryBadge label="Global Default" value={globalDefault ? 'Yes' : 'No'} />
-        <SummaryBadge label="Preemption" value={preemptionPolicy === 'PreemptLowerPriority' ? 'Enabled' : 'Never'} color={preemptionPolicy === 'PreemptLowerPriority' ? 'green' : 'default'} />
+        <SummaryBadge label="Preemption" value={preemption} color={preemption === 'PreemptLowerPriority' ? 'green' : 'default'} />
       </div>
 
       {/* Basic Info */}
@@ -76,7 +77,7 @@ export default function PriorityClassInfo({ name }: Props) {
         <InfoGrid>
           <InfoRow label="Value" value={String(value)} />
           <InfoRow label="Global Default" value={globalDefault ? 'Yes' : 'No'} />
-          <InfoRow label="Preemption Policy" value={preemptionPolicy} />
+          <InfoRow label="Preemption Policy" value={preemption} />
         </InfoGrid>
       </InfoSection>
 

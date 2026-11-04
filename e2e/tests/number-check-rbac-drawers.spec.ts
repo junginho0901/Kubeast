@@ -153,6 +153,8 @@ const tagsOf = (m?: Record<string, string>) => Object.entries(m ?? {}).map(([k, 
 const card = (lines: Record<string, string>, tables: TableView[] = []): Card => ({ lines, tables })
 // a list longer than its page shows the first page and the pager's range and buttons (usePagination)
 const pagerMarks = (total: number, size: number) => (total > size ? [`1-${size} / ${total}`, 'Prev', 'Next'] : [])
+// a RuntimeClass's section of the nodes its scheduling.nodeSelector matches (the title before its "(n)")
+const NODES_MATCHING = 'Nodes Matching scheduling.nodeSelector'
 // newest first, as kubectl's printEvent dates them, ten to a page
 const eventsSection = (events: Obj[]) => (events.length
   ? section({
@@ -452,7 +454,8 @@ const KINDS: Kind[] = [
       const preemption = o.preemptionPolicy ?? 'PreemptLowerPriority'
       const yesNo = o.globalDefault ? 'Yes' : 'No'
       return {
-        badges: { Value: String(o.value), 'Global Default': yesNo, Preemption: preemption === 'PreemptLowerPriority' ? 'Enabled' : 'Never' },
+        // the policy as the API writes it, as kubectl describe prints it (unset: the API default)
+        badges: { Value: String(o.value), 'Global Default': yesNo, Preemption: preemption },
         counts: { 'Used By Pods': c.pods.length },
         sections: {
           Summary: section({ rows: rowsOf({ Name: o.metadata.name, UID: o.metadata.uid, Created: at(o.metadata.creationTimestamp) }) }),
@@ -481,7 +484,8 @@ const KINDS: Kind[] = [
       const matching = c.nodes.filter((n) => Object.entries(nodeSelector).every(([k, v]) => n.metadata.labels?.[k] === v))
       return {
         badges: { Handler: dash(o.handler), Overhead: Object.keys(overhead).length ? 'Configured' : '-', Scheduling: hasScheduling ? 'Configured' : '-' },
-        counts: { ...(Object.keys(nodeSelector).length ? { 'Schedulable Nodes': matching.length } : {}), 'Used By Pods': c.pods.length },
+        // the nodes whose labels match scheduling.nodeSelector (taints and cordon are not part of it)
+        counts: { ...(Object.keys(nodeSelector).length ? { [NODES_MATCHING]: matching.length } : {}), 'Used By Pods': c.pods.length },
         sections: {
           Summary: section({ rows: rowsOf({ Name: o.metadata.name, UID: o.metadata.uid, Created: at(o.metadata.creationTimestamp) }) }),
           'Runtime Settings': section({ rows: rowsOf({ Handler: dash(o.handler) }) }),
@@ -494,7 +498,7 @@ const KINDS: Kind[] = [
             }),
           } : {}),
           ...(Object.keys(nodeSelector).length ? {
-            'Schedulable Nodes': matching.length ? section({ marks: [...matching.slice(0, 20).map((n) => n.metadata.name), ...pagerMarks(matching.length, 20)] }) : section({ notes: ['No Node matches scheduling.nodeSelector.'] }),
+            [NODES_MATCHING]: matching.length ? section({ marks: [...matching.slice(0, 20).map((n) => n.metadata.name), ...pagerMarks(matching.length, 20)] }) : section({ notes: ['No Node matches scheduling.nodeSelector.'] }),
           } : {}),
           'Used By Pods': c.pods.length
             ? section({ tables: podTable(['Namespace', 'Pod', 'Status', 'Node'], c.pods, (p) => [p.metadata.namespace, p.metadata.name, dash(p.status.phase), dash(p.spec.nodeName)]) })

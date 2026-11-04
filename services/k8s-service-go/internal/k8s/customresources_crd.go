@@ -3,8 +3,11 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"sync"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	crdrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/crd"
 )
@@ -23,12 +26,32 @@ func (s *Service) GetCRDs(ctx context.Context) ([]map[string]interface{}, error)
 	return result, nil
 }
 
-// DescribeCRD returns detailed info about a CRD.
+// DescribeCRD returns detailed info about a CRD, with the events kubectl describe lists about it (involvedObject name
+// and kind, in every namespace — a CRD is cluster-scoped).
 func (s *Service) DescribeCRD(ctx context.Context, name string) (map[string]interface{}, error) {
-	item, err := s.dynamicCtx(ctx).Resource(crdGVR).Get(ctx, name, metav1.GetOptions{})
+	var item *unstructured.Unstructured
+	var events *corev1.EventList
+	var err, eventsErr error
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		item, err = s.dynamicCtx(ctx).Resource(crdGVR).Get(ctx, name, metav1.GetOptions{})
+	}()
+	go func() {
+		defer wg.Done()
+		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events("").List(ctx, metav1.ListOptions{
+			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=CustomResourceDefinition", name),
+		})
+	}()
+	wg.Wait()
 	if err != nil {
 		return nil, fmt.Errorf("get crd %s: %w", name, err)
 	}
+	if eventsErr != nil {
+		events = &corev1.EventList{}
+	}
+	sortEventsByTime(events.Items)
 
 	spec, _ := item.Object["spec"].(map[string]interface{})
 	status, _ := item.Object["status"].(map[string]interface{})
@@ -131,6 +154,7 @@ func (s *Service) DescribeCRD(ctx context.Context, name string) (map[string]inte
 		"accepted_names":   acceptedNames,
 		"stored_versions":  storedVersions,
 		"subresources":     subresourcesToList(subresources),
+		"events":           formatEventList(events.Items),
 	}
 
 	return result, nil

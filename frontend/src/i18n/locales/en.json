@@ -3532,7 +3532,8 @@
     "ownerReferences": "Owner References",
     "finalizers": "Finalizers",
     "events": "Events",
-    "printerColumns": "Additional Info"
+    "printerColumns": "Additional Info",
+    "otherFields": "Other Fields"
   },
   "cronjob": {
     "suspend": "Suspend",

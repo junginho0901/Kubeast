@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, NoneText, Th, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, NoneText, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -67,6 +67,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
   const categories = Array.isArray(describe?.categories) ? describe.categories : []
   const storedVersions = Array.isArray(describe?.stored_versions) ? describe.stored_versions : []
   const subresources = Array.isArray(describe?.subresources) ? describe.subresources as string[] : []
+  const events = Array.isArray(describe?.events) ? describe.events : []
   // status.acceptedNames repeats spec.names unless the API server refused a name (a conflict) — shown only then
   const accepted = describe?.accepted_names
   const sameList = (a: unknown, b: string[]) => (Array.isArray(a) ? a : []).join(',') === b.join(',')
@@ -264,6 +265,10 @@ export default function CRDInfo({ name, rawJson }: Props) {
           )}
         </InfoSection>
       )}
+
+      <InfoSection title="Events">
+        <EventsTable events={events} />
+      </InfoSection>
 
       {Object.keys(labels).length > 0 && (
         <InfoSection title="Labels">

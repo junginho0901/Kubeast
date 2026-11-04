@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Eye, ChevronLeft, ChevronRight, Copy, Check, ArrowUpDown } from 'lucide-react'
 import { SearchResult, SearchSortKey, compareResults } from './searchEngine'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { detailTarget } from '@/components/resource-detail/crDetail'
 
 interface Props {
   results: SearchResult[]
@@ -20,6 +21,10 @@ const WARNING_HEIGHT = 44
 export default function SearchResultTable({ results, maxDisplay = 500 }: Props) {
   const { t } = useTranslation()
   const { open: openDetail } = useResourceDetail()
+  // the object's apiVersion goes along, so a Kind two groups serve opens the right group's object
+  const openResult = (item: SearchResult) => openDetail(detailTarget(
+    item.kind, item.name, item.namespace || undefined, typeof item.raw?.apiVersion === 'string' ? item.raw.apiVersion : undefined, item.raw,
+  ))
   const containerRef = useRef<HTMLDivElement>(null)
   const [page, setPage] = useState(0)
   const [sortKey, setSortKey] = useState<SortKey>('name')
@@ -136,12 +141,7 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
                   <td className="px-4 py-2 font-medium text-ink truncate max-w-0">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <button
-                        onClick={() => openDetail({
-                          kind: item.kind,
-                          name: item.name,
-                          namespace: item.namespace || undefined,
-                          rawJson: item.raw,
-                        })}
+                        onClick={() => openResult(item)}
                         className="truncate text-primary-400 hover:text-primary-300 hover:underline transition-colors text-left"
                       >
                         {item.name}
@@ -171,12 +171,7 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
                   <td className="px-4 py-2 text-slate-500">{item.age}</td>
                   <td className="px-4 py-2 text-right">
                     <button
-                      onClick={() => openDetail({
-                        kind: item.kind,
-                        name: item.name,
-                        namespace: item.namespace || undefined,
-                        rawJson: item.raw,
-                      })}
+                      onClick={() => openResult(item)}
                       className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-ink transition-colors"
                     >
                       <Eye className="w-3.5 h-3.5" />

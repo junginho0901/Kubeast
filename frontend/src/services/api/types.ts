@@ -47,8 +47,8 @@ export interface TimelineEvent {
   reason: string
   message: string
   source: string
-  resource: { kind: string; name: string; namespace: string }
-  involved_object: { kind: string; name: string; namespace: string }
+  resource: { kind: string; name: string; namespace: string; api_version?: string }
+  involved_object: { kind: string; name: string; namespace: string; api_version?: string }
   count: number
   first_seen: string
   last_seen: string

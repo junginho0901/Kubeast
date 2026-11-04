@@ -7,6 +7,7 @@ import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { formatAge, formatTime } from '@/utils/time'
 import { printerCellText, type PrinterCell } from '@/pages/custom-resources/printerCells'
+import { otherFields } from './crDetail'
 
 const RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/
 import { useResourceDetail } from '@/components/ResourceDetailContext'
@@ -162,6 +163,7 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
   const finalizers = Array.isArray(describe?.finalizers) ? describe.finalizers : []
   const conditions = Array.isArray(status?.conditions) ? status.conditions : []
   const statusFields = Object.entries(status ?? {}).filter(([k]) => k !== 'conditions')
+  const topFields = otherFields(describe?.fields)
   const events = Array.isArray(describe?.events) ? describe.events : []
 
   if (isLoading) return <p className="text-slate-400">{tr('common.loading', 'Loading...')}</p>
@@ -213,6 +215,17 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
         <InfoSection title={tr('crInstanceInfo.status', 'Status')}>
           <div className="space-y-2">
             {statusFields.map(([key, value]) => (
+              <InfoRow key={key} label={key} value={renderValue(value)} />
+            ))}
+          </div>
+        </InfoSection>
+      )}
+
+      {/* The fields beside spec and status (a PolicyReport's results, scope, summary), as kubectl describe lists them */}
+      {topFields.length > 0 && (
+        <InfoSection title={tr('crInstanceInfo.otherFields', 'Other Fields')}>
+          <div className="space-y-2">
+            {topFields.map(([key, value]) => (
               <InfoRow key={key} label={key} value={renderValue(value)} />
             ))}
           </div>

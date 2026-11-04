@@ -150,31 +150,36 @@ func (s *Service) getTimelineEvents(ctx context.Context, namespace, kind, name s
 	}
 
 	result := make([]map[string]interface{}, 0, len(filtered))
-	for _, e := range filtered {
-		ts := eventTimestamp(e)
-		first, last, count := eventtime.Seen(&e)
-		result = append(result, map[string]interface{}{
-			"timestamp": ts.UTC().Format(time.RFC3339),
-			"type":      e.Type,
-			"reason":    e.Reason,
-			"message":   e.Message,
-			"source":    e.Source.Component,
-			"resource": map[string]interface{}{
-				"kind":      e.InvolvedObject.Kind,
-				"name":      e.InvolvedObject.Name,
-				"namespace": e.InvolvedObject.Namespace,
-			},
-			"involved_object": map[string]interface{}{
-				"kind":      e.InvolvedObject.Kind,
-				"name":      e.InvolvedObject.Name,
-				"namespace": e.InvolvedObject.Namespace,
-			},
-			"count":      count,
-			"first_seen": eventtime.ISO(first),
-			"last_seen":  eventtime.ISO(last),
-		})
+	for i := range filtered {
+		result = append(result, timelineEventRow(&filtered[i]))
 	}
 	return result, counts, nil
+}
+
+// timelineEventRow is an event as the Timeline lists it; the object it names carries its apiVersion, so the page
+// opens a custom resource of the right group (two groups may serve one Kind).
+func timelineEventRow(e *corev1.Event) map[string]interface{} {
+	first, last, count := eventtime.Seen(e)
+	object := func() map[string]interface{} {
+		return map[string]interface{}{
+			"kind":        e.InvolvedObject.Kind,
+			"name":        e.InvolvedObject.Name,
+			"namespace":   e.InvolvedObject.Namespace,
+			"api_version": e.InvolvedObject.APIVersion,
+		}
+	}
+	return map[string]interface{}{
+		"timestamp":       eventTimestamp(*e).UTC().Format(time.RFC3339),
+		"type":            e.Type,
+		"reason":          e.Reason,
+		"message":         e.Message,
+		"source":          e.Source.Component,
+		"resource":        object(),
+		"involved_object": object(),
+		"count":           count,
+		"first_seen":      eventtime.ISO(first),
+		"last_seen":       eventtime.ISO(last),
+	}
 }
 
 // getNamespaceRolloutHistory collects the rollouts of a namespace (all when empty): each Deployment's ReplicaSets
