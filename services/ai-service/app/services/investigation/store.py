@@ -180,7 +180,9 @@ async def list_rows(
         if cluster:
             conds.append(AlertInvestigation.cluster == cluster)
         total = int((await s.execute(select(func.count()).select_from(AlertInvestigation).where(*conds))).scalar() or 0)
-        q = select(AlertInvestigation).where(*conds).order_by(AlertInvestigation.received_at.desc()).limit(limit).offset(offset)
+        # id after the time: rows of one webhook share received_at, and pages must not repeat or skip them
+        q = (select(AlertInvestigation).where(*conds)
+             .order_by(AlertInvestigation.received_at.desc(), AlertInvestigation.id.desc()).limit(limit).offset(offset))
         return list((await s.execute(q)).scalars().all()), total
 
 

@@ -346,7 +346,7 @@ Where the cluster has Recent flows or the Hubble metrics, the Resource Graph hea
 - **Audit log** — records every write operation and sensitive reads (viewing Secrets, Node Shell, viewing container log files, log search, Helm changes, etc.), with both success and failure
 - **Cluster hygiene check** (Admin → Cluster hygiene) — reads Pod Security Standards, image tags, resources, Namespace policies, RBAC and TLS expiry into one sheet, with the viewer's permissions.
   - It has CSV/JSON and a monthly sign-off per cluster ([details](operations.md#cluster-hygiene-check)).
-- **AI usage** (Admin → AI Usage) — aggregates the `ai.chat.complete` audit rows by user, model and cluster. A row is left for each chat turn and each Optimization AI explanation, with the token counts the provider sent, summed per turn.
+- **AI usage** (Admin → AI Usage) — aggregates the `ai.chat.complete` audit rows by user, model and cluster. A row is left for each chat turn and each Optimization AI explanation, with the token counts the provider sent, summed per turn. Alert investigations (`ai.investigation.run`) are counted in rows of their own, marked "Alert investigation" (by user, the investigator `kubeast:investigator`), and in the totals, which show chat and investigations apart. Each source lists the 500 groups with the most tokens; the totals count every group, and a cut list says so under the table.
   - It sets no limits. It shows who used how much.
   - Calls for which the provider sent no usage are left out of the totals and shown as a count.
   - **Cached** next to input tokens is the input tokens the provider served from its cache, and their share. These are Anthropic `cache_read_input_tokens` and OpenAI `prompt_tokens_details.cached_tokens`.

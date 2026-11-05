@@ -4528,7 +4528,7 @@
   },
   "adminAIUsage": {
     "title": "AI Usage",
-    "subtitle": "채팅 턴과 Optimization의 AI 설명마다 남는 감사 기록을 모아 요청·토큰·툴 호출을 보여 줍니다. 한도는 없고, 누가 얼마나 썼는지 봅니다.",
+    "subtitle": "채팅 턴, Optimization의 AI 설명, 알림 조사마다 남는 감사 기록을 모아 요청·토큰·툴 호출을 보여 줍니다. 알림 조사는 채팅 행에 더하지 않고 따로 된 행으로 보입니다. 한도는 없고, 누가 얼마나 썼는지 봅니다.",
     "since": "시작일",
     "until": "종료일",
     "groupBy": "기준",
@@ -4551,8 +4551,16 @@
     "failures": "실패",
     "lastAt": "마지막",
     "partialTokens": "{{n}}건은 제공자가 토큰 수를 보내지 않아 합계에 없습니다.",
-    "note": "토큰 수는 AI 제공자가 응답에 usage 값을 보낼 때만 집계합니다. 원본 기록은 감사 로그에서 동작 ai.chat.complete로 걸러 보고 CSV로 내보낼 수 있습니다.",
-    "partialLegend": "제공자가 토큰 수를 보내지 않은 요청이 있어 그 행의 합계에서 빠졌습니다."
+    "partialRuns": "{{n}}건은 토큰 수가 기록되지 않아(끝나기 전에 실패했거나 제공자가 보내지 않음) 합계에 없습니다.",
+    "runs": "회",
+    "source": {
+      "chat": "채팅·Optimization",
+      "investigation": "알림 조사",
+      "investigationRow": "알림 조사"
+    },
+    "cut": "{{source}} · {{group}} 기준: {{groups}}개 중 토큰이 많은 {{shown}}개만 목록에 있습니다. 합계는 {{groups}}개 전부를 셉니다.",
+    "note": "토큰 수는 AI 제공자가 응답에 usage 값을 보낼 때만 집계합니다. 원본 기록은 감사 로그에서 동작 ai.chat.complete와 ai.investigation.run으로 걸러 보고 CSV로 내보낼 수 있습니다.",
+    "partialLegend": "토큰 수가 없는 요청(제공자가 보내지 않았거나 알림 조사가 끝나기 전에 실패함)이 있어 그 행의 합계에서 빠졌습니다."
   },
   "yamlCreate": {
     "clusterScoped": "클러스터 범위 리소스: metadata.namespace는 사용되지 않습니다.",
@@ -5216,7 +5224,8 @@
       "status": "상태",
       "cluster": "클러스터",
       "clusterPlaceholder": "클러스터 ID",
-      "apply": "검색"
+      "apply": "검색",
+      "pending": "아직 적용 안 됨 — 검색이나 Enter를 누르세요."
     },
     "status": {
       "all": "전체",

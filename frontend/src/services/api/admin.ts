@@ -221,7 +221,7 @@ export const adminApi = {
     }
   },
 
-  // AI usage — ai.chat.complete audit records aggregated per user/model/cluster.
+  // AI usage — chat and alert investigation audit records aggregated per user/model/cluster.
   adminAIUsage: async (params?: AIUsageQuery): Promise<AIUsageResponse> => {
     const { data } = await client.get('/auth/admin/ai-usage', { params })
     return {
@@ -229,6 +229,9 @@ export const adminApi = {
       until: data?.until ?? '',
       group: data?.group ?? 'user',
       rows: Array.isArray(data?.rows) ? data.rows : [],
+      limit: typeof data?.limit === 'number' ? data.limit : null,
+      truncated: data?.truncated === true,
+      totals: data?.totals ?? null,
     }
   },
 }

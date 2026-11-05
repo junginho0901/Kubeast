@@ -4,14 +4,19 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/repository"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
 // AdminAIUsage handles GET /auth/admin/ai-usage?since&until&group=user|model|cluster.
-// It aggregates the ai.chat.complete audit records (one per chat turn: token
-// usage, tool calls, duration) so an operator can see who used the AI how much.
-// There is no quota; this is the visibility half of OWASP LLM10.
+// It aggregates the ai.chat.complete audit records (one per chat turn or
+// Optimization explanation: token usage, tool calls, duration) and, as rows of
+// their own, the ai.investigation.run records of the alert investigator, so an
+// operator can see who used the AI how much. There is no quota; this is the
+// visibility half of OWASP LLM10. Each source lists at most
+// repository.AIUsageLimit groups; totals counts every group and truncated
+// says when some are not listed.
 //
 // Defaults: since = now-30d, until = now, group = user. Requires
 // admin.audit.read and, like the audit-log list, records the read itself.
@@ -45,7 +50,7 @@ func (h *AuthHandler) AdminAIUsage(w http.ResponseWriter, r *http.Request) {
 		group = "user"
 	}
 
-	rows, err := h.repo.AIUsage(r.Context(), since, until, group)
+	report, err := h.repo.AIUsage(r.Context(), since, until, group, repository.AIUsageLimit)
 	if err != nil {
 		if group != "user" && group != "model" && group != "cluster" {
 			response.Error(w, http.StatusBadRequest, "group must be user, model or cluster")
@@ -62,14 +67,17 @@ func (h *AuthHandler) AdminAIUsage(w http.ResponseWriter, r *http.Request) {
 	rec.ActorEmail = payload.Email
 	rec.TargetType = "ai-usage"
 	rec.After = audit.MustJSON(map[string]interface{}{
-		"since": since, "until": until, "group": group, "rows": len(rows),
+		"since": since, "until": until, "group": group, "rows": len(report.Rows), "truncated": report.Truncated,
 	})
 	_, _ = h.auditStore.Write(r.Context(), rec)
 
 	response.JSON(w, http.StatusOK, map[string]interface{}{
-		"since": since.Format(time.RFC3339),
-		"until": until.Format(time.RFC3339),
-		"group": group,
-		"rows":  rows,
+		"since":     since.Format(time.RFC3339),
+		"until":     until.Format(time.RFC3339),
+		"group":     group,
+		"rows":      report.Rows,
+		"limit":     report.Limit,
+		"truncated": report.Truncated,
+		"totals":    report.Totals,
 	})
 }
