@@ -149,6 +149,8 @@ class AlertInvestigation(Base):
     tool_calls = Column(JSON, nullable=False, default=list)
     report = Column(Text, nullable=False, default="")
     error = Column(Text, nullable=False, default="")
+    # the email of the person who asked for it in the Alerts inbox, "" when the webhook queued it (00021)
+    requested_by = Column(String, nullable=False, default="")
 
 
 class AlertInboxItem(Base):
@@ -186,7 +188,7 @@ class AlertInboxItem(Base):
 
 # Schema version this build needs — the newest file in
 # services/pkg/dbmigrate/migrations (goose records it in goose_db_version).
-REQUIRED_SCHEMA_VERSION = 20
+REQUIRED_SCHEMA_VERSION = 21
 
 
 async def read_schema_version(engine) -> int:

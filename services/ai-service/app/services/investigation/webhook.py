@@ -2,9 +2,10 @@
 
 Not behind the signed-in-user dependency: Alertmanager sends Authorization:
 Bearer <ALERT_WEBHOOK_TOKEN> (http_config.authorization). Every alert of the
-message, firing or resolved, goes into the alert inbox (inbox.py). Each firing
-alert then passes the severity filter, then folds into a recent row of the same
-cluster + fingerprint (Alertmanager repeats a firing group every
+message, firing or resolved, goes into the alert inbox (inbox.py). With
+automatic investigations on (features.alertInvestigation.automatic), each
+firing alert then passes the severity filter, then folds into a recent row of
+the same cluster + fingerprint (Alertmanager repeats a firing group every
 repeat_interval), or is skipped by the per-message investigation cap, the
 hourly cap, the daily token budget or a provider pause, or is queued for the
 worker. The answer comes at once; the investigation runs later.
@@ -84,8 +85,9 @@ def parse_time(value: Optional[str]) -> Optional[datetime]:
 
 
 async def gate_and_queue(db, cfg: inv_settings.InvestigationSettings, cluster: str, msg: AmWebhook, now: datetime) -> dict[str, int]:
-    """Each alert lands in exactly one of resolved, filtered, duplicate, capped, skipped and accepted; all are stored."""
-    counts = {"accepted": 0, "duplicate": 0, "filtered": 0, "skipped": 0, "capped": 0, "resolved": 0, "stored": 0}
+    """Each alert lands in exactly one of resolved, automatic_off, filtered, duplicate, capped, skipped and accepted;
+    all are stored."""
+    counts = {"accepted": 0, "duplicate": 0, "filtered": 0, "skipped": 0, "capped": 0, "resolved": 0, "automatic_off": 0, "stored": 0}
     for alert in msg.alerts:
         status = (alert.status or msg.status or "").lower()
         await inbox.record(
@@ -97,6 +99,9 @@ async def gate_and_queue(db, cfg: inv_settings.InvestigationSettings, cluster: s
         counts["stored"] += 1
         if status != "firing":
             counts["resolved"] += 1
+            continue
+        if not cfg.automatic:  # stored for the inbox, where a person may ask for an investigation
+            counts["automatic_off"] += 1
             continue
         severity = (alert.labels.get("severity") or "").strip().lower()
         if cfg.severities and severity not in cfg.severities:

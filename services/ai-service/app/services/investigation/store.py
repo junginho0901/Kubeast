@@ -5,17 +5,19 @@ from __future__ import annotations
 import re
 import uuid
 from datetime import datetime, timedelta
-from typing import Any, Optional
+from typing import Any, Awaitable, Callable, Optional
 
-from sqlalchemy import func, select, text, update
+from sqlalchemy import func, or_, select, text, update
 
-from app.database import AlertInvestigation, utcnow
+from app.database import AlertInboxItem, AlertInvestigation, utcnow
 from app.services.investigation import skip_reasons
 
 # Rows a repeat of the same alert folds into (a skipped one may be tried again).
 _DEDUPE_STATUSES = ("queued", "running", "done", "failed")
 # Rows that count against the hourly cap.
 _CAP_STATUSES = ("queued", "running", "done", "failed")
+# An alert's investigation in one of these needs no new one when a person asks ("Investigate now").
+BUSY_STATUSES = ("queued", "running", "done")
 
 
 async def cluster_exists(db, cluster: str) -> bool:
@@ -79,17 +81,22 @@ async def fold_skip(db, inv_id: str, reason: str, now: datetime) -> None:
 
 
 async def count_since(db, since: datetime) -> int:
+    """The webhook's investigations since `since` (the hourly cap; the ones people asked for do not count)."""
     async with db.async_session() as s:
         q = select(func.count()).select_from(AlertInvestigation).where(
-            AlertInvestigation.received_at >= since, AlertInvestigation.status.in_(_CAP_STATUSES)
+            AlertInvestigation.received_at >= since, AlertInvestigation.status.in_(_CAP_STATUSES),
+            AlertInvestigation.requested_by == "",
         )
         return int((await s.execute(q)).scalar() or 0)
 
 
-async def tokens_since(db, since: datetime) -> int:
+async def tokens_since(db, since: datetime, *, manual: bool = False) -> int:
+    """The tokens of the webhook's investigations since `since`, or of the ones people asked for (manual): each daily
+    budget counts its own. A run counts once it has finished (runner.claim_refusal keeps the next one waiting)."""
     async with db.async_session() as s:
         q = select(func.coalesce(func.sum(AlertInvestigation.total_tokens), 0)).where(
-            AlertInvestigation.received_at >= since
+            AlertInvestigation.received_at >= since,
+            AlertInvestigation.requested_by != "" if manual else AlertInvestigation.requested_by == "",
         )
         return int((await s.execute(q)).scalar() or 0)
 
@@ -114,20 +121,26 @@ async def last_refusal(db) -> Optional[AlertInvestigation]:
 _REFUSAL = re.compile(r"^provider refused \((\w+)(?:, until (\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ))?\)")
 
 
-async def pause_reason(db, minutes: int, now: datetime) -> str:
-    """Why no investigation runs now, or "": the model provider refused the newest failed run for credit or the
-    key less than `minutes` ago, or for a usage window that has not lifted yet."""
+async def pause_state(db, minutes: int, now: datetime) -> Optional[tuple[str, datetime, datetime]]:
+    """(kind, refused at, until) while no investigation runs, else None: the model provider refused the newest failed
+    run for credit or the key less than `minutes` ago, or for a usage window that has not lifted yet."""
     if minutes <= 0:
-        return ""
+        return None
     row = await last_refusal(db)
     match = _REFUSAL.match(row.error or "") if row is not None else None
     if match is None or row.finished_at is None:
-        return ""
+        return None
     kind, lifts = match.group(1), match.group(2)
     until = datetime.strptime(lifts, "%Y-%m-%dT%H:%M:%SZ") if lifts else row.finished_at + timedelta(minutes=minutes)
     if now >= until:
-        return ""
-    return skip_reasons.provider_paused(kind, row.finished_at, until)
+        return None
+    return kind, row.finished_at, until
+
+
+async def pause_reason(db, minutes: int, now: datetime) -> str:
+    """Why no investigation runs now (pause_state as the skip reason), or ""."""
+    state = await pause_state(db, minutes, now)
+    return skip_reasons.provider_paused(*state) if state else ""
 
 
 async def skip(db, inv_id: str, reason: str) -> None:
@@ -145,6 +158,45 @@ async def insert(db, **fields: Any) -> str:
         s.add(row)
         await s.commit()
     return inv_id
+
+
+async def queue_requested(
+    db, item: AlertInboxItem, *, requested_by: str, now: datetime, record: Callable[[str], Awaitable[bool]],
+) -> tuple[Optional[str], bool]:
+    """A person's "Investigate now" on an inbox alert: (the id of this firing's investigation, False) when one is
+    queued, running or done, else (a new queued row's id, True) — written as the webhook writes a row, and kept only
+    when record(id) stored its audit row ((None, False) when it did not). The inbox row stays locked meanwhile, so two
+    presses at once queue one investigation."""
+    async with db.async_session() as s:
+        await s.execute(select(AlertInboxItem.id).where(AlertInboxItem.id == item.id).with_for_update())
+        q = (
+            select(AlertInvestigation)
+            .where(
+                AlertInvestigation.cluster == item.cluster,
+                AlertInvestigation.fingerprint == item.fingerprint,
+                or_(AlertInvestigation.received_at >= item.starts_at, AlertInvestigation.last_seen_at >= item.starts_at),
+            )
+            .order_by(AlertInvestigation.received_at.desc())
+            .limit(1)
+        )
+        current = (await s.execute(q)).scalars().first()
+        if current is not None and current.status in BUSY_STATUSES:
+            return current.id, False
+        inv_id = f"inv-{uuid.uuid4().hex[:16]}"
+        labels = item.labels or {}
+        s.add(AlertInvestigation(
+            id=inv_id, cluster=item.cluster, fingerprint=item.fingerprint, alertname=(item.alertname or "")[:200],
+            severity=(item.severity or "")[:50], namespace=(item.namespace or "")[:63], status="queued", skip_reason="",
+            labels=dict(labels), annotations=dict(item.annotations or {}), starts_at=item.starts_at,
+            generator_url=(item.generator_url or "")[:2000], alertmanager_url=(item.alertmanager_url or "")[:2000],
+            group_key=(item.group_key or "")[:2000], received_at=now, last_seen_at=now, requested_by=requested_by[:320],
+        ))
+        await s.flush()
+        if not await record(inv_id):
+            await s.rollback()
+            return None, False
+        await s.commit()
+        return inv_id, True
 
 
 async def claim_next(db) -> Optional[AlertInvestigation]:
@@ -220,6 +272,11 @@ async def get(db, inv_id: str) -> Optional[AlertInvestigation]:
 
 def day_start(now: datetime) -> datetime:
     return now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def next_day(now: datetime) -> datetime:
+    """When the daily token budgets start over: the next UTC midnight."""
+    return day_start(now) + timedelta(days=1)
 
 
 def hour_ago(now: datetime) -> datetime:

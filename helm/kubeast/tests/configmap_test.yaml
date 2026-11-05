@@ -592,3 +592,31 @@ tests:
       - equal:
           path: data.RETENTION_INVESTIGATION_DAYS
           value: "30"
+
+  - it: turns automatic investigations and "Investigate now" on by default, the manual kind without a daily budget
+    asserts:
+      - equal:
+          path: data.ALERT_INVESTIGATION_AUTOMATIC
+          value: "true"
+      - equal:
+          path: data.ALERT_INVESTIGATION_MANUAL
+          value: "true"
+      - equal:
+          path: data.ALERT_INVESTIGATION_MANUAL_DAILY_TOKEN_BUDGET
+          value: "0"
+
+  - it: passes the automatic and manual switches off and a manual budget as they are set
+    set:
+      features.alertInvestigation.automatic: false
+      features.alertInvestigation.manual: false
+      features.alertInvestigation.manualDailyTokenBudget: 150000
+    asserts:
+      - equal:
+          path: data.ALERT_INVESTIGATION_AUTOMATIC
+          value: "false"
+      - equal:
+          path: data.ALERT_INVESTIGATION_MANUAL
+          value: "false"
+      - equal:
+          path: data.ALERT_INVESTIGATION_MANUAL_DAILY_TOKEN_BUDGET
+          value: "150000"

@@ -54,7 +54,8 @@ The feature is off by default (`features.alertInvestigation.enabled`). Turning i
   - For Grafana alerting, put the same URL and Authorization header (Bearer, the token) on a webhook contact point. The Grafana 13 webhook body has the same fields Kubeast reads, so it is accepted as is.
   - A wrong token gets 401, an unknown cluster 404, and 404 when the feature is off.
 - **Filtering**: only alerts that are `firing` and whose `severity` label is in `severities` (default critical, warning) pass. For the same cluster and fingerprint within `dedupeHours` (24), only `repeat_count` goes up (Alertmanager resends every 4 hours).
-  - Past `maxPerHour` (6) per hour or the daily `dailyTokenBudget` (200,000 tokens, UTC), alerts are recorded as `skipped`.
+  - Past `maxPerHour` (6) per hour or the daily `dailyTokenBudget` (200,000 tokens, UTC), alerts are recorded as `skipped`. Both count the webhook's investigations only; the ones people ask for in the inbox ("Investigate now", below) have their own `manualDailyTokenBudget`. One investigation took about 60,000 tokens when measured (657 runs on a dev install), so 200,000 is about three a day; 0 means no cap or budget.
+  - `automatic: false` stops the webhook's investigations and keeps every alert in the inbox (counted as `automatic_off`), where a person may still ask for one; `enabled: false` turns the inbox off too.
   - One webhook message starts at most 100 new investigations. The alerts past that are still kept in the inbox and recorded as `skipped` ("investigation cap"); alerts folded into a recent investigation, resolved or filtered take no place. When Alertmanager sends the group again, the investigated ones fold and the next alerts get their turn.
   - An alert skipped again within `dedupeHours` folds into its skipped row (repeats, last seen, the latest reason) instead of a new row.
   - When the model provider **refuses because of a credit or key problem**, investigations pause. For a subscription, this is the usage limit, and the pause lasts until the time it lifts.
@@ -62,8 +63,10 @@ The feature is off by default (`features.alertInvestigation.enabled`). Turning i
     - Alerts arriving in the following `providerPauseMinutes` (30 minutes, 0 = off), and alerts already queued, become `skipped` ("paused: …until …").
     - This way, a blocked provider is not called again for every alert.
   - Rate limiting (429) and outages are temporary, so they do not pause it.
-  - The response comes right away: `{accepted, duplicate, filtered, skipped, capped, resolved, stored}` — `capped` counts the alerts past the 100 new investigations of the message, and every alert lands in exactly one of the six.
+  - The response comes right away: `{accepted, duplicate, filtered, skipped, capped, resolved, automatic_off, stored}` — `capped` counts the alerts past the 100 new investigations of the message, and every alert lands in exactly one of the seven.
 - **Investigation**: one worker processes queued alerts one at a time (only once, even with multiple replicas).
+  - Before it starts one, it checks again: an investigation whose kind was switched off since, that a provider pause began after, or whose kind's daily budget the runs before it spent is recorded as `skipped` instead. Runs count against a budget once they finish, so the budget holds to within the one run that crosses it (per replica).
+  - A run that fails after model calls keeps the tokens they used, in its row and its audit row (with an API key; Claude Code reports usage only when its turn ends).
   - auth-service issues an **investigation-only token** for that cluster, valid for 10 minutes.
     - It holds permissions for the 43 read tools plus `resource.pod.read`, which log store search asks for. It lacks the permissions of the Helm, policy report, cost, network flow, network drop and top talker tools, so the investigation does not see them.
     - When the alert has a `namespace` label, the token is limited to the alert's Namespace.
@@ -83,7 +86,7 @@ The feature is off by default (`features.alertInvestigation.enabled`). Turning i
   - The report is text written by a model that read an external alert, so it is rendered as Markdown only, without raw HTML.
 - **Model**: report quality follows the model. Small local models sometimes put weakly supported causation under "Likely cause", so in production we recommend setting a larger model that is good at tool calling as `model`.
 - **Audit and notification**: one investigation is recorded as `ai.investigation.run`, and each tool call as `ai.tool.call`.
-  - The investigation row has actor `system` / `kubeast:investigator`. Its `after` holds the alert, model, tokens, number of tool calls, duration, a 500-character summary and the link.
+  - The investigation row has actor `system` / `kubeast:investigator`. Its `after` holds the alert, model, tokens, number of tool calls, duration, a 500-character summary, the link and `requested_by` (who asked for it in the inbox, null for the webhook's).
   - Add `ai.investigation.run` to an audit sink's `filter.actions` and the summary goes to Slack or email. Set `consoleUrl` and the summary carries a link to the report.
 - **Cluster side**: the investigation identity's RBAC and an Alertmanager configuration example are in [docs/cluster-requirements.md](cluster-requirements.md) §1 and §13.
   - In dev, check it by putting a fake alert into the second cluster's Alertmanager with `amtool alert add` (`deploy/kind/alertmanager.yaml`).
@@ -109,6 +112,12 @@ Alerts come in through the same webhook as the investigation above, so `features
   - A silence made only of conditions that also match an empty label (e.g. `alertname=~".*"`) cannot be created. Alertmanager has the same rule.
   - The **Silences** tab shows the active and pending silences that mute the cluster's alerts, with "End now" on the cluster's own. The store's other silences that reach it — no cluster condition ("All clusters"), or a cluster pattern the cluster meets ("By cluster pattern") — are listed with that mark and end where they were made.
   - Audit: `alert.silence.create` and `alert.silence.expire`.
+- **Investigate now**: in the alert window of an alert whose investigation was skipped, failed or never made, for people with the permission `resource.alert.investigate` on that cluster (Admin by default, not Read or Write; Role Management offers it under Alerts). Without it the button is not shown.
+  - Pressing it queues an investigation as the webhook does, and the worker runs it. It is not held to `severities` or `maxPerHour`; its tokens count in `manualDailyTokenBudget` (none by default — `resource.alert.investigate` decides who may press; a number is a UTC day's tokens), apart from the webhook's. A provider pause holds it as it holds the webhook's.
+  - When this firing's investigation is queued, running or done, nothing new is queued and the window shows that one.
+  - The button is locked, with why and when it works again in the viewer's time zone, when `manual: false`, while the provider pause lasts, or when today's budget is used up (until the next 00:00 UTC). With a budget, the note beside it shows today's use.
+  - The window keeps its height while the investigation is queued, runs and ends (it is read again every 5 seconds meanwhile), and says who asked for it.
+  - Audit: `ai.investigation.request` with the person, refusals too. When the audit DB cannot be written, the response is 503 and nothing is queued.
 - **Handling marks**: Acknowledge, Assign to me/Unassign, Note and Mark done.
   - They are records inside Kubeast and do not change Alertmanager or the alert rules. The rule decides "Resolved".
   - Every change records `alert.inbox.update` (before and after values). When the audit DB cannot be written, the response is 503 and the mark is rolled back.
@@ -116,7 +125,7 @@ Alerts come in through the same webhook as the investigation above, so `features
   - A skipped investigation says why in the row, the alert window and its report ("Skipped by the investigation limit", with the numbers).
   - Pressing the object (label `pod`, `deployment`, `node`, etc.) opens the resource details window.
   - Opening one alert shows labels, annotations, the alert sender link, the handling area and the AI investigation.
-  - API: `GET /api/v1/alerts/inbox?cluster=`, `/{id}`, `PATCH /{id}` and `/{id}/investigation`.
+  - API: `GET /api/v1/alerts/inbox?cluster=`, `/{id}` (with `investigate_now`: allowed, or `reason` and `until`), `PATCH /{id}`, `/{id}/investigation` and `POST /{id}/investigate` (403 `forbidden` or `manual_off`, 429 `provider_paused` or `manual_budget` with `until` and `Retry-After`, 503 without the audit row).
   - Retention is `retention.investigationDays`, as for investigations, counted from the last time the alert was received.
 
 ## Reading traces (AI, Tempo)

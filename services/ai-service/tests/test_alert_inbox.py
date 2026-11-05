@@ -152,7 +152,7 @@ async def test_an_alert_links_the_investigation_of_this_firing(sqlite_db):
 # --- the API ----------------------------------------------------------------------------------------------------
 
 
-def client(monkeypatch, db, *, matrix=None, namespaces=None, audit_ok=True, ready=True, enabled=True):
+def client(monkeypatch, db, *, matrix=None, namespaces=None, audit_ok=True, ready=True, enabled=True, permissions=(), at=None, **settings):
     from app import api_alert_inbox as api
     from app.security import TokenPayload, require_auth
     from app.services.audit_writer import AuditUnavailable
@@ -174,11 +174,11 @@ def client(monkeypatch, db, *, matrix=None, namespaces=None, audit_ok=True, read
     monkeypatch.setattr(api, "get_db_service", get_db)
     monkeypatch.setattr(api, "write_audit", audit)
     monkeypatch.setattr(api, "require_audit_ready", audit_ready)
-    monkeypatch.setattr(api, "utcnow", lambda: NOW + timedelta(minutes=1))
-    monkeypatch.setattr(api.inv_settings, "load", lambda: InvestigationSettings(enabled=enabled))
+    monkeypatch.setattr(api, "utcnow", lambda: at or NOW + timedelta(minutes=1))
+    monkeypatch.setattr(api.inv_settings, "load", lambda: InvestigationSettings(enabled=enabled, **settings))
     app = FastAPI()
     app.include_router(api.router, prefix="/api/v1/alerts")
-    payload = TokenPayload(user_id="u1", role="member", email="me@x", permissions=(),
+    payload = TokenPayload(user_id="u1", role="member", email="me@x", permissions=tuple(permissions),
                            matrix=matrix if matrix is not None else {"self": ("resource.pod.read",)}, namespaces=namespaces or {})
     app.dependency_overrides[require_auth] = lambda: payload
     return TestClient(app), audits
@@ -243,7 +243,8 @@ async def test_the_report_opens_from_the_inbox_with_its_audit_row(monkeypatch, s
     inv = await store.insert(sqlite_db, cluster="self", fingerprint="fp1", status="queued", received_at=NOW)
     await store.finish(sqlite_db, inv, status="done", report="## Summary\nOOM")
     assert c.get("/api/v1/alerts/inbox?cluster=self").json()["items"][0]["investigation"] == {
-        "id": inv, "status": "done", "skip_reason": "", "skip_reason_key": "", "skip_reason_args": {}}
+        "id": inv, "status": "done", "skip_reason": "", "skip_reason_key": "", "skip_reason_args": {},
+        "requested_by": "", "received_at": NOW.isoformat() + "Z"}
     r = c.get(f"/api/v1/alerts/inbox/{row.id}/investigation")
     assert r.status_code == 200 and r.json()["report"] == "## Summary\nOOM"
     assert audits[-1]["action"] == "ai.investigation.view" and audits[-1]["target_id"] == inv and audits[-1]["after"]["from"] == "inbox"
@@ -324,7 +325,8 @@ async def test_a_skipped_investigation_says_why_with_its_catalog_key(monkeypatch
     reason = "investigation cap (100 new per webhook message)"
     inv = await store.insert(db, cluster="self", fingerprint="fp1", status="skipped", skip_reason=reason, received_at=NOW)
     c, _ = client(monkeypatch, db)
-    want = {"id": inv, "status": "skipped", "skip_reason": reason, "skip_reason_key": "investigation_cap", "skip_reason_args": {"limit": 100}}
+    want = {"id": inv, "status": "skipped", "skip_reason": reason, "skip_reason_key": "investigation_cap", "skip_reason_args": {"limit": 100},
+            "requested_by": "", "received_at": NOW.isoformat() + "Z"}
     item = c.get("/api/v1/alerts/inbox?cluster=self").json()["items"][0]
     assert item["investigation"] == want
     assert c.get(f"/api/v1/alerts/inbox/{item['id']}").json()["investigation"] == want
@@ -333,3 +335,171 @@ async def test_a_skipped_investigation_says_why_with_its_catalog_key(monkeypatch
     # text written some other way has no key: the screen shows it as it is
     other = await store.insert(db, cluster="self", fingerprint="fp2", status="skipped", skip_reason="something else", received_at=NOW)
     assert summary_of(await store.get(db, other)).get("skip_reason_key") == ""
+
+
+# --- "Investigate now" ----------------------------------------------------------------------------------------------
+
+INVESTIGATOR = {"self": ("resource.pod.read", "resource.alert.investigate")}
+# the Write role's keys (auth-service SeedSystemRoles): none of them reaches resource.alert.investigate
+WRITE = ("menu.*", "resource.*.read", "resource.*.create", "resource.*.edit", "resource.*.delete", "resource.cronjob.trigger",
+         "resource.secret.reveal", "resource.alert.silence", "resource.pod.logfile", "resource.helm.read", "ai.tool.*")
+PRESSED_AT = NOW + timedelta(minutes=1)  # the API's clock in client()
+
+
+async def an_alert(db):
+    await put(db)
+    return (await rows_of(db))[0][0]
+
+
+def refusal_of(r) -> dict:
+    """A refused press's {code, message, until, budget, used}, or {} for any other answer."""
+    detail = r.json().get("detail")
+    return detail if isinstance(detail, dict) else {}
+
+
+@pytest.mark.asyncio
+async def test_investigate_now_queues_one_investigation_with_its_audit_row(monkeypatch, sqlite_db):
+    from app.services.investigation import webhook
+
+    row = await an_alert(sqlite_db)
+    c, audits = client(monkeypatch, sqlite_db, matrix=INVESTIGATOR)
+    assert c.get(f"/api/v1/alerts/inbox/{row.id}").json().get("investigate_now") == {
+        "permission": "resource.alert.investigate", "allowed": True, "reason": "", "until": None, "automatic": True, "budget": 0, "used": 0}
+    webhook.wake.clear()
+    r = c.post(f"/api/v1/alerts/inbox/{row.id}/investigate")
+    assert r.status_code == 200 and r.json()["started"] is True and webhook.wake.is_set()
+    inv = r.json()["investigation"]
+    assert (inv["status"], inv["requested_by"], inv["received_at"]) == ("queued", "me@x", PRESSED_AT.isoformat() + "Z")
+    assert (r.json().get("investigate_now", {}).get("allowed"), r.json().get("investigate_now", {}).get("reason")) == (False, "investigating")
+    stored = await store.get(sqlite_db, inv["id"])
+    assert (stored.status, stored.requested_by, stored.cluster, stored.fingerprint, stored.alertname, stored.namespace, stored.labels["pod"]) == (
+        "queued", "me@x", "self", "fp1", "KubePodCrashLooping", "apps", "api-1")
+    assert (audits[-1]["action"], audits[-1]["result"], audits[-1]["target_id"], audits[-1]["cluster"]) == ("ai.investigation.request", "success", row.id, "self")
+    assert audits[-1]["after"] == {"alertname": "KubePodCrashLooping", "fingerprint": "fp1", "investigation_id": inv["id"], "started": True, "status": "queued"}
+    # pressed again (a second tab, someone else): nothing new, the state shown, a row for the press
+    r = c.post(f"/api/v1/alerts/inbox/{row.id}/investigate")
+    assert r.status_code == 200 and r.json()["started"] is False and r.json()["investigation"]["id"] == inv["id"]
+    assert (audits[-1]["after"].get("started"), audits[-1]["after"].get("status")) == (False, "queued")
+    assert (await store.list_rows(sqlite_db))[1] == 1
+    # a mark change answers the same window, the button state too
+    assert c.patch(f"/api/v1/alerts/inbox/{row.id}", json={"acknowledged": True}).json().get("investigate_now", {}).get("reason") == "investigating"
+    await store.finish(sqlite_db, inv["id"], status="done", report="## Summary")
+    r = c.post(f"/api/v1/alerts/inbox/{row.id}/investigate")
+    assert (r.json()["started"], r.json().get("investigate_now", {}).get("reason")) == (False, "investigated")
+    c, _ = client(monkeypatch, sqlite_db, matrix=INVESTIGATOR, automatic=False)
+    assert c.get(f"/api/v1/alerts/inbox/{row.id}").json().get("investigate_now", {}).get("automatic") is False
+
+
+@pytest.mark.asyncio
+async def test_two_presses_that_both_passed_the_check_queue_one_investigation(sqlite_db):
+    """store.queue_requested decides again under the inbox row's lock: the second of two presses at once finds the
+    first one's row, and a press whose audit row was not stored leaves no row."""
+    row = await an_alert(sqlite_db)
+    recorded = []
+
+    async def record(inv_id):
+        recorded.append(inv_id)
+        return True
+
+    first = await store.queue_requested(sqlite_db, row, requested_by="a@x", now=PRESSED_AT, record=record)
+    second = await store.queue_requested(sqlite_db, row, requested_by="b@x", now=PRESSED_AT, record=record)
+    assert (first[1], second, recorded) == (True, (first[0], False), [first[0]])
+    rows, total = await store.list_rows(sqlite_db)
+    assert (total, rows[0].requested_by, rows[0].status) == (1, "a@x", "queued")
+
+    async def refused(inv_id):
+        return False
+
+    other = await an_alert_of(sqlite_db, "fp-other")
+    assert await store.queue_requested(sqlite_db, other, requested_by="a@x", now=PRESSED_AT, record=refused) == (None, False)
+    assert (await store.list_rows(sqlite_db))[1] == 1
+
+
+async def an_alert_of(db, fp):
+    await put(db, fp=fp)
+    return next(r for r in (await rows_of(db))[0] if r.fingerprint == fp)
+
+
+@pytest.mark.asyncio
+async def test_investigate_now_after_a_skipped_or_failed_investigation(monkeypatch, sqlite_db):
+    row = await an_alert(sqlite_db)
+    c, _ = client(monkeypatch, sqlite_db, matrix=INVESTIGATOR)
+    skipped = await store.insert(sqlite_db, cluster="self", fingerprint="fp1", status="skipped", skip_reason="hourly cap (6 per hour)", received_at=NOW)
+    assert c.get(f"/api/v1/alerts/inbox/{row.id}").json().get("investigate_now", {}).get("allowed") is True
+    r = c.post(f"/api/v1/alerts/inbox/{row.id}/investigate")
+    assert r.status_code == 200 and r.json()["started"] is True
+    first = r.json()["investigation"]["id"]
+    assert first != skipped
+    assert (await store.get(sqlite_db, skipped)).status == "skipped"  # the skipped row stays as it was
+    await store.finish(sqlite_db, first, status="failed", error="timed out after 300s")
+    c, _ = client(monkeypatch, sqlite_db, matrix=INVESTIGATOR, at=NOW + timedelta(minutes=10))  # pressed again later
+    assert c.get(f"/api/v1/alerts/inbox/{row.id}").json().get("investigate_now", {}).get("allowed") is True
+    r = c.post(f"/api/v1/alerts/inbox/{row.id}/investigate")
+    assert r.status_code == 200 and r.json()["started"] is True and r.json()["investigation"]["id"] not in (first, skipped)
+    assert r.json()["investigation"]["status"] == "queued"
+
+
+@pytest.mark.asyncio
+async def test_investigate_now_refusals_say_why_and_until_when_with_their_audit_rows(monkeypatch, sqlite_db):
+    row = await an_alert(sqlite_db)
+    window = f"/api/v1/alerts/inbox/{row.id}"
+    # without the permission on that cluster (reading the inbox, the Write role's keys, another cluster's grant)
+    for matrix in ({"self": ("resource.pod.read",)}, {"self": WRITE}, {"default": INVESTIGATOR["self"], "self": ("resource.pod.read",)}):
+        c, audits = client(monkeypatch, sqlite_db, matrix=matrix)
+        assert c.get(window).json().get("investigate_now", {}).get("reason") == "forbidden", matrix
+        r = c.post(f"{window}/investigate")
+        assert (r.status_code, refusal_of(r).get("code")) == (403, "forbidden"), matrix
+        assert (audits[-1]["action"], audits[-1]["result"], audits[-1]["after"].get("code")) == ("ai.investigation.request", "failure", "forbidden")
+    c, _ = client(monkeypatch, sqlite_db, matrix={"self": ("resource.pod.read",)}, permissions=("*",))  # the Admin role
+    assert c.get(window).json().get("investigate_now", {}).get("allowed") is True
+    # switched off on this installation
+    c, audits = client(monkeypatch, sqlite_db, matrix=INVESTIGATOR, manual=False)
+    assert c.get(window).json().get("investigate_now", {}).get("reason") == "manual_off"
+    r = c.post(f"{window}/investigate")
+    assert (r.status_code, refusal_of(r).get("code"), audits[-1]["after"].get("code")) == (403, "manual_off", "manual_off")
+    # today's budget of asked-for runs spent; the webhook's tokens and yesterday's do not count
+    await store.insert(sqlite_db, cluster="self", fingerprint="o1", status="done", total_tokens=150000, received_at=NOW - timedelta(hours=1), requested_by="ops@x")
+    await store.insert(sqlite_db, cluster="self", fingerprint="o2", status="done", total_tokens=900000, received_at=NOW - timedelta(hours=1))
+    await store.insert(sqlite_db, cluster="self", fingerprint="o3", status="done", total_tokens=900000, received_at=NOW - timedelta(days=1), requested_by="ops@x")
+    c, audits = client(monkeypatch, sqlite_db, matrix=INVESTIGATOR, manual_daily_token_budget=150000)
+    until = "2026-10-21T00:00:00Z"  # the next UTC midnight
+    assert c.get(window).json().get("investigate_now") == {
+        "permission": "resource.alert.investigate", "allowed": False, "reason": "manual_budget", "until": until, "automatic": True, "budget": 150000, "used": 150000}
+    r = c.post(f"{window}/investigate")
+    assert r.status_code == 429 and r.json()["detail"] == {
+        "code": "manual_budget", "message": "the daily token budget of manual investigations is spent (UTC day)", "until": until, "budget": 150000, "used": 150000}
+    assert r.headers["retry-after"] == str(int((datetime(2026, 10, 21) - PRESSED_AT).total_seconds()))
+    assert audits[-1]["after"] == {"alertname": "KubePodCrashLooping", "fingerprint": "fp1", "code": "manual_budget", "until": until}
+    c, _ = client(monkeypatch, sqlite_db, matrix=INVESTIGATOR, manual_daily_token_budget=150001)
+    assert c.get(window).json().get("investigate_now", {}).get("allowed") is True
+    c, _ = client(monkeypatch, sqlite_db, matrix=INVESTIGATOR, manual_daily_token_budget=0)  # 0 = no budget
+    assert c.get(window).json().get("investigate_now", {}).get("allowed") is True
+    # the model provider refused a run just now: paused for providerPauseMinutes (30)
+    refused = await store.insert(sqlite_db, cluster="self", fingerprint="o4", status="queued", received_at=NOW)
+    await store.finish(sqlite_db, refused, status="failed", error="provider refused (credit): RateLimitError", finished_at=NOW)
+    c, audits = client(monkeypatch, sqlite_db, matrix=INVESTIGATOR)
+    state = c.get(window).json().get("investigate_now", {})
+    assert (state.get("reason"), state.get("until")) == ("provider_paused", "2026-10-20T03:30:00Z")
+    r = c.post(f"{window}/investigate")
+    assert (r.status_code, refusal_of(r).get("code"), refusal_of(r).get("until")) == (429, "provider_paused", "2026-10-20T03:30:00Z")
+    # no refusal queued anything
+    assert [i.fingerprint for i in (await store.list_rows(sqlite_db, limit=200))[0] if i.status == "queued"] == []
+
+
+@pytest.mark.asyncio
+async def test_investigate_now_queues_nothing_without_its_audit_row(monkeypatch, sqlite_db):
+    row = await an_alert(sqlite_db)
+    press = f"/api/v1/alerts/inbox/{row.id}/investigate"
+    c, audits = client(monkeypatch, sqlite_db, matrix=INVESTIGATOR, ready=False)
+    assert c.post(press).status_code == 503 and audits == []
+    c, audits = client(monkeypatch, sqlite_db, matrix=INVESTIGATOR, audit_ok=False)
+    assert c.post(press).status_code == 503 and len(audits) == 1  # tried, not stored: the row is rolled back
+    assert (await store.list_rows(sqlite_db))[1] == 0
+    c, audits = client(monkeypatch, sqlite_db, matrix=INVESTIGATOR)
+    r = c.post("/api/v1/alerts/inbox/nope/investigate")
+    assert r.status_code == 404 and (audits[-1]["target_id"], audits[-1]["result"], audits[-1]["after"]) == ("nope", "failure", {"code": "not_found"})
+    c, _ = client(monkeypatch, sqlite_db, matrix=INVESTIGATOR, namespaces={"self": ("apps",)})
+    assert c.post(press).status_code == 404  # one answer for missing and not yours
+    c, _ = client(monkeypatch, sqlite_db, matrix=INVESTIGATOR, enabled=False)
+    assert c.post(press).status_code == 404
+    assert (await store.list_rows(sqlite_db))[1] == 0

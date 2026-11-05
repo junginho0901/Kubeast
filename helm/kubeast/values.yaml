@@ -724,13 +724,25 @@ features:
   # Every alert the webhook gets, firing or resolved and of any severity, also
   # goes into the Alerts inbox (send_resolved: true in the webhook config, its
   # default) for whoever reads that cluster as a whole; rows are deleted with
-  # the investigations after retention.investigationDays.
+  # the investigations after retention.investigationDays. enabled: false turns
+  # the inbox off too; automatic: false keeps the inbox and stops only the
+  # webhook's investigations. "Investigate now" in an alert's window (manual,
+  # permission resource.alert.investigate on that cluster — the Admin role
+  # holds it, a role may add it; audited as ai.investigation.request) queues
+  # one for an alert whose investigation was skipped, failed or never made;
+  # it is not held to maxPerHour and has its own daily budget, none by
+  # default. One investigation took about 60,000 tokens when measured (657
+  # runs on a dev install, Claude Haiku 5.5 averaged 66,424), so 200000 is
+  # about three a day.
   alertInvestigation:
     enabled: false
+    automatic: true           # the webhook queues investigations; false = it only stores the alerts in the inbox
+    manual: true              # "Investigate now" in the Alerts inbox
     severities: [critical, warning]
     dedupeHours: 24           # Alertmanager repeats a firing group every repeat_interval (4h)
-    maxPerHour: 6             # 0 = no cap
-    dailyTokenBudget: 200000  # 0 = no budget
+    maxPerHour: 6             # the webhook's investigations; 0 = no cap
+    dailyTokenBudget: 200000  # the webhook's investigations, per UTC day; 0 = no budget
+    manualDailyTokenBudget: 0  # "Investigate now" investigations, per UTC day; 0 = no budget (the permission decides who)
     providerPauseMinutes: 30  # after the model provider refuses for credit or the key, new alerts are skipped this long; 0 = no pause
     maxSteps: 8               # model calls per investigation; the last one gets no tools
     timeoutSeconds: 300

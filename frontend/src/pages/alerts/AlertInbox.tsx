@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { BellOff, BellRing, Check, ExternalLink, FileSearch, Loader2, RefreshCw, Search, UserCheck } from 'lucide-react'
+import { BellOff, BellRing, Bot, Check, ExternalLink, FileSearch, Loader2, RefreshCw, Search, UserCheck } from 'lucide-react'
 
 import { api } from '@/services/api'
 import type { AlertInboxDetail, AlertInboxItem, AlertInboxMarks } from '@/services/api/alertInbox'
@@ -23,6 +23,7 @@ import SilenceModal from './SilenceModal'
 import { alertInvestigationEnabled } from '@/utils/features'
 import { alertResource, liveLineOf, liveStateOf, severityChoices, silenceStart, storeCut, type LiveState } from '@/utils/alertInbox'
 import { severityClass, skipReason, statusClass as investigationClass } from '@/utils/investigationFormat'
+import { investigateErrorText, investigateNowView } from '@/utils/investigateNow'
 import { formatAge, formatTime, utcTitle } from '@/utils/time'
 
 // Alerts: every alert Alertmanager sent for the selected cluster (features.alertInvestigation's webhook), firing or
@@ -348,6 +349,8 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
     queryKey: ['alert-inbox', 'one', id],
     queryFn: () => api.getAlertInboxItem(id),
     retry: false,
+    // a queued or running investigation is read again until it ends (the window keeps what it shows meanwhile)
+    refetchInterval: (q) => (['queued', 'running'].includes(q.state.data?.investigation?.status ?? '') ? 5_000 : false),
   })
   const save = useMutation({
     mutationFn: (marks: AlertInboxMarks) => api.setAlertInboxMarks(id, marks),
@@ -357,6 +360,21 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
       setNote(null)
     },
   })
+  // "Investigate now": the answer is the window with its new investigation; a refusal reads the window again
+  const start = useMutation({
+    mutationFn: () => api.investigateAlertInboxItem(id),
+    onSuccess: (fresh) => {
+      queryClient.setQueryData(['alert-inbox', 'one', id], fresh)
+      queryClient.invalidateQueries({ queryKey: ['alert-inbox', 'list'] })
+    },
+    onError: () => queryClient.invalidateQueries({ queryKey: ['alert-inbox', 'one', id] }),
+  })
+  const now = investigateNowView(data?.investigate_now, tr)
+  const nowNote = start.isError ? investigateErrorText(start.error, tr) : now.note
+  // a refusal's words give way once the window's own state says why (or that it works again)
+  const { reset: resetStart } = start
+  const nowReason = data?.investigate_now?.reason
+  useEffect(() => resetStart(), [nowReason, resetStart])
   const liveLine = data ? liveLineOf(data, store) : null
   const liveState = liveLine && 'state' in liveLine ? liveLine.state : null
   const liveUnknown = liveLine && 'unknown' in liveLine ? liveLine.unknown : null
@@ -377,8 +395,15 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
       received_count: data.received_count, last_received_at: data.last_received_at, acknowledged: data.acknowledged,
       assignee: data.assignee || undefined, done: data.done, note: data.note || undefined, investigation: data.investigation?.status,
       investigation_skip: skip ? data.investigation?.skip_reason || undefined : undefined,
+      investigation_requested_by: data.investigation?.requested_by || undefined,
+      // the "Investigate now" button as the server decided it for this user (until = when it works again, UTC)
+      investigate_now: data.investigate_now ? {
+        allowed: data.investigate_now.allowed, reason: data.investigate_now.reason || undefined, until: data.investigate_now.until ?? undefined,
+        automatic: data.investigate_now.automatic, budget: data.investigate_now.budget, used: data.investigate_now.used,
+        shown: now.show, note: nowNote || undefined,
+      } : undefined,
     },
-  } : null, [data, liveState, liveUnknown, cut?.listed, cut?.total, skip?.text])
+  } : null, [data, liveState, liveUnknown, cut?.listed, cut?.total, skip?.text, nowNote])
 
   const failed = save.error as { response?: { status?: number } } | null
   return (
@@ -390,7 +415,7 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
         size="lg"
         body="scroll"
         onClose={onClose}
-        busy={save.isPending}
+        busy={save.isPending || start.isPending}
         testId="alert-detail"
         footer={<button type="button" onClick={onClose} className="btn btn-secondary">{tr('common.close', 'Close')}</button>}
       >
@@ -496,27 +521,59 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
               )}
             </section>
 
-            <section>
+            <section data-testid="alert-investigation-section">
               <h3 className="mb-2 text-xs font-semibold text-slate-400">{tr('alertInbox.col.investigation', 'AI investigation')}</h3>
-              {data.investigation ? (
-                <div className="flex items-center gap-3 text-sm">
-                  <span className={`rounded-sm border px-1.5 py-0.5 text-xs ${investigationClass[data.investigation.status] ?? ''}`}>
-                    {tr(`investigations.status.${data.investigation.status}`, data.investigation.status)}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setReportOpen(true)}
-                    disabled={data.investigation.status === 'queued' || data.investigation.status === 'running'}
-                    className="inline-flex items-center gap-1 rounded-lg bg-primary-600 px-2 py-1 text-xs text-white hover:bg-primary-500 disabled:opacity-40"
-                    data-testid="alert-report"
-                  >
-                    <FileSearch className="w-3.5 h-3.5" /> {tr('investigations.open', 'Report')}
-                  </button>
-                </div>
-              ) : (
-                <p className="text-xs text-slate-500">{tr('alertInbox.noInvestigation', 'Not investigated (only firing alerts of the investigated severities are, within the hourly cap and token budget).')}</p>
-              )}
-              {skip && <p className="mt-2 text-xs text-slate-300" data-testid="alert-investigation-skip">{skip.text}</p>}
+              {/* a row of one height and a note of two lines: the status, the buttons and the notes change in place
+                  while an investigation is asked for, queued, runs and ends (no empty row for someone with neither) */}
+              {(data.investigation || now.show) && <div className="flex h-8 flex-nowrap items-center gap-3 text-sm">
+                {data.investigation && (
+                  <>
+                    <span className={`inline-block min-w-[4.5rem] shrink-0 rounded-sm border px-1.5 py-0.5 text-center text-xs ${investigationClass[data.investigation.status] ?? ''}`} data-testid="alert-investigation-status">
+                      {tr(`investigations.status.${data.investigation.status}`, data.investigation.status)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setReportOpen(true)}
+                      disabled={data.investigation.status === 'queued' || data.investigation.status === 'running'}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-primary-600 px-2 py-1 text-xs text-white hover:bg-primary-500 disabled:opacity-40"
+                      data-testid="alert-report"
+                    >
+                      <FileSearch className="w-3.5 h-3.5" /> {tr('investigations.open', 'Report')}
+                    </button>
+                  </>
+                )}
+                {now.show && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => start.mutate()}
+                      disabled={!now.enabled || start.isPending}
+                      title={now.enabled ? undefined : now.note}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-primary-600 px-2 py-1 text-xs text-white hover:bg-primary-500 disabled:opacity-40"
+                      data-testid="alert-investigate-now"
+                    >
+                      {start.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bot className="w-3.5 h-3.5" />} {tr('alertInbox.investigateNow.button', 'Investigate now')}
+                    </button>
+                    <span className={`min-w-0 truncate text-xs ${start.isError ? 'text-red-300' : 'text-slate-400'}`} title={nowNote || undefined} data-testid="alert-investigate-note">{nowNote}</span>
+                  </>
+                )}
+              </div>}
+              {/* two lines kept while it may be asked for and after it was: the note does not shrink as it changes */}
+              <div className={`space-y-1 text-xs ${data.investigation || now.show ? 'mt-2' : ''} ${now.show || data.investigation?.requested_by ? 'min-h-8' : ''}`}>
+                {!data.investigation && (
+                  <p className="text-slate-500">
+                    {data.investigate_now?.automatic === false
+                      ? tr('alertInbox.noInvestigationAutomaticOff', 'Not investigated: automatic investigations are off on this installation (features.alertInvestigation.automatic).')
+                      : tr('alertInbox.noInvestigation', 'Not investigated (only firing alerts of the investigated severities are, within the hourly cap and token budget).')}
+                  </p>
+                )}
+                {skip && <p className="text-slate-300" data-testid="alert-investigation-skip">{skip.text}</p>}
+                {data.investigation?.requested_by && (
+                  <p className="text-slate-400" data-testid="alert-investigation-requested">
+                    {tr('alertInbox.investigateNow.requestedBy', 'Asked for by {{who}} · {{when}}', { who: data.investigation.requested_by, when: formatTime(data.investigation.received_at) })}
+                  </p>
+                )}
+              </div>
             </section>
 
             <section>

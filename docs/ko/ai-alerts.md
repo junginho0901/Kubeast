@@ -53,15 +53,18 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
   - 토큰이 틀리면 401, 모르는 클러스터이거나 기능이 꺼져 있으면 404를 돌려줍니다.
 - **거르기**: `firing`이고 `severity` 라벨이 `severities`(기본 critical·warning)에 있는 알림만 받습니다.
   - 클러스터와 fingerprint가 같은 알림이 `dedupeHours`(24) 안에 다시 오면 `repeat_count`만 올립니다(Alertmanager는 4시간마다 다시 보냅니다).
-  - 시간당 `maxPerHour`(6)나 하루 `dailyTokenBudget`(200,000 토큰, UTC 기준)을 넘으면 `skipped`로 남깁니다.
+  - 시간당 `maxPerHour`(6)나 하루 `dailyTokenBudget`(200,000 토큰, UTC 기준)을 넘으면 `skipped`로 남깁니다. 둘 다 웹훅이 시작한 조사만 셉니다. 받은편지함에서 사람이 요청한 조사(아래 "지금 조사")는 따로 `manualDailyTokenBudget`을 씁니다. 조사 한 번은 측정해 보니 약 6만 토큰이었습니다(dev 설치 657번). 200,000이면 하루 약 3번이고, 0은 한도 없음입니다.
+  - `automatic: false`이면 웹훅이 조사를 시작하지 않고 알림은 전부 받은편지함에 저장합니다(`automatic_off`로 셈). 그 알림도 사람이 조사를 요청할 수 있습니다. `enabled: false`는 받은편지함까지 끕니다.
   - 웹훅 한 통에서 새 조사는 100개까지 시작합니다. 넘친 알림도 알림함에는 저장하고 `skipped`("investigation cap")로 남기며, 최근 조사에 접힌 알림·해결 알림·걸러진 알림은 자리를 쓰지 않습니다. Alertmanager가 그 묶음을 다시 보내면 조사한 알림은 접히고 다음 알림이 조사됩니다.
   - `dedupeHours` 안에 다시 건너뛴 알림은 새 행 대신 그 건너뜀 행에 접힙니다(반복 수, 마지막으로 본 시각, 마지막 이유).
   - 모델 공급자가 **크레딧·키 문제로 거절**하면 그 건은 `failed`("provider refused (credit)…")가 됩니다.
     그 뒤 `providerPauseMinutes`(30분, 0 = 끔) 동안 들어오는 알림과 대기 중이던 알림은 `skipped`("paused: …until …")로 두어, 막힌 공급자를 알림마다 다시 부르지 않습니다.
     구독의 사용량 한도라면 한도가 풀리는 시각까지 멈춥니다.
   - 요청 한도 초과(429)나 장애는 일시적이므로 멈추지 않습니다.
-  - 웹훅 응답 `{accepted, duplicate, filtered, skipped, capped, resolved, stored}`은 바로 돌아옵니다. `capped`는 그 통의 새 조사 100개를 넘친 알림 수이고, 알림 하나는 여섯 가지 중 하나에만 듭니다.
+  - 웹훅 응답 `{accepted, duplicate, filtered, skipped, capped, resolved, automatic_off, stored}`은 바로 돌아옵니다. `capped`는 그 통의 새 조사 100개를 넘친 알림 수이고, 알림 하나는 일곱 가지 중 하나에만 듭니다.
 - **조사**: 작업자 하나가 대기열의 알림을 하나씩 처리하며, 복제본이 여럿이어도 한 번만 처리합니다.
+  - 시작하기 전에 한 번 더 봅니다. 그 사이 그 종류(자동·요청)가 꺼졌거나, 제공자 일시 정지가 시작됐거나, 앞서 돈 조사들이 그 종류의 하루 한도를 다 썼으면 시작하지 않고 `skipped`로 남깁니다. 조사는 끝나야 한도에 들어가므로, 한도는 그것을 넘기는 한 번(복제본마다)까지만 넘칩니다.
+  - 모델을 부른 뒤 실패한 조사도 그때까지 쓴 토큰을 조사 행과 감사 행에 남깁니다(API 키일 때. Claude Code는 한 턴이 끝날 때만 사용량을 알려 줍니다).
   - auth-service가 그 클러스터용 **조사 전용 토큰**을 10분짜리로 발급합니다.
     - 권한은 읽기 도구 43개와 로그 저장소 검색이 확인하는 `resource.pod.read`입니다. Helm·정책 보고·비용·네트워크 흐름·네트워크 차단·상위 통신 도구는 이 권한이 없어 조사에는 보이지 않습니다.
     - 알림에 `namespace` 라벨이 있으면 그 Namespace로 한정합니다.
@@ -81,7 +84,7 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
   - 보고서는 외부 알림을 읽은 모델이 쓴 글이므로 원시 HTML 없이 Markdown으로만 그립니다.
 - **모델**: 보고서의 품질은 모델에 달려 있습니다. 작은 로컬 모델은 근거가 약한 인과 관계를 "Likely cause"에 적기도 하므로, 운영 환경에서는 도구 호출을 잘하는 큰 모델을 `model`로 따로 지정하기를 권합니다.
 - **감사·알림**: 조사 1건은 `ai.investigation.run`, 도구 호출 1번은 `ai.tool.call`로 남습니다.
-  - 조사 기록의 actor는 `system` / `kubeast:investigator`이고, `after`에 알림, 모델, 토큰, 도구 호출 수, 소요 시간, 500자 요약, 링크가 들어갑니다.
+  - 조사 기록의 actor는 `system` / `kubeast:investigator`이고, `after`에 알림, 모델, 토큰, 도구 호출 수, 소요 시간, 500자 요약, 링크, `requested_by`(받은편지함에서 요청한 사람, 웹훅이 시작한 것은 null)가 들어갑니다.
   - 감사 싱크의 `filter.actions`에 `ai.investigation.run`을 넣으면 요약이 Slack이나 메일로 갑니다.
   - `consoleUrl`을 설정하면 요약에 보고서 링크가 붙습니다.
 - **클러스터 쪽**: 조사 신원의 RBAC과 Alertmanager 설정 예시는 [docs/ko/cluster-requirements.md](cluster-requirements.md) §1·§13에 있습니다.
@@ -110,6 +113,12 @@ Alertmanager(또는 Grafana 알림)가 보낸 알림을 **울리는 중인 것�
   - 서버가 모든 무음에 그 클러스터 조건(`<clusterLabel>="<값>"`)을 붙이므로 다른 클러스터의 알림은 멈출 수 없습니다. 빈 레이블에도 맞는 조건(예: `alertname=~".*"`)만으로는 무음을 만들 수 없으며, 이는 Alertmanager와 같은 규칙입니다.
   - **무음** 탭에서 그 클러스터 알림에 걸려 있거나 예정된 무음을 보고, 그 클러스터 것은 "지금 끝내기"로 끝낼 수 있습니다. 저장소의 다른 무음 중 이 클러스터에 걸리는 것(클러스터 조건 없음 "모든 클러스터에 걸림", 이 클러스터에 맞는 클러스터 패턴 "클러스터 패턴으로 걸림")도 그 표시와 함께 보이며, 만든 곳에서 끝냅니다.
   - 감사 `alert.silence.create`·`alert.silence.expire`.
+- **지금 조사**: 조사를 건너뛰었거나, 조사가 실패했거나, 조사가 없는 알림의 알림 창에 있습니다. 그 클러스터의 권한 `resource.alert.investigate`(Admin에 기본 포함, Read·Write에는 없음, 역할 관리의 Alerts 묶음에서 줄 수 있음)가 있는 사람에게만 보입니다.
+  - 누르면 웹훅과 같은 방식으로 조사를 줄 세우고 작업자가 돌립니다. `severities`와 `maxPerHour`는 따르지 않고, 토큰은 웹훅 조사와 따로 `manualDailyTokenBudget`(기본 한도 없음 — 누를 수 있는 사람은 `resource.alert.investigate`가 정함, 숫자를 넣으면 UTC 하루 토큰)에 셉니다. 제공자 일시 정지는 웹훅 조사와 똑같이 따릅니다.
+  - 이번 발생의 조사가 이미 대기·실행 중이거나 끝났으면 새로 줄 세우지 않고 창에 그 조사를 보입니다.
+  - `manual: false`일 때, 제공자 일시 정지 동안, 오늘 한도를 다 썼을 때(다음 UTC 00:00까지)는 버튼이 잠기고 옆에 이유와 다시 되는 시각(보는 사람 시간대)을 보입니다. 한도가 있으면 옆에 오늘 쓴 양을 보입니다.
+  - 조사가 줄 서고, 돌고, 끝나는 동안 창 높이는 그대로이며(그동안 5초마다 다시 읽음) 누가 요청했는지 보입니다.
+  - 감사는 요청한 사람으로 `ai.investigation.request`이며 거절도 남깁니다. 감사 DB에 쓸 수 없으면 503이고 아무것도 줄 세우지 않습니다.
 - **처리 표시**: 확인함 · 내가 담당/해제 · 메모 · 조치 완료를 표시할 수 있습니다.
   - Kubeast 안에만 남는 기록이며 Alertmanager나 알림 규칙은 바꾸지 않습니다. "해결됨"은 알림 규칙이 정합니다.
   - 바꿀 때마다 `alert.inbox.update`(전·후 값)를 남기고, 감사 DB에 쓸 수 없으면 503을 돌려주며 표시도 되돌립니다.
@@ -117,7 +126,7 @@ Alertmanager(또는 Grafana 알림)가 보낸 알림을 **울리는 중인 것�
   - 건너뛴 조사는 행, 알림 창, 보고서에 이유를 보입니다("조사 한도로 건너뜀"과 수).
   - 대상(라벨 `pod`·`deployment`·`node` 등)을 누르면 리소스 상세 창이 열립니다.
   - 한 건을 열면 라벨, 주석, 알림 보낸 곳 링크, 처리 칸, AI 조사가 나옵니다.
-  - API는 `GET /api/v1/alerts/inbox?cluster=`·`/{id}`·`PATCH /{id}`·`/{id}/investigation`입니다.
+  - API는 `GET /api/v1/alerts/inbox?cluster=`·`/{id}`(`investigate_now`: 되는지, 안 되면 `reason`·`until`)·`PATCH /{id}`·`/{id}/investigation`·`POST /{id}/investigate`(403 `forbidden`·`manual_off`, 429 `provider_paused`·`manual_budget`와 `until`·`Retry-After`, 감사 행을 못 남기면 503)입니다.
   - 보존 기간은 조사와 같은 `retention.investigationDays`이며, 마지막으로 받은 시각부터 셉니다.
 
 ## 트레이스 읽기 (AI, Tempo)

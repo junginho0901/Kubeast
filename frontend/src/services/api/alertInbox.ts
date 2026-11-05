@@ -1,6 +1,6 @@
 // Alerts inbox (ai-service, features.alertInvestigation): every alert Alertmanager sent for the selected cluster,
-// firing or resolved, and Kubeast's own handling marks. For whoever reads that cluster as a whole; a mark change
-// and opening the alert's investigation report are audited server-side.
+// firing or resolved, and Kubeast's own handling marks. For whoever reads that cluster as a whole; a mark change,
+// opening the alert's investigation report and "Investigate now" are audited server-side.
 
 import { client } from './client'
 import type { Investigation } from './investigations'
@@ -30,8 +30,22 @@ export interface AlertInboxItem {
   done: boolean
   done_by: string
   done_at: string | null
-  // the alert's investigation; skip_reason (with its catalog key) when it was skipped
-  investigation: ({ id: string; status: string } & SkipReason) | null
+  // the alert's investigation; skip_reason (with its catalog key) when it was skipped; requested_by is who asked for it
+  // here ("" when the webhook queued it), received_at when it was queued
+  investigation: ({ id: string; status: string; requested_by?: string; received_at?: string | null } & SkipReason) | null
+}
+
+// The alert window's "Investigate now" for the signed-in user, as the server decides it: allowed, or why not and when
+// it works again (until, UTC), with today's token budget of asked-for investigations and their use (UTC day).
+export interface InvestigateNowState {
+  permission: string
+  allowed: boolean
+  reason: '' | 'forbidden' | 'investigating' | 'investigated' | 'manual_off' | 'provider_paused' | 'manual_budget'
+  until: string | null
+  // whether the webhook investigates by itself (features.alertInvestigation.automatic)
+  automatic: boolean
+  budget: number
+  used: number
 }
 
 export interface AlertInboxDetail extends AlertInboxItem {
@@ -42,6 +56,8 @@ export interface AlertInboxDetail extends AlertInboxItem {
   note: string
   note_by: string
   note_at: string | null
+  // absent from a server before "Investigate now"
+  investigate_now?: InvestigateNowState
 }
 
 export interface AlertInboxList {
@@ -128,6 +144,13 @@ export const alertInboxApi = {
 
   setAlertInboxMarks: async (id: string, marks: AlertInboxMarks): Promise<AlertInboxDetail> => {
     const { data } = await client.patch(`${base}/${encodeURIComponent(id)}`, marks)
+    return data
+  },
+
+  // "Investigate now": queued as the webhook queues one (audited ai.investigation.request); the answer is the alert
+  // window, with started false when this firing's investigation was queued, running or done already
+  investigateAlertInboxItem: async (id: string): Promise<AlertInboxDetail & { started: boolean }> => {
+    const { data } = await client.post(`${base}/${encodeURIComponent(id)}/investigate`)
     return data
   },
 

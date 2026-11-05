@@ -117,7 +117,7 @@ async def test_gates_filter_resolve_queue(monkeypatch):
     fs.install(monkeypatch)
     msg = am_message(alert(fp="a"), alert(fp="b", severity="info"), alert(fp="c", status="resolved"), alert(fp="d", severity="Warning"))
     counts = await webhook.gate_and_queue(None, cfg(), "self", msg, NOW)
-    assert counts == {"accepted": 2, "duplicate": 0, "filtered": 1, "skipped": 0, "capped": 0, "resolved": 1, "stored": 4}
+    assert counts == {"accepted": 2, "duplicate": 0, "filtered": 1, "skipped": 0, "capped": 0, "resolved": 1, "automatic_off": 0, "stored": 4}
     assert [r["fingerprint"] for r in fs.rows] == ["a", "d"]
     # the inbox takes every alert, every severity, firing or resolved
     assert [(r["fingerprint"], r["firing"]) for r in fs.inbox] == [("a", True), ("b", True), ("c", False), ("d", True)]
@@ -173,7 +173,7 @@ async def test_gates_store_every_alert_of_a_message(monkeypatch):
 
 
 def outcomes(counts):
-    return sum(counts[k] for k in ("accepted", "duplicate", "filtered", "skipped", "capped", "resolved"))
+    return sum(counts[k] for k in ("accepted", "duplicate", "filtered", "skipped", "capped", "resolved", "automatic_off"))
 
 
 @pytest.mark.asyncio
@@ -182,7 +182,7 @@ async def test_gates_queue_at_most_100_new_investigations_a_message(monkeypatch)
     fs.install(monkeypatch)
     msg = am_message(*[alert(fp=f"n{i:03}") for i in range(101)])
     counts = await webhook.gate_and_queue(None, cfg(max_per_hour=0, daily_token_budget=0), "self", msg, NOW)
-    assert counts == {"accepted": 100, "duplicate": 0, "filtered": 0, "skipped": 0, "capped": 1, "resolved": 0, "stored": 101}
+    assert counts == {"accepted": 100, "duplicate": 0, "filtered": 0, "skipped": 0, "capped": 1, "resolved": 0, "automatic_off": 0, "stored": 101}
     assert len(fs.inbox) == 101 and len(fs.rows) == 101
     assert [r["status"] for r in fs.rows].count("queued") == 100
     last = fs.rows[-1]
@@ -203,12 +203,12 @@ async def test_resolved_filtered_and_folded_alerts_take_no_place_and_a_resend_in
     )
     settings = cfg(max_per_hour=0, daily_token_budget=0)
     counts = await webhook.gate_and_queue(None, settings, "self", am_message(*alerts), NOW)
-    assert counts == {"accepted": 100, "duplicate": 50, "filtered": 20, "skipped": 0, "capped": 1, "resolved": 30, "stored": 201}
+    assert counts == {"accepted": 100, "duplicate": 50, "filtered": 20, "skipped": 0, "capped": 1, "resolved": 30, "automatic_off": 0, "stored": 201}
     assert outcomes(counts) == counts["stored"]
     assert [r["fingerprint"] for r in fs.rows if r["status"] == "skipped"] == ["n100"]
     # Alertmanager sends the group again: the 100 queued fold, the skipped one is tried again and queued
     counts = await webhook.gate_and_queue(None, settings, "self", am_message(*alerts), NOW + timedelta(minutes=5))
-    assert counts == {"accepted": 1, "duplicate": 150, "filtered": 20, "skipped": 0, "capped": 0, "resolved": 30, "stored": 201}
+    assert counts == {"accepted": 1, "duplicate": 150, "filtered": 20, "skipped": 0, "capped": 0, "resolved": 30, "automatic_off": 0, "stored": 201}
     assert [r["status"] for r in fs.rows if r["fingerprint"] == "n100"] == ["skipped", "queued"]
 
 
@@ -253,7 +253,7 @@ async def test_a_message_of_101_alerts_on_the_database(sqlite_db):
     msg = am_message(*[alert(fp=f"n{i:03}") for i in range(101)])
     settings = cfg(max_per_hour=0, daily_token_budget=0)
     counts = await webhook.gate_and_queue(db, settings, "self", msg, NOW)
-    assert counts == {"accepted": 100, "duplicate": 0, "filtered": 0, "skipped": 0, "capped": 1, "resolved": 0, "stored": 101}
+    assert counts == {"accepted": 100, "duplicate": 0, "filtered": 0, "skipped": 0, "capped": 1, "resolved": 0, "automatic_off": 0, "stored": 101}
     rows, total, by_status = await inbox.list_rows(db, cluster="self", stale_before=NOW - timedelta(hours=8), limit=200)
     assert total == 101 and by_status == {"firing": 101, "stale": 0, "resolved": 0} and len({r.id for r in rows}) == 101
     invs, inv_total = await store.list_rows(db, cluster="self", limit=200)
@@ -390,7 +390,10 @@ class FakeCompletions:
 
     async def create(self, **kw):
         self.calls.append(kw)
-        return self.replies.pop(0)
+        reply = self.replies.pop(0)
+        if isinstance(reply, BaseException):  # the provider (or the clock) fails this call
+            raise reply
+        return reply
 
 
 class FakeService:
@@ -518,7 +521,7 @@ async def test_last_step_has_no_tools(monkeypatch):
 async def test_run_one_records_a_failure(monkeypatch):
     finished, audits = [], []
 
-    async def boom(c, r):
+    async def boom(c, r, progress=None):
         raise runner.InvestigationError("investigator token refused by auth-service (404)")
 
     async def finish(db, inv_id, **f):
@@ -543,7 +546,7 @@ async def test_run_one_records_a_failure(monkeypatch):
 async def test_run_one_records_success_with_summary(monkeypatch):
     finished, audits = [], []
 
-    async def ok(c, r):
+    async def ok(c, r, progress=None):
         return {"report": "## Summary\n" + "x" * 900, "tool_calls": [{"tool": "k8s_get_resources"}], "iterations": 2,
                 "provider": "ollama", "model": "m", "prompt_tokens": 5, "completion_tokens": 2, "total_tokens": 7}
 
@@ -660,7 +663,7 @@ def admin_client(monkeypatch, perms, audit_ok=True, found=True):
                                status="done", skip_reason="", received_at=NOW, started_at=NOW, finished_at=NOW + timedelta(seconds=30),
                                repeat_count=1, last_seen_at=NOW, model="m", total_tokens=7, iterations=2, tool_calls=[{"tool": "t"}],
                                labels={}, annotations={}, starts_at=None, generator_url="", alertmanager_url="", provider="p",
-                               prompt_tokens=5, completion_tokens=2, report="## Summary", error="") if found else None
+                               prompt_tokens=5, completion_tokens=2, report="## Summary", error="", requested_by="ops@example.com") if found else None
 
     async def list_rows(db, **kw):
         return [await get(None, "inv-1")], 1
@@ -687,6 +690,7 @@ def test_admin_reads_need_the_permission_and_audit_the_report(monkeypatch):
     c, audits = admin_client(monkeypatch, perms=["admin.investigations.read"])
     r = c.get("/api/v1/ai/investigations?status=done")
     assert r.status_code == 200 and r.json()["total"] == 1 and r.json()["items"][0]["duration_ms"] == 30000
+    assert r.json()["items"][0].get("requested_by") == "ops@example.com"  # who asked for it in the Alerts inbox
     assert "report" not in r.json()["items"][0] and audits == []  # the list is a plain read
     assert c.get("/api/v1/ai/investigations?status=bogus").status_code == 400
     r = c.get("/api/v1/ai/investigations/inv-1")
@@ -703,7 +707,7 @@ def test_admin_reads_need_the_permission_and_audit_the_report(monkeypatch):
 async def test_run_one_masks_credentials_in_a_provider_error(monkeypatch):
     finished, audits = [], []
 
-    async def provider_error(c, r):
+    async def provider_error(c, r, progress=None):
         raise RuntimeError("Error code: 401 - Incorrect API key provided: sk-proj-abcdefghijklmnopqrstuvwxyz0123456789ABCD")
 
     async def finish(db, inv_id, **f):
@@ -864,3 +868,157 @@ async def test_a_tool_is_not_run_when_the_audit_store_goes_down_mid_investigatio
     assert service.executed == []
     assert out["tool_calls"][0]["error"] == "audit unavailable"
     assert audits[0]["action"] == "ai.tool.call" and audits[0]["result"] == "failure" and audits[0]["error"] == "audit unavailable"
+
+
+# --- the automatic switch, the budgets counted apart, the worker's check, a failed run's tokens ------------------
+
+
+@pytest.mark.asyncio
+async def test_gates_only_store_while_automatic_investigations_are_off(monkeypatch):
+    fs = FakeStore()
+    fs.install(monkeypatch)
+    msg = am_message(alert(fp="a"), alert(fp="b", severity="info"), alert(fp="c", status="resolved"))
+    counts = await webhook.gate_and_queue(None, cfg(automatic=False), "self", msg, NOW)
+    assert counts == {"accepted": 0, "duplicate": 0, "filtered": 0, "skipped": 0, "capped": 0, "resolved": 1, "automatic_off": 2, "stored": 3}
+    assert fs.rows == [] and [f["fingerprint"] for f in fs.inbox] == ["a", "b", "c"]  # the inbox keeps every alert
+
+
+def test_the_switches_are_on_and_the_manual_kind_has_no_budget_unless_set(monkeypatch):
+    from app.services.investigation import settings as inv_settings
+
+    for name in ("ALERT_INVESTIGATION_AUTOMATIC", "ALERT_INVESTIGATION_MANUAL", "ALERT_INVESTIGATION_MANUAL_DAILY_TOKEN_BUDGET"):
+        monkeypatch.delenv(name, raising=False)
+    s = inv_settings.load()
+    assert (s.automatic, s.manual, s.manual_daily_token_budget, s.daily_token_budget) == (True, True, 0, 200_000)
+    monkeypatch.setenv("ALERT_INVESTIGATION_AUTOMATIC", "false")
+    monkeypatch.setenv("ALERT_INVESTIGATION_MANUAL", " False ")
+    monkeypatch.setenv("ALERT_INVESTIGATION_MANUAL_DAILY_TOKEN_BUDGET", "150000")
+    s = inv_settings.load()
+    assert (s.automatic, s.manual, s.manual_daily_token_budget) == (False, False, 150_000)
+
+
+@pytest.mark.asyncio
+async def test_the_hourly_cap_counts_the_webhooks_and_each_daily_budget_its_own_tokens(sqlite_db):
+    db = sqlite_db
+    auto = await store.insert(db, cluster="self", fingerprint="a", status="queued", received_at=NOW - timedelta(minutes=10))
+    asked = await store.insert(db, cluster="self", fingerprint="b", status="queued", received_at=NOW - timedelta(minutes=5), requested_by="ops@x")
+    await store.insert(db, cluster="self", fingerprint="c", status="queued", received_at=NOW - timedelta(minutes=4), requested_by="ops@x")
+    await store.finish(db, auto, status="done", total_tokens=1000)
+    await store.finish(db, asked, status="failed", total_tokens=300)
+    assert await store.count_since(db, store.hour_ago(NOW)) == 1  # the asked-for runs are not held to the hourly cap
+    assert await store.tokens_since(db, store.day_start(NOW)) == 1000
+    assert await store.tokens_since(db, store.day_start(NOW), manual=True) == 300
+    assert store.next_day(NOW) == datetime(2026, 10, 14)
+
+
+@pytest.mark.asyncio
+async def test_a_row_the_worker_takes_waits_when_its_kind_is_off_paused_or_its_budget_was_spent(sqlite_db):
+    db = sqlite_db
+    auto_row, asked_row = row(), row(id="inv-2", requested_by="ops@x")
+    settings = cfg(daily_token_budget=1000, manual_daily_token_budget=500)
+    assert await runner.claim_refusal(settings, db, auto_row, NOW) == ""
+    assert await runner.claim_refusal(settings, db, asked_row, NOW) == ""
+    # a run queued with it went first and spent the day's budget: the next one waits instead of crossing it
+    spent = await store.insert(db, cluster="self", fingerprint="x", status="queued", received_at=NOW - timedelta(minutes=3), requested_by="ops@x")
+    await store.finish(db, spent, status="done", total_tokens=500)
+    assert await runner.claim_refusal(settings, db, asked_row, NOW) == "manual daily token budget (500 tokens, UTC day)"
+    assert await runner.claim_refusal(settings, db, auto_row, NOW) == ""  # the webhook's budget counts its own
+    assert await runner.claim_refusal(cfg(manual_daily_token_budget=0), db, asked_row, NOW) == ""  # 0 = no budget
+    hooked = await store.insert(db, cluster="self", fingerprint="y", status="queued", received_at=NOW - timedelta(minutes=2))
+    await store.finish(db, hooked, status="done", total_tokens=1000)
+    assert await runner.claim_refusal(settings, db, auto_row, NOW) == "daily token budget (1000 tokens, UTC day)"
+    # switched off since it was queued
+    off_auto = await runner.claim_refusal(cfg(automatic=False), db, auto_row, NOW)
+    off_manual = await runner.claim_refusal(cfg(manual=False), db, asked_row, NOW)
+    assert (off_auto, off_manual) == ("automatic investigations are off (features.alertInvestigation.automatic)",
+                                      "manual investigations are off (features.alertInvestigation.manual)")
+    assert [skip_reasons.key_of(r) for r in (off_auto, off_manual, "manual daily token budget (500 tokens, UTC day)")] == [
+        ("automatic_off", {}), ("manual_off", {}), ("manual_daily_token_budget", {"limit": 500})]
+    # the provider refused since: both kinds wait for the pause
+    refused = await store.insert(db, cluster="self", fingerprint="z", status="queued", received_at=NOW)
+    await store.finish(db, refused, status="failed", error="provider refused (credit): RateLimitError", finished_at=NOW - timedelta(minutes=1))
+    assert (await runner.claim_refusal(cfg(), db, asked_row, NOW)).startswith("paused: the AI model provider refused (credit)")
+
+
+@pytest.mark.asyncio
+async def test_worker_skips_an_asked_for_run_once_its_budget_is_spent(monkeypatch):
+    stop = asyncio.Event()
+    skipped, ran = [], []
+
+    async def get_db():
+        return object()
+
+    async def claim_next(db):
+        if stop.is_set():
+            return None
+        stop.set()
+        return row(requested_by="ops@x")
+
+    async def nothing(*a, **k):
+        return 0
+
+    async def no_pause(db, minutes, now):
+        return ""
+
+    async def tokens(db, since, manual=False):
+        return 600 if manual else 0
+
+    async def skip(db, inv_id, reason):
+        skipped.append((inv_id, reason))
+
+    async def run_one(c, db, r):
+        ran.append(r.id)
+
+    monkeypatch.setattr(runner.inv_settings, "load", lambda: cfg(manual_daily_token_budget=500))
+    monkeypatch.setattr(runner, "get_db_service", get_db)
+    monkeypatch.setattr(runner.store, "claim_next", claim_next)
+    monkeypatch.setattr(runner.store, "fail_stale_running", nothing)
+    monkeypatch.setattr(runner.store, "pause_reason", no_pause)
+    monkeypatch.setattr(runner.store, "tokens_since", tokens)
+    monkeypatch.setattr(runner.store, "skip", skip)
+    monkeypatch.setattr(runner, "run_one", run_one)
+    await runner.worker(stop)
+    assert skipped == [("inv-1", "manual daily token budget (500 tokens, UTC day)")] and ran == []
+
+
+@pytest.mark.asyncio
+async def test_a_run_that_fails_after_model_calls_keeps_their_tokens_and_who_asked(monkeypatch):
+    for failure in (RuntimeError("Error code: 500 - upstream connect error"), asyncio.TimeoutError()):
+        service = FakeService([
+            completion(calls=[tool_call("c1", "k8s_get_resources", {"resource_type": "pods", "namespace": "apps"})], tokens=40),
+            failure,
+        ])
+        audits, finished = [], []
+        install_loop(monkeypatch, service, audits)
+
+        async def finish(db, inv_id, **f):
+            finished.append(f)
+
+        monkeypatch.setattr(runner.store, "finish", finish)
+        assert await runner.run_one(cfg(max_steps=5), None, row(requested_by="ops@x")) == "failed"
+        f = finished[0]
+        assert tuple(f.get(k) for k in ("status", "prompt_tokens", "completion_tokens", "total_tokens", "provider", "model")) == (
+            "failed", 40, 1, 41, "ollama", "granite4.1:8b"), failure
+        run = audits[-1]
+        assert run["action"] == "ai.investigation.run" and run["result"] == "failure"
+        assert tuple(run["after"].get(k) for k in ("total_tokens", "model", "requested_by")) == (41, "granite4.1:8b", "ops@x"), failure
+
+
+@pytest.mark.asyncio
+async def test_a_subscription_run_whose_closing_call_fails_keeps_the_turns_tokens(monkeypatch):
+    cc = FakeClaudeCode([("k8s_get_pod_logs", {"namespace": "apps", "pod_name": "p"})], finish="max_turns", turns=4)
+
+    async def closing_fails(messages, *, lane="chat"):
+        raise RuntimeError("Claude Code exited")
+
+    cc.complete = closing_fails
+    audits, finished = [], []
+    install_loop(monkeypatch, FakeSubscriptionService(cc), audits)
+
+    async def finish(db, inv_id, **f):
+        finished.append(f)
+
+    monkeypatch.setattr(runner.store, "finish", finish)
+    assert await runner.run_one(cfg(max_steps=5), None, row()) == "failed"
+    assert (finished[0].get("total_tokens"), finished[0].get("model")) == (35, "claude-haiku-5-5")
+    assert (audits[-1]["after"].get("total_tokens"), audits[-1]["after"].get("requested_by", "absent")) == (35, None)  # None: the webhook's

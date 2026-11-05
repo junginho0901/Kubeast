@@ -3683,6 +3683,7 @@
         "resource_cronjob_suspend": "Suspend CronJob",
         "resource_cronjob_trigger": "Run CronJob now",
         "resource_alert_silence": "Create and expire alert silences",
+        "resource_alert_investigate": "Start an AI investigation of an alert now (Alerts inbox)",
         "resource_networkflow_read": "Read network flows and drop counts (Hubble)",
         "resource_secret_reveal": "Reveal Secret values",
         "resource_helm_all": "All Helm actions",
@@ -4607,7 +4608,20 @@
     "noteBy": "Last written by {{who}} · {{when}}",
     "auditUnavailable": "Not saved: the audit log cannot take the record right now.",
     "saveFailed": "Not saved.",
-    "noInvestigation": "Not investigated (only firing alerts of the investigated severities are, within the hourly cap and token budget)."
+    "noInvestigation": "Not investigated (only firing alerts of the investigated severities are, within the hourly cap and token budget).",
+    "noInvestigationAutomaticOff": "Not investigated: automatic investigations are off on this installation (features.alertInvestigation.automatic).",
+    "investigateNow": {
+      "button": "Investigate now",
+      "requestedBy": "Asked for by {{who}} · {{when}}",
+      "used": "Asked-for investigations today: {{used}} of {{budget}} tokens (UTC day)",
+      "why": {
+        "manual_off": "Turned off on this installation (features.alertInvestigation.manual).",
+        "provider_paused": "The AI model provider refused an investigation: none starts until {{until}}.",
+        "manual_budget": "Today's token budget for asked-for investigations ({{budget}}) is used up: again from {{until}}."
+      },
+      "failed": "Not started.",
+      "auditUnavailable": "Not started: the audit log cannot take the record right now."
+    }
   },
   "investigations": {
     "title": "Investigations",
@@ -4647,13 +4661,19 @@
       "investigation_cap": "Skipped by the investigation limit",
       "hourly_cap": "Skipped by the hourly limit",
       "daily_token_budget": "Skipped by the daily token budget",
-      "provider_paused": "Skipped while the AI provider is paused"
+      "provider_paused": "Skipped while the AI provider is paused",
+      "manual_daily_token_budget": "Skipped by the daily token budget of asked-for investigations",
+      "automatic_off": "Skipped: automatic investigations are off",
+      "manual_off": "Skipped: Investigate now is off"
     },
     "skipWhy": {
       "investigation_cap": "one webhook message starts at most {{limit}} new investigations; the rest are kept in the inbox and tried again when Alertmanager sends them again",
-      "hourly_cap": "at most {{limit}} investigations start in an hour",
-      "daily_token_budget": "investigations use at most {{limit}} tokens a day (UTC, counted again from 00:00 UTC)",
-      "provider_paused": "the AI model provider refused ({{kind}}) at {{at}}; no investigation starts until {{until}}"
+      "hourly_cap": "at most {{limit}} automatic investigations start in an hour",
+      "daily_token_budget": "automatic investigations use at most {{limit}} tokens a day (UTC, counted again from 00:00 UTC)",
+      "provider_paused": "the AI model provider refused ({{kind}}) at {{at}}; no investigation starts until {{until}}",
+      "manual_daily_token_budget": "investigations asked for in the Alerts inbox use at most {{limit}} tokens a day (UTC, counted again from 00:00 UTC)",
+      "automatic_off": "automatic investigations were turned off (features.alertInvestigation.automatic) before it ran",
+      "manual_off": "Investigate now was turned off (features.alertInvestigation.manual) before it ran"
     },
     "report": "Report",
     "loadFailed": "The report could not be opened.",

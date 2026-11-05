@@ -283,6 +283,7 @@ func allPermissions() []map[string]interface{} {
 		}},
 		{"category": "Alerts", "permissions": []perm{
 			{"resource.alert.silence", "Create and expire alert silences"},
+			{"resource.alert.investigate", "Start an AI investigation of an alert now (Alerts inbox)"},
 		}},
 		{"category": "Network", "permissions": []perm{
 			{"resource.networkflow.read", "Read network flows and drop counts (Hubble)"},

@@ -31,7 +31,7 @@ from app.services.audit_target import tool_target
 from app.services.audit_writer import audit_ready, write_audit
 from app.services.investigation import prompt as inv_prompt
 from app.services.investigation import settings as inv_settings
-from app.services.investigation import store
+from app.services.investigation import skip_reasons, store
 from app.services.investigation import webhook
 
 log = logging.getLogger(__name__)
@@ -110,15 +110,28 @@ def link_for(cfg: inv_settings.InvestigationSettings, inv_id: str) -> Optional[s
     return f"{cfg.console_url}/admin/investigations?id={inv_id}" if cfg.console_url else None
 
 
-async def investigate(cfg: inv_settings.InvestigationSettings, row) -> dict[str, Any]:
-    """Run one investigation; return the fields to store. Raises on failure."""
+def used_fields(progress: dict[str, Any]) -> dict[str, Any]:
+    """What a run that failed had used: the provider and model it built and the tokens its model calls reported."""
+    usage = progress.get("usage") or {}
+    out: dict[str, Any] = {k: progress[k] for k in ("provider", "model") if progress.get(k)}
+    if usage.get("seen"):
+        out.update(prompt_tokens=usage["prompt_tokens"], completion_tokens=usage["completion_tokens"], total_tokens=usage["total_tokens"])
+    return out
+
+
+async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    """Run one investigation; return the fields to store. Raises on failure — `progress` then holds what it had used
+    (the provider, the model and the model calls' usage), for used_fields."""
     from app.services.ai import formatters
     from app.services.ai import permissions as perm
+    from app.services.ai import usage as usage_acct
     from app.services.ai.streaming import tool_outcome
     from app.services.ai.tool_turn import run_tool_turn
     from app.services.ai_service import ToolContext
     from app.services.tool_whitelists import READONLY_TOOL_NAMES, readonly_tool_filter
 
+    progress = progress if progress is not None else {}
+    progress["usage"] = usage_acct.new_turn_usage()
     deadline = time.monotonic() + cfg.timeout_seconds
     # The investigator reads the cluster (logs included) as the system; it does so only when the reads are recorded.
     if not (await audit_ready())[0]:
@@ -132,6 +145,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row) -> dict[str,
 
     token = await asyncio.wait_for(fetch_token(cfg, row.cluster, row.namespace), timeout=remaining())
     service = await build_service(cfg, token, row.cluster)
+    progress.update(provider=service.provider or "", model=service.model or "")
     from app.services.ai import features as feature_gate
     tools = await feature_gate.gate_tools(readonly_tool_filter(service._get_tools_definition()), service)
     context = ToolContext(session_id=f"investigation:{row.id}")
@@ -194,7 +208,8 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row) -> dict[str,
         return result
 
     turn = await run_tool_turn(service, messages, tools, run_tool, max_steps=cfg.max_steps,
-                               final_message=inv_prompt.final_step_message(), remaining=remaining, lane="investigation")
+                               final_message=inv_prompt.final_step_message(), remaining=remaining, lane="investigation",
+                               usage=progress["usage"])
     usage = turn.usage
     if not turn.answer:
         raise InvestigationError("the model returned no report")
@@ -213,8 +228,9 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row) -> dict[str,
 async def run_one(cfg: inv_settings.InvestigationSettings, db, row) -> str:
     started = time.monotonic()
     status, fields, error = "done", {}, ""
+    progress: dict[str, Any] = {}
     try:
-        fields = await investigate(cfg, row)
+        fields = await investigate(cfg, row, progress)
     except asyncio.TimeoutError:
         status, error = "failed", f"timed out after {cfg.timeout_seconds}s"
     except InvestigationError as e:
@@ -226,6 +242,8 @@ async def run_one(cfg: inv_settings.InvestigationSettings, db, row) -> str:
         if refusal.blocks:  # credit, the key, a usage window: store.pause_reason holds the next runs back
             lifts = f", until {refusal.retry_at:%Y-%m-%dT%H:%M:%S}Z" if refusal.retry_at else ""
             error = f"{store.REFUSAL_PREFIX}{refusal.kind}{lifts}): {error}"
+    if status == "failed":  # the tokens used before it failed count in the daily budget and AI usage too
+        fields = used_fields(progress)
     duration_ms = int((time.monotonic() - started) * 1000)
     await store.finish(db, row.id, status=status, error=error, **fields)
     report = fields.get("report") or ""
@@ -254,10 +272,28 @@ async def run_one(cfg: inv_settings.InvestigationSettings, db, row) -> str:
             "duration_ms": duration_ms,
             "summary": report[:SUMMARY_CHARS],
             "link": link_for(cfg, row.id),
+            # the person who asked for it in the Alerts inbox (ai.investigation.request); None for the webhook's
+            "requested_by": getattr(row, "requested_by", "") or None,
         },
     )
     log.info("investigation %s %s in %dms", row.id, status, duration_ms)
     return status
+
+
+async def claim_refusal(cfg: inv_settings.InvestigationSettings, db, row, now) -> str:
+    """Why a row the worker took does not run now, or "": its kind was switched off, the model provider refused since
+    it was queued, or its kind's daily token budget was spent since. The rows queued before it ran first and count
+    by now, so the budget holds to within the one run that crosses it (per worker)."""
+    manual = bool(getattr(row, "requested_by", ""))
+    if not (cfg.manual if manual else cfg.automatic):
+        return skip_reasons.switched_off(manual)
+    reason = await store.pause_reason(db, cfg.provider_pause_minutes, now)
+    if reason:
+        return reason
+    budget = cfg.manual_daily_token_budget if manual else cfg.daily_token_budget
+    if budget and await store.tokens_since(db, store.day_start(now), manual=manual) >= budget:
+        return skip_reasons.manual_daily_token_budget(budget) if manual else skip_reasons.daily_token_budget(budget)
+    return ""
 
 
 async def fail_stale(cfg: inv_settings.InvestigationSettings, db) -> int:
@@ -277,8 +313,8 @@ async def worker(stop: asyncio.Event) -> None:
             log.exception("investigation worker: queue unavailable")
             row = None
         if row is not None:
-            reason = await store.pause_reason(db, cfg.provider_pause_minutes, utcnow())
-            if reason:  # queued before the provider refused: it would be refused too
+            reason = await claim_refusal(cfg, db, row, utcnow())
+            if reason:  # queued before the provider refused or the budget was spent: it would cross it too
                 await store.skip(db, row.id, reason)
             else:
                 await run_one(cfg, db, row)

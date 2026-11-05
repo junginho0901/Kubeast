@@ -12,6 +12,9 @@ INVESTIGATION_CAP = "investigation_cap"
 HOURLY_CAP = "hourly_cap"
 DAILY_TOKEN_BUDGET = "daily_token_budget"
 PROVIDER_PAUSED = "provider_paused"
+MANUAL_DAILY_TOKEN_BUDGET = "manual_daily_token_budget"
+AUTOMATIC_OFF = "automatic_off"
+MANUAL_OFF = "manual_off"
 
 
 def _utc(t: datetime) -> str:
@@ -34,12 +37,25 @@ def provider_paused(kind: str, at: datetime, until: datetime) -> str:
     return f"paused: the AI model provider refused ({kind}) at {_utc(at)}; no investigation until {_utc(until)}"
 
 
+def manual_daily_token_budget(limit: int) -> str:
+    return f"manual daily token budget ({limit} tokens, UTC day)"
+
+
+def switched_off(manual: bool) -> str:
+    """A queued row whose kind was switched off before the worker took it (the chart changed meanwhile)."""
+    return "manual investigations are off (features.alertInvestigation.manual)" if manual else \
+        "automatic investigations are off (features.alertInvestigation.automatic)"
+
+
 _TIME = r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ"
 _READ = (
     (INVESTIGATION_CAP, re.compile(r"investigation cap \((?P<limit>\d+) new per webhook message\)")),
     (HOURLY_CAP, re.compile(r"hourly cap \((?P<limit>\d+) per hour\)")),
     (DAILY_TOKEN_BUDGET, re.compile(r"daily token budget \((?P<limit>\d+) tokens, UTC day\)")),
     (PROVIDER_PAUSED, re.compile(rf"paused: the AI model provider refused \((?P<kind>\w+)\) at (?P<at>{_TIME}); no investigation until (?P<until>{_TIME})")),
+    (MANUAL_DAILY_TOKEN_BUDGET, re.compile(r"manual daily token budget \((?P<limit>\d+) tokens, UTC day\)")),
+    (AUTOMATIC_OFF, re.compile(r"automatic investigations are off \(features\.alertInvestigation\.automatic\)")),
+    (MANUAL_OFF, re.compile(r"manual investigations are off \(features\.alertInvestigation\.manual\)")),
 )
 
 
