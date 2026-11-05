@@ -45,6 +45,30 @@ func TestCreateRole_RefusesUnknownAndWiderPermissions(t *testing.T) {
 	}
 }
 
+// Admin on one cluster is not a global admin: a "*" role is refused like any
+// ceiling refusal, with the same answer and audit row.
+func TestCreateRole_AClusterAdminGrantIsNotGlobal(t *testing.T) {
+	store := &memAuditStore{}
+	h := &RoleHandler{auditStore: store}
+	r := httptest.NewRequest(http.MethodPost, "/auth/admin/roles", strings.NewReader(`{"name":"x","permissions":["*"]}`))
+	r = r.WithContext(auth.WithPayload(r.Context(), auth.TokenPayload{
+		UserID: "ca", Email: "ca@example.com",
+		Perms: auth.PermissionMatrix{"*": {"admin.roles.create"}, "prod": {"*"}},
+	}))
+	w := httptest.NewRecorder()
+	func() {
+		defer func() { _ = recover() }() // repo stays nil: a role let past the ceiling stops there unanswered
+		h.CreateRole(w, r)
+	}()
+	if w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), "permission ceiling: cannot grant permissions you do not hold: *") {
+		t.Fatalf("a * role from Admin on prod: %d %s", w.Code, w.Body.String())
+	}
+	if len(store.written) != 1 || store.written[0].Action != "admin.roles.create" || store.written[0].Result != audit.ResultFailure ||
+		!strings.Contains(store.written[0].Error, "permission ceiling") {
+		t.Fatalf("the refusal must be audited as a failure: %+v", store.written)
+	}
+}
+
 func TestAdminUpdateUser_RefusesOwnRoleChange(t *testing.T) {
 	store := &memAuditStore{}
 	h := &AuthHandler{auditStore: store} // repo stays nil: the check runs before the lookup

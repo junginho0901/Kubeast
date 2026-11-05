@@ -31,6 +31,26 @@ describe('hasPermission', () => {
     expect(hasPermission(matrix, 'resource.namespace.create', 'prod')).toBe(false)
     expect(matchAny(undefined, 'resource.pod.read')).toBe(false)
   })
+  // pkg/auth HasPermission: admin.* is read from the "*" entry only.
+  it('an admin.* key is never read from a cluster entry, not even its "*"', () => {
+    const clusterAdmin = { self: ['*'] }
+    expect(hasPermission(clusterAdmin, 'admin.users.read', 'self')).toBe(false)
+    expect(hasPermission(clusterAdmin, 'admin.ai_models.*', 'self')).toBe(false)
+    expect(hasPermission({ self: ['admin.users.read', 'admin.*'] }, 'admin.users.read', 'self')).toBe(false)
+  })
+  it('a cluster entry of "*" keeps every cluster key on that cluster only', () => {
+    const clusterAdmin = { self: ['*'] }
+    expect(['resource.node.shell', 'menu.workloads', 'ai.tool.k8s_scale', 'resource.pod.delete'].map((p) => hasPermission(clusterAdmin, p, 'self')))
+      .toEqual([true, true, true, true])
+    expect(hasPermission(clusterAdmin, 'resource.node.shell', 'default')).toBe(false)
+  })
+  it('the global role keeps its admin keys with or without a cluster, and "*" passes everything', () => {
+    const m = { '*': ['admin.users.read'], self: ['resource.*.read'] }
+    expect([hasPermission(m, 'admin.users.read'), hasPermission(m, 'admin.users.read', 'self'), hasPermission(m, 'admin.users.update', 'self')])
+      .toEqual([true, true, false])
+    const superuser = { '*': ['*'] }
+    expect([hasPermission(superuser, 'admin.audit.read'), hasPermission(superuser, 'resource.node.shell', 'default')]).toEqual([true, true])
+  })
 })
 
 // Same names as permResource in the backend (perm_resource_test.go): a role

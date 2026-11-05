@@ -3,7 +3,8 @@ import { test, expect, type APIRequestContext, type Page } from '@playwright/tes
 // Admin edges the v0.7.3 edge QA found: a role with some admin permissions opens those pages only; nobody changes
 // their own cluster access; a role still held is not deleted, and says why; deleting a team clears it from its
 // members; a browser whose session ends without signing out is told so; someone with no cluster sees no
-// "in this cluster" notice. Throwaway accounts, roles and teams, removed at the end; the dev admin is never a target.
+// "in this cluster" notice; an Admin grant on one cluster opens none of the admin pages its APIs refuse.
+// Throwaway accounts, roles and teams, removed at the end; the dev admin is never a target.
 
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
@@ -52,6 +53,38 @@ async function uiLogin(page: Page, email: string, password: string) {
   await page.locator('input[type="password"]').first().fill(password)
   await page.locator('button[type="submit"]').first().click()
   await page.waitForFunction(() => !document.querySelector('input[autocomplete="email"]'), { timeout: 20000 })
+}
+// The sidebar's entries on self once they stopped changing (the admin entries wait for their settings).
+async function sidebarPaths(page: Page): Promise<string[]> {
+  await page.goto('/account?cluster=self')
+  await expect(page.getByTestId('sidebar-nav')).toBeVisible({ timeout: 20000 })
+  let prev = ''
+  let same = 0
+  let paths: string[] = []
+  for (let i = 0; i < 30 && same < 3; i++) {
+    await page.waitForTimeout(500)
+    paths = [...new Set(await page.getByTestId('sidebar-nav').locator('a[href^="/"]').evaluateAll((as) => as.map((a) => new URL((a as HTMLAnchorElement).href).pathname)))].sort()
+    same = paths.join(' ') === prev ? same + 1 : 0
+    prev = paths.join(' ')
+  }
+  return paths
+}
+// A refused page draws a blank page at its address while /auth/me loads, then goes to "/": the address once it
+// stayed put for 1.2 s with a page heading drawn (at most 10 s).
+async function settledPath(page: Page, url: string): Promise<{ path: string; heading: string }> {
+  await page.goto(url)
+  let path = new URL(page.url()).pathname
+  let since = Date.now()
+  const end = Date.now() + 10000
+  while (Date.now() < end) {
+    await page.waitForTimeout(100)
+    const at = new URL(page.url()).pathname
+    if (at !== path) {
+      path = at
+      since = Date.now()
+    } else if (Date.now() - since >= 1200 && (await page.locator('main h1').count()) > 0) break
+  }
+  return { path, heading: (await page.locator('main h1').first().innerText({ timeout: 1000 }).catch(() => '')).trim() }
 }
 
 test.beforeAll(async ({ request }) => {
@@ -174,4 +207,54 @@ test('someone with no cluster sees the no-cluster page without a "no permission 
   await expect(page.getByTestId('no-accessible-cluster')).toHaveCount(1, { timeout: 15000 })
   await page.waitForTimeout(2000)
   await expect(page.getByTestId('forbidden-banner')).toHaveCount(0)
+})
+
+test('an Admin grant on one cluster opens no admin page, as its APIs refuse; its screens and Node Shell stay, the global admin keeps every admin page', async ({ page, request, browser }) => {
+  test.setTimeout(240000)
+  const u = await mkUser(request, 'clusteradmin', await roleId(request, 'Member'))
+  const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } })
+  try {
+    expect((await request.put(`/api/v1/auth/admin/users/${u.id}/cluster-roles/self`, { headers: admin, data: { role: 'Admin', namespaces: [] } })).status()).toBeLessThan(300)
+    // what the server gives it: the admin APIs (global admin.* keys) refuse, the cluster answers
+    const mine = await bearer(request, u.email, u.password)
+    const answers: number[] = []
+    for (const path of ['/api/v1/auth/admin/users', '/api/v1/auth/admin/audit-logs?limit=1', '/api/v1/cluster/namespaces?cluster=self']) {
+      answers.push((await request.get(path, { headers: mine, failOnStatusCode: false })).status())
+    }
+    expect(answers, 'users, audit log, self namespaces').toEqual([403, 403, 200])
+
+    // the global admin: every admin entry this install turns on, each opening
+    await uiLogin(page, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const globalNav = await sidebarPaths(page)
+    const adminPages = globalNav.filter((p) => p.startsWith('/admin/') && p !== '/admin/node-shell')
+    expect.soft(adminPages, 'the admin entries every install has').toEqual(expect.arrayContaining(['/admin/clusters', '/admin/users', '/admin/roles', '/admin/organizations', '/admin/audit', '/admin/session-recordings']))
+    for (const p of [...adminPages, '/admin/node-shell']) expect.soft((await settledPath(page, `${p}?cluster=self`)).path, `the global admin opens ${p}`).toBe(p)
+
+    // the Admin grant on self, every sidebar entry it was ever drawn recorded (no admin entry drawn, then taken away)
+    await ctx.addInitScript(() => {
+      const seen = new Set<string>()
+      Object.assign(window, { __navSeen: seen })
+      new MutationObserver(() => {
+        document.querySelectorAll('[data-testid="sidebar-nav"] a[href]').forEach((a) => seen.add(new URL((a as HTMLAnchorElement).href).pathname))
+      }).observe(document, { childList: true, subtree: true })
+    })
+    const mp = await ctx.newPage()
+    await uiLogin(mp, u.email, u.password)
+    const nav = await sidebarPaths(mp)
+    const seen = await mp.evaluate(() => [...(window as unknown as { __navSeen: Set<string> }).__navSeen])
+    expect.soft(nav.filter((p) => p.startsWith('/admin/')), 'its admin entries').toEqual(['/admin/node-shell'])
+    expect.soft(seen.filter((p) => p.startsWith('/admin/')).sort(), 'the admin entries ever drawn').toEqual(['/admin/node-shell'])
+    expect.soft(nav.filter((p) => !p.startsWith('/admin/')), 'its other entries: the global admin\'s on self').toEqual(globalNav.filter((p) => !p.startsWith('/admin/')))
+    // and by address, the setup wizard (admin.clusters.create) too
+    const byAddress = [...adminPages, '/setup']
+    const sentTo: string[] = []
+    for (const p of byAddress) sentTo.push((await settledPath(mp, `${p}?cluster=self`)).path)
+    expect.soft(sentTo, `${byAddress.join(', ')} by address`).toEqual(byAddress.map(() => '/'))
+    // the cluster's own pages stay
+    expect.soft(await settledPath(mp, '/admin/node-shell?cluster=self'), 'Node Shell').toEqual({ path: '/admin/node-shell', heading: 'Node Shell' })
+    expect.soft(await settledPath(mp, '/workloads/pods?cluster=self'), 'Pods').toEqual({ path: '/workloads/pods', heading: 'Pods' })
+  } finally {
+    await ctx.close()
+    await request.delete(`/api/v1/auth/admin/users/${u.id}`, { headers: admin, failOnStatusCode: false })
+  }
 })

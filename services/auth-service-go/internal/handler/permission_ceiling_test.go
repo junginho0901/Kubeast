@@ -87,4 +87,24 @@ func TestMissingPermissions_Ceiling(t *testing.T) {
 	if got := missingPermissions(clusterAdmin, []string{"resource.*.read"}, "staging"); !reflect.DeepEqual(got, []string{"resource.*.read"}) {
 		t.Fatalf("no grant on staging: %v", got)
 	}
+
+	// A global object: "*" and admin.* count from the global entry only, so the
+	// Admin grant on prod makes nobody a global admin; cluster keys held on prod
+	// still count, and on prod itself the grant still gives Admin.
+	for _, c := range []struct {
+		perms []string
+		want  []string
+	}{
+		{[]string{"*"}, []string{"*"}},
+		{[]string{"admin.*"}, []string{"admin.*"}},
+		{[]string{"admin.audit.read", "admin.users.update"}, []string{"admin.audit.read"}},
+		{[]string{"menu.*", "resource.*.delete", "resource.node.shell", "ai.tool.*"}, nil},
+	} {
+		if got := missingPermissions(clusterAdmin, c.perms, ""); !reflect.DeepEqual(got, c.want) {
+			t.Fatalf("prod admin + admin.users.update, global role %v: missing %v, want %v", c.perms, got, c.want)
+		}
+	}
+	if got := missingPermissions(clusterAdmin, []string{"*"}, "prod"); got != nil {
+		t.Fatalf("Admin on prod granting Admin on prod: %v", got)
+	}
 }
