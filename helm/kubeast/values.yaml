@@ -184,8 +184,10 @@ auth:
   # grant, API key, temporary grant decided since the last review and role,
   # flags the dormant and the privileged, exports each section as CSV, and
   # records a sign-off (with the report as it stood) when the review is done.
-  # dormantDays flags accounts with no sign-in for that long; intervalDays is
-  # how often a review falls due. Sign-offs are kept retention.reviewDays.
+  # dormantDays flags accounts with no sign-in and no API key use for that
+  # long (what dormantAccounts reads, which locks after its own days);
+  # intervalDays is how often a review falls due. Sign-offs are kept
+  # retention.reviewDays.
   accessReview:
     enabled: true
     dormantDays: 90

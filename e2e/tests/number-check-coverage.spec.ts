@@ -48,7 +48,7 @@ const WHERE: Record<string, string> = {
   '/admin/audit': 'number-check-admin-misc', '/admin/session-recordings': 'number-check-admin-misc', '/ai-chat': 'number-check-admin-misc',
   '/admin/node-shell': 'no numbers: two settings this browser keeps (localStorage), nothing on the server',
   '/admin/ai-models': 'no counts: model settings cards; "Used for" is the API\'s used_for',
-  '/admin/ai-usage': 'N4', '/admin/access-requests': 'N4', '/admin/access-review': 'N4',
+  '/admin/ai-usage': 'N4', '/admin/access-requests': 'number-check-access', '/admin/access-review': 'number-check-access',
   '/admin/investigations': 'N4', '/alerts': 'N4',
 }
 

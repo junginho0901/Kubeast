@@ -122,8 +122,7 @@ func (r *Repository) ListAccessRequestsSince(ctx context.Context, since time.Tim
 	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT `+accessRequestColumns+`
-		  WHERE ar.created_at >= $1
-		  ORDER BY ar.created_at DESC LIMIT $2`, since.UTC(), limit)
+		  WHERE ar.created_at >= $1`+accessRequestOrder+` LIMIT $2`, since.UTC(), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -137,6 +136,13 @@ func (r *Repository) ListAccessRequestsSince(ctx context.Context, since time.Tim
 		out = append(out, *a)
 	}
 	return out, rows.Err()
+}
+
+// CountAccessRequestsSince counts the requests created at or after since.
+func (r *Repository) CountAccessRequestsSince(ctx context.Context, since time.Time) (int, error) {
+	var n int
+	err := r.pool.QueryRow(ctx, `SELECT COUNT(*)`+accessRequestFrom+` WHERE ar.created_at >= $1`, since.UTC()).Scan(&n)
+	return n, err
 }
 
 // CountUsersByRole: role id → accounts whose global role it is.
@@ -191,13 +197,13 @@ func (r *Repository) CreateAccessReview(ctx context.Context, rev *AccessReview) 
 }
 
 // ListAccessReviews returns sign-offs newest first, without snapshots.
-func (r *Repository) ListAccessReviews(ctx context.Context, limit int) ([]AccessReview, error) {
+func (r *Repository) ListAccessReviews(ctx context.Context, limit, offset int) ([]AccessReview, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, reviewed_by, reviewed_by_email, reviewed_at, note, counts
-		   FROM access_reviews ORDER BY reviewed_at DESC LIMIT $1`, limit)
+		   FROM access_reviews ORDER BY reviewed_at DESC, id DESC LIMIT $1 OFFSET $2`, limit, max(offset, 0))
 	if err != nil {
 		return nil, err
 	}
@@ -213,9 +219,16 @@ func (r *Repository) ListAccessReviews(ctx context.Context, limit int) ([]Access
 	return out, rows.Err()
 }
 
+// CountAccessReviews counts every sign-off kept.
+func (r *Repository) CountAccessReviews(ctx context.Context) (int, error) {
+	var n int
+	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM access_reviews`).Scan(&n)
+	return n, err
+}
+
 // LastAccessReview returns the newest sign-off without its snapshot, or nil.
 func (r *Repository) LastAccessReview(ctx context.Context) (*AccessReview, error) {
-	list, err := r.ListAccessReviews(ctx, 1)
+	list, err := r.ListAccessReviews(ctx, 1, 0)
 	if err != nil || len(list) == 0 {
 		return nil, err
 	}

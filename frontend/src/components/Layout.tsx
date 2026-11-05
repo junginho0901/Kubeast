@@ -48,6 +48,7 @@ import ClusterSwitchProgress from './ClusterSwitchProgress'
 import RouteFallback from './RouteFallback'
 import { useCluster } from '../contexts/ClusterContext'
 import { usePermission } from '@/hooks/usePermission'
+import { usePendingAccessRequestCount } from '@/hooks/usePendingAccessRequestCount'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
 import { aiEnabled, alertInvestigationEnabled, costEnabled, policyReportsEnabled } from '@/utils/features'
 import { resolveRouteMeta } from '@/utils/aiContext/routeMatcher'
@@ -198,14 +199,10 @@ export default function Layout() {
     retry: false,
   })
   const accessRequestsOn = !!accessRequestsConfig?.enabled
-  const { data: pendingAccessRequests = [] } = useQuery({
-    queryKey: ['access-requests', 'admin', 'pending'],
-    queryFn: () => api.adminListAccessRequests('pending'),
+  const { data: pendingAccessCount = 0 } = usePendingAccessRequestCount({
     enabled: hasPermission('admin.users.update') && accessRequestsOn,
     refetchInterval: 60_000,
-    retry: false,
   })
-  const pendingAccessCount = pendingAccessRequests.length
   // Access review: the admin menu item appears only when the installation has it on.
   const { data: accessReviewConfig } = useQuery({
     queryKey: ['access-review', 'config'],

@@ -223,6 +223,8 @@
     "overdue": "Overdue since {{when}}",
     "intervalHint": "A review is due every {{days}} days.",
     "generatedAt": "Report as of {{when}}; requests since {{since}}.",
+    "tabCountExpired": "({{count}} · {{expired}} expired)",
+    "requestsCut": "The newest {{shown}} of {{total}} requests since {{since}} are listed here and in the CSV.",
     "section": {
       "users": "Accounts",
       "cluster_roles": "Cluster roles",
@@ -233,8 +235,11 @@
     },
     "card": {
       "users": "Accounts",
-      "globalAdmins": "Global admins",
+      "adminPermissions": "With admin permissions",
+      "fullAdmins": "{{count}} global admins",
+      "fullAdmins_one": "{{count}} global admin",
       "dormant": "Dormant",
+      "dormantHint": "No sign-in or API key use for {{days}} days — the activity the dormant lock checks",
       "neverLoggedIn": "Never signed in",
       "clusterGrants": "Cluster grants",
       "temporaryGrants": "Temporary",
@@ -273,12 +278,14 @@
       "reviewedAt": "Signed off",
       "reviewedBy": "By",
       "note": "Note",
-      "counts": "Accounts / admins / dormant / keys"
+      "counts": "Accounts / admin permissions / dormant / keys"
     },
     "flags": {
-      "global_admin": "global admin",
+      "global_admin": "admin permissions",
       "never_logged_in": "never signed in",
       "dormant": "dormant",
+      "api_key_only": "API key only",
+      "lock_exempt": "lock exempt (admin)",
       "locked": "locked",
       "dormant_locked": "dormant lock",
       "temporary": "temporary",

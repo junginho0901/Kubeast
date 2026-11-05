@@ -75,7 +75,7 @@ func TestBuildFlagsAndSummary(t *testing.T) {
 		t.Errorf("admin should hold 2 active keys, got %d", rep.Users[0].APIKeys)
 	}
 
-	if rep.Summary != (Summary{Users: 4, GlobalAdmins: 1, Dormant: 2, NeverLoggedIn: 2, Locked: 1, ClusterGrants: 3, TemporaryGrants: 1,
+	if rep.Summary != (Summary{Users: 4, GlobalAdmins: 1, FullAdmins: 1, Dormant: 2, NeverLoggedIn: 2, Locked: 1, ClusterGrants: 3, TemporaryGrants: 1,
 		APIKeysActive: 2, APIKeysExpiring: 1, APIKeysUnused: 1, AccessRequests: 1}) {
 		t.Errorf("summary = %+v", rep.Summary)
 	}
@@ -138,5 +138,147 @@ func TestBuildWithoutHistory(t *testing.T) {
 	empty := Build(now, s, now, Input{})
 	if empty.Users == nil || empty.ClusterRoles == nil || empty.APIKeys == nil || empty.AccessRequests == nil || empty.Roles == nil {
 		t.Errorf("sections must be empty slices, not null: %+v", empty)
+	}
+}
+
+// Dormant is what the dormant lock reads (repository.LockDormantAccounts): the
+// later of the last sign-in and the newest use of any key (expired ones too),
+// each counted from creation when missing. An account kept active by a key
+// only is not dormant and says so; one that never signed in stays "never
+// signed in". Admin accounts are counted, and flagged when the lock leaves
+// them alone.
+func TestBuildDormantIsWhatTheLockReads(t *testing.T) {
+	user := func(id, role string, created time.Time, login *time.Time) model.User {
+		return model.User{ID: id, Email: id + "@example.com", RoleName: role, CreatedAt: created, LastLoginAt: login}
+	}
+	key := func(id, user string, expires time.Time, used *time.Time) repository.ReviewAPIKey {
+		return repository.ReviewAPIKey{OwnerEmail: user + "@example.com", APIKey: repository.APIKey{ID: id, UserID: user, Name: id, RoleCeiling: "Read", CreatedAt: now.AddDate(0, 0, -300), ExpiresAt: expires, LastUsedAt: used}}
+	}
+	old := now.AddDate(0, 0, -200)
+	in := Input{
+		Users: []model.User{
+			user("key-only", "Member", old, nil),                    // never signed in, key used an hour ago
+			user("old-login-key", "Member", old, tp(old)),           // signed in long ago, an expired key used 10 days ago
+			user("old-login-old-key", "Member", old, tp(old)),       // its key's last use is 120 days ago
+			user("auditor", "Auditor", old, tp(old)),                // admin.audit.read, nothing since
+			user("admin", "Admin", old, tp(now.AddDate(0, 0, -91))), // "*", nothing for 91 days
+			user("fresh", "Member", now.AddDate(0, 0, -3), nil),     // new, never signed in
+			user("stale", "Member", old, nil),                       // never signed in, no key
+			user("edge", "Member", old, tp(now.AddDate(0, 0, -90))), // exactly at the cutoff: the lock's "<" leaves it
+		},
+		Keys: []repository.ReviewAPIKey{
+			key("k1", "key-only", now.AddDate(0, 0, 30), tp(now.Add(-time.Hour))),
+			key("k2", "old-login-key", now.AddDate(0, 0, -1), tp(now.AddDate(0, 0, -10))),
+			key("k3", "old-login-old-key", now.AddDate(0, 0, 30), tp(now.AddDate(0, 0, -120))),
+			key("k4", "old-login-old-key", now.AddDate(0, 0, 30), nil),
+		},
+		Roles: []model.RoleWithPermissions{
+			{Role: model.Role{ID: 1, Name: "Admin"}, Permissions: []string{"*"}},
+			{Role: model.Role{ID: 4, Name: "Member"}, Permissions: []string{}},
+			{Role: model.Role{ID: 5, Name: "Auditor"}, Permissions: []string{"admin.audit.read"}},
+		},
+	}
+	flagsOf := func(rep *Report) map[string][]string {
+		out := map[string][]string{}
+		for _, u := range rep.Users {
+			out[u.Email[:len(u.Email)-len("@example.com")]] = u.Flags
+		}
+		return out
+	}
+
+	off := Build(now, Settings{DormantDays: 90}, now, in)
+	want := map[string][]string{
+		"key-only":          {FlagNeverLoggedIn, FlagAPIKeyOnly},
+		"old-login-key":     {FlagAPIKeyOnly},
+		"old-login-old-key": {FlagDormant},
+		"auditor":           {FlagGlobalAdmin, FlagDormant},
+		"admin":             {FlagGlobalAdmin, FlagDormant},
+		"fresh":             {FlagNeverLoggedIn},
+		"stale":             {FlagNeverLoggedIn, FlagDormant},
+		"edge":              {},
+	}
+	if got := flagsOf(off); !reflect.DeepEqual(got, want) {
+		t.Errorf("lock off: flags = %v\nwant %v", got, want)
+	}
+	if off.Summary.Dormant != 4 || off.Summary.NeverLoggedIn != 3 || off.Summary.GlobalAdmins != 2 || off.Summary.FullAdmins != 1 {
+		t.Errorf("lock off: summary = %+v", off.Summary)
+	}
+
+	on := Build(now, Settings{DormantDays: 90, LockEnabled: true, LockDays: 90, LockExemptAdmins: true}, now, in)
+	got := flagsOf(on)
+	if !reflect.DeepEqual(got["auditor"], []string{FlagGlobalAdmin, FlagDormant, FlagLockExempt}) || !reflect.DeepEqual(got["admin"], []string{FlagGlobalAdmin, FlagDormant, FlagLockExempt}) {
+		t.Errorf("lock on, admins exempt: auditor %v admin %v", got["auditor"], got["admin"])
+	}
+	if !reflect.DeepEqual(got["stale"], want["stale"]) || on.Summary.Dormant != 4 {
+		t.Errorf("lock on: stale %v, dormant %d — the exempt admins are still counted", got["stale"], on.Summary.Dormant)
+	}
+	noExempt := Build(now, Settings{DormantDays: 90, LockEnabled: true, LockDays: 90}, now, in)
+	if f := flagsOf(noExempt)["auditor"]; !reflect.DeepEqual(f, []string{FlagGlobalAdmin, FlagDormant}) {
+		t.Errorf("lock on without the exemption: auditor %v", f)
+	}
+	if none := Build(now, Settings{}, now, in); none.Summary.Dormant != 0 || flagsOf(none)["key-only"][len(flagsOf(none)["key-only"])-1] != FlagNeverLoggedIn {
+		t.Errorf("dormant days 0: %+v %v", none.Summary, flagsOf(none)["key-only"])
+	}
+}
+
+func TestLastActivityIsTheLocksGreatest(t *testing.T) {
+	created := now.AddDate(0, 0, -300)
+	signIn := now.AddDate(0, 0, -100)
+	keyUse := now.AddDate(0, 0, -50)
+	cases := []struct {
+		login *time.Time
+		key   time.Time
+		want  time.Time
+	}{
+		{nil, time.Time{}, created},    // GREATEST(created, created)
+		{&signIn, time.Time{}, signIn}, // GREATEST(login, created)
+		{nil, keyUse, keyUse},          // GREATEST(created, key)
+		{&signIn, keyUse, keyUse},      // GREATEST(login, key)
+		{&keyUse, signIn.AddDate(0, 0, -1), keyUse},
+	}
+	for i, c := range cases {
+		if got := lastActivity(model.User{CreatedAt: created, LastLoginAt: c.login}, c.key); !got.Equal(c.want) {
+			t.Errorf("case %d: %v, want %v", i, got, c.want)
+		}
+	}
+}
+
+// "With admin permissions" counts every account whose global role carries "*"
+// or an admin.* permission; the global admins beside it are the "*" ones.
+func TestBuildFullAdmins(t *testing.T) {
+	in := Input{
+		Users: []model.User{
+			{ID: "1", Email: "a@x", RoleName: "Admin", CreatedAt: now},
+			{ID: "2", Email: "b@x", RoleName: "Auditor", CreatedAt: now},
+			{ID: "3", Email: "c@x", RoleName: "Ops", CreatedAt: now},
+			{ID: "4", Email: "d@x", RoleName: "Member", CreatedAt: now},
+		},
+		Roles: []model.RoleWithPermissions{
+			{Role: model.Role{Name: "Admin"}, Permissions: []string{"*"}},
+			{Role: model.Role{Name: "Auditor"}, Permissions: []string{"admin.audit.read"}},
+			{Role: model.Role{Name: "Ops"}, Permissions: []string{"resource.pod.read", "*"}},
+			{Role: model.Role{Name: "Member"}, Permissions: []string{"resource.pod.read"}},
+		},
+	}
+	rep := Build(now, Settings{DormantDays: 90}, now, in)
+	if rep.Summary.GlobalAdmins != 3 || rep.Summary.FullAdmins != 2 {
+		t.Errorf("with admin permissions %d (want 3), global admins %d (want 2)", rep.Summary.GlobalAdmins, rep.Summary.FullAdmins)
+	}
+	if c := rep.Counts(); c["global_admins"] != 3 || c["full_admins"] != 2 {
+		t.Errorf("counts = %v", c)
+	}
+}
+
+// The request section holds the newest rows up to the read's limit; the
+// report says how many there are.
+func TestBuildAccessRequestsTotal(t *testing.T) {
+	in := sampleInput()
+	in.RequestsTotal = 5001
+	if rep := Build(now, Settings{}, now, in); rep.AccessRequestsTotal != 5001 || len(rep.AccessRequests) != 1 {
+		t.Errorf("total %d rows %d", rep.AccessRequestsTotal, len(rep.AccessRequests))
+	}
+	in.RequestsTotal = 0
+	if rep := Build(now, Settings{}, now, in); rep.AccessRequestsTotal != 1 {
+		t.Errorf("a total below the rows read = %d, want the rows (1)", rep.AccessRequestsTotal)
 	}
 }

@@ -41,6 +41,29 @@ export interface AccessRequest {
   namespaces?: string[]
 }
 
+// One page of the admin list: the server's filter — one status or "decided" (every request no longer pending) —
+// and search, and the count of every match.
+export interface AccessRequestQuery {
+  status?: AccessRequestStatus | 'decided'
+  q?: string
+  limit: number
+  offset: number
+}
+
+export interface AccessRequestPage {
+  items: AccessRequest[]
+  total: number
+}
+
+// The count of every match a paged list answers next to its page (X-Kubeast-Total); an answer without it is an
+// error, not a count of the rows that came.
+export function totalHeader(headers: unknown): number {
+  const raw = (headers as Record<string, unknown> | undefined)?.['x-kubeast-total']
+  const n = typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : NaN
+  if (!Number.isInteger(n) || n < 0) throw new Error('The answer has no X-Kubeast-Total count')
+  return n
+}
+
 export interface CreateAccessRequestInput {
   cluster_id: string
   role: string
@@ -77,9 +100,10 @@ export const accessRequestsApi = {
     await client.delete(`/auth/access-requests/${id}`)
   },
 
-  adminListAccessRequests: async (status?: AccessRequestStatus): Promise<AccessRequest[]> => {
-    const { data } = await client.get('/auth/admin/access-requests', { params: status ? { status } : undefined })
-    return Array.isArray(data) ? data : []
+  adminAccessRequestsPage: async (query: AccessRequestQuery): Promise<AccessRequestPage> => {
+    const { data, headers } = await client.get('/auth/admin/access-requests', { params: { ...query, q: query.q || undefined } })
+    if (!Array.isArray(data)) throw new Error('Invalid access requests response')
+    return { items: data, total: totalHeader(headers) }
   },
 
   adminApproveAccessRequest: async (id: string, note = ''): Promise<AccessRequest> => {

@@ -3,9 +3,12 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,7 +35,7 @@ import (
 //   POST   /api/v1/auth/access-requests
 //   GET    /api/v1/auth/access-requests                      (own)
 //   DELETE /api/v1/auth/access-requests/{id}                 (own, pending)
-//   GET    /api/v1/auth/admin/access-requests?status=
+//   GET    /api/v1/auth/admin/access-requests?status=&q=&limit=&offset=
 //   POST   /api/v1/auth/admin/access-requests/{id}/approve   { "note": "" }
 //   POST   /api/v1/auth/admin/access-requests/{id}/reject    { "note": "" }
 
@@ -221,18 +224,62 @@ func (h *AuthHandler) CancelAccessRequest(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// AdminListAccessRequests lists requests (optionally one status) for reviewers.
+// adminAccessRequestsLimit is the page an admin list answers without ?limit=.
+const adminAccessRequestsLimit = 200
+
+// AdminListAccessRequests lists requests for reviewers, newest first:
+// ?status= one status or "decided" (every one no longer pending), ?q= text
+// in the requester, cluster, role, reason or decider, ?limit= (0–500; 0
+// lists none) and ?offset=. X-Kubeast-Total counts every match.
 func (h *AuthHandler) AdminListAccessRequests(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.requireClusterRoleAdmin(w, r); !ok {
 		return
 	}
-	status := strings.TrimSpace(r.URL.Query().Get("status"))
-	items, err := h.repo.ListAccessRequests(r.Context(), repository.AccessRequestFilter{Status: status, Limit: 200})
+	f, err := accessRequestListFilter(r.URL.Query())
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	items := []repository.AccessRequest{}
+	if f.Limit > 0 {
+		if items, err = h.repo.ListAccessRequests(r.Context(), f); err != nil {
+			response.InternalError(w, r, err)
+			return
+		}
+	}
+	total, err := h.repo.CountAccessRequests(r.Context(), f)
 	if err != nil {
 		response.InternalError(w, r, err)
 		return
 	}
+	w.Header().Set("X-Kubeast-Total", strconv.Itoa(total))
 	response.JSON(w, http.StatusOK, items)
+}
+
+// accessRequestListFilter reads the admin list's query.
+func accessRequestListFilter(q url.Values) (repository.AccessRequestFilter, error) {
+	f := repository.AccessRequestFilter{Status: strings.TrimSpace(q.Get("status")), Query: strings.TrimSpace(q.Get("q")), Limit: adminAccessRequestsLimit}
+	var err error
+	if f.Limit, err = boundedQueryInt(q, "limit", adminAccessRequestsLimit, 0, 500); err != nil {
+		return f, err
+	}
+	if f.Offset, err = boundedQueryInt(q, "offset", 0, 0, math.MaxInt32); err != nil {
+		return f, err
+	}
+	return f, nil
+}
+
+// boundedQueryInt reads an integer parameter within [lo, hi], def when absent.
+func boundedQueryInt(q url.Values, name string, def, lo, hi int) (int, error) {
+	raw := strings.TrimSpace(q.Get(name))
+	if raw == "" {
+		return def, nil
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < lo || n > hi {
+		return 0, fmt.Errorf("%s must be a whole number from %d to %d", name, lo, hi)
+	}
+	return n, nil
 }
 
 type accessRequestDecision struct {

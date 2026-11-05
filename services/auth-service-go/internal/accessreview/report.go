@@ -6,6 +6,7 @@
 package accessreview
 
 import (
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -14,17 +15,28 @@ import (
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/repository"
 )
 
-// Settings come from the chart (auth.accessReview.*).
+// Settings come from the chart: auth.accessReview.* and, for the flag of a
+// dormant account the lock leaves alone, auth.dormantAccounts.*.
 type Settings struct {
-	DormantDays  int `json:"dormant_days"`
-	IntervalDays int `json:"interval_days"`
+	DormantDays      int  `json:"dormant_days"`
+	IntervalDays     int  `json:"interval_days"`
+	LockEnabled      bool `json:"lock_enabled"`
+	LockDays         int  `json:"lock_days"`
+	LockExemptAdmins bool `json:"lock_exempt_admins"`
 }
 
 // Flags on report rows.
 const (
+	// FlagGlobalAdmin: the global role carries "*" or an admin.* permission
+	// (the card "with admin permissions"; the name stays for stored reports).
 	FlagGlobalAdmin   = "global_admin"
 	FlagNeverLoggedIn = "never_logged_in"
 	FlagDormant       = "dormant"
+	// FlagAPIKeyOnly: no sign-in within the dormant days (or none), active by
+	// API key use only — not dormant, as the lock counts.
+	FlagAPIKeyOnly = "api_key_only"
+	// FlagLockExempt: dormant, but the lock leaves admin accounts alone.
+	FlagLockExempt    = "lock_exempt"
 	FlagLocked        = "locked"
 	FlagDormantLocked = "dormant_locked"
 	FlagTemporary     = "temporary"
@@ -117,8 +129,11 @@ type RoleRow struct {
 
 // Summary is what the cards on the page show.
 type Summary struct {
-	Users           int `json:"users"`
-	GlobalAdmins    int `json:"global_admins"`
+	Users        int `json:"users"`
+	GlobalAdmins int `json:"global_admins"` // with admin permissions (FlagGlobalAdmin)
+	// FullAdmins: of those, the accounts whose global role carries "*" (the
+	// console's global admin, who reaches every cluster).
+	FullAdmins      int `json:"full_admins"`
 	Dormant         int `json:"dormant"`
 	NeverLoggedIn   int `json:"never_logged_in"`
 	Locked          int `json:"locked"`
@@ -145,19 +160,23 @@ type Report struct {
 	ClusterRoles   []ClusterRoleRow   `json:"cluster_roles"`
 	APIKeys        []APIKeyRow        `json:"api_keys"`
 	AccessRequests []AccessRequestRow `json:"access_requests"`
-	Roles          []RoleRow          `json:"roles"`
+	// AccessRequestsTotal counts the requests since Since; AccessRequests
+	// holds the newest of them up to the read's limit.
+	AccessRequestsTotal int       `json:"access_requests_total"`
+	Roles               []RoleRow `json:"roles"`
 }
 
 // Input is everything Build reads, as the repository returns it.
 type Input struct {
-	Users        []model.User
-	Grants       []repository.ReviewClusterGrant
-	Keys         []repository.ReviewAPIKey
-	Requests     []repository.AccessRequest
-	Roles        []model.RoleWithPermissions
-	UsersByRole  map[int]int
-	GrantsByRole map[int]int
-	LastReview   *ReviewSummary
+	Users         []model.User
+	Grants        []repository.ReviewClusterGrant
+	Keys          []repository.ReviewAPIKey
+	Requests      []repository.AccessRequest
+	RequestsTotal int // every request since the window start, Requests aside
+	Roles         []model.RoleWithPermissions
+	UsersByRole   map[int]int
+	GrantsByRole  map[int]int
+	LastReview    *ReviewSummary
 }
 
 // DefaultSince is the start of the access request window when there is no
@@ -180,8 +199,10 @@ func Build(now time.Time, s Settings, since time.Time, in Input) *Report {
 	}
 
 	privileged := map[string]bool{} // role name → carries "*" or admin.*
+	everything := map[string]bool{} // role name → carries "*"
 	for _, r := range in.Roles {
 		privileged[r.Name] = hasAdminPermissions(r.Permissions)
+		everything[r.Name] = slices.Contains(r.Permissions, "*")
 	}
 	grantsByUser, tempByUser := map[string]int{}, map[string]int{}
 	for _, g := range in.Grants {
@@ -191,9 +212,13 @@ func Build(now time.Time, s Settings, since time.Time, in Input) *Report {
 		}
 	}
 	keysByUser := map[string]int{}
+	keyUse := map[string]time.Time{} // newest use of any of the user's keys, expired ones too, as the lock reads them
 	for _, k := range in.Keys {
 		if k.ExpiresAt.After(now) {
 			keysByUser[k.UserID]++
+		}
+		if k.LastUsedAt != nil && k.LastUsedAt.After(keyUse[k.UserID]) {
+			keyUse[k.UserID] = *k.LastUsedAt
 		}
 	}
 
@@ -208,19 +233,26 @@ func Build(now time.Time, s Settings, since time.Time, in Input) *Report {
 			row.Flags = append(row.Flags, FlagGlobalAdmin)
 			rep.Summary.GlobalAdmins++
 		}
+		if everything[u.RoleName] {
+			rep.Summary.FullAdmins++
+		}
 		if u.LastLoginAt == nil {
 			row.Flags = append(row.Flags, FlagNeverLoggedIn)
 			rep.Summary.NeverLoggedIn++
 		}
-		// Dormant counts from the last sign-in, or from creation for an account
-		// that never signed in.
-		ref := u.CreatedAt
-		if u.LastLoginAt != nil {
-			ref = *u.LastLoginAt
-		}
-		if s.DormantDays > 0 && !ref.After(dormantBefore) {
-			row.Flags = append(row.Flags, FlagDormant)
-			rep.Summary.Dormant++
+		// Dormant is what the lock reads (repository.LockDormantAccounts): no
+		// sign-in and no key use since the cutoff, admins counted too.
+		if s.DormantDays > 0 {
+			switch {
+			case lastActivity(u, keyUse[u.ID]).Before(dormantBefore):
+				row.Flags = append(row.Flags, FlagDormant)
+				rep.Summary.Dormant++
+				if s.LockEnabled && s.LockExemptAdmins && privileged[u.RoleName] {
+					row.Flags = append(row.Flags, FlagLockExempt)
+				}
+			case lastSignIn(u).Before(dormantBefore):
+				row.Flags = append(row.Flags, FlagAPIKeyOnly)
+			}
 		}
 		if u.LockedUntil != nil && u.LockedUntil.After(now) {
 			row.LockedUntil = utcPtr(u.LockedUntil)
@@ -290,6 +322,7 @@ func Build(now time.Time, s Settings, since time.Time, in Input) *Report {
 		rep.AccessRequests = append(rep.AccessRequests, row)
 	}
 	rep.Summary.AccessRequests = len(rep.AccessRequests)
+	rep.AccessRequestsTotal = max(in.RequestsTotal, len(rep.AccessRequests))
 
 	for _, r := range in.Roles {
 		perms := append([]string{}, r.Permissions...)
@@ -307,6 +340,27 @@ func Build(now time.Time, s Settings, since time.Time, in Input) *Report {
 	return rep
 }
 
+// lastSignIn is the last sign-in, or creation for an account that never signed in.
+func lastSignIn(u model.User) time.Time {
+	if u.LastLoginAt != nil {
+		return *u.LastLoginAt
+	}
+	return u.CreatedAt
+}
+
+// lastActivity is the later of the last sign-in and the newest key use, each
+// counted from creation when there is none — the lock's GREATEST.
+func lastActivity(u model.User, keyUse time.Time) time.Time {
+	signIn, key := lastSignIn(u), u.CreatedAt
+	if !keyUse.IsZero() {
+		key = keyUse
+	}
+	if key.After(signIn) {
+		return key
+	}
+	return signIn
+}
+
 // hasAdminPermissions: the superuser wildcard or any admin.* permission.
 func hasAdminPermissions(perms []string) bool {
 	for _, p := range perms {
@@ -320,7 +374,7 @@ func hasAdminPermissions(perms []string) bool {
 // Counts is what a sign-off stores next to the snapshot.
 func (r *Report) Counts() map[string]int {
 	return map[string]int{
-		"users": r.Summary.Users, "global_admins": r.Summary.GlobalAdmins, "dormant": r.Summary.Dormant, "never_logged_in": r.Summary.NeverLoggedIn,
+		"users": r.Summary.Users, "global_admins": r.Summary.GlobalAdmins, "full_admins": r.Summary.FullAdmins, "dormant": r.Summary.Dormant, "never_logged_in": r.Summary.NeverLoggedIn,
 		"locked": r.Summary.Locked, "dormant_locked": r.Summary.DormantLocked, "cluster_grants": r.Summary.ClusterGrants, "temporary_grants": r.Summary.TemporaryGrants,
 		"api_keys_active": r.Summary.APIKeysActive, "api_keys_expiring": r.Summary.APIKeysExpiring, "api_keys_unused": r.Summary.APIKeysUnused,
 		"access_requests": r.Summary.AccessRequests, "roles": len(r.Roles),
