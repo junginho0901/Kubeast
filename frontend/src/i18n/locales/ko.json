@@ -223,6 +223,8 @@
     "overdue": "기한 지남 ({{when}})",
     "intervalHint": "검토 주기는 {{days}}일입니다.",
     "generatedAt": "기준 시각 {{when}} · 임시 권한은 {{since}} 이후.",
+    "tabCountExpired": "({{count}} · 만료 {{expired}})",
+    "requestsCut": "{{since}} 이후 요청 {{total}}건 중 최근 {{shown}}건만 여기와 CSV에 있습니다.",
     "section": {
       "users": "계정",
       "cluster_roles": "클러스터 역할",
@@ -233,8 +235,10 @@
     },
     "card": {
       "users": "계정",
-      "globalAdmins": "전역 관리자",
+      "adminPermissions": "관리 권한 있는 계정",
+      "fullAdmins": "전체 관리자 {{count}}명",
       "dormant": "휴면",
+      "dormantHint": "{{days}}일 동안 로그인도 API 키 사용도 없음 — 휴면 잠금이 보는 활동과 같음",
       "neverLoggedIn": "미로그인",
       "clusterGrants": "클러스터 역할",
       "temporaryGrants": "임시 권한",
@@ -273,12 +277,14 @@
       "reviewedAt": "서명 일시",
       "reviewedBy": "검토자",
       "note": "메모",
-      "counts": "계정 / 관리자 / 휴면 / 키"
+      "counts": "계정 / 관리 권한 / 휴면 / 키"
     },
     "flags": {
-      "global_admin": "전역 관리자",
+      "global_admin": "관리자 권한",
       "never_logged_in": "미로그인",
       "dormant": "휴면",
+      "api_key_only": "API 키로만 활동",
+      "lock_exempt": "잠금 제외(관리 권한)",
       "locked": "잠김",
       "dormant_locked": "휴면 잠김",
       "temporary": "임시",

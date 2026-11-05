@@ -190,8 +190,9 @@ type AccessRequestsConfig struct {
 	HelpURL  string
 }
 
-// AccessReviewConfig: DormantDays flags an account with no sign-in for that
-// long; IntervalDays is how often a review is due, counted from the last
+// AccessReviewConfig: DormantDays flags an account with no sign-in and no API
+// key use for that long (the activity the dormant lock reads, with days of
+// its own); IntervalDays is how often a review is due, counted from the last
 // sign-off.
 type AccessReviewConfig struct {
 	Enabled      bool

@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useMemo, useState } from 'react'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { AlertTriangle, ClipboardCheck, Download, History, Loader2, RefreshCw, X } from 'lucide-react'
 
@@ -11,17 +11,22 @@ import {
   type AccessReviewSignoff,
 } from '@/services/api/access_review'
 import { formatDuration, formatWhen } from './accessRequestFormat'
+import { HISTORY_PER_PAGE, apiKeyTabCount, historyPage, requestsCut } from './accessReviewView'
+import { ListPager } from '@/components/ListPager'
 import { utcTitle } from '@/utils/time'
 
 // Admin → Access review: the report of who has what (accounts, per-cluster
 // grants, API keys, temporary grants since the last review, roles) with the
 // flags a reviewer looks for, one CSV per section, and the sign-off that
-// records the review was done. A past sign-off opens as the report it stored.
+// records the review was done. A past sign-off opens as the report it stored. Past reviews are paged by the
+// server with the count of every sign-off kept.
 
 type Tab = AccessReviewSection | 'history'
 
 const FLAG_TONE: Record<string, string> = {
   global_admin: 'bg-red-500/20 text-red-300',
+  lock_exempt: 'bg-yellow-500/20 text-yellow-300',
+  api_key_only: 'bg-slate-700 text-slate-300',
   admin_role: 'bg-red-500/20 text-red-300',
   has_admin_permissions: 'bg-red-500/20 text-red-300',
   dormant: 'bg-red-500/20 text-red-300',
@@ -52,17 +57,26 @@ export default function AccessReview() {
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [viewId, setViewId] = useState<string | null>(null)
+  const [pastPage, setPastPage] = useState(1)
 
   const { data: live, isLoading, isFetching, refetch, error: reportError } = useQuery({
     queryKey: ['access-review', 'report'],
     queryFn: () => api.getAccessReview(),
     retry: false,
   })
-  const { data: history = [], isLoading: historyLoading } = useQuery({
-    queryKey: ['access-review', 'history'],
-    queryFn: api.listAccessReviews,
-    enabled: tab === 'history' || !!viewId,
+  // read with the page (the tab then opens on rows, not a loading line); a page being read keeps the sign-offs shown before it
+  const pastQuery = historyPage(pastPage)
+  const { data: past, isLoading: historyLoading, isPlaceholderData: pastLoading, error: historyError } = useQuery({
+    queryKey: ['access-review', 'history', pastQuery],
+    queryFn: async () => ({ ...(await api.listAccessReviews(pastQuery)), offset: pastQuery.offset }),
+    placeholderData: keepPreviousData,
   })
+  const history = past?.items ?? []
+  const pastTotal = past?.total ?? 0
+  const pastPages = Math.max(1, Math.ceil(pastTotal / HISTORY_PER_PAGE))
+  useEffect(() => {
+    if (past && !pastLoading && pastPage > pastPages) setPastPage(pastPages)
+  }, [past, pastLoading, pastPage, pastPages])
   const { data: viewed } = useQuery({
     queryKey: ['access-review', 'snapshot', viewId],
     queryFn: () => api.getAccessReviewSnapshot(viewId as string),
@@ -165,6 +179,8 @@ export default function AccessReview() {
 
   const sectionLabel = (s: AccessReviewSection) => tr(`accessReview.section.${s}`, s)
   const summary = report?.summary
+  const cut = report ? requestsCut(report) : null
+  const keyCount = report ? apiKeyTabCount(report) : null
 
   return (
     <div className="space-y-4">
@@ -209,19 +225,25 @@ export default function AccessReview() {
 
       {summary && (
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3" data-testid="access-review-summary">
-          {[
+          {([
             ['users', summary.users, 'accessReview.card.users', 'Accounts'],
-            ['global_admins', summary.global_admins, 'accessReview.card.globalAdmins', 'Global admins'],
-            ['dormant', summary.dormant, 'accessReview.card.dormant', 'Dormant'],
+            // every account whose global role carries "*" or an admin.* permission; beside it the "*" ones
+            ['global_admins', summary.global_admins, 'accessReview.card.adminPermissions', 'With admin permissions',
+              summary.full_admins === undefined ? undefined : tr('accessReview.card.fullAdmins', '{{count}} global admins', { count: summary.full_admins })],
+            // a report that keeps the lock's settings counts dormant as the lock does (older sign-offs: sign-ins only)
+            ['dormant', summary.dormant, 'accessReview.card.dormant', 'Dormant', undefined,
+              report?.settings.lock_enabled === undefined ? undefined
+                : tr('accessReview.card.dormantHint', 'No sign-in or API key use for {{days}} days — the activity the dormant lock checks', { days: report.settings.dormant_days })],
             ['never_logged_in', summary.never_logged_in, 'accessReview.card.neverLoggedIn', 'Never signed in'],
             ['cluster_grants', summary.cluster_grants, 'accessReview.card.clusterGrants', 'Cluster grants'],
             ['temporary_grants', summary.temporary_grants, 'accessReview.card.temporaryGrants', 'Temporary'],
             ['api_keys_active', summary.api_keys_active, 'accessReview.card.apiKeys', 'Active API keys'],
             ['api_keys_expiring', summary.api_keys_expiring, 'accessReview.card.apiKeysExpiring', 'Keys expiring ≤30d'],
-          ].map(([key, value, i18nKey, fallback]) => (
-            <div key={String(key)} className="rounded-lg bg-slate-800/50 border border-slate-700 p-3" data-testid={`access-review-card-${key}`}>
-              <div className="text-xs text-slate-400">{tr(String(i18nKey), String(fallback))}</div>
-              <div className={`text-2xl font-semibold ${['dormant', 'global_admins', 'api_keys_expiring'].includes(String(key)) && Number(value) > 0 ? 'text-yellow-300' : 'text-ink'}`}>{value}</div>
+          ] as [string, number, string, string, string?, string?][]).map(([key, value, i18nKey, fallback, sub, hint]) => (
+            <div key={key} className="rounded-lg bg-slate-800/50 border border-slate-700 p-3" data-testid={`access-review-card-${key}`} title={hint}>
+              <div className="text-xs text-slate-400">{tr(i18nKey, fallback)}</div>
+              <div className={`text-2xl font-semibold ${['dormant', 'global_admins', 'api_keys_expiring'].includes(key) && value > 0 ? 'text-yellow-300' : 'text-ink'}`}>{value}</div>
+              {sub !== undefined && <div className="text-[11px] text-slate-400" data-testid={`access-review-card-${key}-sub`}>{sub}</div>}
             </div>
           ))}
         </div>
@@ -254,7 +276,14 @@ export default function AccessReview() {
             data-testid={`access-review-tab-${s}`}
             className={`rounded-sm px-3 py-1.5 text-sm ${tab === s ? 'bg-primary-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'}`}
           >
-            {sectionLabel(s)} {report ? <span className="text-xs">({(report[s] ?? []).length})</span> : null}
+            {sectionLabel(s)}{' '}
+            {report ? (
+              <span className="text-xs">
+                {s === 'api_keys' && keyCount && keyCount.expired > 0
+                  ? tr('accessReview.tabCountExpired', '({{count}} · {{expired}} expired)', { count: keyCount.all, expired: keyCount.expired })
+                  : `(${(report[s] ?? []).length})`}
+              </span>
+            ) : null}
           </button>
         ))}
         <button
@@ -285,10 +314,18 @@ export default function AccessReview() {
         )}
       </div>
 
+      {tab === 'access_requests' && cut && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200" data-testid="access-review-requests-cut">
+          {tr('accessReview.requestsCut', 'The newest {{shown}} of {{total}} requests since {{since}} are listed here and in the CSV.', { shown: cut.shown, total: cut.total, since: formatWhen(cut.since) })}
+        </div>
+      )}
+
       {tab === 'history' ? (
         <div className="rounded-lg bg-slate-800/50 border border-slate-700 overflow-x-auto">
           {historyLoading ? (
             <div className="p-6 text-slate-400 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> {tr('accessReview.loading', 'Loading...')}</div>
+          ) : historyError && !past ? (
+            <div className="p-6 text-red-300">{(historyError as any)?.response?.data?.detail || (historyError as Error).message}</div>
           ) : history.length === 0 ? (
             <div className="p-6 text-slate-400">{tr('accessReview.noHistory', 'No review has been signed off yet.')}</div>
           ) : (
@@ -319,6 +356,15 @@ export default function AccessReview() {
               </tbody>
             </table>
           )}
+          <ListPager
+            currentPage={past ? past.offset / HISTORY_PER_PAGE + 1 : pastPage}
+            totalPages={pastPages}
+            total={pastTotal}
+            rowsPerPage={HISTORY_PER_PAGE}
+            onPageChange={(p) => { if (!pastLoading) setPastPage(p) }}
+            showPageSize={false}
+            testId="access-review-history-pager"
+          />
         </div>
       ) : (
         <div className="rounded-lg bg-slate-800/50 border border-slate-700 overflow-x-auto">

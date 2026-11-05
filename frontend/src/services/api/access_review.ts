@@ -4,6 +4,7 @@
 // (the config endpoint says so and the menu item hides).
 
 import { client } from './client'
+import { totalHeader } from './access_requests'
 
 export interface AccessReviewConfig {
   enabled: boolean
@@ -82,7 +83,10 @@ export interface AccessReviewRoleRow {
 
 export interface AccessReviewSummary {
   users: number
+  // accounts whose global role carries "*" or an admin.* permission (the card "with admin permissions")
   global_admins: number
+  // of those, the "*" ones (global admins); absent in reports signed off before it was counted
+  full_admins?: number
   dormant: number
   never_logged_in: number
   locked: number
@@ -107,7 +111,8 @@ export interface AccessReviewSignoff {
 
 export interface AccessReviewReport {
   generated_at: string
-  settings: { dormant_days: number; interval_days: number }
+  // the dormant lock's settings are absent in reports signed off before they were kept
+  settings: { dormant_days: number; interval_days: number; lock_enabled?: boolean; lock_days?: number; lock_exempt_admins?: boolean }
   since: string
   last_review: { id: string; reviewed_by_email: string; reviewed_at: string; note: string } | null
   next_due_at: string | null
@@ -117,6 +122,8 @@ export interface AccessReviewReport {
   cluster_roles: AccessReviewClusterRoleRow[]
   api_keys: AccessReviewAPIKeyRow[]
   access_requests: AccessReviewRequestRow[]
+  // every request since `since`; access_requests holds the newest of them (absent in older sign-offs)
+  access_requests_total?: number
   roles: AccessReviewRoleRow[]
 }
 
@@ -144,9 +151,11 @@ export const accessReviewApi = {
     return data
   },
 
-  listAccessReviews: async (): Promise<AccessReviewSignoff[]> => {
-    const { data } = await client.get('/auth/admin/access-review/history')
-    return Array.isArray(data) ? data : []
+  // One page of the sign-offs, newest first, and how many are kept.
+  listAccessReviews: async (page: { limit: number; offset: number }): Promise<{ items: AccessReviewSignoff[]; total: number }> => {
+    const { data, headers } = await client.get('/auth/admin/access-review/history', { params: page })
+    if (!Array.isArray(data)) throw new Error('Invalid access review history response')
+    return { items: data, total: totalHeader(headers) }
   },
 
   getAccessReviewSnapshot: async (id: string): Promise<AccessReviewSignoff> => {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Check, Clock, Loader2, Search, ShieldCheck, X } from 'lucide-react'
 
@@ -7,49 +7,66 @@ import { api } from '@/services/api'
 import StatusBadge from '@/components/AccessRequestStatusBadge'
 import { ListPager } from '@/components/ListPager'
 import { formatDuration, formatWhen } from './accessRequestFormat'
+import { REQUESTS_PER_PAGE, accessRequestQuery, pageCount, type AccessRequestTab } from './accessRequestPages'
+import { usePendingAccessRequestCount } from '@/hooks/usePendingAccessRequestCount'
 import { utcTitle } from '@/utils/time'
 
 // Admin review of access requests (temporary per-cluster role grants):
 // pending requests to approve or reject with an optional note, and the
 // history. The server refuses a decision on the reviewer's own request; the
 // row says so instead of offering the buttons. Both tabs search by requester, cluster, role, reason and
-// decider, and page (a fixed count: the page scrolls, and the history only grows).
-
-const REQUESTS_PER_PAGE = 25
+// decider, and page (a fixed count: the page scrolls, and the history only grows). The server searches, pages and
+// counts each tab, so the history reaches its first request; a page being read keeps the rows shown before it.
 
 export default function AccessRequests() {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, opts?: Record<string, unknown>) => t(key, { defaultValue: fallback, ...opts })
   const queryClient = useQueryClient()
-  const [tab, setTab] = useState<'pending' | 'history'>('pending')
+  const [tab, setTab] = useState<AccessRequestTab>('pending')
   const [notes, setNotes] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
+  // the server searches every request, not only the page shown; asked once typing pauses
+  const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchInput.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [searchInput])
+  // the page goes back to 1 with another tab or search, in the same render (no read of the old page number)
+  const pageKey = `${tab}\u0000${search}`
+  const [paged, setPaged] = useState({ key: pageKey, page: 1 })
+  const page = paged.key === pageKey ? paged.page : 1
+  const setPage = (p: number) => setPaged({ key: pageKey, page: p })
 
   const { data: me } = useQuery({ queryKey: ['me'], queryFn: api.me, staleTime: 30_000, retry: false })
   const { data: config } = useQuery({ queryKey: ['access-requests', 'config'], queryFn: api.getAccessRequestsConfig, staleTime: 60_000 })
-  const { data: pending = [], isLoading: pendingLoading } = useQuery({
-    queryKey: ['access-requests', 'admin', 'pending'],
-    queryFn: () => api.adminListAccessRequests('pending'),
+  const { data: pendingCount = 0 } = usePendingAccessRequestCount({ enabled: true, refetchInterval: 30_000 })
+  // Both tabs are read (the one not shown at its first page), so switching shows rows at once; each keeps the
+  // rows it showed while its next page or search loads.
+  const tabQuery = (k: AccessRequestTab) => accessRequestQuery(k, search, tab === k ? page : 1)
+  const pendingList = useQuery({
+    queryKey: ['access-requests', 'admin', 'list', 'pending', tabQuery('pending')],
+    queryFn: async () => ({ ...(await api.adminAccessRequestsPage(tabQuery('pending'))), offset: tabQuery('pending').offset }),
+    placeholderData: keepPreviousData,
     refetchInterval: 30_000,
   })
-  const { data: all = [], isLoading: allLoading } = useQuery({
-    queryKey: ['access-requests', 'admin', 'all'],
-    queryFn: () => api.adminListAccessRequests(),
-    enabled: tab === 'history',
+  const historyList = useQuery({
+    queryKey: ['access-requests', 'admin', 'list', 'history', tabQuery('history')],
+    queryFn: async () => ({ ...(await api.adminAccessRequestsPage(tabQuery('history'))), offset: tabQuery('history').offset }),
+    placeholderData: keepPreviousData,
   })
-  const history = all.filter((r) => r.status !== 'pending')
-  const q = search.trim().toLowerCase()
-  const rows = (tab === 'pending' ? pending : history).filter(
-    (r) => !q || [r.user_name, r.user_email, r.cluster_name, r.cluster_id, r.role, r.reason, r.decided_by_email].some((v) => (v ?? '').toLowerCase().includes(q)),
-  )
-  const totalPages = Math.max(1, Math.ceil(rows.length / REQUESTS_PER_PAGE))
-  useEffect(() => setPage(1), [tab, search])
+  const list = tab === 'pending' ? pendingList : historyList
+  const pagedRows = list.data?.items ?? []
+  const total = list.data?.total ?? 0
+  const totalPages = pageCount(total, REQUESTS_PER_PAGE)
+  // the pager names the page of the rows shown, and does not turn while the next page loads
+  const shownPage = list.data ? list.data.offset / REQUESTS_PER_PAGE + 1 : page
+  const turnPage = (p: number) => {
+    if (!list.isPlaceholderData) setPage(p)
+  }
   useEffect(() => {
-    if (page > totalPages) setPage(totalPages)
-  }, [page, totalPages])
-  const pagedRows = rows.slice((page - 1) * REQUESTS_PER_PAGE, page * REQUESTS_PER_PAGE)
+    if (!list.isPlaceholderData && page > totalPages) setPaged({ key: pageKey, page: totalPages })
+  }, [list.isPlaceholderData, page, totalPages, pageKey])
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['access-requests'] })
@@ -98,8 +115,8 @@ export default function AccessRequests() {
             className={`rounded-lg px-3 py-1.5 text-sm ${tab === k ? 'bg-primary-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
           >
             {k === 'pending' ? tr('accessRequests.tabs.pending', 'Pending') : tr('accessRequests.tabs.history', 'History')}
-            {k === 'pending' && pending.length > 0 && (
-              <span className="ml-2 rounded-full bg-amber-500/90 px-1.5 text-[10px] font-semibold text-slate-900">{pending.length}</span>
+            {k === 'pending' && pendingCount > 0 && (
+              <span className="ml-2 rounded-full bg-amber-500/90 px-1.5 text-[10px] font-semibold text-slate-900">{pendingCount}</span>
             )}
           </button>
         ))}
@@ -109,8 +126,8 @@ export default function AccessRequests() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
         <input
           type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
           placeholder={tr('accessRequests.searchPlaceholder', 'Search by requester, cluster or role...')}
           data-testid="access-requests-search"
           className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
@@ -145,10 +162,12 @@ export default function AccessRequests() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-700/60" data-testid={`access-requests-table-${tab}`}>
-            {(tab === 'pending' ? pendingLoading : allLoading) ? (
+            {list.isLoading ? (
               <tr><td colSpan={9} className="px-4 py-6 text-center text-slate-400"><Loader2 className="w-4 h-4 animate-spin inline" /></td></tr>
-            ) : rows.length === 0 ? (
-              <tr><td colSpan={9} className="px-4 py-6 text-center text-slate-400">{q ? tr('common.noSearchResults', 'No results found.') : tr('common.listEmpty', 'No items.')}</td></tr>
+            ) : list.isError && !list.data ? (
+              <tr><td colSpan={9} className="px-4 py-6 text-center text-red-300" data-testid="access-requests-load-error">{(list.error as any)?.response?.data?.detail || (list.error as Error).message}</td></tr>
+            ) : pagedRows.length === 0 ? (
+              <tr><td colSpan={9} className="px-4 py-6 text-center text-slate-400">{search ? tr('common.noSearchResults', 'No results found.') : tr('common.listEmpty', 'No items.')}</td></tr>
             ) : (
               pagedRows.map((r) => {
                 const own = me?.id === r.user_id
@@ -215,7 +234,7 @@ export default function AccessRequests() {
             )}
           </tbody>
         </table>
-        <ListPager currentPage={page} totalPages={totalPages} total={rows.length} rowsPerPage={REQUESTS_PER_PAGE} onPageChange={setPage} showPageSize={false} testId="access-requests-pager" />
+        <ListPager currentPage={shownPage} totalPages={totalPages} total={total} rowsPerPage={REQUESTS_PER_PAGE} onPageChange={turnPage} showPageSize={false} testId="access-requests-pager" />
       </div>
     </div>
   )

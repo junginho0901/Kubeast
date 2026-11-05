@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -59,15 +61,17 @@ type AccessRequest struct {
 	Namespaces []string `json:"namespaces,omitempty"`
 }
 
-const accessRequestColumns = `
-	ar.id, ar.user_id, u.email, u.name, ar.cluster_id, c.display_name, ar.role_id, ro.name,
-	ar.duration_minutes, ar.reason, ar.status, ar.created_at,
-	ar.decided_by, d.email, ar.decided_at, ar.decision_note, ar.expires_at, ar.ended_at, ar.end_reason, ar.namespaces
+const accessRequestFrom = `
 	FROM access_requests ar
 	JOIN auth_users u ON u.id = ar.user_id
 	JOIN clusters c ON c.id = ar.cluster_id
 	JOIN roles ro ON ro.id = ar.role_id
 	LEFT JOIN auth_users d ON d.id = ar.decided_by`
+
+const accessRequestColumns = `
+	ar.id, ar.user_id, u.email, u.name, ar.cluster_id, c.display_name, ar.role_id, ro.name,
+	ar.duration_minutes, ar.reason, ar.status, ar.created_at,
+	ar.decided_by, d.email, ar.decided_at, ar.decision_note, ar.expires_at, ar.ended_at, ar.end_reason, ar.namespaces` + accessRequestFrom
 
 func scanAccessRequest(row pgx.Row) (*AccessRequest, error) {
 	var a AccessRequest
@@ -101,12 +105,60 @@ func (r *Repository) GetAccessRequest(ctx context.Context, id string) (*AccessRe
 	return a, err
 }
 
-// AccessRequestFilter narrows ListAccessRequests. Empty fields are ignored.
+// AccessRequestsDecided is the Status filter for every request that is no
+// longer pending (approved, rejected, cancelled, expired).
+const AccessRequestsDecided = "decided"
+
+// AccessRequestFilter narrows ListAccessRequests and CountAccessRequests.
+// Empty fields are ignored.
 type AccessRequestFilter struct {
 	UserID string
-	Status string
+	Status string // one status, AccessRequestsDecided, or empty for all
+	// Query: text in the requester's name or email, the cluster's name or id,
+	// the role, the reason or the decider's email (case-insensitive).
+	Query  string
 	Limit  int
+	Offset int
 }
+
+// accessRequestSearchColumns are the fields Query looks in.
+var accessRequestSearchColumns = []string{"u.name", "u.email", "c.display_name", "ar.cluster_id", "ro.name", "ar.reason", "d.email"}
+
+// accessRequestWhere is the WHERE clause the list and its count share.
+func accessRequestWhere(f AccessRequestFilter) (string, []any) {
+	var conds []string
+	var args []any
+	arg := func(v any) string {
+		args = append(args, v)
+		return fmt.Sprintf("$%d", len(args))
+	}
+	if f.UserID != "" {
+		conds = append(conds, "ar.user_id = "+arg(f.UserID))
+	}
+	switch f.Status {
+	case "":
+	case AccessRequestsDecided:
+		conds = append(conds, "ar.status <> "+arg(AccessRequestPending))
+	default:
+		conds = append(conds, "ar.status = "+arg(f.Status))
+	}
+	if q := strings.TrimSpace(f.Query); q != "" {
+		p := arg(strings.ToLower(q))
+		in := make([]string, len(accessRequestSearchColumns))
+		for i, col := range accessRequestSearchColumns {
+			in[i] = "strpos(lower(COALESCE(" + col + ", '')), " + p + ") > 0"
+		}
+		conds = append(conds, "("+strings.Join(in, " OR ")+")")
+	}
+	if len(conds) == 0 {
+		return "", args
+	}
+	return " WHERE " + strings.Join(conds, " AND "), args
+}
+
+// accessRequestOrder: newest first, the id keeping requests of one instant
+// in the same place on every page.
+const accessRequestOrder = " ORDER BY ar.created_at DESC, ar.id DESC"
 
 // ListAccessRequests returns requests newest first.
 func (r *Repository) ListAccessRequests(ctx context.Context, f AccessRequestFilter) ([]AccessRequest, error) {
@@ -114,10 +166,10 @@ func (r *Repository) ListAccessRequests(ctx context.Context, f AccessRequestFilt
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
+	where, args := accessRequestWhere(f)
+	args = append(args, limit, max(f.Offset, 0))
 	rows, err := r.pool.Query(ctx,
-		`SELECT `+accessRequestColumns+`
-		  WHERE ($1 = '' OR ar.user_id = $1) AND ($2 = '' OR ar.status = $2)
-		  ORDER BY ar.created_at DESC LIMIT $3`, f.UserID, f.Status, limit)
+		`SELECT `+accessRequestColumns+where+accessRequestOrder+fmt.Sprintf(" LIMIT $%d OFFSET $%d", len(args)-1, len(args)), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -131,6 +183,15 @@ func (r *Repository) ListAccessRequests(ctx context.Context, f AccessRequestFilt
 		out = append(out, *a)
 	}
 	return out, rows.Err()
+}
+
+// CountAccessRequests counts the requests the filter matches (Limit and
+// Offset aside).
+func (r *Repository) CountAccessRequests(ctx context.Context, f AccessRequestFilter) (int, error) {
+	where, args := accessRequestWhere(f)
+	var n int
+	err := r.pool.QueryRow(ctx, `SELECT COUNT(*)`+accessRequestFrom+where, args...).Scan(&n)
+	return n, err
 }
 
 // HasPendingAccessRequest reports whether the user already has a pending

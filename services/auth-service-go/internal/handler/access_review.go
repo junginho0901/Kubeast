@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -46,7 +48,9 @@ func (h *AuthHandler) AccessReviewConfig(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *AuthHandler) accessReviewSettings() accessreview.Settings {
-	return accessreview.Settings{DormantDays: h.cfg.AccessReview.DormantDays, IntervalDays: h.cfg.AccessReview.IntervalDays}
+	lock := h.cfg.DormantAccounts
+	return accessreview.Settings{DormantDays: h.cfg.AccessReview.DormantDays, IntervalDays: h.cfg.AccessReview.IntervalDays,
+		LockEnabled: lock.Enabled, LockDays: lock.Days, LockExemptAdmins: lock.ExemptAdmins}
 }
 
 // requireAccessReview answers 404 when the feature is off and 403 without
@@ -121,6 +125,9 @@ func (h *AuthHandler) buildAccessReview(r *http.Request, now time.Time, since *t
 		return nil, fmt.Errorf("api keys: %w", err)
 	}
 	if in.Requests, err = h.repo.ListAccessRequestsSince(ctx, from, reviewRequestsMax); err != nil {
+		return nil, fmt.Errorf("access requests: %w", err)
+	}
+	if in.RequestsTotal, err = h.repo.CountAccessRequestsSince(ctx, from); err != nil {
 		return nil, fmt.Errorf("access requests: %w", err)
 	}
 	if in.Roles, err = h.repo.ListRoles(ctx); err != nil {
@@ -272,17 +279,35 @@ func (h *AuthHandler) AdminAccessReviewSignoff(w http.ResponseWriter, r *http.Re
 	response.JSON(w, http.StatusCreated, rev)
 }
 
-// AdminAccessReviewHistory handles GET /auth/admin/access-review/history:
-// past sign-offs, newest first, without snapshots.
+// AdminAccessReviewHistory handles GET /auth/admin/access-review/history?limit=&offset=:
+// past sign-offs, newest first, without snapshots (limit 1–500, default
+// reviewHistoryLimit); X-Kubeast-Total counts every sign-off kept.
 func (h *AuthHandler) AdminAccessReviewHistory(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.requireAccessReview(w, r, "admin.review.read"); !ok {
 		return
 	}
-	list, err := h.repo.ListAccessReviews(r.Context(), reviewHistoryLimit)
+	q := r.URL.Query()
+	limit, err := boundedQueryInt(q, "limit", reviewHistoryLimit, 1, 500)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	offset, err := boundedQueryInt(q, "offset", 0, 0, math.MaxInt32)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	list, err := h.repo.ListAccessReviews(r.Context(), limit, offset)
 	if err != nil {
 		response.InternalError(w, r, err)
 		return
 	}
+	total, err := h.repo.CountAccessReviews(r.Context())
+	if err != nil {
+		response.InternalError(w, r, err)
+		return
+	}
+	w.Header().Set("X-Kubeast-Total", strconv.Itoa(total))
 	response.JSON(w, http.StatusOK, list)
 }
 

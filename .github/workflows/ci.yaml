@@ -85,6 +85,13 @@ jobs:
         env:
           DBMIGRATE_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
         run: go test ./internal/retention/... -run Postgres -v -count=1
+      # auth-service's access request and sign-off pages, and the access
+      # review's dormant accounts next to the lock's (same server).
+      - name: access review
+        working-directory: services/auth-service-go
+        env:
+          DBMIGRATE_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+        run: go test ./internal/repository/... -run Postgres -v -count=1
 
   python:
     name: ai-service (pytest)

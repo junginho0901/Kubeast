@@ -34,15 +34,15 @@ The access review puts "who can do what right now" on one page for periodic revi
 
 | Section | Contents | Flags |
 |---|---|---|
-| Users | email, team, global role, auth source, created date, **last login** (`auth_users.last_login_at`, recorded on every successful login, backfilled from the audit log), counts of cluster roles, API keys and temporary grants | `global_admin`, `never_logged_in`, `dormant` (last login or creation `dormantDays` ago), `locked` |
+| Users | email, team, global role, auth source, created date, **last login** (`auth_users.last_login_at`, recorded on every successful login, backfilled from the audit log), counts of cluster roles, API keys and temporary grants | `global_admin` (the global role carries `*` or any `admin.*` permission — the card "With admin permissions"; the name is kept for stored sign-offs), `never_logged_in`, `dormant` (no sign-in and no API key use for `dormantDays` — the activity the dormant lock reads: the later of the last sign-in and the newest use of any of the account's keys, each counted from creation when missing), `api_key_only` (no sign-in within `dormantDays`, or none, but a key used since — not dormant), `lock_exempt` (dormant, and the lock leaves it alone as an admin), `locked` |
 | Cluster roles | cluster and role per user, permanent/via request, expiry and the role it reverts to | `temporary`, `admin_role` |
 | API keys | owner, name, prefix, cluster, role ceiling, created, expires, last used | `expired`, `expiring_30d`, `unused_30d` |
-| Temporary access history | access requests since the last review: requester, cluster, role, duration, reason, approver, decision, end | — |
+| Temporary access history | access requests since the last review: requester, cluster, role, duration, reason, approver, decision, end (the newest 5,000; past that the tab says how many there are) | — |
 | Roles | name, system or not, permission list, number of users/bindings using it | `has_admin_permissions`, `unused` |
 
 - **CSV** download per tab (UTF-8 BOM, formula injection prevented).
-- Cards at the top show the number of global Admins, dormant accounts, keys about to expire and active temporary grants, plus the **last review and next due date** (`intervalDays` later, flagged when past).
-- The **Sign off** button saves the whole report as of that moment, with a note (`access_reviews`, kept for `retention.reviewDays`, default 3 years). Past reviews can be opened from the list and downloaded again as the CSV of that time.
+- Cards at the top show the accounts with admin permissions (with the global admins among them — a global role carrying `*`, who reaches every cluster), dormant accounts, accounts never signed in, keys about to expire and active temporary grants, plus the **last review and next due date** (`intervalDays` later, flagged when past). The API keys tab counts every key, expired ones too (named beside the count); the "Active API keys" card leaves them out.
+- The **Sign off** button saves the whole report as of that moment, with a note (`access_reviews`, kept for `retention.reviewDays`, default 3 years). Past reviews can be opened from the list (25 a page, with how many are kept) and downloaded again as the CSV of that time.
 - Permissions: `admin.review.read`, `admin.review.export` and `admin.review.signoff`, all included in the system Admin role. The audit actions have the same names. The only write is the sign-off; access itself is changed on the existing screens.
 - To turn it off, set `auth.accessReview.enabled: false`. The menu and API go away.
 - Cost: 7 queries when the page opens, and a snapshot of tens of KB per sign-off.
@@ -55,11 +55,11 @@ With `auth.dormantAccounts.enabled: true`, a sweeper inside auth-service runs ev
 
 A locked account is refused password login, SSO and API key exchange alike. The response is a plain 401, and the audit log records the reason as `reason: dormant`. The account gets back in only after an admin presses **Unlock** in Admin → User Management.
 
-- With `exemptAdmins: true` (default), accounts whose roles carry the `*` or `admin.*` permission are not locked. If the last admin were locked too, no one could unlock anyone. They keep showing as `dormant` in the access review report instead.
+- With `exemptAdmins: true` (default), accounts whose roles carry the `*` or `admin.*` permission are not locked. If the last admin were locked too, no one could unlock anyone. They keep showing as `dormant` in the access review report instead, flagged `lock_exempt`.
 - Admin → User Management shows a "Dormant lock"/"Locked" badge and an **Unlock** button on locked accounts. **Sweep dormant now** at the top runs the sweeper once right away (`admin.users.update`).
 - Audit actions: `user.account.dormant_lock` (actor `system`), `admin.dormant.sweep` and `admin.users.unlock`.
 - Turning it off stops the sweeper so no new locks happen, but accounts already locked stay locked until unlocked.
-- This setting is separate from the access review's `dormantDays` (the display threshold), so the two can differ, e.g. "flag from 60 days, lock at 90".
+- The access review counts dormant accounts with the same activity (sign-in, API key use, creation) but its own `dormantDays` (the display threshold), so the two can differ, e.g. "flag from 60 days, lock at 90".
 
 ## Audit sinks (S3 · webhook · email · file)
 
