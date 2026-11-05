@@ -1926,6 +1926,20 @@ export interface CustomResourceInstanceInfo {
   labels?: Record<string, string> | null
 }
 
+// /custom-resources/all: the instances the caller may list, the kinds the cluster refused it (403) and the kinds
+// whose list failed otherwise (code 0: no answer)
+export interface CustomResourceListFailure {
+  kind: string
+  code: number
+  error: string
+}
+
+export interface CustomResourceInstanceList {
+  items: CustomResourceInstanceInfo[]
+  forbidden_kinds?: string[]
+  failed_kinds?: CustomResourceListFailure[]
+}
+
 export interface TopologyGraph {
   nodes: Array<{
     id: string

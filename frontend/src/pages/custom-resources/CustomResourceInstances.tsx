@@ -12,7 +12,8 @@ import { useAIContext } from '@/hooks/useAIContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { printerCellText, type PrinterCell, type PrinterColumn } from './printerCells'
-import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
+import { crReadNotice } from './readNotice'
+import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search, ShieldAlert, AlertTriangle } from 'lucide-react'
 import CustomDropdown from '@/components/CustomDropdown'
 
 type SortKey = null | 'name' | 'namespace' | 'kind' | 'group' | 'age' | string
@@ -32,10 +33,16 @@ export default function CustomResourceInstances() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
 
-  const { data: instances, isLoading } = useQuery({
+  const { data: instanceList, isLoading } = useQuery({
     queryKey: ['custom-resources', 'instances'],
     queryFn: () => api.getAllCustomResourceInstances(false),
   })
+  const instances = instanceList?.items
+  // the CRDs the instances could not be listed from, in the same answer as the rows, so it is drawn with them
+  const readNotice = useMemo(
+    () => crReadNotice(instanceList?.forbidden_kinds, instanceList?.failed_kinds, tr),
+    [instanceList, tr],
+  )
 
   // the chosen kind is a CRD (crd_name, plural.group): a Kind of one name in two groups stays apart
   const selected = useMemo(
@@ -163,12 +170,16 @@ export default function CustomResourceInstances() {
   const aiSnapshot = useMemo(() => {
     if (!Array.isArray(instances)) return null
     const total = instances.length
+    const forbiddenKinds = instanceList?.forbidden_kinds ?? []
+    const failedKinds = instanceList?.failed_kinds ?? []
     return {
       source: 'base' as const,
-      summary: `CustomResource 인스턴스 ${total}개${kindFilter ? ` · ${kindFilter}` : ''}`,
+      summary: `CustomResource 인스턴스 ${total}개${kindFilter ? ` · ${kindFilter}` : ''}${forbiddenKinds.length ? ` · 볼 권한 없는 종류: ${forbiddenKinds.join(', ')}` : ''}${failedKinds.length ? ` · 불러오지 못한 종류: ${failedKinds.map((f) => f.kind).join(', ')}` : ''}`,
       data: {
         filters: { kind: kindFilter || undefined, search: searchQuery || undefined },
         stats: { total },
+        forbidden_kinds: forbiddenKinds.length ? forbiddenKinds : undefined,
+        failed_kinds: failedKinds.length ? failedKinds : undefined,
         ...summarizeList(pagedItems as unknown as Record<string, unknown>[], {
           total: sortedItems.length,
           currentPage,
@@ -182,7 +193,7 @@ export default function CustomResourceInstances() {
         }),
       },
     }
-  }, [instances, pagedItems, sortedItems.length, currentPage, rowsPerPage, kindFilter, searchQuery])
+  }, [instances, instanceList, pagedItems, sortedItems.length, currentPage, rowsPerPage, kindFilter, searchQuery])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
@@ -260,6 +271,19 @@ export default function CustomResourceInstances() {
           </div>
         ))}
       </div>
+
+      {readNotice.length > 0 && (
+        <div role="status" data-testid="cr-instances-notice" className="shrink-0 space-y-1 rounded-lg border border-amber-700/50 bg-amber-900/20 px-4 py-3 text-sm text-amber-100">
+          {readNotice.map((line) => (
+            <p key={line.text} data-testid={line.testId} title={line.title} className="flex items-start gap-3">
+              {line.testId === 'cr-instances-forbidden'
+                ? <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+                : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />}
+              <span>{line.text}</span>
+            </p>
+          ))}
+        </div>
+      )}
 
       {searchQuery && (
         <p className="text-sm text-slate-400 shrink-0">

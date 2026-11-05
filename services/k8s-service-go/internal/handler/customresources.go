@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
@@ -60,7 +61,16 @@ func (h *Handler) GetAllCustomResourceInstances(w http.ResponseWriter, r *http.R
 		h.handleError(w, err)
 		return
 	}
-	response.JSON(w, http.StatusOK, data)
+	response.JSON(w, http.StatusOK, customResourceInstancesBody(r, data))
+}
+
+// customResourceInstancesBody answers the instances alone, as a screen loaded before the kinds it could not list were
+// answered reads them, or, with with_unlisted=1, {items, forbidden_kinds, failed_kinds} (as events' with_total=1).
+func customResourceInstancesBody(r *http.Request, data *k8s.CustomResourceInstances) interface{} {
+	if queryParam(r, "with_unlisted", "") == "1" {
+		return data
+	}
+	return data.Items
 }
 
 // GetCustomResourceInstances handles GET /api/v1/custom-resources/{group}/{version}/{plural}.

@@ -3,35 +3,54 @@ package k8s
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
+// CustomResourceInstances is every custom resource instance the caller may list and the CRDs it could not list. A
+// refused list (403) is named by its Kind as the Resource Graph's forbidden_kinds are, "Kind (namespace, …)" when only
+// some of a namespace-scoped grant's namespaces refused it; any other error is in FailedKinds, but a 404 (the CRD went
+// between the two lists, or is not served yet), which Gateway → Policies skips too. A Kind two CRDs share carries its
+// group, "Widget (qa.example.com)", as the screen's kind picker names it.
+type CustomResourceInstances struct {
+	Items          []map[string]interface{}    `json:"items"`
+	ForbiddenKinds []string                    `json:"forbidden_kinds,omitempty"`
+	FailedKinds    []CustomResourceListFailure `json:"failed_kinds,omitempty"`
+}
+
+// CustomResourceListFailure is a CRD whose instances could not be listed for a reason other than a refusal.
+type CustomResourceListFailure struct {
+	Kind  string `json:"kind"`
+	Code  int    `json:"code"` // the API server's HTTP status, 0 when it did not answer
+	Error string `json:"error"`
+}
+
 // GetAllCustomResourceInstances lists all custom resource instances across all CRDs.
-func (s *Service) GetAllCustomResourceInstances(ctx context.Context) ([]map[string]interface{}, error) {
+func (s *Service) GetAllCustomResourceInstances(ctx context.Context) (*CustomResourceInstances, error) {
 	// First get all CRDs
 	crdList, err := s.dynamicCtx(ctx).Resource(crdGVR).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list crds for instances: %w", err)
 	}
 
-	type crResult struct {
-		items []map[string]interface{}
-		err   error
-	}
-
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	allItems := make([]map[string]interface{}, 0)
+	var forbidden []string
+	var failed []CustomResourceListFailure
 
 	// Limit concurrency
 	sem := make(chan struct{}, 10)
 	nsScope := scopeFromCtx(ctx) // a namespace-scoped grant: namespaced CRDs are listed per granted namespace
+	kindLabel := crKindLabels(crdList.Items)
 
 	for _, crdItem := range crdList.Items {
 		spec, _ := crdItem.Object["spec"].(map[string]interface{})
@@ -81,20 +100,37 @@ func (s *Service) GetAllCustomResourceInstances(ctx context.Context) ([]map[stri
 			defer func() { <-sem }()
 
 			var crItems []unstructured.Unstructured
+			var refused []string
+			var listErr error
+			targets := []string{""}
 			if len(nsScope) > 0 && scope == "Namespaced" {
-				for _, ns := range nsScope {
-					if l, err := s.dynamicCtx(ctx).Resource(gvr).Namespace(ns).List(ctx, metav1.ListOptions{}); err == nil {
-						crItems = append(crItems, l.Items...)
-					}
-				}
-			} else {
-				crList, err := s.dynamicCtx(ctx).Resource(gvr).List(ctx, metav1.ListOptions{})
-				if err != nil {
-					// Skip CRDs that fail (e.g., permission issues)
-					return
-				}
-				crItems = crList.Items
+				targets = nsScope
 			}
+			for _, ns := range targets {
+				l, err := s.dynamicCtx(ctx).Resource(gvr).Namespace(ns).List(ctx, metav1.ListOptions{})
+				switch {
+				case err == nil:
+					crItems = append(crItems, l.Items...)
+				case apierrors.IsForbidden(err):
+					refused = append(refused, ns)
+				case apierrors.IsNotFound(err):
+					// the CRD went, or is not served yet: nothing to name
+				case listErr == nil:
+					listErr = err
+				}
+			}
+			label := kindLabel(crKind, group)
+			mu.Lock()
+			switch {
+			case len(refused) == len(targets):
+				forbidden = append(forbidden, label)
+			case len(refused) > 0:
+				forbidden = append(forbidden, label+" ("+strings.Join(refused, ", ")+")")
+			}
+			if listErr != nil {
+				failed = append(failed, CustomResourceListFailure{Kind: label, Code: apiStatusCode(listErr), Error: listErr.Error()})
+			}
+			mu.Unlock()
 
 			items := make([]map[string]interface{}, 0, len(crItems))
 			for _, cr := range crItems {
@@ -130,8 +166,39 @@ func (s *Service) GetAllCustomResourceInstances(ctx context.Context) ([]map[stri
 		tj, _ := allItems[j]["created_at"].(string)
 		return ti > tj
 	})
+	sort.Strings(forbidden)
+	sort.Slice(failed, func(i, j int) bool { return failed[i].Kind < failed[j].Kind })
 
-	return allItems, nil
+	return &CustomResourceInstances{Items: allItems, ForbiddenKinds: forbidden, FailedKinds: failed}, nil
+}
+
+// crKindLabels names a CRD's Kind as the instances screen's kind picker does: the Kind, with its group when another
+// CRD has a Kind of that name.
+func crKindLabels(crds []unstructured.Unstructured) func(kind, group string) string {
+	groups := map[string]map[string]bool{}
+	for _, crd := range crds {
+		kind, _, _ := unstructured.NestedString(crd.Object, "spec", "names", "kind")
+		group, _, _ := unstructured.NestedString(crd.Object, "spec", "group")
+		if groups[kind] == nil {
+			groups[kind] = map[string]bool{}
+		}
+		groups[kind][group] = true
+	}
+	return func(kind, group string) string {
+		if len(groups[kind]) > 1 {
+			return kind + " (" + group + ")"
+		}
+		return kind
+	}
+}
+
+// apiStatusCode is the HTTP status an API error carries, 0 for an error without one (no answer, a timeout here).
+func apiStatusCode(err error) int {
+	var status apierrors.APIStatus
+	if errors.As(err, &status) {
+		return int(status.Status().Code)
+	}
+	return 0
 }
 
 // GetCustomResourceInstances lists instances of a specific CR type.

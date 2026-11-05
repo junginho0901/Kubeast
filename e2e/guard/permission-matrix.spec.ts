@@ -72,7 +72,8 @@ type ListScreen = {
   type: 'list'; resource: string; kind: string; namespaced: boolean; create: string | null
   forbiddenId?: string; notInstalledId?: string; emptyKey?: string; count?: false; grantList?: true
 }
-// crRows: the screen lists every custom resource the user may list; this run's GuardCheck instances are its rows or a refusal.
+// crRows: the screen lists every custom resource the user may list; this run's GuardCheck instances are its rows or a refusal,
+// and it reads every CRD's list, its notice naming the ones refused.
 // inNamespace: the screen is opened on the namespace under test (?namespace=) and reads these kinds there; its notice
 // names the kinds it was refused.
 type GraphRead = { kind: string; resource: string; namespaced: boolean }
@@ -160,7 +161,7 @@ const SCREENS: Record<string, Screen> = {
   '/cluster/leases': list('leases.coordination.k8s.io', 'Lease', true, 'leases.create'),
   // Helm keeps each release in a Secret of its namespace
   '/helm/releases': list('secrets', 'Helm release', true, null, { forbiddenId: 'helm-forbidden', emptyKey: 'helmReleases.empty.title', count: false }),
-  '/custom-resources/instances': { type: 'summary', reads: ['customresourcedefinitions.apiextensions.k8s.io'], crRows: true },
+  '/custom-resources/instances': { type: 'summary', reads: ['customresourcedefinitions.apiextensions.k8s.io'], crRows: true, forbiddenId: 'cr-instances-forbidden' },
   '/custom-resources/groups': list('customresourcedefinitions.apiextensions.k8s.io', 'CustomResourceDefinition', false, 'crdPage.create'),
   '/admin/clusters': { type: 'admin' },
   '/admin/users': { type: 'admin', probe: '/api/v1/auth/admin/users?limit=1' },
@@ -311,6 +312,15 @@ function kubectl(args: string[], input?: string, tolerate = false): string {
 // in one namespace, across all of them (allNamespaces) or, for a cluster-scoped kind, all
 const countOf = (resource: string, namespace: string | null, allNamespaces = false) =>
   kubectl(['get', resource, ...(namespace ? ['-n', namespace] : allNamespaces ? ['-A'] : []), '-o', 'name']).split('\n').filter(Boolean).length
+// every CRD as the custom resource instances screen names it: the Kind, with its group where another CRD has that Kind
+function crdKinds(): { resource: string; label: string }[] {
+  const crds = kubectl(['get', 'crd', '-o', 'jsonpath={range .items[*]}{.spec.names.kind}{"\\t"}{.spec.group}{"\\t"}{.spec.names.plural}{"\\n"}{end}'])
+    .split('\n').filter(Boolean).map((l) => { const [kind, group, plural] = l.split('\t'); return { kind, group, plural } })
+  return crds.map((c) => ({
+    resource: `${c.plural}.${c.group}`,
+    label: crds.some((o) => o.kind === c.kind && o.group !== c.group) ? `${c.kind} (${c.group})` : c.kind,
+  }))
+}
 
 // The cluster's answer for the identity Kubeast acts as: one verb on one resource (and name), in one namespace or,
 // with null, across all of them (-A, namespace "" — the attribute a cluster-scoped request carries).
@@ -857,8 +867,16 @@ async function walk(browser: Browser, request: APIRequestContext, role: Role, ce
       } else if (role.scoped) {
         add({ screen: p, view: '', check: 'notice', kubeast, cluster: null, basis: 'not compared for a limited grant: a cluster-wide screen may be narrowed to the grant or refused; the other-namespace check decides', detail })
       } else {
-        const denied = s.reads.map((r) => canI(who, 'list', r, null)).filter((c) => !c.ok)
-        add({ screen: p, view: '', check: 'notice', kubeast, cluster: denied.length ? 'forbidden' : 'allowed', basis: s.reads.length ? s.reads.map((r) => canI(who, 'list', r, null).basis).join('; ') : 'reads nothing on opening', detail })
+        const crds = s.crRows ? crdKinds() : []
+        const reads = [...s.reads, ...crds.map((c) => c.resource)]
+        const denied = reads.map((r) => canI(who, 'list', r, null)).filter((c) => !c.ok)
+        add({ screen: p, view: '', check: 'notice', kubeast, cluster: denied.length ? 'forbidden' : 'allowed', basis: reads.length ? reads.map((r) => canI(who, 'list', r, null).basis).join('; ') : 'reads nothing on opening', detail })
+        if (s.crRows) {
+          const said = own > 0 ? (await page.getByTestId(s.forbiddenId!).allInnerTexts()).join('\n') : ''
+          const named = (said.match(FORBIDDEN_EMPTY)?.[1] ?? '').split(', ').filter(Boolean).sort()
+          const refused = crds.filter((c) => !canI(who, 'list', c.resource, null).ok).map((c) => c.label).sort()
+          add({ screen: p, view: '', check: 'kinds the notice names', kubeast: named.join(', ') || 'none', cluster: refused.join(', ') || 'none', basis: crds.map((c) => canI(who, 'list', c.resource, null).basis).join('; '), detail: { said } })
+        }
       }
       if (s.crRows) {
         // the GuardCheck rows the screen lists, or its refusal; the cluster: may the user list them (where the grant reaches)

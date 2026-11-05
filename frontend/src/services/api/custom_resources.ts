@@ -2,7 +2,13 @@
 // generic instance lookup that dispatches by group/version/plural.
 
 import { client } from './client'
-import type { CRDInfo, CustomResourceInstanceInfo } from './types'
+import type { CRDInfo, CustomResourceInstanceInfo, CustomResourceInstanceList } from './types'
+
+// asked with with_unlisted=1, k8s-service answers the instances with the kinds it could not list; one from before
+// answers the instances alone, read as the items with nothing named
+export function instanceListFrom(data: CustomResourceInstanceList | CustomResourceInstanceInfo[]): CustomResourceInstanceList {
+  return Array.isArray(data) ? { items: data } : data
+}
 
 export const customResourcesApi = {
   // CRDs
@@ -23,11 +29,11 @@ export const customResourcesApi = {
   },
 
   // Instances
-  getAllCustomResourceInstances: async (forceRefresh = false): Promise<CustomResourceInstanceInfo[]> => {
+  getAllCustomResourceInstances: async (forceRefresh = false): Promise<CustomResourceInstanceList> => {
     const { data } = await client.get('/cluster/custom-resources/all', {
-      params: { force_refresh: forceRefresh },
+      params: { force_refresh: forceRefresh, with_unlisted: 1 },
     })
-    return data
+    return instanceListFrom(data)
   },
 
   getCustomResourceInstances: async (group: string, version: string, plural: string): Promise<any[]> => {
