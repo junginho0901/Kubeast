@@ -5,6 +5,8 @@ import { defineConfig, devices } from '@playwright/test'
 const ACTIONS = process.env.E2E_ACTIONS === '1'
 // Site recordings (e2e/demo, scripts/site-media.sh): E2E_DEMO=1 adds the demo project.
 const DEMO = process.env.E2E_DEMO === '1'
+// Safety nets (e2e/guard): E2E_GUARD=1 adds the guard project.
+const GUARD = process.env.E2E_GUARD === '1'
 
 // E2E config — runs against the kind cluster's gateway (port 8000).
 // Snapshots are committed-equivalent baselines that the refactor PRs
@@ -97,6 +99,24 @@ export default defineConfig({
               locale: 'en-US',
               storageState: '.auth/user.json',
               video: { mode: 'on' as const, size: { width: 1440, height: 900 } },
+            },
+            dependencies: ['setup'],
+          },
+        ]
+      : []),
+    ...(GUARD
+      ? [
+          {
+            name: 'guard',
+            testDir: './guard',
+            use: {
+              ...devices['Desktop Chrome'],
+              // a missing element fails its step instead of the whole test timeout (Playwright Test defaults both to 0)
+              actionTimeout: 15_000,
+              navigationTimeout: 30_000,
+              viewport: { width: 1440, height: 900 },
+              locale: 'en-US',
+              storageState: '.auth/user.json',
             },
             dependencies: ['setup'],
           },
