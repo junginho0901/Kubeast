@@ -4398,7 +4398,7 @@
   },
   "adminAIUsage": {
     "title": "AI Usage",
-    "subtitle": "The audit records written per chat turn and per Optimization AI explanation, added up — requests, tokens, tool calls. No quota; see who used how much.",
+    "subtitle": "The audit records written per chat turn, per Optimization AI explanation and per alert investigation, added up — requests, tokens, tool calls. Alert investigations are rows of their own, never added into a chat row. No quota; see who used how much.",
     "since": "From",
     "until": "To",
     "groupBy": "Group by",
@@ -4421,8 +4421,16 @@
     "failures": "Failures",
     "lastAt": "Last",
     "partialTokens": "{{n}} request(s) had no token usage from the provider and are not in the sum",
-    "note": "Token counts are added up only when the provider sends the usage value in its response. The raw records are in the audit log under the action ai.chat.complete, with CSV export.",
-    "partialLegend": "Some requests have no token count from the provider; the row total leaves them out."
+    "partialRuns": "{{n}} run(s) recorded no token count (failed before the end, or the provider sent none) and are not in the sum",
+    "runs": "runs",
+    "source": {
+      "chat": "Chat and Optimization",
+      "investigation": "Alert investigations",
+      "investigationRow": "Alert investigation"
+    },
+    "cut": "{{source}} by {{group}}: {{shown}} of {{groups}} listed, most tokens first; the totals count all {{groups}}.",
+    "note": "Token counts are added up only when the provider sends the usage value in its response. The raw records are in the audit log under the actions ai.chat.complete and ai.investigation.run, with CSV export.",
+    "partialLegend": "Some requests have no token count (the provider sent none, or an alert investigation failed before the end); the row total leaves them out."
   },
   "yamlCreate": {
     "clusterScoped": "Cluster-scoped resource: metadata.namespace is not used.",
@@ -4595,7 +4603,8 @@
       "status": "Status",
       "cluster": "Cluster",
       "clusterPlaceholder": "cluster ID",
-      "apply": "Search"
+      "apply": "Search",
+      "pending": "Not applied yet — press Search or Enter."
     },
     "status": {
       "all": "All",

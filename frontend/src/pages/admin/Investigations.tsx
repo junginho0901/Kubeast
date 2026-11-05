@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { FileSearch, RefreshCw, Siren } from 'lucide-react'
 
@@ -13,6 +13,7 @@ import CustomDropdown from '@/components/CustomDropdown'
 import InvestigationReportModal from '@/components/InvestigationReportModal'
 import { duration, severityClass, statusClass } from '@/utils/investigationFormat'
 import { formatWhen } from './accessRequestFormat'
+import { investigationsView } from './investigationsView'
 import { utcTitle } from '@/utils/time'
 
 // Admin → Investigations: the reports the alert investigator wrote (features.alertInvestigation).
@@ -26,21 +27,27 @@ export default function Investigations() {
   const tr = (key: string, fallback: string, opts?: Record<string, unknown>) => t(key, { defaultValue: fallback, ...opts })
   const [params, setParams] = useSearchParams()
   const openId = params.get('id')
-  const [status, setStatus] = useState('')
+  // The status applies when picked; the cluster ID when Search or Enter is pressed (an unfinished ID lists nothing).
   const [cluster, setCluster] = useState('')
   const [applied, setApplied] = useState({ status: '', cluster: '' })
   const [page, setPage] = useState(1)
   const features = useClusterFeatures()
 
-  const { data, isLoading, refetch, isFetching } = useQuery({
+  // The rows on screen stay while another page or filter loads; the range, page and AI context are theirs.
+  const { data, isLoading, isPlaceholderData, refetch, isFetching } = useQuery({
     queryKey: ['investigations', 'list', applied, page],
-    queryFn: () => api.listInvestigations({ ...applied, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE }),
+    queryFn: async () => ({ ...(await api.listInvestigations({ ...applied, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE })), filter: applied, page }),
+    placeholderData: keepPreviousData,
     // while something is queued or running, follow it
     refetchInterval: (q) => ((q.state.data?.items ?? []).some((r) => r.status === 'queued' || r.status === 'running') ? 5_000 : 30_000),
   })
-  const rows = data?.items ?? []
-  const total = data?.total ?? 0
-  const first = (page - 1) * PAGE_SIZE + 1
+  const view = investigationsView(data, page, PAGE_SIZE)
+  const { rows, total, first, shownPage, shownFilter } = view
+  const clusterPending = cluster.trim() !== applied.cluster
+  const applyCluster = () => {
+    setApplied((a) => ({ ...a, cluster: cluster.trim() }))
+    setPage(1)
+  }
 
   const open = (id: string | null) => {
     const next = new URLSearchParams(params)
@@ -53,16 +60,16 @@ export default function Investigations() {
     r.status === 'skipped' ? tr('investigations.skipReason', 'Skipped: {{reason}}', { reason: r.skip_reason }) : undefined
 
   useAIContext(data ? {
-    summary: `알림 조사 보고서 ${total}건${applied.status ? ` (상태 ${applied.status})` : ''}${applied.cluster ? ` (클러스터 ${applied.cluster})` : ''}`,
+    summary: `알림 조사 보고서 ${total}건${shownFilter.status ? ` (상태 ${shownFilter.status})` : ''}${shownFilter.cluster ? ` (클러스터 ${shownFilter.cluster})` : ''}`,
     data: {
-      filters: { status: applied.status || undefined, cluster: applied.cluster || undefined, page },
+      filters: { status: shownFilter.status || undefined, cluster: shownFilter.cluster || undefined, page: shownPage },
       items: rows.map((r) => ({
         alertname: r.alertname, cluster: r.cluster, namespace: r.namespace, severity: r.severity, status: r.status,
         skip_reason: r.skip_reason || undefined, received_at: r.received_at, repeat_count: r.repeat_count,
         tool_call_count: r.tool_call_count, total_tokens: r.total_tokens,
       })),
     },
-  } : null, [data, total, applied, page, rows])
+  } : null, [data, total, shownFilter, shownPage, rows])
 
   return (
     <div className="page-scrolls space-y-6">
@@ -94,8 +101,11 @@ export default function Investigations() {
           <div className="w-44">
             <CustomDropdown
               label={tr('investigations.filter.status', 'Status')}
-              value={status}
-              onChange={setStatus}
+              value={applied.status}
+              onChange={(v) => {
+                setApplied((a) => ({ ...a, status: v }))
+                setPage(1)
+              }}
               options={[
                 { value: '', label: tr('investigations.status.all', 'All') },
                 ...STATUSES.map((s) => ({ value: s, label: tr(`investigations.status.${s}`, s) })),
@@ -107,6 +117,9 @@ export default function Investigations() {
             <input
               value={cluster}
               onChange={(e) => setCluster(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.nativeEvent.isComposing) applyCluster()
+              }}
               placeholder={tr('investigations.filter.clusterPlaceholder', 'cluster ID')}
               className="w-48 h-10 rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-sm text-ink"
               data-testid="investigations-cluster-filter"
@@ -114,15 +127,16 @@ export default function Investigations() {
           </div>
           <button
             type="button"
-            onClick={() => {
-              setApplied({ status, cluster: cluster.trim() })
-              setPage(1)
-            }}
+            onClick={applyCluster}
             className="h-10 rounded-lg bg-primary-600 px-3 text-sm font-medium text-white hover:bg-primary-500"
             data-testid="investigations-search"
           >
             {tr('investigations.filter.apply', 'Search')}
           </button>
+          {/* kept in place while hidden, so the row does not move when it shows */}
+          <span className={`h-10 flex items-center text-xs text-amber-400 ${clusterPending ? '' : 'invisible'}`} aria-hidden={!clusterPending} data-testid="investigations-cluster-pending">
+            {tr('investigations.filter.pending', 'Not applied yet — press Search or Enter.')}
+          </span>
         </div>
 
         <div className="overflow-x-auto">
@@ -184,15 +198,15 @@ export default function Investigations() {
         <div className="flex items-center justify-between pt-3 mt-2 border-t border-slate-700" data-testid="investigations-pager">
           <div className="text-xs text-slate-400">
             {rows.length > 0
-              ? tr('investigations.range', '{{from}}–{{to}} of {{total}}', { from: first, to: first + rows.length - 1, total })
+              ? tr('investigations.range', '{{from}}–{{to}} of {{total}}', { from: first, to: view.last, total })
               : tr('common.paginationEmpty', 'Showing 0 of 0')}
           </div>
           <div className="flex items-center gap-2">
             <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-ink hover:border-slate-500">
               {tr('common.prev', 'Prev')}
             </button>
-            <span className="text-xs text-slate-300 min-w-[48px] text-center">{page}</span>
-            <button type="button" onClick={() => setPage((p) => p + 1)} disabled={first + rows.length - 1 >= total} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-ink hover:border-slate-500">
+            <span className="text-xs text-slate-300 min-w-[48px] text-center">{shownPage}</span>
+            <button type="button" onClick={() => setPage((p) => p + 1)} disabled={!view.hasNext || isPlaceholderData} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-ink hover:border-slate-500">
               {tr('common.next', 'Next')}
             </button>
           </div>

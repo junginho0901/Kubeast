@@ -2184,8 +2184,11 @@ export interface AuditLogListResponse {
   export_limit?: number  // rows one CSV export holds at most
 }
 
-// Admin AI usage — ai.chat.complete audit records aggregated per user/model/cluster.
+// Admin AI usage — ai.chat.complete (chat turns, Optimization explanations) and
+// ai.investigation.run (alert investigations) audit records aggregated per
+// user/model/cluster, each source in rows of its own.
 export type AIUsageGroup = 'user' | 'model' | 'cluster'
+export type AIUsageSource = 'chat' | 'investigation'
 
 export interface AIUsageQuery {
   since?: string // RFC3339
@@ -2194,12 +2197,13 @@ export interface AIUsageQuery {
 }
 
 export interface AIUsageRow {
+  source: AIUsageSource
   key: string
   requests: number
   failures: number
   prompt_tokens: number
-  cached_tokens: number
-  prompt_chars: number
+  cached_tokens: number | null // null: the source's records do not carry it
+  prompt_chars: number | null
   completion_tokens: number
   total_tokens: number
   token_requests: number
@@ -2208,11 +2212,28 @@ export interface AIUsageRow {
   last_at: string
 }
 
+// Every group of a source in the period, also the ones past the limit; rows = listed.
+export interface AIUsageTotals {
+  groups: number
+  rows: number
+  requests: number
+  failures: number
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+  token_requests: number
+  tool_calls: number
+  truncated: boolean
+}
+
 export interface AIUsageResponse {
   since: string
   until: string
   group: AIUsageGroup
   rows: AIUsageRow[]
+  limit: number | null
+  truncated: boolean
+  totals: { chat: AIUsageTotals; investigation: AIUsageTotals; all: AIUsageTotals } | null
 }
 
 export interface AuthResponse {

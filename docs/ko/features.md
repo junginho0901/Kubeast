@@ -346,7 +346,7 @@ EKS 클러스터에 `features.networkFlowMonitor`를 켜면 Pod·워크로드 �
   기록하고, 성공과 실패를 모두 추적합니다
 - **클러스터 위생 점검** — Pod Security Standards, 이미지 태그, 리소스, Namespace 정책, RBAC, TLS 만료를 보는 사람의 권한으로 읽어 한 장에 모읍니다.
   CSV/JSON으로 내보내고 클러스터별로 월간 서명을 남길 수 있습니다(Admin → Cluster hygiene, [자세히](operations.md#클러스터-위생-점검-cluster-hygiene)).
-- **AI 사용량** — 채팅 턴과 Optimization의 AI 설명마다 남는 `ai.chat.complete` 감사 행(제공자가 보낸 토큰 수를 턴 단위로 합산)을 사용자·모델·클러스터별로 집계합니다(Admin → AI Usage).
+- **AI 사용량** — 채팅 턴과 Optimization의 AI 설명마다 남는 `ai.chat.complete` 감사 행(제공자가 보낸 토큰 수를 턴 단위로 합산)을 사용자·모델·클러스터별로 집계합니다(Admin → AI Usage). 알림 조사(`ai.investigation.run`)는 채팅 행에 더하지 않고 "알림 조사" 표시가 붙은 따로 된 행으로 세며(사용자 기준이면 조사기 `kubeast:investigator` 한 행), 합계에는 넣되 채팅과 조사를 나눠 보입니다. 출처마다 토큰이 많은 500개 그룹까지 목록에 두고, 합계는 모든 그룹을 세며, 목록이 잘리면 표 아래에 그렇게 말합니다.
   - 한도는 없고, 누가 얼마나 썼는지 보여 줍니다. 제공자가 usage를 보내지 않은 호출은 합계에서 빼고 건수로 따로 표시합니다.
   - 입력 토큰 옆의 **캐시 적중**은 제공자가 캐시에서 내준 입력 토큰(Anthropic `cache_read_input_tokens`, OpenAI `prompt_tokens_details.cached_tokens`)과 그 비율입니다.
   - 입력 토큰 칸의 툴팁은 ai-service가 실제로 보낸 프롬프트의 평균 크기(시스템·도구 정의·이력·메시지의 JSON 문자 수, `prompt_chars`)입니다.

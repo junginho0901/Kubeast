@@ -508,6 +508,17 @@ async def test_store_queue_lifecycle(sqlite_db):
     assert total == 3 and len(rows) == 2
 
 
+@pytest.mark.asyncio
+async def test_store_list_orders_same_time_rows_by_id(sqlite_db):
+    db = sqlite_db
+    # one webhook's alerts share received_at; inserted out of id order
+    for inv_id in ["inv-b", "inv-e", "inv-a", "inv-d", "inv-c"]:
+        await store.insert(db, id=inv_id, cluster="tie", fingerprint=inv_id, status="done", received_at=NOW)
+    await store.insert(db, id="inv-0-newer", cluster="tie", fingerprint="n", status="done", received_at=NOW + timedelta(seconds=1))
+    pages = [[r.id for r in (await store.list_rows(db, cluster="tie", limit=2, offset=o))[0]] for o in (0, 2, 4)]
+    assert pages == [["inv-0-newer", "inv-e"], ["inv-d", "inv-c"], ["inv-b", "inv-a"]]
+
+
 # --- the admin reads ------------------------------------------------------------------------------------------
 
 
