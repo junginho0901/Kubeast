@@ -4,7 +4,7 @@ import { api } from '@/services/api'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
 import { policyReportsEnabled } from '@/utils/features'
 import { InfoSection, NoneText } from './DetailCommon'
-import { readViolations, violationsNameTheResource, violationsView } from './violationsView'
+import { violationsNameTheResource, violationsQuery, violationsView } from './violationsView'
 
 // "Policy violations": the fail / warn / error rows the cluster's policy reports hold about this
 // resource (a workload's rows include its pods; a cluster-scoped resource's come from the
@@ -13,7 +13,7 @@ import { readViolations, violationsNameTheResource, violationsView } from './vio
 
 const RESULT_BADGE: Record<string, string> = { fail: 'badge-error', error: 'badge-error', warn: 'badge-warning' }
 
-export default function PolicyViolations({ kind, namespace, name }: { kind: string; namespace: string; name: string }) {
+export default function PolicyViolations({ kind, namespace, name, apiVersion }: { kind: string; namespace: string; name: string; apiVersion?: string }) {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, options?: Record<string, any>) => t(key, { defaultValue: fallback, ...options })
   const on = policyReportsEnabled(useClusterFeatures().data)
@@ -26,8 +26,7 @@ export default function PolicyViolations({ kind, namespace, name }: { kind: stri
   })
   const installed = status.data?.installed === true
   const resource = useQuery({
-    queryKey: ['cluster', 'policyreports', 'resource', namespace, kind, name],
-    queryFn: () => readViolations(namespace, kind, name),
+    ...violationsQuery(namespace, kind, name, apiVersion),
     enabled: on && installed,
     retry: false,
   })

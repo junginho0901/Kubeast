@@ -49,14 +49,16 @@ export const policyReportsApi = {
     return data
   },
 
-  getResourcePolicyReports: async (namespace: string, kind: string, name: string, force = false): Promise<PolicyReportResource | unknown[]> => {
-    const { data } = await client.get(`/cluster/namespaces/${encodeURIComponent(namespace)}/policyreports/resource`, { params: { kind, name, force_refresh: force || undefined } })
+  // apiVersion (a custom resource's, a built-in workload's) leaves out what an object of another group with the same
+  // Kind and name holds
+  getResourcePolicyReports: async (namespace: string, kind: string, name: string, force = false, apiVersion?: string): Promise<PolicyReportResource | unknown[]> => {
+    const { data } = await client.get(`/cluster/namespaces/${encodeURIComponent(namespace)}/policyreports/resource`, { params: { kind, name, force_refresh: force || undefined, ...(apiVersion ? { api_version: apiVersion } : {}) } })
     return data
   },
 
   // A cluster-scoped resource (a Namespace, a Node, a ClusterRole …): the ClusterPolicyReports' rows about it.
-  getClusterResourcePolicyReports: async (kind: string, name: string, force = false): Promise<PolicyReportResource | unknown[]> => {
-    const { data } = await client.get('/cluster/policyreports/resource', { params: { kind, name, force_refresh: force || undefined } })
+  getClusterResourcePolicyReports: async (kind: string, name: string, force = false, apiVersion?: string): Promise<PolicyReportResource | unknown[]> => {
+    const { data } = await client.get('/cluster/policyreports/resource', { params: { kind, name, force_refresh: force || undefined, ...(apiVersion ? { api_version: apiVersion } : {}) } })
     return data
   },
 }

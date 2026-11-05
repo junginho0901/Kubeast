@@ -31,6 +31,11 @@ function text(value: unknown): string {
   return s.length > 0 ? s : '-'
 }
 
+// A reference's group as Gateway API v1 defaults it: a parentRef's gateway.networking.k8s.io, a backendRef's the core
+// group; an empty group set on the reference is the core group.
+export const parentRefGroup = (ref: Record<string, any>): string => (typeof ref?.group === 'string' ? ref.group : 'gateway.networking.k8s.io')
+export const backendRefGroup = (ref: Record<string, any>): string => (typeof ref?.group === 'string' ? ref.group : '')
+
 // A parent or ancestor reference: Kind.group/name (ns=…, section=…, port=…).
 export function formatParentRef(parentRef: Record<string, any>): string {
   if (!parentRef || typeof parentRef !== 'object') return '-'

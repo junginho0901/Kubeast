@@ -11,7 +11,7 @@ import ko from '../../i18n/locales/ko.json'
 import { api } from '@/services/api'
 import { client } from '@/services/api/client'
 import PolicyViolations from './PolicyViolations'
-import { readViolations, violationsAfterInfo, violationsNameTheResource, violationsView } from './violationsView'
+import { readViolations, violationsAfterInfo, violationsApiVersion, violationsNameTheResource, violationsQuery, violationsView } from './violationsView'
 
 // The "Policy violations" section of every drawer a policy report can name: Pod's form for any kind, the rows of a
 // cluster-scoped resource from the ClusterPolicyReports, and why when the reports could not be read.
@@ -75,9 +75,14 @@ describe('which drawers', () => {
     }
   })
 
-  it('the drawer renders it after the Info content for those kinds, with the object\'s own Kind', () => {
+  it('the drawer renders it after the Info content for those kinds, with the object\'s own Kind and a custom resource\'s apiVersion', () => {
     const src = readFileSync(fileURLToPath(new URL('../ResourceDetailDrawer.tsx', import.meta.url)), 'utf8')
-    expect(src).toMatch(/\) : renderInfoContent\(\)\}\s*\{!unreadable && !resolving && violationsAfterInfo\(kind, ns\) && <PolicyViolations kind=\{displayKind\} namespace=\{ns \?\? ''\} name=\{name\} \/>\}/)
+    expect(src).toMatch(/\) : renderInfoContent\(\)\}\s*\{!unreadable && !resolving && violationsAfterInfo\(kind, ns\) && <PolicyViolations kind=\{displayKind\} namespace=\{ns \?\? ''\} name=\{name\} apiVersion=\{violationsApiVersion\(kind, target\?\.rawJson\)\} \/>\}/)
+  })
+
+  it('the workload drawer asks with its built-in group', () => {
+    const src = readFileSync(fileURLToPath(new URL('./WorkloadInfo.tsx', import.meta.url)), 'utf8')
+    expect(src).toContain("<PolicyViolations kind={kind} namespace={namespace ?? ''} name={name} apiVersion={violationsApiVersion(kind)} />")
   })
 
   it('a namespaced resource reads its namespace\'s reports, a cluster-scoped one the cluster reports', async () => {
@@ -85,8 +90,36 @@ describe('which drawers', () => {
     const cluster = vi.spyOn(api, 'getClusterResourcePolicyReports').mockResolvedValue([])
     await readViolations('shop', 'ConfigMap', 'cm-a')
     await readViolations('', 'Namespace', 'shop')
-    expect(ns.mock.calls).toEqual([['shop', 'ConfigMap', 'cm-a']])
-    expect(cluster.mock.calls).toEqual([['Namespace', 'shop']])
+    expect(ns.mock.calls).toEqual([['shop', 'ConfigMap', 'cm-a', false, undefined]])
+    expect(cluster.mock.calls).toEqual([['Namespace', 'shop', false, undefined]])
+  })
+
+  it('with an apiVersion, both routes send it as api_version; without one, the params as before', async () => {
+    const get = vi.spyOn(client, 'get').mockResolvedValue({ data: { rows: [] } })
+    await readViolations('shop', 'StatefulSet', 'web', 'apps/v1')
+    await readViolations('', 'Gizmo', 'g', 'links-b.kubeast.io/v1')
+    await readViolations('shop', 'ConfigMap', 'cm-a')
+    expect(get.mock.calls).toEqual([
+      ['/cluster/namespaces/shop/policyreports/resource', { params: { kind: 'StatefulSet', name: 'web', force_refresh: undefined, api_version: 'apps/v1' } }],
+      ['/cluster/policyreports/resource', { params: { kind: 'Gizmo', name: 'g', force_refresh: undefined, api_version: 'links-b.kubeast.io/v1' } }],
+      ['/cluster/namespaces/shop/policyreports/resource', { params: { kind: 'ConfigMap', name: 'cm-a', force_refresh: undefined } }],
+    ])
+  })
+
+  it('the section\'s query asks with the apiVersion and keeps its answer under its own key', async () => {
+    const ns = vi.spyOn(api, 'getResourcePolicyReports').mockResolvedValue([])
+    const q = violationsQuery('shop', 'StatefulSet', 'web', 'tg.kubeast.io/v1beta1')
+    await q.queryFn()
+    expect(ns.mock.calls).toEqual([['shop', 'StatefulSet', 'web', false, 'tg.kubeast.io/v1beta1']])
+    expect(q.queryKey).toEqual(['cluster', 'policyreports', 'resource', 'shop', 'StatefulSet', 'web', 'tg.kubeast.io/v1beta1'])
+    expect(violationsQuery('shop', 'ConfigMap', 'cm-a').queryKey).toEqual(['cluster', 'policyreports', 'resource', 'shop', 'ConfigMap', 'cm-a'])
+  })
+
+  it('the apiVersion a drawer asks with: a custom resource\'s group and version, a workload\'s built-in group, else none', () => {
+    expect(violationsApiVersion('CustomResourceInstance', { kind: 'StatefulSet', group: 'tg.kubeast.io', version: 'v1beta1' })).toBe('tg.kubeast.io/v1beta1')
+    expect(violationsApiVersion('CustomResourceInstance', { kind: 'Widget' })).toBeUndefined()
+    expect(['Deployment', 'StatefulSet', 'DaemonSet', 'ReplicaSet', 'Job', 'CronJob'].map((k) => violationsApiVersion(k))).toEqual(['apps/v1', 'apps/v1', 'apps/v1', 'apps/v1', 'batch/v1', 'batch/v1'])
+    for (const k of ['Pod', 'ConfigMap', 'Service', 'Namespace', 'ClusterRole']) expect(violationsApiVersion(k), k).toBeUndefined()
   })
 
   it('the cluster route is /cluster/policyreports/resource with the kind and name', async () => {
@@ -101,13 +134,13 @@ describe('which drawers', () => {
 })
 
 // the section rendered with a seeded cache: the features, the status and the resource's answer (or its error)
-function render(lng: string, kind: string, namespace: string, answer: { data?: unknown; error?: unknown }, installed = true) {
+function render(lng: string, kind: string, namespace: string, answer: { data?: unknown; error?: unknown }, installed = true, apiVersion?: string, seededFor = apiVersion) {
   // an errored query is not fetched again on mount, so the server render shows the error
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, retryOnMount: false } } })
   qc.setQueryData(['clusters-accessible'], [])
   qc.setQueryData(['cluster-features', ''], { policyReports: { enabled: true } })
   qc.setQueryData(['cluster', 'policyreports', 'status'], { enabled: true, installed, group: 'wgpolicyk8s.io/v1alpha2' })
-  const key = ['cluster', 'policyreports', 'resource', namespace, kind, 'cm-a']
+  const key = ['cluster', 'policyreports', 'resource', namespace, kind, 'cm-a', ...(seededFor ? [seededFor] : [])]
   if (answer.data !== undefined) qc.setQueryData(key, answer.data)
   if (answer.error) {
     qc.getQueryCache().build(qc, { queryKey: key }, {
@@ -116,7 +149,7 @@ function render(lng: string, kind: string, namespace: string, answer: { data?: u
     })
   }
   return renderToStaticMarkup(createElement(I18nextProvider, { i18n: i18n.cloneInstance({ lng }) },
-    createElement(QueryClientProvider, { client: qc }, createElement(PolicyViolations, { kind, namespace, name: 'cm-a' }))))
+    createElement(QueryClientProvider, { client: qc }, createElement(PolicyViolations, { kind, namespace, name: 'cm-a', apiVersion }))))
 }
 const text = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/&quot;/g, '"').replace(/\s+/g, ' ').trim()
 const heads = (html: string) => [...html.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((m) => m[1])
@@ -135,6 +168,13 @@ describe('PolicyViolations', () => {
     const html = render('en', 'Deployment', 'shop', { data: { rows: [row('fail', 'p', 'Pod', 'web-1')] } })
     expect(heads(html)).toEqual(['Result', 'Policy', 'Severity', 'Resource', 'Message'])
     expect(text(html)).toContain('Pod/web-1')
+  })
+
+  it('a drawer with an apiVersion keeps the answer asked with it apart from the one asked without', () => {
+    const rows = { data: { rows: [row('fail', 'p', 'Pod', 'web-0')] } }
+    expect(text(render('en', 'StatefulSet', 'shop', rows, true, 'apps/v1'))).toContain('Pod/web-0')
+    expect(text(render('en', 'StatefulSet', 'shop', rows, true, 'apps/v1', ''))).toBe('Policy violations Loading...')
+    expect(text(render('en', 'StatefulSet', 'shop', rows, true, 'apps/v1', 'tg.kubeast.io/v1beta1'))).toBe('Policy violations Loading...')
   })
 
   it('a cluster-scoped resource (namespace "") reads its own answer: "None" without a violation', () => {

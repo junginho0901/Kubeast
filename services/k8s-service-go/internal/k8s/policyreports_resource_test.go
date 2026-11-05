@@ -93,7 +93,7 @@ func TestPolicyReportsForResource_EveryResourceAResultNames(t *testing.T) {
 		{"Service", "web", []string{"pass:shop/Service/web/need-team"}, counts(1, 0, 0, 0, 0)},
 		{"ConfigMap", "cm-c", []string{}, counts(0, 0, 0, 0, 0)},
 	} {
-		res, err := s.PolicyReportsForResource(ctx, "shop", c.kind, c.name, false)
+		res, err := s.PolicyReportsForResource(ctx, "shop", c.kind, c.name, "", false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -102,7 +102,7 @@ func TestPolicyReportsForResource_EveryResourceAResultNames(t *testing.T) {
 		}
 	}
 	// none of a resource's rows is JSON null, and the answer carries no list of the other resources
-	none, _ := s.PolicyReportsForResource(ctx, "shop", "ConfigMap", "cm-c", false)
+	none, _ := s.PolicyReportsForResource(ctx, "shop", "ConfigMap", "cm-c", "", false)
 	if b, _ := json.Marshal(none); !strings.Contains(string(b), `"rows":[]`) {
 		t.Errorf("no rows: %s", b)
 	}
@@ -140,7 +140,7 @@ func TestPolicyReportsForClusterResource(t *testing.T) {
 		{"ClusterRole", "admin-y", []string{"error:/ClusterRole/admin-y/no-wildcard"}, counts(0, 0, 0, 1, 0)},
 		{"Namespace", "other", []string{}, counts(0, 0, 0, 0, 0)},
 	} {
-		res, err := s.PolicyReportsForClusterResource(ctx, c.kind, c.name, false)
+		res, err := s.PolicyReportsForClusterResource(ctx, c.kind, c.name, "", false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -148,17 +148,17 @@ func TestPolicyReportsForClusterResource(t *testing.T) {
 			t.Errorf("%s/%s: %+v rows %v, want %v %+v", c.kind, c.name, res, got, c.want, c.totals)
 		}
 	}
-	if res, _ := s.PolicyReportsForClusterResource(ctx, "Namespace", "shop", false); res.Rows[0].Severity != "high" || res.Rows[0].Message != "shop has no owner" || res.Rows[0].Report != "r-ns-shop" {
+	if res, _ := s.PolicyReportsForClusterResource(ctx, "Namespace", "shop", "", false); res.Rows[0].Severity != "high" || res.Rows[0].Message != "shop has no owner" || res.Rows[0].Report != "r-ns-shop" {
 		t.Errorf("row detail = %+v", res.Rows[0])
 	}
 	if n, ns := srv.count("/clusterpolicyreports"), srv.count("/policyreports"); n != 1 || ns != 0 {
 		t.Fatalf("lists: %v — want the cluster reports once (the minute cache), no namespace's", srv.paths)
 	}
-	if _, err := s.PolicyReportsForClusterResource(ctx, "Namespace", "shop", true); err != nil || srv.count("/clusterpolicyreports") != 2 {
+	if _, err := s.PolicyReportsForClusterResource(ctx, "Namespace", "shop", "", true); err != nil || srv.count("/clusterpolicyreports") != 2 {
 		t.Fatalf("a forced read goes to the cluster: %v %v", err, srv.paths)
 	}
 	other := auth.WithPayload(ctx, auth.TokenPayload{UserID: "u2"})
-	if _, err := s.PolicyReportsForClusterResource(other, "Namespace", "shop", false); err != nil || srv.count("/clusterpolicyreports") != 3 {
+	if _, err := s.PolicyReportsForClusterResource(other, "Namespace", "shop", "", false); err != nil || srv.count("/clusterpolicyreports") != 3 {
 		t.Fatalf("another identity reads for itself: %v %v", err, srv.paths)
 	}
 	// the whole view's cache entry is not the cluster reports': the summary lists the namespaces' reports (404 here)
@@ -177,13 +177,13 @@ func TestPolicyReportsForClusterResource_Refused(t *testing.T) {
 		},
 	})
 	ctx := context.Background()
-	res, err := s.PolicyReportsForClusterResource(ctx, "Namespace", "shop", false)
+	res, err := s.PolicyReportsForClusterResource(ctx, "Namespace", "shop", "", false)
 	if !apierrors.IsForbidden(err) || res != nil || !strings.Contains(err.Error(), `cannot list resource "clusterpolicyreports"`) {
 		t.Fatalf("refused: %+v %v", res, err)
 	}
 	scoped := auth.WithPayload(ctx, auth.TokenPayload{UserID: "u1", Namespaces: map[string][]string{"default": {"shop"}}})
 	before := srv.count("/clusterpolicyreports")
-	_, err = s.PolicyReportsForClusterResource(scoped, "Namespace", "shop", false)
+	_, err = s.PolicyReportsForClusterResource(scoped, "Namespace", "shop", "", false)
 	if !apierrors.IsForbidden(err) || !strings.Contains(err.Error(), "outside a grant limited to namespaces") || srv.count("/clusterpolicyreports") != before {
 		t.Fatalf("scoped: %v, lists %v", err, srv.paths)
 	}

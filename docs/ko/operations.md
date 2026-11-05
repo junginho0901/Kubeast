@@ -20,8 +20,8 @@ Kubeast는 정책을 만들거나 데이터를 저장하지 않습니다.
   - `GET /api/v1/cluster/policyreports/status` — 켜짐·CRD 유무
   - `…/summary?namespace=` — 보고서의 `summary`가 아니라 결과 행을 세어 만든 정책별·Namespace별 집계
   - `…/results?namespace=&policy=&result=fail,warn&severity=&kind=&search=&limit=` — 기본 fail·warn·error, 최대 2,000행, `total`은 자르기 전 수
-  - `GET /api/v1/cluster/namespaces/{ns}/policyreports/resource?kind=&name=`
-  - `GET /api/v1/cluster/policyreports/resource?kind=&name=` — 클러스터 범위 리소스의 행(ClusterPolicyReport에서)
+  - `GET /api/v1/cluster/namespaces/{ns}/policyreports/resource?kind=&name=&api_version=` — `api_version`(선택)을 주면 Kind·이름이 같은 다른 그룹 개체의 행과 그 그룹 소유자의 파드(워크로드)를 뺌
+  - `GET /api/v1/cluster/policyreports/resource?kind=&name=&api_version=` — 클러스터 범위 리소스의 행(ClusterPolicyReport에서)
   - CRD가 없으면 데이터 라우트는 빈 목록과 `X-Kubeast-Not-Installed`를 돌려줍니다.
 - **신원·범위** — 보고서는 **로그인 사용자로** 읽으므로 클러스터 RBAC이 상한입니다.
   - Kyverno 차트 기본값(`rbac.roles.aggregate.view: true`)이 `view`에 보고서 읽기 권한을 붙이므로 Read(`kubeast:viewer`)로도 읽을 수 있습니다.
@@ -118,7 +118,7 @@ Helm 릴리스 작업, 노드 cordon/drain, 새 객체 생성은 가드 대상�
   - 플래그: `cpu_over`·`cpu_under`·`mem_over`·`mem_under`·`no_cpu_request`·`no_mem_request`·`no_mem_limit`
   - 기본 범위는 `features.optimization.windowHours`(24)입니다.
   - "AI 설명" 버튼은 이 표를 그대로 모델에 보내, 왜 그런 수치가 나왔는지와 무엇부터 바꿀지 설명을 받습니다 — 모델은 숫자를 바꾸지 않습니다.
-- **재시작 없이 적용** — `POST /api/v1/cluster/namespaces/{ns}/optimization/resize` 본문 `{kind, name, container, cpu_request_m?, mem_request_bytes?}`(최적화 행 그대로)
+- **재시작 없이 적용** — `POST /api/v1/cluster/namespaces/{ns}/optimization/resize` 본문 `{kind, name, container, cpu_request_m?, mem_request_bytes?, api_version?}`(최적화 행 그대로, `api_version` = 워크로드의 것 — 그 그룹 소유자의 파드만)
   - 그 워크로드의 실행 중인 파드마다 컨테이너 requests를 Pod `resize` 하위 리소스로 바꿉니다.
   - Kubernetes 1.35+ GA이고, 차트 `features.inPlaceResize.enabled`는 기본 켬입니다. 서버 버전이 낮으면 버튼을 숨기고 API는 409를 돌려줍니다.
   - QoS 클래스는 유지합니다.

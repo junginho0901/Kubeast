@@ -19,6 +19,9 @@ type ResizeRequest struct {
 	Container       string `json:"container"`
 	CPURequestM     *int64 `json:"cpu_request_m,omitempty"`
 	MemRequestBytes *int64 `json:"mem_request_bytes,omitempty"`
+	// APIVersion is the row's workload's: an owner of another group with the same Kind and name is another workload.
+	// Without it the Kind and name pick the pods, as before.
+	APIVersion string `json:"api_version,omitempty"`
 }
 
 // PodResizeResult is what happened to one pod: resized (the kubelet accepted
@@ -40,6 +43,8 @@ type ResizeResult struct {
 	Pending   int               `json:"pending"`
 	Skipped   int               `json:"skipped"`
 	Failed    int               `json:"failed"`
+	// the request's, so the audit record names the workload's group
+	APIVersion string `json:"api_version,omitempty"`
 }
 
 var resizeKinds = map[string]bool{"Deployment": true, "StatefulSet": true, "DaemonSet": true, "ReplicaSet": true, "Job": true, "CronJob": true, "Pod": true}
@@ -88,7 +93,7 @@ func (s *Service) ResizeWorkload(ctx context.Context, namespace string, req Resi
 	if err != nil {
 		return nil, fmt.Errorf("list pods: %w", err)
 	}
-	res := &ResizeResult{Kind: req.Kind, Namespace: namespace, Name: req.Name, Container: req.Container, Pods: []PodResizeResult{}}
+	res := &ResizeResult{Kind: req.Kind, APIVersion: req.APIVersion, Namespace: namespace, Name: req.Name, Container: req.Container, Pods: []PodResizeResult{}}
 	for _, p := range targets {
 		r := PodResizeResult{Pod: p.Name}
 		idx := containerIndex(p.Spec.Containers, req.Container)
@@ -134,13 +139,14 @@ func (s *Service) ResizeWorkload(ctx context.Context, namespace string, req Resi
 }
 
 // matchesResizeTarget picks the pods a request means: kind Pod names one pod
-// whoever owns it (the Pod drawer); a workload kind names every pod it owns.
+// whoever owns it (the Pod drawer); a workload kind names every pod it owns,
+// of the request's group when it gives an apiVersion.
 func matchesResizeTarget(p *corev1.Pod, req ResizeRequest, owner func(corev1.Pod) (string, string, string)) bool {
 	if req.Kind == "Pod" {
 		return p.Name == req.Name
 	}
-	kind, name, _ := owner(*p)
-	return kind == req.Kind && name == req.Name
+	kind, name, apiVersion := owner(*p)
+	return kind == req.Kind && name == req.Name && (req.APIVersion == "" || apiGroup(apiVersion) == apiGroup(req.APIVersion))
 }
 
 func (r *ResizeResult) count(result string) int {
