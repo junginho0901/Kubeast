@@ -176,9 +176,10 @@
     - HorizontalPodAutoscaler, VerticalPodAutoscaler, PodDisruptionBudget, PersistentVolume, PersistentVolumeClaim and CustomResourceDefinition are `hpa`, `vpa`, `pdb`, `pv`, `pvc` and `crd`, in that order.
     - Kinds without a name of their own (CRs, etc.) are `customresource`.
   - The Write group's `edit` cannot create cluster-scoped objects (Namespace, ClusterRole, StorageClass, etc.), so the cluster refuses those.
-  - On those screens (15 cluster-scoped kinds plus Role and RoleBinding), the create button therefore asks the cluster directly, in addition to checking the app permission.
+  - On those screens (15 cluster-scoped kinds plus Role, RoleBinding, Endpoints, EndpointSlice, ResourceQuota and LimitRange), the create button therefore asks the cluster directly, in addition to checking the app permission.
   - That check is `GET /api/v1/cluster/can-i?verb=create&group=&resource=`, a SelfSubjectAccessReview of the user identity. It is the same as `kubectl auth can-i`.
-  - If the cluster says no, there is no button.
+  - A drawer's "Delete <Kind>" asks the same way for that object (`verb=delete&…&namespace=&name=`, a Namespace in its own name).
+  - If the cluster says no, there is no button. While it is asked the button is not shown; if it cannot be asked, the app permission decides.
 - **Namespace-scoped grants**: a per-cluster role can be limited to a list of namespaces (up to 50).
   - Enter the list in the field next to the role, in the user details or in the cluster access dialog. Empty means the whole cluster.
   - The grant API takes it as `namespaces` and puts it in `/auth/me` (`cluster_namespaces`) and in the token (`ns` claim).

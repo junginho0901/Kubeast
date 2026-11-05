@@ -1,8 +1,9 @@
-// How a drawer is picked for an object named by Kind and apiVersion, and what a custom resource's drawer shows beside
-// its spec and status. kubectl picks a describer by group and Kind (describerMap's GroupKind keys); the same Kind of
-// another group is described from the object (the generic describer).
+// How a drawer is picked for an object named by Kind and apiVersion, what a custom resource's drawer shows beside
+// its spec and status, and the resource its delete acts on. kubectl picks a describer by group and Kind (describerMap's
+// GroupKind keys); the same Kind of another group is described from the object (the generic describer).
 import type { ResourceDetailTarget } from '../ResourceDetailContext'
 import type { CRDInfo } from '@/services/api/types'
+import type { AccessTarget } from '@/hooks/useCanCreate'
 
 // The API group of each kind that has a drawer of its own ('' = core).
 export const DRAWER_GROUPS: Record<string, string> = {
@@ -20,6 +21,29 @@ export const DRAWER_GROUPS: Record<string, string> = {
   Gateway: 'gateway.networking.k8s.io', GatewayClass: 'gateway.networking.k8s.io', HTTPRoute: 'gateway.networking.k8s.io',
   GRPCRoute: 'gateway.networking.k8s.io', ReferenceGrant: 'gateway.networking.k8s.io', BackendTLSPolicy: 'gateway.networking.k8s.io',
   DeviceClass: 'resource.k8s.io', ResourceClaim: 'resource.k8s.io', ResourceClaimTemplate: 'resource.k8s.io', ResourceSlice: 'resource.k8s.io',
+}
+
+// A drawer kind's resource name: apimachinery's meta.UnsafeGuessKindToResource, but a vowel before a final y keeps it
+// (Gateway → gateways, where that guess says gatewaies); drawerAccess.test.ts holds every kind above to the API server.
+export function kindResource(kind: string): string {
+  const k = kind.toLowerCase()
+  if (k.endsWith('endpoints')) return k
+  if (k.endsWith('s')) return `${k}es`
+  if (/[^aeiou]y$/.test(k)) return `${k.slice(0, -1)}ies`
+  return `${k}s`
+}
+
+// What a drawer's delete acts on, for the cluster's answer (SelfSubjectAccessReview): the group and resource, the
+// object's namespace — a Namespace's own name, the namespace the API server authorizes it in — and its name. A custom
+// resource carries its group and plural (crd_name = <plural>.<group>); none for a kind without a drawer of its own.
+export function deleteTarget(kind: string, namespace: string | undefined, name: string, rawJson?: Record<string, unknown>): AccessTarget | undefined {
+  if (kind === 'CustomResourceInstance') {
+    const group = typeof rawJson?.group === 'string' ? rawJson.group : ''
+    const plural = typeof rawJson?.crd_name === 'string' ? rawJson.crd_name.split('.')[0] : ''
+    return group && plural ? { group, resource: plural, namespace: namespace ?? '', name } : undefined
+  }
+  if (!(kind in DRAWER_GROUPS)) return undefined
+  return { group: DRAWER_GROUPS[kind], resource: kindResource(kind), namespace: kind === 'Namespace' ? name : namespace ?? '', name }
 }
 
 const groupVersion = (apiVersion?: string) => {

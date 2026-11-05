@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/services/api'
+import { api, isForbiddenError } from '@/services/api'
 import { useNodeShellSettings } from '@/services/nodeShellSettings'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useAIContext } from '@/hooks/useAIContext'
@@ -33,7 +33,7 @@ export function useNodeData(name: string) {
   const [showNodeShell, setShowNodeShell] = useState(false)
   const [metricsAvailable] = useState(true)
 
-  const { data: nodeDescribe, isLoading, isError } = useQuery({
+  const { data: nodeDescribe, isLoading, isError, error } = useQuery({
     queryKey: ['cluster', 'nodes', 'describe', name],
     queryFn: () => api.describeNode(name),
     enabled: !!name,
@@ -256,6 +256,7 @@ export function useNodeData(name: string) {
     nodeDescribe,
     isLoading,
     isError,
+    forbidden: isForbiddenError(error),
     metricForNode,
     cpuP,
     memP,

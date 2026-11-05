@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { api } from '@/services/api'
+import { api, isForbiddenError } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { Search } from 'lucide-react'
-import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsSection, SummaryBadge, Th, NoneText, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsSection, SummaryBadge, Th, NoneText, Tx, ObjectUnreadable } from './DetailCommon'
 import { eventsNewestFirst, fmtRel, fmtTs } from './detailFormat'
 import { useDetailLabel } from './useDetailLabel'
 import { ResourceLink } from './ResourceLink'
@@ -23,7 +23,7 @@ export default function NamespaceInfo({ name }: Props) {
   const [podFilter, setPodFilter] = useState('')
   const [podPage, setPodPage] = useState(1)
 
-  const { data: nsDescribe, isLoading, isError } = useQuery({
+  const { data: nsDescribe, isLoading, isError, error } = useQuery({
     queryKey: ['namespace-describe', name],
     queryFn: () => api.describeNamespace(name),
     enabled: !!name,
@@ -191,6 +191,7 @@ export default function NamespaceInfo({ name }: Props) {
   }, [nsDescribe?.pod_summary])
 
   if (isLoading) return <p className="text-slate-400">{tr('namespaces.detail.loading', 'Loading...')}</p>
+  if (isForbiddenError(error)) return <ObjectUnreadable kind="Namespace" name={name} />
   if (isError) return <p className="text-red-400">{tr('namespaces.detail.error', 'Failed to load.')}</p>
   if (!nsDescribe) return <p className="text-slate-400">{tr('namespaces.detail.notFound', 'Not found.')}</p>
 

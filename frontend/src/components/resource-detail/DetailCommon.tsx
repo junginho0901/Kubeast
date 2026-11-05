@@ -1,4 +1,6 @@
 import type { ReactNode, ThHTMLAttributes } from 'react'
+import { useTranslation } from 'react-i18next'
+import { useAIContext } from '@/hooks/useAIContext'
 import type { LabelValues } from './detailLabel'
 import { fmtRel } from './detailFormat'
 import { usePagination } from './usePagination'
@@ -24,6 +26,24 @@ export function Tx({ children, text, values }: { children?: string; text?: strin
 export function NoneText({ className = 'text-slate-400 text-xs' }: { className?: string }) {
   const dl = useDetailLabel()
   return <span className={className}>{dl('None')}</span>
+}
+
+// What a drawer says in place of its object when the caller may not see it (403) or it is gone (404) — the same
+// notice for every kind, whether the drawer or the kind's own view read it; the floating chat is told the same.
+export function ObjectUnreadable({ kind, name, namespace, notFound = false }: { kind: string; name: string; namespace?: string; notFound?: boolean }) {
+  const { t } = useTranslation()
+  useAIContext({
+    source: 'DetailUnreadable',
+    summary: `${kind} ${namespace ? `${namespace}/` : ''}${name} — ${notFound ? '없음(삭제됐을 수 있음)' : '볼 권한 없음'}`,
+    data: { kind, name, namespace, unreadable: notFound ? 'not_found' : 'forbidden' },
+  }, [kind, name, namespace, notFound])
+  return (
+    <p data-testid="detail-unreadable" className="rounded-lg border border-amber-700/40 bg-amber-950/20 px-4 py-3 text-amber-200">
+      {notFound
+        ? t('common.objectNotFound', { defaultValue: 'This object does not exist; it may have been deleted.' })
+        : t('common.objectForbidden', { defaultValue: 'You are not allowed to see this object.' })}
+    </p>
+  )
 }
 
 // titleValues fill {{placeholders}} in the title ("Used By Pods ({{n}})").

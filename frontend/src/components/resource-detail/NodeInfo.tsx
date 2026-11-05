@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { InfoSection, InfoRow, KeyValueTags, UsageCard, EventsSection, SummaryBadge, Th, NoneText, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, UsageCard, EventsSection, SummaryBadge, Th, NoneText, Tx, ObjectUnreadable } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { useNodeData } from './node-info/useNodeData'
@@ -19,6 +19,7 @@ export default function NodeInfo({ name }: Props) {
     nodeDescribe,
     isLoading,
     isError,
+    forbidden,
     metricForNode,
     cpuP,
     memP,
@@ -38,6 +39,7 @@ export default function NodeInfo({ name }: Props) {
   } = data
 
   if (isLoading) return <p className="text-slate-400">{tr('nodes.detail.loading', 'Loading node details...')}</p>
+  if (forbidden) return <ObjectUnreadable kind="Node" name={name} />
   if (isError) return <p className="text-red-400">{tr('nodes.detail.error', 'Failed to load node details.')}</p>
   if (!nodeDescribe) return <p className="text-slate-400">{tr('nodes.detail.notFound', 'Node details not found.')}</p>
 

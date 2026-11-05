@@ -13,9 +13,9 @@ import type {
 
 export const securityApi = {
   // Whether the cluster lets the signed-in user do verb on resource
-  // (SelfSubjectAccessReview — kubectl auth can-i). Empty namespace = every namespace.
-  canI: async (q: { verb: string; group: string; resource: string; namespace?: string }): Promise<boolean> => {
-    const { data } = await client.get('/cluster/can-i', { params: { ...q, namespace: q.namespace || undefined } })
+  // (SelfSubjectAccessReview — kubectl auth can-i). Empty namespace = every namespace, empty name = any object.
+  canI: async (q: { verb: string; group: string; resource: string; namespace?: string; name?: string }): Promise<boolean> => {
+    const { data } = await client.get('/cluster/can-i', { params: { ...q, namespace: q.namespace || undefined, name: q.name || undefined } })
     return !!data?.allowed
   },
 

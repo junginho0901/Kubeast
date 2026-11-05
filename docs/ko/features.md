@@ -179,8 +179,9 @@
   - 이름은 Kind의 소문자 형태이고, 자기 이름이 없는 Kind(CR 등)는 `customresource`를 씁니다.
     단, HorizontalPodAutoscaler·VerticalPodAutoscaler·PodDisruptionBudget·PersistentVolume·PersistentVolumeClaim·CustomResourceDefinition은 `hpa`·`vpa`·`pdb`·`pv`·`pvc`·`crd`를 씁니다.
   - Write 그룹의 `edit`는 클러스터 범위 객체(Namespace·ClusterRole·StorageClass 등)를 만들 수 없어 클러스터가 거부합니다.
-    그래서 그 화면들(클러스터 범위 15종 + Role·RoleBinding)의 생성 버튼은 앱 권한에 더해 클러스터에도 직접 묻습니다(`GET /api/v1/cluster/can-i?verb=create&group=&resource=`, 사용자 신원의 SelfSubjectAccessReview = `kubectl auth can-i`).
-  - 클러스터가 안 된다고 답하면 버튼을 보여 주지 않습니다.
+    그래서 그 화면들(클러스터 범위 15종 + Role·RoleBinding·Endpoints·EndpointSlice·ResourceQuota·LimitRange)의 생성 버튼은 앱 권한에 더해 클러스터에도 직접 묻습니다(`GET /api/v1/cluster/can-i?verb=create&group=&resource=`, 사용자 신원의 SelfSubjectAccessReview = `kubectl auth can-i`).
+  - 상세 창의 "Delete <Kind>"도 그 개체로 같이 묻습니다(`verb=delete&…&namespace=&name=`, Namespace는 자기 이름의 네임스페이스로).
+  - 클러스터가 안 된다고 답하면 버튼을 보여 주지 않습니다. 묻는 동안에는 버튼을 숨기고, 물을 수 없으면 앱 권한으로 정합니다.
 - **네임스페이스 범위 부여**: 클러스터별 역할을 네임스페이스 목록(최대 50개)으로 한정할 수 있습니다.
   목록은 사용자 상세의 역할 옆 칸이나 클러스터 접근 창에 적고, 비우면 클러스터 전체입니다. 부여 API는 이 목록을 `namespaces`로 받아 `/auth/me`(`cluster_namespaces`)와 토큰(`ns` 클레임)에 싣습니다.
   - 접근 요청에도 목록을 넣을 수 있고, 범위가 정해진 부여를 받은 사람은 그 안에서만 요청할 수 있습니다(폼에 미리 채워지며 필수).

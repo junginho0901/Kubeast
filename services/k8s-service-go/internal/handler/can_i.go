@@ -9,12 +9,13 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
-// CanI handles GET /api/v1/can-i?verb=&group=&resource=&namespace= — asks the
-// request's cluster, as the signed-in user, whether they may do verb on
+// CanI handles GET /api/v1/can-i?verb=&group=&resource=&namespace=&name= — asks
+// the request's cluster, as the signed-in user, whether they may do verb on
 // resource (a SelfSubjectAccessReview, like kubectl auth can-i). The console
-// shows a create button only where the cluster would allow it: the app
-// permission alone does not say (the Write role's edit ClusterRole cannot
-// create cluster-scoped objects). An empty namespace means every namespace.
+// shows a create or delete button only where the cluster would allow it: the
+// app permission alone does not say (the Write role's edit ClusterRole cannot
+// create or delete cluster-scoped objects). An empty namespace means every
+// namespace; a name asks about that object, which RBAC resourceNames can allow.
 func (h *Handler) CanI(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	attrs := &authorizationv1.ResourceAttributes{
@@ -22,6 +23,7 @@ func (h *Handler) CanI(w http.ResponseWriter, r *http.Request) {
 		Group:     q.Get("group"),
 		Resource:  q.Get("resource"),
 		Namespace: q.Get("namespace"),
+		Name:      q.Get("name"),
 	}
 	if attrs.Verb == "" || attrs.Resource == "" {
 		response.Error(w, http.StatusBadRequest, "verb and resource are required")

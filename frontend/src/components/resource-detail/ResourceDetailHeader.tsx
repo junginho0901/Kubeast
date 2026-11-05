@@ -78,7 +78,8 @@ export function ResourceDetailHeader({
 
       {/* Tabs */}
       <div className="flex items-center justify-between px-5 py-2 border-b border-slate-800 text-xs shrink-0 gap-2">
-        <div className="flex items-center gap-2">
+        {/* as tall as the Delete button, so the row does not move while the cluster is asked or when it is hidden */}
+        <div className="flex items-center gap-2 min-h-7.5">
           {([
             { id: 'info' as TabId, label: t('common.info', { defaultValue: 'Info' }), icon: Info },
             { id: 'yaml' as TabId, label: 'YAML', icon: FileCode },
