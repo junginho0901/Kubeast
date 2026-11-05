@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Film, Play, RefreshCw } from 'lucide-react'
 
@@ -41,15 +41,19 @@ export default function SessionRecordings() {
   const [playing, setPlaying] = useState<SessionRecording | null>(null)
 
   const { data: config } = useQuery({ queryKey: ['recordings', 'config'], queryFn: api.getRecordingsConfig, staleTime: 60_000 })
-  // One row past the page tells whether there is a next page.
-  const { data = [], isLoading, refetch, isFetching } = useQuery({
+  // One row past the page tells whether there is a next page. The rows on
+  // screen stay while another page or search loads, with the range they are.
+  const { data, isLoading, isPlaceholderData, refetch, isFetching } = useQuery({
     queryKey: ['recordings', 'list', applied, page],
-    queryFn: () => api.listRecordings({ ...applied, limit: PAGE_SIZE + 1, offset: (page - 1) * PAGE_SIZE }),
+    queryFn: async () => ({ page, list: await api.listRecordings({ ...applied, limit: PAGE_SIZE + 1, offset: (page - 1) * PAGE_SIZE }) }),
+    placeholderData: keepPreviousData,
     refetchInterval: 15_000,
   })
-  const rows = data.slice(0, PAGE_SIZE)
-  const hasNext = data.length > PAGE_SIZE
-  const first = (page - 1) * PAGE_SIZE + 1
+  const list = data?.list ?? []
+  const rows = list.slice(0, PAGE_SIZE)
+  const hasNext = list.length > PAGE_SIZE
+  const shownPage = data?.page ?? page
+  const first = (shownPage - 1) * PAGE_SIZE + 1
 
   const statusClass: Record<string, string> = {
     recording: 'bg-primary-900/40 text-primary-300 border-primary-800/60',
@@ -199,8 +203,8 @@ export default function SessionRecordings() {
             <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-ink hover:border-slate-500">
               {tr('common.prev', 'Prev')}
             </button>
-            <span className="text-xs text-slate-300 min-w-[48px] text-center">{page}</span>
-            <button type="button" onClick={() => setPage((p) => p + 1)} disabled={!hasNext} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-ink hover:border-slate-500">
+            <span className="text-xs text-slate-300 min-w-[48px] text-center">{shownPage}</span>
+            <button type="button" onClick={() => setPage((p) => p + 1)} disabled={!hasNext || isPlaceholderData} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-ink hover:border-slate-500">
               {tr('common.next', 'Next')}
             </button>
           </div>

@@ -22,6 +22,10 @@ type Reader interface {
 
 	// Get fetches a single entry by id; returns (nil, nil) when not found.
 	Get(ctx context.Context, id int64) (*Entry, error)
+
+	// MaxID returns the highest id written so far (0 when there is none):
+	// the Filter.AsOf of a paged read.
+	MaxID(ctx context.Context) (int64, error)
 }
 
 // Store combines Writer and Reader.

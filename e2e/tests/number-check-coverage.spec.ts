@@ -43,9 +43,13 @@ const WHERE: Record<string, string> = {
   '/gpu/deviceclasses': 'number-check-dra', '/gpu/resourceclaims': 'number-check-dra', '/gpu/resourceclaimtemplates': 'number-check-dra',
   '/gpu/resourceslices': 'number-check-dra',
   // Kubeast's own data: screen = API and database
-  '/admin/users': 'N4', '/admin/roles': 'N4', '/admin/organizations': 'N4', '/admin/clusters': 'N4', '/admin/ai-models': 'N4',
-  '/admin/ai-usage': 'N4', '/admin/audit': 'N4', '/admin/access-requests': 'N4', '/admin/access-review': 'N4',
-  '/admin/investigations': 'N4', '/admin/session-recordings': 'N4', '/admin/node-shell': 'N4', '/alerts': 'N4', '/ai-chat': 'N4',
+  '/admin/users': 'number-check-admin-user-counts', '/admin/roles': 'number-check-admin-user-counts',
+  '/admin/organizations': 'number-check-admin-user-counts', '/admin/clusters': 'number-check-admin-misc',
+  '/admin/audit': 'number-check-admin-misc', '/admin/session-recordings': 'number-check-admin-misc', '/ai-chat': 'number-check-admin-misc',
+  '/admin/node-shell': 'no numbers: two settings this browser keeps (localStorage), nothing on the server',
+  '/admin/ai-models': 'no counts: model settings cards; "Used for" is the API\'s used_for',
+  '/admin/ai-usage': 'N4', '/admin/access-requests': 'N4', '/admin/access-review': 'N4',
+  '/admin/investigations': 'N4', '/alerts': 'N4',
 }
 
 test('every sidebar screen has a place in the number check', () => {

@@ -47,7 +47,7 @@ Viewing is through the admin screen (`admin.audit.read`) and CSV (`admin.audit.e
   - The reason is in the service log (`audit: refusing unrecorded action`).
   - The `audit` block of k8s-service `/health` has `ready`, `write_failures` and `last_error`.
   - Switch: `AUDIT_FAIL_CLOSED` (default true, chart `audit.failClosed`). Boot wait: `AUDIT_DB_WAIT_SEC` (default 90).
-- **Viewing and export**: `GET /api/v1/auth/admin/audit-logs` (filters, pages), `GET /api/v1/auth/admin/audit-logs/export` (same filters, CSV UTF-8 BOM, at most 50,000 rows). Both are audited (`admin.audit.read`, `admin.audit.export`).
+- **Viewing and export**: `GET /api/v1/auth/admin/audit-logs` (filters, pages newest first with id breaking ties; the first page answers `as_of`, the highest id it counted, and the next pages pass it back so rows written meanwhile do not shift them), `GET /api/v1/auth/admin/audit-logs/export` (same filters and `as_of`, CSV UTF-8 BOM, the newest 50,000 rows at most — the list answers that limit as `export_limit`, the export the matching count as `X-Kubeast-Total`). Both are audited (`admin.audit.read`, `admin.audit.export`).
 - **Sinks (optional)**: the DB is the primary store, and sinks **copy** DB rows out.
   - One dispatcher in auth-service does this: of several replicas, the one that holds a Postgres advisory lock. For each sink, it reads the rows above its cursor (`audit_sink_cursors.last_id`), sends them in batches, and moves the cursor on success.
   - The writing services (Go, Python) still INSERT only into the DB.

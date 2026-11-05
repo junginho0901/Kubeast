@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { absoluteTitle, ageSeconds, formatAge, formatDate, formatTime, humanDuration, parseTypedTime, utcTitle } from './time'
+import { absoluteTitle, ageSeconds, endOfMinuteISO, formatAge, formatDate, formatTime, humanDuration, parseTypedTime, utcTitle } from './time'
 
 const SEC = 1
 const MS = 0.001
@@ -62,5 +62,14 @@ describe('time on screen', () => {
     expect(parseTypedTime('10/08/2026')).toBeNull()
     expect(parseTypedTime('2026-10-08 25:00', true)).toBeNull()
     expect(parseTypedTime('2026-10-08', true)).toBeNull()
+  })
+
+  it('ends a typed minute at its last microsecond, so an inclusive until takes in the whole minute', () => {
+    const minute = parseTypedTime('2026-11-05 10:30', true)!
+    const end = endOfMinuteISO(minute)
+    expect(end).toBe(`${new Date(minute.getTime() + 59_000).toISOString().slice(0, 19)}.999999Z`)
+    // 10:30:15 is inside, 10:31:00 is not
+    expect(new Date(minute.getTime() + 15_000).toISOString() <= end).toBe(true)
+    expect(new Date(minute.getTime() + 60_000).toISOString() <= end).toBe(false)
   })
 })

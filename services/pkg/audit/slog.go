@@ -47,3 +47,8 @@ func (s *SlogStore) List(ctx context.Context, f Filter) ([]Entry, int, error) {
 func (s *SlogStore) Get(ctx context.Context, id int64) (*Entry, error) {
 	return nil, nil
 }
+
+// MaxID always returns 0 — slog-backed stores cannot be queried.
+func (s *SlogStore) MaxID(ctx context.Context) (int64, error) {
+	return 0, nil
+}

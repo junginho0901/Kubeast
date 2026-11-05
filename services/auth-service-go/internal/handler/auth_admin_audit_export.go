@@ -24,16 +24,15 @@ var exportColumns = []string{
 
 // AdminExportAuditLogs handles GET /auth/admin/audit-logs/export: the same
 // filter query params as the list, streamed as CSV (RFC 4180, UTF-8 with BOM
-// so spreadsheets open non-ASCII text correctly). Requires the
-// admin.audit.export permission and records the export itself.
+// so spreadsheets open non-ASCII text correctly). The rows are those of the
+// list's as_of (or of the export's start), the newest exportMaxRows of them;
+// X-Kubeast-Total says how many matched. Requires the admin.audit.export
+// permission and records the export itself.
 func (h *AuthHandler) AdminExportAuditLogs(w http.ResponseWriter, r *http.Request) {
 	payload, ok := requirePerm(h.auditStore, w, r, "admin.audit.export")
 	if !ok || refuseIfUnaudited(h.auditStore, w, r) {
 		return
 	}
-	filter := auditFilterFromQuery(r)
-	filter.Limit = 1000
-	filter.Offset = 0
 
 	rec := audit.FromHTTPRequest(r)
 	rec.Service = audit.ServiceAdmin
@@ -41,18 +40,31 @@ func (h *AuthHandler) AdminExportAuditLogs(w http.ResponseWriter, r *http.Reques
 	rec.ActorUserID = payload.UserID
 	rec.ActorEmail = payload.Email
 	rec.TargetType = "audit-logs"
+	fail := func(err error) {
+		rec.Result = audit.ResultFailure
+		rec.Error = err.Error()
+		_, _ = h.auditStore.Write(r.Context(), rec)
+		response.InternalError(w, r, err)
+	}
+
+	filter, err := h.pinnedAuditFilter(r)
+	if err != nil {
+		fail(err)
+		return
+	}
+	filter.Limit = 1000
+	filter.Offset = 0
 
 	// Collect first so a store error becomes a JSON 500 instead of a truncated file.
 	var rows []audit.Entry
+	total := 0
 	for len(rows) < exportMaxRows {
-		page, _, err := h.auditStore.List(r.Context(), filter)
+		page, n, err := h.auditStore.List(r.Context(), filter)
 		if err != nil {
-			rec.Result = audit.ResultFailure
-			rec.Error = err.Error()
-			_, _ = h.auditStore.Write(r.Context(), rec)
-			response.InternalError(w, r, err)
+			fail(err)
 			return
 		}
+		total = n
 		rows = append(rows, page...)
 		if len(page) < filter.Limit {
 			break
@@ -66,13 +78,15 @@ func (h *AuthHandler) AdminExportAuditLogs(w http.ResponseWriter, r *http.Reques
 	rec.After = audit.MustJSON(map[string]interface{}{
 		"filter":    filter,
 		"rows":      len(rows),
-		"truncated": len(rows) == exportMaxRows,
+		"total":     total,
+		"truncated": len(rows) < total,
 	})
 	_, _ = h.auditStore.Write(r.Context(), rec)
 
 	name := "audit-logs-" + time.Now().UTC().Format("20060102-150405") + ".csv"
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", name))
+	w.Header().Set("X-Kubeast-Total", strconv.Itoa(total))
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte{0xEF, 0xBB, 0xBF}) // UTF-8 BOM
 	cw := csv.NewWriter(w)
@@ -114,6 +128,7 @@ func auditFilterFromQuery(r *http.Request) audit.Filter {
 		Cluster:    q.Get("cluster"),
 		Namespace:  q.Get("namespace"),
 		Result:     q.Get("result"),
+		AsOf:       int64(queryInt(r, "as_of", 0)),
 		Limit:      queryInt(r, "limit", 100),
 		Offset:     queryInt(r, "offset", 0),
 	}

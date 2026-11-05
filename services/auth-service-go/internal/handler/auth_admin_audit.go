@@ -17,16 +17,23 @@ import (
 // Query params: service, action, actor_email, target_id, cluster, namespace,
 //
 //	result, since (RFC3339), until (RFC3339), limit (default 100, max 1000),
-//	offset (default 0).
+//	offset (default 0), as_of (the as_of of the first page's answer).
 //
-// Logs the read itself as "admin.audit.read" (meta-audit).
+// Without as_of the read pins itself to the rows written so far and answers
+// that bound as as_of; the next pages (and the CSV) pass it back so rows
+// written in between do not shift them. Logs the read itself as
+// "admin.audit.read" (meta-audit).
 func (h *AuthHandler) AdminListAuditLogs(w http.ResponseWriter, r *http.Request) {
 	payload, ok := requirePerm(h.auditStore, w, r, "admin.audit.read")
 	if !ok || refuseIfUnaudited(h.auditStore, w, r) {
 		return
 	}
 
-	filter := auditFilterFromQuery(r)
+	filter, err := h.pinnedAuditFilter(r)
+	if err != nil {
+		response.InternalError(w, r, err)
+		return
+	}
 
 	entries, total, err := h.auditStore.List(r.Context(), filter)
 	if err != nil {
@@ -48,9 +55,23 @@ func (h *AuthHandler) AdminListAuditLogs(w http.ResponseWriter, r *http.Request)
 	_, _ = h.auditStore.Write(r.Context(), rec)
 
 	response.JSON(w, http.StatusOK, map[string]interface{}{
-		"total": total,
-		"items": entries,
+		"total":        total,
+		"items":        entries,
+		"as_of":        filter.AsOf,
+		"export_limit": exportMaxRows,
 	})
+}
+
+// pinnedAuditFilter reads the filter and, without as_of, bounds it by the
+// highest id written now.
+func (h *AuthHandler) pinnedAuditFilter(r *http.Request) (audit.Filter, error) {
+	filter := auditFilterFromQuery(r)
+	if filter.AsOf > 0 {
+		return filter, nil
+	}
+	asOf, err := h.auditStore.MaxID(r.Context())
+	filter.AsOf = asOf
+	return filter, err
 }
 
 // --- Helpers ---

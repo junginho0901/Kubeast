@@ -8,6 +8,7 @@ import { clustersApi, type ClusterMeta, type ConnectionResult } from '@/services
 import RegisterClusterDialog from './RegisterClusterDialog'
 import EditClusterDialog from './EditClusterDialog'
 import ClusterAccessModal from './ClusterAccessModal'
+import { shownTest, type HeldTest } from './clusterTest'
 
 function healthDotClass(status: string | undefined): string {
   if (status === 'healthy') return 'bg-green-500'
@@ -27,10 +28,10 @@ export default function AdminClusters() {
   const [deleteTarget, setDeleteTarget] = useState<ClusterMeta | null>(null)
   const [editTarget, setEditTarget] = useState<ClusterMeta | null>(null)
   const [accessTarget, setAccessTarget] = useState<ClusterMeta | null>(null)
-  const [testResults, setTestResults] = useState<Record<string, ConnectionResult>>({})
+  const [testResults, setTestResults] = useState<Record<string, HeldTest>>({})
   const [testingId, setTestingId] = useState<string | null>(null)
 
-  const { data: clusters = [], isLoading } = useQuery({
+  const { data: clusters = [], isLoading, dataUpdatedAt } = useQuery({
     queryKey: ['clusters-all'],
     queryFn: () => clustersApi.listClusters(false),
     staleTime: 30_000,
@@ -51,15 +52,18 @@ export default function AdminClusters() {
 
   const runTest = async (id: string) => {
     setTestingId(id)
+    let res: ConnectionResult
     try {
-      const res = await clustersApi.testCluster(id)
-      setTestResults((p) => ({ ...p, [id]: res }))
-      refresh()
+      res = await clustersApi.testCluster(id)
     } catch (e) {
-      setTestResults((p) => ({ ...p, [id]: { healthy: false, error: (e as Error).message } }))
-    } finally {
-      setTestingId(null)
+      res = { healthy: false, error: (e as Error).message }
     }
+    // read the list again (the test wrote its health) and hold the result for that answer
+    await queryClient.refetchQueries({ queryKey: ['clusters-all'], exact: true })
+    queryClient.invalidateQueries({ queryKey: ['clusters-accessible'] })
+    const listAt = queryClient.getQueryState(['clusters-all'])?.dataUpdatedAt ?? 0
+    setTestResults((p) => ({ ...p, [id]: { ...res, listAt } }))
+    setTestingId(null)
   }
 
   return (
@@ -114,7 +118,7 @@ export default function AdminClusters() {
               </tr>
             )}
             {clusters.map((c) => {
-              const res = testResults[c.id]
+              const res = shownTest(testResults[c.id], dataUpdatedAt)
               return (
                 <tr key={c.id} className="text-ink">
                   <td className="px-4 py-3">

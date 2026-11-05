@@ -49,8 +49,8 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서입니다.
   - k8s-service `/health`의 `audit` 블록에 `ready`·`write_failures`·`last_error`가 나옵니다.
   - 스위치는 `AUDIT_FAIL_CLOSED`(기본 true, 차트 `audit.failClosed`), 부팅 대기는 `AUDIT_DB_WAIT_SEC`(기본 90)입니다.
 - **조회·내보내기**: 둘 다 감사 대상입니다(`admin.audit.read`, `admin.audit.export`).
-  - `GET /api/v1/auth/admin/audit-logs` — 필터·페이지
-  - `GET /api/v1/auth/admin/audit-logs/export` — 같은 필터, CSV UTF-8 BOM, 최대 50,000행
+  - `GET /api/v1/auth/admin/audit-logs` — 필터·페이지(최신 순, 같은 시각은 id 순). 첫 쪽이 센 가장 큰 id를 `as_of`로 답하고, 다음 쪽이 그 값을 실어 그사이 들어온 행에 쪽이 밀리지 않습니다.
+  - `GET /api/v1/auth/admin/audit-logs/export` — 같은 필터와 `as_of`, CSV UTF-8 BOM, 최신 50,000행까지(목록 답의 `export_limit`이 그 한도, 내보내기 답의 `X-Kubeast-Total`이 맞는 전체 수)
 - **싱크(선택)**: 1차 저장소는 DB이고, 싱크는 DB 행을 **밖으로 복사**합니다.
   - auth-service의 디스패처 하나(여러 replica 중 Postgres advisory lock을 잡은 것)가 싱크마다 커서(`audit_sink_cursors.last_id`)보다 큰 행을 읽어 배치로 보내고, 성공하면 커서를 옮깁니다.
   - 감사를 쓰는 서비스(Go·Python)는 그대로 DB에만 INSERT합니다.
