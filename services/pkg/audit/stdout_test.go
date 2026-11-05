@@ -21,6 +21,7 @@ func (f *fakeStore) Write(_ context.Context, rec Record) (int64, error) {
 }
 func (f *fakeStore) List(context.Context, Filter) ([]Entry, int, error) { return nil, 0, nil }
 func (f *fakeStore) Get(context.Context, int64) (*Entry, error)         { return nil, nil }
+func (f *fakeStore) MaxID(context.Context) (int64, error)               { return 0, nil }
 
 func captureLogger() (*slog.Logger, *bytes.Buffer) {
 	var buf bytes.Buffer

@@ -216,6 +216,8 @@ export const adminApi = {
     return {
       total: data?.total ?? 0,
       items: Array.isArray(data?.items) ? data.items : [],
+      as_of: typeof data?.as_of === 'number' ? data.as_of : undefined,
+      export_limit: typeof data?.export_limit === 'number' ? data.export_limit : undefined,
     }
   },
 

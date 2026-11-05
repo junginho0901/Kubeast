@@ -71,6 +71,11 @@ export function absoluteTitle(value: TimeInput): string | undefined {
   return utc ? `${formatTime(value)} · ${utc}` : undefined
 }
 
+/** The last instant of a typed minute, to the microsecond PostgreSQL keeps: an inclusive end ("until 10:30") that takes in all of 10:30. */
+export function endOfMinuteISO(minute: Date): string {
+  return new Date(minute.getTime() + 59_999).toISOString().replace(/Z$/, '999Z')
+}
+
 /** A typed `YYYY-MM-DD` (or `YYYY-MM-DD HH:mm` with `withTime`) as a local Date, null when it is not one. */
 export function parseTypedTime(text: string, withTime = false): Date | null {
   const m = withTime

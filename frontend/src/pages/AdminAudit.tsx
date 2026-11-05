@@ -1,11 +1,12 @@
-import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, AuditLogEntry, AuditLogFilter, AuditVerifyReport } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
 import { usePermission } from '@/hooks/usePermission'
 import { CheckCircle, ChevronDown, ChevronUp, Play, Search } from 'lucide-react'
-import { formatTime, parseTypedTime, utcTitle } from '@/utils/time'
+import { endOfMinuteISO, formatTime, parseTypedTime, utcTitle } from '@/utils/time'
+import { auditExportCut, auditExportHref, auditPageFilter } from './adminAuditPages'
 import { DateTextInput } from '@/components/DateTextInput'
 import { ListPager } from '@/components/ListPager'
 import RecordingPlayerModal from '@/components/RecordingPlayerModal'
@@ -101,7 +102,8 @@ export default function AdminAudit() {
   const [sinceText, setSinceText] = useState(() => (filter.since ? formatTime(filter.since).slice(0, 16) : ''))
   const [untilText, setUntilText] = useState(() => (filter.until ? formatTime(filter.until).slice(0, 16) : ''))
 
-  const { data, isLoading, isFetching, refetch } = useQuery({
+  const queryClient = useQueryClient()
+  const { data, isLoading, isFetching, isPlaceholderData, refetch } = useQuery({
     queryKey: ['admin-audit-logs', filter],
     queryFn: () => api.adminListAuditLogs(filter),
     placeholderData: keepPreviousData,
@@ -161,14 +163,15 @@ export default function AdminAudit() {
   const page = Math.floor(offset / limit) + 1
   const totalPages = Math.max(1, Math.ceil(total / limit))
 
-  // The time range is typed as local YYYY-MM-DD HH:mm; the API takes RFC 3339.
-  const typedRange = (text: string) => {
+  // The time range is typed as local YYYY-MM-DD HH:mm; the API takes RFC 3339,
+  // the end minute up to its last instant (the API's until includes it).
+  const typedRange = (text: string, end: boolean) => {
     if (!text.trim()) return { ok: true, iso: undefined }
     const d = parseTypedTime(text, true)
-    return { ok: !!d, iso: d?.toISOString() }
+    return { ok: !!d, iso: d ? (end ? endOfMinuteISO(d) : d.toISOString()) : undefined }
   }
-  const since = typedRange(sinceText)
-  const until = typedRange(untilText)
+  const since = typedRange(sinceText, false)
+  const until = typedRange(untilText, true)
   const rangeOk = since.ok && until.ok
 
   const applyFilter = () => {
@@ -188,21 +191,28 @@ export default function AdminAudit() {
 
   const goPage = (p: number) => {
     const newOffset = Math.max(0, (p - 1) * limit)
-    setFilter({ ...filter, offset: newOffset })
+    setFilter(auditPageFilter(filter, newOffset, data, isPlaceholderData))
     setExpandedId(null)
   }
 
-  // CSV of everything matching the applied filter (not just this page). A
-  // same-origin link download carries the session cookie; the server names
-  // the file.
-  const exportCsv = () => {
-    const params = new URLSearchParams()
-    for (const [k, v] of Object.entries(filter)) {
-      if (k === 'limit' || k === 'offset' || v === undefined || v === '') continue
-      params.set(k, String(v))
+  // Refresh reads the rows written since: a new as_of, never a cached copy of
+  // a page read without one.
+  const refresh = () => {
+    if (filter.as_of === undefined) {
+      void refetch()
+      return
     }
+    void queryClient.invalidateQueries({ queryKey: ['admin-audit-logs'], refetchType: 'none' })
+    setFilter({ ...filter, as_of: undefined })
+  }
+
+  // CSV of everything matching the applied filter (not just this page), the
+  // rows the screen counts. A same-origin link download carries the session
+  // cookie; the server names the file.
+  const exportCut = auditExportCut(data)
+  const exportCsv = () => {
     const a = document.createElement('a')
-    a.href = `/api/v1/auth/admin/audit-logs/export?${params.toString()}`
+    a.href = auditExportHref(filter, filter.as_of ?? (isPlaceholderData ? undefined : data?.as_of))
     a.download = ''
     document.body.appendChild(a)
     a.click()
@@ -246,7 +256,7 @@ export default function AdminAudit() {
             {tr('adminAudit.exportCsv', 'CSV 내보내기')}
           </button>
           <button
-            onClick={() => refetch()}
+            onClick={refresh}
             disabled={isFetching}
             className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
           >
@@ -445,6 +455,12 @@ export default function AdminAudit() {
           </button>
           <span className="ml-auto text-xs text-slate-400 self-center">
             {tr('adminAudit.total', '총 {{total}}건', { total, count: total })}
+            {exportCut && (
+              <span className="text-amber-300">
+                {' · '}
+                {tr('adminAudit.exportCut', 'CSV에는 이 {{total}}건 중 최신 {{limit}}건만 담깁니다(내보내기 한도). 나머지는 필터를 좁혀서 내보내세요.', exportCut)}
+              </span>
+            )}
           </span>
         </div>
       </div>

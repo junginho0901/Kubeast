@@ -2174,11 +2174,14 @@ export interface AuditLogFilter {
   until?: string  // RFC3339
   limit?: number
   offset?: number
+  as_of?: number  // the first page's as_of: later pages and the CSV keep its rows
 }
 
 export interface AuditLogListResponse {
   total: number
   items: AuditLogEntry[]
+  as_of?: number  // the highest id this read counted
+  export_limit?: number  // rows one CSV export holds at most
 }
 
 // Admin AI usage — ai.chat.complete audit records aggregated per user/model/cluster.

@@ -125,6 +125,15 @@ func (s *PostgresStore) Get(ctx context.Context, id int64) (*Entry, error) {
 	return &entries[0], nil
 }
 
+// MaxID returns the highest id written so far, 0 when the table is empty.
+func (s *PostgresStore) MaxID(ctx context.Context) (int64, error) {
+	var id int64
+	if err := s.pool.QueryRow(ctx, `SELECT COALESCE(MAX(id), 0) FROM auth_audit_logs`).Scan(&id); err != nil {
+		return 0, fmt.Errorf("audit max id: %w", err)
+	}
+	return id, nil
+}
+
 // List returns entries matching the filter plus the total count.
 func (s *PostgresStore) List(ctx context.Context, f Filter) ([]Entry, int, error) {
 	where, args := buildWhere(f)
@@ -144,8 +153,8 @@ func (s *PostgresStore) List(ctx context.Context, f Filter) ([]Entry, int, error
 		limit = 1000
 	}
 
-	pageSQL := selectSQL + where +
-		fmt.Sprintf(` ORDER BY created_at DESC LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
+	pageSQL := selectSQL + where + listOrder +
+		fmt.Sprintf(` LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
 	args = append(args, limit, f.Offset)
 
 	rows, err := s.pool.Query(ctx, pageSQL, args...)
@@ -161,6 +170,10 @@ func (s *PostgresStore) List(ctx context.Context, f Filter) ([]Entry, int, error
 }
 
 // --- internal helpers ---
+
+// listOrder is newest first, id breaking ties of created_at: rows of one
+// timestamp keep their place from page to page.
+const listOrder = ` ORDER BY created_at DESC, id DESC`
 
 const selectSQL = `
     SELECT id, created_at,
@@ -259,6 +272,9 @@ func buildWhere(f Filter) (string, []any) {
 	}
 	if !f.Until.IsZero() {
 		add(`created_at <= $%d`, f.Until)
+	}
+	if f.AsOf > 0 {
+		add(`id <= $%d`, f.AsOf)
 	}
 	if len(clauses) == 0 {
 		return "", nil

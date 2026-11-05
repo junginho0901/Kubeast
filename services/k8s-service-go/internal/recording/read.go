@@ -72,8 +72,8 @@ func (m *Manager) List(ctx context.Context, f Filter) ([]Recording, error) {
 		f.Offset = 0
 	}
 	rows, err := m.pool.Query(ctx, `SELECT `+recordingColumns+` FROM session_recordings
-		WHERE ($1 = '' OR user_email ILIKE '%' || $1 || '%') AND ($2 = '' OR cluster = $2) AND ($3 = '' OR kind = $3)
-		ORDER BY started_at DESC, id LIMIT $4 OFFSET $5`, f.User, f.Cluster, f.Kind, f.Limit, f.Offset)
+		WHERE ($1 = '' OR user_email ILIKE '%' || $1 || '%' ESCAPE '\') AND ($2 = '' OR cluster = $2) AND ($3 = '' OR kind = $3)
+		ORDER BY started_at DESC, id LIMIT $4 OFFSET $5`, likeLiteral(f.User), f.Cluster, f.Kind, f.Limit, f.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -87,6 +87,12 @@ func (m *Manager) List(ctx context.Context, f Filter) ([]Recording, error) {
 		out = append(out, *r)
 	}
 	return out, rows.Err()
+}
+
+// likeLiteral escapes LIKE's wildcards (and its escape character) so the user
+// filter matches the text typed: "a_b" finds a_b, not axb.
+func likeLiteral(s string) string {
+	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
 }
 
 func (m *Manager) Get(ctx context.Context, id string) (*Recording, error) {

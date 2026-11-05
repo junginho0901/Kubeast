@@ -19,6 +19,9 @@ const N = 205
 const BATCH = 25
 const PW = 'E2e-ucount-Zq7x'
 const USERS_PAGE = 25
+const TEAMS = { path: '/admin/organizations' }
+const ROLES = { path: '/admin/roles' }
+const USERS = { path: '/admin/users' }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Obj = any
@@ -121,7 +124,7 @@ test.describe('number check — admin screens count every user', () => {
       expect(withRole.length, 'the API lists every user made with the role').toBe(N)
 
       await test.step('Teams: the member count and every member', async () => {
-        await page.goto('/admin/organizations')
+        await page.goto(TEAMS.path)
         await settled(() => badge(page, team), String(inTeam.length), `${team} member count`)
         await page.locator('button', { has: page.locator('span', { hasText: new RegExp(`^${team}$`) }) }).first().click()
         await settled(() => membersWindow(page, team), {
@@ -131,7 +134,7 @@ test.describe('number check — admin screens count every user', () => {
       })
 
       await test.step('Roles: the user count and every user with the role', async () => {
-        await page.goto('/admin/roles')
+        await page.goto(ROLES.path)
         await settled(() => badge(page, roleName), String(withRole.length), `${roleName} user count`)
         await page.locator('button', { has: page.locator('span', { hasText: new RegExp(`^${roleName}$`) }) }).first().click()
         await settled(() => membersWindow(page, roleName), {
@@ -142,7 +145,7 @@ test.describe('number check — admin screens count every user', () => {
 
       await test.step('Users: the search over every user, page by page', async () => {
         const mine = users.filter((u) => [u.name, u.email, u.team].some((v) => (v ?? '').toLowerCase().includes(`${PREFIX}${run}`)))
-        await page.goto('/admin/users')
+        await page.goto(USERS.path)
         const search = page.getByTestId('admin-users-search')
         await search.waitFor()
         await search.fill(`${PREFIX}${run}`)

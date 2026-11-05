@@ -82,6 +82,9 @@ type Filter struct {
 	Result     string // ResultSuccess | ResultFailure
 	Since      time.Time
 	Until      time.Time
-	Limit      int // default 100, max 1000
-	Offset     int
+	// AsOf keeps the rows with id <= AsOf: pages read with the MaxID of the
+	// first read do not shift when rows are written in between.
+	AsOf   int64
+	Limit  int // default 100, max 1000
+	Offset int
 }

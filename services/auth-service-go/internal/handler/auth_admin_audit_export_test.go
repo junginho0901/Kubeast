@@ -15,11 +15,14 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
-// memAuditStore is an in-memory audit.Store: Write appends, List pages.
+// memAuditStore is an in-memory audit.Store: Write appends, List pages the
+// entries in their order (ids above Filter.AsOf left out), afterList runs
+// after each List — rows written between two pages.
 type memAuditStore struct {
-	entries []audit.Entry
-	written []audit.Record
-	lists   int
+	entries   []audit.Entry
+	written   []audit.Record
+	lists     int
+	afterList func(m *memAuditStore)
 }
 
 func (m *memAuditStore) Write(_ context.Context, rec audit.Record) (int64, error) {
@@ -29,17 +32,83 @@ func (m *memAuditStore) Write(_ context.Context, rec audit.Record) (int64, error
 
 func (m *memAuditStore) List(_ context.Context, f audit.Filter) ([]audit.Entry, int, error) {
 	m.lists++
-	if f.Offset >= len(m.entries) {
-		return nil, len(m.entries), nil
+	if m.afterList != nil {
+		defer m.afterList(m)
+	}
+	var match []audit.Entry
+	for _, e := range m.entries {
+		if f.AsOf == 0 || e.ID <= f.AsOf {
+			match = append(match, e)
+		}
+	}
+	if f.Offset >= len(match) {
+		return nil, len(match), nil
 	}
 	end := f.Offset + f.Limit
-	if end > len(m.entries) {
-		end = len(m.entries)
+	if end > len(match) {
+		end = len(match)
 	}
-	return m.entries[f.Offset:end], len(m.entries), nil
+	return match[f.Offset:end], len(match), nil
 }
 
 func (m *memAuditStore) Get(context.Context, int64) (*audit.Entry, error) { return nil, nil }
+
+func (m *memAuditStore) MaxID(context.Context) (int64, error) {
+	var max int64
+	for _, e := range m.entries {
+		if e.ID > max {
+			max = e.ID
+		}
+	}
+	return max, nil
+}
+
+// newestFirst returns entries with ids from..1, newest first, as the list orders them.
+func newestFirst(from int) []audit.Entry {
+	base := time.Date(2026, 11, 5, 1, 0, 0, 0, time.UTC)
+	out := make([]audit.Entry, 0, from)
+	for id := from; id >= 1; id-- {
+		out = append(out, audit.Entry{ID: int64(id), CreatedAt: base.Add(time.Duration(id) * time.Millisecond),
+			Record: audit.Record{Service: audit.ServiceAdmin, Action: "admin.audit.read", Result: audit.ResultSuccess}})
+	}
+	return out
+}
+
+// writeNewer puts n rows newer than every row in front, as rows written now land.
+func writeNewer(m *memAuditStore, n int) {
+	top, _ := m.MaxID(context.Background())
+	fresh := make([]audit.Entry, 0, n)
+	for id := top + int64(n); id > top; id-- {
+		fresh = append(fresh, audit.Entry{ID: id, CreatedAt: time.Date(2026, 11, 5, 2, 0, 0, int(id), time.UTC),
+			Record: audit.Record{Service: audit.ServiceAdmin, Action: "admin.audit.read", Result: audit.ResultSuccess}})
+	}
+	m.entries = append(fresh, m.entries...)
+}
+
+func csvIDs(t *testing.T, body string) []string {
+	t.Helper()
+	rows, err := csv.NewReader(strings.NewReader(strings.TrimPrefix(body, "\xEF\xBB\xBF"))).ReadAll()
+	if err != nil {
+		t.Fatalf("csv parse: %v", err)
+	}
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows[1:] {
+		ids = append(ids, row[0])
+	}
+	return ids
+}
+
+func repeated(ids []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, id := range ids {
+		if seen[id] {
+			out = append(out, id)
+		}
+		seen[id] = true
+	}
+	return out
+}
 
 func exportRequest(perms auth.PermissionMatrix, query string) *http.Request {
 	r := httptest.NewRequest(http.MethodGet, "/auth/admin/audit-logs/export"+query, nil)

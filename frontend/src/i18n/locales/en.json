@@ -4165,6 +4165,7 @@
     "reset": "Reset",
     "total": "{{total}} entries",
     "total_one": "{{total}} entry",
+    "exportCut": "The CSV holds the newest {{limit}} of these {{total}} (its limit); narrow the filter to export the rest.",
     "col": {
       "time": "Time",
       "actor": "User",

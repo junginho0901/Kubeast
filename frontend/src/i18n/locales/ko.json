@@ -4489,6 +4489,7 @@
     "apply": "조회",
     "reset": "초기화",
     "total": "총 {{total}}건",
+    "exportCut": "CSV에는 이 {{total}}건 중 최신 {{limit}}건만 담깁니다(내보내기 한도). 나머지는 필터를 좁혀서 내보내세요.",
     "col": {
       "time": "시각",
       "actor": "사용자",
