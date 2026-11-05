@@ -124,13 +124,22 @@ test.describe('AI Chat', () => {
     await expect(input).toBeEnabled({ timeout: 5_000 })
     await expect(stopButton).toHaveCount(0)
     // the stream really stopped: the answer does not grow any more (stopped before the first word, there is no
-    // answer bubble at all — nothing was written or saved)
+    // answer bubble at all — nothing was written or saved). The answer is measured without the action row under it,
+    // which opens after the stop and adds "Stopped · usage not available"
     const assistants = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)')
+    const answerLength = () => assistants.last().evaluate((el) => {
+      const copy = el.cloneNode(true) as HTMLElement
+      copy.querySelectorAll('[data-testid="message-actions-row"]').forEach((row) => row.remove())
+      return (copy.textContent ?? '').length
+    })
     const before = await assistants.count()
-    const stopped = before ? (await assistants.last().innerText()).length : 0
+    const stopped = before ? await answerLength() : 0
     await page.waitForTimeout(3000)
     expect(await assistants.count()).toBe(before)
-    if (before) expect((await assistants.last().innerText()).length).toBe(stopped)
+    if (before) {
+      expect(await answerLength(), 'the answer stopped growing').toBe(stopped)
+      await expect(assistants.last().getByTestId('message-actions-row'), 'the row under it says it stopped').toContainText(/Stopped|멈춤/, { timeout: 10_000 })
+    }
     // nothing looks busy after the stop (no "…" placeholder left)
     await expect(page.locator('.animate-bounce')).toHaveCount(0)
   })
