@@ -3,27 +3,31 @@ import { api } from '@/services/api'
 import { getCurrentClusterID } from '@/services/clusterRef'
 import { usePermission } from './usePermission'
 
-/** The Kubernetes resource a create button makes, for the cluster's own answer. */
-export interface CreateTarget {
+/** The Kubernetes resource a create or delete button acts on, for the cluster's own answer. */
+export interface AccessTarget {
   group: string
   resource: string
-  /** For a namespaced kind: the namespace being viewed ('' or 'all' = every namespace). */
+  /** For a namespaced kind: the namespace being viewed ('' or a list's 'all' = every namespace). */
   namespace?: string
+  /** The object a delete button acts on (RBAC resourceNames can allow one object only). */
+  name?: string
 }
 
-// Whether a create button shows: the app permission, and for kinds the
-// cluster's RBAC may refuse even so — cluster-scoped objects, Roles and custom
-// resources such as the Gateway API's and VPAs, which the Write role's edit
-// ClusterRole does not cover — the cluster's answer for
+// Whether a create or delete button shows: the app permission, and for kinds the
+// cluster's RBAC may refuse even so — cluster-scoped objects, Roles, Endpoints,
+// quotas and custom resources such as the Gateway API's and VPAs, which the
+// Write role's edit ClusterRole does not cover — the cluster's answer for
 // the signed-in user (SelfSubjectAccessReview). Hidden while the cluster is
 // asked; if it cannot be asked, the app permission decides as before.
-export function useCanCreate(permission: string, target?: CreateTarget): boolean {
+export function useCanI(permission: string, verb: string, target?: AccessTarget): boolean {
   const { has } = usePermission()
   const allowed = has(permission)
-  const namespace = target?.namespace && target.namespace !== 'all' ? target.namespace : ''
+  const name = target?.name ?? ''
+  // a list's 'all' is every namespace; a named object's namespace is its own, whatever it is called
+  const namespace = target?.namespace === 'all' && !name ? '' : target?.namespace ?? ''
   const { data, isError } = useQuery({
-    queryKey: ['can-i', getCurrentClusterID(), 'create', target?.group, target?.resource, namespace],
-    queryFn: () => api.canI({ verb: 'create', group: target!.group, resource: target!.resource, namespace }),
+    queryKey: ['can-i', getCurrentClusterID(), verb, target?.group, target?.resource, namespace, name],
+    queryFn: () => api.canI({ verb, group: target!.group, resource: target!.resource, namespace, name }),
     enabled: allowed && !!target,
     staleTime: 60_000,
     retry: false,
@@ -31,4 +35,8 @@ export function useCanCreate(permission: string, target?: CreateTarget): boolean
   if (!allowed) return false
   if (!target || isError) return true
   return data === true
+}
+
+export function useCanCreate(permission: string, target?: AccessTarget): boolean {
+  return useCanI(permission, 'create', target)
 }

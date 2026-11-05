@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useResourceDetail } from './ResourceDetailContext'
 import { usePermission } from '@/hooks/usePermission'
+import { useCanI } from '@/hooks/useCanCreate'
 import { permResource } from '@/utils/permissions'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useModalStackEntry } from '@/hooks/useModalStack'
@@ -28,7 +29,8 @@ import { ModalFrame } from './ModalFrame'
 import { modalButton } from './modalStyles'
 import { TypeToConfirm, WarningBox } from './TypeToConfirm'
 import { systemObject, type SystemReason } from './resource-detail/systemObject'
-import { customResourceTarget, needsCustomResourceLookup } from './resource-detail/crDetail'
+import { customResourceTarget, deleteTarget, needsCustomResourceLookup } from './resource-detail/crDetail'
+import { ObjectUnreadable } from './resource-detail/DetailCommon'
 import { useConfirm } from '@/services/confirm'
 
 import NodeInfo from './resource-detail/NodeInfo'
@@ -110,7 +112,11 @@ export default function ResourceDetailDrawer() {
   const { has } = usePermission()
   // Admission policies are read-only in Kubeast (no delete route); the YAML tab is the shared path.
   const readOnlyKind = kind === 'ValidatingAdmissionPolicy' || kind === 'MutatingAdmissionPolicy'
-  const canDelete = !readOnlyKind && has(`resource.${permResource(kind)}.delete`)
+  // the cluster's answer too, as the create buttons: the Write role's edit cannot delete cluster-scoped objects,
+  // Roles, Endpoints or quotas; hidden while a custom resource's CRD is looked up and while the cluster is asked
+  const mayDelete = useCanI(`resource.${permResource(kind)}.delete`, 'delete',
+    readOnlyKind || resolving ? undefined : deleteTarget(kind, ns, name, target?.rawJson))
+  const canDelete = !readOnlyKind && !resolving && mayDelete
 
   const {
     deleteDialogOpen,
@@ -168,6 +174,8 @@ export default function ResourceDetailDrawer() {
   // so, instead of an empty object with a delete button.
   const loadStatus = needsRawJsonFetch && !target?.rawJson ? (rawJsonError as { response?: { status?: number } } | null)?.response?.status : undefined
   const unreadable = loadStatus === 403 || loadStatus === 404
+  // ...and its Delete waits for that read, so a gone or refused object does not flash one
+  const linkPending = needsRawJsonFetch && !target?.rawJson && fetchedRawJson === undefined && !rawJsonError
   // Argo CD guard: an object an Application manages is badged; in block mode
   // the console's write buttons are off (k8s-service refuses them anyway).
   const argoManaged = detectArgoApp((fetchedRawJson ?? effectiveRawJson) as Record<string, unknown> | undefined, kind, argoCfg)
@@ -371,7 +379,7 @@ export default function ResourceDetailDrawer() {
           name={name}
           effectiveRawJson={effectiveRawJson}
           canGoBack={canGoBack}
-          canDelete={canDelete && !argoBlocked && !unreadable}
+          canDelete={canDelete && !argoBlocked && !unreadable && !linkPending}
           argo={argo}
           tab={tab}
           onClose={handleClose}
@@ -394,11 +402,7 @@ export default function ResourceDetailDrawer() {
           {tab === 'info' && (
             <div className="p-5 space-y-6 text-sm">
               {unreadable ? (
-                <p data-testid="detail-unreadable" className="rounded-lg border border-amber-700/40 bg-amber-950/20 px-4 py-3 text-amber-200">
-                  {loadStatus === 404
-                    ? t('common.objectNotFound', { defaultValue: 'This object does not exist; it may have been deleted.' })
-                    : t('common.objectForbidden', { defaultValue: 'You are not allowed to see this object.' })}
-                </p>
+                <ObjectUnreadable kind={displayKind} name={name} namespace={ns} notFound={loadStatus === 404} />
               ) : renderInfoContent()}
               {!unreadable && !resolving && violationsAfterInfo(kind, ns) && <PolicyViolations kind={displayKind} namespace={ns ?? ''} name={name} apiVersion={violationsApiVersion(kind, target?.rawJson)} />}
             </div>

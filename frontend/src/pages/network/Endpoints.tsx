@@ -7,7 +7,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
-import { usePermission } from '@/hooks/usePermission'
+import { useCanCreate } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Plus, RefreshCw } from 'lucide-react'
@@ -53,8 +53,7 @@ export default function Endpoints() {
         : api.getEndpoints(selectedNamespace, false)
     ),
   })
-  const { has } = usePermission()
-  const canCreate = has('resource.endpoints.create')
+  const canCreate = useCanCreate('resource.endpoints.create', { group: '', resource: 'endpoints', namespace: selectedNamespace })
 
   useKubeWatchList({
     enabled: true,

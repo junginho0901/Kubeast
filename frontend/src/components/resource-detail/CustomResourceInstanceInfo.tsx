@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { api } from '@/services/api'
-import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsSection, Th, Tx } from './DetailCommon'
+import { api, isForbiddenError } from '@/services/api'
+import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsSection, Th, Tx, ObjectUnreadable } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { formatAge, formatTime } from '@/utils/time'
@@ -125,7 +125,7 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
   const crdName = (rawJson?.crd_name as string) || ''
   const plural = crdName ? crdName.split('.')[0] : ''
 
-  const { data: describe, isLoading } = useQuery({
+  const { data: describe, isLoading, error } = useQuery({
     queryKey: ['cr-instance-describe', group, version, plural, namespace || '-', name],
     queryFn: () => api.describeCustomResourceInstance(group, version, plural, namespace || '-', name),
     enabled: !!name && !!group && !!version && !!plural,
@@ -166,6 +166,9 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
   const topFields = otherFields(describe?.fields)
 
   if (isLoading) return <p className="text-slate-400">{tr('common.loading', 'Loading...')}</p>
+  // refused or gone: the drawers' notice; any other failure draws what it has, as before
+  const gone = (error as { response?: { status?: number } } | null)?.response?.status === 404
+  if (isForbiddenError(error) || gone) return <ObjectUnreadable kind={crKind} name={name} namespace={namespace} notFound={gone} />
 
   return (
     <div className="space-y-4">

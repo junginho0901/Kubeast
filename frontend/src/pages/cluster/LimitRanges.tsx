@@ -7,7 +7,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
-import { usePermission } from '@/hooks/usePermission'
+import { useCanCreate } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Plus, RefreshCw } from 'lucide-react'
@@ -51,8 +51,7 @@ export default function LimitRanges() {
         : api.getLimitRanges(selectedNamespace)
     ),
   })
-  const { has } = usePermission()
-  const canCreate = has('resource.limitrange.create')
+  const canCreate = useCanCreate('resource.limitrange.create', { group: '', resource: 'limitranges', namespace: selectedNamespace })
 
   useKubeWatchList({
     enabled: true,

@@ -7,7 +7,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
-import { usePermission } from '@/hooks/usePermission'
+import { useCanCreate } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Plus, RefreshCw } from 'lucide-react'
@@ -50,8 +50,7 @@ export default function ResourceQuotas() {
         : api.getResourceQuotas(selectedNamespace, false)
     ),
   })
-  const { has } = usePermission()
-  const canCreate = has('resource.resourcequota.create')
+  const canCreate = useCanCreate('resource.resourcequota.create', { group: '', resource: 'resourcequotas', namespace: selectedNamespace })
 
   useKubeWatchList({
     enabled: true,
