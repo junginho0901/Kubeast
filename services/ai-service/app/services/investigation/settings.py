@@ -18,9 +18,16 @@ class InvestigationSettings:
     enabled: bool = False
     webhook_token: str = ""
     severities: tuple[str, ...] = ("critical", "warning")
+    # The webhook queues investigations (off: it only stores the alerts in the inbox).
+    automatic: bool = True
+    # "Investigate now" in the Alerts inbox.
+    manual: bool = True
     dedupe_hours: int = 24
+    # The webhook's investigations only: the hourly cap and daily_token_budget.
     max_per_hour: int = 6
     daily_token_budget: int = 200_000
+    # The tokens of investigations people asked for, per UTC day (0 = no budget).
+    manual_daily_token_budget: int = 0
     # Minutes no investigation runs after the model provider refused for credit or the key (0 = never pause).
     provider_pause_minutes: int = 30
     max_steps: int = 8
@@ -35,6 +42,11 @@ class InvestigationSettings:
     inbox_stale_hours: int = 8
 
 
+def _on(name: str) -> bool:
+    """On unless set to false (an install without the variable keeps the switch on)."""
+    return os.getenv(name, "true").strip().lower() != "false"
+
+
 def load() -> InvestigationSettings:
     severities = tuple(
         s.strip().lower() for s in os.getenv("ALERT_INVESTIGATION_SEVERITIES", "critical,warning").split(",") if s.strip()
@@ -43,9 +55,12 @@ def load() -> InvestigationSettings:
         enabled=os.getenv("ALERT_INVESTIGATION_ENABLED", "false").strip().lower() == "true",
         webhook_token=os.getenv("ALERT_WEBHOOK_TOKEN", "").strip(),
         severities=severities,
+        automatic=_on("ALERT_INVESTIGATION_AUTOMATIC"),
+        manual=_on("ALERT_INVESTIGATION_MANUAL"),
         dedupe_hours=max(0, _int("ALERT_INVESTIGATION_DEDUPE_HOURS", 24)),
         max_per_hour=max(0, _int("ALERT_INVESTIGATION_MAX_PER_HOUR", 6)),
         daily_token_budget=max(0, _int("ALERT_INVESTIGATION_DAILY_TOKEN_BUDGET", 200_000)),
+        manual_daily_token_budget=max(0, _int("ALERT_INVESTIGATION_MANUAL_DAILY_TOKEN_BUDGET", 0)),
         provider_pause_minutes=max(0, _int("ALERT_INVESTIGATION_PROVIDER_PAUSE_MINUTES", 30)),
         max_steps=min(20, max(1, _int("ALERT_INVESTIGATION_MAX_STEPS", 8))),
         timeout_seconds=min(1800, max(30, _int("ALERT_INVESTIGATION_TIMEOUT_SECONDS", 300))),

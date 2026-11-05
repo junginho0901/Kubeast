@@ -166,6 +166,10 @@ data:
   ALERT_INVESTIGATION_DEDUPE_HOURS: {{ .dedupeHours | int64 | quote }}
   ALERT_INVESTIGATION_MAX_PER_HOUR: {{ .maxPerHour | int64 | quote }}
   ALERT_INVESTIGATION_DAILY_TOKEN_BUDGET: {{ .dailyTokenBudget | int64 | quote }}
+  {{- /* dig: values an earlier chart's --reuse-values lacks render as this chart's defaults */}}
+  ALERT_INVESTIGATION_AUTOMATIC: {{ dig "automatic" true . | quote }}
+  ALERT_INVESTIGATION_MANUAL: {{ dig "manual" true . | quote }}
+  ALERT_INVESTIGATION_MANUAL_DAILY_TOKEN_BUDGET: {{ dig "manualDailyTokenBudget" 0 . | int64 | quote }}
   ALERT_INVESTIGATION_PROVIDER_PAUSE_MINUTES: {{ .providerPauseMinutes | int64 | quote }}
   ALERT_INVESTIGATION_MAX_STEPS: {{ .maxSteps | int64 | quote }}
   ALERT_INVESTIGATION_TIMEOUT_SECONDS: {{ .timeoutSeconds | int64 | quote }}

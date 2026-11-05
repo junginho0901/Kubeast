@@ -53,6 +53,8 @@ def summary_of(row) -> dict[str, Any]:
         "finished_at": _iso(row.finished_at),
         "repeat_count": row.repeat_count,
         "last_seen_at": _iso(row.last_seen_at),
+        # who asked for it in the Alerts inbox ("Investigate now"); "" when the webhook queued it
+        "requested_by": row.requested_by or "",
         "model": row.model,
         "total_tokens": row.total_tokens,
         "iterations": row.iterations,

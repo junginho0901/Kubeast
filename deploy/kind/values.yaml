@@ -141,6 +141,8 @@ features:
     # e2e runs repeat within the hour and the day; the cap and the budget are covered by the ai-service unit tests.
     maxPerHour: 0
     dailyTokenBudget: 0
+    # alert-investigate-now.spec.ts spends a manual budget with a row of its own (the chart's default is none).
+    manualDailyTokenBudget: 200000
     # investigator-rbac.spec.ts: the investigator reads the second cluster's Kyverno PolicyReports, nothing more.
     extraRules:
       - apiGroups: [wgpolicyk8s.io]

@@ -24,7 +24,7 @@ describe('why an investigation was skipped', () => {
   it('words the earlier reasons too, a pause with the times in the viewer zone', async () => {
     const tr = await trFor('en')
     expect(skipReason({ skip_reason: 'hourly cap (6 per hour)', skip_reason_key: 'hourly_cap', skip_reason_args: { limit: 6 } }, tr).text)
-      .toBe('Skipped by the hourly limit — at most 6 investigations start in an hour')
+      .toBe('Skipped by the hourly limit — at most 6 automatic investigations start in an hour')
     expect(skipReason({ skip_reason_key: 'daily_token_budget', skip_reason_args: { limit: 200000 } }, tr).label).toBe('Skipped by the daily token budget')
     const paused = skipReason({
       skip_reason_key: 'provider_paused', skip_reason_args: { kind: 'credit', at: '2026-10-13T11:55:00Z', until: '2026-10-13T12:25:00Z' },

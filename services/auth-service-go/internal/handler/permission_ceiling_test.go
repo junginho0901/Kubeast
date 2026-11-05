@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 
@@ -14,6 +15,40 @@ func TestUnknownPermissions_UsesTheCatalog(t *testing.T) {
 	got := unknownPermissions([]string{"menu.dashboard", "resource.pod.read", "made.up", "resource.*.*.*"})
 	if want := []string{"made.up", "resource.*.*.*", "resource.pod.read"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("unknown = %v, want %v", got, want)
+	}
+}
+
+// "Investigate now" in the Alerts inbox (ai-service INVESTIGATE_PERMISSION) is a key of its own under Alerts, so
+// Role Management offers it; "*" reaches it and the Write role's resource.*.create/edit/delete do not.
+func TestCatalog_AlertInvestigateUnderAlerts(t *testing.T) {
+	const key = "resource.alert.investigate"
+	if got := unknownPermissions([]string{key}); got != nil {
+		t.Fatalf("not in the catalog: %v", got)
+	}
+	var categories []struct {
+		Category    string `json:"category"`
+		Permissions []struct {
+			Key string `json:"key"`
+		} `json:"permissions"`
+	}
+	raw, _ := json.Marshal(allPermissions())
+	if err := json.Unmarshal(raw, &categories); err != nil {
+		t.Fatal(err)
+	}
+	under := ""
+	for _, c := range categories {
+		for _, p := range c.Permissions {
+			if p.Key == key {
+				under = c.Category
+			}
+		}
+	}
+	if under != "Alerts" {
+		t.Fatalf("%s is under %q, want Alerts", key, under)
+	}
+	write := []string{"menu.*", "resource.*.read", "resource.*.create", "resource.*.edit", "resource.*.delete", "resource.alert.silence", "ai.tool.*"}
+	if auth.MatchAny(write, key) || !auth.MatchAny([]string{"*"}, key) {
+		t.Fatalf("Write reaches it: %v, * reaches it: %v; want false, true", auth.MatchAny(write, key), auth.MatchAny([]string{"*"}, key))
 	}
 }
 

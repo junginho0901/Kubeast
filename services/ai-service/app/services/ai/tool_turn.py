@@ -37,13 +37,14 @@ def _args(raw: Optional[str]) -> dict:
 
 async def run_tool_turn(service, messages: list[dict[str, Any]], tools: Sequence[dict], run_tool: ToolRunner, *,
                         max_steps: int, final_message: str, remaining: Callable[[], float],
-                        lane: str = "chat") -> ToolTurn:
+                        lane: str = "chat", usage: Optional[dict[str, Any]] = None) -> ToolTurn:
     """`messages` grows with the API-key path's tool exchange; `remaining()` gives the seconds left (it raises
-    once the caller's time is up)."""
+    once the caller's time is up). `usage` (usage.new_turn_usage) is added to as each model call answers, so a
+    caller whose turn fails still has what the calls before used."""
+    out = ToolTurn() if usage is None else ToolTurn(usage=usage)
     if getattr(service, "provider", None) == "claude-code":
         return await _claude_code_turn(service, messages, tools, run_tool, max_steps=max_steps,
-                                       final_message=final_message, remaining=remaining, lane=lane)
-    out = ToolTurn()
+                                       final_message=final_message, remaining=remaining, lane=lane, out=out)
     for step in range(1, max_steps + 1):
         out.steps = step
         final = step == max_steps
@@ -76,10 +77,11 @@ async def run_tool_turn(service, messages: list[dict[str, Any]], tools: Sequence
     return out
 
 
-async def _claude_code_turn(service, messages, tools, run_tool, *, max_steps, final_message, remaining, lane) -> ToolTurn:
+async def _claude_code_turn(service, messages, tools, run_tool, *, max_steps, final_message, remaining, lane,
+                            out: Optional[ToolTurn] = None) -> ToolTurn:
     from app.services.claude_code import TurnResult
 
-    out, cc = ToolTurn(), TurnResult()
+    out, cc = out if out is not None else ToolTurn(), TurnResult()
     results: list[str] = []
 
     async def cc_tool(name: str, args: dict, step: int, call_id: Optional[int] = None):

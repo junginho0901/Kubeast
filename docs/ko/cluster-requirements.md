@@ -390,7 +390,7 @@ receivers:
   - Grafana 13의 웹훅 본문(`version` "1")에도 Kubeast가 읽는 필드가 같은 이름으로 있어 그대로 받을 수 있습니다: `alerts[]`의 `status`·`labels`·`annotations`·`startsAt`·`fingerprint`, `externalURL`.
 - **확인**: Kubeast Alerts 메뉴에 그 알림이 생기는지, Admin → Investigations에 조사 행이 생기는지 봅니다.
   - 심각도 필터에서 걸러진 알림은 조사 행이 생기지 않습니다.
-  - 웹훅 응답 `{accepted, duplicate, filtered, skipped, capped, resolved, stored}`는 Alertmanager 로그에 남습니다.
+  - 웹훅 응답 `{accepted, duplicate, filtered, skipped, capped, resolved, automatic_off, stored}`는 Alertmanager 로그에 남습니다.
   - `max_alerts`는 두지 마세요(0 = 전부). Kubeast가 한 통의 알림을 전부 저장하고 새 조사는 한 통에 100개까지만 시작합니다. Alertmanager가 `max_alerts`로 자른 알림은 알림함에 오지 않습니다.
   - 개발용 전체 예시: [`deploy/kind/alertmanager.yaml`](../../deploy/kind/alertmanager.yaml)
   - Grafana 예시: `scripts/kind-grafana.sh`와 e2e `grafana.spec.ts`(연락처 시험으로 보낸 알림의 조사 확인)

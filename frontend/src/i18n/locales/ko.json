@@ -3793,6 +3793,7 @@
         "resource_cronjob_suspend": "CronJob 일시중지",
         "resource_cronjob_trigger": "CronJob 수동실행",
         "resource_alert_silence": "알림 무음 만들기·끝내기",
+        "resource_alert_investigate": "알림 AI 조사 지금 시작(Alerts 받은편지함)",
         "resource_networkflow_read": "네트워크 흐름·차단 수 읽기(Hubble)",
         "resource_secret_reveal": "Secret 복호화",
         "resource_helm_all": "Helm 전체",
@@ -5228,7 +5229,20 @@
     "noteBy": "마지막 작성 {{who}} · {{when}}",
     "auditUnavailable": "저장하지 않았습니다. 지금 감사 로그에 기록할 수 없습니다.",
     "saveFailed": "저장하지 않았습니다.",
-    "noInvestigation": "조사하지 않았습니다(조사 대상 심각도의 울리는 알림만, 시간당 상한과 토큰 예산 안에서 조사합니다)."
+    "noInvestigation": "조사하지 않았습니다(조사 대상 심각도의 울리는 알림만, 시간당 상한과 토큰 예산 안에서 조사합니다).",
+    "noInvestigationAutomaticOff": "조사하지 않았습니다. 이 설치에서 자동 조사가 꺼져 있습니다(features.alertInvestigation.automatic).",
+    "investigateNow": {
+      "button": "지금 조사",
+      "requestedBy": "{{who}} 요청 · {{when}}",
+      "used": "오늘 요청한 조사: {{budget}} 토큰 중 {{used}} 사용(UTC 날짜)",
+      "why": {
+        "manual_off": "이 설치에서 꺼져 있습니다(features.alertInvestigation.manual).",
+        "provider_paused": "AI 모델 제공자가 조사를 거절해 {{until}}까지 조사를 시작하지 않습니다.",
+        "manual_budget": "오늘 요청 조사의 토큰 한도({{budget}})를 다 썼습니다. {{until}}부터 다시 됩니다."
+      },
+      "failed": "시작하지 못했습니다.",
+      "auditUnavailable": "시작하지 못했습니다. 지금 감사 로그에 기록할 수 없습니다."
+    }
   },
   "investigations": {
     "title": "Investigations",
@@ -5268,13 +5282,19 @@
       "investigation_cap": "조사 한도로 건너뜀",
       "hourly_cap": "시간당 한도로 건너뜀",
       "daily_token_budget": "하루 토큰 한도로 건너뜀",
-      "provider_paused": "AI 제공자 일시 정지로 건너뜀"
+      "provider_paused": "AI 제공자 일시 정지로 건너뜀",
+      "manual_daily_token_budget": "요청 조사 하루 토큰 한도로 건너뜀",
+      "automatic_off": "자동 조사 꺼짐으로 건너뜀",
+      "manual_off": "지금 조사 꺼짐으로 건너뜀"
     },
     "skipWhy": {
       "investigation_cap": "웹훅 한 통에서 새 조사는 {{limit}}개까지 시작하고, 나머지는 알림함에 두었다가 Alertmanager가 다시 보낼 때 다시 시도함",
-      "hourly_cap": "한 시간에 조사를 {{limit}}개까지 시작함",
-      "daily_token_budget": "조사는 하루(UTC, UTC 00:00부터 다시 셈)에 {{limit}} 토큰까지 씀",
-      "provider_paused": "AI 모델 제공자가 {{at}}에 거절했고({{kind}}) {{until}}까지 조사를 시작하지 않음"
+      "hourly_cap": "자동 조사는 한 시간에 {{limit}}개까지 시작함",
+      "daily_token_budget": "자동 조사는 하루(UTC, UTC 00:00부터 다시 셈)에 {{limit}} 토큰까지 씀",
+      "provider_paused": "AI 모델 제공자가 {{at}}에 거절했고({{kind}}) {{until}}까지 조사를 시작하지 않음",
+      "manual_daily_token_budget": "Alerts 받은편지함에서 요청한 조사는 하루(UTC, UTC 00:00부터 다시 셈)에 {{limit}} 토큰까지 씀",
+      "automatic_off": "실행 전에 자동 조사가 꺼짐(features.alertInvestigation.automatic)",
+      "manual_off": "실행 전에 지금 조사가 꺼짐(features.alertInvestigation.manual)"
     },
     "report": "보고서",
     "loadFailed": "보고서를 열 수 없습니다.",
