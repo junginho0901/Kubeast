@@ -49,7 +49,7 @@ const WHERE: Record<string, string> = {
   '/admin/node-shell': 'no numbers: two settings this browser keeps (localStorage), nothing on the server',
   '/admin/ai-models': 'no counts: model settings cards; "Used for" is the API\'s used_for',
   '/admin/ai-usage': 'number-check-ai-usage', '/admin/access-requests': 'number-check-access', '/admin/access-review': 'number-check-access',
-  '/admin/investigations': 'number-check-ai-usage', '/alerts': 'N4',
+  '/admin/investigations': 'number-check-ai-usage', '/alerts': 'number-check-alert-inbox',
 }
 
 test('every sidebar screen has a place in the number check', () => {

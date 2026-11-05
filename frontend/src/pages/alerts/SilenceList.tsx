@@ -4,22 +4,41 @@ import { Loader2 } from 'lucide-react'
 
 import { api } from '@/services/api'
 import { useConfirm } from '@/services/confirm'
+import { useCluster } from '@/contexts/ClusterContext'
+import { useAIContext } from '@/hooks/useAIContext'
 import { formatTime, utcTitle } from '@/utils/time'
 
-// The cluster's active and pending silences in its alert store. Expiring one (resource.alert.silence, with
-// features.alertStore.silences) ends it now and is audited server-side (alert.silence.expire).
+// The active and pending silences that mute this cluster's alerts in its alert store: its own, and the store's
+// others (no cluster condition, or a cluster pattern this cluster meets) marked by their scope. Expiring one of its
+// own (resource.alert.silence, with features.alertStore.silences) ends it now and is audited server-side
+// (alert.silence.expire); the others are not this cluster's to end.
 
 export default function SilenceList({ canExpire }: { canExpire: boolean }) {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, opts?: Record<string, unknown>) => t(key, { defaultValue: fallback, ...opts })
   const queryClient = useQueryClient()
   const confirm = useConfirm()
-  const { data, isLoading, error } = useQuery({ queryKey: ['alert-inbox', 'silences'], queryFn: api.listAlertSilences, retry: false })
+  const { currentCluster } = useCluster()
+  // per cluster: another cluster's list is never shown while this one loads
+  const { data, isLoading, error } = useQuery({ queryKey: ['alert-inbox', 'silences', currentCluster], queryFn: api.listAlertSilences, retry: false })
   const expire = useMutation({
     mutationFn: (id: string) => api.expireAlertSilence(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['alert-inbox'] }),
   })
   const silences = data ?? []
+  const scopeOf = (s: { scope?: string }) => s.scope ?? 'cluster'
+  const own = silences.filter((s) => scopeOf(s) === 'cluster').length
+
+  useAIContext(data ? {
+    source: 'SilenceList',
+    summary: `이 클러스터 알림에 걸린 무음 ${silences.length}건 (이 클러스터 것 ${own}, 다른 범위 ${silences.length - own})`,
+    data: {
+      silences: silences.map((s) => ({
+        state: s.state, scope: scopeOf(s), matchers: s.matchers, created_by: s.createdBy || undefined, comment: s.comment || undefined,
+        ends_at: s.endsAt,
+      })),
+    },
+  } : null, [data])
 
   return (
     <div className="card flex-1 min-h-0 overflow-auto" data-testid="silence-list">
@@ -36,7 +55,14 @@ export default function SilenceList({ canExpire }: { canExpire: boolean }) {
         <tbody className="divide-y divide-slate-700">
           {silences.map((s) => (
             <tr key={s.id} className="text-slate-200" data-testid={`silence-row-${s.id}`}>
-              <td className="py-3 px-4 text-xs">{tr(`alertInbox.silence.state.${s.state}`, s.state)}</td>
+              <td className="py-3 px-4 text-xs">
+                {tr(`alertInbox.silence.state.${s.state}`, s.state)}
+                {scopeOf(s) !== 'cluster' && (
+                  <span className="block mt-1 text-slate-400" title={tr(`alertInbox.silence.scopeHint.${scopeOf(s)}`, scopeOf(s))} data-testid="silence-scope">
+                    {tr(`alertInbox.silence.scope.${scopeOf(s)}`, scopeOf(s))}
+                  </span>
+                )}
+              </td>
               <td className="py-3 px-4">
                 <span className="flex flex-wrap gap-1">
                   {s.matchers.map((m) => <span key={m} className="rounded-sm border border-slate-600 px-1.5 py-0.5 font-mono text-xs text-slate-200">{m}</span>)}
@@ -46,7 +72,7 @@ export default function SilenceList({ canExpire }: { canExpire: boolean }) {
               <td className="py-3 px-4 text-xs break-all">{s.createdBy || '-'}</td>
               <td className="py-3 px-4 text-xs whitespace-nowrap" title={utcTitle(s.endsAt)}>{formatTime(s.endsAt)}</td>
               <td className="py-3 px-4 text-right">
-                {canExpire && (
+                {canExpire && scopeOf(s) === 'cluster' && (
                   <button
                     type="button"
                     disabled={expire.isPending}

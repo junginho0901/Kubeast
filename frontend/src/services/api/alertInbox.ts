@@ -4,6 +4,7 @@
 
 import { client } from './client'
 import type { Investigation } from './investigations'
+import type { SkipReason } from '@/utils/investigationFormat'
 
 export type AlertInboxStatus = 'firing' | 'stale' | 'resolved'
 
@@ -29,7 +30,8 @@ export interface AlertInboxItem {
   done: boolean
   done_by: string
   done_at: string | null
-  investigation: { id: string; status: string } | null
+  // the alert's investigation; skip_reason (with its catalog key) when it was skipped
+  investigation: ({ id: string; status: string } & SkipReason) | null
 }
 
 export interface AlertInboxDetail extends AlertInboxItem {
@@ -47,6 +49,8 @@ export interface AlertInboxList {
   total: number
   counts: Record<AlertInboxStatus, number>
   stale_hours: number
+  // the severity values the cluster's alerts carry (for the filter)
+  severities: string[]
 }
 
 export interface AlertInboxFilter {
@@ -85,6 +89,9 @@ export interface SilenceMatcher {
 export interface AlertSilence {
   id: string
   state: string
+  // how it reaches this cluster's alerts: its own (carries the cluster condition), every cluster's (no cluster
+  // condition), or a cluster pattern this cluster meets; only its own can be ended here
+  scope?: 'cluster' | 'all' | 'pattern'
   matchers: string[]
   createdBy?: string
   comment?: string
@@ -110,6 +117,7 @@ export const alertInboxApi = {
       total: Number(data?.total ?? 0),
       counts: { firing: 0, stale: 0, resolved: 0, ...(data?.counts ?? {}) },
       stale_hours: Number(data?.stale_hours ?? 8),
+      severities: Array.isArray(data?.severities) ? data.severities : [],
     }
   },
 

@@ -10,6 +10,7 @@ from typing import Any, Optional
 from sqlalchemy import func, select, text, update
 
 from app.database import AlertInvestigation, utcnow
+from app.services.investigation import skip_reasons
 
 # Rows a repeat of the same alert folds into (a skipped one may be tried again).
 _DEDUPE_STATUSES = ("queued", "running", "done", "failed")
@@ -46,6 +47,33 @@ async def bump_repeat(db, inv_id: str, now: datetime) -> None:
             update(AlertInvestigation)
             .where(AlertInvestigation.id == inv_id)
             .values(repeat_count=AlertInvestigation.repeat_count + 1, last_seen_at=now)
+        )
+        await s.commit()
+
+
+async def find_recent_skipped(db, cluster: str, fingerprint: str, since: datetime) -> Optional[AlertInvestigation]:
+    """The alert's newest skipped row since `since`: skipping the same alert again folds into it (fold_skip)."""
+    async with db.async_session() as s:
+        q = (
+            select(AlertInvestigation)
+            .where(
+                AlertInvestigation.cluster == cluster,
+                AlertInvestigation.fingerprint == fingerprint,
+                AlertInvestigation.received_at >= since,
+                AlertInvestigation.status == "skipped",
+            )
+            .order_by(AlertInvestigation.received_at.desc())
+            .limit(1)
+        )
+        return (await s.execute(q)).scalars().first()
+
+
+async def fold_skip(db, inv_id: str, reason: str, now: datetime) -> None:
+    async with db.async_session() as s:
+        await s.execute(
+            update(AlertInvestigation)
+            .where(AlertInvestigation.id == inv_id)
+            .values(repeat_count=AlertInvestigation.repeat_count + 1, last_seen_at=now, skip_reason=reason)
         )
         await s.commit()
 
@@ -99,8 +127,7 @@ async def pause_reason(db, minutes: int, now: datetime) -> str:
     until = datetime.strptime(lifts, "%Y-%m-%dT%H:%M:%SZ") if lifts else row.finished_at + timedelta(minutes=minutes)
     if now >= until:
         return ""
-    return (f"paused: the AI model provider refused ({kind}) at {row.finished_at:%Y-%m-%dT%H:%M:%S}Z; "
-            f"no investigation until {until:%Y-%m-%dT%H:%M:%S}Z")
+    return skip_reasons.provider_paused(kind, row.finished_at, until)
 
 
 async def skip(db, inv_id: str, reason: str) -> None:

@@ -11,7 +11,7 @@ import { useAIContext } from '@/hooks/useAIContext'
 import { alertInvestigationEnabled } from '@/utils/features'
 import CustomDropdown from '@/components/CustomDropdown'
 import InvestigationReportModal from '@/components/InvestigationReportModal'
-import { duration, severityClass, statusClass } from '@/utils/investigationFormat'
+import { duration, severityClass, skipReason, statusClass } from '@/utils/investigationFormat'
 import { formatWhen } from './accessRequestFormat'
 import { investigationsView } from './investigationsView'
 import { utcTitle } from '@/utils/time'
@@ -57,7 +57,7 @@ export default function Investigations() {
   }
 
   const statusTitle = (r: InvestigationSummary) =>
-    r.status === 'skipped' ? tr('investigations.skipReason', 'Skipped: {{reason}}', { reason: r.skip_reason }) : undefined
+    r.status === 'skipped' ? skipReason(r, tr).text : undefined
 
   useAIContext(data ? {
     summary: `알림 조사 보고서 ${total}건${shownFilter.status ? ` (상태 ${shownFilter.status})` : ''}${shownFilter.cluster ? ` (클러스터 ${shownFilter.cluster})` : ''}`,

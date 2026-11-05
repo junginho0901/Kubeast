@@ -17,7 +17,7 @@ from app.api_investigations import detail_of as investigation_detail
 from app.database import get_db_service, utcnow
 from app.security import TokenPayload, require_auth
 from app.services.audit_writer import AuditUnavailable, require_audit_ready, write_audit
-from app.services.investigation import inbox
+from app.services.investigation import inbox, skip_reasons
 from app.services.investigation import settings as inv_settings
 
 router = APIRouter()
@@ -39,6 +39,14 @@ def _settings() -> inv_settings.InvestigationSettings:
     if not cfg.enabled:
         raise HTTPException(status_code=404, detail="the alert inbox is off (features.alertInvestigation.enabled)")
     return cfg
+
+
+def investigation_of(inv) -> Optional[dict[str, Any]]:
+    """The row's investigation as the list shows it: its status and, when skipped, why (with its catalog key)."""
+    if inv is None:
+        return None
+    key, args = skip_reasons.key_of(inv.skip_reason)
+    return {"id": inv.id, "status": inv.status, "skip_reason": inv.skip_reason, "skip_reason_key": key, "skip_reason_args": args}
 
 
 def item_of(row, status: str, investigation=None) -> dict[str, Any]:
@@ -64,7 +72,7 @@ def item_of(row, status: str, investigation=None) -> dict[str, Any]:
         "done": bool(row.done_at),
         "done_by": row.done_by,
         "done_at": _iso(row.done_at),
-        "investigation": {"id": investigation.id, "status": investigation.status} if investigation else None,
+        "investigation": investigation_of(investigation),
     }
 
 
@@ -128,6 +136,7 @@ async def list_inbox(
     return {
         "items": [item_of(r, inbox.status_of(r, stale_before), investigations.get(r.id)) for r in rows],
         "total": total, "counts": counts, "limit": limit, "offset": offset, "stale_hours": cfg.inbox_stale_hours,
+        "severities": await inbox.severities(db, cluster),
     }
 
 

@@ -54,11 +54,13 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
 - **거르기**: `firing`이고 `severity` 라벨이 `severities`(기본 critical·warning)에 있는 알림만 받습니다.
   - 클러스터와 fingerprint가 같은 알림이 `dedupeHours`(24) 안에 다시 오면 `repeat_count`만 올립니다(Alertmanager는 4시간마다 다시 보냅니다).
   - 시간당 `maxPerHour`(6)나 하루 `dailyTokenBudget`(200,000 토큰, UTC 기준)을 넘으면 `skipped`로 남깁니다.
+  - 웹훅 한 통에서 새 조사는 100개까지 시작합니다. 넘친 알림도 알림함에는 저장하고 `skipped`("investigation cap")로 남기며, 최근 조사에 접힌 알림·해결 알림·걸러진 알림은 자리를 쓰지 않습니다. Alertmanager가 그 묶음을 다시 보내면 조사한 알림은 접히고 다음 알림이 조사됩니다.
+  - `dedupeHours` 안에 다시 건너뛴 알림은 새 행 대신 그 건너뜀 행에 접힙니다(반복 수, 마지막으로 본 시각, 마지막 이유).
   - 모델 공급자가 **크레딧·키 문제로 거절**하면 그 건은 `failed`("provider refused (credit)…")가 됩니다.
     그 뒤 `providerPauseMinutes`(30분, 0 = 끔) 동안 들어오는 알림과 대기 중이던 알림은 `skipped`("paused: …until …")로 두어, 막힌 공급자를 알림마다 다시 부르지 않습니다.
     구독의 사용량 한도라면 한도가 풀리는 시각까지 멈춥니다.
   - 요청 한도 초과(429)나 장애는 일시적이므로 멈추지 않습니다.
-  - 웹훅 응답 `{accepted, duplicate, filtered, skipped, resolved, dropped}`은 바로 돌아옵니다.
+  - 웹훅 응답 `{accepted, duplicate, filtered, skipped, capped, resolved, stored}`은 바로 돌아옵니다. `capped`는 그 통의 새 조사 100개를 넘친 알림 수이고, 알림 하나는 여섯 가지 중 하나에만 듭니다.
 - **조사**: 작업자 하나가 대기열의 알림을 하나씩 처리하며, 복제본이 여럿이어도 한 번만 처리합니다.
   - auth-service가 그 클러스터용 **조사 전용 토큰**을 10분짜리로 발급합니다.
     - 권한은 읽기 도구 43개와 로그 저장소 검색이 확인하는 `resource.pod.read`입니다. Helm·정책 보고·비용·네트워크 흐름·네트워크 차단·상위 통신 도구는 이 권한이 없어 조사에는 보이지 않습니다.
@@ -98,19 +100,21 @@ Alertmanager(또는 Grafana 알림)가 보낸 알림을 **울리는 중인 것�
   - resolved가 오면 해결됨이 되고, 해결 뒤 다시 울리면 새 줄이 생깁니다.
   - 상태는 울리는 중 · **상태 확인 안 됨** · 해결됨입니다.
   - 상태 확인 안 됨은 울리는 중인데 `inbox.staleAfterHours`(8) 동안 소식이 없는 알림입니다(Alertmanager는 울리는 알림의 `endsAt`을 웹훅으로 보내지 않습니다).
-  - 그 클러스터에 알림 저장소(`features.alertStore`)가 있으면 Alertmanager의 현재 상태(무음 중, 억제됨, Alertmanager에 없음)도 함께 표시합니다.
+  - 웹훅 한 통에 알림이 몇 개든 전부 저장합니다.
+  - 그 클러스터에 알림 저장소(`features.alertStore`)가 있으면 Alertmanager의 현재 상태(무음 중, 억제됨, Alertmanager에 없음)도 함께 표시합니다. 저장소 목록이 `alertStore.maxAlerts`에서 잘려 그 알림이 없으면 행은 "모름", 알림 창은 저장소의 수와 함께 모른다고 말합니다. 저장소가 아직 답하지 않았거나 실패했거나 그 클러스터에 저장소가 없을 때도 알림 창이 그렇게 말합니다.
 - **무음**: 그 클러스터에 알림 저장소가 있고 `features.alertStore.silences: true`이면 무음을 만들 수 있습니다.
   - 이 값은 기본으로 꺼져 있으며, 저장소 인증에 쓰기 권한이 필요합니다(Grafana면 Editor).
   - 권한 `resource.alert.silence`(Write·Admin에 기본 포함, Read에는 없음)를 가진 사람이 알림 창의 **무음**에서 조건, 기간, 이유를 정하고 **지금 무음이 걸릴 알림**을 미리 본 뒤 만듭니다.
   - 조건은 그 알림의 이름, Namespace, 대상 레이블에서 시작해 더하거나 지울 수 있습니다(`=`·`!=`·`=~`·`!~`).
   - 기간은 최대 `silenceMaxHours`(168시간)이고, 이유는 필수입니다.
   - 서버가 모든 무음에 그 클러스터 조건(`<clusterLabel>="<값>"`)을 붙이므로 다른 클러스터의 알림은 멈출 수 없습니다. 빈 레이블에도 맞는 조건(예: `alertname=~".*"`)만으로는 무음을 만들 수 없으며, 이는 Alertmanager와 같은 규칙입니다.
-  - **무음** 탭에서 그 클러스터에 걸려 있거나 예정된 무음을 보고 "지금 끝내기"로 끝낼 수 있습니다.
+  - **무음** 탭에서 그 클러스터 알림에 걸려 있거나 예정된 무음을 보고, 그 클러스터 것은 "지금 끝내기"로 끝낼 수 있습니다. 저장소의 다른 무음 중 이 클러스터에 걸리는 것(클러스터 조건 없음 "모든 클러스터에 걸림", 이 클러스터에 맞는 클러스터 패턴 "클러스터 패턴으로 걸림")도 그 표시와 함께 보이며, 만든 곳에서 끝냅니다.
   - 감사 `alert.silence.create`·`alert.silence.expire`.
 - **처리 표시**: 확인함 · 내가 담당/해제 · 메모 · 조치 완료를 표시할 수 있습니다.
   - Kubeast 안에만 남는 기록이며 Alertmanager나 알림 규칙은 바꾸지 않습니다. "해결됨"은 알림 규칙이 정합니다.
   - 바꿀 때마다 `alert.inbox.update`(전·후 값)를 남기고, 감사 DB에 쓸 수 없으면 503을 돌려주며 표시도 되돌립니다.
-- **화면**: 상태 탭(울리는 중, 상태 확인 안 됨, 해결됨, 전체)이 있고 심각도, 내 담당, 조치 안 된 것으로 거를 수 있습니다.
+- **화면**: 상태 탭(울리는 중, 상태 확인 안 됨, 해결됨, 전체)이 있고 심각도(critical·warning·info와 그 클러스터 알림에 있는 다른 값), 내 담당, 조치 안 된 것으로 거를 수 있습니다.
+  - 건너뛴 조사는 행, 알림 창, 보고서에 이유를 보입니다("조사 한도로 건너뜀"과 수).
   - 대상(라벨 `pod`·`deployment`·`node` 등)을 누르면 리소스 상세 창이 열립니다.
   - 한 건을 열면 라벨, 주석, 알림 보낸 곳 링크, 처리 칸, AI 조사가 나옵니다.
   - API는 `GET /api/v1/alerts/inbox?cluster=`·`/{id}`·`PATCH /{id}`·`/{id}/investigation`입니다.

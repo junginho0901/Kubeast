@@ -21,8 +21,8 @@ import InvestigationReportModal from '@/components/InvestigationReportModal'
 import SilenceList from './SilenceList'
 import SilenceModal from './SilenceModal'
 import { alertInvestigationEnabled } from '@/utils/features'
-import { alertResource, liveStateOf, silenceStart, storeCut, type LiveState } from '@/utils/alertInbox'
-import { severityClass, statusClass as investigationClass } from '@/utils/investigationFormat'
+import { alertResource, liveLineOf, liveStateOf, severityChoices, silenceStart, storeCut, type LiveState } from '@/utils/alertInbox'
+import { severityClass, skipReason, statusClass as investigationClass } from '@/utils/investigationFormat'
 import { formatAge, formatTime, utcTitle } from '@/utils/time'
 
 // Alerts: every alert Alertmanager sent for the selected cluster (features.alertInvestigation's webhook), firing or
@@ -70,9 +70,12 @@ export default function AlertInbox() {
   const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: status })
 
   const filter = { status, severity, mine, open: openOnly, q: search, limit: rowsPerPage, offset: (page - 1) * rowsPerPage }
+  // The rows on screen stay while another tab, page or search loads (never another cluster's); the pager, the counts
+  // and the AI context follow the answer's own filter and page.
   const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ['alert-inbox', 'list', currentCluster, filter],
-    queryFn: () => api.listAlertInbox(filter),
+    queryFn: async () => ({ ...(await api.listAlertInbox(filter)), filter, page }),
+    placeholderData: (prev, prevQuery) => (prevQuery?.queryKey[2] === currentCluster ? prev : undefined),
     refetchInterval: 30_000,
     retry: false,
   })
@@ -81,18 +84,23 @@ export default function AlertInbox() {
   const silenceWith = storeOn && features.data?.alertStore?.silences && has('resource.alert.silence')
     ? { maxHours: features.data.alertStore.silenceMaxHours ?? 168, clusterLabel: features.data.alertStore.clusterLabel ?? 'cluster' }
     : undefined
-  const { data: store } = useQuery({
+  const storeQuery = useQuery({
     queryKey: ['alert-inbox', 'store', currentCluster],
     queryFn: api.listAlertStoreAlerts,
     enabled: storeOn,
     refetchInterval: 60_000,
     retry: false,
   })
+  const store = storeQuery.data
+  // what the alert window says about Alertmanager now; while the features are not known yet, as loading
+  const storeRead = { on: storeOn || !features.data, answer: store, failed: storeQuery.isError }
   const cut = storeCut(store)
   const rows = data?.items ?? []
   const total = data?.total ?? 0
   const counts = data?.counts ?? { firing: 0, stale: 0, resolved: 0 }
-  const totalPages = Math.max(1, Math.ceil(total / rowsPerPage))
+  const shown = data ? { ...data.filter, page: data.page } : { ...filter, page }
+  const totalPages = Math.max(1, Math.ceil(total / shown.limit))
+  const severities = severityChoices(data?.severities, severity)
   const forbidden = (error as { response?: { status?: number } } | null)?.response?.status === 403
 
   useEffect(() => setPage(1), [status, severity, mine, openOnly, search, currentCluster])
@@ -105,10 +113,10 @@ export default function AlertInbox() {
   }
 
   useAIContext(data ? {
-    summary: `알림 ${total}건 (울리는 중 ${counts.firing}, 상태 확인 안 됨 ${counts.stale}, 해결됨 ${counts.resolved})${status ? ` — ${status}만` : ''}`,
+    summary: `알림 ${total}건 (울리는 중 ${counts.firing}, 상태 확인 안 됨 ${counts.stale}, 해결됨 ${counts.resolved})${shown.status ? ` — ${shown.status}만` : ''}`,
     data: {
       cluster: currentCluster,
-      filters: { status: status || undefined, severity: severity || undefined, mine: mine || undefined, open: openOnly || undefined, search: search || undefined, page },
+      filters: { status: shown.status || undefined, severity: shown.severity || undefined, mine: shown.mine || undefined, open: shown.open || undefined, search: shown.q || undefined, page: shown.page },
       counts,
       // the store's list was cut at its limit: "live" is left out for the alerts it did not send
       alert_store_cut: cut ?? undefined,
@@ -117,9 +125,10 @@ export default function AlertInbox() {
         live: liveStateOf(r, store) ?? undefined, summary: r.summary || undefined, starts_at: r.starts_at,
         resolved_at: r.resolved_at ?? undefined, received_count: r.received_count, acknowledged: r.acknowledged || undefined,
         assignee: r.assignee || undefined, done: r.done || undefined, investigation: r.investigation?.status,
+        investigation_skip: r.investigation?.status === 'skipped' ? r.investigation.skip_reason || undefined : undefined,
       })),
     },
-  } : null, [data, store, status, severity, mine, openOnly, search, page, currentCluster])
+  } : null, [data, store, currentCluster])
 
   const statusLabel = (s: string) => tr(`alertInbox.status.${s}`, s)
   const tab = (value: string, label: string, count?: number) => (
@@ -197,12 +206,7 @@ export default function AlertInbox() {
             label={tr('alertInbox.filter.severity', 'Severity')}
             value={severity}
             onChange={setSeverity}
-            options={[
-              { value: '', label: tr('alertInbox.status.all', 'All') },
-              { value: 'critical', label: 'critical' },
-              { value: 'warning', label: 'warning' },
-              { value: 'info', label: 'info' },
-            ]}
+            options={[{ value: '', label: tr('alertInbox.status.all', 'All') }, ...severities.map((s) => ({ value: s, label: s }))]}
           />
         </div>
         <label className={`flex h-10 items-center gap-2 text-sm text-slate-300 ${showSilences ? 'hidden' : ''}`}>
@@ -234,6 +238,9 @@ export default function AlertInbox() {
             <tbody className="divide-y divide-slate-700">
               {rows.map((r, idx) => {
                 const live = liveStateOf(r, store)
+                // not among the alerts the store's cut list sent: what Alertmanager says now is not known
+                const unknown = !live && cut && r.status !== 'resolved'
+                const skip = r.investigation?.status === 'skipped' ? skipReason(r.investigation, tr) : null
                 const target = alertResource(r.labels)
                 return (
                   <tr
@@ -249,6 +256,11 @@ export default function AlertInbox() {
                       </span>
                       {live && live !== 'firing' && (
                         <span className={`block mt-1 text-xs ${liveClass[live]}`} data-testid="alert-live">{tr(`alertInbox.live.${live}`, live)}</span>
+                      )}
+                      {unknown && (
+                        <span className="block mt-1 text-xs text-slate-400" title={tr('alertInbox.liveUnknown.cut', 'Unknown — the alert store sent {{listed}} of its {{total}} alerts for this cluster, not this one', cut)} data-testid="alert-live-unknown">
+                          {tr('alertInbox.live.unknown', 'Unknown')}
+                        </span>
                       )}
                     </td>
                     <td className="py-3 px-4">
@@ -274,10 +286,11 @@ export default function AlertInbox() {
                     <td className="col-optional py-3 px-4 text-right text-xs">{r.received_count}</td>
                     <td className="col-optional py-3 px-4 text-xs">
                       {r.investigation ? (
-                        <span className={`inline-block whitespace-nowrap rounded-sm border px-1.5 py-0.5 ${investigationClass[r.investigation.status] ?? ''}`}>
+                        <span className={`inline-block whitespace-nowrap rounded-sm border px-1.5 py-0.5 ${investigationClass[r.investigation.status] ?? ''}`} title={skip?.text}>
                           {tr(`investigations.status.${r.investigation.status}`, r.investigation.status)}
                         </span>
                       ) : '-'}
+                      {skip && <span className="block mt-1 truncate text-slate-400" title={skip.text} data-testid="alert-investigation-skip">{skip.label}</span>}
                     </td>
                     <td className="py-3 px-4 text-xs" data-testid="alert-handling">
                       <Marks item={r} tr={tr} />
@@ -297,10 +310,10 @@ export default function AlertInbox() {
             <AdaptiveTableFillerRows count={rowsPerPage - rows.length} columnCount={COLUMNS} />
           </table>
         </div>
-        <ListPager currentPage={page} totalPages={totalPages} total={total} rowsPerPage={rowsPerPage} onPageChange={setPage} />
+        <ListPager currentPage={shown.page} totalPages={totalPages} total={total} rowsPerPage={shown.limit} onPageChange={setPage} />
       </div>
 
-      {openId && <AlertDetailModal id={openId} live={store} silenceWith={silenceWith} onClose={() => open(null)} />}
+      {openId && <AlertDetailModal id={openId} store={storeRead} silenceWith={silenceWith} onClose={() => open(null)} />}
     </div>
   )
 }
@@ -316,9 +329,10 @@ function Marks({ item, tr }: { item: Pick<AlertInboxItem, 'acknowledged' | 'assi
   )
 }
 
-function AlertDetailModal({ id, live, silenceWith, onClose }: {
+function AlertDetailModal({ id, store, silenceWith, onClose }: {
   id: string
-  live: Parameters<typeof liveStateOf>[1]
+  // the page's alert store read: whether the cluster has one, its answer, whether it failed
+  store: Parameters<typeof liveLineOf>[1]
   // set when this user may silence the cluster's alerts
   silenceWith?: { maxHours: number; clusterLabel: string }
   onClose: () => void
@@ -343,7 +357,11 @@ function AlertDetailModal({ id, live, silenceWith, onClose }: {
       setNote(null)
     },
   })
-  const liveState = data ? liveStateOf(data, live) : null
+  const liveLine = data ? liveLineOf(data, store) : null
+  const liveState = liveLine && 'state' in liveLine ? liveLine.state : null
+  const liveUnknown = liveLine && 'unknown' in liveLine ? liveLine.unknown : null
+  const cut = storeCut(store.answer)
+  const skip = data?.investigation?.status === 'skipped' ? skipReason(data.investigation, tr) : null
   const target = data ? alertResource(data.labels) : null
   const noteValue = note ?? data?.note ?? ''
 
@@ -352,11 +370,15 @@ function AlertDetailModal({ id, live, silenceWith, onClose }: {
     summary: `알림 — ${data.alertname} (${data.cluster}${data.namespace ? ` / ${data.namespace}` : ''}, ${data.status})`,
     data: {
       alertname: data.alertname, severity: data.severity, status: data.status, live: liveState ?? undefined,
+      // why "live" is missing: the store's list was cut before this alert, not answered yet, failed, or no store
+      live_unknown: liveUnknown ?? undefined,
+      alert_store_cut: cut ?? undefined,
       labels: data.labels, annotations: data.annotations, starts_at: data.starts_at, resolved_at: data.resolved_at ?? undefined,
       received_count: data.received_count, last_received_at: data.last_received_at, acknowledged: data.acknowledged,
       assignee: data.assignee || undefined, done: data.done, note: data.note || undefined, investigation: data.investigation?.status,
+      investigation_skip: skip ? data.investigation?.skip_reason || undefined : undefined,
     },
-  } : null, [data, liveState])
+  } : null, [data, liveState, liveUnknown, cut?.listed, cut?.total, skip?.text])
 
   const failed = save.error as { response?: { status?: number } } | null
   return (
@@ -382,7 +404,14 @@ function AlertDetailModal({ id, live, silenceWith, onClose }: {
           <div className="space-y-5">
             <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-400" data-testid="alert-detail-meta">
               <span>{tr('alertInbox.col.status', 'Status')}: <span className={`rounded-sm border px-1.5 py-0.5 ${statusClass[data.status] ?? ''}`}>{tr(`alertInbox.status.${data.status}`, data.status)}</span></span>
-              {liveState && <span>{tr('alertInbox.liveLabel', 'Alertmanager now')}: <span className={liveClass[liveState]}>{tr(`alertInbox.live.${liveState}`, liveState)}</span></span>}
+              {liveLine && (
+                <span>
+                  {tr('alertInbox.liveLabel', 'Alertmanager now')}:{' '}
+                  {'state' in liveLine
+                    ? <span className={liveClass[liveLine.state]}>{tr(`alertInbox.live.${liveLine.state}`, liveLine.state)}</span>
+                    : <span className="text-slate-300">{tr(`alertInbox.liveUnknown.${liveLine.unknown}`, liveLine.unknown, liveLine)}</span>}
+                </span>
+              )}
               <span>{tr('alertInbox.filter.severity', 'Severity')}: <span className={severityClass[data.severity] ?? 'text-slate-300'}>{data.severity || '-'}</span></span>
               <span>{tr('alertInbox.col.started', 'Started')}: <span className="text-slate-300">{formatTime(data.starts_at)}</span></span>
               {data.resolved_at && <span>{tr('alertInbox.resolvedAt', 'Resolved')}: <span className="text-slate-300">{formatTime(data.resolved_at)}</span></span>}
@@ -487,6 +516,7 @@ function AlertDetailModal({ id, live, silenceWith, onClose }: {
               ) : (
                 <p className="text-xs text-slate-500">{tr('alertInbox.noInvestigation', 'Not investigated (only firing alerts of the investigated severities are, within the hourly cap and token budget).')}</p>
               )}
+              {skip && <p className="mt-2 text-xs text-slate-300" data-testid="alert-investigation-skip">{skip.text}</p>}
             </section>
 
             <section>
