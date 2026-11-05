@@ -55,12 +55,14 @@ The feature is off by default (`features.alertInvestigation.enabled`). Turning i
   - A wrong token gets 401, an unknown cluster 404, and 404 when the feature is off.
 - **Filtering**: only alerts that are `firing` and whose `severity` label is in `severities` (default critical, warning) pass. For the same cluster and fingerprint within `dedupeHours` (24), only `repeat_count` goes up (Alertmanager resends every 4 hours).
   - Past `maxPerHour` (6) per hour or the daily `dailyTokenBudget` (200,000 tokens, UTC), alerts are recorded as `skipped`.
+  - One webhook message starts at most 100 new investigations. The alerts past that are still kept in the inbox and recorded as `skipped` ("investigation cap"); alerts folded into a recent investigation, resolved or filtered take no place. When Alertmanager sends the group again, the investigated ones fold and the next alerts get their turn.
+  - An alert skipped again within `dedupeHours` folds into its skipped row (repeats, last seen, the latest reason) instead of a new row.
   - When the model provider **refuses because of a credit or key problem**, investigations pause. For a subscription, this is the usage limit, and the pause lasts until the time it lifts.
     - That alert becomes `failed` ("provider refused (credit)…").
     - Alerts arriving in the following `providerPauseMinutes` (30 minutes, 0 = off), and alerts already queued, become `skipped` ("paused: …until …").
     - This way, a blocked provider is not called again for every alert.
   - Rate limiting (429) and outages are temporary, so they do not pause it.
-  - The response comes right away: `{accepted, duplicate, filtered, skipped, resolved, dropped}`.
+  - The response comes right away: `{accepted, duplicate, filtered, skipped, capped, resolved, stored}` — `capped` counts the alerts past the 100 new investigations of the message, and every alert lands in exactly one of the six.
 - **Investigation**: one worker processes queued alerts one at a time (only once, even with multiple replicas).
   - auth-service issues an **investigation-only token** for that cluster, valid for 10 minutes.
     - It holds permissions for the 43 read tools plus `resource.pod.read`, which log store search asks for. It lacks the permissions of the Helm, policy report, cost, network flow, network drop and top talker tools, so the investigation does not see them.
@@ -98,18 +100,20 @@ Alerts come in through the same webhook as the investigation above, so `features
 - **One row = one alert**: the same cluster, fingerprint and `startsAt`.
   - When Alertmanager resends every `repeat_interval`, "Received" goes up. When resolved arrives, the row becomes Resolved. If the alert fires again after resolving, it gets a new row.
   - Statuses are Firing, **Status unknown** and Resolved. Status unknown means firing, but nothing heard for `inbox.staleAfterHours` (8); Alertmanager does not send a firing alert's `endsAt` through the webhook.
-  - When the cluster has an alert store (`features.alertStore`), Alertmanager's current state (Silenced, Inhibited, Not in Alertmanager) is shown too.
+  - Every alert of a message is kept, however many the message carries.
+  - When the cluster has an alert store (`features.alertStore`), Alertmanager's current state (Silenced, Inhibited, Not in Alertmanager) is shown too. When the store's list was cut at `alertStore.maxAlerts` before the alert, the row says Unknown and the alert window says so with the store's numbers; the window also says when the store has not answered, failed, or the cluster has none.
 - **Silence**: needs an alert store on the cluster and `features.alertStore.silences: true`. This is off by default; the store credentials need write permission (Editor for Grafana).
   - People with the permission `resource.alert.silence` (Write and Admin by default, not Read) use **Silence** in the alert window.
   - They set conditions starting from the alert's name, Namespace and object labels (`=`, `!=`, `=~`, `!~`, add and remove), a duration (at most `silenceMaxHours` 168) and a reason (required). They preview the **alerts it would mute now**, and then create it.
   - The server adds the cluster condition (`<clusterLabel>="<value>"`) to every silence, so it cannot mute other clusters' alerts.
   - A silence made only of conditions that also match an empty label (e.g. `alertname=~".*"`) cannot be created. Alertmanager has the same rule.
-  - The **Silences** tab shows the cluster's active and pending silences, with "End now".
+  - The **Silences** tab shows the active and pending silences that mute the cluster's alerts, with "End now" on the cluster's own. The store's other silences that reach it — no cluster condition ("All clusters"), or a cluster pattern the cluster meets ("By cluster pattern") — are listed with that mark and end where they were made.
   - Audit: `alert.silence.create` and `alert.silence.expire`.
 - **Handling marks**: Acknowledge, Assign to me/Unassign, Note and Mark done.
   - They are records inside Kubeast and do not change Alertmanager or the alert rules. The rule decides "Resolved".
   - Every change records `alert.inbox.update` (before and after values). When the audit DB cannot be written, the response is 503 and the mark is rolled back.
-- **Screen**: status tabs (Firing, Status unknown, Resolved, All) and filters for severity, Assigned to me and Not done.
+- **Screen**: status tabs (Firing, Status unknown, Resolved, All) and filters for severity (critical, warning, info and any other value the cluster's alerts carry), Assigned to me and Not done.
+  - A skipped investigation says why in the row, the alert window and its report ("Skipped by the investigation limit", with the numbers).
   - Pressing the object (label `pod`, `deployment`, `node`, etc.) opens the resource details window.
   - Opening one alert shows labels, annotations, the alert sender link, the handling area and the AI investigation.
   - API: `GET /api/v1/alerts/inbox?cluster=`, `/{id}`, `PATCH /{id}` and `/{id}/investigation`.

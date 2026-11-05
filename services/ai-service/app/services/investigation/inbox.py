@@ -87,8 +87,8 @@ async def list_rows(
     db, *, cluster: str, status: str = "", severity: str = "", assignee: str = "", open_only: bool = False,
     search: str = "", stale_before: datetime, limit: int = 50, offset: int = 0,
 ) -> tuple[list[AlertInboxItem], int, dict[str, int]]:
-    """A cluster's alerts, firing first then newest, and how many there are per status (before the status filter,
-    after the search)."""
+    """A cluster's alerts, firing first then newest (the alerts of one message share the time: then by id, so pages
+    neither repeat nor skip a row), and how many there are per status (before the status filter, after the search)."""
     base = [AlertInboxItem.cluster == cluster]
     if search:
         base.append(search_condition(search))
@@ -112,10 +112,17 @@ async def list_rows(
         total = int((await s.execute(select(func.count()).select_from(AlertInboxItem).where(*conds))).scalar() or 0)
         q = (
             select(AlertInboxItem).where(*conds)
-            .order_by(case((AlertInboxItem.state == FIRING, 0), else_=1), AlertInboxItem.last_received_at.desc())
+            .order_by(case((AlertInboxItem.state == FIRING, 0), else_=1), AlertInboxItem.last_received_at.desc(), AlertInboxItem.id.desc())
             .limit(limit).offset(offset)
         )
         return list((await s.execute(q)).scalars().all()), total, counts
+
+
+async def severities(db, cluster: str) -> list[str]:
+    """The severity values a cluster's alerts carry, for the screen's filter (kube-prometheus also writes none)."""
+    async with db.async_session() as s:
+        q = select(AlertInboxItem.severity).where(AlertInboxItem.cluster == cluster, AlertInboxItem.severity != "").distinct()
+        return sorted(v for (v,) in (await s.execute(q)).all())
 
 
 async def get(db, item_id: str) -> Optional[AlertInboxItem]:

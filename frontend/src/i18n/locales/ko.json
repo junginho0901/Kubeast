@@ -5130,9 +5130,16 @@
       "firing": "울리는 중",
       "silenced": "무음 중",
       "inhibited": "억제됨",
-      "absent": "Alertmanager에 없음"
+      "absent": "Alertmanager에 없음",
+      "unknown": "모름"
     },
     "liveLabel": "Alertmanager 지금 상태",
+    "liveUnknown": {
+      "cut": "모름 — 알림 저장소가 이 클러스터 알림 {{total}}건 중 {{listed}}건만 보냈고 이 알림은 없음",
+      "loading": "알림 저장소에 묻는 중…",
+      "failed": "모름 — 알림 저장소가 답하지 않음",
+      "none": "읽지 않음 — 이 클러스터엔 알림 저장소가 없음(features.alertStore)"
+    },
     "filter": {
       "severity": "심각도",
       "mine": "내 담당",
@@ -5204,7 +5211,15 @@
       "expireTitle": "무음 끝내기",
       "expireConfirm": "이 무음을 지금 끝낼까요? 맞는 알림이 다시 전송됩니다.",
       "listFailed": "알림 저장소가 답하지 않았습니다.",
-      "storeCut": "알림 저장소가 {{total}}건 중 앞의 {{listed}}건만 보냈습니다(저장소 한도, alertStore.maxAlerts). 나머지는 수에만 들고 목록에는 없습니다."
+      "storeCut": "알림 저장소가 {{total}}건 중 앞의 {{listed}}건만 보냈습니다(저장소 한도, alertStore.maxAlerts). 나머지는 수에만 들고 목록에는 없습니다.",
+      "scope": {
+        "all": "모든 클러스터에 걸림",
+        "pattern": "클러스터 패턴으로 걸림"
+      },
+      "scopeHint": {
+        "all": "클러스터 조건이 없는 무음입니다. 이 알림 저장소의 모든 클러스터에서 맞는 알림을 막습니다. 이 클러스터에서 만든 무음이 아니라 만든 곳에서 끝냅니다.",
+        "pattern": "클러스터 조건이 이 클러스터에 맞는 패턴인 무음입니다. 여기서 맞는 알림을 막고 다른 클러스터 알림도 막을 수 있습니다. 이 클러스터에서 만든 무음이 아니라 만든 곳에서 끝냅니다."
+      }
     },
     "ackedBy": "{{who}} 확인 · {{when}}",
     "assignee": "담당: {{who}}",
@@ -5249,6 +5264,18 @@
     "open": "보고서",
     "range": "{{total}}건 중 {{from}}–{{to}}",
     "skipReason": "건너뜀: {{reason}}",
+    "skip": {
+      "investigation_cap": "조사 한도로 건너뜀",
+      "hourly_cap": "시간당 한도로 건너뜀",
+      "daily_token_budget": "하루 토큰 한도로 건너뜀",
+      "provider_paused": "AI 제공자 일시 정지로 건너뜀"
+    },
+    "skipWhy": {
+      "investigation_cap": "웹훅 한 통에서 새 조사는 {{limit}}개까지 시작하고, 나머지는 알림함에 두었다가 Alertmanager가 다시 보낼 때 다시 시도함",
+      "hourly_cap": "한 시간에 조사를 {{limit}}개까지 시작함",
+      "daily_token_budget": "조사는 하루(UTC, UTC 00:00부터 다시 셈)에 {{limit}} 토큰까지 씀",
+      "provider_paused": "AI 모델 제공자가 {{at}}에 거절했고({{kind}}) {{until}}까지 조사를 시작하지 않음"
+    },
     "report": "보고서",
     "loadFailed": "보고서를 열 수 없습니다.",
     "meta": {

@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from app.database import get_db_service
 from app.security import TokenPayload, require_auth
 from app.services.audit_writer import write_audit
-from app.services.investigation import store
+from app.services.investigation import skip_reasons, store
 
 router = APIRouter()
 
@@ -36,6 +36,8 @@ def summary_of(row) -> dict[str, Any]:
     duration_ms = None
     if row.started_at and row.finished_at:
         duration_ms = int((row.finished_at - row.started_at).total_seconds() * 1000)
+    # the screen words a skip reason from its catalog key and values; the English text stays for the rest
+    skip_key, skip_args = skip_reasons.key_of(row.skip_reason)
     return {
         "id": row.id,
         "cluster": row.cluster,
@@ -44,6 +46,8 @@ def summary_of(row) -> dict[str, Any]:
         "namespace": row.namespace,
         "status": row.status,
         "skip_reason": row.skip_reason,
+        "skip_reason_key": skip_key,
+        "skip_reason_args": skip_args,
         "received_at": _iso(row.received_at),
         "started_at": _iso(row.started_at),
         "finished_at": _iso(row.finished_at),

@@ -113,7 +113,8 @@ func (h *Handler) AlertStoreAlerts(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, res)
 }
 
-// AlertStoreSilences handles GET /api/v1/alertstore/silences: the cluster's active and pending silences. A plain read.
+// AlertStoreSilences handles GET /api/v1/alertstore/silences: the active and pending silences that mute the cluster's
+// alerts, its own and the store's others, each with its scope. A plain read.
 func (h *Handler) AlertStoreSilences(w http.ResponseWriter, r *http.Request) {
 	id, payload, ok := h.alertStoreGate(w, r, "resource.pod.read", "")
 	if !ok || !h.allowAlertRead(w, payload) {

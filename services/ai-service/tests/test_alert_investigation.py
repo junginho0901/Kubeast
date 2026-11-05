@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.services.investigation import prompt as inv_prompt
-from app.services.investigation import inbox, runner, store, webhook
+from app.services.investigation import inbox, runner, skip_reasons, store, webhook
 from app.services.investigation.settings import InvestigationSettings
 
 NOW = datetime(2026, 10, 13, 12, 0, 0)
@@ -60,6 +60,16 @@ class FakeStore:
         async def bump_repeat(db, inv_id, now):
             self.bumped.append(inv_id)
 
+        async def find_recent_skipped(db, cluster, fingerprint, since):
+            for r in reversed(self.rows):
+                if r["cluster"] == cluster and r["fingerprint"] == fingerprint and r["received_at"] >= since and r["status"] == "skipped":
+                    return SimpleNamespace(**r)
+            return None
+
+        async def fold_skip(db, inv_id, reason, now):
+            row = next(r for r in self.rows if r["id"] == inv_id)
+            row.update(repeat_count=row.get("repeat_count", 1) + 1, last_seen_at=now, skip_reason=reason)
+
         async def count_since(db, since):
             return sum(1 for r in self.rows if r["received_at"] >= since and r["status"] != "skipped")
 
@@ -75,7 +85,7 @@ class FakeStore:
             return self.pause if minutes else ""
 
         for name, fn in dict(find_recent=find_recent, bump_repeat=bump_repeat, count_since=count_since, tokens_since=tokens_since, insert=insert,
-                             pause_reason=pause_reason).items():
+                             pause_reason=pause_reason, find_recent_skipped=find_recent_skipped, fold_skip=fold_skip).items():
             monkeypatch.setattr(store, name, fn)
 
 
@@ -107,7 +117,7 @@ async def test_gates_filter_resolve_queue(monkeypatch):
     fs.install(monkeypatch)
     msg = am_message(alert(fp="a"), alert(fp="b", severity="info"), alert(fp="c", status="resolved"), alert(fp="d", severity="Warning"))
     counts = await webhook.gate_and_queue(None, cfg(), "self", msg, NOW)
-    assert counts == {"accepted": 2, "duplicate": 0, "filtered": 1, "skipped": 0, "resolved": 1, "dropped": 0, "stored": 4}
+    assert counts == {"accepted": 2, "duplicate": 0, "filtered": 1, "skipped": 0, "capped": 0, "resolved": 1, "stored": 4}
     assert [r["fingerprint"] for r in fs.rows] == ["a", "d"]
     # the inbox takes every alert, every severity, firing or resolved
     assert [(r["fingerprint"], r["firing"]) for r in fs.inbox] == [("a", True), ("b", True), ("c", False), ("d", True)]
@@ -153,11 +163,125 @@ async def test_gates_skip_on_hourly_cap_and_token_budget(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_gates_read_at_most_100_alerts(monkeypatch):
-    FakeStore().install(monkeypatch)
+async def test_gates_store_every_alert_of_a_message(monkeypatch):
+    fs = FakeStore()
+    fs.install(monkeypatch)
     msg = am_message(*[alert(fp=f"f{i}", severity="info") for i in range(120)])
     counts = await webhook.gate_and_queue(None, cfg(), "self", msg, NOW)
-    assert counts["dropped"] == 20 and counts["filtered"] == 100
+    assert counts["stored"] == 120 and counts["filtered"] == 120 and len(fs.inbox) == 120
+    assert [f["fingerprint"] for f in fs.inbox] == [f"f{i}" for i in range(120)]
+
+
+def outcomes(counts):
+    return sum(counts[k] for k in ("accepted", "duplicate", "filtered", "skipped", "capped", "resolved"))
+
+
+@pytest.mark.asyncio
+async def test_gates_queue_at_most_100_new_investigations_a_message(monkeypatch):
+    fs = FakeStore()
+    fs.install(monkeypatch)
+    msg = am_message(*[alert(fp=f"n{i:03}") for i in range(101)])
+    counts = await webhook.gate_and_queue(None, cfg(max_per_hour=0, daily_token_budget=0), "self", msg, NOW)
+    assert counts == {"accepted": 100, "duplicate": 0, "filtered": 0, "skipped": 0, "capped": 1, "resolved": 0, "stored": 101}
+    assert len(fs.inbox) == 101 and len(fs.rows) == 101
+    assert [r["status"] for r in fs.rows].count("queued") == 100
+    last = fs.rows[-1]
+    assert (last["fingerprint"], last["status"], last["skip_reason"]) == ("n100", "skipped", "investigation cap (100 new per webhook message)")
+    assert skip_reasons.key_of(last["skip_reason"]) == ("investigation_cap", {"limit": 100})
+
+
+@pytest.mark.asyncio
+async def test_resolved_filtered_and_folded_alerts_take_no_place_and_a_resend_investigates_the_next(monkeypatch):
+    done = [{"id": f"old{i}", "cluster": "self", "fingerprint": f"d{i}", "status": "done", "received_at": NOW - timedelta(hours=1)} for i in range(50)]
+    fs = FakeStore(rows=list(done))
+    fs.install(monkeypatch)
+    alerts = (
+        [alert(fp=f"d{i}") for i in range(50)]  # investigated an hour ago: they fold
+        + [alert(fp=f"r{i}", status="resolved") for i in range(30)]
+        + [alert(fp=f"i{i}", severity="info") for i in range(20)]
+        + [alert(fp=f"n{i:03}") for i in range(101)]
+    )
+    settings = cfg(max_per_hour=0, daily_token_budget=0)
+    counts = await webhook.gate_and_queue(None, settings, "self", am_message(*alerts), NOW)
+    assert counts == {"accepted": 100, "duplicate": 50, "filtered": 20, "skipped": 0, "capped": 1, "resolved": 30, "stored": 201}
+    assert outcomes(counts) == counts["stored"]
+    assert [r["fingerprint"] for r in fs.rows if r["status"] == "skipped"] == ["n100"]
+    # Alertmanager sends the group again: the 100 queued fold, the skipped one is tried again and queued
+    counts = await webhook.gate_and_queue(None, settings, "self", am_message(*alerts), NOW + timedelta(minutes=5))
+    assert counts == {"accepted": 1, "duplicate": 150, "filtered": 20, "skipped": 0, "capped": 0, "resolved": 30, "stored": 201}
+    assert [r["status"] for r in fs.rows if r["fingerprint"] == "n100"] == ["skipped", "queued"]
+
+
+@pytest.mark.asyncio
+async def test_a_skipped_alert_skipped_again_folds_into_its_row(monkeypatch):
+    fs = FakeStore(rows=[{"id": f"r{i}", "cluster": "self", "fingerprint": f"x{i}", "status": "done", "received_at": NOW - timedelta(minutes=10)} for i in range(2)])
+    fs.install(monkeypatch)
+    for minutes in (0, 5, 10):
+        counts = await webhook.gate_and_queue(None, cfg(max_per_hour=2), "self", am_message(alert(fp="new")), NOW + timedelta(minutes=minutes))
+        assert counts["skipped"] == 1 and outcomes(counts) == 1
+    skipped = [r for r in fs.rows if r["status"] == "skipped"]
+    assert len(skipped) == 1 and skipped[0]["repeat_count"] == 3 and skipped[0]["last_seen_at"] == NOW + timedelta(minutes=10)
+    assert skipped[0]["skip_reason"] == "hourly cap (2 per hour)"
+    # with no dedupe window every repeat is its own row, as an investigation would be
+    counts = await webhook.gate_and_queue(None, cfg(max_per_hour=2, dedupe_hours=0), "self", am_message(alert(fp="new")), NOW + timedelta(minutes=15))
+    assert counts["skipped"] == 1 and len([r for r in fs.rows if r["status"] == "skipped"]) == 2
+
+
+def test_skip_reasons_read_back_with_their_catalog_keys():
+    at, until = datetime(2026, 10, 13, 11, 55, 0, 123456), datetime(2026, 10, 13, 12, 25, 0)
+    written = {
+        skip_reasons.investigation_cap(100): ("investigation_cap", {"limit": 100}),
+        skip_reasons.hourly_cap(6): ("hourly_cap", {"limit": 6}),
+        skip_reasons.daily_token_budget(200000): ("daily_token_budget", {"limit": 200000}),
+        skip_reasons.provider_paused("credit", at, until): ("provider_paused", {"kind": "credit", "at": "2026-10-13T11:55:00Z", "until": "2026-10-13T12:25:00Z"}),
+    }
+    for text, (key, args) in written.items():
+        assert skip_reasons.key_of(text) == (key, args), text
+    # rows written before the keys hold the same sentences
+    assert skip_reasons.key_of("hourly cap (6 per hour)") == ("hourly_cap", {"limit": 6})
+    assert skip_reasons.key_of("daily token budget (200000 tokens, UTC day)") == ("daily_token_budget", {"limit": 200000})
+    assert skip_reasons.key_of("paused: the AI model provider refused (usage_window) at 2026-10-13T11:55:00Z; no investigation until 2026-10-13T16:00:00Z") == (
+        "provider_paused", {"kind": "usage_window", "at": "2026-10-13T11:55:00Z", "until": "2026-10-13T16:00:00Z"})
+    # any other text has no key: the screen shows it as written
+    for text in ("", "hourly cap", "paused: …", "hourly cap (6 per hour) and more"):
+        assert skip_reasons.key_of(text) == ("", {}), text
+
+
+@pytest.mark.asyncio
+async def test_a_message_of_101_alerts_on_the_database(sqlite_db):
+    db = sqlite_db
+    msg = am_message(*[alert(fp=f"n{i:03}") for i in range(101)])
+    settings = cfg(max_per_hour=0, daily_token_budget=0)
+    counts = await webhook.gate_and_queue(db, settings, "self", msg, NOW)
+    assert counts == {"accepted": 100, "duplicate": 0, "filtered": 0, "skipped": 0, "capped": 1, "resolved": 0, "stored": 101}
+    rows, total, by_status = await inbox.list_rows(db, cluster="self", stale_before=NOW - timedelta(hours=8), limit=200)
+    assert total == 101 and by_status == {"firing": 101, "stale": 0, "resolved": 0} and len({r.id for r in rows}) == 101
+    invs, inv_total = await store.list_rows(db, cluster="self", limit=200)
+    assert inv_total == 101
+    assert sorted((i.status, i.skip_reason) for i in invs)[-1] == ("skipped", "investigation cap (100 new per webhook message)")
+    assert [i.status for i in invs].count("queued") == 100
+    # the group comes again: the 100 queued fold, the one skipped is queued now; still one inbox row per alert
+    counts = await webhook.gate_and_queue(db, settings, "self", msg, NOW + timedelta(minutes=5))
+    assert (counts["accepted"], counts["duplicate"], counts["capped"], counts["stored"]) == (1, 100, 0, 101)
+    rows, total, _ = await inbox.list_rows(db, cluster="self", stale_before=NOW - timedelta(hours=8), limit=200)
+    assert total == 101 and {r.received_count for r in rows} == {2}
+
+
+@pytest.mark.asyncio
+async def test_store_folds_a_skip_into_the_newest_skipped_row(sqlite_db):
+    db = sqlite_db
+    await store.insert(db, cluster="self", fingerprint="fp", status="skipped", skip_reason="hourly cap (6 per hour)", received_at=NOW - timedelta(hours=30))
+    old = await store.insert(db, cluster="self", fingerprint="fp", status="skipped", skip_reason="hourly cap (6 per hour)", received_at=NOW - timedelta(hours=20))
+    recent = await store.insert(db, cluster="self", fingerprint="fp", status="skipped", skip_reason="hourly cap (6 per hour)", received_at=NOW - timedelta(hours=2))
+    await store.insert(db, cluster="self", fingerprint="fp", status="done", received_at=NOW - timedelta(hours=1))
+    await store.insert(db, cluster="default", fingerprint="fp", status="skipped", received_at=NOW)
+    found = await store.find_recent_skipped(db, "self", "fp", NOW - timedelta(hours=24))
+    assert found is not None and found.id == recent
+    await store.fold_skip(db, recent, "daily token budget (200000 tokens, UTC day)", NOW)
+    row = await store.get(db, recent)
+    assert (row.repeat_count, row.last_seen_at, row.skip_reason) == (2, NOW, "daily token budget (200000 tokens, UTC day)")
+    assert (await store.get(db, old)).repeat_count == 1
+    assert await store.find_recent_skipped(db, "self", "fp", NOW - timedelta(minutes=30)) is None
 
 
 # What Grafana 13.2.4 posts from a webhook contact point (captured from a contact point test; message shortened).
@@ -204,7 +328,7 @@ def webhook_client(monkeypatch, settings, known=True):
         return known
 
     async def gate(db, c, cluster, msg, now):
-        return {"accepted": len(msg.alerts), "duplicate": 0, "filtered": 0, "skipped": 0, "resolved": 0, "dropped": 0}
+        return {"accepted": len(msg.alerts), "duplicate": 0, "filtered": 0, "skipped": 0, "capped": 0, "resolved": 0}
 
     monkeypatch.setattr(webhook, "get_db_service", fake_db)
     monkeypatch.setattr(webhook.store, "cluster_exists", exists)

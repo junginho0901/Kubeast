@@ -242,7 +242,8 @@ async def test_the_report_opens_from_the_inbox_with_its_audit_row(monkeypatch, s
     assert c.get(f"/api/v1/alerts/inbox/{row.id}/investigation").status_code == 404
     inv = await store.insert(sqlite_db, cluster="self", fingerprint="fp1", status="queued", received_at=NOW)
     await store.finish(sqlite_db, inv, status="done", report="## Summary\nOOM")
-    assert c.get("/api/v1/alerts/inbox?cluster=self").json()["items"][0]["investigation"] == {"id": inv, "status": "done"}
+    assert c.get("/api/v1/alerts/inbox?cluster=self").json()["items"][0]["investigation"] == {
+        "id": inv, "status": "done", "skip_reason": "", "skip_reason_key": "", "skip_reason_args": {}}
     r = c.get(f"/api/v1/alerts/inbox/{row.id}/investigation")
     assert r.status_code == 200 and r.json()["report"] == "## Summary\nOOM"
     assert audits[-1]["action"] == "ai.investigation.view" and audits[-1]["target_id"] == inv and audits[-1]["after"]["from"] == "inbox"
@@ -274,3 +275,61 @@ async def test_search_matches_name_labels_summary_and_assignee_any_case_with_lit
     await inbox.set_marks(db, row.id, {"assignee": "oncall@example.com"}, "oncall@example.com", NOW)
     assert fingerprints((await rows_of(db, search="oncall@"))[0]) == ["a"]
     assert (await rows_of(db, search="nothing-like-this"))[1] == 0
+
+
+async def add_row(db, item_id, *, firing=True, received=NOW, severity="critical"):
+    from app.database import AlertInboxItem
+
+    async with db.async_session() as s:
+        s.add(AlertInboxItem(
+            id=item_id, cluster="self", fingerprint=f"fp-{item_id}", starts_at=STARTS, alertname="Batch", severity=severity,
+            namespace="apps", labels={}, annotations={}, state="firing" if firing else "resolved",
+            resolved_at=None if firing else received, first_received_at=received, last_received_at=received,
+            generator_url="", alertmanager_url="", receiver="kubeast", group_key="",
+        ))
+        await s.commit()
+
+
+@pytest.mark.asyncio
+async def test_pages_of_one_message_alerts_neither_repeat_nor_skip_a_row(sqlite_db):
+    db = sqlite_db
+    # one webhook message: every row has the same received time; written out of id order
+    for item_id in ["c", "g", "a", "e", "b", "f", "d"]:
+        await add_row(db, item_id)
+    await add_row(db, "z-older", received=NOW - timedelta(minutes=1))
+    await add_row(db, "y-closed", firing=False, received=NOW + timedelta(minutes=1))
+    pages = [[r.id for r in (await rows_of(db, limit=3, offset=o))[0]] for o in (0, 3, 6)]
+    # firing first, newest first, then the id
+    assert pages == [["g", "f", "e"], ["d", "c", "b"], ["a", "z-older", "y-closed"]]
+
+
+@pytest.mark.asyncio
+async def test_the_list_names_every_severity_its_alerts_carry(monkeypatch, sqlite_db):
+    db = sqlite_db
+    for item_id, severity in [("w", "warning"), ("n", "none"), ("e", "error"), ("e2", "error"), ("x", "")]:
+        await add_row(db, item_id, severity=severity)
+    assert await inbox.severities(db, "self") == ["error", "none", "warning"]
+    assert await inbox.severities(db, "default") == []
+    c, _ = client(monkeypatch, db)
+    assert c.get("/api/v1/alerts/inbox?cluster=self").json()["severities"] == ["error", "none", "warning"]
+    assert c.get("/api/v1/alerts/inbox?cluster=self&severity=none").json()["total"] == 1
+
+
+@pytest.mark.asyncio
+async def test_a_skipped_investigation_says_why_with_its_catalog_key(monkeypatch, sqlite_db):
+    from app.api_investigations import summary_of
+
+    db = sqlite_db
+    await put(db)
+    reason = "investigation cap (100 new per webhook message)"
+    inv = await store.insert(db, cluster="self", fingerprint="fp1", status="skipped", skip_reason=reason, received_at=NOW)
+    c, _ = client(monkeypatch, db)
+    want = {"id": inv, "status": "skipped", "skip_reason": reason, "skip_reason_key": "investigation_cap", "skip_reason_args": {"limit": 100}}
+    item = c.get("/api/v1/alerts/inbox?cluster=self").json()["items"][0]
+    assert item["investigation"] == want
+    assert c.get(f"/api/v1/alerts/inbox/{item['id']}").json()["investigation"] == want
+    summary = summary_of(await store.get(db, inv))
+    assert (summary.get("skip_reason"), summary.get("skip_reason_key"), summary.get("skip_reason_args")) == (reason, "investigation_cap", {"limit": 100})
+    # text written some other way has no key: the screen shows it as it is
+    other = await store.insert(db, cluster="self", fingerprint="fp2", status="skipped", skip_reason="something else", received_at=NOW)
+    assert summary_of(await store.get(db, other)).get("skip_reason_key") == ""

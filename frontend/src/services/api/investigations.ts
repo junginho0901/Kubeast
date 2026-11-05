@@ -16,6 +16,9 @@ export interface InvestigationSummary {
   namespace: string
   status: InvestigationStatus
   skip_reason: string
+  // the catalog key and values of skip_reason (investigations.skip.<key>); empty for text written another way
+  skip_reason_key?: string
+  skip_reason_args?: Record<string, string | number>
   received_at: string
   started_at: string | null
   finished_at: string | null

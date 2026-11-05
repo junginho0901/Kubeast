@@ -54,6 +54,32 @@ export function liveStateOf(
   return 'firing'
 }
 
+// The "Alertmanager now" line of a firing alert: the store's state, or why it is not known — the store's list was
+// cut at its limit before this alert (with the answer's numbers), the store has not answered yet, it failed, or the
+// cluster has no alert store. Null for a resolved alert, which the store is not asked about.
+export type LiveLine =
+  | { state: LiveState }
+  | { unknown: 'cut'; listed: number; total: number }
+  | { unknown: 'loading' | 'failed' | 'none' }
+
+export function liveLineOf(
+  item: Pick<AlertInboxItem, 'status' | 'fingerprint'>,
+  store: { on: boolean; answer?: { alerts: AlertStoreAlert[]; total: number; truncated: boolean }; failed: boolean },
+): LiveLine | null {
+  if (item.status === 'resolved') return null
+  if (!store.on) return { unknown: 'none' }
+  if (!store.answer) return { unknown: store.failed ? 'failed' : 'loading' }
+  const state = liveStateOf(item, store.answer)
+  if (state) return { state }
+  return { unknown: 'cut', listed: store.answer.alerts.length, total: store.answer.total }
+}
+
+// The severity filter's values: the three every rule set uses, then any other the cluster's alerts carry (the inbox
+// answer's severities — kube-prometheus' Watchdog is "none") and the one chosen.
+export function severityChoices(carried: string[] | undefined, chosen: string): string[] {
+  return [...new Set(['critical', 'warning', 'info', ...(carried ?? []), ...(chosen ? [chosen] : [])])]
+}
+
 // An alert store answer cut at its limit (alertStore.maxAlerts): how many alerts it listed and how many match in
 // all. The limit itself is not in the answer; a cut list is as long as the limit. Null when nothing was cut.
 export function storeCut(answer: { alerts: unknown[]; total: number; truncated: boolean } | undefined): { listed: number; total: number } | null {

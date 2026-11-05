@@ -15,9 +15,10 @@ import (
 	"unicode/utf8"
 )
 
-// Silence writes (chart features.alertStore.silences): a silence is made, listed and expired for one cluster only.
-// The cluster label matcher is added to every silence here, so a silence made for one cluster mutes nothing of
-// another; a silence that does not carry it is not that cluster's to expire.
+// Silence writes (chart features.alertStore.silences): a silence is made and expired for one cluster only. The
+// cluster label matcher is added to every silence here, so a silence made for one cluster mutes nothing of another;
+// a silence that does not carry it is not that cluster's to expire. The list also holds the store's other silences
+// that mute the cluster's alerts (no cluster condition, or a pattern its value meets), marked by their scope.
 
 // ErrSilencesOff is a write with features.alertStore.silences off.
 var ErrSilencesOff = errors.New("silences are off for the alert store (features.alertStore.silences)")
@@ -125,6 +126,36 @@ func (s *Store) ours(id string, sl gettableSilence) bool {
 	return false
 }
 
+// Scopes of a listed silence, as cluster id's alerts see it.
+const (
+	// ScopeCluster carries the cluster's label condition exactly: the cluster's own, to expire from here.
+	ScopeCluster = "cluster"
+	// ScopeAll has no condition on the cluster label: it mutes the matching alerts of every cluster on the store.
+	ScopeAll = "all"
+	// ScopePattern has a regex or not-equal cluster condition the cluster's value meets: it mutes the cluster's
+	// matching alerts, and may mute other clusters' too.
+	ScopePattern = "pattern"
+)
+
+// scopeOf says how silence sl reaches cluster id's alerts, or "" when its cluster conditions leave the cluster out.
+func (s *Store) scopeOf(id string, sl gettableSilence) string {
+	if s.ours(id, sl) {
+		return ScopeCluster
+	}
+	value := s.cfg.Clusters[id]
+	scope := ScopeAll
+	for _, m := range sl.Matchers {
+		if m.Name != s.cfg.ClusterLabel {
+			continue
+		}
+		if !(Matcher{Name: m.Name, Value: m.Value, IsRegex: m.IsRegex, IsEqual: m.IsEqual == nil || *m.IsEqual}).matches(value) {
+			return ""
+		}
+		scope = ScopePattern
+	}
+	return scope
+}
+
 func silenceOf(sl gettableSilence) Silence {
 	out := Silence{ID: sl.ID, State: sl.Status.State, CreatedBy: cut(sl.CreatedBy, 100), Comment: cut(sl.Comment, 300), StartsAt: sl.StartsAt, EndsAt: sl.EndsAt, Matchers: []string{}}
 	for _, m := range sl.Matchers {
@@ -133,7 +164,8 @@ func silenceOf(sl gettableSilence) Silence {
 	return out
 }
 
-// Silences lists cluster id's active and pending silences, the soonest to end first.
+// Silences lists the active and pending silences that reach cluster id's alerts, the soonest to end first: its own
+// and the store's others that mute them too, each with its scope.
 func (s *Store) Silences(ctx context.Context, id string) ([]Silence, error) {
 	if _, ok := s.cfg.Clusters[id]; !ok {
 		return nil, ErrNotConfigured
@@ -148,8 +180,13 @@ func (s *Store) Silences(ctx context.Context, id string) ([]Silence, error) {
 	}
 	out := []Silence{}
 	for _, sl := range all {
-		if (sl.Status.State == "active" || sl.Status.State == "pending") && s.ours(id, sl) {
-			out = append(out, silenceOf(sl))
+		if sl.Status.State != "active" && sl.Status.State != "pending" {
+			continue
+		}
+		if scope := s.scopeOf(id, sl); scope != "" {
+			one := silenceOf(sl)
+			one.Scope = scope
+			out = append(out, one)
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].EndsAt.Before(out[j].EndsAt) })

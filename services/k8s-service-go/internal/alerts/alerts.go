@@ -256,6 +256,8 @@ type Silence struct {
 	Comment   string    `json:"comment,omitempty"`
 	StartsAt  time.Time `json:"startsAt"`
 	EndsAt    time.Time `json:"endsAt"`
+	// Scope is set in the cluster's silence list: ScopeCluster, ScopeAll or ScopePattern.
+	Scope string `json:"scope,omitempty"`
 }
 
 // NameCount is how many alerts of one name and severity there are.

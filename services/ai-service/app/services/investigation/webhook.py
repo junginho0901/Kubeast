@@ -1,12 +1,13 @@
 """POST /api/v1/alerts/webhook?cluster=<id> — Alertmanager's webhook receiver (payload version 4).
 
 Not behind the signed-in-user dependency: Alertmanager sends Authorization:
-Bearer <ALERT_WEBHOOK_TOKEN> (http_config.authorization). Every alert, firing
-or resolved, goes into the alert inbox (inbox.py). Each firing alert then
-passes the severity filter, then folds into a recent row of the same
+Bearer <ALERT_WEBHOOK_TOKEN> (http_config.authorization). Every alert of the
+message, firing or resolved, goes into the alert inbox (inbox.py). Each firing
+alert then passes the severity filter, then folds into a recent row of the same
 cluster + fingerprint (Alertmanager repeats a firing group every
-repeat_interval), or is skipped by the hourly cap / daily token budget, or is
-queued for the worker. The answer comes at once; the investigation runs later.
+repeat_interval), or is skipped by the per-message investigation cap, the
+hourly cap, the daily token budget or a provider pause, or is queued for the
+worker. The answer comes at once; the investigation runs later.
 """
 
 from __future__ import annotations
@@ -25,14 +26,14 @@ from pydantic import BaseModel, Field, ValidationError
 from app.database import get_db_service, utcnow
 from app.services.audit_writer import write_audit
 from app.services.investigation import settings as inv_settings
-from app.services.investigation import inbox, store
+from app.services.investigation import inbox, skip_reasons, store
 
 log = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Alerts read from one message; Alertmanager's own max_alerts is the place to cut more.
-MAX_ALERTS_PER_MESSAGE = 100
+# New investigations one message queues; the alerts past it are stored and skipped (a resend tries them again).
+MAX_INVESTIGATIONS_PER_MESSAGE = 100
 # Set by the webhook after queueing, so the worker does not wait for its next poll.
 wake = asyncio.Event()
 
@@ -83,10 +84,9 @@ def parse_time(value: Optional[str]) -> Optional[datetime]:
 
 
 async def gate_and_queue(db, cfg: inv_settings.InvestigationSettings, cluster: str, msg: AmWebhook, now: datetime) -> dict[str, int]:
-    counts = {"accepted": 0, "duplicate": 0, "filtered": 0, "skipped": 0, "resolved": 0, "dropped": 0, "stored": 0}
-    alerts = msg.alerts[:MAX_ALERTS_PER_MESSAGE]
-    counts["dropped"] = max(0, len(msg.alerts) - len(alerts))
-    for alert in alerts:
+    """Each alert lands in exactly one of resolved, filtered, duplicate, capped, skipped and accepted; all are stored."""
+    counts = {"accepted": 0, "duplicate": 0, "filtered": 0, "skipped": 0, "capped": 0, "resolved": 0, "stored": 0}
+    for alert in msg.alerts:
         status = (alert.status or msg.status or "").lower()
         await inbox.record(
             db, cluster=cluster, fingerprint=fingerprint_of(alert), firing=status == "firing",
@@ -109,13 +109,22 @@ async def gate_and_queue(db, cfg: inv_settings.InvestigationSettings, cluster: s
                 await store.bump_repeat(db, recent.id, now)
                 counts["duplicate"] += 1
                 continue
-        skip_reason = ""
-        if cfg.max_per_hour and await store.count_since(db, store.hour_ago(now)) >= cfg.max_per_hour:
-            skip_reason = f"hourly cap ({cfg.max_per_hour} per hour)"
+        capped = counts["accepted"] >= MAX_INVESTIGATIONS_PER_MESSAGE
+        if capped:
+            skip_reason = skip_reasons.investigation_cap(MAX_INVESTIGATIONS_PER_MESSAGE)
+        elif cfg.max_per_hour and await store.count_since(db, store.hour_ago(now)) >= cfg.max_per_hour:
+            skip_reason = skip_reasons.hourly_cap(cfg.max_per_hour)
         elif cfg.daily_token_budget and await store.tokens_since(db, store.day_start(now)) >= cfg.daily_token_budget:
-            skip_reason = f"daily token budget ({cfg.daily_token_budget} tokens, UTC day)"
+            skip_reason = skip_reasons.daily_token_budget(cfg.daily_token_budget)
         else:
             skip_reason = await store.pause_reason(db, cfg.provider_pause_minutes, now)
+        if skip_reason and cfg.dedupe_hours > 0:
+            # one skipped row per alert in the dedupe window, however many messages carry it
+            earlier = await store.find_recent_skipped(db, cluster, fingerprint, now - timedelta(hours=cfg.dedupe_hours))
+            if earlier is not None:
+                await store.fold_skip(db, earlier.id, skip_reason, now)
+                counts["capped" if capped else "skipped"] += 1
+                continue
         await store.insert(
             db,
             cluster=cluster,
@@ -133,7 +142,7 @@ async def gate_and_queue(db, cfg: inv_settings.InvestigationSettings, cluster: s
             group_key=msg.groupKey[:2000],
             received_at=now,
         )
-        counts["skipped" if skip_reason else "accepted"] += 1
+        counts["capped" if capped else "skipped" if skip_reason else "accepted"] += 1
     return counts
 
 

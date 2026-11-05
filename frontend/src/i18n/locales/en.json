@@ -4509,9 +4509,16 @@
       "firing": "Firing",
       "silenced": "Silenced",
       "inhibited": "Inhibited",
-      "absent": "Not in Alertmanager"
+      "absent": "Not in Alertmanager",
+      "unknown": "Unknown"
     },
     "liveLabel": "Alertmanager now",
+    "liveUnknown": {
+      "cut": "Unknown — the alert store sent {{listed}} of its {{total}} alerts for this cluster, not this one",
+      "loading": "Asking the alert store…",
+      "failed": "Unknown — the alert store did not answer",
+      "none": "Not read — this cluster has no alert store (features.alertStore)"
+    },
     "filter": {
       "severity": "Severity",
       "mine": "Assigned to me",
@@ -4583,7 +4590,15 @@
       "expireTitle": "End the silence",
       "expireConfirm": "End this silence now? Matching alerts are sent again.",
       "listFailed": "The alert store did not answer.",
-      "storeCut": "The alert store sent the first {{listed}} of {{total}} (its limit, alertStore.maxAlerts); the rest are counted but not listed."
+      "storeCut": "The alert store sent the first {{listed}} of {{total}} (its limit, alertStore.maxAlerts); the rest are counted but not listed.",
+      "scope": {
+        "all": "All clusters",
+        "pattern": "By cluster pattern"
+      },
+      "scopeHint": {
+        "all": "This silence has no cluster condition: it mutes the matching alerts of every cluster on this alert store. It was not made for this cluster, so it is ended where it was made.",
+        "pattern": "This silence's cluster condition is a pattern this cluster meets: it mutes the matching alerts here and may mute other clusters' too. It was not made for this cluster, so it is ended where it was made."
+      }
     },
     "ackedBy": "Acknowledged by {{who}} · {{when}}",
     "assignee": "Assignee: {{who}}",
@@ -4628,6 +4643,18 @@
     "open": "Report",
     "range": "{{from}}–{{to}} of {{total}}",
     "skipReason": "Skipped: {{reason}}",
+    "skip": {
+      "investigation_cap": "Skipped by the investigation limit",
+      "hourly_cap": "Skipped by the hourly limit",
+      "daily_token_budget": "Skipped by the daily token budget",
+      "provider_paused": "Skipped while the AI provider is paused"
+    },
+    "skipWhy": {
+      "investigation_cap": "one webhook message starts at most {{limit}} new investigations; the rest are kept in the inbox and tried again when Alertmanager sends them again",
+      "hourly_cap": "at most {{limit}} investigations start in an hour",
+      "daily_token_budget": "investigations use at most {{limit}} tokens a day (UTC, counted again from 00:00 UTC)",
+      "provider_paused": "the AI model provider refused ({{kind}}) at {{at}}; no investigation starts until {{until}}"
+    },
     "report": "Report",
     "loadFailed": "The report could not be opened.",
     "meta": {

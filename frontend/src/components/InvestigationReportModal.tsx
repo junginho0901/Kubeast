@@ -8,7 +8,7 @@ import { useAIContext } from '@/hooks/useAIContext'
 import { ModalFrame } from '@/components/ModalFrame'
 import { REMARK_PLUGINS } from '@/utils/markdown'
 import { formatWhen } from '@/pages/admin/accessRequestFormat'
-import { duration, severityClass, statusClass } from '@/utils/investigationFormat'
+import { duration, severityClass, skipReason, statusClass } from '@/utils/investigationFormat'
 
 // One alert investigation report (Admin → Investigations, and the Alerts inbox for whoever reads that cluster).
 // Every fetch writes ai.investigation.view server-side, so it is not retried. The report text came from a model
@@ -36,7 +36,8 @@ export default function InvestigationReportModal({ id, load, onClose }: {
       alertname: data.alertname, cluster: data.cluster, namespace: data.namespace, severity: data.severity, status: data.status,
       labels: data.labels, received_at: data.received_at, model: data.model, iterations: data.iterations,
       tool_calls: data.tool_calls.map((c) => ({ tool: c.tool, args: c.args, error: c.error })),
-      error: data.error || undefined, report: data.report.slice(0, 4096),
+      error: data.error || undefined, skip_reason: data.status === 'skipped' ? data.skip_reason || undefined : undefined,
+      report: data.report.slice(0, 4096),
     },
   } : null, [data])
   // The investigator has one identity; the first call that reached the cluster shows it.
@@ -80,7 +81,7 @@ export default function InvestigationReportModal({ id, load, onClose }: {
           )}
           {data.status === 'skipped' && (
             <div className="rounded-lg border border-amber-800/60 bg-amber-900/20 px-3 py-2 text-sm text-amber-200">
-              {tr('investigations.skipReason', 'Skipped: {{reason}}', { reason: data.skip_reason })}
+              {skipReason(data, tr).text}
             </div>
           )}
 

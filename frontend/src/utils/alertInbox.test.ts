@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { alertResource, liveStateOf, silenceStart } from './alertInbox'
+import { alertResource, liveLineOf, liveStateOf, severityChoices, silenceStart } from './alertInbox'
 
 describe('the object an alert is about', () => {
   it('takes the most specific namespaced label first', () => {
@@ -31,6 +31,36 @@ describe('what the alert store says now', () => {
     expect(liveStateOf(firing, undefined)).toBeNull()
     expect(liveStateOf({ ...firing, status: 'resolved' }, store([]))).toBeNull()
     expect(liveStateOf(firing, store([{ fingerprint: 'b', state: 'firing' }], true))).toBeNull()
+  })
+})
+
+describe('the alert window\'s "Alertmanager now" line', () => {
+  const firing = { status: 'firing' as const, fingerprint: 'a' }
+  const listed = (n: number) => Array.from({ length: n }, (_, i) => ({ fingerprint: `x${i}`, state: 'firing' }))
+  const read = (answer?: { alerts: { fingerprint: string; state: string }[]; total: number; truncated: boolean }, extra: { on?: boolean; failed?: boolean } = {}) =>
+    ({ on: true, failed: false, answer, ...extra })
+
+  it('says what the store says when it knows', () => {
+    expect(liveLineOf(firing, read({ alerts: [{ fingerprint: 'a', state: 'silenced' }], total: 1, truncated: false }))).toEqual({ state: 'silenced' })
+    expect(liveLineOf(firing, read({ alerts: [], total: 0, truncated: false }))).toEqual({ state: 'absent' })
+    // found in a cut list: known
+    expect(liveLineOf(firing, read({ alerts: [{ fingerprint: 'a', state: 'firing' }, ...listed(99)], total: 105, truncated: true }))).toEqual({ state: 'firing' })
+  })
+
+  it('tells a cut list, no answer yet, a failed answer and no store apart', () => {
+    expect(liveLineOf(firing, read({ alerts: listed(100), total: 105, truncated: true }))).toEqual({ unknown: 'cut', listed: 100, total: 105 })
+    expect(liveLineOf(firing, read(undefined))).toEqual({ unknown: 'loading' })
+    expect(liveLineOf(firing, read(undefined, { failed: true }))).toEqual({ unknown: 'failed' })
+    expect(liveLineOf(firing, read(undefined, { on: false }))).toEqual({ unknown: 'none' })
+    expect(liveLineOf({ ...firing, status: 'resolved' }, read(undefined, { on: false }))).toBeNull()
+  })
+})
+
+describe('the severity filter', () => {
+  it('offers every severity the alerts carry after the usual three, and keeps the one chosen', () => {
+    expect(severityChoices(undefined, '')).toEqual(['critical', 'warning', 'info'])
+    expect(severityChoices(['error', 'info', 'none'], '')).toEqual(['critical', 'warning', 'info', 'error', 'none'])
+    expect(severityChoices([], 'page')).toEqual(['critical', 'warning', 'info', 'page'])
   })
 })
 

@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -30,7 +31,11 @@ const storedSilences = `[
  {"id":"s-dot","matchers":[{"name":"alertname","value":"Z","isRegex":false,"isEqual":true},{"name":"cluster","value":"eks.alpha","isRegex":true,"isEqual":true}],
   "createdBy":"e@x","comment":"dot","startsAt":"2026-10-19T03:00:00Z","endsAt":"2026-10-19T09:00:00Z","status":{"state":"active"}},
  {"id":"s-old","matchers":[{"name":"alertname","value":"Y","isRegex":false,"isEqual":true},{"name":"cluster","value":"eks-alpha","isRegex":false,"isEqual":true}],
-  "createdBy":"d@x","comment":"gone","startsAt":"2026-10-18T03:00:00Z","endsAt":"2026-10-18T04:00:00Z","status":{"state":"expired"}}
+  "createdBy":"d@x","comment":"gone","startsAt":"2026-10-18T03:00:00Z","endsAt":"2026-10-18T04:00:00Z","status":{"state":"expired"}},
+ {"id":"s-all","matchers":[{"name":"alertname","value":"Watchdog","isRegex":false,"isEqual":true}],
+  "createdBy":"f@x","comment":"every cluster","startsAt":"2026-10-19T03:00:00Z","endsAt":"2026-10-19T07:00:00Z","status":{"state":"active"}},
+ {"id":"s-notbeta","matchers":[{"name":"alertname","value":"W","isRegex":false,"isEqual":true},{"name":"cluster","value":"eks-beta","isRegex":false,"isEqual":false}],
+  "createdBy":"g@x","comment":"not beta","startsAt":"2026-10-19T11:00:00Z","endsAt":"2026-10-19T12:00:00Z","status":{"state":"pending"}}
 ]`
 
 func writesAM(t *testing.T, clusters map[string]string, silencesOn bool) (*Store, *amWrites) {
@@ -170,13 +175,55 @@ func TestACreateIsRefusedBeforeTheStore(t *testing.T) {
 	}
 }
 
-func TestOnlyTheClustersOwnSilencesAreListedAndExpired(t *testing.T) {
+// The list holds every active or pending silence that mutes the cluster's alerts — its own, one without a cluster
+// condition, one whose cluster pattern its value meets — each with its scope; another cluster's and expired ones not.
+func TestTheListHoldsEverySilenceThatMutesTheCluster(t *testing.T) {
+	scopes := func(s *Store, id string) []string {
+		got, err := s.Silences(context.Background(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := []string{}
+		for _, sl := range got {
+			out = append(out, sl.ID+" "+sl.Scope)
+		}
+		sort.Strings(out)
+		return out
+	}
+	s, _ := writesAM(t, twoClusters, true)
+	for id, want := range map[string][]string{
+		// cluster=~"eks.alpha" and cluster!="eks-beta" both take "eks-alpha"
+		"alpha": {"s-all all", "s-alpha cluster", "s-dot pattern", "s-notbeta pattern", "s-regex pattern"},
+		"beta":  {"s-all all", "s-beta cluster", "s-regex pattern"},
+	} {
+		if got := scopes(s, id); strings.Join(got, ", ") != strings.Join(want, ", ") {
+			t.Errorf("%s silences:\n got  %v\n want %v", id, got, want)
+		}
+	}
+	got, _ := s.Silences(context.Background(), "alpha")
+	if len(got) == 0 || got[0].ID != "s-all" || got[len(got)-1].ID != "s-notbeta" {
+		t.Errorf("not the soonest to end first: %v", got)
+	}
+	// a store of one cluster: every silence is that cluster's own
+	one, _ := writesAM(t, map[string]string{"only": ""}, true)
+	if got := scopes(one, "only"); strings.Join(got, ", ") != "s-all cluster, s-alpha cluster, s-beta cluster, s-dot cluster, s-notbeta cluster, s-regex cluster" {
+		t.Errorf("one-cluster store: %v", got)
+	}
+}
+
+func TestOnlyTheClustersOwnSilencesAreExpired(t *testing.T) {
 	s, w := writesAM(t, twoClusters, true)
 	got, err := s.Silences(context.Background(), "alpha")
-	if err != nil || len(got) != 1 || got[0].ID != "s-alpha" || got[0].Matchers[1] != `cluster="eks-alpha"` {
+	if err != nil || len(got) == 0 {
 		t.Fatalf("alpha silences %v %v", got, err)
 	}
-	for _, sid := range []string{"s-beta", "s-regex", "missing"} {
+	for _, sl := range got {
+		if sl.ID == "s-alpha" && sl.Matchers[1] != `cluster="eks-alpha"` {
+			t.Fatalf("s-alpha matchers %v", sl.Matchers)
+		}
+	}
+	// the store's others mute alpha's alerts too, but are not alpha's to end
+	for _, sid := range []string{"s-beta", "s-regex", "s-all", "s-notbeta", "missing"} {
 		if _, err := s.Expire(context.Background(), "alpha", sid); !errors.Is(err, ErrNotFound) {
 			t.Errorf("%s: %v", sid, err)
 		}
