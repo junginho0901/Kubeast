@@ -32,9 +32,11 @@ export function matchAny(perms: string[] | undefined, perm: string): boolean {
 }
 
 // hasPermission honors the all-cluster "*" entry always; the concrete cluster's
-// entry is consulted when clusterID is a real id (deny-by-default — no fallback).
+// entry is consulted when clusterID is a real id (deny-by-default — no fallback),
+// never for an admin.* key, which pkg/auth HasPermission reads from "*" alone.
 export function hasPermission(matrix: PermissionMatrix, perm: string, clusterID = ''): boolean {
   if (matchAny(matrix['*'], perm)) return true
+  if (perm.startsWith('admin.')) return false
   return clusterID ? matchAny(matrix[clusterID], perm) : false
 }
 

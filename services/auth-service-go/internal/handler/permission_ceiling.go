@@ -62,12 +62,15 @@ func unknownPermissions(perms []string) []string {
 // missingPermissions lists the requested permissions the actor does not hold.
 // For a per-cluster grant (clusterID set) a permission counts when held
 // globally or on that cluster. For a global object (clusterID "": authoring a
-// role, assigning a global role) it counts when held globally or on any
-// cluster — the token's "*" entry carries only admin.* (buildPermissionMatrix),
-// so cluster-scoped permissions can only ever be held per cluster, and the
-// grant that makes such a role effective is ceiling-checked per cluster
-// again. Wildcard containment follows permMatches: holding resource.pod.read
-// does not cover resource.*.read, holding "*" covers everything.
+// role, assigning a global role) it counts when held globally, and a
+// cluster-scoped one also when held on any cluster — the token's "*" entry
+// carries only "*" and admin.* (buildPermissionMatrix), so cluster-scoped
+// permissions can only ever be held per cluster, and the grant that makes such
+// a role effective is ceiling-checked per cluster again. A global permission
+// counts from the "*" entry only: "*" granted on one cluster is that cluster's
+// (as Kubernetes RBAC wants a ClusterRole's permissions granted cluster-wide).
+// Wildcard containment follows permMatches: holding resource.pod.read does not
+// cover resource.*.read, holding "*" covers everything.
 func missingPermissions(actor auth.TokenPayload, perms []string, clusterID string) []string {
 	var missing []string
 	for _, p := range perms {
@@ -75,7 +78,7 @@ func missingPermissions(actor auth.TokenPayload, perms []string, clusterID strin
 		if !held && clusterID != "" {
 			held = actor.HasPermissionForCluster(p, clusterID)
 		}
-		if !held && clusterID == "" {
+		if !held && clusterID == "" && !isGlobalPermission(p) {
 			for c := range actor.Perms {
 				if c != "*" && actor.HasPermissionForCluster(p, c) {
 					held = true

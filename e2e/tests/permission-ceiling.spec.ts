@@ -4,7 +4,8 @@ import { test, expect, type APIRequestContext } from '@playwright/test'
 // manage users and roles but is not a global admin cannot make anyone Admin,
 // cannot create or widen a role beyond their own permissions, cannot edit a
 // system role's permissions, cannot change their own role, and cannot grant a
-// cluster role on a cluster they hold nothing on. The refusals are audited.
+// cluster role on a cluster they hold nothing on. Admin granted on one cluster
+// counts on that cluster only, never for a global role. The refusals are audited.
 
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
@@ -96,6 +97,49 @@ test.describe('permission ceiling (M16)', () => {
       await request.delete(`/api/v1/auth/admin/users/${laId}`, { headers: admin, failOnStatusCode: false })
       for (const id of created) await request.delete(`/api/v1/auth/admin/roles/${id}`, { headers: admin, failOnStatusCode: false })
       await request.delete(`/api/v1/auth/admin/roles/${limitedRoleId}`, { headers: admin, failOnStatusCode: false })
+    }
+  })
+
+  test('Admin on one cluster does not lift the ceiling for global roles: no global Admin account, no * role; cluster keys still count', async ({ request }) => {
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const ts = Date.now().toString(36)
+    const adminRoleId = await roleId(request, admin, 'Admin')
+    const users: string[] = []
+    const roles: number[] = []
+    try {
+      const managerRole = await request.post('/api/v1/auth/admin/roles', {
+        headers: admin,
+        data: { name: `e2e-ceiling-ca-${ts}`, description: 'e2e', permissions: ['admin.users.create', 'admin.roles.create'] },
+      })
+      expect(managerRole.status(), await managerRole.text()).toBe(201)
+      roles.push((await managerRole.json()).id as number)
+      const caEmail = `e2e-ceiling-ca-${ts}@kubeast.local`
+      const ca = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E cluster admin', email: caEmail, password: 'e2e-ceiling-throwaway-3', role_id: roles[0] } })
+      expect(ca.status(), await ca.text()).toBe(201)
+      users.push((await ca.json()).id as string)
+      expect((await request.put(`/api/v1/auth/admin/users/${users[0]}/cluster-roles/self`, { headers: admin, data: { role: 'Admin', namespaces: [] } })).status()).toBeLessThan(300)
+      const mine = await login(request, caEmail, 'e2e-ceiling-throwaway-3')
+
+      // whatever an old build lets through is removed in finally
+      const post = async (path: string, data: object, keep: (id: string | number) => void) => {
+        const res = await request.post(path, { headers: mine, data, failOnStatusCode: false })
+        if (res.status() === 201) keep((await res.json()).id)
+        return res.status()
+      }
+      const madeEmail = `e2e-ceiling-made-${ts}@kubeast.local`
+      expect.soft(await post('/api/v1/auth/admin/users', { name: 'E2E made admin', email: madeEmail, password: 'e2e-ceiling-throwaway-4', role_id: adminRoleId }, (id) => users.push(String(id))), 'an account with the global Admin role').toBe(403)
+      expect.soft(await post('/api/v1/auth/admin/roles', { name: `e2e-ceiling-star-${ts}`, permissions: ['*'] }, (id) => roles.push(Number(id))), 'a * role').toBe(403)
+      expect.soft(await post('/api/v1/auth/admin/roles', { name: `e2e-ceiling-audit-${ts}`, permissions: ['admin.audit.read'] }, (id) => roles.push(Number(id))), 'a role with an admin key it does not hold globally').toBe(403)
+      expect.soft(await post('/api/v1/auth/admin/roles', { name: `e2e-ceiling-cluster-${ts}`, permissions: ['menu.*', 'resource.*.read', 'resource.*.delete', 'ai.tool.*'] }, (id) => roles.push(Number(id))), 'a role of cluster keys it holds on self').toBe(201)
+
+      // audited as before: the refusals as failures naming the ceiling, the role within it as a success
+      const rows = async (action: string) =>
+        (await auditRows(request, admin, action)).filter((r) => r.ActorEmail === caEmail).map((r) => `${r.Result} ${/permission ceiling/.test(String(r.Error ?? ''))}`).sort()
+      expect.soft(await rows('user.create'), 'user.create rows').toEqual(['failure true'])
+      expect.soft(await rows('admin.roles.create'), 'admin.roles.create rows').toEqual(['failure true', 'failure true', 'success false'])
+    } finally {
+      for (const id of users) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers: admin, failOnStatusCode: false })
+      for (const id of roles) await request.delete(`/api/v1/auth/admin/roles/${id}`, { headers: admin, failOnStatusCode: false })
     }
   })
 })

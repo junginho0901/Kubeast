@@ -24,7 +24,7 @@ func (h *AuthHandler) buildPermissionMatrix(ctx context.Context, userID string, 
 
 	var global []string
 	for _, p := range globalRolePerms {
-		if p == "*" || strings.HasPrefix(p, "admin.") {
+		if isGlobalPermission(p) {
 			global = append(global, p)
 		}
 	}
@@ -44,4 +44,10 @@ func (h *AuthHandler) buildPermissionMatrix(ctx context.Context, userID string, 
 		matrix[g.ClusterID] = perms
 	}
 	return matrix, nil
+}
+
+// isGlobalPermission: "*" and admin.* are global — the token's "*" entry holds
+// them and auth.TokenPayload.HasPermission reads them from there alone.
+func isGlobalPermission(p string) bool {
+	return p == "*" || strings.HasPrefix(p, "admin.")
 }
