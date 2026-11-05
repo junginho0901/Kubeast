@@ -8,6 +8,7 @@ import { useWorkloadData } from './workload-info/useWorkloadData'
 import WorkloadReplicasSection from './workload-info/WorkloadReplicasSection'
 import WorkloadStrategySection from './workload-info/WorkloadStrategySection'
 import PolicyViolations from './PolicyViolations'
+import { violationsApiVersion } from './violationsView'
 import NetworkPolicies from './NetworkPolicies'
 import NetworkFlows from './NetworkFlows'
 import NetworkDrops from './NetworkDrops'
@@ -280,7 +281,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlo
         </InfoSection>
       )}
 
-      <PolicyViolations kind={kind} namespace={namespace ?? ''} name={name} />
+      <PolicyViolations kind={kind} namespace={namespace ?? ''} name={name} apiVersion={violationsApiVersion(kind)} />
       {NETPOL_KINDS.has(kind) && <NetworkPolicies kind={kind} namespace={namespace ?? ''} name={name} />}
       {NETPOL_KINDS.has(kind) && <NetworkFlows kind={kind} namespace={namespace ?? ''} name={name} />}
       {NETPOL_KINDS.has(kind) && <NetworkDrops kind={kind} namespace={namespace ?? ''} name={name} />}

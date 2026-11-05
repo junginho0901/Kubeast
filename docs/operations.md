@@ -19,8 +19,8 @@ Collects and shows the `wgpolicyk8s.io/v1alpha2` `PolicyReport` (namespaced) and
   - `GET /api/v1/cluster/policyreports/status`: enabled, CRD present.
   - `…/summary?namespace=`: by-policy and by-Namespace totals. It counts result rows, not the reports' `summary`.
   - `…/results?namespace=&policy=&result=fail,warn&severity=&kind=&search=&limit=`: default fail, warn, error. At most 2,000 rows; `total` is the count before truncation.
-  - `GET /api/v1/cluster/namespaces/{ns}/policyreports/resource?kind=&name=`.
-  - `GET /api/v1/cluster/policyreports/resource?kind=&name=`: a cluster-scoped resource's rows, from the ClusterPolicyReports.
+  - `GET /api/v1/cluster/namespaces/{ns}/policyreports/resource?kind=&name=&api_version=`: `api_version` (optional) leaves out the rows of an object, and a workload's the pods of an owner, of another group with the same Kind and name.
+  - `GET /api/v1/cluster/policyreports/resource?kind=&name=&api_version=`: a cluster-scoped resource's rows, from the ClusterPolicyReports.
   - Without the CRD, the data routes return an empty list and `X-Kubeast-Not-Installed`.
 - **Identity and scope** — reports are read **as the signed-in user**, so cluster RBAC is the ceiling.
   - The Kyverno chart default (`rbac.roles.aggregate.view: true`) adds report reads to `view`, so Read (`kubeast:viewer`) can read them too.
@@ -123,7 +123,7 @@ All three cards show read-only results computed by k8s-service (the same numbers
     - flags: `cpu_over`, `cpu_under`, `mem_over`, `mem_under`, `no_cpu_request`, `no_mem_request`, `no_mem_limit`
   - The default range is `features.optimization.windowHours` (24).
   - The "Explain with AI" button sends this table as is to the model and gets an explanation of why the numbers are what they are and what to change first — the model does not change the numbers.
-- **Apply without restart** — `POST /api/v1/cluster/namespaces/{ns}/optimization/resize` with body `{kind, name, container, cpu_request_m?, mem_request_bytes?}`, which is the optimization row as is.
+- **Apply without restart** — `POST /api/v1/cluster/namespaces/{ns}/optimization/resize` with body `{kind, name, container, cpu_request_m?, mem_request_bytes?, api_version?}`, which is the optimization row as is (`api_version` = the workload's: only the pods of an owner of that group).
   - It changes the container requests of every running pod of that workload through the Pod `resize` subresource, GA in Kubernetes 1.35+.
   - Chart `features.inPlaceResize.enabled`, default on. On an older server, the button is hidden and the API returns 409.
   - The QoS class is kept:

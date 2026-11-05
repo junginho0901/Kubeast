@@ -82,7 +82,7 @@ func (h *Handler) GetPolicyReportResults(w http.ResponseWriter, r *http.Request)
 	response.JSON(w, http.StatusOK, res)
 }
 
-// GetResourcePolicyReports handles GET /api/v1/namespaces/{namespace}/policyreports/resource?kind=&name=.
+// GetResourcePolicyReports handles GET /api/v1/namespaces/{namespace}/policyreports/resource?kind=&name=[&api_version=].
 func (h *Handler) GetResourcePolicyReports(w http.ResponseWriter, r *http.Request) {
 	if !h.policyReportsGate(w, r) {
 		return
@@ -92,7 +92,7 @@ func (h *Handler) GetResourcePolicyReports(w http.ResponseWriter, r *http.Reques
 		response.Error(w, http.StatusBadRequest, "kind and name are required")
 		return
 	}
-	res, err := h.svc.PolicyReportsForResource(r.Context(), chi.URLParam(r, "namespace"), kind, name, queryParamBool(r, "force_refresh", false))
+	res, err := h.svc.PolicyReportsForResource(r.Context(), chi.URLParam(r, "namespace"), kind, name, queryParam(r, "api_version", ""), queryParamBool(r, "force_refresh", false))
 	if err != nil {
 		h.handleError(w, err)
 		return
@@ -100,7 +100,7 @@ func (h *Handler) GetResourcePolicyReports(w http.ResponseWriter, r *http.Reques
 	response.JSON(w, http.StatusOK, res)
 }
 
-// GetClusterResourcePolicyReports handles GET /api/v1/policyreports/resource?kind=&name= — a cluster-scoped resource's rows.
+// GetClusterResourcePolicyReports handles GET /api/v1/policyreports/resource?kind=&name=[&api_version=] — a cluster-scoped resource's rows.
 func (h *Handler) GetClusterResourcePolicyReports(w http.ResponseWriter, r *http.Request) {
 	if !h.policyReportsGate(w, r) {
 		return
@@ -110,7 +110,7 @@ func (h *Handler) GetClusterResourcePolicyReports(w http.ResponseWriter, r *http
 		response.Error(w, http.StatusBadRequest, "kind and name are required")
 		return
 	}
-	res, err := h.svc.PolicyReportsForClusterResource(r.Context(), kind, name, queryParamBool(r, "force_refresh", false))
+	res, err := h.svc.PolicyReportsForClusterResource(r.Context(), kind, name, queryParam(r, "api_version", ""), queryParamBool(r, "force_refresh", false))
 	if err != nil {
 		h.handleError(w, err)
 		return

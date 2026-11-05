@@ -3,8 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { ConditionsTable, EventsSection, InfoSection, InfoRow, KeyValueTags, SummaryBadge, Th, NoneText, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
-import { conditionStatus, conditionSummary, formatParentRef } from './gatewayDetail'
-import { ResourceLink } from './ResourceLink'
+import { backendRefGroup, conditionStatus, conditionSummary, formatParentRef, parentRefGroup } from './gatewayDetail'
+import { GroupRefLink } from './GroupRefLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import type { GRPCRouteInfo as GRPCRouteRow } from '@/services/api'
 
@@ -135,7 +135,7 @@ export default function GRPCRouteInfo({ name, namespace, rawJson }: Props) {
               <tbody className="divide-y divide-slate-800">
                 {parentRefs.map((parentRef, idx) => (
                   <tr key={`parent-ref-${idx}`} className="text-slate-200">
-                    <td className="py-1 pr-2 wrap-break-word">{parentRef.name ? <ResourceLink kind={parentRef.kind || 'Gateway'} name={parentRef.name} namespace={parentRef.namespace || namespace} /> : '-'}</td>
+                    <td className="py-1 pr-2 wrap-break-word">{parentRef.name ? <GroupRefLink group={parentRefGroup(parentRef)} kind={parentRef.kind || 'Gateway'} name={parentRef.name} namespace={parentRef.namespace || namespace} /> : '-'}</td>
                     <td className="py-1 pr-2 wrap-break-word">{text(parentRef.namespace)}</td>
                     <td className="py-1 pr-2 wrap-break-word">{text(parentRef.kind)}</td>
                     <td className="py-1 pr-2 wrap-break-word">{text(parentRef.group)}</td>
@@ -208,7 +208,7 @@ export default function GRPCRouteInfo({ name, namespace, rawJson }: Props) {
                         <tbody className="divide-y divide-slate-800">
                           {backendRefs.map((backendRef, backendRefIdx) => (
                             <tr key={`backend-ref-${idx}-${backendRefIdx}`} className="text-slate-200">
-                              <td className="py-1 pr-2 wrap-break-word">{backendRef?.name ? <ResourceLink kind={backendRef?.kind || 'Service'} name={backendRef.name} namespace={backendRef?.namespace || namespace} /> : '-'}</td>
+                              <td className="py-1 pr-2 wrap-break-word">{backendRef?.name ? <GroupRefLink group={backendRefGroup(backendRef)} kind={backendRef?.kind || 'Service'} name={backendRef.name} namespace={backendRef?.namespace || namespace} /> : '-'}</td>
                               <td className="py-1 pr-2 wrap-break-word">{text(backendRef?.namespace)}</td>
                               <td className="py-1 pr-2 wrap-break-word">{text(backendRef?.kind)}</td>
                               <td className="py-1 pr-2 wrap-break-word">{text(backendRef?.group)}</td>

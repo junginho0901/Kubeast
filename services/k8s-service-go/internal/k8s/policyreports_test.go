@@ -327,7 +327,7 @@ func TestPolicyReports_NamespaceScope(t *testing.T) {
 func TestPolicyReportsForResource_WorkloadIncludesItsPods(t *testing.T) {
 	s, _ := newPolicyReportService(t)
 	ctx := context.Background()
-	res, err := s.PolicyReportsForResource(ctx, "apps", "Deployment", "web", false)
+	res, err := s.PolicyReportsForResource(ctx, "apps", "Deployment", "web", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -340,14 +340,14 @@ func TestPolicyReportsForResource_WorkloadIncludesItsPods(t *testing.T) {
 		t.Fatalf("rows = %v totals %+v, want %v", got, res.Totals, want)
 	}
 	// A pod of its own: only its rows, no owner lookup.
-	pod, err := s.PolicyReportsForResource(ctx, "apps", "Pod", "web-1", false)
+	pod, err := s.PolicyReportsForResource(ctx, "apps", "Pod", "web-1", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(pod.Rows) != 2 || pod.Totals != counts(1, 1, 0, 0, 0) {
 		t.Fatalf("pod rows = %+v", pod)
 	}
-	none, err := s.PolicyReportsForResource(ctx, "apps", "Pod", "bare-pod", false)
+	none, err := s.PolicyReportsForResource(ctx, "apps", "Pod", "bare-pod", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,11 +1,29 @@
 import { api } from '@/services/api'
 import type { PolicyReportResource, PolicyReportResult } from '@/services/api/types'
+import { DRAWER_GROUPS } from './crDetail'
 import { WORKLOAD_KINDS } from './utils'
 
 // A namespaced resource's rows come from its namespace's PolicyReports, a cluster-scoped one's from the
-// ClusterPolicyReports.
-export const readViolations = (namespace: string, kind: string, name: string) =>
-  (namespace ? api.getResourcePolicyReports(namespace, kind, name) : api.getClusterResourcePolicyReports(kind, name))
+// ClusterPolicyReports; with the apiVersion, not the rows of an object of another group with the same Kind and name.
+export const readViolations = (namespace: string, kind: string, name: string, apiVersion?: string) =>
+  (namespace ? api.getResourcePolicyReports(namespace, kind, name, false, apiVersion) : api.getClusterResourcePolicyReports(kind, name, false, apiVersion))
+
+// The section's query: an answer asked with an apiVersion is kept apart from one asked without.
+export const violationsQuery = (namespace: string, kind: string, name: string, apiVersion?: string) => ({
+  queryKey: ['cluster', 'policyreports', 'resource', namespace, kind, name, ...(apiVersion ? [apiVersion] : [])],
+  queryFn: () => readViolations(namespace, kind, name, apiVersion),
+})
+
+// The apiVersion a drawer asks its rows with: a custom resource's group and version, a built-in workload's group (its
+// pods are those of an owner of that group); none for the other kinds, as before.
+export function violationsApiVersion(kind: string, rawJson?: Record<string, unknown>): string | undefined {
+  if (kind === 'CustomResourceInstance') {
+    const group = typeof rawJson?.group === 'string' ? rawJson.group : ''
+    const version = typeof rawJson?.version === 'string' ? rawJson.version : ''
+    return group && version ? `${group}/${version}` : undefined
+  }
+  return WORKLOAD_KINDS.has(kind) ? `${DRAWER_GROUPS[kind]}/v1` : undefined
+}
 
 // What a drawer's "Policy violations" section shows: nothing while the feature is off, the user is not given policy
 // reports (403) or the cluster serves no report kind for the object; else the fail / warn / error rows the reports hold

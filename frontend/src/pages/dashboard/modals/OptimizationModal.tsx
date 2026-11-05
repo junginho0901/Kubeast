@@ -32,7 +32,7 @@ import { optimizationRowTarget } from '@/utils/detailTargets'
 import { aiEnabled } from '@/utils/features'
 import { useConfirm } from '@/services/confirm'
 
-import { formatBytes, formatMillicores } from '../utils'
+import { formatBytes, formatMillicores, optimizationResizeRequest } from '../utils'
 import { formatMoney } from '@/utils/money'
 
 interface UsageInfo {
@@ -134,14 +134,7 @@ export function OptimizationModal({
   const rowKey = (row: OptimizationRow) => `${row.kind}/${row.api_version ?? ''}/${row.name}/${row.container}`
   const [resizeResults, setResizeResults] = useState<Record<string, ResizeResult | { error: string }>>({})
   const resize = useMutation({
-    mutationFn: (row: OptimizationRow) =>
-      api.resizeOptimization(row.namespace, {
-        kind: row.kind,
-        name: row.name,
-        container: row.container,
-        cpu_request_m: row.cpu_recommend_m,
-        mem_request_bytes: row.mem_recommend_bytes,
-      }),
+    mutationFn: (row: OptimizationRow) => api.resizeOptimization(row.namespace, optimizationResizeRequest(row)),
     onSuccess: (res, row) => {
       setResizeResults((m) => ({ ...m, [rowKey(row)]: res }))
       queryClient.invalidateQueries({ queryKey: ['cluster-optimization'] })

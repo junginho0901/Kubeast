@@ -53,6 +53,34 @@ export function customResourceTarget(t: ResourceDetailTarget, crds: CRDInfo[] | 
   }
 }
 
+// Kubernetes' version priority (apimachinery version.CompareKubeAwareVersionStrings): GA, then beta, then alpha, higher
+// major then minor first; a version not of that form after them, by name. Above 0 when a comes first.
+export function compareKubeAwareVersions(a: string, b: string): number {
+  if (a === b) return 0
+  const parse = (v: string) => {
+    const m = /^v(\d+)(?:(alpha|beta)(\d+))?$/.exec(v)
+    return m ? { type: m[2] === 'alpha' ? 0 : m[2] === 'beta' ? 1 : 2, major: Number(m[1]), minor: Number(m[3] ?? 0) } : null
+  }
+  const x = parse(a)
+  const y = parse(b)
+  if (!x || !y) return x ? 1 : y ? -1 : a < b ? 1 : -1
+  return x.type - y.type || x.major - y.major || x.minor - y.minor
+}
+
+// Whether such a reference needs the CRD list: a group other than the core group and the Kind's own drawer's.
+export const referenceNeedsVersion = (group: string, kind: string): boolean => !!group && DRAWER_GROUPS[kind] !== group
+
+// The apiVersion of an object a reference names by group and Kind without a version (a Gateway API parentRef or
+// backendRef): the version of its CRD that comes first by that priority, as discovery orders a group's versions and
+// kubectl get <kind>.<group> reads it. None for the core group, the group of the Kind's own drawer or a Kind no CRD of
+// that group serves — the link then opens by Kind, as before.
+export function referenceApiVersion(group: string, kind: string, crds: CRDInfo[] | undefined): string | undefined {
+  if (!referenceNeedsVersion(group, kind) || !Array.isArray(crds)) return undefined
+  const crd = crds.find((c) => c.group === group && c.kind === kind)
+  const served = crd ? (crd.served_versions ?? [crd.version]).filter(Boolean) : []
+  return served.length ? `${group}/${[...served].sort((a, b) => compareKubeAwareVersions(b, a))[0]}` : undefined
+}
+
 // What a custom resource keeps beside apiVersion, kind, metadata, spec and status (a PolicyReport's results, scope and
 // summary — describe's `fields`), by name as kubectl describe prints them.
 export function otherFields(fields: unknown): [string, unknown][] {

@@ -386,8 +386,10 @@ var policyReportWorkloadKinds = map[string]bool{"Deployment": true, "StatefulSet
 
 // PolicyReportsForResource returns the rows about one resource; for a workload
 // the rows of its running pods come along (the pod template is what most
-// policies look at), each row naming the pod.
-func (s *Service) PolicyReportsForResource(ctx context.Context, namespace, kind, name string, force bool) (*PolicyReportResource, error) {
+// policies look at), each row naming the pod. With the resource's apiVersion, a
+// resource and a pod owner of another group with the same Kind and name are left
+// out; a result naming no apiVersion still counts.
+func (s *Service) PolicyReportsForResource(ctx context.Context, namespace, kind, name, apiVersion string, force bool) (*PolicyReportResource, error) {
 	set, _, err := s.policyReportSet(ctx, namespace, force)
 	if err != nil {
 		return nil, err
@@ -404,7 +406,7 @@ func (s *Service) PolicyReportsForResource(ctx context.Context, namespace, kind,
 		}
 		// a page at a time, keeping the workload's pod names (the whole namespace in one list took k8s-service past 512 Mi)
 		err = eachPod(ctx, cs.CoreV1(), namespace, metav1.ListOptions{}, func(p *corev1.Pod) {
-			if k, n, _ := owner(*p); k == kind && n == name {
+			if k, n, v := owner(*p); k == kind && n == name && sameAPIGroup(apiVersion, v) {
 				pods[p.Name] = true
 			}
 		})
@@ -414,15 +416,21 @@ func (s *Service) PolicyReportsForResource(ctx context.Context, namespace, kind,
 	}
 	out := &PolicyReportResource{GeneratedAt: set.at.UTC().Format(time.RFC3339), Kind: kind, Name: name, Namespace: namespace}
 	out.keep(set.results, func(ref policyReportRef) bool {
-		return ref.Namespace == namespace && ((ref.Kind == kind && ref.Name == name) || (ref.Kind == "Pod" && pods[ref.Name]))
+		return ref.Namespace == namespace && ((ref.Kind == kind && ref.Name == name && sameAPIGroup(apiVersion, ref.APIVersion)) || (ref.Kind == "Pod" && pods[ref.Name]))
 	})
 	return out, nil
 }
 
+// sameAPIGroup: whether a reference's apiVersion is of the asked one's group — any when either is not given.
+func sameAPIGroup(asked, ref string) bool {
+	return asked == "" || ref == "" || apiGroup(asked) == apiGroup(ref)
+}
+
 // PolicyReportsForClusterResource returns the rows about one cluster-scoped
 // resource (a Namespace, a Node, a ClusterRole, …) from the
-// ClusterPolicyReports, read as the caller and kept a minute like the others.
-func (s *Service) PolicyReportsForClusterResource(ctx context.Context, kind, name string, force bool) (*PolicyReportResource, error) {
+// ClusterPolicyReports, read as the caller and kept a minute like the others;
+// the apiVersion, when given, as PolicyReportsForResource takes it.
+func (s *Service) PolicyReportsForClusterResource(ctx context.Context, kind, name, apiVersion string, force bool) (*PolicyReportResource, error) {
 	if len(scopeFromCtx(ctx)) > 0 {
 		// as the summary, which leaves the cluster reports out of a grant limited to namespaces
 		return nil, apierrors.NewForbidden(schema.GroupResource{Group: clusterPolicyReportGVR.Group, Resource: clusterPolicyReportGVR.Resource}, "", fmt.Errorf("cluster reports are outside a grant limited to namespaces"))
@@ -437,7 +445,7 @@ func (s *Service) PolicyReportsForClusterResource(ctx context.Context, kind, nam
 	}
 	out := &PolicyReportResource{GeneratedAt: set.at.UTC().Format(time.RFC3339), Kind: kind, Name: name}
 	out.keep(set.results, func(ref policyReportRef) bool {
-		return ref.Namespace == "" && ref.Kind == kind && ref.Name == name
+		return ref.Namespace == "" && ref.Kind == kind && ref.Name == name && sameAPIGroup(apiVersion, ref.APIVersion)
 	})
 	return out, nil
 }

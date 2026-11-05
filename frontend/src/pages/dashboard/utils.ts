@@ -3,6 +3,20 @@
 // lines of utility prelude before the component body.
 
 import { humanDuration } from '@/utils/time'
+import type { OptimizationRow, ResizeRequest } from '@/services/api/types'
+
+// An Optimization row's "Apply without restart": its recommendation on its workload's pods, with the workload's
+// apiVersion so the pods of an owner of another group with the same Kind and name are left alone.
+export function optimizationResizeRequest(row: OptimizationRow): ResizeRequest {
+  return {
+    kind: row.kind,
+    name: row.name,
+    container: row.container,
+    cpu_request_m: row.cpu_recommend_m,
+    mem_request_bytes: row.mem_recommend_bytes,
+    api_version: row.api_version,
+  }
+}
 
 /**
  * unwrapOuterMarkdownFence — if the streamed answer is wrapped in a

@@ -100,14 +100,14 @@
     - 알림 조사 보고서
   - 생성·확인 창은 "무슨 작업 + 대상"만 넘깁니다. 관리자 메뉴(클러스터 정리·알림 조사는 예외)와 내 계정 화면은 아무것도 넘기지 않습니다.
   - 대화는 브라우저 탭마다 하나이고 새로고침해도 이어집니다. 입력칸 왼쪽의 "+"를 누르면 새 대화가 시작되고 이전 대화는 AI Chat 목록에 남습니다. 로그아웃하면 대화가 비워집니다.
-- **리소스 최적화 제안** — 네임스페이스 관측값(requests/limits·사용량) 표 + AI 제안 스트리밍 + 행마다 **재시작 없이 적용**(Pod `resize` 하위 리소스, Kubernetes 1.35+, `features.inPlaceResize`).
+- **리소스 최적화 제안** — 네임스페이스 관측값(requests/limits·사용량) 표 + AI 제안 스트리밍 + 행마다 **재시작 없이 적용**(그 행 워크로드의 API 그룹까지 맞는 파드에, Pod `resize` 하위 리소스, Kubernetes 1.35+, `features.inPlaceResize`).
   Pod 드로어의 컨테이너 카드에서도 값을 직접 넣어 같은 방식으로 조정할 수 있습니다.
 - **비용(OpenCost)** — 클러스터 안의 OpenCost를 Prometheus와 같은 방식으로 찾습니다(이름에 `opencost`가 든 9003 Service, API 서버 프록시).
   Namespace별·워크로드별 비용 표(Cost 메뉴)와 최적화 표의 **월 비용·월 절약** 열을 보여 줍니다(`features.cost`).
   권한은 `resource.cost.read`이고, Namespace 범위로 부여받았다면 그 Namespace만 봅니다.
 - **정책 보고서(Policy Reports)** — Kyverno·Trivy Operator 등이 쓰는 `wgpolicyk8s.io` PolicyReport/ClusterPolicyReport를 읽어 보여 줍니다(`features.policyReports`).
   - Security → Policy Reports: 정책별·Namespace별 pass/fail/warn/error/skip과 결과 행
-  - 보고서가 가리킬 수 있는 개체의 모든 드로어: "Policy violations" 절(클러스터 범위 개체는 ClusterPolicyReport에서)
+  - 보고서가 가리킬 수 있는 개체의 모든 드로어: "Policy violations" 절(클러스터 범위 개체는 ClusterPolicyReport에서, 워크로드는 파드 포함, 워크로드·커스텀 리소스는 Kind·이름이 같은 다른 그룹 개체를 뺌)
   - CRD가 없으면 "설치되어 있지 않습니다"가 나옵니다.
   - 권한은 `resource.policyreport.read`이고, Namespace 범위로 부여받았다면 그 Namespace만 봅니다.
 - **AI 에이전트 연결(MCP 서버)** — Claude Code·Cursor가 kubeconfig 대신 API 키로 연결해 같은 읽기 도구를
@@ -230,7 +230,7 @@
 | **Configuration** | ConfigMap, Secret, ResourceQuota, LimitRange, PriorityClass, RuntimeClass, Lease |
 | **Security (RBAC)** | Role, ClusterRole, RoleBinding, ClusterRoleBinding, ServiceAccount · Policy Reports(`wgpolicyk8s.io` 보고서 모음, CRD 있을 때) |
 | **Cluster** | Node, Namespace, Webhook Configuration(Mutating/Validating), Admission Policy(Validating/Mutating — `admissionregistration.k8s.io/v1`, 읽기 전용, API가 없으면 "API를 제공하지 않음"; `features.admissionPolicies.readOnly: true`면 공용 YAML 적용과 AI 쓰기 도구도 정책·바인딩 4종을 거부하므로 Git으로만 바꿀 수 있습니다) |
-| **Custom Resources** | CRD 동적 탐색 및 인스턴스 편집. 인스턴스의 출력 열은 목록과 상세 창 모두 API 서버가 CRD 열로 만든 Table(읽은 버전, 서버 함수 하나)이고, 상세 창은 링크로도 열립니다(`detailApi=<group>/<version>/<plural>`). 고급 검색·Timeline·Helm 릴리스의 리소스·Policy Reports·대시보드의 Issues와 Optimization 창·Cluster Hygiene·Alerts inbox(kube-state-metrics 커스텀 리소스 상태 알림)·상세 창의 소유자와 스케일 대상 링크는 개체를 apiVersion과 함께 열고, 상세 창은 kubectl describe처럼 그룹과 Kind로 고릅니다: 전용 창의 그룹이 아닌 Kind를 CRD가 내면(두 그룹의 같은 Kind, Istio의 Gateway) 그 CRD의 커스텀 리소스로 엽니다. 상세 창은 spec·status 밖 필드(PolicyReport의 results·scope·summary)도 보여 주고, CRD 상세 창은 이벤트도 보여 줍니다 |
+| **Custom Resources** | CRD 동적 탐색 및 인스턴스 편집. 인스턴스의 출력 열은 목록과 상세 창 모두 API 서버가 CRD 열로 만든 Table(읽은 버전, 서버 함수 하나)이고, 상세 창은 링크로도 열립니다(`detailApi=<group>/<version>/<plural>`). 고급 검색·Timeline·Helm 릴리스의 리소스·Policy Reports·대시보드의 Issues와 Optimization 창·Cluster Hygiene·Alerts inbox(kube-state-metrics 커스텀 리소스 상태 알림)·상세 창의 소유자와 스케일 대상 링크·HTTPRoute와 GRPCRoute의 parentRef·backendRef 링크(그룹과 Kind — CRD가 우선하는 버전으로)는 개체를 apiVersion과 함께 열고, 상세 창은 kubectl describe처럼 그룹과 Kind로 고릅니다: 전용 창의 그룹이 아닌 Kind를 CRD가 내면(두 그룹의 같은 Kind, Istio의 Gateway) 그 CRD의 커스텀 리소스로 엽니다. 상세 창은 spec·status 밖 필드(PolicyReport의 results·scope·summary)도 보여 주고, CRD 상세 창은 이벤트도 보여 줍니다 |
 
 - **YAML 편집** (Monaco), **Pod Exec / 로그** (xterm.js, WebSocket)
 - **실시간 갱신** — WebSocket 멀티플렉서로 리소스 변경 스트리밍

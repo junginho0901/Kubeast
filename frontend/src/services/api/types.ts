@@ -1080,6 +1080,8 @@ export interface ResizeRequest {
   container: string
   cpu_request_m?: number
   mem_request_bytes?: number
+  // the row's workload's: only the pods of an owner of that group (an owner of another group may share Kind and name)
+  api_version?: string
 }
 
 export interface PodResizeResult {
@@ -1098,6 +1100,7 @@ export interface ResizeResult {
   pending: number
   skipped: number
   failed: number
+  api_version?: string
 }
 
 // admissionregistration.k8s.io/v1 ValidatingAdmissionPolicy / MutatingAdmissionPolicy list row
