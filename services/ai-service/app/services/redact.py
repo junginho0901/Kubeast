@@ -66,7 +66,7 @@ _SENSITIVE_KEY = re.compile(
     r"(^|_)(password|passwd|pwd|secret|token|api_key|access_key|private_key|credentials?|client_secret|dsn|connection_string)(_|$)"
 )
 _NOT_SECRET_KEY = re.compile(
-    r"(name|ref|url|uri|path|file|dir|ttl|length|count|min|max|timeout|mode|type|enabled|id|version|algorithm|alg|header|claim|issuer|audience|scope)s?$"
+    r"(name|ref|url|uri|path|file|dir|ttl|length|count|min|max|timeout|mode|type|enabled|id|version|algorithm|alg|header|claim|issuer|audience|scope|policy)s?$"
 )
 _CAMEL_BOUNDARY = re.compile(r"([a-z0-9])([A-Z])")
 
@@ -163,6 +163,55 @@ def _mask_block_values(text: str, stats: Stats) -> str:
         stats.add("key_name", 1)
         i = end
     return "\n".join(out)
+
+
+# A credential among the words of a line (a log line, a command, a connection string, a URL's query). Prose reads the same
+# way ("invalid password: too short"), so only key=value counts there, or a quoted value after = or :, and only a key whose
+# last word is the credential: password_policy=strict and token_count=5 are settings.
+_INLINE_WORD = r"(?:password|passwd|pwd|secret|token|api[_.\-]?key|access[_.\-]?key|private[_.\-]?key|secret[_.\-]?key|credentials?|dsn|connection[_.\-]?string)"
+_INLINE_KEY = r"([A-Za-z0-9_.\-]*?" + _INLINE_WORD + r")"
+_INLINE_BEFORE = r"(^|[^A-Za-z0-9_.\-])"
+# ASCII as in Go, whose \s has no other spaces, so both stop a value at the same place.
+_INLINE_PAIR = re.compile(_INLINE_BEFORE + _INLINE_KEY + r"(=)([^\s\"'\\&;,)\]}|={*%<>\[(][^\s\"'\\&;,)\]}|]*)", re.I | re.A)
+_INLINE_QUOTED = re.compile(_INLINE_BEFORE + _INLINE_KEY + r"([\"'\\]*[ \t]*[=:][ \t]*)(\"[^\"\r\n]*\"|'[^'\r\n]*'|\\\"[^\"\\\r\n]*\\\")", re.I | re.A)
+# What says a state or a place for a value, not the value (token=expired, password=$DB_PASSWORD, password=%s), and the key
+# every Ollama client sends for none.
+_INLINE_NOT_A_VALUE = _HARMLESS | {"null", "nil", "empty", "set", "unset", "missing", "required", "invalid", "expired", "redacted", "hidden", "masked", "undefined", "unknown", "ollama"}
+_INLINE_REFERENCE = re.compile(r"^(\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|%[a-z#+]{1,2}|\*+)$")
+# These words also name an object: in a Kubernetes log secret=kube-system/my-tls is a Secret, not its value.
+_INLINE_NAMES_AN_OBJECT = re.compile(r"(secret|credentials?)$")
+_NAME_SHAPED = re.compile(r"^[a-z0-9._/\-]+$")
+
+
+def _inline_value_stays(key: str, value: str) -> bool:
+    v = value.strip("\\\"'").strip()
+    if not v or v.startswith("<REDACTED") or v.lower() in _INLINE_NOT_A_VALUE or _INLINE_REFERENCE.match(v):
+        return True
+    k = _normalize_key(key.lstrip("-"))
+    if k.endswith("pwd") and v.startswith(("/", "~")):
+        return True  # PWD=/app: the shell's working directory
+    credential = bool(_CREDENTIAL_LAST_WORD.search(k)) or k.endswith(("password", "passwd"))
+    if not credential and all(c.isdigit() or c in ".-msh" for c in v):
+        return True  # token=5, secret=3: a count or a duration
+    # In capitals the key is an environment variable, which holds the value itself.
+    if credential or key == key.upper() or not _INLINE_NAMES_AN_OBJECT.search(k) or not _NAME_SHAPED.match(v):
+        return False
+    return any(c in v for c in "-./") or not any(c.isdigit() for c in v)
+
+
+def _mask_inline_pair(m: re.Match) -> str:
+    key, value = m.group(2), m.group(4)
+    if _inline_value_stays(key, value):
+        return m.group(0)
+    return m.group(1) + key + m.group(3) + "<REDACTED:" + key.lstrip("-") + ">"
+
+
+def _mask_inline_quoted(m: re.Match) -> str:
+    key, value = m.group(2), m.group(4)
+    if _inline_value_stays(key, value):
+        return m.group(0)
+    quote = '\\"' if value.startswith("\\") else value[0]
+    return m.group(1) + key + m.group(3) + quote + "<REDACTED:" + key.lstrip("-") + ">" + quote
 
 
 # --- value-pattern rules --------------------------------------------------------
@@ -503,6 +552,8 @@ def redact_text(text: Optional[str], opts: Optional[Options] = None) -> Tuple[st
         text = _sub_count(_ENV_LIST_JSON, text, _env_json, stats, "key_name")
         text = _sub_count(_KEY_VALUE_LINE, text, _line, stats, "key_name")
         text = _sub_count(_ENV_LIST_YAML, text, _env_yaml, stats, "key_name")
+        text = _sub_count(_INLINE_QUOTED, text, _mask_inline_quoted, stats, "key_name")
+        text = _sub_count(_INLINE_PAIR, text, _mask_inline_pair, stats, "key_name")
     if o.pii:
         if o.on("email"):
             seen: Dict[str, int] = {}

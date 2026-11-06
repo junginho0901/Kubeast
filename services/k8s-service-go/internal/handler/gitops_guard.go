@@ -141,6 +141,12 @@ func gitopsTargetsFromResize(r *http.Request, ns string) []gitopsTarget {
 	return []gitopsTarget{{apiVersion: apiVersion, kind: body.Kind, namespace: ns, name: body.Name}}
 }
 
+// gitopsRouteIsOff says a route whose feature is switched off will change nothing: its handler's 404 is the answer,
+// whoever asks and whatever it names.
+func (h *Handler) gitopsRouteIsOff(r *http.Request) bool {
+	return !h.cfg.InPlaceResizeEnabled && strings.HasSuffix(strings.TrimRight(r.URL.Path, "/"), "/optimization/resize")
+}
+
 // GitopsGuard refuses (409) a write to an object an Argo CD Application
 // manages while gitops.argocd.mode is "block"; in "warn" mode the UI asks
 // first and the request passes. A target it cannot read is refused too, since
@@ -154,7 +160,7 @@ func (h *Handler) GitopsGuard(next http.Handler) http.Handler {
 			return
 		}
 		cfg := h.svc.Gitops()
-		if !cfg.Blocks() {
+		if !cfg.Blocks() || h.gitopsRouteIsOff(r) {
 			next.ServeHTTP(w, r)
 			return
 		}

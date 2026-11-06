@@ -15,10 +15,11 @@ const MaxLogQLLength = 4096
 // ErrInvalidLogQL is a query the injector could not rewrite safely.
 var ErrInvalidLogQL = errors.New("invalid LogQL")
 
-// Matcher is one equality matcher added to every stream selector.
+// Matcher is one equality matcher added to every stream selector; Not makes it != instead.
 type Matcher struct {
 	Name  string
 	Value string
+	Not   bool
 }
 
 // InjectMatchers adds matchers to every stream selector of a LogQL query, so a
@@ -48,6 +49,9 @@ func InjectMatchers(query string, matchers []Matcher) (string, error) {
 			added = append(added, ", "...)
 		}
 		added = append(added, m.Name...)
+		if m.Not {
+			added = append(added, '!')
+		}
 		added = append(added, '=')
 		added = strconv.AppendQuote(added, m.Value)
 	}

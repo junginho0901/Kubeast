@@ -31,6 +31,7 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Optional, Sequence
 
 from app.config import settings
 from app.services.prompt_fence import inside_arrows
+from app.services.audit_target import shown_tool_args
 
 log = logging.getLogger(__name__)
 
@@ -452,7 +453,8 @@ class ClaudeCodeChat:
                 out.tool_calls += 1
                 args = args if isinstance(args, dict) else {}
                 queue.put_nowait(("call", call_id))  # where the call stands among the text, for the saved answer
-                queue.put_nowait(("sse", _sse({"function": name, "args": args, "call_id": call_id})))  # the chat shows the call at once
+                # the chat shows the call at once, and saves a stopped answer from this event
+                queue.put_nowait(("sse", _sse({"function": name, "args": shown_tool_args(name, args), "call_id": call_id})))
                 events, text = await run_tool(name, args, max(1, state["turn"]), call_id)
                 state["fresh"] = True
                 for event in events:

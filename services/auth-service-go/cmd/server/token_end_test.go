@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -97,6 +99,104 @@ func TestABulkRoleChangeStillListsWhatItChanged(t *testing.T) {
 	}
 	if !api.db.ran(endsTokens) {
 		t.Error("the tokens were not ended")
+	}
+}
+
+// bulkAnswer reads the answer of a call that did not change everyone it was given.
+type bulkAnswer struct {
+	Updated []struct {
+		ID string `json:"id"`
+	} `json:"updated"`
+	Failed []struct {
+		UserID string `json:"user_id"`
+		Email  string `json:"email"`
+		Reason string `json:"reason"`
+	} `json:"failed"`
+}
+
+func readBulkAnswer(t *testing.T, w *httptest.ResponseRecorder) bulkAnswer {
+	t.Helper()
+	var out bulkAnswer
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatalf("%d %s: %v", w.Code, w.Body.String(), err)
+	}
+	return out
+}
+
+// failTheChangeOf makes one account's UPDATE fail and leaves the others'.
+func failTheChangeOf(api *authAPI, id string) {
+	api.db.failOn("WHERE id =  '" + id + "'")
+}
+
+func TestABulkRoleChangeSaysWhichAccountsItCouldNotChange(t *testing.T) {
+	noSuchAccount := pgRule{match: "u.role_id WHERE u.id =  'gone'", oids: accountRules("gone", roleMember, "Member")[0].oids}
+	api := newAuthAPI(t, pendingRequest{owner: "requester"}, append(accountFixture(), noSuchAccount)...)
+	failTheChangeOf(api, "reader")
+	w := api.call(api.actor(globalAdmin, nil), http.MethodPatch, "/admin/users/bulk-role", `{"role_id":1,"user_ids":["plain","reader","gone"]}`)
+	if w.Code != http.StatusMultiStatus {
+		t.Fatalf("%d %s, want 207", w.Code, w.Body.String())
+	}
+	out := readBulkAnswer(t, w)
+	if len(out.Updated) != 1 || out.Updated[0].ID != "plain" {
+		t.Errorf("updated %+v", out.Updated)
+	}
+	if len(out.Failed) != 2 || out.Failed[0].UserID != "gone" || out.Failed[0].Reason != "not_found" ||
+		out.Failed[1].UserID != "reader" || out.Failed[1].Email != "reader@example.com" || out.Failed[1].Reason != "failed" {
+		t.Errorf("failed %+v", out.Failed)
+	}
+	rows := api.store.failures("user.role.update")
+	if len(rows) != 2 || rows[0].TargetID != "gone" || rows[1].TargetID != "reader" {
+		t.Errorf("failure rows %+v", rows)
+	}
+	if rows := doneRows(api.store, "user.role.update"); len(rows) != 1 || rows[0].TargetID != "plain" {
+		t.Errorf("success rows %+v", rows)
+	}
+}
+
+func TestABulkRoleChangeThatChangedNobodyIsAFailure(t *testing.T) {
+	api := newAuthAPI(t, pendingRequest{owner: "requester"}, accountFixture()...)
+	api.db.failOn(endsTokens)
+	w := api.call(api.actor(globalAdmin, nil), http.MethodPatch, "/admin/users/bulk-role", `{"role_id":1,"user_ids":["plain","reader"]}`)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("%d %s, want 500", w.Code, w.Body.String())
+	}
+	out := readBulkAnswer(t, w)
+	if len(out.Updated) != 0 || len(out.Failed) != 2 {
+		t.Errorf("%+v", out)
+	}
+	if !strings.Contains(w.Body.String(), `"detail"`) {
+		t.Errorf("no detail for a client that reads only that: %s", w.Body.String())
+	}
+}
+
+// One's own account is left out as it was, and now said to be, as the single-user route says it.
+func TestABulkRoleChangeSaysItLeftOutOnesOwnAccount(t *testing.T) {
+	api := newAuthAPI(t, pendingRequest{owner: "requester"}, accountFixture()...)
+	w := api.call(api.actor(globalAdmin, nil), http.MethodPatch, "/admin/users/bulk-role", `{"role_id":1,"user_ids":["plain","actor"]}`)
+	if w.Code != http.StatusMultiStatus {
+		t.Fatalf("%d %s, want 207", w.Code, w.Body.String())
+	}
+	out := readBulkAnswer(t, w)
+	if len(out.Updated) != 1 || out.Updated[0].ID != "plain" || len(out.Failed) != 1 || out.Failed[0].UserID != "actor" || out.Failed[0].Reason != "self" {
+		t.Errorf("%+v", out)
+	}
+	if rows := api.store.failures("user.role.update"); len(rows) != 1 || rows[0].TargetID != "actor" {
+		t.Errorf("failure rows %+v", rows)
+	}
+}
+
+// What a client of the route already reads when nothing went wrong.
+func TestABulkRoleChangeOfEveryoneAnswersTheListAsBefore(t *testing.T) {
+	api := newAuthAPI(t, pendingRequest{owner: "requester"}, accountFixture()...)
+	w := api.call(api.actor(globalAdmin, nil), http.MethodPatch, "/admin/users/bulk-role", `{"role_id":1,"user_ids":["plain","reader"]}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("%d %s", w.Code, w.Body.String())
+	}
+	var list []struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &list); err != nil || len(list) != 2 {
+		t.Errorf("%s: %v", w.Body.String(), err)
 	}
 }
 

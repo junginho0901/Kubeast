@@ -6,7 +6,8 @@
 //
 // Two rule families:
 //   - key names: a `key: value` / `key=value` / `"key": "value"` line whose key
-//     looks like a credential (password, token, api_key, ...) loses its value;
+//     looks like a credential (password, token, api_key, ...) loses its value,
+//     and so does a `key=value` among a line's words;
 //   - value patterns: AWS keys, private-key blocks, JWTs, credentials inside
 //     URLs, Bearer/Basic authorization values, API keys with a published
 //     prefix (OpenAI, Anthropic, Google, GitHub, Slack, Hugging Face).
@@ -90,7 +91,7 @@ var sensitiveKey = regexp.MustCompile(`(^|_)(password|passwd|pwd|secret|token|ap
 
 // notSecretKey: names that contain a credential word but are references or
 // settings, not values (secretName, secretKeyRef, token_ttl, password_min_length).
-var notSecretKey = regexp.MustCompile(`(name|ref|url|uri|path|file|dir|ttl|length|count|min|max|timeout|mode|type|enabled|id|version|algorithm|alg|header|claim|issuer|audience|scope)s?$`)
+var notSecretKey = regexp.MustCompile(`(name|ref|url|uri|path|file|dir|ttl|length|count|min|max|timeout|mode|type|enabled|id|version|algorithm|alg|header|claim|issuer|audience|scope|policy)s?$`)
 
 var camelBoundary = regexp.MustCompile(`([a-z0-9])([A-Z])`)
 
@@ -226,6 +227,72 @@ func keyIsSensitive(key string) bool {
 	return sensitiveKey.MatchString(k) && !notSecretKey.MatchString(k)
 }
 
+// A credential among the words of a line (a log line, a command, a connection string, a URL's query). Prose reads the
+// same way ("invalid password: too short"), so only key=value counts there, or a quoted value after = or :, and only a
+// key whose last word is the credential: password_policy=strict and token_count=5 are settings.
+const (
+	inlineWord   = `(?:password|passwd|pwd|secret|token|api[_.\-]?key|access[_.\-]?key|private[_.\-]?key|secret[_.\-]?key|credentials?|dsn|connection[_.\-]?string)`
+	inlineKey    = `([A-Za-z0-9_.\-]*?` + inlineWord + `)`
+	inlineBefore = `(^|[^A-Za-z0-9_.\-])`
+)
+
+var (
+	inlinePair   = regexp.MustCompile(`(?i)` + inlineBefore + inlineKey + `(=)([^\s"'\\&;,)\]}|={*%<>\[(][^\s"'\\&;,)\]}|]*)`)
+	inlineQuoted = regexp.MustCompile(`(?i)` + inlineBefore + inlineKey + `(["'\\]*[ \t]*[=:][ \t]*)("[^"\r\n]*"|'[^'\r\n]*'|\\"[^"\\\r\n]*\\")`)
+	// What says a place for a value, not the value: password=$DB_PASSWORD, password=%s.
+	inlineReference = regexp.MustCompile(`^(\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|%[a-z#+]{1,2}|\*+)$`)
+	// These words also name an object: in a Kubernetes log secret=kube-system/my-tls is a Secret, not its value.
+	inlineNamesAnObject = regexp.MustCompile(`(secret|credentials?)$`)
+	nameShaped          = regexp.MustCompile(`^[a-z0-9._/\-]+$`)
+)
+
+// inlineNotAValue says a state, not a value (token=expired), or is the key every Ollama client sends for none.
+var inlineNotAValue = map[string]bool{
+	"true": true, "false": true, "yes": true, "no": true, "on": true, "off": true, "none": true, "auto": true, "default": true,
+	"null": true, "nil": true, "empty": true, "set": true, "unset": true, "missing": true, "required": true, "invalid": true,
+	"expired": true, "redacted": true, "hidden": true, "masked": true, "undefined": true, "unknown": true, "ollama": true,
+}
+
+func inlineValueStays(key, value string) bool {
+	v := strings.TrimSpace(strings.Trim(value, `\"'`))
+	if v == "" || strings.HasPrefix(v, "<REDACTED") || inlineNotAValue[strings.ToLower(v)] || inlineReference.MatchString(v) {
+		return true
+	}
+	k := normalizeKey(strings.TrimLeft(key, "-"))
+	if strings.HasSuffix(k, "pwd") && (strings.HasPrefix(v, "/") || strings.HasPrefix(v, "~")) {
+		return true // PWD=/app: the shell's working directory
+	}
+	credential := credentialLastWord.MatchString(k) || strings.HasSuffix(k, "password") || strings.HasSuffix(k, "passwd")
+	if !credential && onlyNumberCharacters(v) {
+		return true // token=5, secret=3: a count or a duration
+	}
+	// In capitals the key is an environment variable, which holds the value itself.
+	if credential || key == strings.ToUpper(key) || !inlineNamesAnObject.MatchString(k) || !nameShaped.MatchString(v) {
+		return false
+	}
+	return strings.ContainsAny(v, "-./") || !strings.ContainsAny(v, "0123456789")
+}
+
+func maskInlinePair(m string) string {
+	sub := inlinePair.FindStringSubmatch(m)
+	if inlineValueStays(sub[2], sub[4]) {
+		return m
+	}
+	return sub[1] + sub[2] + sub[3] + "<REDACTED:" + strings.TrimLeft(sub[2], "-") + ">"
+}
+
+func maskInlineQuoted(m string) string {
+	sub := inlineQuoted.FindStringSubmatch(m)
+	if inlineValueStays(sub[2], sub[4]) {
+		return m
+	}
+	quote := sub[4][:1]
+	if quote == `\` {
+		quote = `\"`
+	}
+	return sub[1] + sub[2] + sub[3] + quote + "<REDACTED:" + strings.TrimLeft(sub[2], "-") + ">" + quote
+}
+
 // --- value-pattern rules ---------------------------------------------------
 
 var (
@@ -326,6 +393,8 @@ func Text(s string, o Options) (string, Stats) {
 			}
 			return sub[1] + sub[3] + "<REDACTED:" + sub[2] + ">" + sub[5]
 		}, &st, "key_name")
+		s = replaceCount(inlineQuoted, s, maskInlineQuoted, &st, "key_name")
+		s = replaceCount(inlinePair, s, maskInlinePair, &st, "key_name")
 	}
 	return redactPII(s, o, &st), st
 }

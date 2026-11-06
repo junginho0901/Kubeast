@@ -106,7 +106,9 @@ func (s *Searcher) Search(ctx context.Context, req Request) (Result, error) {
 	if !ok {
 		return Result{}, ErrNotConfigured
 	}
-	return s.store.search(ctx, req, store, value)
+	res, err := s.store.search(ctx, req, store, value)
+	res.HiddenNamespace = req.HiddenNamespace
+	return res, err
 }
 
 // QueryRequest is a LogQL query written by hand or by the AI, run on one cluster (and
@@ -123,6 +125,8 @@ type QueryRequest struct {
 	// without it one is refused with ErrNotLogQuery.
 	Metric bool
 	Step   time.Duration
+	// HiddenNamespace is left out of a query across namespaces.
+	HiddenNamespace string
 }
 
 // Query adds the cluster's matcher (when its store has a cluster label) and
@@ -133,7 +137,7 @@ func (s *Searcher) Query(ctx context.Context, req QueryRequest) (Result, error) 
 	if !ok {
 		return Result{}, ErrNotConfigured
 	}
-	effective, err := InjectMatchers(req.Query, s.scope(value, req.Namespace))
+	effective, err := InjectMatchers(req.Query, s.scope(value, req.Namespace, req.HiddenNamespace))
 	if err != nil {
 		return Result{}, err
 	}
@@ -142,14 +146,17 @@ func (s *Searcher) Query(ctx context.Context, req QueryRequest) (Result, error) 
 	return res, err
 }
 
-// scope is the matchers a query on cluster label value (and namespace) gets.
-func (s *Searcher) scope(value, namespace string) []Matcher {
+// scope is the matchers a query on cluster label value (and namespace, without the hidden one) gets.
+func (s *Searcher) scope(value, namespace, hidden string) []Matcher {
 	var m []Matcher
 	if s.cfg.Labels.Cluster != "" && value != "" {
 		m = append(m, Matcher{Name: s.cfg.Labels.Cluster, Value: value})
 	}
 	if namespace != "" {
 		m = append(m, Matcher{Name: s.cfg.Labels.Namespace, Value: namespace})
+	}
+	if hidden != "" {
+		m = append(m, Matcher{Name: s.cfg.Labels.Namespace, Value: hidden, Not: true})
 	}
 	return m
 }
@@ -162,6 +169,8 @@ type LabelsRequest struct {
 	Label     string
 	Start     time.Time
 	End       time.Time
+	// HiddenNamespace is left out of a read across namespaces.
+	HiddenNamespace string
 }
 
 // Labels lists label names or values on the streams of req's cluster and
@@ -175,7 +184,7 @@ func (s *Searcher) Labels(ctx context.Context, req LabelsRequest) (LabelsResult,
 	if err := CheckLabelName(req.Label); err != nil {
 		return LabelsResult{}, err
 	}
-	return s.store.labels(ctx, store, req.Label, s.cfg.LogQL(Request{Namespace: req.Namespace}, value), req.Start, req.End)
+	return s.store.labels(ctx, store, req.Label, s.cfg.LogQL(Request{Namespace: req.Namespace, HiddenNamespace: req.HiddenNamespace}, value), req.Start, req.End)
 }
 
 // CheckLabelName refuses a label name Loki would not take ("" = none asked).
@@ -193,7 +202,7 @@ func (s *Searcher) Patterns(ctx context.Context, req QueryRequest) (PatternsResu
 	if !ok {
 		return PatternsResult{}, ErrNotConfigured
 	}
-	effective, err := InjectMatchers(req.Query, s.scope(value, req.Namespace))
+	effective, err := InjectMatchers(req.Query, s.scope(value, req.Namespace, req.HiddenNamespace))
 	if err != nil {
 		return PatternsResult{}, err
 	}

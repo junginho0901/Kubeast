@@ -260,6 +260,35 @@ test.describe('audit gaps', () => {
     expect(check.healthy, 'default still answers with its own kubeconfig').toBe(true)
   })
 
+  test('an API server address with a user in it is refused and no answer or row repeats it', async ({ request }) => {
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const since = new Date(Date.now() - 2000).toISOString()
+    const fake = 'fake-url-password'
+    const address = `https://bob:${fake}@10.255.255.1:6443`
+    const kubeconfig = 'apiVersion: v1\nkind: Config\nclusters:\n- name: x\n  cluster:\n    server: https://10.255.255.1:6443\nusers:\n- name: x\n  user:\n    token: e2e-not-a-token\ncontexts: []\n'
+
+    const reg = await request.post('/api/v1/clusters', { headers: admin, data: { mode: 'external', display_name: 'e2e-url-user', kubeconfig, api_server_url: address }, failOnStatusCode: false })
+    expect(reg.status(), await reg.text()).toBe(400)
+    expect(await reg.text()).not.toContain(fake)
+    const stored = await (await request.get('/api/v1/clusters', { headers: admin })).json()
+    const before = (stored.items ?? stored).find((c: { id: string }) => c.id === 'default').api_server_url
+    const edit = await request.patch('/api/v1/clusters/default', { headers: admin, data: { api_server_url: address }, failOnStatusCode: false })
+    // The rest of the run reads this cluster, whatever this test finds.
+    if (edit.ok()) await request.patch('/api/v1/clusters/default', { headers: admin, data: { api_server_url: before } })
+    expect(edit.status(), await edit.text()).toBe(400)
+    expect(await edit.text()).not.toContain(fake)
+
+    // The test before this one fails a connection test on the same cluster inside the window.
+    const mine = async () => [...await rows(request, admin, { action: 'admin.cluster.register', since }), ...await rows(request, admin, { action: 'admin.cluster.update', since })].filter((r) => r.Error?.includes('api_server_url'))
+    await expect.poll(async () => (await mine()).map((r) => `${r.Action} ${r.Result} ${r.TargetID} ${r.Error}`).sort(), { timeout: 10_000 }).toEqual([
+      'admin.cluster.register failure  api_server_url: put credentials in the kubeconfig, not in the URL',
+      'admin.cluster.update failure default api_server_url: put credentials in the kubeconfig, not in the URL',
+    ])
+    expect(JSON.stringify(await mine())).not.toContain(fake)
+    const list = await (await request.get('/api/v1/clusters', { headers: admin })).json()
+    expect(JSON.stringify(list)).not.toContain(fake)
+  })
+
   test('a ModelConfig resource change is a sync row, a reconcile with the same spec is not', async ({ request }) => {
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-audit-'))

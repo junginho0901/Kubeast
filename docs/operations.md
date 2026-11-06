@@ -266,6 +266,7 @@ Loki and the collector are set up separately ([docs/cluster-requirements.md §14
 - **The server builds the query**: users do not write LogQL, and every value goes in only as a quoted string. The cluster label matcher (the value from `clusters`) is always added, so several clusters can share one Loki without mixing.
 - **Permission**: `resource.pod.read` on that cluster, and only when `get pods/log`, asked as the user's identity, is allowed. Cluster RBAC decides.
   - A cluster-wide search gets 403 when the user has a Namespace-scoped grant on that cluster; pick a Namespace.
+  - A read across namespaces leaves out the node shell namespace (`nodeShell.namespace`) unless the user holds `resource.node.shell` on that cluster: a node shell pod's log is everything its terminal printed, and the store may have collected it. Search, LogQL, labels and patterns alike: a LogQL answer shows the matcher in its query, and a search says `hiddenNamespace` in its answer and `hidden_namespace` in its row. Keeping that namespace out of the collector is still better.
 - **Limits**:
   - Range: default 1 hour, at most `maxRange` (24h).
   - Lines: `maxLines` (1,000).

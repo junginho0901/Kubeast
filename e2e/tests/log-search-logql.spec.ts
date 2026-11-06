@@ -112,6 +112,71 @@ test.describe('LogQL written by hand', () => {
     expect([400, 502]).toContain(hidden.status())
   })
 
+  test("a read across namespaces leaves the node shell's namespace out for a Read user and not for an admin", async ({ request }) => {
+    const id = Date.now().toString(36)
+    const shellNs = 'kubeast-node-shell'
+    const shellJob = `e2e-logql-shell-${id}`
+    const shellMarker = `${shellJob}-marker`
+    const email = `${shellJob}@kubeast.local`
+    const inShell = `{k8s_namespace_name="${shellNs}"} |= "${shellMarker}"`
+    let userId = ''
+    try {
+      // The namespace the first node shell makes; it may already be there.
+      await request.post(`/api/v1/cluster/resources/yaml/create?cluster=${CLUSTER}`, {
+        headers: bearer(admin), data: { yaml: `apiVersion: v1\nkind: Namespace\nmetadata: {name: ${shellNs}}\n` }, failOnStatusCode: false,
+      })
+      const yaml = [
+        'apiVersion: batch/v1',
+        'kind: Job',
+        `metadata: {name: ${shellJob}, namespace: ${shellNs}}`,
+        'spec:',
+        '  backoffLimit: 0',
+        '  ttlSecondsAfterFinished: 300',
+        '  template:',
+        '    spec:',
+        '      restartPolicy: Never',
+        '      containers:',
+        '        - name: say',
+        '          image: docker.io/library/busybox:1.38.0',
+        `          command: [sh, -c, "echo ${shellMarker}"]`,
+      ].join('\n')
+      const create = await request.post(`/api/v1/cluster/resources/yaml/create?cluster=${CLUSTER}`, { headers: bearer(admin), data: { yaml, namespace: shellNs } })
+      expect(create.ok(), await create.text()).toBeTruthy()
+      await expect.poll(async () => {
+        const res = await logqlAll(request, admin, CLUSTER, inShell)
+        return res.ok() ? (await res.json()).lines.length : -1
+      }, { message: 'an admin reads the line', timeout: 120_000, intervals: [3000] }).toBe(1)
+
+      const raw = await (await request.get('/api/v1/auth/roles', { headers: bearer(admin) })).json()
+      const member = (Array.isArray(raw) ? raw : raw.roles || raw.items || []).find((r: { name: string }) => r.name.toLowerCase() === 'member')
+      const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E logql shell', email, password: PW, role_id: member.id } })
+      expect(created.status()).toBe(201)
+      userId = (await created.json()).id
+      const grant = await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/${CLUSTER}`, { headers: bearer(admin), data: { role: 'Read' } })
+      expect(grant.ok(), await grant.text()).toBeTruthy()
+      const reader = await login(request, email, PW)
+
+      const hidden = await logqlAll(request, reader, CLUSTER, inShell)
+      expect(hidden.status(), await hidden.text()).toBe(200)
+      const hiddenBody = await hidden.json()
+      expect(hiddenBody.effectiveQuery).toBe(`{k8s_cluster_name="kubeast", k8s_namespace_name!="${shellNs}", k8s_namespace_name="${shellNs}"} |= "${shellMarker}"`)
+      expect(hiddenBody.lines).toEqual([])
+
+      const search = await request.get(`/api/v1/cluster/logsearch?cluster=${CLUSTER}&q=${shellMarker}&since=1h`, { headers: bearer(reader) })
+      expect(search.status(), await search.text()).toBe(200)
+      // The gateway's and k8s-service's own logs hold the marker from these very requests.
+      expect((await search.json()).lines.filter((l: { namespace: string }) => l.namespace === shellNs)).toEqual([])
+
+      // The rest of what it reads stays.
+      const others = await logqlAll(request, reader, CLUSTER, `{k8s_container_name="say"} |= "${marker}"`)
+      expect(others.status(), await others.text()).toBe(200)
+      expect((await others.json()).lines).toHaveLength(2)
+    } finally {
+      await request.delete(`/api/v1/namespaces/${shellNs}/jobs/${shellJob}?cluster=${CLUSTER}`, { headers: bearer(admin), failOnStatusCode: false })
+      if (userId) await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: bearer(admin), failOnStatusCode: false })
+    }
+  })
+
   test('a Read user runs LogQL without another permission and sees the toggle; no grant on the cluster is refused', async ({ request, browser }) => {
     const id = Date.now().toString(36)
     const email = `e2e-logql-${id}@kubeast.local`

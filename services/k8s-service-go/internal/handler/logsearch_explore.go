@@ -159,7 +159,7 @@ func (h *Handler) serveLogLabels(w http.ResponseWriter, r *http.Request, namespa
 		return
 	}
 	res, err := h.logSearch.Labels(r.Context(), logsearch.LabelsRequest{
-		Cluster: string(id), Namespace: namespace, Label: r.URL.Query().Get("label"), Start: window.Start, End: window.End,
+		Cluster: string(id), Namespace: namespace, Label: r.URL.Query().Get("label"), Start: window.Start, End: window.End, HiddenNamespace: h.hiddenLogNamespace(r, namespace),
 	})
 	if err != nil {
 		if errors.Is(err, logsearch.ErrNotServed) {
@@ -175,7 +175,7 @@ func (h *Handler) serveLogLabels(w http.ResponseWriter, r *http.Request, namespa
 // streams ?q= selects, with the cluster and namespace matchers added.
 func (h *Handler) serveLogPatterns(w http.ResponseWriter, r *http.Request, namespace string) {
 	id, _ := cluster.FromContext(r.Context())
-	req := logsearch.QueryRequest{Cluster: string(id), Namespace: namespace, Query: r.URL.Query().Get("q")}
+	req := logsearch.QueryRequest{Cluster: string(id), Namespace: namespace, Query: r.URL.Query().Get("q"), HiddenNamespace: h.hiddenLogNamespace(r, namespace)}
 	var res *logsearch.PatternsResult
 	after := func() json.RawMessage { return logReadAudit("patterns", req, res, nil) }
 	prepare := func() error {
@@ -212,7 +212,7 @@ func (h *Handler) serveLogPatterns(w http.ResponseWriter, r *http.Request, names
 // (/logsearch/query), so it reads no more than a structured search would.
 func (h *Handler) serveLogQLSearch(w http.ResponseWriter, r *http.Request, namespace string) {
 	id, _ := cluster.FromContext(r.Context())
-	req := logsearch.QueryRequest{Cluster: string(id), Namespace: namespace, Query: r.URL.Query().Get("q"), Metric: true}
+	req := logsearch.QueryRequest{Cluster: string(id), Namespace: namespace, Query: r.URL.Query().Get("q"), Metric: true, HiddenNamespace: h.hiddenLogNamespace(r, namespace)}
 	var res *logsearch.Result
 	after := func() json.RawMessage { return logReadAudit("", req, nil, res) }
 	prepare := func() error {

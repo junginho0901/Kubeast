@@ -17,6 +17,18 @@ async function openOptions(page: Page): Promise<string[]> {
 }
 
 test.describe('AI model list from the provider', () => {
+  test('a list the service refused says why on the form', async ({ page }) => {
+    await page.route(/\/api\/v1\/ai\/model-configs\/models(\?|$)/, (route) => route.fulfill({
+      status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'audit unavailable' }),
+    }))
+    await page.goto('/admin/ai-models')
+    await page.getByRole('button', { name: 'Add Model' }).first().click()
+    const source = page.getByTestId('model-list-source')
+    await expect(source).toHaveText(/(Built-in list|기본 목록).*audit unavailable/, { timeout: 15_000 })
+    await expect(source).not.toContainText('status code')
+    await expect(source).toHaveAttribute('title', 'audit unavailable')
+  })
+
   test('an Ollama address lists its own models; Anthropic lists its own with a key and falls back to the built-in list without', async ({ page }) => {
     const res = await page.request.post('/api/v1/ai/model-configs/models', { headers: XRW, data: { provider: 'ollama', base_url: STUB } })
     expect(res.status()).toBe(200)

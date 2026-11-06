@@ -91,6 +91,15 @@ func (h *ClustersHandler) ListClusters(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, map[string]interface{}{"items": clusters})
 }
 
+// validateAPIServerURL refuses an address with a user or password in it, which would go to the screens and the audit
+// rows. The error does not repeat the address.
+func validateAPIServerURL(raw *string) error {
+	if raw != nil && cluster.WithoutURLUser(*raw) != *raw {
+		return errors.New("api_server_url: put credentials in the kubeconfig, not in the URL")
+	}
+	return nil
+}
+
 // RegisterCluster handles POST /api/v1/clusters (mode: external | self).
 func (h *ClustersHandler) RegisterCluster(w http.ResponseWriter, r *http.Request) {
 	payload, ok := requirePerm(h.auditStore, w, r, auth.PermClustersCreate)
@@ -109,6 +118,11 @@ func (h *ClustersHandler) RegisterCluster(w http.ResponseWriter, r *http.Request
 	}
 	if cluster.Slugify(req.DisplayName) == "" {
 		response.Error(w, http.StatusBadRequest, "display_name must contain alphanumeric characters")
+		return
+	}
+	if err := validateAPIServerURL(req.APIServerURL); err != nil {
+		h.audit(r, "admin.cluster.register", payload, "", nil, map[string]string{"display_name": req.DisplayName}, err)
+		response.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -236,6 +250,11 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 	}
 	if req.DisplayName != nil && strings.TrimSpace(*req.DisplayName) == "" {
 		response.Error(w, http.StatusBadRequest, "display_name cannot be empty")
+		return
+	}
+	if err := validateAPIServerURL(req.APIServerURL); err != nil {
+		h.audit(r, "admin.cluster.update", payload, string(id), nil, map[string]string{"api_server_url": "refused"}, err)
+		response.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 

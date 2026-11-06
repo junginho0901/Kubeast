@@ -278,6 +278,12 @@ def kept_tool_args(args: Any) -> dict[str, Any]:
         return {key: "<REDACTED:value>" for key in args}
 
 
+def shown_tool_args(tool: str, args: Any) -> Any:
+    """A tool call's arguments as anything but the run may hold them: the saved answer, and the stream the page shows and
+    saves a stopped answer from. A write's real arguments stay in the approval row, which the waiting card reads."""
+    return kept_tool_args(args) if tool in WRITE_TOOL_NAMES else args
+
+
 def pod_exec_row(args: dict, tool_input: dict[str, Any], **after: Any) -> dict[str, Any]:
     """The k8s.pod.exec row of an exec through an AI tool, the row the terminal writes, so a search or a sink filter on
     that action finds both. There is no recording: it is one command and its result. A call without a namespace runs in

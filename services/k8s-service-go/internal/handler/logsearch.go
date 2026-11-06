@@ -33,6 +33,21 @@ func (h *Handler) LogSearchAll(w http.ResponseWriter, r *http.Request) {
 	h.serveLogSearch(w, r, "")
 }
 
+// hiddenLogNamespace is the namespace a read across namespaces leaves out: a node shell pod's log is everything its
+// terminal printed, so it stays with those who may open a node shell on this cluster, whatever the store collected.
+// A read of one namespace goes by the rule on that namespace's route.
+func (h *Handler) hiddenLogNamespace(r *http.Request, namespace string) string {
+	if namespace != "" {
+		return ""
+	}
+	id, _ := cluster.FromContext(r.Context())
+	payload, _ := auth.FromContext(r.Context())
+	if payload.HasPermissionForCluster("resource.node.shell", string(id)) {
+		return ""
+	}
+	return h.cfg.NodeShellNamespace
+}
+
 // serveLogSearch searches the log store for the request's cluster. The store
 // is not Kubernetes, so the cluster is asked as the user whether they may read
 // pod logs there (get pods/log) before anything is read.
@@ -60,6 +75,7 @@ func (h *Handler) serveLogSearch(w http.ResponseWriter, r *http.Request, namespa
 		response.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	req.HiddenNamespace = h.hiddenLogNamespace(r, namespace)
 
 	allowed, err := h.canReadPodLogs(r.Context(), namespace)
 	if err != nil {
@@ -190,6 +206,9 @@ func logSearchAudit(req logsearch.Request, res *logsearch.Result) json.RawMessag
 		"q": text, "match": match, "ignore_case": req.IgnoreCase,
 		"pod": req.Pod, "container": req.Container, "workload": workload,
 		"range_seconds": int64(req.End.Sub(req.Start).Seconds()), "limit": req.Limit,
+	}
+	if req.HiddenNamespace != "" {
+		after["hidden_namespace"] = req.HiddenNamespace
 	}
 	if res != nil {
 		after["lines"] = len(res.Lines)

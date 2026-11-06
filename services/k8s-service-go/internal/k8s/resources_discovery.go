@@ -288,7 +288,7 @@ func (s *Service) GetClusterConfig(ctx context.Context) (map[string]interface{},
 
 	// Server URL
 	if rc := s.restConfigCtx(ctx); rc != nil {
-		result["server"] = rc.Host
+		result["server"] = cluster.WithoutURLUser(rc.Host)
 	}
 
 	// Cluster version

@@ -2865,7 +2865,11 @@
       "approveMember": "Approve as Member",
       "approveAdmin": "Approve as Admin",
       "clearSelection": "Clear",
-      "selectPending": "Select all pending users"
+      "selectPending": "Select all pending users",
+      "notChanged": "{{done}} of {{total}} accounts changed. Not changed: {{accounts}}",
+      "reasonFailed": "the change failed, the audit log says why",
+      "reasonNotFound": "no such account",
+      "reasonSelf": "your own account"
     },
     "createUserTitle": "Add user",
     "createUserSubtitle": "Create a new user account with a specified role.",
@@ -4145,6 +4149,7 @@
       "modelsLoading": "Loading the provider's model list…",
       "modelsFromProvider": "From the provider ({{count}})",
       "modelsBuiltIn": "Built-in list — the provider's list could not be read",
+      "modelsBuiltInWhy": "Built-in list — the provider's list could not be read: {{reason}}",
       "modelsNoList": "Built-in list — Claude Code has no model list",
       "subscriptionTitle": "Personal use only",
       "subscriptionTerms": "A Claude Pro/Max subscription is for its owner's own use (Anthropic's terms). Use it only in a Kubeast that you alone use, not in an install shared with a team or other users.",

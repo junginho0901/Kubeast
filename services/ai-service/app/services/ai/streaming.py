@@ -26,6 +26,7 @@ from app.services.ai.debug_dump import dump, log, safe_error
 
 from app.services.ai.prompts import SYSTEM_MESSAGE
 from app.services.prompt_fence import inside_tag
+from app.services.audit_target import shown_tool_args
 from app.services.redact import redact_text
 
 if TYPE_CHECKING:
@@ -434,7 +435,7 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
     SSE events for the chat, the tool_calls entry the saved message keeps, and the result text for the model.
     Both the API-key loop and Claude Code (provider claude-code) call tools through here. call_id is the call's
     number in the turn, also on its start event, so the chat pairs a result with its call, not by tool name."""
-    from app.services.audit_target import EXEC_TOOL, kept_tool_args, pod_exec_row, tool_target, write_tool_input
+    from app.services.audit_target import EXEC_TOOL, pod_exec_row, tool_target, write_tool_input
     from app.services.audit_writer import audit_ready, fail_closed_enabled, write_audit
     from app.services.ai import permissions as _perm
     from app.services.tool_whitelists import WRITE_TOOL_NAMES, write_approval_required
@@ -593,7 +594,7 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
     log_entry = {
         'function': function_name,
         # what the saved message keeps: a write's arguments were needed for the card and the run, not for the history
-        'args': kept_tool_args(function_args) if function_name in WRITE_TOOL_NAMES else function_args,
+        'args': shown_tool_args(function_name, function_args),
         'result': formatted_result,
         'is_json': is_json,
         'is_yaml': is_yaml,
@@ -1022,7 +1023,8 @@ async def session_chat_stream(
                     dump(f"[DUMP] Calling function {function_name} with args", function_args)
 
                     call_id = len(tool_calls_log)
-                    yield f"data: {json.dumps({'function': function_name, 'args': function_args, 'call_id': call_id}, ensure_ascii=False)}\n\n"
+                    # the page saves a stopped answer from this event, so it says what may be kept
+                    yield f"data: {json.dumps({'function': function_name, 'args': shown_tool_args(function_name, function_args), 'call_id': call_id}, ensure_ascii=False)}\n\n"
 
                     events, log_entry, tool_message_content = await _call_tool(
                         service, db, session, session_id, tools, tool_context, function_name, function_args,

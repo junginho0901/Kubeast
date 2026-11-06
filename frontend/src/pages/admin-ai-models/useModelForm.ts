@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ModelConfigResponse } from '@/services/api'
 import { PROVIDER_CATALOG, getProvider, type ProviderDef } from '@/constants/modelCatalog'
-import { buildOptions, modelOptions, splitLimits, type LimitsError } from './helpers'
+import { buildOptions, modelListError, modelOptions, splitLimits, type LimitsError } from './helpers'
 
 export function useModelForm() {
   const qc = useQueryClient()
@@ -102,7 +102,7 @@ export function useModelForm() {
     loading: providerModels.isFetching,
     fromProvider: Boolean(fetchedModels?.length),
     count: fetchedModels?.length ?? 0,
-    error: providerModels.data?.error ?? (providerModels.error ? String(providerModels.error) : undefined),
+    error: modelListError(providerModels.data?.error, providerModels.error),
   }
 
   const resetForm = () => {

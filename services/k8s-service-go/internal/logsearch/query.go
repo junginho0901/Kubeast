@@ -24,6 +24,8 @@ type Request struct {
 	End          time.Time
 	Limit        int
 	Forward      bool
+	// HiddenNamespace is left out of a search across namespaces.
+	HiddenNamespace string
 }
 
 // MaxTextLength caps the search text.
@@ -119,6 +121,9 @@ func (c Config) LogQL(req Request, clusterValue string) string {
 		m = append(m, c.Labels.Namespace+"="+strconv.Quote(req.Namespace))
 	} else {
 		m = append(m, c.Labels.Namespace+`=~".+"`)
+	}
+	if req.HiddenNamespace != "" {
+		m = append(m, c.Labels.Namespace+"!="+strconv.Quote(req.HiddenNamespace))
 	}
 	switch {
 	case req.Pod != "":

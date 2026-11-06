@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -53,15 +54,30 @@ func (h *AuthHandler) AdminBulkUpdateRole(w http.ResponseWriter, r *http.Request
 	// own ceiling above does, with a failure row per refused account.
 	targets := make([]*model.User, 0, len(req.UserIDs))
 	var refused []error
+	var failed []model.BulkRoleFailure
+	leftOut := func(uid, email, reason string, err error) {
+		failed = append(failed, model.BulkRoleFailure{UserID: uid, Email: email, Reason: reason})
+		writeAudit(h.auditStore, r, payload, auditEvent{
+			action: "user.role.update", targetType: "user", targetID: uid, targetEmail: email,
+			after: map[string]any{"role": targetRole.Name, "bulk": true}, err: err,
+		})
+	}
 	for _, uid := range req.UserIDs {
 		if uid == payload.UserID {
-			continue // skip changing own role
-		}
-		target, _ := h.repo.GetUserByID(r.Context(), uid)
-		if target == nil {
+			leftOut(uid, payload.Email, model.BulkRoleFailedSelf, errors.New("cannot change your own role"))
 			continue
 		}
-		err := h.globalCeiling(r.Context(), payload, target)
+		target, err := h.repo.GetUserByID(r.Context(), uid)
+		if err != nil {
+			slog.Error("bulk role: read account failed", "user_id", uid, "err", err)
+			leftOut(uid, "", model.BulkRoleFailedChange, fmt.Errorf("read the account: %w", err))
+			continue
+		}
+		if target == nil {
+			leftOut(uid, "", model.BulkRoleFailedNotFound, errors.New("no such account"))
+			continue
+		}
+		err = h.globalCeiling(r.Context(), payload, target)
 		if err != nil && !errors.Is(err, errCeiling) {
 			response.InternalError(w, r, err)
 			return
@@ -97,6 +113,8 @@ func (h *AuthHandler) AdminBulkUpdateRole(w http.ResponseWriter, r *http.Request
 			after:  map[string]any{"role": targetRole.Name, "bulk": true}, err: err,
 		})
 		if err != nil {
+			slog.Error("bulk role: change failed", "user_id", uid, "err", err)
+			failed = append(failed, model.BulkRoleFailure{UserID: uid, Email: target.Email, Reason: model.BulkRoleFailedChange})
 			continue
 		}
 		u, _ := h.repo.GetUserByID(r.Context(), uid)
@@ -105,7 +123,17 @@ func (h *AuthHandler) AdminBulkUpdateRole(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	response.JSON(w, http.StatusOK, updated)
+	changeFailed := slices.ContainsFunc(failed, func(f model.BulkRoleFailure) bool { return f.Reason == model.BulkRoleFailedChange })
+	switch {
+	case len(failed) == 0:
+		response.JSON(w, http.StatusOK, updated)
+	case len(updated) == 0 && changeFailed:
+		response.JSON(w, http.StatusInternalServerError, model.BulkRoleResponse{
+			Detail: fmt.Sprintf("no account was changed (%d left as they were)", len(failed)), Updated: updated, Failed: failed,
+		})
+	default:
+		response.JSON(w, http.StatusMultiStatus, model.BulkRoleResponse{Updated: updated, Failed: failed})
+	}
 }
 
 // AdminBulkCreateUsers handles POST /auth/admin/users/bulk

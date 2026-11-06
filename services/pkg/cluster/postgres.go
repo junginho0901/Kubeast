@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"strings"
 	"time"
 
@@ -201,6 +202,35 @@ type Meta struct {
 	UpdatedAt             time.Time  `json:"updated_at"`
 }
 
+// WithoutURLUser is a server address without the user and password written into it. api_server_url is what the screens
+// and the audit rows show; connecting goes by the kubeconfig. An address with no scheme or that url.Parse cannot read
+// (a password with a space or a slash) counts too.
+func WithoutURLUser(raw string) string {
+	start := 0
+	if i := strings.Index(raw, "://"); i >= 0 {
+		start = i + 3
+	} else if strings.HasPrefix(raw, "//") {
+		start = 2
+	}
+	end, queryAt := len(raw), len(raw)
+	if i := strings.IndexAny(raw[start:], "/?#"); i >= 0 {
+		end = start + i
+	}
+	if i := strings.IndexAny(raw[start:], "?#"); i >= 0 {
+		queryAt = start + i
+	}
+	at := strings.LastIndex(raw[start:end], "@")
+	if at < 0 {
+		if _, err := url.Parse(raw); err == nil {
+			return raw
+		}
+		if at = strings.LastIndex(raw[start:queryAt], "@"); at < 0 {
+			return raw
+		}
+	}
+	return raw[:start] + raw[start+at+1:]
+}
+
 func scanMeta(row pgx.Row) (Meta, error) {
 	var (
 		m          Meta
@@ -234,7 +264,7 @@ func scanMeta(row pgx.Row) (Meta, error) {
 	m.LogSearchAuth = lsSecret != nil && *lsSecret != ""
 	m.Mode = Mode(mode)
 	if apiURL != nil {
-		m.APIServerURL = *apiURL
+		m.APIServerURL = WithoutURLUser(*apiURL)
 	}
 	if promURL != nil {
 		m.PrometheusURL = *promURL

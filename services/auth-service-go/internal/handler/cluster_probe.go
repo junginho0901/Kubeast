@@ -90,5 +90,7 @@ func callProbe(r *http.Request, cfg config.Config, path string, body []byte) (pr
 		}
 		return probeResult{}, errors.New(out.Detail)
 	}
+	// What the probe reports goes to the screen, the audit row and api_server_url; the kubeconfig is what connects.
+	out.Server = cluster.WithoutURLUser(out.Server)
 	return out.probeResult, nil
 }
