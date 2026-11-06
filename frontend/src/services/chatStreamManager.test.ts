@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import ANSWERS from './chatAnswer.cases.json'
 import { appendToolBlock, ChatStreamManager, resultTarget, withToolAccess, withToolResult } from './chatStreamManager'
+import { stripToolDetails } from './chatTextUtils'
 import { accessLine, accessSection, requestsBlock } from './toolAccess'
 
 describe('pairing a tool result with its call', () => {
@@ -36,10 +38,133 @@ describe('one answer in the order it came', () => {
 
   it('fills the block at a position with its result and leaves the text around it', () => {
     const content = 'First.\n\n' + block('a') + 'Then.\n\n' + block('a') + 'Executing... is a word here.'
-    const second = ('First.\n\n' + block('a') + 'Then.\n\n').length
+    const second = ('First.\n\n' + block('a') + 'Then.\n\n').length + block('a').indexOf('Executing...')
     const filled = withToolResult(content, second, '```\nsecond\n```')
     expect(filled).toBe('First.\n\n' + block('a') + 'Then.\n\n' + block('a').replace('Executing...', '```\nsecond\n```')
       + 'Executing... is a word here.')
+  })
+
+  it('leaves the text alone when nothing waits at the position', () => {
+    const content = `Executing... ${block('a')}`
+    expect(withToolResult(content, 1, 'x')).toBe(content)
+  })
+})
+
+describe('an answer on screen is the answer saved', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  async function live(parts: (string | number)[][]) {
+    const events = parts.flatMap(([kind, value]): unknown[] => (kind === 'text'
+      ? [{ content: value }]
+      : [{ function: 't', args: {}, call_id: value }, { function_result: 't', result: 'r', call_id: value }]))
+    const body = [...events, '[DONE]'].map((e) => `data: ${typeof e === 'string' ? e : JSON.stringify(e)}\n\n`).join('')
+    vi.useFakeTimers()
+    vi.stubGlobal('window', globalThis)
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(body)))
+    const manager = new ChatStreamManager({ bodyJson: true })
+    await manager.startSessionChat('s1', 'q')
+    await vi.runAllTimersAsync()
+    return manager.getState().content
+  }
+
+  // ai-service tests/test_answer_cases.py runs answer_markdown and strip_tool_blocks over the same cases.
+  it.each(ANSWERS.cases.map((c) => [c.name, c] as const))('%s', async (_name, c) => {
+    const content = await live(c.parts)
+    expect(content).toBe(c.answer.replaceAll('{block}', ANSWERS.block))
+    if (c.stripped !== undefined) expect(stripToolDetails(content)).toBe(c.stripped)
+  })
+
+  it('has cases where a code block needs closing and where it does not', () => {
+    const closes = ANSWERS.cases.filter((c) => c.answer.split('{block}')[0].length > String(c.parts[0][1]).trimEnd().length + 2)
+    expect(closes.length).toBeGreaterThan(8)
+    expect(ANSWERS.cases.length - closes.length).toBeGreaterThan(8)
+  })
+})
+
+describe('a result goes to its own place in the tool block', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  const RESULTS = '<summary><strong>📊 Results</strong></summary>\n\n'
+  const inResults = (result: string) => `${RESULTS}\`\`\`\n${result}\n\`\`\`\n\n</details>`
+
+  async function run(events: unknown[]) {
+    const body = [...events, '[DONE]'].map((e) => `data: ${typeof e === 'string' ? e : JSON.stringify(e)}\n\n`).join('')
+    vi.useFakeTimers()
+    vi.stubGlobal('window', globalThis)
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(body)))
+    const manager = new ChatStreamManager({ bodyJson: true })
+    await manager.startSessionChat('s1', 'q')
+    await vi.runAllTimersAsync()
+    return manager.getState().content
+  }
+
+  it('arguments holding the waiting word keep it', async () => {
+    const c = await run([{ function: 't', args: { q: 'Executing...' }, call_id: 0 }, { function_result: 't', result: 'RESULT', call_id: 0 }])
+    expect(c).toContain('"q": "Executing..."')
+    expect(c).toContain(inResults('RESULT'))
+    expect(c.split('RESULT').length - 1).toBe(1)
+  })
+
+  it('arguments holding the title of the results keep it too', async () => {
+    const words = '<summary><strong>📊 Results</strong></summary> Executing...'
+    const c = await run([{ function: 't', args: { q: words }, call_id: 0 }, { function_result: 't', result: 'RESULT', call_id: 0 }])
+    expect(c).toContain(`"q": "${words}"`)
+    expect(c).toContain(inResults('RESULT'))
+    expect(c.split('RESULT').length - 1).toBe(1)
+  })
+
+  it('results that come in another order each find their block, whatever the arguments hold', async () => {
+    const c = await run([
+      { function: 'first', args: { q: 'Executing...' }, call_id: 0 },
+      { function: 'second', args: { q: 'Executing...' }, call_id: 1 },
+      { function_result: 'second', result: 'SECOND', call_id: 1 },
+      { function_result: 'first', result: 'FIRST', call_id: 0 },
+    ])
+    expect(c.split('"q": "Executing..."').length - 1).toBe(2)
+    expect(c.indexOf(inResults('FIRST'))).toBeGreaterThan(c.indexOf('<strong>first</strong>'))
+    expect(c.indexOf(inResults('FIRST'))).toBeLessThan(c.indexOf('<strong>second</strong>'))
+    expect(c.indexOf(inResults('SECOND'))).toBeGreaterThan(c.indexOf('<strong>second</strong>'))
+  })
+
+  it('a result holding the waiting word leaves the next call its own place', async () => {
+    const c = await run([
+      { function: 'first', args: {}, call_id: 0 },
+      { function: 'second', args: {}, call_id: 1 },
+      { function_result: 'first', result: 'Executing...', call_id: 0 },
+      { function_result: 'second', result: 'SECOND', call_id: 1 },
+    ])
+    expect(c.indexOf(inResults('Executing...'))).toBeLessThan(c.indexOf('<strong>second</strong>'))
+    expect(c.indexOf(inResults('SECOND'))).toBeGreaterThan(c.indexOf('<strong>second</strong>'))
+  })
+
+  it("a second result for a call does not take the next call's place", async () => {
+    const c = await run([
+      { function: 'first', args: {}, call_id: 0 },
+      { function: 'second', args: {}, call_id: 1 },
+      { function_result: 'first', result: 'FIRST', call_id: 0 },
+      { function_result: 'first', result: 'AGAIN', call_id: 0 },
+      { function_result: 'second', result: 'SECOND', call_id: 1 },
+    ])
+    expect(c.indexOf(inResults('FIRST'))).toBeLessThan(c.indexOf('<strong>second</strong>'))
+    expect(c.indexOf(inResults('SECOND'))).toBeGreaterThan(c.indexOf('<strong>second</strong>'))
+    expect(c).not.toContain('AGAIN')
+    expect(c).not.toContain('Executing...')
+  })
+
+  it('a result whose call waits below an open code block goes to that call', async () => {
+    const c = await run([
+      { content: '```\nExecuting...' },
+      { function: 't', args: {}, call_id: 0 },
+      { function_result: 't', result: 'RESULT', call_id: 0 },
+    ])
+    expect(c.startsWith('```\nExecuting...\n```\n\n<details>')).toBe(true)
+    expect(c).toContain(inResults('RESULT'))
   })
 })
 

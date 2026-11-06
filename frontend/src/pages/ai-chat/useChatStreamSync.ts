@@ -35,9 +35,10 @@ export function useChatStreamSync({
   setMessages,
 }: Args) {
   useEffect(() => {
-    // A failed answer's last letters and tool block join its bubble here, before useStreamEndSync settles it.
+    // An ended answer's last letters and tool block join its bubble here, before useStreamEndSync settles it: the bubble
+    // holds what is saved, a stopped answer's queued letters too.
+    if (streamState.status === 'idle') return
     const coming = streamState.status === 'streaming'
-    if (!coming && streamState.status !== 'error') return
     if (!streamState.sessionId) return
     if (selectedSessionId !== streamState.sessionId) return
     if (viewSessionId !== selectedSessionId) return

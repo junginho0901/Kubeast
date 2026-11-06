@@ -7,22 +7,17 @@ import { ChatCharts } from '@/components/ChatChart'
 import { CHAT_MARKDOWN } from '@/components/chatMarkdown'
 
 export interface DisplayMessage {
-  id: string | number
-  role: 'user' | 'assistant'
+  // 'error' = why a turn failed, in its place under that turn
+  role: 'user' | 'assistant' | 'error'
+  // an answer still coming: '' before its first letter
   content: string
   pending?: boolean
-  // the saved tool calls: the graphs the AI asked to show come from here
+  // the tool calls so far: the graphs the AI asked to show come from here, as soon as their results come
   toolCalls?: unknown[]
 }
 
 interface MessageListProps {
   messages: DisplayMessage[]
-  /** the answer so far while one is coming ('' before its first letter) */
-  streamingContent?: string
-  /** that answer's tool calls so far (its graphs show as soon as their results come) */
-  streamingToolCalls?: unknown[]
-  streaming?: boolean
-  error?: string | null
   /** 메시지가 없을 때 리스트 영역에 끼워 넣을 노드 (예: 추천 질문) */
   emptyExtras?: ReactNode
 }
@@ -34,11 +29,13 @@ interface MessageListProps {
  *   → `kubest://` 링크 클릭 시 리소스 상세 드로어 자동 오픈
  * - 답의 첫 글자 전에는 AI 채팅과 같은 점 세 개
  * - 끝난 답은 말풍선 오른쪽 아래 바깥에 작은 복사 아이콘 (토큰 줄은 두지 않음)
+ * - keyed by position, as AI Chat's bubbles: an answer as it came and its saved copy are one bubble, so nothing redraws
+ *   and an open tool block stays open when it ends
  */
-export function MessageList({ messages, streamingContent, streamingToolCalls, streaming, error, emptyExtras }: MessageListProps) {
+export function MessageList({ messages, emptyExtras }: MessageListProps) {
   const { t } = useTranslation()
 
-  if (messages.length === 0 && !streaming && !error) {
+  if (messages.length === 0) {
     return (
       <div className="flex h-full flex-col">
         <div className="flex flex-1 flex-col items-center justify-center px-6 py-6 text-center text-sm text-slate-500">
@@ -56,15 +53,13 @@ export function MessageList({ messages, streamingContent, streamingToolCalls, st
 
   return (
     <div className="flex flex-col gap-3 px-4 py-4">
-      {messages.map((msg) => (
-        <MessageBubble key={msg.id} role={msg.role} content={msg.content} pending={msg.pending} toolCalls={msg.toolCalls} />
-      ))}
-      {streaming ? <MessageBubble role="assistant" content={streamingContent ?? ''} pending toolCalls={streamingToolCalls} /> : null}
-      {error ? (
-        <div className="rounded-md border border-red-700/50 bg-red-900/20 px-3 py-2 text-xs text-red-300">
-          {error}
+      {messages.map((msg, position) => (msg.role === 'error' ? (
+        <div key={position} className="rounded-md border border-red-700/50 bg-red-900/20 px-3 py-2 text-xs text-red-300">
+          {msg.content}
         </div>
-      ) : null}
+      ) : (
+        <MessageBubble key={position} role={msg.role} content={msg.content} pending={msg.pending} toolCalls={msg.toolCalls} />
+      )))}
     </div>
   )
 }

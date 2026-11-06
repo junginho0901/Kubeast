@@ -14,6 +14,7 @@ import { serializeSnapshotForBackend } from '@/utils/aiContext/serializeSnapshot
 import { chatErrorText } from '@/utils/chatError'
 
 import { MessageList, type DisplayMessage } from './MessageList'
+import { turnsOnScreen } from './turnsOnScreen'
 import { modalOpen } from '@/hooks/useModalStack'
 import { focusables } from '@/utils/focusables'
 import { useStickToBottom } from '@/hooks/useStickToBottom'
@@ -86,9 +87,9 @@ export function ChatPanel({
     if (status === 404 || status === 403) setSessionId(null)
   }, [sessionError, setSessionId])
 
-  // 스트리밍 종료 직후 히스토리 리프레시
+  // 스트리밍 종료 직후 히스토리 리프레시 (a failed turn's question may be saved: the next question's place counts it)
   useEffect(() => {
-    if (streamState.status === 'completed' && sessionId) {
+    if ((streamState.status === 'completed' || streamState.status === 'error') && sessionId) {
       queryClient.invalidateQueries({
         queryKey: ['floating-session-detail', sessionId],
       })
@@ -123,6 +124,7 @@ export function ChatPanel({
         activeSessionId,
         message,
         extraBody,
+        messages.length,
       )
     } catch {
       // ChatStreamManager 가 내부 상태에 error 를 기록하므로 별도 처리 불필요
@@ -145,7 +147,13 @@ export function ChatPanel({
     // read after stop, so the letters still queued for the typewriter are saved as shown
     const stopped = floatingChatStreamManager.getState()
     const assistantContent = stopped.content
-    if (!assistantContent) return
+    if (!assistantContent) {
+      // only the question was saved, and the next question's list needs it
+      await queryClient.invalidateQueries({
+        queryKey: ['floating-session-detail', snapshot.sessionId],
+      })
+      return
+    }
 
     try {
       const response = await fetch(`/api/v1/sessions/${snapshot.sessionId}/messages`, {
@@ -181,50 +189,25 @@ export function ChatPanel({
   const messages: DisplayMessage[] = useMemo(() => {
     const history = sessionDetail?.messages ?? []
     return history.map((m) => ({
-      id: m.id,
       role: m.role === 'assistant' ? 'assistant' : 'user',
       content: m.content,
       toolCalls: Array.isArray(m.tool_calls) ? m.tool_calls : undefined,
     }))
   }, [sessionDetail])
 
-  const isStreaming = streamState.isStreaming && streamState.sessionId === sessionId
+  const ours = streamState.sessionId === sessionId
+  const isStreaming = streamState.isStreaming && ours
 
   // A call that failed (the model refused, the budget, a cut stream) keeps the question and the letters that came on screen, with the error under them.
-  const failed = streamState.status === 'error' && streamState.sessionId === sessionId
+  const visibleMessages: DisplayMessage[] = useMemo(
+    () => (ours
+      ? turnsOnScreen(messages, streamState, ({ error, errorKey, errorArgs }) => chatErrorText(t, error ?? '', errorKey, errorArgs))
+      : messages),
+    [messages, ours, streamState, t],
+  )
 
-  // 스트리밍 중이면 히스토리 + 현재 진행중 user 메시지 + 진행중 assistant content
-  const visibleMessages: DisplayMessage[] = useMemo(() => {
-    if (!isStreaming && !failed) return messages
-    const last = messages[messages.length - 1]
-    const saved = failed && last?.role === 'user' && last.content === streamState.userMessage
-    const pendingUser: DisplayMessage[] = streamState.userMessage && !saved
-      ? [
-          {
-            id: `pending-user-${streamState.updatedAt}`,
-            role: 'user',
-            content: streamState.userMessage,
-            pending: isStreaming,
-          },
-        ]
-      : []
-    const received: DisplayMessage[] = failed && streamState.content
-      ? [
-          {
-            id: `failed-answer-${streamState.updatedAt}`,
-            role: 'assistant',
-            content: streamState.content,
-            toolCalls: streamState.toolCalls.length > 0 ? streamState.toolCalls : undefined,
-          },
-        ]
-      : []
-    return [...messages, ...pendingUser, ...received]
-  }, [messages, isStreaming, failed, streamState.userMessage, streamState.content, streamState.toolCalls, streamState.updatedAt])
-
-  // the answer as it comes, tool blocks in their place as once it is saved
-  const streamingContent = isStreaming ? streamState.content : undefined
   // follows new text only while the reader is at the bottom; a new question scrolls back smoothly
-  const { ref: listRef, atBottom, scrollToBottom } = useStickToBottom<HTMLDivElement>([visibleMessages, streamingContent])
+  const { ref: listRef, atBottom, scrollToBottom } = useStickToBottom<HTMLDivElement>([visibleMessages])
   const questions = visibleMessages.filter((m) => m.role === 'user').length
   const lastQuestions = useRef(questions)
   useEffect(() => {
@@ -232,9 +215,6 @@ export function ChatPanel({
     if (questions > lastQuestions.current) scrollToBottom(isStreaming ? undefined : { instant: true })
     lastQuestions.current = questions
   }, [questions, isStreaming, scrollToBottom])
-  const error = failed && streamState.error
-    ? chatErrorText(t, streamState.error, streamState.errorKey, streamState.errorArgs)
-    : null
   // 세션은 첫 질문 시점에 생성하므로 평소엔 활성. 세션 생성 중이거나 스트리밍 중일 때 입력 비활성.
   const disabled = createSessionMutation.isPending
 
@@ -305,10 +285,6 @@ export function ChatPanel({
         ) : (
           <MessageList
             messages={visibleMessages}
-            streamingContent={streamingContent}
-            streamingToolCalls={isStreaming ? streamState.toolCalls : undefined}
-            streaming={isStreaming}
-            error={error}
             emptyExtras={
               <SuggestedQuestions
                 pageType={currentPageType ?? 'default'}

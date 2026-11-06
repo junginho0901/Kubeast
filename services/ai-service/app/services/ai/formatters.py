@@ -30,6 +30,65 @@ def code_fence(text: str) -> str:
     return "`" * (max(longest, 2) + 1)
 
 
+_FENCE_OPEN = re.compile(r" {0,3}(?:(`{3,})[^`]*|(~{3,})[^\n]*)")
+_FENCE_CLOSE = re.compile(r" {0,3}(`{3,}|~{3,})[ \t\r]*")
+
+
+def _line_end(text: str, at: int) -> int:
+    end = text.find("\n", at)
+    return len(text) if end == -1 else end
+
+
+def fence_reader(text: str):
+    """A reader of text's fenced code blocks, by CommonMark's rules (backticks or tildes, up to three spaces in, closed
+    by a line of the same mark at least as long): given the start of a line, moving forward, where the block that opens
+    there ends, or -1. A fence nothing closes is no block: an answer saved before results got their longer fence can
+    hold an odd line of backticks, and reading the rest as code would lose the answer after it."""
+    unclosed: dict = {}  # the shortest fence of each mark with no closing line after it, so open fences stay one pass
+
+    def fence_end(at: int) -> int:
+        opening = _FENCE_OPEN.fullmatch(text, at, _line_end(text, at))
+        fence = opening and (opening.group(1) or opening.group(2))
+        if not fence or len(fence) >= unclosed.get(fence[0], float("inf")):
+            return -1
+        line = _line_end(text, at) + 1
+        while line <= len(text):
+            end = _line_end(text, line)
+            closing = _FENCE_CLOSE.fullmatch(text, line, end)
+            if closing and closing.group(1)[0] == fence[0] and len(closing.group(1)) >= len(fence):
+                return min(end + 1, len(text))
+            line = end + 1
+        unclosed[fence[0]] = len(fence)
+        return -1
+
+    return fence_end
+
+
+def closing_fence(text: str) -> Optional[str]:
+    """The line that closes the code block text leaves open, or None. A tool block below an open one reads as code. A
+    fence with a less indented line after it was in a list item that line ended, and a closing line there would open a
+    new block (frontend chatTextUtils.closingFence does the same, chatAnswer.cases.json holds the two equal)."""
+    def indent_of(line: str) -> int:
+        return len(line) - len(line.lstrip())
+
+    fence_end = fence_reader(text)
+    at = 0
+    while at < len(text):
+        end = fence_end(at)
+        if end != -1:
+            at = end
+            continue
+        next_line = _line_end(text, at)
+        opening = _FENCE_OPEN.fullmatch(text, at, next_line)
+        if opening:
+            indent = indent_of(text[at:next_line])
+            ended = any(after.strip() and indent_of(after) < indent for after in text[next_line:].split("\n"))
+            if not ended:
+                return " " * indent + (opening.group(1) or opening.group(2))
+        at = next_line + 1
+    return None
+
+
 def _format_age(timestamp: Optional[str]) -> str:
     if not timestamp:
         return "-"

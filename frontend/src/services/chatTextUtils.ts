@@ -49,6 +49,34 @@ export function fenceReader(text: string): (at: number) => number {
   }
 }
 
+/**
+ * The line that closes the code block `text` leaves open, or null. A tool block below an open one reads as code. A fence
+ * with a less indented line after it was in a list item that line ended, and a closing line there would open a new block
+ * (ai-service formatters.closing_fence does the same, chatAnswer.cases.json holds the two equal).
+ */
+export function closingFence(text: string): string | null {
+  const fenceEnd = fenceReader(text)
+  const indentOf = (line: string) => line.length - line.trimStart().length
+  let at = 0
+  while (at < text.length) {
+    const end = fenceEnd(at)
+    if (end !== -1) {
+      at = end
+      continue
+    }
+    const next = lineEnd(text, at)
+    const line = text.slice(at, next)
+    const open = FENCE_OPEN.exec(line)
+    if (open) {
+      const indent = indentOf(line)
+      const ended = text.slice(next).split('\n').some((after) => after.trim() && indentOf(after) < indent)
+      if (!ended) return ' '.repeat(indent) + (open[1] ?? open[2])
+    }
+    at = next + 1
+  }
+  return null
+}
+
 function codeBlocks(text: string): [number, number][] {
   const blocks: [number, number][] = []
   const fenceEnd = fenceReader(text)

@@ -125,6 +125,13 @@ def tool_block_markdown(tc: dict) -> str:
 """
 
 
+def _ready_for_tool_block(out: str) -> str:
+    """The answer so far with a code block the model left open closed: a tool block below it would read as code (frontend
+    chatStreamManager.appendToolBlock writes the same, chatAnswer.cases.json holds the two equal)."""
+    closing = formatters.closing_fence(out)
+    return f"{out.rstrip()}\n{closing}\n\n" if closing else out
+
+
 def answer_markdown(parts: list, tool_calls: list) -> str:
     """The saved answer: the turn's text and tool blocks in the order they came — what the model wrote before a
     tool call stays in front of it. parts holds ("text", str) and ("tool", call_id); a call no part names goes
@@ -139,10 +146,10 @@ def answer_markdown(parts: list, tool_calls: list) -> str:
     out, ends_in_text = "", False
     for i, (kind, value) in enumerate(parts):
         if i == last_text and unplaced:
-            out, unplaced, ends_in_text = out + unplaced, "", False
+            out, unplaced, ends_in_text = _ready_for_tool_block(out) + unplaced, "", False
         if kind == "tool":
             if value in by_id:
-                out, ends_in_text = out + tool_block_markdown(by_id[value]), False
+                out, ends_in_text = _ready_for_tool_block(out) + tool_block_markdown(by_id[value]), False
         elif str(value).strip():
             out, ends_in_text = out + str(value).lstrip("\n").rstrip() + "\n\n", True  # a block starts on its own line
     if unplaced:
