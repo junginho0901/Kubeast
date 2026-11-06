@@ -144,6 +144,7 @@ def _dispatch_service():
 @pytest.mark.asyncio
 @pytest.mark.parametrize("tool,sent,travels", [
     ("pod_rbac", {"namespace": " shop ", "pod_name": "web-1", "cluster": "prod", "made_up": "x"}, {"namespace": "shop", "pod_name": "web-1"}),
+    ("pod_rbac", {"namespace": "shop", "pod_name": "web-1", "include_authenticated": True}, {"namespace": "shop", "pod_name": "web-1", "include_authenticated": True}),
     ("logfiles", {"namespace": "shop", "pod_name": "web-1", "container": "app", "path": "/var/log/app/app.log", "lines": 7, "follow": True},
      {"namespace": "shop", "pod_name": "web-1", "container": "app", "path": "/var/log/app/app.log", "lines": 7}),
     ("storage_summary", {"namespace": "shop", "made_up": 1}, {"namespace": "shop"}),

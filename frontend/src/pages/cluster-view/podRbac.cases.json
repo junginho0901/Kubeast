@@ -1,0 +1,2000 @@
+[
+ {
+  "name": "bound by name, by user name and by group",
+  "include_authenticated": false,
+  "answer": {
+   "bindings": [
+    {
+     "binding_name": "web-rb",
+     "binding_type": "RoleBinding",
+     "role_kind": "Role",
+     "role_name": "web-reader"
+    },
+    {
+     "binding_name": "bare-subject-rb",
+     "binding_type": "RoleBinding",
+     "role_kind": "ClusterRole",
+     "role_name": "pod-looker"
+    },
+    {
+     "binding_name": "namespace-group-rb",
+     "binding_type": "RoleBinding",
+     "role_kind": "ClusterRole",
+     "role_name": "pod-looker"
+    },
+    {
+     "binding_name": "web-crb",
+     "binding_type": "ClusterRoleBinding",
+     "role_kind": "ClusterRole",
+     "role_name": "node-looker"
+    },
+    {
+     "binding_name": "user-crb",
+     "binding_type": "ClusterRoleBinding",
+     "role_kind": "ClusterRole",
+     "role_name": "node-looker"
+    },
+    {
+     "binding_name": "all-accounts-crb",
+     "binding_type": "ClusterRoleBinding",
+     "role_kind": "ClusterRole",
+     "role_name": "account-reader"
+    },
+    {
+     "binding_name": "account-and-everyone-crb",
+     "binding_type": "ClusterRoleBinding",
+     "role_kind": "ClusterRole",
+     "role_name": "account-reader"
+    }
+   ],
+   "cluster_role_bindings": [
+    {
+     "created_at": "2026-01-02T03:04:05Z",
+     "is_broad": false,
+     "matched_by": [
+      {
+       "broad": false,
+       "reason": "serviceaccount",
+       "subject": {
+        "api_group": "",
+        "kind": "ServiceAccount",
+        "name": "web-sa",
+        "namespace": "shop"
+       }
+      }
+     ],
+     "name": "web-crb",
+     "resolved_role": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "node-looker",
+      "rules": [
+       {
+        "api_groups": [
+         ""
+        ],
+        "non_resource_urls": [],
+        "resource_names": [],
+        "resources": [
+         "nodes"
+        ],
+        "verbs": [
+         "get",
+         "list"
+        ]
+       },
+       {
+        "api_groups": [],
+        "non_resource_urls": [
+         "/healthz",
+         "/metrics"
+        ],
+        "resource_names": [],
+        "resources": [],
+        "verbs": [
+         "get"
+        ]
+       }
+      ]
+     },
+     "role_ref": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "node-looker"
+     },
+     "subjects": [
+      {
+       "api_group": "",
+       "kind": "ServiceAccount",
+       "name": "web-sa",
+       "namespace": "shop"
+      }
+     ]
+    },
+    {
+     "created_at": "2026-01-02T03:04:05Z",
+     "is_broad": false,
+     "matched_by": [
+      {
+       "broad": false,
+       "reason": "user:system:serviceaccount",
+       "subject": {
+        "api_group": "rbac.authorization.k8s.io",
+        "kind": "User",
+        "name": "system:serviceaccount:shop:web-sa",
+        "namespace": ""
+       }
+      }
+     ],
+     "name": "user-crb",
+     "resolved_role": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "node-looker",
+      "rules": [
+       {
+        "api_groups": [
+         ""
+        ],
+        "non_resource_urls": [],
+        "resource_names": [],
+        "resources": [
+         "nodes"
+        ],
+        "verbs": [
+         "get",
+         "list"
+        ]
+       },
+       {
+        "api_groups": [],
+        "non_resource_urls": [
+         "/healthz",
+         "/metrics"
+        ],
+        "resource_names": [],
+        "resources": [],
+        "verbs": [
+         "get"
+        ]
+       }
+      ]
+     },
+     "role_ref": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "node-looker"
+     },
+     "subjects": [
+      {
+       "api_group": "rbac.authorization.k8s.io",
+       "kind": "User",
+       "name": "system:serviceaccount:shop:web-sa",
+       "namespace": ""
+      }
+     ]
+    },
+    {
+     "created_at": "2026-01-02T03:04:05Z",
+     "is_broad": false,
+     "matched_by": [
+      {
+       "broad": false,
+       "reason": "group:serviceaccounts",
+       "subject": {
+        "api_group": "rbac.authorization.k8s.io",
+        "kind": "Group",
+        "name": "system:serviceaccounts",
+        "namespace": ""
+       }
+      }
+     ],
+     "name": "all-accounts-crb",
+     "resolved_role": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "account-reader",
+      "rules": [
+       {
+        "api_groups": [],
+        "non_resource_urls": [
+         "/openid/v1/jwks"
+        ],
+        "resource_names": [],
+        "resources": [],
+        "verbs": [
+         "get"
+        ]
+       }
+      ]
+     },
+     "role_ref": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "account-reader"
+     },
+     "subjects": [
+      {
+       "api_group": "rbac.authorization.k8s.io",
+       "kind": "Group",
+       "name": "system:serviceaccounts",
+       "namespace": ""
+      }
+     ]
+    },
+    {
+     "created_at": "2026-01-02T03:04:05Z",
+     "is_broad": false,
+     "matched_by": [
+      {
+       "broad": false,
+       "reason": "serviceaccount",
+       "subject": {
+        "api_group": "",
+        "kind": "ServiceAccount",
+        "name": "web-sa",
+        "namespace": "shop"
+       }
+      }
+     ],
+     "name": "account-and-everyone-crb",
+     "resolved_role": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "account-reader",
+      "rules": [
+       {
+        "api_groups": [],
+        "non_resource_urls": [
+         "/openid/v1/jwks"
+        ],
+        "resource_names": [],
+        "resources": [],
+        "verbs": [
+         "get"
+        ]
+       }
+      ]
+     },
+     "role_ref": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "account-reader"
+     },
+     "subjects": [
+      {
+       "api_group": "",
+       "kind": "ServiceAccount",
+       "name": "web-sa",
+       "namespace": "shop"
+      },
+      {
+       "api_group": "rbac.authorization.k8s.io",
+       "kind": "Group",
+       "name": "system:authenticated",
+       "namespace": ""
+      }
+     ]
+    }
+   ],
+   "errors": [],
+   "include_authenticated": false,
+   "namespace": "shop",
+   "pod": {
+    "name": "web-1",
+    "namespace": "shop"
+   },
+   "pod_name": "web-1",
+   "role_bindings": [
+    {
+     "created_at": "2026-01-02T03:04:05Z",
+     "is_broad": false,
+     "matched_by": [
+      {
+       "broad": false,
+       "reason": "serviceaccount",
+       "subject": {
+        "api_group": "",
+        "kind": "ServiceAccount",
+        "name": "web-sa",
+        "namespace": "shop"
+       }
+      }
+     ],
+     "name": "web-rb",
+     "namespace": "shop",
+     "resolved_role": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "Role",
+      "name": "web-reader",
+      "rules": [
+       {
+        "api_groups": [
+         ""
+        ],
+        "non_resource_urls": [],
+        "resource_names": [
+         "app-config",
+         "app-flags"
+        ],
+        "resources": [
+         "configmaps"
+        ],
+        "verbs": [
+         "get"
+        ]
+       },
+       {
+        "api_groups": [
+         "apps"
+        ],
+        "non_resource_urls": [],
+        "resource_names": [],
+        "resources": [
+         "deployments",
+         "deployments/scale"
+        ],
+        "verbs": [
+         "list",
+         "get"
+        ]
+       },
+       {
+        "api_groups": [
+         "",
+         "batch"
+        ],
+        "non_resource_urls": [],
+        "resource_names": [],
+        "resources": [
+         "events"
+        ],
+        "verbs": [
+         "list"
+        ]
+       }
+      ]
+     },
+     "role_ref": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "Role",
+      "name": "web-reader"
+     },
+     "subjects": [
+      {
+       "api_group": "",
+       "kind": "ServiceAccount",
+       "name": "web-sa",
+       "namespace": "shop"
+      }
+     ]
+    },
+    {
+     "created_at": "2026-01-02T03:04:05Z",
+     "is_broad": false,
+     "matched_by": [
+      {
+       "broad": false,
+       "reason": "serviceaccount",
+       "subject": {
+        "api_group": "",
+        "kind": "ServiceAccount",
+        "name": "web-sa",
+        "namespace": ""
+       }
+      }
+     ],
+     "name": "bare-subject-rb",
+     "namespace": "shop",
+     "resolved_role": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "pod-looker",
+      "rules": [
+       {
+        "api_groups": [
+         ""
+        ],
+        "non_resource_urls": [],
+        "resource_names": [],
+        "resources": [
+         "pods",
+         "pods/log"
+        ],
+        "verbs": [
+         "get"
+        ]
+       }
+      ]
+     },
+     "role_ref": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "pod-looker"
+     },
+     "subjects": [
+      {
+       "api_group": "",
+       "kind": "ServiceAccount",
+       "name": "web-sa",
+       "namespace": ""
+      }
+     ]
+    },
+    {
+     "created_at": "2026-01-02T03:04:05Z",
+     "is_broad": false,
+     "matched_by": [
+      {
+       "broad": false,
+       "reason": "group:serviceaccounts:namespace",
+       "subject": {
+        "api_group": "rbac.authorization.k8s.io",
+        "kind": "Group",
+        "name": "system:serviceaccounts:shop",
+        "namespace": ""
+       }
+      }
+     ],
+     "name": "namespace-group-rb",
+     "namespace": "shop",
+     "resolved_role": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "pod-looker",
+      "rules": [
+       {
+        "api_groups": [
+         ""
+        ],
+        "non_resource_urls": [],
+        "resource_names": [],
+        "resources": [
+         "pods",
+         "pods/log"
+        ],
+        "verbs": [
+         "get"
+        ]
+       }
+      ]
+     },
+     "role_ref": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "pod-looker"
+     },
+     "subjects": [
+      {
+       "api_group": "rbac.authorization.k8s.io",
+       "kind": "Group",
+       "name": "system:serviceaccounts:shop",
+       "namespace": ""
+      }
+     ]
+    }
+   ],
+   "secrets": [
+    "web-sa-token"
+   ],
+   "service_account": {
+    "name": "web-sa",
+    "namespace": "shop"
+   },
+   "service_account_labels": {
+    "app": "web"
+   },
+   "service_account_name": "web-sa"
+  },
+  "want": {
+   "service_account": "web-sa",
+   "role_bindings": [
+    "bare-subject-rb",
+    "namespace-group-rb",
+    "web-rb"
+   ],
+   "cluster_role_bindings": [
+    "account-and-everyone-crb",
+    "all-accounts-crb",
+    "user-crb",
+    "web-crb"
+   ],
+   "resources": [
+    "(core)|configmaps|app-config,app-flags|get",
+    "(core)|events||list",
+    "(core)|nodes||get,list",
+    "(core)|pods||get",
+    "(core)|pods/log||get",
+    "apps|deployments||get,list",
+    "apps|deployments/scale||get,list",
+    "batch|events||list"
+   ],
+   "non_resources": [
+    "/healthz|get",
+    "/metrics|get",
+    "/openid/v1/jwks|get"
+   ],
+   "incomplete": false,
+   "warnings": 0
+  }
+ },
+ {
+  "name": "with the broad group",
+  "include_authenticated": true,
+  "answer": {
+   "bindings": [
+    {
+     "binding_name": "web-rb",
+     "binding_type": "RoleBinding",
+     "role_kind": "Role",
+     "role_name": "web-reader"
+    },
+    {
+     "binding_name": "bare-subject-rb",
+     "binding_type": "RoleBinding",
+     "role_kind": "ClusterRole",
+     "role_name": "pod-looker"
+    },
+    {
+     "binding_name": "namespace-group-rb",
+     "binding_type": "RoleBinding",
+     "role_kind": "ClusterRole",
+     "role_name": "pod-looker"
+    },
+    {
+     "binding_name": "web-crb",
+     "binding_type": "ClusterRoleBinding",
+     "role_kind": "ClusterRole",
+     "role_name": "node-looker"
+    },
+    {
+     "binding_name": "user-crb",
+     "binding_type": "ClusterRoleBinding",
+     "role_kind": "ClusterRole",
+     "role_name": "node-looker"
+    },
+    {
+     "binding_name": "all-accounts-crb",
+     "binding_type": "ClusterRoleBinding",
+     "role_kind": "ClusterRole",
+     "role_name": "account-reader"
+    },
+    {
+     "binding_name": "everyone-crb",
+     "binding_type": "ClusterRoleBinding",
+     "role_kind": "ClusterRole",
+     "role_name": "basic-user"
+    },
+    {
+     "binding_name": "account-and-everyone-crb",
+     "binding_type": "ClusterRoleBinding",
+     "role_kind": "ClusterRole",
+     "role_name": "account-reader"
+    }
+   ],
+   "cluster_role_bindings": [
+    {
+     "created_at": "2026-01-02T03:04:05Z",
+     "is_broad": false,
+     "matched_by": [
+      {
+       "broad": false,
+       "reason": "serviceaccount",
+       "subject": {
+        "api_group": "",
+        "kind": "ServiceAccount",
+        "name": "web-sa",
+        "namespace": "shop"
+       }
+      }
+     ],
+     "name": "web-crb",
+     "resolved_role": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "node-looker",
+      "rules": [
+       {
+        "api_groups": [
+         ""
+        ],
+        "non_resource_urls": [],
+        "resource_names": [],
+        "resources": [
+         "nodes"
+        ],
+        "verbs": [
+         "get",
+         "list"
+        ]
+       },
+       {
+        "api_groups": [],
+        "non_resource_urls": [
+         "/healthz",
+         "/metrics"
+        ],
+        "resource_names": [],
+        "resources": [],
+        "verbs": [
+         "get"
+        ]
+       }
+      ]
+     },
+     "role_ref": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "node-looker"
+     },
+     "subjects": [
+      {
+       "api_group": "",
+       "kind": "ServiceAccount",
+       "name": "web-sa",
+       "namespace": "shop"
+      }
+     ]
+    },
+    {
+     "created_at": "2026-01-02T03:04:05Z",
+     "is_broad": false,
+     "matched_by": [
+      {
+       "broad": false,
+       "reason": "user:system:serviceaccount",
+       "subject": {
+        "api_group": "rbac.authorization.k8s.io",
+        "kind": "User",
+        "name": "system:serviceaccount:shop:web-sa",
+        "namespace": ""
+       }
+      }
+     ],
+     "name": "user-crb",
+     "resolved_role": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "node-looker",
+      "rules": [
+       {
+        "api_groups": [
+         ""
+        ],
+        "non_resource_urls": [],
+        "resource_names": [],
+        "resources": [
+         "nodes"
+        ],
+        "verbs": [
+         "get",
+         "list"
+        ]
+       },
+       {
+        "api_groups": [],
+        "non_resource_urls": [
+         "/healthz",
+         "/metrics"
+        ],
+        "resource_names": [],
+        "resources": [],
+        "verbs": [
+         "get"
+        ]
+       }
+      ]
+     },
+     "role_ref": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "node-looker"
+     },
+     "subjects": [
+      {
+       "api_group": "rbac.authorization.k8s.io",
+       "kind": "User",
+       "name": "system:serviceaccount:shop:web-sa",
+       "namespace": ""
+      }
+     ]
+    },
+    {
+     "created_at": "2026-01-02T03:04:05Z",
+     "is_broad": false,
+     "matched_by": [
+      {
+       "broad": false,
+       "reason": "group:serviceaccounts",
+       "subject": {
+        "api_group": "rbac.authorization.k8s.io",
+        "kind": "Group",
+        "name": "system:serviceaccounts",
+        "namespace": ""
+       }
+      }
+     ],
+     "name": "all-accounts-crb",
+     "resolved_role": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "account-reader",
+      "rules": [
+       {
+        "api_groups": [],
+        "non_resource_urls": [
+         "/openid/v1/jwks"
+        ],
+        "resource_names": [],
+        "resources": [],
+        "verbs": [
+         "get"
+        ]
+       }
+      ]
+     },
+     "role_ref": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "account-reader"
+     },
+     "subjects": [
+      {
+       "api_group": "rbac.authorization.k8s.io",
+       "kind": "Group",
+       "name": "system:serviceaccounts",
+       "namespace": ""
+      }
+     ]
+    },
+    {
+     "created_at": "2026-01-02T03:04:05Z",
+     "is_broad": true,
+     "matched_by": [
+      {
+       "broad": true,
+       "reason": "group:system:authenticated",
+       "subject": {
+        "api_group": "rbac.authorization.k8s.io",
+        "kind": "Group",
+        "name": "system:authenticated",
+        "namespace": ""
+       }
+      }
+     ],
+     "name": "everyone-crb",
+     "resolved_role": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "basic-user",
+      "rules": [
+       {
+        "api_groups": [
+         "authorization.k8s.io"
+        ],
+        "non_resource_urls": [],
+        "resource_names": [],
+        "resources": [
+         "selfsubjectaccessreviews"
+        ],
+        "verbs": [
+         "create"
+        ]
+       },
+       {
+        "api_groups": [],
+        "non_resource_urls": [
+         "/version"
+        ],
+        "resource_names": [],
+        "resources": [],
+        "verbs": [
+         "get"
+        ]
+       }
+      ]
+     },
+     "role_ref": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "basic-user"
+     },
+     "subjects": [
+      {
+       "api_group": "rbac.authorization.k8s.io",
+       "kind": "Group",
+       "name": "system:authenticated",
+       "namespace": ""
+      }
+     ]
+    },
+    {
+     "created_at": "2026-01-02T03:04:05Z",
+     "is_broad": false,
+     "matched_by": [
+      {
+       "broad": false,
+       "reason": "serviceaccount",
+       "subject": {
+        "api_group": "",
+        "kind": "ServiceAccount",
+        "name": "web-sa",
+        "namespace": "shop"
+       }
+      },
+      {
+       "broad": true,
+       "reason": "group:system:authenticated",
+       "subject": {
+        "api_group": "rbac.authorization.k8s.io",
+        "kind": "Group",
+        "name": "system:authenticated",
+        "namespace": ""
+       }
+      }
+     ],
+     "name": "account-and-everyone-crb",
+     "resolved_role": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "account-reader",
+      "rules": [
+       {
+        "api_groups": [],
+        "non_resource_urls": [
+         "/openid/v1/jwks"
+        ],
+        "resource_names": [],
+        "resources": [],
+        "verbs": [
+         "get"
+        ]
+       }
+      ]
+     },
+     "role_ref": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "account-reader"
+     },
+     "subjects": [
+      {
+       "api_group": "",
+       "kind": "ServiceAccount",
+       "name": "web-sa",
+       "namespace": "shop"
+      },
+      {
+       "api_group": "rbac.authorization.k8s.io",
+       "kind": "Group",
+       "name": "system:authenticated",
+       "namespace": ""
+      }
+     ]
+    }
+   ],
+   "errors": [],
+   "include_authenticated": true,
+   "namespace": "shop",
+   "pod": {
+    "name": "web-1",
+    "namespace": "shop"
+   },
+   "pod_name": "web-1",
+   "role_bindings": [
+    {
+     "created_at": "2026-01-02T03:04:05Z",
+     "is_broad": false,
+     "matched_by": [
+      {
+       "broad": false,
+       "reason": "serviceaccount",
+       "subject": {
+        "api_group": "",
+        "kind": "ServiceAccount",
+        "name": "web-sa",
+        "namespace": "shop"
+       }
+      }
+     ],
+     "name": "web-rb",
+     "namespace": "shop",
+     "resolved_role": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "Role",
+      "name": "web-reader",
+      "rules": [
+       {
+        "api_groups": [
+         ""
+        ],
+        "non_resource_urls": [],
+        "resource_names": [
+         "app-config",
+         "app-flags"
+        ],
+        "resources": [
+         "configmaps"
+        ],
+        "verbs": [
+         "get"
+        ]
+       },
+       {
+        "api_groups": [
+         "apps"
+        ],
+        "non_resource_urls": [],
+        "resource_names": [],
+        "resources": [
+         "deployments",
+         "deployments/scale"
+        ],
+        "verbs": [
+         "list",
+         "get"
+        ]
+       },
+       {
+        "api_groups": [
+         "",
+         "batch"
+        ],
+        "non_resource_urls": [],
+        "resource_names": [],
+        "resources": [
+         "events"
+        ],
+        "verbs": [
+         "list"
+        ]
+       }
+      ]
+     },
+     "role_ref": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "Role",
+      "name": "web-reader"
+     },
+     "subjects": [
+      {
+       "api_group": "",
+       "kind": "ServiceAccount",
+       "name": "web-sa",
+       "namespace": "shop"
+      }
+     ]
+    },
+    {
+     "created_at": "2026-01-02T03:04:05Z",
+     "is_broad": false,
+     "matched_by": [
+      {
+       "broad": false,
+       "reason": "serviceaccount",
+       "subject": {
+        "api_group": "",
+        "kind": "ServiceAccount",
+        "name": "web-sa",
+        "namespace": ""
+       }
+      }
+     ],
+     "name": "bare-subject-rb",
+     "namespace": "shop",
+     "resolved_role": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "pod-looker",
+      "rules": [
+       {
+        "api_groups": [
+         ""
+        ],
+        "non_resource_urls": [],
+        "resource_names": [],
+        "resources": [
+         "pods",
+         "pods/log"
+        ],
+        "verbs": [
+         "get"
+        ]
+       }
+      ]
+     },
+     "role_ref": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "pod-looker"
+     },
+     "subjects": [
+      {
+       "api_group": "",
+       "kind": "ServiceAccount",
+       "name": "web-sa",
+       "namespace": ""
+      }
+     ]
+    },
+    {
+     "created_at": "2026-01-02T03:04:05Z",
+     "is_broad": false,
+     "matched_by": [
+      {
+       "broad": false,
+       "reason": "group:serviceaccounts:namespace",
+       "subject": {
+        "api_group": "rbac.authorization.k8s.io",
+        "kind": "Group",
+        "name": "system:serviceaccounts:shop",
+        "namespace": ""
+       }
+      }
+     ],
+     "name": "namespace-group-rb",
+     "namespace": "shop",
+     "resolved_role": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "pod-looker",
+      "rules": [
+       {
+        "api_groups": [
+         ""
+        ],
+        "non_resource_urls": [],
+        "resource_names": [],
+        "resources": [
+         "pods",
+         "pods/log"
+        ],
+        "verbs": [
+         "get"
+        ]
+       }
+      ]
+     },
+     "role_ref": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "pod-looker"
+     },
+     "subjects": [
+      {
+       "api_group": "rbac.authorization.k8s.io",
+       "kind": "Group",
+       "name": "system:serviceaccounts:shop",
+       "namespace": ""
+      }
+     ]
+    }
+   ],
+   "secrets": [
+    "web-sa-token"
+   ],
+   "service_account": {
+    "name": "web-sa",
+    "namespace": "shop"
+   },
+   "service_account_labels": {
+    "app": "web"
+   },
+   "service_account_name": "web-sa"
+  },
+  "want": {
+   "service_account": "web-sa",
+   "role_bindings": [
+    "bare-subject-rb",
+    "namespace-group-rb",
+    "web-rb"
+   ],
+   "cluster_role_bindings": [
+    "account-and-everyone-crb",
+    "all-accounts-crb",
+    "everyone-crb",
+    "user-crb",
+    "web-crb"
+   ],
+   "resources": [
+    "(core)|configmaps|app-config,app-flags|get",
+    "(core)|events||list",
+    "(core)|nodes||get,list",
+    "(core)|pods||get",
+    "(core)|pods/log||get",
+    "apps|deployments||get,list",
+    "apps|deployments/scale||get,list",
+    "authorization.k8s.io|selfsubjectaccessreviews||create",
+    "batch|events||list"
+   ],
+   "non_resources": [
+    "/healthz|get",
+    "/metrics|get",
+    "/openid/v1/jwks|get",
+    "/version|get"
+   ],
+   "incomplete": false,
+   "warnings": 0
+  }
+ },
+ {
+  "name": "no binding names the account",
+  "include_authenticated": false,
+  "answer": {
+   "bindings": [],
+   "cluster_role_bindings": [],
+   "errors": [],
+   "include_authenticated": false,
+   "namespace": "shop",
+   "pod": {
+    "name": "web-1",
+    "namespace": "shop"
+   },
+   "pod_name": "web-1",
+   "role_bindings": [],
+   "secrets": [
+    "web-sa-token"
+   ],
+   "service_account": {
+    "name": "web-sa",
+    "namespace": "shop"
+   },
+   "service_account_labels": {
+    "app": "web"
+   },
+   "service_account_name": "web-sa"
+  },
+  "want": {
+   "service_account": "web-sa",
+   "role_bindings": [],
+   "cluster_role_bindings": [],
+   "resources": [],
+   "non_resources": [],
+   "incomplete": false,
+   "warnings": 0
+  }
+ },
+ {
+  "name": "a role without rules",
+  "include_authenticated": false,
+  "answer": {
+   "bindings": [
+    {
+     "binding_name": "empty-crb",
+     "binding_type": "ClusterRoleBinding",
+     "role_kind": "ClusterRole",
+     "role_name": "empty-role"
+    }
+   ],
+   "cluster_role_bindings": [
+    {
+     "created_at": "2026-01-02T03:04:05Z",
+     "is_broad": false,
+     "matched_by": [
+      {
+       "broad": false,
+       "reason": "serviceaccount",
+       "subject": {
+        "api_group": "",
+        "kind": "ServiceAccount",
+        "name": "web-sa",
+        "namespace": "shop"
+       }
+      }
+     ],
+     "name": "empty-crb",
+     "resolved_role": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "empty-role",
+      "rules": []
+     },
+     "role_ref": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "empty-role"
+     },
+     "subjects": [
+      {
+       "api_group": "",
+       "kind": "ServiceAccount",
+       "name": "web-sa",
+       "namespace": "shop"
+      }
+     ]
+    }
+   ],
+   "errors": [],
+   "include_authenticated": false,
+   "namespace": "shop",
+   "pod": {
+    "name": "web-1",
+    "namespace": "shop"
+   },
+   "pod_name": "web-1",
+   "role_bindings": [],
+   "secrets": [
+    "web-sa-token"
+   ],
+   "service_account": {
+    "name": "web-sa",
+    "namespace": "shop"
+   },
+   "service_account_labels": {
+    "app": "web"
+   },
+   "service_account_name": "web-sa"
+  },
+  "want": {
+   "service_account": "web-sa",
+   "role_bindings": [],
+   "cluster_role_bindings": [
+    "empty-crb"
+   ],
+   "resources": [],
+   "non_resources": [],
+   "incomplete": false,
+   "warnings": 0
+  }
+ },
+ {
+  "name": "the cluster refused one role",
+  "include_authenticated": false,
+  "answer": {
+   "bindings": [
+    {
+     "binding_name": "web-rb",
+     "binding_type": "RoleBinding",
+     "role_kind": "Role",
+     "role_name": "web-reader"
+    },
+    {
+     "binding_name": "bare-subject-rb",
+     "binding_type": "RoleBinding",
+     "role_kind": "ClusterRole",
+     "role_name": "pod-looker"
+    },
+    {
+     "binding_name": "namespace-group-rb",
+     "binding_type": "RoleBinding",
+     "role_kind": "ClusterRole",
+     "role_name": "pod-looker"
+    },
+    {
+     "binding_name": "web-crb",
+     "binding_type": "ClusterRoleBinding",
+     "role_kind": "ClusterRole",
+     "role_name": "node-looker"
+    },
+    {
+     "binding_name": "user-crb",
+     "binding_type": "ClusterRoleBinding",
+     "role_kind": "ClusterRole",
+     "role_name": "node-looker"
+    },
+    {
+     "binding_name": "all-accounts-crb",
+     "binding_type": "ClusterRoleBinding",
+     "role_kind": "ClusterRole",
+     "role_name": "account-reader"
+    },
+    {
+     "binding_name": "account-and-everyone-crb",
+     "binding_type": "ClusterRoleBinding",
+     "role_kind": "ClusterRole",
+     "role_name": "account-reader"
+    }
+   ],
+   "cluster_role_bindings": [
+    {
+     "created_at": "2026-01-02T03:04:05Z",
+     "is_broad": false,
+     "matched_by": [
+      {
+       "broad": false,
+       "reason": "serviceaccount",
+       "subject": {
+        "api_group": "",
+        "kind": "ServiceAccount",
+        "name": "web-sa",
+        "namespace": "shop"
+       }
+      }
+     ],
+     "name": "web-crb",
+     "resolved_role": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "node-looker",
+      "rules": [
+       {
+        "api_groups": [
+         ""
+        ],
+        "non_resource_urls": [],
+        "resource_names": [],
+        "resources": [
+         "nodes"
+        ],
+        "verbs": [
+         "get",
+         "list"
+        ]
+       },
+       {
+        "api_groups": [],
+        "non_resource_urls": [
+         "/healthz",
+         "/metrics"
+        ],
+        "resource_names": [],
+        "resources": [],
+        "verbs": [
+         "get"
+        ]
+       }
+      ]
+     },
+     "role_ref": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "node-looker"
+     },
+     "subjects": [
+      {
+       "api_group": "",
+       "kind": "ServiceAccount",
+       "name": "web-sa",
+       "namespace": "shop"
+      }
+     ]
+    },
+    {
+     "created_at": "2026-01-02T03:04:05Z",
+     "is_broad": false,
+     "matched_by": [
+      {
+       "broad": false,
+       "reason": "user:system:serviceaccount",
+       "subject": {
+        "api_group": "rbac.authorization.k8s.io",
+        "kind": "User",
+        "name": "system:serviceaccount:shop:web-sa",
+        "namespace": ""
+       }
+      }
+     ],
+     "name": "user-crb",
+     "resolved_role": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "node-looker",
+      "rules": [
+       {
+        "api_groups": [
+         ""
+        ],
+        "non_resource_urls": [],
+        "resource_names": [],
+        "resources": [
+         "nodes"
+        ],
+        "verbs": [
+         "get",
+         "list"
+        ]
+       },
+       {
+        "api_groups": [],
+        "non_resource_urls": [
+         "/healthz",
+         "/metrics"
+        ],
+        "resource_names": [],
+        "resources": [],
+        "verbs": [
+         "get"
+        ]
+       }
+      ]
+     },
+     "role_ref": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "node-looker"
+     },
+     "subjects": [
+      {
+       "api_group": "rbac.authorization.k8s.io",
+       "kind": "User",
+       "name": "system:serviceaccount:shop:web-sa",
+       "namespace": ""
+      }
+     ]
+    },
+    {
+     "created_at": "2026-01-02T03:04:05Z",
+     "is_broad": false,
+     "matched_by": [
+      {
+       "broad": false,
+       "reason": "group:serviceaccounts",
+       "subject": {
+        "api_group": "rbac.authorization.k8s.io",
+        "kind": "Group",
+        "name": "system:serviceaccounts",
+        "namespace": ""
+       }
+      }
+     ],
+     "name": "all-accounts-crb",
+     "resolved_role": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "account-reader",
+      "rules": [
+       {
+        "api_groups": [],
+        "non_resource_urls": [
+         "/openid/v1/jwks"
+        ],
+        "resource_names": [],
+        "resources": [],
+        "verbs": [
+         "get"
+        ]
+       }
+      ]
+     },
+     "role_ref": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "account-reader"
+     },
+     "subjects": [
+      {
+       "api_group": "rbac.authorization.k8s.io",
+       "kind": "Group",
+       "name": "system:serviceaccounts",
+       "namespace": ""
+      }
+     ]
+    },
+    {
+     "created_at": "2026-01-02T03:04:05Z",
+     "is_broad": false,
+     "matched_by": [
+      {
+       "broad": false,
+       "reason": "serviceaccount",
+       "subject": {
+        "api_group": "",
+        "kind": "ServiceAccount",
+        "name": "web-sa",
+        "namespace": "shop"
+       }
+      }
+     ],
+     "name": "account-and-everyone-crb",
+     "resolved_role": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "account-reader",
+      "rules": [
+       {
+        "api_groups": [],
+        "non_resource_urls": [
+         "/openid/v1/jwks"
+        ],
+        "resource_names": [],
+        "resources": [],
+        "verbs": [
+         "get"
+        ]
+       }
+      ]
+     },
+     "role_ref": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "account-reader"
+     },
+     "subjects": [
+      {
+       "api_group": "",
+       "kind": "ServiceAccount",
+       "name": "web-sa",
+       "namespace": "shop"
+      },
+      {
+       "api_group": "rbac.authorization.k8s.io",
+       "kind": "Group",
+       "name": "system:authenticated",
+       "namespace": ""
+      }
+     ]
+    }
+   ],
+   "errors": [
+    "get cluster role pod-looker: /apis/rbac.authorization.k8s.io/v1/clusterroles/pod-looker is forbidden for this identity"
+   ],
+   "include_authenticated": false,
+   "namespace": "shop",
+   "pod": {
+    "name": "web-1",
+    "namespace": "shop"
+   },
+   "pod_name": "web-1",
+   "role_bindings": [
+    {
+     "created_at": "2026-01-02T03:04:05Z",
+     "is_broad": false,
+     "matched_by": [
+      {
+       "broad": false,
+       "reason": "serviceaccount",
+       "subject": {
+        "api_group": "",
+        "kind": "ServiceAccount",
+        "name": "web-sa",
+        "namespace": "shop"
+       }
+      }
+     ],
+     "name": "web-rb",
+     "namespace": "shop",
+     "resolved_role": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "Role",
+      "name": "web-reader",
+      "rules": [
+       {
+        "api_groups": [
+         ""
+        ],
+        "non_resource_urls": [],
+        "resource_names": [
+         "app-config",
+         "app-flags"
+        ],
+        "resources": [
+         "configmaps"
+        ],
+        "verbs": [
+         "get"
+        ]
+       },
+       {
+        "api_groups": [
+         "apps"
+        ],
+        "non_resource_urls": [],
+        "resource_names": [],
+        "resources": [
+         "deployments",
+         "deployments/scale"
+        ],
+        "verbs": [
+         "list",
+         "get"
+        ]
+       },
+       {
+        "api_groups": [
+         "",
+         "batch"
+        ],
+        "non_resource_urls": [],
+        "resource_names": [],
+        "resources": [
+         "events"
+        ],
+        "verbs": [
+         "list"
+        ]
+       }
+      ]
+     },
+     "role_ref": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "Role",
+      "name": "web-reader"
+     },
+     "subjects": [
+      {
+       "api_group": "",
+       "kind": "ServiceAccount",
+       "name": "web-sa",
+       "namespace": "shop"
+      }
+     ]
+    },
+    {
+     "created_at": "2026-01-02T03:04:05Z",
+     "is_broad": false,
+     "matched_by": [
+      {
+       "broad": false,
+       "reason": "serviceaccount",
+       "subject": {
+        "api_group": "",
+        "kind": "ServiceAccount",
+        "name": "web-sa",
+        "namespace": ""
+       }
+      }
+     ],
+     "name": "bare-subject-rb",
+     "namespace": "shop",
+     "resolved_role": {
+      "api_group": "rbac.authorization.k8s.io",
+      "error": "/apis/rbac.authorization.k8s.io/v1/clusterroles/pod-looker is forbidden for this identity",
+      "kind": "ClusterRole",
+      "name": "pod-looker",
+      "rules": []
+     },
+     "role_ref": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "pod-looker"
+     },
+     "subjects": [
+      {
+       "api_group": "",
+       "kind": "ServiceAccount",
+       "name": "web-sa",
+       "namespace": ""
+      }
+     ]
+    },
+    {
+     "created_at": "2026-01-02T03:04:05Z",
+     "is_broad": false,
+     "matched_by": [
+      {
+       "broad": false,
+       "reason": "group:serviceaccounts:namespace",
+       "subject": {
+        "api_group": "rbac.authorization.k8s.io",
+        "kind": "Group",
+        "name": "system:serviceaccounts:shop",
+        "namespace": ""
+       }
+      }
+     ],
+     "name": "namespace-group-rb",
+     "namespace": "shop",
+     "resolved_role": {
+      "api_group": "rbac.authorization.k8s.io",
+      "error": "/apis/rbac.authorization.k8s.io/v1/clusterroles/pod-looker is forbidden for this identity",
+      "kind": "ClusterRole",
+      "name": "pod-looker",
+      "rules": []
+     },
+     "role_ref": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "pod-looker"
+     },
+     "subjects": [
+      {
+       "api_group": "rbac.authorization.k8s.io",
+       "kind": "Group",
+       "name": "system:serviceaccounts:shop",
+       "namespace": ""
+      }
+     ]
+    }
+   ],
+   "secrets": [
+    "web-sa-token"
+   ],
+   "service_account": {
+    "name": "web-sa",
+    "namespace": "shop"
+   },
+   "service_account_labels": {
+    "app": "web"
+   },
+   "service_account_name": "web-sa"
+  },
+  "want": {
+   "service_account": "web-sa",
+   "role_bindings": [
+    "bare-subject-rb",
+    "namespace-group-rb",
+    "web-rb"
+   ],
+   "cluster_role_bindings": [
+    "account-and-everyone-crb",
+    "all-accounts-crb",
+    "user-crb",
+    "web-crb"
+   ],
+   "resources": [
+    "(core)|configmaps|app-config,app-flags|get",
+    "(core)|events||list",
+    "(core)|nodes||get,list",
+    "apps|deployments||get,list",
+    "apps|deployments/scale||get,list",
+    "batch|events||list"
+   ],
+   "non_resources": [
+    "/healthz|get",
+    "/metrics|get",
+    "/openid/v1/jwks|get"
+   ],
+   "incomplete": true,
+   "warnings": 1
+  }
+ },
+ {
+  "name": "the cluster refused one list and one role",
+  "include_authenticated": false,
+  "answer": {
+   "bindings": [
+    {
+     "binding_name": "web-rb",
+     "binding_type": "RoleBinding",
+     "role_kind": "Role",
+     "role_name": "web-reader"
+    },
+    {
+     "binding_name": "bare-subject-rb",
+     "binding_type": "RoleBinding",
+     "role_kind": "ClusterRole",
+     "role_name": "pod-looker"
+    },
+    {
+     "binding_name": "namespace-group-rb",
+     "binding_type": "RoleBinding",
+     "role_kind": "ClusterRole",
+     "role_name": "pod-looker"
+    }
+   ],
+   "cluster_role_bindings_error": "/apis/rbac.authorization.k8s.io/v1/clusterrolebindings is forbidden for this identity",
+   "errors": [
+    "get cluster role pod-looker: /apis/rbac.authorization.k8s.io/v1/clusterroles/pod-looker is forbidden for this identity",
+    "list cluster role bindings: /apis/rbac.authorization.k8s.io/v1/clusterrolebindings is forbidden for this identity"
+   ],
+   "include_authenticated": false,
+   "namespace": "shop",
+   "pod": {
+    "name": "web-1",
+    "namespace": "shop"
+   },
+   "pod_name": "web-1",
+   "role_bindings": [
+    {
+     "created_at": "2026-01-02T03:04:05Z",
+     "is_broad": false,
+     "matched_by": [
+      {
+       "broad": false,
+       "reason": "serviceaccount",
+       "subject": {
+        "api_group": "",
+        "kind": "ServiceAccount",
+        "name": "web-sa",
+        "namespace": "shop"
+       }
+      }
+     ],
+     "name": "web-rb",
+     "namespace": "shop",
+     "resolved_role": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "Role",
+      "name": "web-reader",
+      "rules": [
+       {
+        "api_groups": [
+         ""
+        ],
+        "non_resource_urls": [],
+        "resource_names": [
+         "app-config",
+         "app-flags"
+        ],
+        "resources": [
+         "configmaps"
+        ],
+        "verbs": [
+         "get"
+        ]
+       },
+       {
+        "api_groups": [
+         "apps"
+        ],
+        "non_resource_urls": [],
+        "resource_names": [],
+        "resources": [
+         "deployments",
+         "deployments/scale"
+        ],
+        "verbs": [
+         "list",
+         "get"
+        ]
+       },
+       {
+        "api_groups": [
+         "",
+         "batch"
+        ],
+        "non_resource_urls": [],
+        "resource_names": [],
+        "resources": [
+         "events"
+        ],
+        "verbs": [
+         "list"
+        ]
+       }
+      ]
+     },
+     "role_ref": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "Role",
+      "name": "web-reader"
+     },
+     "subjects": [
+      {
+       "api_group": "",
+       "kind": "ServiceAccount",
+       "name": "web-sa",
+       "namespace": "shop"
+      }
+     ]
+    },
+    {
+     "created_at": "2026-01-02T03:04:05Z",
+     "is_broad": false,
+     "matched_by": [
+      {
+       "broad": false,
+       "reason": "serviceaccount",
+       "subject": {
+        "api_group": "",
+        "kind": "ServiceAccount",
+        "name": "web-sa",
+        "namespace": ""
+       }
+      }
+     ],
+     "name": "bare-subject-rb",
+     "namespace": "shop",
+     "resolved_role": {
+      "api_group": "rbac.authorization.k8s.io",
+      "error": "/apis/rbac.authorization.k8s.io/v1/clusterroles/pod-looker is forbidden for this identity",
+      "kind": "ClusterRole",
+      "name": "pod-looker",
+      "rules": []
+     },
+     "role_ref": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "pod-looker"
+     },
+     "subjects": [
+      {
+       "api_group": "",
+       "kind": "ServiceAccount",
+       "name": "web-sa",
+       "namespace": ""
+      }
+     ]
+    },
+    {
+     "created_at": "2026-01-02T03:04:05Z",
+     "is_broad": false,
+     "matched_by": [
+      {
+       "broad": false,
+       "reason": "group:serviceaccounts:namespace",
+       "subject": {
+        "api_group": "rbac.authorization.k8s.io",
+        "kind": "Group",
+        "name": "system:serviceaccounts:shop",
+        "namespace": ""
+       }
+      }
+     ],
+     "name": "namespace-group-rb",
+     "namespace": "shop",
+     "resolved_role": {
+      "api_group": "rbac.authorization.k8s.io",
+      "error": "/apis/rbac.authorization.k8s.io/v1/clusterroles/pod-looker is forbidden for this identity",
+      "kind": "ClusterRole",
+      "name": "pod-looker",
+      "rules": []
+     },
+     "role_ref": {
+      "api_group": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "pod-looker"
+     },
+     "subjects": [
+      {
+       "api_group": "rbac.authorization.k8s.io",
+       "kind": "Group",
+       "name": "system:serviceaccounts:shop",
+       "namespace": ""
+      }
+     ]
+    }
+   ],
+   "secrets": [
+    "web-sa-token"
+   ],
+   "service_account": {
+    "name": "web-sa",
+    "namespace": "shop"
+   },
+   "service_account_labels": {
+    "app": "web"
+   },
+   "service_account_name": "web-sa"
+  },
+  "want": {
+   "service_account": "web-sa",
+   "role_bindings": [
+    "bare-subject-rb",
+    "namespace-group-rb",
+    "web-rb"
+   ],
+   "cluster_role_bindings": null,
+   "resources": [
+    "(core)|configmaps|app-config,app-flags|get",
+    "(core)|events||list",
+    "apps|deployments||get,list",
+    "apps|deployments/scale||get,list",
+    "batch|events||list"
+   ],
+   "non_resources": [],
+   "incomplete": true,
+   "warnings": 2
+  }
+ },
+ {
+  "name": "the cluster refused both lists",
+  "include_authenticated": false,
+  "answer": {
+   "bindings": [],
+   "cluster_role_bindings_error": "/apis/rbac.authorization.k8s.io/v1/clusterrolebindings is forbidden for this identity",
+   "errors": [
+    "list role bindings: /apis/rbac.authorization.k8s.io/v1/namespaces/shop/rolebindings is forbidden for this identity",
+    "list cluster role bindings: /apis/rbac.authorization.k8s.io/v1/clusterrolebindings is forbidden for this identity"
+   ],
+   "include_authenticated": false,
+   "namespace": "shop",
+   "pod": {
+    "name": "web-1",
+    "namespace": "shop"
+   },
+   "pod_name": "web-1",
+   "role_bindings_error": "/apis/rbac.authorization.k8s.io/v1/namespaces/shop/rolebindings is forbidden for this identity",
+   "secrets": [
+    "web-sa-token"
+   ],
+   "service_account": {
+    "name": "web-sa",
+    "namespace": "shop"
+   },
+   "service_account_labels": {
+    "app": "web"
+   },
+   "service_account_name": "web-sa"
+  },
+  "want": {
+   "service_account": "web-sa",
+   "role_bindings": null,
+   "cluster_role_bindings": null,
+   "resources": [],
+   "non_resources": [],
+   "incomplete": true,
+   "warnings": 2
+  }
+ }
+]

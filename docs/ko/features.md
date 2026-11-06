@@ -46,7 +46,7 @@
     - `alert_investigate` — Alerts 받은편지함의 알림 하나를 "지금 조사" 버튼처럼 정식 조사로 시작([AI 알림](ai-alerts.md) 참고)
     - `clusters_list` — 그 사람이 볼 수 있는 클러스터와 연결 상태. 클러스터 선택기 목록과 같고 값은 마지막 확인 결과입니다(실시간 아님). `admin.clusters.list`가 있으면 Admin → Clusters 목록도 받습니다. kubeconfig·자격 증명은 나가지 않습니다
     - `alerts_inbox` — Alerts 받은편지함. 알림을 누가 확인했고 누가 맡았고 끝났는지, `alert_id`로 읽으면 메모까지 보여 줍니다. 읽기만 하며 표시 변경은 화면에서 합니다
-    - `pod_rbac` — 파드의 서비스 계정과 그 계정에 묶인 역할. 파드 RBAC API의 답과 같습니다. 각 역할이 허용하는 일은 `k8s_describe_resource`로 읽습니다
+    - `pod_rbac` — 파드의 서비스 계정, 그 계정에 걸리는 바인딩, 각 역할이 허용하는 일. 파드 RBAC API와 파드 창 RBAC 탭의 답과 같습니다. 클러스터가 호출자에게 거절한 것은 비우지 않고 이름을 말합니다
     - `logfiles` — 컨테이너 안 로그 파일. 로그 파일 탭처럼 목록을 보거나 읽습니다(고정 `tail`, 마지막 N줄, 따라가기 없음. [컨테이너 안 로그 파일](operations.md#컨테이너-안-로그-파일-log-files) 참고)
     - `storage_summary` — Storage 창의 PVC(사용량 포함)·PV 상태별 개수와 PVC→PV 연결
     - `network_policy_effective` — 파드나 워크로드를 고르는 NetworkPolicy와 방향별 허용 규칙. 드로어의 Network Policies 칸과 같습니다

@@ -154,6 +154,16 @@ test.describe('AI tools: what a screen computes', () => {
       expect(answer.service_account_name).toBe('web-sa')
       expect(answer.bindings).toContainEqual({ binding_type: 'RoleBinding', binding_name: 'web-rb', role_kind: 'Role', role_name: 'web-reader' })
       expect(answer.bindings).toContainEqual({ binding_type: 'ClusterRoleBinding', binding_name: crb, role_kind: 'ClusterRole', role_name: 'view' })
+      // the tab's rows: what the role allows, not only its name
+      expect(answer.role_bindings.find((b: Obj) => b.name === 'web-rb').resolved_role.rules).toEqual([
+        { verbs: ['get'], api_groups: [''], resources: ['configmaps'], resource_names: [], non_resource_urls: [] },
+      ])
+      expect(answer.cluster_role_bindings.find((b: Obj) => b.name === crb).matched_by.map((m: Obj) => m.reason)).toEqual(['serviceaccount'])
+
+      const broadRoute = await routeOf(request, admin, `/api/v1/cluster/namespaces/${ns}/pods/web/rbac`, { include_authenticated: 'true' })
+      const broadAnswer = await answerOf(request, admin, 'pod_rbac', { namespace: ns, pod_name: 'web', include_authenticated: true })
+      expectSameValues(broadAnswer, broadRoute)
+      expect(broadAnswer.cluster_role_bindings.some((b: Obj) => b.is_broad === true), 'the bindings of system:authenticated').toBe(true)
 
       const reader = await user(request, 'rbac', 'Read')
       expectSameValues(await answerOf(request, reader.token, 'pod_rbac', { namespace: ns, pod_name: 'web' }), route)

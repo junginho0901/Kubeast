@@ -313,6 +313,7 @@ CRD가 없으면 Kubeast는 빈 목록과 "설치 안 됨"(`X-Kubeast-Not-Instal
 | Admission Policies | ValidatingAdmissionPolicy(`admissionregistration.k8s.io/v1`), MutatingAdmissionPolicy(`admissionregistration.k8s.io/v1`) — 이 API를 제공하지 않는 클러스터는 "설치 안 됨". Read 그룹은 `kubeast:cluster-reader`로 정책과 바인딩을 읽습니다. 이 권한은 2026-10-22에 추가되었고 `view`에는 없으므로, 그 전에 RBAC를 적용한 클러스터는 다시 적용하세요 |
 | Ingress 드로어 지연 | ingress-nginx 컨트롤러와 §3의 `nginx_ingress_controller_*` 지표 수집 |
 | NetworkPolicy 보기와 연결 확인(Pod·워크로드 드로어, AI 도구 `network_policy_check`) | 설치할 것은 없습니다. 로그인한 사람의 권한으로 NetworkPolicy·파드·Service·워크로드·Namespace를 읽습니다. 정책이 실제로 강제되는지는 네트워크 플러그인에 달려 있습니다(kind의 kindnet·Calico·Cilium은 강제합니다. 쓰는 플러그인을 확인하세요). 네임스페이스를 레이블로 고르는 규칙은 그 Namespace의 `get` 권한이 필요하며, 없으면 답이 알 수 없음입니다. Cilium(`cilium.io`)·Calico(`projectcalico.org`, API 서버가 없으면 `crd.projectcalico.org`)·network-policy-api(`policy.networking.k8s.io`) 정책은 디스커버리로 찾아 `list`로 개수를 셉니다(권한이 없으면 개수 모름). 평가하지는 않습니다 |
+| Cluster View 파드 창의 RBAC 탭, AI 도구 `pod_rbac` | 설치할 것은 없습니다. 로그인한 사람의 권한으로 ServiceAccount, 파드 네임스페이스의 RoleBinding, ClusterRoleBinding과 거기 적힌 역할을 읽습니다(그 종류의 `get`·`list`, Read 그룹은 `kubeast:cluster-reader`가 줍니다). 클러스터가 거절한 것은 탭에 이름이 나오고 나머지는 그대로 보입니다. **확인**: `kubectl auth can-i --list --as system:serviceaccount:<네임스페이스>:<계정> -n <네임스페이스>`가 "광범위 포함"을 켠 탭의 합과 같습니다 |
 | AI 도구 `gitops_status` | `applications.argoproj.io` CRD(Argo CD). 이 CRD는 Argo CD가 설치된 클러스터에만 있으므로, 중앙 Argo CD를 쓴다면 관리 클러스터에서 호출하세요. 없으면 도구가 unavailable로 답합니다. 권한 상한은 읽는 사람의 RBAC(`applications.argoproj.io` get/list)입니다 |
 
 ## 8. Kubernetes 버전 조건

@@ -33,13 +33,18 @@ func podRoutePath(tool string, args map[string]interface{}) (string, error) {
 	return "/namespaces/" + url.PathEscape(namespace) + "/pods/" + url.PathEscape(pod), nil
 }
 
-// handlePodRBAC: the pod's service account and the bindings that name it.
+// handlePodRBAC is the RBAC tab of a pod's window: its service account, each binding that applies and what the role
+// allows. The short rows and what the cluster refused lead, so the model's cut leaves them and takes rules.
 func handlePodRBAC(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
 	path, err := podRoutePath("pod_rbac", args)
 	if err != nil {
 		return "", err
 	}
-	status, body, err := k8sServiceGet(ctx, headers, path+"/rbac", nil)
+	var q url.Values
+	if argBool(args, "include_authenticated") {
+		q = url.Values{"include_authenticated": {"true"}}
+	}
+	status, body, err := k8sServiceGet(ctx, headers, path+"/rbac", q)
 	if err != nil {
 		return "", err
 	}
@@ -47,9 +52,12 @@ func handlePodRBAC(ctx context.Context, args map[string]interface{}, headers htt
 	if err != nil || out != "" {
 		return out, err
 	}
-	capList(reply, "bindings", rowsCap)
-	reply["note"] = "bindings names the roles this pod's service account is bound to, not what they allow. For that call k8s_describe_resource on each one (resource_type role in this namespace or clusterrole, resource_name role_name). secrets are names only. Groups the account belongs to are not looked at, and admission can still refuse what RBAC allows."
-	return marshalJSON(reply)
+	for _, list := range []string{"bindings", "role_bindings", "cluster_role_bindings"} {
+		capList(reply, list, rowsCap)
+	}
+	reply["note"] = "role_bindings and cluster_role_bindings are every binding in this namespace and the cluster that applies to the pod's service account: matched_by says through what, resolved_role.rules what it allows, as kubectl auth can-i --list --as system:serviceaccount:<namespace>:<account> -n <namespace> adds up. RoleBindings in other namespaces are not looked at, and neither is system:authenticated unless include_authenticated is true. A list named in errors or with a *_error key was refused by the cluster: it is not empty. If this answer is cut, read a role with k8s_describe_resource (resource_type role in this namespace or clusterrole, resource_name role_name). secrets are names only. Admission can still refuse what RBAC allows."
+	return marshalOrdered(reply, []string{"pod_name", "namespace", "service_account_name", "service_account_error", "errors", "role_bindings_error", "cluster_role_bindings_error", "include_authenticated", "truncated", "note", "bindings_total", "bindings"},
+		[]string{"role_bindings_total", "role_bindings", "cluster_role_bindings_total", "cluster_role_bindings"})
 }
 
 // logFileRead keeps the lines last, so a cut at the model's limit keeps what says what they are.

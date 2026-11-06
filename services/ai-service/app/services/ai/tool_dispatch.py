@@ -60,7 +60,7 @@ FEATURE_TOOL_ARGS = {
     "clusters_list": (set(), set(), set()),
     "alert_investigate": ({"alert_id", "alertname", "namespace"}, {"status_only"}, set()),
     "alerts_inbox": ({"alert_id", "status", "alert_severity", "search"}, {"mine", "open_only"}, {"limit", "offset"}),
-    "pod_rbac": ({"namespace", "pod_name"}, set(), set()),
+    "pod_rbac": ({"namespace", "pod_name"}, {"include_authenticated"}, set()),
     "logfiles": ({"namespace", "pod_name", "container", "path"}, set(), {"lines"}),
     "storage_summary": ({"namespace"}, set(), set()),
     "network_policy_effective": ({"namespace", "pod", "workload_kind", "workload_name"}, set(), set()),
