@@ -560,9 +560,14 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
     formatted_result, is_json, is_yaml = formatters._format_tool_result(
         function_name, function_args, function_response,
     )
-    display_result = formatters._build_tool_display(
-        function_name, function_args, formatted_result, is_json, is_yaml,
-    )
+    # The table only draws the answer again: one it cannot draw reaches the screen and the model as it came, not as a lost turn.
+    try:
+        display_result = formatters._build_tool_display(
+            function_name, function_args, formatted_result, is_json, is_yaml,
+        )
+    except Exception as table_error:
+        log.warning("No table for the answer of %s: %s", function_name, safe_error(table_error))
+        display_result = None
 
     max_preview_len = 2500
     result_preview = formatted_result[:max_preview_len] + "\n... (truncated) ..." if len(formatted_result) > max_preview_len else formatted_result
@@ -670,7 +675,7 @@ async def session_chat_stream(
         # 세션 확인
         session = await db.get_session(session_id)
         if not session:
-            yield f"data: {json.dumps({'type': 'error', 'content': 'Session not found'})}\n\n"
+            yield f"data: {json.dumps({'error': 'Session not found', 'error_key': 'sessionNotFound'})}\n\n"
             return
 
         # Token budget (ai.chat.budget.*, off by default): refused before the message is stored or the model called.

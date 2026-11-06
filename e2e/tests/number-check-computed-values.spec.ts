@@ -8,8 +8,9 @@ import { test, expect, type Page } from '@playwright/test'
 // Screens that worked a value out for themselves, on cluster `self` in a namespace of this run's: a crashing pod in the
 // dashboard's Pods window and the Namespace window says what kubectl prints and the floating chat is told the same word, a
 // workload's window tells the floating chat the pods it lists and a Job's window its rows, a Node's window counts its pods
-// by what kubectl prints, a LimitRange's "Violating Pods" counts pods and tells the floating chat its rows, and only a
-// running Job reads Retrying in the issues.
+// by what kubectl prints, a LimitRange's "Violating Pods" counts pods and tells the floating chat its rows, only a running
+// Job reads Retrying in the issues, also between two tries, and a CronJob's and the other workloads' windows tell the
+// floating chat the settings they show.
 
 const NS = 'e2e-computed-values'
 const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
@@ -340,6 +341,161 @@ test.describe('values a screen worked out for itself', () => {
     } finally {
       kubectl(`delete job ${name} -n ${NS} --ignore-not-found --wait=false`)
       kubectl(`delete pod -n ${NS} -l batch.kubernetes.io/job-name=${name} --ignore-not-found --wait=false --grace-period=0 --force`)
+    }
+  })
+
+  // The job controller waits longer before each try (10 s, 20 s, 40 s): a read of the issues between two reads of kubectl
+  // that find no active pod is a read between tries.
+  test('a Job waiting between tries stays Retrying in the issues', async ({ page }) => {
+    test.setTimeout(240_000)
+    const name = 'between-tries'
+    const state = () => {
+      const job = JSON.parse(kubectl(`get job ${name} -n ${NS} -o json`))
+      const status = kubectl(`get job ${name} -n ${NS} --no-headers`).split(/\s+/)[1]
+      return status === 'Running' && (job.status.failed ?? 0) > 0 && (job.status.active ?? 0) === 0
+    }
+    const issue = async () => ((await (await page.request.get('/api/v1/cluster/issues?cluster=self')).json()).issues as { id: string; reason: string }[])
+      .find((i) => i.id === `Job/${NS}/${name}`)?.reason
+    kubectl('apply -f -', JSON.stringify({
+      apiVersion: 'batch/v1', kind: 'Job', metadata: { name, namespace: NS },
+      spec: { backoffLimit: 6, template: { spec: { restartPolicy: 'Never', terminationGracePeriodSeconds: 0, containers: [container('app', ['false'])] } } },
+    }))
+    try {
+      await expect.poll(async () => {
+        const before = state()
+        const reason = await issue()
+        return before && state() ? reason : 'not between tries'
+      }, { timeout: 180_000, intervals: [2_000], message: 'the issues while kubectl finds no active pod' }).toBe('Retrying')
+    } finally {
+      kubectl(`delete job ${name} -n ${NS} --ignore-not-found --wait=false`)
+      kubectl(`delete pod -n ${NS} -l batch.kubernetes.io/job-name=${name} --ignore-not-found --wait=false --grace-period=0 --force`)
+    }
+  })
+
+  test('a CronJob\'s window tells the floating chat the rows it shows', async ({ page }) => {
+    const ask = await captureFloating(page)
+    // New Year's midnight in Seoul: no run while the test looks
+    kubectl('apply -f -', JSON.stringify({
+      apiVersion: 'batch/v1', kind: 'CronJob', metadata: { name: 'yearly', namespace: NS },
+      spec: {
+        schedule: '0 0 1 1 *', timeZone: 'Asia/Seoul', concurrencyPolicy: 'Forbid', startingDeadlineSeconds: 120, successfulJobsHistoryLimit: 2, failedJobsHistoryLimit: 1,
+        jobTemplate: { spec: { template: { spec: { restartPolicy: 'Never', terminationGracePeriodSeconds: 0, containers: [container('app', ['true'])] } } } },
+      },
+    }))
+    try {
+      await page.goto(`/workloads/cronjobs?cluster=self&namespace=${NS}&detail=${encodeURIComponent(`CronJob/${NS}/yearly`)}`)
+      const drawer = page.locator(DRAWER).last()
+      await expect(drawer).toContainText(/Concurrency Policy\s*Forbid/, { timeout: 20_000 })
+      const object = JSON.parse(kubectl(`get cronjob yearly -n ${NS} -o json`))
+      const want = {
+        schedule: object.spec.schedule,
+        suspend: 'No',
+        concurrency_policy: object.spec.concurrencyPolicy,
+        starting_deadline: `${object.spec.startingDeadlineSeconds}s`,
+        successful_jobs_history: String(object.spec.successfulJobsHistoryLimit),
+        failed_jobs_history: String(object.spec.failedJobsHistoryLimit),
+        time_zone: object.spec.timeZone,
+        active_jobs: String((object.status.active ?? []).length),
+      }
+      expect(want, 'the object').toEqual({
+        schedule: '0 0 1 1 *', suspend: 'No', concurrency_policy: 'Forbid', starting_deadline: '120s', successful_jobs_history: '2', failed_jobs_history: '1', time_zone: 'Asia/Seoul', active_jobs: '0',
+      })
+      await expect.poll(async () => {
+        const layer = (await ask()).overlays.find((o) => o.source === 'WorkloadInfo')
+        const d = layer?.data ?? {}
+        // the next run read in Seoul, nine hours ahead of UTC all year
+        const nextInSeoul = typeof d.next_run === 'string' ? new Date(Date.parse(d.next_run) + 9 * 3_600_000).toISOString().slice(5, 16) : null
+        return { summary: layer?.summary, fields: Object.fromEntries(Object.keys(want).map((k) => [k, d[k]])), nextInSeoul }
+      }, { timeout: 20_000 }).toEqual({
+        summary: expect.stringContaining('CronJob yearly'),
+        fields: want,
+        nextInSeoul: '01-01T00:00',
+      })
+      const { summary } = (await ask()).overlays.find((o) => o.source === 'WorkloadInfo')!
+      expect(summary, 'the layer\'s head').toContain('Schedule 0 0 1 1 *, Suspend No, Concurrency Policy Forbid, Active Jobs 0, Next Run ')
+      expect(summary, 'the layer\'s head').not.toContain('replicas')
+      // the same words on screen
+      for (const [label, value] of [['Schedule', want.schedule], ['Concurrency Policy', want.concurrency_policy], ['Starting Deadline', want.starting_deadline], ['Time Zone', want.time_zone], ['Active Jobs', want.active_jobs]]) {
+        await expect(drawer, label).toContainText(new RegExp(`${label}\\s*${value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))
+      }
+    } finally {
+      kubectl(`delete cronjob yearly -n ${NS} --ignore-not-found --wait=false`)
+    }
+  })
+
+  test('a Deployment, StatefulSet, DaemonSet and ReplicaSet window each tell the floating chat the settings it shows', async ({ page }) => {
+    test.setTimeout(240_000)
+    const ask = await captureFloating(page)
+    const labels = (app: string) => ({ selector: { matchLabels: { app } }, template: { metadata: { labels: { app } }, spec: { terminationGracePeriodSeconds: 0, containers: [container('app', ['sleep', '3600'])] } } })
+    kubectl('apply -f -', [
+      JSON.stringify({ apiVersion: 'apps/v1', kind: 'StatefulSet', metadata: { name: 'settings-sts', namespace: NS }, spec: { replicas: 1, serviceName: 'settings-headless', podManagementPolicy: 'Parallel', minReadySeconds: 1, revisionHistoryLimit: 4, updateStrategy: { type: 'RollingUpdate', rollingUpdate: { partition: 0 } }, ...labels('settings-sts') } }),
+      JSON.stringify({ apiVersion: 'apps/v1', kind: 'DaemonSet', metadata: { name: 'settings-ds', namespace: NS }, spec: { minReadySeconds: 1, revisionHistoryLimit: 3, updateStrategy: { type: 'RollingUpdate', rollingUpdate: { maxUnavailable: 1 } }, ...labels('settings-ds') } }),
+    ].join('\n---\n'))
+    try {
+      kubectl(`-n ${NS} rollout status statefulset/settings-sts --timeout=120s`)
+      kubectl(`-n ${NS} rollout status daemonset/settings-ds --timeout=120s`)
+      const get = (kind: string, name: string) => JSON.parse(kubectl(`get ${kind} ${name} -n ${NS} -o json`))
+      const rs = kubectl(`get replicaset -n ${NS} -l app=fine -o jsonpath='{.items[0].metadata.name}'`)
+      const REVISION = 'deployment.kubernetes.io/revision'
+      const cases: { kind: string; plural: string; name: string; want: () => Record<string, unknown>; replicas: () => string }[] = [
+        {
+          kind: 'Deployment', plural: 'deployments', name: 'fine',
+          want: () => {
+            const o = get('deployment', 'fine')
+            return {
+              revision: o.metadata.annotations[REVISION], progress_deadline: `${o.spec.progressDeadlineSeconds}s`, revision_history_limit: String(o.spec.revisionHistoryLimit),
+              strategy: { type: o.spec.strategy.type, max_unavailable: o.spec.strategy.rollingUpdate.maxUnavailable, max_surge: o.spec.strategy.rollingUpdate.maxSurge },
+              current_replicas: o.status.replicas,
+            }
+          },
+          replicas: () => { const o = get('deployment', 'fine'); return `${o.status.readyReplicas ?? 0}/${o.spec.replicas}` },
+        },
+        {
+          kind: 'StatefulSet', plural: 'statefulsets', name: 'settings-sts',
+          want: () => {
+            const o = get('statefulset', 'settings-sts')
+            return {
+              service_name: o.spec.serviceName, pod_management_policy: o.spec.podManagementPolicy, min_ready_seconds: String(o.spec.minReadySeconds), revision_history_limit: String(o.spec.revisionHistoryLimit),
+              current_revision: o.status.currentRevision, update_revision: o.status.updateRevision, strategy: { type: o.spec.updateStrategy.type, partition: o.spec.updateStrategy.rollingUpdate.partition },
+            }
+          },
+          replicas: () => { const o = get('statefulset', 'settings-sts'); return `${o.status.readyReplicas ?? 0}/${o.spec.replicas}` },
+        },
+        {
+          kind: 'DaemonSet', plural: 'daemonsets', name: 'settings-ds',
+          want: () => {
+            const o = get('daemonset', 'settings-ds')
+            return {
+              min_ready_seconds: String(o.spec.minReadySeconds), revision_history_limit: String(o.spec.revisionHistoryLimit),
+              misscheduled_pods: String(o.status.numberMisscheduled ?? 0), unavailable_pods: String(o.status.numberUnavailable ?? 0),
+              replicas: o.status.desiredNumberScheduled, current_replicas: o.status.currentNumberScheduled, ready_replicas: o.status.numberReady,
+              strategy: { type: o.spec.updateStrategy.type, max_unavailable: String(o.spec.updateStrategy.rollingUpdate.maxUnavailable) },
+            }
+          },
+          replicas: () => { const o = get('daemonset', 'settings-ds'); return `${o.status.numberReady ?? 0}/${o.status.desiredNumberScheduled}` },
+        },
+        {
+          kind: 'ReplicaSet', plural: 'replicasets', name: rs,
+          want: () => {
+            const o = get('replicaset', rs)
+            return { owner: 'fine', revision: o.metadata.annotations[REVISION], fully_labeled_replicas: String(o.status.fullyLabeledReplicas ?? 0), current_replicas: o.status.replicas }
+          },
+          replicas: () => { const o = get('replicaset', rs); return `${o.status.readyReplicas ?? 0}/${o.spec.replicas}` },
+        },
+      ]
+      for (const { kind, plural, name, want, replicas } of cases) {
+        await page.goto(`/workloads/${plural}?cluster=self&namespace=${NS}&detail=${encodeURIComponent(`${kind}/${NS}/${name}`)}`)
+        await expect(page.locator(DRAWER).last(), kind).toContainText(name, { timeout: 20_000 })
+        // the layer comes with the describe answer: it is asked again until its head says the object's count
+        await expect.poll(async () => (await ask()).overlays.find((o) => o.source === 'WorkloadInfo')?.summary, { timeout: 30_000, intervals: [2_000], message: kind })
+          .toContain(`${kind} ${name} (${NS}) — replicas ${replicas()}`)
+        const told = (await ask()).overlays.find((o) => o.source === 'WorkloadInfo')?.data ?? {}
+        const expected = want()
+        expect(Object.fromEntries(Object.keys(expected).map((k) => [k, told[k]])), kind).toEqual(expected)
+      }
+    } finally {
+      kubectl(`delete statefulset settings-sts -n ${NS} --ignore-not-found --wait=false`)
+      kubectl(`delete daemonset settings-ds -n ${NS} --ignore-not-found --wait=false`)
     }
   })
 })

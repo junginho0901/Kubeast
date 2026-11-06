@@ -1,4 +1,4 @@
-import type { ChatStreamState } from '@/services/chatStreamManager'
+import type { ChatStreamState, FailedTurn } from '@/services/chatStreamManager'
 import type { DisplayMessage } from './MessageList'
 
 type Failure = Pick<ChatStreamState, 'error' | 'errorKey' | 'errorArgs'>
@@ -7,8 +7,9 @@ const asks = (message: DisplayMessage | undefined, question: string) => message?
 
 /**
  * The floating chat's list: the saved messages with what they do not hold, as AI Chat keeps it in its bubbles. A failed
- * turn stays where it came, since its letters and error are never saved and its question perhaps not; the turn going on
- * or just ended stays until the saved messages have it, so its bubbles do not leave the screen and come back.
+ * turn stays where it came, since its letters and error are never saved and its question perhaps not, and so does a
+ * stopped one until its letters are saved; the turn going on or just ended stays until the saved messages have it, so
+ * its bubbles do not leave the screen and come back.
  */
 export function turnsOnScreen(saved: DisplayMessage[], state: ChatStreamState, errorText: (failure: Failure) => string): DisplayMessage[] {
   const out: DisplayMessage[] = []
@@ -24,14 +25,20 @@ export function turnsOnScreen(saved: DisplayMessage[], state: ChatStreamState, e
     if (turn.error) out.push({ role: 'error', content: errorText(turn) })
   }
 
+  // a stopped answer whose save has landed, wherever it landed, is the saved messages' from then on
+  const lettersSaved = (turn: FailedTurn) =>
+    turn.stopped && !!turn.content && saved.some((m, i) => i >= Math.max(shown, turn.askedAt) && m.role === 'assistant' && m.content === turn.content)
+
   state.failedTurns.forEach((turn, i) => {
+    if (lettersSaved(turn)) return
     const next = state.failedTurns[i + 1]?.question ?? state.userMessage
     let at = Math.max(shown, turn.savedBefore)
     // its saved question had reached the screen before the next was sent
-    if (at > shown && asks(saved[at - 1], turn.question)) at--
+    const reachedScreen = at > shown && asks(saved[at - 1], turn.question)
+    if (reachedScreen) at--
     savedUpTo(at)
-    // asked again: a single saved copy is the later turn's, which has the answer under it
-    if (asks(saved[at], turn.question) && (next !== turn.question || asks(saved[at + 1], turn.question))) savedUpTo(at + 1)
+    // asked again: a single saved copy that reached the screen only later is the later turn's, which has the answer under it
+    if (asks(saved[at], turn.question) && (reachedScreen || next !== turn.question || asks(saved[at + 1], turn.question))) savedUpTo(at + 1)
     else out.push({ role: 'user', content: turn.question })
     answer(turn.content, turn.toolCalls)
     failure(turn)

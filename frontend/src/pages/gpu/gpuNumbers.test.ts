@@ -29,8 +29,8 @@ describe('GPU screen numbers', () => {
     expect(gpuNodeCounts(nodes)).toEqual({ total: 5, ready: 2, notReady: 3 })
   })
 
-  // Running and Pending by phase; Failed by phase or a status naming an error (a CrashLoopBackOff pod is Running and
-  // failing); the GPUs still asked for leave out the pods that ended
+  // Failed is the phase or a status naming an error (a CrashLoopBackOff pod, whose phase is Running), then Running and
+  // Pending by the phase; the GPUs still asked for leave out the pods that ended
   it('counts the pods by phase and kubectl STATUS, the GPUs of the pods not ended', () => {
     const pods = [
       pod('run', 'Running', 'Running', 1),
@@ -40,7 +40,29 @@ describe('GPU screen numbers', () => {
       pod('done', 'Succeeded', 'Completed', 4),
       pod('err', 'Failed', 'Error', 8),
     ]
-    expect(gpuPodCounts(pods)).toEqual({ total: 6, running: 2, pending: 2, failed: 2, requested: 5, namespaces: 2 })
+    expect(gpuPodCounts(pods)).toEqual({ total: 6, running: 1, pending: 2, failed: 2, requested: 5, namespaces: 2 })
+  })
+
+  // As the Pods list's cards: Running, Pending and Failed hold no pod twice, so they and the ended pods add up to Total
+  it('puts a pod in one card', () => {
+    const pods = [
+      pod('run', 'Running', 'Running', 1),
+      pod('crash', 'Running', 'CrashLoopBackOff', 1),
+      pod('oom', 'Running', 'OOMKilled', 1),
+      pod('leaving', 'Running', 'Terminating', 1),
+      pod('wait', 'Pending', 'Pending', 1),
+      pod('pull', 'Pending', 'ImagePullBackOff', 1),
+      pod('initcrash', 'Pending', 'Init:CrashLoopBackOff', 1),
+      pod('init', 'Pending', 'Init:0/1', 1),
+      pod('initerr', 'Failed', 'Init:Error', 1),
+      pod('err', 'Failed', 'Error', 1),
+      pod('done', 'Succeeded', 'Completed', 1),
+      pod('lost', 'Unknown', 'Unknown', 1),
+    ]
+    const { total, running, pending, failed } = gpuPodCounts(pods)
+    expect({ running, pending, failed }).toEqual({ running: 2, pending: 2, failed: 6 })
+    const noCard = pods.filter((p) => p.phase === 'Succeeded' || p.phase === 'Unknown').length
+    expect(running + pending + failed + noCard).toBe(total)
   })
 
   // what the floating chat is told is what the table says: a crash under the phase Running counts, a finished pod does not

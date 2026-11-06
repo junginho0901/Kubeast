@@ -114,6 +114,15 @@ function allocated(node: string): number {
 }
 const ended = (p: Obj) => p.status?.phase === 'Succeeded' || p.status?.phase === 'Failed'
 const namesError = (s: string) => ['error', 'failed', 'backoff', 'errimagepull', 'oomkilled'].some((w) => s.toLowerCase().includes(w))
+// The GPU Pods cards, a pod in one as on the Pods list: Failed the phase or a status naming an error, then the others by phase
+const podCards = (pods: { phase: string; status: string }[]) => {
+  const failing = (p: { phase: string; status: string }) => p.phase === 'Failed' || namesError(p.status)
+  return {
+    running: pods.filter((p) => !failing(p) && p.phase === 'Running').length,
+    pending: pods.filter((p) => !failing(p) && p.phase === 'Pending').length,
+    failed: pods.filter(failing).length,
+  }
+}
 const readinessOf = (status: string) => { const first = status.split(',')[0]; return first === 'Ready' || first === 'NotReady' ? first : 'Unknown' }
 
 type Cluster = {
@@ -617,9 +626,9 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
       const c = await cluster()
       return {
         cards: {
-          'Total Pods': String(c.pods.length), Running: String(c.pods.filter((p) => p.phase === 'Running').length),
-          Pending: String(c.pods.filter((p) => p.phase === 'Pending').length),
-          Failed: String(c.pods.filter((p) => p.phase === 'Failed' || namesError(p.status)).length),
+          'Total Pods': String(c.pods.length), Running: String(podCards(c.pods).running),
+          Pending: String(podCards(c.pods).pending),
+          Failed: String(podCards(c.pods).failed),
           'GPUs Requested': String(c.used + c.waiting), Namespaces: String(new Set(c.pods.map((p) => p.namespace)).size),
         },
         rows: c.pods.map((p) => [p.namespace, p.name, p.node || '-', String(p.gpus), p.status, util[p.key] ?? '-', mem[p.key] ?? '-']).sort(),
@@ -653,6 +662,32 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
       statuses: [...statuses].map(([s, n]) => `${s}${n}(${pct(n, c.pods.length)}%)`).sort(),
     })
   }
+  test('GPU Pods: a pod crashing under the phase Running is in the Failed card and not in Running', async ({ page }) => {
+    test.setTimeout(240_000)
+    await prepare(page)
+    const name = 'gpu-crash'
+    kubectl('apply -f -', list([pod(name, { containers: [box('app', ['false'], GPU(1))] })]))
+    try {
+      // it goes between CrashLoopBackOff and Error and is Running for a moment: the cards are read with kubectl until both say so
+      await expect.poll(async () => {
+        await page.goto(url('/gpu/pods'))
+        await page.locator('main table tbody tr').filter({ hasText: name }).first().waitFor({ timeout: 20_000 })
+        const { cards } = await readPage(page)
+        const c = await cluster()
+        const crash = c.pods.find((p) => p.name === name)
+        const want = podCards(c.pods)
+        return {
+          kubectl: { phase: crash?.phase, namesError: namesError(crash?.status ?? '') },
+          cards: bare({ Running: cards.Running, Pending: cards.Pending, Failed: cards.Failed }) === bare({ Running: String(want.running), Pending: String(want.pending), Failed: String(want.failed) }),
+          one: want.running + want.pending + want.failed + c.pods.filter((p) => p.phase === 'Succeeded').length === c.pods.length,
+        }
+      }, { timeout: 150_000, intervals: [3_000], message: 'the cards while kubectl prints it crashing' }).toEqual({ kubectl: { phase: 'Running', namesError: true }, cards: true, one: true })
+    } finally {
+      kubectl(`delete pod ${name} -n ${NS} --ignore-not-found --grace-period=0 --force`)
+      await waitFor('the crashing pod gone', () => !podsOf().some((p) => p.metadata.name === name), 60_000)
+    }
+  })
+
   // the GPU Pods charts as kubectl has the pods: GPUs and pods by node ('' for no node), pods by STATUS
   function chartsOf(c: Cluster) {
     const byNode = new Map<string, { pods: number; gpus: number }>()
@@ -815,6 +850,8 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
       await expect.poll(async () => byName((await ask())?.stats), { timeout: 30_000 }).toEqual(byName({
         // as the table says: a pod crashing under the phase Running counts, a finished one does not
         total: m.pods.length, total_gpu_requested: m.used + m.waiting, not_running: m.pods.filter((p) => !['Running', 'Completed', 'Succeeded'].includes(p.status)).length,
+        // the cards' numbers, which the table's words do not give
+        ...podCards(m.pods), namespaces: new Set(m.pods.map((p) => p.namespace)).size,
         // every GPU pod here asks for NVIDIA's
         by_vendor: [{ vendor: 'NVIDIA', pods: m.pods.length, requested: m.used + m.waiting }],
         by_status: [...statuses].map(([status, pods]) => ({ status, pods })),
@@ -871,9 +908,7 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
       expect(tool.node_counts).toEqual({ total: c.nodes.length, ready, not_ready: c.nodes.length - ready })
       expect(tool.pod_counts).toEqual({
         total: c.pods.length,
-        running: c.pods.filter((p) => p.phase === 'Running').length,
-        pending: c.pods.filter((p) => p.phase === 'Pending').length,
-        failed: c.pods.filter((p) => p.phase === 'Failed' || namesError(p.status)).length,
+        ...podCards(c.pods),
         requested: c.pods.filter((p) => !p.ended).reduce((s, p) => s + p.gpus, 0),
         namespaces: new Set(c.pods.map((p) => p.namespace)).size,
       })

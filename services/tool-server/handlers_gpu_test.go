@@ -203,8 +203,9 @@ func TestGPU_TheCardsAreTheScreens(t *testing.T) {
 	if got, want := m["node_counts"], (jsonMap{"total": 3.0, "ready": 2.0, "not_ready": 1.0}); !reflect.DeepEqual(got, want) {
 		t.Errorf("node_counts = %v, want %v (a cordoned node is Ready, as gpuNodeCounts reads it)", got, want)
 	}
-	// gpuPodCounts: failed = phase Failed or a status naming an error; requested leaves out the pods that ended
-	if got, want := m["pod_counts"], (jsonMap{"total": 7.0, "running": 4.0, "pending": 1.0, "failed": 2.0, "requested": 11.0, "namespaces": 3.0}); !reflect.DeepEqual(got, want) {
+	// gpuPodCounts: failed = phase Failed or a status naming an error, the others by phase, so the crashing pod is not also
+	// running; requested leaves out the pods that ended
+	if got, want := m["pod_counts"], (jsonMap{"total": 7.0, "running": 3.0, "pending": 1.0, "failed": 2.0, "requested": 11.0, "namespaces": 3.0}); !reflect.DeepEqual(got, want) {
 		t.Errorf("pod_counts = %v, want %v", got, want)
 	}
 	if m["mig_enabled"] != true || m["time_slicing_enabled"] != false {

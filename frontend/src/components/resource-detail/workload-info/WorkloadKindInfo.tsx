@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { Pause, Play, Zap } from 'lucide-react'
 import { InfoSection, InfoRow, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
-import { nextRunOf, nextRunTitle } from '@/pages/workloads/cronjobs/cronJobHelpers'
+import { cronJobDrawerInfo, cronJobNextRunFields, nextRunTitle } from '@/pages/workloads/cronjobs/cronJobHelpers'
 import { humanDuration } from '@/utils/time'
 import { formatDuration, jobDrawerInfo, jobDurationSeconds } from '@/pages/workloads/jobs/jobHelpers'
 
@@ -37,6 +37,7 @@ export default function WorkloadKindInfo({
   if (!isJob && !isCronJob) return null
 
   const job = isJob ? jobDrawerInfo(describe, spec, status) : null
+  const cronJob = isCronJob ? cronJobDrawerInfo(describe, spec, status) : null
 
   return (
     <>
@@ -62,7 +63,7 @@ export default function WorkloadKindInfo({
         </InfoSection>
       )}
 
-      {isCronJob && (
+      {cronJob && (
         <InfoSection
           title="CronJob Info"
           actions={(canSuspend || canTrigger) ? (
@@ -90,46 +91,25 @@ export default function WorkloadKindInfo({
           ) : undefined}
         >
           <div className="space-y-2">
-            <InfoRow label="Schedule" value={String(describe?.schedule ?? spec.schedule ?? '-')} />
-            <InfoRow label="Suspend" value={(describe?.suspend ?? spec.suspend) ? 'Yes' : 'No'} />
-            <InfoRow label="Concurrency Policy" value={String(describe?.concurrency_policy ?? spec.concurrencyPolicy ?? '-')} />
-            {(describe?.starting_deadline_seconds ?? spec.startingDeadlineSeconds) != null && (
-              <InfoRow
-                label="Starting Deadline"
-                value={`${String(describe?.starting_deadline_seconds ?? spec.startingDeadlineSeconds)}s`}
-              />
-            )}
-            {describe?.successful_jobs_history_limit != null && (
-              <InfoRow label="Successful Jobs History" value={String(describe.successful_jobs_history_limit)} />
-            )}
-            {describe?.failed_jobs_history_limit != null && (
-              <InfoRow label="Failed Jobs History" value={String(describe.failed_jobs_history_limit)} />
-            )}
+            <InfoRow label="Schedule" value={cronJob.schedule} />
+            <InfoRow label="Suspend" value={cronJob.suspend} />
+            <InfoRow label="Concurrency Policy" value={cronJob.concurrency_policy} />
+            {cronJob.starting_deadline && <InfoRow label="Starting Deadline" value={cronJob.starting_deadline} />}
+            {cronJob.successful_jobs_history && <InfoRow label="Successful Jobs History" value={cronJob.successful_jobs_history} />}
+            {cronJob.failed_jobs_history && <InfoRow label="Failed Jobs History" value={cronJob.failed_jobs_history} />}
             <InfoRow
               label="Time Zone"
-              value={describe?.time_zone ? String(describe.time_zone) : tr('cronjobs.controllerZone', "the controller's time zone (not set; computed in this browser's zone)")}
+              value={cronJob.time_zone ?? tr('cronjobs.controllerZone', "the controller's time zone (not set; computed in this browser's zone)")}
             />
             <InfoRow
               label="Next Run"
-              value={(() => {
-                const cronjob = {
-                  schedule: String(describe?.schedule ?? spec.schedule ?? ''),
-                  suspend: Boolean(describe?.suspend ?? spec.suspend),
-                  time_zone: describe?.time_zone ? String(describe.time_zone) : null,
-                  last_schedule_time: (describe?.last_schedule_time ?? status.lastScheduleTime ?? null) as string | null,
-                  created_at: describe?.created_at ? String(describe.created_at) : null,
-                }
-                const next = nextRunOf(cronjob)
-                return next ? <span title={nextRunTitle(cronjob, tr)}>{`${fmtTs(next.toISOString())} (${humanDuration((next.getTime() - Date.now()) / 1000)})`}</span> : '-'
-              })()}
+              value={cronJob.next_run
+                ? <span title={nextRunTitle(cronJobNextRunFields(describe, spec, status), tr)}>{`${fmtTs(cronJob.next_run)} (${humanDuration((new Date(cronJob.next_run).getTime() - Date.now()) / 1000)})`}</span>
+                : '-'}
             />
-            <InfoRow label="Active Jobs" value={String(describe?.active ?? (Array.isArray(status.active) ? status.active.length : 0))} />
-            {(describe?.last_schedule_time ?? status.lastScheduleTime) != null && (
-              <InfoRow label="Last Schedule" value={fmtTs(String(describe?.last_schedule_time ?? status.lastScheduleTime))} />
-            )}
-            {(describe?.last_successful_time ?? status.lastSuccessfulTime) != null && (
-              <InfoRow label="Last Successful" value={fmtTs(String(describe?.last_successful_time ?? status.lastSuccessfulTime))} />
-            )}
+            <InfoRow label="Active Jobs" value={cronJob.active_jobs} />
+            {cronJob.last_schedule && <InfoRow label="Last Schedule" value={fmtTs(cronJob.last_schedule)} />}
+            {cronJob.last_successful && <InfoRow label="Last Successful" value={fmtTs(cronJob.last_successful)} />}
           </div>
 
           {Array.isArray(ownedJobs) && ownedJobs.length > 0 && (() => {

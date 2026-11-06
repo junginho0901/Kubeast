@@ -7,8 +7,9 @@ export type StreamingPhase = 'waiting' | 'tools' | 'answer'
 
 export type ChatStreamStatus = 'idle' | 'streaming' | 'completed' | 'aborted' | 'error'
 
-// A turn of this conversation that failed before the current one. The server saves none of its letters or its error,
-// perhaps not its question, so a screen drawn from the saved messages has them only from here.
+// A turn of this conversation that failed or was stopped before the current one. The server saves none of a failed
+// turn's letters or its error, perhaps not its question, and a stopped turn's letters only if the page's save reaches it,
+// so a screen drawn from the saved messages has them only from here.
 export interface FailedTurn {
   question: string
   content: string
@@ -16,6 +17,9 @@ export interface FailedTurn {
   error: string | null
   errorKey: string | null
   errorArgs: Record<string, unknown> | null
+  stopped: boolean
+  // how many saved messages the screen had when its question was sent
+  askedAt: number
   // how many saved messages the screen had when the next question was sent
   savedBefore: number
 }
@@ -311,12 +315,12 @@ export class ChatStreamManager {
     return filled
   }
 
-  // The failed turns of a conversation as its next question is sent: the one that just failed joins them.
+  // The failed turns of a conversation as its next question is sent: the one that just failed or was stopped joins them.
   private _failedTurnsBefore = (sessionId: string, savedMessages: number): FailedTurn[] => {
-    const { status, userMessage, content, toolCalls, error, errorKey, errorArgs, failedTurns } = this.state
+    const { status, userMessage, content, toolCalls, error, errorKey, errorArgs, savedBefore, failedTurns } = this.state
     if (this.state.sessionId !== sessionId) return []
-    if (status !== 'error' || userMessage === null) return failedTurns
-    return [...failedTurns, { question: userMessage, content, toolCalls, error, errorKey, errorArgs, savedBefore: savedMessages }]
+    if ((status !== 'error' && status !== 'aborted') || userMessage === null) return failedTurns
+    return [...failedTurns, { question: userMessage, content, toolCalls, error, errorKey, errorArgs, stopped: status === 'aborted', askedAt: savedBefore, savedBefore: savedMessages }]
   }
 
   stop = async () => {

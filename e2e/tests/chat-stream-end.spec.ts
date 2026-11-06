@@ -382,6 +382,54 @@ test.describe('A code block the answer left open, and a stopped answer', () => {
 })
 
 test.describe('The floating chat keeps each turn on screen', () => {
+  test('a stopped answer whose save failed stays above the next question and its answer', async ({ page }) => {
+    await page.clock.install()
+    let answers = 0
+    const first = sse(
+      { function: 'list_clusters', args: {}, call_id: 0 },
+      { function_result: 'list_clusters', result: '["self"]', call_id: 0 },
+      { content: LONG_ANSWER },
+      '[DONE]',
+    )
+    const chat = answering(page, /\/api\/v1\/ai\/sessions\/[^/]+\/floating-chat/, (route) => {
+      answers++
+      return route.fulfill({ contentType: 'text/event-stream', body: answers === 1 ? first : sse({ content: 'Now it works.' }, '[DONE]') })
+    })
+    await chat.ready
+    await page.route(/\/api\/v1\/sessions\/[^/]+\/messages/, (route) =>
+      route.request().method() === 'POST' ? route.fulfill({ status: 500, contentType: 'application/json', body: '{"detail":"the save failed"}' }) : route.fallback())
+    try {
+      const input = await openFloating(page)
+      await page.clock.pauseAt(Date.now() + 1000)
+      await input.fill(QUESTION)
+      await input.press('Enter')
+      await chat.answered
+      await expect(page.getByTestId('floating-answer').last().getByRole('button', { name: /🔧 list_clusters/ })).toHaveText(/list_clusters/)
+      const refused = page.waitForResponse((r) => /\/sessions\/[^/]+\/messages/.test(r.url()) && r.request().method() === 'POST')
+      await page.getByTestId('floating-chat-panel').getByRole('button', { name: /^중지$|^stop$/i }).click()
+      expect((await refused).status(), 'the save is refused').toBe(500)
+      await page.clock.resume()
+      const list = page.getByTestId('floating-messages')
+      await expect(list).toContainText(LONG_ANSWER)
+
+      await input.fill('and now?')
+      await input.press('Enter')
+      await expect(page.getByTestId('floating-answer').last()).toContainText('Now it works.')
+      // the read of the saved messages after the answer has come
+      await page.waitForTimeout(500)
+
+      const text = await list.innerText()
+      const places = [QUESTION, LONG_ANSWER, 'and now?', 'Now it works.'].map((words) => text.indexOf(words))
+      expect(places.every((at) => at !== -1), text).toBe(true)
+      expect([...places].sort((a, b) => a - b)).toEqual(places)
+      expect(text.split(LONG_ANSWER).length - 1, 'once').toBe(1)
+      expect(text, 'a stop is no error').not.toMatch(ENDINGS[1].error)
+      expect(await page.getByTestId('floating-answer').count(), 'each with its bubble').toBe(2)
+    } finally {
+      await dropSession(page, chat.session())
+    }
+  })
+
   test('a failed turn stays above the next question and its answer, also once that answer is saved', async ({ page }) => {
     let answers = 0
     const chat = answering(page, /\/api\/v1\/ai\/sessions\/[^/]+\/floating-chat/, async (route) => {

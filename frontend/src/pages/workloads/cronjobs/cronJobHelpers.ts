@@ -38,6 +38,63 @@ export function nextRunTitle(
   return tr('cronjobs.nextRunTitle', 'UTC {{utc}} · {{zone}}', { utc: utcTitle(next), zone })
 }
 
+type Fields = Record<string, unknown>
+
+// The fields a CronJob's next run is worked out from: the describe answer's, else the row's.
+export function cronJobNextRunFields(describe: Fields | null | undefined, spec: Fields, status: Fields): NextRunFields {
+  return {
+    schedule: String(describe?.schedule ?? spec.schedule ?? ''),
+    suspend: Boolean(describe?.suspend ?? spec.suspend),
+    time_zone: describe?.time_zone ? String(describe.time_zone) : null,
+    last_schedule_time: (describe?.last_schedule_time ?? status.lastScheduleTime ?? null) as string | null,
+    created_at: describe?.created_at ? String(describe.created_at) : null,
+  }
+}
+
+// The CronJob window's CronJob Info rows, each undefined where the window has no row for it or says something of its own
+// (a time zone not set, no next run): the window draws these and the floating chat is told them.
+export function cronJobDrawerInfo(describe: Fields | null | undefined, spec: Fields, status: Fields) {
+  const text = (value: unknown, unit = '') => (value == null ? undefined : `${String(value)}${unit}`)
+  const next = nextRunOf(cronJobNextRunFields(describe, spec, status))
+  return {
+    schedule: String(describe?.schedule ?? spec.schedule ?? '-'),
+    suspend: (describe?.suspend ?? spec.suspend) ? 'Yes' : 'No',
+    concurrency_policy: String(describe?.concurrency_policy ?? spec.concurrencyPolicy ?? '-'),
+    starting_deadline: text(describe?.starting_deadline_seconds ?? spec.startingDeadlineSeconds, 's'),
+    successful_jobs_history: text(describe?.successful_jobs_history_limit),
+    failed_jobs_history: text(describe?.failed_jobs_history_limit),
+    time_zone: describe?.time_zone ? String(describe.time_zone) : undefined,
+    next_run: next ? next.toISOString() : undefined,
+    active_jobs: String(describe?.active ?? (Array.isArray(status.active) ? status.active.length : 0)),
+    last_schedule: text(describe?.last_schedule_time ?? status.lastScheduleTime),
+    last_successful: text(describe?.last_successful_time ?? status.lastSuccessfulTime),
+  }
+}
+
+export type CronJobDrawerInfo = ReturnType<typeof cronJobDrawerInfo>
+
+// The floating chat is told the window's rows as the window words them, a time zone not set too.
+export function cronJobLayerFields(info: CronJobDrawerInfo, controllerZone: string): Fields {
+  return { ...info, time_zone: info.time_zone ?? controllerZone }
+}
+
+export function cronJobLayerHeadline(info: CronJobDrawerInfo): string {
+  return [
+    `Schedule ${info.schedule}`,
+    `Suspend ${info.suspend}`,
+    `Concurrency Policy ${info.concurrency_policy}`,
+    `Active Jobs ${info.active_jobs}`,
+    ...(info.next_run ? [`Next Run ${info.next_run}`] : []),
+    ...(info.last_schedule ? [`Last Schedule ${info.last_schedule}`] : []),
+  ].join(', ')
+}
+
+// As the issues read it (k8s-service issuesFromJobs, LastRunNotSucceeded): the last scheduled run has not succeeded and none is active.
+export function cronJobLayerNeedsALook(info: CronJobDrawerInfo): boolean {
+  if (!info.last_schedule || Number(info.active_jobs) > 0) return false
+  return !info.last_successful || info.last_successful < info.last_schedule
+}
+
 export function cronJobToWorkloadRawJson(cronjob: CronJobInfo): Record<string, unknown> {
   const labels = { app: cronjob.name }
   const containers = (cronjob.images || []).map((image, idx) => ({

@@ -487,8 +487,9 @@ test.describe('number check — AMD and Intel GPUs on the GPU screens', () => {
       const namesError = (s: string) => ['error', 'failed', 'backoff', 'errimagepull', 'oomkilled'].some((w) => s.toLowerCase().includes(w))
       want = {
         cards: {
-          'Total Pods': String(c.pods.length), Running: String(c.pods.filter((p) => p.phase === 'Running').length),
-          Pending: String(c.pods.filter((p) => p.phase === 'Pending').length),
+          // a pod in one card: Failed the phase or a status naming an error, then the others by phase
+          'Total Pods': String(c.pods.length), Running: String(c.pods.filter((p) => p.phase === 'Running' && !namesError(p.status)).length),
+          Pending: String(c.pods.filter((p) => p.phase === 'Pending' && !namesError(p.status)).length),
           Failed: String(c.pods.filter((p) => p.phase === 'Failed' || namesError(p.status)).length),
           'GPUs Requested': String(c.used + c.waiting), Namespaces: String(new Set(c.pods.map((p) => p.namespace)).size),
         },

@@ -2,15 +2,13 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useAIContext } from '@/hooks/useAIContext'
-import { buildResourceLink } from '@/utils/resourceLink'
 import { api } from '@/services/api'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { usePermission } from '@/hooks/usePermission'
-import { jobDrawerInfo, jobLayerFields, jobLayerHeadline, jobLayerNeedsALook } from '@/pages/workloads/jobs/jobHelpers'
 import { replicaSetOwnerRow } from '../netstoreDetail'
 import { useDrawerFollowsObject } from '../useDrawerFollowsObject'
 import { useOwnedWatchedResources } from './useOwnedWatchedResources'
-import { workloadPodsLayer } from './workloadPodsLayer'
+import { workloadDaemonSetStatus, workloadLayer, workloadReplicaView, workloadStrategy } from './workloadLayer'
 
 // The list each kind's drawer watches its one object on.
 const WATCHED_LIST: Record<string, [apiVersion: string, plural: string]> = {
@@ -73,7 +71,10 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
   const isDaemonSet = kind === 'DaemonSet'
   const isReplicaSet = kind === 'ReplicaSet'
 
-  const labels = ((describe?.labels as Record<string, string> | undefined) ?? (meta.labels as Record<string, string> | undefined) ?? {})
+  const labels = useMemo(
+    () => ((describe?.labels as Record<string, string> | undefined) ?? (meta.labels as Record<string, string> | undefined) ?? {}),
+    [describe?.labels, meta.labels],
+  )
   const annotations = ((describe?.annotations as Record<string, string> | undefined) ?? (meta.annotations as Record<string, string> | undefined) ?? {})
 
   const createdAt = (describe?.created_at as string | undefined) ?? (meta.creationTimestamp as string | undefined)
@@ -115,9 +116,10 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
     staleTime: 10_000,
   })
 
-  const volumeClaimTemplates = Array.isArray(describe?.volume_claim_templates)
-    ? describe.volume_claim_templates
-    : (Array.isArray(spec.volumeClaimTemplates) ? spec.volumeClaimTemplates : [])
+  const volumeClaimTemplates = useMemo(() => {
+    if (Array.isArray(describe?.volume_claim_templates)) return describe.volume_claim_templates
+    return Array.isArray(spec.volumeClaimTemplates) ? spec.volumeClaimTemplates : []
+  }, [describe?.volume_claim_templates, spec.volumeClaimTemplates])
 
   // Held here so the window's table and the floating chat read one list; asked for once the describe answer has come, as
   // when the table asked for it.
@@ -128,54 +130,7 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
     selector: isLoading && needsDescribe ? undefined : selector,
     volumeClaimTemplates,
   })
-  const { pods: ownedPods, podsEnabled, podsLoaded } = owned
-
-  // AI 위젯 overlay
-  const aiSnapshot = useMemo(() => {
-    if (!name || !kind) return null
-    const desc = describe as Record<string, unknown> | undefined
-    const events = (desc?.events as Array<{ type?: string; reason?: string; message?: string; last_timestamp?: string }>) ?? []
-    const conditions = (desc?.conditions as Array<{ type?: string; status?: string; reason?: string }>) ?? []
-    const pods = workloadPodsLayer(desc, { pods: ownedPods, podsEnabled, podsLoaded }, namespace)
-    const replicas = (desc?.replicas as number | undefined) ?? (status.replicas as number | undefined)
-    const ready = (desc?.ready_replicas as number | undefined) ?? (status.readyReplicas as number | undefined)
-    const job = isJob ? jobDrawerInfo(desc, spec, status) : null
-    const prefix = pods.notRunning > 0 || (replicas && ready !== undefined && ready < replicas) || (job && jobLayerNeedsALook(job)) ? '⚠️ ' : ''
-    const podCount = pods.known ? `, Pod ${pods.total}개${pods.notRunning ? ` (NotRunning ${pods.notRunning})` : ''}` : ''
-    const headline = job ? jobLayerHeadline(job) : `replicas ${ready ?? '?'}/${replicas ?? '?'}`
-    const summary = `${prefix}${kind} ${name} (${namespace}) — ${headline}${podCount}`
-
-    return {
-      source: 'WorkloadInfo' as const,
-      summary,
-      data: {
-        kind,
-        name,
-        namespace,
-        _link: buildResourceLink(kind, namespace, name),
-        replicas,
-        ready_replicas: ready,
-        updated_replicas: desc?.updated_replicas ?? status.updatedReplicas,
-        available_replicas: desc?.available_replicas ?? status.availableReplicas,
-        unavailable_replicas: desc?.unavailable_replicas ?? status.unavailableReplicas,
-        strategy: desc?.strategy ?? spec.strategy,
-        selector,
-        conditions: conditions.slice(0, 8),
-        pods: pods.items,
-        recent_events: events.slice(0, 10),
-        ...(job ? jobLayerFields(job) : {}),
-        ...(isCronJob && Array.isArray(ownedJobs)
-          ? {
-              owned_jobs: (ownedJobs as Array<{ name: string; status?: string; start_time?: string }>)
-                .slice(0, 10)
-                .map((j) => ({ name: j.name, status: j.status, start_time: j.start_time })),
-            }
-          : {}),
-      },
-    }
-  }, [name, namespace, kind, describe, spec, status, selector, ownedJobs, isCronJob, isJob, ownedPods, podsEnabled, podsLoaded])
-
-  useAIContext(aiSnapshot, [aiSnapshot])
+  const { pods: ownedPods, podsEnabled, podsLoaded, jobs: liveJobs, jobsEnabled } = owned
 
   const suspendMut = useMutation({
     mutationFn: (suspend: boolean) => api.suspendCronJob(namespace as string, name, suspend),
@@ -268,110 +223,25 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
   const affinity = (podTemplate.affinity as Record<string, any> | undefined)
   const topologySpreadConstraints = Array.isArray(podTemplate.topologySpreadConstraints) ? podTemplate.topologySpreadConstraints : []
 
-  const replicaView = useMemo(() => {
-    if (describe?.replicas_status && typeof describe.replicas_status === 'object') {
-      return {
-        desired: describe.replicas_status.desired ?? 0,
-        current: describe.replicas_status.current ?? 0,
-        ready: describe.replicas_status.ready ?? 0,
-        updated: describe.replicas_status.updated ?? '-',
-        available: describe.replicas_status.available ?? 0,
-      }
-    }
-
-    if (describe?.replicas && typeof describe.replicas === 'object') {
-      return {
-        desired: describe.replicas.desired ?? 0,
-        current: describe.replicas.current ?? 0,
-        ready: describe.replicas.ready ?? 0,
-        updated: describe.replicas.updated ?? 0,
-        available: describe.replicas.available ?? 0,
-      }
-    }
-
-    return {
-      desired: isDaemonSet ? (status.desiredNumberScheduled as number | undefined) ?? 0 : spec.replicas ?? '-',
-      current: isDaemonSet ? (status.currentNumberScheduled as number | undefined) ?? 0 : status.replicas ?? '-',
-      ready: isDaemonSet ? (status.numberReady as number | undefined) ?? 0 : status.readyReplicas ?? 0,
-      updated: isDaemonSet ? (status.updatedNumberScheduled as number | undefined) ?? 0 : status.updatedReplicas ?? 0,
-      available: isDaemonSet ? (status.numberAvailable as number | undefined) ?? 0 : status.availableReplicas ?? 0,
-    }
-  }, [
-    describe?.replicas_status,
-    describe?.replicas,
-    isDaemonSet,
-    spec.replicas,
-    status.replicas,
-    status.readyReplicas,
-    status.updatedReplicas,
-    status.availableReplicas,
-    status.desiredNumberScheduled,
-    status.currentNumberScheduled,
-    status.numberReady,
-    status.updatedNumberScheduled,
-    status.numberAvailable,
-  ])
-
-  const daemonSetStatus = useMemo(() => {
-    if (describe?.daemonset_status && typeof describe.daemonset_status === 'object') {
-      return {
-        misscheduled: describe.daemonset_status.misscheduled ?? 0,
-        unavailable: describe.daemonset_status.unavailable ?? 0,
-      }
-    }
-    return {
-      misscheduled: (status.numberMisscheduled as number | undefined) ?? 0,
-      unavailable: (status.numberUnavailable as number | undefined) ?? Math.max(Number(replicaView.desired) - Number(replicaView.ready), 0),
-    }
-  }, [describe?.daemonset_status, status.numberMisscheduled, status.numberUnavailable, replicaView.desired, replicaView.ready])
-
-  const strategyType = useMemo(() => {
-    if (isDaemonSet) {
-      return (describe?.update_strategy?.type as string | undefined)
-        ?? ((spec.updateStrategy as Record<string, any> | undefined)?.type as string | undefined)
-        ?? '-'
-    }
-
-    if (isStatefulSet) {
-      return (describe?.update_strategy?.type as string | undefined)
-        ?? ((spec.updateStrategy as Record<string, any> | undefined)?.type as string | undefined)
-        ?? '-'
-    }
-
-    if (isDeployment) {
-      return (describe?.strategy?.type as string | undefined)
-        ?? ((spec.strategy as Record<string, any> | undefined)?.type as string | undefined)
-        ?? '-'
-    }
-
-    return ((spec.strategy as Record<string, any> | undefined)?.type as string | undefined)
-      ?? ((spec.updateStrategy as Record<string, any> | undefined)?.type as string | undefined)
-      ?? '-'
-  }, [describe?.update_strategy?.type, describe?.strategy?.type, isDaemonSet, isStatefulSet, isDeployment, spec.strategy, spec.updateStrategy])
-
-  const strategyRolling = useMemo(() => {
-    if (isDaemonSet) {
-      return (describe?.update_strategy?.rolling_update as Record<string, any> | undefined)
-        ?? ((spec.updateStrategy as Record<string, any> | undefined)?.rollingUpdate as Record<string, any> | undefined)
-    }
-
-    if (isStatefulSet) {
-      return (describe?.update_strategy?.rolling_update as Record<string, any> | undefined)
-        ?? ((spec.updateStrategy as Record<string, any> | undefined)?.rollingUpdate as Record<string, any> | undefined)
-    }
-
-    if (isDeployment) {
-      return (describe?.strategy?.rolling_update as Record<string, any> | undefined)
-        ?? ((spec.strategy as Record<string, any> | undefined)?.rollingUpdate as Record<string, any> | undefined)
-    }
-
-    return ((spec.strategy as Record<string, any> | undefined)?.rollingUpdate as Record<string, any> | undefined)
-      ?? ((spec.updateStrategy as Record<string, any> | undefined)?.rollingUpdate as Record<string, any> | undefined)
-  }, [describe?.update_strategy?.rolling_update, describe?.strategy?.rolling_update, isDaemonSet, isStatefulSet, isDeployment, spec.strategy, spec.updateStrategy])
+  const replicaView = useMemo(() => workloadReplicaView(kind, describe, spec, status), [kind, describe, spec, status])
+  const daemonSetStatus = useMemo(() => workloadDaemonSetStatus(describe, status, replicaView), [describe, status, replicaView])
+  const { type: strategyType, rolling: strategyRolling } = useMemo(() => workloadStrategy(kind, describe, spec), [kind, describe, spec])
 
   const conditions = Array.isArray(describe?.conditions)
     ? describe.conditions
     : (Array.isArray(status.conditions) ? status.conditions : [])
+
+  // AI 위젯 overlay
+  const controllerZone = tr('cronjobs.controllerZone', "the controller's time zone (not set; computed in this browser's zone)")
+  const aiSnapshot = useMemo(() => {
+    if (!name || !kind) return null
+    return workloadLayer({
+      kind, name, namespace, describe, spec, status, selector, ownedJobs, controllerZone, createdAt, labels, selectorExpressions, podTemplate, volumeClaimTemplates,
+      owned: { pods: ownedPods, podsEnabled, podsLoaded, jobs: liveJobs, jobsEnabled },
+    })
+  }, [name, namespace, kind, describe, spec, status, selector, ownedJobs, controllerZone, createdAt, labels, selectorExpressions, podTemplate, volumeClaimTemplates, ownedPods, podsEnabled, podsLoaded, liveJobs, jobsEnabled])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const showStrategy =
     strategyType !== '-' ||

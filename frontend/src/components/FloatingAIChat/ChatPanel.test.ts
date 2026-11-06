@@ -110,6 +110,14 @@ describe('the floating chat when an answer does not finish', () => {
     expect(answers(html)).toBe(0)
   })
 
+  it('a conversation that is gone keeps the question and says so, with no letters and no word of a cut', async () => {
+    await ask('how many clusters?', new Response(sse({ error: 'Session not found', error_key: 'sessionNotFound' })))
+    const html = panel()
+    expect(rows(html)).toEqual(['how many clusters?', 'Session not found'])
+    expect(answers(html)).toBe(0)
+    expect(floatingChatStreamManager.getState().status).toBe('error')
+  })
+
   it("a server's refusal after some text keeps the text too", async () => {
     await ask('how many clusters?', new Response(sse({ content: 'Checking.' }, { error: 'AI model call failed' })))
     expect(rows(panel())).toEqual(['how many clusters?', 'Checking.', 'AI model call failed'])
@@ -178,6 +186,12 @@ describe('the floating chat keeps a failed turn when the next question comes', (
     expect(rows(panel())).toEqual(['why?', REFUSED, 'why?', 'Bec'])
   })
 
+  it('the same question asked again, its first copy on screen before the next was sent', async () => {
+    await ask('why?', cut('Bec'))
+    await ask('why?', stillComing('Now'), 1)
+    expect(rows(panel(saved(['user', 'why?'])))).toEqual(['why?', 'Bec', CUT, 'why?', 'Now'])
+  })
+
   it('in its place between saved turns', async () => {
     await ask('failed?', refused(), 2)
     await ask('third?', answered('Third.'), 2)
@@ -229,6 +243,136 @@ describe('the floating chat keeps a failed turn when the next question comes', (
     await ask('elsewhere?', answered('Here'), 0, other)
     await ask('back?', stillComing('Now'))
     expect(rows(panel())).toEqual(['back?', 'Now'])
+  })
+})
+
+// handleStop saves a stopped answer's letters, and that request can fail or still be on its way when the next question
+// is sent. The letters stay until the saved messages have them, as they do in AI Chat's bubbles.
+describe('the floating chat keeps a stopped answer when the next question comes', () => {
+  async function stopped(question: string, letters: string, savedBefore = 0) {
+    await ask(question, stillComing(letters), savedBefore)
+    await floatingChatStreamManager.stop()
+    await vi.runAllTimersAsync()
+  }
+
+  it('above the next answer while it comes, its save having failed', async () => {
+    await stopped('first?', 'Par')
+    await ask('second?', stillComing('Now'), 1)
+    const html = panel(saved(['user', 'first?']))
+    expect(rows(html)).toEqual(['first?', 'Par', 'second?', 'Now'])
+    expect(answers(html)).toBe(2)
+  })
+
+  it('with its question too, when the server had saved neither', async () => {
+    await stopped('first?', 'Par')
+    await ask('second?', stillComing('Now'))
+    expect(rows(panel())).toEqual(['first?', 'Par', 'second?', 'Now'])
+  })
+
+  it('and once the next answer is saved', async () => {
+    await stopped('first?', 'Par')
+    await ask('second?', answered('Now'), 1)
+    expect(rows(panel(saved(['user', 'first?'], ['user', 'second?'], ['assistant', 'Now'])))).toEqual(['first?', 'Par', 'second?', 'Now'])
+  })
+
+  it('and once the next answer is saved, when its question was not', async () => {
+    await stopped('first?', 'Par')
+    await ask('second?', answered('Now'))
+    expect(rows(panel(saved(['user', 'second?'], ['assistant', 'Now'])))).toEqual(['first?', 'Par', 'second?', 'Now'])
+  })
+
+  it('with its tool block, and no error under it', async () => {
+    await ask('first?', (_url: string, init: RequestInit) => new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(sse({ content: 'Checking.' }, { function: 'list_clusters', args: {}, call_id: 0 })))
+        init.signal?.addEventListener('abort', () => controller.error(new DOMException('Aborted', 'AbortError')))
+      },
+    })))
+    await floatingChatStreamManager.stop()
+    await vi.runAllTimersAsync()
+    await ask('second?', stillComing('Now'), 1)
+    const html = panel(saved(['user', 'first?']))
+    expect(html).toContain('🔧 <strong>list_clusters</strong>')
+    expect(html.indexOf('Checking.')).toBeLessThan(html.indexOf('list_clusters'))
+    expect(html.indexOf('list_clusters')).toBeLessThan(html.indexOf('second?'))
+    expect(html).not.toContain('before the answer finished')
+    expect(answers(html)).toBe(2)
+  })
+
+  it('once, when its save reached the screen before the next question', async () => {
+    await stopped('first?', 'Par')
+    await ask('second?', stillComing('Now'), 2)
+    expect(rows(panel(saved(['user', 'first?'], ['assistant', 'Par'])))).toEqual(['first?', 'Par', 'second?', 'Now'])
+  })
+
+  it('once, when its save arrives after the next question was sent', async () => {
+    await stopped('first?', 'Par')
+    await ask('second?', stillComing('Now'), 1)
+    expect(rows(panel(saved(['user', 'first?'])))).toEqual(['first?', 'Par', 'second?', 'Now'])
+    expect(rows(panel(saved(['user', 'first?'], ['assistant', 'Par'])))).toEqual(['first?', 'Par', 'second?', 'Now'])
+    expect(rows(panel(saved(['user', 'first?'], ['assistant', 'Par'], ['user', 'second?'])))).toEqual(['first?', 'Par', 'second?', 'Now'])
+  })
+
+  it('once, in the order saved, when its save arrives after the next question was saved', async () => {
+    await stopped('first?', 'Par')
+    await ask('second?', answered('Now'), 1)
+    expect(rows(panel(saved(['user', 'first?'], ['user', 'second?'], ['assistant', 'Par'], ['assistant', 'Now']))))
+      .toEqual(['first?', 'second?', 'Par', 'Now'])
+  })
+
+  it('an earlier answer with the same letters does not stand for it', async () => {
+    await stopped('again?', 'Same', 2)
+    await ask('next?', stillComing('Now'), 3)
+    expect(rows(panel(saved(['user', 'first?'], ['assistant', 'Same'], ['user', 'again?'])))).toEqual(['first?', 'Same', 'again?', 'Same', 'next?', 'Now'])
+  })
+
+  it('keeps a question stopped before its first letter, which nothing else holds', async () => {
+    await stopped('first?', '')
+    await ask('second?', stillComing('Now'))
+    const html = panel()
+    expect(rows(html)).toEqual(['first?', 'second?', 'Now'])
+    expect(answers(html)).toBe(1)
+  })
+
+  it('shows such a question once, when the server had saved it', async () => {
+    await stopped('first?', '')
+    await ask('second?', stillComing('Now'), 1)
+    expect(rows(panel(saved(['user', 'first?'])))).toEqual(['first?', 'second?', 'Now'])
+  })
+
+  it('the same question asked again shows twice, each with its own answer', async () => {
+    await stopped('why?', 'Bec')
+    await ask('why?', stillComing('Now'), 1)
+    expect(rows(panel(saved(['user', 'why?'])))).toEqual(['why?', 'Bec', 'why?', 'Now'])
+    expect(rows(panel(saved(['user', 'why?'], ['user', 'why?'])))).toEqual(['why?', 'Bec', 'why?', 'Now'])
+  })
+
+  it('two stopped answers in a row stay in the order they came', async () => {
+    await stopped('one?', 'Fir')
+    await stopped('two?', 'Sec', 1)
+    await ask('three?', stillComing('Now'), 2)
+    expect(rows(panel(saved(['user', 'one?'], ['user', 'two?'])))).toEqual(['one?', 'Fir', 'two?', 'Sec', 'three?', 'Now'])
+  })
+
+  it('with a failed turn before it, in the order they came', async () => {
+    await ask('one?', refused())
+    await stopped('two?', 'Par')
+    await ask('three?', stillComing('Now'), 1)
+    expect(rows(panel(saved(['user', 'two?'])))).toEqual(['one?', REFUSED, 'two?', 'Par', 'three?', 'Now'])
+  })
+
+  it('another conversation shows none of it', async () => {
+    const other = `${session}-other`
+    await stopped('first?', 'Par')
+    await ask('elsewhere?', stillComing('Here'), 0, other)
+    expect(rows(panel(undefined, other))).toEqual(['elsewhere?', 'Here'])
+  })
+
+  it('a panel opened again shows the same', async () => {
+    await stopped('first?', 'Par')
+    await ask('second?', stillComing('Now'), 1)
+    const history = saved(['user', 'first?'])
+    expect(rows(panel(history))).toEqual(rows(panel(history)))
   })
 })
 
