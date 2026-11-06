@@ -7,7 +7,7 @@ export type Cells = Map<string, string>
 
 // A list's rows are paired by what names them, not by position, so a row added at the top is one difference. The
 // order of the names is a cell of its own: rows in another order are on the screen too.
-const NAME_FIELDS = ['metadata.uid', 'uid', 'id', 'ID', 'fingerprint', 'key'] as const
+const NAME_FIELDS = ['metadata.uid', 'uid', 'uuid', 'id', 'ID', 'fingerprint', 'key'] as const
 const at = (o: Record<string, unknown>, dotted: string): unknown =>
   dotted.split('.').reduce<unknown>((v, k) => (v && typeof v === 'object' ? (v as Record<string, unknown>)[k] : undefined), o)
 

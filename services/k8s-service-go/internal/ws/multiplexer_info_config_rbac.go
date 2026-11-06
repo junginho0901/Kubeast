@@ -1,6 +1,8 @@
 package ws
 
 import (
+	"sort"
+
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -15,6 +17,7 @@ func configmapToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 		for k := range data {
 			dataKeys = append(dataKeys, k)
 		}
+		sort.Strings(dataKeys)
 	}
 
 	binaryKeys := []string{}
@@ -22,6 +25,7 @@ func configmapToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 		for k := range bd {
 			binaryKeys = append(binaryKeys, k)
 		}
+		sort.Strings(binaryKeys)
 	}
 
 	return map[string]interface{}{
@@ -51,6 +55,7 @@ func secretToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 		for k := range data {
 			dataKeys = append(dataKeys, k)
 		}
+		sort.Strings(dataKeys)
 	}
 
 	return map[string]interface{}{

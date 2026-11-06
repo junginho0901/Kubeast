@@ -22,7 +22,8 @@ func buildResourceGraphResponse(nodeMap map[string]rgNode, edges []rgEdge) map[s
 
 	// ========== BUILD RESPONSE ==========
 	nodeList := make([]map[string]interface{}, 0, len(nodeMap))
-	for _, n := range nodeMap {
+	for _, key := range sortedKeys(nodeMap) {
+		n := nodeMap[key]
 		node := map[string]interface{}{
 			"id":        n.ID,
 			"kind":      n.Kind,

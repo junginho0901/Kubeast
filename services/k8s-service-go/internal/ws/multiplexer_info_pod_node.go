@@ -2,6 +2,7 @@ package ws
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -427,6 +428,7 @@ func podToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 		for k := range cms {
 			list = append(list, k)
 		}
+		sort.Strings(list)
 		out["config_map_refs"] = list
 	}
 	if len(secrets) > 0 {
@@ -434,6 +436,7 @@ func podToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 		for k := range secrets {
 			list = append(list, k)
 		}
+		sort.Strings(list)
 		out["secret_refs"] = list
 	}
 

@@ -160,16 +160,30 @@ func (s *Service) GetAllCustomResourceInstances(ctx context.Context) (*CustomRes
 
 	wg.Wait()
 
-	// Sort by creation time descending
-	sort.Slice(allItems, func(i, j int) bool {
-		ti, _ := allItems[i]["created_at"].(string)
-		tj, _ := allItems[j]["created_at"].(string)
-		return ti > tj
-	})
+	sortInstances(allItems)
 	sort.Strings(forbidden)
 	sort.Slice(failed, func(i, j int) bool { return failed[i].Kind < failed[j].Kind })
 
 	return &CustomResourceInstances{Items: allItems, ForbiddenKinds: forbidden, FailedKinds: failed}, nil
+}
+
+// sortInstances puts the newest first, and objects of one second in one order whichever list answered first.
+func sortInstances(items []map[string]interface{}) {
+	field := func(item map[string]interface{}, name string) string {
+		value, _ := item[name].(string)
+		return value
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if a, b := field(items[i], "created_at"), field(items[j], "created_at"); a != b {
+			return a > b
+		}
+		for _, name := range []string{"crd_name", "namespace", "name"} {
+			if a, b := field(items[i], name), field(items[j], name); a != b {
+				return a < b
+			}
+		}
+		return false
+	})
 }
 
 // crKindLabels names a CRD's Kind as the instances screen's kind picker does: the Kind, with its group when another
