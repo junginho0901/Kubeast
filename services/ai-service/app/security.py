@@ -285,11 +285,9 @@ async def require_auth(authorization: Optional[str] = Depends(bearer_or_cookie))
 
 
 async def require_admin(payload: TokenPayload = Depends(require_auth)) -> TokenPayload:
-    """Admin gate for model-config administration (admin.ai_models.*)."""
-    if payload.permissions:
-        if not payload.has_permission("admin.ai_models.*"):
-            raise HTTPException(status_code=403, detail="Permission denied")
-        return payload
-    if payload.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    """Admin gate for model-config administration (admin.ai_models.*). A role's
+    name decides nothing: it is free text, and a key's token keeps it while
+    carrying no global permissions."""
+    if not payload.has_permission("admin.ai_models.*"):
+        raise HTTPException(status_code=403, detail="Permission denied")
     return payload

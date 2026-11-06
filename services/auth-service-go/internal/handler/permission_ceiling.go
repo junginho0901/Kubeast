@@ -1,14 +1,18 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 	"sync"
 
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/model"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
+	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
 // Permission ceiling. Nobody may hand out more than they hold — the same
@@ -16,6 +20,8 @@ import (
 // only grant permissions they already have. It covers role create/update,
 // global role assignment (single, bulk, at user creation) and per-cluster
 // grants. Permission strings must also come from the catalog the UI offers.
+// An account that exists has its own ceilings: becoming it (accountCeiling) and
+// managing it (globalCeiling).
 
 // errCeiling marks a refused grant so the audit row records the attempt.
 var errCeiling = errors.New("permission ceiling")
@@ -173,4 +179,97 @@ func ceilingNamespacesError(missing []string) error {
 		return fmt.Errorf("%w: your grant on this cluster is limited to namespaces; you cannot grant the whole cluster", errCeiling)
 	}
 	return fmt.Errorf("%w: cannot grant namespaces you do not hold: %s", errCeiling, strings.Join(missing, ", "))
+}
+
+// missingOnCluster lists, each with its cluster, the permissions and the scope
+// of a grant on clusterID that the actor does not hold there.
+func missingOnCluster(actor auth.TokenPayload, perms []string, clusterID string, namespaces []string) []string {
+	var missing []string
+	for _, p := range missingPermissions(actor, perms, clusterID) {
+		missing = append(missing, clusterID+": "+p)
+	}
+	for _, n := range missingNamespaces(actor, clusterID, namespaces) {
+		if n == "*" {
+			missing = append(missing, clusterID+": the whole cluster")
+			continue
+		}
+		missing = append(missing, clusterID+": namespace "+n)
+	}
+	return missing
+}
+
+func ceilingAccountError(email string, missing []string) error {
+	sort.Strings(missing)
+	return fmt.Errorf("%w: %s holds what you do not: %s", errCeiling, email, strings.Join(missing, ", "))
+}
+
+// accountCeiling is the ceiling on becoming an account: a new password hands it
+// over, so the actor must hold all it holds. That is what its token would carry,
+// so the cluster keys of a global role, which give nothing
+// (buildPermissionMatrix), do not count. One's own account is within reach. A
+// refusal wraps errCeiling.
+func (h *AuthHandler) accountCeiling(ctx context.Context, actor auth.TokenPayload, target *model.User) error {
+	if target.ID == actor.UserID || auth.MatchAny(actor.Perms["*"], "*") {
+		return nil
+	}
+	rolePerms, err := h.repo.GetPermissionsByRoleID(ctx, target.RoleID)
+	if err != nil {
+		return err
+	}
+	matrix, err := h.buildPermissionMatrix(ctx, target.ID, rolePerms)
+	if err != nil {
+		return err
+	}
+	namespaces, err := h.repo.ListUserClusterNamespaces(ctx, target.ID)
+	if err != nil {
+		return err
+	}
+	var missing []string
+	for clusterID, perms := range matrix {
+		if clusterID == "*" {
+			missing = append(missing, missingPermissions(actor, perms, "")...)
+			continue
+		}
+		missing = append(missing, missingOnCluster(actor, perms, clusterID, namespaces[clusterID])...)
+	}
+	if len(missing) > 0 {
+		return ceilingAccountError(target.Email, missing)
+	}
+	return nil
+}
+
+// globalCeiling is the ceiling on managing an account: deleting it, changing its
+// role or grants or lifting a lock gains the actor nothing, and taking access
+// away must not wait for someone who holds it, so only the global permissions the
+// actor lacks keep them out. What they hand out stays under the ceiling of each
+// grant. One's own account is within reach. A refusal wraps errCeiling.
+func (h *AuthHandler) globalCeiling(ctx context.Context, actor auth.TokenPayload, target *model.User) error {
+	if target.ID == actor.UserID || auth.MatchAny(actor.Perms["*"], "*") {
+		return nil
+	}
+	rolePerms, err := h.repo.GetPermissionsByRoleID(ctx, target.RoleID)
+	if err != nil {
+		return err
+	}
+	if missing := missingPermissions(actor, globalPermissions(rolePerms), ""); len(missing) > 0 {
+		return ceilingAccountError(target.Email, missing)
+	}
+	return nil
+}
+
+// refuseCeiling answers what a ceiling check returned: 403 with ev as a failure
+// row for a refusal, 500 for an account it could not read. It says whether it
+// answered.
+func (h *AuthHandler) refuseCeiling(w http.ResponseWriter, r *http.Request, actor auth.TokenPayload, target *model.User, err error, ev auditEvent) bool {
+	if err == nil {
+		return false
+	}
+	if !errors.Is(err, errCeiling) {
+		response.InternalError(w, r, err)
+		return true
+	}
+	ev.targetType, ev.targetID, ev.targetEmail, ev.err = "user", target.ID, target.Email, err
+	writeAudit(h.auditStore, r, actor, ev)
+	response.Error(w, http.StatusForbidden, err.Error())
+	return true
 }

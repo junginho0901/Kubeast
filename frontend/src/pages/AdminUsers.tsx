@@ -59,8 +59,14 @@ export default function AdminUsers() {
 
   const { teamOptions, roles, me, users, isLoading, isError } = useAdminUserData({ reauthModalOpen })
 
+  // A row action the server refuses says why: e.g. an account that holds more than this admin.
+  const [actionError, setActionError] = useState<string | null>(null)
+  const showActionError = (err: any) =>
+    setActionError(err?.response?.data?.detail || err?.message || tr('adminUsers.actionFailed', 'The action failed.'))
+
   const updateRoleMutation = useMutation({
     mutationFn: ({ userId, roleId }: { userId: string; roleId: number }) => api.adminUpdateUserRole(userId, roleId),
+    onMutate: () => setActionError(null),
     onSuccess: (_data, vars) => {
       const roleName = roles.find((r) => r.id === vars.roleId)?.name
       if (me?.id && vars.userId === me.id && roleName !== 'admin') {
@@ -70,7 +76,8 @@ export default function AdminUsers() {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
       queryClient.invalidateQueries({ queryKey: ['me'] })
     },
-    onError: (_err, vars) => {
+    onError: (err, vars) => {
+      showActionError(err)
       setRoleDrafts((prev) => {
         const next = { ...prev }
         delete next[vars.userId]
@@ -118,27 +125,33 @@ export default function AdminUsers() {
   })
   const unlockMutation = useMutation({
     mutationFn: ({ userId }: { userId: string }) => api.adminUnlockUser(userId),
+    onMutate: () => setActionError(null),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
     },
+    onError: showActionError,
   })
   const isLocked = (u: Member) => !!u.dormant_locked_at || (!!u.locked_until && new Date(u.locked_until).getTime() > Date.now())
 
   const resetPasswordMutation = useMutation({
     mutationFn: ({ userId, targetLabel }: { userId: string; targetLabel: string }) =>
       api.adminResetUserPassword(userId).then((res) => ({ res, targetLabel })),
+    onMutate: () => setActionError(null),
     onSuccess: ({ res, targetLabel }, { userId }) => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
       setResetCopied(false)
       setResetResult({ targetLabel, password: res.temporary_password, self: !!me?.id && userId === me.id })
     },
+    onError: showActionError,
   })
 
   const deleteUserMutation = useMutation({
     mutationFn: ({ userId }: { userId: string }) => api.adminDeleteUser(userId),
+    onMutate: () => setActionError(null),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
     },
+    onError: showActionError,
   })
 
   const createUserMutation = useMutation({
@@ -420,6 +433,12 @@ export default function AdminUsers() {
           </button>
         </div>
       </div>
+
+      {actionError && (
+        <div className="rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200" role="alert" data-testid="admin-users-action-error">
+          {actionError}
+        </div>
+      )}
 
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />

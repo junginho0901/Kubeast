@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -48,7 +49,10 @@ func (h *AuthHandler) AdminBulkUpdateRole(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	updated := make([]model.UserResponse, 0, len(req.UserIDs))
+	// Every account first: one out of reach refuses the whole call, as the role's
+	// own ceiling above does, with a failure row per refused account.
+	targets := make([]*model.User, 0, len(req.UserIDs))
+	var refused []error
 	for _, uid := range req.UserIDs {
 		if uid == payload.UserID {
 			continue // skip changing own role
@@ -57,6 +61,34 @@ func (h *AuthHandler) AdminBulkUpdateRole(w http.ResponseWriter, r *http.Request
 		if target == nil {
 			continue
 		}
+		err := h.globalCeiling(r.Context(), payload, target)
+		if err != nil && !errors.Is(err, errCeiling) {
+			response.InternalError(w, r, err)
+			return
+		}
+		if err != nil {
+			refused = append(refused, err)
+			writeAudit(h.auditStore, r, payload, auditEvent{
+				action: "user.role.update", targetType: "user", targetID: uid, targetEmail: target.Email,
+				before: map[string]any{"role": target.RoleName},
+				after:  map[string]any{"role": targetRole.Name, "bulk": true}, err: err,
+			})
+			continue
+		}
+		targets = append(targets, target)
+	}
+	if len(refused) > 0 {
+		msg := refused[0].Error()
+		if len(refused) > 1 {
+			msg += fmt.Sprintf(" (and %d more accounts)", len(refused)-1)
+		}
+		response.Error(w, http.StatusForbidden, msg)
+		return
+	}
+
+	updated := make([]model.UserResponse, 0, len(targets))
+	for _, target := range targets {
+		uid := target.ID
 		err := h.repo.UpdateUserRole(r.Context(), uid, req.RoleID)
 		// One audit row per account, like the single-user path.
 		writeAudit(h.auditStore, r, payload, auditEvent{
@@ -344,6 +376,11 @@ func (h *AuthHandler) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.RoleID != nil && h.refuseCeiling(w, r, payload, target, h.globalCeiling(r.Context(), payload, target),
+		auditEvent{action: "user.role.update", before: map[string]any{"role": target.RoleName}}) {
+		return
+	}
+
 	// Validate name
 	if req.Name != nil {
 		trimmed := strings.TrimSpace(*req.Name)
@@ -462,6 +499,9 @@ func (h *AuthHandler) AdminResetPassword(w http.ResponseWriter, r *http.Request)
 		response.Error(w, http.StatusNotFound, "User not found")
 		return
 	}
+	if h.refuseCeiling(w, r, payload, target, h.accountCeiling(r.Context(), payload, target), auditEvent{action: "user.password.reset"}) {
+		return
+	}
 
 	tempPassword, err := security.GenerateRandomPassword(16)
 	if err != nil {
@@ -525,6 +565,10 @@ func (h *AuthHandler) AdminDeleteUser(w http.ResponseWriter, r *http.Request) {
 	target, err := h.repo.GetUserByID(r.Context(), userID)
 	if err != nil || target == nil {
 		response.Error(w, http.StatusNotFound, "User not found")
+		return
+	}
+	if h.refuseCeiling(w, r, payload, target, h.globalCeiling(r.Context(), payload, target),
+		auditEvent{action: "user.delete", before: map[string]any{"role": target.RoleName}}) {
 		return
 	}
 

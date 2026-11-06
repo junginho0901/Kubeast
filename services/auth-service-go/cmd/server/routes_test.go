@@ -67,8 +67,9 @@ type pendingRequest struct {
 }
 
 // newAuthAPI wires the protected routes as main does, over a fake database
-// holding one user, one role and one pending access request.
-func newAuthAPI(t *testing.T, pending pendingRequest) *authAPI {
+// holding one user, one role and one pending access request. Rules in extra are
+// asked first, so a test can name its own accounts and roles.
+func newAuthAPI(t *testing.T, pending pendingRequest, extra ...pgRule) *authAPI {
 	t.Helper()
 	hash, err := security.HashPassword(testPassword, 1000)
 	if err != nil {
@@ -78,7 +79,7 @@ func newAuthAPI(t *testing.T, pending pendingRequest) *authAPI {
 	later := time.Now().Add(time.Hour).UTC().Format(pgTimestamp)
 	text, integer, stamp := uint32(pgtype.TextOID), uint32(pgtype.Int4OID), uint32(pgtype.TimestamptzOID)
 	list, boolean := uint32(pgtype.TextArrayOID), uint32(pgtype.BoolOID)
-	db, pool := startFakePG(t,
+	db, pool := startFakePG(t, append(extra,
 		pgRule{match: "SELECT token_version FROM auth_users", oids: []uint32{integer}, rows: [][]any{{0}}},
 		pgRule{match: "SELECT expires_at FROM api_keys", oids: []uint32{stamp}, rows: [][]any{{later}}},
 		pgRule{match: "FROM auth_users u JOIN roles r ON r.id = u.role_id",
@@ -100,7 +101,7 @@ func newAuthAPI(t *testing.T, pending pendingRequest) *authAPI {
 		pgRule{match: "duration_minutes, namespaces FROM access_requests",
 			oids: []uint32{text, text, integer, integer, list},
 			rows: [][]any{{pending.owner, "c", 2, 30, pending.namespaces}}},
-	)
+	)...)
 	repo := repository.New(pool)
 	mgr, err := security.NewJWTManager(t.TempDir(), "iss", "aud", 5)
 	if err != nil {

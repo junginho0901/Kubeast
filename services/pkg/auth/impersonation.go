@@ -93,6 +93,12 @@ func (p TokenPayload) CacheIdentity(clusterID string) string {
 	return hex.EncodeToString(sum[:8])
 }
 
+// RoleGroupSlug is the form of a role name its group is built from, trimmed as
+// Impersonation trims it: two names with one slug act as one group.
+func RoleGroupSlug(name string) string {
+	return groupSlug(strings.TrimSpace(name))
+}
+
 // groupSlug makes a role name safe for a group: lowercase, [a-z0-9._-] only.
 func groupSlug(s string) string {
 	var b strings.Builder

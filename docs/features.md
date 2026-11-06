@@ -212,6 +212,14 @@
   - Admins preview a person's mapping result with `GET /api/v1/auth/admin/oidc/groups?email=`. It returns the mapped group names and the count of the rest, and is audited as `admin.oidc.groups.read`.
   - Setup steps per provider (Keycloak, Google, Entra ID, Okta), the first admin and login failure codes are in [docs/oidc.md](oidc.md).
 - `auth.impersonation.enabled=false` is for demos: k8s-service runs as `cluster-admin`, tool-server as `*`, and read APIs open with the cluster grant alone.
+- **Managing accounts stays within what you hold**:
+  - A password reset hands the account to the admin, so it is refused for an account holding anything the admin does not: its global permissions and its per-cluster grants, with their namespaces.
+  - Deleting an account, changing its role, unlocking it and setting or revoking a grant gain the admin nothing, and taking access away must not wait for someone who holds it. They are refused only for an account with a global permission (`*`, `admin.*`) the admin lacks, whatever it holds per cluster. What the admin hands out stays under the ceiling of each grant.
+  - Changing only the name or the team is not limited.
+  - A refusal is 403 and leaves a failure in the audit log. A global admin (`*`) is not limited, and neither is a change to one's own account.
+  - Revoking someone's API key stays open to `admin.users.update`, so a leaked key can be stopped at once. It takes nothing away that the owner cannot issue again.
+  - A permission added to a role must be held on every cluster the role is granted on, within the namespaces granted there.
+- **Role names**: a role acts on a cluster as the group made from its name. A new name or a rename is refused if it is a built-in role's name in other capitals or with spaces, or makes the same group as another role (`a b` and `a-b`, or Korean names of the same length). A name already stored keeps working as it is.
 - **What the UI says when a list is empty**:
   - Without permission (403): "You do not have permission to view", in a banner at the top and in the table.
   - On a server error or no response: "Could not load (server error 503)" with Retry.
@@ -221,7 +229,7 @@
   - An address that does not exist shows the 404 screen.
 - Regression checks:
   - `e2e/tests/rbac-matrix.spec.ts`: the role × action 403/200 table
-  - `permission-ceiling.spec.ts`: you cannot grant others more than you have
+  - `permission-ceiling.spec.ts`: you cannot grant others more than you have, reset an account that holds more, or manage one with wider global permissions
   - `reader-ui-notices.spec.ts`: UI notices for Read
   - `notices.spec.ts`: server error, not installed, 404, create button can-i and the permission request notice
 

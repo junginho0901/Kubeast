@@ -1,10 +1,13 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -13,6 +16,7 @@ import (
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/model"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/repository"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -51,6 +55,59 @@ func roleState(name, description string, permissions []string) map[string]any {
 	return map[string]any{"name": name, "description": description, "permissions": permissions}
 }
 
+// roleNameConflict says why a role may not take this name: the group it acts as
+// on a cluster comes from the name alone (auth.RoleGroupSlug), so another role
+// with the same slug shares that group and its bindings, and a built-in's name
+// in other capitals acts as the built-in. id is the role being renamed, 0 for a
+// new one. Empty means the name is free. Stored names are not read through here,
+// so an install that already has such a name keeps it.
+func (h *RoleHandler) roleNameConflict(ctx context.Context, name string, id int) (string, error) {
+	roles, err := h.repo.ListRoleNames(ctx)
+	if err != nil {
+		return "", err
+	}
+	slug := auth.RoleGroupSlug(name)
+	for _, other := range roles {
+		if other.ID == id || auth.RoleGroupSlug(other.Name) != slug {
+			continue
+		}
+		if other.IsSystem {
+			return fmt.Sprintf("Role name %q is taken: it is the built-in role %s apart from letter case or spaces", name, other.Name), nil
+		}
+		return fmt.Sprintf("Role name %q acts as the same Kubernetes group as role %q (kubeast:role:%s). Choose another name", name, other.Name, slug), nil
+	}
+	return "", nil
+}
+
+// grantedRoleCeiling keeps an edit within what the editor holds where the role
+// is in use: its holders get a new key at once, with no grant left to check it,
+// so a key the role does not cover yet must be held on every cluster it is
+// granted on, as far as it is granted there. A refusal wraps errCeiling.
+func (h *RoleHandler) grantedRoleCeiling(ctx context.Context, actor auth.TokenPayload, roleID int, covered, perms []string) error {
+	var added []string
+	for _, p := range perms {
+		if !auth.MatchAny(covered, p) {
+			added = append(added, p)
+		}
+	}
+	if len(added) == 0 {
+		return nil
+	}
+	grants, err := h.repo.ListRoleGrants(ctx, roleID)
+	if err != nil {
+		return err
+	}
+	var missing []string
+	for _, g := range grants {
+		missing = append(missing, missingOnCluster(actor, added, g.ClusterID, g.Namespaces)...)
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	sort.Strings(missing)
+	return fmt.Errorf("%w: this role is granted where you do not hold what it would add: %s", errCeiling, strings.Join(slices.Compact(missing), ", "))
+}
+
 // ListRoles handles GET /auth/roles (public, for dropdowns)
 func (h *RoleHandler) ListRoles(w http.ResponseWriter, r *http.Request) {
 	roles, err := h.repo.ListRoles(r.Context())
@@ -79,7 +136,7 @@ func (h *RoleHandler) CreateRole(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	if req.Name == "" {
+	if strings.TrimSpace(req.Name) == "" {
 		response.Error(w, http.StatusBadRequest, "Name required")
 		return
 	}
@@ -92,6 +149,16 @@ func (h *RoleHandler) CreateRole(w http.ResponseWriter, r *http.Request) {
 		err := ceilingError(missing)
 		writeAudit(h.auditStore, r, payload, auditEvent{action: "admin.roles.create", targetType: "role", after: roleState(req.Name, req.Description, req.Permissions), err: err})
 		response.Error(w, http.StatusForbidden, err.Error())
+		return
+	}
+	conflict, err := h.roleNameConflict(r.Context(), req.Name, 0)
+	if err != nil {
+		response.InternalError(w, r, err)
+		return
+	}
+	if conflict != "" {
+		writeAudit(h.auditStore, r, payload, auditEvent{action: "admin.roles.create", targetType: "role", after: roleState(req.Name, req.Description, req.Permissions), err: errors.New(conflict)})
+		response.Error(w, http.StatusBadRequest, conflict)
 		return
 	}
 
@@ -158,6 +225,35 @@ func (h *RoleHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 			before: roleState(existing.Name, existing.Description, existing.Permissions), after: roleState(name, req.Description, req.Permissions), err: err})
 		response.Error(w, http.StatusForbidden, err.Error())
 		return
+	}
+	if err := h.grantedRoleCeiling(r.Context(), payload, id, existing.Permissions, req.Permissions); err != nil {
+		if !errors.Is(err, errCeiling) {
+			response.InternalError(w, r, err)
+			return
+		}
+		writeAudit(h.auditStore, r, payload, auditEvent{action: "admin.roles.update", targetType: "role", targetID: strconv.Itoa(id),
+			before: roleState(existing.Name, existing.Description, existing.Permissions), after: roleState(name, req.Description, req.Permissions), err: err})
+		response.Error(w, http.StatusForbidden, err.Error())
+		return
+	}
+	// A rename only: a stored name stays usable whatever it is, also through the
+	// screen, which sends it trimmed.
+	if strings.TrimSpace(name) != strings.TrimSpace(existing.Name) {
+		if strings.TrimSpace(name) == "" {
+			response.Error(w, http.StatusBadRequest, "Name required")
+			return
+		}
+		conflict, err := h.roleNameConflict(r.Context(), name, id)
+		if err != nil {
+			response.InternalError(w, r, err)
+			return
+		}
+		if conflict != "" {
+			writeAudit(h.auditStore, r, payload, auditEvent{action: "admin.roles.update", targetType: "role", targetID: strconv.Itoa(id),
+				before: roleState(existing.Name, existing.Description, existing.Permissions), after: roleState(name, req.Description, req.Permissions), err: errors.New(conflict)})
+			response.Error(w, http.StatusBadRequest, conflict)
+			return
+		}
 	}
 
 	role, err := h.repo.UpdateRole(r.Context(), id, name, req.Description, req.Permissions)
