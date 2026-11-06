@@ -28,13 +28,25 @@
       "route": ".",
       "cell": "\\.(data_keys|config_map_refs|secret_refs)\\.\\$order$",
       "why": "These lists come in Go map order, another order per computation. Stays while the compared build has them unsorted.",
-      "pr": "#651"
+      "pr": "#654"
     },
     {
       "route": "^/api/v1/resource-graph$",
       "cell": "^\\$\\.nodes\\.\\$order$",
       "why": "The graph's nodes come in Go map order per computation, kept while cached. Stays while the compared build has them unsorted.",
-      "pr": "#651"
+      "pr": "#654"
+    },
+    {
+      "route": "^/api/v1/cluster/custom-resources/all$",
+      "cell": "\\.items\\.\\$order$",
+      "why": "Objects created in one second came in whichever list answered first. Stays while the compared build has no second key.",
+      "pr": "#654"
+    },
+    {
+      "route": "^/api/v1/cluster/gpu/metrics$",
+      "cell": "^\\$\\.gpus\\.\\$order$",
+      "why": "The GPUs come in Go map order per computation. Stays while the compared build has them unsorted.",
+      "pr": "#654"
     }
   ]
 }

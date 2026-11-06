@@ -327,18 +327,10 @@ func formatPodDetail(p *corev1.Pod) map[string]interface{} {
 		}
 	}
 	if len(cms) > 0 {
-		list := make([]string, 0, len(cms))
-		for k := range cms {
-			list = append(list, k)
-		}
-		out["config_map_refs"] = list
+		out["config_map_refs"] = sortedKeys(cms)
 	}
 	if len(secrets) > 0 {
-		list := make([]string, 0, len(secrets))
-		for k := range secrets {
-			list = append(list, k)
-		}
-		out["secret_refs"] = list
+		out["secret_refs"] = sortedKeys(secrets)
 	}
 	return out
 }

@@ -205,9 +205,10 @@ test.describe('Resource Graph — pod groups', () => {
     const chips = list.getByTestId('pod-group-chips')
     await expect(chips.locator('[data-health="all"]')).toHaveText(/12$/)
     await expect(chips.locator('[data-health="ok"]')).toHaveText(/11$/)
-    await expect(chips.locator('[data-health="error"]')).toHaveText(/1$/)
+    // db-3 reads as a warning while its init container runs again, and the list asks every 5 seconds: allow two answers
+    await expect(chips.locator('[data-health="error"]')).toHaveText(/1$/, { timeout: 15_000 })
     await chips.locator('[data-health="error"]').click()
-    await expect(rows).toHaveCount(1)
+    await expect(rows).toHaveCount(1, { timeout: 15_000 })
     await expect(rows.first()).toContainText('db-3')
     await rows.first().click()
     await expect(list).toBeHidden()

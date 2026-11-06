@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,14 +20,8 @@ func (s *Service) GetConfigMaps(ctx context.Context, namespace string) ([]map[st
 
 	result := make([]map[string]interface{}, 0, len(cmList.Items))
 	for _, cm := range cmList.Items {
-		dataKeys := make([]string, 0, len(cm.Data))
-		for k := range cm.Data {
-			dataKeys = append(dataKeys, k)
-		}
-		binaryKeys := make([]string, 0, len(cm.BinaryData))
-		for k := range cm.BinaryData {
-			binaryKeys = append(binaryKeys, k)
-		}
+		dataKeys := sortedKeys(cm.Data)
+		binaryKeys := sortedKeys(cm.BinaryData)
 
 		result = append(result, map[string]interface{}{
 			"name":        cm.Name,
@@ -51,14 +46,8 @@ func (s *Service) GetAllConfigMaps(ctx context.Context) ([]map[string]interface{
 
 		result := make([]map[string]interface{}, 0, len(cmList.Items))
 		for _, cm := range cmList.Items {
-			dataKeys := make([]string, 0, len(cm.Data))
-			for k := range cm.Data {
-				dataKeys = append(dataKeys, k)
-			}
-			binaryKeys := make([]string, 0, len(cm.BinaryData))
-			for k := range cm.BinaryData {
-				binaryKeys = append(binaryKeys, k)
-			}
+			dataKeys := sortedKeys(cm.Data)
+			binaryKeys := sortedKeys(cm.BinaryData)
 
 			result = append(result, map[string]interface{}{
 				"name":        cm.Name,
@@ -81,14 +70,8 @@ func (s *Service) DescribeConfigMap(ctx context.Context, namespace, name string)
 		return nil, fmt.Errorf("get configmap %s/%s: %w", namespace, name, err)
 	}
 
-	dataKeys := make([]string, 0, len(cm.Data))
-	for k := range cm.Data {
-		dataKeys = append(dataKeys, k)
-	}
-	binaryKeys := make([]string, 0, len(cm.BinaryData))
-	for k := range cm.BinaryData {
-		binaryKeys = append(binaryKeys, k)
-	}
+	dataKeys := sortedKeys(cm.Data)
+	binaryKeys := sortedKeys(cm.BinaryData)
 
 	// Data entries (key-value)
 	dataEntries := make(map[string]string, len(cm.Data))
@@ -164,10 +147,7 @@ func (s *Service) GetSecrets(ctx context.Context, namespace string) ([]map[strin
 
 	result := make([]map[string]interface{}, 0, len(secretList.Items))
 	for _, secret := range secretList.Items {
-		dataKeys := make([]string, 0, len(secret.Data))
-		for k := range secret.Data {
-			dataKeys = append(dataKeys, k)
-		}
+		dataKeys := sortedKeys(secret.Data)
 
 		result = append(result, map[string]interface{}{
 			"name":       secret.Name,
@@ -192,10 +172,7 @@ func (s *Service) GetAllSecrets(ctx context.Context) ([]map[string]interface{}, 
 
 		result := make([]map[string]interface{}, 0, len(secretList.Items))
 		for _, secret := range secretList.Items {
-			dataKeys := make([]string, 0, len(secret.Data))
-			for k := range secret.Data {
-				dataKeys = append(dataKeys, k)
-			}
+			dataKeys := sortedKeys(secret.Data)
 
 			result = append(result, map[string]interface{}{
 				"name":       secret.Name,
@@ -313,4 +290,14 @@ func (s *Service) GetSecretYAML(ctx context.Context, namespace, name string, can
 	}
 
 	return jsonToYAML(rawData), nil
+}
+
+// sortedKeys lists a map's keys in one order: a map's own differs per computation. An empty map gives [], not null.
+func sortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }

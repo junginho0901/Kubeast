@@ -118,7 +118,8 @@ func (s *Service) GetGPUMetrics(ctx context.Context) (map[string]interface{}, er
 	var totalUtil, totalMemUsed, totalMemFree float64
 	count := 0
 
-	for _, g := range gpuMap {
+	for _, key := range sortedKeys(gpuMap) {
+		g := gpuMap[key]
 		g.MemoryTotalMB = g.MemoryUsedMB + g.MemoryFreeMB
 		if g.MemoryTotalMB > 0 {
 			g.MemoryUtilPercent = (g.MemoryUsedMB / g.MemoryTotalMB) * 100
