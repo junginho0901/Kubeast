@@ -270,4 +270,39 @@ test.describe('buttons and drawers follow the cluster\'s answer', () => {
     await expect(gone.getByRole('button', { name: 'YAML', exact: true })).toBeVisible({ timeout: 20_000 })
     expect.soft(await refusal(gone), 'the drawer of a PermCheck that does not exist').toBe(tr('common.objectNotFound'))
   })
+
+  test('a drawer opened by link shows no empty object while it reads: a missing one goes from loading to its notice, asking once', async ({ page }) => {
+    test.skip(ready !== '', ready)
+    test.setTimeout(90_000)
+    // every text the drawer passes through, recorded in the page so no moment between two reads is missed
+    await page.addInitScript((selector) => {
+      const w = window as unknown as { drawerTexts: string[] }
+      w.drawerTexts = []
+      new MutationObserver(() => {
+        const text = document.querySelector(selector)?.textContent ?? ''
+        if (text && w.drawerTexts[w.drawerTexts.length - 1] !== text) w.drawerTexts.push(text)
+      }).observe(document, { childList: true, subtree: true, characterData: true })
+    }, DRAWER)
+    const texts = () => page.evaluate(() => (window as unknown as { drawerTexts: string[] }).drawerTexts)
+
+    // the object of an alert whose custom resource and CRD are gone: what the Alerts inbox opens after a run ended
+    const reads: number[] = []
+    page.on('response', (r) => {
+      const u = new URL(r.url())
+      if (u.pathname === '/api/v1/cluster/resources/json' && u.searchParams.get('resource_name') === 'cpui-gone-widget') reads.push(r.status())
+    })
+    await page.goto(`/account?cluster=${CLUSTER}&detail=${encodeURIComponent(`Widget/${NS_A}/cpui-gone-widget`)}&detailApi=${encodeURIComponent('gone.cpui.kubeast.io/v1')}`)
+    const gone = page.locator(DRAWER).last()
+    await expect(gone.getByTestId('detail-unreadable')).toHaveText(tr('common.objectNotFound'), { timeout: 20_000 })
+    expect.soft((await texts()).filter((t) => t.includes('Basic Info')), 'the drawer on its way to "does not exist"').toEqual([])
+    expect.soft(reads, 'a 404 is an answer: the object is read once').toEqual([404])
+
+    // an object that is there, in the same view: its values or Loading, never its fields with nothing in them
+    const name = 'cpui-revision'
+    kubectl(['apply', '-f', '-'], JSON.stringify({ apiVersion: 'apps/v1', kind: 'ControllerRevision', metadata: { name, namespace: NS_A }, revision: 1, data: {} }))
+    await page.goto(`/account?cluster=${CLUSTER}&detail=${encodeURIComponent(`ControllerRevision/${NS_A}/${name}`)}`)
+    await expect(page.locator(DRAWER).last().getByText('apps/v1', { exact: true })).toBeVisible({ timeout: 20_000 })
+    const passed = await texts()
+    expect.soft(passed.filter((t) => t.includes('Basic Info') && !t.includes('apps/v1')), 'the drawer before the object arrived').toEqual([])
+  })
 })

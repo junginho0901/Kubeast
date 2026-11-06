@@ -166,7 +166,8 @@ export default function ResourceDetailDrawer() {
     queryFn: () => api.getResourceJson(kindToPlural(kind), name, ns || undefined),
     enabled: needsRawJsonFetch,
     staleTime: 30_000,
-    retry: 1,
+    // 403 and 404 are answers: the notice comes now, not a second later after asking again
+    retry: (failures, error) => failures < 1 && ![403, 404].includes((error as { response?: { status?: number } }).response?.status ?? 0),
   })
 
   const effectiveRawJson = target?.rawJson ?? fetchedRawJson
@@ -354,6 +355,8 @@ export default function ResourceDetailDrawer() {
     if (WORKLOAD_KINDS.has(kind)) return <WorkloadInfo name={name} namespace={ns} kind={kind} rawJson={effectiveRawJson} writesBlocked={argoBlocked} />
     if (NETWORK_KINDS.has(kind)) return <NetworkInfo name={name} namespace={ns} kind={kind} rawJson={effectiveRawJson} />
     if (CONFIG_STORAGE_KINDS.has(kind)) return <ConfigStorageInfo name={name} namespace={ns} kind={kind} rawJson={effectiveRawJson} />
+    // the other views load what they show; this one shows only the object, so it waits for the object
+    if (linkPending) return <p className="text-slate-400">{t('common.loading', 'Loading...')}</p>
     return <GenericInfo name={name} namespace={ns} kind={kind} rawJson={effectiveRawJson} />
   }
 
@@ -404,7 +407,7 @@ export default function ResourceDetailDrawer() {
               {unreadable ? (
                 <ObjectUnreadable kind={displayKind} name={name} namespace={ns} notFound={loadStatus === 404} />
               ) : renderInfoContent()}
-              {!unreadable && !resolving && violationsAfterInfo(kind, ns) && <PolicyViolations kind={displayKind} namespace={ns ?? ''} name={name} apiVersion={violationsApiVersion(kind, target?.rawJson)} />}
+              {!unreadable && !resolving && !linkPending && violationsAfterInfo(kind, ns) && <PolicyViolations kind={displayKind} namespace={ns ?? ''} name={name} apiVersion={violationsApiVersion(kind, target?.rawJson)} />}
             </div>
           )}
 
