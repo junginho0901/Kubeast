@@ -595,7 +595,7 @@ test.describe('number check — drawers', () => {
     for (;;) {
       const s = await snapshot()
       const ready = (k: string, name: string) => n(one(s, k, name)?.status?.readyReplicas)
-      const jobsDone = (s.by.Job ?? []).every((j) => (j.status.conditions ?? []).some((c: Obj) => (c.type === 'Complete' || c.type === 'Failed') && c.status === 'True'))
+      const jobsDone = (s.by.Job ?? []).every((j) => j.spec.suspend || (j.status.conditions ?? []).some((c: Obj) => (c.type === 'Complete' || c.type === 'Failed') && c.status === 'True'))
       const crash = one(s, 'Pod', 'num-crash')?.status?.containerStatuses?.[0]?.restartCount ?? 0
       const quota = one(s, 'ResourceQuota', 'num-quota')?.status?.used ?? {}
       if (ready('Deployment', 'num-ready') === 3 && ready('StatefulSet', 'num-db') === 2 && jobsDone && crash >= 1 && quota['limits.cpu']) break

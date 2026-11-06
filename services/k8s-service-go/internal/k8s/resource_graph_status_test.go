@@ -39,6 +39,15 @@ func TestBuildWorkloadGraph_StatusesAreTheLists(t *testing.T) {
 		{ObjectMeta: meta("job-failed"), Status: batchv1.JobStatus{Failed: 1, Conditions: []batchv1.JobCondition{{Type: batchv1.JobFailed, Status: corev1.ConditionTrue}}}},
 		// one of three completions done: still running, not "Succeeded"
 		{ObjectMeta: meta("job-going"), Status: batchv1.JobStatus{Succeeded: 1, Active: 1}},
+		{ObjectMeta: meta("job-held"), Status: batchv1.JobStatus{Conditions: []batchv1.JobCondition{{Type: batchv1.JobSuspended, Status: corev1.ConditionTrue}}}},
+		{ObjectMeta: meta("job-failing"), Status: batchv1.JobStatus{Conditions: []batchv1.JobCondition{{Type: batchv1.JobFailureTarget, Status: corev1.ConditionTrue}}}},
+		{ObjectMeta: meta("job-ending"), Status: batchv1.JobStatus{Conditions: []batchv1.JobCondition{{Type: batchv1.JobSuccessCriteriaMet, Status: corev1.ConditionTrue}}}},
+		{ObjectMeta: func() metav1.ObjectMeta {
+			m := meta("job-leaving")
+			gone := metav1.Now()
+			m.DeletionTimestamp = &gone
+			return m
+		}()},
 	}
 	pod := func(name string, phase corev1.PodPhase, cs corev1.ContainerStatus) corev1.Pod {
 		return corev1.Pod{ObjectMeta: meta(name), Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}}},
@@ -90,6 +99,10 @@ func TestBuildWorkloadGraph_StatusesAreTheLists(t *testing.T) {
 		"ReplicaSet/ns/rs-ok":      "Healthy ok",
 		"Job/ns/job-failed":        "Failed error",
 		"Job/ns/job-going":         "Running ok",
+		"Job/ns/job-held":          "Suspended warn",
+		"Job/ns/job-failing":       "FailureTarget error",
+		"Job/ns/job-ending":        "SuccessCriteriaMet ok",
+		"Job/ns/job-leaving":       "Terminating warn",
 		"Pod/ns/pod-crash":         "CrashLoopBackOff error",
 		"Pod/ns/pod-unready":       "Running warn",
 		"Pod/ns/pod-done":          "Completed ok",

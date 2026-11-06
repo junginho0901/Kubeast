@@ -114,11 +114,18 @@ func Info(p *corev1.Pod) map[string]interface{} {
 			"name":  c.Name,
 			"image": c.Image,
 		}
+		sidecar := restartableInit(&c)
+		if sidecar {
+			ic["restart_policy"] = string(*c.RestartPolicy)
+		}
 		for _, cs := range p.Status.InitContainerStatuses {
 			if cs.Name == c.Name {
 				ic["ready"] = cs.Ready
 				ic["restart_count"] = cs.RestartCount
 				ic["state"] = containerState(cs.State)
+				if sidecar && cs.Started != nil {
+					ic["started"] = *cs.Started
+				}
 				break
 			}
 		}

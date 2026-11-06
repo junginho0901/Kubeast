@@ -103,20 +103,6 @@ func (s *Service) DescribeJob(ctx context.Context, namespace, name string) (map[
 		}
 	}
 
-	// Determine job status
-	jobStatus := "Active"
-	for _, c := range job.Status.Conditions {
-		if c.Type == "Complete" && c.Status == "True" {
-			jobStatus = "Complete"
-			break
-		}
-		if c.Type == "Failed" && c.Status == "True" {
-			jobStatus = "Failed"
-			break
-		}
-	}
-	result["status"] = jobStatus
-
 	// Pod template
 	result["pod_template"] = formatPodTemplate(job.Spec.Template)
 

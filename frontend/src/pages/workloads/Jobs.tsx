@@ -15,6 +15,7 @@ import {
   parseAgeSeconds,
   computeJobStatus,
   jobDurationSeconds,
+  jobSummary,
   type SortKey,
 } from './jobs/jobHelpers'
 import { applyJobWatchEvent } from './jobs/jobWatchNormalize'
@@ -83,22 +84,7 @@ export default function Jobs() {
     })
   }, [normalizedJobs, searchQuery])
 
-  const summary = useMemo(() => {
-    const total = filteredJobs.length
-    let completed = 0
-    let running = 0
-    let failed = 0
-    for (const job of filteredJobs) {
-      const status = job.status.toLowerCase()
-      // backend workloads_job.go 는 condition 기반으로 "Active" / "Complete" /
-      // "Failed" 를 보냄. "Active" 가 running 카드에 잡혀야 함 (기존엔 어디에도
-      // 매칭 안 되어 running 0 으로 표시되던 버그).
-      if (status.includes('complete') || status.includes('succeed')) completed += 1
-      else if (status.includes('fail')) failed += 1
-      else if (status.includes('active') || status.includes('run') || status.includes('pending') || status.includes('suspend')) running += 1
-    }
-    return { total, completed, running, failed }
-  }, [filteredJobs])
+  const summary = useMemo(() => jobSummary(filteredJobs), [filteredJobs])
 
   const sortedJobs = useMemo(() => {
     if (!sortKey) return filteredJobs
@@ -179,7 +165,7 @@ export default function Jobs() {
           currentPage,
           pageSize: rowsPerPage,
           topN: rowsPerPage,
-          pickFields: ['name', 'namespace', 'completions', 'active', 'succeeded', 'failed', 'status', 'duration_seconds'],
+          pickFields: ['name', 'namespace', 'completions', 'completions_text', 'active', 'succeeded', 'failed', 'status', 'duration_seconds'],
           filterProblematic: (j) => {
             const job = j as unknown as JobInfo
             return job.failed > 0

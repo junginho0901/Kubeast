@@ -210,7 +210,7 @@ func isCompletedReason(r string) bool { return r == "Completed" || r == "Succeed
 // deleted is a warning; an error reason (or phase Failed) is an error, where a
 // reason the warning list names is never taken for one; Pending and Unknown
 // warn; a Succeeded pod is fine; init containers not done, containers not
-// ready or a waiting reason warn.
+// ready or a waiting reason warn. A sidecar counts as a container, as in READY.
 func podHealth(p *corev1.Pod) (uint8, string) {
 	phase := listPhase(p)
 	if p.DeletionTimestamp != nil {
@@ -268,15 +268,23 @@ func podHealth(p *corev1.Pod) (uint8, string) {
 		}
 	}
 	initNotReady := false
-	for _, c := range p.Spec.InitContainers {
+	for i := range p.Spec.InitContainers {
+		c := &p.Spec.InitContainers[i]
 		cs := byName(p.Status.InitContainerStatuses, c.Name)
-		if cs == nil {
+		sidecar := podrow.Sidecar(c)
+		if sidecar {
+			total++
+			if cs != nil && cs.Ready {
+				ready++
+			}
+		}
+		// a sidecar is meant to keep running: once started it holds nothing back, as in kubectl's printPod
+		if cs == nil || (sidecar && cs.Started != nil && *cs.Started) {
 			continue
 		}
 		s := cs.State
 		if s.Waiting != nil || s.Running != nil || (s.Terminated != nil && s.Terminated.ExitCode != 0) {
 			initNotReady = true
-			break
 		}
 	}
 	switch {

@@ -71,6 +71,11 @@ const (
 	svcBalanced      = svcMeta + `"spec":{"type":"LoadBalancer","clusterIP":"10.0.0.1","externalIPs":["192.0.2.9"],"selector":{"app":"web"},
 		"ports":[{"name":"http","port":80,"targetPort":"http","nodePort":30080,"protocol":"TCP","appProtocol":"http"}]},
 		"status":{"loadBalancer":{"ingress":[{"ip":"192.0.2.1"},{"hostname":"lb.example.test"}]}}}`
+	svcPending = svcMeta + `"spec":{"type":"LoadBalancer","clusterIP":"10.0.0.1","selector":{"app":"web"},
+		"ports":[{"name":"http","port":80,"targetPort":"http","nodePort":30080,"protocol":"TCP"}]},"status":{"loadBalancer":{}}}`
+	svcPendingWithIPs = svcMeta + `"spec":{"type":"LoadBalancer","clusterIP":"10.0.0.1","externalIPs":["192.0.2.9"],"selector":{"app":"web"},
+		"ports":[{"name":"http","port":80,"targetPort":"http","nodePort":30080,"protocol":"TCP"}]},"status":{"loadBalancer":{}}}`
+	svcClusterIPs = svcMeta + `"spec":{"type":"ClusterIP","clusterIP":"10.0.0.1","externalIPs":["192.0.2.9","192.0.2.1"],"selector":{"app":"web"},"ports":[{"name":"http","port":80,"targetPort":8080,"protocol":"TCP"}]},"status":{"loadBalancer":{}}}`
 
 	epMeta     = `{"apiVersion":"v1","kind":"Endpoints","metadata":{"name":"web","namespace":"demo","creationTimestamp":"2026-11-01T00:00:00Z"}`
 	epPort     = `"ports":[{"name":"http","port":80,"protocol":"TCP"}]`
@@ -204,6 +209,15 @@ const (
 	podSidecarUp = `"status":{"phase":"Running","podIP":"10.0.0.7",` + podConditions + `,
 		"initContainerStatuses":[{"name":"side","image":"example.test/side:1","imageID":"","ready":true,"started":true,"restartCount":1,"state":{"running":{"startedAt":"2026-11-01T00:00:30Z"}}}],
 		"containerStatuses":[` + podAppRunning + `]}`
+	podSidecarNotReady = `"status":{"phase":"Running","podIP":"10.0.0.7",` + podNotReady + `,
+		"initContainerStatuses":[{"name":"side","image":"example.test/side:1","imageID":"","ready":false,"started":true,"restartCount":0,"state":{"running":{"startedAt":"2026-11-01T00:00:30Z"}}}],
+		"containerStatuses":[` + podAppRunning + `]}`
+	podSidecarStarting = `"status":{"phase":"Running","podIP":"10.0.0.7","conditions":[{"type":"Initialized","status":"False"},{"type":"Ready","status":"False"}],
+		"initContainerStatuses":[{"name":"side","image":"example.test/side:1","imageID":"","ready":false,"started":false,"restartCount":0,"state":{"running":{"startedAt":"2026-11-01T00:00:30Z"}}}],
+		"containerStatuses":[{"name":"app","image":"example.test/app:1","imageID":"","ready":false,"restartCount":0,"state":{"waiting":{"reason":"PodInitializing"}}}]}`
+	podSidecarCrashing = `"status":{"phase":"Running","podIP":"10.0.0.7",` + podNotReady + `,
+		"initContainerStatuses":[{"name":"side","image":"example.test/side:1","imageID":"","ready":false,"started":false,"restartCount":3,"state":{"waiting":{"reason":"CrashLoopBackOff"}}}],
+		"containerStatuses":[` + podAppRunning + `]}`
 	podOfDeploy   = podHead + podTags + `},` + podPlainSpec + `,` + podRunning + `}`
 	podBare       = podHead + `},` + podPlainSpec + `,` + podRunning + `}`
 	podDeleting   = podHead + podTags + podGone + `},` + podPlainSpec + `,` + podRunning + `}`
@@ -213,6 +227,9 @@ const (
 	podExited     = podHead + podTags + `},` + podPlainSpec + `,` + podExitCode + `}`
 	podInitError  = podHead + podTags + `},` + podInitSpec + `,` + podInitFailed + `}`
 	podWithSide   = podHead + podTags + `},` + podSidecarSpec + `,` + podSidecarUp + `}`
+	podSideUnfit  = podHead + podTags + `},` + podSidecarSpec + `,` + podSidecarNotReady + `}`
+	podSideStart  = podHead + podTags + `},` + podSidecarSpec + `,` + podSidecarStarting + `}`
+	podSideCrash  = podHead + podTags + `},` + podSidecarSpec + `,` + podSidecarCrashing + `}`
 	podWithClaims = podHead + podTags + `},` + podClaimSpec + `,` + podRunning + `}`
 
 	dsHead     = `{"apiVersion":"apps/v1","kind":"DaemonSet","metadata":{"name":"agent","namespace":"demo","creationTimestamp":"2026-11-01T00:00:00Z"},`
@@ -235,7 +252,12 @@ const (
 	jobRunSpec  = `"spec":{"completions":1,"parallelism":1,` + jobTemplate + `}`
 	jobStopped  = `"spec":{"completions":1,"parallelism":1,"suspend":true,` + jobTemplate + `}`
 	jobNoCount  = `"spec":{` + jobTemplate + `}`
+	jobQueue    = `"spec":{"parallelism":3,` + jobTemplate + `}`
 	jobActive   = `"status":{"active":1,"startTime":"2026-11-06T11:00:00Z"}`
+	jobLeaving  = `,"deletionTimestamp":"2026-11-06T12:00:00Z"`
+	jobToFail   = `"status":{"active":1,"failed":1,"startTime":"2026-11-06T11:00:00Z","conditions":[{"type":"FailureTarget","status":"True","reason":"BackoffLimitExceeded"}]}`
+	jobToEnd    = `"status":{"active":1,"succeeded":1,"startTime":"2026-11-06T11:00:00Z","conditions":[{"type":"SuccessCriteriaMet","status":"True","reason":"CompletionsReached"}]}`
+	jobResumed  = `"status":{"active":1,"startTime":"2026-11-06T11:00:00Z","conditions":[{"type":"Suspended","status":"False"}]}`
 	jobHeld     = `"status":{"conditions":[{"type":"Suspended","status":"True"}]}`
 	jobDone     = `"status":{"succeeded":1,"startTime":"2026-11-06T11:00:00Z","completionTime":"2026-11-06T11:00:30Z","conditions":[{"type":"Complete","status":"True"}]}`
 	jobBroken   = `"status":{"failed":2,"startTime":"2026-11-06T11:00:00Z","conditions":[{"type":"Failed","status":"True","reason":"BackoffLimitExceeded"}]}`
@@ -245,6 +267,12 @@ const (
 	jobFinished = jobHead + jobOwner + `},` + jobRunSpec + `,` + jobDone + `}`
 	jobFailed   = jobHead + jobOwner + `},` + jobRunSpec + `,` + jobBroken + `}`
 	jobDefaults = jobHead + `},` + jobNoCount + `,` + jobActive + `}`
+	jobInQueue  = jobHead + `},` + jobQueue + `,` + jobActive + `}`
+	jobDeleting = jobHead + jobLeaving + `},` + jobRunSpec + `,` + jobActive + `}`
+	jobDoneGone = jobHead + jobLeaving + `},` + jobRunSpec + `,` + jobDone + `}`
+	jobFailing  = jobHead + `},` + jobRunSpec + `,` + jobToFail + `}`
+	jobEnding   = jobHead + `},` + jobRunSpec + `,` + jobToEnd + `}`
+	jobGoingOn  = jobHead + `},` + jobRunSpec + `,` + jobResumed + `}`
 
 	stsHead     = `{"apiVersion":"apps/v1","kind":"StatefulSet","metadata":{"name":"db","namespace":"demo","creationTimestamp":"2026-11-01T00:00:00Z"},`
 	stsTemplate = `"selector":{"matchLabels":{"app":"db"}},"serviceName":"db-headless","template":{"metadata":{"labels":{"app":"db"}},"spec":{"containers":[{"name":"db","image":"example.test/db:1"}]}}`
@@ -388,7 +416,10 @@ func watchRowSources() []watchRowSource {
 			"service_account": "runner",
 		})},
 		{"a pod whose init container failed reads Init:Error with its restarts", "pods", podOfDeploy, podInitError, podShows("Init:Error", "Pending", "0/1", 4, ofDeploy, appWeb, "PodInitializing", "-", "error Error")},
-		{"a pod with a sidecar counts it in READY and RESTARTS", "pods", podOfDeploy, podWithSide, podShows("Running", "Running", "2/2", 3, ofDeploy, appWeb, "-", "-", "warn PodInitializing")},
+		{"a pod with a sidecar counts it in READY and RESTARTS", "pods", podOfDeploy, podWithSide, podShows("Running", "Running", "2/2", 3, ofDeploy, appWeb, "-", "-", "ok Running")},
+		{"a pod whose sidecar is up but not ready warns, as READY says", "pods", podOfDeploy, podSideUnfit, podShows("Running", "Running", "1/2", 2, ofDeploy, appWeb, "-", "-", "warn NotReady")},
+		{"a pod whose sidecar has not started is still initializing", "pods", podOfDeploy, podSideStart, podShows("Init:0/1", "Running", "0/2", 0, ofDeploy, appWeb, "PodInitializing", "-", "warn PodInitializing")},
+		{"a pod whose sidecar crashes is an error", "pods", podOfDeploy, podSideCrash, podShows("Init:CrashLoopBackOff", "Running", "1/2", 5, ofDeploy, appWeb, "-", "-", "error CrashLoopBackOff")},
 		{"a pod being deleted on a node that stopped answering reads Unknown", "pods", podOfDeploy, podLostNode, podShows("Unknown", "Running", "1/1", 2, ofDeploy, appWeb, "NodeLost", "node stopped answering", "warn Terminating")},
 		{"a failed pod whose container names only its exit code prints that", "pods", podOfDeploy, podExited, podShows("ExitCode:2", "Failed", "0/1", 0, ofDeploy, appWeb, "-", "-", "error Failed")},
 		{"a pod that holds a claim and a template lists both", "pods", podOfDeploy, podWithClaims, with(podShows("Running", "Running", "1/1", 2, ofDeploy, appWeb, "-", "-", "ok Running"), map[string]interface{}{"claims": []interface{}{"claim-a", "template-a"}})},
@@ -398,7 +429,13 @@ func watchRowSources() []watchRowSource {
 		{"a DaemonSet with none available is Unavailable, however many read ready", "daemonsets", dsPicky, dsNone, dsShows("1/3", 3, 3, 3, 0, "Unavailable", "disk=ssd", "example.test/app:1")},
 		{"a DaemonSet with no node to run on is Idle", "daemonsets", dsPicky, dsIdle, dsShows("0/0", 0, 0, 0, 0, "Idle", "disk=ssd", "example.test/app:1")},
 		{"a Job its CronJob let go of names no owner", "jobs", jobOwned, jobFree, jobShows("0/1", "Running", "badge-warning", "60m", "2026-11-06T11:00:00Z", noNames)},
-		{"a suspended Job has no start time or duration left", "jobs", jobOwned, jobSuspend, jobShows("0/1", "Running", "badge-warning", "-", "-", ofCronJob)},
+		{"a suspended Job reads Suspended, with no start time or duration left", "jobs", jobOwned, jobSuspend, jobShows("0/1", "Suspended", "badge-warning", "-", "-", ofCronJob)},
+		{"a Job resumed, its Suspended condition false, is running", "jobs", jobSuspend, jobGoingOn, jobShows("0/1", "Running", "badge-warning", "60m", "2026-11-06T11:00:00Z", noNames)},
+		{"a Job being deleted reads Terminating", "jobs", jobFree, jobDeleting, jobShows("0/1", "Terminating", "badge-warning", "60m", "2026-11-06T11:00:00Z", noNames)},
+		{"a finished Job being deleted still reads Complete", "jobs", jobFinished, jobDoneGone, jobShows("1/1", "Complete", "badge-success", "30s", "2026-11-06T11:00:00Z", noNames)},
+		{"a Job on its way to Failed reads FailureTarget", "jobs", jobFree, jobFailing, jobShows("0/1", "FailureTarget", "badge-error", "60m", "2026-11-06T11:00:00Z", noNames)},
+		{"a Job on its way to Complete reads SuccessCriteriaMet", "jobs", jobFree, jobEnding, jobShows("1/1", "SuccessCriteriaMet", "badge-success", "60m", "2026-11-06T11:00:00Z", noNames)},
+		{"a work queue of three counts one of three", "jobs", jobFree, jobInQueue, jobShows("0/1 of 3", "Running", "badge-warning", "60m", "2026-11-06T11:00:00Z", noNames)},
 		{"a Job that finished says so with its run time", "jobs", jobOwned, jobFinished, jobShows("1/1", "Complete", "badge-success", "30s", "2026-11-06T11:00:00Z", ofCronJob)},
 		{"a Job that failed says so and runs to now", "jobs", jobOwned, jobFailed, jobShows("0/1", "Failed", "badge-error", "60m", "2026-11-06T11:00:00Z", ofCronJob)},
 		{"a Job with no completions set wants one", "jobs", jobFree, jobDefaults, jobShows("0/1", "Running", "badge-warning", "60m", "2026-11-06T11:00:00Z", noNames)},
@@ -416,10 +453,12 @@ func watchRowSources() []watchRowSource {
 		{"a CronJob whose time zone changed shows the new one", "cronjobs", cronOld, cronUTC, cronShows("0 9 * * *", false, 0, "Allow", "2026-11-06T09:00:00Z", "2026-11-06T09:01:00Z", "Etc/UTC", "app", "example.test/app:1")},
 		{"a CronJob whose status lost its run times shows none", "cronjobs", cronOld, cronNoRuns, cronShows("0 9 * * *", false, 0, "Allow", nil, nil, "Asia/Seoul", "app", "example.test/app:1")},
 		{"a CronJob whose schedule, policy and containers changed shows the new ones", "cronjobs", cronOld, cronOther, cronShows("30 1 * * *", true, 0, "Forbid", nil, nil, nil, "new, side", "example.test/new:2, example.test/side:1")},
-		// External IP is the list's own value here; kubectl prints the externalName, a list matter these cases do not change
-		{"a Service that became ExternalName shows no cluster IP, port or selector", "services", svcPlain, svcExternalName, svcShows("ExternalName", "-", "<none>", "-", "-")},
+		{"a Service that became ExternalName shows its name, no cluster IP, port or selector", "services", svcPlain, svcExternalName, svcShows("ExternalName", "-", "db.example.test", "-", "-")},
 		{"a Service whose load balancer and node port went away shows neither", "services", svcBalanced, svcPlain, svcShows("ClusterIP", "10.0.0.1", "<none>", "TCP 80->8080", "app=web")},
-		{"a Service that gained a load balancer shows it", "services", svcPlain, svcBalanced, svcShows("LoadBalancer", "10.0.0.1", "192.0.2.9,192.0.2.1,lb.example.test", "TCP 80->http (node:30080)", "app=web")},
+		{"a Service that gained a load balancer shows its addresses before its external IPs", "services", svcPlain, svcBalanced, svcShows("LoadBalancer", "10.0.0.1", "192.0.2.1,lb.example.test,192.0.2.9", "TCP 80->http (node:30080)", "app=web")},
+		{"a LoadBalancer with no address yet reads pending", "services", svcPlain, svcPending, svcShows("LoadBalancer", "10.0.0.1", "<pending>", "TCP 80->http (node:30080)", "app=web")},
+		{"a LoadBalancer with no address and external IPs reads the IPs", "services", svcPending, svcPendingWithIPs, svcShows("LoadBalancer", "10.0.0.1", "192.0.2.9", "TCP 80->http (node:30080)", "app=web")},
+		{"a ClusterIP Service with external IPs reads them in order", "services", svcPlain, svcClusterIPs, svcShows("ClusterIP", "10.0.0.1", "192.0.2.9,192.0.2.1", "TCP 80->8080", "app=web")},
 		{"a Service whose selector alone changed keeps every other cell", "services", svcPlain, svcOtherSelector, svcShows("ClusterIP", "10.0.0.1", "<none>", "TCP 80->8080", "app=new")},
 		{"Endpoints with no subsets left show no address or port", "endpoints", epFull, epNone, epShows(0, 0, "-", "-")},
 		{"Endpoints whose not-ready address became ready list it once", "endpoints", epFull, epAllReady, epShows(2, 0, "10.0.0.1, 10.0.0.2", "http:80/TCP")},

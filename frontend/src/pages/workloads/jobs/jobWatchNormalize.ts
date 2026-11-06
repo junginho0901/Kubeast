@@ -7,14 +7,24 @@
 
 import type { JobInfo } from '@/services/api'
 
-// The server's rule (jobrow.Status), for a row it could not convert: the conditions say Complete or Failed, else Running.
-function statusOfConditions(conditions: unknown): string {
-  for (const c of Array.isArray(conditions) ? conditions : []) {
-    if (c?.status !== 'True') continue
-    if (c?.type === 'Complete') return 'Complete'
-    if (c?.type === 'Failed') return 'Failed'
-  }
+// The server's rule (jobrow.Status, kubectl's printJob), for a row it could not convert.
+function statusOfObject(conditions: unknown, deleting: boolean): string {
+  const list: any[] = Array.isArray(conditions) ? conditions : []
+  const holds = (type: string) => list.find((c) => c?.type === type)?.status === 'True'
+  if (holds('Complete')) return 'Complete'
+  if (holds('Failed')) return 'Failed'
+  if (deleting) return 'Terminating'
+  if (holds('Suspended')) return 'Suspended'
+  if (holds('FailureTarget')) return 'FailureTarget'
+  if (holds('SuccessCriteriaMet')) return 'SuccessCriteriaMet'
   return 'Running'
+}
+
+// The server's completionsText, for the same row.
+function completionsOfObject(completions: unknown, parallelism: unknown, succeeded: unknown): string {
+  const done = Number(succeeded ?? 0)
+  if (completions != null) return `${done}/${completions}`
+  return Number(parallelism ?? 0) > 1 ? `${done}/1 of ${parallelism}` : `${done}/1`
 }
 
 export function normalizeWatchJobObject(obj: any): JobInfo {
@@ -53,11 +63,12 @@ export function normalizeWatchJobObject(obj: any): JobInfo {
     name: metadata?.name ?? obj?.name ?? '',
     namespace: metadata?.namespace ?? obj?.namespace ?? '',
     completions: spec?.completions ?? obj?.completions ?? null,
+    completions_text: completionsOfObject(spec?.completions ?? obj?.completions, spec?.parallelism ?? obj?.parallelism, status?.succeeded ?? obj?.succeeded),
     parallelism: spec?.parallelism ?? obj?.parallelism ?? null,
     active: status?.active ?? obj?.active ?? 0,
     succeeded: status?.succeeded ?? obj?.succeeded ?? 0,
     failed: status?.failed ?? obj?.failed ?? 0,
-    status: statusOfConditions(status?.conditions),
+    status: statusOfObject(status?.conditions, !!metadata?.deletionTimestamp),
     containers: containers.map((container: any) => container?.name).filter(Boolean),
     images: containers.map((container: any) => container?.image).filter(Boolean),
     start_time: startTime ?? obj?.start_time ?? null,

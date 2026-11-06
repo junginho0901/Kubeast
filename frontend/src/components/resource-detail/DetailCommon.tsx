@@ -82,9 +82,9 @@ export function InfoGrid({ children }: { children: ReactNode }) {
 export function StatusBadge({ status, label }: { status: string; label?: string }) {
   const lower = (status || '').toLowerCase()
   let cls = 'badge-info'
-  if (['active', 'running', 'ready', 'bound', 'available', 'true', 'succeeded', 'completed'].some(s => lower.includes(s))) cls = 'badge-success'
-  else if (['pending', 'warning', 'terminating', 'unknown'].some(s => lower.includes(s))) cls = 'badge-warning'
-  else if (['failed', 'error', 'crashloopbackoff', 'false', 'notready', 'lost'].some(s => lower.includes(s))) cls = 'badge-error'
+  if (lower === 'complete' || ['active', 'running', 'ready', 'bound', 'available', 'true', 'succeeded', 'completed', 'successcriteriamet'].some(s => lower.includes(s))) cls = 'badge-success'
+  else if (['pending', 'warning', 'terminating', 'unknown', 'suspended'].some(s => lower.includes(s))) cls = 'badge-warning'
+  else if (['failed', 'error', 'crashloopbackoff', 'false', 'notready', 'lost', 'failuretarget'].some(s => lower.includes(s))) cls = 'badge-error'
   return <span className={`badge ${cls}`} title={label && label !== status ? status : undefined}>{label || status || '-'}</span>
 }
 

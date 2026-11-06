@@ -103,10 +103,14 @@ export const getPodHealth = (pod: any): PodHealth => {
     return { level: 'error' as const, reason: errorReason || 'Failed', phase }
   }
 
-  const readyCount = containers.filter((c: any) => c?.ready).length
-  const totalCount = containers.length
+  // A sidecar counts as a container, as in kubectl's READY, and once started holds nothing back: it is meant to keep running.
+  const isSidecar = (c: any) => c?.restart_policy === 'Always'
+  const countedContainers = [...containers, ...initContainers.filter(isSidecar)]
+  const readyCount = countedContainers.filter((c: any) => c?.ready).length
+  const totalCount = countedContainers.length
   const notReady = totalCount > 0 && readyCount < totalCount
   const initNotReady = initContainers.length > 0 && initContainers.some((c: any) => {
+    if (isSidecar(c) && c?.started) return false
     const state = c?.state || {}
     if (state.waiting) return true
     if (state.running) return true

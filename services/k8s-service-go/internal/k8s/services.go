@@ -84,9 +84,6 @@ func (s *Service) DescribeService(ctx context.Context, namespace, name string) (
 	if svc.Spec.ExternalName != "" {
 		result["external_name"] = svc.Spec.ExternalName
 	}
-	if len(svc.Spec.ExternalIPs) > 0 {
-		result["external_ips"] = svc.Spec.ExternalIPs
-	}
 	if svc.Spec.IPFamilyPolicy != nil {
 		result["ip_family_policy"] = string(*svc.Spec.IPFamilyPolicy)
 	}
@@ -114,20 +111,6 @@ func (s *Service) DescribeService(ctx context.Context, namespace, name string) (
 		})
 	}
 	result["owner_references"] = owners
-
-	// Load balancer ingress
-	lbIngress := make([]map[string]interface{}, 0)
-	for _, ing := range svc.Status.LoadBalancer.Ingress {
-		entry := map[string]interface{}{}
-		if ing.IP != "" {
-			entry["ip"] = ing.IP
-		}
-		if ing.Hostname != "" {
-			entry["hostname"] = ing.Hostname
-		}
-		lbIngress = append(lbIngress, entry)
-	}
-	result["load_balancer_ingress"] = lbIngress
 
 	// Conditions
 	conditions := make([]map[string]interface{}, 0)
