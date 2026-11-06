@@ -77,7 +77,7 @@ describe('which drawers', () => {
 
   it('the drawer renders it after the Info content for those kinds, with the object\'s own Kind and a custom resource\'s apiVersion', () => {
     const src = readFileSync(fileURLToPath(new URL('../ResourceDetailDrawer.tsx', import.meta.url)), 'utf8')
-    expect(src).toMatch(/\) : renderInfoContent\(\)\}\s*\{!unreadable && !resolving && violationsAfterInfo\(kind, ns\) && <PolicyViolations kind=\{displayKind\} namespace=\{ns \?\? ''\} name=\{name\} apiVersion=\{violationsApiVersion\(kind, target\?\.rawJson\)\} \/>\}/)
+    expect(src).toMatch(/\) : renderInfoContent\(\)\}\s*\{!unreadable && !resolving && !linkPending && violationsAfterInfo\(kind, ns\) && <PolicyViolations kind=\{displayKind\} namespace=\{ns \?\? ''\} name=\{name\} apiVersion=\{violationsApiVersion\(kind, target\?\.rawJson\)\} \/>\}/)
   })
 
   it('the workload drawer asks with its built-in group', () => {
