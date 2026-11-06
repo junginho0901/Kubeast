@@ -95,6 +95,50 @@ export function jobDrawerCompletions(describe: { completions?: unknown } | null 
   return spec.completions == null ? '-' : String(spec.completions)
 }
 
+type Fields = Record<string, unknown>
+
+// The Job window's Job Info rows, each undefined where the window has no row for it: the window draws these and the
+// floating chat is told them.
+export function jobDrawerInfo(describe: Fields | null | undefined, spec: Fields, status: Fields) {
+  const start = describe?.start_time ? String(describe.start_time) : undefined
+  const completion = describe?.completion_time ? String(describe.completion_time) : undefined
+  const yesNo = (value: unknown) => (value == null ? undefined : value ? 'Yes' : 'No')
+  const text = (value: unknown, unit = '') => (value == null ? undefined : `${String(value)}${unit}`)
+  return {
+    completions: jobDrawerCompletions(describe, spec),
+    parallelism: String(describe?.parallelism ?? spec.parallelism ?? '-'),
+    active: String(describe?.active ?? status.active ?? 0),
+    succeeded: String(describe?.succeeded ?? status.succeeded ?? 0),
+    failed: String(describe?.failed ?? status.failed ?? 0),
+    status: describe?.status ? String(describe.status) : undefined,
+    start_time: start,
+    completion_time: completion,
+    duration: start ? formatDuration(jobDurationSeconds({ start_time: start, completion_time: completion ?? null })) : undefined,
+    backoff_limit: text(describe?.backoff_limit),
+    active_deadline: text(describe?.active_deadline_seconds, 's'),
+    ttl_after_finished: text(describe?.ttl_seconds_after_finished, 's'),
+    completion_mode: describe?.completion_mode ? String(describe.completion_mode) : undefined,
+    suspend: yesNo(describe?.suspend),
+    manual_selector: yesNo(describe?.manual_selector),
+  }
+}
+
+export type JobDrawerInfo = ReturnType<typeof jobDrawerInfo>
+
+// The floating chat is told the window's rows as the window words them.
+export function jobLayerFields(info: JobDrawerInfo): Fields {
+  return { ...info }
+}
+
+export function jobLayerHeadline(info: JobDrawerInfo): string {
+  const counts = `Completions ${info.completions}, Parallelism ${info.parallelism}, Active ${info.active}, Succeeded ${info.succeeded}, Failed ${info.failed}`
+  return info.status ? `Status ${info.status}, ${counts}` : counts
+}
+
+export function jobLayerNeedsALook(info: JobDrawerInfo): boolean {
+  return jobNeedsALook({ status: info.status ?? '', failed: Number(info.failed) })
+}
+
 // Green as a Pod's Running and the Resource Graph's: a running Job asks nothing, and yellow is the Issues filter's.
 export function getJobStatusColor(status: string): string {
   const lower = String(status || '').toLowerCase()

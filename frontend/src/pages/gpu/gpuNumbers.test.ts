@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { GPUDeviceMetric, GPUNodeInfo, GPUPodInfo, GPUVendor } from '@/services/api'
 import {
   cudaVersion, devicePluginBadges, devicePluginState, driverVersion, gpuCountOf, gpuCountsByVendor, gpuHolderPods, gpuModels, gpuNodeCounts,
-  gpuPodCounts, gpuPodStatuses, gpuPodsByNode, gpuPodVendorCounts, gpuSeriesPod, gpuVendorCounts, gpuVendorLabels, gpuVendorOf, nodeGpuRows,
+  gpuPodCounts, gpuPodStatuses, gpuPodsByNode, gpuPodsNotRunning, gpuPodVendorCounts, gpuSeriesPod, gpuVendorCounts, gpuVendorLabels, gpuVendorOf, nodeGpuRows,
   nodeVendorText, podGpuUsage,
 } from './gpuNumbers'
 import { getStatusColor as dashboardStatusColor } from './gpu-dashboard/helpers'
@@ -41,6 +41,19 @@ describe('GPU screen numbers', () => {
       pod('err', 'Failed', 'Error', 8),
     ]
     expect(gpuPodCounts(pods)).toEqual({ total: 6, running: 2, pending: 2, failed: 2, requested: 5, namespaces: 2 })
+  })
+
+  // what the floating chat is told is what the table says: a crash under the phase Running counts, a finished pod does not
+  it('counts the pods not running by kubectl\'s STATUS, not the phase', () => {
+    const pods = [
+      pod('run', 'Running', 'Running', 1),
+      pod('crash', 'Running', 'CrashLoopBackOff', 2),
+      pod('leaving', 'Running', 'Terminating', 1),
+      pod('wait', 'Pending', 'Pending', 1),
+      pod('done', 'Succeeded', 'Completed', 4),
+      pod('err', 'Failed', 'Error', 8),
+    ]
+    expect(gpuPodsNotRunning(pods).map((p) => p.name)).toEqual(['crash', 'leaving', 'wait', 'err'])
   })
 
   it('says a device plugin not found apart from one not ready', () => {

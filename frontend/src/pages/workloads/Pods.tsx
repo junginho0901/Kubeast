@@ -7,6 +7,7 @@ import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { podNeedsALook } from '@/utils/aiContext/podCounts'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Plus, RefreshCw } from 'lucide-react'
@@ -177,12 +178,6 @@ spec:
     const alert = alertParts.length ? `, ${alertParts.join(', ')}` : ''
     const summary = `${prefix}${nsLabel} Pod ${podStats.total}개 (Ready ${podStats.ready}${alert})`
 
-    const problematic = (p: PodListRow) => {
-      if (p.phase && p.phase !== 'Running') return true
-      if ((p.restart_count ?? 0) > 5) return true
-      return /error|crashloop|oomkilled|errimagepull|backoff/i.test(p.status)
-    }
-
     return {
       source: 'base' as const,
       summary,
@@ -208,7 +203,7 @@ spec:
           pageSize: rowsPerPage,
           topN: rowsPerPage,
           pickFields: ['name', 'namespace', 'phase', 'status', 'ready', 'restart_count', 'node_name'],
-          filterProblematic: (p) => problematic(p as unknown as PodListRow),
+          filterProblematic: (p) => podNeedsALook(p as unknown as PodListRow),
           interpret: (items) => {
             const out: string[] = []
             const podsArr = items as unknown as PodListRow[]

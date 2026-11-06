@@ -813,7 +813,8 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
       }
       await page.goto(url('/gpu/pods'))
       await expect.poll(async () => byName((await ask())?.stats), { timeout: 30_000 }).toEqual(byName({
-        total: m.pods.length, total_gpu_requested: m.used + m.waiting, not_running: m.pods.filter((p) => p.phase !== 'Running').length,
+        // as the table says: a pod crashing under the phase Running counts, a finished one does not
+        total: m.pods.length, total_gpu_requested: m.used + m.waiting, not_running: m.pods.filter((p) => !['Running', 'Completed', 'Succeeded'].includes(p.status)).length,
         // every GPU pod here asks for NVIDIA's
         by_vendor: [{ vendor: 'NVIDIA', pods: m.pods.length, requested: m.used + m.waiting }],
         by_status: [...statuses].map(([status, pods]) => ({ status, pods })),

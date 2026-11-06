@@ -4,7 +4,7 @@ import { InfoSection, InfoRow, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { nextRunOf, nextRunTitle } from '@/pages/workloads/cronjobs/cronJobHelpers'
 import { humanDuration } from '@/utils/time'
-import { formatDuration, jobDrawerCompletions, jobDurationSeconds } from '@/pages/workloads/jobs/jobHelpers'
+import { formatDuration, jobDrawerInfo, jobDurationSeconds } from '@/pages/workloads/jobs/jobHelpers'
 
 interface Props {
   isJob: boolean
@@ -36,26 +36,28 @@ export default function WorkloadKindInfo({
 
   if (!isJob && !isCronJob) return null
 
+  const job = isJob ? jobDrawerInfo(describe, spec, status) : null
+
   return (
     <>
-      {isJob && (
+      {job && (
         <InfoSection title="Job Info">
           <div className="space-y-2">
-            <InfoRow label="Completions" value={jobDrawerCompletions(describe, spec)} />
-            <InfoRow label="Parallelism" value={String(describe?.parallelism ?? spec.parallelism ?? '-')} />
-            <InfoRow label="Active" value={String(describe?.active ?? status.active ?? 0)} />
-            <InfoRow label="Succeeded" value={String(describe?.succeeded ?? status.succeeded ?? 0)} />
-            <InfoRow label="Failed" value={String(describe?.failed ?? status.failed ?? 0)} />
-            {describe?.status && <InfoRow label="Status" value={String(describe.status)} />}
-            {describe?.start_time && <InfoRow label="Start Time" value={`${fmtTs(String(describe.start_time))} (${fmtRel(String(describe.start_time))})`} />}
-            {describe?.completion_time && <InfoRow label="Completion Time" value={`${fmtTs(String(describe.completion_time))} (${fmtRel(String(describe.completion_time))})`} />}
-            {describe?.start_time && <InfoRow label="Duration" value={formatDuration(jobDurationSeconds({ start_time: String(describe.start_time), completion_time: describe?.completion_time ? String(describe.completion_time) : null }))} />}
-            {describe?.backoff_limit != null && <InfoRow label="Backoff Limit" value={String(describe.backoff_limit)} />}
-            {describe?.active_deadline_seconds != null && <InfoRow label="Active Deadline" value={`${String(describe.active_deadline_seconds)}s`} />}
-            {describe?.ttl_seconds_after_finished != null && <InfoRow label="TTL After Finished" value={`${String(describe.ttl_seconds_after_finished)}s`} />}
-            {describe?.completion_mode && <InfoRow label="Completion Mode" value={String(describe.completion_mode)} />}
-            {describe?.suspend != null && <InfoRow label="Suspend" value={describe.suspend ? 'Yes' : 'No'} />}
-            {describe?.manual_selector != null && <InfoRow label="Manual Selector" value={describe.manual_selector ? 'Yes' : 'No'} />}
+            <InfoRow label="Completions" value={job.completions} />
+            <InfoRow label="Parallelism" value={job.parallelism} />
+            <InfoRow label="Active" value={job.active} />
+            <InfoRow label="Succeeded" value={job.succeeded} />
+            <InfoRow label="Failed" value={job.failed} />
+            {job.status && <InfoRow label="Status" value={job.status} />}
+            {job.start_time && <InfoRow label="Start Time" value={`${fmtTs(job.start_time)} (${fmtRel(job.start_time)})`} />}
+            {job.completion_time && <InfoRow label="Completion Time" value={`${fmtTs(job.completion_time)} (${fmtRel(job.completion_time)})`} />}
+            {job.duration && <InfoRow label="Duration" value={job.duration} />}
+            {job.backoff_limit && <InfoRow label="Backoff Limit" value={job.backoff_limit} />}
+            {job.active_deadline && <InfoRow label="Active Deadline" value={job.active_deadline} />}
+            {job.ttl_after_finished && <InfoRow label="TTL After Finished" value={job.ttl_after_finished} />}
+            {job.completion_mode && <InfoRow label="Completion Mode" value={job.completion_mode} />}
+            {job.suspend && <InfoRow label="Suspend" value={job.suspend} />}
+            {job.manual_selector && <InfoRow label="Manual Selector" value={job.manual_selector} />}
           </div>
         </InfoSection>
       )}

@@ -8,11 +8,71 @@ import {
   jobChatStats,
   jobCompletionsCell,
   jobDrawerCompletions,
+  jobDrawerInfo,
   jobDurationSeconds,
+  jobLayerFields,
+  jobLayerHeadline,
+  jobLayerNeedsALook,
   jobNeedsALook,
   jobSummary,
   jobToWorkloadRawJson,
 } from './jobHelpers'
+
+// The Job window's Job Info rows, and the floating chat is told the same values.
+describe('what the Job window shows and tells the floating chat', () => {
+  const describeAnswer = {
+    status: 'Running', completions: 3, parallelism: 2, active: 1, succeeded: 1, failed: 2,
+    start_time: '2026-11-07T00:00:00Z', backoff_limit: 6, active_deadline_seconds: 600, ttl_seconds_after_finished: 3600,
+    completion_mode: 'NonIndexed', suspend: false, manual_selector: true,
+  }
+
+  it('draws every row of the describe answer', () => {
+    expect(jobDrawerInfo(describeAnswer, {}, {})).toMatchObject({
+      completions: '3', parallelism: '2', active: '1', succeeded: '1', failed: '2', status: 'Running', start_time: '2026-11-07T00:00:00Z',
+      backoff_limit: '6', active_deadline: '600s', ttl_after_finished: '3600s', completion_mode: 'NonIndexed', suspend: 'No', manual_selector: 'Yes',
+    })
+  })
+
+  it('reads a finished Job\'s Duration from its completion time', () => {
+    const info = jobDrawerInfo({ ...describeAnswer, status: 'Complete', completion_time: '2026-11-07T00:01:30Z' }, {}, {})
+    expect(info.duration).toBe('90s')
+    expect(info.completion_time).toBe('2026-11-07T00:01:30Z')
+  })
+
+  it('says <unset> for a work queue, as the window does', () => {
+    expect(jobDrawerInfo({ ...describeAnswer, completions: null }, {}, {}).completions).toBe('<unset>')
+  })
+
+  it('reads the row until the describe answer has come', () => {
+    const info = jobDrawerInfo(undefined, { completions: 1, parallelism: 1 }, { active: 1, succeeded: 0, failed: 0 })
+    expect(info).toMatchObject({ completions: '1', parallelism: '1', active: '1', succeeded: '0', failed: '0' })
+    expect(info.status).toBeUndefined()
+    expect(info.duration).toBeUndefined()
+  })
+
+  it('tells the floating chat the rows the window shows, by the name of the row', () => {
+    const fields = jobLayerFields(jobDrawerInfo(describeAnswer, {}, {}))
+    expect(fields).toMatchObject({
+      status: 'Running', completions: '3', parallelism: '2', active: '1', succeeded: '1', failed: '2', start_time: '2026-11-07T00:00:00Z',
+      backoff_limit: '6', active_deadline: '600s', ttl_after_finished: '3600s', completion_mode: 'NonIndexed', suspend: 'No', manual_selector: 'Yes',
+    })
+    expect(fields.duration).toEqual(expect.any(String))
+  })
+
+  it('heads the layer with what the Job is doing, not replicas it does not have', () => {
+    expect(jobLayerHeadline(jobDrawerInfo(describeAnswer, {}, {}))).toBe('Status Running, Completions 3, Parallelism 2, Active 1, Succeeded 1, Failed 2')
+  })
+
+  it('marks a Job as the Jobs list does: failed, decided or retrying', () => {
+    const needs = (status: string, failed: number) => jobLayerNeedsALook(jobDrawerInfo({ ...describeAnswer, status, failed }, {}, {}))
+    expect(needs('Failed', 0)).toBe(true)
+    expect(needs('FailureTarget', 1)).toBe(true)
+    expect(needs('Running', 1)).toBe(true)
+    expect(needs('Running', 0)).toBe(false)
+    expect(needs('Complete', 2)).toBe(false)
+    expect(needs('Suspended', 1)).toBe(false)
+  })
+})
 
 // The floating chat is told the cards' numbers: they read a Job's Status, not how many of its pods failed or run.
 describe('what the floating chat is told of the Jobs', () => {

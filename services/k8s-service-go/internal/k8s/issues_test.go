@@ -169,6 +169,30 @@ func TestIssuesFromJobs_AJobThatHasFailedIsNotRetrying(t *testing.T) {
 	}
 }
 
+// Only a Job still running tries a failed pod again: the others have ended, been stopped or are on their way out, and
+// their remaining pods say nothing about a retry.
+func TestIssuesFromJobs_OnlyARunningJobIsRetrying(t *testing.T) {
+	want := map[string]string{
+		"Running":            "Retrying",
+		"Complete":           "",
+		"SuccessCriteriaMet": "",
+		"Suspended":          "",
+		"Terminating":        "",
+		"Failed":             "Failed",
+		"FailureTarget":      "FailureTarget",
+	}
+	for status, reason := range want {
+		jobs := []m{{"namespace": "a", "name": "j", "status": status, "failed": int32(1), "succeeded": int32(0), "active": int32(1)}}
+		got := ""
+		if issues := issuesFromJobs(toMaps(jobs), nil); len(issues) > 0 {
+			got = issues[0].Reason
+		}
+		if got != reason {
+			t.Errorf("a %s Job with a failed and an active pod: issue %q, want %q", status, got, reason)
+		}
+	}
+}
+
 func TestIssuesFromHPAsAndPVCs(t *testing.T) {
 	hpas := []m{
 		{"namespace": "a", "name": "web", "max_replicas": int32(5), "current_replicas": int32(5), "desired_replicas": int32(5)},

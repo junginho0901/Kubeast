@@ -1,8 +1,9 @@
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsSection, Th, NoneText, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
-import { violatingPodCount } from './limitRangeViolations'
+import { limitRangeViolationsLayer, limitRangeViolationsSummary, violatingPodCount } from './limitRangeViolations'
 import { usePagination } from './usePagination'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -38,7 +39,16 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
   const podCount = violatingPodCount(violationList)
   const { items: pagedViolations, nav: violationsNav } = usePagination(violationList, 10)
 
-  useResourceDetailOverlay({ kind: 'LimitRange', name, namespace, describe: desc })
+  const answered = Array.isArray(violations) ? violations : undefined
+  const violationsLayer = useMemo(() => limitRangeViolationsLayer(answered), [answered])
+  useResourceDetailOverlay({
+    kind: 'LimitRange',
+    name,
+    namespace,
+    describe: desc,
+    extras: violationsLayer,
+    summary: limitRangeViolationsSummary(name, namespace, answered),
+  })
 
   if (isLoading) {
     return <div className="text-xs text-slate-400 py-4 text-center"><Tx>Loading...</Tx></div>

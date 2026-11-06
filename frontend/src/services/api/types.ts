@@ -181,10 +181,14 @@ export interface NamespaceLimitRange {
 export interface NamespacePod {
   name: string
   namespace: string
+  // kubectl's STATUS; phase is the pod's status.phase
   status: string
+  phase?: string
   ready: string
   restarts: number
+  restart_count?: number
   node?: string
+  node_name?: string
   created_at?: string
 }
 

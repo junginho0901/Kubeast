@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest'
 import { PageContextProvider } from '@/components/PageContextProvider'
 import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
 import ConfigMapInfo from './ConfigMapInfo'
+import { namespacePodsLayer } from './namespacePods'
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 
@@ -52,7 +53,7 @@ describe('a drawer pod table\'s Status', () => {
 
   // the Namespace drawer's pod table shows the Status: the floating chat gets it beside the phase
   it('reaches the floating chat with the Namespace drawer\'s pods', () => {
-    const src = readFileSync(join(HERE, 'NamespaceInfo.tsx'), 'utf8')
-    expect(src).toContain('status: p.status,')
+    const [pod] = namespacePodsLayer([{ name: 'web', status: 'CrashLoopBackOff', phase: 'Running' }], 'shop').items
+    expect(pod).toMatchObject({ status: 'CrashLoopBackOff', phase: 'Running' })
   })
 })
