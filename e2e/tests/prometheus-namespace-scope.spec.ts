@@ -97,6 +97,36 @@ test.describe('the cluster\'s Prometheus and a grant limited to namespaces', () 
     }
   })
 
+  test('a cluster with no Prometheus has nothing to refuse: the limited grant is told it is not there, and the dashboard names no permission for it', async ({ browser, request }) => {
+    const status = await (await request.get(`/api/v1/cluster/prometheus/status?cluster=${SELF}`, { headers: bearer(admin) })).json()
+    test.skip(status.available, `the self cluster reads a Prometheus (${JSON.stringify(status)})`)
+    for (const read of READS) {
+      const asScoped = await request.get(`/api/v1/cluster/${read}${read.includes('?') ? '&' : '?'}cluster=${SELF}`, { headers: bearer(scoped) })
+      expect(asScoped.status(), `${read} as the limited grant`).toBe(200)
+      expect((await asScoped.json()).available, `${read} as the limited grant`).toBe(false)
+    }
+    const context = await browser.newContext({ storageState: { cookies: [], origins: [] } })
+    try {
+      const page = await context.newPage()
+      await page.goto('/login')
+      await page.locator('input[autocomplete="email"]').first().fill(scopedEmail)
+      await page.locator('input[type="password"]').first().fill(PW)
+      await page.locator('button[type="submit"]').first().click()
+      await page.waitForFunction(() => !document.querySelector('input[autocomplete="email"]'), undefined, { timeout: 20_000 })
+      const refused: string[] = []
+      page.on('response', (r) => { if (/\/prometheus\//.test(r.url()) && r.status() === 403) refused.push(r.url()) })
+      await page.goto(`/?cluster=${SELF}`)
+      // the banner that names what the cluster refused: the lists the grant may not read are still in it, Prometheus is not
+      await expect(page.getByText(/You do not have permission to view/)).toBeVisible({ timeout: 20_000 })
+      await expect.poll(async () => (await page.getByText(/You do not have permission to view/).innerText()), { timeout: 10_000 }).toContain('Node')
+      await page.waitForLoadState('networkidle').catch(() => {})
+      expect(await page.getByText(/You do not have permission to view/).innerText(), 'the banner').not.toContain('prometheus')
+      expect(refused, 'Prometheus reads refused on a cluster with none').toEqual([])
+    } finally {
+      await context.close()
+    }
+  })
+
   test('an external store: refused to the limited grant, served to the cluster-wide reader', async ({ request }) => {
     const before = await (await request.get(`/api/v1/cluster/prometheus/status?cluster=${SELF}`, { headers: bearer(admin) })).json()
     test.skip(before.source === 'external', `the self cluster already names an external store (${before.endpoint})`)

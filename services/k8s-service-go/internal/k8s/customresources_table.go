@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/client-go/rest"
 )
 
 // tableAccept asks the API server for its server-side printing, as kubectl get does (kubectl v1.37 get.go): a
@@ -33,8 +35,8 @@ func (s *Service) tableAt(ctx context.Context, segments ...string) (*metav1.Tabl
 	if cs == nil {
 		return nil, errNotLoaded
 	}
-	raw, err := cs.RESTClient().Get().AbsPath(segments...).
-		Param("includeObject", "Object").SetHeader("Accept", tableAccept).Do(ctx).Raw()
+	raw, err := tableBody(ctx, cs.RESTClient().Get().AbsPath(segments...).
+		Param("includeObject", "Object").SetHeader("Accept", tableAccept))
 	if err != nil {
 		return nil, err
 	}
@@ -90,4 +92,19 @@ func customResourceRows(t *metav1.Table, group, version string) []map[string]int
 		rows = append(rows, entry)
 	}
 	return rows
+}
+
+// tableBody reads a request that asks for a Table. client-go decodes a refusal with the decoder of the Accept it sent,
+// which takes no Status, and gives up with the message "unknown"; the Status is in the body, so the error keeps the
+// cluster's own sentence (and stays a Forbidden, a NotFound).
+func tableBody(ctx context.Context, req *rest.Request) ([]byte, error) {
+	raw, err := req.Do(ctx).Raw()
+	if err == nil {
+		return raw, nil
+	}
+	var status metav1.Status
+	if json.Unmarshal(raw, &status) == nil && status.Kind == "Status" && status.Message != "" {
+		return nil, &apierrors.StatusError{ErrStatus: status}
+	}
+	return nil, err
 }

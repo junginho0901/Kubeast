@@ -15,6 +15,16 @@ import (
 func TestPrometheusReadsRefuseANamespaceGrant(t *testing.T) {
 	scoped := auth.TokenPayload{UserID: "u3", Email: "shop@example.com", Perms: auth.PermissionMatrix{"*": {"resource.pod.read"}},
 		Roles: map[string]string{"self": "Read"}, Namespaces: map[string][]string{"self": {"shop", "cart"}}}
+	// a cluster with a store: each read refused, through the cluster in prometheus-namespace-scope.spec.ts
+	w := httptest.NewRecorder()
+	if promClusterWide(w, logSearchRequestAs("/api/v1/prometheus/query?query=up", "self", "", scoped)) {
+		t.Fatal("a grant limited to namespaces passed")
+	}
+	if w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), "limited to namespaces (shop, cart)") {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	// a cluster with none: nothing to refuse, the answer anyone gets
+	t.Setenv("PROMETHEUS_ENABLED", "false")
 	h := &Handler{}
 	reads := map[string]http.HandlerFunc{
 		"/api/v1/prometheus/query?query=up":         h.PrometheusQuery,
@@ -28,8 +38,8 @@ func TestPrometheusReadsRefuseANamespaceGrant(t *testing.T) {
 	for target, read := range reads {
 		w := httptest.NewRecorder()
 		read(w, logSearchRequestAs(target, "self", "", scoped))
-		if w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), "limited to namespaces (shop, cart)") {
-			t.Fatalf("%s: %d %s", target, w.Code, w.Body)
+		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"available":false`) {
+			t.Fatalf("%s with no Prometheus: %d %s", target, w.Code, w.Body)
 		}
 	}
 	for name, c := range map[string]struct {

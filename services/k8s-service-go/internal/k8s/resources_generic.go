@@ -149,7 +149,7 @@ func (s *Service) tablePage(ctx context.Context, gvr schema.GroupVersionResource
 	if opts.LabelSelector != "" {
 		req = req.Param("labelSelector", opts.LabelSelector)
 	}
-	raw, err := req.Do(ctx).Raw()
+	raw, err := tableBody(ctx, req)
 	if err != nil {
 		return rawPage{}, err
 	}
