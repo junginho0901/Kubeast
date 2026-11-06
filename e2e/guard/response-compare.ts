@@ -12,6 +12,9 @@ const at = (o: Record<string, unknown>, dotted: string): unknown =>
   dotted.split('.').reduce<unknown>((v, k) => (v && typeof v === 'object' ? (v as Record<string, unknown>)[k] : undefined), o)
 
 function nameOf(row: Record<string, unknown>): string | null {
+  // an event is named by its object, reason and message: its times are what a change moves, and rows of one second have no order
+  const object = row.involved_object as Record<string, unknown> | undefined
+  if (object && typeof object === 'object') return [object.kind, object.namespace, object.name, row.reason, row.message].join('/')
   for (const f of NAME_FIELDS) {
     const v = at(row, f)
     if (typeof v === 'string' || typeof v === 'number') return String(v)
@@ -20,7 +23,9 @@ function nameOf(row: Record<string, unknown>): string | null {
   if (typeof named !== 'string') return null
   const ns = (at(row, 'metadata.namespace') ?? row.namespace) as unknown
   const kind = row.kind ?? row.type
-  return [typeof kind === 'string' ? kind : '', typeof ns === 'string' ? ns : '', named].join('/')
+  // a rollout's revisions share the owner's name
+  const revision = typeof row.revision === 'string' || typeof row.revision === 'number' ? [String(row.revision)] : []
+  return [typeof kind === 'string' ? kind : '', typeof ns === 'string' ? ns : '', named, ...revision].join('/')
 }
 
 function rowNames(rows: unknown[]): string[] | null {
@@ -30,7 +35,15 @@ function rowNames(rows: unknown[]): string[] | null {
   if (!plain && !rows.every((r) => r && typeof r === 'object' && !Array.isArray(r))) return null
   const names = rows.map((r) => (plain ? String(r) : nameOf(r as Record<string, unknown>)))
   if (names.some((n) => n === null)) return null
-  return new Set(names).size === names.length ? (names as string[]) : null
+  if (new Set(names).size === names.length) return names as string[]
+  if (plain) return null
+  // the same name twice (an event that happened again): each is that name's first, second…
+  const seen = new Map<string, number>()
+  return (names as string[]).map((name) => {
+    const nth = (seen.get(name) ?? 0) + 1
+    seen.set(name, nth)
+    return nth === 1 ? name : `${name}#${nth}`
+  })
 }
 
 export function flatten(value: unknown, path = '$', out: Cells = new Map()): Cells {
@@ -77,15 +90,15 @@ export function sortCells(old1: Answer, fresh: Answer, old2: Answer): Sorted {
   return { cells: all.size, real, noise }
 }
 
-// A known difference: which requests (route), which cells, why, and the PR that made it. A rule with no reason or PR
-// is refused; the file's changes show in the diff of whichever PR adds to it.
-export type IgnoreRule = { route: string; cell: string; why: string; pr: string }
-export function compileRules(rules: IgnoreRule[]): ((route: string, cell: string) => IgnoreRule | null) {
+// A known difference: which requests (route), which cells, optionally whose answers (user), why, and the PR that made
+// it. A rule with no reason or PR is refused; the file's changes show in the diff of whichever PR adds to it.
+export type IgnoreRule = { route: string; cell: string; user?: string; why: string; pr: string }
+export function compileRules(rules: IgnoreRule[]): ((route: string, cell: string, user?: string) => IgnoreRule | null) {
   const compiled = rules.map((r) => {
     if (!r.why?.trim() || !r.pr?.trim()) throw new Error(`an ignore rule needs a reason and a PR: ${JSON.stringify(r)}`)
-    return { rule: r, route: new RegExp(r.route), cell: new RegExp(r.cell) }
+    return { rule: r, route: new RegExp(r.route), cell: new RegExp(r.cell), user: r.user ? new RegExp(r.user) : null }
   })
-  return (route, cell) => compiled.find((c) => c.route.test(route) && c.cell.test(cell))?.rule ?? null
+  return (route, cell, user = '') => compiled.find((c) => c.route.test(route) && c.cell.test(cell) && (!c.user || c.user.test(user)))?.rule ?? null
 }
 
 // /api/v1/cluster/pods/x?cluster=self → the same text; rows of the table group by path without the query.

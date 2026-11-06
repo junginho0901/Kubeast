@@ -57,9 +57,30 @@ test.describe('the response comparison', () => {
     expect(lost.real.map((d) => d.cell).sort()).toEqual(['$.keys.$length', '$.keys.$order', '$.keys[b]'])
   })
 
-  test('rows with no name, or with the same name twice, pair by position', () => {
+  test('rows with no name pair by position, and rows of one name are its first and second', () => {
     expect([...flatten([{ v: 1 }, { v: 2 }]).keys()]).toContain('$[1].v')
-    expect([...flatten([{ name: 'a', v: 1 }, { name: 'a', v: 2 }]).keys()]).toContain('$[1].v')
+    expect([...flatten([{ name: 'a', v: 1 }, { name: 'a', v: 2 }]).keys()]).toContain('$[//a#2].v')
+    expect([...flatten(['x', 'x']).keys()], 'plain values the same twice').toContain('$[1]')
+  })
+
+  test('events pair by their object, reason and message, so a row moved within one second is no difference', () => {
+    const event = (name: string, count: number) => ({ involved_object: { kind: 'Pod', namespace: 'n', name }, reason: 'Failed', message: 'm', count })
+    const moved = sortCells(answer({ events: [event('a', 1), event('b', 1)] }), answer({ events: [event('b', 1), event('a', 1)] }), answer({ events: [event('a', 1), event('b', 1)] }))
+    expect(moved.real.map((d) => d.cell)).toEqual(['$.events.$order'])
+    const counted = sortCells(answer({ events: [event('a', 1)] }), answer({ events: [event('a', 2)] }), answer({ events: [event('a', 1)] }))
+    expect(counted.real).toEqual([{ cell: '$.events[Pod/n/a/Failed/m].count', kind: 'changed', old: '1', new: '2' }])
+  })
+
+  test('a rollout\'s revisions are rows of their own', () => {
+    const rollout = (revision: number, replicas: number) => ({ name: 'web', namespace: 'n', revision, replicas })
+    const s = sortCells(answer([rollout(1, 2), rollout(2, 3)]), answer([rollout(1, 2), rollout(2, 4)]), answer([rollout(1, 2), rollout(2, 3)]))
+    expect(s.real).toEqual([{ cell: '$[/n/web/2].replicas', kind: 'changed', old: '3', new: '4' }])
+  })
+
+  test('an ignore rule can be for one user\'s answers', () => {
+    const match = compileRules([{ route: '^/x$', cell: '.', user: '^nsread$', why: 'because', pr: '#1' }])
+    expect(match('/x', '$.a', 'nsread')?.pr).toBe('#1')
+    expect(match('/x', '$.a', 'viewer')).toBeNull()
   })
 
   test('an ignore rule names the route and cell; one with no reason or PR is refused', () => {
