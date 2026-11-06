@@ -9,6 +9,7 @@ import { InfoSection, InfoRow, InfoGrid, SummaryBadge, KeyValueTags, ConditionsT
 import { fmtRel } from './detailFormat'
 import { usePagination } from './usePagination'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
+import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
 
 interface Props {
   name: string
@@ -180,7 +181,7 @@ export default function PDBInfo({ name, namespace }: Props) {
                       onClick={() => openDetail({ kind: 'Pod', name: p.name, namespace: p.namespace })}
                     >
                       <td className="py-1 pr-2 font-mono">{p.name}</td>
-                      <td className="py-1 pr-2"><StatusBadge status={String(p.phase ?? p.status ?? '-')} /></td>
+                      <td className="py-1 pr-2"><StatusBadge status={podTableStatus(p)} /></td>
                       <td className="py-1 pr-2">{p.ready ?? '-'}</td>
                       <td className="py-1 pr-2 truncate max-w-[160px]">{p.node_name || '-'}</td>
                       <td className="py-1 pr-2 text-slate-400">{fmtRel(p.created_at)}</td>

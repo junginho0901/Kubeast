@@ -11,6 +11,7 @@ import { usePagination } from './usePagination'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricCard } from './PrometheusMetrics'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
+import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
 
 interface Props {
   name: string
@@ -355,7 +356,7 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
                       onClick={() => openDetail({ kind: 'Pod', name: p.name, namespace: p.namespace })}
                     >
                       <td className="py-1 pr-2 font-mono">{p.name}</td>
-                      <td className="py-1 pr-2"><StatusBadge status={String((p as any).phase ?? (p as any).status ?? '-')} /></td>
+                      <td className="py-1 pr-2"><StatusBadge status={podTableStatus(p as any)} /></td>
                       <td className="py-1 pr-2">{(p as any).ready ?? '-'}</td>
                       <td className="py-1 pr-2">{String((p as any).restart_count ?? 0)}</td>
                       <td className="py-1 pr-2 truncate max-w-[160px]">{(p as any).node_name || '-'}</td>

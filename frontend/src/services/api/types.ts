@@ -1318,6 +1318,8 @@ export interface OptimizationResponse {
   }
   // Set when the cluster has an OpenCost: the rows then carry cost_month_usd / saving_month_usd.
   pricing?: CostUnitPrices
+  // The row kinds "Apply without restart" takes (k8s ResizeKindAllowed).
+  resize_kinds?: string[]
 }
 
 // kubelet_volume_stats_* via Prometheus; null when the driver reports no

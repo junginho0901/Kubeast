@@ -3,6 +3,7 @@ import { InfoSection, InfoRow, KeyValueTags, UsageCard, EventsSection, SummaryBa
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { useNodeData } from './node-info/useNodeData'
+import { nodeAllocatedView, readyChangedAt } from './node-info/nodeAllocated'
 import NodeActions from './node-info/NodeActions'
 import NodeGpuInfo from './node-info/NodeGpuInfo'
 import NodePrometheusMetrics from './node-info/NodePrometheusMetrics'
@@ -43,6 +44,8 @@ export default function NodeInfo({ name }: Props) {
   if (isError) return <p className="text-red-400">{tr('nodes.detail.error', 'Failed to load node details.')}</p>
   if (!nodeDescribe) return <p className="text-slate-400">{tr('nodes.detail.notFound', 'Node details not found.')}</p>
 
+  const allocated = nodeAllocatedView(nodeDescribe)
+
   return (
     <>
       <NodeActions name={name} tr={tr} data={data} />
@@ -66,8 +69,8 @@ export default function NodeInfo({ name }: Props) {
       {/* Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-3">
-          <p className="text-xs text-slate-400"><Tx>Uptime</Tx></p>
-          <p className="text-base text-ink mt-1">{fmtRel(nodeDescribe.conditions?.find((c: any) => c.type === 'Ready')?.last_transition_time)}</p>
+          <p className="text-xs text-slate-400"><Tx>Since Ready Changed</Tx></p>
+          <p className="text-base text-ink mt-1">{fmtRel(readyChangedAt(nodeDescribe.conditions))}</p>
         </div>
         <UsageCard
           label="CPU Usage"
@@ -126,6 +129,40 @@ export default function NodeInfo({ name }: Props) {
               </tbody>
             </table>
           </div>
+        ) : <NoneText />}
+      </InfoSection>
+
+      {/* Allocated Resources: kubectl describe node's */}
+      <InfoSection title="Allocated Resources">
+        {allocated.error ? (
+          <p className="text-xs text-red-400" data-testid="node-allocated-error"><Tx text="Could not read the node's pods: {{error}}" values={{ error: allocated.error }} /></p>
+        ) : allocated.rows.length > 0 ? (
+          <>
+            <p className="text-xs text-slate-400 mb-2"><Tx>Total limits may be over 100 percent, i.e., overcommitted.</Tx></p>
+            {allocated.scope && (
+              <p className="text-xs text-slate-400 mb-2" data-testid="node-allocated-scope"><Tx text="Counts only the pods in your namespaces ({{namespaces}})." values={{ namespaces: allocated.scope.join(', ') }} /></p>
+            )}
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs min-w-[540px] table-fixed" data-testid="node-allocated">
+                <thead className="text-slate-400">
+                  <tr>
+                    <Th className="text-left py-2 w-[38%]">Resource</Th>
+                    <Th className="text-left py-2 w-[31%]">Requests</Th>
+                    <Th className="text-left py-2 w-[31%]">Limits</Th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {allocated.rows.map((row) => (
+                    <tr key={row.resource} className="text-slate-200">
+                      <td className="py-2 pr-2 font-mono">{row.resource}</td>
+                      <td className="py-2 pr-2">{row.requests}</td>
+                      <td className="py-2 pr-2">{row.limits}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         ) : <NoneText />}
       </InfoSection>
 

@@ -472,6 +472,7 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
       await page.goto(url('/gpu/dashboard'))
       await expect(badge, 'no DaemonSet of the names Kubeast looks for').toHaveText('Device Plugin Not Found', { timeout: 30_000 })
       await expect(page.getByTestId('gpu-plugin-detail')).toHaveCount(0)
+      await expect(page.getByTestId('gpu-plugin-note')).toHaveText(/^NVIDIA device plugin: not under the names Kubeast looks for\./)
 
       if (kubectl(`get namespace ${PLUGIN.namespace} --ignore-not-found -o name`) === '') {
         kubectl(`create namespace ${PLUGIN.namespace}`)
@@ -483,6 +484,7 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
       await expect(async () => {
         await page.reload()
         await expect(badge).toHaveText('Device Plugin Unhealthy', { timeout: 5_000 })
+        await expect(page.getByTestId('gpu-plugin-note')).toHaveCount(0)
         await expect(page.getByTestId('gpu-plugin-detail')).toHaveText(new RegExp(`^Plugin: ${dsStatus().numberReady}/${dsStatus().desiredNumberScheduled} ready$`, 'i'), { timeout: 5_000 })
       }).toPass({ timeout: 60_000 })
 
@@ -532,13 +534,15 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
     await prepare(page)
     await page.goto(url('/gpu/nodes'))
     const label = (n: Cluster['nodes'][number], k: string) => n.labels[`nvidia.com/${k}`] ?? '-'
+    // GPU Feature Discovery's label is a number of mebibytes: the screen gives it its unit
+    const memory = (n: Cluster['nodes'][number]) => (n.labels['nvidia.com/gpu.memory'] ? `${n.labels['nvidia.com/gpu.memory']} MiB` : '-')
     const want = async () => {
       const c = await cluster()
       const ready = c.nodes.filter((n) => readinessOf(n.status) === 'Ready').length
       return {
         cards: { 'Total Nodes': String(c.nodes.length), Ready: String(ready), 'Not Ready': String(c.nodes.length - ready),
           'GPU Capacity': String(c.nodes.reduce((s, n) => s + n.capacity, 0)), Allocatable: String(c.nodes.reduce((s, n) => s + n.allocatable, 0)), 'In Use': String(c.used) },
-        rows: c.nodes.map((n) => [n.name, label(n, 'gpu.product'), label(n, 'gpu.memory'), String(n.capacity), String(n.allocatable), n.status, label(n, 'mig.strategy')]).sort(),
+        rows: c.nodes.map((n) => [n.name, label(n, 'gpu.product'), memory(n), String(n.capacity), String(n.allocatable), n.status, label(n, 'mig.strategy')]).sort(),
       }
     }
     const got = async () => {
@@ -723,7 +727,7 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
       // the node's GPUs are NVIDIA's (AMD's and Intel's: number-check-gpu-vendors.spec.ts)
       ['GPU Vendor', gpusIn(n.status.capacity) > 0 ? 'NVIDIA' : '-'],
       ['GPU Product', l['nvidia.com/gpu.product']],
-      ['GPU Memory', l['nvidia.com/gpu.memory']],
+      ['GPU Memory', `${l['nvidia.com/gpu.memory']} MiB`],
       ['GPU Count (Capacity)', String(gpusIn(n.status.capacity))],
       ['GPU Count (Allocatable)', String(gpusIn(n.status.allocatable))],
       ['MIG Strategy', l['nvidia.com/mig.strategy']],

@@ -52,6 +52,16 @@ var resizeKinds = map[string]bool{"Deployment": true, "StatefulSet": true, "Daem
 // ResizeKindAllowed is the set of workload kinds the optimization table groups pods by.
 func ResizeKindAllowed(kind string) bool { return resizeKinds[kind] }
 
+// ResizeKinds lists those kinds, sorted, for the screen that offers the resize.
+func ResizeKinds() []string {
+	kinds := make([]string, 0, len(resizeKinds))
+	for kind := range resizeKinds {
+		kinds = append(kinds, kind)
+	}
+	sort.Strings(kinds)
+	return kinds
+}
+
 // resizeSettle is how long the kubelet gets to answer before the pod is read
 // back once to tell a pending resize from an applied one.
 const resizeSettle = 1500 * time.Millisecond

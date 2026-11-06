@@ -156,7 +156,7 @@
 | --- | --- | --- | --- |
 | **Pending** | 가입·SSO 직후 기본값 | 없음 — 로그인은 되지만 API는 403 | — |
 | **Member** | 계정 등급 | 전역 권한 없음, **클러스터별 부여로만** 접근 | `kubeast:authenticated`(권한 없음) |
-| **Read** | 클러스터별 | 메뉴 10개 · 모든 리소스 읽기(`resource.*.read`, 비용 `resource.cost.read` 포함) · Helm 읽기(권한 키는 있지만 Release 기록이 Secret이라 클러스터가 거부 — 오른쪽 칸 참고) · 컨테이너 안 로그 파일 읽기(`resource.pod.logfile`, 기능을 켰을 때) · AI 채팅의 읽기 도구 52종(`ai.tool.<읽기 도구>`)과 MCP 연결(`ai.mcp.use`) — 쓰기 도구는 없음 | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view`는 Secret과 `services/proxy`를 제외하므로, Secret과 Helm 릴리스(Secret에 저장)는 클러스터가 거부하고 화면에는 권한 안내가 뜹니다. API 서버 프록시로 읽는 Prometheus·OpenCost(최적화 사용량·스토리지 분석·비용·드로어 메트릭)는 차트 값 `auth.impersonation.viewerProxyServices`에 적은 Service만 **GET으로** 열립니다. 허용은 그 Namespace의 Role로 주고, 이름은 정확히 `<service>:<port>`로 적으며, 다른 Service·POST·NS 범위 부여는 계속 거부됩니다([설정](configuration.md)의 values 주석). 적지 않으면 거부됩니다(프록시는 `kubeast:operator`=`edit`부터 허용) |
+| **Read** | 클러스터별 | 메뉴 10개 · `resource.*.read`(아래 **읽기 API**의 라우트가 묻는 권한, 비용 `resource.cost.read` 포함. 다른 목록은 오른쪽 칸을 따릅니다) · Helm 읽기(권한 키는 있지만 Release 기록이 Secret이라 클러스터가 거부 — 오른쪽 칸 참고) · 컨테이너 안 로그 파일 읽기(`resource.pod.logfile`, 기능을 켰을 때) · AI 채팅의 읽기 도구 52종(`ai.tool.<읽기 도구>`)과 MCP 연결(`ai.mcp.use`) — 쓰기 도구는 없음 | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view`는 Secret과 `services/proxy`를 제외하므로, Secret과 Helm 릴리스(Secret에 저장)는 클러스터가 거부하고 화면에는 권한 안내가 뜹니다. API 서버 프록시로 읽는 Prometheus·OpenCost(최적화 사용량·스토리지 분석·비용·드로어 메트릭)는 차트 값 `auth.impersonation.viewerProxyServices`에 적은 Service만 **GET으로** 열립니다. 허용은 그 Namespace의 Role로 주고, 이름은 정확히 `<service>:<port>`로 적으며, 다른 Service·POST·NS 범위 부여는 계속 거부됩니다([설정](configuration.md)의 values 주석). 적지 않으면 거부됩니다(프록시는 `kubeast:operator`=`edit`부터 허용) |
 | **Write** | 클러스터별 | `menu.*` · 리소스 생성/수정/삭제 · CronJob suspend/trigger · Secret 값 보기 · 로그 파일 읽기 · Helm rollback/upgrade/test · AI 툴 전부(`ai.tool.*`, 쓰기 도구 포함, 아래 Admin 전용 목록은 빼고) · MCP 연결 | `kubeast:operator` = `edit` + viewer |
 | **Admin** | 계정 등급(`*`) 또는 클러스터별 | 전부 — 관리자 메뉴, 모든 클러스터(나중에 등록한 것 포함) | `kubeast:admin` = `cluster-admin` |
 | 커스텀 | 클러스터별 | 고른 권한만(만드는 사람이 가진 권한 안에서) | `kubeast:role:<이름>` — 클러스터가 이 그룹을 바인딩하기 전에는 모든 호출이 403입니다(`auth.impersonation.customRoles`). 화면의 권한 없음 배너와 역할 만들기 창에 이 그룹 이름이 나옵니다 |
@@ -186,6 +186,7 @@
   - 절대 부를 수 없는 도구는 역할에 내주지 않습니다. 거절된 호출은 실행되지 않고 승인 카드도 없으며, 없는 권한을 말하고 실패 행(`ai.tool.call`, `ai.mcp.call`)을 남깁니다. 표(`services/tool-server/screen_permissions.go`, `app/services/ai/screen_permissions.py`)에 없는 도구는 누구에게나 거절됩니다.
 - **쓰기 API는 전부** 핸들러에서 권한을 검사하며, 감사 행을 남기지 못하면 거부됩니다(fail-closed).
   - **읽기 API**는 "그 클러스터에 역할이 있는가"(클러스터 미들웨어, deny-by-default)와 클러스터의 RBAC(viewer 그룹), 두 단계로 막습니다.
+    - `resource.*.read`(역할 화면의 "Pod 로그·…에서 묻습니다")는 목록을 열어 주는 권한이 아닙니다. 일부 라우트만 묻습니다: Pod 로그·로그 검색·Alerts 읽기(`resource.pod.read`), Helm(`resource.helm.read`), Cost(`resource.cost.read`), Policy Reports(`resource.policyreport.read`), NetworkPolicy 확인(`resource.networkpolicy.read`), 네트워크 흐름·드롭·트래픽(`resource.networkflow.read`). 이 권한이 없는 커스텀 역할도 클러스터가 그 그룹을 묶었다면 다른 목록을 봅니다.
   - `menu.*`는 화면 메뉴만 가리며, 사이드바 그룹마다 하나씩 있습니다. 기본 역할에는 `menu.*`가 있으므로 커스텀 역할에서만 그룹이 빠집니다.
     - Core(대시보드·Cluster View·Monitoring·Alerts·Cost·AI Chat·Resource Graph·Change History·Advanced Search)는 `menu.dashboard`입니다. Alerts·Cost·AI Chat은 그 기능을 켰을 때만 나타납니다.
     - Cluster와 Custom Resources는 `menu.cluster`입니다.
@@ -207,6 +208,8 @@
   - 창의 "그래프에 이 묶음 펼치기"나 "모두 펼치기"를 누르면 전처럼 파드를 하나씩 그립니다. 파드가 2,000개를 넘으면 모두 펼치기 전에 한 번 묻습니다.
   - 파드는 500개씩 받아 짧은 줄로 들고 있으므로, 파드가 많은 네임스페이스도 통째로 들지 않습니다.
 - **그 밖의 파드 목록**도 같은 서버 페이지에서 보여 줄 것만 받습니다. RuntimeClass·PriorityClass·ClusterRoleBinding 상세 창은 그것을 쓰는 파드를 10개씩, Dashboard의 Pods 창은 그림에서 고른 phase와 검색을 서버가 거른 50개씩, Monitoring Pods는 사용량과 함께 파드마다 limit을 받습니다. Cluster Hygiene는 파드를 500개씩 받는 대로 점검하고 결과만 남기며, 네트워크 흐름은 모든 파드의 워크로드 이름을 붙입니다(전에는 네임스페이스당 5,000개까지).
+- **파드 상세 창**의 Status 칸은 Pods 목록·kubectl과 같은 글자입니다. Reason·Message는 파드 자신의 값(`Evicted`와 그 까닭)이고, Last State는 컨테이너마다 앞서 끝난 까닭과 종료 코드·시각입니다. 모든 상세 창의 파드 표도 phase가 아니라 같은 Status를 보여 줍니다.
+- **노드 상세 창**의 Allocated Resources는 `kubectl describe node`가 찍는 값이고, 사용자 권한으로 파드를 읽어 계산합니다. 네임스페이스로 한정된 부여는 그 네임스페이스만 세며 그렇다고 알려 주고, 파드를 읽지 못하면 0이 아니라 까닭을 보여 줍니다. "Ready 변경 후"는 Ready 조건이 마지막으로 바뀐 뒤의 시간입니다. API에는 가동 시간 값이 없습니다.
 - **초기화 중인 파드**는 Pods 목록·다른 파드 목록·상세 창에서 kubectl과 같은 STATUS·READY·RESTARTS로 보입니다. `Init:Error`·`Init:CrashLoopBackOff`·`Init:1/2`와 init 컨테이너의 재시작 수입니다(`PodInitializing`·0이 아님). 네이티브 사이드카(`restartPolicy: Always`인 init 컨테이너)도 kubectl처럼 READY에 셉니다.
 - **목록 화면은 네임스페이스를 주소(`?namespace=`)에 둡니다.** 링크나 새로고침으로 같은 네임스페이스가 열리고, All namespaces를 고르면 빠집니다.
 - **Resource Graph에서 네임스페이스를 여러 개 고르면** 클러스터 전체가 아니라 고른 네임스페이스마다 받습니다. 그래서 네임스페이스 권한만 있는 계정도 볼 수 있고, 일부 네임스페이스에서만 거부된 종류는 그 네임스페이스와 함께 알려 줍니다. **Issues** 필터는 노랑·빨강으로 그려진 것(아직 `Progressing`인 Deployment 포함)을 남기고, 떠 있는 채팅도 같은 것을 문제로 셉니다.

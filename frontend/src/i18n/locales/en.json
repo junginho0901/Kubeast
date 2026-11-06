@@ -1637,7 +1637,6 @@
       "loading": "Loading node details...",
       "error": "Failed to load node details.",
       "notFound": "Node details not found.",
-      "uptime": "Uptime",
       "cpuUsage": "CPU Usage",
       "memoryUsage": "Memory Usage",
       "conditions": "Conditions",
@@ -2247,7 +2246,8 @@
         "pending": "pending {{count}}",
         "skipped": "skipped {{count}}",
         "failed": "failed {{count}}",
-        "error": "Not applied: {{error}}"
+        "error": "Not applied: {{error}}",
+        "kindRefused": "Not available for {{kind}}: only {{kinds}} can be applied here."
       }
     },
     "loading": "Loading data...",
@@ -3708,7 +3708,7 @@
         "menu_configuration": "Configuration",
         "menu_admin": "Admin",
         "resource_all_all": "All resources, every action",
-        "resource_all_read": "All resources: read",
+        "resource_all_read": "Asked by Pod logs, log search, Alerts, Helm, Cost, Policy Reports and network reads. The other lists are decided by the role on the cluster and the cluster's RBAC.",
         "resource_all_create": "All resources: create",
         "resource_all_edit": "All resources: edit",
         "resource_all_delete": "All resources: delete",
@@ -4138,7 +4138,10 @@
       "none": "No access",
       "noClusters": "No clusters registered.",
       "namespacesNote": "A role can be limited to namespaces (the box next to it; empty = the whole cluster).",
-      "self": "This is your own account: your cluster access is changed by another admin or through an access request."
+      "self": "This is your own account: your cluster access is changed by another admin or through an access request.",
+      "readError": "Could not read this user's cluster access: {{reason}}",
+      "rolesError": "Could not read the roles, so none can be chosen: {{reason}}",
+      "changeError": "Not changed: {{reason}}"
     },
     "aiModels": {
       "add": "Add Model",
@@ -4312,6 +4315,8 @@
       "pluginDetail": "Plugin",
       "pluginHealthy": "Device Plugin Healthy",
       "pluginNotFound": "Device Plugin Not Found",
+      "pluginNotFoundNote": "{{vendors}} device plugin: not under the names Kubeast looks for. It may run under another name; the GPU counts come from the nodes.",
+      "pluginNotFoundNoteAny": "Device plugin: not under the names Kubeast looks for. It may run under another name; the GPU counts come from the nodes.",
       "pluginUnhealthy": "Device Plugin Unhealthy",
       "ready": "Ready",
       "timeSlicingDisabled": "Time-Slicing Disabled",

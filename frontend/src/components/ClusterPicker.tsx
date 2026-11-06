@@ -5,17 +5,12 @@ import { ChevronDown, Server, Check } from 'lucide-react'
 
 import { clustersApi, type ClusterMeta } from '@/services/api/clusters'
 import { useCluster } from '@/contexts/ClusterContext'
+import { healthDotClass } from '@/utils/clusterHealth'
 
 // Sidebar cluster picker (step 11). Lists only the clusters the user can access
 // (accessibleOnly — step 08 filter); selecting one drives ClusterContext, which
 // updates ?cluster= and clears cluster-scoped caches (steps 09/10). With no
 // accessible cluster it shows guidance; with one it just shows the label.
-
-function healthDotClass(status: string | undefined): string {
-  if (status === 'healthy') return 'bg-green-500'
-  if (status === 'unhealthy' || status === 'disconnected') return 'bg-red-500'
-  return 'bg-slate-500'
-}
 
 export default function ClusterPicker() {
   const { t } = useTranslation()

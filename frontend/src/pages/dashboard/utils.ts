@@ -18,6 +18,17 @@ export function optimizationResizeRequest(row: OptimizationRow): ResizeRequest {
   }
 }
 
+export type OptimizationApply = 'apply' | 'kind' | null
+
+// What a row's Apply cell shows: the button when the server resizes that kind (resize_kinds, k8s ResizeKindAllowed),
+// the reason on an owner it refuses, nothing with no change to apply or for a user who cannot apply.
+export function optimizationApply(row: OptimizationRow, canResize: boolean, kinds: string[] | undefined): OptimizationApply {
+  const differs = (row.cpu_recommend_m != null && row.cpu_recommend_m !== row.cpu_request_m) ||
+    (row.mem_recommend_bytes != null && row.mem_recommend_bytes !== row.mem_request_bytes)
+  if (!canResize || !differs) return null
+  return !kinds || kinds.includes(row.kind) ? 'apply' : 'kind'
+}
+
 /**
  * unwrapOuterMarkdownFence — if the streamed answer is wrapped in a
  * ``` fence (LLMs sometimes do this for the entire response), strip

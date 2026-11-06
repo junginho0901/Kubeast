@@ -1638,7 +1638,6 @@
       "loading": "Node 상세 불러오는 중...",
       "error": "Node 상세를 불러오지 못했습니다.",
       "notFound": "Node 상세 정보가 없습니다.",
-      "uptime": "업타임",
       "cpuUsage": "CPU 사용량",
       "memoryUsage": "메모리 사용량",
       "conditions": "조건",
@@ -2247,7 +2246,8 @@
         "pending": "대기 {{count}}",
         "skipped": "건너뜀 {{count}}",
         "failed": "실패 {{count}}",
-        "error": "적용 안 됨: {{error}}"
+        "error": "적용 안 됨: {{error}}",
+        "kindRefused": "{{kind}}에는 적용할 수 없습니다. 여기서 적용할 수 있는 종류: {{kinds}}."
       }
     },
     "loading": "데이터를 불러오는 중...",
@@ -2880,7 +2880,10 @@
       "none": "접근 없음",
       "noClusters": "등록된 클러스터가 없습니다.",
       "namespacesNote": "역할은 네임스페이스로 한정할 수 있습니다(옆 칸, 비우면 클러스터 전체).",
-      "self": "내 계정입니다. 내 클러스터 권한은 다른 관리자가 바꾸거나 접근 요청으로 받습니다."
+      "self": "내 계정입니다. 내 클러스터 권한은 다른 관리자가 바꾸거나 접근 요청으로 받습니다.",
+      "readError": "이 사용자의 클러스터 접근 권한을 읽지 못했습니다: {{reason}}",
+      "rolesError": "역할을 읽지 못해 고를 수 없습니다: {{reason}}",
+      "changeError": "바꾸지 못했습니다: {{reason}}"
     }
   },
   "adminUsers": {
@@ -3819,7 +3822,7 @@
         "menu_configuration": "설정",
         "menu_admin": "관리자",
         "resource_all_all": "모든 리소스 전체",
-        "resource_all_read": "모든 리소스 조회",
+        "resource_all_read": "Pod 로그·로그 검색·Alerts·Helm·Cost·Policy Reports·네트워크 읽기에서 묻습니다. 다른 목록은 클러스터에 받은 역할과 클러스터 RBAC이 정합니다.",
         "resource_all_create": "모든 리소스 생성",
         "resource_all_edit": "모든 리소스 수정",
         "resource_all_delete": "모든 리소스 삭제",
@@ -4006,6 +4009,8 @@
       "pluginHealthy": "디바이스 플러그인 정상",
       "pluginUnhealthy": "디바이스 플러그인 비정상",
       "pluginNotFound": "디바이스 플러그인 찾지 못함",
+      "pluginNotFoundNote": "{{vendors}} 디바이스 플러그인: Kubeast가 찾는 이름에 없습니다. 다른 이름으로 실행 중일 수 있으며, GPU 수는 노드에서 읽습니다.",
+      "pluginNotFoundNoteAny": "디바이스 플러그인: Kubeast가 찾는 이름에 없습니다. 다른 이름으로 실행 중일 수 있으며, GPU 수는 노드에서 읽습니다.",
       "pluginDetail": "플러그인",
       "migEnabled": "MIG 사용",
       "migDisabled": "MIG 미사용",
@@ -4453,7 +4458,11 @@
       "note": "여기서 역할을 받은 사용자만 이 클러스터에 접근할 수 있습니다(나머지는 기본 거부). 전역 관리자는 모든 클러스터에 접근하며 목록에 나오지 않습니다. 변경은 사용자가 다시 로그인한 뒤 적용됩니다.",
       "revoke": "회수",
       "selectUser": "사용자 선택…",
-      "title": "클러스터 접근 권한"
+      "title": "클러스터 접근 권한",
+      "readError": "이 클러스터에 접근할 수 있는 사용자를 읽지 못했습니다: {{reason}}",
+      "rolesError": "역할을 읽지 못했습니다: {{reason}}",
+      "usersError": "사용자 목록을 읽지 못했습니다: {{reason}}",
+      "changeError": "바꾸지 못했습니다: {{reason}}"
     },
     "edit": {
       "kubeconfig": "kubeconfig 교체 (선택)",
@@ -4675,7 +4684,7 @@
     "Updated": "최신",
     "Available": "사용 가능",
     "Up to date": "최신",
-    "Uptime": "가동 시간",
+    "Since Ready Changed": "Ready 변경 후",
     "Workload Settings": "워크로드 설정",
     "Current Replicas": "현재 레플리카",
     "Desired Replicas": "목표 레플리카",
@@ -4935,6 +4944,12 @@
     "Capacity": "용량",
     "Allocatable": "할당 가능",
     "Capacity / Allocatable": "용량 / 할당 가능",
+    "Allocated Resources": "할당된 리소스",
+    "Total limits may be over 100 percent, i.e., overcommitted.": "limits 합계는 100%를 넘을 수 있습니다(오버커밋).",
+    "Counts only the pods in your namespaces ({{namespaces}}).": "내 네임스페이스({{namespaces}})의 Pod만 셉니다.",
+    "Could not read the node's pods: {{error}}": "노드의 Pod를 읽지 못했습니다: {{error}}",
+    "Last State": "마지막 상태",
+    "exit code {{n}}": "종료 코드 {{n}}",
     "Allocation": "할당",
     "Allocation Status": "할당 상태",
     "Attach Error": "연결 오류",

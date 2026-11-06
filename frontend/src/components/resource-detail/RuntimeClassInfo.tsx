@@ -8,6 +8,7 @@ import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
+import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
 
 interface Props {
   name: string
@@ -164,7 +165,7 @@ export default function RuntimeClassInfo({ name }: Props) {
                   >
                     <td className="py-1 pr-2 font-mono">{p.namespace}</td>
                     <td className="py-1 pr-2 font-mono">{p.name}</td>
-                    <td className="py-1 pr-2"><StatusBadge status={String(p.phase ?? p.status ?? '-')} /></td>
+                    <td className="py-1 pr-2"><StatusBadge status={podTableStatus(p)} /></td>
                     <td className="py-1 pr-2 truncate max-w-[160px]">{p.node_name || '-'}</td>
                   </tr>
                 ))}

@@ -1,7 +1,7 @@
 // The numbers the three GPU screens (Dashboard, Nodes, Pods) count from /cluster/gpu/dashboard and /cluster/gpu/metrics.
 // The server counts the GPUs as kubectl describe node does (gpu_dashboard.go); these count the rows.
 
-import type { GPUDashboardData, GPUDevicePlugin, GPUDeviceMetric, GPUNodeInfo, GPUNodeVendor, GPUPodInfo, GPUVendor } from '@/services/api'
+import type { GPUDashboardData, GPUDevicePlugin, GPUDeviceMetric, GPUMetricsData, GPUNodeInfo, GPUNodeVendor, GPUPodInfo, GPUVendor } from '@/services/api'
 import { nodeReadiness } from '@/utils/nodeStatus'
 
 // The companies Kubernetes' "Schedule GPUs" names, in the order the screens list them (gpu_dashboard.go gpuVendors).
@@ -47,12 +47,16 @@ function amdLabel(labels: Record<string, string>, name: string): string | undefi
   return undefined
 }
 
+// GPU Feature Discovery's label is a number of mebibytes, which it does not say (gpu_dashboard.go gfdMemory); AMD's
+// writes its own unit. A value someone wrote by hand with a unit stays as written.
+const gfdMemory = (label: string | undefined) => (label && /^\d+$/.test(label) ? `${label} MiB` : label)
+
 // A company's GPU model, memory, driver and family from the labels its tools write: NVIDIA's GPU Feature Discovery,
 // AMD's node labeller, Intel's NFD rules (no memory or driver label).
 export function gpuVendorLabels(vendor: GPUVendor, labels: Record<string, string>) {
   switch (vendor) {
     case 'NVIDIA':
-      return { model: labels['nvidia.com/gpu.product'], memory: labels['nvidia.com/gpu.memory'], driver: driverVersion(labels), family: labels['nvidia.com/gpu.family'] }
+      return { model: labels['nvidia.com/gpu.product'], memory: gfdMemory(labels['nvidia.com/gpu.memory']), driver: driverVersion(labels), family: labels['nvidia.com/gpu.family'] }
     case 'AMD':
       return { model: amdLabel(labels, 'product-name'), memory: amdLabel(labels, 'vram'), driver: labels['amd.com/gpu.driver-version'], family: amdLabel(labels, 'family') }
     case 'Intel':
@@ -204,6 +208,20 @@ export function devicePluginBadges(plugins: GPUDevicePlugin[] | undefined): Devi
   const list = plugins ?? []
   if (list.length === 0) return [{ state: 'missing' }]
   return list.map((p) => ({ vendor: list.length > 1 ? p.vendor : undefined, state: devicePluginState(p), plugin: p }))
+}
+
+// The companies whose plugin was looked for and not found, named also when a badge leaves the company out.
+export function missingPluginVendors(badges: DevicePluginBadge[]): GPUVendor[] {
+  return badges.flatMap((b) => (b.state === 'missing' && b.plugin ? [b.plugin.vendor] : []))
+}
+
+// The averages of the GPUs DCGM reports. The server answers 0 where it has no series to average, which is nothing
+// read, not GPUs at 0%; the cards say "-" and the floating chat null.
+export function gpuRealtimeAverages(metrics: Pick<GPUMetricsData, 'gpu_count' | 'avg_gpu_util' | 'avg_memory_util' | 'total_memory_mb'>) {
+  return {
+    util: metrics.gpu_count > 0 ? metrics.avg_gpu_util : null,
+    memory: metrics.total_memory_mb > 0 ? metrics.avg_memory_util : null,
+  }
 }
 
 // The GPUs of each company in use and waiting, its nodes' capacity and allocatable (for the floating chat).

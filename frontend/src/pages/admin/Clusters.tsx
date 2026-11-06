@@ -9,12 +9,7 @@ import RegisterClusterDialog from './RegisterClusterDialog'
 import EditClusterDialog from './EditClusterDialog'
 import ClusterAccessModal from './ClusterAccessModal'
 import { shownTest, type HeldTest } from './clusterTest'
-
-function healthDotClass(status: string | undefined): string {
-  if (status === 'healthy') return 'bg-green-500'
-  if (status === 'unhealthy' || status === 'disconnected') return 'bg-red-500'
-  return 'bg-slate-500'
-}
+import { healthDotClass } from '@/utils/clusterHealth'
 
 // Admin > Clusters (step 11): list every registered cluster with register /
 // connection-test / delete. Registration & deletion are rollout-free, so the

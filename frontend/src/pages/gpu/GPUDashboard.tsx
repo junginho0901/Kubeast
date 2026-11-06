@@ -7,7 +7,7 @@ import { buildResourceLink } from '@/utils/resourceLink'
 import { forbiddenResourceFromUrl } from '@/utils/forbiddenResource'
 import { isForbiddenError } from '@/services/api'
 import { nodeReadiness } from '@/utils/nodeStatus'
-import { devicePluginState, gpuHolderPods, gpuNodeCounts } from './gpuNumbers'
+import { devicePluginState, gpuHolderPods, gpuNodeCounts, gpuRealtimeAverages } from './gpuNumbers'
 import type { GPUDevicePlugin } from '@/services/api'
 import { RefreshCw } from 'lucide-react'
 
@@ -45,6 +45,7 @@ export default function GPUDashboard() {
   const aiSnapshot = useMemo(() => {
     if (!data) return null
     const plugins: GPUDevicePlugin[] = data.device_plugins ?? []
+    const averages = metrics ? gpuRealtimeAverages(metrics) : undefined
     // a plugin not found is not an unhealthy one
     const unhealthy = plugins.filter((p) => devicePluginState(p) === 'unhealthy')
     const freeCount = Math.max(0, data.total_gpu_allocatable - data.total_gpu_used)
@@ -84,9 +85,12 @@ export default function GPUDashboard() {
           vendors: data.vendors ?? [],
           mig_enabled: data.mig_enabled,
           time_slicing_enabled: data.time_slicing_enabled,
-          device_plugins: plugins.map((p) => ({ vendor: p.vendor, state: devicePluginState(p), ready: p.ready, desired: p.desired })),
-          avg_gpu_util: metrics?.avg_gpu_util,
-          avg_memory_util: metrics?.avg_memory_util,
+          device_plugins: plugins.map((p) => ({
+            vendor: p.vendor, state: devicePluginState(p), ready: p.ready, desired: p.desired,
+            ...(devicePluginState(p) === 'missing' ? { note: 'not under the names Kubeast looks for; it may run under another name' } : {}),
+          })),
+          avg_gpu_util: averages?.util,
+          avg_memory_util: averages?.memory,
         },
         nodes: data.gpu_nodes as Array<typeof data.gpu_nodes[number] & Record<string, unknown>>,
         // the pods asking for the most GPUs first

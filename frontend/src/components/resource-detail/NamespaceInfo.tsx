@@ -81,11 +81,12 @@ export default function NamespaceInfo({ name }: Props) {
         pods_total: podsArr.length,
         pods_not_running: notRunning,
         pods_by_phase: podsByPhase,
-        pods: (podsArr as Array<{ name: string; phase?: string; restart_count?: number }>)
+        pods: (podsArr as Array<{ name: string; phase?: string; status?: string; restart_count?: number }>)
           .slice(0, 20)
           .map((p) => ({
             name: p.name,
             phase: p.phase,
+            status: p.status,
             restart_count: p.restart_count,
             _link: buildResourceLink('Pod', name, p.name),
           })),

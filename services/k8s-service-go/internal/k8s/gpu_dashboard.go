@@ -341,13 +341,22 @@ type gpuLabelInfo struct{ model, memory, driver string }
 func gpuNodeLabels(vendor string, labels map[string]string) gpuLabelInfo {
 	switch vendor {
 	case "NVIDIA":
-		return gpuLabelInfo{labels["nvidia.com/gpu.product"], labels["nvidia.com/gpu.memory"], gpuDriverVersion(labels)}
+		return gpuLabelInfo{labels["nvidia.com/gpu.product"], gfdMemory(labels["nvidia.com/gpu.memory"]), gpuDriverVersion(labels)}
 	case "AMD":
 		return gpuLabelInfo{amdLabel(labels, "product-name"), amdLabel(labels, "vram"), labels["amd.com/gpu.driver-version"]}
 	case "Intel":
 		return gpuLabelInfo{model: labels["gpu.intel.com/product"]}
 	}
 	return gpuLabelInfo{}
+}
+
+// gfdMemory gives GPU Feature Discovery's label its unit: the label is a number of mebibytes, which the label does not
+// say (AMD's writes its own, "192G"). A value someone wrote by hand with a unit stays as written.
+func gfdMemory(label string) string {
+	if _, err := strconv.ParseUint(label, 10, 64); err != nil {
+		return label
+	}
+	return label + " MiB"
 }
 
 // amdLabel is the AMD node labeller's value of a property: amd.com/gpu.<name> (or its beta.amd.com copy) when the

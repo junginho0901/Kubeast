@@ -17,7 +17,7 @@ import { useCanI } from '@/hooks/useCanCreate'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { getVolumeDetail } from './pod-info/podInfoFormatters'
 import ContainerCard from './pod-info/ContainerCard'
-import { podDrawerStatus, runningNotReady } from '@/pages/workloads/pods/podHelpers'
+import { podDrawerStatus, podLastStates, podLastStateText, runningNotReady } from '@/pages/workloads/pods/podHelpers'
 import ContainerResizeModal from './pod-info/ContainerResizeModal'
 import { LogFilesView, LogSourceToggle, type LogSource } from '@/components/LogFilesView'
 import { LogSearchView } from '@/components/LogSearchView'
@@ -88,6 +88,9 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
     const desc = podDescribe as
       | {
           phase?: string
+          status?: string
+          status_reason?: string
+          status_message?: string
           conditions?: Array<{ type?: string; status?: string; reason?: string }>
           containers?: Array<Record<string, unknown>>
           init_containers?: Array<Record<string, unknown>>
@@ -104,7 +107,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
     const restarts = containers.reduce((s, c) => s + Number((c.restart_count ?? 0) as number), 0)
     const notReady = containers.filter((c) => c.ready === false).length
     const prefix = notReady > 0 || restarts > 5 ? '⚠️ ' : ''
-    const summary = `${prefix}Pod ${name} (${namespace}) — phase ${desc?.phase ?? 'Unknown'}, 컨테이너 ${containers.length}개${notReady ? ` (NotReady ${notReady})` : ''}, restart ${restarts}, 이벤트 ${events.length}건`
+    const summary = `${prefix}Pod ${name} (${namespace}) — status ${desc?.status ?? 'Unknown'}, phase ${desc?.phase ?? 'Unknown'}, 컨테이너 ${containers.length}개${notReady ? ` (NotReady ${notReady})` : ''}, restart ${restarts}, 이벤트 ${events.length}건`
 
     const tail = typeof logData === 'string' && logData.length > 1500 ? logData.slice(-1500) : logData
 
@@ -117,6 +120,10 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
         namespace,
         _link: buildResourceLink('Pod', namespace, name),
         phase: desc?.phase,
+        status: desc?.status,
+        status_reason: desc?.status_reason,
+        status_message: desc?.status_message,
+        last_states: podLastStates(containers),
         qos_class: desc?.qos_class,
         node_name: desc?.node_name,
         pod_ip: desc?.pod_ip,
@@ -227,11 +234,9 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
   const waitingCount = containers.filter((c: any) => Boolean(c?.state?.waiting)).length
   const terminatedCount = containers.filter((c: any) => Boolean(c?.state?.terminated)).length
   const crashLoopCount = containers.filter((c: any) => c?.state?.waiting?.reason === 'CrashLoopBackOff').length
-  const statusReason = useMemo(
-    () => podDrawerStatus(podDescribe, containers, phase),
-    [podDescribe, containers, phase],
-  )
-  const statusNotReady = runningNotReady({ status: statusReason, ready: `${readyContainers}/${totalContainers}` })
+  const podStatus = podDrawerStatus(podDescribe, phase)
+  const statusNotReady = runningNotReady({ status: podStatus, ready: `${readyContainers}/${totalContainers}` })
+  const lastStates = useMemo(() => podLastStates(containers), [containers])
 
   const containerNames = useMemo(() => {
     if (containers.length > 0) return containers.map((c: any) => c.name)
@@ -344,12 +349,12 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <div className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
             <div className="text-[11px] text-slate-400"><Tx>Status</Tx></div>
-            <div className="mt-1 text-xs text-ink font-medium truncate" title={statusNotReady ? undefined : statusReason}>
+            <div className="mt-1 text-xs text-ink font-medium truncate" title={statusNotReady ? undefined : podStatus} data-testid="pod-drawer-status">
               {statusNotReady ? (
                 <span className="badge badge-warning" title={t('pods.table.notReadyHint', { ready: `${readyContainers}/${totalContainers}`, defaultValue: 'Not ready ({{ready}})' })} data-testid="pod-drawer-status-not-ready">
-                  {statusReason}
+                  {podStatus}
                 </span>
-              ) : (statusReason || '-')}
+              ) : (podStatus || '-')}
             </div>
           </div>
           <div className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
@@ -375,6 +380,9 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
       <InfoSection title="Basic Info">
         <div className="space-y-2">
           <InfoRow label="Phase" value={<StatusBadge status={phase} />} />
+          <InfoRow label="Reason" value={String(podDescribe?.status_reason || '-')} />
+          <InfoRow label="Message" value={String(podDescribe?.status_message || '-')} />
+          <InfoRow label="Last State" value={podLastStateText(lastStates, { exitCode: (n) => dl('exit code {{n}}', { n }), time: fmtTs })} />
           <InfoRow label="Node" value={node && node !== '-' ? <ResourceLink kind="Node" name={node} /> : '-'} />
           <InfoRow label="Pod IP" value={podIP} />
           {podIPs.length > 0 && <InfoRow label="Pod IPs" value={podIPs.join(', ')} />}

@@ -103,6 +103,11 @@ function allocated(node: string): Map<Vendor, number> {
 // each company's model and memory labels: GPU Feature Discovery, AMD's node labeller, Intel's NFD rules
 const MODEL: Record<Vendor, string> = { NVIDIA: 'nvidia.com/gpu.product', AMD: 'amd.com/gpu.product-name', Intel: 'gpu.intel.com/product' }
 const MEMORY: Record<Vendor, string | undefined> = { NVIDIA: 'nvidia.com/gpu.memory', AMD: 'amd.com/gpu.vram', Intel: undefined }
+// NVIDIA's label is a number of mebibytes, which the screens give its unit; AMD's writes its own
+const memoryOf = (v: Vendor, labels: Record<string, string>) => {
+  const label = MEMORY[v] ? labels[MEMORY[v]!] : undefined
+  return label && v === 'NVIDIA' ? `${label} MiB` : label
+}
 const ended = (p: Obj) => p.status?.phase === 'Succeeded' || p.status?.phase === 'Failed'
 const readinessOf = (status: string) => { const first = status.split(',')[0]; return first === 'Ready' || first === 'NotReady' ? first : 'Unknown' }
 const inOrder = <T,>(m: Map<Vendor, T>) => VENDORS.filter((v) => m.has(v)).map((v) => [v, m.get(v)!] as const)
@@ -135,7 +140,7 @@ async function cluster(): Promise<Cluster> {
     return {
       name: n.metadata.name, capacity: sum(cap), allocatable: sum(alloc), used: sum(used), status: nodeStatus[n.metadata.name], labels,
       vendors: VENDORS.filter((v) => cap.get(v) || alloc.get(v) || used.get(v)).map((v) => ({
-        vendor: v, capacity: cap.get(v) ?? 0, allocatable: alloc.get(v) ?? 0, used: used.get(v) ?? 0, model: labels[MODEL[v]], memory: MEMORY[v] ? labels[MEMORY[v]!] : undefined,
+        vendor: v, capacity: cap.get(v) ?? 0, allocatable: alloc.get(v) ?? 0, used: used.get(v) ?? 0, model: labels[MODEL[v]], memory: memoryOf(v, labels),
       })),
     }
   })
@@ -354,7 +359,7 @@ test.describe('number check — AMD and Intel GPUs on the GPU screens', () => {
     // named twice ("NVIDIA-A100…", "AMD_Instinct…"), one that does not is ("Intel Max_1550")
     const seen = await got() as Obj
     expect({ vendors: seen.vendors, readiness: seen.readiness, models: [NODE, AMD_NODE, INTEL_NODE].map((n) => seen.nodes[n]?.models) }, 'the companies and the nodes kubectl lists')
-      .toEqual({ vendors: 'NVIDIA 12 · AMD 4 · Intel 2', readiness: '1 Ready / 2 Not Ready', models: ['NVIDIA-A100-SXM4-80GB • 81920', 'AMD_Instinct_MI300X • 192G', 'Intel Max_1550'] })
+      .toEqual({ vendors: 'NVIDIA 12 · AMD 4 · Intel 2', readiness: '1 Ready / 2 Not Ready', models: ['NVIDIA-A100-SXM4-80GB • 81920 MiB', 'AMD_Instinct_MI300X • 192G', 'Intel Max_1550'] })
   })
 
   test('GPU Dashboard: each company gets its device plugin badge, found or not', async ({ page }) => {
@@ -386,6 +391,7 @@ test.describe('number check — AMD and Intel GPUs on the GPU screens', () => {
       await expect.poll(badges, { timeout: 30_000, message: 'no plugin of any company' })
         .toEqual(['NVIDIA Device Plugin Not Found', 'AMD Device Plugin Not Found', 'Intel Device Plugin Not Found'])
       expect(await details()).toEqual([])
+      await expect(page.getByTestId('gpu-plugin-note')).toHaveText(/^NVIDIA, AMD, Intel device plugin: not under the names Kubeast looks for\./)
 
       kubectl('apply -f -', ds)
       made = true
@@ -404,6 +410,7 @@ test.describe('number check — AMD and Intel GPUs on the GPU screens', () => {
         await reloaded()
         expect(await badges()).toEqual(['NVIDIA Device Plugin Not Found', 'AMD Device Plugin Healthy', 'Intel Device Plugin Not Found'])
         expect(await details()).toEqual(['AMD Plugin: 1/1 Ready'])
+        await expect(page.getByTestId('gpu-plugin-note')).toHaveText(/^NVIDIA, Intel device plugin: not under the names Kubeast looks for\./)
       }).toPass({ timeout: 60_000 })
     } finally {
       if (made) kubectl(`-n ${AMD_PLUGIN.namespace} delete ds ${AMD_PLUGIN.name} --ignore-not-found --wait=true`)

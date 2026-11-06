@@ -223,7 +223,7 @@ func TestGPUDashboard_CountsEveryVendorsGPUs(t *testing.T) {
 		t.Fatalf("GPU nodes %d (the accelerator node is none): %v", len(nodes), nodes)
 	}
 	for name, w := range map[string]map[string]interface{}{
-		"nv":      {"gpu_capacity": 6, "gpu_used": 1, "gpu_model": "NVIDIA-H100-80GB-HBM3", "gpu_memory": "81559", "driver_version": "580.95.05", "status": "Ready"},
+		"nv":      {"gpu_capacity": 6, "gpu_used": 1, "gpu_model": "NVIDIA-H100-80GB-HBM3", "gpu_memory": "81559 MiB", "driver_version": "580.95.05", "status": "Ready"},
 		"amd":     {"gpu_capacity": 8, "gpu_used": 2, "gpu_model": "AMD_Instinct_MI300X", "gpu_memory": "192G", "driver_version": "6.12.12", "status": "NotReady"},
 		"amd-cpx": {"gpu_capacity": 17, "gpu_used": 3, "gpu_model": "AMD_Instinct_MI300X, AMD_Instinct_MI325X", "gpu_memory": "192G", "driver_version": nil, "status": "Ready"},
 		"intel":   {"gpu_capacity": 3, "gpu_used": 1, "gpu_model": "Max_1550", "gpu_memory": nil, "driver_version": nil, "status": "Ready"},

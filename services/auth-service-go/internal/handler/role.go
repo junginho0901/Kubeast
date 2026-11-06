@@ -376,7 +376,7 @@ func allPermissions() []map[string]interface{} {
 		}},
 		{"category": "Resources", "permissions": []perm{
 			{"resource.*.*", "All resources, every action"},
-			{"resource.*.read", "All resources: read"},
+			{"resource.*.read", "Asked by Pod logs, log search, Alerts, Helm, Cost, Policy Reports and network reads. The other lists are decided by the role on the cluster and the cluster's RBAC."},
 			{"resource.*.create", "All resources: create"},
 			{"resource.*.edit", "All resources: edit"},
 			{"resource.*.delete", "All resources: delete"},

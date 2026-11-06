@@ -7,7 +7,7 @@
 
 import { Monitor, Cpu, Activity, Gauge, CheckCircle, XCircle } from 'lucide-react'
 import type { GPUDashboardData } from '@/services/api'
-import type { DevicePluginBadge } from '../gpuNumbers'
+import { missingPluginVendors, type DevicePluginBadge } from '../gpuNumbers'
 
 function StatusBadge({ enabled, label, testId }: { enabled: boolean; label: string; testId?: string }) {
   return (
@@ -83,6 +83,7 @@ export function SummaryCardsRow({ data, allocationRate, devicePlugins, tr }: Pro
   }
   // the company before the badge's words when the badges are of more than one
   const named = (b: DevicePluginBadge, text: string) => (b.vendor ? `${b.vendor} ${text}` : text)
+  const missing = missingPluginVendors(devicePlugins)
 
   return (
     <>
@@ -153,6 +154,13 @@ export function SummaryCardsRow({ data, allocationRate, devicePlugins, tr }: Pro
             {tr('gpuDashboardPage.status.ready', 'ready')}
           </span>
         ))}
+        {devicePlugins.some((b) => b.state === 'missing') && (
+          <span className="text-xs text-slate-500" data-testid="gpu-plugin-note">
+            {missing.length > 0
+              ? tr('gpuDashboardPage.status.pluginNotFoundNote', '{{vendors}} device plugin: not under the names Kubeast looks for. It may run under another name; the GPU counts come from the nodes.', { vendors: missing.join(', ') })
+              : tr('gpuDashboardPage.status.pluginNotFoundNoteAny', 'Device plugin: not under the names Kubeast looks for. It may run under another name; the GPU counts come from the nodes.')}
+          </span>
+        )}
       </div>
     </>
   )

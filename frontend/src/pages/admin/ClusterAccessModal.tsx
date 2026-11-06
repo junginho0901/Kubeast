@@ -9,6 +9,7 @@ import NamespaceScopeInput from '@/components/NamespaceScopeInput'
 import { api } from '@/services/api'
 import type { ClusterMeta } from '@/services/api/clusters'
 import { formatTime } from '@/utils/time'
+import { refusalText } from './clusterAccessRefusal'
 
 // Per-cluster access management (the inverse of the user-detail ClusterRoleMatrix):
 // for ONE cluster, list every user granted a role on it and let an admin change
@@ -29,20 +30,25 @@ export default function ClusterAccessModal({
   onClose: () => void
 }) {
   const { t } = useTranslation()
-  const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
+  const tr = (key: string, fallback: string, options?: Record<string, unknown>) => t(key, { defaultValue: fallback, ...options })
   const queryClient = useQueryClient()
 
   const grantsKey = ['cluster-user-roles', cluster.id]
-  const { data: grants = [], isLoading } = useQuery({
+  const { data: grants = [], isLoading, error: grantsError } = useQuery({
     queryKey: grantsKey,
     queryFn: () => api.getClusterUserRoles(cluster.id),
   })
-  const { data: roles = [] } = useQuery({ queryKey: ['roles'], queryFn: api.listRoles, staleTime: 60_000 })
-  const { data: allUsers = [] } = useQuery({
+  const { data: roles = [], error: rolesError } = useQuery({ queryKey: ['roles'], queryFn: api.listRoles, staleTime: 60_000 })
+  const { data: allUsers = [], error: usersError } = useQuery({
     queryKey: ['admin-users', 'all'],
     queryFn: api.adminListAllUsers,
     staleTime: 30_000,
   })
+  // Lists that did not come would read "No users have access" and "All users already granted".
+  const grantsRefusal = refusalText(grantsError)
+  const usersRefusal = refusalText(usersError)
+  const rolesRefusal = refusalText(rolesError)
+  const [refusal, setRefusal] = useState<string | null>(null)
 
   const grantRoles = useMemo(() => roles.filter((r) => !ACCOUNT_LEVEL_ROLES.has(r.name)), [roles])
   const invalidate = () => queryClient.invalidateQueries({ queryKey: grantsKey })
@@ -50,11 +56,15 @@ export default function ClusterAccessModal({
   const setMutation = useMutation({
     mutationFn: ({ userId, role, namespaces }: { userId: string; role: string; namespaces?: string[] }) =>
       api.setUserClusterRole(userId, cluster.id, role, namespaces ?? grants.find((g) => g.user_id === userId)?.namespaces),
+    onMutate: () => setRefusal(null),
     onSuccess: invalidate,
+    onError: (err) => setRefusal(refusalText(err)),
   })
   const removeMutation = useMutation({
     mutationFn: (userId: string) => api.removeUserClusterRole(userId, cluster.id),
+    onMutate: () => setRefusal(null),
     onSuccess: invalidate,
+    onError: (err) => setRefusal(refusalText(err)),
   })
   const pending = setMutation.isPending || removeMutation.isPending
 
@@ -70,9 +80,13 @@ export default function ClusterAccessModal({
 
   const onAdd = () => {
     if (!addUserId) return
-    setMutation.mutate({ userId: addUserId, role: addRole, namespaces: addNamespaces })
-    setAddUserId('')
-    setAddNamespaces([])
+    // a refused grant keeps the choice on screen beside its reason
+    setMutation.mutate({ userId: addUserId, role: addRole, namespaces: addNamespaces }, {
+      onSuccess: () => {
+        setAddUserId('')
+        setAddNamespaces([])
+      },
+    })
   }
 
   return (
@@ -108,6 +122,10 @@ export default function ClusterAccessModal({
         <div className="mt-4 space-y-1.5" data-testid="cluster-access-list">
           {isLoading ? (
             <div className="text-xs text-slate-400 py-2">…</div>
+          ) : grantsRefusal ? (
+            <p className="text-xs text-red-300 py-3" role="alert" data-testid="cluster-access-error">
+              {tr('cluster.access.readError', 'Could not read who has access to this cluster: {{reason}}', { reason: grantsRefusal })}
+            </p>
           ) : grants.length === 0 ? (
             <div className="text-xs text-slate-400 py-3 text-center">
               {tr('cluster.access.empty', 'No users have access to this cluster yet.')}
@@ -162,6 +180,22 @@ export default function ClusterAccessModal({
           )}
         </div>
 
+        {refusal && (
+          <p className="mt-3 text-xs text-red-300" role="alert" data-testid="cluster-access-refusal">
+            {tr('cluster.access.changeError', 'Not changed: {{reason}}', { reason: refusal })}
+          </p>
+        )}
+        {usersRefusal && (
+          <p className="mt-3 text-xs text-red-300" role="alert" data-testid="cluster-access-error">
+            {tr('cluster.access.usersError', 'Could not read the users: {{reason}}', { reason: usersRefusal })}
+          </p>
+        )}
+        {rolesRefusal && (
+          <p className="mt-3 text-xs text-red-300" role="alert" data-testid="cluster-access-error">
+            {tr('cluster.access.rolesError', 'Could not read the roles: {{reason}}', { reason: rolesRefusal })}
+          </p>
+        )}
+
         {/* Add a user */}
         <div className="mt-4 flex items-center gap-2 border-t border-slate-700/60 pt-4">
           <CustomDropdown
@@ -171,7 +205,7 @@ export default function ClusterAccessModal({
             disabled={pending || addable.length === 0}
             className="flex-1 min-w-0"
             placeholder={
-              addable.length === 0
+              addable.length === 0 && !usersRefusal
                 ? tr('cluster.access.allAdded', 'All users already granted')
                 : tr('cluster.access.selectUser', 'Select a user…')
             }

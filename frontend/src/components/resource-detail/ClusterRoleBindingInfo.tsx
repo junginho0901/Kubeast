@@ -7,6 +7,7 @@ import { useServerPods } from './useServerPods'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
+import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
 
 interface Props {
   name: string
@@ -146,7 +147,7 @@ export default function ClusterRoleBindingInfo({ name, rawJson }: Props) {
                       <td className="py-1 pr-2 font-mono">{p.namespace}</td>
                       <td className="py-1 pr-2 font-mono">{p.name}</td>
                       <td className="py-1 pr-2 font-mono text-slate-400">{p.service_account_name}</td>
-                      <td className="py-1 pr-2"><StatusBadge status={String(p.phase ?? p.status ?? '-')} /></td>
+                      <td className="py-1 pr-2"><StatusBadge status={podTableStatus(p)} /></td>
                     </tr>
                   ))}
                 </tbody>

@@ -7,7 +7,7 @@
 
 import { Activity } from 'lucide-react'
 import type { GPUMetricsData, GPUDeviceMetric } from '@/services/api'
-import { gpuSeriesPod } from '../gpuNumbers'
+import { gpuRealtimeAverages, gpuSeriesPod } from '../gpuNumbers'
 
 interface Props {
   metricsAvailable: boolean
@@ -22,6 +22,7 @@ interface Props {
 export function RealtimeMetricsSection({ metricsAvailable, metrics, gpusByHost, gpuPodKeys, tr }: Props) {
   if (!metricsAvailable || !metrics) return null
   const podOf = (gpu: GPUDeviceMetric) => gpuSeriesPod(gpu, gpuPodKeys)
+  const { util, memory } = gpuRealtimeAverages(metrics)
 
   return (
     <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-5" data-testid="gpu-realtime">
@@ -44,21 +45,21 @@ export function RealtimeMetricsSection({ metricsAvailable, metrics, gpusByHost, 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         <div className="rounded-lg border border-slate-700/50 bg-slate-900/40 px-3 py-2.5">
           <div className="text-[11px] text-slate-400">{tr('gpuDashboardPage.realtime.avgUtil', 'Avg GPU Utilization')}</div>
-          <div className="mt-1 text-lg font-semibold text-ink" data-testid="gpu-realtime-avg-util">{Math.round(metrics.avg_gpu_util)}%</div>
+          <div className="mt-1 text-lg font-semibold text-ink" data-testid="gpu-realtime-avg-util">{util === null ? '-' : `${Math.round(util)}%`}</div>
           <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
             <div
-              className={`h-full rounded-full ${metrics.avg_gpu_util >= 80 ? 'bg-red-500' : metrics.avg_gpu_util >= 50 ? 'bg-amber-500' : 'bg-primary-bright'}`}
-              style={{ width: `${Math.min(metrics.avg_gpu_util, 100)}%` }}
+              className={`h-full rounded-full ${(util ?? 0) >= 80 ? 'bg-red-500' : (util ?? 0) >= 50 ? 'bg-amber-500' : 'bg-primary-bright'}`}
+              style={{ width: `${Math.min(util ?? 0, 100)}%` }}
             />
           </div>
         </div>
         <div className="rounded-lg border border-slate-700/50 bg-slate-900/40 px-3 py-2.5">
           <div className="text-[11px] text-slate-400">{tr('gpuDashboardPage.realtime.avgMemUtil', 'Avg Memory Utilization')}</div>
-          <div className="mt-1 text-lg font-semibold text-ink" data-testid="gpu-realtime-avg-mem">{Math.round(metrics.avg_memory_util)}%</div>
+          <div className="mt-1 text-lg font-semibold text-ink" data-testid="gpu-realtime-avg-mem">{memory === null ? '-' : `${Math.round(memory)}%`}</div>
           <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
             <div
-              className={`h-full rounded-full ${metrics.avg_memory_util >= 80 ? 'bg-red-500' : metrics.avg_memory_util >= 50 ? 'bg-amber-500' : 'bg-primary-bright'}`}
-              style={{ width: `${Math.min(metrics.avg_memory_util, 100)}%` }}
+              className={`h-full rounded-full ${(memory ?? 0) >= 80 ? 'bg-red-500' : (memory ?? 0) >= 50 ? 'bg-amber-500' : 'bg-primary-bright'}`}
+              style={{ width: `${Math.min(memory ?? 0, 100)}%` }}
             />
           </div>
         </div>
@@ -68,12 +69,12 @@ export function RealtimeMetricsSection({ metricsAvailable, metrics, gpusByHost, 
             {metrics.total_memory_mb > 0 ? `${(metrics.total_memory_used_mb / 1024).toFixed(1)} GiB` : '-'}
           </div>
           <div className="text-[11px] text-slate-500" data-testid="gpu-realtime-mem-total">
-            / {(metrics.total_memory_mb / 1024).toFixed(1)} GiB
+            / {metrics.total_memory_mb > 0 ? `${(metrics.total_memory_mb / 1024).toFixed(1)} GiB` : '-'}
           </div>
         </div>
         <div className="rounded-lg border border-slate-700/50 bg-slate-900/40 px-3 py-2.5">
           <div className="text-[11px] text-slate-400">{tr('gpuDashboardPage.realtime.gpuCount', 'Physical GPUs')}</div>
-          <div className="mt-1 text-lg font-semibold text-ink" data-testid="gpu-realtime-count">{metrics.gpu_count}</div>
+          <div className="mt-1 text-lg font-semibold text-ink" data-testid="gpu-realtime-count">{metrics.gpu_count > 0 ? metrics.gpu_count : '-'}</div>
         </div>
       </div>
 
