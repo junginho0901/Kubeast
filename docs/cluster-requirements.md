@@ -342,6 +342,7 @@ The kube-proxy settings check reads the ConfigMaps `kube-proxy` and `kube-proxy-
 Badges and warnings appear only when objects Argo CD deployed carry the tracking annotation `argocd.argoproj.io/tracking-id`. This is the default tracking method of Argo CD 3.x.
 For installs that use the label method (`app.kubernetes.io/instance`, etc.), put that key in `gitops.argocd.instanceLabel`.
 Argo CD itself does not have to be on the target cluster.
+In `mode: block` the guard reads each target as the user before the write (`get`; `list` for an AI delete of everything of a type), so someone who may change an object but not read it is refused.
 
 - **Verification** (e2e `argocd-real.spec.ts`): a Deployment actually synced by an Argo CD 3.5.6 core install (`scripts/kind-argocd.sh`, podinfo chart 6.17.0) carries the annotation `<app>:apps/Deployment:<NS>/<name>`. On that object:
   - Kubeast blocks deleting and rolling back with 409, and writes a `k8s.gitops.refuse` row.

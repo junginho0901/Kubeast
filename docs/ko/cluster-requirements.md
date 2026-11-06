@@ -353,6 +353,7 @@ kube-proxy 설정 점검은 `kube-system`의 ConfigMap `kube-proxy`·`kube-proxy
 
 Argo CD가 배포한 객체에 추적 어노테이션(`argocd.argoproj.io/tracking-id`, Argo CD 3.x 기본 추적 방식)이 있어야 배지와 경고가 붙습니다.
 라벨 방식(`app.kubernetes.io/instance` 등)으로 추적하는 설치라면 `gitops.argocd.instanceLabel`에 그 키를 적으세요. Argo CD 자체는 대상 클러스터에 없어도 됩니다.
+`mode: block`에서 가드는 쓰기 전에 대상을 그 사용자로 읽습니다(`get`, AI 도구로 한 종류를 모두 삭제할 때는 `list`). 객체를 바꿀 수는 있어도 읽을 수 없는 사람의 쓰기는 거부됩니다.
 
 - **검증**: Argo CD 3.5.6 core 설치가 실제로 동기화한 Deployment(`scripts/kind-argocd.sh`, podinfo 차트 6.17.0)로 다음을 확인했습니다(e2e `argocd-real.spec.ts`).
   - 이 Deployment에 `<앱>:apps/Deployment:<NS>/<이름>` 어노테이션이 붙습니다.

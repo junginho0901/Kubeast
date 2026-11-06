@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -148,12 +149,18 @@ type resourceMatch struct {
 	kind       string
 }
 
+// errResourceTypeNotServed: discovery answered and no resource goes by that name.
+var errResourceTypeNotServed = errors.New("not found")
+
 func (s *Service) resolveResourceMatch(ctx context.Context, resourceType string) (resourceMatch, error) {
 	lists, err := s.GetAPIResources(ctx)
 	if err != nil {
 		return resourceMatch{}, err
 	}
+	return matchResource(lists, resourceType)
+}
 
+func matchResource(lists []metav1.APIResourceList, resourceType string) (resourceMatch, error) {
 	// Split into resource name and optional group
 	parts := strings.SplitN(resourceType, ".", 2)
 	searchName := strings.ToLower(parts[0])
@@ -224,7 +231,7 @@ func (s *Service) resolveResourceMatch(ctx context.Context, resourceType string)
 		return *anyMatch, nil
 	}
 
-	return resourceMatch{}, fmt.Errorf("resource type %q not found", resourceType)
+	return resourceMatch{}, fmt.Errorf("resource type %q %w", resourceType, errResourceTypeNotServed)
 }
 
 // GetAPIResourcesFlat returns all API resources as a flat list of maps.

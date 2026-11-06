@@ -95,11 +95,15 @@ With `gitops.argocd.enabled: true`, the console reads that mark and puts an "Arg
 When someone tries to change that object from the console:
 
 - `mode: warn` (default) — the confirmation window says "a change made here is reverted on the next sync. Change it in Git instead" and then proceeds.
-- `mode: block` — k8s-service refuses write requests with 409 (`managed by Argo CD application <app>; change it in Git`), and the AI write tools (apply, delete, patch, scale, rollout) are refused for the same reason. The drawer's delete and YAML apply buttons are disabled.
+- `mode: block` — k8s-service refuses write requests with 409 (`managed by Argo CD application <app>; change it in Git`), and the AI write tools (apply, delete, patch, annotate, label, scale, rollout) are refused for the same reason. The drawer's delete and YAML apply buttons are disabled.
+  - The guard looks at the object the write goes to: the path, or the JSON of `resources/yaml/apply`. An object named in the YAML is looked at too, and a managed one there is refused as well.
+  - A target that cannot be read is refused (`could not check whether Argo CD manages …`, the status of the failed read), since the guard cannot say the write is allowed. An object that does not exist and a kind the cluster does not serve are not managed, so the write answers for itself.
+  - A delete of everything of a type through the AI tools reads the objects it would reach, and is refused if one is managed or if there are more than 5,000 to read.
+  - Someone without the route's permission gets 403 first, with no Application name and no `k8s.gitops.refuse` row.
 
 The annotation counts only when it points to the object itself; annotations copied along through a pod template are ignored.
 Installations that still use the label method (`app.kubernetes.io/instance` or `application.instanceLabelKey` in `argocd-cm`) set that key in `instanceLabel`.
-Helm release operations, node cordon/drain and creating new objects are not covered.
+Helm release operations and creating new objects are not covered. A node's cordon, uncordon and drain are refused like any other write when Argo CD manages that Node.
 
 ## Dashboard quick actions (issues · optimization · storage)
 

@@ -58,13 +58,19 @@ test.describe('Argo CD (real)', () => {
     expect((await del.json()).detail).toContain(`managed by Argo CD application ${APP}`)
     const rollback = await request.post(`${base}/rollback?cluster=${CLUSTER}`, { headers: bearer(admin), data: {}, failOnStatusCode: false })
     expect(rollback.status(), await rollback.text()).toBe(409)
+    // A YAML apply answers for the object it goes to, whatever the YAML says of itself.
+    const apply = await request.post(`/api/v1/cluster/resources/yaml/apply?cluster=${CLUSTER}`, {
+      headers: bearer(admin), failOnStatusCode: false,
+      data: { resource_type: 'deployments', namespace: NS, name: DEPLOY, yaml: 'spec:\n  replicas: 0\n' },
+    })
+    expect(apply.status(), await apply.text()).toBe(409)
 
     type Row = { TargetID: string; Namespace: string; Cluster: string; Result: string; After: { app?: string; method?: string }; CreatedAt: string }
     await expect.poll(async () => {
       const rows: Row[] = (await (await request.get('/api/v1/auth/admin/audit-logs?action=k8s.gitops.refuse&limit=20', { headers: bearer(admin) })).json()).items
       return rows.filter((r) => r.TargetID === DEPLOY && r.Namespace === NS && r.Cluster === CLUSTER && r.After?.app === APP && Date.parse(r.CreatedAt) >= started - 5_000)
         .map((r) => `${r.Result} ${r.After.method}`).sort()
-    }, { timeout: 10_000 }).toEqual(['failure DELETE', 'failure POST']) // the delete, the rollback
+    }, { timeout: 10_000 }).toEqual(['failure DELETE', 'failure POST', 'failure POST']) // the delete, the rollback, the YAML apply
 
     const after = JSON.parse(kubectl(`-n ${NS} get deploy ${DEPLOY} -o json`))
     expect([after.metadata.uid, after.metadata.generation]).toEqual([deploy.metadata.uid, deploy.metadata.generation])

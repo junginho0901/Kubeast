@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -32,13 +33,13 @@ func TestGitopsTargetsFromPath(t *testing.T) {
 		{"POST", "/api/v1/helm/releases/ns/rel/rollback", nil},
 		{"POST", "/api/v1/search", nil},
 		{"POST", "/api/v1/resources/yaml/create", nil},
+		{"POST", "/api/v1/hygiene/signoff", nil},
+		{"POST", "/api/v1/alertstore/silences", nil},
+		{"DELETE", "/api/v1/alertstore/silences/s1", nil},
 	}
 	for _, tc := range cases {
 		r := httptest.NewRequest(tc.method, tc.path, nil)
-		got, err := gitopsTargets(r)
-		if err != nil {
-			t.Fatalf("%s %s: %v", tc.method, tc.path, err)
-		}
+		got := gitopsTargets(r)
 		if len(got) != len(tc.want) {
 			t.Fatalf("%s %s: got %+v, want %+v", tc.method, tc.path, got, tc.want)
 		}
@@ -52,29 +53,53 @@ func TestGitopsTargetsFromPath(t *testing.T) {
 
 func TestGitopsTargetsFromYAMLBody(t *testing.T) {
 	body := `{"namespace":"ns","yaml":"apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: web\n---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: cm\n  namespace: other\n---\nkind: Nameless\n"}`
-	r := httptest.NewRequest("POST", "/api/v1/namespaces/ns/yaml/apply", strings.NewReader(body))
-	got, err := gitopsTargets(r)
-	if err != nil {
-		t.Fatal(err)
+	inYAML := []gitopsTarget{
+		{apiVersion: "apps/v1", kind: "Deployment", namespace: "ns", name: "web", inBody: true},
+		{apiVersion: "v1", kind: "ConfigMap", namespace: "other", name: "cm", inBody: true},
 	}
-	want := []gitopsTarget{
-		{apiVersion: "apps/v1", kind: "Deployment", namespace: "ns", name: "web"},
-		{apiVersion: "v1", kind: "ConfigMap", namespace: "other", name: "cm"},
-	}
-	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
-		t.Fatalf("got %+v, want %+v", got, want)
-	}
-	// The body is still there for the handler.
-	rest, _ := io.ReadAll(r.Body)
-	if string(rest) != body {
-		t.Fatal("body was not restored")
-	}
-	// /resources/yaml/apply and /nodes/{name}/yaml/apply read the body the same way.
-	for _, p := range []string{"/api/v1/resources/yaml/apply", "/api/v1/nodes/n1/yaml/apply"} {
-		r := httptest.NewRequest("POST", p, strings.NewReader(body))
-		if got, _ := gitopsTargets(r); len(got) != 2 {
-			t.Errorf("%s: got %+v", p, got)
+	for path, address := range map[string]gitopsTarget{
+		"/api/v1/namespaces/ns/yaml/apply": {resourceType: "namespaces", name: "ns"},
+		"/api/v1/nodes/n1/yaml/apply":      {resourceType: "nodes", name: "n1"},
+	} {
+		r := httptest.NewRequest("POST", path, strings.NewReader(body))
+		got := gitopsTargets(r)
+		want := append(append([]gitopsTarget{}, inYAML...), address)
+		if !slices.Equal(got, want) {
+			t.Fatalf("%s: got %+v, want %+v", path, got, want)
 		}
+		// The body is still there for the handler.
+		rest, _ := io.ReadAll(r.Body)
+		if string(rest) != body {
+			t.Fatalf("%s: body was not restored", path)
+		}
+	}
+}
+
+// The patch of a YAML apply goes where its JSON says, read as the handler reads it.
+func TestGitopsTargetsFromApply(t *testing.T) {
+	address := gitopsTarget{resourceType: "deployments", namespace: "ns", name: "web"}
+	for name, body := range map[string]string{
+		"name":                      `{"resource_type":"deployments","namespace":"ns","name":"web","yaml":"spec:\n  replicas: 0\n"}`,
+		"resource_name":             `{"resource_type":"deployments","namespace":"ns","resource_name":"web","yaml":"spec:\n  replicas: 0\n"}`,
+		"name before resource_name": `{"resource_type":"deployments","namespace":"ns","name":"web","resource_name":"other","yaml":""}`,
+		"bytes after the JSON":      `{"resource_type":"deployments","namespace":"ns","name":"web","yaml":""} more`,
+	} {
+		r := httptest.NewRequest("POST", "/api/v1/resources/yaml/apply", strings.NewReader(body))
+		if got := gitopsTargets(r); !slices.Equal(got, []gitopsTarget{address}) {
+			t.Errorf("%s: got %+v", name, got)
+		}
+		rest, _ := io.ReadAll(r.Body)
+		if string(rest) != body {
+			t.Errorf("%s: body was not restored", name)
+		}
+	}
+	r := httptest.NewRequest("POST", "/api/v1/resources/yaml/apply", strings.NewReader(`{"resource_type":"deployments","namespace":"ns","name":"web","yaml":"apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: other\n"}`))
+	want := []gitopsTarget{{apiVersion: "apps/v1", kind: "Deployment", namespace: "ns", name: "other", inBody: true}, address}
+	if got := gitopsTargets(r); !slices.Equal(got, want) {
+		t.Errorf("a body naming another object: got %+v, want %+v", got, want)
+	}
+	if got := gitopsTargets(httptest.NewRequest("POST", "/api/v1/resources/yaml/apply", strings.NewReader("not json"))); got != nil {
+		t.Errorf("not JSON is the handler's: got %+v", got)
 	}
 }
 

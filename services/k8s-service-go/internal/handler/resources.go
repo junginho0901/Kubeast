@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -161,9 +160,8 @@ func (h *Handler) ApplyResourceYAML(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.cfg.AdmissionPoliciesReadOnly && admissionPolicyKind(kind) {
-		err := fmt.Errorf("admission policies are read-only (features.admissionPolicies.readOnly)")
-		h.recordAuditWithPayload(r, "k8s.yaml.apply", body.ResourceType, body.Name, body.Namespace, err, nil, nil)
-		response.Error(w, http.StatusForbidden, err.Error())
+		h.recordAuditWithPayload(r, "k8s.yaml.apply", body.ResourceType, body.Name, body.Namespace, errAdmissionPoliciesReadOnly, nil, nil)
+		response.Error(w, http.StatusForbidden, errAdmissionPoliciesReadOnly.Error())
 		return
 	}
 
@@ -206,6 +204,14 @@ func (h *Handler) CreateResourcesFromYAML(w http.ResponseWriter, r *http.Request
 	for _, kind := range kinds {
 		if err := h.requirePermissionForCluster(r, "resource."+permResource(kind)+".create"); err != nil {
 			h.handleError(w, err)
+			return
+		}
+	}
+	for _, kind := range kinds {
+		if h.cfg.AdmissionPoliciesReadOnly && admissionPolicyKind(kind) {
+			h.recordAuditWithPayload(r, "k8s.yaml.create", "multi", "", "", errAdmissionPoliciesReadOnly, nil,
+				audit.MustJSON(map[string]interface{}{"yaml_len": len(body.YAML), "default_namespace": body.Namespace}))
+			response.Error(w, http.StatusForbidden, errAdmissionPoliciesReadOnly.Error())
 			return
 		}
 	}

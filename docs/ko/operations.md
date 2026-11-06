@@ -94,12 +94,16 @@ Argo CD가 배포한 객체에는 추적 어노테이션(`argocd.argoproj.io/tra
 
 - `mode: warn`(기본) — 확인창에서 "다음 동기화 때 되돌아갑니다, Git에서 바꾸세요"라고 알린 뒤 진행합니다.
 - `mode: block` — k8s-service가 쓰기 요청을 409로 거부합니다(`managed by Argo CD application <앱>; change it in Git`).
-  - AI 쓰기 도구(apply·delete·patch·scale·rollout)도 같은 이유로 거부합니다.
+  - AI 쓰기 도구(apply·delete·patch·annotate·label·scale·rollout)도 같은 이유로 거부합니다.
   - 드로어의 삭제·YAML 적용 버튼은 비활성화됩니다.
+  - 가드는 쓰기가 실제로 가는 객체를 봅니다. 경로, 또는 `resources/yaml/apply`의 JSON입니다. YAML이 이름 댄 객체도 함께 보고, 그쪽이 관리 객체여도 거부합니다.
+  - 대상을 읽지 못하면 거부합니다(`could not check whether Argo CD manages …`, 상태 코드는 실패한 읽기의 것). 쓰기를 허용해도 되는지 말할 수 없기 때문입니다. 없는 객체와 클러스터가 제공하지 않는 종류는 관리 대상이 아니므로 쓰기가 스스로 답합니다.
+  - AI 도구로 한 종류를 모두 삭제하면 지울 객체를 읽어 보고, 관리 객체가 있거나 읽을 객체가 5,000개를 넘으면 거부합니다.
+  - 그 경로의 권한이 없는 사람은 먼저 403을 받습니다. Application 이름은 보이지 않고 `k8s.gitops.refuse` 행도 남지 않습니다.
 
 어노테이션은 그 객체 자신을 가리킬 때만 인정합니다(파드 템플릿을 따라 복사된 어노테이션은 무시합니다).
 아직 라벨 방식(`app.kubernetes.io/instance` 또는 `argocd-cm`의 `application.instanceLabelKey`)을 쓰는 설치는 `instanceLabel`에 그 키를 적으면 됩니다.
-Helm 릴리스 작업, 노드 cordon/drain, 새 객체 생성은 가드 대상이 아닙니다.
+Helm 릴리스 작업과 새 객체 생성은 가드 대상이 아닙니다. 노드의 cordon, uncordon, drain은 Argo CD가 그 Node를 관리하면 다른 쓰기처럼 거절됩니다.
 
 ## 대시보드 빠른 작업 (이슈 · 최적화 · 스토리지)
 
