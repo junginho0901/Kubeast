@@ -329,11 +329,13 @@ test.describe('number check — no drawer row out of reach', () => {
       })
 
       await test.step('ServiceAccount hr-sa: every binding of it', async () => {
-        const bindsSa = (b: Obj) => (b.subjects ?? []).some((s: Obj) => s.kind === 'ServiceAccount' && s.name === 'hr-sa' && (s.namespace || b.metadata.namespace) === NS)
+        const namesSa = (b: Obj) => (b.subjects ?? []).some((s: Obj) => s.kind === 'ServiceAccount' && s.name === 'hr-sa' && (s.namespace || b.metadata.namespace) === NS)
+        // also what every ServiceAccount or this namespace's are bound to, as a kind cluster's own issuer discovery binding
+        const bindsSa = (b: Obj) => namesSa(b) || (b.subjects ?? []).some((s: Obj) => s.kind === 'Group' && (s.name === 'system:serviceaccounts' || s.name === `system:serviceaccounts:${NS}`))
         const rbs: Obj[] = JSON.parse(k(`get rolebindings -n ${NS} -o json`)).items.filter(bindsSa).sort(byKey)
         const crbsOfSa: Obj[] = JSON.parse(k('get clusterrolebindings -o json')).items.filter(bindsSa).sort(byKey)
         const all = [...rbs, ...crbsOfSa]
-        expect(all, 'kubectl lists the bindings of hr-sa').toHaveLength(N)
+        expect(all.filter(namesSa), 'kubectl lists the bindings naming hr-sa').toHaveLength(N)
         await openDrawer(page, `ServiceAccount/${NS}/hr-sa`)
         await compare(page, pagesOf(`Effective Permissions (${all.length} bindings)`, all.map((b) => [`via ${b.metadata.name} → ${b.roleRef.name}`]), 5), 'cards')
       })

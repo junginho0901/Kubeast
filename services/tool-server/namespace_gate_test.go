@@ -29,7 +29,7 @@ func TestNamespaceGate(t *testing.T) {
 			t.Fatalf("%s: must be refused naming the scope: %v", name, err)
 		}
 	}
-	if err := namespaceGate(scoped, "c", "get_cluster_overview", args("web")); !errors.Is(err, errNamespaceScope) || !strings.Contains(err.Error(), "spans the cluster") {
+	if err := namespaceGate(scoped, "c", "get_node_metrics", args("web")); !errors.Is(err, errNamespaceScope) || !strings.Contains(err.Error(), "spans the cluster") {
 		t.Fatalf("a cluster-wide tool is refused: %v", err)
 	}
 	if err := namespaceGate(scoped, "other", "k8s_get_resources", args("")); err != nil {

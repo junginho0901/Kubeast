@@ -56,7 +56,7 @@ FEATURE_TOOL_ARGS = {
     "traces_tags": ({"scope", "tag", "namespace", "since"}, set(), set()),
     "traces_metrics": ({"traceql", "namespace", "since", "since_time", "until_time"}, set(), {"step"}),
     "traces_compare": ({"traceql", "namespace", "since", "since_time", "until_time"}, set(), {"limit"}),
-    "alerts_list": ({"state", "alertname"}, set(), set()),
+    "alerts_list": ({"state", "alertname"}, {"silences"}, set()),
     "clusters_list": (set(), set(), set()),
     "alert_investigate": ({"alert_id", "alertname", "namespace"}, {"status_only"}, set()),
     "alerts_inbox": ({"alert_id", "status", "alert_severity", "search"}, {"mine", "open_only"}, {"limit", "offset"}),

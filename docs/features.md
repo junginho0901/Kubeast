@@ -43,7 +43,7 @@
     - `prometheus_metrics` and `prometheus_labels`: find metric names, types and descriptions, and label names and values, before querying
     - `prometheus_rules`: alerting and recording rules and the alerts firing now. The AI calls it first when investigating an alert.
     - `prometheus_targets`: scrape targets up or down, for when a metric is empty. If the store is shared by multiple clusters or has no targets API, it goes through the `up` metric.
-    - `alerts_list`: this cluster's alerts in the alert store (firing, silenced, inhibited) and the silences covering them
+    - `alerts_list`: this cluster's alerts in the alert store (firing, silenced, inhibited) and the silences covering them. With `silences=true`, the Silences tab: every active and pending silence, also one that matches no alert now
     - `alert_investigate`: starts the formal investigation of an alert in the Alerts inbox, as its "Investigate now" button does (see [AI alerts](ai-alerts.md))
     - `clusters_list`: the clusters the person can see and their connection status, as the cluster picker lists them (the last check, not a live probe). With `admin.clusters.list`, also what Admin → Clusters lists. Never a kubeconfig or credential
     - `alerts_inbox`: the Alerts inbox with who acknowledged an alert, who it is assigned to and whether it is done, and with `alert_id` its note. Reading only; the marks change on the screen
@@ -84,7 +84,7 @@
     - `ai_usage`: AI use by user, model or cluster for a period, as on AI Usage (`admin.audit.read`).
     - `access_requests`: pending and decided requests, as on Access requests (`admin.users.update`). Approving and rejecting stay on the screen.
     - `audit_integrity`: how far the audit log's chain is sealed and its last anchor (`admin.audit.read`). It does not check the chain; the Verify button on Audit Logs does.
-    - `hygiene_history`: a cluster's hygiene sign-offs and the report each stored (`admin.hygiene.read`).
+    - `hygiene_history`: a cluster's hygiene sign-offs, how often one is due (`interval_days`) and the report each stored (`admin.hygiene.read`).
     - These answers name each field they give. A key's value and password hashes are not among them; `key_prefix` is what lists show of a key. Mail addresses follow `ai.redaction.pii`.
   - `nodes_stats_summary` and `nodes_log` read the kubelet's stats summary and log query through the API server proxy. They need `admin.nodes.read` and the cluster RBAC `nodes/proxy`. Log queries need kubelet `enableSystemLogQuery` on, and answer unavailable when it is off.
   - Large lists are reduced with these tools:
@@ -134,7 +134,7 @@
   - A setting can have the tier `economy` (`tier`, CRD `spec.tier`). When such a setting is enabled, the chat history summary and the floating assistant use that model, which is usually cheaper. Chat keeps the default model.
   - `model_info.tier` in the stream shows which one is used.
   - If there is no economy setting, or it cannot be used because it has no key, both use the default model.
-  - Each setting can have its own **answer length** (`max_tokens`; empty: 4,096 for chat answers, 2,048 for each alert investigation step) and **tool result length** (`tool_result_chars`, 1,000–200,000 characters; empty: 6,000), set in the edit window for every provider or as `spec.maxTokens` and `spec.toolResultChars` of a `ModelConfig` resource (with its CA certificate as `spec.caCert`). They are kept in the setting's options, and the tool result length is never sent to the provider. A longer result is cut at that length and the model reads its start; `k8s_get_pod_logs`, `logfiles` and `nodes_log` keep the end instead, where the newest lines are. The Claude subscription leaves the answer length to Claude Code.
+  - Each setting can have its own **answer length** (`max_tokens`; empty: 4,096 for chat answers, 2,048 for each alert investigation step) and **tool result length** (`tool_result_chars`, 1,000–200,000 characters; empty: 6,000), set in the edit window for every provider or as `spec.maxTokens` and `spec.toolResultChars` of a `ModelConfig` resource (with its CA certificate as `spec.caCert`). They are kept in the setting's options, and the tool result length is never sent to the provider. A longer result is cut at that length and the model reads its start; `k8s_get_pod_logs`, `logfiles` and `nodes_log` keep the end instead, where the newest lines are, and they keep it past tool-server's own limit (`TOOL_OUTPUT_MAX_BYTES`) too. The Claude subscription leaves the answer length to Claude Code.
   - Each card says what the server runs on it now — Chat, Floating assistant, History summaries, Alert investigations — worked out by the rules ai-service picks models with. "Active" is the one that runs the chat.
   - OpenAI and Azure OpenAI get the answer length as `max_completion_tokens`: their reasoning models (o-series, GPT-5) refuse `max_tokens`. When a model answers 400 naming a parameter it does not take (reasoning models refuse `temperature`, `top_p` and others), the request is sent again once without it, and that model is sent it no more.
 
@@ -230,8 +230,8 @@
     - An "all namespaces" query goes through the list one by one and merges the results.
     - Dashboard counts are counted only within the list (`scoped: true`). Nodes and PVs are 0.
     - The dashboard's issue check reads pods, workloads and Warning events in each namespace of the list. Nodes, which such a grant cannot list, show as an info row saying they were not read.
-  - AI tools and MCP require `namespace`, refuse `all_namespaces` even next to one of the grant's namespaces, and refuse cluster-wide tools: overview, node metrics, apply, create, API list and cluster settings.
-    - Seven stay inside the grant by themselves, as their screens do, so they work without one: `issues`, `cost`, `k8s_find_resource`, `gitops_status`, `storage_summary`, `timeline` and `gpu`. `k8s_explain` and `clusters_list` read no object data.
+  - AI tools and MCP require `namespace`, refuse `all_namespaces` even next to one of the grant's namespaces, and refuse cluster-wide tools: node metrics, apply, create, API list and cluster settings.
+    - Eight stay inside the grant by themselves, as their screens do, so they work without one: `issues`, `cost`, `k8s_find_resource`, `gitops_status`, `storage_summary`, `timeline`, `gpu` and `get_cluster_overview`, which answers the dashboard's counts with nodes and PVs as not counted (null). `k8s_explain` and `clusters_list` read no object data.
   - The cluster's Prometheus answers for the whole cluster, so its reads answer 403 to such grants. This covers `/prometheus/query`, `query_range`, `metrics`, `labels`, `rules`, `targets` and `/gpu/metrics`, whether the cluster reaches the store through the API server's proxy or as an external store with Kubeast's own credentials. Alerts and silences are refused the same way.
   - An external store reads with Kubeast's own credentials, so the cluster's RBAC never sees the caller: reading it takes `resource.pod.read` on that cluster, as the log store does. Through the API server's proxy the cluster decides.
     - `/cluster/features` reports `prometheus.namespaceLimited`, and the drawers' Prometheus sections then say the metrics need a grant on the whole cluster instead of asking.

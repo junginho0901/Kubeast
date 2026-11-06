@@ -137,9 +137,27 @@ test.describe('namespace-scoped grant enforcement', () => {
         const other = await rpc('k8s_get_resources', { cluster: CLUSTER, resource_type: 'configmaps', namespace: nsB })
         expect(other.isError).toBe(true)
         expect(other.content[0].text).toMatch(/outside your grant/)
-        const wide = await rpc('get_cluster_overview', { cluster: CLUSTER })
+        const wide = await rpc('get_node_metrics', { cluster: CLUSTER })
         expect(wide.isError).toBe(true)
         expect(wide.content[0].text).toMatch(/spans the cluster/)
+        // The overview stays inside the grant with the numbers of the dashboard's route, and says what that route's 0 means.
+        const overviewTool = await rpc('get_cluster_overview', { cluster: CLUSTER })
+        expect(overviewTool.isError, overviewTool.content?.[0]?.text).toBeFalsy()
+        const told = JSON.parse(overviewTool.content[0].text)
+        const dashboard = await (await get(request, writer, '/api/v1/cluster/overview')).json()
+        for (const key of ['scoped', 'total_namespaces', 'total_pods', 'total_services', 'total_deployments', 'total_pvcs', 'pod_status', 'refused', 'cluster_version']) {
+          expect(told[key], key).toEqual(dashboard[key])
+        }
+        expect(told.scoped).toBe(true)
+        expect(told.total_namespaces).toBe(1)
+        expect(told.namespaces).toEqual([nsA])
+        expect(told.node_count).toBeNull()
+        expect(told.total_pvs).toBeNull()
+        expect(told.not_counted).toEqual(['persistentvolumes', 'nodes'])
+        // The dashboard's route takes no namespace, so neither does the tool: it cannot name one outside the grant.
+        const overviewElsewhere = await rpc('get_cluster_overview', { cluster: CLUSTER, namespace: nsB })
+        expect(overviewElsewhere.isError).toBe(true)
+        expect(overviewElsewhere.content[0].text).toMatch(/'namespace' was unexpected/)
         const ok = await rpc('k8s_get_resources', { cluster: CLUSTER, resource_type: 'configmaps', namespace: nsA })
         expect(ok.isError, ok.content?.[0]?.text).toBeFalsy()
         expect(ok.content[0].text).toContain('cm-a')

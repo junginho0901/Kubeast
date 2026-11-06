@@ -24,6 +24,8 @@ export interface BoundRole {
   role_kind: 'Role' | 'ClusterRole'
   role_name: string
   role_namespace?: string  // empty for ClusterRole
+  /** the User or Group subjects that make this binding apply, when it does not name the ServiceAccount itself */
+  matched_by: string[]
   rules: RuleEntry[]
   loading: boolean
   error?: string
@@ -35,7 +37,14 @@ export interface NormalizedBinding {
   namespace?: string
   role_ref_kind: string
   role_ref_name: string
-  subjects: Array<{ kind?: string | null; name?: string | null; namespace?: string | null }>
+  subjects: Subject[]
+  matched_by: string[]
+}
+
+interface Subject {
+  kind?: string | null
+  name?: string | null
+  namespace?: string | null
 }
 
 function normalizeRb(item: any, defaultKind: 'RoleBinding' | 'ClusterRoleBinding'): NormalizedBinding | null {
@@ -56,27 +65,33 @@ function normalizeRb(item: any, defaultKind: 'RoleBinding' | 'ClusterRoleBinding
       name: s?.name ?? null,
       namespace: s?.namespace ?? null,
     })),
+    matched_by: [],
   }
 }
 
-function bindsServiceAccount(b: NormalizedBinding, ns: string, saName: string): boolean {
-  for (const s of b.subjects) {
-    if (s.kind !== 'ServiceAccount') continue
-    if (s.name !== saName) continue
-    // RoleBinding subjects always carry an explicit namespace for SA. If missing
-    // (older shape), fall back to the binding's namespace.
-    const subjNs = s.namespace || b.namespace
-    if (subjNs === ns) return true
-  }
+// A subject without a namespace is the RoleBinding's and nobody's in a ClusterRoleBinding, as the API server reads it.
+function namesServiceAccount(s: Subject, b: NormalizedBinding, ns: string, saName: string): boolean {
+  return s.kind === 'ServiceAccount' && s.name === saName && (s.namespace || b.namespace) === ns
+}
+
+// Who the API server also takes it for, as a pod's RBAC tab matches; system:authenticated is everyone signed in, so as there it does not count.
+function includesServiceAccount(s: Subject, ns: string, saName: string): boolean {
+  if (s.kind === 'User') return s.name === `system:serviceaccount:${ns}:${saName}`
+  if (s.kind === 'Group') return s.name === 'system:serviceaccounts' || s.name === `system:serviceaccounts:${ns}`
   return false
 }
 
-// Every RoleBinding, then every ClusterRoleBinding, that binds the ServiceAccount (the drawer pages them)
+// Every RoleBinding, then every ClusterRoleBinding, that applies to the ServiceAccount (the drawer pages them)
 export function serviceAccountBindings(rbList: unknown, crbList: unknown, namespace: string, name: string): NormalizedBinding[] {
   const matched = (list: unknown, kind: 'RoleBinding' | 'ClusterRoleBinding') => (Array.isArray(list) ? list : [])
     .map((b: any) => normalizeRb(b, kind))
     .filter((b): b is NormalizedBinding => b !== null)
-    .filter((b) => bindsServiceAccount(b, namespace, name))
+    .flatMap((b) => {
+      const others = b.subjects.filter((s) => includesServiceAccount(s, namespace, name))
+      const direct = b.subjects.some((s) => namesServiceAccount(s, b, namespace, name))
+      if (!direct && others.length === 0) return []
+      return [{ ...b, matched_by: direct ? [] : others.map((s) => `${s.kind} ${s.name}`) }]
+    })
   return [...matched(rbList, 'RoleBinding'), ...matched(crbList, 'ClusterRoleBinding')]
 }
 
@@ -241,6 +256,7 @@ export function useEffectivePermissions({ namespace, name }: Params): {
       role_kind: roleKind,
       role_name: b.role_ref_name,
       role_namespace: roleNs,
+      matched_by: b.matched_by,
       rules: desc ? normalizeRules(desc?.rules) : [],
       loading: !!q?.isLoading,
       error: q?.error ? String(q.error) : undefined,

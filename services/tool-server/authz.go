@@ -80,7 +80,7 @@ var (
 var clusterWideTools = map[string]struct{}{
 	"k8s_get_available_api_resources": {}, "k8s_get_cluster_configuration": {},
 	"k8s_apply_manifest": {}, "k8s_create_resource": {},
-	"get_cluster_overview": {}, "get_node_metrics": {},
+	"get_node_metrics": {},
 	// PromQL and the alert store are not bounded by a namespace; the hygiene
 	// report covers the cluster; a manifest preview names its own object; the
 	// audit log and node internals are Admin-only and cluster-wide.
@@ -96,7 +96,7 @@ var clusterWideTools = map[string]struct{}{
 // reads the token's "ns" claim and searches only those namespaces — so they
 // pass the gate without naming one. ai-service keeps the same list and refuses
 // first (permissions.NAMESPACE_AWARE_TOOLS).
-var namespaceAwareTools = map[string]struct{}{"k8s_find_resource": {}, "issues": {}, "cost": {}, "gitops_status": {}, "storage_summary": {}, "timeline": {}, "gpu": {}}
+var namespaceAwareTools = map[string]struct{}{"k8s_find_resource": {}, "issues": {}, "cost": {}, "gitops_status": {}, "storage_summary": {}, "timeline": {}, "gpu": {}, "get_cluster_overview": {}}
 
 // namespaceFreeTools return API schema or Kubeast's own list of clusters, not
 // object data, so a scoped grant may call them without a namespace.

@@ -49,13 +49,70 @@ func capOutput(output []byte) string {
 	return string(output[:outputMaxBytes]) + fmt.Sprintf(truncatedMarker, outputMaxBytes)
 }
 
+// endBuffer keeps the last max bytes written to it, holding at most about twice that.
+type endBuffer struct {
+	max int
+	buf []byte
+}
+
+func newEndBuffer(max int) *endBuffer { return &endBuffer{max: max} }
+
+func (b *endBuffer) Write(p []byte) (int, error) {
+	b.buf = append(b.buf, p...)
+	if len(b.buf) > 2*b.max {
+		b.buf = append(b.buf[:0], b.buf[len(b.buf)-b.max:]...)
+	}
+	return len(p), nil
+}
+
+func (b *endBuffer) bytes() []byte {
+	if len(b.buf) > b.max {
+		return b.buf[len(b.buf)-b.max:]
+	}
+	return b.buf
+}
+
+type keepEndKey struct{}
+
+// keepingEnd asks kubectlExec to hold only the last keep bytes of what kubectl prints.
+func keepingEnd(ctx context.Context, keep int) context.Context {
+	return context.WithValue(ctx, keepEndKey{}, keep)
+}
+
 // kubectlExec runs the kubectl binary; tests replace it to script outputs.
 var kubectlExec = func(ctx context.Context, args []string, stdin *string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "kubectl", args...)
 	if stdin != nil {
 		cmd.Stdin = strings.NewReader(*stdin)
 	}
+	if keep, ok := ctx.Value(keepEndKey{}).(int); ok {
+		end := newEndBuffer(keep)
+		cmd.Stdout, cmd.Stderr = end, end
+		err := cmd.Run()
+		return end.bytes(), err
+	}
 	return cmd.CombinedOutput()
+}
+
+// runKubectlKeepingEnd is runKubectl for a log, whose newest lines are at its end: cut says the front left past outputMaxBytes.
+func runKubectlKeepingEnd(ctx context.Context, args ...string) (string, bool, error) {
+	argv, done, err := kubectlCommand(ctx, args)
+	if err != nil {
+		return "", false, err
+	}
+	defer done()
+	output, err := kubectlExec(keepingEnd(ctx, outputMaxBytes+1), argv, nil)
+	if err != nil {
+		errText := strings.TrimSpace(capOutput(output))
+		if errText == "" {
+			errText = err.Error()
+		}
+		return "", false, fmt.Errorf("kubectl failed: %s", errText)
+	}
+	if len(output) <= outputMaxBytes {
+		return string(output), false, nil
+	}
+	return endOfText(string(output), outputMaxBytes), true, nil
 }
 
 func runKubectl(ctx context.Context, headers http.Header, args ...string) (string, error) {

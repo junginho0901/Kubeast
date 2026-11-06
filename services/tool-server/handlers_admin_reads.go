@@ -507,14 +507,18 @@ func handleHygieneHistory(ctx context.Context, args map[string]interface{}, head
 		return "", err
 	}
 	rows, out, err := listReply("hygiene_history", hygieneHistoryAlternative, status, body)
-	if err != nil || out != "" {
-		return out, err
+	if err != nil {
+		return "", err
+	}
+	if out != "" {
+		return hygieneOffAnswer(ctx, out, headers)
 	}
 	answer := map[string]interface{}{
 		"cluster":  clusterIDFromCtx(ctx),
 		"returned": len(rows),
 		"rows":     signOffRows(rows, []string{"id", "cluster", "reviewed_by_email", "reviewed_at", "note", "counts"}),
 	}
+	addHygieneSettings(ctx, answer, headers)
 	if len(rows) >= hygieneHistoryCap {
 		answer["truncated"] = true
 		answer["note"] = fmt.Sprintf("The newest %d sign-offs of this cluster are listed.", hygieneHistoryCap)
@@ -523,6 +527,37 @@ func handleHygieneHistory(ctx context.Context, args map[string]interface{}, head
 		answer["hint"] = "This cluster has not been signed off yet."
 	}
 	return marshalRows(answer)
+}
+
+// addHygieneSettings adds whether the report is on and how often a sign-off is due; settings it could not read are not zeroes.
+func addHygieneSettings(ctx context.Context, answer map[string]interface{}, headers http.Header) {
+	var settings struct {
+		Enabled      bool `json:"enabled"`
+		IntervalDays int  `json:"interval_days"`
+	}
+	status, body, err := k8sServiceGet(ctx, headers, "/hygiene/config", nil)
+	if err == nil && status != http.StatusOK {
+		err = fmt.Errorf("status %d: %s", status, detailOf(body))
+	}
+	if err == nil {
+		err = json.Unmarshal(body, &settings)
+	}
+	if err != nil {
+		answer["interval_days"] = nil
+		answer["settings_error"] = err.Error()
+		return
+	}
+	answer["enabled"], answer["interval_days"] = settings.Enabled, settings.IntervalDays
+}
+
+// hygieneOffAnswer adds the settings to the answer of a report that is off, and leaves any other refusal as it is.
+func hygieneOffAnswer(ctx context.Context, refusal string, headers http.Header) (string, error) {
+	var answer map[string]interface{}
+	if err := json.Unmarshal([]byte(refusal), &answer); err != nil || answer["status"] != "unavailable" {
+		return refusal, nil
+	}
+	addHygieneSettings(ctx, answer, headers)
+	return marshalJSON(answer)
 }
 
 func hygieneSignedOff(ctx context.Context, reviewID string, args map[string]interface{}, headers http.Header) (string, error) {

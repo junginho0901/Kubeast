@@ -696,35 +696,35 @@
   {
    "tool": "get_cluster_overview",
    "args": {},
-   "refused": "spans the cluster"
+   "refused": ""
   },
   {
    "tool": "get_cluster_overview",
    "args": {
     "namespace": "shop"
    },
-   "refused": "spans the cluster"
+   "refused": ""
   },
   {
    "tool": "get_cluster_overview",
    "args": {
     "namespace": "web"
    },
-   "refused": "spans the cluster"
+   "refused": ""
   },
   {
    "tool": "get_cluster_overview",
    "args": {
     "namespace": "db"
    },
-   "refused": "spans the cluster"
+   "refused": "outside your grant"
   },
   {
    "tool": "get_cluster_overview",
    "args": {
     "namespace": " shop "
    },
-   "refused": "spans the cluster"
+   "refused": ""
   },
   {
    "tool": "get_cluster_overview",
@@ -754,7 +754,7 @@
     "all_namespaces": false,
     "namespace": "shop"
    },
-   "refused": "spans the cluster"
+   "refused": ""
   },
   {
    "tool": "get_node_metrics",

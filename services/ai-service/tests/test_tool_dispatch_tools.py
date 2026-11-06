@@ -142,6 +142,9 @@ async def test_feature_tools_pass_declared_arguments_only():
         ("traces_compare", {"traceql": "{ kind = server }", "limit": 50}, {"traceql": "{ kind = server }", "limit": 50}),
         ("alerts_list", {"state": "all", "alertname": "KubePodCrashLooping", "alert_labels": {"severity": "critical", "n": 3, "x": {"y": 1}}, "namespace": "shop"},
          {"state": "all", "alertname": "KubePodCrashLooping", "alert_labels": {"severity": "critical", "n": "3"}}),
+        ("alerts_list", {"silences": True, "namespace": "shop"}, {"silences": True}),
+        ("alerts_list", {"silences": "true"}, {"silences": True}),
+        ("alerts_list", {"silences": False}, {}),
     ]:
         service._call_tool_server.reset_mock()
         await execute_function_with_context(service, tool, given, _ctx())

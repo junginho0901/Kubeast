@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, Member } from '@/services/api'
+import { api, Member, type BulkCreateAnswer } from '@/services/api'
 import { CheckCircle, ChevronDown, ChevronUp, Clock, Copy, Download, KeyRound, Lock, Plus, RotateCcw, Search, Trash2, Unlock, Upload } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ListPager } from '@/components/ListPager'
@@ -15,6 +15,7 @@ import { logoutSession } from '@/services/auth'
 import { useNavigate } from 'react-router-dom'
 import { UserDetailModal } from './admin-users/UserDetailModal'
 import { bulkRoleFailures, bulkRoleFailureText, readBulkRoleAnswer } from './admin-users/bulkRole'
+import { bulkCreateFailureRows, bulkCreateFailures, bulkCreateSummary, parseBulkCsv, readBulkCreateAnswer, type ParsedBulkCsv } from './admin-users/bulkCreate'
 
 const USERS_PAGE_SIZE = 25
 
@@ -39,7 +40,7 @@ export default function AdminUsers() {
 
   // Bulk upload
   const [bulkUploadModalOpen, setBulkUploadModalOpen] = useState(false)
-  const [bulkUploadResult, setBulkUploadResult] = useState<{ created: Member[]; errors: Array<{ email: string; message: string }> } | null>(null)
+  const [bulkUploadResult, setBulkUploadResult] = useState<(BulkCreateAnswer & { total: number; error?: string }) | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   // Sorting
@@ -183,11 +184,21 @@ export default function AdminUsers() {
   })
 
   const bulkCreateMutation = useMutation({
-    mutationFn: (csvUsers: Array<{ name: string; email: string; password: string; role_id: number; team?: string }>) =>
-      api.adminBulkCreateUsers(csvUsers),
-    onSuccess: (result) => {
+    mutationFn: ({ users }: ParsedBulkCsv) => api.adminBulkCreateUsers(users),
+    onSuccess: (result, { users, failed }) => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
-      setBulkUploadResult(result)
+      const answer = readBulkCreateAnswer(result)
+      setBulkUploadResult({ created: answer.created, failed: [...failed, ...answer.failed], total: users.length + failed.length })
+    },
+    onError: (err: any, { users, failed }) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+      const leftOut = bulkCreateFailures(err)
+      setBulkUploadResult({
+        created: [],
+        failed: [...failed, ...leftOut],
+        total: users.length + failed.length,
+        error: leftOut.length > 0 ? undefined : err?.response?.data?.detail || err?.message || tr('adminUsers.actionFailed', 'The action failed.'),
+      })
     },
   })
 
@@ -341,24 +352,12 @@ export default function AdminUsers() {
     reader.onload = (ev) => {
       const text = ev.target?.result as string
       if (!text) return
-      const lines = text.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
-      if (lines.length < 2) return
-
-      const parsed = lines.slice(1).map((line) => {
-        const cols = line.split(',').map((c) => c.trim())
-        const roleName = cols[3] || 'read'
-        const matchedRole = roles.find((r) => r.name === roleName)
-        return {
-          name: cols[0] || '',
-          email: cols[1] || '',
-          password: cols[2] || '',
-          role_id: matchedRole?.id ?? 0,
-          team: cols[4] || undefined,
-        }
-      }).filter((u) => u.name && u.email && u.password && u.role_id > 0)
-
-      if (parsed.length === 0) return
-      bulkCreateMutation.mutate(parsed)
+      const parsed = parseBulkCsv(text, roles)
+      if (parsed.users.length > 0) {
+        bulkCreateMutation.mutate(parsed)
+      } else if (parsed.failed.length > 0) {
+        setBulkUploadResult({ created: [], failed: parsed.failed, total: parsed.failed.length })
+      }
     }
     reader.readAsText(file)
     e.target.value = ''
@@ -900,11 +899,17 @@ export default function AdminUsers() {
                       {tr('adminUsers.bulkCreated', '{{count}} users created.', { count: bulkUploadResult.created.length })}
                     </div>
                   )}
-                  {bulkUploadResult.errors?.length > 0 && (
-                    <div className="rounded-lg border border-red-800/40 bg-red-950/20 px-4 py-2 text-sm text-red-300 space-y-1">
-                      {bulkUploadResult.errors.map((err, i) => (
-                        <div key={i}>{err.email}: {err.message}</div>
+                  {bulkUploadResult.failed.length > 0 && (
+                    <div className="rounded-lg border border-red-800/40 bg-red-950/20 px-4 py-2 text-sm text-red-300 space-y-1" role="alert" data-testid="admin-users-bulk-create-failed">
+                      <div className="font-medium">{bulkCreateSummary(t, bulkUploadResult.total, bulkUploadResult.failed.length)}</div>
+                      {bulkCreateFailureRows(t, bulkUploadResult.failed).map((row, i) => (
+                        <div key={i}>{row}</div>
                       ))}
+                    </div>
+                  )}
+                  {bulkUploadResult.error && (
+                    <div className="rounded-lg border border-red-800/40 bg-red-950/20 px-4 py-2 text-sm text-red-300" role="alert" data-testid="admin-users-bulk-create-error">
+                      {bulkUploadResult.error}
                     </div>
                   )}
                 </div>

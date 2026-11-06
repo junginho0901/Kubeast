@@ -566,7 +566,7 @@ async def test_namespace_scoped_grant_limits_tool_calls(fakes, monkeypatch):
         assert other.json()["result"]["isError"] is True and "outside your grant" in other.json()["result"]["content"][0]["text"]
         none = await call(client, "tok-scoped", "tools/call", {"name": "k8s_get_resources", "arguments": {"cluster": "self", "resource_type": "pods"}})
         assert "namespace is required" in none.json()["result"]["content"][0]["text"]
-        wide = await call(client, "tok-scoped", "tools/call", {"name": "get_cluster_overview", "arguments": {"cluster": "self"}})
+        wide = await call(client, "tok-scoped", "tools/call", {"name": "get_node_metrics", "arguments": {"cluster": "self"}})
         assert "spans the cluster" in wide.json()["result"]["content"][0]["text"]
     assert [c[1] for c in FakeToolServer.calls] == ["k8s_get_resources"]
     assert [r["error"] for r in fakes["audit"] if r.get("result") == "failure"] == ["forbidden: namespace scope"] * 3
@@ -576,9 +576,9 @@ async def test_namespace_scoped_grant_limits_tool_calls(fakes, monkeypatch):
 async def test_namespace_scoped_grant_reaches_the_tools_k8s_service_narrows(fakes, monkeypatch):
     server = mcp_server.KubeastMCPServer(tool_server_url="http://tools")
     async with running_app(server) as client:
-        for name, arguments in (("timeline", {"cluster": "self"}), ("gpu", {"cluster": "self"})):
+        for name, arguments in (("timeline", {"cluster": "self"}), ("gpu", {"cluster": "self"}), ("get_cluster_overview", {"cluster": "self"})):
             res = await call(client, "tok-scoped", "tools/call", {"name": name, "arguments": arguments})
             assert res.json()["result"].get("isError") in (None, False), res.json()
         other = await call(client, "tok-scoped", "tools/call", {"name": "timeline", "arguments": {"cluster": "self", "namespace": "db"}})
         assert other.json()["result"]["isError"] is True and "outside your grant" in other.json()["result"]["content"][0]["text"]
-    assert [c[1] for c in FakeToolServer.calls] == ["timeline", "gpu"]
+    assert [c[1] for c in FakeToolServer.calls] == ["timeline", "gpu", "get_cluster_overview"]

@@ -21,6 +21,86 @@ async function auditRows(request: APIRequestContext, headers: Record<string, str
 }
 
 test.describe('audit — admin actions (M15, M27)', () => {
+  test('a bulk creation names the accounts it left out and creates the rest', async ({ request }) => {
+    const admin = await adminHeaders(request)
+    const stamp = Date.now()
+    const [fine, noTeam, weak] = [`e2e-bulkc-fine-${stamp}@kubeast.local`, `e2e-bulkc-team-${stamp}@kubeast.local`, `e2e-bulkc-weak-${stamp}@kubeast.local`]
+    const row = (email: string, extra: object = {}) => ({ name: email.split('@')[0], email, password: 'e2e-bulk-throwaway-1', ...extra })
+    const made: string[] = []
+    try {
+      const res = await request.post('/api/v1/auth/admin/users/bulk', { headers: admin, data: { users: [row(fine), row(noTeam, { team: `no-such-team-${stamp}` }), row(weak, { password: 'short' }), row(fine)] } })
+      expect(res.status(), await res.text()).toBe(207)
+      const body = await res.json()
+      made.push(...body.created.map((u: any) => u.id))
+      expect(body.created.map((u: any) => u.email)).toEqual([fine])
+      expect(body.failed.map((f: any) => [f.email, f.reason])).toEqual([[noTeam, 'team'], [weak, 'password'], [fine, 'exists']])
+      expect(body.failed[0].detail).toBe(`no-such-team-${stamp}`)
+      // Whoever read errors before still reads every account left out.
+      expect(body.errors.map((e: any) => e.email)).toEqual([noTeam, weak, fine])
+      expect(await res.text()).not.toContain('e2e-bulk-throwaway-1')
+      const rows = await auditRows(request, admin, 'user.create')
+      // newest first: the second try of the address left out, then the account made
+      const ofFine = rows.filter((r) => r.TargetEmail === fine)
+      expect(ofFine.map((r) => r.Result)).toEqual(['failure', 'success'])
+      expect(ofFine[0].After?.reason).toBe('exists')
+      expect(ofFine[1].After?.bulk).toBe(true)
+      expect(rows.find((r) => r.TargetEmail === noTeam)?.After?.reason).toBe('team')
+      expect(JSON.stringify(rows.filter((r) => [fine, noTeam, weak].includes(r.TargetEmail)))).not.toContain('e2e-bulk-throwaway-1')
+
+      const nobody = await request.post('/api/v1/auth/admin/users/bulk', { headers: admin, data: { users: [row(fine)] } })
+      expect(nobody.status(), await nobody.text()).toBe(207)
+      expect((await nobody.json()).created).toEqual([])
+
+      const everyone = `e2e-bulkc-all-${stamp}@kubeast.local`
+      const all = await request.post('/api/v1/auth/admin/users/bulk', { headers: admin, data: { users: [row(everyone)] } })
+      expect(all.status(), await all.text()).toBe(200)
+      const allBody = await all.json()
+      made.push(...allBody.created.map((u: any) => u.id))
+      expect(allBody.failed).toEqual([])
+    } finally {
+      for (const id of made) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers: admin, failOnStatusCode: false })
+    }
+  })
+
+  test('the bulk upload window says which rows it could not create and why', async ({ page, request }) => {
+    const admin = await adminHeaders(request)
+    const stamp = Date.now()
+    const [fine, taken, odd, empty] = ['fine', 'taken', 'odd', 'empty'].map((w) => `e2e-bulkw-${w}-${stamp}@kubeast.local`)
+    const existing = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E bulk taken', email: taken, password: 'e2e-bulk-throwaway-1' } })
+    expect(existing.status(), await existing.text()).toBe(201)
+    const made = [(await existing.json()).id as string]
+    try {
+      await page.goto('/admin/users')
+      await page.getByRole('button', { name: /Bulk upload|일괄 업로드/ }).first().click()
+      const csv = [
+        'name,email,password,role,team',
+        `E2E fine,${fine},e2e-bulk-throwaway-1,Member,`,
+        `E2E taken,${taken},e2e-bulk-throwaway-1,Member,`,
+        `E2E odd,${odd},e2e-bulk-throwaway-1,NoSuchRole${stamp},`,
+        `E2E empty,${empty},,Member,`,
+        '',
+      ].join('\n')
+      await page.locator('input[type="file"][accept=".csv"]').setInputFiles({ name: 'users.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) })
+      const failed = page.getByTestId('admin-users-bulk-create-failed')
+      await expect(failed).toContainText(/Not created: 3 of 4 accounts|만들지 못한 계정: 4개 중 3개/, { timeout: 15_000 })
+      await expect(failed).toContainText(new RegExp(`${taken}: (this email already has an account|이미 계정이 있는 이메일입니다)`))
+      await expect(failed).toContainText(new RegExp(`${odd}: (no such role|없는 역할입니다): NoSuchRole${stamp}`))
+      await expect(failed).toContainText(new RegExp(`${empty}: (name, email and password are required|이름, 이메일, 비밀번호가 필요합니다)`))
+      await expect(page.getByText(/1 user created\.|1명의 사용자가 생성되었습니다\./)).toHaveCount(1)
+      const users: any[] = []
+      for (let offset = 0, more = true; more; offset += 200) {
+        const onePage = await (await request.get(`/api/v1/auth/admin/users?limit=200&offset=${offset}`, { headers: admin })).json()
+        users.push(...onePage)
+        more = onePage.length === 200
+      }
+      const created = users.filter((u) => [fine, odd, empty].includes(u.email))
+      made.push(...created.map((u) => u.id))
+      expect(created.map((u) => u.email)).toEqual([fine])
+    } finally {
+      for (const id of made) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers: admin, failOnStatusCode: false })
+    }
+  })
+
   test('role create/update/delete carry the permission lists', async ({ request }) => {
     const admin = await adminHeaders(request)
     const name = `e2e-role-${Date.now()}`

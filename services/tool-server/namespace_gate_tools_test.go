@@ -44,13 +44,13 @@ func TestNamespaceGate_WhatALimitedGrantMayAsk(t *testing.T) {
 		noNamespace, own, another string
 	}{
 		// They stay inside the grant by themselves, so naming none is a question they can answer.
-		{[]string{"k8s_find_resource", "issues", "cost", "gitops_status", "storage_summary"}, passes, passes, outside},
+		{[]string{"k8s_find_resource", "issues", "cost", "gitops_status", "storage_summary", "get_cluster_overview"}, passes, passes, outside},
 		// No object data: a namespace says nothing to them.
 		{[]string{"k8s_explain", "clusters_list"}, passes, passes, passes},
 		// One object of one namespace.
 		{[]string{"pod_rbac", "logfiles", "network_policy_effective", "limit_range_violations", "k8s_get_pod_logs"}, required, passes, outside},
 		// The Alerts inbox is for whoever reads the cluster as a whole.
-		{[]string{"alerts_inbox", "alert_investigate", "alerts_list", "get_cluster_overview"}, spans, spans, spans},
+		{[]string{"alerts_inbox", "alert_investigate", "alerts_list", "get_node_metrics"}, spans, spans, spans},
 	} {
 		for _, tool := range c.tools {
 			for _, ask := range []struct {

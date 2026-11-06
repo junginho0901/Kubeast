@@ -200,14 +200,14 @@ def scope_tool_args(function_args: Dict, cluster: str) -> Tuple[Dict, Optional[s
 # on the cluster is limited to namespaces (the same list tool-server keeps).
 CLUSTER_WIDE_TOOLS = frozenset({
     "k8s_get_available_api_resources", "k8s_get_cluster_configuration",
-    "k8s_apply_manifest", "k8s_create_resource", "get_cluster_overview", "get_node_metrics",
+    "k8s_apply_manifest", "k8s_create_resource", "get_node_metrics",
     "prometheus_query", "prometheus_metrics", "prometheus_labels", "prometheus_rules", "prometheus_targets", "alerts_list",
     "hygiene", "k8s_diff", "audit_search", "nodes_stats_summary", "nodes_log", "alert_investigate", "alerts_inbox",
     "access_review", "ai_usage", "access_requests", "audit_integrity", "hygiene_history",
 })
 
 # Tool-server's handler or k8s-service's route keeps these inside the grant, so they pass without naming a namespace.
-NAMESPACE_AWARE_TOOLS = frozenset({"k8s_find_resource", "issues", "cost", "gitops_status", "storage_summary", "timeline", "gpu"})
+NAMESPACE_AWARE_TOOLS = frozenset({"k8s_find_resource", "issues", "cost", "gitops_status", "storage_summary", "timeline", "gpu", "get_cluster_overview"})
 
 # API schema or Kubeast's own list of clusters, not object data: a screen answers a grant limited to namespaces too.
 NAMESPACE_FREE_TOOLS = frozenset({"k8s_explain", "clusters_list"})

@@ -348,7 +348,9 @@ K8S_READONLY_TOOLS: List[Dict] = [
                 "inhibited), since when, summary, labels and receivers, firing first; the silences on silenced alerts (who, why, until when); "
                 "counts by state and by name. Default state firing; state=all or silenced answers 'why did no alert come' (a silence or an "
                 "inhibition). The rule behind an alert (expression, threshold) is prometheus_rules. An empty store does not mean nothing fires: "
-                "Prometheus rules can fire without reaching it, so check prometheus_rules active_only=true before saying so. unavailable = no alert store here."
+                "Prometheus rules can fire without reaching it, so check prometheus_rules active_only=true before saying so. unavailable = no alert store here. "
+                "silences=true answers the Alerts page's Silences tab instead of the alerts: every active and pending silence on this cluster's alerts, one that "
+                "matches no alert now too (state, scope: cluster, all or pattern; matchers, createdBy, comment, startsAt, endsAt), with this_cluster and other_scopes counts."
             ),
             "parameters": {
                 "type": "object",
@@ -360,6 +362,7 @@ K8S_READONLY_TOOLS: List[Dict] = [
                         "description": "Exact label values to match, e.g. {\"severity\": \"critical\", \"namespace\": \"shop\"}",
                         "additionalProperties": {"type": "string"},
                     },
+                    "silences": {"type": "boolean", "description": "true: list the silences of the Silences tab; state, alertname and alert_labels do not apply"},
                 },
             },
         },
@@ -1414,7 +1417,8 @@ ADMIN_READ_TOOLS: List[Dict] = [
             "description": (
                 "This cluster's hygiene sign-offs (Admin → Cluster hygiene → Past sign-offs; permission admin.hygiene.read), newest first, at most 100: who "
                 "signed, when, the note and the counts per severity. review_id opens the report one stored, with severity and check filtering its findings as "
-                "in hygiene. The hygiene tool answers the report as it is now. {\"status\":\"unavailable\"} means the report is off (features.hygiene.enabled)."
+                "in hygiene. The list also says enabled and interval_days, how often a sign-off is due. The hygiene tool answers the report as it is now. "
+                "{\"status\":\"unavailable\"} means the report is off (features.hygiene.enabled)."
             ),
             "parameters": {
                 "type": "object",
@@ -1645,15 +1649,18 @@ CLUSTER_METRICS_TOOLS: List[Dict] = [
             "type": "function",
             "function": {
                 "name": "get_cluster_overview",
-                "description": """Get a comprehensive overview of the entire Kubernetes cluster health.
-                    
+                "description": """Get a comprehensive overview of the Kubernetes cluster health: the numbers of the Dashboard's cards.
+
                     Returns:
                     - Total counts: namespaces, pods, services, deployments, PVCs, PVs
                     - Pod status breakdown (Running, Pending, Failed, etc.)
                     - Node count and cluster version
                     A count the user's identity in the cluster may not list is null and its resource is named in
                     "refused": it is not counted, not zero.
-                    
+                    For a grant limited to namespaces "scoped" is true and the counts are of the grant's "namespaces" only;
+                    nodes and PVs, which belong to no namespace, are null and named in "not_counted".
+                    {"status":"forbidden"}: the identity may not list namespaces, so no overview is shown, as on the Dashboard.
+
                     Use this FIRST when user asks about cluster health or wants a general status check.""",
                 "parameters": {"type": "object", "properties": {}}
             }

@@ -7,30 +7,10 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"strings"
 )
-
-type listItems struct {
-	Items []json.RawMessage `json:"items"`
-}
-
-type podList struct {
-	Items []struct {
-		Status struct {
-			Phase string `json:"phase"`
-		} `json:"status"`
-	} `json:"items"`
-}
-
-type versionInfo struct {
-	ServerVersion struct {
-		GitVersion string `json:"gitVersion"`
-	} `json:"serverVersion"`
-}
 
 type serviceInfo struct {
 	Type string `json:"type"`
@@ -65,44 +45,6 @@ type endpointSliceList struct {
 			} `json:"conditions"`
 		} `json:"endpoints"`
 	} `json:"items"`
-}
-
-func countKubectlItems(ctx context.Context, headers http.Header, args ...string) (int, error) {
-	output, err := runKubectl(ctx, headers, args...)
-	if err != nil {
-		return 0, err
-	}
-	var list listItems
-	if err := json.Unmarshal([]byte(output), &list); err != nil {
-		return 0, err
-	}
-	return len(list.Items), nil
-}
-
-func summarizePodStatus(output string) (map[string]int, int) {
-	counts := make(map[string]int)
-	var list podList
-	if err := json.Unmarshal([]byte(output), &list); err != nil {
-		return counts, 0
-	}
-	total := 0
-	for _, item := range list.Items {
-		phase := strings.TrimSpace(item.Status.Phase)
-		if phase == "" {
-			phase = "Unknown"
-		}
-		counts[phase]++
-		total++
-	}
-	return counts, total
-}
-
-func parseClusterVersion(output string) string {
-	var info versionInfo
-	if err := json.Unmarshal([]byte(output), &info); err != nil {
-		return ""
-	}
-	return info.ServerVersion.GitVersion
 }
 
 func parseServiceInfo(output string) (serviceInfo, []map[string]interface{}) {

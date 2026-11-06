@@ -2169,6 +2169,18 @@ export interface AdminResetPasswordResponse extends Member {
   temporary_password: string
 }
 
+// One account a bulk creation left out; detail is what the reason's words cannot say.
+export interface BulkCreateFailure {
+  email: string
+  reason: 'missing_fields' | 'name' | 'password' | 'role' | 'ceiling' | 'team' | 'exists' | 'failed'
+  detail?: string
+}
+
+export interface BulkCreateAnswer {
+  created: Member[]
+  failed: BulkCreateFailure[]
+}
+
 export interface Organization {
   id: number
   type: 'team'

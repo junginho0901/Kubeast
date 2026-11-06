@@ -6,7 +6,7 @@
 #   - tool dispatch (`_execute_function_with_context`) 의 if-elif chain 과
 #     name 매칭이 깨지면 silent failure 발생 → 알려진 set 가 변하면 즉시 경고
 
-from app.services.ai.tools import K8S_READONLY_TOOLS, K8S_WRITE_TOOLS
+from app.services.ai.tools import ADMIN_READ_TOOLS, CLUSTER_METRICS_TOOLS, K8S_READONLY_TOOLS, K8S_WRITE_TOOLS
 
 EXPECTED_READONLY_NAMES = {
     "k8s_get_resources",
@@ -132,6 +132,23 @@ def test_the_screens_tools_say_a_null_is_not_a_zero():
     """A model reads a number it may not have as 0 unless it is told; the wording is get_cluster_overview's."""
     for name in ("timeline", "gpu"):
         assert "not counted, not zero" in _tool(name)["description"], name
+
+
+def test_the_overview_says_what_a_limited_grant_is_answered():
+    description = next(t["function"] for t in CLUSTER_METRICS_TOOLS if t["function"]["name"] == "get_cluster_overview")["description"]
+    for words in ("Dashboard", '"refused"', '"scoped"', '"not_counted"', '"forbidden"'):
+        assert words in description, words
+
+
+def test_alerts_list_offers_the_silences_tab():
+    tool = _tool("alerts_list")
+    assert tool["parameters"]["properties"]["silences"]["type"] == "boolean"
+    assert "Silences tab" in tool["description"]
+
+
+def test_hygiene_history_says_it_tells_the_interval():
+    tool = next(t["function"] for t in ADMIN_READ_TOOLS if t["function"]["name"] == "hygiene_history")
+    assert "interval_days" in tool["description"]
 
 
 def test_timeline_takes_time_arguments_tool_server_knows():

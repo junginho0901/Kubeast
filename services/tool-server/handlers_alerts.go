@@ -16,12 +16,49 @@ import (
 
 const (
 	alertsCap         = 50
+	silencesCap       = 200
 	alertsAlternative = "No alert store is configured for this cluster. Use prometheus_rules for the alerts the cluster's Prometheus rules fire; say silences are not visible here."
 )
+
+// handleSilencesList answers the Alerts page's Silences tab, whose silences may match no alert now, with its counts by scope.
+func handleSilencesList(ctx context.Context, headers http.Header) (string, error) {
+	status, body, err := k8sServiceGet(ctx, headers, "/alertstore/silences", nil)
+	if err != nil {
+		return "", err
+	}
+	reply, out, err := featureReply("alertStore", alertsAlternative, status, body)
+	if err != nil || out != "" {
+		return out, err
+	}
+	silences, _ := reply["silences"].([]interface{})
+	own := 0
+	for _, s := range silences {
+		row, _ := s.(map[string]interface{})
+		// As the tab reads a silence that names no scope.
+		if scope, _ := row["scope"].(string); scope == "" || scope == "cluster" {
+			own++
+		}
+	}
+	result := map[string]interface{}{"total": len(silences), "this_cluster": own, "other_scopes": len(silences) - own}
+	if len(silences) == 0 {
+		silences = []interface{}{}
+		result["hint"] = "No silence is active or pending on this cluster's alerts."
+	}
+	if len(silences) > silencesCap {
+		result["truncated"] = true
+		result["note"] = fmt.Sprintf("The first %d of %d, those ending soonest; the counts cover them all.", silencesCap, len(silences))
+		silences = silences[:silencesCap]
+	}
+	result["returned"], result["silences"] = len(silences), silences
+	return marshalOrdered(result, nil, []string{"silences"})
+}
 
 // handleAlertsList lists the cluster's alerts (firing first, then by severity)
 // with counts by state and name, and the silences on the silenced ones.
 func handleAlertsList(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+	if argBool(args, "silences") {
+		return handleSilencesList(ctx, headers)
+	}
 	q := url.Values{}
 	state := strings.TrimSpace(argString(args, "state", ""))
 	if state == "" {
