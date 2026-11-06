@@ -52,10 +52,13 @@ export const getPodHealth = (pod: any): PodHealth => {
     .filter((r: any) => typeof r?.reason === 'string' && r.reason.trim())
     .filter((r: any) => !isCompletedReason(r.reason))
     .map((r: any) => r.reason) as string[]
-  const initWaitingReasons = initContainers
+  // A finished pod's sidecars say nothing: the kubelet leaves them out of the phase and stops them when the containers
+  // end, on SIGTERM's exit code.
+  const initReasonsFrom = phase === 'Succeeded' ? initContainers.filter((c: any) => c?.restart_policy !== 'Always') : initContainers
+  const initWaitingReasons = initReasonsFrom
     .map((c: any) => c?.state?.waiting?.reason)
     .filter((r: any) => typeof r === 'string' && r.trim()) as string[]
-  const initTerminatedReasons = initContainers
+  const initTerminatedReasons = initReasonsFrom
     .map((c: any) => ({
       reason: c?.state?.terminated?.reason,
       exitCode: c?.state?.terminated?.exit_code,

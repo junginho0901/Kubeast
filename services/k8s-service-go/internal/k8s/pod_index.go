@@ -244,7 +244,12 @@ func podHealth(p *corev1.Pod) (uint8, string) {
 		return waiting, terminated
 	}
 	waiting, terminated := reasonsOf(p.Spec.Containers, p.Status.ContainerStatuses)
-	initWaiting, initTerminated := reasonsOf(p.Spec.InitContainers, p.Status.InitContainerStatuses)
+	initContainers := p.Spec.InitContainers
+	if phase == string(corev1.PodSucceeded) {
+		// the kubelet leaves sidecars out of the phase and stops them when the containers end, on SIGTERM's exit code
+		initContainers = slices.DeleteFunc(slices.Clone(initContainers), func(c corev1.Container) bool { return podrow.Sidecar(&c) })
+	}
+	initWaiting, initTerminated := reasonsOf(initContainers, p.Status.InitContainerStatuses)
 
 	var candidates []string
 	for _, list := range [][]string{{statusReason}, initWaiting, initTerminated, waiting, terminated} {

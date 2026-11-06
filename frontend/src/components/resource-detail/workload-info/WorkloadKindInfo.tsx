@@ -4,7 +4,7 @@ import { InfoSection, InfoRow, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { nextRunOf, nextRunTitle } from '@/pages/workloads/cronjobs/cronJobHelpers'
 import { humanDuration } from '@/utils/time'
-import { formatDuration, jobDurationSeconds } from '@/pages/workloads/jobs/jobHelpers'
+import { formatDuration, jobDrawerCompletions, jobDurationSeconds } from '@/pages/workloads/jobs/jobHelpers'
 
 interface Props {
   isJob: boolean
@@ -41,7 +41,7 @@ export default function WorkloadKindInfo({
       {isJob && (
         <InfoSection title="Job Info">
           <div className="space-y-2">
-            <InfoRow label="Completions" value={String(describe?.completions ?? spec.completions ?? '-')} />
+            <InfoRow label="Completions" value={jobDrawerCompletions(describe, spec)} />
             <InfoRow label="Parallelism" value={String(describe?.parallelism ?? spec.parallelism ?? '-')} />
             <InfoRow label="Active" value={String(describe?.active ?? status.active ?? 0)} />
             <InfoRow label="Succeeded" value={String(describe?.succeeded ?? status.succeeded ?? 0)} />

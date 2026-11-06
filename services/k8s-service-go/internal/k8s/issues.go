@@ -354,15 +354,16 @@ func issuesFromWorkloads(deployments, statefulsets, daemonsets []map[string]inte
 }
 
 // issuesFromJobs: a failed Job (or one still retrying), and a CronJob whose
-// last scheduled run has not succeeded.
+// last scheduled run has not succeeded. FailureTarget has failed too: the
+// controller is only waiting for its last pods to leave.
 func issuesFromJobs(jobs, cronjobs []map[string]interface{}) []Issue {
 	var out []Issue
 	for _, j := range jobs {
 		ns, name := mapStr(j, "namespace"), mapStr(j, "name")
 		failed := mapInt(j, "failed")
-		switch {
-		case mapStr(j, "status") == "Failed":
-			out = append(out, Issue{ID: issueID("Job", ns, name), Kind: "Job", Namespace: ns, Name: name, Severity: severityWarning, Reason: "Failed", Message: fmt.Sprintf("failed %d, succeeded %d", failed, mapInt(j, "succeeded")), Failed: failed})
+		switch status := mapStr(j, "status"); {
+		case status == "Failed" || status == "FailureTarget":
+			out = append(out, Issue{ID: issueID("Job", ns, name), Kind: "Job", Namespace: ns, Name: name, Severity: severityWarning, Reason: status, Message: fmt.Sprintf("failed %d, succeeded %d", failed, mapInt(j, "succeeded")), Failed: failed})
 		case failed > 0 && mapInt(j, "active") > 0:
 			out = append(out, Issue{ID: issueID("Job", ns, name), Kind: "Job", Namespace: ns, Name: name, Severity: severityInfo, Reason: "Retrying", Message: fmt.Sprintf("failed %d, active %d", failed, mapInt(j, "active")), Failed: failed})
 		}

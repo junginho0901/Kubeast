@@ -166,6 +166,108 @@ def _format_table(headers: List[str], rows: List[List[str]]) -> str:
         lines.append("  ".join(row[i].ljust(widths[i]) for i in range(len(headers))))
     return "\n".join(lines)
 
+def _pod_list_view(pod: Dict) -> Tuple[str, str, int]:
+    """STATUS, READY and RESTARTS as kubectl's printPod (v1.37) prints them and k8s-service's podrow.ListView writes them
+    for the Pods list; tests/test_kubectl_table_cases.py holds the two equal."""
+    spec = pod.get("spec") or {}
+    status = pod.get("status") or {}
+    phase = status.get("phase") or ""
+    conditions = status.get("conditions") or []
+    reason = status.get("reason") or phase
+    if any(c.get("type") == "PodScheduled" and c.get("reason") == "SchedulingGated" for c in conditions):
+        reason = "SchedulingGated"
+
+    init_specs = spec.get("initContainers") or []
+    sidecars = {c.get("name") for c in init_specs if c.get("restartPolicy") == "Always"}
+    total = len(spec.get("containers") or []) + len(sidecars)
+    ready = restarts = sidecar_restarts = 0
+    initializing = False
+    for i, cs in enumerate(status.get("initContainerStatuses") or []):
+        restarts += cs.get("restartCount") or 0
+        sidecar = cs.get("name") in sidecars
+        if sidecar:
+            sidecar_restarts += cs.get("restartCount") or 0
+        state = cs.get("state") or {}
+        ended, waiting = state.get("terminated"), state.get("waiting") or {}
+        if ended is not None and not ended.get("exitCode"):
+            continue
+        if sidecar and cs.get("started"):
+            ready += 1 if cs.get("ready") else 0
+            continue
+        if ended is not None:
+            reason = "Init:" + _ended_reason(ended)
+        elif waiting.get("reason") and waiting["reason"] != "PodInitializing":
+            reason = "Init:" + waiting["reason"]
+        else:
+            reason = f"Init:{i}/{len(init_specs)}"
+        initializing = True
+        break
+
+    if not initializing or _condition_true(conditions, "Initialized", first_only=True):
+        restarts = sidecar_restarts
+        has_running = False
+        error_reason = ""
+        for cs in reversed(status.get("containerStatuses") or []):
+            restarts += cs.get("restartCount") or 0
+            state = cs.get("state") or {}
+            ended, waiting = state.get("terminated"), state.get("waiting") or {}
+            if waiting.get("reason"):
+                reason = waiting["reason"]
+            elif ended is not None:
+                reason = _ended_reason(ended)
+                if ended.get("exitCode"):
+                    error_reason = reason
+            elif cs.get("ready") and state.get("running") is not None:
+                has_running = True
+                ready += 1
+        if reason == "Completed":
+            if has_running and _condition_true(conditions, "Ready"):
+                reason = "Running"
+            elif error_reason:
+                reason = error_reason
+            elif has_running:
+                reason = "NotReady"
+
+    if (pod.get("metadata") or {}).get("deletionTimestamp"):
+        if status.get("reason") == "NodeLost":
+            reason = "Unknown"
+        elif phase not in ("Succeeded", "Failed"):
+            reason = "Terminating"
+    return reason or "Unknown", f"{ready}/{total}", restarts
+
+
+def _ended_reason(ended: Dict) -> str:
+    if ended.get("reason"):
+        return ended["reason"]
+    if ended.get("signal"):
+        return f"Signal:{ended['signal']}"
+    return f"ExitCode:{ended.get('exitCode') or 0}"
+
+
+def _condition_true(conditions: List[Dict], kind: str, first_only: bool = False) -> bool:
+    matching = [c for c in conditions if c.get("type") == kind]
+    if first_only:
+        matching = matching[:1]
+    return any(c.get("status") == "True" for c in matching)
+
+
+def _service_external_ip(svc: Dict) -> str:
+    """EXTERNAL-IP as kubectl's getServiceExternalIP (v1.37) prints it and k8s-service's service.Info writes it for the
+    Services list, not always an address; tests/test_kubectl_table_cases.py holds the two equal."""
+    spec = svc.get("spec") or {}
+    external_ips = spec.get("externalIPs") or []
+    kind = spec.get("type")
+    if kind in ("ClusterIP", "NodePort"):
+        return ",".join(external_ips) or "<none>"
+    if kind == "LoadBalancer":
+        ingress = ((svc.get("status") or {}).get("loadBalancer") or {}).get("ingress") or []
+        addresses = sorted({address for address in (ing.get("ip") or ing.get("hostname") for ing in ingress) if address})
+        return ",".join(addresses + external_ips) or "<pending>"
+    if kind == "ExternalName":
+        return spec.get("externalName") or ""
+    return "<unknown>"
+
+
 def _format_k8s_get_resources_display(
         resource_type: str,
     output: str,
@@ -197,26 +299,7 @@ def _format_k8s_get_resources_display(
         rows = []
         for item in items:
             meta = item.get("metadata", {}) if isinstance(item, dict) else {}
-            status = item.get("status", {}) if isinstance(item, dict) else {}
-            spec = item.get("spec", {}) if isinstance(item, dict) else {}
-            containers = (status.get("containerStatuses") or [])
-            ready = sum(1 for c in containers if c.get("ready"))
-            total = len(containers) or len(spec.get("containers") or [])
-            ready_text = f"{ready}/{total}" if total else "0/0"
-            restarts = sum(int(c.get("restartCount", 0)) for c in containers)
-
-            phase = status.get("phase", "Unknown")
-            reason = None
-            for c in containers:
-                state = c.get("state") or {}
-                if state.get("waiting") and state["waiting"].get("reason"):
-                    reason = state["waiting"]["reason"]
-                    break
-                if state.get("terminated") and state["terminated"].get("reason"):
-                    reason = state["terminated"]["reason"]
-                    break
-            status_text = reason or phase or "Unknown"
-
+            status_text, ready_text, restarts = _pod_list_view(item if isinstance(item, dict) else {})
             age = _format_age(meta.get("creationTimestamp"))
             row = [
                 str(meta.get("name", "")),
@@ -264,14 +347,9 @@ def _format_k8s_get_resources_display(
         for item in items:
             meta = item.get("metadata", {}) if isinstance(item, dict) else {}
             spec = item.get("spec", {}) if isinstance(item, dict) else {}
-            status = item.get("status", {}) if isinstance(item, dict) else {}
             svc_type = spec.get("type", "")
             cluster_ip = spec.get("clusterIP", "")
-            external_ips = spec.get("externalIPs") or []
-            lb_ingress = (status.get("loadBalancer") or {}).get("ingress") or []
-            if lb_ingress:
-                external_ips = [ing.get("ip") or ing.get("hostname") for ing in lb_ingress if ing]
-            external_ip = ",".join([ip for ip in external_ips if ip]) or "<none>"
+            external_ip = _service_external_ip(item if isinstance(item, dict) else {})
             ports = []
             for p in spec.get("ports") or []:
                 port = p.get("port")

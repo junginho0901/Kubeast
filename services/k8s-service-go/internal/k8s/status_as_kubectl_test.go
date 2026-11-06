@@ -83,6 +83,62 @@ func TestAJobReadsTheSameInItsListDrawerAndCronJob(t *testing.T) {
 	}
 }
 
+// kubectl describe prints Completions <unset> for a Job without spec.completions. The drawer needs the spec's value: the
+// row's completions fills in 1 for the list and the AI, and that stays.
+func TestAJobDrawerHasTheSpecsCompletions(t *testing.T) {
+	cases := []struct {
+		name, spec, wantDrawer, wantCell string
+		wantRow                          int32
+	}{
+		{"a work queue of three", `"parallelism":3`, `null`, "0/1 of 3", 1},
+		{"nothing set", ``, `null`, "0/1", 1},
+		{"one written out", `"completions":1,"parallelism":1`, `1`, "0/1", 1},
+		{"five", `"completions":5,"parallelism":2`, `5`, "0/5", 5},
+	}
+	for _, c := range cases {
+		job := `{"apiVersion":"batch/v1","kind":"Job","metadata":{"name":"x","namespace":"ns"},"spec":{` + c.spec + `},"status":{}}`
+		s := oneObjectAPI(t, map[string]string{
+			"/apis/batch/v1/namespaces/ns/jobs/x": job,
+			"/apis/batch/v1/namespaces/ns/jobs":   fmt.Sprintf(`{"kind":"JobList","apiVersion":"batch/v1","metadata":{},"items":[%s]}`, job),
+		})
+		ctx := context.Background()
+		described, err := s.DescribeJob(ctx, "ns", "x")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, ok := described["completions"]; !ok {
+			t.Errorf("%s: the drawer's answer has no completions", c.name)
+		} else if text, _ := json.Marshal(got); string(text) != c.wantDrawer {
+			t.Errorf("%s: the drawer's completions %s, want %s", c.name, text, c.wantDrawer)
+		}
+		if got := described["completions_text"]; got != c.wantCell {
+			t.Errorf("%s: the drawer's completions_text %v, want %s", c.name, got, c.wantCell)
+		}
+		listed, err := s.GetJobs(ctx, "ns")
+		if err != nil || len(listed) != 1 {
+			t.Fatalf("%s: list %v, %v", c.name, listed, err)
+		}
+		if got := listed[0]["completions"]; got != c.wantRow {
+			t.Errorf("%s: the row's completions %v, want %d", c.name, got, c.wantRow)
+		}
+	}
+}
+
+// One Job status, one colour: this is what the Resource Graph draws, and the Jobs list and the CronJob drawer's Jobs table
+// hold the same words to the same colours (jobHelpers.test.ts, statusBadge.test.ts).
+func TestAJobStatusHasOneHealth(t *testing.T) {
+	want := map[string]string{
+		"Complete": "ok", "Running": "ok", "SuccessCriteriaMet": "ok",
+		"Suspended": "warn", "Terminating": "warn",
+		"Failed": "error", "FailureTarget": "error",
+	}
+	for status, health := range want {
+		if got := workloadHealth(status); got != health {
+			t.Errorf("%s: health %q, want %q", status, got, health)
+		}
+	}
+}
+
 // The describe answer keeps what the row keeps: the spec's external IPs and the load balancer's addresses, each empty
 // when there are none, so the drawer never falls back on the External IP cell.
 func TestAServiceDrawerReadsExternalIPsAndTheLoadBalancerApart(t *testing.T) {

@@ -282,6 +282,54 @@ func TestPodHealth_FineIsWhatKubectlPrintsRunningAndAllReady(t *testing.T) {
 
 // A reason the warning list names is not an error even when no error reason
 // comes before it; the levels the cases cover.
+// A pod that finished is fine whatever its sidecars ended on: the kubelet leaves a sidecar out of the phase, and it stops
+// them when the containers end, so SIGTERM's exit code is the normal end of a native sidecar. kubectl prints Completed.
+func TestPodHealth_AFinishedPodsSidecarIsNotAnError(t *testing.T) {
+	always := corev1.ContainerRestartPolicyAlways
+	no := false
+	ended := func(reason string, code int32) corev1.ContainerState {
+		return corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: reason, ExitCode: code}}
+	}
+	pod := func(phase corev1.PodPhase, restart *corev1.ContainerRestartPolicy, init corev1.ContainerState, app corev1.ContainerState) *corev1.Pod {
+		return &corev1.Pod{
+			Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}}, InitContainers: []corev1.Container{{Name: "side", RestartPolicy: restart}}},
+			Status: corev1.PodStatus{
+				Phase:                 phase,
+				Conditions:            []corev1.PodCondition{{Type: corev1.PodInitialized, Status: corev1.ConditionTrue}},
+				InitContainerStatuses: []corev1.ContainerStatus{{Name: "side", Started: &no, State: init}},
+				ContainerStatuses:     []corev1.ContainerStatus{{Name: "app", State: app}},
+			},
+		}
+	}
+	done := ended("Completed", 0)
+	crashing := corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}}
+	cases := []struct {
+		name          string
+		pod           *corev1.Pod
+		level         uint8
+		reason, print string
+	}{
+		{"its sidecar ended on SIGTERM", pod(corev1.PodSucceeded, &always, ended("Error", 143), done), podHealthOK, "Succeeded", "Completed"},
+		{"its sidecar was killed after its grace period", pod(corev1.PodSucceeded, &always, ended("Error", 137), done), podHealthOK, "Succeeded", "Completed"},
+		{"its sidecar was out of memory at the end", pod(corev1.PodSucceeded, &always, ended("OOMKilled", 137), done), podHealthOK, "Succeeded", "Completed"},
+		{"its sidecar was crashing when the containers ended", pod(corev1.PodSucceeded, &always, crashing, done), podHealthOK, "Succeeded", "Completed"},
+		{"its sidecar ended cleanly", pod(corev1.PodSucceeded, &always, done, done), podHealthOK, "Succeeded", "Completed"},
+		// what stays an error
+		{"a failed pod", pod(corev1.PodFailed, &always, ended("Error", 143), ended("Error", 1)), podHealthError, "Error", "Error"},
+		{"a running pod whose sidecar is crashing", pod(corev1.PodRunning, &always, crashing, corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}), podHealthError, "CrashLoopBackOff", "Init:CrashLoopBackOff"},
+		{"a finished pod whose plain init container failed", pod(corev1.PodSucceeded, nil, ended("Error", 1), done), podHealthError, "Error", "Completed"},
+		{"a finished pod whose container says it failed", pod(corev1.PodSucceeded, &always, done, ended("Error", 1)), podHealthError, "Error", "Error"},
+	}
+	for _, c := range cases {
+		if l, r := podHealth(c.pod); l != c.level || r != c.reason {
+			t.Errorf("%s: got %d %q, want %d %q", c.name, l, r, c.level, c.reason)
+		}
+		if got := kubectlStatus(c.pod); got != c.print {
+			t.Errorf("%s: kubectl prints %q, the test says %q", c.name, got, c.print)
+		}
+	}
+}
+
 func TestPodHealth_WarnReasonsAreNotErrors(t *testing.T) {
 	waiting := func(phase corev1.PodPhase, reason string) *corev1.Pod {
 		return &corev1.Pod{

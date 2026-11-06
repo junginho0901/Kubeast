@@ -68,10 +68,38 @@ export function jobSummary(jobs: Array<{ status: string }>): { total: number; co
   return { total: jobs.length, completed, running: jobs.length - completed - failed, failed }
 }
 
+// The floating chat is told the cards' numbers, which read a Job's Status: its failed pods say nothing of whether it has failed.
+export const jobChatStats = jobSummary
+
+const hasFailedPods = (job: { failed?: number }) => (job.failed || 0) > 0
+const isRetrying = (job: { status: string; failed?: number }) => job.status === 'Running' && hasFailedPods(job)
+
+export function jobChatNotes(jobs: Array<{ status: string; failed?: number }>): string[] {
+  const failed = jobSummary(jobs).failed
+  const decided = jobs.filter((j) => j.status === 'FailureTarget').length
+  const retrying = jobs.filter(isRetrying).length
+  return [
+    failed > 0 ? `⚠️ ${failed}개 Job 이 실패 상태` : '',
+    decided > 0 ? `⚠️ ${decided}개 Job 이 실패 확정, 파드 정리 중` : '',
+    retrying > 0 ? `${retrying}개 Job 이 실패한 파드를 재시도 중` : '',
+  ].filter(Boolean)
+}
+
+export function jobNeedsALook(job: { status: string; failed?: number }): boolean {
+  return job.status === 'Failed' || job.status === 'FailureTarget' || isRetrying(job)
+}
+
+// kubectl describe's Completions. Only the describe answer can say a Job has none: the row fills in 1 for the list.
+export function jobDrawerCompletions(describe: { completions?: unknown } | null | undefined, spec: { completions?: unknown }): string {
+  if (describe) return describe.completions == null ? '<unset>' : String(describe.completions)
+  return spec.completions == null ? '-' : String(spec.completions)
+}
+
+// Green as a Pod's Running and the Resource Graph's: a running Job asks nothing, and yellow is the Issues filter's.
 export function getJobStatusColor(status: string): string {
   const lower = String(status || '').toLowerCase()
-  if (lower.includes('complete') || lower.includes('succeeded') || lower.includes('successcriteriamet')) return 'badge-success'
-  if (lower.includes('running') || lower.includes('pending') || lower.includes('suspend') || lower.includes('terminating')) return 'badge-warning'
+  if (lower.includes('complete') || lower.includes('succeeded') || lower.includes('successcriteriamet') || lower.includes('running')) return 'badge-success'
+  if (lower.includes('pending') || lower.includes('suspend') || lower.includes('terminating')) return 'badge-warning'
   if (lower.includes('fail') || lower.includes('error')) return 'badge-error'
   return 'badge-info'
 }
@@ -93,7 +121,8 @@ export function jobToWorkloadRawJson(job: JobInfo): Record<string, unknown> {
       creationTimestamp: job.created_at,
     },
     spec: {
-      completions: job.completions,
+      // a work queue's 1 is the row's own: its cell says "of N", so this object does not claim it
+      completions: / of /.test(job.completions_text ?? '') ? undefined : job.completions,
       parallelism: job.parallelism,
       template: {
         metadata: { labels },

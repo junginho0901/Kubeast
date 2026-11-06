@@ -14,7 +14,10 @@ import { Plus, RefreshCw } from 'lucide-react'
 import {
   parseAgeSeconds,
   computeJobStatus,
+  jobChatNotes,
+  jobChatStats,
   jobDurationSeconds,
+  jobNeedsALook,
   jobSummary,
   type SortKey,
 } from './jobs/jobHelpers'
@@ -149,34 +152,22 @@ export default function Jobs() {
   const aiSnapshot = useMemo(() => {
     if (!Array.isArray(jobs)) return null
     const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
-    const total = jobs.length
-    const failed = jobs.filter((j) => j.failed > 0).length
-    const running = jobs.filter((j) => j.active > 0).length
-    const succeeded = jobs.filter((j) => j.succeeded > 0 && j.active === 0 && j.failed === 0).length
-    const prefix = failed > 0 ? '⚠️ ' : ''
+    const stats = jobChatStats(filteredJobs)
+    const prefix = stats.failed > 0 ? '⚠️ ' : ''
     return {
       source: 'base' as const,
-      summary: `${prefix}${nsLabel} Job ${total}개 (성공 ${succeeded}, 실행중 ${running}, 실패 ${failed})`,
+      summary: `${prefix}${nsLabel} Job ${stats.total}개 (완료 ${stats.completed}, 실행중 ${stats.running}, 실패 ${stats.failed})`,
       data: {
         filters: { namespace: selectedNamespace, search: searchQuery || undefined },
-        stats: { total, running, succeeded, failed },
+        stats,
         ...summarizeList(pagedJobs as unknown as Record<string, unknown>[], {
           total: sortedJobs.length,
           currentPage,
           pageSize: rowsPerPage,
           topN: rowsPerPage,
           pickFields: ['name', 'namespace', 'completions', 'completions_text', 'active', 'succeeded', 'failed', 'status', 'duration_seconds'],
-          filterProblematic: (j) => {
-            const job = j as unknown as JobInfo
-            return job.failed > 0
-          },
-          interpret: (items) => {
-            const out: string[] = []
-            const arr = items as unknown as JobInfo[]
-            const failures = arr.filter((j) => j.failed > 0).length
-            if (failures > 0) out.push(`⚠️ ${failures}개 Job 이 실패 상태`)
-            return out
-          },
+          filterProblematic: (j) => jobNeedsALook(j as unknown as JobInfo),
+          interpret: (items) => jobChatNotes(items as unknown as JobInfo[]),
           linkBuilder: (j) => {
             const job = j as unknown as JobInfo
             return buildResourceLink('Job', job.namespace, job.name)
@@ -184,7 +175,7 @@ export default function Jobs() {
         }),
       },
     }
-  }, [jobs, pagedJobs, sortedJobs.length, currentPage, rowsPerPage, selectedNamespace, searchQuery])
+  }, [jobs, filteredJobs, pagedJobs, sortedJobs.length, currentPage, rowsPerPage, selectedNamespace, searchQuery])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
@@ -276,8 +267,8 @@ spec:
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('jobs.stats.completed', 'Completed')}</p>
           <p className="text-lg text-ink font-semibold mt-1">{summary.completed}</p>
         </div>
-        <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-amber-300">{tr('jobs.stats.running', 'Running')}</p>
+        <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
+          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('jobs.stats.running', 'Running')}</p>
           <p className="text-lg text-ink font-semibold mt-1">{summary.running}</p>
         </div>
         <div className="rounded-lg border border-red-700/40 bg-red-900/10 px-4 py-3">

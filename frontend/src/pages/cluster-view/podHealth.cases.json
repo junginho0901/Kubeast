@@ -22846,8 +22846,8 @@
    "status": "Succeeded",
    "status_reason": ""
   },
-  "level": "error",
-  "reason": "Error"
+  "level": "ok",
+  "reason": "Succeeded"
  },
  {
   "pod": {
@@ -29606,8 +29606,8 @@
    "status": "Succeeded",
    "status_reason": ""
   },
-  "level": "error",
-  "reason": "Error"
+  "level": "ok",
+  "reason": "Succeeded"
  },
  {
   "pod": {
@@ -30292,7 +30292,7 @@
    "status_reason": "NodeLost"
   },
   "level": "error",
-  "reason": "Error"
+  "reason": "NodeLost"
  },
  {
   "pod": {
@@ -31285,7 +31285,7 @@
    "status_reason": "Evicted"
   },
   "level": "error",
-  "reason": "Error"
+  "reason": "Evicted"
  },
  {
   "pod": {
@@ -32802,7 +32802,7 @@
    "status_reason": ""
   },
   "level": "error",
-  "reason": "CrashLoopBackOff"
+  "reason": "ContainerCannotRun"
  },
  {
   "pod": {
@@ -37675,7 +37675,7 @@
    "status": "Init:CrashLoopBackOff",
    "status_reason": ""
   },
-  "level": "error",
-  "reason": "CrashLoopBackOff"
+  "level": "ok",
+  "reason": "Succeeded"
  }
 ]

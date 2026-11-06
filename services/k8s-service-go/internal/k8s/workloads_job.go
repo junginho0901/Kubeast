@@ -65,10 +65,9 @@ func (s *Service) DescribeJob(ctx context.Context, namespace, name string) (map[
 	result["labels"] = job.Labels
 	result["annotations"] = job.Annotations
 
-	// Job-specific fields the frontend expects
-	if job.Spec.Completions != nil {
-		result["completions"] = *job.Spec.Completions
-	}
+	// Job-specific fields the frontend expects. The spec's completions, unset for a work queue as kubectl describe says:
+	// the row fills in 1 for the list.
+	result["completions"] = job.Spec.Completions
 	if job.Spec.Parallelism != nil {
 		result["parallelism"] = *job.Spec.Parallelism
 	}

@@ -5,13 +5,12 @@ import { InfoSection, StatusBadge, Th, Tx } from '../DetailCommon'
 import { fmtRel } from '../detailFormat'
 import { usePagination } from '../usePagination'
 import { ResourceLink } from '../ResourceLink'
-import { useOwnedWatchedResources } from './useOwnedWatchedResources'
+import type { OwnedResources } from './useOwnedWatchedResources'
+import { ownedDisplayPods } from './workloadPodsLayer'
 
 interface Props {
-  kind: string
-  name: string
   namespace?: string
-  selector: Record<string, string>
+  owned: OwnedResources
   isCronJob: boolean
   isDaemonSet: boolean
   isDeployment: boolean
@@ -20,14 +19,11 @@ interface Props {
   isStatefulSet: boolean
   describe: any
   ownedJobs: any
-  volumeClaimTemplates?: Array<any>
 }
 
 export default function WorkloadOwnedResources({
-  kind,
-  name,
   namespace,
-  selector,
+  owned,
   isCronJob,
   isDaemonSet,
   isDeployment,
@@ -36,24 +32,16 @@ export default function WorkloadOwnedResources({
   isStatefulSet,
   describe,
   ownedJobs,
-  volumeClaimTemplates,
 }: Props) {
   const { t } = useTranslation()
   const { open: openDetail } = useResourceDetail()
   const tr = (key: string, fallback: string, o?: Record<string, any>) => t(key, { defaultValue: fallback, ...o })
 
-  const { pods, replicaSets, jobs: liveJobs, pvcsByPodName, podsEnabled, rsEnabled, jobsEnabled, pvcsEnabled } = useOwnedWatchedResources({
-    kind,
-    namespace,
-    name,
-    selector,
-    volumeClaimTemplates,
-  })
+  const { replicaSets, jobs: liveJobs, pvcsByPodName, rsEnabled, jobsEnabled, pvcsEnabled } = owned
 
   // Fallback to describe.owned_pods for DS/RS/STS until the first watch tick.
   // The watch query returns the canonical list once enabled.
-  const fallbackPods = (describe as any)?.owned_pods
-  const displayPods = podsEnabled && pods.length > 0 ? pods : (Array.isArray(fallbackPods) ? fallbackPods : [])
+  const displayPods = ownedDisplayPods(describe, owned)
   const showOwnedPods = (isDaemonSet || isReplicaSet || isStatefulSet || isJob) && displayPods.length > 0
   const showDeploymentRS = isDeployment && rsEnabled
   // CronJob owned Jobs — prefer live hook result, fallback to prop (parent's

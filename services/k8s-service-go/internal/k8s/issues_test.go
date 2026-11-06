@@ -156,6 +156,19 @@ func TestIssuesFromJobsAndCronJobs(t *testing.T) {
 	}
 }
 
+// A Job whose failure is decided is not retrying while its last pods leave: it is what the list calls it, and it asks as
+// much attention as a Job that has failed.
+func TestIssuesFromJobs_AJobThatHasFailedIsNotRetrying(t *testing.T) {
+	jobs := []m{{"namespace": "a", "name": "ending", "status": "FailureTarget", "failed": int32(1), "succeeded": int32(0), "active": int32(1)}}
+	got := issuesFromJobs(toMaps(jobs), nil)
+	if len(got) != 1 {
+		t.Fatalf("got %d: %+v", len(got), got)
+	}
+	if is := got[0]; is.Severity != severityWarning || is.Reason != "FailureTarget" || is.Failed != 1 || is.Message != "failed 1, succeeded 0" {
+		t.Errorf("FailureTarget: %+v", is)
+	}
+}
+
 func TestIssuesFromHPAsAndPVCs(t *testing.T) {
 	hpas := []m{
 		{"namespace": "a", "name": "web", "max_replicas": int32(5), "current_replicas": int32(5), "desired_replicas": int32(5)},

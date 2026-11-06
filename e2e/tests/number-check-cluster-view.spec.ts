@@ -164,6 +164,39 @@ test.describe('Cluster View — number check', () => {
     }, { timeout: 15_000 }).toBe(true)
   })
 
+  // The kubelet stops a sidecar when the containers end, and leaves it out of the phase: exit 143 is its normal end.
+  test('a finished pod whose sidecar ended on SIGTERM is fine, as kubectl prints it Completed', async ({ page }) => {
+    test.setTimeout(150_000)
+    const ns = 'e2e-sidecar-done'
+    const name = 'finished'
+    try {
+      k('apply -f -', [
+        `apiVersion: v1\nkind: Namespace\nmetadata: {name: ${ns}}`,
+        JSON.stringify({
+          apiVersion: 'v1', kind: 'Pod', metadata: { name, namespace: ns },
+          spec: {
+            restartPolicy: 'Never',
+            terminationGracePeriodSeconds: 30,
+            initContainers: [{ ...box('side', ['sh', '-c', 'trap "exit 143" TERM; while true; do sleep 1; done']), restartPolicy: 'Always' }],
+            containers: [box('app', ['sh', '-c', 'sleep 5'])],
+          },
+        }),
+      ].join('\n---\n'))
+      k(`-n ${ns} wait pod/${name} --for=jsonpath={.status.phase}=Succeeded --timeout=120s`)
+      expect(k(`-n ${ns} get pod/${name} -o jsonpath='{.status.initContainerStatuses[0].state.terminated.exitCode}'`), 'the sidecar ended on SIGTERM').toBe('143')
+      expect(k(`-n ${ns} get pod/${name} --no-headers`).split(/\s+/)[2], 'kubectl prints').toBe('Completed')
+      const node = k(`-n ${ns} get pod/${name} -o jsonpath='{.spec.nodeName}'`)
+      await page.goto(`/cluster-view?cluster=${CLUSTER}`)
+      await expect(page.getByTestId('cluster-view-map')).toBeVisible()
+      await chooseNamespace(page, ns)
+      await expect.poll(() => cardLevels(page, node), { timeout: 20_000 }).toEqual({ ok: 1, warn: 0, error: 0 })
+      await expect(nodeBox(page, node).locator('button')).toContainText('Succeeded')
+      await expect.poll(async () => sumLevels(await mapCells(page)), { timeout: 15_000 }).toEqual({ ok: 1, warn: 0, error: 0 })
+    } finally {
+      k(`delete namespace/${ns} --wait=false --ignore-not-found`)
+    }
+  })
+
   test('a grant limited to a namespace maps that namespace\'s pods and no other', async ({ browser, request }) => {
     test.setTimeout(90_000)
     const admin = process.env.E2E_USER_EMAIL || 'admin'

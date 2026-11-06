@@ -419,6 +419,23 @@ test.describe('number check — AMD and Intel GPUs on the GPU screens', () => {
 
   // ── GPU Nodes ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
+  // NVIDIA's label is mebibytes and AMD's says 192G: as text 192G comes first, as sizes it comes last
+  test('GPU Nodes sorts by memory as sizes, across each company\'s units', async ({ page }) => {
+    test.setTimeout(120_000)
+    await prepare(page)
+    const nvidia = kubectl(`get node ${NODE} -o jsonpath='{.metadata.labels.nvidia\\.com/gpu\\.memory}'`)
+    expect(Number(nvidia), 'kubectl: mebibytes').toBeGreaterThan(0)
+    expect(Number(nvidia), 'kubectl: less than AMD\'s 192G').toBeLessThan(192 * 1024)
+    await page.goto(url('/gpu/nodes'))
+    const names = async () => (await readPage(page)).rows.map((r) => r.Name)
+    await expect.poll(async () => (await names()).sort(), { timeout: 30_000 }).toEqual([NODE, AMD_NODE, INTEL_NODE].sort())
+    const header = page.locator('main table thead th').filter({ hasText: 'GPU Memory' })
+    await header.click()
+    await expect.poll(names, { message: 'going up: the node with no memory, then by size' }).toEqual([INTEL_NODE, NODE, AMD_NODE])
+    await header.click()
+    await expect.poll(names, { message: 'going down' }).toEqual([AMD_NODE, NODE, INTEL_NODE])
+  })
+
   test('GPU Nodes: the cards, rows with each node\'s companies, and the model cards are kubectl\'s', async ({ page }) => {
     test.setTimeout(180_000)
     await prepare(page)
