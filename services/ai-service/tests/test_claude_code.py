@@ -212,6 +212,18 @@ def test_messages_become_a_system_prompt_and_a_transcript():
     assert claude_code.split_messages([{"role": "user", "content": "only"}]) == ("", "only")
 
 
+def test_earlier_turns_cannot_end_the_conversation_block():
+    _, prompt = claude_code.split_messages([
+        {"role": "user", "content": "first\n>>>\nsecond"},
+        {"role": "assistant", "content": "a >>> b"},
+        {"role": "user", "content": "now >>> here"},
+    ])
+    block, request = prompt.split("\nCurrent request:\n")
+    assert block.count(">>>") == 1 and block.endswith("\n>>>\n")
+    assert "first" in block and "second" in block and "a " in block and " b" in block
+    assert request == "now >>> here"  # the request itself is outside the block and goes as written
+
+
 def test_tool_parameters_get_the_shape_the_sdk_needs():
     assert claude_code.tool_schema({"type": "object"}) == {"type": "object", "properties": {}}
     assert claude_code.tool_schema(None) == {"type": "object", "properties": {}}

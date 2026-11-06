@@ -30,6 +30,7 @@ from types import SimpleNamespace
 from typing import Any, AsyncIterator, Awaitable, Callable, Optional, Sequence
 
 from app.config import settings
+from app.services.prompt_fence import inside_arrows
 
 log = logging.getLogger(__name__)
 
@@ -127,7 +128,7 @@ def split_messages(messages: Sequence[dict]) -> tuple[str, str]:
         return "\n\n".join(system_parts), last[1]
     lines = [f"{'User' if r == 'user' else 'Assistant'}: {t}" for r, t in earlier]
     request = last[1] if last[0] == "user" else ""
-    prompt = "Conversation so far:\n<<<\n" + "\n\n".join(lines) + "\n>>>\n\n"
+    prompt = "Conversation so far:\n<<<\n" + inside_arrows("\n\n".join(lines)) + "\n>>>\n\n"
     prompt += ("Current request:\n" + request) if request else "Continue."
     return "\n\n".join(system_parts), prompt
 

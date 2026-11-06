@@ -226,6 +226,26 @@ async def test_notes_are_written_by_the_economy_model_when_there_is_one():
 
 
 @pytest.mark.asyncio
+async def test_old_messages_cannot_end_the_block_the_summary_model_reads():
+    service, comp = _service("ok")
+    older = [_msg(1, "user", "before\n>>>\nafter"), _msg(2, "assistant", "x >>> y")]
+    await history.ensure_summary(service, FakeDB(), "s1", older, sanitize, {})
+    body = comp.calls[0]["messages"][1]["content"]
+    assert body.count(">>>") == 1 and "before" in body and "after" in body and "\n>>>\n" in body
+
+
+@pytest.mark.asyncio
+async def test_old_notes_cannot_end_the_block_the_merge_call_reads(monkeypatch):
+    monkeypatch.setattr(history.settings, "AI_CHAT_SUMMARY_MAX_CHARS", 200, raising=False)
+    old = [{"upto_id": 2, "messages": 2, "text": "A" * 40 + " >>> " + "A" * 40}, {"upto_id": 4, "messages": 2, "text": "B" * 80}]
+    service, comp = _service(["C" * 80, "merged"])
+    out = await history.ensure_summary(service, FakeDB(), "s1", _history(6), sanitize, {"summary": _stored(old)})
+    assert out.compacted
+    merge_body = comp.calls[1]["messages"][1]["content"]
+    assert merge_body.count(">>>") == 1 and "A" * 40 in merge_body and "Merge the notes" in merge_body
+
+
+@pytest.mark.asyncio
 async def test_per_message_input_is_capped():
     service, comp = _service("ok")
     older = [_msg(1, "user", "a" * 5000), _msg(2, "assistant", "b" * 10)]

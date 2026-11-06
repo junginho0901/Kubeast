@@ -65,3 +65,73 @@ def test_base_url_private_addresses_need_the_allow_list(monkeypatch):
 def test_base_url_unresolvable_is_refused():
     with pytest.raises(policy.PolicyError):
         policy.check_base_url("https://nope.invalid/v1", _resolver({}))
+
+
+@pytest.mark.parametrize("url", [
+    "http://[::ffff:169.254.169.254]/",
+    "http://[::ffff:a9fe:a9fe]/latest",
+    "http://[64:ff9b::169.254.169.254]/",
+    "http://[2002:a9fe:a9fe::]/",
+    "http://[::169.254.169.254]/",
+])
+def test_base_url_ipv6_forms_of_a_metadata_address_are_never_allowed(monkeypatch, url):
+    host = url.split("[")[1].split("]")[0]
+    monkeypatch.setenv("AI_BASE_URL_ALLOWED_HOSTS", host)  # metadata stays refused, listed or not
+    with pytest.raises(policy.PolicyError, match="not allowed"):
+        policy.check_base_url(url, _resolver({}))
+
+
+@pytest.mark.parametrize("url", [
+    "http://[::ffff:10.0.0.1]/v1",
+    "http://[::ffff:127.0.0.1]:8002/",
+    "http://[::ffff:192.168.0.9]:11434",
+    "http://[::ffff:100.64.1.1]/",
+    "http://[64:ff9b::10.0.0.1]/",
+    "http://[2002:0a00:0001::]/",
+    "http://[::10.0.0.1]/",
+])
+def test_base_url_ipv6_forms_of_a_private_address_need_the_allow_list(monkeypatch, url):
+    monkeypatch.delenv("AI_BASE_URL_ALLOWED_HOSTS", raising=False)
+    with pytest.raises(policy.PolicyError, match="AI_BASE_URL_ALLOWED_HOSTS"):
+        policy.check_base_url(url, _resolver({}))
+
+
+@pytest.mark.parametrize("answer", ["::ffff:10.0.0.1", "::ffff:169.254.169.254", "64:ff9b::10.0.0.1", "198.18.0.7"])
+def test_base_url_a_name_resolving_to_an_internal_address_in_any_form_is_refused(monkeypatch, answer):
+    monkeypatch.delenv("AI_BASE_URL_ALLOWED_HOSTS", raising=False)
+    with pytest.raises(policy.PolicyError):
+        policy.check_base_url("https://gw.example.com/v1", _resolver({"gw.example.com": [answer]}))
+
+
+@pytest.mark.parametrize("url", ["http://198.18.0.1/", "http://198.19.255.254/v1", "http://[::ffff:198.18.0.1]/"])
+def test_base_url_the_benchmarking_range_needs_the_allow_list(monkeypatch, url):
+    monkeypatch.delenv("AI_BASE_URL_ALLOWED_HOSTS", raising=False)
+    with pytest.raises(policy.PolicyError, match="AI_BASE_URL_ALLOWED_HOSTS"):
+        policy.check_base_url(url, _resolver({}))
+
+
+@pytest.mark.parametrize("url", [
+    "http://198.17.255.255/v1",  # either side of the benchmarking range
+    "http://198.20.0.1/v1",
+    "http://[::ffff:93.184.216.34]/v1",
+    "http://[64:ff9b::93.184.216.34]/v1",
+    "http://[2002:5db8:d822::]/v1",
+    "http://[2606:4700:4700::1111]/v1",
+])
+def test_base_url_public_addresses_stay_allowed_in_every_form(monkeypatch, url):
+    monkeypatch.delenv("AI_BASE_URL_ALLOWED_HOSTS", raising=False)
+    policy.check_base_url(url, _resolver({}))
+
+
+def test_base_url_a_name_resolving_to_a_public_address_in_ipv6_form_stays_allowed(monkeypatch):
+    monkeypatch.delenv("AI_BASE_URL_ALLOWED_HOSTS", raising=False)
+    policy.check_base_url("https://api.example.com/v1", _resolver({"api.example.com": ["64:ff9b::93.184.216.34", "2606:4700:4700::1111"]}))
+
+
+def test_base_url_hosts_on_the_allow_list_stay_allowed_whatever_they_resolve_to(monkeypatch):
+    monkeypatch.setenv("AI_BASE_URL_ALLOWED_HOSTS", "::ffff:10.0.0.1, 198.18.0.5, gw.corp")
+    policy.check_base_url("http://[::ffff:10.0.0.1]:8080/v1", _resolver({}))
+    policy.check_base_url("http://198.18.0.5/v1", _resolver({}))
+    policy.check_base_url("http://gw.corp/v1", _resolver({"gw.corp": ["198.18.0.7"]}))
+    with pytest.raises(policy.PolicyError):
+        policy.check_base_url("http://[::ffff:10.0.0.2]:8080/v1", _resolver({}))  # only the listed address

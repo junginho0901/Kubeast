@@ -23,6 +23,7 @@ from typing import Any, Callable, Optional, Sequence
 from app.config import settings
 from app.services import redact
 from app.services.ai import usage as usage_acct
+from app.services.prompt_fence import inside_arrows
 
 log = logging.getLogger(__name__)
 
@@ -207,7 +208,7 @@ async def ensure_summary(service: Any, db: Any, session_id: str, older: Sequence
             body = body[:PER_MESSAGE_CAP] + " …"
         lines.append(f"{m.role}: {body}")
     cap = min(max_chars(), note_cap() * max(1, len(new) // 2))
-    body = "<<<\n" + "\n\n".join(lines) + "\n>>>"
+    body = "<<<\n" + inside_arrows("\n\n".join(lines)) + "\n>>>"
     body += "\n\n" + DIGEST_DIRECTIVE.format(cap=cap)
     note, usage, chars, err = await _ask(service, body, cap)
     calls = [(usage, chars)]
@@ -223,7 +224,7 @@ async def ensure_summary(service: Any, db: Any, session_id: str, older: Sequence
         oldest, rest = entries[:k], entries[k:]
         cap2 = note_cap() * 2
         merged, usage2, chars2, err2 = await _ask(
-            service, "<<<\n" + _join(oldest) + "\n>>>\n\n" + COMPACT_DIRECTIVE.format(cap=cap2), cap2)
+            service, "<<<\n" + inside_arrows(_join(oldest)) + "\n>>>\n\n" + COMPACT_DIRECTIVE.format(cap=cap2), cap2)
         calls.append((usage2, chars2))
         if err2:
             merged = " / ".join(str(e["text"])[: note_cap() // 2].rstrip() for e in oldest)[:cap2]
