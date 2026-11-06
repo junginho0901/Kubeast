@@ -59,6 +59,7 @@ func Info(np *networkingv1.NetworkPolicy) map[string]interface{} {
 		"egress":               egressRules,
 		"labels":               np.Labels,
 		"annotations":          np.Annotations,
+		"finalizers":           np.Finalizers,
 		"created_at":           created,
 	}
 }

@@ -5,6 +5,8 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	rsrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/replicaset"
 )
 
 // The list's status buckets for StatefulSets, DaemonSets and ReplicaSets: one that wants replicas and has none
@@ -32,7 +34,7 @@ func TestWorkloadStatus_NoneAvailableIsUnavailable(t *testing.T) {
 		for kind, got := range map[string]interface{}{
 			"StatefulSet": formatStatefulSetDetail(sts)["status"],
 			"DaemonSet":   formatDaemonSetDetail(ds)["status"],
-			"ReplicaSet":  formatReplicaSetDetail(rs)["status"],
+			"ReplicaSet":  rsrow.Info(rs)["status"],
 		} {
 			if got != c.want {
 				t.Errorf("%s %s (%d wanted, %d ready, %d available): status %v, want %s", kind, c.name, c.desired, c.ready, c.available, got, c.want)

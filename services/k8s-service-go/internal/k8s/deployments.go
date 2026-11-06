@@ -8,6 +8,8 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	deployrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/deployment"
 )
 
 // GetDeployments lists deployments in a namespace.
@@ -54,7 +56,7 @@ func (s *Service) DescribeDeployment(ctx context.Context, namespace, name string
 	if depErr != nil {
 		return nil, fmt.Errorf("get deployment %s/%s: %w", namespace, name, depErr)
 	}
-	result := formatDeploymentDetail(dep)
+	result := deployrow.Info(dep)
 
 	// Additional metadata fields for the info modal
 	result["uid"] = string(dep.UID)
@@ -149,52 +151,8 @@ func (s *Service) DeleteDeployment(ctx context.Context, namespace, name string) 
 // formatDeploymentList formats a list of deployments.
 func formatDeploymentList(deps []appsv1.Deployment) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(deps))
-	for _, d := range deps {
-		result = append(result, formatDeploymentDetail(&d))
+	for i := range deps {
+		result = append(result, deployrow.Info(&deps[i]))
 	}
 	return result
-}
-
-// formatDeploymentDetail formats a single deployment.
-func formatDeploymentDetail(d *appsv1.Deployment) map[string]interface{} {
-	replicas := int32(0)
-	if d.Spec.Replicas != nil {
-		replicas = *d.Spec.Replicas
-	}
-
-	images := make([]string, 0, len(d.Spec.Template.Spec.Containers))
-	for _, c := range d.Spec.Template.Spec.Containers {
-		images = append(images, c.Image)
-	}
-
-	image := ""
-	if len(images) > 0 {
-		image = images[0]
-	}
-
-	status, progressingReason := deploymentStatus(d)
-
-	var selector interface{}
-	if d.Spec.Selector != nil && d.Spec.Selector.MatchLabels != nil {
-		selector = d.Spec.Selector.MatchLabels
-	} else {
-		selector = map[string]string{}
-	}
-
-	return map[string]interface{}{
-		"name":                 d.Name,
-		"namespace":            d.Namespace,
-		"replicas":             replicas,
-		"ready_replicas":       d.Status.ReadyReplicas,
-		"available_replicas":   d.Status.AvailableReplicas,
-		"updated_replicas":     d.Status.UpdatedReplicas,
-		"unavailable_replicas": d.Status.UnavailableReplicas,
-		"progressing_reason":   progressingReason,
-		"image":                image,
-		"images":               images,
-		"labels":               d.Labels,
-		"selector":             selector,
-		"status":               status,
-		"created_at":           toISO(&d.CreationTimestamp),
-	}
 }

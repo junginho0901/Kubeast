@@ -84,7 +84,7 @@ const (
 	icPlain = `{"apiVersion":"networking.k8s.io/v1","kind":"IngressClass","metadata":{"name":"nginx","creationTimestamp":"2026-11-01T00:00:00Z"},"spec":{"controller":"example.test/nginx"}}`
 
 	npHead     = `{"apiVersion":"networking.k8s.io/v1","kind":"NetworkPolicy","metadata":{"name":"web","namespace":"demo","creationTimestamp":"2026-11-01T00:00:00Z"`
-	npTags     = `,"labels":{"team":"a"},"annotations":{"note":"kept"}`
+	npTags     = `,"labels":{"team":"a"},"annotations":{"note":"kept"},"finalizers":["example.test/keep"]`
 	npRuleSpec = `"spec":{"podSelector":{"matchLabels":{"app":"web"}},"policyTypes":["Ingress","Egress"],
 		"ingress":[{"from":[{"podSelector":{"matchLabels":{"role":"client"}}},{"namespaceSelector":{"matchLabels":{"team":"back"}}},
 		{"podSelector":{"matchExpressions":[{"key":"tier","operator":"In","values":["b","a"]}]},"namespaceSelector":{}},
@@ -101,6 +101,78 @@ const (
 	pvBound  = pvMeta + `"spec":{` + pvSize + `,` + pvCSI + `},"status":{"phase":"Bound"}}`
 	pvFailed = pvMeta + `"spec":{` + pvSize + `,` + pvCSI + `},"status":{"phase":"Failed","reason":"Broken","message":"disk gone"}}`
 	pvFree   = pvMeta + `"spec":{` + pvSize + `,"hostPath":{"path":"/data"}},"status":{"phase":"Available"}}`
+
+	depHead      = `{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"web","namespace":"demo","creationTimestamp":"2026-11-01T00:00:00Z"`
+	depTags      = `,"labels":{"team":"a"}`
+	depTemplate  = `"selector":{"matchLabels":{"app":"web"}},"template":{"metadata":{"labels":{"app":"web"}},"spec":{"containers":[{"name":"app","image":"example.test/app:1"}]}}`
+	depSpecOld   = `"spec":{"replicas":2,` + depTemplate + `}`
+	depSpecNew   = `"spec":{"replicas":3,"selector":{"matchLabels":{"app":"web"}},"template":{"metadata":{"labels":{"app":"web"}},"spec":{"containers":[{"name":"app","image":"example.test/app:2"},{"name":"side","image":"example.test/side:1"}]}}}`
+	depAvailable = `{"type":"Available","status":"True","reason":"MinimumReplicasAvailable"}`
+	depDone      = `"status":{"replicas":2,"readyReplicas":2,"availableReplicas":2,"updatedReplicas":2,"conditions":[` + depAvailable + `,{"type":"Progressing","status":"True","reason":"NewReplicaSetAvailable"}]}`
+	depStuck     = `"status":{"replicas":3,"readyReplicas":2,"availableReplicas":2,"updatedReplicas":1,"unavailableReplicas":1,"conditions":[` + depAvailable + `,{"type":"Progressing","status":"False","reason":"ProgressDeadlineExceeded"}]}`
+	depStarting  = `"status":{"replicas":3,"updatedReplicas":1,"unavailableReplicas":3,"conditions":[{"type":"Available","status":"False","reason":"MinimumReplicasUnavailable"},{"type":"Progressing","status":"True","reason":"ReplicaSetUpdated"}]}`
+	depOKTagged  = depHead + depTags + `},` + depSpecOld + `,` + depDone + `}`
+	depOKPlain   = depHead + `},` + depSpecOld + `,` + depDone + `}`
+	depStuckAll  = depHead + depTags + `},` + depSpecNew + `,` + depStuck + `}`
+	depStartAll  = depHead + depTags + `},` + depSpecNew + `,` + depStarting + `}`
+
+	rsHead       = `{"apiVersion":"apps/v1","kind":"ReplicaSet","metadata":{"name":"web-1","namespace":"demo","creationTimestamp":"2026-11-01T00:00:00Z"`
+	rsOwner      = `,"ownerReferences":[{"apiVersion":"apps/v1","kind":"Deployment","name":"web","uid":"u-1","controller":true}]`
+	rsController = `,"ownerReferences":[{"apiVersion":"example.test/v1","kind":"Rollout","name":"web","uid":"u-2","controller":true}]`
+	rsTemplate   = `"selector":{"matchLabels":{"app":"web"}},"template":{"metadata":{"labels":{"app":"web"}},"spec":{"containers":[{"name":"app","image":"example.test/app:1"}]}}`
+	rsTwo        = `"spec":{"replicas":2,` + rsTemplate + `}`
+	rsZero       = `"spec":{"replicas":0,` + rsTemplate + `}`
+	rsReady      = `"status":{"replicas":2,"readyReplicas":2,"availableReplicas":2}`
+	rsNotYet     = `"status":{"replicas":2}`
+	rsOwned      = rsHead + rsOwner + `},` + rsTwo + `,` + rsReady + `}`
+	rsFree       = rsHead + `},` + rsTwo + `,` + rsReady + `}`
+	rsTaken      = rsHead + rsController + `},` + rsTwo + `,` + rsReady + `}`
+	rsNoneReady  = rsHead + rsOwner + `},` + rsTwo + `,` + rsNotYet + `}`
+	rsScaledDown = rsHead + rsOwner + `},` + rsZero + `,"status":{"replicas":0}}`
+
+	hpaHead   = `{"apiVersion":"autoscaling/v2","kind":"HorizontalPodAutoscaler","metadata":{"name":"web","namespace":"demo","creationTimestamp":"2026-11-01T00:00:00Z"`
+	hpaTags   = `,"labels":{"team":"a"}`
+	hpaTarget = `"scaleTargetRef":{"apiVersion":"apps/v1","kind":"Deployment","name":"web"},"minReplicas":2,"maxReplicas":5`
+	hpaObject = `"describedObject":{"apiVersion":"v1","kind":"Service","name":"web"}`
+	hpaFive   = `"spec":{` + hpaTarget + `,"metrics":[{"type":"Resource","resource":{"name":"cpu","target":{"type":"Utilization","averageUtilization":80}}},
+		{"type":"Pods","pods":{"metric":{"name":"qps"},"target":{"type":"AverageValue","averageValue":"10"}}},
+		{"type":"Object","object":{` + hpaObject + `,"metric":{"name":"rps"},"target":{"type":"Value","value":"100"}}},
+		{"type":"External","external":{"metric":{"name":"queue"},"target":{"type":"Value","value":"5"}}},
+		{"type":"ContainerResource","containerResource":{"name":"memory","container":"app","target":{"type":"AverageValue","averageValue":"1Gi"}}}]}`
+	hpaNoMetric = `"spec":{` + hpaTarget + `}`
+	hpaRead     = `"status":{"currentReplicas":3,"desiredReplicas":4,"lastScaleTime":"2026-11-05T00:00:00Z","currentMetrics":[
+		{"type":"Resource","resource":{"name":"cpu","current":{"averageUtilization":60}}},
+		{"type":"Pods","pods":{"metric":{"name":"qps"},"current":{"averageValue":"7"}}},
+		{"type":"Object","object":{` + hpaObject + `,"metric":{"name":"rps"},"current":{"value":"90"}}},
+		{"type":"External","external":{"metric":{"name":"queue"},"current":{"value":"3"}}},
+		{"type":"ContainerResource","containerResource":{"name":"memory","container":"app","current":{"averageValue":"500Mi"}}}],
+		"conditions":[{"type":"ScalingActive","status":"True","reason":"ValidMetricFound"}]}`
+	hpaUnread    = `"status":{"currentReplicas":3,"desiredReplicas":0,"conditions":[{"type":"ScalingActive","status":"False","reason":"FailedGetResourceMetric"}]}`
+	hpaFull      = hpaHead + hpaTags + `},` + hpaFive + `,` + hpaRead + `}`
+	hpaNotRead   = hpaHead + `},` + hpaFive + `,` + hpaUnread + `}`
+	hpaNoMetrics = hpaHead + `},` + hpaNoMetric + `,` + hpaUnread + `}`
+
+	cmHead  = `{"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":"conf","namespace":"demo","creationTimestamp":"2026-11-01T00:00:00Z"`
+	cmValue = "fake-config-value-for-tests"
+	cmFull  = cmHead + `,"labels":{"team":"a"}},"data":{"b":"` + cmValue + `","a":"` + cmValue + `"},"binaryData":{"c":"eA=="}}`
+	cmOne   = cmHead + `},"data":{"only":"` + cmValue + `"}}`
+	cmNone  = cmHead + `}}`
+
+	secretHead = `{"apiVersion":"v1","kind":"Secret","type":"Opaque","metadata":{"name":"creds","namespace":"demo","creationTimestamp":"2026-11-01T00:00:00Z"`
+	// a value as the API server sends it, and the same value in the annotation kubectl apply writes
+	secretValue   = "fake-secret-value-for-tests"
+	secretEncoded = "ZmFrZS1zZWNyZXQtdmFsdWUtZm9yLXRlc3Rz"
+	secretApplied = `"kubectl.kubernetes.io/last-applied-configuration":"{\"stringData\":{\"password\":\"` + secretValue + `\"}}"`
+	secretFull    = secretHead + `,"labels":{"team":"a"},"annotations":{` + secretApplied + `}},"data":{"user":"` + secretEncoded + `","password":"` + secretEncoded + `"}}`
+	secretNone    = secretHead + `}}`
+
+	saHead  = `{"apiVersion":"v1","kind":"ServiceAccount","metadata":{"name":"runner","namespace":"demo","creationTimestamp":"2026-11-01T00:00:00Z"`
+	saFull  = saHead + `,"labels":{"team":"a"},"annotations":{"note":"kept"}},"secrets":[{"name":"runner-token"}],"imagePullSecrets":[{"name":"registry"}]}`
+	saPlain = saHead + `}}`
+
+	roleHead  = `{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"Role","metadata":{"name":"reader","namespace":"demo","creationTimestamp":"2026-11-01T00:00:00Z"`
+	roleFull  = roleHead + `,"labels":{"team":"a"},"annotations":{"note":"kept"}},"rules":[{"apiGroups":[""],"resources":["pods"],"verbs":["get"]},{"apiGroups":["apps"],"resources":["deployments"],"verbs":["list"]}]}`
+	rolePlain = roleHead + `}}`
 )
 
 type watchRowSource struct {
@@ -139,13 +211,51 @@ func watchRowSources() []watchRowSource {
 		"ingress": {"pods role=client in this namespace ; every pod in namespaces team=back ; pods tier in (a,b) in every namespace ; addresses 10.0.0.0/8 (except 10.1.0.0/16) | TCP 8000-9000, UDP dns"},
 		"egress":  {"pods app=db in namespaces team=db | TCP 5432"},
 	}
-	npShows := func(selector string, ingress, egress []interface{}, deny string, labels, annotations map[string]interface{}) map[string]interface{} {
+	npShows := func(selector string, ingress, egress []interface{}, deny string, labels, annotations map[string]interface{}, finalizers []interface{}) map[string]interface{} {
 		return map[string]interface{}{
 			"pod_selector": selector, "types": "Ingress, Egress", "ingress_rules": len(ingress), "egress_rules": len(egress),
-			"default_deny": deny, "ingress": ingress, "egress": egress, "labels": labels, "annotations": annotations,
+			"default_deny": deny, "ingress": ingress, "egress": egress, "labels": labels, "annotations": annotations, "finalizers": finalizers,
 		}
 	}
 	note := map[string]interface{}{"note": "kept"}
+	keep := []interface{}{"example.test/keep"}
+	none := []interface{}{}
+	depShows := func(ready string, updated, available int, status, title, badge, bucket, image string, labels map[string]interface{}) map[string]interface{} {
+		return map[string]interface{}{
+			"ready": ready, "updated": updated, "available": available, "status": status, "title": title,
+			"badge": badge, "bucket": bucket, "image": image, "labels": labels,
+		}
+	}
+	rsShows := func(current, desired, ready, available int, status, owner string) map[string]interface{} {
+		return map[string]interface{}{
+			"current": current, "desired": desired, "ready": ready, "available": available, "status": status,
+			"containers": "app", "images": "example.test/app:1", "selector": "app=web", "owner": owner,
+		}
+	}
+	hpaShows := func(replicas string, active bool, lastScale interface{}, metrics []interface{}, labels map[string]interface{}) map[string]interface{} {
+		return map[string]interface{}{
+			"reference": "Deployment/web", "min": 2, "max": 5, "replicas": replicas, "scaling_active": active,
+			"last_scale_time": lastScale, "metrics": metrics, "labels": labels,
+		}
+	}
+	// each metric's type and name, its target, and what the controller last read
+	hpaReadLines := []interface{}{"Resource cpu 80 60", "Pods qps 10 7", "Object rps 100 90", "External queue 5 3", "ContainerResource memory 1Gi 500Mi"}
+	hpaUnreadLines := []interface{}{"Resource cpu 80 -", "Pods qps 10 -", "Object rps 100 -", "External queue 5 -", "ContainerResource memory 1Gi -"}
+	cmShows := func(count int, keys, binary []interface{}, labels map[string]interface{}) map[string]interface{} {
+		return map[string]interface{}{"data_count": count, "data_keys": keys, "binary_keys": binary, "labels": labels}
+	}
+	secretShows := func(count int, keys []interface{}, labels map[string]interface{}) map[string]interface{} {
+		return map[string]interface{}{"type": "Opaque", "data_count": count, "data_keys": keys, "labels": labels}
+	}
+	saShows := func(count int, secrets, pullSecrets []interface{}, withPullSecrets bool, labels, annotations map[string]interface{}) map[string]interface{} {
+		return map[string]interface{}{
+			"secrets": count, "secrets_list": secrets, "image_pull_secrets": pullSecrets, "with_pull_secrets": withPullSecrets,
+			"labels": labels, "annotations": annotations,
+		}
+	}
+	roleShows := func(rules int, labels, annotations map[string]interface{}) map[string]interface{} {
+		return map[string]interface{}{"rules_count": rules, "labels": labels, "annotations": annotations}
+	}
 	pvShows := func(status, class, claim, source, reason, message string) map[string]interface{} {
 		return map[string]interface{}{
 			"status": status, "storage_class": class, "capacity": "1Gi", "access_modes": "ReadWriteOnce", "reclaim_policy": "Retain",
@@ -174,9 +284,29 @@ func watchRowSources() []watchRowSource {
 		{"Endpoints that gained their addresses show them", "endpoints", epNone, epFull, epShows(1, 1, "10.0.0.1 | not-ready: 10.0.0.2", "http:80/TCP")},
 		{"an IngressClass no longer the default, its parameters and labels gone, says so", "ingressclasses", icFull, icPlain, icShows(false, "-", noTags)},
 		{"an IngressClass that gained parameters and the default mark shows them", "ingressclasses", icPlain, icFull, icShows(true, "Params.example.test/p (Namespace) ns=demo", teamA)},
-		{"a NetworkPolicy whose rules went away shows none and keeps its labels", "networkpolicies", npRules, npNoRules, npShows("*", []interface{}{}, []interface{}{}, "Ingress + Egress", teamA, note)},
-		{"a NetworkPolicy that gained its rules words them as the object has them", "networkpolicies", npNoRules, npRules, npShows("app=web", npRuleLines["ingress"], npRuleLines["egress"], "-", teamA, note)},
-		{"a NetworkPolicy whose labels and annotations went away shows none", "networkpolicies", npRules, npRulesNoTags, npShows("app=web", npRuleLines["ingress"], npRuleLines["egress"], "-", noTags, noTags)},
+		{"a NetworkPolicy whose rules went away shows none and keeps its labels and finalizers", "networkpolicies", npRules, npNoRules, npShows("*", []interface{}{}, []interface{}{}, "Ingress + Egress", teamA, note, keep)},
+		{"a NetworkPolicy that gained its rules words them as the object has them", "networkpolicies", npNoRules, npRules, npShows("app=web", npRuleLines["ingress"], npRuleLines["egress"], "-", teamA, note, keep)},
+		{"a NetworkPolicy whose labels, annotations and finalizers went away shows none", "networkpolicies", npRules, npRulesNoTags, npShows("app=web", npRuleLines["ingress"], npRuleLines["egress"], "-", noTags, noTags, none)},
+		{"a Deployment whose rollout recovered is Available with no reason left, its labels gone", "deployments", depStuckAll, depOKPlain, depShows("2/2", 2, 2, "Available", "Available", "badge-success", "healthy", "example.test/app:1", noTags)},
+		{"a Deployment past its progress deadline is Failed with the reason while its old pods stay available", "deployments", depOKTagged, depStuckAll, depShows("2/3", 1, 2, "Failed", "Failed: ProgressDeadlineExceeded", "badge-error", "unavailable", "example.test/app:2", teamA)},
+		{"a Deployment starting a rollout with none available is Progressing, drawn as unavailable", "deployments", depOKTagged, depStartAll, depShows("0/3", 1, 0, "Progressing", "Progressing", "badge-error", "unavailable", "example.test/app:2", teamA)},
+		{"a Deployment that came out of a stuck rollout keeps no count or reason of it", "deployments", depStuckAll, depOKTagged, depShows("2/2", 2, 2, "Available", "Available", "badge-success", "healthy", "example.test/app:1", teamA)},
+		{"a ReplicaSet freed of its owner shows none", "replicasets", rsOwned, rsFree, rsShows(2, 2, 2, 2, "Healthy", "-")},
+		{"a ReplicaSet another controller took names it by kind", "replicasets", rsFree, rsTaken, rsShows(2, 2, 2, 2, "Healthy", "Rollout/web")},
+		{"a ReplicaSet that lost its available pods is Unavailable", "replicasets", rsOwned, rsNoneReady, rsShows(2, 2, 0, 0, "Unavailable", "web")},
+		{"a ReplicaSet scaled to none is Idle with no count left", "replicasets", rsOwned, rsScaledDown, rsShows(0, 0, 0, 0, "Idle", "web")},
+		{"an HPA that lost its readings, last scale and labels shows none", "horizontalpodautoscalers", hpaFull, hpaNotRead, hpaShows("3/-", false, nil, hpaUnreadLines, noTags)},
+		{"an HPA that read its metrics shows every reading and target", "horizontalpodautoscalers", hpaNotRead, hpaFull, hpaShows("3/4", true, "2026-11-05T00:00:00Z", hpaReadLines, teamA)},
+		{"an HPA with no metric left says what the controller wants", "horizontalpodautoscalers", hpaNotRead, hpaNoMetrics, hpaShows("3/0", false, nil, none, noTags)},
+		{"a ConfigMap whose keys all went away lists none", "configmaps", cmFull, cmNone, cmShows(0, none, none, noTags)},
+		{"a ConfigMap left with one key lists only it", "configmaps", cmFull, cmOne, cmShows(1, []interface{}{"only"}, none, noTags)},
+		{"a ConfigMap that gained keys lists them in order", "configmaps", cmNone, cmFull, cmShows(2, []interface{}{"a", "b"}, []interface{}{"c"}, teamA)},
+		{"a Secret whose keys all went away lists none", "secrets", secretFull, secretNone, secretShows(0, none, noTags)},
+		{"a Secret that gained keys lists their names in order", "secrets", secretNone, secretFull, secretShows(2, []interface{}{"password", "user"}, teamA)},
+		{"a ServiceAccount that lost its secrets and pull secrets lists none", "serviceaccounts", saFull, saPlain, saShows(0, none, none, false, noTags, noTags)},
+		{"a ServiceAccount that gained them lists them", "serviceaccounts", saPlain, saFull, saShows(1, []interface{}{"runner-token"}, []interface{}{"registry"}, true, teamA, note)},
+		{"a Role whose rules, labels and annotations went away shows none", "roles", roleFull, rolePlain, roleShows(0, noTags, noTags)},
+		{"a Role that gained them shows them", "roles", rolePlain, roleFull, roleShows(2, teamA, note)},
 		{"a PersistentVolume freed of its claim shows no claim, class, reason or message", "persistentvolumes", pvFailed, pvFree, pvShows("Available", "-", "-", "HostPath", "-", "-")},
 		{"a PersistentVolume that bound shows its claim and source", "persistentvolumes", pvFree, pvBound, pvShows("Bound", "fast", "demo/claim-a", "CSI", "-", "-")},
 		{"a PersistentVolume that failed shows why and keeps every other cell", "persistentvolumes", pvBound, pvFailed, pvShows("Failed", "fast", "demo/claim-a", "CSI", "Broken", "disk gone")},
@@ -257,6 +387,20 @@ func (a *listAPI) row(t *testing.T, resource, object string) map[string]interfac
 		rows, err = a.svc.GetNetworkPolicies(ctx, "demo")
 	case "persistentvolumes":
 		rows, err = a.svc.GetPVs(ctx)
+	case "deployments":
+		rows, err = a.svc.GetDeployments(ctx, "demo")
+	case "replicasets":
+		rows, err = a.svc.GetReplicaSets(ctx, "demo")
+	case "horizontalpodautoscalers":
+		rows, err = a.svc.GetHPAs(ctx, "demo")
+	case "configmaps":
+		rows, err = a.svc.GetConfigMaps(ctx, "demo")
+	case "secrets":
+		rows, err = a.svc.GetSecrets(ctx, "demo")
+	case "serviceaccounts":
+		rows, err = a.svc.GetServiceAccounts(ctx, "demo")
+	case "roles":
+		rows, err = a.svc.GetRoles(ctx, "demo")
 	default:
 		t.Fatalf("no list for %s", resource)
 	}
@@ -360,13 +504,16 @@ func TestWatchRowCasesFixture(t *testing.T) {
 // genericToInfo sends them, which the page's normalizers read (watchRows.cases.test.ts).
 func TestLiveRowOfAnObjectThatDoesNotConvertKeepsItsNameAndNestedSpec(t *testing.T) {
 	for resource, object := range map[string]string{
-		"ingresses":         `{"apiVersion":"networking.k8s.io/v1","kind":"Ingress","metadata":{"name":"odd","namespace":"demo"},"spec":{"rules":"not a list"}}`,
-		"volumeattachments": `{"apiVersion":"storage.k8s.io/v1","kind":"VolumeAttachment","metadata":{"name":"odd"},"spec":{"attacher":7},"status":{"attached":true}}`,
-		"cronjobs":          `{"apiVersion":"batch/v1","kind":"CronJob","metadata":{"name":"odd","namespace":"demo"},"spec":{"schedule":7}}`,
-		"services":          `{"apiVersion":"v1","kind":"Service","metadata":{"name":"odd","namespace":"demo"},"spec":{"ports":"not a list"}}`,
-		"ingressclasses":    `{"apiVersion":"networking.k8s.io/v1","kind":"IngressClass","metadata":{"name":"odd"},"spec":{"controller":7}}`,
-		"networkpolicies":   `{"apiVersion":"networking.k8s.io/v1","kind":"NetworkPolicy","metadata":{"name":"odd","namespace":"demo"},"spec":{"ingress":"not a list"}}`,
-		"persistentvolumes": `{"apiVersion":"v1","kind":"PersistentVolume","metadata":{"name":"odd"},"spec":{"accessModes":"not a list"}}`,
+		"ingresses":                `{"apiVersion":"networking.k8s.io/v1","kind":"Ingress","metadata":{"name":"odd","namespace":"demo"},"spec":{"rules":"not a list"}}`,
+		"volumeattachments":        `{"apiVersion":"storage.k8s.io/v1","kind":"VolumeAttachment","metadata":{"name":"odd"},"spec":{"attacher":7},"status":{"attached":true}}`,
+		"cronjobs":                 `{"apiVersion":"batch/v1","kind":"CronJob","metadata":{"name":"odd","namespace":"demo"},"spec":{"schedule":7}}`,
+		"services":                 `{"apiVersion":"v1","kind":"Service","metadata":{"name":"odd","namespace":"demo"},"spec":{"ports":"not a list"}}`,
+		"ingressclasses":           `{"apiVersion":"networking.k8s.io/v1","kind":"IngressClass","metadata":{"name":"odd"},"spec":{"controller":7}}`,
+		"networkpolicies":          `{"apiVersion":"networking.k8s.io/v1","kind":"NetworkPolicy","metadata":{"name":"odd","namespace":"demo"},"spec":{"ingress":"not a list"}}`,
+		"persistentvolumes":        `{"apiVersion":"v1","kind":"PersistentVolume","metadata":{"name":"odd"},"spec":{"accessModes":"not a list"}}`,
+		"deployments":              `{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"odd","namespace":"demo"},"spec":{"replicas":"not a number"}}`,
+		"replicasets":              `{"apiVersion":"apps/v1","kind":"ReplicaSet","metadata":{"name":"odd","namespace":"demo"},"spec":{"replicas":"not a number"}}`,
+		"horizontalpodautoscalers": `{"apiVersion":"autoscaling/v2","kind":"HorizontalPodAutoscaler","metadata":{"name":"odd","namespace":"demo"},"spec":{"maxReplicas":"not a number"}}`,
 	} {
 		row := liveRow(t, resource, object)
 		if row["name"] != "odd" || row["spec"] == nil {
@@ -378,6 +525,49 @@ func TestLiveRowOfAnObjectThatDoesNotConvertKeepsItsNameAndNestedSpec(t *testing
 	if row["name"] != "odd" || row["subsets"] != "not a list" {
 		t.Errorf("endpoints: %v, want the name and the subsets as they came", row)
 	}
+	// So with a ServiceAccount's and a Role's: names and rules, nothing a list hides.
+	row = liveRow(t, "serviceaccounts", `{"apiVersion":"v1","kind":"ServiceAccount","metadata":{"name":"odd","namespace":"demo"},"secrets":[{"name":"t"}],"imagePullSecrets":[{"name":"r"}],"automountServiceAccountToken":"not a bool"}`)
+	if row["name"] != "odd" || row["secrets"] == nil || row["imagePullSecrets"] == nil {
+		t.Errorf("serviceaccounts: %v, want the name and the secrets as they came", row)
+	}
+	row = liveRow(t, "roles", `{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"Role","metadata":{"name":"odd","namespace":"demo"},"rules":[{"verbs":"not a list"}]}`)
+	if row["name"] != "odd" || row["rules"] == nil {
+		t.Errorf("roles: %v, want the name and the rules as they came", row)
+	}
+}
+
+// A Secret's and a ConfigMap's rows name their keys and never hold a value: not the data, not the same value in the
+// annotation kubectl apply writes, not when the object does not convert.
+func TestALiveOrListRowOfASecretOrConfigMapHoldsNoValue(t *testing.T) {
+	api := newListAPI(t)
+	check := func(what string, row map[string]interface{}, values ...string) {
+		t.Helper()
+		raw, err := json.Marshal(row)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, value := range values {
+			if strings.Contains(string(raw), value) {
+				t.Errorf("%s holds the value %q: %s", what, value, raw)
+			}
+		}
+		for _, key := range []string{"data", "binaryData", "stringData", "annotations", "data_values"} {
+			if _, ok := row[key]; ok {
+				t.Errorf("%s has the key %q: %s", what, key, raw)
+			}
+		}
+	}
+	secretValues := []string{secretValue, secretEncoded}
+	check("the list row of a Secret", api.row(t, "secrets", secretFull), secretValues...)
+	check("the live row of a Secret", liveRow(t, "secrets", secretFull), secretValues...)
+	check("the live row of a Secret whose data does not convert", liveRow(t, "secrets",
+		secretHead+`,"annotations":{`+secretApplied+`}},"data":{"password":"`+secretValue+`!"}}`), secretValues...)
+	check("the live row of a Secret with a field that does not convert", liveRow(t, "secrets",
+		secretHead+`,"annotations":{`+secretApplied+`}},"data":{"password":"`+secretEncoded+`"},"immutable":"not a bool"}`), secretValues...)
+	check("the list row of a ConfigMap", api.row(t, "configmaps", cmFull), cmValue)
+	check("the live row of a ConfigMap", liveRow(t, "configmaps", cmFull), cmValue)
+	check("the live row of a ConfigMap that does not convert", liveRow(t, "configmaps",
+		cmHead+`},"data":{"a":"`+cmValue+`"},"immutable":"not a bool"}`), cmValue)
 }
 
 // The list caps its address preview and counts every address; a live update has to read the same, not list them all.
@@ -407,17 +597,38 @@ func TestAWatchOfTheseListsStaysInsideANamespaceGrant(t *testing.T) {
 		Namespaces: map[string][]string{"self": {"team-a"}},
 	}
 	for path, allowed := range map[string]bool{
-		"/api/v1/services":                          false,
-		"/api/v1/endpoints":                         false,
-		"/api/v1/networkpolicies":                   false,
-		"/api/v1/pvs":                               false,
-		"/api/v1/ingressclasses":                    false,
-		"/api/v1/namespaces/team-b/services":        false,
-		"/api/v1/namespaces/team-b/endpoints":       false,
-		"/api/v1/namespaces/team-b/networkpolicies": false,
-		"/api/v1/namespaces/team-a/services":        true,
-		"/api/v1/namespaces/team-a/endpoints":       true,
-		"/api/v1/namespaces/team-a/networkpolicies": true,
+		"/api/v1/services":                                                false,
+		"/api/v1/endpoints":                                               false,
+		"/api/v1/networkpolicies":                                         false,
+		"/api/v1/pvs":                                                     false,
+		"/api/v1/ingressclasses":                                          false,
+		"/api/v1/namespaces/team-b/services":                              false,
+		"/api/v1/namespaces/team-b/endpoints":                             false,
+		"/api/v1/namespaces/team-b/networkpolicies":                       false,
+		"/api/v1/namespaces/team-a/services":                              true,
+		"/api/v1/namespaces/team-a/endpoints":                             true,
+		"/api/v1/namespaces/team-a/networkpolicies":                       true,
+		"/apis/apps/v1/deployments":                                       false,
+		"/apis/apps/v1/replicasets":                                       false,
+		"/apis/autoscaling/v2/horizontalpodautoscalers":                   false,
+		"/api/v1/configmaps":                                              false,
+		"/api/v1/secrets":                                                 false,
+		"/api/v1/serviceaccounts":                                         false,
+		"/api/v1/roles":                                                   false,
+		"/apis/apps/v1/namespaces/team-b/deployments":                     false,
+		"/apis/apps/v1/namespaces/team-b/replicasets":                     false,
+		"/apis/autoscaling/v2/namespaces/team-b/horizontalpodautoscalers": false,
+		"/api/v1/namespaces/team-b/configmaps":                            false,
+		"/api/v1/namespaces/team-b/secrets":                               false,
+		"/api/v1/namespaces/team-b/serviceaccounts":                       false,
+		"/api/v1/namespaces/team-b/roles":                                 false,
+		"/apis/apps/v1/namespaces/team-a/deployments":                     true,
+		"/apis/apps/v1/namespaces/team-a/replicasets":                     true,
+		"/apis/autoscaling/v2/namespaces/team-a/horizontalpodautoscalers": true,
+		"/api/v1/namespaces/team-a/configmaps":                            true,
+		"/api/v1/namespaces/team-a/secrets":                               true,
+		"/api/v1/namespaces/team-a/serviceaccounts":                       true,
+		"/api/v1/namespaces/team-a/roles":                                 true,
 	} {
 		reason := namespaceScopeRefusal(scoped, "self", path)
 		if (reason == "") != allowed {

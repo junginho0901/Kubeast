@@ -7,6 +7,9 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	deployrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/deployment"
+	rsrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/replicaset"
 )
 
 // A box of the Resource Graph says what the lists say: the workload lists' summary
@@ -58,7 +61,7 @@ func TestBuildWorkloadGraph_StatusesAreTheLists(t *testing.T) {
 	// what each list sends for the same object
 	listStatus := map[string]string{}
 	for i := range deploys {
-		listStatus[rgNodeID("Deployment", "ns", deploys[i].Name)] = formatDeploymentDetail(&deploys[i])["status"].(string)
+		listStatus[rgNodeID("Deployment", "ns", deploys[i].Name)] = deployrow.Info(&deploys[i])["status"].(string)
 	}
 	for i := range sts {
 		listStatus[rgNodeID("StatefulSet", "ns", sts[i].Name)] = formatStatefulSetDetail(&sts[i])["status"].(string)
@@ -67,7 +70,7 @@ func TestBuildWorkloadGraph_StatusesAreTheLists(t *testing.T) {
 		listStatus[rgNodeID("DaemonSet", "ns", dss[i].Name)] = formatDaemonSetDetail(&dss[i])["status"].(string)
 	}
 	for i := range rss {
-		listStatus[rgNodeID("ReplicaSet", "ns", rss[i].Name)] = formatReplicaSetDetail(&rss[i])["status"].(string)
+		listStatus[rgNodeID("ReplicaSet", "ns", rss[i].Name)] = rsrow.Info(&rss[i])["status"].(string)
 	}
 	for i := range jobs {
 		listStatus[rgNodeID("Job", "ns", jobs[i].Name)] = formatJobDetail(&jobs[i])["status"].(string)

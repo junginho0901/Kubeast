@@ -15,7 +15,8 @@ func keysObject(fields ...string) *unstructured.Unstructured {
 	for _, field := range fields {
 		m := map[string]interface{}{}
 		for i := 0; i < 12; i++ {
-			m[fmt.Sprintf("key-%02d", i)] = "v"
+			// valid as a ConfigMap's text and as base64, what a Secret's and a binaryData value are
+			m[fmt.Sprintf("key-%02d", i)] = "dg=="
 		}
 		obj[field] = m
 	}

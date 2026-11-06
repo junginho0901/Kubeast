@@ -101,6 +101,18 @@ export function normalizeWatchNetworkPolicyObject(obj: any): NetworkPolicyInfo {
   }
 }
 
+// An open drawer's answer after a live update of a policy of its namespace: the describe answer is the row, so a frame
+// about this policy is the answer now. A deleted policy leaves the last one on screen until the drawer closes.
+export function applyNetworkPolicyToDrawer(
+  prev: unknown,
+  event: { type?: string; object?: any },
+  name: string,
+): unknown {
+  if (!event?.object || event.type === 'DELETED') return prev
+  const row = normalizeWatchNetworkPolicyObject(event.object)
+  return row.name === name ? row : prev
+}
+
 export function applyNetworkPolicyWatchEvent(
   prev: NetworkPolicyInfo[] | undefined,
   event: { type?: string; object?: any },

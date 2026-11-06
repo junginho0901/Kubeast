@@ -15,6 +15,16 @@ export function computeDeploymentStatus(replicas: number, readyReplicas: number)
   return 'Healthy'
 }
 
+// A Deployment's status and reason by its conditions, as k8s-service internal/deploystatus reads them: a row that comes
+// with its object nested says the word every other row of the list says.
+export function deploymentStatusOf(conditions: unknown): { status: string; reason: string } {
+  const list: Array<{ type?: string; status?: string; reason?: string }> = Array.isArray(conditions) ? conditions : []
+  const progressing = list.find((c) => c?.type === 'Progressing')
+  if (progressing?.status === 'False') return { status: 'Failed', reason: progressing.reason ?? '' }
+  const available = list.find((c) => c?.type === 'Available')
+  return { status: available?.status === 'True' ? 'Available' : 'Progressing', reason: '' }
+}
+
 // status 단어 매핑: backend k8s-service-go/internal/k8s/deployments.go 는
 // "Available" / "Progressing" / "Failed" 를, frontend 의 computeDeploymentStatus
 // fallback 은 "Healthy" / "Degraded" / "Unavailable" 을 만들어내므로 양쪽 모두 매핑.

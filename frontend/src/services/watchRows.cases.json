@@ -1419,7 +1419,7 @@
   }
  },
  {
-  "name": "a NetworkPolicy whose rules went away shows none and keeps its labels",
+  "name": "a NetworkPolicy whose rules went away shows none and keeps its labels and finalizers",
   "resource": "networkpolicies",
   "before": {
    "annotations": {
@@ -1453,6 +1453,9 @@
     }
    ],
    "egress_rules": 1,
+   "finalizers": [
+    "example.test/keep"
+   ],
    "ingress": [
     {
      "from": [
@@ -1533,6 +1536,9 @@
    "default_deny_ingress": true,
    "egress": [],
    "egress_rules": 0,
+   "finalizers": [
+    "example.test/keep"
+   ],
    "ingress": [],
    "ingress_rules": 0,
    "labels": {
@@ -1556,6 +1562,9 @@
    "default_deny_ingress": true,
    "egress": [],
    "egress_rules": 0,
+   "finalizers": [
+    "example.test/keep"
+   ],
    "ingress": [],
    "ingress_rules": 0,
    "labels": {
@@ -1577,6 +1586,9 @@
    "default_deny": "Ingress + Egress",
    "egress": [],
    "egress_rules": 0,
+   "finalizers": [
+    "example.test/keep"
+   ],
    "ingress": [],
    "ingress_rules": 0,
    "labels": {
@@ -1598,6 +1610,9 @@
    "default_deny_ingress": true,
    "egress": [],
    "egress_rules": 0,
+   "finalizers": [
+    "example.test/keep"
+   ],
    "ingress": [],
    "ingress_rules": 0,
    "labels": {
@@ -1644,6 +1659,9 @@
     }
    ],
    "egress_rules": 1,
+   "finalizers": [
+    "example.test/keep"
+   ],
    "ingress": [
     {
      "from": [
@@ -1747,6 +1765,9 @@
     }
    ],
    "egress_rules": 1,
+   "finalizers": [
+    "example.test/keep"
+   ],
    "ingress": [
     {
      "from": [
@@ -1827,6 +1848,9 @@
     "pods app=db in namespaces team=db | TCP 5432"
    ],
    "egress_rules": 1,
+   "finalizers": [
+    "example.test/keep"
+   ],
    "ingress": [
     "pods role=client in this namespace ; every pod in namespaces team=back ; pods tier in (a,b) in every namespace ; addresses 10.0.0.0/8 (except 10.1.0.0/16) | TCP 8000-9000, UDP dns"
    ],
@@ -1839,7 +1863,7 @@
   }
  },
  {
-  "name": "a NetworkPolicy whose labels and annotations went away shows none",
+  "name": "a NetworkPolicy whose labels, annotations and finalizers went away shows none",
   "resource": "networkpolicies",
   "before": {
    "annotations": {
@@ -1873,6 +1897,9 @@
     }
    ],
    "egress_rules": 1,
+   "finalizers": [
+    "example.test/keep"
+   ],
    "ingress": [
     {
      "from": [
@@ -1974,6 +2001,7 @@
     }
    ],
    "egress_rules": 1,
+   "finalizers": null,
    "ingress": [
     {
      "from": [
@@ -2073,6 +2101,7 @@
     }
    ],
    "egress_rules": 1,
+   "finalizers": null,
    "ingress": [
     {
      "from": [
@@ -2149,6 +2178,7 @@
     "pods app=db in namespaces team=db | TCP 5432"
    ],
    "egress_rules": 1,
+   "finalizers": [],
    "ingress": [
     "pods role=client in this namespace ; every pod in namespaces team=back ; pods tier in (a,b) in every namespace ; addresses 10.0.0.0/8 (except 10.1.0.0/16) | TCP 8000-9000, UDP dns"
    ],
@@ -2156,6 +2186,1685 @@
    "labels": {},
    "pod_selector": "app=web",
    "types": "Ingress, Egress"
+  }
+ },
+ {
+  "name": "a Deployment whose rollout recovered is Available with no reason left, its labels gone",
+  "resource": "deployments",
+  "before": {
+   "available_replicas": 2,
+   "created_at": "2026-11-01T00:00:00Z",
+   "image": "example.test/app:2",
+   "images": [
+    "example.test/app:2",
+    "example.test/side:1"
+   ],
+   "labels": {
+    "team": "a"
+   },
+   "name": "web",
+   "namespace": "demo",
+   "progressing_reason": "ProgressDeadlineExceeded",
+   "ready_replicas": 2,
+   "replicas": 3,
+   "selector": {
+    "app": "web"
+   },
+   "status": "Failed",
+   "unavailable_replicas": 1,
+   "updated_replicas": 1
+  },
+  "event": {
+   "available_replicas": 2,
+   "created_at": "2026-11-01T00:00:00Z",
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "labels": null,
+   "name": "web",
+   "namespace": "demo",
+   "progressing_reason": "",
+   "ready_replicas": 2,
+   "replicas": 2,
+   "selector": {
+    "app": "web"
+   },
+   "status": "Available",
+   "unavailable_replicas": 0,
+   "updated_replicas": 2
+  },
+  "after": {
+   "available_replicas": 2,
+   "created_at": "2026-11-01T00:00:00Z",
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "labels": null,
+   "name": "web",
+   "namespace": "demo",
+   "progressing_reason": "",
+   "ready_replicas": 2,
+   "replicas": 2,
+   "selector": {
+    "app": "web"
+   },
+   "status": "Available",
+   "unavailable_replicas": 0,
+   "updated_replicas": 2
+  },
+  "shows": {
+   "available": 2,
+   "badge": "badge-success",
+   "bucket": "healthy",
+   "image": "example.test/app:1",
+   "labels": {},
+   "ready": "2/2",
+   "status": "Available",
+   "title": "Available",
+   "updated": 2
+  }
+ },
+ {
+  "name": "a Deployment past its progress deadline is Failed with the reason while its old pods stay available",
+  "resource": "deployments",
+  "before": {
+   "available_replicas": 2,
+   "created_at": "2026-11-01T00:00:00Z",
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "labels": {
+    "team": "a"
+   },
+   "name": "web",
+   "namespace": "demo",
+   "progressing_reason": "",
+   "ready_replicas": 2,
+   "replicas": 2,
+   "selector": {
+    "app": "web"
+   },
+   "status": "Available",
+   "unavailable_replicas": 0,
+   "updated_replicas": 2
+  },
+  "event": {
+   "available_replicas": 2,
+   "created_at": "2026-11-01T00:00:00Z",
+   "image": "example.test/app:2",
+   "images": [
+    "example.test/app:2",
+    "example.test/side:1"
+   ],
+   "labels": {
+    "team": "a"
+   },
+   "name": "web",
+   "namespace": "demo",
+   "progressing_reason": "ProgressDeadlineExceeded",
+   "ready_replicas": 2,
+   "replicas": 3,
+   "selector": {
+    "app": "web"
+   },
+   "status": "Failed",
+   "unavailable_replicas": 1,
+   "updated_replicas": 1
+  },
+  "after": {
+   "available_replicas": 2,
+   "created_at": "2026-11-01T00:00:00Z",
+   "image": "example.test/app:2",
+   "images": [
+    "example.test/app:2",
+    "example.test/side:1"
+   ],
+   "labels": {
+    "team": "a"
+   },
+   "name": "web",
+   "namespace": "demo",
+   "progressing_reason": "ProgressDeadlineExceeded",
+   "ready_replicas": 2,
+   "replicas": 3,
+   "selector": {
+    "app": "web"
+   },
+   "status": "Failed",
+   "unavailable_replicas": 1,
+   "updated_replicas": 1
+  },
+  "shows": {
+   "available": 2,
+   "badge": "badge-error",
+   "bucket": "unavailable",
+   "image": "example.test/app:2",
+   "labels": {
+    "team": "a"
+   },
+   "ready": "2/3",
+   "status": "Failed",
+   "title": "Failed: ProgressDeadlineExceeded",
+   "updated": 1
+  }
+ },
+ {
+  "name": "a Deployment starting a rollout with none available is Progressing, drawn as unavailable",
+  "resource": "deployments",
+  "before": {
+   "available_replicas": 2,
+   "created_at": "2026-11-01T00:00:00Z",
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "labels": {
+    "team": "a"
+   },
+   "name": "web",
+   "namespace": "demo",
+   "progressing_reason": "",
+   "ready_replicas": 2,
+   "replicas": 2,
+   "selector": {
+    "app": "web"
+   },
+   "status": "Available",
+   "unavailable_replicas": 0,
+   "updated_replicas": 2
+  },
+  "event": {
+   "available_replicas": 0,
+   "created_at": "2026-11-01T00:00:00Z",
+   "image": "example.test/app:2",
+   "images": [
+    "example.test/app:2",
+    "example.test/side:1"
+   ],
+   "labels": {
+    "team": "a"
+   },
+   "name": "web",
+   "namespace": "demo",
+   "progressing_reason": "",
+   "ready_replicas": 0,
+   "replicas": 3,
+   "selector": {
+    "app": "web"
+   },
+   "status": "Progressing",
+   "unavailable_replicas": 3,
+   "updated_replicas": 1
+  },
+  "after": {
+   "available_replicas": 0,
+   "created_at": "2026-11-01T00:00:00Z",
+   "image": "example.test/app:2",
+   "images": [
+    "example.test/app:2",
+    "example.test/side:1"
+   ],
+   "labels": {
+    "team": "a"
+   },
+   "name": "web",
+   "namespace": "demo",
+   "progressing_reason": "",
+   "ready_replicas": 0,
+   "replicas": 3,
+   "selector": {
+    "app": "web"
+   },
+   "status": "Progressing",
+   "unavailable_replicas": 3,
+   "updated_replicas": 1
+  },
+  "shows": {
+   "available": 0,
+   "badge": "badge-error",
+   "bucket": "unavailable",
+   "image": "example.test/app:2",
+   "labels": {
+    "team": "a"
+   },
+   "ready": "0/3",
+   "status": "Progressing",
+   "title": "Progressing",
+   "updated": 1
+  }
+ },
+ {
+  "name": "a Deployment that came out of a stuck rollout keeps no count or reason of it",
+  "resource": "deployments",
+  "before": {
+   "available_replicas": 2,
+   "created_at": "2026-11-01T00:00:00Z",
+   "image": "example.test/app:2",
+   "images": [
+    "example.test/app:2",
+    "example.test/side:1"
+   ],
+   "labels": {
+    "team": "a"
+   },
+   "name": "web",
+   "namespace": "demo",
+   "progressing_reason": "ProgressDeadlineExceeded",
+   "ready_replicas": 2,
+   "replicas": 3,
+   "selector": {
+    "app": "web"
+   },
+   "status": "Failed",
+   "unavailable_replicas": 1,
+   "updated_replicas": 1
+  },
+  "event": {
+   "available_replicas": 2,
+   "created_at": "2026-11-01T00:00:00Z",
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "labels": {
+    "team": "a"
+   },
+   "name": "web",
+   "namespace": "demo",
+   "progressing_reason": "",
+   "ready_replicas": 2,
+   "replicas": 2,
+   "selector": {
+    "app": "web"
+   },
+   "status": "Available",
+   "unavailable_replicas": 0,
+   "updated_replicas": 2
+  },
+  "after": {
+   "available_replicas": 2,
+   "created_at": "2026-11-01T00:00:00Z",
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "labels": {
+    "team": "a"
+   },
+   "name": "web",
+   "namespace": "demo",
+   "progressing_reason": "",
+   "ready_replicas": 2,
+   "replicas": 2,
+   "selector": {
+    "app": "web"
+   },
+   "status": "Available",
+   "unavailable_replicas": 0,
+   "updated_replicas": 2
+  },
+  "shows": {
+   "available": 2,
+   "badge": "badge-success",
+   "bucket": "healthy",
+   "image": "example.test/app:1",
+   "labels": {
+    "team": "a"
+   },
+   "ready": "2/2",
+   "status": "Available",
+   "title": "Available",
+   "updated": 2
+  }
+ },
+ {
+  "name": "a ReplicaSet freed of its owner shows none",
+  "resource": "replicasets",
+  "before": {
+   "available_replicas": 2,
+   "containers": [
+    "app"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 2,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "name": "web-1",
+   "namespace": "demo",
+   "owner_deployment": "web",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "Deployment",
+     "name": "web",
+     "uid": "u-1"
+    }
+   ],
+   "ready_replicas": 2,
+   "replicas": 2,
+   "selector": {
+    "app": "web"
+   },
+   "status": "Healthy"
+  },
+  "event": {
+   "available_replicas": 2,
+   "containers": [
+    "app"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 2,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "name": "web-1",
+   "namespace": "demo",
+   "owner_deployment": "",
+   "owner_references": [],
+   "ready_replicas": 2,
+   "replicas": 2,
+   "selector": {
+    "app": "web"
+   },
+   "status": "Healthy"
+  },
+  "after": {
+   "available_replicas": 2,
+   "containers": [
+    "app"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 2,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "name": "web-1",
+   "namespace": "demo",
+   "owner_deployment": "",
+   "owner_references": [],
+   "ready_replicas": 2,
+   "replicas": 2,
+   "selector": {
+    "app": "web"
+   },
+   "status": "Healthy"
+  },
+  "shows": {
+   "available": 2,
+   "containers": "app",
+   "current": 2,
+   "desired": 2,
+   "images": "example.test/app:1",
+   "owner": "-",
+   "ready": 2,
+   "selector": "app=web",
+   "status": "Healthy"
+  }
+ },
+ {
+  "name": "a ReplicaSet another controller took names it by kind",
+  "resource": "replicasets",
+  "before": {
+   "available_replicas": 2,
+   "containers": [
+    "app"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 2,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "name": "web-1",
+   "namespace": "demo",
+   "owner_deployment": "",
+   "owner_references": [],
+   "ready_replicas": 2,
+   "replicas": 2,
+   "selector": {
+    "app": "web"
+   },
+   "status": "Healthy"
+  },
+  "event": {
+   "available_replicas": 2,
+   "containers": [
+    "app"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 2,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "name": "web-1",
+   "namespace": "demo",
+   "owner_deployment": "",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "Rollout",
+     "name": "web",
+     "uid": "u-2"
+    }
+   ],
+   "ready_replicas": 2,
+   "replicas": 2,
+   "selector": {
+    "app": "web"
+   },
+   "status": "Healthy"
+  },
+  "after": {
+   "available_replicas": 2,
+   "containers": [
+    "app"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 2,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "name": "web-1",
+   "namespace": "demo",
+   "owner_deployment": "",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "Rollout",
+     "name": "web",
+     "uid": "u-2"
+    }
+   ],
+   "ready_replicas": 2,
+   "replicas": 2,
+   "selector": {
+    "app": "web"
+   },
+   "status": "Healthy"
+  },
+  "shows": {
+   "available": 2,
+   "containers": "app",
+   "current": 2,
+   "desired": 2,
+   "images": "example.test/app:1",
+   "owner": "Rollout/web",
+   "ready": 2,
+   "selector": "app=web",
+   "status": "Healthy"
+  }
+ },
+ {
+  "name": "a ReplicaSet that lost its available pods is Unavailable",
+  "resource": "replicasets",
+  "before": {
+   "available_replicas": 2,
+   "containers": [
+    "app"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 2,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "name": "web-1",
+   "namespace": "demo",
+   "owner_deployment": "web",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "Deployment",
+     "name": "web",
+     "uid": "u-1"
+    }
+   ],
+   "ready_replicas": 2,
+   "replicas": 2,
+   "selector": {
+    "app": "web"
+   },
+   "status": "Healthy"
+  },
+  "event": {
+   "available_replicas": 0,
+   "containers": [
+    "app"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 2,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "name": "web-1",
+   "namespace": "demo",
+   "owner_deployment": "web",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "Deployment",
+     "name": "web",
+     "uid": "u-1"
+    }
+   ],
+   "ready_replicas": 0,
+   "replicas": 2,
+   "selector": {
+    "app": "web"
+   },
+   "status": "Unavailable"
+  },
+  "after": {
+   "available_replicas": 0,
+   "containers": [
+    "app"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 2,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "name": "web-1",
+   "namespace": "demo",
+   "owner_deployment": "web",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "Deployment",
+     "name": "web",
+     "uid": "u-1"
+    }
+   ],
+   "ready_replicas": 0,
+   "replicas": 2,
+   "selector": {
+    "app": "web"
+   },
+   "status": "Unavailable"
+  },
+  "shows": {
+   "available": 0,
+   "containers": "app",
+   "current": 2,
+   "desired": 2,
+   "images": "example.test/app:1",
+   "owner": "web",
+   "ready": 0,
+   "selector": "app=web",
+   "status": "Unavailable"
+  }
+ },
+ {
+  "name": "a ReplicaSet scaled to none is Idle with no count left",
+  "resource": "replicasets",
+  "before": {
+   "available_replicas": 2,
+   "containers": [
+    "app"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 2,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "name": "web-1",
+   "namespace": "demo",
+   "owner_deployment": "web",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "Deployment",
+     "name": "web",
+     "uid": "u-1"
+    }
+   ],
+   "ready_replicas": 2,
+   "replicas": 2,
+   "selector": {
+    "app": "web"
+   },
+   "status": "Healthy"
+  },
+  "event": {
+   "available_replicas": 0,
+   "containers": [
+    "app"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "name": "web-1",
+   "namespace": "demo",
+   "owner_deployment": "web",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "Deployment",
+     "name": "web",
+     "uid": "u-1"
+    }
+   ],
+   "ready_replicas": 0,
+   "replicas": 0,
+   "selector": {
+    "app": "web"
+   },
+   "status": "Idle"
+  },
+  "after": {
+   "available_replicas": 0,
+   "containers": [
+    "app"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "name": "web-1",
+   "namespace": "demo",
+   "owner_deployment": "web",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "Deployment",
+     "name": "web",
+     "uid": "u-1"
+    }
+   ],
+   "ready_replicas": 0,
+   "replicas": 0,
+   "selector": {
+    "app": "web"
+   },
+   "status": "Idle"
+  },
+  "shows": {
+   "available": 0,
+   "containers": "app",
+   "current": 0,
+   "desired": 0,
+   "images": "example.test/app:1",
+   "owner": "web",
+   "ready": 0,
+   "selector": "app=web",
+   "status": "Idle"
+  }
+ },
+ {
+  "name": "an HPA that lost its readings, last scale and labels shows none",
+  "resource": "horizontalpodautoscalers",
+  "before": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 3,
+   "desired_replicas": 4,
+   "labels": {
+    "team": "a"
+   },
+   "last_scale_time": "2026-11-05T00:00:00Z",
+   "max_replicas": 5,
+   "metrics": [
+    {
+     "current": {
+      "current_average_utilization": 60,
+      "resource_name": "cpu",
+      "type": "Resource"
+     },
+     "resource_name": "cpu",
+     "target_average_utilization": 80,
+     "target_type": "Utilization",
+     "type": "Resource"
+    },
+    {
+     "current": {
+      "current_average_value": "7",
+      "metric_name": "qps",
+      "type": "Pods"
+     },
+     "metric_name": "qps",
+     "target_average_value": "10",
+     "type": "Pods"
+    },
+    {
+     "current": {
+      "current_value": "90",
+      "metric_name": "rps",
+      "type": "Object"
+     },
+     "described_object": {
+      "api_version": "v1",
+      "kind": "Service",
+      "name": "web"
+     },
+     "metric_name": "rps",
+     "target_value": "100",
+     "type": "Object"
+    },
+    {
+     "current": {
+      "current_value": "3",
+      "metric_name": "queue",
+      "type": "External"
+     },
+     "metric_name": "queue",
+     "target_value": "5",
+     "type": "External"
+    },
+    {
+     "container": "app",
+     "current": {
+      "container": "app",
+      "current_average_value": "500Mi",
+      "resource_name": "memory",
+      "type": "ContainerResource"
+     },
+     "resource_name": "memory",
+     "target_average_value": "1Gi",
+     "target_type": "AverageValue",
+     "type": "ContainerResource"
+    }
+   ],
+   "min_replicas": 2,
+   "name": "web",
+   "namespace": "demo",
+   "scaling_active": true,
+   "target_ref": "Deployment/web",
+   "target_ref_kind": "Deployment",
+   "target_ref_name": "web"
+  },
+  "event": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 3,
+   "desired_replicas": 0,
+   "labels": null,
+   "max_replicas": 5,
+   "metrics": [
+    {
+     "resource_name": "cpu",
+     "target_average_utilization": 80,
+     "target_type": "Utilization",
+     "type": "Resource"
+    },
+    {
+     "metric_name": "qps",
+     "target_average_value": "10",
+     "type": "Pods"
+    },
+    {
+     "described_object": {
+      "api_version": "v1",
+      "kind": "Service",
+      "name": "web"
+     },
+     "metric_name": "rps",
+     "target_value": "100",
+     "type": "Object"
+    },
+    {
+     "metric_name": "queue",
+     "target_value": "5",
+     "type": "External"
+    },
+    {
+     "container": "app",
+     "resource_name": "memory",
+     "target_average_value": "1Gi",
+     "target_type": "AverageValue",
+     "type": "ContainerResource"
+    }
+   ],
+   "min_replicas": 2,
+   "name": "web",
+   "namespace": "demo",
+   "scaling_active": false,
+   "target_ref": "Deployment/web",
+   "target_ref_kind": "Deployment",
+   "target_ref_name": "web"
+  },
+  "after": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 3,
+   "desired_replicas": 0,
+   "labels": null,
+   "max_replicas": 5,
+   "metrics": [
+    {
+     "resource_name": "cpu",
+     "target_average_utilization": 80,
+     "target_type": "Utilization",
+     "type": "Resource"
+    },
+    {
+     "metric_name": "qps",
+     "target_average_value": "10",
+     "type": "Pods"
+    },
+    {
+     "described_object": {
+      "api_version": "v1",
+      "kind": "Service",
+      "name": "web"
+     },
+     "metric_name": "rps",
+     "target_value": "100",
+     "type": "Object"
+    },
+    {
+     "metric_name": "queue",
+     "target_value": "5",
+     "type": "External"
+    },
+    {
+     "container": "app",
+     "resource_name": "memory",
+     "target_average_value": "1Gi",
+     "target_type": "AverageValue",
+     "type": "ContainerResource"
+    }
+   ],
+   "min_replicas": 2,
+   "name": "web",
+   "namespace": "demo",
+   "scaling_active": false,
+   "target_ref": "Deployment/web",
+   "target_ref_kind": "Deployment",
+   "target_ref_name": "web"
+  },
+  "shows": {
+   "labels": {},
+   "last_scale_time": null,
+   "max": 5,
+   "metrics": [
+    "Resource cpu 80 -",
+    "Pods qps 10 -",
+    "Object rps 100 -",
+    "External queue 5 -",
+    "ContainerResource memory 1Gi -"
+   ],
+   "min": 2,
+   "reference": "Deployment/web",
+   "replicas": "3/-",
+   "scaling_active": false
+  }
+ },
+ {
+  "name": "an HPA that read its metrics shows every reading and target",
+  "resource": "horizontalpodautoscalers",
+  "before": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 3,
+   "desired_replicas": 0,
+   "labels": null,
+   "max_replicas": 5,
+   "metrics": [
+    {
+     "resource_name": "cpu",
+     "target_average_utilization": 80,
+     "target_type": "Utilization",
+     "type": "Resource"
+    },
+    {
+     "metric_name": "qps",
+     "target_average_value": "10",
+     "type": "Pods"
+    },
+    {
+     "described_object": {
+      "api_version": "v1",
+      "kind": "Service",
+      "name": "web"
+     },
+     "metric_name": "rps",
+     "target_value": "100",
+     "type": "Object"
+    },
+    {
+     "metric_name": "queue",
+     "target_value": "5",
+     "type": "External"
+    },
+    {
+     "container": "app",
+     "resource_name": "memory",
+     "target_average_value": "1Gi",
+     "target_type": "AverageValue",
+     "type": "ContainerResource"
+    }
+   ],
+   "min_replicas": 2,
+   "name": "web",
+   "namespace": "demo",
+   "scaling_active": false,
+   "target_ref": "Deployment/web",
+   "target_ref_kind": "Deployment",
+   "target_ref_name": "web"
+  },
+  "event": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 3,
+   "desired_replicas": 4,
+   "labels": {
+    "team": "a"
+   },
+   "last_scale_time": "2026-11-05T00:00:00Z",
+   "max_replicas": 5,
+   "metrics": [
+    {
+     "current": {
+      "current_average_utilization": 60,
+      "resource_name": "cpu",
+      "type": "Resource"
+     },
+     "resource_name": "cpu",
+     "target_average_utilization": 80,
+     "target_type": "Utilization",
+     "type": "Resource"
+    },
+    {
+     "current": {
+      "current_average_value": "7",
+      "metric_name": "qps",
+      "type": "Pods"
+     },
+     "metric_name": "qps",
+     "target_average_value": "10",
+     "type": "Pods"
+    },
+    {
+     "current": {
+      "current_value": "90",
+      "metric_name": "rps",
+      "type": "Object"
+     },
+     "described_object": {
+      "api_version": "v1",
+      "kind": "Service",
+      "name": "web"
+     },
+     "metric_name": "rps",
+     "target_value": "100",
+     "type": "Object"
+    },
+    {
+     "current": {
+      "current_value": "3",
+      "metric_name": "queue",
+      "type": "External"
+     },
+     "metric_name": "queue",
+     "target_value": "5",
+     "type": "External"
+    },
+    {
+     "container": "app",
+     "current": {
+      "container": "app",
+      "current_average_value": "500Mi",
+      "resource_name": "memory",
+      "type": "ContainerResource"
+     },
+     "resource_name": "memory",
+     "target_average_value": "1Gi",
+     "target_type": "AverageValue",
+     "type": "ContainerResource"
+    }
+   ],
+   "min_replicas": 2,
+   "name": "web",
+   "namespace": "demo",
+   "scaling_active": true,
+   "target_ref": "Deployment/web",
+   "target_ref_kind": "Deployment",
+   "target_ref_name": "web"
+  },
+  "after": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 3,
+   "desired_replicas": 4,
+   "labels": {
+    "team": "a"
+   },
+   "last_scale_time": "2026-11-05T00:00:00Z",
+   "max_replicas": 5,
+   "metrics": [
+    {
+     "current": {
+      "current_average_utilization": 60,
+      "resource_name": "cpu",
+      "type": "Resource"
+     },
+     "resource_name": "cpu",
+     "target_average_utilization": 80,
+     "target_type": "Utilization",
+     "type": "Resource"
+    },
+    {
+     "current": {
+      "current_average_value": "7",
+      "metric_name": "qps",
+      "type": "Pods"
+     },
+     "metric_name": "qps",
+     "target_average_value": "10",
+     "type": "Pods"
+    },
+    {
+     "current": {
+      "current_value": "90",
+      "metric_name": "rps",
+      "type": "Object"
+     },
+     "described_object": {
+      "api_version": "v1",
+      "kind": "Service",
+      "name": "web"
+     },
+     "metric_name": "rps",
+     "target_value": "100",
+     "type": "Object"
+    },
+    {
+     "current": {
+      "current_value": "3",
+      "metric_name": "queue",
+      "type": "External"
+     },
+     "metric_name": "queue",
+     "target_value": "5",
+     "type": "External"
+    },
+    {
+     "container": "app",
+     "current": {
+      "container": "app",
+      "current_average_value": "500Mi",
+      "resource_name": "memory",
+      "type": "ContainerResource"
+     },
+     "resource_name": "memory",
+     "target_average_value": "1Gi",
+     "target_type": "AverageValue",
+     "type": "ContainerResource"
+    }
+   ],
+   "min_replicas": 2,
+   "name": "web",
+   "namespace": "demo",
+   "scaling_active": true,
+   "target_ref": "Deployment/web",
+   "target_ref_kind": "Deployment",
+   "target_ref_name": "web"
+  },
+  "shows": {
+   "labels": {
+    "team": "a"
+   },
+   "last_scale_time": "2026-11-05T00:00:00Z",
+   "max": 5,
+   "metrics": [
+    "Resource cpu 80 60",
+    "Pods qps 10 7",
+    "Object rps 100 90",
+    "External queue 5 3",
+    "ContainerResource memory 1Gi 500Mi"
+   ],
+   "min": 2,
+   "reference": "Deployment/web",
+   "replicas": "3/4",
+   "scaling_active": true
+  }
+ },
+ {
+  "name": "an HPA with no metric left says what the controller wants",
+  "resource": "horizontalpodautoscalers",
+  "before": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 3,
+   "desired_replicas": 0,
+   "labels": null,
+   "max_replicas": 5,
+   "metrics": [
+    {
+     "resource_name": "cpu",
+     "target_average_utilization": 80,
+     "target_type": "Utilization",
+     "type": "Resource"
+    },
+    {
+     "metric_name": "qps",
+     "target_average_value": "10",
+     "type": "Pods"
+    },
+    {
+     "described_object": {
+      "api_version": "v1",
+      "kind": "Service",
+      "name": "web"
+     },
+     "metric_name": "rps",
+     "target_value": "100",
+     "type": "Object"
+    },
+    {
+     "metric_name": "queue",
+     "target_value": "5",
+     "type": "External"
+    },
+    {
+     "container": "app",
+     "resource_name": "memory",
+     "target_average_value": "1Gi",
+     "target_type": "AverageValue",
+     "type": "ContainerResource"
+    }
+   ],
+   "min_replicas": 2,
+   "name": "web",
+   "namespace": "demo",
+   "scaling_active": false,
+   "target_ref": "Deployment/web",
+   "target_ref_kind": "Deployment",
+   "target_ref_name": "web"
+  },
+  "event": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 3,
+   "desired_replicas": 0,
+   "labels": null,
+   "max_replicas": 5,
+   "metrics": [],
+   "min_replicas": 2,
+   "name": "web",
+   "namespace": "demo",
+   "scaling_active": false,
+   "target_ref": "Deployment/web",
+   "target_ref_kind": "Deployment",
+   "target_ref_name": "web"
+  },
+  "after": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 3,
+   "desired_replicas": 0,
+   "labels": null,
+   "max_replicas": 5,
+   "metrics": [],
+   "min_replicas": 2,
+   "name": "web",
+   "namespace": "demo",
+   "scaling_active": false,
+   "target_ref": "Deployment/web",
+   "target_ref_kind": "Deployment",
+   "target_ref_name": "web"
+  },
+  "shows": {
+   "labels": {},
+   "last_scale_time": null,
+   "max": 5,
+   "metrics": [],
+   "min": 2,
+   "reference": "Deployment/web",
+   "replicas": "3/0",
+   "scaling_active": false
+  }
+ },
+ {
+  "name": "a ConfigMap whose keys all went away lists none",
+  "resource": "configmaps",
+  "before": {
+   "binary_keys": [
+    "c"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "data_count": 2,
+   "data_keys": [
+    "a",
+    "b"
+   ],
+   "labels": {
+    "team": "a"
+   },
+   "name": "conf",
+   "namespace": "demo"
+  },
+  "event": {
+   "binary_keys": [],
+   "created_at": "2026-11-01T00:00:00Z",
+   "data_count": 0,
+   "data_keys": [],
+   "labels": null,
+   "name": "conf",
+   "namespace": "demo"
+  },
+  "after": {
+   "binary_keys": [],
+   "created_at": "2026-11-01T00:00:00Z",
+   "data_count": 0,
+   "data_keys": [],
+   "labels": null,
+   "name": "conf",
+   "namespace": "demo"
+  },
+  "shows": {
+   "binary_keys": [],
+   "data_count": 0,
+   "data_keys": [],
+   "labels": {}
+  }
+ },
+ {
+  "name": "a ConfigMap left with one key lists only it",
+  "resource": "configmaps",
+  "before": {
+   "binary_keys": [
+    "c"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "data_count": 2,
+   "data_keys": [
+    "a",
+    "b"
+   ],
+   "labels": {
+    "team": "a"
+   },
+   "name": "conf",
+   "namespace": "demo"
+  },
+  "event": {
+   "binary_keys": [],
+   "created_at": "2026-11-01T00:00:00Z",
+   "data_count": 1,
+   "data_keys": [
+    "only"
+   ],
+   "labels": null,
+   "name": "conf",
+   "namespace": "demo"
+  },
+  "after": {
+   "binary_keys": [],
+   "created_at": "2026-11-01T00:00:00Z",
+   "data_count": 1,
+   "data_keys": [
+    "only"
+   ],
+   "labels": null,
+   "name": "conf",
+   "namespace": "demo"
+  },
+  "shows": {
+   "binary_keys": [],
+   "data_count": 1,
+   "data_keys": [
+    "only"
+   ],
+   "labels": {}
+  }
+ },
+ {
+  "name": "a ConfigMap that gained keys lists them in order",
+  "resource": "configmaps",
+  "before": {
+   "binary_keys": [],
+   "created_at": "2026-11-01T00:00:00Z",
+   "data_count": 0,
+   "data_keys": [],
+   "labels": null,
+   "name": "conf",
+   "namespace": "demo"
+  },
+  "event": {
+   "binary_keys": [
+    "c"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "data_count": 2,
+   "data_keys": [
+    "a",
+    "b"
+   ],
+   "labels": {
+    "team": "a"
+   },
+   "name": "conf",
+   "namespace": "demo"
+  },
+  "after": {
+   "binary_keys": [
+    "c"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "data_count": 2,
+   "data_keys": [
+    "a",
+    "b"
+   ],
+   "labels": {
+    "team": "a"
+   },
+   "name": "conf",
+   "namespace": "demo"
+  },
+  "shows": {
+   "binary_keys": [
+    "c"
+   ],
+   "data_count": 2,
+   "data_keys": [
+    "a",
+    "b"
+   ],
+   "labels": {
+    "team": "a"
+   }
+  }
+ },
+ {
+  "name": "a Secret whose keys all went away lists none",
+  "resource": "secrets",
+  "before": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "data_count": 2,
+   "data_keys": [
+    "password",
+    "user"
+   ],
+   "labels": {
+    "team": "a"
+   },
+   "name": "creds",
+   "namespace": "demo",
+   "type": "Opaque"
+  },
+  "event": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "data_count": 0,
+   "data_keys": [],
+   "labels": null,
+   "name": "creds",
+   "namespace": "demo",
+   "type": "Opaque"
+  },
+  "after": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "data_count": 0,
+   "data_keys": [],
+   "labels": null,
+   "name": "creds",
+   "namespace": "demo",
+   "type": "Opaque"
+  },
+  "shows": {
+   "data_count": 0,
+   "data_keys": [],
+   "labels": {},
+   "type": "Opaque"
+  }
+ },
+ {
+  "name": "a Secret that gained keys lists their names in order",
+  "resource": "secrets",
+  "before": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "data_count": 0,
+   "data_keys": [],
+   "labels": null,
+   "name": "creds",
+   "namespace": "demo",
+   "type": "Opaque"
+  },
+  "event": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "data_count": 2,
+   "data_keys": [
+    "password",
+    "user"
+   ],
+   "labels": {
+    "team": "a"
+   },
+   "name": "creds",
+   "namespace": "demo",
+   "type": "Opaque"
+  },
+  "after": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "data_count": 2,
+   "data_keys": [
+    "password",
+    "user"
+   ],
+   "labels": {
+    "team": "a"
+   },
+   "name": "creds",
+   "namespace": "demo",
+   "type": "Opaque"
+  },
+  "shows": {
+   "data_count": 2,
+   "data_keys": [
+    "password",
+    "user"
+   ],
+   "labels": {
+    "team": "a"
+   },
+   "type": "Opaque"
+  }
+ },
+ {
+  "name": "a ServiceAccount that lost its secrets and pull secrets lists none",
+  "resource": "serviceaccounts",
+  "before": {
+   "annotations": {
+    "note": "kept"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "image_pull_secrets": [
+    "registry"
+   ],
+   "labels": {
+    "team": "a"
+   },
+   "name": "runner",
+   "namespace": "demo",
+   "secrets": 1,
+   "secrets_list": [
+    "runner-token"
+   ]
+  },
+  "event": {
+   "annotations": null,
+   "created_at": "2026-11-01T00:00:00Z",
+   "image_pull_secrets": [],
+   "labels": null,
+   "name": "runner",
+   "namespace": "demo",
+   "secrets": 0,
+   "secrets_list": []
+  },
+  "after": {
+   "annotations": null,
+   "created_at": "2026-11-01T00:00:00Z",
+   "image_pull_secrets": [],
+   "labels": null,
+   "name": "runner",
+   "namespace": "demo",
+   "secrets": 0,
+   "secrets_list": []
+  },
+  "shows": {
+   "annotations": {},
+   "image_pull_secrets": [],
+   "labels": {},
+   "secrets": 0,
+   "secrets_list": [],
+   "with_pull_secrets": false
+  }
+ },
+ {
+  "name": "a ServiceAccount that gained them lists them",
+  "resource": "serviceaccounts",
+  "before": {
+   "annotations": null,
+   "created_at": "2026-11-01T00:00:00Z",
+   "image_pull_secrets": [],
+   "labels": null,
+   "name": "runner",
+   "namespace": "demo",
+   "secrets": 0,
+   "secrets_list": []
+  },
+  "event": {
+   "annotations": {
+    "note": "kept"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "image_pull_secrets": [
+    "registry"
+   ],
+   "labels": {
+    "team": "a"
+   },
+   "name": "runner",
+   "namespace": "demo",
+   "secrets": 1,
+   "secrets_list": [
+    "runner-token"
+   ]
+  },
+  "after": {
+   "annotations": {
+    "note": "kept"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "image_pull_secrets": [
+    "registry"
+   ],
+   "labels": {
+    "team": "a"
+   },
+   "name": "runner",
+   "namespace": "demo",
+   "secrets": 1,
+   "secrets_list": [
+    "runner-token"
+   ]
+  },
+  "shows": {
+   "annotations": {
+    "note": "kept"
+   },
+   "image_pull_secrets": [
+    "registry"
+   ],
+   "labels": {
+    "team": "a"
+   },
+   "secrets": 1,
+   "secrets_list": [
+    "runner-token"
+   ],
+   "with_pull_secrets": true
+  }
+ },
+ {
+  "name": "a Role whose rules, labels and annotations went away shows none",
+  "resource": "roles",
+  "before": {
+   "annotations": {
+    "note": "kept"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "team": "a"
+   },
+   "name": "reader",
+   "namespace": "demo",
+   "rules_count": 2
+  },
+  "event": {
+   "annotations": null,
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "name": "reader",
+   "namespace": "demo",
+   "rules_count": 0
+  },
+  "after": {
+   "annotations": null,
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "name": "reader",
+   "namespace": "demo",
+   "rules_count": 0
+  },
+  "shows": {
+   "annotations": {},
+   "labels": {},
+   "rules_count": 0
+  }
+ },
+ {
+  "name": "a Role that gained them shows them",
+  "resource": "roles",
+  "before": {
+   "annotations": null,
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "name": "reader",
+   "namespace": "demo",
+   "rules_count": 0
+  },
+  "event": {
+   "annotations": {
+    "note": "kept"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "team": "a"
+   },
+   "name": "reader",
+   "namespace": "demo",
+   "rules_count": 2
+  },
+  "after": {
+   "annotations": {
+    "note": "kept"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "team": "a"
+   },
+   "name": "reader",
+   "namespace": "demo",
+   "rules_count": 2
+  },
+  "shows": {
+   "annotations": {
+    "note": "kept"
+   },
+   "labels": {
+    "team": "a"
+   },
+   "rules_count": 2
   }
  },
  {

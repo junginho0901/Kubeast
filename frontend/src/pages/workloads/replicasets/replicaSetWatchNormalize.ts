@@ -4,7 +4,6 @@
 // applyReplicaSetWatchEvent 추출. useKubeWatchList 의 applyEvent 콜백에서만 사용
 // (raw watch event → 기존 list state 에 병합).
 
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import type { ReplicaSetInfo } from '@/services/api'
 import { computeReplicaSetStatus } from './replicaSetHelpers'
 
@@ -28,7 +27,9 @@ export function normalizeWatchReplicaSetObject(obj: any): ReplicaSetInfo {
   const readyReplicas = status?.readyReplicas ?? 0
   const availableReplicas = status?.availableReplicas ?? 0
 
-  const ownerReferences = Array.isArray(metadata?.ownerReferences) ? metadata.ownerReferences : []
+  // the object's own, or the names a generic row keeps at its top
+  const ownerSource = metadata?.ownerReferences ?? obj?.owner_references
+  const ownerReferences = Array.isArray(ownerSource) ? ownerSource : []
   const ownerDeployment = ownerReferences.find((r: any) => r?.kind === 'Deployment')?.name ?? ''
 
   const selector = spec?.selector?.matchLabels ?? {}
@@ -52,10 +53,10 @@ export function normalizeWatchReplicaSetObject(obj: any): ReplicaSetInfo {
       uid: r?.uid ?? null,
       controller: r?.controller ?? null,
     })),
-    labels: metadata?.labels ?? {},
+    labels: metadata?.labels ?? obj?.labels ?? {},
     selector,
     created_at: metadata?.creationTimestamp ?? obj?.created_at ?? null,
-    status: computeReplicaSetStatus({ replicas, ready_replicas: readyReplicas }),
+    status: computeReplicaSetStatus({ replicas, ready_replicas: readyReplicas, available_replicas: availableReplicas }),
   }
 }
 
@@ -80,7 +81,9 @@ export function applyReplicaSetWatchEvent(
     return items
   }
 
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
+  // the server sends the whole row (rsrow.Info), so it replaces: an owner that went away shows that instead of keeping
+  // the old one
+  if (index >= 0) items[index] = normalized
   else items.push(normalized)
 
   return items

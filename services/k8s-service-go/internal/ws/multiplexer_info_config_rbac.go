@@ -1,126 +1,63 @@
 package ws
 
 import (
-	"sort"
-
+	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+
+	configmaprow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/configmap"
+	rolerow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/role"
+	secretrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/secret"
+	sarow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/serviceaccount"
 )
 
-// configmapToInfo — list endpoint: GetConfigMaps inline (configmaps.go).
+// configmapToInfo is the list's row (configmaprow.Info), so a live update says what the list says. An object that does
+// not convert stays a generic row, which has no data: a row holds no value.
 func configmapToInfo(obj *unstructured.Unstructured) map[string]interface{} {
-	metadata := obj.Object["metadata"].(map[string]interface{})
-
-	dataKeys := []string{}
-	dataCount := 0
-	if data, ok := obj.Object["data"].(map[string]interface{}); ok {
-		dataCount = len(data)
-		for k := range data {
-			dataKeys = append(dataKeys, k)
-		}
-		sort.Strings(dataKeys)
+	var cm corev1.ConfigMap
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, &cm); err != nil {
+		return genericToInfo(obj)
 	}
-
-	binaryKeys := []string{}
-	if bd, ok := obj.Object["binaryData"].(map[string]interface{}); ok {
-		for k := range bd {
-			binaryKeys = append(binaryKeys, k)
-		}
-		sort.Strings(binaryKeys)
-	}
-
-	return map[string]interface{}{
-		"name":        metadata["name"],
-		"namespace":   metadata["namespace"],
-		"data_count":  dataCount,
-		"data_keys":   dataKeys,
-		"binary_keys": binaryKeys,
-		"labels":      metadata["labels"],
-		"created_at":  metadata["creationTimestamp"],
-	}
+	return configmaprow.Info(&cm)
 }
 
-// secretToInfo — list endpoint: GetSecrets inline (configmaps.go).
+// secretToInfo is the list's row (secretrow.Info), so a live update says what the list says. An object that does not
+// convert stays a generic row, which has neither the data nor the annotations: a row holds no value.
 func secretToInfo(obj *unstructured.Unstructured) map[string]interface{} {
-	metadata := obj.Object["metadata"].(map[string]interface{})
-
-	secretType := ""
-	if t, ok := obj.Object["type"].(string); ok {
-		secretType = t
+	var s corev1.Secret
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, &s); err != nil {
+		return genericToInfo(obj)
 	}
-
-	dataKeys := []string{}
-	dataCount := 0
-	if data, ok := obj.Object["data"].(map[string]interface{}); ok {
-		dataCount = len(data)
-		for k := range data {
-			dataKeys = append(dataKeys, k)
-		}
-		sort.Strings(dataKeys)
-	}
-
-	return map[string]interface{}{
-		"name":       metadata["name"],
-		"namespace":  metadata["namespace"],
-		"type":       secretType,
-		"data_count": dataCount,
-		"data_keys":  dataKeys,
-		"labels":     metadata["labels"],
-		"created_at": metadata["creationTimestamp"],
-	}
+	return secretrow.Info(&s)
 }
 
-// serviceAccountToInfo — list endpoint: formatServiceAccountList (security_serviceaccount.go).
-// Secret detail 의 "Used By ServiceAccounts" watch 가 obj.secrets_list /
-// obj.image_pull_secrets 두 string array 를 검사하므로 backend list formatter
-// 와 동일 shape 로 노출.
+// serviceAccountToInfo is the list's row (sarow.Info), so a live update says what the list says. An object that does
+// not convert keeps its names, which sit beside the metadata and not under spec or status, for the page to read.
 func serviceAccountToInfo(obj *unstructured.Unstructured) map[string]interface{} {
-	metadata := obj.Object["metadata"].(map[string]interface{})
-	rawSecrets, _ := obj.Object["secrets"].([]interface{})
-	rawIPS, _ := obj.Object["imagePullSecrets"].([]interface{})
-
-	secretsList := make([]string, 0, len(rawSecrets))
-	for _, s := range rawSecrets {
-		sm, _ := s.(map[string]interface{})
-		if sm == nil {
-			continue
+	var sa corev1.ServiceAccount
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, &sa); err != nil {
+		out := genericToInfo(obj)
+		for _, field := range []string{"secrets", "imagePullSecrets"} {
+			if names, ok := obj.Object[field]; ok {
+				out[field] = names
+			}
 		}
-		if n, _ := sm["name"].(string); n != "" {
-			secretsList = append(secretsList, n)
-		}
+		return out
 	}
-	imagePullSecrets := make([]string, 0, len(rawIPS))
-	for _, s := range rawIPS {
-		sm, _ := s.(map[string]interface{})
-		if sm == nil {
-			continue
-		}
-		if n, _ := sm["name"].(string); n != "" {
-			imagePullSecrets = append(imagePullSecrets, n)
-		}
-	}
-
-	return map[string]interface{}{
-		"name":               metadata["name"],
-		"namespace":          metadata["namespace"],
-		"secrets":            len(rawSecrets),
-		"secrets_list":       secretsList,
-		"image_pull_secrets": imagePullSecrets,
-		"created_at":         metadata["creationTimestamp"],
-		"labels":             metadata["labels"],
-		"annotations":        metadata["annotations"],
-	}
+	return sarow.Info(&sa)
 }
 
-// roleToInfo — list endpoint: formatRoleList (security.go).
+// roleToInfo is the list's row (rolerow.Info), so a live update says what the list says. An object that does not
+// convert keeps its rules, which sit beside the metadata and not under spec or status, for the page to count.
 func roleToInfo(obj *unstructured.Unstructured) map[string]interface{} {
-	metadata := obj.Object["metadata"].(map[string]interface{})
-	rules, _ := obj.Object["rules"].([]interface{})
-	return map[string]interface{}{
-		"name":        metadata["name"],
-		"namespace":   metadata["namespace"],
-		"rules_count": len(rules),
-		"created_at":  metadata["creationTimestamp"],
-		"labels":      metadata["labels"],
-		"annotations": metadata["annotations"],
+	var r rbacv1.Role
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, &r); err != nil {
+		out := genericToInfo(obj)
+		if rules, ok := obj.Object["rules"]; ok {
+			out["rules"] = rules
+		}
+		return out
 	}
+	return rolerow.Info(&r)
 }

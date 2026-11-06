@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation, Trans } from 'react-i18next'
 import { api, type RoleInfo } from '@/services/api'
@@ -17,58 +16,10 @@ import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
+import { applyRoleWatchEvent } from './roles/roleWatchNormalize'
 
 type SortKey = null | 'name' | 'namespace' | 'rules' | 'age'
 type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
-
-function normalizeWatchRoleObject(obj: any): RoleInfo {
-  if (
-    typeof obj?.name === 'string' &&
-    typeof obj?.namespace === 'string' &&
-    typeof obj?.rules_count === 'number'
-  ) {
-    return obj as RoleInfo
-  }
-
-  const metadata = obj?.metadata ?? {}
-  const rules = Array.isArray(obj?.rules) ? obj.rules : []
-
-  return {
-    name: metadata?.name ?? obj?.name ?? '',
-    namespace: metadata?.namespace ?? obj?.namespace ?? '',
-    rules_count: rules.length,
-    created_at: metadata?.creationTimestamp ?? obj?.created_at ?? '',
-    labels: metadata?.labels ?? obj?.labels ?? null,
-    annotations: metadata?.annotations ?? obj?.annotations ?? null,
-  }
-}
-
-function applyRoleWatchEvent(
-  prev: RoleInfo[] | undefined,
-  event: { type?: string; object?: any },
-): RoleInfo[] {
-  const items = Array.isArray(prev) ? [...prev] : []
-  const obj = event?.object
-  if (!obj) return items
-
-  const normalized = normalizeWatchRoleObject(obj)
-  const name = normalized?.name
-  const namespace = normalized?.namespace
-  if (!name || !namespace) return items
-
-  const key = `${namespace}/${name}`
-  const index = items.findIndex((item) => `${item.namespace}/${item.name}` === key)
-
-  if (event.type === 'DELETED') {
-    if (index >= 0) items.splice(index, 1)
-    return items
-  }
-
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
-  else items.push(normalized)
-
-  return items
-}
 
 export default function Roles() {
   const queryClient = useQueryClient()

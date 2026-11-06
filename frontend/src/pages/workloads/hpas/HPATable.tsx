@@ -7,22 +7,12 @@
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { HPAInfo } from '@/services/api'
-
-// Without a metrics source the HPA controller reports desiredReplicas 0 while
-// the target keeps running — show "-" instead of a misleading "2/0".
-function hasCurrentMetric(h: HPAInfo): boolean {
-  const metrics = Array.isArray((h as any).metrics) ? ((h as any).metrics as any[]) : []
-  if (metrics.length === 0) return true
-  return metrics.some((m) => {
-    const cur = m?.current
-    return !!cur && Object.values(cur).some((v) => v !== '' && v != null)
-  })
-}
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAge,
+  hasCurrentMetric,
   hpaToRawJson,
   type SortKey,
 } from './hpaHelpers'

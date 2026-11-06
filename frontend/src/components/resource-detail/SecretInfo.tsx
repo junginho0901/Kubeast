@@ -7,6 +7,7 @@ import type { PodInfo, ServiceAccountInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
+import { applyServiceAccountWatchEvent } from '@/pages/security/serviceaccounts/serviceAccountWatchNormalize'
 import { InfoSection, InfoRow, KeyValueTags, EventsSection, StatusBadge, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useDetailLabel } from './useDetailLabel'
@@ -53,46 +54,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
     queryKey: ['secret-used-by-sas', namespace, name],
     path: `/api/v1/namespaces/${namespace}/serviceaccounts`,
     query: 'watch=1',
-    applyEvent: (prev, event) => {
-      const items = Array.isArray(prev) ? [...(prev as ServiceAccountInfo[])] : []
-      const obj = event?.object
-      if (!obj) return items
-      const m = obj?.metadata ?? {}
-      const saName = m?.name
-      const saNs = m?.namespace
-      if (!saName || !saNs) return items
-      // wsMultiplexer serviceAccountToInfo 는 secrets_list / image_pull_secrets
-      // string array 로 미리 가공. raw K8s shape (obj.secrets[].name / obj.imagePullSecrets[].name) 도
-      // genericToInfo fallback 시 들어올 수 있어 둘 다 지원.
-      const secretsList = Array.isArray(obj?.secrets_list)
-        ? obj.secrets_list.filter(Boolean)
-        : Array.isArray(obj?.secrets)
-          ? obj.secrets.map((s: any) => s?.name).filter(Boolean)
-          : []
-      const imagePullSecrets = Array.isArray(obj?.image_pull_secrets)
-        ? obj.image_pull_secrets.filter(Boolean)
-        : Array.isArray(obj?.imagePullSecrets)
-          ? obj.imagePullSecrets.map((s: any) => s?.name).filter(Boolean)
-          : []
-      const normalized: ServiceAccountInfo = {
-        name: saName,
-        namespace: saNs,
-        secrets: secretsList.length,
-        secrets_list: secretsList,
-        image_pull_secrets: imagePullSecrets,
-        created_at: m?.creationTimestamp ?? null,
-        labels: m?.labels ?? null,
-        annotations: m?.annotations ?? null,
-      }
-      const idx = items.findIndex((s) => s.name === saName && s.namespace === saNs)
-      if (event?.type === 'DELETED') {
-        if (idx >= 0) items.splice(idx, 1)
-        return items
-      }
-      if (idx >= 0) items[idx] = normalized
-      else items.push(normalized)
-      return items
-    },
+    applyEvent: (prev, event) => applyServiceAccountWatchEvent(prev as ServiceAccountInfo[] | undefined, event),
   })
 
   const usingPods = (Array.isArray(nsPods) ? nsPods : []).filter((p: any) => {

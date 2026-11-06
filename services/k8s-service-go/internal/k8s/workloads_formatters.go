@@ -10,6 +10,7 @@ import (
 
 	cronjobrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/cronjob"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/eventtime"
+	rsrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/replicaset"
 )
 
 // Formatting helpers — turn typed K8s objects into the
@@ -156,72 +157,10 @@ func formatDaemonSetDetail(ds *appsv1.DaemonSet) map[string]interface{} {
 
 func formatReplicaSetList(items []appsv1.ReplicaSet) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(items))
-	for _, rs := range items {
-		result = append(result, formatReplicaSetDetail(&rs))
+	for i := range items {
+		result = append(result, rsrow.Info(&items[i]))
 	}
 	return result
-}
-
-func formatReplicaSetDetail(rs *appsv1.ReplicaSet) map[string]interface{} {
-	replicas := int32(0)
-	if rs.Spec.Replicas != nil {
-		replicas = *rs.Spec.Replicas
-	}
-
-	images := make([]string, 0)
-	containers := make([]string, 0)
-	for _, c := range rs.Spec.Template.Spec.Containers {
-		images = append(images, c.Image)
-		containers = append(containers, c.Name)
-	}
-	image := ""
-	if len(images) > 0 {
-		image = images[0]
-	}
-
-	var selector interface{}
-	if rs.Spec.Selector != nil && rs.Spec.Selector.MatchLabels != nil {
-		selector = rs.Spec.Selector.MatchLabels
-	} else {
-		selector = map[string]string{}
-	}
-
-	owner := ""
-	for _, or := range rs.OwnerReferences {
-		if or.Kind == "Deployment" {
-			owner = or.Name
-			break
-		}
-	}
-
-	rsStatus := replicaStatus(replicas, rs.Status.AvailableReplicas, rs.Status.ReadyReplicas)
-
-	ownerRefs := make([]map[string]interface{}, 0, len(rs.OwnerReferences))
-	for _, or := range rs.OwnerReferences {
-		ownerRefs = append(ownerRefs, map[string]interface{}{
-			"kind":       or.Kind,
-			"name":       or.Name,
-			"uid":        string(or.UID),
-			"controller": or.Controller != nil && *or.Controller,
-		})
-	}
-
-	return map[string]interface{}{
-		"name":               rs.Name,
-		"namespace":          rs.Namespace,
-		"replicas":           replicas,
-		"current_replicas":   rs.Status.Replicas,
-		"ready_replicas":     rs.Status.ReadyReplicas,
-		"available_replicas": rs.Status.AvailableReplicas,
-		"image":              image,
-		"images":             images,
-		"containers":         containers,
-		"selector":           selector,
-		"owner_deployment":   owner,
-		"owner_references":   ownerRefs,
-		"status":             rsStatus,
-		"created_at":         toISO(&rs.CreationTimestamp),
-	}
 }
 
 func formatJobList(items []batchv1.Job) []map[string]interface{} {
