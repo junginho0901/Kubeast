@@ -425,7 +425,7 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
     SSE events for the chat, the tool_calls entry the saved message keeps, and the result text for the model.
     Both the API-key loop and Claude Code (provider claude-code) call tools through here. call_id is the call's
     number in the turn, also on its start event, so the chat pairs a result with its call, not by tool name."""
-    from app.services.audit_target import tool_target
+    from app.services.audit_target import EXEC_TOOL, pod_exec_row, tool_target, write_tool_input
     from app.services.audit_writer import audit_ready, write_audit
     from app.services.ai import permissions as _perm
     from app.services.tool_whitelists import WRITE_TOOL_NAMES, write_approval_required
@@ -436,7 +436,12 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
     # model's call. Record an approval request, tell the user
     # (SSE) and the model (tool result), and move on.
     pending_approval_id = None
-    if function_name in WRITE_TOOL_NAMES and write_approval_required() and not _perm.may_request_approval(service, tools, function_name):
+    ran = False
+    refusal = _perm.tool_refusal(service, function_name, function_args) if function_name in WRITE_TOOL_NAMES else None
+    if refusal:
+        # Needs a screen's permission this role does not hold: no approval card, and the model can say why.
+        function_response = json.dumps({"status": "not_permitted", "message": refusal}, ensure_ascii=False)
+    elif function_name in WRITE_TOOL_NAMES and write_approval_required() and not _perm.may_request_approval(service, tools, function_name):
         # Not offered this turn (read-only widget) or not
         # permitted for this user: no approval card, and the
         # model is told so instead of running anything.
@@ -479,6 +484,7 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
         # Like the screens and MCP: what the chat reads from a cluster runs only when its row can be stored.
         function_response = AUDIT_UNAVAILABLE_RESULT
     else:
+        ran = True
         access_mod.reset(service)
         function_response = await service._execute_function_with_context(
             function_name, function_args, tool_context
@@ -542,11 +548,12 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
     if chart is not None:
         log_entry['chart'] = chart
 
-    # audit: ai.tool.call (메타데이터만 — args/result 본문은 저장하지 않음)
+    # audit: ai.tool.call. A read tool's row is metadata only; a write tool's also says what it was asked to do, masked.
     if audit_actor:
         args_dict = function_args if isinstance(function_args, dict) else {}
         target = tool_target(function_name, args_dict)
         tool_result, tool_error, tool_status = tool_outcome(function_response)
+        tool_input = write_tool_input(function_name, args_dict)
         await write_audit(
             action='ai.tool.call',
             actor_user_id=audit_actor.get('user_id'),
@@ -568,6 +575,7 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
                 # the cluster requests it made, each with the Audit-ID to find it in the cluster's audit log
                 'requests': call_requests,
                 **({'objects': target.objects} if target.objects else {}),
+                **tool_input,
             },
             request_ip=(audit_http or {}).get('ip'),
             user_agent=(audit_http or {}).get('user_agent'),
@@ -576,6 +584,19 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
             result=tool_result,
             error=tool_error,
         )
+        if ran and function_name == EXEC_TOOL:
+            await write_audit(
+                **pod_exec_row(args_dict, tool_input),
+                actor_user_id=audit_actor.get('user_id'),
+                actor_email=audit_actor.get('email'),
+                cluster=_perm.effective_cluster(service),
+                request_ip=(audit_http or {}).get('ip'),
+                user_agent=(audit_http or {}).get('user_agent'),
+                request_id=(audit_http or {}).get('request_id'),
+                path=(audit_http or {}).get('path'),
+                result=tool_result,
+                error=tool_error,
+            )
 
     if chart is not None:
         return events, log_entry, charts.for_model(chart)
@@ -785,6 +806,11 @@ async def session_chat_stream(
         # 확장점: 호출자가 넘긴 tool filter (ex. READONLY 화이트리스트)
         if tool_filter is not None:
             tools = tool_filter(tools)
+        else:
+            # What the role may not run is not offered; this lets the answer say why when it is asked for.
+            from app.services.ai.permissions import unavailable_note
+            if note := unavailable_note(service):
+                messages.append({"role": "system", "content": note})
 
         # 모델 정보를 스트림 첫 이벤트로 전송 (브라우저 콘솔에서 확인용)
         yield f"data: {json.dumps({'model_info': {'provider': service.provider, 'model': service.model, 'role': service.user_role, 'tier': getattr(service, 'tier', 'default')}}, ensure_ascii=False)}\n\n"
@@ -795,17 +821,7 @@ async def session_chat_stream(
         assistant_content = ""
         tool_calls_log = []  # Tool call 정보 저장
         parts: list = []  # the turn in order: ("text", what the model wrote) / ("tool", call_id) — the saved answer
-        is_write_intent = service._detect_write_intent(message)
-        skip_llm = False
-        if service.user_role == "read" and is_write_intent:
-            skip_llm = True
-            assistant_content = "이 요청은 write 전용 작업이라 read 권한으로는 실행할 수 없습니다. 관리자에게 권한을 요청하세요."
-            yield f"data: {json.dumps({'content': assistant_content}, ensure_ascii=False)}\n\n"
-        elif service.user_role == "write" and any(key in message for key in ["exec", "실행", "명령", "k8s_execute_command"]):
-            skip_llm = True
-            assistant_content = "이 요청은 admin 전용 작업이라 write 권한으로는 실행할 수 없습니다. 관리자에게 권한을 요청하세요."
-            yield f"data: {json.dumps({'content': assistant_content}, ensure_ascii=False)}\n\n"
-        
+
         # Per-turn usage accounting → ai.chat.complete audit (admin AI-usage view).
         turn_started = time.monotonic()
         turn_usage = usage_acct.new_turn_usage()
@@ -816,7 +832,7 @@ async def session_chat_stream(
         turn_tool_calls = 0
         turn_finish_reason = None
 
-        delegated = getattr(service, "provider", None) == "claude-code" and not skip_llm
+        delegated = getattr(service, "provider", None) == "claude-code"
         if delegated:
             # Claude subscription: Claude Code runs this turn's model loop, and its tool calls come back to _call_tool.
             from app.services.claude_code import TurnResult
@@ -861,7 +877,7 @@ async def session_chat_stream(
                 parts.append(("text", assistant_content))
                 yield f"data: {json.dumps({'content': assistant_content}, ensure_ascii=False)}\n\n"
 
-        while iteration < max_iterations and not skip_llm and not delegated:
+        while iteration < max_iterations and not delegated:
             iteration += 1
             log.debug("[DEBUG] Iteration %s/%s", iteration, max_iterations)
             

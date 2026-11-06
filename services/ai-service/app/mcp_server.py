@@ -6,7 +6,8 @@ call then runs as that user: the user's cluster role (tool-server impersonates
 them), the read tools the chat offers, the same masking of what leaves for a
 model, and an audit row (ai.mcp.call) per call — refused while the row cannot
 be stored. Read tools; with MCP_WRITE_TOOLS and a Write-ceiling key, the chat's
-write tools too (each call signed as its own approval).
+write tools too (each call signed as its own approval), Pod exec and rollout undo
+only for whoever also holds the screen's permission for them.
 
 Stateless with JSON responses: there is no session to hijack, any replica
 answers, and the bearer token is checked on every request (MCP spec,
@@ -36,14 +37,14 @@ from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.types import ASGIApp
 
 from app.security import TokenPayload, decode_access_token
-from app.services.ai.permissions import namespace_scope_error
+from app.services.ai.permissions import app_permission, app_permission_error, namespace_scope_error, token_may_call
 from app.services.ai import features as feature_gate
 from app.services.ai.access import with_mode
 from app.services.ai.debug_dump import safe_error
 from app.services.ai.tools import ADMIN_READ_TOOLS, CLUSTER_METRICS_TOOLS, K8S_READONLY_TOOLS, K8S_WRITE_TOOLS, WRITE_PREVIEW_TOOLS
 from app.services.k8s_client import K8sServiceClient
 from app.services.approval_token import ApprovalTokenUnavailable, sign as sign_approval
-from app.services.audit_target import tool_target
+from app.services.audit_target import EXEC_TOOL, pod_exec_row, tool_target, write_tool_input
 from app.services.audit_writer import AuditUnavailable, require_audit_ready, write_audit
 from app.services.tool_whitelists import write_approval_required
 from app.services.http_shared import ScopedClient
@@ -97,8 +98,9 @@ def _read_tools() -> Dict[str, Tool]:
 READ_TOOLS: Dict[str, Tool] = _read_tools()
 
 # The chat's write tools (app/services/ai/tools.py K8S_WRITE_TOOLS), offered only
-# when MCP_WRITE_TOOLS is on and the token holds ai.tool.<name> somewhere — a key
-# with a Read ceiling carries neither that nor ai.mcp.use. No approval step: the
+# when MCP_WRITE_TOOLS is on and the token holds ai.tool.<name> somewhere, and for
+# Pod exec the screen's permission too — a key with a Read ceiling carries neither
+# that nor ai.mcp.use, one with a Write ceiling not the exec permission. No approval step: the
 # user's own permissions (or a granted access request) and the Argo CD guard
 # apply, and the annotations tell the client which calls change the cluster.
 WRITE_NON_DESTRUCTIVE = frozenset({"k8s_annotate_resource", "k8s_remove_annotation", "k8s_label_resource", "k8s_remove_label"})
@@ -269,7 +271,7 @@ def _tools_allowed_in(payload: TokenPayload, cluster: str) -> List[str]:
         return []
     names = [name for name in READ_TOOLS if payload.has_permission_for_cluster(f"ai.tool.{name}", cluster)]
     if mcp_write_tools_enabled():
-        names += [name for name in WRITE_TOOLS if payload.has_permission_for_cluster(f"ai.tool.{name}", cluster)]
+        names += [name for name in WRITE_TOOLS if token_may_call(payload, cluster, name)]
     return names
 
 
@@ -278,7 +280,7 @@ def _write_tools_anywhere(payload: TokenPayload) -> List[str]:
     if not mcp_write_tools_enabled():
         return []
     clusters = [c for c in payload.matrix if c != "*"] or ["*"]
-    return [name for name in WRITE_TOOLS if any(payload.has_permission_for_cluster(f"ai.tool.{name}", c) for c in clusters)]
+    return [name for name in WRITE_TOOLS if any(token_may_call(payload, c, name) for c in clusters)]
 
 
 def _http_meta(context: Optional[Context]) -> Dict[str, str]:
@@ -376,10 +378,15 @@ class KubeastMCPServer(MCPServer):
         }
         if target.objects:
             after["objects"] = target.objects
+        tool_input = write_tool_input(name, args)
+        after.update(tool_input)
 
         if not (_may_use_mcp(payload, cluster) and payload.has_permission_for_cluster(f"ai.tool.{name}", cluster)):
             reason = f"forbidden: {name} is not granted to you in cluster {cluster}"
             await write_audit(**audit, after=after, result="failure", error="forbidden")
+            return _text(reason, error=True)
+        if reason := app_permission_error(payload, cluster, name, args):
+            await write_audit(**audit, after=after, result="failure", error=f"forbidden: {app_permission(name, args)}")
             return _text(reason, error=True)
         if reason := namespace_scope_error(payload, cluster, name, args):
             await write_audit(**audit, after=after, result="failure", error="forbidden: namespace scope")
@@ -405,6 +412,8 @@ class KubeastMCPServer(MCPServer):
                 await write_audit(**audit, after=after, result="failure", error=str(e))
                 return _text(f"write tools are not available: {e}", error=True)
             after["approval_id"] = approval_id
+        # The row the terminal writes, so a search or a sink filter on exec finds this one too.
+        exec_row = {**audit, **pod_exec_row(args, tool_input, approval_id=after.get("approval_id"))} if name == EXEC_TOOL else None
 
         client = ToolServerClient(authorization=f"Bearer {token.token}", base_url=self._tool_server_url)
         try:
@@ -415,11 +424,15 @@ class KubeastMCPServer(MCPServer):
             after["access"] = with_mode(client.last_access, name)
             after["requests"] = client.last_requests
             await write_audit(**audit, after=after, result="failure", error=error[:500])
+            if exec_row:
+                await write_audit(**exec_row, result="failure", error=error[:500])
             return _text(error, error=True)
         after["redacted"] = client.last_redacted
         after["access"] = with_mode(client.last_access, name)
         after["requests"] = client.last_requests
         await write_audit(**audit, after=after)
+        if exec_row:
+            await write_audit(**exec_row)
         return _text(content)
 
     async def _request_access(self, token: AccessToken, payload: TokenPayload, args: Dict[str, Any], context: Optional[Context]) -> CallToolResult:

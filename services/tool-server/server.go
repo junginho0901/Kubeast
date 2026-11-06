@@ -109,9 +109,10 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 		return
 	}
 
-	// The caller must hold ai.tool.<name> in the routed cluster; ai-service's
-	// tool filtering is not trusted on its own.
-	payload, status, err := authorizeToolCall(toolAuth, r.Header, req.Name, clusterID)
+	// The caller must hold ai.tool.<name> in the routed cluster, and the screen's
+	// permission where a tool does what a screen guards; ai-service's tool
+	// filtering is not trusted on its own.
+	payload, status, err := authorizeToolCall(toolAuth, r.Header, req.Name, clusterID, req.Arguments)
 	if err != nil {
 		respondToolError(w, status, err.Error(), nil, nil)
 		return

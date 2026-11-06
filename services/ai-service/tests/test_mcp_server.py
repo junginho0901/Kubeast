@@ -398,10 +398,11 @@ async def test_write_tools_follow_the_switch_and_the_users_permissions(fakes, mo
     async with running_app(server) as client:
         res = await call(client, "tok-write", "tools/list")
         tools = {t["name"]: t for t in res.json()["result"]["tools"]}
-        assert WRITE_TOOL_NAMES <= set(tools) and "request_access" in tools
+        # A Write role holds every write tool but Pod exec, which asks for the screen's permission too.
+        assert WRITE_TOOL_NAMES - {"k8s_execute_command"} <= set(tools) and "k8s_execute_command" not in tools and "request_access" in tools
         # read tools (not the Admin-only hygiene nor k8s_diff without an edit grant) + write tools + list_clusters + request_access
         assert not ({"hygiene", "k8s_diff", "audit_search", "nodes_stats_summary", "nodes_log"} & set(tools))
-        assert len(tools) == len(mcp_server.READ_TOOLS) - 5 + len(WRITE_TOOL_NAMES) + 2
+        assert len(tools) == len(mcp_server.READ_TOOLS) - 5 + len(WRITE_TOOL_NAMES) - 1 + 2
         # Honest annotations: writes are not read-only, destructive unless they only touch labels/annotations.
         assert tools["k8s_delete_resource"]["annotations"] == {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": False}
         assert tools["k8s_label_resource"]["annotations"]["destructiveHint"] is False and tools["k8s_label_resource"]["annotations"]["readOnlyHint"] is False

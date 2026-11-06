@@ -18,6 +18,8 @@ const WRITE_TOOLS = [
   'k8s_apply_manifest', 'k8s_create_resource', 'k8s_delete_resource', 'k8s_patch_resource', 'k8s_annotate_resource',
   'k8s_remove_annotation', 'k8s_label_resource', 'k8s_remove_label', 'k8s_scale', 'k8s_rollout', 'k8s_execute_command',
 ]
+// Pod exec also asks for the screen's permission, which a Write ceiling does not hold (ai-write-permissions.spec.ts).
+const WRITE_ROLE_TOOLS = WRITE_TOOLS.filter((t) => t !== 'k8s_execute_command')
 const stamp = () => Date.now().toString(36)
 
 function kubectlFor(kindName: string) {
@@ -126,10 +128,11 @@ test.describe('MCP write tools', () => {
       const writeKey = await issueKey(request, writerToken, 'Write')
       const readKey = await issueKey(request, writerToken, 'Read')
 
-      // Write ceiling: every write tool, honestly annotated, plus request_access.
+      // Write ceiling: every write tool but Pod exec, honestly annotated, plus request_access.
       const tools = await listTools(request, writeKey.key)
       const names = tools.map((t) => t.name)
-      for (const w of WRITE_TOOLS) expect(names, w).toContain(w)
+      for (const w of WRITE_ROLE_TOOLS) expect(names, w).toContain(w)
+      expect(names).not.toContain('k8s_execute_command')
       expect(names).toContain('request_access')
       const del = tools.find((t) => t.name === 'k8s_delete_resource')!
       expect(del.annotations).toEqual({ readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false })

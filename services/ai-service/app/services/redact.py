@@ -510,3 +510,55 @@ def redact_object(value: Any, opts: Optional[Options] = None, _secret: bool = Fa
         stats.merge(s)
         return out, stats
     return value, stats
+
+
+# --- command lines --------------------------------------------------------------
+
+# No Go twin: only ai-service writes a command into an audit row. The key-name rule above reads whole lines, so it misses
+# a credential among the words of a command (sh -c "mysql --password=x", env TOKEN=x app).
+
+_ARG_SEP = "\x1f"  # joins a command's arguments for the rules below, which read it as a space
+_WORD = r"""("[^"\x1f]*"|'[^'\x1f]*'|[^\s"',;|&)\]]+)"""
+_CREDENTIAL_WORD = r"(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|credentials?|dsn|connection[_-]?string)"
+_WORD_ASSIGN = re.compile(r"(?<![\w.\-])(-{0,2}[\w.\-]*" + _CREDENTIAL_WORD + r"[\w.\-]*)([ \t]*[=:][ \t]*)" + _WORD, re.I)
+_WORD_FLAG = re.compile(r"(?<![\w.\-])(--?[\w.\-]*" + _CREDENTIAL_WORD + r"[\w.\-]*)(\s+)" + _WORD, re.I)
+# What holds a credential by its place, not its name: -p is a port or a path outside these programs, and a header's whole
+# value is the credential, a scheme word included.
+_PLACED_CREDENTIALS = [
+    re.compile(r"(\b(?:mysql|mysqldump|mysqladmin|mariadb|mariadb-dump)\b[^|;&\n]{0,500}?\s-p)" + _WORD),
+    re.compile(r"(\bsshpass\b[^|;&\n]{0,500}?\s-p\s*)" + _WORD),
+    re.compile(r"(\bredis-cli\b[^|;&\n]{0,500}?\s-a\s+)" + _WORD),
+    re.compile(r"(\s(?:-u|--user)[\s=]+[^\s:]+:)" + _WORD),
+    re.compile(r"(\b(?:proxy-authorization|authorization|set-cookie|cookie)[ \t]*:[ \t]*)([^\x1f\n\"']+)", re.I),
+]
+_SHELL_REFERENCE = re.compile(r"""^["']?\$\{?[A-Za-z_][A-Za-z0-9_]*\}?["']?$""")
+_NOT_A_VALUE = _HARMLESS | {"null", "~", "[]", "{}", "|", ">", "|-", ">-"}
+
+
+def word_key_is_sensitive(key: str) -> bool:
+    """A flag or variable named like a credential: PGPASSWORD or --db-token, but not --password-file or --token-ttl."""
+    k = key.lstrip("-")
+    return _key_is_sensitive(k) or _normalize_key(k).endswith(("password", "passwd", "secret", "token"))
+
+
+def redact_words(text: str) -> str:
+    """Mask the credentials among the words of a command line. A value that names a shell variable is not one."""
+
+    def _value(m: re.Match) -> str:
+        key, value = m.group(1), m.group(3)
+        if not word_key_is_sensitive(key) or _SHELL_REFERENCE.match(value) or value.startswith(("<REDACTED", "-")) or value.lower() in _NOT_A_VALUE:
+            return m.group(0)
+        return m.group(1) + m.group(2) + "<REDACTED:" + key.lstrip("-") + ">"
+
+    text = _WORD_ASSIGN.sub(_value, text)
+    text = _WORD_FLAG.sub(_value, text)
+    for rule in _PLACED_CREDENTIALS:
+        text = rule.sub(lambda m: m.group(1) + "<REDACTED:password>", text)
+    return text
+
+
+def redact_command(argv: list, opts: Optional[Options] = None) -> list:
+    """Mask a command's arguments one for one: each through the text rules, then the words of all of them together, so
+    a flag's value may be the next argument."""
+    masked = [redact_text(a, opts)[0].replace(_ARG_SEP, " ") for a in argv]
+    return redact_words(_ARG_SEP.join(masked)).split(_ARG_SEP)

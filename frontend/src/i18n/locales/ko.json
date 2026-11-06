@@ -3852,7 +3852,7 @@
         "ai_tool_audit_search": "관리자 도구: Kubeast 감사 로그 검색",
         "ai_tool_nodes_stats_summary": "관리자 도구: 노드 kubelet 통계 요약(CPU·메모리·fs·PSI·파드 상위)",
         "ai_tool_nodes_log": "관리자 도구: 노드 kubelet·시스템 로그",
-        "ai_tool_k8s_execute_command": "K8s 명령어 실행",
+        "ai_tool_k8s_execute_command": "Pod에서 명령 실행(Pod Exec 권한도 필요)",
         "ai_tool_helm_execute": "AI가 Helm 명령 실행 (쓰기 포함)",
         "ai_mcp_use": "외부 AI 에이전트(MCP)를 이 클러스터에 연결",
         "admin_all": "모든 관리자 기능",

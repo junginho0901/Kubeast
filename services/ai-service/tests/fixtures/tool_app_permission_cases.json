@@ -1,0 +1,1380 @@
+[
+ {
+  "name": "Write role: pod exec",
+  "tool": "k8s_execute_command",
+  "args": {
+   "command": [
+    "ls"
+   ],
+   "namespace": "shop",
+   "pod_name": "web"
+  },
+  "perms": [
+   "menu.*",
+   "resource.*.read",
+   "resource.*.create",
+   "resource.*.edit",
+   "resource.*.delete",
+   "resource.cronjob.suspend",
+   "resource.cronjob.trigger",
+   "resource.secret.reveal",
+   "resource.alert.silence",
+   "resource.pod.logfile",
+   "resource.helm.read",
+   "resource.helm.rollback",
+   "resource.helm.upgrade",
+   "resource.helm.test",
+   "ai.tool.*",
+   "ai.mcp.use"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "Write role: rollout undo",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "undo",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "menu.*",
+   "resource.*.read",
+   "resource.*.create",
+   "resource.*.edit",
+   "resource.*.delete",
+   "resource.cronjob.suspend",
+   "resource.cronjob.trigger",
+   "resource.secret.reveal",
+   "resource.alert.silence",
+   "resource.pod.logfile",
+   "resource.helm.read",
+   "resource.helm.rollback",
+   "resource.helm.upgrade",
+   "resource.helm.test",
+   "ai.tool.*",
+   "ai.mcp.use"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "Write role: rollout restart",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "restart",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "menu.*",
+   "resource.*.read",
+   "resource.*.create",
+   "resource.*.edit",
+   "resource.*.delete",
+   "resource.cronjob.suspend",
+   "resource.cronjob.trigger",
+   "resource.secret.reveal",
+   "resource.alert.silence",
+   "resource.pod.logfile",
+   "resource.helm.read",
+   "resource.helm.rollback",
+   "resource.helm.upgrade",
+   "resource.helm.test",
+   "ai.tool.*",
+   "ai.mcp.use"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "Write role: rollout pause",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "pause",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "menu.*",
+   "resource.*.read",
+   "resource.*.create",
+   "resource.*.edit",
+   "resource.*.delete",
+   "resource.cronjob.suspend",
+   "resource.cronjob.trigger",
+   "resource.secret.reveal",
+   "resource.alert.silence",
+   "resource.pod.logfile",
+   "resource.helm.read",
+   "resource.helm.rollback",
+   "resource.helm.upgrade",
+   "resource.helm.test",
+   "ai.tool.*",
+   "ai.mcp.use"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "Write role: rollout resume",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "resume",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "menu.*",
+   "resource.*.read",
+   "resource.*.create",
+   "resource.*.edit",
+   "resource.*.delete",
+   "resource.cronjob.suspend",
+   "resource.cronjob.trigger",
+   "resource.secret.reveal",
+   "resource.alert.silence",
+   "resource.pod.logfile",
+   "resource.helm.read",
+   "resource.helm.rollback",
+   "resource.helm.upgrade",
+   "resource.helm.test",
+   "ai.tool.*",
+   "ai.mcp.use"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "Write role: rollout status",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "status",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "menu.*",
+   "resource.*.read",
+   "resource.*.create",
+   "resource.*.edit",
+   "resource.*.delete",
+   "resource.cronjob.suspend",
+   "resource.cronjob.trigger",
+   "resource.secret.reveal",
+   "resource.alert.silence",
+   "resource.pod.logfile",
+   "resource.helm.read",
+   "resource.helm.rollback",
+   "resource.helm.upgrade",
+   "resource.helm.test",
+   "ai.tool.*",
+   "ai.mcp.use"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "Write role: rollout history",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "history",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "menu.*",
+   "resource.*.read",
+   "resource.*.create",
+   "resource.*.edit",
+   "resource.*.delete",
+   "resource.cronjob.suspend",
+   "resource.cronjob.trigger",
+   "resource.secret.reveal",
+   "resource.alert.silence",
+   "resource.pod.logfile",
+   "resource.helm.read",
+   "resource.helm.rollback",
+   "resource.helm.upgrade",
+   "resource.helm.test",
+   "ai.tool.*",
+   "ai.mcp.use"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "Write role: scale",
+  "tool": "k8s_scale",
+  "args": {
+   "replicas": 2,
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "menu.*",
+   "resource.*.read",
+   "resource.*.create",
+   "resource.*.edit",
+   "resource.*.delete",
+   "resource.cronjob.suspend",
+   "resource.cronjob.trigger",
+   "resource.secret.reveal",
+   "resource.alert.silence",
+   "resource.pod.logfile",
+   "resource.helm.read",
+   "resource.helm.rollback",
+   "resource.helm.upgrade",
+   "resource.helm.test",
+   "ai.tool.*",
+   "ai.mcp.use"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "Write role: delete",
+  "tool": "k8s_delete_resource",
+  "args": {
+   "resource_name": "web",
+   "resource_type": "configmap"
+  },
+  "perms": [
+   "menu.*",
+   "resource.*.read",
+   "resource.*.create",
+   "resource.*.edit",
+   "resource.*.delete",
+   "resource.cronjob.suspend",
+   "resource.cronjob.trigger",
+   "resource.secret.reveal",
+   "resource.alert.silence",
+   "resource.pod.logfile",
+   "resource.helm.read",
+   "resource.helm.rollback",
+   "resource.helm.upgrade",
+   "resource.helm.test",
+   "ai.tool.*",
+   "ai.mcp.use"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "Admin role: pod exec",
+  "tool": "k8s_execute_command",
+  "args": {
+   "command": [
+    "ls"
+   ],
+   "namespace": "shop",
+   "pod_name": "web"
+  },
+  "perms": [
+   "*"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "Admin role: rollout undo",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "undo",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "*"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "Admin role: rollout restart",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "restart",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "*"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "Admin role: rollout pause",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "pause",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "*"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "Admin role: rollout resume",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "resume",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "*"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "Admin role: rollout status",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "status",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "*"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "Admin role: rollout history",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "history",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "*"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "Admin role: scale",
+  "tool": "k8s_scale",
+  "args": {
+   "replicas": 2,
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "*"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "Admin role: delete",
+  "tool": "k8s_delete_resource",
+  "args": {
+   "resource_name": "web",
+   "resource_type": "configmap"
+  },
+  "perms": [
+   "*"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "custom role with both screen permissions: pod exec",
+  "tool": "k8s_execute_command",
+  "args": {
+   "command": [
+    "ls"
+   ],
+   "namespace": "shop",
+   "pod_name": "web"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.pod.exec",
+   "resource.workload.rollback"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "custom role with both screen permissions: rollout undo",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "undo",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.pod.exec",
+   "resource.workload.rollback"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "custom role with both screen permissions: rollout restart",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "restart",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.pod.exec",
+   "resource.workload.rollback"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "custom role with both screen permissions: rollout pause",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "pause",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.pod.exec",
+   "resource.workload.rollback"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "custom role with both screen permissions: rollout resume",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "resume",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.pod.exec",
+   "resource.workload.rollback"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "custom role with both screen permissions: rollout status",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "status",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.pod.exec",
+   "resource.workload.rollback"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "custom role with both screen permissions: rollout history",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "history",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.pod.exec",
+   "resource.workload.rollback"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "custom role with both screen permissions: scale",
+  "tool": "k8s_scale",
+  "args": {
+   "replicas": 2,
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.pod.exec",
+   "resource.workload.rollback"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "custom role with both screen permissions: delete",
+  "tool": "k8s_delete_resource",
+  "args": {
+   "resource_name": "web",
+   "resource_type": "configmap"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.pod.exec",
+   "resource.workload.rollback"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "custom role with Pod exec only: pod exec",
+  "tool": "k8s_execute_command",
+  "args": {
+   "command": [
+    "ls"
+   ],
+   "namespace": "shop",
+   "pod_name": "web"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.pod.exec"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "custom role with Pod exec only: rollout undo",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "undo",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.pod.exec"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "custom role with Pod exec only: rollout restart",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "restart",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.pod.exec"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "custom role with Pod exec only: rollout pause",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "pause",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.pod.exec"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "custom role with Pod exec only: rollout resume",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "resume",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.pod.exec"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "custom role with Pod exec only: rollout status",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "status",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.pod.exec"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "custom role with Pod exec only: rollout history",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "history",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.pod.exec"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "custom role with Pod exec only: scale",
+  "tool": "k8s_scale",
+  "args": {
+   "replicas": 2,
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.pod.exec"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "custom role with Pod exec only: delete",
+  "tool": "k8s_delete_resource",
+  "args": {
+   "resource_name": "web",
+   "resource_type": "configmap"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.pod.exec"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "custom role with rollback only: pod exec",
+  "tool": "k8s_execute_command",
+  "args": {
+   "command": [
+    "ls"
+   ],
+   "namespace": "shop",
+   "pod_name": "web"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.workload.rollback"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "custom role with rollback only: rollout undo",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "undo",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.workload.rollback"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "custom role with rollback only: rollout restart",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "restart",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.workload.rollback"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "custom role with rollback only: rollout pause",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "pause",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.workload.rollback"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "custom role with rollback only: rollout resume",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "resume",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.workload.rollback"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "custom role with rollback only: rollout status",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "status",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.workload.rollback"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "custom role with rollback only: rollout history",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "history",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.workload.rollback"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "custom role with rollback only: scale",
+  "tool": "k8s_scale",
+  "args": {
+   "replicas": 2,
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.workload.rollback"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "custom role with rollback only: delete",
+  "tool": "k8s_delete_resource",
+  "args": {
+   "resource_name": "web",
+   "resource_type": "configmap"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.workload.rollback"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "screen permissions without the AI tools: pod exec",
+  "tool": "k8s_execute_command",
+  "args": {
+   "command": [
+    "ls"
+   ],
+   "namespace": "shop",
+   "pod_name": "web"
+  },
+  "perms": [
+   "resource.pod.exec",
+   "resource.workload.rollback"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "screen permissions without the AI tools: rollout undo",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "undo",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "resource.pod.exec",
+   "resource.workload.rollback"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "screen permissions without the AI tools: rollout restart",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "restart",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "resource.pod.exec",
+   "resource.workload.rollback"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "screen permissions without the AI tools: rollout pause",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "pause",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "resource.pod.exec",
+   "resource.workload.rollback"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "screen permissions without the AI tools: rollout resume",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "resume",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "resource.pod.exec",
+   "resource.workload.rollback"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "screen permissions without the AI tools: rollout status",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "status",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "resource.pod.exec",
+   "resource.workload.rollback"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "screen permissions without the AI tools: rollout history",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "history",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "resource.pod.exec",
+   "resource.workload.rollback"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "screen permissions without the AI tools: scale",
+  "tool": "k8s_scale",
+  "args": {
+   "replicas": 2,
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "resource.pod.exec",
+   "resource.workload.rollback"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "screen permissions without the AI tools: delete",
+  "tool": "k8s_delete_resource",
+  "args": {
+   "resource_name": "web",
+   "resource_type": "configmap"
+  },
+  "perms": [
+   "resource.pod.exec",
+   "resource.workload.rollback"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the exec tool with its screen permission: pod exec",
+  "tool": "k8s_execute_command",
+  "args": {
+   "command": [
+    "ls"
+   ],
+   "namespace": "shop",
+   "pod_name": "web"
+  },
+  "perms": [
+   "ai.tool.k8s_execute_command",
+   "resource.pod.exec"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "the exec tool with its screen permission: rollout undo",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "undo",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_execute_command",
+   "resource.pod.exec"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the exec tool with its screen permission: rollout restart",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "restart",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_execute_command",
+   "resource.pod.exec"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the exec tool with its screen permission: rollout pause",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "pause",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_execute_command",
+   "resource.pod.exec"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the exec tool with its screen permission: rollout resume",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "resume",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_execute_command",
+   "resource.pod.exec"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the exec tool with its screen permission: rollout status",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "status",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_execute_command",
+   "resource.pod.exec"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the exec tool with its screen permission: rollout history",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "history",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_execute_command",
+   "resource.pod.exec"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the exec tool with its screen permission: scale",
+  "tool": "k8s_scale",
+  "args": {
+   "replicas": 2,
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_execute_command",
+   "resource.pod.exec"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the exec tool with its screen permission: delete",
+  "tool": "k8s_delete_resource",
+  "args": {
+   "resource_name": "web",
+   "resource_type": "configmap"
+  },
+  "perms": [
+   "ai.tool.k8s_execute_command",
+   "resource.pod.exec"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the exec tool without its screen permission: pod exec",
+  "tool": "k8s_execute_command",
+  "args": {
+   "command": [
+    "ls"
+   ],
+   "namespace": "shop",
+   "pod_name": "web"
+  },
+  "perms": [
+   "ai.tool.k8s_execute_command"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the exec tool without its screen permission: rollout undo",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "undo",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_execute_command"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the exec tool without its screen permission: rollout restart",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "restart",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_execute_command"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the exec tool without its screen permission: rollout pause",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "pause",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_execute_command"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the exec tool without its screen permission: rollout resume",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "resume",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_execute_command"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the exec tool without its screen permission: rollout status",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "status",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_execute_command"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the exec tool without its screen permission: rollout history",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "history",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_execute_command"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the exec tool without its screen permission: scale",
+  "tool": "k8s_scale",
+  "args": {
+   "replicas": 2,
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_execute_command"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the exec tool without its screen permission: delete",
+  "tool": "k8s_delete_resource",
+  "args": {
+   "resource_name": "web",
+   "resource_type": "configmap"
+  },
+  "perms": [
+   "ai.tool.k8s_execute_command"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the rollout tool with rollback: pod exec",
+  "tool": "k8s_execute_command",
+  "args": {
+   "command": [
+    "ls"
+   ],
+   "namespace": "shop",
+   "pod_name": "web"
+  },
+  "perms": [
+   "ai.tool.k8s_rollout",
+   "resource.workload.rollback"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the rollout tool with rollback: rollout undo",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "undo",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_rollout",
+   "resource.workload.rollback"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "the rollout tool with rollback: rollout restart",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "restart",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_rollout",
+   "resource.workload.rollback"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "the rollout tool with rollback: rollout pause",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "pause",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_rollout",
+   "resource.workload.rollback"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "the rollout tool with rollback: rollout resume",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "resume",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_rollout",
+   "resource.workload.rollback"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "the rollout tool with rollback: rollout status",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "status",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_rollout",
+   "resource.workload.rollback"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "the rollout tool with rollback: rollout history",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "history",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_rollout",
+   "resource.workload.rollback"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "the rollout tool with rollback: scale",
+  "tool": "k8s_scale",
+  "args": {
+   "replicas": 2,
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_rollout",
+   "resource.workload.rollback"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the rollout tool with rollback: delete",
+  "tool": "k8s_delete_resource",
+  "args": {
+   "resource_name": "web",
+   "resource_type": "configmap"
+  },
+  "perms": [
+   "ai.tool.k8s_rollout",
+   "resource.workload.rollback"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the rollout tool without rollback: pod exec",
+  "tool": "k8s_execute_command",
+  "args": {
+   "command": [
+    "ls"
+   ],
+   "namespace": "shop",
+   "pod_name": "web"
+  },
+  "perms": [
+   "ai.tool.k8s_rollout"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the rollout tool without rollback: rollout undo",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "undo",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_rollout"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the rollout tool without rollback: rollout restart",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "restart",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_rollout"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "the rollout tool without rollback: rollout pause",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "pause",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_rollout"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "the rollout tool without rollback: rollout resume",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "resume",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_rollout"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "the rollout tool without rollback: rollout status",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "status",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_rollout"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "the rollout tool without rollback: rollout history",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "history",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_rollout"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "the rollout tool without rollback: scale",
+  "tool": "k8s_scale",
+  "args": {
+   "replicas": 2,
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_rollout"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the rollout tool without rollback: delete",
+  "tool": "k8s_delete_resource",
+  "args": {
+   "resource_name": "web",
+   "resource_type": "configmap"
+  },
+  "perms": [
+   "ai.tool.k8s_rollout"
+  ],
+  "allowed": false
+ }
+]
