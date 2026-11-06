@@ -17,7 +17,7 @@ import { useCanI } from '@/hooks/useCanCreate'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { getVolumeDetail } from './pod-info/podInfoFormatters'
 import ContainerCard from './pod-info/ContainerCard'
-import { runningNotReady } from '@/pages/workloads/pods/podHelpers'
+import { podDrawerStatus, runningNotReady } from '@/pages/workloads/pods/podHelpers'
 import ContainerResizeModal from './pod-info/ContainerResizeModal'
 import { LogFilesView, LogSourceToggle, type LogSource } from '@/components/LogFilesView'
 import { LogSearchView } from '@/components/LogSearchView'
@@ -227,17 +227,10 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
   const waitingCount = containers.filter((c: any) => Boolean(c?.state?.waiting)).length
   const terminatedCount = containers.filter((c: any) => Boolean(c?.state?.terminated)).length
   const crashLoopCount = containers.filter((c: any) => c?.state?.waiting?.reason === 'CrashLoopBackOff').length
-  const statusReason = useMemo(() => {
-    // an initializing pod's status as kubectl prints it (Init:Error, Init:0/2 …), from the server
-    if (typeof podDescribe?.status === 'string' && podDescribe.status.startsWith('Init:')) return podDescribe.status
-    if (typeof podDescribe?.status_reason === 'string' && podDescribe.status_reason) return podDescribe.status_reason
-    const reasons = containers
-      .map((c: any) => c?.state?.waiting?.reason || c?.state?.terminated?.reason || c?.last_state?.terminated?.reason)
-      .filter(Boolean)
-    if (reasons.length > 0) return String(reasons[0])
-    // a Running pod not ready stays Running, as kubectl and the Pods list say; the tile draws it yellow
-    return phase
-  }, [podDescribe?.status, podDescribe?.status_reason, containers, phase])
+  const statusReason = useMemo(
+    () => podDrawerStatus(podDescribe, containers, phase),
+    [podDescribe, containers, phase],
+  )
   const statusNotReady = runningNotReady({ status: statusReason, ready: `${readyContainers}/${totalContainers}` })
 
   const containerNames = useMemo(() => {

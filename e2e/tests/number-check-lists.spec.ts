@@ -137,14 +137,19 @@ const SCREENS: Screen[] = [
       const restarts = (p: Obj) => [...(p.status.initContainerStatuses ?? []), ...(p.status.containerStatuses ?? [])].reduce((s: number, c: Obj) => s + n(c.restartCount), 0)
       const reasonError = (p: Obj) => [...(p.status.initContainerStatuses ?? []), ...(p.status.containerStatuses ?? [])].some((c: Obj) =>
         /error|failed|backoff|errimagepull|oomkilled/i.test(c.state?.waiting?.reason ?? c.state?.terminated?.reason ?? ''))
+      // a pod is in one state card, so they add up to the total: what names an error first, then what is being deleted
+      const error = (p: Obj) => p.status.phase === 'Failed' || reasonError(p)
+      const other = list.filter((p) => !error(p) && !p.metadata.deletionTimestamp)
+      const terminating = list.filter((p) => !error(p) && p.metadata.deletionTimestamp && p.status.phase !== 'Succeeded')
       return {
         Total: list.length,
-        Ready: running.filter(allReady).length,
-        'Not Ready': running.filter((p) => !allReady(p)).length,
-        Pending: list.filter((p) => p.status.phase === 'Pending').length,
-        Error: list.filter((p) => p.status.phase === 'Failed' || reasonError(p)).length,
+        Ready: running.filter((p) => other.includes(p) && allReady(p)).length,
+        'Not Ready': running.filter((p) => other.includes(p) && !allReady(p)).length,
+        Pending: other.filter((p) => p.status.phase === 'Pending').length,
+        Terminating: terminating.length,
+        Error: list.filter(error).length,
         Restarted: list.filter((p) => restarts(p) > 0).length,
-        Completed: list.filter((p) => p.status.phase === 'Succeeded').length,
+        Completed: list.filter((p) => !error(p) && p.status.phase === 'Succeeded').length,
       }
     },
   },

@@ -5,6 +5,8 @@ import {
   gpuPodCounts, gpuPodStatuses, gpuPodsByNode, gpuPodVendorCounts, gpuSeriesPod, gpuVendorCounts, gpuVendorLabels, gpuVendorOf, nodeGpuRows,
   nodeVendorText, podGpuUsage,
 } from './gpuNumbers'
+import { getStatusColor as dashboardStatusColor } from './gpu-dashboard/helpers'
+import { getStatusColor as gpuPodsStatusColor } from './gpupods/gpuPodsHelpers'
 
 const node = (name: string, status: string): GPUNodeInfo => ({ name, status, gpu_capacity: 1, gpu_allocatable: 1, gpu_used: 0 })
 const pod = (name: string, phase: string, status: string, gpus: number, namespace = 'ml'): GPUPodInfo =>
@@ -16,6 +18,11 @@ const gpu = (uuid: string, pod: string, util: number, used: number, free: number
 })
 
 describe('GPU screen numbers', () => {
+  it('draws a pod being deleted as a warning on both pod lists', () => {
+    expect(gpuPodsStatusColor('Terminating')).toBe('badge-warning')
+    expect(dashboardStatusColor('Terminating')).toBe('badge-warning')
+  })
+
   // kubectl's STATUS starts with the readiness: a cordoned Ready node is ready, NotReady and Unknown are not
   it('counts a node ready by the readiness kubectl prints first', () => {
     const nodes = ['Ready', 'Ready,SchedulingDisabled', 'NotReady', 'NotReady,SchedulingDisabled', 'Unknown'].map((s, i) => node(`n${i}`, s))

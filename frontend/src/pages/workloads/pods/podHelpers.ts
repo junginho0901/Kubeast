@@ -17,16 +17,46 @@ export function runningNotReady(pod: { status?: string | null; ready?: string | 
   return !!m && Number(m[2]) > 0 && Number(m[1]) !== Number(m[2])
 }
 
+/**
+ * The Pod drawer's Status tile. A pod initializing or being deleted reads the server's Status (kubectl's). Otherwise a
+ * reason the pod or a container names comes first, a container's last crash too, which the drawer shows nowhere else;
+ * with none named, the server's word (SchedulingGated), else the phase. A Running pod not ready stays Running, as
+ * kubectl and the Pods list say, and the tile draws it yellow.
+ */
+export function podDrawerStatus(
+  describe: { status?: unknown; status_reason?: unknown } | null | undefined,
+  containers: any[],
+  phase: string,
+): string {
+  const server = typeof describe?.status === 'string' ? describe.status : ''
+  if (server.startsWith('Init:') || server === 'Terminating') return server
+  if (typeof describe?.status_reason === 'string' && describe.status_reason) return describe.status_reason
+  const reasons = containers
+    .map((c: any) => c?.state?.waiting?.reason || c?.state?.terminated?.reason || c?.last_state?.terminated?.reason)
+    .filter(Boolean)
+  if (reasons.length > 0) return String(reasons[0])
+  return server || phase
+}
+
 export function getStatusColor(status: string): string {
   const lower = (status || '').toLowerCase()
   if (lower.includes('running') || lower.includes('succeeded') || lower.includes('completed')) return 'badge-success'
-  if (lower.includes('pending') || lower.includes('init') || lower.includes('creating') || lower.includes('notready')) return 'badge-warning'
+  if (
+    lower.includes('pending') ||
+    lower.includes('init') ||
+    lower.includes('creating') ||
+    lower.includes('notready') ||
+    lower.includes('terminating') ||
+    lower.includes('gated')
+  ) return 'badge-warning'
   if (
     lower.includes('error') ||
     lower.includes('failed') ||
     lower.includes('backoff') ||
     lower.includes('oomkilled') ||
-    lower.includes('errimagepull')
+    lower.includes('errimagepull') ||
+    lower.startsWith('signal:') ||
+    /^exitcode:[1-9]/.test(lower)
   ) return 'badge-error'
   return 'badge-info'
 }

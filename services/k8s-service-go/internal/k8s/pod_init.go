@@ -12,6 +12,7 @@ import (
 // containers'; once initialized, restartable init containers (sidecars) count with the containers.
 type podInitView struct {
 	status          string // "" when the pod is not initializing
+	reason          string // the same word whatever the condition says: it stays the Status unless a container names another
 	restarts        int32  // the init containers' restarts, up to the one it waits on
 	sidecarRestarts int32  // the restartable ones' among them
 	sidecars        int    // restartable init containers in the spec, counted as containers
@@ -56,6 +57,7 @@ func podInitState(p *corev1.Pod) podInitView {
 		}
 		break
 	}
+	v.reason = reason
 	if reason != "" && !podInitialized(p) {
 		v.status = reason
 	}
@@ -76,12 +78,13 @@ func podInitialized(p *corev1.Pod) bool {
 }
 
 // podCounts are the READY and RESTARTS columns as kubectl prints them: the containers and the sidecars, and while
-// initializing the init containers' restarts.
+// initializing the init containers' restarts. A container is ready when it says so and is running, and none is
+// counted while initializing holds the pod.
 func podCounts(p *corev1.Pod, iv podInitView) (ready, total int, restarts int32) {
 	total = len(p.Spec.Containers) + iv.sidecars
 	ready = iv.sidecarsReady
 	for _, cs := range p.Status.ContainerStatuses {
-		if cs.Ready {
+		if iv.status == "" && cs.Ready && cs.State.Running != nil {
 			ready++
 		}
 		restarts += cs.RestartCount

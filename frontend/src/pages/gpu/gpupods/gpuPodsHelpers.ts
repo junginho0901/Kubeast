@@ -21,7 +21,7 @@ export { ageSeconds as parseAgeSeconds, formatAge } from '@/utils/time'
 export function getStatusColor(status: string): string {
   const lower = (status || '').toLowerCase()
   if (lower === 'running' || lower === 'succeeded' || lower === 'completed') return 'badge-success'
-  if (lower === 'pending') return 'badge-warning'
+  if (lower === 'pending' || lower === 'terminating') return 'badge-warning'
   if (lower === 'failed' || lower.includes('error') || lower.includes('backoff')) return 'badge-error'
   return 'badge-info'
 }
