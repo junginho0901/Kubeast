@@ -20,8 +20,21 @@ type TokenVersionLookup func(ctx context.Context, userID, apiKeyID string) (int,
 // token's "tv" claim must equal the stored counter, so a bump revokes it at once.
 // The token comes from the Authorization header (API clients) or, for the
 // browser, from the HttpOnly session cookie named cookieName; cookie-authenticated
-// state changes must carry the X-Requested-With header (CSRF).
+// state changes must carry the X-Requested-With header (CSRF). A system token
+// ("sys") has no account and is refused.
 func AuthMiddleware(jwtMgr *JWTManager, tokenVersion TokenVersionLookup, cookieName string) func(http.Handler) http.Handler {
+	return tokenMiddleware(jwtMgr, tokenVersion, cookieName, false)
+}
+
+// InvestigatorReadMiddleware is AuthMiddleware for a read route an alert
+// investigation calls: while investigations are enabled it also takes the
+// investigator's token, as the token-version route does. That token has no account
+// row to check; its signature, expiry and permissions hold as for any other.
+func InvestigatorReadMiddleware(jwtMgr *JWTManager, tokenVersion TokenVersionLookup, cookieName string, enabled bool) func(http.Handler) http.Handler {
+	return tokenMiddleware(jwtMgr, tokenVersion, cookieName, enabled)
+}
+
+func tokenMiddleware(jwtMgr *JWTManager, tokenVersion TokenVersionLookup, cookieName string, takesInvestigator bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			tokenStr := ""
@@ -60,7 +73,13 @@ func AuthMiddleware(jwtMgr *JWTManager, tokenVersion TokenVersionLookup, cookieN
 				return
 			}
 
-			if tokenVersion != nil {
+			sys, _ := claims["sys"].(string)
+			if sys != "" && (!takesInvestigator || fromCookie || sys != auth.SystemInvestigator || userID != InvestigatorSubject) {
+				http.Error(w, `{"detail":"This route does not take a system token"}`, http.StatusForbidden)
+				return
+			}
+
+			if tokenVersion != nil && sys == "" {
 				claimed, _ := claims["tv"].(float64) // JSON numbers decode as float64; missing claim = 0
 				akid, _ := claims["akid"].(string)
 				current, err := tokenVersion(r.Context(), userID, akid)
@@ -108,7 +127,7 @@ func AuthMiddleware(jwtMgr *JWTManager, tokenVersion TokenVersionLookup, cookieN
 			}
 
 			akid, _ := claims["akid"].(string)
-			payload := auth.TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms, Roles: auth.ParseRoles(claims["roles"]), Namespaces: auth.ParseNamespaces(claims["ns"]), AuthTime: authTime, APIKeyID: akid}
+			payload := auth.TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms, Roles: auth.ParseRoles(claims["roles"]), Namespaces: auth.ParseNamespaces(claims["ns"]), AuthTime: authTime, APIKeyID: akid, System: sys}
 			ctx := context.WithValue(r.Context(), auth.TokenPayloadContextKey(), payload)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

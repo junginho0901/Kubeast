@@ -71,6 +71,17 @@ Prefer group bindings; if you bind a `User`, make sure that person's account exi
 The shell in the Kubeast UI opens only for Admin, but the cluster permissions allow it.
 Give people who need a narrower scope a custom role (`auth.impersonation.customRoles`) instead of Write. A custom role can be namespace-scoped.
 
+**The list in `auth.impersonation.customRoles` also says who may give a role that name.**
+A listed group holds its ClusterRoles whether or not a role of that name exists, and a role of that name acts as that group.
+Kubeast cannot compare those ClusterRoles with what a person holds, so a new name or a rename that makes a listed group takes all permissions (`*`, the global Admin). Anyone else holding `admin.roles.create` or `admin.roles.update` gets 403 and an audit row.
+So list the name and have a global admin create the role, or create the role first and list it after. From then on it is a role like any other: `admin.roles.update` edits it, and a role already stored under a listed name keeps working.
+Granting it is not held back: `admin.users.update` grants it within the permission keys the grantor holds, and those keys do not describe the binding. Give a role listed with wide ClusterRoles keys as wide.
+The chart hands the list to auth-service as `IMPERSONATION_CUSTOM_ROLES`. Docker Compose has no chart: put the names in that variable in `.env` if you apply such bindings to your clusters.
+
+**Deleting a role does not remove its bindings.** They stay on every cluster they were applied to, and the next role of that name acts with them.
+While the name is on the list, the rule above still holds.
+Kubeast does not see a binding that is off the list: one written by hand, or an entry you took out of the values whose render is still applied on a registered cluster (`helm upgrade` removes it only from the cluster Kubeast is installed in). Anyone holding `admin.roles.create` can take such a binding by making a role of that name. Delete it on each cluster when you retire a role.
+
 **On the cluster where Kubeast is installed**, the chart creates all of this. Change the values and run `helm upgrade`.
 Do not use the script below on this cluster: it puts kubectl annotations on objects the chart owns.
 

@@ -118,6 +118,9 @@ type Config struct {
 	AlertInvestigationEnabled bool
 	// InvestigatorTokenMinutes is that token's lifetime.
 	InvestigatorTokenMinutes int
+	// ImpersonationCustomRoles is what auth.impersonation.customRoles binds on the
+	// clusters: a role of such a name acts as a group that already holds ClusterRoles.
+	ImpersonationCustomRoles []string
 	// Credential plugins a registered kubeconfig may name (exec.command base names).
 	KubeconfigExecCommands []string
 
@@ -379,6 +382,7 @@ func Load() Config {
 
 		AlertInvestigationEnabled: pkgconfig.GetEnvBool("ALERT_INVESTIGATION_ENABLED", false),
 		InvestigatorTokenMinutes:  pkgconfig.GetEnvInt("INVESTIGATOR_TOKEN_MINUTES", 10),
+		ImpersonationCustomRoles:  pkgconfig.GetEnvList("IMPERSONATION_CUSTOM_ROLES", ""),
 
 		PodNamespace:  pkgconfig.GetEnv("POD_NAMESPACE", "kubeast"),
 		KubeconfigDir: pkgconfig.GetEnv("KUBECONFIG_DIR", "/var/kubeast/kubeconfigs"),

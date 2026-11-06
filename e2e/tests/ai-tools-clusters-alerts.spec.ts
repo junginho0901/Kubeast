@@ -196,6 +196,64 @@ test.describe('AI tools: clusters_list and alert_investigate', () => {
     expect(limitedAnswer.clusters).toEqual([{ ...pickerRow(own[0]), current: true, namespaces: ['default'] }])
   })
 
+  test("an investigation's token reads its own cluster through clusters_list and opens no other auth-service route", async ({ request }) => {
+    test.skip(!investigationOn, 'alert investigation (the investigator token) is off')
+    // Asked for as ai-service asks, from its pod; the answer printed holds statuses and bodies, not the token.
+    const script = `
+import json, os, urllib.error, urllib.request
+
+AUTH = 'http://auth-service:8004'
+CLUSTER = '${INBOX_CLUSTER}'
+
+def call(method, url, headers, body=None):
+    data = None if body is None else json.dumps(body).encode()
+    req = urllib.request.Request(url, data=data, method=method, headers={'Content-Type': 'application/json', **headers})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as res:
+            return {'status': res.status, 'body': res.read().decode()}
+    except urllib.error.HTTPError as err:
+        return {'status': err.code, 'body': err.read().decode()}
+
+issued = call('POST', os.environ['AUTH_INVESTIGATOR_TOKEN_URL'], {'X-Internal-Token': os.environ['INTERNAL_API_TOKEN']}, {'cluster_id': CLUSTER})
+if issued['status'] != 200:
+    raise SystemExit('token refused: %d' % issued['status'])
+token = {'Authorization': 'Bearer ' + json.loads(issued['body'])['access_token']}
+print(json.dumps({
+    'list': call('GET', AUTH + '/api/v1/clusters?accessibleOnly=true', token),
+    'registry': call('GET', AUTH + '/api/v1/clusters', token),
+    'tool': call('POST', os.environ.get('TOOL_SERVER_URL', 'http://tool-server:8086') + '/tools/call', token, {'name': 'clusters_list', 'arguments': {'cluster': CLUSTER}}),
+    'others': {
+        'POST /api/v1/clusters': call('POST', AUTH + '/api/v1/clusters', token, {}),
+        'GET /api/v1/auth/me': call('GET', AUTH + '/api/v1/auth/me', token),
+        'POST /api/v1/auth/refresh': call('POST', AUTH + '/api/v1/auth/refresh', token, {}),
+        'GET /api/v1/auth/roles': call('GET', AUTH + '/api/v1/auth/roles', token),
+        'POST /api/v1/auth/admin/roles': call('POST', AUTH + '/api/v1/auth/admin/roles', token, {'name': 'e2e-sym1-never', 'permissions': []}),
+        'POST /api/v1/auth/access-requests': call('POST', AUTH + '/api/v1/auth/access-requests', token, {}),
+    },
+}))
+`
+    const out = JSON.parse(execFileSync('kubectl', ['--kubeconfig', kc, '--context', 'kind-kubeast', '-n', 'kubeast', 'exec', '-i', 'deploy/ai-service', '--', 'python', '-'], { input: script, encoding: 'utf8' })) as Obj
+    const picker = ((await (await request.get('/api/v1/clusters?accessibleOnly=true', { headers: bearer(admin) })).json()).items as Obj[]).filter((c) => c.id === INBOX_CLUSTER)
+    expect(picker.map((c) => c.id), 'the admin reads that cluster').toEqual([INBOX_CLUSTER])
+
+    expect(out.list.status, out.list.body).toBe(200)
+    expect((JSON.parse(out.list.body).items as Obj[]).map(pickerRow), 'the route: its own row').toEqual(picker.map(pickerRow))
+    expect(out.tool.status, out.tool.body).toBe(200)
+    const answer = JSON.parse(JSON.parse(out.tool.body).content)
+    expect(answer.total, 'the tool: one row').toBe(1)
+    expect((answer.clusters as Obj[]).map(pickerRow), 'the tool: its own row').toEqual(picker.map(pickerRow))
+    expect(answer.clusters[0].current).toBe(true)
+
+    expect(out.registry.status, 'the registry view takes admin.clusters.list').toBe(403)
+    expect(out.registry.body).toContain('admin.clusters.list')
+    for (const [route, res] of Object.entries(out.others) as [string, Obj][]) {
+      expect.soft(res.status, route).toBe(403)
+      expect.soft(res.body, route).toContain('does not take a system token')
+    }
+    const roles = await (await request.get('/api/v1/auth/roles', { headers: bearer(admin) })).json()
+    expect(((Array.isArray(roles) ? roles : roles.roles || roles.items || []) as { name: string }[]).map((r) => r.name), 'nothing was made').not.toContain('e2e-sym1-never')
+  })
+
   test('alert_investigate presses the button: its row, its answer and its audit rows', async ({ request }) => {
     test.setTimeout(120_000)
     const run = Date.now().toString(36)

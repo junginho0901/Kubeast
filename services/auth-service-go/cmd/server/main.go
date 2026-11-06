@@ -238,6 +238,7 @@ func main() {
 
 	// Auth middleware (validates tokens using local public key, no JWKS fetch needed)
 	authMiddleware := security.AuthMiddleware(jwtMgr, repo.TokenVersionFor, cfg.AuthCookieName)
+	clusterListAuth := security.InvestigatorReadMiddleware(jwtMgr, repo.TokenVersionFor, cfg.AuthCookieName, cfg.AlertInvestigationEnabled)
 
 	// Cluster registry: per-cluster kubeconfigs are stored as Secrets (k8s) or
 	// files (docker) and read at request time, so registering a cluster never
@@ -270,7 +271,7 @@ func main() {
 		authHandler.SetGoogleGroups(lookup)
 		slog.Info("google group lookup on", "domain", gg.Domain)
 	}
-	roleHandler := handler.NewRoleHandler(repo, auditStore)
+	roleHandler := handler.NewRoleHandler(repo, auditStore, cfg.ImpersonationCustomRoles)
 	setupHandler := handler.NewSetupHandler(cfg, registry, secretStore, auditStore)
 	clustersHandler := handler.NewClustersHandler(registry, secretStore, auditStore, cfg)
 	if cfg.BootstrapDemoUsers {
@@ -332,7 +333,7 @@ func main() {
 		})
 	})
 
-	topLevelRoutes(r, authMiddleware, authHandler, clustersHandler, setupHandler, auditStore)
+	topLevelRoutes(r, authMiddleware, clusterListAuth, authHandler, clustersHandler, setupHandler, auditStore)
 
 	// Server
 	addr := fmt.Sprintf("0.0.0.0:%d", cfg.Port)
