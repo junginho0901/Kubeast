@@ -5,6 +5,7 @@ import { parseResourceLink } from '@/utils/resourceLink'
 
 interface MarkdownLinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
   children?: ReactNode
+  node?: unknown
 }
 
 /**
@@ -17,8 +18,17 @@ interface MarkdownLinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
  * 잘못된 파라미터(`kubest://pod?ns=../etc&name=<script>`)는 `parseResourceLink` 의
  * DNS-1123 규격 검증을 통과하지 못하면 링크가 **비활성 텍스트**로 렌더된다 (XSS 방어).
  */
-export function MarkdownLink({ href, children, ...rest }: MarkdownLinkProps) {
+export function MarkdownLink({ node: _node, href, children, ...rest }: MarkdownLinkProps) {
   const { open } = useResourceDetail()
+
+  // a footnote and its reference are on this page
+  if (href?.startsWith('#')) {
+    return (
+      <a {...rest} href={href} className="text-primary-400 underline hover:text-primary-300">
+        {children}
+      </a>
+    )
+  }
 
   if (href?.startsWith('kubest://')) {
     const parsed = parseResourceLink(href)
@@ -36,10 +46,10 @@ export function MarkdownLink({ href, children, ...rest }: MarkdownLinkProps) {
     }
     return (
       <a
+        {...rest}
         href={href}
         onClick={handleClick}
         className="text-primary-400 underline decoration-dotted hover:text-primary-300"
-        {...rest}
       >
         {children}
       </a>
@@ -49,11 +59,11 @@ export function MarkdownLink({ href, children, ...rest }: MarkdownLinkProps) {
   // 외부 링크 기본 동작
   return (
     <a
+      {...rest}
       href={href}
       target="_blank"
       rel="noopener noreferrer"
       className="text-primary-400 underline hover:text-primary-300"
-      {...rest}
     >
       {children}
     </a>

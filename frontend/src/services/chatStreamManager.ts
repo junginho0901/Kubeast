@@ -108,7 +108,16 @@ export function appendToolBlock(content: string, block: string): string {
 export function withToolResult(content: string, n: number, result: string): string {
   const at = nthToolBlock(content, n)
   if (at === -1) return content
-  return content.substring(0, at) + content.substring(at).replace('Executing...', result)
+  // a function: replace() reads $&, $` and $' in a replacement string, and a result is any text
+  return content.substring(0, at) + content.substring(at).replace('Executing...', () => result)
+}
+
+// The backticks around a tool result: more than its longest run, so no line of it can close the code block
+// (ai-service formatters.code_fence writes the same; keep the two equal).
+export function codeFence(text: string): string {
+  let longest = 2
+  for (const run of text.match(/`+/g) ?? []) longest = Math.max(longest, run.length)
+  return '`'.repeat(longest + 1)
 }
 
 // The content with what goes under the n-th tool block's name (the 🔐 line and its requests), where the saved answer has it.
@@ -443,13 +452,9 @@ export class ChatStreamManager {
               )
 
               const bodyText = displayText || resultText
-              const codeBlock = displayText
-                ? `\`\`\`\n${bodyText}\n\`\`\``
-                : isYaml
-                ? `\`\`\`yaml\n${bodyText}\n\`\`\``
-                : isJson
-                ? `\`\`\`json\n${bodyText}\n\`\`\``
-                : `\`\`\`\n${bodyText}\n\`\`\``
+              const fence = codeFence(bodyText)
+              const language = displayText ? '' : isYaml ? 'yaml' : isJson ? 'json' : ''
+              const codeBlock = `${fence}${language}\n${bodyText}\n${fence}`
 
               // Text still queued for the typewriter came after this call's block, so it stays in the queue.
               this.setState({

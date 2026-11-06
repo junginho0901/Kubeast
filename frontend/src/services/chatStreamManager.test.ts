@@ -102,6 +102,35 @@ describe('the stream manager keeps text and tool blocks in arrival order', () =>
     expect(state.toolCalls.map((tc) => tc.result)).toEqual(['["self"]', 'pod-a Running'])
   })
 
+  // The same text as ai-service tests/test_tool_result_fence.py: the saved answer and the live one must match.
+  it.each([
+    ['no backticks', 'pod-a Running', '```\npod-a Running\n```'],
+    ['one or two backticks', 'a `b` ``c``', '```\na `b` ``c``\n```'],
+    ['a line of three', 'a\n```\nb', '````\na\n```\nb\n````'],
+    ['a line of five, and three', 'a\n`````\nb\n```\nc', '``````\na\n`````\nb\n```\nc\n``````'],
+    ['a line of three, indented', 'a\n   ```\nb', '````\na\n   ```\nb\n````'],
+    ['three in the middle of a line', 'a ``` b', '````\na ``` b\n````'],
+  ])('a code block outlasts the backticks in its result: %s', async (_name, result, block) => {
+    const state = await run([{ function: 'k8s_pod_logs', args: {}, call_id: 0 }, { function_result: 'k8s_pod_logs', result, call_id: 0 }, '[DONE]'])
+    expect(state.content).toContain(`<summary><strong>📊 Results</strong></summary>\n\n${block}\n\n</details>`)
+  })
+
+  it('a longer code block keeps its language', async () => {
+    const json = await run([{ function: 't', args: {}, call_id: 0 }, { function_result: 't', result: '```', is_json: true, call_id: 0 }, '[DONE]'])
+    expect(json.content).toContain('````json\n```\n````')
+    const yaml = await run([{ function: 't', args: {}, call_id: 0 }, { function_result: 't', result: '```', is_yaml: true, call_id: 0 }, '[DONE]'])
+    expect(yaml.content).toContain('````yaml\n```\n````')
+    const display = await run([{ function: 't', args: {}, call_id: 0 }, { function_result: 't', result: '{}', is_json: true, display: 'a\n```\nb', call_id: 0 }, '[DONE]'])
+    expect(display.content).toContain('````\na\n```\nb\n````')
+  })
+
+  it('a result is put in word for word, whatever dollar signs it holds', async () => {
+    const result = "cost $' and $` and $& and $$ and $1"
+    const state = await run([{ function: 't', args: { a: 1 }, call_id: 0 }, { function_result: 't', result, call_id: 0 }, { content: 'After.' }, '[DONE]'])
+    expect(state.content).toContain(`\`\`\`\n${result}\n\`\`\`\n\n</details>`)
+    expect(state.content.split('📋 Arguments').length - 1).toBe(1)
+  })
+
   it('an answer without tools is its text', async () => {
     const state = await run([{ content: 'Two clusters.' }, '[DONE]'])
     expect(state.content).toBe('Two clusters.')
