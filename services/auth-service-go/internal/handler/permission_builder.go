@@ -22,13 +22,7 @@ import (
 func (h *AuthHandler) buildPermissionMatrix(ctx context.Context, userID string, globalRolePerms []string) (auth.PermissionMatrix, error) {
 	matrix := auth.PermissionMatrix{}
 
-	var global []string
-	for _, p := range globalRolePerms {
-		if isGlobalPermission(p) {
-			global = append(global, p)
-		}
-	}
-	if len(global) > 0 {
+	if global := globalPermissions(globalRolePerms); len(global) > 0 {
 		matrix["*"] = global
 	}
 
@@ -44,6 +38,17 @@ func (h *AuthHandler) buildPermissionMatrix(ctx context.Context, userID string, 
 		matrix[g.ClusterID] = perms
 	}
 	return matrix, nil
+}
+
+// globalPermissions keeps what the token's "*" entry would hold.
+func globalPermissions(perms []string) []string {
+	var global []string
+	for _, p := range perms {
+		if isGlobalPermission(p) {
+			global = append(global, p)
+		}
+	}
+	return global
 }
 
 // isGlobalPermission: "*" and admin.* are global — the token's "*" entry holds

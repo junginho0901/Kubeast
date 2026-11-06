@@ -90,8 +90,6 @@ func (h *AuthHandler) AdminUnlockUser(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusNotFound, "User not found")
 		return
 	}
-	before := audit.MustJSON(map[string]any{"dormant_locked_at": user.DormantLockedAt, "locked_until": user.LockedUntil})
-	found, err := h.repo.UnlockUser(r.Context(), userID)
 	rec := audit.FromHTTPRequest(r)
 	rec.Service = audit.ServiceAdmin
 	rec.Action = "admin.users.unlock"
@@ -100,7 +98,19 @@ func (h *AuthHandler) AdminUnlockUser(w http.ResponseWriter, r *http.Request) {
 	rec.TargetType = "user"
 	rec.TargetID = user.ID
 	rec.TargetEmail = user.Email
-	rec.Before = before
+	rec.Before = audit.MustJSON(map[string]any{"dormant_locked_at": user.DormantLockedAt, "locked_until": user.LockedUntil})
+	if err := h.globalCeiling(r.Context(), payload, user); err != nil {
+		if !errors.Is(err, errCeiling) {
+			response.InternalError(w, r, err)
+			return
+		}
+		rec.Result = audit.ResultFailure
+		rec.Error = err.Error()
+		_, _ = h.auditStore.Write(r.Context(), rec)
+		response.Error(w, http.StatusForbidden, err.Error())
+		return
+	}
+	found, err := h.repo.UnlockUser(r.Context(), userID)
 	if err != nil {
 		rec.Result = audit.ResultFailure
 		rec.Error = err.Error()

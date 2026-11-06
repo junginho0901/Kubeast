@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/model"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/repository"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
@@ -113,6 +114,9 @@ func (h *AuthHandler) SetUserClusterRole(w http.ResponseWriter, r *http.Request)
 		response.Error(w, http.StatusNotFound, "User not found")
 		return
 	}
+	if h.refuseWiderGrant(w, r, "user.cluster_role.set", payload, target, clusterID, map[string]any{"role": req.Role}) {
+		return
+	}
 	role, err := h.repo.GetRoleByName(r.Context(), req.Role)
 	if err != nil {
 		response.InternalError(w, r, err)
@@ -178,6 +182,9 @@ func (h *AuthHandler) DeleteUserClusterRole(w http.ResponseWriter, r *http.Reque
 		response.Error(w, http.StatusNotFound, "User not found")
 		return
 	}
+	if h.refuseWiderGrant(w, r, "user.cluster_role.unset", payload, target, clusterID, nil) {
+		return
+	}
 
 	existed, delErr := h.repo.DeleteUserClusterRole(r.Context(), userID, clusterID)
 	h.auditClusterRole(r, "user.cluster_role.unset", payload, userID, target.Email, clusterID, nil, delErr)
@@ -206,6 +213,23 @@ func (h *AuthHandler) refuseOwnClusterAccess(w http.ResponseWriter, r *http.Requ
 	err := errors.New("cannot change your own cluster access")
 	h.auditClusterRole(r, action, payload, userID, payload.Email, clusterID, after, err)
 	response.Error(w, http.StatusForbidden, "Cannot change your own cluster access")
+	return true
+}
+
+// refuseWiderGrant answers a change to the grant of an account out of reach
+// (globalCeiling) with 403 and a failure row naming the cluster, and says whether
+// it answered.
+func (h *AuthHandler) refuseWiderGrant(w http.ResponseWriter, r *http.Request, action string, actor auth.TokenPayload, target *model.User, clusterID string, after map[string]any) bool {
+	err := h.globalCeiling(r.Context(), actor, target)
+	if err == nil {
+		return false
+	}
+	if !errors.Is(err, errCeiling) {
+		response.InternalError(w, r, err)
+		return true
+	}
+	h.auditClusterRole(r, action, actor, target.ID, target.Email, clusterID, after, err)
+	response.Error(w, http.StatusForbidden, err.Error())
 	return true
 }
 

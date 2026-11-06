@@ -17,7 +17,7 @@ The key does not call the API itself. It is exchanged for a short-lived access t
 
 On each cluster the token keeps the role of the issuer's grant there. The ceiling lowers a built-in role, never raises it. A custom role keeps its name, with its permissions cut down to the ceiling. Only a global admin, who holds every cluster, takes the ceiling's name.
 
-An access token from a key does not manage the account. Issuing or revoking a key, changing the password and cancelling an access request need a signed-in session; the token gets 403 and the attempt is recorded as a failure. It can file an access request (the MCP tool `request_access`), which an admin decides.
+An access token from a key does not manage the account. Issuing or revoking a key, changing the password and cancelling an access request need a signed-in session; the token gets 403 and the attempt is recorded as a failure. It can file an access request (the MCP tool `request_access`), which an admin decides. It does not manage AI models either: that takes `admin.ai_models.*` in the global permissions, which a key's token never carries, whatever its owner's role is called.
 
 Once the key is revoked or expires, the next exchange is refused. Tokens already obtained with that key are refused within the services' token check interval (30 seconds). Only the owner can issue a key, but an admin can revoke someone else's key from the user details.
 
@@ -60,7 +60,7 @@ With `auth.dormantAccounts.enabled: true`, a sweeper inside auth-service runs ev
 A locked account is refused password login, SSO and API key exchange alike. The response is a plain 401, and the audit log records the reason as `reason: dormant`. The account gets back in only after an admin presses **Unlock** in Admin → User Management.
 
 - With `exemptAdmins: true` (default), accounts whose roles carry the `*` or `admin.*` permission are not locked. If the last admin were locked too, no one could unlock anyone. They keep showing as `dormant` in the access review report instead, flagged `lock_exempt`.
-- Admin → User Management shows a "Dormant lock"/"Locked" badge and an **Unlock** button on locked accounts. **Sweep dormant now** at the top runs the sweeper once right away (`admin.users.update`).
+- Admin → User Management shows a "Dormant lock"/"Locked" badge and an **Unlock** button on locked accounts. Unlocking an account with a global permission (`*`, `admin.*`) the admin lacks is refused; what the account holds per cluster does not matter. **Sweep dormant now** at the top runs the sweeper once right away (`admin.users.update`).
 - Audit actions: `user.account.dormant_lock` (actor `system`), `admin.dormant.sweep` and `admin.users.unlock`.
 - Turning it off stops the sweeper so no new locks happen, but accounts already locked stay locked until unlocked.
 - The access review counts dormant accounts with the same activity (sign-in, API key use, creation) but its own `dormantDays` (the display threshold), so the two can differ, e.g. "flag from 60 days, lock at 90".

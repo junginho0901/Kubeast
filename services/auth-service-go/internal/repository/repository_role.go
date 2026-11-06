@@ -103,6 +103,56 @@ func (r *Repository) ListRoles(ctx context.Context) ([]model.RoleWithPermissions
 	return roles, rows.Err()
 }
 
+// ListRoleNames returns every role's id, name and system mark, for checking a
+// new name against them without reading their permissions.
+func (r *Repository) ListRoleNames(ctx context.Context) ([]model.Role, error) {
+	rows, err := r.pool.Query(ctx, `SELECT id, name, is_system FROM roles ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var roles []model.Role
+	for rows.Next() {
+		var role model.Role
+		if err := rows.Scan(&role.ID, &role.Name, &role.IsSystem); err != nil {
+			return nil, err
+		}
+		roles = append(roles, role)
+	}
+	return roles, rows.Err()
+}
+
+// RoleGrant is where a role is granted: a cluster and the namespaces there, nil
+// for the whole cluster.
+type RoleGrant struct {
+	ClusterID  string
+	Namespaces []string
+}
+
+// ListRoleGrants returns where the role is granted, including a grant that goes
+// back to it when a temporary one ends.
+func (r *Repository) ListRoleGrants(ctx context.Context, roleID int) ([]RoleGrant, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT cluster_id, namespaces FROM user_cluster_roles WHERE role_id = $1
+		 UNION
+		 SELECT cluster_id, restore_namespaces FROM user_cluster_roles WHERE restore_role_id = $1`, roleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var grants []RoleGrant
+	for rows.Next() {
+		var g RoleGrant
+		if err := rows.Scan(&g.ClusterID, &g.Namespaces); err != nil {
+			return nil, err
+		}
+		grants = append(grants, g)
+	}
+	return grants, rows.Err()
+}
+
 func (r *Repository) UpdateRole(ctx context.Context, id int, name, description string, permissions []string) (*model.RoleWithPermissions, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {

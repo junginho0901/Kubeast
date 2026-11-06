@@ -2795,6 +2795,7 @@
     "sweepTitle": "Lock accounts with no sign-in or API key use for {{days}} days (runs daily on its own)",
     "sweepDone": "Sweep done: {{count}} account(s) locked.",
     "sweepFailed": "The sweep failed.",
+    "actionFailed": "The action failed.",
     "loading": "Loading...",
     "loadError": "Failed to load users.",
     "title": "User Management",

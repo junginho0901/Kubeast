@@ -133,6 +133,22 @@ test('nobody changes their own cluster access: refused with an audit row, the se
   expect(items.some((r) => r.ActorEmail === u.email && r.Result === 'failure' && /own cluster access/.test(r.Error ?? ''))).toBe(true)
 })
 
+test('a password reset of an account holding more is refused, and User Management says why', async ({ page, request }) => {
+  const role = await mkRole(request, 'narrow', ['menu.dashboard', 'admin.users.read', 'admin.users.update'])
+  const u = await mkUser(request, 'narrow', role.id)
+  expect((await request.put(`/api/v1/auth/admin/users/${u.id}/cluster-roles/default`, { headers: admin, data: { role: 'Read', namespaces: [] } })).status()).toBeLessThan(300)
+  const wide = await mkUser(request, 'wide', await roleId(request, 'Admin'))
+  await uiLogin(page, u.email, u.password)
+  await page.goto('/admin/users')
+  await page.getByTestId('admin-users-search').fill(wide.email)
+  const row = page.locator('tr').filter({ has: page.getByTestId(`user-detail-${wide.email}`) })
+  await row.getByTestId('user-reset-password').click({ timeout: 15000 })
+  await page.getByTestId('confirm-dialog-ok').click()
+  await expect(page.getByTestId('admin-users-action-error')).toContainText(`permission ceiling: ${wide.email} holds what you do not: *`, { timeout: 15000 })
+  await expect(page.getByTestId('reset-password-result')).toHaveCount(0)
+  expect((await login(request, wide.email, wide.password)).status(), 'the password is what it was').toBe(200)
+})
+
 test('a role still held is not deleted, and Role Management says why', async ({ page, request }) => {
   const role = await mkRole(request, 'held', ['menu.dashboard', 'resource.*.read'])
   await mkUser(request, 'holder', role.id)
