@@ -84,10 +84,14 @@ func (o Options) on(rule string) bool { return o.Enabled && !o.Disabled[rule] }
 
 // --- key-name rule ---------------------------------------------------------
 
-// sensitiveKey matches a credential word as a whole segment of the normalized
+// sensitiveKey matches a credential word at the end of a word of the normalized
 // key (db_password, POSTGRES_PASSWORD, clientSecret → client_secret, apiKey →
-// api_key); "tokenizer" or "max_tokens" do not match.
-var sensitiveKey = regexp.MustCompile(`(^|_)(password|passwd|pwd|secret|token|api_key|access_key|private_key|credentials?|client_secret|dsn|connection_string)(_|$)`)
+// api_key, and names glued together, PGPASSWORD, APIKEY); "tokenizer" or
+// "max_tokens" do not match.
+var sensitiveKey = regexp.MustCompile(`(^|_)[a-z0-9]*(password|passwd|pwd|secret|token|api_?key|access_?key|private_?key|secretkey|credentials?|dsn|connection_?string)(_|$)`)
+
+// separatedKey: the same words standing apart. A name that matches only the rule above is glued: see leftToTheWordRule.
+var separatedKey = regexp.MustCompile(`(^|_)(password|passwd|pwd|secret|token|api_key|access_key|private_key|credentials?|dsn|connection_string)(_|$)`)
 
 // notSecretKey: names that contain a credential word but are references or
 // settings, not values (secretName, secretKeyRef, token_ttl, password_min_length).
@@ -124,10 +128,41 @@ var envListJSON = regexp.MustCompile(`("name"[ \t]*:[ \t]*"([A-Za-z0-9_.\-]+)"[ 
 // credentialLastWord: the key's last word says the value itself is the credential, so a number there is one. Under
 // password_expiry_days, token or secret a number may be a setting or a count, and hiding it would change what the
 // reader is told.
-var credentialLastWord = regexp.MustCompile(`(^|_)(password|passwd|pwd|api_key|access_key|secret_key|private_key|client_secret)$`)
+var credentialLastWord = regexp.MustCompile(`(^|_)[a-z0-9]*(password|passwd|pwd|api_?key|access_?key|secret_?key|private_?key|client_?secret)$`)
+
+// The shell's own variables, as the shell spells them: PWD=/app says where a process runs. DB_PWD=/x, and an ODBC
+// connection string's Pwd=/x, are a password whatever they look like.
+var (
+	workingDirectoryKey = regexp.MustCompile(`^(PWD|OLDPWD|pwd|oldpwd)$`)
+	pathShaped          = regexp.MustCompile(`^(~|\.{1,2})?(/[A-Za-z0-9._~\-]*)*$`)
+)
+
+func isWorkingDirectory(key, value string) bool {
+	return workingDirectoryKey.MatchString(key) && pathShaped.MatchString(strings.TrimSpace(value))
+}
+
+// leftToTheWordRule: KEY=word under a glued name stays with the rule for a line's words, as PGPASSWORD=x psql -h db has
+// to: the command after the word is not the value. Whatever that rule cannot read as one word is masked to the end of
+// the line.
+func leftToTheWordRule(key, line string) bool {
+	if separatedKey.MatchString(normalizeKey(key)) {
+		return false
+	}
+	loc := inlinePair.FindStringSubmatchIndex(line)
+	if loc == nil || line[loc[4]:loc[5]] != key {
+		return false
+	}
+	if loc[1] == len(line) || line[loc[1]] == ' ' || line[loc[1]] == '\t' {
+		return true
+	}
+	return line[loc[1]] == '}' && strings.HasPrefix(line[loc[8]:loc[9]], "${")
+}
 
 // valueStays says whether a sensitive key's text value is left as it is.
 func valueStays(key, value string) bool {
+	if isWorkingDirectory(key, value) {
+		return true
+	}
 	if !valueLooksHarmless(value) {
 		return false
 	}
@@ -258,11 +293,11 @@ func inlineValueStays(key, value string) bool {
 	if v == "" || strings.HasPrefix(v, "<REDACTED") || inlineNotAValue[strings.ToLower(v)] || inlineReference.MatchString(v) {
 		return true
 	}
-	k := normalizeKey(strings.TrimLeft(key, "-"))
-	if strings.HasSuffix(k, "pwd") && (strings.HasPrefix(v, "/") || strings.HasPrefix(v, "~")) {
-		return true // PWD=/app: the shell's working directory
+	if isWorkingDirectory(key, v) {
+		return true
 	}
-	credential := credentialLastWord.MatchString(k) || strings.HasSuffix(k, "password") || strings.HasSuffix(k, "passwd")
+	k := normalizeKey(strings.TrimLeft(key, "-"))
+	credential := credentialLastWord.MatchString(k)
 	if !credential && onlyNumberCharacters(v) {
 		return true // token=5, secret=3: a count or a duration
 	}
@@ -381,7 +416,7 @@ func Text(s string, o Options) (string, Stats) {
 		s = replaceCount(keyValueLine, s, func(m string) string {
 			sub := keyValueLine.FindStringSubmatch(m)
 			key, value := sub[2], sub[4]
-			if !keyIsSensitive(key) || valueStays(key, value) {
+			if !keyIsSensitive(key) || valueStays(key, value) || leftToTheWordRule(key, m) {
 				return m
 			}
 			return sub[1] + sub[3] + "<REDACTED:" + key + ">" + sub[5]
@@ -787,7 +822,7 @@ func walk(v any, o Options, st *Stats, secret bool) any {
 			if secret && secretValueFields[k] {
 				continue
 			}
-			if s, ok := val.(string); ok && o.on("key_name") && keyIsSensitive(k) && !valueLooksHarmless(s) {
+			if s, ok := val.(string); ok && o.on("key_name") && keyIsSensitive(k) && !valueLooksHarmless(s) && !isWorkingDirectory(k, s) {
 				t[k] = "<REDACTED:" + k + ">"
 				st.add("key_name", 1)
 				continue

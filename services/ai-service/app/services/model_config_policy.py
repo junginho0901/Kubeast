@@ -12,9 +12,9 @@ updated, tested and resolved for use:
     provider claude-code only) or names starting with KUBEAST_AI_KEY_
     (operators add those to the secret).
   - base_url: http(s) only, no credentials, and every address the host
-    resolves to must be public — never cloud metadata, loopback, link-local
-    or private ranges, in an IPv6 form either — unless the host is listed in
-    AI_BASE_URL_ALLOWED_HOSTS (an in-cluster Ollama or LLM gateway).
+    resolves to must be public — never cloud metadata, loopback, link-local,
+    multicast or private ranges, in an IPv6 form either — unless the host is
+    listed in AI_BASE_URL_ALLOWED_HOSTS (an in-cluster Ollama or LLM gateway).
   - extra_headers: no authentication headers (the key travels via
     api_key_env only), and they are masked in responses.
   - Azure OpenAI: a base_url is required (the v1 endpoint), and deployment
@@ -51,12 +51,17 @@ PRIVATE_NETWORKS = (
     ipaddress.ip_network("0.0.0.0/8"), ipaddress.ip_network("10.0.0.0/8"),
     ipaddress.ip_network("100.64.0.0/10"), ipaddress.ip_network("127.0.0.0/8"),
     ipaddress.ip_network("172.16.0.0/12"), ipaddress.ip_network("192.168.0.0/16"),
-    ipaddress.ip_network("198.18.0.0/15"),
+    ipaddress.ip_network("198.18.0.0/15"), ipaddress.ip_network("224.0.0.0/4"),
     ipaddress.ip_network("::/128"), ipaddress.ip_network("::1/128"),
     ipaddress.ip_network("fc00::/7"), ipaddress.ip_network("fe80::/10"),
+    ipaddress.ip_network("fec0::/10"), ipaddress.ip_network("ff00::/8"),
 )
-# IPv6 forms with an IPv4 address in their low 32 bits: NAT64 and the old IPv4-compatible one.
-IPV4_IN_LOW_BITS = (ipaddress.ip_network("64:ff9b::/96"), ipaddress.ip_network("::/96"))
+# IPv6 forms with an IPv4 address in their low 32 bits: NAT64, a site's own NAT64 (RFC 8215, read as its usual /96),
+# IPv4-translated (SIIT) and the old IPv4-compatible one.
+IPV4_IN_LOW_BITS = (
+    ipaddress.ip_network("64:ff9b::/96"), ipaddress.ip_network("64:ff9b:1::/48"),
+    ipaddress.ip_network("::ffff:0:0:0/96"), ipaddress.ip_network("::/96"),
+)
 
 MASK = "***"
 
@@ -156,15 +161,21 @@ def _addresses(host: str, resolve: Callable[..., list]) -> List[ipaddress._BaseA
     return addrs
 
 
-def _carried_ip(ip: ipaddress._BaseAddress) -> ipaddress._BaseAddress:
-    """The address to judge: an IPv6 form carrying an IPv4 address reaches that address, and a network of the other
-    version never contains it. A public IPv4 behind NAT64 stays public, so an IPv6-only cluster keeps its endpoints."""
+def _addresses_to_judge(ip: ipaddress._BaseAddress) -> List[ipaddress._BaseAddress]:
+    """The address and each IPv4 address its form carries: an IPv6 form reaches that address, and a network of the other
+    version never contains it. A public IPv4 behind NAT64 stays public, so an IPv6-only cluster keeps its endpoints.
+    Teredo carries two, its server and its client."""
     if ip.version == 4:
-        return ip
-    carried = ip.ipv4_mapped or ip.sixtofour
-    if carried is None and any(ip in net for net in IPV4_IN_LOW_BITS):
-        carried = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
-    return ip if carried is None else carried
+        return [ip]
+    judged = [ip, *(ip.teredo or ())]
+    judged += [carried for carried in (ip.ipv4_mapped, ip.sixtofour) if carried is not None]
+    if any(ip in net for net in IPV4_IN_LOW_BITS):
+        judged.append(ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF))
+    return judged
+
+
+def _is_in(ip: ipaddress._BaseAddress, networks: Iterable) -> bool:
+    return any(address in net for address in _addresses_to_judge(ip) for net in networks)
 
 
 def check_base_url(url: Optional[str], resolve: Callable[..., list] = socket.getaddrinfo) -> None:
@@ -184,17 +195,16 @@ def check_base_url(url: Optional[str], resolve: Callable[..., list] = socket.get
         literal = ipaddress.ip_address(host)
     except ValueError:
         literal = None
-    if literal is not None and any(_carried_ip(literal) in net for net in METADATA_NETWORKS):
+    if literal is not None and _is_in(literal, METADATA_NETWORKS):
         raise PolicyError("base_url host is not allowed")
     if _host_allowed(host, allowed_hosts()):
         # The operator vouched for this host (an in-cluster model server, a
         # gateway only cluster DNS resolves): no address check.
         return
     for ip in _addresses(host, resolve):
-        carried = _carried_ip(ip)
-        if any(carried in net for net in METADATA_NETWORKS):
+        if _is_in(ip, METADATA_NETWORKS):
             raise PolicyError("base_url host is not allowed")
-        if any(carried in net for net in PRIVATE_NETWORKS):
+        if _is_in(ip, PRIVATE_NETWORKS):
             raise PolicyError(
                 f"base_url host resolves to a private address ({ip}); list it in AI_BASE_URL_ALLOWED_HOSTS to allow it"
             )
