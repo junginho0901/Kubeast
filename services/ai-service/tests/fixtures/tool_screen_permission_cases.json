@@ -1,0 +1,2797 @@
+{
+ "tools": [
+  "alerts_list",
+  "audit_search",
+  "can_i",
+  "cost",
+  "get_cluster_overview",
+  "get_node_metrics",
+  "get_pod_metrics",
+  "gitops_status",
+  "helm_read",
+  "hygiene",
+  "issues",
+  "k8s_annotate_resource",
+  "k8s_apply_manifest",
+  "k8s_check_service_connectivity",
+  "k8s_count",
+  "k8s_create_resource",
+  "k8s_delete_resource",
+  "k8s_describe_resource",
+  "k8s_diff",
+  "k8s_execute_command",
+  "k8s_explain",
+  "k8s_find_resource",
+  "k8s_get_available_api_resources",
+  "k8s_get_cluster_configuration",
+  "k8s_get_events",
+  "k8s_get_pod_logs",
+  "k8s_get_resource_yaml",
+  "k8s_get_resources",
+  "k8s_jq_query",
+  "k8s_label_resource",
+  "k8s_patch_resource",
+  "k8s_remove_annotation",
+  "k8s_remove_label",
+  "k8s_rollout",
+  "k8s_scale",
+  "k8s_tabular_query",
+  "logsearch",
+  "loki_labels",
+  "loki_patterns",
+  "loki_query",
+  "network_drops",
+  "network_flows",
+  "network_policy_check",
+  "network_top_flows",
+  "nodes_log",
+  "nodes_stats_summary",
+  "optimization",
+  "policy_reports",
+  "prometheus_labels",
+  "prometheus_metrics",
+  "prometheus_query",
+  "prometheus_rules",
+  "prometheus_targets",
+  "resource_graph",
+  "traces_compare",
+  "traces_get",
+  "traces_metrics",
+  "traces_search",
+  "traces_tags"
+ ],
+ "spellings": {
+  "backendtlspolicies": "backendtlspolicy",
+  "backendtlspolicy": "backendtlspolicy",
+  "btlspolicy": "backendtlspolicy",
+  "cj": "cronjob",
+  "clusterrole": "clusterrole",
+  "clusterrolebinding": "clusterrolebinding",
+  "clusterrolebindings": "clusterrolebinding",
+  "clusterroles": "clusterrole",
+  "cm": "configmap",
+  "configmap": "configmap",
+  "configmaps": "configmap",
+  "cost": "cost",
+  "crd": "crd",
+  "crds": "crd",
+  "cronjob": "cronjob",
+  "cronjobs": "cronjob",
+  "customresourcedefinition": "crd",
+  "customresourcedefinitions": "crd",
+  "daemonset": "daemonset",
+  "daemonsets": "daemonset",
+  "deploy": "deployment",
+  "deployment": "deployment",
+  "deployments": "deployment",
+  "deviceclass": "deviceclass",
+  "deviceclasses": "deviceclass",
+  "ds": "daemonset",
+  "endpoints": "endpoints",
+  "endpointslice": "endpointslice",
+  "endpointslices": "endpointslice",
+  "ep": "endpoints",
+  "gateway": "gateway",
+  "gatewayclass": "gatewayclass",
+  "gatewayclasses": "gatewayclass",
+  "gateways": "gateway",
+  "gc": "gatewayclass",
+  "grpcroute": "grpcroute",
+  "grpcroutes": "grpcroute",
+  "gtw": "gateway",
+  "gw": "gateway",
+  "horizontalpodautoscaler": "hpa",
+  "horizontalpodautoscalers": "hpa",
+  "hpa": "hpa",
+  "httproute": "httproute",
+  "httproutes": "httproute",
+  "ing": "ingress",
+  "ingress": "ingress",
+  "ingressclass": "ingressclass",
+  "ingressclasses": "ingressclass",
+  "ingresses": "ingress",
+  "job": "job",
+  "jobs": "job",
+  "lease": "lease",
+  "leases": "lease",
+  "limitrange": "limitrange",
+  "limitranges": "limitrange",
+  "limits": "limitrange",
+  "mutatingadmissionpolicies": "mutatingadmissionpolicy",
+  "mutatingadmissionpolicy": "mutatingadmissionpolicy",
+  "mutatingadmissionpolicybinding": "mutatingadmissionpolicybinding",
+  "mutatingadmissionpolicybindings": "mutatingadmissionpolicybinding",
+  "mutatingwebhookconfiguration": "mutatingwebhookconfiguration",
+  "mutatingwebhookconfigurations": "mutatingwebhookconfiguration",
+  "namespace": "namespace",
+  "namespaces": "namespace",
+  "netpol": "networkpolicy",
+  "networkflow": "networkflow",
+  "networkpolicies": "networkpolicy",
+  "networkpolicy": "networkpolicy",
+  "no": "node",
+  "node": "node",
+  "nodes": "node",
+  "ns": "namespace",
+  "pc": "priorityclass",
+  "pdb": "pdb",
+  "persistentvolume": "pv",
+  "persistentvolumeclaim": "pvc",
+  "persistentvolumeclaims": "pvc",
+  "persistentvolumes": "pv",
+  "po": "pod",
+  "pod": "pod",
+  "poddisruptionbudget": "pdb",
+  "poddisruptionbudgets": "pdb",
+  "pods": "pod",
+  "policyreport": "policyreport",
+  "policyreports": "policyreport",
+  "polr": "policyreport",
+  "priorityclass": "priorityclass",
+  "priorityclasses": "priorityclass",
+  "pv": "pv",
+  "pvc": "pvc",
+  "quota": "resourcequota",
+  "referencegrant": "referencegrant",
+  "referencegrants": "referencegrant",
+  "refgrant": "referencegrant",
+  "replicaset": "replicaset",
+  "replicasets": "replicaset",
+  "resourceclaim": "resourceclaim",
+  "resourceclaims": "resourceclaim",
+  "resourceclaimtemplate": "resourceclaimtemplate",
+  "resourceclaimtemplates": "resourceclaimtemplate",
+  "resourcequota": "resourcequota",
+  "resourcequotas": "resourcequota",
+  "resourceslice": "resourceslice",
+  "resourceslices": "resourceslice",
+  "role": "role",
+  "rolebinding": "rolebinding",
+  "rolebindings": "rolebinding",
+  "roles": "role",
+  "rs": "replicaset",
+  "runtimeclass": "runtimeclass",
+  "runtimeclasses": "runtimeclass",
+  "sa": "serviceaccount",
+  "sc": "storageclass",
+  "secret": "secret",
+  "secrets": "secret",
+  "service": "service",
+  "serviceaccount": "serviceaccount",
+  "serviceaccounts": "serviceaccount",
+  "services": "service",
+  "statefulset": "statefulset",
+  "statefulsets": "statefulset",
+  "storageclass": "storageclass",
+  "storageclasses": "storageclass",
+  "sts": "statefulset",
+  "svc": "service",
+  "validatingadmissionpolicies": "validatingadmissionpolicy",
+  "validatingadmissionpolicy": "validatingadmissionpolicy",
+  "validatingadmissionpolicybinding": "validatingadmissionpolicybinding",
+  "validatingadmissionpolicybindings": "validatingadmissionpolicybinding",
+  "validatingwebhookconfiguration": "validatingwebhookconfiguration",
+  "validatingwebhookconfigurations": "validatingwebhookconfiguration",
+  "verticalpodautoscaler": "vpa",
+  "verticalpodautoscalers": "vpa",
+  "volumeattachment": "volumeattachment",
+  "volumeattachments": "volumeattachment",
+  "vpa": "vpa"
+ },
+ "permission_names": [
+  "backendtlspolicy",
+  "clusterrole",
+  "clusterrolebinding",
+  "configmap",
+  "cost",
+  "crd",
+  "cronjob",
+  "customresource",
+  "daemonset",
+  "deployment",
+  "deviceclass",
+  "endpoints",
+  "endpointslice",
+  "gateway",
+  "gatewayclass",
+  "grpcroute",
+  "hpa",
+  "httproute",
+  "ingress",
+  "ingressclass",
+  "job",
+  "lease",
+  "limitrange",
+  "mutatingadmissionpolicy",
+  "mutatingadmissionpolicybinding",
+  "mutatingwebhookconfiguration",
+  "namespace",
+  "networkflow",
+  "networkpolicy",
+  "node",
+  "pdb",
+  "pod",
+  "policyreport",
+  "priorityclass",
+  "pv",
+  "pvc",
+  "referencegrant",
+  "replicaset",
+  "resourceclaim",
+  "resourceclaimtemplate",
+  "resourcequota",
+  "resourceslice",
+  "role",
+  "rolebinding",
+  "runtimeclass",
+  "secret",
+  "service",
+  "serviceaccount",
+  "statefulset",
+  "storageclass",
+  "validatingadmissionpolicy",
+  "validatingadmissionpolicybinding",
+  "validatingwebhookconfiguration",
+  "volumeattachment",
+  "vpa"
+ ],
+ "write_role": [
+  "menu.*",
+  "resource.*.read",
+  "resource.*.create",
+  "resource.*.edit",
+  "resource.*.delete",
+  "resource.cronjob.suspend",
+  "resource.cronjob.trigger",
+  "resource.secret.reveal",
+  "resource.alert.silence",
+  "resource.pod.logfile",
+  "resource.helm.read",
+  "resource.helm.rollback",
+  "resource.helm.upgrade",
+  "resource.helm.test",
+  "ai.tool.*",
+  "ai.mcp.use"
+ ],
+ "read_role": [
+  "resource.*.read",
+  "resource.helm.read",
+  "resource.pod.logfile",
+  "ai.mcp.use",
+  "ai.tool.get_cluster_overview",
+  "ai.tool.get_pod_metrics",
+  "ai.tool.get_node_metrics",
+  "ai.tool.k8s_get_resources",
+  "ai.tool.k8s_get_resource_yaml",
+  "ai.tool.k8s_describe_resource",
+  "ai.tool.k8s_get_pod_logs",
+  "ai.tool.k8s_get_events",
+  "ai.tool.k8s_get_available_api_resources",
+  "ai.tool.k8s_get_cluster_configuration",
+  "ai.tool.k8s_check_service_connectivity",
+  "ai.tool.k8s_find_resource",
+  "ai.tool.k8s_explain",
+  "ai.tool.issues",
+  "ai.tool.prometheus_query",
+  "ai.tool.prometheus_metrics",
+  "ai.tool.prometheus_labels",
+  "ai.tool.prometheus_rules",
+  "ai.tool.prometheus_targets",
+  "ai.tool.logsearch",
+  "ai.tool.loki_query",
+  "ai.tool.loki_labels",
+  "ai.tool.loki_patterns",
+  "ai.tool.traces_search",
+  "ai.tool.traces_get",
+  "ai.tool.traces_tags",
+  "ai.tool.traces_metrics",
+  "ai.tool.traces_compare",
+  "ai.tool.alerts_list",
+  "ai.tool.policy_reports",
+  "ai.tool.helm_read",
+  "ai.tool.cost",
+  "ai.tool.optimization",
+  "ai.tool.can_i",
+  "ai.tool.network_policy_check",
+  "ai.tool.network_flows",
+  "ai.tool.network_drops",
+  "ai.tool.network_top_flows",
+  "ai.tool.resource_graph",
+  "ai.tool.k8s_jq_query",
+  "ai.tool.k8s_tabular_query",
+  "ai.tool.k8s_count",
+  "ai.tool.gitops_status"
+ ],
+ "cases": [
+  {
+   "tool": "k8s_get_resources",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "k8s_get_resource_yaml",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "k8s_describe_resource",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "k8s_get_events",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "k8s_get_available_api_resources",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "k8s_get_cluster_configuration",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "get_cluster_overview",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "get_node_metrics",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "get_pod_metrics",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "k8s_check_service_connectivity",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "k8s_find_resource",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "k8s_explain",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "prometheus_query",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "prometheus_metrics",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "prometheus_labels",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "prometheus_rules",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "prometheus_targets",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "traces_search",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "traces_get",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "traces_tags",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "traces_metrics",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "traces_compare",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "issues",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "gitops_status",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "optimization",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "can_i",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "resource_graph",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "k8s_jq_query",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "k8s_tabular_query",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "k8s_count",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "k8s_get_resources",
+   "args": {
+    "resource_type": "secrets"
+   },
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "k8s_get_resources",
+   "args": {
+    "resource_type": "all"
+   },
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "k8s_describe_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "secret"
+   },
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "k8s_get_pod_logs",
+   "args": {
+    "pod_name": "web"
+   },
+   "want": [
+    "resource.pod.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "alerts_list",
+   "args": {},
+   "want": [
+    "resource.pod.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "logsearch",
+   "args": {},
+   "want": [
+    "resource.pod.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "loki_query",
+   "args": {},
+   "want": [
+    "resource.pod.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "loki_labels",
+   "args": {},
+   "want": [
+    "resource.pod.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "loki_patterns",
+   "args": {},
+   "want": [
+    "resource.pod.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "policy_reports",
+   "args": {},
+   "want": [
+    "resource.policyreport.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "helm_read",
+   "args": {},
+   "want": [
+    "resource.helm.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "cost",
+   "args": {},
+   "want": [
+    "resource.cost.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "network_policy_check",
+   "args": {},
+   "want": [
+    "resource.networkpolicy.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "network_flows",
+   "args": {},
+   "want": [
+    "resource.networkflow.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "network_drops",
+   "args": {},
+   "want": [
+    "resource.networkflow.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "network_top_flows",
+   "args": {},
+   "want": [
+    "resource.networkflow.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "hygiene",
+   "args": {},
+   "want": [
+    "admin.hygiene.read"
+   ],
+   "write": false,
+   "read": false
+  },
+  {
+   "tool": "audit_search",
+   "args": {},
+   "want": [
+    "admin.audit.read"
+   ],
+   "write": false,
+   "read": false
+  },
+  {
+   "tool": "nodes_stats_summary",
+   "args": {},
+   "want": [
+    "admin.nodes.read"
+   ],
+   "write": false,
+   "read": false
+  },
+  {
+   "tool": "nodes_log",
+   "args": {
+    "node": "n1"
+   },
+   "want": [
+    "admin.nodes.read"
+   ],
+   "write": false,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "secret"
+   },
+   "want": [
+    "resource.secret.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "secrets"
+   },
+   "want": [
+    "resource.secret.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "Secret"
+   },
+   "want": [
+    "resource.secret.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "SECRETS"
+   },
+   "want": [
+    "resource.secret.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "secret.v1"
+   },
+   "want": [
+    "resource.secret.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "secrets.v1"
+   },
+   "want": [
+    "resource.secret.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "secrets.v1.core"
+   },
+   "want": [
+    "resource.secret.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": " secrets "
+   },
+   "want": [
+    "resource.secret.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "cm"
+   },
+   "want": [
+    "resource.configmap.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "configmaps"
+   },
+   "want": [
+    "resource.configmap.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "ConfigMap"
+   },
+   "want": [
+    "resource.configmap.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "deployment.apps"
+   },
+   "want": [
+    "resource.deployment.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "deployments.v1.apps"
+   },
+   "want": [
+    "resource.deployment.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "deploy"
+   },
+   "want": [
+    "resource.deployment.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "po"
+   },
+   "want": [
+    "resource.pod.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "svc"
+   },
+   "want": [
+    "resource.service.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "sts"
+   },
+   "want": [
+    "resource.statefulset.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "ds"
+   },
+   "want": [
+    "resource.daemonset.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "rs"
+   },
+   "want": [
+    "resource.replicaset.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "cj"
+   },
+   "want": [
+    "resource.cronjob.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "ing"
+   },
+   "want": [
+    "resource.ingress.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "netpol"
+   },
+   "want": [
+    "resource.networkpolicy.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "sa"
+   },
+   "want": [
+    "resource.serviceaccount.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "ns"
+   },
+   "want": [
+    "resource.namespace.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "no"
+   },
+   "want": [
+    "resource.node.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "sc"
+   },
+   "want": [
+    "resource.storageclass.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "ep"
+   },
+   "want": [
+    "resource.endpoints.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "quota"
+   },
+   "want": [
+    "resource.resourcequota.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "limits"
+   },
+   "want": [
+    "resource.limitrange.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "pc"
+   },
+   "want": [
+    "resource.priorityclass.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "hpa"
+   },
+   "want": [
+    "resource.hpa.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "horizontalpodautoscalers"
+   },
+   "want": [
+    "resource.hpa.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "horizontalpodautoscaler.autoscaling"
+   },
+   "want": [
+    "resource.hpa.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "vpa"
+   },
+   "want": [
+    "resource.vpa.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "pdb"
+   },
+   "want": [
+    "resource.pdb.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "poddisruptionbudgets.policy"
+   },
+   "want": [
+    "resource.pdb.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "pv"
+   },
+   "want": [
+    "resource.pv.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "persistentvolumes"
+   },
+   "want": [
+    "resource.pv.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "pvc"
+   },
+   "want": [
+    "resource.pvc.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "persistentvolumeclaim"
+   },
+   "want": [
+    "resource.pvc.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "crd"
+   },
+   "want": [
+    "resource.crd.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "crds"
+   },
+   "want": [
+    "resource.crd.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "customresourcedefinitions.apiextensions.k8s.io"
+   },
+   "want": [
+    "resource.crd.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "gtw"
+   },
+   "want": [
+    "resource.gateway.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "httproutes.gateway.networking.k8s.io"
+   },
+   "want": [
+    "resource.httproute.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "clusterrolebindings.rbac.authorization.k8s.io"
+   },
+   "want": [
+    "resource.clusterrolebinding.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "validatingadmissionpolicies"
+   },
+   "want": [
+    "resource.validatingadmissionpolicy.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "widgets"
+   },
+   "want": [
+    "resource.customresource.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "widgets.example.com"
+   },
+   "want": [
+    "resource.customresource.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "replicationcontrollers"
+   },
+   "want": [
+    "resource.customresource.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "rc"
+   },
+   "want": [
+    "resource.customresource.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "configmaps,secrets"
+   },
+   "want": [
+    "resource.configmap.delete",
+    "resource.secret.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "po,svc,widgets.example.com"
+   },
+   "want": [
+    "resource.customresource.delete",
+    "resource.pod.delete",
+    "resource.service.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "Secret, ConfigMap"
+   },
+   "want": [
+    "resource.configmap.delete",
+    "resource.secret.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "secret,secrets,SECRET"
+   },
+   "want": [
+    "resource.secret.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "all"
+   },
+   "want": [
+    "resource.*.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "ALL"
+   },
+   "want": [
+    "resource.*.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "api-extensions"
+   },
+   "want": [
+    "resource.*.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "gateway-api"
+   },
+   "want": [
+    "resource.*.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "configmaps,all"
+   },
+   "want": [
+    "resource.*.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": ""
+   },
+   "want": [
+    "resource.*.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": " "
+   },
+   "want": [
+    "resource.*.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": ","
+   },
+   "want": [
+    "resource.*.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "resource_name": "x",
+    "resource_type": "secrets,"
+   },
+   "want": [
+    "resource.*.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "all": true,
+    "resource_type": "configmaps"
+   },
+   "want": [
+    "resource.configmap.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {},
+   "want": [
+    "resource.*.delete"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_patch_resource",
+   "args": {
+    "resource_name": "web",
+    "resource_type": "deployment"
+   },
+   "want": [
+    "resource.deployment.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_patch_resource",
+   "args": {
+    "resource_name": "web",
+    "resource_type": "secrets,configmaps"
+   },
+   "want": [
+    "resource.configmap.edit",
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_patch_resource",
+   "args": {
+    "resource_name": "web",
+    "resource_type": "all"
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_annotate_resource",
+   "args": {
+    "resource_name": "web",
+    "resource_type": "deployment"
+   },
+   "want": [
+    "resource.deployment.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_annotate_resource",
+   "args": {
+    "resource_name": "web",
+    "resource_type": "secrets,configmaps"
+   },
+   "want": [
+    "resource.configmap.edit",
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_annotate_resource",
+   "args": {
+    "resource_name": "web",
+    "resource_type": "all"
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_remove_annotation",
+   "args": {
+    "resource_name": "web",
+    "resource_type": "deployment"
+   },
+   "want": [
+    "resource.deployment.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_remove_annotation",
+   "args": {
+    "resource_name": "web",
+    "resource_type": "secrets,configmaps"
+   },
+   "want": [
+    "resource.configmap.edit",
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_remove_annotation",
+   "args": {
+    "resource_name": "web",
+    "resource_type": "all"
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_label_resource",
+   "args": {
+    "resource_name": "web",
+    "resource_type": "deployment"
+   },
+   "want": [
+    "resource.deployment.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_label_resource",
+   "args": {
+    "resource_name": "web",
+    "resource_type": "secrets,configmaps"
+   },
+   "want": [
+    "resource.configmap.edit",
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_label_resource",
+   "args": {
+    "resource_name": "web",
+    "resource_type": "all"
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_remove_label",
+   "args": {
+    "resource_name": "web",
+    "resource_type": "deployment"
+   },
+   "want": [
+    "resource.deployment.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_remove_label",
+   "args": {
+    "resource_name": "web",
+    "resource_type": "secrets,configmaps"
+   },
+   "want": [
+    "resource.configmap.edit",
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_remove_label",
+   "args": {
+    "resource_name": "web",
+    "resource_type": "all"
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_scale",
+   "args": {
+    "resource_name": "web",
+    "resource_type": "deployment"
+   },
+   "want": [
+    "resource.deployment.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_scale",
+   "args": {
+    "resource_name": "web",
+    "resource_type": "secrets,configmaps"
+   },
+   "want": [
+    "resource.configmap.edit",
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_scale",
+   "args": {
+    "resource_name": "web",
+    "resource_type": "all"
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_patch_resource",
+   "args": {
+    "resource_name": "n1",
+    "resource_type": "node"
+   },
+   "want": [
+    "resource.node.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_rollout",
+   "args": {
+    "action": "restart",
+    "resource_name": "web",
+    "resource_type": "statefulsets.apps"
+   },
+   "want": [
+    "resource.statefulset.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_rollout",
+   "args": {
+    "action": "pause",
+    "resource_name": "web",
+    "resource_type": "statefulsets.apps"
+   },
+   "want": [
+    "resource.statefulset.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_rollout",
+   "args": {
+    "action": "resume",
+    "resource_name": "web",
+    "resource_type": "statefulsets.apps"
+   },
+   "want": [
+    "resource.statefulset.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_rollout",
+   "args": {
+    "action": "status",
+    "resource_name": "web",
+    "resource_type": "statefulsets.apps"
+   },
+   "want": null,
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_rollout",
+   "args": {
+    "action": "history",
+    "resource_name": "web",
+    "resource_type": "statefulsets.apps"
+   },
+   "want": null,
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_rollout",
+   "args": {
+    "action": " STATUS ",
+    "resource_name": "web",
+    "resource_type": "statefulsets.apps"
+   },
+   "want": null,
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_rollout",
+   "args": {
+    "action": "undo",
+    "resource_name": "web",
+    "resource_type": "statefulsets.apps"
+   },
+   "want": [
+    "resource.workload.rollback"
+   ],
+   "write": false,
+   "read": false
+  },
+  {
+   "tool": "k8s_rollout",
+   "args": {
+    "action": "UNDO",
+    "resource_name": "web",
+    "resource_type": "statefulsets.apps"
+   },
+   "want": [
+    "resource.workload.rollback"
+   ],
+   "write": false,
+   "read": false
+  },
+  {
+   "tool": "k8s_rollout",
+   "args": {
+    "action": "",
+    "resource_name": "web",
+    "resource_type": "statefulsets.apps"
+   },
+   "want": [
+    "resource.statefulset.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_rollout",
+   "args": {
+    "action": "anything",
+    "resource_name": "web",
+    "resource_type": "statefulsets.apps"
+   },
+   "want": [
+    "resource.statefulset.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_execute_command",
+   "args": {
+    "command": [
+     "ls"
+    ],
+    "pod_name": "web"
+   },
+   "want": [
+    "resource.pod.exec"
+   ],
+   "write": false,
+   "read": false
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a\n"
+   },
+   "want": [
+    "resource.configmap.create"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a\n---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: b\n"
+   },
+   "want": [
+    "resource.configmap.create",
+    "resource.secret.create"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "yaml_content": "---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a\n--- # the next one\napiVersion: v1\nkind: Secret\nmetadata:\n  name: b\n---\n"
+   },
+   "want": [
+    "resource.configmap.create",
+    "resource.secret.create"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "yaml_content": "# only a comment\n---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: b\n"
+   },
+   "want": [
+    "resource.secret.create"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: List\nitems:\n- apiVersion: v1\n  kind: Secret\n  metadata:\n    name: a\n- apiVersion: v1\n  kind: ConfigMap\n  metadata:\n    name: b\n"
+   },
+   "want": [
+    "resource.configmap.create",
+    "resource.secret.create"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: SecretList\nitems:\n- metadata:\n    name: a\n"
+   },
+   "want": [
+    "resource.secret.create"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: List\nitems:\n- apiVersion: v1\n  kind: List\n  items:\n  - apiVersion: v1\n    kind: Secret\n    metadata:\n      name: a\n"
+   },
+   "want": [
+    "resource.secret.create"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: ConfigMap\nITEMS:\n- apiVersion: v1\n  kind: Secret\n  metadata:\n    name: a\n"
+   },
+   "want": [
+    "resource.configmap.create",
+    "resource.secret.create"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "yaml_content": "{\"apiVersion\":\"v1\",\"kind\":\"Secret\",\"metadata\":{\"name\":\"a\"}}"
+   },
+   "want": [
+    "resource.secret.create"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "yaml_content": "{\"apiVersion\":\"v1\",\"kind\":\"ConfigMap\",\"metadata\":{\"name\":\"a\"}}{\"apiVersion\":\"v1\",\"kind\":\"Secret\",\"metadata\":{\"name\":\"b\"}}"
+   },
+   "want": [
+    "resource.configmap.create",
+    "resource.secret.create"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "yaml_content": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: a\n"
+   },
+   "want": [
+    "resource.deployment.create"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "yaml_content": "apiVersion: autoscaling/v2\nkind: HorizontalPodAutoscaler\nmetadata:\n  name: a\n"
+   },
+   "want": [
+    "resource.hpa.create"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "yaml_content": "apiVersion: example.com/v1\nkind: Widget\nmetadata:\n  name: a\n"
+   },
+   "want": [
+    "resource.customresource.create"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "yaml_content": ""
+   },
+   "want": [
+    "resource.*.create"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "yaml_content": "   "
+   },
+   "want": [
+    "resource.*.create"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "yaml_content": "just text"
+   },
+   "want": [
+    "resource.*.create"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "yaml_content": "- a\n- b\n"
+   },
+   "want": [
+    "resource.*.create"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "yaml_content": "kind: ["
+   },
+   "want": [
+    "resource.*.create"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "yaml_content": "metadata:\n  name: a\n"
+   },
+   "want": [
+    "resource.*.create"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "yaml_content": "kind: 5\n"
+   },
+   "want": [
+    "resource.*.create"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: List\nitems: nope\n"
+   },
+   "want": [
+    "resource.*.create"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: List\nitems:\n- text\n"
+   },
+   "want": [
+    "resource.*.create"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: List\nitems: []\n"
+   },
+   "want": [
+    "resource.*.create"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a\n--- not a separator\napiVersion: v1\nkind: Secret\nmetadata:\n  name: b\n"
+   },
+   "want": [
+    "resource.*.create"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a\n"
+   },
+   "want": [
+    "resource.configmap.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a\n"
+   },
+   "want": [
+    "resource.configmap.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a\n---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: b\n"
+   },
+   "want": [
+    "resource.configmap.edit",
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a\n---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: b\n"
+   },
+   "want": [
+    "resource.configmap.edit",
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "yaml_content": "---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a\n--- # the next one\napiVersion: v1\nkind: Secret\nmetadata:\n  name: b\n---\n"
+   },
+   "want": [
+    "resource.configmap.edit",
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "yaml_content": "---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a\n--- # the next one\napiVersion: v1\nkind: Secret\nmetadata:\n  name: b\n---\n"
+   },
+   "want": [
+    "resource.configmap.edit",
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "yaml_content": "# only a comment\n---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: b\n"
+   },
+   "want": [
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "yaml_content": "# only a comment\n---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: b\n"
+   },
+   "want": [
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: List\nitems:\n- apiVersion: v1\n  kind: Secret\n  metadata:\n    name: a\n- apiVersion: v1\n  kind: ConfigMap\n  metadata:\n    name: b\n"
+   },
+   "want": [
+    "resource.configmap.edit",
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: List\nitems:\n- apiVersion: v1\n  kind: Secret\n  metadata:\n    name: a\n- apiVersion: v1\n  kind: ConfigMap\n  metadata:\n    name: b\n"
+   },
+   "want": [
+    "resource.configmap.edit",
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: SecretList\nitems:\n- metadata:\n    name: a\n"
+   },
+   "want": [
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: SecretList\nitems:\n- metadata:\n    name: a\n"
+   },
+   "want": [
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: List\nitems:\n- apiVersion: v1\n  kind: List\n  items:\n  - apiVersion: v1\n    kind: Secret\n    metadata:\n      name: a\n"
+   },
+   "want": [
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: List\nitems:\n- apiVersion: v1\n  kind: List\n  items:\n  - apiVersion: v1\n    kind: Secret\n    metadata:\n      name: a\n"
+   },
+   "want": [
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: ConfigMap\nITEMS:\n- apiVersion: v1\n  kind: Secret\n  metadata:\n    name: a\n"
+   },
+   "want": [
+    "resource.configmap.edit",
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: ConfigMap\nITEMS:\n- apiVersion: v1\n  kind: Secret\n  metadata:\n    name: a\n"
+   },
+   "want": [
+    "resource.configmap.edit",
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "yaml_content": "{\"apiVersion\":\"v1\",\"kind\":\"Secret\",\"metadata\":{\"name\":\"a\"}}"
+   },
+   "want": [
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "yaml_content": "{\"apiVersion\":\"v1\",\"kind\":\"Secret\",\"metadata\":{\"name\":\"a\"}}"
+   },
+   "want": [
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "yaml_content": "{\"apiVersion\":\"v1\",\"kind\":\"ConfigMap\",\"metadata\":{\"name\":\"a\"}}{\"apiVersion\":\"v1\",\"kind\":\"Secret\",\"metadata\":{\"name\":\"b\"}}"
+   },
+   "want": [
+    "resource.configmap.edit",
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "yaml_content": "{\"apiVersion\":\"v1\",\"kind\":\"ConfigMap\",\"metadata\":{\"name\":\"a\"}}{\"apiVersion\":\"v1\",\"kind\":\"Secret\",\"metadata\":{\"name\":\"b\"}}"
+   },
+   "want": [
+    "resource.configmap.edit",
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "yaml_content": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: a\n"
+   },
+   "want": [
+    "resource.deployment.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "yaml_content": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: a\n"
+   },
+   "want": [
+    "resource.deployment.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "yaml_content": "apiVersion: autoscaling/v2\nkind: HorizontalPodAutoscaler\nmetadata:\n  name: a\n"
+   },
+   "want": [
+    "resource.hpa.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "yaml_content": "apiVersion: autoscaling/v2\nkind: HorizontalPodAutoscaler\nmetadata:\n  name: a\n"
+   },
+   "want": [
+    "resource.hpa.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "yaml_content": "apiVersion: example.com/v1\nkind: Widget\nmetadata:\n  name: a\n"
+   },
+   "want": [
+    "resource.customresource.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "yaml_content": "apiVersion: example.com/v1\nkind: Widget\nmetadata:\n  name: a\n"
+   },
+   "want": [
+    "resource.customresource.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "yaml_content": ""
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "yaml_content": ""
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "yaml_content": "   "
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "yaml_content": "   "
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "yaml_content": "just text"
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "yaml_content": "just text"
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "yaml_content": "- a\n- b\n"
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "yaml_content": "- a\n- b\n"
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "yaml_content": "kind: ["
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "yaml_content": "kind: ["
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "yaml_content": "metadata:\n  name: a\n"
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "yaml_content": "metadata:\n  name: a\n"
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "yaml_content": "kind: 5\n"
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "yaml_content": "kind: 5\n"
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: List\nitems: nope\n"
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: List\nitems: nope\n"
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: List\nitems:\n- text\n"
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: List\nitems:\n- text\n"
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: List\nitems: []\n"
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: List\nitems: []\n"
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a\n--- not a separator\napiVersion: v1\nkind: Secret\nmetadata:\n  name: b\n"
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a\n--- not a separator\napiVersion: v1\nkind: Secret\nmetadata:\n  name: b\n"
+   },
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "manifest": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a\n",
+    "resource_manifest": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a\n",
+    "yaml_content": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: b\n"
+   },
+   "want": [
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "manifest": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: b\n",
+    "resource_manifest": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a\n"
+   },
+   "want": [
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "resource_manifest": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: b\n"
+   },
+   "want": [
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "resource_manifest": {
+     "apiVersion": "v1",
+     "kind": "Secret",
+     "metadata": {
+      "name": "a"
+     }
+    }
+   },
+   "want": [
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "manifest": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: b\n",
+    "yaml_content": "  "
+   },
+   "want": [
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {},
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {},
+   "want": [
+    "resource.*.create"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "yaml_content": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: b\n"
+   },
+   "want": [
+    "resource.secret.edit"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {},
+   "want": [
+    "resource.*.edit"
+   ],
+   "write": true,
+   "read": false
+  }
+ ]
+}

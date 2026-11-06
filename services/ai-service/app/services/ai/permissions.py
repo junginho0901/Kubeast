@@ -5,9 +5,10 @@
 # (service.cluster_name, 없으면 DEFAULT_CLUSTER) 기준으로만 판단한다 — 다른
 # 클러스터에서 받은 권한은 여기서 아무 효력이 없다.
 
-from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from app.security import DEFAULT_CLUSTER, decode_access_token
+from app.services.ai import screen_permissions
 from app.services.tool_whitelists import WRITE_TOOL_NAMES
 
 if TYPE_CHECKING:
@@ -46,48 +47,52 @@ def role_allows_admin(service: "AIService") -> bool:
     return service.user_role == "admin"
 
 
-def app_permission(tool: str, args: Optional[Dict] = None) -> Optional[str]:
-    """The permission a screen asks for what this call does: a role holding ai.tool.* does not get past it through the
-    AI. The same rules are in tool-server's toolAppPermission; tests/fixtures/tool_app_permission_cases.json holds the
-    two equal."""
-    if tool == "k8s_execute_command":
-        return "resource.pod.exec"
-    if tool == "k8s_rollout" and isinstance(args, dict) and str(args.get("action") or "").strip().lower() == "undo":
-        return "resource.workload.rollback"
-    return None
+def missing_permissions(token, cluster: str, tool: str, args: Any = None) -> List[str]:
+    """What a screen asks for this call and the token does not hold in this cluster (screen_permissions)."""
+    return [p for p in screen_permissions.app_permissions(tool, args) or [] if not token.has_permission_for_cluster(p, cluster)]
 
 
-def token_may_call(token, cluster: str, tool: str, args: Optional[Dict] = None) -> bool:
-    """The token holds the tool and, where the call needs one, the screen's permission, both in this cluster."""
+def token_may_call(token, cluster: str, tool: str, args: Any = None) -> bool:
+    """The token holds the tool and what a screen asks for the call, both in this cluster. Without arguments, for a
+    list: some call of the tool could pass. A tool that is not in the table is refused to everyone."""
     if not token.has_permission_for_cluster(f"ai.tool.{tool}", cluster):
         return False
-    required = app_permission(tool, args)
-    return required is None or token.has_permission_for_cluster(required, cluster)
+    if args is None:
+        return screen_permissions.may_be_called(lambda p: token.has_permission_for_cluster(p, cluster), tool)
+    return screen_permissions.app_permissions(tool, args) is not None and not missing_permissions(token, cluster, tool, args)
 
 
-def _refusal(tool: str, required: str, cluster: str) -> str:
+def _refusal(tool: str, required: List[str], cluster: str) -> str:
     # The same words as tool-server's refusal.
-    return f"forbidden: {tool} needs the permission {required} in cluster {cluster}; your role there does not hold it"
+    return f"forbidden: {tool} needs the permission {', '.join(required)} in cluster {cluster}; your role there does not hold it"
 
 
-def app_permission_error(token, cluster: str, tool: str, args: Optional[Dict] = None) -> Optional[str]:
-    """Why the screen's permission refuses this call, or None."""
-    required = app_permission(tool, args)
-    if required is None or token.has_permission_for_cluster(required, cluster):
-        return None
-    return _refusal(tool, required, cluster)
+def app_permission_error(token, cluster: str, tool: str, args: Any = None) -> Optional[str]:
+    """Why what a screen asks refuses this call, or None."""
+    if screen_permissions.app_permissions(tool, args) is None:
+        return f"forbidden: no permission is on record for {tool}, so it is not run"
+    missing = missing_permissions(token, cluster, tool, args)
+    return _refusal(tool, missing, cluster) if missing else None
 
 
-def tool_refusal(service: "AIService", tool: str, args: Optional[Dict] = None) -> Optional[str]:
-    """app_permission_error for the request's cluster and user. Without a token (legacy role mode) only admin holds it."""
-    required = app_permission(tool, args)
-    if required is None:
-        return None
+# The legacy role mode has no permissions to read: its rules stay in is_tool_allowed, and these two stay with admin.
+_ADMIN_ONLY_WITHOUT_A_TOKEN = frozenset({"resource.pod.exec", "resource.workload.rollback"})
+
+
+def tool_refusal(service: "AIService", tool: str, args: Any = None) -> Optional[str]:
+    """app_permission_error for the request's cluster and user."""
     cluster = effective_cluster(service)
     token = getattr(service, "token", None)
     if token is not None:
         return app_permission_error(token, cluster, tool, args)
-    return None if getattr(service, "user_role", None) == "admin" else _refusal(tool, required, cluster)
+    if getattr(service, "user_role", None) == "admin":
+        return None
+    required = [p for p in screen_permissions.app_permissions(tool, args) or [] if p in _ADMIN_ONLY_WITHOUT_A_TOKEN]
+    return _refusal(tool, required, cluster) if required else None
+
+
+# Verbs the write tools ask on a kind, with what the model can say about each.
+_KIND_VERBS = (("create", "creating objects"), ("edit", "changing objects"), ("delete", "deleting objects"))
 
 
 def unavailable_note(service: "AIService") -> Optional[str]:
@@ -99,11 +104,17 @@ def unavailable_note(service: "AIService") -> Optional[str]:
     if not any(is_tool_allowed(service, name) for name in WRITE_TOOL_NAMES):
         return (f"This user's role in cluster {cluster} holds no write tools, so this chat cannot change anything there. "
                 "If they ask for a change, say that their role does not allow it and that an admin can grant one.")
-    lacking = [f"{required} ({what})" for tool, args, what in (
-        ("k8s_execute_command", None, "running a command in a pod, k8s_execute_command"),
+    def holds(permission: str) -> bool:
+        return token.has_permission_for_cluster(permission, cluster)
+
+    lacking =[f"{required} ({what})" for tool, args, what in (
+        ("k8s_execute_command", {}, "running a command in a pod, k8s_execute_command"),
         ("k8s_rollout", {"action": "undo"}, "a rollback, k8s_rollout with undo"),
-    ) if token.has_permission_for_cluster(f"ai.tool.{tool}", cluster)
-        and (required := app_permission(tool, args)) and not token.has_permission_for_cluster(required, cluster)]
+    ) if holds(f"ai.tool.{tool}") for required in missing_permissions(token, cluster, tool, args)]
+    lacking += [f"resource.<kind>.{verb} on any kind ({what})" for verb, what in _KIND_VERBS
+                if not screen_permissions.holds_verb_on_some_kind(holds, verb)
+                and any(holds(f"ai.tool.{tool}") and rule[0] in ("resource_type", "manifest") and rule[1] == verb
+                        for tool, rule in screen_permissions.TOOL_SCREEN_TABLE.items() if tool in WRITE_TOOL_NAMES)]
     if not lacking:
         return None
     return (f"This user's role in cluster {cluster} does not hold {' or '.join(lacking)}. "

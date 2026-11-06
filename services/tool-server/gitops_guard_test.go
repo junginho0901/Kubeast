@@ -1,12 +1,24 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
 
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/gitops"
 )
+
+// A caller holding everything on c1, so a write tool's permission gate stays out of what these tests look at. kubectl runs without
+// the caller's identity, so the calls they read start with the verb.
+func writerCtx(t *testing.T) context.Context {
+	t.Helper()
+	was := impersonationEnabled
+	impersonationEnabled = false
+	t.Cleanup(func() { impersonationEnabled = was })
+	return auth.WithPayload(ctxFor("c1"), auth.TokenPayload{Perms: auth.PermissionMatrix{"c1": {"*"}}})
+}
 
 func TestGitopsObjects(t *testing.T) {
 	one := `{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"web","namespace":"ns","annotations":{"argocd.argoproj.io/tracking-id":"app:apps/Deployment:ns/web"}}}`
@@ -170,7 +182,7 @@ func TestWriteToolsAreRefusedForAManagedObjectOnBlock(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			setGitopsMode(t, gitops.ModeBlock)
 			calls := kubectlScript(t, answerWith(argoTracked("apps", "Deployment", "shop", "web")))
-			out, err := registry[tc.tool].Handler(ctxFor("c1"), tc.args, bearer())
+			out, err := registry[tc.tool].Handler(writerCtx(t), tc.args, bearer())
 			if !errors.Is(err, errConflict) {
 				t.Fatalf("got %q, %v; want a conflict (calls %v)", out, err, *calls)
 			}
@@ -191,7 +203,7 @@ func TestWriteToolsWriteAFreeObjectOnBlock(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			setGitopsMode(t, gitops.ModeBlock)
 			calls := kubectlScript(t, answerWith(argoFree("apps", "Deployment", "shop", "web")))
-			out, err := registry[tc.tool].Handler(ctxFor("c1"), tc.args, bearer())
+			out, err := registry[tc.tool].Handler(writerCtx(t), tc.args, bearer())
 			if err != nil || out != "done" {
 				t.Fatalf("got %q, %v (calls %v)", out, err, *calls)
 			}
@@ -209,7 +221,7 @@ func TestWriteToolsWriteAManagedObjectOnWarnWithANotice(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			setGitopsMode(t, gitops.ModeWarn)
 			calls := kubectlScript(t, answerWith(argoTracked("apps", "Deployment", "shop", "web")))
-			out, err := registry[tc.tool].Handler(ctxFor("c1"), tc.args, bearer())
+			out, err := registry[tc.tool].Handler(writerCtx(t), tc.args, bearer())
 			if err != nil {
 				t.Fatalf("%v (calls %v)", err, *calls)
 			}
@@ -231,7 +243,7 @@ func TestWriteToolsReadNothingWithTheGuardOff(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			setGitopsMode(t, "off")
 			calls := kubectlScript(t, answerWith(argoTracked("apps", "Deployment", "shop", "web")))
-			out, err := registry[tc.tool].Handler(ctxFor("c1"), tc.args, bearer())
+			out, err := registry[tc.tool].Handler(writerCtx(t), tc.args, bearer())
 			if err != nil || out != "done" {
 				t.Fatalf("got %q, %v", out, err)
 			}
@@ -374,7 +386,7 @@ func TestTargetThatCannotBeReadIsRefusedOnlyOnBlockForTheTools(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			setGitopsMode(t, gitops.ModeBlock)
 			calls := kubectlScript(t, failure)
-			_, err := registry[tc.tool].Handler(ctxFor("c1"), tc.args, bearer())
+			_, err := registry[tc.tool].Handler(writerCtx(t), tc.args, bearer())
 			if err == nil || !strings.Contains(err.Error(), "could not check whether Argo CD manages") || !strings.Contains(err.Error(), "(Forbidden)") {
 				t.Fatalf("block: %v", err)
 			}
@@ -384,7 +396,7 @@ func TestTargetThatCannotBeReadIsRefusedOnlyOnBlockForTheTools(t *testing.T) {
 
 			setGitopsMode(t, gitops.ModeWarn)
 			calls = kubectlScript(t, failure)
-			out, err := registry[tc.tool].Handler(ctxFor("c1"), tc.args, bearer())
+			out, err := registry[tc.tool].Handler(writerCtx(t), tc.args, bearer())
 			if err != nil || out != "done" {
 				t.Fatalf("warn: %q %v", out, err)
 			}
@@ -408,7 +420,7 @@ func TestMissingTargetIsLeftToTheWrite(t *testing.T) {
 			t.Run(name+" "+tc.name, func(t *testing.T) {
 				setGitopsMode(t, gitops.ModeBlock)
 				calls := kubectlScript(t, func([]string) (string, error) { return answer, errors.New("exit status 1") })
-				if out, err := registry[tc.tool].Handler(ctxFor("c1"), tc.args, bearer()); err != nil || out != "done" {
+				if out, err := registry[tc.tool].Handler(writerCtx(t), tc.args, bearer()); err != nil || out != "done" {
 					t.Fatalf("%q %v", out, err)
 				}
 				if got := writesIn(*calls); len(got) != 1 {
@@ -494,7 +506,7 @@ func TestManifestIsCheckedObjectByObject(t *testing.T) {
 				}
 				return managed(args)
 			})
-			_, err := registry["k8s_apply_manifest"].Handler(ctxFor("c1"), map[string]interface{}{"yaml_content": tc.manifest}, bearer())
+			_, err := registry["k8s_apply_manifest"].Handler(writerCtx(t), map[string]interface{}{"yaml_content": tc.manifest}, bearer())
 			if !errors.Is(err, errConflict) || !strings.Contains(err.Error(), "managed by Argo CD application the-app") {
 				t.Fatalf("%v (calls %v)", err, *calls)
 			}
@@ -519,7 +531,7 @@ func TestManifestIsCheckedObjectByObject(t *testing.T) {
 				}
 				return "Error from server (NotFound): objects \"x\" not found", errors.New("exit status 1")
 			})
-			if out, err := registry["k8s_apply_manifest"].Handler(ctxFor("c1"), map[string]interface{}{"yaml_content": manifest}, bearer()); err != nil || out != "done" {
+			if out, err := registry["k8s_apply_manifest"].Handler(writerCtx(t), map[string]interface{}{"yaml_content": manifest}, bearer()); err != nil || out != "done" {
 				t.Fatalf("%q %v", out, err)
 			}
 			if got := writesIn(*calls); len(got) != 1 {

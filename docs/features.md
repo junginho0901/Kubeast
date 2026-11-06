@@ -140,7 +140,7 @@
 | Custom | Per cluster | Only the chosen permissions (within the permissions the creator has) | `kubeast:role:<name>` — every call is 403 until the cluster binds this group (`auth.impersonation.customRoles`). The no-permission banner in the UI and the role creation dialog show this group name |
 
 - **Admin only**: Pod exec, Node shell, cordon/drain, workload rollback and Helm uninstall. Their permissions (`resource.pod.exec`, `resource.node.cordon/drain/shell`, `resource.workload.rollback` and `resource.helm.uninstall`) are not in Write. Add them to a custom role if needed.
-  - The AI asks for the same permissions. `k8s_execute_command` needs `resource.pod.exec` and `k8s_rollout` with `undo` needs `resource.workload.rollback`, next to `ai.tool.*`, in the chat and over MCP. Write is not offered exec and is told why; Admin and a custom role with those permissions run them as before.
+  - The AI asks for the same permissions (below). Write is not offered exec and is told why; Admin and a custom role with those permissions run them as before.
   - On the cluster side, the Write group (`kubeast:operator`) can already exec in every namespace, because the default `edit` ClusterRole includes `pods/exec`. What makes Pod exec Admin-only is Kubeast's app permission.
   - Kubeast's impersonation credential (`kubeast-impersonator`) must therefore be guarded as carefully as the full permissions of those groups.
   - Log file viewing (`features.logFiles`, default off) is also available to Read and Write, because Kubeast fixes the commands to `ls` and `tail`.
@@ -150,6 +150,17 @@
   - Its pods, logs, events and ConfigMaps stay readable. A namespace of that name on another cluster is an ordinary one.
   - This is a limit of the app. Write on that cluster is still `edit` across it and Admin `cluster-admin` on the cluster's side, so someone using Kubernetes directly has to be stopped with RBAC ([details](cluster-requirements.md#who-reaches-kubeasts-own-namespace)).
 - **The node shell's namespace (`nodeShell.namespace`), on any cluster, is for those holding `resource.node.shell`**: anyone else is refused any change there and exec, attach and log files in its pods, since it allows privileged pods ([details](cluster-requirements.md#9-node-shell)).
+- **The AI asks what the screens ask.** `ai.tool.<tool>` opens a tool. Each call also needs, in that cluster, what the route behind the same screen asks, in the chat and over MCP, whatever the cluster's RBAC lets the role's group do. Binding a custom role's group gives the AI no more than the role's screens.
+  - `k8s_delete_resource` needs `resource.<kind>.delete`.
+  - `k8s_patch_resource`, `k8s_scale`, the annotate and label tools and `k8s_rollout` with restart, pause or resume need `resource.<kind>.edit`.
+  - `k8s_create_resource` needs `resource.<kind>.create`.
+  - `k8s_apply_manifest` and the preview `k8s_diff` need `resource.<kind>.edit`. `kubectl apply` also creates, so an object that is not there yet also needs `resource.<kind>.create`. Without it the object is looked up as the user first, and the apply is refused if it is not there or the cluster does not say.
+  - `k8s_execute_command` needs `resource.pod.exec` and `k8s_rollout` with undo needs `resource.workload.rollback`.
+  - `<kind>` is the name the screens use (`permResource`): the lower-cased kind, `hpa`, `vpa`, `pdb`, `pv`, `pvc` and `crd`, and `customresource` for a kind without a name of its own.
+  - Every kind a call names counts: a list with commas, each document of a manifest, the items of a List. `all`, `api-extensions`, `gateway-api` and a manifest that cannot be read need `resource.*.<verb>`. A short name or category a CRD gives itself counts as `customresource`.
+  - The reads whose screen asks a permission: `k8s_get_pod_logs`, `logsearch`, the `loki_*` tools and `alerts_list` need `resource.pod.read`. `helm_read` needs `resource.helm.read`, `cost` `resource.cost.read`, `policy_reports` `resource.policyreport.read`, `network_policy_check` `resource.networkpolicy.read` and the `network_*` flow tools `resource.networkflow.read`. `hygiene` needs `admin.hygiene.read`, `audit_search` `admin.audit.read` and the `nodes_*` tools `admin.nodes.read`.
+  - The other read tools need nothing more, because their screens ask for no `resource.<kind>.read` either: the role on the cluster and the cluster's RBAC decide (see Read APIs below). A custom role without `resource.*.read` whose group is bound reads the same lists on the screens and through the AI. Secret values never go to the AI.
+  - A tool the role can never call is not offered. A refused call runs nothing, gets no approval card, says which permission is missing and leaves a failure row (`ai.tool.call`, `ai.mcp.call`). A tool missing from the table (`services/tool-server/screen_permissions.go`, `app/services/ai/screen_permissions.py`) is refused to everyone.
 - **Every write API** checks permissions in the handler and is refused without an audit row (fail-closed).
   - **Read APIs** are blocked by two checks: whether the user has a role on that cluster (cluster middleware, deny-by-default), and the cluster's RBAC (viewer group).
   - `menu.*` only hides UI menus. There is one key per sidebar group:

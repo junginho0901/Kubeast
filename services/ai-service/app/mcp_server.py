@@ -6,8 +6,8 @@ call then runs as that user: the user's cluster role (tool-server impersonates
 them), the read tools the chat offers, the same masking of what leaves for a
 model, and an audit row (ai.mcp.call) per call — refused while the row cannot
 be stored. Read tools; with MCP_WRITE_TOOLS and a Write-ceiling key, the chat's
-write tools too (each call signed as its own approval), Pod exec and rollout undo
-only for whoever also holds the screen's permission for them.
+write tools too (each call signed as its own approval). Every call also needs
+what a screen asks for it (app/services/ai/screen_permissions.py).
 
 Stateless with JSON responses: there is no session to hijack, any replica
 answers, and the bearer token is checked on every request (MCP spec,
@@ -37,7 +37,7 @@ from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.types import ASGIApp
 
 from app.security import TokenPayload, decode_access_token
-from app.services.ai.permissions import app_permission, app_permission_error, namespace_scope_error, token_may_call
+from app.services.ai.permissions import app_permission_error, missing_permissions, namespace_scope_error, token_may_call
 from app.services.ai import features as feature_gate
 from app.services.ai.access import with_mode
 from app.services.ai.debug_dump import safe_error
@@ -269,7 +269,7 @@ def _may_use_mcp(payload: TokenPayload, cluster: Optional[str] = None) -> bool:
 def _tools_allowed_in(payload: TokenPayload, cluster: str) -> List[str]:
     if not _may_use_mcp(payload, cluster):
         return []
-    names = [name for name in READ_TOOLS if payload.has_permission_for_cluster(f"ai.tool.{name}", cluster)]
+    names = [name for name in READ_TOOLS if token_may_call(payload, cluster, name)]
     if mcp_write_tools_enabled():
         names += [name for name in WRITE_TOOLS if token_may_call(payload, cluster, name)]
     return names
@@ -386,7 +386,7 @@ class KubeastMCPServer(MCPServer):
             await write_audit(**audit, after=after, result="failure", error="forbidden")
             return _text(reason, error=True)
         if reason := app_permission_error(payload, cluster, name, args):
-            await write_audit(**audit, after=after, result="failure", error=f"forbidden: {app_permission(name, args)}")
+            await write_audit(**audit, after=after, result="failure", error=f"forbidden: {', '.join(missing_permissions(payload, cluster, name, args)) or 'not on record'}")
             return _text(reason, error=True)
         if reason := namespace_scope_error(payload, cluster, name, args):
             await write_audit(**audit, after=after, result="failure", error="forbidden: namespace scope")

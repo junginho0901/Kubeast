@@ -145,7 +145,7 @@
 
 - **Admin만 되는 것**: Pod exec · Node shell · cordon/drain · 워크로드 rollback · Helm uninstall.
   `resource.pod.exec`·`resource.node.cordon/drain/shell`·`resource.workload.rollback`·`resource.helm.uninstall`은 Write에 없으므로, 필요하면 커스텀 역할에 넣으세요.
-  - AI도 같은 권한을 봅니다. `k8s_execute_command`는 `resource.pod.exec`, `k8s_rollout`의 `undo`는 `resource.workload.rollback`이 `ai.tool.*`과 함께 있어야 하며, 채팅과 MCP가 같습니다. Write에는 exec를 내주지 않고 왜 안 되는지 알려 줍니다. Admin과 그 권한을 받은 커스텀 역할은 전처럼 실행합니다.
+  - AI도 같은 권한을 봅니다(아래). Write에는 exec를 내주지 않고 왜 안 되는지 알려 줍니다. Admin과 그 권한을 받은 커스텀 역할은 전처럼 실행합니다.
   - 클러스터 쪽에서 보면 기본 `edit` ClusterRole에 `pods/exec`가 들어 있으므로, Write 그룹(`kubeast:operator`)은 원래 모든 네임스페이스에서 exec할 수 있습니다.
     Pod exec가 Admin 전용인 이유는 Kubeast의 앱 권한 때문입니다. 그래서 Kubeast의 impersonation 자격 증명(`kubeast-impersonator`)은 그 그룹들의 전체 권한만큼 중요하게 지켜야 합니다.
   - 로그 파일 보기(`features.logFiles`, 기본 off)는 Kubeast가 명령을 `ls`·`tail`로 고정하므로 Read와 Write도 쓸 수 있습니다.
@@ -155,6 +155,17 @@
   - 파드, 로그, 이벤트, ConfigMap은 계속 읽을 수 있습니다. 다른 클러스터에 있는 같은 이름의 Namespace는 평범한 Namespace입니다.
   - 이것은 앱의 제한입니다. 클러스터 쪽에서 그 클러스터의 Write는 여전히 전체에 걸친 `edit`, Admin은 `cluster-admin`이므로, 쿠버네티스를 직접 쓰는 사람은 RBAC으로 따로 막아야 합니다([자세히](cluster-requirements.md#kubeast-자체-namespace에-누가-닿는가)).
 - **노드 셸의 Namespace(`nodeShell.namespace`)는 어느 클러스터에서든 `resource.node.shell`을 가진 사람 전용입니다.** 특권 파드가 허용되는 곳이므로 그 밖의 사람은 그 안의 변경 전부와 그 안의 파드에 exec·attach, 로그 파일이 거절됩니다([자세히](cluster-requirements.md#9-노드-셸)).
+- **AI는 화면이 묻는 것을 묻습니다.** `ai.tool.<도구>`는 도구를 엽니다. 호출마다 그 클러스터에서, 같은 화면 뒤의 라우트가 묻는 권한도 있어야 합니다. 채팅과 MCP가 같고, 클러스터 RBAC이 역할의 그룹에 무엇을 허용하든 같습니다. 커스텀 역할의 그룹을 바인딩해도 AI로 그 역할의 화면보다 더 하지는 못합니다.
+  - `k8s_delete_resource`는 `resource.<kind>.delete`가 필요합니다.
+  - `k8s_patch_resource`, `k8s_scale`, annotate·label 도구, restart·pause·resume의 `k8s_rollout`은 `resource.<kind>.edit`이 필요합니다.
+  - `k8s_create_resource`는 `resource.<kind>.create`가 필요합니다.
+  - `k8s_apply_manifest`와 미리 보기 `k8s_diff`는 `resource.<kind>.edit`이 필요합니다. `kubectl apply`는 없는 것을 만들기도 하므로, 아직 없는 객체에는 `resource.<kind>.create`도 필요합니다. 이 권한이 없으면 먼저 사용자 권한으로 객체를 찾아 보고, 없거나 클러스터가 답하지 않으면 거절합니다.
+  - `k8s_execute_command`는 `resource.pod.exec`, undo의 `k8s_rollout`은 `resource.workload.rollback`이 필요합니다.
+  - `<kind>`는 화면이 쓰는 이름(`permResource`)입니다. kind를 소문자로 쓴 것, `hpa`·`vpa`·`pdb`·`pv`·`pvc`·`crd`, 자기 이름이 없는 kind는 `customresource`입니다.
+  - 호출이 가리키는 kind는 전부 봅니다. 쉼표 목록, 매니페스트의 문서 하나하나, List의 items가 모두 그렇습니다. `all`·`api-extensions`·`gateway-api`와 읽을 수 없는 매니페스트는 `resource.*.<verb>`가 필요합니다. CRD가 스스로 정한 짧은 이름이나 카테고리는 `customresource`로 봅니다.
+  - 화면이 권한을 묻는 읽기: `k8s_get_pod_logs`, `logsearch`, `loki_*` 도구, `alerts_list`는 `resource.pod.read`가 필요합니다. `helm_read`는 `resource.helm.read`, `cost`는 `resource.cost.read`, `policy_reports`는 `resource.policyreport.read`, `network_policy_check`는 `resource.networkpolicy.read`, `network_*` 흐름 도구는 `resource.networkflow.read`가 필요합니다. `hygiene`은 `admin.hygiene.read`, `audit_search`는 `admin.audit.read`, `nodes_*` 도구는 `admin.nodes.read`가 필요합니다.
+  - 나머지 읽기 도구는 더 필요한 것이 없습니다. 그 화면도 `resource.<kind>.read`를 묻지 않고, 클러스터에 대한 역할과 클러스터 RBAC이 정하기 때문입니다(아래 읽기 API). `resource.*.read`가 없어도 그룹이 바인딩된 커스텀 역할은 화면과 AI로 같은 목록을 읽습니다. Secret 값은 AI로 가지 않습니다.
+  - 절대 부를 수 없는 도구는 역할에 내주지 않습니다. 거절된 호출은 실행되지 않고 승인 카드도 없으며, 없는 권한을 말하고 실패 행(`ai.tool.call`, `ai.mcp.call`)을 남깁니다. 표(`services/tool-server/screen_permissions.go`, `app/services/ai/screen_permissions.py`)에 없는 도구는 누구에게나 거절됩니다.
 - **쓰기 API는 전부** 핸들러에서 권한을 검사하며, 감사 행을 남기지 못하면 거부됩니다(fail-closed).
   - **읽기 API**는 "그 클러스터에 역할이 있는가"(클러스터 미들웨어, deny-by-default)와 클러스터의 RBAC(viewer 그룹), 두 단계로 막습니다.
   - `menu.*`는 화면 메뉴만 가리며, 사이드바 그룹마다 하나씩 있습니다. 기본 역할에는 `menu.*`가 있으므로 커스텀 역할에서만 그룹이 빠집니다.

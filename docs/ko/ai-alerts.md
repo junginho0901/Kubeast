@@ -34,7 +34,7 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
   - 세션을 두지 않으므로(stateless) 요청마다 검사하고, 복제본을 여러 개 띄워도 됩니다.
 - 감사: `ai.mcp.call`의 `after`에 도구, 클러스터, 마스킹 통계, 자격 증명(`credential.akid` = 키 id), 클라이언트(User-Agent), `write`(쓰기 도구 여부)가 남습니다. 권한 밖 호출도 `failure`로 남습니다.
 - 쓰기 도구(`mcp.writeTools: true`, 컴포즈는 `MCP_WRITE_TOOLS`, 기본 꺼짐): 채팅의 쓰기 도구 11개(apply·create·delete·patch·annotate·label·scale·rollout·exec …)가 **역할 상한이 Write인 키**에 함께 열립니다.
-  - Pod exec와 rollout undo는 화면 권한(`resource.pod.exec`·`resource.workload.rollback`)도 있어야 합니다. 상한이 Write면 이 권한이 없으므로 exec를 내주지 않고, 부르면 권한 이름을 대며 거절합니다. 상한과 주인이 이 권한을 가진 키는 둘 다 실행합니다.
+  - Pod exec와 rollout undo는 화면 권한(`resource.pod.exec`·`resource.workload.rollback`)도 있어야 합니다. 상한이 Write면 이 권한이 없으므로 exec를 내주지 않고, 부르면 권한 이름을 대며 거절합니다. 상한과 주인이 이 권한을 가진 키는 둘 다 실행합니다. 다른 호출도 그 화면이 묻는 권한, 곧 호출이 가리키는 kind의 `resource.<kind>.<verb>`가 있어야 합니다([기능](features.md)).
   - 채팅의 승인 카드(`ai.writeApproval`)는 MCP에 없습니다.
   - 그 사람이 그 클러스터에서 할 수 있는 범위 안에서만 실행됩니다. 영구 역할이나 [접근 요청](configuration.md)(`accessRequests`)으로 받은 임시 역할이 그 범위입니다.
   - 호출마다 `write: true`와 시킨 내용(명령, patch·매니페스트의 길이와 가린 앞부분)이 비밀값을 가린 채 감사에 남습니다.

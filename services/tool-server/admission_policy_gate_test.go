@@ -107,7 +107,7 @@ func TestAdmissionPolicyToolsRefuseAListAndAQuotedManifest(t *testing.T) {
 	for _, c := range calls {
 		admissionPoliciesReadOnly = true
 		ran := fakeKubectl(t, func([]string) (string, error) { return "done", nil })
-		if _, err := registry[c.tool].Handler(ctxFor("c1"), c.args, bearer()); err != errAdmissionPolicyReadOnly {
+		if _, err := registry[c.tool].Handler(writerCtx(t), c.args, bearer()); err != errAdmissionPolicyReadOnly {
 			t.Errorf("%s on: %v", c.tool, err)
 		}
 		if len(*ran) != 0 {
@@ -115,7 +115,7 @@ func TestAdmissionPolicyToolsRefuseAListAndAQuotedManifest(t *testing.T) {
 		}
 		admissionPoliciesReadOnly = false
 		ran = fakeKubectl(t, func([]string) (string, error) { return "done", nil })
-		if out, err := registry[c.tool].Handler(ctxFor("c1"), c.args, bearer()); err != nil || out != "done" {
+		if out, err := registry[c.tool].Handler(writerCtx(t), c.args, bearer()); err != nil || out != "done" {
 			t.Errorf("%s off: %q %v", c.tool, out, err)
 		}
 		if len(*ran) != 1 {

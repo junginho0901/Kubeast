@@ -415,7 +415,7 @@ func allPermissions() []map[string]interface{} {
 			{"resource.helm.test", "Run release tests"},
 		}},
 		{"category": "AI tools", "permissions": []perm{
-			{"ai.tool.*", "All AI tools"},
+			{"ai.tool.*", "All AI tools (each call also needs the permission its screen asks for)"},
 			{"ai.tool.get_cluster_overview", "Read tool: cluster overview"},
 			{"ai.tool.get_pod_metrics", "Read tool: pod metrics"},
 			{"ai.tool.get_node_metrics", "Read tool: node metrics"},
