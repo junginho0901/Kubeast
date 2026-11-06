@@ -37,10 +37,14 @@ func (h *Handler) GetGPUDashboard(w http.ResponseWriter, r *http.Request) {
 // --- GPU Metrics (Prometheus / DCGM) ---
 
 func (h *Handler) GetGPUMetrics(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if !h.svc.PrometheusAvailable(ctx) {
+		response.JSON(w, http.StatusOK, map[string]interface{}{"available": false, "gpus": []interface{}{}})
+		return
+	}
 	if !promClusterWide(w, r) {
 		return
 	}
-	ctx := r.Context()
 	data, err := h.svc.GetGPUMetrics(ctx)
 	if err != nil {
 		h.handleError(w, err)
@@ -58,9 +62,6 @@ func (h *Handler) GetPrometheusStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) PrometheusQuery(w http.ResponseWriter, r *http.Request) {
-	if !promClusterWide(w, r) {
-		return
-	}
 	ctx := r.Context()
 	query := r.URL.Query().Get("query")
 	if query == "" {
@@ -73,6 +74,9 @@ func (h *Handler) PrometheusQuery(w http.ResponseWriter, r *http.Request) {
 			"available": false,
 			"results":   []interface{}{},
 		})
+		return
+	}
+	if !promClusterWide(w, r) {
 		return
 	}
 
@@ -102,9 +106,6 @@ func (h *Handler) PrometheusQuery(w http.ResponseWriter, r *http.Request) {
 // of a single `value`. Used by feature detail modals (HPA scaling history,
 // Node 24h CPU/Mem trend) — see refactor-plan.md.
 func (h *Handler) PrometheusQueryRange(w http.ResponseWriter, r *http.Request) {
-	if !promClusterWide(w, r) {
-		return
-	}
 	ctx := r.Context()
 	q := r.URL.Query().Get("query")
 	if q == "" {
@@ -138,6 +139,9 @@ func (h *Handler) PrometheusQueryRange(w http.ResponseWriter, r *http.Request) {
 			"available": false,
 			"results":   []interface{}{},
 		})
+		return
+	}
+	if !promClusterWide(w, r) {
 		return
 	}
 

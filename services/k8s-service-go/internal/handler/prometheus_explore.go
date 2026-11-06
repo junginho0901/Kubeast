@@ -35,17 +35,15 @@ func boundedInt(raw string, def, max int) int {
 	return n
 }
 
-// promUnavailable answers (and returns true) for a caller refused the cluster's Prometheus (promClusterWide) or a
-// cluster without one.
+// promUnavailable answers (and returns true) for a cluster without a Prometheus or a caller refused the cluster's
+// (promClusterWide). In that order: a cluster with no store has nothing to refuse, and the screens say no permission
+// for a refusal.
 func (h *Handler) promUnavailable(w http.ResponseWriter, r *http.Request) bool {
-	if !promClusterWide(w, r) {
+	if !h.svc.PrometheusAvailable(r.Context()) {
+		response.JSON(w, http.StatusOK, map[string]interface{}{"available": false})
 		return true
 	}
-	if h.svc.PrometheusAvailable(r.Context()) {
-		return false
-	}
-	response.JSON(w, http.StatusOK, map[string]interface{}{"available": false})
-	return true
+	return !promClusterWide(w, r)
 }
 
 // PrometheusMetrics — metric names seen in the last hour containing ?pattern=,
