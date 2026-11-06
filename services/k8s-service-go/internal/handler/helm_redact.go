@@ -12,7 +12,9 @@ import (
 // full is a Secret reveal: allowed with resource.secret.reveal and audited as
 // helm.release.reveal; everyone else with resource.helm.read gets the text
 // with Secret documents stripped and credential-looking values masked, the
-// same rules the AI path applies (services/pkg/redact).
+// same rules the AI path applies (services/pkg/redact). The AI path asks for
+// that text with masked=1 whatever the caller may reveal: no person reads it,
+// and asking for less is open to anyone.
 
 var helmRedactOpts = redact.Options{Enabled: true, Disabled: map[string]bool{}}
 
@@ -21,7 +23,7 @@ var helmRedactOpts = redact.Options{Enabled: true, Disabled: map[string]bool{}}
 // the read cannot be recorded — the handler answers 503 (refuseUnaudited)
 // rather than the full text.
 func (h *Handler) helmReveal(r *http.Request, namespace, name, section string) (bool, error) {
-	if !h.canForCluster(r, "resource.secret.reveal") {
+	if queryParamBool(r, "masked", false) || !h.canForCluster(r, "resource.secret.reveal") {
 		return false, nil
 	}
 	if rerr := h.auditReady(r); rerr != nil {

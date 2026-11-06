@@ -49,6 +49,7 @@ class ToolServerClient:
                 reason = body.get("error")
                 self.last_access = body.get("access") if isinstance(body.get("access"), dict) else None
                 self.last_requests = tool_trail(body.get("requests"))
+                self.last_redacted = body.get("redacted") if isinstance(body.get("redacted"), dict) else None
             except Exception:
                 reason = None
             if reason:

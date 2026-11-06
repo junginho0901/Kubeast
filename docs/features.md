@@ -49,7 +49,7 @@
     - `loki_labels`: log label names and values
     - `loki_patterns`: log patterns, with the line count per error type
     - `traces_search`, `traces_get`, `traces_tags`, `traces_metrics` and `traces_compare`: TraceQL on the trace store. They cover slow or failed requests, the spans of one trace, finding attributes, graphs of request count, error rate and p95 trends, and fast and slow samples.
-    - `helm_read`: release list, values, manifest, history, resources, images, revisions and the diff of two revisions, **read only**
+    - `helm_read`: release list, values, manifest, history, resources, images, revisions and the diff of two revisions, **read only**. Always the masked text, also for someone who may see it in full on the screen.
     - `policy_reports`: PolicyReport summary and results
     - `cost`: OpenCost allocation
     - `optimization`: usage against requests, and recommendations
@@ -74,6 +74,7 @@
     - `k8s_jq_query` filters `kubectl get -o json` with jq down to the needed fields. It has no environment or file access and a 5-second cap.
     - `k8s_tabular_query` returns a table of chosen columns only.
     - `k8s_count` returns counts, and counts per group.
+    - **A Secret's values never go out through these.** `k8s_jq_query` and `k8s_count` read the list without them: key names stay, values read `<REDACTED:secret>`. What kubectl computes itself cannot be cleaned first, so a table or a `jsonpath`, `go-template` or `custom-columns` output of Secrets is refused with where to look instead, and so is a count grouped by `.data`. A list of several kinds keeps the other kinds' values. A failed tool's text is masked like its answer.
   - Pods come from the rows k8s-service keeps for the Pods list (`/pods/page`), not from kubectl, so a large cluster is read whole:
     - `k8s_get_resources` for more than 25 pods without a name answers the counts over all of them (by phase, status, card colour, namespace and node) and 25 pods in order of need, errors and warnings first, with `next_offset` to read on. 25 or fewer come from kubectl as before.
     - `k8s_find_resource` searches every pod: `key=value` as a label selector, anything else by its words in the name or in one label. The log tool places a pod named without a namespace by the same rule.
@@ -84,7 +85,7 @@
   - Other kinds are sized before kubectl lists them, since kubectl holds a whole list whatever the output (110,000 events took it 1–1.8 GB): the API server answers how many without the objects (`limit=1` and its remaining count; with a selector the matches are counted 500 at a time up to 5,001). Above 5,000, `k8s_get_resources`, `k8s_jq_query`, `k8s_tabular_query` and `k8s_count` by a field answer `too_large` with the count instead of listing; `k8s_count` without a field answers that count at any size.
   - `k8s_get_events` lists the newest events (200 by default, at most 1,000), newest first, read by k8s-service a page at a time; when more match it says how many.
   - A kubectl list longer than the tool output (`TOOL_OUTPUT_MAX_BYTES`, 1 MiB) is answered as cut: `too_large` from `k8s_jq_query` and `k8s_count`, and "the total is not known" from `k8s_tabular_query`, instead of a read error or a wrong count.
-  - Before a write, `k8s_diff` shows what will change. It diffs the server dry-run result against the live object, and **nothing is applied**. Only users with write permission see it.
+  - Before a write, `k8s_diff` shows what will change. It diffs the server dry-run result against the live object, and **nothing is applied**. Only users with write permission see it. For a Secret it names the keys that would change, without their values.
 - **Floating AI widget (AI Chat)** — a widget floating on every page understands the **current screen context (the resource you are looking at)** and answers, limited to read-only tools.
   - It shows waiting dots before the first character and a small copy icon next to a finished answer (no token row). Wide tables scroll inside a box with a fixed header row.
   - It floats above modals, so you can ask while looking at an open dialog. When the right-hand detail drawer opens, the widget moves to its left (screens 1348px and wider).

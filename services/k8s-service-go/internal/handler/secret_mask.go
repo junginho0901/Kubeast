@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 )
 
@@ -12,7 +13,7 @@ import (
 // resource.secret.reveal, and that read is audited as k8s.secret.reveal.
 // Lists and searches never carry values — no screen needs them there.
 
-const secretMask = "***"
+const secretMask = k8s.SecretMask
 
 func isSecretObject(obj map[string]interface{}) bool {
 	kind, _ := obj["kind"].(string)
@@ -25,20 +26,7 @@ func maskSecretValues(obj map[string]interface{}) bool {
 	if obj == nil || !isSecretObject(obj) {
 		return false
 	}
-	for _, key := range []string{"data", "stringData"} {
-		if m, ok := obj[key].(map[string]interface{}); ok {
-			for k := range m {
-				m[k] = secretMask
-			}
-		}
-	}
-	if md, ok := obj["metadata"].(map[string]interface{}); ok {
-		if ann, ok := md["annotations"].(map[string]interface{}); ok {
-			if _, ok := ann["kubectl.kubernetes.io/last-applied-configuration"]; ok {
-				ann["kubectl.kubernetes.io/last-applied-configuration"] = secretMask
-			}
-		}
-	}
+	k8s.MaskSecretObject(obj)
 	return true
 }
 

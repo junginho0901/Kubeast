@@ -13,6 +13,7 @@ import { useDetailLabel } from './useDetailLabel'
 import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
+import { secretDescribeForAI } from './secretDescribeForAI'
 
 interface Props {
   name: string
@@ -115,14 +116,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
     retry: false,
   })
 
-  // Secret 의 실제 값(data_values)은 LLM 으로 보내지 않는다 — 키 목록과 메타데이터만 노출.
-  const sanitizedDescribe = describe
-    ? (() => {
-        const { data_values: _dv, ...rest } = describe as Record<string, unknown>
-        return rest
-      })()
-    : undefined
-  useResourceDetailOverlay({ kind: 'Secret', name, namespace, describe: sanitizedDescribe })
+  useResourceDetailOverlay({ kind: 'Secret', name, namespace, describe: secretDescribeForAI(describe) })
 
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const labels = (describe?.labels as Record<string, string> | undefined) ?? (meta.labels as Record<string, string> | undefined) ?? {}

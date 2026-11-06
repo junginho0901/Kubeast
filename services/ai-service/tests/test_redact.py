@@ -277,3 +277,102 @@ def test_safe_error_masks_whatever_the_redaction_switch(monkeypatch):
     assert _PROVIDER_KEYS[0] not in safe_error(err)
     # a key the caller holds, even one with no known shape
     assert "typed-in-key-123" not in safe_error(RuntimeError("bad key typed-in-key-123"), ["typed-in-key-123"])
+
+
+# Every value below is made up for the tests (same fixtures as redact_test.go).
+_BRACE_VALUE = "fake-plain-inside-braces"
+
+
+def test_secret_json_values_with_braces_and_cut_output():
+    cases = {
+        "braces in a value": '{"kind":"Secret","stringData":{"conf":"{ value = ' + _BRACE_VALUE + ' }"}}',
+        "json in a value": '{"kind":"Secret","stringData":{"conf":"{\\"a\\":{\\"b\\":\\"' + _BRACE_VALUE + '\\"}}"}}',
+        "quote in a value": '{"kind":"Secret","stringData":{"conf":"a\\"} ' + _BRACE_VALUE + '"}}',
+        "nested object": '{"kind":"Secret","data":{"conf":{"a":"' + _BRACE_VALUE + '"}}}',
+        "pretty": '{\n  "data" : {\n    "conf": "{ ' + _BRACE_VALUE + ' }"\n  },\n  "kind" : "Secret"\n}',
+        "cut in the value": '{"kind":"Secret","stringData":{"conf":"{ value = ' + _BRACE_VALUE,
+        "cut after the key": '{"kind":"Secret","stringData":{"conf":{"a":"' + _BRACE_VALUE + '"}',
+        "last-applied cut": '{"kind":"Secret","metadata":{"annotations":{"kubectl.kubernetes.io/last-applied-configuration":"{\\"data\\":\\"' + _BRACE_VALUE,
+        "warning first": 'Warning: deprecated\n{"kind":"Secret","stringData":{"conf":"{ ' + _BRACE_VALUE + ' }"}}',
+        "a value as a string": '{"kind":"Secret","data":"' + _BRACE_VALUE + '"}',
+        "a value with no key": '{"kind":"Secret","stringData":{"conf" "' + _BRACE_VALUE + '"}}',
+    }
+    for name, text in cases.items():
+        for o in (on(), Options(enabled=False)):
+            out, st = redact_text(text, o)
+            assert _BRACE_VALUE not in out, (name, out)
+            assert st.kinds.get("secret"), (name, st)
+    out, _ = redact_text('{"kind":"Secret","metadata":{"name":"db"},"stringData":{"conf":"{ ' + _BRACE_VALUE + ' }"},"type":"Opaque"}', Options(enabled=False))
+    assert '"name":"db"' in out and '"type":"Opaque"' in out and '"stringData"' in out, out
+
+
+def test_secret_named_by_kubectl_error_text():
+    text = ('error when applying patch:\n{"data":{"tls.key":"ZmFrZS10bHMta2V5"},"metadata":{"annotations":{"kubectl.kubernetes.io/last-applied-configuration":"{\\"data\\":\\"ZmFrZS1hbm5v\\"}"}}}'
+            '\nto:\nResource: "/v1, Resource=secrets", GroupVersionKind: "/v1, Kind=Secret"\nName: "db", Namespace: "shop"\n')
+    out, _ = redact_text(text, Options(enabled=False))
+    assert "ZmFrZS10bHMta2V5" not in out and "ZmFrZS1hbm5v" not in out and 'Name: "db"' in out, out
+
+
+def test_secret_yaml_other_spellings():
+    value = "fake-yaml-value"
+    cases = {
+        "flow data": "kind: Secret\ndata: {tls.key: " + value + "}\n",
+        "flow stringData": 'kind: Secret\nstringData: {"conf": "' + value + '"}\n',
+        "quoted kind": 'kind: "Secret"\ndata:\n  tls.key: ' + value + "\n",
+        "single quoted": "kind: 'Secret'\ndata:\n  tls.key: " + value + "\n",
+        "wide kind": "kind:   Secret\ndata:\n  tls.key: " + value + "\n",
+        "quoted keys": '"kind": "Secret"\n"data":\n  tls.key: ' + value + "\n",
+        "comment on data": "kind: Secret\ndata: # the keys\n  tls.key: " + value + "\n",
+        "multi-line flow": "kind: Secret\ndata: {\n  tls.key: " + value + "\n}\n",
+        "item, flow": "items:\n- kind: Secret\n  data: {tls.key: " + value + "}\n",
+        "item first, flow": "items:\n- data: {tls.key: " + value + "}\n  kind: Secret\n",
+        "windows lines": "kind: Secret\r\ndata:\r\n  tls.key: " + value + "\r\n",
+    }
+    for name, text in cases.items():
+        out, st = redact_text(text, Options(enabled=False))
+        assert value not in out and st.kinds.get("secret"), (name, st, out)
+    out, st = redact_text("kind: Secret\ndata: {}\nmetadata:\n  name: db\ntype: Opaque\n", Options(enabled=False))
+    assert "data: {}" in out and "name: db" in out and "type: Opaque" in out and st.count == 0, (st, out)
+    cm = "kind: ConfigMap\ndata: {mode: plain}\n"
+    assert redact_text(cm, Options(enabled=False))[0] == cm
+
+
+def test_object_secret_values_anywhere_under_it():
+    value = "fake-object-value"
+    last = "kubectl.kubernetes.io/last-applied-configuration"
+    v = {
+        "kind": "Secret",
+        "annotations": {last: '{"stringData":{"conf":"{ ' + value + ' }"}}', "team": "shop"},
+        "describe": {"annotations": {last: value, "team": "shop"}, "data": {"tls.key": value}},
+        "raw": {"data": {"tls.key": value}, "stringData": value},
+        "data_values": {"tls.key": value},
+        "data_keys": ["tls.key"],
+    }
+    out, st = redact_object(v, Options(enabled=False))
+    assert value not in repr(out), out
+    assert out["annotations"][last] == "<REDACTED:secret>" and out["annotations"]["team"] == "shop", out
+    assert out["data_keys"] == ["tls.key"] and st.kinds["secret"] >= 5, (out, st)
+    # the same annotation on another kind is that object's own
+    cm = {"kind": "ConfigMap", "annotations": {last: '{"data":{"mode":"fast"}}'}, "data": {"mode": "fast"}}
+    out, _ = redact_object(cm, Options(enabled=False))
+    assert out["annotations"][last] == '{"data":{"mode":"fast"}}' and out["data"] == {"mode": "fast"}, out
+
+
+def test_floating_page_context_keeps_a_secret_describe_out_of_the_prompt():
+    """The Secret drawer's describe layer: annotations at the top of the object, a value with braces."""
+    from app.models.floating_ai import PageContextPayload, VisibleDataLayer
+    from app.prompts.floating_system_prompt import build_context_prompt
+
+    last = '{"apiVersion":"v1","kind":"Secret","metadata":{"name":"db"},"stringData":{"conf":"{ value = ' + _BRACE_VALUE + ' }"}}'
+    ctx = PageContextPayload(
+        page_type="resource-list", page_title="Secrets", path="/configuration/secrets", resource_kind="Secret",
+        namespace="app", snapshot_at="2026-11-06T00:00:00Z",
+        base=VisibleDataLayer(source="base", summary="Secrets list", data={"rows": 1}),
+        overlays=[VisibleDataLayer(source="SecretInfo", summary="Secret db (app) 상세", data={
+            "kind": "Secret", "name": "db", "namespace": "app", "type": "Opaque", "data_keys": ["conf"],
+            "annotations": {"kubectl.kubernetes.io/last-applied-configuration": last, "team": "shop"},
+        })],
+    )
+    prompt = build_context_prompt(ctx, "default")
+    assert _BRACE_VALUE not in prompt, prompt
+    assert '"data_keys":["conf"]' in prompt and '"team":"shop"' in prompt and "last-applied-configuration" in prompt, prompt

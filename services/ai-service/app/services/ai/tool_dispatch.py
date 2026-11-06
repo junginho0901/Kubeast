@@ -396,6 +396,6 @@ async def execute_function_with_context(
         return result
     
     except Exception as e:
-        error_msg = f"Error in {function_name}: {str(e)}"
-        log.warning("%s", safe_error(error_msg))
+        error_msg = f"Error in {function_name}: {safe_error(e)}"
+        log.warning("%s", error_msg)
         return json.dumps({"error": error_msg}, ensure_ascii=False)

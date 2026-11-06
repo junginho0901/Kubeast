@@ -17,17 +17,15 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/junginho0901/kubeast/services/pkg/redact"
 )
 
 // maxLogTailLines caps a pod-logs tool call; the output is also capped in
 // bytes by runKubectl (TOOL_OUTPUT_MAX_BYTES) and `--limit-bytes`.
 const maxLogTailLines = 2000
 
-// Secrets are readable for the assistant, but never their values: every tool
-// result passes through services/pkg/redact in handleCall, which empties
-// data/stringData of any Secret document and masks credentials elsewhere
-// (OWASP LLM02). The UI path gates the same data behind resource.secret.reveal
-// + audit.
+// How Secrets are read is in secret_read.go.
 
 func handleGetResources(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
 	resourceType := argString(args, "resource_type", "")
@@ -38,6 +36,23 @@ func handleGetResources(ctx context.Context, args map[string]interface{}, header
 	namespace := argString(args, "namespace", "")
 	allNamespaces := argBool(args, "all_namespaces")
 	output := argString(args, "output", "wide")
+
+	cmdArgs := []string{"get", resourceType}
+	if resourceName != "" {
+		cmdArgs = append(cmdArgs, resourceName)
+	}
+
+	if allNamespaces {
+		cmdArgs = append(cmdArgs, "--all-namespaces")
+	} else if namespace != "" {
+		cmdArgs = append(cmdArgs, "-n", namespace)
+	}
+
+	if outputExpression(output) {
+		if out, stop, err := refuseSecretExpression(ctx, headers, resourceType, resourceName, namespace, cmdArgs); stop {
+			return out, err
+		}
+	}
 
 	if isPodsKind(resourceType) && resourceName == "" {
 		ns := namespace
@@ -62,17 +77,6 @@ func handleGetResources(ctx context.Context, args map[string]interface{}, header
 		}
 	}
 
-	cmdArgs := []string{"get", resourceType}
-	if resourceName != "" {
-		cmdArgs = append(cmdArgs, resourceName)
-	}
-
-	if allNamespaces {
-		cmdArgs = append(cmdArgs, "--all-namespaces")
-	} else if namespace != "" {
-		cmdArgs = append(cmdArgs, "-n", namespace)
-	}
-
 	if output != "" {
 		cmdArgs = append(cmdArgs, "-o", output)
 	} else {
@@ -83,7 +87,16 @@ func handleGetResources(ctx context.Context, args map[string]interface{}, header
 	if err != nil {
 		return explainFailure(ctx, headers, err, resourceType, resourceName, namespace)
 	}
-	return out, nil
+	return stripCutSecret(out, resourceType), nil
+}
+
+// stripCutSecret: a Secret the output cap cut may end before the line that says it is one, which handleCall's masking
+// goes by.
+func stripCutSecret(out, resourceType string) string {
+	if outputCut(out) && namesSecrets(resourceType) {
+		out, _ = redact.StripSecretText(out)
+	}
+	return out
 }
 
 func handleGetResourceYAML(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
@@ -103,7 +116,7 @@ func handleGetResourceYAML(ctx context.Context, args map[string]interface{}, hea
 	if err != nil {
 		return explainFailure(ctx, headers, err, resourceType, resourceName, namespace)
 	}
-	return out, nil
+	return stripCutSecret(out, resourceType), nil
 }
 
 func handleDescribeResource(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {

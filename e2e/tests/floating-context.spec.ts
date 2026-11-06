@@ -178,6 +178,36 @@ test.describe('floating chat screen data', () => {
     await expect.poll(() => rightEdge(toggle), 'back to the corner').toBeGreaterThan(1400)
   })
 
+  test('a Secret drawer sends its annotations by name and none of its values', async ({ page, request }) => {
+    const login = await request.post('/api/v1/auth/login', { data: { email: process.env.E2E_USER_EMAIL || 'admin', password: process.env.E2E_USER_PASSWORD || '' } })
+    const headers = { Authorization: `Bearer ${(await login.json()).access_token as string}`, 'X-Requested-With': 'XMLHttpRequest' }
+    const stamp = Date.now()
+    const name = `e2e-floating-secret-${stamp}`
+    const value = `fake-floating-value-${stamp}`
+    const lastApplied = 'kubectl.kubernetes.io/last-applied-configuration'
+    const yaml = ['apiVersion: v1', 'kind: Secret', 'metadata:', `  name: ${name}`, '  namespace: default', '  annotations:',
+      `    ${lastApplied}: '{"kind":"Secret","stringData":{"conf":"{ value = ${value} }"}}'`, '    e2e-team: shop', 'type: Opaque', 'stringData:', `  conf: ${value}`, ''].join('\n')
+    const created = await request.post('/api/v1/cluster/resources/yaml/create?cluster=self', { headers, data: { yaml, namespace: 'default' } })
+    expect(created.ok(), await created.text()).toBeTruthy()
+    try {
+      const sent = await captureFloating(page)
+      await page.goto(`/configuration/secrets?cluster=self&namespace=default&detail=Secret/default/${name}`)
+      await openChat(page)
+      let ctx = await ask(page, sent)
+      const layer = () => ctx.overlays.find((o) => o.source === 'SecretInfo')?.data
+      await expect.poll(async () => {
+        ctx = await ask(page, sent)
+        return layer()?.name
+      }, 'the drawer registers its layer').toBe(name)
+      expect(layer()?.annotations).toEqual(['e2e-team', lastApplied])
+      expect(layer()?.data_keys).toEqual(['conf'])
+      expect(JSON.stringify(ctx)).not.toContain(value)
+      expect(JSON.stringify(ctx)).not.toContain(Buffer.from(value).toString('base64'))
+    } finally {
+      await request.delete(`/api/v1/cluster/namespaces/default/secrets/${name}?cluster=self`, { headers })
+    }
+  })
+
   test('on a screen too narrow for the drawer and the window side by side the chat stays in the corner, in front', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 })
     await page.goto('/workloads/pods?cluster=self')

@@ -13,6 +13,7 @@ from app.models.ai import SessionChatRequest
 from app.models.floating_ai import FloatingChatRequest
 from pydantic import ValidationError
 from app.security import require_auth, decode_access_token, bearer_or_cookie
+from app.services.ai.debug_dump import safe_error
 
 logger = logging.getLogger(__name__)
 
@@ -406,7 +407,7 @@ async def approve_tool_approval(
         if problem:
             status, error = "failed", problem
     except Exception as e:  # tool-server error (403 from the cluster, kubectl failure, ...)
-        status, error = "failed", str(e)
+        status, error = "failed", safe_error(e)
         formatted = f"error: {error}"
     call_access = tool_access.with_mode(ai_service.tool_server.last_access, approval.tool)
     call_requests = ai_service.tool_server.last_requests
@@ -429,7 +430,7 @@ async def approve_tool_approval(
         after={"approval_id": approval.id, "session_id": approval.session_id, "cluster": approval.cluster, "tool": approval.tool, "approved": True,
                "access": call_access, "requests": call_requests, **({"objects": target.objects} if target.objects else {})},
         request_ip=http.get("ip"), user_agent=http.get("user_agent"), request_id=http.get("request_id"), path=http.get("path"),
-        result="success" if status == "executed" else "failure", error=error,
+        result="success" if status == "executed" else "failure", error=error[:500] if error else error,
     )
     _invalidate_caches()
     return _approval_dict(approval)

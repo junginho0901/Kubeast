@@ -150,3 +150,11 @@ async def test_events_tool_forwards_its_limit():
     service._call_tool_server.assert_awaited_with("k8s_get_events", {"namespace": "bulk", "limit": 50})
     await execute_function_with_context(service, "k8s_get_events", {"namespace": "bulk", "limit": "50"}, _make_context())
     service._call_tool_server.assert_awaited_with("k8s_get_events", {"namespace": "bulk"})
+
+
+@pytest.mark.asyncio
+async def test_a_failed_tool_call_reaches_the_model_masked():
+    service = _make_service()
+    service._call_tool_server = AsyncMock(side_effect=Exception("kubectl failed: boom\npassword: fake-failed-password\nstill here"))
+    result = await execute_function_with_context(service, "get_cluster_overview", {}, _make_context())
+    assert "fake-failed-password" not in result and "still here" in result, result

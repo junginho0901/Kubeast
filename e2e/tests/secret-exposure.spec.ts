@@ -32,6 +32,7 @@ const rbName = `e2e-viewer-secrets-${ts}`
 const secretName = `e2e-secret-${ts}`
 const secretValue = `e2e-hunter2-${ts}`
 const secretValueB64 = Buffer.from(secretValue).toString('base64')
+const lastAppliedValue = `e2e-last-applied-${ts}`
 const relName = `e2e-rel-${ts}`
 const relSecretName = `sh.helm.release.v1.${relName}.v1`
 const relSecretValueB64 = Buffer.from(`rel-${secretValue}`).toString('base64')
@@ -147,6 +148,9 @@ test.describe.serial('Secret exposure — generic resource paths and Helm text',
       'metadata:',
       `  name: ${secretName}`,
       `  namespace: ${NS}`,
+      '  annotations:',
+      `    kubectl.kubernetes.io/last-applied-configuration: '{"kind":"Secret","stringData":{"conf":"{ value = ${lastAppliedValue} }"}}'`,
+      '    e2e-team: shop',
       'type: Opaque',
       'stringData:',
       `  password: ${secretValue}`,
@@ -195,6 +199,49 @@ test.describe.serial('Secret exposure — generic resource paths and Helm text',
     expect(describeText).not.toContain(secretValue)
 
     expect(await auditRows(request, admin, 'k8s.secret.reveal', readerEmail)).toHaveLength(0)
+  })
+
+  test('the copy kubectl apply keeps in an annotation is masked with the values, and the annotation stays listed', async ({ request }) => {
+    const paths = [
+      `/api/v1/cluster/resources/yaml?cluster=${CLUSTER}&resource_type=secrets&namespace=${NS}&resource_name=${secretName}`,
+      `/api/v1/cluster/resources/describe?cluster=${CLUSTER}&resource_type=secrets&namespace=${NS}&resource_name=${secretName}`,
+      `/api/v1/cluster/resources/json?cluster=${CLUSTER}&resource_type=secrets&namespace=${NS}&resource_name=${secretName}`,
+      `/api/v1/cluster/namespaces/${NS}/secrets/${secretName}/yaml?cluster=${CLUSTER}`,
+      `/api/v1/cluster/namespaces/${NS}/secrets/${secretName}/describe?cluster=${CLUSTER}`,
+    ]
+    for (const p of paths) {
+      const asReader = await request.get(p, { headers: reader })
+      expect(asReader.status(), await asReader.text()).toBe(200)
+      const text = await asReader.text()
+      expect(text, p).not.toContain(lastAppliedValue)
+      expect(text, p).toContain('kubectl.kubernetes.io/last-applied-configuration')
+      expect(text, p).toContain('e2e-team')
+
+      const asAdmin = await request.get(p, { headers: admin })
+      expect(asAdmin.status(), await asAdmin.text()).toBe(200)
+      expect(await asAdmin.text(), `${p}: reveal keeps it`).toContain(lastAppliedValue)
+    }
+    expect(await auditRows(request, admin, 'k8s.secret.reveal', readerEmail)).toHaveLength(0)
+
+    // another kind's annotation is its own
+    const cmName = `${secretName}-cm`
+    await createYAML(request, admin, [
+      'apiVersion: v1',
+      'kind: ConfigMap',
+      'metadata:',
+      `  name: ${cmName}`,
+      `  namespace: ${NS}`,
+      '  annotations:',
+      `    kubectl.kubernetes.io/last-applied-configuration: '{"data":{"mode":"${lastAppliedValue}"}}'`,
+      '',
+    ].join('\n'))
+    try {
+      const cm = await request.get(`/api/v1/cluster/namespaces/${NS}/configmaps/${cmName}/describe?cluster=${CLUSTER}`, { headers: reader })
+      expect(cm.status(), await cm.text()).toBe(200)
+      expect(await cm.text()).toContain(lastAppliedValue)
+    } finally {
+      await request.delete(`/api/v1/cluster/namespaces/${NS}/configmaps/${cmName}?cluster=${CLUSTER}`, { headers: admin })
+    }
   })
 
   test('the admin gets the values and each generic read is audited with its path', async ({ request }) => {
@@ -256,5 +303,33 @@ test.describe.serial('Secret exposure — generic resource paths and Helm text',
     const rows = (await auditRows(request, admin, 'helm.release.reveal', ADMIN_EMAIL)).filter((r) => r.TargetID === relName)
     const sections = new Set(rows.map((r) => r.after?.section))
     for (const section of ['detail', 'manifest']) expect(sections, `audit section ${section}`).toContain(section)
+  })
+
+  test('the AI path reads the masked Helm text even for someone who may reveal it, and no reveal is recorded', async ({ request }) => {
+    const base = `/api/v1/helm/releases/${NS}/${relName}`
+    const reveals = async () => (await auditRows(request, admin, 'helm.release.reveal', ADMIN_EMAIL)).filter((r) => r.TargetID === relName).length
+    const before = await reveals()
+
+    const manifest = await request.get(`${base}/manifest?cluster=${CLUSTER}&masked=1`, { headers: admin })
+    expect(manifest.status(), await manifest.text()).toBe(200)
+    expect((await manifest.json()).content as string).not.toContain(relSecretValueB64)
+    const detail = await request.get(`${base}?cluster=${CLUSTER}&masked=1`, { headers: admin })
+    expect(detail.status(), await detail.text()).toBe(200)
+    expect(await detail.text()).not.toContain(relCfgPassword)
+    expect(await reveals(), 'masked=1 writes no reveal row').toBe(before)
+
+    const config = await request.get('/api/v1/ai/mcp/config', { headers: admin })
+    test.skip(!config.ok() || !(await config.json()).enabled, 'the MCP server is off (mcp.enabled)')
+    for (const args of [{ what: 'manifest' }, { what: 'values' }, { what: 'get' }, { what: 'revision', revision: 1, section: 'manifest' }]) {
+      const res = await request.post('/api/v1/ai/mcp', {
+        headers: { Accept: 'application/json, text/event-stream', 'Content-Type': 'application/json', Authorization: admin.Authorization },
+        data: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'helm_read', arguments: { cluster: CLUSTER, namespace: NS, release: relName, ...args } } },
+        failOnStatusCode: false,
+      })
+      expect(res.status(), await res.text()).toBe(200)
+      const text = (await res.json()).result.content[0].text as string
+      for (const gone of [relSecretValueB64, relCmPassword, relCfgPassword]) expect(text, JSON.stringify(args)).not.toContain(gone)
+    }
+    expect(await reveals(), 'helm_read writes no reveal row').toBe(before)
   })
 })
