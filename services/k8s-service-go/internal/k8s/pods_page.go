@@ -84,7 +84,7 @@ const (
 type PodListItem struct {
 	Name              string `json:"name"`
 	Namespace         string `json:"namespace"`
-	Status            string `json:"status"` // the Status column (podListStatus)
+	Status            string `json:"status"` // the Status column (podListView)
 	Phase             string `json:"phase"`
 	Ready             string `json:"ready"`
 	RestartCount      int32  `json:"restart_count"`

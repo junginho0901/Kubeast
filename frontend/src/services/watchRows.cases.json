@@ -1,5 +1,3343 @@
 [
  {
+  "name": "a pod being deleted reads Terminating, whatever its containers do",
+  "resource": "pods",
+  "before": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/1",
+   "reason": "",
+   "restart_count": 2,
+   "status": "Running",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "event": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "deletion_timestamp": "2026-11-06T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/1",
+   "reason": "",
+   "restart_count": 2,
+   "status": "Terminating",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "after": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "deletion_timestamp": "2026-11-06T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/1",
+   "reason": "",
+   "restart_count": 2,
+   "status": "Terminating",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "shows": {
+   "claims": [],
+   "config_map_refs": [],
+   "health": "warn Terminating",
+   "labels": {
+    "app": "web"
+   },
+   "message": "-",
+   "node": "node-a",
+   "owners": [
+    "ReplicaSet/web-abc"
+   ],
+   "phase": "Running",
+   "ready": "1/1",
+   "reason": "-",
+   "restarts": 2,
+   "secret_refs": [],
+   "service_account": "-",
+   "status": "Terminating"
+  }
+ },
+ {
+  "name": "a pod past its crash loop keeps no reason or message of it",
+  "resource": "pods",
+  "before": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": false,
+     "resources": {},
+     "restart_count": 3,
+     "state": {
+      "waiting": {
+       "message": "back-off restarting",
+       "reason": "CrashLoopBackOff"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "back-off restarting",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "0/1",
+   "reason": "CrashLoopBackOff",
+   "restart_count": 3,
+   "status": "CrashLoopBackOff",
+   "status_message": "back-off restarting",
+   "status_reason": "CrashLoopBackOff"
+  },
+  "event": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/1",
+   "reason": "",
+   "restart_count": 2,
+   "status": "Running",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "after": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/1",
+   "reason": "",
+   "restart_count": 2,
+   "status": "Running",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "shows": {
+   "claims": [],
+   "config_map_refs": [],
+   "health": "ok Running",
+   "labels": {
+    "app": "web"
+   },
+   "message": "-",
+   "node": "node-a",
+   "owners": [
+    "ReplicaSet/web-abc"
+   ],
+   "phase": "Running",
+   "ready": "1/1",
+   "reason": "-",
+   "restarts": 2,
+   "secret_refs": [],
+   "service_account": "-",
+   "status": "Running"
+  }
+ },
+ {
+  "name": "a pod in a crash loop says why",
+  "resource": "pods",
+  "before": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/1",
+   "reason": "",
+   "restart_count": 2,
+   "status": "Running",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "event": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": false,
+     "resources": {},
+     "restart_count": 3,
+     "state": {
+      "waiting": {
+       "message": "back-off restarting",
+       "reason": "CrashLoopBackOff"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "back-off restarting",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "0/1",
+   "reason": "CrashLoopBackOff",
+   "restart_count": 3,
+   "status": "CrashLoopBackOff",
+   "status_message": "back-off restarting",
+   "status_reason": "CrashLoopBackOff"
+  },
+  "after": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": false,
+     "resources": {},
+     "restart_count": 3,
+     "state": {
+      "waiting": {
+       "message": "back-off restarting",
+       "reason": "CrashLoopBackOff"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "back-off restarting",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "0/1",
+   "reason": "CrashLoopBackOff",
+   "restart_count": 3,
+   "status": "CrashLoopBackOff",
+   "status_message": "back-off restarting",
+   "status_reason": "CrashLoopBackOff"
+  },
+  "shows": {
+   "claims": [],
+   "config_map_refs": [],
+   "health": "error CrashLoopBackOff",
+   "labels": {
+    "app": "web"
+   },
+   "message": "back-off restarting",
+   "node": "node-a",
+   "owners": [
+    "ReplicaSet/web-abc"
+   ],
+   "phase": "Running",
+   "ready": "0/1",
+   "reason": "CrashLoopBackOff",
+   "restarts": 3,
+   "secret_refs": [],
+   "service_account": "-",
+   "status": "CrashLoopBackOff"
+  }
+ },
+ {
+  "name": "a pod its controller let go of names no owner and no labels",
+  "resource": "pods",
+  "before": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/1",
+   "reason": "",
+   "restart_count": 2,
+   "status": "Running",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "event": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": null,
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/1",
+   "reason": "",
+   "restart_count": 2,
+   "status": "Running",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "after": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": null,
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/1",
+   "reason": "",
+   "restart_count": 2,
+   "status": "Running",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "shows": {
+   "claims": [],
+   "config_map_refs": [],
+   "health": "ok Running",
+   "labels": {},
+   "message": "-",
+   "node": "node-a",
+   "owners": [],
+   "phase": "Running",
+   "ready": "1/1",
+   "reason": "-",
+   "restarts": 2,
+   "secret_refs": [],
+   "service_account": "-",
+   "status": "Running"
+  }
+ },
+ {
+  "name": "a pod that holds no reference lists none, whatever the row before it listed",
+  "resource": "pods",
+  "before": {
+   "config_map_refs": [
+    "conf-env",
+    "conf-from",
+    "conf-proj",
+    "conf-vol"
+   ],
+   "containers": [
+    {
+     "env_count": 3,
+     "env_from": [
+      {
+       "config_map": "conf-from"
+      },
+      {
+       "prefix": "S_",
+       "secret": "creds-from"
+      }
+     ],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [
+      {
+       "container_port": 8080,
+       "name": "http",
+       "protocol": "TCP"
+      }
+     ],
+     "ready": true,
+     "resources": {
+      "limits": {
+       "memory": "1Gi"
+      },
+      "requests": {
+       "cpu": "100m"
+      }
+     },
+     "restart_count": 2,
+     "security_context": {
+      "capabilities": {
+       "drop": [
+        "ALL"
+       ]
+      },
+      "run_as_non_root": true
+     },
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": [
+      {
+       "mount_path": "/etc/cfg",
+       "name": "cfg",
+       "read_only": true
+      }
+     ]
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "priority_class_name": "high",
+   "ready": "1/1",
+   "reason": "",
+   "restart_count": 2,
+   "secret_refs": [
+    "creds-env",
+    "creds-from",
+    "creds-proj",
+    "creds-vol",
+    "registry"
+   ],
+   "service_account_name": "runner",
+   "status": "Running",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "event": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/1",
+   "reason": "",
+   "restart_count": 2,
+   "status": "Running",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "after": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/1",
+   "reason": "",
+   "restart_count": 2,
+   "status": "Running",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "shows": {
+   "claims": [],
+   "config_map_refs": [],
+   "health": "ok Running",
+   "labels": {
+    "app": "web"
+   },
+   "message": "-",
+   "node": "node-a",
+   "owners": [
+    "ReplicaSet/web-abc"
+   ],
+   "phase": "Running",
+   "ready": "1/1",
+   "reason": "-",
+   "restarts": 2,
+   "secret_refs": [],
+   "service_account": "-",
+   "status": "Running"
+  }
+ },
+ {
+  "name": "a pod that holds references lists each once, in order",
+  "resource": "pods",
+  "before": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/1",
+   "reason": "",
+   "restart_count": 2,
+   "status": "Running",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "event": {
+   "config_map_refs": [
+    "conf-env",
+    "conf-from",
+    "conf-proj",
+    "conf-vol"
+   ],
+   "containers": [
+    {
+     "env_count": 3,
+     "env_from": [
+      {
+       "config_map": "conf-from"
+      },
+      {
+       "prefix": "S_",
+       "secret": "creds-from"
+      }
+     ],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [
+      {
+       "container_port": 8080,
+       "name": "http",
+       "protocol": "TCP"
+      }
+     ],
+     "ready": true,
+     "resources": {
+      "limits": {
+       "memory": "1Gi"
+      },
+      "requests": {
+       "cpu": "100m"
+      }
+     },
+     "restart_count": 2,
+     "security_context": {
+      "capabilities": {
+       "drop": [
+        "ALL"
+       ]
+      },
+      "run_as_non_root": true
+     },
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": [
+      {
+       "mount_path": "/etc/cfg",
+       "name": "cfg",
+       "read_only": true
+      }
+     ]
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "priority_class_name": "high",
+   "ready": "1/1",
+   "reason": "",
+   "restart_count": 2,
+   "secret_refs": [
+    "creds-env",
+    "creds-from",
+    "creds-proj",
+    "creds-vol",
+    "registry"
+   ],
+   "service_account_name": "runner",
+   "status": "Running",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "after": {
+   "config_map_refs": [
+    "conf-env",
+    "conf-from",
+    "conf-proj",
+    "conf-vol"
+   ],
+   "containers": [
+    {
+     "env_count": 3,
+     "env_from": [
+      {
+       "config_map": "conf-from"
+      },
+      {
+       "prefix": "S_",
+       "secret": "creds-from"
+      }
+     ],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [
+      {
+       "container_port": 8080,
+       "name": "http",
+       "protocol": "TCP"
+      }
+     ],
+     "ready": true,
+     "resources": {
+      "limits": {
+       "memory": "1Gi"
+      },
+      "requests": {
+       "cpu": "100m"
+      }
+     },
+     "restart_count": 2,
+     "security_context": {
+      "capabilities": {
+       "drop": [
+        "ALL"
+       ]
+      },
+      "run_as_non_root": true
+     },
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": [
+      {
+       "mount_path": "/etc/cfg",
+       "name": "cfg",
+       "read_only": true
+      }
+     ]
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "priority_class_name": "high",
+   "ready": "1/1",
+   "reason": "",
+   "restart_count": 2,
+   "secret_refs": [
+    "creds-env",
+    "creds-from",
+    "creds-proj",
+    "creds-vol",
+    "registry"
+   ],
+   "service_account_name": "runner",
+   "status": "Running",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "shows": {
+   "claims": [],
+   "config_map_refs": [
+    "conf-env",
+    "conf-from",
+    "conf-proj",
+    "conf-vol"
+   ],
+   "health": "ok Running",
+   "labels": {
+    "app": "web"
+   },
+   "message": "-",
+   "node": "node-a",
+   "owners": [
+    "ReplicaSet/web-abc"
+   ],
+   "phase": "Running",
+   "ready": "1/1",
+   "reason": "-",
+   "restarts": 2,
+   "secret_refs": [
+    "creds-env",
+    "creds-from",
+    "creds-proj",
+    "creds-vol",
+    "registry"
+   ],
+   "service_account": "runner",
+   "status": "Running"
+  }
+ },
+ {
+  "name": "a pod whose init container failed reads Init:Error with its restarts",
+  "resource": "pods",
+  "before": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/1",
+   "reason": "",
+   "restart_count": 2,
+   "status": "Running",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "event": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {},
+     "name": "app",
+     "ports": [],
+     "ready": false,
+     "resources": {},
+     "restart_count": 0,
+     "state": {
+      "waiting": {
+       "message": "",
+       "reason": "PodInitializing"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [
+    {
+     "image": "example.test/setup:1",
+     "name": "setup",
+     "ready": false,
+     "restart_count": 4,
+     "state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:02:00Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     }
+    }
+   ],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Pending",
+   "pod_ip": "",
+   "ready": "0/1",
+   "reason": "PodInitializing",
+   "restart_count": 4,
+   "status": "Init:Error",
+   "status_message": "",
+   "status_reason": "PodInitializing"
+  },
+  "after": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {},
+     "name": "app",
+     "ports": [],
+     "ready": false,
+     "resources": {},
+     "restart_count": 0,
+     "state": {
+      "waiting": {
+       "message": "",
+       "reason": "PodInitializing"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [
+    {
+     "image": "example.test/setup:1",
+     "name": "setup",
+     "ready": false,
+     "restart_count": 4,
+     "state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:02:00Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     }
+    }
+   ],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Pending",
+   "pod_ip": "",
+   "ready": "0/1",
+   "reason": "PodInitializing",
+   "restart_count": 4,
+   "status": "Init:Error",
+   "status_message": "",
+   "status_reason": "PodInitializing"
+  },
+  "shows": {
+   "claims": [],
+   "config_map_refs": [],
+   "health": "error Error",
+   "labels": {
+    "app": "web"
+   },
+   "message": "-",
+   "node": "node-a",
+   "owners": [
+    "ReplicaSet/web-abc"
+   ],
+   "phase": "Pending",
+   "ready": "0/1",
+   "reason": "PodInitializing",
+   "restarts": 4,
+   "secret_refs": [],
+   "service_account": "-",
+   "status": "Init:Error"
+  }
+ },
+ {
+  "name": "a pod with a sidecar counts it in READY and RESTARTS",
+  "resource": "pods",
+  "before": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/1",
+   "reason": "",
+   "restart_count": 2,
+   "status": "Running",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "event": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [
+    {
+     "image": "example.test/side:1",
+     "name": "side",
+     "ready": true,
+     "restart_count": 1,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:00:30Z"
+      }
+     }
+    }
+   ],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "2/2",
+   "reason": "",
+   "restart_count": 3,
+   "status": "Running",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "after": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [
+    {
+     "image": "example.test/side:1",
+     "name": "side",
+     "ready": true,
+     "restart_count": 1,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:00:30Z"
+      }
+     }
+    }
+   ],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "2/2",
+   "reason": "",
+   "restart_count": 3,
+   "status": "Running",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "shows": {
+   "claims": [],
+   "config_map_refs": [],
+   "health": "warn PodInitializing",
+   "labels": {
+    "app": "web"
+   },
+   "message": "-",
+   "node": "node-a",
+   "owners": [
+    "ReplicaSet/web-abc"
+   ],
+   "phase": "Running",
+   "ready": "2/2",
+   "reason": "-",
+   "restarts": 3,
+   "secret_refs": [],
+   "service_account": "-",
+   "status": "Running"
+  }
+ },
+ {
+  "name": "a pod being deleted on a node that stopped answering reads Unknown",
+  "resource": "pods",
+  "before": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/1",
+   "reason": "",
+   "restart_count": 2,
+   "status": "Running",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "event": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "deletion_timestamp": "2026-11-06T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "node stopped answering",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/1",
+   "reason": "NodeLost",
+   "restart_count": 2,
+   "status": "Unknown",
+   "status_message": "node stopped answering",
+   "status_reason": "NodeLost"
+  },
+  "after": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "deletion_timestamp": "2026-11-06T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "node stopped answering",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/1",
+   "reason": "NodeLost",
+   "restart_count": 2,
+   "status": "Unknown",
+   "status_message": "node stopped answering",
+   "status_reason": "NodeLost"
+  },
+  "shows": {
+   "claims": [],
+   "config_map_refs": [],
+   "health": "warn Terminating",
+   "labels": {
+    "app": "web"
+   },
+   "message": "node stopped answering",
+   "node": "node-a",
+   "owners": [
+    "ReplicaSet/web-abc"
+   ],
+   "phase": "Running",
+   "ready": "1/1",
+   "reason": "NodeLost",
+   "restarts": 2,
+   "secret_refs": [],
+   "service_account": "-",
+   "status": "Unknown"
+  }
+ },
+ {
+  "name": "a failed pod whose container names only its exit code prints that",
+  "resource": "pods",
+  "before": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/1",
+   "reason": "",
+   "restart_count": 2,
+   "status": "Running",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "event": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {},
+     "name": "app",
+     "ports": [],
+     "ready": false,
+     "resources": {},
+     "restart_count": 0,
+     "state": {
+      "terminated": {
+       "exit_code": 2,
+       "finished_at": "2026-11-01T00:02:00Z",
+       "message": "",
+       "reason": "",
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Failed",
+   "pod_ip": "",
+   "ready": "0/1",
+   "reason": "",
+   "restart_count": 0,
+   "status": "ExitCode:2",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "after": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {},
+     "name": "app",
+     "ports": [],
+     "ready": false,
+     "resources": {},
+     "restart_count": 0,
+     "state": {
+      "terminated": {
+       "exit_code": 2,
+       "finished_at": "2026-11-01T00:02:00Z",
+       "message": "",
+       "reason": "",
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Failed",
+   "pod_ip": "",
+   "ready": "0/1",
+   "reason": "",
+   "restart_count": 0,
+   "status": "ExitCode:2",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "shows": {
+   "claims": [],
+   "config_map_refs": [],
+   "health": "error Failed",
+   "labels": {
+    "app": "web"
+   },
+   "message": "-",
+   "node": "node-a",
+   "owners": [
+    "ReplicaSet/web-abc"
+   ],
+   "phase": "Failed",
+   "ready": "0/1",
+   "reason": "-",
+   "restarts": 0,
+   "secret_refs": [],
+   "service_account": "-",
+   "status": "ExitCode:2"
+  }
+ },
+ {
+  "name": "a pod that holds a claim and a template lists both",
+  "resource": "pods",
+  "before": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/1",
+   "reason": "",
+   "restart_count": 2,
+   "status": "Running",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "event": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/1",
+   "reason": "",
+   "resource_claim_templates": [
+    "template-a"
+   ],
+   "resource_claims": [
+    "claim-a"
+   ],
+   "restart_count": 2,
+   "status": "Running",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "after": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/1",
+   "reason": "",
+   "resource_claim_templates": [
+    "template-a"
+   ],
+   "resource_claims": [
+    "claim-a"
+   ],
+   "restart_count": 2,
+   "status": "Running",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "shows": {
+   "claims": [
+    "claim-a",
+    "template-a"
+   ],
+   "config_map_refs": [],
+   "health": "ok Running",
+   "labels": {
+    "app": "web"
+   },
+   "message": "-",
+   "node": "node-a",
+   "owners": [
+    "ReplicaSet/web-abc"
+   ],
+   "phase": "Running",
+   "ready": "1/1",
+   "reason": "-",
+   "restarts": 2,
+   "secret_refs": [],
+   "service_account": "-",
+   "status": "Running"
+  }
+ },
+ {
+  "name": "a DaemonSet whose node selector went away shows none, with its new images",
+  "resource": "daemonsets",
+  "before": {
+   "available": 3,
+   "created_at": "2026-11-01T00:00:00Z",
+   "current": 3,
+   "desired": 3,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "misscheduled": 0,
+   "name": "agent",
+   "namespace": "demo",
+   "node_selector": {
+    "disk": "ssd"
+   },
+   "ready": 3,
+   "selector": {
+    "app": "agent"
+   },
+   "status": "Healthy",
+   "unavailable": 0,
+   "updated": 3
+  },
+  "event": {
+   "available": 3,
+   "created_at": "2026-11-01T00:00:00Z",
+   "current": 3,
+   "desired": 3,
+   "image": "example.test/app:2",
+   "images": [
+    "example.test/app:2",
+    "example.test/side:1"
+   ],
+   "misscheduled": 0,
+   "name": "agent",
+   "namespace": "demo",
+   "node_selector": null,
+   "ready": 3,
+   "selector": {
+    "app": "agent"
+   },
+   "status": "Healthy",
+   "unavailable": 0,
+   "updated": 3
+  },
+  "after": {
+   "available": 3,
+   "created_at": "2026-11-01T00:00:00Z",
+   "current": 3,
+   "desired": 3,
+   "image": "example.test/app:2",
+   "images": [
+    "example.test/app:2",
+    "example.test/side:1"
+   ],
+   "misscheduled": 0,
+   "name": "agent",
+   "namespace": "demo",
+   "node_selector": null,
+   "ready": 3,
+   "selector": {
+    "app": "agent"
+   },
+   "status": "Healthy",
+   "unavailable": 0,
+   "updated": 3
+  },
+  "shows": {
+   "available": 3,
+   "current": 3,
+   "desired": 3,
+   "images": "example.test/app:2, example.test/side:1",
+   "node_selector": "-",
+   "ready": "3/3",
+   "status": "Healthy",
+   "updated": 3
+  }
+ },
+ {
+  "name": "a DaemonSet that gained a node selector shows it",
+  "resource": "daemonsets",
+  "before": {
+   "available": 3,
+   "created_at": "2026-11-01T00:00:00Z",
+   "current": 3,
+   "desired": 3,
+   "image": "example.test/app:2",
+   "images": [
+    "example.test/app:2",
+    "example.test/side:1"
+   ],
+   "misscheduled": 0,
+   "name": "agent",
+   "namespace": "demo",
+   "node_selector": null,
+   "ready": 3,
+   "selector": {
+    "app": "agent"
+   },
+   "status": "Healthy",
+   "unavailable": 0,
+   "updated": 3
+  },
+  "event": {
+   "available": 3,
+   "created_at": "2026-11-01T00:00:00Z",
+   "current": 3,
+   "desired": 3,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "misscheduled": 0,
+   "name": "agent",
+   "namespace": "demo",
+   "node_selector": {
+    "disk": "ssd"
+   },
+   "ready": 3,
+   "selector": {
+    "app": "agent"
+   },
+   "status": "Healthy",
+   "unavailable": 0,
+   "updated": 3
+  },
+  "after": {
+   "available": 3,
+   "created_at": "2026-11-01T00:00:00Z",
+   "current": 3,
+   "desired": 3,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "misscheduled": 0,
+   "name": "agent",
+   "namespace": "demo",
+   "node_selector": {
+    "disk": "ssd"
+   },
+   "ready": 3,
+   "selector": {
+    "app": "agent"
+   },
+   "status": "Healthy",
+   "unavailable": 0,
+   "updated": 3
+  },
+  "shows": {
+   "available": 3,
+   "current": 3,
+   "desired": 3,
+   "images": "example.test/app:1",
+   "node_selector": "disk=ssd",
+   "ready": "3/3",
+   "status": "Healthy",
+   "updated": 3
+  }
+ },
+ {
+  "name": "a DaemonSet with a pod down is Degraded",
+  "resource": "daemonsets",
+  "before": {
+   "available": 3,
+   "created_at": "2026-11-01T00:00:00Z",
+   "current": 3,
+   "desired": 3,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "misscheduled": 0,
+   "name": "agent",
+   "namespace": "demo",
+   "node_selector": {
+    "disk": "ssd"
+   },
+   "ready": 3,
+   "selector": {
+    "app": "agent"
+   },
+   "status": "Healthy",
+   "unavailable": 0,
+   "updated": 3
+  },
+  "event": {
+   "available": 2,
+   "created_at": "2026-11-01T00:00:00Z",
+   "current": 3,
+   "desired": 3,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "misscheduled": 1,
+   "name": "agent",
+   "namespace": "demo",
+   "node_selector": {
+    "disk": "ssd"
+   },
+   "ready": 2,
+   "selector": {
+    "app": "agent"
+   },
+   "status": "Degraded",
+   "unavailable": 1,
+   "updated": 1
+  },
+  "after": {
+   "available": 2,
+   "created_at": "2026-11-01T00:00:00Z",
+   "current": 3,
+   "desired": 3,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "misscheduled": 1,
+   "name": "agent",
+   "namespace": "demo",
+   "node_selector": {
+    "disk": "ssd"
+   },
+   "ready": 2,
+   "selector": {
+    "app": "agent"
+   },
+   "status": "Degraded",
+   "unavailable": 1,
+   "updated": 1
+  },
+  "shows": {
+   "available": 2,
+   "current": 3,
+   "desired": 3,
+   "images": "example.test/app:1",
+   "node_selector": "disk=ssd",
+   "ready": "2/3",
+   "status": "Degraded",
+   "updated": 1
+  }
+ },
+ {
+  "name": "a DaemonSet with none available is Unavailable, however many read ready",
+  "resource": "daemonsets",
+  "before": {
+   "available": 3,
+   "created_at": "2026-11-01T00:00:00Z",
+   "current": 3,
+   "desired": 3,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "misscheduled": 0,
+   "name": "agent",
+   "namespace": "demo",
+   "node_selector": {
+    "disk": "ssd"
+   },
+   "ready": 3,
+   "selector": {
+    "app": "agent"
+   },
+   "status": "Healthy",
+   "unavailable": 0,
+   "updated": 3
+  },
+  "event": {
+   "available": 0,
+   "created_at": "2026-11-01T00:00:00Z",
+   "current": 3,
+   "desired": 3,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "misscheduled": 0,
+   "name": "agent",
+   "namespace": "demo",
+   "node_selector": {
+    "disk": "ssd"
+   },
+   "ready": 1,
+   "selector": {
+    "app": "agent"
+   },
+   "status": "Unavailable",
+   "unavailable": 3,
+   "updated": 3
+  },
+  "after": {
+   "available": 0,
+   "created_at": "2026-11-01T00:00:00Z",
+   "current": 3,
+   "desired": 3,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "misscheduled": 0,
+   "name": "agent",
+   "namespace": "demo",
+   "node_selector": {
+    "disk": "ssd"
+   },
+   "ready": 1,
+   "selector": {
+    "app": "agent"
+   },
+   "status": "Unavailable",
+   "unavailable": 3,
+   "updated": 3
+  },
+  "shows": {
+   "available": 0,
+   "current": 3,
+   "desired": 3,
+   "images": "example.test/app:1",
+   "node_selector": "disk=ssd",
+   "ready": "1/3",
+   "status": "Unavailable",
+   "updated": 3
+  }
+ },
+ {
+  "name": "a DaemonSet with no node to run on is Idle",
+  "resource": "daemonsets",
+  "before": {
+   "available": 3,
+   "created_at": "2026-11-01T00:00:00Z",
+   "current": 3,
+   "desired": 3,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "misscheduled": 0,
+   "name": "agent",
+   "namespace": "demo",
+   "node_selector": {
+    "disk": "ssd"
+   },
+   "ready": 3,
+   "selector": {
+    "app": "agent"
+   },
+   "status": "Healthy",
+   "unavailable": 0,
+   "updated": 3
+  },
+  "event": {
+   "available": 0,
+   "created_at": "2026-11-01T00:00:00Z",
+   "current": 0,
+   "desired": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "misscheduled": 0,
+   "name": "agent",
+   "namespace": "demo",
+   "node_selector": {
+    "disk": "ssd"
+   },
+   "ready": 0,
+   "selector": {
+    "app": "agent"
+   },
+   "status": "Idle",
+   "unavailable": 0,
+   "updated": 0
+  },
+  "after": {
+   "available": 0,
+   "created_at": "2026-11-01T00:00:00Z",
+   "current": 0,
+   "desired": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1"
+   ],
+   "misscheduled": 0,
+   "name": "agent",
+   "namespace": "demo",
+   "node_selector": {
+    "disk": "ssd"
+   },
+   "ready": 0,
+   "selector": {
+    "app": "agent"
+   },
+   "status": "Idle",
+   "unavailable": 0,
+   "updated": 0
+  },
+  "shows": {
+   "available": 0,
+   "current": 0,
+   "desired": 0,
+   "images": "example.test/app:1",
+   "node_selector": "disk=ssd",
+   "ready": "0/0",
+   "status": "Idle",
+   "updated": 0
+  }
+ },
+ {
+  "name": "a Job its CronJob let go of names no owner",
+  "resource": "jobs",
+  "before": {
+   "active": 1,
+   "completions": 1,
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "CronJob",
+     "name": "daily",
+     "uid": "u-1"
+    }
+   ],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Running",
+   "succeeded": 0
+  },
+  "event": {
+   "active": 1,
+   "completions": 1,
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Running",
+   "succeeded": 0
+  },
+  "after": {
+   "active": 1,
+   "completions": 1,
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Running",
+   "succeeded": 0
+  },
+  "shows": {
+   "badge": "badge-warning",
+   "completions": "0/1",
+   "containers": "app, side",
+   "duration": "60m",
+   "images": "example.test/app:1, example.test/side:1",
+   "owners": [],
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Running"
+  }
+ },
+ {
+  "name": "a suspended Job has no start time or duration left",
+  "resource": "jobs",
+  "before": {
+   "active": 1,
+   "completions": 1,
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "CronJob",
+     "name": "daily",
+     "uid": "u-1"
+    }
+   ],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Running",
+   "succeeded": 0
+  },
+  "event": {
+   "active": 0,
+   "completions": 1,
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "CronJob",
+     "name": "daily",
+     "uid": "u-1"
+    }
+   ],
+   "parallelism": 1,
+   "status": "Running",
+   "succeeded": 0
+  },
+  "after": {
+   "active": 0,
+   "completions": 1,
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "CronJob",
+     "name": "daily",
+     "uid": "u-1"
+    }
+   ],
+   "parallelism": 1,
+   "status": "Running",
+   "succeeded": 0
+  },
+  "shows": {
+   "badge": "badge-warning",
+   "completions": "0/1",
+   "containers": "app, side",
+   "duration": "-",
+   "images": "example.test/app:1, example.test/side:1",
+   "owners": [
+    "CronJob/daily"
+   ],
+   "start_time": "-",
+   "status": "Running"
+  }
+ },
+ {
+  "name": "a Job that finished says so with its run time",
+  "resource": "jobs",
+  "before": {
+   "active": 1,
+   "completions": 1,
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "CronJob",
+     "name": "daily",
+     "uid": "u-1"
+    }
+   ],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Running",
+   "succeeded": 0
+  },
+  "event": {
+   "active": 0,
+   "completion_time": "2026-11-06T11:00:30Z",
+   "completions": 1,
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "duration": "30s",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "CronJob",
+     "name": "daily",
+     "uid": "u-1"
+    }
+   ],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Complete",
+   "succeeded": 1
+  },
+  "after": {
+   "active": 0,
+   "completion_time": "2026-11-06T11:00:30Z",
+   "completions": 1,
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "duration": "30s",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "CronJob",
+     "name": "daily",
+     "uid": "u-1"
+    }
+   ],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Complete",
+   "succeeded": 1
+  },
+  "shows": {
+   "badge": "badge-success",
+   "completions": "1/1",
+   "containers": "app, side",
+   "duration": "30s",
+   "images": "example.test/app:1, example.test/side:1",
+   "owners": [
+    "CronJob/daily"
+   ],
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Complete"
+  }
+ },
+ {
+  "name": "a Job that failed says so and runs to now",
+  "resource": "jobs",
+  "before": {
+   "active": 1,
+   "completions": 1,
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "CronJob",
+     "name": "daily",
+     "uid": "u-1"
+    }
+   ],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Running",
+   "succeeded": 0
+  },
+  "event": {
+   "active": 0,
+   "completions": 1,
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 2,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "CronJob",
+     "name": "daily",
+     "uid": "u-1"
+    }
+   ],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Failed",
+   "succeeded": 0
+  },
+  "after": {
+   "active": 0,
+   "completions": 1,
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 2,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "CronJob",
+     "name": "daily",
+     "uid": "u-1"
+    }
+   ],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Failed",
+   "succeeded": 0
+  },
+  "shows": {
+   "badge": "badge-error",
+   "completions": "0/1",
+   "containers": "app, side",
+   "duration": "60m",
+   "images": "example.test/app:1, example.test/side:1",
+   "owners": [
+    "CronJob/daily"
+   ],
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Failed"
+  }
+ },
+ {
+  "name": "a Job with no completions set wants one",
+  "resource": "jobs",
+  "before": {
+   "active": 1,
+   "completions": 1,
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Running",
+   "succeeded": 0
+  },
+  "event": {
+   "active": 1,
+   "completions": 1,
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Running",
+   "succeeded": 0
+  },
+  "after": {
+   "active": 1,
+   "completions": 1,
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Running",
+   "succeeded": 0
+  },
+  "shows": {
+   "badge": "badge-warning",
+   "completions": "0/1",
+   "containers": "app, side",
+   "duration": "60m",
+   "images": "example.test/app:1, example.test/side:1",
+   "owners": [],
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Running"
+  }
+ },
+ {
+  "name": "a StatefulSet rolling out shows its new service name and images",
+  "resource": "statefulsets",
+  "before": {
+   "available_replicas": 2,
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 2,
+   "image": "example.test/db:1",
+   "images": [
+    "example.test/db:1"
+   ],
+   "name": "db",
+   "namespace": "demo",
+   "ready_replicas": 2,
+   "replicas": 2,
+   "selector": {
+    "app": "db"
+   },
+   "service_name": "db-headless",
+   "status": "Healthy",
+   "updated_replicas": 2
+  },
+  "event": {
+   "available_replicas": 1,
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 1,
+   "image": "example.test/db:2",
+   "images": [
+    "example.test/db:2",
+    "example.test/side:1"
+   ],
+   "name": "db",
+   "namespace": "demo",
+   "ready_replicas": 1,
+   "replicas": 2,
+   "selector": {
+    "app": "db"
+   },
+   "service_name": "db-new",
+   "status": "Degraded",
+   "updated_replicas": 1
+  },
+  "after": {
+   "available_replicas": 1,
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 1,
+   "image": "example.test/db:2",
+   "images": [
+    "example.test/db:2",
+    "example.test/side:1"
+   ],
+   "name": "db",
+   "namespace": "demo",
+   "ready_replicas": 1,
+   "replicas": 2,
+   "selector": {
+    "app": "db"
+   },
+   "service_name": "db-new",
+   "status": "Degraded",
+   "updated_replicas": 1
+  },
+  "shows": {
+   "available": 1,
+   "images": "example.test/db:2, example.test/side:1",
+   "ready": "1/2",
+   "service": "db-new",
+   "status": "Degraded",
+   "updated": "1/2"
+  }
+ },
+ {
+  "name": "a StatefulSet with none available is Unavailable",
+  "resource": "statefulsets",
+  "before": {
+   "available_replicas": 2,
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 2,
+   "image": "example.test/db:1",
+   "images": [
+    "example.test/db:1"
+   ],
+   "name": "db",
+   "namespace": "demo",
+   "ready_replicas": 2,
+   "replicas": 2,
+   "selector": {
+    "app": "db"
+   },
+   "service_name": "db-headless",
+   "status": "Healthy",
+   "updated_replicas": 2
+  },
+  "event": {
+   "available_replicas": 0,
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 2,
+   "image": "example.test/db:1",
+   "images": [
+    "example.test/db:1"
+   ],
+   "name": "db",
+   "namespace": "demo",
+   "ready_replicas": 0,
+   "replicas": 2,
+   "selector": {
+    "app": "db"
+   },
+   "service_name": "db-headless",
+   "status": "Unavailable",
+   "updated_replicas": 2
+  },
+  "after": {
+   "available_replicas": 0,
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 2,
+   "image": "example.test/db:1",
+   "images": [
+    "example.test/db:1"
+   ],
+   "name": "db",
+   "namespace": "demo",
+   "ready_replicas": 0,
+   "replicas": 2,
+   "selector": {
+    "app": "db"
+   },
+   "service_name": "db-headless",
+   "status": "Unavailable",
+   "updated_replicas": 2
+  },
+  "shows": {
+   "available": 0,
+   "images": "example.test/db:1",
+   "ready": "0/2",
+   "service": "db-headless",
+   "status": "Unavailable",
+   "updated": "2/2"
+  }
+ },
+ {
+  "name": "a StatefulSet scaled to none is Idle",
+  "resource": "statefulsets",
+  "before": {
+   "available_replicas": 2,
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 2,
+   "image": "example.test/db:1",
+   "images": [
+    "example.test/db:1"
+   ],
+   "name": "db",
+   "namespace": "demo",
+   "ready_replicas": 2,
+   "replicas": 2,
+   "selector": {
+    "app": "db"
+   },
+   "service_name": "db-headless",
+   "status": "Healthy",
+   "updated_replicas": 2
+  },
+  "event": {
+   "available_replicas": 0,
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 0,
+   "image": "example.test/db:1",
+   "images": [
+    "example.test/db:1"
+   ],
+   "name": "db",
+   "namespace": "demo",
+   "ready_replicas": 0,
+   "replicas": 0,
+   "selector": {
+    "app": "db"
+   },
+   "service_name": "db-headless",
+   "status": "Idle",
+   "updated_replicas": 0
+  },
+  "after": {
+   "available_replicas": 0,
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 0,
+   "image": "example.test/db:1",
+   "images": [
+    "example.test/db:1"
+   ],
+   "name": "db",
+   "namespace": "demo",
+   "ready_replicas": 0,
+   "replicas": 0,
+   "selector": {
+    "app": "db"
+   },
+   "service_name": "db-headless",
+   "status": "Idle",
+   "updated_replicas": 0
+  },
+  "shows": {
+   "available": 0,
+   "images": "example.test/db:1",
+   "ready": "0/0",
+   "service": "db-headless",
+   "status": "Idle",
+   "updated": "0/0"
+  }
+ },
+ {
   "name": "an Ingress left with only its default backend shows no host, class, address or TLS",
   "resource": "ingresses",
   "before": {

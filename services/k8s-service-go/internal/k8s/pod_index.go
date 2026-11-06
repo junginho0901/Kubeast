@@ -1,7 +1,6 @@
 package k8s
 
 import (
-	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -9,6 +8,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	resourcehelper "k8s.io/component-helpers/resource"
+
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/podrow"
 )
 
 // The pod informer (informer_cache.go) keeps a podRow per pod instead of the
@@ -163,99 +164,13 @@ func podLimits(p *corev1.Pod) (cpuMilli, memBytes int64) {
 }
 
 // podStatusTerminating is the Status of a pod being deleted that has not finished.
-const podStatusTerminating = "Terminating"
+const podStatusTerminating = podrow.StatusTerminating
 
-// podListView is a pod's Status, READY and RESTARTS as kubectl prints them; the Pods list, the pod detail, the
-// drawers' pod tables, the GPU pods and the Resource Graph's pod boxes all show these.
+// podListView is a pod's Status, READY and RESTARTS as kubectl prints them (podrow.ListView, which the live list updates
+// read too); the Pods list, the pod detail, the drawers' pod tables, the GPU pods and the Resource Graph's pod boxes all
+// show these.
 func podListView(p *corev1.Pod) (status string, ready, total int, restarts int32) {
-	iv := podInitState(p)
-	ready, total, restarts = podCounts(p, iv)
-	return podListStatus(p, iv), ready, total, restarts
-}
-
-// podListStatus is kubectl's STATUS (Kubernetes v1.37 printers.go printPod): the phase, the pod's reason over it, then
-// SchedulingGated, then what the init containers say (pod_init.go). Unless initializing holds the pod, the first
-// container status that is waiting with a reason or has ended goes over that; "Completed" with another container
-// running reads Running or NotReady by the pod's Ready condition, and one that failed names the failure. Readiness
-// alone does not change it: a Running pod not ready stays Running, and the list draws that yellow. Last, a pod being
-// deleted on a node that stopped answering is Unknown, and another that has not finished Terminating. A pod with no
-// phase, which only a hand-made object has, reads Unknown.
-func podListStatus(p *corev1.Pod, iv podInitView) string {
-	reason := string(p.Status.Phase)
-	if p.Status.Reason != "" {
-		reason = p.Status.Reason
-	}
-	for _, c := range p.Status.Conditions {
-		if c.Type == corev1.PodScheduled && c.Reason == corev1.PodReasonSchedulingGated {
-			reason = corev1.PodReasonSchedulingGated
-		}
-	}
-	if iv.reason != "" {
-		reason = iv.reason
-	}
-	if iv.status == "" {
-		reason = podContainersStatus(p, reason)
-	}
-	if p.DeletionTimestamp != nil {
-		if p.Status.Reason == "NodeLost" {
-			return "Unknown"
-		}
-		if p.Status.Phase != corev1.PodSucceeded && p.Status.Phase != corev1.PodFailed {
-			return podStatusTerminating
-		}
-	}
-	if reason == "" {
-		return "Unknown"
-	}
-	return reason
-}
-
-// podContainersStatus is what the containers' statuses make of reason: kubectl walks them from the last, so the first
-// that names something wins.
-func podContainersStatus(p *corev1.Pod, reason string) string {
-	hasRunning, errorReason := false, ""
-	for i := len(p.Status.ContainerStatuses) - 1; i >= 0; i-- {
-		cs := &p.Status.ContainerStatuses[i]
-		switch w, t := cs.State.Waiting, cs.State.Terminated; {
-		case w != nil && w.Reason != "":
-			reason = w.Reason
-		case t != nil:
-			switch {
-			case t.Reason != "":
-				reason = t.Reason
-			case t.Signal != 0:
-				reason = fmt.Sprintf("Signal:%d", t.Signal)
-			default:
-				reason = fmt.Sprintf("ExitCode:%d", t.ExitCode)
-			}
-			if t.ExitCode != 0 {
-				errorReason = reason
-			}
-		case cs.Ready && cs.State.Running != nil:
-			hasRunning = true
-		}
-	}
-	if reason != "Completed" {
-		return reason
-	}
-	switch {
-	case hasRunning && podReadyCondition(p):
-		return "Running"
-	case errorReason != "":
-		return errorReason
-	case hasRunning:
-		return "NotReady"
-	}
-	return reason
-}
-
-func podReadyCondition(p *corev1.Pod) bool {
-	for _, c := range p.Status.Conditions {
-		if c.Type == corev1.PodReady && c.Status == corev1.ConditionTrue {
-			return true
-		}
-	}
-	return false
+	return podrow.ListView(p)
 }
 
 // Cluster View's card colour (frontend pages/cluster-view/podHealth.tsx
@@ -392,7 +307,8 @@ func listPhase(p *corev1.Pod) string {
 	if p.Status.Phase != "" {
 		return string(p.Status.Phase)
 	}
-	return podListStatus(p, podInitState(p))
+	status, _, _, _ := podListView(p)
+	return status
 }
 
 // formattedReason is formatPodDetail's status_reason: the pod's reason, else

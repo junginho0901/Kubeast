@@ -26,8 +26,17 @@ import { applyConfigMapWatchEvent, normalizeWatchConfigMapObject } from '@/pages
 import { applySecretWatchEvent, normalizeWatchSecretObject } from '@/pages/configuration/secrets/secretWatchNormalize'
 import { applyServiceAccountWatchEvent, normalizeWatchServiceAccountObject } from '@/pages/security/serviceaccounts/serviceAccountWatchNormalize'
 import { applyRoleWatchEvent, normalizeWatchRoleObject } from '@/pages/security/roles/roleWatchNormalize'
+import { applyPodWatchEvent, normalizeWatchPodObject } from '@/pages/workloads/pods/podWatchNormalize'
+import { getPodHealth } from '@/pages/cluster-view/podHealth'
+import { podToDetail } from '@/pages/cluster-view/types'
+import { daemonSetToWorkloadRawJson, getDaemonSetStatusColor } from '@/pages/workloads/daemonsets/daemonSetHelpers'
+import { applyDaemonSetWatchEvent, normalizeWatchDaemonSetObject } from '@/pages/workloads/daemonsets/daemonSetWatchNormalize'
+import { formatDuration, getJobStatusColor, jobDurationSeconds, jobToWorkloadRawJson } from '@/pages/workloads/jobs/jobHelpers'
+import { applyJobWatchEvent, normalizeWatchJobObject } from '@/pages/workloads/jobs/jobWatchNormalize'
 import { workloadStatusTitle } from '@/utils/workloadStatus'
+import { QueryClient } from '@tanstack/react-query'
 import secretInfoSrc from '@/components/resource-detail/SecretInfo.tsx?raw'
+import { applyWatchMessage } from './useKubeWatchList'
 import cases from './watchRows.cases.json'
 
 // the English fallback with its values, as the screen writes it with no catalog in the way
@@ -42,7 +51,85 @@ type Page = {
   derives: (row: any) => unknown
 }
 
+// a list whose watch passes no function of its own: the frame takes the row's place (useKubeWatchList)
+function plainWatchApply(prev: any[], event: { type?: string; object?: any }): any[] {
+  const client = new QueryClient()
+  client.setQueryData(['rows'], prev)
+  applyWatchMessage(client, ['rows'], { type: 'DATA', data: event })
+  return client.getQueryData(['rows']) as any[]
+}
+
+const owners = (row: any) => (row.owner_references ?? []).map((r: any) => `${r.kind}/${r.name}`)
+
 const pages: Record<string, Page> = {
+  pods: {
+    apply: applyPodWatchEvent,
+    normalize: normalizeWatchPodObject,
+    // what the drawers' pod tables and their filters read off a row, and the colour of its box in Cluster View
+    shows: (row) => {
+      const health = getPodHealth(row)
+      return {
+        status: row.status,
+        phase: row.phase,
+        ready: row.ready,
+        restarts: row.restart_count,
+        node: row.node_name || '-',
+        owners: owners(row),
+        labels: row.labels || {},
+        reason: row.status_reason || '-',
+        message: row.status_message || '-',
+        health: `${health.level} ${health.reason}`,
+        config_map_refs: row.config_map_refs ?? [],
+        secret_refs: row.secret_refs ?? [],
+        service_account: row.service_account_name ?? '-',
+        claims: [...(row.resource_claims ?? []), ...(row.resource_claim_templates ?? [])],
+      }
+    },
+    derives: podToDetail,
+  },
+  daemonsets: {
+    apply: applyDaemonSetWatchEvent,
+    normalize: normalizeWatchDaemonSetObject,
+    shows: (row) => ({
+      ready: `${row.ready}/${row.desired}`,
+      current: row.current,
+      desired: row.desired,
+      updated: row.updated,
+      available: row.available,
+      status: row.status,
+      node_selector: Object.entries(row.node_selector || {}).map(([k, v]) => `${k}=${v}`).join(', ') || '-',
+      images: (row.images || []).join(', ') || '-',
+    }),
+    derives: daemonSetToWorkloadRawJson,
+  },
+  jobs: {
+    apply: applyJobWatchEvent,
+    normalize: normalizeWatchJobObject,
+    shows: (row) => ({
+      completions: `${row.succeeded ?? 0}/${row.completions ?? '-'}`,
+      status: row.status,
+      badge: getJobStatusColor(row.status),
+      duration: formatDuration(jobDurationSeconds(row)),
+      start_time: row.start_time || '-',
+      owners: owners(row),
+      containers: (row.containers || []).join(', ') || '-',
+      images: (row.images || []).join(', ') || '-',
+    }),
+    derives: jobToWorkloadRawJson,
+  },
+  statefulsets: {
+    apply: plainWatchApply,
+    normalize: (obj) => obj,
+    shows: (row) => ({
+      ready: `${row.ready_replicas ?? 0}/${row.replicas ?? 0}`,
+      updated: `${row.updated_replicas ?? row.current_replicas ?? 0}/${row.replicas ?? 0}`,
+      available: row.available_replicas ?? 0,
+      status: row.status,
+      service: row.service_name || '-',
+      images: (row.images || []).join(', ') || '-',
+    }),
+    derives: (row) => row,
+  },
   ingresses: {
     apply: applyIngressWatchEvent,
     normalize: normalizeWatchIngressObject,
@@ -263,8 +350,22 @@ describe('a live update leaves a row as the list API gives it', () => {
 
   it('the server wrote cases for every list these tests name', () => {
     expect(new Set(cases.map((c) => c.resource))).toEqual(new Set(Object.keys(pages)))
-    expect(cases.length).toBeGreaterThanOrEqual(46)
+    expect(cases.length).toBeGreaterThanOrEqual(70)
   })
+
+  it('no case holds an environment value of a container', () => {
+    expect(cases.filter((c) => c.resource === 'pods').length).toBeGreaterThan(0)
+    expect(JSON.stringify(cases)).not.toContain('fake-env-value-for-tests')
+  })
+
+  // A box in Cluster View takes the frame as its row, so a pod reads the same there as in the node's list.
+  for (const c of cases.filter((one) => one.resource === 'pods')) {
+    it(`a box in Cluster View keeps the list's colour: ${c.name}`, () => {
+      const [row] = plainWatchApply([c.before], { type: 'MODIFIED', object: c.event })
+      expect(getPodHealth(row)).toEqual(getPodHealth(c.after))
+      expect(podToDetail(row)).toEqual(podToDetail(c.after))
+    })
+  }
 
   // the server's TestALiveOrListRowOfASecretOrConfigMapHoldsNoValue holds the rows; this holds the file the page's tests read
   it('no case holds a value of a Secret or a ConfigMap', () => {
@@ -500,6 +601,47 @@ describe('a row the server could not convert comes with its object nested', () =
     const [row] = applyServiceAccountWatchEvent([prior] as any, { type: 'MODIFIED', object: nested })
     expect(pages.serviceaccounts.shows(row)).toEqual({ secrets: 1, secrets_list: ['t'], image_pull_secrets: ['r'], with_pull_secrets: true, labels: {}, annotations: {} })
     expect(applyServiceAccountWatchEvent([prior] as any, { type: 'DELETED', object: nested })).toEqual([])
+  })
+
+  it('a DaemonSet reads its status by the rule of the list', () => {
+    const nested = (status: Record<string, number>) => ({
+      name: 'agent',
+      namespace: 'demo',
+      kind: 'DaemonSet',
+      created_at: '2026-11-01T00:00:00Z',
+      spec: { template: { spec: { containers: [{ name: 'app', image: 'example.test/app:2' }] } } },
+      status,
+    })
+    const prior = { name: 'agent', namespace: 'demo', desired: 9, ready: 9, status: 'Healthy', node_selector: { disk: 'ssd' }, images: ['example.test/app:1'] }
+    const apply = (status: Record<string, number>) => applyDaemonSetWatchEvent([prior] as any, { type: 'MODIFIED', object: nested(status) })[0]
+    expect(apply({ desiredNumberScheduled: 3, numberReady: 3, numberAvailable: 3 })).toMatchObject({ status: 'Healthy', desired: 3, images: ['example.test/app:2'], node_selector: {} })
+    // as the list's replicaStatus: ready without available is Unavailable, and available with too few ready Degraded
+    expect(apply({ desiredNumberScheduled: 3, numberReady: 1, numberAvailable: 0 }).status).toBe('Unavailable')
+    expect(apply({ desiredNumberScheduled: 3, numberReady: 1, numberAvailable: 1 }).status).toBe('Degraded')
+    expect(apply({ desiredNumberScheduled: 0 }).status).toBe('Idle')
+    expect(getDaemonSetStatusColor(apply({ desiredNumberScheduled: 0 }).status)).toBe('badge-neutral')
+    expect(applyDaemonSetWatchEvent([prior] as any, { type: 'DELETED', object: nested({}) })).toEqual([])
+  })
+
+  it('a Job reads its status from its conditions by the rule of the list', () => {
+    const nested = (status: Record<string, unknown>) => ({
+      name: 'daily-1',
+      namespace: 'demo',
+      kind: 'Job',
+      created_at: '2026-11-01T00:00:00Z',
+      spec: { completions: 1, template: { spec: { containers: [{ name: 'app', image: 'example.test/app:2' }] } } },
+      status,
+    })
+    const prior = { name: 'daily-1', namespace: 'demo', status: 'Running', active: 1, succeeded: 0, failed: 0, owner_references: [{ kind: 'CronJob', name: 'daily' }], start_time: '2026-11-06T11:00:00Z' }
+    const apply = (status: Record<string, unknown>) => applyJobWatchEvent([prior] as any, { type: 'MODIFIED', object: nested(status) })[0]
+    // a Job that retried a pod and went on is not Failed: only the condition says so
+    expect(apply({ active: 1, failed: 2 }).status).toBe('Running')
+    expect(apply({ succeeded: 1 }).status).toBe('Running')
+    expect(apply({ conditions: [{ type: 'Failed', status: 'True' }] }).status).toBe('Failed')
+    expect(apply({ conditions: [{ type: 'Complete', status: 'True' }] }).status).toBe('Complete')
+    expect(apply({ conditions: [{ type: 'Complete', status: 'False' }] }).status).toBe('Running')
+    expect(apply({ active: 1 })).toMatchObject({ completions: 1, images: ['example.test/app:2'], owner_references: [], start_time: null })
+    expect(applyJobWatchEvent([prior] as any, { type: 'DELETED', object: nested({}) })).toEqual([])
   })
 
   it('a Role counts the rules beside the metadata', () => {

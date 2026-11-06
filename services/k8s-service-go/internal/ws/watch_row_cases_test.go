@@ -173,6 +173,88 @@ const (
 	roleHead  = `{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"Role","metadata":{"name":"reader","namespace":"demo","creationTimestamp":"2026-11-01T00:00:00Z"`
 	roleFull  = roleHead + `,"labels":{"team":"a"},"annotations":{"note":"kept"}},"rules":[{"apiGroups":[""],"resources":["pods"],"verbs":["get"]},{"apiGroups":["apps"],"resources":["deployments"],"verbs":["list"]}]}`
 	rolePlain = roleHead + `}}`
+
+	podHead = `{"apiVersion":"v1","kind":"Pod","metadata":{"name":"web-1","namespace":"demo","creationTimestamp":"2026-11-01T00:00:00Z"`
+	podTags = `,"labels":{"app":"web"},"ownerReferences":[{"apiVersion":"apps/v1","kind":"ReplicaSet","name":"web-abc","uid":"u-1","controller":true}]`
+	podGone = `,"deletionTimestamp":"2026-11-06T00:00:00Z"`
+	// a value a container holds in the object, which no row carries
+	podEnvValue = "fake-env-value-for-tests"
+	podRefSpec  = `"spec":{"nodeName":"node-a","serviceAccountName":"runner","priorityClassName":"high","containers":[{"name":"app","image":"example.test/app:1",
+		"ports":[{"name":"http","containerPort":8080,"protocol":"TCP"}],"resources":{"requests":{"cpu":"100m"},"limits":{"memory":"1024Mi"}},
+		"env":[{"name":"MODE","value":"` + podEnvValue + `"},{"name":"TOKEN","valueFrom":{"secretKeyRef":{"name":"creds-env","key":"token"}}},{"name":"CONF","valueFrom":{"configMapKeyRef":{"name":"conf-env","key":"conf"}}}],
+		"envFrom":[{"configMapRef":{"name":"conf-from"}},{"prefix":"S_","secretRef":{"name":"creds-from"}}],
+		"volumeMounts":[{"name":"cfg","mountPath":"/etc/cfg","readOnly":true}],"securityContext":{"runAsNonRoot":true,"capabilities":{"drop":["ALL"]}}}],
+		"volumes":[{"name":"cfg","configMap":{"name":"conf-vol"}},{"name":"sec","secret":{"secretName":"creds-vol"}},{"name":"all","projected":{"sources":[{"configMap":{"name":"conf-proj"}},{"secret":{"name":"creds-proj"}}]}}],
+		"imagePullSecrets":[{"name":"registry"}]}`
+	podPlainSpec   = `"spec":{"nodeName":"node-a","containers":[{"name":"app","image":"example.test/app:1"}]}`
+	podSidecarSpec = `"spec":{"nodeName":"node-a","initContainers":[{"name":"side","image":"example.test/side:1","restartPolicy":"Always"}],"containers":[{"name":"app","image":"example.test/app:1"}]}`
+	podInitSpec    = `"spec":{"nodeName":"node-a","initContainers":[{"name":"setup","image":"example.test/setup:1"}],"containers":[{"name":"app","image":"example.test/app:1"}]}`
+	podClaimSpec   = `"spec":{"nodeName":"node-a","containers":[{"name":"app","image":"example.test/app:1"}],"resourceClaims":[{"name":"gpu","resourceClaimName":"claim-a"},{"name":"tmpl","resourceClaimTemplateName":"template-a"}]}`
+	podConditions  = `"conditions":[{"type":"Initialized","status":"True"},{"type":"Ready","status":"True"}]`
+	podNotReady    = `"conditions":[{"type":"Initialized","status":"True"},{"type":"Ready","status":"False"}]`
+	podLastCrash   = `"lastState":{"terminated":{"exitCode":1,"reason":"Error","startedAt":"2026-11-01T00:00:10Z","finishedAt":"2026-11-01T00:00:50Z"}}`
+	podAppRunning  = `{"name":"app","image":"example.test/app:1","imageID":"","ready":true,"restartCount":2,"state":{"running":{"startedAt":"2026-11-01T00:01:00Z"}},` + podLastCrash + `}`
+	podRunning     = `"status":{"phase":"Running","podIP":"10.0.0.7",` + podConditions + `,"containerStatuses":[` + podAppRunning + `]}`
+	podCrashing    = `"status":{"phase":"Running","podIP":"10.0.0.7",` + podNotReady + `,"containerStatuses":[{"name":"app","image":"example.test/app:1","imageID":"","ready":false,"restartCount":3,"state":{"waiting":{"reason":"CrashLoopBackOff","message":"back-off restarting"}},` + podLastCrash + `}]}`
+	podNodeLost    = `"status":{"phase":"Running","reason":"NodeLost","message":"node stopped answering","podIP":"10.0.0.7",` + podConditions + `,"containerStatuses":[` + podAppRunning + `]}`
+	podExitCode    = `"status":{"phase":"Failed","containerStatuses":[{"name":"app","image":"example.test/app:1","imageID":"","ready":false,"restartCount":0,"state":{"terminated":{"exitCode":2,"startedAt":"2026-11-01T00:01:00Z","finishedAt":"2026-11-01T00:02:00Z"}}}]}`
+	podInitFailed  = `"status":{"phase":"Pending","conditions":[{"type":"Initialized","status":"False"},{"type":"Ready","status":"False"}],
+		"initContainerStatuses":[{"name":"setup","image":"example.test/setup:1","imageID":"","ready":false,"restartCount":4,"state":{"terminated":{"exitCode":1,"reason":"Error","startedAt":"2026-11-01T00:01:00Z","finishedAt":"2026-11-01T00:02:00Z"}}}],
+		"containerStatuses":[{"name":"app","image":"example.test/app:1","imageID":"","ready":false,"restartCount":0,"state":{"waiting":{"reason":"PodInitializing"}}}]}`
+	podSidecarUp = `"status":{"phase":"Running","podIP":"10.0.0.7",` + podConditions + `,
+		"initContainerStatuses":[{"name":"side","image":"example.test/side:1","imageID":"","ready":true,"started":true,"restartCount":1,"state":{"running":{"startedAt":"2026-11-01T00:00:30Z"}}}],
+		"containerStatuses":[` + podAppRunning + `]}`
+	podOfDeploy   = podHead + podTags + `},` + podPlainSpec + `,` + podRunning + `}`
+	podBare       = podHead + `},` + podPlainSpec + `,` + podRunning + `}`
+	podDeleting   = podHead + podTags + podGone + `},` + podPlainSpec + `,` + podRunning + `}`
+	podCrashLoop  = podHead + podTags + `},` + podPlainSpec + `,` + podCrashing + `}`
+	podAllRefs    = podHead + podTags + `},` + podRefSpec + `,` + podRunning + `}`
+	podLostNode   = podHead + podTags + podGone + `},` + podPlainSpec + `,` + podNodeLost + `}`
+	podExited     = podHead + podTags + `},` + podPlainSpec + `,` + podExitCode + `}`
+	podInitError  = podHead + podTags + `},` + podInitSpec + `,` + podInitFailed + `}`
+	podWithSide   = podHead + podTags + `},` + podSidecarSpec + `,` + podSidecarUp + `}`
+	podWithClaims = podHead + podTags + `},` + podClaimSpec + `,` + podRunning + `}`
+
+	dsHead     = `{"apiVersion":"apps/v1","kind":"DaemonSet","metadata":{"name":"agent","namespace":"demo","creationTimestamp":"2026-11-01T00:00:00Z"},`
+	dsSelector = `"selector":{"matchLabels":{"app":"agent"}}`
+	dsOnSSD    = `"spec":{` + dsSelector + `,"template":{"metadata":{"labels":{"app":"agent"}},"spec":{"nodeSelector":{"disk":"ssd"},"containers":[{"name":"app","image":"example.test/app:1"}]}}}`
+	dsAnyNode  = `"spec":{` + dsSelector + `,"template":{"metadata":{"labels":{"app":"agent"}},"spec":{"containers":[{"name":"app","image":"example.test/app:2"},{"name":"side","image":"example.test/side:1"}]}}}`
+	dsAllUp    = `"status":{"desiredNumberScheduled":3,"currentNumberScheduled":3,"numberReady":3,"updatedNumberScheduled":3,"numberAvailable":3}`
+	dsOneDown  = `"status":{"desiredNumberScheduled":3,"currentNumberScheduled":3,"numberReady":2,"updatedNumberScheduled":1,"numberAvailable":2,"numberUnavailable":1,"numberMisscheduled":1}`
+	dsNoneUp   = `"status":{"desiredNumberScheduled":3,"currentNumberScheduled":3,"numberReady":1,"updatedNumberScheduled":3,"numberAvailable":0,"numberUnavailable":3}`
+	dsNoNode   = `"status":{"desiredNumberScheduled":0,"currentNumberScheduled":0,"numberReady":0}`
+	dsPicky    = dsHead + dsOnSSD + `,` + dsAllUp + `}`
+	dsAny      = dsHead + dsAnyNode + `,` + dsAllUp + `}`
+	dsDown     = dsHead + dsOnSSD + `,` + dsOneDown + `}`
+	dsNone     = dsHead + dsOnSSD + `,` + dsNoneUp + `}`
+	dsIdle     = dsHead + dsOnSSD + `,` + dsNoNode + `}`
+
+	jobHead     = `{"apiVersion":"batch/v1","kind":"Job","metadata":{"name":"daily-1","namespace":"demo","creationTimestamp":"2026-11-01T00:00:00Z"`
+	jobOwner    = `,"ownerReferences":[{"apiVersion":"batch/v1","kind":"CronJob","name":"daily","uid":"u-1","controller":true}]`
+	jobTemplate = `"template":{"spec":{"restartPolicy":"Never","containers":[{"name":"app","image":"example.test/app:1"},{"name":"side","image":"example.test/side:1"}]}}`
+	jobRunSpec  = `"spec":{"completions":1,"parallelism":1,` + jobTemplate + `}`
+	jobStopped  = `"spec":{"completions":1,"parallelism":1,"suspend":true,` + jobTemplate + `}`
+	jobNoCount  = `"spec":{` + jobTemplate + `}`
+	jobActive   = `"status":{"active":1,"startTime":"2026-11-06T11:00:00Z"}`
+	jobHeld     = `"status":{"conditions":[{"type":"Suspended","status":"True"}]}`
+	jobDone     = `"status":{"succeeded":1,"startTime":"2026-11-06T11:00:00Z","completionTime":"2026-11-06T11:00:30Z","conditions":[{"type":"Complete","status":"True"}]}`
+	jobBroken   = `"status":{"failed":2,"startTime":"2026-11-06T11:00:00Z","conditions":[{"type":"Failed","status":"True","reason":"BackoffLimitExceeded"}]}`
+	jobOwned    = jobHead + jobOwner + `},` + jobRunSpec + `,` + jobActive + `}`
+	jobFree     = jobHead + `},` + jobRunSpec + `,` + jobActive + `}`
+	jobSuspend  = jobHead + jobOwner + `},` + jobStopped + `,` + jobHeld + `}`
+	jobFinished = jobHead + jobOwner + `},` + jobRunSpec + `,` + jobDone + `}`
+	jobFailed   = jobHead + jobOwner + `},` + jobRunSpec + `,` + jobBroken + `}`
+	jobDefaults = jobHead + `},` + jobNoCount + `,` + jobActive + `}`
+
+	stsHead     = `{"apiVersion":"apps/v1","kind":"StatefulSet","metadata":{"name":"db","namespace":"demo","creationTimestamp":"2026-11-01T00:00:00Z"},`
+	stsTemplate = `"selector":{"matchLabels":{"app":"db"}},"serviceName":"db-headless","template":{"metadata":{"labels":{"app":"db"}},"spec":{"containers":[{"name":"db","image":"example.test/db:1"}]}}`
+	stsTwo      = `"spec":{"replicas":2,` + stsTemplate + `}`
+	stsZero     = `"spec":{"replicas":0,` + stsTemplate + `}`
+	stsNew      = `"spec":{"replicas":2,"selector":{"matchLabels":{"app":"db"}},"serviceName":"db-new","template":{"metadata":{"labels":{"app":"db"}},"spec":{"containers":[{"name":"db","image":"example.test/db:2"},{"name":"side","image":"example.test/side:1"}]}}}`
+	stsUp       = stsHead + stsTwo + `,"status":{"replicas":2,"readyReplicas":2,"currentReplicas":2,"updatedReplicas":2,"availableReplicas":2}}`
+	stsRolling  = stsHead + stsNew + `,"status":{"replicas":2,"readyReplicas":1,"currentReplicas":1,"updatedReplicas":1,"availableReplicas":1}}`
+	stsDown     = stsHead + stsTwo + `,"status":{"replicas":2,"readyReplicas":0,"currentReplicas":2,"updatedReplicas":2,"availableReplicas":0}}`
+	stsIdle     = stsHead + stsZero + `,"status":{"replicas":0}}`
 )
 
 type watchRowSource struct {
@@ -262,7 +344,67 @@ func watchRowSources() []watchRowSource {
 			"claim": claim, "volume_mode": "Filesystem", "source": source, "reason": reason, "message": message,
 		}
 	}
+	noNames := []interface{}{}
+	ofDeploy := []interface{}{"ReplicaSet/web-abc"}
+	appWeb := map[string]interface{}{"app": "web"}
+	podShows := func(status, phase, ready string, restarts int, owners []interface{}, labels map[string]interface{}, reason, message, health string) map[string]interface{} {
+		return map[string]interface{}{
+			"status": status, "phase": phase, "ready": ready, "restarts": restarts, "node": "node-a",
+			"owners": owners, "labels": labels, "reason": reason, "message": message, "health": health,
+			"config_map_refs": noNames, "secret_refs": noNames, "service_account": "-", "claims": noNames,
+		}
+	}
+	with := func(shows map[string]interface{}, more map[string]interface{}) map[string]interface{} {
+		for k, v := range more {
+			shows[k] = v
+		}
+		return shows
+	}
+	dsShows := func(ready string, current, desired, updated, available int, status, selector, images string) map[string]interface{} {
+		return map[string]interface{}{
+			"ready": ready, "current": current, "desired": desired, "updated": updated, "available": available,
+			"status": status, "node_selector": selector, "images": images,
+		}
+	}
+	jobShows := func(completions, status, badge, duration, start string, owners []interface{}) map[string]interface{} {
+		return map[string]interface{}{
+			"completions": completions, "status": status, "badge": badge, "duration": duration, "start_time": start,
+			"owners": owners, "containers": "app, side", "images": "example.test/app:1, example.test/side:1",
+		}
+	}
+	ofCronJob := []interface{}{"CronJob/daily"}
+	stsShows := func(ready, updated string, available int, status, service, images string) map[string]interface{} {
+		return map[string]interface{}{"ready": ready, "updated": updated, "available": available, "status": status, "service": service, "images": images}
+	}
 	return []watchRowSource{
+		{"a pod being deleted reads Terminating, whatever its containers do", "pods", podOfDeploy, podDeleting, podShows("Terminating", "Running", "1/1", 2, ofDeploy, appWeb, "-", "-", "warn Terminating")},
+		{"a pod past its crash loop keeps no reason or message of it", "pods", podCrashLoop, podOfDeploy, podShows("Running", "Running", "1/1", 2, ofDeploy, appWeb, "-", "-", "ok Running")},
+		{"a pod in a crash loop says why", "pods", podOfDeploy, podCrashLoop, podShows("CrashLoopBackOff", "Running", "0/1", 3, ofDeploy, appWeb, "CrashLoopBackOff", "back-off restarting", "error CrashLoopBackOff")},
+		{"a pod its controller let go of names no owner and no labels", "pods", podOfDeploy, podBare, podShows("Running", "Running", "1/1", 2, noNames, noTags, "-", "-", "ok Running")},
+		{"a pod that holds no reference lists none, whatever the row before it listed", "pods", podAllRefs, podOfDeploy, podShows("Running", "Running", "1/1", 2, ofDeploy, appWeb, "-", "-", "ok Running")},
+		{"a pod that holds references lists each once, in order", "pods", podOfDeploy, podAllRefs, with(podShows("Running", "Running", "1/1", 2, ofDeploy, appWeb, "-", "-", "ok Running"), map[string]interface{}{
+			"config_map_refs": []interface{}{"conf-env", "conf-from", "conf-proj", "conf-vol"},
+			"secret_refs":     []interface{}{"creds-env", "creds-from", "creds-proj", "creds-vol", "registry"},
+			"service_account": "runner",
+		})},
+		{"a pod whose init container failed reads Init:Error with its restarts", "pods", podOfDeploy, podInitError, podShows("Init:Error", "Pending", "0/1", 4, ofDeploy, appWeb, "PodInitializing", "-", "error Error")},
+		{"a pod with a sidecar counts it in READY and RESTARTS", "pods", podOfDeploy, podWithSide, podShows("Running", "Running", "2/2", 3, ofDeploy, appWeb, "-", "-", "warn PodInitializing")},
+		{"a pod being deleted on a node that stopped answering reads Unknown", "pods", podOfDeploy, podLostNode, podShows("Unknown", "Running", "1/1", 2, ofDeploy, appWeb, "NodeLost", "node stopped answering", "warn Terminating")},
+		{"a failed pod whose container names only its exit code prints that", "pods", podOfDeploy, podExited, podShows("ExitCode:2", "Failed", "0/1", 0, ofDeploy, appWeb, "-", "-", "error Failed")},
+		{"a pod that holds a claim and a template lists both", "pods", podOfDeploy, podWithClaims, with(podShows("Running", "Running", "1/1", 2, ofDeploy, appWeb, "-", "-", "ok Running"), map[string]interface{}{"claims": []interface{}{"claim-a", "template-a"}})},
+		{"a DaemonSet whose node selector went away shows none, with its new images", "daemonsets", dsPicky, dsAny, dsShows("3/3", 3, 3, 3, 3, "Healthy", "-", "example.test/app:2, example.test/side:1")},
+		{"a DaemonSet that gained a node selector shows it", "daemonsets", dsAny, dsPicky, dsShows("3/3", 3, 3, 3, 3, "Healthy", "disk=ssd", "example.test/app:1")},
+		{"a DaemonSet with a pod down is Degraded", "daemonsets", dsPicky, dsDown, dsShows("2/3", 3, 3, 1, 2, "Degraded", "disk=ssd", "example.test/app:1")},
+		{"a DaemonSet with none available is Unavailable, however many read ready", "daemonsets", dsPicky, dsNone, dsShows("1/3", 3, 3, 3, 0, "Unavailable", "disk=ssd", "example.test/app:1")},
+		{"a DaemonSet with no node to run on is Idle", "daemonsets", dsPicky, dsIdle, dsShows("0/0", 0, 0, 0, 0, "Idle", "disk=ssd", "example.test/app:1")},
+		{"a Job its CronJob let go of names no owner", "jobs", jobOwned, jobFree, jobShows("0/1", "Running", "badge-warning", "60m", "2026-11-06T11:00:00Z", noNames)},
+		{"a suspended Job has no start time or duration left", "jobs", jobOwned, jobSuspend, jobShows("0/1", "Running", "badge-warning", "-", "-", ofCronJob)},
+		{"a Job that finished says so with its run time", "jobs", jobOwned, jobFinished, jobShows("1/1", "Complete", "badge-success", "30s", "2026-11-06T11:00:00Z", ofCronJob)},
+		{"a Job that failed says so and runs to now", "jobs", jobOwned, jobFailed, jobShows("0/1", "Failed", "badge-error", "60m", "2026-11-06T11:00:00Z", ofCronJob)},
+		{"a Job with no completions set wants one", "jobs", jobFree, jobDefaults, jobShows("0/1", "Running", "badge-warning", "60m", "2026-11-06T11:00:00Z", noNames)},
+		{"a StatefulSet rolling out shows its new service name and images", "statefulsets", stsUp, stsRolling, stsShows("1/2", "1/2", 1, "Degraded", "db-new", "example.test/db:2, example.test/side:1")},
+		{"a StatefulSet with none available is Unavailable", "statefulsets", stsUp, stsDown, stsShows("0/2", "2/2", 0, "Unavailable", "db-headless", "example.test/db:1")},
+		{"a StatefulSet scaled to none is Idle", "statefulsets", stsUp, stsIdle, stsShows("0/0", "0/0", 0, "Idle", "db-headless", "example.test/db:1")},
 		{"an Ingress left with only its default backend shows no host, class, address or TLS", "ingresses", ingressWeb, ingressDefaultBackendOnly, ingressShows("-", "-", "-", "-", "-", 0)},
 		{"an Ingress whose class annotation went away shows no class", "ingresses", ingressAnnotatedClass, ingressNoClass, ingressShows("-", "example.test", "-", "-", "example.test:/*", 0)},
 		{"an Ingress that gained its rules, address and TLS shows them", "ingresses", ingressEmpty, ingressFull, ingressShows("traefik", "b.example.test, a.example.test", "alpha, zeta", "lb.example.test", "b.example.test:/b, a.example.test:/a", 1)},
@@ -401,6 +543,14 @@ func (a *listAPI) row(t *testing.T, resource, object string) map[string]interfac
 		rows, err = a.svc.GetServiceAccounts(ctx, "demo")
 	case "roles":
 		rows, err = a.svc.GetRoles(ctx, "demo")
+	case "pods":
+		rows, err = a.svc.GetPods(ctx, "demo", "")
+	case "daemonsets":
+		rows, err = a.svc.GetDaemonSets(ctx, "demo")
+	case "jobs":
+		rows, err = a.svc.GetJobs(ctx, "demo")
+	case "statefulsets":
+		rows, err = a.svc.GetStatefulSets(ctx, "demo")
 	default:
 		t.Fatalf("no list for %s", resource)
 	}
@@ -514,6 +664,8 @@ func TestLiveRowOfAnObjectThatDoesNotConvertKeepsItsNameAndNestedSpec(t *testing
 		"deployments":              `{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"odd","namespace":"demo"},"spec":{"replicas":"not a number"}}`,
 		"replicasets":              `{"apiVersion":"apps/v1","kind":"ReplicaSet","metadata":{"name":"odd","namespace":"demo"},"spec":{"replicas":"not a number"}}`,
 		"horizontalpodautoscalers": `{"apiVersion":"autoscaling/v2","kind":"HorizontalPodAutoscaler","metadata":{"name":"odd","namespace":"demo"},"spec":{"maxReplicas":"not a number"}}`,
+		"daemonsets":               `{"apiVersion":"apps/v1","kind":"DaemonSet","metadata":{"name":"odd","namespace":"demo"},"spec":{"minReadySeconds":"not a number"}}`,
+		"jobs":                     `{"apiVersion":"batch/v1","kind":"Job","metadata":{"name":"odd","namespace":"demo"},"spec":{"completions":"not a number"}}`,
 	} {
 		row := liveRow(t, resource, object)
 		if row["name"] != "odd" || row["spec"] == nil {
@@ -568,6 +720,71 @@ func TestALiveOrListRowOfASecretOrConfigMapHoldsNoValue(t *testing.T) {
 	check("the live row of a ConfigMap", liveRow(t, "configmaps", cmFull), cmValue)
 	check("the live row of a ConfigMap that does not convert", liveRow(t, "configmaps",
 		cmHead+`},"data":{"a":"`+cmValue+`"},"immutable":"not a bool"}`), cmValue)
+}
+
+// A row names what a container refers to and never holds what it is given: not an environment value and, for a kind that
+// holds a pod template, not its commands or probes; not when the object does not convert either, where the row carries
+// the object's spec for the page to read.
+func TestALiveRowHoldsNoEnvironmentValue(t *testing.T) {
+	const (
+		value  = "fake-env-value-for-tests"
+		secret = "fake-probe-header-for-tests"
+		arg    = "fake-arg-value-for-tests"
+		attr   = "fake-volume-attribute-for-tests"
+		note   = "fake-template-annotation-for-tests"
+	)
+	container := `{"name":"app","image":"example.test/app:1","env":[{"name":"MODE","value":"` + value + `"}],"args":["--token=` + arg + `"],
+		"livenessProbe":{"httpGet":{"path":"/","port":80,"httpHeaders":[{"name":"X-Token","value":"` + secret + `"}]}}}`
+	podSpec := `"containers":[` + container + `],"initContainers":[` + container + `],"volumes":[{"name":"v","csi":{"driver":"d","volumeAttributes":{"token":"` + attr + `"}}}]`
+	template := `"template":{"metadata":{"annotations":{"note":"` + note + `"}},"spec":{` + podSpec + `}}`
+	every := []string{value, secret, arg, attr, note}
+	// a pod's row lists its containers' commands, as the list's does
+	notArg := []string{value, secret, attr, note}
+	for _, c := range []struct {
+		resource, object string
+		values           []string
+	}{
+		{"pods", `{"apiVersion":"v1","kind":"Pod","metadata":{"name":"p","namespace":"demo"},"spec":{` + podSpec + `}}`, notArg},
+		{"pods", `{"apiVersion":"v1","kind":"Pod","metadata":{"name":"p","namespace":"demo"},"spec":{"nodeName":7,` + podSpec + `}}`, notArg},
+		{"deployments", `{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"d","namespace":"demo"},"spec":{` + template + `}}`, every},
+		{"deployments", `{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"d","namespace":"demo"},"spec":{"replicas":"not a number",` + template + `}}`, every},
+		{"replicasets", `{"apiVersion":"apps/v1","kind":"ReplicaSet","metadata":{"name":"r","namespace":"demo"},"spec":{` + template + `}}`, every},
+		{"replicasets", `{"apiVersion":"apps/v1","kind":"ReplicaSet","metadata":{"name":"r","namespace":"demo"},"spec":{"replicas":"not a number",` + template + `}}`, every},
+		{"statefulsets", `{"apiVersion":"apps/v1","kind":"StatefulSet","metadata":{"name":"s","namespace":"demo"},"spec":{` + template + `}}`, every},
+		{"statefulsets", `{"apiVersion":"apps/v1","kind":"StatefulSet","metadata":{"name":"s","namespace":"demo"},"spec":{"replicas":"not a number",` + template + `}}`, every},
+		{"daemonsets", `{"apiVersion":"apps/v1","kind":"DaemonSet","metadata":{"name":"a","namespace":"demo"},"spec":{` + template + `}}`, every},
+		{"daemonsets", `{"apiVersion":"apps/v1","kind":"DaemonSet","metadata":{"name":"a","namespace":"demo"},"spec":{"minReadySeconds":"not a number",` + template + `}}`, every},
+		{"jobs", `{"apiVersion":"batch/v1","kind":"Job","metadata":{"name":"j","namespace":"demo"},"spec":{` + template + `}}`, every},
+		{"jobs", `{"apiVersion":"batch/v1","kind":"Job","metadata":{"name":"j","namespace":"demo"},"spec":{"completions":"not a number",` + template + `}}`, every},
+		{"cronjobs", `{"apiVersion":"batch/v1","kind":"CronJob","metadata":{"name":"c","namespace":"demo"},"spec":{"schedule":"0 9 * * *","jobTemplate":{"spec":{` + template + `}}}}`, every},
+		{"cronjobs", `{"apiVersion":"batch/v1","kind":"CronJob","metadata":{"name":"c","namespace":"demo"},"spec":{"schedule":7,"jobTemplate":{"spec":{` + template + `}}}}`, every},
+	} {
+		raw, err := json.Marshal(liveRow(t, c.resource, c.object))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, v := range c.values {
+			if strings.Contains(string(raw), v) {
+				t.Errorf("the live row of %s holds %q: %s", c.object[:60], v, raw)
+			}
+		}
+	}
+	if raw, _ := json.Marshal(newListAPI(t).row(t, "pods", podAllRefs)); strings.Contains(string(raw), value) {
+		t.Errorf("the list row of a pod holds an environment value: %s", raw)
+	}
+	// what the pages read of such a row stays: the containers' names and images, and what they refer to
+	row := liveRow(t, "deployments", `{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"d","namespace":"demo"},"spec":{"replicas":"not a number","selector":{"matchLabels":{"app":"a"}},
+		"template":{"metadata":{"labels":{"app":"a"}},"spec":{"nodeSelector":{"disk":"ssd"},"containers":[{"name":"app","image":"example.test/app:1","envFrom":[{"configMapRef":{"name":"conf"}}],"env":[{"name":"T","valueFrom":{"secretKeyRef":{"name":"creds","key":"t"}}}]}],
+		"volumes":[{"name":"v","secret":{"secretName":"tls"}},{"name":"p","projected":{"sources":[{"configMap":{"name":"proj"}}]}}]}}}}`)
+	raw, err := json.Marshal(row["spec"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, kept := range []string{`"replicas":"not a number"`, `"matchLabels":{"app":"a"}`, `"nodeSelector":{"disk":"ssd"}`, `"image":"example.test/app:1"`, `"name":"app"`, `"configMapRef":{"name":"conf"}`, `"secretKeyRef":{"key":"t","name":"creds"}`, `"secretName":"tls"`, `"configMap":{"name":"proj"}`} {
+		if !strings.Contains(string(raw), kept) {
+			t.Errorf("the row's spec lost %s: %s", kept, raw)
+		}
+	}
 }
 
 // The list caps its address preview and counts every address; a live update has to read the same, not list them all.
@@ -629,6 +846,19 @@ func TestAWatchOfTheseListsStaysInsideANamespaceGrant(t *testing.T) {
 		"/api/v1/namespaces/team-a/secrets":                               true,
 		"/api/v1/namespaces/team-a/serviceaccounts":                       true,
 		"/api/v1/namespaces/team-a/roles":                                 true,
+		"/api/v1/pods":                                                    false,
+		"/api/v1/daemonsets":                                              false,
+		"/api/v1/jobs":                                                    false,
+		"/api/v1/namespaces/team-b/pods":                                  false,
+		"/apis/apps/v1/namespaces/team-b/daemonsets":                      false,
+		"/apis/apps/v1/namespaces/team-b/statefulsets":                    false,
+		"/apis/batch/v1/namespaces/team-b/jobs":                           false,
+		"/apis/batch/v1/namespaces/team-b/cronjobs":                       false,
+		"/api/v1/namespaces/team-a/pods":                                  true,
+		"/apis/apps/v1/namespaces/team-a/daemonsets":                      true,
+		"/apis/apps/v1/namespaces/team-a/statefulsets":                    true,
+		"/apis/batch/v1/namespaces/team-a/jobs":                           true,
+		"/apis/batch/v1/namespaces/team-a/cronjobs":                       true,
 	} {
 		reason := namespaceScopeRefusal(scoped, "self", path)
 		if (reason == "") != allowed {

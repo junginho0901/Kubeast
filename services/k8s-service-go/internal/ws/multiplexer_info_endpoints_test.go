@@ -47,19 +47,3 @@ func TestObjectToInfoEndpointsReadsTopLevelPayload(t *testing.T) {
 		t.Fatalf("endpointslice annotations: %v", info["annotations"])
 	}
 }
-
-func TestContainerNamesFromTemplate(t *testing.T) {
-	spec := map[string]interface{}{"template": map[string]interface{}{"spec": map[string]interface{}{
-		"containers": []interface{}{
-			map[string]interface{}{"name": "app", "image": "nginx:1"},
-			map[string]interface{}{"name": "sidecar", "image": "busybox"},
-		},
-	}}}
-	got := containerNamesFromTemplate(spec)
-	if len(got) != 2 || got[0] != "app" || got[1] != "sidecar" {
-		t.Fatalf("containerNamesFromTemplate = %v", got)
-	}
-	if got := containerNamesFromTemplate(nil); len(got) != 0 {
-		t.Fatalf("nil spec should give no names, got %v", got)
-	}
-}

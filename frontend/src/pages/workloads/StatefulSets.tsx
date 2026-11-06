@@ -54,13 +54,6 @@ export default function StatefulSets() {
       ? '/api/v1/statefulsets'
       : `/api/v1/namespaces/${selectedNamespace}/statefulsets`,
     query: 'watch=1',
-    onEvent: (event) => {
-      const name = event?.object?.name
-      const ns = event?.object?.namespace
-      if (name && ns) {
-        queryClient.invalidateQueries({ queryKey: ['statefulset-describe', ns, name] })
-      }
-    },
   })
 
   const filtered = useMemo(() => {

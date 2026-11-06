@@ -49,43 +49,6 @@ func containerImages(spec map[string]interface{}) []string {
 	return images
 }
 
-// containerImagesFromTemplate — JobSpec / CronJobSpec 등의 spec.template.spec.containers
-// 추출 (containerImages 와 동일하지만 이미 podTemplateSpec 인 spec 을 받음).
-func containerImagesFromTemplate(spec map[string]interface{}) []string {
-	return containerImages(spec)
-}
-
-// containerNamesFromTemplate — spec.template.spec.containers[].name (list rows
-// carry `containers` next to `images`).
-func containerNamesFromTemplate(spec map[string]interface{}) []string {
-	names := []string{}
-	if spec == nil {
-		return names
-	}
-	tmpl, ok := spec["template"].(map[string]interface{})
-	if !ok {
-		return names
-	}
-	podSpec, ok := tmpl["spec"].(map[string]interface{})
-	if !ok {
-		return names
-	}
-	containers, ok := podSpec["containers"].([]interface{})
-	if !ok {
-		return names
-	}
-	for _, c := range containers {
-		cm, _ := c.(map[string]interface{})
-		if cm == nil {
-			continue
-		}
-		if name, ok := cm["name"].(string); ok {
-			names = append(names, name)
-		}
-	}
-	return names
-}
-
 // selectorMatchLabels — spec.selector.matchLabels 추출, 없으면 빈 map.
 func selectorMatchLabels(spec map[string]interface{}) interface{} {
 	if spec == nil {
@@ -101,39 +64,84 @@ func selectorMatchLabels(spec map[string]interface{}) interface{} {
 	return map[string]string{}
 }
 
-// containerStateFromMap — the same shape as containerStateStr in the list
-// endpoint (pods_format.go): {running|waiting|terminated: {...}} in snake_case.
-func containerStateFromMap(v interface{}) map[string]interface{} {
-	result := map[string]interface{}{}
-	state, _ := v.(map[string]interface{})
-	if r, ok := state["running"].(map[string]interface{}); ok {
-		result["running"] = map[string]interface{}{"started_at": strOrEmpty(r["startedAt"])}
-	}
-	if w, ok := state["waiting"].(map[string]interface{}); ok {
-		result["waiting"] = map[string]interface{}{
-			"reason":  strOrEmpty(w["reason"]),
-			"message": strOrEmpty(w["message"]),
+// withoutPodValues is a spec for a row sent when the object does not convert. The pages read names and images from it;
+// what a container is given (its environment, commands and probes), a volume's settings and a template's annotations
+// stay out, as the row of an object that converts leaves them out.
+func withoutPodValues(v interface{}) interface{} {
+	switch t := v.(type) {
+	case map[string]interface{}:
+		out := make(map[string]interface{}, len(t))
+		for key, value := range t {
+			switch key {
+			case "containers", "initContainers", "ephemeralContainers":
+				out[key] = eachMap(value, containerNames)
+			case "volumes":
+				out[key] = eachMap(value, volumeNames)
+			case "annotations":
+			default:
+				out[key] = withoutPodValues(value)
+			}
 		}
-	}
-	if t, ok := state["terminated"].(map[string]interface{}); ok {
-		exitCode, _ := toInt64(t["exitCode"])
-		result["terminated"] = map[string]interface{}{
-			"exit_code":   exitCode,
-			"reason":      strOrEmpty(t["reason"]),
-			"message":     strOrEmpty(t["message"]),
-			"started_at":  strOrEmpty(t["startedAt"]),
-			"finished_at": strOrEmpty(t["finishedAt"]),
+		return out
+	case []interface{}:
+		out := make([]interface{}, 0, len(t))
+		for _, value := range t {
+			out = append(out, withoutPodValues(value))
 		}
+		return out
 	}
-	return result
+	return v
 }
 
-// strOrEmpty — interface{} 가 string 이면 그대로, 아니면 빈 string.
-func strOrEmpty(v interface{}) string {
-	if s, ok := v.(string); ok {
-		return s
+// eachMap keeps the entries of a list that are objects, each through keep; anything else is left out.
+func eachMap(v interface{}, keep func(map[string]interface{}) map[string]interface{}) []interface{} {
+	list, _ := v.([]interface{})
+	out := make([]interface{}, 0, len(list))
+	for _, entry := range list {
+		if m, ok := entry.(map[string]interface{}); ok {
+			out = append(out, keep(m))
+		}
 	}
-	return ""
+	return out
+}
+
+// containerNames is what a container says about itself and what it refers to, not what it is given: an env entry keeps
+// its name and where it comes from.
+func containerNames(c map[string]interface{}) map[string]interface{} {
+	out := map[string]interface{}{}
+	for _, key := range []string{"name", "image", "ports", "resources", "envFrom"} {
+		if value, ok := c[key]; ok {
+			out[key] = value
+		}
+	}
+	if _, ok := c["env"]; ok {
+		out["env"] = eachMap(c["env"], func(e map[string]interface{}) map[string]interface{} {
+			return map[string]interface{}{"name": e["name"], "valueFrom": e["valueFrom"]}
+		})
+	}
+	return out
+}
+
+// volumeNames is the ConfigMaps and Secrets a volume names.
+func volumeNames(v map[string]interface{}) map[string]interface{} {
+	out := map[string]interface{}{"name": v["name"]}
+	for _, key := range []string{"configMap", "secret"} {
+		if value, ok := v[key].(map[string]interface{}); ok {
+			out[key] = map[string]interface{}{"name": value["name"], "secretName": value["secretName"]}
+		}
+	}
+	if projected, ok := v["projected"].(map[string]interface{}); ok {
+		out["projected"] = map[string]interface{}{"sources": eachMap(projected["sources"], func(s map[string]interface{}) map[string]interface{} {
+			source := map[string]interface{}{}
+			for _, key := range []string{"configMap", "secret"} {
+				if value, ok := s[key].(map[string]interface{}); ok {
+					source[key] = map[string]interface{}{"name": value["name"]}
+				}
+			}
+			return source
+		})}
+	}
+	return out
 }
 
 func int64Ptr(i int64) *int64 {

@@ -8,6 +8,8 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	jobrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/job"
 )
 
 // ========== Jobs ==========
@@ -56,7 +58,7 @@ func (s *Service) DescribeJob(ctx context.Context, namespace, name string) (map[
 		return nil, fmt.Errorf("get job %s/%s: %w", namespace, name, jobErr)
 	}
 
-	result := formatJobDetail(job)
+	result := jobrow.Info(job)
 
 	// Additional metadata
 	result["uid"] = string(job.UID)

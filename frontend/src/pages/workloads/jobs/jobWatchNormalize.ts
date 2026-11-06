@@ -2,12 +2,20 @@
 //
 // frontend/src/pages/workloads/Jobs.tsx 의 normalizeWatchJobObject +
 // applyJobWatchEvent 추출. useKubeWatchList 의 applyEvent 콜백에서만 사용
-// (raw watch event → 기존 list state 에 병합). start_time/completion_time 기반
+// (raw watch event → 기존 list state 에 반영). start_time/completion_time 기반
 // duration_seconds 계산도 이 안에서 수행.
 
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import type { JobInfo } from '@/services/api'
-import { computeJobStatus } from './jobHelpers'
+
+// The server's rule (jobrow.Status), for a row it could not convert: the conditions say Complete or Failed, else Running.
+function statusOfConditions(conditions: unknown): string {
+  for (const c of Array.isArray(conditions) ? conditions : []) {
+    if (c?.status !== 'True') continue
+    if (c?.type === 'Complete') return 'Complete'
+    if (c?.type === 'Failed') return 'Failed'
+  }
+  return 'Running'
+}
 
 export function normalizeWatchJobObject(obj: any): JobInfo {
   if (typeof obj?.name === 'string' && typeof obj?.namespace === 'string' && typeof obj?.status === 'string') {
@@ -41,7 +49,7 @@ export function normalizeWatchJobObject(obj: any): JobInfo {
     controller: r?.controller ?? null,
   }))
 
-  const normalized: JobInfo = {
+  return {
     name: metadata?.name ?? obj?.name ?? '',
     namespace: metadata?.namespace ?? obj?.namespace ?? '',
     completions: spec?.completions ?? obj?.completions ?? null,
@@ -49,7 +57,7 @@ export function normalizeWatchJobObject(obj: any): JobInfo {
     active: status?.active ?? obj?.active ?? 0,
     succeeded: status?.succeeded ?? obj?.succeeded ?? 0,
     failed: status?.failed ?? obj?.failed ?? 0,
-    status: '',
+    status: statusOfConditions(status?.conditions),
     containers: containers.map((container: any) => container?.name).filter(Boolean),
     images: containers.map((container: any) => container?.image).filter(Boolean),
     start_time: startTime ?? obj?.start_time ?? null,
@@ -58,9 +66,6 @@ export function normalizeWatchJobObject(obj: any): JobInfo {
     created_at: metadata?.creationTimestamp ?? obj?.created_at ?? null,
     owner_references: ownerReferences,
   }
-
-  normalized.status = computeJobStatus(normalized)
-  return normalized
 }
 
 export function applyJobWatchEvent(
@@ -84,7 +89,8 @@ export function applyJobWatchEvent(
     return items
   }
 
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
+  // the server sends the whole row (jobrow.Info), so it replaces: an owner or start time that went away goes
+  if (index >= 0) items[index] = normalized
   else items.push(normalized)
   return items
 }

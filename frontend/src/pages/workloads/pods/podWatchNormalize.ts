@@ -2,9 +2,8 @@
 //
 // frontend/src/pages/workloads/Pods.tsx 의 toSerializedContainerState +
 // normalizeWatchPodObject + applyPodWatchEvent 추출. useKubeWatchList 의
-// applyEvent 콜백에서만 사용 (raw watch event → 기존 list state 에 병합).
+// applyEvent 콜백에서만 사용 (raw watch event → 기존 list state 에 반영).
 
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import type { PodInfo } from '@/services/api'
 
 function toSerializedContainerState(state: any): any {
@@ -38,7 +37,7 @@ function toSerializedContainerState(state: any): any {
   return Object.keys(result).length > 0 ? result : undefined
 }
 
-function normalizeWatchPodObject(obj: any): PodInfo {
+export function normalizeWatchPodObject(obj: any): PodInfo {
   // already normalized (API list shape)
   if (typeof obj?.status === 'string' && typeof obj?.namespace === 'string' && typeof obj?.name === 'string') {
     return obj as PodInfo
@@ -204,8 +203,9 @@ export function applyPodWatchEvent(prev: PodInfo[] | undefined, event: { type?: 
     return items
   }
 
+  // the server sends the whole row (podrow.Info), so it replaces: a reason, owner or label that went away goes
   if (index >= 0) {
-    items[index] = mergeWatchUpdate(items[index], normalized)
+    items[index] = normalized
   } else {
     items.push(normalized)
   }

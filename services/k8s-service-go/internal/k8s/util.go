@@ -104,32 +104,6 @@ func mapStrMap(m map[string]interface{}) map[string]string {
 	return out
 }
 
-// containerStateStr returns a human-readable state from a container status.
-func containerStateStr(state corev1.ContainerState) map[string]interface{} {
-	result := map[string]interface{}{}
-	if state.Running != nil {
-		result["running"] = map[string]interface{}{
-			"started_at": toISO(&state.Running.StartedAt),
-		}
-	}
-	if state.Waiting != nil {
-		result["waiting"] = map[string]interface{}{
-			"reason":  state.Waiting.Reason,
-			"message": state.Waiting.Message,
-		}
-	}
-	if state.Terminated != nil {
-		result["terminated"] = map[string]interface{}{
-			"exit_code":   state.Terminated.ExitCode,
-			"reason":      state.Terminated.Reason,
-			"message":     state.Terminated.Message,
-			"started_at":  toISO(&state.Terminated.StartedAt),
-			"finished_at": toISO(&state.Terminated.FinishedAt),
-		}
-	}
-	return result
-}
-
 // sortEventsByTime sorts events newest first, by when each was last seen (eventtime.Last).
 func sortEventsByTime(events []corev1.Event) {
 	sort.SliceStable(events, func(i, j int) bool { return eventtime.Last(&events[i]).After(eventtime.Last(&events[j])) })

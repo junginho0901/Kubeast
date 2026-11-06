@@ -24,7 +24,7 @@ describe('podDrawerStatus', () => {
   })
 })
 
-// The words kubectl's STATUS has that the list shows (k8s-service podListStatus) keep a state's colour.
+// The words kubectl's STATUS has that the list shows (k8s-service podrow.ListView) keep a state's colour.
 describe('getStatusColor', () => {
   it('draws a pod being deleted or held by scheduling gates as a warning', () => {
     expect(getStatusColor('Terminating')).toBe('badge-warning')

@@ -8,6 +8,8 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	dsrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/daemonset"
 )
 
 // ========== DaemonSets ==========
@@ -56,7 +58,7 @@ func (s *Service) DescribeDaemonSet(ctx context.Context, namespace, name string)
 		return nil, fmt.Errorf("get daemonset %s/%s: %w", namespace, name, dsErr)
 	}
 
-	result := formatDaemonSetDetail(ds)
+	result := dsrow.Info(ds)
 
 	// Additional metadata
 	result["uid"] = string(ds.UID)

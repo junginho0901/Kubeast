@@ -244,4 +244,39 @@ test.describe('Pods being deleted', () => {
       tryK(`delete clusterrole ${RBAC}-imp --ignore-not-found`)
     }
   })
+
+  // Last in the file: its ReplicaSet adds pods to the namespace the tests above count.
+  test('a pod table left open in a workload drawer says Terminating once kubectl does', async ({ page }) => {
+    test.setTimeout(180_000)
+    const SET = 'term-set'
+    k('apply -f -', JSON.stringify({
+      apiVersion: 'apps/v1',
+      kind: 'ReplicaSet',
+      metadata: { name: SET, namespace: NS },
+      spec: {
+        replicas: 1,
+        selector: { matchLabels: { app: SET } },
+        template: { metadata: { labels: { app: SET } }, spec: { terminationGracePeriodSeconds: 600, containers: [box('app', IGNORES_TERM)] } },
+      },
+    }))
+    let name = ''
+    await expect.poll(() => {
+      name = k(`-n ${NS} get pods -l app=${SET} -o jsonpath='{.items[*].metadata.name}'`).split(' ')[0]
+      return printed(NS)[name]?.status
+    }, { timeout: 120_000, message: `${SET}: its pod runs` }).toBe('Running')
+
+    await page.goto(`/workloads/replicasets?cluster=${CLUSTER}&namespace=${NS}&detail=ReplicaSet/${NS}/${SET}`)
+    const drawer = page.locator('div[class*="fixed"][class*="inset-y-0"][class*="right-0"]').last()
+    // the pods table's cells: the pod's name, then its Status
+    const status = drawer.locator('tr').filter({ has: page.getByRole('cell', { name, exact: true }) }).locator('td').nth(1)
+    await expect(status).toHaveText('Running', { timeout: 20_000 })
+
+    k(`-n ${NS} delete pod ${name} --wait=false`)
+    await expect.poll(() => printed(NS)[name]?.status, { timeout: 30_000, message: 'kubectl' }).toBe('Terminating')
+    await expect(status, 'the row a live update left').toHaveText('Terminating', { timeout: 20_000 })
+    // a replacement comes and the row of the one going stays as it is
+    const podRows = drawer.locator('tr').filter({ has: page.getByRole('cell', { name: new RegExp(`^${SET}-`) }) })
+    await expect.poll(() => podRows.count(), { timeout: 60_000, message: 'the replacement pod' }).toBe(2)
+    await expect(status).toHaveText('Terminating')
+  })
 })
