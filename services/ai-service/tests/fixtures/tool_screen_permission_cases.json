@@ -1,6 +1,7 @@
 {
  "tools": [
   "alert_investigate",
+  "alerts_inbox",
   "alerts_list",
   "audit_search",
   "can_i",
@@ -38,6 +39,8 @@
   "k8s_rollout",
   "k8s_scale",
   "k8s_tabular_query",
+  "limit_range_violations",
+  "logfiles",
   "logsearch",
   "loki_labels",
   "loki_patterns",
@@ -45,10 +48,12 @@
   "network_drops",
   "network_flows",
   "network_policy_check",
+  "network_policy_effective",
   "network_top_flows",
   "nodes_log",
   "nodes_stats_summary",
   "optimization",
+  "pod_rbac",
   "policy_reports",
   "prometheus_labels",
   "prometheus_metrics",
@@ -56,6 +61,7 @@
   "prometheus_rules",
   "prometheus_targets",
   "resource_graph",
+  "storage_summary",
   "traces_compare",
   "traces_get",
   "traces_metrics",
@@ -323,7 +329,13 @@
   "ai.tool.k8s_tabular_query",
   "ai.tool.k8s_count",
   "ai.tool.gitops_status",
-  "ai.tool.clusters_list"
+  "ai.tool.clusters_list",
+  "ai.tool.pod_rbac",
+  "ai.tool.logfiles",
+  "ai.tool.storage_summary",
+  "ai.tool.network_policy_effective",
+  "ai.tool.limit_range_violations",
+  "ai.tool.alerts_inbox"
  ],
  "cases": [
   {
@@ -544,6 +556,27 @@
    "read": true
   },
   {
+   "tool": "pod_rbac",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "storage_summary",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "limit_range_violations",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
    "tool": "k8s_get_resources",
    "args": {
     "resource_type": "secrets"
@@ -752,6 +785,63 @@
    ],
    "write": false,
    "read": false
+  },
+  {
+   "tool": "logfiles",
+   "args": {
+    "namespace": "shop",
+    "pod_name": "web"
+   },
+   "want": [
+    "resource.pod.logfile"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "logfiles",
+   "args": {
+    "namespace": "shop",
+    "path": "/var/log/app/app.log",
+    "pod_name": "web"
+   },
+   "want": [
+    "resource.pod.logfile"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "network_policy_effective",
+   "args": {
+    "namespace": "shop",
+    "pod": "web"
+   },
+   "want": [
+    "resource.networkpolicy.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "alerts_inbox",
+   "args": {},
+   "want": [
+    "resource.pod.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "alerts_inbox",
+   "args": {
+    "alert_id": "a1"
+   },
+   "want": [
+    "resource.pod.read"
+   ],
+   "write": true,
+   "read": true
   },
   {
    "tool": "k8s_delete_resource",

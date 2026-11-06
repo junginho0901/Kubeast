@@ -130,8 +130,12 @@ func TestGitopsStatus_SingleAppScopeAndMissingCRD(t *testing.T) {
 		t.Fatalf("name without namespace: %v", err)
 	}
 	// A namespace-scoped grant cannot widen to the cluster.
-	if _, err := handleGitopsStatus(ctxFor("c1", "shop"), map[string]interface{}{}, bearer()); !errors.Is(err, errBadRequest) {
+	scopedCalls := fakeKubectl(t, func(args []string) (string, error) { return single, nil })
+	if _, err := handleGitopsStatus(ctxFor("c1", "shop"), map[string]interface{}{}, bearer()); err != nil {
 		t.Fatalf("scoped grant: %v", err)
+	}
+	if v := verb((*scopedCalls)[0]); strings.Join(v, " ") != "get applications.argoproj.io -n shop -o json" {
+		t.Fatalf("scoped grant argv: %v", v)
 	}
 
 	fakeKubectl(t, func(args []string) (string, error) {

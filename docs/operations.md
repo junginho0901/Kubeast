@@ -201,6 +201,7 @@ All three cards show read-only results computed by k8s-service (the same numbers
 For **apps that write their logs to files** instead of stdout, nothing shows in `kubectl logs`, nor in Kubeast's Logs tab or AI log tools. The kubelet collects only stdout/stderr.
 When on (`features.logFiles.enabled`, default off), the Logs tab of Pod details and the Logs area of the Pod drawer get a **Container output | Log files** switch.
 There you pick a file in the allowed paths, and read its last N lines or follow it live.
+The AI tool `logfiles` lists and reads the same files through the same routes, with the same permission, paths and audit row, and it masks credentials as in other logs. It never follows a file.
 
 - **Fixed commands, no shell**: k8s-service runs only `ls` and `tail` through `pods/exec` as the user's identity.
   - List: `ls -1p -- <directory>`

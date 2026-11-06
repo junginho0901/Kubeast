@@ -16,7 +16,7 @@ from app import mcp_server
 from app.security import TokenPayload
 from app.services.audit_writer import AuditUnavailable
 
-MATRIX_WRITE = {"self": ("ai.tool.*", "ai.mcp.use", "resource.*.read", "resource.*.create", "resource.*.delete",
+MATRIX_WRITE = {"self": ("ai.tool.*", "ai.mcp.use", "resource.*.read", "resource.*.create", "resource.*.delete", "resource.pod.logfile",
                          "resource.deployment.edit", "resource.configmap.edit", "resource.secret.edit"), "default": ("resource.*.read",)}
 TOKENS = {
     "tok-write": TokenPayload(user_id="u-write", role="member", email="w@example.com", matrix=MATRIX_WRITE),
@@ -252,7 +252,8 @@ async def test_list_clusters_names_the_tools_allowed_in_each(fakes, monkeypatch)
     feature_calls = []
     features = {"prometheus": {"enabled": True}, "logSearch": {"enabled": True, "clusters": ["self"]}, "cost": {"enabled": True}, "policyReports": {"enabled": True},
                 "traceStore": {"enabled": True, "clusters": ["self"]}, "alertStore": {"enabled": True, "clusters": ["self"]},
-                "networkFlows": {"enabled": True, "clusters": ["self"]}, "networkFlowMonitor": {"enabled": True, "clusters": ["self"]}}
+                "networkFlows": {"enabled": True, "clusters": ["self"]}, "networkFlowMonitor": {"enabled": True, "clusters": ["self"]},
+                "logFiles": {"enabled": True}, "alertInvestigation": {"enabled": True}}
 
     async def fetch_features(k8s_client, cluster):
         feature_calls.append((k8s_client.client.headers.get("Authorization"), k8s_client.client.params.get("cluster"), cluster))
@@ -284,12 +285,13 @@ async def test_list_clusters_names_the_tools_allowed_in_each(fakes, monkeypatch)
     prometheus = {"prometheus_query", "prometheus_metrics", "prometheus_labels", "prometheus_rules", "prometheus_targets", "network_drops"}
     assert set(tools) == set(mcp_server.READ_TOOLS) - prometheus - {"logsearch", "loki_query", "loki_labels", "loki_patterns", "cost", "policy_reports", "k8s_diff",
                                                          "traces_search", "traces_get", "traces_tags", "traces_metrics", "traces_compare",
-                                                         "alerts_list", "network_flows", "network_top_flows"} - admin_only
+                                                         "alerts_list", "network_flows", "network_top_flows", "logfiles", "alerts_inbox"} - admin_only
 
     # The admin (global *) is offered the hygiene report too.
     features = {"prometheus": {"enabled": True}, "logSearch": {"enabled": True, "clusters": ["self"]}, "cost": {"enabled": True}, "policyReports": {"enabled": True},
                 "traceStore": {"enabled": True, "clusters": ["self"]}, "alertStore": {"enabled": True, "clusters": ["self"]},
-                "networkFlows": {"enabled": True, "clusters": ["self"]}, "networkFlowMonitor": {"enabled": True, "clusters": ["self"]}}
+                "networkFlows": {"enabled": True, "clusters": ["self"]}, "networkFlowMonitor": {"enabled": True, "clusters": ["self"]},
+                "logFiles": {"enabled": True}, "alertInvestigation": {"enabled": True}}
 
     async def get_admin(url, **kwargs):
         assert kwargs["headers"]["Authorization"] == "Bearer tok-admin"
@@ -300,7 +302,7 @@ async def test_list_clusters_names_the_tools_allowed_in_each(fakes, monkeypatch)
         res = await call(client, "tok-admin", "tools/call", {"name": "list_clusters", "arguments": {}})
         data = json.loads(res.json()["result"]["content"][0]["text"])
     tools = {c["id"]: c["tools"] for c in data["clusters"]}["self"]
-    assert "hygiene" in tools and "k8s_diff" in tools and set(tools) == set(mcp_server.READ_TOOLS)
+    assert "hygiene" in tools and "k8s_diff" in tools and set(tools) == set(mcp_server.READ_TOOLS) | set(mcp_server.ACTION_TOOLS)
 
 
 @pytest.mark.asyncio
@@ -411,8 +413,10 @@ async def test_write_tools_follow_the_switch_and_the_users_permissions(fakes, mo
         assert all(tools[n]["annotations"]["readOnlyHint"] is True for n in mcp_server.READ_TOOLS if n in tools)
 
         # Read tools only (no ai.tool.k8s_delete_resource): read tools are listed as before, no write tool is, and a write call is refused + audited.
+        # Nor logfiles: this role does not hold the Log files tab's permission.
         names = tool_names(await call(client, "tok-readtools", "tools/list"))
-        assert not (set(names) & WRITE_TOOL_NAMES) and "request_access" in names and len(names) == len(mcp_server.READ_TOOLS) - 5 + 2
+        assert "logfiles" not in names
+        assert not (set(names) & WRITE_TOOL_NAMES) and "request_access" in names and len(names) == len(mcp_server.READ_TOOLS) - 6 + 2
         res = await call(client, "tok-readtools", "tools/call", {"name": "k8s_delete_resource", "arguments": {"cluster": "self", "resource_type": "pod", "resource_name": "p", "namespace": "ns"}})
         assert res.json()["result"]["isError"] is True and "forbidden" in res.json()["result"]["content"][0]["text"]
         # No MCP anywhere: only the way to ask for a role.

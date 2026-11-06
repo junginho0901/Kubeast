@@ -60,6 +60,12 @@ READONLY_TOOL_NAMES: frozenset[str] = frozenset(
         "k8s_count",
         "gitops_status",
         "clusters_list",
+        "pod_rbac",
+        "logfiles",
+        "storage_summary",
+        "network_policy_effective",
+        "limit_range_violations",
+        "alerts_inbox",
     }
 )
 

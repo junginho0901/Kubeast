@@ -202,17 +202,21 @@ CLUSTER_WIDE_TOOLS = frozenset({
     "k8s_get_available_api_resources", "k8s_get_cluster_configuration",
     "k8s_apply_manifest", "k8s_create_resource", "get_cluster_overview", "get_node_metrics",
     "prometheus_query", "prometheus_metrics", "prometheus_labels", "prometheus_rules", "prometheus_targets", "alerts_list",
-    "hygiene", "k8s_diff", "audit_search", "nodes_stats_summary", "nodes_log", "alert_investigate",
+    "hygiene", "k8s_diff", "audit_search", "nodes_stats_summary", "nodes_log", "alert_investigate", "alerts_inbox",
 })
 
-# Kubeast's own list of clusters, not object data: the picker works for a grant limited to namespaces.
-NAMESPACE_FREE_TOOLS = frozenset({"clusters_list"})
+# Tool-server's handler or k8s-service's route keeps these inside the grant, so they pass without naming a namespace.
+NAMESPACE_AWARE_TOOLS = frozenset({"k8s_find_resource", "issues", "cost", "gitops_status", "storage_summary"})
+
+# API schema or Kubeast's own list of clusters, not object data: a screen answers a grant limited to namespaces too.
+NAMESPACE_FREE_TOOLS = frozenset({"k8s_explain", "clusters_list"})
 
 
 def namespace_scope_error(token, cluster: str, function_name: str, args: Dict) -> Optional[str]:
-    """Why a namespace-scoped grant refuses this call, or None. Mirrors
-    tool-server's namespaceGate so the model gets the reason before the call
-    leaves ai-service; tool-server refuses again on its own."""
+    """Why a namespace-scoped grant refuses this call, or None. tool-server's
+    namespaceGate decides the same (TestNamespaceGateCasesFixture writes the
+    cases tests/test_ai_tools_pods_files.py runs here); this gives the model the
+    reason before the call leaves ai-service and tool-server refuses again on its own."""
     scope = token.namespaces.get(cluster, ()) if token else ()
     if not scope or function_name in NAMESPACE_FREE_TOOLS:
         return None
@@ -224,6 +228,8 @@ def namespace_scope_error(token, cluster: str, function_name: str, args: Dict) -
     if all_namespaces.strip().lower() == "true" if isinstance(all_namespaces, str) else bool(all_namespaces):
         return f"forbidden: all_namespaces spans the cluster; your grant on {cluster} is limited to namespaces {listed}"
     ns = str((args or {}).get("namespace") or "").strip()
+    if not ns and function_name in NAMESPACE_AWARE_TOOLS:
+        return None
     if not ns:
         return f"forbidden: namespace is required; your grant on {cluster} is limited to namespaces {listed}"
     if not token.allowed_in(cluster, ns):

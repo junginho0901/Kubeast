@@ -211,6 +211,36 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Handler:     handleAlertInvestigate,
 	})
 	register(ToolDefinition{
+		Name:        "alerts_inbox",
+		Description: "The Alerts inbox: what Alertmanager sent with its acknowledged, assignee and done marks, or one alert with its note",
+		Handler:     handleAlertsInbox,
+	})
+	register(ToolDefinition{
+		Name:        "pod_rbac",
+		Description: "A pod's service account and the roles it is bound to",
+		Handler:     handlePodRBAC,
+	})
+	register(ToolDefinition{
+		Name:        "logfiles",
+		Description: "The log files inside a container that the Log files tab covers, or the last lines of one (fixed tail through pods/exec)",
+		Handler:     handleLogFiles,
+	})
+	register(ToolDefinition{
+		Name:        "storage_summary",
+		Description: "The Storage window: claims with their usage and volumes, counted by status, and the claim-to-volume topology",
+		Handler:     handleStorageSummary,
+	})
+	register(ToolDefinition{
+		Name:        "network_policy_effective",
+		Description: "The NetworkPolicies that select a pod or a workload's pods, per direction, with what their rules allow",
+		Handler:     handleNetworkPolicyEffective,
+	})
+	register(ToolDefinition{
+		Name:        "limit_range_violations",
+		Description: "The containers outside a LimitRange's bounds",
+		Handler:     handleLimitRangeViolations,
+	})
+	register(ToolDefinition{
 		Name:        "logsearch",
 		Description: "Search the cluster's log store (Loki) through Kubeast — also pods that no longer exist",
 		Handler:     handleLogSearch,

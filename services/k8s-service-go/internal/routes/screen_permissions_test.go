@@ -51,7 +51,7 @@ func screenRouter(t *testing.T) chi.Router {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := handler.New(svc, config.Config{}, nil)
+	h := handler.New(svc, config.Config{LogFilesEnabled: true}, nil)
 	r := chi.NewRouter()
 	RegisterCluster(r, h)
 	RegisterPods(r, h)
@@ -159,6 +159,9 @@ func TestTheRouteBehindAToolAsksWhatTheTableSays(t *testing.T) {
 		{"policy_reports", nil, http.MethodGet, "/api/v1/policyreports/results"},
 		{"network_policy_check", nil, http.MethodGet, "/api/v1/networkpolicies/check"},
 		{"network_drops", nil, http.MethodGet, "/api/v1/namespaces/x/networkdrops"},
+		{"network_policy_effective", nil, http.MethodGet, "/api/v1/namespaces/x/networkpolicies/effective?name=y"},
+		{"logfiles", map[string]interface{}{"pod_name": "web"}, http.MethodGet, "/api/v1/namespaces/x/pods/y/logfiles"},
+		{"logfiles", map[string]interface{}{"path": "/var/log/app/app.log"}, http.MethodGet, "/api/v1/namespaces/x/pods/y/logfiles/content?path=/var/log/app/app.log"},
 		{"k8s_rollout", map[string]interface{}{"action": "undo"}, http.MethodPost, "/api/v1/namespaces/x/deployments/y/rollback"},
 	} {
 		want := wantFor(c.tool, c.args)
@@ -191,6 +194,11 @@ func TestAReadTheTableLeavesToTheClusterAsksNoPermission(t *testing.T) {
 		"/api/v1/overview",
 		"/api/v1/prometheus/query?query=up",
 		"/api/v1/api-resources",
+		"/api/v1/namespaces/x/pods/y/rbac",
+		"/api/v1/namespaces/x/limitranges/y/violations",
+		"/api/v1/topology/storage",
+		"/api/v1/pvcs?usage=true",
+		"/api/v1/pvs",
 	} {
 		if rec := askAsToolsOnly(r, http.MethodGet, path); rec.Code == http.StatusForbidden || rec.Code == http.StatusUnauthorized {
 			t.Errorf("GET %s: status %d body %s, want no refusal by the app", path, rec.Code, rec.Body.String())

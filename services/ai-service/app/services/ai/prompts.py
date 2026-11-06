@@ -52,6 +52,12 @@ SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 - `alerts_list`: 알림 저장소(Alertmanager·Grafana 알림)의 이 클러스터 알림 — 울림·무음·억제 상태, 무음(누가·왜·언제까지), 이름별 개수 (알림 저장소가 있을 때만 제공)
 - `alert_investigate`: Alerts 받은편지함의 알림 하나를 정식 조사로 시작 — 알림 창의 "지금 조사" 버튼과 같습니다(권한 `resource.alert.investigate`, 토큰이 듭니다). 사용자가 조사를 시작하라고 할 때만 부르고, 답에 `report_link`를 넣으세요. 다시 볼 때는 `status_only=true`로 부르면 아무것도 시작하지 않고 보고서를 읽습니다
 - `clusters_list`: 사용자가 볼 수 있는 클러스터 목록과 연결 상태 — "어느 클러스터가 연결 안 돼?"(`health_status`는 마지막 연결 확인 결과이며 그 시각은 `last_healthcheck_at`)
+- `alerts_inbox`: Alerts 받은편지함 — 알림을 누가 확인했고 누가 맡았고 끝났는지, 메모(`alert_id`로 한 건을 읽을 때) (받은편지함이 켜져 있을 때만 제공, 표시 변경은 화면에서)
+- `pod_rbac`: 파드의 서비스 계정과 그 계정을 묶은 RoleBinding·ClusterRoleBinding — "이 파드가 뭘 할 수 있나"의 시작, 각 역할의 내용은 `k8s_describe_resource`로
+- `logfiles`: 파일로 로그를 쓰는 앱의 컨테이너 안 로그 파일 — `path` 없이 목록, `path`로 마지막 N줄 (로그 파일 기능이 켜져 있을 때만 제공)
+- `storage_summary`: Storage 창 — PVC(사용량 포함)·PV의 상태별 개수와 PVC→PV 연결. "저장소 문제 있어?", "곧 찰 볼륨은?"
+- `network_policy_effective`: 파드·워크로드를 고르는 NetworkPolicy와 방향별 허용 규칙 — "이 파드를 뭐가 막나"(연결 하나를 따질 땐 `network_policy_check`)
+- `limit_range_violations`: LimitRange 범위를 벗어난 컨테이너
 - `prometheus_targets`: 수집 대상이 살아 있는지(up/down·마지막 오류) — 지표가 비거나 그래프가 빌 때
 - `logsearch`: 로그 저장소 검색 — 죽은·재시작된 파드, 워크로드 전체 파드의 로그를 텍스트로 필터 (이 클러스터에 로그 검색이 있을 때만 제공)
 - `loki_query` · `loki_labels` · `loki_patterns`: 로그 저장소에 LogQL — 시간대별 에러 수·비율(지표 질의), `| json`·`| logfmt`로 푼 줄, 레이블 이름·값 찾기, 에러 유형 묶기(패턴) (로그 검색이 있을 때만 제공)
@@ -215,6 +221,12 @@ Tool 결과를 분석한 후 다음 형식으로 응답하세요:
 - `alerts_list(state, alertname, alert_labels)` - The cluster's alerts in the alert store (firing, silenced, inhibited) and the silences on them; offered only where an alert store exists
 - `alert_investigate(alert_id, alertname, namespace, alert_labels, status_only)` - Start the formal investigation of an alert in the Alerts inbox, as its "Investigate now" button does (costs tokens: only when the user asks); give report_link; status_only=true starts nothing and reads how it went
 - `clusters_list()` - The clusters the user can see and their last connection check
+- `alerts_inbox(alert_id, status, alert_severity, mine, open_only, search, limit, offset)` - The Alerts inbox: who acknowledged an alert, who it is assigned to, whether it is done, and with alert_id its note; offered where the inbox is on, marks change on the screen only
+- `pod_rbac(namespace, pod_name)` - A pod's service account and the roles bound to it: the start of "what can this pod do"; read each role with k8s_describe_resource
+- `logfiles(namespace, pod_name, container, path, lines)` - Log files inside a container for apps that log to files: without path the list, with path the last lines; offered where log files are on
+- `storage_summary(namespace)` - The Storage window: PVCs with usage and PVs by status, and the claim-to-volume topology
+- `network_policy_effective(namespace, pod, workload_kind, workload_name)` - The NetworkPolicies selecting a pod or workload, per direction
+- `limit_range_violations(namespace, name)` - Containers outside a LimitRange's bounds
 - `prometheus_targets(health, job)` - Scrape targets and their health — when a metric is missing
 - `logsearch(namespace, text, pod, workload_kind, workload_name, since, limit)` - Log store search, also for pods that are gone; offered only where log search exists
 - `loki_query(logql, namespace, since, since_time, until_time, step, limit)` / `loki_labels(label, namespace, since)` / `loki_patterns(selector, namespace, since)` - LogQL on the log store (lines, or series to count errors over time), its label names and values, log patterns; offered only where log search exists

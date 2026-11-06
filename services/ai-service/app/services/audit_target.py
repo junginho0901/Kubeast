@@ -62,7 +62,9 @@ def tool_target(tool: str, args: dict) -> ToolTarget:
     namespace = args.get("namespace") if isinstance(args.get("namespace"), str) and args.get("namespace") else None
     if tool == "alert_investigate":
         return ToolTarget("alert", args.get("alert_id") or args.get("alertname") or tool, namespace, None)
-    named = args.get("resource_name") or args.get("name") or args.get("pod_name")
+    if tool == "alerts_inbox" and args.get("alert_id"):
+        return ToolTarget("alert", args["alert_id"], None, None)
+    named =args.get("resource_name") or args.get("name") or args.get("pod_name")
     objects = [] if named else _manifest_objects(args)
     if not objects:
         return ToolTarget(args.get("resource_type") or "tool", named or tool, namespace, None)
