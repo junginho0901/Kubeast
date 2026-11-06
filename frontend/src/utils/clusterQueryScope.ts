@@ -1,3 +1,5 @@
+import type { QueryClient } from '@tanstack/react-query'
+
 // Which TanStack Query keys are scoped to a specific cluster (step 10).
 //
 // When the selected cluster changes we drop the cluster-scoped cache so the new
@@ -32,4 +34,11 @@ export function isClusterScopedQueryKey(queryKey: unknown): boolean {
   const head = queryKey[0]
   if (typeof head !== 'string') return false
   return !CLUSTER_INDEPENDENT_KEYS.has(head)
+}
+
+// dropClusterQueries empties the cluster-scoped cache when the selected cluster
+// changes. A query on screen asks again whether or not its component renders
+// again, so a fetch on its way at that moment does not leave the screen empty.
+export function dropClusterQueries(queryClient: QueryClient): Promise<void> {
+  return queryClient.resetQueries({ predicate: (q) => isClusterScopedQueryKey(q.queryKey) })
 }
