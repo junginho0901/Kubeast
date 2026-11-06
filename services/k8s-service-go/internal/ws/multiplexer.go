@@ -14,6 +14,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -48,11 +49,45 @@ type RequestMessage struct {
 
 // ResponseMessage is sent back to the client.
 type ResponseMessage struct {
-	Type  string      `json:"type"`            // "DATA" or "ERROR"
-	Path  string      `json:"path"`            // original path
-	Query string      `json:"query"`           // original query string
-	Data  interface{} `json:"data,omitempty"`  // watch event data
-	Error interface{} `json:"error,omitempty"` // error info
+	Type      string      `json:"type"`                // "DATA", "ERROR" or "RESYNC" (read the list again)
+	ClusterID string      `json:"clusterId,omitempty"` // the cluster its REQUEST named
+	Path      string      `json:"path"`                // original path
+	Query     string      `json:"query"`               // original query string
+	Data      interface{} `json:"data,omitempty"`      // watch event data
+	Error     interface{} `json:"error,omitempty"`     // error info
+}
+
+// frame answers r under the names it asked with, the one thing telling the same path on two clusters apart.
+func (r RequestMessage) frame(kind string) ResponseMessage {
+	return ResponseMessage{Type: kind, ClusterID: r.ClusterID, Path: r.Path, Query: r.Query}
+}
+
+func (r RequestMessage) errorFrame(message string) ResponseMessage {
+	f := r.frame("ERROR")
+	f.Error = map[string]string{"message": message}
+	return f
+}
+
+// send queues a frame unless ctx ends first: with a slow client or a dead writer the queue may never have room.
+func send(ctx context.Context, sendCh chan<- ResponseMessage, f ResponseMessage) bool {
+	select {
+	case sendCh <- f:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
+// pause waits d and reports whether ctx is still live.
+func pause(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-t.C:
+		return true
+	case <-ctx.Done():
+		return false
+	}
 }
 
 type subscription struct {
@@ -195,6 +230,11 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// Writer goroutine — DATA/ERROR 메시지 송신 + 25초마다 ping.
 	go func() {
+		// Nothing else drains sendCh: a dead writer has to end the connection, or what waits on the queue stays for good.
+		defer func() {
+			cancel()
+			_ = conn.Close()
+		}()
 		ticker := time.NewTicker(pingPeriod)
 		defer ticker.Stop()
 		for {
@@ -222,14 +262,13 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	var wsSubKeys []string
+	// This connection's live watches, under m.mu: the part of m.subs that counts against its own limit.
+	connSubs := make(map[string]*subscription)
 	defer func() {
 		m.mu.Lock()
-		for _, key := range wsSubKeys {
-			if sub, ok := m.subs[key]; ok {
-				sub.cancel()
-				delete(m.subs, key)
-			}
+		for key, sub := range connSubs {
+			sub.cancel()
+			delete(m.subs, key)
 		}
 		m.mu.Unlock()
 		slog.Info("ws disconnected", "id", wsID)
@@ -245,23 +284,18 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		if err := json.Unmarshal(message, &req); err != nil {
 			continue
 		}
-		req.ClusterID = subscriptionCluster(ctx, req.ClusterID)
+		clusterID := subscriptionCluster(ctx, req.ClusterID)
 
-		key := fmt.Sprintf("%s:%s:%s?%s", wsID, req.ClusterID, req.Path, req.Query)
+		key := fmt.Sprintf("%s:%s:%s?%s", wsID, clusterID, req.Path, req.Query)
 
 		switch req.Type {
 		case "REQUEST":
-			if !canWatchCluster(payload, req.ClusterID) {
-				sendCh <- ResponseMessage{
-					Type:  "ERROR",
-					Path:  req.Path,
-					Query: req.Query,
-					Error: map[string]string{"message": "forbidden: no access to cluster " + effectiveClusterID(req.ClusterID)},
-				}
+			if !canWatchCluster(payload, clusterID) {
+				send(ctx, sendCh, req.errorFrame("forbidden: no access to cluster "+effectiveClusterID(clusterID)))
 				continue
 			}
-			if reason := namespaceScopeRefusal(payload, effectiveClusterID(req.ClusterID), req.Path); reason != "" {
-				sendCh <- ResponseMessage{Type: "ERROR", Path: req.Path, Query: req.Query, Error: map[string]string{"message": reason}}
+			if reason := namespaceScopeRefusal(payload, effectiveClusterID(clusterID), req.Path); reason != "" {
+				send(ctx, sendCh, req.errorFrame(reason))
 				continue
 			}
 
@@ -273,62 +307,81 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Reject if this connection's or the global cap is reached
-			if len(wsSubKeys) >= maxPerConn || len(m.subs) >= maxTotal {
-				m.mu.Unlock()
+			if len(connSubs) >= maxPerConn || len(m.subs) >= maxTotal {
 				limit, scope := maxPerConn, "this connection"
-				if len(wsSubKeys) < maxPerConn {
+				if len(connSubs) < maxPerConn {
 					limit, scope = maxTotal, "the server"
 				}
-				sendCh <- ResponseMessage{
-					Type:  "ERROR",
-					Path:  req.Path,
-					Query: req.Query,
-					Error: map[string]string{"message": fmt.Sprintf("max subscriptions reached for %s (%d), cannot create new watch", scope, limit)},
-				}
+				m.mu.Unlock()
+				send(ctx, sendCh, req.errorFrame(fmt.Sprintf("max subscriptions reached for %s (%d), cannot create new watch", scope, limit)))
 				continue
 			}
 
 			subCtx, subCancel := context.WithCancel(ctx)
 			// Carry the target cluster so the watch hits the right cluster.
-			if req.ClusterID != "" {
-				subCtx = cluster.WithID(subCtx, cluster.ID(req.ClusterID))
+			if clusterID != "" {
+				subCtx = cluster.WithID(subCtx, cluster.ID(clusterID))
 			}
-			m.subs[key] = &subscription{cancel: subCancel}
-			wsSubKeys = append(wsSubKeys, key)
+			sub := &subscription{cancel: subCancel}
+			m.subs[key] = sub
+			connSubs[key] = sub
 			m.mu.Unlock()
 
-			go m.runWatch(subCtx, req.Path, req.Query, sendCh)
+			go func() {
+				defer m.forgetSubscription(key, sub, connSubs)
+				m.runWatch(subCtx, req, sendCh)
+			}()
 
 		case "CLOSE":
 			m.mu.Lock()
-			if sub, ok := m.subs[key]; ok {
+			if sub, ok := connSubs[key]; ok {
 				sub.cancel()
 				delete(m.subs, key)
+				delete(connSubs, key)
 			}
 			m.mu.Unlock()
 		}
 	}
 }
 
-func (m *Multiplexer) runWatch(ctx context.Context, path, queryStr string, sendCh chan<- ResponseMessage) {
-	resource, namespace, err := parsePath(path)
+// forgetSubscription frees the place of a watch that has ended, unless a later REQUEST of the same key already holds it.
+func (m *Multiplexer) forgetSubscription(key string, sub *subscription, connSubs map[string]*subscription) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	sub.cancel()
+	if m.subs[key] == sub {
+		delete(m.subs, key)
+		delete(connSubs, key)
+	}
+}
+
+// resourceVersionExpired is the API server saying a watch cannot resume from the version it was asked for.
+func resourceVersionExpired(err error) bool {
+	return apierrors.IsResourceExpired(err) || apierrors.IsGone(err)
+}
+
+func (m *Multiplexer) runWatch(ctx context.Context, req RequestMessage, sendCh chan<- ResponseMessage) {
+	resource, namespace, err := parsePath(req.Path)
 	if err != nil {
-		sendCh <- ResponseMessage{Type: "ERROR", Path: path, Query: queryStr, Error: map[string]string{"message": err.Error()}}
+		send(ctx, sendCh, req.errorFrame(err.Error()))
 		return
 	}
 
-	params := parseQuery(queryStr)
+	params := parseQuery(req.Query)
 	labelSelector := params["labelSelector"]
 	fieldSelector := params["fieldSelector"]
 
 	gvr, ok := resourceToGVR(resource)
 	if !ok {
-		sendCh <- ResponseMessage{Type: "ERROR", Path: path, Query: queryStr, Error: map[string]string{"message": "unsupported resource: " + resource}}
+		send(ctx, sendCh, req.errorFrame("unsupported resource: "+resource))
 		return
 	}
 	gvr = m.servedVersion(ctx, gvr)
 
 	var lastResourceVersion string
+	// A watch from no version sends the objects there are, not those deleted since, so the client has to read its list
+	// again (Kubernetes API Concepts, "410 Gone responses").
+	resync := false
 
 	for {
 		if ctx.Err() != nil {
@@ -336,17 +389,19 @@ func (m *Multiplexer) runWatch(ctx context.Context, path, queryStr string, sendC
 		}
 
 		opts := metav1.ListOptions{
-			Watch:           true,
-			TimeoutSeconds:  int64Ptr(300),
-			ResourceVersion: lastResourceVersion,
-			LabelSelector:   labelSelector,
-			FieldSelector:   fieldSelector,
+			Watch: true,
+			// Keeps the version to resume from recent on a quiet list, where the last event's may be long expired.
+			AllowWatchBookmarks: true,
+			TimeoutSeconds:      int64Ptr(300),
+			ResourceVersion:     lastResourceVersion,
+			LabelSelector:       labelSelector,
+			FieldSelector:       fieldSelector,
 		}
 
 		dyn := m.provider.DynamicForCtx(ctx)
 		if dyn == nil {
 			slog.Warn("watch skipped: kubeconfig not loaded", "resource", resource)
-			sendCh <- ResponseMessage{Type: "ERROR", Path: path, Query: queryStr, Error: map[string]string{"message": "kubeconfig not loaded"}}
+			send(ctx, sendCh, req.errorFrame("kubeconfig not loaded"))
 			return
 		}
 		var watcher watch.Interface
@@ -356,52 +411,88 @@ func (m *Multiplexer) runWatch(ctx context.Context, path, queryStr string, sendC
 			watcher, err = dyn.Resource(gvr).Watch(ctx, opts)
 		}
 		if err != nil {
+			// Canceled while connecting: nobody is waiting for this watch, so it is no failure to report.
+			if ctx.Err() != nil {
+				return
+			}
+			if lastResourceVersion != "" && resourceVersionExpired(err) {
+				lastResourceVersion, resync = "", true
+				continue
+			}
 			slog.Warn("watch failed", "resource", resource, "err", err)
-			sendCh <- ResponseMessage{Type: "ERROR", Path: path, Query: queryStr, Error: map[string]string{"message": err.Error()}}
-			time.Sleep(5 * time.Second)
+			if !send(ctx, sendCh, req.errorFrame(err.Error())) || !pause(ctx, 5*time.Second) {
+				return
+			}
 			continue
 		}
 
-		for event := range watcher.ResultChan() {
-			if ctx.Err() != nil {
+		// Only now that the new watch is on: what is deleted after the client reads its list still reaches it as an event.
+		if resync {
+			resync = false
+			if !send(ctx, sendCh, req.frame("RESYNC")) {
 				watcher.Stop()
 				return
 			}
-
-			obj, ok := event.Object.(*unstructured.Unstructured)
-			if !ok {
-				continue
-			}
-
-			rv := obj.GetResourceVersion()
-			if rv != "" {
-				lastResourceVersion = rv
-			}
-
-			// gvr.Resource 가 정식 K8s 이름 (e.g. "persistentvolumes").
-			// resource 변수는 path 의 raw segment 라 alias ("pvs", "pvcs") 가
-			// 그대로 넘어옴 → objectToInfo switch 에 case 없어 default
-			// genericToInfo 가 호출되어 partial object 만 보내는 버그.
-			// 정식 이름 사용으로 매번 정확한 *ToInfo 호출 보장.
-			info := objectToInfo(gvr.Resource, obj)
-
-			sendCh <- ResponseMessage{
-				Type:  "DATA",
-				Path:  path,
-				Query: queryStr,
-				Data: map[string]interface{}{
-					"type":   string(event.Type),
-					"object": info,
-				},
-			}
 		}
+
+		expired := forwardEvents(ctx, watcher, req, gvr.Resource, &lastResourceVersion, sendCh)
 
 		// Watch ended, retry
 		if ctx.Err() != nil {
 			return
 		}
-		time.Sleep(1 * time.Second)
+		if expired && lastResourceVersion != "" {
+			lastResourceVersion, resync = "", true
+		}
+		if !pause(ctx, time.Second) {
+			return
+		}
 	}
+}
+
+// forwardEvents sends a watch's events until it ends, moving resourceVersion along, and reports whether the API server
+// said that version has expired.
+func forwardEvents(ctx context.Context, watcher watch.Interface, req RequestMessage, resource string, resourceVersion *string, sendCh chan<- ResponseMessage) bool {
+	defer watcher.Stop()
+	for event := range watcher.ResultChan() {
+		if ctx.Err() != nil {
+			return false
+		}
+
+		// The dynamic client decodes this event's object to a Status, not to the resource's kind.
+		if event.Type == watch.Error {
+			err := apierrors.FromObject(event.Object)
+			if resourceVersionExpired(err) {
+				return true
+			}
+			slog.Warn("watch error event", "resource", resource, "err", err)
+			continue
+		}
+
+		obj, ok := event.Object.(*unstructured.Unstructured)
+		if !ok {
+			continue
+		}
+
+		rv := obj.GetResourceVersion()
+		if rv != "" {
+			*resourceVersion = rv
+		}
+		if event.Type == watch.Bookmark {
+			continue
+		}
+
+		// resource is gvr.Resource: the path's own segment may be an alias ("pvs"), which objectToInfo would send as a partial object.
+		f := req.frame("DATA")
+		f.Data = map[string]interface{}{
+			"type":   string(event.Type),
+			"object": objectToInfo(resource, obj),
+		}
+		if !send(ctx, sendCh, f) {
+			return false
+		}
+	}
+	return false
 }
 
 // parsePath extracts resource type and optional namespace from K8s API path.

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { watchMultiplexer } from './watchMultiplexer'
 import { getCurrentClusterID } from './clusterRef'
 
@@ -51,6 +51,34 @@ export function scopedPaths(path: string, scope: string[] | undefined): string[]
   return scope.map((ns) => `${path.slice(0, cut)}/namespaces/${ns}${path.slice(cut)}`)
 }
 
+// applyWatchMessage is what one frame of a subscription does to the list it feeds.
+export function applyWatchMessage(
+  queryClient: QueryClient,
+  queryKey: any[],
+  message: any,
+  applyEvent?: (prev: any[] | undefined, event: WatchEvent) => any[],
+  onEvent?: (event: WatchEvent) => void,
+) {
+  // The rows stay on screen until the list answers.
+  if (message?.type === 'RESYNC') {
+    void queryClient.invalidateQueries({ queryKey })
+    return
+  }
+  if (message?.type !== 'DATA') return
+  const event = message?.data as WatchEvent
+  queryClient.setQueryData(queryKey, (prev: any[] | undefined) => {
+    // list 가 도착하기 전 (prev=undefined) 의 watch event 는 무시.
+    // K8s watch with resourceVersion="" 는 LIST 의 모든 item 을 ADDED
+    // event 로 stream 하는데, list 응답보다 일부 event 가 먼저 도착하면
+    // setQueryData 가 빈 prev → 부분 array 를 만들어 useQuery 의 list
+    // 응답을 race 로 덮어쓰거나 partial render 발생. list 가 정상적으로
+    // 도착하면 그 시점부터의 watch event 만 apply 해야 정합성 유지.
+    if (prev === undefined) return undefined
+    return (applyEvent ?? applyWatchEvent)(prev, event)
+  })
+  onEvent?.(event)
+}
+
 export function useKubeWatchList(options: {
   enabled: boolean
   queryKey: any[]
@@ -86,21 +114,7 @@ export function useKubeWatchList(options: {
     // the list this subscription feeds; a later key gets its own subscription
     const queryKey = queryKeyRef.current
 
-    const handle = (message: any) => {
-      if (message?.type !== 'DATA') return
-      const event = message?.data as WatchEvent
-      queryClient.setQueryData(queryKey, (prev: any[] | undefined) => {
-        // list 가 도착하기 전 (prev=undefined) 의 watch event 는 무시.
-        // K8s watch with resourceVersion="" 는 LIST 의 모든 item 을 ADDED
-        // event 로 stream 하는데, list 응답보다 일부 event 가 먼저 도착하면
-        // setQueryData 가 빈 prev → 부분 array 를 만들어 useQuery 의 list
-        // 응답을 race 로 덮어쓰거나 partial render 발생. list 가 정상적으로
-        // 도착하면 그 시점부터의 watch event 만 apply 해야 정합성 유지.
-        if (prev === undefined) return undefined
-        return (applyEventRef.current ?? applyWatchEvent)(prev, event)
-      })
-      onEventRef.current?.(event)
-    }
+    const handle = (message: any) => applyWatchMessage(queryClient, queryKey, message, applyEventRef.current, onEventRef.current)
 
     // Unsubscribed by message, not by the function subscribe resolves to: that
     // comes only once the socket is open, and a cleanup before it (the key
