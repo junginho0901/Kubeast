@@ -589,12 +589,13 @@ func handleNodesLog(ctx context.Context, args map[string]interface{}, headers ht
 			fmt.Sprintf("The kubelet on %s ignores log queries: enableSystemLogQuery is off, so /logs/ only lists files. Set enableSystemLogQuery: true (with enableSystemLogHandler: true) in the kubelet configuration — the NodeLogQuery feature is GA since Kubernetes 1.36.", node),
 			nodesAlternative)
 	}
-	textLines := splitLines(trimmed)
 	truncated := false
 	if len(trimmed) > nodeLogTextCap {
-		trimmed = trimmed[:nodeLogTextCap] + fmt.Sprintf(truncatedMarker, nodeLogTextCap)
+		// a log ends with its newest line
+		trimmed = endOfText(trimmed, nodeLogTextCap)
 		truncated = true
 	}
+	textLines := splitLines(trimmed)
 	result := map[string]interface{}{
 		"node":           node,
 		"source":         source,

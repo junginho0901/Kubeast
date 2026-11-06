@@ -12,6 +12,7 @@ import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Plus, RefreshCw } from 'lucide-react'
 import {
+  hasAttachmentError,
   parseAgeSeconds,
   statusLabel,
   type SortKey,
@@ -83,7 +84,7 @@ export default function VolumeAttachments() {
     let errors = 0
 
     for (const va of filteredVolumeAttachments) {
-      if (va.attach_error?.message || va.detach_error?.message) errors += 1
+      if (hasAttachmentError(va)) errors += 1
       if (va.attached === true) attached += 1
       if (va.attached === false) detached += 1
     }
@@ -162,7 +163,7 @@ export default function VolumeAttachments() {
   const aiSnapshot = useMemo(() => {
     if (!Array.isArray(volumeAttachments)) return null
     const total = volumeAttachments.length
-    const withError = volumeAttachments.filter((v) => !!(v.attach_error || v.detach_error)).length
+    const withError = volumeAttachments.filter(hasAttachmentError).length
     const prefix = withError > 0 ? '⚠️ ' : ''
     return {
       source: 'base' as const,
@@ -176,10 +177,7 @@ export default function VolumeAttachments() {
           pageSize: rowsPerPage,
           topN: rowsPerPage,
           pickFields: ['name', 'attacher', 'persistent_volume_name', 'node_name', 'attached', 'attach_error', 'detach_error'],
-          filterProblematic: (v) => {
-            const va = v as unknown as VolumeAttachmentInfo
-            return !!(va.attach_error || va.detach_error)
-          },
+          filterProblematic: (v) => hasAttachmentError(v as unknown as VolumeAttachmentInfo),
           linkBuilder: (v) => {
             const va = v as unknown as VolumeAttachmentInfo
             return buildResourceLink('VolumeAttachment', undefined, va.name)

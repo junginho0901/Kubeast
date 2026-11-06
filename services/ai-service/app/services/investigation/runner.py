@@ -170,7 +170,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
             try:
                 raw = await asyncio.wait_for(service._execute_function_with_context(name, args, context), timeout=remaining())
                 formatted, _is_json, _is_yaml = formatters._format_tool_result(name, args, raw)
-                result = formatters._truncate_tool_result_for_llm(formatted, limits.tool_result_chars(service))
+                result = formatters._truncate_tool_result_for_llm(formatted, limits.tool_result_chars(service), tool=name)
                 entry["result_chars"] = len(formatted)
                 # a refusal or an error the tool answered with, read as the chat reads it
                 _outcome, problem, _status = tool_outcome(raw)

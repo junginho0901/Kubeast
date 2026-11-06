@@ -248,11 +248,14 @@ export default function ResourceGraph() {
       _link: buildResourceLink(n.kind, n.namespace, n.name),
     }))
     const problematicCount = filteredNodes.filter(isProblem).length
+    // the page's notice in the floating chat: a kind left out because the cluster refuses it is not a kind with no objects
+    const refusedKinds = graphData.forbidden_kinds ?? []
 
     return {
       source: 'base' as const,
-      summary: `리소스 그래프 · ${nsArray?.join(', ') ?? '선택 없음'} · 노드 ${totalNodes}개 중 ${shown.nodes}개, 엣지 ${totalEdges}개 중 ${shown.edges}개 표시${problematicCount > 0 ? `, 문제 ${problematicCount}` : ''}`,
+      summary: `리소스 그래프 · ${nsArray?.join(', ') ?? '선택 없음'} · 노드 ${totalNodes}개 중 ${shown.nodes}개, 엣지 ${totalEdges}개 중 ${shown.edges}개 표시${problematicCount > 0 ? `, 문제 ${problematicCount}` : ''}${refusedKinds.length ? ` · 볼 권한 없는 종류: ${refusedKinds.join(', ')}` : ''}`,
       data: {
+        forbidden_kinds: refusedKinds.length ? refusedKinds : undefined,
         filters: {
           namespaces: nsArray,
           kind_filters: Array.from(kindFilters),

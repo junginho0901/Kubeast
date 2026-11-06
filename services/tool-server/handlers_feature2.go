@@ -139,6 +139,7 @@ func cutHygieneReport(report map[string]interface{}, args map[string]interface{}
 // filtered result rows of PolicyReport / ClusterPolicyReport.
 func handlePolicyReports(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
 	view := argString(args, "view", policyDefaultTop)
+	offset := max(argInt(args, "offset", 0), 0)
 	q := url.Values{}
 	if ns := argString(args, "namespace", ""); ns != "" {
 		q.Set("namespace", ns)
@@ -146,7 +147,7 @@ func handlePolicyReports(ctx context.Context, args map[string]interface{}, heade
 	path := "/policyreports/summary"
 	if view == "results" {
 		path = "/policyreports/results"
-		for arg, param := range map[string]string{"policy": "policy", "kind": "kind", "search": "search", "results": "result", "severities": "severity"} {
+		for arg, param := range map[string]string{"policy": "policy", "policy_source": "source", "kind": "kind", "search": "search", "results": "result", "severities": "severity", "sort": "sort", "dir": "dir"} {
 			if v := strings.TrimSpace(argString(args, arg, "")); v != "" {
 				q.Set(param, v)
 			}
@@ -156,6 +157,9 @@ func handlePolicyReports(ctx context.Context, args map[string]interface{}, heade
 			limit = policyRowsCap
 		}
 		q.Set("limit", strconv.Itoa(limit))
+		if offset > 0 {
+			q.Set("offset", strconv.Itoa(offset))
+		}
 	}
 	status, body, err := k8sServiceGet(ctx, headers, path, q)
 	if err != nil {
@@ -173,14 +177,20 @@ func handlePolicyReports(ctx context.Context, args map[string]interface{}, heade
 	reply["view"] = view
 	if view == "results" {
 		capList(reply, "rows", policyRowsCap)
-		if total, _ := reply["total"].(float64); total == 0 {
+		total, _ := reply["total"].(float64)
+		if total == 0 {
 			reply["hint"] = "No result matched. Widen the filter (results pass,fail,warn,error,skip; drop policy/kind) or check the namespace."
 		}
-	} else {
-		capList(reply, "policies", rowsCap)
-		capList(reply, "namespaces", rowsCap)
+		rows, _ := reply["rows"].([]interface{})
+		if next := offset + len(rows); len(rows) > 0 && next < int(total) {
+			reply["next_offset"] = next
+		}
+		// the counts first: a model's cut of a long answer keeps the start
+		return marshalOrdered(reply, []string{"view", "total", "next_offset", "truncated", "rows_total", "scoped", "generated_at", "hint"}, []string{"rows"})
 	}
-	return marshalJSON(reply)
+	capList(reply, "policies", rowsCap)
+	capList(reply, "namespaces", rowsCap)
+	return marshalOrdered(reply, []string{"view", "totals", "reports", "truncated", "scoped", "generated_at", "policies_total", "namespaces_total"}, []string{"policies", "namespaces"})
 }
 
 var helmWhat = map[string]bool{"list": true, "get": true, "values": true, "manifest": true, "notes": true, "hooks": true, "history": true, "resources": true, "images": true, "diff": true, "revision": true}
@@ -291,6 +301,25 @@ func handleHelmRead(ctx context.Context, args map[string]interface{}, headers ht
 
 // handleCost: OpenCost allocation by namespace or controller for a window,
 // narrowed to a namespace or the caller's granted namespaces.
+// sumRows adds up the rows for each number of the route's totals, so a narrowed list and its totals agree.
+func sumRows(rows []interface{}, totals interface{}) interface{} {
+	route, ok := totals.(map[string]interface{})
+	if !ok {
+		return totals
+	}
+	summed := make(map[string]interface{}, len(route))
+	for key := range route {
+		sum := 0.0
+		for _, r := range rows {
+			row, _ := r.(map[string]interface{})
+			value, _ := row[key].(float64)
+			sum += value
+		}
+		summed[key] = sum
+	}
+	return summed
+}
+
 func handleCost(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
 	window := argString(args, "window", costDefaultWin)
 	aggregate := argString(args, "aggregate", "namespace")
@@ -328,6 +357,9 @@ func handleCost(ctx context.Context, args map[string]interface{}, headers http.H
 			kept = append(kept, r)
 		}
 		reply["rows"] = kept
+		if namespace != "" {
+			reply["totals"] = sumRows(kept, reply["totals"])
+		}
 	}
 	capList(reply, "rows", rowsCap)
 	reply["window"] = window
@@ -391,11 +423,16 @@ func handleCanI(ctx context.Context, args map[string]interface{}, headers http.H
 	q := url.Values{"verb": {verb}, "resource": {resource}}
 	group := argString(args, "group", "")
 	namespace := argString(args, "namespace", "")
+	name := argString(args, "name", "")
 	if group != "" {
 		q.Set("group", group)
 	}
 	if namespace != "" {
 		q.Set("namespace", namespace)
+	}
+	// an RBAC rule with resourceNames answers for one object what it refuses for the kind
+	if name != "" {
+		q.Set("name", name)
 	}
 	status, body, err := k8sServiceGet(ctx, headers, "/can-i", q)
 	if err != nil {
@@ -411,6 +448,9 @@ func handleCanI(ctx context.Context, args map[string]interface{}, headers http.H
 	reply["namespace"] = namespaceOrAll(namespace)
 	if namespace == "" {
 		reply["namespace"] = "cluster scope"
+	}
+	if name != "" {
+		reply["name"] = name
 	}
 	reply["note"] = "Answered by the cluster for the signed-in user (their RBAC), not for Kubeast's own identity."
 	return marshalJSON(reply)

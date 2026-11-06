@@ -619,7 +619,7 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
         summed = charts.chart_from_result({"chart": True}, function_response)
         if summed is not None:
             return events, log_entry, charts.for_model(summed, shown_to_user=False)
-    return events, log_entry, formatters._truncate_tool_result_for_llm(formatted_result, result_chars)
+    return events, log_entry, formatters._truncate_tool_result_for_llm(formatted_result, result_chars, tool=function_name)
 
 
 async def session_chat_stream(
