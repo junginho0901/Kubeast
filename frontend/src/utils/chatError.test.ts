@@ -40,6 +40,19 @@ describe('chatErrorText', () => {
     }
   })
 
+  it('says in the screen language how a stream ended without an answer', async () => {
+    const ko_t = await tFor('ko')
+    expect(chatErrorText(ko_t, 'x', 'streamHttp', { status: 503, detail: 'audit unavailable' })).toBe('채팅 요청이 실패했습니다 (HTTP 503): audit unavailable')
+    expect(chatErrorText(ko_t, 'x', 'streamHttpStatus', { status: 502 })).toBe('채팅 요청이 실패했습니다 (HTTP 502).')
+    expect(chatErrorText(ko_t, 'x', 'streamCut')).toBe('답변이 끝나기 전에 연결이 끊겼습니다. 위 내용은 일부일 수 있습니다. 전체 답변이 필요하면 다시 질문하세요.')
+    expect(chatErrorText(ko_t, 'x', 'streamEmpty')).toBe('답변 없이 연결이 끊겼습니다. 다시 질문하세요.')
+    const en_t = await tFor('en')
+    expect(chatErrorText(en_t, 'x', 'streamHttp', { status: 503, detail: 'audit unavailable' })).toBe('The chat request failed (HTTP 503): audit unavailable')
+    expect(chatErrorText(en_t, 'x', 'streamHttpStatus', { status: 502 })).toBe('The chat request failed (HTTP 502).')
+    expect(chatErrorText(en_t, 'x', 'streamCut')).toContain('before the answer finished')
+    expect(chatErrorText(en_t, 'x', 'streamEmpty')).toContain('without an answer')
+  })
+
   it('shows other errors as they came, and the server text for a key the catalog does not know', async () => {
     const t = await tFor('ko')
     expect(chatErrorText(t, 'upstream timeout')).toBe('upstream timeout')

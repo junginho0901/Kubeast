@@ -35,7 +35,9 @@ export function useChatStreamSync({
   setMessages,
 }: Args) {
   useEffect(() => {
-    if (streamState.status !== 'streaming') return
+    // A failed answer's last letters and tool block join its bubble here, before useStreamEndSync settles it.
+    const coming = streamState.status === 'streaming'
+    if (!coming && streamState.status !== 'error') return
     if (!streamState.sessionId) return
     if (selectedSessionId !== streamState.sessionId) return
     if (viewSessionId !== selectedSessionId) return
@@ -53,6 +55,8 @@ export function useChatStreamSync({
         }
         return updated
       }
+
+      if (!coming) return prev
 
       // DB에는 아직 assistant 메시지가 없을 수 있으므로, 임시 assistant 메시지를 추가한다.
       const nextMessages = [...prev]

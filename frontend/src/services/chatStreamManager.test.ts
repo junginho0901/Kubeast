@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { appendToolBlock, ChatStreamManager, nthToolBlock, resultTarget, withToolAccess, withToolResult } from './chatStreamManager'
+import { appendToolBlock, ChatStreamManager, resultTarget, withToolAccess, withToolResult } from './chatStreamManager'
 import { accessLine, accessSection, requestsBlock } from './toolAccess'
 
 describe('pairing a tool result with its call', () => {
@@ -22,16 +22,6 @@ describe('pairing a tool result with its call', () => {
     expect(resultTarget(old, 'logsearch', undefined)).toBe(-1)
   })
 
-  it('finds the n-th tool block, so two calls of one tool fill their own blocks', () => {
-    const block = (n: string) => `<details>\n<summary>🔧 <strong>${n}</strong></summary>\n\nExecuting...\n\n</details>\n`
-    const content = block('prometheus_query') + block('issues') + block('prometheus_query')
-    const third = nthToolBlock(content, 2)
-    expect(content.slice(third)).toContain('prometheus_query')
-    expect(content.slice(0, third).split('<summary>🔧').length - 1).toBe(2)
-    expect(nthToolBlock(content, 0)).toBe(content.indexOf('<summary>🔧'))
-    expect(nthToolBlock(content, 3)).toBe(-1)
-    expect(nthToolBlock(content, -1)).toBe(-1)
-  })
 })
 
 describe('one answer in the order it came', () => {
@@ -44,12 +34,12 @@ describe('one answer in the order it came', () => {
     expect(appendToolBlock(block('a'), block('b'))).toBe(block('a').trimEnd() + '\n\n' + block('b'))
   })
 
-  it('fills the n-th block with its result and leaves the text around it', () => {
+  it('fills the block at a position with its result and leaves the text around it', () => {
     const content = 'First.\n\n' + block('a') + 'Then.\n\n' + block('a') + 'Executing... is a word here.'
-    const filled = withToolResult(content, 1, '```\nsecond\n```')
+    const second = ('First.\n\n' + block('a') + 'Then.\n\n').length
+    const filled = withToolResult(content, second, '```\nsecond\n```')
     expect(filled).toBe('First.\n\n' + block('a') + 'Then.\n\n' + block('a').replace('Executing...', '```\nsecond\n```')
       + 'Executing... is a word here.')
-    expect(withToolResult(content, 2, 'x')).toBe(content)
   })
 })
 
@@ -155,6 +145,231 @@ describe('the stream manager keeps text and tool blocks in arrival order', () =>
   })
 })
 
+describe('how an answer ends', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  const sse = (...events: unknown[]) => events.map((e) => `data: ${typeof e === 'string' ? e : JSON.stringify(e)}\n\n`).join('')
+
+  async function ended(response: Response | (() => Response)) {
+    vi.useFakeTimers()
+    vi.stubGlobal('window', globalThis)
+    vi.stubGlobal('fetch', vi.fn(async () => (typeof response === 'function' ? response() : response)))
+    const manager = new ChatStreamManager({ bodyJson: true })
+    await manager.startSessionChat('s1', 'how many?')
+    await vi.runAllTimersAsync()
+    return manager.getState()
+  }
+
+  it('an answer that ends with [DONE] is complete, with no error', async () => {
+    const state = await ended(new Response(sse({ content: 'Two clusters.' }, '[DONE]')))
+    expect(state).toMatchObject({ status: 'completed', isStreaming: false, content: 'Two clusters.', error: null, errorKey: null, streamingPhase: null })
+  })
+
+  it('a [DONE] on the last line without its line end is still the end', async () => {
+    const state = await ended(new Response(`${sse({ content: 'Two clusters.' })}data: [DONE]`))
+    expect(state).toMatchObject({ status: 'completed', content: 'Two clusters.', error: null })
+  })
+
+  it('a refused request is an error that says the status and the reason', async () => {
+    const state = await ended(new Response('{"detail":"audit unavailable"}', { status: 503 }))
+    expect(state).toMatchObject({
+      status: 'error',
+      isStreaming: false,
+      streamingPhase: null,
+      content: '',
+      userMessage: 'how many?',
+      error: 'HTTP 503: audit unavailable',
+      errorKey: 'streamHttp',
+      errorArgs: { status: 503, detail: 'audit unavailable' },
+    })
+  })
+
+  it.each([
+    ['a page from a proxy', '<html><body>Bad Gateway</body></html>', 502],
+    ['no body', '', 500],
+    ['a detail that is no sentence', '{"detail":[{"loc":["body"],"msg":"x"}]}', 422],
+  ])('a refused request with %s says the status alone', async (_name, body, status) => {
+    const state = await ended(new Response(body, { status }))
+    expect(state).toMatchObject({ status: 'error', error: `HTTP ${status}`, errorKey: 'streamHttpStatus', errorArgs: { status } })
+  })
+
+  it('a long reason is cut', async () => {
+    const state = await ended(new Response(JSON.stringify({ detail: 'x'.repeat(5000) }), { status: 500 }))
+    expect(state.errorArgs).toEqual({ status: 500, detail: 'x'.repeat(300) })
+  })
+
+  it('a stream that closes without [DONE] is an error and keeps every letter it brought', async () => {
+    const state = await ended(new Response(sse({ content: 'partial ' }, { content: 'answer' })))
+    expect(state).toMatchObject({ status: 'error', isStreaming: false, streamingPhase: null, content: 'partial answer', userMessage: 'how many?', errorKey: 'streamCut' })
+    expect(state.error).toContain('before the answer finished')
+  })
+
+  it('a stream that closes while a tool runs keeps the block', async () => {
+    const state = await ended(new Response(sse({ content: 'Checking.' }, { function: 'list_clusters', args: {}, call_id: 0 })))
+    expect(state).toMatchObject({ status: 'error', errorKey: 'streamCut' })
+    expect(state.content.startsWith('Checking.\n\n<details>')).toBe(true)
+    expect(state.content).toContain('<strong>list_clusters</strong>')
+    expect(state.toolCalls.map((tc) => tc.function)).toEqual(['list_clusters'])
+  })
+
+  it.each([
+    ['an empty body', ''],
+    ['only the model and usage lines', sse({ model_info: { provider: 'p', model: 'm' } }, { usage: { total_tokens: 1 } })],
+    ['a line that is no event', 'hello\n\n'],
+    ['half an event', 'data: {"content":"par'],
+    ['a sign-in page answered with 200', '<!doctype html><html></html>'],
+  ])('a 200 with %s is an error, not an empty answer', async (_name, body) => {
+    const state = await ended(new Response(body))
+    expect(state).toMatchObject({ status: 'error', isStreaming: false, content: '', errorKey: 'streamEmpty' })
+    expect(state.error).toContain('without an answer')
+  })
+
+  it("a server's refusal keeps its own text and the letters before it", async () => {
+    const state = await ended(new Response(sse({ content: 'Checking.' }, { error: 'AI model call failed', error_key: 'modelCall', error_args: { provider: 'p', detail: 'd' } }, '[DONE]')))
+    expect(state).toMatchObject({ status: 'error', content: 'Checking.', error: 'AI model call failed', errorKey: 'modelCall', errorArgs: { provider: 'p', detail: 'd' } })
+  })
+
+  it('a connection that breaks part way keeps the letters', async () => {
+    let reads = 0
+    const state = await ended(new Response(new ReadableStream({
+      pull(controller) {
+        if (reads++ === 0) controller.enqueue(new TextEncoder().encode(sse({ content: 'partial' })))
+        else controller.error(new TypeError('network error'))
+      },
+    })))
+    expect(state).toMatchObject({ status: 'error', isStreaming: false, content: 'partial', error: 'TypeError: network error', errorKey: null })
+  })
+
+  it('a stopped answer stays stopped, with no error, also when the stream ends right after', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('window', globalThis)
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(sse({ content: 'part of it' })))
+        init.signal?.addEventListener('abort', () => controller.error(new DOMException('Aborted', 'AbortError')))
+      },
+    }))))
+    const manager = new ChatStreamManager({ bodyJson: true })
+    const running = manager.startSessionChat('s1', 'how many?')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(manager.getState().status).toBe('streaming')
+    await manager.stop()
+    await running
+    await vi.runAllTimersAsync()
+    expect(manager.getState()).toMatchObject({ status: 'aborted', isStreaming: false, content: 'part of it', error: null, errorKey: null })
+  })
+
+  it('a refusal whose body is still coming when the answer is stopped stays stopped', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('window', globalThis)
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => new Response(new ReadableStream({
+      start(controller) {
+        init.signal?.addEventListener('abort', () => controller.error(new DOMException('Aborted', 'AbortError')))
+      },
+    }), { status: 503 })))
+    const manager = new ChatStreamManager({ bodyJson: true })
+    const running = manager.startSessionChat('s1', 'how many?')
+    await vi.advanceTimersByTimeAsync(0)
+    await manager.stop()
+    await running
+    expect(manager.getState()).toMatchObject({ status: 'aborted', isStreaming: false, error: null })
+  })
+
+  it('the next question starts clean after a failed one', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('window', globalThis)
+    const answers = [new Response('{"detail":"audit unavailable"}', { status: 503 }), new Response(sse({ content: 'Two clusters.' }, '[DONE]'))]
+    vi.stubGlobal('fetch', vi.fn(async () => answers.shift()))
+    const manager = new ChatStreamManager({ bodyJson: true })
+    await manager.startSessionChat('s1', 'how many?')
+    await vi.runAllTimersAsync()
+    expect(manager.getState().status).toBe('error')
+    await manager.startSessionChat('s1', 'and now?')
+    await vi.runAllTimersAsync()
+    expect(manager.getState()).toMatchObject({ status: 'completed', content: 'Two clusters.', userMessage: 'and now?', error: null, errorKey: null, errorArgs: null })
+  })
+})
+
+describe('each tool result and 🔐 line goes to its own block', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  const access = { cluster: 'self', kind: 'person', user: 'a@example.test', groups: [], role: 'Read', impersonation: true, mode: 'read' }
+  const line = accessLine(access)
+  const HEAD = '<summary>🔧 <strong>written</strong></summary>\n'
+
+  async function run(events: unknown[]) {
+    vi.useFakeTimers()
+    vi.stubGlobal('window', globalThis)
+    const body = [...events, '[DONE]'].map((e) => `data: ${typeof e === 'string' ? e : JSON.stringify(e)}\n\n`).join('')
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(body)))
+    const manager = new ChatStreamManager({ bodyJson: true })
+    await manager.startSessionChat('s1', 'q')
+    await vi.runAllTimersAsync()
+    return manager.getState().content
+  }
+
+  // the block of a tool as the stream fills it, from its name to its closing tag
+  const blockOf = (content: string, name: string) => {
+    const start = content.indexOf(`<details>\n<summary>🔧 <strong>${name}</strong>`)
+    expect(start).not.toBe(-1)
+    return content.slice(start, content.indexOf('</details>\n\n</details>', start))
+  }
+
+  it("a tool's name in an earlier result does not take the next call's 🔐 line", async () => {
+    const earlier = `a log line\n${HEAD}another line`
+    const c = await run([
+      { function: 'first', args: {}, call_id: 0 },
+      { function_result: 'first', result: earlier, call_id: 0 },
+      { function: 'second', args: {}, call_id: 1 },
+      { function_result: 'second', result: 'its result', call_id: 1, access },
+    ])
+    expect(blockOf(c, 'first')).toContain(`\`\`\`\n${earlier}\n\`\`\``)
+    expect(blockOf(c, 'first')).not.toContain('🔐')
+    expect(blockOf(c, 'second')).toContain(`<summary>🔧 <strong>second</strong></summary>\n\n${line}\n`)
+    expect(blockOf(c, 'second')).toContain('```\nits result\n```')
+    expect(c).not.toContain('Executing...')
+  })
+
+  it("a tool's name in the answer's own text does not take the first call's 🔐 line", async () => {
+    const text = `Looking for ${HEAD}in the logs.`
+    const c = await run([
+      { content: text },
+      { function: 'first', args: {}, call_id: 0 },
+      { function_result: 'first', result: 'its result', call_id: 0, access },
+    ])
+    expect(c.startsWith(`${text}\n\n<details>`)).toBe(true)
+    expect(blockOf(c, 'first')).toContain(`<summary>🔧 <strong>first</strong></summary>\n\n${line}\n`)
+    expect(c.split('🔐').length - 1).toBe(1)
+  })
+
+  it("the answer's text after a call does not move the later blocks", async () => {
+    const c = await run([
+      { function: 'first', args: {}, call_id: 0 },
+      { content: `Then ${HEAD}more.` },
+      { function: 'second', args: {}, call_id: 1 },
+      { function_result: 'second', result: `second result ${HEAD}`, call_id: 1, access },
+      { function_result: 'first', result: `first result ${HEAD}`, call_id: 0, access: { ...access, user: 'b@example.test' } },
+    ])
+    expect(blockOf(c, 'first')).toContain('<code>b@example.test</code>')
+    expect(blockOf(c, 'first')).toContain(`first result ${HEAD}`)
+    expect(blockOf(c, 'second')).toContain('<code>a@example.test</code>')
+    expect(blockOf(c, 'second')).toContain(`second result ${HEAD}`)
+    expect(c.split('🔐').length - 1).toBe(2)
+    expect(c).not.toContain('Executing...')
+  })
+
+  it('a result for no call leaves the answer alone', async () => {
+    const c = await run([{ content: 'Text.' }, { function_result: 'nothing', result: 'x', access }])
+    expect(c).toBe('Text.')
+  })
+})
+
 describe('the 🔐 line', () => {
   const read = { cluster: 'prod', kind: 'person', user: 'a@example.com', groups: ['kubeast:authenticated', 'kubeast:viewer'], role: 'Read', impersonation: true }
 
@@ -185,11 +400,10 @@ describe('the 🔐 line', () => {
     expect(accessLine(null)).toBe('')
   })
 
-  it('goes under the n-th block name only', () => {
+  it('goes under the name of the block at a position only', () => {
     const block = (n: string) => `<details>\n<summary>🔧 <strong>${n}</strong></summary>\n\n<p>args</p>\n\n</details>\n\n`
     const content = block('a') + block('b')
-    expect(withToolAccess(content, 1, '<p>L</p>')).toBe(block('a') + block('b').replace('</summary>\n', '</summary>\n\n<p>L</p>\n'))
-    expect(withToolAccess(content, 2, '<p>L</p>')).toBe(content)
+    expect(withToolAccess(content, block('a').length, '<p>L</p>')).toBe(block('a') + block('b').replace('</summary>\n', '</summary>\n\n<p>L</p>\n'))
     expect(withToolAccess(content, 0, '')).toBe(content)
   })
 })

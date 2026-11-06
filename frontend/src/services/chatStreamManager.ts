@@ -86,17 +86,6 @@ export function resultTarget(toolCalls: any[], functionName: string, callId: unk
   return toolCalls.findIndex((tc) => tc?.function === functionName && !tc.result)
 }
 
-// Where the n-th tool block starts in the content (blocks are appended in call order). -1 = none.
-export function nthToolBlock(content: string, n: number): number {
-  if (n < 0) return -1
-  let at = -1
-  for (let i = 0; i <= n; i++) {
-    at = content.indexOf('<summary>🔧 <strong>', at + 1)
-    if (at === -1) return -1
-  }
-  return at
-}
-
 // The content with a tool block after it: the block starts on a line of its own below the text so far (markdown
 // reads <details> as a block only there).
 export function appendToolBlock(content: string, block: string): string {
@@ -104,10 +93,8 @@ export function appendToolBlock(content: string, block: string): string {
   return before ? `${before}\n\n${block}` : block
 }
 
-// The content with the n-th tool block's "Executing..." replaced by its result. Unchanged when there is no such block.
-export function withToolResult(content: string, n: number, result: string): string {
-  const at = nthToolBlock(content, n)
-  if (at === -1) return content
+// The content with the "Executing..." of the tool block starting at `at` replaced by its result.
+export function withToolResult(content: string, at: number, result: string): string {
   // a function: replace() reads $&, $` and $' in a replacement string, and a result is any text
   return content.substring(0, at) + content.substring(at).replace('Executing...', () => result)
 }
@@ -120,14 +107,33 @@ export function codeFence(text: string): string {
   return '`'.repeat(longest + 1)
 }
 
-// The content with what goes under the n-th tool block's name (the 🔐 line and its requests), where the saved answer has it.
-export function withToolAccess(content: string, n: number, line: string): string {
-  const at = nthToolBlock(content, n)
-  const end = at === -1 ? -1 : content.indexOf('</summary>\n', at)
+// The content with what goes under the name of the tool block starting at `at` (the 🔐 line and its requests), where the saved answer has it.
+export function withToolAccess(content: string, at: number, line: string): string {
+  const end = content.indexOf('</summary>\n', at)
   if (!line || end === -1) return content
   const cut = end + '</summary>\n'.length
   return `${content.substring(0, cut)}\n${line}\n${content.substring(cut)}`
 }
+
+// What a refused chat request says: its status and the server's reason. A body that is not the server's JSON (a proxy's
+// page) has nothing to show.
+async function refusal(response: Response): Promise<Partial<ChatStreamState>> {
+  const { status } = response
+  const body = await response.text()
+  let detail = ''
+  try {
+    const parsed = JSON.parse(body)?.detail
+    if (typeof parsed === 'string') detail = parsed.slice(0, 300)
+  } catch {
+    // not JSON
+  }
+  return detail
+    ? { error: `HTTP ${status}: ${detail}`, errorKey: 'streamHttp', errorArgs: { status, detail } }
+    : { error: `HTTP ${status}`, errorKey: 'streamHttpStatus', errorArgs: { status } }
+}
+
+const STREAM_CUT = 'The connection closed before the answer finished, so the text above may be incomplete. Ask again for the whole answer.'
+const STREAM_EMPTY = 'The connection closed without an answer. Ask again.'
 
 export interface ChatStreamManagerOptions {
   /**
@@ -158,6 +164,8 @@ export class ChatStreamManager {
   private _typewriterTimer: number | null = null
   private _streamDone = false          // SSE [DONE] 수신 여부
   private _pendingDonePatch: Partial<ChatStreamState> | null = null
+  // Where each tool block of this answer starts. Kept, not read back from the text: a result or the answer can hold the same words.
+  private _toolBlockAt: number[] = []
   private static readonly TICK_MS = 16 // 드레인 간격 (ms) — one screen refresh
 
   constructor(options: ChatStreamManagerOptions = {}) {
@@ -256,6 +264,23 @@ export class ChatStreamManager {
     this.notify()
   }
 
+  // The answer failed: the letters that came stay in content, and an answer the user already stopped stays stopped.
+  private _fail = (patch: Partial<ChatStreamState>) => {
+    if (this.state.status !== 'streaming') return
+    this.setState({ status: 'error', isStreaming: false, streamingPhase: null, ...patch }, true)
+  }
+
+  // The content with the n-th tool's result and 🔐 line in its block; the blocks after it move by what went in.
+  private _withToolOutcome = (n: number, result: string, access: string): string => {
+    const content = this.state.content
+    const at = this._toolBlockAt[n]
+    if (at === undefined) return content
+    const filled = withToolAccess(withToolResult(content, at, result), at, access)
+    const grew = filled.length - content.length
+    this._toolBlockAt = this._toolBlockAt.map((start) => (start > at ? start + grew : start))
+    return filled
+  }
+
   stop = async () => {
     if (this.abortController) {
       try {
@@ -284,6 +309,7 @@ export class ChatStreamManager {
     this._charQueue.length = 0
     this._streamDone = false
     this._pendingDonePatch = null
+    this._toolBlockAt = []
     this.setState({
       status: 'streaming',
       isStreaming: true,
@@ -330,6 +356,11 @@ export class ChatStreamManager {
       if (response.status === 401) {
         handleUnauthorized()
         throw new Error('Unauthorized')
+      }
+
+      if (!response.ok) {
+        this._fail(await refusal(response))
+        return
       }
 
       if (!response.body) throw new Error('No response body')
@@ -418,9 +449,12 @@ export class ChatStreamManager {
               }
 
               this._flushQueue()
+              const block = buildToolCallBlock(data.function, data.args || {})
+              const content = appendToolBlock(this.state.content, block)
+              this._toolBlockAt.push(content.length - block.length)
               this.setState({
                 toolCalls: [...this.state.toolCalls, toolCall],
-                content: appendToolBlock(this.state.content, buildToolCallBlock(data.function, data.args || {})),
+                content,
                 streamingPhase: 'tools',
               })
               continue
@@ -459,21 +493,18 @@ export class ChatStreamManager {
               // Text still queued for the typewriter came after this call's block, so it stays in the queue.
               this.setState({
                 toolCalls: mergedToolCalls,
-                content: withToolAccess(withToolResult(this.state.content, target, codeBlock), target, accessSection(data.access, data.requests)),
+                content: this._withToolOutcome(target, codeBlock, accessSection(data.access, data.requests)),
                 streamingPhase: 'tools',
               })
               continue
             }
 
             if (data.error) {
-              this.setState({
-                status: 'error',
-                isStreaming: false,
+              this._fail({
                 error: String(data.error),
                 errorKey: typeof data.error_key === 'string' ? data.error_key : null,
                 errorArgs: data.error_args && typeof data.error_args === 'object' ? data.error_args : null,
-                streamingPhase: null,
-              }, true)
+              })
               return
             }
           } catch {
@@ -482,19 +513,21 @@ export class ChatStreamManager {
         }
       }
 
-      this._finishWhenDrained({ status: 'completed', isStreaming: false, streamingPhase: null })
+      // Every answer the server finishes ends with [DONE] or an error event: a stream without either was cut off.
+      if (buffer.trim() === 'data: [DONE]') {
+        this._finishWhenDrained({ status: 'completed', isStreaming: false, streamingPhase: null })
+      } else if (this.state.content || this._charQueue.length > 0) {
+        this._fail({ error: STREAM_CUT, errorKey: 'streamCut' })
+      } else {
+        this._fail({ error: STREAM_EMPTY, errorKey: 'streamEmpty' })
+      }
     } catch (error: any) {
       if (error?.name === 'AbortError') {
         this.setState({ status: 'aborted', isStreaming: false, streamingPhase: null }, true)
         return
       }
 
-      this.setState({
-        status: 'error',
-        isStreaming: false,
-        error: String(error),
-        streamingPhase: null,
-      }, true)
+      this._fail({ error: String(error) })
     } finally {
       this.abortController = null
     }

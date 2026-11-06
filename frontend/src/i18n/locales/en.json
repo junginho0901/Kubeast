@@ -1770,7 +1770,11 @@
       "modelRateLimit": "AI model call failed ({{provider}}): too many requests for now. Try again in a minute. ({{detail}})",
       "modelUsageWindow": "AI model call failed ({{provider}}): the usage limit is reached until {{retry_at}} (UTC). ({{detail}})",
       "modelAuth": "AI model call failed ({{provider}}): the provider refused the key or token. An administrator checks it in Admin → AI Models. ({{detail}})",
-      "modelUnavailable": "AI model call failed ({{provider}}): the provider is overloaded or did not answer. Try again later. ({{detail}})"
+      "modelUnavailable": "AI model call failed ({{provider}}): the provider is overloaded or did not answer. Try again later. ({{detail}})",
+      "streamHttp": "The chat request failed (HTTP {{status}}): {{detail}}",
+      "streamHttpStatus": "The chat request failed (HTTP {{status}}).",
+      "streamCut": "The connection closed before the answer finished, so the text above may be incomplete. Ask again for the whole answer.",
+      "streamEmpty": "The connection closed without an answer. Ask again."
     },
     "errorAnswer": "Sorry, an error occurred while generating the answer: {{error}}",
     "errorSessionCreate": "Failed to create session: {{error}}",
