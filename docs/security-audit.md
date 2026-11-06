@@ -155,6 +155,8 @@ When session recording is on (`sessionRecording.enabled`, default off), the **ou
 
 When a session opens, the terminal first prints one line, "This session is recorded" ("이 세션은 녹화됩니다" on a Korean screen). The recording keeps that line too. The audit row (`k8s.pod.exec` or `k8s.node.shell`) gets a `recording_id`.
 
+An exec through an AI tool has no recording: it is one command and its result, not a terminal. Its command, masked, is in the `k8s.pod.exec` row and in `ai.tool.execute` or `ai.mcp.call`.
+
 - **Storage**: during the session, k8s-service writes to a local volume and uploads chunks every `chunkSeconds` (default 30 seconds). If the k8s-service pod disappears, only the last chunk interval is lost. The store is one of:
   - `s3`: recommended for production, with the same fields as the audit S3 sink. S3 keys are mounted as files, so they do not touch k8s-service's IRSA identity.
   - `database`: 1 MiB per session, for small installs without S3.

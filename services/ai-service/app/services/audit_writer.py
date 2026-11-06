@@ -7,14 +7,15 @@ going when a write fails, but a write tool is not run unless the row can be
 stored: `require_audit_ready()` before the action, fail-closed by default
 (AUDIT_FAIL_CLOSED).
 
-Records only metadata: actor, action, target, result. Chat message content
-and LLM responses are stored in the `messages` table, NOT audit, to avoid
-duplicating sensitive content.
+Records metadata: actor, action, target, result, and for a write tool what it
+was asked to do with credentials masked (audit_target.write_tool_input). Chat
+message content and LLM responses are stored in the `messages` table, NOT
+audit, to avoid duplicating sensitive content.
 
 Action keys:
 - ai.chat.send      — chat session received a user message (start of stream)
 - ai.chat.complete  — chat turn finished (token usage, tool calls, duration in `after`)
-- ai.tool.call      — LLM invoked a readonly tool
+- ai.tool.call      — LLM invoked a tool: a read, or a write parked or refused
 - ai.tool.execute   — an approved write tool ran
 
 Schema columns come from services/pkg/dbmigrate/migrations (auth_audit_logs).

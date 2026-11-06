@@ -135,10 +135,25 @@ func namespaceGate(payload auth.TokenPayload, clusterID, tool string, args map[s
 	return nil
 }
 
+// toolAppPermission is the permission a screen asks for what this call does: a role holding ai.tool.* does not get
+// past it through the AI. The same rules are in ai-service's permissions.app_permission; TestToolPermissionCasesFixture
+// writes the cases both run.
+func toolAppPermission(tool string, args map[string]interface{}) string {
+	switch tool {
+	case "k8s_execute_command":
+		return "resource.pod.exec"
+	case "k8s_rollout":
+		if strings.EqualFold(strings.TrimSpace(argString(args, "action", "")), "undo") {
+			return "resource.workload.rollback"
+		}
+	}
+	return ""
+}
+
 // authorizeToolCall returns the validated caller, or an HTTP status + error:
-// 401 when the token is missing/invalid, 403 when ai.tool.<tool> is not
-// granted in clusterID ("" = the default cluster).
-func authorizeToolCall(v tokenValidator, headers http.Header, tool, clusterID string) (auth.TokenPayload, int, error) {
+// 401 when the token is missing/invalid, 403 when ai.tool.<tool>, or the screen's
+// permission for this call, is not granted in clusterID ("" = the default cluster).
+func authorizeToolCall(v tokenValidator, headers http.Header, tool, clusterID string, args map[string]interface{}) (auth.TokenPayload, int, error) {
 	token := extractBearerToken(headers)
 	if token == "" {
 		return auth.TokenPayload{}, http.StatusUnauthorized, errNoToken
@@ -152,6 +167,9 @@ func authorizeToolCall(v tokenValidator, headers http.Header, tool, clusterID st
 	}
 	if !payload.HasPermissionForCluster("ai.tool."+tool, clusterID) {
 		return payload, http.StatusForbidden, errForbidden
+	}
+	if required := toolAppPermission(tool, args); required != "" && !payload.HasPermissionForCluster(required, clusterID) {
+		return payload, http.StatusForbidden, fmt.Errorf("%w: %s needs the permission %s in cluster %s; your role there does not hold it", errForbidden, tool, required, clusterID)
 	}
 	return payload, 0, nil
 }

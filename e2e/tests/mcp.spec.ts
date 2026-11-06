@@ -94,8 +94,9 @@ test.describe('MCP server', () => {
       expect(names).toContain('list_clusters')
       expect(names).toContain('k8s_get_resources')
       // Write tools (and request_access) appear only when the operator turned them on (mcp.writeTools, mcp-write.spec.ts).
+      // Pod exec is not among them for this Write user, as on the screens (ai-write-permissions.spec.ts).
       const writes = names.filter((n) => /^k8s_(apply|create|delete|patch|scale|rollout|execute|label|annotat|remove)/.test(n))
-      expect(writes.length).toBe(cfg.write_tools ? 11 : 0)
+      expect(writes.length).toBe(cfg.write_tools ? 10 : 0)
       expect(names.includes('request_access')).toBe(!!cfg.write_tools)
       expect(tools.filter((t) => !writes.includes(t.name) && t.name !== 'request_access').every((t) => t.annotations?.readOnlyHint === true)).toBe(true)
       expect(tools.find((t) => t.name === 'k8s_get_resources')!.inputSchema.required).toContain('cluster')

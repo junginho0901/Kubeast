@@ -113,7 +113,7 @@
   - 권한은 `resource.policyreport.read`이고, Namespace 범위로 부여받았다면 그 Namespace만 봅니다.
 - **AI 에이전트 연결(MCP 서버)** — Claude Code·Cursor가 kubeconfig 대신 API 키로 연결해 같은 읽기 도구를
   **그 사람 권한으로만**, 마스킹·감사를 거쳐 씁니다(기본 꺼짐). 운영자가 켜면(`mcp.writeTools`) 상한이 Write인 키는 쓰기 도구와
-  접근 요청 도구도 씁니다. 승인 카드 없이 그 사람 권한(영구·임시)을 그대로 쓰며, Argo CD 가드와 감사는 똑같이 적용됩니다.
+  접근 요청 도구도 씁니다. Pod exec와 rollout undo는 아래 Admin 전용 목록처럼 그 권한이 있는 사람만 씁니다. 승인 카드 없이 그 사람 권한(영구·임시)을 그대로 쓰며, Argo CD 가드와 감사는 똑같이 적용됩니다.
 - **모델 설정** — `ModelConfig` CRD와 DB로 관리하고, Admin UI에서 추가하고 테스트합니다.
   등급(`tier`, CRD `spec.tier`)이 `economy`인 설정을 켜 두면 채팅 이력 요약과 플로팅 어시스턴트는 보통 더 싼 그 모델을 쓰고, 채팅은 기본 모델을 그대로 씁니다.
   어느 쪽인지는 스트림의 `model_info.tier`로 알 수 있습니다. economy 설정이 없거나 키가 없어 쓸 수 없으면 둘 다 기본 모델을 씁니다.
@@ -139,12 +139,13 @@
 | **Pending** | 가입·SSO 직후 기본값 | 없음 — 로그인은 되지만 API는 403 | — |
 | **Member** | 계정 등급 | 전역 권한 없음, **클러스터별 부여로만** 접근 | `kubeast:authenticated`(권한 없음) |
 | **Read** | 클러스터별 | 메뉴 10개 · 모든 리소스 읽기(`resource.*.read`, 비용 `resource.cost.read` 포함) · Helm 읽기(권한 키는 있지만 Release 기록이 Secret이라 클러스터가 거부 — 오른쪽 칸 참고) · 컨테이너 안 로그 파일 읽기(`resource.pod.logfile`, 기능을 켰을 때) · AI 채팅의 읽기 도구 43종(`ai.tool.<읽기 도구>`)과 MCP 연결(`ai.mcp.use`) — 쓰기 도구는 없음 | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view`는 Secret과 `services/proxy`를 제외하므로, Secret과 Helm 릴리스(Secret에 저장)는 클러스터가 거부하고 화면에는 권한 안내가 뜹니다. API 서버 프록시로 읽는 Prometheus·OpenCost(최적화 사용량·스토리지 분석·비용·드로어 메트릭)는 차트 값 `auth.impersonation.viewerProxyServices`에 적은 Service만 **GET으로** 열립니다. 허용은 그 Namespace의 Role로 주고, 이름은 정확히 `<service>:<port>`로 적으며, 다른 Service·POST·NS 범위 부여는 계속 거부됩니다([설정](configuration.md)의 values 주석). 적지 않으면 거부됩니다(프록시는 `kubeast:operator`=`edit`부터 허용) |
-| **Write** | 클러스터별 | `menu.*` · 리소스 생성/수정/삭제 · CronJob suspend/trigger · Secret 값 보기 · 로그 파일 읽기 · Helm rollback/upgrade/test · AI 툴 전부(`ai.tool.*`, 쓰기 도구 포함) · MCP 연결 | `kubeast:operator` = `edit` + viewer |
+| **Write** | 클러스터별 | `menu.*` · 리소스 생성/수정/삭제 · CronJob suspend/trigger · Secret 값 보기 · 로그 파일 읽기 · Helm rollback/upgrade/test · AI 툴 전부(`ai.tool.*`, 쓰기 도구 포함, 아래 Admin 전용 목록은 빼고) · MCP 연결 | `kubeast:operator` = `edit` + viewer |
 | **Admin** | 계정 등급(`*`) 또는 클러스터별 | 전부 — 관리자 메뉴, 모든 클러스터(나중에 등록한 것 포함) | `kubeast:admin` = `cluster-admin` |
 | 커스텀 | 클러스터별 | 고른 권한만(만드는 사람이 가진 권한 안에서) | `kubeast:role:<이름>` — 클러스터가 이 그룹을 바인딩하기 전에는 모든 호출이 403입니다(`auth.impersonation.customRoles`). 화면의 권한 없음 배너와 역할 만들기 창에 이 그룹 이름이 나옵니다 |
 
 - **Admin만 되는 것**: Pod exec · Node shell · cordon/drain · 워크로드 rollback · Helm uninstall.
   `resource.pod.exec`·`resource.node.cordon/drain/shell`·`resource.workload.rollback`·`resource.helm.uninstall`은 Write에 없으므로, 필요하면 커스텀 역할에 넣으세요.
+  - AI도 같은 권한을 봅니다. `k8s_execute_command`는 `resource.pod.exec`, `k8s_rollout`의 `undo`는 `resource.workload.rollback`이 `ai.tool.*`과 함께 있어야 하며, 채팅과 MCP가 같습니다. Write에는 exec를 내주지 않고 왜 안 되는지 알려 줍니다. Admin과 그 권한을 받은 커스텀 역할은 전처럼 실행합니다.
   - 클러스터 쪽에서 보면 기본 `edit` ClusterRole에 `pods/exec`가 들어 있으므로, Write 그룹(`kubeast:operator`)은 원래 모든 네임스페이스에서 exec할 수 있습니다.
     Pod exec가 Admin 전용인 이유는 Kubeast의 앱 권한 때문입니다. 그래서 Kubeast의 impersonation 자격 증명(`kubeast-impersonator`)은 그 그룹들의 전체 권한만큼 중요하게 지켜야 합니다.
   - 로그 파일 보기(`features.logFiles`, 기본 off)는 Kubeast가 명령을 `ls`·`tail`로 고정하므로 Read와 Write도 쓸 수 있습니다.

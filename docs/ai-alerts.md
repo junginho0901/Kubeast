@@ -38,8 +38,9 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
   - the client (User-Agent)
   - `write`: whether it is a write tool
 - Write tools (`mcp.writeTools: true`, `MCP_WRITE_TOOLS` in compose, off by default): the chat's 11 write tools (apply, create, delete, patch, annotate, label, scale, rollout, exec …) also appear for **keys whose role ceiling is Write**.
+  - Pod exec and rollout undo also need the screens' permissions, `resource.pod.exec` and `resource.workload.rollback`. A Write ceiling does not hold them, so such a key is not offered exec and a call is refused with the permission's name; a key whose ceiling and owner hold them runs both.
   - The chat's approval card (`ai.writeApproval`) does not exist in MCP. The agent can do only as much as that person can do on that cluster, with a permanent role or a temporary role obtained through an [access request](configuration.md) (`accessRequests`).
-  - Every call is audited with `write: true`.
+  - Every call is audited with `write: true` and what it was asked to do, credentials masked (a command, or the length and masked start of a patch or manifest).
   - The tool annotations (`destructiveHint`) are set honestly, so clients such as Claude Code ask the user to confirm before the call.
   - Objects managed by Argo CD follow the guard mode: `block` refuses ("change it in Git"), and `warn` runs and adds a warning to the first line of the result.
   - When permissions fall short, the agent files an access request itself with the `request_access` tool and tries again. Once an admin approves it, the request is applied within a minute.

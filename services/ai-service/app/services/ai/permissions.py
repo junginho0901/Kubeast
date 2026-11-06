@@ -8,6 +8,7 @@
 from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from app.security import DEFAULT_CLUSTER, decode_access_token
+from app.services.tool_whitelists import WRITE_TOOL_NAMES
 
 if TYPE_CHECKING:
     from app.services.ai_service import AIService
@@ -45,6 +46,70 @@ def role_allows_admin(service: "AIService") -> bool:
     return service.user_role == "admin"
 
 
+def app_permission(tool: str, args: Optional[Dict] = None) -> Optional[str]:
+    """The permission a screen asks for what this call does: a role holding ai.tool.* does not get past it through the
+    AI. The same rules are in tool-server's toolAppPermission; tests/fixtures/tool_app_permission_cases.json holds the
+    two equal."""
+    if tool == "k8s_execute_command":
+        return "resource.pod.exec"
+    if tool == "k8s_rollout" and isinstance(args, dict) and str(args.get("action") or "").strip().lower() == "undo":
+        return "resource.workload.rollback"
+    return None
+
+
+def token_may_call(token, cluster: str, tool: str, args: Optional[Dict] = None) -> bool:
+    """The token holds the tool and, where the call needs one, the screen's permission, both in this cluster."""
+    if not token.has_permission_for_cluster(f"ai.tool.{tool}", cluster):
+        return False
+    required = app_permission(tool, args)
+    return required is None or token.has_permission_for_cluster(required, cluster)
+
+
+def _refusal(tool: str, required: str, cluster: str) -> str:
+    # The same words as tool-server's refusal.
+    return f"forbidden: {tool} needs the permission {required} in cluster {cluster}; your role there does not hold it"
+
+
+def app_permission_error(token, cluster: str, tool: str, args: Optional[Dict] = None) -> Optional[str]:
+    """Why the screen's permission refuses this call, or None."""
+    required = app_permission(tool, args)
+    if required is None or token.has_permission_for_cluster(required, cluster):
+        return None
+    return _refusal(tool, required, cluster)
+
+
+def tool_refusal(service: "AIService", tool: str, args: Optional[Dict] = None) -> Optional[str]:
+    """app_permission_error for the request's cluster and user. Without a token (legacy role mode) only admin holds it."""
+    required = app_permission(tool, args)
+    if required is None:
+        return None
+    cluster = effective_cluster(service)
+    token = getattr(service, "token", None)
+    if token is not None:
+        return app_permission_error(token, cluster, tool, args)
+    return None if getattr(service, "user_role", None) == "admin" else _refusal(tool, required, cluster)
+
+
+def unavailable_note(service: "AIService") -> Optional[str]:
+    """What this role may not ask the chat for and why, so an answer can say it. Nothing for a role with everything."""
+    token = getattr(service, "token", None)
+    if token is None:
+        return None
+    cluster = effective_cluster(service)
+    if not any(is_tool_allowed(service, name) for name in WRITE_TOOL_NAMES):
+        return (f"This user's role in cluster {cluster} holds no write tools, so this chat cannot change anything there. "
+                "If they ask for a change, say that their role does not allow it and that an admin can grant one.")
+    lacking = [f"{required} ({what})" for tool, args, what in (
+        ("k8s_execute_command", None, "running a command in a pod, k8s_execute_command"),
+        ("k8s_rollout", {"action": "undo"}, "a rollback, k8s_rollout with undo"),
+    ) if token.has_permission_for_cluster(f"ai.tool.{tool}", cluster)
+        and (required := app_permission(tool, args)) and not token.has_permission_for_cluster(required, cluster)]
+    if not lacking:
+        return None
+    return (f"This user's role in cluster {cluster} does not hold {' or '.join(lacking)}. "
+            "If they ask for that, say that their role lacks the permission and that an admin can grant it.")
+
+
 def may_request_approval(service: "AIService", offered_tools: List[Dict], function_name: str) -> bool:
     """A write tool gets an approval card only if the model was offered it in
     this turn (a read-only widget offers none) and the user may run it. The
@@ -55,7 +120,7 @@ def may_request_approval(service: "AIService", offered_tools: List[Dict], functi
 
 def is_tool_allowed(service: "AIService", function_name: str) -> bool:
     if service.token:
-        return service.token.has_permission_for_cluster(f"ai.tool.{function_name}", effective_cluster(service))
+        return token_may_call(service.token, effective_cluster(service), function_name)
     # Fallback to legacy role-based checks
     write_tools = {
         "k8s_apply_manifest",
@@ -80,6 +145,17 @@ def is_tool_allowed(service: "AIService", function_name: str) -> bool:
     return True
 
 
+def _without_undo(tool: Dict, reason: str) -> Dict:
+    """k8s_rollout stays for restart and status; a copy says undo is not for this role (the catalog is shared)."""
+    fn = dict(tool["function"])
+    fn["description"] = f"Rollout actions: restart, pause, resume, status. Not undo: {reason}"
+    parameters = fn.get("parameters")
+    if isinstance(parameters, dict) and isinstance(parameters.get("properties"), dict) and "action" in parameters["properties"]:
+        action = {**parameters["properties"]["action"], "description": "restart/pause/resume/status"}
+        fn["parameters"] = {**parameters, "properties": {**parameters["properties"], "action": action}}
+    return {**tool, "function": fn}
+
+
 def filter_tools_by_role(service: "AIService", tools: List[Dict]) -> List[Dict]:
     filtered: List[Dict] = []
     for tool in tools:
@@ -89,7 +165,8 @@ def filter_tools_by_role(service: "AIService", tools: List[Dict]) -> List[Dict]:
             filtered.append(tool)
             continue
         if is_tool_allowed(service, name):
-            filtered.append(tool)
+            refusal = tool_refusal(service, name, {"action": "undo"}) if name == "k8s_rollout" else None
+            filtered.append(_without_undo(tool, refusal) if refusal else tool)
     return filtered
 
 

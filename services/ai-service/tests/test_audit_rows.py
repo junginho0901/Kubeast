@@ -356,13 +356,14 @@ async def test_an_approved_write_that_fails_keeps_its_output_masked_and_short(mo
     monkeypatch.setattr(audit_writer, "write_audit", write)
     monkeypatch.setattr(audit_writer, "require_audit_ready", ready)
     monkeypatch.setattr(api, "_load_own_pending_approval", load)
-    monkeypatch.setattr(api, "_caller", lambda auth: SimpleNamespace(user_id="u1"))
+    monkeypatch.setattr(api, "_caller", lambda auth: SimpleNamespace(user_id="u1", has_permission_for_cluster=lambda perm, cluster: True))
     monkeypatch.setattr(api, "_extract_audit_meta", lambda request, auth: ({"user_id": "u1", "email": "dev@example.com"}, {}))
     monkeypatch.setattr(api, "_build_ai_service", build)
     monkeypatch.setattr("app.services.approval_token.sign", lambda *a, **k: "tok")
     await api.approve_tool_approval("ap3", request=SimpleNamespace(), authorization="Bearer x")
-    run = out[-1]
-    assert run["action"] == "ai.tool.execute" and run["result"] == "failure"
+    run = next(r for r in out if r["action"] == "ai.tool.execute")
+    assert run["result"] == "failure"
+    assert out[-1]["action"] == "k8s.pod.exec" and out[-1]["result"] == "failure" and "fake-failed-password" not in out[-1]["error"]
     assert "fake-failed-password" not in run["error"] and "boom" in run["error"] and len(run["error"]) <= 500, run["error"]
     assert "fake-failed-password" not in approval.result
     assert "fake-failed-password" not in repr(messages)

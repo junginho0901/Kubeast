@@ -442,7 +442,7 @@ func allPermissions() []map[string]interface{} {
 			{"ai.tool.audit_search", "Admin tool: search the Kubeast audit log"},
 			{"ai.tool.nodes_stats_summary", "Admin tool: a node's kubelet stats summary (cpu, memory, fs, PSI, top pods)"},
 			{"ai.tool.nodes_log", "Admin tool: a node's kubelet and system logs"},
-			{"ai.tool.k8s_execute_command", "Run kubectl commands"},
+			{"ai.tool.k8s_execute_command", "Run a command in a pod (also needs Pod exec)"},
 			{"ai.tool.helm_execute", "AI runs Helm commands (including writes)"},
 			{"ai.mcp.use", "Connect an external AI agent (MCP) to this cluster"},
 		}},

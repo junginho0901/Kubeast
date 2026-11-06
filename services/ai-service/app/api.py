@@ -2,6 +2,7 @@
 AI Service API 라우터
 """
 import copy
+import json
 import logging
 from typing import Optional
 
@@ -351,9 +352,10 @@ async def approve_tool_approval(
     authorization: str = Depends(bearer_or_cookie),
 ):
     from app.database import utcnow
-    from app.services.audit_target import tool_target
+    from app.services.audit_target import EXEC_TOOL, pod_exec_row, tool_target, write_tool_input
     from app.services.audit_writer import AuditUnavailable, fail_closed_enabled, require_audit_ready, write_audit
     from app.services.ai import access as tool_access, formatters
+    from app.services.ai.permissions import app_permission_error
     from app.services.ai.streaming import tool_outcome
 
     from app.services.approval_token import ApprovalTokenUnavailable, sign as sign_approval
@@ -399,8 +401,13 @@ async def approve_tool_approval(
     ai_service = await _build_ai_service(authorization, cluster_name=approval.cluster)
     args = dict(approval.args or {})
     status, error = "executed", None
+    # A card from before the role lost the permission: tool-server would refuse too, this says why without calling it.
+    refusal = app_permission_error(payload, approval.cluster, approval.tool, args)
     try:
-        response = await ai_service._call_tool_server(approval.tool, args, approval_id=approval.id, approval_token=approval_token)
+        if refusal:
+            response = json.dumps({"status": "forbidden", "message": refusal})
+        else:
+            response = await ai_service._call_tool_server(approval.tool, args, approval_id=approval.id, approval_token=approval_token)
         formatted, _, _ = formatters._format_tool_result(approval.tool, args, response)
         # refused before tool-server (a namespace-scoped grant): not executed
         _outcome, problem, _status = tool_outcome(response)
@@ -425,14 +432,21 @@ async def approve_tool_approval(
                      **({"access": call_access} if call_access else {}), **({"requests": call_requests} if call_requests else {})}],
     )
     target = tool_target(approval.tool, args)
+    tool_input = write_tool_input(approval.tool, args)
     await write_audit(
         action="ai.tool.execute", actor_user_id=actor.get("user_id"), actor_email=actor.get("email"), cluster=approval.cluster,
         target_type=target.type, target_id=target.id, namespace=target.namespace,
         after={"approval_id": approval.id, "session_id": approval.session_id, "cluster": approval.cluster, "tool": approval.tool, "approved": True,
-               "access": call_access, "requests": call_requests, **({"objects": target.objects} if target.objects else {})},
+               "access": call_access, "requests": call_requests, **({"objects": target.objects} if target.objects else {}), **tool_input},
         request_ip=http.get("ip"), user_agent=http.get("user_agent"), request_id=http.get("request_id"), path=http.get("path"),
         result="success" if status == "executed" else "failure", error=error[:500] if error else error,
     )
+    if approval.tool == EXEC_TOOL and not refusal:
+        await write_audit(
+            **pod_exec_row(args, tool_input, approval_id=approval.id), actor_user_id=actor.get("user_id"), actor_email=actor.get("email"), cluster=approval.cluster,
+            request_ip=http.get("ip"), user_agent=http.get("user_agent"), request_id=http.get("request_id"), path=http.get("path"),
+            result="success" if status == "executed" else "failure", error=error[:500] if error else error,
+        )
     _invalidate_caches()
     return _approval_dict(approval)
 

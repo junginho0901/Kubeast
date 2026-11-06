@@ -156,6 +156,7 @@ audit:
 입력한 명령은 에코로 화면에 찍히므로 남고, 에코되지 않는 비밀번호 입력은 남지 않습니다.
 세션을 열면 터미널에 "This session is recorded"(한국어 화면이면 "이 세션은 녹화됩니다") 한 줄이 먼저 찍히고, 이 줄은 녹화에도 그대로 남습니다.
 감사 행(`k8s.pod.exec`·`k8s.node.shell`)에는 `recording_id`가 붙습니다.
+AI 도구로 한 exec는 터미널이 아니라 명령 하나와 그 결과이므로 녹화가 없습니다. 가린 명령은 `k8s.pod.exec` 행과 `ai.tool.execute` 또는 `ai.mcp.call`에 남습니다.
 
 - **저장**: k8s-service가 로컬 볼륨에 쓰고, 세션 중에도 `chunkSeconds`(기본 30초)마다 조각을 올립니다.
   그래서 k8s-service 파드가 사라져도 마지막 조각 간격만큼만 잃습니다. 저장소는 다음 중에서 고릅니다.
