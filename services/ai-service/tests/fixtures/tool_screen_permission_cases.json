@@ -11,6 +11,7 @@
   "get_node_metrics",
   "get_pod_metrics",
   "gitops_status",
+  "gpu",
   "helm_read",
   "hygiene",
   "issues",
@@ -62,6 +63,7 @@
   "prometheus_targets",
   "resource_graph",
   "storage_summary",
+  "timeline",
   "traces_compare",
   "traces_get",
   "traces_metrics",
@@ -335,7 +337,9 @@
   "ai.tool.storage_summary",
   "ai.tool.network_policy_effective",
   "ai.tool.limit_range_violations",
-  "ai.tool.alerts_inbox"
+  "ai.tool.alerts_inbox",
+  "ai.tool.timeline",
+  "ai.tool.gpu"
  ],
  "cases": [
   {
@@ -571,6 +575,20 @@
   },
   {
    "tool": "limit_range_violations",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "timeline",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "gpu",
    "args": {},
    "want": null,
    "write": true,

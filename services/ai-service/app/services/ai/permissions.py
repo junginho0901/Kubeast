@@ -206,7 +206,7 @@ CLUSTER_WIDE_TOOLS = frozenset({
 })
 
 # Tool-server's handler or k8s-service's route keeps these inside the grant, so they pass without naming a namespace.
-NAMESPACE_AWARE_TOOLS = frozenset({"k8s_find_resource", "issues", "cost", "gitops_status", "storage_summary"})
+NAMESPACE_AWARE_TOOLS = frozenset({"k8s_find_resource", "issues", "cost", "gitops_status", "storage_summary", "timeline", "gpu"})
 
 # API schema or Kubeast's own list of clusters, not object data: a screen answers a grant limited to namespaces too.
 NAMESPACE_FREE_TOOLS = frozenset({"k8s_explain", "clusters_list"})

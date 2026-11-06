@@ -95,7 +95,7 @@ var clusterWideTools = map[string]struct{}{
 // reads the token's "ns" claim and searches only those namespaces — so they
 // pass the gate without naming one. ai-service keeps the same list and refuses
 // first (permissions.NAMESPACE_AWARE_TOOLS).
-var namespaceAwareTools = map[string]struct{}{"k8s_find_resource": {}, "issues": {}, "cost": {}, "gitops_status": {}, "storage_summary": {}}
+var namespaceAwareTools = map[string]struct{}{"k8s_find_resource": {}, "issues": {}, "cost": {}, "gitops_status": {}, "storage_summary": {}, "timeline": {}, "gpu": {}}
 
 // namespaceFreeTools return API schema or Kubeast's own list of clusters, not
 // object data, so a scoped grant may call them without a namespace.

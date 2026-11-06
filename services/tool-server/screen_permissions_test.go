@@ -41,6 +41,7 @@ var readToolsTheScreenLeavesToTheCluster = []string{
 	"pod_rbac",
 	"storage_summary",
 	"limit_range_violations",
+	"timeline", "gpu",
 }
 
 // The tools of the seeded Read role (auth-service repository.ReadAIToolPermissions).
@@ -58,6 +59,7 @@ var readRoleTools = []string{
 	"network_policy_effective",
 	"limit_range_violations",
 	"alerts_inbox",
+	"timeline", "gpu",
 }
 
 // The seeded Write role's list (auth-service repository_schema.go).

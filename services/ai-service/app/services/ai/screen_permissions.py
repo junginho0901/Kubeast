@@ -66,6 +66,8 @@ TOOL_SCREEN_TABLE: Dict[str, Tuple[str, ...]] = {
     "storage_summary": _LEFT_TO_THE_CLUSTER,
     "limit_range_violations": _LEFT_TO_THE_CLUSTER,
     "alert_investigate": _always("resource.alert.investigate", "resource.pod.read"),
+    "timeline": _LEFT_TO_THE_CLUSTER,
+    "gpu": _LEFT_TO_THE_CLUSTER,
     "k8s_get_pod_logs": _always("resource.pod.read"),
     "alerts_list": _always("resource.pod.read"),
     "alerts_inbox": _always("resource.pod.read"),

@@ -78,6 +78,8 @@ def test_tool_usage_guide():
         "network_drops",
         "network_top_flows",
         "resource_graph",
+        "timeline",
+        "gpu",
         "hygiene",
         "k8s_jq_query",
         "k8s_tabular_query",

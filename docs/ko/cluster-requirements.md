@@ -27,7 +27,7 @@ Kubeast는 등록한 클러스터에 아무것도 설치하지 않습니다. 예
 | 드로어·대시보드 그래프, 최적화, 스토리지 분석 | Prometheus + 지표 수집기 — §3 | `features.prometheus.enabled`(**끔**) | 그래프 영역이 숨겨지고, 최적화는 metrics-server 순간값 사용 |
 | 비용(Cost), 최적화 비용 열 | OpenCost — §4 | `features.cost.enabled`(켬) | "OpenCost 없음" 안내, 비용 열 없음 |
 | 정책 보고서 | PolicyReport CRD와 보고서를 만드는 도구 — §5 | `features.policyReports.enabled`(켬) | "설치 안 됨" 안내 |
-| GPU·DRA | NVIDIA·AMD·Intel device plugin과 노드 라벨·DCGM exporter, DRA API — §6 | — | GPU 수·사용률이 비거나 DRA 목록이 "설치되어 있지 않음" |
+| GPU·DRA(화면, AI `gpu`) | NVIDIA·AMD·Intel device plugin과 노드 라벨·DCGM exporter, DRA API — §6 | — | GPU 수·사용률이 비거나 DRA 목록이 "설치되어 있지 않음" |
 | VPA·Gateway API·Admission Policy·Ingress 지연 | 해당 CRD·컨트롤러 — §7 | — | 목록이 비고 "설치 안 됨" 표시 |
 | 재시작 없이 적용(resize) | Kubernetes 1.35 이상 — §8 | `features.inPlaceResize.enabled`(켬) | 버튼이 숨겨지고 API는 409 |
 | 노드 셸 | 특권 파드 허용과 이미지 — §9 | `nodeShell.enabled`(끔) | 파드 생성 실패 |

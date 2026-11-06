@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/cache"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/handler"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
@@ -47,7 +48,8 @@ current-context: c
 
 func screenRouter(t *testing.T) chi.Router {
 	t.Helper()
-	svc, err := k8s.NewService(context.Background(), unreachableCluster{}, false, nil, k8s.ServiceOptions{})
+	// the Timeline's routes read their cache before the cluster: no host is the in-memory one, nothing to reach
+	svc, err := k8s.NewService(context.Background(), unreachableCluster{}, false, cache.New("", 0, 0, ""), k8s.ServiceOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,6 +201,13 @@ func TestAReadTheTableLeavesToTheClusterAsksNoPermission(t *testing.T) {
 		"/api/v1/topology/storage",
 		"/api/v1/pvcs?usage=true",
 		"/api/v1/pvs",
+		"/api/v1/timeline",
+		"/api/v1/namespaces/x/timeline",
+		"/api/v1/namespaces/x/timeline/Deployment/y",
+		"/api/v1/gpu/dashboard",
+		"/api/v1/gpu/metrics",
+		"/api/v1/deviceclasses",
+		"/api/v1/resourceclaimtemplates/all",
 	} {
 		if rec := askAsToolsOnly(r, http.MethodGet, path); rec.Code == http.StatusForbidden || rec.Code == http.StatusUnauthorized {
 			t.Errorf("GET %s: status %d body %s, want no refusal by the app", path, rec.Code, rec.Body.String())

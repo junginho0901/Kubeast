@@ -366,6 +366,16 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Handler:     handleResourceGraph,
 	})
 	register(ToolDefinition{
+		Name:        "timeline",
+		Description: "The Timeline screen's change history: events and rollout revisions of a namespace, one object or every namespace in a time window",
+		Handler:     handleTimeline,
+	})
+	register(ToolDefinition{
+		Name:        "gpu",
+		Description: "The GPU screens' numbers: GPUs per node and company with what is in use and free, pods' requests, device plugins, DeviceClasses, ResourceClaimTemplates, DCGM utilization",
+		Handler:     handleGPU,
+	})
+	register(ToolDefinition{
 		Name:        "k8s_jq_query",
 		Description: "kubectl get -o json filtered by a jq expression (capped results)",
 		Handler:     handleJQQuery,

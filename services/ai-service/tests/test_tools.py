@@ -45,6 +45,8 @@ EXPECTED_READONLY_NAMES = {
     "network_drops",
     "network_top_flows",
     "resource_graph",
+    "timeline",
+    "gpu",
     "k8s_jq_query",
     "k8s_tabular_query",
     "k8s_count",
@@ -120,6 +122,24 @@ def test_no_overlap_between_readonly_and_write():
     wr = set(_names(K8S_WRITE_TOOLS))
     overlap = ro & wr
     assert not overlap, f"readonly 와 write 에 같은 name: {overlap}"
+
+
+def _tool(name):
+    return next(t["function"] for t in K8S_READONLY_TOOLS if t["function"]["name"] == name)
+
+
+def test_the_screens_tools_say_a_null_is_not_a_zero():
+    """A model reads a number it may not have as 0 unless it is told; the wording is get_cluster_overview's."""
+    for name in ("timeline", "gpu"):
+        assert "not counted, not zero" in _tool(name)["description"], name
+
+
+def test_timeline_takes_time_arguments_tool_server_knows():
+    """tool-server's argument rules are by name across every tool: since and from/to already mean something else there."""
+    properties = _tool("timeline")["parameters"]["properties"]
+    assert set(properties) == {"namespace", "since_time", "until_time", "event_type", "kind", "name", "limit"}
+    assert properties["event_type"]["enum"] == ["Normal", "Warning"]
+    assert _tool("gpu")["parameters"]["properties"] == {}
 
 
 def test_all_tools_are_function_type():
