@@ -153,7 +153,7 @@ func validNamespaceName(n string) bool {
 // Returns the namespaces the grantor lacks; "*" stands for the whole cluster.
 func missingNamespaces(actor auth.TokenPayload, clusterID string, namespaces []string) []string {
 	own := actor.Namespaces[clusterID]
-	if len(own) == 0 {
+	if len(own) == 0 || auth.MatchAny(actor.Perms["*"], "*") {
 		return nil
 	}
 	if len(namespaces) == 0 {

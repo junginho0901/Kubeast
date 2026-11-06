@@ -38,8 +38,8 @@ import (
 //
 //   GET    /api/v1/auth/api-keys/config
 //   GET    /api/v1/auth/api-keys                     (own)
-//   POST   /api/v1/auth/api-keys                     { name, expires_in_days, cluster_ids?, role_ceiling? }
-//   DELETE /api/v1/auth/api-keys/{id}                (own)
+//   POST   /api/v1/auth/api-keys                     { name, expires_in_days, cluster_ids?, role_ceiling? } (session only)
+//   DELETE /api/v1/auth/api-keys/{id}                (own, session only)
 //   POST   /api/v1/auth/token                        Authorization: Bearer kbk_…  (public; the gateway rate-limits it like sign-in)
 //   GET    /api/v1/auth/admin/users/{user_id}/api-keys        admin.users.update
 //   DELETE /api/v1/auth/admin/users/{user_id}/api-keys/{id}   admin.users.update

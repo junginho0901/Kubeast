@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
@@ -78,6 +79,33 @@ func TestAuthMiddleware_TokenVersionRevokes(t *testing.T) {
 	}
 	if code := callWithToken(t, mw, tok2); code != http.StatusOK {
 		t.Fatalf("the sign-in token is not touched by the key, got %d", code)
+	}
+}
+
+func TestAuthMiddleware_CarriesTheTokensClaims(t *testing.T) {
+	m := newTestManager(t)
+	perms := auth.PermissionMatrix{"c": {"resource.pod.read"}}
+	roles := map[string]string{"c": "Read"}
+	scope := map[string][]string{"c": {"team-a", "team-b"}}
+	tok, err := m.CreateAPIKeyToken("u1", "u1@example.com", "member", perms, roles, scope, 0, "key-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got auth.TokenPayload
+	h := AuthMiddleware(m, nil, "kubeast.token")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got, _ = auth.FromContext(r.Context())
+	}))
+	req := httptest.NewRequest("GET", "/api/v1/auth/me", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	h.ServeHTTP(httptest.NewRecorder(), req)
+	if !reflect.DeepEqual(got.Namespaces, scope) {
+		t.Errorf("Namespaces = %v, want %v", got.Namespaces, scope)
+	}
+	if !reflect.DeepEqual(got.Roles, roles) || got.APIKeyID != "key-1" || got.UserID != "u1" {
+		t.Errorf("payload = %+v", got)
+	}
+	if got.AllowedIn("c", "team-c") || !got.AllowedIn("c", "team-a") {
+		t.Errorf("AllowedIn does not follow the token's scope: %+v", got.Namespaces)
 	}
 }
 
