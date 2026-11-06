@@ -4,7 +4,7 @@ import { useQueryClient, useIsFetching } from '@tanstack/react-query'
 
 import { clustersApi } from '@/services/api/clusters'
 import { setCurrentClusterRef } from '@/services/clusterRef'
-import { isClusterScopedQueryKey } from '@/utils/clusterQueryScope'
+import { dropClusterQueries, isClusterScopedQueryKey } from '@/utils/clusterQueryScope'
 import { ClusterContext, STORAGE_KEY } from './ClusterContext'
 
 // Provider half of ClusterContext, in its own file so Fast Refresh treats it as
@@ -44,7 +44,7 @@ export function ClusterProvider({ children }: { children: ReactNode }) {
     const prev = prevClusterRef.current
     if (prev === currentCluster) return
     prevClusterRef.current = currentCluster
-    queryClient.removeQueries({ predicate: (q) => isClusterScopedQueryKey(q.queryKey) })
+    void dropClusterQueries(queryClient)
     // The first selection ('' → the picker's auto-select, after every sign-in) is
     // not a switch: no indicator. Its cache still goes: requests made while the
     // selection was empty reached the server's default cluster, which need not be
