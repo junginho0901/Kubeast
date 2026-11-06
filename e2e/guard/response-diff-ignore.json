@@ -1,0 +1,40 @@
+{
+  "rules": [
+    {
+      "route": "^/api/v1/cluster/pods/(page|nodes)$",
+      "cell": "^\\$\\.revision$",
+      "why": "A token of the build's own informers that a poll sends back; each build has its own and no screen shows it.",
+      "pr": "#651"
+    },
+    {
+      "route": "^/api/v1/cluster/(cost|policyreports/summary)$",
+      "cell": "^\\$\\.generated_at$",
+      "why": "When this build filled its own minute of the answer; the two builds fill theirs moments apart.",
+      "pr": "#651"
+    },
+    {
+      "route": "^/api/v1/cluster/cost$",
+      "cell": "\\.(minutes|cpu_core_hours|ram_byte_hours)$",
+      "why": "OpenCost's window runs up to the moment a build filled its minute of the answer. number-check-cost.spec.ts holds these numbers to OpenCost.",
+      "pr": "#651"
+    },
+    {
+      "route": "^/api/v1/cluster/prometheus/query(_range)?$",
+      "cell": "\\.values?(\\[|$)",
+      "why": "The cluster's metrics at the moment each build asked, kept for its own moments. number-check-monitoring.spec.ts holds them to the Prometheus.",
+      "pr": "#651"
+    },
+    {
+      "route": ".",
+      "cell": "\\.(data_keys|config_map_refs|secret_refs)\\.\\$order$",
+      "why": "These lists come in Go map order, another order per computation. Stays while the compared build has them unsorted.",
+      "pr": "#651"
+    },
+    {
+      "route": "^/api/v1/resource-graph$",
+      "cell": "^\\$\\.nodes\\.\\$order$",
+      "why": "The graph's nodes come in Go map order per computation, kept while cached. Stays while the compared build has them unsorted.",
+      "pr": "#651"
+    }
+  ]
+}
