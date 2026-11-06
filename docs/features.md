@@ -230,6 +230,7 @@
   - A refusal is 403 and leaves a failure in the audit log. A global admin (`*`) is not limited, and neither is a change to one's own account.
   - Revoking someone's API key stays open to `admin.users.update`, so a leaked key can be stopped at once. It takes nothing away that the owner cannot issue again.
   - A permission added to a role must be held on every cluster the role is granted on, within the namespaces granted there.
+- **Role edits and sessions**: taking a permission away from a role ends the sessions and key tokens that could still use it, at once: those of everyone granted the role on a cluster and, for `*` or `admin.*` keys, of everyone holding it as a global role. Renaming a role to another group ends those of everyone granted it. Adding a permission or changing the description ends nothing; holders get an added permission at their next refresh. An editor who holds the role signs in again too.
 - **Role names**: a role acts on a cluster as the group made from its name. A new name or a rename is refused if it is a built-in role's name in other capitals or with spaces, or makes the same group as another role (`a b` and `a-b`, or Korean names of the same length). A name already stored keeps working as it is.
 - **What the UI says when a list is empty**:
   - Without permission (403): "You do not have permission to view", in a banner at the top and in the table.

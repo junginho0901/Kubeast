@@ -24,6 +24,12 @@ test.describe('setup / model-config endpoints require authentication', () => {
     expect((await request.get('/api/v1/auth/setup/rollout-status')).status()).toBe(401)
   })
 
+  test('GET /auth/roles without a token → 401, while what the sign-in page reads stays open', async ({ request }) => {
+    expect((await request.get('/api/v1/auth/roles')).status()).toBe(401)
+    expect((await request.get('/api/v1/auth/organizations?type=team')).status()).toBe(200)
+    expect((await request.get('/api/v1/auth/oidc/config')).status()).toBe(200)
+  })
+
   test('POST /ai/model-configs/test without a token → 401', async ({ request }) => {
     const res = await request.post('/api/v1/ai/model-configs/test', {
       data: { provider: 'ollama', model: 'x', base_url: 'http://127.0.0.1:1' },

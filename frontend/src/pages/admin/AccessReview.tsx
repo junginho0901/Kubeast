@@ -29,6 +29,7 @@ const FLAG_TONE: Record<string, string> = {
   api_key_only: 'bg-slate-700 text-slate-300',
   admin_role: 'bg-red-500/20 text-red-300',
   has_admin_permissions: 'bg-red-500/20 text-red-300',
+  sensitive_access: 'bg-yellow-500/20 text-yellow-300',
   dormant: 'bg-red-500/20 text-red-300',
   expired: 'bg-red-500/20 text-red-300',
   locked: 'bg-yellow-500/20 text-yellow-300',

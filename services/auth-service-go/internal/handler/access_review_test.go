@@ -12,6 +12,8 @@ import (
 
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/accessreview"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/config"
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/model"
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/repository"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
@@ -130,5 +132,23 @@ func TestAccessReviewCSV(t *testing.T) {
 	records, err := csv.NewReader(bytes.NewReader(buf.Bytes()[3:])).ReadAll()
 	if err != nil || len(records) != 2 || records[1][0] != "Admin" || records[1][3] != "*" {
 		t.Errorf("roles csv = %v err = %v", records, err)
+	}
+}
+
+// The flag reaches the file a reviewer keeps, on both sections that name a role.
+func TestAccessReviewCSVCarriesTheSensitiveRoleFlag(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	rep := accessreview.Build(now, accessreview.Settings{}, now, accessreview.Input{
+		Grants: []repository.ReviewClusterGrant{{UserID: "u", UserEmail: "u@example.com", ClusterName: "c", RoleID: 9, Role: "shell"}},
+		Roles:  []model.RoleWithPermissions{{Role: model.Role{ID: 9, Name: "shell"}, Permissions: []string{"resource.node.shell"}}},
+	})
+	for _, section := range []string{"cluster_roles", "roles"} {
+		header, rows := accessReviewCSV(rep, section)
+		if len(rows) != 1 {
+			t.Fatalf("%s: rows %v", section, rows)
+		}
+		if got := rows[0][len(header)-1]; !strings.Contains(got, "sensitive_access") {
+			t.Errorf("%s: flags cell %q, want sensitive_access", section, got)
+		}
 	}
 }

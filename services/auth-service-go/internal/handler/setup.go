@@ -161,6 +161,9 @@ func (h *SetupHandler) PostSetup(w http.ResponseWriter, r *http.Request) {
 // the freshly registered cluster (the UI's old "waiting for rollout" step
 // becomes a connection check — 00-COMMON §2-4).
 func (h *SetupHandler) RolloutStatus(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requirePerm(h.auditStore, w, r, auth.PermClustersCreate); !ok {
+		return
+	}
 	connStatus, connMsg := k8ssetup.CheckK8sServiceHealth(h.cfg.K8sServiceHealthURL, 2)
 	ready := connStatus == "connected"
 	response.JSON(w, http.StatusOK, map[string]interface{}{

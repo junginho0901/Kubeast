@@ -294,6 +294,7 @@
       "expiring_30d": "expires ≤30d",
       "unused_30d": "unused 30d",
       "has_admin_permissions": "admin permissions",
+      "sensitive_access": "shell, exec or Secret values",
       "unused": "unused"
     },
     "snapshot": {
@@ -3005,6 +3006,7 @@
       "ssoDenied": "Sign-in was cancelled or refused by the identity provider.",
       "ssoDomain": "This email domain is not allowed to sign in.",
       "ssoEmailUnverified": "The identity provider has not verified this email address.",
+      "ssoEmailInvalid": "This name cannot be used for an account: it may not contain a colon, a space or a control character.",
       "ssoNoEmail": "The identity provider did not return an email address.",
       "tokenTooLarge": "Your roles differ across too many clusters to fit in a sign-in token. Ask an administrator to align them."
     },

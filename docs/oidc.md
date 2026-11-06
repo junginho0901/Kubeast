@@ -128,6 +128,7 @@ auth:
 
 A signed-in person's requests go to the target cluster as **that person's email + the group `kubeast:viewer`/`operator`/`admin`** (impersonation).
 Provider groups do not go to the cluster RBAC directly.
+A sign-in that reaches an account still waiting for approval (where a self sign-up stays) removes that account's password and ends its tokens, because the sign-up proved nothing about the address. An account past approval keeps its password.
 For the cluster-side bindings, see [cluster-requirements §1](cluster-requirements.md).
 
 ## 6. Sign-in failure codes
@@ -142,4 +143,5 @@ For the cluster-side bindings, see [cluster-requirements §1](cluster-requiremen
 | `oidc_no_email` | No email claim | Scope `email`, `claims.email` |
 | `oidc_email_unverified` | `email_verified=false` | Email verification at the provider |
 | `oidc_domain` | Outside `allowedDomains` | The value |
+| `oidc_email_invalid` | A first sign-in whose name cannot be a Kubernetes user: it holds a colon (`system:`, `eks:`, `kubeast:` and the like are kept for the cluster's own users), a space or a control character. An account that already exists is not refused | `claims.email` |
 | `oidc_provision` | Creating the account or applying the role failed | The role names in `roleMapping` (a role that does not exist fails), DB |

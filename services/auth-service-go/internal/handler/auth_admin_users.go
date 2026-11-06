@@ -139,6 +139,12 @@ func (h *AuthHandler) AdminBulkCreateUsers(w http.ResponseWriter, r *http.Reques
 			bulkErrors = append(bulkErrors, model.BulkError{Email: u.Email, Message: "Missing required fields (name, email, password)"})
 			continue
 		}
+		if err := checkAccountName(u.Email); err != nil {
+			writeAudit(h.auditStore, r, payload, auditEvent{action: "user.create", targetType: "user", targetEmail: u.Email,
+				after: map[string]any{"email": u.Email, "bulk": true}, err: err})
+			bulkErrors = append(bulkErrors, model.BulkError{Email: u.Email, Message: err.Error()})
+			continue
+		}
 		if err := security.ValidatePassword(u.Password, u.Email, h.cfg.PasswordMinLength); err != nil {
 			bulkErrors = append(bulkErrors, model.BulkError{Email: u.Email, Message: err.Error()})
 			continue
@@ -237,6 +243,12 @@ func (h *AuthHandler) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	if !strings.Contains(req.Email, "@") {
 		response.Error(w, http.StatusBadRequest, "Invalid email")
+		return
+	}
+	if err := checkAccountName(req.Email); err != nil {
+		writeAudit(h.auditStore, r, payload, auditEvent{action: "user.create", targetType: "user", targetEmail: req.Email,
+			after: map[string]any{"email": req.Email}, err: err})
+		response.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	if err := security.ValidatePassword(req.Password, req.Email, h.cfg.PasswordMinLength); err != nil {

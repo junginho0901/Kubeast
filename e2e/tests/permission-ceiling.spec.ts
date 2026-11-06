@@ -336,6 +336,117 @@ test.describe('permission ceiling (M16)', () => {
     }
   })
 
+  test('a new account cannot be named as a cluster identity; an ordinary address and the admin keep working', async ({ request }) => {
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const ts = Date.now().toString(36)
+    const made: string[] = []
+    const account = (email: string) => ({ name: 'E2E name', email, password: 'e2e-ceiling-throwaway-9' })
+    try {
+      for (const email of [`system:anonymous-${ts}@kubeast.local`, `kubeast:cache-${ts}@kubeast.local`, ` e2e-space-${ts}@kubeast.local`, `e2e-space-${ts}@kubeast.local `, `e2e space-${ts}@kubeast.local`]) {
+        const res = await request.post('/api/v1/auth/admin/users', { headers: admin, data: account(email), failOnStatusCode: false })
+        expect.soft(res.status(), `create ${JSON.stringify(email)}`).toBe(400)
+        expect.soft(await res.text(), `${JSON.stringify(email)} says why`).toContain('colon')
+        const bulk = await request.post('/api/v1/auth/admin/users/bulk', { headers: admin, data: { users: [account(email)] }, failOnStatusCode: false })
+        const body = await bulk.json()
+        expect.soft(body.errors?.length, `bulk ${JSON.stringify(email)}`).toBe(1)
+        expect.soft(body.created ?? [], `bulk ${JSON.stringify(email)} made nothing`).toEqual([])
+      }
+      const row = (await auditRows(request, admin, 'user.create')).find((r) => r.TargetEmail === `system:anonymous-${ts}@kubeast.local` && r.Result === 'failure')
+      expect(row, 'the refusal is audited').toBeTruthy()
+
+      for (const email of [`e2e.first+tag-${ts}@kubeast.local`, `e2e-홍길동-${ts}@kubeast.local`]) {
+        const res = await request.post('/api/v1/auth/admin/users', { headers: admin, data: account(email), failOnStatusCode: false })
+        expect(res.status(), `${email}: ${await res.text()}`).toBe(201)
+        made.push((await res.json()).id)
+        expect((await request.post('/api/v1/auth/login', { data: { email, password: 'e2e-ceiling-throwaway-9' } })).status(), `${email} signs in`).toBe(200)
+      }
+      expect((await request.get('/api/v1/auth/me', { headers: admin })).status(), 'the default admin signs in as before').toBe(200)
+    } finally {
+      for (const id of made) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers: admin, failOnStatusCode: false })
+    }
+  })
+
+  test('taking a permission from a role ends what its holders hold; adding one or a description ends nothing', async ({ request }) => {
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const ts = Date.now().toString(36)
+    const password = 'e2e-ceiling-throwaway-8'
+    const memberRole = await roleId(request, admin, 'Member')
+    const roles: number[] = []
+    const users: string[] = []
+    const newRole = async (name: string, permissions: string[]) => {
+      const res = await request.post('/api/v1/auth/admin/roles', { headers: admin, data: { name, permissions } })
+      expect(res.status(), await res.text()).toBe(201)
+      const id = (await res.json()).id as number
+      roles.push(id)
+      return id
+    }
+    const newUser = async (email: string, role: number) => {
+      const res = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E holder', email, password, role_id: role } })
+      expect(res.status(), await res.text()).toBe(201)
+      const id = (await res.json()).id as string
+      users.push(id)
+      return id
+    }
+    const alive = async (headers: Record<string, string>) => (await request.get('/api/v1/auth/me', { headers, failOnStatusCode: false })).status()
+    try {
+      const clusterName = `e2e-held-${ts}`
+      const clusterRole = await newRole(clusterName, ['menu.dashboard', 'resource.*.read'])
+      const edit = (id: number, name: string, description: string, permissions: string[]) => request.put(`/api/v1/auth/admin/roles/${id}`, { headers: admin, data: { name, description, permissions } })
+      const granted = `e2e-held-grant-${ts}@kubeast.local`
+      const grantedId = await newUser(granted, memberRole)
+      expect((await request.put(`/api/v1/auth/admin/users/${grantedId}/cluster-roles/self`, { headers: admin, data: { role: clusterName } })).ok(), 'grant').toBeTruthy()
+      const globalOnly = `e2e-held-global-${ts}@kubeast.local`
+      await newUser(globalOnly, clusterRole)
+      const bystander = `e2e-held-none-${ts}@kubeast.local`
+      await newUser(bystander, memberRole)
+
+      let grantToken = await login(request, granted, password)
+      const globalToken = await login(request, globalOnly, password)
+      const otherToken = await login(request, bystander, password)
+
+      expect((await edit(clusterRole, clusterName, 'edited', ['menu.dashboard', 'resource.*.read'])).status(), 'the description alone').toBe(200)
+      expect(await alive(grantToken), 'a description ends nothing').toBe(200)
+      expect((await edit(clusterRole, clusterName, 'edited', ['menu.*', 'resource.*.read'])).status(), 'a wider key').toBe(200)
+      expect(await alive(grantToken), 'a wider key ends nothing').toBe(200)
+
+      expect((await edit(clusterRole, clusterName, 'edited', ['menu.*'])).status(), 'a cluster key taken away').toBe(200)
+      expect(await alive(grantToken), 'the holder on a cluster').toBe(401)
+      expect(await alive(globalToken), 'a global role\'s token never held that key').toBe(200)
+      expect(await alive(otherToken), 'someone without the role').toBe(200)
+      grantToken = await login(request, granted, password)
+      expect(await alive(grantToken), 'signing in again works').toBe(200)
+
+      const adminName = `e2e-held-admin-${ts}`
+      const adminRole = await newRole(adminName, ['admin.audit.read', 'menu.*'])
+      const adminHolder = `e2e-held-admin-${ts}@kubeast.local`
+      await newUser(adminHolder, adminRole)
+      const adminToken = await login(request, adminHolder, password)
+      expect((await edit(adminRole, adminName, '', ['menu.*'])).status(), 'an admin key taken away').toBe(200)
+      expect(await alive(adminToken), 'a global role\'s token held that key').toBe(401)
+    } finally {
+      for (const id of users) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers: admin, failOnStatusCode: false })
+      for (const id of roles) await request.delete(`/api/v1/auth/admin/roles/${id}`, { headers: admin, failOnStatusCode: false })
+    }
+  })
+
+  test('the setup rollout status answers only what the wizard needs permission for', async ({ request }) => {
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const ts = Date.now().toString(36)
+    const email = `e2e-rollout-${ts}@kubeast.local`
+    const made = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E rollout', email, password: 'e2e-ceiling-throwaway-7', role_id: await roleId(request, admin, 'Member') } })
+    expect(made.status(), await made.text()).toBe(201)
+    const id = (await made.json()).id as string
+    try {
+      const res = await request.get('/api/v1/auth/setup/rollout-status', { headers: await login(request, email, 'e2e-ceiling-throwaway-7'), failOnStatusCode: false })
+      expect(res.status(), 'without admin.clusters.create').toBe(403)
+      const ok = await request.get('/api/v1/auth/setup/rollout-status', { headers: admin })
+      expect(ok.status(), 'the wizard\'s user').toBe(200)
+      expect(typeof (await ok.json()).ready).toBe('boolean')
+    } finally {
+      await request.delete(`/api/v1/auth/admin/users/${id}`, { headers: admin, failOnStatusCode: false })
+    }
+  })
+
   test('AI model settings follow the permission in the token, not the role name', async ({ request }) => {
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     const ts = Date.now().toString(36)

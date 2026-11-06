@@ -415,6 +415,10 @@ func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 	groupsLookup := h.addGoogleGroups(r.Context(), &claims)
 
 	user, err := h.provisionOIDCUser(r, claims)
+	if errors.Is(err, errAccountName) {
+		h.oidcFail(w, r, "oidc_email_invalid", claims.Email, err)
+		return
+	}
 	if err != nil {
 		h.oidcFail(w, r, "oidc_provision", claims.Email, err)
 		return
@@ -479,7 +483,15 @@ func (h *AuthHandler) provisionOIDCUser(r *http.Request, claims oidcClaims) (*mo
 	if err != nil {
 		return nil, err
 	}
+	if user != nil && user.RoleName == "Pending" && user.PasswordHash != "" {
+		if err := h.endSelfSignUpCredentials(r, user); err != nil {
+			return nil, err
+		}
+	}
 	if user == nil {
+		if err := checkAccountName(claims.Email); err != nil {
+			return nil, err
+		}
 		roleName := mapped
 		role, err := h.repo.GetRoleByName(ctx, roleName)
 		if err != nil || role == nil {
@@ -532,11 +544,53 @@ func (h *AuthHandler) provisionOIDCUser(r *http.Request, claims oidcClaims) (*mo
 	return user, nil
 }
 
+// endSelfSignUpCredentials is for a provider's sign-in reaching an account still
+// waiting for approval: a sign-up proved nothing about the address, so whoever
+// made it must not keep a password or a token that a later approval or role sync
+// would widen. The provider has just proved who owns the address.
+func (h *AuthHandler) endSelfSignUpCredentials(r *http.Request, user *model.User) error {
+	ctx := r.Context()
+	if err := h.repo.UpdateUserPassword(ctx, user.ID, ""); err != nil {
+		return err
+	}
+	if err := h.endTokens(ctx, user); err != nil {
+		return err
+	}
+	user.PasswordHash = ""
+	h.writeAuditLog(r, "user.account.link", &user.ID, &user.Email, &user.ID, &user.Email, nil, jsonRaw(map[string]any{"method": "oidc", "password_removed": true}))
+	return nil
+}
+
+// endTokens ends every token issued to the user so far and keeps user current,
+// so a token issued from it next is valid.
+func (h *AuthHandler) endTokens(ctx context.Context, user *model.User) error {
+	if err := h.repo.BumpTokenVersion(ctx, user.ID); err != nil {
+		return err
+	}
+	v, err := h.repo.GetTokenVersion(ctx, user.ID)
+	if err != nil {
+		return err
+	}
+	user.TokenVersion = v
+	return nil
+}
+
 // syncClusterGrants sets the per-cluster roles the user's groups name; each
 // change is a user.cluster_role.set/.unset row (after.via = oidc, the user as
-// actor), like an admin's grant.
-func (h *AuthHandler) syncClusterGrants(r *http.Request, user *model.User, want map[string]string) error {
+// actor), like an admin's grant. A grant lost or replaced ends the tokens the
+// user's other devices hold, which carry the old matrix; a new grant takes
+// nothing away, so they get it at their next refresh.
+func (h *AuthHandler) syncClusterGrants(r *http.Request, user *model.User, want map[string]string) (err error) {
 	ctx, userID := r.Context(), user.ID
+	lost := false
+	defer func() {
+		if !lost {
+			return
+		}
+		if endErr := h.endTokens(ctx, user); endErr != nil && err == nil {
+			err = endErr
+		}
+	}()
 	self := auth.TokenPayload{UserID: user.ID, Email: user.Email}
 	have, err := h.repo.ListUserClusterRoleNames(ctx, userID)
 	if err != nil {
@@ -576,6 +630,7 @@ func (h *AuthHandler) syncClusterGrants(r *http.Request, user *model.User, want 
 		if err != nil {
 			return err
 		}
+		lost = lost || have[clusterID] != ""
 	}
 	for clusterID := range have {
 		if temporary[clusterID] {
@@ -588,6 +643,7 @@ func (h *AuthHandler) syncClusterGrants(r *http.Request, user *model.User, want 
 			if err != nil {
 				return err
 			}
+			lost = true
 		}
 	}
 	return nil

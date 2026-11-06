@@ -57,6 +57,11 @@ Kubeast sends requests to the cluster **as the signed-in person** (impersonation
 | `pods/exec` in the log file namespaces | When you turn on log file viewing (§10) | `features.logFiles` → `templates/logfiles-rbac.yaml` |
 | Alert investigator identity `kubeast:investigator`: impersonation allowed, plus a read-only ClusterRole (get, list and watch; no Secrets, exec, proxy or writes) | When you turn on alerts → AI investigation. Kubeast runs the read tools as this identity instead of a person. If the investigation also has to read CRDs such as Kyverno PolicyReport or Argo Rollout, add read rules in `features.alertInvestigation.extraRules`. The render refuses verbs other than get, list and watch, `apiGroups "*"`, Secrets, exec, proxy and tokens | `features.alertInvestigation` → `templates/impersonation-investigator.yaml` (the render fails when impersonation is off) |
 
+**The user name is the account's email**, and a binding of that `User` applies to whoever holds the account.
+A new account's name may not hold a colon, a space or a control character, so it cannot be a `system:`, `eks:` or `kubeast:` user or another address with spaces around it.
+Kubeast cannot tell whether an address belongs to the person: anyone with `admin.users.create`, or an admin approving a self sign-up, can name an address that has no account yet.
+Prefer group bindings; if you bind a `User`, make sure that person's account exists, or that accounts come from your identity provider.
+
 **Write = the Kubernetes default `edit`.** This is the same scope as someone given `edit` for kubectl. It includes:
 
 - reading and writing Secrets

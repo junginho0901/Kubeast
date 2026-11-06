@@ -3,6 +3,7 @@ package repository_test
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net/url"
 	"os"
 	"slices"
@@ -317,3 +318,43 @@ func TestPostgresDormantIsWhatTheLockTakes(t *testing.T) {
 }
 
 func ptr(t time.Time) *time.Time { return &t }
+
+func TestPostgresRoleEditEndsTheTokensItNames(t *testing.T) {
+	pool := migratedDatabase(t)
+	ctx := context.Background()
+	repo := repository.New(pool)
+	held := roleID(t, pool, "t-held", "resource.*.read")
+	other := roleID(t, pool, "t-other")
+	exec(t, pool, `INSERT INTO clusters (id, display_name, mode) VALUES ('c1', 'One', 'external'), ('c2', 'Two', 'external')`)
+	for id, role := range map[string]int{"granted": other, "global": held, "both": held, "neither": other} {
+		exec(t, pool, `INSERT INTO auth_users (id, name, email, password_hash, role_id) VALUES ($1, $1, $2, 'x', $3)`, id, id+"@example.com", role)
+	}
+	exec(t, pool, `INSERT INTO user_cluster_roles (user_id, cluster_id, role_id) VALUES ('granted', 'c1', $1), ('both', 'c1', $1), ('both', 'c2', $1)`, held)
+
+	versions := func() map[string]int {
+		got := map[string]int{}
+		for _, id := range []string{"granted", "global", "both", "neither"} {
+			v, err := repo.GetTokenVersion(ctx, id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got[id] = v
+		}
+		return got
+	}
+	for _, c := range []struct {
+		tokens repository.RoleTokens
+		want   map[string]int
+	}{
+		{repository.RoleTokensKept, map[string]int{"granted": 0, "global": 0, "both": 0, "neither": 0}},
+		{repository.RoleTokensOfGrants, map[string]int{"granted": 1, "global": 0, "both": 1, "neither": 0}},
+		{repository.RoleTokensOfAllHolders, map[string]int{"granted": 2, "global": 1, "both": 2, "neither": 0}},
+	} {
+		if _, err := repo.UpdateRole(ctx, held, "t-held", "edited", []string{"resource.*.read"}, c.tokens); err != nil {
+			t.Fatal(err)
+		}
+		if got := versions(); !maps.Equal(got, c.want) {
+			t.Errorf("%v: versions %v, want %v", c.tokens, got, c.want)
+		}
+	}
+}
