@@ -76,3 +76,61 @@ test.describe('ws multiplexer — per-subscription cluster gate (M1)', () => {
     }
   })
 })
+
+test.describe('ws multiplexer — the watches of one tab', () => {
+  test('closed watches leave the limit of 50 free, open ones stop at it, and each frame names its cluster', async ({ page }) => {
+    test.setTimeout(120_000)
+    await page.goto('/')
+    const got = await page.evaluate(async () => {
+      const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/v1/cluster/wsMultiplexer?cluster=self`)
+      await new Promise((resolve, reject) => {
+        ws.onopen = resolve
+        ws.onerror = () => reject(new Error('ws error'))
+      })
+      type Frame = { type: string; clusterId?: string; query?: string; error?: { message?: string } }
+      const waiting = new Map<string, (f: Frame) => void>()
+      ws.onmessage = (ev) => {
+        const f = JSON.parse(ev.data) as Frame
+        const deliver = waiting.get(f.query ?? '')
+        if (deliver) {
+          waiting.delete(f.query ?? '')
+          deliver(f)
+        }
+      }
+      const message = (type: string, query: string) => JSON.stringify({ type, clusterId: 'self', path: '/api/v1/namespaces', query })
+      const firstFrame = (query: string) => new Promise<Frame>((resolve) => {
+        const timer = setTimeout(() => {
+          waiting.delete(query)
+          resolve({ type: 'no frame' })
+        }, 15_000)
+        waiting.set(query, (f) => {
+          clearTimeout(timer)
+          resolve(f)
+        })
+        ws.send(message('REQUEST', query))
+      })
+
+      const closed: Frame[] = []
+      for (let i = 0; i < 60; i += 1) {
+        closed.push(await firstFrame(`watch=1&closed=${i}`))
+        ws.send(message('CLOSE', `watch=1&closed=${i}`))
+      }
+      const open: Frame[] = []
+      for (let i = 0; i < 50; i += 1) open.push(await firstFrame(`watch=1&open=${i}`))
+      const pastTheLimit = await firstFrame('watch=1&past=1')
+      ws.send(message('CLOSE', 'watch=1&open=0'))
+      const afterOneClosed = await firstFrame('watch=1&past=1')
+      ws.close()
+      return {
+        closed: closed.map((f) => `${f.type} ${f.clusterId}`),
+        open: open.map((f) => f.type),
+        pastTheLimit: pastTheLimit.error?.message,
+        afterOneClosed: afterOneClosed.type,
+      }
+    })
+    expect(got.closed).toEqual(Array(60).fill('DATA self'))
+    expect(got.open).toEqual(Array(50).fill('DATA'))
+    expect(got.pastTheLimit).toBe('max subscriptions reached for this connection (50), cannot create new watch')
+    expect(got.afterOneClosed).toBe('DATA')
+  })
+})

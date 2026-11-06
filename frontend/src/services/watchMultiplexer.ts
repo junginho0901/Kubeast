@@ -8,24 +8,18 @@ type ClientMessage = {
   userId?: string
 }
 
-type ServerMessage =
-  | {
-      type: 'DATA'
-      path: string
-      query: string
-      data: any
-    }
-  | {
-      type: 'ERROR'
-      path: string
-      query: string
-      error: { message?: string }
-    }
-  | {
-      type: 'COMPLETE'
-      path: string
-      query: string
-    }
+type ServerMessage = {
+  // the cluster its REQUEST named; a server older than this field leaves it out
+  clusterId?: string
+  path: string
+  query: string
+} & (
+  | { type: 'DATA'; data: any }
+  | { type: 'ERROR'; error: { message?: string } }
+  | { type: 'COMPLETE' }
+  // the watch started over and cannot say what was deleted meanwhile: read the list again
+  | { type: 'RESYNC' }
+)
 
 type Listener = (msg: ServerMessage) => void
 
@@ -38,13 +32,13 @@ const getWsBase = () => {
   return `${protocol}//${window.location.host}`
 }
 
-const makeKey = (path: string, query: string) => `${path}?${query}`
+const makeKey = (clusterId: string, path: string, query: string) => `${clusterId}\n${path}?${query}`
 
 class WebSocketMultiplexer {
   private socket: WebSocket | null = null
   private listeners = new Map<string, Set<Listener>>()
-  // subscriptions: WS reconnect 시 어떤 (path, query) 들을 다시 REQUEST 해야
-  // 하는지 알아야 하므로 ClientMessage 자체를 별도 보관. listeners 와 1:1.
+  // subscriptions: WS reconnect 시 어떤 (cluster, path, query) 들을 다시 REQUEST
+  // 해야 하는지 알아야 하므로 ClientMessage 자체를 별도 보관. listeners 와 1:1.
   private subscriptions = new Map<string, ClientMessage>()
   private connecting: Promise<WebSocket> | null = null
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -69,6 +63,20 @@ class WebSocketMultiplexer {
         this.scheduleReconnect()
       })
     }, delay)
+  }
+
+  // A frame goes to the cluster it names, so one still on its way when the screen moved to another cluster goes
+  // nowhere. A server that does not name clusters yet (an upgrade under way) leaves only the path and query to go by.
+  private dispatch(msg: ServerMessage) {
+    if (msg.clusterId) {
+      this.listeners.get(makeKey(msg.clusterId, msg.path, msg.query))?.forEach((fn) => fn(msg))
+      return
+    }
+    for (const [key, sub] of this.subscriptions) {
+      if (sub.path === msg.path && sub.query === msg.query) {
+        this.listeners.get(key)?.forEach((fn) => fn(msg))
+      }
+    }
   }
 
   private waitForOpen(socket: WebSocket): Promise<void> {
@@ -123,12 +131,7 @@ class WebSocketMultiplexer {
 
     socket.onmessage = (evt) => {
       try {
-        const msg = JSON.parse(evt.data) as ServerMessage
-        const key = makeKey(msg.path, msg.query)
-        const handlers = this.listeners.get(key)
-        if (handlers) {
-          handlers.forEach((fn) => fn(msg))
-        }
+        this.dispatch(JSON.parse(evt.data) as ServerMessage)
       } catch (err) {
         console.warn('watch multiplexer parse error', err)
       }
@@ -163,7 +166,7 @@ class WebSocketMultiplexer {
   }
 
   async subscribe(msg: ClientMessage, onMessage: Listener): Promise<() => void> {
-    const key = makeKey(msg.path, msg.query)
+    const key = makeKey(msg.clusterId, msg.path, msg.query)
     const set = this.listeners.get(key) || new Set()
     set.add(onMessage)
     this.listeners.set(key, set)
@@ -188,7 +191,7 @@ class WebSocketMultiplexer {
   }
 
   unsubscribe(msg: ClientMessage, onMessage: Listener) {
-    const key = makeKey(msg.path, msg.query)
+    const key = makeKey(msg.clusterId, msg.path, msg.query)
     const set = this.listeners.get(key)
     if (!set) return
     set.delete(onMessage)

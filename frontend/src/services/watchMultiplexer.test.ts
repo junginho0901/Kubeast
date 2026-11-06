@@ -290,6 +290,78 @@ describe('WebSocketMultiplexer', () => {
     expect(second).toHaveBeenCalledTimes(1)
   })
 
+  // Closing a cluster's watch does not recall the frames already on their way: they must not land in the next cluster's list.
+  it('a late frame of the cluster left behind does not reach the next cluster\'s subscription', async () => {
+    const mux = new WebSocketMultiplexer()
+    const a = { type: 'REQUEST' as const, clusterId: 'cluster-a', path: '/api/v1/pods', query: 'watch=1' }
+    const b = { ...a, clusterId: 'cluster-b' }
+    const p = mux.subscribe(a, vi.fn())
+    await flush()
+    const ws = MockWebSocket.instances[0]
+    ws.simulateOpen()
+    const closeA = await p
+    closeA()
+    const onB = vi.fn()
+    await mux.subscribe(b, onB)
+
+    ws.simulateMessage({ type: 'DATA', clusterId: 'cluster-a', path: a.path, query: a.query, data: { type: 'MODIFIED', object: { name: 'only-in-a' } } })
+    expect(onB).not.toHaveBeenCalled()
+
+    ws.simulateMessage({ type: 'DATA', clusterId: 'cluster-b', path: b.path, query: b.query, data: { type: 'MODIFIED', object: { name: 'in-b' } } })
+    expect(onB).toHaveBeenCalledTimes(1)
+    expect(onB.mock.calls[0][0].data.object.name).toBe('in-b')
+  })
+
+  it('the same path on two clusters is two subscriptions, each with its own frames, CLOSE and reconnect', async () => {
+    const mux = new WebSocketMultiplexer()
+    const a = { type: 'REQUEST' as const, clusterId: 'cluster-a', path: '/api/v1/pods', query: 'watch=1' }
+    const b = { ...a, clusterId: 'cluster-b' }
+    const onA = vi.fn()
+    const onB = vi.fn()
+    const p = mux.subscribe(a, onA)
+    await flush()
+    const ws = MockWebSocket.instances[0]
+    ws.simulateOpen()
+    await p
+    await mux.subscribe(b, onB)
+    expect(ws.sent.map((m) => JSON.parse(m))).toEqual([a, b])
+
+    ws.simulateMessage({ type: 'DATA', clusterId: 'cluster-b', path: b.path, query: b.query, data: { type: 'ADDED', object: { name: 'in-b' } } })
+    expect(onA).not.toHaveBeenCalled()
+    expect(onB).toHaveBeenCalledTimes(1)
+
+    ws.simulateServerClose()
+    await vi.advanceTimersByTimeAsync(1000)
+    await flush()
+    const ws2 = MockWebSocket.instances[1]
+    ws2.simulateOpen()
+    await flush()
+    expect(ws2.sent.map((m) => JSON.parse(m))).toEqual([a, b])
+
+    mux.unsubscribe(a, onA)
+    expect(JSON.parse(ws2.sent[ws2.sent.length - 1])).toEqual({ ...a, type: 'CLOSE' })
+    ws2.simulateMessage({ type: 'DATA', clusterId: 'cluster-b', path: b.path, query: b.query, data: { type: 'ADDED', object: { name: 'also-in-b' } } })
+    expect(onB).toHaveBeenCalledTimes(2)
+  })
+
+  // During an upgrade a new screen can talk to a server that does not name the cluster yet.
+  it('a frame naming no cluster still reaches the subscription of its path and query', async () => {
+    const mux = new WebSocketMultiplexer()
+    const pods = { type: 'REQUEST' as const, clusterId: 'cluster-a', path: '/api/v1/pods', query: 'watch=1' }
+    const onPods = vi.fn()
+    const onNodes = vi.fn()
+    const p = mux.subscribe(pods, onPods)
+    await flush()
+    const ws = MockWebSocket.instances[0]
+    ws.simulateOpen()
+    await p
+    await mux.subscribe({ ...pods, path: '/api/v1/nodes' }, onNodes)
+
+    ws.simulateMessage({ type: 'DATA', path: pods.path, query: pods.query, data: { type: 'ADDED', object: { name: 'web' } } })
+    expect(onPods).toHaveBeenCalledTimes(1)
+    expect(onNodes).not.toHaveBeenCalled()
+  })
+
   it('a subscription dropped before its REQUEST goes out on an open socket sends no REQUEST', async () => {
     const mux = new WebSocketMultiplexer()
     const pods = { type: 'REQUEST' as const, clusterId: 'self', path: '/api/v1/pods', query: 'watch=1' }
