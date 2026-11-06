@@ -7,6 +7,13 @@ export function auditPageFilter(filter: AuditLogFilter, offset: number, answer?:
   return { ...filter, offset, as_of: filter.as_of ?? (placeholder ? undefined : answer?.as_of) }
 }
 
+// Rows per page is the table's own value, so choosing one reads at once: the filter the table shows, from the first
+// page, and a new as_of (the rows written since show, as a Search would).
+export function auditLimitFilter(filter: AuditLogFilter, limit: number): AuditLogFilter {
+  const { as_of: _asOf, ...rest } = filter
+  return { ...rest, limit, offset: 0 }
+}
+
 // The CSV of the applied filter, of the rows the screen counts (as_of).
 export function auditExportHref(filter: AuditLogFilter, asOf?: number): string {
   const params = new URLSearchParams()

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, KeyValueTags, Th, Tx } from './DetailCommon'
+import { EventsSection, InfoSection, InfoRow, KeyValueTags, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { draValueMap } from './draText'
@@ -28,6 +28,8 @@ type ResourceSliceDescribe = {
   // the claims holding this slice's devices (driver, pool and device the slice's), worked out on the server
   allocations?: Array<{ claim_namespace: string; claim_name: string; request: string; device: string; driver: string; pool: string }>
   allocations_error?: string
+  events?: unknown[]
+  events_error?: string
 }
 
 const text = (v: unknown) => (v != null && v !== '' ? String(v) : '-')
@@ -174,6 +176,8 @@ export default function ResourceSliceInfo({ name, rawJson }: Props) {
           <KeyValueTags data={annotations} />
         </InfoSection>
       )}
+
+      <EventsSection events={describe?.events} error={describe?.events_error} loading={isLoading} />
     </>
   )
 }

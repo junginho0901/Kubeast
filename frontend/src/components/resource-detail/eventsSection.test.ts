@@ -10,10 +10,20 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import en from '../../i18n/locales/en.json'
 import ko from '../../i18n/locales/ko.json'
 import { EventsSection } from './DetailCommon'
-import { eventsNewestFirst } from './detailFormat'
+import { eventsForAI, eventsNewestFirst } from './detailFormat'
 import IngressClassDetail from './network-info/IngressClassDetail'
 import EndpointDetail from './network-info/EndpointDetail'
+import IngressDetail from './network-info/IngressDetail'
+import NetworkPolicyDetail from './network-info/NetworkPolicyDetail'
+import EndpointSliceDetail from './network-info/EndpointSliceDetail'
+import DeviceClassInfo from './DeviceClassInfo'
+import ResourceClaimInfo from './ResourceClaimInfo'
+import ResourceClaimTemplateInfo from './ResourceClaimTemplateInfo'
+import ResourceSliceInfo from './ResourceSliceInfo'
+import GenericInfo from './GenericInfo'
+import { PageContextCtx, type PageContextValue } from '@/components/PageContext'
 import { PodDescribeTab } from '@/pages/cluster-view/PodDescribeTab'
+import { applyNetworkPolicyToDrawer } from '@/pages/network/networkpolicies/networkPolicyWatchNormalize'
 
 // Every drawer draws its Events section: the events, "None" without any, and that they could not be read (with the
 // server's reason) instead of a "None" nobody read.
@@ -120,6 +130,70 @@ describe('drawers draw the Events section with or without events', () => {
     expect(events(tab({ events_error: REFUSED }))).toContain('Could not load the events: events is forbidden')
     expect(events(tab({}))).toContain('Could not load the events.')
   })
+
+  it('the Cluster View pod window\'s Describe tab: Labels, Containers and Conditions say "None" as Events does', () => {
+    const tr = (key: string, fallback: string, o?: Record<string, unknown>) => i18n.t(key, { defaultValue: fallback, ...o })
+    const tab = (data: Record<string, unknown>) => renderToStaticMarkup(createElement(PodDescribeTab, { data: { name: 'p', namespace: 'ns', events: [], ...data }, na: '-', tr }))
+    const part = (html: string, title: string) => {
+      const at = html.indexOf(`>${title}</h3>`)
+      if (at < 0) return `no ${title} section`
+      const next = html.indexOf('<h3', at)
+      return html.slice(at, next < 0 ? undefined : next)
+    }
+    for (const empty of [{}, { labels: {}, containers: [], conditions: [] }, { labels: null, containers: null, conditions: null }]) {
+      const html = tab(empty)
+      for (const title of ['Labels', 'Containers', 'Conditions']) expect(part(html, title), title).toContain('>None</p>')
+    }
+    const filled = tab({ labels: { app: 'web' }, containers: [{ name: 'c1', image: 'i', ready: true, restart_count: 0 }], conditions: [{ type: 'Ready', status: 'True' }] })
+    expect(part(filled, 'Labels')).toContain('app:')
+    expect(part(filled, 'Containers')).toContain('c1')
+    expect(part(filled, 'Conditions')).toContain('Ready')
+    for (const title of ['Labels', 'Containers', 'Conditions']) expect(part(filled, title), title).not.toContain('>None</p>')
+  })
+})
+
+// The drawers that had no Events section: what kubectl describe's Events shows, "None" without any, the reason when the
+// cluster refused, each from the describe answer the drawer reads.
+describe('the drawers that gained the Events section', () => {
+  const PAGE = { registerLayer: () => {}, unregisterLayer: () => {}, getSnapshot: () => ({}), consumeContextChanged: () => false } as unknown as PageContextValue
+  const inPage = (el: ReactElement) => createElement(PageContextCtx.Provider, { value: PAGE }, el)
+  const cases: { kind: string; el: ReactElement; key: unknown[] }[] = [
+    { kind: 'Ingress', el: inPage(createElement(IngressDetail, { name: 'x', namespace: 'ns', rawJson: { metadata: { name: 'x' } } })), key: ['ingress-describe', 'ns', 'x'] },
+    { kind: 'NetworkPolicy', el: inPage(createElement(NetworkPolicyDetail, { name: 'x', namespace: 'ns', rawJson: { metadata: { name: 'x' }, spec: {} } })), key: ['networkpolicy-describe', 'ns', 'x'] },
+    { kind: 'EndpointSlice', el: inPage(createElement(EndpointSliceDetail, { name: 'x', namespace: 'ns', rawJson: { metadata: { name: 'x' } } })), key: ['endpointslice-describe', 'ns', 'x'] },
+    { kind: 'DeviceClass', el: inPage(createElement(DeviceClassInfo, { name: 'x' })), key: ['deviceclass-describe', 'x'] },
+    { kind: 'ResourceClaim', el: inPage(createElement(ResourceClaimInfo, { name: 'x', namespace: 'ns' })), key: ['resourceclaim-describe', 'ns', 'x'] },
+    { kind: 'ResourceClaimTemplate', el: inPage(createElement(ResourceClaimTemplateInfo, { name: 'x', namespace: 'ns' })), key: ['resourceclaimtemplate-describe', 'ns', 'x'] },
+    { kind: 'ResourceSlice', el: inPage(createElement(ResourceSliceInfo, { name: 'x' })), key: ['resourceslice-describe', 'x'] },
+    { kind: 'a kind with no view of its own', el: inPage(createElement(GenericInfo, { name: 'x', namespace: 'ns', kind: 'Gadget', rawJson: { metadata: { name: 'x' } } })), key: ['generic-describe', 'Gadget', 'ns', 'x'] },
+  ]
+  for (const c of cases) {
+    it(`${c.kind}: the events, "None" without any, the reason when refused`, () => {
+      const drawn = (describe: unknown) => eventsPart(render('en', c.el, [[c.key, describe]]))
+      expect(rows(drawn({ name: 'x', events: [ev(1), ev(2)] }))).toBe(2)
+      expect(drawn({ name: 'x', events: [] })).toContain('>None</span>')
+      expect(drawn({ name: 'x', events_error: REFUSED })).toContain('Could not load the events: events is forbidden')
+    })
+  }
+
+  it('the AI layer gets what the section shows: the list, or why it was not read', () => {
+    expect(eventsForAI({ events: [ev(1)] })).toEqual({ events: [ev(1)] })
+    expect(eventsForAI({ events: [] })).toEqual({ events: [] })
+    expect(eventsForAI({ events_error: REFUSED })).toEqual({ events_error: REFUSED })
+    expect(eventsForAI(undefined)).toEqual({})
+  })
+})
+
+// A NetworkPolicy drawer follows the object live; a live update of the policy keeps the events the describe answered.
+describe('a NetworkPolicy drawer following its object', () => {
+  it('keeps the events through a live update', () => {
+    const prev = { name: 'x', namespace: 'ns', events: [ev(1)], pod_selector: { match_labels: {}, match_expressions: [] }, policy_types: [] }
+    const next = applyNetworkPolicyToDrawer(prev as never, { type: 'MODIFIED', object: { name: 'x', namespace: 'ns', pod_selector: { match_labels: { a: 'b' }, match_expressions: [] }, policy_types: ['Ingress'] } } as never, 'x') as unknown as Record<string, unknown>
+    expect(next.events).toEqual([ev(1)])
+    expect(next.policy_types).toEqual(['Ingress'])
+    const refused = applyNetworkPolicyToDrawer({ ...prev, events: undefined, events_error: REFUSED } as never, { type: 'MODIFIED', object: { name: 'x', namespace: 'ns', pod_selector: { match_labels: {}, match_expressions: [] }, policy_types: [] } } as never, 'x') as unknown as Record<string, unknown>
+    expect(refused.events_error).toBe(REFUSED)
+  })
 })
 
 // Every drawer component draws its Events section through EventsSection: none hides it when the list is empty
@@ -144,8 +218,8 @@ describe('the drawers', () => {
     expect(bad).toEqual([])
   })
 
-  it('so every drawer that reads events has the section (36 drawers)', () => {
+  it('so every drawer that reads events has the section (44 drawers)', () => {
     const using = files.filter((f) => /<EventsSection\b/.test(readFileSync(f, 'utf8'))).map((f) => relative(dir, f)).sort()
-    expect(using.length).toBe(36)
+    expect(using.length).toBe(44)
   })
 })

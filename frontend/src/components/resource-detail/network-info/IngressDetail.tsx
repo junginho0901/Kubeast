@@ -1,8 +1,11 @@
-import { InfoSection, InfoRow, KeyValueTags, Th, Tx } from '../DetailCommon'
-import { fmtRel, fmtTs } from '../detailFormat'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '@/services/api'
+import { EventsSection, InfoSection, InfoRow, KeyValueTags, Th, Tx } from '../DetailCommon'
+import { eventsForAI, fmtRel, fmtTs } from '../detailFormat'
 import { ResourceLink } from '../ResourceLink'
 import { backendPort, backendService } from '@/utils/ingressBackend'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
+import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { PrometheusSection, MetricCard } from '../PrometheusMetrics'
 
 interface Props {
@@ -12,6 +15,14 @@ interface Props {
 }
 
 export default function IngressDetail({ name, namespace, rawJson }: Props) {
+  // the events kubectl describe lists about the Ingress
+  const { data: describe, isLoading } = useQuery({
+    queryKey: ['ingress-describe', namespace, name],
+    queryFn: () => api.describeIngress(namespace as string, name),
+    enabled: !!name && !!namespace,
+    retry: false,
+  })
+  useResourceDetailOverlay({ kind: 'Ingress', name, namespace, extras: { spec: rawJson?.spec, status: rawJson?.status, ...eventsForAI(describe) } })
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const spec = (rawJson?.spec ?? {}) as Record<string, unknown>
   const status = (rawJson?.status ?? {}) as Record<string, unknown>
@@ -125,6 +136,7 @@ export default function IngressDetail({ name, namespace, rawJson }: Props) {
       <IngressLatencyMetrics name={name} namespace={namespace} />
 
       {Object.keys(labels).length > 0 && <InfoSection title="Labels"><KeyValueTags data={labels} /></InfoSection>}
+      <EventsSection events={describe?.events} error={describe?.events_error} loading={isLoading} />
     </>
   )
 }

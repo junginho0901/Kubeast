@@ -9,8 +9,8 @@ import { test, expect, type Page } from '@playwright/test'
 // Every drawer's numbers are the cluster's: for each object of namespace e2e-numbers on `self` (the list check's
 // fixture, made here and removed after) and for the node, the drawer's rows, summary badges, "(n)" counts and
 // tables hold what the object says, what kubectl prints of it (the API server's Table, kubectl's printEvent rules) or
-// what its ResourceQuota counts, and every drawer but the node's, the Ingress's and the NetworkPolicy's has its Events
-// section — "None" when kubectl lists no event about the object. A drawer is read until it matches or 20 s pass, then
+// what its ResourceQuota counts, and every drawer but the node's has its Events section — "None" when kubectl lists no
+// event about the object. A drawer is read until it matches or 20 s pass, then
 // every difference is listed (expect.soft), and a number on a drawer that nothing here compares fails too.
 
 const NS = 'e2e-numbers'
@@ -616,10 +616,9 @@ test.describe('number check — drawers', () => {
       const want = (s: Snap): Want => {
         const o = t.kind === 'Node' ? s.node : t.kind === 'Namespace' ? s.namespace : one(s, t.kind, t.ref.split('/')[1])
         const w = t.want(s)
-        // the events kubectl lists about it in the namespace (a node's are recorded elsewhere; Ingress and NetworkPolicy
-        // drawers list none)
+        // the events kubectl lists about it in the namespace (a node's are recorded elsewhere)
         const about = `${t.kind.toLowerCase()}/${o?.metadata.name}`
-        const events = ['Node', 'Ingress', 'NetworkPolicy'].includes(t.kind) ? {} : { events: s.events.filter((e) => e.Object === about).length }
+        const events = t.kind === 'Node' ? {} : { events: s.events.filter((e) => e.Object === about).length }
         return { ...w, ...events, ifShown: { 'Resource Version': o?.metadata.resourceVersion ?? '', ...w.ifShown }, spans: { Created: since(o?.metadata.creationTimestamp), ...w.spans } }
       }
       // the cluster read before and after the drawer, so a value that moves (a crashing pod's restarts) matches one of them

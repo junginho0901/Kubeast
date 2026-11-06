@@ -60,14 +60,38 @@ export function liveStateOf(
 export type LiveLine =
   | { state: LiveState }
   | { unknown: 'cut'; listed: number; total: number }
+  | { unknown: 'limited'; seconds: number }
   | { unknown: 'loading' | 'failed' | 'none' }
+
+// how often the page reads the store while nothing refuses it
+const STORE_READ_S = 60
+
+// A read the server refused at the user's per-minute budget (alertStore.perUserPerMinute): the seconds its Retry-After
+// names until the next is taken. Null for any other failure.
+export function storeLimited(error: unknown): { retryAfter: number } | null {
+  const res = (error as { response?: { status?: number; headers?: Record<string, unknown> } } | null)?.response
+  if (res?.status !== 429) return null
+  const seconds = Number(res.headers?.['retry-after'])
+  return { retryAfter: seconds > 0 ? Math.ceil(seconds) : STORE_READ_S }
+}
+
+// When the page reads the store next: as the server said after a refusal, else on its minute.
+export function storeRefetchMs(error: unknown): number {
+  return (storeLimited(error)?.retryAfter ?? STORE_READ_S) * 1000
+}
+
+// The seconds left of a refusal's wait, for the screen: at least 1 until the next read has answered.
+export function storeLimitedSeconds(until: number | null, now: number): number | null {
+  return until === null ? null : Math.max(1, Math.ceil((until - now) / 1000))
+}
 
 export function liveLineOf(
   item: Pick<AlertInboxItem, 'status' | 'fingerprint'>,
-  store: { on: boolean; answer?: { alerts: AlertStoreAlert[]; total: number; truncated: boolean }; failed: boolean },
+  store: { on: boolean; answer?: { alerts: AlertStoreAlert[]; total: number; truncated: boolean }; failed: boolean; limited?: number | null },
 ): LiveLine | null {
   if (item.status === 'resolved') return null
   if (!store.on) return { unknown: 'none' }
+  if (!store.answer && typeof store.limited === 'number') return { unknown: 'limited', seconds: store.limited }
   if (!store.answer) return { unknown: store.failed ? 'failed' : 'loading' }
   const state = liveStateOf(item, store.answer)
   if (state) return { state }

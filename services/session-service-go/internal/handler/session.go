@@ -18,6 +18,9 @@ import (
 	"github.com/junginho0901/kubeast/services/session-service-go/internal/repository"
 )
 
+// messagesPage is how many messages one read of a conversation holds.
+const messagesPage = 100
+
 // sessionStore is what the handler needs of repository.Repository.
 type sessionStore interface {
 	CreateSession(ctx context.Context, id, userID, clusterID, title string) (*model.Session, error)
@@ -26,6 +29,7 @@ type sessionStore interface {
 	UpdateSessionTitle(ctx context.Context, id, title string) error
 	DeleteSession(ctx context.Context, id string) error
 	GetMessages(ctx context.Context, sessionID string, limit int) ([]model.Message, error)
+	GetMessagesBefore(ctx context.Context, sessionID string, beforeID, limit int) ([]model.Message, error)
 	AddMessage(ctx context.Context, sessionID, role, content string, toolCalls, usage *json.RawMessage) (*model.Message, error)
 	GetMessageCount(ctx context.Context, sessionID string) (int, error)
 }
@@ -186,16 +190,73 @@ func (h *SessionHandler) GetSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	messages, err := h.repo.GetMessages(r.Context(), sessionID, 100)
+	messages, err := h.repo.GetMessages(r.Context(), sessionID, messagesPage)
 	if err != nil {
 		slog.Error("get messages failed", "error", err)
 		response.InternalError(w, r, err)
 		return
 	}
+	// counted after the page: a message saved between the two reads counts as before it until the next read, never
+	// leaving an earlier message uncounted
+	total, err := h.repo.GetMessageCount(r.Context(), sessionID)
+	if err != nil {
+		slog.Error("count messages failed", "error", err)
+		response.InternalError(w, r, err)
+		return
+	}
+	before := total - len(messages)
+	if before < 0 {
+		before = 0
+	}
 
-	msgResponses := make([]model.MessageResponse, len(messages))
+	response.JSON(w, http.StatusOK, model.SessionDetailResponse{
+		ID:             session.ID,
+		Title:          session.Title,
+		CreatedAt:      session.CreatedAt,
+		UpdatedAt:      session.UpdatedAt,
+		Messages:       messageResponses(messages),
+		MessagesBefore: before,
+	})
+}
+
+// GetEarlierMessages handles GET /sessions/{session_id}/messages?before_id=<message id>: the page of messages right
+// before that one, for a conversation longer than GetSession's newest page.
+func (h *SessionHandler) GetEarlierMessages(w http.ResponseWriter, r *http.Request) {
+	payload, ok := auth.FromContext(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+	sessionID := chi.URLParam(r, "session_id")
+	session, err := h.repo.GetSession(r.Context(), sessionID)
+	if err != nil {
+		slog.Error("get session failed", "error", err)
+		response.InternalError(w, r, err)
+		return
+	}
+	if session == nil || session.UserID != payload.UserID {
+		response.Error(w, http.StatusNotFound, "Session not found")
+		return
+	}
+	beforeID, err := strconv.Atoi(r.URL.Query().Get("before_id"))
+	if err != nil || beforeID < 1 {
+		response.Error(w, http.StatusBadRequest, "before_id: a message id")
+		return
+	}
+	messages, err := h.repo.GetMessagesBefore(r.Context(), sessionID, beforeID, messagesPage)
+	if err != nil {
+		slog.Error("get earlier messages failed", "error", err)
+		response.InternalError(w, r, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]interface{}{"messages": messageResponses(messages)})
+}
+
+// messageResponses are messages as the API answers them.
+func messageResponses(messages []model.Message) []model.MessageResponse {
+	out := make([]model.MessageResponse, len(messages))
 	for i, m := range messages {
-		msgResponses[i] = model.MessageResponse{
+		out[i] = model.MessageResponse{
 			ID:        m.ID,
 			Role:      m.Role,
 			Content:   m.Content,
@@ -204,14 +265,7 @@ func (h *SessionHandler) GetSession(w http.ResponseWriter, r *http.Request) {
 			CreatedAt: m.CreatedAt,
 		}
 	}
-
-	response.JSON(w, http.StatusOK, model.SessionDetailResponse{
-		ID:        session.ID,
-		Title:     session.Title,
-		CreatedAt: session.CreatedAt,
-		UpdatedAt: session.UpdatedAt,
-		Messages:  msgResponses,
-	})
+	return out
 }
 
 // UpdateSession handles PATCH /sessions/{session_id}

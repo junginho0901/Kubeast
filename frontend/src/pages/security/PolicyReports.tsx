@@ -191,7 +191,7 @@ export default function PolicyReports() {
           pageSize: rowsPerPage,
           topN: rowsPerPage,
           pickFields: tab === 'results'
-            ? ['result', 'severity', 'policy', 'rule', 'kind', 'api_version', 'name', 'namespace', 'message']
+            ? ['result', 'severity', 'policy', 'rule', 'kind', 'api_version', 'name', 'selector', 'namespace', 'message']
             : tab === 'policies' ? ['policy', 'category', 'severity', 'source', 'fail', 'warn', 'error', 'pass', 'skip'] : ['namespace', 'policies', 'fail', 'warn', 'error', 'pass', 'skip'],
         }),
       },
@@ -453,9 +453,9 @@ export default function PolicyReports() {
                       <td className="py-3 px-4"><span className={`badge ${RESULT_BADGE[r.result] || 'badge-neutral'}`} data-testid="policy-report-result">{resultLabel(r.result)}</span></td>
                       <td className="py-3 px-4 text-xs font-medium text-ink"><span className="block truncate" title={r.policy}>{r.policy}</span></td>
                       <td className="py-3 px-4 text-xs font-mono">
-                        <span className="block truncate" title={`${r.kind}/${r.name}`}>
+                        <span className="block truncate" title={r.selector ? r.selector : `${r.kind}/${r.name}`} data-testid="policy-report-resource">
                           {r.kind && <span className="text-slate-400">{r.kind}/</span>}
-                          {r.name || '-'}
+                          {r.name || r.selector || '-'}
                         </span>
                       </td>
                       <td className="col-low py-3 px-4 text-xs font-mono whitespace-nowrap" title={r.namespace}>{r.namespace || '-'}</td>

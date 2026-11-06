@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -216,6 +218,12 @@ func (h *Handler) allowAlertRead(w http.ResponseWriter, payload auth.TokenPayloa
 	if h.alertStore.Allow(payload.UserID) {
 		return true
 	}
+	// whole seconds, rounded up, so a read at that moment is taken (RFC 9110 Retry-After)
+	seconds := int(math.Ceil(h.alertStore.RetryAfter(payload.UserID).Seconds()))
+	if seconds < 1 {
+		seconds = 1
+	}
+	w.Header().Set("Retry-After", strconv.Itoa(seconds))
 	response.Error(w, http.StatusTooManyRequests, fmt.Sprintf("too many alert reads: %d per minute", h.alertStore.Config().PerUserPerMinute))
 	return false
 }

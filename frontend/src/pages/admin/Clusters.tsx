@@ -8,7 +8,7 @@ import { clustersApi, type ClusterMeta, type ConnectionResult } from '@/services
 import RegisterClusterDialog from './RegisterClusterDialog'
 import EditClusterDialog from './EditClusterDialog'
 import ClusterAccessModal from './ClusterAccessModal'
-import { shownTest, type HeldTest } from './clusterTest'
+import { healthChecked, shownTest, type HeldTest } from './clusterTest'
 import { healthDotClass } from '@/utils/clusterHealth'
 
 // Admin > Clusters (step 11): list every registered cluster with register /
@@ -114,6 +114,7 @@ export default function AdminClusters() {
             )}
             {clusters.map((c) => {
               const res = shownTest(testResults[c.id], dataUpdatedAt)
+              const checked = healthChecked(c.last_healthcheck_at)
               return (
                 <tr key={c.id} className="text-ink">
                   <td className="px-4 py-3">
@@ -150,6 +151,11 @@ export default function AdminClusters() {
                           : c.health_status ? tr(`cluster.admin.healthValue.${c.health_status}`, c.health_status) : '-'}
                       </span>
                     </span>
+                    {checked && (
+                      <span className="block mt-0.5 text-xs text-slate-500 whitespace-nowrap" title={checked.title} data-testid={`cluster-health-checked-${c.id}`}>
+                        {t('cluster.admin.healthChecked', { defaultValue: 'Checked {{time}}', time: checked.text })}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-slate-400">{c.created_by || '-'}</td>
                   <td className="px-4 py-3">

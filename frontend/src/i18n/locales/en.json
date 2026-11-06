@@ -1716,6 +1716,11 @@
     "createTitle": "Create Node from YAML"
   },
   "aiChat": {
+    "earlier": {
+      "hidden": "Earlier messages not shown: {{count}}",
+      "load": "Load earlier messages",
+      "error": "Could not load the earlier messages: {{error}}"
+    },
     "newChat": "New Chat",
     "newChatTitle": "New Chat",
     "multiSelectCancel": "Cancel",
@@ -2046,7 +2051,8 @@
     "scoped": "Only the namespaces of your grant are counted.",
     "truncated": "The cluster has more reports than this page reads at once; narrow by namespace or policy to see them all.",
     "loadError": "Could not load the policy reports",
-    "violationsError": "Could not load the policy reports: {{error}}"
+    "violationsError": "Could not load the policy reports: {{error}}",
+    "selectorError": "Results that pick resources by label could not be checked against this object: {{error}}"
   },
   "monitoring": {
     "title": "Monitoring",
@@ -4036,6 +4042,7 @@
       "mode": "Mode",
       "apiServer": "API server",
       "health": "Health",
+      "healthChecked": "Checked {{time}}",
       "createdBy": "Created by",
       "actions": "Actions",
       "test": "Test",
@@ -4560,6 +4567,7 @@
     "refresh": "Refresh",
     "disabled": "The alert webhook is off on this installation (features.alertInvestigation.enabled), so no alerts come in.",
     "forbidden": "Alerts cover the whole cluster: they are shown to users who can read this cluster without a namespace limit.",
+    "storeLimited": "Alertmanager's state could not be read for now (request limit). Reading again in {{seconds}} s.",
     "storeCut": "The alert store sent the first {{listed}} of its {{total}} alerts for this cluster (its limit, alertStore.maxAlerts): for an alert not among them, what Alertmanager says now is not shown.",
     "status": {
       "firing": "Firing",
@@ -4579,6 +4587,7 @@
       "cut": "Unknown — the alert store sent {{listed}} of its {{total}} alerts for this cluster, not this one",
       "loading": "Asking the alert store…",
       "failed": "Unknown — the alert store did not answer",
+      "limited": "Unknown — not read for now (request limit), reading again in {{seconds}} s",
       "none": "Not read — this cluster has no alert store (features.alertStore)"
     },
     "filter": {

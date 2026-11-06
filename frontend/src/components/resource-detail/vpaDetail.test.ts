@@ -7,7 +7,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import en from '../../i18n/locales/en.json'
 import { PageContextCtx, type PageContextValue } from '@/components/PageContext'
 import VPAInfo from './VPAInfo'
-import { vpaPolicyExtraRows, vpaStartupBoostText, vpaValue } from './vpaDetail'
+import { vpaEvictionText, vpaPolicyExtraRows, vpaRecommendersText, vpaStartupBoostText, vpaValue } from './vpaDetail'
 
 // The VPA drawer shows the fields of VPA 1.6 and 1.7 (vertical-pod-autoscaler-1.8.1's vpa-v1-crd-gen.yaml): the wide
 // columns MinReplicas and OOMSeconds, the pod's startupBoost, and each container policy's OOM, memory aggregation and
@@ -34,6 +34,19 @@ describe('vpa values', () => {
     expect(vpaStartupBoostText({ memory: { type: 'Factor', factor: 3, zeta: 'z' }, cpu: { type: 'Factor', factor: 2 } }))
       .toBe('cpu (type: Factor, factor: 2); memory (type: Factor, factor: 3, zeta: z)')
     expect([undefined, null, {}, []].map(vpaStartupBoostText)).toEqual(['-', '-', '-', '-'])
+  })
+
+  it('eviction requirements: each one\'s resources and change requirement, as the API writes them', () => {
+    expect(vpaEvictionText([{ resources: ['cpu', 'memory'], changeRequirement: 'TargetHigherThanRequests' }])).toBe('cpu, memory: TargetHigherThanRequests')
+    expect(vpaEvictionText([{ resources: ['cpu'], changeRequirement: 'TargetLowerThanRequests' }, { resources: ['memory'], changeRequirement: 'TargetHigherThanRequests' }]))
+      .toBe('cpu: TargetLowerThanRequests; memory: TargetHigherThanRequests')
+    expect([undefined, null, []].map(vpaEvictionText)).toEqual(['-', '-', '-'])
+  })
+
+  it('recommenders: their names; none named is "-" (the default recommender)', () => {
+    expect(vpaRecommendersText([{ name: 'custom' }])).toBe('custom')
+    expect(vpaRecommendersText([{ name: 'a' }, { name: 'b' }])).toBe('a, b')
+    expect([undefined, null, []].map(vpaRecommendersText)).toEqual(['-', '-', '-'])
   })
 
   it('the container policies\' second table: every policy\'s row once any sets one of the fields, else none', () => {
@@ -74,9 +87,15 @@ const section = (html: string, title: string) => {
 }
 
 describe('VPAInfo', () => {
-  it('Update Policy: the mode, MinReplicas, OOMSeconds and the startup boost', () => {
-    expect(section(drawer(DESCRIBE), 'Update Policy'))
-      .toBe('Update Policy Update Mode InPlace Min Replicas 2 Evict After OOM Seconds 300 Startup Boost cpu (type: Factor, factor: 2, durationSeconds: 10)')
+  it('Update Policy: the mode, MinReplicas, OOMSeconds, the startup boost, the eviction requirements and recommenders', () => {
+    expect(section(drawer({ ...DESCRIBE, eviction_requirements: [{ resources: ['cpu'], changeRequirement: 'TargetHigherThanRequests' }], recommenders: [{ name: 'custom' }] }), 'Update Policy'))
+      .toBe('Update Policy Update Mode InPlace Min Replicas 2 Evict After OOM Seconds 300 Startup Boost cpu (type: Factor, factor: 2, durationSeconds: 10) Eviction Requirements cpu: TargetHigherThanRequests Recommenders custom')
+  })
+
+  it('Summary: the generation the status last saw', () => {
+    expect(section(drawer({ ...DESCRIBE, observed_generation: 7 }), 'Summary')).toContain('Observed Generation 7')
+    expect(section(drawer({ ...DESCRIBE, observed_generation: 0 }), 'Summary')).toContain('Observed Generation 0')
+    expect(section(drawer(DESCRIBE), 'Summary')).toContain('Observed Generation -')
   })
 
   it('Container Policies: the policies\' table, then their OOM, memory aggregation and startup boost', () => {
@@ -87,7 +106,7 @@ describe('VPAInfo', () => {
   it('a VPA without them (or an older CRD): "-" in Update Policy and no second table', () => {
     const old = { ...DESCRIBE, update_mode: 'Auto', min_replicas: null, evict_after_oom_seconds: null, startup_boost: null, container_policies: [{ container_name: 'app', mode: 'Auto' }] }
     const html = drawer(old)
-    expect(section(html, 'Update Policy')).toBe('Update Policy Update Mode Auto Min Replicas - Evict After OOM Seconds - Startup Boost -')
+    expect(section(html, 'Update Policy')).toBe('Update Policy Update Mode Auto Min Replicas - Evict After OOM Seconds - Startup Boost - Eviction Requirements - Recommenders -')
     expect(section(html, 'Container Policies')).not.toContain('OOM Bump Up Ratio')
   })
 })

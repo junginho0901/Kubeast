@@ -762,6 +762,8 @@ export interface PolicyReportResult {
   report: string
   /** the resource's apiVersion (the result's resources, else the report's scope) */
   api_version?: string
+  /** a result that picks its resources by label instead of naming them, as kubectl writes a selector */
+  selector?: string
 }
 
 export interface PolicyReportPolicyRow extends PolicyReportCounts {
@@ -1067,6 +1069,8 @@ export interface PolicyReportResource {
   namespace: string
   totals: PolicyReportCounts
   rows: PolicyReportResult[]
+  /** why the results that pick by label could not be held to this resource */
+  selector_error?: string
 }
 
 export interface PolicyReportStatus {
@@ -2337,5 +2341,7 @@ export interface SessionDetail {
     usage?: { prompt_tokens: number; completion_tokens: number; cached_tokens?: number; model_calls?: number; model?: string | null } | null
     created_at: string
   }>
+  // the conversation's messages older than `messages`, which holds its newest page
+  messages_before?: number
 }
 

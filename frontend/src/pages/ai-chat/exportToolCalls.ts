@@ -6,6 +6,7 @@
 // 등 모든 zip 가공 로직을 자체 보유.
 
 import { api } from '@/services/api'
+import { olderThanNewestPage } from '@/services/sessionMessages'
 
 const TRUNCATED_MARKER = '... (truncated) ...'
 
@@ -46,6 +47,8 @@ export async function exportToolCallsAsZip({ message, sessionId, t: _t, getCurre
 
       try {
         const session = await api.getSession(sessionId)
+        // a message read above the newest page came whole from the server; no message of this answer is that one
+        if (olderThanNewestPage(message.id, session.messages)) return current
         let dbMessage: any | undefined
         const dbToolMessages = session.messages.filter(
           (m) => m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length > 0,
@@ -129,7 +132,7 @@ export async function exportToolCallsAsZip({ message, sessionId, t: _t, getCurre
       if (sessionId) {
         try {
           const session = await api.getSession(sessionId)
-          const candidates = session.messages
+          const candidates = olderThanNewestPage(message.id, session.messages) ? [] : session.messages
             .filter((m) => m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length > 0)
             .reverse()
 

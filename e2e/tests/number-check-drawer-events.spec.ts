@@ -57,6 +57,15 @@ const FIXTURE = [
     spec: { schedule: '0 0 1 1 *', suspend: true, jobTemplate: { spec: { template: { spec: { ...pod('drev-none'), restartPolicy: 'Never' } } } } } },
   { apiVersion: 'v1', kind: 'Service', metadata: { name: 'drev-svc', namespace: NS }, spec: { ports: [{ port: 80, targetPort: 80 }] } },
   { apiVersion: 'v1', kind: 'Endpoints', metadata: { name: 'drev-ep', namespace: NS }, subsets: [{ addresses: [{ ip: '10.255.0.1' }], ports: [{ port: 80 }] }] },
+  // the kinds whose drawers gained the section, one without events and one with; a PodTemplate has the fallback drawer
+  ...['drev-ing', 'drev-ing-events'].map((name) => ({ apiVersion: 'networking.k8s.io/v1', kind: 'Ingress', metadata: { name, namespace: NS },
+    spec: { rules: [{ http: { paths: [{ path: '/', pathType: 'Prefix', backend: { service: { name: 'drev-svc', port: { number: 80 } } } }] } }] } })),
+  ...['drev-np', 'drev-np-events'].map((name) => ({ apiVersion: 'networking.k8s.io/v1', kind: 'NetworkPolicy', metadata: { name, namespace: NS },
+    spec: { podSelector: { matchLabels: { app: 'nothing-here' } }, policyTypes: ['Ingress'] } })),
+  ...['drev-eps', 'drev-eps-events'].map((name) => ({ apiVersion: 'discovery.k8s.io/v1', kind: 'EndpointSlice', metadata: { name, namespace: NS, labels: { 'kubernetes.io/service-name': 'drev-svc' } },
+    addressType: 'IPv4', ports: [{ port: 80, protocol: 'TCP' }], endpoints: [{ addresses: ['10.255.0.2'] }] })),
+  ...['drev-pt', 'drev-pt-events'].map((name) => ({ apiVersion: 'v1', kind: 'PodTemplate', metadata: { name, namespace: NS },
+    template: { metadata: { labels: { app: 'drev-pt' } }, spec: pod('drev-none') } })),
   { apiVersion: 'v1', kind: 'ConfigMap', metadata: { name: 'drev-cm', namespace: NS }, data: { k: 'v' } },
   { apiVersion: 'v1', kind: 'ConfigMap', metadata: { name: 'drev-cm-events', namespace: NS }, data: { k: 'v' } },
   { apiVersion: 'v1', kind: 'Secret', metadata: { name: 'drev-secret', namespace: NS }, type: 'Opaque', stringData: { k: 'v' } },
@@ -82,6 +91,10 @@ const CLUSTER_SCOPED = 'volumeattachment/drev-va persistentvolume/drev-pv persis
 const WRITTEN: [string, string, string, string, string, number][] = [
   ['ConfigMap', 'v1', 'drev-cm-events', 'Synced', 'Normal', 3],
   ['ConfigMap', 'v1', 'drev-cm-events', 'Rejected', 'Warning', 1],
+  ['Ingress', 'networking.k8s.io/v1', 'drev-ing-events', 'Sync', 'Normal', 2],
+  ['NetworkPolicy', 'networking.k8s.io/v1', 'drev-np-events', 'Applied', 'Normal', 2],
+  ['EndpointSlice', 'discovery.k8s.io/v1', 'drev-eps-events', 'Mirrored', 'Warning', 2],
+  ['PodTemplate', 'v1', 'drev-pt-events', 'Seen', 'Normal', 2],
   ['IngressClass', 'networking.k8s.io/v1', 'drev-ic-events', 'Claimed', 'Normal', 2],
 ]
 const eventName = (name: string, reason: string) => `${name}.drev-${reason.toLowerCase()}`
@@ -93,6 +106,8 @@ const TARGETS: [string, string, string][] = [
   ['Role', NS, 'drev-role'], ['RoleBinding', NS, 'drev-rb'], ['PersistentVolumeClaim', NS, 'drev-pvc'], ['PersistentVolumeClaim', NS, 'drev-pvc-bound'],
   ['PersistentVolume', '', 'drev-pv'], ['StorageClass', '', 'drev-sc'], ['VolumeAttachment', '', 'drev-va'], ['IngressClass', '', 'drev-ic'],
   ['IngressClass', '', 'drev-ic-events'], ['Namespace', '', NS],
+  ['Ingress', NS, 'drev-ing'], ['Ingress', NS, 'drev-ing-events'], ['NetworkPolicy', NS, 'drev-np'], ['NetworkPolicy', NS, 'drev-np-events'],
+  ['EndpointSlice', NS, 'drev-eps'], ['EndpointSlice', NS, 'drev-eps-events'], ['PodTemplate', NS, 'drev-pt'], ['PodTemplate', NS, 'drev-pt-events'],
 ]
 const link = (kind: string, ns: string, name: string) => `/?cluster=${CLUSTER}&detail=${encodeURIComponent(ns ? `${kind}/${ns}/${name}` : `${kind}/${name}`)}`
 

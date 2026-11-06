@@ -51,7 +51,8 @@ export const vpa17 = (ns: string, name: string): Obj => ({
   apiVersion: 'autoscaling.k8s.io/v1', kind: 'VerticalPodAutoscaler', metadata: { name, namespace: ns },
   spec: {
     targetRef: { apiVersion: 'apps/v1', kind: 'Deployment', name: 'web' },
-    updatePolicy: { updateMode: 'InPlace', minReplicas: 2, evictAfterOOMSeconds: 300 },
+    updatePolicy: { updateMode: 'InPlace', minReplicas: 2, evictAfterOOMSeconds: 300, evictionRequirements: [{ resources: ['cpu', 'memory'], changeRequirement: 'TargetHigherThanRequests' }] },
+    recommenders: [{ name: 'num-recommender' }],
     startupBoost: { cpu: { type: 'Factor', factor: 2, durationSeconds: 10 } },
     resourcePolicy: {
       containerPolicies: [

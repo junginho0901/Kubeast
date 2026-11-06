@@ -184,6 +184,39 @@ func (r *Repository) DeleteSession(ctx context.Context, id string) error {
 	return tx.Commit(ctx)
 }
 
+// GetMessagesBefore returns the limit messages that come right before beforeID in the conversation, oldest first; a
+// message that is not the conversation's has none before it.
+func (r *Repository) GetMessagesBefore(ctx context.Context, sessionID string, beforeID, limit int) ([]model.Message, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, session_id, role, content, tool_calls, usage, created_at
+		FROM messages
+		WHERE session_id = $1
+		  AND (created_at, id) < (SELECT created_at, id FROM messages WHERE id = $2 AND session_id = $1)
+		ORDER BY created_at DESC, id DESC
+		LIMIT $3`, sessionID, beforeID, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var messages []model.Message
+	for rows.Next() {
+		var m model.Message
+		if err := rows.Scan(&m.ID, &m.SessionID, &m.Role, &m.Content, &m.ToolCalls, &m.Usage, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+		messages = append(messages, m)
+	}
+	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+		messages[i], messages[j] = messages[j], messages[i]
+	}
+	if messages == nil {
+		messages = []model.Message{}
+	}
+	return messages, rows.Err()
+}
+
 // GetMessages retrieves messages for a session, ordered chronologically.
 func (r *Repository) GetMessages(ctx context.Context, sessionID string, limit int) ([]model.Message, error) {
 	rows, err := r.pool.Query(ctx,

@@ -390,6 +390,7 @@ func (s *Service) DescribeGenericResource(ctx context.Context, resourceType, nam
 	if status := mapMap(obj.Object, "status"); status != nil {
 		result["status"] = status
 	}
+	s.setObjectEvents(ctx, result, obj.GetNamespace(), obj.GetKind(), obj.GetName())
 
 	return result, nil
 }

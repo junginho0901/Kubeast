@@ -439,6 +439,24 @@
       "cell": "\\.claude-code\\.",
       "why": "The dev image is built WITH_CLAUDE_CODE and the compared release tag is the one without it, not a difference in the code.",
       "pr": "#651"
+    },
+    {
+      "route": "^/api/v1/cluster/namespaces/[^/]+/(ingresses|networkpolicies|endpointslices|resourceclaims|resourceclaimtemplates)/[^/]+/describe$|^/api/v1/cluster/(deviceclasses|resourceslices)/[^/]+/describe$|^/api/v1/cluster/resources/describe$",
+      "cell": "^\\$\\.events",
+      "why": "These describes return the events about the object, for the drawers' Events section.",
+      "pr": "U6b"
+    },
+    {
+      "route": "^/api/v1/cluster/vpas/all$|^/api/v1/cluster/namespaces/[^/]+/vpas(/[^/]+/describe)?$|^live /apis/autoscaling\\.k8s\\.io/v1/verticalpodautoscalers$",
+      "cell": "(eviction_requirements|recommenders|observed_generation)",
+      "why": "A VPA's row carries what else kubectl describe prints of it.",
+      "pr": "U6b"
+    },
+    {
+      "route": "^/api/v1/sessions/[^/]+$",
+      "cell": "^\\$\\.messages_before$",
+      "why": "A conversation's answer counts the messages older than its newest page.",
+      "pr": "U6b"
     }
   ]
 }

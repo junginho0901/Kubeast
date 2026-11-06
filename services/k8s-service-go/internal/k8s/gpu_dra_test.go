@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -44,6 +45,13 @@ const (
 
 func newDRAService(t *testing.T) (*Service, *[]string) {
 	t.Helper()
+	return newDRAServiceWithEvents(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"kind":"EventList","apiVersion":"v1","metadata":{},"items":[]}`))
+	})
+}
+
+func newDRAServiceWithEvents(t *testing.T, events http.HandlerFunc) (*Service, *[]string) {
+	t.Helper()
 	var podLimits []string
 	list := func(kind, items string) string {
 		return `{"apiVersion":"resource.k8s.io/v1","kind":"` + kind + `","metadata":{},"items":[` + items + `]}`
@@ -63,6 +71,10 @@ func newDRAService(t *testing.T) (*Service, *[]string) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/api/v1/namespaces/ml/pods" {
 			podLimits = append(podLimits, r.URL.Query().Get("limit"))
+		}
+		if strings.HasSuffix(r.URL.Path, "/events") {
+			events(w, r)
+			return
 		}
 		if body, ok := answers[r.URL.Path]; ok {
 			_, _ = w.Write([]byte(body))

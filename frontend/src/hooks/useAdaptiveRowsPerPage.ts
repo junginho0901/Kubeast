@@ -1,4 +1,4 @@
-import { type RefObject, useEffect, useState } from 'react'
+import { type RefObject, useLayoutEffect, useState } from 'react'
 
 interface UseAdaptiveRowsPerPageOptions {
   // ── 숫자 추정 (폴백 모드) ─────────────────────────────
@@ -38,7 +38,9 @@ export function useAdaptiveRowsPerPage(
 
   const [rowsPerPage, setRowsPerPage] = useState(12)
 
-  useEffect(() => {
+  // Before the paint: the first row's real height comes with the rows, so a count worked out from the estimate never
+  // reaches the screen. Later size changes wait for the next frame.
+  useLayoutEffect(() => {
     let frameId = 0
     let observer: ResizeObserver | null = null
 
@@ -73,7 +75,7 @@ export function useAdaptiveRowsPerPage(
       frameId = requestAnimationFrame(calculate)
     }
 
-    scheduleCalculate()
+    calculate()
     window.addEventListener('resize', scheduleCalculate)
 
     if (typeof ResizeObserver !== 'undefined') {

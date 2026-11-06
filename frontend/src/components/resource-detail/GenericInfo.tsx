@@ -1,5 +1,8 @@
-import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, Tx } from './DetailCommon'
-import { fmtRel, fmtTs } from './detailFormat'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '@/services/api'
+import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsSection, Tx } from './DetailCommon'
+import { eventsForAI, fmtRel, fmtTs } from './detailFormat'
+import { kindToPlural } from './utils'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface Props {
@@ -16,7 +19,17 @@ export default function GenericInfo({ name, namespace, kind, rawJson }: Props) {
   const labels = (meta.labels ?? {}) as Record<string, string>
   const annotations = (meta.annotations ?? {}) as Record<string, string>
 
-  useResourceDetailOverlay({ kind, name, namespace, extras: { spec, status } })
+  // the events kubectl describe lists about the object; of the object's own group where a Kind has two
+  const group = typeof rawJson?.apiVersion === 'string' && rawJson.apiVersion.includes('/') ? rawJson.apiVersion.split('/')[0] : ''
+  const { data: describe, isLoading, error } = useQuery({
+    queryKey: ['generic-describe', kind, namespace, name],
+    queryFn: () => api.describeGenericResource(group ? `${kindToPlural(kind)}.${group}` : kindToPlural(kind), name, namespace),
+    enabled: !!name,
+    retry: false,
+  })
+  const refused = (error as { response?: { data?: { detail?: string } } } | null)?.response?.data?.detail
+
+  useResourceDetailOverlay({ kind, name, namespace, extras: { spec, status, ...eventsForAI(describe) } })
 
   // the fields this view knows how to show; a section with none of them is left out (the YAML tab has the rest)
   const statusShown = typeof status.phase === 'string' || typeof status.replicas === 'number' || Array.isArray(status.conditions)
@@ -101,6 +114,8 @@ export default function GenericInfo({ name, namespace, kind, rawJson }: Props) {
           <KeyValueTags data={annotations} />
         </InfoSection>
       )}
+
+      <EventsSection events={describe?.events} error={describe?.events_error ?? refused} loading={isLoading} />
     </>
   )
 }

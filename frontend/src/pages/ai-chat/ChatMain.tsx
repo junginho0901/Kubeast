@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import type { TFunction } from 'i18next'
+import type { SessionDetail } from '@/services/api/types'
 import type { Message } from './types'
 import { ChatWelcome } from './ChatWelcome'
 import { MessageInput } from './MessageInput'
@@ -13,6 +14,7 @@ import { useAIChat } from './AIChatContext'
 const isTempSessionId = (id: string | null) => typeof id === 'string' && id.startsWith('temp:')
 
 interface Props {
+  sessionDetail?: SessionDetail
   isStreaming: boolean
   copiedMessageKey: string | null
   onCopy: (message: Message, key: string) => void
@@ -23,6 +25,7 @@ interface Props {
 }
 
 export function ChatMain({
+  sessionDetail,
   isStreaming,
   copiedMessageKey,
   onCopy,
@@ -51,6 +54,7 @@ export function ChatMain({
         />
       ) : (
         <MessagesList
+          sessionDetail={sessionDetail}
           copiedMessageKey={copiedMessageKey}
           onCopy={onCopy}
           onDownloadJson={onDownloadJson}

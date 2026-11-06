@@ -7,6 +7,7 @@ import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
 import ClusterAccessSection from './account/ClusterAccessSection'
 import ApiKeysSection from './account/ApiKeysSection'
+import { useAccountSectionsReady } from './account/accountReady'
 import { COLOR_MODES, setColorMode, useColorMode } from '@/utils/colorMode'
 
 export default function Account() {
@@ -25,6 +26,7 @@ export default function Account() {
   const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false)
   const languageDropdownRef = useRef<HTMLDivElement>(null)
   const colorMode = useColorMode()
+  const sectionsReady = useAccountSectionsReady()
 
   const changePasswordMutation = useMutation({
     mutationFn: () => api.changePassword({ current_password: currentPassword, new_password: newPassword }),
@@ -132,6 +134,8 @@ export default function Account() {
           </div>
         </div>
 
+        {/* these sections and what follows them show together, once the server has answered: nothing moves under the reader */}
+        <div className={sectionsReady ? 'contents' : 'hidden'} data-testid="account-sections">
         <ClusterAccessSection me={me} />
 
         <ApiKeysSection />
@@ -240,6 +244,7 @@ export default function Account() {
               </button>
             ))}
           </div>
+        </div>
         </div>
       </div>
 

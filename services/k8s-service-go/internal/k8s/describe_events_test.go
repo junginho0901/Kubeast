@@ -122,6 +122,8 @@ func TestDescribe_EventsNoneOrWhyNot(t *testing.T) {
 		"Endpoints":               func(s *Service) (map[string]interface{}, error) { return s.DescribeEndpoints(ctx, "ns", "x") },
 		"Ingress":                 func(s *Service) (map[string]interface{}, error) { return s.DescribeIngress(ctx, "ns", "x") },
 		"IngressClass":            func(s *Service) (map[string]interface{}, error) { return s.DescribeIngressClass(ctx, "x") },
+		"NetworkPolicy":           func(s *Service) (map[string]interface{}, error) { return s.DescribeNetworkPolicy(ctx, "ns", "x") },
+		"EndpointSlice":           func(s *Service) (map[string]interface{}, error) { return s.DescribeEndpointSlice(ctx, "ns", "x") },
 		"PersistentVolume":        func(s *Service) (map[string]interface{}, error) { return s.DescribePV(ctx, "x") },
 		"PersistentVolumeClaim":   func(s *Service) (map[string]interface{}, error) { return s.DescribePVC(ctx, "ns", "x") },
 		"StorageClass":            func(s *Service) (map[string]interface{}, error) { return s.DescribeStorageClass(ctx, "x") },

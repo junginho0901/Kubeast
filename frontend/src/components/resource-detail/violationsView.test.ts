@@ -8,6 +8,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import en from '../../i18n/locales/en.json'
 import ko from '../../i18n/locales/ko.json'
+import { PageContextCtx, type PageContextValue } from '@/components/PageContext'
 import { api } from '@/services/api'
 import { client } from '@/services/api/client'
 import PolicyViolations from './PolicyViolations'
@@ -35,6 +36,12 @@ const axiosError = (status: number, detail?: string) => Object.assign(new Error(
 const ON = { data: { installed: true } }
 
 describe('violationsView', () => {
+  it('carries why the results that pick by label could not be held to this object', () => {
+    const view = violationsView(true, ON, { data: { rows: [row('fail', 'p1')], selector_error: 'configmaps is forbidden' } })
+    expect(view).toMatchObject({ show: 'rows', selectorError: 'configmaps is forbidden' })
+    expect(violationsView(true, ON, { data: { rows: [] } })).toEqual({ show: 'rows', rows: [] })
+  })
+
   it('shows nothing while the feature is off, the user is not given reports, the status is unknown or the CRD is missing', () => {
     expect(violationsView(false, ON, { data: { rows: [] } })).toEqual({ show: 'nothing' })
     expect(violationsView(true, { error: axiosError(403, 'no permission') }, {})).toEqual({ show: 'nothing' })
@@ -149,8 +156,10 @@ function render(lng: string, kind: string, namespace: string, answer: { data?: u
     })
   }
   return renderToStaticMarkup(createElement(I18nextProvider, { i18n: i18n.cloneInstance({ lng }) },
-    createElement(QueryClientProvider, { client: qc }, createElement(PolicyViolations, { kind, namespace, name: 'cm-a', apiVersion }))))
+    createElement(QueryClientProvider, { client: qc }, createElement(PageContextCtx.Provider, { value: PAGE }, createElement(PolicyViolations, { kind, namespace, name: 'cm-a', apiVersion })))))
 }
+// the floating chat's registry the section reports to, which these renders do not read
+const PAGE = { registerLayer: () => {}, unregisterLayer: () => {}, getSnapshot: () => ({}), consumeContextChanged: () => false } as unknown as PageContextValue
 const text = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/&quot;/g, '"').replace(/\s+/g, ' ').trim()
 const heads = (html: string) => [...html.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((m) => m[1])
 

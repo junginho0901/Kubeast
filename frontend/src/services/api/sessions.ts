@@ -25,6 +25,12 @@ export const sessionsApi = {
     return data
   },
 
+  // the page of messages right before the one named (getSession holds the newest page)
+  getEarlierMessages: async (sessionId: string, beforeId: number): Promise<SessionDetail['messages']> => {
+    const { data } = await client.get(`/sessions/${sessionId}/messages`, { params: { before_id: beforeId } })
+    return data.messages
+  },
+
   updateSession: async (sessionId: string, title: string): Promise<Session> => {
     const { data } = await client.patch(`/sessions/${sessionId}`, { title })
     return data

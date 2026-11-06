@@ -9,8 +9,8 @@ import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
 import { networkPolicyToRawJson } from '@/pages/network/networkpolicies/networkPolicyHelpers'
 import { applyNetworkPolicyToDrawer } from '@/pages/network/networkpolicies/networkPolicyWatchNormalize'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
-import { InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx } from '../DetailCommon'
-import { fmtRel, fmtTs } from '../detailFormat'
+import { EventsSection, InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx } from '../DetailCommon'
+import { eventsForAI, fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
 import { peerOf, peerText, portOf, portsText, selectorText, type Tr } from '../netpolText'
 import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
@@ -24,7 +24,7 @@ interface Props {
 export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props) {
   const { open: openDetail } = useResourceDetail()
   const describeKey = ['networkpolicy-describe', namespace, name]
-  const { data: describe } = useQuery({
+  const { data: describe, isLoading: describeLoading } = useQuery({
     queryKey: describeKey,
     queryFn: () => api.describeNetworkPolicy(namespace as string, name),
     enabled: !!namespace && !!name,
@@ -40,7 +40,7 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
   })
   // The object as it is now; what the drawer was opened with until the answer comes, or when it is refused.
   const object = useMemo(() => (describe ? networkPolicyToRawJson(describe) : rawJson), [describe, rawJson])
-  useResourceDetailOverlay({ kind: 'NetworkPolicy', name, namespace, extras: object ? { spec: object.spec } : undefined })
+  useResourceDetailOverlay({ kind: 'NetworkPolicy', name, namespace, extras: object ? { spec: object.spec, ...eventsForAI(describe) } : undefined })
   const meta = (object?.metadata ?? {}) as Record<string, unknown>
   const spec = (object?.spec ?? {}) as Record<string, unknown>
   const labels = (meta.labels ?? {}) as Record<string, string>
@@ -213,6 +213,7 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
           </div>
         </InfoSection>
       )}
+      <EventsSection events={describe?.events} error={describe?.events_error} loading={describeLoading} />
     </>
   )
 }

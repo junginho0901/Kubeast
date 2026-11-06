@@ -110,7 +110,10 @@ export function applyNetworkPolicyToDrawer(
 ): unknown {
   if (!event?.object || event.type === 'DELETED') return prev
   const row = normalizeWatchNetworkPolicyObject(event.object)
-  return row.name === name ? row : prev
+  if (row.name !== name) return prev
+  // a live update is the object alone: the events stay as the describe answered them
+  const { events, events_error } = (prev ?? {}) as { events?: unknown; events_error?: unknown }
+  return { ...row, ...(events !== undefined ? { events } : {}), ...(events_error !== undefined ? { events_error } : {}) }
 }
 
 export function applyNetworkPolicyWatchEvent(

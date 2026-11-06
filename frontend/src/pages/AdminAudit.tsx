@@ -6,7 +6,7 @@ import { clustersApi } from '@/services/api/clusters'
 import { usePermission } from '@/hooks/usePermission'
 import { CheckCircle, ChevronDown, ChevronUp, Play, Search } from 'lucide-react'
 import { endOfMinuteISO, formatTime, parseTypedTime, utcTitle } from '@/utils/time'
-import { auditExportCut, auditExportHref, auditPageFilter } from './adminAuditPages'
+import { auditExportCut, auditExportHref, auditLimitFilter, auditPageFilter } from './adminAuditPages'
 import { DateTextInput } from '@/components/DateTextInput'
 import { ListPager } from '@/components/ListPager'
 import RecordingPlayerModal from '@/components/RecordingPlayerModal'
@@ -431,8 +431,12 @@ export default function AdminAudit() {
           <label className="flex flex-col text-xs font-semibold text-slate-400">
             {tr('adminAudit.filter.limit', '페이지당 건수')}
             <CustomDropdown
-              value={draft.limit ?? 50}
-              onChange={(v) => setDraft({ ...draft, limit: Number(v) })}
+              value={limit}
+              onChange={(v) => {
+                setDraft({ ...draft, limit: Number(v) })
+                setFilter(auditLimitFilter(filter, Number(v)))
+                setExpandedId(null)
+              }}
               options={[25, 50, 100, 200].map((n) => ({ value: n, label: String(n) }))}
               minWidth="min-w-[140px]"
             />
