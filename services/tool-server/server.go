@@ -126,13 +126,18 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 		return
 	}
 
-	kcPath, err := resolveClusterKubeconfig(ctx, clusterID, r.Header)
+	kcPath, protected, err := resolveClusterAccess(ctx, clusterID, r.Header)
 	if err != nil {
 		respondToolError(w, http.StatusBadGateway, "cluster kubeconfig: "+err.Error(), nil, nil)
 		return
 	}
+	if err := protectedToolGate(payload, clusterID, protected, req.Name, req.Arguments); err != nil {
+		respondToolError(w, http.StatusForbidden, err.Error(), nil, nil)
+		return
+	}
 	// kubectl runs as the validated user in the routed cluster.
 	ctx = withKubeconfigPath(ctx, kcPath)
+	ctx = withProtectedNamespaces(ctx, protected)
 	ctx = withClusterID(ctx, clusterID)
 	ctx = auth.WithPayload(ctx, payload)
 	access := payload.Access(clusterID, impersonationEnabled)

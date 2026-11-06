@@ -16,6 +16,7 @@ import {
 import { useReleasesAISnapshot } from './releases/useReleasesAISnapshot'
 import ReleaseFilters from './releases/ReleaseFilters'
 import ReleaseTable from './releases/ReleaseTable'
+import { isProtectedNamespaceError } from '@/utils/protectedNamespace'
 
 export default function HelmReleasesPage() {
   const { t } = useTranslation()
@@ -226,7 +227,7 @@ export default function HelmReleasesPage() {
           data-testid="helm-forbidden"
           className="flex items-center justify-center rounded-lg border border-dashed border-slate-700 bg-slate-800/20 py-16 text-center text-slate-400"
         >
-          {t('helmReleases.forbidden')}
+          {isProtectedNamespaceError(error) ? t('helmReleases.protected') : t('helmReleases.forbidden')}
         </div>
       ) : (
         <ReleaseTable

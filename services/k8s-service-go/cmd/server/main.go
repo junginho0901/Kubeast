@@ -115,15 +115,17 @@ func main() {
 	// Init Kubernetes service (cluster-aware; starts even if unconfigured).
 	startCtx, startCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	k8sSvc, err := k8s.NewService(startCtx, registry, cfg.KubeconfigWatch, redisCache, k8s.ServiceOptions{
-		MaxClusters:    cfg.MaxClusters,
-		Gitops:         cfg.Gitops,
-		QueryCacheTTL:  time.Duration(cfg.QueryCacheTTLSec) * time.Second,
-		RateLimitQPS:   cfg.RateLimitQPS,
-		RateLimitBurst: cfg.RateLimitBurst,
-		BreakerFails:   cfg.BreakerConsecutiveFails,
-		BreakerOpen:    time.Duration(cfg.BreakerOpenSec) * time.Second,
-		Impersonation:  cfg.ImpersonationEnabled,
-		ExecCommands:   cfg.KubeconfigExecCommands,
+		MaxClusters:        cfg.MaxClusters,
+		Gitops:             cfg.Gitops,
+		QueryCacheTTL:      time.Duration(cfg.QueryCacheTTLSec) * time.Second,
+		RateLimitQPS:       cfg.RateLimitQPS,
+		RateLimitBurst:     cfg.RateLimitBurst,
+		BreakerFails:       cfg.BreakerConsecutiveFails,
+		BreakerOpen:        time.Duration(cfg.BreakerOpenSec) * time.Second,
+		Impersonation:      cfg.ImpersonationEnabled,
+		ExecCommands:       cfg.KubeconfigExecCommands,
+		InstallNamespace:   cfg.PodNamespace,
+		NodeShellNamespace: cfg.NodeShellNamespace,
 	})
 	startCancel()
 	if err != nil {

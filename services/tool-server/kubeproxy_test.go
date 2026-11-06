@@ -24,9 +24,9 @@ import (
 )
 
 type seenRequest struct {
-	path, auth, user, auditID string
-	groups, extra             []string
-	upgrade                   bool
+	path, query, auth, user, auditID string
+	groups, extra                    []string
+	upgrade                          bool
 }
 
 // fakeAPIServer answers like an API server, on TLS (client-go sends a token
@@ -37,7 +37,7 @@ func fakeAPIServer(t *testing.T) (*httptest.Server, func() []seenRequest) {
 	var seen []seenRequest
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
-		seen = append(seen, seenRequest{path: r.URL.Path, auth: r.Header.Get("Authorization"), user: r.Header.Get("Impersonate-User"),
+		seen = append(seen, seenRequest{path: r.URL.Path, query: r.URL.RawQuery, auth: r.Header.Get("Authorization"), user: r.Header.Get("Impersonate-User"),
 			groups: r.Header.Values("Impersonate-Group"), auditID: r.Header.Get("Audit-ID"), upgrade: r.Header.Get("Upgrade") != ""})
 		for k := range r.Header {
 			if strings.HasPrefix(strings.ToLower(k), "impersonate-extra-") {
@@ -108,7 +108,7 @@ func TestKubeProxySendsTheClusterCredentialTheUserAndAnAuditID(t *testing.T) {
 	}
 	rec := &accesstrail.Recorder{}
 	imp := rest.ImpersonationConfig{UserName: "a@example.com", Groups: []string{"kubeast:authenticated", "kubeast:viewer"}}
-	path, done, err := p.prepare("prod", clusterKubeconfig(t, api.URL), imp, rec)
+	path, done, err := p.prepare("prod", clusterKubeconfig(t, api.URL), imp, rec, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +187,7 @@ func TestKubeProxyUpgradeCarriesTheIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec := &accesstrail.Recorder{}
-	path, done, err := p.prepare("prod", clusterKubeconfig(t, api.URL), rest.ImpersonationConfig{UserName: "a@example.com", Groups: []string{"kubeast:operator"}}, rec)
+	path, done, err := p.prepare("prod", clusterKubeconfig(t, api.URL), rest.ImpersonationConfig{UserName: "a@example.com", Groups: []string{"kubeast:operator"}}, rec, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

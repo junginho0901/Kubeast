@@ -150,6 +150,11 @@
     Pod exec가 Admin 전용인 이유는 Kubeast의 앱 권한 때문입니다. 그래서 Kubeast의 impersonation 자격 증명(`kubeast-impersonator`)은 그 그룹들의 전체 권한만큼 중요하게 지켜야 합니다.
   - 로그 파일 보기(`features.logFiles`, 기본 off)는 Kubeast가 명령을 `ls`·`tail`로 고정하므로 Read와 Write도 쓸 수 있습니다.
     이를 위해 차트는 적어 둔 네임스페이스에서만 Read 그룹(`kubeast:viewer`)에 `pods/exec`를 바인딩합니다([컨테이너 안 로그 파일](operations.md#컨테이너-안-로그-파일-log-files)).
+- **Kubeast가 도는 클러스터의 자기 Namespace는 전역 관리자(모든 클러스터의 `*`) 전용입니다.** 로그인 키와 다른 클러스터의 자격 증명이 거기 있기 때문입니다.
+  - 그 클러스터의 Write나 Admin 부여를 포함해 그 밖의 사람은 화면, API, AI 도구, MCP에서 403으로 거절됩니다. 대상은 그 안의 Secret과 Helm release, 그 안의 변경 전부, 그 안의 파드에 exec·attach와 로그 파일입니다. 여러 Namespace에 걸친 Secret 목록에서는 빠지고, 리소스 서랍은 거절될 동작의 버튼을 숨깁니다.
+  - 파드, 로그, 이벤트, ConfigMap은 계속 읽을 수 있습니다. 다른 클러스터에 있는 같은 이름의 Namespace는 평범한 Namespace입니다.
+  - 이것은 앱의 제한입니다. 클러스터 쪽에서 그 클러스터의 Write는 여전히 전체에 걸친 `edit`, Admin은 `cluster-admin`이므로, 쿠버네티스를 직접 쓰는 사람은 RBAC으로 따로 막아야 합니다([자세히](cluster-requirements.md#kubeast-자체-namespace에-누가-닿는가)).
+- **노드 셸의 Namespace(`nodeShell.namespace`)는 어느 클러스터에서든 `resource.node.shell`을 가진 사람 전용입니다.** 특권 파드가 허용되는 곳이므로 그 밖의 사람은 그 안의 변경 전부와 그 안의 파드에 exec·attach, 로그 파일이 거절됩니다([자세히](cluster-requirements.md#9-노드-셸)).
 - **쓰기 API는 전부** 핸들러에서 권한을 검사하며, 감사 행을 남기지 못하면 거부됩니다(fail-closed).
   - **읽기 API**는 "그 클러스터에 역할이 있는가"(클러스터 미들웨어, deny-by-default)와 클러스터의 RBAC(viewer 그룹), 두 단계로 막습니다.
   - `menu.*`는 화면 메뉴만 가리며, 사이드바 그룹마다 하나씩 있습니다. 기본 역할에는 `menu.*`가 있으므로 커스텀 역할에서만 그룹이 빠집니다.

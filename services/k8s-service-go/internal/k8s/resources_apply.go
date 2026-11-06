@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -141,6 +142,41 @@ func (s *Service) CreateNamespaces(ctx context.Context, yamlStr, defaultNamespac
 		return nil
 	})
 	return out
+}
+
+// CreateObject names one object of a create in its audit row.
+type CreateObject struct {
+	Kind      string `json:"kind"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace,omitempty"`
+}
+
+// CreateObjects lists the objects CreateResourcesFromYAML would make, up to max of them, and how many there are, in
+// the namespaces it would use. A generated name is given as its prefix.
+func (s *Service) CreateObjects(ctx context.Context, yamlStr, defaultNamespace string, max int) ([]CreateObject, int) {
+	out := []CreateObject{}
+	total := 0
+	_ = s.eachCreateDocument(ctx, yamlStr, defaultNamespace, func(d createDocument) error {
+		total++
+		if len(out) < max {
+			name := d.obj.GetName()
+			if name == "" {
+				name = d.obj.GetGenerateName()
+			}
+			out = append(out, CreateObject{Kind: rowText(d.obj.GetKind()), Name: rowText(name), Namespace: rowText(d.namespace)})
+		}
+		return nil
+	})
+	return out, total
+}
+
+// rowText keeps a value nothing has validated yet to the longest a Kubernetes name can be, so a row stays a row.
+func rowText(s string) string {
+	const longestName = 253
+	if len(s) > longestName {
+		return strings.ToValidUTF8(s[:longestName], "")
+	}
+	return s
 }
 
 // YAMLNamespaces is every metadata.namespace the documents name, a value that is no string as it prints.

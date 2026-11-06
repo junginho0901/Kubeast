@@ -323,6 +323,13 @@ CRD가 없으면 Kubeast는 빈 목록과 "설치 안 됨"(`X-Kubeast-Not-Instal
 - 노드가 이미지(`nodeShell.images`, 기본 `docker.io/library/busybox:1.38.0`)를 내려받을 수 있어야 합니다. 폐쇄망이라면 사내 미러 주소를 적으세요.
 - 사용자는 그 클러스터의 Admin(cluster-admin)이어야 합니다.
 
+이 Namespace는 첫 셸 뒤에도 `privileged`인 채로 남습니다.
+
+- Kubeast는 어느 클러스터에서든 `resource.node.shell`이 없는 사람이 그 안의 무엇이든 바꾸거나(파드, 워크로드, Namespace 객체) 그 안의 파드에 exec·attach하거나 로그 파일을 읽으면 화면, API, AI 도구, MCP에서 403으로 거절합니다. 읽기는 그대로입니다.
+- 이 제한은 Kubeast의 것입니다. Kubeast는 이를 위해 대상 클러스터에 아무것도 설치하지 않고, Write 그룹의 `edit`은 클러스터 전체에 바인딩되어 있으므로, 쿠버네티스 자체는 그 그룹이나 클러스터를 직접 쓰는 사람이 그곳에 파드를 만드는 것을 계속 허용합니다. 다른 Namespace를 제한해 둔 클러스터에는 다음을 권합니다.
+  - 노드 셸을 주는 그룹(`kubeast:admin`, 그 권한을 가진 커스텀 역할의 `kubeast:role:<이름>`)만 이 Namespace에 파드를 만들게 하는 어드미션 정책(ValidatingAdmissionPolicy, Kyverno, Gatekeeper).
+  - 노드 셸을 쓰지 않으면 끄고(`nodeShell.enabled`) 이 Namespace를 지웁니다.
+
 ## 10. 컨테이너 안 로그 파일
 
 Kubeast는 사용자 신원으로 `pods/exec`를 호출해 `ls`·`tail`만 실행합니다.
@@ -481,6 +488,24 @@ service:
 | 콘솔 메트릭 수집 | `metrics.serviceMonitor`·`metrics.prometheusRule`을 켜려면 prometheus-operator CRD가 필요합니다([metrics.md](metrics.md)) |
 | EKS 외부 클러스터·S3 | IRSA 롤(`aws.irsaRoleArn` 등) |
 | 사설 CA·TLS를 가로채는 프록시 | `customCAs`에 적은 Secret·ConfigMap이 릴리스 네임스페이스에 먼저 있어야 합니다. 없으면 새 파드가 볼륨을 기다리느라 뜨지 않으며, 이전 파드는 계속 응답합니다 |
+
+### Kubeast 자체 Namespace에 누가 닿는가
+
+릴리스 네임스페이스에는 로그인을 서명하는 키(`kubeast-auth-keys`), 등록한 클러스터의 자격 증명(`cluster-kubeconfig-<id>`), 차트의 Secret이 있습니다. 이것을 읽은 사람은 등록된 모든 클러스터에서 전역 관리자로 행동할 수 있습니다.
+
+- **이 클러스터의 역할은 이 클러스터 전체에 대한 쿠버네티스 권한입니다.** Write는 `kubeast:operator`로 동작하고, 차트가 이 그룹을 클러스터 전체에 `edit` ClusterRole로 바인딩합니다. `edit`은 모든 Namespace에서 Secret을 읽고 파드를 만듭니다. Admin은 `kubeast:admin`, 곧 `cluster-admin`입니다.
+- **Kubeast 앱은 자기 Namespace를 전역 관리자(모든 클러스터의 `*` 권한)로 제한합니다.** 이 클러스터의 Write나 Admin 부여를 포함해 그 밖의 사람은 화면, API, AI 도구, MCP에서 다음을 하면 까닭과 함께 403을 받습니다.
+  - 그 안의 Secret과 Helm release 읽기(여러 Namespace에 걸친 목록에서는 빠집니다)
+  - 그 안의 변경 전부: 파드·워크로드 만들기, YAML 적용, 삭제, ServiceAccount 토큰, Namespace 객체 자체
+  - 그 안의 파드에 exec·attach·port-forward, 로그 파일 읽기, API 서버를 거쳐 그 안의 파드·Service로 프록시하기. Kubeast가 읽는 Prometheus나 OpenCost는 다른 Namespace에 두세요. Kubeast는 그 프록시로 읽습니다.
+- 파드, 로그, 이벤트, ConfigMap은 계속 읽을 수 있고, drain은 그 안의 파드도 옮길 수 있습니다.
+- **쿠버네티스는 이 제한을 모릅니다.** 자기 kubeconfig로, 또는 다른 Namespace에 띄운 파드에서 클러스터를 직접 쓰는 사람은 클러스터의 RBAC과 Pod Security로만 막힙니다. Kubeast는 이것을 막을 수 없습니다.
+  - 이 클러스터의 역할은 클러스터를 맡겨도 되는 사람에게만 주세요.
+  - 사람의 쿠버네티스 신원은 RBAC으로 이 Namespace의 Secret을 못 읽게 묶으세요. `kubectl auth can-i get secrets -n <릴리스 네임스페이스> --as <사용자>`로 확인합니다.
+  - 다른 Namespace에도 Pod Security를 적용하세요. 호스트 `/`를 마운트한 파드는 그 노드의 Secret에 모두 닿습니다.
+  - 노드 셸(`resource.node.shell`)은 이 클러스터 노드의 root이므로 같은 Secret에 닿습니다. 이 클러스터에서는 전역 관리자로 삼아도 되는 사람에게만 주세요.
+- **In-cluster**로 연결한 클러스터만 이 클러스터로 압니다. kubeconfig로 연결하면 Kubeast에게는 다른 클러스터이고 위 내용이 적용되지 않습니다. In-cluster로 연결하세요.
+- 등록한 다른 클러스터에 있는 같은 이름의 Namespace는 평범한 Namespace입니다.
 
 ## 16. Hubble Relay (네트워크 흐름)
 

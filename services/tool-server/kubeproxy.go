@@ -40,6 +40,7 @@ import (
 
 	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
 	kubetrail "github.com/junginho0901/kubeast/services/pkg/accesstrail/kube"
+	"github.com/junginho0901/kubeast/services/pkg/protectedns"
 )
 
 type kubeProxy struct {
@@ -58,6 +59,8 @@ type proxyRun struct {
 	rt       http.RoundTripper
 	upgrade  proxy.UpgradeRequestRoundTripper
 	recorder *accesstrail.Recorder
+	// check holds each request to the guarded namespaces (protected_namespaces.go); nil lets all through.
+	check func(*http.Request) error
 }
 
 // kubectlProxy is started once at boot; nil keeps kubectl talking to the
@@ -110,7 +113,7 @@ func loopbackCertificate() (tls.Certificate, []byte, error) {
 // prepare writes a kubeconfig for one kubectl run against cluster, through the
 // proxy, as the user in cfg (its Impersonate set or not), recording into rec.
 // The returned cleanup removes the file and the token.
-func (p *kubeProxy) prepare(cluster, realKubeconfig string, impersonate rest.ImpersonationConfig, rec *accesstrail.Recorder) (string, func(), error) {
+func (p *kubeProxy) prepare(cluster, realKubeconfig string, impersonate rest.ImpersonationConfig, rec *accesstrail.Recorder, check func(*http.Request) error) (string, func(), error) {
 	var cfg *rest.Config
 	var err error
 	if realKubeconfig == "" {
@@ -126,6 +129,7 @@ func (p *kubeProxy) prepare(cluster, realKubeconfig string, impersonate rest.Imp
 	if err != nil {
 		return "", nil, err
 	}
+	run.check = check
 	var b [32]byte
 	if _, err := io.ReadFull(rand.Reader, b[:]); err != nil {
 		return "", nil, err
@@ -233,6 +237,14 @@ func (p *kubeProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r.Header.Set(accesstrail.HeaderAuditID, id)
 	entry := kubetrail.Describe(r)
 	entry.AuditID = id
+	if run.check != nil {
+		if err := run.check(r); err != nil {
+			protectedns.WriteForbidden(w, err)
+			entry.Status = http.StatusForbidden
+			run.recorder.Add(entry)
+			return
+		}
+	}
 
 	h := proxy.NewUpgradeAwareHandler(run.target, run.rt, false, false, proxyResponder{})
 	h.UpgradeTransport = run.upgrade

@@ -13,7 +13,7 @@ import { PrometheusSection, MetricBar } from './PrometheusMetrics'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import PodExecTerminal from '@/components/PodExecTerminal'
 import { useAIContext } from '@/hooks/useAIContext'
-import { usePermission } from '@/hooks/usePermission'
+import { useCanI } from '@/hooks/useCanCreate'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { getVolumeDetail } from './pod-info/podInfoFormatters'
 import ContainerCard from './pod-info/ContainerCard'
@@ -64,7 +64,9 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
   const [isExecShellOpen, setIsExecShellOpen] = useState(false)
   const execContainerRef = useRef<HTMLDivElement>(null)
   const execShellRef = useRef<HTMLDivElement>(null)
-  const { has } = usePermission()
+  // the namespace counts too: the server keeps some to fewer people than the permission alone says
+  const canExec = useCanI('resource.pod.exec', 'create', { group: '', resource: 'pods', subresource: 'exec', namespace, name })
+  const canEditPod = useCanI('resource.pod.edit', 'patch', { group: '', resource: 'pods', namespace, name })
 
   const { data: podDescribe, isLoading } = useQuery({
     queryKey: ['pod-describe', namespace, name],
@@ -283,7 +285,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
             {t('clusterView.logSearch.traces', 'Traces')}
           </a>
         )}
-        {has('resource.pod.exec') && phase === 'Running' && containerNames.length > 0 && (
+        {canExec && phase === 'Running' && containerNames.length > 0 && (
           <div className={`flex items-center gap-2 ${tracesHref ? '' : 'ml-auto'}`}>
             {/* Container 커스텀 드롭다운 */}
             <div className="relative" ref={execContainerRef}>
@@ -514,10 +516,10 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                 variant="container"
                 namespace={namespace}
                 onExec={setExecTarget}
-                canExec={has('resource.pod.exec')}
+                canExec={canExec}
                 execTooltip={t('pods.exec.openExec', { defaultValue: 'Open terminal' })}
                 onResize={(container, requests) => setResizeTarget({ container, requests })}
-                canResize={has('resource.pod.edit') && !!features?.inPlaceResize?.enabled && !!features?.inPlaceResize?.serverSupports}
+                canResize={canEditPod && !!features?.inPlaceResize?.enabled && !!features?.inPlaceResize?.serverSupports}
                 resizeTooltip={t('pods.resize.title', { defaultValue: 'Adjust resources' })}
               />
             ))}

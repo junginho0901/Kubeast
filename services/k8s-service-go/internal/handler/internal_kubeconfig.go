@@ -13,6 +13,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
+	"github.com/junginho0901/kubeast/services/pkg/protectedns"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -21,12 +22,13 @@ import (
 // registered kubeconfig (the cluster-kubeconfig-<id> Secret) that k8s-service
 // already reads — tool-server just fetches it here instead of holding its own.
 //
-//	GET /internal/clusters/{id}/kubeconfig → { "kubeconfig": "...", "in_cluster": bool }
+//	GET /internal/clusters/{id}/kubeconfig → { "kubeconfig": "...", "in_cluster": bool, "protected_namespaces": {...} }
 //
 // Security: internal-only (NOT routed via the gateway) + gated by the caller's
 // per-cluster access — a user can only obtain kubeconfigs for clusters they hold
 // a grant on (deny-by-default), so it can't widen what they could already do.
 // in_cluster=true returns no blob (the cluster uses the in-cluster SA).
+// protected_namespaces is what tool-server holds the call to, so the AI path keeps the same two namespaces.
 func (h *Handler) GetClusterKubeconfig(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	payload, ok := auth.FromContext(r.Context())
@@ -48,6 +50,10 @@ func (h *Handler) GetClusterKubeconfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	blob, inCluster, err := h.svc.ClusterKubeconfig(r.Context(), cluster.ID(id))
+	var protected protectedns.Namespaces
+	if err == nil {
+		protected, err = h.svc.ProtectedNamespacesOf(r.Context(), cluster.ID(id))
+	}
 	if werr := h.auditKubeconfigRead(r, payload, id, err); werr != nil {
 		h.refuseUnaudited(w, r, werr)
 		return
@@ -58,8 +64,9 @@ func (h *Handler) GetClusterKubeconfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.JSON(w, http.StatusOK, map[string]interface{}{
-		"kubeconfig": blob,
-		"in_cluster": inCluster,
+		"kubeconfig":           blob,
+		"in_cluster":           inCluster,
+		"protected_namespaces": protected,
 	})
 }
 

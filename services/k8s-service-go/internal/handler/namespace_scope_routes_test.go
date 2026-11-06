@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -50,7 +51,14 @@ type standIn struct {
 	mu      sync.Mutex
 	calls   []apiCall
 	refused map[string]bool // namespaces the cluster refuses to the caller
+	review  []string        // the access reviews asked, as sent
 	srv     *httptest.Server
+}
+
+func (a *standIn) reviews() []string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return append([]string(nil), a.review...)
 }
 
 // core and grouped are the kinds the stand-in serves, as discovery says: plural → kind, namespaced.
@@ -125,6 +133,10 @@ func (a *standIn) serve(w http.ResponseWriter, r *http.Request) {
 	a.mu.Unlock()
 
 	if r.URL.Path == "/apis/authorization.k8s.io/v1/selfsubjectaccessreviews" {
+		body, _ := io.ReadAll(r.Body)
+		a.mu.Lock()
+		a.review = append(a.review, string(body))
+		a.mu.Unlock()
 		writeJSON(w, 201, map[string]interface{}{"kind": "SelfSubjectAccessReview", "apiVersion": "authorization.k8s.io/v1", "status": map[string]bool{"allowed": true}})
 		return
 	}
@@ -314,6 +326,7 @@ func (a *standIn) reset() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.calls = nil
+	a.review = nil
 }
 
 // wideLists are the caller's lists of a namespaced kind across every namespace. The events about one cluster-scoped

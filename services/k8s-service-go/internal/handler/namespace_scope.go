@@ -14,15 +14,15 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
+	"github.com/junginho0901/kubeast/services/pkg/protectedns"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
-// NamespaceScopeMiddleware applies a namespace-scoped grant (the token's "ns"
-// claim) to the request's cluster, before any cluster call. It is the one place
-// that decides: the matched route picks its rule in namespaceRoutes, a {namespace}
-// in the path is checked without an entry, and a route with neither is refused to
-// such a grant, so a new route is closed until someone says how it stays inside.
-// Runs after ClusterMiddleware, in an inline group so the route is already matched.
+// NamespaceScopeMiddleware holds a request to the namespaces it may reach, before any cluster call: a namespace-scoped
+// grant (the token's "ns" claim) to its namespaces, and everyone to the guarded namespaces (services/pkg/protectedns).
+// It is the one place that decides: the matched route picks its rule in namespaceRoutes, a {namespace} in the path is
+// checked without an entry, and a route with neither is refused to a limited grant, so a new route is closed until
+// someone says how it stays inside. Runs after ClusterMiddleware, in an inline group so the route is already matched.
 func (h *Handler) NamespaceScopeMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		payload, ok := auth.FromContext(r.Context())
@@ -32,20 +32,41 @@ func (h *Handler) NamespaceScopeMiddleware(next http.Handler) http.Handler {
 		}
 		id, _ := cluster.FromContext(r.Context())
 		scope := payload.Namespaces[string(id)]
-		if len(scope) == 0 {
+		// A global admin passes the guarded namespaces, and without a limited grant has nothing else to check.
+		protected := h.svc.ProtectedNamespaces(r.Context())
+		if len(scope) == 0 && (protected == (protectedns.Namespaces{}) || auth.MatchAny(payload.Perms["*"], "*")) {
 			next.ServeHTTP(w, r)
 			return
 		}
-		ask := namespaceRuleFor(r.Method, routePattern(r)).ask(h, r)
-		targetType, target, err := ask.refusal(payload, string(id), scope)
+		pattern := routePattern(r)
+		ask := namespaceRuleFor(r.Method, pattern).ask(h, r)
+		var targetType, target string
+		var err error
+		permission := "namespace scope"
+		details := map[string]interface{}{"method": r.Method, "path": r.URL.Path}
+		if len(scope) > 0 {
+			details["namespaces"] = scope
+			targetType, target, err = ask.refusal(payload, string(id), scope)
+		}
+		if err == nil && len(ask.namespaces) > 0 {
+			if targetType, target, err = ask.protectedRefusal(protected, payload, string(id), h.protectedAct(r, pattern)); err != nil {
+				permission = "protected namespace"
+				delete(details, "namespaces")
+			}
+		}
 		if err == nil {
 			next.ServeHTTP(w, r)
 			return
 		}
+		details["permission"] = permission
 		// A write or a terminal is a refused attempt worth a row; reads are not (see denied).
 		if r.Method != http.MethodGet || strings.HasSuffix(r.URL.Path, "/ws") {
-			_ = h.recordAuditWithPayload(r, "k8s.access.denied", targetType, target, "", err, nil,
-				audit.MustJSON(map[string]interface{}{"permission": "namespace scope", "method": r.Method, "path": r.URL.Path, "namespaces": scope}))
+			_ = h.recordAuditWithPayload(r, "k8s.access.denied", targetType, target, "", err, nil, audit.MustJSON(details))
+		}
+		if permission == "protected namespace" {
+			// The screens say why from this: no role on the cluster would change the answer.
+			response.JSON(w, http.StatusForbidden, map[string]string{"detail": err.Error(), "reason": "protected_namespace"})
+			return
 		}
 		response.Error(w, http.StatusForbidden, err.Error())
 	})

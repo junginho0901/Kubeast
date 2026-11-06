@@ -222,7 +222,8 @@ test.describe('notices instead of "nothing here"', () => {
       await expect(drawer.getByText(/Effective Permissions \(\d+ bindings?\)|실효 권한 \(바인딩 \d+개\)/)).toHaveCount(1, { timeout: 20000 })
       await expect(drawer.getByTestId('sa-bindings-unreadable')).toHaveCount(0)
 
-      await reader.page.goto('/helm/releases/kubeast/kubeast?cluster=self')
+      // Kubeast's own namespace says its own reason (protected-namespaces.spec.ts); this is the cluster refusing a Read grant.
+      await reader.page.goto('/helm/releases/default/kubeast?cluster=self')
       await expect(reader.page.getByTestId('helm-release-forbidden')).toContainText(/Secrets?.*Read cannot|Secret을 읽을 수 없어/, { timeout: 20000 })
     } finally {
       await reader.done()

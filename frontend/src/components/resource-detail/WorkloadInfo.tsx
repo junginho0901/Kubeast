@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { useCanI } from '@/hooks/useCanCreate'
+import { deleteTarget } from './crDetail'
 import { useTranslation } from 'react-i18next'
 import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsSection } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
@@ -54,7 +56,6 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlo
     suspendMut,
     triggerMut,
     rollbackMut,
-    has,
     triggerDialogOpen,
     setTriggerDialogOpen,
     triggerToast,
@@ -100,6 +101,11 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlo
     showWorkloadSettings,
   } = data
 
+  // the namespace counts too: the server keeps some to fewer people than the permission alone says
+  const mayRollback = useCanI('resource.workload.rollback', 'patch', isRollbackKind ? deleteTarget(kind, namespace, name) : undefined)
+  const canSuspend = useCanI('resource.cronjob.suspend', 'patch', isCronJob ? { group: 'batch', resource: 'cronjobs', namespace, name } : undefined)
+  const canTrigger = useCanI('resource.cronjob.trigger', 'create', isCronJob ? { group: 'batch', resource: 'jobs', namespace } : undefined)
+
   if (isLoading && needsDescribe) return <p className="text-slate-400">{tr('common.loading', 'Loading...')}</p>
 
   return (
@@ -115,7 +121,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlo
         getWorkloadMetric={getWorkloadMetric}
       />
 
-      <InfoSection title="Basic Info" actions={isRollbackKind && has('resource.workload.rollback') && !writesBlocked ? (
+      <InfoSection title="Basic Info" actions={isRollbackKind && mayRollback && !writesBlocked ? (
         <button
           onClick={() => setRollbackDialogOpen(true)}
           className="text-xs px-2 py-1 rounded-sm border border-slate-700 bg-slate-800 text-ink hover:border-slate-500"
@@ -162,7 +168,8 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlo
         describe={describe}
         spec={spec}
         status={status}
-        has={has}
+        canSuspend={canSuspend}
+        canTrigger={canTrigger}
         suspendMut={suspendMut}
         setTriggerDialogOpen={setTriggerDialogOpen}
         ownedJobs={ownedJobs}

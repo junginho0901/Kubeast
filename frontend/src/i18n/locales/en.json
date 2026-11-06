@@ -3445,6 +3445,7 @@
     "create": "Create Secret",
     "createTitle": "Create Secret from YAML",
     "forbidden": "You do not have permission to view Secrets in this cluster.",
+    "protected": "This namespace holds Kubeast's own credentials, so only a global admin can read its Secrets.",
     "matchCount": "{{count}} result(s) match.",
     "stats": {
       "total": "Total",
@@ -3799,6 +3800,7 @@
     "searchPlaceholder": "Search release name...",
     "matchCount": "{{count}} release(s) match.",
     "forbidden": "Helm keeps release records in Secrets, and your role in this cluster cannot read Secrets (Read cannot). Viewing releases needs Write or a role that reads Secrets.",
+    "protected": "Helm keeps release records in Secrets, and this namespace holds Kubeast's own credentials, so only a global admin can read them.",
     "stats": {
       "total": "Total",
       "deployed": "Deployed",
@@ -3901,6 +3903,7 @@
       "notFound": "Cluster {{cluster}} has no release {{name}} in namespace {{namespace}}. Pick another cluster or find it in the release list.",
       "openList": "Releases of {{cluster}}",
       "forbidden": "Helm keeps this release's records in Secrets, and your role in this cluster cannot read Secrets (Read cannot). Viewing it needs Write or a role that reads Secrets.",
+      "protected": "Helm keeps this release's records in Secrets, and its namespace holds Kubeast's own credentials, so only a global admin can read them.",
       "loadFailed": "Could not load the release (server error {{code}})."
     }
   },
