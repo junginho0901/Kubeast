@@ -7,13 +7,16 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/helm"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 )
 
 // helmWatchTimeoutSeconds is the K8s watch's server-side timeout. The
@@ -133,7 +136,82 @@ func (h *Handler) startSecretWatch(ctx context.Context, namespace string) (watch
 		return nil, errKubeconfigNotLoaded
 	}
 
+	if scope := k8s.CallerScope(ctx); namespace == "" && len(scope) > 0 {
+		return watchNamespaces(scope, func(ns string) (watch.Interface, error) {
+			return cs.CoreV1().Secrets(ns).Watch(ctx, opts)
+		})
+	}
 	return cs.CoreV1().Secrets(namespace).Watch(ctx, opts)
+}
+
+// watchNamespaces opens one watch per namespace of a grant limited to namespaces, leaving out one the cluster refuses
+// unless all are, as the lists do. Their events come through one channel, which closes when the first watch ends, so
+// the caller opens them all again.
+func watchNamespaces(scope []string, open func(namespace string) (watch.Interface, error)) (watch.Interface, error) {
+	m := &mergedWatch{out: make(chan watch.Event), done: make(chan struct{})}
+	var skipped error
+	for _, ns := range scope {
+		w, err := open(ns)
+		if err != nil {
+			if apierrors.IsForbidden(err) || apierrors.IsNotFound(err) {
+				skipped = err
+				continue
+			}
+			m.Stop()
+			return nil, err
+		}
+		m.watchers = append(m.watchers, w)
+	}
+	if len(m.watchers) == 0 {
+		return nil, skipped
+	}
+	var running sync.WaitGroup
+	for _, w := range m.watchers {
+		running.Add(1)
+		go func(w watch.Interface) {
+			defer running.Done()
+			defer m.Stop()
+			for {
+				select {
+				case <-m.done:
+					return
+				case event, ok := <-w.ResultChan():
+					if !ok {
+						return
+					}
+					select {
+					case m.out <- event:
+					case <-m.done:
+						return
+					}
+				}
+			}
+		}(w)
+	}
+	go func() {
+		running.Wait()
+		close(m.out)
+	}()
+	return m, nil
+}
+
+// mergedWatch is the namespaces' watches as one (watchNamespaces).
+type mergedWatch struct {
+	watchers []watch.Interface
+	out      chan watch.Event
+	done     chan struct{}
+	stop     sync.Once
+}
+
+func (m *mergedWatch) ResultChan() <-chan watch.Event { return m.out }
+
+func (m *mergedWatch) Stop() {
+	m.stop.Do(func() {
+		close(m.done)
+		for _, w := range m.watchers {
+			w.Stop()
+		}
+	})
 }
 
 // consumeWatchSSE drains a single watcher until it ends or ctx is done.

@@ -37,6 +37,16 @@ func listCacheKey(ctx context.Context, clusterID, namespace, status string) stri
 // The status filter is applied by Helm SDK before the cache is consulted,
 // so per-status queries are cached under distinct keys.
 func (s *Service) ListReleases(ctx context.Context, namespace, status string, force bool) ([]ReleaseSummary, error) {
+	if scope := k8s.CallerScope(ctx); namespace == "" && len(scope) > 0 {
+		out, err := k8s.FanOutNamespaces(scope, func(ns string) ([]ReleaseSummary, error) {
+			return s.ListReleases(ctx, ns, status, force)
+		})
+		if err != nil {
+			return nil, err
+		}
+		sortReleases(out)
+		return out, nil
+	}
 	// Scope the cache by cluster — otherwise one cluster's release list is served
 	// for another (the list page would show the prior cluster's releases after a
 	// switch, then 404 on click). force (the page's Refresh) reads the cluster
@@ -79,19 +89,23 @@ func (s *Service) ListReleases(ctx context.Context, namespace, status string, fo
 		out = append(out, toSummary(r))
 	}
 
-	// Deterministic order: namespace then name. Helm itself returns
-	// releases in storage-iteration order which is not stable.
+	sortReleases(out)
+
+	if s.cache != nil {
+		s.cache.Set(ctx, cacheKey, out, listCacheTTL)
+	}
+	return out, nil
+}
+
+// sortReleases gives a deterministic order: namespace then name. Helm itself returns
+// releases in storage-iteration order which is not stable.
+func sortReleases(out []ReleaseSummary) {
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Namespace != out[j].Namespace {
 			return out[i].Namespace < out[j].Namespace
 		}
 		return out[i].Name < out[j].Name
 	})
-
-	if s.cache != nil {
-		s.cache.Set(ctx, cacheKey, out, listCacheTTL)
-	}
-	return out, nil
 }
 
 // invalidateListCache drops every cached release-list response. Called

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -32,11 +33,31 @@ func (s *Service) GetGenericResources(ctx context.Context, resourceType, namespa
 		ns = ""
 	}
 
-	list, err := s.ListResources(ctx, gvr, ns, opts)
-	if err != nil {
-		return nil, fmt.Errorf("list %s: %w", resourceType, err)
+	listIn := func(ns string) ([]map[string]interface{}, error) {
+		list, err := s.ListResources(ctx, gvr, ns, opts)
+		if err != nil {
+			return nil, fmt.Errorf("list %s: %w", resourceType, err)
+		}
+		return genericResourceRows(list), nil
 	}
+	if namespaced && ns == "" {
+		return s.listAcrossNamespaces(ctx, listIn)
+	}
+	result, err := listIn(ns)
+	if err != nil {
+		return nil, err
+	}
+	if isNamespaceKind(gvr) {
+		result = slices.DeleteFunc(result, func(row map[string]interface{}) bool {
+			name, _ := row["name"].(string)
+			return !inCallerScope(ctx, name)
+		})
+	}
+	return result, nil
+}
 
+// genericResourceRows is a list as the generic resources API answers it.
+func genericResourceRows(list *unstructured.UnstructuredList) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(list.Items))
 	for _, item := range list.Items {
 		entry := map[string]interface{}{
@@ -60,7 +81,7 @@ func (s *Service) GetGenericResources(ctx context.Context, resourceType, namespa
 
 		result = append(result, entry)
 	}
-	return result, nil
+	return result
 }
 
 // Advanced Search lists in pages, as kubectl does (--chunk-size 500), so one list of a large cluster no longer
@@ -78,7 +99,7 @@ const (
 // with the whole object, kubectl v1.37 get.go) and the cell of its Status column goes with the object — nil for a
 // kind kubectl prints no Status for, or an API that prints no tables, which is read as a plain list. A caller whose
 // grant is limited to namespaces asking every namespace of a namespaced kind gets each of its namespaces in turn:
-// the cluster refuses the whole list to such a grant (namespace_scope.go).
+// the cluster refuses the whole list to such a grant (namespace_scope.go); of the Namespace objects it gets its own.
 func (s *Service) StreamGenericResourcesRaw(ctx context.Context, resourceType, namespace, labelSelector string, max int,
 	head func(kind, apiVersion string) error, item func(obj map[string]interface{}, status *string) error) (truncated bool, remaining int64, err error) {
 	m, err := s.resolveResourceMatch(ctx, resourceType)
@@ -88,6 +109,16 @@ func (s *Service) StreamGenericResourcesRaw(ctx context.Context, resourceType, n
 	gvr, namespaced := m.gvr, m.namespaced
 	if !namespaced {
 		namespace = ""
+	}
+	if isNamespaceKind(gvr) {
+		every := item
+		item = func(obj map[string]interface{}, status *string) error {
+			name, _ := mapMap(obj, "metadata")["name"].(string)
+			if !inCallerScope(ctx, name) {
+				return nil
+			}
+			return every(obj, status)
+		}
 	}
 	tables := true
 	listIn := func(ns string) func(metav1.ListOptions) (rawPage, error) {

@@ -3,6 +3,7 @@ package netflows
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -401,5 +402,95 @@ func TestPerUserLimit(t *testing.T) {
 	s := testStore()
 	if !s.Allow("u") || !s.Allow("u") || s.Allow("u") || !s.Allow("v") {
 		t.Fatal("2 per minute per user")
+	}
+}
+
+// A limited reader's flows name nothing outside its namespaces: a Service seen on an end with no namespace, a policy
+// of another namespace, the node. What is inside the namespaces stays, and a reader with no limit sees it all.
+func TestKeepHidesWhatIsOutsideTheScope(t *testing.T) {
+	now := time.Date(2026, 11, 6, 15, 0, 0, 0, time.UTC)
+	policies := func() *Policies {
+		return &Policies{
+			IngressAllowedBy: []PolicyRef{{Kind: "NetworkPolicy", Namespace: "shop", Name: "web"}, {Kind: "NetworkPolicy", Namespace: "other", Name: "secret-allow"}},
+			EgressAllowedBy:  []PolicyRef{{Kind: "NetworkPolicy", Namespace: "other", Name: "secret-egress"}},
+			IngressDeniedBy:  []PolicyRef{{Kind: "CiliumClusterwideNetworkPolicy", Name: "cluster-wide"}},
+			EgressDeniedBy:   []PolicyRef{{Kind: "NetworkPolicy", Namespace: "other", Name: "secret-deny"}},
+		}
+	}
+	flows := []Flow{
+		{Time: now.Add(-time.Minute), Verdict: "FORWARDED", Node: "node-1", Policies: policies(),
+			Source:      End{Namespace: "shop", Pod: "web-1", Workload: &Workload{Kind: "Deployment", Name: "web"}},
+			Destination: End{IP: "10.96.0.10", Port: 53, Service: "other/secret-svc", Identity: 9}},
+		{Time: now.Add(-time.Minute), Verdict: "FORWARDED", Node: "node-1", Policies: &Policies{EgressAllowedBy: []PolicyRef{{Kind: "NetworkPolicy", Namespace: "other", Name: "only-other"}}},
+			Source:      End{Namespace: "shop", Pod: "web-1"},
+			Destination: End{IP: "10.96.0.11", Port: 80, Service: "shop/own-svc"}},
+		{Time: now.Add(-time.Minute), Verdict: "FORWARDED", Node: "node-1",
+			Source:      End{Namespace: "shop", Pod: "web-1", Service: "other/other-svc"},
+			Destination: End{IP: "93.184.216.34", Port: 443, Names: []string{"example.com"}}},
+	}
+	s := testStore()
+	req := Request{Namespace: "shop", Scope: []string{"shop"}}
+	if err := s.Normalize(&req); err != nil {
+		t.Fatal(err)
+	}
+	res := s.keep(context.Background(), req, flows, now, false)
+	if !res.Redacted || len(res.Flows) != 3 {
+		t.Fatalf("redacted %v, %d flows", res.Redacted, len(res.Flows))
+	}
+	hidden := res.Flows[0]
+	if hidden.Destination.Service != "" || hidden.Destination.Identity != 0 {
+		t.Errorf("a Service of another namespace on an end with no namespace: %+v", hidden.Destination)
+	}
+	if hidden.Destination.IP != "10.96.0.10" || hidden.Destination.Port != 53 {
+		t.Errorf("the address stays: %+v", hidden.Destination)
+	}
+	if hidden.Source.Pod != "web-1" || hidden.Source.Workload == nil {
+		t.Errorf("an end inside the scope keeps its names: %+v", hidden.Source)
+	}
+	want := &Policies{
+		IngressAllowedBy: []PolicyRef{{Kind: "NetworkPolicy", Namespace: "shop", Name: "web"}},
+		IngressDeniedBy:  []PolicyRef{{Kind: "CiliumClusterwideNetworkPolicy", Name: "cluster-wide"}},
+	}
+	if !reflect.DeepEqual(hidden.Policies, want) {
+		t.Errorf("policies %+v, want %+v", hidden.Policies, want)
+	}
+	if hidden.Node != "" {
+		t.Errorf("node %q for a limited reader", hidden.Node)
+	}
+	own := res.Flows[1]
+	if own.Destination.Service != "shop/own-svc" {
+		t.Errorf("a Service inside the scope: %+v", own.Destination)
+	}
+	if own.Policies != nil {
+		t.Errorf("no policy left, none listed: %+v", own.Policies)
+	}
+	if got := res.Flows[2].Source; got.Pod != "web-1" || got.Service != "" {
+		t.Errorf("a Service of another namespace on an end inside: %+v", got)
+	}
+	for _, g := range res.Groups {
+		if text := fmt.Sprintf("%+v %+v %+v", g.Source, g.Destination, g.Policies); strings.Contains(text, "other") || strings.Contains(text, "secret") {
+			t.Errorf("a connection names what is outside: %s", text)
+		}
+	}
+	if flows[0].Policies.EgressAllowedBy[0].Name != "secret-egress" || flows[0].Node != "node-1" || flows[0].Destination.Service != "other/secret-svc" {
+		t.Errorf("the flows read were changed: %+v", flows[0])
+	}
+
+	req.Scope = nil
+	whole := s.keep(context.Background(), req, flows, now, false)
+	if whole.Redacted {
+		t.Error("no limit, nothing hidden")
+	}
+	f := whole.Flows[0]
+	if f.Node != "node-1" || f.Destination.Service != "other/secret-svc" || f.Destination.Identity != 9 || !reflect.DeepEqual(f.Policies, policies()) {
+		t.Errorf("a reader with no limit: %+v", f)
+	}
+}
+
+// An end with no namespace and nothing naming one stays as it is: an address outside the cluster.
+func TestRedactLeavesAnAddressAlone(t *testing.T) {
+	e := End{IP: "93.184.216.34", Names: []string{"example.com"}, Identity: 2}
+	if (Request{Scope: []string{"shop"}}).redact(&e) || e.Identity != 2 || len(e.Names) != 1 {
+		t.Fatalf("%+v", e)
 	}
 }

@@ -14,3 +14,17 @@ def test_namespace_scope_error_mirrors_tool_server():
     for tool in ("prometheus_query", "alerts_list", "audit_search"):
         assert "spans the cluster" in namespace_scope_error(scoped, "c", tool, {"namespace": "web"}), tool
     assert namespace_scope_error(None, "c", "get_cluster_overview", {}) is None
+
+
+def test_all_namespaces_stays_inside_the_grant():
+    scoped = TokenPayload(user_id="u", role="member", matrix={"c": ("ai.tool.*",)}, namespaces={"c": ("api", "web")})
+    whole = TokenPayload(user_id="u", role="member", matrix={"c": ("ai.tool.*",)})
+    for tool in ("k8s_get_resources", "k8s_get_events"):
+        for flag in (True, "true", "TRUE", 1):
+            reason = namespace_scope_error(scoped, "c", tool, {"namespace": "web", "all_namespaces": flag})
+            assert reason is not None and "spans the cluster" in reason, (tool, flag, reason)
+            assert namespace_scope_error(scoped, "c", tool, {"all_namespaces": flag}) is not None, (tool, flag)
+        for flag in (False, "false", None):
+            assert namespace_scope_error(scoped, "c", tool, {"namespace": "web", "all_namespaces": flag}) is None, (tool, flag)
+    assert namespace_scope_error(scoped, "other", "k8s_get_resources", {"all_namespaces": True}) is None
+    assert namespace_scope_error(whole, "c", "k8s_get_resources", {"namespace": "web", "all_namespaces": True}) is None

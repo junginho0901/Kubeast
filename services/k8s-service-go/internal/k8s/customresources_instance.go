@@ -217,6 +217,17 @@ func apiStatusCode(err error) int {
 
 // GetCustomResourceInstances lists instances of a specific CR type.
 func (s *Service) GetCustomResourceInstances(ctx context.Context, group, version, plural string) ([]map[string]interface{}, error) {
+	if scope := scopeFromCtx(ctx); len(scope) > 0 {
+		if namespaced, _ := s.ResourceScope(ctx, plural+"."+group); namespaced {
+			return fanOutNamespaces(scope, func(ns string) ([]map[string]interface{}, error) {
+				t, err := s.tableAt(ctx, "/apis", group, version, "namespaces", ns, plural)
+				if err != nil {
+					return nil, fmt.Errorf("list custom resources %s/%s/%s: %w", group, version, plural, err)
+				}
+				return customResourceRows(t, group, version), nil
+			})
+		}
+	}
 	t, err := s.customResourceTable(ctx, group, version, plural)
 	if err != nil {
 		return nil, fmt.Errorf("list custom resources %s/%s/%s: %w", group, version, plural, err)

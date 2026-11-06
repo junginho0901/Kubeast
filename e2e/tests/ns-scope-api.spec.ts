@@ -152,6 +152,125 @@ test.describe('namespace-scoped grant enforcement', () => {
     }
   })
 
+  // The group is bound in both namespaces, as a chart does for a role shared by teams, so the cluster would answer: every
+  // way of naming the other namespace stops at Kubeast, and the same ways inside the grant work.
+  test('a Write grant limited to one namespace cannot name another in a query, a body or YAML, and its lists stay inside', async ({ request }) => {
+    test.setTimeout(180_000)
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const s = Date.now().toString(36)
+    const nsA = `e2e-nsways-a-${s}`
+    const nsB = `e2e-nsways-b-${s}`
+    const email = `e2e-nsways-${s}@kubeast.local`
+    const rbac = `e2e-nsways-${s}`
+    let userId = ''
+    const cm = (name: string, namespace?: string) => `apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: ${name}\n${namespace ? `  namespace: ${namespace}\n` : ''}data:\n  k: v\n`
+    const has = (ns: string, name: string) => tryKubectl(`-n ${ns} get configmap ${name} -o name`) !== null
+    try {
+      kubectl(`create namespace ${nsA}`)
+      kubectl(`create namespace ${nsB}`)
+      kubectl(`-n ${nsA} create configmap cm-a --from-literal=k=a`)
+      kubectl(`-n ${nsB} create configmap cm-b --from-literal=k=b`)
+      kubectl(`create clusterrole ${rbac}-imp --verb=impersonate --resource=groups --resource-name=kubeast:role:write`)
+      kubectl(`create clusterrolebinding ${rbac}-imp --clusterrole=${rbac}-imp --serviceaccount=kubeast:k8s-service --serviceaccount=kubeast:tool-server`)
+      kubectl(`-n ${nsA} create rolebinding ${rbac}-edit --clusterrole=edit --group=kubeast:role:write`)
+      kubectl(`-n ${nsB} create rolebinding ${rbac}-edit --clusterrole=edit --group=kubeast:role:write`)
+      userId = await createUser(request, admin, email)
+      const grant = await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/${CLUSTER}`, { headers: bearer(admin), data: { role: 'Write', namespaces: [nsA] } })
+      expect(grant.status(), await grant.text()).toBe(200)
+      const user = await login(request, email, PW)
+      await expect.poll(async () => (await get(request, user, `/api/v1/cluster/namespaces/${nsA}/configmaps`)).status(), { timeout: 20_000 }).toBe(200)
+
+      // Reads that name the other namespace, each of which the cluster itself would answer.
+      for (const p of [
+        `/api/v1/cluster/resources?resource_type=configmaps&namespace=${nsB}`,
+        `/api/v1/cluster/resources?resource_type=configmaps&namespace=${nsA}&namespace=${nsB}`,
+        `/api/v1/cluster/resources/json?resource_type=configmaps&resource_name=cm-b&namespace=${nsB}`,
+        `/api/v1/cluster/resources/yaml?resource_type=configmaps&resource_name=cm-b&namespace=${nsB}`,
+        `/api/v1/cluster/resources/describe?resource_type=configmaps&resource_name=cm-b&namespace=${nsB}`,
+        `/api/v1/cluster/resources/yaml?resource_type=namespaces&resource_name=${nsB}`,
+        `/api/v1/cluster/events?namespace=${nsB}`,
+        `/api/v1/cluster/resource-graph?namespaces=${nsA},${nsB}`,
+        `/api/v1/topology/namespace/${nsB}`,
+        `/api/v1/helm/releases?namespace=${nsB}`,
+        `/api/v1/helm/releases/${nsB}/any`,
+      ]) {
+        const res = await get(request, user, p)
+        const text = await res.text()
+        expect(res.status(), `${p}: ${text.slice(0, 200)}`).toBe(403)
+        expect(text, p).toMatch(/outside your grant/)
+        expect(text, p).not.toContain('cm-b')
+      }
+
+      // Writes that name the other namespace leave it as it was; one document outside and none is created.
+      const post = (p: string, data: object) => request.post(`${p}?cluster=${CLUSTER}`, { headers: bearer(user), data, failOnStatusCode: false })
+      const apply = '/api/v1/cluster/resources/yaml/apply'
+      const create = '/api/v1/cluster/resources/yaml/create'
+      for (const [p, data] of [
+        [apply, { resource_type: 'configmaps', name: 'cm-b', namespace: nsB, yaml: 'metadata:\n  labels:\n    e2e: changed\n' }],
+        [apply, { resource_type: 'configmaps', name: 'cm-a', namespace: nsA, yaml: `metadata:\n  namespace: ${nsB}\n` }],
+        [create, { namespace: nsB, yaml: cm('made-b') }],
+        [create, { namespace: nsA, yaml: cm('made-b', nsB) }],
+        [create, { yaml: cm('made-default') }],
+        [create, { namespace: nsA, yaml: `${cm('made-a-too')}---\n${cm('made-b', nsB)}` }],
+      ] as const) {
+        const res = await post(p, data)
+        expect(res.status(), `${p} ${JSON.stringify(data)}: ${await res.text()}`).toBe(403)
+      }
+      expect(kubectl(`-n ${nsB} get configmap cm-b -o jsonpath={.metadata.labels}`), 'the object outside was not changed').toBe('')
+      expect(has(nsB, 'made-b'), 'nothing created outside').toBe(false)
+      expect(has(nsA, 'made-a-too'), 'a create with one document outside creates none').toBe(false)
+
+      // The same writes inside the grant go through.
+      const applied = await post(apply, { resource_type: 'configmaps', name: 'cm-a', namespace: nsA, yaml: 'metadata:\n  labels:\n    e2e: changed\n' })
+      expect(applied.status(), await applied.text()).toBe(200)
+      expect(kubectl(`-n ${nsA} get configmap cm-a -o jsonpath={.metadata.labels.e2e}`)).toBe('changed')
+      const created = await post(create, { namespace: nsA, yaml: `${cm('made-a')}---\n${cm('made-a-2', nsA)}` })
+      expect(created.status(), await created.text()).toBe(200)
+      expect([has(nsA, 'made-a'), has(nsA, 'made-a-2')]).toEqual([true, true])
+
+      // Asked with no namespace: the grant's namespace and nothing beside it.
+      kubectl('create -f -', JSON.stringify({
+        apiVersion: 'v1', kind: 'Event', metadata: { name: `cm-b.${s}`, namespace: nsB },
+        involvedObject: { apiVersion: 'v1', kind: 'ConfigMap', namespace: nsB, name: 'cm-b' }, type: 'Warning', reason: 'E2EOutside', message: 'outside', count: 1,
+        firstTimestamp: new Date().toISOString(), lastTimestamp: new Date().toISOString(), source: { component: 'e2e' },
+      }))
+      for (const p of ['/api/v1/cluster/events', '/api/v1/cluster/resources?resource_type=configmaps', '/api/v1/cluster/resources?resource_type=configmaps&all_namespaces=true', '/api/v1/cluster/resources?resource_type=namespaces', `/api/v1/cluster/resource-graph?probe=${s}`]) {
+        const res = await get(request, user, p)
+        const text = await res.text()
+        if (p.includes('resource_type=namespaces')) {
+          // the group lists no namespaces: the cluster's own refusal, nothing of the other namespace
+          expect([200, 403], p).toContain(res.status())
+        } else {
+          expect(res.status(), `${p}: ${text.slice(0, 200)}`).toBe(200)
+        }
+        expect(text, p).not.toContain(nsB)
+      }
+      const list = await (await get(request, user, '/api/v1/cluster/resources?resource_type=configmaps')).text()
+      expect(list).toContain('cm-a')
+
+      // The buttons' question has an answer for the namespace outside, without the cluster being asked.
+      const canI = await get(request, user, `/api/v1/cluster/can-i?verb=create&resource=configmaps&namespace=${nsB}`)
+      expect(canI.status()).toBe(200)
+      expect(await canI.json()).toEqual({ allowed: false })
+
+      // The AI's flag for every namespace does not pass next to an own namespace.
+      const mcpCfg = await request.get('/api/v1/ai/mcp/config', { headers: bearer(admin) })
+      if (mcpCfg.ok() && (await mcpCfg.json()).enabled) {
+        const res = await request.post(MCP, { headers: { ...RPC, Authorization: `Bearer ${user}` }, data: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'k8s_get_resources', arguments: { cluster: CLUSTER, resource_type: 'configmaps', namespace: nsA, all_namespaces: true } } }, failOnStatusCode: false })
+        expect(res.status(), await res.text()).toBe(200)
+        const result = (await res.json()).result as { isError?: boolean; content: { text: string }[] }
+        expect(result.isError).toBe(true)
+        expect(result.content[0].text).toMatch(/all_namespaces spans the cluster/)
+        expect(result.content[0].text).not.toContain('cm-b')
+      }
+    } finally {
+      if (userId) await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: bearer(admin), failOnStatusCode: false })
+      tryKubectl(`delete clusterrolebinding ${rbac}-imp --ignore-not-found`)
+      tryKubectl(`delete clusterrole ${rbac}-imp --ignore-not-found`)
+      tryKubectl(`delete namespace ${nsA} ${nsB} --ignore-not-found --wait=false`)
+    }
+  })
+
   // The dashboard's "Check issues" for the same kind of grant: the namespace's issues and Warning events, the same as
   // the admin's issues in that namespace, nothing of the namespace beside it, and the nodes — which the grant cannot
   // list — as a row saying they were not read; on screen the rows, not "Failed to collect issues".

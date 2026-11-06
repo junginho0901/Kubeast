@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -496,22 +497,24 @@ func (r Request) side(e End) bool {
 }
 
 // redact keeps only the namespace and the address of an end the reader may not see: outside its scope, or in
-// a namespace whose pods it cannot list.
+// a namespace whose pods it cannot list. An end with no namespace goes by its Service when that names one; a Service
+// with no namespace on an end with none cannot be placed, so a limited reader does not see it.
 func (r Request) redact(e *End, hidden map[string]bool) bool {
-	if e.Namespace == "" {
-		return false
-	}
-	if !hidden[e.Namespace] {
-		if r.Scope == nil {
+	namespace := e.Namespace
+	if namespace == "" {
+		if e.Service == "" {
 			return false
 		}
-		for _, ns := range r.Scope {
-			if ns == e.Namespace {
-				return false
-			}
+		if ns, _, qualified := strings.Cut(e.Service, "/"); qualified {
+			namespace = ns
+		} else if r.Scope == nil {
+			return false
 		}
 	}
-	changed := e.Pod != "" || e.Workload != nil || e.Service != ""
-	e.Pod, e.Workload, e.Service = "", nil, ""
+	if !hidden[namespace] && (r.Scope == nil || slices.Contains(r.Scope, namespace)) {
+		return false
+	}
+	changed := e.Pod != "" || e.Workload != nil || e.Service != "" || e.AZ != "" || e.VPC != "" || e.Instance != ""
+	e.Pod, e.Workload, e.Service, e.AZ, e.VPC, e.Instance = "", nil, "", "", "", ""
 	return changed
 }

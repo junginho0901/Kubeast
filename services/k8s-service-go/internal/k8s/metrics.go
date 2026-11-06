@@ -51,13 +51,21 @@ type nodeMetricsItem struct {
 
 // GetPodMetrics returns pod metrics for a namespace (or all namespaces) with aggregated cpu/memory per pod.
 func (s *Service) GetPodMetrics(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	var path string
 	if namespace == "" {
-		path = "/apis/metrics.k8s.io/v1beta1/pods"
-	} else {
-		path = fmt.Sprintf("/apis/metrics.k8s.io/v1beta1/namespaces/%s/pods", namespace)
+		return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) { return s.podMetricsIn(ctx, ns) })
 	}
-	rawBody, statusCode, err := s.RawRequest(ctx, "GET", path)
+	return s.podMetricsIn(ctx, namespace)
+}
+
+func podMetricsPath(namespace string) string {
+	if namespace == "" {
+		return "/apis/metrics.k8s.io/v1beta1/pods"
+	}
+	return fmt.Sprintf("/apis/metrics.k8s.io/v1beta1/namespaces/%s/pods", namespace)
+}
+
+func (s *Service) podMetricsIn(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
+	rawBody, statusCode, err := s.RawRequest(ctx, "GET", podMetricsPath(namespace))
 	if err != nil {
 		// metrics-server not installed in this cluster → the metrics.k8s.io API
 		// group is unregistered (404). That's "no metrics", not a server error;
@@ -169,40 +177,48 @@ func (s *Service) GetTopResources(ctx context.Context, podLimit, nodeLimit int) 
 
 	result := map[string]interface{}{}
 
-	// Pod metrics across all namespaces
-	podBody, _, podErr := s.RawRequest(ctx, "GET", "/apis/metrics.k8s.io/v1beta1/pods")
-	if podErr == nil {
-		var podResp podMetricsResponse
-		if err := json.Unmarshal(podBody, &podResp); err == nil {
-			pods := make([]map[string]interface{}, 0, len(podResp.Items))
-			for _, item := range podResp.Items {
-				var totalCPUNano int64
-				var totalMemBytes int64
-				for _, c := range item.Containers {
-					totalCPUNano += cpuToNanoCores(c.Usage["cpu"])
-					totalMemBytes += memoryToBytes(c.Usage["memory"])
-				}
-				pods = append(pods, map[string]interface{}{
-					"name":      item.Metadata.Name,
-					"namespace": item.Metadata.Namespace,
-					"cpu":       fmt.Sprintf("%dm", topMillicores(totalCPUNano)),
-					"memory":    fmt.Sprintf("%dMi", totalMemBytes/(1<<20)),
-					"timestamp": item.Timestamp,
-				})
-			}
-
-			// Sort by CPU usage descending
-			sort.Slice(pods, func(i, j int) bool {
-				ci, _ := pods[i]["cpu"].(string)
-				cj, _ := pods[j]["cpu"].(string)
-				return cpuToNanoCores(ci) > cpuToNanoCores(cj)
-			})
-
-			if len(pods) > podLimit {
-				pods = pods[:podLimit]
-			}
-			result["top_pods"] = pods
+	// Pod metrics across all namespaces, each of a limited grant's namespaces in turn
+	var podItems []podMetricsItem
+	podErr := eachCallerNamespace(ctx, "", func(ns string) error {
+		podBody, _, err := s.RawRequest(ctx, "GET", podMetricsPath(ns))
+		if err != nil {
+			return err
 		}
+		var podResp podMetricsResponse
+		if json.Unmarshal(podBody, &podResp) == nil {
+			podItems = append(podItems, podResp.Items...)
+		}
+		return nil
+	})
+	if podErr == nil {
+		pods := make([]map[string]interface{}, 0, len(podItems))
+		for _, item := range podItems {
+			var totalCPUNano int64
+			var totalMemBytes int64
+			for _, c := range item.Containers {
+				totalCPUNano += cpuToNanoCores(c.Usage["cpu"])
+				totalMemBytes += memoryToBytes(c.Usage["memory"])
+			}
+			pods = append(pods, map[string]interface{}{
+				"name":      item.Metadata.Name,
+				"namespace": item.Metadata.Namespace,
+				"cpu":       fmt.Sprintf("%dm", topMillicores(totalCPUNano)),
+				"memory":    fmt.Sprintf("%dMi", totalMemBytes/(1<<20)),
+				"timestamp": item.Timestamp,
+			})
+		}
+
+		// Sort by CPU usage descending
+		sort.Slice(pods, func(i, j int) bool {
+			ci, _ := pods[i]["cpu"].(string)
+			cj, _ := pods[j]["cpu"].(string)
+			return cpuToNanoCores(ci) > cpuToNanoCores(cj)
+		})
+
+		if len(pods) > podLimit {
+			pods = pods[:podLimit]
+		}
+		result["top_pods"] = pods
 	} else {
 		result["top_pods"] = []map[string]interface{}{}
 		result["pod_metrics_error"] = podErr.Error()

@@ -53,44 +53,46 @@ func (s *Service) GetGPUDashboard(ctx context.Context) (map[string]interface{}, 
 	go func() {
 		defer wg.Done()
 		// a page at a time, keeping the pods that ask for a GPU (every pod in one list took k8s-service past 512 Mi)
-		podErr = eachPod(dashCtx, s.clientsetCtx(ctx).CoreV1(), "", metav1.ListOptions{}, func(pod *corev1.Pod) {
-			byVendor := getPodGPURequests(pod)
-			gpuReq := sumVendors(byVendor)
-			if gpuReq == 0 {
-				return
-			}
-			// in use = kubectl describe node's "Allocated resources": the pods on a node that have not ended; a pod
-			// no node has taken yet waits for one and is counted apart
-			if pod.Status.Phase != corev1.PodSucceeded && pod.Status.Phase != corev1.PodFailed {
-				for vendor, n := range byVendor {
-					if pod.Spec.NodeName != "" {
-						if usedByNode[pod.Spec.NodeName] == nil {
-							usedByNode[pod.Spec.NodeName] = map[string]int{}
+		podErr = eachCallerNamespace(ctx, "", func(ns string) error {
+			return eachPod(dashCtx, s.clientsetCtx(ctx).CoreV1(), ns, metav1.ListOptions{}, func(pod *corev1.Pod) {
+				byVendor := getPodGPURequests(pod)
+				gpuReq := sumVendors(byVendor)
+				if gpuReq == 0 {
+					return
+				}
+				// in use = kubectl describe node's "Allocated resources": the pods on a node that have not ended; a pod
+				// no node has taken yet waits for one and is counted apart
+				if pod.Status.Phase != corev1.PodSucceeded && pod.Status.Phase != corev1.PodFailed {
+					for vendor, n := range byVendor {
+						if pod.Spec.NodeName != "" {
+							if usedByNode[pod.Spec.NodeName] == nil {
+								usedByNode[pod.Spec.NodeName] = map[string]int{}
+							}
+							usedByNode[pod.Spec.NodeName][vendor] += n
+						} else {
+							waitingByVendor[vendor] += n
 						}
-						usedByNode[pod.Spec.NodeName][vendor] += n
-					} else {
-						waitingByVendor[vendor] += n
 					}
 				}
-			}
-			status, _, _, _ := podListView(pod)
-			requested := make([]map[string]interface{}, 0, len(byVendor))
-			for _, vendor := range gpuVendorOrder(byVendor) {
-				requested = append(requested, map[string]interface{}{"vendor": vendor, "requested": byVendor[vendor]})
-			}
-			row := map[string]interface{}{
-				"name":          pod.Name,
-				"namespace":     pod.Namespace,
-				"gpu_requested": gpuReq,
-				"gpu_vendors":   requested,
-				"status":        status,
-				"phase":         string(pod.Status.Phase),
-				"created_at":    toISO(&pod.CreationTimestamp),
-			}
-			if pod.Spec.NodeName != "" {
-				row["node_name"] = pod.Spec.NodeName
-			}
-			gpuPods = append(gpuPods, row)
+				status, _, _, _ := podListView(pod)
+				requested := make([]map[string]interface{}, 0, len(byVendor))
+				for _, vendor := range gpuVendorOrder(byVendor) {
+					requested = append(requested, map[string]interface{}{"vendor": vendor, "requested": byVendor[vendor]})
+				}
+				row := map[string]interface{}{
+					"name":          pod.Name,
+					"namespace":     pod.Namespace,
+					"gpu_requested": gpuReq,
+					"gpu_vendors":   requested,
+					"status":        status,
+					"phase":         string(pod.Status.Phase),
+					"created_at":    toISO(&pod.CreationTimestamp),
+				}
+				if pod.Spec.NodeName != "" {
+					row["node_name"] = pod.Spec.NodeName
+				}
+				gpuPods = append(gpuPods, row)
+			})
 		})
 	}()
 	go func() {
@@ -447,6 +449,9 @@ func getDevicePlugins(ctx context.Context, s *Service) map[string]map[string]int
 
 func getDevicePluginStatus(ctx context.Context, s *Service, candidates []dsRef) map[string]interface{} {
 	for _, c := range candidates {
+		if !inCallerScope(ctx, c.namespace) {
+			continue
+		}
 		// Short timeout per candidate so we don't block if the namespace doesn't exist
 		tryCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		ds, err := s.clientsetCtx(ctx).AppsV1().DaemonSets(c.namespace).Get(tryCtx, c.name, metav1.GetOptions{})
@@ -471,6 +476,9 @@ func getTimeSlicingConfig(ctx context.Context, s *Service) map[string]interface{
 	names := []string{"time-slicing-config", "nvidia-plugin-configs", "time-slicing"}
 
 	for _, ns := range namespaces {
+		if !inCallerScope(ctx, ns) {
+			continue
+		}
 		for _, name := range names {
 			tryCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 			cm, err := s.clientsetCtx(ctx).CoreV1().ConfigMaps(ns).Get(tryCtx, name, metav1.GetOptions{})

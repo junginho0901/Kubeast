@@ -129,16 +129,19 @@ func (h *Handler) GetGenericResourceYAML(w http.ResponseWriter, r *http.Request)
 	response.JSON(w, http.StatusOK, map[string]interface{}{"yaml": data})
 }
 
+// applyYAMLBody is the body of a YAML apply, read the same way by the namespace scope check.
+type applyYAMLBody struct {
+	ResourceType string `json:"resource_type"`
+	Namespace    string `json:"namespace"`
+	Name         string `json:"name"`
+	ResourceName string `json:"resource_name"`
+	YAML         string `json:"yaml"`
+}
+
 // ApplyResourceYAML handles POST /api/v1/resources/yaml/apply. It needs the
 // edit permission of the kind the resource type resolves to.
 func (h *Handler) ApplyResourceYAML(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		ResourceType string `json:"resource_type"`
-		Namespace    string `json:"namespace"`
-		Name         string `json:"name"`
-		ResourceName string `json:"resource_name"`
-		YAML         string `json:"yaml"`
-	}
+	var body applyYAMLBody
 	if err := decodeJSON(r, &body); err != nil {
 		response.Error(w, http.StatusBadRequest, "invalid request body: "+err.Error())
 		return
@@ -177,13 +180,16 @@ func (h *Handler) ApplyResourceYAML(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, data)
 }
 
+// createYAMLBody is the body of a YAML create, read the same way by the namespace scope check.
+type createYAMLBody struct {
+	YAML      string `json:"yaml"`
+	Namespace string `json:"namespace"`
+}
+
 // CreateResourcesFromYAML handles POST /api/v1/resources/yaml/create. Every
 // document needs the create permission of its kind.
 func (h *Handler) CreateResourcesFromYAML(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		YAML      string `json:"yaml"`
-		Namespace string `json:"namespace"`
-	}
+	var body createYAMLBody
 	if err := decodeJSON(r, &body); err != nil {
 		response.Error(w, http.StatusBadRequest, "invalid request body: "+err.Error())
 		return

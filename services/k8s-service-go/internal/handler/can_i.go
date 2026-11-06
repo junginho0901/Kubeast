@@ -6,6 +6,8 @@ import (
 	authorizationv1 "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/junginho0901/kubeast/services/pkg/auth"
+	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -16,6 +18,8 @@ import (
 // app permission alone does not say (the Write role's edit ClusterRole cannot
 // create or delete cluster-scoped objects). An empty namespace means every
 // namespace; a name asks about that object, which RBAC resourceNames can allow.
+// A namespace outside a limited grant is "no" without asking: the middleware
+// would refuse the action there, and a button shows when this call fails.
 func (h *Handler) CanI(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	attrs := &authorizationv1.ResourceAttributes{
@@ -27,6 +31,12 @@ func (h *Handler) CanI(w http.ResponseWriter, r *http.Request) {
 	}
 	if attrs.Verb == "" || attrs.Resource == "" {
 		response.Error(w, http.StatusBadRequest, "verb and resource are required")
+		return
+	}
+	payload, _ := auth.FromContext(r.Context())
+	id, _ := cluster.FromContext(r.Context())
+	if attrs.Namespace != "" && !payload.AllowedIn(string(id), attrs.Namespace) {
+		response.JSON(w, http.StatusOK, map[string]bool{"allowed": false})
 		return
 	}
 	cs, err := h.svc.ClientsetFor(r.Context())

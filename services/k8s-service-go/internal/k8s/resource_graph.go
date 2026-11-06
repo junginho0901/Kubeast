@@ -184,8 +184,11 @@ type rgResources struct {
 }
 
 // GetResourceGraph returns a comprehensive resource graph for given namespaces.
-// If namespaces is empty, it fetches across all namespaces.
+// If namespaces is empty, it fetches across all namespaces, or a limited grant's.
 func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string, opts ResourceGraphOptions) (map[string]interface{}, error) {
+	if len(namespaces) == 0 {
+		namespaces = scopeFromCtx(ctx)
+	}
 	cacheKey := s.clusterCacheKey(ctx, fmt.Sprintf("resource-graph|%s%s", strings.Join(namespaces, ","), opts.cacheKey()))
 	var cached map[string]interface{}
 	if s.cache.Get(ctx, cacheKey, &cached) {

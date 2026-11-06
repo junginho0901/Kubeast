@@ -503,3 +503,38 @@ func TestReadOfEKSRowsFoldsTheReceivingEndAndNamesServiceAddresses(t *testing.T)
 		t.Fatalf("given unit %q", r.Unit)
 	}
 }
+
+// A hidden end keeps its namespace and address only, the machine it runs on gone too; a Service names its own namespace
+// when the end has none, and with no way to tell whose it is a limited reader does not see it.
+func TestRedactKeepsNamespaceAndAddressOnly(t *testing.T) {
+	scoped := Request{Scope: []string{"shop"}}
+	outsideEnd := End{Namespace: "pay", Pod: "p", Workload: &netflows.Workload{Kind: "Deployment", Name: "pay"}, Service: "pay", IP: "10.0.3.40", AZ: "apne2-az1", VPC: "vpc-1", Instance: "i-1"}
+	if !scoped.redact(&outsideEnd, nil) {
+		t.Fatal("not hidden")
+	}
+	if want := (End{Namespace: "pay", IP: "10.0.3.40"}); !reflect.DeepEqual(outsideEnd, want) {
+		t.Errorf("%+v, want %+v", outsideEnd, want)
+	}
+	for name, c := range map[string]struct {
+		req    Request
+		in     End
+		hidden map[string]bool
+		want   End
+		did    bool
+	}{
+		"a Service of another namespace, no namespace on the end":   {scoped, End{Service: "pay/billing", IP: "10.0.3.41", AZ: "z", VPC: "v", Instance: "i"}, nil, End{IP: "10.0.3.41"}, true},
+		"a Service with no namespace, no namespace on the end":      {scoped, End{Service: "billing", IP: "10.0.3.42", AZ: "z", VPC: "v", Instance: "i"}, nil, End{IP: "10.0.3.42"}, true},
+		"a Service of its own namespace, no namespace on the end":   {scoped, End{Service: "shop/web", IP: "10.0.3.43", AZ: "z"}, nil, End{Service: "shop/web", IP: "10.0.3.43", AZ: "z"}, false},
+		"an end inside the scope":                                   {scoped, End{Namespace: "shop", Pod: "web-1", Service: "web", IP: "10.0.1.1", AZ: "z", VPC: "v", Instance: "i"}, nil, End{Namespace: "shop", Pod: "web-1", Service: "web", IP: "10.0.1.1", AZ: "z", VPC: "v", Instance: "i"}, false},
+		"an address and nothing else":                               {scoped, End{IP: "10.0.9.9", AZ: "z", VPC: "v", Instance: "i"}, nil, End{IP: "10.0.9.9", AZ: "z", VPC: "v", Instance: "i"}, false},
+		"no limit, nothing named":                                   {Request{}, End{Service: "billing", IP: "10.0.3.44", AZ: "z"}, nil, End{Service: "billing", IP: "10.0.3.44", AZ: "z"}, false},
+		"no limit, a namespace the reader cannot list":              {Request{}, End{Namespace: "pay", Pod: "p", IP: "10.0.3.45", AZ: "z", VPC: "v", Instance: "i"}, map[string]bool{"pay": true}, End{Namespace: "pay", IP: "10.0.3.45"}, true},
+		"no limit, a Service in a namespace the reader cannot list": {Request{}, End{Service: "pay/billing", IP: "10.0.3.46", AZ: "z"}, map[string]bool{"pay": true}, End{IP: "10.0.3.46"}, true},
+		"no limit, a namespace the reader can list":                 {Request{}, End{Namespace: "pay", Pod: "p", IP: "10.0.3.47", AZ: "z"}, nil, End{Namespace: "pay", Pod: "p", IP: "10.0.3.47", AZ: "z"}, false},
+	} {
+		e := c.in
+		if did := c.req.redact(&e, c.hidden); did != c.did || !reflect.DeepEqual(e, c.want) {
+			t.Errorf("%s: hid %v, %+v, want %v, %+v", name, did, e, c.did, c.want)
+		}
+	}
+}

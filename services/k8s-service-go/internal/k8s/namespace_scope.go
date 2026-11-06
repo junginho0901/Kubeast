@@ -7,13 +7,14 @@ import (
 	"sync"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
 // Namespace-scoped grants (the token's "ns" claim): a user whose grant on the
 // request's cluster is limited to namespaces sees only those. The handler
-// middleware refuses a namespaced path outside the list; here the
+// middleware refuses a namespace outside the list, however a route names it; here the
 // all-namespaces reads fan out over the list instead of asking the cluster for
 // everything (which the cluster would refuse: the grant's group is bound per
 // namespace), and the namespace list and overview are built from it.
@@ -26,6 +27,20 @@ func scopeFromCtx(ctx context.Context) []string {
 		return nil
 	}
 	return p.Namespaces[string(ctxClusterID(ctx))]
+}
+
+// CallerScope is scopeFromCtx for the packages beside this one.
+func CallerScope(ctx context.Context) []string { return scopeFromCtx(ctx) }
+
+// inCallerScope reports whether the caller's grant on the ctx cluster reaches namespace.
+func inCallerScope(ctx context.Context, namespace string) bool {
+	scope := scopeFromCtx(ctx)
+	return len(scope) == 0 || slices.Contains(scope, namespace)
+}
+
+// isNamespaceKind reports whether gvr is the Namespace kind, whose objects are named as a grant lists them.
+func isNamespaceKind(gvr schema.GroupVersionResource) bool {
+	return gvr.Group == "" && gvr.Resource == "namespaces"
 }
 
 // listFanOutWorkers bounds the parallel per-namespace lists of one request.
@@ -44,6 +59,40 @@ func (s *Service) listAcrossNamespaces(ctx context.Context, list func(namespace 
 		return list("")
 	}
 	return fanOutNamespaces(scope, list)
+}
+
+// FanOutNamespaces is fanOutNamespaces for the packages beside this one.
+func FanOutNamespaces[T any](scope []string, list func(namespace string) ([]T, error)) ([]T, error) {
+	return fanOutNamespaces(scope, list)
+}
+
+// eachCallerNamespace runs read for namespace, or, when every namespace ("") is asked by a caller limited to
+// namespaces, for each of those in turn, for a read that adds to one result as it goes. A namespace the cluster refuses
+// or does not have is skipped unless none could be read, as listAcrossNamespaces does.
+func eachCallerNamespace(ctx context.Context, namespace string, read func(namespace string) error) error {
+	scope := scopeFromCtx(ctx)
+	if namespace != "" || len(scope) == 0 {
+		return read(namespace)
+	}
+	var refused error
+	readOne := false
+	for _, ns := range scope {
+		if err := read(ns); err != nil {
+			if apierrors.IsForbidden(err) {
+				refused = err
+				continue
+			}
+			if apierrors.IsNotFound(err) {
+				continue
+			}
+			return err
+		}
+		readOne = true
+	}
+	if !readOne {
+		return refused
+	}
+	return nil
 }
 
 // fanOutNamespaces runs list once per namespace of scope, in parallel, and

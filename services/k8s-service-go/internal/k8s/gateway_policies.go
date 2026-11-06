@@ -89,14 +89,27 @@ func (s *Service) GetGatewayPolicies(ctx context.Context, namespace string, extr
 			if !k.Namespaced {
 				ns = ""
 			}
-			list, err := s.ListResources(ctx, k.GVR, ns, metav1.ListOptions{})
+			rowsIn := func(ns string) ([]map[string]interface{}, error) {
+				list, err := s.ListResources(ctx, k.GVR, ns, metav1.ListOptions{})
+				if err != nil {
+					return nil, err
+				}
+				rows := make([]map[string]interface{}, 0, len(list.Items))
+				for _, item := range list.Items {
+					rows = append(rows, policyRow(&item, k))
+				}
+				return rows, nil
+			}
+			var rows []map[string]interface{}
+			var err error
+			if k.Namespaced && ns == "" {
+				rows, err = s.listAcrossNamespaces(ctx, rowsIn)
+			} else {
+				rows, err = rowsIn(ns)
+			}
 			if err != nil {
 				results[i] = result{kind: k, err: err}
 				return
-			}
-			rows := make([]map[string]interface{}, 0, len(list.Items))
-			for _, item := range list.Items {
-				rows = append(rows, policyRow(&item, k))
 			}
 			results[i] = result{kind: k, items: rows}
 		}(i, k)

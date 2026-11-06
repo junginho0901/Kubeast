@@ -117,6 +117,10 @@ func namespaceGate(payload auth.TokenPayload, clusterID, tool string, args map[s
 	if _, free := namespaceFreeTools[tool]; free {
 		return nil
 	}
+	// The handlers read this flag before the namespace, so an own namespace beside it says nothing.
+	if argBool(args, "all_namespaces") {
+		return fmt.Errorf("%w: all_namespaces spans the cluster; your grant on %s is limited to namespaces %s", errNamespaceScope, clusterID, strings.Join(scope, ", "))
+	}
 	ns, _ := args["namespace"].(string)
 	ns = strings.TrimSpace(ns)
 	if _, aware := namespaceAwareTools[tool]; aware && ns == "" {
