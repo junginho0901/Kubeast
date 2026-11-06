@@ -8,7 +8,6 @@
 // 없으면 null. spec.source.persistentVolumeName + spec.nodeName camelCase/
 // snake_case 둘 다 지원.
 
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import type { VolumeAttachmentInfo } from '@/services/api'
 
 function normalizeError(error?: { time?: string | null; message?: string | null } | null): { time?: string | null; message?: string | null } | null {
@@ -20,7 +19,8 @@ function normalizeError(error?: { time?: string | null; message?: string | null 
 }
 
 export function normalizeWatchVolumeAttachmentObject(obj: any): VolumeAttachmentInfo {
-  if (typeof obj?.name === 'string') {
+  // a row the server could not convert has a top-level name and still holds the object's nested spec and status
+  if (typeof obj?.name === 'string' && !obj?.spec) {
     return {
       name: obj.name,
       attacher: obj?.attacher ?? null,
@@ -41,7 +41,7 @@ export function normalizeWatchVolumeAttachmentObject(obj: any): VolumeAttachment
   const detachError = status?.detachError ?? status?.detach_error
 
   return {
-    name: metadata?.name ?? '',
+    name: metadata?.name ?? obj?.name ?? '',
     attacher: spec?.attacher ?? null,
     node_name: spec?.nodeName ?? spec?.node_name ?? null,
     persistent_volume_name:
@@ -51,7 +51,7 @@ export function normalizeWatchVolumeAttachmentObject(obj: any): VolumeAttachment
     attached: typeof status?.attached === 'boolean' ? status.attached : null,
     attach_error: normalizeError(attachError),
     detach_error: normalizeError(detachError),
-    created_at: metadata?.creationTimestamp ?? null,
+    created_at: metadata?.creationTimestamp ?? obj?.created_at ?? null,
   }
 }
 
@@ -74,7 +74,8 @@ export function applyVolumeAttachmentWatchEvent(
     return items
   }
 
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
+  // the server sends the whole row (varow.Info), so it replaces: an error that went away does not stay on screen
+  if (index >= 0) items[index] = normalized
   else items.push(normalized)
   return items
 }

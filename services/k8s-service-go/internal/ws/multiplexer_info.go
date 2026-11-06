@@ -42,6 +42,8 @@ func objectToInfo(resource string, obj *unstructured.Unstructured) map[string]in
 		return pvToInfo(obj)
 	case "storageclasses":
 		return storageclassToInfo(obj)
+	case "volumeattachments":
+		return volumeAttachmentToInfo(obj)
 	case "statefulsets":
 		return statefulsetToInfo(obj)
 	case "daemonsets":

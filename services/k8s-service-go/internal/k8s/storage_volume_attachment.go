@@ -7,8 +7,9 @@ import (
 	"sync"
 
 	corev1 "k8s.io/api/core/v1"
-	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	varow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/volumeattachment"
 )
 
 // --- VolumeAttachments ---
@@ -21,8 +22,8 @@ func (s *Service) GetVolumeAttachments(ctx context.Context) ([]map[string]interf
 	}
 
 	result := make([]map[string]interface{}, 0, len(vaList.Items))
-	for _, va := range vaList.Items {
-		result = append(result, formatVolumeAttachment(&va))
+	for i := range vaList.Items {
+		result = append(result, varow.Info(&vaList.Items[i]))
 	}
 	return result, nil
 }
@@ -60,7 +61,7 @@ func (s *Service) DescribeVolumeAttachment(ctx context.Context, name string) (ma
 	}()
 	wg.Wait()
 
-	result := formatVolumeAttachment(va)
+	result := varow.Info(va)
 
 	// Additional describe fields
 	result["uid"] = string(va.UID)
@@ -138,35 +139,4 @@ func (s *Service) DescribeVolumeAttachment(ctx context.Context, name string) (ma
 // DeleteVolumeAttachment deletes a volume attachment.
 func (s *Service) DeleteVolumeAttachment(ctx context.Context, name string) error {
 	return s.clientsetCtx(ctx).StorageV1().VolumeAttachments().Delete(ctx, name, metav1.DeleteOptions{})
-}
-
-func formatVolumeAttachment(va *storagev1.VolumeAttachment) map[string]interface{} {
-	pvName := ""
-	if va.Spec.Source.PersistentVolumeName != nil {
-		pvName = *va.Spec.Source.PersistentVolumeName
-	}
-
-	result := map[string]interface{}{
-		"name":                   va.Name,
-		"attacher":               va.Spec.Attacher,
-		"node_name":              va.Spec.NodeName,
-		"persistent_volume_name": pvName,
-		"attached":               va.Status.Attached,
-		"created_at":             toISO(&va.CreationTimestamp),
-	}
-
-	if va.Status.AttachError != nil {
-		result["attach_error"] = map[string]interface{}{
-			"message": va.Status.AttachError.Message,
-			"time":    va.Status.AttachError.Time.UTC().Format("2006-01-02T15:04:05Z"),
-		}
-	}
-	if va.Status.DetachError != nil {
-		result["detach_error"] = map[string]interface{}{
-			"message": va.Status.DetachError.Message,
-			"time":    va.Status.DetachError.Time.UTC().Format("2006-01-02T15:04:05Z"),
-		}
-	}
-
-	return result
 }

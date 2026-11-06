@@ -4,9 +4,11 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 
+	cronjobrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/cronjob"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/deploystatus"
 )
 
@@ -375,71 +377,11 @@ func jobToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 	return out
 }
 
-// cronjobToInfo — list endpoint: formatCronJobDetail (workloads_formatters.go).
+// cronjobToInfo is the list's row (cronjobrow.Info), so a live update says what the list says.
 func cronjobToInfo(obj *unstructured.Unstructured) map[string]interface{} {
-	metadata := obj.Object["metadata"].(map[string]interface{})
-	spec, _ := obj.Object["spec"].(map[string]interface{})
-	status, _ := obj.Object["status"].(map[string]interface{})
-
-	schedule := ""
-	suspend := false
-	concurrencyPolicy := ""
-	if spec != nil {
-		if s, ok := spec["schedule"].(string); ok {
-			schedule = s
-		}
-		if s, ok := spec["suspend"].(bool); ok {
-			suspend = s
-		}
-		if cp, ok := spec["concurrencyPolicy"].(string); ok {
-			concurrencyPolicy = cp
-		}
+	var cj batchv1.CronJob
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, &cj); err != nil {
+		return genericToInfo(obj)
 	}
-
-	activeCount := 0
-	var lastScheduleTime, lastSuccessfulTime interface{}
-	if status != nil {
-		if activeList, ok := status["active"].([]interface{}); ok {
-			activeCount = len(activeList)
-		}
-		lastScheduleTime = status["lastScheduleTime"]
-		lastSuccessfulTime = status["lastSuccessfulTime"]
-	}
-
-	// images — spec.jobTemplate.spec.template.spec.containers
-	images := []string{}
-	containers := []string{}
-	if spec != nil {
-		if jt, ok := spec["jobTemplate"].(map[string]interface{}); ok {
-			if jtSpec, ok := jt["spec"].(map[string]interface{}); ok {
-				images = containerImagesFromTemplate(jtSpec)
-				containers = containerNamesFromTemplate(jtSpec)
-			}
-		}
-	}
-	image := ""
-	if len(images) > 0 {
-		image = images[0]
-	}
-
-	out := map[string]interface{}{
-		"name":               metadata["name"],
-		"namespace":          metadata["namespace"],
-		"schedule":           schedule,
-		"suspend":            suspend,
-		"active":             activeCount,
-		"image":              image,
-		"images":             images,
-		"containers":         containers,
-		"concurrency_policy": concurrencyPolicy,
-		"created_at":         metadata["creationTimestamp"],
-	}
-	if ls, ok := lastScheduleTime.(string); ok && ls != "" {
-		out["last_schedule"] = ls
-	}
-	if lsu, ok := lastSuccessfulTime.(string); ok && lsu != "" {
-		out["last_successful"] = lsu
-	}
-
-	return out
+	return cronjobrow.Info(&cj)
 }

@@ -1431,6 +1431,139 @@ test.describe('number check — list screens', () => {
     }
   })
 
+  // A live update carries the list's own row (internal/ingress, cronjob and volumeattachment), so the row it leaves reads
+  // as a fresh read of the list API does, a value that went away included. The objects are made here and removed after.
+  test('a live update leaves an Ingress, CronJob and VolumeAttachment row as the list API shows it, emptied values too', async ({ page }) => {
+    test.setTimeout(300_000)
+    const ING = 'num-live-ing'
+    const CRON = 'num-live-cron'
+    const VA = 'num-live-va'
+    const screenOf = (path: string) => [...SCREENS, ...SCREENS_CLUSTER].find((s) => s.path === path) as Screen
+    const ago = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString().replace(/\.\d+Z$/, 'Z')
+
+    await page.context().addInitScript(() => localStorage.setItem('kubeast.listPageSize', '100'))
+    const held = await page.context().newPage()
+    await held.routeWebSocket(/wsMultiplexer/, () => {})
+    for (const p of [held, page]) await p.setViewportSize({ width: 2560, height: 1200 })
+
+    // what a page shows of one object: the cells by column (no Age, which moves), their hover text as title:<column>, and the cards
+    const shows = async (p: Page, name: string) => {
+      const { heads, rows, cards } = await readScreen(p)
+      const row = rows.find((cells) => cells[heads.findIndex((h) => /^name$/i.test(h))] === name) ?? []
+      const titles = await p.locator('main tbody tr').filter({ has: p.getByRole('cell', { name, exact: true }) }).locator('td')
+        .evaluateAll((tds) => tds.map((td) => td.getAttribute('title') ?? td.querySelector('[title]')?.getAttribute('title') ?? ''))
+      const columns = heads.map((h, i) => [h, i] as const).filter(([h]) => h !== 'Age')
+      return {
+        row: Object.fromEntries([...columns.map(([h, i]) => [h, row[i]]), ...columns.map(([h, i]) => [`title:${h}`, titles[i]])]),
+        cards,
+      }
+    }
+    // the screen, with the watch past its first events
+    const watching = async (s: Screen, name: string) => {
+      const socket = page.waitForEvent('websocket', (ws) => /wsMultiplexer/.test(ws.url()))
+      await page.goto(screenUrl(s))
+      await (await socket).waitForEvent('framereceived', { predicate: (f) => String(f.payload).includes(name), timeout: 20_000 })
+    }
+    // the changes, then the live row holds the values they should leave and a fresh read of the list API reads the same
+    const follows = async (s: Screen, name: string, changes: string[], wants: Record<string, unknown>) => {
+      for (const change of changes) kubectl(change)
+      const live = async () => {
+        const { row } = await shows(page, name)
+        return Object.fromEntries(Object.keys(wants).map((k) => [k, row[k]]))
+      }
+      await expect.poll(live, { timeout: 20_000, message: `${name}: the row after a live update` }).toEqual(wants)
+      const after = await shows(page, name)
+      await expect.poll(async () => {
+        await held.goto(screenUrl(s))
+        // the page's first answer, or there is nothing to read yet and each round of this poll opens it again
+        await held.getByRole('cell', { name, exact: true }).first().waitFor({ timeout: 15_000 }).catch(() => {})
+        return shows(held, name)
+      }, { timeout: 40_000, message: `${name}: a fresh read of the list API` }).toEqual(after)
+    }
+
+    try {
+      await test.step('an Ingress that lost its class, rules, TLS and address shows none', async () => {
+        const s = screenOf('/network/ingresses')
+        const patch = (ops: Obj[]) => `patch ingress ${ING} -n ${NS} --type=json -p=${arg(ops)}`
+        const lbStatus = (ingress: Obj) => `patch ingress ${ING} -n ${NS} --subresource=status --type=merge -p=${arg({ status: { loadBalancer: { ingress } } })}`
+        kubectl('apply -f -', JSON.stringify({
+          apiVersion: 'networking.k8s.io/v1',
+          kind: 'Ingress',
+          metadata: { name: ING, namespace: NS },
+          spec: {
+            ingressClassName: 'num-live',
+            tls: [{ hosts: ['live.numbers.example'], secretName: 'num-live-tls' }],
+            rules: [{ host: 'live.numbers.example', http: { paths: [{ path: '/', pathType: 'Prefix', backend: { service: { name: 'num-db', port: { number: 5432 } } } }] } }],
+          },
+        }))
+        kubectl(lbStatus([{ ip: '192.0.2.10' }]))
+        await watching(s, ING)
+        await follows(s, ING, [], { Class: 'num-live', Hosts: 'live.numbers.example', Routes: 'live.numbers.example:/', Address: '192.0.2.10' })
+        await follows(s, ING, [
+          patch([
+            { op: 'remove', path: '/spec/ingressClassName' },
+            { op: 'remove', path: '/spec/tls' },
+            { op: 'remove', path: '/spec/rules' },
+            { op: 'add', path: '/spec/defaultBackend', value: { service: { name: 'num-db', port: { number: 5432 } } } },
+          ]),
+          lbStatus(null),
+        ], { Class: '-', Hosts: '-', Routes: '-', Address: '-' })
+      })
+
+      await test.step('a CronJob follows its time zone and last run, and shows none once they are gone', async () => {
+        const s = screenOf('/workloads/cronjobs')
+        const specPatch = (ops: Obj[]) => `patch cronjob ${CRON} -n ${NS} --type=json -p=${arg(ops)}`
+        const statusPatch = (ops: Obj[]) => `patch cronjob ${CRON} -n ${NS} --subresource=status --type=json -p=${arg(ops)}`
+        // the first of a month six months away: no run comes due while the test reads the row
+        const month = ((new Date().getUTCMonth() + 6) % 12) + 1
+        kubectl('apply -f -', JSON.stringify({
+          apiVersion: 'batch/v1',
+          kind: 'CronJob',
+          metadata: { name: CRON, namespace: NS },
+          spec: {
+            schedule: `0 0 1 ${month} *`,
+            timeZone: 'Asia/Seoul',
+            jobTemplate: { spec: { template: { spec: { restartPolicy: 'Never', containers: [{ name: 'app', image: 'busybox:1.37', command: ['true'] }] } } } },
+          },
+        }))
+        kubectl(statusPatch([{ op: 'add', path: '/status/lastScheduleTime', value: ago(10) }]))
+        await watching(s, CRON)
+        await follows(s, CRON, [], { 'Last Schedule': '10d', 'title:Next Run': expect.stringContaining('Asia/Seoul') })
+        await follows(s, CRON, [
+          specPatch([{ op: 'replace', path: '/spec/timeZone', value: 'Etc/UTC' }]),
+          statusPatch([{ op: 'replace', path: '/status/lastScheduleTime', value: ago(3) }]),
+        ], { 'Last Schedule': '3d', 'title:Next Run': expect.stringContaining('Etc/UTC') })
+        await follows(s, CRON, [
+          specPatch([{ op: 'remove', path: '/spec/timeZone' }]),
+          statusPatch([{ op: 'remove', path: '/status/lastScheduleTime' }]),
+        ], { 'Last Schedule': '-', 'title:Next Run': expect.not.stringMatching(/Asia\/Seoul|Etc\/UTC/) })
+      })
+
+      await test.step('a VolumeAttachment reads its state from each update, and no error stays after it clears', async () => {
+        const s = screenOf('/storage?tab=volumeattachments')
+        const status = (st: Obj) => `patch volumeattachment ${VA} --subresource=status --type=merge -p=${arg({ status: st })}`
+        const at = ago(1)
+        kubectl('apply -f -', JSON.stringify({
+          apiVersion: 'storage.k8s.io/v1',
+          kind: 'VolumeAttachment',
+          metadata: { name: VA },
+          spec: { attacher: 'numbers.kubeast.io', nodeName: 'kubeast-control-plane', source: { persistentVolumeName: 'num-live-pv' } },
+        }))
+        kubectl(status({ attached: false, attachError: { time: at, message: 'num-live attach failed' } }))
+        await watching(s, VA)
+        await follows(s, VA, [], { Attached: 'Error', Error: 'num-live attach failed' })
+        await follows(s, VA, [status({ attached: true, attachError: null })], { Attached: 'Attached', Error: '-' })
+        await follows(s, VA, [status({ attached: true, detachError: { time: at, message: 'num-live detach failed' } })], { Attached: 'Error', Error: 'num-live detach failed' })
+        await follows(s, VA, [status({ attached: false, detachError: null })], { Attached: 'Detached', Error: '-' })
+      })
+    } finally {
+      await held.close()
+      kubectl(`delete ingress ${ING} -n ${NS} --ignore-not-found --wait=false`)
+      kubectl(`delete cronjob ${CRON} -n ${NS} --ignore-not-found --wait=false`)
+      kubectl(`delete volumeattachment ${VA} --ignore-not-found --wait=false`)
+    }
+  })
+
   // An EndpointSlice row and its drawer are the slice the cluster has whichever way they came: from the list API (live
   // updates held back), from a live update, and by link (the object itself). Last in the file: it changes num-hand.
   test('an EndpointSlice row and drawer show the slice from the list API, a live update and a link alike', async ({ page }) => {

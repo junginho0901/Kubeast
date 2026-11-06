@@ -136,16 +136,6 @@ func strOrEmpty(v interface{}) string {
 	return ""
 }
 
-// sortStrings — 외부 패키지 import 없이 쓸 수 있게 작은 insertion sort.
-// formatIngressDetail 이 sort.Strings(backends) 호출하므로 동일 결과 보장.
-func sortStrings(s []string) {
-	for i := 1; i < len(s); i++ {
-		for j := i; j > 0 && s[j-1] > s[j]; j-- {
-			s[j-1], s[j] = s[j], s[j-1]
-		}
-	}
-}
-
 func int64Ptr(i int64) *int64 {
 	return &i
 }

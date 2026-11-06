@@ -4,12 +4,15 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 
+	ingressrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/ingress"
 	pvcrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/pvc"
 	scrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/storageclass"
+	varow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/volumeattachment"
 )
 
 // pvcToInfo is the list's row (pvcrow.Info), so a live update says what the list says.
@@ -142,173 +145,20 @@ func storageclassToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 	return scrow.Info(&sc)
 }
 
-// ingressToInfo — list endpoint: formatIngressDetail (networking.go).
+// volumeAttachmentToInfo is the list's row (varow.Info), so a live update says what the list says.
+func volumeAttachmentToInfo(obj *unstructured.Unstructured) map[string]interface{} {
+	var va storagev1.VolumeAttachment
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, &va); err != nil {
+		return genericToInfo(obj)
+	}
+	return varow.Info(&va)
+}
+
+// ingressToInfo is the list's row (ingressrow.Info), so a live update says what the list says.
 func ingressToInfo(obj *unstructured.Unstructured) map[string]interface{} {
-	metadata := obj.Object["metadata"].(map[string]interface{})
-	spec, _ := obj.Object["spec"].(map[string]interface{})
-	status, _ := obj.Object["status"].(map[string]interface{})
-
-	hosts := []string{}
-	backendSet := map[string]bool{}
-	backends := []string{}
-
-	rules := []map[string]interface{}{}
-	if spec != nil {
-		if rawRules, ok := spec["rules"].([]interface{}); ok {
-			for _, r := range rawRules {
-				rm, _ := r.(map[string]interface{})
-				if rm == nil {
-					continue
-				}
-				host, _ := rm["host"].(string)
-				if host != "" {
-					hosts = append(hosts, host)
-				}
-				ruleEntry := map[string]interface{}{
-					"host": host,
-				}
-				if http, ok := rm["http"].(map[string]interface{}); ok {
-					paths := []map[string]interface{}{}
-					if rawPaths, ok := http["paths"].([]interface{}); ok {
-						for _, p := range rawPaths {
-							pm, _ := p.(map[string]interface{})
-							if pm == nil {
-								continue
-							}
-							pathEntry := map[string]interface{}{
-								"path": pm["path"],
-							}
-							if pt, ok := pm["pathType"].(string); ok {
-								pathEntry["path_type"] = pt
-							}
-							if backend, ok := pm["backend"].(map[string]interface{}); ok {
-								if svc, ok := backend["service"].(map[string]interface{}); ok {
-									svcName, _ := svc["name"].(string)
-									backendEntry := map[string]interface{}{
-										"service_name": svcName,
-									}
-									if portMap, ok := svc["port"].(map[string]interface{}); ok {
-										if pn, ok := toInt64(portMap["number"]); ok && pn > 0 {
-											backendEntry["service_port"] = pn
-										}
-										if pname, ok := portMap["name"].(string); ok && pname != "" {
-											backendEntry["service_port_name"] = pname
-										}
-									}
-									pathEntry["backend"] = backendEntry
-									if !backendSet[svcName] {
-										backendSet[svcName] = true
-										backends = append(backends, svcName)
-									}
-								}
-							}
-							paths = append(paths, pathEntry)
-						}
-					}
-					ruleEntry["paths"] = paths
-				}
-				rules = append(rules, ruleEntry)
-			}
-		}
+	var ing networkingv1.Ingress
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, &ing); err != nil {
+		return genericToInfo(obj)
 	}
-	// formatIngressDetail 은 backends 정렬
-	sortStrings(backends)
-
-	addresses := []map[string]interface{}{}
-	if status != nil {
-		if lb, ok := status["loadBalancer"].(map[string]interface{}); ok {
-			if rawIng, ok := lb["ingress"].([]interface{}); ok {
-				for _, ing := range rawIng {
-					ingm, _ := ing.(map[string]interface{})
-					if ingm == nil {
-						continue
-					}
-					addr := map[string]interface{}{}
-					if ip, ok := ingm["ip"].(string); ok && ip != "" {
-						addr["ip"] = ip
-					}
-					if hn, ok := ingm["hostname"].(string); ok && hn != "" {
-						addr["hostname"] = hn
-					}
-					addresses = append(addresses, addr)
-				}
-			}
-		}
-	}
-
-	// class / class_source — spec.ingressClassName 우선, 없으면 annotation
-	ingressClass := ""
-	classSource := ""
-	annotations, _ := metadata["annotations"].(map[string]interface{})
-	if spec != nil {
-		if icn, ok := spec["ingressClassName"].(string); ok && icn != "" {
-			ingressClass = icn
-			classSource = "spec"
-		}
-	}
-	if ingressClass == "" && annotations != nil {
-		if v, ok := annotations["kubernetes.io/ingress.class"].(string); ok && v != "" {
-			ingressClass = v
-			classSource = "annotation"
-		}
-	}
-
-	tls := []map[string]interface{}{}
-	if spec != nil {
-		if rawTLS, ok := spec["tls"].([]interface{}); ok {
-			for _, t := range rawTLS {
-				tm, _ := t.(map[string]interface{})
-				if tm == nil {
-					continue
-				}
-				secretName, _ := tm["secretName"].(string)
-				tlsHosts := []string{}
-				if rh, ok := tm["hosts"].([]interface{}); ok {
-					for _, h := range rh {
-						if s, ok := h.(string); ok {
-							tlsHosts = append(tlsHosts, s)
-						}
-					}
-				}
-				tls = append(tls, map[string]interface{}{
-					"secret_name": secretName,
-					"hosts":       tlsHosts,
-				})
-			}
-		}
-	}
-
-	var defaultBackend interface{}
-	if spec != nil {
-		if db, ok := spec["defaultBackend"].(map[string]interface{}); ok {
-			if svc, ok := db["service"].(map[string]interface{}); ok {
-				dbEntry := map[string]interface{}{
-					"type":         "service",
-					"service_name": svc["name"],
-				}
-				if port, ok := svc["port"].(map[string]interface{}); ok {
-					if pn, ok := toInt64(port["number"]); ok && pn > 0 {
-						dbEntry["service_port"] = pn
-					}
-				}
-				defaultBackend = dbEntry
-			}
-		}
-	}
-
-	return map[string]interface{}{
-		"name":            metadata["name"],
-		"namespace":       metadata["namespace"],
-		"class":           ingressClass,
-		"class_source":    classSource,
-		"hosts":           hosts,
-		"addresses":       addresses,
-		"tls":             tls,
-		"default_backend": defaultBackend,
-		"rules":           rules,
-		"backends":        backends,
-		"labels":          metadata["labels"],
-		"annotations":     metadata["annotations"],
-		"created_at":      metadata["creationTimestamp"],
-	}
+	return ingressrow.Info(&ing)
 }

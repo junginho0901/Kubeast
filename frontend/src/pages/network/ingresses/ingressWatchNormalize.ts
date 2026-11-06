@@ -5,7 +5,6 @@
 // object 를 API list 형태 (IngressInfo) 로 정규화 — spec.ingressClassName /
 // annotation 모두 지원하여 class/class_source 결정 + rules/paths/backends 정규화.
 
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import type { IngressInfo } from '@/services/api'
 
 function normalizeBackend(backend: any): any {
@@ -49,8 +48,8 @@ export function normalizeWatchIngressObject(obj: any): IngressInfo {
   const metadata = obj?.metadata ?? {}
   const spec = obj?.spec ?? {}
   const status = obj?.status ?? {}
-  const annotations = metadata?.annotations ?? {}
-  const labels = metadata?.labels ?? {}
+  const annotations = metadata?.annotations ?? obj?.annotations ?? {}
+  const labels = metadata?.labels ?? obj?.labels ?? {}
   const specClass = spec?.ingressClassName ?? null
   const annoClass = annotations?.['kubernetes.io/ingress.class'] ?? null
   const ingressClass = specClass || annoClass || null
@@ -103,8 +102,8 @@ export function normalizeWatchIngressObject(obj: any): IngressInfo {
     .filter((v: any) => typeof v === 'string' && v.length > 0)
 
   return {
-    name: metadata?.name ?? '',
-    namespace: metadata?.namespace ?? '',
+    name: metadata?.name ?? obj?.name ?? '',
+    namespace: metadata?.namespace ?? obj?.namespace ?? '',
     hosts,
     class: ingressClass,
     class_source: classSource,
@@ -115,7 +114,7 @@ export function normalizeWatchIngressObject(obj: any): IngressInfo {
     rules,
     labels,
     annotations,
-    created_at: metadata?.creationTimestamp ?? null,
+    created_at: metadata?.creationTimestamp ?? obj?.created_at ?? null,
   }
 }
 
@@ -137,7 +136,9 @@ export function applyIngressWatchEvent(prev: IngressInfo[] | undefined, event: {
     return items
   }
 
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
+  // the server sends the whole row (ingressrow.Info), so it replaces: a host, class or address that went away shows
+  // that instead of keeping the old one
+  if (index >= 0) items[index] = normalized
   else items.push(normalized)
 
   return items
