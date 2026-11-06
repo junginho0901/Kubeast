@@ -19,6 +19,7 @@ import re
 import time
 from datetime import timedelta
 from typing import Any, Optional
+from urllib.parse import urlencode
 
 import httpx
 
@@ -31,7 +32,7 @@ from app.services.audit_target import tool_target
 from app.services.audit_writer import audit_ready, fail_closed_enabled, write_audit
 from app.services.investigation import prompt as inv_prompt
 from app.services.investigation import settings as inv_settings
-from app.services.investigation import skip_reasons, store
+from app.services.investigation import inbox, skip_reasons, store
 from app.services.investigation import webhook
 
 log = logging.getLogger(__name__)
@@ -106,8 +107,19 @@ def alert_view(row) -> dict[str, Any]:
     }
 
 
-def link_for(cfg: inv_settings.InvestigationSettings, inv_id: str) -> Optional[str]:
-    return f"{cfg.console_url}/admin/investigations?id={inv_id}" if cfg.console_url else None
+async def link_for(cfg: inv_settings.InvestigationSettings, db, row) -> Optional[str]:
+    """Where the audit summary's link goes: the alert's window in Alerts, which whoever reads the cluster can open, the
+    report inside it. Without the alert's row, the report in Investigations, for those who hold that."""
+    if not cfg.console_url:
+        return None
+    try:
+        item = await inbox.row_of(db, row)
+    except Exception as e:  # the link is not worth the run's audit row
+        log.warning("investigation %s: no alert row for the link: %s", row.id, clean_error(e))
+        item = None
+    if item is None:
+        return f"{cfg.console_url}/admin/investigations?id={row.id}"
+    return f"{cfg.console_url}/alerts?{urlencode({'cluster': row.cluster, 'alert': item.id})}"
 
 
 def used_fields(progress: dict[str, Any]) -> dict[str, Any]:
@@ -253,6 +265,7 @@ async def run_one(cfg: inv_settings.InvestigationSettings, db, row) -> str:
     duration_ms = int((time.monotonic() - started) * 1000)
     await store.finish(db, row.id, status=status, error=error, **fields)
     report = fields.get("report") or ""
+    link = await link_for(cfg, db, row)
     await write_audit(
         action="ai.investigation.run",
         actor_user_id=ACTOR_ID,
@@ -277,7 +290,7 @@ async def run_one(cfg: inv_settings.InvestigationSettings, db, row) -> str:
             "iterations": fields.get("iterations"),
             "duration_ms": duration_ms,
             "summary": report[:SUMMARY_CHARS],
-            "link": link_for(cfg, row.id),
+            "link": link,
             # the person who asked for it in the Alerts inbox (ai.investigation.request); None for the webhook's
             "requested_by": getattr(row, "requested_by", "") or None,
         },

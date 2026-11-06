@@ -27,7 +27,11 @@ func isDRAAPINotAvailable(err error) bool {
 
 func (h *Handler) GetGPUDashboard(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data, err := h.svc.GetGPUDashboard(ctx)
+	read := h.svc.GetGPUDashboard
+	if queryParam(r, "pods_only", "") == "1" {
+		read = h.svc.GetGPUPods
+	}
+	data, err := read(ctx)
 	if err != nil {
 		h.handleError(w, err)
 		return

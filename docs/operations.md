@@ -41,7 +41,7 @@ Collects and shows the `wgpolicyk8s.io/v1alpha2` `PolicyReport` (namespaced) and
 Gathers the **configuration risks** of what is running in a cluster right now on one page. It also records a sign-off that the monthly check was done (ISMS-P 2.10.2 security configuration monitoring, 2.11.2 periodic inspection).
 Check issues is about "problems that broke just now"; this page is about risky settings, even while everything works.
 
-No external scanner is installed. Pick a cluster in Admin → Cluster hygiene, and k8s-service reads Pods, Namespaces, NetworkPolicies, RBAC and `kubernetes.io/tls` Secrets **as the viewer's identity** (impersonation).
+No external scanner is installed. Pick a cluster in Cluster → Cluster Hygiene, and k8s-service reads Pods, Namespaces, NetworkPolicies, RBAC and `kubernetes.io/tls` Secrets **as the viewer's identity** (impersonation).
 It judges on the spot, with no background job.
 Lists it could not read are not hidden; they are shown as "skipped checks".
 
@@ -72,7 +72,7 @@ Lists it could not read are not hidden; they are shown as "skipped checks".
   - The screen shows the last sign-off and the next due date (`intervalDays`, default 30 days).
   - Automation such as n8n can fetch `GET /api/v1/cluster/hygiene?cluster=<id>&format=json` with an API key.
   - A finding's `message` is an English sentence, also in the CSV and snapshot. The screen receives the same content as `message_key` and `message_args`, and shows it in the screen language.
-- Permissions: `admin.hygiene.read` (view, history), `admin.hygiene.export` and `admin.hygiene.signoff`, included in Admin.
+- Permissions: viewing the report and its history is `resource.hygiene.scan` on that cluster, which an Admin grant there holds and Read and Write do not; a grant limited to namespaces is refused it, since the report spans the cluster. The global role's `admin.hygiene.read` reads every cluster's report. `admin.hygiene.export` and `admin.hygiene.signoff` are global too, so the export and the sign-off are for global Admins and roles that hold them.
 - Audit:
   - The scan is `k8s.hygiene.scan`. It is a sensitive read because it reads Secrets, so the request gets 503 when it cannot be recorded.
   - Also `admin.hygiene.export`, `admin.hygiene.signoff` and `admin.hygiene.read` (snapshot).

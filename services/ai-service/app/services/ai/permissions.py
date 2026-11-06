@@ -47,9 +47,16 @@ def role_allows_admin(service: "AIService") -> bool:
     return service.user_role == "admin"
 
 
+def _holds(token, cluster: str, permission: str) -> bool:
+    if token.has_permission_for_cluster(permission, cluster):
+        return True
+    global_key = screen_permissions.ALSO_GLOBAL.get(permission)
+    return bool(global_key and token.has_permission(global_key))
+
+
 def missing_permissions(token, cluster: str, tool: str, args: Any = None) -> List[str]:
     """What a screen asks for this call and the token does not hold in this cluster (screen_permissions)."""
-    return [p for p in screen_permissions.app_permissions(tool, args) or [] if not token.has_permission_for_cluster(p, cluster)]
+    return [p for p in screen_permissions.app_permissions(tool, args) or [] if not _holds(token, cluster, p)]
 
 
 def token_may_call(token, cluster: str, tool: str, args: Any = None) -> bool:
@@ -58,7 +65,7 @@ def token_may_call(token, cluster: str, tool: str, args: Any = None) -> bool:
     if not token.has_permission_for_cluster(f"ai.tool.{tool}", cluster):
         return False
     if args is None:
-        return screen_permissions.may_be_called(lambda p: token.has_permission_for_cluster(p, cluster), tool)
+        return screen_permissions.may_be_called(lambda p: _holds(token, cluster, p), tool)
     return screen_permissions.app_permissions(tool, args) is not None and not missing_permissions(token, cluster, tool, args)
 
 

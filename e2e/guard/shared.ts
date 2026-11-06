@@ -11,6 +11,8 @@ export const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 export const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
 export const BASE = process.env.E2E_BASE_URL || 'http://localhost:30080'
 export const CLUSTER = 'self'
+// The dev cluster that serves the Gateway API and the VPA CRD: registered under the kind cluster's name.
+export const TEST2 = 'test2'
 const KIND_CLUSTER = 'kubeast'
 export const PW = 'E2e-guard-throwaway-1!'
 const REPO = path.join(__dirname, '..', '..')
@@ -105,6 +107,19 @@ export const DRAWERS: Record<string, DrawerRow> = {
   StorageClass: { resource: 'storageclasses.storage.k8s.io', at: 'cluster', name: 'sc' },
   VolumeAttachment: { resource: 'volumeattachments.storage.k8s.io', at: 'cluster', name: 'va' },
 }
+
+// The kinds self does not serve, opened on test2 (applyTest2Fixtures makes the objects).
+const GW = 'gateway.networking.k8s.io'
+export const TEST2_DRAWERS: Record<string, DrawerRow> = {
+  Gateway: { resource: `gateways.${GW}`, at: 'ns', name: 'guard-gw' },
+  GatewayClass: { resource: `gatewayclasses.${GW}`, at: 'cluster', name: 'gc' },
+  HTTPRoute: { resource: `httproutes.${GW}`, at: 'ns', name: 'guard-http' },
+  GRPCRoute: { resource: `grpcroutes.${GW}`, at: 'ns', name: 'guard-grpc' },
+  ReferenceGrant: { resource: `referencegrants.${GW}`, at: 'ns', name: 'guard-rg' },
+  BackendTLSPolicy: { resource: `backendtlspolicies.${GW}`, at: 'ns', name: 'guard-btls' },
+  VerticalPodAutoscaler: { resource: 'verticalpodautoscalers.autoscaling.k8s.io', at: 'ns', name: 'guard-vpa' },
+}
+export const NOT_SERVED_ON_SELF = Object.entries(DRAWERS).filter(([, d]) => 'skip' in d && d.skip === NOT_SERVED).map(([k]) => k)
 
 // The objects: one of every namespaced kind in each of the two namespaces (none acts on anything: no pod is scheduled,
 // nothing scales, the claims are never allocated) and one of every cluster-scoped kind that self has none of or that a
@@ -253,10 +268,10 @@ export function drawerTargets(kind: string, d: Exclude<DrawerRow, { skip: string
   }
 }
 
-// The kind cluster's admin kubeconfig: '' when it can be used, else why the run skips.
-export function openCluster(): string {
-  const which = spawnSync('kind', ['get', 'kubeconfig', '--name', KIND_CLUSTER], { encoding: 'utf8' })
-  if (which.status !== 0) return `no kind cluster ${KIND_CLUSTER} (kind get kubeconfig)`
+// A kind cluster's admin kubeconfig, used by kubectl() from here on: '' when it can be used, else why the run skips.
+export function openCluster(kindCluster = KIND_CLUSTER): string {
+  const which = spawnSync('kind', ['get', 'kubeconfig', '--name', kindCluster], { encoding: 'utf8' })
+  if (which.status !== 0) return `no kind cluster ${kindCluster} (kind get kubeconfig)`
   kubeconfig = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-guard-')), 'kubeconfig')
   fs.writeFileSync(kubeconfig, which.stdout, { mode: 0o600 })
   const impersonator = JSON.parse(kubectl(['get', 'clusterrole', 'kubeast-impersonator', '-o', 'json'], undefined, true) || '{}')
@@ -288,6 +303,49 @@ export async function applyFixtures(): Promise<{ node: string; served: Set<strin
     }
   }
   return { node, served: new Set(kubectl(['api-resources', '-o', 'name'], undefined, true).split('\n').filter(Boolean)) }
+}
+
+// The Gateway API and VPA objects on test2, in the same two namespaces. The limited Read grant may read them in NS_A,
+// as a cluster would open them to a team, and in NS_B nothing.
+const test2ClusterObjects = (v: string) => [
+  { apiVersion: `${GW}/${v}`, kind: 'GatewayClass', metadata: { name: `${PREFIX}-gc`, labels: LABELS }, spec: { controllerName: 'guard.kubeast.io/none' } },
+]
+export function applyTest2Fixtures(): { node: string; served: Set<string> } {
+  const version = (crd: string) => kubectl(['get', 'crd', crd, '-o', 'jsonpath={.spec.versions[?(@.storage==true)].name}'])
+  const node = kubectl(['get', 'nodes', '-o', 'jsonpath={.items[0].metadata.name}'])
+  const served = new Set(kubectl(['api-resources', '-o', 'name'], undefined, true).split('\n').filter(Boolean))
+  const wanted = Object.values(TEST2_DRAWERS).map((d) => ('skip' in d ? '' : d.resource))
+  if (wanted.some((r) => !served.has(r))) return { node, served }
+  const v = (plural: string) => version(`${plural}.${GW}`)
+  kubectl(['apply', '-f', '-'], asList([NS_A, NS_B].map((name) => ({ apiVersion: 'v1', kind: 'Namespace', metadata: { name, labels: LABELS } }))))
+  kubectl(['apply', '-f', '-'], asList(test2ClusterObjects(v('gatewayclasses'))))
+  const objects = (ns: string): object[] => {
+    const meta = (name: string) => ({ name, namespace: ns, labels: LABELS })
+    return [
+      { apiVersion: `${GW}/${v('gateways')}`, kind: 'Gateway', metadata: meta('guard-gw'), spec: { gatewayClassName: `${PREFIX}-gc`, listeners: [{ name: 'http', port: 80, protocol: 'HTTP' }] } },
+      { apiVersion: `${GW}/${v('httproutes')}`, kind: 'HTTPRoute', metadata: meta('guard-http'), spec: { parentRefs: [{ name: 'guard-gw' }] } },
+      { apiVersion: `${GW}/${v('grpcroutes')}`, kind: 'GRPCRoute', metadata: meta('guard-grpc'), spec: { parentRefs: [{ name: 'guard-gw' }] } },
+      { apiVersion: `${GW}/${v('referencegrants')}`, kind: 'ReferenceGrant', metadata: meta('guard-rg'), spec: { from: [{ group: GW, kind: 'HTTPRoute', namespace: ns }], to: [{ group: '', kind: 'Service' }] } },
+      { apiVersion: `${GW}/${v('backendtlspolicies')}`, kind: 'BackendTLSPolicy', metadata: meta('guard-btls'), spec: { targetRefs: [{ group: '', kind: 'Service', name: 'guard-svc' }], validation: { hostname: 'guard.invalid', wellKnownCACertificates: 'System' } } },
+      { apiVersion: 'autoscaling.k8s.io/v1', kind: 'VerticalPodAutoscaler', metadata: meta('guard-vpa'), spec: { targetRef: { apiVersion: 'apps/v1', kind: 'Deployment', name: 'guard-deploy' }, updatePolicy: { updateMode: 'Off' } } },
+    ]
+  }
+  kubectl(['apply', '-f', '-'], asList([...objects(NS_A), ...objects(NS_B)]))
+  const group = [{ apiGroup: RBAC, kind: 'Group', name: 'kubeast:role:read' }]
+  kubectl(['apply', '-f', '-'], asList([
+    { apiVersion: `${RBAC}/v1`, kind: 'RoleBinding', metadata: { name: `${PREFIX}-view`, namespace: NS_A, labels: LABELS }, roleRef: { apiGroup: RBAC, kind: 'ClusterRole', name: 'view' }, subjects: group },
+    { apiVersion: `${RBAC}/v1`, kind: 'Role', metadata: { name: `${PREFIX}-read`, namespace: NS_A, labels: LABELS }, rules: [
+      { apiGroups: [GW], resources: ['gateways', 'httproutes', 'grpcroutes', 'referencegrants', 'backendtlspolicies'], verbs: ['get', 'list', 'watch'] },
+      { apiGroups: ['autoscaling.k8s.io'], resources: ['verticalpodautoscalers'], verbs: ['get', 'list', 'watch'] },
+    ] },
+    { apiVersion: `${RBAC}/v1`, kind: 'RoleBinding', metadata: { name: `${PREFIX}-read`, namespace: NS_A, labels: LABELS }, roleRef: { apiGroup: RBAC, kind: 'Role', name: `${PREFIX}-read` }, subjects: group },
+  ]))
+  return { node, served }
+}
+export function removeTest2Fixtures(): void {
+  if (!kubeconfig) return
+  kubectl(['delete', 'namespace', NS_A, NS_B, '--ignore-not-found', '--wait=false'], undefined, true)
+  kubectl(['delete', 'gatewayclass', `${PREFIX}-gc`, '--ignore-not-found', '--wait=false'], undefined, true)
 }
 
 export function removeFixtures(node: string): void {

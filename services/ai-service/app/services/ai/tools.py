@@ -1227,7 +1227,7 @@ ADMIN_READ_TOOLS: List[Dict] = [
         "function": {
             "name": "hygiene",
             "description": (
-                "The cluster hygiene report (Admin → Cluster hygiene; permission admin.hygiene.read): Pod Security Standards level per namespace, "
+                "The cluster hygiene report (Cluster → Cluster Hygiene; permission resource.hygiene.scan on the cluster, which an Admin grant holds, or admin.hygiene.read): Pod Security Standards level per namespace, "
                 "containers running as root or privileged, images by mutable tag (latest), TLS certificates about to expire, deprecated APIs and "
                 "other upgrade-readiness checks against the next Kubernetes minor, with counts per severity, the list of checks and the findings "
                 "(check, severity, kind, namespace, name, message, exempt). The upgrade checks' ids start with upgrade. and server_version and "
@@ -1419,7 +1419,7 @@ ADMIN_READ_TOOLS: List[Dict] = [
         "function": {
             "name": "hygiene_history",
             "description": (
-                "This cluster's hygiene sign-offs (Admin → Cluster hygiene → Past sign-offs; permission admin.hygiene.read), newest first, at most 100: who "
+                "This cluster's hygiene sign-offs (Cluster → Cluster Hygiene → Past sign-offs; permission resource.hygiene.scan on the cluster or admin.hygiene.read), newest first, at most 100: who "
                 "signed, when, the note and the counts per severity. review_id opens the report one stored, with severity and check filtering its findings as "
                 "in hygiene. The list also says enabled and interval_days, how often a sign-off is due. The hygiene tool answers the report as it is now. "
                 "{\"status\":\"unavailable\"} means the report is off (features.hygiene.enabled)."

@@ -229,4 +229,30 @@ test.describe('AI feature tools 2: helm_read, policy_reports, cost, optimization
       if (userId) await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: bearer(admin) })
     }
   })
+
+  test('an Admin grant on one cluster has the hygiene report there and nowhere else, as the screen', async ({ request }) => {
+    const admin = await login(request)
+    test.skip(!(await mcpOn(request, admin)), 'the MCP server is off (mcp.enabled)')
+    const config = await request.get('/api/v1/cluster/hygiene/config?cluster=self', { headers: bearer(admin) })
+    test.skip(!config.ok() || !(await config.json()).enabled, 'cluster hygiene report is off (features.hygiene.enabled)')
+    const email = `e2e-tools3-a-${stamp()}@kubeast.local`
+    let userId = ''
+    try {
+      userId = await createReadUser(request, admin, email)
+      const grant = await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/self`, { headers: bearer(admin), data: { role: 'Admin' } })
+      expect(grant.ok(), 'grant Admin on self').toBeTruthy()
+      const reachesDefault = await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/default`, { headers: bearer(admin), data: { role: 'Read' } })
+      expect(reachesDefault.ok(), 'grant Read on default').toBeTruthy()
+      const token = await login(request, email, PW)
+      const clusters = json((await call(request, token, 'list_clusters', {})).text).clusters as { id: string; tools: string[] }[]
+      expect(clusters.find((c) => c.id === 'self')!.tools, 'on the cluster it administers').toContain('hygiene')
+      expect(clusters.find((c) => c.id === 'default')!.tools, 'on the cluster it reads').not.toContain('hygiene')
+      const report = json((await call(request, token, 'hygiene', { cluster: 'self' })).text)
+      expect(report.cluster).toBe('self')
+      expect(Array.isArray(report.report.findings)).toBe(true)
+      expect((await call(request, token, 'hygiene', { cluster: 'default' })).isError, 'the report of the cluster it reads').toBe(true)
+    } finally {
+      if (userId) await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: bearer(admin) })
+    }
+  })
 })

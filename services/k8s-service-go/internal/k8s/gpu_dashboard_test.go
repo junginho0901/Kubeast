@@ -3,12 +3,15 @@ package k8s
 import (
 	"context"
 	"reflect"
+	"sort"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
 func gpuList(kv ...string) corev1.ResourceList {
@@ -167,6 +170,47 @@ func TestGPUVendorOf(t *testing.T) {
 // and driver are its company's labels: AMD's labeller (the value, or the values it writes after the name when the
 // node's GPUs differ), Intel's product label. A node of two companies counts both; a node of other accelerators is
 // no GPU node.
+// GPU Pods for whoever may not list nodes: the pods of its namespaces that ask for GPUs, as the dashboard reads them,
+// and nothing of the nodes. The dashboard itself still answers the cluster's refusal, since its numbers are the nodes'.
+func TestGPUPods_ListsThePodsWithoutTheNodes(t *testing.T) {
+	api := &listAPI{
+		pods: []corev1.Pod{
+			gpuPodObj("mine", "a", corev1.PodRunning, nil, gpuBox("app", "nvidia.com/gpu", "2")),
+			gpuPodObj("mine-waiting", "", corev1.PodPending, nil, gpuBox("app", "nvidia.com/gpu", "1")),
+			gpuPodObj("mine-no-gpu", "a", corev1.PodRunning, nil, gpuBox("app", "cpu", "1")),
+		},
+		refused: map[string]bool{"/api/v1/nodes": true},
+	}
+	other := gpuPodObj("theirs", "a", corev1.PodRunning, nil, gpuBox("app", "nvidia.com/gpu", "4"))
+	other.Namespace = "other"
+	api.pods = append(api.pods, other)
+	svc := api.serve(t)
+	ctx := auth.WithPayload(context.Background(), auth.TokenPayload{UserID: "u1", Namespaces: map[string][]string{"default": {"ml"}}})
+
+	if _, err := svc.GetGPUDashboard(ctx); err == nil {
+		t.Error("the dashboard answered without the nodes the cluster refused")
+	}
+	res, err := svc.GetGPUPods(ctx)
+	if err != nil {
+		t.Fatalf("GPU pods: %v", err)
+	}
+	pods := res["gpu_pods"].([]map[string]interface{})
+	names := make([]string, 0, len(pods))
+	for _, p := range pods {
+		names = append(names, p["name"].(string))
+	}
+	sort.Strings(names)
+	if !reflect.DeepEqual(names, []string{"mine", "mine-waiting"}) {
+		t.Errorf("GPU pods %v, want the namespace's two that ask for GPUs", names)
+	}
+	if nodes := res["gpu_nodes"].([]map[string]interface{}); len(nodes) != 0 || res["total_gpu_capacity"] != 0 {
+		t.Errorf("nodes in the answer: %v, capacity %v", nodes, res["total_gpu_capacity"])
+	}
+	if got := gpuRow(t, pods, "mine"); got["gpu_requested"] != 2 || got["status"] != "Running" {
+		t.Errorf("row mine = %v", got)
+	}
+}
+
 func TestGPUDashboard_CountsEveryVendorsGPUs(t *testing.T) {
 	api := &listAPI{
 		pods: []corev1.Pod{

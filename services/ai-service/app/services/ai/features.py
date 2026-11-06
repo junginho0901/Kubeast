@@ -121,12 +121,19 @@ REQUIRED_PERMISSIONS: Dict[str, tuple[str, str]] = {
 }
 
 
+def _held_globally(perm: str, token) -> bool:
+    global_key = screen_permissions.ALSO_GLOBAL.get(perm)
+    return bool(global_key and token.has_permission(global_key))
+
+
 def permitted(name: str, token, cluster: Optional[str]) -> bool:
     """The token holds what k8s-service will ask for; no token (legacy role mode) keeps the tool."""
     req = REQUIRED_PERMISSIONS.get(name)
     if req is None or token is None:
         return True
     scope, perm = req
+    if _held_globally(perm, token):
+        return True
     if scope == "global":
         return bool(token.has_permission(perm))
     return bool(token.has_permission_for_cluster(perm, cluster))
@@ -140,6 +147,8 @@ def permitted_anywhere(name: str, token) -> bool:
     if req is None or token is None:
         return True
     scope, perm = req
+    if _held_globally(perm, token):
+        return True
     if scope == "global":
         return bool(token.has_permission(perm))
     clusters = [c for c in (getattr(token, "matrix", None) or {}) if c != "*"]

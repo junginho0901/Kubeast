@@ -23,7 +23,8 @@ test('security-audit', async ({ page }) => {
   await beat(page, 3500)
 
   c.step('hygiene')
-  await page.getByTestId('sidebar-nav').locator('a[href="/admin/cluster-hygiene"]').click()
+  await page.getByTestId('sidebar-nav').getByRole('button', { name: 'Cluster', exact: true }).click()
+  await page.getByTestId('sidebar-nav').locator('a[href="/cluster/hygiene"]').click()
   await expect(page.getByTestId('hygiene-finding-row').first()).toBeVisible({ timeout: 30_000 })
   await beat(page, 1200)
   await page.getByPlaceholder(/Search Namespace/).pressSequentially('shop', { delay: 80 })

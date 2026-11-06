@@ -1,9 +1,9 @@
-"""Floating assistant prompt: the admin rule and the two admin screens it leaves readable."""
+"""Floating assistant prompt: the admin rule and the admin screen it leaves readable."""
 from app.models.floating_ai import PageContextPayload, VisibleDataLayer
 from app.prompts.floating_system_prompt import build_context_prompt, build_floating_system_prompt
 
 # frontend/src/utils/aiContext/privateScreens.ts READABLE_ADMIN_PATHS
-READABLE_ADMIN_PATHS = ["/admin/cluster-hygiene", "/admin/investigations"]
+READABLE_ADMIN_PATHS = ["/admin/investigations"]
 
 
 def test_admin_screens_keep_the_fixed_notice():
@@ -12,11 +12,17 @@ def test_admin_screens_keep_the_fixed_notice():
     assert "AI 가 화면 내용을 읽을 수 없도록 설정되어 있습니다" in prompt
 
 
-def test_cluster_hygiene_and_investigations_are_answered_like_other_screens():
+def test_investigations_are_answered_like_other_screens():
     prompt = build_floating_system_prompt()
     for path in READABLE_ADMIN_PATHS:
         assert f"`{path}`" in prompt
     assert "다른 화면과 똑같이 답하세요" in prompt
+
+
+def test_the_screens_that_moved_out_of_admin_are_not_named_as_admin_screens():
+    prompt = build_floating_system_prompt()
+    assert "/admin/cluster-hygiene" not in prompt
+    assert "노드 셸" not in prompt
 
 
 def test_an_investigations_screen_puts_its_data_in_the_context():

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hasPermission, matchAny, permMatches, permResource } from './permissions'
+import { hasPermission, holdsOnAnyCluster, matchAny, permMatches, permResource, waitsForCluster } from './permissions'
 
 // Same table as services/pkg/auth permissions_test.go — the three matchers
 // (Go, Python, TS) must agree on wildcard semantics.
@@ -37,6 +37,22 @@ describe('hasPermission', () => {
     expect(hasPermission(clusterAdmin, 'admin.users.read', 'self')).toBe(false)
     expect(hasPermission(clusterAdmin, 'admin.ai_models.*', 'self')).toBe(false)
     expect(hasPermission({ self: ['admin.users.read', 'admin.*'] }, 'admin.users.read', 'self')).toBe(false)
+  })
+  it('held on any cluster: a setting kept in this browser belongs to no one cluster', () => {
+    expect(holdsOnAnyCluster({ self: ['*'] }, 'resource.node.shell')).toBe(true)
+    expect(holdsOnAnyCluster({ '*': ['*'] }, 'resource.node.shell')).toBe(true)
+    expect(holdsOnAnyCluster({ default: ['resource.*.read'], self: ['resource.node.shell'] }, 'resource.node.shell')).toBe(true)
+    expect(holdsOnAnyCluster({ default: ['resource.*.read', 'menu.*'] }, 'resource.node.shell')).toBe(false)
+    expect(holdsOnAnyCluster({ '*': ['admin.*'] }, 'resource.node.shell')).toBe(false)
+    expect(holdsOnAnyCluster({}, 'resource.node.shell')).toBe(false)
+  })
+  it('a route waits for the picker\'s cluster only when a cluster holds its key', () => {
+    const page = ['admin.hygiene.read', 'resource.hygiene.scan']
+    expect(waitsForCluster(page, '', { self: ['*'] }), 'an Admin grant, no cluster chosen yet').toBe(true)
+    expect(waitsForCluster(page, 'self', { self: ['*'] }), 'the cluster is chosen').toBe(false)
+    expect(waitsForCluster(page, '', { '*': ['admin.hygiene.read'] }), 'the global key answers at once').toBe(false)
+    expect(waitsForCluster(page, '', { self: ['resource.*.read'] }), 'no cluster holds it: refused at once').toBe(false)
+    expect(waitsForCluster(['admin.audit.read'], '', { self: ['*'] }), 'an admin key is not a cluster\'s').toBe(false)
   })
   it('a cluster entry of "*" keeps every cluster key on that cluster only', () => {
     const clusterAdmin = { self: ['*'] }

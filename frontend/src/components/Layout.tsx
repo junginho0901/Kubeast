@@ -27,7 +27,6 @@ import {
   Search,
   ShieldAlert,
   ShieldCheck,
-  SquareTerminal,
   Users,
   Waypoints,
   Siren,
@@ -53,7 +52,7 @@ import { usePendingAccessRequestCount } from '@/hooks/usePendingAccessRequestCou
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
 import { aiEnabled, alertInvestigationEnabled, costEnabled, policyReportsEnabled } from '@/utils/features'
 import { resolveRouteMeta } from '@/utils/aiContext/routeMatcher'
-import { ADMIN_PAGE_PERMISSIONS, isGlobalAdmin } from '@/utils/adminAccess'
+import { ADMIN_PAGE_PERMISSIONS, isGlobalAdmin, readsHygiene } from '@/utils/adminAccess'
 
 type NavItem = {
   name: string
@@ -68,6 +67,8 @@ type NavItem = {
   testId?: string
   // Shown when the user holds any of these (the admin pages: utils/adminAccess).
   permissions?: string[]
+  // Shown without the group's menu key: the user holds a key of this entry's own (an all-cluster one).
+  ownKey?: boolean
 }
 
 type NavGroup = {
@@ -213,8 +214,8 @@ export default function Layout() {
     enabled: hasPermission('admin.review.read'),
   })
   const accessReviewOn = !!accessReviewConfig?.enabled
-  // Cluster hygiene: shown to admins who can read it, when the installation has it on.
-  const canReadHygiene = hasPermission('admin.hygiene.read')
+  // Cluster hygiene: shown to whoever reads the selected cluster's report, when the installation has it on.
+  const canReadHygiene = readsHygiene(hasPermission, clusterNamespaces)
   const { data: hygieneConfig } = useQuery({
     queryKey: ['hygiene', 'config'],
     queryFn: api.getHygieneConfig,
@@ -260,6 +261,9 @@ export default function Layout() {
         { name: t('nav.validatingWebhooks'), href: '/cluster/validatingwebhookconfigurations', icon: K.ValidatingWebhookConfiguration },
         { name: t('nav.validatingAdmissionPolicies'), href: '/cluster/validatingadmissionpolicies', icon: K.ValidatingAdmissionPolicy },
         { name: t('nav.mutatingAdmissionPolicies'), href: '/cluster/mutatingadmissionpolicies', icon: K.MutatingAdmissionPolicy },
+        ...(hygieneOn
+          ? [{ name: t('nav.clusterHygiene', { defaultValue: 'Cluster Hygiene' }), href: '/cluster/hygiene', icon: ShieldCheck, testId: 'nav-cluster-hygiene', ownKey: true }]
+          : []),
       ],
     },
     {
@@ -409,24 +413,25 @@ export default function Layout() {
         ...(accessReviewOn
           ? [{ name: t('nav.accessReview', { defaultValue: 'Access Review' }), href: '/admin/access-review', icon: ClipboardCheck, testId: 'nav-access-review' }]
           : []),
-        ...(hygieneOn
-          ? [{ name: t('nav.clusterHygiene', { defaultValue: 'Cluster Hygiene' }), href: '/admin/cluster-hygiene', icon: ShieldCheck, testId: 'nav-cluster-hygiene' }]
-          : []),
         { name: t('nav.organizations'), href: '/admin/organizations', icon: Building2 },
         ...(aiOn ? [{ name: t('nav.aiModels'), href: '/admin/ai-models', icon: Bot }] : []),
         { name: t('nav.auditLogs'), href: '/admin/audit', icon: FileSearch },
         { name: t('nav.sessionRecordings', { defaultValue: 'Session Recordings' }), href: '/admin/session-recordings', icon: Film, testId: 'nav-session-recordings' },
         ...(aiOn ? [{ name: t('nav.aiUsage'), href: '/admin/ai-usage', icon: ChartColumn }] : []),
         ...(investigationsOn ? [{ name: t('nav.investigations', { defaultValue: 'Investigations' }), href: '/admin/investigations', icon: Siren, testId: 'nav-investigations' }] : []),
-        { name: t('nav.nodeShell'), href: '/admin/node-shell', icon: SquareTerminal },
       ] as NavItem[]).map((item) => ({ ...item, permissions: ADMIN_PAGE_PERMISSIONS[item.href] })),
     },
   ], [t, accessRequestsOn, pendingAccessCount, accessReviewOn, hygieneOn, aiOn, costOn, policyReportsOn, investigationsOn, alertsOn])
 
+  // What a group lists for this user: its menu key opens it, an entry with a key of its own shows without that.
+  const groupItems = useCallback((group: NavGroup) => {
+    const groupOpen = !group.requiredPermission || hasPermission(group.requiredPermission)
+    return group.items.filter((item) => canOpen(item) && (groupOpen || item.ownKey))
+  }, [canOpen, hasPermission])
+
   const active = useMemo(() => {
     for (const group of navGroups) {
-      if (group.requiredPermission && !hasPermission(group.requiredPermission)) continue
-      for (const item of group.items.filter(canOpen)) {
+      for (const item of groupItems(group)) {
         const isActive = item.match
           ? item.match(location.pathname, location.search)
           : item.exact
@@ -436,7 +441,7 @@ export default function Layout() {
       }
     }
     return null
-  }, [canOpen, location.pathname, location.search, navGroups, hasPermission])
+  }, [groupItems, location.pathname, location.search, navGroups])
   const activeGroup = active?.group ?? null
 
   // Browser tab: "<screen> · Kubeast" (WCAG 2.4.2 Page Titled) — the sidebar's name for the page, or the route's
@@ -497,11 +502,7 @@ export default function Layout() {
               past the sidebar and the ADMIN items end up under the account box */}
           <nav data-testid="sidebar-nav" className="sidebar-nav flex-1 min-h-0 px-4 py-6 space-y-2 overflow-y-auto">
             {navGroups
-              .filter((group) => {
-                if (group.adminOnly && !group.items.some(canOpen)) return false
-                if (group.requiredPermission && !hasPermission(group.requiredPermission)) return false
-                return true
-              })
+              .filter((group) => groupItems(group).length > 0)
               .map((group) => (
                 <div key={group.label} className="space-y-0.5">
                   <button
@@ -521,7 +522,7 @@ export default function Layout() {
                   >
                     <div className="overflow-hidden">
                       <div className="space-y-1">
-                      {group.items.filter(canOpen).map((item) => {
+                      {groupItems(group).map((item) => {
                         const isActive = item.match
                           ? item.match(location.pathname, location.search)
                           : item.exact

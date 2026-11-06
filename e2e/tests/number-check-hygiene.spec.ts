@@ -10,7 +10,7 @@ import { test, expect, type Page } from '@playwright/test'
 // count them (a certificate five days from expiry is critical in the warning check tls.expiry), and with more findings than the
 // report lists (5000) the Findings tab counts all of them and the note says how many are listed.
 
-const HYGIENE = { path: '/admin/cluster-hygiene', cluster: 'self' }
+const HYGIENE = { path: '/cluster/hygiene', cluster: 'self' }
 const NS = 'e2e-hygiene-counts'
 const MANY = 5100
 

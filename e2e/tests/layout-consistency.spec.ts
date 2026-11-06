@@ -22,7 +22,7 @@ async function headerGap(page: Page): Promise<number> {
 }
 
 test.describe('Layout consistency', () => {
-  for (const href of ['/admin/session-recordings', '/admin/node-shell', '/workloads/pdbs']) {
+  for (const href of ['/admin/session-recordings', '/admin/investigations', '/workloads/pdbs']) {
     test(`the current sidebar entry is in view on ${href}`, async ({ page }) => {
       await page.goto(href)
       await expect(page.getByTestId('sidebar-nav').locator(`a[href="${href}"]`)).toBeInViewport({ ratio: 1 })
@@ -65,7 +65,7 @@ test.describe('Layout consistency', () => {
   test('admin tables at 1024 break no word inside and cut no value without a tooltip (ko)', async ({ page }) => {
     await korean(page)
     await page.setViewportSize({ width: 1024, height: 900 })
-    for (const href of ['/admin/audit', '/admin/ai-usage', '/admin/cluster-hygiene', '/admin/session-recordings', '/admin/access-review']) {
+    for (const href of ['/admin/audit', '/admin/ai-usage', '/cluster/hygiene', '/admin/session-recordings', '/admin/access-review']) {
       await page.goto(href)
       await expect(page.locator('main tbody tr').first()).toBeVisible({ timeout: 15_000 })
       const found = await page.locator('main').evaluate((main) => {

@@ -26,7 +26,8 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
 - 켜기: `mcp.enabled: true`(컴포즈는 `MCP_ENABLED`). 기본은 꺼져 있고, 꺼져 있으면 경로 자체가 없습니다.
 - 권한: 그 클러스터에 대한 `ai.mcp.use`(시스템 Read·Write 역할에 포함, Admin은 모든 권한)와 쓰려는 도구의 `ai.tool.<이름>`이 필요합니다.
   - Read는 읽기 도구 52종만, Write는 전부와 쓰기 미리보기 `k8s_diff`를 쓸 수 있습니다.
-  - `hygiene`은 `admin.hygiene.read`를 가진 Admin에게만 보이고, 다른 Admin 읽기 도구(`audit_search`, `nodes_*`, `access_review`, `ai_usage`, `access_requests`, `audit_integrity`, `hygiene_history`)는 그 화면의 `admin.*` 권한을 가진 사람에게만 보입니다.
+  - `hygiene`과 `hygiene_history`는 그 클러스터의 보고서를 읽을 수 있는 사람에게만 보입니다. 그 클러스터의 Admin 부여(`resource.hygiene.scan`)나 `admin.hygiene.read`입니다.
+  - 다른 Admin 읽기 도구(`audit_search`, `nodes_*`, `access_review`, `ai_usage`, `access_requests`, `audit_integrity`)는 그 화면의 `admin.*` 권한을 가진 사람에게만 보입니다.
   - `list_clusters`가 연결한 사람이 쓸 수 있는 클러스터와 도구를 알려 줍니다.
   - 나머지 도구는 `cluster` 인자가 필수이며 기본 클러스터로 대신하지 않습니다.
 - 인증: `Authorization: Bearer` 헤더에 API 키(`kbk_…`)나 액세스 토큰을 넣습니다.
@@ -81,13 +82,13 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
 - **화면**: Admin → **Investigations**. 기능과 AI가 켜져 있을 때 메뉴에 보이며, 권한은 `admin.investigations.read`입니다.
   - 받은 시각, 클러스터, 알림, 심각도, Namespace, 상태, 반복, 토큰, 소요 시간을 표로 보여 주고, 상태와 클러스터로 거를 수 있습니다.
   - "보고서"를 누르면 창에 보고서, 알림 라벨/주석, 알림 보낸 곳(Alertmanager·Grafana) 링크, 도구 호출(인자·결과 길이)이 나옵니다.
-  - 이때 주소가 감사 요약의 링크와 같은 `?id=<조사 ID>`로 바뀝니다.
+  - 이때 주소가 `?id=<조사 ID>`로 바뀌어, 권한이 있는 사람에게 그 보고서로 가는 링크가 됩니다.
   - 보고서는 외부 알림을 읽은 모델이 쓴 글이므로 원시 HTML 없이 Markdown으로만 그립니다.
 - **모델**: 보고서의 품질은 모델에 달려 있습니다. 작은 로컬 모델은 근거가 약한 인과 관계를 "Likely cause"에 적기도 하므로, 운영 환경에서는 도구 호출을 잘하는 큰 모델을 `model`로 따로 지정하기를 권합니다.
 - **감사·알림**: 조사 1건은 `ai.investigation.run`, 도구 호출 1번은 `ai.tool.call`로 남습니다.
   - 조사 기록의 actor는 `system` / `kubeast:investigator`이고, `after`에 알림, 모델, 토큰, 도구 호출 수, 소요 시간, 500자 요약, 링크, `requested_by`(받은편지함에서 요청한 사람, 웹훅이 시작한 것은 null)가 들어갑니다.
   - 감사 싱크의 `filter.actions`에 `ai.investigation.run`을 넣으면 요약이 Slack이나 메일로 갑니다.
-  - `consoleUrl`을 설정하면 요약에 보고서 링크가 붙습니다.
+  - `consoleUrl`을 설정하면 요약에 Alerts의 그 알림 창으로 가는 링크(`/alerts?cluster=<클러스터>&alert=<id>`)가 붙습니다. 클러스터를 읽는 사람은 거기서 보고서를 엽니다. 알림 줄이 없으면 Investigations의 보고서로 연결합니다.
 - **클러스터 쪽**: 조사 신원의 RBAC과 Alertmanager 설정 예시는 [docs/ko/cluster-requirements.md](cluster-requirements.md) §1·§13에 있습니다.
   - dev에서는 두 번째 클러스터의 Alertmanager에 `amtool alert add`로 가짜 알림을 넣어 확인합니다(`deploy/kind/alertmanager.yaml`).
   - Grafana는 `scripts/kind-grafana.sh`로 띄운 Grafana에서 웹훅 연락처 시험 기능으로 알림을 보냅니다(e2e `grafana.spec.ts`).

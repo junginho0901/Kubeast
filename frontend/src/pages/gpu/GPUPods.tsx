@@ -5,6 +5,7 @@ import { api, isForbiddenError } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
+import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { RefreshCw, BarChart3, ChevronDown, ChevronUp } from 'lucide-react'
@@ -28,9 +29,12 @@ export default function GPUPods() {
   const [currentPage, setCurrentPage] = useState(1)
   const [showCharts, setShowCharts] = useState(false)
 
+  // A grant limited to namespaces lists its own pods: it may not list nodes, and the cluster's GPU metrics are refused
+  // to it whatever it holds (k8s-service promClusterWide).
+  const limited = !!usePermission().clusterNamespaces?.length
   const { data, isLoading, error, refetch } = useQuery<GPUDashboardData>({
-    queryKey: ['gpu', 'dashboard'],
-    queryFn: () => api.getGPUDashboard(),
+    queryKey: limited ? ['gpu', 'dashboard', 'pods'] : ['gpu', 'dashboard'],
+    queryFn: () => api.getGPUDashboard(limited),
     refetchInterval: 30000,
     retry: 2,
     retryDelay: 1000,
@@ -39,6 +43,7 @@ export default function GPUPods() {
   const { data: metrics } = useQuery<GPUMetricsData>({
     queryKey: ['gpu', 'metrics'],
     queryFn: () => api.getGPUMetrics(),
+    enabled: !limited,
     refetchInterval: 15000,
     retry: 1,
   })

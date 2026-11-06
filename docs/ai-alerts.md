@@ -27,7 +27,7 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
 - Turning it on: `mcp.enabled: true` (`MCP_ENABLED` in compose). Off by default; when off, the path does not exist.
 - Permissions:
   - `ai.mcp.use` on that cluster. The system Read and Write roles include it, and Admin has everything.
-  - `ai.tool.<name>` for each tool to be used. Read gets only the 52 read tools; Write gets all of them plus the write preview `k8s_diff`. `hygiene` is visible only to Admins with `admin.hygiene.read`, and the other Admin reads (`audit_search`, `nodes_*`, `access_review`, `ai_usage`, `access_requests`, `audit_integrity`, `hygiene_history`) only to whoever holds the `admin.*` permission of their screen.
+  - `ai.tool.<name>` for each tool to be used. Read gets only the 52 read tools; Write gets all of them plus the write preview `k8s_diff`. `hygiene` and `hygiene_history` are visible on a cluster to whoever may read its report: an Admin grant there (`resource.hygiene.scan`) or `admin.hygiene.read`. The other Admin reads (`audit_search`, `nodes_*`, `access_review`, `ai_usage`, `access_requests`, `audit_integrity`) are visible only to whoever holds the `admin.*` permission of their screen.
   - `list_clusters` tells the connected person which clusters and tools they can use. The other tools require the `cluster` argument and do not fall back to the default cluster.
 - Authentication: an API key (`kbk_…`) or an access token in the `Authorization: Bearer` header.
   - The server exchanges the key for a short-lived token, and the exchange is audited too. Once the key is revoked, the next call is refused.
@@ -83,12 +83,12 @@ The feature is off by default (`features.alertInvestigation.enabled`). Turning i
 - **Screen**: Admin → **Investigations**, in the menu when the feature and AI are on (permission `admin.investigations.read`).
   - A table shows received time, cluster, alert, severity, Namespace, status, repeats, tokens and duration, filtered by status and cluster.
   - Pressing "Report" opens a window with the report, the alert labels/annotations, a link to the alert sender (Alertmanager, Grafana) and the tool calls (arguments, result length).
-  - The URL becomes `?id=<investigation ID>`, the same as the link in the audit summary.
+  - The URL becomes `?id=<investigation ID>`, a link to that report for those who hold the permission.
   - The report is text written by a model that read an external alert, so it is rendered as Markdown only, without raw HTML.
 - **Model**: report quality follows the model. Small local models sometimes put weakly supported causation under "Likely cause", so in production we recommend setting a larger model that is good at tool calling as `model`.
 - **Audit and notification**: one investigation is recorded as `ai.investigation.run`, and each tool call as `ai.tool.call`.
   - The investigation row has actor `system` / `kubeast:investigator`. Its `after` holds the alert, model, tokens, number of tool calls, duration, a 500-character summary, the link and `requested_by` (who asked for it in the inbox, null for the webhook's).
-  - Add `ai.investigation.run` to an audit sink's `filter.actions` and the summary goes to Slack or email. Set `consoleUrl` and the summary carries a link to the report.
+  - Add `ai.investigation.run` to an audit sink's `filter.actions` and the summary goes to Slack or email. Set `consoleUrl` and the summary carries a link to the alert's window in Alerts (`/alerts?cluster=<cluster>&alert=<id>`), where whoever reads the cluster opens the report. Without the alert's row it links to the report in Investigations.
 - **Cluster side**: the investigation identity's RBAC and an Alertmanager configuration example are in [docs/cluster-requirements.md](cluster-requirements.md) §1 and §13.
   - In dev, check it by putting a fake alert into the second cluster's Alertmanager with `amtool alert add` (`deploy/kind/alertmanager.yaml`).
   - For Grafana, send one with a webhook contact point test from the Grafana of `scripts/kind-grafana.sh` (e2e `grafana.spec.ts`).

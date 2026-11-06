@@ -2,6 +2,7 @@
 marks with their audit rows, and who may read it (the whole cluster, as the alert store read)."""
 
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 
 import pytest
 from fastapi import FastAPI
@@ -61,6 +62,27 @@ async def test_one_alert_is_one_row_until_it_resolves_and_a_new_firing_is_a_new_
     assert await put(db, starts_at=STARTS + timedelta(hours=6), now=NOW + timedelta(hours=6)) == "new"
     rows, total, counts = await rows_of(db)
     assert total == 2 and [r.state for r in rows] == ["firing", "resolved"]  # firing first
+
+
+@pytest.mark.asyncio
+async def test_an_investigation_finds_its_alerts_row_by_cluster_alert_and_start(sqlite_db):
+    db = sqlite_db
+    await put(db)
+    await put(db, starts_at=STARTS + timedelta(hours=9), now=NOW + timedelta(hours=9))  # the alert fired again
+    await inbox.record(
+        db, cluster="default", fingerprint="fp1", firing=True, starts_at=STARTS, ends_at=None, labels=labels(), annotations={},
+        generator_url="", alertmanager_url="", receiver="kubeast", group_key="g", now=NOW,
+    )
+    rows, _, _ = await rows_of(db)
+    by_start = {r.starts_at: r.id for r in rows}
+    inv = SimpleNamespace(cluster="self", fingerprint="fp1", starts_at=STARTS)
+    assert (await inbox.row_of(db, inv)).id == by_start[STARTS]
+    # a hand-made message without startsAt: the alert's newest row, as the webhook stored it
+    newest = SimpleNamespace(cluster="self", fingerprint="fp1", starts_at=None)
+    assert (await inbox.row_of(db, newest)).id == by_start[STARTS + timedelta(hours=9)]
+    # retention removed the row, or the alert was never stored
+    assert await inbox.row_of(db, SimpleNamespace(cluster="self", fingerprint="fp1", starts_at=STARTS - timedelta(days=90))) is None
+    assert await inbox.row_of(db, SimpleNamespace(cluster="self", fingerprint="other", starts_at=STARTS)) is None
 
 
 @pytest.mark.asyncio

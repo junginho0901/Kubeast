@@ -575,7 +575,53 @@ async def test_run_one_records_a_failure(monkeypatch):
     assert finished[0][1]["status"] == "failed" and "refused" in finished[0][1]["error"]
     run = audits[-1]
     assert run["action"] == "ai.investigation.run" and run["result"] == "failure" and run["target_id"] == "fp1"
-    assert run["after"]["link"] == "https://kubeast.example.com/admin/investigations?id=inv-1"
+
+
+async def _summary_link(monkeypatch, row_of, **row_kw):
+    """The link an investigation's audit summary carries, with the inbox lookup given."""
+    audits = []
+
+    async def ok(c, r, progress=None):
+        return {"report": "## Summary\nok", "tool_calls": [], "iterations": 1}
+
+    async def finish(db, inv_id, **f):
+        return None
+
+    async def audit(**kw):
+        audits.append(kw)
+        return True
+
+    monkeypatch.setattr(runner, "investigate", ok)
+    monkeypatch.setattr(runner.store, "finish", finish)
+    monkeypatch.setattr(runner, "write_audit", audit)
+    monkeypatch.setattr(runner.inbox, "row_of", row_of)
+    await runner.run_one(cfg(console_url="https://kubeast.example.com"), None, row(**row_kw))
+    return audits[-1]["after"]["link"]
+
+
+@pytest.mark.asyncio
+async def test_the_summary_links_to_the_alert_window_of_its_cluster(monkeypatch):
+    async def found(db, inv):
+        return SimpleNamespace(id="row-7")
+
+    assert await _summary_link(monkeypatch, found) == "https://kubeast.example.com/alerts?cluster=self&alert=row-7"
+    assert await _summary_link(monkeypatch, found, cluster="team a") == "https://kubeast.example.com/alerts?cluster=team+a&alert=row-7"
+
+
+@pytest.mark.asyncio
+async def test_an_alert_with_no_row_links_to_the_report_in_investigations(monkeypatch):
+    async def gone(db, inv):
+        return None
+
+    assert await _summary_link(monkeypatch, gone) == "https://kubeast.example.com/admin/investigations?id=inv-1"
+
+
+@pytest.mark.asyncio
+async def test_a_failed_row_lookup_keeps_the_audit_row_and_the_report_link(monkeypatch):
+    async def broken(db, inv):
+        raise RuntimeError("database gone")
+
+    assert await _summary_link(monkeypatch, broken) == "https://kubeast.example.com/admin/investigations?id=inv-1"
 
 
 @pytest.mark.asyncio

@@ -925,7 +925,7 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
 
   // ── a grant limited to namespaces ─────────────────────────────────────────────────────────────────────────────────
 
-  test('a grant limited to namespaces reads "-" on the GPU cards and is told why', async ({ page, browser, request }) => {
+  test('a grant limited to namespaces reads "-" on the nodes\' GPU cards and is told why, and lists its own GPU pods', async ({ page, browser, request }) => {
     test.setTimeout(150_000)
     await prepare(page)
     const headers = await admin(request)
@@ -958,12 +958,6 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
       await user.waitForFunction(() => !document.querySelector('input[autocomplete="email"]'), { timeout: 20_000 })
       await user.goto(url('/gpu/dashboard'))
       await expect(user.getByTestId('gpu-dashboard-forbidden')).toContainText(/permission/i, { timeout: 30_000 })
-      for (const [p, labels] of [['/gpu/nodes', ['Total Nodes', 'Ready', 'Not Ready', 'GPU Capacity', 'Allocatable', 'In Use']],
-        ['/gpu/pods', ['Total Pods', 'Running', 'Pending', 'Failed', 'GPUs Requested', 'Namespaces']]] as const) {
-        await user.goto(url(p))
-        await expect(user.getByTestId('table-forbidden'), `${p}: the table says why`).toHaveText(/permission/i, { timeout: 30_000 })
-        await expect.poll(async () => (await readPage(user)).cards, { message: `${p}: cards` }).toEqual(Object.fromEntries(labels.map((l) => [l, '-'])))
-      }
       // the AI tool: what a card shows as "-" is null and its source named, not zero
       if (await mcpOn(request, headers)) {
         const signedIn = await request.post('/api/v1/auth/login', { data: { email, password } })
@@ -976,6 +970,22 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
         expect(tool.utilization.available).toBeNull()
         expect(tool.null_note).toContain('not counted, not zero')
       }
+      await user.goto(url('/gpu/nodes'))
+      await expect(user.getByTestId('table-forbidden'), 'GPU Nodes: the table says why').toHaveText(/permission/i, { timeout: 30_000 })
+      await expect.poll(async () => (await readPage(user)).cards, { message: 'GPU Nodes: cards' }).toEqual(Object.fromEntries(['Total Nodes', 'Ready', 'Not Ready', 'GPU Capacity', 'Allocatable', 'In Use'].map((l) => [l, '-'])))
+      // GPU Pods needs no node: the pods of its namespace that ask for GPUs, as kubectl has them, and no refusal
+      const mine = (await cluster()).pods.filter((p) => p.namespace === NS)
+      const refused: string[] = []
+      user.on('response', (r) => { if (r.status() === 403) refused.push(new URL(r.url()).pathname) })
+      await user.goto(url('/gpu/pods'))
+      await expect.poll(async () => {
+        const { rows, cards } = await readPage(user)
+        return { total: cards['Total Pods'], namespaces: cards.Namespaces, rows: rows.map((r) => [r.Namespace, r.Name, r.GPUs, r.Status]).sort() }
+      }, { timeout: 30_000, message: 'GPU Pods: its namespace\'s pods' }).toEqual({
+        total: String(mine.length), namespaces: '1', rows: mine.map((p) => [p.namespace, p.name, String(p.gpus), p.status]).sort(),
+      })
+      await expect(user.getByTestId('forbidden-banner'), 'GPU Pods: nothing refused').toHaveCount(0)
+      expect(refused, 'requests the cluster refused on GPU Pods').toEqual([])
     } finally {
       await ctx.close()
       await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers })

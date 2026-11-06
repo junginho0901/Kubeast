@@ -43,7 +43,7 @@ Kubeast는 정책을 만들거나 데이터를 저장하지 않습니다.
 이슈 확인이 "지금 터진 문제"를 다룬다면, 이 화면은 정상 동작 중이어도 위험한 설정을 다룹니다.
 
 - 외부 스캐너는 설치하지 않습니다.
-- Admin → Cluster hygiene에서 클러스터를 고르면 k8s-service가 **보는 사람의 신원**(impersonation)으로 파드·Namespace·NetworkPolicy·RBAC·`kubernetes.io/tls` Secret을 읽어 그 자리에서 판정합니다(백그라운드 작업 없음).
+- Cluster → Cluster Hygiene에서 클러스터를 고르면 k8s-service가 **보는 사람의 신원**(impersonation)으로 파드·Namespace·NetworkPolicy·RBAC·`kubernetes.io/tls` Secret을 읽어 그 자리에서 판정합니다(백그라운드 작업 없음).
 - 읽지 못한 목록은 숨기지 않고 "건너뛴 점검"으로 보여 줍니다.
 
 | 점검 | 근거 | 심각도 |
@@ -70,7 +70,7 @@ Kubeast는 정책을 만들거나 데이터를 저장하지 않습니다.
   - 화면에는 마지막 서명과 다음 기한(`intervalDays`, 기본 30일)이 보입니다.
   - n8n 같은 자동화는 API 키로 `GET /api/v1/cluster/hygiene?cluster=<id>&format=json`을 호출해 가져가면 됩니다.
   - 항목의 `message`는 영어 문장이고 CSV와 스냅샷에도 이 문장이 들어갑니다. 화면은 같은 내용을 `message_key`·`message_args`로 받아 화면 언어로 보여 줍니다.
-- 권한: `admin.hygiene.read`(보기·이력) · `admin.hygiene.export` · `admin.hygiene.signoff`(Admin에 포함)
+- 권한: 보고서와 이력 보기는 그 클러스터의 `resource.hygiene.scan`입니다. 그 클러스터의 Admin 부여에 들어 있고 Read·Write에는 없습니다. 보고서가 클러스터 전체를 읽으므로 네임스페이스로 한정한 부여는 거절합니다. 전역 역할의 `admin.hygiene.read`는 모든 클러스터의 보고서를 읽습니다. `admin.hygiene.export`·`admin.hygiene.signoff`도 전역이라, 내보내기와 서명은 전체 관리자와 이 키를 가진 역할의 몫입니다.
 - 감사:
   - 조회 `k8s.hygiene.scan` — Secret을 읽으므로 민감 조회이고, 기록할 수 없으면 503
   - `admin.hygiene.export` · `admin.hygiene.signoff` · `admin.hygiene.read`(스냅샷)

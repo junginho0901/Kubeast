@@ -152,7 +152,7 @@ test.describe('cluster hygiene report', () => {
       })
 
       await test.step('the page shows the report; sign off and open the sign-off', async () => {
-        await page.goto('/admin/cluster-hygiene')
+        await page.goto('/cluster/hygiene')
         await expect(page.getByRole('heading', { name: 'Cluster hygiene' })).toBeVisible()
         await expect(page.getByTestId('nav-cluster-hygiene')).toBeVisible()
         await page.getByTestId('hygiene-cluster').click()

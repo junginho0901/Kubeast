@@ -28,8 +28,9 @@ import (
 type listAPI struct {
 	mu      sync.Mutex
 	pods    []corev1.Pod
-	counts  map[string]int // how many objects each other listed kind has ("services", "configmaps" …)
-	objects map[string]any // a GET path → the object answered
+	counts  map[string]int  // how many objects each other listed kind has ("services", "configmaps" …)
+	objects map[string]any  // a GET path → the object answered
+	refused map[string]bool // a GET path the cluster answers 403
 	podAsks []map[string]string
 }
 
@@ -38,6 +39,11 @@ func (a *listAPI) serve(t *testing.T) *Service {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		q := r.URL.Query()
+		if a.refused[r.URL.Path] {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"kind":"Status","apiVersion":"v1","status":"Failure","reason":"Forbidden","code":403}`))
+			return
+		}
 		if o, ok := a.objects[r.URL.Path]; ok {
 			_ = json.NewEncoder(w).Encode(o)
 			return

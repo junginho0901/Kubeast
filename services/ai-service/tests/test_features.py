@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from app.security import _match_any
 from app.services.ai import features
 from app.services.ai.tools import K8S_READONLY_TOOLS
 
@@ -84,6 +85,19 @@ class _Token:
         return self.has_permission(perm) or perm in self.cluster_perms
 
 
+class _Holder:
+    """A token as app.security reads one: a per-cluster matrix, wildcards included."""
+
+    def __init__(self, matrix):
+        self.matrix = matrix
+
+    def has_permission(self, perm):
+        return _match_any(self.matrix.get("*", ()), perm)
+
+    def has_permission_for_cluster(self, perm, cluster):
+        return self.has_permission(perm) or _match_any(self.matrix.get(cluster, ()), perm)
+
+
 def test_permission_gate_follows_what_k8s_service_asks_for():
     feats = {"prometheus": {"enabled": True}, "logSearch": {"enabled": True, "clusters": ["self"]}, "cost": {"enabled": True}, "policyReports": {"enabled": True}}
     names = ["issues", "hygiene", "policy_reports", "helm_read", "cost", "can_i"]
@@ -98,6 +112,12 @@ def test_permission_gate_follows_what_k8s_service_asks_for():
     hygiene_only = _Token(set(), {"admin.hygiene.read"})
     assert "hygiene" in features.gated_names(names, feats, "self", hygiene_only)
     assert "helm_read" not in features.gated_names(names, feats, "self", hygiene_only)
+    # The hygiene report goes with the cluster's own key as well: an Admin grant on that cluster, not Read or Write.
+    cluster_admin = _Token({"resource.hygiene.scan"})
+    assert "hygiene" in features.gated_names(names, feats, "self", cluster_admin)
+    assert features.permitted("hygiene", cluster_admin, "self") is True
+    # The Write role holds ai.tool.*, which does not reach the report's key.
+    assert features.permitted("hygiene", _Token({"ai.tool.*", "resource.*.read"}), "self") is False
     # The write preview needs the write's RBAC: a Read grant does not get it, a Write grant does.
     assert features.gated_names(["k8s_diff", "k8s_count"], feats, "self", reader) == ["k8s_count"]
     writer = _Token({"resource.*.edit", "resource.*.read"})
@@ -106,6 +126,9 @@ def test_permission_gate_follows_what_k8s_service_asks_for():
     assert features.permitted_anywhere("k8s_diff", reader) is False
     assert features.permitted_anywhere("k8s_diff", writer) is True
     assert features.permitted_anywhere("hygiene", reader) is False
+    assert features.permitted_anywhere("hygiene", hygiene_only) is True
+    assert features.permitted_anywhere("hygiene", _Holder({"self": ["*"]})) is True
+    assert features.permitted_anywhere("hygiene", _Holder({"self": ["ai.tool.*", "resource.*.read"]})) is False
     assert features.permitted_anywhere("k8s_count", reader) is True
     # The Admin-only audit log and node tools need their global permission; the wildcard admin holds them.
     for name, perm in [("audit_search", "admin.audit.read"), ("nodes_stats_summary", "admin.nodes.read"), ("nodes_log", "admin.nodes.read"),

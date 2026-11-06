@@ -84,7 +84,7 @@ TOOL_SCREEN_TABLE: Dict[str, Tuple[str, ...]] = {
     "network_flows": _always("resource.networkflow.read"),
     "network_drops": _always("resource.networkflow.read"),
     "network_top_flows": _always("resource.networkflow.read"),
-    "hygiene": _always("admin.hygiene.read"),
+    "hygiene": _always("resource.hygiene.scan"),
     "audit_search": _always("admin.audit.read"),
     "nodes_stats_summary": _always("admin.nodes.read"),
     "nodes_log": _always("admin.nodes.read"),
@@ -92,7 +92,7 @@ TOOL_SCREEN_TABLE: Dict[str, Tuple[str, ...]] = {
     "ai_usage": _always("admin.audit.read"),
     "access_requests": _always("admin.users.update"),
     "audit_integrity": _always("admin.audit.read"),
-    "hygiene_history": _always("admin.hygiene.read"),
+    "hygiene_history": _always("resource.hygiene.scan"),
     "k8s_delete_resource": _for_resource_type("delete"),
     "k8s_patch_resource": _for_resource_type("edit"),
     "k8s_annotate_resource": _for_resource_type("edit"),
@@ -109,6 +109,9 @@ TOOL_SCREEN_TABLE: Dict[str, Tuple[str, ...]] = {
 }
 
 # Names kubectl expands to several kinds, some of them only known to the cluster: those need every kind.
+# A cluster's key whose route also answers an all-cluster key (k8s-service hygieneReadAllowed; tool-server alsoGlobal).
+ALSO_GLOBAL: Dict[str, str] = {"resource.hygiene.scan": "admin.hygiene.read"}
+
 _KUBECTL_CATEGORIES = frozenset({"all", "api-extensions", "gateway-api"})
 
 # The other names kubectl takes for a kind with a permission name of its own (auth.PermResource in services/pkg).

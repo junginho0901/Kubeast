@@ -69,10 +69,10 @@
     - `resource_graph` — 네임스페이스 객체와 그 연결. 파드가 10개 넘는 소유자의 정상 파드는 화면처럼 개수를 단 노드 하나로
     - `timeline` — Timeline 화면의 변경 이력. 네임스페이스·객체 하나·전체 네임스페이스의 이벤트와 롤아웃 리비전을 기간·이벤트 종류로 읽습니다. 숫자는 화면과 같고, 목록이 잘리면 "N개 중 최신 M개", 롤아웃을 못 읽으면 그 까닭을 함께 답합니다.
     - `gpu` — GPU 화면들의 숫자. 회사별·노드별 GPU 수와 사용·남은 수, 파드별 요청, device plugin, DeviceClass, ResourceClaimTemplate, DCGM 사용률을 읽습니다. 읽지 못한 곳은 이름을 대고 그 숫자는 0이 아니라 null입니다.
-    - `hygiene` — 위생 보고, Admin
+    - `hygiene` — 위생 보고, 그 클러스터의 Admin 부여
   - 다음 경우에는 그 도구가 도구 목록에서 빠집니다(`/api/v1/features`, 1분 캐시).
     - 그 클러스터에 기능이 없을 때: Prometheus 미설정, 로그·트레이스·알림 저장소 없음, 네트워크 흐름 꺼짐, 비용·정책 보고 꺼짐
-    - 그 사람에게 k8s-service가 확인하는 권한(`admin.hygiene.read`·`resource.helm.read`·`resource.policyreport.read`·`resource.cost.read`·`resource.networkflow.read`)이 없을 때
+    - 그 사람에게 k8s-service가 확인하는 권한(`resource.hygiene.scan` 또는 `admin.hygiene.read`·`resource.helm.read`·`resource.policyreport.read`·`resource.cost.read`·`resource.networkflow.read`)이 없을 때
   - 결과가 길면 시리즈 100개, 점 120개, 로그 200줄, 행 200개, 그래프 노드 200개/엣지 400개, 텍스트 64 KB에서 자릅니다.
   - 범위 질의 결과(`prometheus_query`·`loki_query` 지표 질의)가 모델이 한 번에 읽는 길이(모델의 도구 결과 최대 길이, 정하지 않으면 6,000자)를 넘으면, 자르는 대신 값이 큰 시리즈 10개의 최저·최고·평균·마지막 값과 12점 개요로 줄여서 줍니다.
     그래프로 그린 결과도 같은 요약을 씁니다.
@@ -85,7 +85,7 @@
       - `ai_usage` — AI Usage처럼 기간별로 사용자·모델·클러스터별 AI 사용량을 답합니다(`admin.audit.read`).
       - `access_requests` — Access requests처럼 대기 중인 요청과 처리된 요청을 답합니다(`admin.users.update`). 승인과 거절은 화면에서만 합니다.
       - `audit_integrity` — 감사 로그 체인이 어디까지 봉인됐는지와 마지막 앵커를 답합니다(`admin.audit.read`). 체인을 검사하지는 않습니다. 검사는 Audit Logs의 Verify 버튼이 합니다.
-      - `hygiene_history` — 클러스터의 위생 점검 서명 이력, 서명 주기(`interval_days`), 서명 때 저장한 보고서를 답합니다(`admin.hygiene.read`).
+      - `hygiene_history` — 클러스터의 위생 점검 서명 이력, 서명 주기(`interval_days`), 서명 때 저장한 보고서를 답합니다(`resource.hygiene.scan` 또는 `admin.hygiene.read`).
       - 이 답은 주는 칸을 하나하나 정해 둡니다. API 키 값과 비밀번호 해시는 들어 있지 않고, `key_prefix`는 목록에 보이는 키 앞부분입니다. 메일 주소는 `ai.redaction.pii`를 따릅니다.
     - `nodes_stats_summary`·`nodes_log` — kubelet의 stats summary와 로그 질의를 API 서버 프록시로 읽습니다(`admin.nodes.read` + 클러스터 RBAC `nodes/proxy`).
       로그 질의는 kubelet의 `enableSystemLogQuery`가 켜져 있어야 하며, 꺼져 있으면 unavailable로 답합니다.
@@ -117,7 +117,7 @@
     - Cluster View 파드
     - Helm 리비전·테스트·업그레이드 미리보기
     - 알림 조사 보고서
-  - 생성·확인 창은 "무슨 작업 + 대상"만 넘깁니다. 관리자 메뉴(클러스터 정리·알림 조사는 예외)와 내 계정 화면은 아무것도 넘기지 않습니다.
+  - 생성·확인 창은 "무슨 작업 + 대상"만 넘깁니다. 관리자 메뉴(알림 조사는 예외)와 내 계정 화면은 아무것도 넘기지 않습니다.
   - 대화는 브라우저 탭마다 하나이고 새로고침해도 이어집니다. 입력칸 왼쪽의 "+"를 누르면 새 대화가 시작되고 이전 대화는 AI Chat 목록에 남습니다. 로그아웃하면 대화가 비워집니다.
 - **리소스 최적화 제안** — 네임스페이스 관측값(requests/limits·사용량) 표 + AI 제안 스트리밍 + 행마다 **재시작 없이 적용**(그 행 워크로드의 API 그룹까지 맞는 파드에, Pod `resize` 하위 리소스, Kubernetes 1.35+, `features.inPlaceResize`).
   Pod 드로어의 컨테이너 카드에서도 값을 직접 넣어 같은 방식으로 조정할 수 있습니다.
@@ -161,8 +161,9 @@
 | **Admin** | 계정 등급(`*`) 또는 클러스터별 | 전부 — 관리자 메뉴, 모든 클러스터(나중에 등록한 것 포함) | `kubeast:admin` = `cluster-admin` |
 | 커스텀 | 클러스터별 | 고른 권한만(만드는 사람이 가진 권한 안에서) | `kubeast:role:<이름>` — 클러스터가 이 그룹을 바인딩하기 전에는 모든 호출이 403입니다(`auth.impersonation.customRoles`). 화면의 권한 없음 배너와 역할 만들기 창에 이 그룹 이름이 나옵니다 |
 
-- **Admin만 되는 것**: Pod exec · Node shell · cordon/drain · 워크로드 rollback · Helm uninstall.
-  `resource.pod.exec`·`resource.node.cordon/drain/shell`·`resource.workload.rollback`·`resource.helm.uninstall`은 Write에 없으므로, 필요하면 커스텀 역할에 넣으세요.
+- **Admin만 되는 것**: Pod exec · Node shell · cordon/drain · 워크로드 rollback · Helm uninstall · Cluster Hygiene 보고서.
+  `resource.pod.exec`·`resource.node.cordon/drain/shell`·`resource.workload.rollback`·`resource.helm.uninstall`·`resource.hygiene.scan`은 Write에 없으므로, 필요하면 커스텀 역할에 넣으세요.
+  Admin 부여는 그 클러스터에서만 이 권한을 가집니다. 보고서 내보내기와 서명은 모든 클러스터에 닿는 `admin.hygiene.export`·`admin.hygiene.signoff`이고, `admin.hygiene.read`는 모든 클러스터의 보고서를 읽습니다.
   - AI도 같은 권한을 봅니다(아래). Write에는 exec를 내주지 않고 왜 안 되는지 알려 줍니다. Admin과 그 권한을 받은 커스텀 역할은 전처럼 실행합니다.
   - 클러스터 쪽에서 보면 기본 `edit` ClusterRole에 `pods/exec`가 들어 있으므로, Write 그룹(`kubeast:operator`)은 원래 모든 네임스페이스에서 exec할 수 있습니다.
     Pod exec가 Admin 전용인 이유는 Kubeast의 앱 권한 때문입니다. 그래서 Kubeast의 impersonation 자격 증명(`kubeast-impersonator`)은 그 그룹들의 전체 권한만큼 중요하게 지켜야 합니다.
@@ -228,6 +229,7 @@
     - 경로에 네임스페이스가 없는 라우트는 `internal/handler/namespace_scope_routes.go`에 규칙이 있습니다. 규칙이 없으면 이런 부여에는 거절하므로 새 라우트는 닫힌 채로 시작합니다.
     - 네임스페이스 없이 여러 네임스페이스를 읽는 것(이벤트, 타임라인, Helm 릴리스와 실시간 갱신, 파드 지표, 리소스 그래프, 커스텀 리소스 종류별 목록, IngressClass의 Ingress, GPU 파드, StorageClass의 PVC)은 부여된 네임스페이스만 읽습니다.
     - 하는 일 자체가 다른 네임스페이스에 닿는 것(노드 drain, 노드 셸, Hygiene 보고)은 거절합니다.
+    - 요약 화면은 부여된 네임스페이스에 있는 것을 보여 주고, 그 밖에서 클러스터가 거절한 것은 이름을 말합니다. 대시보드와 Cluster View는 네임스페이스의 객체를 세고 Node를 말합니다. Monitoring의 Nodes 탭은 Node와 metrics를 말하고 Pods 탭은 네임스페이스의 파드를 보여 줍니다. Custom resource 인스턴스는 CRD 목록을 못 읽으면 그 이름을 말합니다. Timeline·GPU Pods·리소스 그래프는 거기서 읽을 수 있는 것을 거절하지 않습니다. GPU Dashboard와 GPU Nodes(숫자가 노드의 것)와 Alerts(라벨을 네임스페이스로 가를 수 없음)는 이런 부여에 닫혀 있고 그렇게 말합니다.
     - 네임스페이스에 속하지 않는 객체(Node, PV, ClusterRole, CRD)는 지금처럼 클러스터 RBAC이 답합니다. `/cluster/can-i`는 밖의 네임스페이스에 묻지 않고 no로 답합니다.
     - 네임스페이스 목록은 부여 목록 그대로 보여 줍니다.
     - "전체 네임스페이스" 조회는 목록의 네임스페이스를 하나씩 조회해 합칩니다.
@@ -388,7 +390,7 @@ EKS 클러스터에 `features.networkFlowMonitor`를 켜면 Pod·워크로드 �
 - **Topology View** — 클러스터 리소스 관계 시각화 (React Flow / dagre / elkjs)
 - **Dependency Graph** — 워크로드 간 의존성 그래프
 - **Monitoring** — Prometheus 시계열 차트, 이상 감지, 상관 분석, GPU 심층 메트릭 (대상 클러스터에 있어야 하는 Prometheus·지표는 [docs/ko/cluster-requirements.md §3](cluster-requirements.md#3-prometheus))
-- **Node Shell** — 웹 기반 노드 터미널
+- **Node Shell** — 웹 기반 노드 터미널. 설정(켜기·이미지)은 이 브라우저의 것으로 Account 화면에 있습니다
 - **로그 파일** — 로그를 파일로 쓰는 앱의 컨테이너 안 로그를 허용된 경로에서만 읽고 따라가기(고정 `tail`, 기본 off, [자세히](operations.md#컨테이너-안-로그-파일-log-files))
 - **로그 검색** — 재시작·삭제된 파드의 로그까지 Loki에서 텍스트·기간으로 찾기, 클러스터 RBAC(`pods/log`) 기준(기본 off, [자세히](operations.md#로그-검색-loki))
 - **Advanced Search** — 표현식 기반 전역 리소스 탐색. 고른 리소스마다 나눠 받아 화면 설정 "Max items per resource"(최대 10,000)에서 멈추고, 멈추면 알려 줍니다. 네임스페이스를 고르면 좁혀집니다. 두 API 그룹이 같은 이름으로 내는 리소스(core와 events.k8s.io의 Event)는 따로 고르고 따로 읽습니다. 실패한 종류는 새로고침마다 다시 읽고 매번 알리며, 중간에 실패한 목록은 몇 개를 읽었는지 알려 줍니다
@@ -400,7 +402,7 @@ EKS 클러스터에 `features.networkFlowMonitor`를 켜면 Pod·워크로드 �
 - **감사 로그** — 모든 쓰기 작업 + 민감 조회(Secret 열람, Node Shell, 컨테이너 로그 파일 열람, 로그 검색, Helm 변경 등)를
   기록하고, 성공과 실패를 모두 추적합니다
 - **클러스터 위생 점검** — Pod Security Standards, 이미지 태그, 리소스, Namespace 정책, RBAC, TLS 만료를 보는 사람의 권한으로 읽어 한 장에 모읍니다.
-  CSV/JSON으로 내보내고 클러스터별로 월간 서명을 남길 수 있습니다(Admin → Cluster hygiene, [자세히](operations.md#클러스터-위생-점검-cluster-hygiene)).
+  CSV/JSON으로 내보내고 클러스터별로 월간 서명을 남길 수 있습니다(Cluster → Cluster Hygiene, [자세히](operations.md#클러스터-위생-점검-cluster-hygiene)).
 - **AI 사용량** — 채팅 턴과 Optimization의 AI 설명마다 남는 `ai.chat.complete` 감사 행(제공자가 보낸 토큰 수를 턴 단위로 합산)을 사용자·모델·클러스터별로 집계합니다(Admin → AI Usage). 알림 조사(`ai.investigation.run`)는 채팅 행에 더하지 않고 "알림 조사" 표시가 붙은 따로 된 행으로 세며(사용자 기준이면 조사기 `kubeast:investigator` 한 행), 합계에는 넣되 채팅과 조사를 나눠 보입니다. 출처마다 토큰이 많은 500개 그룹까지 목록에 두고, 합계는 모든 그룹을 세며, 목록이 잘리면 표 아래에 그렇게 말합니다.
   - 한도는 없고, 누가 얼마나 썼는지 보여 줍니다. 제공자가 usage를 보내지 않은 호출은 합계에서 빼고 건수로 따로 표시합니다.
   - 입력 토큰 옆의 **캐시 적중**은 제공자가 캐시에서 내준 입력 토큰(Anthropic `cache_read_input_tokens`, OpenAI `prompt_tokens_details.cached_tokens`)과 그 비율입니다.

@@ -97,7 +97,7 @@ func screenPermissionCases() []screenCase {
 	for _, tool := range []string{"network_flows", "network_drops", "network_top_flows"} {
 		add(tool, nil, "resource.networkflow.read")
 	}
-	add("hygiene", nil, "admin.hygiene.read")
+	add("hygiene", nil, "resource.hygiene.scan")
 	add("audit_search", nil, "admin.audit.read")
 	add("nodes_stats_summary", nil, "admin.nodes.read")
 	add("nodes_log", args{"node": "n1"}, "admin.nodes.read")
@@ -115,7 +115,7 @@ func screenPermissionCases() []screenCase {
 	add("ai_usage", nil, "admin.audit.read")
 	add("access_requests", nil, "admin.users.update")
 	add("audit_integrity", nil, "admin.audit.read")
-	add("hygiene_history", nil, "admin.hygiene.read")
+	add("hygiene_history", nil, "resource.hygiene.scan")
 
 	// One name in every spelling kubectl takes.
 	del := func(resourceType string, want ...string) {
@@ -402,7 +402,7 @@ func aiToolPerms(tools []string) []string {
 // Written out as a rule, not read from the table: Write holds every call but what is Admin-only on the screens.
 func writeRoleHolds(c screenCase) bool {
 	for _, perm := range c.Want {
-		if perm == "resource.pod.exec" || perm == "resource.workload.rollback" || perm == "resource.alert.investigate" || strings.HasPrefix(perm, "admin.") {
+		if perm == "resource.pod.exec" || perm == "resource.workload.rollback" || perm == "resource.alert.investigate" || perm == "resource.hygiene.scan" || strings.HasPrefix(perm, "admin.") {
 			return false
 		}
 	}

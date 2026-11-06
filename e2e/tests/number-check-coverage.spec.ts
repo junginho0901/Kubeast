@@ -36,7 +36,7 @@ const WHERE: Record<string, string> = {
   '/workloads/vpas': 'number-check-lists', '/security/policyreports': 'number-check-lists', '/gateway/policies': 'number-check-lists',
   // summary screens
   '/': 'number-check-dashboard', '/cluster-view': 'number-check-cluster-view', '/helm/releases': 'number-check-lists', '/timeline': 'number-check-timeline', '/monitoring': 'number-check-monitoring', '/cluster/search': 'number-check-search',
-  '/admin/cluster-hygiene': 'number-check-hygiene', '/cluster/resource-graph': 'number-check-graph', '/cost': 'number-check-cost',
+  '/cluster/hygiene': 'number-check-hygiene', '/cluster/resource-graph': 'number-check-graph', '/cost': 'number-check-cost',
   // the device plugin's GPUs and DCGM metrics, on test2 with fake GPUs (scripts/kind-gpu.sh)
   '/gpu/dashboard': 'number-check-gpu', '/gpu/nodes': 'number-check-gpu', '/gpu/pods': 'number-check-gpu',
   // the DRA lists, on test2 with the DRA example driver
@@ -46,7 +46,6 @@ const WHERE: Record<string, string> = {
   '/admin/users': 'number-check-admin-user-counts', '/admin/roles': 'number-check-admin-user-counts',
   '/admin/organizations': 'number-check-admin-user-counts', '/admin/clusters': 'number-check-admin-misc',
   '/admin/audit': 'number-check-admin-misc', '/admin/session-recordings': 'number-check-admin-misc', '/ai-chat': 'number-check-admin-misc',
-  '/admin/node-shell': 'no numbers: two settings this browser keeps (localStorage), nothing on the server',
   '/admin/ai-models': 'no counts: model settings cards; "Used for" is the API\'s used_for',
   '/admin/ai-usage': 'number-check-ai-usage', '/admin/access-requests': 'number-check-access', '/admin/access-review': 'number-check-access',
   '/admin/investigations': 'number-check-ai-usage', '/alerts': 'number-check-alert-inbox',

@@ -19,7 +19,7 @@ SCREEN_PERMISSION = {
     "ai_usage": "admin.audit.read",
     "access_requests": "admin.users.update",
     "audit_integrity": "admin.audit.read",
-    "hygiene_history": "admin.hygiene.read",
+    "hygiene_history": "resource.hygiene.scan",
 }
 CLUSTER = "alpha"
 
@@ -36,6 +36,19 @@ def _holder(permission):
 
 def _reader():
     return TokenPayload(user_id="u", role="member", matrix={CLUSTER: ("ai.tool.*", "ai.mcp.use", "resource.*.read")})
+
+
+@pytest.mark.parametrize("tool", ["hygiene", "hygiene_history"])
+def test_the_report_tools_ask_the_clusters_key_or_the_all_cluster_one(tool):
+    cluster_key = TokenPayload(user_id="u", role="member", matrix={CLUSTER: ("ai.tool.*", "resource.hygiene.scan")})
+    global_key = TokenPayload(user_id="u", role="member", permissions=("admin.hygiene.read",),
+                              matrix={"*": ("admin.hygiene.read",), CLUSTER: ("ai.tool.*",)})
+    other_cluster = TokenPayload(user_id="u", role="member", matrix={CLUSTER: ("ai.tool.*",), "other": ("resource.hygiene.scan",)})
+    assert permissions.missing_permissions(cluster_key, CLUSTER, tool) == []
+    assert permissions.missing_permissions(global_key, CLUSTER, tool) == []
+    assert permissions.token_may_call(global_key, CLUSTER, tool)
+    assert permissions.missing_permissions(other_cluster, CLUSTER, tool) == ["resource.hygiene.scan"]
+    assert permissions.missing_permissions(_reader(), CLUSTER, tool) == ["resource.hygiene.scan"]
 
 
 def _service():
@@ -56,7 +69,7 @@ def test_it_is_an_admin_read_and_not_in_the_read_seed(name):
     assert mcp_server.READ_TOOLS[name].annotations.read_only_hint is True
 
 
-@pytest.mark.parametrize("name,permission", sorted(SCREEN_PERMISSION.items()))
+@pytest.mark.parametrize("name,permission", sorted((n, p) for n, p in SCREEN_PERMISSION.items() if p.startswith("admin.")))
 def test_it_is_offered_only_with_what_the_screen_asks(name, permission):
     assert features.REQUIRED_PERMISSIONS.get(name) == ("global", permission)
     assert screen_permissions.fixed_permissions().get(name) == permission
