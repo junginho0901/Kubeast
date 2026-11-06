@@ -19,6 +19,10 @@ var ErrInvalidSection = errors.New("invalid section")
 // positive. Mapped to HTTP 400 in the handler layer.
 var ErrInvalidRevision = errors.New("from/to revisions must be positive")
 
+// ErrInvalidValues is returned when an upgrade's values are not a YAML map. The
+// parser's words after it can quote the values, so the audit row keeps this part only.
+var ErrInvalidValues = errors.New("values must be valid YAML")
+
 // translateSDKError converts a low-level Helm SDK error to one of our
 // sentinel errors where possible, preserving the original message.
 // Used so callers can errors.Is(err, helm.ErrNotFound) without importing

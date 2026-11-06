@@ -263,7 +263,7 @@ func (s *Service) UpgradeValues(ctx context.Context, namespace, name, valuesYAML
 	vals := map[string]interface{}{}
 	if trimmed := trimSpace(valuesYAML); trimmed != "" {
 		if err := yaml.Unmarshal([]byte(valuesYAML), &vals); err != nil {
-			return nil, fmt.Errorf("values must be valid YAML: %w", err)
+			return nil, fmt.Errorf("%w: %w", ErrInvalidValues, err)
 		}
 	}
 

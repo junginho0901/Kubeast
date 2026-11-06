@@ -1,8 +1,10 @@
 package audit
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -48,5 +50,41 @@ func TestRealIP_OnlyTrustsXRealIP(t *testing.T) {
 	h.ServeHTTP(httptest.NewRecorder(), r)
 	if seen != "203.0.113.9" {
 		t.Fatalf("X-Real-IP from the gateway must set RemoteAddr: %q", seen)
+	}
+}
+
+func TestMaskSensitive_MasksEverySpellingOfACredentialKey(t *testing.T) {
+	keys := []string{
+		"password", "db_password", "POSTGRES_PASSWORD", "passwd", "pwd", "DB_PWD", "db-pwd", "dbPwd",
+		"secret", "clientSecret", "token", "refresh_token",
+		"apikey", "api_key", "api-key", "apiKey", "API_KEY", "x-api-key", "api.key",
+		"privatekey", "private_key", "private-key", "privateKey",
+		"access_key", "access-key", "accessKey", "AWS_ACCESS_KEY", "accesskey",
+		"credential", "credentials", "awsCredentials", "aws-credential",
+		"connection_string", "connection-string", "connectionString", "DB_CONNECTION_STRING",
+		"dsn", "DSN", "db_dsn", "db-dsn", "dbDsn", "sentry.dsn",
+		"authorization",
+	}
+	for _, key := range keys {
+		raw, err := json.Marshal(map[string]any{"outer": []any{map[string]any{key: "fake-value"}}, "kept": "plain"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := string(MaskSensitive(raw))
+		if strings.Contains(out, "fake-value") || !strings.Contains(out, `"kept":"plain"`) {
+			t.Errorf("key %q: %s", key, out)
+		}
+	}
+}
+
+func TestMaskSensitive_KeepsOrdinaryNames(t *testing.T) {
+	for _, key := range []string{"name", "role", "permissions", "fields_names", "kinds_namespaces", "cmd_snapshot", "idsNumber", "app_wd", "keyboard"} {
+		raw, err := json.Marshal(map[string]any{key: "fake-value"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if out := string(MaskSensitive(raw)); !strings.Contains(out, "fake-value") {
+			t.Errorf("key %q was masked: %s", key, out)
+		}
 	}
 }

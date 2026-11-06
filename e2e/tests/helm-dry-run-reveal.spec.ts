@@ -63,3 +63,42 @@ test('the rollback window names the release it rolls back', async ({ page, reque
   await page.getByRole('button', { name: /^(cancel|취소)$/i }).click()
   await expect(subtitle).toHaveCount(0)
 })
+
+// Values that do not parse are refused before the upgrade starts, so the release stays as it is; the row
+// still has to be written, and it and the audit screen show a summary of what was sent and none of it.
+test('a refused values upgrade leaves a summary in its audit row and no value', async ({ page, request }) => {
+  const admin = await login(request)
+  const release = '/api/v1/helm/releases/kubeast/kubeast'
+  const detail = await request.get(`${release}?cluster=self`, { headers: bearer(admin), failOnStatusCode: false })
+  test.skip(!detail.ok(), `no Helm release kubeast/kubeast on cluster self (${detail.status()})`)
+  const { revision } = await detail.json()
+
+  const values = 'adminPassword: !!int e2e-fake-value\n'
+  const started = Date.now()
+  const refused = await request.put(`${release}/values?cluster=self`, {
+    headers: bearer(admin), data: { values, dryRun: false }, failOnStatusCode: false,
+  })
+  expect(refused.status(), await refused.text()).toBeGreaterThanOrEqual(400)
+  expect((await refused.json()).detail).toContain('e2e-fake-value') // whoever sent it keeps the full reason
+
+  type Row = { TargetID: string; Namespace: string; Result: string; Error: string; Before: unknown; After: Record<string, unknown>; CreatedAt: string }
+  let row: Row | undefined
+  await expect.poll(async () => {
+    const rows: Row[] = (await (await request.get('/api/v1/auth/admin/audit-logs?action=helm.release.upgrade&limit=20', { headers: bearer(admin) })).json()).items
+    row = rows.find((r) => r.TargetID === 'kubeast' && r.Namespace === 'kubeast' && r.After?.values_len === values.length && Date.parse(r.CreatedAt) >= started - 5_000)
+    return row?.Result
+  }, { timeout: 15_000 }).toBe('failure')
+  expect(row!.After).toEqual({ newRevision: 0, values_keys: [], values_len: values.length })
+  expect(row!.Before).toEqual({ fromRevision: 0 })
+  expect(row!.Error).toBe('values must be valid YAML')
+  expect(JSON.stringify(row)).not.toContain('e2e-fake-value')
+
+  const after = await (await request.get(`${release}?cluster=self`, { headers: bearer(admin) })).json()
+  expect(after.revision).toBe(revision)
+
+  await page.goto('/admin/audit')
+  await page.locator('tbody tr', { hasText: 'helm.release.upgrade' }).first().click()
+  const shown = page.locator('pre', { hasText: '"values_len"' })
+  await expect(shown).toContainText(`"values_len": ${values.length}`)
+  await expect(page.getByText('e2e-fake-value')).toHaveCount(0)
+})
