@@ -42,6 +42,9 @@ type Service struct {
 	// in a restConfigGetter — see defaultGetter.
 	getterFactory func(ctx context.Context, namespace string) (genericclioptions.RESTClientGetter, error)
 
+	// configOverride, set by tests, runs the real Helm actions against in-memory release storage.
+	configOverride func(ctx context.Context, namespace string) (*action.Configuration, error)
+
 	mu sync.Mutex
 }
 
@@ -76,6 +79,9 @@ func (s *Service) defaultGetter(ctx context.Context, namespace string) (genericc
 // actionConfig builds a fresh *action.Configuration for the given namespace.
 // Callers must not share the returned value across goroutines.
 func (s *Service) actionConfig(ctx context.Context, namespace string) (*action.Configuration, error) {
+	if s.configOverride != nil {
+		return s.configOverride(ctx, namespace)
+	}
 	getter, err := s.getterFactory(ctx, namespace)
 	if err != nil {
 		return nil, fmt.Errorf("helm getter: %w", err)

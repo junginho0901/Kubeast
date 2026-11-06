@@ -134,7 +134,15 @@ func (c *Cache) DeletePattern(ctx context.Context, pattern string) {
 		}
 		return
 	}
-	// In-memory: no pattern matching, skip
+	// One lock over the scan (a few ms at 100,000 keys, writes are rare); expired entries go too, as only a read of that key would remove them.
+	now := time.Now()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for key, entry := range c.mem {
+		if globMatch(pattern, key) || now.After(entry.expires) {
+			delete(c.mem, key)
+		}
+	}
 }
 
 func (c *Cache) IsConnected() bool {

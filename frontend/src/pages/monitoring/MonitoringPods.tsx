@@ -341,12 +341,13 @@ export default function MonitoringPods({
           </table>
           <ListPager currentPage={page} totalPages={totalPages} total={filteredRows.length} rowsPerPage={PODS_PER_PAGE} onPageChange={setPage} showPageSize={false} testId="monitoring-pod-pager" />
         </div>
-      ) : selectedNamespace && error ? (
+      ) : selectedNamespace && error && !isMetricsUnavailableError(error) ? (
         <div className="text-center py-12">
           <div className="flex flex-col items-center gap-4">
             <Activity className="w-12 h-12 text-red-400 animate-pulse" />
             <div>
-              <p className="text-red-400 font-medium">{t('monitoring.pods.errorTitle')}</p>
+              <p className="text-red-400 font-medium" data-testid="pod-metrics-error">{t('monitoring.pods.errorTitle')}</p>
+              {(error as any).response?.data?.detail && <p className="text-sm text-slate-400 mt-2">{(error as any).response.data.detail}</p>}
               <p className="text-sm text-slate-500 mt-2">{t('monitoring.pods.retrying')}</p>
             </div>
           </div>

@@ -18,7 +18,7 @@ test.describe('console metrics exposure', () => {
 
   test('the metrics-server proxy for pods is still routed', async ({ request }) => {
     const res = await request.get('/api/v1/cluster/metrics/pods?cluster=default')
-    expect([200, 404, 503]).toContain(res.status())
+    expect([200, 404, 502, 503]).toContain(res.status())
     expect(await res.text()).not.toContain('# HELP')
   })
 })

@@ -2044,6 +2044,7 @@
       "title": "Node 리소스 사용량",
       "total": "총 {{count}}개 Node",
       "unavailable": "Node 메트릭을 사용할 수 없습니다",
+      "errorTitle": "Node 메트릭을 불러오는 중 오류가 발생했습니다",
       "searchPlaceholder": "Node 이름 검색..."
     },
     "pods": {

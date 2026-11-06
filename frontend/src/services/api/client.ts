@@ -88,12 +88,14 @@ export const FORBIDDEN_EVENT = 'kubeast:forbidden'
 export const LIST_STATUS_EVENT = 'kubeast:list-status'
 export type ListStatusDetail = { url: string; state: 'ok' | 'notInstalled' | 'error'; code?: number }
 
+const METRICS_UNAVAILABLE = 'metrics_unavailable'
+
 // Internal — used by domain files that want to fall through to a
 // "metrics-server unavailable" branch instead of bubbling the error.
 export const isMetricsUnavailableResponse = (error: any): boolean => {
-  const status = error?.response?.status
-  const detail = error?.response?.data?.detail
-  return status === 503 && detail === 'metrics_unavailable'
+  if (error?.response?.status !== 503) return false
+  const data = error.response.data
+  return data?.detail === METRICS_UNAVAILABLE || data?.detail?.code === METRICS_UNAVAILABLE || data?.code === METRICS_UNAVAILABLE
 }
 
 // Per-cluster flag — once a metrics call fails with metrics_unavailable the UI
@@ -112,11 +114,6 @@ export const isMetricsDisabled = (): boolean => metricsDisabledClusters.has(metr
 /** The request answered 403: the section says "no permission", not that the cluster has nothing. */
 export const isForbiddenError = (err: any): boolean => err?.response?.status === 403
 
-export const isMetricsUnavailableError = (err: any): boolean => {
-  const status = err?.response?.status
-  if (status === 503) return true
-  const code =
-    err?.response?.data?.detail?.code ||
-    err?.response?.data?.code
-  return status === 503 && code === 'metrics_unavailable'
-}
+/** metrics-server is missing: an answer that says so or the metrics calls' error for it. A 503 alone is a gateway or an unreachable cluster, which pass. */
+export const isMetricsUnavailableError = (err: any): boolean =>
+  err?.code === METRICS_UNAVAILABLE || isMetricsUnavailableResponse(err)
