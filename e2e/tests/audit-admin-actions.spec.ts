@@ -101,6 +101,69 @@ test.describe('audit — admin actions (M15, M27)', () => {
     }
   })
 
+  test('the bulk template goes up as it is, and the window\'s format line names its columns', async ({ page, request }) => {
+    const admin = await adminHeaders(request)
+    const example = 'hong@example.com'
+    const allUsers = async () => {
+      const users: any[] = []
+      for (let offset = 0, more = true; more; offset += 200) {
+        const onePage = await (await request.get(`/api/v1/auth/admin/users?limit=200&offset=${offset}`, { headers: admin })).json()
+        users.push(...onePage)
+        more = onePage.length === 200
+      }
+      return users
+    }
+    const removeExample = async () => {
+      for (const u of (await allUsers()).filter((x) => x.email === example)) await request.delete(`/api/v1/auth/admin/users/${u.id}`, { headers: admin, failOnStatusCode: false })
+    }
+    await removeExample()
+    try {
+      await page.goto('/admin/users')
+      await page.getByRole('button', { name: /Bulk upload|일괄 업로드/ }).first().click()
+      const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /^(Download|다운로드)$/ }).click()])
+      const chunks: Buffer[] = []
+      for await (const chunk of await download.createReadStream()) chunks.push(chunk as Buffer)
+      const buffer = Buffer.concat(chunks)
+      const lines = buffer.toString('utf8').split('\n')
+      await expect(page.getByTestId('admin-users-bulk-format')).toHaveText(lines.filter((l) => !l.includes('#'))[0])
+      await page.locator('input[type="file"][accept=".csv"]').setInputFiles({ name: 'user_template.csv', mimeType: 'text/csv', buffer })
+      await expect(page.getByText(/1 user created\.|1명의 사용자가 생성되었습니다\./)).toHaveCount(1, { timeout: 15_000 })
+      await expect(page.getByTestId('admin-users-bulk-create-failed')).toHaveCount(0)
+      const made = (await allUsers()).filter((u) => u.email === example)
+      expect(made.map((u) => u.role?.name)).toEqual(['Member'])
+    } finally {
+      await removeExample()
+    }
+  })
+
+  test('the window that creates a user says why the server refused, and a new form starts clean', async ({ page, request }) => {
+    const admin = await adminHeaders(request)
+    const taken = `e2e-create-taken-${Date.now()}@kubeast.local`
+    const existing = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E create taken', email: taken, password: 'e2e-bulk-throwaway-1' } })
+    expect(existing.status(), await existing.text()).toBe(201)
+    const id = (await existing.json()).id as string
+    try {
+      await page.goto('/admin/users')
+      await page.getByRole('button', { name: /^(Add user|사용자 추가)$/ }).first().click()
+      const dialog = page.getByTestId('create-user-dialog')
+      await dialog.locator('input').first().fill('E2E create taken')
+      await dialog.locator('input[type="email"]').fill(taken)
+      await dialog.locator('input[type="password"]').fill('e2e-bulk-throwaway-1')
+      await page.getByTestId('create-user-role').click()
+      await dialog.getByRole('button', { name: 'Member', exact: true }).click()
+      await dialog.locator('button[type="submit"]').click()
+      await expect(page.getByTestId('create-user-error')).toHaveText(/(Failed to create user|사용자 생성에 실패했습니다): Email already exists/, { timeout: 15_000 })
+      await expect(dialog.locator('input[type="email"]'), 'what was typed stays').toHaveValue(taken)
+
+      await dialog.getByRole('button', { name: /^(Cancel|취소)$/ }).click()
+      await page.getByRole('button', { name: /^(Add user|사용자 추가)$/ }).first().click()
+      await expect(dialog.locator('input[type="email"]')).toHaveValue('')
+      await expect(page.getByTestId('create-user-error')).toHaveCount(0)
+    } finally {
+      await request.delete(`/api/v1/auth/admin/users/${id}`, { headers: admin, failOnStatusCode: false })
+    }
+  })
+
   test('role create/update/delete carry the permission lists', async ({ request }) => {
     const admin = await adminHeaders(request)
     const name = `e2e-role-${Date.now()}`

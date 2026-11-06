@@ -29,6 +29,7 @@ import { modalButton } from './modalStyles'
 import { TypeToConfirm, WarningBox } from './TypeToConfirm'
 import { systemObject, type SystemReason } from './resource-detail/systemObject'
 import { customResourceTarget, deleteTarget, needsCustomResourceLookup } from './resource-detail/crDetail'
+import { drawerObjectLayer, followsObjectForChat, objectReadInterval } from './resource-detail/drawerObjectLayer'
 import { ObjectUnreadable } from './resource-detail/DetailCommon'
 import { useConfirm } from '@/services/confirm'
 
@@ -162,11 +163,14 @@ export default function ResourceDetailDrawer() {
     && !UNRESOLVABLE_KINDS.has(kind)
     && !!name
 
+  // The floating chat is told the object as it is now, not the row the list had when the drawer opened.
+  const followsForChat = !!target && tab === 'info' && !resolving && !!name && followsObjectForChat(kind)
   const { data: fetchedRawJson, isFetching: rawJsonFetching, error: rawJsonError } = useQuery({
     queryKey: ['resource-json', kind, ns, name],
     queryFn: () => api.getResourceJson(kindToPlural(kind), name, ns || undefined),
-    enabled: needsRawJsonFetch,
+    enabled: needsRawJsonFetch || followsForChat,
     staleTime: 30_000,
+    refetchInterval: (query) => objectReadInterval(followsForChat, query.state.error),
     // 403 and 404 are answers: the notice comes now, not a second later after asking again
     retry: (failures, error) => failures < 1 && ![403, 404].includes((error as { response?: { status?: number } }).response?.status ?? 0),
   })
@@ -219,32 +223,21 @@ export default function ResourceDetailDrawer() {
         data: { ...base, yaml: isSecret ? '(secret data omitted)' : truncated },
       }
     }
-    // info tab — effectiveRawJson 전체를 sanitize 후 통째로 포함.
-    // managedFields / annotations 본문 등 대용량/잡음 필드는 제거.
-    // 8KB 토큰 한도는 useAIContext 의 enforceTokenBudget 가 자동 적용.
-    const rj = effectiveRawJson as Record<string, unknown> | undefined
-    const meta = (rj?.metadata as Record<string, unknown> | undefined) ?? {}
-    const sanitizedMeta = meta
-      ? {
-          ...meta,
-          managedFields: undefined,
-          annotations: meta.annotations
-            ? Object.keys(meta.annotations as Record<string, unknown>)
-            : undefined,
-        }
-      : meta
-    const sanitizedRaw = rj
-      ? { ...rj, metadata: sanitizedMeta, ...(isSecret ? { data: undefined, stringData: undefined } : {}) }
-      : undefined
+    // info tab
     return {
       source: 'ResourceDetailDrawer' as const,
       summary: `${kind} ${name}${ns ? ` (${ns})` : ''} 상세 — Info 탭`,
       data: {
         ...base,
-        raw: sanitizedRaw,
+        ...drawerObjectLayer({
+          row: target.rawJson,
+          live: fetchedRawJson,
+          secret: isSecret,
+          readStatus: (rawJsonError as { response?: { status?: number } } | null)?.response?.status,
+        }),
       },
     }
-  }, [target, tab, kind, name, ns, yamlData, effectiveRawJson])
+  }, [target, tab, kind, name, ns, yamlData, fetchedRawJson, rawJsonError])
 
   useAIContext(aiSnapshot, [aiSnapshot])
   useAIContext(deleteDialogOpen && target ? {

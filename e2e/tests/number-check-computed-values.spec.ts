@@ -192,6 +192,43 @@ test.describe('values a screen worked out for itself', () => {
     })
   })
 
+  // The list asks the caller's own identity; a role that reads LimitRanges but not pods gets this answer from the cluster.
+  test('a LimitRange whose violations cannot be read says so, not that no pod violates', async ({ page }) => {
+    const ask = await captureFloating(page)
+    await page.route('**/limitranges/caps/violations*', (route) => route.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ detail: 'pods is forbidden' }) }))
+    await page.goto(`/?cluster=self&detail=${encodeURIComponent(`LimitRange/${NS}/caps`)}`)
+    const drawer = page.locator(DRAWER).last()
+    await expect(drawer.getByTestId('limitrange-violations-unread')).toContainText(/You may not read the pods of this namespace|이 Namespace의 Pod를 읽을 권한이 없어/, { timeout: 20_000 })
+    await expect(drawer.getByTestId('limitrange-violations-unread')).toContainText('pods is forbidden')
+    await expect(drawer).toContainText(/Violating Pods: -|위반 Pod: -/)
+    await expect(drawer).toContainText(/Violating Pods \(-\)|위반 Pod \(-\)/)
+    await expect(drawer).not.toContainText(/currently violates this LimitRange|이 LimitRange를 위반하는 Pod가 없습니다/)
+    await expect.poll(async () => {
+      const layer = (await ask()).overlays.find((o) => o.source === 'LimitRangeInfo')
+      return { summary: layer?.summary, unread: layer?.data?.violations_unread, count: layer?.data?.violating_pods }
+    }, { timeout: 20_000 }).toEqual({
+      summary: expect.stringContaining('위반 Pod 목록을 읽지 못함'),
+      unread: { status: 403, detail: 'pods is forbidden' },
+      count: undefined,
+    })
+  })
+
+  test('the floating chat is told a drawer\'s object as it is now, not the row it opened from', async ({ page }) => {
+    const ask = await captureFloating(page)
+    await page.goto(`/workloads/deployments?cluster=self&namespace=${NS}`)
+    await page.locator('main tbody tr').filter({ has: page.getByRole('cell', { name: 'fine', exact: true }) }).click({ timeout: 20_000 })
+    await expect(page.locator(DRAWER).last()).toContainText('fine', { timeout: 20_000 })
+    kubectl(`-n ${NS} label deployment fine e2e-raw=changed --overwrite`)
+    try {
+      await expect.poll(async () => {
+        const data = (await ask()).overlays.find((o) => o.source === 'ResourceDetailDrawer')?.data
+        return { label: (data?.raw as { metadata?: { labels?: Record<string, string> } } | undefined)?.metadata?.labels?.['e2e-raw'], from: data?.raw_from }
+      }, { timeout: 40_000, intervals: [3_000] }).toEqual({ label: 'changed', from: undefined })
+    } finally {
+      kubectl(`-n ${NS} label deployment fine e2e-raw-`)
+    }
+  })
+
   test('a Job\'s window tells the floating chat the rows it shows', async ({ page }) => {
     const ask = await captureFloating(page)
     await page.goto(`/workloads/jobs?cluster=self&namespace=${NS}&detail=${encodeURIComponent(`Job/${NS}/going`)}`)

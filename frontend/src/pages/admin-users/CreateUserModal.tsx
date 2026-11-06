@@ -47,6 +47,8 @@ export function CreateUserModal({
 }: Props) {
   if (!open) return null
   const incomplete = !newUser.name || !newUser.email || !newUser.password || !newUser.role_id
+  // the form stays filled after a refusal, so the window has to say which field to change
+  const refusal: string = mutation.error?.response?.data?.detail || mutation.error?.message || ''
   return (
     <ModalFrame
       size="md"
@@ -135,8 +137,10 @@ export function CreateUserModal({
         </div>
 
         {mutation.isError && (
-          <div className="rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200">
-            {tr('adminUsers.createUserError', 'Failed to create user.')}
+          <div className="rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200" data-testid="create-user-error">
+            {refusal
+              ? tr('adminUsers.createUserRefused', 'Failed to create user: {{detail}}', { detail: refusal })
+              : tr('adminUsers.createUserError', 'Failed to create user.')}
           </div>
         )}
       </form>

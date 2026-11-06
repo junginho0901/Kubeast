@@ -16,13 +16,37 @@ export interface ParsedBulkCsv {
   failed: BulkCreateFailure[]
 }
 
+// The columns the template writes, the upload window names and parseBulkCsv reads, in that order.
+export const BULK_CSV_HEADER = 'name,email,password,role,team'
+
+// What the server makes an account with no role named: a global Read or Write has no effect, so no example offers one.
+const DEFAULT_ROLE = 'Member'
+
+// The example row goes up as it is, so a password all templates shared would be an account anyone could sign in to.
+export function exampleBulkPassword(): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+export function bulkCsvTemplate(teamNames: string[], roles: Array<{ name: string }>, password: string): string {
+  const levels = roles.filter((r) => ['Admin', 'Member'].includes(r.name)).map((r) => r.name).join(', ') || 'Admin, Member'
+  return [
+    `# Available Team: ${teamNames.length > 0 ? teamNames.join(', ') : '(none registered)'}`,
+    `# role (account level): ${levels}`,
+    BULK_CSV_HEADER,
+    // the server refuses a team it does not have, so with none registered the column stays empty
+    `Hong Gildong,hong@example.com,${password},${DEFAULT_ROLE},${teamNames[0] ?? ''}`,
+    '',
+  ].join('\n')
+}
+
 // The rows of the template's CSV. A role id of 0 would make the server pick Member, so a role not found stays here.
+// A name is read as written: names that differ in capitals can both be stored, and a role decides what an account may do.
 export function parseBulkCsv(text: string, roles: Array<{ id: number; name: string }>): ParsedBulkCsv {
   const lines = text.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
   const parsed: ParsedBulkCsv = { users: [], failed: [] }
   for (const line of lines.slice(1)) {
     const [name = '', email = '', password = '', roleColumn = '', team = ''] = line.split(',').map((c) => c.trim())
-    const roleName = roleColumn || 'read'
+    const roleName = roleColumn || DEFAULT_ROLE
     const role = roles.find((r) => r.name === roleName)
     if (!name || !email || !password) {
       parsed.failed.push({ email, reason: 'missing_fields' })

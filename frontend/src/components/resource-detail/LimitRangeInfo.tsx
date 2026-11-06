@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsSection, Th, NoneText, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
-import { limitRangeViolationsLayer, limitRangeViolationsSummary, violatingPodCount } from './limitRangeViolations'
+import { limitRangeViolationsLayer, limitRangeViolationsSummary, violatingPodCount, violationsUnread } from './limitRangeViolations'
 import { usePagination } from './usePagination'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -29,25 +29,28 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
     retry: 1,
   })
 
-  const { data: violations } = useQuery({
+  const { data: violations, error: violationsError } = useQuery({
     queryKey: ['limitrange-violations', namespace, name],
     queryFn: () => api.listPodsViolatingLimitRange(namespace, name),
     enabled: !!namespace && !!name,
     staleTime: 10_000,
+    // a refusal is an answer: the window says it now, not a second later after asking again
+    retry: (failures, error) => failures < 1 && (error as { response?: { status?: number } }).response?.status !== 403,
   })
   const violationList = Array.isArray(violations) ? violations : []
   const podCount = violatingPodCount(violationList)
   const { items: pagedViolations, nav: violationsNav } = usePagination(violationList, 10)
 
   const answered = Array.isArray(violations) ? violations : undefined
-  const violationsLayer = useMemo(() => limitRangeViolationsLayer(answered), [answered])
+  const unread = useMemo(() => violationsUnread(violationsError), [violationsError])
+  const violationsLayer = useMemo(() => limitRangeViolationsLayer(answered, unread), [answered, unread])
   useResourceDetailOverlay({
     kind: 'LimitRange',
     name,
     namespace,
     describe: desc,
     extras: violationsLayer,
-    summary: limitRangeViolationsSummary(name, namespace, answered),
+    summary: limitRangeViolationsSummary(name, namespace, answered, unread),
   })
 
   if (isLoading) {
@@ -71,8 +74,8 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
         ))}
         <SummaryBadge
           label="Violating Pods"
-          value={podCount}
-          color={podCount === 0 ? 'green' : podCount < 5 ? 'amber' : 'red'}
+          value={answered ? podCount : '-'}
+          color={!answered ? 'default' : podCount === 0 ? 'green' : podCount < 5 ? 'amber' : 'red'}
         />
       </div>
 
@@ -123,8 +126,17 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
         ) : <NoneText />}
       </InfoSection>
 
-      <InfoSection title="Violating Pods ({{n}})" titleValues={{ n: podCount }}>
-        {violationList.length === 0 ? (
+      <InfoSection title="Violating Pods ({{n}})" titleValues={{ n: answered ? podCount : '-' }}>
+        {!answered && unread ? (
+          <p className="text-xs text-red-400" data-testid="limitrange-violations-unread">
+            <Tx>{unread.status === 403
+              ? 'You may not read the pods of this namespace, so this window cannot say which of them violate this LimitRange.'
+              : 'Could not read the pods of this namespace, so this window cannot say which of them violate this LimitRange.'}</Tx>
+            {unread.detail && <span className="block mt-1 text-slate-400">{unread.detail}</span>}
+          </p>
+        ) : !answered ? (
+          <p className="text-xs text-slate-400"><Tx>Loading...</Tx></p>
+        ) : violationList.length === 0 ? (
           <p className="text-xs text-slate-400"><Tx>No pod in this namespace currently violates this LimitRange.</Tx></p>
         ) : (
           <div className="overflow-x-auto">

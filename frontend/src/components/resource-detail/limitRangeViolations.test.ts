@@ -46,6 +46,11 @@ describe('limitRangeViolationsLayer', () => {
     expect(limitRangeViolationsLayer([])).toEqual({ violating_pods: 0, violation_rows: 0, violations_shown: 0, violations: [] })
   })
 
+  it('says the list was not read, and claims no count, when it failed', () => {
+    expect(limitRangeViolationsLayer(undefined, { status: 403, detail: 'pods is forbidden' })).toEqual({ violations_unread: { status: 403, detail: 'pods is forbidden' } })
+    expect(limitRangeViolationsSummary('caps', 'ns', undefined, { status: 403 })).toBe('LimitRange caps (ns) 상세 — 위반 Pod 목록을 읽지 못함')
+  })
+
   it('claims nothing before the list has answered', () => {
     expect(limitRangeViolationsLayer(undefined)).toBeUndefined()
   })
