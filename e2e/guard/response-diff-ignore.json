@@ -47,6 +47,398 @@
       "cell": "^\\$\\.gpus\\.\\$order$",
       "why": "The GPUs come in Go map order per computation. Stays while the compared build has them unsorted.",
       "pr": "#654"
+    },
+    {
+      "route": "^/api/v1/cluster/pods/page$",
+      "cell": ".",
+      "why": "This route did not exist in v0.7.5 (404): the Pods list paged by the server.",
+      "pr": "#497"
+    },
+    {
+      "route": "^/api/v1/cluster/pods/(nodes|on-node)$",
+      "cell": ".",
+      "why": "These routes did not exist in v0.7.5 (404): Cluster View's node map and one node's pods.",
+      "pr": "#498"
+    },
+    {
+      "route": "^live /api/v1(/namespaces/[^/]+)?/endpointslices$",
+      "cell": "^\\$\\.items\\.\\$order$|^\\$\\.items\\[EndpointSlice/",
+      "why": "A live update was the raw object and is now the list row, so the row is named without its kind and the raw object's cells go.",
+      "pr": "#526"
+    },
+    {
+      "route": "^live /api/v1(/namespaces/[^/]+)?/endpointslices$",
+      "cell": "^\\$\\.items\\[/[^\\]]*\\]\\.(name|namespace|created_at|watchEvent|labels|annotations|address_type|service_name|managed_by|endpoints_total|endpoints_ready|endpoints_not_ready|ports|endpoints)(\\.|\\[|$)",
+      "why": "A live update is now the same row as the list (internal/endpointslice), which every cell of the row under its new name is.",
+      "pr": "#526"
+    },
+    {
+      "route": "^/api/v1/cluster(/namespaces/[^/]+)?/endpointslices(/all)?$",
+      "cell": "^\\$\\[[^\\]]*\\]\\.(endpoints|labels|annotations)(\\.|\\[|$)",
+      "why": "The list row now carries the slice's endpoints, labels and annotations.",
+      "pr": "#526"
+    },
+    {
+      "route": "^/api/v1/cluster/namespaces/[^/]+/services/[^/]+/describe$",
+      "cell": "^\\$\\.endpoint_slices\\[[^\\]]*\\]\\.(endpoints|labels|annotations)(\\.|\\[|$)",
+      "why": "A Service's slices are the same row as the EndpointSlice list.",
+      "pr": "#526"
+    },
+    {
+      "route": "^/api/v1/cluster/timeline$",
+      "cell": "^\\$\\.summary\\.events_shown$",
+      "why": "The summary says how many of the counted events are listed.",
+      "pr": "#513"
+    },
+    {
+      "route": "^/api/v1/cluster/timeline$",
+      "cell": "^\\$\\.summary\\.events_matching$|^\\$\\.rollout_history\\.\\$(length|order)$|^\\$\\.rollout_history\\[(DaemonSet|StatefulSet)/",
+      "why": "The summary adds the events of the type asked; namespace and cluster rollouts now include StatefulSet and DaemonSet revisions.",
+      "pr": "#605"
+    },
+    {
+      "route": "^/api/v1/cluster/timeline$",
+      "cell": "^\\$\\.events\\[[^\\]]*\\]\\.(count|first_seen|last_seen|timestamp)$",
+      "why": "Event times and counts as kubectl's printEvent reads them (eventTime and series for events.k8s.io writers, 1 for one seen once).",
+      "pr": "#522"
+    },
+    {
+      "route": "^/api/v1/cluster/timeline$",
+      "cell": "^\\$\\.events\\[[^\\]]*\\]\\.(involved_object|resource)\\.api_version$",
+      "why": "The event's object carries its apiVersion so the page opens the right group's custom resource.",
+      "pr": "#623"
+    },
+    {
+      "route": "^/api/v1/cluster/namespaces/[^/]+/(pods|configmaps|jobs|pdbs|pvcs)/[^/]+/describe$",
+      "cell": "^\\$\\.events\\[\\d+\\]\\.(count|first_time|last_time|first_timestamp|last_timestamp)$",
+      "why": "Drawers' events as kubectl prints them; first_time and last_time, which no screen read, are now first_timestamp and last_timestamp, which the Events table reads.",
+      "pr": "#522"
+    },
+    {
+      "route": "^/api/v1/auth/admin/access-review/history$",
+      "cell": "^\\$\\.\\$(length|order)$|^\\$header\\.x-kubeast-total$|^\\$\\[[^\\]]+\\]\\.(id|reviewed_by|reviewed_by_email|reviewed_at|note|counts\\.(roles|users|locked|dormant|global_admins|cluster_grants|dormant_locked|access_requests|api_keys_active|api_keys_unused|never_logged_in|temporary_grants|api_keys_expiring))$",
+      "why": "Past reviews page: the server honours limit=25 (v0.7.5 ignored it and sent 100) and says the total in X-Kubeast-Total; the cells are rows 26 to 100.",
+      "pr": "#632"
+    },
+    {
+      "route": "^/api/v1/auth/admin/access-review$",
+      "cell": "^\\$\\.settings\\.lock_(enabled|days|exempt_admins)$|^\\$\\.summary\\.full_admins$|^\\$\\.access_requests_total$",
+      "why": "The access review's dormant lock settings, full admins and total requests.",
+      "pr": "#632"
+    },
+    {
+      "route": "^/api/v1/auth/admin/access-requests$",
+      "cell": "^\\$header\\.x-kubeast-total$",
+      "why": "The admin list of access requests pages on the server and says its total.",
+      "pr": "#632"
+    },
+    {
+      "route": "^/api/v1/auth/admin/audit-logs$",
+      "cell": "^\\$\\.(as_of|export_limit)$",
+      "why": "Audit log pages keep the first read (as_of) and say the CSV's limit.",
+      "pr": "#631"
+    },
+    {
+      "route": "^/api/v1/auth/admin/ai-usage$",
+      "cell": "^\\$\\.(limit|truncated)$|^\\$\\.totals\\.|^\\$\\.rows\\.\\$(length|order)$|^\\$\\.rows\\[[^\\]]*\\]\\.source$|^\\$\\.rows\\[kubeast:investigator\\]\\.",
+      "why": "AI usage reads chat and alert investigations with totals over every group; each row names its source and the investigator has a row of its own.",
+      "pr": "#633"
+    },
+    {
+      "route": "^/api/v1/auth/permissions$",
+      "cell": "^\\$\\[[^\\]]*\\]\\.permissions\\.\\$(length|order)$|^\\$\\[[^\\]]*\\]\\.permissions\\[resource\\.alert\\.investigate\\]\\.(key|description)$",
+      "why": "The new permission resource.alert.investigate.",
+      "pr": "#635"
+    },
+    {
+      "route": "^/api/v1/alerts/inbox$",
+      "cell": "^\\$\\.items\\[[^\\]]*\\]\\.investigation\\.(skip_reason|skip_reason_key|skip_reason_args)(\\.|$)|^\\$\\.severities(\\.\\$length$|\\.\\$order$|\\[)|^\\$\\.items\\.\\$order$",
+      "why": "Skip reasons with their catalog key, the severities the alerts carry, and the inbox ordered by status, last received, then id.",
+      "pr": "#634"
+    },
+    {
+      "route": "^/api/v1/alerts/inbox$",
+      "cell": "^\\$\\.items\\[[^\\]]*\\]\\.investigation\\.(requested_by|received_at)$",
+      "why": "The inbox says who asked for an investigation and when it was received.",
+      "pr": "#635"
+    },
+    {
+      "route": "^/api/v1/ai/investigations$",
+      "cell": "^\\$\\.items\\[[^\\]]*\\]\\.skip_reason_(key|args)(\\.|$)",
+      "why": "The investigations list answers the skip reason's catalog key and arguments.",
+      "pr": "#634"
+    },
+    {
+      "route": "^/api/v1/ai/investigations$",
+      "cell": "^\\$\\.items\\[[^\\]]*\\]\\.requested_by$",
+      "why": "alert_investigations.requested_by tells a person's request from the webhook's.",
+      "pr": "#635"
+    },
+    {
+      "route": "^/api/v1/ai/model-configs$",
+      "cell": "^\\$\\[[^\\]]*\\]\\.used_for(\\.\\$length$|\\.\\$order$|\\[)",
+      "why": "Each model says what it is used for.",
+      "pr": "#511"
+    },
+    {
+      "route": "^/api/v1/cluster/custom-resources/all$",
+      "cell": "^\\$\\.\\$(length|order)$|^\\$\\[[^\\]]*\\]\\.|^\\$\\.items(\\.\\$length$|\\[)|^\\$\\.forbidden_kinds(\\.\\$length$|\\.\\$order$|\\[)",
+      "why": "The screen now asks with_unlisted=1, which answers {items, forbidden_kinds, failed_kinds}; the rows are the same rows under items (the old build ignores the parameter and sends the array).",
+      "pr": "#641"
+    },
+    {
+      "route": "^/api/v1/cluster/custom-resources/[^/]+/[^/]+/[^/]+$",
+      "cell": "^\\$\\[[^\\]]*\\]\\.printer_cells\\.",
+      "why": "The per-CRD list carries each row's printer cells from the API server's Table.",
+      "pr": "#588"
+    },
+    {
+      "route": "^/api/v1/cluster/custom-resources/[^/]+/[^/]+/[^/]+/[^/]+/[^/]+/describe$",
+      "cell": "^\\$\\.(group|version)$|^\\$\\.printer_cells\\.",
+      "why": "Custom resource describe is the list's row (customResourceRows) with its metadata.",
+      "pr": "#620"
+    },
+    {
+      "route": "^/api/v1/cluster/resources$",
+      "cell": "^\\$\\.(limit|truncated)$",
+      "why": "Advanced Search reads in pages up to the limit and says whether the list was cut.",
+      "pr": "#493"
+    },
+    {
+      "route": "^/api/v1/cluster/resources$",
+      "cell": "^\\$\\.printer_status(\\.\\$length$|\\[)",
+      "why": "Each object's kubectl STATUS, the Status column of the API server's Table.",
+      "pr": "#613"
+    },
+    {
+      "route": "^live /apis/apps/v1(/namespaces/[^/]+)?/deployments$",
+      "cell": "^\\$\\.items\\[[^\\]]*\\]\\.(progressing_reason|unavailable_replicas)$",
+      "why": "The live update now carries what the list row has (ws deploymentToInfo).",
+      "pr": "#603"
+    },
+    {
+      "route": "^/api/v1/cluster/replicasets/all$|^live /api/v1/replicasets$",
+      "cell": "\\.status$",
+      "why": "A ReplicaSet with none available is Unavailable, not Degraded: none available is now checked first.",
+      "pr": "#518"
+    },
+    {
+      "route": "^/api/v1/resource-graph$",
+      "cell": "^\\$\\.nodes\\[[^\\]]*\\]\\.health$|^\\$\\.nodes\\[(Deployment|ReplicaSet|StatefulSet|DaemonSet|Pod)/[^\\]]*\\]\\.status$",
+      "why": "A box says what its list says (a pod's Status, a workload's summary status) and carries its health; a Deployment past its deadline reads Failed with #603.",
+      "pr": "#596"
+    },
+    {
+      "route": "^/api/v1/resource-graph$",
+      "cell": "^\\$\\.nodes\\[(Role|ClusterRole)/[^\\]]*\\]\\.status$",
+      "why": "A Role or ClusterRole a binding names has no status: the graph lists none.",
+      "pr": "#604"
+    },
+    {
+      "route": "^/api/v1/cluster/hygiene$",
+      "cell": "^\\$\\.report\\.checks\\[[^\\]]*\\]\\.severities\\.",
+      "why": "A check's summary adds its findings by their own severity.",
+      "pr": "#606"
+    },
+    {
+      "route": "^/api/v1/cluster/hygiene$",
+      "cell": "^\\$\\.report\\.findings\\[[^\\]]*\\]\\.api_version$",
+      "why": "A pod finding's owner carries its apiVersion so its link opens the right group.",
+      "pr": "#627"
+    },
+    {
+      "route": "^/api/v1/cluster/crds$",
+      "cell": "^\\$\\[[^\\]]*\\]\\.served_versions(\\.\\$length$|\\.\\$order$|\\[)",
+      "why": "The served versions, kubectl's VERSIONS column, next to the storage version.",
+      "pr": "#546"
+    },
+    {
+      "route": "^/api/v1/cluster/storageclasses$",
+      "cell": "^\\$\\[[^\\]]*\\]\\.mount_options(\\.\\$length)?$",
+      "why": "Mount options of a class with none are an empty list instead of null (internal/storageclass).",
+      "pr": "#546"
+    },
+    {
+      "route": "^/api/v1/cluster(/namespaces/[^/]+)?/pvcs(/[^/]+/describe)?$|^live /api/v1(/namespaces/[^/]+)?/pvcs$",
+      "cell": "\\.(requested_)?access_modes(\\.\\$length$|\\.\\$order$|\\[)",
+      "why": "Access modes are the volume's once the claim is bound, empty before, as kubectl's printPersistentVolumeClaim; what the claim asks for is requested_access_modes.",
+      "pr": "#546"
+    },
+    {
+      "route": "^/api/v1/cluster/namespaces/[^/]+/describe$",
+      "cell": "^\\$\\.pod_summary\\.",
+      "why": "The Namespace drawer's Resource Summary comes from describe (phases and sums); summed_pods came with #522.",
+      "pr": "#516"
+    },
+    {
+      "route": "^/api/v1/cluster/gpu/dashboard$",
+      "cell": "^\\$\\.total_gpu_(capacity|allocatable|waiting)$|^\\$\\.gpu_nodes\\[[^\\]]*\\]\\.(gpu_capacity|gpu_allocatable|gpu_used|driver_version)$",
+      "why": "nvidia.com/gpu and each nvidia.com/mig-* are added up, a GPU in use counts as kubectl describe node does, and the driver version keeps its revision.",
+      "pr": "#617"
+    },
+    {
+      "route": "^/api/v1/cluster/gpu/dashboard$",
+      "cell": "^\\$\\.device_plugin_status$|^\\$\\.device_plugins(\\.\\$length$|\\[)|^\\$\\.vendors(\\.\\$length$|\\[)|^\\$\\.gpu_nodes\\[[^\\]]*\\]\\.gpu_vendors(\\.\\$length$|\\[)",
+      "why": "GPUs per company: device_plugins replaces device_plugin_status, which the new screens no longer read.",
+      "pr": "#622"
+    },
+    {
+      "route": "^/api/v1/cluster/gpu/dashboard$",
+      "cell": "^\\$\\.dra_pods\\.\\$length$",
+      "why": "The pods holding a GPU through a DRA claim are named.",
+      "pr": "#624"
+    },
+    {
+      "route": "^/api/v1/cluster/gpu/metrics$",
+      "cell": "^\\$\\.gpus\\[[^\\]]*\\]\\.(hostname|exported_namespace|exported_pod)$",
+      "why": "DCGM labels in either spelling: hostname as well as Hostname, pod and namespace where the scrape kept them.",
+      "pr": "#617"
+    },
+    {
+      "route": "^/api/v1/cluster/features$",
+      "cell": "^\\$\\.prometheus\\.namespaceLimited$",
+      "why": "The features say when a grant limited to namespaces is refused the cluster's Prometheus.",
+      "pr": "#555"
+    },
+    {
+      "route": "^/api/v1/cluster/metrics/(nodes|top-resources)$",
+      "cell": "\\.(cpu|cpu_percent|memory_percent)$",
+      "why": "Usage as kubectl top prints it: CPU rounded up, percents of the allocatable cut down. number-check-monitoring.spec.ts holds these numbers.",
+      "pr": "#600"
+    },
+    {
+      "route": "^/api/v1/cluster/vpas/all$|^live /apis/autoscaling\\.k8s\\.io/v1/verticalpodautoscalers$",
+      "cell": "\\.target_ref_api_version$",
+      "why": "The VPA's target carries its apiVersion for the drawer link.",
+      "pr": "#627"
+    },
+    {
+      "route": "^/api/v1/cluster/vpas/all$|^live /apis/autoscaling\\.k8s\\.io/v1/verticalpodautoscalers$",
+      "cell": "\\.(evict_after_oom_seconds|min_replicas|startup_boost)$",
+      "why": "VPA's minReplicas, evictAfterOOMSeconds and startupBoost fields.",
+      "pr": "#628"
+    },
+    {
+      "route": "^/api/v1/cluster/gatewayclasses$|^/api/v1/cluster/(gateways|httproutes|grpcroutes|referencegrants|backendtlspolicies)/all$",
+      "cell": "^\\$\\[[^\\]]*\\]\\.(accepted|addresses|addresses_count|annotations|api_version|attached_routes|backend_refs_count|conditions|controllerName|controller_name|description|finalizers|gatewayClassName|gateway_class_name|hostnames|labels|listener_count|listeners|listeners_count|namespace|parameters_ref|parent_refs|parent_refs_count|parents|programmed|resolved_refs|rule_count|rules|status|status_listeners)(\\.|\\[|$)",
+      "why": "One row for the list and the live updates (internal/gatewayrow): the fields the pages read, which v0.7.5's list row left out or named otherwise.",
+      "pr": "#578"
+    },
+    {
+      "route": "^live /api/v1(/namespaces/[^/]+)?/(gateways|gatewayclasses|httproutes|grpcroutes|referencegrants|backendtlspolicies)$",
+      "cell": "^\\$\\.items\\.\\$(length|order)$|^\\$\\.items\\[(Gateway|GatewayClass|HTTPRoute)/",
+      "why": "A live update was the raw object and is now the list row, so the row is named without its kind and the raw object's cells go.",
+      "pr": "#578"
+    },
+    {
+      "route": "^live /api/v1(/namespaces/[^/]+)?/(gateways|gatewayclasses|httproutes|grpcroutes|referencegrants|backendtlspolicies)$",
+      "cell": "^\\$\\.items\\[/[^\\]]*\\]\\.(accepted|addresses|addresses_count|annotations|api_version|attached_routes|backend_refs_count|conditions|controller_name|created_at|description|finalizers|from|gateway_class_name|hostnames|labels|listeners|listeners_count|name|namespace|parameters_ref|parent_refs|parent_refs_count|parents|programmed|resolved_refs|rule_count|rules|status|status_listeners|target_refs|to|watchEvent)(\\.|\\[|$)",
+      "why": "A live update is now the same row as the list (internal/gatewayrow), which every cell of the row under its new name is.",
+      "pr": "#578"
+    },
+    {
+      "route": "^live /api/v1(/namespaces/[^/]+)?/(grpcroutes|referencegrants|backendtlspolicies)$",
+      "cell": "^\\$\\.error$",
+      "why": "These three had no live updates in v0.7.5 (unsupported resource); on a cluster without the kind the answer is now the API server's own.",
+      "pr": "#578"
+    },
+    {
+      "route": "^live /api/v1(/namespaces/[^/]+)?/(deviceclasses|resourceclaims|resourceclaimtemplates|resourceslices)$",
+      "cell": "^\\$\\.error$|^\\$\\.items\\.\\$(length|order)$|^\\$\\.items\\[[^\\]]*\\]\\.(all_nodes|created_at|device_count|driver_name|labels|name|namespace|node_name|pool_name|request_count|selector_count|state|watchEvent)(\\.|$)",
+      "why": "These four kinds had no live updates in v0.7.5 (unsupported resource); they are watched and send the list's row (internal/drarow).",
+      "pr": "#614"
+    },
+    {
+      "route": "^/api/v1/cluster/deviceclasses$",
+      "cell": "^\\$\\[[^\\]]*\\]\\.(namespace|labels|selector_count)$",
+      "why": "One row for a DeviceClass (internal/drarow): cluster-scoped, so no namespace; labels never null; a count of 0 is sent.",
+      "pr": "#614"
+    },
+    {
+      "route": "^/api/v1/cluster/(resourceclaims/all|namespaces/[^/]+/resourceclaims|resourceclaimtemplates/all)$",
+      "cell": "^\\$\\[[^\\]]*\\]\\.(state|labels)$",
+      "why": "One row for a claim and its template (internal/drarow): the claim's State as kubectl's resourceClaimState; labels never null.",
+      "pr": "#614"
+    },
+    {
+      "route": "^/api/v1/cluster/resourceslices$",
+      "cell": "^\\$\\[[^\\]]*\\]\\.(all_nodes|device_count|driver_name|node_name|pool_name|labels)$",
+      "why": "A slice's Node, Driver and Pool are spec.nodeName, spec.driver and spec.pool.name; the old top-level fields were always empty.",
+      "pr": "#614"
+    },
+    {
+      "route": "^/api/v1/cluster/deviceclasses/[^/]+/describe$",
+      "cell": "^\\$\\.used_by(\\.\\$length$|\\.\\$order$|\\[)",
+      "why": "Describe computes the drawer's claims using the class.",
+      "pr": "#614"
+    },
+    {
+      "route": "^/api/v1/cluster/namespaces/[^/]+/resourceclaims/[^/]+/describe$",
+      "cell": "^\\$\\.state$|^\\$\\.using_pods\\.",
+      "why": "Describe computes the claim's State and the pods using it.",
+      "pr": "#614"
+    },
+    {
+      "route": "^/api/v1/cluster/namespaces/[^/]+/resourceclaimtemplates/[^/]+/describe$",
+      "cell": "^\\$\\.related_claims\\.",
+      "why": "Describe computes the claims made from the template.",
+      "pr": "#614"
+    },
+    {
+      "route": "^/api/v1/cluster/ingressclasses/[^/]+/describe$",
+      "cell": "^\\$\\.events\\.\\$length$|^\\$\\.resource_version$|^\\$\\.uid$",
+      "why": "IngressClass describe reads the object's events and metadata.",
+      "pr": "#618"
+    },
+    {
+      "route": "^/api/v1/cluster/namespaces/[^/]+/endpoints/[^/]+/describe$",
+      "cell": "^\\$\\.events\\.\\$length$|^\\$\\.uid$",
+      "why": "Endpoints describe reads the object's events and uid.",
+      "pr": "#618"
+    },
+    {
+      "route": "^/api/v1/cluster/(mutatingadmissionpolicies|validatingadmissionpolicies)/[^/]+/describe$",
+      "cell": "^\\$\\.events\\.\\$length$",
+      "why": "The admission policies list the events about them.",
+      "pr": "#619"
+    },
+    {
+      "route": "^/api/v1/cluster/clusterroles/[^/]+/describe$",
+      "cell": "^\\$\\.rules\\[\\d+\\]\\.resourceNames$",
+      "why": "ClusterRole rules are as the API has them: a rule with no names leaves the key out instead of sending null.",
+      "pr": "#619"
+    },
+    {
+      "route": "^/api/v1/cluster/crds/[^/]+/describe$",
+      "cell": "^\\$\\.events\\.\\$length$",
+      "why": "CRD describe returns its events.",
+      "pr": "#623"
+    },
+    {
+      "route": "^/api/v1/cluster/resources$",
+      "cell": ".",
+      "user": "^nsread$",
+      "why": "A grant limited to namespaces lists its namespaces as the user instead of being refused the whole cluster; the rows are that namespace's only.",
+      "pr": "#613"
+    },
+    {
+      "route": "^/api/v1/cluster/nodes/[^/]+/pods$",
+      "cell": ".",
+      "user": "^nsread$",
+      "why": "A grant limited to namespaces reads a node's pods in its namespaces instead of being refused.",
+      "pr": "#498"
+    },
+    {
+      "route": "^/api/v1/cluster/timeline$",
+      "cell": "^\\$\\.events\\.\\$order$",
+      "why": "Events are read in the order their times say since kubectl's printEvent rules; rows of one second have no order of their own.",
+      "pr": "#522"
+    },
+    {
+      "route": "^/api/v1/ai/model-configs/providers$",
+      "cell": "\\.claude-code\\.",
+      "why": "The dev image is built WITH_CLAUDE_CODE and the compared release tag is the one without it, not a difference in the code.",
+      "pr": "#651"
     }
   ]
 }
