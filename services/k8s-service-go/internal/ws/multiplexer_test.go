@@ -44,6 +44,8 @@ func TestCanWatchCluster(t *testing.T) {
 		{"viewer other cluster", viewer, "prod", false},
 		{"viewer empty falls back to default", viewer, "", false},
 		{"no grants", nobody, "alpha", false},
+		{"a global admin page key opens no cluster", auth.TokenPayload{Perms: auth.PermissionMatrix{"*": {"admin.audit.read"}}}, "alpha", false},
+		{"a page key beside a grant keeps the grant", auth.TokenPayload{Perms: auth.PermissionMatrix{"*": {"admin.audit.read"}, "alpha": {"resource.*.read"}}}, "alpha", true},
 	}
 	for _, c := range cases {
 		if got := canWatchCluster(c.payload, c.cluster); got != c.want {

@@ -74,7 +74,7 @@ func (h *Handler) NetworkTopFlows(w http.ResponseWriter, r *http.Request) {
 	after := func() json.RawMessage { return nfmAudit(monitor, req, res) }
 	refuse := func(status int, err error) {
 		_ = h.recordAuditWithPayload(r, "k8s.networkflows.query", targetType, targetID, namespace, err, nil, after())
-		response.Error(w, status, err.Error())
+		response.Error(w, status, response.Public(err))
 	}
 	allowed, err := h.canListPods(ctx, namespace)
 	if err != nil {
@@ -99,7 +99,7 @@ func (h *Handler) NetworkTopFlows(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if qerr != nil {
-		response.Error(w, nfmStatus(qerr), qerr.Error())
+		response.Error(w, nfmStatus(qerr), response.Public(qerr))
 		return
 	}
 	response.JSON(w, http.StatusOK, res)

@@ -30,6 +30,8 @@ const (
 	ActExec
 	// ActEvict moves a pod off a node and reads nothing: a drain has to pass.
 	ActEvict
+	// ActLog reads a pod's output, which for a node shell's pod is everything its terminal printed.
+	ActLog
 )
 
 // Namespaces names the guarded namespaces on one cluster. Install is empty on a cluster Kubeast does not run in, where
@@ -59,8 +61,8 @@ func (n Namespaces) Refusal(p auth.TokenPayload, clusterID, namespace string, ac
 	if namespace == n.Install && !isGlobalAdmin(p) && (act == ActSecretRead || act == ActWrite || act == ActExec) {
 		return refusal("forbidden: namespace " + namespace + " holds Kubeast's own credentials on this cluster: only a global admin may read its Secrets, change anything in it or run commands in its pods")
 	}
-	if namespace == n.NodeShell && (act == ActWrite || act == ActExec) && !p.HasPermissionForCluster(nodeShellPermission, clusterID) {
-		return refusal("forbidden: namespace " + namespace + " runs privileged node shells: changing anything in it or running commands in its pods requires " + nodeShellPermission + " on cluster " + clusterID)
+	if namespace == n.NodeShell && (act == ActWrite || act == ActExec || act == ActLog) && !p.HasPermissionForCluster(nodeShellPermission, clusterID) {
+		return refusal("forbidden: namespace " + namespace + " runs privileged node shells: changing anything in it, running commands in its pods or reading their logs requires " + nodeShellPermission + " on cluster " + clusterID)
 	}
 	return nil
 }
@@ -72,6 +74,8 @@ func ActOf(group, verb, resource, subresource string) Act {
 		return ActExec
 	case "eviction":
 		return ActEvict
+	case "log":
+		return ActLog
 	}
 	switch verb {
 	case "get", "list", "watch":

@@ -224,7 +224,7 @@ func scanEntries(rows pgx.Rows) ([]Entry, error) {
 			e.Before = json.RawMessage(before)
 		}
 		if len(after) > 0 && string(after) != "{}" {
-			e.After = json.RawMessage(after)
+			e.After = readableAfter(e.Action, after)
 		}
 		out = append(out, e)
 	}

@@ -14,6 +14,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Search, X, ChevronDown, CheckCircle, Download } from 'lucide-react'
 import { api } from '@/services/api'
 import { getCurrentClusterID } from '@/services/clusterRef'
+import { SESSION_ENDED_EVENT } from '@/services/auth'
+import { liveSessionEndText } from '@/utils/liveSessionEnd'
 import { LogFilesView, LogSourceToggle, type LogSource } from '@/components/LogFilesView'
 import { LogSearchView } from '@/components/LogSearchView'
 import { useLogSearchAvailable } from '@/hooks/useLogSearchAvailable'
@@ -59,6 +61,11 @@ export function PodLogsTab({
   const logsEndRef = useRef<HTMLDivElement>(null)
   const containerDropdownRef = useRef<HTMLDivElement>(null)
   const tailLinesDropdownRef = useRef<HTMLDivElement>(null)
+  // read through a ref: a language change must not reopen the stream
+  const trRef = useRef(tr)
+  useEffect(() => {
+    trRef.current = tr
+  })
 
   // 로그 스트리밍 (Server-Sent Events).
   //
@@ -98,7 +105,17 @@ export function PodLogsTab({
       // CONNECTING 상태는 browser 가 자동 재시도 중 — 우리가 할 일 없음.
       if (es.readyState === EventSource.CLOSED) {
         setIsStreamingLogs(false)
+        // Refused before the first line: not "No logs".
+        setLogs((prev) => prev || '» ' + trRef.current('clusterView.logs.streamError', 'An error occurred while streaming logs.') + '\n')
       }
+    })
+
+    // Reopening would be refused: the lines stay on screen and say why they stopped.
+    es.addEventListener(SESSION_ENDED_EVENT, (e) => {
+      es.close()
+      setIsStreamingLogs(false)
+      const reason = liveSessionEndText(trRef.current, (e as MessageEvent).data)
+      setLogs((prev) => prev + '» ' + reason + '\n')
     })
 
     // backend 가 startup 실패 시 보내는 named 'error' 이벤트

@@ -516,7 +516,7 @@ service:
   - 사람의 쿠버네티스 신원은 RBAC으로 이 Namespace의 Secret을 못 읽게 묶으세요. `kubectl auth can-i get secrets -n <릴리스 네임스페이스> --as <사용자>`로 확인합니다.
   - 다른 Namespace에도 Pod Security를 적용하세요. 호스트 `/`를 마운트한 파드는 그 노드의 Secret에 모두 닿습니다.
   - 노드 셸(`resource.node.shell`)은 이 클러스터 노드의 root이므로 같은 Secret에 닿습니다. 이 클러스터에서는 전역 관리자로 삼아도 되는 사람에게만 주세요.
-- **In-cluster**로 연결한 클러스터만 이 클러스터로 압니다. kubeconfig로 연결하면 Kubeast에게는 다른 클러스터이고 위 내용이 적용되지 않습니다. In-cluster로 연결하세요.
+- **In-cluster**로 연결한 클러스터는 이 클러스터입니다. kubeconfig로 연결한 클러스터는 `kube-system` 네임스페이스 UID를 viewer 신원(`kubeast:viewer`)으로 읽어 비교하고, 같으면 위 내용을 똑같이 적용합니다. 그 UID를 읽지 못하면 로그를 남기고 다른 클러스터로 다루므로, 이 클러스터는 In-cluster로 연결하세요.
 - 등록한 다른 클러스터에 있는 같은 이름의 Namespace는 평범한 Namespace입니다.
 
 ## 16. Hubble Relay (네트워크 흐름)

@@ -63,7 +63,8 @@ func (h *Handler) recordAuditAs(
 	rec.After = after
 	if err != nil {
 		rec.Result = audit.ResultFailure
-		rec.Error = err.Error()
+		// The API server quotes the value it refused, which may be a secret the caller sent.
+		rec.Error = audit.MaskInvalidValues(err.Error())
 	} else {
 		rec.Result = audit.ResultSuccess
 	}

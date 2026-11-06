@@ -95,7 +95,7 @@ func (h *Handler) openReadDoor(w http.ResponseWriter, r *http.Request, rs readSt
 		if action != "" {
 			_ = h.recordAuditWithPayload(r, action, "namespace", namespace, namespace, err, nil, after())
 		}
-		response.Error(w, status, err.Error())
+		response.Error(w, status, response.Public(err))
 		return false
 	}
 	allowed, err := h.canReadPodLogs(r.Context(), namespace)
@@ -165,7 +165,7 @@ func (h *Handler) serveLogLabels(w http.ResponseWriter, r *http.Request, namespa
 		if errors.Is(err, logsearch.ErrNotServed) {
 			err = fmt.Errorf("label lists %w", err)
 		}
-		response.Error(w, logReadStatus(err), err.Error())
+		response.Error(w, logReadStatus(err), response.Public(err))
 		return
 	}
 	response.JSON(w, http.StatusOK, res)
@@ -200,7 +200,7 @@ func (h *Handler) serveLogPatterns(w http.ResponseWriter, r *http.Request, names
 		return
 	}
 	if perr != nil {
-		response.Error(w, logReadStatus(perr), perr.Error())
+		response.Error(w, logReadStatus(perr), response.Public(perr))
 		return
 	}
 	response.JSON(w, http.StatusOK, out)
@@ -241,7 +241,7 @@ func (h *Handler) serveLogQLSearch(w http.ResponseWriter, r *http.Request, names
 		return
 	}
 	if qerr != nil {
-		response.Error(w, logReadStatus(qerr), qerr.Error())
+		response.Error(w, logReadStatus(qerr), response.Public(qerr))
 		return
 	}
 	response.JSON(w, http.StatusOK, out)

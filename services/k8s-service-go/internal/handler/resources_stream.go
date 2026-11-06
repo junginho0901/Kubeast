@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
+	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
 type rawStream func(head func(kind, apiVersion string) error, item func(obj map[string]interface{}, status *string) error) (truncated bool, remaining int64, err error)
@@ -76,7 +77,7 @@ func writeRawList(w http.ResponseWriter, limit int, stream rawStream, fail func(
 		tail["remaining"] = remaining
 	}
 	if err != nil {
-		tail["truncated"], tail["error"] = true, err.Error()
+		tail["truncated"], tail["error"] = true, response.Public(err)
 	}
 	b, _ := json.Marshal(tail)
 	_, _ = w.Write(append([]byte("],"), b[1:]...))

@@ -12,6 +12,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/ws"
 
 	"github.com/junginho0901/kubeast/services/pkg/audit"
+	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
 // terminalFrameMaxBytes bounds a client → server frame on the exec and node
@@ -70,6 +71,8 @@ func (h *Handler) PodExecWS(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
+	ctx, release := h.holdSession(ctx)
+	defer release()
 
 	// The exec runs on the request's cluster as the signed-in user: the
 	// executor builds its transport from this config, identity included.
@@ -81,25 +84,25 @@ func (h *Handler) PodExecWS(w http.ResponseWriter, r *http.Request) {
 	cfg, err := h.svc.UserRESTConfigFor(ctx)
 	if err != nil {
 		failed(fmt.Errorf("cluster config: %w", err))
-		_ = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("cluster config: %v\r\n", err)))
+		_ = conn.WriteMessage(websocket.TextMessage, []byte("cluster config: "+response.Public(err)+"\r\n"))
 		return
 	}
 	cs, err := h.svc.ClientsetFor(ctx)
 	if err != nil {
 		failed(fmt.Errorf("cluster client: %w", err))
-		_ = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("cluster client: %v\r\n", err)))
+		_ = conn.WriteMessage(websocket.TextMessage, []byte("cluster client: "+response.Public(err)+"\r\n"))
 		return
 	}
 
 	slog.Info("pod exec attached", "pod", podName, "namespace", namespace, "container", container)
 	if err := streamShell(ctx, conn, readFrames(ctx, conn), cfg, execURL(cs, namespace, podName, container, command), rec, r.URL.Query().Get("lang")); err != nil {
-		msg := fmt.Sprintf("failed to connect to K8s API: %v", err)
-		slog.Error(msg)
+		slog.Error("failed to connect to K8s API", "err", err)
 		if ctx.Err() == nil {
 			failed(err)
 		}
-		_ = conn.WriteMessage(websocket.TextMessage, []byte(msg+"\r\n"))
+		_ = conn.WriteMessage(websocket.TextMessage, []byte("failed to connect to K8s API: "+response.Public(err)+"\r\n"))
 		return
 	}
+	h.auditSessionEnd(ctx, r, "pod", podName, namespace, "exec")
 	slog.Info("pod exec ended", "pod", podName, "namespace", namespace)
 }

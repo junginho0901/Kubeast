@@ -54,9 +54,10 @@ func (h *Handler) ClusterMiddleware(next http.Handler) http.Handler {
 		// do not each call requirePermissionForCluster, so without this baseline
 		// check any authenticated user could read a cluster's data just by hitting
 		// the endpoint. Require a per-cluster grant (Perms[id]) or the global admin
-		// entry (Perms["*"]); deny-by-default (00-COMMON §2-3).
+		// ("*"), deny-by-default (00-COMMON §2-3); a global admin.* key opens only the
+		// routes its page reads (globalKeyOpens).
 		r = r.WithContext(cluster.WithID(r.Context(), id))
-		if len(payload.Perms["*"]) == 0 && len(payload.Perms[c]) == 0 {
+		if !payload.ReachesCluster(c) && !globalKeyOpens(payload, r.URL.Path) {
 			err := errors.New("forbidden: no access to cluster " + c)
 			// A write or a terminal is a refused attempt worth a row; reads are not (see denied).
 			if r.Method != http.MethodGet || strings.HasSuffix(r.URL.Path, "/ws") {
@@ -94,13 +95,17 @@ func (h *Handler) ClusterMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(sr, r)
 
 		switch {
-		case sr.status == http.StatusServiceUnavailable:
+		case sr.clusterFailed:
 			h.svc.MarkClusterDown(id)
 		case sr.status < http.StatusInternalServerError:
 			h.svc.MarkClusterUp(id)
 		}
 	})
 }
+
+// clusterFailureNoter is the response writer ClusterMiddleware gives handlers: handleError tells it a call to the
+// cluster failed.
+type clusterFailureNoter interface{ noteClusterFailure() }
 
 // statusRecorder captures the response status for the health signal while
 // transparently forwarding Hijacker (WebSocket exec/logs) and Flusher (SSE
@@ -112,7 +117,11 @@ type statusRecorder struct {
 	// the cluster requests made before the handler started its answer.
 	trail   *accesstrail.Recorder
 	stamped bool
+	// clusterFailed: the answer is a failed call to the cluster, not a 503 of Kubeast's own.
+	clusterFailed bool
 }
+
+func (s *statusRecorder) noteClusterFailure() { s.clusterFailed = true }
 
 func (s *statusRecorder) stamp() {
 	if s.trail == nil || s.stamped {

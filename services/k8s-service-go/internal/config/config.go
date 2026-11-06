@@ -84,6 +84,9 @@ type Config struct {
 	// AuthTokenVersionURL is auth-service's token-version lookup; the JWT
 	// validator asks it so revoked tokens stop working before they expire.
 	AuthTokenVersionURL string
+	// SessionAbsoluteHours is auth-service's session cap (SESSION_ABSOLUTE_HOURS); an open terminal or stream ends
+	// there too. 0 = no cap.
+	SessionAbsoluteHours int
 	// InternalAPIToken authenticates the services that call the /internal
 	// routes (tool-server, auth-service) — services/pkg/internalauth.
 	InternalAPIToken string
@@ -174,12 +177,13 @@ func Load() Config {
 		BreakerConsecutiveFails: pkgconfig.GetEnvInt("MC_BREAKER_CONSECUTIVE_FAILS", 5),
 		BreakerOpenSec:          pkgconfig.GetEnvInt("MC_BREAKER_OPEN_SEC", 30),
 
-		AuthJWKSURL:         pkgconfig.GetEnv("AUTH_JWKS_URL", "http://auth-service:8004/api/v1/auth/jwks.json"),
-		AuthTokenVersionURL: pkgconfig.GetEnv("AUTH_TOKEN_VERSION_URL", "http://auth-service:8004/api/v1/auth/internal/token-version"),
-		InternalAPIToken:    pkgconfig.GetEnv(internalauth.Env, ""),
-		JWTIssuer:           pkgconfig.GetEnv("JWT_ISSUER", "kubeast-auth"),
-		JWTAudience:         pkgconfig.GetEnv("JWT_AUDIENCE", "kubeast"),
-		AuthCookieName:      pkgconfig.GetEnv("AUTH_COOKIE_NAME", "kubeast.token"),
+		AuthJWKSURL:          pkgconfig.GetEnv("AUTH_JWKS_URL", "http://auth-service:8004/api/v1/auth/jwks.json"),
+		AuthTokenVersionURL:  pkgconfig.GetEnv("AUTH_TOKEN_VERSION_URL", "http://auth-service:8004/api/v1/auth/internal/token-version"),
+		SessionAbsoluteHours: pkgconfig.GetEnvInt("SESSION_ABSOLUTE_HOURS", 8),
+		InternalAPIToken:     pkgconfig.GetEnv(internalauth.Env, ""),
+		JWTIssuer:            pkgconfig.GetEnv("JWT_ISSUER", "kubeast-auth"),
+		JWTAudience:          pkgconfig.GetEnv("JWT_AUDIENCE", "kubeast"),
+		AuthCookieName:       pkgconfig.GetEnv("AUTH_COOKIE_NAME", "kubeast.token"),
 
 		ImpersonationEnabled: pkgconfig.GetEnvBool("IMPERSONATION_ENABLED", true),
 

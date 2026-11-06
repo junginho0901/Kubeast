@@ -64,6 +64,7 @@ type frame struct {
 	} `json:"data"`
 	Error struct {
 		Message string `json:"message"`
+		Reason  string `json:"reason"`
 	} `json:"error"`
 }
 

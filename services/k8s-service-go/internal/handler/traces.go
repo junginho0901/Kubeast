@@ -138,7 +138,7 @@ func (h *Handler) traceRead(w http.ResponseWriter, r *http.Request, namespace, k
 		if errors.Is(rerr, traces.ErrNotServed) {
 			rerr = fmt.Errorf("this %w (Tempo's HTTP API at the configured URL?)", rerr)
 		}
-		response.Error(w, traceReadStatus(rerr), rerr.Error())
+		response.Error(w, traceReadStatus(rerr), response.Public(rerr))
 		return
 	}
 	response.JSON(w, http.StatusOK, out)
@@ -236,7 +236,7 @@ func (h *Handler) serveTraceTags(w http.ResponseWriter, r *http.Request, namespa
 		if errors.Is(err, traces.ErrNotServed) {
 			err = fmt.Errorf("attribute lists %w", err)
 		}
-		response.Error(w, traceReadStatus(err), err.Error())
+		response.Error(w, traceReadStatus(err), response.Public(err))
 		return
 	}
 	response.JSON(w, http.StatusOK, res)

@@ -55,6 +55,11 @@ func TestRefusalFollowsWhoAsksAndWhatTheyDo(t *testing.T) {
 		{"a write role's write in the node shell namespace", writer, nodeShell, ActWrite, true},
 		{"a write role's terminal in the node shell namespace", writer, nodeShell, ActExec, true},
 		{"a write role's read in the node shell namespace", writer, nodeShell, ActRead, false},
+		{"a write role's log read in the node shell namespace", writer, nodeShell, ActLog, true},
+		{"a node shell holder's log read in the node shell namespace", shellHolder, nodeShell, ActLog, false},
+		{"a global admin's log read in the node shell namespace", globalAdmin, nodeShell, ActLog, false},
+		{"a write role's log read in the install namespace", writer, install, ActLog, false},
+		{"a write role's log read elsewhere", writer, "shop", ActLog, false},
 		{"a node shell holder's write in the node shell namespace", shellHolder, nodeShell, ActWrite, false},
 		{"a node shell holder's terminal in the node shell namespace", shellHolder, nodeShell, ActExec, false},
 		{"a global admin's write in the node shell namespace", globalAdmin, nodeShell, ActWrite, false},
@@ -100,7 +105,7 @@ func TestActOfReadsAKubernetesRequest(t *testing.T) {
 		{"", "delete", "secrets", "", ActWrite},
 		{"example.com", "get", "secrets", "", ActRead},
 		{"", "get", "configmaps", "", ActRead},
-		{"", "get", "pods", "log", ActRead},
+		{"", "get", "pods", "log", ActLog},
 		{"", "create", "pods", "", ActWrite},
 		{"apps", "patch", "deployments", "", ActWrite},
 		{"apps", "update", "deployments", "scale", ActWrite},
@@ -300,5 +305,18 @@ func TestWriteForbiddenAnswersAsAnAPIServer(t *testing.T) {
 	}
 	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
 		t.Errorf("content type %q", ct)
+	}
+}
+
+func TestAPodsLogSubresourceReadsAsALogRead(t *testing.T) {
+	if got := ActOf("", "get", "pods", "log"); got != ActLog {
+		t.Fatalf("ActOf(pods/log) = %v", got)
+	}
+	err := rules.Check(writer, clusterID, request(http.MethodGet, "/api/v1/namespaces/"+nodeShell+"/pods/node-debugger-a/log?follow=true"))
+	if err == nil {
+		t.Fatal("a log read in the node shell namespace passed")
+	}
+	if err := rules.Check(writer, clusterID, request(http.MethodGet, "/api/v1/namespaces/"+install+"/pods/kubeast-0/log")); err != nil {
+		t.Fatalf("a log read in the install namespace: %v", err)
 	}
 }

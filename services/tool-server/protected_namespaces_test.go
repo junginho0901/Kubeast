@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -332,5 +333,23 @@ func TestHandleCallTakesTheNamespacesFromK8sService(t *testing.T) {
 	}
 	if fetches != 1 {
 		t.Errorf("fetched %d times: the answer is kept with the kubeconfig", fetches)
+	}
+}
+
+func TestANodeShellPodsLogIsHeldOnTheAIPathToo(t *testing.T) {
+	logs := map[string]interface{}{"namespace": protectedNodeShell, "pod_name": "node-debugger-a"}
+	if err := protectedToolGate(writeCaller, "c", onInstallCluster, "k8s_get_pod_logs", logs); !errors.Is(err, protectedns.ErrRefused) {
+		t.Fatalf("Write: %v", err)
+	}
+	if err := protectedToolGate(shellCaller, "c", onInstallCluster, "k8s_get_pod_logs", logs); err != nil {
+		t.Fatalf("holder: %v", err)
+	}
+	installLogs := map[string]interface{}{"namespace": protectedInstall, "pod_name": "kubeast-0"}
+	if err := protectedToolGate(writeCaller, "c", onInstallCluster, "k8s_get_pod_logs", installLogs); err != nil {
+		t.Fatalf("install namespace: %v", err)
+	}
+	ctx := withProtectedNamespaces(auth.WithPayload(withClusterID(context.Background(), "c"), writeCaller), onInstallCluster)
+	if err := directKubectlRefusal(ctx, []string{"logs", "-n", protectedNodeShell, "node-debugger-a"}); !errors.Is(err, protectedns.ErrRefused) {
+		t.Fatalf("kubectl logs with the proxy off: %v", err)
 	}
 }

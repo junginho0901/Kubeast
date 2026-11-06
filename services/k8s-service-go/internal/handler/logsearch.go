@@ -94,7 +94,7 @@ func (h *Handler) serveLogSearch(w http.ResponseWriter, r *http.Request, namespa
 		if errors.Is(serr, logsearch.ErrTimeout) {
 			status = http.StatusGatewayTimeout
 		}
-		response.Error(w, status, serr.Error())
+		response.Error(w, status, response.Public(serr))
 		return
 	}
 	response.JSON(w, http.StatusOK, res)
@@ -217,7 +217,8 @@ func (h *Handler) LogSearchStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := cluster.FromContext(r.Context())
-	response.JSON(w, http.StatusOK, h.logSearch.Status(r.Context(), string(id)))
+	payload, _ := auth.FromContext(r.Context())
+	response.JSON(w, http.StatusOK, storeStatusFor(payload, h.logSearch.Status(r.Context(), string(id))))
 }
 
 func (h *Handler) logSearchFeature(ctx context.Context) map[string]interface{} {

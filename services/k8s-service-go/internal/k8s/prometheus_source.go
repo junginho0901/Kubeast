@@ -3,6 +3,7 @@ package k8s
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -14,6 +15,8 @@ import (
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql/parser"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
@@ -253,8 +256,11 @@ func (s *Service) getPromSource(ctx context.Context) *promSource {
 // API server's proxy the answer is what the caller's identity may read, so that
 // key carries the identity (CacheIdentity) and a hit never serves one user's
 // answer to another; an external store answers Kubeast's own credentials alike
-// for everyone the handlers let ask.
+// for everyone holding the permission promExternalRead asks for, before the cache.
 func (s *Service) promFetch(ctx context.Context, src *promSource, promPath string) ([]map[string]interface{}, error) {
+	if err := promExternalRead(ctx, src); err != nil {
+		return nil, err
+	}
 	key := promCacheKey(ctx, src, promPath)
 	return s.promQ.do(key, func() ([]map[string]interface{}, error) {
 		if src.ext != nil {
@@ -262,6 +268,20 @@ func (s *Service) promFetch(ctx context.Context, src *promSource, promPath strin
 		}
 		return s.prometheusViaProxyUncached(ctx, src.proxy, promPath)
 	})
+}
+
+// promExternalRead refuses a caller without resource.pod.read a read from an external store, the permission the log
+// store asks for too: its labels name pods and namespaces, Kubeast's own credentials read it, and so the cluster's RBAC
+// never gets to say no. A read with no signed-in caller is Kubeast's own.
+func promExternalRead(ctx context.Context, src *promSource) error {
+	if src.ext == nil {
+		return nil
+	}
+	p, ok := auth.FromContext(ctx)
+	if !ok || p.HasPermissionForCluster("resource.pod.read", string(ctxClusterID(ctx))) {
+		return nil
+	}
+	return apierrors.NewForbidden(schema.GroupResource{Resource: "prometheus"}, "", errors.New("reading this cluster's external metrics store needs resource.pod.read"))
 }
 
 // promCacheKey is promFetch's cache and singleflight key: the cluster and the path, and on the proxy path the

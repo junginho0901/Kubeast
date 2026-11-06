@@ -146,6 +146,29 @@ export function clearRedirectAfterLogin() {
   }
 }
 
+// A WebSocket the server closed because the session it opened with no longer stands (auth.SessionEndedCloseCode).
+export const SESSION_ENDED_CLOSE_CODE = 4401
+// The event an event stream ends with for the same reason; its data is the reason code.
+export const SESSION_ENDED_EVENT = 'session-ended'
+// A second end this soon after the first means the connection reopened with the same session.
+const SESSION_END_REPEAT_MS = 60 * 1000
+
+// One long-lived connection was ended by its session. The cookie may be newer than the connection (a sign-in in another
+// tab), in which case the connection reopens with it and nobody is signed out; otherwise the session is over and the
+// sign-in page says so. `lastEnd` is when this same connection last ended this way. Resolves to true when it may reopen.
+export async function liveSessionEnded(lastEnd: number): Promise<boolean> {
+  if (Date.now() - lastEnd >= SESSION_END_REPEAT_MS) {
+    try {
+      const res = await fetch('/api/v1/auth/me', { credentials: 'same-origin' })
+      if (res.status !== 401) return true
+    } catch {
+      return true // a network failure says nothing about the session
+    }
+  }
+  handleUnauthorized()
+  return false
+}
+
 let handlingUnauthorized = false
 
 // A request was refused with 401: the session is gone (expired, revoked, or

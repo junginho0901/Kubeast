@@ -18,6 +18,8 @@ func routeAct(method, pattern string) protectedns.Act {
 		return protectedns.ActExec
 	case strings.Contains(pattern, "/secrets"), strings.HasPrefix(pattern, "/api/v1/helm/releases"):
 		return protectedns.ActSecretRead
+	case strings.HasSuffix(pattern, "/logs"), strings.HasSuffix(pattern, "/logs/stream"), strings.Contains(pattern, "/logsearch"):
+		return protectedns.ActLog
 	}
 	return protectedns.ActRead
 }

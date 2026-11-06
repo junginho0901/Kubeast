@@ -101,11 +101,25 @@ func (h *Handler) TestHelmRelease(w http.ResponseWriter, r *http.Request) {
 	}
 	h.recordHelmAudit(r, "helm.release.test", "release", name, ns, err, nil, payload)
 
-	if err != nil {
+	status, body := helmTestAnswer(result, err)
+	if status == 0 {
 		h.handleHelmError(w, err)
 		return
 	}
-	response.JSON(w, http.StatusOK, result)
+	response.JSON(w, status, body)
+}
+
+// helmTestAnswer is what a test run answers. A hook that failed is the test's result, which the screen shows hook by
+// hook, not a failure of the service; status 0 is an error with no result, for handleHelmError.
+func helmTestAnswer(result *helm.TestResult, err error) (int, any) {
+	if err == nil {
+		return http.StatusOK, result
+	}
+	if result == nil || len(result.Hooks) == 0 {
+		return 0, nil
+	}
+	result.Error = response.Public(err)
+	return http.StatusOK, result
 }
 
 // UpgradeHelmValues handles PUT /api/v1/helm/releases/{namespace}/{name}/values.

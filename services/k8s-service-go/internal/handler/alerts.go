@@ -76,7 +76,7 @@ func alertStoreError(w http.ResponseWriter, err error) {
 	case errors.As(err, &se) && (se.Status == http.StatusUnauthorized || se.Status == http.StatusForbidden):
 		err = fmt.Errorf("the alert store refused the write (its credentials need write access to silences): %w", err)
 	}
-	response.Error(w, status, err.Error())
+	response.Error(w, status, response.Public(err))
 }
 
 // AlertStoreAlerts handles GET /api/v1/alertstore/alerts?state=&alertname=&label=name=value…:

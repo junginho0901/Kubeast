@@ -23,6 +23,8 @@ var leftEmptyByTheMiddleware = map[string]string{
 	// caller. The investigator's token reaches this service only at the
 	// token-version route, which reads the claim itself.
 	"System": "this service never acts on a cluster as the caller",
+	// Only auth.LiveSessions reads it, for a connection held open past its token, and this service holds none.
+	"ExpiresAt": "this service holds no connection open past a token",
 }
 
 // Both readers must see one token alike: a claim one of them forgets is a limit

@@ -10,6 +10,8 @@ import { RefreshCw, Radio } from 'lucide-react'
 import CustomDropdown from '@/components/CustomDropdown'
 import { api } from '@/services/api'
 import { getCurrentClusterID } from '@/services/clusterRef'
+import { SESSION_ENDED_EVENT } from '@/services/auth'
+import { liveSessionEndText } from '@/utils/liveSessionEnd'
 import { useCluster } from '@/contexts/ClusterContext'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
 
@@ -155,6 +157,11 @@ export function LogFilesView({ namespace, pod, container, size = 'md', leading }
       es.close()
       setFollow(false)
       setStreamNote(t('clusterView.logFiles.streamEnded', 'Following stopped.'))
+    })
+    es.addEventListener(SESSION_ENDED_EVENT, (e) => {
+      es.close()
+      setFollow(false)
+      setStreamNote(liveSessionEndText(t, (e as MessageEvent).data))
     })
     // Never let the browser reconnect on its own: a reconnect reads the last
     // lines again (duplicates on screen) and is another audited read. After a

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { HelmReleaseSummary } from './api'
+import { liveSessionEnded, SESSION_ENDED_EVENT } from './auth'
 
 // Helm release watch — Server-Sent Events 로 cluster + namespace 별 release
 // 변화를 실시간 push. backend 가 Helm Secret 을 decode 해서 보내주므로 K8s
@@ -130,6 +131,15 @@ export function useHelmWatchList(options: UseHelmWatchListOptions): void {
         console.warn('helm watch parse error', err)
       }
     }
+
+    // The stream's session ended. The browser reopens the stream by itself with the current cookie; when that session
+    // is over too, the sign-in page says so.
+    let lastSessionEnd = 0
+    es.addEventListener(SESSION_ENDED_EVENT, () => {
+      const lastEnd = lastSessionEnd
+      lastSessionEnd = Date.now()
+      void liveSessionEnded(lastEnd)
+    })
 
     // backend 가 startSecretWatch 실패 시 보내는 named 'error' 이벤트.
     es.addEventListener('error', (e) => {

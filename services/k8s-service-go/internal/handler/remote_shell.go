@@ -11,6 +11,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/httpstream"
 	"k8s.io/client-go/kubernetes"
@@ -128,6 +129,25 @@ func recordingNotice(id, lang string) string {
 	return "\r\n[Kubeast] This session is recorded (" + id + ").\r\n"
 }
 
+// sessionEndNotice is the line a terminal ends with when its session stopped standing, in the screen's language.
+func sessionEndNotice(code, lang string) string {
+	ko := strings.HasPrefix(strings.ToLower(lang), "ko")
+	switch {
+	case code == auth.SessionExpired && ko:
+		return "\r\n[Kubeast] 세션 최대 시간이 지나 이 터미널을 닫았습니다. 다시 로그인하세요.\r\n"
+	case code == auth.SessionExpired:
+		return "\r\n[Kubeast] This terminal was closed: the session reached its maximum lifetime. Sign in again.\r\n"
+	case code == auth.SessionUnverified && ko:
+		return "\r\n[Kubeast] 세션을 확인할 수 없어 이 터미널을 닫았습니다. 다시 로그인하세요.\r\n"
+	case code == auth.SessionUnverified:
+		return "\r\n[Kubeast] This terminal was closed: the session could not be verified. Sign in again.\r\n"
+	case ko:
+		return "\r\n[Kubeast] 계정이나 권한이 바뀌어 이 터미널을 닫았습니다. 다시 로그인하세요.\r\n"
+	default:
+		return "\r\n[Kubeast] This terminal was closed: your account or access changed. Sign in again.\r\n"
+	}
+}
+
 func hangUp(w io.Writer) {
 	for i, key := range shellHangup {
 		if i > 0 {
@@ -150,15 +170,34 @@ func hangUp(w io.Writer) {
 // With rec set, the terminal output (what the user sees, not keystrokes) is
 // also written to the recording, after a one-line notice that it is — in
 // lang, the screen's language the page sent.
+//
+// A ctx ended by the session (auth.LiveSessions) says why on the terminal and
+// closes the socket, which from here on is a browser going away: the shell is
+// hung up, not left running in the container.
 func streamShell(ctx context.Context, conn *websocket.Conn, in <-chan []byte, cfg *rest.Config, u *url.URL, rec *recording.Session, lang string) error {
 	exec, err := newShellExecutor(cfg, u)
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithCancel(ctx)
+	held := ctx
+	ctx, cancel := context.WithCancel(context.WithoutCancel(held))
 	defer cancel()
 
 	out := &shellWriter{conn: conn, rec: rec}
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-held.Done():
+			code := auth.SessionEndCode(held)
+			if code == "" {
+				cancel()
+				return
+			}
+			_, _ = out.channel(shellStderr).Write([]byte(sessionEndNotice(code, lang)))
+			_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(auth.SessionEndedCloseCode, code), time.Now().Add(time.Second))
+			_ = conn.Close()
+		}
+	}()
 	if rec != nil {
 		if _, err := out.channel(shellStdout).Write([]byte(recordingNotice(rec.ID, lang))); err != nil {
 			return err
@@ -199,6 +238,9 @@ func streamShell(ctx context.Context, conn *websocket.Conn, in <-chan []byte, cf
 	var exit utilexec.CodeExitError
 	if errors.As(err, &exit) {
 		_, _ = out.channel(shellError).Write([]byte(exit.Error()))
+		return nil
+	}
+	if auth.SessionEndCode(held) != "" {
 		return nil
 	}
 	return err

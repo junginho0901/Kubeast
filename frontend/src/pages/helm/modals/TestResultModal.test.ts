@@ -57,7 +57,7 @@ describe('the Helm test window', () => {
   })
 
   it('a failed run that came back with its hooks shows the reason and each hook', () => {
-    const html = render(failing(500, { detail: REASON, success: false, hooks: [{ name: 'web-test', phase: 'Failed', failed: true }, { name: 'web-smoke', phase: 'Succeeded', failed: false }] }))
+    const html = render((o) => o.onSuccess({ error: REASON, success: false, hooks: [{ name: 'web-test', phase: 'Failed', failed: true }, { name: 'web-smoke', phase: 'Succeeded', failed: false }] }))
     expect(html).toContain(REASON)
     expect(html).toContain('web-test')
     expect(html).toContain('web-smoke')

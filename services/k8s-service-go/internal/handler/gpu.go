@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -57,8 +58,8 @@ func (h *Handler) GetGPUMetrics(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetPrometheusStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := h.svc.PrometheusStatus(ctx)
-	response.JSON(w, http.StatusOK, data)
+	payload, _ := auth.FromContext(ctx)
+	response.JSON(w, http.StatusOK, storeStatusFor(payload, h.svc.PrometheusStatus(ctx)))
 }
 
 func (h *Handler) PrometheusQuery(w http.ResponseWriter, r *http.Request) {
