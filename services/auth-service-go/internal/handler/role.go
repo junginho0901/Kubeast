@@ -461,6 +461,8 @@ func allPermissions() []map[string]interface{} {
 			{"ai.tool.k8s_count", "Read tool: count objects, grouped by a field"},
 			{"ai.tool.k8s_diff", "Write tool: preview a manifest's changes (server dry run, nothing applied)"},
 			{"ai.tool.gitops_status", "Read tool: Argo CD Application status (sync, health, operation, conditions)"},
+			{"ai.tool.clusters_list", "Read tool: the clusters the user can see and their connection status"},
+			{"ai.tool.alert_investigate", "Start an AI investigation of an alert from the chat (also needs Investigate now and reading its pods)"},
 			{"ai.tool.audit_search", "Admin tool: search the Kubeast audit log"},
 			{"ai.tool.nodes_stats_summary", "Admin tool: a node's kubelet stats summary (cpu, memory, fs, PSI, top pods)"},
 			{"ai.tool.nodes_log", "Admin tool: a node's kubelet and system logs"},

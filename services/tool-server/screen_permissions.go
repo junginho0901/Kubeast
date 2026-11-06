@@ -25,8 +25,8 @@ type toolRule func(args map[string]interface{}) []string
 
 func leftToTheCluster(map[string]interface{}) []string { return nil }
 
-func always(permission string) toolRule {
-	return func(map[string]interface{}) []string { return []string{permission} }
+func always(permissions ...string) toolRule {
+	return func(map[string]interface{}) []string { return permissions }
 }
 
 // forResourceType asks the verb on every kind the resource_type argument names.
@@ -98,7 +98,10 @@ var toolScreenTable = map[string]toolRule{
 	"k8s_jq_query":                    leftToTheCluster,
 	"k8s_tabular_query":               leftToTheCluster,
 	"k8s_count":                       leftToTheCluster,
+	// The picker asks for a sign-in only; auth-service answers the caller's own clusters.
+	"clusters_list": leftToTheCluster,
 
+	"alert_investigate":    always("resource.alert.investigate", "resource.pod.read"),
 	"k8s_get_pod_logs":     always("resource.pod.read"),
 	"alerts_list":          always("resource.pod.read"),
 	"logsearch":            always("resource.pod.read"),

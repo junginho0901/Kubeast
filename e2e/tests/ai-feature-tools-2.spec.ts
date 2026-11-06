@@ -180,6 +180,20 @@ test.describe('AI feature tools 2: helm_read, policy_reports, cost, optimization
       expect(Array.isArray(hygiene.report.findings)).toBe(true)
       const critical = json((await call(request, token, 'hygiene', { cluster: 'self', severity: 'critical' })).text)
       for (const f of critical.report.findings) expect(f.severity).toBe('critical')
+
+      // The upgrade checks are in the tool's answer as the screen's API gives them: the versions, every check, a check's findings.
+      const upgradeOnly = (checks: { id: string }[]) => checks.filter((c) => c.id.startsWith('upgrade.')).sort((a, b) => a.id.localeCompare(b.id))
+      const screen = await (await request.get('/api/v1/cluster/hygiene?cluster=self', { headers: bearer(token) })).json()
+      expect(screen.report.target_version, 'the API server version was read').toMatch(/^v1\.\d+$/)
+      expect(hygiene.report.server_version).toBe(screen.report.server_version)
+      expect(hygiene.report.target_version).toBe(screen.report.target_version)
+      expect(upgradeOnly(screen.report.checks).length).toBeGreaterThan(0)
+      expect(upgradeOnly(hygiene.report.checks).map((c) => c.id)).toEqual(upgradeOnly(screen.report.checks).map((c) => c.id))
+      // Not the deprecated-API check: its findings follow the requests of the moment, and the two reads are moments apart.
+      const check = upgradeOnly(screen.report.checks).map((c) => c.id).find((id) => id !== 'upgrade.deprecated-api.requests') as string
+      const one = json((await call(request, token, 'hygiene', { cluster: 'self', check })).text)
+      const fromScreen = (screen.report.findings as { check: string; name: string }[]).filter((f) => f.check === check).map((f) => f.name).sort()
+      expect((one.report.findings as { check: string; name: string }[]).map((f) => f.name).sort()).toEqual(fromScreen)
     } else {
       expect(hygiene).toMatchObject({ status: 'unavailable', feature: 'hygiene' })
     }

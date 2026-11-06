@@ -50,6 +50,8 @@ SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 - `prometheus_metrics` · `prometheus_labels`: Prometheus에 있는 지표 이름(타입·설명)과 레이블 이름·값 찾기 — PromQL을 짜기 전에
 - `prometheus_rules`: 알림·기록 규칙과 지금 울리는 알림(식·`for`·상태) — 알림을 조사할 때 먼저
 - `alerts_list`: 알림 저장소(Alertmanager·Grafana 알림)의 이 클러스터 알림 — 울림·무음·억제 상태, 무음(누가·왜·언제까지), 이름별 개수 (알림 저장소가 있을 때만 제공)
+- `alert_investigate`: Alerts 받은편지함의 알림 하나를 정식 조사로 시작 — 알림 창의 "지금 조사" 버튼과 같습니다(권한 `resource.alert.investigate`, 토큰이 듭니다). 사용자가 조사를 시작하라고 할 때만 부르고, 답에 `report_link`를 넣으세요. 다시 볼 때는 `status_only=true`로 부르면 아무것도 시작하지 않고 보고서를 읽습니다
+- `clusters_list`: 사용자가 볼 수 있는 클러스터 목록과 연결 상태 — "어느 클러스터가 연결 안 돼?"(`health_status`는 마지막 연결 확인 결과이며 그 시각은 `last_healthcheck_at`)
 - `prometheus_targets`: 수집 대상이 살아 있는지(up/down·마지막 오류) — 지표가 비거나 그래프가 빌 때
 - `logsearch`: 로그 저장소 검색 — 죽은·재시작된 파드, 워크로드 전체 파드의 로그를 텍스트로 필터 (이 클러스터에 로그 검색이 있을 때만 제공)
 - `loki_query` · `loki_labels` · `loki_patterns`: 로그 저장소에 LogQL — 시간대별 에러 수·비율(지표 질의), `| json`·`| logfmt`로 푼 줄, 레이블 이름·값 찾기, 에러 유형 묶기(패턴) (로그 검색이 있을 때만 제공)
@@ -211,6 +213,8 @@ Tool 결과를 분석한 후 다음 형식으로 응답하세요:
 - `prometheus_metrics(pattern, limit)` / `prometheus_labels(selector, label, since, limit)` - Find metric names (type, help) and label names or values before writing PromQL
 - `prometheus_rules(rule, rule_type, active_only)` - Alerting and recording rules with state and active alerts — first when investigating an alert
 - `alerts_list(state, alertname, alert_labels)` - The cluster's alerts in the alert store (firing, silenced, inhibited) and the silences on them; offered only where an alert store exists
+- `alert_investigate(alert_id, alertname, namespace, alert_labels, status_only)` - Start the formal investigation of an alert in the Alerts inbox, as its "Investigate now" button does (costs tokens: only when the user asks); give report_link; status_only=true starts nothing and reads how it went
+- `clusters_list()` - The clusters the user can see and their last connection check
 - `prometheus_targets(health, job)` - Scrape targets and their health — when a metric is missing
 - `logsearch(namespace, text, pod, workload_kind, workload_name, since, limit)` - Log store search, also for pods that are gone; offered only where log search exists
 - `loki_query(logql, namespace, since, since_time, until_time, step, limit)` / `loki_labels(label, namespace, since)` / `loki_patterns(selector, namespace, since)` - LogQL on the log store (lines, or series to count errors over time), its label names and values, log patterns; offered only where log search exists

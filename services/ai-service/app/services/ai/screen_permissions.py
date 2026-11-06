@@ -16,8 +16,8 @@ import yaml
 _LEFT_TO_THE_CLUSTER: Tuple[str, ...] = ("left",)
 
 
-def _always(permission: str) -> Tuple[str, str]:
-    return ("always", permission)
+def _always(*permissions: str) -> Tuple[str, ...]:
+    return ("always", *permissions)
 
 
 def _for_resource_type(verb: str) -> Tuple[str, str]:
@@ -59,6 +59,9 @@ TOOL_SCREEN_TABLE: Dict[str, Tuple[str, ...]] = {
     "k8s_jq_query": _LEFT_TO_THE_CLUSTER,
     "k8s_tabular_query": _LEFT_TO_THE_CLUSTER,
     "k8s_count": _LEFT_TO_THE_CLUSTER,
+    # The picker asks for a sign-in only; auth-service answers the caller's own clusters.
+    "clusters_list": _LEFT_TO_THE_CLUSTER,
+    "alert_investigate": _always("resource.alert.investigate", "resource.pod.read"),
     "k8s_get_pod_logs": _always("resource.pod.read"),
     "alerts_list": _always("resource.pod.read"),
     "logsearch": _always("resource.pod.read"),
@@ -289,7 +292,7 @@ def app_permissions(tool: str, args: Any = None) -> Optional[List[str]]:
     if how == "left":
         return []
     if how == "always":
-        return [rule[1]]
+        return list(rule[1:])
     if how == "rollout":
         action = _arg_string(args, "action").strip().lower()
         if action == "undo":
@@ -315,7 +318,7 @@ def may_be_called(holds: Callable[[str], bool], tool: str) -> bool:
     if rule[0] in ("left", "rollout"):
         return True
     if rule[0] == "always":
-        return holds(rule[1])
+        return all(holds(permission) for permission in rule[1:])
     return holds_verb_on_some_kind(holds, rule[1])
 
 
@@ -324,5 +327,5 @@ def holds_verb_on_some_kind(holds: Callable[[str], bool], verb: str) -> bool:
 
 
 def fixed_permissions() -> Dict[str, str]:
-    """The tools that ask one permission whatever the call: tool → permission."""
+    """The tools that ask the same whatever the call: tool → the permission that decides whether to list it, the first."""
     return {tool: rule[1] for tool, rule in TOOL_SCREEN_TABLE.items() if rule[0] == "always"}

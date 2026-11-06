@@ -137,7 +137,7 @@ async def test_list_tools_is_read_only_and_needs_the_permission(fakes):
         # A global admin sees everything, the hygiene report included.
         admin_names = tool_names(await call(client, "tok-admin", "tools/list"))
         assert {"hygiene", "k8s_diff", "audit_search", "nodes_stats_summary", "nodes_log"} <= set(admin_names)
-        assert len(admin_names) == len(mcp_server.READ_TOOLS) + 1
+        assert len(admin_names) == len(mcp_server.READ_TOOLS) + len(mcp_server.ACTION_TOOLS) + 1
 
 
 @pytest.mark.asyncio

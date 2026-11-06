@@ -43,6 +43,8 @@
     - `prometheus_rules` — 알림·기록 규칙과 지금 울리는 알림. 알림을 조사할 때 먼저 씁니다.
     - `prometheus_targets` — 수집 대상 up/down. 지표가 빌 때 씁니다. 여러 클러스터가 함께 쓰는 저장소이거나 targets API가 없으면 `up` 지표로 판단합니다.
     - `alerts_list` — 알림 저장소에 있는 이 클러스터의 알림(울림·무음·억제 상태)과 그 알림을 덮은 무음
+    - `alert_investigate` — Alerts 받은편지함의 알림 하나를 "지금 조사" 버튼처럼 정식 조사로 시작([AI 알림](ai-alerts.md) 참고)
+    - `clusters_list` — 그 사람이 볼 수 있는 클러스터와 연결 상태. 클러스터 선택기 목록과 같고 값은 마지막 확인 결과입니다(실시간 아님). `admin.clusters.list`가 있으면 Admin → Clusters 목록도 받습니다. kubeconfig·자격 증명은 나가지 않습니다
     - `logsearch` — 로그 저장소 검색, 사라진 파드 포함
     - `loki_query` — LogQL. 로그 줄, 또는 `count_over_time`·`rate` 같은 메트릭 쿼리로 시간대별 에러 수 시리즈를 받고, 그래프로도 그립니다.
     - `loki_labels` — 로그 레이블 이름·값
@@ -139,7 +141,7 @@
 | --- | --- | --- | --- |
 | **Pending** | 가입·SSO 직후 기본값 | 없음 — 로그인은 되지만 API는 403 | — |
 | **Member** | 계정 등급 | 전역 권한 없음, **클러스터별 부여로만** 접근 | `kubeast:authenticated`(권한 없음) |
-| **Read** | 클러스터별 | 메뉴 10개 · 모든 리소스 읽기(`resource.*.read`, 비용 `resource.cost.read` 포함) · Helm 읽기(권한 키는 있지만 Release 기록이 Secret이라 클러스터가 거부 — 오른쪽 칸 참고) · 컨테이너 안 로그 파일 읽기(`resource.pod.logfile`, 기능을 켰을 때) · AI 채팅의 읽기 도구 43종(`ai.tool.<읽기 도구>`)과 MCP 연결(`ai.mcp.use`) — 쓰기 도구는 없음 | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view`는 Secret과 `services/proxy`를 제외하므로, Secret과 Helm 릴리스(Secret에 저장)는 클러스터가 거부하고 화면에는 권한 안내가 뜹니다. API 서버 프록시로 읽는 Prometheus·OpenCost(최적화 사용량·스토리지 분석·비용·드로어 메트릭)는 차트 값 `auth.impersonation.viewerProxyServices`에 적은 Service만 **GET으로** 열립니다. 허용은 그 Namespace의 Role로 주고, 이름은 정확히 `<service>:<port>`로 적으며, 다른 Service·POST·NS 범위 부여는 계속 거부됩니다([설정](configuration.md)의 values 주석). 적지 않으면 거부됩니다(프록시는 `kubeast:operator`=`edit`부터 허용) |
+| **Read** | 클러스터별 | 메뉴 10개 · 모든 리소스 읽기(`resource.*.read`, 비용 `resource.cost.read` 포함) · Helm 읽기(권한 키는 있지만 Release 기록이 Secret이라 클러스터가 거부 — 오른쪽 칸 참고) · 컨테이너 안 로그 파일 읽기(`resource.pod.logfile`, 기능을 켰을 때) · AI 채팅의 읽기 도구 44종(`ai.tool.<읽기 도구>`)과 MCP 연결(`ai.mcp.use`) — 쓰기 도구는 없음 | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view`는 Secret과 `services/proxy`를 제외하므로, Secret과 Helm 릴리스(Secret에 저장)는 클러스터가 거부하고 화면에는 권한 안내가 뜹니다. API 서버 프록시로 읽는 Prometheus·OpenCost(최적화 사용량·스토리지 분석·비용·드로어 메트릭)는 차트 값 `auth.impersonation.viewerProxyServices`에 적은 Service만 **GET으로** 열립니다. 허용은 그 Namespace의 Role로 주고, 이름은 정확히 `<service>:<port>`로 적으며, 다른 Service·POST·NS 범위 부여는 계속 거부됩니다([설정](configuration.md)의 values 주석). 적지 않으면 거부됩니다(프록시는 `kubeast:operator`=`edit`부터 허용) |
 | **Write** | 클러스터별 | `menu.*` · 리소스 생성/수정/삭제 · CronJob suspend/trigger · Secret 값 보기 · 로그 파일 읽기 · Helm rollback/upgrade/test · AI 툴 전부(`ai.tool.*`, 쓰기 도구 포함, 아래 Admin 전용 목록은 빼고) · MCP 연결 | `kubeast:operator` = `edit` + viewer |
 | **Admin** | 계정 등급(`*`) 또는 클러스터별 | 전부 — 관리자 메뉴, 모든 클러스터(나중에 등록한 것 포함) | `kubeast:admin` = `cluster-admin` |
 | 커스텀 | 클러스터별 | 고른 권한만(만드는 사람이 가진 권한 안에서) | `kubeast:role:<이름>` — 클러스터가 이 그룹을 바인딩하기 전에는 모든 호출이 403입니다(`auth.impersonation.customRoles`). 화면의 권한 없음 배너와 역할 만들기 창에 이 그룹 이름이 나옵니다 |
@@ -164,7 +166,7 @@
   - `k8s_execute_command`는 `resource.pod.exec`, undo의 `k8s_rollout`은 `resource.workload.rollback`이 필요합니다.
   - `<kind>`는 화면이 쓰는 이름(`permResource`)입니다. kind를 소문자로 쓴 것, `hpa`·`vpa`·`pdb`·`pv`·`pvc`·`crd`, 자기 이름이 없는 kind는 `customresource`입니다.
   - 호출이 가리키는 kind는 전부 봅니다. 쉼표 목록, 매니페스트의 문서 하나하나, List의 items가 모두 그렇습니다. `all`·`api-extensions`·`gateway-api`와 읽을 수 없는 매니페스트는 `resource.*.<verb>`가 필요합니다. CRD가 스스로 정한 짧은 이름이나 카테고리는 `customresource`로 봅니다.
-  - 화면이 권한을 묻는 읽기: `k8s_get_pod_logs`, `logsearch`, `loki_*` 도구, `alerts_list`는 `resource.pod.read`가 필요합니다. `helm_read`는 `resource.helm.read`, `cost`는 `resource.cost.read`, `policy_reports`는 `resource.policyreport.read`, `network_policy_check`는 `resource.networkpolicy.read`, `network_*` 흐름 도구는 `resource.networkflow.read`가 필요합니다. `hygiene`은 `admin.hygiene.read`, `audit_search`는 `admin.audit.read`, `nodes_*` 도구는 `admin.nodes.read`가 필요합니다.
+  - 화면이 권한을 묻는 읽기: `k8s_get_pod_logs`, `logsearch`, `loki_*` 도구, `alerts_list`는 `resource.pod.read`가 필요합니다. `helm_read`는 `resource.helm.read`, `cost`는 `resource.cost.read`, `policy_reports`는 `resource.policyreport.read`, `network_policy_check`는 `resource.networkpolicy.read`, `network_*` 흐름 도구는 `resource.networkflow.read`가 필요합니다. `hygiene`은 `admin.hygiene.read`, `audit_search`는 `admin.audit.read`, `nodes_*` 도구는 `admin.nodes.read`가 필요합니다. `alert_investigate`는 버튼이 묻는 `resource.alert.investigate`와 `resource.pod.read`가 필요합니다.
   - 나머지 읽기 도구는 더 필요한 것이 없습니다. 그 화면도 `resource.<kind>.read`를 묻지 않고, 클러스터에 대한 역할과 클러스터 RBAC이 정하기 때문입니다(아래 읽기 API). `resource.*.read`가 없어도 그룹이 바인딩된 커스텀 역할은 화면과 AI로 같은 목록을 읽습니다. Secret 값은 AI로 가지 않습니다.
   - 절대 부를 수 없는 도구는 역할에 내주지 않습니다. 거절된 호출은 실행되지 않고 승인 카드도 없으며, 없는 권한을 말하고 실패 행(`ai.tool.call`, `ai.mcp.call`)을 남깁니다. 표(`services/tool-server/screen_permissions.go`, `app/services/ai/screen_permissions.py`)에 없는 도구는 누구에게나 거절됩니다.
 - **쓰기 API는 전부** 핸들러에서 권한을 검사하며, 감사 행을 남기지 못하면 거부됩니다(fail-closed).

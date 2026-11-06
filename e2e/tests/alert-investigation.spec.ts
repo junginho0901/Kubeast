@@ -20,6 +20,7 @@ const READ_TOOLS = new Set([
   'traces_search', 'traces_get', 'traces_tags', 'traces_metrics', 'traces_compare', 'alerts_list',
   'policy_reports', 'helm_read', 'cost', 'optimization', 'can_i', 'network_policy_check', 'network_flows', 'network_drops', 'network_top_flows', 'resource_graph',
   'k8s_jq_query', 'k8s_tabular_query', 'k8s_count', 'gitops_status',
+  'clusters_list',
 ])
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Requested-With': 'XMLHttpRequest' })
 

@@ -60,6 +60,8 @@ def test_tool_usage_guide():
         "traces_metrics",
         "traces_compare",
         "alerts_list",
+        "clusters_list",
+        "alert_investigate",
         "helm_read",
         "policy_reports",
         "cost",

@@ -87,6 +87,8 @@ var clusterWideTools = map[string]struct{}{
 	"prometheus_query": {}, "prometheus_metrics": {}, "prometheus_labels": {}, "prometheus_rules": {}, "prometheus_targets": {}, "alerts_list": {},
 	"hygiene": {}, "k8s_diff": {},
 	"audit_search": {}, "nodes_stats_summary": {}, "nodes_log": {},
+	// The Alerts inbox is for whoever reads the cluster as a whole.
+	"alert_investigate": {},
 }
 
 // namespaceAwareTools apply a namespace-scoped grant themselves — the handler
@@ -94,9 +96,9 @@ var clusterWideTools = map[string]struct{}{
 // pass the gate without naming one.
 var namespaceAwareTools = map[string]struct{}{"k8s_find_resource": {}, "issues": {}, "cost": {}, "gitops_status": {}}
 
-// namespaceFreeTools return API schema, not object data, so a scoped grant
-// may call them without a namespace.
-var namespaceFreeTools = map[string]struct{}{"k8s_explain": {}}
+// namespaceFreeTools return API schema or Kubeast's own list of clusters, not
+// object data, so a scoped grant may call them without a namespace.
+var namespaceFreeTools = map[string]struct{}{"k8s_explain": {}, "clusters_list": {}}
 
 var errNamespaceScope = errors.New("namespace scope")
 

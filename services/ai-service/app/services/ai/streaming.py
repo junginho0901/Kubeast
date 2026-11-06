@@ -438,7 +438,7 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
     from app.services.audit_target import EXEC_TOOL, pod_exec_row, tool_target, write_tool_input
     from app.services.audit_writer import audit_ready, fail_closed_enabled, write_audit
     from app.services.ai import permissions as _perm
-    from app.services.tool_whitelists import WRITE_TOOL_NAMES, write_approval_required
+    from app.services.tool_whitelists import ACTION_TOOL_NAMES, WRITE_TOOL_NAMES, write_approval_required
 
     events: list[str] = []
     call_access = call_requests = None
@@ -451,7 +451,7 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
     if refusal:
         # Needs what a screen asks and this role does not hold: no approval card, and the model can say why.
         function_response = json.dumps({"status": "not_permitted", "message": refusal}, ensure_ascii=False)
-    elif function_name in WRITE_TOOL_NAMES and write_approval_required() and not _perm.may_request_approval(service, tools, function_name):
+    elif (function_name in ACTION_TOOL_NAMES or (function_name in WRITE_TOOL_NAMES and write_approval_required())) and not _perm.may_request_approval(service, tools, function_name):
         # Not offered this turn (read-only widget) or not
         # permitted for this user: no approval card, and the
         # model is told so instead of running anything.

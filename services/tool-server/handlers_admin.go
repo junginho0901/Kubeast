@@ -61,7 +61,11 @@ func parseFromTime(v string, now time.Time) (time.Time, error) {
 // authServiceGet calls auth-service with the user's own Authorization header;
 // auth-service applies its permission check and writes its own audit entry.
 func authServiceGet(ctx context.Context, headers http.Header, path string, q url.Values) (int, []byte, error) {
-	target := authServiceURL + "/api/v1/auth" + path
+	return authServiceGetAt(ctx, headers, "/api/v1/auth"+path, q)
+}
+
+func authServiceGetAt(ctx context.Context, headers http.Header, path string, q url.Values) (int, []byte, error) {
+	target := authServiceURL + path
 	if len(q) > 0 {
 		target += "?" + q.Encode()
 	}

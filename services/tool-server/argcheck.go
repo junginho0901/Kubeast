@@ -157,6 +157,8 @@ var argRules = map[string]argCheck{
 	// The alert store.
 	"state":     checkEnum("firing", "silenced", "inhibited", "all"),
 	"alertname": checkPrintable(200),
+	// An Alerts inbox row, which becomes one segment of a route's path.
+	"alert_id": checkInboxID,
 }
 
 // validateToolArgs rejects any argument that would not be read by kubectl as
@@ -524,6 +526,15 @@ func checkFieldPath(field, v string) error {
 func checkLabelSelector(field, v string) error {
 	if len(v) > 500 || strings.HasPrefix(v, "-") || strings.IndexFunc(v, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
 		return badArg(field, v, "a label selector such as app=web,tier!=db")
+	}
+	return nil
+}
+
+var inboxIDRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
+
+func checkInboxID(field, v string) error {
+	if !inboxIDRe.MatchString(v) {
+		return badArg(field, v, "an alert id from the Alerts inbox")
 	}
 	return nil
 }

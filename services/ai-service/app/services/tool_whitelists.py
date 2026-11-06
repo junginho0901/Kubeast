@@ -9,7 +9,7 @@ allowlist 방식 — 신규 tool 이 추가돼도 명시적으로 여기 넣기 
 from typing import Any, Dict, List
 
 
-# The same twenty-six names are the Read role's ai.tool.* permissions
+# The same names are the Read role's ai.tool.* permissions
 # (auth-service repository.ReadAIToolPermissions) — keep the two lists the same.
 # The Admin-only read tool (hygiene, tools.ADMIN_READ_TOOLS) and the write preview
 # (k8s_diff, tools.WRITE_PREVIEW_TOOLS — needs the write's RBAC) are deliberately not here.
@@ -59,8 +59,15 @@ READONLY_TOOL_NAMES: frozenset[str] = frozenset(
         "k8s_tabular_query",
         "k8s_count",
         "gitops_status",
+        "clusters_list",
     }
 )
+
+
+# Tools that start something in Kubeast without changing a cluster, so they take no approval card; the permission of the
+# screen's button and the feature's own limits stand in front of them, as they do for the button. In no read-only list:
+# a read-only widget and an investigation do not start one.
+ACTION_TOOL_NAMES: frozenset[str] = frozenset({"alert_investigate"})
 
 
 # Tools that change cluster state. They are never executed straight from the

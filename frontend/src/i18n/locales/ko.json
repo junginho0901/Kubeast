@@ -3875,6 +3875,8 @@
         "ai_tool_k8s_count": "읽기 도구: 개수·필드별 그룹 개수",
         "ai_tool_k8s_diff": "쓰기 도구: 매니페스트 변경 미리보기(서버 dry-run, 적용 없음)",
         "ai_tool_gitops_status": "읽기 도구: Argo CD 애플리케이션 상태(sync·health·operation·오류 조건)",
+        "ai_tool_clusters_list": "읽기 도구: 사용자가 볼 수 있는 클러스터와 연결 상태",
+        "ai_tool_alert_investigate": "채팅에서 알림 AI 조사 시작(지금 조사 권한과 파드 읽기 권한도 필요)",
         "ai_tool_audit_search": "관리자 도구: Kubeast 감사 로그 검색",
         "ai_tool_nodes_stats_summary": "관리자 도구: 노드 kubelet 통계 요약(CPU·메모리·fs·PSI·파드 상위)",
         "ai_tool_nodes_log": "관리자 도구: 노드 kubelet·시스템 로그",
