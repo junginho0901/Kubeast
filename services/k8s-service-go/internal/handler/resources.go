@@ -186,6 +186,9 @@ type createYAMLBody struct {
 	Namespace string `json:"namespace"`
 }
 
+// yamlCreateObjectsMax bounds the objects one create's audit row lists; objects_total says how many there were.
+const yamlCreateObjectsMax = 100
+
 // CreateResourcesFromYAML handles POST /api/v1/resources/yaml/create. Every
 // document needs the create permission of its kind.
 func (h *Handler) CreateResourcesFromYAML(w http.ResponseWriter, r *http.Request) {
@@ -208,11 +211,15 @@ func (h *Handler) CreateResourcesFromYAML(w http.ResponseWriter, r *http.Request
 	}
 
 	ctx := r.Context()
+	// Named before the create so a failed one's row says what it was asked to make; the text itself stays out of the row.
+	objects, total := h.svc.CreateObjects(ctx, body.YAML, body.Namespace, yamlCreateObjectsMax)
 	data, err := h.svc.CreateResourcesFromYAML(ctx, body.YAML, body.Namespace)
 	h.recordAuditWithPayload(r, "k8s.yaml.create", "multi", "", "", err,
 		nil, audit.MustJSON(map[string]interface{}{
 			"yaml_len":          len(body.YAML),
 			"default_namespace": body.Namespace,
+			"objects":           objects,
+			"objects_total":     total,
 		}))
 	if err != nil {
 		h.handleError(w, err)

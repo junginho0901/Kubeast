@@ -204,4 +204,4 @@ Each AI tool call shows who the cluster saw it as and the cluster requests it ma
   - It sends each request with the cluster's credential, the person's impersonation and a new `Audit-ID`, and lists it.
   - exec, attach, port-forward and log streams pass through it too. An upgraded connection (exec) is listed when it ends, with status 101.
   - kubectl's own discovery reads (`/api`, `/apis`, `/openapi`) go through it but are not listed.
-  - `TOOL_SERVER_KUBECTL_PROXY=false` on tool-server sends kubectl to the cluster directly with `--as`, without the list.
+  - `TOOL_SERVER_KUBECTL_PROXY=false` on tool-server sends kubectl to the cluster directly with `--as`, without the list. Nothing then reads its requests, so [Kubeast's own and the node shell's namespaces](cluster-requirements.md#who-reaches-kubeasts-own-namespace) are held by kubectl's arguments, and every namespace's Secrets are refused to anyone but a global admin on the cluster Kubeast runs on.

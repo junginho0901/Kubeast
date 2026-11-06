@@ -208,4 +208,4 @@ AI 도구 호출마다 클러스터가 그 호출을 누구로 봤는지와 그 
   - 요청마다 클러스터 자격 증명, 그 사람의 impersonation, 새 `Audit-ID`를 붙여 보내고 목록에 남깁니다.
   - exec·attach·port-forward·로그 스트림도 같은 중계를 거칩니다. 업그레이드된 연결(exec)은 끝날 때 상태 101로 남습니다.
   - kubectl 자체의 탐색 요청(`/api`·`/apis`·`/openapi`)은 중계를 거치지만 목록에는 넣지 않습니다.
-  - tool-server에 `TOOL_SERVER_KUBECTL_PROXY=false`를 주면 kubectl이 `--as`로 클러스터에 바로 붙고, 목록은 없습니다.
+  - tool-server에 `TOOL_SERVER_KUBECTL_PROXY=false`를 주면 kubectl이 `--as`로 클러스터에 바로 붙고, 목록은 없습니다. 그러면 요청을 읽는 곳이 없으므로 [Kubeast 자체 Namespace와 노드 셸의 Namespace](cluster-requirements.md#kubeast-자체-namespace에-누가-닿는가)는 kubectl 인자로 판단하고, Kubeast가 도는 클러스터에서 모든 Namespace의 Secret 목록은 전역 관리자가 아니면 거절합니다.

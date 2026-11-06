@@ -99,6 +99,9 @@ func runKubectlWithInput(ctx context.Context, headers http.Header, input string,
 // request and lists the request for the call. Without it, kubectlArgs.
 func kubectlCommand(ctx context.Context, args []string) ([]string, func(), error) {
 	if kubectlProxy == nil {
+		if err := directKubectlRefusal(ctx, args); err != nil {
+			return nil, nil, err
+		}
 		return kubectlArgs(ctx, args), func() {}, nil
 	}
 	var imp rest.ImpersonationConfig
@@ -111,7 +114,7 @@ func kubectlCommand(ctx context.Context, args []string) ([]string, func(), error
 	if rec == nil {
 		rec = &accesstrail.Recorder{}
 	}
-	path, done, err := kubectlProxy.prepare(clusterIDFromCtx(ctx), kubeconfigForCtx(ctx), imp, rec)
+	path, done, err := kubectlProxy.prepare(clusterIDFromCtx(ctx), kubeconfigForCtx(ctx), imp, rec, protectedRequestCheck(ctx))
 	if err != nil {
 		return nil, nil, fmt.Errorf("kubectl proxy: %w", err)
 	}

@@ -239,6 +239,7 @@ metrics:
 # point at a registry mirror) — a node that has the image needs no registry.
 nodeShell:
   enabled: false
+  # A namespace for this alone: Kubeast takes changes and terminals in it only from holders of resource.node.shell.
   namespace: kubeast-node-shell
   images:
     - docker.io/library/busybox:1.38.0

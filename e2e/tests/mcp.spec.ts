@@ -115,13 +115,28 @@ test.describe('MCP server', () => {
       const text = result.content[0].text as string
       for (const name of kubectl(`-n kubeast get pods -o jsonpath='{.items[*].metadata.name}'`).split(/\s+/).filter(Boolean)) expect(text).toContain(name)
 
-      // A Secret's values never reach the agent.
-      const secret = await rpc(request, key.key, 'tools/call', { name: 'k8s_get_resource_yaml', arguments: { cluster: 'self', resource_type: 'secret', resource_name: 'kubeast-secrets', namespace: 'kubeast' } })
-      const secretText = (await secret.json()).result.content[0].text as string
-      expect(secretText).toContain('kubeast-secrets')
+      // Kubeast's own Secrets are for a global admin, whatever the key's role lets it do elsewhere.
+      const own = await rpc(request, key.key, 'tools/call', { name: 'k8s_get_resource_yaml', arguments: { cluster: 'self', resource_type: 'secret', resource_name: 'kubeast-secrets', namespace: 'kubeast' } })
+      const ownResult = (await own.json()).result
+      expect(ownResult.isError).toBe(true)
       const pw = kubectl(`-n kubeast get secret kubeast-secrets -o jsonpath='{.data.DEFAULT_ADMIN_PASSWORD}'`)
       expect(pw.length).toBeGreaterThan(0)
-      expect(secretText).not.toContain(pw)
+      expect(ownResult.content[0].text as string).toContain('namespace kubeast')
+      expect(ownResult.content[0].text as string).not.toContain(pw)
+
+      // A Secret's values never reach the agent.
+      const secretName = `e2e-mcp-${s}`
+      const secretValue = `e2e-mcp-fake-value-${s}`
+      kubectl(`-n default create secret generic ${secretName} --from-literal=token=${secretValue}`)
+      try {
+        const secret = await rpc(request, key.key, 'tools/call', { name: 'k8s_get_resource_yaml', arguments: { cluster: 'self', resource_type: 'secret', resource_name: secretName, namespace: 'default' } })
+        const secretText = (await secret.json()).result.content[0].text as string
+        expect(secretText).toContain(secretName)
+        expect(secretText).not.toContain(Buffer.from(secretValue).toString('base64'))
+        expect(secretText).not.toContain(secretValue)
+      } finally {
+        kubectl(`-n default delete secret ${secretName} --ignore-not-found`)
+      }
 
       // A cluster the key does not reach: refused, and the refusal is a failure row.
       const other = await rpc(request, key.key, 'tools/call', { name: 'k8s_get_resources', arguments: { cluster: 'default', resource_type: 'pods' } })

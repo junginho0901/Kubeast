@@ -311,6 +311,13 @@ It then starts a privileged pod on the chosen node, with hostPID, hostIPC, hostN
 - The node must be able to pull the image (`nodeShell.images`, default `docker.io/library/busybox:1.38.0`). On an air-gapped network, enter your internal mirror address.
 - The user must be an Admin (cluster-admin) of that cluster.
 
+The namespace stays after the first shell, still `privileged`.
+
+- On any cluster, Kubeast refuses with a 403 anyone without `resource.node.shell` who tries to change anything in it (a pod, a workload, the Namespace object) or to exec, attach or read log files in its pods, on screens, the API, AI tools and MCP. Reads stay.
+- That limit is Kubeast's. Kubeast installs nothing on the target cluster to enforce it, and the Write group's `edit` is bound cluster-wide, so Kubernetes itself still lets that group, or anyone using the cluster directly, create pods there. Recommended on a cluster that restricts its other namespaces:
+  - An admission policy (ValidatingAdmissionPolicy, Kyverno, Gatekeeper) that allows pods in this namespace only for the groups you give the node shell to: `kubeast:admin` and `kubeast:role:<name>` of a custom role holding it.
+  - If the node shell is not used, turn it off (`nodeShell.enabled`) and delete the namespace.
+
 ## 10. Log files inside containers
 
 Kubeast runs only `ls` and `tail`, through `pods/exec` as the user's identity.
@@ -465,6 +472,24 @@ service:
 | Console metrics scraping | Turning on `metrics.serviceMonitor` or `metrics.prometheusRule` needs the prometheus-operator CRDs ([metrics.md](metrics.md)) |
 | EKS external clusters, S3 | IRSA role (`aws.irsaRoleArn`, etc.) |
 | Private CA, TLS-intercepting proxy | The Secrets and ConfigMaps listed in `customCAs` must exist in the release namespace first (otherwise new pods wait for the volume and do not start, while the previous pods keep answering) |
+
+### Who reaches Kubeast's own namespace
+
+The release namespace holds the key that signs sign-ins (`kubeast-auth-keys`), the registered clusters' credentials (`cluster-kubeconfig-<id>`) and the chart's Secrets. Whoever reads them can act as a global admin on every registered cluster.
+
+- **A role on this cluster is Kubernetes access to this whole cluster.** Write acts as `kubeast:operator`, which the chart binds to the `edit` ClusterRole across the cluster, and `edit` reads Secrets and creates pods in every namespace. Admin acts as `kubeast:admin`, which is `cluster-admin`.
+- **The Kubeast app limits its namespace to global admins** (the `*` permission on every cluster). Anyone else, a Write or Admin grant on this cluster included, gets a 403 with the reason on screens, the API, AI tools and MCP for:
+  - reading its Secrets and Helm releases (a list across namespaces leaves them out),
+  - any change there: creating pods or workloads, applying YAML, deleting, ServiceAccount tokens, the Namespace object itself,
+  - exec, attach, port-forward and log files in its pods, and proxying to its pods and Services through the API server. Keep a Prometheus or OpenCost that Kubeast reads in its own namespace: Kubeast reads them through that proxy.
+- Its pods, logs, events and ConfigMaps stay readable, and a drain can still move its pods.
+- **Kubernetes does not know this limit.** Someone who uses the cluster directly, with their own kubeconfig or from a pod they run in another namespace, is stopped only by the cluster's RBAC and Pod Security. Kubeast cannot limit that:
+  - Give a role on this cluster only to people you would give the cluster to.
+  - Bind people's own Kubernetes identities with RBAC so they cannot read Secrets in this namespace: check with `kubectl auth can-i get secrets -n <release namespace> --as <user>`.
+  - Enforce Pod Security in the other namespaces: a pod that mounts the host's `/` reaches every Secret on its node.
+  - The node shell (`resource.node.shell`) is root on this cluster's nodes, so it reaches the same Secrets. Give it on this cluster only to people you would make global admins.
+- Only a cluster connected as **In-cluster** is known to be this cluster. Connected with a kubeconfig it is another cluster to Kubeast, and none of this applies to it: connect it as In-cluster.
+- A namespace of the same name on another registered cluster is an ordinary namespace.
 
 ## 16. Hubble Relay (network flows)
 

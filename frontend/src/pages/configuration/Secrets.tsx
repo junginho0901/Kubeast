@@ -17,6 +17,7 @@ import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
+import { isProtectedNamespaceError } from '@/utils/protectedNamespace'
 
 type SortKey = null | 'name' | 'namespace' | 'type' | 'data' | 'age'
 type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
@@ -397,7 +398,9 @@ stringData:
                   <tr>
                     <td colSpan={showNamespaceColumn ? 5 : 4} className="py-6 px-4 text-center text-slate-400">
                       <span data-testid="secrets-forbidden">
-                        {tr('secretsPage.forbidden', 'You do not have permission to view Secrets in this cluster.')}
+                        {isProtectedNamespaceError(secretsError)
+                          ? tr('secretsPage.protected', "This namespace holds Kubeast's own credentials, so only a global admin can read its Secrets.")
+                          : tr('secretsPage.forbidden', 'You do not have permission to view Secrets in this cluster.')}
                       </span>
                     </td>
                   </tr>

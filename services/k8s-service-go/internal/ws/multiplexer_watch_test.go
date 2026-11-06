@@ -13,6 +13,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
+	"github.com/junginho0901/kubeast/services/pkg/protectedns"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -546,4 +547,53 @@ func TestFramesNameNoClusterWhenTheRequestNamedNone(t *testing.T) {
 // watchInto runs a watch of the default cluster as the multiplexer does.
 func watchInto(ctx context.Context, m *Multiplexer, path, query string, out chan<- ResponseMessage) {
 	m.runWatch(ctx, RequestMessage{Path: path, Query: query}, out)
+}
+
+// protectedClients answers like the k8s Service, which names the guarded namespaces on the cluster in ctx.
+type protectedClients struct {
+	fakeClients
+	rules protectedns.Namespaces
+}
+
+func (p protectedClients) ProtectedNamespaces(context.Context) protectedns.Namespaces { return p.rules }
+
+// A watch of a guarded namespace's Secrets is refused once, in words, instead of failing every few seconds at the cluster.
+func TestAWatchOfTheInstallNamespacesSecretsIsRefusedOnce(t *testing.T) {
+	var asked atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked.Add(1)
+		eventThenHold(w, r)
+	}))
+	t.Cleanup(server.Close)
+	d, err := dynamic.NewForConfig(&rest.Config{Host: server.URL, QPS: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules := protectedns.Namespaces{Install: "kubeast", NodeShell: "kubeast-node-shell"}
+	m := NewMultiplexer(protectedClients{fakeClients{d}, rules})
+	write := auth.PermissionMatrix{"c": {"resource.*.read", "resource.secret.reveal"}}
+
+	conn := socketTo(t, m, write)
+	request(t, conn, "REQUEST", "c", "/api/v1/namespaces/kubeast/secrets", "watch=1")
+	if f := nextFrame(t, conn); f.Type != "ERROR" || !strings.Contains(f.Error.Message, "kubeast") {
+		t.Fatalf("got %s %q, want the refusal", f.Type, f.Error.Message)
+	}
+	if asked.Load() != 0 || m.SubscriptionCount() != 0 {
+		t.Fatalf("the cluster was asked %d times, %d subscriptions", asked.Load(), m.SubscriptionCount())
+	}
+
+	// other kinds there, and Secrets elsewhere, watch as before
+	for _, path := range []string{"/api/v1/namespaces/kubeast/pods", "/api/v1/namespaces/shop/secrets"} {
+		request(t, conn, "REQUEST", "c", path, "watch=1")
+		if f := nextFrame(t, conn); f.Type != "DATA" {
+			t.Fatalf("%s: got %s %q", path, f.Type, f.Error.Message)
+		}
+	}
+
+	// a global admin keeps it
+	admin := socketTo(t, m, everyCluster)
+	request(t, admin, "REQUEST", "c", "/api/v1/namespaces/kubeast/secrets", "watch=1")
+	if f := nextFrame(t, admin); f.Type != "DATA" {
+		t.Fatalf("global admin: got %s %q", f.Type, f.Error.Message)
+	}
 }

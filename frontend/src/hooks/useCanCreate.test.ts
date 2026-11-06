@@ -98,6 +98,19 @@ describe('useCanI: the app permission and the cluster\'s answer', () => {
     expect(canI).toHaveBeenCalledWith({ verb: 'delete', group: '', resource: 'configmaps', namespace: 'ns-a', name: 'cm' })
   })
 
+  it('asks about the subresource an action goes through, kept apart from the object itself', async () => {
+    granted.add('resource.configmap.delete')
+    const qc = client([], 'asking')
+    render(qc, createElement('div', null,
+      createElement(Probe, { verb: 'create', target: { group: '', resource: 'pods', subresource: 'exec', namespace: 'ns-a', name: 'p' } }),
+      createElement(Probe, { verb: 'create', target: { group: '', resource: 'pods', namespace: 'ns-a', name: 'p' } })))
+    const query = qc.getQueryCache().find({ queryKey: ['can-i', '', 'create', '', 'pods', 'ns-a', 'p', 'exec'], exact: true })
+    expect(query, 'the question kept per subresource').toBeTruthy()
+    await query!.fetch()
+    expect(canI).toHaveBeenCalledWith({ verb: 'create', group: '', resource: 'pods', subresource: 'exec', namespace: 'ns-a', name: 'p' })
+    expect(qc.getQueryCache().getAll()).toHaveLength(2)
+  })
+
   it('a list\'s "all" asks about every namespace; an object in a namespace called "all" keeps it', async () => {
     granted.add('resource.configmap.delete')
     const qc = client([], 'asking')

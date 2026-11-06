@@ -12,7 +12,8 @@ interface Props {
   describe: any
   spec: Record<string, unknown>
   status: Record<string, unknown>
-  has: (permission: string) => boolean
+  canSuspend: boolean
+  canTrigger: boolean
   suspendMut: { isPending: boolean; mutate: (suspend: boolean) => void }
   setTriggerDialogOpen: (open: boolean) => void
   ownedJobs?: Array<any>
@@ -24,7 +25,8 @@ export default function WorkloadKindInfo({
   describe,
   spec,
   status,
-  has,
+  canSuspend,
+  canTrigger,
   suspendMut,
   setTriggerDialogOpen,
   ownedJobs,
@@ -61,9 +63,9 @@ export default function WorkloadKindInfo({
       {isCronJob && (
         <InfoSection
           title="CronJob Info"
-          actions={(has('resource.cronjob.suspend') || has('resource.cronjob.trigger')) ? (
+          actions={(canSuspend || canTrigger) ? (
             <div className="flex gap-2">
-              {has('resource.cronjob.suspend') && (
+              {canSuspend && (
                 <button
                   onClick={() => suspendMut.mutate(!(describe?.suspend ?? spec.suspend))}
                   disabled={suspendMut.isPending}
@@ -73,7 +75,7 @@ export default function WorkloadKindInfo({
                   {(describe?.suspend ?? spec.suspend) ? tr('cronjob.resume', 'Resume') : tr('cronjob.suspend', 'Suspend')}
                 </button>
               )}
-              {has('resource.cronjob.trigger') && (
+              {canTrigger && (
                 <button
                   onClick={() => setTriggerDialogOpen(true)}
                   className="text-xs px-2 py-1 rounded-sm border border-slate-700 bg-slate-800 text-ink hover:border-slate-500 flex items-center gap-1"

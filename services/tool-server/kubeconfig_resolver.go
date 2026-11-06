@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/junginho0901/kubeast/services/pkg/internalauth"
+	"github.com/junginho0901/kubeast/services/pkg/protectedns"
 )
 
 type ctxKey int
@@ -95,8 +96,9 @@ users:
 `
 
 type cachedKubeconfig struct {
-	path   string // "" = in-cluster ServiceAccount (no --kubeconfig)
-	expiry time.Time
+	path      string // "" = in-cluster ServiceAccount (no --kubeconfig)
+	protected protectedns.Namespaces
+	expiry    time.Time
 }
 
 var (
@@ -108,6 +110,13 @@ var (
 // = in-cluster SA), fetching + caching the registered kubeconfig. An empty
 // clusterID defaults to "default" (single-cluster / unspecified back-compat).
 func resolveClusterKubeconfig(ctx context.Context, clusterID string, headers http.Header) (string, error) {
+	path, _, err := resolveClusterAccess(ctx, clusterID, headers)
+	return path, err
+}
+
+// resolveClusterAccess is resolveClusterKubeconfig with what k8s-service answers beside the kubeconfig: the namespaces
+// the call is held to on that cluster.
+func resolveClusterAccess(ctx context.Context, clusterID string, headers http.Header) (string, protectedns.Namespaces, error) {
 	if clusterID == "" {
 		clusterID = "default"
 	}
@@ -124,13 +133,13 @@ func resolveClusterKubeconfig(ctx context.Context, clusterID string, headers htt
 	kcCacheMu.Lock()
 	if c, ok := kcCache[key]; ok && time.Now().Before(c.expiry) {
 		kcCacheMu.Unlock()
-		return c.path, nil
+		return c.path, c.protected, nil
 	}
 	kcCacheMu.Unlock()
 
-	blob, inCluster, err := fetchClusterKubeconfig(ctx, clusterID, headers)
+	blob, inCluster, protected, err := fetchClusterKubeconfig(ctx, clusterID, headers)
 	if err != nil {
-		return "", err
+		return "", protectedns.Namespaces{}, err
 	}
 
 	// in-cluster clusters have no registered blob — kubectl can't talk to the
@@ -144,13 +153,13 @@ func resolveClusterKubeconfig(ctx context.Context, clusterID string, headers htt
 		path, err = writeKubeconfigFile(clusterID, blob)
 	}
 	if err != nil {
-		return "", err
+		return "", protectedns.Namespaces{}, err
 	}
 
 	kcCacheMu.Lock()
-	kcCache[key] = cachedKubeconfig{path: path, expiry: time.Now().Add(kubeconfigTTL)}
+	kcCache[key] = cachedKubeconfig{path: path, protected: protected, expiry: time.Now().Add(kubeconfigTTL)}
 	kcCacheMu.Unlock()
-	return path, nil
+	return path, protected, nil
 }
 
 // kcCacheKey scopes a cache entry to (cluster, caller). The kubeconfig blob is
@@ -187,11 +196,11 @@ func invalidateClusterKubeconfig(clusterID string) {
 	_ = os.Remove(filepath.Join(os.TempDir(), "tool-server-kubeconfig-"+sanitizeID(clusterID)))
 }
 
-func fetchClusterKubeconfig(ctx context.Context, clusterID string, headers http.Header) (blob string, inCluster bool, err error) {
+func fetchClusterKubeconfig(ctx context.Context, clusterID string, headers http.Header) (blob string, inCluster bool, protected protectedns.Namespaces, err error) {
 	url := fmt.Sprintf("%s/internal/clusters/%s/kubeconfig", k8sServiceURL, clusterID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return "", false, err
+		return "", false, protected, err
 	}
 	// The user's token (access gate + audit actor on k8s-service) plus this
 	// service's own token: a user session alone cannot fetch a kubeconfig.
@@ -202,21 +211,22 @@ func fetchClusterKubeconfig(ctx context.Context, clusterID string, headers http.
 
 	resp, err := kcHTTP.Do(req)
 	if err != nil {
-		return "", false, fmt.Errorf("kubeconfig fetch for %q: %w", clusterID, err)
+		return "", false, protected, fmt.Errorf("kubeconfig fetch for %q: %w", clusterID, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", false, fmt.Errorf("kubeconfig fetch for %q: status %d", clusterID, resp.StatusCode)
+		return "", false, protected, fmt.Errorf("kubeconfig fetch for %q: status %d", clusterID, resp.StatusCode)
 	}
 
 	var body struct {
-		Kubeconfig string `json:"kubeconfig"`
-		InCluster  bool   `json:"in_cluster"`
+		Kubeconfig string                 `json:"kubeconfig"`
+		InCluster  bool                   `json:"in_cluster"`
+		Protected  protectedns.Namespaces `json:"protected_namespaces"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		return "", false, err
+		return "", false, protected, err
 	}
-	return body.Kubeconfig, body.InCluster, nil
+	return body.Kubeconfig, body.InCluster, body.Protected, nil
 }
 
 func writeKubeconfigFile(clusterID, blob string) (string, error) {

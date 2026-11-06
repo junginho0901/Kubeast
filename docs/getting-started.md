@@ -142,10 +142,13 @@ docker compose exec auth-service /app/server reset-admin
 
 Log in with the `admin` account first. If no cluster is registered, you are taken to the `/setup` wizard right after login (the wizard and its API require admin permission). **Change the password right after logging in.**
 
-- **In-cluster** — automatically connects the cluster Kubeast runs in, with its ServiceAccount permissions
+- **In-cluster** — automatically connects the cluster Kubeast runs in, with its ServiceAccount permissions. Connect that cluster this way: only then does Kubeast know it is the one it runs on and [limit its own namespace to global admins](cluster-requirements.md#who-reaches-kubeasts-own-namespace).
 - **External** — registers another cluster's kubeconfig (multi-cluster).
   - If you leave the API server address empty, the address actually used during the connection check is filled in.
   - For a cluster registered without an address, the connection test in **Admin > Clusters** fills it in.
+
+**A role on the cluster Kubeast runs on is Kubernetes access to that whole cluster**: Write acts with `edit` in every namespace and Admin as `cluster-admin`.
+The Kubeast app keeps its own namespace, which holds the sign-in key and the other clusters' credentials, to global admins, but someone using Kubernetes directly has to be stopped with RBAC ([details](cluster-requirements.md#who-reaches-kubeasts-own-namespace)).
 
 **Cluster requirements**: Kubeast installs nothing on the clusters you register.
 Each cluster must already have the permissions (RBAC). Features such as graphs, cost and policy reports read that cluster's metrics-server, Prometheus, OpenCost, Kyverno, etc.

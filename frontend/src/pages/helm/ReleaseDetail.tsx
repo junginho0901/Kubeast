@@ -16,6 +16,7 @@ import HistoryTab from './tabs/HistoryTab'
 import ResourcesTab from './tabs/ResourcesTab'
 import UninstallModal from './modals/UninstallModal'
 import TestResultModal from './modals/TestResultModal'
+import { isProtectedNamespaceError } from '@/utils/protectedNamespace'
 
 type TabKey = 'overview' | 'values' | 'manifest' | 'notes' | 'history' | 'resources'
 
@@ -183,7 +184,7 @@ export default function HelmReleaseDetailPage() {
         <div className="flex flex-col items-start gap-3 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200" data-testid={`helm-release-${key}`}>
           <p>
             {key === 'forbidden'
-              ? t('helmReleaseDetail.error.forbidden')
+              ? t(isProtectedNamespaceError(detailQuery.error) ? 'helmReleaseDetail.error.protected' : 'helmReleaseDetail.error.forbidden')
               : key === 'notFound'
                 ? t('helmReleaseDetail.error.notFound', { namespace, name, cluster: currentCluster || 'default' })
                 : t('helmReleaseDetail.error.loadFailed', { code: status ?? '-', defaultValue: 'Could not load the release (server error {{code}}).' })}

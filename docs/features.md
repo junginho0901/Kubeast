@@ -145,6 +145,11 @@
   - Kubeast's impersonation credential (`kubeast-impersonator`) must therefore be guarded as carefully as the full permissions of those groups.
   - Log file viewing (`features.logFiles`, default off) is also available to Read and Write, because Kubeast fixes the commands to `ls` and `tail`.
   - For this, the chart binds `pods/exec` to the Read group (`kubeast:viewer`) only in the namespaces you list. See [Log files inside containers](operations.md#log-files-inside-containers).
+- **Kubeast's own namespace, on the cluster it runs on, is for global admins** (`*` on every cluster), because it holds the sign-in key and the other clusters' credentials.
+  - Anyone else, a Write or Admin grant on that cluster included, is refused with 403 on screens, the API, AI tools and MCP: its Secrets and Helm releases, any change there, and exec, attach and log files in its pods. Lists of Secrets across namespaces leave them out, and a resource drawer hides the buttons for what would be refused.
+  - Its pods, logs, events and ConfigMaps stay readable. A namespace of that name on another cluster is an ordinary one.
+  - This is a limit of the app. Write on that cluster is still `edit` across it and Admin `cluster-admin` on the cluster's side, so someone using Kubernetes directly has to be stopped with RBAC ([details](cluster-requirements.md#who-reaches-kubeasts-own-namespace)).
+- **The node shell's namespace (`nodeShell.namespace`), on any cluster, is for those holding `resource.node.shell`**: anyone else is refused any change there and exec, attach and log files in its pods, since it allows privileged pods ([details](cluster-requirements.md#9-node-shell)).
 - **Every write API** checks permissions in the handler and is refused without an audit row (fail-closed).
   - **Read APIs** are blocked by two checks: whether the user has a role on that cluster (cluster middleware, deny-by-default), and the cluster's RBAC (viewer group).
   - `menu.*` only hides UI menus. There is one key per sidebar group:

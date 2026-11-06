@@ -14,6 +14,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
+	"github.com/junginho0901/kubeast/services/pkg/protectedns"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -295,6 +296,10 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			if reason := namespaceScopeRefusal(payload, effectiveClusterID(clusterID), req.Path); reason != "" {
+				send(ctx, sendCh, req.errorFrame(reason))
+				continue
+			}
+			if reason := m.protectedRefusal(ctx, payload, effectiveClusterID(clusterID), req.Path); reason != "" {
 				send(ctx, sendCh, req.errorFrame(reason))
 				continue
 			}
@@ -581,6 +586,33 @@ func resourceToGVR(resource string) (schema.GroupVersionResource, bool) {
 	}
 	gvr, ok := gvrMap[resource]
 	return gvr, ok
+}
+
+// ProtectedResolver, which the k8s Service implements, names the guarded namespaces on the cluster in ctx.
+type ProtectedResolver interface {
+	ProtectedNamespaces(ctx context.Context) protectedns.Namespaces
+}
+
+// protectedRefusal applies the guarded namespaces to a watch that names a namespace, once and in words. A watch of
+// every namespace has its Secrets narrowed by the cluster client. "" = allowed.
+func (m *Multiplexer) protectedRefusal(ctx context.Context, payload auth.TokenPayload, clusterID, path string) string {
+	r, ok := m.provider.(ProtectedResolver)
+	if !ok {
+		return ""
+	}
+	resource, namespace, err := parsePath(path)
+	if err != nil {
+		return ""
+	}
+	gvr, ok := resourceToGVR(resource)
+	if !ok {
+		return ""
+	}
+	rules := r.ProtectedNamespaces(cluster.WithID(ctx, cluster.ID(clusterID)))
+	if err := rules.Refusal(payload, clusterID, namespace, protectedns.ActOf(gvr.Group, "watch", gvr.Resource, "")); err != nil {
+		return err.Error()
+	}
+	return ""
 }
 
 // namespaceScopeRefusal applies a namespace-scoped grant to a watch: the path

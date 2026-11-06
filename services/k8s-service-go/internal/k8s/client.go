@@ -22,6 +22,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/gitops"
+	"github.com/junginho0901/kubeast/services/pkg/protectedns"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -68,6 +69,8 @@ type clientBundle struct {
 	// running set, if any (informer_cache.go). id names the cluster in logs.
 	id          cluster.ID
 	cacheClient kubernetes.Interface
+	// protected is what this cluster's client holds a signed-in user to (services/pkg/protectedns).
+	protected   protectedns.Namespaces
 	infMu       sync.Mutex
 	inf         *clusterInformers
 	infFailedAt time.Time
@@ -142,7 +145,10 @@ type ServiceOptions struct {
 	// ExecCommands is the allow-list of credential plugins a registered
 	// kubeconfig may run (cluster.CheckKubeconfigExec); they execute in this pod.
 	ExecCommands []string
-	Gitops       gitops.Config // Argo CD guard (chart gitops.argocd)
+	// InstallNamespace is the namespace Kubeast runs in and NodeShellNamespace where node shells run (services/pkg/protectedns).
+	InstallNamespace   string
+	NodeShellNamespace string
+	Gitops             gitops.Config // Argo CD guard (chart gitops.argocd)
 }
 
 // impersonationEnabled and execCommands are read by buildClientBundle (set once
@@ -158,6 +164,7 @@ var (
 func NewService(ctx context.Context, registry cluster.Registry, watchEnabled bool, c *cache.Cache, opts ServiceOptions) (*Service, error) {
 	impersonationEnabled = opts.Impersonation
 	execCommands = opts.ExecCommands
+	installNamespace, nodeShellNamespace = opts.InstallNamespace, opts.NodeShellNamespace
 	s := &Service{
 		registry:          registry,
 		gitops:            opts.Gitops,
@@ -242,6 +249,11 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 		cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return auth.ImpersonationRoundTripper(rt, id) })
 		cacheCfg.Impersonate = rest.ImpersonationConfig{UserName: overviewCacheUser, Groups: []string{auth.GroupAuthenticated, auth.GroupViewer}}
 	}
+	// Inside the recording, so a refused request is listed for the call as the cluster's own refusal is.
+	protected := protectedFor(info)
+	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper {
+		return protectedns.RoundTripper(rt, protected, string(info.ID))
+	})
 	// A request recorded for an AI tool call (accesstrail) goes out with its own Audit-ID.
 	cfg.Wrap(kubetrail.RoundTripper)
 	clientset, err := kubernetes.NewForConfig(cfg)
@@ -269,6 +281,7 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 		logStore:    logStoreFromInfo(info),
 		cost:        &costCache{},
 		id:          info.ID,
+		protected:   protected,
 		cacheClient: cacheClient,
 	}, nil
 }
@@ -499,16 +512,22 @@ func (s *Service) UserRESTConfigFor(ctx context.Context) (*rest.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !impersonationEnabled {
+	p, ok := auth.FromContext(ctx)
+	if !impersonationEnabled && !ok {
 		return b.restConfig, nil
 	}
-	p, ok := auth.FromContext(ctx)
 	if !ok {
 		return nil, ErrNoUser
 	}
-	user, groups := p.Impersonation(string(b.id))
 	cfg := rest.CopyConfig(b.restConfig)
-	cfg.Impersonate = rest.ImpersonationConfig{UserName: user, Groups: groups}
+	if impersonationEnabled {
+		user, groups := p.Impersonation(string(b.id))
+		cfg.Impersonate = rest.ImpersonationConfig{UserName: user, Groups: groups}
+	}
+	// This config's callers send their own contexts, which the bundle's check cannot read a user from.
+	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper {
+		return protectedns.Pinned(rt, b.protected, string(b.id), p)
+	})
 	return cfg, nil
 }
 

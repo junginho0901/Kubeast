@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useResourceDetail } from './ResourceDetailContext'
-import { usePermission } from '@/hooks/usePermission'
 import { useCanI } from '@/hooks/useCanCreate'
 import { permResource } from '@/utils/permissions'
 import { useAIContext } from '@/hooks/useAIContext'
@@ -109,7 +108,6 @@ export default function ResourceDetailDrawer() {
   // The generic custom-resource drawer shows the object's own kind when the caller passes it.
   const crKind = kind === 'CustomResourceInstance' ? target?.rawJson?.kind : undefined
   const displayKind = typeof crKind === 'string' && crKind ? crKind : kind
-  const { has } = usePermission()
   // Admission policies are read-only in Kubeast (no delete route); the YAML tab is the shared path.
   const readOnlyKind = kind === 'ValidatingAdmissionPolicy' || kind === 'MutatingAdmissionPolicy'
   // the cluster's answer too, as the create buttons: the Write role's edit cannot delete cluster-scoped objects,
@@ -132,7 +130,10 @@ export default function ResourceDetailDrawer() {
   // features.admissionPolicies.readOnly: the server refuses a policy apply, so the editor stays read-only too.
   const policyLocked = !!features?.admissionPolicies?.readOnly &&
     ['ValidatingAdmissionPolicy', 'ValidatingAdmissionPolicyBinding', 'MutatingAdmissionPolicy', 'MutatingAdmissionPolicyBinding'].includes(kind)
-  const canEditYaml = has(`resource.${permResource(kind)}.edit`) && !policyLocked
+  // the cluster's and the server's answer for this object, as Delete above
+  const mayEdit = useCanI(`resource.${permResource(kind)}.edit`, 'patch',
+    readOnlyKind || resolving ? undefined : deleteTarget(kind, ns, name, target?.rawJson))
+  const canEditYaml = mayEdit && !policyLocked
 
   const {
     yamlData,
