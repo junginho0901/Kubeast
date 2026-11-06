@@ -116,3 +116,25 @@ func TestDryRunDiffIsARevealLikeTheRevisionDiff(t *testing.T) {
 		t.Fatal("an empty diff reveals nothing and writes no row")
 	}
 }
+
+// The AI path asks for the masked text with masked=1: nothing is revealed and no reveal row is written, whatever the
+// caller may reveal. The screen, which does not ask, keeps its full text.
+func TestHelmRevealAskedForMaskedTextRevealsNothing(t *testing.T) {
+	req := func(target string) *http.Request {
+		r := httptest.NewRequest(http.MethodGet, target, nil)
+		ctx := context.WithValue(r.Context(), auth.TokenPayloadContextKey(),
+			auth.TokenPayload{UserID: "u1", Email: "dev@example.com", Perms: auth.PermissionMatrix{"self": {"resource.helm.read", "resource.secret.reveal"}}})
+		return r.WithContext(cluster.WithID(ctx, cluster.ID("self")))
+	}
+	store := &memAudit{}
+	h := &Handler{auditStore: store}
+
+	reveal, err := h.helmReveal(req("/api/v1/helm/releases/ns/rel/manifest?masked=1"), "ns", "rel", "manifest")
+	if err != nil || reveal || len(store.rows) != 0 {
+		t.Fatalf("masked=1: reveal %v err %v rows %d, want no reveal and no row", reveal, err, len(store.rows))
+	}
+	reveal, err = h.helmReveal(req("/api/v1/helm/releases/ns/rel/manifest"), "ns", "rel", "manifest")
+	if err != nil || !reveal || len(store.rows) != 1 {
+		t.Fatalf("the screen: reveal %v err %v rows %d, want a reveal and one row", reveal, err, len(store.rows))
+	}
+}

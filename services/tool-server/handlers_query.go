@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/itchyny/gojq"
+
+	"github.com/junginho0901/kubeast/services/pkg/redact"
 )
 
 const (
@@ -56,7 +58,8 @@ func listArgs(ctx context.Context, args map[string]interface{}) ([]string, strin
 	return cmd, scope, nil
 }
 
-// getJSONList runs kubectl get -o json and decodes the list.
+// getJSONList runs kubectl get -o json and decodes the list, without the values of any Secret in it: what is computed
+// from it next (a jq program, a group) can only see their key names.
 func getJSONList(ctx context.Context, headers http.Header, cmd []string, kind, namespace string) (map[string]interface{}, string, error) {
 	out, err := runKubectl(ctx, headers, append(cmd, "-o", "json")...)
 	if err != nil {
@@ -77,6 +80,7 @@ func getJSONList(ctx context.Context, headers http.Header, cmd []string, kind, n
 	if err := json.Unmarshal([]byte(out), &list); err != nil {
 		return nil, "", fmt.Errorf("kubectl get -o json: unreadable output: %w", err)
 	}
+	redact.StripSecrets(list)
 	return list, "", nil
 }
 
@@ -199,6 +203,9 @@ func handleTabularQuery(ctx context.Context, args map[string]interface{}, header
 	if err != nil {
 		return "", err
 	}
+	if out, stop, err := refuseSecretExpression(ctx, headers, argString(args, "resource_type", ""), "", argString(args, "namespace", ""), cmd); stop {
+		return out, err
+	}
 	if out, stop, err := podsTooMany(ctx, headers, args); stop {
 		return out, err
 	}
@@ -260,6 +267,9 @@ func handleCount(ctx context.Context, args map[string]interface{}, headers http.
 	cmd, scope, err := listArgs(ctx, args)
 	if err != nil {
 		return "", err
+	}
+	if kind := argString(args, "resource_type", ""); namesSecrets(kind) && secretValuePath(argString(args, "group_by", "")) {
+		return secretRefusal(kind)
 	}
 	if isPodsKind(argString(args, "resource_type", "")) {
 		if out, ok, err := podsCount(ctx, headers, args); ok {

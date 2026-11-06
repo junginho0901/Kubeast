@@ -105,7 +105,7 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 	// The arguments are the model's: refuse anything that kubectl would read
 	// as a flag instead of a name (argcheck.go) before touching the cluster.
 	if err := validateToolArgs(req.Arguments); err != nil {
-		respondJSON(w, http.StatusBadRequest, ToolCallResponse{Error: err.Error()})
+		respondToolError(w, http.StatusBadRequest, err.Error(), nil, nil)
 		return
 	}
 
@@ -113,21 +113,21 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 	// tool filtering is not trusted on its own.
 	payload, status, err := authorizeToolCall(toolAuth, r.Header, req.Name, clusterID)
 	if err != nil {
-		respondJSON(w, status, ToolCallResponse{Error: err.Error()})
+		respondToolError(w, status, err.Error(), nil, nil)
 		return
 	}
 	if err := namespaceGate(payload, clusterID, req.Name, req.Arguments); err != nil {
-		respondJSON(w, http.StatusForbidden, ToolCallResponse{Error: err.Error()})
+		respondToolError(w, http.StatusForbidden, err.Error(), nil, nil)
 		return
 	}
 	if status, err := approvalGate(r.Header, req.Name, clusterID, payload, req.Arguments); err != nil {
-		respondJSON(w, status, ToolCallResponse{Error: err.Error()})
+		respondToolError(w, status, err.Error(), nil, nil)
 		return
 	}
 
 	kcPath, err := resolveClusterKubeconfig(ctx, clusterID, r.Header)
 	if err != nil {
-		respondJSON(w, http.StatusBadGateway, ToolCallResponse{Error: "cluster kubeconfig: " + err.Error()})
+		respondToolError(w, http.StatusBadGateway, "cluster kubeconfig: "+err.Error(), nil, nil)
 		return
 	}
 	// kubectl runs as the validated user in the routed cluster.
@@ -146,7 +146,7 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 		} else if errors.Is(err, errConflict) {
 			status = http.StatusConflict
 		}
-		respondJSON(w, status, ToolCallResponse{Error: err.Error(), Access: &access, Requests: trailOf(rec)})
+		respondToolError(w, status, err.Error(), &access, trailOf(rec))
 		return
 	}
 
@@ -164,8 +164,19 @@ func trailOf(rec *accesstrail.Recorder) *accesstrail.Trail {
 	return &t
 }
 
+// respondToolError answers a failed call. Its text is the tool's output too (a failed command's stdout, a refused patch)
+// and bound for the same places, so it is masked the same way.
+func respondToolError(w http.ResponseWriter, status int, message string, access *auth.Access, requests *accesstrail.Trail) {
+	text, stats := redactToolOutput(message)
+	respondJSON(w, status, ToolCallResponse{Error: text, Redacted: stats, Access: access, Requests: requests})
+}
+
+// redactToolOutput masks one tool's output: a JSON answer string by string, so what a string holds is seen as itself.
 func redactToolOutput(output string) (string, *redact.Stats) {
-	content, stats := redact.Text(output, redactOpts)
+	content, stats, isJSON := redact.JSON(output, redactOpts)
+	if !isJSON {
+		content, stats = redact.Text(output, redactOpts)
+	}
 	if stats.Count == 0 {
 		return content, nil
 	}

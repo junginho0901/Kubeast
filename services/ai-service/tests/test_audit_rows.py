@@ -312,3 +312,57 @@ async def test_an_approved_write_refused_before_tool_server_is_failed(monkeypatc
     (_, _, content), kw = messages[0]
     assert content.startswith("⚠️ `k8s_scale` on `self` was approved and failed.")
     assert kw["tool_calls"][0]["approval_status"] == "failed"
+
+
+@pytest.mark.asyncio
+async def test_an_approved_write_that_fails_keeps_its_output_masked_and_short(monkeypatch):
+    import app.api as api
+
+    out = []
+
+    async def write(**kw):
+        out.append(kw)
+        return True
+
+    async def ready():
+        return None
+
+    approval = SimpleNamespace(id="ap3", user_id="u1", cluster="self", tool="k8s_execute_command",
+                               args={"pod_name": "web", "namespace": "shop", "command": ["cat", "conf"]},
+                               session_id="s1", result="", status="pending", created_at=None, expires_at=None, decided_at=None)
+    messages = []
+
+    class DB:
+        async def transition_tool_approval(self, *a, **k):
+            for key, value in k.items():
+                setattr(approval, key, value)
+            return approval
+
+        async def add_message(self, *a, **k):
+            messages.append((a, k))
+
+    async def load(approval_id, payload):
+        return DB(), approval
+
+    class Service:
+        tool_server = SimpleNamespace(last_access=None, last_requests=None)
+
+        async def _call_tool_server(self, tool, args, **kw):
+            raise Exception("kubectl failed: boom\npassword: fake-failed-password\n" + "x" * 5000)
+
+    async def build(authorization, cluster_name=None):
+        return Service()
+
+    monkeypatch.setattr(audit_writer, "write_audit", write)
+    monkeypatch.setattr(audit_writer, "require_audit_ready", ready)
+    monkeypatch.setattr(api, "_load_own_pending_approval", load)
+    monkeypatch.setattr(api, "_caller", lambda auth: SimpleNamespace(user_id="u1"))
+    monkeypatch.setattr(api, "_extract_audit_meta", lambda request, auth: ({"user_id": "u1", "email": "dev@example.com"}, {}))
+    monkeypatch.setattr(api, "_build_ai_service", build)
+    monkeypatch.setattr("app.services.approval_token.sign", lambda *a, **k: "tok")
+    await api.approve_tool_approval("ap3", request=SimpleNamespace(), authorization="Bearer x")
+    run = out[-1]
+    assert run["action"] == "ai.tool.execute" and run["result"] == "failure"
+    assert "fake-failed-password" not in run["error"] and "boom" in run["error"] and len(run["error"]) <= 500, run["error"]
+    assert "fake-failed-password" not in approval.result
+    assert "fake-failed-password" not in repr(messages)

@@ -156,11 +156,22 @@ def _sub_count(pattern: re.Pattern, text: str, repl, stats: Stats, kind: str) ->
 
 # --- Secret documents -----------------------------------------------------------
 
-_JSON_SECRET_DATA = re.compile(r'"(data|stringData)"\s*:\s*\{[^{}]*\}')
-_JSON_LAST_APPLIED = re.compile(r'"kubectl\.kubernetes\.io/last-applied-configuration"\s*:\s*"(?:[^"\\]|\\.)*"')
+_SECRET_PLACEHOLDER = "<REDACTED:secret>"
+_LAST_APPLIED_NAME = "kubectl.kubernetes.io/last-applied-configuration"
+_LAST_APPLIED = _LAST_APPLIED_NAME + ":"
+# A Secret's values: its own two fields and the describe answer's data_values.
+_SECRET_VALUE_FIELDS = ("data", "stringData", "data_values")
+
+# A chart may quote the kind or put spaces after the colon; kubectl prints `kind: Secret`.
+_SECRET_YAML_KIND = re.compile(r"""^[ \t]*(?:-[ \t]+)?["']?kind["']?[ \t]*:[ \t]*["']?Secret["']?[ \t]*\r?$""", re.M)
+# `"kind": "Secret"`, or kubectl's own words in a refused patch, whose JSON does not say what it patches.
+_SECRET_JSON_KIND = re.compile(r'"kind"\s*:\s*"Secret"|\bKind=Secret\b')
+# A field of a JSON Secret that holds its values, up to where the value starts.
+_JSON_SECRET_FIELD = re.compile(r'"(data|stringData|data_values|kubectl\.kubernetes\.io/last-applied-configuration)"\s*:\s*')
 
 
-_LAST_APPLIED = "kubectl.kubernetes.io/last-applied-configuration:"
+def _names_secret_yaml(text: str) -> bool:
+    return "kind: Secret" in text or bool(_SECRET_YAML_KIND.search(text))
 
 
 def _strip_secret_yaml(doc: str) -> Tuple[str, int]:
@@ -190,7 +201,7 @@ def _strip_secret_yaml(doc: str) -> Tuple[str, int]:
                 if value < 0:
                     value = indent
                 if indent == value and ":" in trim:
-                    lines[i] = " " * indent + trim.split(":", 1)[0] + ": <REDACTED:secret>"
+                    lines[i] = " " * indent + trim.split(":", 1)[0] + ": " + _SECRET_PLACEHOLDER
                     n += 1
                 else:
                     lines[i] = ""
@@ -198,8 +209,8 @@ def _strip_secret_yaml(doc: str) -> Tuple[str, int]:
             block = value = -1
         if anno >= 0:
             if indent > anno:
-                if trim.startswith(_LAST_APPLIED):
-                    lines[i] = " " * indent + _LAST_APPLIED + " <REDACTED:secret>"
+                if trim.lstrip("\"'").startswith(_LAST_APPLIED_NAME):
+                    lines[i] = " " * indent + _LAST_APPLIED + " " + _SECRET_PLACEHOLDER
                     n += 1
                     last = indent
                 elif last >= 0 and indent > last:
@@ -208,39 +219,163 @@ def _strip_secret_yaml(doc: str) -> Tuple[str, int]:
                     last = -1
                 continue
             anno = last = -1
-        if key in ("data:", "stringData:"):
-            block, value = key_indent, -1
-        elif key == "annotations:":
+        if ":" not in key:
+            continue
+        field, rest = key.split(":", 1)
+        rest = rest.strip()
+        name = field.strip("\"' ")
+        on_its_own = rest == "" or rest.startswith("#")
+        if name in ("data", "stringData"):
+            if on_its_own:
+                block, value = key_indent, -1
+            elif rest in ("{}", "null", "~"):
+                pass
+            elif not field.startswith('"'):  # JSON's `"data": {` is _strip_secret_json's
+                # a flow mapping or a scalar on the key's line, which may go on below it
+                lines[i] = line[:line.index(key)] + field + ": " + _SECRET_PLACEHOLDER
+                n += 1
+                block, value = key_indent, -1
+        elif name == "annotations" and on_its_own:
             anno, last = key_indent, -1
+        elif name == "annotations" and _LAST_APPLIED_NAME in rest and not field.startswith('"'):
+            lines[i] = line[:line.index(key)] + field + ": " + _SECRET_PLACEHOLDER
+            n += 1
     return "\n".join(lines), n
 
 
+def _json_value_end(s: str, i: int) -> int:
+    """The index after the JSON value that starts at s[i], or -1 if s ends before the value does."""
+    if i >= len(s):
+        return -1
+    c = s[i]
+    if c == '"':
+        j = i + 1
+        while j < len(s):
+            if s[j] == "\\":
+                j += 2
+                continue
+            if s[j] == '"':
+                return j + 1
+            j += 1
+        return -1
+    if c in "{[":
+        depth = 0
+        j = i
+        while j < len(s):
+            ch = s[j]
+            if ch == '"':
+                end = _json_value_end(s, j)
+                if end < 0:
+                    return -1
+                j = end
+                continue
+            if ch in "{[":
+                depth += 1
+            elif ch in "}]":
+                depth -= 1
+                if depth == 0:
+                    return j + 1
+            j += 1
+        return -1
+    j = i
+    while j < len(s) and s[j] not in ",}]\r\n":
+        j += 1
+    return j
+
+
+_JSON_SPACE = " \t\n\r"
+
+
+def _mask_json_value(out: list, s: str, i: int, counter: list) -> int:
+    """Write the placeholder for the value at s[i]; the index after it, -1 if s ends first. An empty value stays."""
+    end = _json_value_end(s, i)
+    value = s[i:] if end < 0 else s[i:end]
+    if end >= 0 and (value in ("{}", "null", '""', "[]") or value.startswith('"<REDACTED')):
+        out.append(value)
+    else:
+        out.append('"' + _SECRET_PLACEHOLDER + '"')
+        counter[0] += 1
+    return end
+
+
+def _mask_json_object(out: list, s: str, i: int, counter: list) -> int:
+    """Write the object at s[i] with each value masked; the index after it, -1 if s ends first. Anything in it but
+    keys, values, punctuation and space (a diff's +/- at a line's start) is left out."""
+    out.append("{")
+    j = i + 1
+    while j < len(s):
+        c = s[j]
+        if c == "}":
+            out.append("}")
+            return j + 1
+        if c == '"':
+            end = _json_value_end(s, j)
+            if end < 0:
+                return -1
+            colon = end
+            while colon < len(s) and s[colon] in _JSON_SPACE:
+                colon += 1
+            if colon >= len(s) or s[colon] != ":":  # no key: a value out of place is still a value
+                j = _mask_json_value(out, s, j, counter)
+                if j < 0:
+                    return -1
+                continue
+            out.append(s[j:colon + 1])
+            j = colon + 1
+            while j < len(s) and s[j] in _JSON_SPACE:
+                out.append(s[j])
+                j += 1
+            j = _mask_json_value(out, s, j, counter)
+            if j < 0:
+                return -1
+            continue
+        if c in ",+-" or c in _JSON_SPACE:
+            out.append(c)
+        j += 1
+    return -1
+
+
 def _strip_secret_json(doc: str) -> Tuple[str, int]:
-    n = 0
+    """Mask a JSON Secret's values where a parser cannot be used: the text may be cut, or hold other text around the
+    object. The scan keeps to JSON's strings, so braces and quotes inside a value do not end it, and a value that never
+    ends takes the rest of the text with it. Key names stay; what is already a placeholder stays too."""
+    out: list = []
+    counter = [0]
+    while True:
+        m = _JSON_SECRET_FIELD.search(doc)
+        if not m:
+            out.append(doc)
+            return "".join(out), counter[0]
+        out.append(doc[:m.end()])
+        at = m.end()
+        if m.group(1) != _LAST_APPLIED_NAME and at < len(doc) and doc[at] == "{":
+            end = _mask_json_object(out, doc, at, counter)
+        else:
+            end = _mask_json_value(out, doc, at, counter)
+        if end < 0:
+            return "".join(out), counter[0]
+        doc = doc[end:]
 
-    def _data(m: re.Match) -> str:
-        nonlocal n
-        n += 1
-        return '"%s": {"<REDACTED>": "secret"}' % m.group(1)
 
-    def _anno(_m: re.Match) -> str:
-        nonlocal n
-        n += 1
-        return '"kubectl.kubernetes.io/last-applied-configuration": "<REDACTED:secret>"'
-
-    doc = _JSON_SECRET_DATA.sub(_data, doc)
-    doc = _JSON_LAST_APPLIED.sub(_anno, doc)
-    return doc, n
+def strip_secret_text(text: str) -> Tuple[str, int]:
+    """Strip text known to hold a Secret, also when nothing in it says so: a text cut short may end before its kind."""
+    docs = text.split("\n---")
+    total = 0
+    for i, doc in enumerate(docs):
+        out, n = _strip_secret_yaml(doc)
+        out, m = _strip_secret_json(out)
+        docs[i], total = out, total + n + m
+    return "\n---".join(docs), total
 
 
 def _strip_secret_documents(text: str) -> Tuple[str, int]:
     docs = text.split("\n---")
     total = 0
     for i, doc in enumerate(docs):
-        if "kind: Secret" in doc:
+        if _names_secret_yaml(doc):
             docs[i], n = _strip_secret_yaml(doc)
             total += n
-        if '"kind": "Secret"' in docs[i] or '"kind":"Secret"' in docs[i]:
+        if _SECRET_JSON_KIND.search(docs[i]):
             docs[i], n = _strip_secret_json(docs[i])
             total += n
     return "\n---".join(docs), total
@@ -254,7 +389,7 @@ def redact_text(text: Optional[str], opts: Optional[Options] = None) -> Tuple[st
     if not text:
         return text or "", stats
     o = opts or from_env()
-    if "kind: Secret" in text or '"kind": "Secret"' in text or '"kind":"Secret"' in text:
+    if _names_secret_yaml(text) or _SECRET_JSON_KIND.search(text):
         text, n = _strip_secret_documents(text)
         stats.add("secret", n)
     if not o.enabled:
@@ -321,29 +456,40 @@ def redact_text(text: Optional[str], opts: Optional[Options] = None) -> Tuple[st
     return text, stats
 
 
+def _mask_secret_fields(value: dict, stats: Stats) -> None:
+    """Mask what one mapping under a Secret holds of its values."""
+    for f in _SECRET_VALUE_FIELDS:
+        inner = value.get(f)
+        if isinstance(inner, dict):
+            for k in list(inner.keys()):
+                inner[k] = _SECRET_PLACEHOLDER
+                stats.add("secret", 1)
+        elif inner is not None:
+            value[f] = _SECRET_PLACEHOLDER
+            stats.add("secret", 1)
+    # metadata.annotations of an object, or annotations at the top of a describe answer
+    anno = value.get("annotations")
+    if isinstance(anno, dict) and _LAST_APPLIED_NAME in anno:
+        anno[_LAST_APPLIED_NAME] = _SECRET_PLACEHOLDER
+        stats.add("secret", 1)
+
+
 def redact_object(value: Any, opts: Optional[Options] = None, _secret: bool = False, _stats: Optional[Stats] = None) -> Tuple[Any, Stats]:
     """Redact a decoded JSON/YAML value in place: credential-looking keys lose
     their string values, every string goes through redact_text, and a mapping
-    with kind: Secret loses data/stringData entirely."""
+    with kind: Secret loses data/stringData wherever they sit under it, with
+    the last-applied annotation of any annotations under it."""
     stats = _stats if _stats is not None else Stats()
     o = opts or from_env()
     if isinstance(value, dict):
         secret = _secret or value.get("kind") == "Secret"
-        skip = {"data", "stringData"} if secret else set()
-        if value.get("kind") == "Secret":
-            for f in ("data", "stringData"):
-                inner = value.get(f)
-                if isinstance(inner, dict):
-                    for k in list(inner.keys()):
-                        inner[k] = "<REDACTED:secret>"
-                        stats.add("secret", 1)
-            anno = (value.get("metadata") or {}).get("annotations") if isinstance(value.get("metadata"), dict) else None
-            if isinstance(anno, dict) and "kubectl.kubernetes.io/last-applied-configuration" in anno:
-                anno["kubectl.kubernetes.io/last-applied-configuration"] = "<REDACTED:secret>"
-                stats.add("secret", 1)
+        skip = set()
+        if secret:
+            _mask_secret_fields(value, stats)
+            skip.update(_SECRET_VALUE_FIELDS)
             # a page snapshot may carry the YAML text next to the object
             if isinstance(value.get("yaml"), str):
-                value["yaml"], n = _strip_secret_documents(value["yaml"])
+                value["yaml"], n = strip_secret_text(value["yaml"])
                 stats.add("secret", n)
                 skip.add("yaml")
         for k, v in list(value.items()):

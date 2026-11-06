@@ -213,7 +213,7 @@ func (s *Service) DescribeSecret(ctx context.Context, namespace, name string, ca
 		"data_sizes":       dataSizes,
 		"can_reveal":       canReveal,
 		"labels":           secret.Labels,
-		"annotations":      secret.Annotations,
+		"annotations":      secretAnnotations(secret.Annotations, canReveal),
 		"created_at":       toISO(&secret.CreationTimestamp),
 		"uid":              string(secret.UID),
 		"resource_version": secret.ResourceVersion,
@@ -270,18 +270,8 @@ func (s *Service) GetSecretYAML(ctx context.Context, namespace, name string, can
 
 	obj.SetManagedFields(nil)
 
-	// Mask data values for read-only users
 	if !canReveal {
-		if data, ok := obj.Object["data"].(map[string]interface{}); ok {
-			for k := range data {
-				data[k] = "***"
-			}
-		}
-		if stringData, ok := obj.Object["stringData"].(map[string]interface{}); ok {
-			for k := range stringData {
-				stringData[k] = "***"
-			}
-		}
+		MaskSecretObject(obj.Object)
 	}
 
 	rawData, err := json.Marshal(obj.Object)
@@ -290,6 +280,44 @@ func (s *Service) GetSecretYAML(ctx context.Context, namespace, name string, can
 	}
 
 	return jsonToYAML(rawData), nil
+}
+
+// SecretMask stands in for a Secret's value for a caller without resource.secret.reveal.
+const SecretMask = "***"
+
+// lastAppliedAnnotation: kubectl apply keeps the object it applied here, so on a Secret it repeats the values,
+// plain stringData included. It stays listed, as the screen shows every annotation.
+const lastAppliedAnnotation = "kubectl.kubernetes.io/last-applied-configuration"
+
+// MaskSecretObject blanks a Secret object's data, stringData and last-applied annotation in place.
+func MaskSecretObject(obj map[string]interface{}) {
+	for _, key := range []string{"data", "stringData"} {
+		if m, ok := obj[key].(map[string]interface{}); ok {
+			for k := range m {
+				m[k] = SecretMask
+			}
+		}
+	}
+	if md, ok := obj["metadata"].(map[string]interface{}); ok {
+		if ann, ok := md["annotations"].(map[string]interface{}); ok {
+			if _, ok := ann[lastAppliedAnnotation]; ok {
+				ann[lastAppliedAnnotation] = SecretMask
+			}
+		}
+	}
+}
+
+// secretAnnotations is a Secret's annotations for a describe answer, the last-applied one masked without reveal.
+func secretAnnotations(annotations map[string]string, canReveal bool) map[string]string {
+	if _, ok := annotations[lastAppliedAnnotation]; canReveal || !ok {
+		return annotations
+	}
+	out := make(map[string]string, len(annotations))
+	for k, v := range annotations {
+		out[k] = v
+	}
+	out[lastAppliedAnnotation] = SecretMask
+	return out
 }
 
 // sortedKeys lists a map's keys in one order: a map's own differs per computation. An empty map gives [], not null.

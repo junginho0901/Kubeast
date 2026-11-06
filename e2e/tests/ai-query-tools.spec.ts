@@ -113,6 +113,98 @@ test.describe('AI query tools: jq, tabular, count, and the k8s_diff preview', ()
     expect(nodes.count).toBe(Number(kubectl(`get nodes -o name`).split('\n').filter(Boolean).length))
   })
 
+  test('a Secret answers every query tool without its values, a ConfigMap read the same way keeps them, and k8s_diff names keys only', async ({ request }) => {
+    const admin = await login(request)
+    test.skip(!(await mcpOn(request, admin)), 'the MCP server is off (mcp.enabled)')
+    const ns = `e2e-secval-${stamp()}`
+    const value = `fake-value-${stamp()}`
+    const newValue = `fake-new-${stamp()}`
+    const b64 = (s: string) => Buffer.from(s).toString('base64')
+    const inBraces = `{ conf = ${value} }`
+    const configValue = `plain-config-${stamp()}`
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-secval-'))
+    const secretYaml = (key: string) => `apiVersion: v1\nkind: Secret\nmetadata:\n  name: app\n  namespace: ${ns}\ntype: Opaque\nstringData:\n  conf: "${inBraces}"\n  tls.key: ${key}\n`
+    const file = path.join(dir, 'objects.yaml')
+    // kubectl apply: the last-applied annotation holds stringData in the clear
+    fs.writeFileSync(file, `${secretYaml(value)}---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: cfg\n  namespace: ${ns}\ndata:\n  mode: ${configValue}\n`)
+    kubectl(`create namespace ${ns}`)
+    try {
+      kubectl(`apply -f ${file}`)
+      const gone = [value, b64(value), inBraces, b64(inBraces)]
+      const clean = (text: string, what: string) => {
+        for (const g of gone) expect(text, what).not.toContain(g)
+      }
+
+      // whatever the output and however the kind is written
+      const outputs: Record<string, unknown>[] = [
+        { resource_type: 'secrets', output: 'jsonpath={.items[*].data}' },
+        { resource_type: 'secret', output: 'jsonpath-as-json={.items[*].data}' },
+        { resource_type: 'Secret', output: 'go-template={{range .items}}{{.data}}{{end}}' },
+        { resource_type: 'secrets,configmaps', output: 'custom-columns=V:.data' },
+        { resource_type: 'secrets', resource_name: 'app', output: 'jsonpath={.metadata.annotations}' },
+      ]
+      for (const args of outputs) {
+        const res = json((await call(request, admin, 'k8s_get_resources', { namespace: ns, ...args })).text)
+        expect(res.status, JSON.stringify(args)).toBe('forbidden')
+        expect(res.hint).toContain('k8s_describe_resource')
+      }
+      const table = json((await call(request, admin, 'k8s_tabular_query', { resource_type: 'secrets', namespace: ns, columns: 'V:.data.conf' })).text)
+      expect(table.status).toBe('forbidden')
+      const sorted = json((await call(request, admin, 'k8s_tabular_query', { resource_type: 'secrets,configmaps', namespace: ns, sort_by: '.data.conf' })).text)
+      expect(sorted.status).toBe('forbidden')
+      const grouped = json((await call(request, admin, 'k8s_count', { resource_type: 'secrets', namespace: ns, group_by: '.data.conf' })).text)
+      expect(grouped.status).toBe('forbidden')
+
+      for (const kind of ['secrets', 'secrets,configmaps', 'all']) {
+        for (const jq of ['.items[].data', '.items[].metadata.annotations', '.items[]', '[.items[] | .data // {} | to_entries[] | .value]']) {
+          clean((await call(request, admin, 'k8s_jq_query', { resource_type: kind, namespace: ns, jq })).text, `${kind} ${jq}`)
+        }
+      }
+      // a program that fails on the value does not quote it either
+      clean((await call(request, admin, 'k8s_jq_query', { resource_type: 'secrets', namespace: ns, jq: '.items[0].data.conf | .missing' })).text, 'runtime error')
+      for (const output of ['json', 'yaml']) clean((await call(request, admin, 'k8s_get_resources', { resource_type: 'secrets', namespace: ns, output })).text, output)
+      clean((await call(request, admin, 'k8s_get_resource_yaml', { resource_type: 'secret', resource_name: 'app', namespace: ns })).text, 'yaml')
+      clean((await call(request, admin, 'k8s_describe_resource', { resource_type: 'secret', resource_name: 'app', namespace: ns })).text, 'describe')
+
+      // what needs no value stays: key names, how many, of which type
+      const keys = json((await call(request, admin, 'k8s_jq_query', { resource_type: 'secrets', namespace: ns, jq: '.items[] | select(.metadata.name == "app") | .data | keys' })).text)
+      const realKeys = Object.keys(JSON.parse(kubectl(`-n ${ns} get secret app -o json`)).data).sort()
+      expect(keys.results).toEqual([realKeys])
+      const howMany = kubectl(`-n ${ns} get secrets -o name`).split('\n').filter(Boolean).length
+      expect(json((await call(request, admin, 'k8s_count', { resource_type: 'secrets', namespace: ns })).text).count).toBe(howMany)
+      const types = json((await call(request, admin, 'k8s_count', { resource_type: 'secrets', namespace: ns, group_by: '.type' })).text)
+      expect(types.groups.map((g: { key: string }) => g.key)).toContain('Opaque')
+
+      // the same calls on a ConfigMap answer with its values
+      const jqValue = json((await call(request, admin, 'k8s_jq_query', { resource_type: 'configmaps', namespace: ns, jq: '.items[] | select(.metadata.name == "cfg") | .data.mode' })).text)
+      expect(jqValue.results).toEqual([configValue])
+      const mixed = await call(request, admin, 'k8s_jq_query', { resource_type: 'secrets,configmaps', namespace: ns, jq: '.items[] | .data' })
+      expect(mixed.text).toContain(configValue)
+      clean(mixed.text, 'a list of both')
+      expect((await call(request, admin, 'k8s_tabular_query', { resource_type: 'configmaps', namespace: ns, columns: 'V:.data.mode' })).text).toContain(configValue)
+      expect((await call(request, admin, 'k8s_get_resources', { resource_type: 'configmaps', namespace: ns, output: 'jsonpath={.items[*].data.mode}' })).text).toContain(configValue)
+      const byMode = json((await call(request, admin, 'k8s_count', { resource_type: 'configmaps', namespace: ns, group_by: '.data.mode' })).text)
+      expect(byMode.groups.map((g: { key: string }) => g.key)).toContain(configValue)
+      expect((await call(request, admin, 'k8s_tabular_query', { resource_type: 'all', namespace: ns, columns: 'NAME:.metadata.name' })).text).not.toContain('"status":"forbidden"')
+
+      // k8s_diff of a Secret: the key that changes, no value on either side, nothing applied
+      const same = json((await call(request, admin, 'k8s_diff', { yaml_content: secretYaml(value) })).text)
+      expect(same.status).toBe('unchanged')
+      const changed = await call(request, admin, 'k8s_diff', { yaml_content: secretYaml(newValue) })
+      clean(changed.text, 'diff')
+      expect(changed.text).not.toContain(b64(newValue))
+      expect(changed.text).not.toContain(newValue)
+      const preview = json(changed.text)
+      expect(preview).toMatchObject({ status: 'changed', kind: 'Secret', lines_added: 1, lines_removed: 1 })
+      expect(preview.diff).toContain('"tls.key"')
+      expect(preview.diff).not.toMatch(/^[-+] +"conf"/m)
+      expect(JSON.parse(kubectl(`-n ${ns} get secret app -o json`)).data['tls.key']).toBe(b64(value))
+    } finally {
+      kubectl(`delete namespace ${ns} --wait=false`, true)
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   test('k8s_diff previews created, changed and unchanged without applying; a Read user is not offered it', async ({ request }) => {
     const admin = await login(request)
     test.skip(!(await mcpOn(request, admin)), 'the MCP server is off (mcp.enabled)')

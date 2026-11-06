@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"net/http"
 	"os/exec"
+	"reflect"
 	"strings"
 )
 
@@ -90,6 +91,7 @@ func handleDiff(ctx context.Context, args map[string]interface{}, headers http.H
 		dropPath(want, path)
 		dropPath(live, path)
 	}
+	hideSecretValues(want, live)
 	wantText := prettyJSON(want)
 	liveTextClean := ""
 	if live != nil {
@@ -126,6 +128,33 @@ func handleDiff(ctx context.Context, args map[string]interface{}, headers http.H
 		out["hint"] = "Applying this manifest would change nothing (ignoring server-owned fields and status)."
 	}
 	return marshalJSON(out)
+}
+
+// hideSecretValues keeps a Secret's preview to which keys would change: its keys may have any name, so the rules on
+// names would not find them. Values are compared here and leave as placeholders that differ only if the values do.
+func hideSecretValues(want, live map[string]interface{}) {
+	if kind, _ := want["kind"].(string); kind != "Secret" {
+		return
+	}
+	for _, field := range []string{"data", "stringData"} {
+		after, _ := want[field].(map[string]interface{})
+		before, _ := live[field].(map[string]interface{})
+		for k, value := range after {
+			old, both := before[k]
+			switch {
+			case !both || reflect.DeepEqual(old, value):
+				after[k] = "<REDACTED:secret>"
+			default:
+				after[k] = "<REDACTED:secret:new value>"
+				before[k] = "<REDACTED:secret:old value>"
+			}
+		}
+		for k, value := range before {
+			if s, _ := value.(string); !strings.HasPrefix(s, "<REDACTED:secret:") {
+				before[k] = "<REDACTED:secret>"
+			}
+		}
+	}
 }
 
 // qualifiedType renders the type for kubectl get: the bare kind for the core

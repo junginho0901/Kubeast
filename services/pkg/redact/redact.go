@@ -16,8 +16,12 @@
 // its last-applied-configuration annotation, whether redaction is enabled or
 // not. The screen path (UI) is not affected by this package.
 //
+// Text works on free text, JSON (jsontext.go) on a tool's JSON answer string by
+// string, StripSecrets on decoded objects before something computes from them.
+//
 // The same rules exist in services/ai-service/app/services/redact.py; keep
-// the two lists in sync.
+// the two lists in sync. JSON has no Python twin: ai-service masks decoded
+// objects there (redact_object) and tool results arrive already masked.
 package redact
 
 import (
@@ -171,7 +175,7 @@ func Text(s string, o Options) (string, Stats) {
 	if s == "" {
 		return s, st
 	}
-	if strings.Contains(s, "kind: Secret") || strings.Contains(s, `"kind": "Secret"`) || strings.Contains(s, `"kind":"Secret"`) {
+	if namesSecretYAML(s) || secretJSONKind.MatchString(s) {
 		var n int
 		s, n = stripSecretDocuments(s)
 		st.add("secret", n)
@@ -244,27 +248,33 @@ func Text(s string, o Options) (string, Stats) {
 			return sub[1] + sub[3] + "<REDACTED:" + sub[2] + ">" + sub[5]
 		}, &st, "key_name")
 	}
-	if o.PII {
-		if o.on("email") {
-			seen := map[string]int{}
-			s = replaceCount(emailAddr, s, func(m string) string {
-				if _, ok := seen[m]; !ok {
-					seen[m] = len(seen) + 1
-				}
-				return fmt.Sprintf("<EMAIL_%d>", seen[m])
-			}, &st, "email")
-		}
-		if o.on("rrn") {
-			s = replaceCount(krRRN, s, func(string) string { return "<REDACTED:rrn>" }, &st, "rrn")
-		}
-		if o.on("card") {
-			s = replaceCount(cardNum, s, func(string) string { return "<REDACTED:card>" }, &st, "card")
-		}
-		if o.on("phone") {
-			s = replaceCount(krPhone, s, func(string) string { return "<REDACTED:phone>" }, &st, "phone")
-		}
+	return redactPII(s, o, &st), st
+}
+
+// redactPII applies the personal-data rules; one address keeps one placeholder across the text it is given.
+func redactPII(s string, o Options, st *Stats) string {
+	if !o.PII {
+		return s
 	}
-	return s, st
+	if o.on("email") {
+		seen := map[string]int{}
+		s = replaceCount(emailAddr, s, func(m string) string {
+			if _, ok := seen[m]; !ok {
+				seen[m] = len(seen) + 1
+			}
+			return fmt.Sprintf("<EMAIL_%d>", seen[m])
+		}, st, "email")
+	}
+	if o.on("rrn") {
+		s = replaceCount(krRRN, s, func(string) string { return "<REDACTED:rrn>" }, st, "rrn")
+	}
+	if o.on("card") {
+		s = replaceCount(cardNum, s, func(string) string { return "<REDACTED:card>" }, st, "card")
+	}
+	if o.on("phone") {
+		s = replaceCount(krPhone, s, func(string) string { return "<REDACTED:phone>" }, st, "phone")
+	}
+	return s
 }
 
 func replaceCount(re *regexp.Regexp, s string, f func(string) string, st *Stats, kind string) string {
@@ -282,31 +292,60 @@ func replaceCount(re *regexp.Regexp, s string, f func(string) string, st *Stats,
 
 // --- Secret documents ------------------------------------------------------
 
-// stripSecretDocuments walks YAML text (possibly several `---` documents) and,
+const (
+	secretPlaceholder = "<REDACTED:secret>"
+	lastAppliedName   = "kubectl.kubernetes.io/last-applied-configuration"
+	lastAppliedKey    = lastAppliedName + ":"
+)
+
+// secretValueFields hold a Secret's values: its own two and the describe answer's data_values.
+var secretValueFields = map[string]bool{"data": true, "stringData": true, "data_values": true}
+
+var (
+	// A chart may quote the kind or put spaces after the colon; kubectl prints `kind: Secret`.
+	secretYAMLKind = regexp.MustCompile(`(?m)^[ \t]*(?:-[ \t]+)?["']?kind["']?[ \t]*:[ \t]*["']?Secret["']?[ \t]*\r?$`)
+	// `"kind": "Secret"`, or kubectl's own words in a refused patch, whose JSON does not say what it patches.
+	secretJSONKind = regexp.MustCompile(`"kind"\s*:\s*"Secret"|\bKind=Secret\b`)
+	// A field of a JSON Secret that holds its values, up to where the value starts.
+	jsonSecretField = regexp.MustCompile(`"(data|stringData|data_values|kubectl\.kubernetes\.io/last-applied-configuration)"\s*:\s*`)
+)
+
+func namesSecretYAML(s string) bool {
+	return strings.Contains(s, "kind: Secret") || secretYAMLKind.MatchString(s)
+}
+
+// StripSecretText strips text known to hold a Secret, also when nothing in it says so: an answer cut off by an output
+// cap may end before its kind.
+func StripSecretText(s string) (string, int) {
+	docs := strings.Split(s, "\n---")
+	total := 0
+	for i, doc := range docs {
+		out, n := stripSecretYAML(doc)
+		out, m := stripSecretJSON(out)
+		docs[i], total = out, total+n+m
+	}
+	return strings.Join(docs, "\n---"), total
+}
+
+// stripSecretDocuments walks text (possibly several `---` documents) and,
 // inside every document whose kind is Secret, replaces the values under
 // `data:` / `stringData:` and removes the last-applied-configuration
-// annotation (it carries a copy of the data). JSON Secret documents are
-// handled by the key-value pass with the same placeholder.
+// annotation (it carries a copy of the data).
 func stripSecretDocuments(s string) (string, int) {
 	docs := strings.Split(s, "\n---")
 	total := 0
 	for i, doc := range docs {
-		if !strings.Contains(doc, "kind: Secret") && !strings.Contains(doc, `"kind"`) {
-			continue
-		}
-		if strings.Contains(doc, "kind: Secret") {
+		if namesSecretYAML(doc) {
 			out, n := stripSecretYAML(doc)
 			docs[i], total = out, total+n
 		}
-		if strings.Contains(doc, `"kind": "Secret"`) || strings.Contains(doc, `"kind":"Secret"`) {
+		if secretJSONKind.MatchString(docs[i]) {
 			out, n := stripSecretJSON(docs[i])
 			docs[i], total = out, total+n
 		}
 	}
 	return strings.Join(docs, "\n---"), total
 }
-
-const lastAppliedKey = "kubectl.kubernetes.io/last-applied-configuration:"
 
 // stripSecretYAML blanks every value under data:/stringData: and the
 // last-applied annotation. Blocks are found by indentation at any depth — a
@@ -337,7 +376,7 @@ func stripSecretYAML(doc string) (string, int) {
 					value = indent
 				}
 				if indent == value && strings.Contains(trim, ":") {
-					lines[i] = strings.Repeat(" ", indent) + strings.SplitN(trim, ":", 2)[0] + ": <REDACTED:secret>"
+					lines[i] = strings.Repeat(" ", indent) + strings.SplitN(trim, ":", 2)[0] + ": " + secretPlaceholder
 					n++
 				} else {
 					lines[i] = ""
@@ -349,8 +388,8 @@ func stripSecretYAML(doc string) (string, int) {
 		if anno >= 0 {
 			if indent > anno {
 				switch {
-				case strings.HasPrefix(trim, lastAppliedKey):
-					lines[i] = strings.Repeat(" ", indent) + lastAppliedKey + " <REDACTED:secret>"
+				case strings.HasPrefix(strings.TrimLeft(trim, `"'`), lastAppliedName):
+					lines[i] = strings.Repeat(" ", indent) + lastAppliedKey + " " + secretPlaceholder
 					n++
 					last = indent
 				case last >= 0 && indent > last:
@@ -362,44 +401,229 @@ func stripSecretYAML(doc string) (string, int) {
 			}
 			anno, last = -1, -1
 		}
-		switch key {
-		case "data:", "stringData:":
-			block, value = keyIndent, -1
-		case "annotations:":
+		field, rest, isKey := strings.Cut(key, ":")
+		if !isKey {
+			continue
+		}
+		rest = strings.TrimSpace(rest)
+		name := strings.Trim(field, `"' `)
+		onItsOwn := rest == "" || strings.HasPrefix(rest, "#")
+		switch {
+		case name == "data" || name == "stringData":
+			switch {
+			case onItsOwn:
+				block, value = keyIndent, -1
+			case rest == "{}" || rest == "null" || rest == "~":
+			case !strings.HasPrefix(field, `"`): // JSON's `"data": {` is stripSecretJSON's
+				// a flow mapping or a scalar on the key's line, which may go on below it
+				lines[i] = line[:strings.Index(line, key)] + field + ": " + secretPlaceholder
+				n++
+				block, value = keyIndent, -1
+			}
+		case name == "annotations" && onItsOwn:
 			anno, last = keyIndent, -1
+		case name == "annotations" && strings.Contains(rest, lastAppliedName) && !strings.HasPrefix(field, `"`):
+			lines[i] = line[:strings.Index(line, key)] + field + ": " + secretPlaceholder
+			n++
 		}
 	}
 	return strings.Join(lines, "\n"), n
 }
 
-var jsonSecretData = regexp.MustCompile(`"(data|stringData)"\s*:\s*\{[^{}]*\}`)
-var jsonLastApplied = regexp.MustCompile(`"kubectl\.kubernetes\.io/last-applied-configuration"\s*:\s*"(?:[^"\\]|\\.)*"`)
-
+// stripSecretJSON masks a JSON Secret's values where a parser cannot be used: the text may be cut, or hold other text
+// around the object. The scan keeps to JSON's strings, so braces and quotes inside a value do not end it, and a value
+// that never ends takes the rest of the text with it. Key names stay; what is already a placeholder stays too.
 func stripSecretJSON(doc string) (string, int) {
+	var out strings.Builder
 	n := 0
-	doc = jsonSecretData.ReplaceAllStringFunc(doc, func(m string) string {
-		n++
-		field := "data"
-		if strings.HasPrefix(m, `"stringData"`) {
-			field = "stringData"
+	for {
+		loc := jsonSecretField.FindStringSubmatchIndex(doc)
+		if loc == nil {
+			out.WriteString(doc)
+			return out.String(), n
 		}
-		return `"` + field + `": {"<REDACTED>": "secret"}`
-	})
-	doc = jsonLastApplied.ReplaceAllStringFunc(doc, func(string) string {
-		n++
-		return `"kubectl.kubernetes.io/last-applied-configuration": "<REDACTED:secret>"`
-	})
-	return doc, n
+		out.WriteString(doc[:loc[1]])
+		var end int
+		if doc[loc[2]:loc[3]] != lastAppliedName && loc[1] < len(doc) && doc[loc[1]] == '{' {
+			end = maskJSONObject(&out, doc, loc[1], &n)
+		} else {
+			end = maskJSONValue(&out, doc, loc[1], &n)
+		}
+		if end < 0 {
+			return out.String(), n
+		}
+		doc = doc[end:]
+	}
+}
+
+// maskJSONObject writes the object at s[i] with each value masked and returns the index after it, -1 if s ends first.
+// Anything in it but keys, values, punctuation and space (a diff's +/- at a line's start) is left out.
+func maskJSONObject(out *strings.Builder, s string, i int, n *int) int {
+	out.WriteByte('{')
+	for j := i + 1; j < len(s); {
+		switch c := s[j]; {
+		case c == '}':
+			out.WriteByte('}')
+			return j + 1
+		case c == '"':
+			end := jsonValueEnd(s, j)
+			if end < 0 {
+				return -1
+			}
+			colon := end
+			for colon < len(s) && isJSONSpace(s[colon]) {
+				colon++
+			}
+			if colon >= len(s) || s[colon] != ':' { // no key: a value out of place is still a value
+				if j = maskJSONValue(out, s, j, n); j < 0 {
+					return -1
+				}
+				continue
+			}
+			out.WriteString(s[j : colon+1])
+			j = colon + 1
+			for j < len(s) && isJSONSpace(s[j]) {
+				out.WriteByte(s[j])
+				j++
+			}
+			if j = maskJSONValue(out, s, j, n); j < 0 {
+				return -1
+			}
+		default:
+			if c == ',' || c == '+' || c == '-' || isJSONSpace(c) {
+				out.WriteByte(c)
+			}
+			j++
+		}
+	}
+	return -1
+}
+
+// maskJSONValue writes the placeholder for the value at s[i] and returns the index after it, -1 if s ends first.
+// An empty value has nothing to hide and stays.
+func maskJSONValue(out *strings.Builder, s string, i int, n *int) int {
+	end := jsonValueEnd(s, i)
+	value := s[i:]
+	if end >= 0 {
+		value = s[i:end]
+	}
+	switch {
+	case end >= 0 && (value == "{}" || value == "null" || value == `""` || value == "[]" || strings.HasPrefix(value, `"<REDACTED`)):
+		out.WriteString(value)
+	default:
+		out.WriteString(`"` + secretPlaceholder + `"`)
+		*n++
+	}
+	return end
+}
+
+func isJSONSpace(c byte) bool { return c == ' ' || c == '\t' || c == '\n' || c == '\r' }
+
+// jsonValueEnd is the index after the JSON value that starts at s[i], or -1 if s ends before the value does.
+func jsonValueEnd(s string, i int) int {
+	if i >= len(s) {
+		return -1
+	}
+	switch s[i] {
+	case '"':
+		for j := i + 1; j < len(s); j++ {
+			switch s[j] {
+			case '\\':
+				j++
+			case '"':
+				return j + 1
+			}
+		}
+		return -1
+	case '{', '[':
+		depth := 0
+		for j := i; j < len(s); j++ {
+			switch s[j] {
+			case '"':
+				end := jsonValueEnd(s, j)
+				if end < 0 {
+					return -1
+				}
+				j = end - 1
+			case '{', '[':
+				depth++
+			case '}', ']':
+				if depth--; depth == 0 {
+					return j + 1
+				}
+			}
+		}
+		return -1
+	}
+	j := i
+	for j < len(s) && !strings.ContainsRune(",}]\r\n", rune(s[j])) {
+		j++
+	}
+	return j
 }
 
 // --- structured values -----------------------------------------------------
 
 // Object redacts a decoded JSON/YAML value in place: map keys that look like
 // credentials lose their string values, every string goes through Text, and
-// a map with kind: Secret loses data/stringData entirely.
+// a map with kind: Secret loses data/stringData wherever they sit under it,
+// with the last-applied annotation of any annotations under it.
 func Object(v any, o Options) (any, Stats) {
 	var st Stats
 	return walk(v, o, &st, false), st
+}
+
+// StripSecrets removes the values of every Secret in a decoded object or list, in place, and leaves everything else as
+// it is. For a result computed from the objects (a jq program), masking what comes out would be too late. Key names
+// stay, so which keys a Secret has can still be asked.
+func StripSecrets(v any) int {
+	var st Stats
+	stripSecrets(v, false, &st)
+	return st.Kinds["secret"]
+}
+
+func stripSecrets(v any, secret bool, st *Stats) {
+	switch t := v.(type) {
+	case map[string]any:
+		if kind, _ := t["kind"].(string); kind == "Secret" {
+			secret = true
+		}
+		if secret {
+			maskSecretFields(t, st)
+		}
+		for k, val := range t {
+			if !secret || !secretValueFields[k] {
+				stripSecrets(val, secret, st)
+			}
+		}
+	case []any:
+		for _, val := range t {
+			stripSecrets(val, secret, st)
+		}
+	}
+}
+
+// maskSecretFields masks what one map under a Secret holds of its values.
+func maskSecretFields(t map[string]any, st *Stats) {
+	for f := range secretValueFields {
+		switch val := t[f].(type) {
+		case nil:
+		case map[string]any:
+			for k := range val {
+				val[k] = secretPlaceholder
+				st.add("secret", 1)
+			}
+		default:
+			t[f] = secretPlaceholder
+			st.add("secret", 1)
+		}
+	}
+	if anno, ok := t["annotations"].(map[string]any); ok {
+		if _, has := anno[lastAppliedName]; has {
+			anno[lastAppliedName] = secretPlaceholder
+			st.add("secret", 1)
+		}
+	}
 }
 
 func walk(v any, o Options, st *Stats, secret bool) any {
@@ -407,25 +631,12 @@ func walk(v any, o Options, st *Stats, secret bool) any {
 	case map[string]any:
 		if kind, _ := t["kind"].(string); kind == "Secret" {
 			secret = true
-			for _, f := range []string{"data", "stringData"} {
-				if inner, ok := t[f].(map[string]any); ok {
-					for k := range inner {
-						inner[k] = "<REDACTED:secret>"
-						st.add("secret", 1)
-					}
-				}
-			}
-			if meta, ok := t["metadata"].(map[string]any); ok {
-				if anno, ok := meta["annotations"].(map[string]any); ok {
-					if _, has := anno["kubectl.kubernetes.io/last-applied-configuration"]; has {
-						anno["kubectl.kubernetes.io/last-applied-configuration"] = "<REDACTED:secret>"
-						st.add("secret", 1)
-					}
-				}
-			}
+		}
+		if secret {
+			maskSecretFields(t, st)
 		}
 		for k, val := range t {
-			if secret && (k == "data" || k == "stringData") {
+			if secret && secretValueFields[k] {
 				continue
 			}
 			if s, ok := val.(string); ok && o.on("key_name") && keyIsSensitive(k) && !valueLooksHarmless(s) {

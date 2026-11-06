@@ -49,7 +49,7 @@
     - `loki_patterns` — 로그 패턴, 에러 유형별 줄 수
     - `traces_search`·`traces_get`·`traces_tags`·`traces_metrics`·`traces_compare` — 트레이스 저장소에 TraceQL 질의
       - 느리거나 실패한 요청, 한 트레이스의 스팬, 속성 찾기, 요청 수·오류율·p95 추이 그래프, 빠른·느린 표본
-    - `helm_read` — 릴리스 목록·values·manifest·이력·리소스·이미지·리비전·두 리비전 diff, **읽기 전용**
+    - `helm_read` — 릴리스 목록·values·manifest·이력·리소스·이미지·리비전·두 리비전 diff, **읽기 전용**. 화면에서 원문을 볼 수 있는 사람도 언제나 가린 본을 읽습니다.
     - `policy_reports` — PolicyReport 요약·결과
     - `cost` — OpenCost 배분
     - `optimization` — requests 대비 사용량·권고
@@ -76,6 +76,7 @@
     - `k8s_jq_query` — `kubectl get -o json`을 jq로 걸러 필요한 필드만, 환경·파일 접근 없음, 5초 상한
     - `k8s_tabular_query` — 고른 열만 표로
     - `k8s_count` — 개수, 그룹별 개수
+    - **Secret 값은 이 길로 나가지 않습니다.** `k8s_jq_query`·`k8s_count`는 값을 뺀 목록을 읽습니다. 키 이름은 남고 값은 `<REDACTED:secret>`입니다. kubectl이 직접 계산하는 출력은 먼저 지울 수 없으므로, Secret의 표와 `jsonpath`·`go-template`·`custom-columns` 출력, `.data`로 묶은 개수는 다른 길을 안내하며 거절합니다. 여러 종류를 함께 읽으면 다른 종류의 값은 그대로입니다. 실패한 도구의 글도 답과 똑같이 가립니다.
   - 파드는 kubectl이 아니라 k8s-service가 Pods 목록용으로 들고 있는 줄(`/pods/page`)에서 읽어, 큰 클러스터도 전부 봅니다.
     - 이름 없는 `k8s_get_resources`가 파드 25개를 넘으면 전체에 대한 개수(phase·상태·카드 색·네임스페이스·노드별)와, 오류·경고부터 손볼 순서로 파드 25개를 답하고 `next_offset`으로 이어 읽습니다. 25개 이하는 지금처럼 kubectl로 답합니다.
     - `k8s_find_resource`는 파드 전부를 찾습니다. `키=값`은 레이블 셀렉터로, 그 밖에는 단어가 모두 이름이나 레이블 하나에 있는 파드를 찾습니다. 네임스페이스 없이 이름만 받은 로그 도구도 같은 규칙으로 파드를 찾습니다.
@@ -86,7 +87,7 @@
   - 다른 종류는 kubectl로 목록을 받기 전에 크기를 먼저 묻습니다. kubectl은 출력 방식과 상관없이 목록 전체를 들고 있기 때문입니다(이벤트 11만 개에 1~1.8GB). API 서버가 객체 없이 개수를 답합니다(`limit=1`과 남은 수, 셀렉터가 있으면 500개씩 5,001개까지 셈). 5,000개를 넘으면 `k8s_get_resources`·`k8s_jq_query`·`k8s_tabular_query`·필드로 묶은 `k8s_count`는 목록을 받지 않고 개수와 함께 `too_large`로 답하고, 묶지 않은 `k8s_count`는 크기와 상관없이 그 개수로 답합니다.
   - `k8s_get_events`는 최신 이벤트를 최신 순으로 답합니다(기본 200, 최대 1,000). k8s-service가 쪽 단위로 읽으며, 더 많으면 전체 수를 함께 말합니다.
   - kubectl 목록이 도구 출력 상한(`TOOL_OUTPUT_MAX_BYTES`, 1 MiB)보다 길면 잘렸다고 답합니다. `k8s_jq_query`·`k8s_count`는 `too_large`, `k8s_tabular_query`는 "전체 수는 모름"으로 답하며, 읽기 오류나 틀린 개수를 내지 않습니다.
-  - 쓰기 전에는 `k8s_diff`로 바뀔 내용을 먼저 보여 줍니다. 서버 dry-run 결과를 라이브 객체와 비교한 diff이며 **실제로 적용하지 않고**, 쓰기 권한이 있는 사용자에게만 보입니다.
+  - 쓰기 전에는 `k8s_diff`로 바뀔 내용을 먼저 보여 줍니다. 서버 dry-run 결과를 라이브 객체와 비교한 diff이며 **실제로 적용하지 않고**, 쓰기 권한이 있는 사용자에게만 보입니다. Secret이면 값 없이 바뀌는 키 이름만 보여 줍니다.
 - **플로팅 AI 위젯(AI Chat)** — 모든 페이지에 떠 있는 위젯이 **현재 화면 컨텍스트**(보고 있는 리소스)를 이해하고 답합니다.
   - 답할 때는 read-only 툴만 씁니다.
   - 첫 글자가 나오기 전에는 대기 점이, 끝난 답 옆에는 작은 복사 아이콘이 보이고 토큰 줄은 없습니다. 넓은 표는 상자 안에서 스크롤되고 머리 줄은 고정됩니다.

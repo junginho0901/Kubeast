@@ -215,6 +215,19 @@ async def test_tool_failure_is_an_error_result_with_a_failure_row(fakes):
 
 
 @pytest.mark.asyncio
+async def test_a_failed_tool_is_masked_for_the_agent_and_the_audit_row(fakes):
+    FakeToolServer.fail = "kubectl failed: boom\npassword: fake-failed-password\nstill here"
+    server = mcp_server.KubeastMCPServer(tool_server_url="http://tools")
+    async with running_app(server) as client:
+        res = await call(client, "tok-write", "tools/call", {"name": "get_node_metrics", "arguments": {"cluster": "self"}})
+        body = res.json()["result"]
+        assert body["isError"] is True
+        text = body["content"][0]["text"]
+        assert "fake-failed-password" not in text and "still here" in text, text
+    assert "fake-failed-password" not in fakes["audit"][0]["error"], fakes["audit"]
+
+
+@pytest.mark.asyncio
 async def test_list_clusters_names_the_tools_allowed_in_each(fakes, monkeypatch):
     server = mcp_server.KubeastMCPServer(tool_server_url="http://tools")
 
