@@ -197,5 +197,18 @@ test.describe('Grafana in front of the stores', () => {
     expect(d.namespace).toBe(NS)
     expect(d.alertmanager_url).toBe('http://kubeast-b-control-plane:31300/')
     expect(d.annotations.summary).toBe('CoreDNS check from a Grafana alert')
+
+    // Grafana's test sends firing and nothing after it: close the inbox row as a resolved notification would
+    const rows = () => get(request, admin, `/api/v1/alerts/inbox?cluster=${CLUSTER}&q=${name}&limit=10`).then((r) => r.items as any[])
+    const [row] = await rows()
+    const closed = await request.post(`/api/v1/alerts/webhook?cluster=${CLUSTER}`, {
+      headers: { Authorization: `Bearer ${webhookToken}` },
+      data: {
+        version: '4', groupKey: `{}:{alertname="${name}"}`, status: 'resolved', receiver: 'kubeast',
+        alerts: [{ status: 'resolved', labels: row.labels, annotations: row.annotations, startsAt: row.starts_at, endsAt: new Date().toISOString(), fingerprint: row.fingerprint }],
+      },
+    })
+    expect(closed.ok(), await closed.text()).toBe(true)
+    expect((await rows()).map((r) => r.status), 'the inbox row is closed').toEqual(['resolved'])
   })
 })

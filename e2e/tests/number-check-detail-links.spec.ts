@@ -303,6 +303,8 @@ test.describe('number check — the drawer a screen opens for one Kind of two gr
       if (kb && features.alertInvestigation?.enabled) {
         const token = Buffer.from(kb('-n kubeast get secret kubeast-secrets -o jsonpath={.data.ALERT_WEBHOOK_TOKEN}'), 'base64').toString()
         const alertname = `E2EDetailLinks${RUN}`
+        // one alert keeps its start, as Alertmanager's does: the inbox knows a resolved notification by it
+        const startsAt = ago(120)
         const post = (status: 'firing' | 'resolved') => page.request.post('/api/v1/alerts/webhook?cluster=default', {
           headers: { Authorization: `Bearer ${token}` },
           data: {
@@ -311,7 +313,7 @@ test.describe('number check — the drawer a screen opens for one Kind of two gr
               status,
               labels: { alertname, severity: 'info', namespace: NS, customresource_group: g, customresource_version: 'v1', customresource_kind: 'Widget', name: WIDGET },
               annotations: { summary: `the ${g} widget is not ready ${RUN}` },
-              startsAt: ago(120), ...(status === 'resolved' ? { endsAt: ago(1) } : {}),
+              startsAt, ...(status === 'resolved' ? { endsAt: ago(1) } : {}),
               fingerprint: `dlinks-${RUN}-${g}`,
             })),
           },
@@ -330,6 +332,8 @@ test.describe('number check — the drawer a screen opens for one Kind of two gr
         } finally {
           await post('resolved')
         }
+        const rows = (await (await page.request.get('/api/v1/alerts/inbox', { params: { cluster: 'default', q: RUN, limit: 200 } })).json()).items as Obj[]
+        expect(rows.filter((i) => i.alertname === alertname).map((i) => i.status), 'each alert closed by its resolved notification').toEqual(['resolved', 'resolved'])
       } else {
         test.info().annotations.push({ type: 'skip', description: 'Alerts inbox: alert investigation (the webhook) is off' })
       }
