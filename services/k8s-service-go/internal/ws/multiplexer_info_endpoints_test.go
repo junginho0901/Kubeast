@@ -6,10 +6,9 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-// Endpoints / EndpointSlice carry their payload at the top level; the watch
-// summary has to keep it or the list resets ready counts to 0. An EndpointSlice
-// update is the list's row, labels and annotations included.
-func TestObjectToInfoEndpointsKeepsTopLevelPayload(t *testing.T) {
+// Endpoints / EndpointSlice carry their payload at the top level, not under spec or status; a live update of either is
+// the list's row, so the counts, addresses, labels and annotations come from it.
+func TestObjectToInfoEndpointsReadsTopLevelPayload(t *testing.T) {
 	ep := &unstructured.Unstructured{Object: map[string]interface{}{
 		"kind":     "Endpoints",
 		"metadata": map[string]interface{}{"name": "web", "namespace": "qa"},
@@ -19,8 +18,11 @@ func TestObjectToInfoEndpointsKeepsTopLevelPayload(t *testing.T) {
 		}},
 	}}
 	info := objectToInfo("endpoints", ep)
-	if _, ok := info["subsets"]; !ok {
-		t.Fatalf("endpoints info lost subsets: %v", info)
+	if info["ready_count"] != 1 || info["not_ready_count"] != 0 {
+		t.Fatalf("endpoints counts: %v", info)
+	}
+	if got := info["ready_addresses"].([]string); len(got) != 1 || got[0] != "10.0.0.1" {
+		t.Fatalf("endpoints addresses: %v", info["ready_addresses"])
 	}
 
 	slice := &unstructured.Unstructured{Object: map[string]interface{}{

@@ -5,7 +5,21 @@ import { errorText, statusLabel, volumeAttachmentToRawJson } from '@/pages/stora
 import { applyVolumeAttachmentWatchEvent, normalizeWatchVolumeAttachmentObject } from '@/pages/storage/volumeattachments/volumeAttachmentWatchNormalize'
 import { cronJobToWorkloadRawJson, nextRunOf } from '@/pages/workloads/cronjobs/cronJobHelpers'
 import { applyCronJobWatchEvent, normalizeWatchCronJobObject } from '@/pages/workloads/cronjobs/cronJobWatchNormalize'
+import { peerOf, peerText, portOf, portsText, type Tr } from '@/components/resource-detail/netpolText'
+import { endpointToRawJson, formatAddresses as formatEndpointAddresses, formatPorts as formatEndpointPorts } from '@/pages/network/endpoints/endpointHelpers'
+import { applyEndpointWatchEvent, normalizeWatchEndpointObject } from '@/pages/network/endpoints/endpointWatchNormalize'
+import { formatParameters, ingressClassToRawJson } from '@/pages/network/ingressclasses/ingressClassHelpers'
+import { applyIngressClassWatchEvent, normalizeWatchIngressClassObject } from '@/pages/network/ingressclasses/ingressClassWatchNormalize'
+import { formatDefaultDeny, formatPolicyTypes, formatSelector as formatPodSelector, networkPolicyToRawJson } from '@/pages/network/networkpolicies/networkPolicyHelpers'
+import { applyNetworkPolicyWatchEvent, normalizeWatchNetworkPolicyObject } from '@/pages/network/networkpolicies/networkPolicyWatchNormalize'
+import { formatPorts as formatServicePorts, formatSelector, serviceToRawJson } from '@/pages/network/services/serviceHelpers'
+import { applyServiceWatchEvent, normalizeWatchServiceObject } from '@/pages/network/services/serviceWatchNormalize'
+import { claimToText, pvToRawJson } from '@/pages/storage/pvs/pvHelpers'
+import { applyPvWatchEvent, normalizeWatchPvObject } from '@/pages/storage/pvs/pvWatchNormalize'
 import cases from './watchRows.cases.json'
+
+// the English fallback with its values, as the screen writes it with no catalog in the way
+const tr: Tr = (_key, fallback, options) => fallback.replace(/{{(\w+)}}/g, (_all, name) => String(options?.[name] ?? ''))
 
 type Page = {
   apply: (prev: any[], event: { type?: string; object?: any }) => any[]
@@ -52,6 +66,78 @@ const pages: Record<string, Page> = {
     }),
     derives: (row) => ({ next_run: nextRunOf(row)?.toISOString() ?? null, raw: cronJobToWorkloadRawJson(row) }),
   },
+  services: {
+    apply: applyServiceWatchEvent,
+    normalize: normalizeWatchServiceObject,
+    shows: (row) => ({
+      type: row.type || '-',
+      cluster_ip: row.cluster_ip || '-',
+      external_ip: row.external_ip || '-',
+      ports: formatServicePorts(row.ports),
+      selector: formatSelector(row.selector),
+    }),
+    derives: serviceToRawJson,
+  },
+  endpoints: {
+    apply: applyEndpointWatchEvent,
+    normalize: normalizeWatchEndpointObject,
+    shows: (row) => ({
+      ready: row.ready_count || 0,
+      not_ready: row.not_ready_count || 0,
+      addresses: formatEndpointAddresses(row),
+      ports: formatEndpointPorts(row.ports),
+    }),
+    derives: endpointToRawJson,
+  },
+  ingressclasses: {
+    apply: applyIngressClassWatchEvent,
+    normalize: normalizeWatchIngressClassObject,
+    shows: (row) => ({
+      controller: row.controller || '-',
+      default: Boolean(row.is_default),
+      parameters: formatParameters(row),
+      labels: row.labels || {},
+    }),
+    derives: ingressClassToRawJson,
+  },
+  networkpolicies: {
+    apply: applyNetworkPolicyWatchEvent,
+    normalize: normalizeWatchNetworkPolicyObject,
+    shows: (row) => {
+      // what the drawer opened from this row words, peers and ports of each rule, labels and annotations
+      const object = networkPolicyToRawJson(row) as any
+      const line = (peers: any[], ports: any[]) => `${peers.map((p) => peerText(peerOf(p), tr)).join(' ; ')} | ${portsText(ports.map(portOf), tr)}`
+      return {
+        pod_selector: formatPodSelector(row),
+        types: formatPolicyTypes(row),
+        ingress_rules: row.ingress_rules || 0,
+        egress_rules: row.egress_rules || 0,
+        default_deny: formatDefaultDeny(row),
+        ingress: object.spec.ingress.map((r: any) => line(r.from, r.ports)),
+        egress: object.spec.egress.map((r: any) => line(r.to, r.ports)),
+        labels: object.metadata.labels,
+        annotations: object.metadata.annotations,
+      }
+    },
+    derives: networkPolicyToRawJson,
+  },
+  persistentvolumes: {
+    apply: applyPvWatchEvent,
+    normalize: normalizeWatchPvObject,
+    shows: (row) => ({
+      status: row.status || '-',
+      storage_class: row.storage_class || '-',
+      capacity: row.capacity || '-',
+      access_modes: (row.access_modes || []).join(', ') || '-',
+      reclaim_policy: row.reclaim_policy || '-',
+      claim: claimToText(row.claim_ref),
+      volume_mode: row.volume_mode || '-',
+      source: row.source || row.driver || '-',
+      reason: row.reason || '-',
+      message: row.message || '-',
+    }),
+    derives: pvToRawJson,
+  },
 }
 
 // k8s-service's TestWatchRowCasesFixture writes these: one object through the real list code and the real live update
@@ -67,7 +153,7 @@ describe('a live update leaves a row as the list API gives it', () => {
 
   it('the server wrote cases for every list these tests name', () => {
     expect(new Set(cases.map((c) => c.resource))).toEqual(new Set(Object.keys(pages)))
-    expect(cases.length).toBeGreaterThanOrEqual(11)
+    expect(cases.length).toBeGreaterThanOrEqual(26)
   })
 
   for (const c of cases) {
@@ -78,6 +164,24 @@ describe('a live update leaves a row as the list API gives it', () => {
       expect(page.shows(c.after)).toEqual(c.shows)
       expect(page.derives(row)).toEqual(page.derives(c.after))
       expect(row).toEqual(page.normalize(c.after))
+    })
+  }
+})
+
+describe('a live update of a row', () => {
+  for (const c of cases) {
+    it(`goes when the object is deleted: ${c.name}`, () => {
+      expect(pages[c.resource].apply([c.before], { type: 'DELETED', object: c.event })).toEqual([])
+    })
+
+    it(`stays in its place and leaves the other rows as they were: ${c.name}`, () => {
+      const namespace = (c.before as { namespace?: string }).namespace
+      const first = { name: 'first', namespace }
+      const last = { name: 'last', namespace }
+      const rows = pages[c.resource].apply([first, c.before, last], { type: 'MODIFIED', object: c.event })
+      expect(rows.map((r) => r.name)).toEqual(['first', (c.before as { name: string }).name, 'last'])
+      expect(rows[0]).toBe(first)
+      expect(rows[2]).toBe(last)
     })
   }
 })
@@ -122,5 +226,62 @@ describe('a row the server could not convert comes with its object nested', () =
     expect(row.labels).toEqual({ team: 'a' })
     expect(row.created_at).toBe('2026-11-01T00:00:00Z')
     expect(applyIngressWatchEvent([prior], { type: 'DELETED', object: nested })).toEqual([])
+  })
+
+  it('a Service reads its object, so a port or selector that went away goes', () => {
+    const nested = {
+      name: 'web',
+      namespace: 'demo',
+      kind: 'Service',
+      created_at: '2026-11-01T00:00:00Z',
+      spec: { type: 'ClusterIP', clusterIP: '10.0.0.9' },
+      status: {},
+    }
+    const prior = { name: 'web', namespace: 'demo', type: 'LoadBalancer', cluster_ip: '10.0.0.1', external_ip: '192.0.2.1', ports: [{ port: 80 }], selector: { app: 'web' } }
+    const [row] = applyServiceWatchEvent([prior] as any, { type: 'MODIFIED', object: nested })
+    expect(pages.services.shows(row)).toEqual({ type: 'ClusterIP', cluster_ip: '10.0.0.9', external_ip: '-', ports: '-', selector: '-' })
+    expect(row.created_at).toBe('2026-11-01T00:00:00Z')
+  })
+
+  it('Endpoints read the subsets beside the metadata', () => {
+    const nested = { name: 'web', namespace: 'demo', kind: 'Endpoints', created_at: '2026-11-01T00:00:00Z', subsets: [{ addresses: [{ ip: '10.0.0.3' }] }] }
+    const prior = { name: 'web', namespace: 'demo', ready_count: 1, not_ready_count: 1, ready_addresses: ['10.0.0.1'], not_ready_addresses: ['10.0.0.2'], ports: [{ port: 80 }] }
+    const [row] = applyEndpointWatchEvent([prior] as any, { type: 'MODIFIED', object: nested })
+    expect(pages.endpoints.shows(row)).toEqual({ ready: 1, not_ready: 0, addresses: '10.0.0.3', ports: '-' })
+    expect(applyEndpointWatchEvent([prior] as any, { type: 'DELETED', object: nested })).toEqual([])
+  })
+
+  it('an IngressClass keeps its name, so the row updates and a deleted one goes', () => {
+    const nested = { name: 'nginx', kind: 'IngressClass', labels: { team: 'a' }, created_at: '2026-11-01T00:00:00Z', spec: { controller: 'example.test/new' } }
+    const prior = { name: 'nginx', controller: 'example.test/old', is_default: false, parameters: { kind: 'Params' } }
+    const [row] = applyIngressClassWatchEvent([prior] as any, { type: 'MODIFIED', object: nested })
+    expect(pages.ingressclasses.shows(row)).toEqual({ controller: 'example.test/new', default: false, parameters: '-', labels: { team: 'a' } })
+    expect(row.created_at).toBe('2026-11-01T00:00:00Z')
+    expect(applyIngressClassWatchEvent([prior] as any, { type: 'DELETED', object: nested })).toEqual([])
+  })
+
+  it('a NetworkPolicy keeps the labels at the top of the row', () => {
+    const nested = {
+      name: 'web',
+      namespace: 'demo',
+      kind: 'NetworkPolicy',
+      labels: { team: 'a' },
+      created_at: '2026-11-01T00:00:00Z',
+      spec: { podSelector: { matchLabels: { app: 'web' } }, policyTypes: ['Ingress'] },
+    }
+    const prior = { name: 'web', namespace: 'demo', pod_selector: {}, policy_types: [], ingress_rules: 1, ingress: [{ from: [], ports: [] }], labels: {} }
+    const [row] = applyNetworkPolicyWatchEvent([prior] as any, { type: 'MODIFIED', object: nested })
+    expect(row.labels).toEqual({ team: 'a' })
+    expect(row.ingress_rules).toBe(0)
+    expect(formatPodSelector(row)).toBe('app=web')
+  })
+
+  it('a PersistentVolume with no phase reads Unknown, not the status object', () => {
+    const nested = { name: 'disk-a', kind: 'PersistentVolume', created_at: '2026-11-01T00:00:00Z', spec: { capacity: { storage: '1Gi' } }, status: { reason: 'Broken' } }
+    const prior = { name: 'disk-a', status: 'Bound', capacity: '2Gi', access_modes: ['ReadWriteOnce'], claim_ref: { namespace: 'demo', name: 'claim-a' } }
+    const [row] = applyPvWatchEvent([prior] as any, { type: 'MODIFIED', object: nested })
+    expect(row.status).toBe('Unknown')
+    expect(row.capacity).toBe('1Gi')
+    expect(claimToText(row.claim_ref)).toBe('-')
   })
 })

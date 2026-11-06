@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	pvrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/pv"
 	pvcrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/pvc"
 )
 
@@ -29,7 +30,7 @@ func (s *Service) GetPV(ctx context.Context, name string) (map[string]interface{
 	if err != nil {
 		return nil, fmt.Errorf("get pv %s: %w", name, err)
 	}
-	return formatPVDetail(pv), nil
+	return pvrow.Info(pv), nil
 }
 
 // DescribePV returns detailed info about a PV.
@@ -76,7 +77,7 @@ func (s *Service) DescribePV(ctx context.Context, name string) (map[string]inter
 	}()
 	wg.Wait()
 
-	result := formatPVDetail(pv)
+	result := pvrow.Info(pv)
 
 	// Additional describe fields
 	result["uid"] = string(pv.UID)
@@ -163,78 +164,8 @@ func (s *Service) DeletePV(ctx context.Context, name string) error {
 
 func formatPVList(pvs []corev1.PersistentVolume) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(pvs))
-	for _, pv := range pvs {
-		result = append(result, formatPVDetail(&pv))
+	for i := range pvs {
+		result = append(result, pvrow.Info(&pvs[i]))
 	}
 	return result
-}
-
-func formatPVDetail(pv *corev1.PersistentVolume) map[string]interface{} {
-	capacity := ""
-	if pv.Spec.Capacity != nil {
-		if q, ok := pv.Spec.Capacity[corev1.ResourceStorage]; ok {
-			capacity = q.String()
-		}
-	}
-
-	accessModes := make([]string, 0, len(pv.Spec.AccessModes))
-	for _, am := range pv.Spec.AccessModes {
-		accessModes = append(accessModes, string(am))
-	}
-
-	reclaimPolicy := ""
-	if pv.Spec.PersistentVolumeReclaimPolicy != "" {
-		reclaimPolicy = string(pv.Spec.PersistentVolumeReclaimPolicy)
-	}
-
-	storageClass := pv.Spec.StorageClassName
-
-	var claimRef interface{}
-	if pv.Spec.ClaimRef != nil {
-		claimRef = map[string]interface{}{
-			"namespace": pv.Spec.ClaimRef.Namespace,
-			"name":      pv.Spec.ClaimRef.Name,
-		}
-	}
-
-	volumeMode := ""
-	if pv.Spec.VolumeMode != nil {
-		volumeMode = string(*pv.Spec.VolumeMode)
-	}
-
-	// Determine volume source info
-	source := ""
-	driver := ""
-	volumeHandle := ""
-	if pv.Spec.CSI != nil {
-		source = "CSI"
-		driver = pv.Spec.CSI.Driver
-		volumeHandle = pv.Spec.CSI.VolumeHandle
-	} else if pv.Spec.NFS != nil {
-		source = "NFS"
-		driver = fmt.Sprintf("%s:%s", pv.Spec.NFS.Server, pv.Spec.NFS.Path)
-	} else if pv.Spec.Local != nil {
-		source = "Local"
-		driver = pv.Spec.Local.Path
-	} else if pv.Spec.HostPath != nil {
-		source = "HostPath"
-		driver = pv.Spec.HostPath.Path
-	}
-
-	return map[string]interface{}{
-		"name":           pv.Name,
-		"status":         string(pv.Status.Phase),
-		"capacity":       capacity,
-		"access_modes":   accessModes,
-		"reclaim_policy": reclaimPolicy,
-		"storage_class":  storageClass,
-		"claim_ref":      claimRef,
-		"volume_mode":    volumeMode,
-		"source":         source,
-		"driver":         driver,
-		"volume_handle":  volumeHandle,
-		"reason":         pv.Status.Reason,
-		"message":        pv.Status.Message,
-		"created_at":     toISO(&pv.CreationTimestamp),
-	}
 }

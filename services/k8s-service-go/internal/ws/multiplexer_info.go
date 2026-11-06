@@ -56,6 +56,10 @@ func objectToInfo(resource string, obj *unstructured.Unstructured) map[string]in
 		return cronjobToInfo(obj)
 	case "ingresses":
 		return ingressToInfo(obj)
+	case "ingressclasses":
+		return ingressClassToInfo(obj)
+	case "networkpolicies":
+		return networkPolicyToInfo(obj)
 	case "configmaps":
 		return configmapToInfo(obj)
 	case "secrets":

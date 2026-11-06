@@ -770,5 +770,1620 @@
    "suspend": true,
    "time_zone": null
   }
+ },
+ {
+  "name": "a Service that became ExternalName shows no cluster IP, port or selector",
+  "resource": "services",
+  "before": {
+   "cluster_ip": "10.0.0.1",
+   "created_at": "2026-11-01T00:00:00Z",
+   "external_ip": "<none>",
+   "name": "web",
+   "namespace": "demo",
+   "ports": [
+    {
+     "name": "http",
+     "port": 80,
+     "protocol": "TCP",
+     "target_port": "8080"
+    }
+   ],
+   "selector": {
+    "app": "web"
+   },
+   "type": "ClusterIP"
+  },
+  "event": {
+   "cluster_ip": "",
+   "created_at": "2026-11-01T00:00:00Z",
+   "external_ip": "<none>",
+   "name": "web",
+   "namespace": "demo",
+   "ports": [],
+   "selector": null,
+   "type": "ExternalName"
+  },
+  "after": {
+   "cluster_ip": "",
+   "created_at": "2026-11-01T00:00:00Z",
+   "external_ip": "<none>",
+   "name": "web",
+   "namespace": "demo",
+   "ports": [],
+   "selector": null,
+   "type": "ExternalName"
+  },
+  "shows": {
+   "cluster_ip": "-",
+   "external_ip": "<none>",
+   "ports": "-",
+   "selector": "-",
+   "type": "ExternalName"
+  }
+ },
+ {
+  "name": "a Service whose load balancer and node port went away shows neither",
+  "resource": "services",
+  "before": {
+   "cluster_ip": "10.0.0.1",
+   "created_at": "2026-11-01T00:00:00Z",
+   "external_ip": "192.0.2.9,192.0.2.1,lb.example.test",
+   "name": "web",
+   "namespace": "demo",
+   "ports": [
+    {
+     "app_protocol": "http",
+     "name": "http",
+     "node_port": 30080,
+     "port": 80,
+     "protocol": "TCP",
+     "target_port": "http"
+    }
+   ],
+   "selector": {
+    "app": "web"
+   },
+   "type": "LoadBalancer"
+  },
+  "event": {
+   "cluster_ip": "10.0.0.1",
+   "created_at": "2026-11-01T00:00:00Z",
+   "external_ip": "<none>",
+   "name": "web",
+   "namespace": "demo",
+   "ports": [
+    {
+     "name": "http",
+     "port": 80,
+     "protocol": "TCP",
+     "target_port": "8080"
+    }
+   ],
+   "selector": {
+    "app": "web"
+   },
+   "type": "ClusterIP"
+  },
+  "after": {
+   "cluster_ip": "10.0.0.1",
+   "created_at": "2026-11-01T00:00:00Z",
+   "external_ip": "<none>",
+   "name": "web",
+   "namespace": "demo",
+   "ports": [
+    {
+     "name": "http",
+     "port": 80,
+     "protocol": "TCP",
+     "target_port": "8080"
+    }
+   ],
+   "selector": {
+    "app": "web"
+   },
+   "type": "ClusterIP"
+  },
+  "shows": {
+   "cluster_ip": "10.0.0.1",
+   "external_ip": "<none>",
+   "ports": "TCP 80->8080",
+   "selector": "app=web",
+   "type": "ClusterIP"
+  }
+ },
+ {
+  "name": "a Service that gained a load balancer shows it",
+  "resource": "services",
+  "before": {
+   "cluster_ip": "10.0.0.1",
+   "created_at": "2026-11-01T00:00:00Z",
+   "external_ip": "<none>",
+   "name": "web",
+   "namespace": "demo",
+   "ports": [
+    {
+     "name": "http",
+     "port": 80,
+     "protocol": "TCP",
+     "target_port": "8080"
+    }
+   ],
+   "selector": {
+    "app": "web"
+   },
+   "type": "ClusterIP"
+  },
+  "event": {
+   "cluster_ip": "10.0.0.1",
+   "created_at": "2026-11-01T00:00:00Z",
+   "external_ip": "192.0.2.9,192.0.2.1,lb.example.test",
+   "name": "web",
+   "namespace": "demo",
+   "ports": [
+    {
+     "app_protocol": "http",
+     "name": "http",
+     "node_port": 30080,
+     "port": 80,
+     "protocol": "TCP",
+     "target_port": "http"
+    }
+   ],
+   "selector": {
+    "app": "web"
+   },
+   "type": "LoadBalancer"
+  },
+  "after": {
+   "cluster_ip": "10.0.0.1",
+   "created_at": "2026-11-01T00:00:00Z",
+   "external_ip": "192.0.2.9,192.0.2.1,lb.example.test",
+   "name": "web",
+   "namespace": "demo",
+   "ports": [
+    {
+     "app_protocol": "http",
+     "name": "http",
+     "node_port": 30080,
+     "port": 80,
+     "protocol": "TCP",
+     "target_port": "http"
+    }
+   ],
+   "selector": {
+    "app": "web"
+   },
+   "type": "LoadBalancer"
+  },
+  "shows": {
+   "cluster_ip": "10.0.0.1",
+   "external_ip": "192.0.2.9,192.0.2.1,lb.example.test",
+   "ports": "TCP 80->http (node:30080)",
+   "selector": "app=web",
+   "type": "LoadBalancer"
+  }
+ },
+ {
+  "name": "a Service whose selector alone changed keeps every other cell",
+  "resource": "services",
+  "before": {
+   "cluster_ip": "10.0.0.1",
+   "created_at": "2026-11-01T00:00:00Z",
+   "external_ip": "<none>",
+   "name": "web",
+   "namespace": "demo",
+   "ports": [
+    {
+     "name": "http",
+     "port": 80,
+     "protocol": "TCP",
+     "target_port": "8080"
+    }
+   ],
+   "selector": {
+    "app": "web"
+   },
+   "type": "ClusterIP"
+  },
+  "event": {
+   "cluster_ip": "10.0.0.1",
+   "created_at": "2026-11-01T00:00:00Z",
+   "external_ip": "<none>",
+   "name": "web",
+   "namespace": "demo",
+   "ports": [
+    {
+     "name": "http",
+     "port": 80,
+     "protocol": "TCP",
+     "target_port": "8080"
+    }
+   ],
+   "selector": {
+    "app": "new"
+   },
+   "type": "ClusterIP"
+  },
+  "after": {
+   "cluster_ip": "10.0.0.1",
+   "created_at": "2026-11-01T00:00:00Z",
+   "external_ip": "<none>",
+   "name": "web",
+   "namespace": "demo",
+   "ports": [
+    {
+     "name": "http",
+     "port": 80,
+     "protocol": "TCP",
+     "target_port": "8080"
+    }
+   ],
+   "selector": {
+    "app": "new"
+   },
+   "type": "ClusterIP"
+  },
+  "shows": {
+   "cluster_ip": "10.0.0.1",
+   "external_ip": "<none>",
+   "ports": "TCP 80->8080",
+   "selector": "app=new",
+   "type": "ClusterIP"
+  }
+ },
+ {
+  "name": "Endpoints with no subsets left show no address or port",
+  "resource": "endpoints",
+  "before": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "name": "web",
+   "namespace": "demo",
+   "not_ready_addresses": [
+    "10.0.0.2"
+   ],
+   "not_ready_count": 1,
+   "not_ready_targets": [
+    {
+     "ip": "10.0.0.2"
+    }
+   ],
+   "ports": [
+    {
+     "name": "http",
+     "port": 80,
+     "protocol": "TCP"
+    }
+   ],
+   "ready_addresses": [
+    "10.0.0.1"
+   ],
+   "ready_count": 1,
+   "ready_targets": [
+    {
+     "ip": "10.0.0.1",
+     "node_name": "node-a",
+     "target_ref": {
+      "kind": "Pod",
+      "name": "web-1"
+     }
+    }
+   ]
+  },
+  "event": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "name": "web",
+   "namespace": "demo",
+   "not_ready_addresses": [],
+   "not_ready_count": 0,
+   "not_ready_targets": [],
+   "ports": [],
+   "ready_addresses": [],
+   "ready_count": 0,
+   "ready_targets": []
+  },
+  "after": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "name": "web",
+   "namespace": "demo",
+   "not_ready_addresses": [],
+   "not_ready_count": 0,
+   "not_ready_targets": [],
+   "ports": [],
+   "ready_addresses": [],
+   "ready_count": 0,
+   "ready_targets": []
+  },
+  "shows": {
+   "addresses": "-",
+   "not_ready": 0,
+   "ports": "-",
+   "ready": 0
+  }
+ },
+ {
+  "name": "Endpoints whose not-ready address became ready list it once",
+  "resource": "endpoints",
+  "before": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "name": "web",
+   "namespace": "demo",
+   "not_ready_addresses": [
+    "10.0.0.2"
+   ],
+   "not_ready_count": 1,
+   "not_ready_targets": [
+    {
+     "ip": "10.0.0.2"
+    }
+   ],
+   "ports": [
+    {
+     "name": "http",
+     "port": 80,
+     "protocol": "TCP"
+    }
+   ],
+   "ready_addresses": [
+    "10.0.0.1"
+   ],
+   "ready_count": 1,
+   "ready_targets": [
+    {
+     "ip": "10.0.0.1",
+     "node_name": "node-a",
+     "target_ref": {
+      "kind": "Pod",
+      "name": "web-1"
+     }
+    }
+   ]
+  },
+  "event": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "name": "web",
+   "namespace": "demo",
+   "not_ready_addresses": [],
+   "not_ready_count": 0,
+   "not_ready_targets": [],
+   "ports": [
+    {
+     "name": "http",
+     "port": 80,
+     "protocol": "TCP"
+    }
+   ],
+   "ready_addresses": [
+    "10.0.0.1",
+    "10.0.0.2"
+   ],
+   "ready_count": 2,
+   "ready_targets": [
+    {
+     "ip": "10.0.0.1",
+     "node_name": "node-a",
+     "target_ref": {
+      "kind": "Pod",
+      "name": "web-1"
+     }
+    },
+    {
+     "ip": "10.0.0.2"
+    }
+   ]
+  },
+  "after": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "name": "web",
+   "namespace": "demo",
+   "not_ready_addresses": [],
+   "not_ready_count": 0,
+   "not_ready_targets": [],
+   "ports": [
+    {
+     "name": "http",
+     "port": 80,
+     "protocol": "TCP"
+    }
+   ],
+   "ready_addresses": [
+    "10.0.0.1",
+    "10.0.0.2"
+   ],
+   "ready_count": 2,
+   "ready_targets": [
+    {
+     "ip": "10.0.0.1",
+     "node_name": "node-a",
+     "target_ref": {
+      "kind": "Pod",
+      "name": "web-1"
+     }
+    },
+    {
+     "ip": "10.0.0.2"
+    }
+   ]
+  },
+  "shows": {
+   "addresses": "10.0.0.1, 10.0.0.2",
+   "not_ready": 0,
+   "ports": "http:80/TCP",
+   "ready": 2
+  }
+ },
+ {
+  "name": "Endpoints that gained their addresses show them",
+  "resource": "endpoints",
+  "before": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "name": "web",
+   "namespace": "demo",
+   "not_ready_addresses": [],
+   "not_ready_count": 0,
+   "not_ready_targets": [],
+   "ports": [],
+   "ready_addresses": [],
+   "ready_count": 0,
+   "ready_targets": []
+  },
+  "event": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "name": "web",
+   "namespace": "demo",
+   "not_ready_addresses": [
+    "10.0.0.2"
+   ],
+   "not_ready_count": 1,
+   "not_ready_targets": [
+    {
+     "ip": "10.0.0.2"
+    }
+   ],
+   "ports": [
+    {
+     "name": "http",
+     "port": 80,
+     "protocol": "TCP"
+    }
+   ],
+   "ready_addresses": [
+    "10.0.0.1"
+   ],
+   "ready_count": 1,
+   "ready_targets": [
+    {
+     "ip": "10.0.0.1",
+     "node_name": "node-a",
+     "target_ref": {
+      "kind": "Pod",
+      "name": "web-1"
+     }
+    }
+   ]
+  },
+  "after": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "name": "web",
+   "namespace": "demo",
+   "not_ready_addresses": [
+    "10.0.0.2"
+   ],
+   "not_ready_count": 1,
+   "not_ready_targets": [
+    {
+     "ip": "10.0.0.2"
+    }
+   ],
+   "ports": [
+    {
+     "name": "http",
+     "port": 80,
+     "protocol": "TCP"
+    }
+   ],
+   "ready_addresses": [
+    "10.0.0.1"
+   ],
+   "ready_count": 1,
+   "ready_targets": [
+    {
+     "ip": "10.0.0.1",
+     "node_name": "node-a",
+     "target_ref": {
+      "kind": "Pod",
+      "name": "web-1"
+     }
+    }
+   ]
+  },
+  "shows": {
+   "addresses": "10.0.0.1 | not-ready: 10.0.0.2",
+   "not_ready": 1,
+   "ports": "http:80/TCP",
+   "ready": 1
+  }
+ },
+ {
+  "name": "an IngressClass no longer the default, its parameters and labels gone, says so",
+  "resource": "ingressclasses",
+  "before": {
+   "annotations": {
+    "ingressclass.kubernetes.io/is-default-class": "true"
+   },
+   "controller": "example.test/nginx",
+   "created_at": "2026-11-01T00:00:00Z",
+   "finalizers": [
+    "example.test/keep"
+   ],
+   "is_default": true,
+   "labels": {
+    "team": "a"
+   },
+   "name": "nginx",
+   "parameters": {
+    "api_group": "example.test",
+    "kind": "Params",
+    "name": "p",
+    "namespace": "demo",
+    "scope": "Namespace"
+   }
+  },
+  "event": {
+   "annotations": null,
+   "controller": "example.test/nginx",
+   "created_at": "2026-11-01T00:00:00Z",
+   "finalizers": null,
+   "is_default": false,
+   "labels": null,
+   "name": "nginx"
+  },
+  "after": {
+   "annotations": null,
+   "controller": "example.test/nginx",
+   "created_at": "2026-11-01T00:00:00Z",
+   "finalizers": null,
+   "is_default": false,
+   "labels": null,
+   "name": "nginx"
+  },
+  "shows": {
+   "controller": "example.test/nginx",
+   "default": false,
+   "labels": {},
+   "parameters": "-"
+  }
+ },
+ {
+  "name": "an IngressClass that gained parameters and the default mark shows them",
+  "resource": "ingressclasses",
+  "before": {
+   "annotations": null,
+   "controller": "example.test/nginx",
+   "created_at": "2026-11-01T00:00:00Z",
+   "finalizers": null,
+   "is_default": false,
+   "labels": null,
+   "name": "nginx"
+  },
+  "event": {
+   "annotations": {
+    "ingressclass.kubernetes.io/is-default-class": "true"
+   },
+   "controller": "example.test/nginx",
+   "created_at": "2026-11-01T00:00:00Z",
+   "finalizers": [
+    "example.test/keep"
+   ],
+   "is_default": true,
+   "labels": {
+    "team": "a"
+   },
+   "name": "nginx",
+   "parameters": {
+    "api_group": "example.test",
+    "kind": "Params",
+    "name": "p",
+    "namespace": "demo",
+    "scope": "Namespace"
+   }
+  },
+  "after": {
+   "annotations": {
+    "ingressclass.kubernetes.io/is-default-class": "true"
+   },
+   "controller": "example.test/nginx",
+   "created_at": "2026-11-01T00:00:00Z",
+   "finalizers": [
+    "example.test/keep"
+   ],
+   "is_default": true,
+   "labels": {
+    "team": "a"
+   },
+   "name": "nginx",
+   "parameters": {
+    "api_group": "example.test",
+    "kind": "Params",
+    "name": "p",
+    "namespace": "demo",
+    "scope": "Namespace"
+   }
+  },
+  "shows": {
+   "controller": "example.test/nginx",
+   "default": true,
+   "labels": {
+    "team": "a"
+   },
+   "parameters": "Params.example.test/p (Namespace) ns=demo"
+  }
+ },
+ {
+  "name": "a NetworkPolicy whose rules went away shows none and keeps its labels",
+  "resource": "networkpolicies",
+  "before": {
+   "annotations": {
+    "note": "kept"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "default_deny_egress": false,
+   "default_deny_ingress": false,
+   "egress": [
+    {
+     "ports": [
+      {
+       "port": "5432",
+       "protocol": "TCP"
+      }
+     ],
+     "to": [
+      {
+       "namespace_selector": {
+        "match_labels": {
+         "team": "db"
+        }
+       },
+       "pod_selector": {
+        "match_labels": {
+         "app": "db"
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "egress_rules": 1,
+   "ingress": [
+    {
+     "from": [
+      {
+       "pod_selector": {
+        "match_labels": {
+         "role": "client"
+        }
+       }
+      },
+      {
+       "namespace_selector": {
+        "match_labels": {
+         "team": "back"
+        }
+       }
+      },
+      {
+       "namespace_selector": {},
+       "pod_selector": {
+        "match_expressions": [
+         {
+          "key": "tier",
+          "operator": "In",
+          "values": [
+           "b",
+           "a"
+          ]
+         }
+        ]
+       }
+      },
+      {
+       "ip_block": {
+        "cidr": "10.0.0.0/8",
+        "except": [
+         "10.1.0.0/16"
+        ]
+       }
+      }
+     ],
+     "ports": [
+      {
+       "end_port": 9000,
+       "port": "8000",
+       "protocol": "TCP"
+      },
+      {
+       "port": "dns",
+       "protocol": "UDP"
+      }
+     ]
+    }
+   ],
+   "ingress_rules": 1,
+   "labels": {
+    "team": "a"
+   },
+   "name": "web",
+   "namespace": "demo",
+   "pod_selector": {
+    "match_labels": {
+     "app": "web"
+    }
+   },
+   "policy_types": [
+    "Ingress",
+    "Egress"
+   ],
+   "selects_all_pods": false
+  },
+  "event": {
+   "annotations": {
+    "note": "kept"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "default_deny_egress": true,
+   "default_deny_ingress": true,
+   "egress": [],
+   "egress_rules": 0,
+   "ingress": [],
+   "ingress_rules": 0,
+   "labels": {
+    "team": "a"
+   },
+   "name": "web",
+   "namespace": "demo",
+   "pod_selector": {},
+   "policy_types": [
+    "Ingress",
+    "Egress"
+   ],
+   "selects_all_pods": true
+  },
+  "after": {
+   "annotations": {
+    "note": "kept"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "default_deny_egress": true,
+   "default_deny_ingress": true,
+   "egress": [],
+   "egress_rules": 0,
+   "ingress": [],
+   "ingress_rules": 0,
+   "labels": {
+    "team": "a"
+   },
+   "name": "web",
+   "namespace": "demo",
+   "pod_selector": {},
+   "policy_types": [
+    "Ingress",
+    "Egress"
+   ],
+   "selects_all_pods": true
+  },
+  "shows": {
+   "annotations": {
+    "note": "kept"
+   },
+   "default_deny": "Ingress + Egress",
+   "egress": [],
+   "egress_rules": 0,
+   "ingress": [],
+   "ingress_rules": 0,
+   "labels": {
+    "team": "a"
+   },
+   "pod_selector": "*",
+   "types": "Ingress, Egress"
+  }
+ },
+ {
+  "name": "a NetworkPolicy that gained its rules words them as the object has them",
+  "resource": "networkpolicies",
+  "before": {
+   "annotations": {
+    "note": "kept"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "default_deny_egress": true,
+   "default_deny_ingress": true,
+   "egress": [],
+   "egress_rules": 0,
+   "ingress": [],
+   "ingress_rules": 0,
+   "labels": {
+    "team": "a"
+   },
+   "name": "web",
+   "namespace": "demo",
+   "pod_selector": {},
+   "policy_types": [
+    "Ingress",
+    "Egress"
+   ],
+   "selects_all_pods": true
+  },
+  "event": {
+   "annotations": {
+    "note": "kept"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "default_deny_egress": false,
+   "default_deny_ingress": false,
+   "egress": [
+    {
+     "ports": [
+      {
+       "port": "5432",
+       "protocol": "TCP"
+      }
+     ],
+     "to": [
+      {
+       "namespace_selector": {
+        "match_labels": {
+         "team": "db"
+        }
+       },
+       "pod_selector": {
+        "match_labels": {
+         "app": "db"
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "egress_rules": 1,
+   "ingress": [
+    {
+     "from": [
+      {
+       "pod_selector": {
+        "match_labels": {
+         "role": "client"
+        }
+       }
+      },
+      {
+       "namespace_selector": {
+        "match_labels": {
+         "team": "back"
+        }
+       }
+      },
+      {
+       "namespace_selector": {},
+       "pod_selector": {
+        "match_expressions": [
+         {
+          "key": "tier",
+          "operator": "In",
+          "values": [
+           "b",
+           "a"
+          ]
+         }
+        ]
+       }
+      },
+      {
+       "ip_block": {
+        "cidr": "10.0.0.0/8",
+        "except": [
+         "10.1.0.0/16"
+        ]
+       }
+      }
+     ],
+     "ports": [
+      {
+       "end_port": 9000,
+       "port": "8000",
+       "protocol": "TCP"
+      },
+      {
+       "port": "dns",
+       "protocol": "UDP"
+      }
+     ]
+    }
+   ],
+   "ingress_rules": 1,
+   "labels": {
+    "team": "a"
+   },
+   "name": "web",
+   "namespace": "demo",
+   "pod_selector": {
+    "match_labels": {
+     "app": "web"
+    }
+   },
+   "policy_types": [
+    "Ingress",
+    "Egress"
+   ],
+   "selects_all_pods": false
+  },
+  "after": {
+   "annotations": {
+    "note": "kept"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "default_deny_egress": false,
+   "default_deny_ingress": false,
+   "egress": [
+    {
+     "ports": [
+      {
+       "port": "5432",
+       "protocol": "TCP"
+      }
+     ],
+     "to": [
+      {
+       "namespace_selector": {
+        "match_labels": {
+         "team": "db"
+        }
+       },
+       "pod_selector": {
+        "match_labels": {
+         "app": "db"
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "egress_rules": 1,
+   "ingress": [
+    {
+     "from": [
+      {
+       "pod_selector": {
+        "match_labels": {
+         "role": "client"
+        }
+       }
+      },
+      {
+       "namespace_selector": {
+        "match_labels": {
+         "team": "back"
+        }
+       }
+      },
+      {
+       "namespace_selector": {},
+       "pod_selector": {
+        "match_expressions": [
+         {
+          "key": "tier",
+          "operator": "In",
+          "values": [
+           "b",
+           "a"
+          ]
+         }
+        ]
+       }
+      },
+      {
+       "ip_block": {
+        "cidr": "10.0.0.0/8",
+        "except": [
+         "10.1.0.0/16"
+        ]
+       }
+      }
+     ],
+     "ports": [
+      {
+       "end_port": 9000,
+       "port": "8000",
+       "protocol": "TCP"
+      },
+      {
+       "port": "dns",
+       "protocol": "UDP"
+      }
+     ]
+    }
+   ],
+   "ingress_rules": 1,
+   "labels": {
+    "team": "a"
+   },
+   "name": "web",
+   "namespace": "demo",
+   "pod_selector": {
+    "match_labels": {
+     "app": "web"
+    }
+   },
+   "policy_types": [
+    "Ingress",
+    "Egress"
+   ],
+   "selects_all_pods": false
+  },
+  "shows": {
+   "annotations": {
+    "note": "kept"
+   },
+   "default_deny": "-",
+   "egress": [
+    "pods app=db in namespaces team=db | TCP 5432"
+   ],
+   "egress_rules": 1,
+   "ingress": [
+    "pods role=client in this namespace ; every pod in namespaces team=back ; pods tier in (a,b) in every namespace ; addresses 10.0.0.0/8 (except 10.1.0.0/16) | TCP 8000-9000, UDP dns"
+   ],
+   "ingress_rules": 1,
+   "labels": {
+    "team": "a"
+   },
+   "pod_selector": "app=web",
+   "types": "Ingress, Egress"
+  }
+ },
+ {
+  "name": "a NetworkPolicy whose labels and annotations went away shows none",
+  "resource": "networkpolicies",
+  "before": {
+   "annotations": {
+    "note": "kept"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "default_deny_egress": false,
+   "default_deny_ingress": false,
+   "egress": [
+    {
+     "ports": [
+      {
+       "port": "5432",
+       "protocol": "TCP"
+      }
+     ],
+     "to": [
+      {
+       "namespace_selector": {
+        "match_labels": {
+         "team": "db"
+        }
+       },
+       "pod_selector": {
+        "match_labels": {
+         "app": "db"
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "egress_rules": 1,
+   "ingress": [
+    {
+     "from": [
+      {
+       "pod_selector": {
+        "match_labels": {
+         "role": "client"
+        }
+       }
+      },
+      {
+       "namespace_selector": {
+        "match_labels": {
+         "team": "back"
+        }
+       }
+      },
+      {
+       "namespace_selector": {},
+       "pod_selector": {
+        "match_expressions": [
+         {
+          "key": "tier",
+          "operator": "In",
+          "values": [
+           "b",
+           "a"
+          ]
+         }
+        ]
+       }
+      },
+      {
+       "ip_block": {
+        "cidr": "10.0.0.0/8",
+        "except": [
+         "10.1.0.0/16"
+        ]
+       }
+      }
+     ],
+     "ports": [
+      {
+       "end_port": 9000,
+       "port": "8000",
+       "protocol": "TCP"
+      },
+      {
+       "port": "dns",
+       "protocol": "UDP"
+      }
+     ]
+    }
+   ],
+   "ingress_rules": 1,
+   "labels": {
+    "team": "a"
+   },
+   "name": "web",
+   "namespace": "demo",
+   "pod_selector": {
+    "match_labels": {
+     "app": "web"
+    }
+   },
+   "policy_types": [
+    "Ingress",
+    "Egress"
+   ],
+   "selects_all_pods": false
+  },
+  "event": {
+   "annotations": null,
+   "created_at": "2026-11-01T00:00:00Z",
+   "default_deny_egress": false,
+   "default_deny_ingress": false,
+   "egress": [
+    {
+     "ports": [
+      {
+       "port": "5432",
+       "protocol": "TCP"
+      }
+     ],
+     "to": [
+      {
+       "namespace_selector": {
+        "match_labels": {
+         "team": "db"
+        }
+       },
+       "pod_selector": {
+        "match_labels": {
+         "app": "db"
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "egress_rules": 1,
+   "ingress": [
+    {
+     "from": [
+      {
+       "pod_selector": {
+        "match_labels": {
+         "role": "client"
+        }
+       }
+      },
+      {
+       "namespace_selector": {
+        "match_labels": {
+         "team": "back"
+        }
+       }
+      },
+      {
+       "namespace_selector": {},
+       "pod_selector": {
+        "match_expressions": [
+         {
+          "key": "tier",
+          "operator": "In",
+          "values": [
+           "b",
+           "a"
+          ]
+         }
+        ]
+       }
+      },
+      {
+       "ip_block": {
+        "cidr": "10.0.0.0/8",
+        "except": [
+         "10.1.0.0/16"
+        ]
+       }
+      }
+     ],
+     "ports": [
+      {
+       "end_port": 9000,
+       "port": "8000",
+       "protocol": "TCP"
+      },
+      {
+       "port": "dns",
+       "protocol": "UDP"
+      }
+     ]
+    }
+   ],
+   "ingress_rules": 1,
+   "labels": null,
+   "name": "web",
+   "namespace": "demo",
+   "pod_selector": {
+    "match_labels": {
+     "app": "web"
+    }
+   },
+   "policy_types": [
+    "Ingress",
+    "Egress"
+   ],
+   "selects_all_pods": false
+  },
+  "after": {
+   "annotations": null,
+   "created_at": "2026-11-01T00:00:00Z",
+   "default_deny_egress": false,
+   "default_deny_ingress": false,
+   "egress": [
+    {
+     "ports": [
+      {
+       "port": "5432",
+       "protocol": "TCP"
+      }
+     ],
+     "to": [
+      {
+       "namespace_selector": {
+        "match_labels": {
+         "team": "db"
+        }
+       },
+       "pod_selector": {
+        "match_labels": {
+         "app": "db"
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "egress_rules": 1,
+   "ingress": [
+    {
+     "from": [
+      {
+       "pod_selector": {
+        "match_labels": {
+         "role": "client"
+        }
+       }
+      },
+      {
+       "namespace_selector": {
+        "match_labels": {
+         "team": "back"
+        }
+       }
+      },
+      {
+       "namespace_selector": {},
+       "pod_selector": {
+        "match_expressions": [
+         {
+          "key": "tier",
+          "operator": "In",
+          "values": [
+           "b",
+           "a"
+          ]
+         }
+        ]
+       }
+      },
+      {
+       "ip_block": {
+        "cidr": "10.0.0.0/8",
+        "except": [
+         "10.1.0.0/16"
+        ]
+       }
+      }
+     ],
+     "ports": [
+      {
+       "end_port": 9000,
+       "port": "8000",
+       "protocol": "TCP"
+      },
+      {
+       "port": "dns",
+       "protocol": "UDP"
+      }
+     ]
+    }
+   ],
+   "ingress_rules": 1,
+   "labels": null,
+   "name": "web",
+   "namespace": "demo",
+   "pod_selector": {
+    "match_labels": {
+     "app": "web"
+    }
+   },
+   "policy_types": [
+    "Ingress",
+    "Egress"
+   ],
+   "selects_all_pods": false
+  },
+  "shows": {
+   "annotations": {},
+   "default_deny": "-",
+   "egress": [
+    "pods app=db in namespaces team=db | TCP 5432"
+   ],
+   "egress_rules": 1,
+   "ingress": [
+    "pods role=client in this namespace ; every pod in namespaces team=back ; pods tier in (a,b) in every namespace ; addresses 10.0.0.0/8 (except 10.1.0.0/16) | TCP 8000-9000, UDP dns"
+   ],
+   "ingress_rules": 1,
+   "labels": {},
+   "pod_selector": "app=web",
+   "types": "Ingress, Egress"
+  }
+ },
+ {
+  "name": "a PersistentVolume freed of its claim shows no claim, class, reason or message",
+  "resource": "persistentvolumes",
+  "before": {
+   "access_modes": [
+    "ReadWriteOnce"
+   ],
+   "capacity": "1Gi",
+   "claim_ref": {
+    "name": "claim-a",
+    "namespace": "demo"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "driver": "csi.example.test",
+   "message": "disk gone",
+   "name": "disk-a",
+   "reason": "Broken",
+   "reclaim_policy": "Retain",
+   "source": "CSI",
+   "status": "Failed",
+   "storage_class": "fast",
+   "volume_handle": "vol-1",
+   "volume_mode": "Filesystem"
+  },
+  "event": {
+   "access_modes": [
+    "ReadWriteOnce"
+   ],
+   "capacity": "1Gi",
+   "claim_ref": null,
+   "created_at": "2026-11-01T00:00:00Z",
+   "driver": "/data",
+   "message": "",
+   "name": "disk-a",
+   "reason": "",
+   "reclaim_policy": "Retain",
+   "source": "HostPath",
+   "status": "Available",
+   "storage_class": "",
+   "volume_handle": "",
+   "volume_mode": "Filesystem"
+  },
+  "after": {
+   "access_modes": [
+    "ReadWriteOnce"
+   ],
+   "capacity": "1Gi",
+   "claim_ref": null,
+   "created_at": "2026-11-01T00:00:00Z",
+   "driver": "/data",
+   "message": "",
+   "name": "disk-a",
+   "reason": "",
+   "reclaim_policy": "Retain",
+   "source": "HostPath",
+   "status": "Available",
+   "storage_class": "",
+   "volume_handle": "",
+   "volume_mode": "Filesystem"
+  },
+  "shows": {
+   "access_modes": "ReadWriteOnce",
+   "capacity": "1Gi",
+   "claim": "-",
+   "message": "-",
+   "reason": "-",
+   "reclaim_policy": "Retain",
+   "source": "HostPath",
+   "status": "Available",
+   "storage_class": "-",
+   "volume_mode": "Filesystem"
+  }
+ },
+ {
+  "name": "a PersistentVolume that bound shows its claim and source",
+  "resource": "persistentvolumes",
+  "before": {
+   "access_modes": [
+    "ReadWriteOnce"
+   ],
+   "capacity": "1Gi",
+   "claim_ref": null,
+   "created_at": "2026-11-01T00:00:00Z",
+   "driver": "/data",
+   "message": "",
+   "name": "disk-a",
+   "reason": "",
+   "reclaim_policy": "Retain",
+   "source": "HostPath",
+   "status": "Available",
+   "storage_class": "",
+   "volume_handle": "",
+   "volume_mode": "Filesystem"
+  },
+  "event": {
+   "access_modes": [
+    "ReadWriteOnce"
+   ],
+   "capacity": "1Gi",
+   "claim_ref": {
+    "name": "claim-a",
+    "namespace": "demo"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "driver": "csi.example.test",
+   "message": "",
+   "name": "disk-a",
+   "reason": "",
+   "reclaim_policy": "Retain",
+   "source": "CSI",
+   "status": "Bound",
+   "storage_class": "fast",
+   "volume_handle": "vol-1",
+   "volume_mode": "Filesystem"
+  },
+  "after": {
+   "access_modes": [
+    "ReadWriteOnce"
+   ],
+   "capacity": "1Gi",
+   "claim_ref": {
+    "name": "claim-a",
+    "namespace": "demo"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "driver": "csi.example.test",
+   "message": "",
+   "name": "disk-a",
+   "reason": "",
+   "reclaim_policy": "Retain",
+   "source": "CSI",
+   "status": "Bound",
+   "storage_class": "fast",
+   "volume_handle": "vol-1",
+   "volume_mode": "Filesystem"
+  },
+  "shows": {
+   "access_modes": "ReadWriteOnce",
+   "capacity": "1Gi",
+   "claim": "demo/claim-a",
+   "message": "-",
+   "reason": "-",
+   "reclaim_policy": "Retain",
+   "source": "CSI",
+   "status": "Bound",
+   "storage_class": "fast",
+   "volume_mode": "Filesystem"
+  }
+ },
+ {
+  "name": "a PersistentVolume that failed shows why and keeps every other cell",
+  "resource": "persistentvolumes",
+  "before": {
+   "access_modes": [
+    "ReadWriteOnce"
+   ],
+   "capacity": "1Gi",
+   "claim_ref": {
+    "name": "claim-a",
+    "namespace": "demo"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "driver": "csi.example.test",
+   "message": "",
+   "name": "disk-a",
+   "reason": "",
+   "reclaim_policy": "Retain",
+   "source": "CSI",
+   "status": "Bound",
+   "storage_class": "fast",
+   "volume_handle": "vol-1",
+   "volume_mode": "Filesystem"
+  },
+  "event": {
+   "access_modes": [
+    "ReadWriteOnce"
+   ],
+   "capacity": "1Gi",
+   "claim_ref": {
+    "name": "claim-a",
+    "namespace": "demo"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "driver": "csi.example.test",
+   "message": "disk gone",
+   "name": "disk-a",
+   "reason": "Broken",
+   "reclaim_policy": "Retain",
+   "source": "CSI",
+   "status": "Failed",
+   "storage_class": "fast",
+   "volume_handle": "vol-1",
+   "volume_mode": "Filesystem"
+  },
+  "after": {
+   "access_modes": [
+    "ReadWriteOnce"
+   ],
+   "capacity": "1Gi",
+   "claim_ref": {
+    "name": "claim-a",
+    "namespace": "demo"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "driver": "csi.example.test",
+   "message": "disk gone",
+   "name": "disk-a",
+   "reason": "Broken",
+   "reclaim_policy": "Retain",
+   "source": "CSI",
+   "status": "Failed",
+   "storage_class": "fast",
+   "volume_handle": "vol-1",
+   "volume_mode": "Filesystem"
+  },
+  "shows": {
+   "access_modes": "ReadWriteOnce",
+   "capacity": "1Gi",
+   "claim": "demo/claim-a",
+   "message": "disk gone",
+   "reason": "Broken",
+   "reclaim_policy": "Retain",
+   "source": "CSI",
+   "status": "Failed",
+   "storage_class": "fast",
+   "volume_mode": "Filesystem"
+  }
  }
 ]

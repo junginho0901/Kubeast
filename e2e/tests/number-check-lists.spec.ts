@@ -1431,13 +1431,19 @@ test.describe('number check — list screens', () => {
     }
   })
 
-  // A live update carries the list's own row (internal/ingress, cronjob and volumeattachment), so the row it leaves reads
-  // as a fresh read of the list API does, a value that went away included. The objects are made here and removed after.
-  test('a live update leaves an Ingress, CronJob and VolumeAttachment row as the list API shows it, emptied values too', async ({ page }) => {
-    test.setTimeout(300_000)
+  // A live update carries the list's own row (internal/ingress, cronjob, volumeattachment, service, endpoints,
+  // ingressclass, networkpolicy and pv), so the row it leaves reads as a fresh read of the list API does, a value that
+  // went away included. The objects are made here and removed after.
+  test('a live update leaves a row as the list API shows it, emptied values too', async ({ page }) => {
+    test.setTimeout(600_000)
     const ING = 'num-live-ing'
     const CRON = 'num-live-cron'
     const VA = 'num-live-va'
+    const SVC = 'num-live-svc'
+    const EP = 'num-live-ep'
+    const CLASS = 'num-live-class'
+    const NP = 'num-live-np'
+    const PV = 'num-live-pv'
     const screenOf = (path: string) => [...SCREENS, ...SCREENS_CLUSTER].find((s) => s.path === path) as Screen
     const ago = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString().replace(/\.\d+Z$/, 'Z')
 
@@ -1556,11 +1562,147 @@ test.describe('number check — list screens', () => {
         await follows(s, VA, [status({ attached: true, detachError: { time: at, message: 'num-live detach failed' } })], { Attached: 'Error', Error: 'num-live detach failed' })
         await follows(s, VA, [status({ attached: false, detachError: null })], { Attached: 'Detached', Error: '-' })
       })
+
+      await test.step('a Service that became ExternalName shows no cluster IP, port or selector', async () => {
+        const s = screenOf('/network/services')
+        kubectl('apply -f -', JSON.stringify({
+          apiVersion: 'v1',
+          kind: 'Service',
+          metadata: { name: SVC, namespace: NS },
+          spec: { selector: { app: 'num-live' }, ports: [{ name: 'http', port: 80, targetPort: 8080 }] },
+        }))
+        await watching(s, SVC)
+        await follows(s, SVC, [], { Type: 'ClusterIP', Ports: 'TCP 80->8080', Selector: 'app=num-live' })
+        await follows(s, SVC, [
+          `patch service ${SVC} -n ${NS} --type=merge -p=${arg({ spec: { type: 'ExternalName', externalName: 'live.numbers.example', ports: null, selector: null } })}`,
+        ], { Type: 'ExternalName', 'Cluster IP': '-', Ports: '-', Selector: '-' })
+      })
+
+      await test.step('Endpoints show the addresses each update leaves, and none once their subsets are gone', async () => {
+        const s = screenOf('/network/endpoints')
+        const port = { name: 'http', port: 80, protocol: 'TCP' }
+        const subsets = (value: Obj | null) => `patch endpoints ${EP} -n ${NS} --type=merge -p=${arg({ subsets: value })}`
+        kubectl('apply -f -', JSON.stringify({
+          apiVersion: 'v1',
+          kind: 'Endpoints',
+          metadata: { name: EP, namespace: NS },
+          subsets: [{ addresses: [{ ip: '192.0.2.20' }], notReadyAddresses: [{ ip: '192.0.2.21' }], ports: [port] }],
+        }))
+        await watching(s, EP)
+        await follows(s, EP, [], { Addresses: '192.0.2.20 | not-ready: 192.0.2.21', Ports: 'http:80/TCP', Ready: '1', 'Not Ready': '1' })
+        await follows(s, EP, [subsets([{ addresses: [{ ip: '192.0.2.20' }, { ip: '192.0.2.21' }], ports: [port] }])],
+          { Addresses: '192.0.2.20, 192.0.2.21', Ports: 'http:80/TCP', Ready: '2', 'Not Ready': '0' })
+        await follows(s, EP, [subsets(null)], { Addresses: '-', Ports: '-', Ready: '0', 'Not Ready': '0' })
+      })
+
+      await test.step('an IngressClass follows its parameters and its row goes when it is deleted', async () => {
+        const s = screenOf('/network/ingressclasses')
+        const names = async () => {
+          const { heads, rows } = await readScreen(page)
+          return rows.map((r) => r[heads.findIndex((h) => /^name$/i.test(h))])
+        }
+        kubectl('apply -f -', JSON.stringify({
+          apiVersion: 'networking.k8s.io/v1',
+          kind: 'IngressClass',
+          metadata: { name: CLASS },
+          spec: { controller: 'numbers.kubeast.io/live', parameters: { apiGroup: 'numbers.kubeast.io', kind: 'Params', name: 'live', scope: 'Cluster' } },
+        }))
+        await watching(s, CLASS)
+        await follows(s, CLASS, [], { Controller: 'numbers.kubeast.io/live', Default: 'No', Parameters: 'Params.numbers.kubeast.io/live (Cluster)' })
+        await follows(s, CLASS, [`patch ingressclass ${CLASS} --type=json -p=${arg([{ op: 'remove', path: '/spec/parameters' }])}`],
+          { Controller: 'numbers.kubeast.io/live', Default: 'No', Parameters: '-' })
+        kubectl(`delete ingressclass ${CLASS} --wait=false`)
+        await expect.poll(names, { timeout: 20_000, message: `${CLASS}: the row after the class was deleted` }).not.toContain(CLASS)
+      })
+
+      await test.step('a NetworkPolicy drops the rules it lost, and its drawer words the rules it has as the object does', async () => {
+        const s = screenOf('/network/networkpolicies')
+        const squash = (text: string) => text.replace(/\s+/g, '')
+        // the drawer opened from the row on that page
+        const opened = async (p: Page) => {
+          await p.locator('main tbody tr').getByRole('cell', { name: NP, exact: true }).click()
+          const drawer = p.locator(DRAWER).last()
+          await expect(drawer).toContainText('NetworkPolicy Info', { timeout: 20_000 })
+          const read = {
+            peers: await p.getByTestId('netpol-rule-peers').allInnerTexts(),
+            ports: await p.getByTestId('netpol-rule-ports').allInnerTexts(),
+            text: squash(await drawer.innerText()),
+          }
+          await p.keyboard.press('Escape')
+          return read
+        }
+        const rules = {
+          peers: [
+            'From: pods role=client in this namespace ; every pod in namespaces team=back ; pods tier in (a,b) in every namespace',
+            'To: pods app=db in namespaces team=db',
+          ],
+          ports: ['Ports: TCP 8000-9000', 'Ports: TCP 5432'],
+        }
+        kubectl('apply -f -', JSON.stringify({
+          apiVersion: 'networking.k8s.io/v1',
+          kind: 'NetworkPolicy',
+          metadata: { name: NP, namespace: NS, labels: { team: 'live' }, annotations: { note: 'kept' } },
+          spec: {
+            podSelector: { matchLabels: { app: 'num-live' } },
+            policyTypes: ['Ingress', 'Egress'],
+            ingress: [{
+              from: [
+                { podSelector: { matchLabels: { role: 'client' } } },
+                { namespaceSelector: { matchLabels: { team: 'back' } } },
+                { podSelector: { matchExpressions: [{ key: 'tier', operator: 'In', values: ['a', 'b'] }] }, namespaceSelector: {} },
+              ],
+              ports: [{ protocol: 'TCP', port: 8000, endPort: 9000 }],
+            }],
+            egress: [{ to: [{ podSelector: { matchLabels: { app: 'db' } }, namespaceSelector: { matchLabels: { team: 'db' } } }], ports: [{ protocol: 'TCP', port: 5432 }] }],
+          },
+        }))
+        await watching(s, NP)
+        await follows(s, NP, [], { 'Pod Selector': 'app=num-live', Types: 'Ingress, Egress', 'Ingress Rules': '1', 'Egress Rules': '1', 'Default Deny': '-' })
+        // held has only the list API's row, page the row a live update left; each says what the object has
+        for (const [way, p] of [['from the list API', held], ['from a live update', page]] as const) {
+          const { peers, ports, text } = await opened(p)
+          expect.soft({ peers, ports }, `${NP} drawer ${way}`).toEqual(rules)
+          expect.soft(text, `${NP} drawer ${way}: its label`).toContain('team:live')
+          expect.soft(text, `${NP} drawer ${way}: its annotation`).toContain('note:kept')
+        }
+        await follows(s, NP, [`patch networkpolicy ${NP} -n ${NS} --type=json -p=${arg([{ op: 'remove', path: '/spec/ingress' }, { op: 'remove', path: '/spec/egress' }])}`],
+          { 'Pod Selector': 'app=num-live', Types: 'Ingress, Egress', 'Ingress Rules': '0', 'Egress Rules': '0', 'Default Deny': 'Ingress + Egress' })
+        const { peers, text } = await opened(page)
+        expect.soft(peers, `${NP} drawer after its rules went`).toEqual([])
+        expect.soft(text, `${NP} drawer after its rules went: its label`).toContain('team:live')
+      })
+
+      await test.step('a PersistentVolume freed of its claim shows none, every other cell kept', async () => {
+        const s = screenOf('/storage?tab=pvs')
+        const kept = { StorageClass: 'num-live', Capacity: '1Gi', 'Access Modes': 'ReadWriteOnce', 'Reclaim Policy': 'Retain', 'Volume Mode': 'Filesystem', Source: 'HostPath' }
+        // a claim uid no claim has: the volume controller reads it as a claim that went away, and leaves a Retain volume Released
+        kubectl('apply -f -', JSON.stringify({
+          apiVersion: 'v1',
+          kind: 'PersistentVolume',
+          metadata: { name: PV },
+          spec: {
+            capacity: { storage: '1024Mi' },
+            accessModes: ['ReadWriteOnce'],
+            persistentVolumeReclaimPolicy: 'Retain',
+            storageClassName: 'num-live',
+            hostPath: { path: '/tmp/num-live-pv' },
+            claimRef: { namespace: NS, name: 'num-live-claim', uid: '00000000-0000-0000-0000-00000000aaaa' },
+          },
+        }))
+        await watching(s, PV)
+        await follows(s, PV, [], { ...kept, Status: 'Released', Claim: `${NS}/num-live-claim` })
+        await follows(s, PV, [`patch persistentvolume ${PV} --type=json -p=${arg([{ op: 'remove', path: '/spec/claimRef' }])}`], { ...kept, Status: 'Available', Claim: '-' })
+      })
     } finally {
       await held.close()
       kubectl(`delete ingress ${ING} -n ${NS} --ignore-not-found --wait=false`)
       kubectl(`delete cronjob ${CRON} -n ${NS} --ignore-not-found --wait=false`)
       kubectl(`delete volumeattachment ${VA} --ignore-not-found --wait=false`)
+      kubectl(`delete service ${SVC} -n ${NS} --ignore-not-found --wait=false`)
+      kubectl(`delete endpoints ${EP} -n ${NS} --ignore-not-found --wait=false`)
+      kubectl(`delete ingressclass ${CLASS} --ignore-not-found --wait=false`)
+      kubectl(`delete networkpolicy ${NP} -n ${NS} --ignore-not-found --wait=false`)
+      kubectl(`delete persistentvolume ${PV} --ignore-not-found --wait=false`)
     }
   })
 

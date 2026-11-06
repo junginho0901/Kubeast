@@ -245,7 +245,7 @@ const KINDS: Kind[] = [
       const ready: Obj[] = subsets.flatMap((s) => s.addresses ?? [])
       const notReady: Obj[] = subsets.flatMap((s) => s.notReadyAddresses ?? [])
       const total = ready.length + notReady.length
-      // the ports of every subset once (k8s-service formatEndpointsFull)
+      // the ports of every subset once (k8s-service internal/endpoints)
       const ports: Obj[] = []
       for (const p of subsets.flatMap((s) => s.ports ?? [])) {
         if (!ports.some((q) => (q.name ?? '') === (p.name ?? '') && q.port === p.port && q.protocol === p.protocol)) ports.push(p)

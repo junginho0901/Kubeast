@@ -10,6 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	ingressrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/ingress"
+	ingressclassrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/ingressclass"
 )
 
 // ========== Ingresses ==========
@@ -131,8 +132,8 @@ func (s *Service) GetIngressClasses(ctx context.Context) ([]map[string]interface
 		return nil, fmt.Errorf("list ingress classes: %w", err)
 	}
 	result := make([]map[string]interface{}, 0, len(list.Items))
-	for _, ic := range list.Items {
-		result = append(result, formatIngressClassDetail(&ic))
+	for i := range list.Items {
+		result = append(result, ingressclassrow.Info(&list.Items[i]))
 	}
 	return result, nil
 }
@@ -159,7 +160,7 @@ func (s *Service) DescribeIngressClass(ctx context.Context, name string) (map[st
 	if icErr != nil {
 		return nil, fmt.Errorf("get ingress class %s: %w", name, icErr)
 	}
-	result := formatIngressClassDetail(ic)
+	result := ingressclassrow.Info(ic)
 	result["uid"] = string(ic.UID)
 	result["resource_version"] = ic.ResourceVersion
 	result["labels"] = ic.Labels
@@ -196,41 +197,5 @@ func formatIngressList(items []networkingv1.Ingress) []map[string]interface{} {
 	for i := range items {
 		result = append(result, ingressrow.Info(&items[i]))
 	}
-	return result
-}
-
-func formatIngressClassDetail(ic *networkingv1.IngressClass) map[string]interface{} {
-	isDefault := false
-	if v, ok := ic.Annotations["ingressclass.kubernetes.io/is-default-class"]; ok && v == "true" {
-		isDefault = true
-	}
-
-	result := map[string]interface{}{
-		"name":        ic.Name,
-		"controller":  ic.Spec.Controller,
-		"is_default":  isDefault,
-		"labels":      ic.Labels,
-		"annotations": ic.Annotations,
-		"finalizers":  ic.Finalizers,
-		"created_at":  toISO(&ic.CreationTimestamp),
-	}
-
-	if ic.Spec.Parameters != nil {
-		params := map[string]interface{}{
-			"kind": ic.Spec.Parameters.Kind,
-			"name": ic.Spec.Parameters.Name,
-		}
-		if ic.Spec.Parameters.APIGroup != nil {
-			params["api_group"] = *ic.Spec.Parameters.APIGroup
-		}
-		if ic.Spec.Parameters.Namespace != nil {
-			params["namespace"] = *ic.Spec.Parameters.Namespace
-		}
-		if ic.Spec.Parameters.Scope != nil {
-			params["scope"] = *ic.Spec.Parameters.Scope
-		}
-		result["parameters"] = params
-	}
-
 	return result
 }

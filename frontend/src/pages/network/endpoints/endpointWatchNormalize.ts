@@ -7,7 +7,6 @@
 // ports 는 (name|port|protocol) 키로 dedup, targetRef/nodeName camelCase/snake_case
 // 둘 다 지원.
 
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import type { EndpointInfo } from '@/services/api'
 
 export function normalizeWatchEndpointObject(obj: any): EndpointInfo {
@@ -98,7 +97,9 @@ export function applyEndpointWatchEvent(prev: EndpointInfo[] | undefined, event:
     return items
   }
 
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
+  // the server sends the whole row (endpointsrow.Info), so it replaces: an address, port or subset that went away
+  // shows that instead of keeping the old one
+  if (index >= 0) items[index] = normalized
   else items.push(normalized)
 
   return items

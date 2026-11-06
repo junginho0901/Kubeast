@@ -7,7 +7,6 @@
 // spec.persistentVolumeReclaimPolicy (default 'Delete') + spec.claimRef
 // {namespace, name} + spec.volumeMode 정규화.
 
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import type { PVInfo } from '@/services/api'
 
 export function normalizeWatchPvObject(obj: any): PVInfo {
@@ -24,7 +23,7 @@ export function normalizeWatchPvObject(obj: any): PVInfo {
 
   return {
     name: metadata?.name ?? obj?.name ?? '',
-    status: status?.phase ?? obj?.status ?? 'Unknown',
+    status: status?.phase ?? 'Unknown',
     capacity: String(spec?.capacity?.storage ?? obj?.capacity ?? ''),
     access_modes: Array.isArray(spec?.accessModes) ? spec.accessModes : (Array.isArray(obj?.access_modes) ? obj.access_modes : []),
     storage_class: spec?.storageClassName ?? obj?.storage_class ?? null,
@@ -60,7 +59,9 @@ export function applyPvWatchEvent(prev: PVInfo[] | undefined, event: { type?: st
     return items
   }
 
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
+  // the server sends the whole row (pvrow.Info), so it replaces: a claim, class or reason that went away shows that
+  // instead of keeping the old one
+  if (index >= 0) items[index] = normalized
   else items.push(normalized)
   return items
 }
