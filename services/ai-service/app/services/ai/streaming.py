@@ -427,8 +427,8 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
     SSE events for the chat, the tool_calls entry the saved message keeps, and the result text for the model.
     Both the API-key loop and Claude Code (provider claude-code) call tools through here. call_id is the call's
     number in the turn, also on its start event, so the chat pairs a result with its call, not by tool name."""
-    from app.services.audit_target import EXEC_TOOL, pod_exec_row, tool_target, write_tool_input
-    from app.services.audit_writer import audit_ready, write_audit
+    from app.services.audit_target import EXEC_TOOL, kept_tool_args, pod_exec_row, tool_target, write_tool_input
+    from app.services.audit_writer import audit_ready, fail_closed_enabled, write_audit
     from app.services.ai import permissions as _perm
     from app.services.tool_whitelists import WRITE_TOOL_NAMES, write_approval_required
 
@@ -494,69 +494,13 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
         call_access = access_mod.of_call(service, function_name)
         call_requests = access_mod.requests_of_call(service)
 
-    log.debug("[DEBUG] Function response length: %d", len(str(function_response)))
-
-    formatted_result, is_json, is_yaml = formatters._format_tool_result(
-        function_name, function_args, function_response,
-    )
-    display_result = formatters._build_tool_display(
-        function_name, function_args, formatted_result, is_json, is_yaml,
-    )
-
-    max_preview_len = 2500
-    result_preview = formatted_result[:max_preview_len] + "\n... (truncated) ..." if len(formatted_result) > max_preview_len else formatted_result
-    display_preview = None
-    if display_result is not None:
-        display_preview = display_result[:max_preview_len] + "\n... (truncated) ..." if len(display_result) > max_preview_len else display_result
-
-    payload = {
-        "function_result": function_name,
-        "result": result_preview,
-        "is_json": is_json,
-        "is_yaml": is_yaml,
-    }
-    if call_id is not None:
-        payload["call_id"] = call_id
-    if call_access is not None:
-        payload["access"] = call_access
-    if call_requests is not None:
-        payload["requests"] = call_requests
-    if display_preview is not None:
-        payload["display"] = display_preview
-        payload["display_format"] = "kubectl"
-    # The preview above is cut; a graph the model asked for travels whole, here and in the saved message.
-    chart = charts.chart_from_result(function_args, function_response) if function_name in charts.CHART_TOOLS else None
-    if chart is not None:
-        payload["chart"] = chart
-    events.append(f"data: {json.dumps(payload, ensure_ascii=False)}\n\n")
-
-    log_entry = {
-        'function': function_name,
-        'args': function_args,
-        'result': formatted_result,
-        'is_json': is_json,
-        'is_yaml': is_yaml,
-        'display': display_result,
-        'display_format': "kubectl" if display_result is not None else None,
-        # set when the call is parked for approval (H2) — the UI renders the card from this
-        'approval_id': pending_approval_id,
-    }
-    if call_id is not None:
-        log_entry['call_id'] = call_id
-    if call_access is not None:
-        log_entry['access'] = call_access
-    if call_requests is not None:
-        log_entry['requests'] = call_requests
-    if chart is not None:
-        log_entry['chart'] = chart
-
     # audit: ai.tool.call. A read tool's row is metadata only; a write tool's also says what it was asked to do, masked.
     if audit_actor:
         args_dict = function_args if isinstance(function_args, dict) else {}
         target = tool_target(function_name, args_dict)
         tool_result, tool_error, tool_status = tool_outcome(function_response)
         tool_input = write_tool_input(function_name, args_dict)
-        await write_audit(
+        stored = await write_audit(
             action='ai.tool.call',
             actor_user_id=audit_actor.get('user_id'),
             actor_email=audit_actor.get('email'),
@@ -599,6 +543,66 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
                 result=tool_result,
                 error=tool_error,
             )
+        if stored is False and ran and function_name not in WRITE_TOOL_NAMES and fail_closed_enabled():
+            # As on the screens, a read nobody could find later gives no answer. A write has happened, so it keeps its own.
+            function_response = AUDIT_UNAVAILABLE_RESULT
+
+    log.debug("[DEBUG] Function response length: %d", len(str(function_response)))
+
+    formatted_result, is_json, is_yaml = formatters._format_tool_result(
+        function_name, function_args, function_response,
+    )
+    display_result = formatters._build_tool_display(
+        function_name, function_args, formatted_result, is_json, is_yaml,
+    )
+
+    max_preview_len = 2500
+    result_preview = formatted_result[:max_preview_len] + "\n... (truncated) ..." if len(formatted_result) > max_preview_len else formatted_result
+    display_preview = None
+    if display_result is not None:
+        display_preview = display_result[:max_preview_len] + "\n... (truncated) ..." if len(display_result) > max_preview_len else display_result
+
+    payload = {
+        "function_result": function_name,
+        "result": result_preview,
+        "is_json": is_json,
+        "is_yaml": is_yaml,
+    }
+    if call_id is not None:
+        payload["call_id"] = call_id
+    if call_access is not None:
+        payload["access"] = call_access
+    if call_requests is not None:
+        payload["requests"] = call_requests
+    if display_preview is not None:
+        payload["display"] = display_preview
+        payload["display_format"] = "kubectl"
+    # The preview above is cut; a graph the model asked for travels whole, here and in the saved message.
+    chart = charts.chart_from_result(function_args, function_response) if function_name in charts.CHART_TOOLS else None
+    if chart is not None:
+        payload["chart"] = chart
+    events.append(f"data: {json.dumps(payload, ensure_ascii=False)}\n\n")
+
+    log_entry = {
+        'function': function_name,
+        # what the saved message keeps: a write's arguments were needed for the card and the run, not for the history
+        'args': kept_tool_args(function_args) if function_name in WRITE_TOOL_NAMES else function_args,
+        'result': formatted_result,
+        'is_json': is_json,
+        'is_yaml': is_yaml,
+        'display': display_result,
+        'display_format': "kubectl" if display_result is not None else None,
+        # set when the call is parked for approval (H2) — the UI renders the card from this
+        'approval_id': pending_approval_id,
+    }
+    if call_id is not None:
+        log_entry['call_id'] = call_id
+    if call_access is not None:
+        log_entry['access'] = call_access
+    if call_requests is not None:
+        log_entry['requests'] = call_requests
+    if chart is not None:
+        log_entry['chart'] = chart
 
     if chart is not None:
         return events, log_entry, charts.for_model(chart)

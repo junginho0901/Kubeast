@@ -273,15 +273,26 @@ def _caller(authorization: str):
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
+async def _expire_if_due(db, approval):
+    """A waiting call past its time can no longer run, so only a masked copy of its arguments stays."""
+    from app.database import utcnow
+    from app.services.audit_target import kept_tool_args
+
+    if approval.status == "pending" and approval.expires_at and approval.expires_at < utcnow():
+        return await db.transition_tool_approval(
+            approval.id, "pending", status="expired", decided_at=utcnow(), args=kept_tool_args(approval.args),
+        ) or await db.get_tool_approval(approval.id)
+    return approval
+
+
 async def _load_own_pending_approval(approval_id: str, payload):
-    from app.database import get_db_service, utcnow
+    from app.database import get_db_service
 
     db = await get_db_service()
     approval = await db.get_tool_approval(approval_id)
     if approval is None or approval.user_id != payload.user_id:
         raise HTTPException(status_code=404, detail="Approval not found")
-    if approval.status == "pending" and approval.expires_at and approval.expires_at < utcnow():
-        approval = await db.transition_tool_approval(approval.id, "pending", status="expired", decided_at=utcnow()) or await db.get_tool_approval(approval.id)
+    approval = await _expire_if_due(db, approval)
     if approval.status != "pending":
         raise HTTPException(status_code=409, detail=f"Approval is {approval.status}")
     return db, approval
@@ -307,7 +318,7 @@ async def get_tool_approval(approval_id: str, authorization: str = Depends(beare
     approval = await db.get_tool_approval(approval_id)
     if approval is None or approval.user_id != payload.user_id:
         raise HTTPException(status_code=404, detail="Approval not found")
-    return _approval_dict(approval)
+    return _approval_dict(await _expire_if_due(db, approval))
 
 
 @router.post("/tool-approvals/{approval_id}/reject")
@@ -317,6 +328,7 @@ async def reject_tool_approval(
     authorization: str = Depends(bearer_or_cookie),
 ):
     from app.database import utcnow
+    from app.services.audit_target import kept_tool_args
     from app.services.audit_writer import AuditUnavailable, require_audit_ready, write_audit
 
     payload = _caller(authorization)
@@ -327,7 +339,7 @@ async def reject_tool_approval(
     except AuditUnavailable as e:
         logger.warning("audit: refusing unrecorded rejection (approval=%s tool=%s): %s", approval.id, approval.tool, e)
         raise HTTPException(status_code=503, detail="audit unavailable")
-    approval = await db.transition_tool_approval(approval.id, "pending", status="rejected", decided_at=utcnow())
+    approval = await db.transition_tool_approval(approval.id, "pending", status="rejected", decided_at=utcnow(), args=kept_tool_args(approval.args))
     if approval is None:
         raise HTTPException(status_code=409, detail="Approval is no longer pending")
     await db.add_message(
@@ -352,7 +364,7 @@ async def approve_tool_approval(
     authorization: str = Depends(bearer_or_cookie),
 ):
     from app.database import utcnow
-    from app.services.audit_target import EXEC_TOOL, pod_exec_row, tool_target, write_tool_input
+    from app.services.audit_target import EXEC_TOOL, kept_tool_args, pod_exec_row, tool_target, write_tool_input
     from app.services.audit_writer import AuditUnavailable, fail_closed_enabled, require_audit_ready, write_audit
     from app.services.ai import access as tool_access, formatters
     from app.services.ai.permissions import app_permission_error
@@ -391,7 +403,7 @@ async def approve_tool_approval(
         # The database went away between the readiness probe and the row: the
         # tool has not run, so close the approval instead of executing unrecorded.
         await db.transition_tool_approval(
-            approval.id, "approved", status="failed", result="audit unavailable", decided_at=utcnow(),
+            approval.id, "approved", status="failed", result="audit unavailable", decided_at=utcnow(), args=kept_tool_args(approval.args),
         )
         _invalidate_caches()
         raise HTTPException(status_code=503, detail="audit unavailable")
@@ -418,8 +430,10 @@ async def approve_tool_approval(
         formatted = f"error: {error}"
     call_access = tool_access.with_mode(ai_service.tool_server.last_access, approval.tool)
     call_requests = ai_service.tool_server.last_requests
+    # The run is over, so nothing needs the arguments as they were: the row and the saved message keep a masked copy.
+    kept_args = kept_tool_args(args)
     approval = await db.transition_tool_approval(
-        approval.id, "approved", status=status, result=formatted[:APPROVAL_RESULT_MAX_CHARS], decided_at=utcnow(),
+        approval.id, "approved", status=status, result=formatted[:APPROVAL_RESULT_MAX_CHARS], decided_at=utcnow(), args=kept_args,
     ) or approval
     icon = "✅" if status == "executed" else "⚠️"
     access_line = tool_access.section(call_access, call_requests)
@@ -428,7 +442,7 @@ async def approve_tool_approval(
         approval.session_id, "assistant",
         f"{icon} `{approval.tool}` on `{approval.cluster}` was approved and {'executed' if status == 'executed' else 'failed'}.\n\n"
         + (f"{access_line}\n\n" if access_line else "") + f"{fence}\n{approval.result}\n{fence}",
-        tool_calls=[{"function": approval.tool, "args": args, "result": approval.result, "approval_id": approval.id, "approval_status": status,
+        tool_calls=[{"function": approval.tool, "args": kept_args, "result": approval.result, "approval_id": approval.id, "approval_status": status,
                      **({"access": call_access} if call_access else {}), **({"requests": call_requests} if call_requests else {})}],
     )
     target = tool_target(approval.tool, args)

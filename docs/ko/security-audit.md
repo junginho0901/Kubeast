@@ -143,8 +143,11 @@ audit:
 
 - **신뢰 근거는 버킷의 Object Lock**입니다. DB와 S3를 둘 다 고칠 수 있는 사람은 앵커도 다시 쓸 수 있으니, 다이제스트가 놓이는 버킷에 기본 보존을 거세요. 다이제스트에는 서명이 없습니다.
 - **독립 검증**: Kubeast 없이 psql로 같은 식을 다시 계산할 수 있습니다(`services/auth-service-go/internal/auditchain`의 `CanonSQL`, [docs/ko/audit-log-plan.md](audit-log-plan.md) §7).
-- **한계**
+- **한계**: 체인만으로는 남아 있는 행이 서로 이어지는지만 알 수 있습니다.
   - 봉인되기 전 구간(≤ `sealSeconds`)에 지워진 행은 잡지 못합니다.
+  - 마지막 앵커 뒤에 봉인된 행을 체인 끝에서 잘라 내면(최대 `anchor.hours`) 잡지 못합니다. 남은 것은 더 짧지만 온전한 체인이고, 잘라 낸 뒤에 만든 앵커도 이를 잡지 못합니다.
+  - 앵커 싱크가 없는 설치(기본값)에서는 DB에 쓸 수 있는 사람이 체인 전체를 다시 계산할 수 있고, DB 밖에 대조할 것이 없습니다.
+  - 줄이려면 앵커 싱크를 켜고 `anchor.hours`를 줄인 뒤, stdout 미러나 싱크 사본처럼 DB 밖으로 나간 행과 대조하세요.
   - 기능을 껐다가 다시 켠 구간은 검증 결과에 앵커 없음으로 나타납니다.
   - 보존(`retention.auditDays`)은 체인의 앞부분만 지웁니다.
 - 메트릭 `kubeast_audit_chain_sealed_seq` · `kubeast_audit_chain_unsealed_rows` · `kubeast_audit_anchor_last_timestamp_seconds`.

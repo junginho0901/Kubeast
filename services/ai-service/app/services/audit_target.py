@@ -236,6 +236,48 @@ def write_tool_input(tool: str, args: dict) -> dict[str, Any]:
     return fields
 
 
+_DOCUMENT_ARGS = ("patch", "yaml_content", "resource_manifest", "manifest")
+_SECRET_VALUE = "<REDACTED:secret>"
+
+
+def _kept_document(value: Any, opts: redact.Options) -> Any:
+    """A patch or manifest read as data and masked, in the form it came. Text that cannot be read keeps its length."""
+    docs = _documents(value)
+    if docs is None:
+        return f"<REDACTED:{len(value)} characters>"
+    masked = [_mask_shapes(redact.redact_object(doc, opts)[0], opts) for doc in docs]
+    if not isinstance(value, str):
+        return masked[0]
+    text = yaml.safe_dump_all(masked, sort_keys=False, allow_unicode=True, default_flow_style=False)
+    return redact.redact_words(redact.redact_text(text, opts)[0])
+
+
+def kept_tool_args(args: Any) -> dict[str, Any]:
+    """A write tool's arguments once they are not needed to run, for the approval row and the saved answer: the same
+    fields, so the card still says what was asked, with credentials masked by the audit row's rules. What cannot be read
+    safely keeps its field and no value."""
+    if not isinstance(args, dict):
+        return {}
+    opts = _row_options()
+    secret = _names_secret(args.get("resource_type"))
+    try:
+        rest = {k: copy.deepcopy(v) for k, v in args.items() if k not in _DOCUMENT_ARGS}
+        masked = _mask_shapes(redact.redact_object(rest, opts)[0], opts)
+        kept: dict[str, Any] = {}
+        for key, value in args.items():
+            if key in _DOCUMENT_ARGS and value:
+                kept[key] = _SECRET_VALUE if secret and key == "patch" else _kept_document(value, opts)
+            elif key == "annotations" and secret:
+                kept[key] = _SECRET_VALUE
+            elif key in _DOCUMENT_ARGS:
+                kept[key] = value
+            else:
+                kept[key] = redact.redact_words(masked[key]) if isinstance(masked[key], str) else masked[key]
+        return kept
+    except Exception:  # the run is over and this is only what is kept: no value is better than a stuck approval
+        return {key: "<REDACTED:value>" for key in args}
+
+
 def pod_exec_row(args: dict, tool_input: dict[str, Any], **after: Any) -> dict[str, Any]:
     """The k8s.pod.exec row of an exec through an AI tool, the row the terminal writes, so a search or a sink filter on
     that action finds both. There is no recording: it is one command and its result. A call without a namespace runs in

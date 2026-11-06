@@ -9,6 +9,9 @@ from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 import asyncio
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 Base = declarative_base()
 
@@ -477,6 +480,7 @@ class DatabaseService:
         import uuid
         from datetime import timedelta
 
+        await self._expire_waiting_tool_approvals()
         async with self.async_session() as db:
             row = ToolApproval(
                 id=uuid.uuid4().hex,
@@ -493,6 +497,25 @@ class DatabaseService:
             await db.commit()
             await db.refresh(row)
             return row
+
+    async def _expire_waiting_tool_approvals(self, limit: int = 50) -> None:
+        """Calls nobody decided in time can no longer run, so their arguments stay only masked. A card opened later does
+        this too; here those no one opens again get there. A failure here must not stop the new call."""
+        from sqlalchemy import select
+
+        from app.services.audit_target import kept_tool_args
+
+        try:
+            async with self.async_session() as db:
+                now = utcnow()
+                rows = await db.execute(
+                    select(ToolApproval).where(ToolApproval.status == "pending", ToolApproval.expires_at < now).limit(limit)
+                )
+                for row in rows.scalars().all():
+                    row.status, row.decided_at, row.args = "expired", now, kept_tool_args(row.args)
+                await db.commit()
+        except Exception as e:
+            logger.warning("tool approvals: could not expire waiting calls: %s", e.__class__.__name__)
 
     async def get_tool_approval(self, approval_id: str) -> Optional[ToolApproval]:
         async with self.async_session() as db:

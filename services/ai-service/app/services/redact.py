@@ -101,6 +101,70 @@ def _key_is_sensitive(key: str) -> bool:
     return bool(_SENSITIVE_KEY.search(k)) and not _NOT_SECRET_KEY.search(k)
 
 
+# The key's last word says the value itself is the credential, so a number there is one. Under password_expiry_days,
+# token or secret a number may be a setting or a count, and hiding it would change what the reader is told.
+_CREDENTIAL_LAST_WORD = re.compile(r"(^|_)(password|passwd|pwd|api_key|access_key|secret_key|private_key|client_secret)$")
+
+
+def _value_stays(key: str, value: str) -> bool:
+    """Whether a sensitive key's text value is left as it is."""
+    if not _value_looks_harmless(value):
+        return False
+    v = value.strip()
+    return not v or not all(c.isdigit() or c in ".-msh" for c in v) or not _CREDENTIAL_LAST_WORD.search(_normalize_key(key))
+
+
+def _holds_credential(key: str, value: Any) -> bool:
+    """Whether a decoded member's value is a credential by its key. true, false and null say nothing."""
+    if not _key_is_sensitive(key):
+        return False
+    if isinstance(value, str):
+        return not _value_stays(key, value)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    return bool(_CREDENTIAL_LAST_WORD.search(_normalize_key(key)))
+
+
+# A value given as a YAML block (token: |, password: >-) is on the lines below the key, which the line rules do not read.
+_BLOCK_KEY = re.compile(r"""^([ \t]*(?:-[ \t]+)?)"?([A-Za-z0-9_.\-]+)"?[ \t]*:[ \t]*[|>][0-9+\-]*[ \t]*(?:#.*)?\r?$""")
+
+
+def _indent_of(line: str) -> int:
+    return len(line) - len(line.lstrip(" \t"))
+
+
+def _mask_block_values(text: str, stats: Stats) -> str:
+    """Replace a sensitive key's block with one placeholder. The block is what sits deeper than the key, as in YAML; the
+    key's next sibling and blank lines after the block stay."""
+    if "|" not in text and ">" not in text:
+        return text
+    lines = text.split("\n")
+    out: list = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        out.append(line)
+        i += 1
+        m = _BLOCK_KEY.match(line)
+        if not m or not _key_is_sensitive(m.group(2)):
+            continue
+        first, end = None, i
+        for j in range(i, len(lines)):
+            if not lines[j].strip():
+                continue
+            if _indent_of(lines[j]) <= len(m.group(1)):
+                break
+            first = first if first is not None else lines[j]
+            end = j + 1
+        if first is None:
+            continue
+        cr = "\r" if first.endswith("\r") else ""
+        out.append(first[:_indent_of(first)] + "<REDACTED:" + m.group(2) + ">" + cr)
+        stats.add("key_name", 1)
+        i = end
+    return "\n".join(out)
+
+
 # --- value-pattern rules --------------------------------------------------------
 
 _PRIVATE_KEY = re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----")
@@ -414,26 +478,27 @@ def redact_text(text: Optional[str], opts: Optional[Options] = None) -> Tuple[st
     if o.on("key_name"):
         def _pair(m: re.Match) -> str:
             key, value = m.group(2), m.group(4)
-            if not _key_is_sensitive(key) or _value_looks_harmless(value):
+            if not _key_is_sensitive(key) or _value_stays(key, value):
                 return m.group(0)
             return m.group(1) + key + m.group(3) + "<REDACTED:" + key + ">" + m.group(5)
 
         def _env_json(m: re.Match) -> str:
-            if not _key_is_sensitive(m.group(2)) or _value_looks_harmless(m.group(3)):
+            if not _key_is_sensitive(m.group(2)) or _value_stays(m.group(2), m.group(3)):
                 return m.group(0)
             return m.group(1) + "<REDACTED:" + m.group(2) + ">" + m.group(4)
 
         def _line(m: re.Match) -> str:
             key, value = m.group(2), m.group(4)
-            if not _key_is_sensitive(key) or _value_looks_harmless(value):
+            if not _key_is_sensitive(key) or _value_stays(key, value):
                 return m.group(0)
             return m.group(1) + m.group(3) + "<REDACTED:" + key + ">" + m.group(5)
 
         def _env_yaml(m: re.Match) -> str:
-            if not _key_is_sensitive(m.group(2)) or _value_looks_harmless(m.group(4)):
+            if not _key_is_sensitive(m.group(2)) or _value_stays(m.group(2), m.group(4)):
                 return m.group(0)
             return m.group(1) + m.group(3) + "<REDACTED:" + m.group(2) + ">" + m.group(5)
 
+        text = _mask_block_values(text, stats)
         text = _sub_count(_JSON_PAIR, text, _pair, stats, "key_name")
         text = _sub_count(_ENV_LIST_JSON, text, _env_json, stats, "key_name")
         text = _sub_count(_KEY_VALUE_LINE, text, _line, stats, "key_name")
@@ -476,9 +541,10 @@ def _mask_secret_fields(value: dict, stats: Stats) -> None:
 
 def redact_object(value: Any, opts: Optional[Options] = None, _secret: bool = False, _stats: Optional[Stats] = None) -> Tuple[Any, Stats]:
     """Redact a decoded JSON/YAML value in place: credential-looking keys lose
-    their string values, every string goes through redact_text, and a mapping
-    with kind: Secret loses data/stringData wherever they sit under it, with
-    the last-applied annotation of any annotations under it."""
+    their values, a container env entry's value follows its name, every string
+    goes through redact_text, and a mapping with kind: Secret loses
+    data/stringData wherever they sit under it, with the last-applied annotation
+    of any annotations under it."""
     stats = _stats if _stats is not None else Stats()
     o = opts or from_env()
     if isinstance(value, dict):
@@ -492,11 +558,16 @@ def redact_object(value: Any, opts: Optional[Options] = None, _secret: bool = Fa
                 value["yaml"], n = strip_secret_text(value["yaml"])
                 stats.add("secret", n)
                 skip.add("yaml")
+        env_name = value.get("name")  # the key is "value", so the name decides
         for k, v in list(value.items()):
             if k in skip:
                 continue
-            if isinstance(v, str) and o.on("key_name") and _key_is_sensitive(k) and not _value_looks_harmless(v):
+            if o.on("key_name") and _holds_credential(k, v):
                 value[k] = "<REDACTED:" + k + ">"
+                stats.add("key_name", 1)
+                continue
+            if k == "value" and isinstance(env_name, str) and o.on("key_name") and _holds_credential(env_name, v):
+                value[k] = "<REDACTED:" + env_name + ">"
                 stats.add("key_name", 1)
                 continue
             value[k], _ = redact_object(v, o, secret, stats)

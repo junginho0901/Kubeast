@@ -620,3 +620,24 @@ tests:
       - equal:
           path: data.ALERT_INVESTIGATION_MANUAL_DAILY_TOKEN_BUDGET
           value: "150000"
+
+  - it: keeps the shared webhook token and leaves registered store URLs open by default
+    asserts:
+      - equal:
+          path: data.ALERT_WEBHOOK_CLUSTER_TOKENS_ONLY
+          value: "false"
+      - equal:
+          path: data.CLUSTER_STORE_ALLOWED_HOSTS
+          value: ""
+
+  - it: passes the cluster token switch and the store allow list as they are set
+    set:
+      features.alertInvestigation.webhookClusterTokensOnly: true
+      features.clusterStoreAllowedHosts: [prom.monitoring.svc, .corp.example.com]
+    asserts:
+      - equal:
+          path: data.ALERT_WEBHOOK_CLUSTER_TOKENS_ONLY
+          value: "true"
+      - equal:
+          path: data.CLUSTER_STORE_ALLOWED_HOSTS
+          value: prom.monitoring.svc,.corp.example.com

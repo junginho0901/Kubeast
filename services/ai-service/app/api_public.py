@@ -222,6 +222,7 @@ async def test_model_connection(raw: Request, payload=Depends(require_auth), req
     """Connection test, recorded as ai.model_config.test (the server's key goes to that address)."""
     from app.services import model_config_audit
 
+    await model_config_audit.ready_or_503("model connection test")
     body = request or {}
     try:
         out = await _test_model_connection(body)
@@ -335,6 +336,7 @@ async def list_provider_models(raw: Request, payload=Depends(require_auth), requ
     """The provider's model list, recorded as ai.model_config.models (the server's key goes to that address)."""
     from app.services import model_config_audit
 
+    await model_config_audit.ready_or_503("provider model list")
     body = request or {}
     try:
         out = await _list_provider_models(body)

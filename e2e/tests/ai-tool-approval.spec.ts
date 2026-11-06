@@ -96,6 +96,8 @@ test.describe('AI write tools need approval (H2)', () => {
       await expect(card2).toHaveAttribute('data-approval-status', /executed|failed/, { timeout: 90_000 })
       await expect(card2).toHaveAttribute('data-approval-status', 'executed')
       await expect.poll(() => replicas(request, admin), { timeout: 60_000 }).toBe(2)
+      await expect(card2, 'the decided card still says what was asked').toContainText(/"replicas": "?2/)
+      await expect(card2).toContainText('f3approve')
 
       // Audit: the approval and the call are recorded with the approval id.
       const audit = await request.get('/api/v1/auth/admin/audit-logs?action=ai.tool.approve&limit=5', { headers: admin })

@@ -246,6 +246,7 @@ func TestNotFound_PodSimilarNamesFromThePodRows(t *testing.T) {
 
 // The jq and table tools do not run kubectl over more pods than it can hold: the pod rows count them first.
 func TestQueryTools_TooManyPodsForKubectl(t *testing.T) {
+	freshAPIResources(t)
 	total := 50010
 	seen := fakeK8sService(t, func(r *http.Request) (int, string) {
 		return 200, fmt.Sprintf(`{"items":[],"total":%d,"stats":{"total":%d}}`, total, total)
@@ -277,7 +278,9 @@ func TestQueryTools_TooManyPodsForKubectl(t *testing.T) {
 		t.Fatalf("kubectl did not run for %d pods: %v", total, err)
 	}
 	n := len(*seen)
-	if _, err := handleTabularQuery(ctxFor("c1"), map[string]interface{}{"resource_type": "deployments"}, bearer()); err != nil || len(*seen) != n || len(*calls) != 2 {
-		t.Fatalf("deployments asked k8s-service or skipped kubectl: %v", err)
+	_, err := handleTabularQuery(ctxFor("c1"), map[string]interface{}{"resource_type": "deployments"}, bearer())
+	last := verb((*calls)[len(*calls)-1])
+	if err != nil || len(*seen) != n || len(last) < 2 || last[0] != "get" || last[1] != "deployments" {
+		t.Fatalf("deployments asked k8s-service or skipped kubectl: %v, last kubectl %v", err, last)
 	}
 }

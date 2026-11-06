@@ -142,8 +142,11 @@ audit:
 
 - **The trust anchor is the bucket's Object Lock.** Someone who can change both the DB and S3 can also rewrite the anchors, so set a default retention on the bucket that holds the digests. Digests are not signed.
 - **Independent verification**: the same formula can be recomputed with psql, without Kubeast (`CanonSQL` in `services/auth-service-go/internal/auditchain`, [docs/audit-log-plan.md](audit-log-plan.md) §7).
-- **Limits**:
+- **Limits**: the chain alone shows only that the rows it still has link up.
   - Rows deleted in the window before sealing (≤ `sealSeconds`) are not caught.
+  - Sealed rows cut from the end of the chain after the last anchor (up to `anchor.hours`) are not caught: what remains is a shorter chain that is whole, and an anchor taken after the cut does not catch them either.
+  - With no anchor sink (the default), someone who can write to the database can recompute the whole chain, and nothing outside the database disagrees.
+  - To narrow these, set an anchor sink, shorten `anchor.hours`, and compare the rows with what left the database: the stdout mirror or a sink's copies.
   - If the feature was turned off and on again, that period shows in the verification result as having no anchor.
   - Retention (`retention.auditDays`) deletes only a prefix of the chain.
 - Metrics: `kubeast_audit_chain_sealed_seq`, `kubeast_audit_chain_unsealed_rows` and `kubeast_audit_anchor_last_timestamp_seconds`.

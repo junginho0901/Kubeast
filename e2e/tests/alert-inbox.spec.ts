@@ -1,4 +1,5 @@
 import { execSync } from 'node:child_process'
+import { createHmac } from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -108,6 +109,19 @@ test.describe('Alerts inbox', () => {
 
   test.beforeEach(() => {
     test.skip(!ready, 'alert investigation (the webhook) is off')
+  })
+
+  test("a cluster's own token posts for that cluster only, next to the shared one", async ({ request }) => {
+    const withToken = (cluster: string, bearerToken: string) =>
+      request.post(`/api/v1/alerts/webhook?cluster=${cluster}`, {
+        headers: { Authorization: `Bearer ${bearerToken}` },
+        data: { version: '4', status: 'firing', receiver: 'kubeast', alerts: [] },
+      })
+    const selfToken = createHmac('sha256', token).update('self').digest('hex')
+    expect((await withToken('self', selfToken)).status()).toBe(200)
+    expect((await withToken('default', selfToken)).status()).toBe(401)
+    expect((await withToken('self', token)).status(), 'a receiver set up with the shared token keeps working').toBe(200)
+    expect((await withToken('default', token)).status()).toBe(200)
   })
 
   test('one alert is one row: a repeat counts, resolved closes it, firing again is a new row', async ({ request }) => {

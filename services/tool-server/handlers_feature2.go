@@ -182,8 +182,8 @@ var helmWhat = map[string]bool{"list": true, "get": true, "values": true, "manif
 
 // handleHelmRead reads Helm releases as the caller (resource.helm.read):
 // list, one release, a section, history, resources, images, a revision's
-// section, or the diff between two revisions. Never a write — those stay with
-// helm_execute and the approval card. It asks for the masked text, so a caller
+// section, or the diff between two revisions. Never a write — no AI tool changes
+// a release; that is the Helm screen's. It asks for the masked text, so a caller
 // who may reveal the release on the screen does not reveal it to the model.
 func handleHelmRead(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
 	what := argString(args, "what", "list")

@@ -89,7 +89,7 @@ func (h *AuthHandler) AdminBulkUpdateRole(w http.ResponseWriter, r *http.Request
 	updated := make([]model.UserResponse, 0, len(targets))
 	for _, target := range targets {
 		uid := target.ID
-		err := h.repo.UpdateUserRole(r.Context(), uid, req.RoleID)
+		err := h.repo.UpdateUserRoleEndingTokens(r.Context(), uid, req.RoleID)
 		// One audit row per account, like the single-user path.
 		writeAudit(h.auditStore, r, payload, auditEvent{
 			action: "user.role.update", targetType: "user", targetID: uid, targetEmail: target.Email,
@@ -99,7 +99,6 @@ func (h *AuthHandler) AdminBulkUpdateRole(w http.ResponseWriter, r *http.Request
 		if err != nil {
 			continue
 		}
-		_ = h.repo.BumpTokenVersion(r.Context(), uid) // issued tokens carry the old role
 		u, _ := h.repo.GetUserByID(r.Context(), uid)
 		if u != nil {
 			updated = append(updated, u.ToResponse())
@@ -446,12 +445,11 @@ func (h *AuthHandler) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	// Apply role update
 	if req.RoleID != nil {
-		if err := h.repo.UpdateUserRole(r.Context(), userID, *req.RoleID); err != nil {
+		if err := h.repo.UpdateUserRoleEndingTokens(r.Context(), userID, *req.RoleID); err != nil {
 			h.writeAuditFailure(r, "user.role.update", &payload.UserID, &payload.Email, &userID, nil, err.Error(), nil)
 			response.InternalError(w, r, err)
 			return
 		}
-		_ = h.repo.BumpTokenVersion(r.Context(), userID) // issued tokens carry the old role
 	}
 
 	// Audit
@@ -527,12 +525,12 @@ func (h *AuthHandler) AdminResetPassword(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := h.repo.UpdateUserPassword(r.Context(), userID, newHash); err != nil {
+	// A reset logs the user out everywhere.
+	if err := h.repo.UpdateUserPasswordEndingTokens(r.Context(), userID, newHash); err != nil {
 		h.writeAuditFailure(r, "user.password.reset", &payload.UserID, &payload.Email, &userID, &target.Email, err.Error(), nil)
 		response.InternalError(w, r, err)
 		return
 	}
-	_ = h.repo.BumpTokenVersion(r.Context(), userID)   // reset logs the user out everywhere
 	_ = h.repo.ResetLoginFailures(r.Context(), userID) // and lifts a login lockout (H13)
 
 	actor, _ := h.repo.GetUserByID(r.Context(), payload.UserID)

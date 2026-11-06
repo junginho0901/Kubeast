@@ -12,6 +12,7 @@ Kubeast는 OpenID Connect 공급자(Keycloak, Google, Entra ID, Okta 등) 하나
 - ID 토큰은 discovery(`<issuerUrl>/.well-known/openid-configuration`)에서 받은 키로 서명, issuer, audience(`clientId`), 만료, nonce를 확인합니다.
 - `email_verified`가 `false`면 로그인을 거부합니다. `allowedDomains`를 설정하면 그 도메인의 메일 주소만 받습니다.
 - 계정은 첫 로그인 때 비밀번호 없이 만듭니다. 같은 이메일의 계정이 이미 있으면 그 계정으로 로그인합니다.
+- 주소 꼴이 아닌 이름(`claims.email`을 사용자 이름 클레임으로 둔 경우)은 차트의 `admin`처럼 비밀번호로 만든 계정에 닿지 않습니다. 로그인을 `oidc_account_conflict`로 거부합니다. 공급자가 만든 계정과, 어느 클레임이든 주소 꼴인 값은 전과 같이 로그인합니다.
 - 성공과 실패 모두 감사 로그에 남습니다. 성공은 `user.login.success`, 실패는 `user.login.failed`와 사유 코드(§6)로 남습니다.
 
 ## 2. 공통 순서
@@ -141,6 +142,7 @@ auth:
 | `oidc_denied` | 공급자가 거부(`error=` 응답) | 공급자 쪽 사용자 할당·동의 |
 | `oidc_exchange` | code → 토큰 교환 실패 | client secret, redirect URI 일치 |
 | `oidc_token` | ID 토큰 없음 또는 검증 실패(서명·audience·만료·nonce) | `clientId`, 시계 |
+| `oidc_account_conflict` | 공급자의 이름이 주소 꼴이 아니고 비밀번호로 만든 계정과 같음 | 공급자에서 이름을 바꾸거나 `claims.email`을 주소가 든 클레임으로 지정. 그 계정의 비밀번호 로그인은 그대로입니다 |
 | `oidc_no_email` | 이메일 클레임 없음 | scope `email`, `claims.email` |
 | `oidc_email_unverified` | `email_verified=false` | 공급자의 메일 확인 |
 | `oidc_domain` | `allowedDomains` 밖 | 값 |

@@ -643,7 +643,7 @@ K8S_READONLY_TOOLS: List[Dict] = [
         "function": {
             "name": "helm_read",
             "description": (
-                "Read Helm releases — never change them (upgrades, rollbacks and uninstalls go through helm_execute and the approval card). "
+                "Read Helm releases — never change them (no tool upgrades, rolls back or uninstalls a release: the person does that on the Helm screen). "
                 "what=list (default; optional namespace, status) lists releases with chart, version, revision, status and updated time. "
                 "For one release (namespace + release): what=get (summary, description, notes, values up to 32 KB), what=values / manifest / notes / hooks "
                 "(that section as text), what=history (every revision with status and description), what=resources (the objects the release owns), "

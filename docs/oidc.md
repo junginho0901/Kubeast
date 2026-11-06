@@ -12,6 +12,7 @@ The authoritative description of the values is `auth.oidc` in [`helm/kubeast/val
 - The ID token's signature, issuer, audience (`clientId`), expiry and nonce are checked with the keys from discovery (`<issuerUrl>/.well-known/openid-configuration`).
 - If `email_verified` is `false`, the sign-in is refused. If `allowedDomains` is set, only mail addresses in those domains are accepted.
 - The account is created at the first sign-in (no password). If an account with the same email already exists, the person signs in to that account.
+- A name that is not an address (`claims.email` set to a username claim) does not reach an account made with a password, such as the chart's `admin`: the sign-in is refused with `oidc_account_conflict`. Accounts the provider made, and addresses in any claim, sign in as before.
 - Both success and failure are recorded in the audit log: `user.login.success`, or `user.login.failed` with a reason code (§6).
 
 ## 2. Common steps
@@ -140,6 +141,7 @@ For the cluster-side bindings, see [cluster-requirements §1](cluster-requiremen
 | `oidc_denied` | The provider refused (`error=` response) | User assignment and consent at the provider |
 | `oidc_exchange` | The code → token exchange failed | Client secret, redirect URI match |
 | `oidc_token` | No ID token, or verification failed (signature, audience, expiry, nonce) | `clientId`, clock |
+| `oidc_account_conflict` | The provider's name is not an address and matches an account made with a password | Rename the person at the provider, or set `claims.email` to a claim that holds an address. That account keeps its password sign-in |
 | `oidc_no_email` | No email claim | Scope `email`, `claims.email` |
 | `oidc_email_unverified` | `email_verified=false` | Email verification at the provider |
 | `oidc_domain` | Outside `allowedDomains` | The value |

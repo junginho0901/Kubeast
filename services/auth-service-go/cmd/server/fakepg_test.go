@@ -23,9 +23,10 @@ type pgRule struct {
 // test can walk a request through the real routes and handlers without a
 // server. A statement no rule matches gets an empty result.
 type fakePG struct {
-	rules []pgRule
-	mu    sync.Mutex
-	seen  []string
+	rules   []pgRule
+	mu      sync.Mutex
+	seen    []string
+	failing []string
 }
 
 func startFakePG(t *testing.T, rules ...pgRule) (*fakePG, *pgxpool.Pool) {
@@ -90,7 +91,15 @@ func (f *fakePG) serve(c net.Conn) {
 func (f *fakePG) answer(be *pgproto3.Backend, sql string) {
 	f.mu.Lock()
 	f.seen = append(f.seen, sql)
+	failing := f.failing
 	f.mu.Unlock()
+	for _, text := range failing {
+		if strings.Contains(sql, text) {
+			be.Send(&pgproto3.ErrorResponse{Severity: "ERROR", Code: "XX000", Message: "fake database failure"})
+			be.Send(&pgproto3.ReadyForQuery{TxStatus: 'I'})
+			return
+		}
+	}
 	n := 0
 	for _, rule := range f.rules {
 		if !strings.Contains(sql, rule.match) {
@@ -141,6 +150,13 @@ func (f *fakePG) ran(text string) bool {
 		}
 	}
 	return false
+}
+
+// failOn makes every statement containing text fail, as a database that went away would.
+func (f *fakePG) failOn(text string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.failing = append(f.failing, text)
 }
 
 func (f *fakePG) forget() {

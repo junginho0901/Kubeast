@@ -18,6 +18,17 @@ func TestUnknownPermissions_UsesTheCatalog(t *testing.T) {
 	}
 }
 
+// A role that holds a key the catalog dropped can still be saved: the page sends back what the role holds.
+func TestRetiredPermissionIsNotOfferedAndDoesNotStopASave(t *testing.T) {
+	const key = "ai.tool.helm_execute"
+	if _, offered := catalog()[key]; offered {
+		t.Fatalf("%s is still offered: no such tool exists", key)
+	}
+	if got := unknownPermissions([]string{key, "menu.dashboard"}); got != nil {
+		t.Fatalf("a role holding it would not save: %v", got)
+	}
+}
+
 // "Investigate now" in the Alerts inbox (ai-service INVESTIGATE_PERMISSION) is a key of its own under Alerts, so
 // Role Management offers it; "*" reaches it and the Write role's resource.*.create/edit/delete do not.
 func TestCatalog_AlertInvestigateUnderAlerts(t *testing.T) {

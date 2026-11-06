@@ -18,19 +18,25 @@ deployments   deploy       apps/v1            true         Deployment
 events                     events.k8s.io/v1   true         Event
 `
 
+// freshAPIResources starts a test with no cluster's api-resources answer kept, as a new process has: the cache outlives
+// a test, so without this a test's kubectl calls depend on which tests ran before it.
+func freshAPIResources(t *testing.T) {
+	t.Helper()
+	forget := func() {
+		apiResourcesMu.Lock()
+		defer apiResourcesMu.Unlock()
+		apiResourcesCache = map[string]apiResourcesEntry{}
+	}
+	forget()
+	t.Cleanup(forget)
+}
+
 // bigCluster fakes kubectl for a cluster of 110 000 events and 3 ConfigMaps: api-resources, get --raw of a list path
 // (limit, continue, the API server's remainingItemCount, which a selector leaves out; a selector matches every
 // tenth event), and the plain lists the tools run. It returns the calls.
 func bigCluster(t *testing.T) *[][]string {
 	t.Helper()
-	apiResourcesMu.Lock()
-	apiResourcesCache = map[string]apiResourcesEntry{}
-	apiResourcesMu.Unlock()
-	t.Cleanup(func() {
-		apiResourcesMu.Lock()
-		apiResourcesCache = map[string]apiResourcesEntry{}
-		apiResourcesMu.Unlock()
-	})
+	freshAPIResources(t)
 	return fakeKubectl(t, func(args []string) (string, error) {
 		v := verb(args)
 		switch {

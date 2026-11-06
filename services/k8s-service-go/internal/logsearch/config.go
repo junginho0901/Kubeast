@@ -35,6 +35,9 @@ type Store struct {
 	URL        string
 	AuthHeader string
 	Tenant     string
+	// Registered: the URL came from a cluster's registration, not the chart, so
+	// storeurl's address rule applies.
+	Registered bool
 	// ClusterLabel is the value of Labels.Cluster the cluster's streams carry
 	// in this store; "" = the store holds this cluster only, so no matcher.
 	ClusterLabel string

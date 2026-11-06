@@ -16,7 +16,7 @@ func logStoreFromInfo(info cluster.Info) *logsearch.Store {
 	if u == "" {
 		return nil
 	}
-	return &logsearch.Store{URL: u, AuthHeader: info.LogSearchAuthHeader, Tenant: strings.TrimSpace(info.LogSearchTenant), ClusterLabel: strings.TrimSpace(info.LogSearchClusterLabel)}
+	return &logsearch.Store{Registered: true, URL: u, AuthHeader: info.LogSearchAuthHeader, Tenant: strings.TrimSpace(info.LogSearchTenant), ClusterLabel: strings.TrimSpace(info.LogSearchClusterLabel)}
 }
 
 // LogStore returns the log store cluster id names for itself, nil for none

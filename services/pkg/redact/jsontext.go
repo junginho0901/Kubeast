@@ -8,7 +8,7 @@ import (
 
 // JSON redacts text that is one JSON object or array, optionally after lines kubectl printed before it (warnings). The
 // rules of Text see each string decoded, so a YAML document or a log line inside a string is masked as it would be
-// alone, and the rules on object keys see each member. Only the strings that change are rewritten: numbers, key order
+// alone, and the rules on object keys see each member. Only what the rules change is rewritten: other numbers, key order
 // and spacing stay as they came. ok is false when s is not such text; the caller then uses Text.
 func JSON(s string, o Options) (out string, st Stats, ok bool) {
 	start := jsonStart(s)
@@ -143,16 +143,17 @@ func (w *jsonRewriter) object(start, end int, secret bool) {
 	for _, m := range ms {
 		w.text(m.keyStart, m.keyEnd)
 		value, isString := w.stringOf(m.valueStart, m.valEnd)
+		isNumber := w.src[m.valueStart] == '-' || (w.src[m.valueStart] >= '0' && w.src[m.valueStart] <= '9')
 		switch {
 		case secret && secretValueFields[m.key]:
 			w.secretField(m.valueStart, m.valEnd)
 		case secret && m.key == lastAppliedName && !isPlaceholderValue(value):
 			w.replace(m.valueStart, m.valEnd, `"`+secretPlaceholder+`"`)
 			w.st.add("secret", 1)
-		case isString && w.opts.on("key_name") && keyIsSensitive(m.key) && !valueLooksHarmless(value):
+		case w.opts.on("key_name") && holdsCredential(m.key, value, isString, isNumber):
 			w.replace(m.valueStart, m.valEnd, jsonString("<REDACTED:"+m.key+">"))
 			w.st.add("key_name", 1)
-		case isString && m.key == "value" && envSecret != "" && !valueLooksHarmless(value):
+		case m.key == "value" && envSecret != "" && holdsCredential(envSecret, value, isString, isNumber):
 			w.replace(m.valueStart, m.valEnd, jsonString("<REDACTED:"+envSecret+">"))
 			w.st.add("key_name", 1)
 		default:

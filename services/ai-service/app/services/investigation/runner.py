@@ -28,7 +28,7 @@ from app.services.ai import limits
 from app.services.ai.debug_dump import safe_error
 from app.services.ai.model_errors import classify
 from app.services.audit_target import tool_target
-from app.services.audit_writer import audit_ready, write_audit
+from app.services.audit_writer import audit_ready, fail_closed_enabled, write_audit
 from app.services.investigation import prompt as inv_prompt
 from app.services.investigation import settings as inv_settings
 from app.services.investigation import skip_reasons, store
@@ -157,6 +157,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
 
     async def run_tool(name: str, args: dict, step: int) -> str:
         entry: dict[str, Any] = {"tool": name, "args": args, "step": step}
+        ran = False
         if name not in READONLY_TOOL_NAMES:
             result = json.dumps({"error": f"'{name}' is not a read-only tool; investigations only read"})
             entry["error"] = "not a read-only tool"
@@ -164,6 +165,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
             result = json.dumps({"status": "audit_unavailable"})
             entry["error"] = "audit unavailable"
         else:
+            ran = True
             access_mod.reset(service)
             try:
                 raw = await asyncio.wait_for(service._execute_function_with_context(name, args, context), timeout=remaining())
@@ -185,7 +187,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
                 entry["requests"] = requests
         tool_log.append(entry)
         target = tool_target(name, args)
-        await write_audit(
+        stored = await write_audit(
             action="ai.tool.call",
             actor_user_id=ACTOR_ID,
             actor_email=ACTOR_EMAIL,
@@ -205,6 +207,10 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
             result="failure" if entry.get("error") else "success",
             error=entry.get("error"),
         )
+        if stored is False and ran and fail_closed_enabled():
+            # As on the screens, a read nobody could find later gives no answer.
+            entry["error"] = "audit unavailable"
+            return json.dumps({"status": "audit_unavailable"})
         return result
 
     turn = await run_tool_turn(service, messages, tools, run_tool, max_steps=cfg.max_steps,

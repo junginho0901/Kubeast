@@ -163,14 +163,57 @@ func (r *Repository) SetUserClusterRole(ctx context.Context, userID, clusterID s
 	if len(namespaces) == 0 {
 		namespaces = nil
 	}
-	_, err := r.pool.Exec(ctx,
-		`INSERT INTO user_cluster_roles (user_id, cluster_id, role_id, namespaces)
+	_, err := r.pool.Exec(ctx, setClusterRoleSQL, userID, clusterID, roleID, namespaces)
+	return err
+}
+
+const setClusterRoleSQL = `INSERT INTO user_cluster_roles (user_id, cluster_id, role_id, namespaces)
 		 VALUES ($1, $2, $3, $4)
 		 ON CONFLICT (user_id, cluster_id) DO UPDATE
 		   SET role_id = EXCLUDED.role_id, namespaces = EXCLUDED.namespaces,
-		       expires_at = NULL, restore_role_id = NULL, restore_namespaces = NULL, request_id = NULL`,
-		userID, clusterID, roleID, namespaces)
-	return err
+		       expires_at = NULL, restore_role_id = NULL, restore_namespaces = NULL, request_id = NULL`
+
+const endTokensSQL = `UPDATE auth_users SET token_version = token_version + 1, updated_at = NOW() WHERE id = $1`
+
+// SetUserClusterRoleEndingTokens is SetUserClusterRole for a person's change, in one transaction with ending the tokens
+// that carry the old matrix: the change never stands while they still work.
+func (r *Repository) SetUserClusterRoleEndingTokens(ctx context.Context, userID, clusterID string, roleID int, namespaces []string) error {
+	if len(namespaces) == 0 {
+		namespaces = nil
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, setClusterRoleSQL, userID, clusterID, roleID, namespaces); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, endTokensSQL, userID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// DeleteUserClusterRoleEndingTokens is DeleteUserClusterRole in one transaction with ending the tokens that carry the
+// grant. Returns whether a grant existed; without one no token is ended.
+func (r *Repository) DeleteUserClusterRoleEndingTokens(ctx context.Context, userID, clusterID string) (bool, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	tag, err := tx.Exec(ctx, `DELETE FROM user_cluster_roles WHERE user_id = $1 AND cluster_id = $2`, userID, clusterID)
+	if err != nil {
+		return false, err
+	}
+	if tag.RowsAffected() == 0 {
+		return false, tx.Commit(ctx)
+	}
+	if _, err := tx.Exec(ctx, endTokensSQL, userID); err != nil {
+		return false, err
+	}
+	return true, tx.Commit(ctx)
 }
 
 // ListUserClusterNamespaces returns the user's namespace-scoped grants as a
