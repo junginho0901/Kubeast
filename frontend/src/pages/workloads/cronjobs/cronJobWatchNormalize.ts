@@ -2,10 +2,9 @@
 //
 // frontend/src/pages/workloads/CronJobs.tsx 의 normalizeWatchCronJobObject +
 // applyCronJobWatchEvent 추출. useKubeWatchList 의 applyEvent 콜백에서만 사용
-// (raw watch event → 기존 list state 에 병합). active 는 raw k8s 의 status.active
-// (Job 참조 배열) 의 length 로 환산.
+// (watch event 의 행으로 기존 list state 의 행을 교체). active 는 raw k8s 의
+// status.active (Job 참조 배열) 의 length 로 환산.
 
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import type { CronJobInfo } from '@/services/api'
 
 export function normalizeWatchCronJobObject(obj: any): CronJobInfo {
@@ -66,7 +65,8 @@ export function applyCronJobWatchEvent(
     return items
   }
 
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
+  // the server sends the whole row (cronjobrow.Info), so it replaces: a time zone or run time that went away shows none
+  if (index >= 0) items[index] = normalized
   else items.push(normalized)
   return items
 }

@@ -8,6 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
+	cronjobrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/cronjob"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/eventtime"
 )
 
@@ -296,60 +297,8 @@ func formatJobDetail(job *batchv1.Job) map[string]interface{} {
 
 func formatCronJobList(items []batchv1.CronJob) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(items))
-	for _, cj := range items {
-		result = append(result, formatCronJobDetail(&cj))
+	for i := range items {
+		result = append(result, cronjobrow.Info(&items[i]))
 	}
-	return result
-}
-
-func formatCronJobDetail(cj *batchv1.CronJob) map[string]interface{} {
-	suspend := false
-	if cj.Spec.Suspend != nil {
-		suspend = *cj.Spec.Suspend
-	}
-
-	images := make([]string, 0)
-	containers := make([]string, 0)
-	for _, c := range cj.Spec.JobTemplate.Spec.Template.Spec.Containers {
-		images = append(images, c.Image)
-		containers = append(containers, c.Name)
-	}
-	image := ""
-	if len(images) > 0 {
-		image = images[0]
-	}
-
-	result := map[string]interface{}{
-		"name":       cj.Name,
-		"namespace":  cj.Namespace,
-		"schedule":   cj.Spec.Schedule,
-		"suspend":    suspend,
-		"active":     len(cj.Status.Active),
-		"image":      image,
-		"images":     images,
-		"containers": containers,
-		"created_at": toISO(&cj.CreationTimestamp),
-	}
-
-	// last_schedule_time / last_successful_time are the names the list and describe share (the
-	// frontend reads them); last_schedule / last_successful stay for API callers.
-	if cj.Status.LastScheduleTime != nil {
-		result["last_schedule"] = toISO(cj.Status.LastScheduleTime)
-		result["last_schedule_time"] = toISO(cj.Status.LastScheduleTime)
-	}
-	if cj.Status.LastSuccessfulTime != nil {
-		result["last_successful"] = toISO(cj.Status.LastSuccessfulTime)
-		result["last_successful_time"] = toISO(cj.Status.LastSuccessfulTime)
-	}
-	if cj.Spec.TimeZone != nil {
-		result["time_zone"] = *cj.Spec.TimeZone
-	}
-
-	concurrencyPolicy := ""
-	if cj.Spec.ConcurrencyPolicy != "" {
-		concurrencyPolicy = string(cj.Spec.ConcurrencyPolicy)
-	}
-	result["concurrency_policy"] = concurrencyPolicy
-
 	return result
 }

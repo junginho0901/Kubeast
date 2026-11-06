@@ -3,12 +3,13 @@ package k8s
 import (
 	"context"
 	"fmt"
-	"sort"
 	"sync"
 
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	ingressrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/ingress"
 )
 
 // ========== Ingresses ==========
@@ -62,8 +63,7 @@ func (s *Service) DescribeIngress(ctx context.Context, namespace, name string) (
 		return nil, fmt.Errorf("get ingress %s/%s: %w", namespace, name, ingErr)
 	}
 
-	// formatIngressDetail now includes rules, tls, default_backend, labels, annotations
-	result := formatIngressDetail(ing)
+	result := ingressrow.Info(ing)
 
 	// Try to enrich with IngressClass controller info
 	if ing.Spec.IngressClassName != nil && icErr == nil {
@@ -193,133 +193,10 @@ func (s *Service) DeleteIngressClass(ctx context.Context, name string) error {
 
 func formatIngressList(items []networkingv1.Ingress) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(items))
-	for _, ing := range items {
-		result = append(result, formatIngressDetail(&ing))
+	for i := range items {
+		result = append(result, ingressrow.Info(&items[i]))
 	}
 	return result
-}
-
-func formatIngressDetail(ing *networkingv1.Ingress) map[string]interface{} {
-	hosts := make([]string, 0)
-	backendSet := make(map[string]bool)
-	backends := make([]string, 0)
-
-	// Build rules with full detail
-	rules := make([]map[string]interface{}, 0, len(ing.Spec.Rules))
-	for _, rule := range ing.Spec.Rules {
-		if rule.Host != "" {
-			hosts = append(hosts, rule.Host)
-		}
-		r := map[string]interface{}{
-			"host": rule.Host,
-		}
-		if rule.HTTP != nil {
-			paths := make([]map[string]interface{}, 0, len(rule.HTTP.Paths))
-			for _, p := range rule.HTTP.Paths {
-				path := map[string]interface{}{
-					"path": p.Path,
-				}
-				if p.PathType != nil {
-					path["path_type"] = string(*p.PathType)
-				}
-				if p.Backend.Service != nil {
-					svcName := p.Backend.Service.Name
-					backend := map[string]interface{}{
-						"service_name": svcName,
-					}
-					if p.Backend.Service.Port.Number > 0 {
-						backend["service_port"] = p.Backend.Service.Port.Number
-					}
-					if p.Backend.Service.Port.Name != "" {
-						backend["service_port_name"] = p.Backend.Service.Port.Name
-					}
-					path["backend"] = backend
-					if !backendSet[svcName] {
-						backendSet[svcName] = true
-						backends = append(backends, svcName)
-					}
-				}
-				paths = append(paths, path)
-			}
-			r["paths"] = paths
-		}
-		rules = append(rules, r)
-	}
-	sort.Strings(backends)
-
-	addresses := make([]map[string]interface{}, 0)
-	for _, lb := range ing.Status.LoadBalancer.Ingress {
-		addr := map[string]interface{}{}
-		if lb.IP != "" {
-			addr["ip"] = lb.IP
-		}
-		if lb.Hostname != "" {
-			addr["hostname"] = lb.Hostname
-		}
-		if len(lb.Ports) > 0 {
-			ports := make([]map[string]interface{}, 0, len(lb.Ports))
-			for _, p := range lb.Ports {
-				port := map[string]interface{}{
-					"port":     int(p.Port),
-					"protocol": string(p.Protocol),
-				}
-				if p.Error != nil {
-					port["error"] = *p.Error
-				}
-				ports = append(ports, port)
-			}
-			addr["ports"] = ports
-		}
-		addresses = append(addresses, addr)
-	}
-
-	ingressClass := ""
-	classSource := ""
-	if ing.Spec.IngressClassName != nil {
-		ingressClass = *ing.Spec.IngressClassName
-		classSource = "spec"
-	} else if v, ok := ing.Annotations["kubernetes.io/ingress.class"]; ok {
-		ingressClass = v
-		classSource = "annotation"
-	}
-
-	// TLS info
-	tls := make([]map[string]interface{}, 0, len(ing.Spec.TLS))
-	for _, t := range ing.Spec.TLS {
-		tls = append(tls, map[string]interface{}{
-			"secret_name": t.SecretName,
-			"hosts":       t.Hosts,
-		})
-	}
-
-	// Default backend
-	var defaultBackend interface{}
-	if ing.Spec.DefaultBackend != nil && ing.Spec.DefaultBackend.Service != nil {
-		db := map[string]interface{}{
-			"type":         "service",
-			"service_name": ing.Spec.DefaultBackend.Service.Name,
-		}
-		if ing.Spec.DefaultBackend.Service.Port.Number > 0 {
-			db["service_port"] = ing.Spec.DefaultBackend.Service.Port.Number
-		}
-		defaultBackend = db
-	}
-
-	return map[string]interface{}{
-		"name":            ing.Name,
-		"namespace":       ing.Namespace,
-		"class":           ingressClass,
-		"class_source":    classSource,
-		"hosts":           hosts,
-		"addresses":       addresses,
-		"tls":             tls,
-		"default_backend": defaultBackend,
-		"rules":           rules,
-		"backends":        backends,
-		"labels":          ing.Labels,
-		"annotations":     ing.Annotations,
-		"created_at":      toISO(&ing.CreationTimestamp),
-	}
 }
 
 func formatIngressClassDetail(ic *networkingv1.IngressClass) map[string]interface{} {

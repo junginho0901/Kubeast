@@ -10,6 +10,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+
+	cronjobrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/cronjob"
 )
 
 // ========== CronJobs ==========
@@ -58,7 +60,7 @@ func (s *Service) DescribeCronJob(ctx context.Context, namespace, name string) (
 		return nil, fmt.Errorf("get cronjob %s/%s: %w", namespace, name, cjErr)
 	}
 
-	result := formatCronJobDetail(cj)
+	result := cronjobrow.Info(cj)
 
 	// Additional metadata
 	result["uid"] = string(cj.UID)
