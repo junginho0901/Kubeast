@@ -49,7 +49,7 @@ COMPACT_DIRECTIVE = (
     "Do not add anything."
 )
 
-_FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
+_FENCE_RE = re.compile(r"(`{3,}).*?\1", re.DOTALL)  # a block ends at its own fence: a result holding backticks is in a longer one
 _BLOCK_TAG_RE = re.compile(r"</?(details|summary|p|div|br|ul|ol|li|pre)\b[^>]*>", re.IGNORECASE)
 _INLINE_TAG_RE = re.compile(r"</?(strong|em|b|i|code|span)\b[^>]*>", re.IGNORECASE)
 

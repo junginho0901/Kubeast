@@ -8,10 +8,11 @@ const TRUNCATED_MARKER = '... (truncated) ...'
 export function truncateToolResultsInContent(content: string, maxChars = TOOL_RESULT_DISPLAY_MAX_CHARS) {
   if (!content) return content
 
+  // the block ends at its own fence: a result holding backticks is in a longer one
   const resultsBlockRegex =
-    /(<summary><strong>📊 Results<\/strong><\/summary>[\s\S]*?```(?:json|yaml)?\r?\n)([\s\S]*?)(\r?\n```)/g
+    /(<summary><strong>📊 Results<\/strong><\/summary>[\s\S]*?(`{3,})(?:json|yaml)?\r?\n)([\s\S]*?)(\r?\n\2)/g
 
-  return content.replace(resultsBlockRegex, (_match, prefix: string, body: string, suffix: string) => {
+  return content.replace(resultsBlockRegex, (_match, prefix: string, _fence: string, body: string, suffix: string) => {
     if (body.includes(TRUNCATED_MARKER)) return `${prefix}${body}${suffix}`
     if (body.length <= maxChars) return `${prefix}${body}${suffix}`
     const truncatedBody = body.slice(0, maxChars) + `\n${TRUNCATED_MARKER}`

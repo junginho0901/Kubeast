@@ -1,28 +1,10 @@
 import { useState, type ReactNode } from 'react'
 import { Check, Copy } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
-import { REMARK_PLUGINS } from '@/utils/markdown'
-import rehypeRaw from 'rehype-raw'
-import { MarkdownDetails, MarkdownSummary } from '@/components/MarkdownDisclosure'
-import { MarkdownTable } from '@/components/MarkdownTable'
+import ReactMarkdown from 'react-markdown'
 import { stripToolDetails } from '@/services/chatTextUtils'
 import { ChatCharts } from '@/components/ChatChart'
-
-import { MarkdownLink } from './MarkdownLink'
-
-/**
- * react-markdown v10 의 기본 urlTransform 은 unknown scheme 을 sanitize 한다.
- * `kubest://` 도 unknown 으로 보고 빈 문자열로 만들기 때문에 MarkdownLink 가
- * 받는 href 가 비어 있어 클릭 시 현재 URL 로 새로고침된다.
- *
- * 우리는 `kubest://` 를 신뢰한다 (DNS-1123 검증은 MarkdownLink 가 한 번 더 함)
- * 그 외 URL 은 기본 sanitize 유지.
- */
-function urlTransform(url: string): string {
-  if (typeof url === 'string' && url.startsWith('kubest://')) return url
-  return defaultUrlTransform(url)
-}
+import { CHAT_MARKDOWN } from '@/components/chatMarkdown'
 
 export interface DisplayMessage {
   id: string | number
@@ -44,8 +26,6 @@ interface MessageListProps {
   /** 메시지가 없을 때 리스트 영역에 끼워 넣을 노드 (예: 추천 질문) */
   emptyExtras?: ReactNode
 }
-
-const MARKDOWN_COMPONENTS = { a: MarkdownLink, details: MarkdownDetails, summary: MarkdownSummary, table: MarkdownTable }
 
 /**
  * 플로팅 채팅 패널의 메시지 리스트 (스크롤·"맨 아래로"는 ChatPanel 의 useStickToBottom).
@@ -112,9 +92,7 @@ function MessageBubble({ role, content, pending, toolCalls }: MessageBubbleProps
       <div className={`min-w-0 max-w-[80%] rounded-lg bg-slate-800 px-3 py-2 text-sm text-slate-100 ${pending ? 'opacity-90' : ''}`}>
         {content ? (
           <div className="chat-md floating-md prose prose-invert prose-sm max-w-none wrap-break-word">
-            <ReactMarkdown remarkPlugins={REMARK_PLUGINS} rehypePlugins={[rehypeRaw]} urlTransform={urlTransform} components={MARKDOWN_COMPONENTS}>
-              {content}
-            </ReactMarkdown>
+            <ReactMarkdown {...CHAT_MARKDOWN}>{content}</ReactMarkdown>
             <ChatCharts toolCalls={toolCalls} />
           </div>
         ) : (

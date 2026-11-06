@@ -94,13 +94,14 @@ def tool_block_markdown(tc: dict) -> str:
 </details>"""
     else:
         args_section = "<p><strong>📋 Arguments:</strong> No arguments</p>"
-    result_preview = tc.get("display") or tc.get("result", "No result")
+    result_preview = str(tc.get("display") or tc.get("result", "No result"))
+    code_fence = formatters.code_fence(result_preview)
     if tc.get("display"):
-        code_fence = "```"
+        language = ""
     elif tc.get("is_yaml", False):
-        code_fence = "```yaml"
+        language = "yaml"
     else:
-        code_fence = "```json" if tc.get("is_json", False) else "```"
+        language = "json" if tc.get("is_json", False) else ""
     access_section = access_mod.section(tc.get("access"), tc.get("requests"))
     access_section = f"{access_section}\n\n" if access_section else ""
     return f"""<details>
@@ -111,9 +112,9 @@ def tool_block_markdown(tc: dict) -> str:
 <details>
 <summary><strong>📊 Results</strong></summary>
 
-{code_fence}
+{code_fence}{language}
 {result_preview}
-```
+{code_fence}
 
 </details>
 

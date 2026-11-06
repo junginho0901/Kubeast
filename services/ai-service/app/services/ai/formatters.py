@@ -22,6 +22,14 @@ def _truncate_tool_result_for_llm(content: Optional[str], max_chars: int = LLM_R
         return content[:max_chars] + "\n... (truncated for LLM) ..."
     return content
 
+
+def code_fence(text: str) -> str:
+    """The backticks around a tool result in an answer: more than its longest run, so no line of it can close the
+    code block (frontend chatStreamManager.codeFence writes the same; keep the two equal)."""
+    longest = max(map(len, re.findall(r"`+", text)), default=0)
+    return "`" * (max(longest, 2) + 1)
+
+
 def _format_age(timestamp: Optional[str]) -> str:
     if not timestamp:
         return "-"

@@ -416,10 +416,11 @@ async def approve_tool_approval(
     ) or approval
     icon = "✅" if status == "executed" else "⚠️"
     access_line = tool_access.section(call_access, call_requests)
+    fence = formatters.code_fence(approval.result or "")
     await db.add_message(
         approval.session_id, "assistant",
         f"{icon} `{approval.tool}` on `{approval.cluster}` was approved and {'executed' if status == 'executed' else 'failed'}.\n\n"
-        + (f"{access_line}\n\n" if access_line else "") + f"```\n{approval.result}\n```",
+        + (f"{access_line}\n\n" if access_line else "") + f"{fence}\n{approval.result}\n{fence}",
         tool_calls=[{"function": approval.tool, "args": args, "result": approval.result, "approval_id": approval.id, "approval_status": status,
                      **({"access": call_access} if call_access else {}), **({"requests": call_requests} if call_requests else {})}],
     )
