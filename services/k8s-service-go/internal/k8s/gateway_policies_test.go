@@ -166,3 +166,21 @@ func TestGetGatewayPolicies_NamespaceAndConfiguredKinds(t *testing.T) {
 		}
 	}
 }
+
+// Asked for every namespace, a limited grant gets the policies of its namespaces and no other.
+func TestGetGatewayPolicies_LimitedGrantReadsItsNamespaces(t *testing.T) {
+	s := newPolicyService(t)
+	out, err := s.GetGatewayPolicies(scopedTo("web"), "", nil)
+	if err != nil {
+		t.Fatalf("GetGatewayPolicies: %v", err)
+	}
+	items := out["items"].([]map[string]interface{})
+	if len(items) == 0 {
+		t.Fatal("no policies")
+	}
+	for _, it := range items {
+		if it["namespace"] != "web" {
+			t.Errorf("listed %s/%s", it["namespace"], it["name"])
+		}
+	}
+}

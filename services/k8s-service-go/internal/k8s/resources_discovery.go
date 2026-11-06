@@ -101,6 +101,16 @@ func (s *Service) ResolveResource(ctx context.Context, resourceType string) (sch
 	return m.gvr, m.namespaced, err
 }
 
+// ResourceScope says whether a resource type is namespaced and whether it is the Namespace kind. A type that does not
+// resolve counts as namespaced, the side that has to name a namespace.
+func (s *Service) ResourceScope(ctx context.Context, resourceType string) (namespaced, isNamespace bool) {
+	m, err := s.resolveResourceMatch(ctx, resourceType)
+	if err != nil {
+		return true, false
+	}
+	return m.namespaced, isNamespaceKind(m.gvr)
+}
+
 // ResourceKind is the kind of the resource a resource type string resolves to
 // ("horizontalpodautoscalers" → "HorizontalPodAutoscaler").
 func (s *Service) ResourceKind(ctx context.Context, resourceType string) (string, error) {

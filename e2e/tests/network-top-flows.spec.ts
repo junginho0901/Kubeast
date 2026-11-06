@@ -184,7 +184,7 @@ test.describe('Top talkers (Network Flow Monitor)', () => {
     expect(refused.body.detail).toContain(`list pods in ${NS}`)
     expect(stub('GET', '/_calls').calls).toEqual([])
 
-    // bound to view in this namespace only, it reads; the CoreDNS end in kube-system keeps its namespace and address
+    // bound to view in this namespace only, it reads; the CoreDNS end in kube-system keeps its namespace and address, its zone gone
     const binding = `e2e-nfm-read-${id}`
     kubectl!('-n', NS, 'create', 'rolebinding', binding, '--clusterrole=view', '--group=kubeast:role:read')
     try {
@@ -192,7 +192,7 @@ test.describe('Top talkers (Network Flow Monitor)', () => {
       expect(status, JSON.stringify(body)).toBe(200)
       expect(body.redacted).toBe(true)
       const dns = (body.rows as Row[]).find((r) => r.category === 'INTER_AZ')!
-      expect(dns.remote).toEqual({ namespace: 'kube-system', ip: pods.dnsIP, az: 'use1-az2' })
+      expect(dns.remote).toEqual({ namespace: 'kube-system', ip: pods.dnsIP })
       expect((body.rows as Row[]).find((r) => r.category === 'INTRA_AZ')!.local.pod).toBe(pods.gateway)
     } finally {
       kubectl!('-n', NS, 'delete', 'rolebinding', binding, '--ignore-not-found')

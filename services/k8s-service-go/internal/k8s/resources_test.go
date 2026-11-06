@@ -2,14 +2,18 @@ package k8s
 
 import (
 	"context"
+	"slices"
 	"testing"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	fakediscovery "k8s.io/client-go/discovery/fake"
 	fakedynamic "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
 func TestResolveCreateNamespace(t *testing.T) {
@@ -152,4 +156,67 @@ func newServiceWithFakes(t *testing.T) *Service {
 		discovery: fakeDiscovery,
 	})
 	return s
+}
+
+func scopedTo(namespaces ...string) context.Context {
+	return auth.WithPayload(context.Background(), auth.TokenPayload{UserID: "u1", Namespaces: map[string][]string{"default": namespaces}})
+}
+
+// What a limited grant's scope check reads is what the create would do, document by document, up to where it would stop.
+func TestCreateNamespacesNamesWhereEachDocumentGoes(t *testing.T) {
+	s := newServiceWithFakes(t)
+	pod := func(namespace string) string {
+		meta := "metadata:\n  name: p\n"
+		if namespace != "" {
+			meta += "  namespace: " + namespace + "\n"
+		}
+		return "apiVersion: v1\nkind: Pod\n" + meta
+	}
+	for name, c := range map[string]struct {
+		yaml, def string
+		want      []string
+	}{
+		"the document's namespace first":    {pod("a"), "b", []string{"a"}},
+		"the default namespace next":        {pod(""), "b", []string{"b"}},
+		"the namespace called default last": {pod(""), "", []string{"default"}},
+		"every document":                    {pod("a") + "---\n" + pod(""), "b", []string{"a", "b"}},
+		"a Namespace object by its name":    {"apiVersion: v1\nkind: Namespace\nmetadata:\n  name: n\n", "b", []string{"n"}},
+		"up to a document it cannot read":   {pod("a") + "---\nkind: [\n---\n" + pod("c"), "", []string{"a"}},
+		"up to a document with no kind":     {pod("a") + "---\nmetadata:\n  name: x\n---\n" + pod("c"), "", []string{"a"}},
+		"no document":                       {"", "b", nil},
+	} {
+		if got := s.CreateNamespaces(context.Background(), c.yaml, c.def); !slices.Equal(got, c.want) {
+			t.Errorf("%s: %v, want %v", name, got, c.want)
+		}
+	}
+}
+
+// A document outside a limited grant stops the create at that document, without the handler's check too.
+func TestCreateStopsAtADocumentOutsideTheGrant(t *testing.T) {
+	s := newServiceWithFakes(t)
+	doc := func(namespace string) string {
+		return "apiVersion: v1\nkind: Pod\nmetadata:\n  name: p\n  namespace: " + namespace + "\n"
+	}
+	results, err := s.CreateResourcesFromYAML(scopedTo("shop"), doc("shop")+"---\n"+doc("other"), "")
+	if !apierrors.IsForbidden(err) || len(results) != 1 {
+		t.Fatalf("results %v, err %v", results, err)
+	}
+	if _, err := s.CreateResourcesFromYAML(scopedTo("shop"), "apiVersion: v1\nkind: Namespace\nmetadata:\n  name: other\n", ""); !apierrors.IsForbidden(err) {
+		t.Fatalf("a Namespace outside: %v", err)
+	}
+}
+
+func TestYAMLNamespaces(t *testing.T) {
+	for in, want := range map[string][]string{
+		"metadata:\n  name: x\n": nil,
+		"metadata:\n  namespace: a\n---\nmetadata:\n  namespace: b\n": {"a", "b"},
+		"metadata:\n  namespace: 12\n":                                {"12"},
+		"metadata:\n  namespace: \"\"\n":                              nil,
+		"not: [":                                                      nil,
+		"":                                                            nil,
+	} {
+		if got := YAMLNamespaces(in); !slices.Equal(got, want) {
+			t.Errorf("%q: %v, want %v", in, got, want)
+		}
+	}
 }

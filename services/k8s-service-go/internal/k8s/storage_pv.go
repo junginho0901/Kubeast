@@ -50,7 +50,8 @@ func (s *Service) DescribePV(ctx context.Context, name string) (map[string]inter
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		if pv.Spec.ClaimRef == nil || pv.Spec.ClaimRef.Name == "" {
+		// A claim in a namespace outside a limited grant stays unread; the volume's own claimRef still names it.
+		if pv.Spec.ClaimRef == nil || pv.Spec.ClaimRef.Name == "" || !inCallerScope(ctx, pv.Spec.ClaimRef.Namespace) {
 			return
 		}
 		// the claim first: its users are the PVC drawer's (kubectl's getPodsForPVC), its owner pod among them

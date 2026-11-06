@@ -23,6 +23,25 @@ func (s *Service) GetStorageClasses(ctx context.Context) ([]map[string]interface
 	return formatStorageClassList(scList.Items), nil
 }
 
+// callerPVCs is the claims of every namespace, or of each of a limited grant's namespaces.
+func (s *Service) callerPVCs(ctx context.Context) (*corev1.PersistentVolumeClaimList, error) {
+	scope := scopeFromCtx(ctx)
+	if len(scope) == 0 {
+		return s.clientsetCtx(ctx).CoreV1().PersistentVolumeClaims("").List(ctx, metav1.ListOptions{})
+	}
+	items, err := fanOutNamespaces(scope, func(ns string) ([]corev1.PersistentVolumeClaim, error) {
+		l, err := s.clientsetCtx(ctx).CoreV1().PersistentVolumeClaims(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, err
+		}
+		return l.Items, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &corev1.PersistentVolumeClaimList{Items: items}, nil
+}
+
 // DescribeStorageClass returns detailed info about a storage class.
 func (s *Service) DescribeStorageClass(ctx context.Context, name string) (map[string]interface{}, error) {
 	// Fetch SC, PVs, PVCs, and events in parallel
@@ -44,7 +63,7 @@ func (s *Service) DescribeStorageClass(ctx context.Context, name string) (map[st
 	}()
 	go func() {
 		defer wg.Done()
-		pvcList, pvcErr = s.clientsetCtx(ctx).CoreV1().PersistentVolumeClaims("").List(ctx, metav1.ListOptions{})
+		pvcList, pvcErr = s.callerPVCs(ctx)
 	}()
 	go func() {
 		defer wg.Done()

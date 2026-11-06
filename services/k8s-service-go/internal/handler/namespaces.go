@@ -71,6 +71,12 @@ func (h *Handler) ApplyNamespaceYAML(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, data)
 }
 
+// createNamespaceBody is the body of a namespace create, read the same way by the namespace scope check.
+type createNamespaceBody struct {
+	Name   string            `json:"name"`
+	Labels map[string]string `json:"labels"`
+}
+
 // CreateNamespace handles POST /api/v1/namespaces.
 func (h *Handler) CreateNamespace(w http.ResponseWriter, r *http.Request) {
 	if err := h.requirePermissionForCluster(r, "resource.namespace.create"); err != nil {
@@ -79,10 +85,7 @@ func (h *Handler) CreateNamespace(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 
-	var body struct {
-		Name   string            `json:"name"`
-		Labels map[string]string `json:"labels"`
-	}
+	var body createNamespaceBody
 	if err := decodeJSON(r, &body); err != nil {
 		response.Error(w, http.StatusBadRequest, "invalid request body: "+err.Error())
 		return

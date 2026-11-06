@@ -95,29 +95,31 @@ func (s *Service) DeleteIngress(ctx context.Context, namespace, name string) err
 // kubernetes.io/ingress.class annotation), in the list's order. The drawer pages them and counts them all: it cut
 // at 50 before, with the title saying 50.
 func (s *Service) ListIngressesByClass(ctx context.Context, className string) ([]map[string]interface{}, error) {
-	list, err := s.clientsetCtx(ctx).NetworkingV1().Ingresses("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all ingresses: %w", err)
-	}
-	out := make([]map[string]interface{}, 0)
-	for i := range list.Items {
-		ing := &list.Items[i]
-		ic := ""
-		if ing.Spec.IngressClassName != nil {
-			ic = *ing.Spec.IngressClassName
-		} else if ann, ok := ing.Annotations["kubernetes.io/ingress.class"]; ok {
-			ic = ann
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		list, err := s.clientsetCtx(ctx).NetworkingV1().Ingresses(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all ingresses: %w", err)
 		}
-		if ic != className {
-			continue
+		out := make([]map[string]interface{}, 0)
+		for i := range list.Items {
+			ing := &list.Items[i]
+			ic := ""
+			if ing.Spec.IngressClassName != nil {
+				ic = *ing.Spec.IngressClassName
+			} else if ann, ok := ing.Annotations["kubernetes.io/ingress.class"]; ok {
+				ic = ann
+			}
+			if ic != className {
+				continue
+			}
+			out = append(out, map[string]interface{}{
+				"name":       ing.Name,
+				"namespace":  ing.Namespace,
+				"created_at": toISO(&ing.CreationTimestamp),
+			})
 		}
-		out = append(out, map[string]interface{}{
-			"name":       ing.Name,
-			"namespace":  ing.Namespace,
-			"created_at": toISO(&ing.CreationTimestamp),
-		})
-	}
-	return out, nil
+		return out, nil
+	})
 }
 
 // ========== IngressClasses ==========

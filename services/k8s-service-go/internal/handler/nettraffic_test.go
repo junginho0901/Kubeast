@@ -350,3 +350,74 @@ func (f *retinaDropsTraffic) PrometheusQuery(_ context.Context, q string) ([]k8s
 	}
 	return []k8s.PrometheusQueryResult{{Metric: map[string]interface{}{"destination_namespace": "flows-demo", "destination_pod": "web-1", "reason": "POLICY_DENIED", "traffic_direction": "ingress"}, Value: 4}}, nil
 }
+
+// A flow the Relay sends with a policy of another namespace and, on an end with no namespace, a Service of another
+// namespace.
+func flowNamingOtherNamespaces(at time.Time) []byte {
+	str := func(b []byte, n protowire.Number, v string) []byte {
+		b = protowire.AppendTag(b, n, protowire.BytesType)
+		return protowire.AppendString(b, v)
+	}
+	msg := func(b []byte, n protowire.Number, m []byte) []byte {
+		b = protowire.AppendTag(b, n, protowire.BytesType)
+		return protowire.AppendBytes(b, m)
+	}
+	var flow, ts, tcp []byte
+	ts = protowire.AppendVarint(protowire.AppendTag(ts, 1, protowire.VarintType), uint64(at.Unix()))
+	flow = msg(flow, 1, ts)
+	flow = protowire.AppendVarint(protowire.AppendTag(flow, 2, protowire.VarintType), uint64(netflows.Verdicts["DROPPED"]))
+	tcp = protowire.AppendVarint(protowire.AppendTag(tcp, 2, protowire.VarintType), 80)
+	flow = msg(flow, 6, msg(nil, 1, tcp))
+	flow = msg(flow, 8, str(str(nil, 3, "demo"), 5, "client-1"))
+	flow = msg(flow, 9, str(nil, 3, ""))
+	flow = msg(flow, 21, str(str(nil, 1, "secret-svc"), 2, "ops"))
+	flow = msg(flow, 21004, str(str(str(nil, 1, "secret-deny"), 2, "ops"), 5, "NetworkPolicy"))
+	flow = msg(flow, 21004, str(str(str(nil, 1, "web-only"), 2, "demo"), 5, "NetworkPolicy"))
+	flow = str(flow, 11, "node-secret")
+	m := msg(nil, 1, flow)
+	out := make([]byte, 5, 5+len(m))
+	binary.BigEndian.PutUint32(out[1:], uint32(len(m)))
+	return append(out, m...)
+}
+
+// The lines of a limited reader's Relay read name no Service, policy or node outside its namespaces; its own policy
+// stays, and a reader with no limit sees them all.
+func TestNetworkTrafficRelayNamesNothingOutsideTheScope(t *testing.T) {
+	f := newNetflowsFixture(t, 5)
+	answer := flowNamingOtherNamespaces(time.Date(2026, 10, 24, 14, 5, 0, 0, time.UTC))
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/grpc")
+		w.Header().Set("Trailer", "Grpc-Status")
+		_, _ = w.Write(answer)
+		w.Header().Set("Grpc-Status", "0")
+	}))
+	srv.EnableHTTP2 = true
+	srv.StartTLS()
+	t.Cleanup(srv.Close)
+	f.h.netflowsDial = func(context.Context, netflows.Target) (string, *http.Client, error) {
+		return srv.URL + "/observer.Observer/GetFlows", srv.Client(), nil
+	}
+	scoped := flowReader
+	scoped.Namespaces = map[string][]string{"self": {"demo"}}
+	w, res := getTraffic(f.h, "/api/v1/networktraffic?namespaces=demo&source=relay", scoped)
+	if w.Code != http.StatusOK || !res.Redacted || len(res.Lines) == 0 {
+		t.Fatalf("status %d: %s", w.Code, w.Body)
+	}
+	for _, name := range []string{"secret-svc", "secret-deny", "node-secret", `"ops"`} {
+		if strings.Contains(w.Body.String(), name) {
+			t.Errorf("%s in a limited reader's answer: %s", name, w.Body)
+		}
+	}
+	if !strings.Contains(w.Body.String(), "web-only") {
+		t.Errorf("its own policy is gone: %s", w.Body)
+	}
+	w, res = getTraffic(f.h, "/api/v1/networktraffic?namespaces=demo&source=relay", flowReader)
+	if w.Code != http.StatusOK || res.Redacted {
+		t.Fatalf("status %d, redacted %v", w.Code, res.Redacted)
+	}
+	for _, name := range []string{"secret-svc", "secret-deny", "web-only"} {
+		if !strings.Contains(w.Body.String(), name) {
+			t.Errorf("%s missing for a reader with no limit: %s", name, w.Body)
+		}
+	}
+}

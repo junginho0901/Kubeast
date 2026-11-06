@@ -186,12 +186,16 @@
   - The grant API takes it as `namespaces` and puts it in `/auth/me` (`cluster_namespaces`) and in the token (`ns` claim).
   - Access requests can also have a list. People with scoped grants can only request within it, and the form prefills it and requires it.
   - For such grants:
-    - Kubeast **filters paths outside those namespaces with 403** before asking the cluster. Writes get an audit row.
+    - Kubeast **refuses a namespace outside those namespaces with 403** before asking the cluster, however the request names it: in the path, in a query (`namespace`, `namespaces`), in the body or in YAML (`metadata.namespace` of every document; a create with one document outside creates none). Writes get an audit row.
+    - A route with no namespace in its path has a rule in `internal/handler/namespace_scope_routes.go`; one without a rule is refused to such a grant, so a new route starts closed.
+    - What reads across namespaces with none named reads the grant's namespaces: events, the timeline, Helm releases and their live updates, pod metrics, the Resource Graph, a custom resource kind's list, the Ingresses of an IngressClass, the GPU pods, the claims of a StorageClass.
+    - What reaches other namespaces by what it does is refused: draining a node, the node shell and the hygiene report.
+    - Objects in no namespace (Nodes, PVs, ClusterRoles, CRDs) stay the cluster's RBAC to answer. `/cluster/can-i` answers no for a namespace outside, without asking.
     - The namespace list is the grant list as is.
     - An "all namespaces" query goes through the list one by one and merges the results.
     - Dashboard counts are counted only within the list (`scoped: true`). Nodes and PVs are 0.
     - The dashboard's issue check reads pods, workloads and Warning events in each namespace of the list. Nodes, which such a grant cannot list, show as an info row saying they were not read.
-  - AI tools and MCP require `namespace` and refuse cluster-wide tools: overview, node metrics, apply, create, API list and cluster settings.
+  - AI tools and MCP require `namespace`, refuse `all_namespaces` even next to one of the grant's namespaces, and refuse cluster-wide tools: overview, node metrics, apply, create, API list and cluster settings.
   - The cluster's Prometheus answers for the whole cluster, so its reads answer 403 to such grants. This covers `/prometheus/query`, `query_range`, `metrics`, `labels`, `rules`, `targets` and `/gpu/metrics`, whether the cluster reaches the store through the API server's proxy or as an external store with Kubeast's own credentials. Alerts and silences are refused the same way.
     - `/cluster/features` reports `prometheus.namespaceLimited`, and the drawers' Prometheus sections then say the metrics need a grant on the whole cluster instead of asking.
     - The proxy path's short query cache is kept per identity (`CacheIdentity`), so no one is served an answer read for someone else.
@@ -277,7 +281,7 @@ With `features.networkFlows` on for a cluster, the Pod and workload drawers also
 - One row is one connection: the reply packets are folded into it, and a connection seen on both nodes shows once.
 - "Why?" on a dropped connection opens the NetworkPolicy check above for that peer, port and direction, so the rule that denies it is named.
 - The Relay is read as the signed-in user, through the cluster's API server service proxy (`proxy`, the default) or at a TLS address (`https://`). The cluster must let the user create `services/proxy` on the Relay Service; `templates/impersonation-viewer-hubble.yaml` gives that to the Read group.
-- A namespace-limited user sees peers outside their namespaces by namespace and address only, and URL query strings are dropped.
+- A namespace-limited user sees peers outside their namespaces by namespace and address only, and URL query strings are dropped. A Service of another namespace on an end with no namespace, a policy of another namespace and the node that saw the flow are left out too; a cluster-wide policy stays.
 - Microsoft Retina's Hubble control plane serves the same Relay. Its flows name pods only, so Kubeast names their workloads from the pods it lists as the user. A connection to a Service shows the Service's cluster IP where it left the client.
 - On Calico, the flows come from Whisker (read the same way, as the user), aggregated by Calico: the numbers are packets, and a pod shows the flows of the pods of its ReplicaSet or Job, which Calico names together.
 - The AI tool `network_flows` reads the same connections and points to `network_policy_check` for a drop.

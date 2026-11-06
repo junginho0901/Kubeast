@@ -128,6 +128,10 @@ def namespace_scope_error(token, cluster: str, function_name: str, args: Dict) -
     listed = ", ".join(scope)
     if function_name in CLUSTER_WIDE_TOOLS:
         return f"forbidden: {function_name} spans the cluster; your grant on {cluster} is limited to namespaces {listed}"
+    # The handlers read this flag before the namespace, so an own namespace beside it says nothing.
+    all_namespaces = (args or {}).get("all_namespaces")
+    if all_namespaces.strip().lower() == "true" if isinstance(all_namespaces, str) else bool(all_namespaces):
+        return f"forbidden: all_namespaces spans the cluster; your grant on {cluster} is limited to namespaces {listed}"
     ns = str((args or {}).get("namespace") or "").strip()
     if not ns:
         return f"forbidden: namespace is required; your grant on {cluster} is limited to namespaces {listed}"

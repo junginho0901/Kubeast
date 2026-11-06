@@ -182,9 +182,23 @@ func timelineEventRow(e *corev1.Event) map[string]interface{} {
 	}
 }
 
-// getNamespaceRolloutHistory collects the rollouts of a namespace (all when empty): each Deployment's ReplicaSets
-// and each StatefulSet's and DaemonSet's ControllerRevisions created in the window.
+// getNamespaceRolloutHistory collects the rollouts of a namespace (all when empty, each of a limited grant's namespaces
+// in turn): each Deployment's ReplicaSets and each StatefulSet's and DaemonSet's ControllerRevisions created in the window.
 func (s *Service) getNamespaceRolloutHistory(ctx context.Context, namespace string, cutoff time.Time) ([]map[string]interface{}, error) {
+	if scope := scopeFromCtx(ctx); namespace == "" && len(scope) > 0 {
+		result, err := fanOutNamespaces(scope, func(ns string) ([]map[string]interface{}, error) {
+			return s.rolloutHistoryIn(ctx, ns, cutoff)
+		})
+		if err != nil {
+			return nil, err
+		}
+		sortRolloutsNewestFirst(result)
+		return result, nil
+	}
+	return s.rolloutHistoryIn(ctx, namespace, cutoff)
+}
+
+func (s *Service) rolloutHistoryIn(ctx context.Context, namespace string, cutoff time.Time) ([]map[string]interface{}, error) {
 	var wg sync.WaitGroup
 	var deploys *appsv1.DeploymentList
 	var rsList *appsv1.ReplicaSetList

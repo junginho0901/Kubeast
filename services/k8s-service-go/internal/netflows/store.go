@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -253,19 +254,59 @@ func (r Request) matches(f Flow) bool {
 	return false
 }
 
-// redact hides a peer outside the reader's namespaces; true when it did.
+// redact hides a peer outside the reader's namespaces; true when it did. An end with no namespace goes by its Service,
+// which names one (Hubble's destination_service comes apart from the endpoint), and with neither is an address only.
 func (r Request) redact(e *End) bool {
-	if r.Scope == nil || e.Namespace == "" {
+	if r.Scope == nil {
 		return false
 	}
-	for _, ns := range r.Scope {
-		if ns == e.Namespace {
-			return false
+	serviceNS, _, qualified := strings.Cut(e.Service, "/")
+	switch {
+	case e.Namespace != "" && r.inScope(e.Namespace):
+		if qualified && !r.inScope(serviceNS) {
+			e.Service = ""
+			return true
 		}
+		return false
+	case e.Namespace == "" && e.Service == "":
+		return false
+	case e.Namespace == "" && qualified && r.inScope(serviceNS):
+		return false
 	}
 	changed := e.Pod != "" || e.Workload != nil || e.Service != "" || e.Identity != 0
 	e.Pod, e.Workload, e.Service, e.Identity = "", nil, "", 0
 	return changed
+}
+
+func (r Request) inScope(namespace string) bool {
+	return slices.Contains(r.Scope, namespace)
+}
+
+// redactPolicies is p without the policies of namespaces outside the reader's; nil when none is left. A policy with no
+// namespace (a cluster-wide one) stays: it belongs to nobody's namespace and says why the reader's own flow went as it
+// did. A copy: the flows it was read from may be kept.
+func (r Request) redactPolicies(p *Policies) (*Policies, bool) {
+	if r.Scope == nil || p == nil {
+		return p, false
+	}
+	removed := false
+	keep := func(refs []PolicyRef) []PolicyRef {
+		var out []PolicyRef
+		for _, ref := range refs {
+			if ref.Namespace != "" && !r.inScope(ref.Namespace) {
+				removed = true
+				continue
+			}
+			out = append(out, ref)
+		}
+		return out
+	}
+	out := &Policies{EgressAllowedBy: keep(p.EgressAllowedBy), IngressAllowedBy: keep(p.IngressAllowedBy),
+		EgressDeniedBy: keep(p.EgressDeniedBy), IngressDeniedBy: keep(p.IngressDeniedBy)}
+	if out.EgressAllowedBy == nil && out.IngressAllowedBy == nil && out.EgressDeniedBy == nil && out.IngressDeniedBy == nil {
+		out = nil
+	}
+	return out, removed
 }
 
 // Result is the answer of Query, newest flow first.
@@ -519,6 +560,13 @@ func (s *Store) keep(ctx context.Context, req Request, flows []Flow, now time.Ti
 		}
 		if req.redact(&f.Destination) {
 			redacted = true
+		}
+		var hiddenPolicy bool
+		if f.Policies, hiddenPolicy = req.redactPolicies(f.Policies); hiddenPolicy {
+			redacted = true
+		}
+		if req.Scope != nil {
+			f.Node = "" // a limited reader lists no nodes
 		}
 		out = append(out, f)
 	}

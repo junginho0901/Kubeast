@@ -16,21 +16,23 @@ import (
 // cluster of 50 000 pods had 107 000 events, which took k8s-service past 512 Mi as one list).
 const eventPageSize = 500
 
-// eachEvent calls fn for every event of namespace ("" for all) that opts selects, a page at a time. A later page's
-// expired continue token is an error: EachListItem does not fall back to one full list (ListPager.List would, by
-// default — FullListIfExpired is off here as well).
+// eachEvent calls fn for every event of namespace ("" for all, each of a limited grant's namespaces in turn) that opts
+// selects, a page at a time. A later page's expired continue token is an error: EachListItem does not fall back to one
+// full list (ListPager.List would, by default — FullListIfExpired is off here as well).
 func (s *Service) eachEvent(ctx context.Context, namespace string, opts metav1.ListOptions, fn func(*corev1.Event)) error {
-	p := listpager.New(listpager.SimplePageFunc(func(o metav1.ListOptions) (runtime.Object, error) {
-		return s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, o)
-	}))
-	p.PageSize = eventPageSize
-	p.PageBufferSize = 1
-	p.FullListIfExpired = false
-	return p.EachListItem(ctx, opts, func(obj runtime.Object) error {
-		if e, ok := obj.(*corev1.Event); ok {
-			fn(e)
-		}
-		return nil
+	return eachCallerNamespace(ctx, namespace, func(ns string) error {
+		p := listpager.New(listpager.SimplePageFunc(func(o metav1.ListOptions) (runtime.Object, error) {
+			return s.clientsetCtx(ctx).CoreV1().Events(ns).List(ctx, o)
+		}))
+		p.PageSize = eventPageSize
+		p.PageBufferSize = 1
+		p.FullListIfExpired = false
+		return p.EachListItem(ctx, opts, func(obj runtime.Object) error {
+			if e, ok := obj.(*corev1.Event); ok {
+				fn(e)
+			}
+			return nil
+		})
 	})
 }
 
