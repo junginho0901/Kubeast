@@ -16,7 +16,7 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서입니다.
 |---|---|---|
 | D1 | 모든 **쓰기 핸들러**(create/update/delete/rollback/restart/scale/apply/…)와 **민감 읽기**(Secret reveal, Node shell, Pod exec, Pod logs, kubeconfig 읽기, 감사 로그 조회·내보내기)를 기록합니다. 단순 목록/조회, health, 공개 엔드포인트는 제외합니다 | 핸들러가 `audit.FromHTTPRequest(r)`로 레코드를 만들고 `auditStore.Write`로 씁니다 |
 | D2 | 성공과 실패를 모두 기록합니다. 실패는 `Result = failure`로 두고 `Error`에 사유를 적습니다 | `recordHelmAudit` 같은 헬퍼가 err 유무를 보고 채웁니다 |
-| D3 | `Before`/`After`에 비밀이 들어가지 않게 마스킹합니다 | `audit.MaskSensitive`(password/secret/token/apikey 키), AI 툴 결과는 `pkg/redact` |
+| D3 | `Before`/`After`에 비밀이 들어가지 않게 마스킹합니다 | `audit.MaskSensitive`(`pkg/redact`의 키 이름인 password, secret, token, API 키, access key, credential, DSN, connection string과 authorization). 문자열 안은 읽지 못하므로 YAML과 values 글은 행에 넣지 않고 길이(`yaml_len`)만, Helm values는 해시·최상위 키 이름·길이만 남깁니다. AI 툴 결과는 `pkg/redact` |
 | D4 | **DB 행은 민감 동작의 선행 조건**이고(fail-closed), stdout 미러만 best-effort입니다. 감사 DB에 기록할 수 없으면 쓰기와 민감 읽기는 503 `audit unavailable`로 거부하고, 목록·조회는 계속 됩니다. 이미 실행된 변경의 감사 행을 나중에 쓰지 못하면 실패 수를 세고 ERROR 로그를 남기며, 응답은 그대로 둡니다. 부팅 때 DB가 없으면 기다렸다가(`AUDIT_DB_WAIT_SEC` 90 s) 종료합니다 — 로그 전용 폴백은 없습니다(NIST AU-5(4) 제한 모드·Vault 감사 장치·kube-apiserver `--audit-log-mode blocking`과 같은 방향) | k8s-service: `audit.Guarded`(핑 캐시 2 s·실패 카운터·`/health` `audit` 블록) + 변경 라우트의 `audit.RequireWritable`(POST `/search` 제외) + 조건부 감사 GET 핸들러의 `auditReady`/`refuseUnaudited`. auth-service: 같은 `audit.Guarded` + 로그인한 라우트의 `RequireWritable`(토큰 갱신·본인 비밀번호 변경·클러스터 전환 신호 제외 — 로그인·로그아웃·API 키 교환은 처음부터 그 밖) + 감사 로그·권한 검토·AI 사용량·디렉터리 그룹을 읽기 전 준비 확인(2026-10-21, 관리자 쓰기만 거부). session-service: 같은 `audit.Guarded` + 대화방 이름 변경·삭제의 `RequireWritable`. ai-service: 승인된 쓰기 툴의 실행·거절과 AI 모델 설정 추가·수정·삭제 전에는 `require_audit_ready()`, 채팅 도구와 알림 조사는 실행 전에 `audit_ready()`를 부릅니다(준비가 안 되면 도구 결과는 `audit_unavailable`, 조사는 실패 처리). **쓰기 실패 뒤 시험 쓰기**: 핑(SELECT 1)만으로는 DB는 살아 있는데 감사 표만 행을 받지 못하는 경우(디스크·잠금·트리거)를 잡지 못합니다. 그래서 감사 행 쓰기가 한 번 실패하면 준비 확인이 행을 넣었다 되돌리는 시험 쓰기로 바뀌고, 쓸 수 있게 될 때까지 거부합니다(`audit.WriteProber`, Python `_write_broken`). 스위치 `AUDIT_FAIL_CLOSED`(기본 true, 차트 `audit.failClosed`) |
 | D5 | 감사 1건 = DB 1행 + **stdout JSON 1줄**. 앱 DB와 독립된 사본을 클러스터 로그 파이프라인이 가져갑니다 | `audit.StdoutTee`(Go), `audit_writer._emit_stdout`(Python). 줄 형식은 §4 |
 | D6 | 액션 이름은 `<domain>.<object>.<verb>` 형식입니다. 새 액션은 코드보다 먼저 이 문서 §5-2에 추가합니다 | 도메인 = `user` `admin` `k8s` `helm` `ai` |
@@ -58,7 +58,7 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서입니다.
   - 종류:
     - `s3` — S3 호환(AWS·MinIO·GCS·R2), 시간 파티션 NDJSON gzip, 키 `prefix/YYYY/MM/DD/HH/<첫 id>-<끝 id>.ndjson.gz`
     - `webhook` — `json` 범용 · `slack` · `teams`(Workflows Adaptive Card) · `discord` · `telegram` · `pagerduty`(Events v2)
-    - `email` — SMTP
+    - `email` — SMTP. 메일 윗부분 요약과 채팅 webhook의 한 줄 요약은 필드의 제어 문자를 공백으로 바꿉니다. 그 아래 레코드는 행 그대로입니다.
     - `file` — NDJSON, 크기 로테이션
   - 싱크마다 액션 필터(권한 패턴과 같은 와일드카드, 예 `k8s.*.delete`)와 결과 필터를 둘 수 있습니다.
   - 전달은 **최소 1회**입니다(보낸 뒤 커서를 옮기기 전에 죽으면 다시 보냄). 수신 측은 레코드의 `id`로 중복을 제거하고, S3 객체 키는 id 범위라 같은 배치는 같은 키에 덮어씁니다.
@@ -164,7 +164,7 @@ verb는 지금 쓰고 있는 것에서 고릅니다:
 | `k8s.pod.resize` | 최적화 제안을 재시작 없이 적용(`POST /namespaces/{ns}/optimization/resize`, `resource.pod.edit`, `IN_PLACE_RESIZE_ENABLED`, 서버 1.35+). 워크로드의 파드마다 `resize` 하위 리소스로 컨테이너 requests(·limits)를 바꿉니다 — target = 워크로드(kind/name, `api_version`을 주면 그 그룹 소유자의 파드만이고 `after`에 남음). Pod 드로어의 "리소스 조정"은 같은 호출을 `kind: Pod`로 보내며, 이때 target = 그 파드입니다(소유자와 관계없이 이름으로). `after` = `{container, cpu_request_m, mem_request_bytes, pods, resized, skipped, failed, results[]}`(파드별 resized/skipped/error + 사유). 호출 하나에 행 하나를 남기고, 실패는 `failure`입니다 |
 | `k8s.cluster.kubeconfig.read` | tool-server가 클러스터 kubeconfig를 읽는 경우(민감 읽기) |
 | `helm.release.reveal` | 릴리스의 manifest·values·hooks·diff와 롤백·값 변경의 **미리 보기(dry-run) diff**를 **마스킹 없이** 읽는 경우 — `resource.secret.reveal`이 있는 사람만 해당합니다. 권한이 없으면 Secret 문서를 빼고 민감 값을 가린 뒤 돌려주며 기록하지 않습니다. 이때 diff는 양쪽 원문을 먼저 가린 뒤 만듭니다(diff 출력을 가리면 +/- 줄 머리 때문에 값이 남음). `after.section` = manifest/values/hooks/diff/detail/`rollback dry-run`/`upgrade dry-run` |
-| `helm.release.upgrade` / `.rollback` / `.uninstall` / `.test` | Helm 쓰기(uninstall은 `?confirm=<release>` 필수). dry-run은 이 액션으로 남기지 않고, 그 diff를 원문으로 보면 `helm.release.reveal`로 남습니다 |
+| `helm.release.upgrade` / `.rollback` / `.uninstall` / `.test` | Helm 쓰기(uninstall은 `?confirm=<release>` 필수). dry-run은 이 액션으로 남기지 않고, 그 diff를 원문으로 보면 `helm.release.reveal`로 남습니다. upgrade의 `after` = `{newRevision, values_keys, values_len}`(최상위 키 이름)입니다. values 글은 남기지 않습니다. 거절의 `error`는 그 안에 인용된 문자열 값(4자 이상)을 `***`로 바꾸고, values를 읽지 못했으면 `values must be valid YAML`만 남깁니다. values를 보낸 사람은 응답에서 전체 사유를 그대로 받습니다 |
 
 **ai-service (`ai`)** — `cluster`는 요청의 `X-Cluster-Name`이고, 없으면 k8s-service가 정한 기본 클러스터(`GET /api/v1/cluster/current`)입니다.
 세션 관리처럼 클러스터와 무관한 행은 비웁니다.

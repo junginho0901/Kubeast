@@ -78,7 +78,7 @@ _, _ = h.auditStore.Write(r.Context(), rec)
   행을 받을 때까지 거부한다. auth-service는 관리자 쓰기만 거부(로그인·로그아웃·토큰 갱신·본인 비밀번호 변경은 계속),
   AI 채팅 도구·알림 조사도 실행 전에 확인한다. 부팅 때 DB가 없으면 `AUDIT_DB_WAIT_SEC`(90 s)까지 기다렸다가 종료한다 —
   로그 전용 폴백은 없다.
-- 민감 필드(password, secret, token, apikey 등)는 **`audit.MaskSensitive(...)` 적용 후** 저장.
+- 민감 필드(password, secret, token, apikey 등)는 **`audit.MaskSensitive(...)` 적용 후** 저장. 문자열 안은 읽지 못하므로 YAML·JSON 글은 행에 넣지 말고 길이나 요약만 남긴다(`yaml_len`, `helmValuesAudit`).
 
 ### PR 리뷰 기준
 

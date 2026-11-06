@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -36,27 +38,36 @@ func ClientIP(r *http.Request) string {
 	return r.RemoteAddr
 }
 
-// sensitiveKeys lists JSON field names whose values must be redacted
-// before persistence. Matching is case-insensitive and substring-based
-// so both "password" and "db_password" are masked.
+// sensitiveKeys lists words of JSON field names whose values must be redacted
+// before persistence. Case and the separators "_", "-" and "." are ignored and
+// the word may sit inside a longer name, so "db_password", "api-key" and
+// "accessKey" are all masked. Covers the key names of pkg/redact.
 var sensitiveKeys = []string{
 	"password",
 	"passwd",
 	"secret",
 	"token",
 	"apikey",
-	"api_key",
+	"accesskey",
 	"privatekey",
-	"private_key",
+	"credential",
+	"connectionstring",
 	"authorization",
 }
+
+// sensitiveWords count only as a whole word of the name: "fields_names" holds "dsn".
+var sensitiveWords = []string{"dsn", "pwd"}
+
+var camelBoundary = regexp.MustCompile(`([a-z0-9])([A-Z])`)
 
 // MaskSensitive walks a JSON value (object/array) and replaces the values
 // of any field whose (lower-cased) key contains a sensitiveKeys entry
 // with the string "***". Non-JSON input is returned unchanged.
 //
 // Use this before assigning to Record.Before / Record.After whenever the
-// payload might contain user-supplied secrets.
+// payload might contain user-supplied secrets. It does not look inside a string
+// value: YAML or JSON held as text passes through, so keep such text out of the
+// record and record its length instead.
 func MaskSensitive(raw json.RawMessage) json.RawMessage {
 	if len(raw) == 0 {
 		return raw
@@ -106,9 +117,15 @@ func maskValue(v any) any {
 }
 
 func isSensitive(key string) bool {
-	lower := strings.ToLower(key)
+	snake := strings.ToLower(strings.NewReplacer("-", "_", ".", "_").Replace(camelBoundary.ReplaceAllString(key, "${1}_${2}")))
+	joined := strings.ReplaceAll(snake, "_", "")
 	for _, k := range sensitiveKeys {
-		if strings.Contains(lower, k) {
+		if strings.Contains(joined, k) {
+			return true
+		}
+	}
+	for _, word := range strings.Split(snake, "_") {
+		if slices.Contains(sensitiveWords, word) {
 			return true
 		}
 	}

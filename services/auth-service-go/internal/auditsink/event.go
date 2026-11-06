@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // Event is one audit row as it leaves Kubeast (docs/audit-log-plan.md §4).
@@ -37,6 +38,8 @@ type Event struct {
 
 // Line is a one-line human summary for chat and mail sinks:
 // "k8s.pod.delete failure · alice@example.com · pod nginx · default/test2 · 07:01:02Z".
+// A target's name or an error can come from a request, so a control character in
+// a field becomes a space and the summary cannot show a line nobody recorded.
 func (e Event) Line() string {
 	parts := []string{e.Action + " " + e.Result}
 	if e.ActorEmail != "" {
@@ -54,7 +57,14 @@ func (e Event) Line() string {
 	if e.Error != "" {
 		parts = append(parts, "error: "+truncate(e.Error, 200))
 	}
-	return strings.Join(parts, " · ")
+	return strings.Map(controlToSpace, strings.Join(parts, " · "))
+}
+
+func controlToSpace(r rune) rune {
+	if unicode.IsControl(r) || unicode.In(r, unicode.Zl, unicode.Zp, unicode.Bidi_Control) {
+		return ' '
+	}
+	return r
 }
 
 // Summary is a short title for a batch ("3 audit events: k8s.pod.delete, …").
