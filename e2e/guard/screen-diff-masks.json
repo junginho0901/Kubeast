@@ -1,0 +1,14 @@
+{
+  "rules": [
+    {
+      "screen": "/account on",
+      "selector": "pre:has-text(\"claude mcp add\")",
+      "why": "The registration command names the address the page was opened on: the two builds answer on two ports."
+    },
+    {
+      "screen": "/ai-chat on",
+      "selector": "canvas",
+      "why": "The moving particle sphere of an empty chat: it never holds still."
+    }
+  ]
+}
