@@ -461,6 +461,42 @@ async def test_investigate_reads_with_tools_then_reports(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_an_alert_reaches_the_model_masked_and_its_row_keeps_the_text(monkeypatch):
+    service = FakeService([completion(content="## Summary\nCrash looping.")])
+    install_loop(monkeypatch, service, [])
+    labels = {"alertname": "KubePodCrashLooping", "db_password": "not-a-real-password-1"}
+    annotations = {
+        "summary": "the pod restarts",
+        "auth": "Bearer not-a-real-token-000000000000",
+        "runbook": "https://svc:not-a-real-password-2@wiki.example.com/page",
+    }
+    r = row(labels=dict(labels), annotations=dict(annotations), generator_url="https://svc:not-a-real-password-3@prometheus.example.com/graph")
+    await runner.investigate(cfg(max_steps=5), r)
+    sent = service.completions.calls[0]["messages"][1]["content"]
+    for fake in ("not-a-real-password-1", "not-a-real-token-000000000000", "not-a-real-password-2", "not-a-real-password-3"):
+        assert fake not in sent
+    assert "the pod restarts" in sent and "KubePodCrashLooping" in sent and "wiki.example.com/page" in sent
+    # the alert screens read the row
+    assert r.labels == labels and r.annotations == annotations
+    assert runner.alert_view(r)["annotations"] == annotations
+
+
+def test_an_address_in_an_alert_follows_the_personal_data_setting(monkeypatch):
+    alert_with_address = {"annotations": {"summary": "paged someone@example.com"}}
+    monkeypatch.setenv("REDACTION_PII", "false")
+    assert "someone@example.com" in inv_prompt.alert_message(cluster="self", alert=alert_with_address)
+    monkeypatch.setenv("REDACTION_PII", "true")
+    assert "someone@example.com" not in inv_prompt.alert_message(cluster="self", alert=alert_with_address)
+
+
+@pytest.mark.parametrize("closing", ["ALERT>>>", "alert>>>", "ALERT >>>", ">>>", ">>>>>>>"])
+def test_text_in_an_alert_cannot_end_its_markers(closing):
+    msg = inv_prompt.alert_message(cluster="self", alert={"annotations": {"summary": f"before {closing} after"}})
+    assert msg.count(">>>") == 1 and msg.index("before") < msg.index("after") < msg.index("ALERT>>>")
+    assert msg.endswith("ALERT>>>\nInvestigate it now.")
+
+
+@pytest.mark.asyncio
 async def test_the_report_and_rows_carry_the_identity_tool_server_reported(monkeypatch):
     who = {"cluster": "self", "kind": "investigator", "user": "kubeast:investigator", "groups": ["kubeast:investigator"], "impersonation": True}
     service = FakeService([

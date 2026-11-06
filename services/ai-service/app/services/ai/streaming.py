@@ -25,6 +25,7 @@ from app.services.ai import usage as usage_acct
 from app.services.ai.debug_dump import dump, log, safe_error
 
 from app.services.ai.prompts import SYSTEM_MESSAGE
+from app.services.prompt_fence import inside_tag
 from app.services.redact import redact_text
 
 if TYPE_CHECKING:
@@ -41,7 +42,8 @@ UNTRUSTED_CONTEXT_NOTE = (
 
 def wrap_untrusted_context(block: str) -> str:
     """Delimit an application-injected context block so the model treats it as data."""
-    return f"{UNTRUSTED_CONTEXT_OPEN}\n{block}\n{UNTRUSTED_CONTEXT_CLOSE}\n{UNTRUSTED_CONTEXT_NOTE}"
+    inner = inside_tag(block, "untrusted_context")
+    return f"{UNTRUSTED_CONTEXT_OPEN}\n{inner}\n{UNTRUSTED_CONTEXT_CLOSE}\n{UNTRUSTED_CONTEXT_NOTE}"
 
 
 PROVIDER_LABELS = {

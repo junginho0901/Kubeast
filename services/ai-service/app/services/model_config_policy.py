@@ -13,7 +13,7 @@ updated, tested and resolved for use:
     (operators add those to the secret).
   - base_url: http(s) only, no credentials, and every address the host
     resolves to must be public — never cloud metadata, loopback, link-local
-    or private ranges — unless the host is listed in
+    or private ranges, in an IPv6 form either — unless the host is listed in
     AI_BASE_URL_ALLOWED_HOSTS (an in-cluster Ollama or LLM gateway).
   - extra_headers: no authentication headers (the key travels via
     api_key_env only), and they are masked in responses.
@@ -51,9 +51,12 @@ PRIVATE_NETWORKS = (
     ipaddress.ip_network("0.0.0.0/8"), ipaddress.ip_network("10.0.0.0/8"),
     ipaddress.ip_network("100.64.0.0/10"), ipaddress.ip_network("127.0.0.0/8"),
     ipaddress.ip_network("172.16.0.0/12"), ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("198.18.0.0/15"),
     ipaddress.ip_network("::/128"), ipaddress.ip_network("::1/128"),
     ipaddress.ip_network("fc00::/7"), ipaddress.ip_network("fe80::/10"),
 )
+# IPv6 forms with an IPv4 address in their low 32 bits: NAT64 and the old IPv4-compatible one.
+IPV4_IN_LOW_BITS = (ipaddress.ip_network("64:ff9b::/96"), ipaddress.ip_network("::/96"))
 
 MASK = "***"
 
@@ -153,6 +156,17 @@ def _addresses(host: str, resolve: Callable[..., list]) -> List[ipaddress._BaseA
     return addrs
 
 
+def _carried_ip(ip: ipaddress._BaseAddress) -> ipaddress._BaseAddress:
+    """The address to judge: an IPv6 form carrying an IPv4 address reaches that address, and a network of the other
+    version never contains it. A public IPv4 behind NAT64 stays public, so an IPv6-only cluster keeps its endpoints."""
+    if ip.version == 4:
+        return ip
+    carried = ip.ipv4_mapped or ip.sixtofour
+    if carried is None and any(ip in net for net in IPV4_IN_LOW_BITS):
+        carried = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+    return ip if carried is None else carried
+
+
 def check_base_url(url: Optional[str], resolve: Callable[..., list] = socket.getaddrinfo) -> None:
     """Reject anything but a public http(s) endpoint (or an allow-listed host).
     `resolve` is socket.getaddrinfo; tests inject a fake."""
@@ -170,16 +184,17 @@ def check_base_url(url: Optional[str], resolve: Callable[..., list] = socket.get
         literal = ipaddress.ip_address(host)
     except ValueError:
         literal = None
-    if literal is not None and any(literal in net for net in METADATA_NETWORKS):
+    if literal is not None and any(_carried_ip(literal) in net for net in METADATA_NETWORKS):
         raise PolicyError("base_url host is not allowed")
     if _host_allowed(host, allowed_hosts()):
         # The operator vouched for this host (an in-cluster model server, a
         # gateway only cluster DNS resolves): no address check.
         return
     for ip in _addresses(host, resolve):
-        if any(ip in net for net in METADATA_NETWORKS):
+        carried = _carried_ip(ip)
+        if any(carried in net for net in METADATA_NETWORKS):
             raise PolicyError("base_url host is not allowed")
-        if any(ip in net for net in PRIVATE_NETWORKS):
+        if any(carried in net for net in PRIVATE_NETWORKS):
             raise PolicyError(
                 f"base_url host resolves to a private address ({ip}); list it in AI_BASE_URL_ALLOWED_HOSTS to allow it"
             )

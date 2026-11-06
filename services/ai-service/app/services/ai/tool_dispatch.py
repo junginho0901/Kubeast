@@ -19,7 +19,7 @@
 
 from typing import TYPE_CHECKING, Dict
 
-from app.services.ai import resolvers
+from app.services.ai import permissions, resolvers
 from app.services.ai.debug_dump import dump, log, safe_error
 
 if TYPE_CHECKING:
@@ -99,8 +99,12 @@ async def execute_function_with_context(
             )
         
         # 캐시 확인
-        cache_key = f"{function_name}_{json.dumps(function_args, sort_keys=True)}"
-        if cache_key in tool_context.cache:
+        # A session can be called for another cluster: an answer serves only the cluster it came from.
+        cluster = permissions.effective_cluster(service)
+        cache_key = f"{cluster}|{function_name}_{json.dumps(function_args, sort_keys=True)}"
+        # A grant can shrink while an answer is cached: outside it the call goes on to where the refusal is made.
+        in_grant = permissions.namespace_scope_error(getattr(service, "token", None), cluster, function_name, function_args) is None
+        if in_grant and cache_key in tool_context.cache:
             log.debug("[DEBUG] Cache hit for %s", cache_key)
             return tool_context.cache[cache_key]
 

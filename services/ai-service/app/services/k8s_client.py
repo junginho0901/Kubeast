@@ -3,12 +3,22 @@ K8s Service HTTP Client
 MSA 환경에서 K8s Service와 HTTP로 통신
 """
 from typing import List, Optional, Dict
+from urllib.parse import quote
 import json
 
 from app.services.ai.access import HEADER as ACCESS_HEADER, RECORD_HEADER, REQUESTS_HEADER, from_header, merge, trail_from_header
 from app.services.http_shared import ScopedClient
 
 K8S_SERVICE_URL = "http://k8s-service:8002/api/v1"
+
+
+def _seg(value: object) -> str:
+    """One path segment: a name, which may come from a model's tool call, never reaches another route."""
+    text = str(value)
+    # quote leaves dots alone and httpx resolves dot segments; no Kubernetes name is one of these.
+    if text in (".", ".."):
+        raise ValueError(f"not a name: {text!r}")
+    return quote(text, safe="")
 
 
 class K8sServiceClient:
@@ -67,13 +77,13 @@ class K8sServiceClient:
 
     async def get_pods(self, namespace: str) -> List[Dict]:
         """특정 네임스페이스의 Pod 목록 조회"""
-        response = await self.client.get(f"/namespaces/{namespace}/pods")
+        response = await self.client.get(f"/namespaces/{_seg(namespace)}/pods")
         response.raise_for_status()
         return response.json()
     
     async def describe_pod(self, namespace: str, name: str) -> Dict:
         """Pod 상세 정보 조회"""
-        response = await self.client.get(f"/namespaces/{namespace}/pods/{name}/describe")
+        response = await self.client.get(f"/namespaces/{_seg(namespace)}/pods/{_seg(name)}/describe")
         response.raise_for_status()
         return response.json()
     
@@ -90,7 +100,7 @@ class K8sServiceClient:
             params["container"] = container
 
         response = await self.client.get(
-            f"/namespaces/{namespace}/pods/{pod_name}/logs",
+            f"/namespaces/{_seg(namespace)}/pods/{_seg(pod_name)}/logs",
             params=params,
         )
         response.raise_for_status()
@@ -99,25 +109,25 @@ class K8sServiceClient:
     
     async def get_deployments(self, namespace: str) -> List[Dict]:
         """Deployment 목록 조회"""
-        response = await self.client.get(f"/namespaces/{namespace}/deployments")
+        response = await self.client.get(f"/namespaces/{_seg(namespace)}/deployments")
         response.raise_for_status()
         return response.json()
     
     async def describe_deployment(self, namespace: str, name: str) -> Dict:
         """Deployment 상세 정보 조회"""
-        response = await self.client.get(f"/namespaces/{namespace}/deployments/{name}/describe")
+        response = await self.client.get(f"/namespaces/{_seg(namespace)}/deployments/{_seg(name)}/describe")
         response.raise_for_status()
         return response.json()
     
     async def get_services(self, namespace: str) -> List[Dict]:
         """Service 목록 조회"""
-        response = await self.client.get(f"/namespaces/{namespace}/services")
+        response = await self.client.get(f"/namespaces/{_seg(namespace)}/services")
         response.raise_for_status()
         return response.json()
     
     async def describe_service(self, namespace: str, name: str) -> Dict:
         """Service 상세 정보 조회"""
-        response = await self.client.get(f"/namespaces/{namespace}/services/{name}/describe")
+        response = await self.client.get(f"/namespaces/{_seg(namespace)}/services/{_seg(name)}/describe")
         response.raise_for_status()
         return response.json()
 
@@ -132,7 +142,7 @@ class K8sServiceClient:
         if port:
             params["port"] = port
         response = await self.client.get(
-            f"/namespaces/{namespace}/services/{service_name}/connectivity",
+            f"/namespaces/{_seg(namespace)}/services/{_seg(service_name)}/connectivity",
             params=params,
         )
         response.raise_for_status()
@@ -141,7 +151,7 @@ class K8sServiceClient:
     async def get_events(self, namespace: Optional[str]) -> List[Dict]:
         """이벤트 조회"""
         if namespace:
-            response = await self.client.get(f"/namespaces/{namespace}/events")
+            response = await self.client.get(f"/namespaces/{_seg(namespace)}/events")
         else:
             response = await self.client.get("/events")
         response.raise_for_status()
@@ -156,7 +166,7 @@ class K8sServiceClient:
     
     async def describe_node(self, name: str) -> Dict:
         """노드 상세 정보 조회"""
-        response = await self.client.get(f"/nodes/{name}/describe")
+        response = await self.client.get(f"/nodes/{_seg(name)}/describe")
         response.raise_for_status()
         return response.json()
     

@@ -36,6 +36,22 @@ test.describe('model config policy (M19)', () => {
       expect(privateHost.status, 'private address behind a DNS name').toBe(400)
       expect(privateHost.detail).toContain('AI_BASE_URL_ALLOWED_HOSTS')
 
+      const mappedMetadata = await post({ name: `e2e-m19-f-${ts}`, api_key_env: 'OPENAI_API_KEY', base_url: 'http://[::ffff:169.254.169.254]/v1' })
+      expect(mappedMetadata.status, 'metadata address in an IPv6 form').toBe(400)
+      expect(mappedMetadata.detail).toContain('not allowed')
+
+      const mappedPrivate = await post({ name: `e2e-m19-g-${ts}`, api_key_env: 'OPENAI_API_KEY', base_url: 'http://[::ffff:10.0.0.1]:8080/v1' })
+      expect(mappedPrivate.status, 'private address in an IPv6 form').toBe(400)
+      expect(mappedPrivate.detail).toContain('AI_BASE_URL_ALLOWED_HOSTS')
+
+      const benchmarking = await post({ name: `e2e-m19-h-${ts}`, api_key_env: 'OPENAI_API_KEY', base_url: 'http://198.18.0.1/v1' })
+      expect(benchmarking.status, 'the benchmarking range').toBe(400)
+      expect(benchmarking.detail).toContain('AI_BASE_URL_ALLOWED_HOSTS')
+
+      const mappedPublic = await post({ name: `e2e-m19-i-${ts}`, api_key_env: 'OPENAI_API_KEY', base_url: 'http://[::ffff:93.184.216.34]/v1' })
+      expect(mappedPublic.status, `a public address in an IPv6 form: ${mappedPublic.detail}`).toBe(200)
+      expect(mappedPublic.body.base_url, 'the address is stored as it was given').toBe('http://[::ffff:93.184.216.34]/v1')
+
       const authHeader = await post({ name: `e2e-m19-d-${ts}`, api_key_env: 'OPENAI_API_KEY', extra_headers: { Authorization: 'Bearer x' } })
       expect(authHeader.status, 'auth header in extra_headers').toBe(400)
 

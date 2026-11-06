@@ -68,9 +68,10 @@ async def test_cache_hit_returns_cached_value_without_calling_tools():
     """캐시 히트 시 _call_tool_server / k8s_service 둘 다 호출 안 됨"""
     cached = '{"cached": "value"}'
     service = _make_service()
-    ctx = _make_context(
-        cache={f"get_cluster_overview_{json.dumps({}, sort_keys=True)}": cached}
-    )
+    service._call_tool_server = AsyncMock(return_value=cached)
+    ctx = _make_context()
+    await execute_function_with_context(service, "get_cluster_overview", {}, ctx)
+    service._call_tool_server.reset_mock()
 
     result = await execute_function_with_context(
         service, "get_cluster_overview", {}, ctx
@@ -124,8 +125,7 @@ async def test_cache_miss_writes_to_cache():
 
     await execute_function_with_context(service, "get_cluster_overview", {}, ctx)
 
-    cache_key = f"get_cluster_overview_{json.dumps({}, sort_keys=True)}"
-    assert cache_key in ctx.cache
+    assert list(ctx.cache.values()) == ['{"ok": true}']
 
 
 @pytest.mark.asyncio
@@ -158,3 +158,69 @@ async def test_a_failed_tool_call_reaches_the_model_masked():
     service._call_tool_server = AsyncMock(side_effect=Exception("kubectl failed: boom\npassword: fake-failed-password\nstill here"))
     result = await execute_function_with_context(service, "get_cluster_overview", {}, _make_context())
     assert "fake-failed-password" not in result and "still here" in result, result
+
+
+@pytest.mark.asyncio
+async def test_a_cached_result_answers_only_for_its_own_cluster():
+    from app.services.ai_service import ToolContext
+
+    service = _make_service()
+    service._call_tool_server = AsyncMock(side_effect=['{"from": "cluster-a"}', '{"from": "cluster-b"}'])
+    ctx = ToolContext("s1")
+    args = {"resource_type": "pods", "namespace": "shop"}
+
+    service.cluster_name = "cluster-a"
+    assert await execute_function_with_context(service, "k8s_get_resources", args, ctx) == '{"from": "cluster-a"}'
+    service.cluster_name = "cluster-b"
+    assert await execute_function_with_context(service, "k8s_get_resources", args, ctx) == '{"from": "cluster-b"}'
+    assert service._call_tool_server.await_count == 2
+
+    # each cluster keeps its own answer
+    service.cluster_name = "cluster-a"
+    assert await execute_function_with_context(service, "k8s_get_resources", args, ctx) == '{"from": "cluster-a"}'
+    service.cluster_name = "cluster-b"
+    assert await execute_function_with_context(service, "k8s_get_resources", args, ctx) == '{"from": "cluster-b"}'
+    assert service._call_tool_server.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_the_same_call_on_the_same_cluster_still_answers_from_the_cache():
+    from app.services.ai_service import ToolContext
+
+    service = _make_service()
+    service.cluster_name = "cluster-a"
+    service._call_tool_server = AsyncMock(side_effect=['{"call": 1}', '{"call": 2}'])
+    ctx = ToolContext("s1")
+
+    first = await execute_function_with_context(service, "k8s_get_resources", {"resource_type": "pods", "namespace": "shop"}, ctx)
+    # the same arguments in another order are the same call
+    again = await execute_function_with_context(service, "k8s_get_resources", {"namespace": "shop", "resource_type": "pods"}, ctx)
+    assert first == again == '{"call": 1}'
+    assert service._call_tool_server.await_count == 1
+
+    other = await execute_function_with_context(service, "k8s_get_resources", {"resource_type": "pods", "namespace": "web"}, ctx)
+    assert other == '{"call": 2}'
+    assert service._call_tool_server.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_a_cached_result_is_not_served_outside_the_namespaces_the_caller_holds_now():
+    from app.security import TokenPayload
+
+    service = _make_service()
+    service.cluster_name = "cluster-a"
+    service._call_tool_server = AsyncMock(side_effect=['{"pods": "shop"}', '{"status": "forbidden"}'])
+    ctx = _make_context()
+    args = {"resource_type": "pods", "namespace": "shop"}
+    grant = lambda *namespaces: TokenPayload(user_id="u", role="member", matrix={"cluster-a": ("ai.tool.*",)}, namespaces={"cluster-a": namespaces})
+
+    service.token = grant("shop", "web")
+    assert await execute_function_with_context(service, "k8s_get_resources", args, ctx) == '{"pods": "shop"}'
+    # a grant that still covers the namespace keeps the cache
+    service.token = grant("shop")
+    assert await execute_function_with_context(service, "k8s_get_resources", args, ctx) == '{"pods": "shop"}'
+    assert service._call_tool_server.await_count == 1
+    # a grant that no longer does goes the normal way, where the refusal is made
+    service.token = grant("web")
+    assert await execute_function_with_context(service, "k8s_get_resources", args, ctx) == '{"status": "forbidden"}'
+    assert service._call_tool_server.await_count == 2
