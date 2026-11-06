@@ -109,8 +109,10 @@ export default defineConfig({
           {
             name: 'guard',
             testDir: './guard',
-            // the response comparison needs the old build beside the install (scripts/before-stack.sh); the other nets count what the namespace holds
-            testMatch: process.env.E2E_BEFORE_URL ? /response-diff\.spec\.ts$/ : /(permission-matrix|response-compare)\.spec\.ts$/,
+            // the comparisons need the old build beside the install (scripts/before-stack.sh); the other nets count what the namespace holds
+            testMatch: process.env.E2E_BEFORE_URL
+              ? (process.env.E2E_SCREEN_DIFF ? /screen-diff\.spec\.ts$/ : /response-diff\.spec\.ts$/)
+              : /(permission-matrix|response-compare|screen-compare)\.spec\.ts$/,
             use: {
               ...devices['Desktop Chrome'],
               // a missing element fails its step instead of the whole test timeout (Playwright Test defaults both to 0)
