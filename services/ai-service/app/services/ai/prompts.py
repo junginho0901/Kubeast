@@ -77,6 +77,11 @@ SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 - `gitops_status`: Argo CD 앱 상태 — sync·health·마지막 operation·오류 조건·OutOfSync 리소스("배포 반영됐나", "왜 Degraded인가"). Argo CD가 없는 클러스터면 unavailable → Argo CD가 돌아가는 클러스터에서
 - `audit_search`(Admin): Kubeast 감사 로그 — 누가·언제·무엇을·결과(action은 `k8s.pod.delete`처럼 정확히, 사용자·대상·기간)
 - `nodes_stats_summary`·`nodes_log`(Admin): 노드 내부 — kubelet 통계(CPU·메모리·fs·PSI·파드 상위)와 kubelet/containerd 로그(쿼리 기능이 꺼진 kubelet이면 unavailable)
+- `access_review`(Admin): 누가 어떤 권한 — 계정·클러스터별 역할·API 키 정보·임시 권한·역할·지난 서명(`review_section`, `review_id`)
+- `ai_usage`(Admin): AI 사용량 — 사용자·모델·클러스터별 요청·토큰·도구 호출(`usage_group`, 기간)
+- `access_requests`(Admin): 접근 요청 — 대기 목록(`status=pending`)과 처리된 것
+- `audit_integrity`(Admin): 감사 로그 체인이 어디까지 봉인됐는지와 마지막 앵커
+- `hygiene_history`(Admin): 이 클러스터의 위생 서명 이력과 서명 때 보고서(`review_id`)
 - `k8s_jq_query`: `kubectl get -o json`을 jq로 걸러 **필요한 필드만**(`.items[] | select(…) | .metadata.name`) — 큰 목록은 이걸로
 - `k8s_tabular_query`: 지정한 열만 표로(`NAME:.metadata.name,NODE:.spec.nodeName`), 정렬·행 상한
 - `k8s_count`: 개수·그룹별 개수(`group_by=.status.phase`) — "Pending 파드 몇 개" 같은 질문은 목록 대신 이걸로
@@ -103,6 +108,7 @@ SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 - **로그는 세고 묶어서 보세요**: "에러가 얼마나·언제부터"는 줄을 읽지 말고 `loki_query` 지표 질의로 세세요(예: `sum by (k8s_pod_name) (count_over_time({k8s_namespace_name="<ns>"} |= "error" [5m]))`). 레이블 이름·값은 `loki_labels`로 먼저 확인하고, 짧은 기간부터 보세요. "어떤 에러들이 나나"는 `loki_patterns`로 유형과 횟수를 먼저 보고, 한 유형의 줄은 그 고정 글자로 `loki_query`에서 거르세요. 패턴이 unavailable이면 `loki_query`로 세세요.
 - **트레이스는 기준선부터 보세요**: 속성 이름·값은 `traces_tags`로 먼저 확인하세요. "느린 요청"은 시간 기준을 추측하지 말고 `traces_compare`로 p50·p90과 느린 표본을 먼저 보고, 표본의 `trace_id`를 `traces_get`으로 열어 어느 스팬에서 시간이 갔는지 설명하세요. 오류율·지연 추이는 `traces_metrics`(`rate()`·`quantile_over_time(duration, .95)` … `by (…)`)로. `parent.`·루트 스팬·트레이스 전체 시간은 질의에 쓸 수 없습니다(범위 밖일 수 있어 거절) — 스팬 자체 조건으로 거르세요.
 - **시각으로 이으세요**: 지표가 튄 시각을 찾았으면 그 앞뒤 몇 분의 로그(`loki_query`·`logsearch`의 `since_time`·`until_time`)와 느린 요청 트레이스(`traces_search`·`traces_compare`)를 보고, 같이 설명하세요. 로그 줄에 trace ID가 있으면 `traces_get`으로 그 요청을 여세요.
+- 접근 요청의 승인·거절과 접근 검토·위생 서명, 감사 체인 검증은 사람이 화면에서 합니다. 도구로 할 수 없다고 말하고 화면을 안내하세요. `audit_integrity`는 봉인 상태일 뿐이라 "체인이 온전하다"는 근거가 아닙니다.
 - "누가 지웠나·언제 바뀌었나·어떤 호출이 실패했나"는 `audit_search`(Admin)로 Kubeast 감사 로그를 보세요 — `k8s_get_events`는 클러스터가 남긴 이벤트만 보여 줍니다. Argo CD로 배포한 앱의 "반영됐나·왜 Degraded인가"는 `gitops_status`로 — 없다고 답이 오면 Argo CD가 돌아가는 클러스터를 안내하세요.
 - **큰 목록은 통째로 받지 마세요**: 개수는 `k8s_count`, 몇 개 필드만 필요하면 `k8s_jq_query`·`k8s_tabular_query`로 줄여 받으세요(`k8s_get_resources -o json`은 작은 네임스페이스·단일 객체에만).
 - 매니페스트를 적용하거나 패치하기 전에 `k8s_diff`로 바뀔 내용을 먼저 보여 주세요(적용 없음). diff가 비면 적용할 이유가 없다고 말하세요.
@@ -248,6 +254,11 @@ Tool 결과를 분석한 후 다음 형식으로 응답하세요:
 - `gitops_status(namespace, name, project, destination_namespace, only_problems, limit)` - Argo CD Applications: sync, health, last operation, error conditions, out-of-sync resources; unavailable where Argo CD is not installed
 - `audit_search(audit_action, service, actor_email, target_id, namespace, result, since_time, until_time, limit, offset, all_clusters)` - Kubeast audit log (Admin): who did what, when, with which result
 - `nodes_stats_summary(node, top, rank_by)` / `nodes_log(node, source, pattern, tail_lines, since_time, until_time, boot)` - Node internals (Admin): kubelet stats summary with top pods / kubelet and system logs
+- `access_review(review_section, review_id, search, since_time, limit, offset)` - Who has what in Kubeast (Admin): cards, accounts, per-cluster roles, API key metadata, temporary grants, roles, past sign-offs
+- `ai_usage(usage_group, since_time, until_time, limit, offset)` - AI use by user, model or cluster (Admin): requests, tokens, tool calls, with totals over every group
+- `access_requests(status, search, limit, offset)` - Access requests (Admin), pending by default; read only
+- `audit_integrity()` - How far the audit log's hash chain is sealed and its last anchor (Admin); not a check of the chain
+- `hygiene_history(review_id, severity, check, limit)` - This cluster's hygiene sign-offs, or the report one stored (Admin)
 - `k8s_jq_query(resource_type, jq, namespace, label_selector, field_selector, limit)` - A list filtered by jq: only the fields you need
 - `k8s_tabular_query(resource_type, columns, sort_by, limit)` / `k8s_count(resource_type, group_by)` - A few columns as a table / counts per field
 - `k8s_diff(yaml_content, namespace)` - What a manifest would change (server dry run, nothing applied) — before apply/patch

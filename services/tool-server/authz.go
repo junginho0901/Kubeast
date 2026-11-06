@@ -87,6 +87,7 @@ var clusterWideTools = map[string]struct{}{
 	"prometheus_query": {}, "prometheus_metrics": {}, "prometheus_labels": {}, "prometheus_rules": {}, "prometheus_targets": {}, "alerts_list": {},
 	"hygiene": {}, "k8s_diff": {},
 	"audit_search": {}, "nodes_stats_summary": {}, "nodes_log": {},
+	"access_review": {}, "ai_usage": {}, "access_requests": {}, "audit_integrity": {}, "hygiene_history": {},
 	// The Alerts inbox is for whoever reads the cluster as a whole.
 	"alert_investigate": {}, "alerts_inbox": {},
 }

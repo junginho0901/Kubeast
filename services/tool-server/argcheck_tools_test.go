@@ -20,6 +20,7 @@ func TestValidateToolArgs_NewArguments(t *testing.T) {
 		{"api_version": "v1"}, {"api_version": "apps/v1"}, {"api_version": "autoscaling/v2beta2"},
 		{"kinds": "pods,services"}, {"kinds": []interface{}{"pods", "deployments.apps"}},
 		{"grep": "connection refused"},
+		{"check": "upgrade.removed-api.helm"}, {"check": "ns.pss-label"}, {"check": "privileged"},
 	}
 	for _, args := range ok {
 		if err := validateToolArgs(args); err != nil {
@@ -27,6 +28,7 @@ func TestValidateToolArgs_NewArguments(t *testing.T) {
 		}
 	}
 	bad := []map[string]interface{}{
+		{"check": "--all"}, {"check": "upgrade..helm"}, {"check": "Upgrade.Helm"}, {"check": "a b"},
 		{"since": "10x"}, {"since": "200h"}, {"since": "--since=1h"}, {"since": "0s"},
 		{"field_selector": "spec..nodeName=a"}, {"field_selector": "--all=x"}, {"field_selector": "type=a b"}, {"field_selector": "type"}, {"field_selector": "type=Warning,"},
 		{"kind": "pod-s"}, {"kind": "--all"},

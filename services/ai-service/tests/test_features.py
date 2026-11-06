@@ -108,7 +108,9 @@ def test_permission_gate_follows_what_k8s_service_asks_for():
     assert features.permitted_anywhere("hygiene", reader) is False
     assert features.permitted_anywhere("k8s_count", reader) is True
     # The Admin-only audit log and node tools need their global permission; the wildcard admin holds them.
-    for name, perm in [("audit_search", "admin.audit.read"), ("nodes_stats_summary", "admin.nodes.read"), ("nodes_log", "admin.nodes.read")]:
+    for name, perm in [("audit_search", "admin.audit.read"), ("nodes_stats_summary", "admin.nodes.read"), ("nodes_log", "admin.nodes.read"),
+                       ("access_review", "admin.review.read"), ("ai_usage", "admin.audit.read"), ("access_requests", "admin.users.update"),
+                       ("audit_integrity", "admin.audit.read"), ("hygiene_history", "admin.hygiene.read")]:
         assert features.gated_names([name, "k8s_count"], feats, "self", reader) == ["k8s_count"]
         assert features.gated_names([name], feats, "self", admin) == [name]
         assert features.gated_names([name], feats, "self", _Token(set(), {perm})) == [name]

@@ -27,7 +27,7 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
 - Turning it on: `mcp.enabled: true` (`MCP_ENABLED` in compose). Off by default; when off, the path does not exist.
 - Permissions:
   - `ai.mcp.use` on that cluster. The system Read and Write roles include it, and Admin has everything.
-  - `ai.tool.<name>` for each tool to be used. Read gets only the 52 read tools; Write gets all of them plus the write preview `k8s_diff`. `hygiene` is visible only to Admins with `admin.hygiene.read`.
+  - `ai.tool.<name>` for each tool to be used. Read gets only the 52 read tools; Write gets all of them plus the write preview `k8s_diff`. `hygiene` is visible only to Admins with `admin.hygiene.read`, and the other Admin reads (`audit_search`, `nodes_*`, `access_review`, `ai_usage`, `access_requests`, `audit_integrity`, `hygiene_history`) only to whoever holds the `admin.*` permission of their screen.
   - `list_clusters` tells the connected person which clusters and tools they can use. The other tools require the `cluster` argument and do not fall back to the default cluster.
 - Authentication: an API key (`kbk_…`) or an access token in the `Authorization: Bearer` header.
   - The server exchanges the key for a short-lived token, and the exchange is audited too. Once the key is revoked, the next call is refused.

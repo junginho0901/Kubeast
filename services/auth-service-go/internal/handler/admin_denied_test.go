@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/config"
@@ -41,6 +42,10 @@ func TestAdminEndpoints_RefusalIsAudited(t *testing.T) {
 		{"create role", http.MethodPost, "/api/v1/auth/admin/roles", "admin.roles.create", rh.CreateRole},
 		{"list access requests", http.MethodGet, "/api/v1/auth/admin/access-requests", "admin.users.update", ah.AdminListAccessRequests},
 		{"access review", http.MethodGet, "/api/v1/auth/admin/access-review", "admin.review.read", ah.AdminAccessReview},
+		{"past reviews", http.MethodGet, "/api/v1/auth/admin/access-review/history", "admin.review.read", ah.AdminAccessReviewHistory},
+		{"a stored review", http.MethodGet, "/api/v1/auth/admin/access-review/history/r1", "admin.review.read", ah.AdminAccessReviewSnapshot},
+		{"ai usage", http.MethodGet, "/api/v1/auth/admin/ai-usage", "admin.audit.read", ah.AdminAIUsage},
+		{"audit integrity", http.MethodGet, "/api/v1/auth/admin/audit/integrity", "admin.audit.read", ah.AuditIntegrityStatus},
 		{"register cluster", http.MethodPost, "/api/v1/clusters", auth.PermClustersCreate, ch.RegisterCluster},
 		{"list every cluster", http.MethodGet, "/api/v1/clusters", auth.PermClustersList, ch.ListClusters},
 	}
@@ -62,6 +67,59 @@ func TestAdminEndpoints_RefusalIsAudited(t *testing.T) {
 		if rec.Action != "admin.access.denied" || rec.Result != audit.ResultFailure || rec.ActorEmail != "m1@example.com" ||
 			rec.TargetID != c.perm || after["permission"] != c.perm || after["method"] != c.method || after["path"] != c.path {
 			t.Errorf("%s: row %s %s actor=%s target=%s after=%v", c.name, rec.Action, rec.Result, rec.ActorEmail, rec.TargetID, after)
+		}
+	}
+}
+
+// The AI's table (services/tool-server/screen_permissions.go, written out in this file) says what a screen asks. This
+// holds its Admin reads to the routes behind those screens: each refuses with the permission the table names.
+const toolScreenCasesFile = "../../../ai-service/tests/fixtures/tool_screen_permission_cases.json"
+
+func TestAdminReadTools_AskWhatTheirRoutesAsk(t *testing.T) {
+	raw, err := os.ReadFile(toolScreenCasesFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Cases []struct {
+			Tool string   `json:"tool"`
+			Want []string `json:"want"`
+		} `json:"cases"`
+	}
+	if err := json.Unmarshal(raw, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	wantFor := func(tool string) string {
+		for _, c := range fixture.Cases {
+			if c.Tool == tool && len(c.Want) == 1 {
+				return c.Want[0]
+			}
+		}
+		t.Fatalf("no case of %s", tool)
+		return ""
+	}
+	store := &memAuditStore{}
+	cfg := config.Config{}
+	cfg.AccessReview.Enabled = true
+	h := &AuthHandler{auditStore: store, cfg: cfg}
+	for _, c := range []struct {
+		tool string
+		path string
+		call http.HandlerFunc
+	}{
+		{"access_review", "/api/v1/auth/admin/access-review", h.AdminAccessReview},
+		{"access_review", "/api/v1/auth/admin/access-review/history", h.AdminAccessReviewHistory},
+		{"access_review", "/api/v1/auth/admin/access-review/history/r1", h.AdminAccessReviewSnapshot},
+		{"ai_usage", "/api/v1/auth/admin/ai-usage", h.AdminAIUsage},
+		{"access_requests", "/api/v1/auth/admin/access-requests", h.AdminListAccessRequests},
+		{"audit_integrity", "/api/v1/auth/admin/audit/integrity", h.AuditIntegrityStatus},
+	} {
+		store.written = nil
+		w := httptest.NewRecorder()
+		c.call(w, memberRequest(http.MethodGet, c.path))
+		want := wantFor(c.tool)
+		if w.Code != http.StatusForbidden || len(store.written) != 1 || store.written[0].TargetID != want {
+			t.Errorf("%s %s: status %d rows %+v, want 403 naming %s", c.tool, c.path, w.Code, store.written, want)
 		}
 	}
 }

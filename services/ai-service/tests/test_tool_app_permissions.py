@@ -831,6 +831,11 @@ def test_a_tool_not_in_the_table_is_closed(monkeypatch):
     ("logsearch", {"namespace": "shop"}, ["resource.pod.read"]),
     ("helm_read", {"what": "list"}, ["resource.helm.read"]),
     ("nodes_log", {"node": "n1"}, ["admin.nodes.read"]),
+    ("access_review", {"review_section": "cluster_roles"}, ["admin.review.read"]),
+    ("ai_usage", {}, ["admin.audit.read"]),
+    ("access_requests", {}, ["admin.users.update"]),
+    ("audit_integrity", {}, ["admin.audit.read"]),
+    ("hygiene_history", {}, ["admin.hygiene.read"]),
     ("k8s_diff", {"yaml_content": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: a\n"}, ["resource.secret.edit"]),
 ])
 async def test_a_refused_read_in_the_chat_does_not_run_and_says_why(rows, name, args, perms):
@@ -892,6 +897,11 @@ async def test_the_same_write_in_the_chat_gets_its_card_with_the_permission(rows
 @pytest.mark.parametrize("name,args,perms", [
     *WRITE_CALLS,
     ("k8s_get_pod_logs", {"pod_name": "web", "namespace": "shop"}, ["resource.pod.read"]),
+    ("access_review", {"review_section": "users"}, ["admin.review.read"]),
+    ("ai_usage", {}, ["admin.audit.read"]),
+    ("access_requests", {}, ["admin.users.update"]),
+    ("audit_integrity", {}, ["admin.audit.read"]),
+    ("hygiene_history", {}, ["admin.hygiene.read"]),
 ])
 async def test_a_refusal_over_mcp_says_what_is_missing_and_is_recorded(mcp, name, args, perms):
     res = await mcp.call(_token(TOOLS_ONLY), name, args)
@@ -907,6 +917,32 @@ async def test_a_refusal_over_mcp_says_what_is_missing_and_is_recorded(mcp, name
 async def test_the_same_call_over_mcp_goes_through_with_the_permission(mcp, name, args, perms):
     res = await mcp.call(_token(("ai.tool.*", "ai.mcp.use", *perms)), name, args)
     assert res.is_error is not True and [n for n, _ in _ToolServer.calls] == [name]
+
+
+ADMIN_READS = [
+    ("access_review", {"review_section": "cluster_roles"}, "admin.review.read"),
+    ("ai_usage", {"usage_group": "model"}, "admin.audit.read"),
+    ("access_requests", {}, "admin.users.update"),
+    ("audit_integrity", {}, "admin.audit.read"),
+    ("hygiene_history", {}, "admin.hygiene.read"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name,args,perm", ADMIN_READS)
+async def test_an_admin_read_over_mcp_runs_with_the_screens_permission_and_is_recorded(mcp, name, args, perm):
+    res = await mcp.call(_token(("ai.tool.*", "ai.mcp.use", perm)), name, args)
+    assert res.is_error is not True and [n for n, _ in _ToolServer.calls] == [name]
+    row = mcp.audit[-1]
+    assert row["action"] == "ai.mcp.call" and row.get("result", "success") == "success" and row["target_id"] == name and row["after"]["write"] is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name,args,perm", ADMIN_READS)
+async def test_an_admin_read_in_the_chat_runs_with_the_screens_permission_and_is_recorded(rows, name, args, perm):
+    got = await _chat_call(_token(("ai.tool.*", perm)), name, args, offered=[{"type": "function", "function": {"name": name}}])
+    assert [n for n, _ in got.service.executed] == [name]
+    assert rows[-1]["action"] == "ai.tool.call" and rows[-1].get("result", "success") == "success" and rows[-1]["after"]["tool"] == name
 
 
 def test_only_what_is_missing_is_named():

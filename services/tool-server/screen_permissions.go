@@ -128,6 +128,11 @@ var toolScreenTable = map[string]toolRule{
 	"audit_search":             always("admin.audit.read"),
 	"nodes_stats_summary":      always("admin.nodes.read"),
 	"nodes_log":                always("admin.nodes.read"),
+	"access_review":            always("admin.review.read"),
+	"ai_usage":                 always("admin.audit.read"),
+	"access_requests":          always("admin.users.update"),
+	"audit_integrity":          always("admin.audit.read"),
+	"hygiene_history":          always("admin.hygiene.read"),
 
 	"k8s_delete_resource":   forResourceType("delete"),
 	"k8s_patch_resource":    forResourceType("edit"),

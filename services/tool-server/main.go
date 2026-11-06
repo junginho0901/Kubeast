@@ -316,6 +316,31 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Handler:     handleNodesLog,
 	})
 	register(ToolDefinition{
+		Name:        "access_review",
+		Description: "Who has what in Kubeast: accounts, per-cluster grants, API key metadata, temporary grants, roles, past sign-offs — Admin",
+		Handler:     handleAccessReview,
+	})
+	register(ToolDefinition{
+		Name:        "ai_usage",
+		Description: "AI use by user, model or cluster in a period: requests, tokens, tool calls — Admin",
+		Handler:     handleAIUsage,
+	})
+	register(ToolDefinition{
+		Name:        "access_requests",
+		Description: "Access requests waiting for a decision, or decided ones (read only) — Admin",
+		Handler:     handleAccessRequests,
+	})
+	register(ToolDefinition{
+		Name:        "audit_integrity",
+		Description: "How far the audit log's hash chain is sealed and its last anchor — Admin",
+		Handler:     handleAuditIntegrity,
+	})
+	register(ToolDefinition{
+		Name:        "hygiene_history",
+		Description: "This cluster's hygiene sign-offs, or the report one stored — Admin",
+		Handler:     handleHygieneHistory,
+	})
+	register(ToolDefinition{
 		Name:        "policy_reports",
 		Description: "PolicyReport / ClusterPolicyReport summary or result rows (Kyverno, Trivy Operator …)",
 		Handler:     handlePolicyReports,

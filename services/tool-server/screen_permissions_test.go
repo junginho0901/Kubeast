@@ -111,6 +111,11 @@ func screenPermissionCases() []screenCase {
 	// The Alerts inbox, the list and one alert.
 	add("alerts_inbox", nil, "resource.pod.read")
 	add("alerts_inbox", args{"alert_id": "a1"}, "resource.pod.read")
+	add("access_review", nil, "admin.review.read")
+	add("ai_usage", nil, "admin.audit.read")
+	add("access_requests", nil, "admin.users.update")
+	add("audit_integrity", nil, "admin.audit.read")
+	add("hygiene_history", nil, "admin.hygiene.read")
 
 	// One name in every spelling kubectl takes.
 	del := func(resourceType string, want ...string) {

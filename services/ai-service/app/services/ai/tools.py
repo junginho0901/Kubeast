@@ -1310,6 +1310,115 @@ ADMIN_READ_TOOLS: List[Dict] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "access_review",
+            "description": (
+                "Who has what in Kubeast (Admin → Access review; permission admin.review.read). Kubeast-wide: the same answer from any cluster. "
+                "review_section: summary (default: the cards, when the last review was and when the next is due, each tab's count), users (accounts, "
+                "global role, last sign-in, flags such as dormant or never_logged_in), cluster_roles (who holds which role on which cluster, the "
+                "namespaces it is limited to, temporary grants and when they end), api_keys (owner, name, key_prefix, clusters, role ceiling, expiry, "
+                "last use), access_requests (temporary grants requested since the last review), roles (each role's permissions and how many hold it), "
+                "history (past sign-offs). search looks in what the screen's search box looks in, for example a cluster name in cluster_roles. "
+                "review_id opens a past sign-off's stored report. Rows come a page at a time: total, returned, next_offset; pass offset for the next page "
+                "(limit default 25, max 200). since_time widens the requests' window of the live report. A key's value and password hashes are never "
+                "in the answer: key_prefix is only the first characters a list shows. {\"status\":\"unavailable\"} means the report is off "
+                "(auth.accessReview.enabled). The read is recorded as admin.review.read; signing off stays on the screen."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "review_section": {"type": "string", "enum": ["summary", "users", "cluster_roles", "api_keys", "access_requests", "roles", "history"], "description": "Which part of the report (default summary)"},
+                    "review_id": {"type": "string", "description": "Id of a past sign-off (from review_section=history): read its stored report"},
+                    "search": {"type": "string", "description": "Text to find in a section's rows"},
+                    "since_time": {"type": "string", "description": "Start of the requests' window, live report only: a window such as 30d (max 90d) or an RFC3339 time"},
+                    "limit": {"type": "integer", "description": "Rows to return (default 25, max 200)"},
+                    "offset": {"type": "integer", "description": "Skip this many rows (paging)"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "ai_usage",
+            "description": (
+                "Who used the AI how much (Admin → AI Usage; permission admin.audit.read). Kubeast-wide: the same answer from any cluster. usage_group "
+                "adds up by user (default), model or cluster, most tokens first, with chat and Optimization (source chat) and alert investigations "
+                "(source investigation) in rows of their own: requests, failures, prompt, cached, completion and total tokens, tool calls, average "
+                "duration, last use. totals counts every group, also those past the listing limit, which cuts names per source; use totals for "
+                "\"how many tokens in all\", never the rows added up. partial_tokens means some requests recorded no token count. since_time (a window "
+                "such as 7d, at most 90d, or an RFC3339 time; default the last 30 days) and until_time (RFC3339) set the period. Rows come a page at a "
+                "time: total, returned, next_offset (limit default 25, max 200). The read is recorded as admin.audit.read."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "usage_group": {"type": "string", "enum": ["user", "model", "cluster"], "description": "Add up by user (default), model or cluster"},
+                    "since_time": {"type": "string", "description": "Window such as 7d (max 90d), or an RFC3339 time; default the last 30 days"},
+                    "until_time": {"type": "string", "description": "RFC3339 end time; default now"},
+                    "limit": {"type": "integer", "description": "Rows to return (default 25, max 200)"},
+                    "offset": {"type": "integer", "description": "Skip this many rows (paging)"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "access_requests",
+            "description": (
+                "Requests for a temporary higher role on a cluster (Admin → Access requests; permission admin.users.update). Kubeast-wide: the same answer "
+                "from any cluster. status: pending (default, those waiting for a decision), decided (every request no longer pending), or one of approved, "
+                "rejected, cancelled, expired. search looks in the requester, cluster, role, reason and decider. Each row has who asked, the cluster, the "
+                "role, how long, the reason and the decision. total counts every match; next_offset gives the next page (limit default 25, max 200). "
+                "enabled false means requests are off on this installation. Read only: Approving or rejecting is done by a person on the screen; no tool does it."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status": {"type": "string", "enum": ["pending", "decided", "approved", "rejected", "cancelled", "expired"], "description": "Which requests (default pending)"},
+                    "search": {"type": "string", "description": "Text in the requester, cluster, role, reason or decider"},
+                    "limit": {"type": "integer", "description": "Rows to return (default 25, max 200)"},
+                    "offset": {"type": "integer", "description": "Skip this many rows (paging)"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "audit_integrity",
+            "description": (
+                "The audit log's hash chain as Admin → Audit Logs shows it (permission admin.audit.read). Kubeast-wide: the same answer from any cluster. "
+                "How far the rows are sealed (sealed_through_seq), how many are not yet (unsealed_rows), and the last digest anchored outside the database "
+                "(last_anchor, null when none yet). enabled false means the chain is off. This does not check the chain, so it cannot say that no row was "
+                "changed: the Verify button on that screen recomputes it. Say so when asked whether the log is intact."
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "hygiene_history",
+            "description": (
+                "This cluster's hygiene sign-offs (Admin → Cluster hygiene → Past sign-offs; permission admin.hygiene.read), newest first, at most 100: who "
+                "signed, when, the note and the counts per severity. review_id opens the report one stored, with severity and check filtering its findings as "
+                "in hygiene. The hygiene tool answers the report as it is now. {\"status\":\"unavailable\"} means the report is off (features.hygiene.enabled)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "review_id": {"type": "string", "description": "Id of a sign-off: read the report it stored"},
+                    "severity": {"type": "string", "description": "With review_id: only findings of this severity (critical, warning or info)"},
+                    "check": {"type": "string", "description": "With review_id: only findings of this check id"},
+                    "limit": {"type": "integer", "description": "Sign-offs to return (default and max 100)"},
+                },
+            },
+        },
+    },
 ]
 
 K8S_WRITE_TOOLS: List[Dict] = [

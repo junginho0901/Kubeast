@@ -2,7 +2,7 @@
 // (kubelet stats summary, node logs) through the API server proxy as the
 // user. Both services ask a token for admin.audit.read / admin.nodes.read
 // (screen_permissions.go); the cluster's RBAC (nodes/proxy) and auth-service's
-// own permission check stand behind that.
+// own permission check stand behind that. handlers_admin_reads.go has the others.
 
 package main
 
@@ -65,27 +65,37 @@ func authServiceGet(ctx context.Context, headers http.Header, path string, q url
 }
 
 func authServiceGetAt(ctx context.Context, headers http.Header, path string, q url.Values) (int, []byte, error) {
+	status, body, _, err := authServiceReadAt(ctx, headers, path, q)
+	return status, body, err
+}
+
+// authServiceRead also gives the answer's headers: a paged route counts its matches in one.
+func authServiceRead(ctx context.Context, headers http.Header, path string, q url.Values) (int, []byte, http.Header, error) {
+	return authServiceReadAt(ctx, headers, "/api/v1/auth"+path, q)
+}
+
+func authServiceReadAt(ctx context.Context, headers http.Header, path string, q url.Values) (int, []byte, http.Header, error) {
 	target := authServiceURL + path
 	if len(q) > 0 {
 		target += "?" + q.Encode()
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, nil, err
 	}
 	if auth := headers.Get("Authorization"); auth != "" {
 		req.Header.Set("Authorization", auth)
 	}
 	resp, err := featureHTTP.Do(req)
 	if err != nil {
-		return 0, nil, fmt.Errorf("auth-service %s: %w", path, err)
+		return 0, nil, nil, fmt.Errorf("auth-service %s: %w", path, err)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, featureBodyCap))
 	if err != nil {
-		return 0, nil, fmt.Errorf("auth-service %s: %w", path, err)
+		return 0, nil, nil, fmt.Errorf("auth-service %s: %w", path, err)
 	}
-	return resp.StatusCode, body, nil
+	return resp.StatusCode, body, resp.Header, nil
 }
 
 // handleAuditSearch: GET /api/v1/auth/admin/audit-logs with the filters the
