@@ -1,12 +1,14 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { createElement, type ReactElement } from 'react'
+import { createElement, createRef, type ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import type { GPUDashboardData, GPUMetricsData } from '@/services/api'
+import type { GPUDashboardData, GPUDeviceMetric, GPUMetricsData } from '@/services/api'
 import { RealtimeMetricsSection } from './gpu-dashboard/RealtimeMetricsSection'
 import { SummaryCardsRow } from './gpu-dashboard/SummaryCardsRow'
-import { devicePluginBadges, gpuRealtimeAverages, missingPluginVendors } from './gpuNumbers'
+import GPUNodesRealtimeMetrics from './gpu-nodes/GPUNodesRealtimeMetrics'
+import { GPUPodsTable } from './gpupods/GPUPodsTable'
+import { devicePluginBadges, gpuRealtimeAverages, missingPluginVendors, type PodGpuUsage } from './gpuNumbers'
 
 const tr = (_key: string, fallback: string, options?: Record<string, unknown>) =>
   fallback.replace(/\{\{(\w+)\}\}/g, (_, name) => String(options?.[name] ?? ''))
@@ -52,6 +54,75 @@ describe('the real-time GPU averages', () => {
     const src = readFileSync(fileURLToPath(new URL('./GPUDashboard.tsx', import.meta.url)), 'utf8')
     expect(src).toContain('avg_gpu_util: averages?.util')
     expect(src).toContain('avg_memory_util: averages?.memory')
+    expect(src).toContain('avg_gpu_util_of: `${reportingUtil} of ${metrics.gpu_count} GPUs`')
+  })
+})
+
+// A GPU missing a series is not a GPU at 0%: its number says "-", a real 0 stays 0, and the host's averages are of the
+// GPUs that have one, as Prometheus's avg() is.
+describe('a GPU that reports only some of its series', () => {
+  const gpu = (uuid: string, util: number | null, memory: number | null, temp: number | null = null) => ({
+    uuid, gpu: '0', hostname: 'n1', model_name: 'A100', gpu_util: util, memory_used_mb: memory === null ? null : memory * 10,
+    memory_free_mb: memory === null ? null : (100 - memory) * 10, memory_total_mb: memory === null ? null : 1000, memory_util_percent: memory, memory_temp: temp,
+  }) as unknown as GPUDeviceMetric
+  const dashboardGpu = (g: GPUDeviceMetric) =>
+    html(createElement(RealtimeMetricsSection, { metricsAvailable: true, metrics: SERIES, gpusByHost: new Map([['n1', [g]]]), gpuPodKeys: new Set<string>(), tr }))
+  const nodesCard = (gpus: GPUDeviceMetric[]) => html(createElement(GPUNodesRealtimeMetrics, { gpusByHost: new Map([['n1', gpus]]) }))
+
+  it('the dashboard says "-" for what it did not read, with an empty bar', () => {
+    const m = dashboardGpu(gpu('a', null, null))
+    expect(text(m, 'gpu-realtime-core')).toBe('-')
+    expect(text(m, 'gpu-realtime-mem')).toBe('-')
+    expect(m).not.toContain('NaN')
+    expect(m).not.toContain('gpu-realtime-temp')
+  })
+
+  it('the dashboard keeps a real 0%', () => {
+    const m = dashboardGpu(gpu('a', 0, 0, 40))
+    expect(text(m, 'gpu-realtime-core')).toBe('0%')
+    expect(text(m, 'gpu-realtime-mem')).toBe('0%')
+    expect(m).toContain('40°C')
+  })
+
+  it('GPU Nodes says "-" for what it did not read', () => {
+    const m = nodesCard([gpu('a', null, null)])
+    expect(text(m, 'gpu-nodes-core')).toBe('-')
+    expect(text(m, 'gpu-nodes-mem')).toBe('-')
+    expect(text(m, 'gpu-nodes-avg-core')).toBe('Avg Core: -')
+    expect(text(m, 'gpu-nodes-avg-mem')).toBe('Avg Mem: -')
+    expect(m).not.toContain('NaN')
+  })
+
+  it('GPU Nodes averages the GPUs that have a number', () => {
+    const m = nodesCard([gpu('a', 80, 40), gpu('b', null, null), gpu('c', 40, 20)])
+    expect(text(m, 'gpu-nodes-avg-core')).toBe('Avg Core: 60%')
+    expect(text(m, 'gpu-nodes-avg-mem')).toBe('Avg Mem: 30%')
+  })
+
+  it('the dashboard card says what its average leaves out, and only then', () => {
+    const section = (gpus: GPUDeviceMetric[]) =>
+      html(createElement(RealtimeMetricsSection, { metricsAvailable: true, metrics: { ...SERIES, gpu_count: gpus.length, gpus }, gpusByHost: new Map(), gpuPodKeys: new Set<string>(), tr }))
+    expect(section([gpu('a', 80, 40), gpu('b', null, null), gpu('c', 40, 20)])).toContain('title="The 2 of 3 GPUs that report utilization"')
+    expect(section([gpu('a', 80, 40), gpu('c', 40, 20)])).not.toContain('that report utilization')
+  })
+
+  it('an average the API has no number for is "-" on the card', () => {
+    const none = { ...SERIES, avg_gpu_util: null, avg_memory_util: null, total_memory_used_mb: null, total_memory_free_mb: null, total_memory_mb: null } as unknown as GPUMetricsData
+    expect(gpuRealtimeAverages(none)).toEqual({ util: null, memory: null })
+    const m = html(createElement(RealtimeMetricsSection, { metricsAvailable: true, metrics: none, gpusByHost: new Map(), gpuPodKeys: new Set<string>(), tr }))
+    expect(['gpu-realtime-avg-util', 'gpu-realtime-avg-mem', 'gpu-realtime-mem-used'].map((id) => text(m, id))).toEqual(['-', '-', '-'])
+  })
+
+  it('GPU Pods says "-" for what its GPUs did not report', () => {
+    const table = (usage: PodGpuUsage) => html(createElement(GPUPodsTable, {
+      pagedPods: [{ name: 'p', namespace: 'ml', phase: 'Running', status: 'Running', gpu_requested: 1 }], sortedPodsLength: 1, isLoading: false, metricsAvailable: true,
+      podMetricsMap: new Map([['ml/p', usage]]), showCharts: false, sortKey: 'name', setSortKey: () => {}, sortDir: 'asc', setSortDir: () => {}, currentPage: 1, setCurrentPage: () => {},
+      totalPages: 1, rowsPerPage: 25, tableContainerRef: createRef(), tableBodyRef: createRef(), theadRef: createRef(), firstRowRef: createRef(), openDetail: () => {}, tr,
+    } as unknown as Parameters<typeof GPUPodsTable>[0]))
+    const unread = table({ gpus: 1, gpu_util: null, memory_util_percent: null })
+    expect(unread).not.toContain('>0%<')
+    expect(unread).not.toContain('NaN')
+    expect(table({ gpus: 1, gpu_util: 0, memory_util_percent: 0 })).toContain('>0%<')
   })
 })
 

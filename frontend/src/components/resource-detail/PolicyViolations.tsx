@@ -8,9 +8,9 @@ import { InfoSection, NoneText } from './DetailCommon'
 import { violationsNameTheResource, violationsQuery, violationsView } from './violationsView'
 
 // "Policy violations": the fail / warn / error rows the cluster's policy reports hold about this
-// resource (a workload's rows include its pods; a cluster-scoped resource's come from the
-// ClusterPolicyReports). Nothing is shown when the feature is off or the cluster has no PolicyReport
-// CRD; reports that could not be read say why.
+// resource (a workload's rows include its pods; a namespaced resource's also come from the
+// ClusterPolicyReports naming it, a cluster-scoped resource's from those alone). Nothing is shown when the
+// feature is off or the cluster has no PolicyReport CRD; reports that could not be read say why.
 
 const RESULT_BADGE: Record<string, string> = { fail: 'badge-error', error: 'badge-error', warn: 'badge-warning' }
 
@@ -33,14 +33,16 @@ export default function PolicyViolations({ kind, namespace, name, apiVersion }: 
   })
   const view = violationsView(on, status, resource)
   const selectorError = view.show === 'rows' ? view.selectorError : undefined
+  const clusterReportsError = view.show === 'rows' ? view.clusterReportsError : undefined
   useAIContext(view.show === 'rows' ? {
     source: 'PolicyViolations',
     summary: `Policy violations of ${kind} ${name}: ${view.rows.length}`,
     data: {
       rows: view.rows.map((r) => ({ result: r.result, policy: r.policy, rule: r.rule, severity: r.severity, kind: r.kind, name: r.name, message: r.message })),
       selector_error: selectorError,
+      cluster_reports_error: clusterReportsError,
     },
-  } : null, [view.show, view.show === 'rows' ? view.rows : null, selectorError, kind, name])
+  } : null, [view.show, view.show === 'rows' ? view.rows : null, selectorError, clusterReportsError, kind, name])
   if (view.show === 'nothing') return null
   const named = violationsNameTheResource(kind)
   return (
@@ -48,6 +50,11 @@ export default function PolicyViolations({ kind, namespace, name, apiVersion }: 
       {selectorError && (
         <p className="text-xs text-amber-300 mb-2" data-testid="policy-violations-selector-error">
           {tr('policyReports.selectorError', 'Results that pick resources by label could not be checked against this object: {{error}}', { error: selectorError })}
+        </p>
+      )}
+      {clusterReportsError && (
+        <p className="text-xs text-amber-300 mb-2" data-testid="policy-violations-cluster-error">
+          {tr('policyReports.clusterReportsError', 'Results the cluster reports hold about this object are not listed: {{error}}', { error: clusterReportsError })}
         </p>
       )}
       {view.show === 'loading' ? (

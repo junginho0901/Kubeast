@@ -246,15 +246,48 @@ func gpuUtilization(metrics map[string]interface{}, read bool) map[string]interf
 			u[key] = metrics[key]
 		}
 	}
+	if note := gpuUnreadNote(gpuRows(metrics["gpus"])); note != "" {
+		u["note"] = note
+	}
 	return u
 }
 
+// gpuUnreadNote says what the averages leave out, as the screens' cards do: a GPU missing a series is not counted, not
+// counted as zero. Empty when every GPU reports.
+func gpuUnreadNote(rows []map[string]interface{}) string {
+	noUtil, noMemory := 0, 0
+	for _, g := range rows {
+		if g["gpu_util"] == nil {
+			noUtil++
+		}
+		if g["memory_total_mb"] == nil {
+			noMemory++
+		}
+	}
+	notes := []string{}
+	switch {
+	case noUtil == 0:
+	case noUtil == len(rows):
+		notes = append(notes, "No GPU reports a utilization series, so it is not counted, not zero.")
+	default:
+		notes = append(notes, fmt.Sprintf("%d of the %d GPUs report no utilization series: avg_gpu_util is the average of the others, and their gpu_util is null, not zero.", noUtil, len(rows)))
+	}
+	switch {
+	case noMemory == 0:
+	case noMemory == len(rows):
+		notes = append(notes, "No GPU reports both memory series, so memory is not counted, not zero.")
+	default:
+		notes = append(notes, fmt.Sprintf("%d of the %d GPUs do not report both memory series: the memory numbers are of the others.", noMemory, len(rows)))
+	}
+	return strings.Join(notes, " ")
+}
+
 // gpuSeriesRows are the GPUs of the real-time answer with the pod the screens name, and adds each pod's use to its row
-// (gpuNumbers.ts podGpuUsage: the mean of its GPUs, the used of their total memory).
+// (gpuNumbers.ts podGpuUsage: the mean of its GPUs that report, the used of the total memory of those that report both).
 func gpuSeriesRows(metrics, dashboard map[string]interface{}) []map[string]interface{} {
 	holders := gpuHolders(dashboard)
 	type usage struct {
-		n                 int
+		n, reporting      int
 		util, used, total float64
 	}
 	byPod := map[string]*usage{}
@@ -266,8 +299,11 @@ func gpuSeriesRows(metrics, dashboard map[string]interface{}) []map[string]inter
 		}
 		total, _ := g["memory_total_mb"].(float64)
 		if total == 0 {
+			// 0 of 0 reads as nothing, and what a GPU with one memory series reports stays
 			for _, key := range []string{"memory_used_mb", "memory_free_mb", "memory_total_mb", "memory_util_percent"} {
-				row[key] = nil
+				if value, _ := g[key].(float64); value == 0 {
+					row[key] = nil
+				}
 			}
 		}
 		// the screens leave a temperature of 0 out: it is a series that is not there
@@ -285,12 +321,16 @@ func gpuSeriesRows(metrics, dashboard map[string]interface{}) []map[string]inter
 				u = &usage{}
 				byPod[key] = u
 			}
-			util, _ := g["gpu_util"].(float64)
-			used, _ := g["memory_used_mb"].(float64)
 			u.n++
-			u.util += util
-			u.used += used
-			u.total += total
+			if util, reports := g["gpu_util"].(float64); reports {
+				u.reporting++
+				u.util += util
+			}
+			if total > 0 {
+				used, _ := g["memory_used_mb"].(float64)
+				u.used += used
+				u.total += total
+			}
 		}
 		rows = append(rows, row)
 	}
@@ -299,11 +339,14 @@ func gpuSeriesRows(metrics, dashboard map[string]interface{}) []map[string]inter
 		if u == nil {
 			continue
 		}
-		var memory interface{}
+		var util, memory interface{}
+		if u.reporting > 0 {
+			util = u.util / float64(u.reporting)
+		}
 		if u.total > 0 {
 			memory = u.used / u.total * 100
 		}
-		pod["gpu_usage"] = map[string]interface{}{"gpus": u.n, "gpu_util": u.util / float64(u.n), "memory_util_percent": memory}
+		pod["gpu_usage"] = map[string]interface{}{"gpus": u.n, "gpu_util": util, "memory_util_percent": memory}
 	}
 	return rows
 }

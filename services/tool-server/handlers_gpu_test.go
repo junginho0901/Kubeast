@@ -405,6 +405,104 @@ func TestGPU_AGPUsMissingSeriesAreNotZero(t *testing.T) {
 	}
 }
 
+// A series a GPU did not report is null in the API's answer: it stays null in its row and is left out of its pod's use,
+// which is the mean of the GPUs that report, as the GPU Pods screen counts it; a real 0 stays 0.
+func TestGPU_WhatAGPUDidNotReportIsNullInItsRowAndItsPod(t *testing.T) {
+	calls := fakeKubectl(t, func([]string) (string, error) { return "", errors.New("the gpu tool runs no kubectl") })
+	row := func(uuid string, util, used, free, total, percent, temp interface{}, pod string) jsonMap {
+		return jsonMap{"uuid": uuid, "gpu": "0", "hostname": "n-big", "model_name": "A100", "gpu_util": util, "memory_used_mb": used, "memory_free_mb": free,
+			"memory_total_mb": total, "memory_util_percent": percent, "memory_temp": temp, "exported_pod": pod, "exported_namespace": "training"}
+	}
+	metrics := gpuMetricsFixture()
+	metrics["gpu_count"] = 4
+	metrics["avg_gpu_util"] = 40.0
+	metrics["gpus"] = []jsonMap{
+		row("u1", 80.0, 2000.0, 2000.0, 4000.0, 50.0, 40.0, "job-a"),
+		row("u2", nil, 1000.0, nil, nil, nil, nil, "job-a"),
+		row("u3", nil, nil, nil, nil, nil, nil, "dcgm-exporter-x"),
+		row("u4", 0.0, 0.0, 4000.0, 4000.0, 0.0, nil, "job-idle"),
+	}
+	answers := gpuFullAnswers(t)
+	answers[gpuMetricsPath] = gpuFake{body: gpuJSON(t, metrics)}
+	dashboard := gpuDashboardFixture()
+	dashboard["gpu_pods"] = []jsonMap{
+		{"namespace": "training", "name": "job-a", "phase": "Running", "status": "Running", "gpu_requested": 2},
+		{"namespace": "training", "name": "job-idle", "phase": "Running", "status": "Running", "gpu_requested": 1},
+		{"namespace": "training", "name": "dcgm-exporter-x", "phase": "Running", "status": "Running", "gpu_requested": 1},
+	}
+	answers[gpuDashboardPath] = gpuFake{body: gpuJSON(t, dashboard)}
+	fakeGPUService(t, answers)
+	m := askGPU(t, "c1")
+
+	gpus := map[string]jsonMap{}
+	for _, item := range subList(t, m, "gpus") {
+		g, _ := item.(jsonMap)
+		gpus[g["uuid"].(string)] = g
+	}
+	wantNull(t, gpus["u2"], "gpu_util")
+	if gpus["u2"]["memory_used_mb"] != 1000.0 {
+		t.Errorf("u2 used = %v: what it reports stays", gpus["u2"]["memory_used_mb"])
+	}
+	for _, key := range []string{"memory_free_mb", "memory_total_mb", "memory_util_percent", "memory_temp"} {
+		wantNull(t, gpus["u2"], key)
+	}
+	if gpus["u4"]["gpu_util"] != 0.0 || gpus["u4"]["memory_util_percent"] != 0.0 || gpus["u4"]["memory_used_mb"] != 0.0 {
+		t.Errorf("u4 reports 0, which stays 0: %v", gpus["u4"])
+	}
+
+	pods := rowsByName(t, m["gpu_pods"])
+	if got, want := subMap(t, pods["training/job-a"], "gpu_usage"), (jsonMap{"gpus": 2.0, "gpu_util": 80.0, "memory_util_percent": 50.0}); !reflect.DeepEqual(got, want) {
+		t.Errorf("job-a: %v, want %v", got, want)
+	}
+	unread := subMap(t, pods["training/dcgm-exporter-x"], "gpu_usage")
+	wantNull(t, unread, "gpu_util")
+	wantNull(t, unread, "memory_util_percent")
+	if got, want := subMap(t, pods["training/job-idle"], "gpu_usage"), (jsonMap{"gpus": 1.0, "gpu_util": 0.0, "memory_util_percent": 0.0}); !reflect.DeepEqual(got, want) {
+		t.Errorf("job-idle: %v, want %v", got, want)
+	}
+	if len(*calls) != 0 {
+		t.Errorf("kubectl ran: %v", *calls)
+	}
+}
+
+// The average the screens show is of the GPUs that report; what it leaves out is said, and null stays null.
+func TestGPU_TheUtilizationSaysWhatItsAverageLeavesOut(t *testing.T) {
+	calls := fakeKubectl(t, func([]string) (string, error) { return "", errors.New("the gpu tool runs no kubectl") })
+	metrics := gpuMetricsFixture()
+	gpus := metrics["gpus"].([]jsonMap)
+	gpus[1]["gpu_util"] = nil
+	gpus[3]["gpu_util"] = nil
+	answers := gpuFullAnswers(t)
+	answers[gpuMetricsPath] = gpuFake{body: gpuJSON(t, metrics)}
+	fakeGPUService(t, answers)
+	u := subMap(t, askGPU(t, "c1"), "utilization")
+	note, _ := u["note"].(string)
+	if !strings.Contains(note, "2 of the 4 GPUs") {
+		t.Errorf("note = %q", note)
+	}
+
+	metrics["avg_gpu_util"] = nil
+	for _, g := range gpus {
+		g["gpu_util"] = nil
+	}
+	answers[gpuMetricsPath] = gpuFake{body: gpuJSON(t, metrics)}
+	fakeGPUService(t, answers)
+	u = subMap(t, askGPU(t, "c1"), "utilization")
+	wantNull(t, u, "avg_gpu_util")
+	if note, _ := u["note"].(string); !strings.Contains(note, "not counted") {
+		t.Errorf("note = %q", note)
+	}
+
+	full := gpuFullAnswers(t)
+	fakeGPUService(t, full)
+	if u := subMap(t, askGPU(t, "c1"), "utilization"); u["note"] != nil {
+		t.Errorf("every GPU reports, and yet note = %v", u["note"])
+	}
+	if len(*calls) != 0 {
+		t.Errorf("kubectl ran: %v", *calls)
+	}
+}
+
 func TestGPU_WhatAGrantMayNotReadIsNullAndNamed(t *testing.T) {
 	forbidden := func(detail string) gpuFake { return gpuFake{status: 403, body: gpuJSON(t, jsonMap{"detail": detail})} }
 	fakeGPUService(t, map[string]gpuFake{

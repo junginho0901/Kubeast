@@ -83,6 +83,25 @@ describe('GPU screen numbers', () => {
     })
   })
 
+  // a GPU missing a series counts for what it has: the mean of the GPUs that report, the used of the memory that adds up
+  it('reads a pod\'s GPUs for the series they report', () => {
+    const partial = (uuid: string, pod: string, util: number | null, used: number | null, free: number | null) => ({
+      ...gpu(uuid, pod, 0, 0, 0), gpu_util: util, memory_used_mb: used, memory_free_mb: free,
+      memory_total_mb: used === null || free === null ? null : used + free,
+      memory_util_percent: used === null || free === null || used + free === 0 ? null : (used / (used + free)) * 100,
+    }) as unknown as GPUDeviceMetric
+    const usage = podGpuUsage([
+      partial('a', 'two', 80, 2000, 2000), partial('b', 'two', null, 1000, null),
+      partial('c', 'none', null, null, null),
+      partial('d', 'idle', 0, 0, 4000),
+    ])
+    expect(Object.fromEntries(usage)).toEqual({
+      'ml/two': { gpus: 2, gpu_util: 80, memory_util_percent: 50 },
+      'ml/none': { gpus: 1, gpu_util: null, memory_util_percent: null },
+      'ml/idle': { gpus: 1, gpu_util: 0, memory_util_percent: 0 },
+    })
+  })
+
   // nvidia.com/gpu and the MIG profiles of the mixed strategy add up; a node without either has no count
   it('counts whole GPUs and MIG devices', () => {
     expect(gpuCountOf({ cpu: '4', 'nvidia.com/gpu': '8', 'nvidia.com/mig-1g.5gb': '4', 'nvidia.com/mig-3g.20gb': '1' })).toBe(13)

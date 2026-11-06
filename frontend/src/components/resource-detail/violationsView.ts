@@ -3,8 +3,9 @@ import type { PolicyReportResource, PolicyReportResult } from '@/services/api/ty
 import { DRAWER_GROUPS } from './crDetail'
 import { WORKLOAD_KINDS } from './utils'
 
-// A namespaced resource's rows come from its namespace's PolicyReports, a cluster-scoped one's from the
-// ClusterPolicyReports; with the apiVersion, not the rows of an object of another group with the same Kind and name.
+// A namespaced resource's rows come from its namespace's PolicyReports and the ClusterPolicyReports naming it, a
+// cluster-scoped one's from the ClusterPolicyReports; with the apiVersion, not the rows of an object of another group
+// with the same Kind and name.
 export const readViolations = (namespace: string, kind: string, name: string, apiVersion?: string) =>
   (namespace ? api.getResourcePolicyReports(namespace, kind, name, false, apiVersion) : api.getClusterResourcePolicyReports(kind, name, false, apiVersion))
 
@@ -32,7 +33,7 @@ export type ViolationsView =
   | { show: 'nothing' }
   | { show: 'loading' }
   | { show: 'error'; reason: string }
-  | { show: 'rows'; rows: PolicyReportResult[]; selectorError?: string }
+  | { show: 'rows'; rows: PolicyReportResult[]; selectorError?: string; clusterReportsError?: string }
 
 type Read = { data?: unknown; error?: unknown }
 
@@ -49,8 +50,14 @@ export function violationsView(on: boolean, status: Read, resource: Read): Viola
   if (Array.isArray(resource.data)) return { show: 'nothing' }
   const answer = resource.data as PolicyReportResource
   const rows = (answer.rows ?? []).filter((r) => r.result === 'fail' || r.result === 'warn' || r.result === 'error')
-  // the results that pick by label could not be held to this object: the rows naming it are not the whole answer
-  return answer.selector_error ? { show: 'rows', rows, selectorError: answer.selector_error } : { show: 'rows', rows }
+  // the results that pick by label could not be held to this object, or the cluster reports could not be read: the rows
+  // are not the whole answer
+  return {
+    show: 'rows',
+    rows,
+    ...(answer.selector_error ? { selectorError: answer.selector_error } : {}),
+    ...(answer.cluster_reports_error ? { clusterReportsError: answer.cluster_reports_error } : {}),
+  }
 }
 
 // A workload's rows also name its pods, so its section names each row's resource; every other kind's rows are its own.

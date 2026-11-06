@@ -626,12 +626,14 @@ export interface GPUDeviceMetric {
   gpu: string
   hostname: string
   model_name: string
-  gpu_util: number
-  memory_used_mb: number
-  memory_free_mb: number
-  memory_total_mb: number
-  memory_util_percent: number
-  memory_temp: number
+  // null: the GPU reports no such series, which is not read, not 0
+  gpu_util: number | null
+  memory_used_mb: number | null
+  memory_free_mb: number | null
+  // null unless both memory series are there; the percent also while their total is 0
+  memory_total_mb: number | null
+  memory_util_percent: number | null
+  memory_temp: number | null
   exported_pod?: string
   exported_namespace?: string
 }
@@ -639,11 +641,12 @@ export interface GPUDeviceMetric {
 export interface GPUMetricsData {
   available: boolean
   gpu_count: number
-  avg_gpu_util: number
-  avg_memory_util: number
-  total_memory_used_mb: number
-  total_memory_free_mb: number
-  total_memory_mb: number
+  // of the GPUs that have the value; null with none
+  avg_gpu_util: number | null
+  avg_memory_util: number | null
+  total_memory_used_mb: number | null
+  total_memory_free_mb: number | null
+  total_memory_mb: number | null
   gpus: GPUDeviceMetric[]
 }
 
@@ -1075,6 +1078,8 @@ export interface PolicyReportResource {
   rows: PolicyReportResult[]
   /** why the results that pick by label could not be held to this resource */
   selector_error?: string
+  // why rows the ClusterPolicyReports hold about the resource may be missing
+  cluster_reports_error?: string
 }
 
 export interface PolicyReportStatus {

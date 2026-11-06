@@ -7,7 +7,7 @@ import { buildResourceLink } from '@/utils/resourceLink'
 import { forbiddenResourceFromUrl } from '@/utils/forbiddenResource'
 import { isForbiddenError } from '@/services/api'
 import { nodeReadiness } from '@/utils/nodeStatus'
-import { devicePluginState, gpuHolderPods, gpuNodeCounts, gpuRealtimeAverages } from './gpuNumbers'
+import { devicePluginState, gpuHolderPods, gpuNodeCounts, gpuRealtimeAverages, gpusReportingUtil } from './gpuNumbers'
 import type { GPUDevicePlugin } from '@/services/api'
 import { RefreshCw } from 'lucide-react'
 
@@ -46,6 +46,7 @@ export default function GPUDashboard() {
     if (!data) return null
     const plugins: GPUDevicePlugin[] = data.device_plugins ?? []
     const averages = metrics ? gpuRealtimeAverages(metrics) : undefined
+    const reportingUtil = metrics ? gpusReportingUtil(metrics.gpus ?? []) : 0
     // a plugin not found is not an unhealthy one
     const unhealthy = plugins.filter((p) => devicePluginState(p) === 'unhealthy')
     const freeCount = Math.max(0, data.total_gpu_allocatable - data.total_gpu_used)
@@ -90,6 +91,8 @@ export default function GPUDashboard() {
             ...(devicePluginState(p) === 'missing' ? { note: 'not under the names Kubeast looks for; it may run under another name' } : {}),
           })),
           avg_gpu_util: averages?.util,
+          // the average leaves out the GPUs reporting no utilization, as the card's title says
+          ...(metrics && reportingUtil > 0 && reportingUtil < metrics.gpu_count ? { avg_gpu_util_of: `${reportingUtil} of ${metrics.gpu_count} GPUs` } : {}),
           avg_memory_util: averages?.memory,
         },
         nodes: data.gpu_nodes as Array<typeof data.gpu_nodes[number] & Record<string, unknown>>,

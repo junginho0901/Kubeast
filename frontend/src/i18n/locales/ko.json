@@ -2046,7 +2046,8 @@
     "truncated": "이 화면이 한 번에 읽는 양보다 보고서가 많습니다. Namespace나 정책으로 좁히면 전부 보입니다.",
     "loadError": "정책 보고서를 불러오지 못했습니다",
     "violationsError": "정책 보고서를 불러오지 못했습니다: {{error}}",
-    "selectorError": "레이블로 리소스를 고르는 결과를 이 개체와 맞춰 보지 못했습니다: {{error}}"
+    "selectorError": "레이블로 리소스를 고르는 결과를 이 개체와 맞춰 보지 못했습니다: {{error}}",
+    "clusterReportsError": "클러스터 보고서가 이 개체에 대해 담은 결과는 나열되지 않았습니다: {{error}}"
   },
   "monitoring": {
     "title": "Monitoring",
@@ -4031,6 +4032,7 @@
     "realtime": {
       "title": "실시간 GPU 메트릭",
       "avgUtil": "평균 GPU 사용률",
+      "avgUtilOf": "GPU {{total}}개 중 사용률을 보고하는 {{n}}개의 평균입니다.",
       "avgMemUtil": "평균 메모리 사용률",
       "memUsed": "메모리 사용량",
       "gpuCount": "물리 GPU",
