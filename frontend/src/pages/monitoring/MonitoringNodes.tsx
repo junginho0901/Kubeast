@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { formatTime } from '@/utils/time'
 import {
+  Activity,
   Server,
   RefreshCw,
   HardDrive,
@@ -333,6 +334,17 @@ export default function MonitoringNodes({
           <p className="text-slate-400" data-testid="node-metrics-forbidden">
             {t('common.forbiddenEmpty', { resource: forbiddenResourceFromUrl('/cluster/metrics/nodes'), defaultValue: 'You do not have permission to view {{resource}} in this cluster.' })}
           </p>
+        </div>
+      ) : error && !isMetricsUnavailableError(error) ? (
+        <div className="text-center py-12">
+          <div className="flex flex-col items-center gap-4">
+            <Activity className="w-12 h-12 text-red-400 animate-pulse" />
+            <div>
+              <p className="text-red-400 font-medium" data-testid="node-metrics-error">{t('monitoring.nodes.errorTitle')}</p>
+              {(error as any).response?.data?.detail && <p className="text-sm text-slate-400 mt-2">{(error as any).response.data.detail}</p>}
+              <p className="text-sm text-slate-500 mt-2">{t('monitoring.pods.retrying')}</p>
+            </div>
+          </div>
         </div>
       ) : (
         <div className="text-center py-12">

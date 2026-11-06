@@ -65,7 +65,10 @@ func (s *Service) Rollback(ctx context.Context, namespace, name string, revision
 	// Wait is deliberately left false: we return as soon as Helm has
 	// committed the new revision and let the client poll the History
 	// tab for rollout progress, same as kubectl rollout.
-	if err := r.Run(name); err != nil {
+	err = r.Run(name)
+	// Before the error check: a failed attempt has recorded a failed revision.
+	s.invalidateListCache(ctx)
+	if err != nil {
 		return nil, translateSDKError(err)
 	}
 
@@ -83,8 +86,6 @@ func (s *Service) Rollback(ctx context.Context, namespace, name string, revision
 			ToRevision:   revision,
 		}, nil
 	}
-
-	s.invalidateListCache(ctx)
 
 	status := ""
 	if after.Info != nil {
@@ -223,11 +224,11 @@ func (s *Service) Uninstall(ctx context.Context, namespace, name string, keepHis
 	// UI refresh to show the result rather than block the request
 	// for potentially minutes while finalizers drain.
 	resp, err := u.Run(name)
+	// Before the error check: a failed attempt has left the release uninstalling.
+	s.invalidateListCache(ctx)
 	if err != nil {
 		return nil, translateSDKError(err)
 	}
-
-	s.invalidateListCache(ctx)
 
 	info := ""
 	if resp != nil && resp.Release != nil && resp.Release.Info != nil {
@@ -283,6 +284,10 @@ func (s *Service) UpgradeValues(ctx context.Context, namespace, name, valuesYAML
 	// refreshes history/status, not the HTTP request.
 
 	newRel, err := up.Run(name, current.Chart, vals)
+	// Before the error check: a failed attempt has recorded a failed revision.
+	if !dryRun {
+		s.invalidateListCache(ctx)
+	}
 	if err != nil {
 		return nil, translateSDKError(err)
 	}
@@ -303,8 +308,6 @@ func (s *Service) UpgradeValues(ctx context.Context, namespace, name, valuesYAML
 			MaskedDiff:   maskedDiff(fromLabel, toLabel, current.Manifest, newRel.Manifest),
 		}, nil
 	}
-
-	s.invalidateListCache(ctx)
 
 	status := ""
 	if newRel.Info != nil {

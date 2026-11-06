@@ -28,16 +28,9 @@ export default function TestResultModal({
     // to keep the render paths from tripping over `null.length`.
     onSuccess: (data) => setResult({ ...data, hooks: data.hooks ?? [] }),
     onError: (err: any) => {
-      // A failing helm test still returns a response body shaped like
-      // HelmTestResponse; surface both the error and any hook details
-      // that made it through.
-      const body = err?.response?.data
-      if (body && typeof body === 'object') {
-        setResult({
-          success: !!body.success,
-          hooks: Array.isArray(body.hooks) ? body.hooks : [],
-        })
-      }
+      // Only hooks that ran make a result: an empty one would read as a chart without test hooks.
+      const hooks = err?.response?.data?.hooks
+      if (Array.isArray(hooks) && hooks.length > 0) setResult({ success: false, hooks })
       setError(err?.response?.data?.detail ?? err?.message ?? 'test failed')
     },
   })
@@ -80,40 +73,44 @@ export default function TestResultModal({
             <Loader2 className="w-5 h-5 animate-spin" />
             <span className="text-sm">{t('helmReleaseDetail.test.running')}</span>
           </div>
-        ) : result && result.hooks.length === 0 ? (
+        ) : !error && result?.success && result.hooks.length === 0 ? (
           <div className="rounded-sm border border-slate-600 bg-slate-800/40 px-3 py-4 text-sm text-slate-300">
             {t('helmReleaseDetail.test.noHooks')}
           </div>
-        ) : result ? (
+        ) : error || result ? (
           <div className="space-y-2">
-            <div
-              className={`rounded-sm px-3 py-2 text-sm ${
-                result.success
-                  ? 'bg-emerald-500/15 text-emerald-200 border border-emerald-500/30'
-                  : 'bg-red-500/15 text-red-200 border border-red-500/30'
-              }`}
-            >
-              {result.success
-                ? t('helmReleaseDetail.test.passed')
-                : t('helmReleaseDetail.test.failed')}
-            </div>
-            <ul className="rounded-sm border border-slate-700 divide-y divide-slate-800 text-sm">
-              {result.hooks.map((h) => (
-                <li key={h.name} className="flex items-center gap-3 px-3 py-2">
-                  {h.failed ? (
-                    <XCircle className="w-4 h-4 text-red-400 shrink-0" />
-                  ) : (
-                    <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-                  )}
-                  <span className="text-ink truncate">{h.name}</span>
-                  <span className="text-xs text-slate-400 ml-auto">{h.phase}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : error ? (
-          <div className="rounded-sm border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
-            {error}
+            {error ? (
+              <div className="rounded-sm border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                {error}
+              </div>
+            ) : result && (
+              <div
+                className={`rounded-sm px-3 py-2 text-sm ${
+                  result.success
+                    ? 'bg-emerald-500/15 text-emerald-200 border border-emerald-500/30'
+                    : 'bg-red-500/15 text-red-200 border border-red-500/30'
+                }`}
+              >
+                {result.success
+                  ? t('helmReleaseDetail.test.passed')
+                  : t('helmReleaseDetail.test.failed')}
+              </div>
+            )}
+            {result && result.hooks.length > 0 && (
+              <ul className="rounded-sm border border-slate-700 divide-y divide-slate-800 text-sm">
+                {result.hooks.map((h) => (
+                  <li key={h.name} className="flex items-center gap-3 px-3 py-2">
+                    {h.failed ? (
+                      <XCircle className="w-4 h-4 text-red-400 shrink-0" />
+                    ) : (
+                      <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                    )}
+                    <span className="text-ink truncate">{h.name}</span>
+                    <span className="text-xs text-slate-400 ml-auto">{h.phase}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         ) : null}
 

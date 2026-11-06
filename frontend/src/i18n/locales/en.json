@@ -2051,6 +2051,7 @@
       "total": "Total {{count}} nodes",
       "total_one": "Total {{count}} node",
       "unavailable": "Node metrics are not available",
+      "errorTitle": "Failed to load node metrics",
       "searchPlaceholder": "Search nodes by name..."
     },
     "pods": {

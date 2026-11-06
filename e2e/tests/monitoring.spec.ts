@@ -50,4 +50,65 @@ test.describe('Monitoring', () => {
       animations: 'disabled',
     })
   })
+
+  // A gateway or a cluster failing for a moment is an error, and the screen comes back by itself. Only the answer that
+  // says metrics-server is missing stops the polling and puts up that notice. Cluster default runs metrics-server.
+  test.describe('a failed metrics read', () => {
+    const MISSING = /Metrics server not available for this cluster|이 클러스터에 메트릭 서버가 없습니다/
+    const gateway503 = { status: 503, contentType: 'text/plain', body: 'gateway temporarily unavailable' }
+
+    test('a 503 on the node metrics is an error, and the Nodes tab recovers by itself', async ({ page }) => {
+      let failing = true
+      await page.route('**/api/v1/cluster/metrics/nodes*', (route) => (failing ? route.fulfill(gateway503) : route.continue()))
+      await page.goto('/monitoring?cluster=default')
+      await expect(page.getByTestId('node-metrics-error')).toHaveText(/Failed to load node metrics|Node 메트릭을 불러오는/, { timeout: 30_000 })
+      await expect(page.getByText(MISSING)).toHaveCount(0)
+
+      failing = false
+      await expect.poll(() => page.getByTestId('monitoring-node').count(), { timeout: 30_000 }).toBeGreaterThan(0)
+      await expect(page.getByTestId('node-metrics-error')).toHaveCount(0)
+    })
+
+    test('a 503 on the pod metrics is an error, and the Pods tab recovers by itself', async ({ page }) => {
+      let failing = true
+      await page.route('**/api/v1/cluster/metrics/pods*', (route) => (failing ? route.fulfill(gateway503) : route.continue()))
+      await page.goto('/monitoring?cluster=default')
+      await page.getByRole('button', { name: /pod resources|pod 리소스/i }).first().click()
+      await page.getByTestId('monitoring-namespace').click()
+      await page.getByTestId('monitoring-namespace-opt-kube-system').click()
+      await expect(page.getByTestId('pod-metrics-error')).toHaveText(/Failed to load pod metrics|Pod 메트릭을 불러오는/, { timeout: 30_000 })
+      await expect(page.getByText(MISSING)).toHaveCount(0)
+
+      failing = false
+      await expect.poll(() => page.getByTestId('monitoring-pod-row').count(), { timeout: 30_000 }).toBeGreaterThan(0)
+      await expect(page.getByTestId('pod-metrics-error')).toHaveCount(0)
+    })
+
+    test('a 503 on the top resources is an error on the dashboard, and it recovers by itself', async ({ page }) => {
+      let failing = true
+      await page.route('**/api/v1/cluster/metrics/top-resources*', (route) => (failing ? route.fulfill(gateway503) : route.continue()))
+      await page.goto('/?cluster=default')
+      const failed = page.getByText(/^(Failed to fetch data|데이터를 가져오지 못했습니다)$/)
+      await expect(failed.first()).toHaveText(/Failed to fetch data|데이터를 가져오지 못했습니다/, { timeout: 30_000 })
+      await expect(page.getByText(MISSING)).toHaveCount(0)
+
+      failing = false
+      await expect(failed).toHaveCount(0, { timeout: 30_000 })
+      await expect(page.getByText(MISSING)).toHaveCount(0)
+    })
+
+    test('the answer that says metrics-server is missing puts up the notice and stops asking', async ({ page }) => {
+      let asked = 0
+      await page.route('**/api/v1/cluster/metrics/nodes*', (route) => {
+        asked += 1
+        return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'metrics_unavailable' }) })
+      })
+      await page.goto('/monitoring?cluster=default')
+      await expect(page.getByText(MISSING)).toHaveText(MISSING, { timeout: 30_000 })
+      await expect(page.getByTestId('node-metrics-error')).toHaveCount(0)
+      const askedThen = asked
+      await page.waitForTimeout(7_000)
+      expect(asked).toBe(askedThen)
+    })
+  })
 })
