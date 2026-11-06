@@ -81,6 +81,44 @@ test.describe('namespace-scoped grants', () => {
     }
   })
 
+  test('a grantor limited to namespaces gives only within them', async ({ request }) => {
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const run = Date.now().toString(36)
+    const grantorRole = `e2e-ns-grantor-${run}`
+    const email = `e2e-ns-g-${run}@kubeast.local`
+    let roleId = 0
+    let grantorId = ''
+    let targetId = ''
+    try {
+      const role = await request.post('/api/v1/auth/admin/roles', { headers: bearer(admin), data: { name: grantorRole, permissions: ['admin.users.update', 'menu.*'] } })
+      expect(role.status(), await role.text()).toBeLessThan(300)
+      roleId = (await role.json()).id
+      const made = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E ns grantor', email, password: PW, role_id: roleId } })
+      expect(made.status(), await made.text()).toBe(201)
+      grantorId = (await made.json()).id
+      expect((await grant(request, admin, grantorId, 'Admin', ['team-a'])).status()).toBe(200)
+      targetId = await createUser(request, admin, `e2e-ns-t-${run}@kubeast.local`)
+      const grantor = await login(request, email, PW)
+
+      const whole = await grant(request, grantor, targetId, 'Read')
+      expect(whole.status(), 'the whole cluster').toBe(403)
+      const outside = await grant(request, grantor, targetId, 'Read', ['team-b'])
+      expect(outside.status(), 'a namespace outside the grantor\'s').toBe(403)
+      expect(await outside.text(), 'the answer names it').toContain('team-b')
+      const rolesAfter = await (await request.get(`/api/v1/auth/admin/users/${targetId}/cluster-roles`, { headers: bearer(admin) })).json()
+      expect(JSON.stringify(rolesAfter), 'nothing was granted').not.toContain(CLUSTER)
+
+      const inside = await grant(request, grantor, targetId, 'Read', ['team-a'])
+      expect(inside.status(), await inside.text()).toBe(200)
+      expect((await inside.json()).namespaces, 'within the grantor\'s namespaces').toEqual(['team-a'])
+    } finally {
+      for (const id of [targetId, grantorId]) {
+        if (id) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers: bearer(admin), failOnStatusCode: false })
+      }
+      if (roleId) await request.delete(`/api/v1/auth/admin/roles/${roleId}`, { headers: bearer(admin), failOnStatusCode: false })
+    }
+  })
+
   test('an access request carries namespaces: within the grant only, applied on approval, restored on expiry', async ({ request }) => {
     test.setTimeout(240_000)
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)

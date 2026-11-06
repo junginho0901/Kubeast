@@ -108,7 +108,7 @@ func AuthMiddleware(jwtMgr *JWTManager, tokenVersion TokenVersionLookup, cookieN
 			}
 
 			akid, _ := claims["akid"].(string)
-			payload := auth.TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms, Roles: auth.ParseRoles(claims["roles"]), AuthTime: authTime, APIKeyID: akid}
+			payload := auth.TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms, Roles: auth.ParseRoles(claims["roles"]), Namespaces: auth.ParseNamespaces(claims["ns"]), AuthTime: authTime, APIKeyID: akid}
 			ctx := context.WithValue(r.Context(), auth.TokenPayloadContextKey(), payload)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

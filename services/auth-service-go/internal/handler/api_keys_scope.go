@@ -12,17 +12,19 @@ import (
 // them down (the same rule as the permission ceiling for grants — nobody
 // hands out more than they hold).
 
-// roleRank orders the built-in cluster roles for the ceiling. A custom role
-// has no rank, so under a ceiling it is replaced by the ceiling role.
+// roleRank orders the built-in cluster roles for the ceiling. A custom role has
+// no rank: it keeps its name, since the cluster decides what its group may do
+// and a built-in name would be another identity there.
 var roleRank = map[string]int{"read": 1, "write": 2, "admin": 3}
 
-// roleAtMost returns role when it ranks at or below ceiling, else ceiling.
+// roleAtMost lowers a built-in role that ranks above ceiling to ceiling. Any
+// other role comes back as it is.
 func roleAtMost(role, ceiling string) string {
-	r, ok := roleRank[strings.ToLower(strings.TrimSpace(role))]
-	if ok && r <= roleRank[strings.ToLower(ceiling)] {
-		return role
+	r, builtin := roleRank[strings.ToLower(strings.TrimSpace(role))]
+	if builtin && r > roleRank[strings.ToLower(ceiling)] {
+		return ceiling
 	}
-	return ceiling
+	return role
 }
 
 // intersectPerms keeps what both sets grant, wildcards on either side
@@ -54,29 +56,34 @@ func intersectPerms(a, b []string) []string {
 
 // narrowForAPIKey builds the matrix and cluster roles an exchanged token
 // carries: one entry per cluster in clusterIDs, holding what the user has
-// there (the global "*" entry counts everywhere) cut down to ceilingPerms,
-// and the role name capped at ceiling. No "*" entry survives, so a global
-// admin's key reaches only the listed clusters. A cluster the user has
-// nothing on is left out.
+// there cut down to ceilingPerms, and the role name of their grant there capped
+// at ceiling. A global admin ("*") holds every cluster whatever their grant
+// there, so the ceiling alone names their key's role; global admin.* keys are
+// no ground for a cluster. No "*" entry survives, so a global admin's key
+// reaches only the listed clusters. A cluster the user has nothing on is left
+// out.
 func narrowForAPIKey(matrix auth.PermissionMatrix, roles map[string]string, clusterIDs []string, ceiling string, ceilingPerms []string) (auth.PermissionMatrix, map[string]string) {
 	out := auth.PermissionMatrix{}
 	outRoles := map[string]string{}
-	global := matrix["*"]
+	globalAdmin := auth.MatchAny(matrix["*"], "*")
 	for _, c := range clusterIDs {
 		c = strings.TrimSpace(c)
 		if c == "" || c == "*" {
 			continue
 		}
-		effective := append(append([]string{}, global...), matrix[c]...)
-		perms := intersectPerms(effective, ceilingPerms)
+		held := matrix[c]
+		if globalAdmin {
+			held = append([]string{"*"}, held...)
+		}
+		perms := intersectPerms(held, ceilingPerms)
 		if len(perms) == 0 {
 			continue
 		}
 		out[c] = perms
-		if role, ok := roles[c]; ok && strings.TrimSpace(role) != "" {
-			outRoles[c] = roleAtMost(role, ceiling)
-		} else {
+		if globalAdmin {
 			outRoles[c] = ceiling
+		} else if role := strings.TrimSpace(roles[c]); role != "" {
+			outRoles[c] = roleAtMost(role, ceiling)
 		}
 	}
 	return out, outRoles

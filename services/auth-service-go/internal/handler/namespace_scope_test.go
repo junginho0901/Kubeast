@@ -52,6 +52,10 @@ func TestMissingNamespaces_Ceiling(t *testing.T) {
 			t.Fatal("an unscoped grantor is not limited")
 		}
 	}
+	scopedAdmin := auth.TokenPayload{Perms: auth.PermissionMatrix{"*": {"*"}}, Namespaces: map[string][]string{"c": {"web"}}}
+	if missingNamespaces(scopedAdmin, "c", nil) != nil || missingNamespaces(scopedAdmin, "c", []string{"db"}) != nil {
+		t.Fatal("a global admin is not limited by a grant of their own")
+	}
 }
 
 func TestRequestWithinGrant(t *testing.T) {

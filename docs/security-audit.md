@@ -15,6 +15,10 @@ The key's value (`kbk_…`) is shown only once.
 
 The key does not call the API itself. It is exchanged for a short-lived access token. The token carries the permissions the issuer holds at that moment, cut down to the key's scope, so it cannot do more than the issuer.
 
+On each cluster the token keeps the role of the issuer's grant there. The ceiling lowers a built-in role, never raises it. A custom role keeps its name, with its permissions cut down to the ceiling. Only a global admin, who holds every cluster, takes the ceiling's name.
+
+An access token from a key does not manage the account. Issuing or revoking a key, changing the password and cancelling an access request need a signed-in session; the token gets 403 and the attempt is recorded as a failure. It can file an access request (the MCP tool `request_access`), which an admin decides.
+
 Once the key is revoked or expires, the next exchange is refused. Tokens already obtained with that key are refused within the services' token check interval (30 seconds). Only the owner can issue a key, but an admin can revoke someone else's key from the user details.
 
 ```bash

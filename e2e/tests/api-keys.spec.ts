@@ -156,6 +156,129 @@ test.describe('API keys', () => {
     }
   })
 
+  test('a token from a key cannot change the account', async ({ request }) => {
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    test.skip(!(await enabled(request, admin)), 'API keys are disabled on this installation')
+    const email = `e2e-apikey-acct-${stamp()}@example.com`
+    let userId = ''
+    try {
+      userId = await createUser(request, admin, email)
+      const granted = await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/${CLUSTER}`, { headers: bearer(admin), data: { role: 'Write' } })
+      expect(granted.ok(), `grant: ${await granted.text()}`).toBeTruthy()
+      const user = await login(request, email, PW)
+      const made = await request.post('/api/v1/auth/api-keys', { headers: bearer(user), data: { name: 'e2e account', expires_in_days: 1, cluster_ids: [CLUSTER], role_ceiling: 'Read' } })
+      expect(made.status(), `create: ${await made.text()}`).toBe(201)
+      const key = await made.json()
+      const token = (await (await exchange(request, key.key)).json()).access_token as string
+
+      const wider = await request.post('/api/v1/auth/api-keys', { headers: bearer(token), data: { name: 'e2e wider', expires_in_days: 1, role_ceiling: 'Admin' }, failOnStatusCode: false })
+      expect(wider.status(), 'a new key').toBe(403)
+      expect(await wider.text(), 'the answer names the key').toContain('API key')
+      expect((await request.delete(`/api/v1/auth/api-keys/${key.id}`, { headers: bearer(token), failOnStatusCode: false })).status(), 'revoking a key').toBe(403)
+      const changed = await request.post('/api/v1/auth/change-password', { headers: bearer(token), data: { current_password: PW, new_password: `${PW}2` }, failOnStatusCode: false })
+      expect(changed.status(), 'the password').toBe(403)
+      expect((await request.delete('/api/v1/auth/access-requests/no-such-request', { headers: bearer(token), failOnStatusCode: false })).status(), 'cancelling an access request').toBe(403)
+      expect((await request.delete('/api/v1/auth/access-requests/no-such-request', { headers: bearer(user), failOnStatusCode: false })).status(), 'the signed-in owner reaches the route').toBe(404)
+
+      // Nothing changed, and the token still does what a key is for.
+      const listed = await (await request.get('/api/v1/auth/api-keys', { headers: bearer(user) })).json()
+      expect(listed.map((k: any) => k.id), 'no new key, none revoked').toEqual([key.id])
+      expect((await exchange(request, key.key)).status(), 'the key still exchanges').toBe(200)
+      expect(await login(request, email, PW), 'the password is the old one').toBeTruthy()
+      const self = await request.get('/api/v1/auth/me', { headers: bearer(token) })
+      expect(self.status(), 'reading its own account').toBe(200)
+      expect((await request.get(`/api/v1/cluster/overview?cluster=${CLUSTER}`, { headers: onCluster(token, CLUSTER) })).status(), 'reading the cluster').toBe(200)
+
+      // Each refusal is a failure row against the owner (the rows of a key name the key).
+      for (const action of ['user.apikey.create', 'user.apikey.delete', 'user.password.change', 'access.request.cancel']) {
+        await expect.poll(() => auditCount(request, admin, action, userId), { message: action, timeout: 10_000 }).toBe(1)
+      }
+    } finally {
+      await deleteUser(request, admin, userId)
+    }
+  })
+
+  test('a key stays within the role its owner holds on the cluster', async ({ request }) => {
+    test.setTimeout(120_000)
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    test.skip(!(await enabled(request, admin)), 'API keys are disabled on this installation')
+    const run = stamp()
+    const customRole = `e2e-apikey-custom-${run}`
+    const auditorRole = `e2e-apikey-auditor-${run}`
+    const roleIds: number[] = []
+    const userIds: string[] = []
+    const groupsFor = async (token: string): Promise<string[]> => {
+      const res = await request.get(`/api/v1/cluster/namespaces/kube-system/pods?cluster=${CLUSTER}`, { headers: onCluster(token, CLUSTER), failOnStatusCode: false })
+      const header = res.headers()['x-kubeast-access']
+      expect(header, 'X-Kubeast-Access on a cluster answer').toBeTruthy()
+      return (JSON.parse(Buffer.from(header, 'base64url').toString('utf8')).groups as string[]).slice().sort()
+    }
+    const mkRole = async (name: string, permissions: string[]) => {
+      const res = await request.post('/api/v1/auth/admin/roles', { headers: bearer(admin), data: { name, permissions } })
+      expect(res.status(), `role ${name}: ${await res.text()}`).toBeLessThan(300)
+      roleIds.push((await res.json()).id)
+    }
+    const grantOn = async (userId: string, role: string) => {
+      const res = await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/${CLUSTER}`, { headers: bearer(admin), data: { role } })
+      expect(res.ok(), `grant ${role}: ${await res.text()}`).toBeTruthy()
+    }
+    const adminCeilingKey = async (token: string) => {
+      const res = await request.post('/api/v1/auth/api-keys', { headers: bearer(token), data: { name: 'e2e ceiling', expires_in_days: 1, cluster_ids: [CLUSTER], role_ceiling: 'Admin' } })
+      expect(res.status(), `create: ${await res.text()}`).toBe(201)
+      return (await res.json()).key as string
+    }
+    const decode = (token: string) => JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString())
+    try {
+      // A custom role: the Admin ceiling lifts neither its permissions nor its identity on the cluster.
+      await mkRole(customRole, ['menu.*', 'resource.*.read'])
+      const customEmail = `e2e-apikey-c-${run}@example.com`
+      const customId = await createUser(request, admin, customEmail)
+      userIds.push(customId)
+      await grantOn(customId, customRole)
+      const session = await login(request, customEmail, PW)
+      const customKey = await adminCeilingKey(session)
+      const customToken = (await (await exchange(request, customKey)).json()).access_token as string
+      expect(decode(customToken).roles, 'the role on the token').toEqual({ [CLUSTER]: customRole })
+      const sessionGroups = await groupsFor(session)
+      expect(sessionGroups, 'the session acts as the custom role').toContain(`kubeast:role:${customRole}`)
+      expect(await groupsFor(customToken), 'the key acts as the session does').toEqual(sessionGroups)
+
+      // Read under an Admin ceiling stays Read.
+      const readEmail = `e2e-apikey-r-${run}@example.com`
+      const readId = await createUser(request, admin, readEmail)
+      userIds.push(readId)
+      await grantOn(readId, 'Read')
+      const readSession = await login(request, readEmail, PW)
+      const readKey = await adminCeilingKey(readSession)
+      const readToken = (await (await exchange(request, readKey)).json()).access_token as string
+      expect(decode(readToken).roles, 'Read stays Read').toEqual({ [CLUSTER]: 'Read' })
+      expect(await groupsFor(readToken), 'the key acts as Read').toEqual(await groupsFor(readSession))
+
+      // A global admin.* permission is no ground for a cluster: the key goes with the grant it was made under.
+      await mkRole(auditorRole, ['admin.audit.read', 'menu.*'])
+      const raw = await (await request.get('/api/v1/auth/roles', { headers: bearer(admin) })).json()
+      const auditorId = (Array.isArray(raw) ? raw : raw.roles || raw.items || []).find((r: any) => r.name === auditorRole).id
+      const auditorEmail = `e2e-apikey-a-${run}@example.com`
+      const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E api key', email: auditorEmail, password: PW, role_id: auditorId } })
+      expect(created.status(), `create: ${await created.text()}`).toBe(201)
+      const auditorUserId = (await created.json()).id as string
+      userIds.push(auditorUserId)
+      await grantOn(auditorUserId, 'Admin')
+      const auditorKey = await adminCeilingKey(await login(request, auditorEmail, PW))
+      const before = (await (await exchange(request, auditorKey)).json()).access_token as string
+      expect(decode(before).roles, 'Admin while granted').toEqual({ [CLUSTER]: 'Admin' })
+      const revoked = await request.delete(`/api/v1/auth/admin/users/${auditorUserId}/cluster-roles/${CLUSTER}`, { headers: bearer(admin) })
+      expect(revoked.ok(), `revoke: ${await revoked.text()}`).toBeTruthy()
+      const after = (await (await exchange(request, auditorKey)).json()).access_token as string
+      expect(Object.keys(decode(after).permissions ?? {}), 'no cluster after the grant is gone').toEqual([])
+      expect(decode(after).roles ?? {}, 'no role after the grant is gone').toEqual({})
+      expect((await request.get(`/api/v1/cluster/overview?cluster=${CLUSTER}`, { headers: onCluster(after, CLUSTER), failOnStatusCode: false })).status(), 'the cluster refuses it').toBe(403)
+    } finally {
+      for (const id of userIds) await deleteUser(request, admin, id)
+      for (const id of roleIds) await request.delete(`/api/v1/auth/admin/roles/${id}`, { headers: bearer(admin), failOnStatusCode: false })
+    }
+  })
+
   test('Settings → API keys: issue a key, see it once, revoke it', async ({ page, request }) => {
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     test.skip(!(await enabled(request, admin)), 'API keys are disabled on this installation')
