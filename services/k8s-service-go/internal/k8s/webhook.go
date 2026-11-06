@@ -8,6 +8,8 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	webhookrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/webhookconfig"
 )
 
 // ── Mutating Webhook Configurations ─────────────────────────────────────────
@@ -44,7 +46,7 @@ func (s *Service) DescribeMutatingWebhookConfiguration(ctx context.Context, name
 	if mwcErr != nil {
 		return nil, fmt.Errorf("get mutatingwebhookconfiguration %s: %w", name, mwcErr)
 	}
-	result := formatMutatingWebhookConfigSummary(mwc)
+	result := webhookrow.Mutating(mwc)
 
 	// Additional metadata
 	result["uid"] = string(mwc.UID)
@@ -70,18 +72,9 @@ func (s *Service) DeleteMutatingWebhookConfiguration(ctx context.Context, name s
 func formatMutatingWebhookConfigList(items []admissionregistrationv1.MutatingWebhookConfiguration) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(items))
 	for i := range items {
-		result = append(result, formatMutatingWebhookConfigSummary(&items[i]))
+		result = append(result, webhookrow.Mutating(&items[i]))
 	}
 	return result
-}
-
-func formatMutatingWebhookConfigSummary(mwc *admissionregistrationv1.MutatingWebhookConfiguration) map[string]interface{} {
-	return map[string]interface{}{
-		"name":           mwc.Name,
-		"webhooks_count": len(mwc.Webhooks),
-		"labels":         mwc.Labels,
-		"created_at":     toISO(&mwc.CreationTimestamp),
-	}
 }
 
 func formatMutatingWebhooks(webhooks []admissionregistrationv1.MutatingWebhook) []map[string]interface{} {
@@ -173,7 +166,7 @@ func (s *Service) DescribeValidatingWebhookConfiguration(ctx context.Context, na
 	if vwcErr != nil {
 		return nil, fmt.Errorf("get validatingwebhookconfiguration %s: %w", name, vwcErr)
 	}
-	result := formatValidatingWebhookConfigSummary(vwc)
+	result := webhookrow.Validating(vwc)
 
 	// Additional metadata
 	result["uid"] = string(vwc.UID)
@@ -199,18 +192,9 @@ func (s *Service) DeleteValidatingWebhookConfiguration(ctx context.Context, name
 func formatValidatingWebhookConfigList(items []admissionregistrationv1.ValidatingWebhookConfiguration) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(items))
 	for i := range items {
-		result = append(result, formatValidatingWebhookConfigSummary(&items[i]))
+		result = append(result, webhookrow.Validating(&items[i]))
 	}
 	return result
-}
-
-func formatValidatingWebhookConfigSummary(vwc *admissionregistrationv1.ValidatingWebhookConfiguration) map[string]interface{} {
-	return map[string]interface{}{
-		"name":           vwc.Name,
-		"webhooks_count": len(vwc.Webhooks),
-		"labels":         vwc.Labels,
-		"created_at":     toISO(&vwc.CreationTimestamp),
-	}
 }
 
 func formatValidatingWebhooks(webhooks []admissionregistrationv1.ValidatingWebhook) []map[string]interface{} {

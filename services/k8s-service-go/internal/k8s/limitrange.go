@@ -8,6 +8,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	limitrangerow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/limitrange"
 )
 
 // GetLimitRanges lists LimitRanges in a namespace.
@@ -53,7 +55,7 @@ func (s *Service) DescribeLimitRange(ctx context.Context, namespace, name string
 	if lrErr != nil {
 		return nil, fmt.Errorf("get limit range %s/%s: %w", namespace, name, lrErr)
 	}
-	result := formatLimitRangeDetail(lr)
+	result := limitrangerow.Info(lr)
 
 	result["uid"] = string(lr.UID)
 	result["resource_version"] = lr.ResourceVersion
@@ -161,17 +163,7 @@ func checkLimitRangeViolations(lr *corev1.LimitRange, c *corev1.Container) []lrV
 func formatLimitRangeList(items []corev1.LimitRange) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(items))
 	for i := range items {
-		result = append(result, formatLimitRangeDetail(&items[i]))
+		result = append(result, limitrangerow.Info(&items[i]))
 	}
 	return result
-}
-
-func formatLimitRangeDetail(lr *corev1.LimitRange) map[string]interface{} {
-	return map[string]interface{}{
-		"name":       lr.Name,
-		"namespace":  lr.Namespace,
-		"labels":     lr.Labels,
-		"limits":     buildLimitItems(lr.Spec.Limits),
-		"created_at": toISO(&lr.CreationTimestamp),
-	}
 }

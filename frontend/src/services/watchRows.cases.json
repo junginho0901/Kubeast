@@ -1,5 +1,1507 @@
 [
  {
+  "name": "a ClusterRole whose rules, labels and annotations went away shows none",
+  "resource": "clusterroles",
+  "before": {
+   "annotations": {
+    "note": "kept"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "team": "a"
+   },
+   "name": "reader",
+   "rules_count": 2
+  },
+  "event": {
+   "annotations": null,
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "name": "reader",
+   "rules_count": 0
+  },
+  "after": {
+   "annotations": null,
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "name": "reader",
+   "rules_count": 0
+  },
+  "shows": {
+   "annotations": {},
+   "labels": {},
+   "rules_count": 0
+  }
+ },
+ {
+  "name": "a ClusterRole that gained them shows them",
+  "resource": "clusterroles",
+  "before": {
+   "annotations": null,
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "name": "reader",
+   "rules_count": 0
+  },
+  "event": {
+   "annotations": {
+    "note": "kept"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "team": "a"
+   },
+   "name": "reader",
+   "rules_count": 2
+  },
+  "after": {
+   "annotations": {
+    "note": "kept"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "team": "a"
+   },
+   "name": "reader",
+   "rules_count": 2
+  },
+  "shows": {
+   "annotations": {
+    "note": "kept"
+   },
+   "labels": {
+    "team": "a"
+   },
+   "rules_count": 2
+  }
+ },
+ {
+  "name": "a ClusterRoleBinding whose subjects, labels and annotations went away shows none",
+  "resource": "clusterrolebindings",
+  "before": {
+   "annotations": {
+    "note": "kept"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "team": "a"
+   },
+   "name": "readers",
+   "role_ref_kind": "ClusterRole",
+   "role_ref_name": "reader",
+   "subjects": [
+    {
+     "apiGroup": "rbac.authorization.k8s.io",
+     "kind": "User",
+     "name": "someone@example.test",
+     "namespace": ""
+    },
+    {
+     "apiGroup": "",
+     "kind": "ServiceAccount",
+     "name": "runner",
+     "namespace": "demo"
+    }
+   ],
+   "subjects_count": 2
+  },
+  "event": {
+   "annotations": null,
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "name": "readers",
+   "role_ref_kind": "ClusterRole",
+   "role_ref_name": "reader",
+   "subjects": [],
+   "subjects_count": 0
+  },
+  "after": {
+   "annotations": null,
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "name": "readers",
+   "role_ref_kind": "ClusterRole",
+   "role_ref_name": "reader",
+   "subjects": [],
+   "subjects_count": 0
+  },
+  "shows": {
+   "annotations": {},
+   "labels": {},
+   "role": "ClusterRole/reader",
+   "subjects": [],
+   "subjects_count": 0
+  }
+ },
+ {
+  "name": "a ClusterRoleBinding that gained them shows them",
+  "resource": "clusterrolebindings",
+  "before": {
+   "annotations": null,
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "name": "readers",
+   "role_ref_kind": "ClusterRole",
+   "role_ref_name": "reader",
+   "subjects": [],
+   "subjects_count": 0
+  },
+  "event": {
+   "annotations": {
+    "note": "kept"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "team": "a"
+   },
+   "name": "readers",
+   "role_ref_kind": "ClusterRole",
+   "role_ref_name": "reader",
+   "subjects": [
+    {
+     "apiGroup": "rbac.authorization.k8s.io",
+     "kind": "User",
+     "name": "someone@example.test",
+     "namespace": ""
+    },
+    {
+     "apiGroup": "",
+     "kind": "ServiceAccount",
+     "name": "runner",
+     "namespace": "demo"
+    }
+   ],
+   "subjects_count": 2
+  },
+  "after": {
+   "annotations": {
+    "note": "kept"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "team": "a"
+   },
+   "name": "readers",
+   "role_ref_kind": "ClusterRole",
+   "role_ref_name": "reader",
+   "subjects": [
+    {
+     "apiGroup": "rbac.authorization.k8s.io",
+     "kind": "User",
+     "name": "someone@example.test",
+     "namespace": ""
+    },
+    {
+     "apiGroup": "",
+     "kind": "ServiceAccount",
+     "name": "runner",
+     "namespace": "demo"
+    }
+   ],
+   "subjects_count": 2
+  },
+  "shows": {
+   "annotations": {
+    "note": "kept"
+   },
+   "labels": {
+    "team": "a"
+   },
+   "role": "ClusterRole/reader",
+   "subjects": [
+    "User/someone@example.test",
+    "ServiceAccount/runner"
+   ],
+   "subjects_count": 2
+  }
+ },
+ {
+  "name": "a RoleBinding whose subjects, labels and annotations went away shows none",
+  "resource": "rolebindings",
+  "before": {
+   "annotations": {
+    "note": "kept"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "team": "a"
+   },
+   "name": "readers",
+   "namespace": "demo",
+   "role_ref_kind": "ClusterRole",
+   "role_ref_name": "reader",
+   "subjects": [
+    {
+     "apiGroup": "rbac.authorization.k8s.io",
+     "kind": "User",
+     "name": "someone@example.test",
+     "namespace": ""
+    },
+    {
+     "apiGroup": "",
+     "kind": "ServiceAccount",
+     "name": "runner",
+     "namespace": "demo"
+    }
+   ],
+   "subjects_count": 2
+  },
+  "event": {
+   "annotations": null,
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "name": "readers",
+   "namespace": "demo",
+   "role_ref_kind": "ClusterRole",
+   "role_ref_name": "reader",
+   "subjects": [],
+   "subjects_count": 0
+  },
+  "after": {
+   "annotations": null,
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "name": "readers",
+   "namespace": "demo",
+   "role_ref_kind": "ClusterRole",
+   "role_ref_name": "reader",
+   "subjects": [],
+   "subjects_count": 0
+  },
+  "shows": {
+   "annotations": {},
+   "labels": {},
+   "role": "ClusterRole/reader",
+   "subjects": [],
+   "subjects_count": 0
+  }
+ },
+ {
+  "name": "a RoleBinding that gained them shows them",
+  "resource": "rolebindings",
+  "before": {
+   "annotations": null,
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "name": "readers",
+   "namespace": "demo",
+   "role_ref_kind": "ClusterRole",
+   "role_ref_name": "reader",
+   "subjects": [],
+   "subjects_count": 0
+  },
+  "event": {
+   "annotations": {
+    "note": "kept"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "team": "a"
+   },
+   "name": "readers",
+   "namespace": "demo",
+   "role_ref_kind": "ClusterRole",
+   "role_ref_name": "reader",
+   "subjects": [
+    {
+     "apiGroup": "rbac.authorization.k8s.io",
+     "kind": "User",
+     "name": "someone@example.test",
+     "namespace": ""
+    },
+    {
+     "apiGroup": "",
+     "kind": "ServiceAccount",
+     "name": "runner",
+     "namespace": "demo"
+    }
+   ],
+   "subjects_count": 2
+  },
+  "after": {
+   "annotations": {
+    "note": "kept"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "team": "a"
+   },
+   "name": "readers",
+   "namespace": "demo",
+   "role_ref_kind": "ClusterRole",
+   "role_ref_name": "reader",
+   "subjects": [
+    {
+     "apiGroup": "rbac.authorization.k8s.io",
+     "kind": "User",
+     "name": "someone@example.test",
+     "namespace": ""
+    },
+    {
+     "apiGroup": "",
+     "kind": "ServiceAccount",
+     "name": "runner",
+     "namespace": "demo"
+    }
+   ],
+   "subjects_count": 2
+  },
+  "shows": {
+   "annotations": {
+    "note": "kept"
+   },
+   "labels": {
+    "team": "a"
+   },
+   "role": "ClusterRole/reader",
+   "subjects": [
+    "User/someone@example.test",
+    "ServiceAccount/runner"
+   ],
+   "subjects_count": 2
+  }
+ },
+ {
+  "name": "a PriorityClass no longer the default, its description and labels gone, says so",
+  "resource": "priorityclasses",
+  "before": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "description": "for the front",
+   "global_default": true,
+   "labels": {
+    "team": "a"
+   },
+   "name": "high",
+   "preemption_policy": "Never",
+   "value": 1000
+  },
+  "event": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "description": "",
+   "global_default": false,
+   "labels": null,
+   "name": "high",
+   "preemption_policy": "PreemptLowerPriority",
+   "value": 1000
+  },
+  "after": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "description": "",
+   "global_default": false,
+   "labels": null,
+   "name": "high",
+   "preemption_policy": "PreemptLowerPriority",
+   "value": 1000
+  },
+  "shows": {
+   "description": "",
+   "global_default": false,
+   "labels": {},
+   "preemption_policy": "PreemptLowerPriority",
+   "value": 1000
+  }
+ },
+ {
+  "name": "a PriorityClass that gained them shows them",
+  "resource": "priorityclasses",
+  "before": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "description": "",
+   "global_default": false,
+   "labels": null,
+   "name": "high",
+   "preemption_policy": "PreemptLowerPriority",
+   "value": 1000
+  },
+  "event": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "description": "for the front",
+   "global_default": true,
+   "labels": {
+    "team": "a"
+   },
+   "name": "high",
+   "preemption_policy": "Never",
+   "value": 1000
+  },
+  "after": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "description": "for the front",
+   "global_default": true,
+   "labels": {
+    "team": "a"
+   },
+   "name": "high",
+   "preemption_policy": "Never",
+   "value": 1000
+  },
+  "shows": {
+   "description": "for the front",
+   "global_default": true,
+   "labels": {
+    "team": "a"
+   },
+   "preemption_policy": "Never",
+   "value": 1000
+  }
+ },
+ {
+  "name": "a RuntimeClass whose overhead, scheduling and labels went away shows none",
+  "resource": "runtimeclasses",
+  "before": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "handler": "runsc",
+   "labels": {
+    "team": "a"
+   },
+   "name": "gvisor",
+   "overhead": {
+    "cpu": "250m",
+    "memory": "1Gi"
+   },
+   "scheduling": {
+    "node_selector": {
+     "sandbox": "yes"
+    },
+    "tolerations": [
+     {
+      "effect": "NoSchedule",
+      "key": "sandbox",
+      "operator": "Exists"
+     }
+    ]
+   }
+  },
+  "event": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "handler": "runsc",
+   "labels": null,
+   "name": "gvisor"
+  },
+  "after": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "handler": "runsc",
+   "labels": null,
+   "name": "gvisor"
+  },
+  "shows": {
+   "handler": "runsc",
+   "labels": {},
+   "node_selector": null,
+   "overhead": null,
+   "tolerations": 0
+  }
+ },
+ {
+  "name": "a RuntimeClass that gained them shows them",
+  "resource": "runtimeclasses",
+  "before": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "handler": "runsc",
+   "labels": null,
+   "name": "gvisor"
+  },
+  "event": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "handler": "runsc",
+   "labels": {
+    "team": "a"
+   },
+   "name": "gvisor",
+   "overhead": {
+    "cpu": "250m",
+    "memory": "1Gi"
+   },
+   "scheduling": {
+    "node_selector": {
+     "sandbox": "yes"
+    },
+    "tolerations": [
+     {
+      "effect": "NoSchedule",
+      "key": "sandbox",
+      "operator": "Exists"
+     }
+    ]
+   }
+  },
+  "after": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "handler": "runsc",
+   "labels": {
+    "team": "a"
+   },
+   "name": "gvisor",
+   "overhead": {
+    "cpu": "250m",
+    "memory": "1Gi"
+   },
+   "scheduling": {
+    "node_selector": {
+     "sandbox": "yes"
+    },
+    "tolerations": [
+     {
+      "effect": "NoSchedule",
+      "key": "sandbox",
+      "operator": "Exists"
+     }
+    ]
+   }
+  },
+  "shows": {
+   "handler": "runsc",
+   "labels": {
+    "team": "a"
+   },
+   "node_selector": {
+    "sandbox": "yes"
+   },
+   "overhead": {
+    "cpu": "250m",
+    "memory": "1Gi"
+   },
+   "tolerations": 1
+  }
+ },
+ {
+  "name": "a ValidatingWebhookConfiguration left with no webhook counts none, its labels gone",
+  "resource": "validatingwebhookconfigurations",
+  "before": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "team": "a"
+   },
+   "name": "policy",
+   "webhooks_count": 2
+  },
+  "event": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "name": "policy",
+   "webhooks_count": 0
+  },
+  "after": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "name": "policy",
+   "webhooks_count": 0
+  },
+  "shows": {
+   "labels": {},
+   "webhooks_count": 0
+  }
+ },
+ {
+  "name": "a ValidatingWebhookConfiguration that gained webhooks counts them",
+  "resource": "validatingwebhookconfigurations",
+  "before": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "name": "policy",
+   "webhooks_count": 0
+  },
+  "event": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "team": "a"
+   },
+   "name": "policy",
+   "webhooks_count": 2
+  },
+  "after": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "team": "a"
+   },
+   "name": "policy",
+   "webhooks_count": 2
+  },
+  "shows": {
+   "labels": {
+    "team": "a"
+   },
+   "webhooks_count": 2
+  }
+ },
+ {
+  "name": "a MutatingWebhookConfiguration left with no webhook counts none, its labels gone",
+  "resource": "mutatingwebhookconfigurations",
+  "before": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "team": "a"
+   },
+   "name": "policy",
+   "webhooks_count": 2
+  },
+  "event": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "name": "policy",
+   "webhooks_count": 0
+  },
+  "after": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "name": "policy",
+   "webhooks_count": 0
+  },
+  "shows": {
+   "labels": {},
+   "webhooks_count": 0
+  }
+ },
+ {
+  "name": "a MutatingWebhookConfiguration that gained webhooks counts them",
+  "resource": "mutatingwebhookconfigurations",
+  "before": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "name": "policy",
+   "webhooks_count": 0
+  },
+  "event": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "team": "a"
+   },
+   "name": "policy",
+   "webhooks_count": 2
+  },
+  "after": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "team": "a"
+   },
+   "name": "policy",
+   "webhooks_count": 2
+  },
+  "shows": {
+   "labels": {
+    "team": "a"
+   },
+   "webhooks_count": 2
+  }
+ },
+ {
+  "name": "a Lease its holder let go of shows no holder, duration or times",
+  "resource": "leases",
+  "before": {
+   "acquire_time": "2026-11-05T00:00:00Z",
+   "created_at": "2026-11-01T00:00:00Z",
+   "holder_identity": "node-a",
+   "labels": {
+    "team": "a"
+   },
+   "lease_duration_seconds": 40,
+   "lease_transitions": 3,
+   "name": "node-a",
+   "namespace": "demo",
+   "renew_time": "2026-11-06T11:59:50Z"
+  },
+  "event": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "name": "node-a",
+   "namespace": "demo"
+  },
+  "after": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "name": "node-a",
+   "namespace": "demo"
+  },
+  "shows": {
+   "acquire_time": null,
+   "duration": "-",
+   "holder": "-",
+   "labels": {},
+   "renew_time": null,
+   "transitions": "-"
+  }
+ },
+ {
+  "name": "a Lease that was taken shows its holder with its times to the second",
+  "resource": "leases",
+  "before": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "name": "node-a",
+   "namespace": "demo"
+  },
+  "event": {
+   "acquire_time": "2026-11-05T00:00:00Z",
+   "created_at": "2026-11-01T00:00:00Z",
+   "holder_identity": "node-a",
+   "labels": {
+    "team": "a"
+   },
+   "lease_duration_seconds": 40,
+   "lease_transitions": 3,
+   "name": "node-a",
+   "namespace": "demo",
+   "renew_time": "2026-11-06T11:59:50Z"
+  },
+  "after": {
+   "acquire_time": "2026-11-05T00:00:00Z",
+   "created_at": "2026-11-01T00:00:00Z",
+   "holder_identity": "node-a",
+   "labels": {
+    "team": "a"
+   },
+   "lease_duration_seconds": 40,
+   "lease_transitions": 3,
+   "name": "node-a",
+   "namespace": "demo",
+   "renew_time": "2026-11-06T11:59:50Z"
+  },
+  "shows": {
+   "acquire_time": "2026-11-05T00:00:00Z",
+   "duration": 40,
+   "holder": "node-a",
+   "labels": {
+    "team": "a"
+   },
+   "renew_time": "2026-11-06T11:59:50Z",
+   "transitions": 3
+  }
+ },
+ {
+  "name": "a Lease that changed hands shows the new holder and times",
+  "resource": "leases",
+  "before": {
+   "acquire_time": "2026-11-05T00:00:00Z",
+   "created_at": "2026-11-01T00:00:00Z",
+   "holder_identity": "node-a",
+   "labels": {
+    "team": "a"
+   },
+   "lease_duration_seconds": 40,
+   "lease_transitions": 3,
+   "name": "node-a",
+   "namespace": "demo",
+   "renew_time": "2026-11-06T11:59:50Z"
+  },
+  "event": {
+   "acquire_time": "2026-11-06T12:00:00Z",
+   "created_at": "2026-11-01T00:00:00Z",
+   "holder_identity": "node-b",
+   "labels": {
+    "team": "a"
+   },
+   "lease_duration_seconds": 15,
+   "lease_transitions": 4,
+   "name": "node-a",
+   "namespace": "demo",
+   "renew_time": "2026-11-06T12:00:00Z"
+  },
+  "after": {
+   "acquire_time": "2026-11-06T12:00:00Z",
+   "created_at": "2026-11-01T00:00:00Z",
+   "holder_identity": "node-b",
+   "labels": {
+    "team": "a"
+   },
+   "lease_duration_seconds": 15,
+   "lease_transitions": 4,
+   "name": "node-a",
+   "namespace": "demo",
+   "renew_time": "2026-11-06T12:00:00Z"
+  },
+  "shows": {
+   "acquire_time": "2026-11-06T12:00:00Z",
+   "duration": 15,
+   "holder": "node-b",
+   "labels": {
+    "team": "a"
+   },
+   "renew_time": "2026-11-06T12:00:00Z",
+   "transitions": 4
+  }
+ },
+ {
+  "name": "a LimitRange left with no limit lists no type, its labels gone",
+  "resource": "limitranges",
+  "before": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "team": "a"
+   },
+   "limits": [
+    {
+     "default": {
+      "cpu": "500m"
+     },
+     "default_request": {
+      "memory": "1Gi"
+     },
+     "max": {
+      "cpu": "2"
+     },
+     "min": {
+      "cpu": "10m"
+     },
+     "type": "Container"
+    },
+    {
+     "max": {
+      "memory": "2Gi"
+     },
+     "type": "Pod"
+    }
+   ],
+   "name": "limits",
+   "namespace": "demo"
+  },
+  "event": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "limits": [],
+   "name": "limits",
+   "namespace": "demo"
+  },
+  "after": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "limits": [],
+   "name": "limits",
+   "namespace": "demo"
+  },
+  "shows": {
+   "labels": {},
+   "limits": [],
+   "types": "-"
+  }
+ },
+ {
+  "name": "a LimitRange of other limits lists only those",
+  "resource": "limitranges",
+  "before": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "team": "a"
+   },
+   "limits": [
+    {
+     "default": {
+      "cpu": "500m"
+     },
+     "default_request": {
+      "memory": "1Gi"
+     },
+     "max": {
+      "cpu": "2"
+     },
+     "min": {
+      "cpu": "10m"
+     },
+     "type": "Container"
+    },
+    {
+     "max": {
+      "memory": "2Gi"
+     },
+     "type": "Pod"
+    }
+   ],
+   "name": "limits",
+   "namespace": "demo"
+  },
+  "event": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "limits": [
+    {
+     "max": {
+      "storage": "100Gi"
+     },
+     "type": "PersistentVolumeClaim"
+    }
+   ],
+   "name": "limits",
+   "namespace": "demo"
+  },
+  "after": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "limits": [
+    {
+     "max": {
+      "storage": "100Gi"
+     },
+     "type": "PersistentVolumeClaim"
+    }
+   ],
+   "name": "limits",
+   "namespace": "demo"
+  },
+  "shows": {
+   "labels": {},
+   "limits": [
+    "PersistentVolumeClaim max storage=100Gi"
+   ],
+   "types": "PersistentVolumeClaim"
+  }
+ },
+ {
+  "name": "a LimitRange that gained limits lists each with its values",
+  "resource": "limitranges",
+  "before": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "limits": [],
+   "name": "limits",
+   "namespace": "demo"
+  },
+  "event": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "team": "a"
+   },
+   "limits": [
+    {
+     "default": {
+      "cpu": "500m"
+     },
+     "default_request": {
+      "memory": "1Gi"
+     },
+     "max": {
+      "cpu": "2"
+     },
+     "min": {
+      "cpu": "10m"
+     },
+     "type": "Container"
+    },
+    {
+     "max": {
+      "memory": "2Gi"
+     },
+     "type": "Pod"
+    }
+   ],
+   "name": "limits",
+   "namespace": "demo"
+  },
+  "after": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "team": "a"
+   },
+   "limits": [
+    {
+     "default": {
+      "cpu": "500m"
+     },
+     "default_request": {
+      "memory": "1Gi"
+     },
+     "max": {
+      "cpu": "2"
+     },
+     "min": {
+      "cpu": "10m"
+     },
+     "type": "Container"
+    },
+    {
+     "max": {
+      "memory": "2Gi"
+     },
+     "type": "Pod"
+    }
+   ],
+   "name": "limits",
+   "namespace": "demo"
+  },
+  "shows": {
+   "labels": {
+    "team": "a"
+   },
+   "limits": [
+    "Container default cpu=500m defaultRequest memory=1Gi max cpu=2 min cpu=10m",
+    "Pod max memory=2Gi"
+   ],
+   "types": "Container, Pod"
+  }
+ },
+ {
+  "name": "a ResourceQuota the controller has not counted yet shows nothing used, its labels gone",
+  "resource": "resourcequotas",
+  "before": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "team": "a"
+   },
+   "name": "quota",
+   "namespace": "demo",
+   "status_hard": {
+    "pods": "10",
+    "requests.memory": "1Gi"
+   },
+   "status_used": {
+    "pods": "3",
+    "requests.memory": "512Mi"
+   }
+  },
+  "event": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "name": "quota",
+   "namespace": "demo",
+   "status_hard": {},
+   "status_used": {}
+  },
+  "after": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "name": "quota",
+   "namespace": "demo",
+   "status_hard": {},
+   "status_used": {}
+  },
+  "shows": {
+   "hard": {},
+   "labels": {},
+   "requests": 0,
+   "used": {}
+  }
+ },
+ {
+  "name": "a ResourceQuota left with one limit counts only it",
+  "resource": "resourcequotas",
+  "before": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "team": "a"
+   },
+   "name": "quota",
+   "namespace": "demo",
+   "status_hard": {
+    "pods": "10",
+    "requests.memory": "1Gi"
+   },
+   "status_used": {
+    "pods": "3",
+    "requests.memory": "512Mi"
+   }
+  },
+  "event": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "name": "quota",
+   "namespace": "demo",
+   "status_hard": {
+    "pods": "20"
+   },
+   "status_used": {
+    "pods": "4"
+   }
+  },
+  "after": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "name": "quota",
+   "namespace": "demo",
+   "status_hard": {
+    "pods": "20"
+   },
+   "status_used": {
+    "pods": "4"
+   }
+  },
+  "shows": {
+   "hard": {
+    "pods": "20"
+   },
+   "labels": {},
+   "requests": 1,
+   "used": {
+    "pods": "4"
+   }
+  }
+ },
+ {
+  "name": "a ResourceQuota the controller counted shows what is used",
+  "resource": "resourcequotas",
+  "before": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": null,
+   "name": "quota",
+   "namespace": "demo",
+   "status_hard": {},
+   "status_used": {}
+  },
+  "event": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "team": "a"
+   },
+   "name": "quota",
+   "namespace": "demo",
+   "status_hard": {
+    "pods": "10",
+    "requests.memory": "1Gi"
+   },
+   "status_used": {
+    "pods": "3",
+    "requests.memory": "512Mi"
+   }
+  },
+  "after": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "team": "a"
+   },
+   "name": "quota",
+   "namespace": "demo",
+   "status_hard": {
+    "pods": "10",
+    "requests.memory": "1Gi"
+   },
+   "status_used": {
+    "pods": "3",
+    "requests.memory": "512Mi"
+   }
+  },
+  "shows": {
+   "hard": {
+    "pods": "10",
+    "requests.memory": "1Gi"
+   },
+   "labels": {
+    "team": "a"
+   },
+   "requests": 2,
+   "used": {
+    "pods": "3",
+    "requests.memory": "512Mi"
+   }
+  }
+ },
+ {
+  "name": "a PodDisruptionBudget moved from min available to max unavailable shows only that, its labels gone",
+  "resource": "poddisruptionbudgets",
+  "before": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_healthy": 3,
+   "desired_healthy": 2,
+   "disruptions_allowed": 1,
+   "expected_pods": 3,
+   "labels": {
+    "team": "a"
+   },
+   "min_available": "2",
+   "name": "web",
+   "namespace": "demo",
+   "selector": {
+    "app": "web"
+   },
+   "unhealthy_pod_eviction_policy": "AlwaysAllow"
+  },
+  "event": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_healthy": 3,
+   "desired_healthy": 2,
+   "disruptions_allowed": 1,
+   "expected_pods": 3,
+   "labels": null,
+   "match_expressions": [
+    {
+     "key": "app",
+     "operator": "In",
+     "values": [
+      "web"
+     ]
+    }
+   ],
+   "max_unavailable": "50%",
+   "name": "web",
+   "namespace": "demo",
+   "selector": {}
+  },
+  "after": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_healthy": 3,
+   "desired_healthy": 2,
+   "disruptions_allowed": 1,
+   "expected_pods": 3,
+   "labels": null,
+   "match_expressions": [
+    {
+     "key": "app",
+     "operator": "In",
+     "values": [
+      "web"
+     ]
+    }
+   ],
+   "max_unavailable": "50%",
+   "name": "web",
+   "namespace": "demo",
+   "selector": {}
+  },
+  "shows": {
+   "allowed": 1,
+   "current": "3/2",
+   "desired": 2,
+   "expected": 3,
+   "labels": {},
+   "max_unavailable": "50%",
+   "min_available": "-",
+   "selector": "-"
+  }
+ },
+ {
+  "name": "a PodDisruptionBudget moved back shows min available and its selector",
+  "resource": "poddisruptionbudgets",
+  "before": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_healthy": 3,
+   "desired_healthy": 2,
+   "disruptions_allowed": 1,
+   "expected_pods": 3,
+   "labels": null,
+   "match_expressions": [
+    {
+     "key": "app",
+     "operator": "In",
+     "values": [
+      "web"
+     ]
+    }
+   ],
+   "max_unavailable": "50%",
+   "name": "web",
+   "namespace": "demo",
+   "selector": {}
+  },
+  "event": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_healthy": 3,
+   "desired_healthy": 2,
+   "disruptions_allowed": 1,
+   "expected_pods": 3,
+   "labels": {
+    "team": "a"
+   },
+   "min_available": "2",
+   "name": "web",
+   "namespace": "demo",
+   "selector": {
+    "app": "web"
+   },
+   "unhealthy_pod_eviction_policy": "AlwaysAllow"
+  },
+  "after": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_healthy": 3,
+   "desired_healthy": 2,
+   "disruptions_allowed": 1,
+   "expected_pods": 3,
+   "labels": {
+    "team": "a"
+   },
+   "min_available": "2",
+   "name": "web",
+   "namespace": "demo",
+   "selector": {
+    "app": "web"
+   },
+   "unhealthy_pod_eviction_policy": "AlwaysAllow"
+  },
+  "shows": {
+   "allowed": 1,
+   "current": "3/2",
+   "desired": 2,
+   "expected": 3,
+   "labels": {
+    "team": "a"
+   },
+   "max_unavailable": "-",
+   "min_available": "2",
+   "selector": "app=web"
+  }
+ },
+ {
+  "name": "a PodDisruptionBudget with no pods left counts none, with no selector",
+  "resource": "poddisruptionbudgets",
+  "before": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_healthy": 3,
+   "desired_healthy": 2,
+   "disruptions_allowed": 1,
+   "expected_pods": 3,
+   "labels": {
+    "team": "a"
+   },
+   "min_available": "2",
+   "name": "web",
+   "namespace": "demo",
+   "selector": {
+    "app": "web"
+   },
+   "unhealthy_pod_eviction_policy": "AlwaysAllow"
+  },
+  "event": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_healthy": 0,
+   "desired_healthy": 0,
+   "disruptions_allowed": 0,
+   "expected_pods": 0,
+   "labels": null,
+   "min_available": "50%",
+   "name": "web",
+   "namespace": "demo",
+   "selector": {}
+  },
+  "after": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "current_healthy": 0,
+   "desired_healthy": 0,
+   "disruptions_allowed": 0,
+   "expected_pods": 0,
+   "labels": null,
+   "min_available": "50%",
+   "name": "web",
+   "namespace": "demo",
+   "selector": {}
+  },
+  "shows": {
+   "allowed": 0,
+   "current": "0/0",
+   "desired": 0,
+   "expected": 0,
+   "labels": {},
+   "max_unavailable": "-",
+   "min_available": "50%",
+   "selector": "-"
+  }
+ },
+ {
+  "name": "a CustomResourceDefinition no longer serving a version lists only the served one",
+  "resource": "customresourcedefinitions",
+  "before": {
+   "annotations": {
+    "note": "kept"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "group": "example.test",
+   "kind": "Widget",
+   "labels": {
+    "team": "a"
+   },
+   "name": "widgets.example.test",
+   "scope": "Namespaced",
+   "served_versions": [
+    "v1",
+    "v1beta1"
+   ],
+   "version": "v1"
+  },
+  "event": {
+   "annotations": null,
+   "created_at": "2026-11-01T00:00:00Z",
+   "group": "example.test",
+   "kind": "Widget",
+   "labels": null,
+   "name": "widgets.example.test",
+   "scope": "Namespaced",
+   "served_versions": [
+    "v1"
+   ],
+   "version": "v1"
+  },
+  "after": {
+   "annotations": null,
+   "created_at": "2026-11-01T00:00:00Z",
+   "group": "example.test",
+   "kind": "Widget",
+   "labels": null,
+   "name": "widgets.example.test",
+   "scope": "Namespaced",
+   "served_versions": [
+    "v1"
+   ],
+   "version": "v1"
+  },
+  "shows": {
+   "annotations": {},
+   "group": "example.test",
+   "kind": "Widget",
+   "labels": {},
+   "scope": "Namespaced",
+   "versions": "v1 (storage)"
+  }
+ },
+ {
+  "name": "a CustomResourceDefinition that serves a version again lists both",
+  "resource": "customresourcedefinitions",
+  "before": {
+   "annotations": null,
+   "created_at": "2026-11-01T00:00:00Z",
+   "group": "example.test",
+   "kind": "Widget",
+   "labels": null,
+   "name": "widgets.example.test",
+   "scope": "Namespaced",
+   "served_versions": [
+    "v1"
+   ],
+   "version": "v1"
+  },
+  "event": {
+   "annotations": {
+    "note": "kept"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "group": "example.test",
+   "kind": "Widget",
+   "labels": {
+    "team": "a"
+   },
+   "name": "widgets.example.test",
+   "scope": "Namespaced",
+   "served_versions": [
+    "v1",
+    "v1beta1"
+   ],
+   "version": "v1"
+  },
+  "after": {
+   "annotations": {
+    "note": "kept"
+   },
+   "created_at": "2026-11-01T00:00:00Z",
+   "group": "example.test",
+   "kind": "Widget",
+   "labels": {
+    "team": "a"
+   },
+   "name": "widgets.example.test",
+   "scope": "Namespaced",
+   "served_versions": [
+    "v1",
+    "v1beta1"
+   ],
+   "version": "v1"
+  },
+  "shows": {
+   "annotations": {
+    "note": "kept"
+   },
+   "group": "example.test",
+   "kind": "Widget",
+   "labels": {
+    "team": "a"
+   },
+   "scope": "Namespaced",
+   "versions": "v1 (storage), v1beta1"
+  }
+ },
+ {
   "name": "a pod being deleted reads Terminating, whatever its containers do",
   "resource": "pods",
   "before": {

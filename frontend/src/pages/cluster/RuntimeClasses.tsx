@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation, Trans } from 'react-i18next'
 import { api, type RuntimeClassInfo } from '@/services/api'
@@ -16,49 +15,9 @@ import { useCanCreate } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
+import { applyRuntimeClassWatchEvent } from './runtimeclasses/runtimeClassWatchNormalize'
 
 type SortKey = null | 'name' | 'handler' | 'age'
-
-function normalizeWatchRuntimeClassObject(obj: any): RuntimeClassInfo {
-  if (typeof obj?.name === 'string' && typeof obj?.handler === 'string' && typeof obj?.created_at === 'string') {
-    return obj as RuntimeClassInfo
-  }
-  const metadata = obj?.metadata ?? {}
-
-  return {
-    name: metadata?.name ?? obj?.name ?? '',
-    handler: obj?.handler ?? '',
-    overhead: obj?.overhead ?? undefined,
-    scheduling: obj?.scheduling ?? undefined,
-    labels: metadata?.labels ?? obj?.labels ?? {},
-    created_at: metadata?.creationTimestamp ?? obj?.created_at ?? '',
-  }
-}
-
-function applyRuntimeClassWatchEvent(
-  prev: RuntimeClassInfo[] | undefined,
-  event: { type?: string; object?: any },
-): RuntimeClassInfo[] {
-  const items = Array.isArray(prev) ? [...prev] : []
-  const obj = event?.object
-  if (!obj) return items
-
-  const normalized = normalizeWatchRuntimeClassObject(obj)
-  const name = normalized?.name
-  if (!name) return items
-
-  const index = items.findIndex((item) => item.name === name)
-
-  if (event.type === 'DELETED') {
-    if (index >= 0) items.splice(index, 1)
-    return items
-  }
-
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
-  else items.push(normalized)
-
-  return items
-}
 
 function runtimeClassToRawJson(rc: RuntimeClassInfo): Record<string, unknown> {
   return {

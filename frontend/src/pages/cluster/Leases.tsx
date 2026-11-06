@@ -61,6 +61,7 @@ export default function Leases() {
       : `/apis/coordination.k8s.io/v1/namespaces/${selectedNamespace}/leases`,
     query: 'watch=1',
     applyEvent: (prev, event) => applyLeaseWatchEvent(prev as LeaseInfo[] | undefined, event),
+    gatherEveryMs: 1000,
   })
 
   const filteredLeases = useMemo(() => {

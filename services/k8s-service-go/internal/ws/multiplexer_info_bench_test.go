@@ -67,6 +67,50 @@ func TestALivePodRowCostsLessThanTheConverter(t *testing.T) {
 	}
 }
 
+// What one renewal of a node's Lease costs k8s-service: the kind with the most events per object, every ten seconds per
+// node on the Leases screen of every namespace. The Lease as an API server sends it, with its two field managers.
+func BenchmarkLeaseFrame(b *testing.B) {
+	raw := []byte(`{"apiVersion":"coordination.k8s.io/v1","kind":"Lease","metadata":{"name":"node-a","namespace":"kube-node-lease","uid":"0d7f1c1e-6b1f-4a7e-9a44-1f7c6c8d2b11","resourceVersion":"123456","creationTimestamp":"2026-11-01T00:00:00Z",
+		"ownerReferences":[{"apiVersion":"v1","kind":"Node","name":"node-a","uid":"u-1"}],
+		"managedFields":[{"manager":"kubelet","operation":"Update","apiVersion":"coordination.k8s.io/v1","time":"2026-11-06T12:00:00Z","fieldsType":"FieldsV1","fieldsV1":{"f:metadata":{"f:ownerReferences":{".":{},"k:{\"uid\":\"u-1\"}":{}}},"f:spec":{"f:holderIdentity":{},"f:leaseDurationSeconds":{},"f:renewTime":{}}}}]},
+		"spec":{"holderIdentity":"node-a","leaseDurationSeconds":40,"renewTime":"2026-11-06T12:00:00.123456Z"}}`)
+	object := func(b *testing.B) *unstructured.Unstructured {
+		var obj unstructured.Unstructured
+		if err := obj.UnmarshalJSON(raw); err != nil {
+			b.Fatal(err)
+		}
+		return &obj
+	}
+	b.Run("read", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			object(b)
+		}
+	})
+	b.Run("row", func(b *testing.B) {
+		obj := object(b)
+		b.ReportAllocs()
+		for b.Loop() {
+			objectToInfo("leases", obj)
+		}
+	})
+	b.Run("write", func(b *testing.B) {
+		row := objectToInfo("leases", object(b))
+		frame, err := json.Marshal(row)
+		if err != nil {
+			b.Fatal(err)
+		}
+		b.ReportAllocs()
+		for b.Loop() {
+			if _, err := json.Marshal(row); err != nil {
+				b.Fatal(err)
+			}
+		}
+		b.ReportMetric(float64(len(raw)), "event-bytes")
+		b.ReportMetric(float64(len(frame)), "frame-bytes")
+	})
+}
+
 // What one pod event costs k8s-service, by its parts: reading the event, making the row and writing the frame.
 func BenchmarkPodFrame(b *testing.B) {
 	raw := []byte(benchPodJSON())

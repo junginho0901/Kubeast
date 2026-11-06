@@ -7,6 +7,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	resourcequotarow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/resourcequota"
 )
 
 // GetResourceQuotas lists ResourceQuotas in a namespace.
@@ -52,7 +54,7 @@ func (s *Service) DescribeResourceQuota(ctx context.Context, namespace, name str
 	if rqErr != nil {
 		return nil, fmt.Errorf("get resource quota %s/%s: %w", namespace, name, rqErr)
 	}
-	result := formatResourceQuotaDetail(rq)
+	result := resourcequotarow.Info(rq)
 
 	result["uid"] = string(rq.UID)
 	result["resource_version"] = rq.ResourceVersion
@@ -102,26 +104,7 @@ func (s *Service) DeleteResourceQuota(ctx context.Context, namespace, name strin
 func formatResourceQuotaList(items []corev1.ResourceQuota) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(items))
 	for i := range items {
-		result = append(result, formatResourceQuotaDetail(&items[i]))
+		result = append(result, resourcequotarow.Info(&items[i]))
 	}
 	return result
-}
-
-func formatResourceQuotaDetail(rq *corev1.ResourceQuota) map[string]interface{} {
-	hard := make(map[string]string)
-	used := make(map[string]string)
-	for k, v := range rq.Status.Hard {
-		hard[string(k)] = v.String()
-	}
-	for k, v := range rq.Status.Used {
-		used[string(k)] = v.String()
-	}
-	return map[string]interface{}{
-		"name":        rq.Name,
-		"namespace":   rq.Namespace,
-		"labels":      rq.Labels,
-		"status_hard": hard,
-		"status_used": used,
-		"created_at":  toISO(&rq.CreationTimestamp),
-	}
 }

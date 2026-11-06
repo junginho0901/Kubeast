@@ -2005,6 +2005,273 @@ test.describe('number check — list screens', () => {
     }
   })
 
+  // These lists had no live updates: the server refused each watch as an unsupported resource. Each object is made here
+  // and removed after; none limits a pod (a limit on claims only, a quota on ConfigMaps and Secrets, webhooks of a group
+  // no API serves, no default PriorityClass).
+  test('a live update of a binding, class, webhook, Lease, limit, quota, budget or definition leaves its row as the list API shows it', async ({ page }) => {
+    test.setTimeout(480_000)
+    const RBAC = 'rbac.authorization.k8s.io/v1'
+    const ADMISSION = 'admissionregistration.k8s.io/v1'
+    const namedInNs = (name: string) => ({ name, namespace: NS })
+    const hook = (name: string) => ({
+      name, admissionReviewVersions: ['v1'], sideEffects: 'None', failurePolicy: 'Ignore',
+      clientConfig: { url: 'https://num-live.invalid/' },
+      rules: [{ apiGroups: ['num-live.invalid'], apiVersions: ['v1'], operations: ['CREATE'], resources: ['things'] }],
+    })
+    const subjects = [{ kind: 'ServiceAccount', name: 'num-sa', namespace: NS }, { kind: 'ServiceAccount', name: 'default', namespace: NS }]
+    const roleRef = { apiGroup: 'rbac.authorization.k8s.io', kind: 'ClusterRole', name: 'view' }
+    const crdVersion = (name: string, served: boolean, storage: boolean) => ({
+      name, served, storage, schema: { openAPIV3Schema: { type: 'object', 'x-kubernetes-preserve-unknown-fields': true } },
+    })
+    const jsonPatch = (ops: Obj[]) => `--type=json -p=${arg(ops)}`
+    const mergePatch = (patch: Obj) => `--type=merge -p=${arg(patch)}`
+    // the kind as kubectl names it, its screen and list API, the object, the cells it should show, a change and the cells
+    // that change leaves; another = a second object of the kind, which comes and goes on a screen short enough to hold it
+    const kinds: { kind: string; path: string; list: string; object: Obj; cells: Record<string, string>; change: string; changed: Record<string, string>; another?: boolean }[] = [
+      {
+        kind: 'clusterrole', path: '/security/clusterroles', list: 'clusterroles',
+        object: { apiVersion: RBAC, kind: 'ClusterRole', metadata: { name: 'num-live-cr' }, rules: [{ apiGroups: [''], resources: ['pods'], verbs: ['get'] }, { apiGroups: ['apps'], resources: ['deployments'], verbs: ['get'] }] },
+        cells: { Rules: '2' }, change: jsonPatch([{ op: 'remove', path: '/rules/1' }]), changed: { Rules: '1' },
+      },
+      {
+        kind: 'clusterrolebinding', path: '/security/clusterrolebindings', list: 'clusterrolebindings',
+        object: { apiVersion: RBAC, kind: 'ClusterRoleBinding', metadata: { name: 'num-live-crb' }, roleRef, subjects },
+        cells: { 'Role Ref': 'ClusterRole/view', Subjects: '2' }, change: jsonPatch([{ op: 'remove', path: '/subjects' }]), changed: { 'Role Ref': 'ClusterRole/view', Subjects: '0' },
+      },
+      {
+        kind: 'rolebinding', path: '/security/rolebindings', list: `namespaces/${NS}/rolebindings`, another: true,
+        object: { apiVersion: RBAC, kind: 'RoleBinding', metadata: namedInNs('num-live-rb'), roleRef, subjects },
+        cells: { 'Role Ref': 'ClusterRole/view', Subjects: '2' }, change: jsonPatch([{ op: 'remove', path: '/subjects' }]), changed: { 'Role Ref': 'ClusterRole/view', Subjects: '0' },
+      },
+      {
+        kind: 'priorityclass', path: '/cluster/priorityclasses', list: 'priorityclasses', another: true,
+        object: { apiVersion: 'scheduling.k8s.io/v1', kind: 'PriorityClass', metadata: { name: 'num-live-pc' }, value: 17, preemptionPolicy: 'Never', description: 'num-live' },
+        cells: { Value: '17', 'Preemption Policy': 'Never' }, change: mergePatch({ description: 'num-live changed' }), changed: { Value: '17', 'Preemption Policy': 'Never' },
+      },
+      {
+        kind: 'runtimeclass', path: '/cluster/runtimeclasses', list: 'runtimeclasses', another: true,
+        object: { apiVersion: 'node.k8s.io/v1', kind: 'RuntimeClass', metadata: { name: 'num-live-rc' }, handler: 'num-live' },
+        cells: { Handler: 'num-live' }, change: mergePatch({ metadata: { labels: { 'num-live': 'yes' } } }), changed: { Handler: 'num-live' },
+      },
+      {
+        kind: 'validatingwebhookconfiguration', path: '/cluster/validatingwebhookconfigurations', list: 'validatingwebhookconfigurations', another: true,
+        object: { apiVersion: ADMISSION, kind: 'ValidatingWebhookConfiguration', metadata: { name: 'num-live-vwc' }, webhooks: [hook('one.num-live.invalid'), hook('two.num-live.invalid')] },
+        cells: { Webhooks: '2' }, change: jsonPatch([{ op: 'remove', path: '/webhooks/1' }]), changed: { Webhooks: '1' },
+      },
+      {
+        kind: 'mutatingwebhookconfiguration', path: '/cluster/mutatingwebhookconfigurations', list: 'mutatingwebhookconfigurations', another: true,
+        object: { apiVersion: ADMISSION, kind: 'MutatingWebhookConfiguration', metadata: { name: 'num-live-mwc' }, webhooks: [hook('one.num-live.invalid'), hook('two.num-live.invalid')] },
+        cells: { Webhooks: '2' }, change: jsonPatch([{ op: 'remove', path: '/webhooks/1' }]), changed: { Webhooks: '1' },
+      },
+      {
+        kind: 'lease', path: '/cluster/leases', list: `namespaces/${NS}/leases`, another: true,
+        object: { apiVersion: 'coordination.k8s.io/v1', kind: 'Lease', metadata: namedInNs('num-live-lease'), spec: { holderIdentity: 'num-live-holder', leaseDurationSeconds: 15 } },
+        cells: { Holder: 'num-live-holder', 'Duration (s)': '15' },
+        change: jsonPatch([{ op: 'remove', path: '/spec/holderIdentity' }, { op: 'remove', path: '/spec/leaseDurationSeconds' }]),
+        changed: { Holder: '-', 'Duration (s)': '-' },
+      },
+      {
+        kind: 'limitrange', path: '/cluster/limitranges', list: `namespaces/${NS}/limitranges`, another: true,
+        object: { apiVersion: 'v1', kind: 'LimitRange', metadata: namedInNs('num-live-lr'), spec: { limits: [{ type: 'PersistentVolumeClaim', max: { storage: '100Gi' } }] } },
+        cells: { Types: 'PersistentVolumeClaim' }, change: mergePatch({ spec: { limits: [] } }), changed: { Types: '-' },
+      },
+      {
+        kind: 'resourcequota', path: '/cluster/resourcequotas', list: `namespaces/${NS}/resourcequotas`, another: true,
+        object: { apiVersion: 'v1', kind: 'ResourceQuota', metadata: namedInNs('num-live-rq'), spec: { hard: { configmaps: '500', secrets: '500' } } },
+        cells: { Resources: '2' }, change: mergePatch({ spec: { hard: { secrets: null } } }), changed: { Resources: '1' },
+      },
+      {
+        kind: 'poddisruptionbudget', path: '/workloads/pdbs', list: `namespaces/${NS}/pdbs`, another: true,
+        object: { apiVersion: 'policy/v1', kind: 'PodDisruptionBudget', metadata: namedInNs('num-live-pdb'), spec: { minAvailable: 1, selector: { matchLabels: { app: 'num-live-nothing' } } } },
+        cells: { 'Min Available': '1', 'Max Unavailable': '-' },
+        change: jsonPatch([{ op: 'remove', path: '/spec/minAvailable' }, { op: 'add', path: '/spec/maxUnavailable', value: '50%' }]),
+        changed: { 'Min Available': '-', 'Max Unavailable': '50%' },
+      },
+      {
+        kind: 'customresourcedefinition', path: '/custom-resources/groups', list: 'crds',
+        object: {
+          apiVersion: 'apiextensions.k8s.io/v1', kind: 'CustomResourceDefinition', metadata: { name: 'numlives.numbers.kubeast.io' },
+          spec: { group: 'numbers.kubeast.io', scope: 'Namespaced', names: { kind: 'NumLive', plural: 'numlives', singular: 'numlive', listKind: 'NumLiveList' }, versions: [crdVersion('v1', true, true), crdVersion('v1beta1', true, false)] },
+        },
+        cells: { Versions: 'v1 (storage), v1beta1' },
+        change: mergePatch({ spec: { versions: [crdVersion('v1', true, true), crdVersion('v1beta1', false, false)] } }),
+        changed: { Versions: 'v1 (storage)' },
+      },
+    ]
+    const screenOf = (path: string) => [...SCREENS, ...SCREENS_CLUSTER].find((s) => s.path === path) as Screen
+    const inNamespace = (o: Obj) => (o.metadata.namespace ? `-n ${o.metadata.namespace}` : '')
+
+    await page.context().addInitScript(() => localStorage.setItem('kubeast.listPageSize', '100'))
+    const held = await page.context().newPage()
+    await held.routeWebSocket(/wsMultiplexer/, () => {})
+    for (const p of [held, page]) await p.setViewportSize({ width: 2560, height: 1200 })
+
+    // one object's row by column (no Age, which moves), undefined while there is none, and the cards
+    const shown = async (p: Page, name: string) => {
+      const { heads, rows, cards } = await readScreen(p)
+      const row = rows.find((cells) => cells[heads.findIndex((h) => /^name$/i.test(h))] === name)
+      return { row: row && Object.fromEntries(heads.map((h, i) => [h, row[i]] as const).filter(([h]) => h !== 'Age')), cards }
+    }
+    const cellsOf = async (name: string, want: Record<string, string>) => {
+      const { row } = await shown(page, name)
+      return row && Object.fromEntries(Object.keys(want).map((k) => [k, row[k]]))
+    }
+
+    try {
+      for (const k of kinds) {
+        await test.step(`${k.kind}: from the list API, then live as it changes, comes and goes`, async () => {
+          const s = screenOf(k.path)
+          const name: string = k.object.metadata.name
+          const listed = async () => {
+            const answer = await page.request.get(`/api/v1/cluster/${k.list}?cluster=self&force_refresh=true`)
+            return ((await answer.json()) as Obj[]).find((r) => r.name === name)
+          }
+          kubectl('apply -f -', JSON.stringify(k.object))
+
+          const frames: string[] = []
+          const collect = (ws: WebSocket) => {
+            if (/wsMultiplexer/.test(ws.url())) ws.on('framereceived', (f) => { if (String(f.payload).includes(`"${name}"`)) frames.push(String(f.payload)) })
+          }
+          page.on('websocket', collect)
+          try {
+            await page.goto(screenUrl(s))
+            await expect.poll(() => frames.length, { timeout: 20_000, message: `${k.kind}: the watch's first frame` }).toBeGreaterThan(0)
+            await expect.poll(() => cellsOf(name, k.cells), { timeout: 20_000, message: `${k.kind}: the row as made` }).toEqual(k.cells)
+
+            const before = frames.length
+            kubectl(`patch ${k.kind} ${name} ${inNamespace(k.object)} ${k.change}`)
+            await expect.poll(() => frames.length, { timeout: 20_000, message: `${k.kind}: the frame of the change` }).toBeGreaterThan(before)
+            await expect.poll(() => cellsOf(name, k.changed), { timeout: 20_000, message: `${k.kind}: the row after a live update` }).toEqual(k.changed)
+            await expect(async () => {
+              expect(JSON.parse(frames[frames.length - 1]).data.object, `${k.kind}: the live frame is the list row`).toEqual(await listed())
+            }).toPass({ timeout: 20_000 })
+
+            // a fresh read of the list API reads what the update left
+            const live = await shown(page, name)
+            await expect.poll(async () => {
+              await held.goto(screenUrl(s))
+              await expect(held.locator('main tbody tr').filter({ has: held.getByRole('cell', { name, exact: true }) })).toHaveCount(1, { timeout: 20_000 })
+              return shown(held, name)
+            }, { timeout: 40_000, message: `${k.kind}: a fresh read of the list API` }).toEqual(live)
+
+            if (k.another) {
+              const other = `${name}-2`
+              const made = { ...k.object, metadata: { ...k.object.metadata, name: other } }
+              kubectl('apply -f -', JSON.stringify(made))
+              await expect.poll(() => cellsOf(other, k.cells), { timeout: 20_000, message: `${k.kind}: a new object's row` }).toEqual(k.cells)
+              kubectl(`delete ${k.kind} ${other} ${inNamespace(k.object)} --wait=false`)
+              await expect.poll(async () => (await shown(page, other)).row, { timeout: 20_000, message: `${k.kind}: a deleted object's row` }).toBeUndefined()
+            }
+
+            kubectl(`delete ${k.kind} ${name} ${inNamespace(k.object)} --wait=false`)
+            await expect.poll(async () => (await shown(page, name)).row, { timeout: 20_000, message: `${k.kind}: the row after its object went` }).toBeUndefined()
+          } finally {
+            page.off('websocket', collect)
+          }
+        })
+      }
+    } finally {
+      await held.close()
+      for (const k of kinds) {
+        kubectl(`delete ${k.kind} ${k.object.metadata.name} ${inNamespace(k.object)} --ignore-not-found --wait=false`)
+        if (k.another) kubectl(`delete ${k.kind} ${k.object.metadata.name}-2 ${inNamespace(k.object)} --ignore-not-found --wait=false`)
+      }
+    }
+  })
+
+  // The same drawers as a workload's: what they read is asked again when the object changes, whichever page opened them.
+  test('an open drawer of a binding, class, webhook, limit, quota, budget or definition follows its object, and a role\'s and a ServiceAccount\'s its bindings', async ({ page }) => {
+    test.setTimeout(420_000)
+    const base = { 'num-follow-base': 'yes' }
+    const subjects = [{ kind: 'ServiceAccount', name: 'num-sa', namespace: NS }]
+    const roleRef = { apiGroup: 'rbac.authorization.k8s.io', kind: 'ClusterRole', name: 'view' }
+    const hook = { name: 'one.num-follow.invalid', admissionReviewVersions: ['v1'], sideEffects: 'None', failurePolicy: 'Ignore', clientConfig: { url: 'https://num-follow.invalid/' }, rules: [{ apiGroups: ['num-follow.invalid'], apiVersions: ['v1'], operations: ['CREATE'], resources: ['things'] }] }
+    const objects: { kind: string; list: string; name: string; namespaced?: boolean; body: Obj }[] = [
+      { kind: 'ClusterRole', list: '/security/clusterroles', name: 'num-follow-cr', body: { apiVersion: 'rbac.authorization.k8s.io/v1', rules: [{ apiGroups: [''], resources: ['pods'], verbs: ['get'] }] } },
+      { kind: 'ClusterRoleBinding', list: '/security/clusterrolebindings', name: 'num-follow-crb', body: { apiVersion: 'rbac.authorization.k8s.io/v1', roleRef, subjects } },
+      { kind: 'RoleBinding', list: '/security/rolebindings', name: 'num-follow-rb', namespaced: true, body: { apiVersion: 'rbac.authorization.k8s.io/v1', roleRef, subjects } },
+      { kind: 'PriorityClass', list: '/cluster/priorityclasses', name: 'num-follow-pc', body: { apiVersion: 'scheduling.k8s.io/v1', value: 18 } },
+      { kind: 'RuntimeClass', list: '/cluster/runtimeclasses', name: 'num-follow-rc', body: { apiVersion: 'node.k8s.io/v1', handler: 'num-follow' } },
+      { kind: 'ValidatingWebhookConfiguration', list: '/cluster/validatingwebhookconfigurations', name: 'num-follow-vwc', body: { apiVersion: 'admissionregistration.k8s.io/v1', webhooks: [hook] } },
+      { kind: 'MutatingWebhookConfiguration', list: '/cluster/mutatingwebhookconfigurations', name: 'num-follow-mwc', body: { apiVersion: 'admissionregistration.k8s.io/v1', webhooks: [hook] } },
+      { kind: 'LimitRange', list: '/cluster/limitranges', name: 'num-follow-lr', namespaced: true, body: { apiVersion: 'v1', spec: { limits: [{ type: 'PersistentVolumeClaim', max: { storage: '100Gi' } }] } } },
+      { kind: 'ResourceQuota', list: '/cluster/resourcequotas', name: 'num-follow-rq', namespaced: true, body: { apiVersion: 'v1', spec: { hard: { configmaps: '500' } } } },
+      { kind: 'PodDisruptionBudget', list: '/workloads/pdbs', name: 'num-follow-pdb', namespaced: true, body: { apiVersion: 'policy/v1', spec: { minAvailable: 1, selector: { matchLabels: { app: 'num-follow-nothing' } } } } },
+      {
+        kind: 'CustomResourceDefinition', list: '/custom-resources/groups', name: 'numfollows.numbers.kubeast.io',
+        body: {
+          apiVersion: 'apiextensions.k8s.io/v1',
+          spec: { group: 'numbers.kubeast.io', scope: 'Namespaced', names: { kind: 'NumFollow', plural: 'numfollows' }, versions: [{ name: 'v1', served: true, storage: true, schema: { openAPIV3Schema: { type: 'object', 'x-kubernetes-preserve-unknown-fields': true } } }] },
+        },
+      },
+    ]
+    const inNamespace = (o: { namespaced?: boolean }) => (o.namespaced ? `-n ${NS}` : '')
+    const label = (o: (typeof objects)[number], value: string) => kubectl(`label ${o.kind.toLowerCase()} ${o.name} ${inNamespace(o)} num-follow=${value} --overwrite`)
+    const drawer = page.locator(DRAWER).last()
+    const binding = (kind: string, name: string, role: Obj, namespace?: string) =>
+      JSON.stringify({ apiVersion: 'rbac.authorization.k8s.io/v1', kind, metadata: { name, ...(namespace ? { namespace } : {}) }, roleRef: role, subjects })
+    try {
+      for (const o of objects) {
+        const { body, ...named } = o
+        kubectl('apply -f -', JSON.stringify({ ...body, kind: named.kind, metadata: { name: named.name, labels: base, ...(named.namespaced ? { namespace: NS } : {}) } }))
+      }
+      for (const o of objects) {
+        await test.step(`${o.kind}: from its list, then by a link from another page`, async () => {
+          const target = o.namespaced ? `${o.kind}/${NS}/${o.name}` : `${o.kind}/${o.name}`
+          const detail = `cluster=self${o.namespaced ? `&namespace=${NS}` : ''}&detail=${target}`
+
+          await page.goto(`${o.list}?${detail}`)
+          await expect(drawer).toContainText('num-follow-base:yes', { timeout: 20_000 })
+          const section = drawer.getByText('Labels', { exact: true }).first()
+          // the same element after the update: the section was not drawn again from a loading state
+          await section.evaluate((el) => el.setAttribute('data-e2e-kept', 'yes'))
+          label(o, 'one')
+          await expect(drawer, `${o.kind} drawer opened from its list`).toContainText('num-follow:one', { timeout: 20_000 })
+          await expect(section).toHaveAttribute('data-e2e-kept', 'yes')
+
+          await page.goto(`/workloads/pods?${detail}`)
+          await expect(drawer).toContainText('num-follow:one', { timeout: 20_000 })
+          label(o, 'two')
+          await expect(drawer, `${o.kind} drawer opened by a link`).toContainText('num-follow:two', { timeout: 20_000 })
+          await expect(drawer).not.toContainText('num-follow:one')
+          kubectl(`label ${o.kind.toLowerCase()} ${o.name} ${inNamespace(o)} num-follow-`)
+          await expect(drawer, `${o.kind} drawer after its label went`).not.toContainText('num-follow:', { timeout: 20_000 })
+        })
+      }
+
+      await test.step('a ClusterRole drawer lists its bindings as they come and go', async () => {
+        const role = { apiGroup: 'rbac.authorization.k8s.io', kind: 'ClusterRole', name: 'num-follow-cr' }
+        await page.goto(`/security/clusterroles?cluster=self&detail=ClusterRole/num-follow-cr`)
+        await expect(drawer).toContainText('Referenced By ClusterRoleBindings (0)', { timeout: 20_000 })
+        await expect(drawer).toContainText('Referenced By RoleBindings (0)', { timeout: 20_000 })
+        kubectl('apply -f -', binding('ClusterRoleBinding', 'num-follow-ref-crb', role))
+        kubectl('apply -f -', binding('RoleBinding', 'num-follow-ref-rb', role, NS))
+        await expect(drawer, 'the ClusterRoleBinding that came').toContainText('Referenced By ClusterRoleBindings (1)', { timeout: 20_000 })
+        await expect(drawer, 'the RoleBinding that came').toContainText('Referenced By RoleBindings (1)', { timeout: 20_000 })
+        await expect(drawer).toContainText('num-follow-ref-crb')
+        await expect(drawer).toContainText('num-follow-ref-rb')
+        kubectl('delete clusterrolebinding num-follow-ref-crb --wait=false')
+        kubectl(`delete rolebinding num-follow-ref-rb -n ${NS} --wait=false`)
+        await expect(drawer, 'the ClusterRoleBinding that went').toContainText('Referenced By ClusterRoleBindings (0)', { timeout: 20_000 })
+        await expect(drawer, 'the RoleBinding that went').toContainText('Referenced By RoleBindings (0)', { timeout: 20_000 })
+      })
+
+      await test.step("a ServiceAccount drawer's permissions follow the bindings that name it", async () => {
+        await page.goto(`/security/serviceaccounts?cluster=self&namespace=${NS}&detail=ServiceAccount/${NS}/num-sa`)
+        await expect(drawer).toContainText('num-sa', { timeout: 20_000 })
+        await expect(drawer).not.toContainText('num-follow-sa-rb')
+        kubectl('apply -f -', binding('RoleBinding', 'num-follow-sa-rb', roleRef, NS))
+        await expect(drawer, 'the RoleBinding that came').toContainText('num-follow-sa-rb', { timeout: 20_000 })
+        kubectl(`delete rolebinding num-follow-sa-rb -n ${NS} --wait=false`)
+        await expect(drawer, 'the RoleBinding that went').not.toContainText('num-follow-sa-rb', { timeout: 20_000 })
+      })
+    } finally {
+      kubectl('delete clusterrolebinding num-follow-ref-crb --ignore-not-found --wait=false')
+      kubectl(`delete rolebinding num-follow-ref-rb num-follow-sa-rb -n ${NS} --ignore-not-found --wait=false`)
+      for (const o of objects) kubectl(`delete ${o.kind.toLowerCase()} ${o.name} ${inNamespace(o)} --ignore-not-found --wait=false`)
+    }
+  })
+
   // An EndpointSlice row and its drawer are the slice the cluster has whichever way they came: from the list API (live
   // updates held back), from a live update, and by link (the object itself). Last in the file: it changes num-hand.
   test('an EndpointSlice row and drawer show the slice from the list API, a live update and a link alike', async ({ page }) => {

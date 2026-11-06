@@ -23,7 +23,8 @@ gateway:
     - http://localhost:5173
     - http://localhost:8000
 auth:
-  tokenTTLMinutes: 60
+  # the full e2e signs in once and runs past an hour
+  tokenTTLMinutes: 120
   bootstrapDemoUsers: true
   cookieSecure: false
   # e2e/tests/permission-ceiling.spec.ts: a listed name with no role takes a global admin.

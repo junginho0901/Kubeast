@@ -33,9 +33,31 @@ import { daemonSetToWorkloadRawJson, getDaemonSetStatusColor } from '@/pages/wor
 import { applyDaemonSetWatchEvent, normalizeWatchDaemonSetObject } from '@/pages/workloads/daemonsets/daemonSetWatchNormalize'
 import { formatDuration, getJobStatusColor, jobCompletionsCell, jobDurationSeconds, jobToWorkloadRawJson } from '@/pages/workloads/jobs/jobHelpers'
 import { applyJobWatchEvent, normalizeWatchJobObject } from '@/pages/workloads/jobs/jobWatchNormalize'
+import { applyClusterRoleWatchEvent, normalizeWatchClusterRoleObject } from '@/pages/security/clusterroles/clusterRoleWatchNormalize'
+import {
+  applyClusterRoleBindingWatchEvent,
+  applyRoleBindingWatchEvent,
+  normalizeWatchClusterRoleBindingObject,
+  normalizeWatchRoleBindingObject,
+} from '@/pages/security/rolebindings/roleBindingWatchNormalize'
+import { normalizeBinding, type ReverseBinding } from '@/components/resource-detail/role-info/referencedBy'
+import { applyPriorityClassWatchEvent, normalizeWatchPriorityClassObject } from '@/pages/cluster/priorityclasses/priorityClassWatchNormalize'
+import { applyRuntimeClassWatchEvent, normalizeWatchRuntimeClassObject } from '@/pages/cluster/runtimeclasses/runtimeClassWatchNormalize'
+import { applyWebhookConfigWatchEvent, normalizeWatchWebhookConfigObject } from '@/pages/cluster/webhooks/webhookConfigWatchNormalize'
+import { leaseToRawJson } from '@/pages/cluster/leases/leaseHelpers'
+import { applyLeaseWatchEvent, normalizeWatchLeaseObject } from '@/pages/cluster/leases/leaseWatchNormalize'
+import { getLimitTypes, limitRangeToRawJson } from '@/pages/cluster/limitranges/limitRangeHelpers'
+import { applyLimitRangeWatchEvent, normalizeWatchLimitRangeObject } from '@/pages/cluster/limitranges/limitRangeWatchNormalize'
+import { resourceQuotaToRawJson } from '@/pages/cluster/resourcequotas/resourceQuotaHelpers'
+import { applyResourceQuotaWatchEvent, normalizeWatchResourceQuotaObject } from '@/pages/cluster/resourcequotas/resourceQuotaWatchNormalize'
+import { pdbToRawJson } from '@/pages/workloads/pdbs/pdbHelpers'
+import { applyPDBWatchEvent, normalizeWatchPDBObject } from '@/pages/workloads/pdbs/pdbWatchNormalize'
+import { crdVersionsText } from '@/pages/custom-resources/crdVersions'
+import { applyCRDWatchEvent, normalizeWatchCRDObject } from '@/pages/custom-resources/crdWatchNormalize'
 import { workloadStatusTitle } from '@/utils/workloadStatus'
 import { QueryClient } from '@tanstack/react-query'
 import secretInfoSrc from '@/components/resource-detail/SecretInfo.tsx?raw'
+import effectivePermissionsSrc from '@/components/resource-detail/service-account-info/useEffectivePermissions.ts?raw'
 import { applyWatchMessage } from './useKubeWatchList'
 import cases from './watchRows.cases.json'
 
@@ -61,7 +83,130 @@ function plainWatchApply(prev: any[], event: { type?: string; object?: any }): a
 
 const owners = (row: any) => (row.owner_references ?? []).map((r: any) => `${r.kind}/${r.name}`)
 
+// what a binding's list row and the drawers that list its subjects read
+const bindingShows = (row: any) => ({
+  role: `${row.role_ref_kind}/${row.role_ref_name}`,
+  subjects_count: row.subjects_count,
+  subjects: (row.subjects ?? []).map((s: any) => `${s.kind}/${s.name}`),
+  labels: row.labels || {},
+  annotations: row.annotations || {},
+})
+const webhookPage: Page = {
+  apply: applyWebhookConfigWatchEvent,
+  normalize: normalizeWatchWebhookConfigObject,
+  shows: (row) => ({ webhooks_count: row.webhooks_count, labels: row.labels || {} }),
+  derives: (row) => row,
+}
+const quantities = (values: Record<string, string> | undefined) =>
+  Object.entries(values ?? {}).map(([k, v]) => `${k}=${v}`).join(' ')
+const limitLine = (limit: any) =>
+  [limit.type, ...(['default', 'default_request', 'max', 'min'] as const)
+    .filter((field) => limit[field])
+    .map((field) => `${field === 'default_request' ? 'defaultRequest' : field} ${quantities(limit[field])}`)].join(' ')
+
 const pages: Record<string, Page> = {
+  clusterroles: {
+    apply: applyClusterRoleWatchEvent,
+    normalize: normalizeWatchClusterRoleObject,
+    shows: (row) => ({ rules_count: row.rules_count, labels: row.labels || {}, annotations: row.annotations || {} }),
+    derives: (row) => row,
+  },
+  clusterrolebindings: {
+    apply: applyClusterRoleBindingWatchEvent,
+    normalize: normalizeWatchClusterRoleBindingObject,
+    shows: bindingShows,
+    derives: normalizeBinding,
+  },
+  rolebindings: {
+    apply: applyRoleBindingWatchEvent,
+    normalize: normalizeWatchRoleBindingObject,
+    shows: bindingShows,
+    derives: normalizeBinding,
+  },
+  priorityclasses: {
+    apply: applyPriorityClassWatchEvent,
+    normalize: normalizeWatchPriorityClassObject,
+    shows: (row) => ({
+      value: row.value,
+      global_default: row.global_default,
+      preemption_policy: row.preemption_policy,
+      description: row.description,
+      labels: row.labels || {},
+    }),
+    derives: (row) => row,
+  },
+  runtimeclasses: {
+    apply: applyRuntimeClassWatchEvent,
+    normalize: normalizeWatchRuntimeClassObject,
+    shows: (row) => ({
+      handler: row.handler,
+      overhead: row.overhead ?? null,
+      node_selector: row.scheduling?.node_selector ?? null,
+      tolerations: row.scheduling?.tolerations?.length ?? 0,
+      labels: row.labels || {},
+    }),
+    derives: (row) => row,
+  },
+  validatingwebhookconfigurations: webhookPage,
+  mutatingwebhookconfigurations: webhookPage,
+  leases: {
+    apply: applyLeaseWatchEvent,
+    normalize: normalizeWatchLeaseObject,
+    shows: (row) => ({
+      holder: row.holder_identity || '-',
+      duration: row.lease_duration_seconds ?? '-',
+      transitions: row.lease_transitions ?? '-',
+      renew_time: row.renew_time ?? null,
+      acquire_time: row.acquire_time ?? null,
+      labels: row.labels || {},
+    }),
+    derives: leaseToRawJson,
+  },
+  limitranges: {
+    apply: applyLimitRangeWatchEvent,
+    normalize: normalizeWatchLimitRangeObject,
+    shows: (row) => ({ types: getLimitTypes(row), limits: (row.limits ?? []).map(limitLine), labels: row.labels || {} }),
+    derives: limitRangeToRawJson,
+  },
+  resourcequotas: {
+    apply: applyResourceQuotaWatchEvent,
+    normalize: normalizeWatchResourceQuotaObject,
+    shows: (row) => ({
+      requests: Object.keys(row.status_hard || {}).length,
+      hard: row.status_hard ?? {},
+      used: row.status_used ?? {},
+      labels: row.labels || {},
+    }),
+    derives: resourceQuotaToRawJson,
+  },
+  poddisruptionbudgets: {
+    apply: applyPDBWatchEvent,
+    normalize: normalizeWatchPDBObject,
+    shows: (row) => ({
+      min_available: row.min_available ?? '-',
+      max_unavailable: row.max_unavailable ?? '-',
+      allowed: row.disruptions_allowed,
+      current: `${row.current_healthy}/${row.desired_healthy}`,
+      desired: row.desired_healthy,
+      expected: row.expected_pods,
+      selector: Object.entries(row.selector || {}).map(([k, v]) => `${k}=${v}`).join(', ') || '-',
+      labels: row.labels || {},
+    }),
+    derives: pdbToRawJson,
+  },
+  customresourcedefinitions: {
+    apply: applyCRDWatchEvent,
+    normalize: normalizeWatchCRDObject,
+    shows: (row) => ({
+      group: row.group,
+      versions: crdVersionsText(row),
+      scope: row.scope,
+      kind: row.kind,
+      labels: row.labels || {},
+      annotations: row.annotations || {},
+    }),
+    derives: (row) => row,
+  },
   pods: {
     apply: applyPodWatchEvent,
     normalize: normalizeWatchPodObject,
@@ -350,7 +495,31 @@ describe('a live update leaves a row as the list API gives it', () => {
 
   it('the server wrote cases for every list these tests name', () => {
     expect(new Set(cases.map((c) => c.resource))).toEqual(new Set(Object.keys(pages)))
-    expect(cases.length).toBeGreaterThanOrEqual(82)
+    expect(cases.length).toBeGreaterThanOrEqual(110)
+  })
+
+  // The drawers that list the bindings of a role read the same rows, through a watch of their own.
+  it('a binding drawer reads a frame as it reads the list row', () => {
+    for (const c of cases.filter((one) => one.resource === 'rolebindings' || one.resource === 'clusterrolebindings')) {
+      expect(normalizeBinding(c.event) as ReverseBinding).toEqual(normalizeBinding(c.after))
+    }
+  })
+
+  // A ServiceAccount drawer's permissions are the bindings naming it: a binding that comes or goes changes them.
+  it('a ServiceAccount drawer reads a frame of a binding, whose name sits at the top of the row', () => {
+    expect(effectivePermissionsSrc).toContain('applyRoleBindingWatchEvent(prev as RoleBindingInfo[] | undefined, event)')
+    expect(effectivePermissionsSrc).toContain('applyClusterRoleBindingWatchEvent(prev as ClusterRoleBindingInfo[] | undefined, event)')
+    const bindings = cases.filter((c) => c.resource === 'rolebindings')
+    expect(bindings.length).toBeGreaterThan(0)
+    for (const c of bindings) {
+      expect(applyRoleBindingWatchEvent([], { type: 'ADDED', object: c.event })).toEqual([c.after])
+      expect(applyRoleBindingWatchEvent([c.before as any], { type: 'DELETED', object: c.event })).toEqual([])
+    }
+  })
+
+  it('no case holds what a webhook is given', () => {
+    expect(cases.filter((c) => c.resource.endsWith('webhookconfigurations')).length).toBeGreaterThan(0)
+    expect(JSON.stringify(cases)).not.toContain('ZmFrZS1jYS1idW5kbGUtZm9yLXRlc3Rz')
   })
 
   // The External IP cell is what kubectl prints, which for some Services is no address: the drawer opened from a row
@@ -707,6 +876,84 @@ describe('a row the server could not convert comes with its object nested', () =
     expect(cell({ parallelism: 3 }, 1)).toBe('1/1 of 3')
     expect(cell({ parallelism: 1 })).toBe('0/1')
     expect(cell({})).toBe('0/1')
+  })
+
+  it('a ClusterRole counts the rules beside the metadata', () => {
+    const [row] = applyClusterRoleWatchEvent([], {
+      type: 'ADDED',
+      object: { name: 'odd', namespace: null, kind: 'ClusterRole', labels: { team: 'a' }, created_at: '2026-11-01T00:00:00Z', spec: null, status: null, rules: [{}, {}] },
+    })
+    expect(pages.clusterroles.shows(row)).toEqual({ rules_count: 2, labels: { team: 'a' }, annotations: {} })
+  })
+
+  it('a binding reads its role and subjects beside the metadata', () => {
+    const generic = { name: 'odd', namespace: 'demo', kind: 'RoleBinding', labels: null, created_at: '2026-11-01T00:00:00Z', spec: null, status: null, roleRef: { kind: 'Role', name: 'r' }, subjects: [{ kind: 'User', name: 'someone' }] }
+    const want = { role: 'Role/r', subjects_count: 1, subjects: ['User/someone'], labels: {}, annotations: {} }
+    expect(bindingShows(applyRoleBindingWatchEvent([], { type: 'ADDED', object: generic })[0])).toEqual(want)
+    expect(bindingShows(applyClusterRoleBindingWatchEvent([], { type: 'ADDED', object: { ...generic, namespace: null } })[0])).toEqual(want)
+  })
+
+  it('a PriorityClass reads its value and policy beside the metadata', () => {
+    const [row] = applyPriorityClassWatchEvent([], {
+      type: 'ADDED',
+      object: { name: 'odd', namespace: null, kind: 'PriorityClass', labels: null, created_at: '', spec: null, status: null, value: 7, globalDefault: 'not a bool', preemptionPolicy: 'Never', description: 'd' },
+    })
+    expect(pages.priorityclasses.shows(row)).toEqual({ value: 7, global_default: false, preemption_policy: 'Never', description: 'd', labels: {} })
+  })
+
+  it('a RuntimeClass keeps its handler and claims no overhead it could not read', () => {
+    const [row] = applyRuntimeClassWatchEvent([], {
+      type: 'ADDED',
+      object: { name: 'odd', namespace: null, kind: 'RuntimeClass', labels: null, created_at: '', spec: null, status: null, handler: 'h' },
+    })
+    expect(pages.runtimeclasses.shows(row)).toEqual({ handler: 'h', overhead: null, node_selector: null, tolerations: 0, labels: {} })
+  })
+
+  it('a webhook configuration counts what the server counted', () => {
+    const [row] = applyWebhookConfigWatchEvent([], {
+      type: 'ADDED',
+      object: { name: 'odd', namespace: null, kind: 'X', labels: null, created_at: '', spec: null, status: null, webhooks_count: 2 },
+    })
+    expect(webhookPage.shows(row)).toEqual({ webhooks_count: 2, labels: {} })
+  })
+
+  it('a Lease reads its holder and times from the spec, not an empty top of the row', () => {
+    const [row] = applyLeaseWatchEvent([], {
+      type: 'ADDED',
+      object: {
+        name: 'odd', namespace: 'demo', kind: 'Lease', labels: { team: 'a' }, created_at: '2026-11-01T00:00:00Z', status: null,
+        spec: { holderIdentity: 'node-a', leaseDurationSeconds: 40, leaseTransitions: 1, renewTime: '2026-11-06T11:59:50Z', acquireTime: '2026-11-05T00:00:00Z' },
+      },
+    })
+    expect(pages.leases.shows(row)).toEqual({ holder: 'node-a', duration: 40, transitions: 1, renew_time: '2026-11-06T11:59:50Z', acquire_time: '2026-11-05T00:00:00Z', labels: { team: 'a' } })
+  })
+
+  it('a LimitRange reads its limits from the spec, not an empty top of the row', () => {
+    const [row] = applyLimitRangeWatchEvent([], {
+      type: 'ADDED',
+      object: { name: 'odd', namespace: 'demo', kind: 'LimitRange', labels: null, created_at: '2026-11-01T00:00:00Z', status: null, spec: { limits: [{ type: 'Pod', max: { cpu: '1' }, defaultRequest: { cpu: '1' } }] } },
+    })
+    expect(pages.limitranges.shows(row)).toEqual({ types: 'Pod', limits: ['Pod defaultRequest cpu=1 max cpu=1'], labels: {} })
+  })
+
+  it('a ResourceQuota reads what is used from the status, not an empty top of the row', () => {
+    const [row] = applyResourceQuotaWatchEvent([], {
+      type: 'ADDED',
+      object: { name: 'odd', namespace: 'demo', kind: 'ResourceQuota', labels: null, created_at: '2026-11-01T00:00:00Z', spec: { hard: { pods: '1' } }, status: { hard: { pods: '1' }, used: { pods: '0' } } },
+    })
+    expect(pages.resourcequotas.shows(row)).toEqual({ requests: 1, hard: { pods: '1' }, used: { pods: '0' }, labels: {} })
+  })
+
+  it('a PodDisruptionBudget reads its budget from the spec and status, its labels kept', () => {
+    const [row] = applyPDBWatchEvent([], {
+      type: 'ADDED',
+      object: {
+        name: 'odd', namespace: 'demo', kind: 'PodDisruptionBudget', labels: { team: 'a' }, created_at: '2026-11-01T00:00:00Z',
+        spec: { maxUnavailable: 1, selector: { matchLabels: { app: 'web' } } },
+        status: { currentHealthy: 3, desiredHealthy: 2, disruptionsAllowed: 1, expectedPods: 3 },
+      },
+    })
+    expect(pages.poddisruptionbudgets.shows(row)).toEqual({ min_available: '-', max_unavailable: '1', allowed: 1, current: '3/2', desired: 2, expected: 3, selector: 'app=web', labels: { team: 'a' } })
   })
 
   it('a Role counts the rules beside the metadata', () => {

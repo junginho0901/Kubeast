@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation, Trans } from 'react-i18next'
 import { api, type ClusterRoleBindingInfo } from '@/services/api'
@@ -16,57 +15,10 @@ import { useCanCreate } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
+import { applyClusterRoleBindingWatchEvent } from './rolebindings/roleBindingWatchNormalize'
 
 type SortKey = null | 'name' | 'roleRef' | 'subjects' | 'age'
 type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
-
-function normalizeWatchClusterRoleBindingObject(obj: any): ClusterRoleBindingInfo {
-  if (
-    typeof obj?.name === 'string' &&
-    typeof obj?.subjects_count === 'number'
-  ) {
-    return obj as ClusterRoleBindingInfo
-  }
-
-  const metadata = obj?.metadata ?? {}
-  const subjects = Array.isArray(obj?.subjects) ? obj.subjects : []
-  const roleRef = obj?.roleRef ?? {}
-
-  return {
-    name: metadata?.name ?? obj?.name ?? '',
-    role_ref_kind: roleRef?.kind ?? obj?.role_ref_kind ?? '',
-    role_ref_name: roleRef?.name ?? obj?.role_ref_name ?? '',
-    subjects_count: subjects.length,
-    created_at: metadata?.creationTimestamp ?? obj?.created_at ?? '',
-    labels: metadata?.labels ?? obj?.labels ?? null,
-    annotations: metadata?.annotations ?? obj?.annotations ?? null,
-  }
-}
-
-function applyClusterRoleBindingWatchEvent(
-  prev: ClusterRoleBindingInfo[] | undefined,
-  event: { type?: string; object?: any },
-): ClusterRoleBindingInfo[] {
-  const items = Array.isArray(prev) ? [...prev] : []
-  const obj = event?.object
-  if (!obj) return items
-
-  const normalized = normalizeWatchClusterRoleBindingObject(obj)
-  const name = normalized?.name
-  if (!name) return items
-
-  const index = items.findIndex((item) => item.name === name)
-
-  if (event.type === 'DELETED') {
-    if (index >= 0) items.splice(index, 1)
-    return items
-  }
-
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
-  else items.push(normalized)
-
-  return items
-}
 
 export default function ClusterRoleBindings() {
   const queryClient = useQueryClient()
@@ -93,13 +45,6 @@ export default function ClusterRoleBindings() {
     path: '/apis/rbac.authorization.k8s.io/v1/clusterrolebindings',
     query: 'watch=1',
     applyEvent: (prev, event) => applyClusterRoleBindingWatchEvent(prev as ClusterRoleBindingInfo[] | undefined, event),
-    onEvent: (event) => {
-      if (event?.type === 'DELETED') return
-      const name = event?.object?.name || event?.object?.metadata?.name
-      if (name) {
-        queryClient.invalidateQueries({ queryKey: ['clusterrolebinding-describe', name] })
-      }
-    },
   })
 
   const filteredItems = useMemo(() => {

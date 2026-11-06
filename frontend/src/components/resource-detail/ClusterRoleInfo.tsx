@@ -8,6 +8,7 @@ import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { usePermission } from '@/hooks/usePermission'
+import { useDrawerFollowsObject } from './useDrawerFollowsObject'
 import { useReverseRoleBindings } from './role-info/useReverseRoleBindings'
 import { referencedByContext, subjectsText, unreadableText } from './role-info/referencedBy'
 
@@ -25,6 +26,12 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
     queryFn: () => api.describeClusterRole(name),
     enabled: !!name,
     retry: false,
+  })
+  useDrawerFollowsObject({
+    enabled: !!name,
+    describeKey: ['clusterrole-describe', name],
+    path: '/apis/rbac.authorization.k8s.io/v1/clusterroles',
+    name,
   })
 
   const { bindings: referencedBy, error: crbError } = useReverseRoleBindings({ kind: 'ClusterRole', name })

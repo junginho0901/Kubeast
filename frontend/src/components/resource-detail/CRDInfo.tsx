@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsSection, NoneText, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
+import { useDrawerFollowsObject } from './useDrawerFollowsObject'
 import { usePagination } from './usePagination'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { formatAge } from '@/utils/time'
@@ -22,6 +23,12 @@ export default function CRDInfo({ name, rawJson }: Props) {
     queryFn: () => api.describeCRD(name),
     enabled: !!name,
     retry: false,
+  })
+  useDrawerFollowsObject({
+    enabled: !!name,
+    describeKey: ['crd-describe', name],
+    path: '/apis/apiextensions.k8s.io/v1/customresourcedefinitions',
+    name,
   })
 
   useResourceDetailOverlay({ kind: 'CustomResourceDefinition', name, describe })

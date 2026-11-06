@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { InfoSection, InfoRow, StatusBadge, KeyValueTags, EventsSection, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
+import { useDrawerFollowsObject } from './useDrawerFollowsObject'
 import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
@@ -25,6 +26,12 @@ export default function RoleBindingInfo({ name, namespace, rawJson }: Props) {
     queryFn: () => api.describeRoleBinding(namespace, name),
     enabled: !!namespace && !!name,
     retry: false,
+  })
+  useDrawerFollowsObject({
+    enabled: !!namespace && !!name,
+    describeKey: ['rolebinding-describe', namespace, name],
+    path: `/apis/rbac.authorization.k8s.io/v1/namespaces/${namespace}/rolebindings`,
+    name,
   })
 
   useResourceDetailOverlay({ kind: 'RoleBinding', name, namespace, describe })

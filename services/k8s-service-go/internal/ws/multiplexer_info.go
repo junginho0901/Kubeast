@@ -68,6 +68,28 @@ func objectToInfo(resource string, obj *unstructured.Unstructured) map[string]in
 		return serviceAccountToInfo(obj)
 	case "roles":
 		return roleToInfo(obj)
+	case "clusterroles":
+		return clusterRoleToInfo(obj)
+	case "clusterrolebindings":
+		return clusterRoleBindingToInfo(obj)
+	case "rolebindings":
+		return roleBindingToInfo(obj)
+	case "priorityclasses":
+		return priorityClassToInfo(obj)
+	case "runtimeclasses":
+		return runtimeClassToInfo(obj)
+	case "validatingwebhookconfigurations":
+		return validatingWebhookConfigToInfo(obj)
+	case "mutatingwebhookconfigurations":
+		return mutatingWebhookConfigToInfo(obj)
+	case "leases":
+		return leaseToInfo(obj)
+	case "limitranges":
+		return limitRangeToInfo(obj)
+	case "resourcequotas":
+		return resourceQuotaToInfo(obj)
+	case "poddisruptionbudgets":
+		return pdbToInfo(obj)
 	case "horizontalpodautoscalers":
 		return hpaToInfo(obj)
 	case "verticalpodautoscalers":

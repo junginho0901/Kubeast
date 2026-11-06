@@ -11,6 +11,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	resourcehelper "k8s.io/component-helpers/resource"
+
+	limitrangerow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/limitrange"
 )
 
 // GetNamespaces returns all namespaces.
@@ -444,40 +446,5 @@ func buildLimitRangeList(items []corev1.LimitRange) []map[string]interface{} {
 
 // buildLimitItems converts limit range items to map representation.
 func buildLimitItems(items []corev1.LimitRangeItem) []map[string]interface{} {
-	result := make([]map[string]interface{}, 0, len(items))
-	for _, li := range items {
-		item := map[string]interface{}{
-			"type": string(li.Type),
-		}
-		if li.Max != nil {
-			m := make(map[string]string)
-			for k, v := range li.Max {
-				m[string(k)] = v.String()
-			}
-			item["max"] = m
-		}
-		if li.Min != nil {
-			m := make(map[string]string)
-			for k, v := range li.Min {
-				m[string(k)] = v.String()
-			}
-			item["min"] = m
-		}
-		if li.Default != nil {
-			m := make(map[string]string)
-			for k, v := range li.Default {
-				m[string(k)] = v.String()
-			}
-			item["default"] = m
-		}
-		if li.DefaultRequest != nil {
-			m := make(map[string]string)
-			for k, v := range li.DefaultRequest {
-				m[string(k)] = v.String()
-			}
-			item["default_request"] = m
-		}
-		result = append(result, item)
-	}
-	return result
+	return limitrangerow.Items(items)
 }
