@@ -108,7 +108,29 @@ func (h *RoleHandler) grantedRoleCeiling(ctx context.Context, actor auth.TokenPa
 	return fmt.Errorf("%w: this role is granted where you do not hold what it would add: %s", errCeiling, strings.Join(slices.Compact(missing), ", "))
 }
 
-// ListRoles handles GET /auth/roles (public, for dropdowns)
+// tokensEndedBy says whose issued tokens a role edit makes wrong. A token carries
+// a grant's whole permission list and its role's name, from which the cluster
+// group comes, and of a global role only "*" and admin.* (buildPermissionMatrix).
+// Only what was taken away ends a session: an added key reaches holders at their
+// next refresh, and a description changes nothing a token holds.
+func tokensEndedBy(existing *model.RoleWithPermissions, name string, perms []string) repository.RoleTokens {
+	tokens := repository.RoleTokensKept
+	if auth.RoleGroupSlug(name) != auth.RoleGroupSlug(existing.Name) {
+		tokens = repository.RoleTokensOfGrants
+	}
+	for _, p := range existing.Permissions {
+		if auth.MatchAny(perms, p) {
+			continue
+		}
+		if isGlobalPermission(p) {
+			return repository.RoleTokensOfAllHolders
+		}
+		tokens = repository.RoleTokensOfGrants
+	}
+	return tokens
+}
+
+// ListRoles handles GET /auth/roles (any signed-in caller, for the admin screens' dropdowns)
 func (h *RoleHandler) ListRoles(w http.ResponseWriter, r *http.Request) {
 	roles, err := h.repo.ListRoles(r.Context())
 	if err != nil {
@@ -256,7 +278,7 @@ func (h *RoleHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	role, err := h.repo.UpdateRole(r.Context(), id, name, req.Description, req.Permissions)
+	role, err := h.repo.UpdateRole(r.Context(), id, name, req.Description, req.Permissions, tokensEndedBy(existing, name, req.Permissions))
 	writeAudit(h.auditStore, r, payload, auditEvent{
 		action: "admin.roles.update", targetType: "role", targetID: strconv.Itoa(id),
 		before: roleState(existing.Name, existing.Description, existing.Permissions),

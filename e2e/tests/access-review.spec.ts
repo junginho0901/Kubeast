@@ -63,6 +63,48 @@ test.describe('Access review', () => {
     if (userId) await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: bearer(admin), failOnStatusCode: false })
   })
 
+  test('a role reaching exec, a shell or Secret values is marked, in the answer, the CSV and on screen', async ({ request, page }) => {
+    const name = `e2e-review-exec-${stamp}`
+    const made = await request.post('/api/v1/auth/admin/roles', { headers: bearer(admin), data: { name, permissions: ['menu.dashboard', 'resource.pod.exec'] } })
+    expect(made.status(), await made.text()).toBe(201)
+    const id = (await made.json()).id
+    const holder = await request.post('/api/v1/auth/admin/users', {
+      headers: bearer(admin),
+      data: { name: 'E2E review exec', email: `e2e-review-exec-${stamp}@example.com`, password: PW, role_id: await roleId(request, admin, 'Member') },
+    })
+    expect(holder.status(), await holder.text()).toBe(201)
+    const holderId = (await holder.json()).id
+    try {
+      const grant = await request.put(`/api/v1/auth/admin/users/${holderId}/cluster-roles/${CLUSTER}`, { headers: bearer(admin), data: { role: name } })
+      expect(grant.ok(), await grant.text()).toBeTruthy()
+
+      const rep = await (await request.get('/api/v1/auth/admin/access-review', { headers: bearer(admin) })).json()
+      const row = rep.roles.find((r: any) => r.name === name)
+      expect(row.flags, 'the role row').toContain('sensitive_access')
+      expect(row.flags, 'the admin flag keeps its meaning').not.toContain('has_admin_permissions')
+      const grantRow = rep.cluster_roles.find((g: any) => g.role === name)
+      expect(grantRow.flags, 'the grant row').toContain('sensitive_access')
+      expect(grantRow.flags, 'the admin flag keeps its meaning').not.toContain('admin_role')
+      expect(rep.roles.find((r: any) => r.name === 'Read').flags, 'Read reaches none of them').not.toContain('sensitive_access')
+      expect(rep.roles.find((r: any) => r.name === 'Write').flags, 'Write reveals Secrets').toContain('sensitive_access')
+
+      for (const section of ['roles', 'cluster_roles']) {
+        const csv = await (await request.get(`/api/v1/auth/admin/access-review/export?section=${section}`, { headers: bearer(admin) })).text()
+        const line = csv.split('\r\n').find((l) => l.includes(name))
+        expect(line, `${section} CSV`).toContain('sensitive_access')
+      }
+
+      await page.goto('/admin/access-review')
+      await page.getByTestId('access-review-tab-roles').click()
+      await page.getByPlaceholder(/Search|검색/).fill(name)
+      const screenRow = page.getByTestId('access-review-table').locator('tr', { hasText: name })
+      await expect(screenRow.locator('td').last()).toContainText(/shell, exec or Secret values|셸·exec·Secret 값/)
+    } finally {
+      await request.delete(`/api/v1/auth/admin/users/${holderId}`, { headers: bearer(admin), failOnStatusCode: false })
+      await request.delete(`/api/v1/auth/admin/roles/${id}`, { headers: bearer(admin), failOnStatusCode: false })
+    }
+  })
+
   test('the report lists the account, its grant and its key with the right flags', async ({ request }) => {
     const res = await request.get('/api/v1/auth/admin/access-review', { headers: bearer(admin) })
     expect(res.ok(), await res.text()).toBeTruthy()

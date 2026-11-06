@@ -129,6 +129,7 @@ auth:
 
 로그인한 사람의 요청은 대상 클러스터에 **그 사람 이메일 + 그룹 `kubeast:viewer`/`operator`/`admin`**으로 전달됩니다(impersonation).
 공급자 그룹이 클러스터 RBAC으로 직접 넘어가지는 않습니다.
+승인을 기다리는 계정(자기 가입이 머무는 상태)에 로그인이 닿으면 그 계정의 비밀번호를 지우고 토큰을 끝냅니다. 가입은 주소의 주인임을 증명하지 않기 때문입니다. 승인을 지난 계정은 비밀번호가 그대로입니다.
 클러스터 쪽 바인딩은 [cluster-requirements §1](cluster-requirements.md)을 참고하세요.
 
 ## 6. 로그인 실패 코드
@@ -143,4 +144,5 @@ auth:
 | `oidc_no_email` | 이메일 클레임 없음 | scope `email`, `claims.email` |
 | `oidc_email_unverified` | `email_verified=false` | 공급자의 메일 확인 |
 | `oidc_domain` | `allowedDomains` 밖 | 값 |
+| `oidc_email_invalid` | 첫 로그인의 이름이 쿠버네티스 사용자 이름이 될 수 없음: 콜론(`system:`, `eks:`, `kubeast:` 등은 클러스터 자체 사용자의 몫입니다)·공백·제어 문자가 있습니다. 이미 있는 계정은 거절하지 않습니다 | `claims.email` |
 | `oidc_provision` | 계정 생성 또는 역할 반영 실패 | `roleMapping`의 역할 이름(없는 역할이면 실패), DB |

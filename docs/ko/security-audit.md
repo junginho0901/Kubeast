@@ -39,11 +39,12 @@ curl -s "https://console.example.com/api/v1/cluster/overview?cluster=prod" \
 | 섹션 | 내용 | 플래그 |
 |---|---|---|
 | 사용자 | 이메일·팀·전역 역할·인증 출처·생성일·**마지막 로그인**(`auth_users.last_login_at`, 로그인에 성공할 때마다 기록, 과거 값은 감사 로그에서 백필)·클러스터 역할/API 키/임시 권한 개수 | `global_admin`(전역 역할에 `*`나 `admin.*` 권한이 하나라도 있음 — 카드 "관리 권한 있는 계정", 이름은 저장된 서명 때문에 그대로) · `never_logged_in` · `dormant`(`dormantDays` 동안 로그인도 API 키 사용도 없음 — 휴면 잠금이 보는 활동: 마지막 로그인과 그 계정 키의 가장 최근 사용 중 늦은 것, 없으면 생성 시각) · `api_key_only`(`dormantDays` 안에 로그인은 없지만(또는 한 번도 없지만) 키를 쓴 계정 — 휴면 아님) · `lock_exempt`(휴면이지만 관리 권한이라 잠금이 건너뜀) · `locked` |
-| 클러스터 역할 | 사용자별 클러스터·역할, 영구 부여인지 요청으로 받았는지, 만료와 만료 뒤 돌아갈 역할 | `temporary` · `admin_role` |
+| 클러스터 역할 | 사용자별 클러스터·역할, 영구 부여인지 요청으로 받았는지, 만료와 만료 뒤 돌아갈 역할 | `temporary` · `admin_role` · `sensitive_access` |
 | API 키 | 소유자·이름·접두어·클러스터·역할 상한·생성·만료·마지막 사용 시각 | `expired` · `expiring_30d` · `unused_30d` |
 | 임시 권한 이력 | 마지막 검토 이후의 권한 요청: 신청자·클러스터·역할·기간·사유·승인자·결정·종료(최근 5,000건, 넘으면 탭이 전체 수를 알림) | — |
-| 역할 | 이름·시스템 역할 여부·권한 목록·이 역할을 쓰는 사용자/바인딩 수 | `has_admin_permissions` · `unused` |
+| 역할 | 이름·시스템 역할 여부·권한 목록·이 역할을 쓰는 사용자/바인딩 수 | `has_admin_permissions` · `sensitive_access` · `unused` |
 
+- `sensitive_access`는 노드 셸·파드 exec·Secret 값에 닿는 역할을 표시합니다(`resource.node.shell`, `resource.pod.exec`, `resource.secret.reveal` 또는 이를 포함하는 와일드카드). 관리자 플래그는 이 권한을 세지 않습니다. 사용자 탭에는 없습니다. 전역 역할의 리소스 권한은 그 계정의 토큰에 담기지 않기 때문입니다.
 - 탭마다 **CSV**로 내려받을 수 있습니다(UTF-8 BOM, 수식 주입 방지).
 - 상단 카드에는 다음이 나옵니다.
   - 관리 권한 있는 계정(그중 전체 관리자 — 전역 역할에 `*`가 있어 모든 클러스터에 접근 — 수를 옆에), 휴면 계정, 한 번도 로그인 안 한 계정, 만료가 임박한 키, 활성 임시 권한의 수

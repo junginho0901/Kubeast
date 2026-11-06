@@ -35,6 +35,12 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, "Invalid email")
 		return
 	}
+	if err := checkAccountName(req.Email); err != nil {
+		// No account behind the attempt: the row names only the address asked for.
+		writeAudit(h.auditStore, r, auth.TokenPayload{}, auditEvent{action: "user.register", targetType: "user", targetEmail: req.Email, err: err})
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if err := security.ValidatePassword(req.Password, req.Email, h.cfg.PasswordMinLength); err != nil {
 		response.Error(w, http.StatusBadRequest, err.Error())
 		return

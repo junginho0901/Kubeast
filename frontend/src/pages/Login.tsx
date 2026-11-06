@@ -18,6 +18,7 @@ const SSO_ERROR_KEYS: Record<string, [string, string]> = {
   oidc_denied: ['login.errors.ssoDenied', 'Sign-in was cancelled or refused by the identity provider.'],
   oidc_domain: ['login.errors.ssoDomain', 'This email domain is not allowed to sign in.'],
   oidc_email_unverified: ['login.errors.ssoEmailUnverified', 'The identity provider has not verified this email address.'],
+  oidc_email_invalid: ['login.errors.ssoEmailInvalid', 'This name cannot be used for an account: it may not contain a colon, a space or a control character.'],
   oidc_no_email: ['login.errors.ssoNoEmail', 'The identity provider did not return an email address.'],
   token_too_large: ['login.errors.tokenTooLarge', 'Your roles differ across too many clusters to fit in a sign-in token. Ask an administrator to align them.'],
 }

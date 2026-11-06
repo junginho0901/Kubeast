@@ -179,6 +179,9 @@ test.describe('API keys', () => {
       expect(changed.status(), 'the password').toBe(403)
       expect((await request.delete('/api/v1/auth/access-requests/no-such-request', { headers: bearer(token), failOnStatusCode: false })).status(), 'cancelling an access request').toBe(403)
       expect((await request.delete('/api/v1/auth/access-requests/no-such-request', { headers: bearer(user), failOnStatusCode: false })).status(), 'the signed-in owner reaches the route').toBe(404)
+      const switched = { previous_cluster: CLUSTER, new_cluster: CLUSTER }
+      expect((await request.post('/api/v1/audit/cluster-switch', { headers: bearer(token), data: switched, failOnStatusCode: false })).status(), 'a cluster switch row').toBe(403)
+      expect((await request.post('/api/v1/audit/cluster-switch', { headers: bearer(user), data: switched, failOnStatusCode: false })).status(), 'the signed-in owner records one').toBe(204)
 
       // Nothing changed, and the token still does what a key is for.
       const listed = await (await request.get('/api/v1/auth/api-keys', { headers: bearer(user) })).json()
@@ -190,7 +193,7 @@ test.describe('API keys', () => {
       expect((await request.get(`/api/v1/cluster/overview?cluster=${CLUSTER}`, { headers: onCluster(token, CLUSTER) })).status(), 'reading the cluster').toBe(200)
 
       // Each refusal is a failure row against the owner (the rows of a key name the key).
-      for (const action of ['user.apikey.create', 'user.apikey.delete', 'user.password.change', 'access.request.cancel']) {
+      for (const action of ['user.apikey.create', 'user.apikey.delete', 'user.password.change', 'access.request.cancel', 'user.cluster.switch']) {
         await expect.poll(() => auditCount(request, admin, action, userId), { message: action, timeout: 10_000 }).toBe(1)
       }
     } finally {

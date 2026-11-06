@@ -13,6 +13,7 @@ import (
 
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/model"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/repository"
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
 // Settings come from the chart: auth.accessReview.* and, for the flag of a
@@ -46,7 +47,14 @@ const (
 	FlagUnused30d     = "unused_30d"
 	FlagAdminPerms    = "has_admin_permissions"
 	FlagUnusedRole    = "unused"
+	// FlagSensitiveAccess: the role reaches a node's shell, a pod's exec or Secret
+	// values, on the rows where a role acts on a cluster. Not on an account's row:
+	// a global role's resource keys are not in its token.
+	FlagSensitiveAccess = "sensitive_access"
 )
+
+// sensitiveKeys are the keys that reach past what the cluster lists show.
+var sensitiveKeys = []string{"resource.node.shell", "resource.pod.exec", "resource.secret.reveal"}
 
 const (
 	keyExpiringWindow = 30 * 24 * time.Hour
@@ -200,9 +208,11 @@ func Build(now time.Time, s Settings, since time.Time, in Input) *Report {
 
 	privileged := map[string]bool{} // role name → carries "*" or admin.*
 	everything := map[string]bool{} // role name → carries "*"
+	sensitive := map[string]bool{}  // role name → grants one of sensitiveKeys
 	for _, r := range in.Roles {
 		privileged[r.Name] = hasAdminPermissions(r.Permissions)
 		everything[r.Name] = slices.Contains(r.Permissions, "*")
+		sensitive[r.Name] = hasSensitiveAccess(r.Permissions)
 	}
 	grantsByUser, tempByUser := map[string]int{}, map[string]int{}
 	for _, g := range in.Grants {
@@ -283,6 +293,9 @@ func Build(now time.Time, s Settings, since time.Time, in Input) *Report {
 		if privileged[g.Role] {
 			row.Flags = append(row.Flags, FlagAdminRole)
 		}
+		if sensitive[g.Role] {
+			row.Flags = append(row.Flags, FlagSensitiveAccess)
+		}
 		rep.ClusterRoles = append(rep.ClusterRoles, row)
 	}
 	rep.Summary.ClusterGrants = len(rep.ClusterRoles)
@@ -332,6 +345,9 @@ func Build(now time.Time, s Settings, since time.Time, in Input) *Report {
 		if privileged[r.Name] {
 			row.Flags = append(row.Flags, FlagAdminPerms)
 		}
+		if sensitive[r.Name] {
+			row.Flags = append(row.Flags, FlagSensitiveAccess)
+		}
 		if !r.IsSystem && row.Users == 0 && row.ClusterBindings == 0 {
 			row.Flags = append(row.Flags, FlagUnusedRole)
 		}
@@ -369,6 +385,12 @@ func hasAdminPermissions(perms []string) bool {
 		}
 	}
 	return false
+}
+
+// hasSensitiveAccess reads wildcards as the permission check does: "resource.*",
+// "resource.pod.*" and "*" all grant these keys.
+func hasSensitiveAccess(perms []string) bool {
+	return slices.ContainsFunc(sensitiveKeys, func(key string) bool { return auth.MatchAny(perms, key) })
 }
 
 // Counts is what a sign-off stores next to the snapshot.

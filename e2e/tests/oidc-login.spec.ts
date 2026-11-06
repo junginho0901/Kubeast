@@ -143,6 +143,17 @@ test.describe('OIDC sign-in', () => {
     expect((await me(page)).status).toBe(401)
   })
 
+  test('a first sign-in named as a cluster\'s own user is refused, with the reason on screen', async ({ page, request }) => {
+    const email = `system:e2e-${Date.now()}@example.com`
+    await signInWithMock(page, { email, email_verified: true, groups: [] })
+    await page.waitForURL(/\/login\?error=oidc_email_invalid/)
+    await expect(page.getByTestId('sso-error')).toContainText(/colon|콜론/)
+    expect((await me(page)).status).toBe(401)
+    const token = await adminToken(request)
+    const users = await (await request.get('/api/v1/auth/admin/users?limit=200', { headers: { Authorization: `Bearer ${token}` } })).json()
+    expect((users as Array<{ email: string }>).map((u) => u.email), 'no account was made').not.toContain(email)
+  })
+
   test('an unverified email is refused', async ({ page }) => {
     await signInWithMock(page, { email: newEmail('mallory'), email_verified: false })
     await page.waitForURL(/\/login\?error=oidc_email_unverified/)

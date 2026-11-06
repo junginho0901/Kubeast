@@ -9,11 +9,12 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
-const apiKeyTokenRefused = "An API key token cannot do this; sign in to manage API keys, the password or access requests"
+const apiKeyTokenRefused = "An API key token cannot do this; it is for a signed-in person"
 
 // RefuseAPIKeyToken keeps a route to a signed-in person: a token an API key was
 // exchanged for carries the key's cut-down scope, which a new key or a new
-// password would outlive. The refused attempt leaves a failure row of action.
+// password would outlive, and a row it wrote would read as the person's. The
+// refused attempt leaves a failure row of action.
 func RefuseAPIKeyToken(store audit.Store, action string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

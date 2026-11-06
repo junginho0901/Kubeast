@@ -2,6 +2,8 @@ package accessreview
 
 import (
 	"reflect"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -83,7 +85,7 @@ func TestBuildFlagsAndSummary(t *testing.T) {
 	if g := rep.ClusterRoles[1]; g.GrantedVia != "request:req-1" || g.RestoreRole != "Read" || !reflect.DeepEqual(g.Flags, []string{FlagTemporary}) {
 		t.Errorf("temporary grant row: %+v", g)
 	}
-	if g := rep.ClusterRoles[2]; g.GrantedVia != "permanent" || !reflect.DeepEqual(g.Flags, []string{FlagAdminRole}) {
+	if g := rep.ClusterRoles[2]; g.GrantedVia != "permanent" || !reflect.DeepEqual(g.Flags, []string{FlagAdminRole, FlagSensitiveAccess}) {
 		t.Errorf("admin grant row: %+v", g)
 	}
 
@@ -106,7 +108,7 @@ func TestBuildFlagsAndSummary(t *testing.T) {
 	for _, r := range rep.Roles {
 		roleFlags[r.Name] = r.Flags
 	}
-	if !reflect.DeepEqual(roleFlags, map[string][]string{"Admin": {FlagAdminPerms}, "Read": {}, "Write": {}, "Member": {}, "Auditor": {FlagAdminPerms, FlagUnusedRole}}) {
+	if !reflect.DeepEqual(roleFlags, map[string][]string{"Admin": {FlagAdminPerms, FlagSensitiveAccess}, "Read": {}, "Write": {}, "Member": {}, "Auditor": {FlagAdminPerms, FlagUnusedRole}}) {
 		t.Errorf("role flags = %v", roleFlags)
 	}
 	if rep.Roles[0].Users != 1 || rep.Roles[0].ClusterBindings != 1 || !reflect.DeepEqual(rep.Roles[2].Permissions, []string{"resource.pod.delete", "resource.pod.read"}) {
@@ -281,4 +283,68 @@ func TestBuildAccessRequestsTotal(t *testing.T) {
 	if rep := Build(now, Settings{}, now, in); rep.AccessRequestsTotal != 1 {
 		t.Errorf("a total below the rows read = %d, want the rows (1)", rep.AccessRequestsTotal)
 	}
+}
+
+// A role can reach a node's shell, a pod's exec or Secret values without any
+// admin.* key, and a reviewer must see that on the row. The admin flags keep
+// their meaning, so a card counting them does not move.
+func TestReportMarksRolesThatReachShellsExecAndSecrets(t *testing.T) {
+	const flag = "sensitive_access"
+	for _, c := range []struct {
+		perms     []string
+		sensitive bool
+		admin     bool
+	}{
+		{[]string{"resource.*"}, true, false},
+		{[]string{"resource.*.*"}, true, false},
+		{[]string{"resource.node.shell"}, true, false},
+		{[]string{"resource.node.*"}, true, false},
+		{[]string{"resource.pod.exec"}, true, false},
+		{[]string{"resource.pod.*"}, true, false},
+		{[]string{"resource.secret.reveal"}, true, false},
+		{[]string{"menu.dashboard", "resource.pod.read", "resource.secret.reveal"}, true, false},
+		{[]string{"*"}, true, true},
+		{[]string{"admin.audit.read", "resource.pod.exec"}, true, true},
+		{[]string{"admin.*"}, false, true},
+		{[]string{"resource.*.read", "resource.*.create", "resource.*.edit", "resource.*.delete"}, false, false},
+		{[]string{"resource.pod.logfile", "resource.pod.read"}, false, false},
+		{[]string{"menu.*", "ai.tool.*", "ai.mcp.use"}, false, false},
+		{nil, false, false},
+	} {
+		t.Run(strings.Join(c.perms, ","), func(t *testing.T) {
+			s := Settings{DormantDays: 90, IntervalDays: 90}
+			rep := Build(now, s, now, Input{
+				Users:  []model.User{{ID: "u", Email: "u@example.com", RoleName: "probe", CreatedAt: now, LastLoginAt: &now}},
+				Grants: []repository.ReviewClusterGrant{{UserID: "u", UserEmail: "u@example.com", ClusterName: "c", RoleID: 9, Role: "probe"}},
+				Roles:  []model.RoleWithPermissions{{Role: model.Role{ID: 9, Name: "probe"}, Permissions: c.perms}},
+			})
+			if got := slices.Contains(rep.Roles[0].Flags, flag); got != c.sensitive {
+				t.Errorf("role row flags %v, want %s = %v", rep.Roles[0].Flags, flag, c.sensitive)
+			}
+			if got := slices.Contains(rep.ClusterRoles[0].Flags, flag); got != c.sensitive {
+				t.Errorf("grant row flags %v, want %s = %v", rep.ClusterRoles[0].Flags, flag, c.sensitive)
+			}
+			if got := slices.Contains(rep.Roles[0].Flags, FlagAdminPerms); got != c.admin {
+				t.Errorf("role row flags %v, want %s = %v", rep.Roles[0].Flags, FlagAdminPerms, c.admin)
+			}
+			if got := slices.Contains(rep.ClusterRoles[0].Flags, FlagAdminRole); got != c.admin {
+				t.Errorf("grant row flags %v, want %s = %v", rep.ClusterRoles[0].Flags, FlagAdminRole, c.admin)
+			}
+			if rep.Summary.GlobalAdmins != boolCount(c.admin) {
+				t.Errorf("global admins = %d, want %d", rep.Summary.GlobalAdmins, boolCount(c.admin))
+			}
+			// A global role's resource keys are not in the token: on the account's
+			// row the flag would claim something the account cannot do.
+			if slices.Contains(rep.Users[0].Flags, flag) {
+				t.Errorf("user row flags %v must not carry %s", rep.Users[0].Flags, flag)
+			}
+		})
+	}
+}
+
+func boolCount(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }

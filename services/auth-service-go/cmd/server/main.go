@@ -32,7 +32,6 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/dbmigrate"
-	"github.com/junginho0901/kubeast/services/pkg/internalauth"
 	"github.com/junginho0901/kubeast/services/pkg/limits"
 	pkglogger "github.com/junginho0901/kubeast/services/pkg/logger"
 	"github.com/junginho0901/kubeast/services/pkg/metrics"
@@ -323,35 +322,7 @@ func main() {
 
 	// Auth API
 	r.Route("/api/v1/auth", func(r chi.Router) {
-		// Public endpoints. The two that take credentials accept only
-		// application/json bodies (login CSRF: a cross-site form cannot send
-		// that content type without a preflight).
-		r.With(handler.RequireJSON).Post("/register", authHandler.Register)
-		r.With(handler.RequireJSON).Post("/login", authHandler.Login)
-		r.Post("/logout", authHandler.Logout)
-		// OIDC login (provider chosen by configuration); the session it sets is
-		// the same cookie a password login sets.
-		r.Get("/oidc/config", authHandler.OIDCConfig)
-		r.Get("/oidc/login", authHandler.OIDCLogin)
-		r.Get("/oidc/callback", authHandler.OIDCCallback)
-		r.Get("/jwks.json", authHandler.JWKS)
-		r.Get("/.well-known/jwks.json", authHandler.JWKS)
-		// Service-to-service: the other services' validators ask for the
-		// bearer's current token_version (not routed by the gateway).
-		r.Get("/internal/token-version/{userID}", authHandler.TokenVersion)
-		// The alert investigator's short token (features.alertInvestigation):
-		// ai-service asks with the internal token, per investigation.
-		r.With(internalauth.Middleware(cfg.InternalAPIToken)).Post("/internal/investigator-token", authHandler.InvestigatorToken)
-		// API key → access token (Authorization: Bearer kbk_…); the gateway
-		// rate-limits it like sign-in.
-		r.Post("/token", authHandler.ExchangeAPIKey)
-
-		// Setup: only "is a cluster registered yet" is public (login page routing).
-		r.Get("/setup", setupHandler.GetSetupPublic)
-
-		// Public (for registration form dropdowns)
-		r.Get("/organizations", authHandler.ListOrganizations)
-		r.Get("/roles", roleHandler.ListRoles)
+		publicAuthRoutes(r, authHandler, setupHandler, cfg.InternalAPIToken)
 
 		// Protected endpoints
 		r.Group(func(r chi.Router) {
@@ -361,23 +332,7 @@ func main() {
 		})
 	})
 
-	// Multi-cluster CRUD + system info + cluster-switch audit. These live at the
-	// top level (not under /api/v1/auth) and all require a valid token; the
-	// admin.clusters.* permission is enforced inside each cluster handler.
-	r.Group(func(r chi.Router) {
-		r.Use(authMiddleware)
-		r.Use(handler.AdminWritesGate(auditStore))
-
-		r.Get("/api/v1/clusters", clustersHandler.ListClusters)
-		r.Post("/api/v1/clusters", clustersHandler.RegisterCluster)
-		r.Post("/api/v1/clusters/validate", clustersHandler.ValidateCluster)
-		r.Delete("/api/v1/clusters/{id}", clustersHandler.DeleteCluster)
-		r.Patch("/api/v1/clusters/{id}", clustersHandler.UpdateCluster)
-		r.Post("/api/v1/clusters/{id}/test", clustersHandler.TestCluster)
-
-		r.Get("/api/v1/system/deployment-mode", setupHandler.DeploymentMode)
-		r.Post("/api/v1/audit/cluster-switch", authHandler.ClusterSwitch)
-	})
+	topLevelRoutes(r, authMiddleware, authHandler, clustersHandler, setupHandler, auditStore)
 
 	// Server
 	addr := fmt.Sprintf("0.0.0.0:%d", cfg.Port)

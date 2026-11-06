@@ -153,7 +153,32 @@ func (r *Repository) ListRoleGrants(ctx context.Context, roleID int) ([]RoleGran
 	return grants, rows.Err()
 }
 
-func (r *Repository) UpdateRole(ctx context.Context, id int, name, description string, permissions []string) (*model.RoleWithPermissions, error) {
+// RoleTokens says whose issued tokens an edit of a role ends.
+type RoleTokens int
+
+const (
+	RoleTokensKept RoleTokens = iota
+	// RoleTokensOfGrants ends the tokens of the accounts holding the role on a cluster.
+	RoleTokensOfGrants
+	// RoleTokensOfAllHolders also ends those of the accounts holding it as their global role.
+	RoleTokensOfAllHolders
+)
+
+func (t RoleTokens) statement() string {
+	switch t {
+	case RoleTokensOfGrants:
+		return `UPDATE auth_users SET token_version = token_version + 1, updated_at = NOW()
+		 WHERE id IN (SELECT user_id FROM user_cluster_roles WHERE role_id = $1)`
+	case RoleTokensOfAllHolders:
+		return `UPDATE auth_users SET token_version = token_version + 1, updated_at = NOW()
+		 WHERE role_id = $1 OR id IN (SELECT user_id FROM user_cluster_roles WHERE role_id = $1)`
+	}
+	return ""
+}
+
+// UpdateRole changes the role and ends the tokens in one transaction, so no edit
+// that takes something away stands while the old tokens still work.
+func (r *Repository) UpdateRole(ctx context.Context, id int, name, description string, permissions []string, tokens RoleTokens) (*model.RoleWithPermissions, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -178,6 +203,11 @@ func (r *Repository) UpdateRole(ctx context.Context, id int, name, description s
 		if _, err := tx.Exec(ctx,
 			`INSERT INTO role_permissions (role_id, permission) VALUES ($1, $2)`, id, p,
 		); err != nil {
+			return nil, err
+		}
+	}
+	if statement := tokens.statement(); statement != "" {
+		if _, err := tx.Exec(ctx, statement, id); err != nil {
 			return nil, err
 		}
 	}

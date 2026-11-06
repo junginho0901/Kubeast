@@ -51,6 +51,18 @@ func (s *recordedAudit) failures(action string) []audit.Record {
 	return out
 }
 
+func (s *recordedAudit) successes(action string) []audit.Record {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []audit.Record
+	for _, rec := range s.rows {
+		if rec.Action == action && rec.Result != audit.ResultFailure { // empty means success
+			out = append(out, rec)
+		}
+	}
+	return out
+}
+
 type authAPI struct {
 	t      *testing.T
 	db     *fakePG
@@ -70,6 +82,12 @@ type pendingRequest struct {
 // holding one user, one role and one pending access request. Rules in extra are
 // asked first, so a test can name its own accounts and roles.
 func newAuthAPI(t *testing.T, pending pendingRequest, extra ...pgRule) *authAPI {
+	t.Helper()
+	return newAuthAPIWith(t, pending, nil, extra...)
+}
+
+// newAuthAPIWith is newAuthAPI with a test's own settings on top of the defaults.
+func newAuthAPIWith(t *testing.T, pending pendingRequest, settings func(*config.Config), extra ...pgRule) *authAPI {
 	t.Helper()
 	hash, err := security.HashPassword(testPassword, 1000)
 	if err != nil {
@@ -114,18 +132,24 @@ func newAuthAPI(t *testing.T, pending pendingRequest, extra ...pgRule) *authAPI 
 		PasswordMinLength:      12,
 		JWTExpiresMinutes:      5,
 	}
+	if settings != nil {
+		settings(&cfg)
+	}
 	store := &recordedAudit{}
 	authHandler := handler.NewAuthHandler(repo, mgr, cfg, store)
 	roleHandler := handler.NewRoleHandler(repo, store)
 	setupHandler := handler.NewSetupHandler(cfg, nil, nil, store)
+	authMiddleware := security.AuthMiddleware(mgr, repo.TokenVersionFor, "kubeast.token")
 	r := chi.NewRouter()
 	r.Route("/api/v1/auth", func(r chi.Router) {
+		publicAuthRoutes(r, authHandler, setupHandler, cfg.InternalAPIToken)
 		r.Group(func(r chi.Router) {
-			r.Use(security.AuthMiddleware(mgr, repo.TokenVersionFor, "kubeast.token"))
+			r.Use(authMiddleware)
 			r.Use(handler.AdminWritesGate(store))
 			protectedAuthRoutes(r, authHandler, roleHandler, setupHandler, store)
 		})
 	})
+	topLevelRoutes(r, authMiddleware, authHandler, handler.NewClustersHandler(nil, nil, store, cfg), setupHandler, store)
 	return &authAPI{t: t, db: db, store: store, mgr: mgr, router: r}
 }
 

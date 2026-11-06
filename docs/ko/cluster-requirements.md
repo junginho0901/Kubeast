@@ -57,6 +57,11 @@ Kubeast는 **로그인한 사람의 신원으로**(impersonation) 클러스터�
 | 로그 파일 Namespace의 `pods/exec` | 로그 파일 보기를 켤 때(§10) | `features.logFiles` → `templates/logfiles-rbac.yaml` |
 | 알림 조사 신원 `kubeast:investigator` — impersonate 허용 + 읽기 전용 ClusterRole(get·list·watch, Secret·exec·프록시·쓰기 없음) | 알림 → AI 조사를 켤 때 필요합니다. Kubeast는 사람 대신 이 신원으로 읽기 도구를 실행합니다. 조사에서 CRD(Kyverno PolicyReport·Argo Rollout 등)도 읽어야 하면 `features.alertInvestigation.extraRules`에 읽기 규칙을 추가합니다. get·list·watch 외의 동사, `apiGroups "*"`, Secret·exec·프록시·토큰은 렌더 단계에서 거부합니다 | `features.alertInvestigation` → `templates/impersonation-investigator.yaml`(impersonation이 꺼져 있으면 렌더 실패) |
 
+**사용자 이름은 계정의 이메일입니다.** 그 `User`에 묶은 바인딩은 그 계정을 가진 사람에게 적용됩니다.
+새 계정의 이름에는 콜론·공백·제어 문자를 쓸 수 없습니다. 그래서 `system:`, `eks:`, `kubeast:` 사용자나 앞뒤에 공백을 붙인 다른 주소가 될 수 없습니다.
+Kubeast는 주소가 그 사람의 것인지 알 수 없습니다. `admin.users.create`를 가진 사람이나 자기 가입을 승인하는 관리자는 아직 계정이 없는 주소를 쓸 수 있습니다.
+그룹 바인딩을 권합니다. `User`를 묶는다면 그 사람의 계정이 이미 있는지, 계정이 ID 공급자에서 오는지 확인하세요.
+
 **Write = Kubernetes 기본 `edit`**: kubectl로 `edit`을 받은 사람과 범위가 같으며, 다음 권한까지 포함합니다.
 
 - Secret 읽기·쓰기

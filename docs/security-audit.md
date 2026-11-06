@@ -39,11 +39,12 @@ The access review puts "who can do what right now" on one page for periodic revi
 | Section | Contents | Flags |
 |---|---|---|
 | Users | email, team, global role, auth source, created date, **last login** (`auth_users.last_login_at`, recorded on every successful login, backfilled from the audit log), counts of cluster roles, API keys and temporary grants | `global_admin` (the global role carries `*` or any `admin.*` permission — the card "With admin permissions"; the name is kept for stored sign-offs), `never_logged_in`, `dormant` (no sign-in and no API key use for `dormantDays` — the activity the dormant lock reads: the later of the last sign-in and the newest use of any of the account's keys, each counted from creation when missing), `api_key_only` (no sign-in within `dormantDays`, or none, but a key used since — not dormant), `lock_exempt` (dormant, and the lock leaves it alone as an admin), `locked` |
-| Cluster roles | cluster and role per user, permanent/via request, expiry and the role it reverts to | `temporary`, `admin_role` |
+| Cluster roles | cluster and role per user, permanent/via request, expiry and the role it reverts to | `temporary`, `admin_role`, `sensitive_access` |
 | API keys | owner, name, prefix, cluster, role ceiling, created, expires, last used | `expired`, `expiring_30d`, `unused_30d` |
 | Temporary access history | access requests since the last review: requester, cluster, role, duration, reason, approver, decision, end (the newest 5,000; past that the tab says how many there are) | — |
-| Roles | name, system or not, permission list, number of users/bindings using it | `has_admin_permissions`, `unused` |
+| Roles | name, system or not, permission list, number of users/bindings using it | `has_admin_permissions`, `sensitive_access`, `unused` |
 
+- `sensitive_access` marks a role that reaches a node's shell, a pod's exec or Secret values (`resource.node.shell`, `resource.pod.exec`, `resource.secret.reveal`, or a wildcard covering one). The admin flags do not count these keys. It is not on the Users tab, because a global role's resource keys are not in the account's token.
 - **CSV** download per tab (UTF-8 BOM, formula injection prevented).
 - Cards at the top show the accounts with admin permissions (with the global admins among them — a global role carrying `*`, who reaches every cluster), dormant accounts, accounts never signed in, keys about to expire and active temporary grants, plus the **last review and next due date** (`intervalDays` later, flagged when past). The API keys tab counts every key, expired ones too (named beside the count); the "Active API keys" card leaves them out.
 - The **Sign off** button saves the whole report as of that moment, with a note (`access_reviews`, kept for `retention.reviewDays`, default 3 years). Past reviews can be opened from the list (25 a page, with how many are kept) and downloaded again as the CSV of that time.
