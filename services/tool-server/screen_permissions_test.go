@@ -29,19 +29,21 @@ type args = map[string]interface{}
 
 func perms(p ...string) []string { return p }
 
-// The read tools whose screen asks for no permission of its own: a role on the cluster and the cluster's RBAC decide
-// there, and so they do here.
-var readToolsTheScreenLeavesToTheCluster = []string{
-	"k8s_get_resources", "k8s_get_resource_yaml", "k8s_describe_resource", "k8s_get_events", "k8s_get_available_api_resources",
-	"k8s_get_cluster_configuration", "get_cluster_overview", "get_node_metrics", "get_pod_metrics", "k8s_check_service_connectivity",
-	"k8s_find_resource", "k8s_explain", "prometheus_query", "prometheus_metrics", "prometheus_labels", "prometheus_rules", "prometheus_targets",
-	"traces_search", "traces_get", "traces_tags", "traces_metrics", "traces_compare", "issues", "gitops_status", "optimization", "can_i",
-	"resource_graph", "k8s_jq_query", "k8s_tabular_query", "k8s_count",
-	"clusters_list",
-	"pod_rbac",
-	"storage_summary",
-	"limit_range_violations",
-	"timeline", "gpu",
+// What the read gate on k8s-service's lists and details asks (handler/read_gate.go).
+const objectsReadKey = "resource.objects.read"
+
+// The read tools behind a list or detail with no permission of its own.
+var readToolsOfListsAndDetails = []string{
+	"k8s_get_resources", "k8s_get_resource_yaml", "k8s_describe_resource", "k8s_get_events", "get_cluster_overview", "get_node_metrics",
+	"get_pod_metrics", "k8s_check_service_connectivity", "k8s_find_resource", "prometheus_query", "prometheus_metrics", "prometheus_labels",
+	"prometheus_rules", "prometheus_targets", "traces_search", "traces_get", "traces_tags", "traces_metrics", "traces_compare", "issues",
+	"gitops_status", "optimization", "resource_graph", "k8s_jq_query", "k8s_tabular_query", "k8s_count", "pod_rbac", "storage_summary",
+	"limit_range_violations", "timeline", "gpu",
+}
+
+// The tools with no object in their answer, as the routes that read none: the kinds a cluster serves, its version, can-i, the picker.
+var readToolsOfNoObject = []string{
+	"k8s_get_available_api_resources", "k8s_get_cluster_configuration", "k8s_explain", "can_i", "clusters_list",
 }
 
 // The tools of the seeded Read role (auth-service repository.ReadAIToolPermissions).
@@ -78,12 +80,15 @@ func screenPermissionCases() []screenCase {
 		}
 		cases = append(cases, screenCase{Tool: tool, Args: a, Want: want})
 	}
-	for _, tool := range readToolsTheScreenLeavesToTheCluster {
+	for _, tool := range readToolsOfListsAndDetails {
+		add(tool, nil, objectsReadKey)
+	}
+	for _, tool := range readToolsOfNoObject {
 		add(tool, nil)
 	}
-	add("k8s_get_resources", args{"resource_type": "secrets"})
-	add("k8s_get_resources", args{"resource_type": "all"})
-	add("k8s_describe_resource", args{"resource_type": "secret", "resource_name": "x"})
+	add("k8s_get_resources", args{"resource_type": "secrets"}, objectsReadKey)
+	add("k8s_get_resources", args{"resource_type": "all"}, objectsReadKey)
+	add("k8s_describe_resource", args{"resource_type": "secret", "resource_name": "x"}, objectsReadKey)
 
 	// Reads a screen's route asks a permission for.
 	add("k8s_get_pod_logs", args{"pod_name": "web"}, "resource.pod.read")
@@ -199,9 +204,9 @@ func screenPermissionCases() []screenCase {
 	rollout("restart", "resource.statefulset.edit")
 	rollout("pause", "resource.statefulset.edit")
 	rollout("resume", "resource.statefulset.edit")
-	rollout("status")
-	rollout("history")
-	rollout(" STATUS ")
+	rollout("status", objectsReadKey)
+	rollout("history", objectsReadKey)
+	rollout(" STATUS ", objectsReadKey)
 	rollout("undo", "resource.workload.rollback")
 	rollout("UNDO", "resource.workload.rollback")
 	rollout("", "resource.statefulset.edit")
@@ -350,6 +355,8 @@ func TestAuthorizeToolCall_ACustomRoleDoesNoMoreThanOnTheScreen(t *testing.T) {
 		"pod read":        {"alpha": {"ai.tool.*", "resource.pod.read"}},
 		"every edit":      {"alpha": {"ai.tool.*", "resource.*.edit"}},
 		"every delete":    {"alpha": {"ai.tool.*", "resource.*.delete"}},
+		"lists":           {"alpha": {"ai.tool.*", objectsReadKey}},
+		"every read":      {"alpha": {"ai.tool.*", "resource.*.read"}},
 	}
 	cm := "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a\n"
 	secret := "apiVersion: v1\nkind: Secret\nmetadata:\n  name: b\n"
@@ -359,9 +366,10 @@ func TestAuthorizeToolCall_ACustomRoleDoesNoMoreThanOnTheScreen(t *testing.T) {
 		args args
 		may  []string
 	}{
-		{"read a list", "k8s_get_resources", args{"resource_type": "configmaps"}, []string{"tools only", "configmaps", "deployment edit", "pod read", "every edit", "every delete"}},
-		{"read pod logs", "k8s_get_pod_logs", args{"pod_name": "web"}, []string{"pod read"}},
-		{"read helm releases", "helm_read", args{}, nil},
+		{"read a list", "k8s_get_resources", args{"resource_type": "configmaps"}, []string{"lists", "every read"}},
+		{"ask what the role may do", "can_i", args{"verb": "get", "resource": "pods"}, []string{"tools only", "configmaps", "deployment edit", "pod read", "every edit", "every delete", "lists", "every read"}},
+		{"read pod logs", "k8s_get_pod_logs", args{"pod_name": "web"}, []string{"pod read", "every read"}},
+		{"read helm releases", "helm_read", args{}, []string{"every read"}},
 		{"read node logs", "nodes_log", args{"node": "n1"}, nil},
 		{"delete a configmap", "k8s_delete_resource", args{"resource_type": "configmap", "resource_name": "x"}, []string{"configmaps", "every delete"}},
 		{"delete a secret", "k8s_delete_resource", args{"resource_type": "secret", "resource_name": "x"}, []string{"every delete"}},
@@ -371,7 +379,7 @@ func TestAuthorizeToolCall_ACustomRoleDoesNoMoreThanOnTheScreen(t *testing.T) {
 		{"patch a configmap", "k8s_patch_resource", args{"resource_type": "cm", "resource_name": "x"}, []string{"configmaps", "every edit"}},
 		{"label a node", "k8s_label_resource", args{"resource_type": "no", "resource_name": "x"}, []string{"every edit"}},
 		{"restart a deployment", "k8s_rollout", args{"action": "restart", "resource_type": "deploy", "resource_name": "x"}, []string{"deployment edit", "every edit"}},
-		{"read a rollout", "k8s_rollout", args{"action": "status", "resource_type": "deploy", "resource_name": "x"}, []string{"tools only", "configmaps", "deployment edit", "pod read", "every edit", "every delete"}},
+		{"read a rollout", "k8s_rollout", args{"action": "status", "resource_type": "deploy", "resource_name": "x"}, []string{"lists", "every read"}},
 		{"apply a configmap", "k8s_apply_manifest", args{"yaml_content": cm}, []string{"configmaps", "every edit"}},
 		{"apply a configmap and a secret", "k8s_apply_manifest", args{"yaml_content": cm + "---\n" + secret}, []string{"every edit"}},
 		{"create a configmap", "k8s_create_resource", args{"yaml_content": cm}, []string{"configmaps"}},
@@ -446,6 +454,28 @@ func TestAuthorizeToolCall_TheBuiltInRolesKeepWhatTheyHad(t *testing.T) {
 		check("Admin", auth.PermissionMatrix{"alpha": {"*"}}, c, true)
 		check("Write", auth.PermissionMatrix{"alpha": writeRolePerms}, c, writeRoleHolds(c))
 		check("Read", auth.PermissionMatrix{"alpha": readRolePerms()}, c, readRoleHolds(c))
+	}
+}
+
+// The alert investigator's token (auth-service repository.InvestigatorPermissions): it reads the lists it read and no more.
+func TestAuthorizeToolCall_TheInvestigatorKeepsItsReadsAndNoMore(t *testing.T) {
+	token := append(aiToolPerms(readRoleTools), "resource.pod.read", objectsReadKey)
+	refused := map[string]bool{
+		"policy_reports": true, "helm_read": true, "cost": true, "logfiles": true, "network_policy_check": true, "network_policy_effective": true,
+		"network_flows": true, "network_drops": true, "network_top_flows": true,
+	}
+	for _, c := range screenPermissionCases() {
+		if !readRoleHolds(c) {
+			continue
+		}
+		v := fakeValidator{payload: auth.TokenPayload{Perms: auth.PermissionMatrix{"alpha": token}}}
+		_, status, err := authorizeToolCall(v, hdr("t"), c.Tool, "alpha", c.Args)
+		if refused[c.Tool] && status != http.StatusForbidden {
+			t.Errorf("%s %v: status %d, want 403", c.Tool, c.Args, status)
+		}
+		if !refused[c.Tool] && status != 0 {
+			t.Errorf("%s %v: status %d (%v), want allowed", c.Tool, c.Args, status, err)
+		}
 	}
 }
 

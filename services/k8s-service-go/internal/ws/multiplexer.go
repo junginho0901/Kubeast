@@ -364,6 +364,11 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				send(ctx, sendCh, req.errorFrame("forbidden: no access to cluster "+effectiveClusterID(clusterID), reasonForbidden))
 				continue
 			}
+			// What the list route asks, once per subscription: a frame carries no new question.
+			if !payload.HasPermissionForCluster(auth.PermObjectsRead, effectiveClusterID(clusterID)) {
+				send(ctx, sendCh, req.errorFrame("forbidden: requires "+auth.PermObjectsRead+" permission in cluster "+effectiveClusterID(clusterID), reasonForbidden))
+				continue
+			}
 			if refusal := namespaceScopeRefusalOf(payload, effectiveClusterID(clusterID), req.Path, req.Query); refusal != "" {
 				send(ctx, sendCh, req.errorFrame(refusal, namespaceScopeReason(req.Path)))
 				continue

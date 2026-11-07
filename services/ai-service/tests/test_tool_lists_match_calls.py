@@ -52,7 +52,9 @@ async def test_a_role_with_every_read_tool_keeps_the_list_it_had(monkeypatch):
 async def test_a_tool_is_listed_only_where_the_key_and_the_tool_are_held_together(monkeypatch):
     apart = _token({"a": ("ai.mcp.use",), "b": ("ai.tool.k8s_get_resources",)})
     assert await _listed(monkeypatch, apart) == ALWAYS_THERE
-    together = _token({"a": ("ai.mcp.use",), "b": ("ai.mcp.use", "ai.tool.k8s_get_resources")})
+    without_the_read = _token({"a": ("ai.mcp.use",), "b": ("ai.mcp.use", "ai.tool.k8s_get_resources")})
+    assert await _listed(monkeypatch, without_the_read) == ALWAYS_THERE
+    together = _token({"a": ("ai.mcp.use",), "b": ("ai.mcp.use", "ai.tool.k8s_get_resources", "resource.objects.read")})
     assert await _listed(monkeypatch, together) == ALWAYS_THERE | {"k8s_get_resources"}
 
 

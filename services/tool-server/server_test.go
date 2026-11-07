@@ -43,7 +43,7 @@ func TestHandleCallReturnsAccess(t *testing.T) {
 	})
 	defer restore()
 	payload := auth.TokenPayload{UserID: "u1", Email: "a@example.com",
-		Perms: auth.PermissionMatrix{"prod": {"ai.tool.*"}},
+		Perms: auth.PermissionMatrix{"prod": {"ai.tool.*", "resource.objects.read"}},
 		Roles: map[string]string{"prod": "Read"}, Namespaces: map[string][]string{"prod": {"shop"}}}
 	prevAuth, prevImp := toolAuth, impersonationEnabled
 	toolAuth = fakeValidator{payload: payload}
@@ -119,7 +119,7 @@ func TestHandleCallReturnsTheRequestsK8sServiceMade(t *testing.T) {
 	})
 	defer restore()
 	prevAuth := toolAuth
-	toolAuth = fakeValidator{payload: auth.TokenPayload{UserID: "u1", Email: "a@example.com", Perms: auth.PermissionMatrix{"prod": {"ai.tool.*"}}}}
+	toolAuth = fakeValidator{payload: auth.TokenPayload{UserID: "u1", Email: "a@example.com", Perms: auth.PermissionMatrix{"prod": {"ai.tool.*", "resource.objects.read"}}}}
 	defer func() { toolAuth = prevAuth }()
 	tools := map[string]ToolDefinition{"get_cluster_overview": {
 		Name: "get_cluster_overview",

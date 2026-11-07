@@ -1,8 +1,8 @@
 // A tool reaches the cluster through kubectl, where a screen goes through a route that asks a permission first. This
 // table says, per tool, what that route asks: a role holding ai.tool.* does not get past it through the AI, however
-// much its group is bound in the cluster. A read a screen leaves to the cluster's RBAC asks nothing here either.
-// ai-service keeps the same table (app/services/ai/screen_permissions.py); TestToolScreenCasesFixture writes the cases
-// both run.
+// much its group is bound in the cluster. A list or detail asks resource.objects.read, as k8s-service's read gate does;
+// what has no object in its answer asks nothing. ai-service keeps the same table
+// (app/services/ai/screen_permissions.py); TestToolScreenCasesFixture writes the cases both run.
 
 package main
 
@@ -23,7 +23,10 @@ import (
 // toolRule gives the permissions a screen asks for one call of a tool.
 type toolRule func(args map[string]interface{}) []string
 
-func leftToTheCluster(map[string]interface{}) []string { return nil }
+func asksNothing(map[string]interface{}) []string { return nil }
+
+// listsAndDetails is what the read gate on k8s-service's lists and details asks.
+func listsAndDetails(map[string]interface{}) []string { return []string{auth.PermObjectsRead} }
 
 // alsoGlobal is a cluster's key whose route also answers an all-cluster key (k8s-service hygieneReadAllowed; ai-service ALSO_GLOBAL).
 var alsoGlobal = map[string]string{"resource.hygiene.scan": "admin.hygiene.read"}
@@ -72,51 +75,52 @@ func rolloutRule(args map[string]interface{}) []string {
 	case "undo":
 		return []string{"resource.workload.rollback"}
 	case "status", "history":
-		return nil
+		return listsAndDetails(args)
 	}
 	return forResourceType("edit")(args)
 }
 
 // A tool that is not here is refused to everyone: TestEveryToolIsInTheTableAndHasACase makes a new tool say what it asks.
 var toolScreenTable = map[string]toolRule{
-	"k8s_get_resources":               leftToTheCluster,
-	"k8s_get_resource_yaml":           leftToTheCluster,
-	"k8s_describe_resource":           leftToTheCluster,
-	"k8s_get_events":                  leftToTheCluster,
-	"k8s_get_available_api_resources": leftToTheCluster,
-	"k8s_get_cluster_configuration":   leftToTheCluster,
-	"get_cluster_overview":            leftToTheCluster,
-	"get_node_metrics":                leftToTheCluster,
-	"get_pod_metrics":                 leftToTheCluster,
-	"k8s_check_service_connectivity":  leftToTheCluster,
-	"k8s_find_resource":               leftToTheCluster,
-	"k8s_explain":                     leftToTheCluster,
-	"prometheus_query":                leftToTheCluster,
-	"prometheus_metrics":              leftToTheCluster,
-	"prometheus_labels":               leftToTheCluster,
-	"prometheus_rules":                leftToTheCluster,
-	"prometheus_targets":              leftToTheCluster,
-	"traces_search":                   leftToTheCluster,
-	"traces_get":                      leftToTheCluster,
-	"traces_tags":                     leftToTheCluster,
-	"traces_metrics":                  leftToTheCluster,
-	"traces_compare":                  leftToTheCluster,
-	"issues":                          leftToTheCluster,
-	"gitops_status":                   leftToTheCluster,
-	"optimization":                    leftToTheCluster,
-	"can_i":                           leftToTheCluster,
-	"resource_graph":                  leftToTheCluster,
-	"k8s_jq_query":                    leftToTheCluster,
-	"k8s_tabular_query":               leftToTheCluster,
-	"k8s_count":                       leftToTheCluster,
+	"k8s_get_resources":              listsAndDetails,
+	"k8s_get_resource_yaml":          listsAndDetails,
+	"k8s_describe_resource":          listsAndDetails,
+	"k8s_get_events":                 listsAndDetails,
+	"get_cluster_overview":           listsAndDetails,
+	"get_node_metrics":               listsAndDetails,
+	"get_pod_metrics":                listsAndDetails,
+	"k8s_check_service_connectivity": listsAndDetails,
+	"k8s_find_resource":              listsAndDetails,
+	"prometheus_query":               listsAndDetails,
+	"prometheus_metrics":             listsAndDetails,
+	"prometheus_labels":              listsAndDetails,
+	"prometheus_rules":               listsAndDetails,
+	"prometheus_targets":             listsAndDetails,
+	"traces_search":                  listsAndDetails,
+	"traces_get":                     listsAndDetails,
+	"traces_tags":                    listsAndDetails,
+	"traces_metrics":                 listsAndDetails,
+	"traces_compare":                 listsAndDetails,
+	"issues":                         listsAndDetails,
+	"gitops_status":                  listsAndDetails,
+	"optimization":                   listsAndDetails,
+	"resource_graph":                 listsAndDetails,
+	"k8s_jq_query":                   listsAndDetails,
+	"k8s_tabular_query":              listsAndDetails,
+	"k8s_count":                      listsAndDetails,
+	"pod_rbac":                       listsAndDetails,
+	"storage_summary":                listsAndDetails,
+	"limit_range_violations":         listsAndDetails,
+	"timeline":                       listsAndDetails,
+	"gpu":                            listsAndDetails,
+
+	// No object in the answer, as the routes that read none: the kinds a cluster serves, its version, can-i.
+	"k8s_get_available_api_resources": asksNothing,
+	"k8s_get_cluster_configuration":   asksNothing,
+	"k8s_explain":                     asksNothing,
+	"can_i":                           asksNothing,
 	// The picker asks for a sign-in only; auth-service answers the caller's own clusters.
-	"clusters_list": leftToTheCluster,
-	// A pod's RBAC tab, the Storage window's lists and a LimitRange's violations ask no permission of their own.
-	"pod_rbac":               leftToTheCluster,
-	"storage_summary":        leftToTheCluster,
-	"limit_range_violations": leftToTheCluster,
-	"timeline":               leftToTheCluster,
-	"gpu":                    leftToTheCluster,
+	"clusters_list": asksNothing,
 
 	"alert_investigate":        always("resource.alert.investigate", "resource.pod.read"),
 	"k8s_get_pod_logs":         always("resource.pod.read"),

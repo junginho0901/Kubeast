@@ -6,6 +6,66 @@ import (
 	"testing"
 )
 
+// The rule as ai-service security.py and frontend utils/permissions.ts write it, segment by segment over a split.
+func permMatchesSplit(pattern, perm string) bool {
+	if pattern == "*" || pattern == perm {
+		return true
+	}
+	ps := strings.Split(pattern, ".")
+	qs := strings.Split(perm, ".")
+	for i, seg := range ps {
+		if seg == "*" && i == len(ps)-1 {
+			return len(qs) >= len(ps)
+		}
+		if i >= len(qs) || (seg != "*" && seg != qs[i]) {
+			return false
+		}
+	}
+	return len(ps) == len(qs)
+}
+
+// Every pattern and key of up to four segments of these, against the split rule.
+func TestPermMatchesAnswersAsTheSplitRule(t *testing.T) {
+	var words []string
+	var grow func(prefix string, depth int)
+	grow = func(prefix string, depth int) {
+		for _, seg := range []string{"*", "a", "b", ""} {
+			word := prefix + seg
+			words = append(words, word)
+			if depth > 1 {
+				grow(word+".", depth-1)
+			}
+		}
+	}
+	grow("", 4)
+	checked := 0
+	for _, pattern := range words {
+		for _, perm := range words {
+			checked++
+			if got, want := permMatches(pattern, perm), permMatchesSplit(pattern, perm); got != want {
+				t.Fatalf("permMatches(%q, %q) = %v, the split rule says %v", pattern, perm, got, want)
+			}
+		}
+	}
+	if checked < 100000 {
+		t.Fatalf("only %d pairs", checked)
+	}
+}
+
+// A role's keys are read on every checked request.
+func TestPermMatchesAllocatesNothing(t *testing.T) {
+	for _, c := range [][2]string{
+		{"ai.tool.k8s_get_resources", "resource.objects.read"},
+		{"menu.*", "resource.objects.read"},
+		{"resource.*.read", "resource.objects.read"},
+		{"resource.*", "resource.objects.read"},
+	} {
+		if allocs := testing.AllocsPerRun(100, func() { permMatches(c[0], c[1]) }); allocs != 0 {
+			t.Errorf("permMatches(%q, %q): %v allocations", c[0], c[1], allocs)
+		}
+	}
+}
+
 // permMatches must agree with ai-service security.py and frontend
 // utils/permissions.ts (same table in their tests).
 func TestPermMatches(t *testing.T) {

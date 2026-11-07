@@ -90,7 +90,7 @@ test.describe('a Helm release editor without reveal', () => {
     kubectl(`-n ${NS} apply -f -`, releaseSecret())
 
     const role = await request.post('/api/v1/auth/admin/roles', { headers: bearer(admin), data: { name: ROLE, description: 'e2e',
-      permissions: ['menu.dashboard', 'menu.helm', 'resource.helm.read', 'resource.helm.upgrade'] } })
+      permissions: ['menu.dashboard', 'menu.helm', 'resource.objects.read', 'resource.helm.read', 'resource.helm.upgrade'] } })
     expect(role.status(), await role.text()).toBe(201)
     roleId = (await role.json()).id
     // What auth.impersonation.customRoles renders, done by hand: the service account may act as this group.

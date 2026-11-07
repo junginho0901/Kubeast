@@ -37,7 +37,7 @@ func TestWriteTools(t *testing.T) {
 
 func TestAuthorizeToolCall(t *testing.T) {
 	v := fakeValidator{payload: auth.TokenPayload{Perms: auth.PermissionMatrix{
-		"alpha": {"ai.tool.*"},
+		"alpha": {"ai.tool.*", "resource.objects.read"},
 		"prod":  {"resource.*.read"},
 	}}}
 	cases := []struct {
@@ -87,18 +87,20 @@ func toolPermissionCases() []toolPermissionCase {
 	}{
 		{"Write role", write, false, false, true, true, true, true},
 		{"Admin role", []string{"*"}, true, true, true, true, true, true},
-		{"custom role with both screen permissions", []string{"ai.tool.*", "resource.pod.exec", "resource.workload.rollback"}, true, true, true, false, false, false},
-		{"custom role with Pod exec only", []string{"ai.tool.*", "resource.pod.exec"}, true, false, true, false, false, false},
-		{"custom role with rollback only", []string{"ai.tool.*", "resource.workload.rollback"}, false, true, true, false, false, false},
+		{"custom role with both screen permissions", []string{"ai.tool.*", "resource.pod.exec", "resource.workload.rollback"}, true, true, false, false, false, false},
+		{"custom role with Pod exec only", []string{"ai.tool.*", "resource.pod.exec"}, true, false, false, false, false, false},
+		{"custom role with rollback only", []string{"ai.tool.*", "resource.workload.rollback"}, false, true, false, false, false, false},
 		{"screen permissions without the AI tools", []string{"resource.pod.exec", "resource.workload.rollback"}, false, false, false, false, false, false},
 		{"the exec tool with its screen permission", []string{"ai.tool.k8s_execute_command", "resource.pod.exec"}, true, false, false, false, false, false},
 		{"the exec tool without its screen permission", []string{"ai.tool.k8s_execute_command"}, false, false, false, false, false, false},
-		{"the rollout tool with rollback", []string{"ai.tool.k8s_rollout", "resource.workload.rollback"}, false, true, true, false, false, false},
-		{"the rollout tool without rollback", []string{"ai.tool.k8s_rollout"}, false, false, true, false, false, false},
-		{"the rollout tool with edit of that kind", []string{"ai.tool.k8s_rollout", "resource.deployment.edit"}, false, false, true, true, false, false},
-		{"custom role with no resource permission", []string{"ai.tool.*"}, false, false, true, false, false, false},
-		{"custom role with these kinds", []string{"ai.tool.*", "resource.deployment.edit", "resource.configmap.delete"}, false, false, true, true, true, true},
-		{"custom role with other kinds", []string{"ai.tool.*", "resource.statefulset.edit", "resource.secret.delete"}, false, false, true, false, false, false},
+		{"the rollout tool with rollback", []string{"ai.tool.k8s_rollout", "resource.workload.rollback"}, false, true, false, false, false, false},
+		{"the rollout tool without rollback", []string{"ai.tool.k8s_rollout"}, false, false, false, false, false, false},
+		{"the rollout tool with the lists", []string{"ai.tool.k8s_rollout", "resource.objects.read"}, false, false, true, false, false, false},
+		{"the rollout tool with edit of that kind", []string{"ai.tool.k8s_rollout", "resource.deployment.edit"}, false, false, false, true, false, false},
+		{"custom role with no resource permission", []string{"ai.tool.*"}, false, false, false, false, false, false},
+		{"custom role with the lists", []string{"ai.tool.*", "resource.objects.read"}, false, false, true, false, false, false},
+		{"custom role with these kinds", []string{"ai.tool.*", "resource.deployment.edit", "resource.configmap.delete"}, false, false, false, true, true, true},
+		{"custom role with other kinds", []string{"ai.tool.*", "resource.statefulset.edit", "resource.secret.delete"}, false, false, false, false, false, false},
 		{"custom role with read only", []string{"ai.tool.*", "resource.*.read"}, false, false, true, false, false, false},
 	}
 	workload := func(action string) map[string]interface{} {

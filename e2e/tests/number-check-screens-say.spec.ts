@@ -263,12 +263,12 @@ test.describe('the screens say what they know', () => {
     await expect(page.getByTestId('cluster-picker').locator('span.rounded-full.w-2')).toHaveClass(/bg-red-500/)
   })
 
-  test('the role screen says what resource.*.read asks for, and the cluster decides the other lists', async ({ request }) => {
+  test('the role screen says what resource.*.read opens, and that the cluster still decides what the group sees', async ({ request }) => {
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     const body = await (await request.get('/api/v1/auth/permissions', { headers: bearer(admin) })).json()
     const categories: { permissions: { key: string; description: string }[] }[] = Array.isArray(body) ? body : body.categories ?? body.items
     const read = categories.flatMap((c) => c.permissions).find((p) => p.key === 'resource.*.read')
-    expect(read?.description).toMatch(/^Asked by Pod logs, .*The other lists are decided by the role on the cluster and the cluster's RBAC\.$/)
+    expect(read?.description).toMatch(/^Opens the lists and details of every kind, and Pod logs, .*The cluster's RBAC still decides what the role's group sees\.$/)
   })
 
   test('a refused cluster access change says why and changes nothing', async ({ browser, request }: { browser: Browser; request: APIRequestContext }) => {

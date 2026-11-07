@@ -55,18 +55,22 @@ func screenRouter(t *testing.T) chi.Router {
 	}
 	h := handler.New(svc, config.Config{LogFilesEnabled: true}, nil)
 	r := chi.NewRouter()
-	RegisterCluster(r, h)
-	RegisterPods(r, h)
-	RegisterWorkloads(r, h)
-	RegisterNetwork(r, h)
-	RegisterGateway(r, h)
-	RegisterStorage(r, h)
-	RegisterSecurity(r, h)
-	RegisterConfiguration(r, h)
-	RegisterHelm(r, h)
-	RegisterGPU(r, h)
-	RegisterCustomResources(r, h)
-	RegisterMetrics(r, h)
+	// As in main.go: a group, so the route is matched when the gate reads it.
+	r.Group(func(g chi.Router) {
+		g.Use(h.ReadGateMiddleware)
+		RegisterCluster(g, h)
+		RegisterPods(g, h)
+		RegisterWorkloads(g, h)
+		RegisterNetwork(g, h)
+		RegisterGateway(g, h)
+		RegisterStorage(g, h)
+		RegisterSecurity(g, h)
+		RegisterConfiguration(g, h)
+		RegisterHelm(g, h)
+		RegisterGPU(g, h)
+		RegisterCustomResources(g, h)
+		RegisterMetrics(g, h)
+	})
 	return r
 }
 
@@ -165,6 +169,24 @@ func TestTheRouteBehindAToolAsksWhatTheTableSays(t *testing.T) {
 		{"logfiles", map[string]interface{}{"pod_name": "web"}, http.MethodGet, "/api/v1/namespaces/x/pods/y/logfiles"},
 		{"logfiles", map[string]interface{}{"path": "/var/log/app/app.log"}, http.MethodGet, "/api/v1/namespaces/x/pods/y/logfiles/content?path=/var/log/app/app.log"},
 		{"k8s_rollout", map[string]interface{}{"action": "undo"}, http.MethodPost, "/api/v1/namespaces/x/deployments/y/rollback"},
+		{"k8s_rollout", map[string]interface{}{"action": "status"}, http.MethodGet, "/api/v1/namespaces/x/deployments/y/revisions"},
+		{"k8s_get_resources", nil, http.MethodGet, "/api/v1/namespaces/x/configmaps"},
+		{"k8s_get_resource_yaml", nil, http.MethodGet, "/api/v1/resources/yaml?resource_type=configmaps&namespace=x&resource_name=y"},
+		{"k8s_describe_resource", nil, http.MethodGet, "/api/v1/resources/describe?resource_type=configmaps&namespace=x&resource_name=y"},
+		{"k8s_get_events", nil, http.MethodGet, "/api/v1/events?namespace=x"},
+		{"get_cluster_overview", nil, http.MethodGet, "/api/v1/overview"},
+		{"get_node_metrics", nil, http.MethodGet, "/api/v1/metrics/nodes"},
+		{"get_pod_metrics", nil, http.MethodGet, "/api/v1/metrics/pods?namespace=x"},
+		{"prometheus_query", nil, http.MethodGet, "/api/v1/prometheus/query?query=up"},
+		{"traces_search", nil, http.MethodGet, "/api/v1/traces/search"},
+		{"issues", nil, http.MethodGet, "/api/v1/issues?namespace=x"},
+		{"optimization", nil, http.MethodGet, "/api/v1/optimization?namespace=x"},
+		{"resource_graph", nil, http.MethodGet, "/api/v1/namespaces/x/resource-graph"},
+		{"timeline", nil, http.MethodGet, "/api/v1/timeline"},
+		{"gpu", nil, http.MethodGet, "/api/v1/gpu/dashboard"},
+		{"pod_rbac", nil, http.MethodGet, "/api/v1/namespaces/x/pods/y/rbac"},
+		{"storage_summary", nil, http.MethodGet, "/api/v1/pvcs?usage=true"},
+		{"limit_range_violations", nil, http.MethodGet, "/api/v1/namespaces/x/limitranges/y/violations"},
 	} {
 		want := wantFor(c.tool, c.args)
 		if len(want) != 1 {
@@ -177,8 +199,22 @@ func TestTheRouteBehindAToolAsksWhatTheTableSays(t *testing.T) {
 	}
 }
 
-// A read the table leaves to the cluster asks no permission here either. If one of these starts to ask, the table asks too.
+// What the table leaves to the cluster asks nothing here either: it is the can-i and facts the screens read with no object.
 func TestAReadTheTableLeavesToTheClusterAsksNoPermission(t *testing.T) {
+	r := screenRouter(t)
+	for _, path := range []string{
+		"/api/v1/api-resources",
+		"/api/v1/cluster-config",
+		"/api/v1/can-i?verb=get&resource=pods",
+	} {
+		if rec := askAsToolsOnly(r, http.MethodGet, path); rec.Code == http.StatusForbidden || rec.Code == http.StatusUnauthorized {
+			t.Errorf("GET %s: status %d body %s, want no refusal by the app", path, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+// A read with no permission of its own asks the key and, with it, is the cluster's to answer.
+func TestAReadWithNoPermissionOfItsOwnIsTheClustersToAnswerForAHolderOfTheKey(t *testing.T) {
 	r := screenRouter(t)
 	for _, path := range []string{
 		"/api/v1/namespaces/x/configmaps",
@@ -195,7 +231,6 @@ func TestAReadTheTableLeavesToTheClusterAsksNoPermission(t *testing.T) {
 		"/api/v1/optimization?namespace=x",
 		"/api/v1/overview",
 		"/api/v1/prometheus/query?query=up",
-		"/api/v1/api-resources",
 		"/api/v1/namespaces/x/pods/y/rbac",
 		"/api/v1/namespaces/x/limitranges/y/violations",
 		"/api/v1/topology/storage",
@@ -209,8 +244,11 @@ func TestAReadTheTableLeavesToTheClusterAsksNoPermission(t *testing.T) {
 		"/api/v1/deviceclasses",
 		"/api/v1/resourceclaimtemplates/all",
 	} {
-		if rec := askAsToolsOnly(r, http.MethodGet, path); rec.Code == http.StatusForbidden || rec.Code == http.StatusUnauthorized {
-			t.Errorf("GET %s: status %d body %s, want no refusal by the app", path, rec.Code, rec.Body.String())
+		if rec := askAsToolsOnly(r, http.MethodGet, path); !refusedForTheKey(rec) {
+			t.Errorf("GET %s without the key: status %d body %.120s, want 403 naming it", path, rec.Code, rec.Body.String())
+		}
+		if rec := askHolding(r, []string{auth.PermObjectsRead}, http.MethodGet, path); rec.Code == http.StatusForbidden || rec.Code == http.StatusUnauthorized {
+			t.Errorf("GET %s with the key: status %d body %.120s, want no refusal by the app", path, rec.Code, rec.Body.String())
 		}
 	}
 }

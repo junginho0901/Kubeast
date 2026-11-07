@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	"fmt"
+
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
 // The schema (tables, columns, indexes) is defined by the versioned migrations
@@ -67,10 +69,11 @@ var ReadAIToolPermissions = []string{
 }
 
 // InvestigatorPermissions is what the alert investigator's token carries: the
-// read tools, plus resource.pod.read, which k8s-service asks for before it
-// searches the log store (the cluster itself still decides through the
-// investigator's RBAC).
-var InvestigatorPermissions = append(append([]string{}, ReadAIToolPermissions...), "resource.pod.read")
+// read tools, what k8s-service asks for a list or detail, and resource.pod.read,
+// which it asks before it searches the log store (the cluster itself still
+// decides through the investigator's RBAC). Not resource.*.read, which would add
+// Helm, Cost and the network reads.
+var InvestigatorPermissions = append(append([]string{}, ReadAIToolPermissions...), auth.PermObjectsRead, "resource.pod.read")
 
 // SeedSystemRoles ensures the four system roles exist and migrates auth_users.role → role_id.
 func (r *Repository) SeedSystemRoles(ctx context.Context) error {

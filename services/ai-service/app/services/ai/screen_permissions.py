@@ -2,9 +2,10 @@
 
 A tool reaches the cluster through kubectl, where a screen goes through a route that asks a permission first. This
 table says, per tool, what that route asks: a role holding ai.tool.* does not get past it through the AI, however much
-its group is bound in the cluster. A read a screen leaves to the cluster's RBAC asks nothing here either. tool-server
-keeps the same table (screen_permissions.go) and decides again; its TestToolScreenCasesFixture writes the cases
-tests/test_tool_app_permissions.py runs here. A tool that is not in the table is refused to everyone.
+its group is bound in the cluster. A list or detail asks resource.objects.read, as k8s-service's read gate does; what
+has no object in its answer asks nothing. tool-server keeps the same table (screen_permissions.go) and decides again;
+its TestToolScreenCasesFixture writes the cases tests/test_tool_app_permissions.py runs here. A tool that is not in the
+table is refused to everyone.
 """
 from __future__ import annotations
 
@@ -13,11 +14,17 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import yaml
 
-_LEFT_TO_THE_CLUSTER: Tuple[str, ...] = ("left",)
+# What k8s-service's lists and details ask (handler/read_gate.go).
+LISTS_AND_DETAILS = "resource.objects.read"
+
+_ASKS_NOTHING: Tuple[str, ...] = ("left",)
 
 
 def _always(*permissions: str) -> Tuple[str, ...]:
     return ("always", *permissions)
+
+
+_LISTS_AND_DETAILS = _always(LISTS_AND_DETAILS)
 
 
 def _for_resource_type(verb: str) -> Tuple[str, str]:
@@ -29,45 +36,45 @@ def _for_manifest(verb: str) -> Tuple[str, str]:
 
 
 TOOL_SCREEN_TABLE: Dict[str, Tuple[str, ...]] = {
-    "k8s_get_resources": _LEFT_TO_THE_CLUSTER,
-    "k8s_get_resource_yaml": _LEFT_TO_THE_CLUSTER,
-    "k8s_describe_resource": _LEFT_TO_THE_CLUSTER,
-    "k8s_get_events": _LEFT_TO_THE_CLUSTER,
-    "k8s_get_available_api_resources": _LEFT_TO_THE_CLUSTER,
-    "k8s_get_cluster_configuration": _LEFT_TO_THE_CLUSTER,
-    "get_cluster_overview": _LEFT_TO_THE_CLUSTER,
-    "get_node_metrics": _LEFT_TO_THE_CLUSTER,
-    "get_pod_metrics": _LEFT_TO_THE_CLUSTER,
-    "k8s_check_service_connectivity": _LEFT_TO_THE_CLUSTER,
-    "k8s_find_resource": _LEFT_TO_THE_CLUSTER,
-    "k8s_explain": _LEFT_TO_THE_CLUSTER,
-    "prometheus_query": _LEFT_TO_THE_CLUSTER,
-    "prometheus_metrics": _LEFT_TO_THE_CLUSTER,
-    "prometheus_labels": _LEFT_TO_THE_CLUSTER,
-    "prometheus_rules": _LEFT_TO_THE_CLUSTER,
-    "prometheus_targets": _LEFT_TO_THE_CLUSTER,
-    "traces_search": _LEFT_TO_THE_CLUSTER,
-    "traces_get": _LEFT_TO_THE_CLUSTER,
-    "traces_tags": _LEFT_TO_THE_CLUSTER,
-    "traces_metrics": _LEFT_TO_THE_CLUSTER,
-    "traces_compare": _LEFT_TO_THE_CLUSTER,
-    "issues": _LEFT_TO_THE_CLUSTER,
-    "gitops_status": _LEFT_TO_THE_CLUSTER,
-    "optimization": _LEFT_TO_THE_CLUSTER,
-    "can_i": _LEFT_TO_THE_CLUSTER,
-    "resource_graph": _LEFT_TO_THE_CLUSTER,
-    "k8s_jq_query": _LEFT_TO_THE_CLUSTER,
-    "k8s_tabular_query": _LEFT_TO_THE_CLUSTER,
-    "k8s_count": _LEFT_TO_THE_CLUSTER,
+    "k8s_get_resources": _LISTS_AND_DETAILS,
+    "k8s_get_resource_yaml": _LISTS_AND_DETAILS,
+    "k8s_describe_resource": _LISTS_AND_DETAILS,
+    "k8s_get_events": _LISTS_AND_DETAILS,
+    "get_cluster_overview": _LISTS_AND_DETAILS,
+    "get_node_metrics": _LISTS_AND_DETAILS,
+    "get_pod_metrics": _LISTS_AND_DETAILS,
+    "k8s_check_service_connectivity": _LISTS_AND_DETAILS,
+    "k8s_find_resource": _LISTS_AND_DETAILS,
+    "prometheus_query": _LISTS_AND_DETAILS,
+    "prometheus_metrics": _LISTS_AND_DETAILS,
+    "prometheus_labels": _LISTS_AND_DETAILS,
+    "prometheus_rules": _LISTS_AND_DETAILS,
+    "prometheus_targets": _LISTS_AND_DETAILS,
+    "traces_search": _LISTS_AND_DETAILS,
+    "traces_get": _LISTS_AND_DETAILS,
+    "traces_tags": _LISTS_AND_DETAILS,
+    "traces_metrics": _LISTS_AND_DETAILS,
+    "traces_compare": _LISTS_AND_DETAILS,
+    "issues": _LISTS_AND_DETAILS,
+    "gitops_status": _LISTS_AND_DETAILS,
+    "optimization": _LISTS_AND_DETAILS,
+    "resource_graph": _LISTS_AND_DETAILS,
+    "k8s_jq_query": _LISTS_AND_DETAILS,
+    "k8s_tabular_query": _LISTS_AND_DETAILS,
+    "k8s_count": _LISTS_AND_DETAILS,
+    "pod_rbac": _LISTS_AND_DETAILS,
+    "storage_summary": _LISTS_AND_DETAILS,
+    "limit_range_violations": _LISTS_AND_DETAILS,
+    "timeline": _LISTS_AND_DETAILS,
+    "gpu": _LISTS_AND_DETAILS,
+    # No object in the answer, as the routes that read none: the kinds a cluster serves, its version, can-i.
+    "k8s_get_available_api_resources": _ASKS_NOTHING,
+    "k8s_get_cluster_configuration": _ASKS_NOTHING,
+    "k8s_explain": _ASKS_NOTHING,
+    "can_i": _ASKS_NOTHING,
     # The picker asks for a sign-in only; auth-service answers the caller's own clusters.
-    "clusters_list": _LEFT_TO_THE_CLUSTER,
-    # A pod's RBAC tab, the Storage window's lists and a LimitRange's violations ask no permission of their own.
-    "pod_rbac": _LEFT_TO_THE_CLUSTER,
-    "storage_summary": _LEFT_TO_THE_CLUSTER,
-    "limit_range_violations": _LEFT_TO_THE_CLUSTER,
+    "clusters_list": _ASKS_NOTHING,
     "alert_investigate": _always("resource.alert.investigate", "resource.pod.read"),
-    "timeline": _LEFT_TO_THE_CLUSTER,
-    "gpu": _LEFT_TO_THE_CLUSTER,
     "k8s_get_pod_logs": _always("resource.pod.read"),
     "alerts_list": _always("resource.pod.read"),
     "alerts_inbox": _always("resource.pod.read"),
@@ -321,7 +328,7 @@ def app_permissions(tool: str, args: Any = None) -> Optional[List[str]]:
         if action == "undo":
             return ["resource.workload.rollback"]
         if action in ("status", "history"):
-            return []
+            return [LISTS_AND_DETAILS]
         how, rule = "resource_type", _for_resource_type("edit")
     verb = rule[1]
     if how == "resource_type":
@@ -338,8 +345,10 @@ def may_be_called(holds: Callable[[str], bool], tool: str) -> bool:
     rule = TOOL_SCREEN_TABLE.get(tool)
     if rule is None:
         return False
-    if rule[0] in ("left", "rollout"):
+    if rule[0] == "left":
         return True
+    if rule[0] == "rollout":
+        return holds(LISTS_AND_DETAILS) or holds("resource.workload.rollback") or holds_verb_on_some_kind(holds, "edit")
     if rule[0] == "always":
         return all(holds(permission) for permission in rule[1:])
     return holds_verb_on_some_kind(holds, rule[1])

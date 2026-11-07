@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
@@ -60,6 +61,61 @@ func TestCatalog_AlertInvestigateUnderAlerts(t *testing.T) {
 	write := []string{"menu.*", "resource.*.read", "resource.*.create", "resource.*.edit", "resource.*.delete", "resource.alert.silence", "ai.tool.*"}
 	if auth.MatchAny(write, key) || !auth.MatchAny([]string{"*"}, key) {
 		t.Fatalf("Write reaches it: %v, * reaches it: %v; want false, true", auth.MatchAny(write, key), auth.MatchAny([]string{"*"}, key))
+	}
+}
+
+// Lists and details ask a key of their own, offered next to All resources: read, which covers it. A role can hold the
+// lists without Pod logs, Helm or Cost, and a Read ceiling lets it through.
+func TestCatalog_ListsAndDetailsUnderResources(t *testing.T) {
+	if got := unknownPermissions([]string{auth.PermObjectsRead}); got != nil {
+		t.Fatalf("not in the catalog: %v", got)
+	}
+	var categories []struct {
+		Category    string `json:"category"`
+		Permissions []struct {
+			Key         string `json:"key"`
+			Description string `json:"description"`
+		} `json:"permissions"`
+	}
+	raw, _ := json.Marshal(allPermissions())
+	if err := json.Unmarshal(raw, &categories); err != nil {
+		t.Fatal(err)
+	}
+	texts := map[string]string{}
+	under := ""
+	for _, c := range categories {
+		for _, p := range c.Permissions {
+			texts[p.Key] = p.Description
+			if p.Key == auth.PermObjectsRead {
+				under = c.Category
+			}
+		}
+	}
+	if under != "Resources" {
+		t.Fatalf("%s is under %q, want Resources", auth.PermObjectsRead, under)
+	}
+	for _, word := range []string{"lists and details", "Pod logs", "Helm", "Cost"} {
+		if !strings.Contains(texts["resource.*.read"], word) {
+			t.Errorf("resource.*.read says %q, want it to name %q", texts["resource.*.read"], word)
+		}
+	}
+	if strings.Contains(texts["resource.*.read"], "decided by") {
+		t.Errorf("resource.*.read still says the cluster decides the lists: %q", texts["resource.*.read"])
+	}
+	if !auth.MatchAny([]string{"resource.*.read"}, auth.PermObjectsRead) {
+		t.Fatal("resource.*.read does not cover the key")
+	}
+	for _, wider := range []string{"resource.pod.read", "resource.helm.read", "resource.cost.read", "resource.policyreport.read", "resource.networkflow.read", "resource.networkpolicy.read"} {
+		if auth.MatchAny([]string{auth.PermObjectsRead}, wider) {
+			t.Errorf("the key opens %s", wider)
+		}
+	}
+	if got := uncoveredPermissions([]string{"menu.dashboard", auth.PermObjectsRead}, []string{"menu.*", "resource.*.read"}); got != nil {
+		t.Fatalf("within the Read ceiling: %v", got)
+	}
+	matrix, _ := narrowForAPIKey(auth.PermissionMatrix{"c": {"menu.*", auth.PermObjectsRead}}, nil, []string{"c"}, "read", []string{"menu.*", "resource.*.read"})
+	if !auth.MatchAny(matrix["c"], auth.PermObjectsRead) {
+		t.Fatalf("a Read key on such a role lost the lists: %v", matrix)
 	}
 }
 

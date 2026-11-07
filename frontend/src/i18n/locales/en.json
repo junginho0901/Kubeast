@@ -489,6 +489,7 @@
       "title": "No permission",
       "body": "You do not have permission to view {{resources}} in this cluster. Ask an administrator for a role that includes it.",
       "customRole": "Your role \"{{role}}\" acts on this cluster as the Kubernetes group {{group}}. If every page shows this notice, the cluster has not allowed and bound that group yet (chart auth.impersonation.customRoles).",
+      "readPermission": "Your role on this cluster holds neither resource.objects.read (lists and details) nor resource.*.read (All resources: read), so Kubeast reads no list for it. Ask an administrator to add one.",
       "namespaces": "Your access to this cluster is limited to the namespaces {{namespaces}}; cluster-wide pages and other namespaces are not shown."
     },
     "watchProblem": {
@@ -3729,7 +3730,8 @@
         "menu_configuration": "Configuration",
         "menu_admin": "Admin",
         "resource_all_all": "All resources, every action",
-        "resource_all_read": "Asked by Pod logs, log search, Alerts, Helm, Cost, Policy Reports and network reads. The other lists are decided by the role on the cluster and the cluster's RBAC.",
+        "resource_all_read": "Opens the lists and details of every kind, and Pod logs, log search, Alerts, Helm, Cost, Policy Reports and network reads. The cluster's RBAC still decides what the role's group sees.",
+        "resource_objects_read": "Lists and details of every kind, without Pod logs, log search, Alerts, Helm, Cost, Policy Reports or network reads. Without this or All resources: read a role's screens read nothing.",
         "resource_all_create": "All resources: create",
         "resource_all_edit": "All resources: edit",
         "resource_all_delete": "All resources: delete",

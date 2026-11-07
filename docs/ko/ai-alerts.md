@@ -68,7 +68,7 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
   - 시작하기 전에 한 번 더 봅니다. 그 사이 그 종류(자동·요청)가 꺼졌거나, 제공자 일시 정지가 시작됐거나, 앞서 돈 조사들이 그 종류의 하루 한도를 다 썼으면 시작하지 않고 `skipped`로 남깁니다. 조사는 끝나야 한도에 들어가므로, 한도는 그것을 넘기는 한 번(복제본마다)까지만 넘칩니다.
   - 모델을 부른 뒤 실패한 조사도 그때까지 쓴 토큰을 조사 행과 감사 행에 남깁니다(API 키일 때. Claude Code는 한 턴이 끝날 때만 사용량을 알려 줍니다).
   - auth-service가 그 클러스터용 **조사 전용 토큰**을 10분짜리로 발급합니다.
-    - 권한은 읽기 도구 52개와 로그 저장소 검색이 확인하는 `resource.pod.read`입니다. Helm·정책 보고·비용·로그 파일·NetworkPolicy·네트워크 흐름·네트워크 차단·상위 통신 도구는 이 권한이 없어 조사에는 보이지 않습니다.
+    - 권한은 읽기 도구 52개, 목록·상세가 묻는 `resource.objects.read`, 로그 저장소 검색이 확인하는 `resource.pod.read`입니다. Helm·정책 보고·비용·로그 파일·NetworkPolicy·네트워크 흐름·네트워크 차단·상위 통신 도구는 이 권한이 없어 조사에는 보이지 않습니다.
     - 알림에 `namespace` 라벨이 있으면 그 Namespace로 한정합니다.
     - auth-service에서 열리는 경로는 하나입니다. 도구 `clusters_list`가 읽는 클러스터 목록이고, 그 클러스터의 행만 답합니다. 다른 경로는 403을 답하고, `features.alertInvestigation.enabled`가 꺼지면 이 경로도 멈춥니다.
     - 클러스터에는 사용자·그룹 `kubeast:investigator`로 요청합니다. 이 신원은 Secret·exec·쓰기 권한이 없는 읽기 전용 ClusterRole입니다(`templates/impersonation-investigator.yaml`).
