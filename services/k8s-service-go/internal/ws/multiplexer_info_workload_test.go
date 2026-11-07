@@ -62,7 +62,7 @@ func TestDeploymentToInfo_StatusAsTheList(t *testing.T) {
 			"status":   map[string]interface{}{"availableReplicas": int64(1), "unavailableReplicas": int64(1), "conditions": c.conds},
 		}}
 		info := deploymentToInfo(obj)
-		if info["status"] != c.status || info["progressing_reason"] != c.reason || info["unavailable_replicas"] != int64(1) {
+		if info["status"] != c.status || info["progressing_reason"] != c.reason || info["unavailable_replicas"] != int32(1) {
 			t.Errorf("%s: status %v reason %v unavailable %v, want %q %q 1", c.name, info["status"], info["progressing_reason"], info["unavailable_replicas"], c.status, c.reason)
 		}
 	}

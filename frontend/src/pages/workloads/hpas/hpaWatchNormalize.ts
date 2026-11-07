@@ -4,7 +4,6 @@
 // applyHPAWatchEvent 추출. raw k8s HPA object 를 API list 형태 (HPAInfo) 로
 // 정규화하고, watch event (ADDED/MODIFIED/DELETED) 를 cache 배열에 머지.
 
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import type { HPAInfo } from '@/services/api'
 
 export function normalizeWatchHPAObject(obj: any): HPAInfo {
@@ -20,6 +19,9 @@ export function normalizeWatchHPAObject(obj: any): HPAInfo {
     name: metadata?.name ?? obj?.name ?? '',
     namespace: metadata?.namespace ?? obj?.namespace ?? '',
     target_ref: `${scaleTargetRef?.kind ?? ''}/${scaleTargetRef?.name ?? ''}`,
+    target_ref_kind: scaleTargetRef?.kind ?? '',
+    target_ref_name: scaleTargetRef?.name ?? '',
+    labels: metadata?.labels ?? obj?.labels ?? null,
     min_replicas: spec?.minReplicas ?? null,
     max_replicas: spec?.maxReplicas ?? 0,
     current_replicas: status?.currentReplicas ?? null,
@@ -53,7 +55,9 @@ export function applyHPAWatchEvent(
     return items
   }
 
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
+  // the server sends the whole row (hparow.Info), so it replaces: a metric or last scale that went away shows that
+  // instead of keeping the old one
+  if (index >= 0) items[index] = normalized
   else items.push(normalized)
 
   return items

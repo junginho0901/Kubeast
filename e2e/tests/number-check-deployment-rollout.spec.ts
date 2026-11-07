@@ -85,4 +85,32 @@ test.describe('Number check — a rollout past its progress deadline', () => {
     await expect.soft(badge).toHaveText(/^(Failed|실패)$/)
     await expect.soft(badge).toHaveAttribute('title', 'Failed: ProgressDeadlineExceeded')
   })
+
+  // Last in the file: it ends the stuck rollout. A live update replaces the row, so the reason goes with the failure and
+  // the old pod staying available keeps the row on one word from then on.
+  test('a recovered rollout reads Available live with no reason left, and the row shows no other status on the way', async ({ page }) => {
+    test.setTimeout(240_000)
+    await page.goto(`/workloads/deployments?cluster=${CLUSTER}&namespace=${NS}`)
+    const badge = page.locator('tr').filter({ hasText: 'stuck' }).locator('span.badge')
+    await expect(badge).toHaveAttribute('title', 'Failed: ProgressDeadlineExceeded', { timeout: 20_000 })
+    await badge.evaluate((el) => {
+      const seen: string[] = []
+      ;(window as unknown as { statusSeen: string[] }).statusSeen = seen
+      new MutationObserver(() => {
+        const text = el.getAttribute('title') ?? ''
+        if (seen[seen.length - 1] !== text) seen.push(text)
+      }).observe(el, { attributes: true, attributeFilter: ['title'], childList: true, characterData: true, subtree: true })
+    })
+
+    k!(`patch deployment/stuck -n ${NS} --type=json -p='[{"op":"remove","path":"/spec/template/spec/nodeSelector"}]'`)
+    k!(`rollout status deployment/stuck -n ${NS} --timeout=120s`)
+
+    await expect(badge).toHaveAttribute('title', 'Available', { timeout: 20_000 })
+    await expect(badge).toHaveText(/^(Healthy|정상)$/)
+    const seen = await page.evaluate(() => (window as unknown as { statusSeen: string[] }).statusSeen)
+    expect(seen, 'each status the row showed after the failure').toEqual(['Available'])
+    // the row a fresh list read gives
+    const list = (await (await page.request.get(`/api/v1/cluster/namespaces/${NS}/deployments?cluster=${CLUSTER}`)).json()) as { name: string; status: string; progressing_reason?: string }[]
+    expect(list.filter((d) => d.name === 'stuck').map((d) => ({ status: d.status, reason: d.progressing_reason }))).toEqual([{ status: 'Available', reason: '' }])
+  })
 })

@@ -31,15 +31,17 @@ export function replicaSetOwner(rs: Pick<ReplicaSetInfo, 'owner_deployment' | 'o
   return ref.kind === 'Deployment' ? ref.name : `${ref.kind}/${ref.name}`
 }
 
+// The list's rule (k8s-service internal/replicastatus): a row that comes with its object nested says the word every
+// other row of the list says.
 export function computeReplicaSetStatus(rs: {
   replicas: number
   ready_replicas: number
+  available_replicas: number
 }): string {
   const desired = rs.replicas || 0
-  const ready = rs.ready_replicas || 0
-  if (desired === 0 && ready === 0) return 'Idle'
-  if (desired > 0 && ready === 0) return 'Unavailable'
-  if (ready !== desired) return 'Degraded'
+  if (desired === 0) return 'Idle'
+  if ((rs.available_replicas || 0) === 0) return 'Unavailable'
+  if ((rs.ready_replicas || 0) < desired) return 'Degraded'
   return 'Healthy'
 }
 

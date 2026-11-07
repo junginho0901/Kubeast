@@ -4,9 +4,8 @@
 // applyDeploymentWatchEvent 추출. useKubeWatchList 의 applyEvent 콜백에서만 사용
 // (raw watch event → 기존 list state 에 병합).
 
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import type { DeploymentInfo } from '@/services/api'
-import { computeDeploymentStatus } from './deploymentHelpers'
+import { deploymentStatusOf } from './deploymentHelpers'
 
 export function normalizeWatchDeploymentObject(obj: any): DeploymentInfo {
   if (
@@ -21,24 +20,25 @@ export function normalizeWatchDeploymentObject(obj: any): DeploymentInfo {
   const spec = obj?.spec ?? {}
   const status = obj?.status ?? {}
 
-  const replicas = spec?.replicas ?? 0
-  const readyReplicas = status?.readyReplicas ?? 0
-  const availableReplicas = status?.availableReplicas ?? 0
-  const updatedReplicas = status?.updatedReplicas ?? 0
-  const image = spec?.template?.spec?.containers?.[0]?.image ?? ''
+  const containers = Array.isArray(spec?.template?.spec?.containers) ? spec.template.spec.containers : []
+  const images: string[] = containers.map((c: any) => c?.image).filter(Boolean)
+  const { status: summary, reason } = deploymentStatusOf(status?.conditions)
 
   return {
     name: metadata?.name ?? obj?.name ?? '',
     namespace: metadata?.namespace ?? obj?.namespace ?? '',
-    replicas,
-    ready_replicas: readyReplicas,
-    available_replicas: availableReplicas,
-    updated_replicas: updatedReplicas,
-    image,
+    replicas: spec?.replicas ?? 0,
+    ready_replicas: status?.readyReplicas ?? 0,
+    available_replicas: status?.availableReplicas ?? 0,
+    updated_replicas: status?.updatedReplicas ?? 0,
+    unavailable_replicas: status?.unavailableReplicas ?? 0,
+    progressing_reason: reason,
+    image: images[0] ?? '',
+    images,
     labels: metadata?.labels ?? obj?.labels ?? {},
     selector: spec?.selector?.matchLabels ?? obj?.selector ?? {},
     created_at: metadata?.creationTimestamp ?? obj?.created_at ?? null,
-    status: computeDeploymentStatus(replicas, readyReplicas),
+    status: summary,
   }
 }
 
@@ -63,7 +63,9 @@ export function applyDeploymentWatchEvent(
     return items
   }
 
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
+  // the server sends the whole row (deployrow.Info), so it replaces: a reason or label that went away shows that instead
+  // of keeping the old one
+  if (index >= 0) items[index] = normalized
   else items.push(normalized)
 
   return items

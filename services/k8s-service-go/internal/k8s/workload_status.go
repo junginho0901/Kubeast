@@ -6,23 +6,17 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/deploystatus"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/replicastatus"
 )
 
 // The workload lists' summary statuses (frontend utils/workloadStatus), one set
 // of rules for the lists, their drawers and the Resource Graph's boxes.
 
 // replicaStatus is a StatefulSet's, DaemonSet's or ReplicaSet's: Idle with none
-// wanted, Unavailable with none available, Degraded with fewer ready than wanted.
+// wanted, Unavailable with none available, Degraded with fewer ready than wanted
+// (replicastatus.Of, which the ReplicaSet row reads too).
 func replicaStatus(want, available, ready int32) string {
-	switch {
-	case want == 0:
-		return "Idle"
-	case available == 0:
-		return "Unavailable"
-	case ready < want:
-		return "Degraded"
-	}
-	return "Healthy"
+	return replicastatus.Of(want, available, ready)
 }
 
 // deploymentStatus is a Deployment's by its conditions: Available, Failed (the

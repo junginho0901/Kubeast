@@ -1372,7 +1372,9 @@ export interface DeploymentInfo {
   ready_replicas: number
   available_replicas: number
   updated_replicas: number
+  unavailable_replicas?: number
   image: string
+  images?: string[]
   labels: Record<string, string>
   selector: Record<string, string>
   created_at: string
@@ -1478,6 +1480,9 @@ export interface HPAInfo {
   name: string
   namespace: string
   target_ref: string
+  target_ref_kind?: string
+  target_ref_name?: string
+  labels?: Record<string, string> | null
   min_replicas?: number | null
   max_replicas: number
   current_replicas?: number | null

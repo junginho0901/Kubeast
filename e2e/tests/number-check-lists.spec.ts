@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import zlib from 'node:zlib'
 
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Page, type WebSocket } from '@playwright/test'
 
 import { GW, ancestor, arg, condition, gatewayFixture, gatewayVersions, routeConds, summary, writeGatewayStatus } from './number-check.gateway-shared'
 import { CR_CRD, GWPOL_CRD, NUM_SVC, VPA17_MISSING, crInstances, numbersPolicies, vpa17, vpaFixture, vpaPrintsWideColumns, writeNumbersPolicyStatus, writeVpaStatus, writeWidgetStatus } from './number-check.cr-shared'
@@ -1449,7 +1449,16 @@ test.describe('number check — list screens', () => {
     const CLASS = 'num-live-class'
     const NP = 'num-live-np'
     const PV = 'num-live-pv'
-    const screenOf = (path: string) => [...SCREENS, ...SCREENS_CLUSTER].find((s) => s.path === path) as Screen
+    const RS = 'num-live-rs'
+    const HPA = 'num-live-hpa'
+    const CM = 'num-live-cm'
+    const SECRET = 'num-live-secret'
+    const SA = 'num-live-sa'
+    const ROLE = 'num-live-role'
+    const SECRET_VALUE = 'fake-secret-value-for-tests'
+    const SECRET_ENCODED = 'ZmFrZS1zZWNyZXQtdmFsdWUtZm9yLXRlc3Rz'
+    const CONFIG_VALUE = 'fake-config-value-for-tests'
+    const screenOf =(path: string) => [...SCREENS, ...SCREENS_CLUSTER].find((s) => s.path === path) as Screen
     const ago = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString().replace(/\.\d+Z$/, 'Z')
 
     await page.context().addInitScript(() => localStorage.setItem('kubeast.listPageSize', '100'))
@@ -1490,6 +1499,31 @@ test.describe('number check — list screens', () => {
         await held.getByRole('cell', { name, exact: true }).first().waitFor({ timeout: 15_000 }).catch(() => {})
         return shows(held, name)
       }, { timeout: 40_000, message: `${name}: a fresh read of the list API` }).toEqual(after)
+    }
+    // what one object's live frames say after a change: the change is made once the watch runs, and the last frame of it
+    // is held to the row the list API gives for the same object
+    const frameIsTheListRow = async (s: Screen, name: string, listPath: string, change: string, forbidden: string[] = []) => {
+      const frames: string[] = []
+      const collect = (ws: WebSocket) => {
+        if (/wsMultiplexer/.test(ws.url())) ws.on('framereceived', (f) => { if (String(f.payload).includes(`"${name}"`)) frames.push(String(f.payload)) })
+      }
+      page.on('websocket', collect)
+      await page.goto(screenUrl(s))
+      await expect.poll(() => frames.length, { timeout: 20_000, message: `${name}: the watch's first frame` }).toBeGreaterThan(0)
+      const before = frames.length
+      kubectl(change)
+      await expect.poll(() => frames.length, { timeout: 20_000, message: `${name}: the frame of the change` }).toBeGreaterThan(before)
+      const listed = async () => (await (await page.request.get(`/api/v1/cluster/namespaces/${NS}/${listPath}?cluster=self&force_refresh=true`)).json()) as Obj[]
+      await expect(async () => {
+        const row = (await listed()).find((r) => r.name === name)
+        expect(JSON.parse(frames[frames.length - 1]).data.object, `${name}: the live frame is the list row`).toEqual(row)
+      }).toPass({ timeout: 20_000 })
+      const list = JSON.stringify(await listed())
+      for (const value of forbidden) {
+        expect.soft(frames.join('\n'), `${name}: a live frame holds no value`).not.toContain(value)
+        expect.soft(list, `${name}: the list API holds no value`).not.toContain(value)
+      }
+      page.off('websocket', collect)
     }
 
     try {
@@ -1646,7 +1680,7 @@ test.describe('number check — list screens', () => {
         kubectl('apply -f -', JSON.stringify({
           apiVersion: 'networking.k8s.io/v1',
           kind: 'NetworkPolicy',
-          metadata: { name: NP, namespace: NS, labels: { team: 'live' }, annotations: { note: 'kept' } },
+          metadata: { name: NP, namespace: NS, labels: { team: 'live' }, annotations: { note: 'kept' }, finalizers: ['numbers.kubeast.io/keep'] },
           spec: {
             podSelector: { matchLabels: { app: 'num-live' } },
             policyTypes: ['Ingress', 'Egress'],
@@ -1669,12 +1703,136 @@ test.describe('number check — list screens', () => {
           expect.soft({ peers, ports }, `${NP} drawer ${way}`).toEqual(rules)
           expect.soft(text, `${NP} drawer ${way}: its label`).toContain('team:live')
           expect.soft(text, `${NP} drawer ${way}: its annotation`).toContain('note:kept')
+          expect.soft(text, `${NP} drawer ${way}: its finalizer`).toContain('numbers.kubeast.io/keep')
         }
+        // a drawer left open follows the object, from the list and from a link on another page
+        const egressTo = (app: string) => `patch networkpolicy ${NP} -n ${NS} --type=json -p=${arg([{ op: 'replace', path: '/spec/egress/0/to/0/podSelector/matchLabels/app', value: app }])}`
+        await page.locator('main tbody tr').getByRole('cell', { name: NP, exact: true }).click()
+        await expect(page.locator(DRAWER).last()).toContainText('NetworkPolicy Info', { timeout: 20_000 })
+        kubectl(egressTo('db-next'))
+        await expect.poll(() => page.getByTestId('netpol-rule-peers').allInnerTexts(), { timeout: 20_000, message: `${NP} open drawer after a change` })
+          .toEqual([rules.peers[0], 'To: pods app=db-next in namespaces team=db'])
+        await page.keyboard.press('Escape')
+        await page.goto(`/workloads/pods?cluster=self&namespace=${NS}&detail=NetworkPolicy/${NS}/${NP}`)
+        await expect(page.locator(DRAWER).last()).toContainText('NetworkPolicy Info', { timeout: 20_000 })
+        await expect.poll(() => page.getByTestId('netpol-rule-peers').allInnerTexts(), { timeout: 20_000, message: `${NP} drawer by link` })
+          .toEqual([rules.peers[0], 'To: pods app=db-next in namespaces team=db'])
+        kubectl(egressTo('db'))
+        await expect.poll(() => page.getByTestId('netpol-rule-peers').allInnerTexts(), { timeout: 20_000, message: `${NP} drawer by link after a change` })
+          .toEqual(rules.peers)
+        await watching(s, NP)
         await follows(s, NP, [`patch networkpolicy ${NP} -n ${NS} --type=json -p=${arg([{ op: 'remove', path: '/spec/ingress' }, { op: 'remove', path: '/spec/egress' }])}`],
           { 'Pod Selector': 'app=num-live', Types: 'Ingress, Egress', 'Ingress Rules': '0', 'Egress Rules': '0', 'Default Deny': 'Ingress + Egress' })
         const { peers, text } = await opened(page)
         expect.soft(peers, `${NP} drawer after its rules went`).toEqual([])
         expect.soft(text, `${NP} drawer after its rules went: its label`).toContain('team:live')
+      })
+
+      await test.step('a ReplicaSet freed of its owner shows none', async () => {
+        const s = screenOf('/workloads/replicasets')
+        const uid = kubectl(`get configmap num-cm -n ${NS} -o jsonpath={.metadata.uid}`)
+        kubectl('apply -f -', JSON.stringify({
+          apiVersion: 'apps/v1',
+          kind: 'ReplicaSet',
+          metadata: { name: RS, namespace: NS, ownerReferences: [{ apiVersion: 'v1', kind: 'ConfigMap', name: 'num-cm', uid, controller: true }] },
+          spec: {
+            replicas: 0,
+            selector: { matchLabels: { app: RS } },
+            template: { metadata: { labels: { app: RS } }, spec: { containers: [{ name: 'app', image: 'busybox:1.37', command: ['sleep', '3600'] }] } },
+          },
+        }))
+        await watching(s, RS)
+        await follows(s, RS, [], { Owner: 'ConfigMap/num-cm', Containers: 'app', Status: 'Idle' })
+        await follows(s, RS, [`patch replicaset ${RS} -n ${NS} --type=json -p=${arg([{ op: 'remove', path: '/metadata/ownerReferences' }])}`],
+          { Owner: '-', Containers: 'app', Status: 'Idle' })
+      })
+
+      await test.step('an HPA frame carries the targets and readings the list row has', async () => {
+        const s = screenOf('/workloads/hpas')
+        // a target no scale can be read of: the controller leaves the status this test writes
+        kubectl('apply -f -', JSON.stringify({
+          apiVersion: 'autoscaling/v2',
+          kind: 'HorizontalPodAutoscaler',
+          metadata: { name: HPA, namespace: NS, labels: { team: 'live' } },
+          spec: {
+            scaleTargetRef: { apiVersion: 'apps/v1', kind: 'Deployment', name: 'num-live-nowhere' },
+            minReplicas: 2,
+            maxReplicas: 5,
+            metrics: [
+              { type: 'Pods', pods: { metric: { name: 'qps' }, target: { type: 'AverageValue', averageValue: '10' } } },
+              { type: 'External', external: { metric: { name: 'queue' }, target: { type: 'Value', value: '5' } } },
+            ],
+          },
+        }))
+        await frameIsTheListRow(s, HPA, 'hpas', `patch horizontalpodautoscaler ${HPA} -n ${NS} --type=json -p=${arg([{ op: 'remove', path: '/metadata/labels' }])}`)
+      })
+
+      await test.step('a ConfigMap frame is the list row, with no value in it', async () => {
+        const s = screenOf('/configuration/configmaps')
+        kubectl('apply -f -', JSON.stringify({
+          apiVersion: 'v1',
+          kind: 'ConfigMap',
+          metadata: { name: CM, namespace: NS, labels: { team: 'live' } },
+          data: { b: CONFIG_VALUE, a: CONFIG_VALUE },
+          binaryData: { c: 'eA==' },
+        }))
+        await frameIsTheListRow(s, CM, 'configmaps', `patch configmap ${CM} -n ${NS} --type=json -p=${arg([{ op: 'remove', path: '/data/b' }, { op: 'remove', path: '/binaryData' }, { op: 'remove', path: '/metadata/labels' }])}`, [CONFIG_VALUE])
+        await follows(s, CM, [], { Data: '1' })
+      })
+
+      await test.step('a Secret frame is the list row, with no value in it, and the row follows its keys', async () => {
+        const s = screenOf('/configuration/secrets')
+        kubectl('apply -f -', JSON.stringify({
+          apiVersion: 'v1',
+          kind: 'Secret',
+          type: 'Opaque',
+          metadata: {
+            name: SECRET,
+            namespace: NS,
+            labels: { team: 'live' },
+            annotations: { 'kubectl.kubernetes.io/last-applied-configuration': JSON.stringify({ stringData: { password: SECRET_VALUE } }) },
+          },
+          data: { password: SECRET_ENCODED, user: SECRET_ENCODED },
+        }))
+        await frameIsTheListRow(s, SECRET, 'secrets', `patch secret ${SECRET} -n ${NS} --type=json -p=${arg([{ op: 'remove', path: '/data/user' }, { op: 'remove', path: '/metadata/labels' }])}`, [SECRET_VALUE, SECRET_ENCODED])
+        await follows(s, SECRET, [], { Type: 'Opaque', Data: '1' })
+      })
+
+      await test.step('a ServiceAccount shows the Secrets it lost, on its row, its card and an open Secret drawer', async () => {
+        const s = screenOf('/security/serviceaccounts')
+        kubectl('apply -f -', JSON.stringify({
+          apiVersion: 'v1',
+          kind: 'ServiceAccount',
+          metadata: { name: SA, namespace: NS, labels: { team: 'live' }, annotations: { note: 'kept' } },
+          secrets: [{ name: 'num-live-token' }],
+          imagePullSecrets: [{ name: 'num-live-pull' }],
+        }))
+        await watching(s, SA)
+        await follows(s, SA, [], { Secrets: '1' })
+        await follows(s, SA, [`patch serviceaccount ${SA} -n ${NS} --type=json -p=${arg([{ op: 'remove', path: '/secrets' }, { op: 'remove', path: '/imagePullSecrets' }, { op: 'remove', path: '/metadata/labels' }])}`], { Secrets: '0' })
+
+        // the Secret drawer's "Used By ServiceAccounts" takes a ServiceAccount's live rows
+        await page.goto(`${screenUrl(screenOf('/configuration/secrets'))}&detail=Secret/${NS}/${SECRET}`)
+        const drawer = page.locator(DRAWER).last()
+        await expect(drawer).toContainText('Used By ServiceAccounts (0)', { timeout: 20_000 })
+        kubectl(`patch serviceaccount ${SA} -n ${NS} --type=merge -p=${arg({ imagePullSecrets: [{ name: SECRET }] })}`)
+        await expect(drawer).toContainText('Used By ServiceAccounts (1)', { timeout: 20_000 })
+        await expect(drawer).toContainText(SA)
+        kubectl(`patch serviceaccount ${SA} -n ${NS} --type=json -p=${arg([{ op: 'remove', path: '/imagePullSecrets' }])}`)
+        await expect(drawer).toContainText('Used By ServiceAccounts (0)', { timeout: 20_000 })
+        await page.keyboard.press('Escape')
+      })
+
+      await test.step('a Role frame is the list row, and the row follows its rules', async () => {
+        const s = screenOf('/security/roles')
+        kubectl('apply -f -', JSON.stringify({
+          apiVersion: 'rbac.authorization.k8s.io/v1',
+          kind: 'Role',
+          metadata: { name: ROLE, namespace: NS, labels: { team: 'live' }, annotations: { note: 'kept' } },
+          rules: [{ apiGroups: [''], resources: ['pods'], verbs: ['get'] }, { apiGroups: ['apps'], resources: ['deployments'], verbs: ['list'] }],
+        }))
+        await frameIsTheListRow(s, ROLE, 'roles', `patch role ${ROLE} -n ${NS} --type=json -p=${arg([{ op: 'remove', path: '/rules/1' }, { op: 'remove', path: '/metadata/labels' }, { op: 'remove', path: '/metadata/annotations' }])}`)
+        await follows(s, ROLE, [], { Rules: '1' })
       })
 
       await test.step('a PersistentVolume freed of its claim shows none, every other cell kept', async () => {
@@ -1706,8 +1864,18 @@ test.describe('number check — list screens', () => {
       kubectl(`delete service ${SVC} -n ${NS} --ignore-not-found --wait=false`)
       kubectl(`delete endpoints ${EP} -n ${NS} --ignore-not-found --wait=false`)
       kubectl(`delete ingressclass ${CLASS} --ignore-not-found --wait=false`)
+      // its finalizer holds it until this removes it
+      if (kubectl(`get networkpolicy ${NP} -n ${NS} --ignore-not-found -o name`)) {
+        kubectl(`patch networkpolicy ${NP} -n ${NS} --type=merge -p=${arg({ metadata: { finalizers: null } })}`)
+      }
       kubectl(`delete networkpolicy ${NP} -n ${NS} --ignore-not-found --wait=false`)
       kubectl(`delete persistentvolume ${PV} --ignore-not-found --wait=false`)
+      kubectl(`delete replicaset ${RS} -n ${NS} --ignore-not-found --wait=false`)
+      kubectl(`delete horizontalpodautoscaler ${HPA} -n ${NS} --ignore-not-found --wait=false`)
+      kubectl(`delete configmap ${CM} -n ${NS} --ignore-not-found --wait=false`)
+      kubectl(`delete secret ${SECRET} -n ${NS} --ignore-not-found --wait=false`)
+      kubectl(`delete serviceaccount ${SA} -n ${NS} --ignore-not-found --wait=false`)
+      kubectl(`delete role ${ROLE} -n ${NS} --ignore-not-found --wait=false`)
     }
   })
 

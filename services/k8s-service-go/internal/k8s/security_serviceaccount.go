@@ -7,6 +7,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	sarow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/serviceaccount"
 )
 
 // GetServiceAccounts lists serviceaccounts in a namespace.
@@ -68,62 +70,20 @@ func (s *Service) DeleteServiceAccount(ctx context.Context, namespace, name stri
 
 func formatServiceAccountList(items []corev1.ServiceAccount) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(items))
-	for _, sa := range items {
-		secretsList := make([]string, 0, len(sa.Secrets))
-		for _, s := range sa.Secrets {
-			if s.Name != "" {
-				secretsList = append(secretsList, s.Name)
-			}
-		}
-		imagePullSecrets := make([]string, 0, len(sa.ImagePullSecrets))
-		for _, ips := range sa.ImagePullSecrets {
-			if ips.Name != "" {
-				imagePullSecrets = append(imagePullSecrets, ips.Name)
-			}
-		}
-		result = append(result, map[string]interface{}{
-			"name":               sa.Name,
-			"namespace":          sa.Namespace,
-			"secrets":            len(sa.Secrets),
-			"secrets_list":       secretsList,
-			"image_pull_secrets": imagePullSecrets,
-			"created_at":         toISO(&sa.CreationTimestamp),
-			"labels":             sa.Labels,
-			"annotations":        sa.Annotations,
-		})
+	for i := range items {
+		result = append(result, sarow.Info(&items[i]))
 	}
 	return result
 }
 
 func formatServiceAccountDetail(sa *corev1.ServiceAccount) map[string]interface{} {
-	result := map[string]interface{}{
-		"name":             sa.Name,
-		"namespace":        sa.Namespace,
-		"secrets":          len(sa.Secrets),
-		"created_at":       toISO(&sa.CreationTimestamp),
-		"labels":           sa.Labels,
-		"annotations":      sa.Annotations,
-		"uid":              string(sa.UID),
-		"resource_version": sa.ResourceVersion,
-	}
+	result := sarow.Info(sa)
+	result["uid"] = string(sa.UID)
+	result["resource_version"] = sa.ResourceVersion
 
 	if sa.AutomountServiceAccountToken != nil {
 		result["automount_service_account_token"] = *sa.AutomountServiceAccountToken
 	}
-
-	// Image pull secrets
-	imagePullSecrets := make([]string, 0, len(sa.ImagePullSecrets))
-	for _, ips := range sa.ImagePullSecrets {
-		imagePullSecrets = append(imagePullSecrets, ips.Name)
-	}
-	result["image_pull_secrets"] = imagePullSecrets
-
-	// Secrets list
-	secrets := make([]string, 0, len(sa.Secrets))
-	for _, s := range sa.Secrets {
-		secrets = append(secrets, s.Name)
-	}
-	result["secrets_list"] = secrets
 
 	return result
 }

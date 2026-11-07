@@ -47,7 +47,7 @@ func TestWorkloadInfoCurrentAndScalingActive(t *testing.T) {
 		"spec":     map[string]interface{}{"replicas": int64(3)},
 		"status":   map[string]interface{}{"replicas": int64(2), "readyReplicas": int64(1)},
 	}}
-	if got := objectToInfo("replicasets", rs)["current_replicas"]; got != int64(2) {
+	if got := objectToInfo("replicasets", rs)["current_replicas"]; got != int32(2) {
 		t.Errorf("replicaset current_replicas = %v, want 2", got)
 	}
 

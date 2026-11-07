@@ -9,56 +9,17 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 
 	cronjobrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/cronjob"
-	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/deploystatus"
+	deployrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/deployment"
+	rsrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/replicaset"
 )
 
-// deploymentToInfo — list endpoint: formatDeploymentDetail (deployments.go).
+// deploymentToInfo is the list's row (deployrow.Info), so a live update says what the list says.
 func deploymentToInfo(obj *unstructured.Unstructured) map[string]interface{} {
-	metadata := obj.Object["metadata"].(map[string]interface{})
-	spec, _ := obj.Object["spec"].(map[string]interface{})
-	status, _ := obj.Object["status"].(map[string]interface{})
-
-	var replicas, readyReplicas, availableReplicas, updatedReplicas int64
-	if spec != nil {
-		replicas, _ = toInt64(spec["replicas"])
+	var d appsv1.Deployment
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, &d); err != nil {
+		return genericToInfo(obj)
 	}
-	if status != nil {
-		readyReplicas, _ = toInt64(status["readyReplicas"])
-		availableReplicas, _ = toInt64(status["availableReplicas"])
-		updatedReplicas, _ = toInt64(status["updatedReplicas"])
-	}
-
-	images := containerImages(spec)
-	image := ""
-	if len(images) > 0 {
-		image = images[0]
-	}
-
-	// status and its reason as the list endpoint writes them (deploystatus.Of)
-	var st appsv1.DeploymentStatus
-	if status != nil {
-		_ = runtime.DefaultUnstructuredConverter.FromUnstructured(status, &st)
-	}
-	depStatus, progressingReason := deploystatus.Of(&appsv1.Deployment{Status: st})
-
-	selector := selectorMatchLabels(spec)
-
-	return map[string]interface{}{
-		"name":                 metadata["name"],
-		"namespace":            metadata["namespace"],
-		"replicas":             replicas,
-		"ready_replicas":       readyReplicas,
-		"available_replicas":   availableReplicas,
-		"updated_replicas":     updatedReplicas,
-		"unavailable_replicas": int64(st.UnavailableReplicas),
-		"progressing_reason":   progressingReason,
-		"image":                image,
-		"images":               images,
-		"labels":               metadata["labels"],
-		"selector":             selector,
-		"status":               depStatus,
-		"created_at":           metadata["creationTimestamp"],
-	}
+	return deployrow.Info(&d)
 }
 
 // statefulsetToInfo — list endpoint: formatStatefulSetDetail (workloads_formatters.go).
@@ -183,85 +144,14 @@ func daemonsetToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 	}
 }
 
-// replicasetToInfo — list endpoint: formatReplicaSetDetail (workloads_formatters.go).
+// replicasetToInfo is the list's row (rsrow.Info), so a live update says what the list says. The drawer's owned
+// ReplicaSets match on its owner_references.
 func replicasetToInfo(obj *unstructured.Unstructured) map[string]interface{} {
-	metadata := obj.Object["metadata"].(map[string]interface{})
-	spec, _ := obj.Object["spec"].(map[string]interface{})
-	status, _ := obj.Object["status"].(map[string]interface{})
-
-	var replicas, currentReplicas, readyReplicas, availableReplicas int64
-	if spec != nil {
-		replicas, _ = toInt64(spec["replicas"])
+	var rs appsv1.ReplicaSet
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, &rs); err != nil {
+		return genericToInfo(obj)
 	}
-	if status != nil {
-		currentReplicas, _ = toInt64(status["replicas"])
-		readyReplicas, _ = toInt64(status["readyReplicas"])
-		availableReplicas, _ = toInt64(status["availableReplicas"])
-	}
-
-	images := containerImages(spec)
-	image := ""
-	if len(images) > 0 {
-		image = images[0]
-	}
-
-	selector := selectorMatchLabels(spec)
-
-	// owner_deployment — ownerReferences 에서 Kind=="Deployment" 의 Name. owner_references 전체도
-	// 함께 노출 (5.2 Deployment Owned RS / WorkloadOwnedResources 의 ownerRef filter 가
-	// watch event 에서 정확히 매칭하도록).
-	owner := ""
-	var ownerRefs []map[string]interface{}
-	if ors, ok := metadata["ownerReferences"].([]interface{}); ok && len(ors) > 0 {
-		ownerRefs = make([]map[string]interface{}, 0, len(ors))
-		for _, o := range ors {
-			om, _ := o.(map[string]interface{})
-			if om == nil {
-				continue
-			}
-			ctrl, _ := om["controller"].(bool)
-			ownerRefs = append(ownerRefs, map[string]interface{}{
-				"kind":       om["kind"],
-				"name":       om["name"],
-				"uid":        om["uid"],
-				"controller": ctrl,
-			})
-			if k, _ := om["kind"].(string); k == "Deployment" && owner == "" {
-				if n, _ := om["name"].(string); n != "" {
-					owner = n
-				}
-			}
-		}
-	}
-
-	rsStatus := "Healthy"
-	if replicas == 0 {
-		rsStatus = "Idle"
-	} else if availableReplicas == 0 && replicas > 0 {
-		rsStatus = "Unavailable"
-	} else if readyReplicas < replicas {
-		rsStatus = "Degraded"
-	}
-
-	out := map[string]interface{}{
-		"name":               metadata["name"],
-		"namespace":          metadata["namespace"],
-		"replicas":           replicas,
-		"current_replicas":   currentReplicas,
-		"ready_replicas":     readyReplicas,
-		"available_replicas": availableReplicas,
-		"image":              image,
-		"images":             images,
-		"containers":         containerNamesFromTemplate(spec),
-		"selector":           selector,
-		"owner_deployment":   owner,
-		"status":             rsStatus,
-		"created_at":         metadata["creationTimestamp"],
-	}
-	if len(ownerRefs) > 0 {
-		out["owner_references"] = ownerRefs
-	}
-	return out
+	return rsrow.Info(&rs)
 }
 
 // jobToInfo — list endpoint: formatJobDetail (workloads_formatters.go).

@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation, Trans } from 'react-i18next'
 import { api, type ServiceAccountInfo } from '@/services/api'
@@ -17,58 +16,10 @@ import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
+import { applyServiceAccountWatchEvent } from './serviceaccounts/serviceAccountWatchNormalize'
 
 type SortKey = null | 'name' | 'namespace' | 'secrets' | 'age'
 type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
-
-function normalizeWatchServiceAccountObject(obj: any): ServiceAccountInfo {
-  if (
-    typeof obj?.name === 'string' &&
-    typeof obj?.namespace === 'string' &&
-    typeof obj?.secrets === 'number'
-  ) {
-    return obj as ServiceAccountInfo
-  }
-
-  const metadata = obj?.metadata ?? {}
-  const secrets = Array.isArray(obj?.secrets) ? obj.secrets : []
-
-  return {
-    name: metadata?.name ?? obj?.name ?? '',
-    namespace: metadata?.namespace ?? obj?.namespace ?? '',
-    secrets: secrets.length,
-    created_at: metadata?.creationTimestamp ?? obj?.created_at ?? '',
-    labels: metadata?.labels ?? obj?.labels ?? null,
-    annotations: metadata?.annotations ?? obj?.annotations ?? null,
-  }
-}
-
-function applyServiceAccountWatchEvent(
-  prev: ServiceAccountInfo[] | undefined,
-  event: { type?: string; object?: any },
-): ServiceAccountInfo[] {
-  const items = Array.isArray(prev) ? [...prev] : []
-  const obj = event?.object
-  if (!obj) return items
-
-  const normalized = normalizeWatchServiceAccountObject(obj)
-  const name = normalized?.name
-  const namespace = normalized?.namespace
-  if (!name || !namespace) return items
-
-  const key = `${namespace}/${name}`
-  const index = items.findIndex((item) => `${item.namespace}/${item.name}` === key)
-
-  if (event.type === 'DELETED') {
-    if (index >= 0) items.splice(index, 1)
-    return items
-  }
-
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
-  else items.push(normalized)
-
-  return items
-}
 
 export default function ServiceAccounts() {
   const queryClient = useQueryClient()

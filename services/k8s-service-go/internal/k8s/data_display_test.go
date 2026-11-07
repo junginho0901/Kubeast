@@ -12,6 +12,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	hparow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/hpa"
+	rsrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/replicaset"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 )
 
@@ -99,7 +101,7 @@ func TestFormatReplicaSetCurrentReplicas(t *testing.T) {
 		Spec:       appsv1.ReplicaSetSpec{Replicas: &three},
 		Status:     appsv1.ReplicaSetStatus{Replicas: 2, ReadyReplicas: 1},
 	}
-	got := formatReplicaSetDetail(rs)
+	got := rsrow.Info(rs)
 	if got["current_replicas"] != int32(2) || got["replicas"] != int32(3) {
 		t.Errorf("current/desired = %v/%v", got["current_replicas"], got["replicas"])
 	}
@@ -122,7 +124,7 @@ func TestFormatHPAScalingActive(t *testing.T) {
 		"active":       {hpa(cond(autoscalingv2.ScalingActive, corev1.ConditionTrue)), true},
 		"not yet seen": {hpa(), false},
 	} {
-		if got := formatHPADetail(c.hpa)["scaling_active"]; got != c.want {
+		if got := hparow.Info(c.hpa)["scaling_active"]; got != c.want {
 			t.Errorf("%s: scaling_active = %v, want %v", name, got, c.want)
 		}
 	}

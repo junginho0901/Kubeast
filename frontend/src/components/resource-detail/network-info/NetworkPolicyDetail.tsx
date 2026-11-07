@@ -6,6 +6,9 @@ import type { PodInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
+import { networkPolicyToRawJson } from '@/pages/network/networkpolicies/networkPolicyHelpers'
+import { applyNetworkPolicyToDrawer } from '@/pages/network/networkpolicies/networkPolicyWatchNormalize'
+import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
@@ -19,11 +22,29 @@ interface Props {
 
 export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props) {
   const { open: openDetail } = useResourceDetail()
-  const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
-  const spec = (rawJson?.spec ?? {}) as Record<string, unknown>
+  const describeKey = ['networkpolicy-describe', namespace, name]
+  const { data: describe } = useQuery({
+    queryKey: describeKey,
+    queryFn: () => api.describeNetworkPolicy(namespace as string, name),
+    enabled: !!namespace && !!name,
+    retry: false,
+  })
+  // Opened away from the list page no list watches the policy, so the drawer follows it itself.
+  useKubeWatchList({
+    enabled: !!namespace && !!name,
+    queryKey: describeKey,
+    path: `/api/v1/namespaces/${namespace}/networkpolicies`,
+    query: 'watch=1',
+    applyEvent: (prev, event) => applyNetworkPolicyToDrawer(prev, event, name) as any,
+  })
+  // The object as it is now; what the drawer was opened with until the answer comes, or when it is refused.
+  const object = useMemo(() => (describe ? networkPolicyToRawJson(describe) : rawJson), [describe, rawJson])
+  useResourceDetailOverlay({ kind: 'NetworkPolicy', name, namespace, extras: object ? { spec: object.spec } : undefined })
+  const meta = (object?.metadata ?? {}) as Record<string, unknown>
+  const spec = (object?.spec ?? {}) as Record<string, unknown>
   const labels = (meta.labels ?? {}) as Record<string, string>
   const annotations = (meta.annotations ?? {}) as Record<string, string>
-  const finalizers = (meta.finalizers ?? rawJson?.finalizers ?? []) as string[]
+  const finalizers = (meta.finalizers ?? object?.finalizers ?? []) as string[]
   const { t } = useTranslation()
   const tr: Tr = (key, fallback, options) => t(key, { defaultValue: fallback, ...options })
   const podSelector = (spec.podSelector as any)?.matchLabels as Record<string, string> | undefined

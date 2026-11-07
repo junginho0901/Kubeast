@@ -8,6 +8,8 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	rsrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/replicaset"
 )
 
 // ========== ReplicaSets ==========
@@ -56,7 +58,7 @@ func (s *Service) DescribeReplicaSet(ctx context.Context, namespace, name string
 		return nil, fmt.Errorf("get replicaset %s/%s: %w", namespace, name, rsErr)
 	}
 
-	result := formatReplicaSetDetail(rs)
+	result := rsrow.Info(rs)
 
 	// Additional metadata
 	result["uid"] = string(rs.UID)

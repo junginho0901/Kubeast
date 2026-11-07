@@ -8,6 +8,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	rolerow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/role"
 )
 
 // GetRoles lists roles in a namespace.
@@ -69,15 +71,8 @@ func (s *Service) DeleteRole(ctx context.Context, namespace, name string) error 
 
 func formatRoleList(items []rbacv1.Role) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(items))
-	for _, role := range items {
-		result = append(result, map[string]interface{}{
-			"name":        role.Name,
-			"namespace":   role.Namespace,
-			"rules_count": len(role.Rules),
-			"created_at":  toISO(&role.CreationTimestamp),
-			"labels":      role.Labels,
-			"annotations": role.Annotations,
-		})
+	for i := range items {
+		result = append(result, rolerow.Info(&items[i]))
 	}
 	return result
 }
@@ -94,15 +89,9 @@ func formatRoleDetail(role *rbacv1.Role) map[string]interface{} {
 		})
 	}
 
-	return map[string]interface{}{
-		"name":             role.Name,
-		"namespace":        role.Namespace,
-		"rules_count":      len(role.Rules),
-		"created_at":       toISO(&role.CreationTimestamp),
-		"labels":           role.Labels,
-		"annotations":      role.Annotations,
-		"uid":              string(role.UID),
-		"resource_version": role.ResourceVersion,
-		"rules":            rules,
-	}
+	result := rolerow.Info(role)
+	result["uid"] = string(role.UID)
+	result["resource_version"] = role.ResourceVersion
+	result["rules"] = rules
+	return result
 }

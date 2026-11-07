@@ -7,8 +7,12 @@ import (
 	"sort"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	configmaprow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/configmap"
+	secretrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/secret"
 )
 
 // GetConfigMaps lists configmaps in a namespace.
@@ -17,23 +21,7 @@ func (s *Service) GetConfigMaps(ctx context.Context, namespace string) ([]map[st
 	if err != nil {
 		return nil, fmt.Errorf("list configmaps: %w", err)
 	}
-
-	result := make([]map[string]interface{}, 0, len(cmList.Items))
-	for _, cm := range cmList.Items {
-		dataKeys := sortedKeys(cm.Data)
-		binaryKeys := sortedKeys(cm.BinaryData)
-
-		result = append(result, map[string]interface{}{
-			"name":        cm.Name,
-			"namespace":   cm.Namespace,
-			"data_count":  len(cm.Data),
-			"data_keys":   dataKeys,
-			"binary_keys": binaryKeys,
-			"labels":      cm.Labels,
-			"created_at":  toISO(&cm.CreationTimestamp),
-		})
-	}
-	return result, nil
+	return formatConfigMapList(cmList.Items), nil
 }
 
 // GetAllConfigMaps lists configmaps across all namespaces.
@@ -43,24 +31,16 @@ func (s *Service) GetAllConfigMaps(ctx context.Context) ([]map[string]interface{
 		if err != nil {
 			return nil, fmt.Errorf("list all configmaps: %w", err)
 		}
-
-		result := make([]map[string]interface{}, 0, len(cmList.Items))
-		for _, cm := range cmList.Items {
-			dataKeys := sortedKeys(cm.Data)
-			binaryKeys := sortedKeys(cm.BinaryData)
-
-			result = append(result, map[string]interface{}{
-				"name":        cm.Name,
-				"namespace":   cm.Namespace,
-				"data_count":  len(cm.Data),
-				"data_keys":   dataKeys,
-				"binary_keys": binaryKeys,
-				"labels":      cm.Labels,
-				"created_at":  toISO(&cm.CreationTimestamp),
-			})
-		}
-		return result, nil
+		return formatConfigMapList(cmList.Items), nil
 	})
+}
+
+func formatConfigMapList(items []corev1.ConfigMap) []map[string]interface{} {
+	result := make([]map[string]interface{}, 0, len(items))
+	for i := range items {
+		result = append(result, configmaprow.Info(&items[i]))
+	}
+	return result
 }
 
 // DescribeConfigMap returns detailed info about a configmap.
@@ -70,29 +50,18 @@ func (s *Service) DescribeConfigMap(ctx context.Context, namespace, name string)
 		return nil, fmt.Errorf("get configmap %s/%s: %w", namespace, name, err)
 	}
 
-	dataKeys := sortedKeys(cm.Data)
-	binaryKeys := sortedKeys(cm.BinaryData)
-
 	// Data entries (key-value)
 	dataEntries := make(map[string]string, len(cm.Data))
 	for k, v := range cm.Data {
 		dataEntries[k] = v
 	}
 
-	result := map[string]interface{}{
-		"name":             cm.Name,
-		"namespace":        cm.Namespace,
-		"data_count":       len(cm.Data),
-		"data_keys":        dataKeys,
-		"binary_keys":      binaryKeys,
-		"binary_count":     len(cm.BinaryData),
-		"data":             dataEntries,
-		"labels":           cm.Labels,
-		"annotations":      cm.Annotations,
-		"created_at":       toISO(&cm.CreationTimestamp),
-		"uid":              string(cm.UID),
-		"resource_version": cm.ResourceVersion,
-	}
+	result := configmaprow.Info(cm)
+	result["binary_count"] = len(cm.BinaryData)
+	result["data"] = dataEntries
+	result["annotations"] = cm.Annotations
+	result["uid"] = string(cm.UID)
+	result["resource_version"] = cm.ResourceVersion
 
 	// Immutable — true 면 update 불가. Secret 은 이미 노출, ConfigMap 도 일관성.
 	if cm.Immutable != nil {
@@ -144,22 +113,7 @@ func (s *Service) GetSecrets(ctx context.Context, namespace string) ([]map[strin
 	if err != nil {
 		return nil, fmt.Errorf("list secrets: %w", err)
 	}
-
-	result := make([]map[string]interface{}, 0, len(secretList.Items))
-	for _, secret := range secretList.Items {
-		dataKeys := sortedKeys(secret.Data)
-
-		result = append(result, map[string]interface{}{
-			"name":       secret.Name,
-			"namespace":  secret.Namespace,
-			"type":       string(secret.Type),
-			"data_count": len(secret.Data),
-			"data_keys":  dataKeys,
-			"labels":     secret.Labels,
-			"created_at": toISO(&secret.CreationTimestamp),
-		})
-	}
-	return result, nil
+	return formatSecretList(secretList.Items), nil
 }
 
 // GetAllSecrets lists secrets across all namespaces (data values masked).
@@ -169,23 +123,16 @@ func (s *Service) GetAllSecrets(ctx context.Context) ([]map[string]interface{}, 
 		if err != nil {
 			return nil, fmt.Errorf("list all secrets: %w", err)
 		}
-
-		result := make([]map[string]interface{}, 0, len(secretList.Items))
-		for _, secret := range secretList.Items {
-			dataKeys := sortedKeys(secret.Data)
-
-			result = append(result, map[string]interface{}{
-				"name":       secret.Name,
-				"namespace":  secret.Namespace,
-				"type":       string(secret.Type),
-				"data_count": len(secret.Data),
-				"data_keys":  dataKeys,
-				"labels":     secret.Labels,
-				"created_at": toISO(&secret.CreationTimestamp),
-			})
-		}
-		return result, nil
+		return formatSecretList(secretList.Items), nil
 	})
+}
+
+func formatSecretList(items []corev1.Secret) []map[string]interface{} {
+	result := make([]map[string]interface{}, 0, len(items))
+	for i := range items {
+		result = append(result, secretrow.Info(&items[i]))
+	}
+	return result
 }
 
 // DescribeSecret returns detailed info about a secret.
@@ -197,27 +144,17 @@ func (s *Service) DescribeSecret(ctx context.Context, namespace, name string, ca
 		return nil, fmt.Errorf("get secret %s/%s: %w", namespace, name, err)
 	}
 
-	dataKeys := make([]string, 0, len(secret.Data))
 	dataSizes := make(map[string]int, len(secret.Data))
 	for k, v := range secret.Data {
-		dataKeys = append(dataKeys, k)
 		dataSizes[k] = len(v)
 	}
 
-	result := map[string]interface{}{
-		"name":             secret.Name,
-		"namespace":        secret.Namespace,
-		"type":             string(secret.Type),
-		"data_count":       len(secret.Data),
-		"data_keys":        dataKeys,
-		"data_sizes":       dataSizes,
-		"can_reveal":       canReveal,
-		"labels":           secret.Labels,
-		"annotations":      secretAnnotations(secret.Annotations, canReveal),
-		"created_at":       toISO(&secret.CreationTimestamp),
-		"uid":              string(secret.UID),
-		"resource_version": secret.ResourceVersion,
-	}
+	result := secretrow.Info(secret)
+	result["data_sizes"] = dataSizes
+	result["can_reveal"] = canReveal
+	result["annotations"] = secretAnnotations(secret.Annotations, canReveal)
+	result["uid"] = string(secret.UID)
+	result["resource_version"] = secret.ResourceVersion
 
 	// Include actual base64-encoded data values for write/admin users
 	if canReveal {

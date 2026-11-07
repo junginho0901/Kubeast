@@ -40,9 +40,7 @@ func (s *Service) DescribeNetworkPolicy(ctx context.Context, namespace, name str
 	}
 
 	// the row already includes all fields
-	result := netpolrow.Info(np)
-	result["finalizers"] = np.Finalizers
-	return result, nil
+	return netpolrow.Info(np), nil
 }
 
 // DeleteNetworkPolicy deletes a network policy.
