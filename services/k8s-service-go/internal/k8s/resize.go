@@ -69,15 +69,11 @@ const resizeSettle = 1500 * time.Millisecond
 // ServerSupportsResize reports whether the API server is 1.35 or newer, where
 // the pod resize subresource is GA.
 func (s *Service) ServerSupportsResize(ctx context.Context) bool {
-	cs := s.clientsetCtx(ctx)
-	if cs == nil {
+	b := s.bundleForCtx(ctx)
+	if b == nil {
 		return false
 	}
-	v, err := cs.Discovery().ServerVersion()
-	if err != nil {
-		return false
-	}
-	return minorOf(v.GitVersion) >= 35
+	return minorOf(b.serverVersion(ctx)) >= 35
 }
 
 // ResizeWorkload applies req to the named container of every running pod the

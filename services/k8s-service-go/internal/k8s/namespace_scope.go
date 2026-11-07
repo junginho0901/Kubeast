@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"slices"
 	"sync"
+	"sync/atomic"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -45,6 +46,22 @@ func isNamespaceKind(gvr schema.GroupVersionResource) bool {
 
 // listFanOutWorkers bounds the parallel per-namespace lists of one request.
 const listFanOutWorkers = 8
+
+// sideBySide runs do(0) … do(n-1) on at most listFanOutWorkers goroutines, each taking the next index when it is free.
+func sideBySide(n int, do func(i int)) {
+	var next atomic.Int64
+	var wg sync.WaitGroup
+	for range min(n, listFanOutWorkers) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := int(next.Add(1) - 1); i < n; i = int(next.Add(1) - 1) {
+				do(i)
+			}
+		}()
+	}
+	wg.Wait()
+}
 
 // listAcrossNamespaces runs list once with "" (every namespace) for an
 // unscoped caller, or once per namespace of a scoped caller and merges the
@@ -103,31 +120,23 @@ func fanOutNamespaces[T any](scope []string, list func(namespace string) ([]T, e
 	read := make([]bool, len(scope))
 	refused := make([]error, len(scope))
 	errs := make([]error, len(scope))
-	var wg sync.WaitGroup
-	sem := make(chan struct{}, listFanOutWorkers)
-	for i, ns := range scope {
-		wg.Add(1)
-		go func(i int, ns string) {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-			items, err := list(ns)
-			if err != nil {
-				if apierrors.IsForbidden(err) || apierrors.IsNotFound(err) {
-					slog.Debug("namespace scope: skipping namespace the cluster refused", "namespace", ns, "err", err)
-					if apierrors.IsForbidden(err) {
-						refused[i] = err
-					}
-					return
+	sideBySide(len(scope), func(i int) {
+		ns := scope[i]
+		items, err := list(ns)
+		if err != nil {
+			if apierrors.IsForbidden(err) || apierrors.IsNotFound(err) {
+				slog.Debug("namespace scope: skipping namespace the cluster refused", "namespace", ns, "err", err)
+				if apierrors.IsForbidden(err) {
+					refused[i] = err
 				}
-				errs[i] = err
 				return
 			}
-			results[i] = items
-			read[i] = true
-		}(i, ns)
-	}
-	wg.Wait()
+			errs[i] = err
+			return
+		}
+		results[i] = items
+		read[i] = true
+	})
 	for _, err := range errs {
 		if err != nil {
 			return nil, err

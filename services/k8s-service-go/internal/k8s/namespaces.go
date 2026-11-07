@@ -21,15 +21,23 @@ func (s *Service) GetNamespaces(ctx context.Context) ([]map[string]interface{}, 
 	// refuse "list namespaces" for a group bound per namespace). Each entry is
 	// read as the user when the cluster allows it, so status and labels show.
 	if scope := scopeFromCtx(ctx); len(scope) > 0 {
-		result := make([]map[string]interface{}, 0, len(scope))
-		for _, name := range scope {
-			entry := map[string]interface{}{"name": name, "status": "Active", "created_at": "", "labels": map[string]string{}}
-			if ns, err := s.clientsetCtx(ctx).CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{}); err == nil {
+		cs := s.clientsetCtx(ctx)
+		if cs == nil {
+			return nil, errNotLoaded
+		}
+		result := make([]map[string]interface{}, len(scope))
+		sideBySide(len(scope), func(i int) {
+			entry := map[string]interface{}{"name": scope[i], "status": "Active", "created_at": "", "labels": map[string]string{}}
+			if ns, err := cs.CoreV1().Namespaces().Get(ctx, scope[i], metav1.GetOptions{}); err == nil {
 				entry["status"] = string(ns.Status.Phase)
 				entry["created_at"] = toISO(&ns.CreationTimestamp)
 				entry["labels"] = ns.Labels
 			}
-			result = append(result, entry)
+			result[i] = entry
+		})
+		// rows of a request that left are the grant's guesses, not what the cluster said
+		if err := ctx.Err(); err != nil {
+			return nil, err
 		}
 		return result, nil
 	}

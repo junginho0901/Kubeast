@@ -49,11 +49,11 @@ func (v *JWTValidator) checkTokenVersion(tokenStr, userID, akid string, claimed 
 		return compareTokenVersion(claimed, entry.version)
 	}
 
-	current, err := v.fetchTokenVersion(tokenStr, userID)
+	current, fetched, err := v.fetchTokenVersionShared(tokenStr, userID, now)
 	switch {
 	case err == nil:
 		v.tvMu.Lock()
-		v.tv[key] = tokenVersionEntry{version: current, fetched: now}
+		v.tv[key] = tokenVersionEntry{version: current, fetched: fetched}
 		v.tvMu.Unlock()
 		return compareTokenVersion(claimed, current)
 	case errors.Is(err, ErrTokenRevoked):
@@ -72,6 +72,36 @@ func (v *JWTValidator) checkTokenVersion(tokenStr, userID, akid string, claimed 
 	default:
 		return fmt.Errorf("invalid token: token version unavailable: %w", err)
 	}
+}
+
+type tokenVersionCall struct {
+	done    chan struct{}
+	started time.Time
+	version int
+	err     error
+}
+
+var errTokenVersionUnfinished = errors.New("token version lookup did not finish")
+
+// fetchTokenVersionShared is one lookup for a token's requests at one moment, keyed by the token: auth-service answers for the token itself.
+func (v *JWTValidator) fetchTokenVersionShared(tokenStr, userID string, now time.Time) (version int, fetched time.Time, err error) {
+	v.tvMu.Lock()
+	if c, ok := v.tvCalls[tokenStr]; ok {
+		v.tvMu.Unlock()
+		<-c.done
+		return c.version, c.started, c.err
+	}
+	c := &tokenVersionCall{done: make(chan struct{}), started: now, err: errTokenVersionUnfinished}
+	v.tvCalls[tokenStr] = c
+	v.tvMu.Unlock()
+	defer func() {
+		v.tvMu.Lock()
+		delete(v.tvCalls, tokenStr)
+		v.tvMu.Unlock()
+		close(c.done)
+	}()
+	c.version, c.err = v.fetchTokenVersion(tokenStr, userID)
+	return c.version, c.started, c.err
 }
 
 func compareTokenVersion(claimed, current int) error {

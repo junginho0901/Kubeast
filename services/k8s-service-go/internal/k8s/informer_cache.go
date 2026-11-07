@@ -16,7 +16,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
@@ -68,10 +67,6 @@ type clusterInformers struct {
 	nodeList    *nodeList
 	nodeListRev uint64
 	nodeListSec int64
-
-	versionMu sync.Mutex
-	version   string
-	versionAt time.Time
 }
 
 // newClusterInformers starts the seven informers on client. onStop is called
@@ -317,19 +312,6 @@ func (ci *clusterInformers) nodeAllocatables() map[string]nodeAllocatable {
 		out[n.Name] = allocatableOf(n)
 	}
 	return out
-}
-
-// serverVersion returns the cluster's GitVersion, refreshed every 10 minutes.
-func (ci *clusterInformers) serverVersion(disc discovery.DiscoveryInterface) string {
-	ci.versionMu.Lock()
-	defer ci.versionMu.Unlock()
-	if disc == nil || (ci.version != "" && time.Since(ci.versionAt) < 10*time.Minute) {
-		return ci.version
-	}
-	if sv, err := disc.ServerVersion(); err == nil {
-		ci.version, ci.versionAt = sv.GitVersion, time.Now()
-	}
-	return ci.version
 }
 
 // nodeList is one build of the node list and, encoded once when first asked,

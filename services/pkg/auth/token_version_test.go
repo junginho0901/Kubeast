@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -207,5 +208,103 @@ func TestValidate_TokenVersionKeyTokenCachedApart(t *testing.T) {
 	}
 	if _, err := v.Validate(keyTok); !errors.Is(err, ErrTokenRevoked) {
 		t.Fatalf("key token after revocation must be refused, got %v", err)
+	}
+}
+
+// slowTVServer answers the token-version lookup after a pause, refusing the tokens refuse names, and counts the asks
+// per token.
+func slowTVServer(t *testing.T, pause time.Duration, refuse func(token string) bool) (*httptest.Server, func(token string) int) {
+	t.Helper()
+	var mu sync.Mutex
+	asks := map[string]int{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		mu.Lock()
+		asks[tok]++
+		mu.Unlock()
+		time.Sleep(pause)
+		if refuse != nil && refuse(tok) {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		_, _ = w.Write([]byte(`{"tv":3}`))
+	}))
+	t.Cleanup(srv.Close)
+	return srv, func(token string) int {
+		mu.Lock()
+		defer mu.Unlock()
+		return asks[token]
+	}
+}
+
+func signSession(t *testing.T, key *rsa.PrivateKey, session string) string {
+	t.Helper()
+	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+		"sub": "u1", "email": "u1@example.com", "role": "admin", "sid": session,
+		"permissions": map[string][]string{"*": {"*"}}, "iss": "iss", "aud": "aud", "tv": 3,
+		"iat": time.Now().Unix(), "exp": time.Now().Add(time.Minute).Unix(),
+	})
+	tok.Header["kid"] = "k1"
+	s, err := tok.SignedString(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+// The reads one screen sends together with one token ask auth-service the token's version once, and all pass.
+func TestValidate_RequestsOfOneTokenAtOnceAskTheVersionOnce(t *testing.T) {
+	j := newJWKSServer(t, "k1")
+	srv, asks := slowTVServer(t, 50*time.Millisecond, nil)
+	v := NewJWTValidator(JWKSConfig{JWKSURL: j.srv.URL, Issuer: "iss", Audience: "aud", TokenVersionURL: srv.URL})
+	token := signSession(t, j.key, "screen")
+	if err := v.fetchKeys(); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	var failed atomic.Int32
+	for i := 0; i < 11; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := v.Validate(token); err != nil {
+				failed.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+	if n := failed.Load(); n != 0 {
+		t.Errorf("%d of 11 requests of a current token were refused", n)
+	}
+	if n := asks(token); n != 1 {
+		t.Errorf("11 requests at once asked auth-service %d times, want 1", n)
+	}
+}
+
+// Two tokens of one user asked at the same moment each get auth-service's own answer: one refused does not refuse
+// the other.
+func TestValidate_ARefusedTokenDoesNotRefuseAnotherTokenOfTheUserAskedAtOnce(t *testing.T) {
+	j := newJWKSServer(t, "k1")
+	gone := signSession(t, j.key, "gone")
+	live := signSession(t, j.key, "live")
+	srv, asks := slowTVServer(t, 50*time.Millisecond, func(tok string) bool { return tok == gone })
+	v := NewJWTValidator(JWKSConfig{JWKSURL: j.srv.URL, Issuer: "iss", Audience: "aud", TokenVersionURL: srv.URL})
+	if err := v.fetchKeys(); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	var goneErr, liveErr error
+	wg.Add(2)
+	go func() { defer wg.Done(); _, goneErr = v.Validate(gone) }()
+	go func() { defer wg.Done(); time.Sleep(10 * time.Millisecond); _, liveErr = v.Validate(live) }()
+	wg.Wait()
+	if !errors.Is(goneErr, ErrTokenRevoked) {
+		t.Errorf("the refused token: %v, want revoked", goneErr)
+	}
+	if liveErr != nil {
+		t.Errorf("the live token asked at the same moment: %v", liveErr)
+	}
+	if asks(gone) != 1 || asks(live) != 1 {
+		t.Errorf("asks gone=%d live=%d, want 1 each", asks(gone), asks(live))
 	}
 }
