@@ -10,6 +10,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { WebSocketMultiplexer } from './watchMultiplexer'
+import { getWatchProblem, resetWatchProblems } from './watchProblemStore'
 
 // import.meta.env / window 는 vite 가 아니라 node 에서 실행되므로 직접 stub.
 ;(globalThis as any).import_meta_env_VITE_WS_URL = 'ws://test.local'
@@ -28,7 +29,7 @@ class MockWebSocket {
   url: string
   sent: string[] = []
   onmessage: ((evt: { data: string }) => void) | null = null
-  onclose: (() => void) | null = null
+  onclose: ((evt?: { code?: number }) => void) | null = null
   onerror: (() => void) | null = null
   onopen: (() => void) | null = null
   private eventListeners = new Map<string, Set<(payload?: unknown) => void>>()
@@ -79,11 +80,11 @@ class MockWebSocket {
     this.onmessage?.(evt)
   }
 
-  simulateServerClose() {
+  simulateServerClose(code?: number) {
     // 서버가 일방적으로 끊은 케이스 (proxy idle timeout 등)
     this.readyState = MockWebSocket.CLOSED
     this.fire('close')
-    this.onclose?.()
+    this.onclose?.({ code })
   }
 }
 
@@ -378,5 +379,123 @@ describe('WebSocketMultiplexer', () => {
     mux.unsubscribe(nodes, listener) // before subscribe() gets past its await
     await flush()
     expect(ws.sent.map((m) => JSON.parse(m).type)).not.toContain('REQUEST')
+  })
+  it('an ERROR frame reaches what the screen says, and the watch answering or closing clears it', async () => {
+    resetWatchProblems()
+    const mux = new WebSocketMultiplexer()
+    const msg = { type: 'REQUEST' as const, clusterId: 'self', path: '/api/v1/pods', query: 'watch=1' }
+    const listener = vi.fn()
+    const sub = mux.subscribe(msg, listener)
+    await flush()
+    const ws = MockWebSocket.instances[0]
+    ws.simulateOpen()
+    await sub
+
+    ws.simulateMessage({ type: 'ERROR', clusterId: 'self', path: msg.path, query: msg.query, error: { message: 'x', reason: 'forbidden' } })
+    expect(getWatchProblem()).toBe('forbidden')
+    ws.simulateMessage({ type: 'RESYNC', clusterId: 'self', path: msg.path, query: msg.query })
+    expect(getWatchProblem()).toBeUndefined()
+
+    ws.simulateMessage({ type: 'ERROR', clusterId: 'self', path: msg.path, query: msg.query, error: { message: 'x', reason: 'limit' } })
+    expect(getWatchProblem()).toBe('limit')
+    mux.unsubscribe(msg, listener)
+    expect(getWatchProblem()).toBeUndefined()
+  })
+
+  describe('the session of a socket ended', () => {
+    // A fresh module each time: services/auth signs out once per page load, and remembers it in a module variable.
+    const freshMux = async () => {
+      vi.resetModules()
+      const { WebSocketMultiplexer: Fresh } = await import('./watchMultiplexer')
+      return new Fresh()
+    }
+    const open = async (mux: WebSocketMultiplexer) => {
+      const sub = mux.subscribe({ type: 'REQUEST', clusterId: 'default', path: '/api/v1/pods', query: 'watch=1' }, vi.fn())
+      await flush()
+      const ws = MockWebSocket.instances[MockWebSocket.instances.length - 1]
+      ws.simulateOpen()
+      await sub
+      return ws
+    }
+    const settle = async () => {
+      await vi.advanceTimersByTimeAsync(0)
+      await flush()
+    }
+
+    beforeEach(() => {
+      ;(globalThis as any).window = {
+        location: { protocol: 'http:', host: 'test.local', pathname: '/pods', search: '', assign: vi.fn() },
+        localStorage: { getItem: () => null, setItem: vi.fn(), removeItem: vi.fn() },
+        sessionStorage: { getItem: () => null, setItem: vi.fn(), removeItem: vi.fn() },
+      }
+    })
+    afterEach(() => {
+      vi.unstubAllGlobals()
+    })
+
+    it('reopens without signing out when the cookie is a newer session', async () => {
+      const fetchMe = vi.fn(async () => ({ status: 200 }))
+      vi.stubGlobal('fetch', fetchMe)
+      const mux = await freshMux()
+      const ws = await open(mux)
+
+      ws.simulateServerClose(4401)
+      await settle()
+      expect(fetchMe).toHaveBeenCalledWith('/api/v1/auth/me', { credentials: 'same-origin' })
+      expect((globalThis as any).window.location.assign).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(1000)
+      await flush()
+      expect(MockWebSocket.instances.length).toBe(2)
+    })
+
+    it('goes to the sign-in page and does not reopen when the session is over', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url: string) => ({ status: url.endsWith('/auth/me') ? 401 : 200 })))
+      const mux = await freshMux()
+      const ws = await open(mux)
+
+      ws.simulateServerClose(4401)
+      await settle()
+      expect((globalThis as any).window.location.assign).toHaveBeenCalledWith('/login')
+
+      await vi.advanceTimersByTimeAsync(60000)
+      expect(MockWebSocket.instances.length).toBe(1)
+    })
+
+    it('a second end right after reopening is the same session: it goes to the sign-in page', async () => {
+      const fetchMe = vi.fn(async () => ({ status: 200 }))
+      vi.stubGlobal('fetch', fetchMe)
+      const mux = await freshMux()
+      const ws = await open(mux)
+
+      ws.simulateServerClose(4401)
+      await settle()
+      await vi.advanceTimersByTimeAsync(1000)
+      await flush()
+      const reopened = MockWebSocket.instances[1]
+      reopened.simulateOpen()
+      await flush()
+      fetchMe.mockClear()
+
+      reopened.simulateServerClose(4401)
+      await settle()
+      expect((globalThis as any).window.location.assign).toHaveBeenCalledWith('/login')
+      await vi.advanceTimersByTimeAsync(60000)
+      expect(MockWebSocket.instances.length).toBe(2)
+    })
+
+    it('another close keeps reconnecting and asks nothing', async () => {
+      const fetchMe = vi.fn(async () => ({ status: 200 }))
+      vi.stubGlobal('fetch', fetchMe)
+      const mux = await freshMux()
+      const ws = await open(mux)
+
+      ws.simulateServerClose(1006)
+      await settle()
+      expect(fetchMe).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1000)
+      await flush()
+      expect(MockWebSocket.instances.length).toBe(2)
+    })
   })
 })

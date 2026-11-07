@@ -27,10 +27,8 @@ export default function TestResultModal({
     // Go marshals an empty slice as JSON null, so coerce hooks to [] here
     // to keep the render paths from tripping over `null.length`.
     onSuccess: (data) => setResult({ ...data, hooks: data.hooks ?? [] }),
+    // A hook that failed comes as a result (success false, with Helm's error); this is a test that never ran.
     onError: (err: any) => {
-      // Only hooks that ran make a result: an empty one would read as a chart without test hooks.
-      const hooks = err?.response?.data?.hooks
-      if (Array.isArray(hooks) && hooks.length > 0) setResult({ success: false, hooks })
       setError(err?.response?.data?.detail ?? err?.message ?? 'test failed')
     },
   })
@@ -50,7 +48,7 @@ export default function TestResultModal({
     source: 'HelmTestResult',
     summary: `Helm 릴리스 ${namespace}/${name} 테스트 — ${running ? '실행 중' : result ? (result.success ? '성공' : '실패') : error ? '실패' : '대기'}`,
     data: {
-      release: name, namespace, running, success: result?.success, error: error ?? undefined,
+      release: name, namespace, running, success: result?.success, error: error ?? result?.error ?? undefined,
       hooks: result?.hooks.map((h) => ({ name: h.name, phase: h.phase, failed: h.failed, logs: h.logs?.slice(-1500) })),
     },
   }, [namespace, name, running, result, error])
@@ -73,30 +71,25 @@ export default function TestResultModal({
             <Loader2 className="w-5 h-5 animate-spin" />
             <span className="text-sm">{t('helmReleaseDetail.test.running')}</span>
           </div>
-        ) : !error && result?.success && result.hooks.length === 0 ? (
+        ) : result?.success && result.hooks.length === 0 ? (
           <div className="rounded-sm border border-slate-600 bg-slate-800/40 px-3 py-4 text-sm text-slate-300">
             {t('helmReleaseDetail.test.noHooks')}
           </div>
-        ) : error || result ? (
+        ) : result ? (
           <div className="space-y-2">
-            {error ? (
-              <div className="rounded-sm border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
-                {error}
-              </div>
-            ) : result && (
-              <div
-                className={`rounded-sm px-3 py-2 text-sm ${
-                  result.success
-                    ? 'bg-emerald-500/15 text-emerald-200 border border-emerald-500/30'
-                    : 'bg-red-500/15 text-red-200 border border-red-500/30'
-                }`}
-              >
-                {result.success
-                  ? t('helmReleaseDetail.test.passed')
-                  : t('helmReleaseDetail.test.failed')}
-              </div>
-            )}
-            {result && result.hooks.length > 0 && (
+            <div
+              className={`rounded-sm px-3 py-2 text-sm ${
+                result.success
+                  ? 'bg-emerald-500/15 text-emerald-200 border border-emerald-500/30'
+                  : 'bg-red-500/15 text-red-200 border border-red-500/30'
+              }`}
+            >
+              {result.success
+                ? t('helmReleaseDetail.test.passed')
+                : t('helmReleaseDetail.test.failed')}
+              {result.error && <div data-testid="helm-test-error" className="mt-1 text-xs break-words">{result.error}</div>}
+            </div>
+            {result.hooks.length > 0 && (
               <ul className="rounded-sm border border-slate-700 divide-y divide-slate-800 text-sm">
                 {result.hooks.map((h) => (
                   <li key={h.name} className="flex items-center gap-3 px-3 py-2">
@@ -111,6 +104,10 @@ export default function TestResultModal({
                 ))}
               </ul>
             )}
+          </div>
+        ) : error ? (
+          <div className="rounded-sm border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+            {error}
           </div>
         ) : null}
 

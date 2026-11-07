@@ -153,7 +153,7 @@ func (h *Handler) relayRead(w http.ResponseWriter, r *http.Request, req netflows
 	after := func() json.RawMessage { return netflowsAudit(target, req, res) }
 	refuse := func(status int, err error) {
 		_ = h.recordAuditWithPayload(r, "k8s.networkflows.query", targetType, targetID, namespace, err, nil, after())
-		response.Error(w, status, err.Error())
+		response.Error(w, status, response.Public(err))
 	}
 	allowed, err := h.canReadRelay(ctx, target)
 	if err != nil {
@@ -184,20 +184,25 @@ func (h *Handler) relayRead(w http.ResponseWriter, r *http.Request, req netflows
 		res, qerr = h.netflows.Read(ctx, target, client, url, req, now)
 	}
 	if res != nil {
-		res.Cluster, res.Mode, res.Relay = string(id), target.Mode, target.Relay.String()
-		if target.Mode == "address" {
-			res.Relay = target.URL
-		}
+		res.Cluster, res.Mode, res.Relay = string(id), target.Mode, relayLabel(target)
 	}
 	if werr := h.recordAuditWithPayload(r, "k8s.networkflows.query", targetType, targetID, namespace, qerr, nil, after()); werr != nil {
 		h.refuseUnaudited(w, r, werr)
 		return nil
 	}
 	if qerr != nil {
-		response.Error(w, netflowsStatus(qerr), qerr.Error())
+		response.Error(w, netflowsStatus(qerr), response.Public(qerr))
 		return nil
 	}
 	return res
+}
+
+// relayLabel names a flow source in an answer: a reader has no use for the address registered in mode address.
+func relayLabel(t netflows.Target) string {
+	if t.Mode == "address" {
+		return "address"
+	}
+	return t.Relay.String()
 }
 
 // canReadRelay asks the cluster whether the user may use the flow source's

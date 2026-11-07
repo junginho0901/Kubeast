@@ -283,7 +283,8 @@ func (h *Handler) PodLogsSSE(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
 
-	ctx := r.Context()
+	ctx, release := h.holdSession(r.Context())
+	defer release()
 	slog.Info("pod logs sse connected", "namespace", namespace, "pod", name, "container", container)
 
 	// Pod 가 초기화 중일 때 retry. SSE 헤더 이미 보냈으므로 retry 실패 시
@@ -292,6 +293,7 @@ func (h *Handler) PodLogsSSE(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// 이미 client 에 error 이벤트 전송됨
 		_ = h.recordAuditWithPayload(r, "k8s.pod.logs.read", "pod", name, namespace, err, nil, after)
+		sayStreamEnded(ctx, w, flusher)
 		return
 	}
 	defer stream.Close()
@@ -307,7 +309,7 @@ func (h *Handler) PodLogsSSE(w http.ResponseWriter, r *http.Request) {
 	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 	for scanner.Scan() {
 		if ctx.Err() != nil {
-			return
+			break
 		}
 		line := scanner.Text()
 		// SSE 메시지 = 한 로그 줄. data: prefix + 빈 줄로 종료.
@@ -320,6 +322,9 @@ func (h *Handler) PodLogsSSE(w http.ResponseWriter, r *http.Request) {
 
 	if err := scanner.Err(); err != nil && ctx.Err() == nil {
 		slog.Warn("pod logs sse scanner error", "err", err)
+	}
+	if sayStreamEnded(ctx, w, flusher) {
+		h.auditSessionEnd(ctx, r, "pod", name, namespace, "pod-logs")
 	}
 	slog.Info("pod logs sse ended", "namespace", namespace, "pod", name)
 }
@@ -348,7 +353,7 @@ func (h *Handler) retryStreamPodLogs(ctx context.Context, w http.ResponseWriter,
 
 		if !retryable || attempt >= maxRetries {
 			slog.Error("stream pod logs failed", "err", err)
-			fmt.Fprintf(w, "event: error\ndata: %s\n\n", escapeSSE(errMsg))
+			fmt.Fprintf(w, "event: error\ndata: %s\n\n", escapeSSE(response.Public(err)))
 			flusher.Flush()
 			return nil, err
 		}

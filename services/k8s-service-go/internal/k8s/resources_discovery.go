@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/discovery"
 
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 )
@@ -18,7 +20,7 @@ import (
 func (s *Service) GetAPIResources(ctx context.Context) ([]metav1.APIResourceList, error) {
 	cid := ctxClusterID(ctx)
 	s.apiResourcesMu.RLock()
-	if cached := s.apiResourcesCache[cid]; cached != nil && time.Since(s.apiResourcesAt[cid]) < 60*time.Second {
+	if cached := s.apiResourcesCache[cid]; cached != nil && time.Since(s.apiResourcesAt[cid]) < apiResourcesTTL {
 		s.apiResourcesMu.RUnlock()
 		return cached, nil
 	}
@@ -32,20 +34,34 @@ func (s *Service) GetAPIResources(ctx context.Context) ([]metav1.APIResourceList
 	}
 
 	// Double-check after acquiring write lock
-	if cached := s.apiResourcesCache[cid]; cached != nil && time.Since(s.apiResourcesAt[cid]) < 60*time.Second {
+	if cached := s.apiResourcesCache[cid]; cached != nil && time.Since(s.apiResourcesAt[cid]) < apiResourcesTTL {
 		return cached, nil
 	}
 
 	groups, lists, err := s.discoveryCtx(ctx).ServerGroupsAndResources()
-	if err != nil {
+	// One aggregated API that does not answer leaves the others known, as kubectl goes on with them. A short cache: the
+	// kinds of that API come back when it does.
+	partial := discovery.IsGroupDiscoveryFailedError(err)
+	if err != nil && !partial {
 		return nil, fmt.Errorf("discover API resources: %w", err)
+	}
+	if partial {
+		slog.Warn("some API groups are not answering", "cluster", cid, "err", err)
 	}
 
 	result := preferredFirst(groups, lists)
 	s.apiResourcesCache[cid] = result
 	s.apiResourcesAt[cid] = time.Now()
+	if partial {
+		s.apiResourcesAt[cid] = time.Now().Add(-apiResourcesTTL + apiResourcesPartialTTL)
+	}
 	return result, nil
 }
+
+const (
+	apiResourcesTTL        = 60 * time.Second
+	apiResourcesPartialTTL = 10 * time.Second
+)
 
 // preferredFirst orders discovery lists so each group's preferred version comes
 // before its other versions (then by group/version), since discovery returns

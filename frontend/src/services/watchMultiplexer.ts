@@ -1,4 +1,6 @@
 import { getCurrentClusterID } from './clusterRef'
+import { liveSessionEnded, SESSION_ENDED_CLOSE_CODE } from './auth'
+import { clearWatchProblem, recordWatchFrame } from './watchProblemStore'
 
 type ClientMessage = {
   type: 'REQUEST' | 'CLOSE'
@@ -15,7 +17,7 @@ type ServerMessage = {
   query: string
 } & (
   | { type: 'DATA'; data: any }
-  | { type: 'ERROR'; error: { message?: string } }
+  | { type: 'ERROR'; error: { message?: string; reason?: string } }
   | { type: 'COMPLETE' }
   // the watch started over and cannot say what was deleted meanwhile: read the list again
   | { type: 'RESYNC' }
@@ -43,6 +45,7 @@ class WebSocketMultiplexer {
   private connecting: Promise<WebSocket> | null = null
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private reconnectAttempts = 0
+  private lastSessionEnd = 0
 
   private getReconnectDelay(): number {
     // exponential backoff: 1s → 2s → 4s → 8s → 16s → 30s (max).
@@ -69,11 +72,14 @@ class WebSocketMultiplexer {
   // nowhere. A server that does not name clusters yet (an upgrade under way) leaves only the path and query to go by.
   private dispatch(msg: ServerMessage) {
     if (msg.clusterId) {
-      this.listeners.get(makeKey(msg.clusterId, msg.path, msg.query))?.forEach((fn) => fn(msg))
+      const key = makeKey(msg.clusterId, msg.path, msg.query)
+      if (this.listeners.has(key)) recordWatchFrame(key, msg)
+      this.listeners.get(key)?.forEach((fn) => fn(msg))
       return
     }
     for (const [key, sub] of this.subscriptions) {
       if (sub.path === msg.path && sub.query === msg.query) {
+        recordWatchFrame(key, msg)
         this.listeners.get(key)?.forEach((fn) => fn(msg))
       }
     }
@@ -137,9 +143,17 @@ class WebSocketMultiplexer {
       }
     }
 
-    socket.onclose = () => {
+    socket.onclose = (event) => {
       this.socket = null
       this.connecting = null
+      if (event?.code === SESSION_ENDED_CLOSE_CODE) {
+        const lastEnd = this.lastSessionEnd
+        this.lastSessionEnd = Date.now()
+        void liveSessionEnded(lastEnd).then((reopen) => {
+          if (reopen) this.scheduleReconnect()
+        })
+        return
+      }
       // 구독자가 남아있으면 backoff 후 자동 reconnect.
       this.scheduleReconnect()
     }
@@ -148,6 +162,8 @@ class WebSocketMultiplexer {
       await this.waitForOpen(socket)
       // 연결 성공 시 backoff counter reset + 기존 구독 전부 재전송.
       this.reconnectAttempts = 0
+      // A watch that still cannot start says so again.
+      for (const key of this.subscriptions.keys()) clearWatchProblem(key)
       for (const msg of this.subscriptions.values()) {
         try {
           socket.send(JSON.stringify(msg))
@@ -198,6 +214,7 @@ class WebSocketMultiplexer {
     if (set.size > 0) return
 
     this.listeners.delete(key)
+    clearWatchProblem(key)
     this.subscriptions.delete(key)
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify({ ...msg, type: 'CLOSE' }))

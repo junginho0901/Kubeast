@@ -356,7 +356,8 @@ func (h *Handler) LogFileStream(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
 		return
 	}
-	ctx := r.Context()
+	ctx, release := h.holdSession(r.Context())
+	defer release()
 	run := func(argv []string, out io.Writer) *logFileError {
 		var stderr bytes.Buffer
 		if err := h.runContainerCommand(ctx, namespace, pod, container, argv, out, &limitedWriter{w: &stderr, n: logFileStderrMax}); err != nil {
@@ -423,6 +424,10 @@ func (h *Handler) LogFileStream(w http.ResponseWriter, r *http.Request) {
 	}
 	// stop ends the stream with the reason; the browser closes on "end".
 	stop := func(e *logFileError) {
+		if sayStreamEnded(ctx, w, flusher) {
+			h.auditSessionEnd(ctx, r, "pod", pod, namespace, "log-file")
+			return
+		}
 		slog.InfoContext(ctx, "log file stream stopped", "namespace", namespace, "pod", pod, "reason", e.reason, "detail", e.detail)
 		write("error", e.detail)
 		write("end", "stream ended")
@@ -461,6 +466,9 @@ func (h *Handler) LogFileStream(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case <-ctx.Done():
+			if sayStreamEnded(ctx, w, flusher) {
+				h.auditSessionEnd(ctx, r, "pod", pod, namespace, "log-file")
+			}
 			return
 		case <-heartbeat.C:
 			// A comment line keeps proxies (nginx: 60 s idle) from closing a quiet stream.

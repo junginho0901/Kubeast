@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logsearch"
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
 // A cluster that names its own store searches there although the deployment-wide map does not list it; the
@@ -47,9 +48,9 @@ func TestLogSearchOwnStoreClusterAndStatus(t *testing.T) {
 		t.Fatalf("feature clusters %v", got)
 	}
 
-	status := func(cluster string) map[string]interface{} {
+	statusAs := func(cluster string, caller auth.TokenPayload) map[string]interface{} {
 		rec := httptest.NewRecorder()
-		f.h.LogSearchStatus(rec, logSearchRequestAs("/api/v1/logsearch/status", cluster, "", podReader))
+		f.h.LogSearchStatus(rec, logSearchRequestAs("/api/v1/logsearch/status", cluster, "", caller))
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status %s: %d %s", cluster, rec.Code, rec.Body.String())
 		}
@@ -59,8 +60,13 @@ func TestLogSearchOwnStoreClusterAndStatus(t *testing.T) {
 		}
 		return out
 	}
-	if st := status("b"); st["source"] != "cluster" || st["available"] != true || st["endpoint"] != own.URL {
-		t.Fatalf("b: %v", st)
+	status := func(cluster string) map[string]interface{} { return statusAs(cluster, podReader) }
+	registrar := auth.TokenPayload{UserID: "u2", Perms: auth.PermissionMatrix{"*": {auth.PermClustersUpdate}}}
+	if st := statusAs("b", registrar); st["source"] != "cluster" || st["available"] != true || st["endpoint"] != own.URL {
+		t.Fatalf("b as whoever registers clusters: %v", st)
+	}
+	if st := status("b"); st["source"] != "cluster" || st["available"] != true || st["endpoint"] != nil {
+		t.Fatalf("b as a reader: %v", st)
 	}
 	if st := status("self"); st["source"] != "global" || st["available"] != true {
 		t.Fatalf("self: %v", st)

@@ -105,7 +105,7 @@ func TestClusterMiddlewareUnknownClusterIs404(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := &Handler{svc: svc}
-	admin := auth.TokenPayload{UserID: "u1", Perms: auth.PermissionMatrix{"*": {"menu.dashboard"}}}
+	admin := auth.TokenPayload{UserID: "u1", Perms: auth.PermissionMatrix{"*": {"*"}}}
 
 	cases := []struct {
 		query  string

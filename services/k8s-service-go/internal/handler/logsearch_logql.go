@@ -98,7 +98,7 @@ func (h *Handler) serveLogQL(w http.ResponseWriter, r *http.Request, namespace s
 		case errors.Is(qerr, logsearch.ErrTimeout):
 			status = http.StatusGatewayTimeout
 		}
-		response.Error(w, status, qerr.Error())
+		response.Error(w, status, response.Public(qerr))
 		return
 	}
 	response.JSON(w, http.StatusOK, res)

@@ -49,6 +49,8 @@ func protectedToolAct(tool string, args map[string]interface{}) protectedns.Act 
 	switch {
 	case tool == "k8s_execute_command":
 		return protectedns.ActExec
+	case tool == "k8s_get_pod_logs":
+		return protectedns.ActLog
 	case requiresApproval(tool):
 		return protectedns.ActWrite
 	case strings.HasPrefix(tool, "helm_"), isSecretResourceName(argString(args, "resource_type", "")):
@@ -125,7 +127,9 @@ func directKubectlRefusal(ctx context.Context, args []string) error {
 	switch args[0] {
 	case "exec", "attach", "port-forward":
 		act = protectedns.ActExec
-	case "get", "describe", "logs", "top", "explain", "api-resources", "version", "config", "auth":
+	case "logs":
+		act = protectedns.ActLog
+	case "get", "describe", "top", "explain", "api-resources", "version", "config", "auth":
 		act = protectedns.ActRead
 		for _, name := range names {
 			if isSecretResourceName(name) {

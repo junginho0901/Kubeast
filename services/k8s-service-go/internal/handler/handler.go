@@ -37,6 +37,8 @@ type Handler struct {
 	auditStore audit.Writer
 	helmSvc    *helm.Service
 	recorder   *recording.Manager // nil or disabled: terminals are not recorded
+	// liveSessions ends long-lived answers with their session (nil: not checked).
+	liveSessions *auth.LiveSessions
 	// hygieneStore keeps cluster hygiene sign-offs (nil in tests: no history).
 	hygieneStore hygiene.Store
 	// hygieneScan replaces svc.CollectHygiene in tests.
@@ -74,6 +76,9 @@ type Handler struct {
 
 // SetRecorder turns on terminal session recording (internal/recording).
 func (h *Handler) SetRecorder(m *recording.Manager) { h.recorder = m }
+
+// SetLiveSessions sets what ends open terminals and followed streams when their session stops standing.
+func (h *Handler) SetLiveSessions(s *auth.LiveSessions) { h.liveSessions = s }
 
 // New creates a new Handler. The helm service is derived from the same
 // k8s.Service and cache so Helm SDK calls observe the kubeconfig
@@ -180,7 +185,12 @@ func queryParamBool(r *http.Request, key string, defaultVal bool) bool {
 
 // handleError sends an appropriate error response based on the error message.
 func (h *Handler) handleError(w http.ResponseWriter, err error) {
-	response.Error(w, statusForError(err), err.Error())
+	status := statusForError(err)
+	// Only here does a 503 come from the cluster: the breaker counts these, not Kubeast's own (audit store and so on).
+	if failure, ok := w.(clusterFailureNoter); ok && status == http.StatusServiceUnavailable {
+		failure.noteClusterFailure()
+	}
+	response.Error(w, status, response.Public(err))
 }
 
 // statusForError maps an error to an HTTP status. Kubernetes API errors are

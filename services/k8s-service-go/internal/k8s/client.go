@@ -249,8 +249,12 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 		cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return auth.ImpersonationRoundTripper(rt, id) })
 		cacheCfg.Impersonate = rest.ImpersonationConfig{UserName: overviewCacheUser, Groups: []string{auth.GroupAuthenticated, auth.GroupViewer}}
 	}
+	cacheClient, err := kubernetes.NewForConfig(cacheCfg)
+	if err != nil {
+		return nil, fmt.Errorf("create cache clientset: %w", err)
+	}
 	// Inside the recording, so a refused request is listed for the call as the cluster's own refusal is.
-	protected := protectedFor(info)
+	protected := protectedFor(info, cacheClient)
 	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper {
 		return protectedns.RoundTripper(rt, protected, string(info.ID))
 	})
@@ -263,10 +267,6 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 	dynClient, err := dynamic.NewForConfig(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("create dynamic client: %w", err)
-	}
-	cacheClient, err := kubernetes.NewForConfig(cacheCfg)
-	if err != nil {
-		return nil, fmt.Errorf("create cache clientset: %w", err)
 	}
 	promExt, promSvc := promSourceFromInfo(info)
 	return &clientBundle{

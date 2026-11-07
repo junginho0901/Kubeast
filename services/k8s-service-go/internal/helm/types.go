@@ -149,6 +149,8 @@ type UpgradeResult struct {
 type TestResult struct {
 	Success bool             `json:"success"`
 	Hooks   []TestHookResult `json:"hooks"`
+	// Error is Helm's message when a hook failed.
+	Error string `json:"error,omitempty"`
 }
 
 // TestHookResult is one per test hook (usually a Pod). Name + phase let

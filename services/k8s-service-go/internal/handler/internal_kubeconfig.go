@@ -37,8 +37,8 @@ func (h *Handler) GetClusterKubeconfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Access = a global admin (matrix["*"]) or a per-cluster grant on this id.
-	if len(payload.Perms["*"]) == 0 && len(payload.Perms[id]) == 0 {
+	// Access = a global admin or a per-cluster grant on this id.
+	if !payload.ReachesCluster(id) {
 		h.auditKubeconfigRead(r, payload, id, errForbiddenKubeconfig)
 		response.Error(w, http.StatusForbidden, "forbidden: no access to cluster "+id)
 		return
@@ -83,7 +83,7 @@ func (h *Handler) InvalidateCluster(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	if len(payload.Perms["*"]) == 0 && len(payload.Perms[id]) == 0 {
+	if !payload.ReachesCluster(id) && !holdsClusterRegistration(payload) {
 		response.Error(w, http.StatusForbidden, "forbidden: no access to cluster "+id)
 		return
 	}
@@ -110,7 +110,7 @@ func (h *Handler) ValidateKubeconfig(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	if !payload.HasPermission(auth.PermClustersCreate) && !payload.HasPermission(auth.PermClustersUpdate) {
+	if !holdsClusterRegistration(payload) {
 		response.Error(w, http.StatusForbidden, "forbidden: cluster registration permission required")
 		return
 	}
@@ -144,7 +144,7 @@ func (h *Handler) ValidateCluster(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	if len(payload.Perms["*"]) == 0 && len(payload.Perms[id]) == 0 {
+	if !payload.ReachesCluster(id) && !holdsClusterRegistration(payload) {
 		response.Error(w, http.StatusForbidden, "forbidden: no access to cluster "+id)
 		return
 	}

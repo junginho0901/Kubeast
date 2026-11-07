@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -240,7 +241,8 @@ func (h *Handler) handleHelmError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, helm.ErrNotFound):
 		response.Error(w, http.StatusNotFound, err.Error())
-	case errors.Is(err, helm.ErrInvalidSection), errors.Is(err, helm.ErrInvalidRevision):
+	case errors.Is(err, helm.ErrInvalidSection), errors.Is(err, helm.ErrInvalidRevision), errors.Is(err, helm.ErrInvalidValues),
+		strings.Contains(err.Error(), "values don't meet the specifications of the schema"):
 		response.Error(w, http.StatusBadRequest, err.Error())
 	default:
 		h.handleError(w, err)

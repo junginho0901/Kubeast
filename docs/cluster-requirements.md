@@ -500,7 +500,7 @@ The release namespace holds the key that signs sign-ins (`kubeast-auth-keys`), t
   - Bind people's own Kubernetes identities with RBAC so they cannot read Secrets in this namespace: check with `kubectl auth can-i get secrets -n <release namespace> --as <user>`.
   - Enforce Pod Security in the other namespaces: a pod that mounts the host's `/` reaches every Secret on its node.
   - The node shell (`resource.node.shell`) is root on this cluster's nodes, so it reaches the same Secrets. Give it on this cluster only to people you would make global admins.
-- Only a cluster connected as **In-cluster** is known to be this cluster. Connected with a kubeconfig it is another cluster to Kubeast, and none of this applies to it: connect it as In-cluster.
+- A cluster connected as **In-cluster** is this cluster. One connected with a kubeconfig is compared with it by the `kube-system` namespace's UID, read with the viewer identity (`kubeast:viewer`): when they match, all of this applies to it too. When that UID cannot be read, Kubeast logs it and treats the cluster as another one, so connect this cluster as In-cluster.
 - A namespace of the same name on another registered cluster is an ordinary namespace.
 
 ## 16. Hubble Relay (network flows)

@@ -90,6 +90,9 @@ func (s *Service) prometheusFlavor(ctx context.Context, src *promSource) string 
 // promGetData calls one Prometheus API path on the cluster's source and
 // returns the "data" member of the reply.
 func (s *Service) promGetData(ctx context.Context, src *promSource, promPath string) (json.RawMessage, error) {
+	if err := promExternalRead(ctx, src); err != nil {
+		return nil, err
+	}
 	var body []byte
 	if src.ext != nil {
 		b, code, err := src.ext.do(ctx, promPath)

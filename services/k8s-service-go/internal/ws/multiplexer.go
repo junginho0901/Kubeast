@@ -3,6 +3,7 @@ package ws
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/protectedns"
+	"github.com/junginho0901/kubeast/services/pkg/response"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -63,10 +65,35 @@ func (r RequestMessage) frame(kind string) ResponseMessage {
 	return ResponseMessage{Type: kind, ClusterID: r.ClusterID, Path: r.Path, Query: r.Query}
 }
 
-func (r RequestMessage) errorFrame(message string) ResponseMessage {
+// Why a watch has no data, as the screen reads it (the message stays the server's English).
+const (
+	reasonForbidden   = "forbidden"   // the app or the cluster refuses it
+	reasonLimit       = "limit"       // too many watches on this connection or this server
+	reasonUnreachable = "unreachable" // the cluster did not answer; the watch keeps trying
+	reasonFailed      = "failed"      // the cluster answered with an error; the watch keeps trying
+	reasonNotServed   = "not_served"  // the cluster does not serve the kind, which its list says
+	reasonUnsupported = "unsupported" // a resource this socket has no live updates for
+)
+
+func (r RequestMessage) errorFrame(message, reason string) ResponseMessage {
 	f := r.frame("ERROR")
-	f.Error = map[string]string{"message": message}
+	f.Error = map[string]string{"message": message, "reason": reason}
 	return f
+}
+
+// watchFailure is a failed watch as the client may read it: an error the API server wrote stays, a failed call's
+// address does not.
+func watchFailure(err error) (message, reason string) {
+	var status apierrors.APIStatus
+	switch {
+	case apierrors.IsForbidden(err), apierrors.IsUnauthorized(err):
+		return err.Error(), reasonForbidden
+	case apierrors.IsNotFound(err):
+		return err.Error(), reasonNotServed
+	case errors.As(err, &status):
+		return response.Public(err), reasonFailed
+	}
+	return response.Public(err), reasonUnreachable
 }
 
 // send queues a frame unless ctx ends first: with a slow client or a dead writer the queue may never have room.
@@ -141,7 +168,9 @@ type Multiplexer struct {
 	// MaxSubscriptions / MaxSubscriptionsPerConn: 0 = the defaults above.
 	MaxSubscriptions        int
 	MaxSubscriptionsPerConn int
-	provider                ClientProvider
+	// Sessions ends a socket whose session stopped standing (nil: not checked).
+	Sessions *auth.LiveSessions
+	provider ClientProvider
 
 	mu   sync.Mutex
 	subs map[string]*subscription // key -> subscription
@@ -174,13 +203,10 @@ func effectiveClusterID(id string) string {
 	return id
 }
 
-// canWatchCluster is the per-subscription authorization: a global admin
-// ("*" entry) or a per-cluster grant on the effective cluster (deny-by-default).
+// canWatchCluster is the per-subscription authorization: a global admin ("*") or a per-cluster grant on the effective
+// cluster (deny-by-default).
 func canWatchCluster(payload auth.TokenPayload, clusterID string) bool {
-	if len(payload.Perms["*"]) > 0 {
-		return true
-	}
-	return len(payload.Perms[effectiveClusterID(clusterID)]) > 0
+	return payload.ReachesCluster(effectiveClusterID(clusterID))
 }
 
 // NewMultiplexer creates a new WebSocket multiplexer.
@@ -217,6 +243,9 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
+	// Every watch of this socket hangs off the session it opened with.
+	ctx, release := m.Sessions.Hold(ctx, payload)
+	defer release()
 
 	// Keepalive: pong 받을 때마다 ReadDeadline 갱신. 60초 안에 pong 없으면
 	// ReadMessage 가 timeout 으로 break → defer 의 disconnect 처리.
@@ -241,6 +270,10 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		for {
 			select {
 			case <-ctx.Done():
+				if code := auth.SessionEndCode(ctx); code != "" {
+					slog.Info("ws closed: session ended", "id", wsID, "user", payload.UserID, "reason", code)
+					_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(auth.SessionEndedCloseCode, code), time.Now().Add(writeWait))
+				}
 				return
 			case msg, ok := <-sendCh:
 				if !ok {
@@ -292,15 +325,15 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		switch req.Type {
 		case "REQUEST":
 			if !canWatchCluster(payload, clusterID) {
-				send(ctx, sendCh, req.errorFrame("forbidden: no access to cluster "+effectiveClusterID(clusterID)))
+				send(ctx, sendCh, req.errorFrame("forbidden: no access to cluster "+effectiveClusterID(clusterID), reasonForbidden))
 				continue
 			}
-			if reason := namespaceScopeRefusal(payload, effectiveClusterID(clusterID), req.Path); reason != "" {
-				send(ctx, sendCh, req.errorFrame(reason))
+			if refusal := namespaceScopeRefusal(payload, effectiveClusterID(clusterID), req.Path); refusal != "" {
+				send(ctx, sendCh, req.errorFrame(refusal, reasonForbidden))
 				continue
 			}
-			if reason := m.protectedRefusal(ctx, payload, effectiveClusterID(clusterID), req.Path); reason != "" {
-				send(ctx, sendCh, req.errorFrame(reason))
+			if refusal := m.protectedRefusal(ctx, payload, effectiveClusterID(clusterID), req.Path); refusal != "" {
+				send(ctx, sendCh, req.errorFrame(refusal, reasonForbidden))
 				continue
 			}
 
@@ -318,7 +351,7 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 					limit, scope = maxTotal, "the server"
 				}
 				m.mu.Unlock()
-				send(ctx, sendCh, req.errorFrame(fmt.Sprintf("max subscriptions reached for %s (%d), cannot create new watch", scope, limit)))
+				send(ctx, sendCh, req.errorFrame(fmt.Sprintf("max subscriptions reached for %s (%d), cannot create new watch", scope, limit), reasonLimit))
 				continue
 			}
 
@@ -368,7 +401,7 @@ func resourceVersionExpired(err error) bool {
 func (m *Multiplexer) runWatch(ctx context.Context, req RequestMessage, sendCh chan<- ResponseMessage) {
 	resource, namespace, err := parsePath(req.Path)
 	if err != nil {
-		send(ctx, sendCh, req.errorFrame(err.Error()))
+		send(ctx, sendCh, req.errorFrame(err.Error(), reasonUnsupported))
 		return
 	}
 
@@ -378,7 +411,7 @@ func (m *Multiplexer) runWatch(ctx context.Context, req RequestMessage, sendCh c
 
 	gvr, ok := resourceToGVR(resource)
 	if !ok {
-		send(ctx, sendCh, req.errorFrame("unsupported resource: "+resource))
+		send(ctx, sendCh, req.errorFrame("unsupported resource: "+resource, reasonUnsupported))
 		return
 	}
 	gvr = m.servedVersion(ctx, gvr)
@@ -406,7 +439,7 @@ func (m *Multiplexer) runWatch(ctx context.Context, req RequestMessage, sendCh c
 		dyn := m.provider.DynamicForCtx(ctx)
 		if dyn == nil {
 			slog.Warn("watch skipped: kubeconfig not loaded", "resource", resource)
-			send(ctx, sendCh, req.errorFrame("kubeconfig not loaded"))
+			send(ctx, sendCh, req.errorFrame("kubeconfig not loaded", reasonUnreachable))
 			return
 		}
 		var watcher watch.Interface
@@ -425,9 +458,12 @@ func (m *Multiplexer) runWatch(ctx context.Context, req RequestMessage, sendCh c
 				continue
 			}
 			slog.Warn("watch failed", "resource", resource, "err", err)
-			if !send(ctx, sendCh, req.errorFrame(err.Error())) || !pause(ctx, 5*time.Second) {
+			message, reason := watchFailure(err)
+			if !send(ctx, sendCh, req.errorFrame(message, reason)) || !pause(ctx, 5*time.Second) {
 				return
 			}
+			// The client was told the list stopped following: the next watch says it is back, on a quiet list too.
+			resync = true
 			continue
 		}
 

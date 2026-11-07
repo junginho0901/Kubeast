@@ -41,6 +41,8 @@ type TokenPayload struct {
 	// unchanged so auth-service can cap the session's absolute lifetime
 	// (OWASP Session Management: absolute timeout). Falls back to "iat".
 	AuthTime int64
+	// ExpiresAt is the "exp" claim (unix seconds): when this token stops being accepted on a new request.
+	ExpiresAt int64
 	// APIKeyID is the "akid" claim: set when the token was issued for an API
 	// key (POST /auth/token) rather than a sign-in. Such a token cannot be
 	// refreshed; the client exchanges the key again.
@@ -134,6 +136,12 @@ func (p TokenPayload) AllowedIn(clusterID, namespace string) bool {
 // permission must be granted in clusterID and the grant must reach namespace.
 func (p TokenPayload) HasPermissionIn(perm, clusterID, namespace string) bool {
 	return p.HasPermissionForCluster(perm, clusterID) && p.AllowedIn(clusterID, namespace)
+}
+
+// ReachesCluster reports whether the caller may act on clusterID at all: the global admin ("*") or a grant there. The
+// "*" entry also holds admin.* keys, which open pages and not clusters.
+func (p TokenPayload) ReachesCluster(clusterID string) bool {
+	return matchAny(p.Perms["*"], "*") || len(p.Perms[clusterID]) > 0
 }
 
 // HasPermission checks a GLOBAL permission (cluster-agnostic) — i.e. the "*"
@@ -392,8 +400,12 @@ func (v *JWTValidator) Validate(tokenStr string) (TokenPayload, error) {
 	} else if f, ok := claims["iat"].(float64); ok && f > 0 {
 		authTime = int64(f)
 	}
+	var expiresAt int64
+	if f, ok := claims["exp"].(float64); ok && f > 0 {
+		expiresAt = int64(f)
+	}
 	sys, _ := claims["sys"].(string)
-	return TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms, Roles: ParseRoles(claims["roles"]), Namespaces: ParseNamespaces(claims["ns"]), TokenVersion: claimedTV, AuthTime: authTime, APIKeyID: akid, System: sys}, nil
+	return TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms, Roles: ParseRoles(claims["roles"]), Namespaces: ParseNamespaces(claims["ns"]), TokenVersion: claimedTV, AuthTime: authTime, ExpiresAt: expiresAt, APIKeyID: akid, System: sys}, nil
 }
 
 // CSRFHeader must accompany cookie-authenticated requests that can change

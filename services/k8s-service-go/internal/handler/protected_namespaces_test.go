@@ -356,7 +356,7 @@ func TestNoRouteReadsTheInstallNamespacesSecrets(t *testing.T) {
 func TestRoutesSayWhatTheyDo(t *testing.T) {
 	r := chi.NewRouter()
 	r.Group(func(g chi.Router) { routes.Register(g, &handler.Handler{}, ws.NewMultiplexer(nil)) })
-	var secretReads, terminals []string
+	var secretReads, terminals, logReads []string
 	writes := 0
 	err := chi.Walk(r, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
 		switch handler.RouteAct(method, route) {
@@ -364,6 +364,8 @@ func TestRoutesSayWhatTheyDo(t *testing.T) {
 			secretReads = append(secretReads, method+" "+route)
 		case protectedns.ActExec:
 			terminals = append(terminals, method+" "+route)
+		case protectedns.ActLog:
+			logReads = append(logReads, method+" "+route)
 		case protectedns.ActWrite:
 			if method == http.MethodGet {
 				t.Errorf("a GET route counts as a write: %s", route)
@@ -381,6 +383,25 @@ func TestRoutesSayWhatTheyDo(t *testing.T) {
 	}
 	slices.Sort(secretReads)
 	slices.Sort(terminals)
+	slices.Sort(logReads)
+	wantLogReads := []string{
+		"GET /api/v1/logsearch",
+		"GET /api/v1/logsearch/labels",
+		"GET /api/v1/logsearch/logql",
+		"GET /api/v1/logsearch/patterns",
+		"GET /api/v1/logsearch/query",
+		"GET /api/v1/logsearch/status",
+		"GET /api/v1/namespaces/{namespace}/logsearch",
+		"GET /api/v1/namespaces/{namespace}/logsearch/labels",
+		"GET /api/v1/namespaces/{namespace}/logsearch/logql",
+		"GET /api/v1/namespaces/{namespace}/logsearch/patterns",
+		"GET /api/v1/namespaces/{namespace}/logsearch/query",
+		"GET /api/v1/namespaces/{namespace}/pods/{name}/logs",
+		"GET /api/v1/namespaces/{namespace}/pods/{name}/logs/stream",
+	}
+	if !slices.Equal(logReads, wantLogReads) {
+		t.Errorf("routes that read a pod's output:\n got %v\nwant %v", logReads, wantLogReads)
+	}
 	wantSecretReads := []string{
 		"GET /api/v1/helm/releases",
 		"GET /api/v1/helm/releases/stream",
@@ -644,5 +665,43 @@ func TestAYAMLCreatesObjectListIsCapped(t *testing.T) {
 	}
 	if len(after.Objects) != 100 || after.Total != 130 {
 		t.Errorf("%d objects of %d", len(after.Objects), after.Total)
+	}
+}
+
+// A node shell's pod has a TTY, so its log is the shell's whole screen.
+func TestANodeShellPodsLogIsForThoseHoldingTheNodeShell(t *testing.T) {
+	paths := []string{
+		"/api/v1/namespaces/" + nodeShellNS + "/pods/node-debugger-a/logs?container=debugger",
+		"/api/v1/namespaces/" + nodeShellNS + "/pods/node-debugger-a/logs/stream?container=debugger",
+	}
+	rig := newProtectedRig(t, writeOnCluster(), false)
+	for _, path := range paths {
+		if w := rig.do(http.MethodGet, path+"&cluster=c", ""); w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), "protected_namespace") {
+			t.Errorf("Write on %s: %d %s", path, w.Code, w.Body)
+		}
+	}
+	if got := callsInto(rig.api.calls, nodeShellNS); len(got) != 0 {
+		t.Errorf("the cluster was asked: %v", got)
+	}
+}
+
+func TestAHolderOfTheNodeShellKeepsItsPodsLog(t *testing.T) {
+	holder := writeOnCluster()
+	holder.Perms["c"] = append(holder.Perms["c"], "resource.node.shell")
+	rig := newProtectedRig(t, holder, false)
+	path := "/api/v1/namespaces/" + nodeShellNS + "/pods/node-debugger-a/logs?container=debugger&cluster=c"
+	if w := rig.do(http.MethodGet, path, ""); w.Code == http.StatusForbidden {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+}
+
+func TestPodLogsStayReadableInTheInstallNamespace(t *testing.T) {
+	rig := newProtectedRig(t, writeOnCluster(), true)
+	path := "/api/v1/namespaces/" + installNS + "/pods/kubeast-0/logs?container=app&cluster=c"
+	if w := rig.do(http.MethodGet, path, ""); w.Code == http.StatusForbidden {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	if got := callsInto(rig.api.calls, installNS); len(got) == 0 {
+		t.Fatal("the cluster was not asked for the log")
 	}
 }

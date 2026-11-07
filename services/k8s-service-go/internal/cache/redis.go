@@ -22,6 +22,8 @@ type Cache struct {
 	mu      sync.RWMutex
 	mem     map[string]memEntry
 	memOnce sync.Once
+	// memSweepAt is the entry count at which Set next looks for expired entries.
+	memSweepAt int
 }
 
 type memEntry struct {
@@ -111,13 +113,43 @@ func (c *Cache) Set(ctx context.Context, key string, value interface{}, ttl time
 		return
 	}
 
+	now := time.Now()
 	c.mu.Lock()
-	c.mem[key] = memEntry{data: data, expires: time.Now().Add(ttl)}
+	c.mem[key] = memEntry{data: data, expires: now.Add(ttl)}
+	c.dropExpired(now)
 	c.mu.Unlock()
+}
+
+// memSweepMin is how many entries the in-memory cache holds before Set looks for expired ones. Get drops only a key it
+// is asked for, so a key nobody asks for again would stay. c.mu held.
+const memSweepMin = 1024
+
+func (c *Cache) dropExpired(now time.Time) {
+	if len(c.mem) < c.memSweepAt || len(c.mem) < memSweepMin {
+		return
+	}
+	for key, entry := range c.mem {
+		if now.After(entry.expires) {
+			delete(c.mem, key)
+		}
+	}
+	// Twice what stayed: the sweep costs a walk of the map, so it cannot run on every Set of a full cache.
+	c.memSweepAt = 2 * len(c.mem)
+}
+
+// invalidationTimeout bounds a delete that no longer ends with its request.
+const invalidationTimeout = 5 * time.Second
+
+// invalidationContext keeps a delete going after the request that caused it: the write has happened, so a browser gone
+// meanwhile must not leave the old list in the cache.
+func invalidationContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), invalidationTimeout)
 }
 
 func (c *Cache) Delete(ctx context.Context, key string) {
 	if c.connected {
+		ctx, cancel := invalidationContext(ctx)
+		defer cancel()
 		c.rdb.Del(ctx, key)
 		return
 	}
@@ -128,6 +160,8 @@ func (c *Cache) Delete(ctx context.Context, key string) {
 
 func (c *Cache) DeletePattern(ctx context.Context, pattern string) {
 	if c.connected {
+		ctx, cancel := invalidationContext(ctx)
+		defer cancel()
 		iter := c.rdb.Scan(ctx, 0, pattern, 100).Iterator()
 		for iter.Next(ctx) {
 			c.rdb.Del(ctx, iter.Val())

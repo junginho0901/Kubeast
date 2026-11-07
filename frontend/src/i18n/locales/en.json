@@ -491,6 +491,12 @@
       "customRole": "Your role \"{{role}}\" acts on this cluster as the Kubernetes group {{group}}. If every page shows this notice, the cluster has not allowed and bound that group yet (chart auth.impersonation.customRoles).",
       "namespaces": "Your access to this cluster is limited to the namespaces {{namespaces}}; cluster-wide pages and other namespaces are not shown."
     },
+    "watchProblem": {
+      "forbidden": "The cluster refuses live updates for part of this page. Rows may be out of date; refresh to read them again.",
+      "limit": "Too many lists are following the cluster for live updates. Rows may be out of date; close other tabs or refresh.",
+      "unreachable": "The cluster cannot be reached, so live updates are paused. They come back by themselves.",
+      "failed": "Live updates are paused because the cluster answered with an error. They come back by themselves."
+    },
     "clusterChecking": "Checking connection...",
     "clusterConnected": "Cluster connected",
     "clusterDisconnected": "Cluster disconnected",
@@ -2999,6 +3005,11 @@
     "ssoHint": "You signed in with single sign-on. Once an administrator assigns your role, sign out and sign in again.",
     "logout": "Sign out",
     "ssoGroupHint": "You signed in with single sign-on, and your role comes from your groups at the identity provider. Ask an administrator to add you to a group there, then sign out and sign in again."
+  },
+  "liveSession": {
+    "revoked": "Stopped: your account or access changed. Sign in again.",
+    "expired": "Stopped: the session reached its maximum lifetime. Sign in again.",
+    "unverified": "Stopped: the session could not be verified. Sign in again."
   },
   "login": {
     "sessionEnded": "Your session ended: your account or access may have changed, or the session timed out. Sign in again.",

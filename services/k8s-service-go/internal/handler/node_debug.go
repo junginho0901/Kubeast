@@ -20,6 +20,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
+	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
 // How long the debug pod has to start, and how often it is checked.
@@ -91,6 +92,8 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
+	ctx, release := h.holdSession(ctx)
+	defer release()
 	// The socket's reader from here on: closing the window while the pod is
 	// still starting ends the wait (and deletes the pod) instead of the timeout.
 	in := readFrames(ctx, conn)
@@ -99,7 +102,7 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 	clientset, err := h.svc.ClientsetFor(ctx)
 	if err != nil {
 		fail(fmt.Errorf("cluster client: %w", err))
-		writeShellStatus(conn, shellStatus{Status: shellFailed, Message: fmt.Sprintf("cluster client: %v", err)})
+		writeShellStatus(conn, shellStatus{Status: shellFailed, Message: "cluster client: " + response.Public(err)})
 		return
 	}
 	// The attach runs as the signed-in user, like the pod calls above: the
@@ -107,7 +110,7 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 	restConfig, err := h.svc.UserRESTConfigFor(ctx)
 	if err != nil {
 		fail(fmt.Errorf("cluster config: %w", err))
-		writeShellStatus(conn, shellStatus{Status: shellFailed, Message: fmt.Sprintf("cluster config: %v", err)})
+		writeShellStatus(conn, shellStatus{Status: shellFailed, Message: "cluster config: " + response.Public(err)})
 		return
 	}
 
@@ -166,7 +169,7 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 	if err := ensureNodeShellNamespace(ctx, clientset, namespace); err != nil {
 		err = fmt.Errorf("prepare namespace %s: %w", namespace, err)
 		fail(err)
-		writeShellStatus(conn, shellStatus{Status: shellFailed, Message: err.Error()})
+		writeShellStatus(conn, shellStatus{Status: shellFailed, Message: response.Public(err)})
 		return
 	}
 	_, err = clientset.CoreV1().Pods(namespace).Create(ctx, debugPod, metav1.CreateOptions{})
@@ -174,7 +177,7 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 		err = fmt.Errorf("create debug pod: %w", err)
 		slog.Error("debug shell", "err", err)
 		fail(err)
-		writeShellStatus(conn, shellStatus{Status: shellFailed, Message: err.Error()})
+		writeShellStatus(conn, shellStatus{Status: shellFailed, Message: response.Public(err)})
 		return
 	}
 
@@ -209,6 +212,10 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-ctx.Done():
 			fail(ctx.Err())
+			if code := auth.SessionEndCode(ctx); code != "" {
+				_ = conn.WriteMessage(websocket.TextMessage, []byte(sessionEndNotice(code, r.URL.Query().Get("lang"))))
+				_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(auth.SessionEndedCloseCode, code), time.Now().Add(time.Second))
+			}
 			return
 		case _, open := <-in:
 			if !open { // the window closed before the shell opened
@@ -258,11 +265,11 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("debug shell attached", "pod", podName, "node", nodeName)
 	if err := streamShell(ctx, conn, in, restConfig, attachURL(clientset, namespace, podName, "debugger"), rec, r.URL.Query().Get("lang")); err != nil {
-		msg := fmt.Sprintf("failed to connect to K8s API: %v", err)
-		slog.Error(msg)
-		conn.WriteMessage(websocket.TextMessage, []byte(msg+"\r\n"))
+		slog.Error("failed to connect to K8s API", "err", err)
+		conn.WriteMessage(websocket.TextMessage, []byte("failed to connect to K8s API: "+response.Public(err)+"\r\n"))
 		return
 	}
+	h.auditSessionEnd(ctx, r, "node", nodeName, namespace, "node-shell")
 	slog.Info("debug shell ended", "pod", podName, "node", nodeName)
 }
 

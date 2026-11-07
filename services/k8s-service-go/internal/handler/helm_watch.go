@@ -17,6 +17,7 @@ import (
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/helm"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
+	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
 // helmWatchTimeoutSeconds is the K8s watch's server-side timeout. The
@@ -74,9 +75,12 @@ func (h *Handler) WatchHelmReleases(w http.ResponseWriter, r *http.Request) {
 
 	namespace := r.URL.Query().Get("namespace")
 
-	if err := h.runHelmWatchSSE(r.Context(), w, flusher, namespace); err != nil {
+	ctx, release := h.holdSession(r.Context())
+	defer release()
+	if err := h.runHelmWatchSSE(ctx, w, flusher, namespace); err != nil {
 		slog.Warn("helm watch sse ended with error", "err", err, "namespace", namespace)
 	}
+	sayStreamEnded(ctx, w, flusher)
 }
 
 // runHelmWatchSSE is the long-lived loop that streams Secret events as SSE
@@ -95,7 +99,7 @@ func (h *Handler) runHelmWatchSSE(ctx context.Context, w http.ResponseWriter, fl
 		watcher, err := h.startSecretWatch(ctx, namespace)
 		if err != nil {
 			// transient kubeconfig hot-reload / API server hiccup — back off + retry
-			if writeErr := writeSSEEvent(w, flusher, "error", err.Error()); writeErr != nil {
+			if writeErr := writeSSEEvent(w, flusher, "error", response.Public(err)); writeErr != nil {
 				return writeErr
 			}
 			select {

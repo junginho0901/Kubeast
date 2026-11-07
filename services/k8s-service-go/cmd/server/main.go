@@ -30,6 +30,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/nfm"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/routes"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/sessioncheck"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/traces"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/tracing"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/ws"
@@ -271,6 +272,14 @@ func main() {
 	wsMux := ws.NewMultiplexer(k8sSvc)
 	wsMux.MaxSubscriptions = cfg.WSMaxSubscriptions
 	wsMux.MaxSubscriptionsPerConn = cfg.WSMaxSubscriptionsPerConn
+
+	// Open terminals, watches and followed logs end when the session behind them stops standing.
+	liveSessions := auth.NewLiveSessions(auth.LiveSessionConfig{
+		Lookup:           sessioncheck.Lookup(pgPool),
+		AbsoluteLifetime: time.Duration(cfg.SessionAbsoluteHours) * time.Hour,
+	})
+	wsMux.Sessions = liveSessions
+	h.SetLiveSessions(liveSessions)
 
 	// Console metrics (services/pkg/metrics): HTTP by route pattern, the audit
 	// store's readiness and write failures, live WebSocket subscriptions.

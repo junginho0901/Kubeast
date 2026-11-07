@@ -32,6 +32,17 @@ Without `?cluster=`, the request goes to the registry's default cluster (the sel
 
 To turn it off, set `auth.apiKeys.enabled: false` (`API_KEYS_ENABLED` in compose). Issuing, revoking and exchanging keys are recorded in the audit log.
 
+## Open connections
+
+A terminal, a followed log and a live list are authenticated when they open. The browser cannot hand them a new token afterwards, so they do not end with their token.
+
+- k8s-service asks every 30 seconds whether the session behind each one still stands: the user's `token_version` is the same, the user or API key still exists, and the absolute session lifetime (`auth.sessionAbsoluteHours`) has not passed.
+- When it does not, the connection ends within that interval and says why: a terminal prints the reason and hangs up its shell, a followed log adds the reason as its last line, and a live list goes to the sign-in page unless the browser already holds a newer session.
+- A terminal or followed log ended this way leaves a `k8s.session.end` row.
+- If the version cannot be read (the database is down), connections keep running for 5 minutes and then end.
+- A session with no activity keeps its open connections while the above holds. The token's expiry alone ends nothing, or a followed log would stop every `auth.tokenTTLMinutes`.
+- Changing what a custom role allows does not end connections opened under it.
+
 ## Access review
 
 The access review puts "who can do what right now" on one page for periodic review, and records that the review was done. It maps to ISMS-P 2.5.6 (access rights review) and NIST 800-53 AC-2(j). Admin → Access review shows five sections as tables.
@@ -175,8 +186,9 @@ An exec through an AI tool has no recording: it is one command and its result, n
 - **Failures**:
   - If recording cannot start because the local volume cannot be written, the session is refused (`required: true`).
   - If an upload to the store fails, or one chunk does not finish within 30 seconds, the session goes on. Uploads are retried, and the problem shows up as the alert `KubeastSessionRecordingUploadStalled`.
-  - Past `maxBytes` per session (default 64 MiB), only the recording stops.
+  - Past `maxBytes` per session (default 64 MiB; 1 MiB in the `database` store), only the recording stops. The session goes on and its terminal is not told, so output after that point is not recorded. The recording ends with a marker saying so and the list shows ✂. The open and failure rows in the audit log stay as they are. `required` is about starting a recording, not this.
 - **Playback**: in Admin → Session recordings (permission `admin.sessions.read`), you can play a recording or download the `.cast` or a text copy. Exec rows in Audit Logs play too. Every time a recording is opened, `admin.session.read` is audited.
+  - That permission reaches the recordings of every cluster, also one its holder has no grant on, unlike the other admin permissions: an auditor's job crosses clusters. A recording shows whatever was printed in the terminal, Secret values included, so give it as you would access to those clusters.
 - **Player and CSP**: the player (asciinema-player) runs the terminal in WebAssembly. That is why the `script-src` of the CSP the gateway sends includes `'wasm-unsafe-eval'`, not `'unsafe-eval'` (`helm/kubeast/files/nginx.conf`).
   - If an Ingress or proxy in front overwrites the CSP header, it must allow the same value for playback to work. Without it, the player stops at the ▶ button and `--:--`.
 - **Retention**: remote objects are left to the bucket lifecycle and Object Lock; list rows follow `retention.auditDays`.

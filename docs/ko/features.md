@@ -154,7 +154,7 @@
   - 그 클러스터의 Write나 Admin 부여를 포함해 그 밖의 사람은 화면, API, AI 도구, MCP에서 403으로 거절됩니다. 대상은 그 안의 Secret과 Helm release, 그 안의 변경 전부, 그 안의 파드에 exec·attach와 로그 파일입니다. 여러 Namespace에 걸친 Secret 목록에서는 빠지고, 리소스 서랍은 거절될 동작의 버튼을 숨깁니다.
   - 파드, 로그, 이벤트, ConfigMap은 계속 읽을 수 있습니다. 다른 클러스터에 있는 같은 이름의 Namespace는 평범한 Namespace입니다.
   - 이것은 앱의 제한입니다. 클러스터 쪽에서 그 클러스터의 Write는 여전히 전체에 걸친 `edit`, Admin은 `cluster-admin`이므로, 쿠버네티스를 직접 쓰는 사람은 RBAC으로 따로 막아야 합니다([자세히](cluster-requirements.md#kubeast-자체-namespace에-누가-닿는가)).
-- **노드 셸의 Namespace(`nodeShell.namespace`)는 어느 클러스터에서든 `resource.node.shell`을 가진 사람 전용입니다.** 특권 파드가 허용되는 곳이므로 그 밖의 사람은 그 안의 변경 전부와 그 안의 파드에 exec·attach, 로그 파일이 거절됩니다([자세히](cluster-requirements.md#9-노드-셸)).
+- **노드 셸의 Namespace(`nodeShell.namespace`)는 어느 클러스터에서든 `resource.node.shell`을 가진 사람 전용입니다.** 특권 파드가 허용되는 곳이고 노드 셸의 로그는 곧 그 화면이므로, 그 밖의 사람은 그 안의 변경 전부와 그 안의 파드에 exec·attach, 로그 파일, 로그가 거절됩니다([자세히](cluster-requirements.md#9-노드-셸)).
 - **AI는 화면이 묻는 것을 묻습니다.** `ai.tool.<도구>`는 도구를 엽니다. 호출마다 그 클러스터에서, 같은 화면 뒤의 라우트가 묻는 권한도 있어야 합니다. 채팅과 MCP가 같고, 클러스터 RBAC이 역할의 그룹에 무엇을 허용하든 같습니다. 커스텀 역할의 그룹을 바인딩해도 AI로 그 역할의 화면보다 더 하지는 못합니다.
   - `k8s_delete_resource`는 `resource.<kind>.delete`가 필요합니다.
   - `k8s_patch_resource`, `k8s_scale`, annotate·label 도구, restart·pause·resume의 `k8s_rollout`은 `resource.<kind>.edit`이 필요합니다.
@@ -172,7 +172,7 @@
     - Core(대시보드·Cluster View·Monitoring·Alerts·Cost·AI Chat·Resource Graph·Change History·Advanced Search)는 `menu.dashboard`입니다. Alerts·Cost·AI Chat은 그 기능을 켰을 때만 나타납니다.
     - Cluster와 Custom Resources는 `menu.cluster`입니다.
     - Workloads·Storage·Network·Gateway·GPU·Security·Configuration·Helm은 같은 이름의 키를 따릅니다.
-    - Admin은 관리 화면마다 그 화면의 권한을 가진 사람에게 보입니다(`frontend/src/utils/adminAccess.ts`: User Management `admin.users.read`, Audit Logs `admin.audit.read`, Role Management `admin.roles.create/update/delete` 중 하나 …). 그래서 관리 권한 일부만 가진 커스텀 역할은 그 화면만 보고 엽니다. 관리 권한은 화면을 열 뿐 클러스터를 열지는 않습니다. 모든 클러스터에 닿는 것은 `*`뿐입니다.
+    - Admin은 관리 화면마다 그 화면의 권한을 가진 사람에게 보입니다(`frontend/src/utils/adminAccess.ts`: User Management `admin.users.read`, Audit Logs `admin.audit.read`, Role Management `admin.roles.create/update/delete` 중 하나 …). 그래서 관리 권한 일부만 가진 커스텀 역할은 그 화면만 보고 엽니다. 관리 권한은 화면을 열 뿐 클러스터를 열지는 않습니다. 모든 클러스터에 닿는 것은 `*`뿐입니다. 받은 권한이 없는 클러스터에서 전역 관리 키가 여는 것은 그 화면이 읽는 것뿐입니다. `admin.hygiene.*`는 Cluster Hygiene, `admin.clusters.create`·`.update`는 클러스터 편집 창의 저장소 상태, 그리고 `/cluster/features`입니다. 세션 녹화는 클러스터를 넘는 예외입니다([자세히](security-audit.md#세션-기록-exec--노드-셸)).
 - **대시보드 개수**(네임스페이스·파드·노드 …)는 클러스터별 informer 캐시(`kubeast:cache` 신원)에서 셉니다.
   그래서 사용자 신원이 네임스페이스를 list할 수 있는지(SelfSubjectAccessReview, 60초 캐시) 먼저 묻고, 안 되면 403을 돌려줍니다.
   그룹이 아직 바인딩되지 않은 커스텀 역할이나 네임스페이스 하나에만 묶인 사용자가 클러스터 전체 개수를 보지 못하게 하기 위해서입니다.
@@ -215,6 +215,7 @@
   - 클러스터 쪽 신원은 `kubeast:role:<slug>` 그룹이므로 **그 네임스페이스마다 RoleBinding을 묶기 전에는 클러스터가 거부합니다**.
     차트 `auth.impersonation.customRoles`에 `{name: Read, namespaces: [a, b], clusterRoles: [view]}`처럼 적으면 그 RoleBinding이 렌더됩니다(등록한 클러스터마다 적용하세요).
   - 화면에서는 네임스페이스 선택기에 부여된 네임스페이스만 보이고, 권한 없음 안내에 "이 클러스터에서는 네임스페이스 a, b만"이 붙으며, 실시간 갱신도 네임스페이스별로 구독합니다.
+  - 외부 메트릭 저장소는 Kubeast 자격으로 읽어 클러스터 RBAC이 호출자를 볼 수 없습니다. 그래서 읽으려면 그 클러스터의 `resource.pod.read`가 필요합니다(로그 저장소와 같습니다). API 서버 프록시로 읽는 경로는 클러스터가 판단합니다.
   - Access Review 보고서와 CSV에 `namespaces` 열이 있습니다.
 - **SSO 그룹 → 역할**: OIDC 공급자가 주는 그룹을 다음과 같이 역할로 바꿉니다. `syncRoles`를 켜면 로그인할 때마다 다시 맞춥니다.
   - 계정 등급: `auth.oidc.roleMapping`(`<그룹>=<Admin|Member|커스텀>`)
