@@ -758,8 +758,10 @@ K8S_READONLY_TOOLS: List[Dict] = [
             "description": (
                 "Policy results from PolicyReport / ClusterPolicyReport (wgpolicyk8s.io — Kyverno, Trivy Operator and others write them). "
                 "view=summary (default) gives totals per policy and per namespace (pass, fail, warn, error, skip); view=results lists the "
-                "rows — each with namespace, kind, name, policy, rule, result, severity, message — filtered by namespace, policy, kind, "
-                "results (e.g. fail,warn), severities (e.g. high,critical) or a search text, up to limit rows (max 200). Use it for "
+                "rows — each with namespace, kind, name, policy, rule, result, severity, message, source — filtered by namespace, policy, the engine "
+                "that wrote it (policy_source), kind, results (e.g. fail,warn), severities (e.g. high,critical) or a search text, one page at a time: "
+                "total counts every match, next_offset is where the next page starts, truncated means the cluster held more reports than one read "
+                "takes. Two engines can name a policy alike; source tells them apart. Use it for "
                 "\"which workloads violate policy X\", \"what fails in namespace Y\" or a compliance overview. {\"status\":\"unavailable\"} means the "
                 "cluster has no PolicyReport source. Only offered where the policy reports feature is on and the user may read them."
             ),
@@ -769,11 +771,15 @@ K8S_READONLY_TOOLS: List[Dict] = [
                     "view": {"type": "string", "description": "summary (default) or results"},
                     "namespace": {"type": "string", "description": "Only this namespace"},
                     "policy": {"type": "string", "description": "results: only this policy"},
+                    "policy_source": {"type": "string", "description": "results: only this engine, as a row's source says (kyverno, Trivy …)"},
                     "kind": {"type": "string", "description": "results: only objects of this kind (Pod, Deployment …)"},
-                    "results": {"type": "string", "description": "results: comma-separated result kinds to keep: pass,fail,warn,error,skip (default all)"},
+                    "results": {"type": "string", "description": "results: comma-separated result kinds to keep: pass,fail,warn,error,skip (default fail,warn,error)"},
                     "severities": {"type": "string", "description": "results: comma-separated severities to keep, e.g. critical,high"},
                     "search": {"type": "string", "description": "results: text to match in object name, policy or message"},
-                    "limit": {"type": "integer", "description": "results: maximum rows (default 100, max 200)"},
+                    "sort": {"type": "string", "description": "results: result, policy, namespace or name (default worst first)"},
+                    "dir": {"type": "string", "description": "results: asc (default) or desc"},
+                    "offset": {"type": "integer", "description": "results: rows to skip, next_offset of the page before"},
+                    "limit": {"type": "integer", "description": "results: rows in the page (default 100, max 200)"},
                 },
             },
         },
@@ -814,7 +820,7 @@ K8S_READONLY_TOOLS: List[Dict] = [
             "description": (
                 "Cost allocation from the cluster's OpenCost: per namespace (aggregate=namespace, default) or per workload (aggregate=controller) over a "
                 "window (1h, 6h, 12h, 24h — default —, 48h, 7d, 14d, 30d), each row with cpu_cost, ram_cost, gpu_cost, pv_cost, network_cost and the total in "
-                "the cluster's currency, plus the hours the cost covers. namespace narrows to one namespace. Use it for \"what does namespace X cost\", "
+                "the cluster's currency, plus the hours the cost covers; totals add up the rows answered. namespace narrows the rows and the totals to one namespace. Use it for \"what does namespace X cost\", "
                 "\"the most expensive workloads this week\". {\"status\":\"unavailable\"} means no OpenCost is reachable; then use optimization "
                 "(requests vs usage) for sizing without prices. Only offered where the cost feature is on and the user may read costs."
             ),
@@ -856,7 +862,8 @@ K8S_READONLY_TOOLS: List[Dict] = [
             "description": (
                 "Ask the cluster whether the signed-in user may do verb on resource (SelfSubjectAccessReview as that user — their RBAC, not "
                 "Kubeast's). verb: get, list, watch, create, update, patch, delete …; resource: the plural type (pods, deployments, secrets); group for a "
-                "non-core API (apps, batch, networking.k8s.io); namespace for a namespaced check (empty = cluster scope). Returns allowed true/false. "
+                "non-core API (apps, batch, networking.k8s.io); namespace for a namespaced check (empty = cluster scope); name for one object, since an "
+                "RBAC rule with resourceNames allows that object and not the kind, as a drawer's Delete button asks. Returns allowed true/false. "
                 "Use it before suggesting an action the user may not be allowed to do, or to explain a 403."
             ),
             "parameters": {
@@ -866,6 +873,7 @@ K8S_READONLY_TOOLS: List[Dict] = [
                     "resource": {"type": "string", "description": "Plural resource type, e.g. pods"},
                     "group": {"type": "string", "description": "API group, e.g. apps (empty for core)"},
                     "namespace": {"type": "string", "description": "Namespace (empty = cluster scope)"},
+                    "name": {"type": "string", "description": "One object's name (empty = the kind as a whole)"},
                 },
                 "required": ["verb", "resource"],
             },

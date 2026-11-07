@@ -13,8 +13,13 @@ export type SummaryCard = [label: string, value: number, boxClass: string, label
 
 export { ageSeconds as parseAgeSeconds, formatAge } from '@/utils/time'
 
+// An error the API server holds with no message is not shown as one: the card, the badge and the floating chat agree.
+export function hasAttachmentError(va: VolumeAttachmentInfo): boolean {
+  return !!(va.attach_error?.message || va.detach_error?.message)
+}
+
 export function statusLabel(va: VolumeAttachmentInfo): 'Attached' | 'Detached' | 'Error' | 'Unknown' {
-  if (va.attach_error?.message || va.detach_error?.message) return 'Error'
+  if (hasAttachmentError(va)) return 'Error'
   if (va.attached === true) return 'Attached'
   if (va.attached === false) return 'Detached'
   return 'Unknown'

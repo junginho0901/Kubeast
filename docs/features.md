@@ -19,7 +19,7 @@
   - The conversation follows new text only while you are at the bottom. When you scroll up, it stays put and a "Jump to latest" button appears.
   - Tables in answers have horizontal and vertical lines, and answers have the Kubeast icon next to them.
 - **Multi-round Tool Calling** — the AI views and changes K8s with allowlisted tools, for up to 10 rounds. Read, write and admin tools are **gated by the user's permissions (JWT)**.
-  - The 13 read tools include:
+  - The 52 read tools include:
     - `k8s_find_resource`, which finds multiple kinds and namespaces at once by name fragment or label
     - `k8s_explain`, which asks for the API schema
     - Pod logs, with the previous log of a dead container (`previous`), a time range, all containers and a text filter
@@ -58,10 +58,10 @@
     - `loki_patterns`: log patterns, with the line count per error type
     - `traces_search`, `traces_get`, `traces_tags`, `traces_metrics` and `traces_compare`: TraceQL on the trace store. They cover slow or failed requests, the spans of one trace, finding attributes, graphs of request count, error rate and p95 trends, and fast and slow samples.
     - `helm_read`: release list, values, manifest, history, resources, images, revisions and the diff of two revisions, **read only**. Always the masked text, also for someone who may see it in full on the screen.
-    - `policy_reports`: PolicyReport summary and results
-    - `cost`: OpenCost allocation
+    - `policy_reports`: PolicyReport summary and results, a page at a time, by source and in the order the screen offers
+    - `cost`: OpenCost allocation, whose totals add up the rows answered
     - `optimization`: usage against requests, and recommendations
-    - `can_i`: whether that user can do something
+    - `can_i`: whether that user can do something, to a kind or to one object
     - `network_policy_check`: whether NetworkPolicy allows a connection, with the policy and rule that decide (see [NetworkPolicy view and check](#networkpolicy-view-and-check))
     - `network_flows`: recent connections of a namespace, pod or workload from the cluster's Hubble Relay, folded per connection, with the drop reason and the policies that decided (see [Recent flows](#recent-flows-hubble))
     - `network_drops`: drops of a namespace, pod or workload counted by the Hubble agents, from the cluster's Prometheus, by reason and peer, up to a day back (see [Network drops](#network-drops-hubble-metrics))
@@ -134,7 +134,7 @@
   - A setting can have the tier `economy` (`tier`, CRD `spec.tier`). When such a setting is enabled, the chat history summary and the floating assistant use that model, which is usually cheaper. Chat keeps the default model.
   - `model_info.tier` in the stream shows which one is used.
   - If there is no economy setting, or it cannot be used because it has no key, both use the default model.
-  - Each setting can have its own **answer length** (`max_tokens`; empty: 4,096 for chat answers, 2,048 for each alert investigation step) and **tool result length** (`tool_result_chars`, 1,000–200,000 characters; empty: 6,000), set in the edit window for every provider or as `spec.maxTokens` and `spec.toolResultChars` of a `ModelConfig` resource (with its CA certificate as `spec.caCert`). They are kept in the setting's options, and the tool result length is never sent to the provider. The Claude subscription leaves the answer length to Claude Code.
+  - Each setting can have its own **answer length** (`max_tokens`; empty: 4,096 for chat answers, 2,048 for each alert investigation step) and **tool result length** (`tool_result_chars`, 1,000–200,000 characters; empty: 6,000), set in the edit window for every provider or as `spec.maxTokens` and `spec.toolResultChars` of a `ModelConfig` resource (with its CA certificate as `spec.caCert`). They are kept in the setting's options, and the tool result length is never sent to the provider. A longer result is cut at that length and the model reads its start; `k8s_get_pod_logs`, `logfiles` and `nodes_log` keep the end instead, where the newest lines are. The Claude subscription leaves the answer length to Claude Code.
   - Each card says what the server runs on it now — Chat, Floating assistant, History summaries, Alert investigations — worked out by the rules ai-service picks models with. "Active" is the one that runs the chat.
   - OpenAI and Azure OpenAI get the answer length as `max_completion_tokens`: their reasoning models (o-series, GPT-5) refuse `max_tokens`. When a model answers 400 naming a parameter it does not take (reasoning models refuse `temperature`, `top_p` and others), the request is sent again once without it, and that model is sent it no more.
 
@@ -231,7 +231,7 @@
     - Dashboard counts are counted only within the list (`scoped: true`). Nodes and PVs are 0.
     - The dashboard's issue check reads pods, workloads and Warning events in each namespace of the list. Nodes, which such a grant cannot list, show as an info row saying they were not read.
   - AI tools and MCP require `namespace`, refuse `all_namespaces` even next to one of the grant's namespaces, and refuse cluster-wide tools: overview, node metrics, apply, create, API list and cluster settings.
-    - Five stay inside the grant by themselves, as their screens do, so they work without one: `issues`, `cost`, `k8s_find_resource`, `gitops_status` and `storage_summary`. `k8s_explain` and `clusters_list` read no object data.
+    - Seven stay inside the grant by themselves, as their screens do, so they work without one: `issues`, `cost`, `k8s_find_resource`, `gitops_status`, `storage_summary`, `timeline` and `gpu`. `k8s_explain` and `clusters_list` read no object data.
   - The cluster's Prometheus answers for the whole cluster, so its reads answer 403 to such grants. This covers `/prometheus/query`, `query_range`, `metrics`, `labels`, `rules`, `targets` and `/gpu/metrics`, whether the cluster reaches the store through the API server's proxy or as an external store with Kubeast's own credentials. Alerts and silences are refused the same way.
   - An external store reads with Kubeast's own credentials, so the cluster's RBAC never sees the caller: reading it takes `resource.pod.read` on that cluster, as the log store does. Through the API server's proxy the cluster decides.
     - `/cluster/features` reports `prometheus.namespaceLimited`, and the drawers' Prometheus sections then say the metrics need a grant on the whole cluster instead of asking.

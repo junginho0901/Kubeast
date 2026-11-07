@@ -169,6 +169,10 @@ var argRules = map[string]argCheck{
 	"path": checkContainerPath,
 	// The Timeline's event types: its API lists both for any other word.
 	"event_type": checkEnum("Normal", "Warning"),
+	// Policy Reports: the engine that wrote a result ("source" above is a node's log source) and the screen's column order.
+	"policy_source": checkPrintable(253),
+	"sort":          checkEnum("result", "policy", "namespace", "name"),
+	"dir":           checkEnum("asc", "desc"),
 }
 
 // validateToolArgs rejects any argument that would not be read by kubectl as

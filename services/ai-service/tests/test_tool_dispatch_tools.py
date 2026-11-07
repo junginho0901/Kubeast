@@ -177,7 +177,13 @@ async def test_second_batch_feature_tools_pass_declared_arguments_only():
         ("policy_reports", {"view": "results", "results": "fail,warn", "limit": 50, "force_refresh": True}, {"view": "results", "results": "fail,warn", "limit": 50}),
         ("cost", {"window": "7d", "aggregate": "controller", "namespace": " shop "}, {"window": "7d", "aggregate": "controller", "namespace": "shop"}),
         ("optimization", {"namespace": "shop", "window_hours": 48}, {"namespace": "shop", "window_hours": 48}),
+        (
+            "policy_reports",
+            {"view": "results", "policy_source": "kyverno", "offset": 100, "sort": "policy", "dir": "desc", "source": "x"},
+            {"view": "results", "policy_source": "kyverno", "offset": 100, "sort": "policy", "dir": "desc"},
+        ),
         ("can_i", {"verb": "delete", "resource": "pods", "namespace": "shop", "group": ""}, {"verb": "delete", "resource": "pods", "namespace": "shop"}),
+        ("can_i", {"verb": "delete", "resource": "configmaps", "namespace": "shop", "name": " app-config "}, {"verb": "delete", "resource": "configmaps", "namespace": "shop", "name": "app-config"}),
         ("resource_graph", {"namespace": "shop", "depth": 3}, {"namespace": "shop"}),
         (
             "timeline",

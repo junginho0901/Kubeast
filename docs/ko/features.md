@@ -21,7 +21,7 @@
   읽기/쓰기/관리 툴은 **사용자 권한(JWT)에 따라 허용됩니다**.
   없는 이름, 없는 종류, 없는 기능(metrics-server 등)은 kubectl 오류 대신 **`not_found`(비슷한 이름 목록 포함)·`unknown_kind`·`unavailable` 결과**로 돌아옵니다.
   그래서 AI는 네임스페이스를 바꿔 가며 되묻지 않고, 한 번 찾아본 뒤 어디를 봤는지 말하고 질문합니다. 비슷한 이름은 그 사람의 네임스페이스 범위 안에서만 찾습니다.
-  - 읽기 도구 13종에는 다음이 들어 있습니다.
+  - 읽기 도구 52종에는 다음이 들어 있습니다.
     - 이름 조각이나 레이블로 여러 종류와 네임스페이스를 한 번에 찾는 `k8s_find_resource`
     - API 스키마를 묻는 `k8s_explain`
     - 죽은 컨테이너의 직전 로그(`previous`), 기간, 전체 컨테이너, 텍스트 필터를 지원하는 Pod 로그
@@ -58,10 +58,10 @@
     - `traces_search`·`traces_get`·`traces_tags`·`traces_metrics`·`traces_compare` — 트레이스 저장소에 TraceQL 질의
       - 느리거나 실패한 요청, 한 트레이스의 스팬, 속성 찾기, 요청 수·오류율·p95 추이 그래프, 빠른·느린 표본
     - `helm_read` — 릴리스 목록·values·manifest·이력·리소스·이미지·리비전·두 리비전 diff, **읽기 전용**. 화면에서 원문을 볼 수 있는 사람도 언제나 가린 본을 읽습니다.
-    - `policy_reports` — PolicyReport 요약·결과
-    - `cost` — OpenCost 배분
+    - `policy_reports` — PolicyReport 요약·결과. 결과는 화면처럼 쪽 단위로 읽고 출처와 정렬을 고를 수 있습니다
+    - `cost` — OpenCost 배분. 합계는 답한 행을 더한 값입니다
     - `optimization` — requests 대비 사용량·권고
-    - `can_i` — 그 사용자가 할 수 있는지 확인
+    - `can_i` — 그 사용자가 할 수 있는지 확인. 종류 전체나 개체 하나를 물을 수 있습니다
     - `network_policy_check` — NetworkPolicy가 연결을 허용하는지와 그렇게 정한 정책·규칙([NetworkPolicy 보기와 연결 확인](#networkpolicy-보기와-연결-확인))
     - `network_flows` — 클러스터의 Hubble Relay가 본 네임스페이스·파드·워크로드의 최근 연결. 연결별로 합치고, 막힌 이유와 판정한 정책을 붙입니다([최근 흐름](#최근-흐름-hubble)).
     - `network_drops` — Hubble 에이전트가 센 네임스페이스·파드·워크로드의 차단 수를 클러스터의 Prometheus에서 사유·상대별로, 최대 1일 전까지([네트워크 차단](#네트워크-차단-hubble-지표)).
@@ -135,7 +135,7 @@
 - **모델 설정** — `ModelConfig` CRD와 DB로 관리하고, Admin UI에서 추가하고 테스트합니다.
   등급(`tier`, CRD `spec.tier`)이 `economy`인 설정을 켜 두면 채팅 이력 요약과 플로팅 어시스턴트는 보통 더 싼 그 모델을 쓰고, 채팅은 기본 모델을 그대로 씁니다.
   어느 쪽인지는 스트림의 `model_info.tier`로 알 수 있습니다. economy 설정이 없거나 키가 없어 쓸 수 없으면 둘 다 기본 모델을 씁니다.
-  - 설정마다 **답 최대 길이**(`max_tokens`, 비우면 채팅 답 4,096 · 알림 조사 한 단계 2,048)와 **도구 결과 최대 길이**(`tool_result_chars`, 1,000~200,000자, 비우면 6,000)를 편집 창(모든 공급자)이나 `ModelConfig` 리소스의 `spec.maxTokens`·`spec.toolResultChars`로 정할 수 있습니다(리소스의 CA 인증서는 `spec.caCert`). 설정의 옵션에 저장하며, 도구 결과 최대 길이는 공급자에 보내지 않습니다. 구독은 Claude Code가 답 길이를 정합니다.
+  - 설정마다 **답 최대 길이**(`max_tokens`, 비우면 채팅 답 4,096 · 알림 조사 한 단계 2,048)와 **도구 결과 최대 길이**(`tool_result_chars`, 1,000~200,000자, 비우면 6,000)를 편집 창(모든 공급자)이나 `ModelConfig` 리소스의 `spec.maxTokens`·`spec.toolResultChars`로 정할 수 있습니다(리소스의 CA 인증서는 `spec.caCert`). 설정의 옵션에 저장하며, 도구 결과 최대 길이는 공급자에 보내지 않습니다. 더 긴 결과는 그 길이에서 잘려 모델이 앞부분을 읽습니다. `k8s_get_pod_logs`, `logfiles`, `nodes_log`는 최신 줄이 있는 끝부분을 남깁니다. 구독은 Claude Code가 답 길이를 정합니다.
   - 카드마다 서버가 지금 그 설정으로 돌리는 곳(채팅 · 플로팅 어시스턴트 · 이력 요약 · 알림 조사)을 ai-service가 모델을 고르는 규칙 그대로 계산해 보여 줍니다. "활성"은 채팅을 돌리는 설정입니다.
   - OpenAI·Azure OpenAI에는 답 길이를 `max_completion_tokens`로 보냅니다. 추론 모델(o 시리즈, GPT-5)은 `max_tokens`를 받지 않습니다. 모델이 받지 않는 매개변수를 400으로 지목하면(추론 모델은 `temperature`·`top_p` 등을 거부) 그것을 빼고 한 번 다시 보내고, 그 모델에는 이후로도 보내지 않습니다.
 
@@ -230,7 +230,7 @@
     - "전체 네임스페이스" 조회는 목록의 네임스페이스를 하나씩 조회해 합칩니다.
     - 대시보드 개수도 그 안에서만 셉니다(`scoped: true`, 노드·PV는 0).
   - AI 도구와 MCP는 `namespace`를 반드시 받고, 부여된 네임스페이스와 함께 주어도 `all_namespaces`는 거부하며, 클러스터 전체 도구(overview·노드 메트릭·apply·create·API 목록·클러스터 설정)는 거부합니다.
-    - 다섯 도구는 화면처럼 스스로 그 범위 안에서만 읽으므로 네임스페이스 없이도 됩니다: `issues`, `cost`, `k8s_find_resource`, `gitops_status`, `storage_summary`. `k8s_explain`과 `clusters_list`는 객체 데이터를 읽지 않습니다.
+    - 일곱 도구는 화면처럼 스스로 그 범위 안에서만 읽으므로 네임스페이스 없이도 됩니다: `issues`, `cost`, `k8s_find_resource`, `gitops_status`, `storage_summary`, `timeline`, `gpu`. `k8s_explain`과 `clusters_list`는 객체 데이터를 읽지 않습니다.
   - 클러스터 쪽 신원은 `kubeast:role:<slug>` 그룹이므로 **그 네임스페이스마다 RoleBinding을 묶기 전에는 클러스터가 거부합니다**.
     차트 `auth.impersonation.customRoles`에 `{name: Read, namespaces: [a, b], clusterRoles: [view]}`처럼 적으면 그 RoleBinding이 렌더됩니다(등록한 클러스터마다 적용하세요).
   - 화면에서는 네임스페이스 선택기에 부여된 네임스페이스만 보이고, 권한 없음 안내에 "이 클러스터에서는 네임스페이스 a, b만"이 붙으며, 실시간 갱신도 네임스페이스별로 구독합니다.

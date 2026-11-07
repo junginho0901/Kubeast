@@ -14,11 +14,52 @@ from typing import Dict, List, Optional, Tuple
 LLM_RESULT_CHARS = 6000
 
 
-def _truncate_tool_result_for_llm(content: Optional[str], max_chars: int = LLM_RESULT_CHARS) -> str:
+# A log ends with its newest line, so these keep the end: tool -> the field of its JSON answer holding the log (None: the answer is the log).
+_LOG_TOOLS = {"k8s_get_pod_logs": None, "logfiles": "content", "nodes_log": "text"}
+
+
+def _end_of_log(text: str, max_chars: int) -> str:
+    """The last max_chars of a log, from the start of a line unless its last line alone is longer."""
+    if max_chars <= 0:
+        return ""
+    end = text[-max_chars:]
+    newline = end.find("\n")
+    return end[newline + 1:] if 0 <= newline < len(end) - 1 else end
+
+
+def _cut_log_answer(content: str, max_chars: int, field: Optional[str]) -> Optional[str]:
+    """A log tool's answer cut to the model's length, or None when it holds no log (a list of files)."""
+    if field is None:
+        return "... (earlier lines truncated for LLM) ...\n" + _end_of_log(content, max_chars)
+    try:
+        answer = json.loads(content)
+    except ValueError:
+        return None
+    if not isinstance(answer, dict) or not isinstance(answer.get(field), str):
+        return None
+    log = answer[field]
+    shape = {**answer, field: "", "truncated": True, "truncated_for_llm": "earlier lines left out"}
+    room = max_chars - len(json.dumps(shape, ensure_ascii=False, indent=2))
+    if room <= 0:
+        return None
+    # a log's quotes and line breaks take more room as JSON than as text
+    size = room
+    kept = _end_of_log(log, size)
+    while size > 0 and len(json.dumps(kept, ensure_ascii=False)) - 2 > room:
+        size = size * 4 // 5
+        kept = _end_of_log(log, size)
+    return json.dumps({**shape, field: kept}, ensure_ascii=False, indent=2)
+
+
+def _truncate_tool_result_for_llm(content: Optional[str], max_chars: int = LLM_RESULT_CHARS, tool: Optional[str] = None) -> str:
     """Tool 결과를 LLM 입력용으로 축약 (max_chars = 모델의 tool_result_chars, 없으면 6000)"""
     if not isinstance(content, str):
         content = "" if content is None else str(content)
     if len(content) > max_chars:
+        if tool in _LOG_TOOLS:
+            cut = _cut_log_answer(content, max_chars, _LOG_TOOLS[tool])
+            if cut is not None:
+                return cut
         return content[:max_chars] + "\n... (truncated for LLM) ..."
     return content
 
