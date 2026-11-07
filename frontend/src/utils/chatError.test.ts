@@ -19,6 +19,11 @@ describe('chatErrorText', () => {
     expect(chatErrorText(en_t, 'x', 'budgetUserDaily', { used: 250000, limit: 200000 })).toContain(`over the daily budget of ${(200000).toLocaleString()}`)
   })
 
+  it('says a conversation that is gone in the screen language', async () => {
+    expect(chatErrorText(await tFor('ko'), 'Session not found', 'sessionNotFound')).toBe('이 대화는 더 이상 없습니다. 새 대화를 시작하세요.')
+    expect(chatErrorText(await tFor('en'), 'Session not found', 'sessionNotFound')).toBe('This conversation no longer exists. Start a new one.')
+  })
+
   it('names the provider of a failed model call in the screen language, the same wording on every provider', async () => {
     const args = { provider: 'Claude subscription', detail: 'Claude Code failed: timeout' }
     expect(chatErrorText(await tFor('ko'), 'AI model call failed (Claude subscription): Claude Code failed: timeout', 'modelCall', args))

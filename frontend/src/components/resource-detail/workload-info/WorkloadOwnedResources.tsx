@@ -6,6 +6,7 @@ import { fmtRel } from '../detailFormat'
 import { usePagination } from '../usePagination'
 import { ResourceLink } from '../ResourceLink'
 import type { OwnedResources } from './useOwnedWatchedResources'
+import { ownedDisplayJobs } from './workloadLayer'
 import { ownedDisplayPods } from './workloadPodsLayer'
 
 interface Props {
@@ -46,9 +47,7 @@ export default function WorkloadOwnedResources({
   const showDeploymentRS = isDeployment && rsEnabled
   // CronJob owned Jobs — prefer live hook result, fallback to prop (parent's
   // staleTime-only query) until first watch tick.
-  const displayJobs = jobsEnabled && liveJobs.length > 0
-    ? liveJobs
-    : (Array.isArray(ownedJobs) ? ownedJobs : [])
+  const displayJobs = ownedDisplayJobs({ jobs: liveJobs, jobsEnabled }, ownedJobs)
   const showOwnedJobs = isCronJob && displayJobs.length > 0
 
   // Pre-sort/pre-slice computed lists for pagination. Keeps existing display

@@ -1,7 +1,6 @@
 import { InfoSection, InfoRow } from '../DetailCommon'
 import { ResourceLink } from '../ResourceLink'
-import { boolText } from './workloadInfoFormatters'
-import { replicaSetOwnerRow } from '../netstoreDetail'
+import { workloadSettingsInfo } from './workloadLayer'
 
 interface Props {
   namespace?: string
@@ -32,6 +31,10 @@ export default function WorkloadStrategySection({
   showReplicaSetSettings,
   daemonSetStatus,
 }: Props) {
+  const kind = showDeploymentSettings ? 'Deployment' : showStatefulSetSettings ? 'StatefulSet' : showDaemonSetSettings ? 'DaemonSet' : 'ReplicaSet'
+  const settings = workloadSettingsInfo(kind, describe, spec, daemonSetStatus)
+  const row = (label: string, value: string | undefined) => value && <InfoRow label={label} value={value} />
+
   return (
     <>
       {showStrategy && (
@@ -52,46 +55,44 @@ export default function WorkloadStrategySection({
           <div className="space-y-2">
             {showDeploymentSettings && (
               <>
-                {describe?.revision && <InfoRow label="Revision" value={String(describe.revision)} />}
-                {describe?.paused != null && <InfoRow label="Paused" value={boolText(describe.paused)} />}
-                {describe?.min_ready_seconds != null && <InfoRow label="Min Ready Seconds" value={String(describe.min_ready_seconds)} />}
-                {describe?.progress_deadline_seconds != null && <InfoRow label="Progress Deadline" value={`${String(describe.progress_deadline_seconds)}s`} />}
-                {describe?.revision_history_limit != null && <InfoRow label="Revision History Limit" value={String(describe.revision_history_limit)} />}
+                {row('Revision', settings.revision)}
+                {row('Paused', settings.paused)}
+                {row('Min Ready Seconds', settings.min_ready_seconds)}
+                {row('Progress Deadline', settings.progress_deadline)}
+                {row('Revision History Limit', settings.revision_history_limit)}
               </>
             )}
             {showStatefulSetSettings && (
               <>
-                {(describe?.service_name || spec.serviceName) && (
+                {settings.service_name && (
                   <InfoRow
                     label="Service Name"
-                    value={<ResourceLink kind="Service" name={String(describe?.service_name || spec.serviceName)} namespace={namespace} />}
+                    value={<ResourceLink kind="Service" name={settings.service_name} namespace={namespace} />}
                   />
                 )}
-                {(describe?.pod_management_policy || spec.podManagementPolicy) && (
-                  <InfoRow label="Pod Management Policy" value={String(describe?.pod_management_policy || spec.podManagementPolicy)} />
-                )}
-                {describe?.min_ready_seconds != null && <InfoRow label="Min Ready Seconds" value={String(describe.min_ready_seconds)} />}
-                {describe?.revision_history_limit != null && <InfoRow label="Revision History Limit" value={String(describe.revision_history_limit)} />}
-                {describe?.current_revision && <InfoRow label="Current Revision" value={String(describe.current_revision)} />}
-                {describe?.update_revision && <InfoRow label="Update Revision" value={String(describe.update_revision)} />}
-                {describe?.collision_count != null && <InfoRow label="Collision Count" value={String(describe.collision_count)} />}
+                {row('Pod Management Policy', settings.pod_management_policy)}
+                {row('Min Ready Seconds', settings.min_ready_seconds)}
+                {row('Revision History Limit', settings.revision_history_limit)}
+                {row('Current Revision', settings.current_revision)}
+                {row('Update Revision', settings.update_revision)}
+                {row('Collision Count', settings.collision_count)}
               </>
             )}
             {showDaemonSetSettings && (
               <>
-                {describe?.min_ready_seconds != null && <InfoRow label="Min Ready Seconds" value={String(describe.min_ready_seconds)} />}
-                {describe?.revision_history_limit != null && <InfoRow label="Revision History Limit" value={String(describe.revision_history_limit)} />}
-                {describe?.collision_count != null && <InfoRow label="Collision Count" value={String(describe.collision_count)} />}
-                <InfoRow label="Misscheduled Pods" value={String(daemonSetStatus.misscheduled)} />
-                <InfoRow label="Unavailable Pods" value={String(daemonSetStatus.unavailable)} />
+                {row('Min Ready Seconds', settings.min_ready_seconds)}
+                {row('Revision History Limit', settings.revision_history_limit)}
+                {row('Collision Count', settings.collision_count)}
+                {row('Misscheduled Pods', settings.misscheduled_pods)}
+                {row('Unavailable Pods', settings.unavailable_pods)}
               </>
             )}
             {showReplicaSetSettings && (
               <>
-                {replicaSetOwnerRow(describe) && <InfoRow label="Owner" value={replicaSetOwnerRow(describe)!} />}
-                {describe?.revision && <InfoRow label="Revision" value={String(describe.revision)} />}
-                {describe?.min_ready_seconds != null && <InfoRow label="Min Ready Seconds" value={String(describe.min_ready_seconds)} />}
-                {describe?.fully_labeled_replicas != null && <InfoRow label="Fully Labeled Replicas" value={String(describe.fully_labeled_replicas)} />}
+                {row('Owner', settings.owner)}
+                {row('Revision', settings.revision)}
+                {row('Min Ready Seconds', settings.min_ready_seconds)}
+                {row('Fully Labeled Replicas', settings.fully_labeled_replicas)}
               </>
             )}
           </div>

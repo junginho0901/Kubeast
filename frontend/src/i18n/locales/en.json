@@ -1785,7 +1785,8 @@
       "streamHttp": "The chat request failed (HTTP {{status}}): {{detail}}",
       "streamHttpStatus": "The chat request failed (HTTP {{status}}).",
       "streamCut": "The connection closed before the answer finished, so the text above may be incomplete. Ask again for the whole answer.",
-      "streamEmpty": "The connection closed without an answer. Ask again."
+      "streamEmpty": "The connection closed without an answer. Ask again.",
+      "sessionNotFound": "This conversation no longer exists. Start a new one."
     },
     "errorAnswer": "Sorry, an error occurred while generating the answer: {{error}}",
     "errorSessionCreate": "Failed to create session: {{error}}",

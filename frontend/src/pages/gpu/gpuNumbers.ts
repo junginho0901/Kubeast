@@ -147,14 +147,17 @@ export function statusNamesError(status: string): boolean {
 
 const ended = (p: GPUPodInfo) => p.phase === 'Succeeded' || p.phase === 'Failed'
 
-// The GPU Pods cards: Running and Pending by phase, Failed the phase or a status naming an error (the Pods list's
-// Error card), and the GPUs still asked for — of the pods not Succeeded or Failed, on a node or waiting for one.
+// The GPU Pods cards, a pod in one as on the Pods list: Failed the phase or a status naming an error (its Error card),
+// then Running and Pending by phase; and the GPUs still asked for — of the pods not Succeeded or Failed, on a node or
+// waiting for one.
 export function gpuPodCounts(pods: GPUPodInfo[]) {
+  const failing = (p: GPUPodInfo) => p.phase === 'Failed' || statusNamesError(p.status)
+  const healthy = pods.filter((p) => !failing(p))
   return {
     total: pods.length,
-    running: pods.filter((p) => p.phase === 'Running').length,
-    pending: pods.filter((p) => p.phase === 'Pending').length,
-    failed: pods.filter((p) => p.phase === 'Failed' || statusNamesError(p.status)).length,
+    running: healthy.filter((p) => p.phase === 'Running').length,
+    pending: healthy.filter((p) => p.phase === 'Pending').length,
+    failed: pods.length - healthy.length,
     requested: pods.filter((p) => !ended(p)).reduce((sum, p) => sum + p.gpu_requested, 0),
     namespaces: new Set(pods.map((p) => p.namespace)).size,
   }

@@ -357,6 +357,7 @@ func issuesFromWorkloads(deployments, statefulsets, daemonsets []map[string]inte
 // last scheduled run has not succeeded. FailureTarget has failed too: the
 // controller is only waiting for its last pods to leave. Only a Running Job
 // retries: the pods left on a suspended, deleted or finishing one are leaving.
+// Between two tries it has no active pod and has not given up, so it stays.
 func issuesFromJobs(jobs, cronjobs []map[string]interface{}) []Issue {
 	var out []Issue
 	for _, j := range jobs {
@@ -365,7 +366,7 @@ func issuesFromJobs(jobs, cronjobs []map[string]interface{}) []Issue {
 		switch status := mapStr(j, "status"); {
 		case status == "Failed" || status == "FailureTarget":
 			out = append(out, Issue{ID: issueID("Job", ns, name), Kind: "Job", Namespace: ns, Name: name, Severity: severityWarning, Reason: status, Message: fmt.Sprintf("failed %d, succeeded %d", failed, mapInt(j, "succeeded")), Failed: failed})
-		case status == "Running" && failed > 0 && mapInt(j, "active") > 0:
+		case status == "Running" && failed > 0:
 			out = append(out, Issue{ID: issueID("Job", ns, name), Kind: "Job", Namespace: ns, Name: name, Severity: severityInfo, Reason: "Retrying", Message: fmt.Sprintf("failed %d, active %d", failed, mapInt(j, "active")), Failed: failed})
 		}
 	}

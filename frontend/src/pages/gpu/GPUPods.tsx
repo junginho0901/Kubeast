@@ -142,7 +142,7 @@ export default function GPUPods() {
   const aiSnapshot = useMemo(() => {
     if (!data) return null
     const total = pods.length
-    const { requested: totalGpuRequested } = gpuPodCounts(pods)
+    const { requested: totalGpuRequested, running, pending, failed, namespaces } = gpuPodCounts(pods)
     const notRunning = gpuPodsNotRunning(pods).length
     const prefix = notRunning > 0 ? '⚠️ ' : ''
     return {
@@ -152,7 +152,7 @@ export default function GPUPods() {
         filters: { search: searchQuery || undefined },
         // each company's pods and the GPUs they still ask for; the charts' statuses and nodes, every one
         stats: {
-          total, total_gpu_requested: totalGpuRequested, not_running: notRunning, by_vendor: gpuPodVendorCounts(pods),
+          total, running, pending, failed, namespaces, total_gpu_requested: totalGpuRequested, not_running: notRunning, by_vendor: gpuPodVendorCounts(pods),
           by_status: stats.topStatuses.map(([status, n]) => ({ status, pods: n })),
           by_node: nodeGpuUsage.map(([node, e]) => ({ node: node || null, pods: e.podCount, gpus: e.totalGpu })),
         },

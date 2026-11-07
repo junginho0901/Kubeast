@@ -168,14 +168,14 @@ func gpuDashboardNumbers(result, d map[string]interface{}) {
 	podsOf, askedOf := map[string]int{}, map[string]int{}
 	for _, pod := range pods {
 		phase := gpuString(pod, "phase")
-		switch phase {
-		case "Running":
-			running++
-		case "Pending":
-			pending++
-		}
-		if phase == "Failed" || gpuStatusNamesError(gpuString(pod, "status")) {
+		// a pod in one card, as gpuNumbers.ts gpuPodCounts
+		switch {
+		case phase == "Failed" || gpuStatusNamesError(gpuString(pod, "status")):
 			failed++
+		case phase == "Running":
+			running++
+		case phase == "Pending":
+			pending++
 		}
 		if !gpuPodEnded(pod) {
 			requested += gpuInt(pod, "gpu_requested")

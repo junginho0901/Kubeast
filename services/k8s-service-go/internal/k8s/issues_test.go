@@ -193,6 +193,33 @@ func TestIssuesFromJobs_OnlyARunningJobIsRetrying(t *testing.T) {
 	}
 }
 
+// The job controller waits between tries with no pod active: the Job has not given up, so its row does not leave the
+// issues until the next try starts, as the floating chat goes on saying it retries (jobHelpers.ts isRetrying).
+func TestIssuesFromJobs_AJobBetweenTriesStaysRetrying(t *testing.T) {
+	job := func(status string, failed, active int32) m {
+		return m{"namespace": "a", "name": "j", "status": status, "failed": failed, "succeeded": int32(0), "active": active}
+	}
+	got := issuesFromJobs(toMaps([]m{job("Running", 2, 0)}), nil)
+	if len(got) != 1 {
+		t.Fatalf("a Running Job between tries: got %d issues: %+v", len(got), got)
+	}
+	if is := got[0]; is.Reason != "Retrying" || is.Severity != severityInfo || is.Failed != 2 || is.Message != "failed 2, active 0" {
+		t.Errorf("a Running Job between tries: %+v", is)
+	}
+	for name, j := range map[string]m{
+		"running with no failed pod":       job("Running", 0, 1),
+		"running with nothing started yet": job("Running", 0, 0),
+		"complete after a failed pod":      job("Complete", 2, 0),
+		"suspended after a failed pod":     job("Suspended", 2, 0),
+		"being deleted after a failed pod": job("Terminating", 2, 0),
+		"success met after a failed pod":   job("SuccessCriteriaMet", 2, 0),
+	} {
+		if got := issuesFromJobs(toMaps([]m{j}), nil); len(got) != 0 {
+			t.Errorf("%s: %+v, want no issue", name, got)
+		}
+	}
+}
+
 func TestIssuesFromHPAsAndPVCs(t *testing.T) {
 	hpas := []m{
 		{"namespace": "a", "name": "web", "max_replicas": int32(5), "current_replicas": int32(5), "desired_replicas": int32(5)},
