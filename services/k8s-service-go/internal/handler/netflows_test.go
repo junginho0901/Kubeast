@@ -202,6 +202,63 @@ func TestNetworkFlowsPassesTheScope(t *testing.T) {
 	}
 }
 
+// Where the Relay runs is the cluster's, outside what a grant limited to namespaces reads: its answer has no such place,
+// and the audit row, for those who read the log, still does.
+func TestNetworkFlowsLeavesTheRelaysPlaceOutForAGrantLimitedToNamespaces(t *testing.T) {
+	f := newNetflowsFixture(t, 5)
+	scoped := flowReader
+	scoped.Namespaces = map[string][]string{"self": {"demo"}}
+	w := f.get("/api/v1/namespaces/demo/networkflows", scoped)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", w.Code, w.Body)
+	}
+	var answer map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &answer); err != nil {
+		t.Fatal(err)
+	}
+	if relay, there := answer["relay"]; there {
+		t.Errorf("the answer names the Relay: %v", relay)
+	}
+	if strings.Contains(w.Body.String(), "hubble-relay") {
+		t.Errorf("the answer holds the Relay's name: %s", w.Body)
+	}
+	if _, after := f.lastRow(t); after["relay"] != "kube-system/hubble-relay:443" {
+		t.Errorf("the row lost the Relay: %v", after)
+	}
+
+	whole := f.get("/api/v1/namespaces/demo/networkflows", flowReader)
+	var res netflows.Result
+	if err := json.Unmarshal(whole.Body.Bytes(), &res); err != nil || res.Relay != "kube-system/hubble-relay:443" {
+		t.Errorf("a reader of the whole cluster reads relay %q: %v", res.Relay, err)
+	}
+}
+
+// The cluster's refusal says the same to that grant: what is missing, without where the Relay runs, which the row keeps
+// for whoever grants it. A reader of the whole cluster reads the place in the answer.
+func TestNetworkFlowsRefusalLeavesTheRelaysPlaceOutForAGrantLimitedToNamespaces(t *testing.T) {
+	f := newNetflowsFixture(t, 5)
+	f.h.netflowsCanI = func(context.Context, netflows.Target) (bool, error) { return false, nil }
+	scoped := flowReader
+	scoped.Namespaces = map[string][]string{"self": {"demo"}}
+	w := f.get("/api/v1/namespaces/demo/networkflows", scoped)
+	if w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), "services/proxy") {
+		t.Fatalf("status %d: %s", w.Code, w.Body)
+	}
+	for _, place := range []string{"hubble-relay", "kube-system"} {
+		if strings.Contains(w.Body.String(), place) {
+			t.Errorf("the answer holds %q: %s", place, w.Body)
+		}
+	}
+	row, _ := f.lastRow(t)
+	if !strings.Contains(row.Error, "https:hubble-relay:443") || !strings.Contains(row.Error, "kube-system") {
+		t.Errorf("the row lost the place: %q", row.Error)
+	}
+	whole := f.get("/api/v1/namespaces/demo/networkflows", flowReader)
+	if whole.Code != http.StatusForbidden || !strings.Contains(whole.Body.String(), "https:hubble-relay:443") {
+		t.Errorf("a reader of the whole cluster: status %d: %s", whole.Code, whole.Body)
+	}
+}
+
 // A read the audit store cannot record is refused before the Relay is asked.
 func TestNetworkFlowsWithoutAudit(t *testing.T) {
 	f := newNetflowsFixture(t, 5)

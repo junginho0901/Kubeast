@@ -315,8 +315,9 @@ type Result struct {
 	Cluster string `json:"cluster"`
 	Mode    string `json:"mode"`
 	// Provider is what served the flows: hubble (a Hubble Relay) or calico (Calico's Whisker, at Relay).
-	Provider  string `json:"provider,omitempty"`
-	Relay     string `json:"relay"`
+	Provider string `json:"provider,omitempty"`
+	// Relay is where the flows came from; a grant limited to namespaces reads no place outside them, so its answer has none.
+	Relay     string `json:"relay,omitempty"`
 	Namespace string `json:"namespace"`
 	Kind      string `json:"kind,omitempty"`
 	Name      string `json:"name,omitempty"`

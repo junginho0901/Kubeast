@@ -70,6 +70,8 @@ func (a *helmAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		writeAPIJSON(w, http.StatusOK, list)
+	case strings.HasPrefix(r.URL.Path, secrets+"/") && r.Method == http.MethodGet && a.secrets[strings.TrimPrefix(r.URL.Path, secrets+"/")] != nil:
+		writeAPIJSON(w, http.StatusOK, a.secrets[strings.TrimPrefix(r.URL.Path, secrets+"/")])
 	case strings.HasPrefix(r.URL.Path, secrets) && (r.Method == http.MethodPost || r.Method == http.MethodPut):
 		body, _ := io.ReadAll(r.Body)
 		s := &corev1.Secret{}

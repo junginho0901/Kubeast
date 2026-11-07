@@ -241,7 +241,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
 
       <InfoSection title={`${tr('secretInfo.data', 'Data')} (${filteredDataKeys.length}${dataSearch ? ` / ${dataKeys.length}` : ''})`}>
         {!canReveal && (
-          <p className="text-[11px] text-amber-400/80 mb-2">{tr('secretInfo.maskedHint', 'Values are hidden for read-only users.')}</p>
+          <p className="text-[11px] text-amber-400/80 mb-2">{tr('secretInfo.maskedHint', 'Values are hidden without the resource.secret.reveal permission.')}</p>
         )}
 
         {dataKeys.length > DATA_PER_PAGE && (

@@ -2054,7 +2054,8 @@
     "loadError": "Could not load the policy reports",
     "violationsError": "Could not load the policy reports: {{error}}",
     "selectorError": "Results that pick resources by label could not be checked against this object: {{error}}",
-    "clusterReportsError": "Results the cluster reports hold about this object are not listed: {{error}}"
+    "clusterReportsError": "Results the cluster reports hold about this object are not listed: {{error}}",
+    "clusterReportsNotCounted": "Results the cluster reports hold are not counted here: {{error}}"
   },
   "monitoring": {
     "title": "Monitoring",
@@ -3522,7 +3523,9 @@
     "noMatchingKeys": "No matching keys.",
     "noData": "No data entries.",
     "ownerReferences": "Owner References",
-    "maskedHint": "Values are hidden for read-only users."
+    "maskedHint": "Values are hidden without the resource.secret.reveal permission.",
+    "yamlMaskedNote": "A value shown as *** stays as it is when you save. To change one, write the new value over it.",
+    "appliedKeptMasked": "Applied. Hidden values left as they were: {{count}}"
   },
   "crdPage": {
     "title": "CustomResourceDefinitions",
@@ -3943,7 +3946,9 @@
       "subtitle": "{{namespace}}/{{name}} — chart version unchanged; values only",
       "noChange": "No changes will be applied.",
       "apply": "Apply upgrade",
-      "applying": "Upgrading..."
+      "applying": "Upgrading...",
+      "maskedNote": "A value shown as <REDACTED:…> stays as it is while its line does. Write over it to change it, or delete the line to remove it.",
+      "keptMasked": "Hidden values stay as they are: {{names}}"
     },
     "test": {
       "button": "Run tests",

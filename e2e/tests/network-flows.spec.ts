@@ -114,7 +114,10 @@ test.describe('Network flows (Hubble Relay)', () => {
     const scoped = await user(request, 'scoped', { role: 'Read', namespaces: [NS] })
     const { status, body } = await flows(request, scoped.token, { kind: 'Deployment', name: 'web' })
     expect(status, JSON.stringify(body)).toBe(403)
-    expect(body.detail).toContain('services/proxy https:hubble-relay:443')
+    expect(body.detail).toContain('services/proxy')
+    // where the Relay runs is not this grant's to read; the row keeps it for whoever grants it
+    expect(body.detail).not.toContain('hubble-relay')
+    expect(body.detail).not.toContain('kube-system')
   })
 
   test('the drawer shows the connections and a drop opens the NetworkPolicy check for it', async ({ page }) => {

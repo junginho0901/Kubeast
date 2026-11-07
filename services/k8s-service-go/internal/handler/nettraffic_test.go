@@ -403,7 +403,7 @@ func TestNetworkTrafficRelayNamesNothingOutsideTheScope(t *testing.T) {
 	if w.Code != http.StatusOK || !res.Redacted || len(res.Lines) == 0 {
 		t.Fatalf("status %d: %s", w.Code, w.Body)
 	}
-	for _, name := range []string{"secret-svc", "secret-deny", "node-secret", `"ops"`} {
+	for _, name := range []string{"secret-svc", "secret-deny", "node-secret", `"ops"`, "hubble-relay"} {
 		if strings.Contains(w.Body.String(), name) {
 			t.Errorf("%s in a limited reader's answer: %s", name, w.Body)
 		}

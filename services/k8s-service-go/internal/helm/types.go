@@ -141,6 +141,8 @@ type UpgradeResult struct {
 	Diff         string `json:"diff,omitempty"`
 	MaskedDiff   string `json:"-"` // see DiffResult
 	ChartVersion string `json:"chartVersion"`
+	// KeptMasked names where a value the caller could not read stayed as it was (masked_values.go).
+	KeptMasked []string `json:"kept_masked,omitempty"`
 }
 
 // TestResult captures the outcome of running the helm test hooks for a

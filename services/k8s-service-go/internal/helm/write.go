@@ -253,6 +253,26 @@ func (s *Service) Uninstall(ctx context.Context, namespace, name string, keepHis
 // drive the service directly do not have to hand-shape a
 // map[string]interface{}.
 func (s *Service) UpgradeValues(ctx context.Context, namespace, name, valuesYAML string, dryRun bool) (*UpgradeResult, error) {
+	return s.upgradeValues(ctx, namespace, name, valuesYAML, dryRun, nil)
+}
+
+// UpgradeValuesWithoutReveal is UpgradeValues for an editor who read the values masked (masked_values.go). It names where
+// a hidden value stayed, in the result and for the caller's audit row, and no value comes back in its error.
+func (s *Service) UpgradeValuesWithoutReveal(ctx context.Context, namespace, name, valuesYAML string, dryRun bool) (*UpgradeResult, []string, error) {
+	kept := &keptValues{}
+	result, err := s.upgradeValues(ctx, namespace, name, valuesYAML, dryRun, func(current *release.Release, vals map[string]interface{}) (map[string]interface{}, error) {
+		var restored map[string]interface{}
+		restored, kept = keepMaskedValues(vals, current.Config)
+		return restored, kept.refusal()
+	})
+	if err != nil {
+		return nil, nil, kept.scrub(err)
+	}
+	result.KeptMasked = kept.places
+	return result, kept.places, nil
+}
+
+func (s *Service) upgradeValues(ctx context.Context, namespace, name, valuesYAML string, dryRun bool, prepare func(*release.Release, map[string]interface{}) (map[string]interface{}, error)) (*UpgradeResult, error) {
 	current, err := s.fetchRelease(ctx, namespace, name, 0)
 	if err != nil {
 		return nil, err
@@ -265,6 +285,11 @@ func (s *Service) UpgradeValues(ctx context.Context, namespace, name, valuesYAML
 	if trimmed := trimSpace(valuesYAML); trimmed != "" {
 		if err := yaml.Unmarshal([]byte(valuesYAML), &vals); err != nil {
 			return nil, fmt.Errorf("%w: %w", ErrInvalidValues, err)
+		}
+	}
+	if prepare != nil {
+		if vals, err = prepare(current, vals); err != nil {
+			return nil, err
 		}
 	}
 

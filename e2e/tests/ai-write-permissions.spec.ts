@@ -231,6 +231,48 @@ test.describe('AI write tools ask for the screens permissions', () => {
     }
   })
 
+  test('what a tool read in place of a value cannot be written back, in any form, and the value stays', async ({ request }) => {
+    test.setTimeout(120_000)
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    await mcpWriteOn(request, admin)
+    const ns = `e2e-aiw-m-${stamp()}`
+    const value = 'fake-e2e-pass-masked'
+    const encoded = Buffer.from(value).toString('base64')
+    const stored = () => kubectl(`-n ${ns} get secret db -o 'jsonpath={.data.password}'`)
+    const doc = (body: string) => `apiVersion: v1\nkind: Secret\nmetadata:\n  name: db\n  namespace: ${ns}\n${body}\n`
+    try {
+      kubectl(`create namespace ${ns}`)
+      kubectl(`-n ${ns} create secret generic db --from-literal=password=${value}`)
+      const read = await callTool(request, admin, 'k8s_get_resource_yaml', { resource_type: 'secret', resource_name: 'db', namespace: ns })
+      expect(read.isError, read.content[0].text).toBeFalsy()
+      expect(read.content[0].text).toContain('<REDACTED:secret>')
+      expect(read.content[0].text).not.toContain(value)
+
+      const placeholder = Buffer.from('<REDACTED:secret>').toString('base64')
+      for (const [title, tool, args] of [
+        ['the answer as it read', 'k8s_apply_manifest', { yaml_content: read.content[0].text }],
+        ['under stringData', 'k8s_apply_manifest', { yaml_content: doc('stringData:\n  password: <REDACTED:secret>') }],
+        ['encoded for data', 'k8s_apply_manifest', { yaml_content: doc(`data:\n  password: ${placeholder}`) }],
+        ["the screen's mask", 'k8s_apply_manifest', { yaml_content: doc("stringData:\n  password: '***'") }],
+        ['a patch', 'k8s_patch_resource', { resource_type: 'secret', resource_name: 'db', namespace: ns, patch: { stringData: { password: '<REDACTED:secret>' } } }],
+      ] as [string, string, object][]) {
+        const refused = await callTool(request, admin, tool, args)
+        expect(refused.isError, `${title}: ${refused.content[0].text}`).toBe(true)
+        expect(refused.content[0].text, title).toContain('placeholder')
+        expect(refused.content[0].text, title).toContain('k8s_patch_resource')
+        expect(stored(), title).toBe(encoded)
+      }
+
+      // what the refusal says to do works, and leaves the value
+      const labelled = await callTool(request, admin, 'k8s_patch_resource', { resource_type: 'secret', resource_name: 'db', namespace: ns, patch: { metadata: { labels: { edited: 'yes' } } } })
+      expect(labelled.isError, labelled.content[0].text).toBeFalsy()
+      expect(kubectl(`-n ${ns} get secret db -o 'jsonpath={.metadata.labels.edited}'`)).toBe('yes')
+      expect(stored()).toBe(encoded)
+    } finally {
+      tryKubectl(`delete namespace ${ns} --wait=false`)
+    }
+  })
+
   test('a cluster Admin and a custom role holding the permissions are offered exec; a custom role without them, or a Write ceiling, is not', async ({ request }) => {
     test.setTimeout(240_000)
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)

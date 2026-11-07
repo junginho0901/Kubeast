@@ -109,6 +109,7 @@
   - `k8s_get_events`는 최신 이벤트를 최신 순으로 답합니다(기본 200, 최대 1,000). k8s-service가 쪽 단위로 읽으며, 더 많으면 전체 수를 함께 말합니다.
   - kubectl 목록이 도구 출력 상한(`TOOL_OUTPUT_MAX_BYTES`, 1 MiB)보다 길면 잘렸다고 답합니다. `k8s_jq_query`·`k8s_count`는 `too_large`, `k8s_tabular_query`는 "전체 수는 모름"으로 답하며, 읽기 오류나 틀린 개수를 내지 않습니다.
   - 쓰기 전에는 `k8s_diff`로 바뀔 내용을 먼저 보여 줍니다. 서버 dry-run 결과를 라이브 객체와 비교한 diff이며 **실제로 적용하지 않고**, 쓰기 권한이 있는 사용자에게만 보입니다. Secret이면 값 없이 바뀌는 키 이름만 보여 줍니다.
+  - AI가 값 대신 읽은 글자(`<REDACTED:…>`, Secret의 `***`, 인코딩한 꼴 포함)를 담은 쓰기는 그 글자가 저장되므로 누구든 거절합니다. 승인 카드 전에 걸리고 tool-server에서 한 번 더 걸립니다. 거절 글이 대신 할 일을 말합니다: 다른 칸만 패치하고, 새 값은 사용자에게 받습니다.
 - **플로팅 AI 위젯(AI Chat)** — 모든 페이지에 떠 있는 위젯이 **현재 화면 컨텍스트**(보고 있는 리소스)를 이해하고 답합니다.
   - 답할 때는 read-only 툴만 씁니다.
   - 첫 글자가 나오기 전에는 대기 점이, 끝난 답 옆에는 작은 복사 아이콘이 보이고 토큰 줄은 없습니다. 넓은 표는 상자 안에서 스크롤되고 머리 줄은 고정됩니다.
@@ -128,7 +129,7 @@
   Namespace별·워크로드별 비용 표(Cost 메뉴)와 최적화 표의 **월 비용·월 절약** 열을 보여 줍니다(`features.cost`).
   권한은 `resource.cost.read`이고, Namespace 범위로 부여받았다면 그 Namespace만 봅니다.
 - **정책 보고서(Policy Reports)** — Kyverno·Trivy Operator 등이 쓰는 `wgpolicyk8s.io` PolicyReport/ClusterPolicyReport를 읽어 보여 줍니다(`features.policyReports`).
-  - Security → Policy Reports: 정책별·Namespace별 pass/fail/warn/error/skip과 결과 행
+  - Security → Policy Reports: 정책별·Namespace별 pass/fail/warn/error/skip과 결과 행. Namespace 하나로 좁히면 이 화면과 AI의 `policy_reports`는 그 Namespace 개체에 대해 ClusterPolicyReport가 담은 결과도 드로어처럼 세고, 못 읽었으면 까닭을 말합니다.
   - 보고서가 가리킬 수 있는 개체의 모든 드로어: "Policy violations" 절(클러스터 범위 개체는 ClusterPolicyReport에서, 네임스페이스 개체는 그 네임스페이스의 보고서와 그 개체를 가리키는 ClusterPolicyReport에서, 그것을 못 읽었으면 까닭을 말함, 워크로드는 파드 포함, 워크로드·커스텀 리소스는 Kind·이름이 같은 다른 그룹 개체를 뺌)
   - CRD가 없으면 "설치되어 있지 않습니다"가 나옵니다.
   - 권한은 `resource.policyreport.read`이고, Namespace 범위로 부여받았다면 그 Namespace만 봅니다.
@@ -382,6 +383,7 @@ EKS 클러스터에 `features.networkFlowMonitor`를 켜면 Pod·워크로드 �
 
 - 릴리스 목록 / 상세 / 히스토리 / values / 매니페스트 / 리소스 보기
 - **Rollback · Upgrade · Uninstall · Test** (모두 dry-run 미리보기 + 확인 후 실행)
+- `resource.secret.reveal`이 없으면 values는 가려져 보입니다. `<REDACTED:…>`로 보이는 값은 그 줄을 그대로 두면 유지되고 미리보기가 어느 값인지 말해 줍니다. 그 자리에 새 값을 쓰면 바뀌고, 줄을 지우면 사라집니다. 다른 자리의 가림 글자는 대신할 값이 없어 그 자리를 말하며 거절합니다
 
 ## 🎮 GPU & DRA (Dynamic Resource Allocation)
 

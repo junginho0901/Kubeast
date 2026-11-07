@@ -161,7 +161,14 @@ func (h *Handler) relayRead(w http.ResponseWriter, r *http.Request, req netflows
 		return nil
 	}
 	if !allowed {
-		refuse(http.StatusForbidden, fmt.Errorf("forbidden: the cluster does not let you read %s (%s on services/proxy %s in %s)", target.What(), target.ProxyVerb(), target.Relay.ProxyName(), target.Relay.Namespace))
+		refused := fmt.Errorf("forbidden: the cluster does not let you read %s (%s on services/proxy %s in %s)", target.What(), target.ProxyVerb(), target.Relay.ProxyName(), target.Relay.Namespace)
+		if len(req.Scope) == 0 {
+			refuse(http.StatusForbidden, refused)
+			return nil
+		}
+		// where it runs stays with the row, for whoever grants it: a grant limited to namespaces reads no place outside them
+		_ = h.recordAuditWithPayload(r, "k8s.networkflows.query", targetType, targetID, namespace, refused, nil, after())
+		response.Error(w, http.StatusForbidden, fmt.Sprintf("forbidden: the cluster does not let you read %s (%s on its services/proxy)", target.What(), target.ProxyVerb()))
 		return nil
 	}
 	if !h.netflows.Allow(payload.UserID) {
@@ -184,7 +191,10 @@ func (h *Handler) relayRead(w http.ResponseWriter, r *http.Request, req netflows
 		res, qerr = h.netflows.Read(ctx, target, client, url, req, now)
 	}
 	if res != nil {
-		res.Cluster, res.Mode, res.Relay = string(id), target.Mode, relayLabel(target)
+		res.Cluster, res.Mode = string(id), target.Mode
+		if len(req.Scope) == 0 {
+			res.Relay = relayLabel(target)
+		}
 	}
 	if werr := h.recordAuditWithPayload(r, "k8s.networkflows.query", targetType, targetID, namespace, qerr, nil, after()); werr != nil {
 		h.refuseUnaudited(w, r, werr)

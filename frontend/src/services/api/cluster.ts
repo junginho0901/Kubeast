@@ -136,7 +136,7 @@ export const clusterApi = {
     return data
   },
 
-  applyResourceYaml: async (resourceType: string, name: string, yaml: string, namespace?: string): Promise<{ status: string }> => {
+  applyResourceYaml: async (resourceType: string, name: string, yaml: string, namespace?: string): Promise<{ status: string; kept_masked?: string[] }> => {
     const { data } = await client.post('/cluster/resources/yaml/apply', {
       resource_type: resourceType,
       resource_name: name,

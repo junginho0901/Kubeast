@@ -280,7 +280,7 @@ The PolicyReport and ClusterPolicyReport CRDs of `wgpolicyk8s.io/v1alpha2` and a
   Development values and example policies: [`deploy/kind/kyverno-values.yaml`](../deploy/kind/kyverno-values.yaml), [`kyverno-policies.yaml`](../deploy/kind/kyverno-policies.yaml).
 - Reports from other tools that use the same CRDs are read too, but only Kyverno has been verified.
 - A result that picks its resources by label (`resourceSelector`, or the report's `scopeSelector`) goes on the drawer of each object whose labels match. For that the drawer reads the object's labels as the user; when the user may not, the drawer says those results could not be checked.
-- A namespaced object's drawer also lists what the ClusterPolicyReports say about it, read as the user at most once a minute. When the user may not read them, or the grant is limited to namespaces, the drawer says those results are not listed.
+- A namespaced object's drawer, and the Policy Reports page and the AI's `policy_reports` narrowed to its Namespace, also list what the ClusterPolicyReports say about it, read as the user at most once a minute. When the user may not read them, or the grant is limited to namespaces, each says those results are not listed.
 - **Check**: `kubectl --context <cluster> get policyreports -A`
 
 ## 6. GPU and DRA

@@ -186,11 +186,11 @@ func handlePolicyReports(ctx context.Context, args map[string]interface{}, heade
 			reply["next_offset"] = next
 		}
 		// the counts first: a model's cut of a long answer keeps the start
-		return marshalOrdered(reply, []string{"view", "total", "next_offset", "truncated", "rows_total", "scoped", "generated_at", "hint"}, []string{"rows"})
+		return marshalOrdered(reply, []string{"view", "total", "next_offset", "truncated", "cluster_reports_error", "rows_total", "scoped", "generated_at", "hint"}, []string{"rows"})
 	}
 	capList(reply, "policies", rowsCap)
 	capList(reply, "namespaces", rowsCap)
-	return marshalOrdered(reply, []string{"view", "totals", "reports", "truncated", "scoped", "generated_at", "policies_total", "namespaces_total"}, []string{"policies", "namespaces"})
+	return marshalOrdered(reply, []string{"view", "totals", "reports", "truncated", "cluster_reports_error", "scoped", "generated_at", "policies_total", "namespaces_total"}, []string{"policies", "namespaces"})
 }
 
 var helmWhat = map[string]bool{"list": true, "get": true, "values": true, "manifest": true, "notes": true, "hooks": true, "history": true, "resources": true, "images": true, "diff": true, "revision": true}

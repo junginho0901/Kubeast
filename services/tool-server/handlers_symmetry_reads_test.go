@@ -190,6 +190,29 @@ func TestPolicyReports_TheCountsComeBeforeTheRows(t *testing.T) {
 	}
 }
 
+// Why the cluster reports were not read reaches the model with the counts it qualifies, before a cut could lose it.
+func TestPolicyReports_WhatCouldNotBeReadComesBeforeTheRows(t *testing.T) {
+	const reason = "cluster reports are outside a grant limited to namespaces"
+	fakeK8sService(t, func(r *http.Request) (int, string) {
+		if strings.HasSuffix(r.URL.Path, "/summary") {
+			return 200, `{"totals":{"fail":1},"reports":1,"policies":[],"namespaces":[],"cluster_reports_error":"` + reason + `"}`
+		}
+		return 200, strings.Replace(policyPage(520, 0, 100), `"truncated":false`, `"truncated":false,"cluster_reports_error":"`+reason+`"`, 1)
+	})
+	for view, last := range map[string]string{"results": `"rows":`, "summary": `"policies":`} {
+		out, err := handlePolicyReports(ctxFor("c1"), map[string]interface{}{"view": view, "namespace": "shop"}, bearer())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := decode(t, out)["cluster_reports_error"]; got != reason {
+			t.Errorf("%s: cluster_reports_error = %v", view, got)
+		}
+		if at, end := strings.Index(out, `"cluster_reports_error":`), strings.Index(out, last); at < 0 || at > end {
+			t.Errorf("%s: the reason at %d, the list at %d: a model's cut would lose it", view, at, end)
+		}
+	}
+}
+
 func TestPolicyReports_TheClustersCutStaysAndAPageIsNotACut(t *testing.T) {
 	fakeK8sService(t, func(r *http.Request) (int, string) { return 200, policyPage(520, 0, 100) })
 	out, _ := handlePolicyReports(ctxFor("c1"), map[string]interface{}{"view": "results"}, bearer())
