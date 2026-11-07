@@ -7,7 +7,8 @@
 
 ```yaml
 global:
-  imageTag: "v0.1.0"
+  # 릴리스된 차트에는 자기 버전이 이미 들어 있습니다. 다른 빌드를 쓸 때만 지정하세요.
+  imageTag: "vX.Y.Z"
 
 # 초기 관리자 계정 — password를 비우면 설치할 때 무작위로 생성합니다
 admin:

@@ -76,9 +76,11 @@ _, _ = h.auditStore.Write(r.Context(), rec)
   `recordAudit*` 반환 오류 확인(`h.refuseUnaudited`). 이미 실행된 변경의 사후 쓰기 실패는 `audit.Guarded`가 세고
   ERROR 로그로 남기며 응답은 그대로다 — 그 뒤로는 준비 확인이 시험 쓰기(넣었다 되돌림)로 바뀌어 감사 표가 다시
   행을 받을 때까지 거부한다. auth-service는 관리자 쓰기만 거부(로그인·로그아웃·토큰 갱신·본인 비밀번호 변경은 계속),
-  AI 채팅 도구·알림 조사도 실행 전에 확인한다. 부팅 때 DB가 없으면 `AUDIT_DB_WAIT_SEC`(90 s)까지 기다렸다가 종료한다 —
+  AI 채팅 도구·알림 조사도 실행 전에 확인한다. 읽기 도구는 행을 못 남기면 답을 버리고(`audit_unavailable`: 채팅·MCP·알림 조사, `test_audit_after_read.py`), 이미 실행된 쓰기 도구는 답을 그대로 준다. 모델 연결 시험과 공급자 모델 목록은 서버 키를 쓰므로 시작 전에 503으로 거부한다(`model_config_audit.ready_or_503`). 부팅 때 DB가 없으면 `AUDIT_DB_WAIT_SEC`(90 s)까지 기다렸다가 종료한다 —
   로그 전용 폴백은 없다.
 - 민감 필드(password, secret, token, apikey 등)는 **`audit.MaskSensitive(...)` 적용 후** 저장. 문자열 안은 읽지 못하므로 YAML·JSON 글은 행에 넣지 말고 길이나 요약만 남긴다(`yaml_len`, `helmValuesAudit`).
+- 값을 못 읽는 사람이 저장한 Secret·Helm values의 행에는 값 대신 자리 이름만 남긴다: 값이 그대로인 자리는 `kept_masked`, Helm에서 새로 쓰거나 지운 자리는 `changed_masked`.
+- AI 쓰기 도구의 인자는 실행에 필요한 동안만 원문이다. 저장되는 답과 스트림(멈춘 답은 화면이 스트림에서 받은 글로 저장한다)은 처음부터, 승인 행은 실행·거절·만료 뒤에 필드가 같은 가린 사본을 갖는다(`audit_target.shown_tool_args`, `kept_tool_args`).
 
 ### PR 리뷰 기준
 
@@ -118,5 +120,6 @@ _, _ = h.auditStore.Write(r.Context(), rec)
   주기적으로 실행한다(예: 로그 파일 실시간 보기 = `tail -c +<오프셋>` 2초 폴링, `services/k8s-service-go/internal/handler/logfiles.go`).
   사람이 쓰는 대화형 터미널(Pod exec·노드 셸)은 예외지만, 브라우저가 `exit` 없이 끊기면 서버가 셸에 Ctrl-C·Ctrl-D를 보내고
   끝나기를 잠깐 기다린 뒤 끊는다(`remote_shell.go` `streamShell`) — 이걸 빼면 끊길 때마다 컨테이너에 셸이 남는다.
+- 노드 셸 파드의 로그는 터미널에 찍힌 전부다. 네임스페이스 없는 로그 저장소 읽기(검색·LogQL·레이블·패턴)는 그 클러스터에 `resource.node.shell`이 없으면 질의의 매처로 노드 셸 네임스페이스를 뺀다(`hiddenLogNamespace`).
 - exec 명령은 인자 배열로 넘기고 셸을 거치지 않는다. 사용자 입력이 들어가는 인자는 허용 목록으로 검증하고 `--`로 옵션 파싱을 끝낸다.
 - 로컬 실행은 [docker-compose.yml](docker-compose.yml) 참고.

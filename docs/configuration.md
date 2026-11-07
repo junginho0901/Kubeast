@@ -7,7 +7,8 @@ Frequently used values:
 
 ```yaml
 global:
-  imageTag: "v0.1.0"
+  # The released chart already holds its own version. Set this only to run another build.
+  imageTag: "vX.Y.Z"
 
 # Initial admin account — leave password empty to generate a random one at install
 admin:
