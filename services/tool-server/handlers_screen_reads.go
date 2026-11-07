@@ -364,8 +364,40 @@ func handleLimitRangeViolations(ctx context.Context, args map[string]interface{}
 	return marshalOrdered(reply, []string{"namespace", "name", "violations_total", "truncated", "note"}, []string{"violations"})
 }
 
+// addWindowReport reads what the alert window's Report button opens, through the route that records its view (ai.investigation.view).
+// That button is off while a run has no report yet, so nothing is read then. A report that cannot be read leaves the window, with why.
+func addWindowReport(ctx context.Context, headers http.Header, id string, window map[string]interface{}) error {
+	investigation, _ := window["investigation"].(map[string]interface{})
+	if investigation == nil {
+		window["report_error"] = "This alert has no investigation."
+		return nil
+	}
+	if state := fmt.Sprint(investigation["status"]); state == "queued" || state == "running" {
+		window["report_error"] = "The investigation is " + state + ", so it has no report yet."
+		return nil
+	}
+	status, body, err := aiServiceDo(ctx, headers, http.MethodGet, inboxItemPath(id)+"/investigation", nil)
+	if err != nil {
+		return err
+	}
+	if status != http.StatusOK {
+		window["report_error"] = detailOf(body)
+		return nil
+	}
+	var detail map[string]interface{}
+	if err := json.Unmarshal(body, &detail); err != nil {
+		return fmt.Errorf("investigation: unreadable reply: %w", err)
+	}
+	report, err := marshalInvestigationReport(detail)
+	if err != nil {
+		return err
+	}
+	window["investigation_report"] = json.RawMessage(report)
+	return nil
+}
+
 // handleAlertsInbox reads the Alerts inbox: a page of the list, or with alert_id one alert as its window opens, with
-// the note the list leaves out. Reading only: a mark or a press stays on the screen.
+// the note the list leaves out, and with_report the report its Report button opens. Reading only: a mark or a press stays on the screen.
 func handleAlertsInbox(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
 	if id := argString(args, "alert_id", ""); id != "" {
 		window, out, err := inboxWindowOf(ctx, headers, id)
@@ -373,8 +405,13 @@ func handleAlertsInbox(ctx context.Context, args map[string]interface{}, headers
 			return out, err
 		}
 		window["alert_link"] = consoleURL + "/alerts?" + url.Values{"alert": {id}, "cluster": {clusterIDFromCtx(ctx)}}.Encode()
+		if argBool(args, "with_report") {
+			if err := addWindowReport(ctx, headers, id, window); err != nil {
+				return "", err
+			}
+		}
 		return marshalOrdered(window, []string{"id", "alertname", "severity", "namespace", "status", "acknowledged", "acked_by", "acked_at", "assignee", "done", "done_by", "done_at", "note", "note_by", "note_at", "alert_link", "summary"},
-			[]string{"labels", "annotations"})
+			[]string{"investigation_report", "labels", "annotations"})
 	}
 	search := argString(args, "search", "")
 	if len([]rune(search)) > inboxSearchMaxChars {

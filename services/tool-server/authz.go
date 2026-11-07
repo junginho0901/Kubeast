@@ -88,6 +88,7 @@ var clusterWideTools = map[string]struct{}{
 	"hygiene": {}, "k8s_diff": {},
 	"audit_search": {}, "nodes_stats_summary": {}, "nodes_log": {},
 	"access_review": {}, "ai_usage": {}, "access_requests": {}, "audit_integrity": {}, "hygiene_history": {},
+	"investigations": {}, "ai_models": {}, "session_recordings": {},
 	// The Alerts inbox is for whoever reads the cluster as a whole.
 	"alert_investigate": {}, "alerts_inbox": {},
 }

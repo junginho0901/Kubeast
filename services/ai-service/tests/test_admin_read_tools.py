@@ -20,6 +20,9 @@ SCREEN_PERMISSION = {
     "access_requests": "admin.users.update",
     "audit_integrity": "admin.audit.read",
     "hygiene_history": "resource.hygiene.scan",
+    "investigations": "admin.investigations.read",
+    "ai_models": "admin.ai_models.*",
+    "session_recordings": "admin.sessions.read",
 }
 CLUSTER = "alpha"
 
@@ -120,6 +123,13 @@ def test_a_grant_limited_to_namespaces_is_refused(name):
     ("hygiene_history", {"review_id": "h1", "severity": "critical", "check": "pss-level", "bogus": 1},
      {"review_id": "h1", "severity": "critical", "check": "pss-level"}),
     ("hygiene_history", {"limit": 10}, {"limit": 10}),
+    ("investigations", {"status": "done", "cluster_id": "alpha", "limit": 5, "offset": 5, "bogus": 1},
+     {"status": "done", "cluster_id": "alpha", "limit": 5, "offset": 5}),
+    ("investigations", {"investigation_id": "inv-1", "report": "text"}, {"investigation_id": "inv-1"}),
+    ("ai_models", {"api_key": "fake-credential-value", "name": "x"}, {}),
+    ("session_recordings", {"actor_email": "ann", "recording_kind": "exec", "cluster_id": "alpha", "limit": 5, "offset": 5, "format": "text"},
+     {"actor_email": "ann", "recording_kind": "exec", "cluster_id": "alpha", "limit": 5, "offset": 5}),
+    ("session_recordings", {"recording_id": "r1", "download": True}, {"recording_id": "r1"}),
 ])
 async def test_only_the_declared_arguments_travel(name, given, sent):
     service = _service()
@@ -146,3 +156,35 @@ def test_the_descriptions_say_what_stays_on_the_screens_and_what_is_not_given():
     for name in SCREEN_PERMISSION:
         assert name in SYSTEM_MESSAGE, name
     assert "승인·거절" in SYSTEM_MESSAGE
+
+
+def test_a_recordings_details_are_read_and_what_the_terminal_showed_is_not():
+    description = _tool("session_recordings")["description"]
+    assert "never what the terminal showed" in description and "audited" in description
+    # The argument that could ask for the output does not exist.
+    assert not {"format", "download", "cast"} & set(_tool("session_recordings")["parameters"]["properties"])
+    assert "녹화 내용" in SYSTEM_MESSAGE
+
+
+def test_a_models_key_and_address_are_not_read_and_its_limits_are_said():
+    from app.services.ai import limits
+
+    description = _tool("ai_models")["description"]
+    assert "never" in description and "API key" in description
+    assert "key_env_set" in description and "No key env" in description
+    assert "key_env_set" in SYSTEM_MESSAGE
+    assert str(limits.TOOL_RESULT_CHARS) in description and "max_tokens" in description and "tool_result_chars" in description
+    assert not _tool("ai_models")["parameters"].get("properties")
+    assert "API 키" in SYSTEM_MESSAGE
+
+
+def test_opening_a_report_is_said_to_be_recorded():
+    assert "ai.investigation.view" in _tool("investigations")["description"]
+
+
+def test_clusters_list_says_the_connection_status_is_checked_by_itself():
+    from app.services.ai.tools import K8S_READONLY_TOOLS
+
+    description = next(t["function"] for t in K8S_READONLY_TOOLS if t["function"]["name"] == "clusters_list")["description"]
+    assert "every 60 seconds" in description and "multicluster.healthcheckIntervalSec" in description
+    assert "not a live probe" not in description and "made at registration or by a person's Test" not in description

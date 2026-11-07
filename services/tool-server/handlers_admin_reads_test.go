@@ -816,6 +816,10 @@ var adminReadTools = map[string]string{
 	"access_requests": "admin.users.update",
 	"audit_integrity": "admin.audit.read",
 	"hygiene_history": "resource.hygiene.scan",
+	// Admin → Investigations, AI Models and Session recordings.
+	"investigations":     "admin.investigations.read",
+	"ai_models":          "admin.ai_models.*",
+	"session_recordings": "admin.sessions.read",
 }
 
 type fixedToken struct{ payload auth.TokenPayload }

@@ -153,6 +153,7 @@ def _dispatch_service():
     ("alerts_inbox", {"status": "firing", "alert_severity": "page", "mine": "true", "open_only": True, "search": "load", "limit": 20, "offset": 40, "note": "x", "done": True},
      {"status": "firing", "alert_severity": "page", "mine": True, "open_only": True, "search": "load", "limit": 20, "offset": 40}),
     ("alerts_inbox", {"alert_id": "a1", "mine": False}, {"alert_id": "a1"}),
+    ("alerts_inbox", {"alert_id": "a1", "with_report": "true"}, {"alert_id": "a1", "with_report": True}),
 ])
 async def test_only_the_declared_arguments_travel(tool, sent, travels):
     service = _dispatch_service()

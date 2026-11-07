@@ -44,6 +44,11 @@ func k8sServiceGetWithHeader(ctx context.Context, headers http.Header, path stri
 		q = url.Values{}
 	}
 	q.Set("cluster", clusterIDFromCtx(ctx))
+	return k8sServiceRead(ctx, headers, path, q)
+}
+
+// k8sServiceRead sends the query as it is, for a route outside the cluster middleware, whose cluster is a filter.
+func k8sServiceRead(ctx context.Context, headers http.Header, path string, q url.Values) (int, http.Header, []byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, k8sServiceURL+"/api/v1"+path+"?"+q.Encode(), nil)
 	if err != nil {
 		return 0, nil, nil, err

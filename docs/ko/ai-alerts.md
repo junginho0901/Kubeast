@@ -27,7 +27,7 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
 - 권한: 그 클러스터에 대한 `ai.mcp.use`(시스템 Read·Write 역할에 포함, Admin은 모든 권한)와 쓰려는 도구의 `ai.tool.<이름>`이 필요합니다.
   - Read는 읽기 도구 52종만, Write는 전부와 쓰기 미리보기 `k8s_diff`를 쓸 수 있습니다.
   - `hygiene`과 `hygiene_history`는 그 클러스터의 보고서를 읽을 수 있는 사람에게만 보입니다. 그 클러스터의 Admin 부여(`resource.hygiene.scan`)나 `admin.hygiene.read`입니다.
-  - 다른 Admin 읽기 도구(`audit_search`, `nodes_*`, `access_review`, `ai_usage`, `access_requests`, `audit_integrity`)는 그 화면의 `admin.*` 권한을 가진 사람에게만 보입니다.
+  - 다른 Admin 읽기 도구(`audit_search`, `nodes_*`, `access_review`, `ai_usage`, `access_requests`, `audit_integrity`, `investigations`, `ai_models`, `session_recordings`)는 그 화면의 `admin.*` 권한을 가진 사람에게만 보입니다.
   - `list_clusters`가 연결한 사람이 쓸 수 있는 클러스터와 도구를 알려 줍니다.
   - 나머지 도구는 `cluster` 인자가 필수이며 기본 클러스터로 대신하지 않습니다.
 - 인증: `Authorization: Bearer` 헤더에 API 키(`kbk_…`)나 액세스 토큰을 넣습니다.

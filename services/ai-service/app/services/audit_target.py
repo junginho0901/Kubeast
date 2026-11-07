@@ -64,6 +64,10 @@ def tool_target(tool: str, args: dict) -> ToolTarget:
         return ToolTarget("alert", args.get("alert_id") or args.get("alertname") or tool, namespace, None)
     if tool == "alerts_inbox" and args.get("alert_id"):
         return ToolTarget("alert", args["alert_id"], None, None)
+    if tool == "investigations" and args.get("investigation_id"):
+        return ToolTarget("investigation", args["investigation_id"], None, None)
+    if tool == "session_recordings" and args.get("recording_id"):
+        return ToolTarget("session_recording", args["recording_id"], None, None)
     named =args.get("resource_name") or args.get("name") or args.get("pod_name")
     objects = [] if named else _manifest_objects(args)
     if not objects:

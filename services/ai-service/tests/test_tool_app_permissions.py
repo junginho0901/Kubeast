@@ -836,6 +836,9 @@ def test_a_tool_not_in_the_table_is_closed(monkeypatch):
     ("access_requests", {}, ["admin.users.update"]),
     ("audit_integrity", {}, ["admin.audit.read"]),
     ("hygiene_history", {}, ["resource.hygiene.scan"]),
+    ("investigations", {"investigation_id": "inv-1"}, ["admin.investigations.read"]),
+    ("ai_models", {}, ["admin.ai_models.*"]),
+    ("session_recordings", {"recording_id": "r1"}, ["admin.sessions.read"]),
     ("k8s_diff", {"yaml_content": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: a\n"}, ["resource.secret.edit"]),
 ])
 async def test_a_refused_read_in_the_chat_does_not_run_and_says_why(rows, name, args, perms):
@@ -902,6 +905,9 @@ async def test_the_same_write_in_the_chat_gets_its_card_with_the_permission(rows
     ("access_requests", {}, ["admin.users.update"]),
     ("audit_integrity", {}, ["admin.audit.read"]),
     ("hygiene_history", {}, ["resource.hygiene.scan"]),
+    ("investigations", {}, ["admin.investigations.read"]),
+    ("ai_models", {}, ["admin.ai_models.*"]),
+    ("session_recordings", {}, ["admin.sessions.read"]),
 ])
 async def test_a_refusal_over_mcp_says_what_is_missing_and_is_recorded(mcp, name, args, perms):
     res = await mcp.call(_token(TOOLS_ONLY), name, args)
@@ -925,6 +931,9 @@ ADMIN_READS = [
     ("access_requests", {}, "admin.users.update"),
     ("audit_integrity", {}, "admin.audit.read"),
     ("hygiene_history", {}, "resource.hygiene.scan"),
+    ("investigations", {}, "admin.investigations.read"),
+    ("ai_models", {}, "admin.ai_models.*"),
+    ("session_recordings", {}, "admin.sessions.read"),
 ]
 
 

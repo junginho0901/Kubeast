@@ -15,7 +15,7 @@ import (
 	"testing"
 )
 
-// k8s-service's and auth-service's tests hold every GET route to a row of this file. These hold each row to the tool: a tool
+// k8s-service's, auth-service's, session-service's and ai-service's tests hold every GET route to a row of this file. These hold each row to the tool: a tool
 // that is registered, takes the arguments and reaches that route or that kind. A row with a note says how the tool answers
 // the same facts another way, so only its call is checked.
 const aiRouteCoverageFile = "../ai-service/tests/fixtures/ai_route_coverage.json"
@@ -147,16 +147,19 @@ func callForCoverage(t *testing.T, row aiRouteCoverage, handler ToolHandler) (*c
 		_, _ = w.Write([]byte(answer))
 	}))
 	defer srv.Close()
-	origK8s, origAuth, origKubectl := k8sServiceURL, authServiceURL, kubectlExec
-	k8sServiceURL, authServiceURL = srv.URL, srv.URL
+	origK8s, origAuth, origAI, origKubectl := k8sServiceURL, authServiceURL, aiServiceURL, kubectlExec
+	k8sServiceURL, authServiceURL, aiServiceURL = srv.URL, srv.URL, srv.URL
 	kubectlExec = func(_ context.Context, args []string, _ *string) ([]byte, error) {
 		calls.addKubectl(args)
 		return []byte(`{"items":[]}`), nil
 	}
-	defer func() { k8sServiceURL, authServiceURL, kubectlExec = origK8s, origAuth, origKubectl }()
+	defer func() {
+		k8sServiceURL, authServiceURL, aiServiceURL, kubectlExec = origK8s, origAuth, origAI, origKubectl
+	}()
 
 	var firstErr error
-	for _, shape := range []string{`{}`, `[]`} {
+	// The third is an alert window of this cluster with a finished investigation, which the next read opens.
+	for _, shape := range []string{`{}`, `[]`, `{"cluster":"coverage","investigation":{"id":"y","status":"done"}}`} {
 		answer = shape
 		args := make(map[string]interface{}, len(row.Args))
 		for k, v := range row.Args {
