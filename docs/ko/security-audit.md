@@ -31,6 +31,8 @@ curl -s "https://console.example.com/api/v1/cluster/overview?cluster=prod" \
 
 끄려면 `auth.apiKeys.enabled: false`로 설정하세요(컴포즈는 `API_KEYS_ENABLED`). 발급·폐기·교환은 감사 로그에 남습니다.
 
+`GET /api/v1/auth/me`는 키 토큰에 그 키가 닿는 범위로 답합니다. 키의 클러스터·역할 상한·네임스페이스이며, 주인의 다른 권한은 말하지 않습니다.
+
 ## 열린 연결
 
 터미널, 실시간 로그, 실시간 목록은 열 때 인증합니다. 브라우저는 열린 연결에 새 토큰을 줄 수 없으므로 토큰 만료로 끝나지 않습니다.
@@ -96,7 +98,7 @@ auth-service replica 하나가 싱크마다 "어디까지 보냈는지"(커서)�
 |---|---|---|
 | `s3` | 장기 보관(S3·MinIO·GCS·R2). 시간별로 나눈 NDJSON gzip | `accessKeyId`·`secretAccessKey` — 없으면 IRSA(`serviceAccounts.authService.annotations`에 롤 지정) |
 | `webhook` `json` | SIEM·n8n 같은 범용 수신처(HMAC 서명 `X-Kubeast-Signature` 선택) | `url`, `hmacSecret` |
-| `webhook` `slack` · `teams` · `discord` | 채팅 알림 | `url` |
+| `webhook` `slack` · `teams` · `discord` | 채팅 알림. 칸의 글은 글자 그대로 채널에 갑니다. 대상 이름이나 오류 글이 링크·서식·멘션이 되지 않습니다 | `url` |
 | `webhook` `telegram` | 채팅 알림(`chatId`) | `botToken` |
 | `webhook` `pagerduty` | 온콜(Events v2, 이벤트당 1건) | `routingKey` |
 | `email` | 메일(SMTP, STARTTLS/TLS) | `username`·`password` |
@@ -171,7 +173,7 @@ audit:
 입력한 명령은 에코로 화면에 찍히므로 남고, 에코되지 않는 비밀번호 입력은 남지 않습니다.
 세션을 열면 터미널에 "This session is recorded"(한국어 화면이면 "이 세션은 녹화됩니다") 한 줄이 먼저 찍히고, 이 줄은 녹화에도 그대로 남습니다.
 감사 행(`k8s.pod.exec`·`k8s.node.shell`)에는 `recording_id`가 붙습니다.
-AI 도구로 한 exec는 터미널이 아니라 명령 하나와 그 결과이므로 녹화가 없습니다. 가린 명령은 `k8s.pod.exec` 행과 `ai.tool.execute` 또는 `ai.mcp.call`에 남습니다.
+AI 도구로 한 exec는 터미널이 아니라 명령 하나와 그 결과이므로 녹화가 없습니다. 가린 명령은 `k8s.pod.exec` 행과 `ai.tool.execute` 또는 `ai.mcp.call`에 남습니다. 터미널의 명령도 행에는 같은 규칙으로 가려 남습니다.
 
 - **저장**: k8s-service가 로컬 볼륨에 쓰고, 세션 중에도 `chunkSeconds`(기본 30초)마다 조각을 올립니다.
   그래서 k8s-service 파드가 사라져도 마지막 조각 간격만큼만 잃습니다. 저장소는 다음 중에서 고릅니다.
@@ -202,6 +204,15 @@ sessionRecording:
   enabled: true
   s3: {bucket: kubeast-sessions, prefix: sessions/, region: ap-northeast-2}   # k8s-service 롤에 s3:PutObject·GetObject
 ```
+
+## 가린 Helm values가 숨기지 못하는 것
+
+`resource.secret.reveal`이 없으면 릴리스의 values는 가려져 보이고, 업그레이드 미리보기는 숨긴 값 자리에 쓴 값이 맞았는지 말하지 않습니다. 그래도 차트가 그 값으로 렌더한 것이 값을 내줄 수 있습니다.
+
+- 숨긴 값의 체크섬을 렌더하는 차트(`checksum/secret: {{ .Values.adminPassword | sha256sum }}`, 값이 바뀌면 Deployment를 다시 띄우는 흔한 방법)는 그 해시를 Deployment에 남깁니다. Deployment나 릴리스 매니페스트를 읽는 사람이 해시를 보고 추측 값을 맞춰 볼 수 있습니다. 미리보기에서도 맞는 값과 틀린 값이 그 줄에서 다릅니다.
+- 차트가 그 값으로 Secret이 아닌 것에 렌더하는 다른 값도 마찬가지입니다.
+
+Kubeast는 이 줄을 숨기지 않습니다. 해시는 클러스터의 객체에도 그대로 있어 읽을 수 있는 사람이 볼 수 있고, 미리보기에서 숨기면 롤아웃이 일어난다는 것까지 가려집니다. 이런 값은 차트가 참조하는 Secret(`existingSecret`)에 두고 체크섬은 값이 아닌 것으로 만드세요. 그럴 수 없으면, 추측 값을 맞춰 보면 안 되는 사람에게 그 릴리스의 Helm 수정 권한을 주지 마세요.
 
 ## 클러스터 감사 로그에서 AI 도구 호출 찾기
 

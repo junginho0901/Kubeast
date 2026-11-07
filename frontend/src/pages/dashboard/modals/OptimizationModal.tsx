@@ -18,8 +18,7 @@ import {
   X,
   Zap,
 } from 'lucide-react'
-import ReactMarkdown from 'react-markdown'
-import { REMARK_PLUGINS } from '@/utils/markdown'
+import { AIMarkdown } from '@/components/AIMarkdown'
 
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
@@ -545,7 +544,7 @@ export function OptimizationModal({
                     {tr('dashboard.optimization.observedData', 'Table as sent to the model')}
                   </summary>
                   <div className="mt-2 prose prose-invert prose-sm max-w-none leading-snug overflow-x-auto [&_table]:min-w-full [&_table]:w-max [&_table]:text-xs [&_th]:px-2 [&_td]:px-2 [&_th]:py-1 [&_td]:py-1 [&_pre]:text-xs">
-                    <ReactMarkdown remarkPlugins={REMARK_PLUGINS}>{observedMarkdown}</ReactMarkdown>
+                    <AIMarkdown>{observedMarkdown}</AIMarkdown>
                   </div>
                 </details>
               )}
@@ -553,7 +552,7 @@ export function OptimizationModal({
               {aiEnabled(features) && <div className="rounded-lg border border-slate-700 bg-slate-900/20 p-3" data-testid="optimization-ai">
                 {isStreaming ? (
                   <div className="prose prose-invert prose-sm max-w-none leading-snug overflow-x-auto [&_table]:min-w-full [&_table]:w-max [&_table]:text-xs [&_th]:px-2 [&_td]:px-2 [&_th]:py-1 [&_td]:py-1 [&_pre]:text-xs">
-                    <ReactMarkdown remarkPlugins={REMARK_PLUGINS}>{answerMarkdownForStreaming}</ReactMarkdown>
+                    <AIMarkdown>{answerMarkdownForStreaming}</AIMarkdown>
                     {!answerContent && (
                       <p className="text-[11px] text-slate-500">
                         {tr('dashboard.optimization.writing', 'AI is writing…')}
@@ -562,7 +561,7 @@ export function OptimizationModal({
                   </div>
                 ) : (
                   <div className="prose prose-invert prose-sm max-w-none leading-snug overflow-x-auto [&_table]:min-w-full [&_table]:w-max [&_table]:text-xs [&_th]:px-2 [&_td]:px-2 [&_th]:py-1 [&_td]:py-1 [&_pre]:text-xs">
-                    <ReactMarkdown remarkPlugins={REMARK_PLUGINS}>{answerMarkdown}</ReactMarkdown>
+                    <AIMarkdown>{answerMarkdown}</AIMarkdown>
                   </div>
                 )}
               </div>}

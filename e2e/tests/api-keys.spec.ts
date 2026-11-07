@@ -156,6 +156,36 @@ test.describe('API keys', () => {
     }
   })
 
+  test('a key reads its own reach from /me, and its owner the whole account', async ({ request }) => {
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    test.skip(!(await enabled(request, admin)), 'API keys are disabled on this installation')
+    const email = `e2e-apikey-me-${stamp()}@example.com`
+    let userId = ''
+    try {
+      userId = await createUser(request, admin, email)
+      for (const cluster of [CLUSTER, 'self']) {
+        const granted = await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/${cluster}`, { headers: bearer(admin), data: { role: 'Write' } })
+        expect(granted.ok(), `grant on ${cluster}: ${await granted.text()}`).toBeTruthy()
+      }
+      const user = await login(request, email, PW)
+      const made = await request.post('/api/v1/auth/api-keys', { headers: bearer(user), data: { name: 'e2e me', expires_in_days: 1, cluster_ids: [CLUSTER], role_ceiling: 'Read' } })
+      expect(made.status(), `create: ${await made.text()}`).toBe(201)
+      const token = (await (await exchange(request, (await made.json()).key)).json()).access_token as string
+
+      const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString())
+      const key = await (await request.get('/api/v1/auth/me', { headers: bearer(token) })).json()
+      expect(Object.keys(key.permissions_matrix), 'the clusters of the key').toEqual([CLUSTER])
+      expect(key.cluster_roles, 'the ceiling of the key').toEqual({ [CLUSTER]: 'Read' })
+      expect(key.email, 'it still names its owner').toBe(email)
+      expect(claims.akid, 'this is a key token').toBeTruthy()
+
+      const owner = await (await request.get('/api/v1/auth/me', { headers: bearer(user) })).json()
+      expect(owner.cluster_roles, 'the owner reads every grant').toEqual({ [CLUSTER]: 'Write', self: 'Write' })
+    } finally {
+      await deleteUser(request, admin, userId)
+    }
+  })
+
   test('a token from a key cannot change the account', async ({ request }) => {
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     test.skip(!(await enabled(request, admin)), 'API keys are disabled on this installation')

@@ -476,6 +476,66 @@ func TestDiffOfASecretNamesTheChangedKeysWithoutTheirValues(t *testing.T) {
 	}
 }
 
+// What the read took out of the list is in the audit row's count too, which the answer's masking cannot see any more.
+func TestSecretValuesTakenOutAtTheReadAreCountedForTheAuditRow(t *testing.T) {
+	toolServerForSecrets(t, nil)
+	list := `{"apiVersion":"v1","kind":"List","items":[` +
+		`{"kind":"Secret","metadata":{"name":"a"},"data":{"note":"ZmFrZS0x","other":"ZmFrZS0y"}},` +
+		`{"kind":"Secret","metadata":{"name":"b"},"data":{"note":"ZmFrZS0z"}}]}`
+	fakeKubectl(t, func([]string) (string, error) { return list, nil })
+	for _, c := range []struct {
+		tool string
+		args map[string]interface{}
+	}{
+		{"k8s_jq_query", map[string]interface{}{"resource_type": "secrets", "namespace": "shop", "jq": ".items[].metadata.name"}},
+		{"k8s_count", map[string]interface{}{"resource_type": "secrets", "namespace": "shop", "group_by": ".type"}},
+	} {
+		resp := callTool(t, c.tool, c.args)
+		if resp.Error != "" {
+			t.Fatalf("%s: %s", c.tool, resp.Error)
+		}
+		if resp.Redacted == nil || resp.Redacted.Kinds["secret"] != 3 {
+			t.Errorf("%s: redacted = %+v, want 3 taken out at the read", c.tool, resp.Redacted)
+		}
+	}
+
+	fakeKubectl(t, func([]string) (string, error) {
+		return `{"apiVersion":"v1","kind":"List","items":[{"kind":"Pod","metadata":{"name":"a"}}]}`, nil
+	})
+	resp := callTool(t, "k8s_jq_query", map[string]interface{}{"resource_type": "pods", "namespace": "shop", "jq": ".items[].metadata.name"})
+	if resp.Redacted != nil {
+		t.Errorf("nothing to take out, redacted = %+v", resp.Redacted)
+	}
+
+	// A read that failed after the list came still says what it took out.
+	fakeKubectl(t, func([]string) (string, error) { return list, nil })
+	resp = callTool(t, "k8s_jq_query", map[string]interface{}{"resource_type": "secrets", "namespace": "shop", "jq": ".items[0].metadata.name | .foo"})
+	if resp.Error == "" {
+		t.Fatalf("the program did not fail: %s", resp.Content)
+	}
+	if resp.Redacted == nil || resp.Redacted.Kinds["secret"] != 3 {
+		t.Errorf("after a failed program, redacted = %+v", resp.Redacted)
+	}
+}
+
+// A Secret the output cap cut goes through the text rules before the answer's: those are counted too.
+func TestACutSecretsValuesAreCountedForTheAuditRow(t *testing.T) {
+	toolServerForSecrets(t, nil)
+	fakeKubectl(t, func([]string) (string, error) {
+		return "metadata:\n  name: a\ndata:\n  note: ZmFrZS0x\n" + truncatedMarkerLead + " cut", nil
+	})
+	resp := callTool(t, "k8s_get_resources", map[string]interface{}{"resource_type": "secrets", "resource_name": "a", "namespace": "shop", "output": "yaml"})
+	if resp.Error != "" {
+		t.Fatal(resp.Error)
+	}
+	if strings.Contains(resp.Content, "ZmFrZS0x") {
+		t.Errorf("the value left: %s", resp.Content)
+	}
+	if resp.Redacted == nil || resp.Redacted.Kinds["secret"] != 1 {
+		t.Errorf("redacted = %+v, want 1: %s", resp.Redacted, resp.Content)
+	}
+}
+
 // A failed tool's text goes through the same masking as a good answer: stdout of a failed command, a refused patch,
 // a failed lookup, an argument echoed back.
 func TestFailedToolOutputIsMasked(t *testing.T) {

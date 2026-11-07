@@ -27,7 +27,7 @@ func (s *Service) ProbeKubeconfig(ctx context.Context, blob string, timeout time
 	}
 	cfg, err := clientcmd.RESTConfigFromKubeConfig([]byte(blob))
 	if err != nil {
-		return ProbeResult{}, fmt.Errorf("invalid kubeconfig: %w", err)
+		return ProbeResult{}, fmt.Errorf("invalid kubeconfig: %s", cluster.WithoutQuoted(err))
 	}
 	return probeConfig(ctx, cfg, timeout)
 }
@@ -67,7 +67,7 @@ func probeConfig(ctx context.Context, cfg *rest.Config, timeout time.Duration) (
 	cfg.Timeout = timeout
 	client, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
-		return ProbeResult{}, fmt.Errorf("create client: %w", err)
+		return ProbeResult{}, fmt.Errorf("create client: %s", cluster.WithoutQuoted(err))
 	}
 	ver, err := client.Discovery().ServerVersion()
 	if err != nil {

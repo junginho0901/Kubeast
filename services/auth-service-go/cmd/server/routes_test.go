@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -261,6 +263,64 @@ func TestAPIKeyTokenKeepsItsOtherRoutes(t *testing.T) {
 				t.Errorf("%d %s, want %d", w.Code, w.Body.String(), c.want)
 			}
 		})
+	}
+}
+
+// What a key's token reads of its own account is what that key can do, not what its owner can.
+func TestMeAnswersAKeyTokenWithTheKeysOwnReach(t *testing.T) {
+	const wide = "resource.pod.delete"
+	rules := []pgRule{
+		{match: "FROM role_permissions", oids: []uint32{uint32(pgtype.TextOID)}, rows: [][]any{{"admin.users.read"}, {readPerm}, {wide}}},
+		{match: "SELECT cluster_id, role_id, namespaces FROM user_cluster_roles", oids: []uint32{uint32(pgtype.TextOID), uint32(pgtype.Int4OID), uint32(pgtype.TextArrayOID)},
+			rows: [][]any{{"c", 3, nil}, {"prod", 3, nil}}},
+		{match: "SELECT ucr.cluster_id, ro.name", oids: []uint32{uint32(pgtype.TextOID), uint32(pgtype.TextOID)}, rows: [][]any{{"c", "Admin"}, {"prod", "Admin"}}},
+		{match: "SELECT cluster_id, namespaces FROM user_cluster_roles", oids: []uint32{uint32(pgtype.TextOID), uint32(pgtype.TextArrayOID)}, rows: [][]any{{"prod", "{shop}"}}},
+	}
+	type me struct {
+		Email string `json:"email"`
+		Role  struct {
+			Permissions []string `json:"permissions"`
+		} `json:"role"`
+		Matrix     auth.PermissionMatrix `json:"permissions_matrix"`
+		Roles      map[string]string     `json:"cluster_roles"`
+		Namespaces map[string][]string   `json:"cluster_namespaces"`
+	}
+	read := func(api *authAPI, token string) me {
+		t.Helper()
+		w := api.call(token, http.MethodGet, "/me", "")
+		if w.Code != http.StatusOK {
+			t.Fatalf("%d %s", w.Code, w.Body.String())
+		}
+		var out me
+		if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	api := newAuthAPI(t, pendingRequest{owner: "requester"}, rules...)
+	key := read(api, api.keyToken())
+	if !reflect.DeepEqual(key.Matrix, auth.PermissionMatrix{"c": {readPerm}}) {
+		t.Errorf("a key's matrix = %v", key.Matrix)
+	}
+	if !reflect.DeepEqual(key.Roles, map[string]string{"c": "Read"}) {
+		t.Errorf("a key's roles = %v", key.Roles)
+	}
+	if len(key.Namespaces) != 0 {
+		t.Errorf("a key's namespaces = %v", key.Namespaces)
+	}
+	if !reflect.DeepEqual(key.Role.Permissions, []string{readPerm}) {
+		t.Errorf("a key's role permissions = %v", key.Role.Permissions)
+	}
+	if key.Email != "owner@example.com" {
+		t.Errorf("a key still names its owner: %q", key.Email)
+	}
+	// The session of the same account reads the whole of it, as before.
+	session := read(api, api.sessionToken())
+	if !reflect.DeepEqual(session.Roles, map[string]string{"c": "Admin", "prod": "Admin"}) || !reflect.DeepEqual(session.Namespaces, map[string][]string{"prod": {"shop"}}) {
+		t.Errorf("a session's grants = %v %v", session.Roles, session.Namespaces)
+	}
+	if !auth.MatchAny(session.Matrix["prod"], wide) || !auth.MatchAny(session.Role.Permissions, wide) {
+		t.Errorf("a session's permissions = %v %v", session.Matrix, session.Role.Permissions)
 	}
 }
 

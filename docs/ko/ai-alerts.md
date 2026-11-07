@@ -125,7 +125,7 @@ Alertmanager(또는 Grafana 알림)가 보낸 알림을 **울리는 중인 것�
   - AI 채팅과 MCP에서도 도구 `alert_investigate`로 시작할 수 있습니다. 그 사람 권한으로 버튼의 경로를 부르므로 권한·대기열·한도·감사가 버튼과 같습니다. `ai.tool.alert_investigate`도 필요하며 Write는 `ai.tool.*`로 갖고 Read에는 없습니다.
     - 승인 카드는 없습니다. 버튼처럼 조사를 시작할 뿐 클러스터를 바꾸지 않습니다.
     - 플로팅 채팅과 조사 자신에게는 주지 않고, `features.alertInvestigation`이나 `manual`이 꺼져 있으면 도구 목록에서 빠집니다.
-    - 채팅은 상태와 보고서 링크를 받고, 조사가 끝났으면 보고서를 4,000자까지 받습니다. 이 읽기는 `ai.investigation.view`로 남습니다. `status_only`면 아무것도 시작하지 않습니다.
+    - 채팅은 상태와 보고서 링크를 받고, 조사가 끝났으면 보고서 전체를 받습니다. 모델은 `tool_result_chars`까지 읽습니다. 이 읽기는 `ai.investigation.view`로 남습니다. `status_only`면 아무것도 시작하지 않습니다.
 - **처리 표시**: 확인함 · 내가 담당/해제 · 메모 · 조치 완료를 표시할 수 있습니다.
   - Kubeast 안에만 남는 기록이며 Alertmanager나 알림 규칙은 바꾸지 않습니다. "해결됨"은 알림 규칙이 정합니다.
   - 바꿀 때마다 `alert.inbox.update`(전·후 값)를 남기고, 감사 DB에 쓸 수 없으면 503을 돌려주며 표시도 되돌립니다.

@@ -420,6 +420,12 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	}
 
 	permissions, _ := h.repo.GetPermissionsByRoleID(r.Context(), user.RoleID)
+	// A key's token carries what that key can do, which is what its holder asks here, and a key cut down to one cluster
+	// says nothing of the owner's others.
+	if payload.APIKeyID != "" {
+		h.writeMe(w, user, intersectPerms(permissions, keyPermissions(payload.Perms)), payload.Perms, payload.Roles, payload.Namespaces)
+		return
+	}
 	// The browser holds the token only as an HttpOnly cookie, so it cannot
 	// read the per-cluster matrix from the JWT; hand it over here (same
 	// buildPermissionMatrix the token is issued from).
@@ -437,13 +443,26 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	if clusterNamespaces == nil {
 		clusterNamespaces = map[string][]string{}
 	}
+	h.writeMe(w, user, permissions, matrix, clusterRoles, clusterNamespaces)
+}
+
+func (h *AuthHandler) writeMe(w http.ResponseWriter, user *model.User, permissions []string, matrix auth.PermissionMatrix, roles map[string]string, namespaces map[string][]string) {
+	if matrix == nil {
+		matrix = auth.PermissionMatrix{}
+	}
+	if roles == nil {
+		roles = map[string]string{}
+	}
+	if namespaces == nil {
+		namespaces = map[string][]string{}
+	}
 	response.JSON(w, http.StatusOK, struct {
 		model.UserResponse
 		PermissionsMatrix auth.PermissionMatrix `json:"permissions_matrix"`
 		ClusterRoles      map[string]string     `json:"cluster_roles"`
 		ClusterNamespaces map[string][]string   `json:"cluster_namespaces"`
 		TokenTTLMinutes   int                   `json:"token_ttl_minutes"`
-	}{user.ToResponseWithPermissions(permissions), matrix, clusterRoles, clusterNamespaces, h.cfg.JWTExpiresMinutes})
+	}{user.ToResponseWithPermissions(permissions), matrix, roles, namespaces, h.cfg.JWTExpiresMinutes})
 }
 
 // ChangePassword handles POST /auth/change-password

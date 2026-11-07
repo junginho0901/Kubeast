@@ -57,7 +57,7 @@ def parsed(events):
     return out
 
 
-async def one_turn(monkeypatch, name, args, answer, session=True):
+async def one_turn(monkeypatch, name, args, answer, session=True, titles=None):
     """A turn whose model calls the tool once, gets `answer` and writes one sentence."""
     from app.services.ai import streaming
 
@@ -80,7 +80,8 @@ async def one_turn(monkeypatch, name, args, answer, session=True):
             pass
 
         async def update_session_title(self, sid, title):
-            pass
+            if titles is not None:
+                titles.append(title)
 
     async def get_db_service():
         return DB()
@@ -122,6 +123,28 @@ async def one_turn(monkeypatch, name, args, answer, session=True):
     )
     events = parsed([e async for e in streaming.session_chat_stream(service, "s1", "well?")])
     return events, saved, calls
+
+
+@pytest.mark.asyncio
+async def test_the_title_is_masked_off_the_event_loop_and_stored_before_the_answer_ends(monkeypatch):
+    import threading
+
+    from app.services.ai import streaming
+    from app.services.redact import redact_text
+
+    loop_thread = threading.get_ident()
+    seen = []
+
+    def masking(text, *a):
+        seen.append(threading.get_ident())
+        return redact_text(text + " password=fake-pass-1", *a)
+
+    monkeypatch.setattr(streaming, "redact_text", masking)
+    titles = []
+    events, _, _ = await one_turn(monkeypatch, "get_pod_metrics", {}, [], titles=titles)
+    assert seen and all(thread != loop_thread for thread in seen), seen
+    assert titles == ["well? password=<REDACTED:password>"]
+    assert events[-1] == "[DONE]"
 
 
 @pytest.mark.asyncio

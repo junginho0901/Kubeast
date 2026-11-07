@@ -123,7 +123,7 @@ Alerts come in through the same webhook as the investigation above, so `features
   - The AI chat and MCP can start it too, with the tool `alert_investigate`. It calls the button's route as that person, so its permission, queue, budget and audit are the button's. It also needs `ai.tool.alert_investigate`, which Write holds through `ai.tool.*` and Read does not.
     - There is no approval card: like the button, it starts an investigation and changes nothing in the cluster.
     - The floating chat and an investigation itself are not offered it, and it is left out while `features.alertInvestigation` or `manual` is off.
-    - The chat gets the state, a link to the report and, once it is finished, the report, up to 4,000 characters. Reading it is `ai.investigation.view`. With `status_only` it starts nothing.
+    - The chat gets the state, a link to the report and, once it is finished, the whole report, which a model reads up to its `tool_result_chars`. Reading it is `ai.investigation.view`. With `status_only` it starts nothing.
 - **Handling marks**: Acknowledge, Assign to me/Unassign, Note and Mark done.
   - They are records inside Kubeast and do not change Alertmanager or the alert rules. The rule decides "Resolved".
   - Every change records `alert.inbox.update` (before and after values). When the audit DB cannot be written, the response is 503 and the mark is rolled back.

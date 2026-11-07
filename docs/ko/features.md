@@ -97,7 +97,7 @@
     - `k8s_tabular_query` — 고른 열만 표로
     - `k8s_count` — 개수, 그룹별 개수
     - **Secret 값은 이 길로 나가지 않습니다.** `k8s_jq_query`·`k8s_count`는 값을 뺀 목록을 읽습니다. 키 이름은 남고 값은 `<REDACTED:secret>`입니다. kubectl이 직접 계산하는 출력은 먼저 지울 수 없으므로, Secret의 표와 `jsonpath`·`go-template`·`custom-columns` 출력, `.data`로 묶은 개수는 다른 길을 안내하며 거절합니다. 여러 종류를 함께 읽으면 다른 종류의 값은 그대로입니다. 실패한 도구의 글도 답과 똑같이 가립니다.
-    - **다른 자격 증명은 키와 모양으로 찾습니다.** `key: value` 줄, 그리고 줄의 낱말 사이에 있는 `key=value`와 `=`·`:` 뒤의 따옴표 값입니다(로그 줄의 `password=…`, URL 쿼리의 토큰). 키의 끝 낱말이 자격 증명일 때만 값으로 봅니다. 앞 낱말과 떨어져 있든 붙어 있든 같습니다(`DB_PASSWORD`, `PGPASSWORD`, `APIKEY`). 복수형(`api_keys`, `passwords`, 목록이면 항목마다)과 다른 낱말 뒤의 비밀번호 줄임말(`DB_PASS`, `PGPASS`. `pass` 혼자, `first_pass`, `bypass`는 아닙니다)도 같습니다. `tokens`와 `secrets`는 세지 않습니다. 모델이 쓴 양과 리소스 종류를 뜻하기 때문입니다. 그래서 `password_policy=strict`·`token_count=5`는 그대로이고, 개수(`token=5`)·상태(`token=expired`)·참조(`password=$DB_PASSWORD`)·Secret 이름(`secret=kube-system/my-tls`)·셸의 작업 폴더(`PWD=/app`, `OLDPWD=/root`. `DB_PWD=/x`는 비밀번호로 봅니다)도 그대로입니다. 문장도 같은 꼴이므로(`invalid password: too short`) 줄 가운데서 `:` 뒤의 따옴표 없는 값도 그대로입니다.
+    - **다른 자격 증명은 키와 모양으로 찾습니다.** `key: value` 줄, 그리고 줄의 낱말 사이에 있는 `key=value`와 `=`·`:` 뒤의 따옴표 값입니다(로그 줄의 `password=…`, URL 쿼리의 토큰). 키의 끝 낱말이 자격 증명일 때만 값으로 봅니다. 앞 낱말과 떨어져 있든 붙어 있든 같습니다(`DB_PASSWORD`, `PGPASSWORD`, `APIKEY`). 복수형(`api_keys`, `passwords`, 목록이면 항목마다)과 다른 낱말 뒤의 비밀번호 줄임말(`DB_PASS`, `PGPASS`. `pass` 혼자, `first_pass`, `bypass`는 아닙니다)도 같습니다. `tokens`와 `secrets`는 세지 않습니다. 모델이 쓴 양과 리소스 종류를 뜻하기 때문입니다. 그래서 `password_policy=strict`·`token_count=5`는 그대로이고, 개수(`token=5`)·상태(`token=expired`)·참조(`password=$DB_PASSWORD`)·Secret 이름(`secret=kube-system/my-tls`, 차트가 이름에 쓰는 키의 `existingSecret: my-tls`·`tlsSecret: my-tls`)·짧은 이름 아래 작은 숫자(`foo_pass: 3`)·kubectl에 준 파일(`--from-file=token=./token.txt`)·셸의 작업 폴더(`PWD=/app`, `OLDPWD=/root`, `PWD=/home/me/My Docs`. `DB_PWD=/x`는 비밀번호로 보고, 소문자 `pwd` 아래 인코딩한 글처럼 읽히는 값도 그렇습니다)도 그대로입니다. 문장도 같은 꼴이므로(`invalid password: too short`) 줄 가운데서 `:` 뒤의 따옴표 없는 값도 그대로입니다. `DB_PASSWORD=x` 뒤의 나머지는 명령으로 읽히면(`psql -h db`, `HOME=/root`, `./run.sh`) 남기고, 공백 있는 값과 구분할 수 없으면 가립니다. Secret은 YAML 흐름 꼴이나 로그 줄 안의 이스케이프된 JSON으로 적혀 있어도 알아봅니다.
   - 파드는 kubectl이 아니라 k8s-service가 Pods 목록용으로 들고 있는 줄(`/pods/page`)에서 읽어, 큰 클러스터도 전부 봅니다.
     - 이름 없는 `k8s_get_resources`가 파드 25개를 넘으면 전체에 대한 개수(phase·상태·카드 색·네임스페이스·노드별)와, 오류·경고부터 손볼 순서로 파드 25개를 답하고 `next_offset`으로 이어 읽습니다. 25개 이하는 지금처럼 kubectl로 답합니다.
     - `k8s_find_resource`는 파드 전부를 찾습니다. `키=값`은 레이블 셀렉터로, 그 밖에는 단어가 모두 이름이나 레이블 하나에 있는 파드를 찾습니다. 네임스페이스 없이 이름만 받은 로그 도구도 같은 규칙으로 파드를 찾습니다.
@@ -108,7 +108,7 @@
   - 다른 종류는 kubectl로 목록을 받기 전에 크기를 먼저 묻습니다. kubectl은 출력 방식과 상관없이 목록 전체를 들고 있기 때문입니다(이벤트 11만 개에 1~1.8GB). API 서버가 객체 없이 개수를 답합니다(`limit=1`과 남은 수, 셀렉터가 있으면 500개씩 5,001개까지 셈). 5,000개를 넘으면 `k8s_get_resources`·`k8s_jq_query`·`k8s_tabular_query`·필드로 묶은 `k8s_count`는 목록을 받지 않고 개수와 함께 `too_large`로 답하고, 묶지 않은 `k8s_count`는 크기와 상관없이 그 개수로 답합니다.
   - `k8s_get_events`는 최신 이벤트를 최신 순으로 답합니다(기본 200, 최대 1,000). k8s-service가 쪽 단위로 읽으며, 더 많으면 전체 수를 함께 말합니다.
   - kubectl 목록이 도구 출력 상한(`TOOL_OUTPUT_MAX_BYTES`, 1 MiB)보다 길면 잘렸다고 답합니다. `k8s_jq_query`·`k8s_count`는 `too_large`, `k8s_tabular_query`는 "전체 수는 모름"으로 답하며, 읽기 오류나 틀린 개수를 내지 않습니다.
-  - 쓰기 전에는 `k8s_diff`로 바뀔 내용을 먼저 보여 줍니다. 서버 dry-run 결과를 라이브 객체와 비교한 diff이며 **실제로 적용하지 않고**, 쓰기 권한이 있는 사용자에게만 보입니다. Secret이면 값 없이 바뀌는 키 이름만 보여 줍니다.
+  - 쓰기 전에는 `k8s_diff`로 바뀔 내용을 먼저 보여 줍니다. AI가 값 대신 읽은 글자가 든 manifest는 `placeholders`로 알려 줍니다. diff는 그 글자를 비교한 것이고 쓰기는 거절되기 때문입니다. 서버 dry-run 결과를 라이브 객체와 비교한 diff이며 **실제로 적용하지 않고**, 쓰기 권한이 있는 사용자에게만 보입니다. Secret이면 값 없이 바뀌는 키 이름만 보여 줍니다.
   - AI가 값 대신 읽은 글자(`<REDACTED:…>`, Secret의 `***`, 인코딩한 꼴 포함)를 담은 쓰기는 그 글자가 저장되므로 누구든 거절합니다. 승인 카드 전에 걸리고 tool-server에서 한 번 더 걸립니다. 거절 글이 대신 할 일을 말합니다: 다른 칸만 패치하고, 새 값은 사용자에게 받습니다.
 - **플로팅 AI 위젯(AI Chat)** — 모든 페이지에 떠 있는 위젯이 **현재 화면 컨텍스트**(보고 있는 리소스)를 이해하고 답합니다.
   - 답할 때는 read-only 툴만 씁니다.
@@ -383,7 +383,7 @@ EKS 클러스터에 `features.networkFlowMonitor`를 켜면 Pod·워크로드 �
 
 - 릴리스 목록 / 상세 / 히스토리 / values / 매니페스트 / 리소스 보기
 - **Rollback · Upgrade · Uninstall · Test** (모두 dry-run 미리보기 + 확인 후 실행)
-- `resource.secret.reveal`이 없으면 values는 가려져 보입니다. `<REDACTED:…>`로 보이는 값은 그 줄을 그대로 두면 유지되고 미리보기가 어느 값인지 말해 줍니다. 그 자리에 새 값을 쓰면 바뀌고, 줄을 지우면 사라집니다. 미리보기는 이 자리들도 말해 줍니다. 보낸 글만 보고 숨겨진 값과 비교하지 않으므로, 쓴 값이 맞았는지는 알려 주지 않습니다. 다른 자리의 가림 글자는 대신할 값이 없어 그 자리를 말하며 거절합니다. 목록 항목은 같은 글로 보인 항목과 짝이 되므로 항목을 지우거나 옮겨도 값은 자기 항목을 따라가고, 한 항목의 다른 칸은 그 자리에서 고칠 수 있습니다. 같은 글의 항목은 모두 남아 있어야 합니다. 아니면 어느 값인지 말할 수 없어 그 자리를 말하며 거절합니다
+- `resource.secret.reveal`이 없으면 values는 가려져 보입니다. `<REDACTED:…>`로 보이는 값은 그 줄을 그대로 두면 유지되고 미리보기가 어느 값인지 말해 줍니다. 그 자리에 새 값을 쓰면 바뀌고, 줄을 지우면 사라집니다. 미리보기는 이 자리들도 말해 줍니다. 보낸 글만 보고 숨겨진 값과 비교하지 않으므로, 쓴 값이 맞았는지는 알려 주지 않습니다. 다른 자리의 가림 글자는 대신할 값이 없어 그 자리를 말하며 거절합니다. 목록 항목은 같은 글로 보인 항목과 짝이 되므로 항목을 지우거나 옮겨도 값은 자기 항목을 따라가고, 한 항목의 다른 칸은 그 자리에서 고칠 수 있습니다. 같은 글의 항목은 모두 남아 있어야 합니다. 아니면 어느 값인지 말할 수 없어 그 자리를 말하며 거절합니다. 가림이 숨기지 못하는 것이 하나 있습니다. 숨긴 값의 체크섬을 렌더하는 차트입니다(값이 바뀌면 Deployment를 다시 띄우는 annotation). 체크섬은 매니페스트와 Deployment를 읽는 사람에게 보이고, 미리보기에서도 맞는 값과 틀린 값이 다르게 나옵니다([보안과 감사](security-audit.md#가린-helm-values가-숨기지-못하는-것) 참고)
 - 보내는 values가 보이는 values와 다르면 미리보기에서 적용할 수 있습니다. 매니페스트에 차이가 보이지 않을 때도 그렇습니다(`resource.secret.reveal` 없이 Secret에만 들어가는 값, 훅에서만 쓰는 값, 차트가 쓰지 않는 값). 미리보기가 그렇다고 말해 줍니다. 주석이나 띄어쓰기만 다른 것은 변경이 아닙니다
 
 ## 🎮 GPU & DRA (Dynamic Resource Allocation)

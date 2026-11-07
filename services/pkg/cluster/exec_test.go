@@ -32,6 +32,29 @@ users:
 	return b.String()
 }
 
+// The text of a refusal goes to a stored audit row and the sinks: it says what is wrong without what the parser quoted.
+func TestCheckKubeconfigExec_SaysWhatIsWrongWithoutQuotingTheValue(t *testing.T) {
+	const value = "fake-token-1"
+	for _, c := range []struct{ name, blob, reason string }{
+		{"an alias where a token goes", "apiVersion: v1\nkind: Config\nusers:\n- name: u\n  user:\n    token: *" + value + "\n", "unknown anchor"},
+		{"a version nothing serves", "apiVersion: " + value + "\nkind: Config\nclusters: []\nusers: []\n", "is registered for version"},
+		{"a kind nothing serves", "apiVersion: v1\nkind: " + value + "\nclusters: []\nusers: []\n", "is registered for version"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			err := CheckKubeconfigExec(c.blob, []string{"aws-iam-authenticator"})
+			if err == nil {
+				t.Fatal("not refused")
+			}
+			if strings.Contains(err.Error(), value) {
+				t.Errorf("the value is in the text: %v", err)
+			}
+			if !strings.Contains(err.Error(), "invalid kubeconfig") || !strings.Contains(err.Error(), c.reason) {
+				t.Errorf("the text does not say why: %v", err)
+			}
+		})
+	}
+}
+
 // A registered kubeconfig must not disable TLS verification, route through a
 // proxy, or reference files on the pod's filesystem (second review M28).
 func TestCheckKubeconfigExec_RejectsUnsafeClusterAndUserFields(t *testing.T) {

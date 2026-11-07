@@ -127,7 +127,7 @@ func (w *webhookSink) Send(ctx context.Context, events []Event) error {
 		case "discord":
 			body = mustJSON(discordMessage(events, start, end))
 		case "telegram":
-			body = mustJSON(map[string]any{"chat_id": w.cfg.ChatID, "text": truncate(chatText(events, start, end), 4000), "disable_web_page_preview": true})
+			body = mustJSON(map[string]any{"chat_id": w.cfg.ChatID, "text": truncate(chatText(events, start, end, nil), 4000), "disable_web_page_preview": true})
 			target = strings.TrimRight(w.url, "/") + "/bot" + w.token + "/sendMessage"
 		}
 		if err := w.post(ctx, target, body, nil); err != nil {
@@ -137,12 +137,17 @@ func (w *webhookSink) Send(ctx context.Context, events []Event) error {
 	return nil
 }
 
-func chatText(events []Event, start, end int) string {
+// chatText is a batch as lines; escape makes a line plain words for a channel that reads markup.
+func chatText(events []Event, start, end int, escape *strings.Replacer) string {
 	var b strings.Builder
 	b.WriteString(Summary(events[start:end]))
 	for _, e := range events[start:end] {
 		b.WriteString("\n• ")
-		b.WriteString(e.Line())
+		if escape != nil {
+			b.WriteString(escape.Replace(e.Line()))
+		} else {
+			b.WriteString(e.Line())
+		}
 	}
 	return b.String()
 }
@@ -170,7 +175,8 @@ func slackEscape(s string) string {
 func teamsMessage(events []Event, start, end int) map[string]any {
 	body := []map[string]any{{"type": "TextBlock", "text": Summary(events[start:end]), "weight": "Bolder", "wrap": true}}
 	for _, e := range events[start:end] {
-		body = append(body, map[string]any{"type": "TextBlock", "text": e.Line(), "wrap": true, "spacing": "Small"})
+		// A TextBlock reads Markdown and a line holds what a request wrote; a TextRun reads none.
+		body = append(body, map[string]any{"type": "RichTextBlock", "spacing": "Small", "inlines": []map[string]any{{"type": "TextRun", "text": e.Line()}}})
 	}
 	return map[string]any{
 		"type": "message",
@@ -187,8 +193,18 @@ func teamsMessage(events []Event, start, end int) map[string]any {
 	}
 }
 
+// discordMarkup are the characters Discord reads as formatting, links and mentions.
+var discordMarkup = strings.NewReplacer(`\`, `\\`, `*`, `\*`, `_`, `\_`, `~`, `\~`, "`", "\\`", `|`, `\|`, `>`, `\>`, `<`, `\<`, `[`, `\[`, `]`, `\]`, `#`, `\#`)
+
+// discordMessage: a line holds what a request wrote, so it stays words, calls nobody and pulls in no preview of an address.
 func discordMessage(events []Event, start, end int) map[string]any {
-	return map[string]any{"username": "Kubeast", "content": truncate(chatText(events, start, end), 1990)}
+	const suppressEmbeds = 1 << 2
+	return map[string]any{
+		"username":         "Kubeast",
+		"content":          truncate(chatText(events, start, end, discordMarkup), 1990),
+		"allowed_mentions": map[string]any{"parse": []string{}},
+		"flags":            suppressEmbeds,
+	}
 }
 
 func pagerDutyEvent(routingKey, severity string, e Event) map[string]any {

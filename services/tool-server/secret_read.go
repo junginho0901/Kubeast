@@ -10,7 +10,42 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"sync/atomic"
+
+	"github.com/junginho0901/kubeast/services/pkg/redact"
 )
+
+type readMasksKey struct{}
+
+// withReadMasks counts what a read takes out of a Secret before the answer is written, which the answer's masking cannot
+// see any more and the audit row says all the same.
+func withReadMasks(ctx context.Context) (context.Context, *atomic.Int64) {
+	count := &atomic.Int64{}
+	return context.WithValue(ctx, readMasksKey{}, count), count
+}
+
+func countReadMasks(ctx context.Context, n int) {
+	if count, ok := ctx.Value(readMasksKey{}).(*atomic.Int64); ok {
+		count.Add(int64(n))
+	}
+}
+
+// addReadMasks puts what the read took out next to what the answer's masking did, as the kind of a Secret's values.
+func addReadMasks(stats *redact.Stats, count *atomic.Int64) *redact.Stats {
+	n := int(count.Load())
+	if n == 0 {
+		return stats
+	}
+	if stats == nil {
+		stats = &redact.Stats{}
+	}
+	if stats.Kinds == nil {
+		stats.Kinds = map[string]int{}
+	}
+	stats.Kinds["secret"] += n
+	stats.Count += n
+	return stats
+}
 
 // namesSecrets: a kubectl resource argument that lists core Secrets, by any spelling kubectl takes or nearly takes:
 // any case, the singular, version or group forms, one of several separated by commas. <plural>.<group with a dot> is

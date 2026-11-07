@@ -1147,8 +1147,9 @@ async def session_chat_stream(
         
         # 세션 제목 자동 생성 (첫 메시지인 경우)
         if len(messages_history) <= 1:  # 시스템 메시지 + 첫 사용자 메시지
-            # The list shows the title on every visit: mask credentials as for model input.
-            text, _ = redact_text(message)
+            # The list shows the title on every visit: mask credentials as for model input, off the event loop, since the
+            # message may be as long as the gateway lets it be.
+            text, _ = await asyncio.to_thread(redact_text, message)
             title = text[:50] + "..." if len(text) > 50 else text
             if title_prefix:
                 title = title_prefix + title

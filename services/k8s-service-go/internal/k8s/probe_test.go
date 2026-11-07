@@ -38,6 +38,30 @@ func TestProbeKubeconfig_RejectsDisallowedExecBeforeDialing(t *testing.T) {
 	}
 }
 
+// A password in a server address the client cannot use stays out of the text, which reaches a stored audit row.
+func TestProbeKubeconfig_SaysAServerAddressIsBadWithoutQuotingIt(t *testing.T) {
+	const value = "fake-pass-1"
+	for name, server := range map[string]string{
+		"a space in the host": "https://bob:" + value + "@ex ample:6443",
+		"a broken escape":     "http://%zz" + value,
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := &Service{}
+			blob := strings.Replace(strings.Replace(probeKubeconfigTemplate, "%s", "token: abc", 1), "https://127.0.0.1:1", `"`+server+`"`, 1)
+			_, err := s.ProbeKubeconfig(context.Background(), blob, 3*time.Second)
+			if err == nil {
+				t.Fatal("not refused")
+			}
+			if strings.Contains(err.Error(), value) {
+				t.Errorf("the value is in the text: %v", err)
+			}
+			if !strings.Contains(err.Error(), "create client") {
+				t.Errorf("the text does not say where it failed: %v", err)
+			}
+		})
+	}
+}
+
 func TestProbeKubeconfig_ReportsConnectionFailure(t *testing.T) {
 	s := &Service{}
 	blob := strings.Replace(probeKubeconfigTemplate, "%s", "token: abc", 1)

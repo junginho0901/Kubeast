@@ -161,6 +161,46 @@ async def test_a_failed_tool_call_reaches_the_model_masked():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("refusal", [
+    '{"status": "forbidden", "message": "outside the grant"}',
+    '{"status": "not_permitted"}',
+    '{"status": "audit_unavailable"}',
+    '{"status": "rate_limited"}',
+    '{"error": "cluster refused"}',
+])
+async def test_a_refusal_is_not_kept_and_the_next_call_answers_from_the_cluster(refusal):
+    from app.services.ai_service import ToolContext
+
+    service = _make_service()
+    service._call_tool_server = AsyncMock(side_effect=[refusal, '{"pods": "shop"}'])
+    ctx = ToolContext("s1")
+    args = {"resource_type": "pods", "namespace": "shop"}
+    assert await execute_function_with_context(service, "k8s_get_resources", args, ctx) == refusal
+    assert await execute_function_with_context(service, "k8s_get_resources", args, ctx) == '{"pods": "shop"}'
+    # an answer is kept as before
+    assert await execute_function_with_context(service, "k8s_get_resources", args, ctx) == '{"pods": "shop"}'
+    assert service._call_tool_server.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_a_refusal_for_the_namespace_gives_way_when_the_grant_widens():
+    from app.security import TokenPayload
+    from app.services.ai_service import ToolContext
+
+    service = _make_service()
+    service.cluster_name = "cluster-a"
+    service._call_tool_server = AsyncMock(side_effect=['{"status": "forbidden"}', '{"pods": "shop"}'])
+    ctx = ToolContext("s1")
+    args = {"resource_type": "pods", "namespace": "shop"}
+    grant = lambda *namespaces: TokenPayload(user_id="u", role="member", matrix={"cluster-a": ("ai.tool.*",)}, namespaces={"cluster-a": namespaces})
+
+    service.token = grant("web")
+    assert await execute_function_with_context(service, "k8s_get_resources", args, ctx) == '{"status": "forbidden"}'
+    service.token = grant("web", "shop")
+    assert await execute_function_with_context(service, "k8s_get_resources", args, ctx) == '{"pods": "shop"}'
+
+
+@pytest.mark.asyncio
 async def test_a_cached_result_answers_only_for_its_own_cluster():
     from app.services.ai_service import ToolContext
 

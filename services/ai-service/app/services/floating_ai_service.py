@@ -5,6 +5,7 @@ extra_context_block / title_prefix) 만 주입하고 나머지 동작은 AIServi
 그대로 수행한다. 세션 로드/LLM 스트림/DB 저장/continuation/usage 집계 등
 품질 관련 기능이 자동으로 상속된다.
 """
+import asyncio
 from typing import AsyncGenerator, Optional
 
 from app.models.floating_ai import PageContextPayload
@@ -35,8 +36,10 @@ class FloatingAIService:
         audit_http: Optional[dict] = None,
     ) -> AsyncGenerator[str, None]:
         system_prompt = build_floating_system_prompt()
+        # Masking the snapshot is CPU work on text a caller sent, up to the gateway's body limit; it goes off the event
+        # loop and is awaited before anything of the answer leaves.
         extra_context = (
-            build_context_prompt(page_context, cluster_name) if page_context else None
+            await asyncio.to_thread(build_context_prompt, page_context, cluster_name) if page_context else None
         )
 
         async for event in self._ai.session_chat_stream(

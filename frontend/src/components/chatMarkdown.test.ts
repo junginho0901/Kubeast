@@ -103,6 +103,16 @@ describe.each(SURFACES)('%s: what an answer cannot draw', (_name, render) => {
     expect(link).toContain('rel="noopener noreferrer"')
   })
 
+  it('a link in the head of a disclosure is its words, and one in the body stays a link', () => {
+    for (const head of ['<a href="https://example.test/head">docs</a>', 'see <b><a href="https://example.test/head">docs</a></b>']) {
+      const html = render(`<details>\n<summary>${head}</summary>\n\n[body](https://example.test/body)\n\n</details>`)
+      expect(html).not.toContain('https://example.test/head')
+      expect(html).toContain('docs')
+      expect(html).toContain('md-summary')
+      expect(anchor(html, 'https://example.test/body')).toContain('target="_blank"')
+    }
+  })
+
   it('a link left open does not take in the blocks after it', () => {
     const html = render('<a href="https://example.test/">docs\n\nNext paragraph.\n\n<details>\n<summary>🔧 <strong>tool</strong></summary>\n\nbody\n\n</details>\n\nLast paragraph.')
     expect(html).toContain('Next paragraph.')

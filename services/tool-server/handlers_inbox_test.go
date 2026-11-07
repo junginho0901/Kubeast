@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -493,7 +494,7 @@ func TestAlertInvestigate_ADoneInvestigationAnswersItsReportAndStartsNothing(t *
 		return 200, inboxWindow("a1", "c1", "inv-1", "done", nil)
 	})
 	reply := decode(t, runTool(t, ctxWithPayload("c1", holderOf()), "alert_investigate", args{"alert_id": "a1"}))
-	if reply["started"] != false || reply["report"] != report || reply["report_truncated"] != false {
+	if reply["started"] != false || reply["report"] != report {
 		t.Fatalf("got %v", reply)
 	}
 	if reply["total_tokens"] != float64(60029) || reply["model"] != "m1" || reply["tool_call_count"] != float64(7) || reply["duration_ms"] != float64(81000) || reply["finished_at"] != "2026-11-06T10:02:00Z" {
@@ -508,9 +509,10 @@ func TestAlertInvestigate_ADoneInvestigationAnswersItsReportAndStartsNothing(t *
 	}
 }
 
-func TestAlertInvestigate_ALongReportIsCutAndSaysSo(t *testing.T) {
+// The same report reads the same whichever tool opens it; what a model may read of it is its own limit (tool_result_chars).
+func TestAlertInvestigate_AnswersTheWholeReportAsTheOtherToolsDo(t *testing.T) {
 	no := false
-	report := strings.Repeat("가", investigationReportCap) + strings.Repeat("나", 5)
+	report := strings.Repeat("가", 6000) + strings.Repeat("나", 5)
 	fakeAIService(t, func(r *http.Request) (int, string) {
 		switch {
 		case r.Method == http.MethodPost:
@@ -521,8 +523,14 @@ func TestAlertInvestigate_ALongReportIsCutAndSaysSo(t *testing.T) {
 		return 200, inboxWindow("a1", "c1", "inv-1", "done", nil)
 	})
 	reply := decode(t, runTool(t, ctxWithPayload("c1", holderOf()), "alert_investigate", args{"alert_id": "a1"}))
-	if reply["report"] != strings.Repeat("가", investigationReportCap) || reply["report_truncated"] != true || reply["report_chars"] != float64(investigationReportCap+5) {
-		t.Fatalf("cut: truncated=%v chars=%v len=%d", reply["report_truncated"], reply["report_chars"], len([]rune(reply["report"].(string))))
+	if reply["report"] != report {
+		t.Fatalf("the report came back with %d characters of %d", len([]rune(fmt.Sprint(reply["report"]))), len([]rune(report)))
+	}
+	if _, says := reply["report_truncated"]; says {
+		t.Errorf("a whole report says whether it was cut: %v", reply["report_truncated"])
+	}
+	if reply["report_chars"] != float64(6005) {
+		t.Errorf("report_chars = %v", reply["report_chars"])
 	}
 }
 
