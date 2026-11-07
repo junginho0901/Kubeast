@@ -70,6 +70,28 @@ def test_a_setting_glued_to_a_credential_word_is_not_held_as_a_credential():
         assert redact.word_key_is_sensitive(name), name
 
 
+def test_lists_in_text_count_as_the_key_rule():
+    for text in ('log {"api_keys":["fake-1","fake-2"]} end', '{\n  "api_keys": [\n    "fake-1",\n    "fake-2"\n  ]\n}\n'):
+        assert redact.redact_text(text, redact.Options())[1].kinds == {"key_name": 2}, text
+        assert redact.redact_text(text, redact.Options(disabled={"key_name"}))[0] == text
+
+
+def test_a_commands_words_lose_a_short_or_plural_credential_and_keep_the_word_pass():
+    argv = ["env", "DB_PASS=fake-pass-1", "PGPASS=fake-pass-2", "API_KEYS=fake-key-1", "passwords=fake-pass-3",
+            "first_pass=done", "pass=ok", "bypass=yes", "--pass=ok", "--db-pass", "fake-pass-4", "ls"]
+    assert redact.redact_command(argv, redact.Options()) == [
+        "env", "DB_PASS=<REDACTED:DB_PASS>", "PGPASS=<REDACTED:PGPASS>", "API_KEYS=<REDACTED:API_KEYS>", "passwords=<REDACTED:passwords>",
+        "first_pass=done", "pass=ok", "bypass=yes", "--pass=ok", "--db-pass", "<REDACTED:db-pass>", "ls",
+    ]
+
+
+def test_the_word_pass_and_the_plural_of_a_count_are_not_held_as_a_credential():
+    for name in ("DB_PASS", "--db-pass", "mysqlPass", "PGPASS", "passwords", "--api-keys", "API_KEYS", "E2E_PASS", "TEST_PASS"):
+        assert redact.word_key_is_sensitive(name), name
+    for name in ("pass", "--pass", "first_pass", "--first-pass", "test_pass", "bypass", "passed", "PGPASSFILE", "tokens", "total_tokens", "secrets"):
+        assert not redact.word_key_is_sensitive(name), name
+
+
 def test_the_floating_snapshot_loses_the_credential_and_keeps_the_rest():
     pod = {
         "kind": "Pod",

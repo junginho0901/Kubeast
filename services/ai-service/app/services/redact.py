@@ -60,14 +60,22 @@ def from_env() -> Options:
 # --- key-name rule ------------------------------------------------------------
 
 # A credential word at the end of a word of the normalized (snake_case) key: db_password,
-# clientSecret → client_secret, apiKey → api_key, and names glued together, PGPASSWORD, APIKEY;
-# "tokenizer" or "max_tokens" do not match.
+# clientSecret → client_secret, apiKey → api_key, names glued together, PGPASSWORD, APIKEY, and the plural, api_keys;
+# "tokenizer" or "max_tokens" do not match. "secrets" and "tokens" stay out: they name a kind and what a model used far
+# more often than they hold a value.
 _SENSITIVE_KEY = re.compile(
-    r"(^|_)[a-z0-9]*(password|passwd|pwd|secret|token|api_?key|access_?key|private_?key|secretkey|credentials?|dsn|connection_?string)(_|$)"
+    r"(^|_)[a-z0-9]*(passwords?|passwds?|pwds?|secret|token|api_?keys?|access_?keys?|private_?keys?|secretkeys?|credentials?|dsns?|connection_?strings?)(_|$)"
 )
 # The same words standing apart. A name that matches only the rule above is glued: see _left_to_the_word_rule.
 _SEPARATED_KEY = re.compile(
-    r"(^|_)(password|passwd|pwd|secret|token|api_key|access_key|private_key|credentials?|dsn|connection_string)(_|$)"
+    r"(^|_)(passwords?|passwds?|pwds?|secret|token|api_keys?|access_keys?|private_keys?|credentials?|dsns?|connection_strings?)(_|$)|[a-z0-9]_pass$"
+)
+# "pass" as a password's short name: the last word after another one (DB_PASS, mysqlPass), or PGPASS. Alone it is a result
+# (pass: true), glued it is another word (bypass, compass), and after these words it is a run or a check that passed,
+# unless the name is in capitals: an environment variable holds the value itself (E2E_PASS).
+_SHORT_PASSWORD_KEY = re.compile(r"[a-z0-9]_pass$|(^|_)pgpass$")
+_PASS_OF_A_RUN = re.compile(
+    r"(^|_)(first|second|third|fourth|last|final|next|prev|previous|by|single|multi|test|tests|unit|e2e|lint|check|checks|build|gate|scan|summary|result|results|total|all)_pass$"
 )
 _NOT_SECRET_KEY = re.compile(
     r"(name|ref|url|uri|path|file|dir|ttl|length|count|min|max|timeout|mode|type|enabled|id|version|algorithm|alg|header|claim|issuer|audience|scope|policy)s?$"
@@ -91,7 +99,7 @@ _HARMLESS = {"true", "false", "yes", "no", "on", "off", "none", "auto", "default
 
 def _value_looks_harmless(v: str) -> bool:
     v = v.strip()
-    if v in ("", "null", "~", "[]", "{}", "|", ">", "|-", ">-"):
+    if v in ("", "null", "~", "[]", "{}", "[", "{", "|", ">", "|-", ">-"):
         return True
     if v.startswith("<REDACTED") or v.startswith("<set to the key") or v.startswith("<EMAIL"):
         return True
@@ -100,21 +108,26 @@ def _value_looks_harmless(v: str) -> bool:
     return all(c.isdigit() or c in ".-msh" for c in v)
 
 
+def _is_short_password(key: str) -> bool:
+    k = _normalize_key(key.lstrip("-"))
+    return bool(_SHORT_PASSWORD_KEY.search(k)) and (key == key.upper() or not _PASS_OF_A_RUN.search(k))
+
+
 def _key_is_sensitive(key: str) -> bool:
     k = _normalize_key(key)
-    return bool(_SENSITIVE_KEY.search(k)) and not _NOT_SECRET_KEY.search(k)
+    return (bool(_SENSITIVE_KEY.search(k)) and not _NOT_SECRET_KEY.search(k)) or _is_short_password(key)
 
 
 # The key's last word says the value itself is the credential, so a number there is one. Under password_expiry_days,
 # token or secret a number may be a setting or a count, and hiding it would change what the reader is told.
-_CREDENTIAL_LAST_WORD = re.compile(r"(^|_)[a-z0-9]*(password|passwd|pwd|api_?key|access_?key|secret_?key|private_?key|client_?secret)$")
+_CREDENTIAL_LAST_WORD = re.compile(r"(^|_)[a-z0-9]*(password|passwd|pwd|api_?key|access_?key|secret_?key|private_?key|client_?secret)$|[a-z0-9]_pass$|(^|_)pgpass$")
 # The shell's own variables, as the shell spells them: PWD=/app says where a process runs. DB_PWD=/x, and an ODBC
 # connection string's Pwd=/x, are a password whatever they look like.
 _WORKING_DIRECTORY_KEY = re.compile(r"^(PWD|OLDPWD|pwd|oldpwd)$")
 _PATH_SHAPED = re.compile(r"^(~|\.{1,2})?(/[A-Za-z0-9._~\-]*)*$")
 
 
-def _is_working_directory(key: str, value: str) -> bool:
+def is_working_directory(key: str, value: str) -> bool:
     return bool(_WORKING_DIRECTORY_KEY.match(key) and _PATH_SHAPED.match(value.strip()))
 
 
@@ -132,7 +145,7 @@ def _left_to_the_word_rule(key: str, line: str) -> bool:
 
 def _value_stays(key: str, value: str) -> bool:
     """Whether a sensitive key's text value is left as it is."""
-    if _is_working_directory(key, value):
+    if is_working_directory(key, value):
         return True
     if not _value_looks_harmless(value):
         return False
@@ -191,10 +204,88 @@ def _mask_block_values(text: str, stats: Stats) -> str:
     return "\n".join(out)
 
 
+# A key with nothing after it, whose value may be the list on the lines below, and one item of that list.
+_LIST_KEY = re.compile(r"""^([ \t]*(?:-[ \t]+)?)"?([A-Za-z0-9_.\-]+)"?[ \t]*:[ \t]*(?:#.*)?\r?$""")
+_LIST_ITEM = re.compile(r"^([ \t]*-[ \t]+)(.*?)([ \t]*\r?)$")
+
+# A JSON string in text, plain or backslash-escaped as an annotation holds it.
+_JSON_STRING_IN_TEXT = r'"(?:[^"\\\r\n]|\\[^\r\n])*"|\\"(?:[^"\\\r\n]|\\[^"\r\n])*\\"'
+# "key": [...] in a line, up to its bracket or, in text cut short, the line's end. A list holding a mapping or a list does
+# not match: those have their own keys.
+_JSON_LIST_IN_TEXT = re.compile(
+    r'(\\?")([A-Za-z0-9_.\-]+)(\\?"[ \t]*:[ \t]*\[)((?:' + _JSON_STRING_IN_TEXT + r'|[^\[\]{}"\\\r\n])*(?:"[^"\r\n]*)?)(\]|\r?$)', re.M
+)
+_JSON_LIST_ITEM = re.compile(_JSON_STRING_IN_TEXT + r'|"[^"\r\n]*$|[^ \t\r\n,"\\]+')
+# A key whose list goes on below this line, quoted or at the line's start: in a sentence a word before a colon is not one.
+# Then one item on a line of its own.
+_JSON_LIST_OPENS = re.compile(r'(?:^[ \t]*(?:-[ \t]+)?"?|")([A-Za-z0-9_.\-]+)"?[ \t]*:[ \t]*\[[^\]\r\n]*\r?$')
+_JSON_LIST_LINE = re.compile(r'^([ \t]*)(' + _JSON_STRING_IN_TEXT + r'|"[^"\r\n]*|[^ \t\r\n,"\\\[\]{}:]+)([ \t,\]}]*\r?)$')
+
+
+def _mask_list_item(key: str, item: str, quote: str, stats: Stats) -> str:
+    """Mask one item of a JSON list under a sensitive key, in the quote it came in, or quote if it had none."""
+    value = item
+    if item.startswith('\\"'):
+        value, quote = item[2:].removesuffix('\\"'), '\\"'
+    elif item.startswith('"'):
+        value, quote = item[1:].removesuffix('"'), '"'
+    if _value_stays(key, value):
+        return item
+    stats.add("key_name", 1)
+    return quote + "<REDACTED:" + key + ">" + quote
+
+
+def _mask_json_lists(text: str, stats: Stats) -> str:
+    """Mask a sensitive key's JSON list held in one line of text, which a parser cannot read when the text is a log line or
+    was cut short."""
+
+    def _list(m: re.Match) -> str:
+        key = m.group(2)
+        if not _key_is_sensitive(key):
+            return m.group(0)
+        items = _JSON_LIST_ITEM.sub(lambda item: _mask_list_item(key, item.group(0), m.group(1), stats), m.group(4))
+        return m.group(1) + key + m.group(3) + items + m.group(5)
+
+    return _JSON_LIST_IN_TEXT.sub(_list, text)
+
+
+def _mask_list_values(text: str, stats: Stats) -> str:
+    """Replace each item of a sensitive key's list on the lines below it, which the line rules read as words with no key.
+    An item that is a mapping has its own keys, and a count or a state stays as it does on the key's own line. A JSON list
+    is read up to its first line that is not one item, so what follows a mapping in the same list stays."""
+    if "\n" not in text:
+        return text
+    lines = text.split("\n")
+    for i, line in enumerate(lines):
+        opened = _JSON_LIST_OPENS.search(line)
+        if opened and _key_is_sensitive(opened.group(1)):
+            for j in range(i + 1, len(lines)):
+                item = _JSON_LIST_LINE.match(lines[j])
+                if not item:
+                    break
+                lines[j] = item.group(1) + _mask_list_item(opened.group(1), item.group(2), '"', stats) + item.group(3)
+            continue
+        m = _LIST_KEY.match(line)
+        if not m or not _key_is_sensitive(m.group(2)):
+            continue
+        for j in range(i + 1, len(lines)):
+            item = _LIST_ITEM.match(lines[j])
+            if not item or _indent_of(lines[j]) < len(m.group(1)):
+                break
+            value, quote = item.group(2), ""
+            if len(value) >= 2 and value[0] in "\"'" and value[-1] == value[0]:
+                value, quote = value[1:-1], value[0]
+            if (not quote and (": " in value or value.endswith(":"))) or _value_stays(m.group(2), value):
+                continue
+            lines[j] = item.group(1) + quote + "<REDACTED:" + m.group(2) + ">" + quote + item.group(3)
+            stats.add("key_name", 1)
+    return "\n".join(lines)
+
+
 # A credential among the words of a line (a log line, a command, a connection string, a URL's query). Prose reads the same
 # way ("invalid password: too short"), so only key=value counts there, or a quoted value after = or :, and only a key whose
 # last word is the credential: password_policy=strict and token_count=5 are settings.
-_INLINE_WORD = r"(?:password|passwd|pwd|secret|token|api[_.\-]?key|access[_.\-]?key|private[_.\-]?key|secret[_.\-]?key|credentials?|dsn|connection[_.\-]?string)"
+_INLINE_WORD = r"(?:passwords?|passwds?|pwds?|secret|token|api[_.\-]?keys?|access[_.\-]?keys?|private[_.\-]?keys?|secret[_.\-]?keys?|credentials?|dsns?|connection[_.\-]?strings?|pgpass|[_.\-]pass)"
 _INLINE_KEY = r"([A-Za-z0-9_.\-]*?" + _INLINE_WORD + r")"
 _INLINE_BEFORE = r"(^|[^A-Za-z0-9_.\-])"
 # ASCII as in Go, whose \s has no other spaces, so both stop a value at the same place.
@@ -213,9 +304,11 @@ def _inline_value_stays(key: str, value: str) -> bool:
     v = value.strip("\\\"'").strip()
     if not v or v.startswith("<REDACTED") or v.lower() in _INLINE_NOT_A_VALUE or _INLINE_REFERENCE.match(v):
         return True
-    if _is_working_directory(key, v):
+    if is_working_directory(key, v):
         return True
     k = _normalize_key(key.lstrip("-"))
+    if k.endswith("pass") and not _is_short_password(key):
+        return True  # pass=ok, first_pass=done
     credential = bool(_CREDENTIAL_LAST_WORD.search(k))
     if not credential and all(c.isdigit() or c in ".-msh" for c in v):
         return True  # token=5, secret=3: a count or a duration
@@ -574,6 +667,8 @@ def redact_text(text: Optional[str], opts: Optional[Options] = None) -> Tuple[st
             return m.group(1) + m.group(3) + "<REDACTED:" + m.group(2) + ">" + m.group(5)
 
         text = _mask_block_values(text, stats)
+        text = _mask_list_values(text, stats)
+        text = _mask_json_lists(text, stats)
         text = _sub_count(_JSON_PAIR, text, _pair, stats, "key_name")
         text = _sub_count(_ENV_LIST_JSON, text, _env_json, stats, "key_name")
         text = _sub_count(_KEY_VALUE_LINE, text, _line, stats, "key_name")
@@ -647,6 +742,11 @@ def redact_object(value: Any, opts: Optional[Options] = None, _secret: bool = Fa
                 value[k] = "<REDACTED:" + env_name + ">"
                 stats.add("key_name", 1)
                 continue
+            if isinstance(v, list) and o.on("key_name") and _key_is_sensitive(k):
+                for i, item in enumerate(v):
+                    if _holds_credential(k, item):
+                        v[i] = "<REDACTED:" + k + ">"
+                        stats.add("key_name", 1)
             value[k], _ = redact_object(v, o, secret, stats)
         return value, stats
     if isinstance(value, list):
@@ -667,7 +767,7 @@ def redact_object(value: Any, opts: Optional[Options] = None, _secret: bool = Fa
 
 _ARG_SEP = "\x1f"  # joins a command's arguments for the rules below, which read it as a space
 _WORD = r"""("[^"\x1f]*"|'[^'\x1f]*'|[^\s"',;|&)\]]+)"""
-_CREDENTIAL_WORD = r"(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|credentials?|dsn|connection[_-]?string)"
+_CREDENTIAL_WORD = r"(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|credentials?|dsn|connection[_-]?string|pgpass|[_.\-]pass)"
 _WORD_ASSIGN = re.compile(r"(?<![\w.\-])(-{0,2}[\w.\-]*" + _CREDENTIAL_WORD + r"[\w.\-]*)([ \t]*[=:][ \t]*)" + _WORD, re.I)
 _WORD_FLAG = re.compile(r"(?<![\w.\-])(--?[\w.\-]*" + _CREDENTIAL_WORD + r"[\w.\-]*)(\s+)" + _WORD, re.I)
 # What holds a credential by its place, not its name: -p is a port or a path outside these programs, and a header's whole
@@ -696,7 +796,7 @@ def redact_words(text: str) -> str:
         key, value = m.group(1), m.group(3)
         if not word_key_is_sensitive(key) or _SHELL_REFERENCE.match(value) or value.startswith(("<REDACTED", "-")) or value.lower() in _NOT_A_VALUE:
             return m.group(0)
-        if _is_working_directory(key, value.strip("\"'")):
+        if is_working_directory(key, value.strip("\"'")):
             return m.group(0)
         return m.group(1) + m.group(2) + "<REDACTED:" + key.lstrip("-") + ">"
 

@@ -175,7 +175,7 @@ def _mask_shapes(value: Any, opts: redact.Options) -> Any:
         name, path = value.get("name"), value.get("path")
         for key, item in value.items():
             value[key] = _mask_shapes(item, opts)
-        if isinstance(name, str) and redact.word_key_is_sensitive(name) and isinstance(value.get("value"), str):
+        if isinstance(name, str) and redact.word_key_is_sensitive(name) and isinstance(value.get("value"), str) and not redact.is_working_directory(name, value["value"]):
             value["value"] = f"<REDACTED:{name}>"
         if "op" in value and isinstance(path, str) and _is_secret_path(path) and "value" in value:
             value["value"] = "<REDACTED:value>"

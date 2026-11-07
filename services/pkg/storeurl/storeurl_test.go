@@ -2,14 +2,95 @@ package storeurl
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 )
+
+// The same addresses run in ai-service (test_model_config_policy.py), where private ranges need the list: "store" is what
+// this rule answers and "model" what that one does.
+func TestSharedAddressCases(t *testing.T) {
+	raw, err := os.ReadFile("../../ai-service/tests/fixtures/address_forms_cases.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []struct {
+		Address string `json:"address"`
+		Form    string `json:"form"`
+		Store   string `json:"store"`
+	}
+	if err := json.Unmarshal(raw, &cases); err != nil {
+		t.Fatal(err)
+	}
+	if len(cases) == 0 {
+		t.Fatal("no cases read")
+	}
+	namesTheSetting := func(err error) bool { return err != nil && strings.Contains(err.Error(), allowedHostsValue) }
+	for _, c := range cases {
+		t.Run(c.Address, func(t *testing.T) {
+			dialled := net.JoinHostPort(c.Address, "9090")
+			target := "http://" + dialled + "/"
+			t.Setenv(AllowedHostsEnv, "")
+			switch c.Store {
+			case "never":
+				if got := CheckURL(target); !errors.Is(got, errMetadata) {
+					t.Errorf("%s: CheckURL = %v", c.Form, got)
+				}
+				for _, listed := range []bool{false, true} {
+					if got := checkDialled(dialled, listed); !errors.Is(got, errMetadata) {
+						t.Errorf("%s: dialled, listed=%v: %v", c.Form, listed, got)
+					}
+				}
+				t.Setenv(AllowedHostsEnv, c.Address)
+				if got := CheckURL(target); !errors.Is(got, errMetadata) {
+					t.Errorf("%s: on the list, CheckURL = %v", c.Form, got)
+				}
+			case "listed":
+				if got := CheckURL(target); !namesTheSetting(got) {
+					t.Errorf("%s: CheckURL = %v", c.Form, got)
+				}
+				if got := checkDialled(dialled, false); !namesTheSetting(got) {
+					t.Errorf("%s: dialled = %v", c.Form, got)
+				}
+				if got := checkDialled(dialled, true); got != nil {
+					t.Errorf("%s: dialled, listed = %v", c.Form, got)
+				}
+				t.Setenv(AllowedHostsEnv, c.Address)
+				if got := CheckURL(target); got != nil {
+					t.Errorf("%s: on the list, CheckURL = %v", c.Form, got)
+				}
+			case "open":
+				if got := CheckURL(target); got != nil {
+					t.Errorf("%s: CheckURL = %v", c.Form, got)
+				}
+				if got := checkDialled(dialled, false); got != nil {
+					t.Errorf("%s: dialled = %v", c.Form, got)
+				}
+				t.Setenv(AllowedHostsEnv, "store.example.com")
+				if got := CheckURL(target); !errors.Is(got, errNotOnList) {
+					t.Errorf("%s: another host on the list, CheckURL = %v", c.Form, got)
+				}
+			default:
+				t.Fatalf("store = %q", c.Store)
+			}
+		})
+	}
+}
+
+func TestMetadataHostNamesAreRefused(t *testing.T) {
+	for _, host := range []string{"metadata.google.internal", "metadata.goog", "metadata", "instance-data"} {
+		if got := CheckURL("http://" + host + "/"); !errors.Is(got, errMetadata) {
+			t.Errorf("%s: %v, want the metadata refusal", host, got)
+		}
+	}
+}
 
 func TestCheckedAddressesByClass(t *testing.T) {
 	for _, c := range []struct {
