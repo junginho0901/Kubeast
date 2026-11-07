@@ -70,7 +70,12 @@ export function bulkCreateFailures(err: unknown): BulkCreateFailure[] {
   return Array.isArray(failed) ? (failed as BulkCreateFailure[]) : []
 }
 
-function reasonText(t: TFunction, reason: BulkCreateFailure['reason']): string {
+// What the server's reason says, with what its words cannot: a policy, the permissions, a team.
+export function createRefusalText(t: (key: string, fallback: string) => string, reason: BulkCreateFailure['reason'], detail?: string): string {
+  return `${reasonText(t, reason)}${detail ? `: ${detail}` : ''}`
+}
+
+function reasonText(t: (key: string, fallback: string) => string, reason: BulkCreateFailure['reason']): string {
   switch (reason) {
     case 'missing_fields':
       return t('adminUsers.bulkFailure.missingFields', 'name, email and password are required')
@@ -93,7 +98,7 @@ function reasonText(t: TFunction, reason: BulkCreateFailure['reason']): string {
 
 // One line per account left out, with why.
 export function bulkCreateFailureRows(t: TFunction, failed: BulkCreateFailure[]): string[] {
-  return failed.map((f) => `${f.email || '-'}: ${reasonText(t, f.reason)}${f.detail ? `: ${f.detail}` : ''}`)
+  return failed.map((f) => `${f.email || '-'}: ${createRefusalText(t, f.reason, f.detail)}`)
 }
 
 export function bulkCreateSummary(t: TFunction, total: number, failed: number): string {

@@ -124,6 +124,36 @@ test.describe('Monitoring', () => {
       await expect(notice).toHaveCount(0, { timeout: 30_000 })
     })
 
+    test('choosing another namespace on the Pods tab shows nothing of the last one while the new rows come', async ({ page }) => {
+      let release: () => void = () => {}
+      const held = new Promise<void>((resolve) => { release = resolve })
+      await page.route('**/api/v1/cluster/metrics/pods*', async (route) => {
+        if (new URL(route.request().url()).searchParams.get('namespace') === 'monitoring') await held
+        return route.continue()
+      })
+      await page.goto('/monitoring?cluster=default')
+      await page.getByRole('button', { name: /pod resources|pod 리소스/i }).first().click()
+      await page.getByTestId('monitoring-namespace').click()
+      await page.getByTestId('monitoring-namespace-opt-kube-system').click()
+      const rows = page.getByTestId('monitoring-pod-row')
+      await expect.poll(() => rows.count(), { timeout: 30_000 }).toBeGreaterThan(0)
+      const numbers = page.locator('.bg-slate-700.rounded-lg p.text-2xl')
+      await expect(numbers).toHaveCount(3)
+      await expect(numbers.first()).not.toHaveText('-')
+
+      await page.getByTestId('monitoring-namespace').click()
+      await page.getByTestId('monitoring-namespace-opt-monitoring').click()
+      await expect(rows).toHaveCount(0)
+      await expect(page.getByText(/^(Loading data\.\.\.|데이터를 불러오는 중\.\.\.)$/)).toHaveCount(1)
+      expect(await numbers.allInnerTexts(), 'the cards keep their place with no number').toEqual(['-', '-', '-'])
+
+      release()
+      await expect.poll(() => rows.count(), { timeout: 30_000 }).toBeGreaterThan(0)
+      const namespaces = await rows.locator('td:nth-child(2)').allInnerTexts()
+      expect([...new Set(namespaces)]).toEqual(['monitoring'])
+      expect(await numbers.first().innerText()).toBe(String(namespaces.length))
+    })
+
     test('a 503 on the top resources is an error on the dashboard, and it recovers by itself', async ({ page }) => {
       let failing = true
       await page.route('**/api/v1/cluster/metrics/top-resources*', (route) => (failing ? route.fulfill(gateway503) : route.continue()))

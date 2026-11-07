@@ -49,6 +49,12 @@ export function useForbiddenLabels(): string[] {
   return Array.from(labels).sort()
 }
 
+/** The API segments of every list the page was refused. */
+export function useForbiddenLists(): ReadonlySet<string> {
+  useSyncExternalStore(subscribe, getVersion, getVersion)
+  return segments
+}
+
 /** True when the list request for this API segment ("pods", "vpas", "helm") answered 403. */
 export function useForbidden(segment: string): boolean {
   useSyncExternalStore(subscribe, getVersion, getVersion)

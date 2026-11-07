@@ -136,6 +136,38 @@ test.describe('audit — admin actions (M15, M27)', () => {
     }
   })
 
+  test('the form that creates a user answers why it refused and leaves a failure row of the same words', async ({ request }) => {
+    const admin = await adminHeaders(request)
+    const stamp = Date.now()
+    const taken = `e2e-create-why-${stamp}@kubeast.local`
+    const weak = `e2e-create-weak-${stamp}@kubeast.local`
+    const password = 'e2e-bulk-throwaway-1'
+    const made = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E create why', email: taken, password } })
+    expect(made.status(), await made.text()).toBe(201)
+    const id = (await made.json()).id as string
+    try {
+      const again = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E create why', email: taken, password }, failOnStatusCode: false })
+      expect(again.status()).toBe(409)
+      expect(await again.json()).toEqual({ detail: 'Email already exists', reason: 'exists' })
+
+      const short = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E create why', email: weak, password: 'short' }, failOnStatusCode: false })
+      expect(short.status()).toBe(400)
+      const shortBody = await short.json()
+      expect(shortBody.reason).toBe('password')
+      expect(shortBody.reason_detail).toBe(shortBody.detail)
+
+      const rows = await auditRows(request, admin, 'user.create')
+      const ofTaken = rows.filter((r) => r.TargetEmail === taken)
+      expect(ofTaken.map((r) => [r.Result, r.After?.reason])).toEqual([['failure', 'exists'], ['success', undefined]])
+      const ofWeak = rows.filter((r) => r.TargetEmail === weak)
+      expect(ofWeak.map((r) => [r.Result, r.After?.reason, r.Error])).toEqual([['failure', 'password', shortBody.detail]])
+      expect(ofWeak[0].After?.bulk).toBeUndefined()
+      expect(JSON.stringify([...ofTaken, ...ofWeak])).not.toContain(password)
+    } finally {
+      await request.delete(`/api/v1/auth/admin/users/${id}`, { headers: admin, failOnStatusCode: false })
+    }
+  })
+
   test('the window that creates a user says why the server refused, and a new form starts clean', async ({ page, request }) => {
     const admin = await adminHeaders(request)
     const taken = `e2e-create-taken-${Date.now()}@kubeast.local`
@@ -152,7 +184,7 @@ test.describe('audit — admin actions (M15, M27)', () => {
       await page.getByTestId('create-user-role').click()
       await dialog.getByRole('button', { name: 'Member', exact: true }).click()
       await dialog.locator('button[type="submit"]').click()
-      await expect(page.getByTestId('create-user-error')).toHaveText(/(Failed to create user|사용자 생성에 실패했습니다): Email already exists/, { timeout: 15_000 })
+      await expect(page.getByTestId('create-user-error')).toHaveText(/(Failed to create user: this email already has an account|사용자 생성에 실패했습니다: 이미 계정이 있는 이메일입니다)/, { timeout: 15_000 })
       await expect(dialog.locator('input[type="email"]'), 'what was typed stays').toHaveValue(taken)
 
       await dialog.getByRole('button', { name: /^(Cancel|취소)$/ }).click()

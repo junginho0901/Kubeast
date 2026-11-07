@@ -249,3 +249,164 @@ test.describe.serial('open connections and what a global key opens', () => {
     await expect(notice).toHaveCount(0)
   })
 })
+
+test.describe('a list that does not follow, and what the floating chat is told', () => {
+  type Layer = { source: string; summary: string; data?: Record<string, unknown> }
+
+  async function captureFloating(page: Page) {
+    const sent: { overlays: Layer[] }[] = []
+    await page.route(/\/api\/v1\/sessions(\?|$)/, (route) =>
+      route.request().method() === 'POST'
+        ? route.fulfill({ json: { id: 'e2e-open-conn-1', title: 'New Chat', created_at: '', updated_at: '', message_count: 0 } })
+        : route.fallback())
+    await page.route(/\/api\/v1\/sessions\/e2e-open-conn-\d+(\?|$)/, (route) =>
+      route.fulfill({ json: { id: 'e2e-open-conn-1', title: 'New Chat', created_at: '', updated_at: '', messages: [] } }))
+    await page.route(/\/api\/v1\/ai\/sessions\/e2e-open-conn-\d+\/floating-chat/, (route) => {
+      sent.push(route.request().postDataJSON().page_context)
+      return route.fulfill({ contentType: 'text/event-stream', body: 'data: {"content":"ok"}\n\ndata: [DONE]\n\n' })
+    })
+    return async () => {
+      if ((await page.getByTestId('floating-chat-panel').count()) === 0) await page.getByTestId('floating-chat-toggle').click()
+      const input = page.getByTestId('floating-chat-input')
+      await expect(input).toBeVisible()
+      const before = sent.length
+      await input.fill('what is on this screen?')
+      await input.press('Enter')
+      await expect.poll(() => sent.length).toBe(before + 1)
+      await expect(page.getByTestId('floating-chat-panel').getByRole('button', { name: /^(Send|보내기)$/ })).toBeVisible()
+      return sent[sent.length - 1]
+    }
+  }
+
+  test('a watch the cluster refuses says so beside a notice about another list, and tells the floating chat', async ({ page }) => {
+    let answer: ((frame: object) => void) | undefined
+    let asked: { clusterId: string; path: string; query: string } | undefined
+    await page.routeWebSocket(/wsMultiplexer/, (ws) => {
+      const server = ws.connectToServer()
+      ws.onMessage((message) => {
+        const msg = JSON.parse(String(message))
+        if (msg.type === 'REQUEST' && msg.path === '/api/v1/nodes') asked = msg
+        server.send(message)
+      })
+      server.onMessage((message) => ws.send(message))
+      answer = (frame) => ws.send(JSON.stringify(frame))
+    })
+    // another list on the page is refused: the banner names that one and not these rows
+    await page.route('**/api/v1/cluster/metrics/nodes*', (route) =>
+      route.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ detail: 'metrics is forbidden' }) }))
+    const ask = await captureFloating(page)
+    await page.goto('/cluster/nodes?cluster=self')
+    await expect.poll(() => Boolean(asked), { timeout: 20_000 }).toBe(true)
+    await expect(page.getByTestId('forbidden-banner')).toHaveCount(1, { timeout: 20_000 })
+    const notice = page.getByTestId('watch-problem-notice')
+    await expect(notice).toHaveCount(0)
+
+    answer!({ ...asked, type: 'ERROR', error: { message: 'nodes is forbidden', reason: 'forbidden' } })
+    await expect(notice).toHaveAttribute('data-problem', 'forbidden')
+    await expect(notice).toContainText(tr('layout.watchProblem.forbidden'))
+    await expect(page.getByTestId('forbidden-banner')).toHaveCount(1)
+    await expect.poll(async () => (await ask()).overlays.find((o) => o.source === 'WatchProblemNotice')?.data, { timeout: 20_000 })
+      .toEqual({ live_updates: 'stopped', reason: 'forbidden' })
+
+    answer!({ ...asked, type: 'RESYNC' })
+    await expect(notice).toHaveCount(0)
+    await expect.poll(async () => (await ask()).overlays.some((o) => o.source === 'WatchProblemNotice'), { timeout: 20_000 }).toBe(false)
+  })
+
+  test('a role that may list a kind and may not watch it reads so on the page, from the cluster\'s own refusal', async ({ request, browser }) => {
+    test.setTimeout(90_000)
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const roles = (await (await request.get('/api/v1/auth/roles', { headers: bearer(admin) })).json()) as RoleRow[]
+    const namespace = `e2e-open-conn-list-${STAMP}`
+    const email = `e2e-open-conn-list-${STAMP}@kubeast.local`
+    let id = ''
+    kubectl(`create namespace ${namespace}`)
+    try {
+      kubectl(`-n ${namespace} create role e2e-list-only --verb=list --resource=configmaps`)
+      kubectl(`-n ${namespace} create rolebinding e2e-list-only --role=e2e-list-only --group=kubeast:role:read`)
+      id = await createUser(request, admin, email, roles.find((r) => r.name.toLowerCase() === 'member')!.id)
+      expect((await request.put(`/api/v1/auth/admin/users/${id}/cluster-roles/self`, { headers: bearer(admin), data: { role: 'Read', namespaces: [namespace] } })).ok()).toBeTruthy()
+
+      const page = await signIn(browser, email)
+      const refusals: { message: string; reason: string }[] = []
+      await page.routeWebSocket(/wsMultiplexer/, (ws) => {
+        const server = ws.connectToServer()
+        ws.onMessage((message) => server.send(message))
+        server.onMessage((message) => {
+          const frame = JSON.parse(String(message))
+          if (frame.type === 'ERROR' && frame.path === `/api/v1/namespaces/${namespace}/configmaps`) refusals.push(frame.error)
+          ws.send(message)
+        })
+      })
+      await page.goto(`/configuration/configmaps?cluster=self&namespace=${namespace}`)
+      await expect(page.locator('main tbody tr').filter({ hasText: 'kube-root-ca.crt' }), 'the list answers').toHaveCount(1, { timeout: 30_000 })
+      const notice = page.getByTestId('watch-problem-notice')
+      await expect(notice).toHaveAttribute('data-problem', 'forbidden', { timeout: 20_000 })
+      await expect(notice).toContainText(tr('layout.watchProblem.forbidden'))
+      await expect.poll(() => refusals.length, { timeout: 20_000 }).toBeGreaterThan(0)
+      expect(refusals[0].reason).toBe('forbidden')
+      expect(refusals[0].message).toContain('cannot watch resource "configmaps"')
+      await page.context().close()
+    } finally {
+      if (id) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers: bearer(admin), failOnStatusCode: false })
+      kubectl(`delete namespace ${namespace} --ignore-not-found --wait=false`)
+    }
+  })
+
+  // The cluster's RBAC is what the two lists answer by, as before; the watches stop asking it.
+  test('a grant limited to a namespace is refused a kind of the cluster once, and its lists answer as they did', async ({ request, browser }) => {
+    test.setTimeout(150_000)
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const roles = (await (await request.get('/api/v1/auth/roles', { headers: bearer(admin) })).json()) as RoleRow[]
+    const namespace = `e2e-open-conn-scope-${STAMP}`
+    const email = `e2e-open-conn-scope-${STAMP}@kubeast.local`
+    let id = ''
+    kubectl(`create namespace ${namespace}`)
+    try {
+      kubectl(`-n ${namespace} create rolebinding e2e-view --clusterrole=view --group=kubeast:role:read`)
+      id = await createUser(request, admin, email, roles.find((r) => r.name.toLowerCase() === 'member')!.id)
+      expect((await request.put(`/api/v1/auth/admin/users/${id}/cluster-roles/self`, { headers: bearer(admin), data: { role: 'Read', namespaces: [namespace] } })).ok()).toBeTruthy()
+      const token = await login(request, email, PW)
+
+      const page = await signIn(browser, email)
+      const refusals = new Map<string, { message: string; reason: string }[]>()
+      await page.routeWebSocket(/wsMultiplexer/, (ws) => {
+        const server = ws.connectToServer()
+        ws.onMessage((message) => server.send(message))
+        server.onMessage((message) => {
+          const frame = JSON.parse(String(message))
+          if (frame.type === 'ERROR') refusals.set(frame.path, [...(refusals.get(frame.path) ?? []), frame.error])
+          ws.send(message)
+        })
+      })
+      const notice = page.getByTestId('watch-problem-notice')
+
+      // the list of namespaces is narrowed to the grant and answers
+      const listed = await request.get('/api/v1/cluster/namespaces?cluster=self', { headers: bearer(token) })
+      expect(listed.status()).toBe(200)
+      expect((await listed.json()).map((n: { name: string }) => n.name)).toEqual([namespace])
+      await page.goto('/cluster/namespaces?cluster=self')
+      await expect(page.locator('main tbody tr').filter({ hasText: namespace })).toHaveCount(1, { timeout: 20_000 })
+      await expect(notice).toHaveAttribute('data-problem', 'scope', { timeout: 20_000 })
+      await expect(notice).toContainText(tr('layout.watchProblem.scope'))
+      await expect(page.getByTestId('forbidden-banner')).toHaveCount(0)
+      // past the five seconds the cluster's own refusal comes back at
+      await page.waitForTimeout(12_000)
+      const namespaces = `/api/v1/namespaces/${namespace}/namespaces`
+      expect((refusals.get(namespaces) ?? []).map((e) => e.reason)).toEqual(['scope'])
+
+      // the list of nodes is the cluster's to refuse, and that page says it
+      const nodes = await request.get('/api/v1/cluster/nodes?cluster=self', { headers: bearer(token), failOnStatusCode: false })
+      expect(nodes.status()).toBe(403)
+      await page.goto('/cluster/nodes?cluster=self')
+      await expect(page.getByTestId('forbidden-banner')).toHaveCount(1, { timeout: 20_000 })
+      await page.waitForTimeout(12_000)
+      expect((refusals.get(`/api/v1/namespaces/${namespace}/nodes`) ?? []).map((e) => e.reason)).toEqual(['scope'])
+      await expect(notice).toHaveCount(0)
+      await page.context().close()
+    } finally {
+      if (id) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers: bearer(admin), failOnStatusCode: false })
+      kubectl(`delete namespace ${namespace} --ignore-not-found --wait=false`)
+    }
+  })
+})

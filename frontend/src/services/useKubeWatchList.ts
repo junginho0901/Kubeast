@@ -58,10 +58,12 @@ export function applyWatchMessage(
   message: any,
   applyEvent?: (prev: any[] | undefined, event: WatchEvent) => any[],
   onEvent?: (event: WatchEvent) => void,
+  onResync?: () => void,
 ) {
   // The rows stay on screen until the list answers.
   if (message?.type === 'RESYNC') {
     void queryClient.invalidateQueries({ queryKey })
+    onResync?.()
     return
   }
   if (message?.type !== 'DATA') return
@@ -111,6 +113,8 @@ export function useKubeWatchList(options: {
   query?: string
   applyEvent?: (prev: any[] | undefined, event: WatchEvent) => any[]
   onEvent?: (event: WatchEvent) => void
+  // the watch started over and cannot say what changed meanwhile
+  onResync?: () => void
   // gathers the frames this often instead of drawing each (frameHolder)
   gatherEveryMs?: number
 }) {
@@ -127,10 +131,12 @@ export function useKubeWatchList(options: {
   // 끊지 않고, queryKey 는 contents(queryKeyDep)가 바뀔 때만 재구독.
   const applyEventRef = useRef(options.applyEvent)
   const onEventRef = useRef(options.onEvent)
+  const onResyncRef = useRef(options.onResync)
   const queryKeyRef = useRef(options.queryKey)
   useEffect(() => {
     applyEventRef.current = options.applyEvent
     onEventRef.current = options.onEvent
+    onResyncRef.current = options.onResync
     queryKeyRef.current = options.queryKey
   })
   const queryKeyDep = JSON.stringify(options.queryKey)
@@ -142,7 +148,7 @@ export function useKubeWatchList(options: {
     // the list this subscription feeds; a later key gets its own subscription
     const queryKey = queryKeyRef.current
 
-    const deliver = (message: any) => applyWatchMessage(queryClient, queryKey, message, applyEventRef.current, onEventRef.current)
+    const deliver = (message: any) => applyWatchMessage(queryClient, queryKey, message, applyEventRef.current, onEventRef.current, onResyncRef.current)
     const holder = gatherEveryMs ? frameHolder(deliver, gatherEveryMs) : null
     const handle = holder ? holder.push : deliver
 

@@ -15,24 +15,33 @@ function differsFromAnswer(frame: Record<string, unknown>, answer: unknown): boo
 }
 
 // objectFollower reads a drawer's answer again when its object changes. The answer holds more than a frame (events,
-// conditions, settings), so it is read rather than replaced; the drawer keeps showing the last one until it comes.
-export function objectFollower(client: QueryClient, describeKey: QueryKey, everyMs = READ_AT_MOST_EVERY_MS) {
+// conditions, settings), so it is read rather than replaced; the drawer keeps showing the last one until it comes. The
+// tables in `alsoRead` hang on the same object and are read with it, each at its own pace.
+export function objectFollower(client: QueryClient, describeKey: QueryKey, everyMs = READ_AT_MOST_EVERY_MS, alsoRead: QueryKey[] = []) {
   let timer: ReturnType<typeof setTimeout> | undefined
   let started = false
+  let waiting: QueryKey[] = []
 
   const read = () => {
     timer = undefined
     // A read under way may have missed the change, and restarting it on each frame might never let one finish.
-    if (client.isFetching({ queryKey: describeKey }) > 0) {
-      timer = setTimeout(read, everyMs)
-      return
+    const underWay = waiting.filter((queryKey) => client.isFetching({ queryKey }) > 0)
+    for (const queryKey of waiting) {
+      if (!underWay.includes(queryKey)) void client.invalidateQueries({ queryKey })
     }
-    void client.invalidateQueries({ queryKey: describeKey })
+    waiting = underWay
+    if (waiting.length > 0) timer = setTimeout(read, everyMs)
+  }
+
+  const readSoon = (keys: QueryKey[]) => {
+    waiting = keys
+    if (timer === undefined) timer = setTimeout(read, everyMs)
   }
 
   const stop = () => {
     if (timer !== undefined) clearTimeout(timer)
     timer = undefined
+    waiting = []
   }
 
   return {
@@ -47,7 +56,11 @@ export function objectFollower(client: QueryClient, describeKey: QueryKey, every
       const opening = !started && event.type === 'ADDED'
       started = true
       if (opening && !differsFromAnswer(event.object, client.getQueryData(describeKey))) return
-      if (timer === undefined) timer = setTimeout(read, everyMs)
+      readSoon([describeKey, ...alsoRead])
+    },
+    // The watch cannot say what changed while it was gone, and its RESYNC reads only the answer.
+    onResync() {
+      if (alsoRead.length > 0) readSoon(alsoRead)
     },
     stop,
   }
@@ -55,20 +68,21 @@ export function objectFollower(client: QueryClient, describeKey: QueryKey, every
 
 // useDrawerFollowsObject keeps an open drawer on its object as it changes, whichever screen opened it: a page's own
 // watch is not there for a drawer opened by a link from another page.
-export function useDrawerFollowsObject(options: { enabled: boolean; describeKey: QueryKey; path: string; name: string }) {
+export function useDrawerFollowsObject(options: { enabled: boolean; describeKey: QueryKey; path: string; name: string; alsoRead?: QueryKey[] }) {
   const client = useQueryClient()
   const keyDep = JSON.stringify(options.describeKey)
+  const alsoDep = JSON.stringify(options.alsoRead ?? [])
   const follower = useRef<ReturnType<typeof objectFollower> | null>(null)
 
   useEffect(() => {
     if (!options.enabled) return
-    const current = objectFollower(client, JSON.parse(keyDep) as QueryKey)
+    const current = objectFollower(client, JSON.parse(keyDep) as QueryKey, READ_AT_MOST_EVERY_MS, JSON.parse(alsoDep) as QueryKey[])
     follower.current = current
     return () => {
       current.stop()
       follower.current = null
     }
-  }, [client, keyDep, options.enabled])
+  }, [client, keyDep, alsoDep, options.enabled])
 
   useKubeWatchList({
     enabled: options.enabled,
@@ -78,5 +92,6 @@ export function useDrawerFollowsObject(options: { enabled: boolean; describeKey:
     // the frame is not the answer: it stays until it is read again, which a RESYNC of this watch asks for too
     applyEvent: (prev) => prev as any[],
     onEvent: (event) => follower.current?.onEvent(event),
+    onResync: () => follower.current?.onResync(),
   })
 }

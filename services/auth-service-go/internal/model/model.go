@@ -243,6 +243,14 @@ type BulkCreateFailure struct {
 	Detail string `json:"detail,omitempty"`
 }
 
+// CreateUserRefusal answers the form that creates one account: Detail is the server's sentence, for clients that read
+// only that; Reason and ReasonDetail are a BulkCreateFailure's.
+type CreateUserRefusal struct {
+	Detail       string `json:"detail"`
+	Reason       string `json:"reason"`
+	ReasonDetail string `json:"reason_detail,omitempty"`
+}
+
 // BulkCreateUserResponse answers 200, 207 when someone was not created, 500 when a failed write left nobody; Errors is for older clients.
 type BulkCreateUserResponse struct {
 	Detail  string              `json:"detail,omitempty"`

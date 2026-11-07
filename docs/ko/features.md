@@ -242,7 +242,7 @@
     - 여덟 도구는 화면처럼 스스로 그 범위 안에서만 읽으므로 네임스페이스 없이도 됩니다: `issues`, `cost`, `k8s_find_resource`, `gitops_status`, `storage_summary`, `timeline`, `gpu`, `get_cluster_overview`. `get_cluster_overview`는 대시보드 개수를 답하고 노드·PV는 세지 않은 값(null)으로 답합니다. `k8s_explain`과 `clusters_list`는 객체 데이터를 읽지 않습니다.
   - 클러스터 쪽 신원은 `kubeast:role:<slug>` 그룹이므로 **그 네임스페이스마다 RoleBinding을 묶기 전에는 클러스터가 거부합니다**.
     차트 `auth.impersonation.customRoles`에 `{name: Read, namespaces: [a, b], clusterRoles: [view]}`처럼 적으면 그 RoleBinding이 렌더됩니다(등록한 클러스터마다 적용하세요).
-  - 화면에서는 네임스페이스 선택기에 부여된 네임스페이스만 보이고, 권한 없음 안내에 "이 클러스터에서는 네임스페이스 a, b만"이 붙으며, 실시간 갱신도 네임스페이스별로 구독합니다.
+  - 화면에서는 네임스페이스 선택기에 부여된 네임스페이스만 보이고, 권한 없음 안내에 "이 클러스터에서는 네임스페이스 a, b만"이 붙으며, 실시간 갱신도 네임스페이스별로 구독합니다. 클러스터 범위 객체는 어느 네임스페이스에도 없어 실시간으로 갱신되지 않고, 그 목록을 볼 수 있는 화면은 위 안내가 그렇다고 말합니다.
   - 외부 메트릭 저장소는 Kubeast 자격으로 읽어 클러스터 RBAC이 호출자를 볼 수 없습니다. 그래서 읽으려면 그 클러스터의 `resource.pod.read`가 필요합니다(로그 저장소와 같습니다). API 서버 프록시로 읽는 경로는 클러스터가 판단합니다.
   - Access Review 보고서와 CSV에 `namespaces` 열이 있습니다.
 - **SSO 그룹 → 역할**: OIDC 공급자가 주는 그룹을 다음과 같이 역할로 바꿉니다. `syncRoles`를 켜면 로그인할 때마다 다시 맞춥니다.

@@ -282,22 +282,30 @@ func (h *AuthHandler) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// An account never written leaves its failure row and says why in the words of a bulk creation's answer.
+	refuse := func(status int, role, reason, detail, message string) {
+		after := map[string]any{"email": req.Email, "reason": reason}
+		if role != "" {
+			after["role"] = role
+		}
+		writeAudit(h.auditStore, r, payload, auditEvent{action: "user.create", targetType: "user", targetEmail: req.Email, after: after, err: errors.New(message)})
+		response.JSON(w, status, model.CreateUserRefusal{Detail: message, Reason: reason, ReasonDetail: detail})
+	}
+
 	if req.Name == "" {
-		response.Error(w, http.StatusBadRequest, "Name required")
+		refuse(http.StatusBadRequest, "", model.BulkCreateFailedFields, "", "Name required")
 		return
 	}
 	if !strings.Contains(req.Email, "@") {
-		response.Error(w, http.StatusBadRequest, "Invalid email")
+		refuse(http.StatusBadRequest, "", model.BulkCreateFailedFields, "", "Invalid email")
 		return
 	}
 	if err := checkAccountName(req.Email); err != nil {
-		writeAudit(h.auditStore, r, payload, auditEvent{action: "user.create", targetType: "user", targetEmail: req.Email,
-			after: map[string]any{"email": req.Email}, err: err})
-		response.Error(w, http.StatusBadRequest, err.Error())
+		refuse(http.StatusBadRequest, "", model.BulkCreateFailedName, "", err.Error())
 		return
 	}
 	if err := security.ValidatePassword(req.Password, req.Email, h.cfg.PasswordMinLength); err != nil {
-		response.Error(w, http.StatusBadRequest, err.Error())
+		refuse(http.StatusBadRequest, "", model.BulkCreateFailedPassword, err.Error(), err.Error())
 		return
 	}
 
@@ -312,35 +320,32 @@ func (h *AuthHandler) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	targetRole, err := h.repo.GetRoleByID(r.Context(), roleID)
 	if err != nil || targetRole == nil {
-		response.Error(w, http.StatusBadRequest, "Invalid role_id")
+		refuse(http.StatusBadRequest, "", model.BulkCreateFailedRole, "", "Invalid role_id")
 		return
 	}
 	// Ceiling: the grantor must hold everything the role gives.
 	if missing := missingPermissions(payload, targetRole.Permissions, ""); len(missing) > 0 {
-		err := ceilingError(missing)
-		writeAudit(h.auditStore, r, payload, auditEvent{action: "user.create", targetType: "user", targetEmail: req.Email,
-			after: map[string]any{"email": req.Email, "role": targetRole.Name}, err: err})
-		response.Error(w, http.StatusForbidden, err.Error())
+		refuse(http.StatusForbidden, targetRole.Name, model.BulkCreateFailedCeiling, strings.Join(missing, ", "), ceilingError(missing).Error())
 		return
 	}
 
 	// Validate Team
 	if req.Team != nil && strings.TrimSpace(*req.Team) != "" {
 		if ok, _ := h.repo.OrganizationExists(r.Context(), "team", strings.TrimSpace(*req.Team)); !ok {
-			response.Error(w, http.StatusBadRequest, "Invalid Team value")
+			refuse(http.StatusBadRequest, targetRole.Name, model.BulkCreateFailedTeam, *req.Team, "Invalid Team value")
 			return
 		}
 	}
 
 	existing, _ := h.repo.GetUserByEmail(r.Context(), req.Email)
 	if existing != nil {
-		response.Error(w, http.StatusConflict, "Email already exists")
+		refuse(http.StatusConflict, targetRole.Name, model.BulkCreateFailedExists, "", "Email already exists")
 		return
 	}
 
 	hash, err := security.HashPassword(req.Password, h.cfg.PasswordHashIterations)
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, "Failed to hash password")
+		refuse(http.StatusInternalServerError, targetRole.Name, model.BulkCreateFailedWrite, "", "Failed to hash password")
 		return
 	}
 
@@ -359,8 +364,9 @@ func (h *AuthHandler) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.repo.CreateUser(r.Context(), user); err != nil {
 		h.writeAuditFailure(r, "user.create", &payload.UserID, &payload.Email, nil, &user.Email, err.Error(),
-			jsonRaw(map[string]string{"email": user.Email, "role": targetRole.Name, "name": user.Name}))
-		response.InternalError(w, r, err)
+			jsonRaw(map[string]string{"email": user.Email, "role": targetRole.Name, "name": user.Name, "reason": model.BulkCreateFailedWrite}))
+		slog.Error("create user: write failed", "email", user.Email, "err", err)
+		response.JSON(w, http.StatusInternalServerError, model.CreateUserRefusal{Detail: "internal server error", Reason: model.BulkCreateFailedWrite})
 		return
 	}
 

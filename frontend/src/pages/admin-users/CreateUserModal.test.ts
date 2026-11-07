@@ -21,7 +21,8 @@ beforeAll(async () => {
   })
 })
 
-const refused = (status: number, detail?: string) => Object.assign(new Error(`Request failed with status code ${status}`), { response: { status, data: detail ? { detail } : {} } })
+const refused = (status: number, detail?: string, why: Record<string, string> = {}) =>
+  Object.assign(new Error(`Request failed with status code ${status}`), { response: { status, data: { ...(detail ? { detail } : {}), ...why } } })
 
 const render = (error: unknown, lng = 'en') => {
   const inst = i18n.cloneInstance({ lng })
@@ -63,6 +64,21 @@ describe('the window that creates a user, when the server refuses', () => {
 
   it('says what the browser knows when no answer came', () => {
     expect(render(new Error('Network Error'))).toContain('Failed to create user: Network Error')
+  })
+
+  it('says the reason in the words of the file upload, in the screen\'s language', () => {
+    const taken = refused(409, 'Email already exists', { reason: 'exists' })
+    expect(render(taken)).toContain('Failed to create user: this email already has an account')
+    expect(render(taken, 'ko')).toContain(`사용자 생성에 실패했습니다: ${ko.adminUsers.bulkFailure.exists}`)
+    expect(render(taken, 'ko')).not.toContain('Email already exists')
+  })
+
+  it('adds what the reason names: the policy the password missed, the permissions, the team', () => {
+    const weak = refused(400, 'password must be at least 12 characters', { reason: 'password', reason_detail: 'password must be at least 12 characters' })
+    expect(render(weak)).toContain('Failed to create user: the password does not meet the policy: password must be at least 12 characters')
+    const high = refused(403, 'permission ceiling: cannot grant permissions you do not hold: admin.users.delete', { reason: 'ceiling', reason_detail: 'admin.users.delete' })
+    expect(render(high, 'ko')).toContain(`사용자 생성에 실패했습니다: ${ko.adminUsers.bulkFailure.ceiling}: admin.users.delete`)
+    expect(render(refused(400, 'Invalid Team value', { reason: 'team', reason_detail: 'ghost' }))).toContain('Failed to create user: no such team: ghost')
   })
 
   it('says only that it failed when there is nothing more to say', () => {

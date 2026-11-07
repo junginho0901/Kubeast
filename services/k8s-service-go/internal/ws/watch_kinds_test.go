@@ -210,6 +210,16 @@ func TestAWatchOfAClusterScopedKindIsRefusedOnceToAGrantLimitedToNamespaces(t *t
 		"/apis/admissionregistration.k8s.io/v1/namespaces/team-a/validatingwebhookconfigurations",
 		"/apis/admissionregistration.k8s.io/v1/namespaces/team-a/mutatingwebhookconfigurations",
 		"/apis/apiextensions.k8s.io/v1/namespaces/team-a/customresourcedefinitions",
+		"/api/v1/namespaces/team-a/nodes",
+		"/api/v1/namespaces/team-a/namespaces",
+		"/api/v1/namespaces/team-a/pvs",
+		"/api/v1/namespaces/team-a/persistentvolumes",
+		"/api/v1/namespaces/team-a/storageclasses",
+		"/api/v1/namespaces/team-a/ingressclasses",
+		"/api/v1/namespaces/team-a/volumeattachments",
+		"/api/v1/namespaces/team-a/gatewayclasses",
+		"/api/v1/namespaces/team-a/deviceclasses",
+		"/api/v1/namespaces/team-a/resourceslices",
 	} {
 		t.Run(resource, func(t *testing.T) {
 			api := &apiSeen{status: http.StatusNotFound}
@@ -220,11 +230,56 @@ func TestAWatchOfAClusterScopedKindIsRefusedOnceToAGrantLimitedToNamespaces(t *t
 			if f.Type != "ERROR" || !strings.Contains(f.Error.Message, "of the cluster") {
 				t.Fatalf("frame %s %q, want a refusal naming the kind as the cluster's", f.Type, f.Error.Message)
 			}
+			if f.Error.Reason != "scope" {
+				t.Errorf("reason %q, want scope", f.Error.Reason)
+			}
 			waitForSubscriptions(t, m, 0)
 			if asked := api.asked(); len(asked) != 0 {
 				t.Errorf("the API server was asked for %v", asked)
 			}
 		})
+	}
+}
+
+// The kinds a namespace holds. Whatever else a watch can reach has no namespace, so a new kind is decided here.
+var namespacedWatchKinds = map[string]bool{
+	"pods": true, "services": true, "events": true, "persistentvolumeclaims": true, "pvcs": true, "configmaps": true,
+	"secrets": true, "endpoints": true, "deployments": true, "statefulsets": true, "daemonsets": true, "replicasets": true,
+	"ingresses": true, "networkpolicies": true, "endpointslices": true, "jobs": true, "cronjobs": true, "gateways": true,
+	"httproutes": true, "grpcroutes": true, "referencegrants": true, "backendtlspolicies": true, "serviceaccounts": true,
+	"roles": true, "rolebindings": true, "horizontalpodautoscalers": true, "verticalpodautoscalers": true,
+	"resourceclaims": true, "resourceclaimtemplates": true, "leases": true, "limitranges": true, "resourcequotas": true,
+	"poddisruptionbudgets": true,
+}
+
+// A kind left out of clusterWideWatch asks the cluster every five seconds per namespace, and holds a place each time.
+func TestEveryKindWithNoNamespaceIsRefusedToAGrantLimitedToNamespaces(t *testing.T) {
+	wrong := []string{}
+	for resource, gvr := range watchKinds {
+		if clusterWideWatch[resource] == namespacedWatchKinds[resource] {
+			wrong = append(wrong, fmt.Sprintf("%s: in clusterWideWatch %v, a namespaced kind %v", resource, clusterWideWatch[resource], namespacedWatchKinds[resource]))
+		}
+		if clusterWideWatch[resource] != clusterWideWatch[gvr.Resource] {
+			wrong = append(wrong, fmt.Sprintf("%s answers otherwise than %s, the kind it names", resource, gvr.Resource))
+		}
+	}
+	sort.Strings(wrong)
+	if len(wrong) > 0 {
+		t.Errorf("%d kinds decided wrongly:\n%s", len(wrong), strings.Join(wrong, "\n"))
+	}
+	for resource := range clusterWideWatch {
+		if _, ok := watchKinds[resource]; !ok {
+			t.Errorf("%s is in clusterWideWatch and no watch reaches it", resource)
+		}
+	}
+}
+
+// The refusal stays with the grant: a caller with no limit on namespaces reaches the same kinds through the cluster's own RBAC.
+func TestAClusterScopedKindStaysOpenToAGrantWithNoLimitOnNamespaces(t *testing.T) {
+	for _, path := range []string{"/api/v1/nodes", "/api/v1/namespaces", "/api/v1/pvs", "/api/v1/storageclasses", "/api/v1/ingressclasses"} {
+		if reason := namespaceScopeRefusal(auth.TokenPayload{Perms: auth.PermissionMatrix{"self": {"resource.*.read"}}}, "self", path); reason != "" {
+			t.Errorf("%s was refused: %s", path, reason)
+		}
 	}
 }
 

@@ -24,12 +24,6 @@ export default function CRDInfo({ name, rawJson }: Props) {
     enabled: !!name,
     retry: false,
   })
-  useDrawerFollowsObject({
-    enabled: !!name,
-    describeKey: ['crd-describe', name],
-    path: '/apis/apiextensions.k8s.io/v1/customresourcedefinitions',
-    name,
-  })
 
   useResourceDetailOverlay({ kind: 'CustomResourceDefinition', name, describe })
 
@@ -41,6 +35,14 @@ export default function CRDInfo({ name, rawJson }: Props) {
     const sv = versions.find((v: any) => v.storage)
     return sv?.name || versions[0]?.name || ''
   }, [describe?.versions])
+
+  useDrawerFollowsObject({
+    enabled: !!name,
+    describeKey: ['crd-describe', name],
+    path: '/apis/apiextensions.k8s.io/v1/customresourcedefinitions',
+    name,
+    alsoRead: [['crd-instances', group, storageVersion, plural]],
+  })
 
   const { data: crInstances } = useQuery({
     queryKey: ['crd-instances', group, storageVersion, plural],

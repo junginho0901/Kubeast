@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { api } from '@/services/api'
+import { api, type PriorityClassInfo as PriorityClassRow } from '@/services/api'
+import { useKubeWatchList } from '@/services/useKubeWatchList'
+import { applyPriorityClassWatchEvent } from '@/pages/cluster/priorityclasses/priorityClassWatchNormalize'
 import { InfoSection, InfoRow, InfoGrid, SummaryBadge, StatusBadge, KeyValueTags, EventsSection, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
@@ -39,6 +41,13 @@ export default function PriorityClassInfo({ name }: Props) {
     queryFn: () => api.getPriorityClasses(false),
     enabled: !!name,
     staleTime: 60_000,
+  })
+  // the conflict is with the other classes, which the watch of this one never sees
+  useKubeWatchList({
+    enabled: !!name,
+    queryKey: ['all-priorityclasses'],
+    path: '/apis/scheduling.k8s.io/v1/priorityclasses',
+    applyEvent: (prev, event) => applyPriorityClassWatchEvent(prev as PriorityClassRow[] | undefined, event),
   })
 
   useResourceDetailOverlay({ kind: 'PriorityClass', name, describe: desc })

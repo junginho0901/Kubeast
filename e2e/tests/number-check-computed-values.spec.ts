@@ -193,6 +193,67 @@ test.describe('values a screen worked out for itself', () => {
     })
   })
 
+  test('a LimitRange window reads its violating pods again when the LimitRange changes, its rows on screen until then', async ({ page }) => {
+    await page.goto(`/?cluster=self&detail=${encodeURIComponent(`LimitRange/${NS}/caps`)}`)
+    const drawer = page.locator(DRAWER).last()
+    const rows = drawer.locator('tbody tr').filter({ hasText: 'too-big' })
+    await expect(rows).toHaveCount(4, { timeout: 20_000 })
+    // kept by the update, and no moment on the way without rows
+    await rows.first().evaluate((row) => {
+      const seen: number[] = []
+      ;(window as unknown as { __rows: number[] }).__rows = seen
+      row.closest('table')!.setAttribute('data-e2e-kept', 'yes')
+      new MutationObserver(() => seen.push(document.querySelectorAll('[data-e2e-kept] tbody tr').length)).observe(document.body, { subtree: true, childList: true })
+    })
+    try {
+      kubectl(`patch limitrange caps -n ${NS} --type=merge -p '{"spec":{"limits":[{"type":"Container","max":{"cpu":"4","memory":"16Mi"}}]}}'`)
+      await expect(rows, 'only the memory rows are past the new limit').toHaveCount(2, { timeout: 20_000 })
+      await expect(rows.filter({ hasText: 'memory max' })).toHaveCount(2)
+      await expect(drawer.locator('table[data-e2e-kept="yes"]')).toHaveCount(1)
+      expect(await page.evaluate(() => (window as unknown as { __rows: number[] }).__rows.filter((n) => n === 0))).toEqual([])
+    } finally {
+      kubectl('apply -f -', LIMIT_RANGE)
+    }
+    await expect(rows, 'back to the first limit').toHaveCount(4, { timeout: 20_000 })
+  })
+
+  // Admission lets one class be the global default, so two come from a race or from admission being off: the answers are
+  // stood in, and the frames are the server's rows.
+  test('a PriorityClass window says a conflict with another class as soon as that class changes', async ({ page }) => {
+    const row = (name: string, global_default: boolean) => ({ name, value: 5, global_default, preemption_policy: 'PreemptLowerPriority', description: '', labels: {}, created_at: '2026-11-01T00:00:00Z' })
+    await page.route('**/api/v1/cluster/priorityclasses/e2e-pc-this/describe*', (route) => route.fulfill({ json: { ...row('e2e-pc-this', true), uid: 'uid-1', events: [] } }))
+    // the drawer reads the object itself too, and says a class the cluster does not have is gone
+    await page.route((url) => url.pathname === '/api/v1/cluster/resources/json' && url.searchParams.get('resource_name') === 'e2e-pc-this', (route) => route.fulfill({ json: {
+      apiVersion: 'scheduling.k8s.io/v1', kind: 'PriorityClass', metadata: { name: 'e2e-pc-this', uid: 'uid-1', creationTimestamp: '2026-11-01T00:00:00Z' },
+      value: 5, globalDefault: true, preemptionPolicy: 'PreemptLowerPriority',
+    } }))
+    await page.route('**/api/v1/cluster/priorityclasses', (route) => route.fulfill({ json: [row('e2e-pc-this', true), row('e2e-pc-other', false)] }))
+    await page.route('**/api/v1/cluster/priorityclasses?*', (route) => route.fulfill({ json: [row('e2e-pc-this', true), row('e2e-pc-other', false)] }))
+    let answer: ((frame: object) => void) | undefined
+    let asked: { clusterId: string; path: string; query: string } | undefined
+    await page.routeWebSocket(/wsMultiplexer/, (ws) => {
+      const server = ws.connectToServer()
+      ws.onMessage((message) => {
+        const msg = JSON.parse(String(message))
+        if (msg.type === 'REQUEST' && msg.path === '/apis/scheduling.k8s.io/v1/priorityclasses' && msg.query === 'watch=1') asked = msg
+        server.send(message)
+      })
+      server.onMessage((message) => ws.send(message))
+      answer = (frame) => ws.send(JSON.stringify(frame))
+    })
+    await page.goto(`/?cluster=self&detail=${encodeURIComponent('PriorityClass/e2e-pc-this')}`)
+    const drawer = page.locator(DRAWER).last()
+    await expect(drawer).toContainText('uid-1', { timeout: 20_000 })
+    await expect.poll(() => Boolean(asked), { timeout: 20_000 }).toBe(true)
+    await expect(drawer).not.toContainText('e2e-pc-other')
+
+    const frame = (global_default: boolean) => ({ ...asked, type: 'DATA', data: { type: 'MODIFIED', object: row('e2e-pc-other', global_default) } })
+    answer!(frame(true))
+    await expect(drawer, 'the class named in the conflict').toContainText('e2e-pc-other', { timeout: 20_000 })
+    answer!(frame(false))
+    await expect(drawer, 'the conflict gone').not.toContainText('e2e-pc-other', { timeout: 20_000 })
+  })
+
   // The list asks the caller's own identity; a role that reads LimitRanges but not pods gets this answer from the cluster.
   test('a LimitRange whose violations cannot be read says so, not that no pod violates', async ({ page }) => {
     const ask = await captureFloating(page)

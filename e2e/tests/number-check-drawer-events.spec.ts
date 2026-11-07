@@ -218,6 +218,38 @@ test.describe('number check — every drawer\'s Events section', () => {
     })
   })
 
+  test('the window of a kind with no drawer of its own tells the floating chat what it shows', async ({ page }) => {
+    test.setTimeout(120_000)
+    const sent: { overlays: { source: string; data?: Obj }[] }[] = []
+    await page.route(/\/api\/v1\/sessions(\?|$)/, (route) =>
+      route.request().method() === 'POST'
+        ? route.fulfill({ json: { id: 'e2e-drev-1', title: 'New Chat', created_at: '', updated_at: '', message_count: 0 } })
+        : route.fallback())
+    await page.route(/\/api\/v1\/sessions\/e2e-drev-\d+(\?|$)/, (route) =>
+      route.fulfill({ json: { id: 'e2e-drev-1', title: 'New Chat', created_at: '', updated_at: '', messages: [] } }))
+    await page.route(/\/api\/v1\/ai\/sessions\/e2e-drev-\d+\/floating-chat/, (route) => {
+      sent.push(route.request().postDataJSON().page_context)
+      return route.fulfill({ contentType: 'text/event-stream', body: 'data: {"content":"ok"}\n\ndata: [DONE]\n\n' })
+    })
+    kubectl(`annotate podtemplate drev-pt -n ${NS} e2e.kubeast.io/note=drev-note-value --overwrite`)
+    kubectl(`label podtemplate drev-pt -n ${NS} e2e-label=shown --overwrite`)
+    const want: Obj = JSON.parse(kubectl(`get podtemplate drev-pt -n ${NS} -o json`))
+    await page.goto(link('PodTemplate', NS, 'drev-pt'))
+    await expect(page.locator(DRAWER).last()).toContainText('e2e-label:shown', { timeout: 20_000 })
+    await page.getByTestId('floating-chat-toggle').click()
+    const input = page.getByTestId('floating-chat-input')
+    await expect.poll(async () => {
+      const before = sent.length
+      await input.fill('what is on this screen?')
+      await input.press('Enter')
+      await expect.poll(() => sent.length).toBe(before + 1)
+      await expect(page.getByTestId('floating-chat-panel').getByRole('button', { name: /^(Send|보내기)$/ })).toBeVisible()
+      const data = sent[sent.length - 1].overlays.find((o) => o.source === 'PodTemplateInfo')?.data
+      return { apiVersion: data?.api_version, uid: data?.uid, created: data?.created_at, label: data?.labels?.['e2e-label'], annotated: data?.annotations?.includes('e2e.kubeast.io/note') }
+    }, { timeout: 30_000 }).toEqual({ apiVersion: 'v1', uid: want.metadata.uid, created: want.metadata.creationTimestamp, label: 'shown', annotated: true })
+    expect(JSON.stringify(sent[sent.length - 1].overlays.find((o) => o.source === 'PodTemplateInfo'))).not.toContain('drev-note-value')
+  })
+
   test('a reader the cluster lets read the object but not its events is told so, with the cluster\'s reason', async ({ browser }) => {
     test.setTimeout(120_000)
     // what the cluster answers that identity (Kubeast impersonates the user's email in the role's group)

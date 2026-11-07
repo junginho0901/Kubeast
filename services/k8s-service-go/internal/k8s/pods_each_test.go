@@ -34,7 +34,7 @@ type listAPI struct {
 	podAsks []map[string]string
 }
 
-func (a *listAPI) serve(t *testing.T) *Service {
+func (a *listAPI) serve(t testing.TB) *Service {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

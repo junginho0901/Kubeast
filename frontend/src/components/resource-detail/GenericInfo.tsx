@@ -1,7 +1,9 @@
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsSection, Tx } from './DetailCommon'
-import { eventsForAI, fmtRel, fmtTs } from './detailFormat'
+import { fmtRel, fmtTs } from './detailFormat'
+import { genericObjectLayer } from './drawerObjectLayer'
 import { kindToPlural } from './utils'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -29,7 +31,8 @@ export default function GenericInfo({ name, namespace, kind, rawJson }: Props) {
   })
   const refused = (error as { response?: { data?: { detail?: string } } } | null)?.response?.data?.detail
 
-  useResourceDetailOverlay({ kind, name, namespace, extras: { spec, status, ...eventsForAI(describe) } })
+  const layer = useMemo(() => genericObjectLayer(rawJson, describe), [rawJson, describe])
+  useResourceDetailOverlay({ kind, name, namespace, extras: layer })
 
   // the fields this view knows how to show; a section with none of them is left out (the YAML tab has the rest)
   const statusShown = typeof status.phase === 'string' || typeof status.replicas === 'number' || Array.isArray(status.conditions)

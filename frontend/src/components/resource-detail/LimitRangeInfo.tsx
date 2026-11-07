@@ -34,6 +34,7 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
     describeKey: ['limitrange-describe', namespace, name],
     path: `/api/v1/namespaces/${namespace}/limitranges`,
     name,
+    alsoRead: [['limitrange-violations', namespace, name]],
   })
 
   const { data: violations, error: violationsError } = useQuery({
