@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type PVInfo } from '@/services/api'
+import { useDescribeReads } from '@/services/pacedReads'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
@@ -23,6 +24,7 @@ import { PVTable } from './pvs/PVTable'
 
 export default function PersistentVolumes() {
   const queryClient = useQueryClient()
+  const describes = useDescribeReads()
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
@@ -51,7 +53,7 @@ export default function PersistentVolumes() {
       if (event?.type === 'DELETED') return
       const name = event?.object?.name || event?.object?.metadata?.name
       if (name) {
-        queryClient.invalidateQueries({ queryKey: ['pv-describe', name] })
+        describes.changed(['pv-describe', name])
       }
     },
   })

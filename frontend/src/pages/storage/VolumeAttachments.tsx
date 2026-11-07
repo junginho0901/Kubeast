@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type VolumeAttachmentInfo } from '@/services/api'
+import { useDescribeReads } from '@/services/pacedReads'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
@@ -24,6 +25,7 @@ import { VolumeAttachmentTable } from './volumeattachments/VolumeAttachmentTable
 
 export default function VolumeAttachments() {
   const queryClient = useQueryClient()
+  const describes = useDescribeReads()
   const { t } = useTranslation()
   const tr = useCallback((key: string, fallback: string, options?: Record<string, any>) => t(key, { defaultValue: fallback, ...options }), [t])
   const { open: openDetail } = useResourceDetail()
@@ -55,7 +57,7 @@ export default function VolumeAttachments() {
       if (event?.type === 'DELETED') return
       const name = event?.object?.name || event?.object?.metadata?.name
       if (name) {
-        queryClient.invalidateQueries({ queryKey: ['volumeattachment-describe', name] })
+        describes.changed(['volumeattachment-describe', name])
       }
     },
   })

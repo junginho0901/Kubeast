@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type StorageClassInfo } from '@/services/api'
+import { useDescribeReads } from '@/services/pacedReads'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
@@ -22,6 +23,7 @@ import { StorageClassTable } from './storageclasses/StorageClassTable'
 
 export default function StorageClasses() {
   const queryClient = useQueryClient()
+  const describes = useDescribeReads()
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
@@ -51,7 +53,7 @@ export default function StorageClasses() {
       if (event?.type === 'DELETED') return
       const name = event?.object?.name || event?.object?.metadata?.name
       if (name) {
-        queryClient.invalidateQueries({ queryKey: ['storageclass-describe', name] })
+        describes.changed(['storageclass-describe', name])
       }
     },
   })

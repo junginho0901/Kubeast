@@ -27,6 +27,7 @@ import { useCluster } from '@/contexts/ClusterContext'
 import { traceTemplates } from '@/utils/features'
 import { fillTraceTemplate, podServiceName } from '@/utils/traceLinks'
 import PolicyViolations from './PolicyViolations'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import NetworkPolicies from './NetworkPolicies'
 import NetworkFlows from './NetworkFlows'
 import NetworkDrops from './NetworkDrops'
@@ -74,6 +75,8 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
     enabled: !!name && !!namespace,
     retry: false,
   })
+  // A container that keeps crashing counts up BackOff on the event while the Pod reads the same.
+  useDrawerFollowsEvents({ describeKey: ['pod-describe', namespace, name], answer: podDescribe, kind: 'Pod', namespace, name })
 
   const { data: logData, isFetching: logsFetching, refetch: refetchLogs } = useQuery({
     queryKey: ['pod-logs', namespace, name, logContainer, logLines],

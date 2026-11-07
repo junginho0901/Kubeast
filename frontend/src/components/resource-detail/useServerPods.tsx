@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { api, type PodListRow, type PodPageParams } from '@/services/api'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { PodListRow, PodPageParams } from '@/services/api'
+import { readPodPageSince } from '@/services/podPageRead'
 import { Tx } from './DetailCommon'
 
 // A drawer's pod list from the Pods page's server page (filtered on the server, a page at a time), with the same
@@ -16,9 +17,11 @@ export function useServerPods(filter: Omit<PodPageParams, 'offset' | 'limit'> | 
   const [page, setPage] = useState(1)
   const key = JSON.stringify(filter)
   useEffect(() => setPage(1), [key])
+  const client = useQueryClient()
+  const queryKey = ['drawer-pods', key, page, pageSize]
   const query = useQuery({
-    queryKey: ['drawer-pods', key, page, pageSize],
-    queryFn: () => api.getPodPage({ ...filter!, offset: (page - 1) * pageSize, limit: pageSize }),
+    queryKey,
+    queryFn: () => readPodPageSince(client, queryKey, { ...filter!, offset: (page - 1) * pageSize, limit: pageSize }),
     enabled: filter !== null,
     staleTime: 30_000,
     placeholderData: keepPreviousData,

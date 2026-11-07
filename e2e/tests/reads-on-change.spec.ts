@@ -165,6 +165,16 @@ test.describe('what a screen asks of the server', () => {
     expect(health.seen[1].searchParams.get('revision')).toBeTruthy()
   })
 
+  test('the Dashboard\'s Pods window polls with the revision it holds', async ({ page }) => {
+    test.setTimeout(120_000)
+    const windowReads = counter(page, (u) => u.pathname === '/api/v1/cluster/pods/page' && u.searchParams.get('limit') === '50')
+    await page.goto('/?cluster=self')
+    await page.getByTestId('stat-pods').click()
+    await expect.poll(windowReads.count, { timeout: 60_000 }).toBeGreaterThanOrEqual(2)
+    expect(windowReads.seen[0].searchParams.get('revision')).toBeNull()
+    expect(windowReads.seen[1].searchParams.get('revision')).toBeTruthy()
+  })
+
   test('an open Pod drawer on the Pods page reads when its own row changes, not when another pod\'s does', async ({ page }) => {
     test.setTimeout(150_000)
     for (const name of ['keep-one', 'keep-two']) kubectl('apply -f -', pod(name))

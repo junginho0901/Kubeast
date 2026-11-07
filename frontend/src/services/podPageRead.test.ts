@@ -4,6 +4,7 @@ import type { PodPage } from './api'
 import { podRowChanged, readPodPageSince } from './podPageRead'
 import dashboardQueriesSrc from '@/pages/dashboard/hooks/useDashboardQueries.ts?raw'
 import podGroupListSrc from '@/pages/resource-graph/PodGroupList.tsx?raw'
+import useServerPodsSrc from '@/components/resource-detail/useServerPods.tsx?raw'
 import podsPageSrc from '@/pages/workloads/Pods.tsx?raw'
 
 const answered = vi.hoisted(() => ({ next: undefined as unknown, asked: [] as Record<string, unknown>[] }))
@@ -72,6 +73,19 @@ describe('a read of a page of pods that may not have changed', () => {
   it('the Dashboard\'s problem pods and a group window read this way', () => {
     expect(dashboardQueriesSrc).toContain("readPodPageSince(queryClient, ['dashboard-problem-pods', ck], { sort: 'health', offset: 0, limit: 10 })")
     expect(podGroupListSrc).toContain('readPodPageSince(queryClient, podGroupKey, {')
+  })
+
+  it('the Dashboard\'s Pods window, its namespaces\' counts and a drawer\'s pods read this way, each by its own key', () => {
+    expect(dashboardQueriesSrc).toContain('readPodPageSince(queryClient, podPageKey, {')
+    expect(dashboardQueriesSrc).toContain('queryKey: podPageKey,')
+    expect(dashboardQueriesSrc).toContain("readPodPageSince(queryClient, ['dashboard-namespace-pods', ck], { offset: 0, limit: 1, groups: 1, group_top: NAMESPACE_POD_GROUPS })")
+    expect(useServerPodsSrc).toContain('readPodPageSince(client, queryKey, { ...filter!, offset: (page - 1) * pageSize, limit: pageSize })')
+    expect(useServerPodsSrc).toContain('queryKey,')
+  })
+
+  it('leaves no read of a page of pods that polls without its revision', () => {
+    expect(dashboardQueriesSrc).not.toMatch(/api\.getPodPage\(/)
+    expect(useServerPodsSrc).not.toMatch(/api\.getPodPage\(/)
   })
 })
 

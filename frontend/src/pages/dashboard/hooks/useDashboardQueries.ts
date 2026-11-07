@@ -83,9 +83,10 @@ export function useDashboardQueries({
 
   // The Pods window: a page of 50 from the Pods list's server page, the phase the chart picked and the search
   // worked out on the server — not every pod of the cluster.
+  const podPageKey = ['dashboard-pods-page', ck, podQuery.q, selectedPodStatus, podQuery.page]
   const { data: podPage, isLoading: isLoadingPods } = useQuery({
-    queryKey: ['dashboard-pods-page', ck, podQuery.q, selectedPodStatus, podQuery.page],
-    queryFn: () => api.getPodPage({
+    queryKey: podPageKey,
+    queryFn: () => readPodPageSince(queryClient, podPageKey, {
       q: podQuery.q || undefined, phase: selectedPodStatus ?? undefined, offset: (podQuery.page - 1) * DASHBOARD_POD_PAGE, limit: DASHBOARD_POD_PAGE,
     }),
     enabled: selectedResourceType === 'pods' || selectedPodStatus !== null,
@@ -150,7 +151,7 @@ export function useDashboardQueries({
   // The Namespaces window's pod counts: the pods the caller may see, counted per namespace by the server.
   const { data: namespacePods, isError: isNamespacePodsError } = useQuery({
     queryKey: ['dashboard-namespace-pods', ck],
-    queryFn: () => api.getPodPage({ offset: 0, limit: 1, groups: 1, group_top: NAMESPACE_POD_GROUPS }),
+    queryFn: () => readPodPageSince(queryClient, ['dashboard-namespace-pods', ck], { offset: 0, limit: 1, groups: 1, group_top: NAMESPACE_POD_GROUPS }),
     enabled: selectedResourceType === 'namespaces',
     retry: false,
   })
