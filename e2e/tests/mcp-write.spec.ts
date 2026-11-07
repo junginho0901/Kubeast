@@ -203,6 +203,80 @@ test.describe('MCP write tools', () => {
     }
   })
 
+  test('on block, a label, an annotation and a delete of everything of a type answer to the Argo CD guard; what it does not manage still goes', async ({ request }) => {
+    test.setTimeout(150_000)
+    const admin = await login(request, EMAIL, PASSWORD)
+    await mcpWriteConfig(request, admin)
+    const features = await (await request.get('/api/v1/cluster/features?cluster=self', { headers: bearer(admin) })).json()
+    test.skip(features.gitops?.argocd?.mode !== 'block', 'gitops.argocd is not in block mode on this install')
+
+    const s = stamp()
+    const writer = `e2e-mcpw-g-${s}@kubeast.local`
+    let writerId = ''
+    let ns = ''
+    try {
+      ns = fixture(s)
+      writerId = await createUser(request, admin, writer)
+      await grant(request, admin, writerId, 'self', 'Write')
+      const key = await issueKey(request, await login(request, writer, PW), 'Write')
+      const tracking = 'argocd.argoproj.io/tracking-id'
+      kubectl(`-n ${ns} create configmap tracked --from-literal=a=b`)
+      kubectl(`-n ${ns} annotate configmap tracked ${tracking}=e2e-app:/ConfigMap:${ns}/tracked`)
+      const object = { cluster: 'self', resource_type: 'configmap', resource_name: 'tracked', namespace: ns }
+      const refusal = `ConfigMap ${ns}/tracked is managed by Argo CD application e2e-app; change it in Git`
+
+      for (const [tool, args] of [
+        ['k8s_label_resource', { labels: { 'e2e-mcpw': 'x' } }],
+        ['k8s_annotate_resource', { annotations: { 'e2e-mcpw': 'x' } }],
+        ['k8s_remove_annotation', { keys: [tracking] }],
+        ['k8s_remove_label', { keys: ['e2e-mcpw'] }],
+      ] as const) {
+        const res = await callTool(request, key.key, tool, { ...object, ...args })
+        expect(res.isError, tool).toBe(true)
+        expect(res.content[0].text, tool).toContain(refusal)
+      }
+      expect(kubectl(`-n ${ns} get configmap tracked -o jsonpath='{.metadata.labels}'`).replace(/'/g, ''), 'no label went on').toBe('')
+      expect(kubectl(`-n ${ns} get configmap tracked -o jsonpath='{.metadata.annotations}'`), 'the annotation stayed alone').not.toContain('"e2e-mcpw"')
+      expect(kubectl(`-n ${ns} get configmap tracked -o jsonpath='{.metadata.annotations}'`), 'the tracking annotation stayed').toContain(tracking)
+
+      // One managed object among the type stops the delete of them all, and none of them goes.
+      const everything = { cluster: 'self', resource_type: 'configmaps', all: true, namespace: ns }
+      const refused = await callTool(request, key.key, 'k8s_delete_resource', everything)
+      expect(refused.isError).toBe(true)
+      expect(refused.content[0].text).toContain(refusal)
+      expect(tryKubectl(`-n ${ns} get configmap tracked -o name`)).toBe('configmap/tracked')
+      expect(tryKubectl(`-n ${ns} get configmap scratch -o name`)).toBe('configmap/scratch')
+
+      // A manifest and several types at once are read as kubectl reads them.
+      const freshCm = `apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: brand-new\n  namespace: ${ns}\n`
+      const manifest = `apiVersion: v1\nkind: 'ConfigMap'\nmetadata:\n  name: tracked\n  namespace: ${ns}\n---\n${freshCm}`
+      const applied = await callTool(request, key.key, 'k8s_apply_manifest', { cluster: 'self', yaml_content: manifest })
+      expect(applied.isError).toBe(true)
+      expect(applied.content[0].text).toContain(refusal)
+      expect(tryKubectl(`-n ${ns} get configmap brand-new -o name`), 'nothing of the manifest went').toBeNull()
+      const several = await callTool(request, key.key, 'k8s_delete_resource', { ...object, resource_type: 'secrets,configmaps' })
+      expect(several.isError).toBe(true)
+      expect(several.content[0].text).toContain(refusal)
+      expect(tryKubectl(`-n ${ns} get configmap tracked -o name`)).toBe('configmap/tracked')
+
+      // The same tools on what Argo CD does not manage go through.
+      const created = await callTool(request, key.key, 'k8s_apply_manifest', { cluster: 'self', yaml_content: freshCm })
+      expect(created.isError, created.content?.[0]?.text).toBeFalsy()
+      expect(tryKubectl(`-n ${ns} get configmap brand-new -o name`)).toBe('configmap/brand-new')
+      const labelled =await callTool(request, key.key, 'k8s_label_resource', { ...object, resource_name: 'scratch', labels: { 'e2e-mcpw': 'x' } })
+      expect(labelled.isError, labelled.content?.[0]?.text).toBeFalsy()
+      expect(kubectl(`-n ${ns} get configmap scratch -o jsonpath='{.metadata.labels.e2e-mcpw}'`).replace(/'/g, '')).toBe('x')
+      kubectl(`-n ${ns} annotate configmap tracked ${tracking}-`)
+      const deleted = await callTool(request, key.key, 'k8s_delete_resource', everything)
+      expect(deleted.isError, deleted.content?.[0]?.text).toBeFalsy()
+      expect(tryKubectl(`-n ${ns} get configmap tracked -o name`), 'the delete of them all went').toBeNull()
+      expect(tryKubectl(`-n ${ns} get configmap scratch -o name`), 'the delete of them all went').toBeNull()
+    } finally {
+      if (writerId) await request.delete(`/api/v1/auth/admin/users/${writerId}`, { headers: bearer(admin), failOnStatusCode: false })
+      if (ns) tryKubectl(`delete namespace ${ns} --wait=false`)
+    }
+  })
+
   test('a Read user asks through request_access; the write works once approved and is refused again after expiry', async ({ request }) => {
     test.setTimeout(420_000)
     const admin = await login(request, EMAIL, PASSWORD)

@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"os"
-	"regexp"
 	"strings"
 )
 
@@ -14,32 +13,38 @@ import (
 var (
 	admissionPoliciesReadOnly  = strings.EqualFold(os.Getenv("ADMISSION_POLICIES_READ_ONLY"), "true")
 	errAdmissionPolicyReadOnly = errors.New("admission policies are read-only (features.admissionPolicies.readOnly)")
-	manifestKindLine           = regexp.MustCompile(`(?i)(?:^|[\s{,])"?kind"?\s*:\s*"?([A-Za-z]+)`)
 )
 
+// api-extensions is the kubectl category these kinds belong to; they have no short names.
 var admissionPolicyResources = map[string]struct{}{
+	"api-extensions":            {},
 	"validatingadmissionpolicy": {}, "validatingadmissionpolicies": {},
 	"validatingadmissionpolicybinding": {}, "validatingadmissionpolicybindings": {},
 	"mutatingadmissionpolicy": {}, "mutatingadmissionpolicies": {},
 	"mutatingadmissionpolicybinding": {}, "mutatingadmissionpolicybindings": {},
 }
 
-// admissionPolicyResource reports whether a resource_type argument (kind,
-// singular or plural, with or without the API group) names a policy kind.
+// admissionPolicyResource reports whether a resource_type argument (kinds,
+// singular or plural, with or without the API group, one or several separated
+// by commas) names a policy kind.
 func admissionPolicyResource(resourceType string) bool {
-	t := strings.ToLower(strings.TrimSpace(resourceType))
-	if i := strings.Index(t, "."); i > 0 {
-		t = t[:i]
+	for _, one := range strings.Split(resourceType, ",") {
+		t := strings.ToLower(strings.TrimSpace(one))
+		if i := strings.Index(t, "."); i > 0 {
+			t = t[:i]
+		}
+		if _, ok := admissionPolicyResources[t]; ok {
+			return true
+		}
 	}
-	_, ok := admissionPolicyResources[t]
-	return ok
+	return false
 }
 
-// admissionPolicyManifest reports whether any document of a YAML or JSON
-// manifest is a policy kind.
+// admissionPolicyManifest reports whether any object of a YAML or JSON manifest
+// is a policy kind.
 func admissionPolicyManifest(manifest string) bool {
-	for _, m := range manifestKindLine.FindAllStringSubmatch(manifest, -1) {
-		if admissionPolicyResource(m[1]) {
+	for _, o := range manifestObjects(manifest) {
+		if admissionPolicyResource(o.Kind) {
 			return true
 		}
 	}

@@ -1,10 +1,15 @@
 package handler
 
-import "strings"
+import (
+	"errors"
+	"strings"
+)
 
-// features.admissionPolicies.readOnly: the kinds the YAML apply route refuses
-// while the switch is on (the policy screens themselves are read-only; the
-// shared YAML path was the one way left to change a policy from Kubeast).
+var errAdmissionPoliciesReadOnly = errors.New("admission policies are read-only (features.admissionPolicies.readOnly)")
+
+// features.admissionPolicies.readOnly: the kinds the YAML apply and create routes
+// refuse while the switch is on (the policy screens themselves are read-only; the
+// shared YAML paths were the ways left to change a policy from Kubeast).
 var admissionPolicyKinds = map[string]struct{}{
 	"validatingadmissionpolicy":        {},
 	"validatingadmissionpolicybinding": {},
