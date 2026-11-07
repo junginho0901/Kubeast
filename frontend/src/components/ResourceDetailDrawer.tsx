@@ -32,6 +32,7 @@ import { systemObject, type SystemReason } from './resource-detail/systemObject'
 import { customResourceTarget, deleteTarget, needsCustomResourceLookup } from './resource-detail/crDetail'
 import { drawerObjectLayer, followsObjectForChat, objectReadInterval } from './resource-detail/drawerObjectLayer'
 import { drawerBody, useDrawerFollowsRead } from './resource-detail/useDrawerFollowsRead'
+import { DrawerObjectReadContext } from './resource-detail/drawerObjectRead'
 import { ObjectUnreadable } from './resource-detail/DetailCommon'
 import { useConfirm } from '@/services/confirm'
 
@@ -166,14 +167,18 @@ export default function ResourceDetailDrawer() {
     && !UNRESOLVABLE_KINDS.has(kind)
     && !!name
 
-  // The floating chat is told the object as it is now, not the row the list had when the drawer opened.
+  // The floating chat is told the object as it is now, not the row the list had when the drawer opened. A view inside that
+  // watches its object reads this when the object changes; without a watch that answers it is read on the clock.
   const followsForChat = !!target && tab === 'info' && !resolving && !!name && followsObjectForChat(kind)
+  const [objectWatchAnswers, setObjectWatchAnswers] = useState(false)
+  const objectKey = useMemo(() => ['resource-json', kind, ns, name], [kind, ns, name])
+  const objectRead = useMemo(() => (followsForChat ? { key: objectKey, setWatchAnswers: setObjectWatchAnswers } : null), [followsForChat, objectKey])
   const { data: fetchedRawJson, isFetching: rawJsonFetching, error: rawJsonError } = useQuery({
-    queryKey: ['resource-json', kind, ns, name],
+    queryKey: objectKey,
     queryFn: () => api.getResourceJson(kindToPlural(kind), name, ns || undefined),
     enabled: needsRawJsonFetch || followsForChat,
     staleTime: 30_000,
-    refetchInterval: (query) => objectReadInterval(followsForChat, query.state.error),
+    refetchInterval: (query) => objectReadInterval(followsForChat, query.state.error, objectWatchAnswers),
     // 403 and 404 are answers: the notice comes now, not a second later after asking again
     retry: (failures, error) => failures < 1 && ![403, 404].includes((error as { response?: { status?: number } }).response?.status ?? 0),
   })
@@ -405,12 +410,14 @@ export default function ResourceDetailDrawer() {
         {/* Content */}
         <div ref={contentScrollRef} className="flex-1 overflow-y-auto overflow-x-hidden">
           {tab === 'info' && (
+            <DrawerObjectReadContext.Provider value={objectRead}>
             <div className="p-5 space-y-6 text-sm">
               {unreadable ? (
                 <ObjectUnreadable kind={displayKind} name={name} namespace={ns} notFound={loadStatus === 404} />
               ) : renderInfoContent()}
               {!unreadable && !resolving && !linkPending && violationsAfterInfo(kind, ns) && <PolicyViolations kind={displayKind} namespace={ns ?? ''} name={name} apiVersion={violationsApiVersion(kind, target?.rawJson)} />}
             </div>
+            </DrawerObjectReadContext.Provider>
           )}
 
           {tab === 'yaml' && (

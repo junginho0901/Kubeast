@@ -109,6 +109,52 @@ describe('a role that may list a kind and may not watch it', () => {
   })
 })
 
+describe('a list past a limit of live updates', () => {
+  const past = (scope: string, size: number) => ({ type: 'ERROR', error: { message: `max subscriptions reached for ${scope} (${size}), cannot create new watch`, reason: 'limit' } })
+  beforeEach(() => {
+    resetWatchProblems()
+    refused.labels = []
+    refused.lists = []
+    chat.current = null
+  })
+
+  it('reads that the server is full, and asks nothing of the reader, when the limit is the server\'s', () => {
+    recordWatchFrame(watch('/api/v1/nodes'), past('the server', 2000))
+    const html = render()
+    expect(html).toContain('data-problem="server_limit"')
+    expect(html).toContain(en.layout.watchProblem.serverLimit)
+    expect(en.layout.watchProblem.serverLimit).not.toMatch(/tab/i)
+    expect(chat.current?.summary).toBe(en.layout.watchProblem.serverLimit)
+    expect(chat.current?.data).toEqual({ live_updates: 'stopped', reason: 'server_limit' })
+    expect(render('ko')).toContain(ko.layout.watchProblem.serverLimit)
+    expect(ko.layout.watchProblem.serverLimit).not.toContain('탭')
+  })
+
+  // A tab has one socket and the limit is per socket: closing another tab frees nothing here.
+  it('reads that this tab is full when the limit is the tab\'s, not that other tabs should close', () => {
+    recordWatchFrame(watch('/api/v1/nodes'), past('this connection', 50))
+    const html = render()
+    expect(html).toContain('data-problem="limit"')
+    expect(html).toContain(en.layout.watchProblem.limit)
+    expect(render('ko')).toContain(ko.layout.watchProblem.limit)
+    expect(en.layout.watchProblem.limit).not.toMatch(/other tabs/i)
+    expect(ko.layout.watchProblem.limit).not.toContain('다른 탭')
+  })
+
+  it('says the rows go on being read and that live updates come back by themselves', () => {
+    for (const text of [en.layout.watchProblem.limit, en.layout.watchProblem.serverLimit]) {
+      expect(text).toMatch(/about once a minute/)
+      expect(text).toMatch(/by themselves|goes back|go back/)
+      expect(text).not.toMatch(/refresh/i)
+    }
+    for (const text of [ko.layout.watchProblem.limit, ko.layout.watchProblem.serverLimit]) {
+      expect(text).toContain('약 1분마다')
+      expect(text).toContain('실시간 갱신으로 돌아갑니다')
+      expect(text).not.toContain('새로고침')
+    }
+  })
+})
+
 describe('the notice among the windows the floating chat is told of', () => {
   it('is never the window on top, whenever it came', () => {
     const notice = { source: 'WatchProblemNotice', summary: 'n' }

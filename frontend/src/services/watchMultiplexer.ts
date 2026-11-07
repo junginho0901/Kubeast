@@ -49,6 +49,8 @@ const REFUSED_WAIT_MS = 30_000
 const REFUSED_WAIT_MAX_MS = 300_000
 const refusedWait = (tries: number) => Math.min(REFUSED_WAIT_MS * 2 ** tries, REFUSED_WAIT_MAX_MS) * (0.5 + Math.random())
 
+const tabHidden = () => typeof document !== 'undefined' && document?.visibilityState === 'hidden'
+
 class WebSocketMultiplexer {
   private socket: WebSocket | null = null
   private listeners = new Map<string, Set<Listener>>()
@@ -64,12 +66,16 @@ class WebSocketMultiplexer {
   private refusedTimer: ReturnType<typeof setTimeout> | null = null
   // the watches an earlier socket carried
   private carried = new Set<string>()
+  // the watches a frame has answered on this socket
+  private answered = new Set<string>()
+  private closeListeners = new Set<() => void>()
 
   private getReconnectDelay(): number {
-    // exponential backoff: 1s → 2s → 4s → 8s → 16s → 30s (max).
+    // exponential backoff: 1s → 2s → 4s → 8s → 16s → 30s (max); a restart closes every socket at once, so each waits half of that to all of it.
     const base = 1000
     const max = 30000
-    return Math.min(base * Math.pow(2, this.reconnectAttempts), max)
+    const ceiling = Math.min(base * Math.pow(2, this.reconnectAttempts), max)
+    return ceiling / 2 + Math.random() * (ceiling / 2)
   }
 
   private scheduleReconnect() {
@@ -105,6 +111,8 @@ class WebSocketMultiplexer {
 
   private noteFrame(key: string, msg: ServerMessage) {
     recordWatchFrame(key, msg)
+    if (msg.type === 'ERROR') this.answered.delete(key)
+    else this.answered.add(key)
     if (msg.type === 'ERROR' && msg.error?.reason === 'limit') {
       this.refused.set(key, (this.refused.get(key) ?? -1) + 1)
       this.scheduleAskingRefused()
@@ -114,17 +122,19 @@ class WebSocketMultiplexer {
   }
 
   // Other refusals stay until the grant changes, and that ends the socket; a place may free up with nothing to say so.
+  // A hidden tab takes no place from one somebody is looking at: it asks again soon after it shows.
   private scheduleAskingRefused() {
     if (this.refusedTimer || this.refused.size === 0) return
     this.refusedTimer = setTimeout(() => {
       this.refusedTimer = null
-      this.askRefused(this.refused.size)
-    }, refusedWait(Math.max(...this.refused.values())))
+      if (tabHidden()) this.scheduleAskingRefused()
+      else this.askRefused(this.refused.size)
+    }, refusedWait(tabHidden() ? 0 : Math.max(...this.refused.values())))
   }
 
   // The answer is a frame: a refusal schedules the next time, a place ends it with the RESYNC this asks for.
   private askRefused(count: number) {
-    if (this.socket?.readyState !== WebSocket.OPEN) return
+    if (this.socket?.readyState !== WebSocket.OPEN || tabHidden()) return
     for (const key of [...this.refused.keys()].slice(0, count)) {
       const msg = this.subscriptions.get(key)
       if (msg) this.socket.send(JSON.stringify({ ...msg, resync: true }))
@@ -140,6 +150,11 @@ class WebSocketMultiplexer {
   // Whether this list is followed already, which a drawer on one of its objects can share.
   follows(clusterId: string, path: string, query: string): boolean {
     return this.subscriptions.has(makeKey(clusterId, path, query))
+  }
+
+  // Whether a frame has come on this socket: who joins such a watch hears nothing until something changes.
+  answers(clusterId: string, path: string, query: string): boolean {
+    return this.answered.has(makeKey(clusterId, path, query))
   }
 
   private waitForOpen(socket: WebSocket): Promise<void> {
@@ -203,6 +218,8 @@ class WebSocketMultiplexer {
     socket.onclose = (event) => {
       this.socket = null
       this.connecting = null
+      this.answered.clear()
+      this.closeListeners.forEach((listener) => listener())
       if (event?.code === SESSION_ENDED_CLOSE_CODE) {
         const lastEnd = this.lastSessionEnd
         this.lastSessionEnd = Date.now()
@@ -237,6 +254,14 @@ class WebSocketMultiplexer {
       return await this.connecting
     } finally {
       this.connecting = null
+    }
+  }
+
+  // Told each time the socket closes: its watches have stopped, and no frame says so.
+  onSocketClosed(listener: () => void): () => void {
+    this.closeListeners.add(listener)
+    return () => {
+      this.closeListeners.delete(listener)
     }
   }
 
@@ -277,6 +302,7 @@ class WebSocketMultiplexer {
     clearWatchProblem(key)
     this.subscriptions.delete(key)
     this.carried.delete(key)
+    this.answered.delete(key)
     const heldAPlace = !this.refused.delete(key)
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify({ ...msg, type: 'CLOSE' }))

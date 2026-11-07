@@ -132,4 +132,15 @@ describe('reading the object again for the chat', () => {
     for (const status of [400, 403, 404]) expect(objectReadInterval(true, httpError(status))).toBe(false)
     expect(objectReadInterval(false, null)).toBe(false)
   })
+
+  it('has no clock while a watch of the object answers: the watch says when to read', () => {
+    expect(objectReadInterval(true, null, true)).toBe(false)
+    expect(objectReadInterval(true, null, false)).toBe(OBJECT_READ_EVERY_MS)
+  })
+
+  it('reads again after a failure that may pass even with a watch that answers, which says nothing until the object changes', () => {
+    expect(objectReadInterval(true, httpError(503), true)).toBe(OBJECT_READ_EVERY_MS)
+    expect(objectReadInterval(true, new Error('Network Error'), true)).toBe(OBJECT_READ_EVERY_MS)
+    for (const status of [400, 403, 404]) expect(objectReadInterval(true, httpError(status), true)).toBe(false)
+  })
 })

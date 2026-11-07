@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type JobInfo } from '@/services/api'
-import { useKubeWatchList } from '@/services/useKubeWatchList'
+import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
@@ -68,6 +68,7 @@ export default function Jobs() {
       : `/api/v1/namespaces/${selectedNamespace}/jobs`,
     query: 'watch=1',
     applyEvent: (prev, event) => applyJobWatchEvent(prev as JobInfo[] | undefined, event),
+    gatherEveryMs: LIST_GATHER_MS,
   })
 
   const normalizedJobs = useMemo(

@@ -25,6 +25,18 @@ describe('what the screen says about its live updates', () => {
     expect(getWatchProblem()).toBe('failed')
   })
 
+  // These are the server's words, which multiplexer_watch_test.go holds; one tab cannot free the server's room, nor another tab this tab's.
+  it('tells the limit of this tab from the limit of the server', () => {
+    recordWatchFrame('a', { type: 'ERROR', error: { message: 'max subscriptions reached for this connection (50), cannot create new watch', reason: 'limit' } })
+    expect(getWatchProblem()).toBe('limit')
+    resetWatchProblems()
+    recordWatchFrame('a', { type: 'ERROR', error: { message: 'max subscriptions reached for the server (2000), cannot create new watch', reason: 'limit' } })
+    expect(getWatchProblem()).toBe('server_limit')
+    resetWatchProblems()
+    recordWatchFrame('a', frame('limit'))
+    expect(getWatchProblem()).toBe('limit')
+  })
+
   it('ignores what the page already says or has no watch to lose', () => {
     recordWatchFrame('a', frame('not_served'))
     recordWatchFrame('b', frame('unsupported'))

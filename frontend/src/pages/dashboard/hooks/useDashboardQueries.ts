@@ -21,6 +21,7 @@ import {
   isMetricsDisabled,
   isMetricsUnavailableError,
 } from '@/services/api'
+import { readPodPageSince } from '@/services/podPageRead'
 import { useCluster } from '@/contexts/ClusterContext'
 
 import type { ResourceType } from '../types'
@@ -94,7 +95,7 @@ export function useDashboardQueries({
   // The problem pods the floating chat is told about: errors, then warnings, first (sort=health), with the counts.
   const { data: problemPods } = useQuery({
     queryKey: ['dashboard-problem-pods', ck],
-    queryFn: () => api.getPodPage({ sort: 'health', offset: 0, limit: 10 }),
+    queryFn: () => readPodPageSince(queryClient, ['dashboard-problem-pods', ck], { sort: 'health', offset: 0, limit: 10 }),
     staleTime: 15000,
     refetchInterval: 30000,
   })

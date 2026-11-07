@@ -2,10 +2,11 @@
 // page's server page (owner, card colour, search, problems first), or the members of a PVC or PV group.
 
 import { useEffect, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Search, X } from 'lucide-react'
-import { api, type ResourceGraphNode } from '@/services/api'
+import type { ResourceGraphNode } from '@/services/api'
+import { readPodPageSince } from '@/services/podPageRead'
 import { ListPager } from '@/components/ListPager'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
@@ -41,13 +42,16 @@ export function PodGroupList({ group, onClose, onExpand, onOpen }: Props) {
   useEffect(() => setPage(1), [q, health])
 
   const owner = `${group.ownerKind ?? ''}/${group.ownerName ?? ''}`
+  const queryClient = useQueryClient()
+  const podGroupKey = ['resource-graph-group', group.namespace, owner, health, q, page]
   const podPage = useQuery({
-    queryKey: ['resource-graph-group', group.namespace, owner, health, q, page],
-    queryFn: () => api.getPodPage({
+    queryKey: podGroupKey,
+    queryFn: () => readPodPageSince(queryClient, podGroupKey, {
       namespace: group.namespace, owner, health, q: q || undefined, sort: 'health', offset: (page - 1) * ROWS, limit: ROWS,
     }),
     enabled: isPods,
-    refetchInterval: 5000,
+    // listed rows (no revision) cost the cluster a list: ask less often
+    refetchInterval: (query) => (query.state.data && !query.state.data.revision ? 30000 : 5000),
   })
 
   // a PVC or PV group: its members, searched here

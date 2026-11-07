@@ -16,10 +16,11 @@ export function followsObjectForChat(kind: string): boolean {
   return kind !== 'Secret' && !SELF_LOADING_KINDS.has(kind) && !UNRESOLVABLE_KINDS.has(kind)
 }
 
-// A refusal or a missing object answers the same on the next read; a failure of the server may pass.
-export function objectReadInterval(follows: boolean, error: unknown): number | false {
+// A refusal or a missing object answers the same on the next read; a failure may pass; a watch that answers says when to read (useDrawerFollowsObject).
+export function objectReadInterval(follows: boolean, error: unknown, watchAnswers = false): number | false {
   const status = (error as { response?: { status?: number } } | null)?.response?.status ?? 0
-  return follows && !(status >= 400 && status < 500) ? OBJECT_READ_EVERY_MS : false
+  if (!follows || (status >= 400 && status < 500)) return false
+  return watchAnswers && !error ? false : OBJECT_READ_EVERY_MS
 }
 
 // The object as the floating chat gets it, without what is large or noise: managed fields, the annotations' values.

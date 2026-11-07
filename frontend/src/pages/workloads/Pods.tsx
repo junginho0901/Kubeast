@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type PodListRow, type PodPage, type PodPageParams } from '@/services/api'
+import { podRowChanged, readPodPageSince } from '@/services/podPageRead'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
@@ -23,7 +24,7 @@ export default function Pods() {
   const queryClient = useQueryClient()
   const { t } = useTranslation()
   const tr = useCallback((key: string, fallback: string, options?: Record<string, any>) => t(key, { defaultValue: fallback, ...options }), [t])
-  const { open: openDetail } = useResourceDetail()
+  const { open: openDetail, target: detail } = useResourceDetail()
 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
@@ -75,11 +76,7 @@ export default function Pods() {
   // answers "unchanged" and the page keeps what it has.
   const { data: page, isLoading: isLoadingPods } = useQuery({
     queryKey: pageKey,
-    queryFn: async () => {
-      const prev = queryClient.getQueryData<PodPage>(pageKey)
-      const next = await api.getPodPage({ ...pageParams, revision: prev?.revision || undefined })
-      return next.unchanged && prev ? prev : next
-    },
+    queryFn: () => readPodPageSince(queryClient, pageKey, pageParams),
     placeholderData: keepPreviousData,
     // listed rows (no revision) cost the cluster a list: ask less often
     refetchInterval: (query) => {
@@ -93,15 +90,16 @@ export default function Pods() {
     if (page && page.total !== totalRows) setTotalRows(page.total)
   }, [page, totalRows])
 
-  // An open Pod drawer follows the list: when a row changed, its describe is read again.
-  const lastRevision = useRef('')
+  // An open Pod drawer follows the list: when its row changed, its describe is read again.
+  const lastPage = useRef<PodPage | undefined>(undefined)
   useEffect(() => {
-    const rev = page?.revision ?? ''
-    if (rev && lastRevision.current && rev !== lastRevision.current) {
-      queryClient.invalidateQueries({ queryKey: ['pod-describe'] })
+    const before = lastPage.current
+    lastPage.current = page
+    if (!page?.revision || !before?.revision || page.revision === before.revision) return
+    if (detail?.kind === 'Pod' && podRowChanged(before?.items, page.items, detail)) {
+      queryClient.invalidateQueries({ queryKey: ['pod-describe', detail.namespace, detail.name] })
     }
-    lastRevision.current = rev
-  }, [page?.revision, queryClient])
+  }, [page, detail, queryClient])
 
   const podStats = useMemo(() => {
     const st = page?.stats
