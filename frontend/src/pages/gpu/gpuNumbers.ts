@@ -4,6 +4,7 @@
 import type { GPUDashboardData, GPUDevicePlugin, GPUDeviceMetric, GPUMetricsData, GPUNodeInfo, GPUNodeVendor, GPUPodInfo, GPUVendor } from '@/services/api'
 import { podNotRunning } from '@/utils/aiContext/podCounts'
 import { nodeReadiness } from '@/utils/nodeStatus'
+import { getStatusColor as podsListStatusColor } from '../workloads/pods/podHelpers'
 
 // The companies Kubernetes' "Schedule GPUs" names, in the order the screens list them (gpu_dashboard.go gpuVendors).
 export const GPU_VENDORS: GPUVendor[] = ['NVIDIA', 'AMD', 'Intel']
@@ -143,6 +144,25 @@ export function gpuNodeCounts(nodes: GPUNodeInfo[]) {
 export function statusNamesError(status: string): boolean {
   const s = (status || '').toLowerCase()
   return ['error', 'failed', 'backoff', 'errimagepull', 'oomkilled'].some((w) => s.includes(w))
+}
+
+// A status's colour on the two GPU pod lists: the Pods list's, red for what the cards here count as Failed.
+export function gpuPodStatusColor(status: string): string {
+  return statusNamesError(status) ? 'badge-error' : podsListStatusColor(status)
+}
+
+// The bar of a status in a distribution says what its badge says; a pod that finished needs nothing, each screen draws it its way.
+export function gpuPodStatusBar(status: string, finished: string): string {
+  switch (gpuPodStatusColor(status)) {
+    case 'badge-error':
+      return 'bg-red-500'
+    case 'badge-warning':
+      return 'bg-yellow-500'
+    case 'badge-success':
+      return status === 'Running' ? 'bg-emerald-500' : finished
+    default:
+      return 'bg-slate-500'
+  }
 }
 
 const ended = (p: GPUPodInfo) => p.phase === 'Succeeded' || p.phase === 'Failed'

@@ -7,6 +7,7 @@ import en from '@/i18n/locales/en.json'
 import ko from '@/i18n/locales/ko.json'
 import type { HelmUpgradeResponse } from '@/services/api'
 import UpgradePreviewModal from './UpgradePreviewModal'
+import { failedPreview } from './upgradePreview'
 
 // The preview of a values edit: Apply opens for anything the edit changes, also when the masked diff cannot show it.
 
@@ -30,9 +31,9 @@ beforeEach(() => aiContext.mockClear())
 
 const preview = (fields: Partial<HelmUpgradeResponse>): HelmUpgradeResponse => ({ dryRun: true, fromRevision: 3, chartVersion: '1.0.0', ...fields })
 
-const render = (fields: Partial<HelmUpgradeResponse>, lng = 'en', refusal?: string) =>
+const render = (fields: Partial<HelmUpgradeResponse>, lng = 'en') =>
   renderToStaticMarkup(createElement(I18nextProvider, { i18n: i18n.cloneInstance({ lng }) },
-    createElement(UpgradePreviewModal, { namespace: 'team-a', name: 'app', values: 'a: 1\n', preview: preview(fields), refusal, onClose: () => {}, onApplied: () => {} })))
+    createElement(UpgradePreviewModal, { namespace: 'team-a', name: 'app', values: 'a: 1\n', preview: preview(fields), onClose: () => {}, onApplied: () => {} })))
 
 // The opening tag of the button that says text.
 const button = (html: string, text: string) => html.split('<button').find((part) => part.includes(text))?.split('>')[0] ?? ''
@@ -42,6 +43,55 @@ const applyOff = (html: string, lng: 'en' | 'ko' = 'en') => {
   return tag.includes(' disabled=""')
 }
 const named = (html: string) => /data-testid="helm-upgrade-changed-masked">([^<]*)</.exec(html)?.[1]
+
+// A preview that failed has nothing to apply: what the server said is no diff.
+describe('a values preview that failed', () => {
+  const failed = (err: unknown) => failedPreview(err) as HelmUpgradeResponse
+  const refused = { response: { data: { detail: 'Values: yaml: line 3: mapping values are not allowed' } } }
+  const draw = (fields: HelmUpgradeResponse, lng = 'en') =>
+    renderToStaticMarkup(createElement(I18nextProvider, { i18n: i18n.cloneInstance({ lng }) },
+      createElement(UpgradePreviewModal, { namespace: 'team-a', name: 'app', values: 'a: 1\n', preview: fields, onClose: () => {}, onApplied: () => {} })))
+
+  it('keeps Apply off', () => {
+    expect(applyOff(draw(failed(refused)))).toBe(true)
+  })
+
+  it('shows what the server said as an error, not as a diff', () => {
+    const html = draw(failed(refused))
+    expect(html).not.toContain('data-testid="diff"')
+    expect(/data-testid="helm-upgrade-preview-failed"[^>]*>([^<]*)</.exec(html)?.[1]).toBe('Values: yaml: line 3: mapping values are not allowed')
+    expect(html).not.toContain(en.helmReleaseDetail.upgrade.noChange)
+  })
+
+  it('reads the message of a failure the server did not answer', () => {
+    expect(/data-testid="helm-upgrade-preview-failed"[^>]*>([^<]*)</.exec(draw(failed(new Error('Network Error'))))?.[1]).toBe('Network Error')
+  })
+
+  it('tells the assistant the preview failed, not that a change is on its way', () => {
+    draw(failed(refused))
+    const snapshot = aiContext.mock.calls.at(-1)![0] as { summary: string; data: Record<string, unknown> }
+    expect(snapshot.data.preview_error).toBe('Values: yaml: line 3: mapping values are not allowed')
+    expect(snapshot.data.diff).toBe('')
+    expect(snapshot.summary).toContain('미리보기 실패')
+    expect(snapshot.summary).not.toContain('manifest 차이 있음')
+  })
+
+  it('says the server\'s refusal as it came, in both languages, with Apply off, and tells the assistant why', () => {
+    const refusal = 'the values hold a masked placeholder where it stands for no value (note): write the value there, or put the line back as it was shown'
+    for (const lng of ['en', 'ko'] as const) {
+      aiContext.mockClear()
+      const html = draw(failed({ response: { data: { detail: refusal } } }), lng)
+      expect(/data-testid="helm-upgrade-preview-failed"[^>]*>([^<]*)</.exec(html)?.[1]).toBe(refusal)
+      expect(applyOff(html, lng)).toBe(true)
+      expect(html).not.toContain('data-testid="diff"')
+      expect(html).not.toContain((lng === 'en' ? en : ko).helmReleaseDetail.upgrade.noChange)
+      const snapshot = aiContext.mock.calls.at(-1)![0] as { summary: string; data: Record<string, unknown> }
+      expect(snapshot.data.preview_error).toBe(refusal)
+      expect(snapshot.summary).toContain('미리보기 실패')
+      expect(snapshot.summary).toContain(refusal)
+    }
+  })
+})
 
 describe('the values upgrade preview', () => {
   it('opens Apply and says where when all it changes is hidden from the diff', () => {
@@ -113,22 +163,6 @@ describe('the values upgrade preview', () => {
     expect(named(html)).toBeUndefined()
     const snapshot = aiContext.mock.calls[0][0] as { summary: string }
     expect(snapshot.summary).toContain('바뀌는 것 없음')
-  })
-
-  it('says the server\'s refusal where the diff would be, with Apply off, and tells the assistant', () => {
-    const refusal = 'the values hold a masked placeholder where it stands for no value (note): write the value there, or put the line back as it was shown'
-    for (const lng of ['en', 'ko'] as const) {
-      aiContext.mockClear()
-      const html = render({ fromRevision: 0, chartVersion: '' }, lng, refusal)
-      expect(/data-testid="helm-upgrade-refusal">([^<]*)</.exec(html)?.[1]).toBe(refusal)
-      expect(applyOff(html, lng)).toBe(true)
-      expect(html).not.toContain('data-testid="diff"')
-      expect(html).not.toContain((lng === 'en' ? en : ko).helmReleaseDetail.upgrade.noChange)
-      const snapshot = aiContext.mock.calls[0][0] as { summary: string; data: Record<string, unknown> }
-      expect(snapshot.data.refusal).toBe(refusal)
-      expect(snapshot.summary).toContain('거절')
-      expect(snapshot.summary).toContain('(note)')
-    }
   })
 
   it('leaves a diff with no hidden change as it was', () => {

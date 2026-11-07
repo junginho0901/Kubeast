@@ -81,7 +81,9 @@ auth:
     scopes: [openid, email, profile]
     claims:
       # A claim holding a plain name also works, but such a name does not reach
-      # an account made with a password, such as the admin above.
+      # an account made with a password, such as the admin above. If people can
+      # change this claim themselves at the provider, set allowedDomains: an
+      # address is taken as the provider's word, whichever claim holds it.
       email: email
       name: name
       groups: groups

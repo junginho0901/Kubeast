@@ -67,7 +67,7 @@ export function replicaSetToWorkloadRawJson(replicaset: ReplicaSetInfo): Record<
     metadata: {
       name: replicaset.name,
       namespace: replicaset.namespace,
-      labels: replicaset.labels || {},
+      ...(replicaset.labels ? { labels: replicaset.labels } : {}),
       creationTimestamp: replicaset.created_at,
     },
     spec: {

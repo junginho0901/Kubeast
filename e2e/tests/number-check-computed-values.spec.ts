@@ -367,11 +367,13 @@ test.describe('values a screen worked out for itself', () => {
     await expect.poll(async () => {
       const d = (await ask()).overlays.find((o) => o.source === 'NodeInfo')?.data
       const statuses = onNode()
+      const list = d?.pods_not_running_list as { name: string; status: string }[] | undefined
       return {
         notRunning: d?.pods_not_running === notRunning(statuses),
         running: (d?.pods_by_status as Record<string, number> | undefined)?.Running === countWords(statuses).Running,
+        named: list?.find((p) => p.name === crash)?.status === printed('crash').status,
       }
-    }, { timeout: 60_000, intervals: [3_000] }).toEqual({ notRunning: true, running: true })
+    }, { timeout: 60_000, intervals: [3_000] }).toEqual({ notRunning: true, running: true, named: true })
   })
 
   // A Job's other states hold no pod that retries: the job controller stops counting a pod as active once it is being

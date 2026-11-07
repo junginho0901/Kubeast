@@ -18,6 +18,7 @@ export type SortKey =
   | 'claim'
   | 'volumeMode'
   | 'source'
+  | 'reason'
   | 'age'
 
 export { ageSeconds as parseAgeSeconds, formatAge } from '@/utils/time'
@@ -100,6 +101,8 @@ export function pvToRawJson(pv: PVInfo): Record<string, unknown> {
     },
     status: {
       phase: pv.status,
+      ...(pv.reason ? { reason: pv.reason } : {}),
+      ...(pv.message ? { message: pv.message } : {}),
     },
   }
 }

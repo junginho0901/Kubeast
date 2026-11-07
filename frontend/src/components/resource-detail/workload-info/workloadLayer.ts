@@ -175,9 +175,10 @@ function templateLayer(template: Fields | undefined, selectorExpressions: unknow
   }
 }
 
-// The Jobs a CronJob's window lists, the newest first.
+// The Jobs a CronJob's window lists, the newest first, and what their answers count of the pods they ran: the window has no pods of its own to read.
 function ownedJobsLayer(jobs: Fields[]) {
   const newest = [...jobs].sort((a, b) => String(b.start_time ?? '').localeCompare(String(a.start_time ?? '')))
+  const sum = (field: string) => jobs.reduce((total, j) => total + (Number(j[field]) || 0), 0)
   return {
     owned_jobs_total: jobs.length,
     owned_jobs: newest.slice(0, OWNED_JOBS_TOLD).map((j) => ({
@@ -186,6 +187,7 @@ function ownedJobsLayer(jobs: Fields[]) {
       start_time: j.start_time,
       duration: formatDuration(jobDurationSeconds(j)),
     })),
+    ...(jobs.length > 0 ? { job_pods: { active: sum('active'), succeeded: sum('succeeded'), failed: sum('failed') } } : {}),
   }
 }
 
@@ -232,10 +234,13 @@ export function workloadLayer({
   const needsALook = pods.notRunning > 0 || short || (job && jobLayerNeedsALook(job)) || (cronJob && cronJobLayerNeedsALook(cronJob))
   const podCount = pods.known ? `, Pod ${pods.total}개${pods.notRunning ? ` (NotRunning ${pods.notRunning})` : ''}` : ''
   const headline = job ? jobLayerHeadline(job) : cronJob ? cronJobLayerHeadline(cronJob) : counted ? `replicas ${view.ready}/${view.desired}` : 'replicas ?/?'
-  const summary = `${needsALook ? '⚠️ ' : ''}${kind} ${name} (${namespace}) — ${headline}${podCount}`
+  const liveJobs = owned.jobsEnabled && owned.jobs && owned.jobs.length > 0
+  const jobsLayer = isCronJob && (Array.isArray(ownedJobs) || liveJobs) ? ownedJobsLayer(ownedDisplayJobs(owned, ownedJobs)) : undefined
+  const jobPods = jobsLayer?.job_pods
+  const jobCount = jobPods ? `, Job ${jobsLayer.owned_jobs_total}개 (Pod active ${jobPods.active}, succeeded ${jobPods.succeeded}, failed ${jobPods.failed})` : ''
+  const summary = `${needsALook ? '⚠️ ' : ''}${kind} ${name} (${namespace}) — ${headline}${podCount}${jobCount}`
 
   const count = (value: unknown) => (counted && value !== '-' ? value : undefined)
-  const liveJobs = owned.jobsEnabled && owned.jobs && owned.jobs.length > 0
 
   return {
     source: 'WorkloadInfo' as const,
@@ -270,9 +275,10 @@ export function workloadLayer({
       // a list the budget halves goes first: these ahead of the pods and events
       ...templateLayer(podTemplate, selectorExpressions, volumeClaimTemplates),
       conditions: conditions.slice(0, 8),
-      pods: pods.items,
+      // no list has answered yet: an empty one would read as "no pods"
+      pods: pods.known ? pods.items : undefined,
       recent_events: events.slice(0, 10),
-      ...(isCronJob && (Array.isArray(ownedJobs) || liveJobs) ? ownedJobsLayer(ownedDisplayJobs(owned, ownedJobs)) : {}),
+      ...jobsLayer,
     } as Fields,
   }
 }

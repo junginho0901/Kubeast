@@ -2,8 +2,11 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { createElement, createRef, type ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import type { GPUDashboardData, GPUDeviceMetric, GPUMetricsData } from '@/services/api'
+import { DistributionsSection } from './gpu-dashboard/DistributionsSection'
+import { GPUPodsCharts } from './gpupods/GPUPodsCharts'
 import { RealtimeMetricsSection } from './gpu-dashboard/RealtimeMetricsSection'
 import { SummaryCardsRow } from './gpu-dashboard/SummaryCardsRow'
 import GPUNodesRealtimeMetrics from './gpu-nodes/GPUNodesRealtimeMetrics'
@@ -19,6 +22,29 @@ const NO_SERIES: GPUMetricsData = {
   available: true, gpu_count: 0, avg_gpu_util: 0, avg_memory_util: 0, total_memory_used_mb: 0, total_memory_free_mb: 0, total_memory_mb: 0, gpus: [],
 }
 const SERIES: GPUMetricsData = { ...NO_SERIES, gpu_count: 2, avg_gpu_util: 40, avg_memory_util: 25, total_memory_used_mb: 2048, total_memory_mb: 8192 }
+
+// A status's bar says what its badge says: only the colour of a status that needs nothing from anyone differs per screen.
+describe('the GPU status bars', () => {
+  const statuses: [string, number][] = [['Running', 1], ['Pending', 1], ['Terminating', 1], ['Init:0/1', 1], ['ContainerCreating', 1], ['Completed', 1], ['CrashLoopBackOff', 1], ['Init:Error', 1], ['Unknown', 1]]
+  const bars = (markup: string, testId: string) => Object.fromEntries(
+    markup.split(`data-testid="${testId}"`).slice(1).map((row) => [statuses.find(([s]) => row.includes(`>${s}<`))?.[0], /h-full rounded-full (bg-[\w-]+)/.exec(row)?.[1]]),
+  )
+  const waiting = { Terminating: 'bg-yellow-500', Pending: 'bg-yellow-500', 'Init:0/1': 'bg-yellow-500', ContainerCreating: 'bg-yellow-500' }
+  const failing = { CrashLoopBackOff: 'bg-red-500', 'Init:Error': 'bg-red-500' }
+
+  it('on GPU Pods', () => {
+    expect(bars(html(createElement(GPUPodsCharts, { nodeGpuUsage: [], topStatuses: statuses, total: statuses.length, tr })), 'gpu-pods-status-row')).toEqual({
+      Running: 'bg-emerald-500', ...waiting, ...failing, Completed: 'bg-slate-500', Unknown: 'bg-slate-500',
+    })
+  })
+
+  it('on the GPU Dashboard', () => {
+    const section = createElement(DistributionsSection, { data: { gpu_pods: statuses.map(() => ({})) } as never, modelDistribution: [], podStatusDist: statuses, tr })
+    expect(bars(html(createElement(MemoryRouter, null, section)), 'gpu-pod-status-row')).toEqual({
+      Running: 'bg-emerald-500', ...waiting, ...failing, Completed: 'bg-primary-bright', Unknown: 'bg-slate-500',
+    })
+  })
+})
 
 // Prometheus answering with no DCGM series is nothing read, not GPUs at 0%.
 describe('the real-time GPU averages', () => {

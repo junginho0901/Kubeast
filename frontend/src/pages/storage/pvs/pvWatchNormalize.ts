@@ -39,6 +39,8 @@ export function normalizeWatchPvObject(obj: any): PVInfo {
     driver: obj?.driver ?? null,
     volume_handle: obj?.volume_handle ?? null,
     node_affinity: obj?.node_affinity ?? null,
+    reason: status?.reason ?? obj?.reason ?? null,
+    message: status?.message ?? obj?.message ?? null,
     created_at: metadata?.creationTimestamp ?? obj?.created_at ?? null,
   }
 }

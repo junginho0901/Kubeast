@@ -5,11 +5,23 @@ type Failure = Pick<ChatStreamState, 'error' | 'errorKey' | 'errorArgs'>
 
 const asks = (message: DisplayMessage | undefined, question: string) => message?.role === 'user' && message.content === question
 
+// Whether this account cannot have the conversation (another account's, or deleted): reading it said so, or the chat did.
+export function conversationGone(readError: unknown, state: Pick<ChatStreamState, 'errorKey' | 'sessionId'>, sessionId: string | null): boolean {
+  const status = (readError as { response?: { status?: number } } | null)?.response?.status
+  return status === 404 || status === 403 || (state.sessionId === sessionId && state.errorKey === 'sessionNotFound')
+}
+
+// A conversation that is gone is left for a new one, except while the turn that found out is on screen: its question and
+// error stay until the next question, which starts the new conversation.
+export function forgetsConversation(state: Pick<ChatStreamState, 'status' | 'sessionId'>, sessionId: string | null): boolean {
+  return !(state.status === 'error' && state.sessionId === sessionId)
+}
+
 /**
  * The floating chat's list: the saved messages with what they do not hold, as AI Chat keeps it in its bubbles. A failed
- * turn stays where it came, since its letters and error are never saved and its question perhaps not, and so does a
- * stopped one until its letters are saved; the turn going on or just ended stays until the saved messages have it, so
- * its bubbles do not leave the screen and come back.
+ * turn stays where it came, since its error is never saved, its question perhaps not, and its letters only if the server
+ * got them, and so does a stopped one until its letters are saved; the turn going on or just ended stays until the saved
+ * messages have it, so its bubbles do not leave the screen and come back.
  */
 export function turnsOnScreen(saved: DisplayMessage[], state: ChatStreamState, errorText: (failure: Failure) => string): DisplayMessage[] {
   const out: DisplayMessage[] = []
@@ -25,14 +37,31 @@ export function turnsOnScreen(saved: DisplayMessage[], state: ChatStreamState, e
     if (turn.error) out.push({ role: 'error', content: errorText(turn) })
   }
 
-  // a stopped answer whose save has landed, wherever it landed, is the saved messages' from then on
-  const lettersSaved = (turn: FailedTurn) =>
-    turn.stopped && !!turn.content && saved.some((m, i) => i >= Math.max(shown, turn.askedAt) && m.role === 'assistant' && m.content === turn.content)
+  // Where the saved messages have the letters of a turn, or -1: a stopped answer's save lands wherever it lands, a failed
+  // one the server wrote comes marked under its question, and letters read the same when a stream was cut after the save.
+  const savedLetters = (turn: FailedTurn) => {
+    if (!turn.content) return -1
+    const from = Math.max(shown, turn.askedAt)
+    return saved.findIndex((m, i) => i >= from && m.role === 'assistant'
+      && (m.content === turn.content || (!turn.stopped && !!m.failed && asks(saved[i - 1], turn.question))))
+  }
 
   state.failedTurns.forEach((turn, i) => {
-    if (lettersSaved(turn)) return
+    const letters = savedLetters(turn)
+    if (letters !== -1) {
+      if (turn.error) {
+        savedUpTo(letters + 1)
+        failure(turn)
+      }
+      return
+    }
     const next = state.failedTurns[i + 1]?.question ?? state.userMessage
-    let at = Math.max(shown, turn.savedBefore)
+    // It came just before the next question. The list may be behind the count taken when that went out, so what it holds
+    // above the first later question, or all of it while none is saved, came before this turn.
+    const from = Math.max(shown, turn.savedBefore)
+    const later = [...state.failedTurns.slice(i + 1).map((t) => t.question), state.userMessage]
+    const laterAt = saved.findIndex((m, at) => at >= from && m.role === 'user' && later.includes(m.content))
+    let at = laterAt !== -1 ? laterAt : Math.max(from, saved.length)
     // its saved question had reached the screen before the next was sent
     const reachedScreen = at > shown && asks(saved[at - 1], turn.question)
     if (reachedScreen) at--
@@ -56,11 +85,9 @@ export function turnsOnScreen(saved: DisplayMessage[], state: ChatStreamState, e
   const questionSaved = at >= from
   savedUpTo(questionSaved ? at + 1 : saved.length)
   if (!questionSaved) out.push({ role: 'user', content: question, pending: state.isStreaming })
-  const answerSaved = questionSaved && saved[at + 1]?.role === 'assistant' && (state.status === 'completed' || state.status === 'aborted')
+  const answerSaved = questionSaved && saved[at + 1]?.role === 'assistant' && !state.isStreaming
   savedUpTo(saved.length)
-  if (answerSaved) return out
-
-  answer(state.content, state.toolCalls, state.isStreaming)
+  if (!answerSaved) answer(state.content, state.toolCalls, state.isStreaming)
   failure(state)
   return out
 }

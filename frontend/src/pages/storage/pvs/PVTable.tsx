@@ -3,9 +3,9 @@
 // frontend/src/pages/storage/PersistentVolumes.tsx 의 table JSX (sort header
 // + tbody + 빈/로딩 상태 + pagination footer) 추출. useAdaptiveTable 의 ref/
 // rowsPerPage 는 부모에서 hook 호출 후 props 로 전달.
-// cluster-scoped 라 namespace 컬럼 없음. **10 컬럼 모두 sortable** (가장 많은
+// cluster-scoped 라 namespace 컬럼 없음. **11 컬럼 모두 sortable** (가장 많은
 // 컬럼 수): name/status/storageClass/capacity/accessModes/reclaimPolicy/
-// claim/volumeMode/source/age. min-w-[1400px].
+// claim/volumeMode/source/reason/age. min-w-[1400px].
 
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
@@ -122,6 +122,9 @@ export function PVTable({
               <th className="col-optional text-left py-3 px-4 w-[190px] cursor-pointer" onClick={() => handleSort('source')}>
                 <span className="inline-flex items-center gap-1">{tr('pvs.table.source', 'Source')}{renderSortIcon('source')}</span>
               </th>
+              <th className="col-optional text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => handleSort('reason')}>
+                <span className="inline-flex items-center gap-1">{tr('pvs.table.reason', 'Reason')}{renderSortIcon('reason')}</span>
+              </th>
               <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
                 <span className="inline-flex items-center gap-1">{tr('pvs.table.age', 'Age')}{renderSortIcon('age')}</span>
               </th>
@@ -150,12 +153,13 @@ export function PVTable({
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{claimToText(pv.claim_ref)}</span></td>
                 <td className="col-optional py-3 px-4 text-xs">{pv.volume_mode || '-'}</td>
                 <td className="col-optional py-3 px-4 text-xs"><span className="block truncate">{pv.source || pv.driver || '-'}</span></td>
+                <td className="col-optional py-3 px-4 text-xs"><span className="block truncate" title={pv.message || undefined}>{pv.reason || '-'}</span></td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(pv.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
               <tr>
-                <td colSpan={10} className="py-10 px-4 text-center text-slate-400">
+                <td colSpan={11} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     
@@ -166,10 +170,10 @@ export function PVTable({
             )}
 
             {sortedPVsLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={10} resource="pvs" searching={searching} />
+              <TableEmptyRow colSpan={11} resource="pvs" searching={searching} />
             )}
           </tbody>
-            <AdaptiveTableFillerRows count={rowsPerPage - pagedPVs.length} columnCount={10} />
+            <AdaptiveTableFillerRows count={rowsPerPage - pagedPVs.length} columnCount={11} />
         </table>
       </div>
 

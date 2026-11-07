@@ -74,9 +74,16 @@
       "stripped": "- ```\n  code\n\nAfter."
     },
     {
+      "name": "a fence written indented outside a list, closed, needs nothing with a less indented line in it",
+      "parts": [["text", "Run this:\n\n  ```\ncode\n  ```"], ["tool", 0], ["text", "After."]],
+      "answer": "Run this:\n\n  ```\ncode\n  ```\n\n{block}After.",
+      "stripped": "Run this:\n\n  ```\ncode\n  ```\n\nAfter."
+    },
+    {
       "name": "a line less indented than the fence has ended its list item",
       "parts": [["text", "- item\n  ```\n  code\nnot indented"], ["tool", 0], ["text", "After."]],
-      "answer": "- item\n  ```\n  code\nnot indented\n\n{block}After."
+      "answer": "- item\n  ```\n  code\nnot indented\n\n{block}After.",
+      "stripped": "- item\n  ```\n  code\nnot indented\n\nAfter."
     },
     {
       "name": "the third fence line opens a block of its own",

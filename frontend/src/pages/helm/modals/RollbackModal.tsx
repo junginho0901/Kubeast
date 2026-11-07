@@ -4,8 +4,20 @@ import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { useAIContext } from '@/hooks/useAIContext'
+import { usePermission } from '@/hooks/usePermission'
 import { api, type HelmRollbackResponse } from '@/services/api'
 import DiffView from './DiffView'
+
+// An empty diff compares what this caller can read of two manifests: the rollback still writes a revision, and values the
+// chart does not render or that are hidden from this caller may differ.
+export function NoManifestDiff({ canReveal }: { canReveal: boolean }) {
+  const { t } = useTranslation()
+  return (
+    <div className="rounded-sm border border-slate-600 bg-slate-800/40 px-3 py-4 text-sm text-slate-300" data-testid="helm-rollback-no-diff">
+      {t(canReveal ? 'helmReleaseDetail.rollback.noChange' : 'helmReleaseDetail.rollback.noChangeMasked')}
+    </div>
+  )
+}
 
 export default function RollbackModal({
   namespace,
@@ -19,6 +31,7 @@ export default function RollbackModal({
   onClose: () => void
 }) {
   const { t } = useTranslation()
+  const { has } = usePermission()
   const queryClient = useQueryClient()
   const [preview, setPreview] = useState<HelmRollbackResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -95,9 +108,7 @@ export default function RollbackModal({
             {error}
           </div>
         ) : noChange ? (
-          <div className="rounded-sm border border-slate-600 bg-slate-800/40 px-3 py-4 text-sm text-slate-300">
-            {t('helmReleaseDetail.rollback.noChange')}
-          </div>
+          <NoManifestDiff canReveal={has('resource.secret.reveal')} />
         ) : (
           <DiffView diff={diff} />
         )}

@@ -1471,6 +1471,7 @@
       "claim": "Claim",
       "volumeMode": "Volume Mode",
       "source": "Source",
+      "reason": "Reason",
       "age": "Age"
     },
     "stats": {
@@ -1805,7 +1806,9 @@
       "cached": " · {{pct}}% cached",
       "calls": "Model calls: {{count}} · {{model}}",
       "stopped": "Stopped · usage not available",
-      "stoppedTitle": "The answer was stopped before the provider reported its tokens."
+      "stoppedTitle": "The answer was stopped before the provider reported its tokens.",
+      "failed": "Ended by an error",
+      "failedTitle": "The answer ended here because of an error. What came before it is kept."
     },
     "jumpToLatest": "Jump to latest"
   },
@@ -2876,6 +2879,7 @@
       "name": "this name cannot be a Kubernetes user: no colon, space or control character",
       "password": "the password does not meet the policy",
       "role": "no such role",
+      "clusterRole": "Read and Write are granted per cluster and give nothing as an account level: make the account Member and grant the role on a cluster",
       "ceiling": "the role gives permissions you do not hold",
       "team": "no such team",
       "exists": "this email already has an account",
@@ -3529,7 +3533,7 @@
     "noData": "No data entries.",
     "ownerReferences": "Owner References",
     "maskedHint": "Values are hidden without the resource.secret.reveal permission.",
-    "yamlMaskedNote": "A value shown as *** stays as it is when you save. To change one, write the new value over it.",
+    "yamlMaskedNote": "A value shown as *** stays as it is when you save, as long as its line is there. To change one, write the new value over it. To remove one, delete its line.",
     "appliedKeptMasked": "Applied. Hidden values left as they were: {{count}}"
   },
   "crdPage": {
@@ -3946,7 +3950,8 @@
       "button": "Rollback",
       "title": "Rollback to revision {{rev}}",
       "subtitle": "{{namespace}}/{{name}} — review the diff before applying",
-      "noChange": "No changes will be applied.",
+      "noChange": "The manifests of these two revisions read the same. Rolling back still records a new revision with that revision's values.",
+      "noChangeMasked": "The manifests of these two revisions read the same as far as you can see: values hidden from you are not compared here. Rolling back still records a new revision with that revision's values.",
       "cancel": "Cancel",
       "apply": "Apply rollback",
       "applying": "Rolling back..."
@@ -4116,6 +4121,19 @@
       "external": "its stored kubeconfig is deleted too.",
       "submit": "Delete"
     },
+    "access": {
+      "add": "Add",
+      "allAdded": "All users already granted",
+      "empty": "No users have access to this cluster yet.",
+      "note": "Users granted a role here can access this cluster (deny-by-default for everyone else). Global admins reach every cluster and are not listed. Changes apply after the user logs in again.",
+      "revoke": "Revoke",
+      "selectUser": "Select a user…",
+      "title": "Cluster access",
+      "readError": "Could not read who has access to this cluster: {{reason}}",
+      "rolesError": "Could not read the roles: {{reason}}",
+      "usersError": "Could not read the users: {{reason}}",
+      "changeError": "Not changed: {{reason}}"
+    },
     "edit": {
       "prometheus": {
         "title": "Prometheus",
@@ -4165,6 +4183,11 @@
         "resultGlobal": "Deployment store {{endpoint}} — {{state}}",
         "resultNone": "No log store: {{message}}"
       }
+    },
+    "noAccess": {
+      "body": "You have not been granted access to any cluster yet. Ask an administrator to grant you a role on a cluster.",
+      "title": "No accessible cluster",
+      "helpLink": "Request access"
     }
   },
   "admin": {

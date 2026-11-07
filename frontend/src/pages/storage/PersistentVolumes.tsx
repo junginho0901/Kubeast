@@ -119,6 +119,8 @@ export default function PersistentVolumes() {
           return pv.volume_mode || ''
         case 'source':
           return pv.source || pv.driver || ''
+        case 'reason':
+          return pv.reason || ''
         case 'age':
           return parseAgeSeconds(pv.created_at)
         default:
@@ -176,7 +178,7 @@ export default function PersistentVolumes() {
           currentPage,
           pageSize: rowsPerPage,
           topN: rowsPerPage,
-          pickFields: ['name', 'capacity', 'access_modes', 'reclaim_policy', 'status', 'claim', 'storage_class'],
+          pickFields: ['name', 'capacity', 'access_modes', 'reclaim_policy', 'status', 'reason', 'message', 'claim', 'storage_class'],
           filterProblematic: (p) => {
             const pv = p as unknown as PVInfo
             return /released|fail/i.test(pv.status)

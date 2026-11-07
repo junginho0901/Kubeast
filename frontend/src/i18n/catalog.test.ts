@@ -29,6 +29,24 @@ for (const f of files) {
 const lookup = (key: string): unknown =>
   key.split('.').reduce<unknown>((o, p) => (o && typeof o === 'object' ? (o as Record<string, unknown>)[p] : undefined), ko)
 
+describe('English catalog', () => {
+  const blocks = [['cluster.access', '../pages/admin/ClusterAccessModal.tsx'], ['cluster.noAccess', '../components/Layout.tsx'], ['cluster.noAccess', '../components/AccessHelp.tsx']]
+  const block = (cat: unknown, key: string) =>
+    (key.split('.').reduce<unknown>((o, p) => (o && typeof o === 'object' ? (o as Record<string, unknown>)[p] : undefined), cat) ?? {}) as Record<string, string>
+
+  it('has the entries of the cluster access window and of the notice for a user with no cluster', () => {
+    for (const [key] of blocks) expect(Object.keys(block(en, key)).sort(), key).toEqual(Object.keys(block(ko, key)).sort())
+  })
+
+  it('says what the screens have written beside each of those calls', () => {
+    for (const [key, file] of blocks) {
+      const src = readFileSync(join(SRC, 'i18n', file), 'utf8')
+      for (const m of src.matchAll(new RegExp(`\\btr\\(\\s*'${key}\\.(\\w+)'\\s*,\\s*'((?:[^'\\\\]|\\\\.)*)'`, 'g'))) expect(block(en, key)[m[1]], m[1]).toBe(m[2])
+      for (const m of src.matchAll(new RegExp(`\\bt\\(\\s*'${key}\\.(\\w+)'\\s*,\\s*\\{\\s*defaultValue:\\s*'((?:[^'\\\\]|\\\\.)*)'`, 'g'))) expect(block(en, key)[m[1]], m[1]).toBe(m[2])
+    }
+  })
+})
+
 describe('Korean catalog', () => {
   it('finds the keys the UI uses', () => {
     expect(used.size).toBeGreaterThan(1000)

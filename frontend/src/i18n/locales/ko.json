@@ -1470,6 +1470,7 @@
       "claim": "클레임",
       "volumeMode": "볼륨 모드",
       "source": "소스",
+      "reason": "사유",
       "age": "경과 시간"
     },
     "stats": {
@@ -1803,7 +1804,9 @@
       "cached": " · 캐시 {{pct}}%",
       "calls": "모델 호출 {{count}}회 · {{model}}",
       "stopped": "멈춤 · 사용량을 표시할 수 없음",
-      "stoppedTitle": "공급자가 토큰 수를 알려 주기 전에 답을 멈췄습니다."
+      "stoppedTitle": "공급자가 토큰 수를 알려 주기 전에 답을 멈췄습니다.",
+      "failed": "오류로 끝남",
+      "failedTitle": "오류로 여기서 끝난 답입니다. 그때까지 온 내용을 남겼습니다."
     },
     "jumpToLatest": "맨 아래로"
   },
@@ -2966,6 +2969,7 @@
       "name": "쿠버네티스 사용자 이름이 될 수 없습니다. 콜론, 공백, 제어 문자는 쓸 수 없습니다",
       "password": "비밀번호가 정책에 맞지 않습니다",
       "role": "없는 역할입니다",
+      "clusterRole": "Read와 Write는 클러스터마다 주는 역할이라 계정 등급으로는 권한이 없습니다. 계정은 Member로 만들고 클러스터에서 역할을 주세요",
       "ceiling": "역할에 내가 갖지 않은 권한이 있습니다",
       "team": "없는 팀입니다",
       "exists": "이미 계정이 있는 이메일입니다",
@@ -3636,7 +3640,7 @@
     "noData": "데이터 항목이 없습니다.",
     "ownerReferences": "소유자 참조",
     "maskedHint": "resource.secret.reveal 권한이 없으면 값이 숨겨집니다.",
-    "yamlMaskedNote": "***로 보이는 값은 저장해도 그대로입니다. 바꾸려면 그 자리에 새 값을 쓰세요.",
+    "yamlMaskedNote": "***로 보이는 값은 줄을 그대로 두면 저장해도 그대로입니다. 바꾸려면 그 자리에 새 값을 쓰고, 없애려면 그 줄을 지우세요.",
     "appliedKeptMasked": "적용했습니다. 숨겨진 값은 그대로 두었습니다: {{count}}개",
     "dockerConfigInfo": "Docker 레지스트리 정보",
     "registries": "레지스트리",
@@ -4319,7 +4323,8 @@
       "button": "롤백",
       "title": "리비전 {{rev}}로 롤백",
       "subtitle": "{{namespace}}/{{name}} — 변경 내용을 미리 보고 적용합니다.",
-      "noChange": "적용될 변경이 없습니다.",
+      "noChange": "두 리비전의 manifest는 같습니다. 롤백해도 그 리비전의 values로 새 리비전이 기록됩니다.",
+      "noChangeMasked": "볼 수 있는 범위에서 두 리비전의 manifest는 같습니다. 숨겨진 값은 여기서 비교하지 않습니다. 롤백해도 그 리비전의 values로 새 리비전이 기록됩니다.",
       "cancel": "취소",
       "apply": "롤백 실행",
       "applying": "롤백 중..."

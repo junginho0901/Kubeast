@@ -216,4 +216,25 @@ test.describe('a Secret editor without reveal', () => {
     await expect(drawer.getByRole('button', { name: /^edit$/i }), 'the save ended').toBeVisible({ timeout: 30_000 })
     expect((JSON.parse(kubectl(`-n ${NS} get secret ${name} -o json`)) as SecretObject).data).toEqual(data)
   })
+
+  test('a key whose line is deleted in the window leaves the Secret, and the other keys stay', async ({ page }) => {
+    test.setTimeout(120_000)
+    const name = 'key-line'
+    // the window lists the keys in this order, from the second line down: apiVersion, stringData, a-gone, b-stays
+    kubectl(`-n ${NS} create -f -`, JSON.stringify({ apiVersion: 'v1', kind: 'Secret', metadata: { name }, type: 'Opaque', data: { 'a-gone': b64('fake-one'), 'b-stays': b64('fake-two') } }))
+    await page.goto(`/?cluster=${CLUSTER}&detail=${encodeURIComponent(`Secret/${NS}/${name}`)}`)
+    const drawer = page.locator('div[class*="fixed"][class*="inset-y-0"][class*="right-0"]').last()
+    await drawer.getByRole('button', { name: 'YAML', exact: true }).click({ timeout: 30_000 })
+    await expect(drawer.locator('.monaco-editor .view-lines').first()).toContainText('a-gone', { timeout: 30_000 })
+    await drawer.getByRole('button', { name: /^edit$/i }).click()
+    await drawer.locator('.monaco-editor').first().click()
+    await page.keyboard.press('ControlOrMeta+Home')
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('ControlOrMeta+Shift+K')
+    await expect(drawer.locator('.monaco-editor .view-lines').first()).not.toContainText('a-gone')
+    await drawer.getByRole('button', { name: /^apply$/i }).click()
+    await expect(drawer.getByRole('button', { name: /^edit$/i }), 'the save ended').toBeVisible({ timeout: 30_000 })
+    expect((JSON.parse(kubectl(`-n ${NS} get secret ${name} -o json`)) as SecretObject).data).toEqual({ 'b-stays': b64('fake-two') })
+  })
 })

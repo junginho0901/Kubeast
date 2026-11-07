@@ -21,6 +21,8 @@ export const BULK_CSV_HEADER = 'name,email,password,role,team'
 
 // What the server makes an account with no role named: a global Read or Write has no effect, so no example offers one.
 const DEFAULT_ROLE = 'Member'
+// Granted per cluster. As an account level they give nothing, and the server moves such an account to Member at its next start.
+const CLUSTER_ROLES = ['Read', 'Write']
 
 // The example row goes up as it is, so a password all templates shared would be an account anyone could sign in to.
 export function exampleBulkPassword(): string {
@@ -52,6 +54,8 @@ export function parseBulkCsv(text: string, roles: Array<{ id: number; name: stri
       parsed.failed.push({ email, reason: 'missing_fields' })
     } else if (!role) {
       parsed.failed.push({ email, reason: 'role', detail: roleName })
+    } else if (CLUSTER_ROLES.includes(role.name)) {
+      parsed.failed.push({ email, reason: 'cluster_role', detail: role.name })
     } else {
       parsed.users.push({ name, email, password, role_id: role.id, team: team || undefined })
     }
@@ -85,6 +89,8 @@ function reasonText(t: (key: string, fallback: string) => string, reason: BulkCr
       return t('adminUsers.bulkFailure.password', 'the password does not meet the policy')
     case 'role':
       return t('adminUsers.bulkFailure.role', 'no such role')
+    case 'cluster_role':
+      return t('adminUsers.bulkFailure.clusterRole', 'Read and Write are granted per cluster and give nothing as an account level: make the account Member and grant the role on a cluster')
     case 'ceiling':
       return t('adminUsers.bulkFailure.ceiling', 'the role gives permissions you do not hold')
     case 'team':

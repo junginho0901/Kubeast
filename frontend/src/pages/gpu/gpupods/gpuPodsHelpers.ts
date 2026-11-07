@@ -17,11 +17,4 @@ export type SortKey =
 export type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
 
 export { ageSeconds as parseAgeSeconds, formatAge } from '@/utils/time'
-
-export function getStatusColor(status: string): string {
-  const lower = (status || '').toLowerCase()
-  if (lower === 'running' || lower === 'succeeded' || lower === 'completed') return 'badge-success'
-  if (lower === 'pending' || lower === 'terminating') return 'badge-warning'
-  if (lower === 'failed' || lower.includes('error') || lower.includes('backoff')) return 'badge-error'
-  return 'badge-info'
-}
+export { gpuPodStatusColor as getStatusColor } from '../gpuNumbers'

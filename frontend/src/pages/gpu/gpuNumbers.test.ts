@@ -7,6 +7,7 @@ import {
 } from './gpuNumbers'
 import { getStatusColor as dashboardStatusColor } from './gpu-dashboard/helpers'
 import { getStatusColor as gpuPodsStatusColor } from './gpupods/gpuPodsHelpers'
+import { getStatusColor as podsListStatusColor } from '../workloads/pods/podHelpers'
 
 const node = (name: string, status: string): GPUNodeInfo => ({ name, status, gpu_capacity: 1, gpu_allocatable: 1, gpu_used: 0 })
 const pod = (name: string, phase: string, status: string, gpus: number, namespace = 'ml'): GPUPodInfo =>
@@ -21,6 +22,21 @@ describe('GPU screen numbers', () => {
   it('draws a pod being deleted as a warning on both pod lists', () => {
     expect(gpuPodsStatusColor('Terminating')).toBe('badge-warning')
     expect(dashboardStatusColor('Terminating')).toBe('badge-warning')
+  })
+
+  it('draws a status in the colour the Pods list gives it, on both pod lists', () => {
+    for (const status of ['Running', 'Pending', 'Completed', 'Succeeded', 'Unknown', 'Terminating', 'Init:0/1', 'PodInitializing', 'ContainerCreating', 'SchedulingGated', 'NotReady', 'ContainerStatusUnknown', 'CrashLoopBackOff', 'ImagePullBackOff', 'ErrImagePull', 'OOMKilled', 'Error', 'Failed', 'Signal:9', 'ExitCode:2', 'ExitCode:0']) {
+      expect(gpuPodsStatusColor(status), status).toBe(podsListStatusColor(status))
+      expect(dashboardStatusColor(status), status).toBe(podsListStatusColor(status))
+    }
+  })
+
+  // the GPU Pods cards count these as Failed, so a list beside them cannot say they only wait
+  it('keeps a status naming an error red, in an init container too', () => {
+    for (const status of ['Init:Error', 'Init:CrashLoopBackOff', 'Init:ImagePullBackOff', 'Init:OOMKilled']) {
+      expect(gpuPodsStatusColor(status), status).toBe('badge-error')
+      expect(dashboardStatusColor(status), status).toBe('badge-error')
+    }
   })
 
   // kubectl's STATUS starts with the readiness: a cordoned Ready node is ready, NotReady and Unknown are not

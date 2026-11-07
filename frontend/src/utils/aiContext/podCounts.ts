@@ -18,6 +18,16 @@ export function notRunningFirst<T extends PodWords>(pods: T[]): T[] {
   return [...pods.filter(podNotRunning), ...pods.filter((p) => !podNotRunning(p))]
 }
 
+// The pods that need a look, for a window that tells the floating chat only the page it shows: at most `limit`, and how
+// many it left out. Worked out from the rows the window already has.
+export function notRunningPods<T extends PodWords & { name?: string; namespace?: string; ready?: string | null }>(pods: T[], limit: number) {
+  const all = pods.filter(podNotRunning)
+  return {
+    items: all.slice(0, limit).map((p) => ({ name: p.name, namespace: p.namespace, status: p.status, phase: p.phase, ready: p.ready, restart_count: p.restart_count })),
+    cut: Math.max(0, all.length - limit),
+  }
+}
+
 export function podNeedsALook(pod: PodWords): boolean {
   return podNotRunning(pod) || (pod.restart_count ?? 0) > 5
 }

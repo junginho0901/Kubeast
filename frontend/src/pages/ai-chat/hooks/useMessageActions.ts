@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import type { TFunction } from 'i18next'
 import { stripToolDetails } from '@/services/chatTextUtils'
 import { exportToolCallsAsZip } from '../exportToolCalls'
@@ -27,7 +27,8 @@ export function useMessageActions({
 }: Params): Result {
   const [copiedMessageKey, setCopiedMessageKey] = useState<string | null>(null)
 
-  const handleCopyMessage = async (message: Message, key: string) => {
+  // the same functions from draw to draw, or every bubble would be drawn again for each letter of an answer
+  const handleCopyMessage = useCallback(async (message: Message, key: string) => {
     try {
       await navigator.clipboard.writeText(stripToolDetails(message.content || ''))
       setCopiedMessageKey(key)
@@ -37,9 +38,9 @@ export function useMessageActions({
     } catch (err) {
       console.warn('[AIChat] copy failed', err)
     }
-  }
+  }, [])
 
-  const handleDownloadJson = async (message: Message) => {
+  const handleDownloadJson = useCallback(async (message: Message) => {
     const sessionId = viewSessionId || selectedSessionId
     await exportToolCallsAsZip({
       message,
@@ -47,7 +48,7 @@ export function useMessageActions({
       t,
       getCurrentMessages: () => messagesRef.current,
     })
-  }
+  }, [viewSessionId, selectedSessionId, messagesRef, t])
 
   return { copiedMessageKey, handleCopyMessage, handleDownloadJson }
 }

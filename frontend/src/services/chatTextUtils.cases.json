@@ -165,6 +165,31 @@
     "stripped": "``\nAfter."
   },
   {
+    "name": "a less indented line ends a list item's fence, so the block after it goes",
+    "text": "- item\n  ```\n  code\nnot indented\n\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\n<details>\n<summary><strong>📊 Results</strong></summary>\n\n```\nr\n```\n\n</details>\n\n</details>\n\nAfter.",
+    "stripped": "- item\n  ```\n  code\nnot indented\n\nAfter."
+  },
+  {
+    "name": "a list item's fence with its lines indented holds what looks like a block",
+    "text": "- item\n  ```\n  <details>\n  <summary>🔧 <strong>t</strong></summary>\n  ```\n\nAfter.",
+    "stripped": "- item\n  ```\n  <details>\n  <summary>🔧 <strong>t</strong></summary>\n  ```\n\nAfter."
+  },
+  {
+    "name": "a fence written indented outside a list keeps its less indented lines",
+    "text": "Run this:\n\n  ```\n<details>\n<summary>🔧 <strong>t</strong></summary>\n  ```\n\nAfter.",
+    "stripped": "Run this:\n\n  ```\n<details>\n<summary>🔧 <strong>t</strong></summary>\n  ```\n\nAfter."
+  },
+  {
+    "name": "a fence written indented below a first blank line, with a less indented line in it",
+    "text": "\n  ```\nnot indented\n  ```\n\nAfter.",
+    "stripped": "\n  ```\nnot indented\n  ```\n\nAfter."
+  },
+  {
+    "name": "a blank line does not end a list item's fence",
+    "text": "- item\n  ```\n  code\n\n  <details>\n  <summary>🔧 <strong>t</strong></summary>\n  ```\n\nAfter.",
+    "stripped": "- item\n  ```\n  code\n\n  <details>\n  <summary>🔧 <strong>t</strong></summary>\n  ```\n\nAfter."
+  },
+  {
     "name": "empty text",
     "text": "",
     "stripped": ""

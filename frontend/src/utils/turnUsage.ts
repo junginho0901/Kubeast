@@ -10,12 +10,19 @@ export interface TurnUsage {
   model?: string | null
   // an answer the user stopped part way (saved by the page, session-service keeps only this marker)
   stopped?: boolean
+  // an answer an error ended part way (saved by ai-service, next to the tokens the provider had reported)
+  failed?: boolean
 }
 
 // "In 15,041 · out 120 tokens · 99% cached" under the answer; the tooltip names the model calls and the model.
 // A stopped answer says so instead: its last model call never reported tokens.
 export function turnUsageText(t: TFunction, usage?: TurnUsage | null): { text: string; title: string } | null {
   if (usage?.stopped) return { text: t('aiChat.turnUsage.stopped'), title: t('aiChat.turnUsage.stoppedTitle') }
+  if (usage?.failed) {
+    const reported = typeof usage.prompt_tokens === 'number' && typeof usage.completion_tokens === 'number'
+    const tokens = reported ? ` · ${t('aiChat.turnUsage.line', { prompt: usage.prompt_tokens!.toLocaleString(), completion: usage.completion_tokens!.toLocaleString() })}` : ''
+    return { text: `${t('aiChat.turnUsage.failed')}${tokens}`, title: t('aiChat.turnUsage.failedTitle') }
+  }
   if (!usage || typeof usage.prompt_tokens !== 'number' || typeof usage.completion_tokens !== 'number') return null
   let text = t('aiChat.turnUsage.line', {
     prompt: usage.prompt_tokens.toLocaleString(),

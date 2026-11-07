@@ -200,10 +200,10 @@ export default function ResourceDetailDrawer() {
   const argoWarnText = t('common.gitops.confirm', { app: argoManaged?.app ?? '', defaultValue: 'Argo CD application "{{app}}" manages this object; a change made here is reverted on the next sync. Change it in Git instead. Continue anyway?' })
   const confirm = useConfirm()
   const keptMaskedRef = useRef(0)
-  const handleApplyYamlGuarded = async (rawYaml: string) => {
+  const handleApplyYamlGuarded = async (rawYaml: string, opened: string) => {
     keptMaskedRef.current = 0
     if (argoManaged && !argoBlocked && !(await confirm({ title: t('common.gitops.confirmTitle', { defaultValue: 'Managed by Argo CD' }), message: argoWarnText, confirmLabel: t('common.gitops.applyAnyway', { defaultValue: 'Apply anyway' }) }))) return false
-    keptMaskedRef.current = await handleApplyYaml(rawYaml)
+    keptMaskedRef.current = await handleApplyYaml(rawYaml, opened)
     return true
   }
 
@@ -440,7 +440,7 @@ export default function ResourceDetailDrawer() {
                 onDirtyChange={setIsYamlDirty}
                 showInlineApplied={false}
                 toast={applyToast}
-                note={kind === 'Secret' && canEditYaml && !argoBlocked && !unreadable && !hasPermission('resource.secret.reveal') ? t('secretInfo.yamlMaskedNote', { defaultValue: 'A value shown as *** stays as it is when you save. To change one, write the new value over it.' }) : undefined}
+                note={kind === 'Secret' && canEditYaml && !argoBlocked && !unreadable && !hasPermission('resource.secret.reveal') ? t('secretInfo.yamlMaskedNote', { defaultValue: 'A value shown as *** stays as it is when you save, as long as its line is there. To change one, write the new value over it. To remove one, delete its line.' }) : undefined}
                 labels={{
                   title: `${displayKind}: ${name}`,
                   refresh: t('common.refresh', { defaultValue: 'Refresh' }),

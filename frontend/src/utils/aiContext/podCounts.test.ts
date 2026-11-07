@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { notRunningFirst, podCounts, podNeedsALook, podNotRunning } from './podCounts'
+import { notRunningFirst, notRunningPods, podCounts, podNeedsALook, podNotRunning } from './podCounts'
 
 const pod = (status: string, phase = 'Running', restart_count = 0) => ({ status, phase, restart_count })
 
@@ -36,6 +36,38 @@ describe('notRunningFirst', () => {
   it('puts the pods that need a look first and keeps the order within each', () => {
     const list = [{ name: 'a', ...pod('Running') }, { name: 'b', ...pod('Error', 'Failed') }, { name: 'c', ...pod('Completed', 'Succeeded') }, { name: 'd', ...pod('ImagePullBackOff', 'Pending') }]
     expect(notRunningFirst(list).map((p) => p.name)).toEqual(['b', 'd', 'a', 'c'])
+  })
+})
+
+// A Node window's table shows a page of its pods, and the floating chat is told that page too: this says which of the
+// rest need a look, from the list the window already holds.
+describe('notRunningPods', () => {
+  const rows = [
+    { name: 'a', namespace: 'x', ready: '1/1', ...pod('Running') },
+    { name: 'b', namespace: 'y', ready: '0/1', ...pod('CrashLoopBackOff', 'Running', 7) },
+    { name: 'c', namespace: 'x', ready: '0/1', ...pod('Completed', 'Succeeded') },
+    { name: 'd', namespace: 'z', ready: '0/1', ...pod('Init:0/1', 'Pending') },
+  ]
+
+  it('names each pod that needs a look and what the table says of it', () => {
+    expect(notRunningPods(rows, 20)).toEqual({
+      items: [
+        { name: 'b', namespace: 'y', status: 'CrashLoopBackOff', phase: 'Running', ready: '0/1', restart_count: 7 },
+        { name: 'd', namespace: 'z', status: 'Init:0/1', phase: 'Pending', ready: '0/1', restart_count: 0 },
+      ],
+      cut: 0,
+    })
+  })
+
+  it('says how many it left out past its limit', () => {
+    const many = Array.from({ length: 25 }, (_, i) => ({ name: `p${i}`, namespace: 'x', ...pod('Error', 'Failed') }))
+    const got = notRunningPods(many, 20)
+    expect(got.items.map((p) => p.name)).toEqual(many.slice(0, 20).map((p) => p.name))
+    expect(got.cut).toBe(5)
+  })
+
+  it('has nothing to say of pods that ask for nothing', () => {
+    expect(notRunningPods(rows.filter((p) => !podNotRunning(p)), 20)).toEqual({ items: [], cut: 0 })
   })
 })
 
