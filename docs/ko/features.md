@@ -77,6 +77,7 @@
     - `k8s_tabular_query` — 고른 열만 표로
     - `k8s_count` — 개수, 그룹별 개수
     - **Secret 값은 이 길로 나가지 않습니다.** `k8s_jq_query`·`k8s_count`는 값을 뺀 목록을 읽습니다. 키 이름은 남고 값은 `<REDACTED:secret>`입니다. kubectl이 직접 계산하는 출력은 먼저 지울 수 없으므로, Secret의 표와 `jsonpath`·`go-template`·`custom-columns` 출력, `.data`로 묶은 개수는 다른 길을 안내하며 거절합니다. 여러 종류를 함께 읽으면 다른 종류의 값은 그대로입니다. 실패한 도구의 글도 답과 똑같이 가립니다.
+    - **다른 자격 증명은 키와 모양으로 찾습니다.** `key: value` 줄, 그리고 줄의 낱말 사이에 있는 `key=value`와 `=`·`:` 뒤의 따옴표 값입니다(로그 줄의 `password=…`, URL 쿼리의 토큰). 키의 끝 낱말이 자격 증명일 때만 값으로 봅니다. 그래서 `password_policy=strict`·`token_count=5`는 그대로이고, 개수(`token=5`)·상태(`token=expired`)·참조(`password=$DB_PASSWORD`)·Secret 이름(`secret=kube-system/my-tls`)도 그대로입니다. 문장도 같은 꼴이므로(`invalid password: too short`) 줄 가운데서 `:` 뒤의 따옴표 없는 값도 그대로입니다.
   - 파드는 kubectl이 아니라 k8s-service가 Pods 목록용으로 들고 있는 줄(`/pods/page`)에서 읽어, 큰 클러스터도 전부 봅니다.
     - 이름 없는 `k8s_get_resources`가 파드 25개를 넘으면 전체에 대한 개수(phase·상태·카드 색·네임스페이스·노드별)와, 오류·경고부터 손볼 순서로 파드 25개를 답하고 `next_offset`으로 이어 읽습니다. 25개 이하는 지금처럼 kubectl로 답합니다.
     - `k8s_find_resource`는 파드 전부를 찾습니다. `키=값`은 레이블 셀렉터로, 그 밖에는 단어가 모두 이름이나 레이블 하나에 있는 파드를 찾습니다. 네임스페이스 없이 이름만 받은 로그 도구도 같은 규칙으로 파드를 찾습니다.

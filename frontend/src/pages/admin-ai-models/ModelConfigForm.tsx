@@ -136,6 +136,8 @@ export default function ModelConfigForm({ form, inModal }: Props) {
                   ? tr('admin.aiModels.modelsLoading', 'Loading the provider\'s model list…')
                   : modelList.fromProvider
                     ? t('admin.aiModels.modelsFromProvider', { count: modelList.count, defaultValue: 'From the provider ({{count}})' })
+                    : modelList.error
+                    ? t('admin.aiModels.modelsBuiltInWhy', { reason: modelList.error, defaultValue: 'Built-in list — the provider\'s list could not be read: {{reason}}' })
                     : tr('admin.aiModels.modelsBuiltIn', 'Built-in list — the provider\'s list could not be read')}
               </p>
             </>

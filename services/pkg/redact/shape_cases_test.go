@@ -75,6 +75,14 @@ func TestShapesCountAsTheKeyRule(t *testing.T) {
 	if got, _, _ := JSON(`{"password":1234}`, off); got != `{"password":1234}` {
 		t.Errorf("rule off: %q", got)
 	}
+	if _, st := Text("login password=fake-pass-1 now", opts); st.Kinds["key_name"] != 1 {
+		t.Errorf("among words = %+v", st)
+	}
+	for _, line := range []string{"login password=fake-pass-1 now", `login password="fake pass 1" now`} {
+		if got, _ := Text(line, off); got != line {
+			t.Errorf("rule off: %q", got)
+		}
+	}
 }
 
 // What is not masked keeps its spelling: a number that went through a decoder could change.

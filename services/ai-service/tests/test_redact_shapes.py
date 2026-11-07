@@ -42,6 +42,9 @@ def test_the_key_rule_switch_covers_the_new_shapes():
     assert redact.redact_object({"name": "DB_PASSWORD", "value": "fake-password-1"}, off)[0]["value"] == "fake-password-1"
     assert redact.redact_object({"password": 1234}, off)[0]["password"] == 1234
     assert "fake-block-value" in redact.redact_text("token: |\n  fake-block-value\n", off)[0]
+    assert "fake-pass-1" in redact.redact_text("login password=fake-pass-1 now", off)[0]
+    assert "fake pass 1" in redact.redact_text('login password="fake pass 1" now', off)[0]
+    assert redact.redact_text("login password=fake-pass-1 now", redact.Options())[1].kinds == {"key_name": 1}
 
 
 def test_the_floating_snapshot_loses_the_credential_and_keeps_the_rest():

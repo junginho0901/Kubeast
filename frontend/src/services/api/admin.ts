@@ -13,6 +13,7 @@ import type {
   AuditLogFilter,
   AuditLogListResponse,
   AuditVerifyReport,
+  BulkRoleAnswer,
   DormantAccountsConfig,
   Member,
   Organization,
@@ -79,7 +80,8 @@ export const adminApi = {
     return data
   },
 
-  adminBulkUpdateRole: async (userIds: string[], roleId: number): Promise<Member[]> => {
+  // The list when everyone changed; { updated, failed } with 207 when someone did not.
+  adminBulkUpdateRole: async (userIds: string[], roleId: number): Promise<Member[] | BulkRoleAnswer> => {
     const { data } = await client.patch('/auth/admin/users/bulk-role', { user_ids: userIds, role_id: roleId })
     return data
   },

@@ -54,7 +54,7 @@ func (h *Handler) serveLogQL(w http.ResponseWriter, r *http.Request, namespace s
 
 	// the range, limit and direction are read the way a structured search's are
 	base, err := logSearchRequest(r, string(id), namespace)
-	req := logsearch.QueryRequest{Cluster: string(id), Namespace: namespace, Query: r.URL.Query().Get("q"), Start: base.Start, End: base.End, Limit: base.Limit, Forward: base.Forward}
+	req := logsearch.QueryRequest{Cluster: string(id), Namespace: namespace, Query: r.URL.Query().Get("q"), Start: base.Start, End: base.End, Limit: base.Limit, Forward: base.Forward, HiddenNamespace: h.hiddenLogNamespace(r, namespace)}
 	if err == nil {
 		err = h.logSearch.Config().NormalizeRange(&req.Start, &req.End, &req.Limit, time.Now())
 	}

@@ -260,6 +260,7 @@ Loki와 수집기는 따로 설치합니다([docs/ko/cluster-requirements.md §1
   - 클러스터 라벨 매처(`clusters`의 값)가 항상 붙으므로 여러 클러스터가 Loki 하나를 함께 써도 섞이지 않습니다.
 - **권한**: `resource.pod.read`(그 클러스터)가 있고, 사용자 신원으로 `get pods/log`를 물어 허용될 때만 검색합니다 — 결국 클러스터 RBAC이 정합니다.
   - 그 클러스터에 Namespace 범위 부여가 있으면 전체 검색은 403이므로 Namespace를 골라야 합니다.
+  - 네임스페이스를 가리지 않는 조회는 그 클러스터에 `resource.node.shell`이 없는 사용자에게 노드 셸 네임스페이스(`nodeShell.namespace`)를 뺍니다. 노드 셸 파드의 로그는 터미널에 찍힌 내용 전부이고, 저장소가 그것을 수집했을 수 있기 때문입니다. 검색·LogQL·레이블·패턴 모두 같습니다. LogQL의 답은 질의에 그 매처가 보이고, 검색은 답의 `hiddenNamespace`와 감사 행의 `hidden_namespace`로 말합니다. 그래도 수집기에서 그 네임스페이스를 빼는 편이 낫습니다.
 - **한도**:
   - 기간: 기본 1시간, 최대 `maxRange`(24h)
   - 줄: `maxLines`(1,000)

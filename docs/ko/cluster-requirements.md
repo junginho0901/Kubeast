@@ -139,7 +139,7 @@ kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator 
   - 자동 발견은 개요 캐시 신원(`kubeast:cache`, `view`)으로 실행하므로, 이 신원이 모든 Namespace의 Service 목록을 읽을 수 있어야 합니다(§1 설정 그대로면 됩니다).
 - **중앙 저장소**(Thanos·Mimir·VictoriaMetrics 등 Prometheus 호환 API): Admin → Clusters → 편집에 주소·인증·클러스터 레이블 값을 적습니다.
   - **쓸 수 있는 주소**(이 주소와 §14 로그 저장소 주소): 사설 주소와 클러스터 DNS 이름은 그대로 됩니다. 클라우드 메타데이터와 링크 로컬 주소는 어떤 경우에도 안 됩니다. k8s-service 자기 머신(`localhost`, `127.0.0.1`)은 그 호스트를 `features.clusterStoreAllowedHosts`에 넣어야 합니다. 이 목록을 채우면 목록의 호스트만 됩니다(정확한 이름, 또는 호스트와 하위 도메인을 뜻하는 `.example.com`). 주소를 저장할 때와 k8s-service가 연결할 때 검사하고, 연결 때 거부되면 저장소 상태에 그 이유가 보입니다.
-  - 저장소의 리다이렉트는 같은 호스트 안에서만 따라갑니다(http에서 https로, 프록시 뒤의 경로). 다른 호스트로 가는 리다이렉트는 거부하므로 저장소가 실제로 답하는 주소를 적으세요.
+  - 저장소의 리다이렉트는 같은 호스트 안에서만 따라갑니다(http에서 https로, 프록시 뒤의 경로). 다른 호스트로 가는 리다이렉트는 거부하므로 저장소가 실제로 답하는 주소를 적으세요. 저장소에 인증을 설정했다면 https에서 http로 가는 리다이렉트도 거부합니다. 인증 값이 암호화 없이 가기 때문입니다. 인증이 없으면 따라갑니다.
   - `features.prometheus.url`과 `features.logSearch.url`은 설치자가 정하는 값이라 이 제한을 받지 않습니다.
   - 참고: [운영 기능 — 대시보드 빠른 작업의 "Prometheus 소스"](operations.md#대시보드-빠른-작업-이슈--최적화--스토리지)
   - 이때 아래 지표에는 그 클러스터 레이블이 붙어 있어야 합니다.

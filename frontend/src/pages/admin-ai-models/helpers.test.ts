@@ -1,6 +1,30 @@
 import { describe, expect, it } from 'vitest'
 import { getProvider } from '@/constants/modelCatalog'
-import { buildOptions, modelOptions, splitLimits } from './helpers'
+import { buildOptions, modelListError, modelOptions, splitLimits } from './helpers'
+
+describe('modelListError', () => {
+  const refused = Object.assign(new Error('Request failed with status code 503'), {
+    response: { status: 503, data: { detail: 'audit unavailable' } },
+  })
+
+  it('says why the service refused, not the status code', () => {
+    expect(modelListError(undefined, refused)).toBe('audit unavailable')
+  })
+
+  it('keeps what the provider answered first', () => {
+    expect(modelListError('the provider refused the key', refused)).toBe('the provider refused the key')
+  })
+
+  it('falls back on the message when the service gave no reason', () => {
+    expect(modelListError(undefined, new Error('Network Error'))).toBe('Network Error')
+    expect(modelListError(undefined, Object.assign(new Error('Request failed with status code 500'), { response: { status: 500, data: '<html>' } })))
+      .toBe('Request failed with status code 500')
+  })
+
+  it('says nothing when nothing failed', () => {
+    expect(modelListError(undefined, null)).toBeUndefined()
+  })
+})
 
 describe('modelOptions', () => {
   const ollama = getProvider('ollama')!

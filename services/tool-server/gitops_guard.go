@@ -210,6 +210,7 @@ func gitopsGuardObjects(ctx context.Context, headers http.Header, objs []gitops.
 		return "", nil
 	}
 	var notices []string
+	managed := 0
 	for _, o := range objs {
 		if live {
 			kind := o.Kind
@@ -236,11 +237,20 @@ func gitopsGuardObjects(ctx context.Context, headers http.Header, objs []gitops.
 			if gitopsCfg.Blocks() {
 				return "", fmt.Errorf("%w: %s %s/%s is managed by Argo CD application %s; change it in Git", errConflict, o.Kind, o.Namespace, o.Name, res.App)
 			}
-			notices = append(notices, fmt.Sprintf("⚠ %s %s/%s is managed by Argo CD application %s (gitops.argocd.mode=warn): this change drifts from Git until the Application syncs it back.", o.Kind, o.Namespace, o.Name, res.App))
+			if managed++; managed <= gitopsNoticeLines {
+				notices = append(notices, fmt.Sprintf("⚠ %s %s/%s is managed by Argo CD application %s (gitops.argocd.mode=warn): this change drifts from Git until the Application syncs it back.", o.Kind, o.Namespace, o.Name, res.App))
+			}
 		}
+	}
+	if managed > gitopsNoticeLines {
+		notices = append(notices, fmt.Sprintf("⚠ … and %d more objects managed by Argo CD.", managed-gitopsNoticeLines))
 	}
 	return strings.Join(notices, "\n"), nil
 }
+
+// gitopsNoticeLines is how many managed objects a warn-mode notice names: a delete of a whole type can touch thousands,
+// and the notice goes in front of the tool's answer, which the model reads only so far of.
+const gitopsNoticeLines = 10
 
 // withGitopsNotice puts the warn-mode notice before a tool's output.
 func withGitopsNotice(notice, output string) string {

@@ -158,13 +158,17 @@ func (t checkedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 // stayOnHost follows a store's redirects on its own host (http to https, a path behind a proxy) and no further: the
-// registered URL is what was checked and what its credentials are for.
+// registered URL is what was checked and what its credentials are for. A credential does not go from https to http.
 func stayOnHost(req *http.Request, via []*http.Request) error {
 	if len(via) >= 10 {
 		return errors.New("stopped after 10 redirects")
 	}
 	if !strings.EqualFold(normalize(req.URL.Hostname()), normalize(via[0].URL.Hostname())) {
 		return fmt.Errorf("the store redirected to another host (%s); register the address it answers on", req.URL.Hostname())
+	}
+	// The client copies the header to a redirect on the same host, where this one would send it in the clear.
+	if req.Header.Get("Authorization") != "" && via[len(via)-1].URL.Scheme == "https" && req.URL.Scheme == "http" {
+		return errors.New("the store redirected from https to http, which would send its credential unencrypted; register the address it answers on")
 	}
 	return nil
 }

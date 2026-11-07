@@ -2152,6 +2152,18 @@ export interface OIDCLoginConfig {
   roles_from_groups?: boolean
 }
 
+// One account a bulk role change left as it was.
+export interface BulkRoleFailure {
+  user_id: string
+  email?: string
+  reason: 'failed' | 'not_found' | 'self'
+}
+
+export interface BulkRoleAnswer {
+  updated: Member[]
+  failed: BulkRoleFailure[]
+}
+
 // AdminResetPassword 응답: Member 필드 + 1회용 평문 비밀번호
 export interface AdminResetPasswordResponse extends Member {
   temporary_password: string

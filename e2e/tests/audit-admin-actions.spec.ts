@@ -81,6 +81,69 @@ test.describe('audit — admin actions (M15, M27)', () => {
     }
   })
 
+  test('a bulk role change names the account it could not change and changes the rest', async ({ request }) => {
+    const admin = await adminHeaders(request)
+    const email = `e2e-bulk-part-${Date.now()}@kubeast.local`
+    const gone = `e2e-gone-${Date.now()}`
+    const user = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E bulk part', email, password: 'e2e-bulk-throwaway-1' } })
+    expect(user.status()).toBe(201)
+    const userId = (await user.json()).id as string
+    try {
+      const raw = await (await request.get('/api/v1/auth/roles', { headers: admin })).json()
+      const member = (Array.isArray(raw) ? raw : raw.items || []).find((r: any) => r.name === 'Member')
+      const bulk = await request.patch('/api/v1/auth/admin/users/bulk-role', { headers: admin, data: { user_ids: [userId, gone], role_id: member.id } })
+      expect(bulk.status(), await bulk.text()).toBe(207)
+      const body = await bulk.json()
+      expect(body.updated.map((u: any) => u.id)).toEqual([userId])
+      expect(body.failed).toEqual([{ user_id: gone, reason: 'not_found' }])
+      const rows = await auditRows(request, admin, 'user.role.update')
+      expect(rows.find((r) => r.TargetID === userId)?.Result).toBe('success')
+      expect(rows.find((r) => r.TargetID === gone)?.Result).toBe('failure')
+    } finally {
+      await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: admin })
+    }
+  })
+
+  test('the pending window says which account it could not approve', async ({ page, request }) => {
+    const admin = await adminHeaders(request)
+    const stamp = Date.now()
+    const [staysEmail, goesEmail] = [`e2e-pend-stays-${stamp}@kubeast.local`, `e2e-pend-goes-${stamp}@kubeast.local`]
+    const raw = await (await request.get('/api/v1/auth/roles', { headers: admin })).json()
+    const pending = (Array.isArray(raw) ? raw : raw.items || []).find((r: any) => r.name === 'Pending')
+    expect(pending, 'Pending role').toBeTruthy()
+    const make = async (email: string) => {
+      const res = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: email.split('@')[0], email, password: 'e2e-bulk-throwaway-1', role_id: pending.id } })
+      expect(res.status(), await res.text()).toBe(201)
+      return (await res.json()).id as string
+    }
+    const stays = await make(staysEmail)
+    const goes = await make(goesEmail)
+    try {
+      await page.goto('/admin/users')
+      await page.getByRole('button', { name: /Pending|대기/ }).first().click()
+      // The list behind the window has the same rows.
+      const dialog = page.getByRole('dialog')
+      await dialog.locator('tr', { hasText: staysEmail }).click()
+      await dialog.locator('tr', { hasText: goesEmail }).click()
+      await expect(dialog.locator('tr', { hasText: goesEmail }).locator('input[type="checkbox"]')).toBeChecked()
+      // Another admin removes it while the window is open.
+      expect((await request.delete(`/api/v1/auth/admin/users/${goes}`, { headers: admin })).status()).toBe(204)
+      await dialog.getByRole('button', { name: /Approve as Member|Member로 승인/ }).click()
+      // Some were approved, so the window closes and the page says what was not.
+      const error = page.getByTestId('admin-users-action-error')
+      await expect(error).toContainText(/1 of 2 accounts changed|계정 2개 중 1개를 바꿨습니다/, { timeout: 15_000 })
+      await expect(error).toContainText(goes)
+      await expect(error).toContainText(/no such account|없는 계정/)
+      await expect(dialog.locator('tr', { hasText: staysEmail }), 'the approved account left the list').toHaveCount(0, { timeout: 15_000 })
+      const row = (await auditRows(request, admin, 'user.role.update')).find((r) => r.TargetID === stays)
+      expect(row?.Result).toBe('success')
+      expect(row?.After?.role).toBe('Member')
+    } finally {
+      await request.delete(`/api/v1/auth/admin/users/${stays}`, { headers: admin, failOnStatusCode: false })
+      await request.delete(`/api/v1/auth/admin/users/${goes}`, { headers: admin, failOnStatusCode: false })
+    }
+  })
+
   test('k8s write rows carry the cluster the object lives in', async ({ request }) => {
     const admin = await adminHeaders(request)
     const name = `e2e-audit-cm-${Date.now()}`

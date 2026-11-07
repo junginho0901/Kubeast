@@ -94,6 +94,151 @@
       "name": "words that are not a password stay",
       "input": "password: true\npwd: none\napi_key: auto\n",
       "want": "password: true\npwd: none\napi_key: auto\n"
+    },
+    {
+      "name": "a password in the middle of a sentence",
+      "input": "connecting to db with password=fake-pass-1 now\n",
+      "want": "connecting to db with password=<REDACTED:password> now\n"
+    },
+    {
+      "name": "a password between other pairs of a log line",
+      "input": "level=info user=bob password=fake-pass-1 host=db\n",
+      "want": "level=info user=bob password=<REDACTED:password> host=db\n"
+    },
+    {
+      "name": "a token and an API key in one line",
+      "input": "GET /x token=fake-token-1 api_key=fake-key-1 ok\n",
+      "want": "GET /x token=<REDACTED:token> api_key=<REDACTED:api_key> ok\n"
+    },
+    {
+      "name": "a token in a URL query keeps the rest of the URL",
+      "input": "GET https://example.test/cb?token=fake-token-1&page=2 200\n",
+      "want": "GET https://example.test/cb?token=<REDACTED:token>&page=2 200\n"
+    },
+    {
+      "name": "a quoted value with spaces",
+      "input": "msg=\"connect\" password=\"fake pass 1\" port=5432\n",
+      "want": "msg=\"connect\" password=\"<REDACTED:password>\" port=5432\n"
+    },
+    {
+      "name": "a command line's flags",
+      "input": "mysql --password=fake-pass-1 --host=db\nkubectl create secret generic db --from-literal=password=fake-pass-1 --namespace=shop\n",
+      "want": "mysql --password=<REDACTED:password> --host=db\nkubectl create secret generic db --from-literal=password=<REDACTED:password> --namespace=shop\n"
+    },
+    {
+      "name": "a variable set in front of a command",
+      "input": "PGPASSWORD=fake-pass-1 psql -h db\n",
+      "want": "PGPASSWORD=<REDACTED:PGPASSWORD> psql -h db\n"
+    },
+    {
+      "name": "a connection string's parts",
+      "input": "Server=db;User=bob;Password=fake-pass-1;Database=shop\n",
+      "want": "Server=db;User=bob;Password=<REDACTED:Password>;Database=shop\n"
+    },
+    {
+      "name": "a dsn in a log line",
+      "input": "dial dsn=postgres://bob:fake-pass-1@db/shop retry=3\n",
+      "want": "dial dsn=<REDACTED:dsn> retry=3\n"
+    },
+    {
+      "name": "a printed mapping with single quotes",
+      "input": "{'user': 'bob', 'password': 'fake-pass-1'}\n",
+      "want": "{'user': 'bob', 'password': '<REDACTED:password>'}\n"
+    },
+    {
+      "name": "a quoted value after a colon in a sentence",
+      "input": "auth failed user: bob password: \"fake-pass-1\"\n",
+      "want": "auth failed user: bob password: \"<REDACTED:password>\"\n"
+    },
+    {
+      "name": "a secret that does not read as an object's name",
+      "input": "client_id=a secret=abc123 client_secret=my-value\n",
+      "want": "client_id=a secret=<REDACTED:secret> client_secret=<REDACTED:client_secret>\n"
+    },
+    {
+      "name": "an environment variable holds the value itself, name-shaped or not",
+      "input": "env JWT_SECRET=my-dev-value HOME=/root\n",
+      "want": "env JWT_SECRET=<REDACTED:JWT_SECRET> HOME=/root\n"
+    },
+    {
+      "name": "settings named after a credential stay in a sentence",
+      "input": "level=info password_policy=strict token_count=5 secret_name=my-tls token_ttl=60 password_min_length=12 max_tokens=4096 tokenizer=cl100k password_expiry_days=90\n",
+      "want": "level=info password_policy=strict token_count=5 secret_name=my-tls token_ttl=60 password_min_length=12 max_tokens=4096 tokenizer=cl100k password_expiry_days=90\n"
+    },
+    {
+      "name": "a policy on a line of its own stays",
+      "input": "password_policy=strict\npassword_policy: strict\n",
+      "want": "password_policy=strict\npassword_policy: strict\n"
+    },
+    {
+      "name": "plain values of a URL query stay",
+      "input": "GET https://example.test/search?q=password&page=2&sort=token&next=/home&password_policy=strict&token_count=5 200\n",
+      "want": "GET https://example.test/search?q=password&page=2&sort=token&next=/home&password_policy=strict&token_count=5 200\n"
+    },
+    {
+      "name": "the name of a Secret stays",
+      "input": "reading secret=kube-system/my-tls secret=my-tls credentials=aws-creds secret=foo\n",
+      "want": "reading secret=kube-system/my-tls secret=my-tls credentials=aws-creds secret=foo\n"
+    },
+    {
+      "name": "a Secret's name in a metric's labels stays",
+      "input": "kube_secret_info{namespace=\"shop\",secret=\"my-tls\"} 1\n",
+      "want": "kube_secret_info{namespace=\"shop\",secret=\"my-tls\"} 1\n"
+    },
+    {
+      "name": "counts and words that say nothing stay in a sentence",
+      "input": "found token=5 secret=3 password=true password=none api_key=auto\n",
+      "want": "found token=5 secret=3 password=true password=none api_key=auto\n"
+    },
+    {
+      "name": "a state stays",
+      "input": "auth failed token=expired password=missing\n",
+      "want": "auth failed token=expired password=missing\n"
+    },
+    {
+      "name": "sentences about a password stay",
+      "input": "error: invalid password: too short\nthe token: expired\npassword must be set\nwrong password= given\n",
+      "want": "error: invalid password: too short\nthe token: expired\npassword must be set\nwrong password= given\n"
+    },
+    {
+      "name": "references to a value stay",
+      "input": "using password=$DB_PASSWORD token=${TOKEN} password=%s password=<set> password=*** token={{ .token }}\n",
+      "want": "using password=$DB_PASSWORD token=${TOKEN} password=%s password=<set> password=*** token={{ .token }}\n"
+    },
+    {
+      "name": "comparisons stay",
+      "input": "if password == other and token != other and password==other\n",
+      "want": "if password == other and token != other and password==other\n"
+    },
+    {
+      "name": "flags that name a file or an object stay",
+      "input": "--token-auth-file=/etc/x --tls-private-key-file=/etc/y --service-account-key-file=/z --secret-name=foo --password-file=/p\n",
+      "want": "--token-auth-file=/etc/x --tls-private-key-file=/etc/y --service-account-key-file=/z --secret-name=foo --password-file=/p\n"
+    },
+    {
+      "name": "the working directory stays",
+      "input": "env PWD=/app OLDPWD=/root HOME=/root\n",
+      "want": "env PWD=/app OLDPWD=/root HOME=/root\n"
+    },
+    {
+      "name": "flags and values of an API server's command line stay",
+      "input": "kube-apiserver --use-service-account-credentials=true --enable-bootstrap-token-auth=true --oidc-username-claim=email --authorization-mode=Node,RBAC --controllers=*,bootstrapsigner,tokencleaner\n",
+      "want": "kube-apiserver --use-service-account-credentials=true --enable-bootstrap-token-auth=true --oidc-username-claim=email --authorization-mode=Node,RBAC --controllers=*,bootstrapsigner,tokencleaner\n"
+    },
+    {
+      "name": "an access log's plain query values stay and its token does not",
+      "input": "GET /oauth/token?grant_type=password&client_id=web&refresh_token=fake-token-1 200\n",
+      "want": "GET /oauth/token?grant_type=password&client_id=web&refresh_token=<REDACTED:refresh_token> 200\n"
+    },
+    {
+      "name": "a value that already went through stays",
+      "input": "user=bob password=<REDACTED:password>\n",
+      "want": "user=bob password=<REDACTED:password>\n"
+    },
+    {
+      "name": "a credential word as a value stays",
+      "input": "reason=password msg=token\n",
+      "want": "reason=password msg=token\n"
     }
   ],
   "objects": [
@@ -198,6 +343,11 @@
       "name": "rows of a count table stay",
       "input": [{"name": "Secret", "value": 12}, {"name": "Secrets", "value": "12"}, {"name": "Token", "value": 7}, {"name": "Pods", "value": 40}],
       "want": [{"name": "Secret", "value": 12}, {"name": "Secrets", "value": "12"}, {"name": "Token", "value": 7}, {"name": "Pods", "value": 40}]
+    },
+    {
+      "name": "a password in a string's sentence, the rest of it staying",
+      "input": {"msg": "user=bob password=fake-pass-1 retries=3", "url": "https://example.test/?q=password&page=2"},
+      "want": {"msg": "user=bob password=<REDACTED:password> retries=3", "url": "https://example.test/?q=password&page=2"}
     }
   ]
 }

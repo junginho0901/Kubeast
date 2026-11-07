@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -237,6 +238,59 @@ func TestWriteToolsWriteAManagedObjectOnWarnWithANotice(t *testing.T) {
 }
 
 // off reads nothing and writes as asked.
+// A delete of a whole type can touch thousands of managed objects: the notice names the first ones and how many more,
+// so it does not push the tool's own answer out of what the model reads.
+func TestWarnNoticeOfManyObjectsNamesTheFirstAndCountsTheRest(t *testing.T) {
+	setGitopsMode(t, gitops.ModeWarn)
+	var objs []gitops.Object
+	for i := 0; i < 25; i++ {
+		objs = append(objs, gitops.Object{Group: "apps", Kind: "Deployment", Namespace: "ns", Name: fmt.Sprintf("web-%d", i),
+			Annotations: map[string]string{gitops.DefaultTrackingAnnotation: fmt.Sprintf("app:apps/Deployment:ns/web-%d", i)}})
+	}
+	notice, err := gitopsGuardObjects(nil, nil, objs, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(notice, "\n")
+	if len(lines) != gitopsNoticeLines+1 {
+		t.Fatalf("%d lines:\n%s", len(lines), notice)
+	}
+	if !strings.Contains(lines[0], "web-0 ") || !strings.Contains(lines[gitopsNoticeLines-1], fmt.Sprintf("web-%d ", gitopsNoticeLines-1)) {
+		t.Errorf("not the first ones:\n%s", notice)
+	}
+	if want := fmt.Sprintf("⚠ … and %d more objects managed by Argo CD.", 25-gitopsNoticeLines); lines[gitopsNoticeLines] != want {
+		t.Errorf("last line %q, want %q", lines[gitopsNoticeLines], want)
+	}
+}
+
+func TestWarnNoticeUpToTheLimitNamesEveryObject(t *testing.T) {
+	setGitopsMode(t, gitops.ModeWarn)
+	var objs []gitops.Object
+	for i := 0; i < gitopsNoticeLines; i++ {
+		objs = append(objs, gitops.Object{Group: "apps", Kind: "Deployment", Namespace: "ns", Name: fmt.Sprintf("web-%d", i),
+			Annotations: map[string]string{gitops.DefaultTrackingAnnotation: fmt.Sprintf("app:apps/Deployment:ns/web-%d", i)}})
+	}
+	notice, err := gitopsGuardObjects(nil, nil, objs, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lines := strings.Split(notice, "\n"); len(lines) != gitopsNoticeLines || strings.Contains(notice, "more objects") {
+		t.Errorf("%d lines:\n%s", len(lines), notice)
+	}
+}
+
+// On block the first managed object is the answer, however many there are.
+func TestBlockAnswersTheFirstManagedObjectAsBefore(t *testing.T) {
+	setGitopsMode(t, gitops.ModeBlock)
+	objs := []gitops.Object{
+		{Group: "apps", Kind: "Deployment", Namespace: "ns", Name: "web-0", Annotations: map[string]string{gitops.DefaultTrackingAnnotation: "app:apps/Deployment:ns/web-0"}},
+		{Group: "apps", Kind: "Deployment", Namespace: "ns", Name: "web-1", Annotations: map[string]string{gitops.DefaultTrackingAnnotation: "app:apps/Deployment:ns/web-1"}},
+	}
+	if _, err := gitopsGuardObjects(nil, nil, objs, false); !errors.Is(err, errConflict) || !strings.Contains(err.Error(), "web-0") {
+		t.Errorf("%v", err)
+	}
+}
+
 func TestWriteToolsReadNothingWithTheGuardOff(t *testing.T) {
 	registry := buildToolRegistry()
 	for _, tc := range guardedToolCalls {

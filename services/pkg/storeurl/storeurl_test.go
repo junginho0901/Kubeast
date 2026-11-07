@@ -89,6 +89,130 @@ func TestClientKeepsTheDefaultTransportSettings(t *testing.T) {
 	}
 }
 
+// storePair is a store's https address that sends each request to its http one, and the requests that reached each.
+func storePair(t *testing.T, target string) (client *http.Client, tlsURL string, plainSeen *atomic.Int32) {
+	t.Helper()
+	t.Setenv(AllowedHostsEnv, "127.0.0.1")
+	plainSeen = &atomic.Int32{}
+	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		plainSeen.Add(1)
+		_, _ = w.Write([]byte("answer"))
+	}))
+	t.Cleanup(plain.Close)
+	secure := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/here" {
+			_, _ = w.Write([]byte("answer"))
+			return
+		}
+		to := target
+		if to == "" {
+			to = plain.URL + "/api"
+		}
+		http.Redirect(w, r, to, http.StatusFound)
+	}))
+	t.Cleanup(secure.Close)
+	client = Client(time.Second)
+	client.Transport.(checkedTransport).next.(*http.Transport).TLSClientConfig = secure.Client().Transport.(*http.Transport).TLSClientConfig
+	return client, secure.URL, plainSeen
+}
+
+func storeGet(client *http.Client, url, auth string) (*http.Response, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	if auth != "" {
+		req.Header.Set("Authorization", auth)
+	}
+	return client.Do(req)
+}
+
+func TestARedirectFromHTTPSToHTTPDoesNotCarryTheCredential(t *testing.T) {
+	client, secure, plainSeen := storePair(t, "")
+	resp, err := storeGet(client, secure+"/api", "Bearer fake-store-token")
+	if err == nil {
+		resp.Body.Close()
+		t.Errorf("followed: %d", resp.StatusCode)
+	}
+	if plainSeen.Load() != 0 {
+		t.Errorf("the plain address got %d requests with the credential", plainSeen.Load())
+	}
+	if err != nil && !strings.Contains(err.Error(), "https") {
+		t.Errorf("the error does not say what happened: %v", err)
+	}
+	if err != nil && strings.Contains(err.Error(), "fake-store-token") {
+		t.Errorf("the error holds the credential: %v", err)
+	}
+}
+
+func TestARedirectFromHTTPSToHTTPWithNoCredentialStillWorks(t *testing.T) {
+	client, secure, plainSeen := storePair(t, "")
+	resp, err := storeGet(client, secure+"/api", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || plainSeen.Load() != 1 {
+		t.Errorf("%d, plain address asked %d times", resp.StatusCode, plainSeen.Load())
+	}
+}
+
+func TestARedirectInsideHTTPSKeepsTheCredential(t *testing.T) {
+	client, secure, plainSeen := storePair(t, "/here")
+	resp, err := storeGet(client, secure+"/api", "Bearer fake-store-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || plainSeen.Load() != 0 {
+		t.Errorf("%d, plain address asked %d times", resp.StatusCode, plainSeen.Load())
+	}
+}
+
+func TestARedirectFromHTTPToHTTPSKeepsTheCredential(t *testing.T) {
+	t.Setenv(AllowedHostsEnv, "127.0.0.1")
+	var got atomic.Value
+	secure := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got.Store(r.Header.Get("Authorization"))
+		_, _ = w.Write([]byte("answer"))
+	}))
+	defer secure.Close()
+	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, secure.URL+"/api", http.StatusFound)
+	}))
+	defer plain.Close()
+	client := Client(time.Second)
+	client.Transport.(checkedTransport).next.(*http.Transport).TLSClientConfig = secure.Client().Transport.(*http.Transport).TLSClientConfig
+	resp, err := storeGet(client, plain.URL+"/api", "Bearer fake-store-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || got.Load() != "Bearer fake-store-token" {
+		t.Errorf("%d, Authorization %v", resp.StatusCode, got.Load())
+	}
+}
+
+func TestARedirectInsideHTTPKeepsItsPath(t *testing.T) {
+	t.Setenv(AllowedHostsEnv, "127.0.0.1")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/moved" {
+			_, _ = w.Write([]byte("answer"))
+			return
+		}
+		http.Redirect(w, r, "/moved", http.StatusFound)
+	}))
+	defer srv.Close()
+	resp, err := storeGet(Client(time.Second), srv.URL+"/api", "Bearer fake-store-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("%d", resp.StatusCode)
+	}
+}
+
 func TestRedirectsStayOnTheHostAndStop(t *testing.T) {
 	t.Setenv(AllowedHostsEnv, "127.0.0.1")
 	hops := &atomic.Int32{}

@@ -8,6 +8,15 @@ export const providerOptions: DropdownOption[] = PROVIDER_CATALOG.map((p) => ({
   testId: `provider-option-${p.id}`,
 }))
 
+// ai-service says why in detail (e.g. audit unavailable); axios' own message only has the status code.
+export function modelListError(answered: string | undefined, failed: unknown): string | undefined {
+  if (answered) return answered
+  if (!failed) return undefined
+  const { response, message } = failed as { response?: { data?: { detail?: unknown } }; message?: string }
+  const detail = response?.data?.detail
+  return (typeof detail === 'string' && detail) || message || String(failed)
+}
+
 export function modelOptions(provDef: ProviderDef, fetched?: { name: string; label?: string }[]): DropdownOption[] {
   if (!fetched?.length) {
     return provDef.models.map((m) => ({

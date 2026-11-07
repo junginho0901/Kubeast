@@ -240,7 +240,14 @@ func newArgoRig(t *testing.T, a *argoCluster, cfg gitops.Config, payload auth.To
 
 func newArgoRigWith(t *testing.T, a *argoCluster, cfg gitops.Config, payload auth.TokenPayload, base config.Config) *argoRig {
 	t.Helper()
-	base.ImpersonationEnabled, base.HygieneEnabled, base.InPlaceResizeEnabled, base.HygieneIntervalDays = true, true, true, 30
+	base.InPlaceResizeEnabled = true
+	return newArgoRigAsSet(t, a, cfg, payload, base)
+}
+
+// newArgoRigAsSet leaves the feature switches a test turned off as they are.
+func newArgoRigAsSet(t *testing.T, a *argoCluster, cfg gitops.Config, payload auth.TokenPayload, base config.Config) *argoRig {
+	t.Helper()
+	base.ImpersonationEnabled, base.HygieneEnabled, base.HygieneIntervalDays = true, true, 30
 	t.Setenv("PROMETHEUS_ENABLED", "false")
 	blob := strings.Replace(standInKubeconfig, "SERVER", a.srv.URL, 1)
 	svc, err := k8s.NewService(context.Background(), standInRegistry{blob: blob}, false, cache.New("", 0, 0, ""), k8s.ServiceOptions{Impersonation: true, Gitops: cfg})
@@ -713,6 +720,38 @@ func TestSomeoneWhoCannotWriteLearnsNothingFromTheGuard(t *testing.T) {
 }
 
 // warn and off write what they wrote before, managed or not, and the guard reads nothing for it.
+// A route that is switched off answers as it does with the guard off, whoever asks and whatever the object is.
+func TestResizeWithTheFeatureOffAnswersNotFoundBeforeTheGuardLooks(t *testing.T) {
+	body := `{"kind":"Deployment","name":"web","container":"c","cpu_request_m":100}`
+	for name, who := range map[string]auth.TokenPayload{"a writer": argoWriter(), "someone without the permission": argoHolding("menu.dashboard")} {
+		t.Run(name, func(t *testing.T) {
+			a := newArgoCluster(t)
+			a.trackedBy = map[string]string{"web": "the-app"}
+			rig := newArgoRigAsSet(t, a, argoBlock, who, config.Config{})
+			w := rig.do("POST", "/api/v1/namespaces/shop/optimization/resize", body)
+			if w.Code != http.StatusNotFound || !strings.Contains(w.Body.String(), "in-place resize is off") {
+				t.Errorf("%d %s", w.Code, w.Body.String())
+			}
+			if rows := rig.refusals(); len(rows) != 0 {
+				t.Errorf("refusal rows %+v", rows)
+			}
+			if got := a.seenWrites(); len(got) != 0 {
+				t.Errorf("writes %v", got)
+			}
+		})
+	}
+}
+
+func TestResizeWithTheFeatureOnIsStillRefusedForAManagedObject(t *testing.T) {
+	a := newArgoCluster(t)
+	a.trackedBy = map[string]string{"deployments/web": "the-app", "web": "the-app"}
+	rig := newArgoRig(t, a, argoBlock, argoWriter())
+	w := rig.do("POST", "/api/v1/namespaces/shop/optimization/resize", `{"kind":"Deployment","name":"web","container":"c","cpu_request_m":100}`)
+	if w.Code != http.StatusConflict || len(rig.refusals()) != 1 {
+		t.Errorf("%d %s, rows %+v", w.Code, w.Body.String(), rig.refusals())
+	}
+}
+
 func TestWarnAndOffLeaveEveryWriteAlone(t *testing.T) {
 	for mode, cfg := range map[string]gitops.Config{"warn": argoWarn, "off": argoOff} {
 		for _, tc := range []struct {

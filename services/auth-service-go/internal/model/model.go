@@ -185,6 +185,27 @@ type BulkUpdateRoleRequest struct {
 	RoleID  int      `json:"role_id"`
 }
 
+// Why a bulk role change left an account as it was. The screen words them from its catalog.
+const (
+	BulkRoleFailedChange   = "failed"
+	BulkRoleFailedNotFound = "not_found"
+	BulkRoleFailedSelf     = "self"
+)
+
+type BulkRoleFailure struct {
+	UserID string `json:"user_id"`
+	Email  string `json:"email,omitempty"`
+	Reason string `json:"reason"`
+}
+
+// BulkRoleResponse answers a call that did not change everyone: 207, or 500 when it changed nobody it set out to.
+// A call that changed everyone answers the list alone.
+type BulkRoleResponse struct {
+	Detail  string            `json:"detail,omitempty"`
+	Updated []UserResponse    `json:"updated"`
+	Failed  []BulkRoleFailure `json:"failed"`
+}
+
 // --- Role request DTOs ---
 
 type CreateRoleRequest struct {

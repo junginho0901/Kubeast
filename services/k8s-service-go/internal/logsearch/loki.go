@@ -42,6 +42,8 @@ type Result struct {
 	// EffectiveQuery is the LogQL actually sent for a query someone wrote
 	// (Searcher.Query): theirs with the cluster and namespace matchers added.
 	EffectiveQuery string `json:"effectiveQuery,omitempty"`
+	// HiddenNamespace says a search across namespaces left this one out, which a structured search's answer shows nowhere else.
+	HiddenNamespace string `json:"hiddenNamespace,omitempty"`
 	// ResultType is set for a query run with QueryRequest.Metric: "streams"
 	// (Lines) or "matrix" (Series, at most MaxSeries, Truncated past it).
 	ResultType  string   `json:"resultType,omitempty"`

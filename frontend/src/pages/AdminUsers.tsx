@@ -14,6 +14,7 @@ import { useConfirm } from '@/services/confirm'
 import { logoutSession } from '@/services/auth'
 import { useNavigate } from 'react-router-dom'
 import { UserDetailModal } from './admin-users/UserDetailModal'
+import { bulkRoleFailures, bulkRoleFailureText, readBulkRoleAnswer } from './admin-users/bulkRole'
 
 const USERS_PAGE_SIZE = 25
 
@@ -87,11 +88,23 @@ export default function AdminUsers() {
   })
 
   const bulkUpdateRoleMutation = useMutation({
-    mutationFn: ({ userIds, roleId }: { userIds: string[]; roleId: number }) => api.adminBulkUpdateRole(userIds, roleId),
-    onSuccess: () => {
+    mutationFn: async ({ userIds, roleId }: { userIds: string[]; roleId: number }) => readBulkRoleAnswer(await api.adminBulkUpdateRole(userIds, roleId)),
+    onMutate: () => setActionError(null),
+    onSuccess: ({ failed }, vars) => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+      if (failed.length > 0) {
+        // The window stays with the accounts that are left, so what happened is on screen and they can be tried again.
+        setActionError(bulkRoleFailureText(t, vars.userIds.length, failed))
+        setPendingSelectedIds(new Set(failed.filter((f) => f.reason === 'failed').map((f) => f.user_id)))
+        return
+      }
       setPendingSelectedIds(new Set())
       setPendingModalOpen(false)
+    },
+    onError: (err, vars) => {
+      const failed = bulkRoleFailures(err)
+      if (failed.length > 0) setActionError(bulkRoleFailureText(t, vars.userIds.length, failed))
+      else showActionError(err)
     },
   })
 
@@ -772,6 +785,12 @@ export default function AdminUsers() {
                     </tbody>
                   </table>
                 </div>
+
+                {actionError && (
+                  <div className="mt-4 rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200" role="alert" data-testid="admin-users-bulk-error">
+                    {actionError}
+                  </div>
+                )}
 
                 <div className="mt-4 flex items-center gap-3">
                   {pendingSelectedIds.size > 0 && (

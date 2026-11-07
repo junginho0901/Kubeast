@@ -138,7 +138,7 @@ These read Prometheus:
 - **Central store** (a Prometheus-compatible API such as Thanos, Mimir or VictoriaMetrics): enter the URL, authentication and cluster label value in Admin → Clusters → Edit.
   The metrics below must then carry that cluster label.
   - **Addresses allowed** (this URL and the log store's in §14): private addresses and cluster DNS names work as they are. Cloud metadata and link-local addresses never do. k8s-service's own machine (`localhost`, `127.0.0.1`) needs its host in `features.clusterStoreAllowedHosts`; a non-empty list allows only the hosts on it (exact, or `.example.com` for the host and its subdomains). The rule runs when the URL is saved and when k8s-service connects, where a refusal shows as the store's status.
-  - A store's redirect is followed on its own host only (http to https, a path behind a proxy). A redirect to another host is refused: register the address the store answers on.
+  - A store's redirect is followed on its own host only (http to https, a path behind a proxy). A redirect to another host is refused: register the address the store answers on. So is a redirect from https to http when the store has authentication set, which would send it unencrypted; with no authentication it is followed.
   - `features.prometheus.url` and `features.logSearch.url` are the installer's and are not limited by this.
   See [Operations — "Prometheus source" in dashboard quick actions](operations.md#dashboard-quick-actions-issues--optimization--storage).
 - **Through Grafana**: use this when the store's query API is not exposed and exists only as a Grafana data source.
