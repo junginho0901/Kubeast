@@ -203,6 +203,8 @@ sessionRecording:
 
 Each AI tool call shows who the cluster saw it as and the cluster requests it made: the 🔐 line and "🧾 Cluster requests" in the chat's tool block, `after.access` and `after.requests` in its audit row.
 
+A write tool's arguments stay as written only while the call needs them. The answer the server saves, and the stream the page saves a stopped answer from, hold a masked copy with the same fields, so the tool block still says what was asked. The approval row holds the real arguments for the waiting card, and the same copy once the call has run, been rejected or expired. What cannot be read safely keeps its field and no value.
+
 - Kubeast sends each request of a tool call with its own `Audit-ID` header: `kubeast-` and 32 hex characters.
 - The API server takes that value as the audit event's `auditID` and returns it in the response. ✓ next to a request means it came back.
 - Requests the API server hands to the kubelet (exec, attach, port-forward) may come back without it. They are marked "not echoed" and are still in the cluster's audit log under the same ID.
