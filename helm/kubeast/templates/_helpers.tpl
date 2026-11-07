@@ -5,7 +5,7 @@
 {{/* Group slug of a Kubeast role name, as services/pkg/auth/impersonation.go
      computes it: lowercase, anything but a-z 0-9 . _ - becomes "-". */}}
 {{- define "kubeast.roleSlug" -}}
-{{- regexReplaceAll "[^a-z0-9._-]" (lower .) "-" -}}
+{{- regexReplaceAll "[^a-z0-9._-]" (lower (trim .)) "-" -}}
 {{- end }}
 
 {{- define "kubeast.labels" -}}

@@ -84,8 +84,6 @@ export default function MonitoringPods({
       return failureCount < 2
     },
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
-    placeholderData: (prev, prevQuery) =>
-      prevQuery && prevQuery.queryKey[1] === currentCluster ? prev : undefined,
   })
 
   useEffect(() => {
@@ -226,14 +224,14 @@ export default function MonitoringPods({
 
       {selectedNamespace && refreshFailure && <MetricsRefreshFailed failure={refreshFailure} retrying={!metricsUnavailable} testId="pod-metrics-refresh-failed" />}
 
-      {/* Pod 통계 카드 */}
-      {selectedNamespace && podStats && (
+      {/* The cards keep their place with "-" while a read is under way, so the table below does not jump */}
+      {selectedNamespace && (podStats || isLoading) && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="p-4 bg-slate-700 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-400">{t('monitoring.pods.totalPods')}</p>
-                <p className="text-2xl font-bold text-ink mt-1">{podStats.totalPods}</p>
+                <p className="text-2xl font-bold text-ink mt-1">{podStats ? podStats.totalPods : '-'}</p>
               </div>
               <Box className="w-8 h-8 text-slate-500" />
             </div>
@@ -242,7 +240,7 @@ export default function MonitoringPods({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-400">{t('monitoring.pods.totalCpu')}</p>
-                <p className="text-2xl font-bold text-ink mt-1">{podStats.totalCpu}m</p>
+                <p className="text-2xl font-bold text-ink mt-1">{podStats ? `${podStats.totalCpu}m` : '-'}</p>
               </div>
               <Cpu className="w-8 h-8 text-slate-500" />
             </div>
@@ -251,7 +249,7 @@ export default function MonitoringPods({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-400">{t('monitoring.pods.totalMemory')}</p>
-                <p className="text-2xl font-bold text-ink mt-1">{podStats.totalMemory}Mi</p>
+                <p className="text-2xl font-bold text-ink mt-1">{podStats ? `${podStats.totalMemory}Mi` : '-'}</p>
               </div>
               <HardDrive className="w-8 h-8 text-slate-500" />
             </div>

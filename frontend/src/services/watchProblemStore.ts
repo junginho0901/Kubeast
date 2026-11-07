@@ -4,12 +4,28 @@
 
 import { useSyncExternalStore } from 'react'
 
-export type WatchProblem = 'forbidden' | 'limit' | 'unreachable' | 'failed'
+export type WatchProblem = 'forbidden' | 'limit' | 'unreachable' | 'failed' | 'scope'
 
 type WatchFrame = { type: string; error?: { message?: string; reason?: string } }
 
-const SERIOUS_FIRST: WatchProblem[] = ['forbidden', 'limit', 'unreachable', 'failed']
+const SERIOUS_FIRST: WatchProblem[] = ['forbidden', 'limit', 'unreachable', 'failed', 'scope']
 const SILENT = new Set(['not_served', 'unsupported'])
+
+// The kinds a watch names otherwise than the REST list it feeds does (forbiddenStore's segments).
+const LIST_OF_KIND: Record<string, string> = {
+  customresourcedefinitions: 'crds',
+  persistentvolumes: 'pvs',
+  persistentvolumeclaims: 'pvcs',
+  horizontalpodautoscalers: 'hpas',
+  verticalpodautoscalers: 'vpas',
+  poddisruptionbudgets: 'pdbs',
+}
+
+function listOfWatch(key: string): string {
+  const path = key.slice(key.indexOf('\n') + 1).split('?')[0]
+  const kind = path.slice(path.lastIndexOf('/') + 1)
+  return LIST_OF_KIND[kind] ?? kind
+}
 
 const problems = new Map<string, WatchProblem>()
 const listeners = new Set<() => void>()
@@ -47,8 +63,12 @@ export function recordWatchFrame(key: string, frame: WatchFrame): void {
   set(key, SERIOUS_FIRST.includes(reason as WatchProblem) ? (reason as WatchProblem) : 'failed')
 }
 
-export function getWatchProblem(): WatchProblem | undefined {
-  const present = new Set(problems.values())
+// The most serious problem, past the lists the page already says it was refused: those have no rows to go old.
+export function getWatchProblem(refusedLists?: ReadonlySet<string>): WatchProblem | undefined {
+  const present = new Set<WatchProblem>()
+  for (const [key, problem] of problems) {
+    if (!refusedLists?.has(listOfWatch(key))) present.add(problem)
+  }
   return SERIOUS_FIRST.find((p) => present.has(p))
 }
 
@@ -58,7 +78,7 @@ const subscribe = (l: () => void) => {
 }
 const getVersion = () => version
 
-export function useWatchProblem(): WatchProblem | undefined {
+export function useWatchProblem(refusedLists?: ReadonlySet<string>): WatchProblem | undefined {
   useSyncExternalStore(subscribe, getVersion, getVersion)
-  return getWatchProblem()
+  return getWatchProblem(refusedLists)
 }

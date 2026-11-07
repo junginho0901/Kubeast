@@ -2239,6 +2239,26 @@ test.describe('number check — list screens', () => {
         })
       }
 
+      await test.step('a CRD drawer reads its instances again when the CRD changes', async () => {
+        const crd = objects.at(-1)!
+        kubectl(`wait --for=condition=Established crd/${crd.name} --timeout=60s`)
+        let reads = 0
+        await page.route('**/api/v1/cluster/custom-resources/numbers.kubeast.io/v1/numfollows*', (route) => {
+          reads += 1
+          return route.fallback()
+        })
+        await page.goto(`/custom-resources/groups?cluster=self&detail=CustomResourceDefinition/${crd.name}`)
+        await expect.poll(() => reads, { timeout: 20_000 }).toBeGreaterThan(0)
+        await expect(drawer).not.toContainText('num-follow-inst')
+        const before = reads
+        kubectl('apply -f -', JSON.stringify({ apiVersion: 'numbers.kubeast.io/v1', kind: 'NumFollow', metadata: { name: 'num-follow-inst', namespace: NS } }))
+        label(crd, 'three')
+        await expect(drawer, 'the CRD itself').toContainText('num-follow:three', { timeout: 20_000 })
+        await expect(drawer, 'the instance the new read found').toContainText('num-follow-inst', { timeout: 20_000 })
+        expect(reads).toBeGreaterThan(before)
+        await page.unroute('**/api/v1/cluster/custom-resources/numbers.kubeast.io/v1/numfollows*')
+      })
+
       await test.step('a ClusterRole drawer lists its bindings as they come and go', async () => {
         const role = { apiGroup: 'rbac.authorization.k8s.io', kind: 'ClusterRole', name: 'num-follow-cr' }
         await page.goto(`/security/clusterroles?cluster=self&detail=ClusterRole/num-follow-cr`)

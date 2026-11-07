@@ -59,6 +59,16 @@ describe('what the screen says about its live updates', () => {
     expect(getWatchProblem()).toBe('forbidden')
   })
 
+  it('keeps the limit of a grant apart from a refusal, and below every other problem', () => {
+    recordWatchFrame('a', frame('scope'))
+    expect(getWatchProblem()).toBe('scope')
+    recordWatchFrame('b', frame('unreachable'))
+    expect(getWatchProblem()).toBe('unreachable')
+    clearWatchProblem('b')
+    recordWatchFrame('c', frame('failed'))
+    expect(getWatchProblem()).toBe('failed')
+  })
+
   it('forgets a watch the screen closed', () => {
     recordWatchFrame('a', frame('limit'))
     clearWatchProblem('a')

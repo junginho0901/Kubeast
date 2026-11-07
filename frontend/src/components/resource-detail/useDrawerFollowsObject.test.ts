@@ -14,7 +14,9 @@ import resourceQuotaInfoSrc from './ResourceQuotaInfo.tsx?raw'
 import pdbInfoSrc from './PDBInfo.tsx?raw'
 import crdInfoSrc from './CRDInfo.tsx?raw'
 import leaseInfoSrc from './LeaseInfo.tsx?raw'
+import followHookSrc from './useDrawerFollowsObject.ts?raw'
 import { objectFollower } from './useDrawerFollowsObject'
+import { applyPriorityClassWatchEvent } from '@/pages/cluster/priorityclasses/priorityClassWatchNormalize'
 
 const describeKey = ['workload-describe', 'Deployment', 'demo', 'web']
 
@@ -202,6 +204,175 @@ describe('an open drawer follows its object', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(drawer.shown()).toEqual({ name: 'web', replicas: 3 })
     drawer.close()
+  })
+})
+
+describe('a table in a drawer that reads what its object decides', () => {
+  const tableKey = ['limitrange-violations', 'demo', 'web']
+
+  // The drawer's two reads, a watch of its object and the follower that reads both again. A slow table takes `tableMs`.
+  function openDrawerWithTable(rows: () => string[], tableMs = 0) {
+    const client = new QueryClient()
+    let reads = 0
+    let tableReads = 0
+    const answer = new QueryObserver(client, {
+      queryKey: describeKey,
+      retry: false,
+      queryFn: async () => {
+        reads += 1
+        return { name: 'web', max: rows().length }
+      },
+    })
+    const table = new QueryObserver(client, {
+      queryKey: tableKey,
+      retry: false,
+      queryFn: () =>
+        new Promise<string[]>((resolve) => {
+          tableReads += 1
+          const now = rows()
+          setTimeout(() => resolve(now), tableMs)
+        }),
+    })
+    const stops = [answer.subscribe(() => {}), table.subscribe(() => {})]
+    const follower = objectFollower(client, describeKey, 1000, [tableKey])
+    return {
+      client,
+      follower,
+      frame: (type: string, object: unknown) =>
+        applyWatchMessage(client, describeKey, { type: 'DATA', data: { type, object } }, (prev) => prev as any[], follower.onEvent),
+      reads: () => reads,
+      tableReads: () => tableReads,
+      rowsShown: () => table.getCurrentResult().data,
+      close: () => {
+        follower.stop()
+        stops.forEach((stop) => stop())
+      },
+    }
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('reads it again when the object changes, keeping the last rows on screen until the new ones come', async () => {
+    let rows = ['pod-a']
+    const drawer = openDrawerWithTable(() => rows, 300)
+    await vi.advanceTimersByTimeAsync(300)
+    expect(drawer.rowsShown()).toEqual(['pod-a'])
+
+    rows = ['pod-a', 'pod-b']
+    drawer.frame('MODIFIED', { name: 'web', max: 2 })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(drawer.tableReads()).toBe(2)
+    expect(drawer.rowsShown()).toEqual(['pod-a'])
+    await vi.advanceTimersByTimeAsync(300)
+    expect(drawer.rowsShown()).toEqual(['pod-a', 'pod-b'])
+    drawer.close()
+  })
+
+  it('reads it once a second at most, however many changes come', async () => {
+    let rows = ['pod-a']
+    const drawer = openDrawerWithTable(() => rows)
+    await vi.advanceTimersByTimeAsync(0)
+    for (let i = 1; i <= 50; i += 1) {
+      rows = Array.from({ length: i }, (_, n) => `pod-${n}`)
+      drawer.frame('MODIFIED', { name: 'web', max: i })
+      await vi.advanceTimersByTimeAsync(100)
+    }
+    // 5 s of changes
+    expect(drawer.tableReads()).toBeLessThanOrEqual(6)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(drawer.rowsShown()).toHaveLength(50)
+    drawer.close()
+  })
+
+  it('does not read it for the object the watch opens with', async () => {
+    const drawer = openDrawerWithTable(() => ['pod-a'])
+    await vi.advanceTimersByTimeAsync(0)
+    drawer.frame('ADDED', { name: 'web', max: 1 })
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(drawer.tableReads()).toBe(1)
+    drawer.close()
+  })
+
+  it('a table slower than a second holds back neither the answer nor its own next read', async () => {
+    let rows = ['pod-a']
+    const drawer = openDrawerWithTable(() => rows, 2500)
+    await vi.advanceTimersByTimeAsync(100)
+    rows = ['pod-a', 'pod-b']
+    // the table's first read is under way and read the old rows
+    drawer.frame('MODIFIED', { name: 'web', max: 2 })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(drawer.reads()).toBe(2)
+    expect(drawer.tableReads()).toBe(1)
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(drawer.tableReads()).toBe(2)
+    expect(drawer.rowsShown()).toEqual(['pod-a', 'pod-b'])
+    drawer.close()
+  })
+
+  it('reads it for a change while it waits on an earlier read, once', async () => {
+    let rows = ['pod-a']
+    const drawer = openDrawerWithTable(() => rows, 2500)
+    await vi.advanceTimersByTimeAsync(100)
+    drawer.frame('MODIFIED', { name: 'web', max: 1 })
+    await vi.advanceTimersByTimeAsync(1000)
+    rows = ['pod-a', 'pod-b']
+    drawer.frame('MODIFIED', { name: 'web', max: 2 })
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(drawer.tableReads()).toBe(2)
+    expect(drawer.reads()).toBe(3)
+    expect(drawer.rowsShown()).toEqual(['pod-a', 'pod-b'])
+    drawer.close()
+  })
+
+  it('reads nothing once the drawer is closed', async () => {
+    const drawer = openDrawerWithTable(() => ['pod-a'])
+    await vi.advanceTimersByTimeAsync(0)
+    drawer.frame('MODIFIED', { name: 'web', max: 2 })
+    drawer.close()
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(drawer.tableReads()).toBe(1)
+  })
+
+  it('a watch that lost its place reads the table again as well', async () => {
+    let rows = ['pod-a']
+    const drawer = openDrawerWithTable(() => rows)
+    await vi.advanceTimersByTimeAsync(0)
+    rows = ['pod-b']
+    applyWatchMessage(drawer.client, describeKey, { type: 'RESYNC' }, undefined, undefined, drawer.follower.onResync)
+    await vi.advanceTimersByTimeAsync(1001)
+    expect(drawer.tableReads()).toBe(2)
+    expect(drawer.rowsShown()).toEqual(['pod-b'])
+    drawer.close()
+  })
+
+  it('the drawers hand the tables they read to their follower', () => {
+    expect(limitRangeInfoSrc).toContain("alsoRead: [['limitrange-violations', namespace, name]],")
+    expect(limitRangeInfoSrc).toContain("queryKey: ['limitrange-violations', namespace, name],")
+    expect(crdInfoSrc).toContain("alsoRead: [['crd-instances', group, storageVersion, plural]],")
+    expect(crdInfoSrc).toContain("queryKey: ['crd-instances', group, storageVersion, plural],")
+    expect(followHookSrc).toContain('onResync: () => follower.current?.onResync(),')
+  })
+})
+
+// A globalDefault conflict is about the other classes, which a watch of the drawer's own object never sees.
+describe('the PriorityClass drawer\'s list of classes', () => {
+  const key = ['all-priorityclasses']
+  const row = (name: string, global_default: boolean) => ({ name, value: 1, global_default, preemption_policy: 'PreemptLowerPriority', description: '', labels: {}, created_at: '' })
+
+  it('follows every class by its own watch, row for row, with nothing read again', () => {
+    expect(priorityClassInfoSrc).toContain("queryKey: ['all-priorityclasses'],\n    path: '/apis/scheduling.k8s.io/v1/priorityclasses',")
+    expect(priorityClassInfoSrc).toContain('applyEvent: (prev, event) => applyPriorityClassWatchEvent(prev as PriorityClassRow[] | undefined, event),')
+
+    const client = new QueryClient()
+    client.setQueryData(key, [row('this', true), row('other', false)])
+    applyWatchMessage(client, key, { type: 'DATA', data: { type: 'MODIFIED', object: row('other', true) } }, (prev, event) => applyPriorityClassWatchEvent(prev as never, event))
+    expect(client.getQueryData(key)).toEqual([row('this', true), row('other', true)])
+    expect(client.getQueryState(key)?.isInvalidated).toBe(false)
   })
 })
 

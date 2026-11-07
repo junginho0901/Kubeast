@@ -35,6 +35,12 @@ export interface PageContextValue extends RouteContextMeta {
   consumeContextChanged: () => boolean
 }
 
+// The chat reads the last overlay as the window on top. A notice above the page is no window, whenever it came.
+export function overlaysInOrder(overlays: VisibleDataLayer[]): VisibleDataLayer[] {
+  const isNotice = (layer: VisibleDataLayer) => layer.source === 'WatchProblemNotice'
+  return [...overlays.filter(isNotice), ...overlays.filter((layer) => !isNotice(layer))]
+}
+
 export const PageContextCtx = createContext<PageContextValue | null>(null)
 
 export function usePageContext(): PageContextValue {

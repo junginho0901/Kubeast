@@ -9,6 +9,7 @@ import type { RoleWithDetails } from '@/services/api'
 import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
 import CustomDropdown from '@/components/CustomDropdown'
+import { createRefusalText } from './bulkCreate'
 
 interface NewUser {
   name: string
@@ -48,7 +49,10 @@ export function CreateUserModal({
   if (!open) return null
   const incomplete = !newUser.name || !newUser.email || !newUser.password || !newUser.role_id
   // the form stays filled after a refusal, so the window has to say which field to change
-  const refusal: string = mutation.error?.response?.data?.detail || mutation.error?.message || ''
+  const refused = mutation.error?.response?.data
+  const refusal: string = refused?.reason
+    ? createRefusalText(tr, refused.reason, refused.reason_detail)
+    : refused?.detail || mutation.error?.message || ''
   return (
     <ModalFrame
       size="md"

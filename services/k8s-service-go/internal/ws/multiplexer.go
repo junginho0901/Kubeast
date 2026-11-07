@@ -73,6 +73,7 @@ const (
 	reasonFailed      = "failed"      // the cluster answered with an error; the watch keeps trying
 	reasonNotServed   = "not_served"  // the cluster does not serve the kind, which its list says
 	reasonUnsupported = "unsupported" // a resource this socket has no live updates for
+	reasonScope       = "scope"       // a kind no namespace holds, for a grant limited to namespaces
 )
 
 func (r RequestMessage) errorFrame(message, reason string) ResponseMessage {
@@ -329,7 +330,7 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			if refusal := namespaceScopeRefusal(payload, effectiveClusterID(clusterID), req.Path); refusal != "" {
-				send(ctx, sendCh, req.errorFrame(refusal, reasonForbidden))
+				send(ctx, sendCh, req.errorFrame(refusal, namespaceScopeReason(req.Path)))
 				continue
 			}
 			if refusal := m.protectedRefusal(ctx, payload, effectiveClusterID(clusterID), req.Path); refusal != "" {
@@ -579,61 +580,63 @@ func parseQuery(queryStr string) map[string]string {
 	return result
 }
 
-func resourceToGVR(resource string) (schema.GroupVersionResource, bool) {
-	gvrMap := map[string]schema.GroupVersionResource{
-		"pods":                     {Group: "", Version: "v1", Resource: "pods"},
-		"services":                 {Group: "", Version: "v1", Resource: "services"},
-		"nodes":                    {Group: "", Version: "v1", Resource: "nodes"},
-		"namespaces":               {Group: "", Version: "v1", Resource: "namespaces"},
-		"events":                   {Group: "", Version: "v1", Resource: "events"},
-		"persistentvolumeclaims":   {Group: "", Version: "v1", Resource: "persistentvolumeclaims"},
-		"pvcs":                     {Group: "", Version: "v1", Resource: "persistentvolumeclaims"},
-		"persistentvolumes":        {Group: "", Version: "v1", Resource: "persistentvolumes"},
-		"pvs":                      {Group: "", Version: "v1", Resource: "persistentvolumes"},
-		"configmaps":               {Group: "", Version: "v1", Resource: "configmaps"},
-		"secrets":                  {Group: "", Version: "v1", Resource: "secrets"},
-		"endpoints":                {Group: "", Version: "v1", Resource: "endpoints"},
-		"deployments":              {Group: "apps", Version: "v1", Resource: "deployments"},
-		"statefulsets":             {Group: "apps", Version: "v1", Resource: "statefulsets"},
-		"daemonsets":               {Group: "apps", Version: "v1", Resource: "daemonsets"},
-		"replicasets":              {Group: "apps", Version: "v1", Resource: "replicasets"},
-		"ingresses":                {Group: "networking.k8s.io", Version: "v1", Resource: "ingresses"},
-		"ingressclasses":           {Group: "networking.k8s.io", Version: "v1", Resource: "ingressclasses"},
-		"networkpolicies":          {Group: "networking.k8s.io", Version: "v1", Resource: "networkpolicies"},
-		"endpointslices":           {Group: "discovery.k8s.io", Version: "v1", Resource: "endpointslices"},
-		"jobs":                     {Group: "batch", Version: "v1", Resource: "jobs"},
-		"cronjobs":                 {Group: "batch", Version: "v1", Resource: "cronjobs"},
-		"storageclasses":           {Group: "storage.k8s.io", Version: "v1", Resource: "storageclasses"},
-		"volumeattachments":        {Group: "storage.k8s.io", Version: "v1", Resource: "volumeattachments"},
-		"gateways":                 {Group: "gateway.networking.k8s.io", Version: "v1", Resource: "gateways"},
-		"gatewayclasses":           {Group: "gateway.networking.k8s.io", Version: "v1", Resource: "gatewayclasses"},
-		"httproutes":               {Group: "gateway.networking.k8s.io", Version: "v1", Resource: "httproutes"},
-		"grpcroutes":               {Group: "gateway.networking.k8s.io", Version: "v1", Resource: "grpcroutes"},
-		"referencegrants":          {Group: "gateway.networking.k8s.io", Version: "v1beta1", Resource: "referencegrants"},
-		"backendtlspolicies":       {Group: "gateway.networking.k8s.io", Version: "v1alpha3", Resource: "backendtlspolicies"},
-		"serviceaccounts":          {Group: "", Version: "v1", Resource: "serviceaccounts"},
-		"roles":                    {Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "roles"},
-		"horizontalpodautoscalers": {Group: "autoscaling", Version: "v2", Resource: "horizontalpodautoscalers"},
-		"verticalpodautoscalers":   {Group: "autoscaling.k8s.io", Version: "v1", Resource: "verticalpodautoscalers"},
-		"deviceclasses":            {Group: "resource.k8s.io", Version: "v1", Resource: "deviceclasses"},
-		"resourceclaims":           {Group: "resource.k8s.io", Version: "v1", Resource: "resourceclaims"},
-		"resourceclaimtemplates":   {Group: "resource.k8s.io", Version: "v1", Resource: "resourceclaimtemplates"},
-		"resourceslices":           {Group: "resource.k8s.io", Version: "v1", Resource: "resourceslices"},
+// watchKinds is every resource a watch can reach, by the path's last part.
+var watchKinds = map[string]schema.GroupVersionResource{
+	"pods":                     {Group: "", Version: "v1", Resource: "pods"},
+	"services":                 {Group: "", Version: "v1", Resource: "services"},
+	"nodes":                    {Group: "", Version: "v1", Resource: "nodes"},
+	"namespaces":               {Group: "", Version: "v1", Resource: "namespaces"},
+	"events":                   {Group: "", Version: "v1", Resource: "events"},
+	"persistentvolumeclaims":   {Group: "", Version: "v1", Resource: "persistentvolumeclaims"},
+	"pvcs":                     {Group: "", Version: "v1", Resource: "persistentvolumeclaims"},
+	"persistentvolumes":        {Group: "", Version: "v1", Resource: "persistentvolumes"},
+	"pvs":                      {Group: "", Version: "v1", Resource: "persistentvolumes"},
+	"configmaps":               {Group: "", Version: "v1", Resource: "configmaps"},
+	"secrets":                  {Group: "", Version: "v1", Resource: "secrets"},
+	"endpoints":                {Group: "", Version: "v1", Resource: "endpoints"},
+	"deployments":              {Group: "apps", Version: "v1", Resource: "deployments"},
+	"statefulsets":             {Group: "apps", Version: "v1", Resource: "statefulsets"},
+	"daemonsets":               {Group: "apps", Version: "v1", Resource: "daemonsets"},
+	"replicasets":              {Group: "apps", Version: "v1", Resource: "replicasets"},
+	"ingresses":                {Group: "networking.k8s.io", Version: "v1", Resource: "ingresses"},
+	"ingressclasses":           {Group: "networking.k8s.io", Version: "v1", Resource: "ingressclasses"},
+	"networkpolicies":          {Group: "networking.k8s.io", Version: "v1", Resource: "networkpolicies"},
+	"endpointslices":           {Group: "discovery.k8s.io", Version: "v1", Resource: "endpointslices"},
+	"jobs":                     {Group: "batch", Version: "v1", Resource: "jobs"},
+	"cronjobs":                 {Group: "batch", Version: "v1", Resource: "cronjobs"},
+	"storageclasses":           {Group: "storage.k8s.io", Version: "v1", Resource: "storageclasses"},
+	"volumeattachments":        {Group: "storage.k8s.io", Version: "v1", Resource: "volumeattachments"},
+	"gateways":                 {Group: "gateway.networking.k8s.io", Version: "v1", Resource: "gateways"},
+	"gatewayclasses":           {Group: "gateway.networking.k8s.io", Version: "v1", Resource: "gatewayclasses"},
+	"httproutes":               {Group: "gateway.networking.k8s.io", Version: "v1", Resource: "httproutes"},
+	"grpcroutes":               {Group: "gateway.networking.k8s.io", Version: "v1", Resource: "grpcroutes"},
+	"referencegrants":          {Group: "gateway.networking.k8s.io", Version: "v1beta1", Resource: "referencegrants"},
+	"backendtlspolicies":       {Group: "gateway.networking.k8s.io", Version: "v1alpha3", Resource: "backendtlspolicies"},
+	"serviceaccounts":          {Group: "", Version: "v1", Resource: "serviceaccounts"},
+	"roles":                    {Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "roles"},
+	"horizontalpodautoscalers": {Group: "autoscaling", Version: "v2", Resource: "horizontalpodautoscalers"},
+	"verticalpodautoscalers":   {Group: "autoscaling.k8s.io", Version: "v1", Resource: "verticalpodautoscalers"},
+	"deviceclasses":            {Group: "resource.k8s.io", Version: "v1", Resource: "deviceclasses"},
+	"resourceclaims":           {Group: "resource.k8s.io", Version: "v1", Resource: "resourceclaims"},
+	"resourceclaimtemplates":   {Group: "resource.k8s.io", Version: "v1", Resource: "resourceclaimtemplates"},
+	"resourceslices":           {Group: "resource.k8s.io", Version: "v1", Resource: "resourceslices"},
 
-		"clusterroles":                    {Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "clusterroles"},
-		"clusterrolebindings":             {Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "clusterrolebindings"},
-		"rolebindings":                    {Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "rolebindings"},
-		"priorityclasses":                 {Group: "scheduling.k8s.io", Version: "v1", Resource: "priorityclasses"},
-		"runtimeclasses":                  {Group: "node.k8s.io", Version: "v1", Resource: "runtimeclasses"},
-		"validatingwebhookconfigurations": {Group: "admissionregistration.k8s.io", Version: "v1", Resource: "validatingwebhookconfigurations"},
-		"mutatingwebhookconfigurations":   {Group: "admissionregistration.k8s.io", Version: "v1", Resource: "mutatingwebhookconfigurations"},
-		"leases":                          {Group: "coordination.k8s.io", Version: "v1", Resource: "leases"},
-		"limitranges":                     {Group: "", Version: "v1", Resource: "limitranges"},
-		"resourcequotas":                  {Group: "", Version: "v1", Resource: "resourcequotas"},
-		"poddisruptionbudgets":            {Group: "policy", Version: "v1", Resource: "poddisruptionbudgets"},
-		"customresourcedefinitions":       {Group: "apiextensions.k8s.io", Version: "v1", Resource: "customresourcedefinitions"},
-	}
-	gvr, ok := gvrMap[resource]
+	"clusterroles":                    {Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "clusterroles"},
+	"clusterrolebindings":             {Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "clusterrolebindings"},
+	"rolebindings":                    {Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "rolebindings"},
+	"priorityclasses":                 {Group: "scheduling.k8s.io", Version: "v1", Resource: "priorityclasses"},
+	"runtimeclasses":                  {Group: "node.k8s.io", Version: "v1", Resource: "runtimeclasses"},
+	"validatingwebhookconfigurations": {Group: "admissionregistration.k8s.io", Version: "v1", Resource: "validatingwebhookconfigurations"},
+	"mutatingwebhookconfigurations":   {Group: "admissionregistration.k8s.io", Version: "v1", Resource: "mutatingwebhookconfigurations"},
+	"leases":                          {Group: "coordination.k8s.io", Version: "v1", Resource: "leases"},
+	"limitranges":                     {Group: "", Version: "v1", Resource: "limitranges"},
+	"resourcequotas":                  {Group: "", Version: "v1", Resource: "resourcequotas"},
+	"poddisruptionbudgets":            {Group: "policy", Version: "v1", Resource: "poddisruptionbudgets"},
+	"customresourcedefinitions":       {Group: "apiextensions.k8s.io", Version: "v1", Resource: "customresourcedefinitions"},
+}
+
+func resourceToGVR(resource string) (schema.GroupVersionResource, bool) {
+	gvr, ok := watchKinds[resource]
 	return gvr, ok
 }
 
@@ -688,8 +691,18 @@ func namespaceScopeRefusal(payload auth.TokenPayload, clusterID, path string) st
 	return ""
 }
 
+// namespaceScopeReason tells the screen a kind of the cluster from a refusal: the limit of the grant is why its rows do
+// not follow, and no role or cluster setting changes that.
+func namespaceScopeReason(path string) string {
+	if resource, _, err := parsePath(path); err == nil && clusterWideWatch[resource] {
+		return reasonScope
+	}
+	return reasonForbidden
+}
+
 // clusterWideWatch holds kinds no namespace has. A page of a grant limited to namespaces asks for them once per namespace
 // (scopedPaths), which the cluster would refuse every five seconds, each holding a place in the tab's limit of watches.
+// TestEveryKindWithNoNamespaceIsRefusedToAGrantLimitedToNamespaces holds it to watchKinds.
 var clusterWideWatch = map[string]bool{
 	"clusterroles":                    true,
 	"clusterrolebindings":             true,
@@ -698,4 +711,14 @@ var clusterWideWatch = map[string]bool{
 	"validatingwebhookconfigurations": true,
 	"mutatingwebhookconfigurations":   true,
 	"customresourcedefinitions":       true,
+	"nodes":                           true,
+	"namespaces":                      true,
+	"persistentvolumes":               true,
+	"pvs":                             true,
+	"ingressclasses":                  true,
+	"storageclasses":                  true,
+	"volumeattachments":               true,
+	"gatewayclasses":                  true,
+	"deviceclasses":                   true,
+	"resourceslices":                  true,
 }
