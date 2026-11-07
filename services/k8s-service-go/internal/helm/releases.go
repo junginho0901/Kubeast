@@ -130,9 +130,9 @@ func sortReleases(out []ReleaseSummary) {
 	})
 }
 
-// invalidateListCache drops every cached release-list response. Called
-// by write operations (rollback/upgrade/uninstall) once they land, so
-// the next GET sees the post-mutation world.
+// invalidateListCache drops every cached release-list response. Called after
+// each rollback, upgrade or uninstall attempt, a failed one too, so the next
+// GET sees what the attempt left.
 func (s *Service) invalidateListCache(ctx context.Context) {
 	if s.cache == nil {
 		return

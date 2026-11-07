@@ -169,27 +169,6 @@ func gitopsListFits(ctx context.Context, headers http.Header, resourceType, name
 	return nil
 }
 
-// gitopsGuarded is the guard for a write tool that names one object and does
-// not call it itself: the admission gate first, as the tools that do. A missing
-// argument stays the tool's own answer.
-func gitopsGuarded(next ToolHandler) ToolHandler {
-	return func(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
-		resourceType, name := argString(args, "resource_type", ""), argString(args, "resource_name", "")
-		if resourceType == "" || name == "" {
-			return next(ctx, args, headers)
-		}
-		if err := admissionPolicyGate(resourceType); err != nil {
-			return "", err
-		}
-		notice, err := gitopsGuard(ctx, headers, resourceType, name, argString(args, "namespace", ""))
-		if err != nil {
-			return "", err
-		}
-		out, err := next(ctx, args, headers)
-		return withGitopsNotice(notice, out), err
-	}
-}
-
 // gitopsGuardManifest checks every object a manifest would change: each document
 // with a name, read as kubectl reads it, is looked at in the cluster.
 func gitopsGuardManifest(ctx context.Context, headers http.Header, manifest string) (string, error) {

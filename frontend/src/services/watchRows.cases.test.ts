@@ -26,7 +26,7 @@ import { applyConfigMapWatchEvent, normalizeWatchConfigMapObject } from '@/pages
 import { applySecretWatchEvent, normalizeWatchSecretObject } from '@/pages/configuration/secrets/secretWatchNormalize'
 import { applyServiceAccountWatchEvent, normalizeWatchServiceAccountObject } from '@/pages/security/serviceaccounts/serviceAccountWatchNormalize'
 import { applyRoleWatchEvent, normalizeWatchRoleObject } from '@/pages/security/roles/roleWatchNormalize'
-import { applyPodWatchEvent, normalizeWatchPodObject } from '@/pages/workloads/pods/podWatchNormalize'
+import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
 import { getPodHealth } from '@/pages/cluster-view/podHealth'
 import { podToDetail } from '@/pages/cluster-view/types'
 import { daemonSetToWorkloadRawJson, getDaemonSetStatusColor } from '@/pages/workloads/daemonsets/daemonSetHelpers'
@@ -209,7 +209,7 @@ const pages: Record<string, Page> = {
   },
   pods: {
     apply: applyPodWatchEvent,
-    normalize: normalizeWatchPodObject,
+    normalize: (obj) => obj,
     // what the drawers' pod tables and their filters read off a row, and the colour of its box in Cluster View
     shows: (row) => {
       const health = getPodHealth(row)

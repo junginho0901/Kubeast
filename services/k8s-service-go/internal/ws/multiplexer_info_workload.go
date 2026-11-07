@@ -38,7 +38,7 @@ func deploymentToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 
 // statefulsetToInfo — list endpoint: formatStatefulSetDetail (workloads_formatters.go).
 func statefulsetToInfo(obj *unstructured.Unstructured) map[string]interface{} {
-	metadata := obj.Object["metadata"].(map[string]interface{})
+	metadata, _ := obj.Object["metadata"].(map[string]interface{})
 	spec, _ := obj.Object["spec"].(map[string]interface{})
 	status, _ := obj.Object["status"].(map[string]interface{})
 

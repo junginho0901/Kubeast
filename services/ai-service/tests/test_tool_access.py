@@ -202,7 +202,6 @@ async def test_chat_shows_and_audits_each_calls_own_identity(monkeypatch):
         _build_language_directive=lambda message: "Answer in English.",
         _get_tools_definition=lambda: tools,
         _filter_tools_for_output_preference=lambda tools, message: tools,
-        _detect_write_intent=lambda message: False,
         _execute_function_with_context=execute,
     )
 

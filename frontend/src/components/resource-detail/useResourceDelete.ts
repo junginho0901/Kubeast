@@ -275,13 +275,12 @@ export function useResourceDelete({ target, close }: Args) {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ['workloads', 'statefulsets'] }),
           queryClient.invalidateQueries({ queryKey: ['workloads', 'statefulsets', ns] }),
-          queryClient.invalidateQueries({ queryKey: ['statefulset-describe', ns, name] }),
+          queryClient.invalidateQueries({ queryKey: ['workload-describe', 'StatefulSet', ns, name] }),
         ])
       } else if (kind === 'DaemonSet' && ns) {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ['workloads', 'daemonsets'] }),
           queryClient.invalidateQueries({ queryKey: ['workloads', 'daemonsets', ns] }),
-          queryClient.invalidateQueries({ queryKey: ['daemonset-describe', ns, name] }),
           queryClient.invalidateQueries({ queryKey: ['workload-describe', 'DaemonSet', ns, name] }),
         ])
       } else if (kind === 'Job' && ns) {
@@ -294,7 +293,6 @@ export function useResourceDelete({ target, close }: Args) {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ['workloads', 'replicasets'] }),
           queryClient.invalidateQueries({ queryKey: ['workloads', 'replicasets', ns] }),
-          queryClient.invalidateQueries({ queryKey: ['replicasets', ns] }),
           queryClient.invalidateQueries({ queryKey: ['workload-describe', 'ReplicaSet', ns, name] }),
         ])
       } else if (kind === 'CronJob' && ns) {
@@ -335,7 +333,7 @@ export function useResourceDelete({ target, close }: Args) {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ['network', 'endpoints'] }),
           queryClient.invalidateQueries({ queryKey: ['network', 'endpoints', ns] }),
-          queryClient.invalidateQueries({ queryKey: ['endpoint-describe', ns, name] }),
+          queryClient.invalidateQueries({ queryKey: ['endpoints-describe', ns, name] }),
         ])
       } else if (kind === 'EndpointSlice' && ns) {
         await Promise.all([
@@ -347,7 +345,7 @@ export function useResourceDelete({ target, close }: Args) {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ['network', 'ingresses'] }),
           queryClient.invalidateQueries({ queryKey: ['network', 'ingresses', ns] }),
-          queryClient.invalidateQueries({ queryKey: ['ingress-detail', ns, name] }),
+          queryClient.invalidateQueries({ queryKey: ['ingress-describe', ns, name] }),
         ])
       } else if (kind === 'IngressClass') {
         await Promise.all([

@@ -460,22 +460,22 @@ func buildToolRegistry() map[string]ToolDefinition {
 	register(ToolDefinition{
 		Name:        "k8s_annotate_resource",
 		Description: "Annotate a Kubernetes resource (kubectl annotate)",
-		Handler:     gitopsGuarded(handleAnnotateResource),
+		Handler:     handleAnnotateResource,
 	})
 	register(ToolDefinition{
 		Name:        "k8s_remove_annotation",
 		Description: "Remove annotations from a Kubernetes resource (kubectl annotate key-)",
-		Handler:     gitopsGuarded(handleRemoveAnnotation),
+		Handler:     handleRemoveAnnotation,
 	})
 	register(ToolDefinition{
 		Name:        "k8s_label_resource",
 		Description: "Label a Kubernetes resource (kubectl label)",
-		Handler:     gitopsGuarded(handleLabelResource),
+		Handler:     handleLabelResource,
 	})
 	register(ToolDefinition{
 		Name:        "k8s_remove_label",
 		Description: "Remove labels from a Kubernetes resource (kubectl label key-)",
-		Handler:     gitopsGuarded(handleRemoveLabel),
+		Handler:     handleRemoveLabel,
 	})
 	register(ToolDefinition{
 		Name:        "k8s_scale",

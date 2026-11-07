@@ -62,6 +62,34 @@ dependencies:
       - path: .github/workflows/addon-versions.yaml
         match: 'ZEITGEIST_VERSION:'
 
+  # CI's checkers, so one commit gets one verdict. What they compare against (the schemas, the advisory databases) is
+  # still read when they run.
+  - name: kubeconform
+    version: v0.8.0
+    upstream:
+      flavour: github
+      url: yannh/kubeconform
+    refPaths:
+      - path: .github/workflows/ci.yaml
+        match: 'KUBECONFORM_VERSION:'
+
+  - name: pip-audit
+    version: 2.10.1
+    upstream:
+      flavour: github
+      url: pypa/pip-audit
+    refPaths:
+      - path: .github/workflows/ci.yaml
+        match: 'PIP_AUDIT_VERSION:'
+
+  # No upstream: golang/vuln's GitHub releases stop at v1.1.4 while the module proxy has newer versions, so the weekly
+  # check could not see them. Look with `go list -m -versions golang.org/x/vuln`.
+  - name: govulncheck
+    version: v1.9.0
+    refPaths:
+      - path: .github/workflows/ci.yaml
+        match: 'GOVULNCHECK_VERSION:'
+
   - name: prometheus
     version: v3.15.1
     upstream:

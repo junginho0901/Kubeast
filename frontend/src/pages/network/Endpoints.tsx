@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type EndpointInfo } from '@/services/api'
-import { useDescribeReads } from '@/services/pacedReads'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
@@ -28,7 +27,6 @@ type SummaryCard = [label: string, value: number, boxClass: string, labelClass: 
 
 export default function Endpoints() {
   const queryClient = useQueryClient()
-  const describes = useDescribeReads()
   const { t } = useTranslation()
   const tr = useCallback((key: string, fallback: string, options?: Record<string, any>) => t(key, { defaultValue: fallback, ...options }), [t])
   const { open: openDetail } = useResourceDetail()
@@ -65,14 +63,6 @@ export default function Endpoints() {
       : `/api/v1/namespaces/${selectedNamespace}/endpoints`,
     query: 'watch=1',
     applyEvent: (prev, event) => applyEndpointWatchEvent(prev as EndpointInfo[] | undefined, event),
-    onEvent: (event) => {
-      if (event?.type === 'DELETED') return
-      const name = event?.object?.name || event?.object?.metadata?.name
-      const ns = event?.object?.namespace || event?.object?.metadata?.namespace
-      if (name && ns) {
-        describes.changed(['endpoint-describe', ns, name])
-      }
-    },
   })
 
   const filteredEndpoints = useMemo(() => {

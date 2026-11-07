@@ -649,7 +649,6 @@ async def test_a_session_turn_through_claude_code_is_saved_and_audited_like_any_
         _build_language_directive=lambda message: "Answer in English.",
         _get_tools_definition=lambda: TOOLS,
         _filter_tools_for_output_preference=lambda tools, message: tools,
-        _detect_write_intent=lambda message: False,
         _execute_function_with_context=execute,
     )
 

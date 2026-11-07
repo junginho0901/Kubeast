@@ -127,7 +127,6 @@ def chat(monkeypatch):
             _build_language_directive=lambda message: "Answer in English.",
             _get_tools_definition=lambda: tools,
             _filter_tools_for_output_preference=lambda tools, message: tools,
-            _detect_write_intent=lambda message: False,
             _execute_function_with_context=execute,
         )
         events = [e async for e in streaming.session_chat_stream(service, "s1", "go")]

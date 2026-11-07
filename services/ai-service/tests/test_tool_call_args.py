@@ -87,7 +87,6 @@ async def test_a_call_without_usable_arguments_runs_with_an_empty_object(monkeyp
         _build_language_directive=lambda message: "Answer in English.",
         _get_tools_definition=lambda: tools,
         _filter_tools_for_output_preference=lambda tools, message: tools,
-        _detect_write_intent=lambda message: False,
         _execute_function_with_context=execute,
     )
 
