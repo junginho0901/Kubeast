@@ -79,6 +79,8 @@ export interface HelmUpgradeResponse {
   status?: string
   diff?: string
   chartVersion: string
+  // where a value hidden from the caller stays as it was, for a caller without resource.secret.reveal
+  kept_masked?: string[]
 }
 
 export interface HelmUninstallResponse {

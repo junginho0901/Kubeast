@@ -107,6 +107,7 @@
   - `k8s_get_events` lists the newest events (200 by default, at most 1,000), newest first, read by k8s-service a page at a time; when more match it says how many.
   - A kubectl list longer than the tool output (`TOOL_OUTPUT_MAX_BYTES`, 1 MiB) is answered as cut: `too_large` from `k8s_jq_query` and `k8s_count`, and "the total is not known" from `k8s_tabular_query`, instead of a read error or a wrong count.
   - Before a write, `k8s_diff` shows what will change. It diffs the server dry-run result against the live object, and **nothing is applied**. Only users with write permission see it. For a Secret it names the keys that would change, without their values.
+  - A write holding what the assistant read in place of a value (`<REDACTED:…>`, or a Secret's `***`, encoded too) is refused for everyone, before an approval card and again in tool-server, since it would store those letters. The refusal says what to do instead: patch the other fields only, and get a new value from the user.
 - **Floating AI widget (AI Chat)** — a widget floating on every page understands the **current screen context (the resource you are looking at)** and answers, limited to read-only tools.
   - It shows waiting dots before the first character and a small copy icon next to a finished answer (no token row). Wide tables scroll inside a box with a fixed header row.
   - It floats above modals, so you can ask while looking at an open dialog. When the right-hand detail drawer opens, the widget moves to its left (screens 1348px and wider).
@@ -126,7 +127,7 @@
   - It shows cost tables by Namespace and by workload (Cost menu), and the **monthly cost** and **monthly savings** columns of the optimization table.
   - Permission `resource.cost.read`. A Namespace-scoped grant covers only those Namespaces.
 - **Policy Reports** — reads the `wgpolicyk8s.io` PolicyReport and ClusterPolicyReport written by Kyverno, Trivy Operator and others (`features.policyReports`).
-  - Security → Policy Reports shows pass/fail/warn/error/skip per policy and per Namespace, with result rows.
+  - Security → Policy Reports shows pass/fail/warn/error/skip per policy and per Namespace, with result rows. Narrowed to one Namespace, it and the AI's `policy_reports` also count what the ClusterPolicyReports hold about that Namespace's objects, as their drawers do, or say why those were not read.
   - Every drawer of an object the reports can name has a "Policy violations" section (a cluster-scoped object's from the ClusterPolicyReports; a namespaced object's from its namespace's reports and the ClusterPolicyReports naming it, or saying why those were not read; a workload's with its pods; a workload's and a custom resource's leave out an object of another group with the same Kind and name).
   - Without the CRD, the screen says "is not installed on this cluster".
   - Permission `resource.policyreport.read`. A Namespace-scoped grant covers only those Namespaces.
@@ -382,6 +383,7 @@ Where the cluster has Recent flows or the Hubble metrics, the Resource Graph hea
 
 - View the release list, details, history, values, manifest and resources
 - **Rollback, Upgrade, Uninstall and Test**, all with a dry-run preview and run after confirmation
+- Without `resource.secret.reveal` the values are read masked. A value shown as `<REDACTED:…>` stays as it is while its line does, and the preview names which; written over, it changes, and with its line gone it goes. The same placeholder anywhere else is refused with where, as it stands for no value there
 
 ## 🎮 GPU & DRA (Dynamic Resource Allocation)
 

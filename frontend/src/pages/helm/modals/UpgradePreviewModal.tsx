@@ -49,7 +49,7 @@ export default function UpgradePreviewModal({
   useAIContext({
     source: 'HelmUpgradePreview',
     summary: `Helm 릴리스 ${namespace}/${name} 업그레이드 미리보기 — 리비전 ${preview.fromRevision}에서, ${noChange ? '바뀌는 것 없음' : 'manifest 차이 있음'}`,
-    data: { release: name, namespace, from_revision: preview.fromRevision, chart_version: preview.chartVersion, diff: diff.slice(0, 4096), error: error ?? undefined },
+    data: { release: name, namespace, from_revision: preview.fromRevision, chart_version: preview.chartVersion, diff: diff.slice(0, 4096), kept_masked: preview.kept_masked, error: error ?? undefined },
   }, [namespace, name, preview, diff, noChange, error])
 
   return (
@@ -64,6 +64,11 @@ export default function UpgradePreviewModal({
         <p className="text-sm text-slate-400 mb-4">
           {t('helmReleaseDetail.upgrade.subtitle', { namespace, name })}
         </p>
+        {!!preview.kept_masked?.length && (
+          <p className="text-sm text-slate-400 mb-4" data-testid="helm-upgrade-kept-masked">
+            {t('helmReleaseDetail.upgrade.keptMasked', { names: preview.kept_masked.join(', ') })}
+          </p>
+        )}
 
         {noChange ? (
           <div className="rounded-sm border border-slate-600 bg-slate-800/40 px-3 py-4 text-sm text-slate-300">

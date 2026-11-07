@@ -133,7 +133,7 @@ func TestPolicyReportSummary_WholeCluster(t *testing.T) {
 		t.Fatalf("list calls = %v", srv.paths)
 	}
 
-	// One namespace: no cluster reports, only that namespace's list.
+	// One namespace: that namespace's list and the cluster reports' own read, which name none of its objects here.
 	one, err := s.PolicyReportSummary(ctx, "kube-system", false)
 	if err != nil {
 		t.Fatal(err)
@@ -141,7 +141,7 @@ func TestPolicyReportSummary_WholeCluster(t *testing.T) {
 	if one.Reports != 1 || one.Totals != counts(0, 1, 1, 0, 0) || len(one.Namespaces) != 1 || one.Namespaces[0].Namespace != "kube-system" {
 		t.Fatalf("kube-system summary = %+v", one)
 	}
-	if srv.count("/namespaces/kube-system/policyreports") != 1 || srv.count("/clusterpolicyreports") != 1 {
+	if srv.count("/namespaces/kube-system/policyreports") != 1 || srv.count("/clusterpolicyreports") != 2 {
 		t.Fatalf("list calls after the namespace read = %v", srv.paths)
 	}
 }

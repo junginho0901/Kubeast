@@ -30,8 +30,8 @@ const (
 	fakeOtherB64     = "ZmFrZS1vdGhlci12YWx1ZQ==" // fake-other-value
 	fakeLastApplied  = `{"kind":"Secret","stringData":{"password":"fake-secret-value"}}`
 	maskSent         = "***"
-	maskInBase64     = "Kioq"     // base64 of the mask
-	quotedInBase64   = "JyoqKic=" // base64 of the mask with the quotes the YAML window's save keeps
+	maskInBase64     = "Kioq"     // base64 of the mask, as the YAML window saves it
+	quotedInBase64   = "JyoqKic=" // base64 of the mask with its quotes, as a window opened before it read YAML's quotes saves it
 	secretApplyPath  = "/api/v1/resources/yaml/apply"
 	secretCreatePath = "/api/v1/resources/yaml/create"
 )
@@ -288,8 +288,8 @@ func TestSecretApplyWithoutRevealKeepsWhatWasMasked(t *testing.T) {
 	for title, body := range map[string]string{
 		"data removed, as the only save the API server took":   "",
 		"the masks under data":                                 "data:\n  password: '***'\n  user: '***'\n",
-		"the masks the window encoded, as it writes them":      "data:\n  password: " + quotedInBase64 + "\n  user: " + quotedInBase64 + "\n",
-		"the masks encoded without their quotes":               "data:\n  password: " + maskInBase64 + "\n  user: " + maskInBase64 + "\n",
+		"the masks a window opened earlier encoded":            "data:\n  password: " + quotedInBase64 + "\n  user: " + quotedInBase64 + "\n",
+		"the masks the window encodes":                         "data:\n  password: " + maskInBase64 + "\n  user: " + maskInBase64 + "\n",
 		"the masks under stringData":                           "stringData:\n  password: '***'\n  user: '***'\n",
 		"the masks under data and stringData, one key of each": "data:\n  password: '***'\nstringData:\n  user: '***'\n",
 	} {

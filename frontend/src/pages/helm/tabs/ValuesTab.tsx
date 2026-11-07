@@ -137,6 +137,9 @@ export default function ValuesTab({ namespace, name }: { namespace: string; name
             }}
           />
         </div>
+        {!has('resource.secret.reveal') && current.includes('<REDACTED:') && (
+          <p className="text-[11px] text-slate-500" data-testid="helm-values-masked-note">{t('helmReleaseDetail.upgrade.maskedNote')}</p>
+        )}
       </div>
 
       {preview && (

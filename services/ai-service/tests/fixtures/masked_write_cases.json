@@ -1,0 +1,167 @@
+{
+ "comment": "Written by hand and read by both services: tool-server's masked_writes_test.go and ai-service's test_masked_writes.py. Every value is made up.",
+ "cases": [
+  {
+   "name": "apply a Secret as it was read",
+   "tool": "k8s_apply_manifest",
+   "args": {"yaml_content": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: db\n  namespace: shop\n  labels:\n    tier: edited\ndata:\n  password: <REDACTED:secret>\n"},
+   "refused": ["<REDACTED:secret>"]
+  },
+  {
+   "name": "apply a Secret with the placeholder under stringData",
+   "tool": "k8s_apply_manifest",
+   "args": {"yaml_content": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: db\n  namespace: shop\nstringData:\n  password: \"<REDACTED:secret>\"\n"},
+   "refused": ["<REDACTED:secret>"]
+  },
+  {
+   "name": "apply a Secret with the placeholder encoded for data",
+   "tool": "k8s_apply_manifest",
+   "args": {"yaml_content": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: db\n  namespace: shop\ndata:\n  password: PFJFREFDVEVEOnNlY3JldD4=\n"},
+   "refused": ["<REDACTED:secret>"]
+  },
+  {
+   "name": "apply a Secret with a placeholder inside an encoded address",
+   "tool": "k8s_apply_manifest",
+   "args": {"yaml_content": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: db\n  namespace: shop\ndata:\n  url: cG9zdGdyZXM6Ly9hOjxSRURBQ1RFRDpwYXNzd29yZD5AZGIvYXBw\n"},
+   "refused": ["<REDACTED:password>"]
+  },
+  {
+   "name": "apply a Secret with the screen's mask under stringData",
+   "tool": "k8s_apply_manifest",
+   "args": {"yaml_content": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: db\n  namespace: shop\nstringData:\n  password: '***'\n"},
+   "refused": ["***"]
+  },
+  {
+   "name": "apply a Secret with the screen's mask encoded",
+   "tool": "k8s_apply_manifest",
+   "args": {"yaml_content": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: db\n  namespace: shop\ndata:\n  password: Kioq\n"},
+   "refused": ["***"]
+  },
+  {
+   "name": "apply a Secret with the screen's mask encoded with its quotes",
+   "tool": "k8s_apply_manifest",
+   "args": {"yaml_content": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: db\n  namespace: shop\ndata:\n  password: JyoqKic=\n"},
+   "refused": ["***"]
+  },
+  {
+   "name": "apply a ConfigMap whose value was masked by its key's name",
+   "tool": "k8s_apply_manifest",
+   "args": {"yaml_content": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: app\n  namespace: shop\ndata:\n  db_password: <REDACTED:db_password>\n"},
+   "refused": ["<REDACTED:db_password>"]
+  },
+  {
+   "name": "apply a Deployment whose env value was masked",
+   "tool": "k8s_apply_manifest",
+   "args": {"yaml_content": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: web\n  namespace: shop\nspec:\n  template:\n    spec:\n      containers:\n      - name: app\n        env:\n        - name: DB_PASSWORD\n          value: <REDACTED:DB_PASSWORD>\n"},
+   "refused": ["<REDACTED:DB_PASSWORD>"]
+  },
+  {
+   "name": "apply a manifest given as an object",
+   "tool": "k8s_apply_manifest",
+   "args": {"resource_manifest": {"apiVersion": "v1", "kind": "Secret", "metadata": {"name": "db", "namespace": "shop"}, "stringData": {"password": "<REDACTED:secret>"}}},
+   "refused": ["<REDACTED:secret>"]
+  },
+  {
+   "name": "apply a JSON manifest with the screen's mask",
+   "tool": "k8s_apply_manifest",
+   "args": {"resource_manifest": {"apiVersion": "v1", "kind": "Secret", "metadata": {"name": "db", "namespace": "shop"}, "stringData": {"password": "***"}}},
+   "refused": ["***"]
+  },
+  {
+   "name": "apply JSON text that escapes the placeholder",
+   "tool": "k8s_apply_manifest",
+   "args": {"manifest": "{\"apiVersion\":\"v1\",\"kind\":\"Secret\",\"metadata\":{\"name\":\"db\",\"namespace\":\"shop\"},\"stringData\":{\"password\":\"\\u003cREDACTED:secret\\u003e\"}}"},
+   "refused": ["<REDACTED:secret>"]
+  },
+  {
+   "name": "create from what was read",
+   "tool": "k8s_create_resource",
+   "args": {"yaml_content": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: db-copy\n  namespace: shop\nstringData:\n  password: <REDACTED:secret>\n"},
+   "refused": ["<REDACTED:secret>"]
+  },
+  {
+   "name": "patch a Secret's value with the placeholder",
+   "tool": "k8s_patch_resource",
+   "args": {"resource_type": "secret", "resource_name": "db", "namespace": "shop", "patch": {"stringData": {"password": "<REDACTED:secret>"}}},
+   "refused": ["<REDACTED:secret>"]
+  },
+  {
+   "name": "patch text with an address holding the placeholder",
+   "tool": "k8s_patch_resource",
+   "args": {"resource_type": "configmap", "resource_name": "app", "namespace": "shop", "patch": "{\"data\":{\"url\":\"postgres://a:<REDACTED:password>@db/app\"}}"},
+   "refused": ["<REDACTED:password>"]
+  },
+  {
+   "name": "JSON patch of a Secret with the screen's mask",
+   "tool": "k8s_patch_resource",
+   "args": {"resource_type": "secrets", "resource_name": "db", "namespace": "shop", "patch_type": "json", "patch": "[{\"op\":\"replace\",\"path\":\"/stringData/password\",\"value\":\"***\"}]"},
+   "refused": ["***"]
+  },
+  {
+   "name": "patch of a Secret with the screen's mask encoded",
+   "tool": "k8s_patch_resource",
+   "args": {"resource_type": "Secret", "resource_name": "db", "namespace": "shop", "patch": {"data": {"password": "Kioq"}}},
+   "refused": ["***"]
+  },
+  {
+   "name": "annotation holding the placeholder",
+   "tool": "k8s_annotate_resource",
+   "args": {"resource_type": "configmap", "resource_name": "app", "namespace": "shop", "annotations": {"note": "<REDACTED:secret>"}},
+   "refused": ["<REDACTED:secret>"]
+  },
+  {
+   "name": "a command holding the placeholder",
+   "tool": "k8s_execute_command",
+   "args": {"pod_name": "db-0", "namespace": "shop", "command": ["psql", "-c", "ALTER ROLE app PASSWORD '<REDACTED:password>'"]},
+   "refused": ["<REDACTED:password>"]
+  },
+  {
+   "name": "a Secret with its own values",
+   "tool": "k8s_apply_manifest",
+   "args": {"yaml_content": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: db\n  namespace: shop\ndata:\n  password: ZmFrZS12YWx1ZQ==\nstringData:\n  user: fake-user\n"},
+   "refused": []
+  },
+  {
+   "name": "a Secret value of four stars, which no screen writes",
+   "tool": "k8s_apply_manifest",
+   "args": {"yaml_content": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: db\n  namespace: shop\ndata:\n  pattern: KioqKg==\nstringData:\n  other: '****'\n"},
+   "refused": []
+  },
+  {
+   "name": "stars in a ConfigMap, where no screen masks",
+   "tool": "k8s_apply_manifest",
+   "args": {"yaml_content": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: app\n  namespace: shop\ndata:\n  pattern: '***'\n  encoded: Kioq\n"},
+   "refused": []
+  },
+  {
+   "name": "the word on its own",
+   "tool": "k8s_apply_manifest",
+   "args": {"yaml_content": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: app\n  namespace: shop\ndata:\n  note: values are REDACTED in logs\n"},
+   "refused": []
+  },
+  {
+   "name": "a patch of a Secret's labels",
+   "tool": "k8s_patch_resource",
+   "args": {"resource_type": "secret", "resource_name": "db", "namespace": "shop", "patch": {"metadata": {"labels": {"tier": "edited"}}}},
+   "refused": []
+  },
+  {
+   "name": "a patch of a workload",
+   "tool": "k8s_patch_resource",
+   "args": {"resource_type": "deployment", "resource_name": "web", "namespace": "shop", "patch": {"spec": {"replicas": 2}}},
+   "refused": []
+  },
+  {
+   "name": "an ordinary command",
+   "tool": "k8s_execute_command",
+   "args": {"pod_name": "db-0", "namespace": "shop", "command": ["ls", "-la"]},
+   "refused": []
+  },
+  {
+   "name": "a delete names only the object",
+   "tool": "k8s_delete_resource",
+   "args": {"resource_type": "secret", "resource_name": "db", "namespace": "shop"},
+   "refused": []
+  }
+ ]
+}

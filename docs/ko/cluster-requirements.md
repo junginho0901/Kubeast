@@ -293,7 +293,7 @@ Read 사용자에게도 열어 주려면 이 주소를 §1의 `viewerProxyServic
   - 개발용 값과 정책 예시는 [`deploy/kind/kyverno-values.yaml`](../../deploy/kind/kyverno-values.yaml)·[`kyverno-policies.yaml`](../../deploy/kind/kyverno-policies.yaml)에 있습니다.
 - 같은 CRD를 쓰는 다른 도구의 보고서도 읽을 수 있지만, 검증은 Kyverno로만 했습니다.
 - 레이블로 리소스를 고르는 결과(`resourceSelector`, 또는 보고서의 `scopeSelector`)는 레이블이 맞는 개체마다 그 상세 창에 붙습니다. 이를 위해 상세 창이 개체의 레이블을 사용자 권한으로 읽으며, 읽을 수 없으면 그 결과를 맞춰 보지 못했다고 알려 줍니다.
-- 네임스페이스 개체의 상세 창은 ClusterPolicyReport가 그 개체에 대해 담은 결과도 보여 줍니다. 사용자 권한으로 분당 한 번까지 읽습니다. 사용자가 읽을 수 없거나 네임스페이스 한정 권한이면 그 결과가 나열되지 않았다고 알려 줍니다.
+- 네임스페이스 개체의 상세 창과, 그 네임스페이스로 좁힌 Policy Reports 화면·AI의 `policy_reports`는 ClusterPolicyReport가 그 개체에 대해 담은 결과도 보여 줍니다. 사용자 권한으로 분당 한 번까지 읽습니다. 사용자가 읽을 수 없거나 네임스페이스 한정 권한이면 그 결과가 나열되지 않았다고 알려 줍니다.
 - **확인**: `kubectl --context <cluster> get policyreports -A`
 
 ## 6. GPU·DRA

@@ -38,7 +38,7 @@ func (s *Service) ApplySecretYAMLWithoutReveal(ctx context.Context, resourceType
 }
 
 // isSecretDataMask: whether a value under a Secret's data is the mask, as it reads or in the base64 the YAML window makes
-// of a line it shows under stringData, quotes included.
+// of a line it shows under stringData; a window opened before it read YAML's quotes saves them too.
 func isSecretDataMask(value interface{}) bool {
 	text, ok := value.(string)
 	if !ok {

@@ -32,6 +32,8 @@ type YamlEditorProps = {
   toast?: { type: 'success' | 'error'; message: string } | null
   showInlineApplied?: boolean
   labels: Labels
+  // One line under the hint, for what a save of this object does beyond what the text says.
+  note?: string
 }
 
 export default function YamlEditor({
@@ -48,6 +50,7 @@ export default function YamlEditor({
   toast,
   showInlineApplied = true,
   labels,
+  note,
 }: YamlEditorProps) {
   const [draft, setDraft] = useState(value || '')
   const [isEditing, setIsEditing] = useState(false)
@@ -241,6 +244,7 @@ export default function YamlEditor({
         <p className="text-[11px] text-slate-500">
           {canEdit && isEditing ? labels.editHint : labels.readonly}
         </p>
+        {note && <p className="text-[11px] text-slate-500" data-testid="yaml-editor-note">{note}</p>}
         {applyError && <p className="text-xs text-red-400">{applyError}</p>}
         {showInlineApplied && applySuccess && !toast && (
           <p className="text-xs text-emerald-300">{labels.applied}</p>

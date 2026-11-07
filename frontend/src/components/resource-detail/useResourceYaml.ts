@@ -52,7 +52,8 @@ export function useResourceYaml({ target, tab, canEditYaml }: Args) {
     retry: 1,
   })
 
-  const handleApplyYaml = async (rawYaml: string) => {
+  // Answers how many of a Secret's masked values the server left as they were.
+  const handleApplyYaml = async (rawYaml: string): Promise<number> => {
     const yaml = kind === 'Secret' && canEditYaml ? encodeSecretYaml(rawYaml) : rawYaml
     if (kind === 'Node') await api.applyNodeYaml(name, yaml)
     else if (kind === 'Namespace') await api.applyNamespaceYaml(name, yaml)
@@ -62,7 +63,8 @@ export function useResourceYaml({ target, tab, canEditYaml }: Args) {
       const crdN = (rj?.crd_name as string) || ''
       if (crdN) await api.applyResourceYaml(crdN, name, yaml, ns || undefined)
     }
-    else await api.applyResourceYaml(kindToPlural(kind), name, yaml, ns || undefined)
+    else return (await api.applyResourceYaml(kindToPlural(kind), name, yaml, ns || undefined))?.kept_masked?.length ?? 0
+    return 0
   }
 
   const invalidateAfterApply = useCallback(() => {

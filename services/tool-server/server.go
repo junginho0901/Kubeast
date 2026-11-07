@@ -120,6 +120,10 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 		respondToolError(w, http.StatusForbidden, err.Error(), nil, nil)
 		return
 	}
+	if err := maskedWriteGate(req.Name, req.Arguments); err != nil {
+		respondToolError(w, http.StatusBadRequest, err.Error(), nil, nil)
+		return
+	}
 	if status, err := approvalGate(r.Header, req.Name, clusterID, payload, req.Arguments); err != nil {
 		respondToolError(w, status, err.Error(), nil, nil)
 		return

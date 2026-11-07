@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from app.security import DEFAULT_CLUSTER, decode_access_token
 from app.services.ai import screen_permissions
+from app.services.ai.masked_writes import masked_write_refusal
 from app.services.tool_whitelists import WRITE_TOOL_NAMES
 
 if TYPE_CHECKING:
@@ -87,7 +88,11 @@ _ADMIN_ONLY_WITHOUT_A_TOKEN = frozenset({"resource.pod.exec", "resource.workload
 
 
 def tool_refusal(service: "AIService", tool: str, args: Any = None) -> Optional[str]:
-    """app_permission_error for the request's cluster and user."""
+    """app_permission_error for the request's cluster and user, then a write that would store a placeholder's letters."""
+    return _permission_refusal(service, tool, args) or masked_write_refusal(tool, args)
+
+
+def _permission_refusal(service: "AIService", tool: str, args: Any = None) -> Optional[str]:
     cluster = effective_cluster(service)
     token = getattr(service, "token", None)
     if token is not None:

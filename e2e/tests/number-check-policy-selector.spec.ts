@@ -120,6 +120,40 @@ test.describe('number check — policy results that pick by label', () => {
       await page.goto(`/?cluster=${CLUSTER}&detail=${encodeURIComponent(`ConfigMap/${NS}/cm-plain`)}`)
       await expect.poll(() => rowsIn(page), { timeout: 30_000 }).toEqual([['fail', 'cluster-names-it/r', '-', 'named by a cluster report']])
       await expect(page.locator(DRAWER).last().getByTestId('policy-violations-cluster-error')).toHaveCount(0)
+
+      await test.step('the page and the AI tool narrowed to the namespace count the same row', async () => {
+        const query = `cluster=${CLUSTER}&namespace=${NS}&force_refresh=true`
+        const summaryAnswer = await request.get(`/api/v1/cluster/policyreports/summary?${query}`)
+        expect(summaryAnswer.ok(), await summaryAnswer.text()).toBeTruthy()
+        const summary = (await summaryAnswer.json()) as { totals: { fail: number; warn: number }; cluster_reports_error?: string }
+        const resultsAnswer = await request.get(`/api/v1/cluster/policyreports/results?${query}&result=fail`)
+        expect(resultsAnswer.ok(), await resultsAnswer.text()).toBeTruthy()
+        const results = (await resultsAnswer.json()) as { total: number; rows: { policy: string; namespace: string; kind: string; name: string }[] }
+        expect(results.rows.find((r) => r.policy === 'cluster-names-it')).toMatchObject({ namespace: NS, kind: 'ConfigMap', name: 'cm-plain' })
+        expect(summary.totals.fail, 'the card counts what the rows list').toBe(results.total)
+        expect(summary.cluster_reports_error).toBeUndefined()
+
+        await page.goto(`/security/policyreports?cluster=${CLUSTER}`)
+        await page.getByTestId('policy-reports-namespace').click({ timeout: 30_000 })
+        await page.getByTestId(`policy-reports-namespace-opt-${NS}`).click()
+        await expect(page.getByTestId('policy-reports-stat-fail')).toHaveText(String(summary.totals.fail), { timeout: 30_000 })
+        await expect(page.getByTestId('policy-reports-cluster-error')).toHaveCount(0)
+
+        const login = await request.post('/api/v1/auth/login', { data: { email: process.env.E2E_USER_EMAIL || 'admin', password: process.env.E2E_USER_PASSWORD || '' } })
+        expect(login.ok(), `login: ${login.status()}`).toBeTruthy()
+        const token = (await login.json()).access_token as string
+        const config = await request.get('/api/v1/ai/mcp/config', { headers: { Authorization: `Bearer ${token}` } })
+        if (config.ok() && (await config.json()).enabled) {
+          const call = await request.post('/api/v1/ai/mcp', {
+            headers: { Accept: 'application/json, text/event-stream', 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            data: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'policy_reports', arguments: { cluster: CLUSTER, namespace: NS, view: 'results', results: 'fail' } } },
+          })
+          expect(call.status(), await call.text()).toBe(200)
+          const tool = JSON.parse((await call.json()).result.content[0].text) as { total: number; rows: { policy: string }[] }
+          expect(tool.total, 'the tool says the page\'s number').toBe(results.total)
+          expect(tool.rows.map((r) => r.policy)).toContain('cluster-names-it')
+        }
+      })
     } finally {
       kubectl(`delete clusterpolicyreport ${name} --ignore-not-found`)
       await readNow()

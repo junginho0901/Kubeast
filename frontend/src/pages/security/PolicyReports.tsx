@@ -159,6 +159,7 @@ export default function PolicyReports() {
     [resultsQuery.data],
   )
   const pagedResults = useMemo<PolicyReportResult[]>(() => results?.rows ?? [], [results])
+  const clusterReportsError = summary?.cluster_reports_error || results?.cluster_reports_error
 
   const rowCount = tab === 'policies' ? sortedPolicies.length : tab === 'namespaces' ? sortedNamespaces.length : (results?.total ?? 0)
   const totalPages = Math.max(1, Math.ceil(rowCount / rowsPerPage))
@@ -184,7 +185,7 @@ export default function PolicyReports() {
       summary: `Policy reports: ${summary.totals.fail} fail, ${summary.totals.warn} warn, ${summary.totals.error} error over ${summary.reports} reports (${tab})`,
       data: {
         filters: { tab, namespace: namespace || undefined, policy: policy || undefined, policySource: policySource || undefined, result: resultFilter, severity: severity || undefined, search: searchQuery || undefined, scoped: summary.scoped },
-        stats: { ...summary.totals, reports: summary.reports, truncated: summary.truncated },
+        stats: { ...summary.totals, reports: summary.reports, truncated: summary.truncated, cluster_reports_error: clusterReportsError },
         ...summarizeList(list as unknown as Record<string, unknown>[], {
           total: rowCount,
           currentPage,
@@ -196,7 +197,7 @@ export default function PolicyReports() {
         }),
       },
     }
-  }, [summary, tab, pagedPolicies, pagedNamespaces, pagedResults, rowCount, currentPage, rowsPerPage, namespace, policy, policySource, resultFilter, severity, searchQuery])
+  }, [summary, clusterReportsError, tab, pagedPolicies, pagedNamespaces, pagedResults, rowCount, currentPage, rowsPerPage, namespace, policy, policySource, resultFilter, severity, searchQuery])
   useAIContext(aiSnapshot, [aiSnapshot])
 
   // Force refresh: past the server's one-minute cache, so a fix shows up as soon as the engine reports it.
@@ -388,6 +389,11 @@ export default function PolicyReports() {
           {summary?.scoped && (
             <p className="text-sm text-amber-300 shrink-0" data-testid="policy-reports-scoped">
               {tr('policyReports.scoped', 'Only the namespaces of your grant are counted.')}
+            </p>
+          )}
+          {clusterReportsError && (
+            <p className="text-sm text-amber-300 shrink-0" data-testid="policy-reports-cluster-error">
+              {tr('policyReports.clusterReportsNotCounted', 'Results the cluster reports hold are not counted here: {{error}}', { error: clusterReportsError })}
             </p>
           )}
           {(summary?.truncated || results?.truncated) && (

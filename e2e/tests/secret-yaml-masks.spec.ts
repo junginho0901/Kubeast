@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { test, expect, type APIRequestContext } from '@playwright/test'
+import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 
 // A Secret's editor without resource.secret.reveal reads its values as a mask. What the YAML window's save sends for them
 // stands for the values: they stay in the cluster, on the screen's save and on the API's, and the edit around them goes
@@ -35,6 +35,10 @@ const tryKubectl = (args: string) => {
   }
 }
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Requested-With': 'XMLHttpRequest' })
+
+// Monaco's end of the text by the system it reads from the page's user agent (the chromium project's is Windows):
+// Cmd+Down on a Mac, Ctrl+End elsewhere. ControlOrMeta follows the machine the test runs on instead.
+const textEnd = async (page: Page) => ((await page.evaluate(() => navigator.userAgent.includes('Macintosh'))) ? 'Meta+ArrowDown' : 'Control+End')
 
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
@@ -128,14 +132,18 @@ test.describe('a Secret editor without reveal', () => {
       const drawer = page.locator('div[class*="fixed"][class*="inset-y-0"][class*="right-0"]').last()
       await drawer.getByRole('button', { name: 'YAML', exact: true }).click({ timeout: 30_000 })
       await expect(drawer.locator('.monaco-editor .view-lines').first()).toContainText('***', { timeout: 30_000 })
+      await expect(drawer.getByTestId('yaml-editor-note'), 'the window says what a save does to a masked value').toHaveText(/\*\*\*.*(when you save|저장해도)/)
       await drawer.getByRole('button', { name: /^edit$/i }).click()
       await drawer.locator('.monaco-editor').first().click()
-      await page.keyboard.press('ControlOrMeta+End')
+      await page.keyboard.press(await textEnd(page))
       await page.keyboard.type('# edited in the window')
       await drawer.getByRole('button', { name: /^apply$/i }).click()
       await expect.poll(async () => (await keptInRows(request)).length, { timeout: 30_000 }).toBeGreaterThan(0)
       wantValuesKept()
       expect((await keptInRows(request))[0].kept_masked?.sort()).toEqual(['data.password', 'data.user', `metadata.annotations.${LAST_APPLIED}`].sort())
+      await expect(drawer.getByText(/(Hidden values left as they were: 3|숨겨진 값은 그대로 두었습니다: 3개)/), 'and after it, how many stayed').toBeVisible({ timeout: 10_000 })
+      await drawer.getByRole('button', { name: /^(info|정보)$/i }).click()
+      await expect(drawer.getByText(/resource\.secret\.reveal/), 'the Data section says who reads values').toBeVisible({ timeout: 10_000 })
     })
 
     await test.step('data taken out of the YAML: the annotation stays as it is', async () => {
@@ -174,5 +182,38 @@ test.describe('a Secret editor without reveal', () => {
       const text = JSON.stringify(rows)
       for (const leak of [VALUE, OTHER, b64(VALUE), b64(OTHER)]) expect(text).not.toContain(leak)
     })
+  })
+
+  // Whoever may read the values sees their letters in the window, and a save of something else leaves their bytes alone.
+  test('a save in the window of one who reads the values keeps every value byte for byte', async ({ page }) => {
+    test.setTimeout(120_000)
+    const name = 'bytes'
+    const data = {
+      korean: b64('가짜애비밀번호'),
+      spaces: b64('  fake value  '),
+      tab: b64('\tfake\t'),
+      quoted: b64("'fake-value'"),
+      hash: b64('fake #value'),
+      colon: b64('key: value'),
+      lines: b64('line one\nline two\n'),
+      pipe: b64('|'),
+      mask: b64('***'),
+      binary: Buffer.from([0x00, 0xff, 0xfe, 0x66]).toString('base64'),
+      empty: '',
+    }
+    kubectl(`-n ${NS} create -f -`, JSON.stringify({ apiVersion: 'v1', kind: 'Secret', metadata: { name }, type: 'Opaque', data }))
+    await page.goto(`/?cluster=${CLUSTER}&detail=${encodeURIComponent(`Secret/${NS}/${name}`)}`)
+    const drawer = page.locator('div[class*="fixed"][class*="inset-y-0"][class*="right-0"]').last()
+    await drawer.getByRole('button', { name: 'YAML', exact: true }).click({ timeout: 30_000 })
+    await expect(drawer.locator('.monaco-editor .view-lines').first()).toContainText('stringData', { timeout: 30_000 })
+    await expect(drawer.locator('.monaco-editor .view-lines').first(), 'Korean reads as its letters').toContainText('가짜애비밀번호')
+    await expect(drawer.getByTestId('yaml-editor-note'), 'no note for one who reads the values').toHaveCount(0)
+    await drawer.getByRole('button', { name: /^edit$/i }).click()
+    await drawer.locator('.monaco-editor').first().click()
+    await page.keyboard.press(await textEnd(page))
+    await page.keyboard.type('# edited in the window')
+    await drawer.getByRole('button', { name: /^apply$/i }).click()
+    await expect(drawer.getByRole('button', { name: /^edit$/i }), 'the save ended').toBeVisible({ timeout: 30_000 })
+    expect((JSON.parse(kubectl(`-n ${NS} get secret ${name} -o json`)) as SecretObject).data).toEqual(data)
   })
 })

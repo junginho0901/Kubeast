@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useResourceDetail } from './ResourceDetailContext'
 import { useCanI } from '@/hooks/useCanCreate'
+import { usePermission } from '@/hooks/usePermission'
 import { permResource } from '@/utils/permissions'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useModalStackEntry } from '@/hooks/useModalStack'
@@ -135,6 +136,7 @@ export default function ResourceDetailDrawer() {
   const mayEdit = useCanI(`resource.${permResource(kind)}.edit`, 'patch',
     readOnlyKind || resolving ? undefined : deleteTarget(kind, ns, name, target?.rawJson))
   const canEditYaml = mayEdit && !policyLocked
+  const { has: hasPermission } = usePermission()
 
   const {
     yamlData,
@@ -189,9 +191,11 @@ export default function ResourceDetailDrawer() {
   const argo = argoCfg?.enabled ? { managed: argoManaged, url: argoManaged ? argoAppUrl(argoCfg, argoManaged.app) : null, blocked: argoBlocked } : undefined
   const argoWarnText = t('common.gitops.confirm', { app: argoManaged?.app ?? '', defaultValue: 'Argo CD application "{{app}}" manages this object; a change made here is reverted on the next sync. Change it in Git instead. Continue anyway?' })
   const confirm = useConfirm()
+  const keptMaskedRef = useRef(0)
   const handleApplyYamlGuarded = async (rawYaml: string) => {
+    keptMaskedRef.current = 0
     if (argoManaged && !argoBlocked && !(await confirm({ title: t('common.gitops.confirmTitle', { defaultValue: 'Managed by Argo CD' }), message: argoWarnText, confirmLabel: t('common.gitops.applyAnyway', { defaultValue: 'Apply anyway' }) }))) return
-    await handleApplyYaml(rawYaml)
+    keptMaskedRef.current = await handleApplyYaml(rawYaml)
   }
 
   // re-QA #38: system objects ask for the name; the namespaces the API server keeps get a notice
@@ -416,11 +420,16 @@ export default function ResourceDetailDrawer() {
                 error={yamlError ? t('common.yamlError', { defaultValue: 'Failed to load YAML.' }) : null}
                 onRefresh={() => setYamlRefreshNonce(prev => prev + 1)}
                 onApply={canEditYaml && !argoBlocked && !unreadable ? handleApplyYamlGuarded : undefined}
-                onApplySuccess={() => { invalidateAfterApply(); setApplyToast({ type: 'success', message: t('common.applied', { defaultValue: 'Applied' }) }) }}
+                onApplySuccess={() => {
+                  invalidateAfterApply()
+                  const kept = keptMaskedRef.current
+                  setApplyToast({ type: 'success', message: kept > 0 ? t('secretInfo.appliedKeptMasked', { count: kept, defaultValue: 'Applied. Hidden values left as they were: {{count}}' }) : t('common.applied', { defaultValue: 'Applied' }) })
+                }}
                 onApplyError={(msg) => setApplyToast({ type: 'error', message: msg || t('common.applyError', { defaultValue: 'Apply failed.' }) })}
                 onDirtyChange={setIsYamlDirty}
                 showInlineApplied={false}
                 toast={applyToast}
+                note={kind === 'Secret' && canEditYaml && !argoBlocked && !unreadable && !hasPermission('resource.secret.reveal') ? t('secretInfo.yamlMaskedNote', { defaultValue: 'A value shown as *** stays as it is when you save. To change one, write the new value over it.' }) : undefined}
                 labels={{
                   title: `${displayKind}: ${name}`,
                   refresh: t('common.refresh', { defaultValue: 'Refresh' }),

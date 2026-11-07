@@ -140,6 +140,8 @@ type PolicyReportSummary struct {
 	Totals      PolicyReportCounts         `json:"totals"`
 	Policies    []PolicyReportPolicyRow    `json:"policies"`
 	Namespaces  []PolicyReportNamespaceRow `json:"namespaces"`
+	// ClusterReportsError says why rows the ClusterPolicyReports hold may be missing.
+	ClusterReportsError string `json:"cluster_reports_error,omitempty"`
 }
 
 // PolicyReportFilter narrows GET /api/v1/policyreports/results and picks a
@@ -169,6 +171,8 @@ type PolicyReportResults struct {
 	Scoped      bool                 `json:"scoped"`
 	Total       int                  `json:"total"`
 	Rows        []PolicyReportResult `json:"rows"`
+	// ClusterReportsError says why rows the ClusterPolicyReports hold may be missing.
+	ClusterReportsError string `json:"cluster_reports_error,omitempty"`
 }
 
 // PolicyReportResource is one resource's rows (a workload includes its pods).
@@ -191,6 +195,8 @@ type policyReportSet struct {
 	reports   int
 	truncated bool
 	results   []PolicyReportResult
+	// clusterError says why the cluster reports a view should hold were not read.
+	clusterError string
 }
 
 type policyReportCache struct {
@@ -217,7 +223,7 @@ func policyReportCacheFor(cluster string) *policyReportCache {
 // PolicyReportSummary aggregates the cluster's (or one namespace's) results by
 // policy and by namespace. A namespace-scoped grant sees its namespaces only.
 func (s *Service) PolicyReportSummary(ctx context.Context, namespace string, force bool) (*PolicyReportSummary, error) {
-	set, scoped, err := s.policyReportSet(ctx, namespace, force)
+	set, scoped, err := s.policyReportView(ctx, namespace, force)
 	if err != nil {
 		return nil, err
 	}
@@ -229,6 +235,8 @@ func (s *Service) PolicyReportSummary(ctx context.Context, namespace string, for
 		Scoped:      scoped,
 		Policies:    []PolicyReportPolicyRow{},
 		Namespaces:  []PolicyReportNamespaceRow{},
+
+		ClusterReportsError: set.clusterError,
 	}
 	// a policy is its name within its source: two engines may name a policy alike
 	policies := map[string]*PolicyReportPolicyRow{}
@@ -308,7 +316,7 @@ var policyReportResultRank = map[string]int{"fail": 0, "error": 1, "warn": 2, "p
 // PolicyReportResults returns the rows a filter keeps, worst result first.
 // Without a result filter only fail, warn and error rows are returned.
 func (s *Service) PolicyReportResults(ctx context.Context, f PolicyReportFilter) (*PolicyReportResults, error) {
-	set, scoped, err := s.policyReportSet(ctx, f.Namespace, f.Force)
+	set, scoped, err := s.policyReportView(ctx, f.Namespace, f.Force)
 	if err != nil {
 		return nil, err
 	}
@@ -356,7 +364,7 @@ func (s *Service) PolicyReportResults(ctx context.Context, f PolicyReportFilter)
 		}
 		return policyReportCompare(rows[i], rows[j], "") < 0
 	})
-	out := &PolicyReportResults{GeneratedAt: set.at.UTC().Format(time.RFC3339), Truncated: set.truncated, Scoped: scoped, Total: len(rows)}
+	out := &PolicyReportResults{GeneratedAt: set.at.UTC().Format(time.RFC3339), Truncated: set.truncated, Scoped: scoped, Total: len(rows), ClusterReportsError: set.clusterError}
 	limit := f.Limit
 	if limit <= 0 {
 		limit = policyReportResultsDef
@@ -406,18 +414,8 @@ func (s *Service) PolicyReportsForResource(ctx context.Context, namespace, kind,
 	if err != nil {
 		return nil, err
 	}
-	results := set.results
-	clusterReportsError := ""
-	clusterSet, err := s.clusterPolicyReportSet(ctx, force)
-	switch {
-	case err == nil:
-		results = append(results[:len(results):len(results)], clusterSet.resultsNaming(namespace)...)
-		if clusterSet.truncated {
-			clusterReportsError = fmt.Sprintf("the cluster holds more than one read takes (%d reports, %d results), so the rest were not read", policyReportMaxReports, policyReportMaxResults)
-		}
-	case !apierrors.IsNotFound(err):
-		clusterReportsError = err.Error()
-	}
+	clusterRows, clusterReportsError := s.clusterReportsNaming(ctx, namespace, force)
+	results := append(set.results[:len(set.results):len(set.results)], clusterRows.results...)
 	pods := map[string]bool{}
 	picking := policyReportSet{results: results}.picksByLabel()
 	var targets []policyReportTarget
@@ -456,6 +454,59 @@ func (s *Service) PolicyReportsForResource(ctx context.Context, namespace, kind,
 		return ref.Namespace == namespace && ((ref.Kind == kind && ref.Name == name && sameAPIGroup(apiVersion, ref.APIVersion)) || (ref.Kind == "Pod" && pods[ref.Name]))
 	}, targets...)
 	return out, nil
+}
+
+// clusterReportsNaming are the rows the ClusterPolicyReports hold about objects of namespace and, when something stopped
+// that read or cut it, why they may not be all. A cluster serving no such kind has none and nothing to say.
+func (s *Service) clusterReportsNaming(ctx context.Context, namespace string, force bool) (policyReportSet, string) {
+	clusterSet, err := s.clusterPolicyReportSet(ctx, force)
+	switch {
+	case err == nil:
+		named := policyReportSet{truncated: clusterSet.truncated, results: clusterSet.resultsNaming(namespace)}
+		if clusterSet.truncated {
+			return named, fmt.Sprintf("the cluster holds more than one read takes (%d reports, %d results), so the rest were not read", policyReportMaxReports, policyReportMaxResults)
+		}
+		return named, ""
+	case apierrors.IsNotFound(err):
+		return policyReportSet{}, ""
+	}
+	return policyReportSet{}, err.Error()
+}
+
+// policyReportView is what the page and the AI tool count. For one namespace that is its reports and what the cluster
+// reports hold about its objects, each such row named after the object of that namespace, so the numbers are its drawers'.
+// The view of the whole cluster has the cluster reports already, or says why not.
+func (s *Service) policyReportView(ctx context.Context, namespace string, force bool) (policyReportSet, bool, error) {
+	set, scoped, err := s.policyReportSet(ctx, namespace, force)
+	if err != nil {
+		return set, scoped, err
+	}
+	if namespace == "" && !scoped {
+		return set, scoped, nil
+	}
+	clusterRows, clusterError := s.clusterReportsNaming(ctx, namespace, force)
+	set.clusterError = clusterError
+	if namespace == "" {
+		return set, scoped, nil
+	}
+	reports := map[string]bool{}
+	results := set.results[:len(set.results):len(set.results)]
+	for _, row := range clusterRows.results {
+		reports[row.Report] = true
+		if row.Namespace != namespace {
+			for _, other := range row.also {
+				if other.Namespace == namespace {
+					row.Namespace, row.Kind, row.Name, row.APIVersion = other.Namespace, other.Kind, other.Name, other.APIVersion
+					break
+				}
+			}
+		}
+		results = append(results, row)
+	}
+	set.results = results
+	set.reports += len(reports)
+	set.truncated = set.truncated || clusterRows.truncated
+	return set, scoped, nil
 }
 
 // resultsNaming are the results about an object of namespace, by the resource a row names or a later one of its result.
@@ -660,7 +711,11 @@ func (s *Service) readPolicyReports(ctx context.Context, namespace string, scope
 	}
 	// Cluster-scoped resources only belong to a whole-cluster view.
 	if namespace == "" && len(scope) == 0 {
-		if err := s.readPolicyReportKind(ctx, clusterPolicyReportGVR, "", &set); err != nil && !apierrors.IsNotFound(err) && !apierrors.IsForbidden(err) {
+		err := s.readPolicyReportKind(ctx, clusterPolicyReportGVR, "", &set)
+		switch {
+		case apierrors.IsForbidden(err):
+			set.clusterError = err.Error()
+		case err != nil && !apierrors.IsNotFound(err):
 			return set, err
 		}
 	}

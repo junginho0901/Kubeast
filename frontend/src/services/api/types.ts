@@ -796,6 +796,8 @@ export interface PolicyReportSummary {
   totals: PolicyReportCounts
   policies: PolicyReportPolicyRow[]
   namespaces: PolicyReportNamespaceRow[]
+  // why rows the ClusterPolicyReports hold may be missing
+  cluster_reports_error?: string
 }
 
 // GET /api/v1/cluster/policyreports/results — one page (offset, limit) of the matches; total counts them all.
@@ -806,6 +808,7 @@ export interface PolicyReportResults {
   scoped: boolean
   total: number
   rows: PolicyReportResult[]
+  cluster_reports_error?: string
 }
 
 // GET /api/v1/cluster/namespaces/{ns}/networkpolicies/effective?kind=&name= — the NetworkPolicies that
@@ -884,7 +887,8 @@ export interface NetflowResult {
   cluster: string
   mode: string
   provider?: 'hubble' | 'calico'
-  relay: string
+  // not given to a grant limited to namespaces
+  relay?: string
   namespace: string
   kind?: string
   name?: string
