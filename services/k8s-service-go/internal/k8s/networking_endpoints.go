@@ -7,6 +7,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	endpointsrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/endpoints"
 )
 
 // ========== Endpoints ==========
@@ -19,7 +21,7 @@ func (s *Service) GetEndpoints(ctx context.Context, namespace string) ([]map[str
 	}
 	result := make([]map[string]interface{}, 0, len(list.Items))
 	for _, ep := range list.Items {
-		result = append(result, formatEndpointsFull(&ep))
+		result = append(result, endpointsrow.Info(&ep))
 	}
 	return result, nil
 }
@@ -33,7 +35,7 @@ func (s *Service) GetAllEndpoints(ctx context.Context) ([]map[string]interface{}
 		}
 		result := make([]map[string]interface{}, 0, len(list.Items))
 		for _, ep := range list.Items {
-			result = append(result, formatEndpointsFull(&ep))
+			result = append(result, endpointsrow.Info(&ep))
 		}
 		return result, nil
 	})
@@ -62,7 +64,7 @@ func (s *Service) DescribeEndpoints(ctx context.Context, namespace, name string)
 		return nil, fmt.Errorf("get endpoints %s/%s: %w", namespace, name, epErr)
 	}
 
-	result := formatEndpointsFull(ep)
+	result := endpointsrow.Info(ep)
 	result["uid"] = string(ep.UID)
 	result["labels"] = ep.Labels
 	result["annotations"] = ep.Annotations
@@ -132,80 +134,5 @@ func formatEndpointsBasic(name, namespace string, ts *metav1.Time, subsets int) 
 		"namespace":    namespace,
 		"subset_count": subsets,
 		"created_at":   toISO(ts),
-	}
-}
-
-func formatEndpointsFull(ep *corev1.Endpoints) map[string]interface{} {
-	readyCount := 0
-	notReadyCount := 0
-	readyAddresses := make([]string, 0)
-	notReadyAddresses := make([]string, 0)
-	readyTargets := make([]map[string]interface{}, 0)
-	notReadyTargets := make([]map[string]interface{}, 0)
-	portSet := make(map[string]bool)
-	ports := make([]map[string]interface{}, 0)
-
-	for _, subset := range ep.Subsets {
-		readyCount += len(subset.Addresses)
-		notReadyCount += len(subset.NotReadyAddresses)
-
-		for _, addr := range subset.Addresses {
-			if len(readyAddresses) < 50 {
-				readyAddresses = append(readyAddresses, addr.IP)
-			}
-			target := map[string]interface{}{"ip": addr.IP}
-			if addr.NodeName != nil {
-				target["node_name"] = *addr.NodeName
-			}
-			if addr.TargetRef != nil {
-				target["target_ref"] = map[string]interface{}{
-					"kind": addr.TargetRef.Kind,
-					"name": addr.TargetRef.Name,
-				}
-			}
-			readyTargets = append(readyTargets, target)
-		}
-
-		for _, addr := range subset.NotReadyAddresses {
-			if len(notReadyAddresses) < 50 {
-				notReadyAddresses = append(notReadyAddresses, addr.IP)
-			}
-			target := map[string]interface{}{"ip": addr.IP}
-			if addr.NodeName != nil {
-				target["node_name"] = *addr.NodeName
-			}
-			if addr.TargetRef != nil {
-				target["target_ref"] = map[string]interface{}{
-					"kind": addr.TargetRef.Kind,
-					"name": addr.TargetRef.Name,
-				}
-			}
-			notReadyTargets = append(notReadyTargets, target)
-		}
-
-		for _, p := range subset.Ports {
-			key := fmt.Sprintf("%s/%d/%s", p.Name, p.Port, string(p.Protocol))
-			if !portSet[key] {
-				portSet[key] = true
-				ports = append(ports, map[string]interface{}{
-					"name":     p.Name,
-					"port":     p.Port,
-					"protocol": string(p.Protocol),
-				})
-			}
-		}
-	}
-
-	return map[string]interface{}{
-		"name":                ep.Name,
-		"namespace":           ep.Namespace,
-		"ready_count":         readyCount,
-		"not_ready_count":     notReadyCount,
-		"ready_addresses":     readyAddresses,
-		"not_ready_addresses": notReadyAddresses,
-		"ready_targets":       readyTargets,
-		"not_ready_targets":   notReadyTargets,
-		"ports":               ports,
-		"created_at":          toISO(&ep.CreationTimestamp),
 	}
 }

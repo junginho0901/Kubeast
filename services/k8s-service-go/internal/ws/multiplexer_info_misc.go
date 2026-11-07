@@ -1,14 +1,12 @@
 package ws
 
 import (
-	"fmt"
-	"strings"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/eventtime"
+	servicerow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/service"
 )
 
 // namespaceToInfo — list endpoint: GetNamespaces inline (namespaces.go).
@@ -31,118 +29,13 @@ func namespaceToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 	}
 }
 
-// serviceToInfo — list endpoint: formatServiceDetail (services.go).
+// serviceToInfo is the list's row (servicerow.Info), so a live update says what the list says.
 func serviceToInfo(obj *unstructured.Unstructured) map[string]interface{} {
-	metadata := obj.Object["metadata"].(map[string]interface{})
-	spec, _ := obj.Object["spec"].(map[string]interface{})
-	status, _ := obj.Object["status"].(map[string]interface{})
-
-	svcType := ""
-	clusterIP := ""
-	var selector interface{}
-	if spec != nil {
-		if t, ok := spec["type"].(string); ok {
-			svcType = t
-		}
-		if ip, ok := spec["clusterIP"].(string); ok {
-			clusterIP = ip
-		}
-		selector = spec["selector"]
+	var svc corev1.Service
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, &svc); err != nil {
+		return genericToInfo(obj)
 	}
-
-	// ports
-	ports := []map[string]interface{}{}
-	if spec != nil {
-		if rawPorts, ok := spec["ports"].([]interface{}); ok {
-			for _, p := range rawPorts {
-				pm, _ := p.(map[string]interface{})
-				if pm == nil {
-					continue
-				}
-				port := map[string]interface{}{}
-				if pn, ok := pm["name"].(string); ok {
-					port["name"] = pn
-				} else {
-					port["name"] = ""
-				}
-				if pv, ok := toInt64(pm["port"]); ok {
-					port["port"] = pv
-				}
-				// target_port 은 string 으로 직렬화 (intstr)
-				if tp, ok := pm["targetPort"]; ok {
-					switch v := tp.(type) {
-					case string:
-						port["target_port"] = v
-					case int64:
-						port["target_port"] = fmt.Sprintf("%d", v)
-					case float64:
-						port["target_port"] = fmt.Sprintf("%d", int64(v))
-					default:
-						port["target_port"] = fmt.Sprintf("%v", v)
-					}
-				} else {
-					port["target_port"] = ""
-				}
-				if pp, ok := pm["protocol"].(string); ok {
-					port["protocol"] = pp
-				} else {
-					port["protocol"] = ""
-				}
-				if np, ok := toInt64(pm["nodePort"]); ok && np > 0 {
-					port["node_port"] = np
-				}
-				if ap, ok := pm["appProtocol"].(string); ok && ap != "" {
-					port["app_protocol"] = ap
-				}
-				ports = append(ports, port)
-			}
-		}
-	}
-
-	// external_ip — formatServiceDetail 과 동일 logic
-	externalIPs := []string{}
-	if spec != nil {
-		if eips, ok := spec["externalIPs"].([]interface{}); ok {
-			for _, ip := range eips {
-				if s, ok := ip.(string); ok {
-					externalIPs = append(externalIPs, s)
-				}
-			}
-		}
-	}
-	if svcType == "LoadBalancer" && status != nil {
-		if lb, ok := status["loadBalancer"].(map[string]interface{}); ok {
-			if ingressList, ok := lb["ingress"].([]interface{}); ok {
-				for _, ing := range ingressList {
-					ingm, _ := ing.(map[string]interface{})
-					if ingm == nil {
-						continue
-					}
-					if ip, ok := ingm["ip"].(string); ok && ip != "" {
-						externalIPs = append(externalIPs, ip)
-					}
-					if hn, ok := ingm["hostname"].(string); ok && hn != "" {
-						externalIPs = append(externalIPs, hn)
-					}
-				}
-			}
-		}
-	}
-	externalIP := "<none>"
-	if len(externalIPs) > 0 {
-		externalIP = strings.Join(externalIPs, ",")
-	}
-
-	return map[string]interface{}{
-		"name":        metadata["name"],
-		"namespace":   metadata["namespace"],
-		"type":        svcType,
-		"cluster_ip":  clusterIP,
-		"external_ip": externalIP,
-		"ports":       ports,
-		"selector":    selector,
-		"created_at":  metadata["creationTimestamp"],
-	}
+	return servicerow.Info(&svc)
 }
 
 // eventToInfo — list endpoint: GetEvents inline (events.go).

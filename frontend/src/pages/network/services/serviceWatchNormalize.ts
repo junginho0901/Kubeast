@@ -6,7 +6,6 @@
 // status.loadBalancer.ingress[0].ip/hostname 또는 spec.externalIPs[0] 우선순위로
 // external_ip 추출, spec.ports 의 nodePort/targetPort/protocol 정규화.
 
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import type { ServiceInfo } from '@/services/api'
 
 function extractExternalIp(obj: any): string | undefined {
@@ -78,7 +77,9 @@ export function applyServiceWatchEvent(
     return items
   }
 
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
+  // the server sends the whole row (servicerow.Info), so it replaces: a cluster IP, port or selector that went away
+  // shows that instead of keeping the old one
+  if (index >= 0) items[index] = normalized
   else items.push(normalized)
 
   return items

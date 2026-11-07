@@ -8,7 +8,6 @@
 // 판정 + selects_all_pods 판정 + selector matchLabels/matchExpressions
 // camelCase/snake_case 둘 다 지원.
 
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import type { NetworkPolicyInfo } from '@/services/api'
 
 function normalizeSelector(raw: any): NetworkPolicyInfo['pod_selector'] {
@@ -95,8 +94,8 @@ export function normalizeWatchNetworkPolicyObject(obj: any): NetworkPolicyInfo {
     egress_rules: egress.length,
     ingress,
     egress,
-    labels: metadata?.labels || {},
-    annotations: metadata?.annotations || {},
+    labels: metadata?.labels || obj?.labels || {},
+    annotations: metadata?.annotations || obj?.annotations || {},
     finalizers: metadata?.finalizers || [],
     created_at: metadata?.creationTimestamp ?? obj?.created_at ?? '',
   }
@@ -123,7 +122,9 @@ export function applyNetworkPolicyWatchEvent(
     return items
   }
 
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
+  // the server sends the whole row (netpolrow.Info), so it replaces: a rule or label that went away shows that instead
+  // of keeping the old one
+  if (index >= 0) items[index] = normalized
   else items.push(normalized)
 
   return items

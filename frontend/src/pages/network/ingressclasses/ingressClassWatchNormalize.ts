@@ -6,7 +6,6 @@
 // is_default 는 annotation `ingressclass.kubernetes.io/is-default-class==='true'` 로 판정,
 // spec.parameters 의 apiGroup/kind/name/scope/namespace 정규화 (snake_case).
 
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import type { IngressClassInfo } from '@/services/api'
 
 export function normalizeWatchIngressClassObject(obj: any): IngressClassInfo {
@@ -21,8 +20,8 @@ export function normalizeWatchIngressClassObject(obj: any): IngressClassInfo {
 
   const metadata = obj?.metadata ?? {}
   const spec = obj?.spec ?? {}
-  const annotations = metadata?.annotations ?? {}
-  const labels = metadata?.labels ?? {}
+  const annotations = metadata?.annotations ?? obj?.annotations ?? {}
+  const labels = metadata?.labels ?? obj?.labels ?? {}
   const paramObj = spec?.parameters
     ? {
         api_group: spec.parameters?.apiGroup ?? null,
@@ -34,14 +33,14 @@ export function normalizeWatchIngressClassObject(obj: any): IngressClassInfo {
     : null
 
   return {
-    name: metadata?.name ?? '',
+    name: metadata?.name ?? obj?.name ?? '',
     controller: spec?.controller ?? null,
     is_default: annotations?.['ingressclass.kubernetes.io/is-default-class'] === 'true',
     parameters: paramObj,
     labels,
     annotations,
     finalizers: Array.isArray(metadata?.finalizers) ? metadata.finalizers : [],
-    created_at: metadata?.creationTimestamp ?? null,
+    created_at: metadata?.creationTimestamp ?? obj?.created_at ?? null,
   }
 }
 
@@ -64,7 +63,9 @@ export function applyIngressClassWatchEvent(
     return items
   }
 
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
+  // the server sends the whole row (ingressclassrow.Info), so it replaces: parameters or labels that went away show
+  // that instead of keeping the old ones
+  if (index >= 0) items[index] = normalized
   else items.push(normalized)
   return items
 }

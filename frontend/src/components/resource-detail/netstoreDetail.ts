@@ -8,7 +8,7 @@ import { statusLabel } from '@/pages/storage/volumeattachments/volumeAttachmentH
 type Port = NonNullable<EndpointInfo['ports']>[number]
 type Target = NonNullable<EndpointInfo['ready_targets']>[number]
 
-// An Endpoints as the drawer shows it: the list's row (k8s-service formatEndpointsFull) with each subset's ready and
+// An Endpoints as the drawer shows it: the list's row (k8s-service internal/endpoints) with each subset's ready and
 // not-ready addresses and ports, as kubectl describe endpoints lists them.
 export interface EndpointsView {
   ready_count: number

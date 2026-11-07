@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strings"
 	"sync"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/endpointslice"
+	servicerow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/service"
 )
 
 // GetServices lists services in a namespace.
@@ -65,7 +65,7 @@ func (s *Service) DescribeService(ctx context.Context, namespace, name string) (
 		return nil, fmt.Errorf("get service %s/%s: %w", namespace, name, svcErr)
 	}
 
-	result := formatServiceDetail(svc)
+	result := servicerow.Info(svc)
 
 	// Additional describe fields
 	result["uid"] = string(svc.UID)
@@ -241,59 +241,8 @@ func (s *Service) CheckServiceConnectivity(ctx context.Context, namespace, name 
 // formatServiceList formats a list of services.
 func formatServiceList(services []corev1.Service) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(services))
-	for _, svc := range services {
-		result = append(result, formatServiceDetail(&svc))
+	for i := range services {
+		result = append(result, servicerow.Info(&services[i]))
 	}
 	return result
-}
-
-// formatServiceDetail formats a single service.
-func formatServiceDetail(svc *corev1.Service) map[string]interface{} {
-	ports := make([]map[string]interface{}, 0, len(svc.Spec.Ports))
-	for _, p := range svc.Spec.Ports {
-		port := map[string]interface{}{
-			"name":        p.Name,
-			"port":        p.Port,
-			"target_port": p.TargetPort.String(),
-			"protocol":    string(p.Protocol),
-		}
-		if p.NodePort > 0 {
-			port["node_port"] = p.NodePort
-		}
-		if p.AppProtocol != nil {
-			port["app_protocol"] = *p.AppProtocol
-		}
-		ports = append(ports, port)
-	}
-
-	externalIPs := make([]string, 0)
-	for _, ip := range svc.Spec.ExternalIPs {
-		externalIPs = append(externalIPs, ip)
-	}
-	if svc.Spec.Type == corev1.ServiceTypeLoadBalancer {
-		for _, ing := range svc.Status.LoadBalancer.Ingress {
-			if ing.IP != "" {
-				externalIPs = append(externalIPs, ing.IP)
-			}
-			if ing.Hostname != "" {
-				externalIPs = append(externalIPs, ing.Hostname)
-			}
-		}
-	}
-
-	externalIP := "<none>"
-	if len(externalIPs) > 0 {
-		externalIP = strings.Join(externalIPs, ",")
-	}
-
-	return map[string]interface{}{
-		"name":        svc.Name,
-		"namespace":   svc.Namespace,
-		"type":        string(svc.Spec.Type),
-		"cluster_ip":  svc.Spec.ClusterIP,
-		"external_ip": externalIP,
-		"ports":       ports,
-		"selector":    svc.Spec.Selector,
-		"created_at":  toISO(&svc.CreationTimestamp),
-	}
 }
