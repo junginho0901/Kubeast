@@ -439,9 +439,9 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
     # (SSE) and the model (tool result), and move on.
     pending_approval_id = None
     ran = False
-    refusal = _perm.tool_refusal(service, function_name, function_args) if function_name in WRITE_TOOL_NAMES else None
+    refusal = _perm.tool_refusal(service, function_name, function_args)
     if refusal:
-        # Needs a screen's permission this role does not hold: no approval card, and the model can say why.
+        # Needs what a screen asks and this role does not hold: no approval card, and the model can say why.
         function_response = json.dumps({"status": "not_permitted", "message": refusal}, ensure_ascii=False)
     elif function_name in WRITE_TOOL_NAMES and write_approval_required() and not _perm.may_request_approval(service, tools, function_name):
         # Not offered this turn (read-only widget) or not

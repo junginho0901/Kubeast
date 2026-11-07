@@ -45,7 +45,7 @@ func TestAuthorizeToolCall(t *testing.T) {
 		validator                  tokenValidator
 		wantStatus                 int
 	}{
-		{"granted on alpha", "k8s_delete_resource", "alpha", "t", v, 0},
+		{"granted on alpha", "k8s_get_resources", "alpha", "t", v, 0},
 		{"same tool refused on prod", "k8s_delete_resource", "prod", "t", v, http.StatusForbidden},
 		{"read tool refused on prod (no ai.tool grant)", "k8s_get_resources", "prod", "t", v, http.StatusForbidden},
 		{"empty cluster = default, no grant", "k8s_get_resources", "", "t", v, http.StatusForbidden},
@@ -81,20 +81,25 @@ func toolPermissionCases() []toolPermissionCase {
 		"resource.helm.read", "resource.helm.rollback", "resource.helm.upgrade", "resource.helm.test", "ai.tool.*", "ai.mcp.use",
 	}
 	grants := []struct {
-		name                       string
-		perms                      []string
-		exec, undo, rollout, other bool
+		name                                    string
+		perms                                   []string
+		exec, undo, reads, changes, scale, drop bool
 	}{
-		{"Write role", write, false, false, true, true},
-		{"Admin role", []string{"*"}, true, true, true, true},
-		{"custom role with both screen permissions", []string{"ai.tool.*", "resource.pod.exec", "resource.workload.rollback"}, true, true, true, true},
-		{"custom role with Pod exec only", []string{"ai.tool.*", "resource.pod.exec"}, true, false, true, true},
-		{"custom role with rollback only", []string{"ai.tool.*", "resource.workload.rollback"}, false, true, true, true},
-		{"screen permissions without the AI tools", []string{"resource.pod.exec", "resource.workload.rollback"}, false, false, false, false},
-		{"the exec tool with its screen permission", []string{"ai.tool.k8s_execute_command", "resource.pod.exec"}, true, false, false, false},
-		{"the exec tool without its screen permission", []string{"ai.tool.k8s_execute_command"}, false, false, false, false},
-		{"the rollout tool with rollback", []string{"ai.tool.k8s_rollout", "resource.workload.rollback"}, false, true, true, false},
-		{"the rollout tool without rollback", []string{"ai.tool.k8s_rollout"}, false, false, true, false},
+		{"Write role", write, false, false, true, true, true, true},
+		{"Admin role", []string{"*"}, true, true, true, true, true, true},
+		{"custom role with both screen permissions", []string{"ai.tool.*", "resource.pod.exec", "resource.workload.rollback"}, true, true, true, false, false, false},
+		{"custom role with Pod exec only", []string{"ai.tool.*", "resource.pod.exec"}, true, false, true, false, false, false},
+		{"custom role with rollback only", []string{"ai.tool.*", "resource.workload.rollback"}, false, true, true, false, false, false},
+		{"screen permissions without the AI tools", []string{"resource.pod.exec", "resource.workload.rollback"}, false, false, false, false, false, false},
+		{"the exec tool with its screen permission", []string{"ai.tool.k8s_execute_command", "resource.pod.exec"}, true, false, false, false, false, false},
+		{"the exec tool without its screen permission", []string{"ai.tool.k8s_execute_command"}, false, false, false, false, false, false},
+		{"the rollout tool with rollback", []string{"ai.tool.k8s_rollout", "resource.workload.rollback"}, false, true, true, false, false, false},
+		{"the rollout tool without rollback", []string{"ai.tool.k8s_rollout"}, false, false, true, false, false, false},
+		{"the rollout tool with edit of that kind", []string{"ai.tool.k8s_rollout", "resource.deployment.edit"}, false, false, true, true, false, false},
+		{"custom role with no resource permission", []string{"ai.tool.*"}, false, false, true, false, false, false},
+		{"custom role with these kinds", []string{"ai.tool.*", "resource.deployment.edit", "resource.configmap.delete"}, false, false, true, true, true, true},
+		{"custom role with other kinds", []string{"ai.tool.*", "resource.statefulset.edit", "resource.secret.delete"}, false, false, true, false, false, false},
+		{"custom role with read only", []string{"ai.tool.*", "resource.*.read"}, false, false, true, false, false, false},
 	}
 	workload := func(action string) map[string]interface{} {
 		return map[string]interface{}{"action": action, "resource_type": "deployment", "resource_name": "web"}
@@ -106,11 +111,14 @@ func toolPermissionCases() []toolPermissionCase {
 		}
 		add("pod exec", "k8s_execute_command", map[string]interface{}{"pod_name": "web", "namespace": "shop", "command": []interface{}{"ls"}}, g.exec)
 		add("rollout undo", "k8s_rollout", workload("undo"), g.undo)
-		for _, action := range []string{"restart", "pause", "resume", "status", "history"} {
-			add("rollout "+action, "k8s_rollout", workload(action), g.rollout)
+		for _, action := range []string{"restart", "pause", "resume"} {
+			add("rollout "+action, "k8s_rollout", workload(action), g.changes)
 		}
-		add("scale", "k8s_scale", map[string]interface{}{"resource_type": "deployment", "resource_name": "web", "replicas": 2}, g.other)
-		add("delete", "k8s_delete_resource", map[string]interface{}{"resource_type": "configmap", "resource_name": "web"}, g.other)
+		for _, action := range []string{"status", "history"} {
+			add("rollout "+action, "k8s_rollout", workload(action), g.reads)
+		}
+		add("scale", "k8s_scale", map[string]interface{}{"resource_type": "deployment", "resource_name": "web", "replicas": 2}, g.scale)
+		add("delete", "k8s_delete_resource", map[string]interface{}{"resource_type": "configmap", "resource_name": "web"}, g.drop)
 	}
 	return cases
 }

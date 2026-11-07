@@ -387,7 +387,8 @@ ai:
 # guard apply, every call is audited with write: true and what it was asked to do.
 # Pod exec and rollout undo also need resource.pod.exec and
 # resource.workload.rollback, as on the screens: Admin and custom roles holding
-# them run those, the Write role does not.
+# them run those, the Write role does not. Every other call needs what its screen
+# asks too, resource.<kind>.<verb> for the kinds it names (docs/features.md).
 mcp:
   enabled: false
   writeTools: false

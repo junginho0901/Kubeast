@@ -11,7 +11,7 @@ def _service(matrix, cluster):
 
 
 def test_write_tool_allowed_only_on_granted_cluster():
-    matrix = {"alpha": ["ai.tool.*", "resource.*.create"], "prod": ["resource.*.read"]}
+    matrix = {"alpha": ["ai.tool.*", "resource.*.create", "resource.*.delete"], "prod": ["resource.*.read"]}
     assert permissions.is_tool_allowed(_service(matrix, "alpha"), "k8s_delete_resource")
     assert not permissions.is_tool_allowed(_service(matrix, "prod"), "k8s_delete_resource")
     assert not permissions.is_tool_allowed(_service(matrix, "prod"), "k8s_get_resources")
@@ -20,7 +20,7 @@ def test_write_tool_allowed_only_on_granted_cluster():
 
 
 def test_tool_list_is_filtered_per_cluster():
-    matrix = {"alpha": ["ai.tool.*"], "prod": []}
+    matrix = {"alpha": ["ai.tool.*", "resource.*.delete"], "prod": []}
     tools = [
         {"type": "function", "function": {"name": "k8s_get_resources"}},
         {"type": "function", "function": {"name": "k8s_delete_resource"}},

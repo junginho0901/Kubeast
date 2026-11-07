@@ -150,7 +150,7 @@ func toolServerForSecrets(t *testing.T, api func(w http.ResponseWriter, r *http.
 	t.Cleanup(restore)
 	prev := toolAuth
 	toolAuth = fakeValidator{payload: auth.TokenPayload{UserID: "u1", Email: "a@example.com",
-		Perms: auth.PermissionMatrix{secretValuesCluster: {"ai.tool.*"}}}}
+		Perms: auth.PermissionMatrix{secretValuesCluster: {"ai.tool.*", "resource.*.read", "resource.*.edit", "resource.helm.read"}}}}
 	t.Cleanup(func() { toolAuth = prev })
 }
 

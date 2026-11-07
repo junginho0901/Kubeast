@@ -22,6 +22,9 @@ func handleApplyManifest(ctx context.Context, args map[string]interface{}, heade
 	if err := admissionPolicyGateManifest(manifest); err != nil {
 		return "", err
 	}
+	if err := applyCreateGate(ctx, headers, manifest); err != nil {
+		return "", err
+	}
 	notice, err := gitopsGuardManifest(ctx, headers, manifest)
 	if err != nil {
 		return "", err

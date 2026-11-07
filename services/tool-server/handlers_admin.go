@@ -1,8 +1,8 @@
 // Admin-only tools: the audit log through auth-service, and node internals
 // (kubelet stats summary, node logs) through the API server proxy as the
-// user. ai-service offers them only to a token holding admin.audit.read /
-// admin.nodes.read; the cluster's RBAC (nodes/proxy) and auth-service's own
-// permission check stand behind that.
+// user. Both services ask a token for admin.audit.read / admin.nodes.read
+// (screen_permissions.go); the cluster's RBAC (nodes/proxy) and auth-service's
+// own permission check stand behind that.
 
 package main
 

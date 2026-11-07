@@ -15,7 +15,9 @@ import pytest
 from app import mcp_server
 from app.database import utcnow
 from app.security import TokenPayload
-from app.services.ai import permissions
+from app.services.ai import features as feature_gate
+from app.services.ai import permissions, screen_permissions
+from app.services.ai import tools as tools_catalog
 from app.services.ai.tools import K8S_WRITE_TOOLS
 from app.services.tool_whitelists import READONLY_TOOL_NAMES, WRITE_TOOL_NAMES
 
@@ -736,3 +738,250 @@ async def test_a_chat_read_tools_row_stays_metadata_only(rows):
     row = next(r for r in rows if r["action"] == "ai.tool.call")
     assert "fake-pass-1" not in json.dumps(row)
     assert set(row["after"]) <= {"session_id", "tool", "iteration", "resource_type", "status", "redacted", "access", "requests", "objects"}
+
+
+# --- What a screen asks, for every tool: the table both services keep -------------------------------------------------
+
+SCREEN = json.loads((Path(__file__).parent / "fixtures" / "tool_screen_permission_cases.json").read_text())
+TOOLS_ONLY = ("ai.tool.*", "ai.mcp.use")
+CATALOG = sorted({t["function"]["name"] for t in tools_catalog.get_tools_definition(SimpleNamespace(_filter_tools_by_role=lambda tools: tools))})
+
+
+def _offered(token, tools=None):
+    return {t["function"]["name"] for t in permissions.filter_tools_by_role(_service(token), tools or ALL_TOOLS)}
+
+
+def test_each_call_asks_what_tool_server_asks():
+    wrong = [(c["tool"], c["args"], screen_permissions.app_permissions(c["tool"], c["args"]), c["want"]) for c in SCREEN["cases"]
+             if screen_permissions.app_permissions(c["tool"], c["args"]) != (c["want"] or [])]
+    assert wrong == []
+    assert len(SCREEN["cases"]) > 200
+
+
+def test_the_table_and_the_spellings_are_tool_servers():
+    assert sorted(screen_permissions.TOOL_SCREEN_TABLE) == SCREEN["tools"]
+    assert screen_permissions.spellings() == SCREEN["spellings"]
+    assert sorted(screen_permissions.PERMISSION_NAMES) == SCREEN["permission_names"]
+
+
+def test_every_tool_the_model_or_an_agent_can_be_offered_is_in_the_table():
+    assert len(CATALOG) > 50
+    assert [n for n in CATALOG if n not in screen_permissions.TOOL_SCREEN_TABLE] == []
+    assert [n for n in [*mcp_server.READ_TOOLS, *mcp_server.WRITE_TOOLS] if n not in screen_permissions.TOOL_SCREEN_TABLE] == []
+
+
+def test_each_call_of_the_built_in_roles_goes_as_before():
+    admin, write, read = _admin(), _token(SCREEN["write_role"]), _token(SCREEN["read_role"])
+    cluster_admin = _token(("*",))
+    wrong = []
+    for c in SCREEN["cases"]:
+        for name, token, want in (("global admin", admin, True), ("Admin", cluster_admin, True), ("Write", write, c["write"]), ("Read", read, c["read"])):
+            if permissions.token_may_call(token, CLUSTER, c["tool"], c["args"]) != want:
+                wrong.append((name, c["tool"], c["args"]))
+    assert wrong == []
+
+
+def test_the_built_in_roles_are_offered_what_they_were():
+    write = _token(SCREEN["write_role"])
+    assert _offered(_admin(), [{"type": "function", "function": {"name": n}} for n in CATALOG]) == set(CATALOG)
+    assert _offered(write) == (WRITE_TOOL_NAMES | READONLY_TOOL_NAMES) - {"k8s_execute_command"}
+    assert _offered(_token(SCREEN["read_role"]), [{"type": "function", "function": {"name": n}} for n in sorted(READONLY_TOOL_NAMES)]) == READONLY_TOOL_NAMES
+
+
+def test_a_role_with_tools_and_no_resource_permission_is_offered_only_what_its_screens_show():
+    offered = _offered(_token(TOOLS_ONLY))
+    assert "k8s_get_resources" in offered and "k8s_describe_resource" in offered and "issues" in offered
+    assert offered & {"k8s_get_pod_logs", "logsearch", "helm_read", "cost", "network_flows"} == set()
+    # rollout stays for its status and history; everything else that writes needs a permission no kind here holds.
+    assert offered & WRITE_TOOL_NAMES == {"k8s_rollout"}
+
+
+@pytest.mark.parametrize("perms,present,absent", [
+    (("ai.tool.*", "resource.configmap.delete"), {"k8s_delete_resource"}, {"k8s_patch_resource", "k8s_scale", "k8s_create_resource", "k8s_apply_manifest"}),
+    (("ai.tool.*", "resource.deployment.edit"), {"k8s_scale", "k8s_patch_resource", "k8s_label_resource", "k8s_apply_manifest"}, {"k8s_delete_resource", "k8s_create_resource"}),
+    (("ai.tool.*", "resource.secret.create"), {"k8s_create_resource"}, {"k8s_delete_resource", "k8s_apply_manifest"}),
+    (("ai.tool.*", "resource.*.delete"), {"k8s_delete_resource"}, {"k8s_scale"}),
+    (("ai.tool.k8s_get_pod_logs", "resource.pod.read"), {"k8s_get_pod_logs"}, {"k8s_get_resources"}),
+])
+def test_a_tool_is_offered_once_the_role_holds_what_it_asks_for_some_kind(perms, present, absent):
+    offered = _offered(_token(perms))
+    assert present <= offered and offered & absent == set()
+
+
+def test_the_grant_of_another_cluster_is_not_what_offers_a_tool():
+    token = TokenPayload(user_id="u1", role="member", matrix={CLUSTER: TOOLS_ONLY, "prod": ("resource.*.delete", "resource.pod.read")})
+    assert permissions.token_may_call(token, CLUSTER, "k8s_delete_resource") is False
+    assert permissions.token_may_call(token, CLUSTER, "k8s_get_pod_logs") is False
+    assert permissions.token_may_call(token, CLUSTER, "k8s_delete_resource", {"resource_type": "secret"}) is False
+
+
+def test_a_tool_not_in_the_table_is_closed(monkeypatch):
+    monkeypatch.delitem(screen_permissions.TOOL_SCREEN_TABLE, "k8s_get_resources")
+    for token in (_admin(), _token(("*",)), _token(TOOLS_ONLY)):
+        assert permissions.token_may_call(token, CLUSTER, "k8s_get_resources") is False
+        assert permissions.token_may_call(token, CLUSTER, "k8s_get_resources", {"resource_type": "pods"}) is False
+        reason = permissions.app_permission_error(token, CLUSTER, "k8s_get_resources", {"resource_type": "pods"})
+        assert reason and "forbidden" in reason and "k8s_get_resources" in reason
+        assert "k8s_get_resources" not in _offered(token)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name,args,perms", [
+    ("k8s_get_pod_logs", {"pod_name": "web", "namespace": "shop"}, ["resource.pod.read"]),
+    ("logsearch", {"namespace": "shop"}, ["resource.pod.read"]),
+    ("helm_read", {"what": "list"}, ["resource.helm.read"]),
+    ("nodes_log", {"node": "n1"}, ["admin.nodes.read"]),
+    ("k8s_diff", {"yaml_content": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: a\n"}, ["resource.secret.edit"]),
+])
+async def test_a_refused_read_in_the_chat_does_not_run_and_says_why(rows, name, args, perms):
+    got = await _chat_call(_token(TOOLS_ONLY), name, args, offered=[{"type": "function", "function": {"name": name}}])
+    assert got.service.executed == []
+    answer = json.loads(got.llm_text)
+    assert answer["status"] == "not_permitted" and CLUSTER in answer["message"]
+    for perm in perms:
+        assert perm in answer["message"]
+    assert rows[-1]["action"] == "ai.tool.call" and rows[-1]["result"] == "failure"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name,args", [
+    ("k8s_get_resources", {"resource_type": "secrets", "namespace": "shop"}),
+    ("k8s_describe_resource", {"resource_type": "configmap", "resource_name": "a", "namespace": "shop"}),
+    ("k8s_get_events", {"namespace": "shop"}),
+    ("prometheus_query", {"promql": "up"}),
+])
+async def test_a_read_the_screens_leave_to_the_cluster_runs_for_the_same_role(rows, name, args):
+    got = await _chat_call(_token(TOOLS_ONLY), name, args, offered=[{"type": "function", "function": {"name": name}}])
+    assert [n for n, _ in got.service.executed] == [name]
+
+
+WRITE_CALLS = [
+    ("k8s_delete_resource", {"resource_type": "Secret", "resource_name": "x", "namespace": "shop"}, ["resource.secret.delete"]),
+    ("k8s_delete_resource", {"resource_type": "configmaps,secrets.v1", "resource_name": "x", "namespace": "shop"}, ["resource.configmap.delete", "resource.secret.delete"]),
+    ("k8s_delete_resource", {"resource_type": "all", "all": True, "namespace": "shop"}, ["resource.*.delete"]),
+    ("k8s_patch_resource", {"resource_type": "deployment.apps", "resource_name": "x", "namespace": "shop", "patch": {"a": 1}}, ["resource.deployment.edit"]),
+    ("k8s_annotate_resource", {"resource_type": "svc", "resource_name": "x", "namespace": "shop", "annotations": {"a": "b"}}, ["resource.service.edit"]),
+    ("k8s_label_resource", {"resource_type": "nodes", "resource_name": "x", "labels": {"a": "b"}}, ["resource.node.edit"]),
+    ("k8s_scale", {"resource_type": "statefulsets", "resource_name": "x", "namespace": "shop", "replicas": 2}, ["resource.statefulset.edit"]),
+    ("k8s_rollout", {"action": "restart", "resource_type": "deploy", "resource_name": "x", "namespace": "shop"}, ["resource.deployment.edit"]),
+    ("k8s_apply_manifest", {"yaml_content": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a\n---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: b\n"}, ["resource.configmap.edit", "resource.secret.edit"]),
+    ("k8s_create_resource", {"yaml_content": "apiVersion: v1\nkind: List\nitems:\n- apiVersion: v1\n  kind: Secret\n  metadata:\n    name: b\n"}, ["resource.secret.create"]),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name,args,perms", WRITE_CALLS)
+async def test_a_refused_write_in_the_chat_gets_no_card_and_a_failure_row(rows, name, args, perms):
+    got = await _chat_call(_token(TOOLS_ONLY), name, args, offered=[{"type": "function", "function": {"name": name}}])
+    assert not any('"approval_required"' in e for e in got.events) and got.db.approvals == []
+    answer = json.loads(got.llm_text)
+    assert answer["status"] == "not_permitted"
+    for perm in perms:
+        assert perm in answer["message"]
+    assert rows[-1]["action"] == "ai.tool.call" and rows[-1]["result"] == "failure" and rows[-1]["after"]["status"] == "not_permitted"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name,args,perms", WRITE_CALLS)
+async def test_the_same_write_in_the_chat_gets_its_card_with_the_permission(rows, name, args, perms):
+    got = await _chat_call(_token(("ai.tool.*", *perms)), name, args)
+    assert len(got.db.approvals) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name,args,perms", [
+    *WRITE_CALLS,
+    ("k8s_get_pod_logs", {"pod_name": "web", "namespace": "shop"}, ["resource.pod.read"]),
+])
+async def test_a_refusal_over_mcp_says_what_is_missing_and_is_recorded(mcp, name, args, perms):
+    res = await mcp.call(_token(TOOLS_ONLY), name, args)
+    assert res.is_error is True and _ToolServer.calls == []
+    row = mcp.audit[-1]
+    assert row["action"] == "ai.mcp.call" and row["result"] == "failure" and row["after"]["write"] is (name in WRITE_TOOL_NAMES)
+    for perm in perms:
+        assert perm in res.content[0].text and perm in row["error"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name,args,perms", WRITE_CALLS)
+async def test_the_same_call_over_mcp_goes_through_with_the_permission(mcp, name, args, perms):
+    res = await mcp.call(_token(("ai.tool.*", "ai.mcp.use", *perms)), name, args)
+    assert res.is_error is not True and [n for n, _ in _ToolServer.calls] == [name]
+
+
+def test_only_what_is_missing_is_named():
+    reason = permissions.app_permission_error(_token(("ai.tool.*", "resource.configmap.delete")), CLUSTER, "k8s_delete_resource", {"resource_type": "configmap,secret,pods"})
+    assert reason and "resource.secret.delete" in reason and "resource.pod.delete" in reason and "resource.configmap.delete" not in reason
+
+
+def test_mcp_offers_each_cluster_what_may_be_called_there(mcp):
+    token = TokenPayload(user_id="u1", role="member", matrix={CLUSTER: TOOLS_ONLY, "prod": ("ai.mcp.use", "ai.tool.*", "resource.pod.read", "resource.*.delete")})
+    alpha, prod = mcp_server._tools_allowed_in(token, CLUSTER), mcp_server._tools_allowed_in(token, "prod")
+    assert "k8s_get_resources" in alpha and "k8s_get_resources" in prod
+    assert "k8s_get_pod_logs" not in alpha and "k8s_get_pod_logs" in prod
+    assert "k8s_delete_resource" not in alpha and "k8s_delete_resource" in prod
+
+
+def test_a_feature_tool_is_not_listed_where_its_screen_permission_is_held_nowhere():
+    for name in ("k8s_get_pod_logs", "logsearch", "loki_query", "alerts_list", "network_policy_check", "helm_read", "cost"):
+        assert feature_gate.permitted_anywhere(name, _token(TOOLS_ONLY)) is False, name
+        assert feature_gate.permitted_anywhere(name, _token(SCREEN["read_role"])) is True, name
+        assert feature_gate.permitted_anywhere(name, _admin()) is True, name
+
+
+def test_the_list_gate_reads_the_same_table():
+    for tool, rule in screen_permissions.TOOL_SCREEN_TABLE.items():
+        if rule[0] == "always" and tool not in WRITE_TOOL_NAMES:
+            assert feature_gate.REQUIRED_PERMISSIONS[tool][1] == rule[1], tool
+
+
+@pytest.mark.asyncio
+async def test_a_card_for_a_kind_the_role_no_longer_holds_stops_at_the_run_and_says_why(monkeypatch, rows):
+    args = {"resource_type": "secret", "resource_name": "x", "namespace": "shop"}
+    approval = _approval("k8s_delete_resource", args)
+    got = await _approve(monkeypatch, rows, _token(TOOLS_ONLY), approval)
+    assert got.ran == []
+    assert approval.status == "failed" and "resource.secret.delete" in approval.result
+    assert next(r for r in rows if r["action"] == "ai.tool.execute")["result"] == "failure"
+
+
+def test_arguments_that_are_not_an_object_count_as_every_kind():
+    service = _service(_token(("ai.tool.*", "resource.configmap.delete")))
+    assert "resource.*.delete" in (permissions.tool_refusal(service, "k8s_delete_resource", "not an object") or "")
+    assert permissions.tool_refusal(_service(_token(SCREEN["write_role"])), "k8s_delete_resource", "not an object") is None
+    assert permissions.tool_refusal(_service(_admin()), "k8s_delete_resource", "not an object") is None
+
+
+def test_the_legacy_role_mode_keeps_its_rules():
+    def legacy(role):
+        return SimpleNamespace(token=None, user_role=role, cluster_name=CLUSTER)
+
+    assert permissions.tool_refusal(legacy("write"), "k8s_delete_resource", {"resource_type": "secret"}) is None
+    assert permissions.tool_refusal(legacy("read"), "k8s_get_pod_logs", {"pod_name": "web"}) is None
+    assert "resource.pod.exec" in permissions.tool_refusal(legacy("write"), "k8s_execute_command", {"pod_name": "web"})
+    assert permissions.tool_refusal(legacy("admin"), "k8s_execute_command", {"pod_name": "web"}) is None
+
+
+@pytest.mark.asyncio
+async def test_the_model_is_told_which_writes_a_role_with_tools_only_cannot_do(monkeypatch):
+    models, _ = await _ask(monkeypatch, "이 파드 지워줘", user_role="read", token=_token(TOOLS_ONLY))
+    told = " ".join(m["content"] for m in models[0] if m["role"] == "system")
+    for verb in ("create", "edit", "delete"):
+        assert f"resource.<kind>.{verb}" in told
+
+
+@pytest.mark.asyncio
+async def test_the_write_role_is_not_told_about_the_writes_it_holds(monkeypatch):
+    models, _ = await _ask(monkeypatch, "이 파드 지워줘", user_role="read", token=_token(WRITE_ROLE))
+    told = " ".join(m["content"] for m in models[0] if m["role"] == "system")
+    assert "resource.<kind>" not in told
+
+
+def test_a_manifest_too_long_to_read_counts_as_every_kind():
+    long = "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a\ndata:\n  a: " + "x" * (257 << 10) + "\n"
+    assert screen_permissions.app_permissions("k8s_apply_manifest", {"yaml_content": long}) == ["resource.*.edit"]
+
+
+def test_a_manifest_that_refers_to_itself_counts_as_every_kind():
+    nested = "kind: List\nitems: &a\n- kind: List\n  items: *a\n"
+    assert screen_permissions.app_permissions("k8s_create_resource", {"yaml_content": nested}) == ["resource.*.create"]

@@ -116,7 +116,8 @@ def test_permission_gate_follows_what_k8s_service_asks_for():
     assert features.gated_names(["gitops_status"], feats, "self", bare) == ["gitops_status"]
     # filter_tools applies the same rule to tool definitions, in order.
     tools = _tools("hygiene", "k8s_get_pod_logs", "cost")
-    assert _names(features.filter_tools(tools, feats, "self", reader)) == ["k8s_get_pod_logs", "cost"]
+    assert _names(features.filter_tools(tools, feats, "self", reader)) == ["cost"]
+    assert _names(features.filter_tools(tools, feats, "self", _Token({"resource.pod.read", "resource.cost.read"}))) == ["k8s_get_pod_logs", "cost"]
 
 
 @pytest.mark.asyncio

@@ -3811,7 +3811,7 @@
         "resource_helm_upgrade": "Release 업그레이드 (values 수정)",
         "resource_helm_uninstall": "Release 삭제",
         "resource_helm_test": "Release 테스트 실행",
-        "ai_tool_all": "모든 AI 도구",
+        "ai_tool_all": "모든 AI 도구(호출마다 그 화면이 묻는 권한도 필요)",
         "ai_tool_get_cluster_overview": "읽기 도구: 클러스터 개요",
         "ai_tool_get_pod_metrics": "읽기 도구: Pod 메트릭",
         "ai_tool_get_node_metrics": "읽기 도구: 노드 메트릭",

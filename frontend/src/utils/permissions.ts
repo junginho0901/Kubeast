@@ -55,8 +55,8 @@ export function parsePermissions(raw: unknown): PermissionMatrix {
 }
 
 // permResource is the <name> in resource.<name>.<verb> for a kind, as the
-// backend names it (permResource in services/k8s-service-go/internal/handler/
-// perm_resource.go — keep the lists the same): the lower-cased kind, a short
+// backend names it (PermResource in services/pkg/auth/perm_resource.go — keep
+// the lists the same): the lower-cased kind, a short
 // name for six kinds, and "customresource" for any kind without its own name.
 // The short names and the drawer's CustomResourceInstance are accepted too.
 const PERM_RESOURCE_ALIASES: Record<string, string> = {

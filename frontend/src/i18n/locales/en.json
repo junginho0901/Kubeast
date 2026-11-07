@@ -3701,7 +3701,7 @@
         "resource_helm_upgrade": "Upgrade releases (edit values)",
         "resource_helm_uninstall": "Uninstall releases",
         "resource_helm_test": "Run release tests",
-        "ai_tool_all": "All AI tools",
+        "ai_tool_all": "All AI tools (each call also needs the permission its screen asks for)",
         "ai_tool_get_cluster_overview": "Read tool: cluster overview",
         "ai_tool_get_pod_metrics": "Read tool: pod metrics",
         "ai_tool_get_node_metrics": "Read tool: node metrics",

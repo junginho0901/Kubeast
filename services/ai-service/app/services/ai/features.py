@@ -14,6 +14,9 @@ import logging
 import time
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
+from app.services.ai import screen_permissions
+from app.services.tool_whitelists import WRITE_TOOL_NAMES
+
 log = logging.getLogger(__name__)
 
 TTL_SECONDS = 60.0
@@ -91,23 +94,14 @@ GATES: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
     "policy_reports": _policy_reports_on,
 }
 
-# tool name → (scope, permission) k8s-service asks for when the tool calls it.
+# tool name → (scope, permission) the screen's route asks for when the tool calls it.
 # Without it the call could only answer forbidden, so the tool is not offered.
 # "global" = the all-cluster entry (admin.*), "cluster" = granted in the active cluster.
 REQUIRED_PERMISSIONS: Dict[str, tuple[str, str]] = {
-    "hygiene": ("global", "admin.hygiene.read"),
-    "policy_reports": ("cluster", "resource.policyreport.read"),
-    "cost": ("cluster", "resource.cost.read"),
-    "helm_read": ("cluster", "resource.helm.read"),
-    "network_flows": ("cluster", "resource.networkflow.read"),
-    "network_drops": ("cluster", "resource.networkflow.read"),
-    "network_top_flows": ("cluster", "resource.networkflow.read"),
+    **{tool: ("global" if permission.startswith("admin.") else "cluster", permission)
+       for tool, permission in screen_permissions.fixed_permissions().items() if tool not in WRITE_TOOL_NAMES},
     # A server dry run needs the write's RBAC; the Write role's edit permission stands for it.
     "k8s_diff": ("cluster", "resource.*.edit"),
-    # Admin-only: the audit log (auth-service asks for it) and node internals through nodes/proxy.
-    "audit_search": ("global", "admin.audit.read"),
-    "nodes_stats_summary": ("global", "admin.nodes.read"),
-    "nodes_log": ("global", "admin.nodes.read"),
 }
 
 

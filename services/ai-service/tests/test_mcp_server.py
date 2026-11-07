@@ -16,7 +16,8 @@ from app import mcp_server
 from app.security import TokenPayload
 from app.services.audit_writer import AuditUnavailable
 
-MATRIX_WRITE = {"self": ("ai.tool.*", "ai.mcp.use", "resource.*.read"), "default": ("resource.*.read",)}
+MATRIX_WRITE = {"self": ("ai.tool.*", "ai.mcp.use", "resource.*.read", "resource.*.create", "resource.*.delete",
+                         "resource.deployment.edit", "resource.configmap.edit", "resource.secret.edit"), "default": ("resource.*.read",)}
 TOKENS = {
     "tok-write": TokenPayload(user_id="u-write", role="member", email="w@example.com", matrix=MATRIX_WRITE),
     "tok-read": TokenPayload(user_id="u-read", role="member", email="r@example.com", matrix={"self": ("resource.*.read",)}),
@@ -264,7 +265,7 @@ async def test_list_clusters_names_the_tools_allowed_in_each(fakes, monkeypatch)
 
         data = json.loads(res.json()["result"]["content"][0]["text"])
     by_id = {c["id"]: c for c in data["clusters"]}
-    # A grant with ai.tool.* and resource.*.read (no edit) gets every read tool but the Admin-only
+    # A grant with ai.tool.* and resource.*.read (edit of some kinds, not every kind) gets every read tool but the Admin-only
     # hygiene report and the write preview, which needs the write's RBAC.
     admin_only = {"hygiene", "audit_search", "nodes_stats_summary", "nodes_log"}
     assert by_id["self"]["mcp"] is True and set(by_id["self"]["tools"]) == set(mcp_server.READ_TOOLS) - admin_only - {"k8s_diff"}
@@ -400,7 +401,7 @@ async def test_write_tools_follow_the_switch_and_the_users_permissions(fakes, mo
         tools = {t["name"]: t for t in res.json()["result"]["tools"]}
         # A Write role holds every write tool but Pod exec, which asks for the screen's permission too.
         assert WRITE_TOOL_NAMES - {"k8s_execute_command"} <= set(tools) and "k8s_execute_command" not in tools and "request_access" in tools
-        # read tools (not the Admin-only hygiene nor k8s_diff without an edit grant) + write tools + list_clusters + request_access
+        # read tools (not the Admin-only hygiene nor k8s_diff without edit of every kind) + write tools + list_clusters + request_access
         assert not ({"hygiene", "k8s_diff", "audit_search", "nodes_stats_summary", "nodes_log"} & set(tools))
         assert len(tools) == len(mcp_server.READ_TOOLS) - 5 + len(WRITE_TOOL_NAMES) - 1 + 2
         # Honest annotations: writes are not read-only, destructive unless they only touch labels/annotations.
