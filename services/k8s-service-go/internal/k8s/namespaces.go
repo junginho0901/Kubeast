@@ -3,6 +3,7 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 
@@ -13,6 +14,7 @@ import (
 	resourcehelper "k8s.io/component-helpers/resource"
 
 	limitrangerow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/limitrange"
+	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
 )
 
 // GetNamespaces returns all namespaces.
@@ -41,6 +43,9 @@ func (s *Service) GetNamespaces(ctx context.Context) ([]map[string]interface{}, 
 		}
 		return result, nil
 	}
+	if rows, ok := s.cachedNamespaces(ctx); ok {
+		return rows, nil
+	}
 	nsList, err := s.clientsetCtx(ctx).CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list namespaces: %w", err)
@@ -56,6 +61,36 @@ func (s *Service) GetNamespaces(ctx context.Context) ([]map[string]interface{}, 
 		})
 	}
 	return result, nil
+}
+
+// cachedNamespaces is the informers' namespaces by name, as a list returns them, for a caller the cluster lets list namespaces; ok=false leaves it to a list as the caller.
+func (s *Service) cachedNamespaces(ctx context.Context) ([]map[string]interface{}, bool) {
+	b := s.bundleForCtx(ctx)
+	if b == nil {
+		return nil, false
+	}
+	ci := b.syncedInformers() // not started or waited for here, which would make the list slower than the caller's own
+	if ci == nil {
+		return nil, false
+	}
+	if ok, err := s.mayList(ctx, b, "namespaces", ""); err != nil || !ok {
+		return nil, false
+	}
+	accesstrail.Cached(ctx, "namespaces (watched as "+overviewCacheUser+")")
+	ci.touch()
+	objs := ci.namespaces.List()
+	namespaces := make([]*corev1.Namespace, 0, len(objs))
+	for _, o := range objs {
+		if ns, ok := o.(*corev1.Namespace); ok {
+			namespaces = append(namespaces, ns)
+		}
+	}
+	slices.SortFunc(namespaces, func(a, b *corev1.Namespace) int { return strings.Compare(a.Name, b.Name) })
+	rows := make([]map[string]interface{}, 0, len(namespaces))
+	for _, ns := range namespaces {
+		rows = append(rows, map[string]interface{}{"name": ns.Name, "status": string(ns.Status.Phase), "created_at": toISO(&ns.CreationTimestamp), "labels": ns.Labels})
+	}
+	return rows, true
 }
 
 // namespacePodSummary is what the Namespace drawer shows of its pods without listing them: how many, how many per

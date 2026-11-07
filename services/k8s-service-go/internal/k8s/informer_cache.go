@@ -392,15 +392,17 @@ func sameNodeView(a, b *corev1.Node) bool {
 	return equality.Semantic.DeepEqual(&ac, &bc)
 }
 
-// stripForOverview keeps only what overview, nodeAllocatables and the node list
-// read; the informer stores the returned object instead of the full one. Pods
+// stripForOverview keeps only what overview, nodeAllocatables, the node list and
+// the namespace list read; the informer stores the returned object instead of the full one. Pods
 // become podRows before this (newClusterInformers).
 func stripForOverview(obj interface{}) (interface{}, error) {
 	switch o := obj.(type) {
 	case *corev1.Node:
 		return stripNode(o), nil
 	case *corev1.Namespace:
-		return &corev1.Namespace{ObjectMeta: keyMeta(o.ObjectMeta)}, nil
+		meta := keyMeta(o.ObjectMeta)
+		meta.Labels, meta.CreationTimestamp = o.Labels, o.CreationTimestamp
+		return &corev1.Namespace{ObjectMeta: meta, Status: corev1.NamespaceStatus{Phase: o.Status.Phase}}, nil
 	case *corev1.Service:
 		return &corev1.Service{ObjectMeta: keyMeta(o.ObjectMeta)}, nil
 	case *appsv1.Deployment:

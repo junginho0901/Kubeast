@@ -192,6 +192,10 @@ multicluster:
   healthcheckIntervalSec: 60
   rateLimitQPS: 0           # 0 = off
   breakerConsecutiveFails: 5
+  clientQPS: 100            # client-go's rate to each cluster's API server
+  clientBurst: 200
+  reviewQPS: 0              # 0 = the access checks share clientQPS; see architecture.md "Many users"
+  reviewBurst: 0
 ```
 
 See [helm/kubeast/values.yaml](../helm/kubeast/values.yaml) for all options.

@@ -76,6 +76,10 @@ type Config struct {
 	QueryCacheTTLSec        int // Prometheus query cache TTL; 0 = off (singleflight stays)
 	RateLimitQPS            int // per-cluster request rate; 0 = off
 	RateLimitBurst          int // per-cluster burst
+	ClientQPS               int // client-go's rate to each cluster's API server
+	ClientBurst             int
+	ReviewQPS               int // the callers' access checks on a rate of their own; 0 = the client's
+	ReviewBurst             int
 	BreakerConsecutiveFails int // open the per-cluster breaker after N fails; 0 = off
 	BreakerOpenSec          int // breaker open duration before half-open
 
@@ -175,6 +179,10 @@ func Load() Config {
 		QueryCacheTTLSec:        pkgconfig.GetEnvInt("MC_QUERY_CACHE_TTL_SEC", 30),
 		RateLimitQPS:            pkgconfig.GetEnvInt("MC_RATE_LIMIT_QPS", 0),
 		RateLimitBurst:          pkgconfig.GetEnvInt("MC_RATE_LIMIT_BURST", 20),
+		ClientQPS:               pkgconfig.GetEnvInt("MC_CLIENT_QPS", 100),
+		ClientBurst:             pkgconfig.GetEnvInt("MC_CLIENT_BURST", 200),
+		ReviewQPS:               pkgconfig.GetEnvInt("MC_REVIEW_QPS", 0),
+		ReviewBurst:             pkgconfig.GetEnvInt("MC_REVIEW_BURST", 0),
 		BreakerConsecutiveFails: pkgconfig.GetEnvInt("MC_BREAKER_CONSECUTIVE_FAILS", 5),
 		BreakerOpenSec:          pkgconfig.GetEnvInt("MC_BREAKER_OPEN_SEC", 30),
 
