@@ -69,14 +69,7 @@ export function podLastStateText(
 export function getStatusColor(status: string): string {
   const lower = (status || '').toLowerCase()
   if (lower.includes('running') || lower.includes('succeeded') || lower.includes('completed')) return 'badge-success'
-  if (
-    lower.includes('pending') ||
-    lower.includes('init') ||
-    lower.includes('creating') ||
-    lower.includes('notready') ||
-    lower.includes('terminating') ||
-    lower.includes('gated')
-  ) return 'badge-warning'
+  // before the waiting words: Init:Error is in the Error card, as any status naming an error is
   if (
     lower.includes('error') ||
     lower.includes('failed') ||
@@ -86,5 +79,13 @@ export function getStatusColor(status: string): string {
     lower.startsWith('signal:') ||
     /^exitcode:[1-9]/.test(lower)
   ) return 'badge-error'
+  if (
+    lower.includes('pending') ||
+    lower.includes('init') ||
+    lower.includes('creating') ||
+    lower.includes('notready') ||
+    lower.includes('terminating') ||
+    lower.includes('gated')
+  ) return 'badge-warning'
   return 'badge-info'
 }

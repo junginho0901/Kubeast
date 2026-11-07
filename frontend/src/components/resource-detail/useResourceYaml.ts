@@ -8,7 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '@/services/api'
 
-import { kindToPlural, secretYamlToSave } from './utils'
+import { encodeSecretYaml, kindToPlural, yamlOpenedOf } from './utils'
 
 interface Target {
   kind: string
@@ -54,16 +54,19 @@ export function useResourceYaml({ target, tab, canEditYaml }: Args) {
 
   // Answers how many of a Secret's masked values the server left as they were.
   const handleApplyYaml = async (rawYaml: string, opened?: string): Promise<number> => {
-    const yaml = kind === 'Secret' && canEditYaml ? secretYamlToSave(rawYaml, opened) : rawYaml
-    if (kind === 'Node') await api.applyNodeYaml(name, yaml)
-    else if (kind === 'Namespace') await api.applyNamespaceYaml(name, yaml)
-    else if (kind === 'CustomResourceDefinition') await api.applyResourceYaml('customresourcedefinitions', name, yaml, undefined)
+    const asSaved = (text: string) => (kind === 'Secret' && canEditYaml ? encodeSecretYaml(text) : text)
+    const yaml = asSaved(rawYaml)
+    // what left this text leaves the object: a merge patch alone would leave what it does not name
+    const began = opened === undefined ? undefined : yamlOpenedOf(asSaved(opened), yaml)
+    if (kind === 'Node') await api.applyNodeYaml(name, yaml, began)
+    else if (kind === 'Namespace') await api.applyNamespaceYaml(name, yaml, began)
+    else if (kind === 'CustomResourceDefinition') await api.applyResourceYaml('customresourcedefinitions', name, yaml, undefined, began)
     else if (kind === 'CustomResourceInstance') {
       const rj = target?.rawJson as Record<string, unknown> | undefined
       const crdN = (rj?.crd_name as string) || ''
-      if (crdN) await api.applyResourceYaml(crdN, name, yaml, ns || undefined)
+      if (crdN) await api.applyResourceYaml(crdN, name, yaml, ns || undefined, began)
     }
-    else return (await api.applyResourceYaml(kindToPlural(kind), name, yaml, ns || undefined))?.kept_masked?.length ?? 0
+    else return (await api.applyResourceYaml(kindToPlural(kind), name, yaml, ns || undefined, began))?.kept_masked?.length ?? 0
     return 0
   }
 

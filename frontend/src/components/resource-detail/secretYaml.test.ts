@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decodeSecretYaml, encodeSecretYaml, secretYamlToSave } from './utils'
+import { decodeSecretYaml, encodeSecretYaml } from './utils'
 
 const utf8 = (text: string) => new TextEncoder().encode(text)
 const toBase64 = (bytes: Uint8Array) => btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(''))
@@ -10,62 +10,6 @@ const savedValueOf = (window: string) => valueLineOf(savedOf(window)).replace(' 
 const windowLine = (value: string) => `stringData:\n  value: ${value}\nkind: Secret\n`
 const typed = (value: string) => encodeSecretYaml(windowLine(value)).split('\n')[1].replace('  value:', '').trim()
 const typedBlock = (lines: string) => encodeSecretYaml(`stringData:\n  value: ${lines}\n  next: ${'n'}\nkind: Secret\n`)
-
-// A save is a merge patch, which leaves what it does not name: a key whose line went from the window goes out as null.
-describe('a key line deleted in the Secret YAML window', () => {
-  const opened = 'apiVersion: v1\nstringData:\n  a: one\n  b: two\n  c: |\n    x\n    y: z\nkind: Secret\nmetadata:\n  name: s\ntype: Opaque\n'
-
-  it('takes the key out of the object, the others saved as before', () => {
-    const edited = opened.replace('  b: two\n', '')
-    expect(secretYamlToSave(edited, opened)).toBe(`apiVersion: v1\ndata:\n  "b":\n  a: ${btoa('one')}\n  c: ${btoa('x\ny: z\n')}\nkind: Secret\nmetadata:\n  name: s\ntype: Opaque\n`)
-  })
-
-  it('takes a key with a block value out too', () => {
-    const edited = opened.replace('  c: |\n    x\n    y: z\n', '')
-    expect(secretYamlToSave(edited, opened)).toBe(`apiVersion: v1\ndata:\n  "c":\n  a: ${btoa('one')}\n  b: ${btoa('two')}\nkind: Secret\nmetadata:\n  name: s\ntype: Opaque\n`)
-  })
-
-  it('takes them all out when the whole section went', () => {
-    const edited = 'apiVersion: v1\nkind: Secret\nmetadata:\n  name: s\ntype: Opaque\n'
-    expect(secretYamlToSave(edited, opened)).toBe(`${edited}data:\n  "a":\n  "b":\n  "c":\n`)
-  })
-
-  it('follows the indent of the section it writes into', () => {
-    const wide = 'stringData:\n    a: one\n    b: two\nkind: Secret\n'
-    expect(secretYamlToSave(wide.replace('    a: one\n', ''), wide)).toBe(`data:\n    "a":\n    b: ${btoa('two')}\nkind: Secret\n`)
-  })
-
-  it('takes out a mask whose line went, which is how the window says to remove a hidden value', () => {
-    const masked = "stringData:\n  password: '***'\n  user: '***'\nkind: Secret\n"
-    expect(secretYamlToSave(masked.replace("  user: '***'\n", ''), masked)).toBe(`data:\n  "user":\n  password: ${btoa('***')}\nkind: Secret\n`)
-  })
-
-  it('leaves a key that moved between the sections, was renamed in place or was kept', () => {
-    expect(secretYamlToSave(opened, opened)).toBe(encodeSecretYaml(opened))
-    const renamed = opened.replace('  a: one\n', '  z: one\n')
-    expect(secretYamlToSave(renamed, opened)).toBe(encodeSecretYaml(renamed).replace('data:\n', 'data:\n  "a":\n'))
-    const moved = "apiVersion: v1\ndata:\n  a: b25l\nstringData:\n  b: two\n  c: x\nkind: Secret\n"
-    expect(secretYamlToSave(moved, opened)).toBe(encodeSecretYaml(moved))
-  })
-
-  it('leaves a key added since the window opened, which this person never saw', () => {
-    // the server's object has a key the text does not name: only what was in the text at Edit can leave
-    const before = 'stringData:\n  a: one\nkind: Secret\n'
-    expect(secretYamlToSave('stringData:\n  a: changed\nkind: Secret\n', before)).toBe(`data:\n  a: ${btoa('changed')}\nkind: Secret\n`)
-  })
-
-  it('removes nothing from text it cannot read line by line', () => {
-    const flow = 'data: {a: b25l}\nkind: Secret\n'
-    expect(secretYamlToSave(flow, opened)).toBe(flow)
-    expect(secretYamlToSave('', opened)).toBe('')
-    expect(secretYamlToSave('# nothing here\n', opened)).toBe('# nothing here\n')
-    expect(secretYamlToSave('kind: ConfigMap\n', opened)).toBe('kind: ConfigMap\n')
-  })
-
-  it('saves as before without the text the edit began from', () => {
-    expect(secretYamlToSave(opened)).toBe(encodeSecretYaml(opened))
-  })
-})
 
 // What the YAML window of a Secret does to the text the server sends: a caller who may edit reads data as stringData and
 // saves it back as data. k8s-service's secret_apply_masks_test.go holds the server to the bytes pinned here.

@@ -348,9 +348,33 @@ func (s *Service) GetNamespaceOwnedPods(ctx context.Context, namespace string) (
 	return result, nil
 }
 
+// editedStrings is a namespace's labels or annotations after a save: a key the text names is set, one it names with no value
+// or that left the text the edit began from is removed, and one with a protected prefix is left as it is.
+func editedStrings(current map[string]string, edited, opened map[string]interface{}) map[string]string {
+	if current == nil {
+		current = make(map[string]string)
+	}
+	for k, v := range edited {
+		if isProtectedKey(k) {
+			continue
+		}
+		if v == nil {
+			delete(current, k)
+			continue
+		}
+		current[k] = fmt.Sprintf("%v", v)
+	}
+	for k := range opened {
+		if _, kept := edited[k]; !kept && !isProtectedKey(k) {
+			delete(current, k)
+		}
+	}
+	return current
+}
+
 // ApplyNamespaceYAML applies labels/annotations from a YAML string to a namespace.
 // Protected keys with kubernetes.io/ and metadata.k8s.io/ prefixes are not modified.
-func (s *Service) ApplyNamespaceYAML(ctx context.Context, name string, yamlStr string) (map[string]interface{}, error) {
+func (s *Service) ApplyNamespaceYAML(ctx context.Context, name, opened, yamlStr string) (map[string]interface{}, error) {
 	ns, err := s.clientsetCtx(ctx).CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get namespace %s: %w", name, err)
@@ -366,29 +390,13 @@ func (s *Service) ApplyNamespaceYAML(ctx context.Context, name string, yamlStr s
 		return nil, fmt.Errorf("invalid YAML: missing metadata")
 	}
 
-	if newLabels, ok := metadata["labels"].(map[string]interface{}); ok {
-		if ns.Labels == nil {
-			ns.Labels = make(map[string]string)
-		}
-		for k, v := range newLabels {
-			if isProtectedKey(k) {
-				continue
-			}
-			ns.Labels[k] = fmt.Sprintf("%v", v)
-		}
+	openedMetadata, _ := openedObject(opened)["metadata"].(map[string]interface{})
+	stringsOf := func(from map[string]interface{}, key string) map[string]interface{} {
+		values, _ := from[key].(map[string]interface{})
+		return values
 	}
-
-	if newAnnotations, ok := metadata["annotations"].(map[string]interface{}); ok {
-		if ns.Annotations == nil {
-			ns.Annotations = make(map[string]string)
-		}
-		for k, v := range newAnnotations {
-			if isProtectedKey(k) {
-				continue
-			}
-			ns.Annotations[k] = fmt.Sprintf("%v", v)
-		}
-	}
+	ns.Labels = editedStrings(ns.Labels, stringsOf(metadata, "labels"), stringsOf(openedMetadata, "labels"))
+	ns.Annotations = editedStrings(ns.Annotations, stringsOf(metadata, "annotations"), stringsOf(openedMetadata, "annotations"))
 
 	updated, err := s.clientsetCtx(ctx).CoreV1().Namespaces().Update(ctx, ns, metav1.UpdateOptions{})
 	if err != nil {

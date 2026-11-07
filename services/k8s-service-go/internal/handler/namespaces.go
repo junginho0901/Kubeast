@@ -54,14 +54,15 @@ func (h *Handler) ApplyNamespaceYAML(w http.ResponseWriter, r *http.Request) {
 	namespace := chi.URLParam(r, "namespace")
 
 	var body struct {
-		YAML string `json:"yaml"`
+		YAML   string      `json:"yaml"`
+		Opened *yamlOpened `json:"opened"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		response.Error(w, http.StatusBadRequest, "invalid request body: "+err.Error())
 		return
 	}
 
-	data, err := h.svc.ApplyNamespaceYAML(ctx, namespace, body.YAML)
+	data, err := h.svc.ApplyNamespaceYAML(ctx, namespace, body.Opened.text(body.YAML), body.YAML)
 	h.recordAuditWithPayload(r, "k8s.namespace.apply", "namespace", namespace, namespace, err,
 		nil, audit.MustJSON(map[string]interface{}{"yaml_len": len(body.YAML)}))
 	if err != nil {

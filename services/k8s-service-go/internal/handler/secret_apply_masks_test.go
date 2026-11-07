@@ -61,6 +61,10 @@ func newSecretCluster(t *testing.T) *secretCluster {
 
 func mergeMaps(into, patch map[string]interface{}) {
 	for k, v := range patch {
+		if v == nil {
+			delete(into, k)
+			continue
+		}
 		sub, isMap := v.(map[string]interface{})
 		cur, curIsMap := into[k].(map[string]interface{})
 		if isMap && curIsMap {
@@ -209,6 +213,12 @@ func (r *secretRig) apply(t *testing.T, doc string) *httptest.ResponseRecorder {
 	return r.do("POST", secretApplyPath, jsonBody(t, map[string]string{"resource_type": "secrets", "namespace": inside, "name": "db", "yaml": doc}))
 }
 
+// applyEdited is a save of the YAML window: the text saved and where its edit began.
+func (r *secretRig) applyEdited(t *testing.T, opened, edited string) *httptest.ResponseRecorder {
+	t.Helper()
+	return r.do("POST", secretApplyPath, jsonBody(t, map[string]interface{}{"resource_type": "secrets", "namespace": inside, "name": "db", "yaml": edited, "opened": openedOf(opened, edited)}))
+}
+
 func (r *secretRig) create(t *testing.T, doc string) *httptest.ResponseRecorder {
 	t.Helper()
 	return r.do("POST", secretCreatePath, jsonBody(t, map[string]string{"namespace": inside, "yaml": doc}))
@@ -320,6 +330,95 @@ func TestSecretYAMLWithoutRevealPrintsTheMaskTheWindowSaves(t *testing.T) {
 		if strings.Contains(answer["yaml"], leak) {
 			t.Errorf("the YAML holds a value: %s", answer["yaml"])
 		}
+	}
+}
+
+// As the window shows the Secret to one without reveal and saves it (encodeSecretYaml): each mask as its base64.
+func windowSecret(keys ...string) string {
+	text := "apiVersion: v1\nkind: Secret\nmetadata:\n  name: db\n  namespace: " + inside + "\n  annotations:\n    " + lastAppliedKey + ": '***'\n    team: shop\ndata:\n"
+	for _, key := range keys {
+		text += "  " + key + ": " + maskInBase64 + "\n"
+	}
+	return text + "type: Opaque\n"
+}
+
+func TestAMaskWhoseLineLeftTheWindowTakesOutItsKeyAndNoOther(t *testing.T) {
+	rig := newSecretRig(t, secretEditor())
+	w := rig.applyEdited(t, windowSecret("password", "user"), windowSecret("password"))
+	if w.Code != 200 {
+		t.Fatalf("status %d: %s", w.Code, w.Body)
+	}
+	data := rig.cluster.data()
+	if _, there := data["user"]; there {
+		t.Errorf("user is still there: %v", data)
+	}
+	if data["password"] != fakeValueB64 {
+		t.Errorf("the value beside it changed: %v", data)
+	}
+	if ann := rig.cluster.annotations(); ann[lastAppliedKey] != fakeLastApplied || ann["team"] != "shop" {
+		t.Errorf("the annotations changed: %v", ann)
+	}
+	row := rig.rowAfter(t, "k8s.yaml.apply")
+	kept, _ := row["kept_masked"].([]interface{})
+	if len(kept) != 2 {
+		t.Errorf("kept_masked = %v", row["kept_masked"])
+	}
+}
+
+func TestAWindowSaveLeavingEveryMaskKeepsEveryValueAndNamesThem(t *testing.T) {
+	rig := newSecretRig(t, secretEditor())
+	text := windowSecret("password", "user")
+	if w := rig.applyEdited(t, text, text+"# edited in the window\n"); w.Code != 200 {
+		t.Fatalf("status %d: %s", w.Code, w.Body)
+	}
+	if data := rig.cluster.data(); data["password"] != fakeValueB64 || data["user"] != fakeOtherB64 {
+		t.Errorf("the values changed: %v", data)
+	}
+	if sent := rig.cluster.sent(); strings.Contains(sent, `"data"`) || strings.Contains(sent, lastAppliedKey) {
+		t.Errorf("the patch names what did not change: %s", sent)
+	}
+	row := rig.rowAfter(t, "k8s.yaml.apply")
+	if kept, _ := row["kept_masked"].([]interface{}); len(kept) != 3 {
+		t.Errorf("kept_masked = %v", row["kept_masked"])
+	}
+}
+
+func TestAValueWrittenOverAMaskIsSavedBesideTheOneThatStays(t *testing.T) {
+	rig := newSecretRig(t, secretEditor())
+	newValue := base64.StdEncoding.EncodeToString([]byte("fake-new-value"))
+	edited := strings.Replace(windowSecret("password", "user"), "  user: "+maskInBase64, "  user: "+newValue, 1)
+	if w := rig.applyEdited(t, windowSecret("password", "user"), edited); w.Code != 200 {
+		t.Fatalf("status %d: %s", w.Code, w.Body)
+	}
+	data := rig.cluster.data()
+	if data["user"] != newValue || data["password"] != fakeValueB64 {
+		t.Errorf("data = %v", data)
+	}
+}
+
+func TestOneWhoReadsTheValuesTakesOutAKeyByItsLine(t *testing.T) {
+	rig := newSecretRig(t, secretRevealer())
+	opened := "apiVersion: v1\nkind: Secret\nmetadata:\n  name: db\n  namespace: " + inside + "\ndata:\n  password: " + fakeValueB64 + "\n  user: " + fakeOtherB64 + "\n"
+	if w := rig.applyEdited(t, opened, strings.Replace(opened, "  user: "+fakeOtherB64+"\n", "", 1)); w.Code != 200 {
+		t.Fatalf("status %d: %s", w.Code, w.Body)
+	}
+	data := rig.cluster.data()
+	if _, there := data["user"]; there || data["password"] != fakeValueB64 {
+		t.Errorf("data = %v", data)
+	}
+}
+
+func TestTheWholeDataSectionLeavingTheWindowTakesOutEveryKey(t *testing.T) {
+	rig := newSecretRig(t, secretRevealer())
+	opened := "apiVersion: v1\nkind: Secret\nmetadata:\n  name: db\n  namespace: " + inside + "\ndata:\n  password: " + fakeValueB64 + "\n  user: " + fakeOtherB64 + "\ntype: Opaque\n"
+	edited := "apiVersion: v1\nkind: Secret\nmetadata:\n  name: db\n  namespace: " + inside + "\ntype: Opaque\n"
+	if w := rig.applyEdited(t, opened, edited); w.Code != 200 {
+		t.Fatalf("status %d: %s", w.Code, w.Body)
+	}
+	rig.cluster.mu.Lock()
+	defer rig.cluster.mu.Unlock()
+	if data, there := rig.cluster.object["data"]; there {
+		t.Errorf("data = %v", data)
 	}
 }
 

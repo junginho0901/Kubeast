@@ -2206,6 +2206,14 @@ export interface AdminResetPasswordResponse extends Member {
 }
 
 // One account a bulk creation left out; detail is what the reason's words cannot say.
+// The text a YAML window's edit began from, as what it does not share with the text saved: `head` lines from the start and
+// `tail` from the end are the saved text's, `lines` lie between.
+export interface YamlOpened {
+  head: number
+  tail: number
+  lines: string[]
+}
+
 export interface BulkCreateFailure {
   email: string
   // cluster_role: said by the screen before anything is sent, the rest by the server too

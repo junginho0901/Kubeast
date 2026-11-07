@@ -17,6 +17,13 @@ describe('getStatusColor', () => {
     expect(getStatusColor('ContainerStatusUnknown')).toBe('badge-info')
   })
 
+  // the Error card counts these (k8s-service statusNamesError), in an init container too
+  it('draws a status naming an error as an error, also while the pod is initialising', () => {
+    for (const status of ['Init:Error', 'Init:CrashLoopBackOff', 'Init:ImagePullBackOff', 'Init:ErrImagePull', 'Init:OOMKilled', 'Init:CreateContainerConfigError']) {
+      expect(getStatusColor(status), status).toBe('badge-error')
+    }
+  })
+
   it('keeps the colours it had', () => {
     expect(getStatusColor('Running')).toBe('badge-success')
     expect(getStatusColor('Completed')).toBe('badge-success')

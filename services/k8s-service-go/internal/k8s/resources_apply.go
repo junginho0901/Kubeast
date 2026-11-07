@@ -18,18 +18,24 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-// ApplyResourceYAML applies a strategic merge patch to a resource from YAML.
+// ApplyResourceYAML patches a resource with a whole YAML document: what the document does not name stays.
 func (s *Service) ApplyResourceYAML(ctx context.Context, resourceType, namespace, name, yamlStr string) (map[string]interface{}, error) {
-	return s.applyResourceYAML(ctx, resourceType, namespace, name, yamlStr, nil)
+	return s.applyResourceYAML(ctx, resourceType, namespace, name, "", yamlStr, nil)
 }
 
-// ApplySecretYAMLWithoutReveal is ApplyResourceYAML for a Secret's editor who was shown its values as the mask: a mask
+// ApplyEditedYAML is ApplyResourceYAML for a save that says what text its edit began from, as the YAML windows do: a line
+// taken out of that text is taken out of the object (editedPatch). Without one it is ApplyResourceYAML.
+func (s *Service) ApplyEditedYAML(ctx context.Context, resourceType, namespace, name, opened, yamlStr string) (map[string]interface{}, error) {
+	return s.applyResourceYAML(ctx, resourceType, namespace, name, opened, yamlStr, nil)
+}
+
+// ApplySecretYAMLWithoutReveal is ApplyEditedYAML for a Secret's editor who was shown its values as the mask: a mask
 // stands for the value it hides, and a merge patch leaves what it does not name, so each one is left out of the patch
 // and that value stays. It also names them, as the answer's kept_masked does.
-func (s *Service) ApplySecretYAMLWithoutReveal(ctx context.Context, resourceType, namespace, name, yamlStr string) (map[string]interface{}, []string, error) {
+func (s *Service) ApplySecretYAMLWithoutReveal(ctx context.Context, resourceType, namespace, name, opened, yamlStr string) (map[string]interface{}, []string, error) {
 	var kept []string
-	answer, err := s.applyResourceYAML(ctx, resourceType, namespace, name, yamlStr, func(object map[string]interface{}) {
-		kept = takeSecretMasks(object)
+	answer, err := s.applyResourceYAML(ctx, resourceType, namespace, name, opened, yamlStr, func(object, before map[string]interface{}) {
+		kept = takeSecretMasks(object, before)
 	})
 	if err == nil && len(kept) > 0 {
 		answer["kept_masked"] = kept
@@ -59,21 +65,24 @@ func isSecretDataMask(value interface{}) bool {
 }
 
 // takeSecretMasks removes the masks from a Secret written as YAML and names what it removed; keys and fields only, which
-// a caller without reveal reads anyway.
-func takeSecretMasks(object map[string]interface{}) []string {
+// a caller without reveal reads anyway. With the text the edit began from it takes them from that too, so a value whose
+// mask stayed is no difference, and leaves a section it emptied in place: the section gone would read as all its keys taken out.
+func takeSecretMasks(object, before map[string]interface{}) []string {
 	var taken []string
 	take := func(section string, isMask func(interface{}) bool) {
 		values, ok := object[section].(map[string]interface{})
 		if !ok {
 			return
 		}
+		opened, _ := before[section].(map[string]interface{})
 		for _, key := range sortedKeys(values) {
 			if isMask(values[key]) {
 				delete(values, key)
+				delete(opened, key)
 				taken = append(taken, section+"."+key)
 			}
 		}
-		if len(values) == 0 {
+		if len(values) == 0 && before == nil {
 			delete(object, section)
 		}
 	}
@@ -82,6 +91,11 @@ func takeSecretMasks(object map[string]interface{}) []string {
 	if metadata, ok := object["metadata"].(map[string]interface{}); ok {
 		if annotations, ok := metadata["annotations"].(map[string]interface{}); ok && annotations[lastAppliedAnnotation] == SecretMask {
 			delete(annotations, lastAppliedAnnotation)
+			if openedMetadata, ok := before["metadata"].(map[string]interface{}); ok {
+				if opened, ok := openedMetadata["annotations"].(map[string]interface{}); ok {
+					delete(opened, lastAppliedAnnotation)
+				}
+			}
 			taken = append(taken, "metadata.annotations."+lastAppliedAnnotation)
 		}
 	}
@@ -102,20 +116,22 @@ func YAMLSecretMasks(yamlStr string) []string {
 			continue
 		}
 		metadata, _ := document["metadata"].(map[string]interface{})
-		for _, field := range takeSecretMasks(document) {
+		for _, field := range takeSecretMasks(document, nil) {
 			out = append(out, fmt.Sprintf("%v %s", metadata["name"], field))
 		}
 	}
 }
 
-func (s *Service) applyResourceYAML(ctx context.Context, resourceType, namespace, name, yamlStr string, prepare func(map[string]interface{})) (map[string]interface{}, error) {
-	gvr, namespaced, err := s.ResolveResource(ctx, resourceType)
+func (s *Service) applyResourceYAML(ctx context.Context, resourceType, namespace, name, opened, yamlStr string, prepare func(object, before map[string]interface{})) (map[string]interface{}, error) {
+	match, err := s.resolveResourceMatch(ctx, resourceType)
 	if err != nil {
 		return nil, err
 	}
+	gvr := match.gvr
+	gvk := gvr.GroupVersion().WithKind(match.kind)
 
 	ns := namespace
-	if !namespaced {
+	if !match.namespaced {
 		ns = ""
 	}
 
@@ -124,20 +140,33 @@ func (s *Service) applyResourceYAML(ctx context.Context, resourceType, namespace
 	if err := yaml.Unmarshal([]byte(yamlStr), &parsed); err != nil {
 		return nil, fmt.Errorf("parse YAML: %w", err)
 	}
-	if object, ok := parsed.(map[string]interface{}); ok && prepare != nil {
-		prepare(object)
+	before := openedObject(opened)
+	object, isObject := parsed.(map[string]interface{})
+	if isObject && prepare != nil {
+		prepare(object, before)
 	}
 
-	patchData, err := json.Marshal(parsed)
-	if err != nil {
-		return nil, fmt.Errorf("marshal patch: %w", err)
+	var patchType types.PatchType
+	var patchData []byte
+	if before != nil && len(object) > 0 {
+		patchType, patchData, err = editedPatch(gvk, before, object)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// A window left with no object in it takes nothing out: a difference would name every line.
+		patchType = patchTypeOf(gvk)
+		patchData, err = json.Marshal(parsed)
+		if err != nil {
+			return nil, fmt.Errorf("marshal patch: %w", err)
+		}
 	}
 
 	var patched *unstructured.Unstructured
 	if ns != "" {
-		patched, err = s.dynamicCtx(ctx).Resource(gvr).Namespace(ns).Patch(ctx, name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{FieldManager: "k8s-service"})
+		patched, err = s.dynamicCtx(ctx).Resource(gvr).Namespace(ns).Patch(ctx, name, patchType, patchData, metav1.PatchOptions{FieldManager: "k8s-service"})
 	} else {
-		patched, err = s.dynamicCtx(ctx).Resource(gvr).Patch(ctx, name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{FieldManager: "k8s-service"})
+		patched, err = s.dynamicCtx(ctx).Resource(gvr).Patch(ctx, name, patchType, patchData, metav1.PatchOptions{FieldManager: "k8s-service"})
 	}
 	if err != nil {
 		return nil, fmt.Errorf("patch %s %s: %w", resourceType, name, err)

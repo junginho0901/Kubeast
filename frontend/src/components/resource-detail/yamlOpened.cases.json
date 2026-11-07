@@ -1,0 +1,9 @@
+[
+  { "name": "nothing changed", "opened": "a\nb\n", "edited": "a\nb\n", "head": 3, "tail": 0, "lines": [] },
+  { "name": "a line taken out", "opened": "a\nb\nc\n", "edited": "a\nc\n", "head": 1, "tail": 2, "lines": ["b"] },
+  { "name": "a line added", "opened": "a\nc", "edited": "a\nb\nc", "head": 1, "tail": 1, "lines": [] },
+  { "name": "two places", "opened": "a\nb\nc\nd\ne", "edited": "a\nc\nd", "head": 1, "tail": 0, "lines": ["b", "c", "d", "e"] },
+  { "name": "every line taken out", "opened": "a\nb", "edited": "", "head": 0, "tail": 0, "lines": ["a", "b"] },
+  { "name": "nothing to begin from", "opened": "", "edited": "a", "head": 0, "tail": 0, "lines": [""] },
+  { "name": "one of the same lines", "opened": "a\na\na", "edited": "a\na", "head": 2, "tail": 0, "lines": ["a"] }
+]
