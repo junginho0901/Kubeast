@@ -20,6 +20,8 @@ const NAME = 'redaction-e2e'
 const STAMP = Date.now().toString(36)
 const PW_VALUE = `hunter2-${STAMP}`
 const URL_PW = `s3cr3t-${STAMP}`
+const GLUED_PW = `fake-glued-pass-${STAMP}`
+const GLUED_KEY = `fake-glued-key-${STAMP}`
 // Same selectors as ai-chat.spec.ts.
 const PLACEHOLDER_RE = /메시지|message/i
 const SEND_RE = /^전송$|^send$/i
@@ -55,6 +57,9 @@ test.describe('AI tool results are redacted', () => {
       'data:',
       `  DB_PASSWORD: ${PW_VALUE}`,
       `  DATABASE_URL: postgres://app:${URL_PW}@db:5432/app`,
+      `  PGPASSWORD: ${GLUED_PW}`,
+      `  APIKEY: ${GLUED_KEY}`,
+      '  PWD: /app',
       '  LOG_LEVEL: debug',
       '',
     ].join('\n')
@@ -91,6 +96,11 @@ test.describe('AI tool results are redacted', () => {
     expect(body).not.toContain(URL_PW)
     expect(body).toContain('DB_PASSWORD: <REDACTED:DB_PASSWORD>')
     expect(body).toContain('postgres://app:<REDACTED:password>@db:5432/app')
+    expect(body).not.toContain(GLUED_PW)
+    expect(body).not.toContain(GLUED_KEY)
+    expect(body).toContain('PGPASSWORD: <REDACTED:PGPASSWORD>')
+    expect(body).toContain('APIKEY: <REDACTED:APIKEY>')
+    expect(body).toContain('PWD: /app')
     expect(body).toContain('LOG_LEVEL: debug')
 
     // audit: the ai.tool.call row names what was masked

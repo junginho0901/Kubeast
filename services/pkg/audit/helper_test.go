@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/junginho0901/kubeast/services/pkg/redact"
 )
 
 func TestFromHTTPRequest_ClientIPComesFromTheGateway(t *testing.T) {
@@ -74,6 +77,46 @@ func TestMaskSensitive_MasksEverySpellingOfACredentialKey(t *testing.T) {
 		if strings.Contains(out, "fake-value") || !strings.Contains(out, `"kept":"plain"`) {
 			t.Errorf("key %q: %s", key, out)
 		}
+	}
+}
+
+// A row is stored for good, so the audit mask holds at least what the redaction rules hold. Each name runs through both
+// real rules: the case file says what each answers, and names a setting the row masks and the model is told.
+func TestMaskSensitive_HoldsEveryKeyTheRedactionRulesHold(t *testing.T) {
+	raw, err := os.ReadFile("../../ai-service/tests/fixtures/redact_shape_cases.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases struct {
+		KeyNames []struct {
+			Key    string `json:"key"`
+			Redact bool   `json:"redact"`
+			Audit  bool   `json:"audit"`
+		} `json:"key_names"`
+	}
+	if err := json.Unmarshal(raw, &cases); err != nil {
+		t.Fatal(err)
+	}
+	if len(cases.KeyNames) == 0 {
+		t.Fatal("no cases read")
+	}
+	const value = "fake-value-1"
+	for _, c := range cases.KeyNames {
+		t.Run(c.Key, func(t *testing.T) {
+			out, _ := redact.Text(c.Key+": "+value+"\n", redact.Options{Enabled: true, Disabled: map[string]bool{}})
+			byRedact := !strings.Contains(out, value)
+			row, err := json.Marshal(map[string]string{c.Key: value})
+			if err != nil {
+				t.Fatal(err)
+			}
+			byAudit := !strings.Contains(string(MaskSensitive(row)), value)
+			if byRedact != c.Redact || byAudit != c.Audit {
+				t.Errorf("redact masks = %v (want %v), audit masks = %v (want %v)", byRedact, c.Redact, byAudit, c.Audit)
+			}
+			if byRedact && !byAudit {
+				t.Error("the redaction rules hold this key and the audit mask does not")
+			}
+		})
 	}
 }
 

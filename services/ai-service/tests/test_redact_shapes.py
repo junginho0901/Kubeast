@@ -30,6 +30,12 @@ def test_object_shapes(case):
     assert redact.redact_object(copy.deepcopy(case["input"]), redact.Options())[0] == case["want"]
 
 
+@pytest.mark.parametrize("case", CASES["key_names"], ids=lambda c: c["key"])
+def test_key_names(case):
+    out = redact.redact_text(case["key"] + ": fake-value-1\n", redact.Options())[0]
+    assert ("fake-value-1" not in out) == case["redact"], out
+
+
 def test_masking_is_counted_for_the_audit_row():
     _, stats = redact.redact_text("token: |\n  fake-block-value\n", redact.Options())
     assert stats.kinds == {"key_name": 1}
@@ -45,6 +51,23 @@ def test_the_key_rule_switch_covers_the_new_shapes():
     assert "fake-pass-1" in redact.redact_text("login password=fake-pass-1 now", off)[0]
     assert "fake pass 1" in redact.redact_text('login password="fake pass 1" now', off)[0]
     assert redact.redact_text("login password=fake-pass-1 now", redact.Options())[1].kinds == {"key_name": 1}
+
+
+def test_a_commands_words_keep_the_working_directory_and_lose_the_credentials():
+    argv = ["env", "PWD=/app", "OLDPWD=/root", "DB_PWD=/fake-pass-1", "--pwd=/fake-pass-2", "PWD=fake-pass-3", "APIKEY=fake-key-1", "PGPASSWORD=fake-pass-4", "ls"]
+    assert redact.redact_command(argv, redact.Options()) == [
+        "env", "PWD=/app", "OLDPWD=/root", "DB_PWD=<REDACTED:DB_PWD>", "--pwd=<REDACTED:-pwd>", "PWD=<REDACTED:PWD>",
+        "APIKEY=<REDACTED:APIKEY>", "PGPASSWORD=<REDACTED:PGPASSWORD>", "ls",
+    ]
+    assert redact.redact_words('sh -c "PWD=/app ls"') == 'sh -c "PWD=/app ls"'
+    assert redact.redact_words("--pwd /fake-pass-1 ls") == "--pwd <REDACTED:pwd> ls"
+
+
+def test_a_setting_glued_to_a_credential_word_is_not_held_as_a_credential():
+    for name in ("tokenizer", "maxtokens", "secretname", "passwordfile", "accesskeyid"):
+        assert not redact.word_key_is_sensitive(name), name
+    for name in ("PGPASSWORD", "APIKEY", "AWSSECRETKEY", "DBPWD", "SENTRYDSN"):
+        assert redact.word_key_is_sensitive(name), name
 
 
 def test_the_floating_snapshot_loses_the_credential_and_keeps_the_rest():

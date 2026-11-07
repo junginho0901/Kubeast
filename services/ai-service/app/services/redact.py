@@ -59,11 +59,15 @@ def from_env() -> Options:
 
 # --- key-name rule ------------------------------------------------------------
 
-# A credential word as a whole segment of the normalized (snake_case) key:
-# db_password, clientSecret → client_secret, apiKey → api_key match;
-# "tokenizer" or "max_tokens" do not.
+# A credential word at the end of a word of the normalized (snake_case) key: db_password,
+# clientSecret → client_secret, apiKey → api_key, and names glued together, PGPASSWORD, APIKEY;
+# "tokenizer" or "max_tokens" do not match.
 _SENSITIVE_KEY = re.compile(
-    r"(^|_)(password|passwd|pwd|secret|token|api_key|access_key|private_key|credentials?|client_secret|dsn|connection_string)(_|$)"
+    r"(^|_)[a-z0-9]*(password|passwd|pwd|secret|token|api_?key|access_?key|private_?key|secretkey|credentials?|dsn|connection_?string)(_|$)"
+)
+# The same words standing apart. A name that matches only the rule above is glued: see _left_to_the_word_rule.
+_SEPARATED_KEY = re.compile(
+    r"(^|_)(password|passwd|pwd|secret|token|api_key|access_key|private_key|credentials?|dsn|connection_string)(_|$)"
 )
 _NOT_SECRET_KEY = re.compile(
     r"(name|ref|url|uri|path|file|dir|ttl|length|count|min|max|timeout|mode|type|enabled|id|version|algorithm|alg|header|claim|issuer|audience|scope|policy)s?$"
@@ -103,11 +107,33 @@ def _key_is_sensitive(key: str) -> bool:
 
 # The key's last word says the value itself is the credential, so a number there is one. Under password_expiry_days,
 # token or secret a number may be a setting or a count, and hiding it would change what the reader is told.
-_CREDENTIAL_LAST_WORD = re.compile(r"(^|_)(password|passwd|pwd|api_key|access_key|secret_key|private_key|client_secret)$")
+_CREDENTIAL_LAST_WORD = re.compile(r"(^|_)[a-z0-9]*(password|passwd|pwd|api_?key|access_?key|secret_?key|private_?key|client_?secret)$")
+# The shell's own variables, as the shell spells them: PWD=/app says where a process runs. DB_PWD=/x, and an ODBC
+# connection string's Pwd=/x, are a password whatever they look like.
+_WORKING_DIRECTORY_KEY = re.compile(r"^(PWD|OLDPWD|pwd|oldpwd)$")
+_PATH_SHAPED = re.compile(r"^(~|\.{1,2})?(/[A-Za-z0-9._~\-]*)*$")
+
+
+def _is_working_directory(key: str, value: str) -> bool:
+    return bool(_WORKING_DIRECTORY_KEY.match(key) and _PATH_SHAPED.match(value.strip()))
+
+
+def _left_to_the_word_rule(key: str, line: str) -> bool:
+    """KEY=word under a glued name stays with the rule for a line's words, as PGPASSWORD=x psql -h db has to: the command
+    after the word is not the value. Whatever that rule cannot read as one word is masked to the end of the line."""
+    if _SEPARATED_KEY.search(_normalize_key(key)):
+        return False
+    m = _INLINE_PAIR.search(line)
+    if not m or m.group(2) != key:
+        return False
+    after = line[m.end():m.end() + 1]
+    return after in ("", " ", "\t") or (after == "}" and m.group(4).startswith("${"))
 
 
 def _value_stays(key: str, value: str) -> bool:
     """Whether a sensitive key's text value is left as it is."""
+    if _is_working_directory(key, value):
+        return True
     if not _value_looks_harmless(value):
         return False
     v = value.strip()
@@ -187,10 +213,10 @@ def _inline_value_stays(key: str, value: str) -> bool:
     v = value.strip("\\\"'").strip()
     if not v or v.startswith("<REDACTED") or v.lower() in _INLINE_NOT_A_VALUE or _INLINE_REFERENCE.match(v):
         return True
+    if _is_working_directory(key, v):
+        return True
     k = _normalize_key(key.lstrip("-"))
-    if k.endswith("pwd") and v.startswith(("/", "~")):
-        return True  # PWD=/app: the shell's working directory
-    credential = bool(_CREDENTIAL_LAST_WORD.search(k)) or k.endswith(("password", "passwd"))
+    credential = bool(_CREDENTIAL_LAST_WORD.search(k))
     if not credential and all(c.isdigit() or c in ".-msh" for c in v):
         return True  # token=5, secret=3: a count or a duration
     # In capitals the key is an environment variable, which holds the value itself.
@@ -538,7 +564,7 @@ def redact_text(text: Optional[str], opts: Optional[Options] = None) -> Tuple[st
 
         def _line(m: re.Match) -> str:
             key, value = m.group(2), m.group(4)
-            if not _key_is_sensitive(key) or _value_stays(key, value):
+            if not _key_is_sensitive(key) or _value_stays(key, value) or _left_to_the_word_rule(key, m.group(0)):
                 return m.group(0)
             return m.group(1) + m.group(3) + "<REDACTED:" + key + ">" + m.group(5)
 
@@ -669,6 +695,8 @@ def redact_words(text: str) -> str:
     def _value(m: re.Match) -> str:
         key, value = m.group(1), m.group(3)
         if not word_key_is_sensitive(key) or _SHELL_REFERENCE.match(value) or value.startswith(("<REDACTED", "-")) or value.lower() in _NOT_A_VALUE:
+            return m.group(0)
+        if _is_working_directory(key, value.strip("\"'")):
             return m.group(0)
         return m.group(1) + m.group(2) + "<REDACTED:" + key.lstrip("-") + ">"
 

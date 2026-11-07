@@ -239,6 +239,96 @@
       "name": "a credential word as a value stays",
       "input": "reason=password msg=token\n",
       "want": "reason=password msg=token\n"
+    },
+    {
+      "name": "a password variable glued to its program's name",
+      "input": "PGPASSWORD: fake-pass-1\nPGPASSWORD=fake-pass-1\nexport MYSQLPASSWORD=fake-pass-2\nPGPassword: fake-pass-3\n",
+      "want": "PGPASSWORD: <REDACTED:PGPASSWORD>\nPGPASSWORD=<REDACTED:PGPASSWORD>\nexport MYSQLPASSWORD=<REDACTED:MYSQLPASSWORD>\nPGPassword: <REDACTED:PGPassword>\n"
+    },
+    {
+      "name": "an API key without a separator",
+      "input": "APIKEY: fake-key-1\napikey=fake-key-1\nX-APIKEY: fake-key-1\nSENDGRIDAPIKEY: fake-key-2\nOpenAIApiKey: fake-key-3\n",
+      "want": "APIKEY: <REDACTED:APIKEY>\napikey=<REDACTED:apikey>\nX-APIKEY: <REDACTED:X-APIKEY>\nSENDGRIDAPIKEY: <REDACTED:SENDGRIDAPIKEY>\nOpenAIApiKey: <REDACTED:OpenAIApiKey>\n"
+    },
+    {
+      "name": "every credential word glued to what it belongs to",
+      "input": "ACCESSKEY: fake-1\nAWSAccessKey: fake-1\nPRIVATEKEY: fake-1\nSECRETKEY: fake-1\nAWSSECRETKEY: fake-1\nCLIENTSECRET: fake-1\nJWTSECRET: fake-1\nAUTHTOKEN: fake-1\nGITHUBTOKEN: fake-1\nDBPASSWD: fake-1\nDBPWD: fake-1\nAWSCREDENTIALS: fake-1\nSENTRYDSN: fake-1\nCONNECTIONSTRING: fake-1\n",
+      "want": "ACCESSKEY: <REDACTED:ACCESSKEY>\nAWSAccessKey: <REDACTED:AWSAccessKey>\nPRIVATEKEY: <REDACTED:PRIVATEKEY>\nSECRETKEY: <REDACTED:SECRETKEY>\nAWSSECRETKEY: <REDACTED:AWSSECRETKEY>\nCLIENTSECRET: <REDACTED:CLIENTSECRET>\nJWTSECRET: <REDACTED:JWTSECRET>\nAUTHTOKEN: <REDACTED:AUTHTOKEN>\nGITHUBTOKEN: <REDACTED:GITHUBTOKEN>\nDBPASSWD: <REDACTED:DBPASSWD>\nDBPWD: <REDACTED:DBPWD>\nAWSCREDENTIALS: <REDACTED:AWSCREDENTIALS>\nSENTRYDSN: <REDACTED:SENTRYDSN>\nCONNECTIONSTRING: <REDACTED:CONNECTIONSTRING>\n"
+    },
+    {
+      "name": "glued names in JSON text",
+      "input": "log {\"APIKEY\":\"fake-key-1\",\"PGPASSWORD\":\"fake-pass-1\",\"level\":\"info\"} end\n",
+      "want": "log {\"APIKEY\":\"<REDACTED:APIKEY>\",\"PGPASSWORD\":\"<REDACTED:PGPASSWORD>\",\"level\":\"info\"} end\n"
+    },
+    {
+      "name": "glued names in a JSON env list as text",
+      "input": "{\"env\":[{\"name\":\"PGPASSWORD\",\"value\":\"fake-pass-1\"},{\"name\":\"APIKEY\",\"value\":\"fake-key-1\"},{\"name\":\"LOG_LEVEL\",\"value\":\"debug\"}]}\n",
+      "want": "{\"env\":[{\"name\":\"PGPASSWORD\",\"value\":\"<REDACTED:PGPASSWORD>\"},{\"name\":\"APIKEY\",\"value\":\"<REDACTED:APIKEY>\"},{\"name\":\"LOG_LEVEL\",\"value\":\"debug\"}]}\n"
+    },
+    {
+      "name": "glued names in a YAML env entry",
+      "input": "- name: PGPASSWORD\n  value: fake-pass-1\n- name: APIKEY\n  value: \"fake-key-1\"\n- name: LOG_LEVEL\n  value: debug\n",
+      "want": "- name: PGPASSWORD\n  value: <REDACTED:PGPASSWORD>\n- name: APIKEY\n  value: \"<REDACTED:APIKEY>\"\n- name: LOG_LEVEL\n  value: debug\n"
+    },
+    {
+      "name": "a glued name holding a block",
+      "input": "PGPASSWORD: |\n  fake-block-value\nname: app\n",
+      "want": "PGPASSWORD: |\n  <REDACTED:PGPASSWORD>\nname: app\n"
+    },
+    {
+      "name": "digits under a glued name that holds the value itself",
+      "input": "PGPASSWORD: 1234\nAPIKEY: 123456\nPGPASSWORD=1234\nAPIKEY=123456\nCLIENTSECRET: 1234\n",
+      "want": "PGPASSWORD: <REDACTED:PGPASSWORD>\nAPIKEY: <REDACTED:APIKEY>\nPGPASSWORD=<REDACTED:PGPASSWORD>\nAPIKEY=<REDACTED:APIKEY>\nCLIENTSECRET: <REDACTED:CLIENTSECRET>\n"
+    },
+    {
+      "name": "a glued variable in front of a command keeps the command",
+      "input": "MYSQLPASSWORD=fake-pass-1 mysql -h db\nAPIKEY=fake-key-1 ./run.sh --verbose\n",
+      "want": "MYSQLPASSWORD=<REDACTED:MYSQLPASSWORD> mysql -h db\nAPIKEY=<REDACTED:APIKEY> ./run.sh --verbose\n"
+    },
+    {
+      "name": "a glued variable that names another one stays",
+      "input": "PGPASSWORD=$DB_PASS psql -h db\nexport APIKEY=${KEY}\nAUTHTOKEN=expired\n",
+      "want": "PGPASSWORD=$DB_PASS psql -h db\nexport APIKEY=${KEY}\nAUTHTOKEN=expired\n"
+    },
+    {
+      "name": "a glued name's whole value goes when no word can be told from the rest",
+      "input": "PGPASSWORD: fake pass 1\nPGPASSWORD = fake pass 1\nPGPASSWORD=*fake pass 1\nPGPASSWORD=fake;pass 1\n",
+      "want": "PGPASSWORD: <REDACTED:PGPASSWORD>\nPGPASSWORD = <REDACTED:PGPASSWORD>\nPGPASSWORD=<REDACTED:PGPASSWORD>\nPGPASSWORD=<REDACTED:PGPASSWORD>\n"
+    },
+    {
+      "name": "glued names that hold settings or only start with a credential word stay",
+      "input": "tokenizer: cl100k\ntokens: 5\nmaxtokens: 4096\nmaxtoken: 4096\nAUTHTOKEN: 5\npasswordless: enabled\nnopassword: true\nsecrets: 7\nsecretstore: vault\nsecretname: my-tls\ntokenttl: 60\npasswordfile: /etc/p\napikeyheader: X-Api-Key\naccesskeyid: fake-id\nkeyboard: us\nmonkey: see\n",
+      "want": "tokenizer: cl100k\ntokens: 5\nmaxtokens: 4096\nmaxtoken: 4096\nAUTHTOKEN: 5\npasswordless: enabled\nnopassword: true\nsecrets: 7\nsecretstore: vault\nsecretname: my-tls\ntokenttl: 60\npasswordfile: /etc/p\napikeyheader: X-Api-Key\naccesskeyid: fake-id\nkeyboard: us\nmonkey: see\n"
+    },
+    {
+      "name": "the shell's working directory on a line of its own stays",
+      "input": "PWD=/app\nOLDPWD=/root\nexport PWD=/srv/app\nPWD: /app\n  OLDPWD:  /home/me\npwd: /app\nPWD=~\nPWD=~/app\nPWD=.\nOLDPWD=../app\n",
+      "want": "PWD=/app\nOLDPWD=/root\nexport PWD=/srv/app\nPWD: /app\n  OLDPWD:  /home/me\npwd: /app\nPWD=~\nPWD=~/app\nPWD=.\nOLDPWD=../app\n"
+    },
+    {
+      "name": "the shell's working directory in an env entry and in JSON text stays",
+      "input": "- name: PWD\n  value: /app\n{\"env\":[{\"name\":\"OLDPWD\",\"value\":\"/root\"}],\"PWD\":\"/app\"}\n",
+      "want": "- name: PWD\n  value: /app\n{\"env\":[{\"name\":\"OLDPWD\",\"value\":\"/root\"}],\"PWD\":\"/app\"}\n"
+    },
+    {
+      "name": "the abbreviation of a password goes whatever its value looks like",
+      "input": "DB_PWD=fake-pass-1\nDB_PWD=/fake-pass-1\nMYSQL_PWD: /fake-pass-1\ndb-pwd: ~fake\n",
+      "want": "DB_PWD=<REDACTED:DB_PWD>\nDB_PWD=<REDACTED:DB_PWD>\nMYSQL_PWD: <REDACTED:MYSQL_PWD>\ndb-pwd: <REDACTED:db-pwd>\n"
+    },
+    {
+      "name": "a value under the shell's names that is no path goes",
+      "input": "PWD=fake-pass-1\npwd: fake-pass-1\nOLDPWD=fake-pass-1\nPWD=/fake+pass=1\nPWD: fake pass 1\nPWD=1234\nPWD=/fake pass\n",
+      "want": "PWD=<REDACTED:PWD>\npwd: <REDACTED:pwd>\nOLDPWD=<REDACTED:OLDPWD>\nPWD=<REDACTED:PWD>\nPWD: <REDACTED:PWD>\nPWD=<REDACTED:PWD>\nPWD=<REDACTED:PWD>\n"
+    },
+    {
+      "name": "a connection string's Pwd goes even when it starts with a slash",
+      "input": "Server=db;Uid=bob;Pwd=/fake-pass-1;Database=shop\nPwd: /fake-pass-1\n",
+      "want": "Server=db;Uid=bob;Pwd=<REDACTED:Pwd>;Database=shop\nPwd: <REDACTED:Pwd>\n"
+    },
+    {
+      "name": "among a line's words the working directory stays and the abbreviation goes",
+      "input": "env DB_PWD=/fake-pass-1 PWD=/app OLDPWD=/root --pwd=/fake-pass-2 level=info\n",
+      "want": "env DB_PWD=<REDACTED:DB_PWD> PWD=/app OLDPWD=/root --pwd=<REDACTED:pwd> level=info\n"
     }
   ],
   "objects": [
@@ -348,6 +438,113 @@
       "name": "a password in a string's sentence, the rest of it staying",
       "input": {"msg": "user=bob password=fake-pass-1 retries=3", "url": "https://example.test/?q=password&page=2"},
       "want": {"msg": "user=bob password=<REDACTED:password> retries=3", "url": "https://example.test/?q=password&page=2"}
+    },
+    {
+      "name": "a glued name in a container env entry",
+      "input": {"name": "PGPASSWORD", "value": "fake-pass-1"},
+      "want": {"name": "PGPASSWORD", "value": "<REDACTED:PGPASSWORD>"}
+    },
+    {
+      "name": "a number in a glued container env entry",
+      "input": {"name": "PGPASSWORD", "value": 1234},
+      "want": {"name": "PGPASSWORD", "value": "<REDACTED:PGPASSWORD>"}
+    },
+    {
+      "name": "glued names as keys",
+      "input": {"APIKEY": "fake-key-1", "PGPASSWORD": "fake-pass-1", "apikey": 123456, "LOG_LEVEL": "debug"},
+      "want": {"APIKEY": "<REDACTED:APIKEY>", "PGPASSWORD": "<REDACTED:PGPASSWORD>", "apikey": "<REDACTED:apikey>", "LOG_LEVEL": "debug"}
+    },
+    {
+      "name": "glued names that hold settings stay in an env list",
+      "input": [{"name": "MAXTOKENS", "value": "4096"}, {"name": "TOKENIZER", "value": "cl100k"}, {"name": "SECRETNAME", "value": "my-tls"}, {"name": "AUTHTOKEN", "value": "60"}],
+      "want": [{"name": "MAXTOKENS", "value": "4096"}, {"name": "TOKENIZER", "value": "cl100k"}, {"name": "SECRETNAME", "value": "my-tls"}, {"name": "AUTHTOKEN", "value": "60"}]
+    },
+    {
+      "name": "the shell's working directory in an object stays",
+      "input": [{"name": "PWD", "value": "/app"}, {"name": "OLDPWD", "value": "/root"}, {"PWD": "/app"}, {"pwd": "/srv/app"}],
+      "want": [{"name": "PWD", "value": "/app"}, {"name": "OLDPWD", "value": "/root"}, {"PWD": "/app"}, {"pwd": "/srv/app"}]
+    },
+    {
+      "name": "the abbreviation of a password in an object goes whatever its value looks like",
+      "input": [{"name": "DB_PWD", "value": "/fake-pass-1"}, {"DB_PWD": "/fake-pass-1"}, {"PWD": "fake-pass-1"}, {"name": "PWD", "value": "fake-pass-1"}],
+      "want": [{"name": "DB_PWD", "value": "<REDACTED:DB_PWD>"}, {"DB_PWD": "<REDACTED:DB_PWD>"}, {"PWD": "<REDACTED:PWD>"}, {"name": "PWD", "value": "<REDACTED:PWD>"}]
     }
+  ],
+  "key_names": [
+    {"key": "password", "redact": true, "audit": true},
+    {"key": "db_password", "redact": true, "audit": true},
+    {"key": "POSTGRES_PASSWORD", "redact": true, "audit": true},
+    {"key": "passwd", "redact": true, "audit": true},
+    {"key": "secret", "redact": true, "audit": true},
+    {"key": "clientSecret", "redact": true, "audit": true},
+    {"key": "client_secret", "redact": true, "audit": true},
+    {"key": "token", "redact": true, "audit": true},
+    {"key": "refresh_token", "redact": true, "audit": true},
+    {"key": "api_key", "redact": true, "audit": true},
+    {"key": "api-key", "redact": true, "audit": true},
+    {"key": "apiKey", "redact": true, "audit": true},
+    {"key": "access_key", "redact": true, "audit": true},
+    {"key": "accessKey", "redact": true, "audit": true},
+    {"key": "private_key", "redact": true, "audit": true},
+    {"key": "credential", "redact": true, "audit": true},
+    {"key": "credentials", "redact": true, "audit": true},
+    {"key": "connection_string", "redact": true, "audit": true},
+    {"key": "connectionString", "redact": true, "audit": true},
+    {"key": "dsn", "redact": true, "audit": true},
+    {"key": "sentry.dsn", "redact": true, "audit": true},
+    {"key": "pwd", "redact": true, "audit": true},
+    {"key": "DB_PWD", "redact": true, "audit": true},
+    {"key": "PWD", "redact": true, "audit": true},
+    {"key": "PGPASSWORD", "redact": true, "audit": true},
+    {"key": "MYSQLPASSWORD", "redact": true, "audit": true},
+    {"key": "PGPassword", "redact": true, "audit": true},
+    {"key": "DBPASSWD", "redact": true, "audit": true},
+    {"key": "DBPWD", "redact": true, "audit": true},
+    {"key": "OLDPWD", "redact": true, "audit": true},
+    {"key": "APIKEY", "redact": true, "audit": true},
+    {"key": "apikey", "redact": true, "audit": true},
+    {"key": "X-APIKEY", "redact": true, "audit": true},
+    {"key": "SENDGRIDAPIKEY", "redact": true, "audit": true},
+    {"key": "OpenAIApiKey", "redact": true, "audit": true},
+    {"key": "ACCESSKEY", "redact": true, "audit": true},
+    {"key": "AWSAccessKey", "redact": true, "audit": true},
+    {"key": "PRIVATEKEY", "redact": true, "audit": true},
+    {"key": "SECRETKEY", "redact": true, "audit": true},
+    {"key": "AWSSECRETKEY", "redact": true, "audit": true},
+    {"key": "CLIENTSECRET", "redact": true, "audit": true},
+    {"key": "JWTSECRET", "redact": true, "audit": true},
+    {"key": "AUTHTOKEN", "redact": true, "audit": true},
+    {"key": "GITHUBTOKEN", "redact": true, "audit": true},
+    {"key": "AWSCREDENTIALS", "redact": true, "audit": true},
+    {"key": "SENTRYDSN", "redact": true, "audit": true},
+    {"key": "CONNECTIONSTRING", "redact": true, "audit": true},
+    {"key": "tokenizer", "redact": false, "audit": true},
+    {"key": "max_tokens", "redact": false, "audit": true},
+    {"key": "tokens", "redact": false, "audit": true},
+    {"key": "token_ttl", "redact": false, "audit": true},
+    {"key": "token_count", "redact": false, "audit": true},
+    {"key": "secretName", "redact": false, "audit": true},
+    {"key": "secret_name", "redact": false, "audit": true},
+    {"key": "secretKeyRef", "redact": false, "audit": true},
+    {"key": "secrets", "redact": false, "audit": true},
+    {"key": "password_min_length", "redact": false, "audit": true},
+    {"key": "password_policy", "redact": false, "audit": true},
+    {"key": "passwordFile", "redact": false, "audit": true},
+    {"key": "passwordless", "redact": false, "audit": true},
+    {"key": "accesskeyid", "redact": false, "audit": true},
+    {"key": "authorization", "redact": false, "audit": true},
+    {"key": "name", "redact": false, "audit": false},
+    {"key": "role", "redact": false, "audit": false},
+    {"key": "key", "redact": false, "audit": false},
+    {"key": "KEY_DIR", "redact": false, "audit": false},
+    {"key": "auth_mode", "redact": false, "audit": false},
+    {"key": "clientId", "redact": false, "audit": false},
+    {"key": "keyboard", "redact": false, "audit": false},
+    {"key": "monkey", "redact": false, "audit": false},
+    {"key": "fields_names", "redact": false, "audit": false},
+    {"key": "kinds_namespaces", "redact": false, "audit": false},
+    {"key": "cmd_snapshot", "redact": false, "audit": false},
+    {"key": "idsNumber", "redact": false, "audit": false},
+    {"key": "app_wd", "redact": false, "audit": false}
   ]
 }

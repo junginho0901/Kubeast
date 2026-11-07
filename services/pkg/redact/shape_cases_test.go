@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -20,6 +21,10 @@ type shapeCases struct {
 		Input json.RawMessage `json:"input"`
 		Want  any             `json:"want"`
 	} `json:"objects"`
+	KeyNames []struct {
+		Key    string `json:"key"`
+		Redact bool   `json:"redact"`
+	} `json:"key_names"`
 }
 
 // The same cases run in ai-service (test_redact_shapes.py): the two rule lists must give the same answers.
@@ -32,7 +37,7 @@ func TestSharedShapeCases(t *testing.T) {
 	if err := json.Unmarshal(raw, &cases); err != nil {
 		t.Fatal(err)
 	}
-	if len(cases.Text) == 0 || len(cases.Objects) == 0 {
+	if len(cases.Text) == 0 || len(cases.Objects) == 0 || len(cases.KeyNames) == 0 {
 		t.Fatal("no cases read")
 	}
 	opts := Options{Enabled: true, Disabled: map[string]bool{}}
@@ -57,6 +62,24 @@ func TestSharedShapeCases(t *testing.T) {
 				t.Errorf("got  %s\nwant %v", out, c.Want)
 			}
 		})
+	}
+	for _, c := range cases.KeyNames {
+		t.Run("key/"+c.Key, func(t *testing.T) {
+			out, _ := Text(c.Key+": fake-value-1\n", opts)
+			if masked := !strings.Contains(out, "fake-value-1"); masked != c.Redact {
+				t.Errorf("masked = %v, want %v: %q", masked, c.Redact, out)
+			}
+		})
+	}
+}
+
+// Helm values go through Object, which has its own check on a value.
+func TestObjectKeepsTheWorkingDirectoryAndMasksGluedNames(t *testing.T) {
+	in := map[string]any{"PWD": "/app", "OLDPWD": "/root", "DB_PWD": "/fake-pass-1", "PGPASSWORD": "fake-pass-1", "APIKEY": "fake-key-1", "tokenizer": "cl100k"}
+	want := map[string]any{"PWD": "/app", "OLDPWD": "/root", "DB_PWD": "<REDACTED:DB_PWD>", "PGPASSWORD": "<REDACTED:PGPASSWORD>", "APIKEY": "<REDACTED:APIKEY>", "tokenizer": "cl100k"}
+	got, _ := Object(in, Options{Enabled: true, Disabled: map[string]bool{}})
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got  %v\nwant %v", got, want)
 	}
 }
 

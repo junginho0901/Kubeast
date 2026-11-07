@@ -5,7 +5,6 @@ import (
 	"net"
 	"net/http"
 	"regexp"
-	"slices"
 	"strings"
 )
 
@@ -41,7 +40,9 @@ func ClientIP(r *http.Request) string {
 // sensitiveKeys lists words of JSON field names whose values must be redacted
 // before persistence. Case and the separators "_", "-" and "." are ignored and
 // the word may sit inside a longer name, so "db_password", "api-key" and
-// "accessKey" are all masked. Covers the key names of pkg/redact.
+// "accessKey" are all masked. Covers the key names of pkg/redact and more, since
+// a stored row cannot be masked later: "tokenizer" and "secretName" are masked
+// here and not there (the shared cases in redact_shape_cases.json).
 var sensitiveKeys = []string{
 	"password",
 	"passwd",
@@ -55,7 +56,8 @@ var sensitiveKeys = []string{
 	"authorization",
 }
 
-// sensitiveWords count only as a whole word of the name: "fields_names" holds "dsn".
+// sensitiveWords count only at the end of a word of the name, as "DBPWD" and "SENTRYDSN" have them: "fields_names" holds
+// "dsn" and "app_wd" holds "pwd" only across the separator.
 var sensitiveWords = []string{"dsn", "pwd"}
 
 var camelBoundary = regexp.MustCompile(`([a-z0-9])([A-Z])`)
@@ -124,9 +126,11 @@ func isSensitive(key string) bool {
 			return true
 		}
 	}
-	for _, word := range strings.Split(snake, "_") {
-		if slices.Contains(sensitiveWords, word) {
-			return true
+	for _, part := range strings.Split(snake, "_") {
+		for _, word := range sensitiveWords {
+			if strings.HasSuffix(part, word) {
+				return true
+			}
 		}
 	}
 	return false
