@@ -6,6 +6,7 @@ import { buildResourceLink } from '@/utils/resourceLink'
 import { api } from '@/services/api'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { usePermission } from '@/hooks/usePermission'
+import { jobDrawerInfo, jobLayerFields, jobLayerHeadline, jobLayerNeedsALook } from '@/pages/workloads/jobs/jobHelpers'
 import { replicaSetOwnerRow } from '../netstoreDetail'
 import { useDrawerFollowsObject } from '../useDrawerFollowsObject'
 import { useOwnedWatchedResources } from './useOwnedWatchedResources'
@@ -138,9 +139,11 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
     const pods = workloadPodsLayer(desc, { pods: ownedPods, podsEnabled, podsLoaded }, namespace)
     const replicas = (desc?.replicas as number | undefined) ?? (status.replicas as number | undefined)
     const ready = (desc?.ready_replicas as number | undefined) ?? (status.readyReplicas as number | undefined)
-    const prefix = pods.notRunning > 0 || (replicas && ready !== undefined && ready < replicas) ? '⚠️ ' : ''
+    const job = isJob ? jobDrawerInfo(desc, spec, status) : null
+    const prefix = pods.notRunning > 0 || (replicas && ready !== undefined && ready < replicas) || (job && jobLayerNeedsALook(job)) ? '⚠️ ' : ''
     const podCount = pods.known ? `, Pod ${pods.total}개${pods.notRunning ? ` (NotRunning ${pods.notRunning})` : ''}` : ''
-    const summary = `${prefix}${kind} ${name} (${namespace}) — replicas ${ready ?? '?'}/${replicas ?? '?'}${podCount}`
+    const headline = job ? jobLayerHeadline(job) : `replicas ${ready ?? '?'}/${replicas ?? '?'}`
+    const summary = `${prefix}${kind} ${name} (${namespace}) — ${headline}${podCount}`
 
     return {
       source: 'WorkloadInfo' as const,
@@ -160,6 +163,7 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
         conditions: conditions.slice(0, 8),
         pods: pods.items,
         recent_events: events.slice(0, 10),
+        ...(job ? jobLayerFields(job) : {}),
         ...(isCronJob && Array.isArray(ownedJobs)
           ? {
               owned_jobs: (ownedJobs as Array<{ name: string; status?: string; start_time?: string }>)
@@ -169,7 +173,7 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
           : {}),
       },
     }
-  }, [name, namespace, kind, describe, spec, status, selector, ownedJobs, isCronJob, ownedPods, podsEnabled, podsLoaded])
+  }, [name, namespace, kind, describe, spec, status, selector, ownedJobs, isCronJob, isJob, ownedPods, podsEnabled, podsLoaded])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 

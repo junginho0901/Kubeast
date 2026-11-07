@@ -7,6 +7,7 @@ import { Search } from 'lucide-react'
 import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsSection, SummaryBadge, Th, NoneText, Tx, ObjectUnreadable } from './DetailCommon'
 import { eventsNewestFirst, fmtRel, fmtTs } from './detailFormat'
 import { useDetailLabel } from './useDetailLabel'
+import { namespacePodBadge, namespacePodsLayer } from './namespacePods'
 import { ResourceLink } from './ResourceLink'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricCard } from './PrometheusMetrics'
@@ -56,15 +57,7 @@ export default function NamespaceInfo({ name }: Props) {
     const podsArr = Array.isArray(nsPods) ? nsPods : []
     const rqArr = Array.isArray(resourceQuotas) ? resourceQuotas : []
     const lrArr = Array.isArray(limitRanges) ? limitRanges : []
-    const podsByPhase: Record<string, number> = {}
-    for (const p of podsArr as Array<{ phase?: string; status?: string }>) {
-      const ph = p.phase || p.status || 'Unknown'
-      podsByPhase[ph] = (podsByPhase[ph] ?? 0) + 1
-    }
-    const notRunning = podsArr.filter((p: { phase?: string; status?: string }) => {
-      const ph = p.phase || p.status || ''
-      return ph !== 'Running' && ph !== 'Succeeded'
-    }).length
+    const { notRunning, byPhase, byStatus, items: podItems } = namespacePodsLayer(podsArr, name)
     const events = desc?.events ?? []
     const prefix = notRunning > 0 || (desc?.status && !/active/i.test(desc.status)) ? '⚠️ ' : ''
     const summary = `${prefix}Namespace ${name} — Pod ${podsArr.length}개${notRunning ? ` (NotRunning ${notRunning})` : ''}, RQ ${rqArr.length}, LR ${lrArr.length}, 이벤트 ${events.length}건`
@@ -80,16 +73,9 @@ export default function NamespaceInfo({ name }: Props) {
         conditions: desc?.conditions?.slice(0, 6),
         pods_total: podsArr.length,
         pods_not_running: notRunning,
-        pods_by_phase: podsByPhase,
-        pods: (podsArr as Array<{ name: string; phase?: string; status?: string; restart_count?: number }>)
-          .slice(0, 20)
-          .map((p) => ({
-            name: p.name,
-            phase: p.phase,
-            status: p.status,
-            restart_count: p.restart_count,
-            _link: buildResourceLink('Pod', name, p.name),
-          })),
+        pods_by_phase: byPhase,
+        pods_by_status: byStatus,
+        pods: podItems,
         resource_quotas: (rqArr as Array<{ name: string; hard?: Record<string, string>; used?: Record<string, string> }>)
           .slice(0, 5)
           .map((rq) => ({ name: rq.name, hard: rq.hard, used: rq.used })),
@@ -160,15 +146,6 @@ export default function NamespaceInfo({ name }: Props) {
   useEffect(() => {
     setPodPage(1)
   }, [podFilter, name])
-
-  const podStatusColor = (s: string) => {
-    const l = (s || '').toLowerCase()
-    if (l === 'running') return 'badge-success'
-    if (['succeeded', 'completed'].includes(l)) return 'badge-info'
-    if (l === 'pending' || l === 'terminating') return 'badge-warning'
-    if (['failed', 'error', 'crashloopbackoff'].includes(l)) return 'badge-error'
-    return 'badge-info'
-  }
 
   // CPU (millicores) and memory (bytes) requests and limits of the pods not finished, as the namespace's ResourceQuota
   // counts them used, and every pod per phase: the server sums them from its pages (pod_summary). The pod rows carry
@@ -402,16 +379,19 @@ export default function NamespaceInfo({ name }: Props) {
               <table className="w-full text-xs table-fixed min-w-[620px]">
                 <thead className="text-slate-400"><tr><Th className="text-left py-2 w-[30%]">Name</Th><Th className="text-left py-2 w-[12%]">Status</Th><Th className="text-left py-2 w-[10%]">Ready</Th><Th className="text-left py-2 w-[10%]">Restarts</Th><Th className="text-left py-2 w-[23%]">Node</Th><Th className="text-left py-2 w-[15%]">Age</Th></tr></thead>
                 <tbody className="divide-y divide-slate-800">
-                  {pagedPods.map((pod: any) => (
-                    <tr key={pod.name} className="text-slate-200">
-                      <td className="py-2 pr-2"><span className="block truncate font-mono" title={pod.name}><ResourceLink kind="Pod" name={pod.name} namespace={name} /></span></td>
-                      <td className="py-2 pr-2"><span className={`badge ${podStatusColor(pod.status)}`}>{pod.status}</span></td>
-                      <td className="py-2 pr-2">{pod.ready}</td>
-                      <td className="py-2 pr-2">{pod.restarts}</td>
-                      <td className="py-2 pr-2"><span className="block truncate">{pod.node || '-'}</span></td>
-                      <td className="py-2 pr-2">{fmtRel(pod.created_at)}</td>
-                    </tr>
-                  ))}
+                  {pagedPods.map((pod: any) => {
+                    const status = namespacePodBadge(pod)
+                    return (
+                      <tr key={pod.name} className="text-slate-200">
+                        <td className="py-2 pr-2"><span className="block truncate font-mono" title={pod.name}><ResourceLink kind="Pod" name={pod.name} namespace={name} /></span></td>
+                        <td className="py-2 pr-2"><span className={`badge ${status.badge}`} title={status.title} data-testid="namespace-pod-status">{status.text}</span></td>
+                        <td className="py-2 pr-2">{pod.ready}</td>
+                        <td className="py-2 pr-2">{pod.restarts}</td>
+                        <td className="py-2 pr-2"><span className="block truncate">{pod.node || '-'}</span></td>
+                        <td className="py-2 pr-2">{fmtRel(pod.created_at)}</td>
+                      </tr>
+                    )
+                  })}
                   {pagedPods.length === 0 && (
                     <tr>
                       <td colSpan={6} className="py-3 text-slate-400"><NoneText className="" /></td>

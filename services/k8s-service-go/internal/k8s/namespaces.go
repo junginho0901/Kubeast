@@ -322,23 +322,16 @@ func (s *Service) GetNamespaceLimitRanges(ctx context.Context, namespace string)
 }
 
 // GetNamespaceOwnedPods lists pods in a namespace, a page at a time: only the rows stay, not the pods (50 000 pods
-// as one list took k8s-service past 512 Mi).
+// as one list took k8s-service past 512 Mi). A row says what the Pods list says of the pod, with its phase beside it.
 func (s *Service) GetNamespaceOwnedPods(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
 	result := make([]map[string]interface{}, 0)
 	err := eachPod(ctx, s.clientsetCtx(ctx).CoreV1(), namespace, metav1.ListOptions{}, func(p *corev1.Pod) {
-		ready := 0
-		total := len(p.Spec.Containers)
-		restarts := int32(0)
-		for _, cs := range p.Status.ContainerStatuses {
-			if cs.Ready {
-				ready++
-			}
-			restarts += cs.RestartCount
-		}
+		status, ready, total, restarts := podListView(p)
 		result = append(result, map[string]interface{}{
 			"name":          p.Name,
 			"namespace":     p.Namespace,
-			"status":        string(p.Status.Phase),
+			"status":        status,
+			"phase":         string(p.Status.Phase),
 			"ready":         fmt.Sprintf("%d/%d", ready, total),
 			"restart_count": restarts,
 			"restarts":      restarts,

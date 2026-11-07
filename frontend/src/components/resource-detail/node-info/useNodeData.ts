@@ -4,6 +4,7 @@ import { api, isForbiddenError } from '@/services/api'
 import { useNodeShellSettings } from '@/services/nodeShellSettings'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useAIContext } from '@/hooks/useAIContext'
+import { podCounts } from '@/utils/aiContext/podCounts'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { formatBytes } from '@/pages/dashboard/utils'
 import { parseQuantityToBytes } from '@/pages/storage/pvcs/pvcHelpers'
@@ -77,17 +78,11 @@ export function useNodeData(name: string) {
       : undefined
 
     const podsByNs: Record<string, number> = {}
-    const podsByPhase: Record<string, number> = {}
-    for (const p of podsArr as Array<{ namespace?: string; phase?: string; status?: string }>) {
+    for (const p of podsArr as Array<{ namespace?: string }>) {
       const ns = p.namespace || 'default'
       podsByNs[ns] = (podsByNs[ns] ?? 0) + 1
-      const ph = p.phase || p.status || 'Unknown'
-      podsByPhase[ph] = (podsByPhase[ph] ?? 0) + 1
     }
-    const notRunning = podsArr.filter((p: { phase?: string; status?: string }) => {
-      const ph = p.phase || p.status || ''
-      return ph !== 'Running' && ph !== 'Succeeded'
-    }).length
+    const { notRunning, byPhase: podsByPhase, byStatus: podsByStatus } = podCounts(podsArr)
 
     const conditions = (nodeDescribe as { conditions?: Array<{ type?: string; status?: string; reason?: string; last_transition_time?: string }> } | undefined)?.conditions
     const taints = (nodeDescribe as { taints?: Array<{ key?: string; value?: string; effect?: string }> } | undefined)?.taints
@@ -96,7 +91,7 @@ export function useNodeData(name: string) {
     const prefix = unschedulable || notRunning > 0 ? '⚠️ ' : ''
 
     // 화면 페이지네이션과 일치하는 pod 목록만 LLM 에 전달.
-    type PodLike = { name: string; namespace: string; phase?: string; status?: string; restart_count?: number }
+    type PodLike = { name: string; namespace: string; phase?: string; status?: string; ready?: string; restart_count?: number }
     const filteredForView = podFilter.trim()
       ? (podsArr as PodLike[]).filter((p) =>
           p.name.toLowerCase().includes(podFilter.toLowerCase()) ||
@@ -135,13 +130,15 @@ export function useNodeData(name: string) {
         pods_not_running: notRunning,
         pods_by_namespace: podsByNs,
         pods_by_phase: podsByPhase,
+        pods_by_status: podsByStatus,
         pods_filter: podFilter || undefined,
         pods_page: { current: podPage, size: PAGE_SIZE, filtered_total: filteredForView.length },
         pods_visible: visiblePods.map((p) => ({
           name: p.name,
           namespace: p.namespace,
-          phase: p.phase || p.status,
           status: p.status,
+          phase: p.phase || p.status,
+          ready: p.ready,
           restart_count: p.restart_count,
           _link: buildResourceLink('Pod', p.namespace, p.name),
         })),

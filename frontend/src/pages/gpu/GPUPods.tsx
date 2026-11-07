@@ -6,6 +6,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { podNotRunning } from '@/utils/aiContext/podCounts'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { RefreshCw, BarChart3, ChevronDown, ChevronUp } from 'lucide-react'
@@ -15,7 +16,7 @@ import { parseAgeSeconds, type SortKey, type SummaryCard } from './gpupods/gpuPo
 import { GPUPodsFilters } from './gpupods/GPUPodsFilters'
 import { GPUPodsTable } from './gpupods/GPUPodsTable'
 import { GPUPodsCharts } from './gpupods/GPUPodsCharts'
-import { gpuPodCounts, gpuPodStatuses, gpuPodsByNode, gpuPodVendorCounts, podGpuUsage, vendorNames } from './gpuNumbers'
+import { gpuPodCounts, gpuPodStatuses, gpuPodsByNode, gpuPodsNotRunning, gpuPodVendorCounts, podGpuUsage, vendorNames } from './gpuNumbers'
 
 export default function GPUPods() {
   const { t } = useTranslation()
@@ -142,7 +143,7 @@ export default function GPUPods() {
     if (!data) return null
     const total = pods.length
     const { requested: totalGpuRequested } = gpuPodCounts(pods)
-    const notRunning = pods.filter((p) => p.phase !== 'Running').length
+    const notRunning = gpuPodsNotRunning(pods).length
     const prefix = notRunning > 0 ? '⚠️ ' : ''
     return {
       source: 'base' as const,
@@ -161,7 +162,7 @@ export default function GPUPods() {
           pageSize: rowsPerPage,
           topN: rowsPerPage,
           pickFields: ['name', 'namespace', 'node_name', 'gpu_requested', 'gpu_vendors', 'status'],
-          filterProblematic: (p) => (p as unknown as GPUPodInfo).phase !== 'Running',
+          filterProblematic: (p) => podNotRunning(p as unknown as GPUPodInfo),
           linkBuilder: (p) => {
             const pod = p as unknown as GPUPodInfo
             return buildResourceLink('Pod', pod.namespace, pod.name)

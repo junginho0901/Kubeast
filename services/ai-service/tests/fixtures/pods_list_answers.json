@@ -1,0 +1,82 @@
+[
+ {
+  "name": "the first page of every namespace",
+  "args": {
+   "all_namespaces": true,
+   "output": "wide",
+   "resource_type": "pods"
+  },
+  "answer": "{\"resource_type\":\"pods\",\"scope\":\"all namespaces\",\"total\":312,\"note\":\"312 pods in all namespaces, too many to list at once. The counts cover every pod; pods lists 4 from offset 0, in order of need: errors and warnings first (need_attention = 20), then the rest. Call again with offset=next_offset for the next ones, a namespace to narrow, or k8s_find_resource for a name.\",\"offset\":0,\"next_offset\":4,\"need_attention\":20,\"cards\":{\"ok\":292,\"warn\":13,\"error\":7},\"phases\":[{\"name\":\"Running\",\"count\":300},{\"name\":\"Pending\",\"count\":12}],\"statuses\":[{\"status\":\"Running\",\"count\":290},{\"status\":\"CrashLoopBackOff\",\"count\":7}],\"by_namespace\":[{\"name\":\"shop\",\"count\":40},{\"name\":\"(other)\",\"count\":272}],\"by_node\":[{\"name\":\"n1\",\"count\":50},{\"name\":\"(other)\",\"count\":262}],\"pods\":[\"shop/web-1 CrashLoopBackOff ready=0/1 restarts=12 node=n1\",\"ops/job-1 Pending ready=0/1 restarts=0 node=\\u003cnone\\u003e\",\"ops/init-1 Init:0/2 ready=0/1 restarts=3 node=n2\",\"ops/odd-1 A Reason With Spaces ready=1/2 restarts=0 node=n2\"]}",
+  "rows": [
+   {
+    "NAME": "web-1",
+    "NAMESPACE": "shop",
+    "NODE": "n1",
+    "READY": "0/1",
+    "RESTARTS": "12",
+    "STATUS": "CrashLoopBackOff"
+   },
+   {
+    "NAME": "job-1",
+    "NAMESPACE": "ops",
+    "NODE": "\u003cnone\u003e",
+    "READY": "0/1",
+    "RESTARTS": "0",
+    "STATUS": "Pending"
+   },
+   {
+    "NAME": "init-1",
+    "NAMESPACE": "ops",
+    "NODE": "n2",
+    "READY": "0/1",
+    "RESTARTS": "3",
+    "STATUS": "Init:0/2"
+   },
+   {
+    "NAME": "odd-1",
+    "NAMESPACE": "ops",
+    "NODE": "n2",
+    "READY": "1/2",
+    "RESTARTS": "0",
+    "STATUS": "A Reason With Spaces"
+   }
+  ]
+ },
+ {
+  "name": "the last page of one namespace",
+  "args": {
+   "namespace": "shop",
+   "offset": 25,
+   "resource_type": "po"
+  },
+  "answer": "{\"resource_type\":\"pods\",\"scope\":\"shop\",\"total\":27,\"note\":\"27 pods in shop, too many to list at once. The counts cover every pod; pods lists 2 from offset 25, in order of need: errors and warnings first (need_attention = 20), then the rest. Call again with offset=next_offset for the next ones, a namespace to narrow, or k8s_find_resource for a name.\",\"offset\":25,\"need_attention\":20,\"cards\":{\"ok\":292,\"warn\":13,\"error\":7},\"phases\":[{\"name\":\"Running\",\"count\":300},{\"name\":\"Pending\",\"count\":12}],\"statuses\":[{\"status\":\"Running\",\"count\":290},{\"status\":\"CrashLoopBackOff\",\"count\":7}],\"by_namespace\":[{\"name\":\"shop\",\"count\":40},{\"name\":\"(other)\",\"count\":272}],\"by_node\":[{\"name\":\"n1\",\"count\":50},{\"name\":\"(other)\",\"count\":262}],\"pods\":[\"shop/web-26 Running ready=1/1 restarts=0 node=n1\",\"shop/web-27 Running ready=1/1 restarts=1 node=n1\"]}",
+  "rows": [
+   {
+    "NAME": "web-26",
+    "NAMESPACE": "shop",
+    "NODE": "n1",
+    "READY": "1/1",
+    "RESTARTS": "0",
+    "STATUS": "Running"
+   },
+   {
+    "NAME": "web-27",
+    "NAMESPACE": "shop",
+    "NODE": "n1",
+    "READY": "1/1",
+    "RESTARTS": "1",
+    "STATUS": "Running"
+   }
+  ]
+ },
+ {
+  "name": "an offset past the end",
+  "args": {
+   "all_namespaces": true,
+   "offset": 400,
+   "resource_type": "pods"
+  },
+  "answer": "{\"resource_type\":\"pods\",\"scope\":\"all namespaces\",\"total\":312,\"note\":\"312 pods in all namespaces, too many to list at once. The counts cover every pod; pods lists 0 from offset 400, in order of need: errors and warnings first (need_attention = 20), then the rest. Call again with offset=next_offset for the next ones, a namespace to narrow, or k8s_find_resource for a name.\",\"offset\":400,\"need_attention\":20,\"cards\":{\"ok\":292,\"warn\":13,\"error\":7},\"phases\":[{\"name\":\"Running\",\"count\":300},{\"name\":\"Pending\",\"count\":12}],\"statuses\":[{\"status\":\"Running\",\"count\":290},{\"status\":\"CrashLoopBackOff\",\"count\":7}],\"by_namespace\":[{\"name\":\"shop\",\"count\":40},{\"name\":\"(other)\",\"count\":272}],\"by_node\":[{\"name\":\"n1\",\"count\":50},{\"name\":\"(other)\",\"count\":262}],\"pods\":[]}",
+  "rows": []
+ }
+]

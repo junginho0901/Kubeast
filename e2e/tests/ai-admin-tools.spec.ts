@@ -306,7 +306,6 @@ test.describe('AI admin tools: gitops_status, audit_search, nodes_stats_summary,
 
     const nodes = kubectl.run("get nodes -o jsonpath='{.items[*].metadata.name}'").replace(/'/g, '').split(/\s+/).filter(Boolean)
     const node = nodes[0]
-    const podsOnNode = kubectl.run(`get pods -A --field-selector spec.nodeName=${node},status.phase=Running -o name`).split('\n').filter(Boolean).length
 
     const one = json((await call(request, admin, 'nodes_stats_summary', { cluster: 'self', node, top: 3 })).text)
     expect(one.node).toBe(node)
@@ -316,7 +315,12 @@ test.describe('AI admin tools: gitops_status, audit_search, nodes_stats_summary,
     expect(one.fs.capacity_gib).toBeGreaterThan(0)
     expect(one.system_containers.kubelet.memory_working_set_mib).toBeGreaterThan(0)
     expect(one.pods_total).toBeGreaterThanOrEqual(1)
-    expect(one.pods_total).toBeLessThanOrEqual(podsOnNode)
+    // The kubelet's summary counts a pod deleted moments ago for a while after kubectl stops listing it.
+    await expect.poll(async () => {
+      const running = kubectl.run(`get pods -A --field-selector spec.nodeName=${node},status.phase=Running -o name`).split('\n').filter(Boolean).length
+      const summary = json((await call(request, admin, 'nodes_stats_summary', { cluster: 'self', node, top: 3 })).text)
+      return summary.pods_total <= running
+    }, { timeout: 60_000, intervals: [5_000] }).toBe(true)
     expect(one.ranked_by).toBe('memory')
     const top = one.pods_top as Array<{ namespace: string; name: string; memory_working_set_mib: number }>
     expect(top.length).toBe(3)

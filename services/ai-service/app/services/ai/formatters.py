@@ -130,7 +130,8 @@ def closing_fence(text: str) -> Optional[str]:
     return None
 
 
-def _format_age(timestamp: Optional[str]) -> str:
+def _format_age(timestamp: Optional[str], now: Optional[datetime] = None) -> str:
+    """An age as kubectl prints AGE; a Go zero time or Unix epoch reads as no time, as utils/time.ts reads it."""
     if not timestamp:
         return "-"
     try:
@@ -138,21 +139,41 @@ def _format_age(timestamp: Optional[str]) -> str:
         dt = datetime.fromisoformat(ts)
     except Exception:
         return "-"
-    now = datetime.now(dt.tzinfo)
-    delta = now - dt
-    seconds = int(delta.total_seconds())
-    if seconds < 0:
-        seconds = 0
-    days = seconds // 86400
-    if days > 0:
-        return f"{days}d"
-    hours = seconds // 3600
-    if hours > 0:
-        return f"{hours}h"
-    minutes = seconds // 60
-    if minutes > 0:
+    if dt.year < 1980:
+        return "-"
+    current = now or datetime.now(dt.tzinfo)
+    return _human_duration((current - dt).total_seconds())
+
+
+def _human_duration(total_seconds: float) -> str:
+    """k8s.io/apimachinery duration.HumanDuration (frontend utils/time.ts humanDuration writes the same);
+    tests/test_kubectl_table_cases.py holds it to the Go function."""
+    s = int(total_seconds)
+    if s < -1:
+        return "<invalid>"
+    if s < 0:
+        return "0s"
+    if s < 60 * 2:
+        return f"{s}s"
+    minutes = s // 60
+    if minutes < 10:
+        return f"{minutes}m{s % 60}s" if s % 60 else f"{minutes}m"
+    if minutes < 60 * 3:
         return f"{minutes}m"
-    return f"{seconds}s"
+    hours = s // 3600
+    if hours < 8:
+        return f"{hours}h{minutes % 60}m" if minutes % 60 else f"{hours}h"
+    if hours < 48:
+        return f"{hours}h"
+    days = hours // 24
+    if hours < 24 * 8:
+        return f"{days}d{hours % 24}h" if hours % 24 else f"{days}d"
+    if hours < 24 * 365 * 2:
+        return f"{days}d"
+    if hours < 24 * 365 * 8:
+        return f"{days // 365}y{days % 365}d" if days % 365 else f"{days // 365}y"
+    return f"{days // 365}y"
+
 
 def _format_table(headers: List[str], rows: List[List[str]]) -> str:
     if not rows:
@@ -268,6 +289,82 @@ def _service_external_ip(svc: Dict) -> str:
     return "<unknown>"
 
 
+def _service_cluster_ip(spec: Dict) -> str:
+    """CLUSTER-IP as kubectl's printService (v1.37) prints it: the first address, <none> for an ExternalName."""
+    addresses = spec.get("clusterIPs") or []
+    return addresses[0] if addresses else spec.get("clusterIP") or "<none>"
+
+
+def _node_status(node: Dict) -> str:
+    """STATUS as kubectl's printNode (v1.37) prints it and k8s-service's nodeStatusText writes it for the Nodes list."""
+    status = "Unknown"
+    for condition in (node.get("status") or {}).get("conditions") or []:
+        if condition.get("type") == "Ready":
+            status = "Ready" if condition.get("status") == "True" else "NotReady"
+            break
+    if (node.get("spec") or {}).get("unschedulable"):
+        status += ",SchedulingDisabled"
+    return status
+
+
+NODE_ROLE_PREFIX = "node-role.kubernetes.io/"
+
+
+def _node_roles(meta: Dict) -> str:
+    """ROLES as kubectl's findNodeRoles (v1.37) reads them: the role labels, sorted, each once."""
+    roles = set()
+    for key, value in (meta.get("labels") or {}).items():
+        if key.startswith(NODE_ROLE_PREFIX):
+            if key[len(NODE_ROLE_PREFIX):]:
+                roles.add(key[len(NODE_ROLE_PREFIX):])
+        elif key == "kubernetes.io/role" and value:
+            roles.add(value)
+    return ",".join(sorted(roles)) or "<none>"
+
+
+# tool-server's row for a pod (handlers_pods.go podPageReply.lines); tests/test_kubectl_table_cases.py holds the two equal.
+POD_ANSWER_ROW = re.compile(r"^([^/\s]+)/(\S+) (.*) ready=(\S+) restarts=(\d+) node=(\S+)$")
+
+
+def _counts_text(groups: object, name_key: str = "name") -> str:
+    if not isinstance(groups, list):
+        return ""
+    return ", ".join(f"{g.get(name_key)} {g.get('count')}" for g in groups if isinstance(g, dict))
+
+
+def _format_pods_answer(data: Dict, include_namespace: bool) -> Optional[str]:
+    """tool-server's answer for more pods than it lists at once (handlers_pods.go podsList): a page of rows with the
+    counts over every pod. What it covers and how to go on come first, where the chat's cut of a long result falls last."""
+    rows = []
+    for line in data["pods"]:
+        match = POD_ANSWER_ROW.match(line) if isinstance(line, str) else None
+        if match is None:
+            return None
+        namespace, name, status, ready, restarts, node = match.groups()
+        rows.append(([namespace] if include_namespace else []) + [name, ready, status, restarts, node])
+
+    covers = f"{data.get('total')} pods in {data.get('scope')}. Showing {len(rows)} from offset {data.get('offset', 0)}, errors and warnings first."
+    if data.get("next_offset") is not None:
+        covers += f" Next page: offset {data['next_offset']}."
+    lines = [covers]
+    cards = data.get("cards")
+    if isinstance(cards, dict):
+        lines.append(f"Need attention: {data.get('need_attention')} (ok {cards.get('ok')}, warn {cards.get('warn')}, error {cards.get('error')})")
+    for label, groups, name_key in (
+        ("Phases", data.get("phases"), "name"),
+        ("Top statuses", data.get("statuses"), "status"),
+        ("Namespaces", data.get("by_namespace"), "name"),
+        ("Nodes", data.get("by_node"), "name"),
+    ):
+        text = _counts_text(groups, name_key)
+        if text:
+            lines.append(f"{label}: {text}")
+    if not rows:
+        return "\n".join(lines)
+    headers = (["NAMESPACE"] if include_namespace else []) + ["NAME", "READY", "STATUS", "RESTARTS", "NODE"]
+    return "\n".join(lines) + "\n\n" + _format_table(headers, rows)
+
+
 def _format_k8s_get_resources_display(
         resource_type: str,
     output: str,
@@ -283,15 +380,25 @@ def _format_k8s_get_resources_display(
     if not data:
         return None
 
+    key = (resource_type or "").strip().lower()
+    if key in {"po", "pod", "pods"} and isinstance(data, dict) and "items" not in data and isinstance(data.get("pods"), list):
+        return _format_pods_answer(data, include_namespace)
+
     items = []
-    if isinstance(data, dict) and isinstance(data.get("items"), list):
+    if isinstance(data, dict) and "items" in data:
         items = data.get("items") or []
     elif isinstance(data, list):
         items = data
     elif isinstance(data, dict):
         items = [data]
+    else:
+        items = None
 
-    key = (resource_type or "").strip().lower()
+    # An answer that lists no objects (too_large, not_found, a refusal, a jsonpath's one value) has no row to draw: the
+    # chat shows it as it came.
+    if not isinstance(items, list) or any(not isinstance(item, dict) or not isinstance(item.get("metadata"), dict) for item in items):
+        return None
+
     if key in {"po", "pod", "pods"}:
         headers = ["NAME", "READY", "STATUS", "RESTARTS", "AGE"]
         if include_namespace:
@@ -348,7 +455,7 @@ def _format_k8s_get_resources_display(
             meta = item.get("metadata", {}) if isinstance(item, dict) else {}
             spec = item.get("spec", {}) if isinstance(item, dict) else {}
             svc_type = spec.get("type", "")
-            cluster_ip = spec.get("clusterIP", "")
+            cluster_ip = _service_cluster_ip(spec)
             external_ip = _service_external_ip(item if isinstance(item, dict) else {})
             ports = []
             for p in spec.get("ports") or []:
@@ -359,7 +466,7 @@ def _format_k8s_get_resources_display(
                     ports.append(f"{port}:{node_port}/{proto}")
                 else:
                     ports.append(f"{port}/{proto}")
-            ports_text = ",".join(ports)
+            ports_text = ",".join(ports) or "<none>"
             age = _format_age(meta.get("creationTimestamp"))
             row = [
                 str(meta.get("name", "")),
@@ -391,22 +498,9 @@ def _format_k8s_get_resources_display(
         for item in items:
             meta = item.get("metadata", {}) if isinstance(item, dict) else {}
             status = item.get("status", {}) if isinstance(item, dict) else {}
-            conditions = status.get("conditions") or []
-            ready = "NotReady"
-            for c in conditions:
-                if c.get("type") == "Ready":
-                    ready = "Ready" if c.get("status") == "True" else "NotReady"
-                    break
-            labels = meta.get("labels") or {}
-            roles = []
-            for k in labels.keys():
-                if k.startswith("node-role.kubernetes.io/"):
-                    role = k.split("/", 1)[1]
-                    roles.append(role or "<none>")
-            roles_text = ",".join(roles) if roles else "<none>"
             age = _format_age(meta.get("creationTimestamp"))
             version = (status.get("nodeInfo") or {}).get("kubeletVersion", "")
-            rows.append([str(meta.get("name", "")), ready, roles_text, age, str(version)])
+            rows.append([str(meta.get("name", "")), _node_status(item), _node_roles(meta), age, str(version)])
         return _format_table(headers, rows)
 
     # Fallback: name/age

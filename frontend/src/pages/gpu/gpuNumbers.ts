@@ -2,6 +2,7 @@
 // The server counts the GPUs as kubectl describe node does (gpu_dashboard.go); these count the rows.
 
 import type { GPUDashboardData, GPUDevicePlugin, GPUDeviceMetric, GPUMetricsData, GPUNodeInfo, GPUNodeVendor, GPUPodInfo, GPUVendor } from '@/services/api'
+import { podNotRunning } from '@/utils/aiContext/podCounts'
 import { nodeReadiness } from '@/utils/nodeStatus'
 
 // The companies Kubernetes' "Schedule GPUs" names, in the order the screens list them (gpu_dashboard.go gpuVendors).
@@ -157,6 +158,11 @@ export function gpuPodCounts(pods: GPUPodInfo[]) {
     requested: pods.filter((p) => !ended(p)).reduce((sum, p) => sum + p.gpu_requested, 0),
     namespaces: new Set(pods.map((p) => p.namespace)).size,
   }
+}
+
+// What the floating chat is told is not running: what the table says, not the phase the cards count.
+export function gpuPodsNotRunning(pods: GPUPodInfo[]): GPUPodInfo[] {
+  return pods.filter(podNotRunning)
 }
 
 // The GPU Pods charts: each STATUS and its pods, and each node ('' for the pods no node has taken) with its pods and
