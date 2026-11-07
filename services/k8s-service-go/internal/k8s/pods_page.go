@@ -61,6 +61,7 @@ type PodPageQuery struct {
 	// the Dashboard pod window and the drawers' pod lists, counted before them like the search
 	Phase, RuntimeClass, PriorityClass string
 	ServiceAccounts                    []string // <namespace>/<name>; a pod running as any of them
+	ConfigMap, Secret                  string   // a pod naming it (podrow.ReferenceNames), with Namespace
 	// Tokens: the search as the AI's find_pods matches — every word of it in the name, or in one label's key and value
 	Tokens bool
 	// Groups: the page counts the pods it matched per namespace, node and phase (the AI's summary and counts), the
@@ -68,7 +69,8 @@ type PodPageQuery struct {
 	Groups   bool
 	GroupTop int
 	// LabelSelector keeps the rows whose labels it selects (nil: no selector)
-	LabelSelector labels.Selector
+	LabelSelector     labels.Selector
+	LabelSelectorText string // as asked, for the answer's filters
 }
 
 // PodGroupCount is the pods of one namespace, node or phase; "(other)" sums the ones past the largest.
@@ -124,7 +126,17 @@ type PodHealthCounts struct {
 	Error int `json:"error"`
 }
 
+// PodPageFilters are a drawer table's conditions as the page applied them, so a screen can tell a server that left one out.
+type PodPageFilters struct {
+	Namespace      string `json:"namespace,omitempty"`
+	ConfigMap      string `json:"config_map,omitempty"`
+	Secret         string `json:"secret,omitempty"`
+	ServiceAccount string `json:"service_account,omitempty"`
+	LabelSelector  string `json:"label_selector,omitempty"`
+}
+
 type PodPage struct {
+	Filters     PodPageFilters  `json:"filters"`
 	ByNamespace []PodGroupCount `json:"by_namespace,omitempty"`
 	ByNode      []PodGroupCount `json:"by_node,omitempty"`
 	ByPhase     []PodGroupCount `json:"by_phase,omitempty"`
@@ -149,11 +161,19 @@ func (s *Service) GetPodPage(ctx context.Context, q PodPageQuery) (*PodPage, err
 	}
 	defer set.done()
 	if set.unchanged {
-		return &PodPage{Items: []PodListItem{}, Stats: PodStats{TopReasons: []PodReasonCount{}}, Revision: set.revision, Unchanged: true, Source: set.source}, nil
+		return &PodPage{Filters: q.filters(), Items: []PodListItem{}, Stats: PodStats{TopReasons: []PodReasonCount{}}, Revision: set.revision, Unchanged: true, Source: set.source}, nil
 	}
 	page := buildPodPage(rowsOfOwner(set.rows, q.OwnerKind, q.OwnerName), q, time.Now())
-	page.Revision, page.Source = set.revision, set.source
+	page.Filters, page.Revision, page.Source = q.filters(), set.revision, set.source
 	return page, nil
+}
+
+func (q PodPageQuery) filters() PodPageFilters {
+	f := PodPageFilters{Namespace: q.Namespace, ConfigMap: q.ConfigMap, Secret: q.Secret, ServiceAccount: strings.Join(q.ServiceAccounts, ",")}
+	if q.LabelSelector != nil {
+		f.LabelSelector = q.LabelSelectorText
+	}
+	return f
 }
 
 // searchWords splits a search as the AI's find_pods does: lower case, everything but letters and digits a separator.
@@ -623,6 +643,12 @@ func buildPodPage(rows []*podRow, q PodPageQuery, now time.Time) *PodPage {
 		matched = slices.DeleteFunc(matched, func(r *podRow) bool {
 			return r.serviceAccount == "" || !slices.Contains(q.ServiceAccounts, r.namespace+"/"+r.serviceAccount)
 		})
+	}
+	if q.ConfigMap != "" {
+		matched = slices.DeleteFunc(matched, func(r *podRow) bool { return !refsHold(r.common().configMaps, q.ConfigMap) })
+	}
+	if q.Secret != "" {
+		matched = slices.DeleteFunc(matched, func(r *podRow) bool { return !refsHold(r.common().secrets, q.Secret) })
 	}
 	if q.LabelSelector != nil {
 		matched = slices.DeleteFunc(matched, func(r *podRow) bool { return !q.LabelSelector.Matches(rowLabels(r.labels)) })

@@ -4,7 +4,7 @@ import { api } from '@/services/api'
 import { InfoSection, InfoRow, StatusBadge, KeyValueTags, EventsSection, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
-import { usePagination } from './usePagination'
+import { useNamespacePodTable } from './useNamespacePodTable'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -44,20 +44,19 @@ export default function RoleBindingInfo({ name, namespace, rawJson }: Props) {
 
   // ServiceAccount subjects 가 가리키는 SA 의 ns 의 Pod (serviceAccountName 매칭).
   // RoleBinding 은 ns-scoped 이라 subjects.namespace 가 binding ns 와 같다고 가정.
-  // ns Pod list 1번 + subjects[].kind=ServiceAccount filter.
-  const saSubjectNames = subjects
+  const saSubjectNames: string[] = subjects
     .filter((s: any) => s?.kind === 'ServiceAccount' && (s?.namespace ?? namespace) === namespace)
     .map((s: any) => s?.name)
     .filter(Boolean)
-  const { data: nsPods } = useQuery({
-    queryKey: ['rolebinding-bound-pods', namespace, name],
-    queryFn: () => api.getPods(namespace),
+  const boundPods = useNamespacePodTable({
     enabled: !!namespace && saSubjectNames.length > 0,
+    namespace,
+    filter: { service_account: saSubjectNames.map((n: string) => `${namespace}/${n}`).join(',') },
+    queryKey: ['rolebinding-bound-pods', namespace, name],
+    keeps: (p) => saSubjectNames.includes(p?.service_account_name ?? ''),
+    follows: false,
     staleTime: 30_000,
   })
-  const boundPods = (Array.isArray(nsPods) ? nsPods : [])
-    .filter((p: any) => saSubjectNames.includes(p?.service_account_name))
-  const { items: pagedBoundPods, nav: boundPodsNav } = usePagination(boundPods, 10)
 
   if (isLoading) return <p className="text-slate-400">{tr('common.loading', 'Loading...')}</p>
 
@@ -140,8 +139,11 @@ export default function RoleBindingInfo({ name, namespace, rawJson }: Props) {
       )}
 
       {saSubjectNames.length > 0 && (
-        <InfoSection title="Bound Pods via ServiceAccount Subjects ({{n}})" titleValues={{ n: boundPods.length }}>
-          {boundPods.length === 0 ? (
+        <InfoSection title="Bound Pods via ServiceAccount Subjects ({{n}})" titleValues={{ n: boundPods.total }}>
+          {boundPods.note}
+          {boundPods.loading ? (
+            <p className="text-xs text-slate-400"><Tx>Loading...</Tx></p>
+          ) : boundPods.total === 0 ? (
             <p className="text-xs text-slate-400"><Tx>No pod uses any of the bound ServiceAccounts.</Tx></p>
           ) : (
             <div className="overflow-x-auto">
@@ -155,7 +157,7 @@ export default function RoleBindingInfo({ name, namespace, rawJson }: Props) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
-                  {pagedBoundPods.map((p: any) => (
+                  {boundPods.items.map((p) => (
                     <tr
                       key={`${p.namespace}/${p.name}`}
                       className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
@@ -169,7 +171,7 @@ export default function RoleBindingInfo({ name, namespace, rawJson }: Props) {
                   ))}
                 </tbody>
               </table>
-              {boundPodsNav}
+              {boundPods.nav}
             </div>
           )}
         </InfoSection>

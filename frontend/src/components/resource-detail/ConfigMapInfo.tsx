@@ -2,15 +2,12 @@ import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
-import type { PodInfo } from '@/services/api'
-import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
 import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
 import { InfoSection, InfoRow, KeyValueTags, EventsSection, StatusBadge, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useDetailLabel } from './useDetailLabel'
-import { usePagination } from './usePagination'
+import { useNamespacePodTable } from './useNamespacePodTable'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface Props {
@@ -36,25 +33,13 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
   useResourceDetailOverlay({ kind: 'ConfigMap', name, namespace, describe })
 
   const podsEnabled = !!namespace && !!name
-  const { data: nsPods } = useQuery({
-    queryKey: ['cm-used-by-pods', namespace, name],
-    queryFn: () => api.getPods(namespace),
+  const usingPods = useNamespacePodTable({
     enabled: podsEnabled,
-    staleTime: 5_000,
-  })
-  useKubeWatchList({
-    enabled: podsEnabled,
+    namespace,
+    filter: { config_map: name },
     queryKey: ['cm-used-by-pods', namespace, name],
-    path: `/api/v1/namespaces/${namespace}/pods`,
-    query: 'watch=1',
-    applyEvent: (prev, event) => applyPodWatchEvent(prev as PodInfo[] | undefined, event),
-    gatherEveryMs: LIST_GATHER_MS,
+    keeps: (p) => (Array.isArray(p?.config_map_refs) ? p.config_map_refs : []).includes(name),
   })
-  const usingPods = (Array.isArray(nsPods) ? nsPods : []).filter((p: any) => {
-    const refs = Array.isArray(p?.config_map_refs) ? p.config_map_refs : []
-    return refs.includes(name)
-  })
-  const { items: pagedUsingPods, nav: usingPodsNav } = usePagination(usingPods, 10)
 
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const labels = (describe?.labels as Record<string, string> | undefined) ?? (meta.labels as Record<string, string> | undefined) ?? {}
@@ -179,8 +164,11 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
       )}
 
       {podsEnabled && (
-        <InfoSection title="Used By Pods ({{n}})" titleValues={{ n: usingPods.length }}>
-          {usingPods.length === 0 ? (
+        <InfoSection title="Used By Pods ({{n}})" titleValues={{ n: usingPods.total }}>
+          {usingPods.note}
+          {usingPods.loading ? (
+            <p className="text-xs text-slate-400"><Tx>Loading...</Tx></p>
+          ) : usingPods.total === 0 ? (
             <p className="text-xs text-slate-400"><Tx>No pod in this namespace references this ConfigMap.</Tx></p>
           ) : (
             <div className="overflow-x-auto">
@@ -195,7 +183,7 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
-                  {pagedUsingPods.map((p: any) => (
+                  {usingPods.items.map((p) => (
                     <tr
                       key={`${p.namespace}/${p.name}`}
                       className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
@@ -210,7 +198,7 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
                   ))}
                 </tbody>
               </table>
-              {usingPodsNav}
+              {usingPods.nav}
             </div>
           )}
         </InfoSection>

@@ -2,16 +2,14 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
-import type { PodInfo } from '@/services/api'
-import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
+import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
 import { networkPolicyToRawJson } from '@/pages/network/networkpolicies/networkPolicyHelpers'
 import { applyNetworkPolicyToDrawer } from '@/pages/network/networkpolicies/networkPolicyWatchNormalize'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { EventsSection, InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx } from '../DetailCommon'
 import { eventsForAI, fmtRel, fmtTs } from '../detailFormat'
-import { usePagination } from '../usePagination'
+import { useNamespacePodTable } from '../useNamespacePodTable'
 import { peerOf, peerText, portOf, portsText, selectorText, type Tr } from '../netpolText'
 import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
 
@@ -54,24 +52,15 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
   const selectorStr = useMemo(() => selectorText(spec.podSelector as any), [spec.podSelector])
   const watchEnabled = !!namespace
 
-  const { data: affectedPods } = useQuery({
+  // The selector comes from the object: until it is known, an empty one would read every pod of the namespace.
+  const pods = useNamespacePodTable({
+    enabled: watchEnabled && !!object,
+    namespace: namespace as string,
+    filter: selectorStr ? { label_selector: selectorStr } : {},
     queryKey: ['networkpolicy-affected-pods', namespace, name, selectorStr],
-    queryFn: () => api.getPods(namespace as string, selectorStr),
-    enabled: watchEnabled,
-    staleTime: 5_000,
+    keeps: () => true,
+    selector: selectorStr,
   })
-
-  useKubeWatchList({
-    enabled: watchEnabled,
-    queryKey: ['networkpolicy-affected-pods', namespace, name, selectorStr],
-    path: `/api/v1/namespaces/${namespace}/pods`,
-    query: `watch=1&labelSelector=${encodeURIComponent(selectorStr)}`,
-    applyEvent: (prev, event) => applyPodWatchEvent(prev as PodInfo[] | undefined, event),
-    gatherEveryMs: LIST_GATHER_MS,
-  })
-
-  const pods = Array.isArray(affectedPods) ? affectedPods : []
-  const { items: pagedPods, nav: podsNav } = usePagination(pods, 10)
   const ingress = (spec.ingress ?? []) as any[]
   const egress = (spec.egress ?? []) as any[]
   const policyTypes = (spec.policyTypes ?? []) as string[]
@@ -164,8 +153,11 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
       )}
 
       {watchEnabled && (
-        <InfoSection title="Affected Pods ({{n}})" titleValues={{ n: pods.length }}>
-          {pods.length === 0 ? (
+        <InfoSection title="Affected Pods ({{n}})" titleValues={{ n: pods.total }}>
+          {pods.note}
+          {pods.loading || (!object && describeLoading) ? (
+            <p className="text-xs text-slate-400"><Tx>Loading...</Tx></p>
+          ) : pods.total === 0 ? (
             <p className="text-xs text-slate-400"><Tx>No pods match this podSelector.</Tx></p>
           ) : (
             <div className="overflow-x-auto">
@@ -181,7 +173,7 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
-                  {pagedPods.map((p) => (
+                  {pods.items.map((p) => (
                     <tr
                       key={`${p.namespace}/${p.name}`}
                       className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
@@ -197,7 +189,7 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
                   ))}
                 </tbody>
               </table>
-              {podsNav}
+              {pods.nav}
             </div>
           )}
         </InfoSection>

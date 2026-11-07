@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type PodListRow, type PodPage, type PodPageParams } from '@/services/api'
-import { podRowChanged, readPodPageSince } from '@/services/podPageRead'
+import { podPagePollEvery, podRowChanged, readPodPageSince } from '@/services/podPageRead'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
@@ -78,13 +78,7 @@ export default function Pods() {
     queryKey: pageKey,
     queryFn: () => readPodPageSince(queryClient, pageKey, pageParams),
     placeholderData: keepPreviousData,
-    // listed rows (no revision) cost the cluster a list: ask less often
-    refetchInterval: (query) => {
-      const d = query.state.data
-      if (!d) return false
-      if (!d.revision) return 30000
-      return d.stats.total > 10000 ? 10000 : 3000
-    },
+    refetchInterval: (query) => podPagePollEvery(query.state.data),
   })
   useEffect(() => {
     if (page && page.total !== totalRows) setTotalRows(page.total)

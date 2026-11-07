@@ -8,6 +8,13 @@ export async function readPodPageSince(client: QueryClient, key: QueryKey, param
   return next.unchanged && held ? held : next
 }
 
+// How often a screen that follows a page of pods reads it again: less often past ten thousand pods, and listed rows (no revision) cost the cluster a list.
+export function podPagePollEvery(page: PodPage | undefined): number | false {
+  if (!page) return false
+  if (!page.revision) return 30_000
+  return page.stats.total > 10_000 ? 10_000 : 3_000
+}
+
 // Whether a pod's row differs between two pages. A pod in neither is one the rows cannot speak for, which reads as changed.
 export function podRowChanged(before: PodListRow[] | undefined, after: PodListRow[] | undefined, pod: { namespace?: string; name: string }): boolean {
   const rowOf = (rows: PodListRow[] | undefined) => rows?.find((row) => row.name === pod.name && row.namespace === pod.namespace)

@@ -26,9 +26,8 @@ type podRow struct {
 	healthReason         string
 	// for the RuntimeClass, PriorityClass and ClusterRoleBinding drawers' pod lists
 	runtimeClass, priorityClass, serviceAccount string
-	// the workload the Hubble agent names (agentWorkload) and the GenerateName Calico names a pod set by, for the
-	// network flows' lookup
-	generateName, workloadKind, workloadName string
+	// what the pod's set shares with it; nil reads as none (common)
+	shared *podShared
 	// the labels as sorted "key\x1fvalue" pairs joined by "\x1e" — the same string for a set's pods, stored once — for
 	// the AI's pod search, which matches label keys and values as it matches names
 	labels string
@@ -38,6 +37,37 @@ type podRow struct {
 	ready, containers            uint16
 	restarts                     int32
 	health                       uint8 // podHealthOK, podHealthWarn, podHealthError
+}
+
+// podShared is what a set's pods have alike, kept once per set so a row holds a pointer instead of five strings.
+type podShared struct {
+	// the GenerateName Calico names a pod set by and the workload the Hubble agent names (agentWorkload)
+	generateName, workloadKind, workloadName string
+	// what the pod names (podrow.ReferenceNames) joined by refSeparator, for the ConfigMap and Secret drawers' tables
+	configMaps, secrets string
+}
+
+const refSeparator = "\x1f"
+
+var noShared podShared
+
+func (r *podRow) common() *podShared {
+	if r.shared == nil {
+		return &noShared
+	}
+	return r.shared
+}
+
+// refsHold reports whether refs, names joined by refSeparator, holds name.
+func refsHold(refs, name string) bool {
+	for refs != "" {
+		head, rest, _ := strings.Cut(refs, refSeparator)
+		if head == name {
+			return true
+		}
+		refs = rest
+	}
+	return false
 }
 
 // GetObjectMeta lets the store key and index the row (meta.Accessor).
@@ -57,11 +87,30 @@ func (r *podRow) sameView(o *podRow) bool {
 // takes the strings few distinct values cover; it goes with its informer set,
 // which stops after overviewIdleTimeout without a request.
 type interner struct {
-	mu sync.Mutex
-	m  map[string]string
+	mu     sync.Mutex
+	m      map[string]string
+	shared map[podShared]*podShared
 }
 
-func newInterner() *interner { return &interner{m: map[string]string{}} }
+func newInterner() *interner {
+	return &interner{m: map[string]string{}, shared: map[podShared]*podShared{}}
+}
+
+// share returns one copy of each podShared it is given, its strings each stored once.
+func (in *interner) share(v podShared) *podShared {
+	if v == noShared {
+		return nil
+	}
+	v = podShared{in.get(v.generateName), in.get(v.workloadKind), in.get(v.workloadName), in.get(v.configMaps), in.get(v.secrets)}
+	in.mu.Lock()
+	defer in.mu.Unlock()
+	if p, ok := in.shared[v]; ok {
+		return p
+	}
+	p := &v
+	in.shared[v] = p
+	return p
+}
 
 func (in *interner) get(s string) string {
 	if s == "" {
@@ -102,11 +151,13 @@ func toPodRow(p *corev1.Pod, in *interner) *podRow {
 	r.priorityClass = in.get(p.Spec.PriorityClassName)
 	r.serviceAccount = in.get(p.Spec.ServiceAccountName)
 	r.cpuLimitMilli, r.memLimitBytes = podLimits(p)
-	r.generateName = in.get(p.GenerateName)
 	r.labels = in.get(podLabelPairs(p.Labels))
+	cms, secrets := podrow.ReferenceNames(&p.Spec)
+	shared := podShared{generateName: p.GenerateName, configMaps: strings.Join(cms, refSeparator), secrets: strings.Join(secrets, refSeparator)}
 	if w, ok := agentWorkload(p); ok {
-		r.workloadKind, r.workloadName = in.get(w.Kind), in.get(w.Name)
+		shared.workloadKind, shared.workloadName = w.Kind, w.Name
 	}
+	r.shared = in.share(shared)
 	h, reason := podHealth(p)
 	r.health, r.healthReason = h, in.get(reason)
 	if ref := metav1.GetControllerOfNoCopy(p); ref != nil {

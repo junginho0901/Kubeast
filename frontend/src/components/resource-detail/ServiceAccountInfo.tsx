@@ -1,10 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
-import type { PodInfo } from '@/services/api'
-import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
 import { InfoSection, InfoRow, KeyValueTags, EventsSection, StatusBadge, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
@@ -12,6 +9,7 @@ import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
 import { useEffectivePermissions } from './service-account-info/useEffectivePermissions'
+import { useNamespacePodTable } from './useNamespacePodTable'
 
 interface Props {
   name: string
@@ -26,27 +24,13 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
 
   const podsEnabled = !!namespace && !!name
 
-  const { data: nsPods } = useQuery({
-    queryKey: ['sa-using-pods', namespace, name],
-    queryFn: () => api.getPods(namespace),
+  const usingPods = useNamespacePodTable({
     enabled: podsEnabled,
-    staleTime: 5_000,
-  })
-
-  useKubeWatchList({
-    enabled: podsEnabled,
+    namespace,
+    filter: { service_account: `${namespace}/${name}` },
     queryKey: ['sa-using-pods', namespace, name],
-    path: `/api/v1/namespaces/${namespace}/pods`,
-    query: 'watch=1',
-    applyEvent: (prev, event) => applyPodWatchEvent(prev as PodInfo[] | undefined, event),
-    gatherEveryMs: LIST_GATHER_MS,
+    keeps: (p: any) => (p?.service_account_name ?? p?.spec?.serviceAccountName) === name,
   })
-
-  const usingPods = (Array.isArray(nsPods) ? nsPods : []).filter((p: any) => {
-    const saName = p?.service_account_name ?? p?.spec?.serviceAccountName
-    return saName === name
-  })
-  const { items: pagedUsingPods, nav: usingPodsNav } = usePagination(usingPods, 10)
 
   const { bound: effectivePerms, loading: effectivePermsLoading, unreadable } = useEffectivePermissions({ namespace, name })
   const { items: pagedEffectivePerms, nav: effectivePermsNav } = usePagination(effectivePerms, 5)
@@ -188,8 +172,11 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
         )}
       </InfoSection>
 
-      <InfoSection title="Pods Using This ServiceAccount ({{n}})" titleValues={{ n: usingPods.length }}>
-        {usingPods.length === 0 ? (
+      <InfoSection title="Pods Using This ServiceAccount ({{n}})" titleValues={{ n: usingPods.total }}>
+        {usingPods.note}
+        {usingPods.loading ? (
+          <p className="text-xs text-slate-400"><Tx>Loading...</Tx></p>
+        ) : usingPods.total === 0 ? (
           <p className="text-xs text-slate-400"><Tx>No pod in this namespace uses this ServiceAccount.</Tx></p>
         ) : (
           <div className="overflow-x-auto">
@@ -204,7 +191,7 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {pagedUsingPods.map((p: any) => (
+                {usingPods.items.map((p) => (
                   <tr
                     key={`${p.namespace}/${p.name}`}
                     className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
@@ -219,7 +206,7 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
                 ))}
               </tbody>
             </table>
-            {usingPodsNav}
+            {usingPods.nav}
           </div>
         )}
       </InfoSection>

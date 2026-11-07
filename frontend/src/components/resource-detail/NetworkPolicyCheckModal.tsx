@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ShieldCheck } from 'lucide-react'
 import { api } from '@/services/api'
@@ -9,6 +9,9 @@ import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
 import { useAIContext } from '@/hooks/useAIContext'
 import { reasonText, resultLabel, ruleName, unevaluatedText, type Tr } from './netpolText'
+import { podPickerWay } from './namespacePodTable'
+
+const POD_SUGGESTIONS = 50
 
 // The window that asks k8s-service whether NetworkPolicy allows one connection between this pod or
 // workload and another end (a pod, a workload, a Service or an address), and shows which policy and
@@ -96,15 +99,35 @@ export default function NetworkPolicyCheckModal({ self, selfName, namespace, onC
   const [protocol, setProtocol] = useState(initial?.protocol ?? 'TCP')
 
   const namespaces = useQuery({ queryKey: ['cluster', 'namespaces', 'names'], queryFn: async () => (await api.getNamespaces()).map((n) => n.name).sort(), retry: false })
-  const nameList = useQuery({ queryKey: ['cluster', 'netpol-check-names', kind, otherNs], queryFn: () => names(kind, otherNs), enabled: kind !== 'ip' && !!otherNs, retry: false })
+  // A namespace's pods are counted from the server's rows first: past the line a name is typed and the server suggests matches.
+  const podCount = useQuery({
+    queryKey: ['cluster', 'netpol-check-pod-count', otherNs],
+    queryFn: () => api.getPodPage({ namespace: otherNs, offset: 0, limit: 1 }),
+    enabled: kind === 'pod' && !!otherNs,
+    retry: false,
+  })
+  const podWay = kind === 'pod' ? podPickerWay(podCount.data, podCount.error) : 'list'
+  const nameList = useQuery({ queryKey: ['cluster', 'netpol-check-names', kind, otherNs], queryFn: () => names(kind, otherNs), enabled: kind !== 'ip' && !!otherNs && podWay === 'list', retry: false })
+  const [podSearch, setPodSearch] = useState('')
+  useEffect(() => {
+    const id = setTimeout(() => setPodSearch(otherName.trim()), 250)
+    return () => clearTimeout(id)
+  }, [otherName])
+  const podMatches = useQuery({
+    queryKey: ['cluster', 'netpol-check-pod-search', otherNs, podSearch],
+    queryFn: () => api.getPodPage({ namespace: otherNs, q: podSearch || undefined, offset: 0, limit: POD_SUGGESTIONS }),
+    enabled: podWay === 'search' && !!otherNs,
+    retry: false,
+    placeholderData: keepPreviousData,
+  })
   const check = useMutation({
     mutationFn: () => {
-      const other = kind === 'ip' ? ip.trim() : `${kind}/${otherNs}/${otherName}`
+      const other = kind === 'ip' ? ip.trim() : `${kind}/${otherNs}/${otherName.trim()}`
       return outgoing ? api.checkNetworkPolicy(self, other, port.trim(), protocol) : api.checkNetworkPolicy(other, self, port.trim(), protocol)
     },
   })
   const kinds = KINDS.filter((k) => outgoing || k !== 'service')
-  const ready = kind === 'ip' ? ip.trim() !== '' : otherName !== ''
+  const ready = kind === 'ip' ? ip.trim() !== '' : otherName.trim() !== ''
   // Opened from a flow: the connection is known, so answer it straight away.
   useEffect(() => {
     if (initial) check.mutate()
@@ -179,14 +202,37 @@ export default function NetworkPolicyCheckModal({ self, selfName, namespace, onC
               options={(namespaces.data ?? [namespace]).map((n) => ({ value: n, label: n, testId: `netpol-check-namespace-opt-${n}` }))}
               testId="netpol-check-namespace"
             />
-            <CustomDropdown
-              label={tr('netpolCheck.name', 'Name')}
-              value={otherName}
-              onChange={setOtherName}
-              placeholder={nameList.isLoading ? tr('common.loading', 'Loading...') : tr('netpolCheck.pickName', 'Choose one')}
-              options={(nameList.data ?? []).map((n) => ({ value: n, label: n, testId: `netpol-check-name-opt-${n}` }))}
-              testId="netpol-check-name"
-            />
+            {podWay === 'search' ? (
+              <div>
+                <label className={LABEL} htmlFor="netpol-check-name-input">{tr('netpolCheck.name', 'Name')}</label>
+                <input
+                  id="netpol-check-name-input"
+                  className={INPUT}
+                  list="netpol-check-name-matches"
+                  value={otherName}
+                  onChange={(e) => setOtherName(e.target.value)}
+                  placeholder={tr('netpolCheck.typePodName', 'Type a pod name')}
+                  data-testid="netpol-check-name-input"
+                />
+                <datalist id="netpol-check-name-matches">
+                  {(podMatches.data?.items ?? []).map((p) => <option key={p.name} value={p.name} />)}
+                </datalist>
+                <p className="mt-1 text-[11px] text-slate-400" data-testid="netpol-check-name-many">
+                  {podCount.data
+                    ? tr('netpolCheck.manyPods', 'This namespace has {{total}} pods, too many to list: type a name, and up to {{shown}} that match it are suggested.', { total: podCount.data.stats.total, shown: POD_SUGGESTIONS })
+                    : tr('netpolCheck.podsUncounted', 'The pods of this namespace could not be counted: type a name, and up to {{shown}} that match it are suggested.', { shown: POD_SUGGESTIONS })}
+                </p>
+              </div>
+            ) : (
+              <CustomDropdown
+                label={tr('netpolCheck.name', 'Name')}
+                value={otherName}
+                onChange={setOtherName}
+                placeholder={nameList.isLoading || podWay === 'wait' ? tr('common.loading', 'Loading...') : tr('netpolCheck.pickName', 'Choose one')}
+                options={(nameList.data ?? []).map((n) => ({ value: n, label: n, testId: `netpol-check-name-opt-${n}` }))}
+                testId="netpol-check-name"
+              />
+            )}
           </div>
         )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

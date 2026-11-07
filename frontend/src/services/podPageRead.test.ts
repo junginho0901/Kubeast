@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient } from '@tanstack/react-query'
 import type { PodPage } from './api'
-import { podRowChanged, readPodPageSince } from './podPageRead'
+import { podPagePollEvery, podRowChanged, readPodPageSince } from './podPageRead'
 import dashboardQueriesSrc from '@/pages/dashboard/hooks/useDashboardQueries.ts?raw'
 import podGroupListSrc from '@/pages/resource-graph/PodGroupList.tsx?raw'
 import useServerPodsSrc from '@/components/resource-detail/useServerPods.tsx?raw'
@@ -120,5 +120,19 @@ describe('whether the row of an open Pod drawer changed', () => {
     expect(podsPageSrc).toContain('podRowChanged(before?.items, page.items, detail)')
     expect(podsPageSrc).toContain("queryKey: ['pod-describe', detail.namespace, detail.name]")
     expect(podsPageSrc).not.toContain("queryKey: ['pod-describe'] }")
+  })
+})
+
+describe('how often a followed page of pods is read again', () => {
+  it('every 3 s, every 10 s past ten thousand pods, every 30 s for listed rows, and not before an answer', () => {
+    const withPods = (total: number, revision = 'r1') => ({ ...page(revision, ['a']), stats: { total } }) as unknown as PodPage
+    expect(podPagePollEvery(withPods(10_000))).toBe(3_000)
+    expect(podPagePollEvery(withPods(10_001))).toBe(10_000)
+    expect(podPagePollEvery(withPods(50_000, ''))).toBe(30_000)
+    expect(podPagePollEvery(undefined)).toBe(false)
+  })
+
+  it('is the Pods page\'s, which a drawer\'s table of many pods follows too', () => {
+    expect(podsPageSrc).toContain('refetchInterval: (query) => podPagePollEvery(query.state.data),')
   })
 })
