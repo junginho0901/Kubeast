@@ -124,12 +124,7 @@ async def root():
 @app.get("/health")
 async def health_check():
     """상세 헬스 체크"""
-    openai_status = "configured" if settings.OPENAI_API_KEY else "not_configured"
-    
-    return {
-        "status": "healthy",
-        "openai": openai_status,
-    }
+    return {"status": "healthy"}
 
 
 if __name__ == "__main__":

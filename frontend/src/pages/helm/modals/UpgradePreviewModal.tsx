@@ -12,6 +12,7 @@ export default function UpgradePreviewModal({
   name,
   values,
   preview,
+  refusal,
   onClose,
   onApplied,
 }: {
@@ -19,6 +20,8 @@ export default function UpgradePreviewModal({
   name: string
   values: string
   preview: HelmUpgradeResponse
+  // the server refused the preview: its answer stands where the diff would, and Apply stays off
+  refusal?: string
   onClose: () => void
   onApplied: () => void
 }) {
@@ -43,14 +46,22 @@ export default function UpgradePreviewModal({
   })
 
   const diff = preview.diff ?? ''
-  const noChange = diff.trim() === ''
+  const noDiff = diff.trim() === ''
+  const changedMasked = preview.changed_masked ?? []
+  const noChange = noDiff && !preview.values_changed
   const applying = applyMutation.isPending
+  const hiddenPart = changedMasked.length > 0 ? `, 새 값을 쓰거나 지운 가려진 값: ${changedMasked.join(', ')}` : ''
+  const whatChanges = noChange ? '바뀌는 것 없음' : `${noDiff ? 'manifest 차이는 없고 values가 바뀜' : 'manifest 차이 있음'}${hiddenPart}`
 
-  useAIContext({
+  useAIContext(refusal !== undefined ? {
     source: 'HelmUpgradePreview',
-    summary: `Helm 릴리스 ${namespace}/${name} 업그레이드 미리보기 — 리비전 ${preview.fromRevision}에서, ${noChange ? '바뀌는 것 없음' : 'manifest 차이 있음'}`,
-    data: { release: name, namespace, from_revision: preview.fromRevision, chart_version: preview.chartVersion, diff: diff.slice(0, 4096), kept_masked: preview.kept_masked, error: error ?? undefined },
-  }, [namespace, name, preview, diff, noChange, error])
+    summary: `Helm 릴리스 ${namespace}/${name} 업그레이드 미리보기 — 서버가 거절함, 적용 불가: ${refusal}`,
+    data: { release: name, namespace, refusal },
+  } : {
+    source: 'HelmUpgradePreview',
+    summary: `Helm 릴리스 ${namespace}/${name} 업그레이드 미리보기 — 리비전 ${preview.fromRevision}에서, ${whatChanges}`,
+    data: { release: name, namespace, from_revision: preview.fromRevision, chart_version: preview.chartVersion, diff: diff.slice(0, 4096), kept_masked: preview.kept_masked, changed_masked: preview.changed_masked, values_changed: preview.values_changed, error: error ?? undefined },
+  }, [namespace, name, preview, diff, whatChanges, error, refusal])
 
   return (
     <ModalOverlay onClose={applying ? () => undefined : onClose}>
@@ -69,10 +80,19 @@ export default function UpgradePreviewModal({
             {t('helmReleaseDetail.upgrade.keptMasked', { names: preview.kept_masked.join(', ') })}
           </p>
         )}
+        {changedMasked.length > 0 && (
+          <p className="text-sm text-slate-400 mb-4" data-testid="helm-upgrade-changed-masked">
+            {t('helmReleaseDetail.upgrade.changedMasked', { names: changedMasked.join(', ') })}
+          </p>
+        )}
 
-        {noChange ? (
+        {refusal !== undefined ? (
+          <div className="rounded-sm border border-slate-600 bg-slate-800/40 px-3 py-4 text-sm text-red-300 whitespace-pre-wrap break-words" data-testid="helm-upgrade-refusal">
+            {refusal}
+          </div>
+        ) : noDiff ? (
           <div className="rounded-sm border border-slate-600 bg-slate-800/40 px-3 py-4 text-sm text-slate-300">
-            {t('helmReleaseDetail.upgrade.noChange')}
+            {noChange ? t('helmReleaseDetail.upgrade.noChange') : t('helmReleaseDetail.upgrade.noDiffValuesChange')}
           </div>
         ) : (
           <DiffView diff={diff} />
@@ -92,7 +112,7 @@ export default function UpgradePreviewModal({
           <button
             type="button"
             onClick={() => applyMutation.mutate()}
-            disabled={applying || noChange}
+            disabled={applying || noChange || refusal !== undefined}
             className="px-4 py-2 text-sm bg-primary-600 hover:bg-primary-700 text-white rounded-lg disabled:opacity-40 inline-flex items-center gap-2"
           >
             {applying && <Loader2 className="w-4 h-4 animate-spin" />}

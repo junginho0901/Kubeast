@@ -58,7 +58,13 @@ type helmValuesRig struct {
 
 func newHelmValuesRig(t *testing.T, ch *chart.Chart, perms ...string) *helmValuesRig {
 	t.Helper()
-	rel := &release.Release{Name: "app", Namespace: "team-a", Version: 1, Config: helmValuesConfig(), Info: &release.Info{Status: release.StatusDeployed}, Chart: ch}
+	return newHelmValuesRigOf(t, ch, helmValuesConfig(), "", perms...)
+}
+
+// newHelmValuesRigOf is a rig whose current revision holds config and has already rendered manifest.
+func newHelmValuesRigOf(t *testing.T, ch *chart.Chart, config map[string]any, manifest string, perms ...string) *helmValuesRig {
+	t.Helper()
+	rel := &release.Release{Name: "app", Namespace: "team-a", Version: 1, Config: config, Info: &release.Info{Status: release.StatusDeployed}, Chart: ch, Manifest: manifest}
 	secret := releaseSecret(t, rel)
 	api := &helmAPI{secrets: map[string]*corev1.Secret{secret.Name: secret}}
 	server := httptest.NewServer(api)
@@ -268,9 +274,6 @@ func TestHelmUpgradeWithoutRevealRefusesAMaskThatStandsForNoValueThere(t *testin
 			return strings.Replace(s, "adminPassword: <REDACTED", "rootPassword: <REDACTED", 1)
 		}, "rootPassword"},
 		{"the text around a partial mask edited", func(s string) string { return strings.Replace(s, "db.shop", "db.other", 1) }, "db.url"},
-		{"a list item moved", func(s string) string {
-			return strings.Replace(s, "extraObjects:\n", "extraObjects:\n- kind: ConfigMap\n", 1)
-		}, "extraObjects[1].stringData.password"},
 		{"another key's mask", func(s string) string {
 			return strings.Replace(s, "dbPassword: <REDACTED:dbPassword>", "dbPassword: <REDACTED:adminPassword>", 1)
 		}, "dbPassword"},

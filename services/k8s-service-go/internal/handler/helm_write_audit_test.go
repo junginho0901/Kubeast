@@ -50,6 +50,10 @@ func (a *helmAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.URL.Path == "/version":
 		writeAPIJSON(w, http.StatusOK, map[string]string{"major": "1", "minor": "33", "gitVersion": "v1.33.0"})
+	case r.URL.Path == "/openapi/v2":
+		// An empty document, so a chart that renders objects passes the SDK's validation.
+		w.Header().Set("Content-Type", "application/com.github.proto-openapi.spec.v2.v1.0+protobuf")
+		w.WriteHeader(http.StatusOK)
 	case r.URL.Path == "/api":
 		writeAPIJSON(w, http.StatusOK, metav1.APIVersions{TypeMeta: metav1.TypeMeta{Kind: "APIVersions"}, Versions: []string{"v1"}})
 	case r.URL.Path == "/apis":

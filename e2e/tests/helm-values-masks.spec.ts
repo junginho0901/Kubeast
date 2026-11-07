@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { gunzipSync, gzipSync } from 'node:zlib'
 
-import { test, expect, type APIRequestContext } from '@playwright/test'
+import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 
 // A release's editor without resource.secret.reveal reads its values masked. A placeholder left where it was shown stands
 // for the value, on the Values tab's save and on the API's: the release's values and what they render stay, and the edit
@@ -39,6 +39,14 @@ const tryKubectl = (args: string) => {
   }
 }
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Requested-With': 'XMLHttpRequest' })
+
+// Monaco's start and end of the text by the system it reads from the page's user agent (the chromium project's is
+// Windows): Cmd+Up and Cmd+Down on a Mac, Ctrl+Home and Ctrl+End elsewhere. ControlOrMeta follows the machine instead.
+const textKey = async (page: Page, to: 'start' | 'end') => {
+  const mac = await page.evaluate(() => navigator.userAgent.includes('Macintosh'))
+  if (mac) return to === 'start' ? 'Meta+ArrowUp' : 'Meta+ArrowDown'
+  return to === 'start' ? 'Control+Home' : 'Control+End'
+}
 
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
@@ -111,7 +119,7 @@ test.describe('a Helm release editor without reveal', () => {
     const res = await request.get(`/api/v1/auth/admin/audit-logs?action=helm.release.upgrade&actor_email=${encodeURIComponent(EMAIL)}&limit=50`, { headers: bearer(admin) })
     expect(res.ok(), await res.text()).toBeTruthy()
     const body = await res.json()
-    return ((Array.isArray(body) ? body : body.items) ?? []) as { Result: string; Error?: string; After: { kept_masked?: string[]; values_keys?: string[] } }[]
+    return ((Array.isArray(body) ? body : body.items) ?? []) as { Result: string; Error?: string; After: { kept_masked?: string[]; changed_masked?: string[]; values_keys?: string[] } }[]
   }
 
   test('the values stay on the tab\'s save and on the API\'s, and a placeholder anywhere else is refused', async ({ page, request }) => {
@@ -142,7 +150,7 @@ test.describe('a Helm release editor without reveal', () => {
       expect((await rows(request))[0].Error).toContain('note')
     })
 
-    await test.step('the Values tab: Edit, a change, Preview says what stays, Apply', async () => {
+    await test.step('the Values tab: the same placeholder is refused in the preview, which says why, with Apply off', async () => {
       await page.context().clearCookies()
       await page.goto('/login')
       await page.locator('input[autocomplete="email"]').first().fill(EMAIL)
@@ -153,9 +161,23 @@ test.describe('a Helm release editor without reveal', () => {
       await page.getByRole('button', { name: /^values$/i }).click({ timeout: 30_000 })
       await expect(page.locator('.monaco-editor .view-lines').first()).toContainText('<REDACTED:adminPassword>', { timeout: 30_000 })
       await page.getByRole('button', { name: /^(edit values|values 편집)$/i }).click()
+      await page.locator('.monaco-editor').first().click()
+      await page.keyboard.press(await textKey(page, 'end'))
+      await page.keyboard.type('note: <REDACTED:adminPassword>')
+      await page.getByRole('button', { name: /dry.?run/i }).click()
+      await expect(page.getByTestId('helm-upgrade-refusal')).toContainText('where it stands for no value (note)', { timeout: 30_000 })
+      await expect(page.getByRole('button', { name: /^(apply upgrade|업그레이드 실행)$/i })).toBeDisabled()
+      await page.keyboard.press('Escape')
+      await expect(page.getByTestId('helm-upgrade-refusal')).toHaveCount(0)
+      await page.getByRole('button', { name: /^(cancel|취소)$/i }).click()
+      expect(storedValues(2), 'no second revision').toBeNull()
+    })
+
+    await test.step('the Values tab: Edit, a change, Preview says what stays, Apply', async () => {
+      await page.getByRole('button', { name: /^(edit values|values 편집)$/i }).click()
       await expect(page.getByTestId('helm-values-masked-note')).toHaveText(/<REDACTED:…>/)
       await page.locator('.monaco-editor').first().click()
-      await page.keyboard.press('ControlOrMeta+End')
+      await page.keyboard.press(await textKey(page, 'end'))
       await page.keyboard.type('zeta: 1')
       await page.getByRole('button', { name: /dry.?run/i }).click()
       await expect(page.getByTestId('helm-upgrade-kept-masked')).toHaveText(/adminPassword, db\.url/, { timeout: 30_000 })
@@ -185,6 +207,97 @@ test.describe('a Helm release editor without reveal', () => {
       const res = await upgrade((await shown()).replace('<REDACTED:adminPassword>', 'fake-new-value'), false)
       expect(res.status(), await res.text()).toBe(200)
       expect(storedValues(4)).toEqual({ ...CONFIG, adminPassword: 'fake-new-value', zeta: 1 })
+    })
+
+    await test.step('only a hidden value written over: the preview says where, Apply is open and the value goes in', async () => {
+      const newUrl = 'postgres://app:fake-other-password@db.shop:5432/app'
+      // the template renders nothing of db.url, so the diff has nothing to show for it
+      const preview = await upgrade((await shown()).replace('postgres://app:<REDACTED:password>@db.shop:5432/app', newUrl), true)
+      const text = await preview.text()
+      expect(preview.status(), text).toBe(200)
+      expect(JSON.parse(text).diff ?? '').toBe('')
+      expect(JSON.parse(text).changed_masked).toEqual(['db.url'])
+      expect(text).not.toContain('fake-other-password')
+      for (const secret of SECRETS) expect(text).not.toContain(secret)
+
+      await page.reload()
+      await page.getByRole('button', { name: /^values$/i }).click({ timeout: 30_000 })
+      await expect(page.locator('.monaco-editor .view-lines').first()).toContainText('<REDACTED:password>', { timeout: 30_000 })
+      await page.getByRole('button', { name: /^(edit values|values 편집)$/i }).click()
+      await page.locator('.monaco-editor').first().click()
+      // line 3 of adminPassword, db, url, replicaCount, zeta
+      await page.keyboard.press(await textKey(page, 'start'))
+      await page.keyboard.press('ArrowDown')
+      await page.keyboard.press('ArrowDown')
+      await page.keyboard.press('Home')
+      await page.keyboard.press('Shift+End')
+      await page.keyboard.type(`url: ${newUrl}`)
+      await page.getByRole('button', { name: /dry.?run/i }).click()
+      await expect(page.getByTestId('helm-upgrade-changed-masked')).toHaveText(/: db\.url$/, { timeout: 30_000 })
+      await expect(page.getByText(/^(No changes will be applied\.|적용될 변경이 없습니다\.)$/)).toHaveCount(0)
+      await page.getByRole('button', { name: /^(apply upgrade|업그레이드 실행)$/i }).click()
+      await expect.poll(() => storedValues(5), { timeout: 30_000 }).toEqual({ ...CONFIG, adminPassword: 'fake-new-value', db: { url: newUrl }, zeta: 1 })
+      await expect.poll(async () => (await rows(request))[0]?.After?.changed_masked, { timeout: 15_000 }).toEqual(['db.url'])
+      expect(JSON.stringify(await rows(request))).not.toContain('fake-other-password')
+    })
+
+    const current = { ...CONFIG, adminPassword: 'fake-new-value', db: { url: 'postgres://app:fake-other-password@db.shop:5432/app' }, zeta: 1 }
+
+    await test.step('a plain value nothing renders: the preview says the values change, and Apply is open', async () => {
+      const preview = await upgrade(`${await shown()}omega: 1\n`, true)
+      const text = await preview.text()
+      expect(preview.status(), text).toBe(200)
+      expect(JSON.parse(text).diff ?? '').toBe('')
+      expect(JSON.parse(text).values_changed).toBe(true)
+      expect(JSON.parse(text).changed_masked).toBeUndefined()
+
+      await page.reload()
+      await page.getByRole('button', { name: /^values$/i }).click({ timeout: 30_000 })
+      await expect(page.locator('.monaco-editor .view-lines').first()).toContainText('<REDACTED:adminPassword>', { timeout: 30_000 })
+      await page.getByRole('button', { name: /^(edit values|values 편집)$/i }).click()
+      await page.locator('.monaco-editor').first().click()
+      await page.keyboard.press(await textKey(page, 'end'))
+      await page.keyboard.type('omega: 1')
+      await page.getByRole('button', { name: /dry.?run/i }).click()
+      await expect(page.getByText(/^(No difference shows in the manifest|화면에 보이는 차이는 없지만)/)).toHaveCount(1, { timeout: 30_000 })
+      await expect(page.getByText(/^(No changes will be applied\.|적용될 변경이 없습니다\.)$/)).toHaveCount(0)
+      await page.getByRole('button', { name: /^(apply upgrade|업그레이드 실행)$/i }).click()
+      await expect.poll(() => storedValues(6), { timeout: 30_000 }).toEqual({ ...current, omega: 1 })
+    })
+
+    await test.step('a right guess and a wrong one over a placeholder read the same to the byte', async () => {
+      // db.url, as the template renders nothing of it
+      const masked = 'postgres://app:<REDACTED:password>@db.shop:5432/app'
+      const right = await upgrade((await shown()).replace(masked, current.db.url), true)
+      const wrong = await upgrade((await shown()).replace(masked, 'postgres://app:fake-wrong-guess@db.shop:5432/app'), true)
+      const text = await right.text()
+      expect(right.status(), text).toBe(200)
+      expect(JSON.parse(text).values_changed).toBe(true)
+      expect(JSON.parse(text).changed_masked).toEqual(['db.url'])
+      expect(await wrong.text()).toBe(text)
+    })
+
+    await test.step('a list item removed: each value stays with its item, and a removal that cannot say which is refused', async () => {
+      const first = `fake-first-${run}`
+      const second = `fake-second-${run}`
+      const withUsers = `${await shown()}users:\n- name: first\n  password: ${first}\n- name: second\n  password: ${second}\n`
+      const added = await upgrade(withUsers, false)
+      expect(added.status(), await added.text()).toBe(200)
+      const read = await shown()
+      expect(read).toContain('- name: first\n  password: <REDACTED:password>\n')
+      const removed = await upgrade(read.replace('- name: first\n  password: <REDACTED:password>\n', ''), false)
+      const text = await removed.text()
+      expect(removed.status(), text).toBe(200)
+      expect(JSON.parse(text).changed_masked).toEqual(['users[0].password'])
+      expect(JSON.parse(text).kept_masked).toContain('users[1].password')
+      expect(storedValues(8)).toEqual({ ...current, omega: 1, users: [{ name: 'second', password: second }] })
+
+      const twins = await upgrade(`${await shown()}urls:\n- postgres://app:fake-one-${run}@db.shop/app\n- postgres://app:fake-two-${run}@db.shop/app\n`, false)
+      expect(twins.status(), await twins.text()).toBe(200)
+      const refused = await upgrade((await shown()).replace('- postgres://app:<REDACTED:password>@db.shop/app\n', ''), false)
+      expect(refused.status(), await refused.text()).toBe(400)
+      expect(String((await refused.json()).detail)).toContain('urls[0]')
+      expect(storedValues(10), 'nothing was written').toBeNull()
     })
   })
 })

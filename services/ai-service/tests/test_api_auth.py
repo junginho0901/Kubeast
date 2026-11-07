@@ -13,16 +13,16 @@ def test_health_is_public_and_minimal():
     assert res.json() == {"status": "healthy"}
 
 
-def test_the_services_own_health_line_names_no_model_and_no_address(monkeypatch):
+def test_the_services_own_health_line_says_only_that_it_is_up(monkeypatch):
     import main
 
     monkeypatch.setattr(main.settings, "OPENAI_MODEL", "fake-model-name")
     monkeypatch.setattr(main.settings, "OPENAI_BASE_URL", "https://fake-model-address.example/v1")
-    res = client.get("/health")
-    assert res.status_code == 200
-    assert res.json()["status"] == "healthy"
-    assert "fake-model-name" not in res.text and "fake-model-address" not in res.text
-    assert not {"model", "openai_base_url"} & set(res.json())
+    for key in ("fake-key-value", ""):
+        monkeypatch.setattr(main.settings, "OPENAI_API_KEY", key)
+        res = client.get("/health")
+        assert res.status_code == 200
+        assert res.json() == {"status": "healthy"}
 
 
 def test_model_config_setup_route_is_gone():

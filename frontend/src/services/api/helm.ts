@@ -81,6 +81,10 @@ export interface HelmUpgradeResponse {
   chartVersion: string
   // where a value hidden from the caller stays as it was, for a caller without resource.secret.reveal
   kept_masked?: string[]
+  // where such a value was written over or removed, which a masked diff cannot show; names only, no value
+  changed_masked?: string[]
+  // the values sent differ from those the caller read, which the diff may not show
+  values_changed?: boolean
 }
 
 export interface HelmUninstallResponse {

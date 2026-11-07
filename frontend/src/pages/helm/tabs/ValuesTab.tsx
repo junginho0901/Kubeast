@@ -24,6 +24,8 @@ export default function ValuesTab({ namespace, name }: { namespace: string; name
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [preview, setPreview] = useState<HelmUpgradeResponse | null>(null)
+  // what the server answered when it refused the preview, which the window says in place of a diff
+  const [refusal, setRefusal] = useState<string | null>(null)
 
   const current = valuesQuery.data?.content ?? ''
 
@@ -100,14 +102,11 @@ export default function ValuesTab({ namespace, name }: { namespace: string; name
                   values: draft,
                   dryRun: true,
                 })
+                setRefusal(null)
                 setPreview(r)
               } catch (err: any) {
-                setPreview({
-                  dryRun: true,
-                  fromRevision: 0,
-                  chartVersion: '',
-                  diff: err?.response?.data?.detail ?? err?.message ?? 'dry-run failed',
-                })
+                setRefusal(String(err?.response?.data?.detail ?? err?.message ?? 'dry-run failed'))
+                setPreview({ dryRun: true, fromRevision: 0, chartVersion: '' })
               }
             }}
             className="inline-flex items-center gap-1.5 rounded-sm bg-primary-600 hover:bg-primary-700 px-3 py-1.5 text-sm text-white disabled:opacity-40"
@@ -117,12 +116,14 @@ export default function ValuesTab({ namespace, name }: { namespace: string; name
         </div>
         <div className="rounded-lg bg-slate-950 border border-slate-700 overflow-hidden">
           {/* keyed so the read-only editor above is not reused for editing: Monaco keeps
-              readOnly from the previous options unless it is set here explicitly */}
+              readOnly from the previous options unless it is set here explicitly. The text
+              starts from the draft and the editor keeps it: a value passed back on each render
+              lands after keys pressed meanwhile and writes over them. */}
           <Editor
             key="values-edit"
             height="60vh"
             defaultLanguage="yaml"
-            value={draft}
+            defaultValue={draft}
             theme="vs-dark"
             onChange={(v) => setDraft(v ?? '')}
             options={{
@@ -148,9 +149,14 @@ export default function ValuesTab({ namespace, name }: { namespace: string; name
           name={name}
           values={draft}
           preview={preview}
-          onClose={() => setPreview(null)}
+          refusal={refusal ?? undefined}
+          onClose={() => {
+            setPreview(null)
+            setRefusal(null)
+          }}
           onApplied={() => {
             setPreview(null)
+            setRefusal(null)
             setEditing(false)
             setDraft('')
           }}

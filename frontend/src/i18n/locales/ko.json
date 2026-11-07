@@ -4321,7 +4321,9 @@
       "apply": "업그레이드 실행",
       "applying": "업그레이드 중...",
       "maskedNote": "<REDACTED:…>로 보이는 값은 그 줄을 그대로 두면 유지됩니다. 바꾸려면 그 자리에 새 값을 쓰고, 없애려면 줄을 지우세요.",
-      "keptMasked": "숨겨진 값은 그대로 둡니다: {{names}}"
+      "keptMasked": "숨겨진 값은 그대로 둡니다: {{names}}",
+      "changedMasked": "새 값을 쓰거나 지운 숨겨진 값: {{names}}",
+      "noDiffValuesChange": "화면에 보이는 차이는 없지만 이 values는 지금 보이는 것과 달라 새로 저장됩니다. 바뀐 값이 여기서 가려졌거나, 훅에서만 쓰이거나, 차트가 쓰지 않는 값일 수 있습니다."
     },
     "test": {
       "button": "테스트 실행",
