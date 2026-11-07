@@ -277,6 +277,8 @@ spec:
               value: "{{ .Values.multicluster.wsWatchStartConcurrency | default 16 }}"
             - name: BIG_READ_CONCURRENCY
               value: "{{ .Values.multicluster.bigReadConcurrency | default 2 }}"
+            - name: EVENT_LIST_CONCURRENCY
+              value: "{{ .Values.multicluster.eventListConcurrency | default 4 }}"
             {{- with .Values.features.prometheus.auth.existingSecret }}
             - name: PROMETHEUS_AUTH_HEADER
               valueFrom:

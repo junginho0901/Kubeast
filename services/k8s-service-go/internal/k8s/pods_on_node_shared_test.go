@@ -45,6 +45,8 @@ type clusterAPI struct {
 	// holdCache, when set, holds every list as kubeast:cache until it is closed
 	holdCache chan struct{}
 	calls     []apiCall
+	// cacheNow and cacheMost are the requests as kubeast:cache under way now and at most
+	cacheNow, cacheMost int
 }
 
 func (a *clusterAPI) allowed(user, verb, resource, namespace, selector string) bool {
@@ -136,6 +138,17 @@ func (a *clusterAPI) serve(w http.ResponseWriter, r *http.Request) {
 		verb = "get"
 	}
 	a.note(apiCall{user: user, groups: groups, verb: verb, resource: resource, namespace: namespace, selector: selector})
+	if user == overviewCacheUser {
+		a.mu.Lock()
+		a.cacheNow++
+		a.cacheMost = max(a.cacheMost, a.cacheNow)
+		a.mu.Unlock()
+		defer func() {
+			a.mu.Lock()
+			a.cacheNow--
+			a.mu.Unlock()
+		}()
+	}
 	if user == overviewCacheUser && a.holdCache != nil {
 		<-a.holdCache
 	}

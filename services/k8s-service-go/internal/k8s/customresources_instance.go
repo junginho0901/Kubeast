@@ -257,9 +257,7 @@ func (s *Service) DescribeCustomResourceInstance(ctx context.Context, group, ver
 	if evtNs == "-" {
 		evtNs = ""
 	}
-	events, eventsErr := s.clientsetCtx(ctx).CoreV1().Events(evtNs).List(ctx, metav1.ListOptions{
-		FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=%s", name, item.GetKind()),
-	})
+	events, eventsErr := s.objectEvents(ctx, evtNs, item.GetKind(), name)
 
 	result := rows[0]
 	result["uid"] = string(item.GetUID())

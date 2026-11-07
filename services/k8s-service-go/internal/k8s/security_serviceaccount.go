@@ -45,9 +45,7 @@ func (s *Service) DescribeServiceAccount(ctx context.Context, namespace, name st
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
-			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=ServiceAccount", name),
-		})
+		events, eventsErr = s.objectEvents(ctx, namespace, "ServiceAccount", name)
 	}()
 	wg.Wait()
 

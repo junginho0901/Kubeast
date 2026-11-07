@@ -35,9 +35,7 @@ func (s *Service) DescribeClusterRole(ctx context.Context, name string) (map[str
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events("").List(ctx, metav1.ListOptions{
-			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=ClusterRole", name),
-		})
+		events, eventsErr = s.objectEvents(ctx, "", "ClusterRole", name)
 	}()
 	wg.Wait()
 

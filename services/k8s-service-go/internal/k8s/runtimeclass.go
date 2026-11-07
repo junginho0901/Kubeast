@@ -35,9 +35,7 @@ func (s *Service) DescribeRuntimeClass(ctx context.Context, name string) (map[st
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events("").List(ctx, metav1.ListOptions{
-			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=RuntimeClass", name),
-		})
+		events, eventsErr = s.objectEvents(ctx, "", "RuntimeClass", name)
 	}()
 	wg.Wait()
 

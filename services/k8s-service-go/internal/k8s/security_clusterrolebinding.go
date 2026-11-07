@@ -35,9 +35,7 @@ func (s *Service) DescribeClusterRoleBinding(ctx context.Context, name string) (
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events("").List(ctx, metav1.ListOptions{
-			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=ClusterRoleBinding", name),
-		})
+		events, eventsErr = s.objectEvents(ctx, "", "ClusterRoleBinding", name)
 	}()
 	wg.Wait()
 

@@ -46,9 +46,7 @@ func (s *Service) DescribePDB(ctx context.Context, namespace, name string) (map[
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
-			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=PodDisruptionBudget", name),
-		})
+		events, eventsErr = s.objectEvents(ctx, namespace, "PodDisruptionBudget", name)
 	}()
 	wg.Wait()
 

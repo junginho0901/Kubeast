@@ -47,9 +47,7 @@ func (s *Service) DescribeDeployment(ctx context.Context, namespace, name string
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
-			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Deployment", name),
-		})
+		events, eventsErr = s.objectEvents(ctx, namespace, "Deployment", name)
 	}()
 	wg.Wait()
 

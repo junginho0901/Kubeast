@@ -15,6 +15,7 @@ import (
 
 	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
+	"github.com/junginho0901/kubeast/services/pkg/limits"
 	"github.com/junginho0901/kubeast/services/pkg/redact"
 )
 
@@ -158,15 +159,36 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 		} else if errors.Is(err, errForbidden) {
 			status = http.StatusForbidden
 		}
-		text, stats := redactToolOutput(err.Error())
+		message := err.Error()
+		defer bigAnswerPlace(ctx, len(message))()
+		text, stats := redactToolOutput(message)
 		respondJSON(w, status, ToolCallResponse{Error: text, Redacted: addReadMasks(stats, masked), Access: &access, Requests: trailOf(rec)})
 		return
 	}
 
 	// Everything a tool returns is bound for the model: mask credentials
 	// (and Secret data) here, once, for every tool.
+	defer bigAnswerPlace(ctx, len(output))()
 	content, stats := redactToolOutput(output)
 	respondJSON(w, http.StatusOK, ToolCallResponse{Content: content, Redacted: addReadMasks(stats, masked), Access: &access, Requests: trailOf(rec)})
+}
+
+// bigAnswerBytes: an answer past this is masked and written holding one of bigAnswerSlots; the output cap is 1 MiB.
+const bigAnswerBytes = 256 << 10
+
+// bigAnswerSlots: masking and writing a 1 MiB kubectl list allocates 7 MiB (BenchmarkMaskingAndWritingABigAnswer), so three take 21 MiB of the heap kubectl's places leave.
+var bigAnswerSlots = limits.NewSlots("big tool answer", 3)
+
+// bigAnswerPlace waits for a place for an answer of size bytes while the call has time; the answer goes out either way.
+func bigAnswerPlace(ctx context.Context, size int) func() {
+	if size <= bigAnswerBytes {
+		return func() {}
+	}
+	release, err := bigAnswerSlots.Take(ctx)
+	if err != nil {
+		return func() {}
+	}
+	return release
 }
 
 func trailOf(rec *accesstrail.Recorder) *accesstrail.Trail {

@@ -123,9 +123,20 @@ type nodePodList struct {
 	namespaces []string
 }
 
+// nodeReadsAtOnce: a node of 40 pods holds about 0.7 MiB while it is read, and at the client's 100 a second a read would take over 160 ms before 16 places set the pace.
+const nodeReadsAtOnce = 16
+
+// nodeReadPlaces bound the shared node reads of each cluster at once; without them the client's burst let 200 through together.
+var nodeReadPlaces = newClusterPlaces("node pods read", nodeReadsAtOnce)
+
 // podsOnNodeShared keeps the shared read's rows of the allowed namespaces and lists the refused ones as the caller, in the order of namespaces.
 func (s *Service) podsOnNodeShared(ctx context.Context, b *clientBundle, node string, namespaces []string, all bool, allowed []string) ([]map[string]interface{}, error) {
 	list, _, err := b.nodePods.Do(ctx, node, func(ctx context.Context) (*nodePodList, error) {
+		release, err := nodeReadPlaces.take(ctx, b.id)
+		if err != nil {
+			return nil, err
+		}
+		defer release()
 		return readNodePods(ctx, b.cacheClient, node)
 	})
 	if err != nil {

@@ -2,11 +2,9 @@ package k8s
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -66,9 +64,7 @@ func (s *Service) describeGatewayObject(ctx context.Context, resource, kind, nam
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
-			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=%s", name, kind),
-		})
+		events, eventsErr = s.objectEvents(ctx, namespace, kind, name)
 	}()
 	wg.Wait()
 

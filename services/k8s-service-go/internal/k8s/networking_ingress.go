@@ -54,9 +54,7 @@ func (s *Service) DescribeIngress(ctx context.Context, namespace, name string) (
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
-			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Ingress", name),
-		})
+		events, eventsErr = s.objectEvents(ctx, namespace, "Ingress", name)
 	}()
 	wg.Wait()
 
@@ -152,9 +150,7 @@ func (s *Service) DescribeIngressClass(ctx context.Context, name string) (map[st
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events("").List(ctx, metav1.ListOptions{
-			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=IngressClass", name),
-		})
+		events, eventsErr = s.objectEvents(ctx, "", "IngressClass", name)
 	}()
 	wg.Wait()
 	if icErr != nil {

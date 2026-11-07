@@ -108,9 +108,7 @@ func (s *Service) describeNode(ctx context.Context, name string, withEvents bool
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events("").List(ctx, metav1.ListOptions{
-				FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Node", name),
-			})
+			events, eventsErr = s.objectEvents(ctx, "", "Node", name)
 		}()
 	}
 	wg.Wait()
@@ -222,9 +220,7 @@ func (s *Service) GetNodePods(ctx context.Context, nodeName string) ([]map[strin
 
 // GetNodeEvents returns events for a node.
 func (s *Service) GetNodeEvents(ctx context.Context, nodeName string) ([]map[string]interface{}, error) {
-	events, err := s.clientsetCtx(ctx).CoreV1().Events("").List(ctx, metav1.ListOptions{
-		FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Node", nodeName),
-	})
+	events, err := s.objectEvents(ctx, "", "Node", nodeName)
 	if err != nil {
 		return nil, fmt.Errorf("get events for node %s: %w", nodeName, err)
 	}

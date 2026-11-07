@@ -71,9 +71,7 @@ func (s *Service) DescribePV(ctx context.Context, name string) (map[string]inter
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events("").List(ctx, metav1.ListOptions{
-			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=PersistentVolume", name),
-		})
+		events, eventsErr = s.objectEvents(ctx, "", "PersistentVolume", name)
 	}()
 	wg.Wait()
 

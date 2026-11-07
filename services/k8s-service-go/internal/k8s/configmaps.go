@@ -69,9 +69,7 @@ func (s *Service) DescribeConfigMap(ctx context.Context, namespace, name string)
 	}
 
 	// Events
-	events, eventsErr := s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
-		FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=ConfigMap", name),
-	})
+	events, eventsErr := s.objectEvents(ctx, namespace, "ConfigMap", name)
 	setEvents(result, events, eventsErr)
 
 	return result, nil
@@ -183,9 +181,7 @@ func (s *Service) DescribeSecret(ctx context.Context, namespace, name string, ca
 	}
 
 	// Events
-	events, eventsErr := s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
-		FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Secret", name),
-	})
+	events, eventsErr := s.objectEvents(ctx, namespace, "Secret", name)
 	setEvents(result, events, eventsErr)
 
 	return result, nil
