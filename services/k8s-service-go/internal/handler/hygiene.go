@@ -24,17 +24,21 @@ import (
 // Cluster hygiene report (k8s.CollectHygiene) for the cluster in ?cluster=:
 //
 //   GET  /api/v1/hygiene/config          enabled, interval_days
-//   GET  /api/v1/hygiene                 report + last sign-off      admin.hygiene.read,   audited k8s.hygiene.scan
-//   GET  /api/v1/hygiene?format=csv|json download                    admin.hygiene.export, audited admin.hygiene.export
-//   POST /api/v1/hygiene/signoff {note}  store the report as signed  admin.hygiene.signoff
-//   GET  /api/v1/hygiene/history         sign-offs, newest first     admin.hygiene.read
-//   GET  /api/v1/hygiene/snapshot/{id}   one sign-off with its report admin.hygiene.read
+//   GET  /api/v1/hygiene                 report + last sign-off       read,   audited k8s.hygiene.scan
+//   GET  /api/v1/hygiene?format=csv|json download                     admin.hygiene.export, audited admin.hygiene.export
+//   POST /api/v1/hygiene/signoff {note}  store the report as signed   admin.hygiene.signoff
+//   GET  /api/v1/hygiene/history         sign-offs, newest first      read
+//   GET  /api/v1/hygiene/snapshot/{id}   one sign-off with its report read
 //
-// The scan runs as the caller (impersonation); a list the caller cannot read
-// becomes a Collector entry. Reading TLS Secrets makes every scan a sensitive
-// read: it is refused while the audit store cannot record it.
+// Read = resource.hygiene.scan on the cluster (an Admin grant holds it; the verb
+// is not .read, or resource.*.read would hand it to the Read and Write roles) or
+// admin.hygiene.read, which reaches every cluster. The scan runs as the caller
+// (impersonation); a list the caller cannot read becomes a Collector entry.
+// Reading TLS Secrets makes every scan a sensitive read: it is refused while the
+// audit store cannot record it.
 
 const (
+	permHygieneScan    = "resource.hygiene.scan"
 	permHygieneRead    = "admin.hygiene.read"
 	permHygieneExport  = "admin.hygiene.export"
 	permHygieneSignoff = "admin.hygiene.signoff"
@@ -64,6 +68,22 @@ func (h *Handler) hygieneAllowed(w http.ResponseWriter, r *http.Request, perm st
 		return false
 	}
 	if err := h.requirePermission(r, perm); err != nil {
+		response.Error(w, http.StatusForbidden, "Permission denied")
+		return false
+	}
+	return true
+}
+
+// hygieneReadAllowed: the cluster's own key, or the global key that reaches every cluster.
+func (h *Handler) hygieneReadAllowed(w http.ResponseWriter, r *http.Request) bool {
+	if !h.cfg.HygieneEnabled {
+		response.Error(w, http.StatusNotFound, "cluster hygiene report is disabled")
+		return false
+	}
+	if payload, ok := auth.FromContext(r.Context()); ok && payload.HasPermission(permHygieneRead) {
+		return true
+	}
+	if err := h.requirePermissionForCluster(r, permHygieneScan); err != nil {
 		response.Error(w, http.StatusForbidden, "Permission denied")
 		return false
 	}
@@ -104,15 +124,17 @@ func hygieneAuditAfter(rep k8s.HygieneReport, extra map[string]interface{}) json
 // GetHygiene returns the report, or with format=csv|json a download of it.
 func (h *Handler) GetHygiene(w http.ResponseWriter, r *http.Request) {
 	format := r.URL.Query().Get("format")
-	perm, action, service := permHygieneRead, "k8s.hygiene.scan", audit.ServiceK8s
+	action, service := "k8s.hygiene.scan", audit.ServiceK8s
 	if format != "" {
 		if format != "csv" && format != "json" {
 			response.Error(w, http.StatusBadRequest, "format must be csv or json")
 			return
 		}
-		perm, action, service = permHygieneExport, "admin.hygiene.export", audit.ServiceAdmin
-	}
-	if !h.hygieneAllowed(w, r, perm) {
+		action, service = "admin.hygiene.export", audit.ServiceAdmin
+		if !h.hygieneAllowed(w, r, permHygieneExport) {
+			return
+		}
+	} else if !h.hygieneReadAllowed(w, r) {
 		return
 	}
 	if err := h.auditReady(r); err != nil {
@@ -212,7 +234,7 @@ func (h *Handler) SignoffHygiene(w http.ResponseWriter, r *http.Request) {
 
 // HygieneHistory lists the cluster's sign-offs, newest first.
 func (h *Handler) HygieneHistory(w http.ResponseWriter, r *http.Request) {
-	if !h.hygieneAllowed(w, r, permHygieneRead) {
+	if !h.hygieneReadAllowed(w, r) {
 		return
 	}
 	if h.hygieneStore == nil {
@@ -233,7 +255,7 @@ func (h *Handler) HygieneHistory(w http.ResponseWriter, r *http.Request) {
 
 // HygieneSnapshot returns one sign-off of the cluster with its report.
 func (h *Handler) HygieneSnapshot(w http.ResponseWriter, r *http.Request) {
-	if !h.hygieneAllowed(w, r, permHygieneRead) {
+	if !h.hygieneReadAllowed(w, r) {
 		return
 	}
 	if h.hygieneStore == nil {

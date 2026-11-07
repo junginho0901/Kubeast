@@ -25,6 +25,17 @@ type toolRule func(args map[string]interface{}) []string
 
 func leftToTheCluster(map[string]interface{}) []string { return nil }
 
+// alsoGlobal is a cluster's key whose route also answers an all-cluster key (k8s-service hygieneReadAllowed; ai-service ALSO_GLOBAL).
+var alsoGlobal = map[string]string{"resource.hygiene.scan": "admin.hygiene.read"}
+
+func holdsForTool(payload auth.TokenPayload, permission, clusterID string) bool {
+	if payload.HasPermissionForCluster(permission, clusterID) {
+		return true
+	}
+	global, ok := alsoGlobal[permission]
+	return ok && payload.HasPermission(global)
+}
+
 func always(permissions ...string) toolRule {
 	return func(map[string]interface{}) []string { return permissions }
 }
@@ -124,7 +135,7 @@ var toolScreenTable = map[string]toolRule{
 	"network_flows":            always("resource.networkflow.read"),
 	"network_drops":            always("resource.networkflow.read"),
 	"network_top_flows":        always("resource.networkflow.read"),
-	"hygiene":                  always("admin.hygiene.read"),
+	"hygiene":                  always("resource.hygiene.scan"),
 	"audit_search":             always("admin.audit.read"),
 	"nodes_stats_summary":      always("admin.nodes.read"),
 	"nodes_log":                always("admin.nodes.read"),
@@ -132,7 +143,7 @@ var toolScreenTable = map[string]toolRule{
 	"ai_usage":                 always("admin.audit.read"),
 	"access_requests":          always("admin.users.update"),
 	"audit_integrity":          always("admin.audit.read"),
-	"hygiene_history":          always("admin.hygiene.read"),
+	"hygiene_history":          always("resource.hygiene.scan"),
 
 	"k8s_delete_resource":   forResourceType("delete"),
 	"k8s_patch_resource":    forResourceType("edit"),

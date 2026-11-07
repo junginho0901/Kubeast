@@ -781,8 +781,9 @@ features:
     #   resources: [policyreports, clusterpolicyreports]
     #   verbs: [get, list, watch]
     extraRules: []
-  # Cluster hygiene report (Admin → Cluster hygiene, permissions
-  # admin.hygiene.read/export/signoff): Pod Security Standards, image tags,
+  # Cluster hygiene report (Cluster → Cluster Hygiene, permissions
+  # resource.hygiene.scan on the cluster, admin.hygiene.read/export/signoff
+  # globally): Pod Security Standards, image tags,
   # resources, namespace policy, service account tokens, RBAC, TLS expiry and
   # readiness for the next Kubernetes minor (removed APIs in Helm releases,
   # deprecated-API requests, fail-closed webhooks, blocking PDBs, kubelet skew),

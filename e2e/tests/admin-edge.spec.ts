@@ -225,7 +225,7 @@ test('someone with no cluster sees the no-cluster page without a "no permission 
   await expect(page.getByTestId('forbidden-banner')).toHaveCount(0)
 })
 
-test('an Admin grant on one cluster opens no admin page, as its APIs refuse; its screens and Node Shell stay, the global admin keeps every admin page', async ({ page, request, browser }) => {
+test('an Admin grant on one cluster opens no admin page, as its APIs refuse; its screens, Cluster Hygiene and the Node Shell settings stay, the global admin keeps every admin page', async ({ page, request, browser }) => {
   test.setTimeout(240000)
   const u = await mkUser(request, 'clusteradmin', await roleId(request, 'Member'))
   const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } })
@@ -242,9 +242,9 @@ test('an Admin grant on one cluster opens no admin page, as its APIs refuse; its
     // the global admin: every admin entry this install turns on, each opening
     await uiLogin(page, ADMIN_EMAIL, ADMIN_PASSWORD)
     const globalNav = await sidebarPaths(page)
-    const adminPages = globalNav.filter((p) => p.startsWith('/admin/') && p !== '/admin/node-shell')
+    const adminPages = globalNav.filter((p) => p.startsWith('/admin/'))
     expect.soft(adminPages, 'the admin entries every install has').toEqual(expect.arrayContaining(['/admin/clusters', '/admin/users', '/admin/roles', '/admin/organizations', '/admin/audit', '/admin/session-recordings']))
-    for (const p of [...adminPages, '/admin/node-shell']) expect.soft((await settledPath(page, `${p}?cluster=self`)).path, `the global admin opens ${p}`).toBe(p)
+    for (const p of adminPages) expect.soft((await settledPath(page, `${p}?cluster=self`)).path, `the global admin opens ${p}`).toBe(p)
 
     // the Admin grant on self, every sidebar entry it was ever drawn recorded (no admin entry drawn, then taken away)
     await ctx.addInitScript(() => {
@@ -258,8 +258,8 @@ test('an Admin grant on one cluster opens no admin page, as its APIs refuse; its
     await uiLogin(mp, u.email, u.password)
     const nav = await sidebarPaths(mp)
     const seen = await mp.evaluate(() => [...(window as unknown as { __navSeen: Set<string> }).__navSeen])
-    expect.soft(nav.filter((p) => p.startsWith('/admin/')), 'its admin entries').toEqual(['/admin/node-shell'])
-    expect.soft(seen.filter((p) => p.startsWith('/admin/')).sort(), 'the admin entries ever drawn').toEqual(['/admin/node-shell'])
+    expect.soft(nav.filter((p) => p.startsWith('/admin/')), 'its admin entries').toEqual([])
+    expect.soft(seen.filter((p) => p.startsWith('/admin/')).sort(), 'the admin entries ever drawn').toEqual([])
     expect.soft(nav.filter((p) => !p.startsWith('/admin/')), 'its other entries: the global admin\'s on self').toEqual(globalNav.filter((p) => !p.startsWith('/admin/')))
     // and by address, the setup wizard (admin.clusters.create) too
     const byAddress = [...adminPages, '/setup']
@@ -267,7 +267,6 @@ test('an Admin grant on one cluster opens no admin page, as its APIs refuse; its
     for (const p of byAddress) sentTo.push((await settledPath(mp, `${p}?cluster=self`)).path)
     expect.soft(sentTo, `${byAddress.join(', ')} by address`).toEqual(byAddress.map(() => '/'))
     // the cluster's own pages stay
-    expect.soft(await settledPath(mp, '/admin/node-shell?cluster=self'), 'Node Shell').toEqual({ path: '/admin/node-shell', heading: 'Node Shell' })
     expect.soft(await settledPath(mp, '/workloads/pods?cluster=self'), 'Pods').toEqual({ path: '/workloads/pods', heading: 'Pods' })
   } finally {
     await ctx.close()

@@ -13,13 +13,16 @@ import { api, clustersApi } from '@/services/api'
 import type { HygieneFinding, HygieneReport, HygieneReview, HygieneSeverity } from '@/services/api/hygiene'
 import { getCurrentClusterID } from '@/services/clusterRef'
 import { formatWhen } from './accessRequestFormat'
+import { readsHygiene } from '@/utils/adminAccess'
 import { hygieneFindingTarget } from '@/utils/detailTargets'
 import { utcTitle } from '@/utils/time'
 
-// Admin → Cluster hygiene: configuration risks of one cluster (Pod Security
+// Cluster → Cluster hygiene: configuration risks of one cluster (Pod Security
 // Standards, image tags, resources, namespace policy, service account tokens,
 // RBAC, TLS expiry) read as the signed-in user, with CSV/JSON export and the
-// monthly sign-off. A past sign-off opens as the report it stored.
+// monthly sign-off. A past sign-off opens as the report it stored. Reading goes
+// with the cluster's own key (utils/adminAccess readsHygiene); the export and the
+// sign-off are all-cluster keys.
 
 type Tab = 'findings' | 'checks' | 'history'
 type SeverityFilter = 'all' | HygieneSeverity | 'exempt'
@@ -62,14 +65,21 @@ export default function ClusterHygiene() {
   const [error, setError] = useState<string | null>(null)
   const [viewId, setViewId] = useState<string | null>(null)
 
-  // without the full cluster list (admin.clusters.list), the clusters the reader reaches
-  const everyCluster = usePermission().has('admin.clusters.list')
-  const { data: clusters = [] } = useQuery({ queryKey: ['clusters', 'all', everyCluster], queryFn: () => clustersApi.listClusters(!everyCluster) })
+  // without the full cluster list (admin.clusters.list), the clusters the reader reaches; of those, the ones whose
+  // report this user may read
+  const { has, namespacesOn } = usePermission()
+  const everyCluster = has('admin.clusters.list')
+  const canExport = has('admin.hygiene.export')
+  const canSignoff = has('admin.hygiene.signoff')
+  const { data: reachable = [] } = useQuery({ queryKey: ['clusters', 'all', everyCluster], queryFn: () => clustersApi.listClusters(!everyCluster) })
+  const clusters = reachable.filter((c) => readsHygiene(has, namespacesOn(c.id), c.id))
+  const clusterIds = clusters.map((c) => c.id).join(',')
   useEffect(() => {
-    if (cluster || clusters.length === 0) return
+    if (cluster || !clusterIds) return
+    const ids = clusterIds.split(',')
     const current = getCurrentClusterID()
-    setCluster(clusters.some((c) => c.id === current) ? current : clusters[0].id)
-  }, [clusters, cluster])
+    setCluster(ids.includes(current) ? current : ids[0])
+  }, [clusterIds, cluster])
 
   const { data: live, isLoading, isFetching, refetch, error: reportError } = useQuery({
     queryKey: ['hygiene', cluster, 'report'],
@@ -303,7 +313,7 @@ export default function ClusterHygiene() {
         <button onClick={() => setTab('history')} className={tabClass(tab === 'history')} data-testid="hygiene-tab-history">
           <History className="w-4 h-4" /> {tr('clusterHygiene.tab.history', 'Past sign-offs')}
         </button>
-        {!viewId && (
+        {!viewId && canExport && (
           <div className="ml-auto flex items-center gap-2">
             <button onClick={() => download('csv')} disabled={!live} data-testid="hygiene-export-csv"
               className="btn btn-primary flex items-center gap-2 disabled:opacity-50">
@@ -461,7 +471,7 @@ export default function ClusterHygiene() {
         </div>
       )}
 
-      {!viewId && (
+      {!viewId && canSignoff && (
         <div className="rounded-lg bg-slate-800/50 border border-slate-700 p-4 space-y-2" data-testid="hygiene-signoff-panel">
           <div className="text-sm font-medium text-ink">{tr('clusterHygiene.signoff.title', 'Sign off this cluster')}</div>
           <p className="text-xs text-slate-400">

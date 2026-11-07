@@ -137,7 +137,7 @@ test.describe('Rows that open the drawer, lists that search and page', () => {
     const findings: { kind: string; name: string; namespace?: string }[] = (await res.json()).report?.findings ?? []
     test.skip(!findings.some((f) => f.kind !== 'API' && f.name), 'no finding that names an object on cluster default')
 
-    await page.goto(`/admin/cluster-hygiene?cluster=${CLUSTER}`)
+    await page.goto(`/cluster/hygiene?cluster=${CLUSTER}`)
     await expect(page.getByTestId('hygiene-pager')).toContainText(pagerTotal(findings.length), { timeout: 30_000 })
     const row = page.locator('[data-testid="hygiene-finding-row"][data-openable="true"]').first()
     const ns = (await row.locator('td').nth(2).innerText()).trim()

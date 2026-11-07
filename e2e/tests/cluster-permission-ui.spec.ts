@@ -144,8 +144,8 @@ test.describe('buttons and drawers follow the cluster\'s answer', () => {
     kubeconfig = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-cpui-')), 'kubeconfig')
     fs.writeFileSync(kubeconfig, which.stdout, { mode: 0o600 })
     const impersonator = JSON.parse(kubectl(['get', 'clusterrole', 'kubeast-impersonator', '-o', 'json'], undefined, true) || '{}')
-    if (!(impersonator.rules ?? []).some((r: { resourceNames?: string[] }) => (r.resourceNames ?? []).includes('kubeast:role:read'))) {
-      ready = 'the impersonator may not act as kubeast:role:read (helm/kubeast/files/impersonation-rbac.yaml)'
+    if (!(impersonator.rules ?? []).some((r: { resourceNames?: string[] }) => ['kubeast:role:read', 'kubeast:role:write'].every((g) => (r.resourceNames ?? []).includes(g)))) {
+      ready = 'the impersonator may not act as kubeast:role:read and kubeast:role:write (helm/kubeast/files/impersonation-rbac.yaml)'
       return
     }
     node = kubectl(['get', 'nodes', '-o', 'jsonpath={.items[0].metadata.name}'])
@@ -213,6 +213,56 @@ test.describe('buttons and drawers follow the cluster\'s answer', () => {
         await expect.soft(s.page.locator('main').getByRole('button', { name: tr(label), exact: true }), `${p} "${tr(label)}" ↔ kubectl auth can-i create ${target} -n ${NS_A} → ${allowed ? 'yes' : 'no'}`)
           .toHaveCount(allowed ? 1 : 0, { timeout: 5_000 })
       }
+    } finally {
+      await signOut(request, admin, s)
+    }
+  })
+
+  test('a user the cluster lets delete one object by name: Delete on that ConfigMap and not on the one beside it, and the API agrees', async ({ browser, request }) => {
+    test.skip(ready !== '', ready)
+    test.setTimeout(120_000)
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    // the limited Write grant acts as kubeast:role:write, which the cluster binds nowhere: only this Role gives it anything
+    const role = {
+      apiVersion: `${RBAC}/v1`, kind: 'Role', metadata: { name: `${PREFIX}-one`, namespace: NS_A, labels: LABELS },
+      rules: [
+        { apiGroups: [''], resources: ['configmaps'], verbs: ['get', 'list', 'watch'] },
+        { apiGroups: [''], resources: ['configmaps'], resourceNames: ['cpui-one'], verbs: ['delete'] },
+      ],
+    }
+    kubectl(['apply', '-f', '-'], asList([
+      { apiVersion: 'v1', kind: 'ConfigMap', metadata: { name: 'cpui-one', namespace: NS_A, labels: LABELS }, data: { k: 'v' } },
+      { apiVersion: 'v1', kind: 'ConfigMap', metadata: { name: 'cpui-two', namespace: NS_A, labels: LABELS }, data: { k: 'v' } },
+      role,
+      { apiVersion: `${RBAC}/v1`, kind: 'RoleBinding', metadata: { name: `${PREFIX}-one`, namespace: NS_A, labels: LABELS }, roleRef: { apiGroup: RBAC, kind: 'Role', name: `${PREFIX}-one` }, subjects: [{ apiGroup: RBAC, kind: 'Group', name: 'kubeast:role:write' }] },
+    ]))
+    let s: Session | null = null
+    try {
+      s = await signIn(browser, request, admin, 'onename', { role: 'Write', namespaces: [NS_A] })
+      test.skip(!s.who.user, 'impersonation is off: Kubeast acts as its own service account, there is no per-user identity to ask about')
+      // the cluster's answers: this one object, not its neighbour, not the kind
+      expect.soft([canI(s.who, 'delete', 'configmaps/cpui-one', NS_A), canI(s.who, 'delete', 'configmaps/cpui-two', NS_A), canI(s.who, 'delete', 'configmaps', NS_A)], 'kubectl auth can-i delete: cpui-one, cpui-two, every ConfigMap')
+        .toEqual([true, false, false])
+      const label = tr('common.deleteKind', { kind: 'ConfigMap' })
+      for (const [name, want] of [['cpui-one', 1], ['cpui-two', 0]] as const) {
+        const asked = s.page.waitForResponse((r) => {
+          const u = new URL(r.url())
+          return u.pathname === '/api/v1/cluster/can-i' && u.searchParams.get('verb') === 'delete' && u.searchParams.get('resource') === 'configmaps' && u.searchParams.get('name') === name
+        }, { timeout: 15_000 })
+        await s.page.goto(`/account?cluster=${CLUSTER}&detail=${encodeURIComponent(`ConfigMap/${NS_A}/${name}`)}`)
+        const drawer = s.page.locator(DRAWER).last()
+        await expect(drawer.getByRole('button', { name: 'YAML', exact: true })).toBeVisible({ timeout: 20_000 })
+        const answer = await asked
+        expect.soft((await answer.json()).allowed, `Kubeast's own answer for ${name}`).toBe(want === 1)
+        await deleteButtons(drawer, 'ConfigMap', want, `"${label}" on ${name}: ${want === 1 ? 'the object the Role names' : 'not named by the Role'}`)
+      }
+      // what the buttons say is what the delete does
+      const token = await login(request, `${PREFIX}-onename@kubeast.local`, PW)
+      const del = (name: string) => request.delete(`/api/v1/cluster/namespaces/${NS_A}/configmaps/${name}?cluster=${CLUSTER}`, { headers: bearer(token), failOnStatusCode: false })
+      expect.soft((await del('cpui-two')).status(), 'deleting the neighbour').toBe(403)
+      expect.soft(kubectl(['get', 'configmap', 'cpui-two', '-n', NS_A, '--ignore-not-found', '-o', 'name']), 'the neighbour is still there').toBe('configmap/cpui-two')
+      expect.soft((await del('cpui-one')).ok(), 'deleting the object the Role names').toBe(true)
+      expect.soft(kubectl(['get', 'configmap', 'cpui-one', '-n', NS_A, '--ignore-not-found', '-o', 'name']), 'it is gone').toBe('')
     } finally {
       await signOut(request, admin, s)
     }

@@ -19,8 +19,9 @@ import type {
 
 export const gpuApi = {
   // GPU Dashboard
-  getGPUDashboard: async (): Promise<GPUDashboardData> => {
-    const { data } = await client.get('/cluster/gpu/dashboard')
+  // podsOnly: the pods the caller may see and nothing about the nodes, for whoever may not list those
+  getGPUDashboard: async (podsOnly = false): Promise<GPUDashboardData> => {
+    const { data } = await client.get('/cluster/gpu/dashboard', podsOnly ? { params: { pods_only: 1 } } : undefined)
     return data
   },
 

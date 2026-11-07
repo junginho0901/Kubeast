@@ -277,7 +277,7 @@ test.describe('number check — the drawer a screen opens for one Kind of two gr
 
       // Cluster Hygiene: the two Widgets' "no memory limit" rows read the same
       await compareRows(page, 'Cluster Hygiene · both Widgets', async (p) => {
-        await p.goto('/admin/cluster-hygiene?cluster=default')
+        await p.goto('/cluster/hygiene?cluster=default')
         await p.getByTestId('hygiene-cluster').click()
         await p.getByTestId('hygiene-cluster-opt-default').click()
         await p.getByTestId('hygiene-summary').waitFor({ timeout: 90_000 })

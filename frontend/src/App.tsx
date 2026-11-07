@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Navigate, Routes, Route, useParams } from 'react-router-dom'
+import { BrowserRouter, Navigate, Routes, Route, useLocation, useParams } from 'react-router-dom'
 import Layout from './components/Layout'
 import RequireAuth from './components/RequireAuth'
 import RequireAdmin from './components/RequireAdmin'
@@ -9,6 +9,9 @@ import Login from './pages/Login'
 import { ClusterProvider } from './contexts/ClusterProvider'
 import ConfirmProvider from './components/ConfirmProvider'
 import { PageContextProvider } from './components/PageContextProvider'
+import { usePermission } from './hooks/usePermission'
+import { readsHygiene } from './utils/adminAccess'
+import { MOVED_SCREENS, movedAddress } from './utils/movedScreens'
 
 // Every page is its own chunk, fetched on first navigation. Login stays in the
 // entry chunk because it is the first screen.
@@ -27,13 +30,12 @@ const AdminUsers = lazy(() => import('./pages/AdminUsers'))
 const AdminAIModels = lazy(() => import('./pages/AdminAIModels'))
 const AdminAudit = lazy(() => import('./pages/AdminAudit'))
 const AdminAIUsage = lazy(() => import('./pages/AdminAIUsage'))
-const AdminNodeShell = lazy(() => import('./pages/AdminNodeShell'))
 const AdminClusters = lazy(() => import('./pages/admin/Clusters'))
 const AdminOrganizations = lazy(() => import('./pages/AdminOrganizations'))
 const AdminRoles = lazy(() => import('./pages/AdminRoles'))
 const AdminAccessRequests = lazy(() => import('./pages/admin/AccessRequests'))
 const AdminAccessReview = lazy(() => import('./pages/admin/AccessReview'))
-const AdminClusterHygiene = lazy(() => import('./pages/admin/ClusterHygiene'))
+const ClusterHygiene = lazy(() => import('./pages/admin/ClusterHygiene'))
 const AdminSessionRecordings = lazy(() => import('./pages/admin/SessionRecordings'))
 const AdminInvestigations = lazy(() => import('./pages/admin/Investigations'))
 const AlertInbox = lazy(() => import('./pages/alerts/AlertInbox'))
@@ -96,6 +98,17 @@ const HelmReleaseDetailPage = lazy(() => import('./pages/helm/ReleaseDetail'))
 function TopologyRedirect() {
   const { namespace = '' } = useParams()
   return <Navigate to={`/cluster/resource-graph?namespace=${encodeURIComponent(namespace)}`} replace />
+}
+
+function MovedScreen({ to }: { to: string }) {
+  const { search, hash } = useLocation()
+  return <Navigate to={movedAddress(to, search, hash)} replace />
+}
+
+// The report reads the whole cluster: a grant limited to namespaces holding its key goes where a refused page goes.
+function ClusterHygieneRoute() {
+  const { has, clusterNamespaces } = usePermission()
+  return readsHygiene(has, clusterNamespaces) ? <ClusterHygiene /> : <Navigate to="/" replace />
 }
 
 function App() {
@@ -183,12 +196,13 @@ function App() {
             <Route path="admin/ai-models" element={<RequireAdmin page="/admin/ai-models"><AIGate><AdminAIModels /></AIGate></RequireAdmin>} />
             <Route path="admin/audit" element={<RequireAdmin page="/admin/audit"><AdminAudit /></RequireAdmin>} />
             <Route path="admin/ai-usage" element={<RequireAdmin page="/admin/ai-usage"><AIGate><AdminAIUsage /></AIGate></RequireAdmin>} />
-            <Route path="admin/node-shell" element={<RequireAdmin page="/admin/node-shell"><AdminNodeShell /></RequireAdmin>} />
+            <Route path={MOVED_SCREENS.nodeShell.from} element={<MovedScreen to={MOVED_SCREENS.nodeShell.to} />} />
             <Route path="admin/organizations" element={<RequireAdmin page="/admin/organizations"><AdminOrganizations /></RequireAdmin>} />
             <Route path="admin/roles" element={<RequireAdmin page="/admin/roles"><AdminRoles /></RequireAdmin>} />
             <Route path="admin/access-requests" element={<RequireAdmin page="/admin/access-requests"><AdminAccessRequests /></RequireAdmin>} />
             <Route path="admin/access-review" element={<RequireAdmin page="/admin/access-review"><AdminAccessReview /></RequireAdmin>} />
-            <Route path="admin/cluster-hygiene" element={<RequireAdmin page="/admin/cluster-hygiene"><AdminClusterHygiene /></RequireAdmin>} />
+            <Route path="cluster/hygiene" element={<RequireAdmin page="/cluster/hygiene"><ClusterHygieneRoute /></RequireAdmin>} />
+            <Route path={MOVED_SCREENS.clusterHygiene.from} element={<MovedScreen to={MOVED_SCREENS.clusterHygiene.to} />} />
             <Route path="admin/session-recordings" element={<RequireAdmin page="/admin/session-recordings"><AdminSessionRecordings /></RequireAdmin>} />
             <Route path="admin/investigations" element={<RequireAdmin page="/admin/investigations"><AIGate><AdminInvestigations /></AIGate></RequireAdmin>} />
             <Route path="*" element={<NotFound />} />

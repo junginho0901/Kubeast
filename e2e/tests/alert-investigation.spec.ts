@@ -1,4 +1,4 @@
-import { test, expect, type APIRequestContext } from '@playwright/test'
+import { test, expect, type APIRequestContext, type Browser } from '@playwright/test'
 import { execSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -88,6 +88,37 @@ async function auditRows(request: APIRequestContext, admin: string, action: stri
   return (((await res.json()).items ?? []) as Array<Record<string, any>>).map((i) => ({ ...i, after: i.After ?? i.after ?? {} }))
 }
 
+// A Read user who follows the link: the window of that alert, its report opening there; the Investigations menu stays
+// the admins'.
+async function readerFollowsTheLink(request: APIRequestContext, browser: Browser, admin: string, alertname: string, link: string) {
+  const raw = await (await request.get('/api/v1/auth/roles', { headers: bearer(admin) })).json()
+  const member = (Array.isArray(raw) ? raw : raw.roles || raw.items || []).find((r: { name: string }) => r.name.toLowerCase() === 'member')
+  const email = `e2e-alerts-link-${Date.now().toString(36)}@kubeast.local`
+  const password = 'E2e-alerts-throwaway-1!'
+  const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E alerts link', email, password, role_id: member.id } })
+  expect(created.status()).toBe(201)
+  const userId = (await created.json()).id as string
+  const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] }, locale: 'en-US' })
+  try {
+    await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/self`, { headers: bearer(admin), data: { role: 'Read' } })
+    const page = await ctx.newPage()
+    await page.goto('/login')
+    await page.locator('input[autocomplete="email"]').first().fill(email)
+    await page.locator('input[type="password"]').first().fill(password)
+    await page.locator('button[type="submit"]').first().click()
+    await page.waitForFunction(() => !document.querySelector('input[autocomplete="email"]'), undefined, { timeout: 20_000 })
+    const url = new URL(link)
+    await page.goto(`${url.pathname}${url.search}`)
+    await expect(page.getByRole('heading', { name: alertname })).toHaveText(alertname, { timeout: 30_000 })
+    await expect(page).toHaveURL(/\/alerts\?/)
+    await page.getByTestId('alert-report').click()
+    await expect(page.getByTestId('investigation-meta')).toHaveCount(1, { timeout: 20_000 })
+  } finally {
+    await ctx.close()
+    await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: bearer(admin), failOnStatusCode: false })
+  }
+}
+
 test.describe('alert investigation', () => {
   test('the webhook wants the token, a known cluster and an Alertmanager message; it filters and counts', async ({ request }) => {
     const token = webhookToken()
@@ -108,7 +139,7 @@ test.describe('alert investigation', () => {
     expect(await findRow(request, admin, name, 'self'), 'a filtered alert leaves no row').toBeUndefined()
   })
 
-  test('a firing alert is investigated with read-only tools, audited, and a repeat only counts', async ({ request }) => {
+  test('a firing alert is investigated with read-only tools, audited, and a repeat only counts', async ({ request, browser }) => {
     test.setTimeout(420_000)
     const token = webhookToken()
     const admin = await login(request)
@@ -144,7 +175,12 @@ test.describe('alert investigation', () => {
     expect(runs).toHaveLength(1)
     expect(runs[0].ActorUserID ?? runs[0].actor_user_id).toBe('system')
     expect(runs[0].ActorEmail ?? runs[0].actor_email).toBe('kubeast:investigator')
-    expect(runs[0].after.link).toBe(`http://localhost:30080/admin/investigations?id=${row.id}`)
+    // The summary's link is the alert's window in Alerts, which whoever reads the cluster can open, the report inside.
+    const inbox = await (await request.get('/api/v1/alerts/inbox', { headers: bearer(admin), params: { cluster: 'self', q: name, limit: 10 } })).json()
+    const item = (inbox.items as Array<{ id: string; alertname: string }>).find((i) => i.alertname === name)
+    expect(item, 'the alert\'s inbox row').toBeTruthy()
+    expect(runs[0].after.link).toBe(`http://localhost:30080/alerts?cluster=self&alert=${item!.id}`)
+    await readerFollowsTheLink(request, browser, admin, name, runs[0].after.link as string)
     expect(runs[0].after.tool_calls).toBe(d.tool_calls.length)
     const views = (await auditRows(request, admin, 'ai.investigation.view', since)).filter((r) => (r.TargetID ?? r.target_id) === row.id)
     expect(views.length).toBeGreaterThanOrEqual(1)

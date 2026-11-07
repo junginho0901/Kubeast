@@ -151,6 +151,12 @@ async def investigations_for(db, rows: list[AlertInboxItem]) -> dict[str, AlertI
     return out
 
 
+async def row_of(db, inv) -> Optional[AlertInboxItem]:
+    """The row of an investigation's alert, or None when retention removed it (rows go after retention.investigationDays)."""
+    async with db.async_session() as s:
+        return await _row(s, inv.cluster, inv.fingerprint, inv.starts_at)
+
+
 MARKS = ("acknowledged", "assignee", "note", "done")
 
 

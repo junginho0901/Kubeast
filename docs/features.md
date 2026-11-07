@@ -69,10 +69,10 @@
     - `resource_graph`: namespace objects and their connections, with the healthy pods of an owner that has more than 10 as one node and a count, as the page draws them
     - `timeline`: the change history of the Timeline screen, events and rollout revisions of a namespace, one object or every namespace in a window, by event type. The counts are the screen's, with "the newest M of N" when the list is cut and why the rollouts could not be read.
     - `gpu`: the numbers of the GPU screens, GPUs per company and node with what is in use and free, pods' requests, device plugins, DeviceClasses, ResourceClaimTemplates and DCGM utilization. A source that could not be read is named and its numbers are null, not zero.
-    - `hygiene`: the hygiene report (Admin)
+    - `hygiene`: the hygiene report (an Admin grant on the cluster)
   - A tool is left out of the tool list (`/api/v1/features`, 1-minute cache) when:
     - the cluster does not have the feature: Prometheus is not set up, there is no log, trace or alert store, network flows are off, or cost or policy reports are off
-    - the person lacks the permission k8s-service checks: `admin.hygiene.read`, `resource.helm.read`, `resource.policyreport.read`, `resource.cost.read` or `resource.networkflow.read`
+    - the person lacks the permission k8s-service checks: `resource.hygiene.scan` (or `admin.hygiene.read`), `resource.helm.read`, `resource.policyreport.read`, `resource.cost.read` or `resource.networkflow.read`
   - Results are cut at 100 series, 120 points, 200 log lines, 200 rows, 200 graph nodes/400 edges and 64 KB of text.
   - A range result (`prometheus_query` and `loki_query` metric queries) can be longer than what the model reads at once (the model's tool result length, 6,000 characters unless set). Then it is not cut.
   - Instead, it is reduced to the 10 series with the largest values, each with its min, max, average and last value and a 12-point overview. Results drawn as graphs get the same summary.
@@ -84,7 +84,7 @@
     - `ai_usage`: AI use by user, model or cluster for a period, as on AI Usage (`admin.audit.read`).
     - `access_requests`: pending and decided requests, as on Access requests (`admin.users.update`). Approving and rejecting stay on the screen.
     - `audit_integrity`: how far the audit log's chain is sealed and its last anchor (`admin.audit.read`). It does not check the chain; the Verify button on Audit Logs does.
-    - `hygiene_history`: a cluster's hygiene sign-offs, how often one is due (`interval_days`) and the report each stored (`admin.hygiene.read`).
+    - `hygiene_history`: a cluster's hygiene sign-offs, how often one is due (`interval_days`) and the report each stored (`resource.hygiene.scan` or `admin.hygiene.read`).
     - These answers name each field they give. A key's value and password hashes are not among them; `key_prefix` is what lists show of a key. Mail addresses follow `ai.redaction.pii`.
   - `nodes_stats_summary` and `nodes_log` read the kubelet's stats summary and log query through the API server proxy. They need `admin.nodes.read` and the cluster RBAC `nodes/proxy`. Log queries need kubelet `enableSystemLogQuery` on, and answer unavailable when it is off.
   - Large lists are reduced with these tools:
@@ -115,7 +115,7 @@
     - Helm revisions, tests and upgrade preview
     - the alert investigation report
   - Create and confirm dialogs pass only "which action + target".
-  - Admin menus (except Cluster Hygiene and Investigations) and the My account screen pass nothing.
+  - Admin menus (except Investigations) and the My account screen pass nothing.
   - There is one conversation per browser tab, and it continues after a refresh. "+" to the left of the input starts a new conversation, and previous conversations stay in the AI Chat list. The conversation is cleared on logout.
 - **Resource optimization suggestions** — a table of namespace observations (requests/limits and usage), streamed AI suggestions, and per-row **apply without restart** on the pods of that row's workload, of its API group (Pod `resize` subresource, Kubernetes 1.35+, `features.inPlaceResize`).
   - Values can also be entered directly in the container card of the Pod drawer and adjusted the same way.
@@ -157,7 +157,7 @@
 | **Admin** | Account level (`*`) or per cluster | Everything — admin menus, all clusters (including ones registered later) | `kubeast:admin` = `cluster-admin` |
 | Custom | Per cluster | Only the chosen permissions (within the permissions the creator has) | `kubeast:role:<name>` — every call is 403 until the cluster binds this group (`auth.impersonation.customRoles`). The no-permission banner in the UI and the role creation dialog show this group name |
 
-- **Admin only**: Pod exec, Node shell, cordon/drain, workload rollback and Helm uninstall. Their permissions (`resource.pod.exec`, `resource.node.cordon/drain/shell`, `resource.workload.rollback` and `resource.helm.uninstall`) are not in Write. Add them to a custom role if needed.
+- **Admin only**: Pod exec, Node shell, cordon/drain, workload rollback, Helm uninstall and the Cluster Hygiene report. Their permissions (`resource.pod.exec`, `resource.node.cordon/drain/shell`, `resource.workload.rollback`, `resource.helm.uninstall` and `resource.hygiene.scan`) are not in Write. Add them to a custom role if needed. An Admin grant holds them on its cluster only; exporting and signing off the report take the all-cluster `admin.hygiene.export` and `admin.hygiene.signoff`, and `admin.hygiene.read` reads every cluster's report.
   - The AI asks for the same permissions (below). Write is not offered exec and is told why; Admin and a custom role with those permissions run them as before.
   - On the cluster side, the Write group (`kubeast:operator`) can already exec in every namespace, because the default `edit` ClusterRole includes `pods/exec`. What makes Pod exec Admin-only is Kubeast's app permission.
   - Kubeast's impersonation credential (`kubeast-impersonator`) must therefore be guarded as carefully as the full permissions of those groups.
@@ -228,6 +228,7 @@
     - A route with no namespace in its path has a rule in `internal/handler/namespace_scope_routes.go`; one without a rule is refused to such a grant, so a new route starts closed.
     - What reads across namespaces with none named reads the grant's namespaces: events, the timeline, Helm releases and their live updates, pod metrics, the Resource Graph, a custom resource kind's list, the Ingresses of an IngressClass, the GPU pods, the claims of a StorageClass.
     - What reaches other namespaces by what it does is refused: draining a node, the node shell and the hygiene report.
+    - A summary screen shows what the grant's namespaces hold and names what the cluster refuses beyond them. The Dashboard and Cluster View count the namespaces' objects and name Node; Monitoring's Nodes tab names Node and metrics, its Pods tab lists the namespaces' pods; Custom resource instances names what the CRD list leaves out; the Timeline, GPU Pods and Resource Graph refuse nothing they can read there. GPU Dashboard and GPU Nodes (their numbers are the nodes') and Alerts (labels no namespace bounds) are closed to such a grant and say so.
     - Objects in no namespace (Nodes, PVs, ClusterRoles, CRDs) stay the cluster's RBAC to answer. `/cluster/can-i` answers no for a namespace outside, without asking.
     - The namespace list is the grant list as is.
     - An "all namespaces" query goes through the list one by one and merges the results.
@@ -389,7 +390,7 @@ Where the cluster has Recent flows or the Hubble metrics, the Resource Graph hea
 - **Topology View** — visualization of cluster resource relationships (React Flow, dagre, elkjs)
 - **Dependency Graph** — dependency graph between workloads
 - **Monitoring** — Prometheus time-series charts, anomaly detection, correlation analysis, in-depth GPU metrics (the Prometheus and metrics the target cluster needs are in [docs/cluster-requirements.md §3](cluster-requirements.md#3-prometheus))
-- **Node Shell** — web-based node terminal
+- **Node Shell** — web-based node terminal; its settings (on or off, the image) are this browser's own, on the Account page
 - **Log files** — read and follow the in-container logs of apps that write logs to files, only from allowed paths (fixed `tail`, default off, [details](operations.md#log-files-inside-containers))
 - **Log search** — find logs in Loki by text and time range, even for restarted or deleted pods. It follows cluster RBAC (`pods/log`) and is off by default ([details](operations.md#log-search-loki)).
 - **Advanced Search** — expression-based global resource search. Each chosen resource is listed in pages and stops at the page's "Max items per resource" (at most 10,000); a list that stops says so, and a namespace narrows it. A resource name served by two API groups (core and events.k8s.io Events) is two entries, each its own list; a type that fails is read again on every refresh and reported each time, and a list that fails partway says how many it read. The Status column is kubectl's STATUS where the kind prints one (a pod's `Completed` or `CrashLoopBackOff`, read from the API server's table as `kubectl get` does), else the phase or the Ready condition; a grant limited to namespaces searching All Namespaces gets each of its namespaces' lists, skipping one the cluster refuses
@@ -399,7 +400,7 @@ Where the cluster has Recent flows or the Hubble metrics, the Resource Graph hea
 - JWT-based built-in authentication (JWKS) with an Organization, Team and User hierarchy
 - **API keys** — credentials for scripts and CI (Settings → API keys). A key is exchanged for a short access token. It has a cluster scope, a role ceiling and an expiry, and cannot exceed the issuer's permissions. See [API keys](security-audit.md#api-keys-automation).
 - **Audit log** — records every write operation and sensitive reads (viewing Secrets, Node Shell, viewing container log files, log search, Helm changes, etc.), with both success and failure
-- **Cluster hygiene check** (Admin → Cluster hygiene) — reads Pod Security Standards, image tags, resources, Namespace policies, RBAC and TLS expiry into one sheet, with the viewer's permissions.
+- **Cluster hygiene check** (Cluster → Cluster Hygiene) — reads Pod Security Standards, image tags, resources, Namespace policies, RBAC and TLS expiry into one sheet, with the viewer's permissions.
   - It has CSV/JSON and a monthly sign-off per cluster ([details](operations.md#cluster-hygiene-check)).
 - **AI usage** (Admin → AI Usage) — aggregates the `ai.chat.complete` audit rows by user, model and cluster. A row is left for each chat turn and each Optimization AI explanation, with the token counts the provider sent, summed per turn. Alert investigations (`ai.investigation.run`) are counted in rows of their own, marked "Alert investigation" (by user, the investigator `kubeast:investigator`), and in the totals, which show chat and investigations apart. Each source lists the 500 groups with the most tokens; the totals count every group, and a cut list says so under the table.
   - It sets no limits. It shows who used how much.

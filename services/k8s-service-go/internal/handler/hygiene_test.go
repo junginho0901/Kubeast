@@ -73,6 +73,92 @@ func hygieneRequest(method, target string, body []byte, perms ...string) *http.R
 	return r.WithContext(ctx)
 }
 
+// A token holding these permissions on one cluster or globally, asking about cluster self.
+func hygieneRequestAs(method, target string, matrix auth.PermissionMatrix) *http.Request {
+	r := httptest.NewRequest(method, target, nil)
+	ctx := context.WithValue(r.Context(), auth.TokenPayloadContextKey(), auth.TokenPayload{UserID: "u2", Email: "someone@example.com", Perms: matrix})
+	return r.WithContext(cluster.WithID(ctx, "self"))
+}
+
+// The seeded Read and Write roles (auth-service repository_schema.go SeedSystemRoles), whose wildcards are what a key
+// must stay out of.
+var (
+	hygieneSeedRead  = []string{"menu.cluster", "resource.*.read", "resource.helm.read", "resource.pod.logfile", "ai.mcp.use", "ai.tool.issues"}
+	hygieneSeedWrite = []string{"menu.*", "resource.*.read", "resource.*.create", "resource.*.edit", "resource.*.delete",
+		"resource.cronjob.suspend", "resource.cronjob.trigger", "resource.secret.reveal", "resource.alert.silence", "resource.pod.logfile",
+		"resource.helm.read", "resource.helm.rollback", "resource.helm.upgrade", "resource.helm.test", "ai.tool.*", "ai.mcp.use"}
+)
+
+// Reading a cluster's report goes with an Admin grant on that cluster, and with the global key on every cluster;
+// the Read and Write roles do not hold it; export and sign-off stay global.
+func TestHygieneReadGoesWithTheClusterGrant(t *testing.T) {
+	reviewed := func() (*Handler, string) {
+		h, _, reviews := hygieneHandler(true)
+		reviews.reviews = []hygiene.Review{{ID: "r1", Cluster: "self", Snapshot: audit.MustJSON(map[string]string{"cluster": "self"})}}
+		return h, "r1"
+	}
+	for _, c := range []struct {
+		name   string
+		matrix auth.PermissionMatrix
+		want   map[string]int
+	}{
+		{"an Admin grant on this cluster reads, and neither exports nor signs off", auth.PermissionMatrix{"self": {"*"}},
+			map[string]int{"report": 200, "history": 200, "snapshot": 200, "export": 403, "signoff": 403}},
+		{"a role with the cluster's key reads", auth.PermissionMatrix{"self": {"resource.hygiene.scan"}},
+			map[string]int{"report": 200, "history": 200, "snapshot": 200, "export": 403, "signoff": 403}},
+		{"an Admin grant on another cluster reads nothing here", auth.PermissionMatrix{"other": {"*"}},
+			map[string]int{"report": 403, "history": 403, "snapshot": 403, "export": 403, "signoff": 403}},
+		{"the Read role reads nothing", auth.PermissionMatrix{"self": hygieneSeedRead},
+			map[string]int{"report": 403, "history": 403, "snapshot": 403, "export": 403, "signoff": 403}},
+		{"the Write role reads nothing", auth.PermissionMatrix{"self": hygieneSeedWrite},
+			map[string]int{"report": 403, "history": 403, "snapshot": 403, "export": 403, "signoff": 403}},
+		{"the global key reads every cluster without a grant", auth.PermissionMatrix{"*": {"admin.hygiene.read"}},
+			map[string]int{"report": 200, "history": 200, "snapshot": 200, "export": 403, "signoff": 403}},
+		{"the global export key exports", auth.PermissionMatrix{"*": {"admin.hygiene.export"}},
+			map[string]int{"report": 403, "history": 403, "snapshot": 403, "export": 200, "signoff": 403}},
+		{"the global sign-off key signs off", auth.PermissionMatrix{"*": {"admin.hygiene.signoff"}},
+			map[string]int{"report": 403, "history": 403, "snapshot": 403, "export": 403, "signoff": 201}},
+		{"the global admin does all of it", auth.PermissionMatrix{"*": {"*"}},
+			map[string]int{"report": 200, "history": 200, "snapshot": 200, "export": 200, "signoff": 201}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h, id := reviewed()
+			got := map[string]int{}
+			ask := func(name string, call func(http.ResponseWriter, *http.Request), r *http.Request) {
+				w := httptest.NewRecorder()
+				call(w, r)
+				got[name] = w.Code
+			}
+			ask("report", h.GetHygiene, hygieneRequestAs(http.MethodGet, "/api/v1/hygiene", c.matrix))
+			ask("history", h.HygieneHistory, hygieneRequestAs(http.MethodGet, "/api/v1/hygiene/history", c.matrix))
+			snapshot := hygieneRequestAs(http.MethodGet, "/api/v1/hygiene/snapshot/"+id, c.matrix)
+			rc := chi.NewRouteContext()
+			rc.URLParams.Add("id", id)
+			ask("snapshot", h.HygieneSnapshot, snapshot.WithContext(context.WithValue(snapshot.Context(), chi.RouteCtxKey, rc)))
+			ask("export", h.GetHygiene, hygieneRequestAs(http.MethodGet, "/api/v1/hygiene?format=csv", c.matrix))
+			ask("signoff", h.SignoffHygiene, hygieneRequestAs(http.MethodPost, "/api/v1/hygiene/signoff", c.matrix))
+			for name, want := range c.want {
+				if got[name] != want {
+					t.Errorf("%s: %d, want %d", name, got[name], want)
+				}
+			}
+		})
+	}
+}
+
+// A refused read names the key the role management screen offers, so the audit row tells an admin what to grant.
+func TestHygieneRefusalNamesTheClusterKey(t *testing.T) {
+	h, store, _ := hygieneHandler(true)
+	w := httptest.NewRecorder()
+	h.GetHygiene(w, hygieneRequestAs(http.MethodGet, "/api/v1/hygiene", auth.PermissionMatrix{"self": hygieneSeedWrite}))
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("code %d", w.Code)
+	}
+	if len(store.rows) != 1 || store.rows[0].Action != "k8s.access.denied" || store.rows[0].TargetID != "resource.hygiene.scan" {
+		t.Errorf("audit = %+v", store.rows)
+	}
+}
+
 func TestHygieneGates(t *testing.T) {
 	h, store, _ := hygieneHandler(false)
 	w := httptest.NewRecorder()

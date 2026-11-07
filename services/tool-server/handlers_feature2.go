@@ -97,7 +97,7 @@ func capList(reply map[string]interface{}, key string, n int) {
 	}
 }
 
-// handleHygiene returns the cluster hygiene report (Admin: admin.hygiene.read).
+// handleHygiene returns the cluster hygiene report (resource.hygiene.scan on the cluster, or admin.hygiene.read; k8s-service asks).
 func handleHygiene(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
 	status, body, err := k8sServiceGet(ctx, headers, "/hygiene", nil)
 	if err != nil {

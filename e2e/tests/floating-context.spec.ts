@@ -298,7 +298,7 @@ test.describe('floating chat — windows and admin screens', () => {
       expect(ctx.path).toBe(path)
       expect({ base: ctx.base ?? null, overlays: ctx.overlays }, path).toEqual({ base: null, overlays: [] })
     }
-    for (const path of ['/admin/cluster-hygiene', '/admin/investigations']) {
+    for (const path of ['/cluster/hygiene', '/admin/investigations']) {
       await navigate(page, path)
       const ctx = await askForBase(page, sent, path, 20000)
       expect(ctx.base?.summary, path).toBeTruthy()

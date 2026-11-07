@@ -704,7 +704,7 @@ func TestHygieneHistory_ARefusalAsksForNoSettings(t *testing.T) {
 }
 
 func TestHygieneHistory_TheSettingsNeedThePermissionOfTheScreen(t *testing.T) {
-	if got := toolScreenTable["hygiene_history"](args{}); !reflect.DeepEqual(got, []string{"admin.hygiene.read"}) {
+	if got := toolScreenTable["hygiene_history"](args{}); !reflect.DeepEqual(got, []string{"resource.hygiene.scan"}) {
 		t.Errorf("permissions: %v", got)
 	}
 }
@@ -815,12 +815,31 @@ var adminReadTools = map[string]string{
 	"ai_usage":        "admin.audit.read",
 	"access_requests": "admin.users.update",
 	"audit_integrity": "admin.audit.read",
-	"hygiene_history": "admin.hygiene.read",
+	"hygiene_history": "resource.hygiene.scan",
 }
 
 type fixedToken struct{ payload auth.TokenPayload }
 
 func (f fixedToken) Validate(string) (auth.TokenPayload, error) { return f.payload, nil }
+
+// The report's route answers the cluster's own key or the all-cluster one, and so do its tools; another cluster's key opens nothing.
+func TestHygieneTools_AskTheClustersKeyOrTheAllClusterOne(t *testing.T) {
+	for _, tool := range []string{"hygiene", "hygiene_history"} {
+		for name, c := range map[string]struct {
+			perms auth.PermissionMatrix
+			want  int
+		}{
+			"the cluster's key": {auth.PermissionMatrix{"c1": {"ai.tool.*", "resource.hygiene.scan"}}, 0},
+			"the global key":    {auth.PermissionMatrix{"c1": {"ai.tool.*"}, "*": {"admin.hygiene.read"}}, 0},
+			"another cluster's": {auth.PermissionMatrix{"c1": {"ai.tool.*"}, "c2": {"resource.hygiene.scan"}}, http.StatusForbidden},
+			"read everything":   {auth.PermissionMatrix{"c1": {"ai.tool.*", "resource.*.read"}}, http.StatusForbidden},
+		} {
+			if _, status, err := authorizeToolCall(fixedToken{auth.TokenPayload{Perms: c.perms}}, bearer(), tool, "c1", args{}); status != c.want {
+				t.Errorf("%s, %s: status %d (%v), want %d", tool, name, status, err, c.want)
+			}
+		}
+	}
+}
 
 func TestAdminReads_AskThePermissionOfTheirScreen(t *testing.T) {
 	headers := bearer()

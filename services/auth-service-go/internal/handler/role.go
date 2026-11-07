@@ -386,6 +386,9 @@ func allPermissions() []map[string]interface{} {
 			{"resource.node.drain", "Drain"},
 			{"resource.node.shell", "Node shell"},
 		}},
+		{"category": "Cluster", "permissions": []perm{
+			{"resource.hygiene.scan", "View this cluster's hygiene report (not in Read or Write; Admin holds it)"},
+		}},
 		{"category": "Pod", "permissions": []perm{
 			{"resource.pod.exec", "Pod exec"},
 			{"resource.pod.logfile", "Read log files inside containers"},
@@ -508,7 +511,7 @@ func allPermissions() []map[string]interface{} {
 			{"admin.review.read", "View the access review report"},
 			{"admin.review.export", "Export the access review (CSV)"},
 			{"admin.review.signoff", "Sign off an access review"},
-			{"admin.hygiene.read", "View the cluster hygiene report"},
+			{"admin.hygiene.read", "View the hygiene report of every cluster"},
 			{"admin.hygiene.export", "Export the cluster hygiene report (CSV/JSON)"},
 			{"admin.hygiene.signoff", "Sign off a cluster hygiene report"},
 			{"admin.investigations.read", "View alert investigation reports"},

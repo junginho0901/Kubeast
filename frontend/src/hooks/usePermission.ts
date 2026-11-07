@@ -29,6 +29,8 @@ export function usePermission() {
   const clusterRole = (currentCluster && me?.cluster_roles?.[currentCluster]) || null
   // The namespaces that grant is limited to, if it is namespace-scoped.
   const clusterNamespaces = (currentCluster && me?.cluster_namespaces?.[currentCluster]) || null
+  // The same for a cluster a page names itself.
+  const namespacesOn = (cluster: string) => me?.cluster_namespaces?.[cluster] ?? null
 
-  return { has, permissions: matrix, role: me?.role ?? null, clusterRole, clusterNamespaces }
+  return { has, permissions: matrix, role: me?.role ?? null, clusterRole, clusterNamespaces, namespacesOn }
 }

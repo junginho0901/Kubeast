@@ -750,7 +750,7 @@
    "tool": "hygiene",
    "args": {},
    "want": [
-    "admin.hygiene.read"
+    "resource.hygiene.scan"
    ],
    "write": false,
    "read": false
@@ -906,7 +906,7 @@
    "tool": "hygiene_history",
    "args": {},
    "want": [
-    "admin.hygiene.read"
+    "resource.hygiene.scan"
    ],
    "write": false,
    "read": false

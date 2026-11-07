@@ -27,6 +27,16 @@ import (
 // ========== GPU Dashboard ==========
 
 func (s *Service) GetGPUDashboard(ctx context.Context) (map[string]interface{}, error) {
+	return s.gpuDashboard(ctx, false)
+}
+
+// GetGPUPods is the dashboard's answer for the GPU Pods screen of a grant limited to namespaces, which the cluster
+// does not let list nodes: the pods it may see that ask for GPUs, and nothing about the nodes.
+func (s *Service) GetGPUPods(ctx context.Context) (map[string]interface{}, error) {
+	return s.gpuDashboard(ctx, true)
+}
+
+func (s *Service) gpuDashboard(ctx context.Context, podsOnly bool) (map[string]interface{}, error) {
 	// Use a bounded context so slow external calls don't block the whole request
 	dashCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
@@ -45,11 +55,7 @@ func (s *Service) GetGPUDashboard(ctx context.Context) (map[string]interface{}, 
 
 	// Fetch nodes, pods, device plugins, time-slicing config and the DRA claims all in parallel
 	var wg sync.WaitGroup
-	wg.Add(5)
-	go func() {
-		defer wg.Done()
-		nodeList, nodeErr = s.clientsetCtx(ctx).CoreV1().Nodes().List(dashCtx, metav1.ListOptions{})
-	}()
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		// a page at a time, keeping the pods that ask for a GPU (every pod in one list took k8s-service past 512 Mi)
@@ -95,24 +101,33 @@ func (s *Service) GetGPUDashboard(ctx context.Context) (map[string]interface{}, 
 			})
 		})
 	}()
-	go func() {
-		defer wg.Done()
-		devicePlugins = getDevicePlugins(dashCtx, s)
-	}()
-	go func() {
-		defer wg.Done()
-		timeSlicingConfig = getTimeSlicingConfig(dashCtx, s)
-	}()
-	go func() {
-		defer wg.Done()
-		// the pods that hold devices through DRA, which a GPU's DCGM series may name (none when the claims cannot be read)
-		if s.isDRAUnavailable(dashCtx) {
-			return
-		}
-		if claims, err := s.draClaims(dashCtx); err == nil {
-			draPods = drarow.ReservedPods(claims)
-		}
-	}()
+	if podsOnly {
+		nodeList = &corev1.NodeList{}
+	} else {
+		wg.Add(4)
+		go func() {
+			defer wg.Done()
+			nodeList, nodeErr = s.clientsetCtx(ctx).CoreV1().Nodes().List(dashCtx, metav1.ListOptions{})
+		}()
+		go func() {
+			defer wg.Done()
+			devicePlugins = getDevicePlugins(dashCtx, s)
+		}()
+		go func() {
+			defer wg.Done()
+			timeSlicingConfig = getTimeSlicingConfig(dashCtx, s)
+		}()
+		go func() {
+			defer wg.Done()
+			// the pods that hold devices through DRA, which a GPU's DCGM series may name (none when the claims cannot be read)
+			if s.isDRAUnavailable(dashCtx) {
+				return
+			}
+			if claims, err := s.draClaims(dashCtx); err == nil {
+				draPods = drarow.ReservedPods(claims)
+			}
+		}()
+	}
 	wg.Wait()
 
 	if nodeErr != nil {

@@ -40,6 +40,18 @@ export function hasPermission(matrix: PermissionMatrix, perm: string, clusterID 
   return clusterID ? matchAny(matrix[clusterID], perm) : false
 }
 
+// Held on at least one cluster: for a setting this browser keeps, which belongs to no one cluster.
+export function holdsOnAnyCluster(matrix: PermissionMatrix, perm: string): boolean {
+  return Object.values(matrix).some((perms) => matchAny(perms, perm))
+}
+
+// A route asking cluster keys cannot be answered before a cluster is chosen (the picker chooses one after a first
+// sign-in): it waits when no key passes yet and some cluster holds one, or a bookmark would be sent away.
+export function waitsForCluster(keys: string[], currentCluster: string, matrix: PermissionMatrix): boolean {
+  if (currentCluster || keys.some((k) => hasPermission(matrix, k))) return false
+  return keys.some((k) => !k.startsWith('admin.') && holdsOnAnyCluster(matrix, k))
+}
+
 // parsePermissions accepts only the per-cluster map form. A flat array or a
 // missing/!object value yields an empty matrix (deny-all), matching the
 // backend's reject-and-relogin behavior on the UI side.

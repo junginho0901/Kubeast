@@ -178,7 +178,7 @@ test.describe('language and terms', () => {
       expect(findings.filter((f) => !f.message_key).map((f) => f.message)).toEqual([])
       expect(findings.filter((f) => lookup(`clusterHygiene.message.${f.message_key}`) === undefined).map((f) => f.message_key)).toEqual([])
 
-      await page.goto('/admin/cluster-hygiene')
+      await page.goto('/cluster/hygiene')
       await page.getByTestId('hygiene-cluster').click()
       await page.getByTestId('hygiene-cluster-opt-self').click()
       const rows = page.getByTestId('hygiene-finding-row')

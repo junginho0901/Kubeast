@@ -163,7 +163,7 @@ func authorizeToolCall(v tokenValidator, headers http.Header, tool, clusterID st
 	}
 	var missing []string
 	for _, permission := range required {
-		if !payload.HasPermissionForCluster(permission, clusterID) {
+		if !holdsForTool(payload, permission, clusterID) {
 			missing = append(missing, permission)
 		}
 	}

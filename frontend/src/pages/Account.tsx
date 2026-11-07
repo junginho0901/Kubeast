@@ -8,6 +8,7 @@ import { modalButton } from '@/components/modalStyles'
 import ClusterAccessSection from './account/ClusterAccessSection'
 import ApiKeysSection from './account/ApiKeysSection'
 import { useAccountSectionsReady } from './account/accountReady'
+import NodeShellSection from './account/NodeShellSection'
 import { COLOR_MODES, setColorMode, useColorMode } from '@/utils/colorMode'
 
 export default function Account() {
@@ -245,6 +246,8 @@ export default function Account() {
             ))}
           </div>
         </div>
+
+        <NodeShellSection ready={sectionsReady} />
         </div>
       </div>
 
