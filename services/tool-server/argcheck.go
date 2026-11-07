@@ -135,6 +135,11 @@ var argRules = map[string]argCheck{
 	"review_section": checkEnum("summary", "users", "cluster_roles", "api_keys", "access_requests", "roles", "history"),
 	"review_id":      checkObjectName,
 	"usage_group":    checkEnum("user", "model", "cluster"),
+	// A report's and a recording's id, each one segment of a route's path; a recording's kind; a list's filter by cluster.
+	"investigation_id": checkInboxID,
+	"recording_id":     checkInboxID,
+	"recording_kind":   checkEnum("exec", "node-shell"),
+	"cluster_id":       checkPrintable(128),
 	// The NetworkPolicy check (port is also k8s_check_service_connectivity's).
 	"src":      checkNetpolEnd,
 	"dst":      checkNetpolEnd,

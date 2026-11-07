@@ -122,7 +122,7 @@ func handleClustersList(ctx context.Context, _ map[string]interface{}, headers h
 	return marshalJSON(map[string]interface{}{
 		"total":    len(clusters),
 		"clusters": clusters,
-		"note":     "health_status is the last connection check, made at registration or by a person's Test in Admin → Clusters at last_healthcheck_at, not a live probe; unknown = never checked.",
+		"note":     "health_status is the last connection check, at last_healthcheck_at: k8s-service probes each cluster every 60 seconds unless multicluster.healthcheckIntervalSec changes or stops it (healthy, disconnected), and a person's Test in Admin → Clusters also writes it (unreachable when it fails); unknown = never checked.",
 	})
 }
 

@@ -286,10 +286,10 @@
   "/api/v1/vpas/all": {"tool": "k8s_get_resources", "args": {"resource_type": "verticalpodautoscalers", "all_namespaces": true}},
   "/api/v1/ws": {"excluded": "The live updates that keep one open list current. A tool reads once, and each list has its tool."},
   "/api/v1/wsMultiplexer": {"excluded": "The live updates that keep open lists current, over one socket. A tool reads once, and each list has its tool."},
-  "/api/v1/recordings/config": {"excluded": "Whether terminal sessions are recorded, for the Session recordings screen. Recordings stay off the AI tools."},
-  "/api/v1/recordings": {"excluded": "The list of recorded terminal sessions. Recordings stay off the AI tools: who typed what in a shell is sensitive, and reading it is its own audited action."},
-  "/api/v1/recordings/{id}": {"excluded": "One recorded terminal session's details. Recordings stay off the AI tools: who typed what in a shell is sensitive, and reading it is its own audited action."},
-  "/api/v1/recordings/{id}/cast": {"excluded": "The recorded terminal output itself, the most sensitive of the recordings. Its contents stay off the AI tools."},
+  "/api/v1/recordings/config": {"tool": "session_recordings", "args": {}},
+  "/api/v1/recordings": {"tool": "session_recordings", "args": {}},
+  "/api/v1/recordings/{id}": {"tool": "session_recordings", "args": {"recording_id": "y"}},
+  "/api/v1/recordings/{id}/cast": {"excluded": "The recorded terminal output itself, which a person opens on the Session recordings screen, each view its own audited admin.session.read. session_recordings reads that a recording exists and its details, never this."},
   "/internal/clusters/{id}/kubeconfig": {"excluded": "A cluster's credential that tool-server fetches for its own kubectl, service to service. It is never an answer to anyone."}
  },
  "auth-service": {
@@ -332,5 +332,36 @@
   "/api/v1/auth/admin/audit/integrity": {"tool": "audit_integrity", "args": {}},
   "/api/v1/clusters": {"tool": "clusters_list", "args": {}},
   "/api/v1/system/deployment-mode": {"excluded": "Whether this install runs on a cluster or on one host, so the Register cluster window can turn off in-cluster mode: a form's setting, nothing about a cluster."}
+ },
+ "ai-service": {
+  "/": {"excluded": "The service saying it runs, for whoever opens its address: no screen reads it."},
+  "/health": {"excluded": "The service saying it runs and whether its environment holds a key, for whoever opens its address: no screen reads it and the gateway's /health goes to k8s-service."},
+  "/metrics": {"excluded": "Prometheus scraping this service's own request counters, not what a screen shows."},
+  "/openapi.json": {"excluded": "The schema FastAPI writes for this service, at its own address. No screen reads it and the gateway does not route it."},
+  "/docs": {"excluded": "The API page FastAPI writes for this service, at its own address. No screen reads it and the gateway does not route it."},
+  "/docs/oauth2-redirect": {"excluded": "A step of FastAPI's API page, at this service's own address. No screen reads it and the gateway does not route it."},
+  "/redoc": {"excluded": "The other API page FastAPI writes for this service, at its own address. No screen reads it and the gateway does not route it."},
+  "/api/v1/ai/health": {"excluded": "The kubelet's probe of this service, through its public path: no screen reads it."},
+  "/api/v1/ai/config": {"excluded": "The name of the model answering in AI Chat's header and the app's version: the chat's own state, nothing about a cluster. ai_models names the config the chat runs on, for whoever holds admin.ai_models.*."},
+  "/api/v1/ai/mcp/config": {"excluded": "How to connect an external agent, in the API keys section of the Account page, a private screen kept from the AI (utils/aiContext/privateScreens): the MCP path and two chart switches."},
+  "/api/v1/ai/model-configs": {"tool": "ai_models", "args": {}},
+  "/api/v1/ai/model-configs/active": {"tool": "ai_models", "args": {}, "note": "The config the chat runs on: active names the row whose used_for holds chat, as the cards' Active badge reads it."},
+  "/api/v1/ai/model-configs/providers": {"tool": "ai_models", "args": {}},
+  "/api/v1/ai/investigations": {"tool": "investigations", "args": {}},
+  "/api/v1/ai/investigations/{inv_id}": {"tool": "investigations", "args": {"investigation_id": "y"}},
+  "/api/v1/ai/suggest-optimization/stream": {"excluded": "The AI explanation on the Optimization screen, a model's answer as it streams, which spends tokens: not a read of data. The optimization tool reads the table it explains."},
+  "/api/v1/ai/tool-approvals": {"excluded": "The approval cards waiting in the caller's own conversation, which the chat draws while it runs. An approval is a person's answer to this same chat, and a tool does not give it."},
+  "/api/v1/ai/tool-approvals/{approval_id}": {"excluded": "One approval card of the caller's own conversation, which the chat reads to draw it. An approval is a person's answer to this same chat, and a tool does not give it."},
+  "/api/v1/alerts/inbox": {"tool": "alerts_inbox", "args": {}},
+  "/api/v1/alerts/inbox/{item_id}": {"tool": "alerts_inbox", "args": {"alert_id": "y"}},
+  "/api/v1/alerts/inbox/{item_id}/investigation": {"tool": "alerts_inbox", "args": {"alert_id": "y", "with_report": true}}
+ },
+ "session-service": {
+  "/": {"excluded": "The service saying it runs, for whoever opens its address: no screen reads it."},
+  "/health": {"excluded": "The kubelet's probe of this service: no screen reads it."},
+  "/metrics": {"excluded": "Prometheus scraping this service's own request counters, not what a screen shows."},
+  "/api/v1/sessions": {"excluded": "The caller's own conversations in AI Chat's list: the chat itself, nothing about a cluster or about anyone else. A tool would read a person's questions back to the model that answered them."},
+  "/api/v1/sessions/{session_id}": {"excluded": "One of the caller's own conversations as AI Chat opens it. The chat gives the model this history itself, so a tool would only read it back."},
+  "/api/v1/sessions/{session_id}/messages": {"excluded": "The earlier messages AI Chat loads when the caller scrolls up in their own conversation: the chat's own history, nothing about a cluster or about anyone else."}
  }
 }

@@ -127,6 +127,69 @@
    "refused": "spans the cluster"
   },
   {
+   "tool": "ai_models",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "ai_models",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "ai_models",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "ai_models",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "ai_models",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "ai_models",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "ai_models",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "ai_models",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "ai_models",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
    "tool": "ai_usage",
    "args": {},
    "refused": "spans the cluster"
@@ -1191,6 +1254,69 @@
   },
   {
    "tool": "hygiene_history",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "investigations",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "investigations",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "investigations",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "investigations",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "investigations",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "investigations",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "investigations",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "investigations",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "investigations",
    "args": {
     "all_namespaces": false,
     "namespace": "shop"
@@ -4220,6 +4346,69 @@
     "namespace": "shop"
    },
    "refused": ""
+  },
+  {
+   "tool": "session_recordings",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "session_recordings",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "session_recordings",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "session_recordings",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "session_recordings",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "session_recordings",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "session_recordings",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "session_recordings",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "session_recordings",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
   },
   {
    "tool": "storage_summary",

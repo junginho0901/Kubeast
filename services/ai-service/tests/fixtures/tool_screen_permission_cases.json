@@ -2,6 +2,7 @@
  "tools": [
   "access_requests",
   "access_review",
+  "ai_models",
   "ai_usage",
   "alert_investigate",
   "alerts_inbox",
@@ -19,6 +20,7 @@
   "helm_read",
   "hygiene",
   "hygiene_history",
+  "investigations",
   "issues",
   "k8s_annotate_resource",
   "k8s_apply_manifest",
@@ -67,6 +69,7 @@
   "prometheus_rules",
   "prometheus_targets",
   "resource_graph",
+  "session_recordings",
   "storage_summary",
   "timeline",
   "traces_compare",
@@ -867,6 +870,18 @@
    "read": true
   },
   {
+   "tool": "alerts_inbox",
+   "args": {
+    "alert_id": "a1",
+    "with_report": true
+   },
+   "want": [
+    "resource.pod.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
    "tool": "access_review",
    "args": {},
    "want": [
@@ -907,6 +922,55 @@
    "args": {},
    "want": [
     "resource.hygiene.scan"
+   ],
+   "write": false,
+   "read": false
+  },
+  {
+   "tool": "investigations",
+   "args": {},
+   "want": [
+    "admin.investigations.read"
+   ],
+   "write": false,
+   "read": false
+  },
+  {
+   "tool": "investigations",
+   "args": {
+    "investigation_id": "inv-1"
+   },
+   "want": [
+    "admin.investigations.read"
+   ],
+   "write": false,
+   "read": false
+  },
+  {
+   "tool": "ai_models",
+   "args": {},
+   "want": [
+    "admin.ai_models.*"
+   ],
+   "write": false,
+   "read": false
+  },
+  {
+   "tool": "session_recordings",
+   "args": {},
+   "want": [
+    "admin.sessions.read"
+   ],
+   "write": false,
+   "read": false
+  },
+  {
+   "tool": "session_recordings",
+   "args": {
+    "recording_id": "r1"
+   },
+   "want": [
+    "admin.sessions.read"
    ],
    "write": false,
    "read": false

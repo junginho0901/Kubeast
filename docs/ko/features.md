@@ -44,8 +44,8 @@
     - `prometheus_targets` — 수집 대상 up/down. 지표가 빌 때 씁니다. 여러 클러스터가 함께 쓰는 저장소이거나 targets API가 없으면 `up` 지표로 판단합니다.
     - `alerts_list` — 알림 저장소에 있는 이 클러스터의 알림(울림·무음·억제 상태)과 그 알림을 덮은 무음. `silences=true`면 Silences 탭의 무음 전체, 지금 걸린 알림이 없는 무음까지
     - `alert_investigate` — Alerts 받은편지함의 알림 하나를 "지금 조사" 버튼처럼 정식 조사로 시작([AI 알림](ai-alerts.md) 참고)
-    - `clusters_list` — 그 사람이 볼 수 있는 클러스터와 연결 상태. 클러스터 선택기 목록과 같고 값은 마지막 확인 결과입니다(실시간 아님). `admin.clusters.list`가 있으면 Admin → Clusters 목록도 받습니다. kubeconfig·자격 증명은 나가지 않습니다
-    - `alerts_inbox` — Alerts 받은편지함. 알림을 누가 확인했고 누가 맡았고 끝났는지, `alert_id`로 읽으면 메모까지 보여 줍니다. 읽기만 하며 표시 변경은 화면에서 합니다
+    - `clusters_list` — 그 사람이 볼 수 있는 클러스터와 연결 상태. 클러스터 선택기 목록과 같고 값은 마지막 확인 결과와 그 시각입니다. k8s-service가 기본 60초마다(`multicluster.healthcheckIntervalSec`) 확인하고, Admin → Clusters의 Test도 이 값을 씁니다. `admin.clusters.list`가 있으면 Admin → Clusters 목록도 받습니다. kubeconfig·자격 증명은 나가지 않습니다
+    - `alerts_inbox` — Alerts 받은편지함. 알림을 누가 확인했고 누가 맡았고 끝났는지, `alert_id`로 읽으면 메모까지, `with_report`를 주면 Report 버튼이 여는 보고서까지 보여 줍니다(`ai.investigation.view`로 남습니다). 읽기만 하며 표시 변경은 화면에서 합니다
     - `pod_rbac` — 파드의 서비스 계정, 그 계정에 걸리는 바인딩, 각 역할이 허용하는 일. 파드 RBAC API와 파드 창 RBAC 탭의 답과 같습니다. 클러스터가 호출자에게 거절한 것은 비우지 않고 이름을 말합니다
     - `logfiles` — 컨테이너 안 로그 파일. 로그 파일 탭처럼 목록을 보거나 읽습니다(고정 `tail`, 마지막 N줄, 따라가기 없음. [컨테이너 안 로그 파일](operations.md#컨테이너-안-로그-파일-log-files) 참고)
     - `storage_summary` — Storage 창의 PVC(사용량 포함)·PV 상태별 개수와 PVC→PV 연결
@@ -86,6 +86,9 @@
       - `access_requests` — Access requests처럼 대기 중인 요청과 처리된 요청을 답합니다(`admin.users.update`). 승인과 거절은 화면에서만 합니다.
       - `audit_integrity` — 감사 로그 체인이 어디까지 봉인됐는지와 마지막 앵커를 답합니다(`admin.audit.read`). 체인을 검사하지는 않습니다. 검사는 Audit Logs의 Verify 버튼이 합니다.
       - `hygiene_history` — 클러스터의 위생 점검 서명 이력, 서명 주기(`interval_days`), 서명 때 저장한 보고서를 답합니다(`resource.hygiene.scan` 또는 `admin.hygiene.read`).
+      - `investigations` — Investigations처럼 모든 클러스터 또는 한 클러스터의 알림 조사 보고서를 답합니다(`admin.investigations.read`). `investigation_id`를 주면 보고서 본문, 도구 호출, 라벨, 주석까지 열며 `ai.investigation.view`로 남습니다.
+      - `ai_models` — AI Models가 읽는 값에서 모델마다 이름, 제공자, 지금 쓰이는 곳(`used_for`), 한도, 이 설치에서 쓸 수 없는 제공자를 답합니다(`admin.ai_models.*`). `key_env_set`은 키 변수가 정해져 있는지만 말합니다. false는 카드의 "키 환경변수 없음" 경고이고, null은 키를 묻지 않는 제공자입니다. API 키, 키를 담은 변수 이름, 헤더, 인증서, 주소는 답하지 않습니다.
+      - `session_recordings` — Session recordings처럼 터미널 세션이 녹화됐다는 사실과 그 정보를 답합니다(`admin.sessions.read`): 누가, 종류, 클러스터, 대상, 시각, 크기, 상태. 터미널에 나온 내용은 읽지 않습니다. 내용은 그 화면에서만 열리고 `admin.session.read`로 남습니다.
       - 이 답은 주는 칸을 하나하나 정해 둡니다. API 키 값과 비밀번호 해시는 들어 있지 않고, `key_prefix`는 목록에 보이는 키 앞부분입니다. 메일 주소는 `ai.redaction.pii`를 따릅니다.
     - `nodes_stats_summary`·`nodes_log` — kubelet의 stats summary와 로그 질의를 API 서버 프록시로 읽습니다(`admin.nodes.read` + 클러스터 RBAC `nodes/proxy`).
       로그 질의는 kubelet의 `enableSystemLogQuery`가 켜져 있어야 하며, 꺼져 있으면 unavailable로 답합니다.
@@ -182,7 +185,7 @@
   - `k8s_execute_command`는 `resource.pod.exec`, undo의 `k8s_rollout`은 `resource.workload.rollback`이 필요합니다.
   - `<kind>`는 화면이 쓰는 이름(`permResource`)입니다. kind를 소문자로 쓴 것, `hpa`·`vpa`·`pdb`·`pv`·`pvc`·`crd`, 자기 이름이 없는 kind는 `customresource`입니다.
   - 호출이 가리키는 kind는 전부 봅니다. 쉼표 목록, 매니페스트의 문서 하나하나, List의 items가 모두 그렇습니다. `all`·`api-extensions`·`gateway-api`와 읽을 수 없는 매니페스트는 `resource.*.<verb>`가 필요합니다. CRD가 스스로 정한 짧은 이름이나 카테고리는 `customresource`로 봅니다.
-  - 화면이 권한을 묻는 읽기: `k8s_get_pod_logs`, `logsearch`, `loki_*` 도구, `alerts_list`는 `resource.pod.read`가 필요합니다. `helm_read`는 `resource.helm.read`, `cost`는 `resource.cost.read`, `policy_reports`는 `resource.policyreport.read`, `network_policy_check`와 `network_policy_effective`는 `resource.networkpolicy.read`, `network_*` 흐름 도구는 `resource.networkflow.read`, `logfiles`는 `resource.pod.logfile`, `alerts_inbox`는 `resource.pod.read`가 필요합니다. `hygiene`과 `hygiene_history`는 `admin.hygiene.read`, `audit_search`·`ai_usage`·`audit_integrity`는 `admin.audit.read`, `access_review`는 `admin.review.read`, `access_requests`는 `admin.users.update`, `nodes_*` 도구는 `admin.nodes.read`가 필요합니다. `alert_investigate`는 버튼이 묻는 `resource.alert.investigate`와 `resource.pod.read`가 필요합니다.
+  - 화면이 권한을 묻는 읽기: `k8s_get_pod_logs`, `logsearch`, `loki_*` 도구, `alerts_list`는 `resource.pod.read`가 필요합니다. `helm_read`는 `resource.helm.read`, `cost`는 `resource.cost.read`, `policy_reports`는 `resource.policyreport.read`, `network_policy_check`와 `network_policy_effective`는 `resource.networkpolicy.read`, `network_*` 흐름 도구는 `resource.networkflow.read`, `logfiles`는 `resource.pod.logfile`, `alerts_inbox`는 `resource.pod.read`가 필요합니다. `hygiene`과 `hygiene_history`는 `admin.hygiene.read`, `audit_search`·`ai_usage`·`audit_integrity`는 `admin.audit.read`, `access_review`는 `admin.review.read`, `access_requests`는 `admin.users.update`, `investigations`는 `admin.investigations.read`, `ai_models`는 `admin.ai_models.*`, `session_recordings`는 `admin.sessions.read`, `nodes_*` 도구는 `admin.nodes.read`가 필요합니다. `alert_investigate`는 버튼이 묻는 `resource.alert.investigate`와 `resource.pod.read`가 필요합니다.
   - 나머지 읽기 도구는 더 필요한 것이 없습니다. 그 화면도 `resource.<kind>.read`를 묻지 않고, 클러스터에 대한 역할과 클러스터 RBAC이 정하기 때문입니다(아래 읽기 API). `resource.*.read`가 없어도 그룹이 바인딩된 커스텀 역할은 화면과 AI로 같은 목록을 읽습니다. Secret 값은 AI로 가지 않습니다.
   - 절대 부를 수 없는 도구는 역할에 내주지 않습니다. 거절된 호출은 실행되지 않고 승인 카드도 없으며, 없는 권한을 말하고 실패 행(`ai.tool.call`, `ai.mcp.call`)을 남깁니다. 표(`services/tool-server/screen_permissions.go`, `app/services/ai/screen_permissions.py`)에 없는 도구는 누구에게나 거절됩니다.
 - **쓰기 API는 전부** 핸들러에서 권한을 검사하며, 감사 행을 남기지 못하면 거부됩니다(fail-closed).

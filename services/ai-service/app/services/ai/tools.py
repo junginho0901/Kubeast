@@ -373,8 +373,9 @@ K8S_READONLY_TOOLS: List[Dict] = [
             "name": "clusters_list",
             "description": (
                 "The clusters this user can see in Kubeast and their connection status, as the cluster picker lists them: id, display_name, mode, "
-                "is_self_cluster, health_status (the last connection check, made at registration or by a person's Test in Admin → Clusters at "
-                "last_healthcheck_at, not a live probe; unknown = never checked), current (the cluster this conversation reads) and namespaces "
+                "is_self_cluster, health_status (the last connection check, at last_healthcheck_at: k8s-service probes each cluster every 60 seconds "
+                "unless multicluster.healthcheckIntervalSec changes or stops it, giving healthy or disconnected, and a person's Test in Admin → Clusters "
+                "also writes it, giving unreachable when it fails; unknown = never checked), current (the cluster this conversation reads) and namespaces "
                 "when the grant there is limited to them. Someone with admin.clusters.list gets every registered cluster, with reachable and the "
                 "API server, Prometheus and log store settings of Admin → Clusters. Never a kubeconfig or credential. Use it for \"which cluster "
                 "is not connected\" and \"which clusters do I have\"; every other tool reads the current cluster only."
@@ -389,14 +390,17 @@ K8S_READONLY_TOOLS: List[Dict] = [
             "description": (
                 "The Alerts inbox: every alert Alertmanager sent to Kubeast for this cluster, firing or resolved, with who acknowledged it, who it is "
                 "assigned to and whether it is done, and its investigation. Without alert_id a page of the list with counts by status; with alert_id "
-                "one alert as its window opens, which adds the note (and who wrote it), annotations, receiver and investigate_now. Use it for \"who is "
-                "on this alert\", \"what is unassigned\", \"what did someone note\"; alerts_list reads the alert store and has none of these marks. "
-                "Reading only: changing a mark stays on the screen. For whoever reads the whole cluster (resource.pod.read, no namespace limit)."
+                "one alert as its window opens, which adds the note (and who wrote it), annotations, receiver and investigate_now, and with_report the "
+                "investigation's report as investigation_report, which is recorded as ai.investigation.view (report_error says why there is none). Use it "
+                "for \"who is on this alert\", \"what is unassigned\", \"what did someone note\", \"what did the investigation find\"; alerts_list reads the "
+                "alert store and has none of these marks. Reading only: changing a mark stays on the screen. For whoever reads the whole cluster "
+                "(resource.pod.read, no namespace limit)."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "alert_id": {"type": "string", "description": "One alert's id from the list, for its window with the note"},
+                    "with_report": {"type": "boolean", "description": "With alert_id: also read the report of its investigation"},
                     "status": {"type": "string", "description": "firing, stale (no word from Alertmanager for a while) or resolved"},
                     "alert_severity": {"type": "string", "description": "The severity the alert carries; the answer's severities lists them"},
                     "mine": {"type": "boolean", "description": "Only alerts assigned to the signed-in user"},
@@ -1431,6 +1435,66 @@ ADMIN_READ_TOOLS: List[Dict] = [
                     "severity": {"type": "string", "description": "With review_id: only findings of this severity (critical, warning or info)"},
                     "check": {"type": "string", "description": "With review_id: only findings of this check id"},
                     "limit": {"type": "integer", "description": "Sign-offs to return (default and max 100)"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "investigations",
+            "description": (
+                "The reports the alert investigator wrote (Admin → Investigations; permission admin.investigations.read), newest first and of every cluster unless "
+                "cluster_id names one: alert, severity, namespace, status (queued, running, done, failed, skipped), skip_reason, times, repeat_count, requested_by, model, "
+                "tokens, tool_call_count. investigation_id opens one report with its text, error, the tool calls it made, labels and annotations, which is recorded as "
+                "ai.investigation.view because a report can quote pod logs. Reports stay listed after features.alertInvestigation is turned off. Reading only: "
+                "alert_investigate starts one. {\"status\":\"audit_unavailable\"} means nothing was read because the audit log cannot take the record."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "investigation_id": {"type": "string", "description": "A report's id from the list, to open it"},
+                    "status": {"type": "string", "description": "Only this status: queued, running, done, failed or skipped"},
+                    "cluster_id": {"type": "string", "description": "Only this cluster's, an id from clusters_list"},
+                    "limit": {"type": "integer", "description": "Rows per page (default 25, at most 200)"},
+                    "offset": {"type": "integer", "description": "Rows to skip, for the next page; total says how many there are"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "ai_models",
+            "description": (
+                "The models set up for the AI (Admin → AI Models; permission admin.ai_models.*): name, provider, model, enabled, is_default, tier, used_for (what runs on it now: "
+                "chat, floating, summary, investigation), and its limits max_tokens and tool_result_chars. null limit = the call's default: 4096 tokens for a chat answer, 2048 for an "
+                "investigation step, 6000 characters of a tool result. key_env_set says only whether a key variable is named: false is the card's \"No key env\" warning, null a provider that asks for "
+                "no key. active names the model the chat runs on and providers what this install cannot run, with why. "
+                "It never answers an API key, the name of the variable holding one, a header, a certificate or an address, which stay on the screen, as do adding, changing and testing a model."
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "session_recordings",
+            "description": (
+                "That a terminal session was recorded and its details (Admin → Session recordings; permission admin.sessions.read), newest first and of every cluster unless "
+                "cluster_id names one: kind (exec or node-shell), user_email, cluster, namespace, target, container, started_at, ended_at, bytes, uploaded_bytes (what an interrupted recording "
+                "kept), parts, status (recording, uploading, uploaded, interrupted), truncated and last_error. enabled says whether terminals are recorded now. Its details, never what the terminal "
+                "showed: that opens only on the screen, where each view is audited. There is no total: next_offset says there is more."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "recording_id": {"type": "string", "description": "A recording's id from the list, for its details alone"},
+                    "actor_email": {"type": "string", "description": "Part of the mail address of the person who opened the terminal"},
+                    "recording_kind": {"type": "string", "enum": ["exec", "node-shell"], "description": "Pod exec or node shell"},
+                    "cluster_id": {"type": "string", "description": "Only this cluster's, an id from clusters_list"},
+                    "limit": {"type": "integer", "description": "Rows per page (default 25, at most 200)"},
+                    "offset": {"type": "integer", "description": "Rows to skip, for the next page"},
                 },
             },
         },

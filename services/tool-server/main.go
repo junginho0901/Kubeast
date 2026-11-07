@@ -341,6 +341,21 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Handler:     handleHygieneHistory,
 	})
 	register(ToolDefinition{
+		Name:        "investigations",
+		Description: "Alert investigation reports: the list or one report — Admin",
+		Handler:     handleInvestigations,
+	})
+	register(ToolDefinition{
+		Name:        "ai_models",
+		Description: "The AI models: name, provider, what each runs and its limits, never a key or address — Admin",
+		Handler:     handleAIModels,
+	})
+	register(ToolDefinition{
+		Name:        "session_recordings",
+		Description: "Terminal session recordings: who, where, when and how much, never what the terminal showed — Admin",
+		Handler:     handleSessionRecordings,
+	})
+	register(ToolDefinition{
 		Name:        "policy_reports",
 		Description: "PolicyReport / ClusterPolicyReport summary or result rows (Kyverno, Trivy Operator …)",
 		Handler:     handlePolicyReports,

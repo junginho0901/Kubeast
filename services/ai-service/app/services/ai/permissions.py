@@ -211,6 +211,7 @@ CLUSTER_WIDE_TOOLS = frozenset({
     "prometheus_query", "prometheus_metrics", "prometheus_labels", "prometheus_rules", "prometheus_targets", "alerts_list",
     "hygiene", "k8s_diff", "audit_search", "nodes_stats_summary", "nodes_log", "alert_investigate", "alerts_inbox",
     "access_review", "ai_usage", "access_requests", "audit_integrity", "hygiene_history",
+    "investigations", "ai_models", "session_recordings",
 })
 
 # Tool-server's handler or k8s-service's route keeps these inside the grant, so they pass without naming a namespace.

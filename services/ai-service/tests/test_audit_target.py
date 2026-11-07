@@ -8,6 +8,13 @@ def test_named_arguments_are_the_target():
     assert tool_target("k8s_get_resources", {"resource_type": "pods"}) == ToolTarget("pods", "k8s_get_resources", None, None)
 
 
+def test_a_read_of_a_kubeast_record_names_that_record():
+    assert tool_target("investigations", {"investigation_id": "inv-1"}) == ToolTarget("investigation", "inv-1", None, None)
+    assert tool_target("investigations", {"status": "done"}) == ToolTarget("tool", "investigations", None, None)
+    assert tool_target("session_recordings", {"recording_id": "r1"}) == ToolTarget("session_recording", "r1", None, None)
+    assert tool_target("session_recordings", {"actor_email": "ann"}) == ToolTarget("tool", "session_recordings", None, None)
+
+
 def test_one_object_in_yaml_json_or_a_dict():
     yaml_one = "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: made\n  namespace: team-a\n"
     want = ToolTarget("ConfigMap", "made", "team-a", ["ConfigMap team-a/made"])

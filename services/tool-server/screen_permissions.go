@@ -144,6 +144,9 @@ var toolScreenTable = map[string]toolRule{
 	"access_requests":          always("admin.users.update"),
 	"audit_integrity":          always("admin.audit.read"),
 	"hygiene_history":          always("resource.hygiene.scan"),
+	"investigations":           always("admin.investigations.read"),
+	"ai_models":                always("admin.ai_models.*"),
+	"session_recordings":       always("admin.sessions.read"),
 
 	"k8s_delete_resource":   forResourceType("delete"),
 	"k8s_patch_resource":    forResourceType("edit"),
