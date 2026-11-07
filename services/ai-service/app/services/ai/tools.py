@@ -413,15 +413,19 @@ K8S_READONLY_TOOLS: List[Dict] = [
         "function": {
             "name": "pod_rbac",
             "description": (
-                "A pod's service account and the RoleBindings and ClusterRoleBindings that name it: the start of \"what can this pod do in the "
-                "cluster\". can_i asks about the signed-in user, not the pod. The answer names the roles (role_kind, role_name); read what each allows "
-                "with k8s_describe_resource (resource_type role in this namespace or clusterrole). secrets are names only."
+                "What a pod may do in the cluster: its service account, each RoleBinding in its namespace and ClusterRoleBinding that applies to the "
+                "account (by name or through a group it belongs to), and what each role allows (resolved_role.rules). can_i asks about the signed-in "
+                "user, not the pod. What the cluster refused the caller is named in errors, not left empty. secrets are names only."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "namespace": {"type": "string", "description": "The pod's namespace"},
                     "pod_name": {"type": "string", "description": "The pod's name"},
+                    "include_authenticated": {
+                        "type": "boolean",
+                        "description": "Also the bindings of system:authenticated, which every signed-in subject has; off by default as on the screen",
+                    },
                 },
                 "required": ["namespace", "pod_name"],
             },

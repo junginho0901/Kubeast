@@ -1765,10 +1765,21 @@ export interface PodRbacBinding {
 }
 
 export interface PodRbacResponse {
+  pod_name: string
+  namespace: string
+  service_account_name: string
+  service_account_labels?: Record<string, string> | null
+  secrets?: string[]
+  bindings: Array<{ binding_type: string; binding_name: string; role_kind: string; role_name: string }>
   pod: { name: string; namespace: string }
   service_account: { name: string; namespace: string }
-  role_bindings: PodRbacBinding[]
-  cluster_role_bindings: PodRbacBinding[]
+  service_account_error?: string
+  include_authenticated: boolean
+  // A list the cluster refused has no key here and its reason in *_error: it is not empty.
+  role_bindings?: PodRbacBinding[]
+  role_bindings_error?: string
+  cluster_role_bindings?: PodRbacBinding[]
+  cluster_role_bindings_error?: string
   errors: string[]
 }
 

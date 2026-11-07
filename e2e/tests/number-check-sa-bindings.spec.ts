@@ -146,12 +146,10 @@ test.describe('number check — a ServiceAccount drawer counts what applies to i
       expect(card?.matchedBy ?? null, b.name).toBe(b.matchedBy ? `Applies through ${b.matchedBy}` : null)
     }
 
-    // The pod's RBAC tab, where its route answers the tab's lists, counts the same bindings.
+    // The pod's RBAC tab counts the same bindings.
     const admin = await login(request)
     const rbac = await (await request.get(`/api/v1/cluster/namespaces/${NS}/pods/uses-bot/rbac?cluster=${CLUSTER}`, { headers: bearer(admin) })).json()
-    if (Array.isArray(rbac.role_bindings)) {
-      const onTab = [...rbac.role_bindings, ...rbac.cluster_role_bindings].map((b: { name: string }) => b.name).sort()
-      expect(onTab).toEqual(want.map((b) => b.metadata.name).sort())
-    }
+    const onTab = [...rbac.role_bindings, ...rbac.cluster_role_bindings].map((b: { name: string }) => b.name).sort()
+    expect(onTab).toEqual(want.map((b) => b.metadata.name).sort())
   })
 })

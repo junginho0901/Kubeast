@@ -215,7 +215,7 @@ func (h *Handler) GetPodRBAC(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	data, err := h.svc.GetPodRBAC(ctx, namespace, name)
+	data, err := h.svc.GetPodRBAC(ctx, namespace, name, queryParamBool(r, "include_authenticated", false))
 	if err != nil {
 		h.handleError(w, err)
 		return

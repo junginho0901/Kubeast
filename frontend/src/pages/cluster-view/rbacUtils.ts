@@ -28,6 +28,77 @@ export interface RbacPermissionItem {
 export interface RbacPermissionSummary {
   resourceItems: RbacPermissionItem[]
   nonResourceItems: RbacPermissionItem[]
+  /** A list or a role could not be read, so the items may lack permissions */
+  incomplete: boolean
+}
+
+export interface RbacBindingList {
+  /** false: the cluster refused the list, so its rows say nothing about what exists */
+  read: boolean
+  error: string
+  all: any[]
+  normal: any[]
+  broad: any[]
+}
+
+export const rbacBindingList = (rbac: any, key: 'role_bindings' | 'cluster_role_bindings'): RbacBindingList => {
+  const rows = rbac?.[key]
+  const all = Array.isArray(rows) ? rows : []
+  return {
+    read: Array.isArray(rows),
+    error: rbac?.[`${key}_error`] || '',
+    all,
+    normal: all.filter((b) => !isAuthenticatedOnlyGrant(b)),
+    broad: all.filter(isAuthenticatedOnlyGrant),
+  }
+}
+
+/** A rule's API groups as the tab writes them: the core group has no name of its own. */
+export const rbacApiGroupsText = (groups: unknown): string => {
+  const list = Array.isArray(groups) ? groups : []
+  return list.map((g) => (g === '' ? '(core)' : g)).join(', ') || '(core)'
+}
+
+const permissionRows = ({ resourceItems, nonResourceItems }: RbacPermissionSummary) => [
+  ...resourceItems.map((i) => `${i.apiGroup}|${i.resource}|${(i.resourceNames ?? []).join(',')}|${i.verbsList.join(',')}`),
+  ...nonResourceItems.map((i) => `${i.nonResourceURL}|${i.verbsList.join(',')}`),
+]
+
+const bindingContextRow = (b: any) => ({
+  name: b?.name,
+  role: `${b?.role_ref?.kind}:${b?.role_ref?.name}`,
+  matched_by: (Array.isArray(b?.matched_by) ? b.matched_by : []).map((m: any) => m?.reason),
+  rules: b?.resolved_role?.error ? undefined : (b?.resolved_role?.rules?.length ?? 0),
+  role_error: b?.resolved_role?.error || undefined,
+})
+
+/** What the tab shows, for the floating chat. A list not read has no key and its reason in `errors`. */
+export const podRbacAIContext = (rbac: any, pod: { name: string; namespace: string }) => {
+  const summary = buildRbacPermissionSummary(rbac)
+  const permissions = permissionRows(summary)
+  const roleBindings = rbacBindingList(rbac, 'role_bindings')
+  const clusterRoleBindings = rbacBindingList(rbac, 'cluster_role_bindings')
+  const name = rbac?.service_account?.name
+  const count = (list: RbacBindingList) => (list.read ? list.all.length : '-')
+  return {
+    source: 'PodRbacTab',
+    summary: `Pod ${pod.name} (${pod.namespace}) RBAC: ServiceAccount ${name ?? '-'}, RoleBinding ${count(roleBindings)}, ClusterRoleBinding ${count(clusterRoleBindings)}, ${permissions.length} permission rows${summary.incomplete ? ' (some could not be read)' : ''}`,
+    data: {
+      kind: 'Pod',
+      name: pod.name,
+      namespace: pod.namespace,
+      service_account: name ? `system:serviceaccount:${pod.namespace}:${name}` : null,
+      include_authenticated: Boolean(rbac?.include_authenticated),
+      // The budget halves arrays in this order; each total says what was there.
+      permissions,
+      permissions_total: permissions.length,
+      permissions_format: 'apiGroup|resource|resourceNames|verbs, url|verbs',
+      permissions_incomplete: summary.incomplete,
+      ...(roleBindings.read ? { role_bindings: roleBindings.all.map(bindingContextRow), role_bindings_total: roleBindings.all.length } : {}),
+      ...(clusterRoleBindings.read ? { cluster_role_bindings: clusterRoleBindings.all.map(bindingContextRow), cluster_role_bindings_total: clusterRoleBindings.all.length } : {}),
+      errors: Array.isArray(rbac?.errors) ? rbac.errors : [],
+    },
+  }
 }
 
 export const buildRbacPermissionSummary = (rbac: any): RbacPermissionSummary => {
@@ -133,5 +204,10 @@ export const buildRbacPermissionSummary = (rbac: any): RbacPermissionSummary => 
     }))
     .sort((a, b) => (a.nonResourceURL || '').localeCompare(b.nonResourceURL || ''))
 
-  return { resourceItems, nonResourceItems }
+  const incomplete =
+    !rbacBindingList(rbac, 'role_bindings').read ||
+    !rbacBindingList(rbac, 'cluster_role_bindings').read ||
+    bindings.some((b) => Boolean(b?.resolved_role?.error))
+
+  return { resourceItems, nonResourceItems, incomplete }
 }

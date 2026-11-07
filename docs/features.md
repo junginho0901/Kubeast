@@ -47,7 +47,7 @@
     - `alert_investigate`: starts the formal investigation of an alert in the Alerts inbox, as its "Investigate now" button does (see [AI alerts](ai-alerts.md))
     - `clusters_list`: the clusters the person can see and their connection status, as the cluster picker lists them (the last check, not a live probe). With `admin.clusters.list`, also what Admin → Clusters lists. Never a kubeconfig or credential
     - `alerts_inbox`: the Alerts inbox with who acknowledged an alert, who it is assigned to and whether it is done, and with `alert_id` its note. Reading only; the marks change on the screen
-    - `pod_rbac`: a pod's service account and the roles bound to it, as the pod's RBAC API answers. What each role allows comes from `k8s_describe_resource`
+    - `pod_rbac`: a pod's service account, the bindings that apply to it and what each role allows, as the pod's RBAC API and the window's RBAC tab answer. What the cluster refuses the caller is named, not left empty
     - `logfiles`: log files inside a container, as the Log files tab lists and reads them (fixed `tail`, the last N lines, no following; see [Log files inside containers](operations.md#log-files-inside-containers))
     - `storage_summary`: the Storage window's PVCs with their usage and PVs by status, and the claim-to-volume topology
     - `network_policy_effective`: the NetworkPolicies that select a pod or workload, per direction, as a drawer's Network Policies section shows them

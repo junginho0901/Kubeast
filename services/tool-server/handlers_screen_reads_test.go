@@ -41,8 +41,17 @@ func sameValues(t *testing.T, got map[string]interface{}, route string, keys ...
 }
 
 const podRBACRoute = `{"pod_name":"web-1","namespace":"shop","service_account_name":"web-sa","service_account_labels":{"app":"web"},"secrets":["web-sa-token"],
+ "pod":{"name":"web-1","namespace":"shop"},"service_account":{"name":"web-sa","namespace":"shop"},"include_authenticated":false,"errors":[],
  "bindings":[{"binding_type":"RoleBinding","binding_name":"web-rb","role_kind":"Role","role_name":"web-reader"},
- {"binding_type":"ClusterRoleBinding","binding_name":"web-crb","role_kind":"ClusterRole","role_name":"view"}]}`
+ {"binding_type":"ClusterRoleBinding","binding_name":"web-crb","role_kind":"ClusterRole","role_name":"view"}],
+ "role_bindings":[{"name":"web-rb","namespace":"shop","is_broad":false,"subjects":[{"kind":"ServiceAccount","api_group":"","name":"web-sa","namespace":"shop"}],
+  "matched_by":[{"reason":"serviceaccount","broad":false,"subject":{"kind":"ServiceAccount","api_group":"","name":"web-sa","namespace":"shop"}}],
+  "role_ref":{"api_group":"rbac.authorization.k8s.io","kind":"Role","name":"web-reader"},
+  "resolved_role":{"api_group":"rbac.authorization.k8s.io","kind":"Role","name":"web-reader","rules":[{"verbs":["get"],"api_groups":[""],"resources":["configmaps"],"resource_names":[],"non_resource_urls":[]}]}}],
+ "cluster_role_bindings":[{"name":"web-crb","is_broad":false,"subjects":[{"kind":"ServiceAccount","api_group":"","name":"web-sa","namespace":"shop"}],
+  "matched_by":[{"reason":"serviceaccount","broad":false,"subject":{"kind":"ServiceAccount","api_group":"","name":"web-sa","namespace":"shop"}}],
+  "role_ref":{"api_group":"rbac.authorization.k8s.io","kind":"ClusterRole","name":"view"},
+  "resolved_role":{"api_group":"rbac.authorization.k8s.io","kind":"ClusterRole","name":"view","rules":[{"verbs":["get"],"api_groups":[""],"resources":["pods"],"resource_names":[],"non_resource_urls":[]}]}}]}`
 
 func TestPodRBAC_AnswersWhatItsRouteAnswers(t *testing.T) {
 	seen := fakeK8sService(t, func(*http.Request) (int, string) { return 200, podRBACRoute })
@@ -55,11 +64,66 @@ func TestPodRBAC_AnswersWhatItsRouteAnswers(t *testing.T) {
 	if req.URL.Query().Get("cluster") != "c1" || req.Header.Get("Authorization") != "Bearer user-token" {
 		t.Fatalf("not asked as the caller: %s auth=%q", req.URL.RawQuery, req.Header.Get("Authorization"))
 	}
+	if req.URL.Query().Has("include_authenticated") {
+		t.Fatalf("the broad group asked for unasked: %s", req.URL.RawQuery)
+	}
 	got := decode(t, out)
 	sameValues(t, got, podRBACRoute)
-	// The route names the roles, not their rules: the answer says where the rules are.
-	if note, _ := got["note"].(string); !strings.Contains(note, "k8s_describe_resource") {
+	// The answer holds the rules now: the note says what a list that was cut or refused means.
+	note, _ := got["note"].(string)
+	if !strings.Contains(note, "resolved_role.rules") || !strings.Contains(note, "k8s_describe_resource") {
 		t.Errorf("note: %v", got["note"])
+	}
+	if strings.Contains(note, "not what they allow") {
+		t.Errorf("note still says the rules are elsewhere: %v", note)
+	}
+}
+
+func TestPodRBAC_AsksForTheBroadGroupWhenTold(t *testing.T) {
+	seen := fakeK8sService(t, func(*http.Request) (int, string) { return 200, podRBACRoute })
+	runTool(t, ctxFor("c1"), "pod_rbac", args{"namespace": "shop", "pod_name": "web-1", "include_authenticated": true})
+	if got := (*seen)[0].URL.Query().Get("include_authenticated"); got != "true" {
+		t.Errorf("include_authenticated = %q, want true", got)
+	}
+}
+
+// The model reads the answer cut at its tool result length: what was refused and the short rows come before the rules.
+func TestPodRBAC_LeadsWithWhatItCouldNotRead(t *testing.T) {
+	route := `{"pod_name":"web-1","namespace":"shop","service_account_name":"web-sa","errors":["list cluster role bindings: forbidden"],
+	 "cluster_role_bindings_error":"forbidden","bindings":[{"binding_type":"RoleBinding","binding_name":"web-rb","role_kind":"Role","role_name":"web-reader"}],
+	 "role_bindings":[{"name":"web-rb","resolved_role":{"rules":[]}}]}`
+	fakeK8sService(t, func(*http.Request) (int, string) { return 200, route })
+	out := runTool(t, ctxFor("c1"), "pod_rbac", args{"namespace": "shop", "pod_name": "web-1"})
+	sameValues(t, decode(t, out), route)
+	last := -1
+	for _, key := range []string{`"errors"`, `"cluster_role_bindings_error"`, `"bindings"`, `"role_bindings"`} {
+		at := strings.Index(out, key)
+		if at <= last {
+			t.Fatalf("%s at %d after %d: %s", key, at, last, out)
+		}
+		last = at
+	}
+}
+
+func TestPodRBAC_CapsEachLongListAndSaysSo(t *testing.T) {
+	rows := make([]string, rowsCap+1)
+	for i := range rows {
+		rows[i] = fmt.Sprintf(`{"name":"rb-%d"}`, i)
+	}
+	fakeK8sService(t, func(*http.Request) (int, string) {
+		return 200, `{"pod_name":"web-1","role_bindings":[` + strings.Join(rows, ",") + `],"cluster_role_bindings":[` + strings.Join(rows, ",") + `]}`
+	})
+	got := decode(t, runTool(t, ctxFor("c1"), "pod_rbac", args{"namespace": "shop", "pod_name": "web-1"}))
+	for _, key := range []string{"role_bindings", "cluster_role_bindings"} {
+		if list, _ := got[key].([]interface{}); len(list) != rowsCap {
+			t.Errorf("%s has %d rows, want %d", key, len(list), rowsCap)
+		}
+		if got[key+"_total"] != float64(rowsCap+1) {
+			t.Errorf("%s_total = %v", key, got[key+"_total"])
+		}
+	}
+	if got["truncated"] != true {
+		t.Errorf("truncated = %v", got["truncated"])
 	}
 }
 

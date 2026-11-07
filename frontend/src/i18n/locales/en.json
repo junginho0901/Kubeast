@@ -2449,6 +2449,7 @@
       "match": {
         "userServiceAccount": "User(system:serviceaccount)",
         "groupServiceAccounts": "Group(system:serviceaccounts)",
+        "groupServiceAccountsNamespace": "Group(system:serviceaccounts:{{namespace}})",
         "groupAuthenticated": "Group(system:authenticated)"
       },
       "title": "RBAC",
@@ -2458,8 +2459,8 @@
       "includeAuthenticatedHint": "When checked, bindings matched by system:authenticated will be included.",
       "loading": "Loading RBAC data...",
       "loadError": "Failed to load RBAC data. (This may be due to permissions or API errors.)",
+      "listUnreadable": "Could not read this list. The cluster answered:",
       "serviceAccountLabel": "ServiceAccount",
-      "defaultName": "default",
       "defaultLabel": "(default)",
       "bindingsLabel": "Bindings",
       "roleBindingCount": "RoleBinding {{count}}",
@@ -2471,6 +2472,7 @@
         "subtitle": "Aggregated from displayed Role/ClusterRole rules.",
         "includeBroad": "(including broad)",
         "excludeBroad": "(excluding broad)",
+        "incomplete": "Some bindings or roles could not be read, so permissions may be missing from this list.",
         "total": "{{count}} items",
         "total_one": "{{count}} item",
         "none": "None",
