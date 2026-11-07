@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { hasStandIn, STAND_IN, STAND_IN_ADDRESS, STAND_IN_SKIP } from './model-address-standin'
 
 // A model provider's refusals reach the user as what they are — no credit, too many requests, a refused key, an
 // outage — named in the screen language with who acts on it. The model endpoint is the refusing stand-in in
@@ -20,10 +21,10 @@ async function adminHeaders(request: APIRequestContext) {
 type ErrorEvent = { error: string; error_key: string; error_args: Record<string, string> }
 
 // One economy config on the stand-in for the call; it and the session are removed after.
-async function withStubModel<T>(request: APIRequestContext, headers: Record<string, string>, path: string, fn: (configName: string) => Promise<T>) {
+async function withStubModel<T>(request: APIRequestContext, headers: Record<string, string>, path: string, fn: (configName: string) => Promise<T>, endpoint = STUB) {
   const name = `e2e-refusal-${path.split('/')[0]}-${Date.now().toString(36)}`
   const created = await request.post('/api/v1/ai/model-configs', {
-    headers, data: { name, provider: 'custom', model: 'gpt-stub', base_url: `${STUB}/${path}`, tier: 'economy', enabled: true, is_default: false },
+    headers, data: { name, provider: 'custom', model: 'gpt-stub', base_url: `${endpoint}/${path}`, tier: 'economy', enabled: true, is_default: false },
   })
   expect(created.ok(), `create ${name}: ${await created.text()}`).toBeTruthy()
   const id = (await created.json()).id
@@ -83,5 +84,29 @@ test.describe('AI provider refusals', () => {
       await expect(panel).toContainText('(OpenAI-compatible)')
       await page.evaluate(() => localStorage.setItem('i18nextLng', 'en'))
     })
+  })
+
+  test('a model address refused when connecting says so to whoever asked, without the address', async ({ page, request }) => {
+    test.skip(!hasStandIn(), STAND_IN_SKIP)
+    const headers = await adminHeaders(request)
+    const err = await withStubModel(request, headers, 'v1', () => floatingError(request, headers), STAND_IN)
+    expect(err.error_key, err.error).toBe('modelAddress')
+    expect(err.error_args.provider).toBe('OpenAI-compatible')
+    expect(JSON.stringify(err)).not.toContain(STAND_IN_ADDRESS)
+
+    await withStubModel(request, headers, 'v1', async () => {
+      await page.goto('/')
+      await page.evaluate(() => localStorage.setItem('i18nextLng', 'ko'))
+      await page.goto('/')
+      if ((await page.getByTestId('floating-chat-panel').count()) === 0) await page.getByTestId('floating-chat-toggle').click()
+      const input = page.getByTestId('floating-chat-input')
+      await input.fill('안녕')
+      await input.press('Enter')
+      const panel = page.getByTestId('floating-chat-panel')
+      await expect(panel).toContainText('모델 주소가 허용되지 않아 아무것도 보내지 않았습니다', { timeout: 90_000 })
+      await expect(panel).toContainText('Admin → AI Models에서 이 모델의 연결 테스트로')
+      await expect(panel).not.toContainText(STAND_IN_ADDRESS)
+      await page.evaluate(() => localStorage.setItem('i18nextLng', 'en'))
+    }, STAND_IN)
   })
 })

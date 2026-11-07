@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { hasStandIn, STAND_IN, STAND_IN_ADDRESS, STAND_IN_SKIP } from './model-address-standin'
 
 // Admin → AI Models → Add Model: the model dropdown lists what the provider itself lists (an Ollama address answering
 // the OpenAI-compatible /models, through ai-service — the dev model-stub's /ok/ endpoint, deploy/kind/devtools.yaml, so
@@ -27,6 +28,26 @@ test.describe('AI model list from the provider', () => {
     await expect(source).toHaveText(/(Built-in list|기본 목록).*audit unavailable/, { timeout: 15_000 })
     await expect(source).not.toContainText('status code')
     await expect(source).toHaveAttribute('title', 'audit unavailable')
+  })
+
+  test('the form says which address was refused when connecting, on the list and on Test', async ({ page }) => {
+    test.skip(!hasStandIn(), STAND_IN_SKIP)
+    await page.goto('/admin/ai-models')
+    await page.getByRole('button', { name: 'Add Model' }).first().click()
+    await page.getByTestId('provider-select').click()
+    await page.getByTestId('provider-option-ollama').click()
+    await page.getByPlaceholder(/localhost:11434|api\.example\.com/).fill(STAND_IN)
+
+    const source = page.getByTestId('model-list-source')
+    await expect(source).toHaveText(new RegExp(`(Built-in list|기본 목록).*when connecting.*${STAND_IN_ADDRESS.replace(/\./g, '\\.')}`), { timeout: 15_000 })
+    await expect(source).toHaveAttribute('title', new RegExp(STAND_IN_ADDRESS.replace(/\./g, '\\.')))
+
+    const tested = page.waitForResponse('**/api/v1/ai/model-configs/test')
+    await page.getByRole('button', { name: /^(Test|연결 테스트)$/ }).click()
+    const answer = await (await tested).json()
+    expect(answer.success).toBe(false)
+    expect(answer.message).toContain(STAND_IN_ADDRESS)
+    await expect(page.getByText(answer.message)).toHaveText(new RegExp(STAND_IN_ADDRESS.replace(/\./g, '\\.')))
   })
 
   test('an Ollama address lists its own models; Anthropic lists its own with a key and falls back to the built-in list without', async ({ page }) => {

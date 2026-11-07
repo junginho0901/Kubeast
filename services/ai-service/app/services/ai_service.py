@@ -135,6 +135,7 @@ class AIService:
         ca_cert: Optional[str] = None,
         options: Optional[Dict[str, Any]] = None,
         cluster_name: Optional[str] = None,
+        installer_base_url: bool = False,
     ):
         """프로바이더별 AsyncOpenAI 어댑터 기반 클라이언트 초기화"""
         resolved_api_key = api_key if api_key is not None else settings.OPENAI_API_KEY
@@ -152,6 +153,7 @@ class AIService:
             default_headers=extra_headers,
             ca_cert=ca_cert,
             options=options,
+            installer_base_url=installer_base_url,
         )
         self.model = resolved_model
         self.options = dict(options or {})  # the model's limits (app/services/ai/limits.py) are read from here

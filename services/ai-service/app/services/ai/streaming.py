@@ -59,6 +59,7 @@ _REFUSAL_HINTS = {
     "rate": "The provider refused for too many requests. Try again in a minute.",
     "auth": "The provider refused the key or token. An administrator checks it in Admin → AI Models.",
     "unavailable": "The provider is overloaded or did not answer. Try again later.",
+    "address": "An administrator runs Test on this model in Admin → AI Models to see why.",
 }
 
 

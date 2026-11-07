@@ -12,7 +12,7 @@ from app.services.ai_service import AIService
 
 def _resolved(model):
     return SimpleNamespace(provider="openai", model=model, base_url=None, api_key="k", extra_headers=None,
-                           tls_verify=True, ca_cert=None, options=None)
+                           tls_verify=True, ca_cert=None, options=None, installer_base_url=False)
 
 
 @pytest.fixture

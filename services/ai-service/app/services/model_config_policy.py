@@ -5,7 +5,8 @@ service will send that key to, and extra headers that ride along. Anyone with
 admin.ai_models.* could point `api_key_env` at any variable of this process
 (the database URL, say) and `base_url` at their own server, and every chat
 would hand the value over. These checks run when a config is created,
-updated, tested and resolved for use:
+updated, tested and resolved for use, and check_connection holds each
+connection to the same address rule (app/services/model_http.py):
 
   - api_key_env: only the key variables the chart ships (OPENAI_API_KEY,
     ANTHROPIC_API_KEY, GEMINI_API_KEY, and CLAUDE_CODE_OAUTH_TOKEN for
@@ -74,6 +75,27 @@ MASK = "***"
 
 class PolicyError(ValueError):
     """A model configuration the service will not accept."""
+
+
+class AddressRefused(PolicyError):
+    """A model call stopped on its address, when the config was resolved or when a connection was about to open. Its text
+    goes to whoever asked the model, so it names no address; `detail` does, for whoever manages models (the connection
+    test, the model list, the service log)."""
+
+    def __init__(self, detail: str):
+        super().__init__("the model's address is not allowed, so nothing was sent")
+        self.detail = detail
+
+
+def refused_address(err: Optional[BaseException]) -> Optional[AddressRefused]:
+    """The refusal behind err, if there is one: an SDK may wrap what its HTTP client raised."""
+    seen = set()
+    while err is not None and id(err) not in seen:
+        if isinstance(err, AddressRefused):
+            return err
+        seen.add(id(err))
+        err = err.__cause__ or err.__context__
+    return None
 
 
 def allowed_hosts() -> List[str]:
@@ -213,6 +235,42 @@ def check_base_url(url: Optional[str], resolve: Callable[..., list] = socket.get
         if _is_in(ip, METADATA_NETWORKS):
             raise PolicyError("base_url host is not allowed")
         if _is_in(ip, PRIVATE_NETWORKS):
-            raise PolicyError(
-                f"base_url host resolves to a private address ({ip}); list it in AI_BASE_URL_ALLOWED_HOSTS to allow it"
-            )
+            raise PolicyError(_private_address_text(ip))
+
+
+def _private_address_text(ip: ipaddress._BaseAddress) -> str:
+    return f"base_url host resolves to a private address ({ip}); list it in AI_BASE_URL_ALLOWED_HOSTS to allow it"
+
+
+def _listed_when_connecting(host: str) -> bool:
+    """A connection names an international host in its ASCII form; the list may hold either form."""
+    allowed = allowed_hosts()
+    if _host_allowed(host, allowed):
+        return True
+    try:
+        return _host_allowed(host.encode("ascii").decode("idna"), allowed)
+    except UnicodeError:
+        return False
+
+
+def check_connection_host(host: str) -> None:
+    """A name that is refused as a name does not get as far as the resolver, as in check_base_url."""
+    if host.lower() in METADATA_HOSTS:
+        raise AddressRefused(f"when connecting: base_url host {host.lower()} is not allowed")
+
+
+def check_connection(host: str, addresses: Iterable[str]) -> None:
+    """check_base_url's rule for the addresses a connection is about to use, which are what a name answers now and not
+    what it answered then. Every one must pass. A listed host may use private addresses and still no metadata address,
+    which only this check sees: check_base_url does not resolve a listed host."""
+    name = host.lower()
+    listed = _listed_when_connecting(name)
+    for address in addresses:
+        try:
+            ip = ipaddress.ip_address(address)
+        except ValueError:
+            raise AddressRefused(f"when connecting: base_url host {name} gave an address that cannot be read") from None
+        if _is_in(ip, METADATA_NETWORKS):
+            raise AddressRefused(f"when connecting: base_url host {name} is not allowed ({ip})")
+        if not listed and _is_in(ip, PRIVATE_NETWORKS):
+            raise AddressRefused(f"when connecting: {_private_address_text(ip)}")

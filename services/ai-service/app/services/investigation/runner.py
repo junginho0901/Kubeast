@@ -90,6 +90,7 @@ async def build_service(cfg: inv_settings.InvestigationSettings, token: str, clu
         tls_verify=resolved.tls_verify,
         ca_cert=resolved.ca_cert,
         options=resolved.options,
+        installer_base_url=resolved.installer_base_url,
     )
     service.update_authorization(f"Bearer {token}", cluster_name=cluster)
     return service

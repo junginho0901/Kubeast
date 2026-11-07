@@ -18,6 +18,7 @@ from app.security import require_admin, require_auth
 from app.services.ai.debug_dump import safe_error
 from app.services import claude_code, model_config_policy
 from app.services.anthropic_messages import API_VERSION as ANTHROPIC_VERSION, api_root as anthropic_root
+from app.services.model_http import model_client
 from app.services.tls import build_verify
 
 public_router = APIRouter()
@@ -44,6 +45,7 @@ async def _test_openai_compatible(
     base_url: str,
     verify: Union[bool, ssl.SSLContext] = True,
     provider: str = "",
+    judged: bool = True,
 ) -> dict:
     """Test OpenAI-compatible endpoints (OpenAI, Groq, DeepSeek, Mistral, etc.) — with the chat's parameter handling
     (OpenAI's max_completion_tokens, a refused parameter left out), so a reasoning model passes as it chats."""
@@ -53,7 +55,7 @@ async def _test_openai_compatible(
     client = AsyncOpenAI(
         api_key=api_key,
         base_url=base_url,
-        http_client=httpx.AsyncClient(verify=verify),
+        http_client=model_client(verify, judged=judged),
         timeout=15.0,
     )
     resp = await _CompletionsProxy(client.chat.completions, provider, None, base_url).create(
@@ -69,9 +71,10 @@ async def _test_anthropic(
     model: str,
     base_url: str = "https://api.anthropic.com",
     verify: Union[bool, ssl.SSLContext] = True,
+    judged: bool = True,
 ) -> dict:
     """Test Anthropic Messages API directly."""
-    async with httpx.AsyncClient(verify=verify, timeout=15.0) as client:
+    async with model_client(verify, judged=judged, timeout=15.0) as client:
         resp = await client.post(
             f"{base_url.rstrip('/')}/v1/messages",
             headers={
@@ -181,6 +184,7 @@ async def _test_ollama(
     model: str,
     base_url: str = "http://localhost:11434",
     verify: Union[bool, ssl.SSLContext] = True,
+    judged: bool = True,
 ) -> dict:
     """Test Ollama connection via its OpenAI-compatible endpoint."""
     from openai import AsyncOpenAI
@@ -192,7 +196,7 @@ async def _test_ollama(
     client = AsyncOpenAI(
         api_key="ollama",  # Ollama doesn't need a real key
         base_url=clean_base,
-        http_client=httpx.AsyncClient(verify=verify),
+        http_client=model_client(verify, judged=judged),
         timeout=15.0,
     )
     try:
@@ -276,13 +280,15 @@ async def _test_model_connection(request: dict) -> dict:
     if provider != "ollama" and not api_key:
         raise HTTPException(status_code=400, detail="api_key_env (or api_key) is required")
 
+    # A provider's built-in address is not held to the address rule: check_base_url does not read it either.
+    judged = bool(user_base_url)
     try:
         if provider == claude_code.PROVIDER:
             return await claude_code.test_connection(model, api_key)
 
         elif provider == "anthropic":
             base = user_base_url or "https://api.anthropic.com"
-            return await _test_anthropic(api_key, model, base, verify)
+            return await _test_anthropic(api_key, model, base, verify, judged=judged)
 
         elif provider in ("google", "gemini"):
             return await _test_google(api_key, model, verify)
@@ -292,7 +298,7 @@ async def _test_model_connection(request: dict) -> dict:
                                             body.get("tls_verify", True), body.get("ca_cert"))
 
         elif provider == "ollama":
-            return await _test_ollama(model, user_base_url or "http://localhost:11434", verify)
+            return await _test_ollama(model, user_base_url or "http://localhost:11434", verify, judged=judged)
 
         else:
             # OpenAI-compatible providers
@@ -302,11 +308,14 @@ async def _test_model_connection(request: dict) -> dict:
                     status_code=400,
                     detail=f"base_url is required for provider '{provider}'",
                 )
-            return await _test_openai_compatible(api_key, model, base, verify, provider=provider)
+            return await _test_openai_compatible(api_key, model, base, verify, provider=provider, judged=judged)
 
     except HTTPException:
         raise
     except Exception as e:
+        refused = model_config_policy.refused_address(e)
+        if refused is not None:
+            return {"success": False, "message": refused.detail}
         return {"success": False, "message": safe_error(e, [api_key])}
 
 
@@ -315,8 +324,8 @@ _NOT_CHAT = re.compile(r"embed|tts|whisper|dall-e|moderation|transcribe|image|au
 _GEMINI_OPENAI_BASE = "https://generativelanguage.googleapis.com/v1beta/openai"
 
 
-async def _list_models(provider: str, api_key: str, base: str, verify: Union[bool, ssl.SSLContext]) -> list[dict]:
-    async with httpx.AsyncClient(verify=verify, timeout=15.0) as client:
+async def _list_models(provider: str, api_key: str, base: str, verify: Union[bool, ssl.SSLContext], judged: bool = True) -> list[dict]:
+    async with model_client(verify, judged=judged, timeout=15.0) as client:
         if provider == "anthropic":
             resp = await client.get(
                 anthropic_root(base) + "/v1/models",
@@ -391,10 +400,13 @@ async def _list_provider_models(request: dict) -> dict:
             return {"models": [], "error": f"base_url is required for provider '{provider}'"}
 
     try:
-        return {"models": await _list_models(provider, api_key, base, verify)}
+        return {"models": await _list_models(provider, api_key, base, verify, judged=bool(user_base_url))}
     except httpx.HTTPStatusError as e:
         return {"models": [], "error": f"the provider answered {e.response.status_code}"}
     except Exception as e:
+        refused = model_config_policy.refused_address(e)
+        if refused is not None:
+            return {"models": [], "error": refused.detail}
         if "CERTIFICATE_VERIFY_FAILED" in str(e):
             return {"models": [], "error": "the provider's TLS certificate is not trusted: add its CA (chart customCAs, or this model's CA)"}
         return {"models": [], "error": type(e).__name__}

@@ -48,7 +48,7 @@ def serve(monkeypatch, refuses=(), param_field=True):
         def __init__(self, **_kw):
             super().__init__(transport=httpx.MockTransport(handler))
 
-    monkeypatch.setattr(provider_adapter.httpx, "AsyncClient", Fake)
+    monkeypatch.setattr(httpx, "AsyncClient", Fake)
     provider_adapter._refused.clear()
     return bodies
 
@@ -154,7 +154,7 @@ async def test_other_refusals_are_not_retried(monkeypatch):
         def __init__(self, **_kw):
             super().__init__(transport=httpx.MockTransport(handler))
 
-    monkeypatch.setattr(provider_adapter.httpx, "AsyncClient", Fake)
+    monkeypatch.setattr(httpx, "AsyncClient", Fake)
     adapter = ProviderAdapter(provider="openai", model="gpt-4o", api_key="k")
     with pytest.raises(openai.BadRequestError):
         await adapter.chat.completions.create(model="gpt-4o", messages=MSG, temperature=0.7)
@@ -166,7 +166,6 @@ async def test_the_openai_connection_test_passes_on_a_reasoning_model(monkeypatc
     from app import api_public
 
     bodies = serve(monkeypatch, refuses=("max_tokens", "temperature"))
-    monkeypatch.setattr(api_public.httpx, "AsyncClient", provider_adapter.httpx.AsyncClient)
     res = await api_public._test_openai_compatible("k", "reasoning-5", "https://api.openai.com/v1", True, provider="openai")
     assert res["success"] and bodies[-1]["max_completion_tokens"] == 5 and "max_tokens" not in bodies[-1]
 
