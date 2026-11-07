@@ -1,17 +1,18 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import type { PodInfo } from '@/services/api'
-import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
 import { ConditionsTable, EventsSection, InfoSection, InfoRow, KeyValueTags, StatusBadge, SummaryBadge, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
-import { usePagination } from './usePagination'
+import { useNamespacePodTable } from './useNamespacePodTable'
+import { SET_POD_TABLE_WATCH_MAX } from './namespacePodTable'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricCard } from './PrometheusMetrics'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
+
+// The API server applies the selector to the whole read: every row it gives is a match.
+const keepEvery = () => true
 
 interface Props {
   name: string
@@ -126,24 +127,15 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
   )
   const matchingEnabled = !!namespace && !!selectorStr
 
-  const { data: matchingPods } = useQuery({
-    queryKey: ['service-matching-pods', namespace, name, selectorStr],
-    queryFn: () => api.getPods(namespace as string, selectorStr),
+  const matchingPods = useNamespacePodTable({
     enabled: matchingEnabled,
-    staleTime: 5_000,
-  })
-
-  useKubeWatchList({
-    enabled: matchingEnabled,
+    namespace: namespace as string,
+    filter: { label_selector: selectorStr },
     queryKey: ['service-matching-pods', namespace, name, selectorStr],
-    path: `/api/v1/namespaces/${namespace}/pods`,
-    query: `watch=1&labelSelector=${encodeURIComponent(selectorStr)}`,
-    applyEvent: (prev, event) => applyPodWatchEvent(prev as PodInfo[] | undefined, event),
-    gatherEveryMs: LIST_GATHER_MS,
+    keeps: keepEvery,
+    selector: selectorStr,
+    line: SET_POD_TABLE_WATCH_MAX,
   })
-
-  const matchingPodsList = Array.isArray(matchingPods) ? matchingPods : []
-  const { items: pagedMatchingPods, nav: matchingPodsNav } = usePagination(matchingPodsList, 10)
 
   const ports = useMemo(() => {
     if (Array.isArray(describe?.ports)) return describe.ports
@@ -333,8 +325,11 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
       )}
 
       {matchingEnabled && (
-        <InfoSection title="Matching Pods ({{n}})" titleValues={{ n: matchingPodsList.length }}>
-          {matchingPodsList.length === 0 ? (
+        <InfoSection title="Matching Pods ({{n}})" titleValues={{ n: matchingPods.total }}>
+          {matchingPods.note}
+          {matchingPods.loading ? (
+            <p className="text-xs text-slate-400"><Tx>Loading...</Tx></p>
+          ) : matchingPods.total === 0 ? (
             <p className="text-xs text-slate-400"><Tx>No pods match this selector.</Tx></p>
           ) : (
             <div className="overflow-x-auto">
@@ -350,7 +345,7 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
-                  {pagedMatchingPods.map((p) => (
+                  {matchingPods.items.map((p) => (
                     <tr
                       key={`${p.namespace}/${p.name}`}
                       className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
@@ -366,7 +361,7 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
                   ))}
                 </tbody>
               </table>
-              {matchingPodsNav}
+              {matchingPods.nav}
             </div>
           )}
         </InfoSection>

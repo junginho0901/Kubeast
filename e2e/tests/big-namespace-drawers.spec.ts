@@ -154,7 +154,10 @@ test.describe('a drawer\'s table of the pods that use its object, in a namespace
       const count = t.bySelector ? matches : pods.length
       await expect(drawer.getByText(new RegExp(`${t.title} \\(\\d+\\)`))).toHaveText(`${t.title} (${count})`, { timeout: 30_000 })
       for (const name of pods) await expect(drawer.getByRole('cell', { name, exact: true })).toHaveCount(1)
-      await expect(drawer.getByTestId('drawer-pods-read-every')).toHaveText('This namespace has too many pods to follow live, so this table is read again every 3 seconds.')
+      // what passed the line: the selector's matches, else the namespace's pods
+      await expect(drawer.getByTestId('drawer-pods-read-every')).toHaveText(t.bySelector
+        ? 'Too many pods match this selector to follow live, so this table is read again every 3 seconds.'
+        : 'This namespace has too many pods to follow live, so this table is read again every 3 seconds.')
       await page.waitForTimeout(8_000)
       expect(seen.whole, 'no pod of the namespace is read whole').toBe(0)
       expect(seen.watches, 'no watch of the namespace\'s pods opens').toBe(0)

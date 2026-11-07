@@ -56,6 +56,15 @@ describe('workloadPodsLayer', () => {
     expect(workloadPodsLayer({}, owned([]), 'ns')).toMatchObject({ known: true, total: 0, notRunning: 0, items: [] })
   })
 
+  it('read a page at a time, tells the server\'s counts of every pod and the page the window shows', () => {
+    const page = [row('a', 'Running'), row('b', 'Pending', 'Pending', '0/1')]
+    const got = workloadPodsLayer({}, { ...owned(page), counted: { total: 2500, notRunning: 40 } }, 'ns')
+    expect(got).toMatchObject({ known: true, total: 2500, notRunning: 40, pageOnly: true })
+    expect(got.items.map((p) => p.name)).toEqual(['b', 'a'])
+    // with every row held, it counts them itself
+    expect(workloadPodsLayer({}, owned(page), 'ns')).toMatchObject({ total: 2, notRunning: 1, pageOnly: false })
+  })
+
   it('does not claim a number of pods while it has not read any', () => {
     expect(workloadPodsLayer({}, owned([], false), 'ns').known).toBe(false)
     expect(workloadPodsLayer({}, none, 'ns').known).toBe(false)

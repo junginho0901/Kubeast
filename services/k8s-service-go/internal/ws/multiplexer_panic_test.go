@@ -3,7 +3,6 @@ package ws
 import (
 	"bytes"
 	"context"
-	"errors"
 	"log/slog"
 	"strings"
 	"sync"
@@ -306,9 +305,9 @@ func TestAPanicBeforeAnyObjectEndsOnlyItsOwnWatch(t *testing.T) {
 	}
 }
 
-// A frame the writer cannot encode ends that socket, after the wait, and no other: the browser connects again and asks
-// for its lists, which the wait keeps from turning into a loop.
-func TestAPanicInTheWriterEndsOnlyItsOwnSocket(t *testing.T) {
+// A frame that cannot be encoded fails while it is queued, so it ends only its own watch: that list is told and comes
+// back after the wait, the socket and its other lists stay, as other sockets do.
+func TestAFrameThatCannotBeEncodedEndsOnlyItsOwnWatch(t *testing.T) {
 	const wait = 200 * time.Millisecond
 	logged := capturedLog(t)
 	script := newScriptedWatches(func(string, int, *watch.FakeWatcher) {})
@@ -316,27 +315,31 @@ func TestAPanicInTheWriterEndsOnlyItsOwnSocket(t *testing.T) {
 	m.PanicRetryDelay = wait
 	broken, other := socketTo(t, m, everyCluster), socketTo(t, m, everyCluster)
 	request(t, broken, "REQUEST", "", namespacesPath, "watch=1")
+	request(t, broken, "REQUEST", "", podsPath, "watch=1")
 	request(t, other, "REQUEST", "", podsPath, "watch=1")
 	script.waitOpen(t, "namespaces", 1)
-	script.waitOpen(t, "pods", 1)
+	script.waitOpen(t, "pods", 2)
 
 	sent := time.Now()
 	script.tell("namespaces", namespaceFramePanics())
 
-	_ = broken.SetReadDeadline(time.Now().Add(5 * time.Second))
-	if _, _, err := broken.ReadMessage(); err == nil || errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("the socket whose writer panicked: %v, want it closed", err)
+	if failed := frameOn(t, broken, namespacesPath); failed.Type != "ERROR" || failed.Error.Reason != reasonFailed {
+		t.Fatalf("the list whose frame could not be encoded = %+v, want ERROR %q", failed, reasonFailed)
 	}
-	if took := time.Since(sent); took < wait {
-		t.Fatalf("the socket closed after %v, want at least %v", took, wait)
+	if back := frameOn(t, broken, namespacesPath); back.Type != "RESYNC" {
+		t.Fatalf("after the error = %+v, want RESYNC", back)
+	} else if took := time.Since(sent); took < wait {
+		t.Fatalf("the list came back after %v, want at least %v", took, wait)
 	}
-	waitForSubscriptions(t, m, 1)
+	waitForSubscriptions(t, m, 3)
 
 	script.tell("pods", objectOf("Pod", "still-here", "7", nil))
-	if row := frameOn(t, other, podsPath); row.Type != "DATA" || frameObjectName(row) != "still-here" {
-		t.Fatalf("a pod list on another socket = %+v", row)
+	for name, conn := range map[string]*websocket.Conn{"the same socket": broken, "another socket": other} {
+		if row := frameOn(t, conn, podsPath); row.Type != "DATA" || frameObjectName(row) != "still-here" {
+			t.Fatalf("a pod list on %s = %+v", name, row)
+		}
 	}
-	if log := logged.String(); strings.Contains(log, panicText) || !strings.Contains(log, "HandleWebSocket") {
+	if log := logged.String(); strings.Contains(log, panicText) || !strings.Contains(log, "forwardEvents") {
 		t.Fatalf("the log: %s", log)
 	}
 }

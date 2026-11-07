@@ -199,7 +199,7 @@ interface WorkloadLayerInput {
   spec: Fields
   status: Fields
   selector: Record<string, string>
-  owned: { pods: Fields[]; podsEnabled: boolean; podsLoaded: boolean; jobs?: Fields[]; jobsEnabled?: boolean }
+  owned: { pods: Fields[]; podsEnabled: boolean; podsLoaded: boolean; counted?: { total: number; notRunning?: number }; jobs?: Fields[]; jobsEnabled?: boolean }
   ownedJobs?: unknown
   // the window's words for a CronJob with no time zone of its own
   controllerZone: string
@@ -231,7 +231,7 @@ export function workloadLayer({
   const cronJob = isCronJob ? cronJobDrawerInfo(desc, spec, status) : null
 
   const short = counted && Number(view.desired) > 0 && Number(view.ready) < Number(view.desired)
-  const needsALook = pods.notRunning > 0 || short || (job && jobLayerNeedsALook(job)) || (cronJob && cronJobLayerNeedsALook(cronJob))
+  const needsALook = (pods.notRunning ?? 0) > 0 || short || (job && jobLayerNeedsALook(job)) || (cronJob && cronJobLayerNeedsALook(cronJob))
   const podCount = pods.known ? `, Pod ${pods.total}개${pods.notRunning ? ` (NotRunning ${pods.notRunning})` : ''}` : ''
   const headline = job ? jobLayerHeadline(job) : cronJob ? cronJobLayerHeadline(cronJob) : counted ? `replicas ${view.ready}/${view.desired}` : 'replicas ?/?'
   const liveJobs = owned.jobsEnabled && owned.jobs && owned.jobs.length > 0
@@ -277,6 +277,8 @@ export function workloadLayer({
       conditions: conditions.slice(0, 8),
       // no list has answered yet: an empty one would read as "no pods"
       pods: pods.known ? pods.items : undefined,
+      // read a page at a time: the rows are the page the window shows, the count is pods_total
+      ...(pods.pageOnly ? { pods_total: pods.total, pods_not_running: pods.notRunning, pods_page_only: true } : {}),
       recent_events: events.slice(0, 10),
       ...jobsLayer,
     } as Fields,

@@ -16,6 +16,7 @@ import pdbInfoSrc from '@/components/resource-detail/PDBInfo.tsx?raw'
 import networkPolicyDetailSrc from '@/components/resource-detail/network-info/NetworkPolicyDetail.tsx?raw'
 import roleBindingInfoSrc from '@/components/resource-detail/RoleBindingInfo.tsx?raw'
 import namespacePodTableSrc from '@/components/resource-detail/useNamespacePodTable.tsx?raw'
+import ownedResourcesSrc from '@/components/resource-detail/workload-info/useOwnedWatchedResources.ts?raw'
 import leasesPageSrc from '@/pages/cluster/Leases.tsx?raw'
 import replicaSetsPageSrc from '@/pages/workloads/ReplicaSets.tsx?raw'
 import jobsPageSrc from '@/pages/workloads/Jobs.tsx?raw'
@@ -466,10 +467,10 @@ describe('a list that opens with thousands of objects', () => {
   // These tables watch their namespace's pods: at fifty thousand pods one pass over the rows per frame never ends.
   it('a drawer\'s table of its namespace\'s pods gathers its frames', () => {
     const podWatch = /path: `\/api\/v1\/namespaces\/\$\{namespace\}\/pods`,[^}]*?\}?[^}]*?applyEvent: \(prev, event\) => applyPodWatchEvent\(prev as PodInfo\[\] \| undefined, event\),\n\s*gatherEveryMs: LIST_GATHER_MS,/
-    const drawers = { serviceInfoSrc, pdbInfoSrc, namespacePodTableSrc }
+    const drawers = { namespacePodTableSrc }
     for (const [name, src] of Object.entries(drawers)) expect(podWatch.test(src), name).toBe(true)
-    // the tables of the pods that use an object follow them through that one table (namespacePodTable.test.ts)
-    const users = { configMapInfoSrc, secretInfoSrc, serviceAccountInfoSrc, roleBindingInfoSrc, networkPolicyDetailSrc }
+    // the drawers' pod tables follow their pods through that one table (namespacePodTable.test.ts, ownerPodTables.test.ts)
+    const users = { configMapInfoSrc, secretInfoSrc, serviceAccountInfoSrc, roleBindingInfoSrc, networkPolicyDetailSrc, serviceInfoSrc, pdbInfoSrc, ownedResourcesSrc }
     for (const [name, src] of Object.entries(users)) expect(src.includes('useNamespacePodTable({'), name).toBe(true)
   })
 

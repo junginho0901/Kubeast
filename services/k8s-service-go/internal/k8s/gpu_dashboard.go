@@ -36,10 +36,18 @@ func (s *Service) GetGPUPods(ctx context.Context) (map[string]interface{}, error
 	return s.gpuDashboard(ctx, true)
 }
 
+var (
+	gpuSideBudget = 15 * time.Second
+	// the nodes and pods wait their turn behind the cluster's other reads within what an AI tool waits for this (45 s)
+	gpuNeededBudget = 40 * time.Second
+)
+
 func (s *Service) gpuDashboard(ctx context.Context, podsOnly bool) (map[string]interface{}, error) {
 	// Use a bounded context so slow external calls don't block the whole request
-	dashCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	dashCtx, cancel := context.WithTimeout(ctx, gpuSideBudget)
 	defer cancel()
+	neededCtx, cancelNeeded := context.WithTimeout(ctx, gpuNeededBudget)
+	defer cancelNeeded()
 
 	var (
 		nodeList          *corev1.NodeList
@@ -60,7 +68,7 @@ func (s *Service) gpuDashboard(ctx context.Context, podsOnly bool) (map[string]i
 		defer wg.Done()
 		// a page at a time, keeping the pods that ask for a GPU (every pod in one list took k8s-service past 512 Mi)
 		podErr = eachCallerNamespace(ctx, "", func(ns string) error {
-			return eachPod(dashCtx, s.clientsetCtx(ctx).CoreV1(), ns, metav1.ListOptions{}, func(pod *corev1.Pod) {
+			return eachPod(neededCtx, s.clientsetCtx(ctx).CoreV1(), ns, metav1.ListOptions{}, func(pod *corev1.Pod) {
 				byVendor := getPodGPURequests(pod)
 				gpuReq := sumVendors(byVendor)
 				if gpuReq == 0 {
@@ -107,7 +115,7 @@ func (s *Service) gpuDashboard(ctx context.Context, podsOnly bool) (map[string]i
 		wg.Add(4)
 		go func() {
 			defer wg.Done()
-			nodeList, nodeErr = s.clientsetCtx(ctx).CoreV1().Nodes().List(dashCtx, metav1.ListOptions{})
+			nodeList, nodeErr = s.clientsetCtx(ctx).CoreV1().Nodes().List(neededCtx, metav1.ListOptions{})
 		}()
 		go func() {
 			defer wg.Done()

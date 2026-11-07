@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import type { PodInfo, PodListRow, PodPage } from '@/services/api'
@@ -7,7 +7,7 @@ import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
 import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
 import { Tx } from './DetailCommon'
 import { drawerPodsKey, pagerNav, useServerPodPage, type ServerPodFilter } from './useServerPods'
-import { PodPageNotFiltered, isClientError, podPageApplied, podTableReadEvery, podTableReadsPages, podTableReadsWhole, podTableShows } from './namespacePodTable'
+import { PodPageNotFiltered, isClientError, podPageApplied, podTableNote, podTableReadEvery, podTableReadsPages, podTableReadsWhole, podTableShows } from './namespacePodTable'
 
 const PAGE_SIZE = 10
 
@@ -27,8 +27,19 @@ export function useNamespacePodTable(options: {
   // false: the whole read is read when the table opens and not followed
   follows?: boolean
   staleTime?: number
-}): { items: PodTableRow[]; total: number; loading: boolean; nav: ReactNode; note: ReactNode } {
-  const { enabled, namespace, selector, queryKey, keeps, follows = true, staleTime = 5_000 } = options
+  // past this many pods it reads pages (POD_TABLE_WATCH_MAX when not given)
+  line?: number
+}): {
+  items: PodTableRow[]
+  total: number
+  loading: boolean
+  nav: ReactNode
+  note: ReactNode
+  // what the rows shown come from: every kept row of the whole read, or the server's page
+  whole?: PodInfo[]
+  page?: PodPage
+} {
+  const { enabled, namespace, selector, queryKey, keeps, follows = true, staleTime = 5_000, line } = options
   const client = useQueryClient()
   const bySelector = selector !== undefined
   const serverFilter: ServerPodFilter | null = enabled ? { namespace, ...options.filter } : null
@@ -40,7 +51,7 @@ export function useNamespacePodTable(options: {
   const [pagesFor, setPagesFor] = useState<string | null>(null)
   const firstPage = enabled ? client.getQueryData<PodPage>(drawerPodsKey(serverFilter, 1, PAGE_SIZE)) : undefined
   const heldNow = enabled ? client.getQueryData<PodInfo[]>(queryKey) : undefined
-  const pagesWanted = pagesFor === tableKey || podTableReadsPages({ answered: firstPage, held: heldNow?.length }, bySelector)
+  const pagesWanted = pagesFor === tableKey || podTableReadsPages({ answered: firstPage, held: heldNow?.length }, bySelector, line)
 
   const pageQuery = useServerPodPage(serverFilter, pagesWanted ? page : 1, PAGE_SIZE, {
     readEvery: (data, error) => podTableReadEvery(pagesWanted, data, error),
@@ -83,7 +94,8 @@ export function useNamespacePodTable(options: {
   }, [crossed, refetch])
 
   const shows = podTableShows({ pages, held: whole.data !== undefined, answered, pageAt: pageQuery.dataUpdatedAt, heldAt: whole.dataUpdatedAt })
-  const kept = shows === 'whole' ? (whole.data ?? []).filter(keeps) : undefined
+  const wholeRows = whole.data
+  const kept = useMemo(() => (shows === 'whole' ? (wholeRows ?? []).filter(keeps) : undefined), [shows, wholeRows, keeps])
   const total = kept ? kept.length : (pageRows?.total ?? 0)
   const items: PodTableRow[] = kept ? kept.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : (pageRows?.items ?? [])
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
@@ -92,12 +104,13 @@ export function useNamespacePodTable(options: {
   }, [page, totalPages])
 
   const every = pages && pageRows ? podPagePollEvery(pageRows) : false
+  const noteText = podTableNote(options.filter.owner, bySelector)
   const note = every ? (
     <p className="mb-2 text-[11px] text-slate-400" data-testid="drawer-pods-read-every">
-      <Tx text="This namespace has too many pods to follow live, so this table is read again every {{seconds}} seconds." values={{ seconds: every / 1000 }} />
+      <Tx text={noteText.text} values={{ ...noteText.values, seconds: every / 1000 }} />
     </p>
   ) : null
   // with no page rows to show: waiting for the page, or for the whole read when that is the way
   const loading = enabled && whole.data === undefined && pageRows === undefined && (readsWhole ? !whole.isError : !pageQuery.isError)
-  return { items, total, loading, nav: pagerNav(page, PAGE_SIZE, total, setPage), note }
+  return { items, total, loading, nav: pagerNav(page, PAGE_SIZE, total, setPage), note, whole: kept, page: kept ? undefined : pageRows }
 }

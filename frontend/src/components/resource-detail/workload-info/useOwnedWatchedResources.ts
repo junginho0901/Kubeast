@@ -1,11 +1,12 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import type { PodInfo, ReplicaSetInfo, PVCInfo, JobInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
-import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
 import { applyReplicaSetWatchEvent } from '@/pages/workloads/replicasets/replicaSetWatchNormalize'
 import { applyJobWatchEvent } from '@/pages/workloads/jobs/jobWatchNormalize'
+import { useNamespacePodTable, type PodTableRow } from '../useNamespacePodTable'
+import { SET_POD_TABLE_WATCH_MAX } from '../namespacePodTable'
 
 interface Params {
   kind: string
@@ -16,7 +17,10 @@ interface Params {
 }
 
 export interface OwnedResources {
-  pods: PodInfo[]
+  // every pod of the set, or the page shown when the table reads the server's pages (counted then says how many)
+  pods: PodTableRow[]
+  counted?: { total: number; notRunning?: number }
+  podTable: ReturnType<typeof useNamespacePodTable>
   replicaSets: ReplicaSetInfo[]
   jobs: JobInfo[]
   pvcsByPodName: Map<string, Array<{ vct: string; pvc?: PVCInfo }>>
@@ -32,51 +36,40 @@ function selectorToString(selector?: Record<string, string>): string {
   return Object.entries(selector).map(([k, v]) => `${k}=${v}`).join(',')
 }
 
+// The pod's controller, else its first owner: the owner a server pod row keeps (pod_index.go), so the whole read and the
+// server's pages list the same pods.
+export function podOwnedBy(pod: PodInfo, kind: string, name: string): boolean {
+  const refs = Array.isArray(pod?.owner_references) ? pod.owner_references : []
+  const owner = refs.find((r) => r?.controller) ?? refs[0]
+  return !!owner && owner.kind === kind && owner.name === name
+}
+
 // Provides live owned/matching child resources for Deployment / Job / DaemonSet /
-// ReplicaSet / StatefulSet detail. Pods are listed via labelSelector for Deployment,
-// via ownerReference filter for ReplicaSet/DaemonSet/StatefulSet/Job. Updates stream
-// through useKubeWatchList so kubectl scale / delete reflects immediately.
+// ReplicaSet / StatefulSet detail. Pods are the label selector's for a Deployment and,
+// for the others, the ones they control; read as the drawers' namespace tables are
+// (useNamespacePodTable): whole and live while few, else the server's pages.
 export function useOwnedWatchedResources({ kind, namespace, name, selector, volumeClaimTemplates }: Params): OwnedResources {
   const selectorStr = useMemo(() => selectorToString(selector), [selector])
 
   const podsKind = kind === 'DaemonSet' || kind === 'ReplicaSet' || kind === 'StatefulSet' || kind === 'Job' || kind === 'Deployment'
   const podsEnabled = podsKind && !!namespace && !!selectorStr
   const rsEnabled = kind === 'Deployment' && !!namespace && !!selectorStr
+  const byOwner = kind !== 'Deployment'
+  const keeps = useCallback((p: PodInfo) => !byOwner || podOwnedBy(p, kind, name), [byOwner, kind, name])
 
-  const { data: pods } = useQuery({
-    queryKey: ['owned-watched-pods', kind, namespace, name, selectorStr],
-    queryFn: async () => {
-      const all = await api.getPods(namespace as string, selectorStr)
-      if (kind === 'Deployment') return all
-      return all.filter((p: any) => {
-        const refs = p?.owner_references || p?.metadata?.ownerReferences || []
-        if (Array.isArray(refs) && refs.length > 0) {
-          return refs.some((r: any) => r?.name === name)
-        }
-        return true
-      })
-    },
+  const podTable = useNamespacePodTable({
     enabled: podsEnabled,
-    staleTime: 5_000,
-  })
-
-  useKubeWatchList({
-    enabled: podsEnabled,
+    namespace: namespace ?? '',
+    filter: byOwner ? { label_selector: selectorStr, owner: `${kind}/${name}` } : { label_selector: selectorStr },
     queryKey: ['owned-watched-pods', kind, namespace, name, selectorStr],
-    path: `/api/v1/namespaces/${namespace}/pods`,
-    query: `watch=1&labelSelector=${encodeURIComponent(selectorStr)}`,
-    applyEvent: (prev, event) => {
-      const next = applyPodWatchEvent(prev as PodInfo[] | undefined, event)
-      if (kind === 'Deployment') return next
-      return next.filter((p: any) => {
-        const refs = p?.owner_references || []
-        if (Array.isArray(refs) && refs.length > 0) {
-          return refs.some((r: any) => r?.name === name)
-        }
-        return true
-      })
-    },
+    keeps,
+    selector: selectorStr,
+    line: SET_POD_TABLE_WATCH_MAX,
   })
+  const pods: PodTableRow[] | undefined = podTable.whole ?? podTable.page?.items
+  const pageTotal = podTable.page?.total
+  const pageNotRunning = podTable.page?.not_running
+  const counted = useMemo(() => (pageTotal === undefined ? undefined : { total: pageTotal, notRunning: pageNotRunning }), [pageTotal, pageNotRunning])
 
   const { data: replicaSets } = useQuery({
     queryKey: ['owned-watched-rs', namespace, name, selectorStr],
@@ -183,6 +176,8 @@ export function useOwnedWatchedResources({ kind, namespace, name, selector, volu
 
   return {
     pods: Array.isArray(pods) ? pods : [],
+    counted,
+    podTable,
     replicaSets: Array.isArray(replicaSets) ? replicaSets : [],
     jobs: Array.isArray(ownedJobsLive) ? ownedJobsLive : [],
     pvcsByPodName,
