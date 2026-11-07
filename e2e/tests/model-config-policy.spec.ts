@@ -56,6 +56,9 @@ test.describe('model config policy (M19)', () => {
         ['j', 'an IPv4-translated form', 'http://[::ffff:0:169.254.169.254]/v1'],
         ['k', 'a Teredo form', 'http://[2001:0:4136:e378:8000:63bf:5601:5601]/v1'],
         ['l', 'a site NAT64 form', 'http://[64:ff9b:1::169.254.169.254]/v1'],
+        ['u', 'an ISATAP form', 'http://[2606:4700::5efe:169.254.169.254]/v1'],
+        ['ac', "Alibaba Cloud's address", 'http://100.100.100.200/v1'],
+        ['ad', "Azure's platform address", 'http://168.63.129.16/v1'],
       ]) {
         const refused = await post({ name: `e2e-m19-${letter}-${ts}`, api_key_env: 'OPENAI_API_KEY', base_url: baseUrl })
         expect(refused.status, `metadata address in ${form}`).toBe(400)
@@ -69,6 +72,12 @@ test.describe('model config policy (M19)', () => {
         ['p', 'site-local', 'http://[fec0::1]:8080/v1'],
         ['q', 'IPv6 multicast', 'http://[ff02::1]/v1'],
         ['r', 'IPv4 multicast', 'http://224.0.0.1/v1'],
+        ['v', 'a private address in an ISATAP form', 'http://[2606:4700::5efe:10.0.0.1]/v1'],
+        ['w', 'class E', 'http://240.0.0.1/v1'],
+        ['x', 'limited broadcast', 'http://255.255.255.255/v1'],
+        ['y', 'IETF protocol assignments', 'http://192.0.0.1/v1'],
+        ['z', 'the IPv6 documentation range', 'http://[2001:db8::1]/v1'],
+        ['aa', 'the IPv6 discard prefix', 'http://[100::1]/v1'],
       ]) {
         const refused = await post({ name: `e2e-m19-${letter}-${ts}`, api_key_env: 'OPENAI_API_KEY', base_url: baseUrl })
         expect(refused.status, form).toBe(400)
@@ -82,6 +91,10 @@ test.describe('model config policy (M19)', () => {
       const sitePublic = await post({ name: `e2e-m19-t-${ts}`, api_key_env: 'OPENAI_API_KEY', base_url: 'http://[64:ff9b:1::5db8:d822]/v1' })
       expect(sitePublic.status, `a public address in a site NAT64 form: ${sitePublic.detail}`).toBe(200)
       expect(sitePublic.body.base_url, 'the address is stored as it was given').toBe('http://[64:ff9b:1::5db8:d822]/v1')
+
+      const isatapPublic = await post({ name: `e2e-m19-ab-${ts}`, api_key_env: 'OPENAI_API_KEY', base_url: 'http://[2606:4700::5efe:93.184.216.34]/v1' })
+      expect(isatapPublic.status, `a public address in an ISATAP form: ${isatapPublic.detail}`).toBe(200)
+      expect(isatapPublic.body.base_url, 'the address is stored as it was given').toBe('http://[2606:4700::5efe:93.184.216.34]/v1')
 
       const authHeader = await post({ name: `e2e-m19-d-${ts}`, api_key_env: 'OPENAI_API_KEY', extra_headers: { Authorization: 'Bearer x' } })
       expect(authHeader.status, 'auth header in extra_headers').toBe(400)

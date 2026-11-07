@@ -329,6 +329,141 @@
       "name": "among a line's words the working directory stays and the abbreviation goes",
       "input": "env DB_PWD=/fake-pass-1 PWD=/app OLDPWD=/root --pwd=/fake-pass-2 level=info\n",
       "want": "env DB_PWD=<REDACTED:DB_PWD> PWD=/app OLDPWD=/root --pwd=<REDACTED:pwd> level=info\n"
+    },
+    {
+      "name": "a password's short name at the end of a name",
+      "input": "MYSQL_PASS: fake-pass-1\nDB_PASS=fake-pass-2\nexport REDIS_PASS=fake-pass-3\ndbPass: fake-pass-4\nsmtp-pass: fake-pass-5\nmail.pass: fake-pass-6\nPGPASS: fake-pass-7\npgpass=fake-pass-8\nDB_PASS: fake pass 9\n",
+      "want": "MYSQL_PASS: <REDACTED:MYSQL_PASS>\nDB_PASS=<REDACTED:DB_PASS>\nexport REDIS_PASS=<REDACTED:REDIS_PASS>\ndbPass: <REDACTED:dbPass>\nsmtp-pass: <REDACTED:smtp-pass>\nmail.pass: <REDACTED:mail.pass>\nPGPASS: <REDACTED:PGPASS>\npgpass=<REDACTED:pgpass>\nDB_PASS: <REDACTED:DB_PASS>\n"
+    },
+    {
+      "name": "a password's short name among a line's words",
+      "input": "env DB_PASS=fake-pass-1 HOME=/root\nPGPASS=fake-pass-2 psql -h db\nlevel=info smtp_pass=fake-pass-3 host=mail\nauth failed user: bob db_pass: \"fake-pass-4\"\n",
+      "want": "env DB_PASS=<REDACTED:DB_PASS> HOME=/root\nPGPASS=<REDACTED:PGPASS> psql -h db\nlevel=info smtp_pass=<REDACTED:smtp_pass> host=mail\nauth failed user: bob db_pass: \"<REDACTED:db_pass>\"\n"
+    },
+    {
+      "name": "a short name standing apart goes to the end of the line, as a whole password word does",
+      "input": "DB_PASS=fake-pass-1 psql -h db\nDB_PASSWORD=fake-pass-1 psql -h db\n",
+      "want": "DB_PASS=<REDACTED:DB_PASS>\nDB_PASSWORD=<REDACTED:DB_PASSWORD>\n"
+    },
+    {
+      "name": "digits as a password under its short name",
+      "input": "DB_PASS: 1234\nPGPASS=1234\nsmtp_pass: \"1234\"\nlog {\"mysql_pass\": \"1234\"} end\n",
+      "want": "DB_PASS: <REDACTED:DB_PASS>\nPGPASS=<REDACTED:PGPASS>\nsmtp_pass: \"<REDACTED:smtp_pass>\"\nlog {\"mysql_pass\": \"<REDACTED:mysql_pass>\"} end\n"
+    },
+    {
+      "name": "a password's short name in an env entry and a block",
+      "input": "- name: MYSQL_PASS\n  value: fake-pass-1\n{\"env\":[{\"name\":\"PGPASS\",\"value\":\"fake-pass-2\"}]}\nDB_PASS: |\n  fake-block-value\nname: app\n",
+      "want": "- name: MYSQL_PASS\n  value: <REDACTED:MYSQL_PASS>\n{\"env\":[{\"name\":\"PGPASS\",\"value\":\"<REDACTED:PGPASS>\"}]}\nDB_PASS: |\n  <REDACTED:DB_PASS>\nname: app\n"
+    },
+    {
+      "name": "a variable in capitals holds its password whatever word comes before the short name",
+      "input": "E2E_PASS=fake-pass-1\nTEST_PASS: fake-pass-2\nenv TEST_PASS=fake-pass-3 HOME=/root\n- name: E2E_PASS\n  value: fake-pass-4\n",
+      "want": "E2E_PASS=<REDACTED:E2E_PASS>\nTEST_PASS: <REDACTED:TEST_PASS>\nenv TEST_PASS=<REDACTED:TEST_PASS> HOME=/root\n- name: E2E_PASS\n  value: <REDACTED:E2E_PASS>\n"
+    },
+    {
+      "name": "the word pass that holds no password stays",
+      "input": "pass: true\npass: 12\nfirst_pass: done\nsecond_pass: 2\nlast-pass: ok\nfirstPass: ok\nfinal_pass: 1\ntest_pass: 12\ntests_pass: 12\nchecks_pass: 3\nlint_pass: yes\nsummary.pass: 3\npassed: 12\nbypass: ingress\nby_pass: ingress\ncompass: north\npass_count: 3\npass_through: on\npassthrough: enabled\nPGPASSFILE: /home/app/.pgpass\n",
+      "want": "pass: true\npass: 12\nfirst_pass: done\nsecond_pass: 2\nlast-pass: ok\nfirstPass: ok\nfinal_pass: 1\ntest_pass: 12\ntests_pass: 12\nchecks_pass: 3\nlint_pass: yes\nsummary.pass: 3\npassed: 12\nbypass: ingress\nby_pass: ingress\ncompass: north\npass_count: 3\npass_through: on\npassthrough: enabled\nPGPASSFILE: /home/app/.pgpass\n"
+    },
+    {
+      "name": "the word pass that holds no password stays among a line's words",
+      "input": "level=info first_pass=done test_pass=3 pass=ok --pass=ok --first-pass=2 bypass=yes passed=3 PGPASSFILE=/p\nmsg first_pass: \"done\"\n",
+      "want": "level=info first_pass=done test_pass=3 pass=ok --pass=ok --first-pass=2 bypass=yes passed=3 PGPASSFILE=/p\nmsg first_pass: \"done\"\n"
+    },
+    {
+      "name": "a credential word in the plural",
+      "input": "api_keys: fake-key-1\npasswords: fake-pass-1\nAPI_KEYS=fake-key-2\nAPIKEYS: fake-key-3\naccessKeys: fake-key-4\nprivate_keys: fake-key-5\nDB_PASSWORDS: fake-pass-2\npasswds: fake-pass-3\npwds: fake-pass-4\ndsns: fake-dsn-1\nconnection_strings: fake-1\n",
+      "want": "api_keys: <REDACTED:api_keys>\npasswords: <REDACTED:passwords>\nAPI_KEYS=<REDACTED:API_KEYS>\nAPIKEYS: <REDACTED:APIKEYS>\naccessKeys: <REDACTED:accessKeys>\nprivate_keys: <REDACTED:private_keys>\nDB_PASSWORDS: <REDACTED:DB_PASSWORDS>\npasswds: <REDACTED:passwds>\npwds: <REDACTED:pwds>\ndsns: <REDACTED:dsns>\nconnection_strings: <REDACTED:connection_strings>\n"
+    },
+    {
+      "name": "a credential word in the plural among a line's words and in JSON text",
+      "input": "env API_KEYS=fake-key-1 HOME=/root\nAPIKEYS=fake-key-2 ./run.sh\nlevel=info passwords=fake-pass-1 ok\nlog {\"api_keys\":\"fake-key-3\",\"passwords\":\"fake-pass-2\",\"level\":\"info\"} end\n{\"env\":[{\"name\":\"API_KEYS\",\"value\":\"fake-key-4\"}]}\n- name: PASSWORDS\n  value: fake-pass-3\n",
+      "want": "env API_KEYS=<REDACTED:API_KEYS> HOME=/root\nAPIKEYS=<REDACTED:APIKEYS> ./run.sh\nlevel=info passwords=<REDACTED:passwords> ok\nlog {\"api_keys\":\"<REDACTED:api_keys>\",\"passwords\":\"<REDACTED:passwords>\",\"level\":\"info\"} end\n{\"env\":[{\"name\":\"API_KEYS\",\"value\":\"<REDACTED:API_KEYS>\"}]}\n- name: PASSWORDS\n  value: <REDACTED:PASSWORDS>\n"
+    },
+    {
+      "name": "a plural's count or state stays",
+      "input": "api_keys: 2\npasswords: 3\naccess_keys: 1\napi_keys: none\npasswords: []\nlevel=info api_keys=2 passwords=3 dsns=1\napi_keys_count: 2\npasswords_enabled: true\n",
+      "want": "api_keys: 2\npasswords: 3\naccess_keys: 1\napi_keys: none\npasswords: []\nlevel=info api_keys=2 passwords=3 dsns=1\napi_keys_count: 2\npasswords_enabled: true\n"
+    },
+    {
+      "name": "tokens counts what a model used",
+      "input": "tokens: 5\nmax_tokens: 4096\ntotal_tokens: 120\nprompt_tokens: 80\nlevel=info tokens=5 total_tokens=120\n",
+      "want": "tokens: 5\nmax_tokens: 4096\ntotal_tokens: 120\nprompt_tokens: 80\nlevel=info tokens=5 total_tokens=120\n"
+    },
+    {
+      "name": "secrets names a kind, its objects or what may be done with them",
+      "input": "secrets: 7\nsecrets: my-tls\nsecrets: get,list,watch\nsecrets: forbidden\nresource: secrets\nkind: secrets\nresources: [secrets]\nimagePullSecrets: regcred\nsecrets_list: my-tls\nlevel=info secrets=7 kind=secrets\n",
+      "want": "secrets: 7\nsecrets: my-tls\nsecrets: get,list,watch\nsecrets: forbidden\nresource: secrets\nkind: secrets\nresources: [secrets]\nimagePullSecrets: regcred\nsecrets_list: my-tls\nlevel=info secrets=7 kind=secrets\n"
+    },
+    {
+      "name": "a credential's list on the lines below its key",
+      "input": "api_keys:\n  - fake-key-1\n  - \"fake-key-2\"\nname: app\npasswords:\n- 'fake-pass-1'\n- fake-pass-2\nport: 80\n- token:\n    - fake-token-1\n  name: db\n",
+      "want": "api_keys:\n  - <REDACTED:api_keys>\n  - \"<REDACTED:api_keys>\"\nname: app\npasswords:\n- '<REDACTED:passwords>'\n- <REDACTED:passwords>\nport: 80\n- token:\n    - <REDACTED:token>\n  name: db\n"
+    },
+    {
+      "name": "a list under a key that holds no credential, or of mappings, stays",
+      "input": "secrets:\n- name: default-token\n- my-tls\ntokens:\n  - 12\nimagePullSecrets:\n  - regcred\ncredentials:\n  - name: aws\n    region: eu\napi_keys:\n  - name: ci\npasswords:\n  - true\n  - 3\nrules:\n- a\n",
+      "want": "secrets:\n- name: default-token\n- my-tls\ntokens:\n  - 12\nimagePullSecrets:\n  - regcred\ncredentials:\n  - name: aws\n    region: eu\napi_keys:\n  - name: ci\npasswords:\n  - true\n  - 3\nrules:\n- a\n"
+    },
+    {
+      "name": "a credential's JSON list in a line of text",
+      "input": "log {\"api_keys\":[\"fake-key-1\",\"fake-key-2\"],\"level\":\"info\"} end\nlog {\"passwords\": [ \"fake-pass-1\" ]} end\n",
+      "want": "log {\"api_keys\":[\"<REDACTED:api_keys>\",\"<REDACTED:api_keys>\"],\"level\":\"info\"} end\nlog {\"passwords\": [ \"<REDACTED:passwords>\" ]} end\n"
+    },
+    {
+      "name": "a JSON list held escaped in a string",
+      "input": "note: {\\\"passwords\\\":[\\\"fake-pass-1\\\",\\\"fake-pass-2\\\"],\\\"level\\\":\\\"info\\\"}\n",
+      "want": "note: {\\\"passwords\\\":[\\\"<REDACTED:passwords>\\\",\\\"<REDACTED:passwords>\\\"],\\\"level\\\":\\\"info\\\"}\n"
+    },
+    {
+      "name": "a JSON list's items are read one by one",
+      "input": "log {\"password\":[1234,\"fake-pass-1\",\"\",true,null]} end\nlog {\"api_keys\":[\"fake,1]x\",\"fake-2\"],\"a\":\"b\"} end\nlog {\"api_keys\":[2,3]} end\n",
+      "want": "log {\"password\":[\"<REDACTED:password>\",\"<REDACTED:password>\",\"\",true,null]} end\nlog {\"api_keys\":[\"<REDACTED:api_keys>\",\"<REDACTED:api_keys>\"],\"a\":\"b\"} end\nlog {\"api_keys\":[2,3]} end\n"
+    },
+    {
+      "name": "a JSON list cut off in a line of text",
+      "input": "{\"replicas\":3,\"api_keys\":[\"fake-key-1\",\"fake-ke",
+      "want": "{\"replicas\":3,\"api_keys\":[\"<REDACTED:api_keys>\",\"<REDACTED:api_keys>\""
+    },
+    {
+      "name": "a JSON list in a line under another key, or of mappings, stays",
+      "input": "log {\"secrets\":[\"my-tls\"],\"tokens\":[\"120\"],\"rules\":[\"get\",\"list\"]} end\nlog {\"api_keys\":[{\"name\":\"ci\",\"token\":\"fake-token-1\"}]} end\nlog {\"password\":[]} end\n",
+      "want": "log {\"secrets\":[\"my-tls\"],\"tokens\":[\"120\"],\"rules\":[\"get\",\"list\"]} end\nlog {\"api_keys\":[{\"name\":\"ci\",\"token\":\"<REDACTED:token>\"}]} end\nlog {\"password\":[]} end\n"
+    },
+    {
+      "name": "a credential's JSON list on the lines below its key",
+      "input": "{\n  \"api_keys\": [\n    \"fake-key-1\",\n    \"fake-key-2\"\n  ],\n  \"level\": \"info\"\n}\n",
+      "want": "{\n  \"api_keys\": [\n    \"<REDACTED:api_keys>\",\n    \"<REDACTED:api_keys>\"\n  ],\n  \"level\": \"info\"\n}\n"
+    },
+    {
+      "name": "a JSON list on many lines cut off in an item",
+      "input": "{\n  \"passwords\": [\n    \"fake-pass-1\",\n    \"fake-pa",
+      "want": "{\n  \"passwords\": [\n    \"<REDACTED:passwords>\",\n    \"<REDACTED:passwords>\""
+    },
+    {
+      "name": "a JSON list that starts on its key's line and goes on below",
+      "input": "{\"api_keys\": [\"fake-key-1\",\n  \"fake-key-2\"],\n \"level\": \"info\"}\n",
+      "want": "{\"api_keys\": [\"<REDACTED:api_keys>\",\n  \"<REDACTED:api_keys>\"],\n \"level\": \"info\"}\n"
+    },
+    {
+      "name": "a JSON list's numbers and states on many lines follow the key",
+      "input": "\"password\": [\n  1234,\n  true,\n  null\n]\n\"api_keys\": [\n  2,\n  3\n]\n",
+      "want": "\"password\": [\n  \"<REDACTED:password>\",\n  true,\n  null\n]\n\"api_keys\": [\n  2,\n  3\n]\n"
+    },
+    {
+      "name": "a JSON list on many lines under another key, or of mappings, stays",
+      "input": "\"secrets\": [\n  \"my-tls\"\n],\n\"tokens\": [\n  \"120\"\n],\n\"credentials\": [\n  {\n    \"name\": \"aws\"\n  }\n],\n\"password\": []\n",
+      "want": "\"secrets\": [\n  \"my-tls\"\n],\n\"tokens\": [\n  \"120\"\n],\n\"credentials\": [\n  {\n    \"name\": \"aws\"\n  }\n],\n\"password\": []\n"
+    },
+    {
+      "name": "a bracket after a credential word in a sentence opens no list",
+      "input": "level=error msg=\"bad token: [abc\"\ndone\nbad token: [abc\ndone\n",
+      "want": "level=error msg=\"bad token: [abc\"\ndone\nbad token: [abc\ndone\n"
+    },
+    {
+      "name": "an opening bracket holds no value and what is under it has its own key",
+      "input": "\"secret\": {\n  \"secretName\": \"my-tls\"\n},\n\"token\": {\n  \"value\": 5\n}\n",
+      "want": "\"secret\": {\n  \"secretName\": \"my-tls\"\n},\n\"token\": {\n  \"value\": 5\n}\n"
     }
   ],
   "objects": [
@@ -468,6 +603,41 @@
       "name": "the abbreviation of a password in an object goes whatever its value looks like",
       "input": [{"name": "DB_PWD", "value": "/fake-pass-1"}, {"DB_PWD": "/fake-pass-1"}, {"PWD": "fake-pass-1"}, {"name": "PWD", "value": "fake-pass-1"}],
       "want": [{"name": "DB_PWD", "value": "<REDACTED:DB_PWD>"}, {"DB_PWD": "<REDACTED:DB_PWD>"}, {"PWD": "<REDACTED:PWD>"}, {"name": "PWD", "value": "<REDACTED:PWD>"}]
+    },
+    {
+      "name": "a password's short name as a key and in an env entry",
+      "input": [{"MYSQL_PASS": "fake-pass-1", "dbPass": "fake-pass-2", "PGPASS": "fake-pass-3", "DB_PASS": "1234", "smtp_pass": 1234}, {"name": "MYSQL_PASS", "value": "fake-pass-4"}, {"name": "PGPASS", "value": 1234}],
+      "want": [{"MYSQL_PASS": "<REDACTED:MYSQL_PASS>", "dbPass": "<REDACTED:dbPass>", "PGPASS": "<REDACTED:PGPASS>", "DB_PASS": "<REDACTED:DB_PASS>", "smtp_pass": "<REDACTED:smtp_pass>"}, {"name": "MYSQL_PASS", "value": "<REDACTED:MYSQL_PASS>"}, {"name": "PGPASS", "value": "<REDACTED:PGPASS>"}]
+    },
+    {
+      "name": "the word pass that holds no password stays in an object",
+      "input": [{"pass": 12, "first_pass": "done", "test_pass": 3, "passed": true, "bypass": "ingress", "PGPASSFILE": "/p"}, {"summary": {"pass": 3, "fail": 0}}, {"name": "first_pass", "value": "done"}, {"pass": "fake-1"}],
+      "want": [{"pass": 12, "first_pass": "done", "test_pass": 3, "passed": true, "bypass": "ingress", "PGPASSFILE": "/p"}, {"summary": {"pass": 3, "fail": 0}}, {"name": "first_pass", "value": "done"}, {"pass": "fake-1"}]
+    },
+    {
+      "name": "a credential word in the plural as a key and in an env entry",
+      "input": [{"api_keys": "fake-key-1", "passwords": "fake-pass-1", "APIKEYS": "fake-key-2"}, {"name": "API_KEYS", "value": "fake-key-3"}],
+      "want": [{"api_keys": "<REDACTED:api_keys>", "passwords": "<REDACTED:passwords>", "APIKEYS": "<REDACTED:APIKEYS>"}, {"name": "API_KEYS", "value": "<REDACTED:API_KEYS>"}]
+    },
+    {
+      "name": "a plural's count stays, a kind's rows too",
+      "input": [{"api_keys": 2, "passwords": 3, "secrets": 7, "tokens": 5}, {"resource_counts": {"pods": 4, "secrets": 7}}, {"name": "Passwords", "value": 3}, {"name": "API Keys", "value": "2"}],
+      "want": [{"api_keys": 2, "passwords": 3, "secrets": 7, "tokens": 5}, {"resource_counts": {"pods": 4, "secrets": 7}}, {"name": "Passwords", "value": 3}, {"name": "API Keys", "value": "2"}]
+    },
+    {
+      "name": "secrets and tokens as text stay",
+      "input": {"secrets": "forbidden: cannot list", "refused": {"secrets": "get,list"}, "tokens": "120", "kind": "secrets"},
+      "want": {"secrets": "forbidden: cannot list", "refused": {"secrets": "get,list"}, "tokens": "120", "kind": "secrets"}
+    },
+    {
+      "name": "each string of a credential's list goes",
+      "input": {"api_keys": ["fake-key-1", "fake-key-2"], "passwords": ["fake-pass-1", "", true], "token": ["fake-token-1"], "password": [1234]},
+      "want": {"api_keys": ["<REDACTED:api_keys>", "<REDACTED:api_keys>"], "passwords": ["<REDACTED:passwords>", "", true], "token": ["<REDACTED:token>"], "password": ["<REDACTED:password>"]}
+    },
+    {
+      "name": "a credential key's list of mappings, and a list under another key, stay",
+      "input": {"api_keys": [{"name": "ci", "key_prefix": "kb_abc", "token": "fake-token-1"}], "credentials": [{"name": "aws"}], "secrets": ["my-tls", "other"], "imagePullSecrets": [{"name": "regcred"}], "tokens": [120, 80], "rules": ["get", "list"]},
+      "want": {"api_keys": [{"name": "ci", "key_prefix": "kb_abc", "token": "<REDACTED:token>"}], "credentials": [{"name": "aws"}], "secrets": ["my-tls", "other"], "imagePullSecrets": [{"name": "regcred"}], "tokens": [120, 80], "rules": ["get", "list"]}
     }
   ],
   "key_names": [
@@ -518,6 +688,37 @@
     {"key": "AWSCREDENTIALS", "redact": true, "audit": true},
     {"key": "SENTRYDSN", "redact": true, "audit": true},
     {"key": "CONNECTIONSTRING", "redact": true, "audit": true},
+    {"key": "MYSQL_PASS", "redact": true, "audit": true},
+    {"key": "DB_PASS", "redact": true, "audit": true},
+    {"key": "db_pass", "redact": true, "audit": true},
+    {"key": "dbPass", "redact": true, "audit": true},
+    {"key": "smtp-pass", "redact": true, "audit": true},
+    {"key": "mail.pass", "redact": true, "audit": true},
+    {"key": "PGPASS", "redact": true, "audit": true},
+    {"key": "pgpass", "redact": true, "audit": true},
+    {"key": "E2E_PASS", "redact": true, "audit": true},
+    {"key": "TEST_PASS", "redact": true, "audit": true},
+    {"key": "api_keys", "redact": true, "audit": true},
+    {"key": "API_KEYS", "redact": true, "audit": true},
+    {"key": "apiKeys", "redact": true, "audit": true},
+    {"key": "APIKEYS", "redact": true, "audit": true},
+    {"key": "access_keys", "redact": true, "audit": true},
+    {"key": "accessKeys", "redact": true, "audit": true},
+    {"key": "private_keys", "redact": true, "audit": true},
+    {"key": "passwords", "redact": true, "audit": true},
+    {"key": "PASSWORDS", "redact": true, "audit": true},
+    {"key": "DB_PASSWORDS", "redact": true, "audit": true},
+    {"key": "passwds", "redact": true, "audit": true},
+    {"key": "pwds", "redact": true, "audit": true},
+    {"key": "DBPWDS", "redact": true, "audit": true},
+    {"key": "dsns", "redact": true, "audit": true},
+    {"key": "connection_strings", "redact": true, "audit": true},
+    {"key": "first_pass", "redact": false, "audit": true},
+    {"key": "second_pass", "redact": false, "audit": true},
+    {"key": "last_pass", "redact": false, "audit": true},
+    {"key": "test_pass", "redact": false, "audit": true},
+    {"key": "tests_pass", "redact": false, "audit": true},
+    {"key": "total_tokens", "redact": false, "audit": true},
     {"key": "tokenizer", "redact": false, "audit": true},
     {"key": "max_tokens", "redact": false, "audit": true},
     {"key": "tokens", "redact": false, "audit": true},
@@ -545,6 +746,13 @@
     {"key": "kinds_namespaces", "redact": false, "audit": false},
     {"key": "cmd_snapshot", "redact": false, "audit": false},
     {"key": "idsNumber", "redact": false, "audit": false},
-    {"key": "app_wd", "redact": false, "audit": false}
+    {"key": "app_wd", "redact": false, "audit": false},
+    {"key": "pass", "redact": false, "audit": false},
+    {"key": "passed", "redact": false, "audit": false},
+    {"key": "bypass", "redact": false, "audit": false},
+    {"key": "compass", "redact": false, "audit": false},
+    {"key": "passthrough", "redact": false, "audit": false},
+    {"key": "pass_count", "redact": false, "audit": false},
+    {"key": "PGPASSFILE", "redact": false, "audit": false}
   ]
 }

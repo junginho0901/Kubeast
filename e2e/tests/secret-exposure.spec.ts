@@ -80,7 +80,7 @@ function helmReleaseYAML() {
     version: 1,
     info: { first_deployed: now, last_deployed: now, status: 'deployed', description: 'e2e fixture' },
     chart: { metadata: { apiVersion: 'v2', name: 'e2e-chart', version: '0.1.0', appVersion: '1.0.0' }, templates: [], values: {} },
-    config: { replicaCount: 1, password: relCfgPassword },
+    config: { replicaCount: 1, password: relCfgPassword, adminPassword: '1234', dbPassword: 5678, DB_PASS: 'fake-short-pass', api_keys: ['fake-plural-key'], password_expiry_days: 90, extraEnv: [{ name: 'DB_PASSWORD', value: 'fake-env-pass' }, { name: 'PWD', value: '/app' }, { name: 'LOG_LEVEL', value: 'debug' }] },
     manifest,
   }
   const encoded = gzipSync(Buffer.from(JSON.stringify(release))).toString('base64')
@@ -274,6 +274,12 @@ test.describe.serial('Secret exposure — generic resource paths and Helm text',
     expect(rel.manifest, 'the rest of the manifest survives').toContain('DB_HOST: db.internal')
     expect(rel.values.password).not.toBe(relCfgPassword)
     expect(rel.values.replicaCount).toBe(1)
+    expect(rel.values.adminPassword).toBe('<REDACTED:adminPassword>')
+    expect(rel.values.dbPassword).toBe('<REDACTED:dbPassword>')
+    expect(rel.values.DB_PASS).toBe('<REDACTED:DB_PASS>')
+    expect(rel.values.api_keys).toEqual(['<REDACTED:api_keys>'])
+    expect(rel.values.password_expiry_days).toBe(90)
+    expect(rel.values.extraEnv).toEqual([{ name: 'DB_PASSWORD', value: '<REDACTED:DB_PASSWORD>' }, { name: 'PWD', value: '/app' }, { name: 'LOG_LEVEL', value: 'debug' }])
 
     const manifest = await request.get(`${base}/manifest?cluster=${CLUSTER}`, { headers: reader })
     expect(manifest.status(), await manifest.text()).toBe(200)

@@ -1,4 +1,37 @@
-from app.services.audit_target import MAX_OBJECTS, ToolTarget, tool_target
+from app.services.audit_target import MAX_OBJECTS, ToolTarget, kept_tool_args, tool_target, write_tool_input
+
+
+ENV_PATCH = {"resource_type": "deployment", "resource_name": "web", "patch": {"spec": {"containers": [{"name": "app", "env": [
+    {"name": "PWD", "value": "/app"}, {"name": "OLDPWD", "value": "/root"}, {"name": "pwd", "value": "~/app"},
+    {"name": "DB_PWD", "value": "/fake-pass-1"}, {"name": "PWD", "value": "fake-pass-2"}, {"name": "PGPASSWORD", "value": "/fake-pass-3"},
+    {"name": "DB_PASS", "value": "fake-pass-4"}, {"name": "API_KEYS", "value": "fake-key-1"},
+]}]}}}
+ENV_GONE = ("fake-pass-1", "fake-pass-2", "fake-pass-3", "fake-pass-4", "fake-key-1")
+
+
+def test_a_write_row_keeps_the_working_directory_and_loses_the_credentials():
+    preview = write_tool_input("k8s_patch_resource", ENV_PATCH)["patch_preview"]
+    for gone in ENV_GONE:
+        assert gone not in preview
+    for kept in ("name: PWD\n", "value: /app", "value: /root", "value: ~/app"):
+        assert kept in preview
+
+
+def test_a_kept_write_argument_keeps_the_working_directory_and_loses_the_credentials():
+    env = kept_tool_args(ENV_PATCH)["patch"]["spec"]["containers"][0]["env"]
+    assert env == [
+        {"name": "PWD", "value": "/app"}, {"name": "OLDPWD", "value": "/root"}, {"name": "pwd", "value": "~/app"},
+        {"name": "DB_PWD", "value": "<REDACTED:DB_PWD>"}, {"name": "PWD", "value": "<REDACTED:PWD>"}, {"name": "PGPASSWORD", "value": "<REDACTED:PGPASSWORD>"},
+        {"name": "DB_PASS", "value": "<REDACTED:DB_PASS>"}, {"name": "API_KEYS", "value": "<REDACTED:API_KEYS>"},
+    ]
+
+
+def test_a_json_patch_under_env_is_held_by_its_path_whatever_it_names():
+    args = {"resource_type": "deployment", "resource_name": "web", "patch": [
+        {"op": "add", "path": "/spec/containers/0/env/0", "value": {"name": "PWD", "value": "/app"}},
+        {"op": "replace", "path": "/spec/containers/0/env/0/value", "value": "/app"},
+    ]}
+    assert [op["value"] for op in kept_tool_args(args)["patch"]] == ["<REDACTED:value>", "<REDACTED:value>"]
 
 
 def test_named_arguments_are_the_target():

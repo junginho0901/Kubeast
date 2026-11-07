@@ -22,6 +22,11 @@ const PW_VALUE = `hunter2-${STAMP}`
 const URL_PW = `s3cr3t-${STAMP}`
 const GLUED_PW = `fake-glued-pass-${STAMP}`
 const GLUED_KEY = `fake-glued-key-${STAMP}`
+const SHORT_PW = `fake-short-pass-${STAMP}`
+const GLUED_SHORT_PW = `fake-pgpass-${STAMP}`
+const PLURAL_KEY = `fake-plural-key-${STAMP}`
+const PLURAL_PW = `fake-plural-pass-${STAMP}`
+const LISTED_KEY = `fake-listed-key-${STAMP}`
 // Same selectors as ai-chat.spec.ts.
 const PLACEHOLDER_RE = /메시지|message/i
 const SEND_RE = /^전송$|^send$/i
@@ -60,6 +65,14 @@ test.describe('AI tool results are redacted', () => {
       `  PGPASSWORD: ${GLUED_PW}`,
       `  APIKEY: ${GLUED_KEY}`,
       '  PWD: /app',
+      `  MYSQL_PASS: ${SHORT_PW}`,
+      `  PGPASS: ${GLUED_SHORT_PW}`,
+      `  api_keys: ${PLURAL_KEY}`,
+      `  passwords: ${PLURAL_PW}`,
+      `  LOG_LINE: '{"api_keys":["${LISTED_KEY}"],"level":"info"}'`,
+      '  first_pass: done',
+      '  total_tokens: "120"',
+      '  secrets: my-tls',
       '  LOG_LEVEL: debug',
       '',
     ].join('\n')
@@ -101,6 +114,15 @@ test.describe('AI tool results are redacted', () => {
     expect(body).toContain('PGPASSWORD: <REDACTED:PGPASSWORD>')
     expect(body).toContain('APIKEY: <REDACTED:APIKEY>')
     expect(body).toContain('PWD: /app')
+    for (const value of [SHORT_PW, GLUED_SHORT_PW, PLURAL_KEY, PLURAL_PW, LISTED_KEY]) expect(body).not.toContain(value)
+    expect(body).toMatch(/LOG_LINE: .{0,30}<REDACTED:api_keys>/)
+    expect(body).toContain('MYSQL_PASS: <REDACTED:MYSQL_PASS>')
+    expect(body).toContain('PGPASS: <REDACTED:PGPASS>')
+    expect(body).toContain('api_keys: <REDACTED:api_keys>')
+    expect(body).toContain('passwords: <REDACTED:passwords>')
+    expect(body).toContain('first_pass: done')
+    expect(body).toMatch(/total_tokens: \\*"120/)
+    expect(body).toContain('secrets: my-tls')
     expect(body).toContain('LOG_LEVEL: debug')
 
     // audit: the ai.tool.call row names what was masked

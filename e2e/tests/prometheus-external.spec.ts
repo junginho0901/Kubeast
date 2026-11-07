@@ -131,13 +131,21 @@ test.describe('external Prometheus source', () => {
   })
 
   test('an address k8s-service must not call is refused when it is saved, a private one is not', async ({ request }) => {
-    for (const address of ['http://169.254.169.254/', 'http://[fd00:ec2::254]/', 'http://metadata.google.internal/', 'http://127.0.0.1:9090', 'http://localhost:9090']) {
+    for (const address of [
+      'http://169.254.169.254/', 'http://[fd00:ec2::254]/', 'http://metadata.google.internal/', 'http://127.0.0.1:9090', 'http://localhost:9090',
+      'http://[::169.254.169.254]/', 'http://[::ffff:0:169.254.169.254]/', 'http://[2001:0:4136:e378:8000:63bf:5601:5601]/',
+      'http://[64:ff9b:1::169.254.169.254]/', 'http://[2606:4700::5efe:169.254.169.254]/', 'http://[::ffff:0:127.0.0.1]:9090',
+      'http://255.255.255.255:9090', 'http://[100::1]:9090', 'http://224.0.0.1:9090', 'http://[ff02::1]:9090',
+      'http://100.100.100.200/', 'http://168.63.129.16/',
+    ]) {
       const refused = await patch(request, admin, { prometheus_url: address })
       expect(refused.status(), address).toBe(400)
       expect(await refused.text(), address).toContain('prometheus_url')
     }
-    const privateAddress = await patch(request, admin, { prometheus_url: 'http://10.84.0.5:9090' })
-    expect(privateAddress.status(), await privateAddress.text()).toBe(200)
+    for (const address of ['http://240.0.0.1:9090', 'http://192.0.0.1:9090', 'http://[2001:db8:42:1::9]:9090', 'http://[2606:4700::5efe:10.0.0.1]:9090', 'http://[fec0::1]:9090', 'http://10.84.0.5:9090']) {
+      const open = await patch(request, admin, { prometheus_url: address })
+      expect(open.status(), `${address}: ${await open.text()}`).toBe(200)
+    }
   })
 
   test('clearing the fields removes the Secret and the cluster is back to no Prometheus', async ({ request }) => {

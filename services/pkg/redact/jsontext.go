@@ -143,7 +143,7 @@ func (w *jsonRewriter) object(start, end int, secret bool) {
 	for _, m := range ms {
 		w.text(m.keyStart, m.keyEnd)
 		value, isString := w.stringOf(m.valueStart, m.valEnd)
-		isNumber := w.src[m.valueStart] == '-' || (w.src[m.valueStart] >= '0' && w.src[m.valueStart] <= '9')
+		isNumber := startsNumber(w.src[m.valueStart])
 		switch {
 		case secret && secretValueFields[m.key]:
 			w.secretField(m.valueStart, m.valEnd)
@@ -156,9 +156,26 @@ func (w *jsonRewriter) object(start, end int, secret bool) {
 		case m.key == "value" && envSecret != "" && holdsCredential(envSecret, value, isString, isNumber):
 			w.replace(m.valueStart, m.valEnd, jsonString("<REDACTED:"+envSecret+">"))
 			w.st.add("key_name", 1)
+		case w.opts.on("key_name") && w.src[m.valueStart] == '[' && keyIsSensitive(m.key):
+			w.credentialList(m.key, m.valueStart, m.valEnd, secret)
 		default:
 			w.value(m.valueStart, m.valEnd, secret)
 		}
+	}
+}
+
+func startsNumber(c byte) bool { return c == '-' || (c >= '0' && c <= '9') }
+
+// credentialList masks each item of a list under a credential's key. A mapping in it has its own keys.
+func (w *jsonRewriter) credentialList(key string, start, end int, secret bool) {
+	for _, e := range w.elements(start, end) {
+		value, isString := w.stringOf(e[0], e[1])
+		if holdsCredential(key, value, isString, startsNumber(w.src[e[0]])) {
+			w.replace(e[0], e[1], jsonString("<REDACTED:"+key+">"))
+			w.st.add("key_name", 1)
+			continue
+		}
+		w.value(e[0], e[1], secret)
 	}
 }
 

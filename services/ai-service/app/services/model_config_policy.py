@@ -13,8 +13,8 @@ updated, tested and resolved for use:
     (operators add those to the secret).
   - base_url: http(s) only, no credentials, and every address the host
     resolves to must be public — never cloud metadata, loopback, link-local,
-    multicast or private ranges, in an IPv6 form either — unless the host is
-    listed in AI_BASE_URL_ALLOWED_HOSTS (an in-cluster Ollama or LLM gateway).
+    multicast, private or reserved ranges, in an IPv6 form either — unless the host
+    is listed in AI_BASE_URL_ALLOWED_HOSTS (an in-cluster Ollama or LLM gateway).
   - extra_headers: no authentication headers (the key travels via
     api_key_env only), and they are masked in responses.
   - Azure OpenAI: a base_url is required (the v1 endpoint), and deployment
@@ -43,16 +43,22 @@ AUTH_HEADERS = frozenset({
     "x-goog-api-key", "anthropic-api-key", "ocp-apim-subscription-key",
 })
 
-# Cloud instance metadata: never, whatever the allow-list says.
-METADATA_HOSTS = frozenset({"metadata.google.internal", "metadata", "instance-data"})
-METADATA_NETWORKS = (ipaddress.ip_network("169.254.0.0/16"), ipaddress.ip_network("fd00:ec2::254/128"))
+# Cloud instance metadata: never, whatever the allow-list says. Besides the link-local range: AWS's IPv6 metadata address,
+# Alibaba Cloud's metadata address and Azure's platform address.
+METADATA_HOSTS = frozenset({"metadata.google.internal", "metadata.goog", "metadata", "instance-data"})
+METADATA_NETWORKS = (
+    ipaddress.ip_network("169.254.0.0/16"), ipaddress.ip_network("fd00:ec2::254/128"), ipaddress.ip_network("fd20:ce::254/128"),
+    ipaddress.ip_network("100.100.100.200/32"), ipaddress.ip_network("168.63.129.16/32"),
+)
 # Not reachable from the internet: only with the host on the allow-list.
 PRIVATE_NETWORKS = (
     ipaddress.ip_network("0.0.0.0/8"), ipaddress.ip_network("10.0.0.0/8"),
     ipaddress.ip_network("100.64.0.0/10"), ipaddress.ip_network("127.0.0.0/8"),
-    ipaddress.ip_network("172.16.0.0/12"), ipaddress.ip_network("192.168.0.0/16"),
-    ipaddress.ip_network("198.18.0.0/15"), ipaddress.ip_network("224.0.0.0/4"),
+    ipaddress.ip_network("172.16.0.0/12"), ipaddress.ip_network("192.0.0.0/24"),
+    ipaddress.ip_network("192.168.0.0/16"), ipaddress.ip_network("198.18.0.0/15"),
+    ipaddress.ip_network("224.0.0.0/4"), ipaddress.ip_network("240.0.0.0/4"),
     ipaddress.ip_network("::/128"), ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("100::/64"), ipaddress.ip_network("2001:db8::/32"),
     ipaddress.ip_network("fc00::/7"), ipaddress.ip_network("fe80::/10"),
     ipaddress.ip_network("fec0::/10"), ipaddress.ip_network("ff00::/8"),
 )
@@ -164,12 +170,14 @@ def _addresses(host: str, resolve: Callable[..., list]) -> List[ipaddress._BaseA
 def _addresses_to_judge(ip: ipaddress._BaseAddress) -> List[ipaddress._BaseAddress]:
     """The address and each IPv4 address its form carries: an IPv6 form reaches that address, and a network of the other
     version never contains it. A public IPv4 behind NAT64 stays public, so an IPv6-only cluster keeps its endpoints.
-    Teredo carries two, its server and its client."""
+    Teredo carries two, its server and its client. ISATAP's interface part is 0:5efe, with the universal and group bits free.
+    services/pkg/storeurl reads the forms the same way (address_forms_cases.json)."""
     if ip.version == 4:
         return [ip]
     judged = [ip, *(ip.teredo or ())]
     judged += [carried for carried in (ip.ipv4_mapped, ip.sixtofour) if carried is not None]
-    if any(ip in net for net in IPV4_IN_LOW_BITS):
+    isatap = (int(ip) >> 32) & 0xFCFFFFFF == 0x00005EFE
+    if isatap or any(ip in net for net in IPV4_IN_LOW_BITS):
         judged.append(ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF))
     return judged
 

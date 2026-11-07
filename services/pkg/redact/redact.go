@@ -26,6 +26,7 @@
 package redact
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
@@ -86,12 +87,26 @@ func (o Options) on(rule string) bool { return o.Enabled && !o.Disabled[rule] }
 
 // sensitiveKey matches a credential word at the end of a word of the normalized
 // key (db_password, POSTGRES_PASSWORD, clientSecret → client_secret, apiKey →
-// api_key, and names glued together, PGPASSWORD, APIKEY); "tokenizer" or
-// "max_tokens" do not match.
-var sensitiveKey = regexp.MustCompile(`(^|_)[a-z0-9]*(password|passwd|pwd|secret|token|api_?key|access_?key|private_?key|secretkey|credentials?|dsn|connection_?string)(_|$)`)
+// api_key, names glued together, PGPASSWORD, APIKEY, and the plural, api_keys);
+// "tokenizer" or "max_tokens" do not match. "secrets" and "tokens" stay out: they
+// name a kind and what a model used far more often than they hold a value.
+var sensitiveKey = regexp.MustCompile(`(^|_)[a-z0-9]*(passwords?|passwds?|pwds?|secret|token|api_?keys?|access_?keys?|private_?keys?|secretkeys?|credentials?|dsns?|connection_?strings?)(_|$)`)
 
 // separatedKey: the same words standing apart. A name that matches only the rule above is glued: see leftToTheWordRule.
-var separatedKey = regexp.MustCompile(`(^|_)(password|passwd|pwd|secret|token|api_key|access_key|private_key|credentials?|dsn|connection_string)(_|$)`)
+var separatedKey = regexp.MustCompile(`(^|_)(passwords?|passwds?|pwds?|secret|token|api_keys?|access_keys?|private_keys?|credentials?|dsns?|connection_strings?)(_|$)|[a-z0-9]_pass$`)
+
+// "pass" as a password's short name: the last word after another one (DB_PASS, mysqlPass), or PGPASS. Alone it is a result
+// (pass: true), glued it is another word (bypass, compass), and after these words it is a run or a check that passed,
+// unless the name is in capitals: an environment variable holds the value itself (E2E_PASS).
+var (
+	shortPasswordKey = regexp.MustCompile(`[a-z0-9]_pass$|(^|_)pgpass$`)
+	passOfARun       = regexp.MustCompile(`(^|_)(first|second|third|fourth|last|final|next|prev|previous|by|single|multi|test|tests|unit|e2e|lint|check|checks|build|gate|scan|summary|result|results|total|all)_pass$`)
+)
+
+func isShortPassword(key string) bool {
+	k := normalizeKey(strings.TrimLeft(key, "-"))
+	return shortPasswordKey.MatchString(k) && (key == strings.ToUpper(key) || !passOfARun.MatchString(k))
+}
 
 // notSecretKey: names that contain a credential word but are references or
 // settings, not values (secretName, secretKeyRef, token_ttl, password_min_length).
@@ -128,7 +143,7 @@ var envListJSON = regexp.MustCompile(`("name"[ \t]*:[ \t]*"([A-Za-z0-9_.\-]+)"[ 
 // credentialLastWord: the key's last word says the value itself is the credential, so a number there is one. Under
 // password_expiry_days, token or secret a number may be a setting or a count, and hiding it would change what the
 // reader is told.
-var credentialLastWord = regexp.MustCompile(`(^|_)[a-z0-9]*(password|passwd|pwd|api_?key|access_?key|secret_?key|private_?key|client_?secret)$`)
+var credentialLastWord = regexp.MustCompile(`(^|_)[a-z0-9]*(password|passwd|pwd|api_?key|access_?key|secret_?key|private_?key|client_?secret)$|[a-z0-9]_pass$|(^|_)pgpass$`)
 
 // The shell's own variables, as the shell spells them: PWD=/app says where a process runs. DB_PWD=/x, and an ODBC
 // connection string's Pwd=/x, are a password whatever they look like.
@@ -183,6 +198,17 @@ func holdsCredential(key, value string, isString, isNumber bool) bool {
 	return false
 }
 
+// decodedCredential is holdsCredential for a value out of a decoder, whose numbers come in several types.
+func decodedCredential(key string, v any) bool {
+	switch t := v.(type) {
+	case string:
+		return holdsCredential(key, t, true, false)
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64, json.Number:
+		return holdsCredential(key, "", false, true)
+	}
+	return false
+}
+
 // blockKey: a value given as a YAML block (token: |, password: >-), on the lines below the key, which the line rules do
 // not read. Group 1 = what stands before the key, 2 = the key.
 var blockKey = regexp.MustCompile(`^([ \t]*(?:-[ \t]+)?)"?([A-Za-z0-9_.\-]+)"?[ \t]*:[ \t]*[|>][0-9+\-]*[ \t]*(?:#.*)?\r?$`)
@@ -232,9 +258,100 @@ func maskBlockValues(s string, st *Stats) string {
 	return strings.Join(out, "\n")
 }
 
+// listKey: a key with nothing after it, whose value may be the list on the lines below. listItem: one item of that list.
+var (
+	listKey  = regexp.MustCompile(`^([ \t]*(?:-[ \t]+)?)"?([A-Za-z0-9_.\-]+)"?[ \t]*:[ \t]*(?:#.*)?\r?$`)
+	listItem = regexp.MustCompile(`^([ \t]*-[ \t]+)(.*?)([ \t]*\r?)$`)
+)
+
+// A JSON string in text, plain or backslash-escaped as an annotation holds it.
+const jsonStringInText = `"(?:[^"\\\r\n]|\\[^\r\n])*"|\\"(?:[^"\\\r\n]|\\[^"\r\n])*\\"`
+
+var (
+	// jsonListInText: `"key": [...]` in a line, up to its bracket or, in text cut short, the line's end. A list holding a
+	// mapping or a list does not match: those have their own keys.
+	jsonListInText = regexp.MustCompile(`(?m)(\\?")([A-Za-z0-9_.\-]+)(\\?"[ \t]*:[ \t]*\[)((?:` + jsonStringInText + `|[^\[\]{}"\\\r\n])*(?:"[^"\r\n]*)?)(\]|\r?$)`)
+	jsonListItem   = regexp.MustCompile(jsonStringInText + `|"[^"\r\n]*$|[^ \t\r\n,"\\]+`)
+	// jsonListOpens: a key whose list goes on below this line, quoted or at the line's start: in a sentence a word before a
+	// colon is not one. jsonListLine: one item on a line of its own.
+	jsonListOpens = regexp.MustCompile(`(?:^[ \t]*(?:-[ \t]+)?"?|")([A-Za-z0-9_.\-]+)"?[ \t]*:[ \t]*\[[^\]\r\n]*\r?$`)
+	jsonListLine  = regexp.MustCompile(`^([ \t]*)(` + jsonStringInText + `|"[^"\r\n]*|[^ \t\r\n,"\\\[\]{}:]+)([ \t,\]}]*\r?)$`)
+)
+
+// maskListItem masks one item of a JSON list under a sensitive key, in the quote it came in, or quote if it had none.
+func maskListItem(key, item, quote string, st *Stats) string {
+	value := item
+	switch {
+	case strings.HasPrefix(item, `\"`):
+		value, quote = strings.TrimSuffix(item[2:], `\"`), `\"`
+	case strings.HasPrefix(item, `"`):
+		value, quote = strings.TrimSuffix(item[1:], `"`), `"`
+	}
+	if valueStays(key, value) {
+		return item
+	}
+	st.add("key_name", 1)
+	return quote + "<REDACTED:" + key + ">" + quote
+}
+
+// maskJSONLists masks a sensitive key's JSON list held in one line of text, which a parser cannot read when the text is a
+// log line or was cut short.
+func maskJSONLists(s string, st *Stats) string {
+	return jsonListInText.ReplaceAllStringFunc(s, func(m string) string {
+		sub := jsonListInText.FindStringSubmatch(m)
+		if !keyIsSensitive(sub[2]) {
+			return m
+		}
+		items := jsonListItem.ReplaceAllStringFunc(sub[4], func(item string) string { return maskListItem(sub[2], item, sub[1], st) })
+		return sub[1] + sub[2] + sub[3] + items + sub[5]
+	})
+}
+
+// maskListValues replaces each item of a sensitive key's list on the lines below it, which the line rules read as words
+// with no key. An item that is a mapping has its own keys, and a count or a state stays as it does on the key's own line.
+// A JSON list is read up to its first line that is not one item, so what follows a mapping in the same list stays.
+func maskListValues(s string, st *Stats) string {
+	if !strings.Contains(s, "\n") {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		if open := jsonListOpens.FindStringSubmatch(line); open != nil && keyIsSensitive(open[1]) {
+			for j := i + 1; j < len(lines); j++ {
+				item := jsonListLine.FindStringSubmatch(lines[j])
+				if item == nil {
+					break
+				}
+				lines[j] = item[1] + maskListItem(open[1], item[2], `"`, st) + item[3]
+			}
+			continue
+		}
+		m := listKey.FindStringSubmatch(line)
+		if m == nil || !keyIsSensitive(m[2]) {
+			continue
+		}
+		for j := i + 1; j < len(lines); j++ {
+			item := listItem.FindStringSubmatch(lines[j])
+			if item == nil || indentOf(lines[j]) < len(m[1]) {
+				break
+			}
+			value, quote := item[2], ""
+			if len(value) >= 2 && (value[0] == '"' || value[0] == '\'') && value[len(value)-1] == value[0] {
+				value, quote = value[1:len(value)-1], value[:1]
+			}
+			if (quote == "" && (strings.Contains(value, ": ") || strings.HasSuffix(value, ":"))) || valueStays(m[2], value) {
+				continue
+			}
+			lines[j] = item[1] + quote + "<REDACTED:" + m[2] + ">" + quote + item[3]
+			st.add("key_name", 1)
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
 func valueLooksHarmless(v string) bool {
 	v = strings.TrimSpace(v)
-	if v == "" || v == "null" || v == "~" || v == "[]" || v == "{}" || v == "|" || v == ">" || v == "|-" || v == ">-" {
+	if v == "" || v == "null" || v == "~" || v == "[]" || v == "{}" || v == "[" || v == "{" || v == "|" || v == ">" || v == "|-" || v == ">-" {
 		return true
 	}
 	if strings.HasPrefix(v, "<REDACTED") || strings.HasPrefix(v, "<set to the key") || strings.HasPrefix(v, "<EMAIL") {
@@ -259,14 +376,14 @@ func onlyNumberCharacters(v string) bool {
 
 func keyIsSensitive(key string) bool {
 	k := normalizeKey(key)
-	return sensitiveKey.MatchString(k) && !notSecretKey.MatchString(k)
+	return (sensitiveKey.MatchString(k) && !notSecretKey.MatchString(k)) || isShortPassword(key)
 }
 
 // A credential among the words of a line (a log line, a command, a connection string, a URL's query). Prose reads the
 // same way ("invalid password: too short"), so only key=value counts there, or a quoted value after = or :, and only a
 // key whose last word is the credential: password_policy=strict and token_count=5 are settings.
 const (
-	inlineWord   = `(?:password|passwd|pwd|secret|token|api[_.\-]?key|access[_.\-]?key|private[_.\-]?key|secret[_.\-]?key|credentials?|dsn|connection[_.\-]?string)`
+	inlineWord   = `(?:passwords?|passwds?|pwds?|secret|token|api[_.\-]?keys?|access[_.\-]?keys?|private[_.\-]?keys?|secret[_.\-]?keys?|credentials?|dsns?|connection[_.\-]?strings?|pgpass|[_.\-]pass)`
 	inlineKey    = `([A-Za-z0-9_.\-]*?` + inlineWord + `)`
 	inlineBefore = `(^|[^A-Za-z0-9_.\-])`
 )
@@ -297,6 +414,9 @@ func inlineValueStays(key, value string) bool {
 		return true
 	}
 	k := normalizeKey(strings.TrimLeft(key, "-"))
+	if strings.HasSuffix(k, "pass") && !isShortPassword(key) {
+		return true // pass=ok, first_pass=done
+	}
 	credential := credentialLastWord.MatchString(k)
 	if !credential && onlyNumberCharacters(v) {
 		return true // token=5, secret=3: a count or a duration
@@ -398,6 +518,8 @@ func Text(s string, o Options) (string, Stats) {
 	}
 	if o.on("key_name") {
 		s = maskBlockValues(s, &st)
+		s = maskListValues(s, &st)
+		s = maskJSONLists(s, &st)
 		s = replaceCount(jsonPair, s, func(m string) string {
 			sub := jsonPair.FindStringSubmatch(m)
 			key, value := sub[2], sub[4]
@@ -748,9 +870,10 @@ func jsonValueEnd(s string, i int) int {
 // --- structured values -----------------------------------------------------
 
 // Object redacts a decoded JSON/YAML value in place: map keys that look like
-// credentials lose their string values, every string goes through Text, and
-// a map with kind: Secret loses data/stringData wherever they sit under it,
-// with the last-applied annotation of any annotations under it.
+// credentials lose their values, a container env entry's value follows its
+// name, every string goes through Text, and a map with kind: Secret loses
+// data/stringData wherever they sit under it, with the last-applied annotation
+// of any annotations under it.
 func Object(v any, o Options) (any, Stats) {
 	var st Stats
 	return walk(v, o, &st, false), st
@@ -818,14 +941,28 @@ func walk(v any, o Options, st *Stats, secret bool) any {
 		if secret {
 			maskSecretFields(t, st)
 		}
+		envName, _ := t["name"].(string) // the key is "value", so the name decides
 		for k, val := range t {
 			if secret && secretValueFields[k] {
 				continue
 			}
-			if s, ok := val.(string); ok && o.on("key_name") && keyIsSensitive(k) && !valueLooksHarmless(s) && !isWorkingDirectory(k, s) {
+			if o.on("key_name") && decodedCredential(k, val) {
 				t[k] = "<REDACTED:" + k + ">"
 				st.add("key_name", 1)
 				continue
+			}
+			if k == "value" && o.on("key_name") && decodedCredential(envName, val) {
+				t[k] = "<REDACTED:" + envName + ">"
+				st.add("key_name", 1)
+				continue
+			}
+			if list, ok := val.([]any); ok && o.on("key_name") && keyIsSensitive(k) {
+				for i, item := range list {
+					if decodedCredential(k, item) {
+						list[i] = "<REDACTED:" + k + ">"
+						st.add("key_name", 1)
+					}
+				}
 			}
 			t[k] = walk(val, o, st, secret)
 		}

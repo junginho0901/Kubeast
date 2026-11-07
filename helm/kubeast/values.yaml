@@ -664,10 +664,11 @@ networkPolicy:
 # Prometheus dependency was introduced; flip to `true` to opt in.
 features:
   # The metrics and log store URLs people enter in Admin → Clusters → Edit.
-  # Empty: any address but cloud metadata and link-local (never allowed) and
-  # k8s-service's own machine, so a store on a private address needs nothing
-  # here. Listed (exact hosts, or ".example.com" for the host and its
-  # subdomains): only these hosts, and a store on localhost must be listed.
+  # Empty: any address but cloud metadata and link-local (never allowed),
+  # k8s-service's own machine and addresses nothing answers on, so a store on a
+  # private address needs nothing here. Listed (exact hosts, or ".example.com"
+  # for the host and its subdomains): only these hosts, and a store on localhost
+  # must be listed.
   # features.prometheus.url and features.logSearch.url are not limited by this.
   clusterStoreAllowedHosts: []
   # Metrics. By default Kubeast looks for a Prometheus Service inside each

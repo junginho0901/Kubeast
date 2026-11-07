@@ -3,11 +3,13 @@
 // saved, before each request and when a name has resolved to an address.
 //
 //   - Cloud metadata and link-local addresses are never called.
-//   - The service's own machine (loopback, unspecified) is called only when its host is on the allow list.
+//   - The service's own machine (loopback, unspecified) and addresses nothing answers on are called only when their host
+//     is on the allow list.
 //   - Anything else, private ranges included, is open while the list is empty: stores in the cluster or the company
 //     network are the usual case. With a list, only the hosts on it.
 //
-// The chart's own store URLs are the installer's and do not come through here.
+// An IPv6 form counts as each IPv4 address it carries. The chart's own store URLs are the installer's and do not come
+// through here.
 package storeurl
 
 import (
@@ -33,16 +35,25 @@ const allowedHostsValue = "features.clusterStoreAllowedHosts"
 var (
 	errMetadata  = errors.New("cloud metadata and link-local addresses are not allowed")
 	errOwnHost   = errors.New("this address is the service's own machine; to use it, add the host to " + allowedHostsValue)
+	errNoAnswer  = errors.New("nothing answers on this address; to use it, add the host to " + allowedHostsValue)
 	errNotOnList = errors.New("this host is not in " + allowedHostsValue)
 )
 
-var metadataHosts = map[string]bool{"metadata.google.internal": true, "metadata": true, "instance-data": true}
+var metadataHosts = map[string]bool{"metadata.google.internal": true, "metadata.goog": true, "metadata": true, "instance-data": true}
 
 var (
-	metadataNetworks = []netip.Prefix{netip.MustParsePrefix("169.254.0.0/16"), netip.MustParsePrefix("fe80::/10"), netip.MustParsePrefix("fd00:ec2::254/128")}
+	// Besides the link-local ranges: AWS's IPv6 metadata address, Alibaba Cloud's metadata address and Azure's platform address.
+	metadataNetworks = []netip.Prefix{netip.MustParsePrefix("169.254.0.0/16"), netip.MustParsePrefix("fe80::/10"), netip.MustParsePrefix("fd00:ec2::254/128"), netip.MustParsePrefix("fd20:ce::254/128"), netip.MustParsePrefix("100.100.100.200/32"), netip.MustParsePrefix("168.63.129.16/32")}
 	ownHostNetworks  = []netip.Prefix{netip.MustParsePrefix("127.0.0.0/8"), netip.MustParsePrefix("::1/128"), netip.MustParsePrefix("0.0.0.0/8"), netip.MustParsePrefix("::/128")}
-	nat64            = netip.MustParsePrefix("64:ff9b::/96")
+	// Multicast, the broadcast address and the prefix routers discard (RFC 6666). Class E, 192.0.0.0/24, 2001:db8::/32 and
+	// site-local are not here: a Google Cloud subnet and kubeadm's dual-stack examples use the first three for a cluster, and
+	// a network may keep the last as a private range.
+	noAnswerNetworks = []netip.Prefix{netip.MustParsePrefix("224.0.0.0/4"), netip.MustParsePrefix("ff00::/8"), netip.MustParsePrefix("255.255.255.255/32"), netip.MustParsePrefix("100::/64")}
+	teredo           = netip.MustParsePrefix("2001::/32")
 	sixToFour        = netip.MustParsePrefix("2002::/16")
+	// IPv6 forms with an IPv4 address in their low 32 bits: NAT64, a site's own NAT64 (RFC 8215, read as its usual /96),
+	// IPv4-translated (SIIT) and the old IPv4-compatible one.
+	ipv4InLowBits = []netip.Prefix{netip.MustParsePrefix("64:ff9b::/96"), netip.MustParsePrefix("64:ff9b:1::/48"), netip.MustParsePrefix("::ffff:0:0:0/96"), netip.MustParsePrefix("::/96")}
 )
 
 func allowedHosts() []string {
@@ -66,22 +77,39 @@ func listed(host string, allowed []string) bool {
 
 func normalize(host string) string { return strings.ToLower(strings.TrimSuffix(host, ".")) }
 
-// plain is the IPv4 address an IPv6 spelling carries, or the address itself.
-func plain(a netip.Addr) netip.Addr {
+// reached is the address and each IPv4 address its form carries: an IPv6 form reaches that address, and a network of the
+// other version never contains it. A public IPv4 address behind NAT64 stays open. Teredo carries two, its server and its
+// client, which is stored inverted. ISATAP's interface part is 0:5efe, with the universal and group bits free.
+func reached(a netip.Addr) []netip.Addr {
 	a = a.Unmap().WithZone("")
-	b := a.As16()
-	switch {
-	case nat64.Contains(a):
-		return netip.AddrFrom4([4]byte(b[12:16]))
-	case sixToFour.Contains(a):
-		return netip.AddrFrom4([4]byte(b[2:6]))
+	if a.Is4() {
+		return []netip.Addr{a}
 	}
-	return a
+	b := a.As16()
+	isatap := b[8]&^0x03 == 0 && b[9] == 0 && b[10] == 0x5e && b[11] == 0xfe
+	switch {
+	case teredo.Contains(a):
+		return []netip.Addr{a, netip.AddrFrom4([4]byte(b[4:8])), netip.AddrFrom4([4]byte{^b[12], ^b[13], ^b[14], ^b[15]})}
+	case sixToFour.Contains(a):
+		return []netip.Addr{a, netip.AddrFrom4([4]byte(b[2:6]))}
+	case isatap || inAny(a, ipv4InLowBits):
+		return []netip.Addr{a, netip.AddrFrom4([4]byte(b[12:16]))}
+	}
+	return []netip.Addr{a}
+}
+
+func inAny(a netip.Addr, networks []netip.Prefix) bool {
+	for _, n := range networks {
+		if n.Contains(a) {
+			return true
+		}
+	}
+	return false
 }
 
 func in(a netip.Addr, networks []netip.Prefix) bool {
-	for _, n := range networks {
-		if n.Contains(a) {
+	for _, r := range reached(a) {
+		if inAny(r, networks) {
 			return true
 		}
 	}
@@ -97,9 +125,6 @@ func CheckURL(raw string) error {
 	}
 	host := normalize(u.Hostname())
 	addr, addrErr := netip.ParseAddr(host)
-	if addrErr == nil {
-		addr = plain(addr)
-	}
 	if metadataHosts[host] || (addrErr == nil && in(addr, metadataNetworks)) {
 		return errMetadata
 	}
@@ -113,6 +138,9 @@ func CheckURL(raw string) error {
 	if host == "localhost" || strings.HasSuffix(host, ".localhost") || (addrErr == nil && in(addr, ownHostNetworks)) {
 		return errOwnHost
 	}
+	if addrErr == nil && in(addr, noAnswerNetworks) {
+		return errNoAnswer
+	}
 	return nil
 }
 
@@ -122,12 +150,16 @@ func checkDialled(address string, hostListed bool) error {
 	if err != nil {
 		return fmt.Errorf("cannot read the address %q: %w", address, err)
 	}
-	a := plain(ap.Addr())
+	a := ap.Addr()
 	switch {
 	case in(a, metadataNetworks):
 		return errMetadata
-	case in(a, ownHostNetworks) && !hostListed:
+	case hostListed:
+		return nil
+	case in(a, ownHostNetworks):
 		return errOwnHost
+	case in(a, noAnswerNetworks):
+		return errNoAnswer
 	}
 	return nil
 }

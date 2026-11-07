@@ -1,8 +1,14 @@
 """M19: a model config may only read the key variables meant for it, send
 them to public endpoints (or allow-listed hosts) and carry no auth headers."""
+import json
+from pathlib import Path
+
 import pytest
 
 from app.services import model_config_policy as policy
+
+ADDRESS_CASES = json.loads((Path(__file__).parent / "fixtures" / "address_forms_cases.json").read_text())
+LIST_VARIABLE = "AI_BASE_URL_ALLOWED_HOSTS"
 
 
 def _resolver(table):
@@ -11,6 +17,35 @@ def _resolver(table):
             raise OSError("no such host")
         return [(None, None, None, None, (ip, 0)) for ip in table[host]]
     return resolve
+
+
+@pytest.mark.parametrize("case", ADDRESS_CASES, ids=lambda c: c["address"])
+def test_shared_address_cases(monkeypatch, case):
+    """The same addresses run in services/pkg/storeurl (TestSharedAddressCases), where private ranges are open: "model" is
+    what this rule answers and "store" what that one does. Written as the host and as what a name resolves to."""
+    address = case["address"]
+    literal = f"http://[{address}]:8080/v1" if ":" in address else f"http://{address}:8080/v1"
+    named = "https://gw.example.com/v1"
+    resolve = _resolver({"gw.example.com": [address]})
+    monkeypatch.delenv(LIST_VARIABLE, raising=False)
+    if case["model"] == "never":
+        for url in (literal, named):
+            with pytest.raises(policy.PolicyError, match="not allowed"):
+                policy.check_base_url(url, resolve)
+        monkeypatch.setenv(LIST_VARIABLE, address)
+        with pytest.raises(policy.PolicyError, match="not allowed"):
+            policy.check_base_url(literal, resolve)
+    elif case["model"] == "listed":
+        for url in (literal, named):
+            with pytest.raises(policy.PolicyError, match=LIST_VARIABLE):
+                policy.check_base_url(url, resolve)
+        monkeypatch.setenv(LIST_VARIABLE, f"{address}, gw.example.com")
+        policy.check_base_url(literal, resolve)
+        policy.check_base_url(named, resolve)
+    else:
+        assert case["model"] == "open"
+        policy.check_base_url(literal, resolve)
+        policy.check_base_url(named, resolve)
 
 
 def test_api_key_env_allow_list():
@@ -60,6 +95,8 @@ def test_base_url_private_addresses_need_the_allow_list(monkeypatch):
         policy.check_base_url("http://169.254.169.254/", resolve)  # metadata never, listed or not
     with pytest.raises(policy.PolicyError):
         policy.check_base_url("http://metadata.google.internal/", resolve)
+    with pytest.raises(policy.PolicyError):
+        policy.check_base_url("http://metadata.goog/", resolve)
 
 
 def test_base_url_unresolvable_is_refused():
