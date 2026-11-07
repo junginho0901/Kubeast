@@ -9,6 +9,7 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"net/url"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -195,7 +196,9 @@ type Multiplexer struct {
 	MaxSubscriptionsPerConn int
 	// Sessions ends a socket whose session stopped standing (nil: not checked).
 	Sessions *auth.LiveSessions
-	provider ClientProvider
+	// PanicRetryDelay is the wait after a panic; 0 = the five seconds a failed watch waits.
+	PanicRetryDelay time.Duration
+	provider        ClientProvider
 
 	// MaxWatchStarts is how many watches of one cluster may be starting at once: 0 = the default above.
 	MaxWatchStarts int
@@ -300,6 +303,13 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			cancel()
 			_ = conn.Close()
+		}()
+		// This socket and no other. The wait comes before the close, since the browser connects again and asks for its lists.
+		defer func() {
+			if r := recover(); r != nil {
+				logPanic("ws writer panicked: this connection ends", r, "id", wsID)
+				pause(ctx, m.panicWait())
+			}
 		}()
 		ticker := time.NewTicker(pingPeriod)
 		defer ticker.Stop()
@@ -408,6 +418,13 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 			go func() {
 				defer m.forgetSubscription(key, sub, connSubs)
+				// The check runs before runWatch and its recover.
+				defer func() {
+					if r := recover(); r != nil {
+						logPanic("watch check panicked: this watch ends", r, "path", req.Path, "cluster", req.ClusterID)
+						send(ctx, sendCh, req.errorFrame("this list could not be followed; open the page again", reasonFailed))
+					}
+				}()
 				if refusal := m.clusterListRefusal(subCtx, payload, effectiveClusterID(clusterID), req); refusal != "" {
 					send(ctx, sendCh, req.errorFrame(refusal, reasonScope))
 					return
@@ -492,12 +509,56 @@ func (m *Multiplexer) forgetSubscription(key string, sub *subscription, connSubs
 	}
 }
 
+func (m *Multiplexer) panicWait() time.Duration {
+	if m.PanicRetryDelay > 0 {
+		return m.PanicRetryDelay
+	}
+	return watchRetryDelay()
+}
+
+// logPanic leaves a recovered panic's type and stack in the log and not its value, which may hold what an object held.
+func logPanic(message string, value any, attrs ...any) {
+	slog.Error(message, append(attrs, "panic_type", fmt.Sprintf("%T", value), "stack", string(debug.Stack()))...)
+}
+
 // resourceVersionExpired is the API server saying a watch cannot resume from the version it was asked for.
 func resourceVersionExpired(err error) bool {
 	return apierrors.IsResourceExpired(err) || apierrors.IsGone(err)
 }
 
+// watchProgress is what a watch goes on from after a panic.
+type watchProgress struct {
+	version string
+	resync  bool
+}
+
+// runWatch follows req until its context ends or there is nothing to follow. Nothing above it recovers, so a panic on one
+// object would end the service for everyone. It ends one try: the client is told, the wait keeps the same panic from
+// spinning, and the watch goes on from its version, past that object, with the list read again.
 func (m *Multiplexer) runWatch(ctx context.Context, req RequestMessage, sendCh chan<- ResponseMessage) {
+	var progress watchProgress
+	for m.watchPanicked(ctx, req, sendCh, &progress) {
+		message := "this list could not be followed for a moment; it goes on by itself"
+		if !send(ctx, sendCh, req.errorFrame(message, reasonFailed)) || !pause(ctx, m.panicWait()) {
+			return
+		}
+		progress.resync = true
+	}
+}
+
+// watchPanicked runs one try of req's watch and reports whether a panic ended it.
+func (m *Multiplexer) watchPanicked(ctx context.Context, req RequestMessage, sendCh chan<- ResponseMessage, progress *watchProgress) (panicked bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			panicked = true
+			logPanic("watch panicked: this watch tries again", r, "path", req.Path, "cluster", req.ClusterID)
+		}
+	}()
+	m.followWatch(ctx, req, sendCh, progress)
+	return false
+}
+
+func (m *Multiplexer) followWatch(ctx context.Context, req RequestMessage, sendCh chan<- ResponseMessage, progress *watchProgress) {
 	resource, namespace, err := parsePath(req.Path)
 	if err != nil {
 		send(ctx, sendCh, req.errorFrame(err.Error(), reasonUnsupported))
@@ -516,10 +577,12 @@ func (m *Multiplexer) runWatch(ctx context.Context, req RequestMessage, sendCh c
 	}
 	gvr = m.servedVersion(ctx, gvr)
 
-	var lastResourceVersion string
+	lastResourceVersion := progress.version
+	// Kept on the way out of a panic too: forwardEvents moves the version before it makes the object's row.
+	defer func() { progress.version = lastResourceVersion }()
 	// A watch from no version sends the objects there are, not those deleted since, so the client has to read its list
 	// again (Kubernetes API Concepts, "410 Gone responses").
-	resync := req.Resync
+	resync := progress.resync || req.Resync
 
 	for {
 		if ctx.Err() != nil {

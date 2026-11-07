@@ -211,7 +211,8 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 	for running := false; !running; {
 		select {
 		case <-ctx.Done():
-			fail(ctx.Err())
+			// The cause: a session's end says which, where ctx.Err() only says canceled.
+			fail(context.Cause(ctx))
 			if code := auth.SessionEndCode(ctx); code != "" {
 				_ = conn.WriteMessage(websocket.TextMessage, []byte(sessionEndNotice(code, r.URL.Query().Get("lang"))))
 				_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(auth.SessionEndedCloseCode, code), time.Now().Add(time.Second))

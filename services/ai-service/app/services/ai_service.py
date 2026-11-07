@@ -295,34 +295,10 @@ class AIService:
         from app.services.ai.optimization import build_optimization_observations
         return await build_optimization_observations(self, namespace, lang)
 
-    def _detect_output_preference(self, text: Optional[str]) -> Optional[str]:
-        from app.services.ai.intent import detect_output_preference
-        return detect_output_preference(text)
-
-    def _mentions_events(self, text: Optional[str]) -> bool:
-        from app.services.ai.intent import mentions_events
-        return mentions_events(text)
-
-    def _mentions_logs(self, text: Optional[str]) -> bool:
-        from app.services.ai.intent import mentions_logs
-        return mentions_logs(text)
-
-    def _mentions_describe(self, text: Optional[str]) -> bool:
-        from app.services.ai.intent import mentions_describe
-        return mentions_describe(text)
-
     def _filter_tools_for_output_preference(self, tools: List[Dict], user_text: Optional[str]) -> List[Dict]:
         from app.services.ai.intent import filter_tools_for_output_preference
         return filter_tools_for_output_preference(tools, user_text)
 
-    def _render_k8s_resource_payload(self, payload) -> str:
-        from app.services.ai.intent import render_k8s_resource_payload
-        return render_k8s_resource_payload(payload)
-
-    def _extract_suggestions(self, message: str) -> List[str]:
-        from app.services.ai.intent import extract_suggestions
-        return extract_suggestions(message)
-    
     async def session_chat_stream(
         self,
         session_id: str,

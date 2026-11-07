@@ -264,3 +264,16 @@ func TestValidateCarriesTheTokensExpiry(t *testing.T) {
 		t.Fatalf("ExpiresAt = %d, want %d", p.ExpiresAt, exp)
 	}
 }
+
+// Nothing above the check's goroutine recovers: a panic there ends the connection it holds and not the service.
+func TestAPanicInTheSessionCheckEndsThatConnection(t *testing.T) {
+	s := NewLiveSessions(LiveSessionConfig{
+		Lookup:     func(context.Context, string, string) (int, error) { panic("the store answered nonsense") },
+		CheckEvery: 5 * time.Millisecond, CacheTTL: time.Millisecond, StaleTTL: 150 * time.Millisecond,
+	})
+	held, release := s.Hold(context.Background(), TokenPayload{UserID: "u1", TokenVersion: 5})
+	defer release()
+	if got := waitEnded(t, held); got != SessionUnverified {
+		t.Fatalf("code = %q, want %q", got, SessionUnverified)
+	}
+}

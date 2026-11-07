@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"runtime/debug"
 	"sync"
 	"time"
 )
@@ -148,6 +150,13 @@ func (s *LiveSessions) Hold(ctx context.Context, p TokenPayload) (context.Contex
 }
 
 func (s *LiveSessions) watch(ctx context.Context, end context.CancelCauseFunc, p TokenPayload) {
+	// Nothing above this goroutine recovers. A session that cannot be checked does not stand, and the service stays up.
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("session check panicked: this connection ends", "panic_type", fmt.Sprintf("%T", r), "stack", string(debug.Stack()))
+			end(&SessionEndError{Code: SessionUnverified})
+		}
+	}()
 	ticker := time.NewTicker(s.cfg.CheckEvery)
 	defer ticker.Stop()
 	verified := time.Now()
