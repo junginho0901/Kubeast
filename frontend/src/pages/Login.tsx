@@ -15,6 +15,7 @@ type Mode = 'login' | 'register'
 // Error codes the OIDC callback sends back as /login?error=<code>. Anything
 // else is reported generically; details stay in the server log and audit row.
 const SSO_ERROR_KEYS: Record<string, [string, string]> = {
+  oidc_account_conflict: ['login.errors.ssoAccountConflict', 'An account with this name already exists and signs in with its password. Ask an administrator.'],
   oidc_denied: ['login.errors.ssoDenied', 'Sign-in was cancelled or refused by the identity provider.'],
   oidc_domain: ['login.errors.ssoDomain', 'This email domain is not allowed to sign in.'],
   oidc_email_unverified: ['login.errors.ssoEmailUnverified', 'The identity provider has not verified this email address.'],

@@ -150,7 +150,7 @@ func (h *AuthHandler) SetUserClusterRole(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	setErr := h.repo.SetUserClusterRole(r.Context(), userID, clusterID, role.ID, namespaces)
+	setErr := h.repo.SetUserClusterRoleEndingTokens(r.Context(), userID, clusterID, role.ID, namespaces)
 	h.auditClusterRole(r, "user.cluster_role.set", payload, userID, target.Email, clusterID, after, setErr)
 	if setErr != nil {
 		response.Error(w, http.StatusInternalServerError, setErr.Error())
@@ -159,9 +159,6 @@ func (h *AuthHandler) SetUserClusterRole(w http.ResponseWriter, r *http.Request)
 	// A direct grant is permanent: an approved access request behind the old
 	// grant is over.
 	h.endApprovedRequests(r, userID, clusterID, repository.EndReasonSuperseded)
-	if err := h.repo.BumpTokenVersion(r.Context(), userID); err != nil { // tokens carry the old matrix
-		slog.Warn("cluster role: bump token version failed", "user", userID, "err", err)
-	}
 	response.JSON(w, http.StatusOK, map[string]any{"cluster_id": clusterID, "role": req.Role, "namespaces": namespaces})
 }
 
@@ -186,14 +183,13 @@ func (h *AuthHandler) DeleteUserClusterRole(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	existed, delErr := h.repo.DeleteUserClusterRole(r.Context(), userID, clusterID)
+	existed, delErr := h.repo.DeleteUserClusterRoleEndingTokens(r.Context(), userID, clusterID)
 	h.auditClusterRole(r, "user.cluster_role.unset", payload, userID, target.Email, clusterID, nil, delErr)
 	if delErr != nil {
 		response.Error(w, http.StatusInternalServerError, delErr.Error())
 		return
 	}
 	if existed {
-		_ = h.repo.BumpTokenVersion(r.Context(), userID) // tokens carry the old matrix
 		h.endApprovedRequests(r, userID, clusterID, repository.EndReasonRevoked)
 	}
 	if !existed {

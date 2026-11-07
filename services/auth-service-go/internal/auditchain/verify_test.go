@@ -139,3 +139,46 @@ func TestDefaultRangeStartsAtTheLastAnchor(t *testing.T) {
 		t.Fatalf("empty last anchor should fall back to the oldest row: from = %d", from)
 	}
 }
+
+// What the documents state as the limit of the chain alone: rows cut from its end leave a shorter chain that is whole,
+// and with no anchor a rewritten chain has nothing outside the database to disagree with.
+func TestVerifyCannotSeeRowsCutFromTheEndAfterTheLastAnchor(t *testing.T) {
+	f := chainOf(10)
+	f.anchors = []Anchor{{ID: 1, FromSeq: 1, ToSeq: 6, Rows: 6, HeadHash: f.rows[5].Hash}}
+	f.rows = f.rows[:8] // seq 9 and 10 gone, both sealed, both after the anchor
+	_, newest, _, err := f.Bounds(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep := verify(t, f, 1, newest, nil, false)
+	if !rep.OK || rep.ToSeq != 8 {
+		t.Fatalf("report = %+v", rep)
+	}
+}
+
+func TestVerifySeesRowsCutBeforeTheLastAnchor(t *testing.T) {
+	f := chainOf(10)
+	f.anchors = []Anchor{{ID: 1, FromSeq: 1, ToSeq: 6, Rows: 6, HeadHash: f.rows[5].Hash}}
+	f.rows = f.rows[:4] // seq 5 and up gone, the anchored head with them
+	rep := verify(t, f, 1, 6, nil, false)
+	if rep.OK && len(rep.Anchors) != 0 {
+		t.Fatalf("report = %+v", rep)
+	}
+	if rep.ToSeq >= 6 {
+		t.Fatalf("report = %+v, the walk cannot reach the anchored head", rep)
+	}
+}
+
+func TestVerifyCannotSeeARewrittenChainWithoutAnAnchor(t *testing.T) {
+	f := chainOf(5)
+	f.rows[2].Canon += "x"
+	prev := f.rows[1].Hash
+	for i := 2; i < len(f.rows); i++ {
+		f.rows[i].Prev = prev
+		f.rows[i].Hash = RowHash(prev, f.rows[i].Canon)
+		prev = f.rows[i].Hash
+	}
+	if rep := verify(t, f, 1, 5, nil, false); !rep.OK {
+		t.Fatalf("report = %+v", rep)
+	}
+}

@@ -16,6 +16,9 @@ func TestLokiQuery_MetricSeriesForTheChart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(*seen) == 0 { // a failed call is an answer here, and a panic would end the run of every test after this one
+		t.Fatalf("k8s-service was not asked: %s", out)
+	}
 	r := (*seen)[0]
 	q := r.URL.Query()
 	start, _ := time.Parse(time.RFC3339, q.Get("start"))

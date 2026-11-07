@@ -137,6 +137,9 @@ These read Prometheus:
   - Discovery runs as the overview cache identity (`kubeast:cache`, `view`), so it must be able to read the Service list of every namespace (as in §1).
 - **Central store** (a Prometheus-compatible API such as Thanos, Mimir or VictoriaMetrics): enter the URL, authentication and cluster label value in Admin → Clusters → Edit.
   The metrics below must then carry that cluster label.
+  - **Addresses allowed** (this URL and the log store's in §14): private addresses and cluster DNS names work as they are. Cloud metadata and link-local addresses never do. k8s-service's own machine (`localhost`, `127.0.0.1`) needs its host in `features.clusterStoreAllowedHosts`; a non-empty list allows only the hosts on it (exact, or `.example.com` for the host and its subdomains). The rule runs when the URL is saved and when k8s-service connects, where a refusal shows as the store's status.
+  - A store's redirect is followed on its own host only (http to https, a path behind a proxy). A redirect to another host is refused: register the address the store answers on.
+  - `features.prometheus.url` and `features.logSearch.url` are the installer's and are not limited by this.
   See [Operations — "Prometheus source" in dashboard quick actions](operations.md#dashboard-quick-actions-issues--optimization--storage).
 - **Through Grafana**: use this when the store's query API is not exposed and exists only as a Grafana data source.
   - URL: Grafana's data source proxy, `https://<Grafana>/api/datasources/proxy/uid/<data source UID>`.
@@ -355,6 +358,9 @@ The inbox and investigations start with a webhook sent by Alertmanager or Grafan
 
 - **Where to send**: `POST <Kubeast URL>/api/v1/alerts/webhook?cluster=<Kubeast cluster ID>`. The cluster ID is the ID in Admin → Clusters. Use a separate receiver (or `cluster` value) for each cluster.
 - **Authentication**: `Authorization: Bearer <ALERT_WEBHOOK_TOKEN of kubeast-secrets>`. The chart creates the token and keeps it on upgrade. With `secrets.existingSecret`, you must put it in that Secret.
+  - That token posts for any cluster, so whoever can read one cluster's Alertmanager config can post alerts for the others.
+  - Each cluster also has its own token, which posts for that cluster only and does not reveal the shared one: `printf %s '<cluster ID>' | openssl dgst -sha256 -hmac '<ALERT_WEBHOOK_TOKEN>' -r | cut -d' ' -f1`.
+  - Both work by default, so receivers already set up go on working. Move each receiver to its cluster's token, then set `features.alertInvestigation.webhookClusterTokensOnly: true` to refuse the shared one (401, audit `alert.webhook.refuse` with `after.reason: shared token refused`).
 - **Inbox**: received alerts, whatever their severity, firing or resolved, stay in the Alerts menu as one row per alert (same cluster, fingerprint and `startsAt`).
   - Resolution notices are needed, so keep `send_resolved: true` (the webhook default).
   - Alertmanager does not send the `endsAt` of firing alerts in the webhook. So an alert that receives nothing for `features.alertInvestigation.inbox.staleAfterHours` after the last receipt shows as "Status unknown". The default is 8, twice `repeat_interval`.
@@ -411,7 +417,7 @@ Loki returns only patterns with 30 or more lines in the window, for the last 3 h
   - With Promtail or Alloy Kubernetes discovery, change them to `namespace`, `pod` and `container`.
 - **Cluster label**: when several clusters go into one Loki, attach a different `k8s.cluster.name` per cluster with the collector's resource processor.
   Pair those values with Kubeast cluster IDs in `features.logSearch.clusters`. Clusters that are not listed have no search.
-- **Per-cluster store**: for a cluster whose logs are in a different Loki, enter that store's URL, authentication, tenant and label value in Admin → Clusters → Edit. This is used before `features.logSearch.url`.
+- **Per-cluster store**: for a cluster whose logs are in a different Loki, enter that store's URL, authentication, tenant and label value in Admin → Clusters → Edit (which addresses are allowed: §3). This is used before `features.logSearch.url`.
   - The label names must be the same as the deployment-wide values, so that store's collector must also send with the same label names.
   - Add that store's host and port to the network policy (below) too.
 - **Permissions**: Kubeast asks for `get pods/log` as the user's identity, in that namespace, or in all namespaces for a cluster-wide search.

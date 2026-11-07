@@ -1,8 +1,10 @@
 """POST /api/v1/alerts/webhook?cluster=<id> — Alertmanager's webhook receiver (payload version 4).
 
 Not behind the signed-in-user dependency: Alertmanager sends Authorization:
-Bearer <ALERT_WEBHOOK_TOKEN> (http_config.authorization). Every alert of the
-message, firing or resolved, goes into the alert inbox (inbox.py). With
+Bearer <token> (http_config.authorization), either ALERT_WEBHOOK_TOKEN or the
+cluster's own token made from it (cluster_token), which posts for that cluster
+only. Every alert of the message, firing or resolved, goes into the alert inbox
+(inbox.py). With
 automatic investigations on (features.alertInvestigation.automatic), each
 firing alert then passes the severity filter, then folds into a recent row of
 the same cluster + fingerprint (Alertmanager repeats a firing group every
@@ -65,6 +67,12 @@ def bearer_matches(authorization: Optional[str], token: str) -> bool:
     if scheme.lower() != "bearer":
         return False
     return hmac.compare_digest(value.strip().encode(), token.encode())
+
+
+def cluster_token(token: str, cluster: str) -> str:
+    """One cluster's webhook token: HMAC-SHA256 of its ID under the shared token, in hex. Nothing new to store, and the
+    shared token cannot be worked out from it, so a cluster's Alertmanager config is good for that cluster only."""
+    return hmac.new(token.encode(), cluster.encode(), hashlib.sha256).hexdigest()
 
 
 def fingerprint_of(alert: AmAlert) -> str:
@@ -162,18 +170,21 @@ async def alert_webhook(
         raise HTTPException(status_code=404, detail="alert investigation is off (features.alertInvestigation.enabled)")
     if not cfg.webhook_token:
         raise HTTPException(status_code=503, detail="webhook token not configured (ALERT_WEBHOOK_TOKEN)")
-    if not bearer_matches(authorization, cfg.webhook_token):
+    cluster = cluster.strip()
+    shared = bearer_matches(authorization, cfg.webhook_token)
+    own = bool(cluster) and bearer_matches(authorization, cluster_token(cfg.webhook_token, cluster))
+    if not own and (not shared or cfg.webhook_cluster_tokens_only):
         # A machine caller, so no actor; the refused attempt is the row (an accepted call is recorded by its inbox
         # rows and investigations).
+        reason = "missing token" if not authorization else "shared token refused" if shared else "token mismatch"
         await write_audit(
-            action="alert.webhook.refuse", target_type="cluster", target_id=cluster.strip() or None,
-            cluster=cluster.strip() or None, result="failure", error="invalid webhook token",
-            after={"reason": "missing token" if not authorization else "token mismatch"},
+            action="alert.webhook.refuse", target_type="cluster", target_id=cluster or None,
+            cluster=cluster or None, result="failure", error="invalid webhook token",
+            after={"reason": reason},
             request_ip=request.headers.get("x-real-ip", "").strip() or (request.client.host if request.client else None),
             user_agent=request.headers.get("user-agent"), path=str(request.url.path),
         )
         raise HTTPException(status_code=401, detail="invalid webhook token")
-    cluster = cluster.strip()
     if not cluster:
         raise HTTPException(status_code=400, detail="cluster query parameter is required (?cluster=<Kubeast cluster id>)")
     try:

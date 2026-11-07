@@ -45,7 +45,7 @@ from app.services.ai.tools import ADMIN_READ_TOOLS, CLUSTER_METRICS_TOOLS, K8S_R
 from app.services.k8s_client import K8sServiceClient
 from app.services.approval_token import ApprovalTokenUnavailable, sign as sign_approval
 from app.services.audit_target import EXEC_TOOL, pod_exec_row, tool_target, write_tool_input
-from app.services.audit_writer import AuditUnavailable, require_audit_ready, write_audit
+from app.services.audit_writer import AuditUnavailable, fail_closed_enabled, require_audit_ready, write_audit
 from app.services.tool_whitelists import write_approval_required
 from app.services.http_shared import ScopedClient
 from app.services.tool_server_client import ToolServerClient
@@ -430,9 +430,12 @@ class KubeastMCPServer(MCPServer):
         after["redacted"] = client.last_redacted
         after["access"] = with_mode(client.last_access, name)
         after["requests"] = client.last_requests
-        await write_audit(**audit, after=after)
+        stored = await write_audit(**audit, after=after)
         if exec_row:
             await write_audit(**exec_row)
+        if stored is False and not is_write and fail_closed_enabled():
+            # As on the screens, a read nobody could find later gives no answer. A write has happened, so it keeps its own.
+            return _text("audit unavailable: the call could not be recorded, so its answer is withheld", error=True)
         return _text(content)
 
     async def _request_access(self, token: AccessToken, payload: TokenPayload, args: Dict[str, Any], context: Optional[Context]) -> CallToolResult:

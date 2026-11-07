@@ -486,17 +486,16 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.repo.UpdateUserPassword(r.Context(), user.ID, newHash); err != nil {
-		h.writeAuditFailure(r, "user.password.change", &user.ID, &user.Email, &user.ID, &user.Email, err.Error(), nil)
-		response.InternalError(w, r, err)
-		return
-	}
 	// Other sessions of this user must log in again with the new password:
 	// bumping token_version invalidates every token issued so far, including
 	// the one this request came with, so the caller gets a fresh one in the
 	// session cookie right here (a later /auth/refresh with the old token
 	// would be refused the same way).
-	_ = h.repo.BumpTokenVersion(r.Context(), user.ID)
+	if err := h.repo.UpdateUserPasswordEndingTokens(r.Context(), user.ID, newHash); err != nil {
+		h.writeAuditFailure(r, "user.password.change", &user.ID, &user.Email, &user.ID, &user.Email, err.Error(), nil)
+		response.InternalError(w, r, err)
+		return
+	}
 
 	// Audit log
 	h.writeAuditLog(r, "user.password.change", &payload.UserID, &user.Email, &user.ID, &user.Email, nil, nil)

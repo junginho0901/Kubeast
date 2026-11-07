@@ -188,6 +188,21 @@ func extractClaims(raw map[string]any, cfg config.OIDCConfig) oidcClaims {
 	return c
 }
 
+// nameTakenByPasswordAccount says whether a provider's name that is no address matches an account made with a password
+// and still holding one, such as the chart's admin. An address is the provider's to vouch for (email_verified,
+// allowedDomains), but with emailClaim on a username anyone who may pick that name would be handed the account. An
+// account the provider made is its own, and a name nobody holds yet makes a new one.
+func (h *AuthHandler) nameTakenByPasswordAccount(ctx context.Context, name string) (bool, error) {
+	if strings.Contains(name, "@") {
+		return false, nil
+	}
+	user, err := h.repo.GetUserByEmail(ctx, name)
+	if err != nil || user == nil {
+		return false, err
+	}
+	return user.AuthSource != model.AuthSourceOIDC && user.PasswordHash != "", nil
+}
+
 func domainAllowed(email string, allowed []string) bool {
 	if len(allowed) == 0 {
 		return true
@@ -412,6 +427,13 @@ func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		h.oidcFail(w, r, "oidc_domain", claims.Email, errors.New("email domain not allowed"))
 		return
 	}
+	if taken, err := h.nameTakenByPasswordAccount(r.Context(), claims.Email); err != nil {
+		h.oidcFail(w, r, "oidc_provision", claims.Email, err)
+		return
+	} else if taken {
+		h.oidcFail(w, r, "oidc_account_conflict", claims.Email, errors.New("a name that is no address matches a password account"))
+		return
+	}
 	groupsLookup := h.addGoogleGroups(r.Context(), &claims)
 
 	user, err := h.provisionOIDCUser(r, claims)
@@ -524,12 +546,12 @@ func (h *AuthHandler) provisionOIDCUser(r *http.Request, claims oidcClaims) (*mo
 			return nil, fmt.Errorf("role %q not found", mapped)
 		}
 		before := jsonRaw(map[string]any{"role": user.RoleName})
-		if err := h.repo.UpdateUserRole(ctx, user.ID, role.ID); err != nil {
+		if err := h.repo.UpdateUserRoleEndingTokens(ctx, user.ID, role.ID); err != nil {
 			return nil, err
 		}
-		_ = h.repo.BumpTokenVersion(ctx, user.ID)
-		if v, err := h.repo.GetTokenVersion(ctx, user.ID); err == nil {
-			user.TokenVersion = v
+		// The token of this sign-in is issued from the new version; with an old one it would be refused at once.
+		if user.TokenVersion, err = h.repo.GetTokenVersion(ctx, user.ID); err != nil {
+			return nil, err
 		}
 		user.RoleID, user.RoleName = role.ID, role.Name
 		h.writeAuditLog(r, "user.role.sync", &user.ID, &user.Email, &user.ID, &user.Email, before,

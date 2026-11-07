@@ -17,6 +17,8 @@ def _int(name: str, default: int) -> int:
 class InvestigationSettings:
     enabled: bool = False
     webhook_token: str = ""
+    # Refuse the shared token: each cluster posts with its own (webhook.cluster_token). Off keeps every receiver working.
+    webhook_cluster_tokens_only: bool = False
     severities: tuple[str, ...] = ("critical", "warning")
     # The webhook queues investigations (off: it only stores the alerts in the inbox).
     automatic: bool = True
@@ -54,6 +56,7 @@ def load() -> InvestigationSettings:
     return InvestigationSettings(
         enabled=os.getenv("ALERT_INVESTIGATION_ENABLED", "false").strip().lower() == "true",
         webhook_token=os.getenv("ALERT_WEBHOOK_TOKEN", "").strip(),
+        webhook_cluster_tokens_only=os.getenv("ALERT_WEBHOOK_CLUSTER_TOKENS_ONLY", "false").strip().lower() == "true",
         severities=severities,
         automatic=_on("ALERT_INVESTIGATION_AUTOMATIC"),
         manual=_on("ALERT_INVESTIGATION_MANUAL"),

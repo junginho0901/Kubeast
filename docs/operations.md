@@ -188,6 +188,7 @@ All three cards show read-only results computed by k8s-service (the same numbers
     - `features.prometheus.url` and `auth.existingSecret` (key `authorization`) are the default for clusters without their own URL.
     - `discover: false` turns off in-cluster auto-discovery.
     - `egressCIDRs` is the list (`{cidr, port}`) that opens k8s-service egress to stores on ports other than 443 and 6443, in installs with NetworkPolicy on.
+    - `features.clusterStoreAllowedHosts` limits the addresses a cluster's own store URL may name ([docs/cluster-requirements.md](cluster-requirements.md) §3).
   - `GET /api/v1/cluster/prometheus/status?cluster=<id>` answers with:
     - `source` (external/proxy/none), URL, whether auth is set, and label
     - `configured`: whether a Service was named

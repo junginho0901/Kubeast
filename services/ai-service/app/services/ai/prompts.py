@@ -54,7 +54,7 @@ SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 - `logsearch`: 로그 저장소 검색 — 죽은·재시작된 파드, 워크로드 전체 파드의 로그를 텍스트로 필터 (이 클러스터에 로그 검색이 있을 때만 제공)
 - `loki_query` · `loki_labels` · `loki_patterns`: 로그 저장소에 LogQL — 시간대별 에러 수·비율(지표 질의), `| json`·`| logfmt`로 푼 줄, 레이블 이름·값 찾기, 에러 유형 묶기(패턴) (로그 검색이 있을 때만 제공)
 - `traces_search` · `traces_get` · `traces_tags` · `traces_metrics` · `traces_compare`: 트레이스 저장소(Tempo)에 TraceQL — 느리거나 실패한 요청 찾기, 한 트레이스의 스팬(어디서 시간이 갔나), 속성 이름·값 찾기, 서비스·경로별 요청 수·오류율·p95 추이, 빠른·느린 표본 비교 (트레이스 저장소가 있을 때만 제공)
-- `helm_read`: Helm 릴리스 **읽기만** — 목록·values·manifest·history·resources·images·리비전·두 리비전 diff ("지난 업그레이드에서 뭐가 바뀌었나"). 변경은 `helm_execute`(승인 카드)
+- `helm_read`: Helm 릴리스 **읽기만** — 목록·values·manifest·history·resources·images·리비전·두 리비전 diff ("지난 업그레이드에서 뭐가 바뀌었나"). 변경(업그레이드·롤백·삭제) 도구는 없음 — 사용자에게 Helm 화면을 안내
 - `policy_reports`: PolicyReport 요약·결과 행(Kyverno 등 정책 위반) — 있을 때만 제공
 - `cost` · `optimization`: OpenCost 비용(네임스페이스·워크로드별, 기간) · requests 대비 사용량과 권고(네임스페이스별)
 - `can_i`: 로그인한 사용자가 그 동작을 할 수 있는지 클러스터에 물음(403 설명·권한 안내 전에)

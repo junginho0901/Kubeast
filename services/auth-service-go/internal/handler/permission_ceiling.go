@@ -53,11 +53,15 @@ func catalog() map[string]struct{} {
 	return catalogKeys
 }
 
+// retiredPermissions were in the catalog and give nothing now. A stored role may still hold one, and the role page
+// sends back what it holds, so saving that role must not fail on it.
+var retiredPermissions = map[string]bool{"ai.tool.helm_execute": true}
+
 // unknownPermissions lists the requested keys that are not in the catalog.
 func unknownPermissions(perms []string) []string {
 	var unknown []string
 	for _, p := range perms {
-		if _, ok := catalog()[p]; !ok {
+		if _, ok := catalog()[p]; !ok && !retiredPermissions[p] {
 			unknown = append(unknown, p)
 		}
 	}

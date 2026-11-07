@@ -120,6 +120,82 @@ var jsonPair = regexp.MustCompile(`(\\?")([A-Za-z0-9_.\-]+)(\\?"[ \t]*:[ \t]*\\?
 var envListYAML = regexp.MustCompile(`(?m)^([ \t]*-?[ \t]*name:[ \t]*"?([A-Za-z0-9_.\-]+)"?[ \t]*\r?\n[ \t]*value:[ \t]*)("?)([^"\r\n]*?)("?)[ \t]*$`)
 var envListJSON = regexp.MustCompile(`("name"[ \t]*:[ \t]*"([A-Za-z0-9_.\-]+)"[ \t]*,[ \t]*"value"[ \t]*:[ \t]*")([^"]*)(")`)
 
+// credentialLastWord: the key's last word says the value itself is the credential, so a number there is one. Under
+// password_expiry_days, token or secret a number may be a setting or a count, and hiding it would change what the
+// reader is told.
+var credentialLastWord = regexp.MustCompile(`(^|_)(password|passwd|pwd|api_key|access_key|secret_key|private_key|client_secret)$`)
+
+// valueStays says whether a sensitive key's text value is left as it is.
+func valueStays(key, value string) bool {
+	if !valueLooksHarmless(value) {
+		return false
+	}
+	v := strings.TrimSpace(value)
+	return v == "" || !onlyNumberCharacters(v) || !credentialLastWord.MatchString(normalizeKey(key))
+}
+
+// holdsCredential says whether a decoded member's value is a credential by its key. true, false and null say nothing.
+func holdsCredential(key, value string, isString, isNumber bool) bool {
+	switch {
+	case !keyIsSensitive(key):
+		return false
+	case isString:
+		return !valueStays(key, value)
+	case isNumber:
+		return credentialLastWord.MatchString(normalizeKey(key))
+	}
+	return false
+}
+
+// blockKey: a value given as a YAML block (token: |, password: >-), on the lines below the key, which the line rules do
+// not read. Group 1 = what stands before the key, 2 = the key.
+var blockKey = regexp.MustCompile(`^([ \t]*(?:-[ \t]+)?)"?([A-Za-z0-9_.\-]+)"?[ \t]*:[ \t]*[|>][0-9+\-]*[ \t]*(?:#.*)?\r?$`)
+
+func indentOf(line string) int { return len(line) - len(strings.TrimLeft(line, " \t")) }
+
+// maskBlockValues replaces a sensitive key's block with one placeholder. The block is what sits deeper than the key, as
+// in YAML; the key's next sibling and blank lines after the block stay.
+func maskBlockValues(s string, st *Stats) string {
+	if !strings.ContainsAny(s, "|>") {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	out := make([]string, 0, len(lines))
+	for i := 0; i < len(lines); {
+		line := lines[i]
+		out = append(out, line)
+		i++
+		m := blockKey.FindStringSubmatch(line)
+		if m == nil || !keyIsSensitive(m[2]) {
+			continue
+		}
+		first, end := "", i
+		for j := i; j < len(lines); j++ {
+			if strings.TrimSpace(lines[j]) == "" {
+				continue
+			}
+			if indentOf(lines[j]) <= len(m[1]) {
+				break
+			}
+			if first == "" {
+				first = lines[j]
+			}
+			end = j + 1
+		}
+		if first == "" {
+			continue
+		}
+		cr := ""
+		if strings.HasSuffix(first, "\r") {
+			cr = "\r"
+		}
+		out = append(out, first[:indentOf(first)]+"<REDACTED:"+m[2]+">"+cr)
+		st.add("key_name", 1)
+		i = end
+	}
+	return strings.Join(out, "\n")
+}
+
 func valueLooksHarmless(v string) bool {
 	v = strings.TrimSpace(v)
 	if v == "" || v == "null" || v == "~" || v == "[]" || v == "{}" || v == "|" || v == ">" || v == "|-" || v == ">-" {
@@ -133,14 +209,16 @@ func valueLooksHarmless(v string) bool {
 		return true
 	}
 	// numbers and short enums (ttl: 60, mode: strict)
-	isNumber := true
+	return onlyNumberCharacters(v)
+}
+
+func onlyNumberCharacters(v string) bool {
 	for _, r := range v {
 		if (r < '0' || r > '9') && r != '.' && r != '-' && r != 'm' && r != 's' && r != 'h' {
-			isNumber = false
-			break
+			return false
 		}
 	}
-	return isNumber
+	return true
 }
 
 func keyIsSensitive(key string) bool {
@@ -217,17 +295,18 @@ func Text(s string, o Options) (string, Stats) {
 		}, &st, "provider_key")
 	}
 	if o.on("key_name") {
+		s = maskBlockValues(s, &st)
 		s = replaceCount(jsonPair, s, func(m string) string {
 			sub := jsonPair.FindStringSubmatch(m)
 			key, value := sub[2], sub[4]
-			if !keyIsSensitive(key) || valueLooksHarmless(value) {
+			if !keyIsSensitive(key) || valueStays(key, value) {
 				return m
 			}
 			return sub[1] + key + sub[3] + "<REDACTED:" + key + ">" + sub[5]
 		}, &st, "key_name")
 		s = replaceCount(envListJSON, s, func(m string) string {
 			sub := envListJSON.FindStringSubmatch(m)
-			if !keyIsSensitive(sub[2]) || valueLooksHarmless(sub[3]) {
+			if !keyIsSensitive(sub[2]) || valueStays(sub[2], sub[3]) {
 				return m
 			}
 			return sub[1] + "<REDACTED:" + sub[2] + ">" + sub[4]
@@ -235,14 +314,14 @@ func Text(s string, o Options) (string, Stats) {
 		s = replaceCount(keyValueLine, s, func(m string) string {
 			sub := keyValueLine.FindStringSubmatch(m)
 			key, value := sub[2], sub[4]
-			if !keyIsSensitive(key) || valueLooksHarmless(value) {
+			if !keyIsSensitive(key) || valueStays(key, value) {
 				return m
 			}
 			return sub[1] + sub[3] + "<REDACTED:" + key + ">" + sub[5]
 		}, &st, "key_name")
 		s = replaceCount(envListYAML, s, func(m string) string {
 			sub := envListYAML.FindStringSubmatch(m)
-			if !keyIsSensitive(sub[2]) || valueLooksHarmless(sub[4]) {
+			if !keyIsSensitive(sub[2]) || valueStays(sub[2], sub[4]) {
 				return m
 			}
 			return sub[1] + sub[3] + "<REDACTED:" + sub[2] + ">" + sub[5]

@@ -130,6 +130,16 @@ test.describe('external Prometheus source', () => {
     await page.keyboard.press('Escape')
   })
 
+  test('an address k8s-service must not call is refused when it is saved, a private one is not', async ({ request }) => {
+    for (const address of ['http://169.254.169.254/', 'http://[fd00:ec2::254]/', 'http://metadata.google.internal/', 'http://127.0.0.1:9090', 'http://localhost:9090']) {
+      const refused = await patch(request, admin, { prometheus_url: address })
+      expect(refused.status(), address).toBe(400)
+      expect(await refused.text(), address).toContain('prometheus_url')
+    }
+    const privateAddress = await patch(request, admin, { prometheus_url: 'http://10.84.0.5:9090' })
+    expect(privateAddress.status(), await privateAddress.text()).toBe(200)
+  })
+
   test('clearing the fields removes the Secret and the cluster is back to no Prometheus', async ({ request }) => {
     const res = await patch(request, admin, { prometheus_url: '', prometheus_cluster_label: '', prometheus_auth: { type: 'none' } })
     expect(res.status()).toBe(200)

@@ -138,6 +138,9 @@ kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator 
   - ② 없으면 이름에 `prometheus`가 들어간 Service 중 **포트 9090**을 다음 Namespace 순서로 찾습니다: `monitoring` → `prometheus` → `jupyterhub` → `kube-system` → `gpu-operator` → `observability` → `default`.
   - 자동 발견은 개요 캐시 신원(`kubeast:cache`, `view`)으로 실행하므로, 이 신원이 모든 Namespace의 Service 목록을 읽을 수 있어야 합니다(§1 설정 그대로면 됩니다).
 - **중앙 저장소**(Thanos·Mimir·VictoriaMetrics 등 Prometheus 호환 API): Admin → Clusters → 편집에 주소·인증·클러스터 레이블 값을 적습니다.
+  - **쓸 수 있는 주소**(이 주소와 §14 로그 저장소 주소): 사설 주소와 클러스터 DNS 이름은 그대로 됩니다. 클라우드 메타데이터와 링크 로컬 주소는 어떤 경우에도 안 됩니다. k8s-service 자기 머신(`localhost`, `127.0.0.1`)은 그 호스트를 `features.clusterStoreAllowedHosts`에 넣어야 합니다. 이 목록을 채우면 목록의 호스트만 됩니다(정확한 이름, 또는 호스트와 하위 도메인을 뜻하는 `.example.com`). 주소를 저장할 때와 k8s-service가 연결할 때 검사하고, 연결 때 거부되면 저장소 상태에 그 이유가 보입니다.
+  - 저장소의 리다이렉트는 같은 호스트 안에서만 따라갑니다(http에서 https로, 프록시 뒤의 경로). 다른 호스트로 가는 리다이렉트는 거부하므로 저장소가 실제로 답하는 주소를 적으세요.
+  - `features.prometheus.url`과 `features.logSearch.url`은 설치자가 정하는 값이라 이 제한을 받지 않습니다.
   - 참고: [운영 기능 — 대시보드 빠른 작업의 "Prometheus 소스"](operations.md#대시보드-빠른-작업-이슈--최적화--스토리지)
   - 이때 아래 지표에는 그 클러스터 레이블이 붙어 있어야 합니다.
 - **Grafana를 거쳐**: 저장소 조회 API를 외부에 열지 않고 Grafana 데이터소스로만 쓰는 환경이면 다음과 같이 적습니다.
@@ -370,6 +373,9 @@ Argo CD가 배포한 객체에 추적 어노테이션(`argocd.argoproj.io/tracki
   - 클러스터마다 수신자(또는 `cluster` 값)를 따로 두세요.
 - **인증**: `Authorization: Bearer <kubeast-secrets의 ALERT_WEBHOOK_TOKEN>`. 토큰은 차트가 만들고 업그레이드할 때도 유지합니다.
   - `secrets.existingSecret`을 쓴다면 그 Secret에 직접 넣어야 합니다.
+  - 이 토큰은 어느 클러스터로도 보낼 수 있습니다. 한 클러스터의 Alertmanager 설정을 읽을 수 있는 사람은 다른 클러스터의 알림도 보낼 수 있습니다.
+  - 클러스터마다 자기 토큰도 있습니다. 그 클러스터로만 보낼 수 있고, 공유 토큰을 알아낼 수 없습니다. `printf %s '<클러스터 ID>' | openssl dgst -sha256 -hmac '<ALERT_WEBHOOK_TOKEN>' -r | cut -d' ' -f1`
+  - 기본값에서는 둘 다 받으므로 이미 설정한 수신자는 그대로 동작합니다. 수신자를 하나씩 클러스터 토큰으로 옮긴 뒤 `features.alertInvestigation.webhookClusterTokensOnly: true`를 켜면 공유 토큰을 거부합니다(401, 감사 `alert.webhook.refuse`, `after.reason: shared token refused`).
 - **받은편지함**: 받은 알림은 심각도나 상태(울리는 중·해결됨)와 관계없이 Alerts 메뉴에 1건당 1행으로 남습니다. 클러스터·fingerprint·`startsAt`이 같으면 같은 알림으로 봅니다.
   - 해결 소식도 받아야 하므로 `send_resolved: true`(웹훅 기본값)로 두세요.
   - Alertmanager는 울리는 알림의 `endsAt`을 웹훅으로 보내지 않습니다. 그래서 마지막으로 받은 뒤 `features.alertInvestigation.inbox.staleAfterHours`(기본 8 — `repeat_interval`의 2배) 동안 새 소식이 없으면 "상태 확인 안 됨"으로 표시합니다.
@@ -423,7 +429,7 @@ Loki는 최근 3시간치 중 창 안에서 30줄 이상 나온 패턴만 돌려
   - Promtail이나 Alloy의 Kubernetes 탐색 방식을 쓴다면 `namespace`·`pod`·`container`로 바꾸세요.
 - **클러스터 라벨**: Loki 하나에 여러 클러스터의 로그를 넣는다면 클러스터마다 다른 `k8s.cluster.name`(수집기의 resource 프로세서)을 붙이고, 그 값을 `features.logSearch.clusters`에 Kubeast 클러스터 ID와 짝지어 적으세요.
   - 여기에 적지 않은 클러스터에서는 검색을 쓸 수 없습니다.
-- **클러스터별 저장소**: 로그가 다른 Loki에 있는 클러스터는 Admin → Clusters → 편집에서 그 저장소의 주소·인증·테넌트·레이블 값을 적습니다. 이 값은 `features.logSearch.url`보다 우선합니다.
+- **클러스터별 저장소**: 로그가 다른 Loki에 있는 클러스터는 Admin → Clusters → 편집에서 그 저장소의 주소·인증·테넌트·레이블 값을 적습니다(쓸 수 있는 주소: §3). 이 값은 `features.logSearch.url`보다 우선합니다.
   - 라벨 이름은 배포 전체 설정과 같아야 하므로, 그 저장소의 수집기도 같은 라벨 이름으로 보내야 합니다.
   - 그 저장소의 호스트와 포트도 아래 네트워크 정책에 추가하세요.
 - **권한**: 사용자 신원으로 `get pods/log` 권한을 확인합니다. 범위는 그 Namespace이고, 전체 검색이면 클러스터 전체입니다.

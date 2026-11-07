@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/model"
+	"github.com/junginho0901/kubeast/services/pkg/storeurl"
 )
 
 // promLabelValue is what a Prometheus label value registered for a cluster may
@@ -29,7 +30,8 @@ func validateLogSearchURL(raw string) error {
 }
 
 // validateStoreURL accepts an absolute http(s) URL without credentials for
-// field; authField names where credentials go instead.
+// field, at an address k8s-service may call (storeurl); authField names where
+// credentials go instead.
 func validateStoreURL(field, authField, raw string) error {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil {
@@ -43,6 +45,9 @@ func validateStoreURL(field, authField, raw string) error {
 	}
 	if u.RawQuery != "" || u.Fragment != "" {
 		return errors.New(field + ": no query string or fragment")
+	}
+	if err := storeurl.CheckURL(raw); err != nil {
+		return errors.New(field + ": " + err.Error())
 	}
 	return nil
 }

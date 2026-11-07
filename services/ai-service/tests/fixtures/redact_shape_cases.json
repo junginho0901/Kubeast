@@ -1,0 +1,203 @@
+{
+  "text": [
+    {
+      "name": "a credential held in a block",
+      "input": "token: |\n  fake-block-value\n  fake-second-line\nname: app\n",
+      "want": "token: |\n  <REDACTED:token>\nname: app\n"
+    },
+    {
+      "name": "a folded block",
+      "input": "password: >-\n  fake-block-value\nreplicas: 3\n",
+      "want": "password: >-\n  <REDACTED:password>\nreplicas: 3\n"
+    },
+    {
+      "name": "a block inside a mapping keeps the keys after it",
+      "input": "auth:\n  client_secret: |-\n    fake-block-value\n  user: bob\nport: 80\n",
+      "want": "auth:\n  client_secret: |-\n    <REDACTED:client_secret>\n  user: bob\nport: 80\n"
+    },
+    {
+      "name": "a block in a list item keeps the item's other keys",
+      "input": "- password: |\n    fake-block-value\n  name: db\n- name: web\n",
+      "want": "- password: |\n    <REDACTED:password>\n  name: db\n- name: web\n"
+    },
+    {
+      "name": "a quoted key",
+      "input": "\"token\": |\n  fake-block-value\nname: app",
+      "want": "\"token\": |\n  <REDACTED:token>\nname: app"
+    },
+    {
+      "name": "a blank line inside the block",
+      "input": "token: |\n  fake-block-value\n\n  fake-second-line\n\nname: app\n",
+      "want": "token: |\n  <REDACTED:token>\n\nname: app\n"
+    },
+    {
+      "name": "a block that ends the text",
+      "input": "token: |\n  fake-block-value",
+      "want": "token: |\n  <REDACTED:token>"
+    },
+    {
+      "name": "line ends with a carriage return",
+      "input": "token: |\r\n  fake-block-value\r\nname: app\r\n",
+      "want": "token: |\r\n  <REDACTED:token>\r\nname: app\r\n"
+    },
+    {
+      "name": "an indentation indicator",
+      "input": "token: |2\n    fake-block-value\nname: x\n",
+      "want": "token: <REDACTED:token>\n    <REDACTED:token>\nname: x\n"
+    },
+    {
+      "name": "a comment after the indicator",
+      "input": "token: | # rotated\n  fake-block-value\nname: app\n",
+      "want": "token: <REDACTED:token>\n  <REDACTED:token>\nname: app\n"
+    },
+    {
+      "name": "a block under an ordinary key stays",
+      "input": "description: |\n  free text\n  more text\nname: app\n",
+      "want": "description: |\n  free text\n  more text\nname: app\n"
+    },
+    {
+      "name": "a block under a key that names a credential but holds none stays",
+      "input": "secretName: |\n  my-tls\ntoken_ttl: |\n  60\n",
+      "want": "secretName: |\n  my-tls\ntoken_ttl: |\n  60\n"
+    },
+    {
+      "name": "an empty block takes nothing after it",
+      "input": "token: |\nname: app\n",
+      "want": "token: |\nname: app\n"
+    },
+    {
+      "name": "digits as a password on a line",
+      "input": "password: 1234\n",
+      "want": "password: <REDACTED:password>\n"
+    },
+    {
+      "name": "digits as a password in an env file",
+      "input": "DB_PASSWORD=12345678\n",
+      "want": "DB_PASSWORD=<REDACTED:DB_PASSWORD>\n"
+    },
+    {
+      "name": "digits as a password in JSON text",
+      "input": "log line {\"password\": \"1234\"} end",
+      "want": "log line {\"password\": \"<REDACTED:password>\"} end"
+    },
+    {
+      "name": "digits as a password in a YAML env entry",
+      "input": "- name: DB_PASSWORD\n  value: \"1234\"\n",
+      "want": "- name: DB_PASSWORD\n  value: \"<REDACTED:DB_PASSWORD>\"\n"
+    },
+    {
+      "name": "settings and counts on lines stay",
+      "input": "password_min_length: 12\npassword_expiry_days: 90\npassword_retries: 3\ntoken: 5\nsecret: 3\ntoken_ttl: 60\nsession_timeout: 30m\nmax_tokens: 4096\n",
+      "want": "password_min_length: 12\npassword_expiry_days: 90\npassword_retries: 3\ntoken: 5\nsecret: 3\ntoken_ttl: 60\nsession_timeout: 30m\nmax_tokens: 4096\n"
+    },
+    {
+      "name": "words that are not a password stay",
+      "input": "password: true\npwd: none\napi_key: auto\n",
+      "want": "password: true\npwd: none\napi_key: auto\n"
+    }
+  ],
+  "objects": [
+    {
+      "name": "a container env entry",
+      "input": {"name": "DB_PASSWORD", "value": "fake-password-1"},
+      "want": {"name": "DB_PASSWORD", "value": "<REDACTED:DB_PASSWORD>"}
+    },
+    {
+      "name": "a number in a container env entry",
+      "input": {"name": "DB_PASSWORD", "value": 1234},
+      "want": {"name": "DB_PASSWORD", "value": "<REDACTED:DB_PASSWORD>"}
+    },
+    {
+      "name": "only the credential among a pod's env",
+      "input": {
+        "spec": {
+          "containers": [
+            {
+              "name": "app",
+              "env": [
+                {"name": "API_TOKEN", "value": "fake-token-1"},
+                {"name": "LOG_LEVEL", "value": "debug"},
+                {"name": "DB_PASSWORD", "valueFrom": {"secretKeyRef": {"name": "db", "key": "password"}}},
+                {"name": "USE_SECRET", "value": "true"},
+                {"name": "TOKEN_TTL", "value": "60"},
+                {"name": "SECRET_NAME", "value": "my-secret"}
+              ]
+            }
+          ]
+        }
+      },
+      "want": {
+        "spec": {
+          "containers": [
+            {
+              "name": "app",
+              "env": [
+                {"name": "API_TOKEN", "value": "<REDACTED:API_TOKEN>"},
+                {"name": "LOG_LEVEL", "value": "debug"},
+                {"name": "DB_PASSWORD", "valueFrom": {"secretKeyRef": {"name": "db", "key": "password"}}},
+                {"name": "USE_SECRET", "value": "true"},
+                {"name": "TOKEN_TTL", "value": "60"},
+                {"name": "SECRET_NAME", "value": "my-secret"}
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "numbers under a credential key",
+      "input": {"password": 1234, "db_password": 5678, "POSTGRES_PASSWORD": 9, "apiKey": 123456, "pwd": 1.5},
+      "want": {
+        "password": "<REDACTED:password>",
+        "db_password": "<REDACTED:db_password>",
+        "POSTGRES_PASSWORD": "<REDACTED:POSTGRES_PASSWORD>",
+        "apiKey": "<REDACTED:apiKey>",
+        "pwd": "<REDACTED:pwd>"
+      }
+    },
+    {
+      "name": "digits in a string under a password key",
+      "input": {"password": "1234", "password_expiry_days": "90", "token": "60", "ttl": "30m"},
+      "want": {"password": "<REDACTED:password>", "password_expiry_days": "90", "token": "60", "ttl": "30m"}
+    },
+    {
+      "name": "settings and counts stay",
+      "input": {
+        "max_tokens": 1000,
+        "token_ttl": 60,
+        "password_min_length": 12,
+        "password_expiry_days": 90,
+        "secret": 3,
+        "token": 5,
+        "secrets": 7,
+        "credentials": 2,
+        "replicas": 3,
+        "port": 5432,
+        "secretName": "tls"
+      },
+      "want": {
+        "max_tokens": 1000,
+        "token_ttl": 60,
+        "password_min_length": 12,
+        "password_expiry_days": 90,
+        "secret": 3,
+        "token": 5,
+        "secrets": 7,
+        "credentials": 2,
+        "replicas": 3,
+        "port": 5432,
+        "secretName": "tls"
+      }
+    },
+    {
+      "name": "what holds no value stays",
+      "input": {"password": true, "api_key": null, "db_password": "", "client_secret": false},
+      "want": {"password": true, "api_key": null, "db_password": "", "client_secret": false}
+    },
+    {
+      "name": "rows of a count table stay",
+      "input": [{"name": "Secret", "value": 12}, {"name": "Secrets", "value": "12"}, {"name": "Token", "value": 7}, {"name": "Pods", "value": 40}],
+      "want": [{"name": "Secret", "value": 12}, {"name": "Secrets", "value": "12"}, {"name": "Token", "value": 7}, {"name": "Pods", "value": 40}]
+    }
+  ]
+}

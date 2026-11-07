@@ -190,6 +190,7 @@ Helm 릴리스 작업과 새 객체 생성은 가드 대상이 아닙니다. 노
     - `features.prometheus.url`·`auth.existingSecret`(키 `authorization`) — 자기 주소가 없는 클러스터가 쓰는 기본값
     - `discover: false` — 클러스터 안 자동 발견 끄기
     - `egressCIDRs` — NetworkPolicy가 켜진 설치에서 443·6443 밖 포트의 저장소로 가는 k8s-service 송신을 여는 목록(`{cidr, port}`)
+    - `features.clusterStoreAllowedHosts` — 클러스터별 저장소 주소에 쓸 수 있는 곳을 좁히는 목록([docs/ko/cluster-requirements.md](cluster-requirements.md) §3)
   - `GET /api/v1/cluster/prometheus/status?cluster=<id>`는 다음을 돌려줍니다.
     - `source`(external/proxy/none)·주소·인증 여부·레이블·`configured`(Service를 적었는지)·저장소 종류(`flavor`)·연결 상태
     - 못 찾았으면 이유(`reason`: `not_found`·`discover_off`)

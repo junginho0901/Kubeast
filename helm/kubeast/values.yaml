@@ -80,6 +80,8 @@ auth:
     redirectUrl: ""
     scopes: [openid, email, profile]
     claims:
+      # A claim holding a plain name also works, but such a name does not reach
+      # an account made with a password, such as the admin above.
       email: email
       name: name
       groups: groups
@@ -659,6 +661,13 @@ networkPolicy:
 # Default is `false` so a fresh install behaves the same as before the
 # Prometheus dependency was introduced; flip to `true` to opt in.
 features:
+  # The metrics and log store URLs people enter in Admin → Clusters → Edit.
+  # Empty: any address but cloud metadata and link-local (never allowed) and
+  # k8s-service's own machine, so a store on a private address needs nothing
+  # here. Listed (exact hosts, or ".example.com" for the host and its
+  # subdomains): only these hosts, and a store on localhost must be listed.
+  # features.prometheus.url and features.logSearch.url are not limited by this.
+  clusterStoreAllowedHosts: []
   # Metrics. By default Kubeast looks for a Prometheus Service inside each
   # registered cluster and queries it through the API server proxy: first by
   # label in every namespace (kubeast.io/prometheus=true, then the prometheus
@@ -726,6 +735,8 @@ features:
   # cluster alerts come from (scripts/render-target-rbac.sh). Needs
   # auth.impersonation.enabled and ai.enabled (the render fails without them).
   # With secrets.existingSecret, that Secret must hold ALERT_WEBHOOK_TOKEN.
+  # That token posts for any cluster. Each cluster also has its own token, made
+  # from it (docs/cluster-requirements.md §13), good for that cluster only.
   # Every alert the webhook gets, firing or resolved and of any severity, also
   # goes into the Alerts inbox (send_resolved: true in the webhook config, its
   # default) for whoever reads that cluster as a whole; rows are deleted with
@@ -741,6 +752,8 @@ features:
   # about three a day.
   alertInvestigation:
     enabled: false
+    # true refuses the shared token: every receiver must send its cluster's own.
+    webhookClusterTokensOnly: false
     automatic: true           # the webhook queues investigations; false = it only stores the alerts in the inbox
     manual: true              # "Investigate now" in the Alerts inbox
     severities: [critical, warning]

@@ -140,6 +140,16 @@ func (r *Repository) UpdateUserRole(ctx context.Context, id string, roleID int) 
 	return err
 }
 
+// UpdateUserRoleEndingTokens changes the role and ends the tokens issued so far, which carry the old role, in one
+// statement: the change never stands while those tokens still work.
+func (r *Repository) UpdateUserRoleEndingTokens(ctx context.Context, id string, roleID int) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE auth_users SET role_id = $1, token_version = token_version + 1, updated_at = $2 WHERE id = $3`,
+		roleID, time.Now().UTC(), id,
+	)
+	return err
+}
+
 // UpdateUserProfile updates name/team fields. Nil arguments are skipped.
 func (r *Repository) UpdateUserProfile(ctx context.Context, id string, name *string, team *string) error {
 	sets := []string{}
@@ -174,6 +184,16 @@ func (r *Repository) UpdateUserProfile(ctx context.Context, id string, name *str
 func (r *Repository) UpdateUserPassword(ctx context.Context, id, passwordHash string) error {
 	_, err := r.pool.Exec(ctx,
 		`UPDATE auth_users SET password_hash = $1, updated_at = $2 WHERE id = $3`,
+		passwordHash, time.Now().UTC(), id,
+	)
+	return err
+}
+
+// UpdateUserPasswordEndingTokens sets the password and ends the tokens issued so far in one statement: a password
+// changed to shut someone out never stands while their token still works.
+func (r *Repository) UpdateUserPasswordEndingTokens(ctx context.Context, id, passwordHash string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE auth_users SET password_hash = $1, token_version = token_version + 1, updated_at = $2 WHERE id = $3`,
 		passwordHash, time.Now().UTC(), id,
 	)
 	return err

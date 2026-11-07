@@ -76,6 +76,11 @@ test.describe("a cluster's own log store", () => {
     const badURL = await patch(request, admin, { log_search_url: 'loki:3100' })
     expect(badURL.status()).toBe(400)
     expect(await badURL.text()).toContain('log_search_url')
+    for (const address of ['http://169.254.169.254/', 'http://[::ffff:169.254.169.254]/', 'http://metadata.google.internal/', 'http://127.0.0.1:3100', 'http://localhost:3100']) {
+      const refused = await patch(request, admin, { log_search_url: address })
+      expect(refused.status(), address).toBe(400)
+      expect(await refused.text(), address).toContain('log_search_url')
+    }
     const badTenant = await patch(request, admin, { log_search_tenant: 'team a' })
     expect(badTenant.status()).toBe(400)
     expect(await badTenant.text()).toContain('log_search_tenant')

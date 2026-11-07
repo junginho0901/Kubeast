@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/junginho0901/kubeast/services/pkg/storeurl"
 )
 
 // Line is one log line with the stream it came from.
@@ -81,12 +83,13 @@ func (e *StoreError) Error() string {
 
 // loki reads /loki/api/v1/query_range.
 type loki struct {
-	cfg  Config
-	http *http.Client
+	cfg        Config
+	http       *http.Client
+	registered *http.Client // for a Store with Registered set
 }
 
 func newLoki(cfg Config) *loki {
-	return &loki{cfg: cfg, http: &http.Client{Timeout: cfg.Timeout}}
+	return &loki{cfg: cfg, http: &http.Client{Timeout: cfg.Timeout}, registered: storeurl.Client(cfg.Timeout)}
 }
 
 type lokiResponse struct {
@@ -117,6 +120,9 @@ func (l *loki) get(ctx context.Context, store Store, path string, params url.Val
 	}
 	if store.Tenant != "" {
 		hreq.Header.Set("X-Scope-OrgID", store.Tenant)
+	}
+	if store.Registered {
+		return l.registered.Do(hreq)
 	}
 	return l.http.Do(hreq)
 }

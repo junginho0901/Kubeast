@@ -17,6 +17,7 @@ import (
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
+	"github.com/junginho0901/kubeast/services/pkg/storeurl"
 )
 
 // promExternal is a Prometheus-compatible store reached over HTTP instead of
@@ -27,6 +28,8 @@ type promExternal struct {
 	baseURL    string
 	authHeader string
 	labelValue string
+	// registered: the URL came from a cluster's registration, not the chart.
+	registered bool
 }
 
 // promSource is where one cluster's metrics come from: an external store, or
@@ -45,6 +48,7 @@ type promSource struct {
 func externalFromInfo(info cluster.Info) *promExternal {
 	base := strings.TrimRight(strings.TrimSpace(info.PrometheusURL), "/")
 	auth := info.PrometheusAuthHeader
+	registered := base != ""
 	if base == "" {
 		base = strings.TrimRight(strings.TrimSpace(os.Getenv("PROMETHEUS_URL")), "/")
 		auth = os.Getenv("PROMETHEUS_AUTH_HEADER")
@@ -52,7 +56,7 @@ func externalFromInfo(info cluster.Info) *promExternal {
 	if base == "" {
 		return nil
 	}
-	return &promExternal{baseURL: base, authHeader: auth, labelValue: strings.TrimSpace(info.PrometheusClusterLabel)}
+	return &promExternal{baseURL: base, authHeader: auth, labelValue: strings.TrimSpace(info.PrometheusClusterLabel), registered: registered}
 }
 
 // promSourceFromInfo resolves a cluster's configured source, most specific
@@ -147,7 +151,11 @@ func injectMatcher(query, name, value string) (string, error) {
 	return expr.String(), nil
 }
 
-var promHTTP = &http.Client{Timeout: 15 * time.Second}
+var (
+	promHTTP = &http.Client{Timeout: 15 * time.Second}
+	// registeredPromHTTP is for a URL someone with cluster settings typed: storeurl's address rule applies.
+	registeredPromHTTP = storeurl.Client(15 * time.Second)
+)
 
 // do performs one GET against the store; the body is capped at 32 MiB.
 func (e *promExternal) do(ctx context.Context, promPath string) ([]byte, int, error) {
@@ -159,7 +167,11 @@ func (e *promExternal) do(ctx context.Context, promPath string) ([]byte, int, er
 	if e.authHeader != "" {
 		req.Header.Set("Authorization", e.authHeader)
 	}
-	resp, err := promHTTP.Do(req)
+	client := promHTTP
+	if e.registered {
+		client = registeredPromHTTP
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, 0, err
 	}
