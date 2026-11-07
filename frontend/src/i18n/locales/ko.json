@@ -1768,7 +1768,11 @@
       "modelRateLimit": "AI 모델을 호출하지 못했습니다 ({{provider}}): 지금 요청이 너무 많습니다. 잠시 뒤 다시 시도하세요. ({{detail}})",
       "modelUsageWindow": "AI 모델을 호출하지 못했습니다 ({{provider}}): 사용량 한도에 닿았습니다. {{retry_at}}(UTC)에 풀립니다. ({{detail}})",
       "modelAuth": "AI 모델을 호출하지 못했습니다 ({{provider}}): 공급자가 키나 토큰을 거부했습니다. 관리자가 Admin → AI Models에서 확인하세요. ({{detail}})",
-      "modelUnavailable": "AI 모델을 호출하지 못했습니다 ({{provider}}): 공급자가 과부하이거나 응답하지 않았습니다. 잠시 뒤 다시 시도하세요. ({{detail}})"
+      "modelUnavailable": "AI 모델을 호출하지 못했습니다 ({{provider}}): 공급자가 과부하이거나 응답하지 않았습니다. 잠시 뒤 다시 시도하세요. ({{detail}})",
+      "streamHttp": "채팅 요청이 실패했습니다 (HTTP {{status}}): {{detail}}",
+      "streamHttpStatus": "채팅 요청이 실패했습니다 (HTTP {{status}}).",
+      "streamCut": "답변이 끝나기 전에 연결이 끊겼습니다. 위 내용은 일부일 수 있습니다. 전체 답변이 필요하면 다시 질문하세요.",
+      "streamEmpty": "답변 없이 연결이 끊겼습니다. 다시 질문하세요."
     },
     "errorAnswer": "죄송합니다. 답변을 생성하는 중 오류가 발생했습니다: {{error}}",
     "errorSessionCreate": "세션 생성에 실패했습니다: {{error}}",

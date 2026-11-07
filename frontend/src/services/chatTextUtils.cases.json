@@ -1,0 +1,172 @@
+[
+  {
+    "name": "text alone stays as it is",
+    "text": "Two clusters.\n\nAll good.",
+    "stripped": "Two clusters.\n\nAll good."
+  },
+  {
+    "name": "a tool block goes, and the blank lines after it",
+    "text": "Checking.\n\n<details>\n<summary>🔧 <strong>k8s_pod_logs</strong></summary>\n\n<p><strong>📋 Arguments:</strong> No arguments</p>\n\n<details>\n<summary><strong>📊 Results</strong></summary>\n\n```\npod-a Running\n```\n\n</details>\n\n</details>\n\nAll good.",
+    "stripped": "Checking.\n\nAll good."
+  },
+  {
+    "name": "two blocks go and the text between stays",
+    "text": "<details>\n<summary>🔧 <strong>k8s_pod_logs</strong></summary>\n\n<p><strong>📋 Arguments:</strong> No arguments</p>\n\n<details>\n<summary><strong>📊 Results</strong></summary>\n\n```\na\n```\n\n</details>\n\n</details>\n\nNow the logs.\n\n<details>\n<summary>🔧 <strong>k8s_pod_logs</strong></summary>\n\n<p><strong>📋 Arguments:</strong> No arguments</p>\n\n<details>\n<summary><strong>📊 Results</strong></summary>\n\n```\nb\n```\n\n</details>\n\n</details>\n\nDone.",
+    "stripped": "Now the logs.\n\nDone."
+  },
+  {
+    "name": "nested sections go with their block",
+    "text": "Before.\n\n<details>\n<summary>🔧 <strong>k8s_pod_logs</strong></summary>\n\n<p><strong>🔐 Ran as:</strong> <code>a@example.test</code> · role Read · whole cluster · read-only</p>\n\n<details>\n<summary><strong>🧾 Cluster requests (1)</strong></summary>\n\n<ul>\n<li>list pods → 200</li>\n</ul>\n\n</details>\n\n<details>\n<summary><strong>📋 Arguments</strong></summary>\n\n```json\n{\n  \"q\": \"</details>\"\n}\n```\n\n</details>\n\n<details>\n<summary><strong>📊 Results</strong></summary>\n\n```\nr\n```\n\n</details>\n\n</details>\n\nAfter.",
+    "stripped": "Before.\n\nAfter."
+  },
+  {
+    "name": "closing tags in a result do not end the block early",
+    "text": "Before.\n\n<details>\n<summary>🔧 <strong>k8s_pod_logs</strong></summary>\n\n<p><strong>📋 Arguments:</strong> No arguments</p>\n\n<details>\n<summary><strong>📊 Results</strong></summary>\n\n````\nx\n</details>\n</details>\nfrom the result\n````\n\n</details>\n\n</details>\n\nAfter.",
+    "stripped": "Before.\n\nAfter."
+  },
+  {
+    "name": "a closing tag in a result, in the shortest fence",
+    "text": "Before.\n\n<details>\n<summary>🔧 <strong>k8s_pod_logs</strong></summary>\n\n<p><strong>📋 Arguments:</strong> No arguments</p>\n\n<details>\n<summary><strong>📊 Results</strong></summary>\n\n```\nx </details> </details> from the result\n```\n\n</details>\n\n</details>\n\nAfter.",
+    "stripped": "Before.\n\nAfter."
+  },
+  {
+    "name": "an opening tag in a result does not take the text after the block",
+    "text": "Before.\n\n<details>\n<summary>🔧 <strong>k8s_pod_logs</strong></summary>\n\n<p><strong>📋 Arguments:</strong> No arguments</p>\n\n<details>\n<summary><strong>📊 Results</strong></summary>\n\n```\nx\n<details>\nfrom the result\n```\n\n</details>\n\n</details>\n\nAfter.",
+    "stripped": "Before.\n\nAfter."
+  },
+  {
+    "name": "a closing tag in the arguments does not end the block early",
+    "text": "Before.\n\n<details>\n<summary>🔧 <strong>k8s_pod_logs</strong></summary>\n\n<details>\n<summary><strong>📋 Arguments</strong></summary>\n\n```json\n{\n  \"q\": \"</details>\"\n}\n```\n\n</details>\n\n<details>\n<summary><strong>📊 Results</strong></summary>\n\n```\nr\n```\n\n</details>\n\n</details>\n\nAfter.",
+    "stripped": "Before.\n\nAfter."
+  },
+  {
+    "name": "a result's lines of backticks stay inside its longer fence",
+    "text": "Before.\n\n<details>\n<summary>🔧 <strong>k8s_pod_logs</strong></summary>\n\n<p><strong>📋 Arguments:</strong> No arguments</p>\n\n<details>\n<summary><strong>📊 Results</strong></summary>\n\n````json\na\n```\n</details>\n```\n<details>\nb\n````\n\n</details>\n\n</details>\n\nAfter.",
+    "stripped": "Before.\n\nAfter."
+  },
+  {
+    "name": "a fence of six holding a line of five",
+    "text": "Before.\n\n<details>\n<summary>🔧 <strong>k8s_pod_logs</strong></summary>\n\n<p><strong>📋 Arguments:</strong> No arguments</p>\n\n<details>\n<summary><strong>📊 Results</strong></summary>\n\n``````\na\n`````\n</details>\n</details>\nb\n``````\n\n</details>\n\n</details>\n\nAfter.",
+    "stripped": "Before.\n\nAfter."
+  },
+  {
+    "name": "a tool block written in a code block by the answer stays",
+    "text": "Example:\n\n```html\n<details>\n<summary>🔧 <strong>k8s_pod_logs</strong></summary>\n\n<p><strong>📋 Arguments:</strong> No arguments</p>\n\n<details>\n<summary><strong>📊 Results</strong></summary>\n\n```\nr\n```\n\n</details>\n\n</details>\n\n```\n\nAfter.",
+    "stripped": "Example:\n\n```html\n<details>\n<summary>🔧 <strong>k8s_pod_logs</strong></summary>\n\n<p><strong>📋 Arguments:</strong> No arguments</p>\n\n<details>\n<summary><strong>📊 Results</strong></summary>\n\n```\nr\n```\n\n</details>\n\n</details>\n\n```\n\nAfter."
+  },
+  {
+    "name": "the same in a longer fence",
+    "text": "Example:\n\n````\n<details>\n<summary>🔧 <strong>k8s_pod_logs</strong></summary>\n\n<p><strong>📋 Arguments:</strong> No arguments</p>\n\n<details>\n<summary><strong>📊 Results</strong></summary>\n\n```\nr\n```\n\n</details>\n\n</details>\n\n````\n\nAfter.",
+    "stripped": "Example:\n\n````\n<details>\n<summary>🔧 <strong>k8s_pod_logs</strong></summary>\n\n<p><strong>📋 Arguments:</strong> No arguments</p>\n\n<details>\n<summary><strong>📊 Results</strong></summary>\n\n```\nr\n```\n\n</details>\n\n</details>\n\n````\n\nAfter."
+  },
+  {
+    "name": "the same in a fence of tildes",
+    "text": "~~~\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\ntext\n~~~\nAfter.",
+    "stripped": "~~~\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\ntext\n~~~\nAfter."
+  },
+  {
+    "name": "a fence closes with a run at least as long",
+    "text": "```\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\n`````\nAfter.",
+    "stripped": "```\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\n`````\nAfter."
+  },
+  {
+    "name": "a shorter run does not close a fence",
+    "text": "````\n```\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\n```\n````\nAfter.",
+    "stripped": "````\n```\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\n```\n````\nAfter."
+  },
+  {
+    "name": "backticks and tildes do not close each other",
+    "text": "```\n~~~\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\n```\nAfter.",
+    "stripped": "```\n~~~\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\n```\nAfter."
+  },
+  {
+    "name": "a line of backticks with more after it does not close a fence",
+    "text": "```\n``` not a close\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\n```\nAfter.",
+    "stripped": "```\n``` not a close\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\n```\nAfter."
+  },
+  {
+    "name": "a closing line may end in spaces",
+    "text": "```\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\n```  \nAfter.",
+    "stripped": "```\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\n```  \nAfter."
+  },
+  {
+    "name": "a fence may be indented up to three spaces",
+    "text": "   ```\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\n   ```\nAfter.",
+    "stripped": "   ```\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\n   ```\nAfter."
+  },
+  {
+    "name": "four spaces make no fence",
+    "text": "    ```\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\n</details>\nAfter.",
+    "stripped": "    ```\nAfter."
+  },
+  {
+    "name": "backticks with a backtick after them make no fence",
+    "text": "``` a`b\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\n</details>\nAfter.",
+    "stripped": "``` a`b\nAfter."
+  },
+  {
+    "name": "a tilde fence may hold backticks after it",
+    "text": "~~~ a`b\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\n~~~\nAfter.",
+    "stripped": "~~~ a`b\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\n~~~\nAfter."
+  },
+  {
+    "name": "lines may end in CRLF",
+    "text": "```\r\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\n```\r\nAfter.",
+    "stripped": "```\r\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\n```\r\nAfter."
+  },
+  {
+    "name": "a mention of the tags in a sentence is no block",
+    "text": "It wraps results in `<details><summary>🔧` and more.\n\nAfter.",
+    "stripped": "It wraps results in `<details><summary>🔧` and more.\n\nAfter."
+  },
+  {
+    "name": "a block cut off by the end of the text goes to the end",
+    "text": "Before.\n\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\ncut off",
+    "stripped": "Before.\n\n"
+  },
+  {
+    "name": "a block cut off inside its result goes to the end",
+    "text": "Before.\n\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\n```\npartial </details>",
+    "stripped": "Before.\n\n"
+  },
+  {
+    "name": "other details stay",
+    "text": "a <details><summary>More</summary>kept</details> b",
+    "stripped": "a <details><summary>More</summary>kept</details> b"
+  },
+  {
+    "name": "details on their own lines stay",
+    "text": "<details>\n<summary>More</summary>\n\nkept\n\n</details>\n\nAfter.",
+    "stripped": "<details>\n<summary>More</summary>\n\nkept\n\n</details>\n\nAfter."
+  },
+  {
+    "name": "a fence nothing closes is no code: an answer saved with a short fence around a line of backticks",
+    "text": "Before.\n\n<details>\n<summary>🔧 <strong>k8s_pod_logs</strong></summary>\n\n<p><strong>📋 Arguments:</strong> No arguments</p>\n\n<details>\n<summary><strong>📊 Results</strong></summary>\n\n```\na\n```\nb\n```\n\n</details>\n\n</details>\n\nAfter.",
+    "stripped": "Before.\n\nAfter."
+  },
+  {
+    "name": "an answer's own open fence before a block reads as the screen reads it",
+    "text": "```\ncode\n\n<details>\n<summary>🔧 <strong>k8s_pod_logs</strong></summary>\n\n<p><strong>📋 Arguments:</strong> No arguments</p>\n\n<details>\n<summary><strong>📊 Results</strong></summary>\n\n```\nr\n```\n\n</details>\n\n</details>\n\n",
+    "stripped": "```\ncode\n\n<details>\n<summary>🔧 <strong>k8s_pod_logs</strong></summary>\n\n<p><strong>📋 Arguments:</strong> No arguments</p>\n\n<details>\n<summary><strong>📊 Results</strong></summary>\n\n```\nr\n```\n\n</details>\n\n</details>\n\n"
+  },
+  {
+    "name": "a code block right after a block keeps its contents",
+    "text": "<details>\n<summary>🔧 <strong>k8s_pod_logs</strong></summary>\n\n<p><strong>📋 Arguments:</strong> No arguments</p>\n\n<details>\n<summary><strong>📊 Results</strong></summary>\n\n```\nr\n```\n\n</details>\n\n</details>\n\n   ```\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\n   ```\nAfter.",
+    "stripped": "```\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\n   ```\nAfter."
+  },
+  {
+    "name": "line separators are not line ends",
+    "text": "``` x\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\n```\nAfter.",
+    "stripped": "``` x\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\n```\nAfter."
+  },
+  {
+    "name": "a fence of two backticks is no fence",
+    "text": "``\n<details>\n<summary>🔧 <strong>t</strong></summary>\n\n</details>\nAfter.",
+    "stripped": "``\nAfter."
+  },
+  {
+    "name": "empty text",
+    "text": "",
+    "stripped": ""
+  }
+]

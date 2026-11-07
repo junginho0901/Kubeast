@@ -122,6 +122,143 @@ describe.each(SURFACES)('%s: what an answer cannot draw', (_name, render) => {
   })
 })
 
+describe.each(SURFACES)('%s: what an answer leaves open hides nothing', (_name, render) => {
+  const BLOCK = '<details>\n<summary>🔧 <strong>tool</strong></summary>\n\n<details>\n<summary><strong>📊 Results</strong></summary>\n\n```\nthe <b>result</b>\n```\n\n</details>\n\n</details>\n\n'
+
+  function expectRestIntact(html: string) {
+    expect(html).toContain('The <strong>next</strong> sentence.')
+    expect(html).toContain('🔧 <strong>tool</strong>')
+    expect(html).toContain('md-summary')
+    expect(html).toContain('<pre><code>the &lt;b&gt;result&lt;/b&gt;\n</code></pre>')
+    expect(html).toContain('The last sentence.')
+  }
+
+  it.each([
+    ['a comment', '<!--', '&lt;!--'],
+    ['a comment with words', '<!-- a note', '&lt;!-- a note'],
+    ['an indented comment', '   <!--', '&lt;!--'],
+    ['a template', '<template>', '&lt;template&gt;'],
+    ['a template with attributes', '<template shadowrootmode="open">', '&lt;template shadowrootmode=&quot;open&quot;&gt;'],
+    ['a template in capitals', '<TEMPLATE>', '&lt;TEMPLATE&gt;'],
+    ['a template in a sentence', 'Words <template> more words', 'Words &lt;template&gt; more words'],
+    ['a processing instruction', '<?php echo 1;', '&lt;?php echo 1;'],
+    ['a declaration', '<!DOCTYPE html', '&lt;!DOCTYPE html'],
+    ['a CDATA section', '<![CDATA[ data', '&lt;![CDATA[ data'],
+    ['a pre', '<pre>', '&lt;pre&gt;'],
+    ['a script', '<script>', '&lt;script&gt;'],
+    ['a style', '<style>', '&lt;style&gt;'],
+    ['a textarea', '<textarea>', '&lt;textarea&gt;'],
+    ['a select', '<select>', '&lt;select&gt;'],
+    ['a col', '<col>', '&lt;col&gt;'],
+  ])('%s shows as words, and the answer and tool block after it stay', (_case, opener, shown) => {
+    const html = render(`Before.\n\n${opener}\n\nThe **next** sentence.\n\n${BLOCK}The last sentence.`)
+    expect(html).toContain('Before.')
+    expect(html).toContain(shown)
+    expectRestIntact(html)
+  })
+
+  it('a comment right under a sentence hides nothing either', () => {
+    const html = render(`A sentence.\n<!--\n\nThe **next** sentence.\n\n${BLOCK}The last sentence.`)
+    expect(html).toContain('&lt;!--')
+    expectRestIntact(html)
+  })
+
+  it('a comment whose only end is in a tool result hides nothing', () => {
+    const result = 'one\n-->\n<b>two</b>'
+    const block = BLOCK.replace('the <b>result</b>', result)
+    const html = render(`<!--\n\nThe **next** sentence.\n\n${block}The last sentence.`)
+    expect(html).toContain('&lt;!--')
+    expect(html).toContain('The <strong>next</strong> sentence.')
+    expect(html).toContain('md-summary')
+    expect(html).toContain('<pre><code>one\n--&gt;\n&lt;b&gt;two&lt;/b&gt;\n</code></pre>')
+    expect(html).not.toContain('<b>two</b>')
+    expect(html).toContain('The last sentence.')
+  })
+
+  it('a pre whose only end is in a tool result hides nothing', () => {
+    const block = BLOCK.replace('the <b>result</b>', '</pre>\n<b>two</b>')
+    const html = render(`<pre>\n\nThe **next** sentence.\n\n${block}The last sentence.`)
+    expect(html).toContain('The <strong>next</strong> sentence.')
+    expect(html).toContain('<pre><code>&lt;/pre&gt;\n&lt;b&gt;two&lt;/b&gt;\n</code></pre>')
+    expect(html).toContain('The last sentence.')
+  })
+
+  it('a comment left open after one that closed hides nothing', () => {
+    const html = render(`<!--\n\`\`\`\n-->\n\n<!--\n\`\`\`\n\nThe last sentence.`)
+    expect(html).toContain('&lt;!--')
+    expect(html).toContain('The last sentence.')
+  })
+
+  it('a comment left open inside other HTML hides nothing', () => {
+    for (const raw of ['<div><!--', '<div>\n<!--', '<div><template>', '<div>\n<template>']) {
+      expectRestIntact(render(`${raw}\n\nThe **next** sentence.\n\n${BLOCK}The last sentence.`))
+    }
+  })
+
+  it('a tool block right after one left open inside other HTML stays', () => {
+    for (const raw of ['<div><!--', '<div>\n<!--', '<div><template>', '<div><?php']) {
+      const html = render(`${raw}\n\n${BLOCK}The **next** sentence.\n\nThe last sentence.`)
+      expectRestIntact(html)
+    }
+  })
+
+  it('no element left open takes what follows it', () => {
+    const tags = `a abbr address applet area article aside audio b base basefont bdi bdo bgsound big blink blockquote body br button canvas caption center cite code
+      col colgroup data datalist dd del details dfn dialog dir div dl dt em embed fieldset figcaption figure font footer form frame frameset h1 h2 h3 h4 h5 h6 head header
+      hgroup hr html i iframe image img input ins kbd keygen label legend li link listing main map mark marquee math menu meta meter nav nobr noembed noframes noscript
+      object ol optgroup option output p param picture plaintext pre progress q rb rp rt rtc ruby s samp script search section select slot small source spacer span strike
+      strong style sub summary sup svg table tbody td template textarea tfoot th thead time title tr track tt u ul var video wbr xmp`.split(/\s+/)
+    const broken = tags.flatMap((tag) => [`<${tag}>`, `Words <${tag}> more`, `</${tag}>`, `Before.\n\n<${tag}>`].filter((opener) => {
+      const html = render(`${opener}\n\nThe **next** sentence.\n\n${BLOCK}The last sentence.`)
+      return !['The <strong>next</strong> sentence.', 'md-summary', '<pre><code>the &lt;b&gt;result&lt;/b&gt;\n</code></pre>', 'The last sentence.'].every((part) => html.includes(part))
+    }))
+    expect(broken).toEqual([])
+  })
+
+  it('what is closed stays as it is', () => {
+    expect(render('Before <!-- a note --> after.')).toContain('Before  after.')
+    const block = render('<!-- a note\nover two lines -->\n\nAfter.')
+    expect(block).not.toContain('a note')
+    expect(block).toContain('After.')
+    const pre = render('<pre>\nkept *as is*\n</pre>\n\nAfter **this**.')
+    expect(pre).toContain('<pre>kept *as is*\n</pre>')
+    expect(pre).toContain('After <strong>this</strong>.')
+    expect(render('<!-->\n\nAfter.')).toContain('After.')
+    const table = render('<table><colgroup><col span="2"></colgroup><tr><td>cell</td></tr></table>\n\nAfter.')
+    expect(table).toContain('<col span="2"/>')
+    expect(table).toContain('<td>cell</td>')
+    const php = render('<?php echo 1; ?>\n\nAfter.')
+    expect(php).not.toContain('echo')
+    expect(php).toContain('After.')
+  })
+
+  it('code keeps these as they are', () => {
+    const fenced = render('````\n<!--\n<template>\n<?php\n<pre>\n```\n````\n\nAfter.')
+    expect(fenced).toContain('<pre><code>&lt;!--\n&lt;template&gt;\n&lt;?php\n&lt;pre&gt;\n```\n</code></pre>')
+    expect(fenced).toContain('After.')
+    const tildes = render('~~~\n<!--\n~~~\n\nAfter.')
+    expect(tildes).toContain('<pre><code>&lt;!--\n</code></pre>')
+    const inline = render('Use `<!--` and `<template>` here.\n\nAfter.')
+    expect(inline).toContain('Use <code>&lt;!--</code> and <code>&lt;template&gt;</code> here.')
+    const indented = render('Text.\n\n    <!--\n\nAfter.')
+    expect(indented).toContain('<pre><code>&lt;!--\n</code></pre>')
+    expect(indented).toContain('After.')
+  })
+
+  it('a tool result keeps these as they are', () => {
+    const result = 'one\n<!--\n<template>\n<?php\n<pre>\ntwo'
+    const html = render(`${BLOCK.replace('the <b>result</b>', result)}The last sentence.`)
+    expect(html).toContain('<pre><code>one\n&lt;!--\n&lt;template&gt;\n&lt;?php\n&lt;pre&gt;\ntwo\n</code></pre>')
+    expect(html).toContain('The last sentence.')
+  })
+
+  it('the same words in a sentence stay words', () => {
+    const html = render('Open with <!-- and go on.\n\nAfter.')
+    expect(html).toContain('Open with &lt;!-- and go on.')
+    expect(html).toContain('After.')
+  })
+})
+
 describe.each(SURFACES)('%s: what an answer keeps', (_name, render) => {
   // a tool block as the server writes it (ai-service streaming.tool_block_markdown, access.section)
   const TOOL_BLOCK = [

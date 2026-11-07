@@ -1,6 +1,7 @@
 """
 AI 트러블슈팅 서비스
 """
+from bisect import bisect_right
 from typing import Callable, List, Dict, Optional, Any
 import httpx
 import re
@@ -54,32 +55,86 @@ class ToolContext:
         self.cache = TTLCache()  # 결과 캐시 (5분 TTL)
 
 
-_TOOL_BLOCK_START = re.compile(r"<details>\s*<summary>🔧")
+_TOOL_BLOCK_START = re.compile(r"^<details>[ \t\r\n]*<summary>🔧", re.MULTILINE)
+_DETAILS_TAG = re.compile(r"</?details>")
+_FENCE_OPEN = re.compile(r" {0,3}(?:(`{3,})[^`]*|(~{3,})[^\n]*)")
+_FENCE_CLOSE = re.compile(r" {0,3}(`{3,}|~{3,})[ \t\r]*")
+
+
+def _code_blocks(text: str) -> tuple[list, list]:
+    """The fenced code blocks of text as sorted starts and ends, by CommonMark's rules (backticks or tildes, up to three
+    spaces in, closed by a line of the same mark at least as long). A fence nothing closes is no block: an answer saved
+    before results got their longer fence can hold an odd line of backticks, and reading the rest as code would lose
+    the answer after it."""
+    def line_end(at: int) -> int:
+        end = text.find("\n", at)
+        return len(text) if end == -1 else end
+
+    unclosed: dict = {}  # the shortest fence of each mark with no closing line after it, so open fences stay one pass
+
+    def fence_end(at: int) -> int:
+        opening = _FENCE_OPEN.fullmatch(text, at, line_end(at))
+        fence = opening and (opening.group(1) or opening.group(2))
+        if not fence or len(fence) >= unclosed.get(fence[0], float("inf")):
+            return -1
+        line = line_end(at) + 1
+        while line <= len(text):
+            end = line_end(line)
+            closing = _FENCE_CLOSE.fullmatch(text, line, end)
+            if closing and closing.group(1)[0] == fence[0] and len(closing.group(1)) >= len(fence):
+                return min(end + 1, len(text))
+            line = end + 1
+        unclosed[fence[0]] = len(fence)
+        return -1
+
+    starts, ends, at = [], [], 0
+    while at < len(text):
+        end = fence_end(at)
+        if end != -1:
+            starts.append(at)
+            ends.append(end)
+        at = end if end != -1 else line_end(at) + 1
+    return starts, ends
 
 
 def strip_tool_blocks(text: str) -> str:
-    """text without its tool blocks: each <details> whose summary starts with 🔧, matched to its own closing tag by
-    counting the nested <details> (Arguments, Results) — a non-greedy regex stops at the first inner one and
-    leaves the results. Other <details> stay (frontend utils stripToolDetails does the same for Copy)."""
+    """text without its tool blocks: each <details> on a line of its own whose summary starts with 🔧, matched to its
+    own closing tag by counting the nested <details> (Arguments, Results) — a non-greedy regex stops at the first inner
+    one and leaves the results. Tags inside a code block are a result's or the answer's words and do not count. Other
+    <details> stay (frontend chatTextUtils.stripToolDetails does the same for Copy; chatTextUtils.cases.json holds the
+    two equal)."""
+    starts, ends = _code_blocks(text)
+
+    def code_end(at: int) -> Optional[int]:
+        k = bisect_right(starts, at) - 1
+        return ends[k] if k >= 0 and at < ends[k] else None
+
     out, i = [], 0
     while True:
-        m = _TOOL_BLOCK_START.search(text, i)
-        if not m:
+        start = _TOOL_BLOCK_START.search(text, i)
+        if not start:
             out.append(text[i:])
             break
-        out.append(text[i:m.start()])
-        depth, j = 0, m.start()
-        while j < len(text):
-            if text.startswith("<details>", j):
-                depth += 1
-                j += len("<details>")
-            elif text.startswith("</details>", j):
-                depth -= 1
-                j += len("</details>")
-                if depth == 0:
-                    break
-            else:
-                j += 1
+        code = code_end(start.start())
+        if code is not None:
+            out.append(text[i:code])
+            i = code
+            continue
+        out.append(text[i:start.start()])
+        depth, j = 0, start.start()
+        while True:
+            tag = _DETAILS_TAG.search(text, j)
+            if not tag:
+                j = len(text)
+                break
+            code = code_end(tag.start())
+            if code is not None:
+                j = code
+                continue
+            j = tag.end()
+            depth += 1 if tag.group() == "<details>" else -1
+            if depth == 0:
+                break
         i = j
         while i < len(text) and text[i] in " \t\r\n":
             i += 1  # the blank lines after the block go with it

@@ -81,7 +81,7 @@ export function useSessionDetailSync({
       const dbIsBehind = dbMessages.length < uiSnapshot.length
       const activeStream = streamStateRef.current
       const streamRelatedToThisSession =
-        activeStream.sessionId === sessionDetail.id && (activeStream.status === 'streaming' || activeStream.status === 'completed')
+        activeStream.sessionId === sessionDetail.id && ['streaming', 'completed', 'error'].includes(activeStream.status)
 
       // 1) 세션이 바뀐 경우: DB 데이터로 완전히 교체 (스트리밍 중인 세션이라도 화면 세션은 맞춰야 함)
       if (sessionDetail.id !== lastLoadedSessionId) {
@@ -98,6 +98,7 @@ export function useSessionDetailSync({
         }
 
         // DB가 뒤처진 상태(assistant 저장 전)라면, UI에 이미 그려진 말풍선을 유지한다.
+        // A failed turn is the same: its question and error may never reach the database.
         if (streamRelatedToThisSession && uiHasAssistant && dbIsBehind) {
           setLastLoadedSessionId(sessionDetail.id)
           setViewSessionId(sessionDetail.id)

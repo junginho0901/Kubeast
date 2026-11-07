@@ -190,7 +190,7 @@ export function ChatPanel({
 
   const isStreaming = streamState.isStreaming && streamState.sessionId === sessionId
 
-  // A call that failed (the model refused, the budget) keeps the question on screen with the error under it.
+  // A call that failed (the model refused, the budget, a cut stream) keeps the question and the letters that came on screen, with the error under them.
   const failed = streamState.status === 'error' && streamState.sessionId === sessionId
 
   // 스트리밍 중이면 히스토리 + 현재 진행중 user 메시지 + 진행중 assistant content
@@ -208,8 +208,18 @@ export function ChatPanel({
           },
         ]
       : []
-    return [...messages, ...pendingUser]
-  }, [messages, isStreaming, failed, streamState.userMessage, streamState.updatedAt])
+    const received: DisplayMessage[] = failed && streamState.content
+      ? [
+          {
+            id: `failed-answer-${streamState.updatedAt}`,
+            role: 'assistant',
+            content: streamState.content,
+            toolCalls: streamState.toolCalls.length > 0 ? streamState.toolCalls : undefined,
+          },
+        ]
+      : []
+    return [...messages, ...pendingUser, ...received]
+  }, [messages, isStreaming, failed, streamState.userMessage, streamState.content, streamState.toolCalls, streamState.updatedAt])
 
   // the answer as it comes, tool blocks in their place as once it is saved
   const streamingContent = isStreaming ? streamState.content : undefined
