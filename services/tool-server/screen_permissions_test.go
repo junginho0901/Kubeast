@@ -37,6 +37,7 @@ var readToolsTheScreenLeavesToTheCluster = []string{
 	"k8s_find_resource", "k8s_explain", "prometheus_query", "prometheus_metrics", "prometheus_labels", "prometheus_rules", "prometheus_targets",
 	"traces_search", "traces_get", "traces_tags", "traces_metrics", "traces_compare", "issues", "gitops_status", "optimization", "can_i",
 	"resource_graph", "k8s_jq_query", "k8s_tabular_query", "k8s_count",
+	"clusters_list",
 }
 
 // The tools of the seeded Read role (auth-service repository.ReadAIToolPermissions).
@@ -47,6 +48,7 @@ var readRoleTools = []string{
 	"prometheus_targets", "logsearch", "loki_query", "loki_labels", "loki_patterns", "traces_search", "traces_get", "traces_tags",
 	"traces_metrics", "traces_compare", "alerts_list", "policy_reports", "helm_read", "cost", "optimization", "can_i", "network_policy_check",
 	"network_flows", "network_drops", "network_top_flows", "resource_graph", "k8s_jq_query", "k8s_tabular_query", "k8s_count", "gitops_status",
+	"clusters_list",
 }
 
 // The seeded Write role's list (auth-service repository_schema.go).
@@ -88,6 +90,9 @@ func screenPermissionCases() []screenCase {
 	add("audit_search", nil, "admin.audit.read")
 	add("nodes_stats_summary", nil, "admin.nodes.read")
 	add("nodes_log", args{"node": "n1"}, "admin.nodes.read")
+	// The alert window's "Investigate now": its own permission and reading the alert.
+	add("alert_investigate", args{"alert_id": "a1"}, "resource.alert.investigate", "resource.pod.read")
+	add("alert_investigate", args{"alertname": "HighLoad", "status_only": true}, "resource.alert.investigate", "resource.pod.read")
 
 	// One name in every spelling kubectl takes.
 	del := func(resourceType string, want ...string) {
@@ -374,7 +379,7 @@ func aiToolPerms(tools []string) []string {
 // Written out as a rule, not read from the table: Write holds every call but what is Admin-only on the screens.
 func writeRoleHolds(c screenCase) bool {
 	for _, perm := range c.Want {
-		if perm == "resource.pod.exec" || perm == "resource.workload.rollback" || strings.HasPrefix(perm, "admin.") {
+		if perm == "resource.pod.exec" || perm == "resource.workload.rollback" || perm == "resource.alert.investigate" || strings.HasPrefix(perm, "admin.") {
 			return false
 		}
 	}

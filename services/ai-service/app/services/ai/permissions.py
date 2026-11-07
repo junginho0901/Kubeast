@@ -122,7 +122,7 @@ def unavailable_note(service: "AIService") -> Optional[str]:
 
 
 def may_request_approval(service: "AIService", offered_tools: List[Dict], function_name: str) -> bool:
-    """A write tool gets an approval card only if the model was offered it in
+    """A write tool gets an approval card, and an action tool its run, only if the model was offered it in
     this turn (a read-only widget offers none) and the user may run it. The
     model naming a tool it was not given is not a request the user should see."""
     offered = {t.get("function", {}).get("name") for t in (offered_tools or [])}
@@ -202,8 +202,11 @@ CLUSTER_WIDE_TOOLS = frozenset({
     "k8s_get_available_api_resources", "k8s_get_cluster_configuration",
     "k8s_apply_manifest", "k8s_create_resource", "get_cluster_overview", "get_node_metrics",
     "prometheus_query", "prometheus_metrics", "prometheus_labels", "prometheus_rules", "prometheus_targets", "alerts_list",
-    "hygiene", "k8s_diff", "audit_search", "nodes_stats_summary", "nodes_log",
+    "hygiene", "k8s_diff", "audit_search", "nodes_stats_summary", "nodes_log", "alert_investigate",
 })
+
+# Kubeast's own list of clusters, not object data: the picker works for a grant limited to namespaces.
+NAMESPACE_FREE_TOOLS = frozenset({"clusters_list"})
 
 
 def namespace_scope_error(token, cluster: str, function_name: str, args: Dict) -> Optional[str]:
@@ -211,7 +214,7 @@ def namespace_scope_error(token, cluster: str, function_name: str, args: Dict) -
     tool-server's namespaceGate so the model gets the reason before the call
     leaves ai-service; tool-server refuses again on its own."""
     scope = token.namespaces.get(cluster, ()) if token else ()
-    if not scope:
+    if not scope or function_name in NAMESPACE_FREE_TOOLS:
         return None
     listed = ", ".join(scope)
     if function_name in CLUSTER_WIDE_TOOLS:

@@ -497,6 +497,9 @@ spec:
             # the audit_search tool reads the audit log through auth-service as the user
             - name: AUTH_SERVICE_URL
               value: http://auth-service:8004
+            # the alert_investigate tool presses "Investigate now" on ai-service's route as the user
+            - name: AI_SERVICE_URL
+              value: http://ai-service:8001
             # kubectl discovery cache; root fs is read-only
             - name: KUBECACHEDIR
               value: /tmp/kube-cache

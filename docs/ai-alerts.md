@@ -27,7 +27,7 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
 - Turning it on: `mcp.enabled: true` (`MCP_ENABLED` in compose). Off by default; when off, the path does not exist.
 - Permissions:
   - `ai.mcp.use` on that cluster. The system Read and Write roles include it, and Admin has everything.
-  - `ai.tool.<name>` for each tool to be used. Read gets only the 43 read tools; Write gets all of them plus the write preview `k8s_diff`. `hygiene` is visible only to Admins with `admin.hygiene.read`.
+  - `ai.tool.<name>` for each tool to be used. Read gets only the 44 read tools; Write gets all of them plus the write preview `k8s_diff`. `hygiene` is visible only to Admins with `admin.hygiene.read`.
   - `list_clusters` tells the connected person which clusters and tools they can use. The other tools require the `cluster` argument and do not fall back to the default cluster.
 - Authentication: an API key (`kbk_…`) or an access token in the `Authorization: Bearer` header.
   - The server exchanges the key for a short-lived token, and the exchange is audited too. Once the key is revoked, the next call is refused.
@@ -69,7 +69,7 @@ The feature is off by default (`features.alertInvestigation.enabled`). Turning i
   - Before it starts one, it checks again: an investigation whose kind was switched off since, that a provider pause began after, or whose kind's daily budget the runs before it spent is recorded as `skipped` instead. Runs count against a budget once they finish, so the budget holds to within the one run that crosses it (per replica).
   - A run that fails after model calls keeps the tokens they used, in its row and its audit row (with an API key; Claude Code reports usage only when its turn ends).
   - auth-service issues an **investigation-only token** for that cluster, valid for 10 minutes.
-    - It holds permissions for the 43 read tools plus `resource.pod.read`, which log store search asks for. It lacks the permissions of the Helm, policy report, cost, network flow, network drop and top talker tools, so the investigation does not see them.
+    - It holds permissions for the 44 read tools plus `resource.pod.read`, which log store search asks for. It lacks the permissions of the Helm, policy report, cost, network flow, network drop and top talker tools, so the investigation does not see them.
     - When the alert has a `namespace` label, the token is limited to the alert's Namespace.
   - Requests reach the cluster as user and group `kubeast:investigator`: a read-only ClusterRole with no Secrets, exec or writes (`templates/impersonation-investigator.yaml`).
   - To let the investigation read CRDs too (Kyverno PolicyReport, Argo Rollout, KEDA ScaledObject, etc.), add read rules to `extraRules`, with verbs get, list and watch only. The render refuses `apiGroups "*"`, Secrets, exec, proxy, tokens and wildcard resources.
@@ -119,6 +119,10 @@ Alerts come in through the same webhook as the investigation above, so `features
   - The button is locked, with why and when it works again in the viewer's time zone, when `manual: false`, while the provider pause lasts, or when today's budget is used up (until the next 00:00 UTC). With a budget, the note beside it shows today's use.
   - The window keeps its height while the investigation is queued, runs and ends (it is read again every 5 seconds meanwhile), and says who asked for it.
   - Audit: `ai.investigation.request` with the person, refusals too. When the audit DB cannot be written, the response is 503 and nothing is queued.
+  - The AI chat and MCP can start it too, with the tool `alert_investigate`. It calls the button's route as that person, so its permission, queue, budget and audit are the button's. It also needs `ai.tool.alert_investigate`, which Write holds through `ai.tool.*` and Read does not.
+    - There is no approval card: like the button, it starts an investigation and changes nothing in the cluster.
+    - The floating chat and an investigation itself are not offered it, and it is left out while `features.alertInvestigation` or `manual` is off.
+    - The chat gets the state, a link to the report and, once it is finished, the report, up to 4,000 characters. Reading it is `ai.investigation.view`. With `status_only` it starts nothing.
 - **Handling marks**: Acknowledge, Assign to me/Unassign, Note and Mark done.
   - They are records inside Kubeast and do not change Alertmanager or the alert rules. The rule decides "Resolved".
   - Every change records `alert.inbox.update` (before and after values). When the audit DB cannot be written, the response is 503 and the mark is rolled back.

@@ -6,8 +6,9 @@ call then runs as that user: the user's cluster role (tool-server impersonates
 them), the read tools the chat offers, the same masking of what leaves for a
 model, and an audit row (ai.mcp.call) per call — refused while the row cannot
 be stored. Read tools; with MCP_WRITE_TOOLS and a Write-ceiling key, the chat's
-write tools too (each call signed as its own approval). Every call also needs
-what a screen asks for it (app/services/ai/screen_permissions.py).
+write tools too (each call signed as its own approval). alert_investigate changes
+no cluster, so it follows its button's permission and not that switch. Every call
+also needs what a screen asks for it (app/services/ai/screen_permissions.py).
 
 Stateless with JSON responses: there is no session to hijack, any replica
 answers, and the bearer token is checked on every request (MCP spec,
@@ -41,6 +42,7 @@ from app.services.ai.permissions import app_permission_error, missing_permission
 from app.services.ai import features as feature_gate
 from app.services.ai.access import with_mode
 from app.services.ai.debug_dump import safe_error
+from app.services.ai.tools import ACTION_TOOLS as ACTION_TOOL_ENTRIES
 from app.services.ai.tools import ADMIN_READ_TOOLS, CLUSTER_METRICS_TOOLS, K8S_READONLY_TOOLS, K8S_WRITE_TOOLS, WRITE_PREVIEW_TOOLS
 from app.services.k8s_client import K8sServiceClient
 from app.services.approval_token import ApprovalTokenUnavailable, sign as sign_approval
@@ -125,6 +127,23 @@ def _write_tools() -> Dict[str, Tool]:
 
 
 WRITE_TOOLS: Dict[str, Tool] = _write_tools()
+
+
+def _action_tools() -> Dict[str, Tool]:
+    tools: Dict[str, Tool] = {}
+    for entry in ACTION_TOOL_ENTRIES:
+        fn = entry["function"]
+        tools[fn["name"]] = Tool(
+            name=fn["name"],
+            description=" ".join(str(fn.get("description", "")).split()),
+            input_schema=_with_cluster(fn.get("parameters")),
+            annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True, open_world_hint=False),
+        )
+    return tools
+
+
+# Start something in Kubeast and change no cluster, so MCP_WRITE_TOOLS does not decide them: the screen's permission does.
+ACTION_TOOLS: Dict[str, Tool] = _action_tools()
 
 REQUEST_ACCESS_TOOL = "request_access"
 REQUEST_ACCESS = Tool(
@@ -269,7 +288,7 @@ def _may_use_mcp(payload: TokenPayload, cluster: Optional[str] = None) -> bool:
 def _tools_allowed_in(payload: TokenPayload, cluster: str) -> List[str]:
     if not _may_use_mcp(payload, cluster):
         return []
-    names = [name for name in READ_TOOLS if token_may_call(payload, cluster, name)]
+    names = [name for name in (*READ_TOOLS, *ACTION_TOOLS) if token_may_call(payload, cluster, name)]
     if mcp_write_tools_enabled():
         names += [name for name in WRITE_TOOLS if token_may_call(payload, cluster, name)]
     return names
@@ -324,7 +343,7 @@ class KubeastMCPServer(MCPServer):
             # Nothing to call yet; with write tools on the agent may still ask for a role.
             return [REQUEST_ACCESS] if mcp_write_tools_enabled() else []
         # The Admin-only read tool is listed only for a token that holds its global permission.
-        tools = [LIST_CLUSTERS, *(t for n, t in READ_TOOLS.items() if feature_gate.permitted_anywhere(n, payload)), *(WRITE_TOOLS[n] for n in _write_tools_anywhere(payload))]
+        tools = [LIST_CLUSTERS, *(t for n, t in {**READ_TOOLS, **ACTION_TOOLS}.items() if feature_gate.permitted_anywhere(n, payload)), *(WRITE_TOOLS[n] for n in _write_tools_anywhere(payload))]
         if mcp_write_tools_enabled():
             tools.append(REQUEST_ACCESS)
         return tools
@@ -338,7 +357,7 @@ class KubeastMCPServer(MCPServer):
             return await self._list_clusters(token, payload)
         if name == REQUEST_ACCESS_TOOL and mcp_write_tools_enabled():
             return await self._request_access(token, payload, dict(arguments or {}), context)
-        tool = READ_TOOLS.get(name) or (WRITE_TOOLS.get(name) if mcp_write_tools_enabled() else None)
+        tool = READ_TOOLS.get(name) or ACTION_TOOLS.get(name) or (WRITE_TOOLS.get(name) if mcp_write_tools_enabled() else None)
         if tool is None:
             return _text(f"unknown tool: {name}", error=True)
         is_write = name in WRITE_TOOLS

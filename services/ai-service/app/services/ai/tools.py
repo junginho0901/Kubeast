@@ -367,6 +367,21 @@ K8S_READONLY_TOOLS: List[Dict] = [
     {
         "type": "function",
         "function": {
+            "name": "clusters_list",
+            "description": (
+                "The clusters this user can see in Kubeast and their connection status, as the cluster picker lists them: id, display_name, mode, "
+                "is_self_cluster, health_status (the last connection check, made at registration or by a person's Test in Admin → Clusters at "
+                "last_healthcheck_at, not a live probe; unknown = never checked), current (the cluster this conversation reads) and namespaces "
+                "when the grant there is limited to them. Someone with admin.clusters.list gets every registered cluster, with reachable and the "
+                "API server, Prometheus and log store settings of Admin → Clusters. Never a kubeconfig or credential. Use it for \"which cluster "
+                "is not connected\" and \"which clusters do I have\"; every other tool reads the current cluster only."
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "prometheus_targets",
             "description": (
                 "Scrape targets of this cluster's Prometheus and whether the last scrape worked (health up/down, last error), the down ones first. "
@@ -988,6 +1003,44 @@ WRITE_PREVIEW_TOOLS: List[Dict] = [
     },
 ]
 
+# Starts something in Kubeast; the cluster does not change, so no approval card (tool_whitelists.ACTION_TOOL_NAMES).
+# Offered when the token holds what the screen's button asks. Not part of the Read role's seed.
+ACTION_TOOLS: List[Dict] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "alert_investigate",
+            "description": (
+                "Start Kubeast's formal investigation of one alert in the Alerts inbox, the same as the alert window's \"Investigate now\" "
+                "button (permission resource.alert.investigate, and reading the whole cluster): it runs in the background as kubeast:investigator "
+                "with read-only tools, its report is stored in Alerts and Admin → Investigations, and it costs model tokens, counted in the "
+                "day's budget of asked-for investigations. Call it only when the user asks to start an investigation; for a quick look use the "
+                "read tools yourself. Name the alert with alert_id, or with alertname and, when several match, namespace or alert_labels; "
+                "{\"status\":\"ambiguous\"} lists the matches, so ask the user which one. Answers started, investigation (id, status), "
+                "report_link (give it to the user), alert_link and investigate_now (the window's state: allowed, reason, until, budget, used). "
+                "Nothing new starts while this firing's investigation is queued, running or done; a finished one answers its report, which you "
+                "summarize. status_only=true starts nothing and reads how it went: use that to look again, because a call without it starts a "
+                "new run after a failed or skipped one. Refusals keep the button's reason: forbidden (code forbidden, manual_off), rate_limited "
+                "(code manual_budget, provider_paused, with until). not_found = not in the inbox; unavailable = investigations are off."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "alert_id": {"type": "string", "description": "The alert's id in the Alerts inbox, from an earlier answer of this tool"},
+                    "alertname": {"type": "string", "description": "Exact alert name, e.g. KubePodCrashLooping"},
+                    "namespace": {"type": "string", "description": "The alert's namespace label, to tell alerts of one name apart"},
+                    "alert_labels": {
+                        "type": "object",
+                        "description": "Exact label values to tell alerts of one name apart, e.g. {\"pod\": \"web-1\"}",
+                        "additionalProperties": {"type": "string"},
+                    },
+                    "status_only": {"type": "boolean", "description": "Read how the investigation went; start nothing"},
+                },
+            },
+        },
+    },
+]
+
 # Read tools for Admin only: offered when the token holds the permission k8s-service asks for
 # (app/services/ai/features.py REQUIRED_PERMISSIONS). Not part of the Read role's seed.
 ADMIN_READ_TOOLS: List[Dict] = [
@@ -999,7 +1052,8 @@ ADMIN_READ_TOOLS: List[Dict] = [
                 "The cluster hygiene report (Admin → Cluster hygiene; permission admin.hygiene.read): Pod Security Standards level per namespace, "
                 "containers running as root or privileged, images by mutable tag (latest), TLS certificates about to expire, deprecated APIs and "
                 "other upgrade-readiness checks against the next Kubernetes minor, with counts per severity, the list of checks and the findings "
-                "(check, severity, kind, namespace, name, message, exempt). Filter with severity (critical, warning, info) or check (one check's id). "
+                "(check, severity, kind, namespace, name, message, exempt). The upgrade checks' ids start with upgrade. and server_version and "
+                "target_version say what they judge against. Filter with severity (critical, warning, info) or check (one check's id). "
                 "Use it for \"is this cluster ready for the upgrade\", \"what breaks Pod Security\", a periodic review. The report also says when it "
                 "was last signed off and whether a review is due. {\"status\":\"unavailable\"} means the report is off (features.hygiene.enabled)."
             ),
@@ -1370,5 +1424,6 @@ def get_tools_definition(service) -> List[Dict]:
     tools.extend(K8S_READONLY_TOOLS)
     tools.extend(ADMIN_READ_TOOLS)
     tools.extend(WRITE_PREVIEW_TOOLS)
+    tools.extend(ACTION_TOOLS)
     tools.extend(K8S_WRITE_TOOLS)
     return service._filter_tools_by_role(tools)

@@ -60,6 +60,8 @@ def _manifest_objects(args: dict) -> list[dict]:
 
 def tool_target(tool: str, args: dict) -> ToolTarget:
     namespace = args.get("namespace") if isinstance(args.get("namespace"), str) and args.get("namespace") else None
+    if tool == "alert_investigate":
+        return ToolTarget("alert", args.get("alert_id") or args.get("alertname") or tool, namespace, None)
     named = args.get("resource_name") or args.get("name") or args.get("pod_name")
     objects = [] if named else _manifest_objects(args)
     if not objects:

@@ -1,8 +1,10 @@
 {
  "tools": [
+  "alert_investigate",
   "alerts_list",
   "audit_search",
   "can_i",
+  "clusters_list",
   "cost",
   "get_cluster_overview",
   "get_node_metrics",
@@ -320,7 +322,8 @@
   "ai.tool.k8s_jq_query",
   "ai.tool.k8s_tabular_query",
   "ai.tool.k8s_count",
-  "ai.tool.gitops_status"
+  "ai.tool.gitops_status",
+  "ai.tool.clusters_list"
  ],
  "cases": [
   {
@@ -534,6 +537,13 @@
    "read": true
   },
   {
+   "tool": "clusters_list",
+   "args": {},
+   "want": null,
+   "write": true,
+   "read": true
+  },
+  {
    "tool": "k8s_get_resources",
    "args": {
     "resource_type": "secrets"
@@ -714,6 +724,31 @@
    },
    "want": [
     "admin.nodes.read"
+   ],
+   "write": false,
+   "read": false
+  },
+  {
+   "tool": "alert_investigate",
+   "args": {
+    "alert_id": "a1"
+   },
+   "want": [
+    "resource.alert.investigate",
+    "resource.pod.read"
+   ],
+   "write": false,
+   "read": false
+  },
+  {
+   "tool": "alert_investigate",
+   "args": {
+    "alertname": "HighLoad",
+    "status_only": true
+   },
+   "want": [
+    "resource.alert.investigate",
+    "resource.pod.read"
    ],
    "write": false,
    "read": false

@@ -15,6 +15,7 @@ import time
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from app.services.ai import screen_permissions
+from app.services.investigation import settings as investigation_settings
 from app.services.tool_whitelists import WRITE_TOOL_NAMES
 
 log = logging.getLogger(__name__)
@@ -70,6 +71,10 @@ def _policy_reports_on(features: Dict[str, Any], cluster: str) -> bool:
     return bool((features.get("policyReports") or {}).get("enabled"))
 
 
+def _investigate_now_on(features: Dict[str, Any], cluster: str) -> bool:
+    return bool((features.get("alertInvestigation") or {}).get("enabled")) and investigation_settings.load().manual
+
+
 # tool name → does this cluster serve it. Tools not listed are always offered.
 GATES: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
     "prometheus_query": _prometheus_on,
@@ -92,6 +97,7 @@ GATES: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
     "network_top_flows": _network_flow_monitor_on,
     "cost": _cost_on,
     "policy_reports": _policy_reports_on,
+    "alert_investigate": _investigate_now_on,
 }
 
 # tool name → (scope, permission) the screen's route asks for when the tool calls it.

@@ -25,7 +25,7 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
 
 - 켜기: `mcp.enabled: true`(컴포즈는 `MCP_ENABLED`). 기본은 꺼져 있고, 꺼져 있으면 경로 자체가 없습니다.
 - 권한: 그 클러스터에 대한 `ai.mcp.use`(시스템 Read·Write 역할에 포함, Admin은 모든 권한)와 쓰려는 도구의 `ai.tool.<이름>`이 필요합니다.
-  - Read는 읽기 도구 43종만, Write는 전부와 쓰기 미리보기 `k8s_diff`를 쓸 수 있습니다.
+  - Read는 읽기 도구 44종만, Write는 전부와 쓰기 미리보기 `k8s_diff`를 쓸 수 있습니다.
   - `hygiene`은 `admin.hygiene.read`를 가진 Admin에게만 보입니다.
   - `list_clusters`가 연결한 사람이 쓸 수 있는 클러스터와 도구를 알려 줍니다.
   - 나머지 도구는 `cluster` 인자가 필수이며 기본 클러스터로 대신하지 않습니다.
@@ -67,7 +67,7 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
   - 시작하기 전에 한 번 더 봅니다. 그 사이 그 종류(자동·요청)가 꺼졌거나, 제공자 일시 정지가 시작됐거나, 앞서 돈 조사들이 그 종류의 하루 한도를 다 썼으면 시작하지 않고 `skipped`로 남깁니다. 조사는 끝나야 한도에 들어가므로, 한도는 그것을 넘기는 한 번(복제본마다)까지만 넘칩니다.
   - 모델을 부른 뒤 실패한 조사도 그때까지 쓴 토큰을 조사 행과 감사 행에 남깁니다(API 키일 때. Claude Code는 한 턴이 끝날 때만 사용량을 알려 줍니다).
   - auth-service가 그 클러스터용 **조사 전용 토큰**을 10분짜리로 발급합니다.
-    - 권한은 읽기 도구 43개와 로그 저장소 검색이 확인하는 `resource.pod.read`입니다. Helm·정책 보고·비용·네트워크 흐름·네트워크 차단·상위 통신 도구는 이 권한이 없어 조사에는 보이지 않습니다.
+    - 권한은 읽기 도구 44개와 로그 저장소 검색이 확인하는 `resource.pod.read`입니다. Helm·정책 보고·비용·네트워크 흐름·네트워크 차단·상위 통신 도구는 이 권한이 없어 조사에는 보이지 않습니다.
     - 알림에 `namespace` 라벨이 있으면 그 Namespace로 한정합니다.
     - 클러스터에는 사용자·그룹 `kubeast:investigator`로 요청합니다. 이 신원은 Secret·exec·쓰기 권한이 없는 읽기 전용 ClusterRole입니다(`templates/impersonation-investigator.yaml`).
   - 조사에서 CRD(Kyverno PolicyReport, Argo Rollout, KEDA ScaledObject 등)도 읽게 하려면 `extraRules`에 읽기 규칙을 추가하세요. 동사는 get, list, watch만 쓸 수 있고, `apiGroups "*"`, Secret, exec, 프록시, 토큰, 와일드카드 자원은 렌더 단계에서 거부합니다.
@@ -120,6 +120,10 @@ Alertmanager(또는 Grafana 알림)가 보낸 알림을 **울리는 중인 것�
   - `manual: false`일 때, 제공자 일시 정지 동안, 오늘 한도를 다 썼을 때(다음 UTC 00:00까지)는 버튼이 잠기고 옆에 이유와 다시 되는 시각(보는 사람 시간대)을 보입니다. 한도가 있으면 옆에 오늘 쓴 양을 보입니다.
   - 조사가 줄 서고, 돌고, 끝나는 동안 창 높이는 그대로이며(그동안 5초마다 다시 읽음) 누가 요청했는지 보입니다.
   - 감사는 요청한 사람으로 `ai.investigation.request`이며 거절도 남깁니다. 감사 DB에 쓸 수 없으면 503이고 아무것도 줄 세우지 않습니다.
+  - AI 채팅과 MCP에서도 도구 `alert_investigate`로 시작할 수 있습니다. 그 사람 권한으로 버튼의 경로를 부르므로 권한·대기열·한도·감사가 버튼과 같습니다. `ai.tool.alert_investigate`도 필요하며 Write는 `ai.tool.*`로 갖고 Read에는 없습니다.
+    - 승인 카드는 없습니다. 버튼처럼 조사를 시작할 뿐 클러스터를 바꾸지 않습니다.
+    - 플로팅 채팅과 조사 자신에게는 주지 않고, `features.alertInvestigation`이나 `manual`이 꺼져 있으면 도구 목록에서 빠집니다.
+    - 채팅은 상태와 보고서 링크를 받고, 조사가 끝났으면 보고서를 4,000자까지 받습니다. 이 읽기는 `ai.investigation.view`로 남습니다. `status_only`면 아무것도 시작하지 않습니다.
 - **처리 표시**: 확인함 · 내가 담당/해제 · 메모 · 조치 완료를 표시할 수 있습니다.
   - Kubeast 안에만 남는 기록이며 Alertmanager나 알림 규칙은 바꾸지 않습니다. "해결됨"은 알림 규칙이 정합니다.
   - 바꿀 때마다 `alert.inbox.update`(전·후 값)를 남기고, 감사 DB에 쓸 수 없으면 503을 돌려주며 표시도 되돌립니다.

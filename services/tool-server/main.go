@@ -201,6 +201,16 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Handler:     handleAlertsList,
 	})
 	register(ToolDefinition{
+		Name:        "clusters_list",
+		Description: "The clusters the user can see in Kubeast and their last connection check, as the cluster picker lists them",
+		Handler:     handleClustersList,
+	})
+	register(ToolDefinition{
+		Name:        "alert_investigate",
+		Description: "Start the formal investigation of an alert in the Alerts inbox, as its Investigate now button does, or read how it went",
+		Handler:     handleAlertInvestigate,
+	})
+	register(ToolDefinition{
 		Name:        "logsearch",
 		Description: "Search the cluster's log store (Loki) through Kubeast — also pods that no longer exist",
 		Handler:     handleLogSearch,
