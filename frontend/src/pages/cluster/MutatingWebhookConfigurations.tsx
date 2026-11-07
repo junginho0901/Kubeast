@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation, Trans } from 'react-i18next'
 import { api, type WebhookConfigInfo } from '@/services/api'
@@ -16,46 +15,9 @@ import { useCanCreate } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
+import { applyWebhookConfigWatchEvent } from './webhooks/webhookConfigWatchNormalize'
 
 type SortKey = null | 'name' | 'webhooksCount' | 'age'
-
-function normalizeWatchObject(obj: any): WebhookConfigInfo {
-  if (typeof obj?.name === 'string' && typeof obj?.webhooks_count === 'number') {
-    return obj as WebhookConfigInfo
-  }
-  const metadata = obj?.metadata ?? {}
-  return {
-    name: metadata?.name ?? obj?.name ?? '',
-    webhooks_count: obj?.webhooks?.length ?? obj?.webhooks_count ?? 0,
-    labels: metadata?.labels ?? obj?.labels ?? {},
-    created_at: metadata?.creationTimestamp ?? obj?.created_at ?? '',
-  }
-}
-
-function applyWatchEvent(
-  prev: WebhookConfigInfo[] | undefined,
-  event: { type?: string; object?: any },
-): WebhookConfigInfo[] {
-  const items = Array.isArray(prev) ? [...prev] : []
-  const obj = event?.object
-  if (!obj) return items
-
-  const normalized = normalizeWatchObject(obj)
-  const name = normalized?.name
-  if (!name) return items
-
-  const index = items.findIndex((item) => item.name === name)
-
-  if (event.type === 'DELETED') {
-    if (index >= 0) items.splice(index, 1)
-    return items
-  }
-
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
-  else items.push(normalized)
-
-  return items
-}
 
 function toRawJson(item: WebhookConfigInfo): Record<string, unknown> {
   return {
@@ -95,7 +57,7 @@ export default function MutatingWebhookConfigurations() {
     queryKey: ['cluster', 'mutatingwebhookconfigurations'],
     path: '/apis/admissionregistration.k8s.io/v1/mutatingwebhookconfigurations',
     query: 'watch=1',
-    applyEvent: (prev, event) => applyWatchEvent(prev as WebhookConfigInfo[] | undefined, event),
+    applyEvent: (prev, event) => applyWebhookConfigWatchEvent(prev as WebhookConfigInfo[] | undefined, event),
   })
 
   const filtered = useMemo(() => {

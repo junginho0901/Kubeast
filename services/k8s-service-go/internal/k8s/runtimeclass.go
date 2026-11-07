@@ -8,6 +8,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	nodev1 "k8s.io/api/node/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	runtimeclassrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/runtimeclass"
 )
 
 // GetRuntimeClasses lists all RuntimeClasses.
@@ -42,7 +44,7 @@ func (s *Service) DescribeRuntimeClass(ctx context.Context, name string) (map[st
 	if rcErr != nil {
 		return nil, fmt.Errorf("get runtimeclass %s: %w", name, rcErr)
 	}
-	result := formatRuntimeClassDetail(rc)
+	result := runtimeclassrow.Info(rc)
 
 	// Additional metadata
 	result["uid"] = string(rc.UID)
@@ -65,54 +67,7 @@ func (s *Service) DeleteRuntimeClass(ctx context.Context, name string) error {
 func formatRuntimeClassList(rcs []nodev1.RuntimeClass) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(rcs))
 	for i := range rcs {
-		result = append(result, formatRuntimeClassDetail(&rcs[i]))
+		result = append(result, runtimeclassrow.Info(&rcs[i]))
 	}
-	return result
-}
-
-func formatRuntimeClassDetail(rc *nodev1.RuntimeClass) map[string]interface{} {
-	result := map[string]interface{}{
-		"name":       rc.Name,
-		"handler":    rc.Handler,
-		"labels":     rc.Labels,
-		"created_at": toISO(&rc.CreationTimestamp),
-	}
-
-	// Overhead
-	if rc.Overhead != nil {
-		overhead := map[string]string{}
-		for k, v := range rc.Overhead.PodFixed {
-			overhead[string(k)] = v.String()
-		}
-		result["overhead"] = overhead
-	}
-
-	// Scheduling
-	if rc.Scheduling != nil {
-		scheduling := map[string]interface{}{}
-		if rc.Scheduling.NodeSelector != nil {
-			scheduling["node_selector"] = rc.Scheduling.NodeSelector
-		}
-		if len(rc.Scheduling.Tolerations) > 0 {
-			tolerations := make([]map[string]interface{}, 0, len(rc.Scheduling.Tolerations))
-			for _, t := range rc.Scheduling.Tolerations {
-				tol := map[string]interface{}{
-					"key":      t.Key,
-					"operator": string(t.Operator),
-					"effect":   string(t.Effect),
-				}
-				if t.Value != "" {
-					tol["value"] = t.Value
-				}
-				if t.TolerationSeconds != nil {
-					tol["toleration_seconds"] = *t.TolerationSeconds
-				}
-				tolerations = append(tolerations, tol)
-			}
-			scheduling["tolerations"] = tolerations
-		}
-		result["scheduling"] = scheduling
-	}
-
 	return result
 }

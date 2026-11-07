@@ -4,6 +4,7 @@ import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsSection, Th, Tx
 import { fmtRel } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
 import { webhookAffected, type WebhookRule } from './clusterDetail'
+import { useDrawerFollowsObject } from './useDrawerFollowsObject'
 import { usePagination } from './usePagination'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -24,6 +25,12 @@ export default function WebhookConfigInfo({ name, kind }: Props) {
         : api.describeValidatingWebhookConfiguration(name),
     staleTime: 10_000,
     retry: 1,
+  })
+  useDrawerFollowsObject({
+    enabled: !!name,
+    describeKey: [isMutating ? 'mutatingwebhookconfiguration-describe' : 'validatingwebhookconfiguration-describe', name],
+    path: `/apis/admissionregistration.k8s.io/v1/${isMutating ? 'mutatingwebhookconfigurations' : 'validatingwebhookconfigurations'}`,
+    name,
   })
 
   useResourceDetailOverlay({ kind, name, describe: desc })

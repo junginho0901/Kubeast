@@ -4,6 +4,7 @@ import { api } from '@/services/api'
 import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsSection, Th, NoneText, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { limitRangeViolationsLayer, limitRangeViolationsSummary, violatingPodCount, violationsUnread } from './limitRangeViolations'
+import { useDrawerFollowsObject } from './useDrawerFollowsObject'
 import { usePagination } from './usePagination'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -27,6 +28,12 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
     queryFn: () => api.describeLimitRange(namespace, name),
     staleTime: 10_000,
     retry: 1,
+  })
+  useDrawerFollowsObject({
+    enabled: !!namespace && !!name,
+    describeKey: ['limitrange-describe', namespace, name],
+    path: `/api/v1/namespaces/${namespace}/limitranges`,
+    name,
   })
 
   const { data: violations, error: violationsError } = useQuery({

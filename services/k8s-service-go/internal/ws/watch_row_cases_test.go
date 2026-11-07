@@ -283,6 +283,65 @@ const (
 	stsRolling  = stsHead + stsNew + `,"status":{"replicas":2,"readyReplicas":1,"currentReplicas":1,"updatedReplicas":1,"availableReplicas":1}}`
 	stsDown     = stsHead + stsTwo + `,"status":{"replicas":2,"readyReplicas":0,"currentReplicas":2,"updatedReplicas":2,"availableReplicas":0}}`
 	stsIdle     = stsHead + stsZero + `,"status":{"replicas":0}}`
+
+	tagsOf    = `,"labels":{"team":"a"},"annotations":{"note":"kept"}`
+	crHead    = `{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"ClusterRole","metadata":{"name":"reader","creationTimestamp":"2026-11-01T00:00:00Z"`
+	crFull    = crHead + tagsOf + `},"rules":[{"apiGroups":[""],"resources":["pods"],"verbs":["get"]},{"nonResourceURLs":["/healthz"],"verbs":["get"]}]}`
+	crPlain   = crHead + `}}`
+	refBinder = `"roleRef":{"apiGroup":"rbac.authorization.k8s.io","kind":"ClusterRole","name":"reader"}`
+	whoBound  = `"subjects":[{"kind":"User","apiGroup":"rbac.authorization.k8s.io","name":"someone@example.test"},{"kind":"ServiceAccount","name":"runner","namespace":"demo"}]`
+	crbHead   = `{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"ClusterRoleBinding","metadata":{"name":"readers","creationTimestamp":"2026-11-01T00:00:00Z"`
+	crbFull   = crbHead + tagsOf + `},` + refBinder + `,` + whoBound + `}`
+	crbNone   = crbHead + `},` + refBinder + `}`
+	rbHead    = `{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"RoleBinding","metadata":{"name":"readers","namespace":"demo","creationTimestamp":"2026-11-01T00:00:00Z"`
+	rbFull    = rbHead + tagsOf + `},` + refBinder + `,` + whoBound + `}`
+	rbNone    = rbHead + `},` + refBinder + `}`
+
+	pcHead  = `{"apiVersion":"scheduling.k8s.io/v1","kind":"PriorityClass","metadata":{"name":"high","creationTimestamp":"2026-11-01T00:00:00Z"`
+	pcFull  = pcHead + `,"labels":{"team":"a"}},"value":1000,"globalDefault":true,"preemptionPolicy":"Never","description":"for the front"}`
+	pcPlain = pcHead + `},"value":1000}`
+
+	rcHead = `{"apiVersion":"node.k8s.io/v1","kind":"RuntimeClass","metadata":{"name":"gvisor","creationTimestamp":"2026-11-01T00:00:00Z"`
+	rcFull = rcHead + `,"labels":{"team":"a"}},"handler":"runsc","overhead":{"podFixed":{"cpu":"250m","memory":"1024Mi"}},
+		"scheduling":{"nodeSelector":{"sandbox":"yes"},"tolerations":[{"key":"sandbox","operator":"Exists","effect":"NoSchedule"}]}}`
+	rcPlain = rcHead + `},"handler":"runsc"}`
+
+	whMeta = `"metadata":{"name":"policy","creationTimestamp":"2026-11-01T00:00:00Z"`
+	// a CA bundle as the API server sends it: not a secret, but a row counts the webhooks and does not carry them
+	whCA    = "ZmFrZS1jYS1idW5kbGUtZm9yLXRlc3Rz"
+	vwcFull = `{"apiVersion":"admissionregistration.k8s.io/v1","kind":"ValidatingWebhookConfiguration",` + whMeta + `,"labels":{"team":"a"}},"webhooks":[` + whEntryOne + `,` + whEntryTwo + `]}`
+	vwcNone = `{"apiVersion":"admissionregistration.k8s.io/v1","kind":"ValidatingWebhookConfiguration",` + whMeta + `}}`
+	mwcFull = `{"apiVersion":"admissionregistration.k8s.io/v1","kind":"MutatingWebhookConfiguration",` + whMeta + `,"labels":{"team":"a"}},"webhooks":[` + whEntryOne + `,` + whEntryTwo + `]}`
+	mwcNone = `{"apiVersion":"admissionregistration.k8s.io/v1","kind":"MutatingWebhookConfiguration",` + whMeta + `}}`
+
+	whEntryOne = `{"name":"one.example.test","clientConfig":{"url":"https://hook.example.test/","caBundle":"` + whCA + `"},"rules":[{"apiGroups":["example.test"],"apiVersions":["v1"],"operations":["CREATE"],"resources":["things"]}],"sideEffects":"None","admissionReviewVersions":["v1"]}`
+	whEntryTwo = `{"name":"two.example.test","clientConfig":{"url":"https://hook.example.test/","caBundle":"` + whCA + `"},"rules":[{"apiGroups":["example.test"],"apiVersions":["v1"],"operations":["CREATE"],"resources":["things"]}],"sideEffects":"None","admissionReviewVersions":["v1"]}`
+
+	leaseHead = `{"apiVersion":"coordination.k8s.io/v1","kind":"Lease","metadata":{"name":"node-a","namespace":"demo","creationTimestamp":"2026-11-01T00:00:00Z"`
+	leaseHeld = leaseHead + `,"labels":{"team":"a"}},"spec":{"holderIdentity":"node-a","leaseDurationSeconds":40,"leaseTransitions":3,"acquireTime":"2026-11-05T00:00:00.123456Z","renewTime":"2026-11-06T11:59:50.654321Z"}}`
+	leaseMore = leaseHead + `,"labels":{"team":"a"}},"spec":{"holderIdentity":"node-b","leaseDurationSeconds":15,"leaseTransitions":4,"acquireTime":"2026-11-06T12:00:00.000000Z","renewTime":"2026-11-06T12:00:00.000000Z"}}`
+	leaseFree = leaseHead + `},"spec":{}}`
+
+	lrHead = `{"apiVersion":"v1","kind":"LimitRange","metadata":{"name":"limits","namespace":"demo","creationTimestamp":"2026-11-01T00:00:00Z"`
+	lrFull = lrHead + `,"labels":{"team":"a"}},"spec":{"limits":[{"type":"Container","default":{"cpu":"500m"},"defaultRequest":{"memory":"1024Mi"},"max":{"cpu":"2"},"min":{"cpu":"10m"}},{"type":"Pod","max":{"memory":"2Gi"}}]}}`
+	lrOne  = lrHead + `},"spec":{"limits":[{"type":"PersistentVolumeClaim","max":{"storage":"100Gi"}}]}}`
+	lrNone = lrHead + `},"spec":{"limits":[]}}`
+
+	rqHead = `{"apiVersion":"v1","kind":"ResourceQuota","metadata":{"name":"quota","namespace":"demo","creationTimestamp":"2026-11-01T00:00:00Z"`
+	rqFull = rqHead + `,"labels":{"team":"a"}},"spec":{"hard":{"pods":"10","requests.memory":"1024Mi"}},"status":{"hard":{"pods":"10","requests.memory":"1024Mi"},"used":{"pods":"3","requests.memory":"512Mi"}}}`
+	rqOne  = rqHead + `},"spec":{"hard":{"pods":"20"}},"status":{"hard":{"pods":"20"},"used":{"pods":"4"}}}`
+	rqNone = rqHead + `},"spec":{"hard":{"pods":"20"}}}`
+
+	pdbHead    = `{"apiVersion":"policy/v1","kind":"PodDisruptionBudget","metadata":{"name":"web","namespace":"demo","creationTimestamp":"2026-11-01T00:00:00Z"`
+	pdbHealthy = `"status":{"currentHealthy":3,"desiredHealthy":2,"disruptionsAllowed":1,"expectedPods":3}`
+	pdbMin     = pdbHead + `,"labels":{"team":"a"}},"spec":{"minAvailable":2,"selector":{"matchLabels":{"app":"web"}},"unhealthyPodEvictionPolicy":"AlwaysAllow"},` + pdbHealthy + `}`
+	pdbMax     = pdbHead + `},"spec":{"maxUnavailable":"50%","selector":{"matchExpressions":[{"key":"app","operator":"In","values":["web"]}]}},` + pdbHealthy + `}`
+	pdbNoPods  = pdbHead + `},"spec":{"minAvailable":"50%"},"status":{"currentHealthy":0,"desiredHealthy":0,"disruptionsAllowed":0,"expectedPods":0}}`
+
+	crdHead = `{"apiVersion":"apiextensions.k8s.io/v1","kind":"CustomResourceDefinition","metadata":{"name":"widgets.example.test","creationTimestamp":"2026-11-01T00:00:00Z"`
+	crdSpec = `"group":"example.test","scope":"Namespaced","names":{"kind":"Widget","plural":"widgets"}`
+	crdTwo  = crdHead + `,"labels":{"team":"a"},"annotations":{"note":"kept"}},"spec":{` + crdSpec + `,"versions":[{"name":"v1beta1","served":true,"storage":false},{"name":"v1","served":true,"storage":true}]}}`
+	crdOne  = crdHead + `},"spec":{` + crdSpec + `,"versions":[{"name":"v1beta1","served":false,"storage":false},{"name":"v1","served":true,"storage":true}]}}`
 )
 
 type watchRowSource struct {
@@ -404,7 +463,69 @@ func watchRowSources() []watchRowSource {
 	stsShows := func(ready, updated string, available int, status, service, images string) map[string]interface{} {
 		return map[string]interface{}{"ready": ready, "updated": updated, "available": available, "status": status, "service": service, "images": images}
 	}
+	crShows := func(rules int, labels, annotations map[string]interface{}) map[string]interface{} {
+		return map[string]interface{}{"rules_count": rules, "labels": labels, "annotations": annotations}
+	}
+	bindingShows := func(count int, subjects []interface{}, labels, annotations map[string]interface{}) map[string]interface{} {
+		return map[string]interface{}{"role": "ClusterRole/reader", "subjects_count": count, "subjects": subjects, "labels": labels, "annotations": annotations}
+	}
+	bound := []interface{}{"User/someone@example.test", "ServiceAccount/runner"}
+	pcShows := func(global bool, preemption, description string, labels map[string]interface{}) map[string]interface{} {
+		return map[string]interface{}{"value": 1000, "global_default": global, "preemption_policy": preemption, "description": description, "labels": labels}
+	}
+	rcShows := func(overhead, selector map[string]interface{}, tolerations int, labels map[string]interface{}) map[string]interface{} {
+		return map[string]interface{}{"handler": "runsc", "overhead": overhead, "node_selector": selector, "tolerations": tolerations, "labels": labels}
+	}
+	whShows := func(count int, labels map[string]interface{}) map[string]interface{} {
+		return map[string]interface{}{"webhooks_count": count, "labels": labels}
+	}
+	leaseShows := func(holder string, duration, transitions, renew, acquire interface{}, labels map[string]interface{}) map[string]interface{} {
+		return map[string]interface{}{"holder": holder, "duration": duration, "transitions": transitions, "renew_time": renew, "acquire_time": acquire, "labels": labels}
+	}
+	lrShows := func(types string, limits []interface{}, labels map[string]interface{}) map[string]interface{} {
+		return map[string]interface{}{"types": types, "limits": limits, "labels": labels}
+	}
+	rqShows := func(requests int, hard, used, labels map[string]interface{}) map[string]interface{} {
+		return map[string]interface{}{"requests": requests, "hard": hard, "used": used, "labels": labels}
+	}
+	pdbShows := func(min, max string, allowed int, current string, desired, expected int, selector string, labels map[string]interface{}) map[string]interface{} {
+		return map[string]interface{}{
+			"min_available": min, "max_unavailable": max, "allowed": allowed, "current": current, "desired": desired, "expected": expected,
+			"selector": selector, "labels": labels,
+		}
+	}
+	crdShows := func(versions string, labels, annotations map[string]interface{}) map[string]interface{} {
+		return map[string]interface{}{"group": "example.test", "versions": versions, "scope": "Namespaced", "kind": "Widget", "labels": labels, "annotations": annotations}
+	}
 	return []watchRowSource{
+		{"a ClusterRole whose rules, labels and annotations went away shows none", "clusterroles", crFull, crPlain, crShows(0, noTags, noTags)},
+		{"a ClusterRole that gained them shows them", "clusterroles", crPlain, crFull, crShows(2, teamA, note)},
+		{"a ClusterRoleBinding whose subjects, labels and annotations went away shows none", "clusterrolebindings", crbFull, crbNone, bindingShows(0, none, noTags, noTags)},
+		{"a ClusterRoleBinding that gained them shows them", "clusterrolebindings", crbNone, crbFull, bindingShows(2, bound, teamA, note)},
+		{"a RoleBinding whose subjects, labels and annotations went away shows none", "rolebindings", rbFull, rbNone, bindingShows(0, none, noTags, noTags)},
+		{"a RoleBinding that gained them shows them", "rolebindings", rbNone, rbFull, bindingShows(2, bound, teamA, note)},
+		{"a PriorityClass no longer the default, its description and labels gone, says so", "priorityclasses", pcFull, pcPlain, pcShows(false, "PreemptLowerPriority", "", noTags)},
+		{"a PriorityClass that gained them shows them", "priorityclasses", pcPlain, pcFull, pcShows(true, "Never", "for the front", teamA)},
+		{"a RuntimeClass whose overhead, scheduling and labels went away shows none", "runtimeclasses", rcFull, rcPlain, rcShows(nil, nil, 0, noTags)},
+		{"a RuntimeClass that gained them shows them", "runtimeclasses", rcPlain, rcFull, rcShows(map[string]interface{}{"cpu": "250m", "memory": "1Gi"}, map[string]interface{}{"sandbox": "yes"}, 1, teamA)},
+		{"a ValidatingWebhookConfiguration left with no webhook counts none, its labels gone", "validatingwebhookconfigurations", vwcFull, vwcNone, whShows(0, noTags)},
+		{"a ValidatingWebhookConfiguration that gained webhooks counts them", "validatingwebhookconfigurations", vwcNone, vwcFull, whShows(2, teamA)},
+		{"a MutatingWebhookConfiguration left with no webhook counts none, its labels gone", "mutatingwebhookconfigurations", mwcFull, mwcNone, whShows(0, noTags)},
+		{"a MutatingWebhookConfiguration that gained webhooks counts them", "mutatingwebhookconfigurations", mwcNone, mwcFull, whShows(2, teamA)},
+		{"a Lease its holder let go of shows no holder, duration or times", "leases", leaseHeld, leaseFree, leaseShows("-", "-", "-", nil, nil, noTags)},
+		{"a Lease that was taken shows its holder with its times to the second", "leases", leaseFree, leaseHeld, leaseShows("node-a", 40, 3, "2026-11-06T11:59:50Z", "2026-11-05T00:00:00Z", teamA)},
+		{"a Lease that changed hands shows the new holder and times", "leases", leaseHeld, leaseMore, leaseShows("node-b", 15, 4, "2026-11-06T12:00:00Z", "2026-11-06T12:00:00Z", teamA)},
+		{"a LimitRange left with no limit lists no type, its labels gone", "limitranges", lrFull, lrNone, lrShows("-", none, noTags)},
+		{"a LimitRange of other limits lists only those", "limitranges", lrFull, lrOne, lrShows("PersistentVolumeClaim", []interface{}{"PersistentVolumeClaim max storage=100Gi"}, noTags)},
+		{"a LimitRange that gained limits lists each with its values", "limitranges", lrNone, lrFull, lrShows("Container, Pod", []interface{}{"Container default cpu=500m defaultRequest memory=1Gi max cpu=2 min cpu=10m", "Pod max memory=2Gi"}, teamA)},
+		{"a ResourceQuota the controller has not counted yet shows nothing used, its labels gone", "resourcequotas", rqFull, rqNone, rqShows(0, noTags, noTags, noTags)},
+		{"a ResourceQuota left with one limit counts only it", "resourcequotas", rqFull, rqOne, rqShows(1, map[string]interface{}{"pods": "20"}, map[string]interface{}{"pods": "4"}, noTags)},
+		{"a ResourceQuota the controller counted shows what is used", "resourcequotas", rqNone, rqFull, rqShows(2, map[string]interface{}{"pods": "10", "requests.memory": "1Gi"}, map[string]interface{}{"pods": "3", "requests.memory": "512Mi"}, teamA)},
+		{"a PodDisruptionBudget moved from min available to max unavailable shows only that, its labels gone", "poddisruptionbudgets", pdbMin, pdbMax, pdbShows("-", "50%", 1, "3/2", 2, 3, "-", noTags)},
+		{"a PodDisruptionBudget moved back shows min available and its selector", "poddisruptionbudgets", pdbMax, pdbMin, pdbShows("2", "-", 1, "3/2", 2, 3, "app=web", teamA)},
+		{"a PodDisruptionBudget with no pods left counts none, with no selector", "poddisruptionbudgets", pdbMin, pdbNoPods, pdbShows("50%", "-", 0, "0/0", 0, 0, "-", noTags)},
+		{"a CustomResourceDefinition no longer serving a version lists only the served one", "customresourcedefinitions", crdTwo, crdOne, crdShows("v1 (storage)", noTags, noTags)},
+		{"a CustomResourceDefinition that serves a version again lists both", "customresourcedefinitions", crdOne, crdTwo, crdShows("v1 (storage), v1beta1", teamA, note)},
 		{"a pod being deleted reads Terminating, whatever its containers do", "pods", podOfDeploy, podDeleting, podShows("Terminating", "Running", "1/1", 2, ofDeploy, appWeb, "-", "-", "warn Terminating")},
 		{"a pod past its crash loop keeps no reason or message of it", "pods", podCrashLoop, podOfDeploy, podShows("Running", "Running", "1/1", 2, ofDeploy, appWeb, "-", "-", "ok Running")},
 		{"a pod in a crash loop says why", "pods", podOfDeploy, podCrashLoop, podShows("CrashLoopBackOff", "Running", "0/1", 3, ofDeploy, appWeb, "CrashLoopBackOff", "back-off restarting", "error CrashLoopBackOff")},
@@ -590,6 +711,30 @@ func (a *listAPI) row(t *testing.T, resource, object string) map[string]interfac
 		rows, err = a.svc.GetJobs(ctx, "demo")
 	case "statefulsets":
 		rows, err = a.svc.GetStatefulSets(ctx, "demo")
+	case "clusterroles":
+		rows, err = a.svc.GetClusterRoles(ctx)
+	case "clusterrolebindings":
+		rows, err = a.svc.GetClusterRoleBindings(ctx)
+	case "rolebindings":
+		rows, err = a.svc.GetRoleBindings(ctx, "demo")
+	case "priorityclasses":
+		rows, err = a.svc.GetPriorityClasses(ctx)
+	case "runtimeclasses":
+		rows, err = a.svc.GetRuntimeClasses(ctx)
+	case "validatingwebhookconfigurations":
+		rows, err = a.svc.GetValidatingWebhookConfigurations(ctx)
+	case "mutatingwebhookconfigurations":
+		rows, err = a.svc.GetMutatingWebhookConfigurations(ctx)
+	case "leases":
+		rows, err = a.svc.GetLeases(ctx, "demo")
+	case "limitranges":
+		rows, err = a.svc.GetLimitRanges(ctx, "demo")
+	case "resourcequotas":
+		rows, err = a.svc.GetResourceQuotas(ctx, "demo")
+	case "poddisruptionbudgets":
+		rows, err = a.svc.GetPDBs(ctx, "demo")
+	case "customresourcedefinitions":
+		rows, err = a.svc.GetCRDs(ctx)
 	default:
 		t.Fatalf("no list for %s", resource)
 	}
@@ -725,6 +870,42 @@ func TestLiveRowOfAnObjectThatDoesNotConvertKeepsItsNameAndNestedSpec(t *testing
 	if row["name"] != "odd" || row["rules"] == nil {
 		t.Errorf("roles: %v, want the name and the rules as they came", row)
 	}
+	// These hold their payload beside the metadata too.
+	for _, c := range []struct {
+		resource, object string
+		beside           []string
+	}{
+		{"clusterroles", `{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"ClusterRole","metadata":{"name":"odd"},"rules":[{"verbs":"not a list"}]}`, []string{"rules"}},
+		{"clusterrolebindings", `{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"ClusterRoleBinding","metadata":{"name":"odd"},"roleRef":{"kind":"ClusterRole","name":"r"},"subjects":"not a list"}`, []string{"roleRef", "subjects"}},
+		{"rolebindings", `{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"RoleBinding","metadata":{"name":"odd","namespace":"demo"},"roleRef":{"kind":"Role","name":"r"},"subjects":"not a list"}`, []string{"roleRef", "subjects"}},
+		{"priorityclasses", `{"apiVersion":"scheduling.k8s.io/v1","kind":"PriorityClass","metadata":{"name":"odd"},"value":7,"globalDefault":"not a bool","preemptionPolicy":"Never","description":"d"}`, []string{"value", "globalDefault", "preemptionPolicy", "description"}},
+		{"runtimeclasses", `{"apiVersion":"node.k8s.io/v1","kind":"RuntimeClass","metadata":{"name":"odd"},"handler":"h","scheduling":"not an object"}`, []string{"handler"}},
+		{"leases", `{"apiVersion":"coordination.k8s.io/v1","kind":"Lease","metadata":{"name":"odd","namespace":"demo"},"spec":{"leaseDurationSeconds":"not a number","holderIdentity":"h"}}`, []string{"spec"}},
+		{"limitranges", `{"apiVersion":"v1","kind":"LimitRange","metadata":{"name":"odd","namespace":"demo"},"spec":{"limits":"not a list"}}`, []string{"spec"}},
+		{"resourcequotas", `{"apiVersion":"v1","kind":"ResourceQuota","metadata":{"name":"odd","namespace":"demo"},"spec":{"hard":"not a map"}}`, []string{"spec"}},
+		{"poddisruptionbudgets", `{"apiVersion":"policy/v1","kind":"PodDisruptionBudget","metadata":{"name":"odd","namespace":"demo"},"spec":{"selector":"not an object"}}`, []string{"spec"}},
+	} {
+		row := liveRow(t, c.resource, c.object)
+		if row["name"] != "odd" {
+			t.Errorf("%s: %v, want the name", c.resource, row)
+		}
+		for _, field := range c.beside {
+			if row[field] == nil {
+				t.Errorf("%s: %v, want %s as it came", c.resource, row, field)
+			}
+		}
+	}
+	// A webhook configuration that does not convert says how many webhooks it has, not what each is given.
+	for _, resource := range []string{"validatingwebhookconfigurations", "mutatingwebhookconfigurations"} {
+		row := liveRow(t, resource, `{"apiVersion":"admissionregistration.k8s.io/v1","kind":"X","metadata":{"name":"odd"},"webhooks":[{"name":7,"clientConfig":{"caBundle":"`+whCA+`"}},{"name":"b"}]}`)
+		raw, err := json.Marshal(row)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if row["name"] != "odd" || row["webhooks_count"] != float64(2) || strings.Contains(string(raw), whCA) {
+			t.Errorf("%s: %s, want the name and a count of 2 with no webhook in it", resource, raw)
+		}
+	}
 }
 
 // A Secret's and a ConfigMap's rows name their keys and never hold a value: not the data, not the same value in the
@@ -853,51 +1034,68 @@ func TestAWatchOfTheseListsStaysInsideANamespaceGrant(t *testing.T) {
 		Namespaces: map[string][]string{"self": {"team-a"}},
 	}
 	for path, allowed := range map[string]bool{
-		"/api/v1/services":                                                false,
-		"/api/v1/endpoints":                                               false,
-		"/api/v1/networkpolicies":                                         false,
-		"/api/v1/pvs":                                                     false,
-		"/api/v1/ingressclasses":                                          false,
-		"/api/v1/namespaces/team-b/services":                              false,
-		"/api/v1/namespaces/team-b/endpoints":                             false,
-		"/api/v1/namespaces/team-b/networkpolicies":                       false,
-		"/api/v1/namespaces/team-a/services":                              true,
-		"/api/v1/namespaces/team-a/endpoints":                             true,
-		"/api/v1/namespaces/team-a/networkpolicies":                       true,
-		"/apis/apps/v1/deployments":                                       false,
-		"/apis/apps/v1/replicasets":                                       false,
-		"/apis/autoscaling/v2/horizontalpodautoscalers":                   false,
-		"/api/v1/configmaps":                                              false,
-		"/api/v1/secrets":                                                 false,
-		"/api/v1/serviceaccounts":                                         false,
-		"/api/v1/roles":                                                   false,
-		"/apis/apps/v1/namespaces/team-b/deployments":                     false,
-		"/apis/apps/v1/namespaces/team-b/replicasets":                     false,
-		"/apis/autoscaling/v2/namespaces/team-b/horizontalpodautoscalers": false,
-		"/api/v1/namespaces/team-b/configmaps":                            false,
-		"/api/v1/namespaces/team-b/secrets":                               false,
-		"/api/v1/namespaces/team-b/serviceaccounts":                       false,
-		"/api/v1/namespaces/team-b/roles":                                 false,
-		"/apis/apps/v1/namespaces/team-a/deployments":                     true,
-		"/apis/apps/v1/namespaces/team-a/replicasets":                     true,
-		"/apis/autoscaling/v2/namespaces/team-a/horizontalpodautoscalers": true,
-		"/api/v1/namespaces/team-a/configmaps":                            true,
-		"/api/v1/namespaces/team-a/secrets":                               true,
-		"/api/v1/namespaces/team-a/serviceaccounts":                       true,
-		"/api/v1/namespaces/team-a/roles":                                 true,
-		"/api/v1/pods":                                                    false,
-		"/api/v1/daemonsets":                                              false,
-		"/api/v1/jobs":                                                    false,
-		"/api/v1/namespaces/team-b/pods":                                  false,
-		"/apis/apps/v1/namespaces/team-b/daemonsets":                      false,
-		"/apis/apps/v1/namespaces/team-b/statefulsets":                    false,
-		"/apis/batch/v1/namespaces/team-b/jobs":                           false,
-		"/apis/batch/v1/namespaces/team-b/cronjobs":                       false,
-		"/api/v1/namespaces/team-a/pods":                                  true,
-		"/apis/apps/v1/namespaces/team-a/daemonsets":                      true,
-		"/apis/apps/v1/namespaces/team-a/statefulsets":                    true,
-		"/apis/batch/v1/namespaces/team-a/jobs":                           true,
-		"/apis/batch/v1/namespaces/team-a/cronjobs":                       true,
+		"/api/v1/services":                                                  false,
+		"/api/v1/endpoints":                                                 false,
+		"/api/v1/networkpolicies":                                           false,
+		"/api/v1/pvs":                                                       false,
+		"/api/v1/ingressclasses":                                            false,
+		"/api/v1/namespaces/team-b/services":                                false,
+		"/api/v1/namespaces/team-b/endpoints":                               false,
+		"/api/v1/namespaces/team-b/networkpolicies":                         false,
+		"/api/v1/namespaces/team-a/services":                                true,
+		"/api/v1/namespaces/team-a/endpoints":                               true,
+		"/api/v1/namespaces/team-a/networkpolicies":                         true,
+		"/apis/apps/v1/deployments":                                         false,
+		"/apis/apps/v1/replicasets":                                         false,
+		"/apis/autoscaling/v2/horizontalpodautoscalers":                     false,
+		"/api/v1/configmaps":                                                false,
+		"/api/v1/secrets":                                                   false,
+		"/api/v1/serviceaccounts":                                           false,
+		"/api/v1/roles":                                                     false,
+		"/apis/apps/v1/namespaces/team-b/deployments":                       false,
+		"/apis/apps/v1/namespaces/team-b/replicasets":                       false,
+		"/apis/autoscaling/v2/namespaces/team-b/horizontalpodautoscalers":   false,
+		"/api/v1/namespaces/team-b/configmaps":                              false,
+		"/api/v1/namespaces/team-b/secrets":                                 false,
+		"/api/v1/namespaces/team-b/serviceaccounts":                         false,
+		"/api/v1/namespaces/team-b/roles":                                   false,
+		"/apis/apps/v1/namespaces/team-a/deployments":                       true,
+		"/apis/apps/v1/namespaces/team-a/replicasets":                       true,
+		"/apis/autoscaling/v2/namespaces/team-a/horizontalpodautoscalers":   true,
+		"/api/v1/namespaces/team-a/configmaps":                              true,
+		"/api/v1/namespaces/team-a/secrets":                                 true,
+		"/api/v1/namespaces/team-a/serviceaccounts":                         true,
+		"/api/v1/namespaces/team-a/roles":                                   true,
+		"/api/v1/pods":                                                      false,
+		"/api/v1/daemonsets":                                                false,
+		"/api/v1/jobs":                                                      false,
+		"/api/v1/namespaces/team-b/pods":                                    false,
+		"/apis/apps/v1/namespaces/team-b/daemonsets":                        false,
+		"/apis/apps/v1/namespaces/team-b/statefulsets":                      false,
+		"/apis/batch/v1/namespaces/team-b/jobs":                             false,
+		"/apis/batch/v1/namespaces/team-b/cronjobs":                         false,
+		"/api/v1/namespaces/team-a/pods":                                    true,
+		"/apis/apps/v1/namespaces/team-a/daemonsets":                        true,
+		"/apis/apps/v1/namespaces/team-a/statefulsets":                      true,
+		"/apis/batch/v1/namespaces/team-a/jobs":                             true,
+		"/apis/batch/v1/namespaces/team-a/cronjobs":                         true,
+		"/api/v1/rolebindings":                                              false,
+		"/api/v1/limitranges":                                               false,
+		"/api/v1/resourcequotas":                                            false,
+		"/apis/coordination.k8s.io/v1/leases":                               false,
+		"/apis/policy/v1/poddisruptionbudgets":                              false,
+		"/api/v1/namespaces/team-b/rolebindings":                            false,
+		"/api/v1/namespaces/team-b/limitranges":                             false,
+		"/api/v1/namespaces/team-b/resourcequotas":                          false,
+		"/apis/rbac.authorization.k8s.io/v1/namespaces/team-b/rolebindings": false,
+		"/apis/coordination.k8s.io/v1/namespaces/team-b/leases":             false,
+		"/apis/policy/v1/namespaces/team-b/poddisruptionbudgets":            false,
+		"/api/v1/namespaces/team-a/rolebindings":                            true,
+		"/api/v1/namespaces/team-a/limitranges":                             true,
+		"/api/v1/namespaces/team-a/resourcequotas":                          true,
+		"/apis/rbac.authorization.k8s.io/v1/namespaces/team-a/rolebindings": true,
+		"/apis/coordination.k8s.io/v1/namespaces/team-a/leases":             true,
+		"/apis/policy/v1/namespaces/team-a/poddisruptionbudgets":            true,
 	} {
 		reason := namespaceScopeRefusal(scoped, "self", path)
 		if (reason == "") != allowed {

@@ -11,7 +11,7 @@ export interface ReverseBinding {
   subjects_count: number
 }
 
-// A binding as the list API answers it (role_ref_kind, role_ref_name) or as a watch event carries it (roleRef).
+// A binding as the list API and a watch event give it (role_ref_kind, role_ref_name), or an object that did not convert (roleRef).
 export function normalizeBinding(item: any): ReverseBinding | null {
   if (!item) return null
   const meta = item?.metadata ?? item ?? {}

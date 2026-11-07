@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation, Trans } from 'react-i18next'
 import { api, type PriorityClassInfo } from '@/services/api'
@@ -16,50 +15,9 @@ import { useCanCreate } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
+import { applyPriorityClassWatchEvent } from './priorityclasses/priorityClassWatchNormalize'
 
 type SortKey = null | 'name' | 'value' | 'globalDefault' | 'preemptionPolicy' | 'age'
-
-function normalizeWatchPriorityClassObject(obj: any): PriorityClassInfo {
-  if (typeof obj?.name === 'string' && typeof obj?.value === 'number' && typeof obj?.preemption_policy === 'string') {
-    return obj as PriorityClassInfo
-  }
-  const metadata = obj?.metadata ?? {}
-
-  return {
-    name: metadata?.name ?? obj?.name ?? '',
-    value: obj?.value ?? 0,
-    global_default: obj?.globalDefault ?? false,
-    preemption_policy: obj?.preemptionPolicy ?? 'PreemptLowerPriority',
-    description: obj?.description ?? '',
-    labels: metadata?.labels ?? obj?.labels ?? {},
-    created_at: metadata?.creationTimestamp ?? obj?.created_at ?? '',
-  }
-}
-
-function applyPriorityClassWatchEvent(
-  prev: PriorityClassInfo[] | undefined,
-  event: { type?: string; object?: any },
-): PriorityClassInfo[] {
-  const items = Array.isArray(prev) ? [...prev] : []
-  const obj = event?.object
-  if (!obj) return items
-
-  const normalized = normalizeWatchPriorityClassObject(obj)
-  const name = normalized?.name
-  if (!name) return items
-
-  const index = items.findIndex((item) => item.name === name)
-
-  if (event.type === 'DELETED') {
-    if (index >= 0) items.splice(index, 1)
-    return items
-  }
-
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
-  else items.push(normalized)
-
-  return items
-}
 
 function priorityClassToRawJson(pc: PriorityClassInfo): Record<string, unknown> {
   return {

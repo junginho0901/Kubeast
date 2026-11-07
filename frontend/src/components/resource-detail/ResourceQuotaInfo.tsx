@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsSection, Th, NoneText, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
+import { useDrawerFollowsObject } from './useDrawerFollowsObject'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { quotaPercent } from '@/utils/resourceQuantity'
 
@@ -17,6 +18,12 @@ export default function ResourceQuotaInfo({ name, namespace }: Props) {
     queryFn: () => api.describeResourceQuota(namespace, name),
     staleTime: 10_000,
     retry: 1,
+  })
+  useDrawerFollowsObject({
+    enabled: !!namespace && !!name,
+    describeKey: ['resourcequota-describe', namespace, name],
+    path: `/api/v1/namespaces/${namespace}/resourcequotas`,
+    name,
   })
 
   useResourceDetailOverlay({ kind: 'ResourceQuota', name, namespace, describe: desc })

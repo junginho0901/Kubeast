@@ -8,6 +8,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	clusterrolerow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/clusterrole"
 )
 
 // GetClusterRoles lists clusterroles (cluster-scoped).
@@ -56,14 +58,8 @@ func (s *Service) DeleteClusterRole(ctx context.Context, name string) error {
 
 func formatClusterRoleList(items []rbacv1.ClusterRole) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(items))
-	for _, cr := range items {
-		result = append(result, map[string]interface{}{
-			"name":        cr.Name,
-			"rules_count": len(cr.Rules),
-			"created_at":  toISO(&cr.CreationTimestamp),
-			"labels":      cr.Labels,
-			"annotations": cr.Annotations,
-		})
+	for i := range items {
+		result = append(result, clusterrolerow.Info(&items[i]))
 	}
 	return result
 }
@@ -80,15 +76,10 @@ func formatClusterRoleDetail(cr *rbacv1.ClusterRole) map[string]interface{} {
 		aggregation = asJSON(cr.AggregationRule)
 	}
 
-	return map[string]interface{}{
-		"name":             cr.Name,
-		"rules_count":      len(cr.Rules),
-		"created_at":       toISO(&cr.CreationTimestamp),
-		"labels":           cr.Labels,
-		"annotations":      cr.Annotations,
-		"uid":              string(cr.UID),
-		"resource_version": cr.ResourceVersion,
-		"rules":            asJSON(rules),
-		"aggregation_rule": aggregation,
-	}
+	result := clusterrolerow.Info(cr)
+	result["uid"] = string(cr.UID)
+	result["resource_version"] = cr.ResourceVersion
+	result["rules"] = asJSON(rules)
+	result["aggregation_rule"] = aggregation
+	return result
 }

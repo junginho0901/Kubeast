@@ -2,6 +2,7 @@ import { useQuery, useQueries } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import type { RoleBindingInfo, ClusterRoleBindingInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
+import { applyClusterRoleBindingWatchEvent, applyRoleBindingWatchEvent } from '@/pages/security/rolebindings/roleBindingWatchNormalize'
 
 interface Params {
   namespace: string
@@ -135,41 +136,7 @@ export function useEffectivePermissions({ namespace, name }: Params): {
     queryKey: rbKey,
     path: `/apis/rbac.authorization.k8s.io/v1/namespaces/${namespace}/rolebindings`,
     query: 'watch=1',
-    applyEvent: (prev, event) => {
-      const items = Array.isArray(prev) ? [...(prev as RoleBindingInfo[])] : []
-      const obj = event?.object
-      if (!obj) return items
-      const meta = obj?.metadata ?? {}
-      const rbName = meta?.name
-      const rbNs = meta?.namespace
-      if (!rbName || !rbNs) return items
-      const roleRef = obj?.roleRef ?? {}
-      const subjectsRaw = Array.isArray(obj?.subjects) ? obj.subjects : []
-      const normalized: RoleBindingInfo = {
-        name: rbName,
-        namespace: rbNs,
-        role_ref_kind: roleRef?.kind ?? '',
-        role_ref_name: roleRef?.name ?? '',
-        subjects_count: subjectsRaw.length,
-        subjects: subjectsRaw.map((s: any) => ({
-          kind: s?.kind ?? null,
-          name: s?.name ?? null,
-          namespace: s?.namespace ?? null,
-          apiGroup: s?.apiGroup ?? null,
-        })),
-        created_at: meta?.creationTimestamp ?? null,
-        labels: meta?.labels ?? null,
-        annotations: meta?.annotations ?? null,
-      }
-      const idx = items.findIndex((b) => b.name === rbName && b.namespace === rbNs)
-      if (event?.type === 'DELETED') {
-        if (idx >= 0) items.splice(idx, 1)
-        return items
-      }
-      if (idx >= 0) items[idx] = normalized
-      else items.push(normalized)
-      return items
-    },
+    applyEvent: (prev, event) => applyRoleBindingWatchEvent(prev as RoleBindingInfo[] | undefined, event),
   })
 
   const { data: crbList, error: crbError } = useQuery({
@@ -184,39 +151,7 @@ export function useEffectivePermissions({ namespace, name }: Params): {
     queryKey: crbKey,
     path: '/apis/rbac.authorization.k8s.io/v1/clusterrolebindings',
     query: 'watch=1',
-    applyEvent: (prev, event) => {
-      const items = Array.isArray(prev) ? [...(prev as ClusterRoleBindingInfo[])] : []
-      const obj = event?.object
-      if (!obj) return items
-      const meta = obj?.metadata ?? {}
-      const crbName = meta?.name
-      if (!crbName) return items
-      const roleRef = obj?.roleRef ?? {}
-      const subjectsRaw = Array.isArray(obj?.subjects) ? obj.subjects : []
-      const normalized: ClusterRoleBindingInfo = {
-        name: crbName,
-        role_ref_kind: roleRef?.kind ?? '',
-        role_ref_name: roleRef?.name ?? '',
-        subjects_count: subjectsRaw.length,
-        subjects: subjectsRaw.map((s: any) => ({
-          kind: s?.kind ?? null,
-          name: s?.name ?? null,
-          namespace: s?.namespace ?? null,
-          apiGroup: s?.apiGroup ?? null,
-        })),
-        created_at: meta?.creationTimestamp ?? null,
-        labels: meta?.labels ?? null,
-        annotations: meta?.annotations ?? null,
-      }
-      const idx = items.findIndex((b) => b.name === crbName)
-      if (event?.type === 'DELETED') {
-        if (idx >= 0) items.splice(idx, 1)
-        return items
-      }
-      if (idx >= 0) items[idx] = normalized
-      else items.push(normalized)
-      return items
-    },
+    applyEvent: (prev, event) => applyClusterRoleBindingWatchEvent(prev as ClusterRoleBindingInfo[] | undefined, event),
   })
 
   // queries of one role share their key, so a role is read once however many bindings name it

@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation, Trans } from 'react-i18next'
 import { api, type ClusterRoleInfo } from '@/services/api'
@@ -16,54 +15,10 @@ import { useCanCreate } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
+import { applyClusterRoleWatchEvent } from './clusterroles/clusterRoleWatchNormalize'
 
 type SortKey = null | 'name' | 'rules' | 'age'
 type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
-
-function normalizeWatchClusterRoleObject(obj: any): ClusterRoleInfo {
-  if (
-    typeof obj?.name === 'string' &&
-    typeof obj?.rules_count === 'number'
-  ) {
-    return obj as ClusterRoleInfo
-  }
-
-  const metadata = obj?.metadata ?? {}
-  const rules = Array.isArray(obj?.rules) ? obj.rules : []
-
-  return {
-    name: metadata?.name ?? obj?.name ?? '',
-    rules_count: rules.length,
-    created_at: metadata?.creationTimestamp ?? obj?.created_at ?? '',
-    labels: metadata?.labels ?? obj?.labels ?? null,
-    annotations: metadata?.annotations ?? obj?.annotations ?? null,
-  }
-}
-
-function applyClusterRoleWatchEvent(
-  prev: ClusterRoleInfo[] | undefined,
-  event: { type?: string; object?: any },
-): ClusterRoleInfo[] {
-  const items = Array.isArray(prev) ? [...prev] : []
-  const obj = event?.object
-  if (!obj) return items
-
-  const normalized = normalizeWatchClusterRoleObject(obj)
-  const name = normalized?.name
-  if (!name) return items
-
-  const index = items.findIndex((item) => item.name === name)
-
-  if (event.type === 'DELETED') {
-    if (index >= 0) items.splice(index, 1)
-    return items
-  }
-
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
-  else items.push(normalized)
-
-  return items
-}
 
 export default function ClusterRoles() {
   const queryClient = useQueryClient()
@@ -90,13 +45,6 @@ export default function ClusterRoles() {
     path: '/apis/rbac.authorization.k8s.io/v1/clusterroles',
     query: 'watch=1',
     applyEvent: (prev, event) => applyClusterRoleWatchEvent(prev as ClusterRoleInfo[] | undefined, event),
-    onEvent: (event) => {
-      if (event?.type === 'DELETED') return
-      const name = event?.object?.name || event?.object?.metadata?.name
-      if (name) {
-        queryClient.invalidateQueries({ queryKey: ['clusterrole-describe', name] })
-      }
-    },
   })
 
   const filteredItems = useMemo(() => {

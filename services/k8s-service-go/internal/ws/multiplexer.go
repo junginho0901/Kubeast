@@ -619,6 +619,19 @@ func resourceToGVR(resource string) (schema.GroupVersionResource, bool) {
 		"resourceclaims":           {Group: "resource.k8s.io", Version: "v1", Resource: "resourceclaims"},
 		"resourceclaimtemplates":   {Group: "resource.k8s.io", Version: "v1", Resource: "resourceclaimtemplates"},
 		"resourceslices":           {Group: "resource.k8s.io", Version: "v1", Resource: "resourceslices"},
+
+		"clusterroles":                    {Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "clusterroles"},
+		"clusterrolebindings":             {Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "clusterrolebindings"},
+		"rolebindings":                    {Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "rolebindings"},
+		"priorityclasses":                 {Group: "scheduling.k8s.io", Version: "v1", Resource: "priorityclasses"},
+		"runtimeclasses":                  {Group: "node.k8s.io", Version: "v1", Resource: "runtimeclasses"},
+		"validatingwebhookconfigurations": {Group: "admissionregistration.k8s.io", Version: "v1", Resource: "validatingwebhookconfigurations"},
+		"mutatingwebhookconfigurations":   {Group: "admissionregistration.k8s.io", Version: "v1", Resource: "mutatingwebhookconfigurations"},
+		"leases":                          {Group: "coordination.k8s.io", Version: "v1", Resource: "leases"},
+		"limitranges":                     {Group: "", Version: "v1", Resource: "limitranges"},
+		"resourcequotas":                  {Group: "", Version: "v1", Resource: "resourcequotas"},
+		"poddisruptionbudgets":            {Group: "policy", Version: "v1", Resource: "poddisruptionbudgets"},
+		"customresourcedefinitions":       {Group: "apiextensions.k8s.io", Version: "v1", Resource: "customresourcedefinitions"},
 	}
 	gvr, ok := gvrMap[resource]
 	return gvr, ok
@@ -659,7 +672,7 @@ func namespaceScopeRefusal(payload auth.TokenPayload, clusterID, path string) st
 	if len(scope) == 0 {
 		return ""
 	}
-	_, namespace, err := parsePath(path)
+	resource, namespace, err := parsePath(path)
 	if err != nil {
 		return ""
 	}
@@ -669,5 +682,20 @@ func namespaceScopeRefusal(payload auth.TokenPayload, clusterID, path string) st
 	if !payload.AllowedIn(clusterID, namespace) {
 		return "forbidden: namespace " + namespace + " is outside your grant on cluster " + clusterID + " (" + strings.Join(scope, ", ") + ")"
 	}
+	if clusterWideWatch[resource] {
+		return "forbidden: " + resource + " are objects of the cluster, outside your grant on cluster " + clusterID + " (" + strings.Join(scope, ", ") + ")"
+	}
 	return ""
+}
+
+// clusterWideWatch holds kinds no namespace has. A page of a grant limited to namespaces asks for them once per namespace
+// (scopedPaths), which the cluster would refuse every five seconds, each holding a place in the tab's limit of watches.
+var clusterWideWatch = map[string]bool{
+	"clusterroles":                    true,
+	"clusterrolebindings":             true,
+	"priorityclasses":                 true,
+	"runtimeclasses":                  true,
+	"validatingwebhookconfigurations": true,
+	"mutatingwebhookconfigurations":   true,
+	"customresourcedefinitions":       true,
 }

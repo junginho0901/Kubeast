@@ -74,7 +74,7 @@ func TestAKindTheClusterDoesNotServeIsNoProblemToReport(t *testing.T) {
 func TestAWatchOfAnUnknownResourceSaysItIsUnsupported(t *testing.T) {
 	m := muxOn(t, eventThenHold)
 	conn := socketTo(t, m, everyCluster)
-	request(t, conn, "REQUEST", "c1", "/apis/rbac.authorization.k8s.io/v1/clusterroles", "watch=1")
+	request(t, conn, "REQUEST", "c1", "/apis/example.com/v1/gadgets", "watch=1")
 	if reason := frameReason(t, nextFrame(t, conn)); reason != reasonUnsupported {
 		t.Fatalf("reason = %q", reason)
 	}

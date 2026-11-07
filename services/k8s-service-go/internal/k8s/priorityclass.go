@@ -8,6 +8,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	schedulingv1 "k8s.io/api/scheduling/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	priorityclassrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/priorityclass"
 )
 
 // GetPriorityClasses lists all PriorityClasses.
@@ -42,7 +44,7 @@ func (s *Service) DescribePriorityClass(ctx context.Context, name string) (map[s
 	if pcErr != nil {
 		return nil, fmt.Errorf("get priorityclass %s: %w", name, pcErr)
 	}
-	result := formatPriorityClassDetail(pc)
+	result := priorityclassrow.Info(pc)
 
 	// Additional metadata
 	result["uid"] = string(pc.UID)
@@ -65,29 +67,7 @@ func (s *Service) DeletePriorityClass(ctx context.Context, name string) error {
 func formatPriorityClassList(pcs []schedulingv1.PriorityClass) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(pcs))
 	for i := range pcs {
-		result = append(result, formatPriorityClassDetail(&pcs[i]))
+		result = append(result, priorityclassrow.Info(&pcs[i]))
 	}
 	return result
-}
-
-func formatPriorityClassDetail(pc *schedulingv1.PriorityClass) map[string]interface{} {
-	globalDefault := false
-	if pc.GlobalDefault {
-		globalDefault = true
-	}
-
-	preemptionPolicy := "PreemptLowerPriority"
-	if pc.PreemptionPolicy != nil {
-		preemptionPolicy = string(*pc.PreemptionPolicy)
-	}
-
-	return map[string]interface{}{
-		"name":              pc.Name,
-		"value":             pc.Value,
-		"global_default":    globalDefault,
-		"preemption_policy": preemptionPolicy,
-		"description":       pc.Description,
-		"labels":            pc.Labels,
-		"created_at":        toISO(&pc.CreationTimestamp),
-	}
 }

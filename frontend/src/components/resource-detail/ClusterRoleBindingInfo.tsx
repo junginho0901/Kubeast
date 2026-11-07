@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { InfoSection, InfoRow, StatusBadge, KeyValueTags, EventsSection, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
+import { useDrawerFollowsObject } from './useDrawerFollowsObject'
 import { useServerPods } from './useServerPods'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
@@ -24,6 +25,12 @@ export default function ClusterRoleBindingInfo({ name, rawJson }: Props) {
     queryFn: () => api.describeClusterRoleBinding(name),
     enabled: !!name,
     retry: false,
+  })
+  useDrawerFollowsObject({
+    enabled: !!name,
+    describeKey: ['clusterrolebinding-describe', name],
+    path: '/apis/rbac.authorization.k8s.io/v1/clusterrolebindings',
+    name,
   })
 
   useResourceDetailOverlay({ kind: 'ClusterRoleBinding', name, describe })

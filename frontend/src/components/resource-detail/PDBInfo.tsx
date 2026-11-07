@@ -7,6 +7,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
 import { InfoSection, InfoRow, InfoGrid, SummaryBadge, KeyValueTags, ConditionsTable, EventsSection, StatusBadge, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
+import { useDrawerFollowsObject } from './useDrawerFollowsObject'
 import { usePagination } from './usePagination'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
@@ -24,6 +25,12 @@ export default function PDBInfo({ name, namespace }: Props) {
     queryFn: () => api.describePDB(namespace, name),
     staleTime: 10_000,
     retry: 1,
+  })
+  useDrawerFollowsObject({
+    enabled: !!namespace && !!name,
+    describeKey: ['pdb-describe', namespace, name],
+    path: `/apis/policy/v1/namespaces/${namespace}/poddisruptionbudgets`,
+    name,
   })
 
   useResourceDetailOverlay({ kind: 'PodDisruptionBudget', name, namespace, describe: desc })

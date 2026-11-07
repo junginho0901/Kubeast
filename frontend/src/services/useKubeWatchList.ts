@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { notifyManager, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { watchMultiplexer } from './watchMultiplexer'
 import { getCurrentClusterID } from './clusterRef'
 
@@ -79,6 +79,31 @@ export function applyWatchMessage(
   onEvent?.(event)
 }
 
+// frameHolder gathers a list's frames and delivers them together, which the screen draws once. For a kind that writes
+// itself all the time and whose objects are many (every node renews its Lease every ten seconds): one drawing per frame
+// is a hundred a second at a thousand nodes.
+export function frameHolder(deliver: (message: any) => void, everyMs: number) {
+  let held: any[] = []
+  let timer: ReturnType<typeof setTimeout> | undefined
+  return {
+    push(message: any) {
+      held.push(message)
+      if (timer !== undefined) return
+      timer = setTimeout(() => {
+        timer = undefined
+        const frames = held
+        held = []
+        notifyManager.batch(() => frames.forEach(deliver))
+      }, everyMs)
+    },
+    stop() {
+      if (timer !== undefined) clearTimeout(timer)
+      timer = undefined
+      held = []
+    },
+  }
+}
+
 export function useKubeWatchList(options: {
   enabled: boolean
   queryKey: any[]
@@ -86,9 +111,12 @@ export function useKubeWatchList(options: {
   query?: string
   applyEvent?: (prev: any[] | undefined, event: WatchEvent) => any[]
   onEvent?: (event: WatchEvent) => void
+  // gathers the frames this often instead of drawing each (frameHolder)
+  gatherEveryMs?: number
 }) {
   const queryClient = useQueryClient()
   const query = options.query ?? 'watch=1'
+  const gatherEveryMs = options.gatherEveryMs
   const clusterId = getCurrentClusterID() || 'default'
   // A namespace-scoped grant (me.cluster_namespaces) watches per namespace; the
   // scope is keyed by content so a re-render with the same list keeps the watch.
@@ -114,7 +142,9 @@ export function useKubeWatchList(options: {
     // the list this subscription feeds; a later key gets its own subscription
     const queryKey = queryKeyRef.current
 
-    const handle = (message: any) => applyWatchMessage(queryClient, queryKey, message, applyEventRef.current, onEventRef.current)
+    const deliver = (message: any) => applyWatchMessage(queryClient, queryKey, message, applyEventRef.current, onEventRef.current)
+    const holder = gatherEveryMs ? frameHolder(deliver, gatherEveryMs) : null
+    const handle = holder ? holder.push : deliver
 
     // Unsubscribed by message, not by the function subscribe resolves to: that
     // comes only once the socket is open, and a cleanup before it (the key
@@ -123,7 +153,8 @@ export function useKubeWatchList(options: {
     for (const msg of msgs) void watchMultiplexer.subscribe(msg, handle)
 
     return () => {
+      holder?.stop()
       for (const msg of msgs) watchMultiplexer.unsubscribe(msg, handle)
     }
-  }, [options.enabled, options.path, query, queryClient, queryKeyDep, clusterId, scopeKey])
+  }, [options.enabled, options.path, query, queryClient, queryKeyDep, clusterId, scopeKey, gatherEveryMs])
 }

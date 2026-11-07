@@ -3,6 +3,17 @@ import { QueryClient, QueryObserver } from '@tanstack/react-query'
 import { applyWatchMessage } from '@/services/useKubeWatchList'
 import workloadDataSrc from './workload-info/useWorkloadData.ts?raw'
 import hpaInfoSrc from './HPAInfo.tsx?raw'
+import clusterRoleInfoSrc from './ClusterRoleInfo.tsx?raw'
+import clusterRoleBindingInfoSrc from './ClusterRoleBindingInfo.tsx?raw'
+import roleBindingInfoSrc from './RoleBindingInfo.tsx?raw'
+import priorityClassInfoSrc from './PriorityClassInfo.tsx?raw'
+import runtimeClassInfoSrc from './RuntimeClassInfo.tsx?raw'
+import webhookConfigInfoSrc from './WebhookConfigInfo.tsx?raw'
+import limitRangeInfoSrc from './LimitRangeInfo.tsx?raw'
+import resourceQuotaInfoSrc from './ResourceQuotaInfo.tsx?raw'
+import pdbInfoSrc from './PDBInfo.tsx?raw'
+import crdInfoSrc from './CRDInfo.tsx?raw'
+import leaseInfoSrc from './LeaseInfo.tsx?raw'
 import { objectFollower } from './useDrawerFollowsObject'
 
 const describeKey = ['workload-describe', 'Deployment', 'demo', 'web']
@@ -209,5 +220,31 @@ describe('the drawers that read a describe answer follow their object', () => {
     expect(workloadDataSrc).toContain('useDrawerFollowsObject({')
     expect(hpaInfoSrc).toContain('useDrawerFollowsObject({')
     expect(hpaInfoSrc).toContain('/apis/autoscaling/v2/namespaces/${namespace}/horizontalpodautoscalers')
+  })
+
+  it('every drawer of a binding, a class, a quota and a definition follows the answer it reads, by its own list', () => {
+    const keyOf = (src: string, label: string) => src.match(new RegExp(`${label}: (\\[[^\\]]*-describe[^\\]]*\\])`))?.[1]
+    for (const [src, path] of [
+      [clusterRoleInfoSrc, "'/apis/rbac.authorization.k8s.io/v1/clusterroles'"],
+      [clusterRoleBindingInfoSrc, "'/apis/rbac.authorization.k8s.io/v1/clusterrolebindings'"],
+      [roleBindingInfoSrc, '`/apis/rbac.authorization.k8s.io/v1/namespaces/${namespace}/rolebindings`'],
+      [priorityClassInfoSrc, "'/apis/scheduling.k8s.io/v1/priorityclasses'"],
+      [runtimeClassInfoSrc, "'/apis/node.k8s.io/v1/runtimeclasses'"],
+      [webhookConfigInfoSrc, "`/apis/admissionregistration.k8s.io/v1/${isMutating ? 'mutatingwebhookconfigurations' : 'validatingwebhookconfigurations'}`"],
+      [limitRangeInfoSrc, '`/api/v1/namespaces/${namespace}/limitranges`'],
+      [resourceQuotaInfoSrc, '`/api/v1/namespaces/${namespace}/resourcequotas`'],
+      [pdbInfoSrc, '`/apis/policy/v1/namespaces/${namespace}/poddisruptionbudgets`'],
+      [crdInfoSrc, "'/apis/apiextensions.k8s.io/v1/customresourcedefinitions'"],
+    ]) {
+      expect(src).toContain('useDrawerFollowsObject({')
+      expect(src).toContain(`path: ${path},`)
+      expect(keyOf(src, 'describeKey'), path).toBeTruthy()
+      expect(keyOf(src, 'describeKey'), path).toBe(keyOf(src, 'queryKey'))
+    }
+  })
+
+  // A Lease's holder renews it every few seconds, faster than a read of its events is worth: the drawer reads on the clock.
+  it('a Lease drawer reads its answer on the clock', () => {
+    expect(leaseInfoSrc).toContain('refetchInterval: 5_000')
   })
 })

@@ -15,67 +15,11 @@ import { useCanCreate } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
-import { crdVersionsText, servedVersions } from './crdVersions'
+import { crdVersionsText } from './crdVersions'
+import { applyCRDWatchEvent } from './crdWatchNormalize'
 
 type SortKey = null | 'name' | 'group' | 'version' | 'scope' | 'kind' | 'age'
 type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
-
-function normalizeWatchCRDObject(obj: any): CRDInfo {
-  if (
-    typeof obj?.name === 'string' &&
-    typeof obj?.group === 'string'
-  ) {
-    return obj as CRDInfo
-  }
-
-  const metadata = obj?.metadata ?? {}
-  const spec = obj?.spec ?? {}
-  const names = spec?.names ?? {}
-
-  let version = ''
-  if (Array.isArray(spec?.versions)) {
-    const storageVer = spec.versions.find((v: any) => v.storage)
-    version = storageVer?.name ?? spec.versions[0]?.name ?? ''
-  }
-
-  return {
-    name: metadata?.name ?? obj?.name ?? '',
-    group: spec?.group ?? '',
-    version,
-    served_versions: servedVersions(spec?.versions),
-    scope: spec?.scope ?? '',
-    kind: names?.kind ?? '',
-    created_at: metadata?.creationTimestamp ?? obj?.created_at ?? '',
-    labels: metadata?.labels ?? obj?.labels ?? null,
-    annotations: metadata?.annotations ?? obj?.annotations ?? null,
-  }
-}
-
-function applyCRDWatchEvent(
-  prev: CRDInfo[] | undefined,
-  event: { type?: string; object?: any },
-): CRDInfo[] {
-  const items = Array.isArray(prev) ? [...prev] : []
-  const obj = event?.object
-  if (!obj) return items
-
-  const normalized = normalizeWatchCRDObject(obj)
-  const name = normalized?.name
-  if (!name) return items
-
-  const index = items.findIndex((item) => item.name === name)
-
-  if (event.type === 'DELETED') {
-    if (index >= 0) items.splice(index, 1)
-    return items
-  }
-
-  // the server sends the whole row (crdrow.Info), so it replaces: a version no longer served goes from the list
-  if (index >= 0) items[index] = normalized
-  else items.push(normalized)
-
-  return items
-}
 
 export default function CustomResourceDefinitions() {
   const queryClient = useQueryClient()
@@ -102,13 +46,6 @@ export default function CustomResourceDefinitions() {
     path: '/apis/apiextensions.k8s.io/v1/customresourcedefinitions',
     query: 'watch=1',
     applyEvent: (prev, event) => applyCRDWatchEvent(prev as CRDInfo[] | undefined, event),
-    onEvent: (event) => {
-      if (event?.type === 'DELETED') return
-      const name = event?.object?.name || event?.object?.metadata?.name
-      if (name) {
-        queryClient.invalidateQueries({ queryKey: ['crd-describe', name] })
-      }
-    },
   })
 
   const filteredItems = useMemo(() => {

@@ -17,6 +17,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+
+	leaserow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/lease"
 )
 
 // clusterDrawersAPI answers GETs of the objects it holds by their API path and events lists as the API server filters
@@ -273,7 +275,7 @@ func TestFormatLeaseDetail_TimesInUTC(t *testing.T) {
 	renew := metav1.NewMicroTime(time.Date(2026, 11, 4, 16, 0, 5, 123456000, kst))
 	acquire := metav1.NewMicroTime(time.Date(2026, 11, 4, 15, 58, 0, 0, kst))
 	holder, dur, transitions := "node-a", int32(40), int32(3)
-	out := formatLeaseDetail(&coordinationv1.Lease{
+	out := leaserow.Info(&coordinationv1.Lease{
 		ObjectMeta: metav1.ObjectMeta{Name: "node-a", Namespace: "kube-node-lease"},
 		Spec:       coordinationv1.LeaseSpec{HolderIdentity: &holder, LeaseDurationSeconds: &dur, LeaseTransitions: &transitions, RenewTime: &renew, AcquireTime: &acquire},
 	})

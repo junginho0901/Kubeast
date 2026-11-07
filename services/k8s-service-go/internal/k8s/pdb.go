@@ -8,6 +8,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	pdbrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/pdb"
 )
 
 // GetPDBs lists PDBs in a namespace.
@@ -53,7 +55,7 @@ func (s *Service) DescribePDB(ctx context.Context, namespace, name string) (map[
 	if pdbErr != nil {
 		return nil, fmt.Errorf("get pdb %s/%s: %w", namespace, name, pdbErr)
 	}
-	result := formatPDBDetail(pdb)
+	result := pdbrow.Info(pdb)
 
 	// Additional metadata
 	result["uid"] = string(pdb.UID)
@@ -89,54 +91,7 @@ func (s *Service) DeletePDB(ctx context.Context, namespace, name string) error {
 func formatPDBList(pdbs []policyv1.PodDisruptionBudget) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(pdbs))
 	for i := range pdbs {
-		result = append(result, formatPDBDetail(&pdbs[i]))
+		result = append(result, pdbrow.Info(&pdbs[i]))
 	}
-	return result
-}
-
-func formatPDBDetail(pdb *policyv1.PodDisruptionBudget) map[string]interface{} {
-	result := map[string]interface{}{
-		"name":                pdb.Name,
-		"namespace":           pdb.Namespace,
-		"current_healthy":     pdb.Status.CurrentHealthy,
-		"desired_healthy":     pdb.Status.DesiredHealthy,
-		"disruptions_allowed": pdb.Status.DisruptionsAllowed,
-		"expected_pods":       pdb.Status.ExpectedPods,
-		"labels":              pdb.Labels,
-		"created_at":          toISO(&pdb.CreationTimestamp),
-	}
-
-	if pdb.Spec.MinAvailable != nil {
-		result["min_available"] = pdb.Spec.MinAvailable.String()
-	}
-	if pdb.Spec.MaxUnavailable != nil {
-		result["max_unavailable"] = pdb.Spec.MaxUnavailable.String()
-	}
-
-	// Selector
-	selector := map[string]string{}
-	if pdb.Spec.Selector != nil && pdb.Spec.Selector.MatchLabels != nil {
-		selector = pdb.Spec.Selector.MatchLabels
-	}
-	result["selector"] = selector
-
-	// Match expressions
-	if pdb.Spec.Selector != nil && len(pdb.Spec.Selector.MatchExpressions) > 0 {
-		exprs := make([]map[string]interface{}, 0, len(pdb.Spec.Selector.MatchExpressions))
-		for _, e := range pdb.Spec.Selector.MatchExpressions {
-			exprs = append(exprs, map[string]interface{}{
-				"key":      e.Key,
-				"operator": string(e.Operator),
-				"values":   e.Values,
-			})
-		}
-		result["match_expressions"] = exprs
-	}
-
-	// UnhealthyPodEvictionPolicy
-	if pdb.Spec.UnhealthyPodEvictionPolicy != nil {
-		result["unhealthy_pod_eviction_policy"] = string(*pdb.Spec.UnhealthyPodEvictionPolicy)
-	}
-
 	return result
 }

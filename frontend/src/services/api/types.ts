@@ -1546,6 +1546,7 @@ export interface PDBInfo {
   disruptions_allowed: number
   expected_pods: number
   selector: Record<string, string>
+  labels?: Record<string, string> | null
   created_at: string
 }
 

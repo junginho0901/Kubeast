@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	leaserow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/lease"
 )
 
 // GetLeases lists Leases in a namespace.
@@ -54,7 +55,7 @@ func (s *Service) DescribeLease(ctx context.Context, namespace, name string) (ma
 	if leaseErr != nil {
 		return nil, fmt.Errorf("get lease %s/%s: %w", namespace, name, leaseErr)
 	}
-	result := formatLeaseDetail(lease)
+	result := leaserow.Info(lease)
 
 	// Additional metadata
 	result["uid"] = string(lease.UID)
@@ -77,35 +78,7 @@ func (s *Service) DeleteLease(ctx context.Context, namespace, name string) error
 func formatLeaseList(leases []coordinationv1.Lease) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(leases))
 	for i := range leases {
-		result = append(result, formatLeaseDetail(&leases[i]))
+		result = append(result, leaserow.Info(&leases[i]))
 	}
-	return result
-}
-
-func formatLeaseDetail(lease *coordinationv1.Lease) map[string]interface{} {
-	result := map[string]interface{}{
-		"name":       lease.Name,
-		"namespace":  lease.Namespace,
-		"labels":     lease.Labels,
-		"created_at": toISO(&lease.CreationTimestamp),
-	}
-
-	if lease.Spec.HolderIdentity != nil {
-		result["holder_identity"] = *lease.Spec.HolderIdentity
-	}
-	if lease.Spec.LeaseDurationSeconds != nil {
-		result["lease_duration_seconds"] = *lease.Spec.LeaseDurationSeconds
-	}
-	if lease.Spec.LeaseTransitions != nil {
-		result["lease_transitions"] = *lease.Spec.LeaseTransitions
-	}
-	// in UTC: a decoded MicroTime is in the process's local zone, which the literal "Z" used to mislabel
-	if lease.Spec.RenewTime != nil {
-		result["renew_time"] = lease.Spec.RenewTime.UTC().Format(time.RFC3339)
-	}
-	if lease.Spec.AcquireTime != nil {
-		result["acquire_time"] = lease.Spec.AcquireTime.UTC().Format(time.RFC3339)
-	}
-
 	return result
 }

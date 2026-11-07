@@ -3,6 +3,7 @@ import { api } from '@/services/api'
 import { InfoSection, InfoRow, InfoGrid, SummaryBadge, StatusBadge, KeyValueTags, EventsSection, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { useDetailLabel } from './useDetailLabel'
+import { useDrawerFollowsObject } from './useDrawerFollowsObject'
 import { useServerPods } from './useServerPods'
 import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
@@ -23,6 +24,12 @@ export default function RuntimeClassInfo({ name }: Props) {
     queryFn: () => api.describeRuntimeClass(name),
     staleTime: 10_000,
     retry: 1,
+  })
+  useDrawerFollowsObject({
+    enabled: !!name,
+    describeKey: ['runtimeclass-describe', name],
+    path: '/apis/node.k8s.io/v1/runtimeclasses',
+    name,
   })
 
   const { items: pagedPods, total: usingTotal, nav: podsNav } = useServerPods(name ? { runtime_class: name } : null)
