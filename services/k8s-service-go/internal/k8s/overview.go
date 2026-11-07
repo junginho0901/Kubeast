@@ -16,9 +16,6 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
 )
 
-// overviewIdentityTTL is how long a cluster's answer about one identity is kept.
-const overviewIdentityTTL = 60 * time.Second
-
 // GetClusterOverview returns a high-level summary of the cluster state, computed
 // from the cluster's informer stores (informer_cache.go). Until those have
 // synced, or when they cannot run, it lists the cluster (cached 30s).
@@ -96,13 +93,31 @@ func refuseCount(ov map[string]interface{}, key, resource string) {
 // grant's namespaces (a kind listable in some of them counted there only). A scoped overview does not count the
 // cluster-wide kinds.
 func (s *Service) keepListable(ctx context.Context, b *clientBundle, ci *clusterInformers, scope []string, ov map[string]interface{}) error {
+	questions := make([]listQuestion, 0, len(overviewCounts))
 	for _, c := range overviewCounts {
 		if len(scope) == 0 {
-			ok, err := s.mayListGroup(ctx, b, c.group, c.resource, "")
-			if err != nil {
-				return err
-			}
-			if !ok {
+			questions = append(questions, listQuestion{group: c.group, resource: c.resource})
+			continue
+		}
+		if !c.namespaced {
+			continue
+		}
+		for _, ns := range scope {
+			questions = append(questions, listQuestion{group: c.group, resource: c.resource, namespace: ns})
+		}
+	}
+	answers, err := s.mayListAll(ctx, b, questions)
+	if err != nil {
+		return err
+	}
+	next := func() bool {
+		ok := answers[0]
+		answers = answers[1:]
+		return ok
+	}
+	for _, c := range overviewCounts {
+		if len(scope) == 0 {
+			if !next() {
 				refuseCount(ov, c.key, c.resource)
 			}
 			continue
@@ -112,11 +127,7 @@ func (s *Service) keepListable(ctx context.Context, b *clientBundle, ci *cluster
 		}
 		var allowed []string
 		for _, ns := range scope {
-			ok, err := s.mayListGroup(ctx, b, c.group, c.resource, ns)
-			if err != nil {
-				return err
-			}
-			if ok {
+			if next() {
 				allowed = append(allowed, ns)
 			}
 		}
@@ -239,7 +250,7 @@ var errOverviewForbidden = apierrors.NewForbidden(schema.GroupResource{Resource:
 	errors.New("your identity in this cluster may not list namespaces, so the cluster overview is not shown"))
 
 // overviewIdentityAllowed answers from the cache (per cluster and identity,
-// overviewIdentityTTL) or asks the cluster through b.mayListNamespaces.
+// accessCheckTTL) or asks the cluster through b.mayListNamespaces.
 func (s *Service) overviewIdentityAllowed(ctx context.Context, b *clientBundle) error {
 	key := s.clusterCacheKey(ctx, "overview_identity")
 	var allowed bool
@@ -249,12 +260,19 @@ func (s *Service) overviewIdentityAllowed(ctx context.Context, b *clientBundle) 
 		}
 		return errOverviewForbidden
 	}
-	allowed, err := b.mayListNamespaces(ctx)
+	allowed, err := s.askOnce(ctx, key, func(ctx context.Context) (bool, error) {
+		var known bool
+		if s.cache != nil && s.cache.Get(ctx, key, &known) {
+			return known, nil
+		}
+		ok, err := b.mayListNamespaces(ctx)
+		if err == nil && s.cache != nil {
+			s.cache.Set(ctx, key, ok, accessCheckTTL())
+		}
+		return ok, err
+	})
 	if err != nil {
 		return err
-	}
-	if s.cache != nil {
-		s.cache.Set(ctx, key, allowed, overviewIdentityTTL)
 	}
 	if !allowed {
 		return errOverviewForbidden

@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"math/rand/v2"
 	"runtime"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	authorizationv1 "k8s.io/api/authorization/v1"
@@ -416,13 +418,17 @@ func (s *Service) podListAccess(ctx context.Context, b *clientBundle, namespace 
 		}
 		scope = []string{namespace}
 	}
+	questions := make([]listQuestion, len(scope))
+	for i, ns := range scope {
+		questions[i] = listQuestion{resource: "pods", namespace: ns}
+	}
+	answers, err := s.mayListAll(ctx, b, questions)
+	if err != nil {
+		return false, nil, err
+	}
 	allowed := make([]string, 0, len(scope))
-	for _, ns := range scope {
-		ok, err := s.mayListPods(ctx, b, ns)
-		if err != nil {
-			return false, nil, err
-		}
-		if ok {
+	for i, ns := range scope {
+		if answers[i] {
 			allowed = append(allowed, ns)
 		}
 	}
@@ -431,6 +437,12 @@ func (s *Service) podListAccess(ctx context.Context, b *clientBundle, namespace 
 			errors.New("your identity in this cluster may not list pods in these namespaces"))
 	}
 	return false, allowed, nil
+}
+
+// accessCheckTTL is how long one answer is remembered: up to a fifth under the minute, never over it, so people who came
+// together do not all ask again at one moment and a revoked permission still counts within the minute.
+func accessCheckTTL() time.Duration {
+	return podAccessTTL - rand.N(podAccessTTL/5)
 }
 
 // mayListPods asks whether the caller may list pods in namespace ("" = every
@@ -468,19 +480,62 @@ func (s *Service) mayListGroup(ctx context.Context, b *clientBundle, group, reso
 	if s.cache != nil && s.cache.Get(ctx, key, &allowed) {
 		return allowed, nil
 	}
-	review, err := b.authz.SelfSubjectAccessReviews().Create(ctx, &authorizationv1.SelfSubjectAccessReview{
-		Spec: authorizationv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authorizationv1.ResourceAttributes{
-			Verb: "list", Group: group, Resource: resource, Namespace: namespace,
-		}},
-	}, metav1.CreateOptions{})
-	if err != nil {
-		return false, err
+	// The key holds the cluster and the identity the review goes out as, all its answer depends on.
+	return s.askOnce(ctx, key, func(ctx context.Context) (bool, error) {
+		var known bool
+		if s.cache != nil && s.cache.Get(ctx, key, &known) {
+			return known, nil
+		}
+		review, err := b.authz.SelfSubjectAccessReviews().Create(ctx, &authorizationv1.SelfSubjectAccessReview{
+			Spec: authorizationv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authorizationv1.ResourceAttributes{
+				Verb: "list", Group: group, Resource: resource, Namespace: namespace,
+			}},
+		}, metav1.CreateOptions{})
+		if err != nil {
+			return false, err
+		}
+		if s.cache != nil {
+			s.cache.Set(ctx, key, review.Status.Allowed, accessCheckTTL())
+		}
+		return review.Status.Allowed, nil
+	})
+}
+
+// askOnce is one access question to the cluster at a time per key, whoever waits on it.
+func (s *Service) askOnce(ctx context.Context, key string, ask func(context.Context) (bool, error)) (bool, error) {
+	allowed, joined, err := s.accessChecks.Do(ctx, key, ask)
+	if joined && err == nil {
+		accesstrail.Cached(ctx, "the same access question of another request")
 	}
-	allowed = review.Status.Allowed
-	if s.cache != nil {
-		s.cache.Set(ctx, key, allowed, podAccessTTL)
+	return allowed, err
+}
+
+// listQuestion is one "may the caller list this?".
+type listQuestion struct{ group, resource, namespace string }
+
+// mayListAll answers one request's questions side by side, listFanOutWorkers at a time, each by mayListGroup. A failed
+// question fails the whole, the first in order as they would have failed in turn.
+func (s *Service) mayListAll(ctx context.Context, b *clientBundle, questions []listQuestion) ([]bool, error) {
+	answers := make([]bool, len(questions))
+	errs := make([]error, len(questions))
+	var wg sync.WaitGroup
+	places := make(chan struct{}, listFanOutWorkers)
+	for i, q := range questions {
+		places <- struct{}{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() { <-places }()
+			answers[i], errs[i] = s.mayListGroup(ctx, b, q.group, q.resource, q.namespace)
+		}()
 	}
-	return allowed, nil
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			return nil, err
+		}
+	}
+	return answers, nil
 }
 
 // accessPrint is part of the revision, so a page is sent again when the

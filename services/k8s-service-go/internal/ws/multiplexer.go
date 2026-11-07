@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
+	"github.com/junginho0901/kubeast/services/pkg/limits"
 	"github.com/junginho0901/kubeast/services/pkg/protectedns"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -84,9 +86,21 @@ const (
 	reasonScope       = "scope"       // a kind no namespace holds, for a grant limited to namespaces
 )
 
+// Which limit a reasonLimit frame hit (limit_scope): closing a tab frees the tab's, not the server's.
+const (
+	limitScopeTab    = "tab"
+	limitScopeServer = "server"
+)
+
 func (r RequestMessage) errorFrame(message, reason string) ResponseMessage {
 	f := r.frame("ERROR")
 	f.Error = map[string]string{"message": message, "reason": reason}
+	return f
+}
+
+func (r RequestMessage) limitFrame(message, scope string) ResponseMessage {
+	f := r.frame("ERROR")
+	f.Error = map[string]string{"message": message, "reason": reasonLimit, "limit_scope": scope}
 	return f
 }
 
@@ -139,6 +153,8 @@ const (
 	// review L22).
 	defaultMaxSubscriptions        = 2000
 	defaultMaxSubscriptionsPerConn = 50
+	// defaultWatchStartsAtOnce: at 50 ms a start, 16 bring 2 000 subscriptions back in about six seconds.
+	defaultWatchStartsAtOnce = 16
 	// maxFrameBytes bounds a client → server frame: a REQUEST/CLOSE message
 	// is a few hundred bytes; anything larger is not ours (M30).
 	maxFrameBytes = 64 * 1024
@@ -181,8 +197,16 @@ type Multiplexer struct {
 	Sessions *auth.LiveSessions
 	provider ClientProvider
 
-	mu   sync.Mutex
-	subs map[string]*subscription // key -> subscription
+	// MaxWatchStarts is how many watches of one cluster may be starting at once: 0 = the default above.
+	MaxWatchStarts int
+
+	// startNoticeAfter and startHoldFor: see takeWatchStart.
+	startNoticeAfter time.Duration
+	startHoldFor     time.Duration
+
+	mu     sync.Mutex
+	subs   map[string]*subscription // key -> subscription
+	starts map[string]*limits.Slots // cluster -> places for starting a watch
 }
 
 // SubscriptionCount is the number of live subscriptions across all connections (metrics).
@@ -221,8 +245,11 @@ func canWatchCluster(payload auth.TokenPayload, clusterID string) bool {
 // NewMultiplexer creates a new WebSocket multiplexer.
 func NewMultiplexer(p ClientProvider) *Multiplexer {
 	return &Multiplexer{
-		provider: p,
-		subs:     make(map[string]*subscription),
+		provider:         p,
+		subs:             make(map[string]*subscription),
+		starts:           make(map[string]*limits.Slots),
+		startNoticeAfter: 10 * time.Second,
+		startHoldFor:     5 * time.Second,
 	}
 }
 
@@ -355,12 +382,12 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 			// Reject if this connection's or the global cap is reached
 			if len(connSubs) >= maxPerConn || len(m.subs) >= maxTotal {
-				limit, scope := maxPerConn, "this connection"
+				limit, scope, limitScope := maxPerConn, "this connection", limitScopeTab
 				if len(connSubs) < maxPerConn {
-					limit, scope = maxTotal, "the server"
+					limit, scope, limitScope = maxTotal, "the server", limitScopeServer
 				}
 				m.mu.Unlock()
-				send(ctx, sendCh, req.errorFrame(fmt.Sprintf("max subscriptions reached for %s (%d), cannot create new watch", scope, limit), reasonLimit))
+				send(ctx, sendCh, req.limitFrame(fmt.Sprintf("max subscriptions reached for %s (%d), cannot create new watch", scope, limit), limitScope))
 				continue
 			}
 
@@ -393,6 +420,60 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			m.mu.Unlock()
 		}
 	}
+}
+
+// watchRetryDelay is the wait before a failed watch tries again: five seconds, give or take two, so what failed together
+// does not come back together.
+func watchRetryDelay() time.Duration { return 3*time.Second + rand.N(4*time.Second) }
+
+// watchResumeDelay is the wait before a watch that ended goes on: a second, give or take a half. An API server restart
+// ends every watch at one moment.
+func watchResumeDelay() time.Duration { return 500*time.Millisecond + rand.N(time.Second) }
+
+// watchTimeoutSeconds is what a watch asks the API server to run for, five minutes give or take thirty seconds: the
+// watches a restart started together would otherwise end together every five minutes from then on.
+func watchTimeoutSeconds() int64 { return 270 + rand.Int64N(61) }
+
+// watchStartPlaces are the places for starting a watch on a cluster. client-go does not rate limit watches, so without
+// them every subscription of a restart reaches the API server at the same moment. Holding a place is only the wait for
+// the API server's first answer; a watch that is on holds none.
+func (m *Multiplexer) watchStartPlaces(id string) *limits.Slots {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.starts[id] == nil {
+		n := m.MaxWatchStarts
+		if n <= 0 {
+			n = defaultWatchStartsAtOnce
+		}
+		m.starts[id] = limits.NewSlots("watch start on "+id, n)
+	}
+	return m.starts[id]
+}
+
+// takeWatchStart waits for a place to start req's watch, which costs one parked goroutine and no frames. A wait past
+// startNoticeAfter is told to the client, whose list is not following meanwhile; told says the next watch has to say
+// it is back. ok is false when ctx ended. The place goes back by the time release is called or the API server has kept
+// the start waiting for startHoldFor, whichever comes first, so a server that does not answer does not stop the queue.
+func (m *Multiplexer) takeWatchStart(ctx context.Context, req RequestMessage, sendCh chan<- ResponseMessage) (release func(), told, ok bool) {
+	places := m.watchStartPlaces(effectiveClusterID(subscriptionCluster(ctx, req.ClusterID)))
+	waiting, stop := context.WithTimeout(ctx, m.startNoticeAfter)
+	give, err := places.Take(waiting)
+	stop()
+	if err != nil {
+		if ctx.Err() != nil || !send(ctx, sendCh, req.errorFrame("waiting for a turn to start following the cluster", reasonUnreachable)) {
+			return nil, false, false
+		}
+		told = true
+		if give, err = places.Take(ctx); err != nil {
+			return nil, told, false
+		}
+	}
+	once := sync.OnceFunc(give)
+	timer := time.AfterFunc(m.startHoldFor, once)
+	return func() {
+		timer.Stop()
+		once()
+	}, told, true
 }
 
 // forgetSubscription frees the place of a watch that has ended, unless a later REQUEST of the same key already holds it.
@@ -459,7 +540,7 @@ func (m *Multiplexer) runWatch(ctx context.Context, req RequestMessage, sendCh c
 				}
 				slog.Warn("watch failed", "resource", resource, "err", err)
 				message, reason := watchFailure(err)
-				if !send(ctx, sendCh, req.errorFrame(message, reason)) || !pause(ctx, 5*time.Second) {
+				if !send(ctx, sendCh, req.errorFrame(message, reason)) || !pause(ctx, watchRetryDelay()) {
 					return
 				}
 				resync = true
@@ -471,18 +552,24 @@ func (m *Multiplexer) runWatch(ctx context.Context, req RequestMessage, sendCh c
 			Watch: true,
 			// Keeps the version to resume from recent on a quiet list, where the last event's may be long expired.
 			AllowWatchBookmarks: true,
-			TimeoutSeconds:      int64Ptr(300),
+			TimeoutSeconds:      int64Ptr(watchTimeoutSeconds()),
 			ResourceVersion:     lastResourceVersion,
 			LabelSelector:       labelSelector,
 			FieldSelector:       fieldSelector,
 		}
 
+		release, told, ok := m.takeWatchStart(ctx, req, sendCh)
+		if !ok {
+			return
+		}
+		resync = resync || told
 		var watcher watch.Interface
 		if namespace != "" {
 			watcher, err = dyn.Resource(gvr).Namespace(namespace).Watch(ctx, opts)
 		} else {
 			watcher, err = dyn.Resource(gvr).Watch(ctx, opts)
 		}
+		release()
 		if err != nil {
 			// Canceled while connecting: nobody is waiting for this watch, so it is no failure to report.
 			if ctx.Err() != nil {
@@ -494,7 +581,7 @@ func (m *Multiplexer) runWatch(ctx context.Context, req RequestMessage, sendCh c
 			}
 			slog.Warn("watch failed", "resource", resource, "err", err)
 			message, reason := watchFailure(err)
-			if !send(ctx, sendCh, req.errorFrame(message, reason)) || !pause(ctx, 5*time.Second) {
+			if !send(ctx, sendCh, req.errorFrame(message, reason)) || !pause(ctx, watchRetryDelay()) {
 				return
 			}
 			// The client was told the list stopped following: the next watch says it is back, on a quiet list too.
@@ -525,7 +612,7 @@ func (m *Multiplexer) runWatch(ctx context.Context, req RequestMessage, sendCh c
 		if expired && lastResourceVersion != "" {
 			lastResourceVersion, resync = "", true
 		}
-		if !pause(ctx, time.Second) {
+		if !pause(ctx, watchResumeDelay()) {
 			return
 		}
 	}

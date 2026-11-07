@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/flight"
+	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -200,8 +202,36 @@ type policyReportSet struct {
 }
 
 type policyReportCache struct {
-	mu   sync.Mutex
-	sets map[string]policyReportSet
+	mu    sync.Mutex
+	sets  map[string]policyReportSet
+	reads flight.Group[policyReportSet]
+}
+
+// fresh is the answer kept for key, while it is within its minute.
+func (c *policyReportCache) fresh(key string) (policyReportSet, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	set, ok := c.sets[key]
+	if !ok || time.Since(set.at) >= policyReportCacheTTL {
+		return policyReportSet{}, false
+	}
+	return set, true
+}
+
+// keep stores an answer and drops those past their minute, which no read asks for again. A read that started later and
+// already answered stays.
+func (c *policyReportCache) keep(key string, set policyReportSet) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for k, kept := range c.sets {
+		if time.Since(kept.at) >= policyReportCacheTTL {
+			delete(c.sets, k)
+		}
+	}
+	if kept, ok := c.sets[key]; ok && kept.at.After(set.at) {
+		return
+	}
+	c.sets[key] = set
 }
 
 var policyReportCaches = struct {
@@ -596,7 +626,7 @@ func (s *Service) clusterPolicyReportSet(ctx context.Context, force bool) (polic
 		return policyReportSet{}, apierrors.NewForbidden(schema.GroupResource{Group: clusterPolicyReportGVR.Group, Resource: clusterPolicyReportGVR.Resource}, "", fmt.Errorf("cluster reports are outside a grant limited to namespaces"))
 	}
 	// "*" starts no namespace name, so the cluster reports keep a cache entry of their own
-	return s.cachedPolicyReports(ctx, "*cluster", force, func() (policyReportSet, error) {
+	return s.cachedPolicyReports(ctx, "*cluster", force, func(ctx context.Context) (policyReportSet, error) {
 		set := policyReportSet{at: time.Now(), results: []PolicyReportResult{}}
 		return set, s.readPolicyReportKind(ctx, clusterPolicyReportGVR, "", &set)
 	})
@@ -659,7 +689,7 @@ func (s *Service) policyReportSet(ctx context.Context, namespace string, force b
 	if scoped && namespace != "" && !containsString(scope, namespace) {
 		return policyReportSet{}, true, apierrors.NewForbidden(schema.GroupResource{Group: policyReportGVR.Group, Resource: policyReportGVR.Resource}, "", fmt.Errorf("namespace %q is outside your grant", namespace))
 	}
-	set, err := s.cachedPolicyReports(ctx, namespace, force, func() (policyReportSet, error) {
+	set, err := s.cachedPolicyReports(ctx, namespace, force, func(ctx context.Context) (policyReportSet, error) {
 		return s.readPolicyReports(ctx, namespace, scope)
 	})
 	return set, scoped, err
@@ -668,30 +698,41 @@ func (s *Service) policyReportSet(ctx context.Context, namespace string, force b
 // cachedPolicyReports serves one read (a namespace, "" for the whole view) from
 // the minute cache of the cluster and the caller's identity, unless force; else
 // it reads and keeps the answer.
-func (s *Service) cachedPolicyReports(ctx context.Context, what string, force bool, read func() (policyReportSet, error)) (policyReportSet, error) {
+func (s *Service) cachedPolicyReports(ctx context.Context, what string, force bool, read func(context.Context) (policyReportSet, error)) (policyReportSet, error) {
 	cluster := string(ctxClusterID(ctx))
-	identity := ""
+	identity, claims := "", ""
 	if p, ok := auth.FromContext(ctx); ok {
-		identity = p.CacheIdentity(cluster)
+		identity, claims = p.CacheIdentity(cluster), p.ClaimsKey()
 	}
 	key := what + "|as:" + identity
 	c := policyReportCacheFor(cluster)
 	if !force {
-		c.mu.Lock()
-		if set, ok := c.sets[key]; ok && time.Since(set.at) < policyReportCacheTTL {
-			c.mu.Unlock()
+		if set, ok := c.fresh(key); ok {
 			return set, nil
 		}
-		c.mu.Unlock()
 	}
 
-	set, err := read()
+	// A read asked for by the holder of the same claims is the one answer; a forced read keeps to its own, since one
+	// that may stop at the cache would not be what the cluster holds now.
+	set, joined, err := c.reads.Do(ctx, fmt.Sprintf("%s|claims:%s|force:%t", key, claims, force), func(ctx context.Context) (policyReportSet, error) {
+		if !force {
+			if set, ok := c.fresh(key); ok {
+				return set, nil
+			}
+		}
+		set, err := read(ctx)
+		if err != nil {
+			return policyReportSet{}, err
+		}
+		c.keep(key, set)
+		return set, nil
+	})
 	if err != nil {
 		return policyReportSet{}, err
 	}
-	c.mu.Lock()
-	c.sets[key] = set
-	c.mu.Unlock()
+	if joined {
+		accesstrail.Cached(ctx, "policy reports read for another request")
+	}
 	return set, nil
 }
 

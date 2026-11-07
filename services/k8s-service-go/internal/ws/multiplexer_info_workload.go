@@ -26,8 +26,12 @@ func genericPodHolderToInfo(obj *unstructured.Unstructured) map[string]interface
 // deploymentToInfo is the list's row (deployrow.Info), so a live update says what the list says.
 func deploymentToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 	var d appsv1.Deployment
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, &d); err != nil {
+	slim, containers := slimWorkload(obj)
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(slim, &d); err != nil {
 		return genericPodHolderToInfo(obj)
+	}
+	if containers != nil {
+		d.Spec.Template.Spec.Containers = containers
 	}
 	return deployrow.Info(&d)
 }
@@ -104,8 +108,12 @@ func daemonsetToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 // ReplicaSets match on its owner_references.
 func replicasetToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 	var rs appsv1.ReplicaSet
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, &rs); err != nil {
+	slim, containers := slimWorkload(obj)
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(slim, &rs); err != nil {
 		return genericPodHolderToInfo(obj)
+	}
+	if containers != nil {
+		rs.Spec.Template.Spec.Containers = containers
 	}
 	return rsrow.Info(&rs)
 }
@@ -114,8 +122,12 @@ func replicasetToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 // match on its owner_references.
 func jobToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 	var j batchv1.Job
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, &j); err != nil {
+	slim, containers := slimWorkload(obj)
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(slim, &j); err != nil {
 		return genericPodHolderToInfo(obj)
+	}
+	if containers != nil {
+		j.Spec.Template.Spec.Containers = containers
 	}
 	return jobrow.Info(&j)
 }

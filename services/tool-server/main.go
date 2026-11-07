@@ -12,6 +12,7 @@ import (
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/internalauth"
+	"github.com/junginho0901/kubeast/services/pkg/memlimit"
 	"github.com/junginho0901/kubeast/services/pkg/metrics"
 )
 
@@ -44,6 +45,7 @@ var (
 )
 
 func main() {
+	memlimit.Set(kubectlReservedBytes(kubectlSlots.Cap()))
 	port := envOrDefault("PORT", "8086")
 
 	toolRegistry := buildToolRegistry()

@@ -93,6 +93,8 @@ func (s *Service) CollectIssues(ctx context.Context, opts IssuesOptions) ([]Issu
 func (s *Service) podIssues(ctx context.Context, opts IssuesOptions) ([]Issue, error) {
 	list := func(namespace string) ([]Issue, error) {
 		var out []Issue
+		var read pagedRead
+		defer read.done()
 		lo := metav1.ListOptions{Limit: podListChunk}
 		for {
 			l, err := s.clientsetCtx(ctx).CoreV1().Pods(namespace).List(ctx, lo)
@@ -102,6 +104,9 @@ func (s *Service) podIssues(ctx context.Context, opts IssuesOptions) ([]Issue, e
 			out = append(out, issuesFromPods(formatPodList(l.Items), opts)...)
 			if l.Continue == "" {
 				return out, nil
+			}
+			if err := read.nextPage(ctx); err != nil {
+				return nil, err
 			}
 			lo.Continue = l.Continue
 		}

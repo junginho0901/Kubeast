@@ -17,6 +17,7 @@ import (
 	"golang.org/x/sync/singleflight"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/cache"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/flight"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logsearch"
 	kubetrail "github.com/junginho0901/kubeast/services/pkg/accesstrail/kube"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
@@ -109,6 +110,8 @@ type Service struct {
 	promQ *promQueryCache
 	// limiters holds per-cluster rate limiters + circuit breakers (step 15).
 	limiters *clusterLimiters
+	// accessChecks is one access question to the cluster at a time per identity and question.
+	accessChecks flight.Group[bool]
 
 	watchEnabled bool
 

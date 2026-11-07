@@ -32,7 +32,7 @@ func namespaceToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 // serviceToInfo is the list's row (servicerow.Info), so a live update says what the list says.
 func serviceToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 	var svc corev1.Service
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, &svc); err != nil {
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(withoutFieldManagers(obj), &svc); err != nil {
 		return genericToInfo(obj)
 	}
 	return servicerow.Info(&svc)
@@ -67,7 +67,7 @@ func eventToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 
 	// The times and count as the list writes them (eventtime), so an update of an events.k8s.io event does not blank them.
 	var ev corev1.Event
-	_ = runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, &ev)
+	_ = runtime.DefaultUnstructuredConverter.FromUnstructured(slimEvent(obj), &ev)
 	first, _, count := eventtime.Seen(&ev)
 
 	return map[string]interface{}{

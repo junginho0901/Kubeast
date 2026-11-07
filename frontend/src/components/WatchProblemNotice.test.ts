@@ -110,7 +110,7 @@ describe('a role that may list a kind and may not watch it', () => {
 })
 
 describe('a list past a limit of live updates', () => {
-  const past = (scope: string, size: number) => ({ type: 'ERROR', error: { message: `max subscriptions reached for ${scope} (${size}), cannot create new watch`, reason: 'limit' } })
+  const past = (scope: string, size: number) => ({ type: 'ERROR', error: { message: `max subscriptions reached for ${scope} (${size}), cannot create new watch`, reason: 'limit', limit_scope: scope === 'the server' ? 'server' : 'tab' } })
   beforeEach(() => {
     resetWatchProblems()
     refused.labels = []

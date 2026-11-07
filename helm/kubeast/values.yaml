@@ -1062,6 +1062,18 @@ multicluster:
   # wsMaxSubscriptionsPerConn those of one browser tab.
   wsMaxSubscriptions: 2000
   wsMaxSubscriptionsPerConn: 50
+  # How many watches of one cluster may be starting at once; the rest wait, so
+  # a restart does not bring every subscription to the API server at one moment.
+  wsWatchStartConcurrency: 16
+  # How many reads of more than one page (500 pods, ReplicaSets, ...) run at once
+  # in one k8s-service; the rest wait, and a read of one page waits for none. One
+  # read of a 50 000-pod namespace asks 39 to 78 pages a second and holds up to
+  # about 110 MiB.
+  bigReadConcurrency: 2
+  # How many kubectl processes tool-server runs at once; the rest wait inside
+  # their call's 60 s. About 40 MiB each, inside resources.toolServer's limit, and
+  # the Go collector's limit is lowered by that much per process.
+  toolServerKubectlConcurrency: 3
   # Credential plugins a registered kubeconfig may run (exec.command base
   # names). They execute inside the k8s-service and tool-server pods, so only
   # known binaries are allowed; an empty list forbids exec plugins.

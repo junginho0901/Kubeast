@@ -634,7 +634,7 @@ describe('WebSocketMultiplexer', () => {
 
   describe('a watch the limit refused', () => {
     const msg = { type: 'REQUEST' as const, clusterId: 'self', path: '/api/v1/namespaces/demo/configmaps', query: 'watch=1' }
-    const refusal = { type: 'ERROR', clusterId: msg.clusterId, path: msg.path, query: msg.query, error: { message: 'max subscriptions reached for the server (2000), cannot create new watch', reason: 'limit' } }
+    const refusal = { type: 'ERROR', clusterId: msg.clusterId, path: msg.path, query: msg.query, error: { message: 'max subscriptions reached for the server (2000), cannot create new watch', reason: 'limit', limit_scope: 'server' } }
     const requests = (ws: MockWebSocket) => ws.sent.map((m) => JSON.parse(m)).filter((m) => m.type === 'REQUEST')
     const open = async (listener = vi.fn()) => {
       resetWatchProblems()

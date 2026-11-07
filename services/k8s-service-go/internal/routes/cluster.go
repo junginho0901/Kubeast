@@ -31,10 +31,10 @@ func RegisterCluster(r chi.Router, h *handler.Handler) {
 
 	// Policy reports (wgpolicyk8s.io PolicyReport/ClusterPolicyReport, features.policyReports)
 	r.Get("/api/v1/policyreports/status", h.GetPolicyReportStatus)
-	r.With(h.ListIfServed("wgpolicyk8s.io", "policyreports")).Get("/api/v1/policyreports/summary", h.GetPolicyReportSummary)
-	r.With(h.ListIfServed("wgpolicyk8s.io", "policyreports")).Get("/api/v1/policyreports/results", h.GetPolicyReportResults)
-	r.With(h.ListIfServed("wgpolicyk8s.io", "policyreports")).Get("/api/v1/namespaces/{namespace}/policyreports/resource", h.GetResourcePolicyReports)
-	r.With(h.ListIfServed("wgpolicyk8s.io", "clusterpolicyreports")).Get("/api/v1/policyreports/resource", h.GetClusterResourcePolicyReports)
+	r.With(h.ListIfServed("wgpolicyk8s.io", "policyreports")).Get("/api/v1/policyreports/summary", h.Shared(h.GetPolicyReportSummary))
+	r.With(h.ListIfServed("wgpolicyk8s.io", "policyreports")).Get("/api/v1/policyreports/results", h.Shared(h.GetPolicyReportResults))
+	r.With(h.ListIfServed("wgpolicyk8s.io", "policyreports")).Get("/api/v1/namespaces/{namespace}/policyreports/resource", h.Shared(h.GetResourcePolicyReports))
+	r.With(h.ListIfServed("wgpolicyk8s.io", "clusterpolicyreports")).Get("/api/v1/policyreports/resource", h.Shared(h.GetClusterResourcePolicyReports))
 
 	// Cluster hygiene report (Cluster → Cluster Hygiene)
 	r.Get("/api/v1/hygiene/config", h.HygieneConfig)

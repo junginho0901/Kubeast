@@ -456,7 +456,7 @@ describe('a list that opens with thousands of objects', () => {
 
 describe('a list the server has no room to follow', () => {
   const listKey = ['configuration', 'configmaps', 'demo']
-  const refused = (path = '/api/v1/namespaces/demo/configmaps') => frame('ERROR', { path, error: { message: 'max subscriptions reached for the server (2000), cannot create new watch', reason: 'limit' } })
+  const refused = (path = '/api/v1/namespaces/demo/configmaps') => frame('ERROR', { path, error: { message: 'max subscriptions reached for the server (2000), cannot create new watch', reason: 'limit', limit_scope: 'server' } })
   const frames = new Map<string, (message: unknown) => void>()
   let closed: (() => void) | undefined
 

@@ -19,7 +19,7 @@ type ServerMessage = {
   query: string
 } & (
   | { type: 'DATA'; data: any }
-  | { type: 'ERROR'; error: { message?: string; reason?: string } }
+  | { type: 'ERROR'; error: { message?: string; reason?: string; limit_scope?: string } }
   | { type: 'COMPLETE' }
   // the watch started over and cannot say what was deleted meanwhile: read the list again
   | { type: 'RESYNC' }

@@ -34,6 +34,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/dbmigrate"
 	"github.com/junginho0901/kubeast/services/pkg/limits"
 	pkglogger "github.com/junginho0901/kubeast/services/pkg/logger"
+	"github.com/junginho0901/kubeast/services/pkg/memlimit"
 	"github.com/junginho0901/kubeast/services/pkg/metrics"
 )
 
@@ -57,6 +58,7 @@ func main() {
 	cfg := config.Load()
 	pkglogger.Setup("auth-service", cfg.Debug)
 	slog.Info("starting auth-service", "port", cfg.Port)
+	memlimit.Set(0)
 	if err := cfg.Validate(); err != nil {
 		slog.Error("invalid configuration", "error", err)
 		os.Exit(1)

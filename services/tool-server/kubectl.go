@@ -19,6 +19,7 @@ import (
 
 	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
+	"github.com/junginho0901/kubeast/services/pkg/limits"
 )
 
 // outputMaxBytes caps what one kubectl call hands back to the model: the tool
@@ -94,6 +95,29 @@ var kubectlExec = func(ctx context.Context, args []string, stdin *string) ([]byt
 	return cmd.CombinedOutput()
 }
 
+// kubectlOneRunBytes is what one kubectl run takes before it reads anything (measured: 40 MiB for a list of one item).
+const kubectlOneRunBytes = 40 << 20
+
+// defaultKubectlRuns: tool-server's own 14 MiB idle, about 110 MiB of heap for what it parses and masks, and three runs
+// of 40 MiB stay under the chart's 256 Mi. The full lists listSize lets through take more, about 120 MiB at 5 000 items.
+const defaultKubectlRuns = 3
+
+// kubectlSlots bounds the kubectl processes of this container (TOOL_SERVER_KUBECTL_CONCURRENCY); the others wait their
+// turn inside their call's time.
+var kubectlSlots = limits.NewSlots("kubectl", envInt("TOOL_SERVER_KUBECTL_CONCURRENCY", defaultKubectlRuns))
+
+func kubectlReservedBytes(runs int) int64 { return int64(runs) * kubectlOneRunBytes }
+
+// kubectlRun runs kubectl once its turn has come.
+func kubectlRun(ctx context.Context, argv []string, stdin *string) ([]byte, error) {
+	release, err := kubectlSlots.Take(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%d kubectl runs were under way until this call's time ran out: %w", kubectlSlots.Cap(), err)
+	}
+	defer release()
+	return kubectlExec(ctx, argv, stdin)
+}
+
 // runKubectlKeepingEnd is runKubectl for a log, whose newest lines are at its end: cut says the front left past outputMaxBytes.
 func runKubectlKeepingEnd(ctx context.Context, args ...string) (string, bool, error) {
 	argv, done, err := kubectlCommand(ctx, args)
@@ -101,7 +125,7 @@ func runKubectlKeepingEnd(ctx context.Context, args ...string) (string, bool, er
 		return "", false, err
 	}
 	defer done()
-	output, err := kubectlExec(keepingEnd(ctx, outputMaxBytes+1), argv, nil)
+	output, err := kubectlRun(keepingEnd(ctx, outputMaxBytes+1), argv, nil)
 	if err != nil {
 		errText := strings.TrimSpace(capOutput(output))
 		if errText == "" {
@@ -121,7 +145,7 @@ func runKubectl(ctx context.Context, headers http.Header, args ...string) (strin
 		return "", err
 	}
 	defer done()
-	output, err := kubectlExec(ctx, argv, nil)
+	output, err := kubectlRun(ctx, argv, nil)
 	if err != nil {
 		errText := strings.TrimSpace(capOutput(output))
 		if errText == "" {
@@ -139,7 +163,7 @@ func runKubectlWithInput(ctx context.Context, headers http.Header, input string,
 		return "", err
 	}
 	defer done()
-	output, err := kubectlExec(ctx, argv, &input)
+	output, err := kubectlRun(ctx, argv, &input)
 	if err != nil {
 		errText := strings.TrimSpace(capOutput(output))
 		if errText == "" {

@@ -361,6 +361,8 @@ func (s *hygienePodSummary) add(p *corev1.Pod) {
 // hygienePodSummaryOf lists the pods podListChunk at a time and checks each page as it comes.
 func hygienePodSummaryOf(ctx context.Context, cs kubernetes.Interface, target int) (*hygienePodSummary, error) {
 	sum := newHygienePodSummary(target)
+	var read pagedRead
+	defer read.done()
 	opts := metav1.ListOptions{Limit: podListChunk}
 	for {
 		l, err := cs.CoreV1().Pods("").List(ctx, opts)
@@ -372,6 +374,9 @@ func hygienePodSummaryOf(ctx context.Context, cs kubernetes.Interface, target in
 		}
 		if l.Continue == "" {
 			return sum, nil
+		}
+		if err := read.nextPage(ctx); err != nil {
+			return nil, err
 		}
 		opts.Continue = l.Continue
 	}

@@ -265,6 +265,10 @@ spec:
               value: "{{ .Values.multicluster.wsMaxSubscriptions | default 2000 }}"
             - name: WS_MAX_SUBSCRIPTIONS_PER_CONN
               value: "{{ .Values.multicluster.wsMaxSubscriptionsPerConn | default 50 }}"
+            - name: WS_WATCH_START_CONCURRENCY
+              value: "{{ .Values.multicluster.wsWatchStartConcurrency | default 16 }}"
+            - name: BIG_READ_CONCURRENCY
+              value: "{{ .Values.multicluster.bigReadConcurrency | default 2 }}"
             {{- with .Values.features.prometheus.auth.existingSecret }}
             - name: PROMETHEUS_AUTH_HEADER
               valueFrom:
@@ -503,6 +507,8 @@ spec:
             # kubectl discovery cache; root fs is read-only
             - name: KUBECACHEDIR
               value: /tmp/kube-cache
+            - name: TOOL_SERVER_KUBECTL_CONCURRENCY
+              value: "{{ .Values.multicluster.toolServerKubectlConcurrency | default 3 }}"
             {{- with include "kubeast.awsEnv" . }}{{ nindent 12 . }}{{- end }}
             {{- with include "kubeast.customCAGoEnv" . }}{{ . | trim | nindent 12 }}{{ end }}
           volumeMounts:
