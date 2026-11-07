@@ -3673,6 +3673,7 @@
     "refreshTitle": "강제 새로고침",
     "allKinds": "모든 Kind",
     "matchCount": "{{count}}개 결과 일치.",
+    "notLive": "이 행은 실시간으로 바뀌지 않습니다. 객체가 {{max}}개 이하인 Kind를 고르면 따라가고, 아니면 새로고침하세요.",
     "stats": {
       "total": "전체 인스턴스",
       "kinds": "Kind 수",
@@ -3687,6 +3688,7 @@
     }
   },
   "crdInfo": {
+    "notLive": "객체가 {{max}}개를 넘는 표는 실시간으로 바뀌지 않습니다. 창을 닫았다가 다시 열면 새로 읽습니다.",
     "basicInfo": "기본 정보",
     "group": "그룹",
     "scope": "범위",

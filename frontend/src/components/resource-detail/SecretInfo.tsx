@@ -16,6 +16,7 @@ import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
 import { secretDescribeForAI } from './secretDescribeForAI'
+import { useDrawerFollowsObject } from './useDrawerFollowsObject'
 
 interface Props {
   name: string
@@ -77,6 +78,13 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
     queryFn: () => api.describeSecret(namespace, name),
     enabled: !!namespace && !!name,
     retry: false,
+  })
+  // Its object is not read every ten seconds as the others' are: that read is an audited reveal.
+  useDrawerFollowsObject({
+    enabled: !!describe,
+    describeKey: ['secret-describe', namespace, name],
+    path: `/api/v1/namespaces/${namespace}/secrets`,
+    name,
   })
 
   useResourceDetailOverlay({ kind: 'Secret', name, namespace, describe: secretDescribeForAI(describe) })

@@ -157,9 +157,15 @@ const conditionOf = (conds: Obj[], type: string) => {
   const of = conds.filter((c) => c.type === type)
   return dash((of.find((c) => c.status === 'True') ?? of[0])?.status)
 }
-const conditionsTable = (conds: Obj[]): TableView[] => (conds.length
-  ? [{ head: ['Type', 'Status', 'Reason', 'Message', 'Last Transition'], rows: conds.map((c) => [dash(c.type), dash(c.status), dash(c.reason), dash(c.message), at(c.lastTransitionTime)]) }]
-  : [])
+const conditionsTable = (conds: Obj[]): TableView[] => {
+  if (!conds.length) return []
+  // the column is there when a condition of the table says which generation it was written for
+  const generation = conds.some((c) => c.observedGeneration != null)
+  return [{
+    head: ['Type', 'Status', 'Reason', 'Message', ...(generation ? ['Observed Generation'] : []), 'Last Transition'],
+    rows: conds.map((c) => [dash(c.type), dash(c.status), dash(c.reason), dash(c.message), ...(generation ? [dash(c.observedGeneration)] : []), at(c.lastTransitionTime)]),
+  }]
+}
 // newest first, as kubectl's printEvent dates them
 const eventsTable = (events: Obj[]): TableView[] => (events.length
   ? [{ head: ['Type', 'Reason', 'Message', 'Last Seen', 'Count'], rows: events.map((e) => [dash(e.type), dash(e.reason), dash(e.message), at(e.lastTimestamp ?? e.firstTimestamp), String(e.count ?? 1)]) }]

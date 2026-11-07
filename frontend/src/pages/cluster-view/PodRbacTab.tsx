@@ -7,11 +7,13 @@ import { useState } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useAIContext } from '@/hooks/useAIContext'
+import { useWatchChanges } from '@/services/useWatchChanges'
 import {
   buildRbacPermissionSummary,
   podRbacAIContext,
   rbacApiGroupsText,
   rbacBindingList,
+  rbacWatchPaths,
   type RbacBindingList,
 } from './rbacUtils'
 
@@ -200,6 +202,11 @@ export function PodRbacTab({ pod, tr }: Props) {
     },
     // The toggle asks again: what it showed stays until the new answer comes, so the page does not blink.
     placeholderData: keepPreviousData,
+  })
+  useWatchChanges({
+    enabled: !!rbacData,
+    paths: rbacWatchPaths(pod.namespace, rbacData),
+    read: [['pod-rbac', pod.namespace, pod.name, includeAuthenticatedGroup]],
   })
 
   useAIContext(rbacData ? podRbacAIContext(rbacData, pod) : null, [rbacData, pod.name, pod.namespace])

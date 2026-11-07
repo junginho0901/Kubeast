@@ -252,7 +252,7 @@
   - In the UI:
     - the namespace selector shows only the granted namespaces
     - the no-permission notice adds "Your access to this cluster is limited to the namespaces a, b"
-    - real-time updates subscribe per namespace; objects of the whole cluster are in no namespace and do not update live, which a notice above a screen listing them says
+    - real-time updates subscribe per namespace; a kind of the whole cluster is one subscription when the cluster's RBAC lets the user list it, and a notice above a screen listing it says when it does not, as for the Namespaces list, which is narrowed to the grant
   - The Access Review report and CSV have a `namespaces` column.
 - **SSO group → role**: groups from the OIDC provider are converted into account-level roles and per-cluster grants. With `syncRoles`, they are re-applied at every login.
   - Account-level roles use `auth.oidc.roleMapping` (`<group>=<Admin|Member|custom>`).

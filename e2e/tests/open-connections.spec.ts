@@ -392,8 +392,7 @@ test.describe('a list that does not follow, and what the floating chat is told',
       await expect(page.getByTestId('forbidden-banner')).toHaveCount(0)
       // past the five seconds the cluster's own refusal comes back at
       await page.waitForTimeout(12_000)
-      const namespaces = `/api/v1/namespaces/${namespace}/namespaces`
-      expect((refusals.get(namespaces) ?? []).map((e) => e.reason)).toEqual(['scope'])
+      expect((refusals.get('/api/v1/namespaces') ?? []).map((e) => e.reason)).toEqual(['scope'])
 
       // the list of nodes is the cluster's to refuse, and that page says it
       const nodes = await request.get('/api/v1/cluster/nodes?cluster=self', { headers: bearer(token), failOnStatusCode: false })
@@ -401,7 +400,7 @@ test.describe('a list that does not follow, and what the floating chat is told',
       await page.goto('/cluster/nodes?cluster=self')
       await expect(page.getByTestId('forbidden-banner')).toHaveCount(1, { timeout: 20_000 })
       await page.waitForTimeout(12_000)
-      expect((refusals.get(`/api/v1/namespaces/${namespace}/nodes`) ?? []).map((e) => e.reason)).toEqual(['scope'])
+      expect((refusals.get('/api/v1/nodes') ?? []).map((e) => e.reason)).toEqual(['scope'])
       await expect(notice).toHaveCount(0)
       await page.context().close()
     } finally {

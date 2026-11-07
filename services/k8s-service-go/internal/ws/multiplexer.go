@@ -48,11 +48,19 @@ type RequestMessage struct {
 	ClusterID string `json:"clusterId"` // e.g. "default"
 	Path      string `json:"path"`      // e.g. "/api/v1/pods"
 	Query     string `json:"query"`     // e.g. "watch=true&..."
+	// Resync asks for one RESYNC once the watch is on: the client missed what happened before this watch.
+	Resync bool `json:"resync,omitempty"`
 }
+
+// notifyParam in a REQUEST's query asks to hear that something changed instead of each object (CHANGED).
+const notifyParam = "notify"
+
+// changedEvery is the most often a watch that only tells of changes says so.
+const changedEvery = time.Second
 
 // ResponseMessage is sent back to the client.
 type ResponseMessage struct {
-	Type      string      `json:"type"`                // "DATA", "ERROR" or "RESYNC" (read the list again)
+	Type      string      `json:"type"`                // "DATA", "ERROR", "RESYNC" (read the list again) or "CHANGED" (what the watch covers changed)
 	ClusterID string      `json:"clusterId,omitempty"` // the cluster its REQUEST named
 	Path      string      `json:"path"`                // original path
 	Query     string      `json:"query"`               // original query string
@@ -329,7 +337,7 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				send(ctx, sendCh, req.errorFrame("forbidden: no access to cluster "+effectiveClusterID(clusterID), reasonForbidden))
 				continue
 			}
-			if refusal := namespaceScopeRefusal(payload, effectiveClusterID(clusterID), req.Path); refusal != "" {
+			if refusal := namespaceScopeRefusalOf(payload, effectiveClusterID(clusterID), req.Path, req.Query); refusal != "" {
 				send(ctx, sendCh, req.errorFrame(refusal, namespaceScopeReason(req.Path)))
 				continue
 			}
@@ -368,6 +376,10 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 			go func() {
 				defer m.forgetSubscription(key, sub, connSubs)
+				if refusal := m.clusterListRefusal(subCtx, payload, effectiveClusterID(clusterID), req); refusal != "" {
+					send(ctx, sendCh, req.errorFrame(refusal, reasonScope))
+					return
+				}
 				m.runWatch(subCtx, req, sendCh)
 			}()
 
@@ -409,8 +421,9 @@ func (m *Multiplexer) runWatch(ctx context.Context, req RequestMessage, sendCh c
 	params := parseQuery(req.Query)
 	labelSelector := params["labelSelector"]
 	fieldSelector := params["fieldSelector"]
+	notify := params[notifyParam] == "1"
 
-	gvr, ok := resourceToGVR(resource)
+	gvr, ok := watchTarget(req.Path, notify)
 	if !ok {
 		send(ctx, sendCh, req.errorFrame("unsupported resource: "+resource, reasonUnsupported))
 		return
@@ -420,11 +433,38 @@ func (m *Multiplexer) runWatch(ctx context.Context, req RequestMessage, sendCh c
 	var lastResourceVersion string
 	// A watch from no version sends the objects there are, not those deleted since, so the client has to read its list
 	// again (Kubernetes API Concepts, "410 Gone responses").
-	resync := false
+	resync := req.Resync
 
 	for {
 		if ctx.Err() != nil {
 			return
+		}
+
+		dyn := m.provider.DynamicForCtx(ctx)
+		if dyn == nil {
+			slog.Warn("watch waiting: kubeconfig not loaded", "resource", resource)
+			if !send(ctx, sendCh, req.errorFrame("kubeconfig not loaded", reasonUnreachable)) || !pause(ctx, 5*time.Second) {
+				return
+			}
+			resync = true
+			continue
+		}
+
+		// A watch of changes starts from now: from no version it would send every object as it opens, for nobody to read.
+		if notify && lastResourceVersion == "" {
+			lastResourceVersion, err = currentResourceVersion(ctx, dyn, gvr, namespace)
+			if err != nil {
+				if ctx.Err() != nil {
+					return
+				}
+				slog.Warn("watch failed", "resource", resource, "err", err)
+				message, reason := watchFailure(err)
+				if !send(ctx, sendCh, req.errorFrame(message, reason)) || !pause(ctx, 5*time.Second) {
+					return
+				}
+				resync = true
+				continue
+			}
 		}
 
 		opts := metav1.ListOptions{
@@ -437,12 +477,6 @@ func (m *Multiplexer) runWatch(ctx context.Context, req RequestMessage, sendCh c
 			FieldSelector:       fieldSelector,
 		}
 
-		dyn := m.provider.DynamicForCtx(ctx)
-		if dyn == nil {
-			slog.Warn("watch skipped: kubeconfig not loaded", "resource", resource)
-			send(ctx, sendCh, req.errorFrame("kubeconfig not loaded", reasonUnreachable))
-			return
-		}
 		var watcher watch.Interface
 		if namespace != "" {
 			watcher, err = dyn.Resource(gvr).Namespace(namespace).Watch(ctx, opts)
@@ -477,7 +511,12 @@ func (m *Multiplexer) runWatch(ctx context.Context, req RequestMessage, sendCh c
 			}
 		}
 
-		expired := forwardEvents(ctx, watcher, req, gvr.Resource, &lastResourceVersion, sendCh)
+		var expired bool
+		if notify {
+			expired = forwardChanges(ctx, watcher, req, gvr.Resource, &lastResourceVersion, sendCh)
+		} else {
+			expired = forwardEvents(ctx, watcher, req, gvr.Resource, &lastResourceVersion, sendCh)
+		}
 
 		// Watch ended, retry
 		if ctx.Err() != nil {
@@ -535,6 +574,80 @@ func forwardEvents(ctx context.Context, watcher watch.Interface, req RequestMess
 		}
 	}
 	return false
+}
+
+// forwardChanges is forwardEvents for a watch of changes: one CHANGED on the first event and at most one every
+// changedEvery while they keep coming, no object in it.
+func forwardChanges(ctx context.Context, watcher watch.Interface, req RequestMessage, resource string, resourceVersion *string, sendCh chan<- ResponseMessage) bool {
+	defer watcher.Stop()
+	var wait <-chan time.Time
+	held := false
+	for {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-wait:
+			wait = nil
+			if held {
+				held = false
+				if !send(ctx, sendCh, req.frame("CHANGED")) {
+					return false
+				}
+				wait = time.After(changedEvery)
+			}
+		case event, open := <-watcher.ResultChan():
+			if !open {
+				// The next watch resumes after this event, so what was held would never be told.
+				if held {
+					send(ctx, sendCh, req.frame("CHANGED"))
+				}
+				return false
+			}
+			if event.Type == watch.Error {
+				err := apierrors.FromObject(event.Object)
+				if resourceVersionExpired(err) {
+					return true
+				}
+				slog.Warn("watch error event", "resource", resource, "err", err)
+				continue
+			}
+			obj, ok := event.Object.(*unstructured.Unstructured)
+			if !ok {
+				continue
+			}
+			if rv := obj.GetResourceVersion(); rv != "" {
+				*resourceVersion = rv
+			}
+			if event.Type == watch.Bookmark {
+				continue
+			}
+			if wait != nil {
+				held = true
+				continue
+			}
+			if !send(ctx, sendCh, req.frame("CHANGED")) {
+				return false
+			}
+			wait = time.After(changedEvery)
+		}
+	}
+}
+
+// currentResourceVersion is the cluster's version now, from a list of one item: without a selector it reads one object
+// however many there are, and a selector would not change the answer.
+func currentResourceVersion(ctx context.Context, dyn dynamic.Interface, gvr schema.GroupVersionResource, namespace string) (string, error) {
+	var list *unstructured.UnstructuredList
+	var err error
+	opts := metav1.ListOptions{Limit: 1}
+	if namespace != "" {
+		list, err = dyn.Resource(gvr).Namespace(namespace).List(ctx, opts)
+	} else {
+		list, err = dyn.Resource(gvr).List(ctx, opts)
+	}
+	if err != nil {
+		return "", err
+	}
+	return list.GetResourceVersion(), nil
 }
 
 // parsePath extracts resource type and optional namespace from K8s API path.
@@ -640,6 +753,43 @@ func resourceToGVR(resource string) (schema.GroupVersionResource, bool) {
 	return gvr, ok
 }
 
+// customResourceGVR reads a path that names its own group, version and plural (/apis/<group>/<version>[/namespaces/<ns>]/<plural>).
+// A CRD's group always has a dot.
+func customResourceGVR(path string) (schema.GroupVersionResource, bool) {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) < 4 || parts[0] != "apis" || !strings.Contains(parts[1], ".") {
+		return schema.GroupVersionResource{}, false
+	}
+	switch {
+	case len(parts) == 4:
+		return schema.GroupVersionResource{Group: parts[1], Version: parts[2], Resource: parts[3]}, true
+	case len(parts) == 6 && parts[3] == "namespaces":
+		return schema.GroupVersionResource{Group: parts[1], Version: parts[2], Resource: parts[5]}, true
+	}
+	return schema.GroupVersionResource{}, false
+}
+
+// watchTarget is what a REQUEST's path reaches. A watch of changes may name any custom resource, since its frames hold no
+// object; one that sends objects stays with watchKinds, whose rows the list screens are written for.
+func watchTarget(path string, notify bool) (schema.GroupVersionResource, bool) {
+	resource, _, err := parsePath(path)
+	if err != nil {
+		return schema.GroupVersionResource{}, false
+	}
+	known, ok := resourceToGVR(resource)
+	if !notify {
+		return known, ok
+	}
+	if custom, isCustom := customResourceGVR(path); isCustom && (!ok || custom.Group != known.Group) {
+		return custom, true
+	}
+	return known, ok
+}
+
+func isNotifyQuery(query string) bool {
+	return parseQuery(query)[notifyParam] == "1"
+}
+
 // ProtectedResolver, which the k8s Service implements, names the guarded namespaces on the cluster in ctx.
 type ProtectedResolver interface {
 	ProtectedNamespaces(ctx context.Context) protectedns.Namespaces
@@ -669,8 +819,13 @@ func (m *Multiplexer) protectedRefusal(ctx context.Context, payload auth.TokenPa
 
 // namespaceScopeRefusal applies a namespace-scoped grant to a watch: the path
 // must name one of the granted namespaces (an all-namespaces watch is refused;
-// the client subscribes per namespace instead). "" = allowed.
+// the client subscribes per namespace instead), or a kind of the cluster whose
+// list route leaves it to the cluster's RBAC, asked in clusterListRefusal. "" = allowed.
 func namespaceScopeRefusal(payload auth.TokenPayload, clusterID, path string) string {
+	return namespaceScopeRefusalOf(payload, clusterID, path, "")
+}
+
+func namespaceScopeRefusalOf(payload auth.TokenPayload, clusterID, path, query string) string {
 	scope := payload.Namespaces[clusterID]
 	if len(scope) == 0 {
 		return ""
@@ -680,15 +835,77 @@ func namespaceScopeRefusal(payload auth.TokenPayload, clusterID, path string) st
 		return ""
 	}
 	if namespace == "" {
+		if leftToTheClustersRBAC(path, query) {
+			return ""
+		}
+		if clusterWideWatch[resource] {
+			return objectsOfTheClusterRefusal(payload, clusterID, resource)
+		}
 		return "forbidden: your grant on cluster " + clusterID + " is limited to namespaces " + strings.Join(scope, ", ") + "; watch one of them"
 	}
 	if !payload.AllowedIn(clusterID, namespace) {
 		return "forbidden: namespace " + namespace + " is outside your grant on cluster " + clusterID + " (" + strings.Join(scope, ", ") + ")"
 	}
 	if clusterWideWatch[resource] {
-		return "forbidden: " + resource + " are objects of the cluster, outside your grant on cluster " + clusterID + " (" + strings.Join(scope, ", ") + ")"
+		return objectsOfTheClusterRefusal(payload, clusterID, resource)
 	}
 	return ""
+}
+
+func objectsOfTheClusterRefusal(payload auth.TokenPayload, clusterID, resource string) string {
+	return "forbidden: " + resource + " are objects of the cluster, outside your grant on cluster " + clusterID + " (" + strings.Join(payload.Namespaces[clusterID], ", ") + ")"
+}
+
+// leftToTheClustersRBAC holds a watch across namespaces that a grant limited to them may ask the cluster for: a kind of
+// the cluster, as its list route (scopeClusterObject), or a custom resource whose frames hold no object. The Namespaces
+// list is narrowed to the grant and a watch of them would tell of the others.
+func leftToTheClustersRBAC(path, query string) bool {
+	resource, _, err := parsePath(path)
+	if err != nil {
+		return false
+	}
+	if resource == "namespaces" {
+		return false
+	}
+	if clusterWideWatch[resource] {
+		return true
+	}
+	if !isNotifyQuery(query) {
+		return false
+	}
+	_, isCustom := customResourceGVR(path)
+	return isCustom
+}
+
+// ListChecker, which the k8s Service implements, asks the cluster whether the caller in ctx may list a kind everywhere.
+type ListChecker interface {
+	MayListKind(ctx context.Context, group, resource string) (bool, error)
+}
+
+// clusterListRefusal is what stands between a grant limited to namespaces and a watch across them (leftToTheClustersRBAC):
+// the cluster's refusal, said once, with no place held and no watch going back to the API server every five seconds.
+// A question that fails is no refusal: the watch then says what is wrong with the cluster. "" = go on.
+func (m *Multiplexer) clusterListRefusal(ctx context.Context, payload auth.TokenPayload, clusterID string, req RequestMessage) string {
+	if len(payload.Namespaces[clusterID]) == 0 {
+		return ""
+	}
+	resource, namespace, err := parsePath(req.Path)
+	if err != nil || namespace != "" {
+		return ""
+	}
+	gvr, ok := watchTarget(req.Path, isNotifyQuery(req.Query))
+	if !ok {
+		return ""
+	}
+	checker, ok := m.provider.(ListChecker)
+	if !ok {
+		return objectsOfTheClusterRefusal(payload, clusterID, resource)
+	}
+	allowed, err := checker.MayListKind(ctx, gvr.Group, gvr.Resource)
+	if err != nil || allowed {
+		return ""
+	}
+	return objectsOfTheClusterRefusal(payload, clusterID, resource)
 }
 
 // namespaceScopeReason tells the screen a kind of the cluster from a refusal: the limit of the grant is why its rows do

@@ -145,7 +145,7 @@ Measured on 2026-10-30 with one k8s-service at the chart's limits (512 Mi; gatew
 
 What sets these limits:
 
-- `multicluster.wsMaxSubscriptions` (2 000): every live watch on a screen is one watch on the cluster as the user. Past the limit, a screen loads but does not update.
+- `multicluster.wsMaxSubscriptions` (2 000): every live watch on a screen is one watch on the cluster as the user. Past the limit, a screen loads but does not update, says so and asks again by itself, spread over half a minute and more. A drawer shares the list watch of the page behind it instead of opening its own, and most drawers follow their object on the read they already make every 10 s, which costs no watch.
 - The node boxes of Cluster View and the namespace list are read from the cluster as each user, so a crowd queues on the client's rate to that cluster (100 a second, burst 200). Raising that rate moved the queue to the test cluster's API Priority and Fairness and the node boxes waited longer. These requests decide how long a crowd waits.
 - The Pods page, the node map and the node list are answered from what k8s-service keeps (measured up to 500 people at once). Their work on the rows runs on as many at once as there are CPUs.
 - The gateway holds proxy buffers for every request in flight, about 30–90 KB each.

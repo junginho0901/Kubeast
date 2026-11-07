@@ -31,6 +31,7 @@ import { TypeToConfirm, WarningBox } from './TypeToConfirm'
 import { systemObject, type SystemReason } from './resource-detail/systemObject'
 import { customResourceTarget, deleteTarget, needsCustomResourceLookup } from './resource-detail/crDetail'
 import { drawerObjectLayer, followsObjectForChat, objectReadInterval } from './resource-detail/drawerObjectLayer'
+import { drawerBody, useDrawerFollowsRead } from './resource-detail/useDrawerFollowsRead'
 import { ObjectUnreadable } from './resource-detail/DetailCommon'
 import { useConfirm } from '@/services/confirm'
 
@@ -177,7 +178,9 @@ export default function ResourceDetailDrawer() {
     retry: (failures, error) => failures < 1 && ![403, 404].includes((error as { response?: { status?: number } }).response?.status ?? 0),
   })
 
-  const effectiveRawJson = target?.rawJson ?? fetchedRawJson
+  // The body follows the read above, which goes on for the floating chat: no request of its own, none while nothing changes.
+  const effectiveRawJson = useMemo(() => drawerBody(kind, target?.rawJson, fetchedRawJson), [kind, target?.rawJson, fetchedRawJson])
+  useDrawerFollowsRead(kind, ns, name, fetchedRawJson)
   // Opened by link with nothing from a list: an object that is gone (404) or out of the caller's reach (403) says
   // so, instead of an empty object with a delete button.
   const loadStatus = needsRawJsonFetch && !target?.rawJson ? (rawJsonError as { response?: { status?: number } } | null)?.response?.status : undefined

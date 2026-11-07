@@ -131,6 +131,68 @@ func (f *helmFixture) checkEveryScope(t *testing.T, want func(web *ReleaseSummar
 	}
 }
 
+// lateListDriver answers a List with what it held when asked, after the write that lands meanwhile.
+type lateListDriver struct {
+	driver.Driver
+	during func()
+}
+
+func (d *lateListDriver) List(filter func(*release.Release) bool) ([]*release.Release, error) {
+	out, err := d.Driver.List(filter)
+	if during := d.during; during != nil {
+		d.during = nil
+		during()
+	}
+	return out, err
+}
+
+// A read that began before a write ends after its invalidation. Its answer may be old, it is the read's own, but it
+// must not stay for the next reader, for up to the list's whole time in the cache.
+func TestAListThatBeganBeforeAWriteDoesNotStayForTheNextReader(t *testing.T) {
+	for _, s := range cachedScopes {
+		t.Run(s.user+" in "+s.namespace, func(t *testing.T) {
+			f := newHelmFixture(t)
+			f.store.Driver = &lateListDriver{Driver: f.mem, during: func() {
+				if _, err := f.svc.Uninstall(identity("admin"), testNS, testRelease, false, false); err != nil {
+					t.Error(err)
+				}
+			}}
+			first, err := f.svc.ListReleases(identity(s.user), s.namespace, "", false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if find(first, testRelease) == nil {
+				t.Fatalf("the read that began first should answer what it read: %+v", first)
+			}
+			next, err := f.svc.ListReleases(identity(s.user), s.namespace, "", false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if web := find(next, testRelease); web != nil {
+				t.Errorf("the next reader got the old list: %+v", web)
+			}
+			if find(next, "other") == nil {
+				t.Errorf("the next reader lost the other release: %+v", next)
+			}
+		})
+	}
+}
+
+// A read no write came near stays cached: the check of a read's own moment must not cost the list its cache.
+func TestAListWithNoWriteNearItStaysCached(t *testing.T) {
+	f := newHelmFixture(t)
+	if _, err := f.svc.ListReleases(identity("admin"), testNS, "", false); err != nil {
+		t.Fatal(err)
+	}
+	f.calls = 0
+	if _, err := f.svc.ListReleases(identity("admin"), testNS, "", false); err != nil {
+		t.Fatal(err)
+	}
+	if f.calls != 0 {
+		t.Errorf("the second read went to the cluster %d times, want 0", f.calls)
+	}
+}
+
 func TestListWithoutForceSeesAnUninstall(t *testing.T) {
 	f := newHelmFixture(t)
 	f.fillCache(t)

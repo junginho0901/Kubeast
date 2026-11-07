@@ -1,6 +1,8 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useQueryClient, type QueryClient, type QueryKey } from '@tanstack/react-query'
+import { getCurrentClusterID } from '@/services/clusterRef'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
+import { watchMultiplexer } from '@/services/watchMultiplexer'
 
 type WatchEvent = { type?: string; object?: any }
 
@@ -66,10 +68,23 @@ export function objectFollower(client: QueryClient, describeKey: QueryKey, every
   }
 }
 
+// The list that already brings this object's frames: the page behind the drawer, of its namespace or of every namespace.
+// Sharing it saves a place in the server's limit of watches and a watcher on the API server.
+export function openListOf(path: string, isOpen: (path: string) => boolean): string | null {
+  const everyNamespace = path.replace(/\/namespaces\/[^/]+\//, '/')
+  return [path, everyNamespace].find(isOpen) ?? null
+}
+
 // useDrawerFollowsObject keeps an open drawer on its object as it changes, whichever screen opened it: a page's own
 // watch is not there for a drawer opened by a link from another page.
 export function useDrawerFollowsObject(options: { enabled: boolean; describeKey: QueryKey; path: string; name: string; alsoRead?: QueryKey[] }) {
   const client = useQueryClient()
+  const clusterId = getCurrentClusterID() || 'default'
+  // Decided as the drawer opens, and the drawer's listener then keeps that list's watch open when the page leaves.
+  const openList = useMemo(
+    () => (options.enabled ? openListOf(options.path, (path) => watchMultiplexer.follows(clusterId, path, 'watch=1')) : null),
+    [options.enabled, options.path, clusterId],
+  )
   const keyDep = JSON.stringify(options.describeKey)
   const alsoDep = JSON.stringify(options.alsoRead ?? [])
   const follower = useRef<ReturnType<typeof objectFollower> | null>(null)
@@ -84,14 +99,23 @@ export function useDrawerFollowsObject(options: { enabled: boolean; describeKey:
     }
   }, [client, keyDep, alsoDep, options.enabled])
 
+  const namespace = /\/namespaces\/([^/]+)\//.exec(options.path)?.[1]
   useKubeWatchList({
     enabled: options.enabled,
     queryKey: options.describeKey as any[],
-    path: options.path,
-    query: `watch=1&fieldSelector=${encodeURIComponent(`metadata.name=${options.name}`)}`,
+    path: openList ?? options.path,
+    query: openList ? 'watch=1' : `watch=1&fieldSelector=${encodeURIComponent(`metadata.name=${options.name}`)}`,
     // the frame is not the answer: it stays until it is read again, which a RESYNC of this watch asks for too
-    applyEvent: (prev) => prev as any[],
-    onEvent: (event) => follower.current?.onEvent(event),
+    listensOnly: true,
+    onEvent: (event) => {
+      if (!openList || frameOfObject(event, options.name, namespace)) follower.current?.onEvent(event)
+    },
     onResync: () => follower.current?.onResync(),
   })
+}
+
+// On a shared list most frames are of other objects.
+export function frameOfObject(event: WatchEvent, name: string, namespace: string | undefined): boolean {
+  const object = event?.object
+  return (object?.name ?? object?.metadata?.name) === name && (!namespace || (object?.namespace ?? object?.metadata?.namespace) === namespace)
 }

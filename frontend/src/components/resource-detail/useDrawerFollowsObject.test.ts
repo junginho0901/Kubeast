@@ -15,7 +15,7 @@ import pdbInfoSrc from './PDBInfo.tsx?raw'
 import crdInfoSrc from './CRDInfo.tsx?raw'
 import leaseInfoSrc from './LeaseInfo.tsx?raw'
 import followHookSrc from './useDrawerFollowsObject.ts?raw'
-import { objectFollower } from './useDrawerFollowsObject'
+import { frameOfObject, objectFollower, openListOf } from './useDrawerFollowsObject'
 import { applyPriorityClassWatchEvent } from '@/pages/cluster/priorityclasses/priorityClassWatchNormalize'
 
 const describeKey = ['workload-describe', 'Deployment', 'demo', 'web']
@@ -412,6 +412,23 @@ describe('the drawers that read a describe answer follow their object', () => {
       expect(keyOf(src, 'describeKey'), path).toBeTruthy()
       expect(keyOf(src, 'describeKey'), path).toBe(keyOf(src, 'queryKey'))
     }
+  })
+
+  it('shares the list the page behind it already follows, of its namespace or of every namespace', () => {
+    const path = '/apis/apps/v1/namespaces/shop/deployments'
+    expect(openListOf(path, (p) => p === path)).toBe(path)
+    expect(openListOf(path, (p) => p === '/apis/apps/v1/deployments')).toBe('/apis/apps/v1/deployments')
+    expect(openListOf('/api/v1/namespaces/shop/limitranges', (p) => p === '/api/v1/limitranges')).toBe('/api/v1/limitranges')
+    expect(openListOf('/apis/rbac.authorization.k8s.io/v1/clusterroles', (p) => p === '/apis/rbac.authorization.k8s.io/v1/clusterroles')).toBe('/apis/rbac.authorization.k8s.io/v1/clusterroles')
+    expect(openListOf(path, () => false)).toBeNull()
+  })
+
+  it('hears only its own object on a shared list', () => {
+    expect(frameOfObject({ object: { name: 'web', namespace: 'shop' } }, 'web', 'shop')).toBe(true)
+    expect(frameOfObject({ object: { name: 'api', namespace: 'shop' } }, 'web', 'shop')).toBe(false)
+    expect(frameOfObject({ object: { name: 'web', namespace: 'other' } }, 'web', 'shop')).toBe(false)
+    expect(frameOfObject({ object: { metadata: { name: 'web', namespace: 'shop' } } }, 'web', 'shop')).toBe(true)
+    expect(frameOfObject({ object: { name: 'admin' } }, 'admin', undefined)).toBe(true)
   })
 
   // A Lease's holder renews it every few seconds, faster than a read of its events is worth: the drawer reads on the clock.

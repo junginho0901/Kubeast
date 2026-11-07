@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next'
 import { ShieldAlert } from 'lucide-react'
 import { resetForbidden, useForbiddenLabels } from '@/services/forbiddenStore'
 import { resetListStatus } from '@/services/listStatusStore'
-import { resetWatchProblems } from '@/services/watchProblemStore'
 import { joinResources } from '@/utils/forbiddenResource'
 import { usePermission } from '@/hooks/usePermission'
 import { customRoleGroup } from '@/utils/roleGroup'
@@ -27,7 +26,6 @@ export default function ForbiddenBanner({ clusterKey }: { clusterKey: string }) 
   useEffect(() => {
     resetForbidden()
     resetListStatus()
-    resetWatchProblems()
   }, [location.pathname, clusterKey])
 
   if (resources.length === 0) return null

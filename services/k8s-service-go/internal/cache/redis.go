@@ -76,6 +76,11 @@ func (c *Cache) Get(ctx context.Context, key string, dest interface{}) bool {
 	return true
 }
 
+// Peek reads key as Get does without noting a hit, for the cache's own bookkeeping, which no answer came from.
+func (c *Cache) Peek(ctx context.Context, key string, dest interface{}) bool {
+	return c.get(ctx, key, dest)
+}
+
 func (c *Cache) get(ctx context.Context, key string, dest interface{}) bool {
 	if c.connected {
 		data, err := c.rdb.Get(ctx, key).Bytes()

@@ -12,6 +12,7 @@ import { otherFields } from './crDetail'
 const RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
+import { useWatchChanges } from '@/services/useWatchChanges'
 
 interface Props {
   name: string
@@ -130,6 +131,14 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
     queryFn: () => api.describeCustomResourceInstance(group, version, plural, namespace || '-', name),
     enabled: !!name && !!group && !!version && !!plural,
     retry: false,
+  })
+  // The answer holds the columns the API server prints, which no frame does.
+  useWatchChanges({
+    enabled: !!describe,
+    paths: [namespace ? `/apis/${group}/${version}/namespaces/${namespace}/${plural}` : `/apis/${group}/${version}/${plural}`],
+    fieldSelector: `metadata.name=${name}`,
+    read: [['cr-instance-describe', group, version, plural, namespace || '-', name]],
+    clusterWide: !namespace,
   })
 
   const crKind = (describe?.kind as string | undefined) || (rawJson?.kind as string | undefined) || 'CustomResource'

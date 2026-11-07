@@ -2,14 +2,17 @@ import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, isForbiddenError } from '@/services/api'
 import { useNodeShellSettings } from '@/services/nodeShellSettings'
-import { useKubeWatchList } from '@/services/useKubeWatchList'
+import { applyWatchEvent, useKubeWatchList } from '@/services/useKubeWatchList'
+import { useChangeReader } from '@/services/useWatchChanges'
 import { useAIContext } from '@/hooks/useAIContext'
 import { podCounts } from '@/utils/aiContext/podCounts'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { formatBytes } from '@/pages/dashboard/utils'
 import { parseQuantityToBytes } from '@/pages/storage/pvcs/pvcHelpers'
 import { eventsNewestFirst } from '../detailFormat'
+import { useDrawerFollowsObject } from '../useDrawerFollowsObject'
 import { nodeAllocatedView, readyChangedAt } from './nodeAllocated'
+import { changesAllocated } from './nodePodsChange'
 
 // Byte-valued node resources shown in binary units ("977896124416" → "910.7Gi").
 export function formatCapacity(key: string, value: string | undefined): string {
@@ -47,10 +50,31 @@ export function useNodeData(name: string) {
     enabled: metricsAvailable,
   })
 
-  const { data: nodePods } = useQuery({
+  useDrawerFollowsObject({
+    enabled: !!nodeDescribe,
+    describeKey: ['cluster', 'nodes', 'describe', name],
+    path: '/api/v1/nodes',
+    name,
+  })
+
+  const { data: nodePods, isError: nodePodsRefused } = useQuery({
     queryKey: ['cluster', 'nodes', 'pods', name],
     queryFn: () => api.getNodePods(name),
     enabled: !!name,
+  })
+
+  // The same watch as the node's box in Cluster View: the frames are the table's rows. Allocated Resources add up on the
+  // server, so they are read when a frame moves the total and not for every status.
+  const allocatedReader = useChangeReader([['cluster', 'nodes', 'describe', name]])
+  useKubeWatchList({
+    enabled: !!name && !nodePodsRefused,
+    queryKey: ['cluster', 'nodes', 'pods', name],
+    path: '/api/v1/pods',
+    query: `watch=1&fieldSelector=${encodeURIComponent(`spec.nodeName=${name}`)}`,
+    applyEvent: (prev, event) => {
+      if (changesAllocated(prev, event)) allocatedReader.changed()
+      return applyWatchEvent(prev, event)
+    },
   })
 
   const { data: nodeEvents, isLoading: eventsLoading, error: eventsError } = useQuery({

@@ -126,15 +126,19 @@ export function KeyValueTags({ data, emptyText = 'None' }: { data?: Record<strin
 export function ConditionsTable({ conditions }: { conditions: any[] }) {
   const dl = useDetailLabel()
   if (!conditions || conditions.length === 0) return <span className="text-slate-400 text-xs">{dl('None')}</span>
+  // A status that lags its spec reads true for an older generation; most kinds' conditions have no such field.
+  const generationOf = (c: any) => c.observedGeneration ?? c.observed_generation
+  const withGeneration = conditions.some((c: any) => generationOf(c) != null)
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-xs table-fixed min-w-[700px]">
         <thead className="text-slate-400">
           <tr>
-            <Th className="text-left py-2 w-[28%]">Type</Th>
+            <Th className={`text-left py-2 ${withGeneration ? 'w-[24%]' : 'w-[28%]'}`}>Type</Th>
             <Th className="text-left py-2 w-[10%]">Status</Th>
-            <Th className="text-left py-2 w-[17%]">Reason</Th>
-            <Th className="text-left py-2 w-[30%]">Message</Th>
+            <Th className={`text-left py-2 ${withGeneration ? 'w-[15%]' : 'w-[17%]'}`}>Reason</Th>
+            <Th className={`text-left py-2 ${withGeneration ? 'w-[26%]' : 'w-[30%]'}`}>Message</Th>
+            {withGeneration && <Th className="text-left py-2 w-[10%]">Observed Generation</Th>}
             <Th className="text-left py-2 w-[15%]">Last Transition</Th>
           </tr>
         </thead>
@@ -145,6 +149,7 @@ export function ConditionsTable({ conditions }: { conditions: any[] }) {
               <td className="py-2 pr-2 whitespace-nowrap align-top"><StatusBadge status={c.status} /></td>
               <td className="py-2 pr-2 wrap-break-word whitespace-normal align-top">{c.reason || '-'}</td>
               <td className="py-2 pr-2 wrap-break-word whitespace-normal align-top">{c.message || '-'}</td>
+              {withGeneration && <td className="py-2 pr-2 whitespace-nowrap align-top">{generationOf(c) ?? '-'}</td>}
               <td className="py-2 pr-2 whitespace-nowrap align-top">{fmtRel(c.lastTransitionTime || c.last_transition_time)}</td>
             </tr>
           ))}

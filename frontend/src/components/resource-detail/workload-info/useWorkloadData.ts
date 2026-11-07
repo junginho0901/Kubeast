@@ -6,6 +6,7 @@ import { api } from '@/services/api'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { usePermission } from '@/hooks/usePermission'
 import { replicaSetOwnerRow } from '../netstoreDetail'
+import { useDrawerFollowsEvents } from '../useDrawerFollowsEvents'
 import { useDrawerFollowsObject } from '../useDrawerFollowsObject'
 import { useOwnedWatchedResources } from './useOwnedWatchedResources'
 import { workloadDaemonSetStatus, workloadLayer, workloadReplicaView, workloadStrategy } from './workloadLayer'
@@ -54,6 +55,7 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
     path: `/apis/${watchedApi}/namespaces/${namespace}/${watchedPlural}`,
     name,
   })
+  useDrawerFollowsEvents({ describeKey: ['workload-describe', kind, namespace, name], answer: describe, kind, namespace, name })
 
   const [triggerDialogOpen, setTriggerDialogOpen] = useState(false)
   const [triggerToast, setTriggerToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)

@@ -79,13 +79,17 @@ func Info(u *unstructured.Unstructured) map[string]interface{} {
 	var conditions []map[string]interface{}
 	provided := ""
 	for _, c := range list(status, "conditions") {
-		conditions = append(conditions, map[string]interface{}{
+		condition := map[string]interface{}{
 			"type":                 str(c, "type"),
 			"status":               str(c, "status"),
 			"reason":               str(c, "reason"),
 			"message":              str(c, "message"),
 			"last_transition_time": str(c, "lastTransitionTime"),
-		})
+		}
+		if generation, ok := c["observedGeneration"]; ok {
+			condition["observed_generation"] = generation
+		}
+		conditions = append(conditions, condition)
 		if str(c, "type") == "RecommendationProvided" {
 			provided = str(c, "status")
 		}

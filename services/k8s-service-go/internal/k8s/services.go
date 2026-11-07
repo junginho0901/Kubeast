@@ -115,13 +115,13 @@ func (s *Service) DescribeService(ctx context.Context, namespace, name string) (
 	// Conditions
 	conditions := make([]map[string]interface{}, 0)
 	for _, c := range svc.Status.Conditions {
-		conditions = append(conditions, map[string]interface{}{
+		conditions = append(conditions, withObservedGeneration(map[string]interface{}{
 			"type":                 string(c.Type),
 			"status":               string(c.Status),
 			"reason":               c.Reason,
 			"message":              c.Message,
 			"last_transition_time": toISO(&c.LastTransitionTime),
-		})
+		}, c.ObservedGeneration))
 	}
 	result["conditions"] = conditions
 
