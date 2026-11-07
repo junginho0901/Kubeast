@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -77,5 +78,43 @@ func TestAnExecRowHoldsTheCommandWithoutItsCredentials(t *testing.T) {
 				t.Fatalf("after the notice: %v", err)
 			}
 		})
+	}
+}
+
+// A container runtime that cannot start a command names it as it came (containerd: exec: "<command>": executable file
+// not found in $PATH): the failed row's error holds it masked, as the row's command is.
+func TestAFailedExecRowHoldsTheErrorWithoutTheCommandsCredentials(t *testing.T) {
+	const command = "mysql -h db --password=fake-pass-1"
+	var version atomic.Int32
+	h, store := liveHandler(t, func(http.ResponseWriter, *http.Request) {}, &version)
+	orig := newShellExecutor
+	newShellExecutor = func(_ *rest.Config, u *url.URL) (remotecommand.Executor, error) {
+		return nil, fmt.Errorf("OCI runtime exec failed: exec failed: unable to start container process: exec: %q: executable file not found in $PATH", u.Query().Get("command"))
+	}
+	t.Cleanup(func() { newShellExecutor = orig })
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.PodExecWS(w, withLogFileContext(r, "apps", "resource.pod.exec"))
+	}))
+	defer srv.Close()
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http")+"?container=app&command="+url.QueryEscape(command), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	if _, data, err := conn.ReadMessage(); err != nil || !strings.Contains(string(data), "executable file not found") {
+		t.Fatalf("the terminal: %q %v", data, err)
+	}
+
+	var failure string
+	store.mu.Lock()
+	for _, row := range store.rows {
+		if row.Action == "k8s.pod.exec" && row.Result == "failure" {
+			failure = row.Error
+		}
+	}
+	store.mu.Unlock()
+	if strings.Contains(failure, "fake-pass-1") || !strings.Contains(failure, `exec: "mysql -h db --password=<REDACTED:password>": executable file not found`) {
+		t.Errorf("the failed row's error: %q", failure)
 	}
 }

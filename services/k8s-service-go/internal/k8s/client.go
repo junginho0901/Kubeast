@@ -130,6 +130,7 @@ type Service struct {
 	apiResourcesMu    sync.RWMutex
 	apiResourcesCache map[cluster.ID][]metav1.APIResourceList
 	apiResourcesAt    map[cluster.ID]time.Time
+	apiResourcesRead  map[cluster.ID]time.Time // when the lists were read, which apiResourcesAt shortens for a partial answer
 }
 
 var errNotLoaded = fmt.Errorf("kubeconfig not loaded")
@@ -191,6 +192,7 @@ func NewService(ctx context.Context, registry cluster.Registry, watchEnabled boo
 		resolveCache:      map[string]resolvedEntry{},
 		apiResourcesCache: map[cluster.ID][]metav1.APIResourceList{},
 		apiResourcesAt:    map[cluster.ID]time.Time{},
+		apiResourcesRead:  map[cluster.ID]time.Time{},
 	}
 
 	defaultID, err := registry.Default(ctx)
@@ -436,6 +438,7 @@ func (s *Service) invalidateCaches() {
 	s.apiResourcesMu.Lock()
 	s.apiResourcesCache = map[cluster.ID][]metav1.APIResourceList{}
 	s.apiResourcesAt = map[cluster.ID]time.Time{}
+	s.apiResourcesRead = map[cluster.ID]time.Time{}
 	s.apiResourcesMu.Unlock()
 
 	s.invalidateResolveCache()

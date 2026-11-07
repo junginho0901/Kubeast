@@ -142,11 +142,16 @@ test.describe('model config policy (M19)', () => {
     expect(list.models).toEqual([])
     expect(list.error).toContain(STAND_IN_ADDRESS)
 
-    const rows = await request.get('/api/v1/auth/admin/audit-logs', { headers: admin, params: { action: 'ai.model_config.test', since, limit: '100' } })
-    expect(rows.ok()).toBeTruthy()
-    const row = ((await rows.json()).items as Array<{ result: string; error: string; after: { ok: boolean; base_url: string } }>).find((r) => r.after?.base_url === `${STAND_IN}/v1`)
-    expect(row?.result).toBe('failure')
-    expect(row?.after.ok).toBe(false)
-    expect(row?.error).toContain(STAND_IN_ADDRESS)
+    // the audit API answers a row as audit.Record (Result, Error, After), the test's arguments under After.after
+    type Row = { Result: string; Error: string; After?: { ok?: boolean; after?: { base_url?: string } } }
+    let row: Row | undefined
+    await expect.poll(async () => {
+      const rows = await request.get('/api/v1/auth/admin/audit-logs', { headers: admin, params: { action: 'ai.model_config.test', since, limit: '100' } })
+      if (!rows.ok()) return `http ${rows.status()}`
+      row = (((await rows.json()).items ?? []) as Row[]).find((r) => r.After?.after?.base_url === `${STAND_IN}/v1`)
+      return row?.Result
+    }, { timeout: 15_000 }).toBe('failure')
+    expect(row?.After?.ok).toBe(false)
+    expect(row?.Error).toContain(STAND_IN_ADDRESS)
   })
 })

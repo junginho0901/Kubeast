@@ -36,9 +36,14 @@ const tryKubectl = (args: string) => {
 }
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Requested-With': 'XMLHttpRequest' })
 
-// Monaco's end of the text by the system it reads from the page's user agent (the chromium project's is Windows):
-// Cmd+Down on a Mac, Ctrl+End elsewhere. ControlOrMeta follows the machine the test runs on instead.
-const textEnd = async (page: Page) => ((await page.evaluate(() => navigator.userAgent.includes('Macintosh'))) ? 'Meta+ArrowDown' : 'Control+End')
+// Monaco's keys by the system it reads from the page's user agent (the chromium project's is Windows): Cmd+Up, Cmd+Down
+// and Cmd+Shift+K on a Mac, Ctrl+Home, Ctrl+End and Ctrl+Shift+K elsewhere. ControlOrMeta follows the machine instead.
+const editorKey = async (page: Page, key: 'start' | 'end' | 'deleteLine') => {
+  const mac = await page.evaluate(() => navigator.userAgent.includes('Macintosh'))
+  if (key === 'deleteLine') return mac ? 'Meta+Shift+K' : 'Control+Shift+K'
+  if (mac) return key === 'start' ? 'Meta+ArrowUp' : 'Meta+ArrowDown'
+  return key === 'start' ? 'Control+Home' : 'Control+End'
+}
 
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
@@ -135,7 +140,7 @@ test.describe('a Secret editor without reveal', () => {
       await expect(drawer.getByTestId('yaml-editor-note'), 'the window says what a save does to a masked value').toHaveText(/\*\*\*.*(when you save|저장해도)/)
       await drawer.getByRole('button', { name: /^edit$/i }).click()
       await drawer.locator('.monaco-editor').first().click()
-      await page.keyboard.press(await textEnd(page))
+      await page.keyboard.press(await editorKey(page, 'end'))
       await page.keyboard.type('# edited in the window')
       await drawer.getByRole('button', { name: /^apply$/i }).click()
       await expect.poll(async () => (await keptInRows(request)).length, { timeout: 30_000 }).toBeGreaterThan(0)
@@ -210,7 +215,7 @@ test.describe('a Secret editor without reveal', () => {
     await expect(drawer.getByTestId('yaml-editor-note'), 'no note for one who reads the values').toHaveCount(0)
     await drawer.getByRole('button', { name: /^edit$/i }).click()
     await drawer.locator('.monaco-editor').first().click()
-    await page.keyboard.press(await textEnd(page))
+    await page.keyboard.press(await editorKey(page, 'end'))
     await page.keyboard.type('# edited in the window')
     await drawer.getByRole('button', { name: /^apply$/i }).click()
     await expect(drawer.getByRole('button', { name: /^edit$/i }), 'the save ended').toBeVisible({ timeout: 30_000 })
@@ -234,10 +239,10 @@ test.describe('a Secret editor without reveal', () => {
     await expect(drawer.locator('.monaco-editor .view-lines').first()).toContainText('a-gone', { timeout: 30_000 })
     await drawer.getByRole('button', { name: /^edit$/i }).click()
     await drawer.locator('.monaco-editor').first().click()
-    await page.keyboard.press('ControlOrMeta+Home')
+    await page.keyboard.press(await editorKey(page, 'start'))
     await page.keyboard.press('ArrowDown')
     await page.keyboard.press('ArrowDown')
-    await page.keyboard.press('ControlOrMeta+Shift+K')
+    await page.keyboard.press(await editorKey(page, 'deleteLine'))
     await expect(drawer.locator('.monaco-editor .view-lines').first()).not.toContainText('a-gone')
     await drawer.getByRole('button', { name: /^apply$/i }).click()
     await expect(drawer.getByRole('button', { name: /^edit$/i }), 'the save ended').toBeVisible({ timeout: 30_000 })
@@ -255,10 +260,10 @@ test.describe('a Secret editor without reveal', () => {
     await expect(drawer.locator('.monaco-editor .view-lines').first()).toContainText('a-gone', { timeout: 30_000 })
     await drawer.getByRole('button', { name: /^edit$/i }).click()
     await drawer.locator('.monaco-editor').first().click()
-    await page.keyboard.press('ControlOrMeta+Home')
+    await page.keyboard.press(await editorKey(page, 'start'))
     await page.keyboard.press('ArrowDown')
     await page.keyboard.press('ArrowDown')
-    await page.keyboard.press('ControlOrMeta+Shift+K')
+    await page.keyboard.press(await editorKey(page, 'deleteLine'))
     await expect(drawer.locator('.monaco-editor .view-lines').first()).not.toContainText('a-gone')
     await drawer.getByRole('button', { name: /^apply$/i }).click()
     await expect(drawer.getByRole('button', { name: /^edit$/i }), 'the save ended').toBeVisible({ timeout: 30_000 })

@@ -18,11 +18,18 @@ import (
 
 // GetAPIResources returns all available API resources in the cluster, cached for 60 seconds.
 func (s *Service) GetAPIResources(ctx context.Context) ([]metav1.APIResourceList, error) {
+	lists, _, err := s.apiResources(ctx)
+	return lists, err
+}
+
+// apiResources is GetAPIResources with the time its lists were read from the cluster.
+func (s *Service) apiResources(ctx context.Context) ([]metav1.APIResourceList, time.Time, error) {
 	cid := ctxClusterID(ctx)
 	s.apiResourcesMu.RLock()
 	if cached := s.apiResourcesCache[cid]; cached != nil && time.Since(s.apiResourcesAt[cid]) < apiResourcesTTL {
+		read := s.apiResourcesRead[cid]
 		s.apiResourcesMu.RUnlock()
-		return cached, nil
+		return cached, read, nil
 	}
 	s.apiResourcesMu.RUnlock()
 
@@ -32,10 +39,13 @@ func (s *Service) GetAPIResources(ctx context.Context) ([]metav1.APIResourceList
 		s.apiResourcesCache = map[cluster.ID][]metav1.APIResourceList{}
 		s.apiResourcesAt = map[cluster.ID]time.Time{}
 	}
+	if s.apiResourcesRead == nil {
+		s.apiResourcesRead = map[cluster.ID]time.Time{}
+	}
 
 	// Double-check after acquiring write lock
 	if cached := s.apiResourcesCache[cid]; cached != nil && time.Since(s.apiResourcesAt[cid]) < apiResourcesTTL {
-		return cached, nil
+		return cached, s.apiResourcesRead[cid], nil
 	}
 
 	groups, lists, err := s.discoveryCtx(ctx).ServerGroupsAndResources()
@@ -43,25 +53,48 @@ func (s *Service) GetAPIResources(ctx context.Context) ([]metav1.APIResourceList
 	// kinds of that API come back when it does.
 	partial := discovery.IsGroupDiscoveryFailedError(err)
 	if err != nil && !partial {
-		return nil, fmt.Errorf("discover API resources: %w", err)
+		return nil, time.Time{}, fmt.Errorf("discover API resources: %w", err)
 	}
 	if partial {
 		slog.Warn("some API groups are not answering", "cluster", cid, "err", err)
 	}
 
 	result := preferredFirst(groups, lists)
+	read := time.Now()
 	s.apiResourcesCache[cid] = result
-	s.apiResourcesAt[cid] = time.Now()
+	s.apiResourcesRead[cid] = read
+	s.apiResourcesAt[cid] = read
 	if partial {
-		s.apiResourcesAt[cid] = time.Now().Add(-apiResourcesTTL + apiResourcesPartialTTL)
+		s.apiResourcesAt[cid] = read.Add(-apiResourcesTTL + apiResourcesPartialTTL)
 	}
-	return result, nil
+	return result, read, nil
 }
 
 const (
 	apiResourcesTTL        = 60 * time.Second
 	apiResourcesPartialTTL = 10 * time.Second
+	// Lists older than this that lack what a request names are read again, as kubectl's discovery mapper reads again on
+	// a miss (client-go restmapper DeferredDiscoveryRESTMapper): a CRD created since is found at once, and requests
+	// naming a type no API serves read discovery at most once a second per cluster.
+	apiResourcesMissTTL = time.Second
 )
+
+// newerAPIResources is asked when the lists read at read lack what a request names. It says whether there are newer
+// lists to look in: read since by another request, or forgotten here so the next read asks the cluster.
+func (s *Service) newerAPIResources(ctx context.Context, read time.Time) bool {
+	cid := ctxClusterID(ctx)
+	s.apiResourcesMu.Lock()
+	defer s.apiResourcesMu.Unlock()
+	last := s.apiResourcesRead[cid]
+	if last.After(read) {
+		return true
+	}
+	if time.Since(last) < apiResourcesMissTTL || s.discoveryCtx(ctx) == nil {
+		return false
+	}
+	delete(s.apiResourcesCache, cid)
+	return true
+}
 
 // preferredFirst orders discovery lists so each group's preferred version comes
 // before its other versions (then by group/version), since discovery returns
@@ -142,21 +175,36 @@ func (s *Service) ResolveKind(ctx context.Context, apiVersion, kind string) (sch
 	if err != nil {
 		return schema.GroupVersionResource{}, false, fmt.Errorf("invalid apiVersion %q: %w", apiVersion, err)
 	}
-	lists, err := s.GetAPIResources(ctx)
+	lists, read, err := s.apiResources(ctx)
 	if err != nil {
 		return schema.GroupVersionResource{}, false, err
 	}
+	if gvr, namespaced, ok := kindIn(lists, gv, kind); ok {
+		return gvr, namespaced, nil
+	}
+	if s.newerAPIResources(ctx, read) {
+		if lists, _, err = s.apiResources(ctx); err != nil {
+			return schema.GroupVersionResource{}, false, err
+		}
+		if gvr, namespaced, ok := kindIn(lists, gv, kind); ok {
+			return gvr, namespaced, nil
+		}
+	}
+	return schema.GroupVersionResource{}, false, fmt.Errorf("%s %s is not served by this cluster", apiVersion, kind)
+}
+
+func kindIn(lists []metav1.APIResourceList, gv schema.GroupVersion, kind string) (schema.GroupVersionResource, bool, bool) {
 	for _, l := range lists {
 		if l.GroupVersion != gv.String() {
 			continue
 		}
 		for _, r := range l.APIResources {
 			if r.Kind == kind && !strings.Contains(r.Name, "/") {
-				return gv.WithResource(r.Name), r.Namespaced, nil
+				return gv.WithResource(r.Name), r.Namespaced, true
 			}
 		}
 	}
-	return schema.GroupVersionResource{}, false, fmt.Errorf("%s %s is not served by this cluster", apiVersion, kind)
+	return schema.GroupVersionResource{}, false, false
 }
 
 type resourceMatch struct {
@@ -169,11 +217,18 @@ type resourceMatch struct {
 var errResourceTypeNotServed = errors.New("not found")
 
 func (s *Service) resolveResourceMatch(ctx context.Context, resourceType string) (resourceMatch, error) {
-	lists, err := s.GetAPIResources(ctx)
+	lists, read, err := s.apiResources(ctx)
 	if err != nil {
 		return resourceMatch{}, err
 	}
-	return matchResource(lists, resourceType)
+	m, err := matchResource(lists, resourceType)
+	if errors.Is(err, errResourceTypeNotServed) && s.newerAPIResources(ctx, read) {
+		if lists, _, err = s.apiResources(ctx); err != nil {
+			return resourceMatch{}, err
+		}
+		return matchResource(lists, resourceType)
+	}
+	return m, err
 }
 
 func matchResource(lists []metav1.APIResourceList, resourceType string) (resourceMatch, error) {

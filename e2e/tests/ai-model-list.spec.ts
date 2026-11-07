@@ -42,12 +42,14 @@ test.describe('AI model list from the provider', () => {
     await expect(source).toHaveText(new RegExp(`(Built-in list|기본 목록).*when connecting.*${STAND_IN_ADDRESS.replace(/\./g, '\\.')}`), { timeout: 15_000 })
     await expect(source).toHaveAttribute('title', new RegExp(STAND_IN_ADDRESS.replace(/\./g, '\\.')))
 
-    const tested = page.waitForResponse('**/api/v1/ai/model-configs/test')
+    // the screen's requests carry ?cluster=
+    const tested = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/ai/model-configs/test')
     await page.getByRole('button', { name: /^(Test|연결 테스트)$/ }).click()
     const answer = await (await tested).json()
     expect(answer.success).toBe(false)
     expect(answer.message).toContain(STAND_IN_ADDRESS)
-    await expect(page.getByText(answer.message)).toHaveText(new RegExp(STAND_IN_ADDRESS.replace(/\./g, '\\.')))
+    // Test's result is the message alone; the list's line above holds the same words after its own
+    await expect(page.getByText(answer.message, { exact: true })).toHaveText(new RegExp(STAND_IN_ADDRESS.replace(/\./g, '\\.')))
   })
 
   test('an Ollama address lists its own models; Anthropic lists its own with a key and falls back to the built-in list without', async ({ page }) => {

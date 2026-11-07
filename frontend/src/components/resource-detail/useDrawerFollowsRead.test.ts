@@ -33,6 +33,19 @@ describe('what a drawer shows of its object', () => {
     expect(drawerBody('IngressClass', { name: 'nginx', is_default: true }, { metadata: { name: 'nginx' } })?.is_default).toBeUndefined()
   })
 
+  // Opened again within the read's stale time, the drawer has the read of its last opening at once: the row it is handed
+  // now is newer, and a slice whose endpoints all went shows none.
+  it('is the row while the read is older than the row it opened with', () => {
+    const emptied = { name: 'web-abc', namespace: 'shop', endpoints: [], endpoints_total: 0, endpoints_ready: 0 }
+    const before = { metadata: { name: 'web-abc', resourceVersion: '7' }, endpoints: [{ addresses: ['10.0.0.1'] }, { addresses: ['10.0.0.9'] }] }
+    expect(drawerBody('EndpointSlice', emptied, before, 1_000, 2_000)).toBe(emptied)
+    expect(drawerBody('EndpointSlice', emptied, before, 2_000, 2_000)).toBe(emptied)
+    expect(drawerBody('EndpointSlice', emptied, before, 0, 2_000)).toBe(emptied)
+    const after = { metadata: { name: 'web-abc', resourceVersion: '8' }, endpoints: null }
+    expect(drawerBody('EndpointSlice', emptied, after, 3_000, 2_000)?.endpoints).toBeNull()
+    expect(drawerBody('Ingress', row, live, 3_000, 2_000)?.spec).toEqual(live.spec)
+  })
+
   it('is the row until the read answers, and the read when it opened without a row', () => {
     expect(drawerBody('Ingress', row, undefined)).toBe(row)
     expect(drawerBody('Ingress', undefined, live)).toBe(live)

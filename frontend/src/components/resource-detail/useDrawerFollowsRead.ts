@@ -13,10 +13,11 @@ const ROW_FIELDS_OF_THE_OBJECT: Record<string, string[]> = {
 
 // What a drawer's body reads: the row it opened with, its object as the drawer's own read has it now (ResourceDetailDrawer,
 // objectReadInterval) over it. The row keeps what only the list works out; a Secret's read is an audited reveal and is
-// not this read. That read already goes on while the Info tab is open, so following it costs no request of its own.
-export function drawerBody(kind: string, row: RawObject | undefined, live: RawObject | undefined): RawObject | undefined {
+// not this read. That read already goes on while the Info tab is open, so following it costs no request of its own. A read
+// kept from an earlier opening (readAt before rowAt, when the row was handed over) is older than the row and stays out.
+export function drawerBody(kind: string, row: RawObject | undefined, live: RawObject | undefined, readAt?: number, rowAt?: number): RawObject | undefined {
   if (!row) return live
-  if (!live || !followsObjectForChat(kind)) return row
+  if (!live || !followsObjectForChat(kind) || (rowAt !== undefined && !((readAt ?? 0) > rowAt))) return row
   const kept = Object.fromEntries(Object.entries(row).filter(([field]) => !ROW_FIELDS_OF_THE_OBJECT[kind]?.includes(field)))
   return { ...kept, ...live }
 }

@@ -16,6 +16,14 @@ const PASSWORD = process.env.E2E_USER_PASSWORD || ''
 const PW = 'E2e-mcp-pass1!'
 const MCP = '/api/v1/ai/mcp'
 const RPC = { Accept: 'application/json, text/event-stream', 'Content-Type': 'application/json' }
+// The chat's write tools by name (tool_whitelists.WRITE_TOOL_NAMES, as mcp-write.spec.ts lists them).
+const WRITE_TOOLS = [
+  'k8s_apply_manifest', 'k8s_create_resource', 'k8s_delete_resource', 'k8s_patch_resource', 'k8s_annotate_resource',
+  'k8s_remove_annotation', 'k8s_label_resource', 'k8s_remove_label', 'k8s_scale', 'k8s_rollout', 'k8s_execute_command',
+  'k8s_cordon_node', 'k8s_cronjob_suspend', 'k8s_cronjob_trigger',
+]
+// Pod exec and cordon also ask for the screen's permission, which a Write ceiling does not hold (ai-write-permissions.spec.ts).
+const WRITE_ROLE_TOOLS = WRITE_TOOLS.filter((t) => t !== 'k8s_execute_command' && t !== 'k8s_cordon_node')
 const stamp = () => Date.now().toString(36)
 
 function kubectlFor(kindName: string) {
@@ -94,9 +102,9 @@ test.describe('MCP server', () => {
       expect(names).toContain('list_clusters')
       expect(names).toContain('k8s_get_resources')
       // Write tools (and request_access) appear only when the operator turned them on (mcp.writeTools, mcp-write.spec.ts).
-      // Pod exec is not among them for this Write user, as on the screens (ai-write-permissions.spec.ts).
-      const writes = names.filter((n) => /^k8s_(apply|create|delete|patch|scale|rollout|execute|label|annotat|remove)/.test(n))
-      expect(writes.length).toBe(cfg.write_tools ? 10 : 0)
+      // Pod exec and cordon are not among them for this Write user, as on the screens (ai-write-permissions.spec.ts).
+      const writes = names.filter((n) => WRITE_TOOLS.includes(n))
+      expect(writes).toEqual(cfg.write_tools ? [...WRITE_ROLE_TOOLS].sort() : [])
       expect(names.includes('request_access')).toBe(!!cfg.write_tools)
       expect(tools.filter((t) => !writes.includes(t.name) && t.name !== 'request_access').every((t) => t.annotations?.readOnlyHint === true)).toBe(true)
       expect(tools.find((t) => t.name === 'k8s_get_resources')!.inputSchema.required).toContain('cluster')
@@ -159,7 +167,7 @@ test.describe('MCP server', () => {
       const readList = await rpc(request, readerToken, 'tools/list')
       expect(readList.status()).toBe(200)
       const readNames = ((await readList.json()).result.tools as { name: string }[]).map((t) => t.name).sort()
-      expect(readNames.filter((n) => /^k8s_(apply|create|delete|patch|scale|rollout|execute|label|annotat|remove)/.test(n))).toEqual([])
+      expect(readNames.filter((n) => WRITE_TOOLS.includes(n))).toEqual([])
       expect(readNames).toContain('k8s_get_resources')
       expect(readNames.includes('request_access')).toBe(!!cfg.write_tools)
       expect(readNames.filter((n) => n !== 'request_access' && n !== 'list_clusters').length).toBe(52)

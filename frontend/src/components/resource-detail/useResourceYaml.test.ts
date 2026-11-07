@@ -50,6 +50,11 @@ describe('a save of a YAML window', () => {
     expect(api.applyNamespaceYaml).toHaveBeenCalledWith('x', EDITED, SENT)
   })
 
+  it('and a kind of a group, by its group: another group may serve the same Kind', async () => {
+    await save('BackendTLSPolicy', 'shop')(EDITED, OPENED)
+    expect(api.applyResourceYaml).toHaveBeenCalledWith('backendtlspolicies.gateway.networking.k8s.io', 'x', EDITED, 'shop', SENT)
+  })
+
   it('and a CustomResourceDefinition', async () => {
     await save('CustomResourceDefinition', null)(EDITED, OPENED)
     expect(api.applyResourceYaml).toHaveBeenCalledWith('customresourcedefinitions', 'x', EDITED, undefined, SENT)

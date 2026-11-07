@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -30,6 +31,12 @@ var execUpgrader = websocket.Upgrader{
 
 // execRowRedactOpts: a stored row cannot be masked later, so it does not follow REDACTION_ENABLED, as an AI exec's row does not.
 var execRowRedactOpts = redact.Options{Enabled: true, Disabled: map[string]bool{}}
+
+// execError is an exec's error as its row and the log hold it: a container runtime names a command it could not start
+// as it came (exec: "<command>": executable file not found), so it is masked as the row's command is.
+func execError(err error) error {
+	return errors.New(redact.Command([]string{err.Error()}, execRowRedactOpts)[0])
+}
 
 // PodExecWS handles WebSocket /api/v1/namespaces/{namespace}/pods/{name}/exec/ws.
 // Write+Admin: opens an interactive shell into a running container.
@@ -84,7 +91,7 @@ func (h *Handler) PodExecWS(w http.ResponseWriter, r *http.Request) {
 	// The row above says the session was opened; one that never got a shell
 	// says so in a second, failed row (a closed tab is not a failure).
 	failed := func(err error) {
-		_ = h.recordAuditWithPayload(r, "k8s.pod.exec", "pod", podName, namespace, err, nil, audit.MustJSON(payload))
+		_ = h.recordAuditWithPayload(r, "k8s.pod.exec", "pod", podName, namespace, execError(err), nil, audit.MustJSON(payload))
 	}
 	cfg, err := h.svc.UserRESTConfigFor(ctx)
 	if err != nil {
@@ -101,7 +108,7 @@ func (h *Handler) PodExecWS(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("pod exec attached", "pod", podName, "namespace", namespace, "container", container)
 	if err := streamShell(ctx, conn, readFrames(ctx, conn), cfg, execURL(cs, namespace, podName, container, command), rec, r.URL.Query().Get("lang")); err != nil {
-		slog.Error("failed to connect to K8s API", "err", err)
+		slog.Error("failed to connect to K8s API", "err", execError(err))
 		if ctx.Err() == nil {
 			failed(err)
 		}

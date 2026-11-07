@@ -4,6 +4,10 @@ import { eventsNewestFirst } from './detailFormat'
 
 type WatchEvent = { type?: string; object?: any }
 
+// formatDrawerEvent's source is the component, "" when the event names none (the scheduler and other events.k8s.io
+// writers leave it empty); a frame carries { component, host }, its component null then.
+const sourceOf = (source: any): string => (typeof source === 'string' ? source : source?.component) || ''
+
 // A frame as the drawer's Events table reads an event (the server's eventToInfo against formatDrawerEvent).
 function eventRow(frame: any) {
   return {
@@ -13,7 +17,7 @@ function eventRow(frame: any) {
     count: frame.count,
     first_timestamp: frame.first_timestamp,
     last_timestamp: frame.last_timestamp,
-    source: frame.source?.component ?? frame.source ?? '',
+    source: sourceOf(frame.source),
   }
 }
 

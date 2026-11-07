@@ -43,6 +43,15 @@ describe('applyEventFrame', () => {
     expect(next.events[0].source).toBe('replicaset-controller')
   })
 
+  // The scheduler writes events.k8s.io events with no source: the answer says "", the frame { component: null }.
+  it('pairs an event that names no source with the answer\'s row, not as a second one', () => {
+    const scheduled = { type: 'Normal', reason: 'Scheduled', message: 'Successfully assigned shop/web-1 to n1', count: 1, first_timestamp: '2026-11-07T00:00:00Z', last_timestamp: '2026-11-07T00:00:00Z', source: '' }
+    const withScheduled = { ...answer, events: [...answer.events, scheduled] }
+    const opening = { ...scheduled, name: 'web-1.1', namespace: 'shop', source: { component: null, host: null }, reporting_component: 'default-scheduler', involved_object: { kind: 'Pod', name: 'web-1', namespace: 'shop' }, created_at: '2026-11-07T00:00:00Z' }
+    expect(applyEventFrame(withScheduled, data('ADDED', opening))).toBe(withScheduled)
+    expect(applyEventFrame(withScheduled, data('DELETED', opening)).events.map((e: any) => e.reason)).toEqual(['B', 'A'])
+  })
+
   // What a watch opens with is what the answer holds: no drawing, no read.
   it('leaves the answer itself when a frame says what it says', () => {
     expect(applyEventFrame(answer, data('ADDED', frame('A', 4, '2026-11-07T01:00:00Z')))).toBe(answer)

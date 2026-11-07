@@ -8,7 +8,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '@/services/api'
 
-import { encodeSecretYaml, kindToPlural, yamlOpenedOf } from './utils'
+import { drawerResourceType } from './crDetail'
+import { encodeSecretYaml, yamlOpenedOf } from './utils'
 
 interface Target {
   kind: string
@@ -45,7 +46,7 @@ export function useResourceYaml({ target, tab, canEditYaml }: Args) {
         const crdN = (rj?.crd_name as string) || ''
         if (crdN) return api.getResourceYaml(crdN, name, ns || undefined)
       }
-      return api.getResourceYaml(kindToPlural(kind), name, ns || undefined)
+      return api.getResourceYaml(drawerResourceType(kind), name, ns || undefined)
     },
     enabled: !!target && tab === 'yaml',
     staleTime: 10_000,
@@ -66,7 +67,7 @@ export function useResourceYaml({ target, tab, canEditYaml }: Args) {
       const crdN = (rj?.crd_name as string) || ''
       if (crdN) await api.applyResourceYaml(crdN, name, yaml, ns || undefined, began)
     }
-    else return (await api.applyResourceYaml(kindToPlural(kind), name, yaml, ns || undefined, began))?.kept_masked?.length ?? 0
+    else return (await api.applyResourceYaml(drawerResourceType(kind), name, yaml, ns || undefined, began))?.kept_masked?.length ?? 0
     return 0
   }
 

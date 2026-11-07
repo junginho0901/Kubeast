@@ -4,6 +4,7 @@
 import type { ResourceDetailTarget } from '../ResourceDetailContext'
 import type { CRDInfo } from '@/services/api/types'
 import type { AccessTarget } from '@/hooks/useCanCreate'
+import { kindToPlural } from './utils'
 
 // The API group of each kind that has a drawer of its own ('' = core).
 export const DRAWER_GROUPS: Record<string, string> = {
@@ -31,6 +32,14 @@ export function kindResource(kind: string): string {
   if (k.endsWith('s')) return `${k}es`
   if (/[^aeiou]y$/.test(k)) return `${k.slice(0, -1)}ies`
   return `${k}s`
+}
+
+// The type a drawer's own object read and YAML window name (resource_type): a kind of a group as <resource>.<group>, as
+// kubectl takes it. The name alone may go to another group that serves the same Kind (k8s-service's matchResource takes
+// the first preferred version serving it), whose object would then be read and saved instead.
+export function drawerResourceType(kind: string): string {
+  const group = DRAWER_GROUPS[kind]
+  return group ? `${kindResource(kind)}.${group}` : kindToPlural(kind)
 }
 
 // What a drawer's delete acts on, for the cluster's answer (SelfSubjectAccessReview): the group and resource, the

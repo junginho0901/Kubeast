@@ -121,6 +121,8 @@ test.describe('a line taken out of a YAML window', () => {
         },
       },
     }))
+    // the controller writes its status right after the create, which moves the version the text is read at
+    kubectl(`-n ${NS} rollout status deployment/deep --timeout=60s`)
     const opened = await yamlOf(request, 'deployments', 'deep', NS)
     let edited = without(opened, 'cpu: 100m')
     edited = without(edited, '- name: GONE_ENV')
@@ -215,18 +217,20 @@ test.describe('a line taken out of a YAML window', () => {
     expect(objectOf(`-n ${NS} get ${CRD} w`).spec.deep).toEqual({ keep: 3 })
   })
 
-  // Monaco's delete-line on the line holding these words
+  // Monaco's delete-line on the line holding these words. Monaco picks Cmd or Ctrl by the page's user agent (the chromium
+  // project's is Windows), not by the machine the test runs on as ControlOrMeta does: Cmd+Up and Cmd+Shift+K on a Mac.
   const deleteLineInWindow = async (page: Page, opened: string, words: string) => {
     const drawer = page.locator(DRAWER).last()
     await drawer.getByRole('button', { name: 'YAML', exact: true }).click({ timeout: 30_000 })
     await expect(drawer.locator('.monaco-editor .view-lines').first()).toContainText(words, { timeout: 30_000 })
     await drawer.getByRole('button', { name: /^(edit|편집)$/i }).click()
     await drawer.locator('.monaco-editor').first().click()
-    await page.keyboard.press('ControlOrMeta+Home')
+    const mac = await page.evaluate(() => navigator.userAgent.includes('Macintosh'))
+    await page.keyboard.press(mac ? 'Meta+ArrowUp' : 'Control+Home')
     const line = opened.split('\n').findIndex((l) => l.trimStart().startsWith(words))
     expect(line).toBeGreaterThan(-1)
     for (let i = 0; i < line; i++) await page.keyboard.press('ArrowDown')
-    await page.keyboard.press('ControlOrMeta+Shift+K')
+    await page.keyboard.press(mac ? 'Meta+Shift+K' : 'Control+Shift+K')
     await expect(drawer.locator('.monaco-editor .view-lines').first()).not.toContainText(words)
     await drawer.getByRole('button', { name: /^(apply|적용)$/i }).click()
     await expect(drawer.getByRole('button', { name: /^(edit|편집)$/i }), 'the save ended').toBeVisible({ timeout: 30_000 })

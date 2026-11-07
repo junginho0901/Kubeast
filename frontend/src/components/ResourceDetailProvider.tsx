@@ -33,7 +33,7 @@ export function ResourceDetailProvider({ children }: { children: ReactNode }) {
   }
 
   const show = useCallback((t: ResourceDetailTarget | null) => {
-    setTarget(t)
+    setTarget(t && t.openedAt === undefined ? { ...t, openedAt: Date.now() } : t)
     setPendingKey(keyOf(t))
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev)
