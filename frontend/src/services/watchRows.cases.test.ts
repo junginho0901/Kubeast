@@ -31,7 +31,7 @@ import { getPodHealth } from '@/pages/cluster-view/podHealth'
 import { podToDetail } from '@/pages/cluster-view/types'
 import { daemonSetToWorkloadRawJson, getDaemonSetStatusColor } from '@/pages/workloads/daemonsets/daemonSetHelpers'
 import { applyDaemonSetWatchEvent, normalizeWatchDaemonSetObject } from '@/pages/workloads/daemonsets/daemonSetWatchNormalize'
-import { formatDuration, getJobStatusColor, jobDurationSeconds, jobToWorkloadRawJson } from '@/pages/workloads/jobs/jobHelpers'
+import { formatDuration, getJobStatusColor, jobCompletionsCell, jobDurationSeconds, jobToWorkloadRawJson } from '@/pages/workloads/jobs/jobHelpers'
 import { applyJobWatchEvent, normalizeWatchJobObject } from '@/pages/workloads/jobs/jobWatchNormalize'
 import { workloadStatusTitle } from '@/utils/workloadStatus'
 import { QueryClient } from '@tanstack/react-query'
@@ -106,7 +106,7 @@ const pages: Record<string, Page> = {
     apply: applyJobWatchEvent,
     normalize: normalizeWatchJobObject,
     shows: (row) => ({
-      completions: `${row.succeeded ?? 0}/${row.completions ?? '-'}`,
+      completions: jobCompletionsCell(row),
       status: row.status,
       badge: getJobStatusColor(row.status),
       duration: formatDuration(jobDurationSeconds(row)),
@@ -350,7 +350,25 @@ describe('a live update leaves a row as the list API gives it', () => {
 
   it('the server wrote cases for every list these tests name', () => {
     expect(new Set(cases.map((c) => c.resource))).toEqual(new Set(Object.keys(pages)))
-    expect(cases.length).toBeGreaterThanOrEqual(70)
+    expect(cases.length).toBeGreaterThanOrEqual(82)
+  })
+
+  // The External IP cell is what kubectl prints, which for some Services is no address: the drawer opened from a row
+  // reads the spec's external IPs and the load balancer's addresses, not the cell.
+  it('a Service row gives the drawer its external IPs and load balancer, each as the object has them', () => {
+    const drawerOf = (name: string) => {
+      const row = cases.find((c) => c.name === name)?.after as any
+      expect(row, name).toBeTruthy()
+      const raw = serviceToRawJson(row) as any
+      return { externalIPs: raw.spec.externalIPs, ingress: raw.status.loadBalancer.ingress }
+    }
+    expect(drawerOf('a LoadBalancer with no address yet reads pending')).toEqual({ externalIPs: [], ingress: [] })
+    expect(drawerOf('a Service that became ExternalName shows its name, no cluster IP, port or selector')).toEqual({ externalIPs: [], ingress: [] })
+    expect(drawerOf('a Service whose load balancer and node port went away shows neither')).toEqual({ externalIPs: [], ingress: [] })
+    expect(drawerOf('a Service that gained a load balancer shows its addresses before its external IPs')).toEqual({
+      externalIPs: ['192.0.2.9'],
+      ingress: [{ ip: '192.0.2.1' }, { hostname: 'lb.example.test' }],
+    })
   })
 
   it('no case holds an environment value of a container', () => {
@@ -466,8 +484,34 @@ describe('a row the server could not convert comes with its object nested', () =
     }
     const prior = { name: 'web', namespace: 'demo', type: 'LoadBalancer', cluster_ip: '10.0.0.1', external_ip: '192.0.2.1', ports: [{ port: 80 }], selector: { app: 'web' } }
     const [row] = applyServiceWatchEvent([prior] as any, { type: 'MODIFIED', object: nested })
-    expect(pages.services.shows(row)).toEqual({ type: 'ClusterIP', cluster_ip: '10.0.0.9', external_ip: '-', ports: '-', selector: '-' })
+    expect(pages.services.shows(row)).toEqual({ type: 'ClusterIP', cluster_ip: '10.0.0.9', external_ip: '<none>', ports: '-', selector: '-' })
     expect(row.created_at).toBe('2026-11-01T00:00:00Z')
+  })
+
+  it('a Service reads its External IP as kubectl prints it', () => {
+    const cell = (spec: Record<string, unknown>, ingress?: unknown[]) =>
+      normalizeWatchServiceObject({ name: 'web', namespace: 'demo', kind: 'Service', spec, status: { loadBalancer: { ingress } } }).external_ip
+    expect(cell({ type: 'ExternalName', externalName: 'db.example.test' })).toBe('db.example.test')
+    expect(cell({ type: 'LoadBalancer' })).toBe('<pending>')
+    expect(cell({ type: 'LoadBalancer', externalIPs: ['192.0.2.9'] })).toBe('192.0.2.9')
+    expect(cell({ type: 'LoadBalancer' }, [{ ip: '192.0.2.9' }, { hostname: 'lb.example.test' }, { ip: '192.0.2.1', hostname: 'both.example.test' }, { ip: '192.0.2.9' }]))
+      .toBe('192.0.2.1,192.0.2.9,lb.example.test')
+    expect(cell({ type: 'LoadBalancer', externalIPs: ['192.0.2.200'] }, [{ ip: '192.0.2.1' }])).toBe('192.0.2.1,192.0.2.200')
+    expect(cell({ type: 'NodePort', externalIPs: ['192.0.2.9', '192.0.2.1'] })).toBe('192.0.2.9,192.0.2.1')
+    expect(cell({ type: 'NodePort' })).toBe('<none>')
+    expect(cell({ type: 'ClusterIP' }, [{ ip: '192.0.2.1' }])).toBe('<none>')
+    expect(cell({ type: 'NoSuchType' })).toBe('<unknown>')
+  })
+
+  it('a Service keeps its external IPs and load balancer apart for the drawer', () => {
+    const row = normalizeWatchServiceObject({
+      name: 'web',
+      namespace: 'demo',
+      kind: 'Service',
+      spec: { type: 'LoadBalancer', externalIPs: ['192.0.2.9'] },
+      status: { loadBalancer: { ingress: [{ hostname: 'lb.example.test' }] } },
+    })
+    expect(row).toMatchObject({ external_ips: ['192.0.2.9'], load_balancer_ingress: [{ hostname: 'lb.example.test' }] })
   })
 
   it('Endpoints read the subsets beside the metadata', () => {
@@ -640,8 +684,29 @@ describe('a row the server could not convert comes with its object nested', () =
     expect(apply({ conditions: [{ type: 'Failed', status: 'True' }] }).status).toBe('Failed')
     expect(apply({ conditions: [{ type: 'Complete', status: 'True' }] }).status).toBe('Complete')
     expect(apply({ conditions: [{ type: 'Complete', status: 'False' }] }).status).toBe('Running')
+    expect(apply({ conditions: [{ type: 'Suspended', status: 'True' }] }).status).toBe('Suspended')
+    expect(apply({ conditions: [{ type: 'Suspended', status: 'False' }] }).status).toBe('Running')
+    expect(apply({ conditions: [{ type: 'FailureTarget', status: 'True' }] }).status).toBe('FailureTarget')
+    expect(apply({ conditions: [{ type: 'SuccessCriteriaMet', status: 'True' }] }).status).toBe('SuccessCriteriaMet')
+    // kubectl's order, whichever condition comes first
+    expect(apply({ conditions: [{ type: 'Failed', status: 'True' }, { type: 'Complete', status: 'True' }] }).status).toBe('Complete')
+    expect(apply({ conditions: [{ type: 'FailureTarget', status: 'True' }, { type: 'Suspended', status: 'True' }] }).status).toBe('Suspended')
+    expect(apply({ conditions: [{ type: 'Complete', status: 'False' }, { type: 'Complete', status: 'True' }] }).status).toBe('Running')
+    const leaving = (status: Record<string, unknown>) => normalizeWatchJobObject({ ...nested(status), metadata: { deletionTimestamp: '2026-11-06T12:00:00Z' } }).status
+    expect(leaving({ conditions: [{ type: 'Suspended', status: 'True' }] })).toBe('Terminating')
+    expect(leaving({ conditions: [{ type: 'Complete', status: 'True' }] })).toBe('Complete')
     expect(apply({ active: 1 })).toMatchObject({ completions: 1, images: ['example.test/app:2'], owner_references: [], start_time: null })
     expect(applyJobWatchEvent([prior] as any, { type: 'DELETED', object: nested({}) })).toEqual([])
+  })
+
+  it('a Job counts its completions as kubectl prints them', () => {
+    const cell = (spec: Record<string, unknown>, succeeded = 0) =>
+      jobCompletionsCell(normalizeWatchJobObject({ name: 'j', namespace: 'demo', kind: 'Job', spec, status: { succeeded } }))
+    expect(cell({ completions: 5, parallelism: 2 }, 3)).toBe('3/5')
+    expect(cell({ completions: 1, parallelism: 3 })).toBe('0/1')
+    expect(cell({ parallelism: 3 }, 1)).toBe('1/1 of 3')
+    expect(cell({ parallelism: 1 })).toBe('0/1')
+    expect(cell({})).toBe('0/1')
   })
 
   it('a Role counts the rules beside the metadata', () => {

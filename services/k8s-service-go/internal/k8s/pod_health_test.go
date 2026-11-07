@@ -65,6 +65,36 @@ func randomHealthPod(rng *rand.Rand, i int) *corev1.Pod {
 	return p
 }
 
+// randomSidecarPod is a pod with restartable init containers (sidecars) beside the plain ones, drawn from its own source
+// so the cases above stay as they were.
+func randomSidecarPod(rng *rand.Rand, i int) *corev1.Pod {
+	p := randomHealthPod(rng, i)
+	p.Name = fmt.Sprintf("s-%04d", i)
+	always := corev1.ContainerRestartPolicyAlways
+	for c := 0; c < 1+rng.Intn(2); c++ {
+		name := fmt.Sprintf("side%d", c)
+		p.Spec.InitContainers = append(p.Spec.InitContainers, corev1.Container{Name: name, Image: "x", RestartPolicy: &always})
+		if rng.Intn(6) == 0 {
+			continue
+		}
+		cs := corev1.ContainerStatus{Name: name, Ready: rng.Intn(3) > 0}
+		if rng.Intn(4) > 0 {
+			started := rng.Intn(4) > 0
+			cs.Started = &started
+		}
+		switch rng.Intn(6) {
+		case 0:
+			cs.State.Waiting = &corev1.ContainerStateWaiting{Reason: []string{"CrashLoopBackOff", "PodInitializing", "ContainerCreating"}[rng.Intn(3)]}
+		case 1:
+			cs.State.Terminated = &corev1.ContainerStateTerminated{Reason: []string{"Error", "Completed"}[rng.Intn(2)], ExitCode: int32(rng.Intn(2))}
+		default:
+			cs.State.Running = &corev1.ContainerStateRunning{}
+		}
+		p.Status.InitContainerStatuses = append(p.Status.InitContainerStatuses, cs)
+	}
+	return p
+}
+
 type podHealthCase struct {
 	Pod    map[string]interface{} `json:"pod"`
 	Level  string                 `json:"level"`
@@ -73,11 +103,17 @@ type podHealthCase struct {
 
 func podHealthCases() []podHealthCase {
 	rng := rand.New(rand.NewSource(7))
+	sidecars := rand.New(rand.NewSource(17))
 	levels := []string{"ok", "warn", "error"}
 	keep := []string{"phase", "status", "status_reason", "deletion_timestamp"}
 	var out []podHealthCase
-	for i := 0; i < 600; i++ {
-		p := randomHealthPod(rng, i)
+	for i := 0; i < 900; i++ {
+		var p *corev1.Pod
+		if i < 600 {
+			p = randomHealthPod(rng, i)
+		} else {
+			p = randomSidecarPod(sidecars, i)
+		}
 		m := formatPodDetail(p)
 		slim := map[string]interface{}{}
 		for _, k := range keep {
@@ -89,7 +125,7 @@ func podHealthCases() []podHealthCase {
 			var cs []map[string]interface{}
 			for _, c := range m[k].([]map[string]interface{}) {
 				sc := map[string]interface{}{"name": c["name"]}
-				for _, f := range []string{"ready", "state"} {
+				for _, f := range []string{"ready", "state", "restart_policy", "started"} {
 					if v, ok := c[f]; ok {
 						sc[f] = v
 					}
@@ -123,6 +159,124 @@ func TestPodHealthFixture(t *testing.T) {
 	}
 	if !bytes.Equal(have, buf.Bytes()) {
 		t.Fatal("podHealth.cases.json is not what podHealth gives now: rerun with UPDATE_POD_HEALTH_CASES=1 and check the page's test")
+	}
+}
+
+// A sidecar is meant to keep running: up, it holds nothing back, and a pod whose containers run beside it is fine. Short
+// of that the pod warns or errs as kubectl's STATUS and READY say, with the sidecar counted as a container.
+func TestPodHealth_ASidecarThatIsUpIsNotAWarning(t *testing.T) {
+	always := corev1.ContainerRestartPolicyAlways
+	yes, no := true, false
+	running := corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}
+	waiting := func(reason string) corev1.ContainerState {
+		return corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: reason}}
+	}
+	initialized := []corev1.PodCondition{{Type: corev1.PodInitialized, Status: corev1.ConditionTrue}, {Type: corev1.PodReady, Status: corev1.ConditionTrue}}
+	pod := func(phase corev1.PodPhase, app corev1.ContainerStatus, side ...corev1.ContainerStatus) *corev1.Pod {
+		app.Name = "app"
+		p := &corev1.Pod{
+			Spec:   corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}}, InitContainers: []corev1.Container{{Name: "side", RestartPolicy: &always}}},
+			Status: corev1.PodStatus{Phase: phase, Conditions: initialized, ContainerStatuses: []corev1.ContainerStatus{app}},
+		}
+		for _, s := range side {
+			s.Name = "side"
+			p.Status.InitContainerStatuses = append(p.Status.InitContainerStatuses, s)
+		}
+		return p
+	}
+	appUp := corev1.ContainerStatus{Ready: true, State: running}
+	sideUp := corev1.ContainerStatus{Ready: true, Started: &yes, State: running}
+	plainInit := pod(corev1.PodRunning, appUp, corev1.ContainerStatus{Ready: true, Started: &yes, State: running})
+	plainInit.Spec.InitContainers[0].RestartPolicy = nil
+	cases := []struct {
+		name   string
+		pod    *corev1.Pod
+		level  uint8
+		reason string
+	}{
+		{"its sidecar up and ready, its container running", pod(corev1.PodRunning, appUp, sideUp), podHealthOK, "Running"},
+		{"its sidecar up but not ready: READY 1/2", pod(corev1.PodRunning, appUp, corev1.ContainerStatus{Started: &yes, State: running}), podHealthWarn, "NotReady"},
+		{"its sidecar ready, its container not", pod(corev1.PodRunning, corev1.ContainerStatus{State: running}, sideUp), podHealthWarn, "NotReady"},
+		{"its sidecar running, not yet started", pod(corev1.PodRunning, appUp, corev1.ContainerStatus{Started: &no, State: running}), podHealthWarn, "PodInitializing"},
+		{"its sidecar with no started field", pod(corev1.PodRunning, appUp, corev1.ContainerStatus{State: running}), podHealthWarn, "PodInitializing"},
+		{"its sidecar waiting to start", pod(corev1.PodRunning, appUp, corev1.ContainerStatus{State: waiting("PodInitializing")}), podHealthWarn, "PodInitializing"},
+		{"its sidecar crashing", pod(corev1.PodRunning, appUp, corev1.ContainerStatus{Started: &no, State: waiting("CrashLoopBackOff")}), podHealthError, "CrashLoopBackOff"},
+		{"its sidecar with no status yet", pod(corev1.PodRunning, appUp), podHealthWarn, "NotReady"},
+		{"a plain init container still running holds it back", plainInit, podHealthWarn, "PodInitializing"},
+	}
+	for _, c := range cases {
+		if l, r := podHealth(c.pod); l != c.level || r != c.reason {
+			t.Errorf("%s: got %d %q, want %d %q", c.name, l, r, c.level, c.reason)
+		}
+	}
+	// what the page reads to tell them apart comes with the row, and only for a sidecar
+	row := formatPodDetail(pod(corev1.PodRunning, appUp, sideUp))["init_containers"].([]map[string]interface{})[0]
+	if row["restart_policy"] != "Always" || row["started"] != true {
+		t.Errorf("a sidecar's row: restart_policy %v, started %v", row["restart_policy"], row["started"])
+	}
+	plain := formatPodDetail(plainInit)["init_containers"].([]map[string]interface{})[0]
+	if _, ok := plain["restart_policy"]; ok {
+		t.Errorf("a plain init container's row has restart_policy %v", plain["restart_policy"])
+	}
+	if _, ok := plain["started"]; ok {
+		t.Errorf("a plain init container's row has started %v", plain["started"])
+	}
+}
+
+// Over the states a pod with a sidecar goes through, Cluster View calls it fine exactly when kubectl prints Running with
+// every container ready.
+func TestPodHealth_FineIsWhatKubectlPrintsRunningAndAllReady(t *testing.T) {
+	always := corev1.ContainerRestartPolicyAlways
+	yes, no := true, false
+	running := corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}
+	waiting := func(reason string) corev1.ContainerState {
+		return corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: reason}}
+	}
+	ended := func(reason string, code int32) corev1.ContainerState {
+		return corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: reason, ExitCode: code}}
+	}
+	sidecars := []corev1.ContainerStatus{
+		{Name: "side", Ready: true, Started: &yes, State: running},
+		{Name: "side", Started: &yes, State: running},
+		{Name: "side", Started: &no, State: running},
+		{Name: "side", State: running},
+		{Name: "side", Started: &no, State: waiting("CrashLoopBackOff")},
+		{Name: "side", State: waiting("PodInitializing")},
+		{Name: "side", Started: &no, State: ended("Error", 1)},
+		{Name: "side", Started: &no, State: ended("Completed", 0)},
+	}
+	apps := []corev1.ContainerStatus{
+		{Name: "app", Ready: true, State: running},
+		{Name: "app", State: running},
+		{Name: "app", State: waiting("CrashLoopBackOff")},
+	}
+	fine := 0
+	for _, side := range sidecars {
+		for _, app := range apps {
+			for _, init := range []corev1.ConditionStatus{corev1.ConditionTrue, corev1.ConditionFalse} {
+				p := &corev1.Pod{
+					Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}}, InitContainers: []corev1.Container{{Name: "side", RestartPolicy: &always}}},
+					Status: corev1.PodStatus{
+						Phase:                 corev1.PodRunning,
+						Conditions:            []corev1.PodCondition{{Type: corev1.PodInitialized, Status: init}},
+						InitContainerStatuses: []corev1.ContainerStatus{side},
+						ContainerStatuses:     []corev1.ContainerStatus{app},
+					},
+				}
+				status, ready, total, _ := podListView(p)
+				want := status == "Running" && ready == total
+				level, reason := podHealth(p)
+				if (level == podHealthOK) != want {
+					t.Errorf("sidecar %+v, app %+v, initialized %s: kubectl prints %s %d/%d, the card is %d %q", side.State, app.State, init, status, ready, total, level, reason)
+				}
+				if want {
+					fine++
+				}
+			}
+		}
+	}
+	if fine == 0 {
+		t.Error("no state reads as fine")
 	}
 }
 

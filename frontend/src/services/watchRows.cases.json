@@ -1553,6 +1553,8 @@
      "name": "side",
      "ready": true,
      "restart_count": 1,
+     "restart_policy": "Always",
+     "started": true,
      "state": {
       "running": {
        "started_at": "2026-11-01T00:00:30Z"
@@ -1619,6 +1621,8 @@
      "name": "side",
      "ready": true,
      "restart_count": 1,
+     "restart_policy": "Always",
+     "started": true,
      "state": {
       "running": {
        "started_at": "2026-11-01T00:00:30Z"
@@ -1653,7 +1657,7 @@
   "shows": {
    "claims": [],
    "config_map_refs": [],
-   "health": "warn PodInitializing",
+   "health": "ok Running",
    "labels": {
     "app": "web"
    },
@@ -1669,6 +1673,636 @@
    "secret_refs": [],
    "service_account": "-",
    "status": "Running"
+  }
+ },
+ {
+  "name": "a pod whose sidecar is up but not ready warns, as READY says",
+  "resource": "pods",
+  "before": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/1",
+   "reason": "",
+   "restart_count": 2,
+   "status": "Running",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "event": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [
+    {
+     "image": "example.test/side:1",
+     "name": "side",
+     "ready": false,
+     "restart_count": 0,
+     "restart_policy": "Always",
+     "started": true,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:00:30Z"
+      }
+     }
+    }
+   ],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/2",
+   "reason": "",
+   "restart_count": 2,
+   "status": "Running",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "after": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [
+    {
+     "image": "example.test/side:1",
+     "name": "side",
+     "ready": false,
+     "restart_count": 0,
+     "restart_policy": "Always",
+     "started": true,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:00:30Z"
+      }
+     }
+    }
+   ],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/2",
+   "reason": "",
+   "restart_count": 2,
+   "status": "Running",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "shows": {
+   "claims": [],
+   "config_map_refs": [],
+   "health": "warn NotReady",
+   "labels": {
+    "app": "web"
+   },
+   "message": "-",
+   "node": "node-a",
+   "owners": [
+    "ReplicaSet/web-abc"
+   ],
+   "phase": "Running",
+   "ready": "1/2",
+   "reason": "-",
+   "restarts": 2,
+   "secret_refs": [],
+   "service_account": "-",
+   "status": "Running"
+  }
+ },
+ {
+  "name": "a pod whose sidecar has not started is still initializing",
+  "resource": "pods",
+  "before": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/1",
+   "reason": "",
+   "restart_count": 2,
+   "status": "Running",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "event": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {},
+     "name": "app",
+     "ports": [],
+     "ready": false,
+     "resources": {},
+     "restart_count": 0,
+     "state": {
+      "waiting": {
+       "message": "",
+       "reason": "PodInitializing"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [
+    {
+     "image": "example.test/side:1",
+     "name": "side",
+     "ready": false,
+     "restart_count": 0,
+     "restart_policy": "Always",
+     "started": false,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:00:30Z"
+      }
+     }
+    }
+   ],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "0/2",
+   "reason": "PodInitializing",
+   "restart_count": 0,
+   "status": "Init:0/1",
+   "status_message": "",
+   "status_reason": "PodInitializing"
+  },
+  "after": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {},
+     "name": "app",
+     "ports": [],
+     "ready": false,
+     "resources": {},
+     "restart_count": 0,
+     "state": {
+      "waiting": {
+       "message": "",
+       "reason": "PodInitializing"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [
+    {
+     "image": "example.test/side:1",
+     "name": "side",
+     "ready": false,
+     "restart_count": 0,
+     "restart_policy": "Always",
+     "started": false,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:00:30Z"
+      }
+     }
+    }
+   ],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "0/2",
+   "reason": "PodInitializing",
+   "restart_count": 0,
+   "status": "Init:0/1",
+   "status_message": "",
+   "status_reason": "PodInitializing"
+  },
+  "shows": {
+   "claims": [],
+   "config_map_refs": [],
+   "health": "warn PodInitializing",
+   "labels": {
+    "app": "web"
+   },
+   "message": "-",
+   "node": "node-a",
+   "owners": [
+    "ReplicaSet/web-abc"
+   ],
+   "phase": "Running",
+   "ready": "0/2",
+   "reason": "PodInitializing",
+   "restarts": 0,
+   "secret_refs": [],
+   "service_account": "-",
+   "status": "Init:0/1"
+  }
+ },
+ {
+  "name": "a pod whose sidecar crashes is an error",
+  "resource": "pods",
+  "before": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/1",
+   "reason": "",
+   "restart_count": 2,
+   "status": "Running",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "event": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [
+    {
+     "image": "example.test/side:1",
+     "name": "side",
+     "ready": false,
+     "restart_count": 3,
+     "restart_policy": "Always",
+     "started": false,
+     "state": {
+      "waiting": {
+       "message": "",
+       "reason": "CrashLoopBackOff"
+      }
+     }
+    }
+   ],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/2",
+   "reason": "",
+   "restart_count": 5,
+   "status": "Init:CrashLoopBackOff",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "after": {
+   "containers": [
+    {
+     "env_count": 0,
+     "env_from": [],
+     "image": "example.test/app:1",
+     "last_state": {
+      "terminated": {
+       "exit_code": 1,
+       "finished_at": "2026-11-01T00:00:50Z",
+       "message": "",
+       "reason": "Error",
+       "started_at": "2026-11-01T00:00:10Z"
+      }
+     },
+     "name": "app",
+     "ports": [],
+     "ready": true,
+     "resources": {},
+     "restart_count": 2,
+     "state": {
+      "running": {
+       "started_at": "2026-11-01T00:01:00Z"
+      }
+     },
+     "volume_mounts": []
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "init_containers": [
+    {
+     "image": "example.test/side:1",
+     "name": "side",
+     "ready": false,
+     "restart_count": 3,
+     "restart_policy": "Always",
+     "started": false,
+     "state": {
+      "waiting": {
+       "message": "",
+       "reason": "CrashLoopBackOff"
+      }
+     }
+    }
+   ],
+   "labels": {
+    "app": "web"
+   },
+   "message": "",
+   "name": "web-1",
+   "namespace": "demo",
+   "node_name": "node-a",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "ReplicaSet",
+     "name": "web-abc",
+     "uid": "u-1"
+    }
+   ],
+   "phase": "Running",
+   "pod_ip": "10.0.0.7",
+   "ready": "1/2",
+   "reason": "",
+   "restart_count": 5,
+   "status": "Init:CrashLoopBackOff",
+   "status_message": "",
+   "status_reason": ""
+  },
+  "shows": {
+   "claims": [],
+   "config_map_refs": [],
+   "health": "error CrashLoopBackOff",
+   "labels": {
+    "app": "web"
+   },
+   "message": "-",
+   "node": "node-a",
+   "owners": [
+    "ReplicaSet/web-abc"
+   ],
+   "phase": "Running",
+   "ready": "1/2",
+   "reason": "-",
+   "restarts": 5,
+   "secret_refs": [],
+   "service_account": "-",
+   "status": "Init:CrashLoopBackOff"
   }
  },
  {
@@ -2656,6 +3290,7 @@
   "before": {
    "active": 1,
    "completions": 1,
+   "completions_text": "0/1",
    "containers": [
     "app",
     "side"
@@ -2685,6 +3320,7 @@
   "event": {
    "active": 1,
    "completions": 1,
+   "completions_text": "0/1",
    "containers": [
     "app",
     "side"
@@ -2707,6 +3343,7 @@
   "after": {
    "active": 1,
    "completions": 1,
+   "completions_text": "0/1",
    "containers": [
     "app",
     "side"
@@ -2738,11 +3375,12 @@
   }
  },
  {
-  "name": "a suspended Job has no start time or duration left",
+  "name": "a suspended Job reads Suspended, with no start time or duration left",
   "resource": "jobs",
   "before": {
    "active": 1,
    "completions": 1,
+   "completions_text": "0/1",
    "containers": [
     "app",
     "side"
@@ -2772,6 +3410,7 @@
   "event": {
    "active": 0,
    "completions": 1,
+   "completions_text": "0/1",
    "containers": [
     "app",
     "side"
@@ -2794,12 +3433,13 @@
     }
    ],
    "parallelism": 1,
-   "status": "Running",
+   "status": "Suspended",
    "succeeded": 0
   },
   "after": {
    "active": 0,
    "completions": 1,
+   "completions_text": "0/1",
    "containers": [
     "app",
     "side"
@@ -2822,7 +3462,7 @@
     }
    ],
    "parallelism": 1,
-   "status": "Running",
+   "status": "Suspended",
    "succeeded": 0
   },
   "shows": {
@@ -2835,6 +3475,523 @@
     "CronJob/daily"
    ],
    "start_time": "-",
+   "status": "Suspended"
+  }
+ },
+ {
+  "name": "a Job resumed, its Suspended condition false, is running",
+  "resource": "jobs",
+  "before": {
+   "active": 0,
+   "completions": 1,
+   "completions_text": "0/1",
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "CronJob",
+     "name": "daily",
+     "uid": "u-1"
+    }
+   ],
+   "parallelism": 1,
+   "status": "Suspended",
+   "succeeded": 0
+  },
+  "event": {
+   "active": 1,
+   "completions": 1,
+   "completions_text": "0/1",
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Running",
+   "succeeded": 0
+  },
+  "after": {
+   "active": 1,
+   "completions": 1,
+   "completions_text": "0/1",
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Running",
+   "succeeded": 0
+  },
+  "shows": {
+   "badge": "badge-warning",
+   "completions": "0/1",
+   "containers": "app, side",
+   "duration": "60m",
+   "images": "example.test/app:1, example.test/side:1",
+   "owners": [],
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Running"
+  }
+ },
+ {
+  "name": "a Job being deleted reads Terminating",
+  "resource": "jobs",
+  "before": {
+   "active": 1,
+   "completions": 1,
+   "completions_text": "0/1",
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Running",
+   "succeeded": 0
+  },
+  "event": {
+   "active": 1,
+   "completions": 1,
+   "completions_text": "0/1",
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Terminating",
+   "succeeded": 0
+  },
+  "after": {
+   "active": 1,
+   "completions": 1,
+   "completions_text": "0/1",
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Terminating",
+   "succeeded": 0
+  },
+  "shows": {
+   "badge": "badge-warning",
+   "completions": "0/1",
+   "containers": "app, side",
+   "duration": "60m",
+   "images": "example.test/app:1, example.test/side:1",
+   "owners": [],
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Terminating"
+  }
+ },
+ {
+  "name": "a finished Job being deleted still reads Complete",
+  "resource": "jobs",
+  "before": {
+   "active": 0,
+   "completion_time": "2026-11-06T11:00:30Z",
+   "completions": 1,
+   "completions_text": "1/1",
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "duration": "30s",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [
+    {
+     "controller": true,
+     "kind": "CronJob",
+     "name": "daily",
+     "uid": "u-1"
+    }
+   ],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Complete",
+   "succeeded": 1
+  },
+  "event": {
+   "active": 0,
+   "completion_time": "2026-11-06T11:00:30Z",
+   "completions": 1,
+   "completions_text": "1/1",
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "duration": "30s",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Complete",
+   "succeeded": 1
+  },
+  "after": {
+   "active": 0,
+   "completion_time": "2026-11-06T11:00:30Z",
+   "completions": 1,
+   "completions_text": "1/1",
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "duration": "30s",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Complete",
+   "succeeded": 1
+  },
+  "shows": {
+   "badge": "badge-success",
+   "completions": "1/1",
+   "containers": "app, side",
+   "duration": "30s",
+   "images": "example.test/app:1, example.test/side:1",
+   "owners": [],
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Complete"
+  }
+ },
+ {
+  "name": "a Job on its way to Failed reads FailureTarget",
+  "resource": "jobs",
+  "before": {
+   "active": 1,
+   "completions": 1,
+   "completions_text": "0/1",
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Running",
+   "succeeded": 0
+  },
+  "event": {
+   "active": 1,
+   "completions": 1,
+   "completions_text": "0/1",
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 1,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "FailureTarget",
+   "succeeded": 0
+  },
+  "after": {
+   "active": 1,
+   "completions": 1,
+   "completions_text": "0/1",
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 1,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "FailureTarget",
+   "succeeded": 0
+  },
+  "shows": {
+   "badge": "badge-error",
+   "completions": "0/1",
+   "containers": "app, side",
+   "duration": "60m",
+   "images": "example.test/app:1, example.test/side:1",
+   "owners": [],
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "FailureTarget"
+  }
+ },
+ {
+  "name": "a Job on its way to Complete reads SuccessCriteriaMet",
+  "resource": "jobs",
+  "before": {
+   "active": 1,
+   "completions": 1,
+   "completions_text": "0/1",
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Running",
+   "succeeded": 0
+  },
+  "event": {
+   "active": 1,
+   "completions": 1,
+   "completions_text": "1/1",
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "SuccessCriteriaMet",
+   "succeeded": 1
+  },
+  "after": {
+   "active": 1,
+   "completions": 1,
+   "completions_text": "1/1",
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "SuccessCriteriaMet",
+   "succeeded": 1
+  },
+  "shows": {
+   "badge": "badge-success",
+   "completions": "1/1",
+   "containers": "app, side",
+   "duration": "60m",
+   "images": "example.test/app:1, example.test/side:1",
+   "owners": [],
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "SuccessCriteriaMet"
+  }
+ },
+ {
+  "name": "a work queue of three counts one of three",
+  "resource": "jobs",
+  "before": {
+   "active": 1,
+   "completions": 1,
+   "completions_text": "0/1",
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [],
+   "parallelism": 1,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Running",
+   "succeeded": 0
+  },
+  "event": {
+   "active": 1,
+   "completions": 1,
+   "completions_text": "0/1 of 3",
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [],
+   "parallelism": 3,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Running",
+   "succeeded": 0
+  },
+  "after": {
+   "active": 1,
+   "completions": 1,
+   "completions_text": "0/1 of 3",
+   "containers": [
+    "app",
+    "side"
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "failed": 0,
+   "image": "example.test/app:1",
+   "images": [
+    "example.test/app:1",
+    "example.test/side:1"
+   ],
+   "name": "daily-1",
+   "namespace": "demo",
+   "owner_references": [],
+   "parallelism": 3,
+   "start_time": "2026-11-06T11:00:00Z",
+   "status": "Running",
+   "succeeded": 0
+  },
+  "shows": {
+   "badge": "badge-warning",
+   "completions": "0/1 of 3",
+   "containers": "app, side",
+   "duration": "60m",
+   "images": "example.test/app:1, example.test/side:1",
+   "owners": [],
+   "start_time": "2026-11-06T11:00:00Z",
    "status": "Running"
   }
  },
@@ -2844,6 +4001,7 @@
   "before": {
    "active": 1,
    "completions": 1,
+   "completions_text": "0/1",
    "containers": [
     "app",
     "side"
@@ -2874,6 +4032,7 @@
    "active": 0,
    "completion_time": "2026-11-06T11:00:30Z",
    "completions": 1,
+   "completions_text": "1/1",
    "containers": [
     "app",
     "side"
@@ -2905,6 +4064,7 @@
    "active": 0,
    "completion_time": "2026-11-06T11:00:30Z",
    "completions": 1,
+   "completions_text": "1/1",
    "containers": [
     "app",
     "side"
@@ -2951,6 +4111,7 @@
   "before": {
    "active": 1,
    "completions": 1,
+   "completions_text": "0/1",
    "containers": [
     "app",
     "side"
@@ -2980,6 +4141,7 @@
   "event": {
    "active": 0,
    "completions": 1,
+   "completions_text": "0/1",
    "containers": [
     "app",
     "side"
@@ -3009,6 +4171,7 @@
   "after": {
    "active": 0,
    "completions": 1,
+   "completions_text": "0/1",
    "containers": [
     "app",
     "side"
@@ -3054,6 +4217,7 @@
   "before": {
    "active": 1,
    "completions": 1,
+   "completions_text": "0/1",
    "containers": [
     "app",
     "side"
@@ -3076,6 +4240,7 @@
   "event": {
    "active": 1,
    "completions": 1,
+   "completions_text": "0/1",
    "containers": [
     "app",
     "side"
@@ -3098,6 +4263,7 @@
   "after": {
    "active": 1,
    "completions": 1,
+   "completions_text": "0/1",
    "containers": [
     "app",
     "side"
@@ -4110,12 +5276,14 @@
   }
  },
  {
-  "name": "a Service that became ExternalName shows no cluster IP, port or selector",
+  "name": "a Service that became ExternalName shows its name, no cluster IP, port or selector",
   "resource": "services",
   "before": {
    "cluster_ip": "10.0.0.1",
    "created_at": "2026-11-01T00:00:00Z",
    "external_ip": "<none>",
+   "external_ips": [],
+   "load_balancer_ingress": [],
    "name": "web",
    "namespace": "demo",
    "ports": [
@@ -4134,7 +5302,9 @@
   "event": {
    "cluster_ip": "",
    "created_at": "2026-11-01T00:00:00Z",
-   "external_ip": "<none>",
+   "external_ip": "db.example.test",
+   "external_ips": [],
+   "load_balancer_ingress": [],
    "name": "web",
    "namespace": "demo",
    "ports": [],
@@ -4144,7 +5314,9 @@
   "after": {
    "cluster_ip": "",
    "created_at": "2026-11-01T00:00:00Z",
-   "external_ip": "<none>",
+   "external_ip": "db.example.test",
+   "external_ips": [],
+   "load_balancer_ingress": [],
    "name": "web",
    "namespace": "demo",
    "ports": [],
@@ -4153,7 +5325,7 @@
   },
   "shows": {
    "cluster_ip": "-",
-   "external_ip": "<none>",
+   "external_ip": "db.example.test",
    "ports": "-",
    "selector": "-",
    "type": "ExternalName"
@@ -4165,7 +5337,18 @@
   "before": {
    "cluster_ip": "10.0.0.1",
    "created_at": "2026-11-01T00:00:00Z",
-   "external_ip": "192.0.2.9,192.0.2.1,lb.example.test",
+   "external_ip": "192.0.2.1,lb.example.test,192.0.2.9",
+   "external_ips": [
+    "192.0.2.9"
+   ],
+   "load_balancer_ingress": [
+    {
+     "ip": "192.0.2.1"
+    },
+    {
+     "hostname": "lb.example.test"
+    }
+   ],
    "name": "web",
    "namespace": "demo",
    "ports": [
@@ -4187,6 +5370,8 @@
    "cluster_ip": "10.0.0.1",
    "created_at": "2026-11-01T00:00:00Z",
    "external_ip": "<none>",
+   "external_ips": [],
+   "load_balancer_ingress": [],
    "name": "web",
    "namespace": "demo",
    "ports": [
@@ -4206,6 +5391,8 @@
    "cluster_ip": "10.0.0.1",
    "created_at": "2026-11-01T00:00:00Z",
    "external_ip": "<none>",
+   "external_ips": [],
+   "load_balancer_ingress": [],
    "name": "web",
    "namespace": "demo",
    "ports": [
@@ -4230,12 +5417,14 @@
   }
  },
  {
-  "name": "a Service that gained a load balancer shows it",
+  "name": "a Service that gained a load balancer shows its addresses before its external IPs",
   "resource": "services",
   "before": {
    "cluster_ip": "10.0.0.1",
    "created_at": "2026-11-01T00:00:00Z",
    "external_ip": "<none>",
+   "external_ips": [],
+   "load_balancer_ingress": [],
    "name": "web",
    "namespace": "demo",
    "ports": [
@@ -4254,7 +5443,18 @@
   "event": {
    "cluster_ip": "10.0.0.1",
    "created_at": "2026-11-01T00:00:00Z",
-   "external_ip": "192.0.2.9,192.0.2.1,lb.example.test",
+   "external_ip": "192.0.2.1,lb.example.test,192.0.2.9",
+   "external_ips": [
+    "192.0.2.9"
+   ],
+   "load_balancer_ingress": [
+    {
+     "ip": "192.0.2.1"
+    },
+    {
+     "hostname": "lb.example.test"
+    }
+   ],
    "name": "web",
    "namespace": "demo",
    "ports": [
@@ -4275,7 +5475,18 @@
   "after": {
    "cluster_ip": "10.0.0.1",
    "created_at": "2026-11-01T00:00:00Z",
-   "external_ip": "192.0.2.9,192.0.2.1,lb.example.test",
+   "external_ip": "192.0.2.1,lb.example.test,192.0.2.9",
+   "external_ips": [
+    "192.0.2.9"
+   ],
+   "load_balancer_ingress": [
+    {
+     "ip": "192.0.2.1"
+    },
+    {
+     "hostname": "lb.example.test"
+    }
+   ],
    "name": "web",
    "namespace": "demo",
    "ports": [
@@ -4295,10 +5506,247 @@
   },
   "shows": {
    "cluster_ip": "10.0.0.1",
-   "external_ip": "192.0.2.9,192.0.2.1,lb.example.test",
+   "external_ip": "192.0.2.1,lb.example.test,192.0.2.9",
    "ports": "TCP 80->http (node:30080)",
    "selector": "app=web",
    "type": "LoadBalancer"
+  }
+ },
+ {
+  "name": "a LoadBalancer with no address yet reads pending",
+  "resource": "services",
+  "before": {
+   "cluster_ip": "10.0.0.1",
+   "created_at": "2026-11-01T00:00:00Z",
+   "external_ip": "<none>",
+   "external_ips": [],
+   "load_balancer_ingress": [],
+   "name": "web",
+   "namespace": "demo",
+   "ports": [
+    {
+     "name": "http",
+     "port": 80,
+     "protocol": "TCP",
+     "target_port": "8080"
+    }
+   ],
+   "selector": {
+    "app": "web"
+   },
+   "type": "ClusterIP"
+  },
+  "event": {
+   "cluster_ip": "10.0.0.1",
+   "created_at": "2026-11-01T00:00:00Z",
+   "external_ip": "<pending>",
+   "external_ips": [],
+   "load_balancer_ingress": [],
+   "name": "web",
+   "namespace": "demo",
+   "ports": [
+    {
+     "name": "http",
+     "node_port": 30080,
+     "port": 80,
+     "protocol": "TCP",
+     "target_port": "http"
+    }
+   ],
+   "selector": {
+    "app": "web"
+   },
+   "type": "LoadBalancer"
+  },
+  "after": {
+   "cluster_ip": "10.0.0.1",
+   "created_at": "2026-11-01T00:00:00Z",
+   "external_ip": "<pending>",
+   "external_ips": [],
+   "load_balancer_ingress": [],
+   "name": "web",
+   "namespace": "demo",
+   "ports": [
+    {
+     "name": "http",
+     "node_port": 30080,
+     "port": 80,
+     "protocol": "TCP",
+     "target_port": "http"
+    }
+   ],
+   "selector": {
+    "app": "web"
+   },
+   "type": "LoadBalancer"
+  },
+  "shows": {
+   "cluster_ip": "10.0.0.1",
+   "external_ip": "<pending>",
+   "ports": "TCP 80->http (node:30080)",
+   "selector": "app=web",
+   "type": "LoadBalancer"
+  }
+ },
+ {
+  "name": "a LoadBalancer with no address and external IPs reads the IPs",
+  "resource": "services",
+  "before": {
+   "cluster_ip": "10.0.0.1",
+   "created_at": "2026-11-01T00:00:00Z",
+   "external_ip": "<pending>",
+   "external_ips": [],
+   "load_balancer_ingress": [],
+   "name": "web",
+   "namespace": "demo",
+   "ports": [
+    {
+     "name": "http",
+     "node_port": 30080,
+     "port": 80,
+     "protocol": "TCP",
+     "target_port": "http"
+    }
+   ],
+   "selector": {
+    "app": "web"
+   },
+   "type": "LoadBalancer"
+  },
+  "event": {
+   "cluster_ip": "10.0.0.1",
+   "created_at": "2026-11-01T00:00:00Z",
+   "external_ip": "192.0.2.9",
+   "external_ips": [
+    "192.0.2.9"
+   ],
+   "load_balancer_ingress": [],
+   "name": "web",
+   "namespace": "demo",
+   "ports": [
+    {
+     "name": "http",
+     "node_port": 30080,
+     "port": 80,
+     "protocol": "TCP",
+     "target_port": "http"
+    }
+   ],
+   "selector": {
+    "app": "web"
+   },
+   "type": "LoadBalancer"
+  },
+  "after": {
+   "cluster_ip": "10.0.0.1",
+   "created_at": "2026-11-01T00:00:00Z",
+   "external_ip": "192.0.2.9",
+   "external_ips": [
+    "192.0.2.9"
+   ],
+   "load_balancer_ingress": [],
+   "name": "web",
+   "namespace": "demo",
+   "ports": [
+    {
+     "name": "http",
+     "node_port": 30080,
+     "port": 80,
+     "protocol": "TCP",
+     "target_port": "http"
+    }
+   ],
+   "selector": {
+    "app": "web"
+   },
+   "type": "LoadBalancer"
+  },
+  "shows": {
+   "cluster_ip": "10.0.0.1",
+   "external_ip": "192.0.2.9",
+   "ports": "TCP 80->http (node:30080)",
+   "selector": "app=web",
+   "type": "LoadBalancer"
+  }
+ },
+ {
+  "name": "a ClusterIP Service with external IPs reads them in order",
+  "resource": "services",
+  "before": {
+   "cluster_ip": "10.0.0.1",
+   "created_at": "2026-11-01T00:00:00Z",
+   "external_ip": "<none>",
+   "external_ips": [],
+   "load_balancer_ingress": [],
+   "name": "web",
+   "namespace": "demo",
+   "ports": [
+    {
+     "name": "http",
+     "port": 80,
+     "protocol": "TCP",
+     "target_port": "8080"
+    }
+   ],
+   "selector": {
+    "app": "web"
+   },
+   "type": "ClusterIP"
+  },
+  "event": {
+   "cluster_ip": "10.0.0.1",
+   "created_at": "2026-11-01T00:00:00Z",
+   "external_ip": "192.0.2.9,192.0.2.1",
+   "external_ips": [
+    "192.0.2.9",
+    "192.0.2.1"
+   ],
+   "load_balancer_ingress": [],
+   "name": "web",
+   "namespace": "demo",
+   "ports": [
+    {
+     "name": "http",
+     "port": 80,
+     "protocol": "TCP",
+     "target_port": "8080"
+    }
+   ],
+   "selector": {
+    "app": "web"
+   },
+   "type": "ClusterIP"
+  },
+  "after": {
+   "cluster_ip": "10.0.0.1",
+   "created_at": "2026-11-01T00:00:00Z",
+   "external_ip": "192.0.2.9,192.0.2.1",
+   "external_ips": [
+    "192.0.2.9",
+    "192.0.2.1"
+   ],
+   "load_balancer_ingress": [],
+   "name": "web",
+   "namespace": "demo",
+   "ports": [
+    {
+     "name": "http",
+     "port": 80,
+     "protocol": "TCP",
+     "target_port": "8080"
+    }
+   ],
+   "selector": {
+    "app": "web"
+   },
+   "type": "ClusterIP"
+  },
+  "shows": {
+   "cluster_ip": "10.0.0.1",
+   "external_ip": "192.0.2.9,192.0.2.1",
+   "ports": "TCP 80->8080",
+   "selector": "app=web",
+   "type": "ClusterIP"
   }
  },
  {
@@ -4308,6 +5756,8 @@
    "cluster_ip": "10.0.0.1",
    "created_at": "2026-11-01T00:00:00Z",
    "external_ip": "<none>",
+   "external_ips": [],
+   "load_balancer_ingress": [],
    "name": "web",
    "namespace": "demo",
    "ports": [
@@ -4327,6 +5777,8 @@
    "cluster_ip": "10.0.0.1",
    "created_at": "2026-11-01T00:00:00Z",
    "external_ip": "<none>",
+   "external_ips": [],
+   "load_balancer_ingress": [],
    "name": "web",
    "namespace": "demo",
    "ports": [
@@ -4346,6 +5798,8 @@
    "cluster_ip": "10.0.0.1",
    "created_at": "2026-11-01T00:00:00Z",
    "external_ip": "<none>",
+   "external_ips": [],
+   "load_balancer_ingress": [],
    "name": "web",
    "namespace": "demo",
    "ports": [

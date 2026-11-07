@@ -193,7 +193,10 @@ export interface ServiceInfo {
   namespace: string
   type: string
   cluster_ip?: string
+  // kubectl's EXTERNAL-IP: <none>, <pending> and an ExternalName's name too, so not always an address
   external_ip?: string
+  external_ips?: string[]
+  load_balancer_ingress?: Array<{ ip?: string | null; hostname?: string | null }>
   ports: Array<{
     name?: string
     port: number
@@ -1439,6 +1442,8 @@ export interface JobInfo {
   name: string
   namespace: string
   completions?: number | null
+  // kubectl's COMPLETIONS as the server prints it: "0/1 of 3"
+  completions_text?: string | null
   parallelism?: number | null
   active: number
   succeeded: number

@@ -192,8 +192,8 @@ const SCREENS: Screen[] = [
   },
   {
     path: '/workloads/jobs', api: `/apis/batch/v1/namespaces/${NS}/jobs`, plural: 'jobs',
-    // num-fail's Duration runs on (start to now, as kubectl's printJob) — to the second while the Job is new
-    spans: { Duration: (o) => !o.status.completionTime },
+    // num-fail's Duration runs on (start to now, as kubectl's printJob) — to the second while the Job is new; num-held never started
+    spans: { Duration: (o) => !!o.status.startTime && !o.status.completionTime },
     skip: { Age: AGE },
     cards: (list) => ({
       Total: list.length,
@@ -240,7 +240,7 @@ const SCREENS: Screen[] = [
     path: '/network/services', api: `/api/v1/namespaces/${NS}/services`, plural: 'services',
     // kubectl prints 80/TCP; Kubeast prints the target port and the node port too
     extra: {
-      Ports: (o) => (o.spec.ports ?? []).map((p: Obj) => `${p.protocol ?? 'TCP'} ${p.port}->${p.targetPort ?? p.port}${p.nodePort ? ` (node:${p.nodePort})` : ''}`).join(', '),
+      Ports: (o) => (o.spec.ports ?? []).map((p: Obj) => `${p.protocol ?? 'TCP'} ${p.port}->${p.targetPort ?? p.port}${p.nodePort ? ` (node:${p.nodePort})` : ''}`).join(', ') || '-',
     },
     skip: { Age: AGE },
     cards: (list) => ({
@@ -898,17 +898,22 @@ test.describe('number check — list screens', () => {
         template: { metadata: { labels: { app: 'num-owned' } }, spec: { containers: [{ name: 'app', image: 'busybox:1.37', imagePullPolicy: 'IfNotPresent' }] } },
       },
     }))
-    // settled: the ready Deployment and the StatefulSet ready, both Jobs finished, the crashing Pod restarted, the two
-    // pods that are never ready Running (the first test reads their phase)
+    // addresses no controller will write over: kind has no load balancer controller
+    kubectl(`patch service num-lb-both -n ${NS} --subresource=status --type=merge -p=${arg({ status: { loadBalancer: { ingress: [{ ip: '192.0.2.40' }, { hostname: 'lb.numbers.example' }, { ip: '192.0.2.31' }] } } })}`)
+    // settled: the ready Deployment and the StatefulSet ready, both Jobs finished or suspended, the crashing Pod restarted,
+    // the two pods that are never ready Running (the first test reads their phase), the sidecar's pod up
     const deadline = Date.now() + 150_000
     for (;;) {
       const got = kubectl(`get deploy/num-ready sts/num-db job/num-done job/num-fail pod/num-crash -n ${NS} -o jsonpath='{.items[*].status.readyReplicas} {.items[*].status.succeeded} {.items[*].status.failed} {.items[4].status.containerStatuses[0].restartCount}'`)
       const [deployReady, stsReady, , , restarts] = got.split(/\s+/)
       const jobs = items('jobs')
-      const done = jobs.every((j) => cond(j, 'Complete') === 'True' || cond(j, 'Failed') === 'True')
-      const notReady = items('pods').filter((p) => p.metadata.labels?.app === 'num-notready')
+      const done = jobs.every((j) => cond(j, j.spec.suspend ? 'Suspended' : 'Complete') === 'True' || cond(j, 'Failed') === 'True')
+      const pods = items('pods')
+      const notReady = pods.filter((p) => p.metadata.labels?.app === 'num-notready')
       const notReadyRunning = notReady.length === 2 && notReady.every((p) => p.status.phase === 'Running')
-      if (deployReady === '3' && stsReady === '2' && done && Number(restarts) >= 1 && notReadyRunning) break
+      const sidecar = pods.find((p) => p.metadata.name === 'num-sidecar')?.status
+      const sidecarUp = sidecar?.phase === 'Running' && [...(sidecar.initContainerStatuses ?? []), ...(sidecar.containerStatuses ?? [])].every((c: Obj) => c.ready)
+      if (deployReady === '3' && stsReady === '2' && done && Number(restarts) >= 1 && notReadyRunning && sidecarUp) break
       if (Date.now() > deadline) throw new Error(`fixture did not settle: ${got}`)
       await new Promise((r) => setTimeout(r, 2000))
     }
@@ -1618,7 +1623,7 @@ test.describe('number check — list screens', () => {
         await follows(s, SVC, [], { Type: 'ClusterIP', Ports: 'TCP 80->8080', Selector: 'app=num-live' })
         await follows(s, SVC, [
           `patch service ${SVC} -n ${NS} --type=merge -p=${arg({ spec: { type: 'ExternalName', externalName: 'live.numbers.example', ports: null, selector: null } })}`,
-        ], { Type: 'ExternalName', 'Cluster IP': '-', Ports: '-', Selector: '-' })
+        ], { Type: 'ExternalName', 'Cluster IP': '-', 'External IP': 'live.numbers.example', Ports: '-', Selector: '-' })
       })
 
       await test.step('Endpoints show the addresses each update leaves, and none once their subsets are gone', async () => {
@@ -2098,5 +2103,133 @@ test.describe('number check — list screens', () => {
       // the drawer's header comes before its fields: read it until every field is there, not once
       await expect.poll(async () => missing(await drawerText(), o), { timeout: 20_000, message: 'drawer opened by link' }).toEqual([])
     })
+  })
+
+  // the API server's Table for one Job, what kubectl prints, against the row a screen holds for it
+  const JOBS = `/workloads/jobs?cluster=self&namespace=${NS}`
+  const jobPrints = async (name: string) => {
+    const table = await on().apiTable(`/apis/batch/v1/namespaces/${NS}/jobs/${name}`)
+    const at = (column: string) => String(table.rows[0].cells[table.columnDefinitions.findIndex((c) => c.name === column)])
+    return { Status: at('Status'), Completions: at('Completions') }
+  }
+  const jobRow = async (page: Page, name: string) => {
+    const { heads, rows } = await readScreen(page)
+    const row = rows.find((r) => r[heads.findIndex((h) => /^name$/i.test(h))] === name)
+    return row ? { Status: row[heads.indexOf('Status')], Completions: row[heads.indexOf('Completions')] } : null
+  }
+  const jobBadge = (page: Page, name: string) => page.locator('main tbody tr').filter({ has: page.getByRole('cell', { name, exact: true }) }).locator('.badge').first()
+
+  test('a suspended work queue reads Suspended and 0/1 of 3, drawn as a warning', async ({ page }) => {
+    const name = 'num-held'
+    await expect.poll(async () => (await jobPrints(name)).Status, { timeout: 20_000, message: 'kubectl prints' }).toBe('Suspended')
+    expect((await jobPrints(name)).Completions, 'kubectl prints').toBe('0/1 of 3')
+    await page.goto(JOBS)
+    await expect.poll(() => jobRow(page, name), { timeout: 20_000 }).toEqual({ Status: 'Suspended', Completions: '0/1 of 3' })
+    await expect(jobBadge(page, name)).toHaveClass(/badge-warning/)
+  })
+
+  // The finalizer keeps the Job while it is deleted; suspended, so no pod runs.
+  test('a Job being deleted reads Terminating in its list and drawer, as kubectl prints it', async ({ page }) => {
+    const name = 'num-leaving-job'
+    try {
+      kubectl('apply -f -', JSON.stringify({
+        apiVersion: 'batch/v1',
+        kind: 'Job',
+        metadata: { name, namespace: NS, finalizers: ['numbers.kubeast.io/hold'] },
+        spec: { suspend: true, template: { spec: { restartPolicy: 'Never', containers: [{ name: 'app', image: 'busybox:1.37', imagePullPolicy: 'IfNotPresent', command: ['true'] }] } } },
+      }))
+      kubectl(`delete job ${name} -n ${NS} --wait=false`)
+      const prints = await jobPrints(name)
+      expect(prints.Status, 'kubectl prints').toBe('Terminating')
+      await page.goto(JOBS)
+      await expect.poll(() => jobRow(page, name), { timeout: 20_000 }).toEqual(prints)
+      await expect(jobBadge(page, name)).toHaveClass(/badge-warning/)
+      await page.goto(`${JOBS}&detail=${encodeURIComponent(`Job/${NS}/${name}`)}`)
+      await expect(page.locator(DRAWER).last()).toContainText(/Status\s*Terminating/, { timeout: 20_000 })
+    } finally {
+      if (kubectl(`get job ${name} -n ${NS} --ignore-not-found -o name`)) kubectl(`patch job ${name} -n ${NS} --type=merge -p=${arg({ metadata: { finalizers: null } })}`)
+    }
+  })
+
+  // The two conditions last until the Job's last pod has gone, which is told to stop once the other pod has ended. It
+  // ignores SIGTERM, so it stays for its grace period and the condition with it.
+  test('a Job on its way to Failed or Complete reads as kubectl prints it', async ({ page }) => {
+    test.setTimeout(240_000)
+    const cases = [
+      { name: 'num-to-fail', condition: 'FailureTarget', badge: /badge-error/, exit: 1, spec: { backoffLimit: 0 } },
+      { name: 'num-to-end', condition: 'SuccessCriteriaMet', badge: /badge-success/, exit: 0, spec: { successPolicy: { rules: [{ succeededIndexes: '0' }] } } },
+    ]
+    try {
+      for (const c of cases) {
+        kubectl('apply -f -', JSON.stringify({
+          apiVersion: 'batch/v1',
+          kind: 'Job',
+          metadata: { name: c.name, namespace: NS },
+          spec: {
+            completionMode: 'Indexed',
+            completions: 2,
+            parallelism: 2,
+            ...c.spec,
+            template: {
+              spec: {
+                restartPolicy: 'Never',
+                terminationGracePeriodSeconds: 90,
+                containers: [{
+                  name: 'app',
+                  image: 'busybox:1.37',
+                  imagePullPolicy: 'IfNotPresent',
+                  command: ['sh', '-c', `if [ "$JOB_COMPLETION_INDEX" = 0 ]; then sleep 5; exit ${c.exit}; fi; trap '' TERM; while true; do sleep 1; done`],
+                }],
+              },
+            },
+          },
+        }))
+      }
+      for (const c of cases) {
+        await test.step(c.condition, async () => {
+          await expect.poll(async () => (await jobPrints(c.name)).Status, { timeout: 60_000, message: `${c.name}: kubectl prints` }).toBe(c.condition)
+          await page.goto(JOBS)
+          await expect.poll(async () => (await jobRow(page, c.name))?.Status, { timeout: 20_000 }).toBe(c.condition)
+          expect(await jobRow(page, c.name)).toEqual(await jobPrints(c.name))
+          await expect(jobBadge(page, c.name)).toHaveClass(c.badge)
+        })
+      }
+    } finally {
+      for (const c of cases) {
+        kubectl(`delete job ${c.name} -n ${NS} --ignore-not-found --wait=false`)
+        kubectl(`delete pod -n ${NS} -l batch.kubernetes.io/job-name=${c.name} --ignore-not-found --wait=false --grace-period=0 --force`)
+      }
+    }
+  })
+
+  // The External IP cell is what kubectl prints; the drawer's rows are the spec's external IPs and the load balancer's addresses.
+  test('a Service drawer opened from its row reads the object, not the External IP cell', async ({ page }) => {
+    const services: [string, string, RegExp][] = [
+      ['num-lb-pending', '<pending>', /External IPs\s*-\s*LoadBalancer\s*-\s*Session Affinity/],
+      ['num-extname', 'db.numbers.example', /External IPs\s*-\s*LoadBalancer\s*-\s*Session Affinity/],
+      ['num-lb-both', '192.0.2.31,192.0.2.40,lb.numbers.example,192.0.2.30', /External IPs\s*192\.0\.2\.30\s*LoadBalancer\s*192\.0\.2\.40, lb\.numbers\.example, 192\.0\.2\.31\s*Session Affinity/],
+    ]
+    for (const [name, cell, rows] of services) {
+      await test.step(name, async () => {
+        await page.goto(`/network/services?cluster=self&namespace=${NS}`)
+        const row = page.locator('main tbody tr').filter({ has: page.getByRole('cell', { name, exact: true }) })
+        await expect(row).toContainText(cell, { timeout: 20_000 })
+        await row.click()
+        await expect(page.locator(DRAWER).last()).toContainText(rows, { timeout: 20_000 })
+      })
+    }
+  })
+
+  test('Cluster View draws a pod whose sidecar is up and whose container runs as fine', async ({ page }) => {
+    const table = await on().apiTable(`/api/v1/namespaces/${NS}/pods/num-sidecar`)
+    const at = (column: string) => String(table.rows[0].cells[table.columnDefinitions.findIndex((c) => c.name === column)])
+    expect({ Ready: at('Ready'), Status: at('Status') }, 'kubectl prints').toEqual({ Ready: '2/2', Status: 'Running' })
+    await page.goto('/cluster-view?cluster=self')
+    await page.getByPlaceholder(/Search pod name|Pod 이름/i).fill('num-sidecar')
+    const card = page.locator('[data-testid="cluster-view-node"] button', { hasText: 'num-sidecar' })
+    await expect(card).toHaveCount(1, { timeout: 20_000 })
+    await expect(card).toContainText('Running')
+    await expect(card).not.toContainText('PodInitializing')
+    await expect(card.locator('svg.lucide-circle-check, svg.lucide-check-circle, svg.lucide-circle-check-big, svg.lucide-check-circle-2')).toHaveCount(1)
   })
 })

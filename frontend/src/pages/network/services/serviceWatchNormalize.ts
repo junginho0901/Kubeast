@@ -3,22 +3,25 @@
 // frontend/src/pages/network/Services.tsx 의 extractExternalIp /
 // normalizeWatchServiceObject / applyServiceWatchEvent 추출.
 // raw k8s Service object 를 API list 형태 (ServiceInfo) 로 정규화 —
-// status.loadBalancer.ingress[0].ip/hostname 또는 spec.externalIPs[0] 우선순위로
-// external_ip 추출, spec.ports 의 nodePort/targetPort/protocol 정규화.
+// spec.ports 의 nodePort/targetPort/protocol 정규화.
 
 import type { ServiceInfo } from '@/services/api'
 
-function extractExternalIp(obj: any): string | undefined {
-  const statusLbIngress = obj?.status?.loadBalancer?.ingress
-  if (Array.isArray(statusLbIngress) && statusLbIngress.length > 0) {
-    const first = statusLbIngress[0]
-    return first?.ip || first?.hostname
+// The server's rule (servicerow, kubectl's getServiceExternalIP), for a row it could not convert.
+function externalIpCell(type: string, spec: any, ingress: Array<{ ip?: string; hostname?: string }>): string {
+  const externalIPs: string[] = Array.isArray(spec?.externalIPs) ? spec.externalIPs : []
+  switch (type) {
+    case 'ClusterIP':
+    case 'NodePort':
+      return externalIPs.join(',') || '<none>'
+    case 'LoadBalancer': {
+      const addresses = ingress.map((i) => i?.ip || i?.hostname).filter((a): a is string => !!a)
+      return [...[...new Set(addresses)].sort(), ...externalIPs].join(',') || '<pending>'
+    }
+    case 'ExternalName':
+      return spec?.externalName ?? ''
   }
-  const specExternalIps = obj?.spec?.externalIPs || obj?.spec?.external_i_ps
-  if (Array.isArray(specExternalIps) && specExternalIps.length > 0) {
-    return String(specExternalIps[0])
-  }
-  return undefined
+  return '<unknown>'
 }
 
 export function normalizeWatchServiceObject(obj: any): ServiceInfo {
@@ -33,6 +36,8 @@ export function normalizeWatchServiceObject(obj: any): ServiceInfo {
 
   const metadata = obj?.metadata ?? {}
   const spec = obj?.spec ?? {}
+  const type = spec?.type ?? obj?.type ?? 'ClusterIP'
+  const ingress = Array.isArray(obj?.status?.loadBalancer?.ingress) ? obj.status.loadBalancer.ingress : []
 
   const ports = Array.isArray(spec?.ports)
     ? spec.ports.map((p: any) => ({
@@ -47,9 +52,11 @@ export function normalizeWatchServiceObject(obj: any): ServiceInfo {
   return {
     name: metadata?.name ?? obj?.name ?? '',
     namespace: metadata?.namespace ?? obj?.namespace ?? '',
-    type: spec?.type ?? obj?.type ?? 'ClusterIP',
+    type,
     cluster_ip: spec?.clusterIP ?? obj?.cluster_ip,
-    external_ip: extractExternalIp(obj) ?? obj?.external_ip,
+    external_ip: externalIpCell(type, spec, ingress),
+    external_ips: Array.isArray(spec?.externalIPs) ? spec.externalIPs : [],
+    load_balancer_ingress: ingress,
     ports,
     selector: (spec?.selector ?? obj?.selector ?? {}) as Record<string, string>,
     created_at: metadata?.creationTimestamp ?? obj?.created_at ?? '',

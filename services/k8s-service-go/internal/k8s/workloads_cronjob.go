@@ -185,23 +185,10 @@ func (s *Service) GetCronJobOwnedJobs(ctx context.Context, namespace, name strin
 			continue
 		}
 
-		// Determine status
-		status := "Active"
-		if job.Status.CompletionTime != nil {
-			status = "Complete"
-		} else {
-			for _, cond := range job.Status.Conditions {
-				if cond.Type == batchv1.JobFailed && cond.Status == corev1.ConditionTrue {
-					status = "Failed"
-					break
-				}
-			}
-		}
-
 		entry := map[string]interface{}{
 			"name":      job.Name,
 			"namespace": job.Namespace,
-			"status":    status,
+			"status":    jobStatus(&job),
 		}
 
 		if job.Status.StartTime != nil {

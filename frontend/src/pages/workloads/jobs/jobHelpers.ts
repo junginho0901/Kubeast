@@ -52,10 +52,26 @@ export function computeJobStatus(job: {
   return 'Pending'
 }
 
+// kubectl's COMPLETIONS, which the server writes: the row's completions alone cannot tell a work queue.
+export function jobCompletionsCell(job: { completions_text?: string | null }): string {
+  return job.completions_text || '-'
+}
+
+// Only a Job that ended is Completed or Failed (FailureTarget is not yet); the rest is Running, so the cards add up to the total.
+export function jobSummary(jobs: Array<{ status: string }>): { total: number; completed: number; running: number; failed: number } {
+  let completed = 0
+  let failed = 0
+  for (const job of jobs) {
+    if (job.status === 'Complete') completed += 1
+    else if (job.status === 'Failed') failed += 1
+  }
+  return { total: jobs.length, completed, running: jobs.length - completed - failed, failed }
+}
+
 export function getJobStatusColor(status: string): string {
   const lower = String(status || '').toLowerCase()
-  if (lower.includes('complete') || lower.includes('succeeded')) return 'badge-success'
-  if (lower.includes('running') || lower.includes('pending') || lower.includes('suspend')) return 'badge-warning'
+  if (lower.includes('complete') || lower.includes('succeeded') || lower.includes('successcriteriamet')) return 'badge-success'
+  if (lower.includes('running') || lower.includes('pending') || lower.includes('suspend') || lower.includes('terminating')) return 'badge-warning'
   if (lower.includes('fail') || lower.includes('error')) return 'badge-error'
   return 'badge-info'
 }

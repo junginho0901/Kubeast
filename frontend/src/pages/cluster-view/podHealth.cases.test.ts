@@ -17,4 +17,41 @@ describe('getPodHealth gives what k8s-service gives', () => {
     const creating = { phase: 'Pending', status_reason: 'ContainerCreating', containers: [{ name: 'c', ready: false, state: { waiting: { reason: 'ContainerCreating' } } }], init_containers: [] }
     expect(getPodHealth(creating).level).toBe('warn')
   })
+
+  describe('a pod with a sidecar', () => {
+    const health = (side: Record<string, unknown>, app: Record<string, unknown> = { ready: true, state: { running: {} } }) => {
+      const got = getPodHealth({ phase: 'Running', containers: [{ name: 'app', ...app }], init_containers: [{ name: 'side', ...side }] })
+      return `${got.level} ${got.reason}`
+    }
+    const sidecar = { restart_policy: 'Always' }
+
+    it('is fine with its sidecar up and ready and its container running', () => {
+      expect(health({ ...sidecar, started: true, ready: true, state: { running: {} } })).toBe('ok Running')
+    })
+
+    it('warns with its sidecar up but not ready, as READY 1/2 says', () => {
+      expect(health({ ...sidecar, started: true, ready: false, state: { running: {} } })).toBe('warn NotReady')
+    })
+
+    it('warns with its container not ready beside a ready sidecar', () => {
+      expect(health({ ...sidecar, started: true, ready: true, state: { running: {} } }, { ready: false, state: { running: {} } })).toBe('warn NotReady')
+    })
+
+    it('is still initializing while its sidecar has not started', () => {
+      expect(health({ ...sidecar, started: false, ready: false, state: { running: {} } })).toBe('warn PodInitializing')
+      expect(health({ ...sidecar, ready: false, state: { running: {} } })).toBe('warn PodInitializing')
+    })
+
+    it('is an error while its sidecar crashes', () => {
+      expect(health({ ...sidecar, started: false, ready: false, state: { waiting: { reason: 'CrashLoopBackOff' } } })).toBe('error CrashLoopBackOff')
+    })
+
+    it('warns with no status of its sidecar yet', () => {
+      expect(health(sidecar)).toBe('warn NotReady')
+    })
+
+    it('tells a plain init container still running from a sidecar', () => {
+      expect(health({ started: true, ready: true, state: { running: {} } })).toBe('warn PodInitializing')
+    })
+  })
 })

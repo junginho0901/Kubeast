@@ -14,6 +14,7 @@ import {
   formatAge,
   formatDuration,
   getJobStatusColor,
+  jobCompletionsCell,
   jobDurationSeconds,
   jobToWorkloadRawJson,
   type SortKey,
@@ -136,7 +137,7 @@ export function JobTable({
                 {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={job.namespace}>{job.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{job.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">
-                  {(job.succeeded ?? 0)}/{(job.completions ?? '-')}
+                  {jobCompletionsCell(job)}
                 </td>
                 <td className="py-3 px-4">
                   <span className={`badge ${getJobStatusColor(job.status)}`}>{job.status || '-'}</span>

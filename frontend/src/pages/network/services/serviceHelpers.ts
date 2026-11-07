@@ -40,8 +40,6 @@ export function formatSelector(selector: Record<string, string>): string {
 }
 
 export function serviceToRawJson(service: ServiceInfo): Record<string, unknown> {
-  const externalIPs = service.external_ip ? [service.external_ip] : []
-
   return {
     apiVersion: 'v1',
     kind: 'Service',
@@ -53,7 +51,7 @@ export function serviceToRawJson(service: ServiceInfo): Record<string, unknown> 
     spec: {
       type: service.type,
       clusterIP: service.cluster_ip,
-      externalIPs,
+      externalIPs: service.external_ips ?? [],
       selector: service.selector || {},
       ports: (service.ports || []).map((port) => ({
         name: port.name,
@@ -65,7 +63,7 @@ export function serviceToRawJson(service: ServiceInfo): Record<string, unknown> 
     },
     status: {
       loadBalancer: {
-        ingress: service.external_ip ? [{ ip: service.external_ip }] : [],
+        ingress: service.load_balancer_ingress ?? [],
       },
     },
   }

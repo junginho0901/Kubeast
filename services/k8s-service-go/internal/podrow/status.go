@@ -164,6 +164,11 @@ func restartableInit(c *corev1.Container) bool {
 	return c != nil && c.RestartPolicy != nil && *c.RestartPolicy == corev1.ContainerRestartPolicyAlways
 }
 
+// Sidecar is a restartable init container: it runs beside the containers and counts in READY.
+func Sidecar(c *corev1.Container) bool {
+	return restartableInit(c)
+}
+
 func initialized(p *corev1.Pod) bool {
 	for _, c := range p.Status.Conditions {
 		if c.Type == corev1.PodInitialized {

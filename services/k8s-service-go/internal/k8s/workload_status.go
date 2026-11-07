@@ -26,7 +26,7 @@ func deploymentStatus(d *appsv1.Deployment) (status, reason string) {
 	return deploystatus.Of(d)
 }
 
-// jobStatus is a Job's by its conditions: Complete, Failed or Running (jobrow.Status, which the Job row reads too).
+// jobStatus is a Job's STATUS as kubectl prints it (jobrow.Status, which the Job row reads too).
 func jobStatus(j *batchv1.Job) string {
 	return jobrow.Status(j)
 }
@@ -35,11 +35,11 @@ func jobStatus(j *batchv1.Job) string {
 // status that asks nothing (Idle).
 func workloadHealth(status string) string {
 	switch status {
-	case "Healthy", "Available", "Complete", "Running":
+	case "Healthy", "Available", "Complete", "Running", "SuccessCriteriaMet":
 		return "ok"
-	case "Progressing", "Degraded":
+	case "Progressing", "Degraded", "Suspended", "Terminating":
 		return "warn"
-	case "Unavailable", "Failed":
+	case "Unavailable", "Failed", "FailureTarget":
 		return "error"
 	}
 	return ""
