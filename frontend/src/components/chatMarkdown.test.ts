@@ -18,14 +18,14 @@ function aiChat(content: string, extra: Partial<Message> = {}) {
 }
 
 const floating = (content: string, toolCalls?: unknown[]) =>
-  renderToStaticMarkup(createElement(MessageList, { messages: [{ id: 1, role: 'assistant', content, toolCalls }] }))
+  renderToStaticMarkup(createElement(MessageList, { messages: [{ role: 'assistant', content, toolCalls }] }))
 
 const SURFACES: [string, (md: string, toolCalls?: unknown[]) => string][] = [
   ['AI Chat, saved', (md, toolCalls) => aiChat(md, { toolCalls } as Partial<Message>)],
   ['AI Chat, while it comes', (md, toolCalls) => aiChat(md, { toolCalls, isTemporary: true, streamingPhase: 'answer' } as Partial<Message>)],
   ['floating chat, saved', floating],
   ['floating chat, while it comes', (md, toolCalls) =>
-    renderToStaticMarkup(createElement(MessageList, { messages: [], streaming: true, streamingContent: md, streamingToolCalls: toolCalls }))],
+    renderToStaticMarkup(createElement(MessageList, { messages: [{ role: 'assistant', content: md, toolCalls, pending: true }] }))],
 ]
 
 // every element the answer drew: text is escaped in static markup, so each "<name" is a real element. Left out are the
@@ -458,5 +458,52 @@ describe.each(SURFACES)('%s: a tool result with lines of backticks', (_name, ren
   it('stays in its code block in a saved answer', () => {
     const saved = `<details>\n<summary>🔧 <strong>k8s_pod_logs</strong></summary>\n\n<p><strong>📋 Arguments:</strong> No arguments</p>\n\n<details>\n<summary><strong>📊 Results</strong></summary>\n\n\`\`\`\`\n${RESULT}\n\`\`\`\`\n\n</details>\n\n</details>\n\nDone.`
     expectInItsBlock(render(saved))
+  })
+})
+
+describe.each(SURFACES)('%s: a tool call below a code block the answer left open', (_name, render) => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  async function liveAnswer(text: string) {
+    const body = [
+      { content: text },
+      { function: 'k8s_pod_logs', args: { pod: 'web' }, call_id: 0 },
+      { function_result: 'k8s_pod_logs', result: 'the result', call_id: 0 },
+      { content: 'The **last** sentence.' },
+      '[DONE]',
+    ].map((e) => `data: ${typeof e === 'string' ? e : JSON.stringify(e)}\n\n`).join('')
+    vi.useFakeTimers()
+    vi.stubGlobal('window', globalThis)
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(body)))
+    const manager = new ChatStreamManager({ bodyJson: true })
+    await manager.startSessionChat('s1', 'logs?')
+    await vi.runAllTimersAsync()
+    return manager.getState().content
+  }
+
+  it.each([
+    ['backticks', 'Try:\n\n```bash\nkubectl get pods', '<pre><code class="language-bash">kubectl get pods\n</code></pre>'],
+    ['tildes', 'Try:\n\n~~~\nkubectl get pods', '<pre><code>kubectl get pods\n</code></pre>'],
+    ['a longer fence', 'Try:\n\n````\nkubectl get pods', '<pre><code>kubectl get pods\n</code></pre>'],
+    ['a list item', '- Try:\n  ```\n  kubectl get pods', '<pre><code>kubectl get pods\n</code></pre>'],
+  ])('%s: the code stays code and the tool block is a tool block', async (_case, text, code) => {
+    const html = render(await liveAnswer(text))
+    expect(html).toContain(code)
+    expect(html).not.toContain('&lt;details&gt;')
+    expect(html).not.toContain('&lt;summary&gt;')
+    expect(html).toMatch(/class="md-summary"[^>]*>🔧 <strong>k8s_pod_logs<\/strong>/)
+    expect(html).toContain('&quot;pod&quot;: &quot;web&quot;')
+    expect(html).toContain('<pre><code>the result\n</code></pre>')
+    expect(html).toContain('The <strong>last</strong> sentence.')
+  })
+
+  it('the words of a tool block in that code stay words beside the real block', async () => {
+    const html = render(await liveAnswer('```html\n<details>\n<summary>🔧 <strong>written</strong></summary>'))
+    expect(html).toContain('&lt;summary&gt;🔧 &lt;strong&gt;written&lt;/strong&gt;&lt;/summary&gt;\n</code></pre>')
+    expect(html).not.toMatch(/class="md-summary"[^>]*>🔧 <strong>written/)
+    expect(html).toMatch(/class="md-summary"[^>]*>🔧 <strong>k8s_pod_logs<\/strong>/)
   })
 })

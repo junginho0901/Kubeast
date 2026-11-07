@@ -1,10 +1,24 @@
 import { getAuthHeaders, handleUnauthorized } from '@/services/auth'
+import { closingFence } from '@/services/chatTextUtils'
 import { clusterHeaders } from '@/services/clusterRef'
 import { accessSection } from '@/services/toolAccess'
 
 export type StreamingPhase = 'waiting' | 'tools' | 'answer'
 
 export type ChatStreamStatus = 'idle' | 'streaming' | 'completed' | 'aborted' | 'error'
+
+// A turn of this conversation that failed before the current one. The server saves none of its letters or its error,
+// perhaps not its question, so a screen drawn from the saved messages has them only from here.
+export interface FailedTurn {
+  question: string
+  content: string
+  toolCalls: any[]
+  error: string | null
+  errorKey: string | null
+  errorArgs: Record<string, unknown> | null
+  // how many saved messages the screen had when the next question was sent
+  savedBefore: number
+}
 
 export interface ChatStreamState {
   status: ChatStreamStatus
@@ -19,6 +33,9 @@ export interface ChatStreamState {
   // A refusal the server writes for the screen (token budget): catalog key and values (utils/chatError)
   errorKey: string | null
   errorArgs: Record<string, unknown> | null
+  // how many saved messages the screen had when this question was sent
+  savedBefore: number
+  failedTurns: FailedTurn[]
   updatedAt: number
 }
 
@@ -35,8 +52,12 @@ const initialState: ChatStreamState = {
   error: null,
   errorKey: null,
   errorArgs: null,
+  savedBefore: 0,
+  failedTurns: [],
   updatedAt: Date.now(),
 }
+
+const RESULT_PLACEHOLDER = 'Executing...'
 
 function safeJsonStringify(value: unknown) {
   try {
@@ -67,7 +88,7 @@ ${argsSection}
 <details>
 <summary><strong>📊 Results</strong></summary>
 
-Executing...
+${RESULT_PLACEHOLDER}
 
 </details>
 
@@ -87,16 +108,19 @@ export function resultTarget(toolCalls: any[], functionName: string, callId: unk
 }
 
 // The content with a tool block after it: the block starts on a line of its own below the text so far (markdown
-// reads <details> as a block only there).
+// reads <details> as a block only there), and below a code block the text left open, closed here as the saved answer
+// closes it (ai-service streaming.answer_markdown).
 export function appendToolBlock(content: string, block: string): string {
   const before = content.replace(/\s+$/, '')
-  return before ? `${before}\n\n${block}` : block
+  if (!before) return block
+  const closing = closingFence(before)
+  return `${before}${closing ? `\n${closing}` : ''}\n\n${block}`
 }
 
-// The content with the "Executing..." of the tool block starting at `at` replaced by its result.
+// The content with the placeholder at `at` replaced by a result; a result already there stays.
 export function withToolResult(content: string, at: number, result: string): string {
-  // a function: replace() reads $&, $` and $' in a replacement string, and a result is any text
-  return content.substring(0, at) + content.substring(at).replace('Executing...', () => result)
+  if (!content.startsWith(RESULT_PLACEHOLDER, at)) return content
+  return content.substring(0, at) + result + content.substring(at + RESULT_PLACEHOLDER.length)
 }
 
 // The backticks around a tool result: more than its longest run, so no line of it can close the code block
@@ -164,8 +188,9 @@ export class ChatStreamManager {
   private _typewriterTimer: number | null = null
   private _streamDone = false          // SSE [DONE] 수신 여부
   private _pendingDonePatch: Partial<ChatStreamState> | null = null
-  // Where each tool block of this answer starts. Kept, not read back from the text: a result or the answer can hold the same words.
-  private _toolBlockAt: number[] = []
+  // Where each tool block of this answer starts and where its result goes. Kept, not read back from the text: a result,
+  // the arguments or the answer can hold the same words.
+  private _toolBlocks: { start: number; resultAt: number }[] = []
   private static readonly TICK_MS = 16 // 드레인 간격 (ms) — one screen refresh
 
   constructor(options: ChatStreamManagerOptions = {}) {
@@ -270,15 +295,28 @@ export class ChatStreamManager {
     this.setState({ status: 'error', isStreaming: false, streamingPhase: null, ...patch }, true)
   }
 
-  // The content with the n-th tool's result and 🔐 line in its block; the blocks after it move by what went in.
+  // The content with the n-th tool's result and 🔐 line in its block, once; the blocks after it move by what went in.
   private _withToolOutcome = (n: number, result: string, access: string): string => {
     const content = this.state.content
-    const at = this._toolBlockAt[n]
-    if (at === undefined) return content
-    const filled = withToolAccess(withToolResult(content, at, result), at, access)
+    const block = this._toolBlocks[n]
+    if (!block || block.resultAt === -1) return content
+    const { start, resultAt } = block
+    const filled = withToolAccess(withToolResult(content, resultAt, result), start, access)
     const grew = filled.length - content.length
-    this._toolBlockAt = this._toolBlockAt.map((start) => (start > at ? start + grew : start))
+    this._toolBlocks = this._toolBlocks.map((other) => {
+      if (other === block) return { start, resultAt: -1 }
+      if (other.start < start) return other
+      return { start: other.start + grew, resultAt: other.resultAt === -1 ? -1 : other.resultAt + grew }
+    })
     return filled
+  }
+
+  // The failed turns of a conversation as its next question is sent: the one that just failed joins them.
+  private _failedTurnsBefore = (sessionId: string, savedMessages: number): FailedTurn[] => {
+    const { status, userMessage, content, toolCalls, error, errorKey, errorArgs, failedTurns } = this.state
+    if (this.state.sessionId !== sessionId) return []
+    if (status !== 'error' || userMessage === null) return failedTurns
+    return [...failedTurns, { question: userMessage, content, toolCalls, error, errorKey, errorArgs, savedBefore: savedMessages }]
   }
 
   stop = async () => {
@@ -299,6 +337,7 @@ export class ChatStreamManager {
     sessionId: string,
     userMessage: string,
     extraBody?: Record<string, unknown>,
+    savedMessages = 0,
   ) => {
     if (this.state.isStreaming) {
       throw new Error('이미 답변 생성 중입니다. 먼저 중단해 주세요.')
@@ -309,7 +348,7 @@ export class ChatStreamManager {
     this._charQueue.length = 0
     this._streamDone = false
     this._pendingDonePatch = null
-    this._toolBlockAt = []
+    this._toolBlocks = []
     this.setState({
       status: 'streaming',
       isStreaming: true,
@@ -321,6 +360,8 @@ export class ChatStreamManager {
       error: null,
       errorKey: null,
       errorArgs: null,
+      savedBefore: savedMessages,
+      failedTurns: this._failedTurnsBefore(sessionId, savedMessages),
     })
 
     try {
@@ -451,7 +492,8 @@ export class ChatStreamManager {
               this._flushQueue()
               const block = buildToolCallBlock(data.function, data.args || {})
               const content = appendToolBlock(this.state.content, block)
-              this._toolBlockAt.push(content.length - block.length)
+              const start = content.length - block.length
+              this._toolBlocks.push({ start, resultAt: start + block.lastIndexOf(RESULT_PLACEHOLDER) })
               this.setState({
                 toolCalls: [...this.state.toolCalls, toolCall],
                 content,

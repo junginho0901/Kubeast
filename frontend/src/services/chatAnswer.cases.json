@@ -1,0 +1,148 @@
+{
+  "block": "<details>\n<summary>🔧 <strong>t</strong></summary>\n\n<p><strong>📋 Arguments:</strong> No arguments</p>\n\n<details>\n<summary><strong>📊 Results</strong></summary>\n\n```\nr\n```\n\n</details>\n\n</details>\n\n",
+  "cases": [
+    {
+      "name": "text alone",
+      "parts": [["text", "Two clusters."]],
+      "answer": "Two clusters.",
+      "stripped": "Two clusters."
+    },
+    {
+      "name": "a code block the answer closed",
+      "parts": [["text", "Try:\n\n```bash\nkubectl get pods\n```"], ["tool", 0], ["text", "After."]],
+      "answer": "Try:\n\n```bash\nkubectl get pods\n```\n\n{block}After.",
+      "stripped": "Try:\n\n```bash\nkubectl get pods\n```\n\nAfter."
+    },
+    {
+      "name": "a code block left open",
+      "parts": [["text", "Try:\n\n```bash\nkubectl get pods"], ["tool", 0], ["text", "After."]],
+      "answer": "Try:\n\n```bash\nkubectl get pods\n```\n\n{block}After.",
+      "stripped": "Try:\n\n```bash\nkubectl get pods\n```\n\nAfter."
+    },
+    {
+      "name": "a code block left open, with blank lines after its last line",
+      "parts": [["text", "```\ncode\n\n"], ["tool", 0], ["text", "After."]],
+      "answer": "```\ncode\n```\n\n{block}After.",
+      "stripped": "```\ncode\n```\n\nAfter."
+    },
+    {
+      "name": "tildes left open",
+      "parts": [["text", "~~~\ncode"], ["tool", 0], ["text", "After."]],
+      "answer": "~~~\ncode\n~~~\n\n{block}After.",
+      "stripped": "~~~\ncode\n~~~\n\nAfter."
+    },
+    {
+      "name": "a longer fence left open, holding a line of three",
+      "parts": [["text", "````\n```\ncode"], ["tool", 0], ["text", "After."]],
+      "answer": "````\n```\ncode\n````\n\n{block}After.",
+      "stripped": "````\n```\ncode\n````\n\nAfter."
+    },
+    {
+      "name": "tildes left open, holding backticks",
+      "parts": [["text", "~~~~\n```\ncode"], ["tool", 0], ["text", "After."]],
+      "answer": "~~~~\n```\ncode\n~~~~\n\n{block}After.",
+      "stripped": "~~~~\n```\ncode\n~~~~\n\nAfter."
+    },
+    {
+      "name": "a longer fence left open, holding a whole shorter block",
+      "parts": [["text", "````md\n```\nx\n```\ny"], ["tool", 0], ["text", "After."]],
+      "answer": "````md\n```\nx\n```\ny\n````\n\n{block}After.",
+      "stripped": "````md\n```\nx\n```\ny\n````\n\nAfter."
+    },
+    {
+      "name": "a code block left open in a list item closes in the item",
+      "parts": [["text", "- item\n  ```\n  code"], ["tool", 0], ["text", "After."]],
+      "answer": "- item\n  ```\n  code\n  ```\n\n{block}After.",
+      "stripped": "- item\n  ```\n  code\n  ```\n\nAfter."
+    },
+    {
+      "name": "the same in a numbered list",
+      "parts": [["text", "1. item\n\n   ```\n   code"], ["tool", 0], ["text", "After."]],
+      "answer": "1. item\n\n   ```\n   code\n   ```\n\n{block}After.",
+      "stripped": "1. item\n\n   ```\n   code\n   ```\n\nAfter."
+    },
+    {
+      "name": "a code block in a quote ends with the quote",
+      "parts": [["text", "> ```\n> code"], ["tool", 0], ["text", "After."]],
+      "answer": "> ```\n> code\n\n{block}After.",
+      "stripped": "> ```\n> code\n\nAfter."
+    },
+    {
+      "name": "a code block on a list marker's line ends with the item",
+      "parts": [["text", "- ```\n  code"], ["tool", 0], ["text", "After."]],
+      "answer": "- ```\n  code\n\n{block}After.",
+      "stripped": "- ```\n  code\n\nAfter."
+    },
+    {
+      "name": "a line less indented than the fence has ended its list item",
+      "parts": [["text", "- item\n  ```\n  code\nnot indented"], ["tool", 0], ["text", "After."]],
+      "answer": "- item\n  ```\n  code\nnot indented\n\n{block}After."
+    },
+    {
+      "name": "the third fence line opens a block of its own",
+      "parts": [["text", "```\na\n```\nb\n```\nc"], ["tool", 0], ["text", "After."]],
+      "answer": "```\na\n```\nb\n```\nc\n```\n\n{block}After.",
+      "stripped": "```\na\n```\nb\n```\nc\n```\n\nAfter."
+    },
+    {
+      "name": "two calls after an open block close it once",
+      "parts": [["text", "```\ncode"], ["tool", 0], ["tool", 1], ["text", "After."]],
+      "answer": "```\ncode\n```\n\n{block}{block}After.",
+      "stripped": "```\ncode\n```\n\nAfter."
+    },
+    {
+      "name": "a block opened after an earlier call",
+      "parts": [["text", "First."], ["tool", 0], ["text", "```\nnext"], ["tool", 1], ["text", "After."]],
+      "answer": "First.\n\n{block}```\nnext\n```\n\n{block}After.",
+      "stripped": "First.\n\n```\nnext\n```\n\nAfter."
+    },
+    {
+      "name": "an open block with no call after it stays as the answer wrote it",
+      "parts": [["tool", 0], ["text", "```\ncode"]],
+      "answer": "{block}```\ncode",
+      "stripped": "```\ncode"
+    },
+    {
+      "name": "the words of a tool block in a closed code block stay words",
+      "parts": [["text", "```html\n<details>\n<summary>🔧 <strong>w</strong></summary>\n```"], ["tool", 0], ["text", "After."]],
+      "answer": "```html\n<details>\n<summary>🔧 <strong>w</strong></summary>\n```\n\n{block}After.",
+      "stripped": "```html\n<details>\n<summary>🔧 <strong>w</strong></summary>\n```\n\nAfter."
+    },
+    {
+      "name": "the words of a tool block in an open code block stay words too",
+      "parts": [["text", "```html\n<details>\n<summary>🔧 <strong>w</strong></summary>"], ["tool", 0], ["text", "After."]],
+      "answer": "```html\n<details>\n<summary>🔧 <strong>w</strong></summary>\n```\n\n{block}After.",
+      "stripped": "```html\n<details>\n<summary>🔧 <strong>w</strong></summary>\n```\n\nAfter."
+    },
+    {
+      "name": "backticks inside a line open nothing",
+      "parts": [["text", "a ``` b\n```not a fence```"], ["tool", 0], ["text", "After."]],
+      "answer": "a ``` b\n```not a fence```\n\n{block}After.",
+      "stripped": "a ``` b\n```not a fence```\n\nAfter."
+    },
+    {
+      "name": "a fence indented four spaces is indented code",
+      "parts": [["text", "    ```\n    code"], ["tool", 0], ["text", "After."]],
+      "answer": "    ```\n    code\n\n{block}After.",
+      "stripped": "    ```\n    code\n\nAfter."
+    },
+    {
+      "name": "a longer line closes a block",
+      "parts": [["text", "```\ncode\n`````"], ["tool", 0], ["text", "After."]],
+      "answer": "```\ncode\n`````\n\n{block}After.",
+      "stripped": "```\ncode\n`````\n\nAfter."
+    },
+    {
+      "name": "tildes do not close backticks",
+      "parts": [["text", "```\ncode\n~~~"], ["tool", 0], ["text", "After."]],
+      "answer": "```\ncode\n~~~\n```\n\n{block}After.",
+      "stripped": "```\ncode\n~~~\n```\n\nAfter."
+    },
+    {
+      "name": "a fence line with a language closes nothing",
+      "parts": [["text", "```\ncode\n```json"], ["tool", 0], ["text", "After."]],
+      "answer": "```\ncode\n```json\n```\n\n{block}After.",
+      "stripped": "```\ncode\n```json\n```\n\nAfter."
+    }
+  ]
+}

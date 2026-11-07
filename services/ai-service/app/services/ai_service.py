@@ -57,36 +57,15 @@ class ToolContext:
 
 _TOOL_BLOCK_START = re.compile(r"^<details>[ \t\r\n]*<summary>🔧", re.MULTILINE)
 _DETAILS_TAG = re.compile(r"</?details>")
-_FENCE_OPEN = re.compile(r" {0,3}(?:(`{3,})[^`]*|(~{3,})[^\n]*)")
-_FENCE_CLOSE = re.compile(r" {0,3}(`{3,}|~{3,})[ \t\r]*")
 
 
 def _code_blocks(text: str) -> tuple[list, list]:
-    """The fenced code blocks of text as sorted starts and ends, by CommonMark's rules (backticks or tildes, up to three
-    spaces in, closed by a line of the same mark at least as long). A fence nothing closes is no block: an answer saved
-    before results got their longer fence can hold an odd line of backticks, and reading the rest as code would lose
-    the answer after it."""
+    """The fenced code blocks of text as sorted starts and ends, as formatters.fence_reader reads them."""
     def line_end(at: int) -> int:
         end = text.find("\n", at)
         return len(text) if end == -1 else end
 
-    unclosed: dict = {}  # the shortest fence of each mark with no closing line after it, so open fences stay one pass
-
-    def fence_end(at: int) -> int:
-        opening = _FENCE_OPEN.fullmatch(text, at, line_end(at))
-        fence = opening and (opening.group(1) or opening.group(2))
-        if not fence or len(fence) >= unclosed.get(fence[0], float("inf")):
-            return -1
-        line = line_end(at) + 1
-        while line <= len(text):
-            end = line_end(line)
-            closing = _FENCE_CLOSE.fullmatch(text, line, end)
-            if closing and closing.group(1)[0] == fence[0] and len(closing.group(1)) >= len(fence):
-                return min(end + 1, len(text))
-            line = end + 1
-        unclosed[fence[0]] = len(fence)
-        return -1
-
+    fence_end = formatters.fence_reader(text)
     starts, ends, at = [], [], 0
     while at < len(text):
         end = fence_end(at)
