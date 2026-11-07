@@ -81,12 +81,16 @@ func bulkCounts(t *testing.T, w *httptest.ResponseRecorder) (created, refused in
 	t.Helper()
 	var body struct {
 		Created []any `json:"created"`
+		Failed  []any `json:"failed"`
 		Errors  []any `json:"errors"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatalf("bulk answer %s: %v", w.Body.String(), err)
 	}
-	return len(body.Created), len(body.Errors)
+	if len(body.Failed) != len(body.Errors) {
+		t.Errorf("the screen reads failed and an older client errors, and they differ: %s", w.Body.String())
+	}
+	return len(body.Created), len(body.Failed)
 }
 
 func accountCreations(t *testing.T) []accountCreation {
@@ -125,7 +129,7 @@ func accountCreations(t *testing.T) []accountCreation {
 			},
 			refusedIt: func(w *httptest.ResponseRecorder) bool {
 				created, refused := bulkCounts(t, w)
-				return w.Code == http.StatusOK && created == 0 && refused == 1
+				return w.Code == http.StatusMultiStatus && created == 0 && refused == 1
 			},
 		},
 	}

@@ -191,10 +191,11 @@ Case format and recent results are in [evals/ai/README.md](../evals/ai/README.md
 
 ## Reading alerts (AI, Alertmanager)
 
-With `features.alertStore.enabled` (default off), the AI's `alerts_list` reads two things from the alert store:
+With `features.alertStore.enabled` (default off), the AI's `alerts_list` reads three things from the alert store:
 
 - **this cluster's current alerts**: name, severity, state firing/silenced/inhibited, start time, summary, labels and receivers
 - **the silences covering them**: who, why and until when
+- **with `silences=true`, what the Silences tab lists**: every active and pending silence on this cluster's alerts with its scope, also one that matches no alert now
 
 The store URL is one of:
 

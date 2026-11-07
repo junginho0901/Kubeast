@@ -101,7 +101,7 @@ test.describe('AI alerts_list', () => {
       matchers: [{ name: 'alertname', value: alertname, isRegex: false, isEqual: true }, { name: 'cluster', value: cluster, isRegex: false, isEqual: true }],
       startsAt: new Date().toISOString(), endsAt, createdBy: 'e2e', comment,
     })).silenceID as string
-    silenceIds.push(silence('kubeast', quiet, `deploy window ${id}`), silence('kubeast-b', firing, `other cluster freeze ${id}`))
+    silenceIds.push(silence('kubeast', quiet, `deploy window ${id}`), silence('kubeast-b', firing, `other cluster freeze ${id}`), silence('kubeast', `E2ENothingFires${id}`, `nothing fires yet ${id}`))
     reader = await user(request, 'read', { role: 'Read' })
     scoped = await user(request, 'scoped', { role: 'Read', namespaces: ['default'] })
     // Alertmanager marks a new alert suppressed once it has run it through the silences
@@ -154,6 +154,28 @@ test.describe('AI alerts_list', () => {
     const none = await alertsList(request, reader, { cluster: 'self', alert_labels: { e2e_run: `${id}-none` } })
     expect(none.total).toBe(0)
     expect(none.hint).toContain('state=all')
+  })
+
+  test('silences=true answers what the Silences tab reads, a silence on no alert too', async ({ request }) => {
+    const route = await request.get('/api/v1/alertstore/silences?cluster=self', { headers: bearer(reader) })
+    expect(route.status(), await route.text()).toBe(200)
+    const tab = (await route.json()).silences as Array<Silence & { scope?: string }>
+    const told = await alertsList(request, reader, { cluster: 'self', silences: true })
+    expect(told.silences).toEqual(tab)
+    expect(told.total).toBe(tab.length)
+    expect(told.returned).toBe(tab.length)
+    const own = tab.filter((s) => (s.scope ?? 'cluster') === 'cluster').length
+    expect(told.this_cluster).toBe(own)
+    expect(told.other_scopes).toBe(tab.length - own)
+    expect(told.alerts).toBeUndefined()
+    const comments = (told.silences as Silence[]).map((s) => s.comment)
+    expect(comments).toContain(`nothing fires yet ${id}`)
+    expect(comments).toContain(`deploy window ${id}`)
+    expect(comments).not.toContain(`other cluster freeze ${id}`)
+
+    const refused = await call(request, scoped, { cluster: 'self', silences: true })
+    expect(refused.isError).toBe(true)
+    expect(refused.text).toContain('alerts_list spans the cluster')
   })
 
   test('a grant limited to namespaces is refused', async ({ request }) => {

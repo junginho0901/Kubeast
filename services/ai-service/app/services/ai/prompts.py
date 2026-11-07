@@ -49,7 +49,7 @@ SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 - `prometheus_query`: PromQL 즉시·범위 질의 — 사용량 추이·오류율·재시작 수 (이 클러스터에 Prometheus가 있을 때만 제공)
 - `prometheus_metrics` · `prometheus_labels`: Prometheus에 있는 지표 이름(타입·설명)과 레이블 이름·값 찾기 — PromQL을 짜기 전에
 - `prometheus_rules`: 알림·기록 규칙과 지금 울리는 알림(식·`for`·상태) — 알림을 조사할 때 먼저
-- `alerts_list`: 알림 저장소(Alertmanager·Grafana 알림)의 이 클러스터 알림 — 울림·무음·억제 상태, 무음(누가·왜·언제까지), 이름별 개수 (알림 저장소가 있을 때만 제공)
+- `alerts_list`: 알림 저장소(Alertmanager·Grafana 알림)의 이 클러스터 알림 — 울림·무음·억제 상태, 무음(누가·왜·언제까지), 이름별 개수 (알림 저장소가 있을 때만 제공). `silences=true`는 Silences 탭의 무음 전체(지금 걸린 알림이 없는 무음까지)
 - `alert_investigate`: Alerts 받은편지함의 알림 하나를 정식 조사로 시작 — 알림 창의 "지금 조사" 버튼과 같습니다(권한 `resource.alert.investigate`, 토큰이 듭니다). 사용자가 조사를 시작하라고 할 때만 부르고, 답에 `report_link`를 넣으세요. 다시 볼 때는 `status_only=true`로 부르면 아무것도 시작하지 않고 보고서를 읽습니다
 - `clusters_list`: 사용자가 볼 수 있는 클러스터 목록과 연결 상태 — "어느 클러스터가 연결 안 돼?"(`health_status`는 마지막 연결 확인 결과이며 그 시각은 `last_healthcheck_at`)
 - `alerts_inbox`: Alerts 받은편지함 — 알림을 누가 확인했고 누가 맡았고 끝났는지, 메모(`alert_id`로 한 건을 읽을 때) (받은편지함이 켜져 있을 때만 제공, 표시 변경은 화면에서)
@@ -81,14 +81,14 @@ SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 - `ai_usage`(Admin): AI 사용량 — 사용자·모델·클러스터별 요청·토큰·도구 호출(`usage_group`, 기간)
 - `access_requests`(Admin): 접근 요청 — 대기 목록(`status=pending`)과 처리된 것
 - `audit_integrity`(Admin): 감사 로그 체인이 어디까지 봉인됐는지와 마지막 앵커
-- `hygiene_history`(Admin): 이 클러스터의 위생 서명 이력과 서명 때 보고서(`review_id`)
+- `hygiene_history`(Admin): 이 클러스터의 위생 서명 이력과 서명 주기(`interval_days`), 서명 때 보고서(`review_id`)
 - `k8s_jq_query`: `kubectl get -o json`을 jq로 걸러 **필요한 필드만**(`.items[] | select(…) | .metadata.name`) — 큰 목록은 이걸로
 - `k8s_tabular_query`: 지정한 열만 표로(`NAME:.metadata.name,NODE:.spec.nodeName`), 정렬·행 상한
 - `k8s_count`: 개수·그룹별 개수(`group_by=.status.phase`) — "Pending 파드 몇 개" 같은 질문은 목록 대신 이걸로
 - `k8s_diff`(쓰기 권한 사용자): 매니페스트를 **적용하지 않고** 서버 dry-run으로 바뀔 내용(diff)만 — apply·patch 전에 보여 주기
 - `k8s_get_available_api_resources`: api-resources 조회
 - `k8s_get_cluster_configuration`: 클러스터 구성 정보 조회
-- `get_cluster_overview`: 클러스터 전체 요약(확장 기능)
+- `get_cluster_overview`: 대시보드 카드와 같은 클러스터 요약 — 못 읽는 종류는 null(`refused`), 네임스페이스로 한정된 권한이면 그 네임스페이스만 셉니다(`scoped`)
 - `get_pod_metrics`: Pod 리소스 사용량 조회(확장 기능, kubectl top pods)
 - `get_node_metrics`: Node 리소스 사용량 조회(확장 기능, kubectl top nodes)
 
@@ -226,7 +226,7 @@ Tool 결과를 분석한 후 다음 형식으로 응답하세요:
 - `prometheus_query(promql, range, since, since_time, until_time, step)` - PromQL through the cluster's Prometheus (trend with range=true); offered only where Prometheus exists
 - `prometheus_metrics(pattern, limit)` / `prometheus_labels(selector, label, since, limit)` - Find metric names (type, help) and label names or values before writing PromQL
 - `prometheus_rules(rule, rule_type, active_only)` - Alerting and recording rules with state and active alerts — first when investigating an alert
-- `alerts_list(state, alertname, alert_labels)` - The cluster's alerts in the alert store (firing, silenced, inhibited) and the silences on them; offered only where an alert store exists
+- `alerts_list(state, alertname, alert_labels, silences)` - The cluster's alerts in the alert store (firing, silenced, inhibited) and the silences on them, or with `silences=true` the Silences tab; offered only where an alert store exists
 - `alert_investigate(alert_id, alertname, namespace, alert_labels, status_only)` - Start the formal investigation of an alert in the Alerts inbox, as its "Investigate now" button does (costs tokens: only when the user asks); give report_link; status_only=true starts nothing and reads how it went
 - `clusters_list()` - The clusters the user can see and their last connection check
 - `alerts_inbox(alert_id, status, alert_severity, mine, open_only, search, limit, offset)` - The Alerts inbox: who acknowledged an alert, who it is assigned to, whether it is done, and with alert_id its note; offered where the inbox is on, marks change on the screen only
@@ -258,11 +258,11 @@ Tool 결과를 분석한 후 다음 형식으로 응답하세요:
 - `ai_usage(usage_group, since_time, until_time, limit, offset)` - AI use by user, model or cluster (Admin): requests, tokens, tool calls, with totals over every group
 - `access_requests(status, search, limit, offset)` - Access requests (Admin), pending by default; read only
 - `audit_integrity()` - How far the audit log's hash chain is sealed and its last anchor (Admin); not a check of the chain
-- `hygiene_history(review_id, severity, check, limit)` - This cluster's hygiene sign-offs, or the report one stored (Admin)
+- `hygiene_history(review_id, severity, check, limit)` - This cluster's hygiene sign-offs and how often one is due, or the report one stored (Admin)
 - `k8s_jq_query(resource_type, jq, namespace, label_selector, field_selector, limit)` - A list filtered by jq: only the fields you need
 - `k8s_tabular_query(resource_type, columns, sort_by, limit)` / `k8s_count(resource_type, group_by)` - A few columns as a table / counts per field
 - `k8s_diff(yaml_content, namespace)` - What a manifest would change (server dry run, nothing applied) — before apply/patch
-- `get_cluster_overview()` - Overall health snapshot
+- `get_cluster_overview()` - Overall health snapshot, the numbers of the Dashboard's cards
 - `k8s_get_resources(resource_type=namespaces)` - Namespace list
 - `k8s_get_resources(resource_type=nodes)` - Node status
 - `k8s_describe_resource(resource_type=nodes, resource_name)` - Node details

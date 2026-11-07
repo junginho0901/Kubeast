@@ -14,6 +14,7 @@ import type {
   AuditLogListResponse,
   AuditVerifyReport,
   BulkRoleAnswer,
+  BulkCreateAnswer,
   DormantAccountsConfig,
   Member,
   Organization,
@@ -86,7 +87,8 @@ export const adminApi = {
     return data
   },
 
-  adminBulkCreateUsers: async (users: Array<{ name: string; email: string; password: string; role_id: number; team?: string }>): Promise<{ created: Member[]; errors: Array<{ email: string; message: string }> }> => {
+  // 200 when everyone was created, 207 when someone was not; a failed write that left nobody created is 500 with the same lists.
+  adminBulkCreateUsers: async (users: Array<{ name: string; email: string; password: string; role_id: number; team?: string }>): Promise<BulkCreateAnswer> => {
     const { data } = await client.post('/auth/admin/users/bulk', { users })
     return data
   },

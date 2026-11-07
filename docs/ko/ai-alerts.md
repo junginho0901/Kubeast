@@ -189,6 +189,7 @@ AI가 원인을 실제로 찾는지는 e2e가 아니라 평가 스크립트로 �
 - **읽는 내용**:
   - 알림: 이름, 심각도, 상태(울림/무음/억제), 시작 시각, 요약, 레이블, 받는 곳
   - 무음: 누가, 왜, 언제까지
+  - `silences=true`: Silences 탭의 목록. 이 클러스터 알림에 걸리는 활성·대기 무음 전체와 그 범위, 지금 걸린 알림이 없는 무음까지
 - **저장소 주소**: 다음 중 하나이며, Grafana라면 Viewer 서비스 계정 토큰을 씁니다.
   - Alertmanager API v2(`http://alertmanager.monitoring:9093`)
   - Grafana 데이터소스 프록시를 거치는 Alertmanager(`…/api/datasources/proxy/uid/<Alertmanager UID>`)

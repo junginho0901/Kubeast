@@ -42,7 +42,7 @@
     - `prometheus_metrics`·`prometheus_labels` — 질의 전에 지표 이름·타입·설명, 레이블 이름·값 찾기
     - `prometheus_rules` — 알림·기록 규칙과 지금 울리는 알림. 알림을 조사할 때 먼저 씁니다.
     - `prometheus_targets` — 수집 대상 up/down. 지표가 빌 때 씁니다. 여러 클러스터가 함께 쓰는 저장소이거나 targets API가 없으면 `up` 지표로 판단합니다.
-    - `alerts_list` — 알림 저장소에 있는 이 클러스터의 알림(울림·무음·억제 상태)과 그 알림을 덮은 무음
+    - `alerts_list` — 알림 저장소에 있는 이 클러스터의 알림(울림·무음·억제 상태)과 그 알림을 덮은 무음. `silences=true`면 Silences 탭의 무음 전체, 지금 걸린 알림이 없는 무음까지
     - `alert_investigate` — Alerts 받은편지함의 알림 하나를 "지금 조사" 버튼처럼 정식 조사로 시작([AI 알림](ai-alerts.md) 참고)
     - `clusters_list` — 그 사람이 볼 수 있는 클러스터와 연결 상태. 클러스터 선택기 목록과 같고 값은 마지막 확인 결과입니다(실시간 아님). `admin.clusters.list`가 있으면 Admin → Clusters 목록도 받습니다. kubeconfig·자격 증명은 나가지 않습니다
     - `alerts_inbox` — Alerts 받은편지함. 알림을 누가 확인했고 누가 맡았고 끝났는지, `alert_id`로 읽으면 메모까지 보여 줍니다. 읽기만 하며 표시 변경은 화면에서 합니다
@@ -85,7 +85,7 @@
       - `ai_usage` — AI Usage처럼 기간별로 사용자·모델·클러스터별 AI 사용량을 답합니다(`admin.audit.read`).
       - `access_requests` — Access requests처럼 대기 중인 요청과 처리된 요청을 답합니다(`admin.users.update`). 승인과 거절은 화면에서만 합니다.
       - `audit_integrity` — 감사 로그 체인이 어디까지 봉인됐는지와 마지막 앵커를 답합니다(`admin.audit.read`). 체인을 검사하지는 않습니다. 검사는 Audit Logs의 Verify 버튼이 합니다.
-      - `hygiene_history` — 클러스터의 위생 점검 서명 이력과 서명 때 저장한 보고서를 답합니다(`admin.hygiene.read`).
+      - `hygiene_history` — 클러스터의 위생 점검 서명 이력, 서명 주기(`interval_days`), 서명 때 저장한 보고서를 답합니다(`admin.hygiene.read`).
       - 이 답은 주는 칸을 하나하나 정해 둡니다. API 키 값과 비밀번호 해시는 들어 있지 않고, `key_prefix`는 목록에 보이는 키 앞부분입니다. 메일 주소는 `ai.redaction.pii`를 따릅니다.
     - `nodes_stats_summary`·`nodes_log` — kubelet의 stats summary와 로그 질의를 API 서버 프록시로 읽습니다(`admin.nodes.read` + 클러스터 RBAC `nodes/proxy`).
       로그 질의는 kubelet의 `enableSystemLogQuery`가 켜져 있어야 하며, 꺼져 있으면 unavailable로 답합니다.
@@ -135,7 +135,7 @@
 - **모델 설정** — `ModelConfig` CRD와 DB로 관리하고, Admin UI에서 추가하고 테스트합니다.
   등급(`tier`, CRD `spec.tier`)이 `economy`인 설정을 켜 두면 채팅 이력 요약과 플로팅 어시스턴트는 보통 더 싼 그 모델을 쓰고, 채팅은 기본 모델을 그대로 씁니다.
   어느 쪽인지는 스트림의 `model_info.tier`로 알 수 있습니다. economy 설정이 없거나 키가 없어 쓸 수 없으면 둘 다 기본 모델을 씁니다.
-  - 설정마다 **답 최대 길이**(`max_tokens`, 비우면 채팅 답 4,096 · 알림 조사 한 단계 2,048)와 **도구 결과 최대 길이**(`tool_result_chars`, 1,000~200,000자, 비우면 6,000)를 편집 창(모든 공급자)이나 `ModelConfig` 리소스의 `spec.maxTokens`·`spec.toolResultChars`로 정할 수 있습니다(리소스의 CA 인증서는 `spec.caCert`). 설정의 옵션에 저장하며, 도구 결과 최대 길이는 공급자에 보내지 않습니다. 더 긴 결과는 그 길이에서 잘려 모델이 앞부분을 읽습니다. `k8s_get_pod_logs`, `logfiles`, `nodes_log`는 최신 줄이 있는 끝부분을 남깁니다. 구독은 Claude Code가 답 길이를 정합니다.
+  - 설정마다 **답 최대 길이**(`max_tokens`, 비우면 채팅 답 4,096 · 알림 조사 한 단계 2,048)와 **도구 결과 최대 길이**(`tool_result_chars`, 1,000~200,000자, 비우면 6,000)를 편집 창(모든 공급자)이나 `ModelConfig` 리소스의 `spec.maxTokens`·`spec.toolResultChars`로 정할 수 있습니다(리소스의 CA 인증서는 `spec.caCert`). 설정의 옵션에 저장하며, 도구 결과 최대 길이는 공급자에 보내지 않습니다. 더 긴 결과는 그 길이에서 잘려 모델이 앞부분을 읽습니다. `k8s_get_pod_logs`, `logfiles`, `nodes_log`는 최신 줄이 있는 끝부분을 남기고, tool-server의 상한(`TOOL_OUTPUT_MAX_BYTES`)을 넘을 때도 그렇습니다. 구독은 Claude Code가 답 길이를 정합니다.
   - 카드마다 서버가 지금 그 설정으로 돌리는 곳(채팅 · 플로팅 어시스턴트 · 이력 요약 · 알림 조사)을 ai-service가 모델을 고르는 규칙 그대로 계산해 보여 줍니다. "활성"은 채팅을 돌리는 설정입니다.
   - OpenAI·Azure OpenAI에는 답 길이를 `max_completion_tokens`로 보냅니다. 추론 모델(o 시리즈, GPT-5)은 `max_tokens`를 받지 않습니다. 모델이 받지 않는 매개변수를 400으로 지목하면(추론 모델은 `temperature`·`top_p` 등을 거부) 그것을 빼고 한 번 다시 보내고, 그 모델에는 이후로도 보내지 않습니다.
 
@@ -229,8 +229,8 @@
     - 네임스페이스 목록은 부여 목록 그대로 보여 줍니다.
     - "전체 네임스페이스" 조회는 목록의 네임스페이스를 하나씩 조회해 합칩니다.
     - 대시보드 개수도 그 안에서만 셉니다(`scoped: true`, 노드·PV는 0).
-  - AI 도구와 MCP는 `namespace`를 반드시 받고, 부여된 네임스페이스와 함께 주어도 `all_namespaces`는 거부하며, 클러스터 전체 도구(overview·노드 메트릭·apply·create·API 목록·클러스터 설정)는 거부합니다.
-    - 일곱 도구는 화면처럼 스스로 그 범위 안에서만 읽으므로 네임스페이스 없이도 됩니다: `issues`, `cost`, `k8s_find_resource`, `gitops_status`, `storage_summary`, `timeline`, `gpu`. `k8s_explain`과 `clusters_list`는 객체 데이터를 읽지 않습니다.
+  - AI 도구와 MCP는 `namespace`를 반드시 받고, 부여된 네임스페이스와 함께 주어도 `all_namespaces`는 거부하며, 클러스터 전체 도구(노드 메트릭·apply·create·API 목록·클러스터 설정)는 거부합니다.
+    - 여덟 도구는 화면처럼 스스로 그 범위 안에서만 읽으므로 네임스페이스 없이도 됩니다: `issues`, `cost`, `k8s_find_resource`, `gitops_status`, `storage_summary`, `timeline`, `gpu`, `get_cluster_overview`. `get_cluster_overview`는 대시보드 개수를 답하고 노드·PV는 세지 않은 값(null)으로 답합니다. `k8s_explain`과 `clusters_list`는 객체 데이터를 읽지 않습니다.
   - 클러스터 쪽 신원은 `kubeast:role:<slug>` 그룹이므로 **그 네임스페이스마다 RoleBinding을 묶기 전에는 클러스터가 거부합니다**.
     차트 `auth.impersonation.customRoles`에 `{name: Read, namespaces: [a, b], clusterRoles: [view]}`처럼 적으면 그 RoleBinding이 렌더됩니다(등록한 클러스터마다 적용하세요).
   - 화면에서는 네임스페이스 선택기에 부여된 네임스페이스만 보이고, 권한 없음 안내에 "이 클러스터에서는 네임스페이스 a, b만"이 붙으며, 실시간 갱신도 네임스페이스별로 구독합니다.

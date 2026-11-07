@@ -2939,6 +2939,17 @@
     "bulkUploading": "업로드 중...",
     "bulkFormat": "CSV 형식:",
     "bulkCreated": "{{count}}명의 사용자가 생성되었습니다.",
+    "bulkNotCreated": "만들지 못한 계정: {{total}}개 중 {{failed}}개",
+    "bulkFailure": {
+      "missingFields": "이름, 이메일, 비밀번호가 필요합니다",
+      "name": "쿠버네티스 사용자 이름이 될 수 없습니다. 콜론, 공백, 제어 문자는 쓸 수 없습니다",
+      "password": "비밀번호가 정책에 맞지 않습니다",
+      "role": "없는 역할입니다",
+      "ceiling": "역할에 내가 갖지 않은 권한이 있습니다",
+      "team": "없는 팀입니다",
+      "exists": "이미 계정이 있는 이메일입니다",
+      "failed": "만들지 못했습니다, 까닭은 감사 로그에 있습니다"
+    },
     "pendingBtn": "승인 대기",
     "pendingBadge": "승인 대기",
     "pendingModal": {
@@ -4782,6 +4793,7 @@
     "Loading ResourceSlice details...": "ResourceSlice 상세 정보 불러오는 중...",
     "Failed to load describe data. Showing summary from list.": "상세 정보를 불러오지 못했습니다. 목록의 요약을 표시합니다.",
     "Failed to load rules: {{error}}": "규칙을 불러오지 못했습니다: {{error}}",
+    "Applies through {{subjects}}": "{{subjects}}(으)로 적용됩니다",
     "Prev": "이전",
     "Next": "다음",
     "Cancel": "취소",

@@ -62,7 +62,7 @@ test.describe('Number check — dashboard counts as the user may list them', () 
 
   test.beforeAll(async ({ request }) => {
     admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
-    const role = await request.post('/api/v1/auth/admin/roles', { headers: bearer(admin), data: { name: ROLE, description: 'e2e', permissions: ['menu.dashboard', 'resource.*.read'] } })
+    const role = await request.post('/api/v1/auth/admin/roles', { headers: bearer(admin), data: { name: ROLE, description: 'e2e', permissions: ['menu.dashboard', 'resource.*.read', 'ai.mcp.use', 'ai.tool.get_cluster_overview'] } })
     expect(role.status(), await role.text()).toBe(201)
     roleId = (await role.json()).id
     const roles = await (await request.get('/api/v1/auth/roles', { headers: bearer(admin) })).json()
@@ -109,6 +109,20 @@ test.describe('Number check — dashboard counts as the user may list them', () 
       expect.soft([...(ov.refused ?? [])].sort(), 'refused').toEqual(KINDS.filter((k) => want[k.key] === null).map((k) => k.resource.replace('.apps', '')).sort())
       expect.soft(ov.pod_status ?? null, 'no pod phases without the pods').toBeNull()
     }).toPass({ timeout: 30_000, intervals: [3_000] })
+
+    // the AI's overview: the same answer, a kind the identity may not list not failing the rest
+    const mcpConfig = await request.get('/api/v1/ai/mcp/config', { headers: bearer(admin) })
+    if (mcpConfig.ok() && (await mcpConfig.json()).enabled) {
+      const res = await request.post('/api/v1/ai/mcp', {
+        headers: { Accept: 'application/json, text/event-stream', 'Content-Type': 'application/json', Authorization: `Bearer ${user}` },
+        data: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'get_cluster_overview', arguments: { cluster: CLUSTER } } },
+        failOnStatusCode: false,
+      })
+      expect(res.status(), await res.text()).toBe(200)
+      const result = (await res.json()).result
+      expect(result.isError, result.content?.[0]?.text).toBeFalsy()
+      expect(JSON.parse(result.content[0].text), 'the tool answers what the dashboard reads').toEqual((await overview()).body)
+    }
 
     // the screen: the identity's counts, and "—" with the reason for the others
     await page.context().clearCookies()

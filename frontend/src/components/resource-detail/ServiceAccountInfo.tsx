@@ -144,6 +144,11 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
                     namespace={b.role_kind === 'Role' ? b.role_namespace : undefined}
                   />
                 </div>
+                {b.matched_by.length > 0 && (
+                  <p className="mb-1 text-[11px] text-slate-400" data-testid="sa-binding-matched-by">
+                    <Tx text="Applies through {{subjects}}" values={{ subjects: b.matched_by.join(' · ') }} />
+                  </p>
+                )}
                 {b.error ? (
                   <p className="text-[11px] text-amber-300"><Tx text="Failed to load rules: {{error}}" values={{ error: String(b.error) }} /></p>
                 ) : b.loading ? (

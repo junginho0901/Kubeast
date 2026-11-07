@@ -5,7 +5,8 @@ import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Browser, type Page } from '@playwright/test'
 
-// What a screen knows, the AI reads the same way: can_i asks about one object as a drawer's Delete button does, cost's totals
+// What a screen knows, the AI reads the same way: get_cluster_overview answers the dashboard's numbers, hygiene_history its
+// settings, a pod's log keeps its newest lines, can_i asks about one object as a drawer's Delete button does, cost's totals
 // follow the namespace asked, policy_reports pages as the Policy Reports screen does, and the floating chat counts a
 // VolumeAttachment's errors as the Errors card does and names the kinds the Resource Graph could not list.
 
@@ -103,6 +104,78 @@ async function signedIn(browser: Browser, email: string) {
 }
 
 test.describe('AI reads what the screens know', () => {
+  test('get_cluster_overview answers the numbers of the dashboard\'s cards', async ({ request }) => {
+    const admin = await login(request)
+    test.skip(!(await mcpOn(request, admin)), 'the MCP server is off (mcp.enabled)')
+    const email = `e2e-symreads-ov-${stamp()}@kubeast.local`
+    const userId = await createReadUser(request, admin, email)
+    try {
+      const reader = await login(request, email, PW)
+      for (const token of [admin, reader]) {
+        // pods come and go on a live cluster, so the two reads are compared until they fall between changes
+        await expect(async () => {
+          const out = await call(request, token, 'get_cluster_overview', { cluster: 'self' })
+          expect(out.isError, out.text).toBe(false)
+          const route = await request.get('/api/v1/cluster/overview?cluster=self', { headers: bearer(token) })
+          expect(route.status()).toBe(200)
+          expect(json(out.text)).toEqual(await route.json())
+        }).toPass({ timeout: 30_000, intervals: [2_000] })
+      }
+    } finally {
+      await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: bearer(admin), failOnStatusCode: false })
+    }
+  })
+
+  test('hygiene_history says how often a sign-off is due, as the hygiene settings do', async ({ request }) => {
+    const admin = await login(request)
+    test.skip(!(await mcpOn(request, admin)), 'the MCP server is off (mcp.enabled)')
+    const route = await request.get('/api/v1/cluster/hygiene/config?cluster=self', { headers: bearer(admin) })
+    expect(route.status()).toBe(200)
+    const settings = await route.json()
+    const out = await call(request, admin, 'hygiene_history', { cluster: 'self' })
+    expect(out.isError, out.text).toBe(false)
+    const told = json(out.text)
+    expect(told.enabled).toBe(settings.enabled)
+    expect(told.interval_days).toBe(settings.interval_days)
+
+    const email = `e2e-symreads-hy-${stamp()}@kubeast.local`
+    const userId = await createReadUser(request, admin, email)
+    try {
+      const refused = await call(request, await login(request, email, PW), 'hygiene_history', { cluster: 'self' })
+      expect(refused.isError, refused.text).toBe(true)
+      expect(refused.text).not.toContain('interval_days')
+    } finally {
+      await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: bearer(admin), failOnStatusCode: false })
+    }
+  })
+
+  test('a pod\'s log longer than the tool\'s output keeps its newest lines', async ({ request }) => {
+    const kubectl = kubectlFor('kubeast')
+    const admin = await login(request)
+    test.skip(!(await mcpOn(request, admin)), 'the MCP server is off (mcp.enabled)')
+    const ns = `e2e-symreads-log-${stamp()}`
+    try {
+      kubectl(['create', 'namespace', ns])
+      // 2000 lines of about 1 KiB: the tool's whole window, past its 1 MiB of output
+      const script = 'pad=$(printf "%01000d" 0); i=0; while [ $i -lt 2000 ]; do echo "oldest-$i $pad"; i=$((i+1)); done; echo e2e-newest-line; sleep 600'
+      kubectl(['create', '-f', '-'], JSON.stringify({
+        apiVersion: 'v1', kind: 'Pod', metadata: { name: 'long-log', namespace: ns },
+        spec: { restartPolicy: 'Never', terminationGracePeriodSeconds: 0, containers: [{ name: 'app', image: 'python:3.12-alpine', command: ['sh', '-c', script] }] },
+      }))
+      await expect.poll(() => { try { return kubectl(['-n', ns, 'logs', 'long-log', '--tail', '1']) } catch { return '' } }, { timeout: 120_000, intervals: [2_000] }).toBe('e2e-newest-line')
+      const out = await call(request, admin, 'k8s_get_pod_logs', { cluster: 'self', namespace: ns, pod_name: 'long-log', tail_lines: 2000 })
+      expect(out.isError, out.text.slice(0, 200)).toBe(false)
+      expect(out.text.trimEnd().endsWith('e2e-newest-line')).toBe(true)
+      expect(out.text.split('\n')[0]).toContain('older lines cut by tool-server')
+      expect(out.text).not.toContain('oldest-0 ')
+
+      const found = await call(request, admin, 'k8s_get_pod_logs', { cluster: 'self', namespace: ns, pod_name: 'long-log', grep: 'newest' })
+      expect(found.text).toContain('e2e-newest-line')
+    } finally {
+      kubectl(['delete', 'namespace', ns, '--wait=false', '--ignore-not-found'])
+    }
+  })
+
   test('can_i asks about one object, as a drawer\'s Delete button does', async ({ request }) => {
     const kubectl = kubectlFor('kubeast')
     const admin = await login(request)
@@ -121,7 +194,8 @@ test.describe('AI reads what the screens know', () => {
       kubectl(['create', '-f', '-'], JSON.stringify({
         apiVersion: 'rbac.authorization.k8s.io/v1', kind: 'RoleBinding', metadata: { name: 'delete-one', namespace: ns },
         roleRef: { apiGroup: 'rbac.authorization.k8s.io', kind: 'Role', name: 'delete-one' },
-        subjects: [{ apiGroup: 'rbac.authorization.k8s.io', kind: 'Group', name: 'kubeast:role:read' }],
+        // A Read grant on the whole cluster acts as this group; kubeast:role:read is one limited to namespaces.
+        subjects: [{ apiGroup: 'rbac.authorization.k8s.io', kind: 'Group', name: 'kubeast:viewer' }],
       }))
       userId = await createReadUser(request, admin, email)
       const token = await login(request, email, PW)

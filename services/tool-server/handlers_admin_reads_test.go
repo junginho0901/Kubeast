@@ -625,6 +625,90 @@ func TestHygieneHistory_TheClustersSignOffsNewestFirst(t *testing.T) {
 	}
 }
 
+// hygieneRoutes answers the sign-offs and the settings, each from its own route.
+func hygieneRoutes(t *testing.T, historyStatus int, history string, configStatus int, config string) *[]*http.Request {
+	t.Helper()
+	return fakeK8sService(t, func(r *http.Request) (int, string) {
+		if r.URL.Path == "/api/v1/hygiene/config" {
+			return configStatus, config
+		}
+		return historyStatus, history
+	})
+}
+
+func TestHygieneHistory_SaysHowOftenASignOffIsDue(t *testing.T) {
+	seen := hygieneRoutes(t, 200, "["+hygieneSignOffNew+"]", 200, `{"enabled":true,"interval_days":45}`)
+	out, err := handleHygieneHistory(ctxFor("c1"), args{}, bearer())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := decode(t, out)
+	if m["interval_days"] != float64(45) || m["enabled"] != true {
+		t.Errorf("settings: interval_days %v enabled %v in %s", m["interval_days"], m["enabled"], out)
+	}
+	assertSame(t, "rows", m["rows"], "["+hygieneSignOffNew+"]")
+	var asked []string
+	for _, r := range *seen {
+		asked = append(asked, r.URL.Path+" "+r.URL.Query().Get("cluster"))
+	}
+	if strings.Join(asked, ",") != "/api/v1/hygiene/history c1,/api/v1/hygiene/config c1" {
+		t.Errorf("asked %v", asked)
+	}
+}
+
+func TestHygieneHistory_AReportThatIsOffStillSaysItsInterval(t *testing.T) {
+	hygieneRoutes(t, 404, `{"detail":"cluster hygiene report is disabled"}`, 200, `{"enabled":false,"interval_days":90}`)
+	out, err := handleHygieneHistory(ctxFor("c1"), args{}, bearer())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := decode(t, out)
+	if m["status"] != "unavailable" || m["enabled"] != false || m["interval_days"] != float64(90) {
+		t.Errorf("%s", out)
+	}
+}
+
+func TestHygieneHistory_ASettingNotReadIsNotAZero(t *testing.T) {
+	hygieneRoutes(t, 200, "["+hygieneSignOffNew+"]", 500, `{"detail":"boom"}`)
+	out, err := handleHygieneHistory(ctxFor("c1"), args{}, bearer())
+	if err != nil {
+		t.Fatalf("the sign-offs were read: %v", err)
+	}
+	m := decode(t, out)
+	if got, has := m["interval_days"]; !has || got != nil {
+		t.Errorf("interval_days = %v (present %v), want null", got, has)
+	}
+	if !strings.Contains(textOf(m["settings_error"]), "boom") {
+		t.Errorf("settings_error = %v", m["settings_error"])
+	}
+	assertSame(t, "rows", m["rows"], "["+hygieneSignOffNew+"]")
+}
+
+// A caller refused the sign-offs is told that and nothing else, however little the settings route asks itself.
+func TestHygieneHistory_ARefusalAsksForNoSettings(t *testing.T) {
+	seen := hygieneRoutes(t, 403, `{"detail":"Permission denied"}`, 200, `{"enabled":true,"interval_days":45}`)
+	out, err := handleHygieneHistory(ctxFor("c1"), args{}, bearer())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := decode(t, out)
+	if m["status"] != "forbidden" {
+		t.Errorf("%s", out)
+	}
+	if _, has := m["interval_days"]; has {
+		t.Errorf("a refusal carries a setting: %s", out)
+	}
+	if len(*seen) != 1 {
+		t.Errorf("%d calls", len(*seen))
+	}
+}
+
+func TestHygieneHistory_TheSettingsNeedThePermissionOfTheScreen(t *testing.T) {
+	if got := toolScreenTable["hygiene_history"](args{}); !reflect.DeepEqual(got, []string{"admin.hygiene.read"}) {
+		t.Errorf("permissions: %v", got)
+	}
+}
+
 func TestHygieneHistory_ASignedOffReportIsTheOneThatWasStored(t *testing.T) {
 	report := `{"generated_at":"2026-08-01T00:00:00Z","counts":{"critical":1},"checks":[{"id":"pss-level"}],"findings":[{"check":"pss-level","severity":"critical","name":"a"},{"check":"root","severity":"warning","name":"b"}]}`
 	body := withCredentials(`{"id":"h1","cluster":"c1","reviewed_by":"u1","reviewed_by_email":"bob@example.com","reviewed_at":"2026-08-01T00:00:00Z","note":"first","counts":{"critical":1,"warning":1,"info":0,"exempt":0},"snapshot":{"cluster":"c1","report":` + report + `}}`)

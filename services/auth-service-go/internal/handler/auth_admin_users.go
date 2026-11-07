@@ -136,7 +136,7 @@ func (h *AuthHandler) AdminBulkUpdateRole(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// AdminBulkCreateUsers handles POST /auth/admin/users/bulk
+// AdminBulkCreateUsers handles POST /auth/admin/users/bulk: it creates who it can and names everyone it left out.
 func (h *AuthHandler) AdminBulkCreateUsers(w http.ResponseWriter, r *http.Request) {
 	payload, ok := requirePerm(h.auditStore, w, r, "admin.users.create")
 	if !ok {
@@ -158,22 +158,34 @@ func (h *AuthHandler) AdminBulkCreateUsers(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var created []model.UserResponse
-	var bulkErrors []model.BulkError
+	created := []model.UserResponse{}
+	failed := []model.BulkCreateFailure{}
+	bulkErrors := []model.BulkError{}
+	noteFailed := func(email, reason, detail, message string) {
+		failed = append(failed, model.BulkCreateFailure{Email: email, Reason: reason, Detail: detail})
+		bulkErrors = append(bulkErrors, model.BulkError{Email: email, Message: message})
+	}
+	// An account never written still leaves its failure row, as an account a bulk role change left out does.
+	leftOut := func(email, role, reason, detail, message string) {
+		noteFailed(email, reason, detail, message)
+		after := map[string]any{"email": email, "reason": reason, "bulk": true}
+		if role != "" {
+			after["role"] = role
+		}
+		writeAudit(h.auditStore, r, payload, auditEvent{action: "user.create", targetType: "user", targetEmail: email, after: after, err: errors.New(message)})
+	}
 
 	for _, u := range req.Users {
 		if u.Name == "" || !strings.Contains(u.Email, "@") || u.Password == "" {
-			bulkErrors = append(bulkErrors, model.BulkError{Email: u.Email, Message: "Missing required fields (name, email, password)"})
+			leftOut(u.Email, "", model.BulkCreateFailedFields, "", "Missing required fields (name, email, password)")
 			continue
 		}
 		if err := checkAccountName(u.Email); err != nil {
-			writeAudit(h.auditStore, r, payload, auditEvent{action: "user.create", targetType: "user", targetEmail: u.Email,
-				after: map[string]any{"email": u.Email, "bulk": true}, err: err})
-			bulkErrors = append(bulkErrors, model.BulkError{Email: u.Email, Message: err.Error()})
+			leftOut(u.Email, "", model.BulkCreateFailedName, "", err.Error())
 			continue
 		}
 		if err := security.ValidatePassword(u.Password, u.Email, h.cfg.PasswordMinLength); err != nil {
-			bulkErrors = append(bulkErrors, model.BulkError{Email: u.Email, Message: err.Error()})
+			leftOut(u.Email, "", model.BulkCreateFailedPassword, err.Error(), err.Error())
 			continue
 		}
 
@@ -188,33 +200,31 @@ func (h *AuthHandler) AdminBulkCreateUsers(w http.ResponseWriter, r *http.Reques
 		}
 		targetRole, err := h.repo.GetRoleByID(r.Context(), roleID)
 		if err != nil || targetRole == nil {
-			bulkErrors = append(bulkErrors, model.BulkError{Email: u.Email, Message: "Invalid role_id"})
+			leftOut(u.Email, "", model.BulkCreateFailedRole, "", "Invalid role_id")
 			continue
 		}
 		if missing := missingPermissions(payload, targetRole.Permissions, ""); len(missing) > 0 {
-			err := ceilingError(missing)
-			writeAudit(h.auditStore, r, payload, auditEvent{action: "user.create", targetType: "user", targetEmail: u.Email,
-				after: map[string]any{"email": u.Email, "role": targetRole.Name, "bulk": true}, err: err})
-			bulkErrors = append(bulkErrors, model.BulkError{Email: u.Email, Message: err.Error()})
+			leftOut(u.Email, targetRole.Name, model.BulkCreateFailedCeiling, strings.Join(missing, ", "), ceilingError(missing).Error())
 			continue
 		}
 
 		if u.Team != nil && strings.TrimSpace(*u.Team) != "" {
 			if ok, _ := h.repo.OrganizationExists(r.Context(), "team", strings.TrimSpace(*u.Team)); !ok {
-				bulkErrors = append(bulkErrors, model.BulkError{Email: u.Email, Message: "Invalid Team: " + *u.Team})
+				leftOut(u.Email, targetRole.Name, model.BulkCreateFailedTeam, *u.Team, "Invalid Team: "+*u.Team)
 				continue
 			}
 		}
 
 		existing, _ := h.repo.GetUserByEmail(r.Context(), u.Email)
 		if existing != nil {
-			bulkErrors = append(bulkErrors, model.BulkError{Email: u.Email, Message: "Email already exists"})
+			leftOut(u.Email, targetRole.Name, model.BulkCreateFailedExists, "", "Email already exists")
 			continue
 		}
 
 		hash, err := security.HashPassword(u.Password, h.cfg.PasswordHashIterations)
 		if err != nil {
-			bulkErrors = append(bulkErrors, model.BulkError{Email: u.Email, Message: "Failed to hash password"})
+			slog.Error("bulk create: hash failed", "email", u.Email, "err", err)
+			leftOut(u.Email, targetRole.Name, model.BulkCreateFailedWrite, "", "Failed to hash password")
 			continue
 		}
 
@@ -238,17 +248,25 @@ func (h *AuthHandler) AdminBulkCreateUsers(w http.ResponseWriter, r *http.Reques
 			after: map[string]any{"name": user.Name, "email": user.Email, "role": targetRole.Name, "team": derefStr(u.Team), "bulk": true}, err: err,
 		})
 		if err != nil {
-			bulkErrors = append(bulkErrors, model.BulkError{Email: u.Email, Message: err.Error()})
+			slog.Error("bulk create: write failed", "email", u.Email, "err", err)
+			noteFailed(u.Email, model.BulkCreateFailedWrite, "", "Failed to create the user")
 			continue
 		}
 
 		created = append(created, user.ToResponse())
 	}
 
-	response.JSON(w, http.StatusOK, model.BulkCreateUserResponse{
-		Created: created,
-		Errors:  bulkErrors,
-	})
+	answer := model.BulkCreateUserResponse{Created: created, Failed: failed, Errors: bulkErrors}
+	writeFailed := slices.ContainsFunc(failed, func(f model.BulkCreateFailure) bool { return f.Reason == model.BulkCreateFailedWrite })
+	switch {
+	case len(failed) == 0:
+		response.JSON(w, http.StatusOK, answer)
+	case len(created) == 0 && writeFailed:
+		answer.Detail = fmt.Sprintf("no account was created (%d left out)", len(failed))
+		response.JSON(w, http.StatusInternalServerError, answer)
+	default:
+		response.JSON(w, http.StatusMultiStatus, answer)
+	}
 }
 
 // AdminCreateUser handles POST /auth/admin/users

@@ -22,8 +22,13 @@ import (
 )
 
 // maxLogTailLines caps a pod-logs tool call; the output is also capped in
-// bytes by runKubectl (TOOL_OUTPUT_MAX_BYTES) and `--limit-bytes`.
+// bytes by runKubectlKeepingEnd (TOOL_OUTPUT_MAX_BYTES).
 const maxLogTailLines = 2000
+
+const (
+	overviewAlternative = "Use k8s_count for one kind."
+	logsCutNotice       = "… [older lines cut by tool-server: this read is larger than %d bytes and the newest lines follow; narrow it with since, tail_lines, grep or container]\n"
+)
 
 // How Secrets are read is in secret_read.go.
 
@@ -179,14 +184,18 @@ func handleGetPodLogs(ctx context.Context, args map[string]interface{}, headers 
 	if grep != "" {
 		scan = maxLogTailLines
 	}
-	cmdArgs = append(cmdArgs, "--tail", fmt.Sprintf("%d", scan), "--limit-bytes", fmt.Sprintf("%d", outputMaxBytes))
+	// No --limit-bytes: it stops the window that many bytes after its start, so the newest lines would go first.
+	cmdArgs = append(cmdArgs, "--tail", fmt.Sprintf("%d", scan))
 
-	out, err := runKubectl(ctx, headers, cmdArgs...)
+	out, cut, err := runKubectlKeepingEnd(ctx, cmdArgs...)
 	if err != nil {
 		return explainFailure(ctx, headers, err, "pods", podName, namespace)
 	}
 	if grep != "" {
-		return grepLines(out, grep, tailLines), nil
+		out = grepLines(out, grep, tailLines)
+	}
+	if cut {
+		return fmt.Sprintf(logsCutNotice, outputMaxBytes) + out, nil
 	}
 	return out, nil
 }
@@ -335,56 +344,27 @@ func handleGetClusterConfiguration(ctx context.Context, _ map[string]interface{}
 	return runKubectl(ctx, headers, "config", "view", "-o", "json")
 }
 
+// handleGetClusterOverview answers what the dashboard's cards read, as the caller, so a kind it may not list and a limited grant read the same.
 func handleGetClusterOverview(ctx context.Context, _ map[string]interface{}, headers http.Header) (string, error) {
-	namespaces, err := countKubectlItems(ctx, headers, "get", "namespaces", "-o", "json")
+	status, body, err := k8sServiceGet(ctx, headers, "/overview", nil)
 	if err != nil {
 		return "", err
 	}
-	podsOutput, err := runKubectl(ctx, headers, "get", "pods", "--all-namespaces", "-o", "json")
-	if err != nil {
-		return "", err
+	reply, out, err := featureReply("overview", overviewAlternative, status, body)
+	if err != nil || out != "" {
+		return out, err
 	}
-	podCounts, podTotal := summarizePodStatus(podsOutput)
+	if scoped, _ := reply["scoped"].(bool); scoped {
+		markNotCounted(ctx, reply)
+	}
+	return marshalJSON(reply)
+}
 
-	services, err := countKubectlItems(ctx, headers, "get", "services", "--all-namespaces", "-o", "json")
-	if err != nil {
-		return "", err
-	}
-	deployments, err := countKubectlItems(ctx, headers, "get", "deployments", "--all-namespaces", "-o", "json")
-	if err != nil {
-		return "", err
-	}
-	pvcs, err := countKubectlItems(ctx, headers, "get", "pvc", "--all-namespaces", "-o", "json")
-	if err != nil {
-		return "", err
-	}
-	pvs, err := countKubectlItems(ctx, headers, "get", "pv", "-o", "json")
-	if err != nil {
-		return "", err
-	}
-	nodes, err := countKubectlItems(ctx, headers, "get", "nodes", "-o", "json")
-	if err != nil {
-		return "", err
-	}
-
-	versionOutput, err := runKubectl(ctx, headers, "version", "-o", "json")
-	if err != nil {
-		return "", err
-	}
-	clusterVersion := parseClusterVersion(versionOutput)
-
-	result := map[string]interface{}{
-		"total_namespaces":  namespaces,
-		"total_pods":        podTotal,
-		"total_services":    services,
-		"total_deployments": deployments,
-		"total_pvcs":        pvcs,
-		"total_pvs":         pvs,
-		"pod_status":        podCounts,
-		"node_count":        nodes,
-		"cluster_version":   clusterVersion,
-	}
-	return marshalJSON(result)
+// markNotCounted says what the dashboard's "—" says: the route's 0 for these kinds of a limited grant means not counted.
+func markNotCounted(ctx context.Context, reply map[string]interface{}) {
+	reply["total_pvs"], reply["node_count"] = nil, nil
+	reply["not_counted"] = []string{"persistentvolumes", "nodes"}
+	reply["namespaces"] = scopedNamespaces(ctx)
 }
 
 func handleGetNodeMetrics(ctx context.Context, _ map[string]interface{}, headers http.Header) (string, error) {

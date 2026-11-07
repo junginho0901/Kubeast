@@ -142,7 +142,7 @@ func buildToolRegistry() map[string]ToolDefinition {
 	})
 	register(ToolDefinition{
 		Name:        "get_cluster_overview",
-		Description: "Get an overview of cluster health and resource counts",
+		Description: "The Dashboard's overview: counts of each kind the user may list, pod phases, node count and version",
 		Handler:     handleGetClusterOverview,
 	})
 	register(ToolDefinition{
@@ -197,7 +197,7 @@ func buildToolRegistry() map[string]ToolDefinition {
 	})
 	register(ToolDefinition{
 		Name:        "alerts_list",
-		Description: "The cluster's alerts in its alert store (Alertmanager): firing, silenced or inhibited, with the silences on them",
+		Description: "The cluster's alerts in its alert store (Alertmanager): firing, silenced or inhibited, with the silences on them, or the Silences tab",
 		Handler:     handleAlertsList,
 	})
 	register(ToolDefinition{
@@ -337,7 +337,7 @@ func buildToolRegistry() map[string]ToolDefinition {
 	})
 	register(ToolDefinition{
 		Name:        "hygiene_history",
-		Description: "This cluster's hygiene sign-offs, or the report one stored — Admin",
+		Description: "This cluster's hygiene sign-offs and how often one is due, or the report one stored — Admin",
 		Handler:     handleHygieneHistory,
 	})
 	register(ToolDefinition{

@@ -224,9 +224,31 @@ type BulkCreateUserRequest struct {
 	Users []AdminCreateUserRequest `json:"users"`
 }
 
+// Why a bulk creation left an account out. The screen words them from its catalog.
+const (
+	BulkCreateFailedFields   = "missing_fields"
+	BulkCreateFailedName     = "name"
+	BulkCreateFailedPassword = "password"
+	BulkCreateFailedRole     = "role"
+	BulkCreateFailedCeiling  = "ceiling"
+	BulkCreateFailedTeam     = "team"
+	BulkCreateFailedExists   = "exists"
+	BulkCreateFailedWrite    = "failed"
+)
+
+// BulkCreateFailure is one account a bulk creation left out; Detail is what the reason's words cannot say.
+type BulkCreateFailure struct {
+	Email  string `json:"email"`
+	Reason string `json:"reason"`
+	Detail string `json:"detail,omitempty"`
+}
+
+// BulkCreateUserResponse answers 200, 207 when someone was not created, 500 when a failed write left nobody; Errors is for older clients.
 type BulkCreateUserResponse struct {
-	Created []UserResponse `json:"created"`
-	Errors  []BulkError    `json:"errors"`
+	Detail  string              `json:"detail,omitempty"`
+	Created []UserResponse      `json:"created"`
+	Failed  []BulkCreateFailure `json:"failed"`
+	Errors  []BulkError         `json:"errors"`
 }
 
 type BulkError struct {
