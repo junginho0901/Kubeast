@@ -2,9 +2,8 @@
 //
 // frontend/src/pages/workloads/DaemonSets.tsx 의 normalizeWatchDaemonSetObject +
 // applyDaemonSetWatchEvent 추출. useKubeWatchList 의 applyEvent 콜백에서만 사용
-// (raw watch event → 기존 list state 에 병합).
+// (raw watch event → 기존 list state 에 반영).
 
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import type { DaemonSetInfo } from '@/services/api'
 import { computeDaemonSetStatus } from './daemonSetHelpers'
 
@@ -46,7 +45,7 @@ export function normalizeWatchDaemonSetObject(obj: any): DaemonSetInfo {
     unavailable,
     node_selector: templateSpec?.nodeSelector ?? obj?.node_selector ?? {},
     images,
-    status: computeDaemonSetStatus({ desired, ready, misscheduled, unavailable }),
+    status: computeDaemonSetStatus({ desired, ready, available }),
     created_at: metadata?.creationTimestamp ?? obj?.created_at ?? null,
   }
 }
@@ -72,7 +71,8 @@ export function applyDaemonSetWatchEvent(
     return items
   }
 
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
+  // the server sends the whole row (dsrow.Info), so it replaces: a node selector that went away goes
+  if (index >= 0) items[index] = normalized
   else items.push(normalized)
 
   return items

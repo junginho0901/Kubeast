@@ -9,20 +9,13 @@ export type SortKey = null | 'name' | 'ready' | 'current' | 'desired' | 'updated
 
 export { ageSeconds as parseAgeSeconds, formatAge } from '@/utils/time'
 
-export function computeDaemonSetStatus(daemonset: {
-  desired: number
-  ready: number
-  misscheduled?: number
-  unavailable?: number
-}): string {
+// The server's rule (replicastatus.Of), for a row it could not convert: Idle with none wanted, Unavailable with none
+// available, Degraded with fewer ready than wanted.
+export function computeDaemonSetStatus(daemonset: { desired: number; ready: number; available: number }): string {
   const desired = daemonset.desired || 0
-  const ready = daemonset.ready || 0
-  const misscheduled = daemonset.misscheduled || 0
-  const unavailable = daemonset.unavailable || 0
-
   if (desired === 0) return 'Idle'
-  if (ready === 0) return 'Unavailable'
-  if (ready !== desired || misscheduled > 0 || unavailable > 0) return 'Degraded'
+  if ((daemonset.available || 0) === 0) return 'Unavailable'
+  if ((daemonset.ready || 0) < desired) return 'Degraded'
   return 'Healthy'
 }
 

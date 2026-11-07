@@ -8,7 +8,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	dsrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/daemonset"
 	deployrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/deployment"
+	jobrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/job"
 	rsrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/replicaset"
 )
 
@@ -67,13 +69,13 @@ func TestBuildWorkloadGraph_StatusesAreTheLists(t *testing.T) {
 		listStatus[rgNodeID("StatefulSet", "ns", sts[i].Name)] = formatStatefulSetDetail(&sts[i])["status"].(string)
 	}
 	for i := range dss {
-		listStatus[rgNodeID("DaemonSet", "ns", dss[i].Name)] = formatDaemonSetDetail(&dss[i])["status"].(string)
+		listStatus[rgNodeID("DaemonSet", "ns", dss[i].Name)] = dsrow.Info(&dss[i])["status"].(string)
 	}
 	for i := range rss {
 		listStatus[rgNodeID("ReplicaSet", "ns", rss[i].Name)] = rsrow.Info(&rss[i])["status"].(string)
 	}
 	for i := range jobs {
-		listStatus[rgNodeID("Job", "ns", jobs[i].Name)] = formatJobDetail(&jobs[i])["status"].(string)
+		listStatus[rgNodeID("Job", "ns", jobs[i].Name)] = jobrow.Info(&jobs[i])["status"].(string)
 	}
 	for i := range pods {
 		s, _, _, _ := podListView(&pods[i])

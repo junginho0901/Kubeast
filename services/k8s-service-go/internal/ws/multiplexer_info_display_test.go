@@ -29,7 +29,7 @@ func TestPodInfoContainerStateMatchesTheList(t *testing.T) {
 	}
 	c := info["containers"].([]map[string]interface{})[0]
 	want := map[string]interface{}{"terminated": map[string]interface{}{
-		"exit_code": int64(1), "reason": "Error", "message": "",
+		"exit_code": int32(1), "reason": "Error", "message": "",
 		"started_at": "2026-10-07T08:47:42Z", "finished_at": "2026-10-07T08:47:43Z",
 	}}
 	if !reflect.DeepEqual(c["state"], want) {

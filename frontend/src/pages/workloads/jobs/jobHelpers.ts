@@ -37,10 +37,7 @@ export function jobDurationSeconds(job: { start_time?: string | null; completion
   return Math.floor((end - start) / 1000)
 }
 
-// backend workloads_job.go 는 condition 기반으로 "Active" / "Complete" / "Failed" 를
-// 보내는데, watch event 의 raw object 는 status 가 비어있어 active/succeeded/failed
-// 카운터로 추정해야 함. summary 분류 (running 카드에 Active 매칭) 도 이 status
-// 문자열을 사용.
+// The server's status (jobrow.Status) stands; a row with none reads by its counts. The summary cards read this string too.
 export function computeJobStatus(job: {
   status?: string
   active?: number

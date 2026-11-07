@@ -6,6 +6,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	dsrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/daemonset"
 	rsrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/replicaset"
 )
 
@@ -33,7 +34,7 @@ func TestWorkloadStatus_NoneAvailableIsUnavailable(t *testing.T) {
 			Status: appsv1.ReplicaSetStatus{ReadyReplicas: c.ready, AvailableReplicas: c.available}}
 		for kind, got := range map[string]interface{}{
 			"StatefulSet": formatStatefulSetDetail(sts)["status"],
-			"DaemonSet":   formatDaemonSetDetail(ds)["status"],
+			"DaemonSet":   dsrow.Info(ds)["status"],
 			"ReplicaSet":  rsrow.Info(rs)["status"],
 		} {
 			if got != c.want {

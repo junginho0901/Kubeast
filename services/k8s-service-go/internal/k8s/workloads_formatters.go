@@ -9,7 +9,9 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	cronjobrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/cronjob"
+	dsrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/daemonset"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/eventtime"
+	jobrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/job"
 	rsrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/replicaset"
 )
 
@@ -111,48 +113,10 @@ func formatStatefulSetDetail(sts *appsv1.StatefulSet) map[string]interface{} {
 
 func formatDaemonSetList(items []appsv1.DaemonSet) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(items))
-	for _, ds := range items {
-		result = append(result, formatDaemonSetDetail(&ds))
+	for i := range items {
+		result = append(result, dsrow.Info(&items[i]))
 	}
 	return result
-}
-
-func formatDaemonSetDetail(ds *appsv1.DaemonSet) map[string]interface{} {
-	images := make([]string, 0)
-	for _, c := range ds.Spec.Template.Spec.Containers {
-		images = append(images, c.Image)
-	}
-	image := ""
-	if len(images) > 0 {
-		image = images[0]
-	}
-
-	var selector interface{}
-	if ds.Spec.Selector != nil && ds.Spec.Selector.MatchLabels != nil {
-		selector = ds.Spec.Selector.MatchLabels
-	} else {
-		selector = map[string]string{}
-	}
-
-	dsStatus := replicaStatus(ds.Status.DesiredNumberScheduled, ds.Status.NumberAvailable, ds.Status.NumberReady)
-
-	return map[string]interface{}{
-		"name":          ds.Name,
-		"namespace":     ds.Namespace,
-		"desired":       ds.Status.DesiredNumberScheduled,
-		"current":       ds.Status.CurrentNumberScheduled,
-		"ready":         ds.Status.NumberReady,
-		"updated":       ds.Status.UpdatedNumberScheduled,
-		"available":     ds.Status.NumberAvailable,
-		"misscheduled":  ds.Status.NumberMisscheduled,
-		"unavailable":   ds.Status.NumberUnavailable,
-		"node_selector": ds.Spec.Template.Spec.NodeSelector,
-		"image":         image,
-		"images":        images,
-		"selector":      selector,
-		"status":        dsStatus,
-		"created_at":    toISO(&ds.CreationTimestamp),
-	}
 }
 
 func formatReplicaSetList(items []appsv1.ReplicaSet) []map[string]interface{} {
@@ -165,72 +129,9 @@ func formatReplicaSetList(items []appsv1.ReplicaSet) []map[string]interface{} {
 
 func formatJobList(items []batchv1.Job) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(items))
-	for _, job := range items {
-		result = append(result, formatJobDetail(&job))
+	for i := range items {
+		result = append(result, jobrow.Info(&items[i]))
 	}
-	return result
-}
-
-func formatJobDetail(job *batchv1.Job) map[string]interface{} {
-	completions := int32(1)
-	if job.Spec.Completions != nil {
-		completions = *job.Spec.Completions
-	}
-
-	parallelism := int32(1)
-	if job.Spec.Parallelism != nil {
-		parallelism = *job.Spec.Parallelism
-	}
-
-	images := make([]string, 0)
-	containers := make([]string, 0)
-	for _, c := range job.Spec.Template.Spec.Containers {
-		images = append(images, c.Image)
-		containers = append(containers, c.Name)
-	}
-	image := ""
-	if len(images) > 0 {
-		image = images[0]
-	}
-
-	status := jobStatus(job)
-
-	ownerRefs := make([]map[string]interface{}, 0, len(job.OwnerReferences))
-	for _, ref := range job.OwnerReferences {
-		ownerRefs = append(ownerRefs, map[string]interface{}{
-			"kind":       ref.Kind,
-			"name":       ref.Name,
-			"uid":        string(ref.UID),
-			"controller": ref.Controller != nil && *ref.Controller,
-		})
-	}
-
-	result := map[string]interface{}{
-		"name":             job.Name,
-		"namespace":        job.Namespace,
-		"completions":      completions,
-		"parallelism":      parallelism,
-		"succeeded":        job.Status.Succeeded,
-		"failed":           job.Status.Failed,
-		"active":           job.Status.Active,
-		"status":           status,
-		"image":            image,
-		"images":           images,
-		"containers":       containers,
-		"owner_references": ownerRefs,
-		"created_at":       toISO(&job.CreationTimestamp),
-	}
-
-	if job.Status.StartTime != nil {
-		result["start_time"] = toISO(job.Status.StartTime)
-	}
-	if job.Status.CompletionTime != nil {
-		result["completion_time"] = toISO(job.Status.CompletionTime)
-	}
-	if job.Status.StartTime != nil && job.Status.CompletionTime != nil {
-		result["duration"] = job.Status.CompletionTime.Time.Sub(job.Status.StartTime.Time).String()
-	}
-
 	return result
 }
 

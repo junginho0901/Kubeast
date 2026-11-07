@@ -1455,6 +1455,10 @@ test.describe('number check — list screens', () => {
     const SECRET = 'num-live-secret'
     const SA = 'num-live-sa'
     const ROLE = 'num-live-role'
+    const DS = 'num-live-ds'
+    const JOB = 'num-live-job'
+    const POD = 'num-live-pod'
+    const ENV_VALUE = 'fake-env-value-for-tests'
     const SECRET_VALUE = 'fake-secret-value-for-tests'
     const SECRET_ENCODED = 'ZmFrZS1zZWNyZXQtdmFsdWUtZm9yLXRlc3Rz'
     const CONFIG_VALUE = 'fake-config-value-for-tests'
@@ -1502,13 +1506,13 @@ test.describe('number check — list screens', () => {
     }
     // what one object's live frames say after a change: the change is made once the watch runs, and the last frame of it
     // is held to the row the list API gives for the same object
-    const frameIsTheListRow = async (s: Screen, name: string, listPath: string, change: string, forbidden: string[] = []) => {
+    const frameIsTheListRow = async (s: Screen | string, name: string, listPath: string, change: string, forbidden: string[] = []) => {
       const frames: string[] = []
       const collect = (ws: WebSocket) => {
         if (/wsMultiplexer/.test(ws.url())) ws.on('framereceived', (f) => { if (String(f.payload).includes(`"${name}"`)) frames.push(String(f.payload)) })
       }
       page.on('websocket', collect)
-      await page.goto(screenUrl(s))
+      await page.goto(typeof s === 'string' ? s : screenUrl(s))
       await expect.poll(() => frames.length, { timeout: 20_000, message: `${name}: the watch's first frame` }).toBeGreaterThan(0)
       const before = frames.length
       kubectl(change)
@@ -1856,6 +1860,62 @@ test.describe('number check — list screens', () => {
         await follows(s, PV, [], { ...kept, Status: 'Released', Claim: `${NS}/num-live-claim` })
         await follows(s, PV, [`patch persistentvolume ${PV} --type=json -p=${arg([{ op: 'remove', path: '/spec/claimRef' }])}`], { ...kept, Status: 'Available', Claim: '-' })
       })
+
+      await test.step('a DaemonSet whose node selector went away shows none', async () => {
+        const s = screenOf('/workloads/daemonsets')
+        // an affinity no node meets, so no pod runs whatever the selector says
+        kubectl('apply -f -', JSON.stringify({
+          apiVersion: 'apps/v1',
+          kind: 'DaemonSet',
+          metadata: { name: DS, namespace: NS },
+          spec: {
+            selector: { matchLabels: { app: DS } },
+            template: {
+              metadata: { labels: { app: DS } },
+              spec: {
+                nodeSelector: { 'kubeast.io/e2e': 'nowhere' },
+                affinity: { nodeAffinity: { requiredDuringSchedulingIgnoredDuringExecution: { nodeSelectorTerms: [{ matchExpressions: [{ key: 'kubeast.io/e2e', operator: 'In', values: ['nowhere'] }] }] } } },
+                containers: [{ name: 'app', image: 'busybox:1.37', command: ['sleep', '3600'] }],
+              },
+            },
+          },
+        }))
+        await watching(s, DS)
+        await follows(s, DS, [], { 'Node Selector': 'kubeast.io/e2e=nowhere', Status: 'Idle' })
+        await follows(s, DS, [`patch daemonset ${DS} -n ${NS} --type=json -p=${arg([{ op: 'remove', path: '/spec/template/spec/nodeSelector' }])}`], { 'Node Selector': '-', Status: 'Idle' })
+      })
+
+      await test.step('a Job frame is the list row, its owner gone with the object', async () => {
+        const s = screenOf('/workloads/jobs')
+        const uid = kubectl(`get configmap num-cm -n ${NS} -o jsonpath={.metadata.uid}`)
+        // suspended, so no pod runs and its Duration stays
+        kubectl('apply -f -', JSON.stringify({
+          apiVersion: 'batch/v1',
+          kind: 'Job',
+          metadata: { name: JOB, namespace: NS, ownerReferences: [{ apiVersion: 'v1', kind: 'ConfigMap', name: 'num-cm', uid, controller: true }] },
+          spec: { suspend: true, template: { spec: { restartPolicy: 'Never', containers: [{ name: 'app', image: 'busybox:1.37', command: ['true'] }] } } },
+        }))
+        await frameIsTheListRow(s, JOB, 'jobs', `patch job ${JOB} -n ${NS} --type=json -p=${arg([{ op: 'remove', path: '/metadata/ownerReferences' }])}`)
+        await follows(s, JOB, [], { Containers: 'app', Duration: '-' })
+      })
+
+      await test.step('a pod frame is the list row, with no environment value in it', async () => {
+        // a node selector no node has: the pod stays Pending and no image is pulled. The ConfigMap drawer watches the namespace's pods.
+        kubectl('apply -f -', JSON.stringify({
+          apiVersion: 'v1',
+          kind: 'Pod',
+          metadata: { name: POD, namespace: NS, labels: { team: 'live' } },
+          spec: {
+            nodeSelector: { 'kubeast.io/e2e': 'nowhere' },
+            containers: [{ name: 'app', image: 'busybox:1.37', env: [{ name: 'MODE', value: ENV_VALUE }], envFrom: [{ configMapRef: { name: 'num-cm' } }] }],
+          },
+        }))
+        await frameIsTheListRow(`/configuration/configmaps?cluster=self&namespace=${NS}&detail=ConfigMap/${NS}/num-cm`, POD, 'pods',
+          `patch pod ${POD} -n ${NS} --type=json -p=${arg([{ op: 'remove', path: '/metadata/labels' }])}`, [ENV_VALUE])
+        const drawer = page.locator(DRAWER).last()
+        await expect(drawer).toContainText(POD, { timeout: 20_000 })
+        await page.keyboard.press('Escape')
+      })
     } finally {
       await held.close()
       kubectl(`delete ingress ${ING} -n ${NS} --ignore-not-found --wait=false`)
@@ -1876,6 +1936,67 @@ test.describe('number check — list screens', () => {
       kubectl(`delete secret ${SECRET} -n ${NS} --ignore-not-found --wait=false`)
       kubectl(`delete serviceaccount ${SA} -n ${NS} --ignore-not-found --wait=false`)
       kubectl(`delete role ${ROLE} -n ${NS} --ignore-not-found --wait=false`)
+      kubectl(`delete daemonset ${DS} -n ${NS} --ignore-not-found --wait=false`)
+      kubectl(`delete job ${JOB} -n ${NS} --ignore-not-found --wait=false`)
+      kubectl(`delete pod ${POD} -n ${NS} --ignore-not-found --wait=false`)
+    }
+  })
+
+  // An open drawer reads its answer again when its object changes, whichever page opened it, and what is on screen stays
+  // meanwhile. No pod runs: nothing is scaled up, a selector no node meets, the Job and the CronJob suspended.
+  test('an open workload or HPA drawer follows its object, opened from its list or by a link', async ({ page }) => {
+    test.setTimeout(300_000)
+    const labels = { app: 'num-follow' }
+    const selector = { matchLabels: labels }
+    const template = { metadata: { labels }, spec: { nodeSelector: { 'kubeast.io/e2e': 'nowhere' }, containers: [{ name: 'app', image: 'busybox:1.37', command: ['sleep', '3600'] }] } }
+    const objects: { kind: string; apiVersion: string; list: string; spec: Obj }[] = [
+      { kind: 'Deployment', apiVersion: 'apps/v1', list: '/workloads/deployments', spec: { replicas: 0, selector, template } },
+      { kind: 'ReplicaSet', apiVersion: 'apps/v1', list: '/workloads/replicasets', spec: { replicas: 0, selector, template } },
+      { kind: 'StatefulSet', apiVersion: 'apps/v1', list: '/workloads/statefulsets', spec: { replicas: 0, serviceName: 'num-follow', selector, template } },
+      { kind: 'DaemonSet', apiVersion: 'apps/v1', list: '/workloads/daemonsets', spec: { selector, template } },
+      { kind: 'Job', apiVersion: 'batch/v1', list: '/workloads/jobs', spec: { suspend: true, template: { spec: { ...template.spec, restartPolicy: 'Never' } } } },
+      { kind: 'CronJob', apiVersion: 'batch/v1', list: '/workloads/cronjobs', spec: { schedule: '0 9 * * *', suspend: true, jobTemplate: { spec: { template: { spec: { ...template.spec, restartPolicy: 'Never' } } } } } },
+      {
+        kind: 'HorizontalPodAutoscaler',
+        apiVersion: 'autoscaling/v2',
+        list: '/workloads/hpas',
+        spec: { scaleTargetRef: { apiVersion: 'apps/v1', kind: 'Deployment', name: 'num-follow-nowhere' }, minReplicas: 1, maxReplicas: 2 },
+      },
+    ]
+    const name = (kind: string) => `num-follow-${kind.toLowerCase()}`
+    const label = (kind: string, value: string) => kubectl(`label ${kind.toLowerCase()} ${name(kind)} -n ${NS} num-follow=${value} --overwrite`)
+    try {
+      for (const o of objects) {
+        // A drawer draws its Labels section once there is a label.
+        kubectl('apply -f -', JSON.stringify({ apiVersion: o.apiVersion, kind: o.kind, metadata: { name: name(o.kind), namespace: NS, labels: { 'e2e-follow': 'yes' } }, spec: o.spec }))
+      }
+      for (const o of objects) {
+        await test.step(`${o.kind}: from its list, then by a link from another page`, async () => {
+          const detail = `cluster=self&namespace=${NS}&detail=${o.kind}/${NS}/${name(o.kind)}`
+          const drawer = page.locator(DRAWER).last()
+
+          await page.goto(`${o.list}?${detail}`)
+          await expect(drawer).toContainText(name(o.kind), { timeout: 20_000 })
+          const section = drawer.getByText('Labels', { exact: true }).first()
+          await expect(section).toBeVisible({ timeout: 20_000 })
+          await expect(drawer).not.toContainText('num-follow:')
+          // the same element after the update: the section was not drawn again from a loading state
+          await section.evaluate((el) => el.setAttribute('data-e2e-kept', 'yes'))
+          label(o.kind, 'one')
+          await expect(drawer, `${o.kind} drawer opened from its list`).toContainText('num-follow:one', { timeout: 20_000 })
+          await expect(section).toHaveAttribute('data-e2e-kept', 'yes')
+
+          await page.goto(`/workloads/pods?${detail}`)
+          await expect(drawer).toContainText('num-follow:one', { timeout: 20_000 })
+          label(o.kind, 'two')
+          await expect(drawer, `${o.kind} drawer opened by a link`).toContainText('num-follow:two', { timeout: 20_000 })
+          await expect(drawer).not.toContainText('num-follow:one')
+          kubectl(`label ${o.kind.toLowerCase()} ${name(o.kind)} -n ${NS} num-follow-`)
+          await expect(drawer, `${o.kind} drawer after its label went`).not.toContainText('num-follow:', { timeout: 20_000 })
+        })
+      }
+    } finally {
+      for (const o of objects) kubectl(`delete ${o.kind.toLowerCase()} ${name(o.kind)} -n ${NS} --ignore-not-found --wait=false`)
     }
   })
 

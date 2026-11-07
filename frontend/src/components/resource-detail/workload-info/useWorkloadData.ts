@@ -7,6 +7,17 @@ import { api } from '@/services/api'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { usePermission } from '@/hooks/usePermission'
 import { replicaSetOwnerRow } from '../netstoreDetail'
+import { useDrawerFollowsObject } from '../useDrawerFollowsObject'
+
+// The list each kind's drawer watches its one object on.
+const WATCHED_LIST: Record<string, [apiVersion: string, plural: string]> = {
+  Deployment: ['apps/v1', 'deployments'],
+  StatefulSet: ['apps/v1', 'statefulsets'],
+  DaemonSet: ['apps/v1', 'daemonsets'],
+  ReplicaSet: ['apps/v1', 'replicasets'],
+  Job: ['batch/v1', 'jobs'],
+  CronJob: ['batch/v1', 'cronjobs'],
+}
 
 interface UseWorkloadDataParams {
   name: string
@@ -34,6 +45,13 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
     },
     enabled: needsDescribe,
     retry: false,
+  })
+  const [watchedApi, watchedPlural] = WATCHED_LIST[kind] ?? []
+  useDrawerFollowsObject({
+    enabled: needsDescribe && !!watchedApi,
+    describeKey: ['workload-describe', kind, namespace, name],
+    path: `/apis/${watchedApi}/namespaces/${namespace}/${watchedPlural}`,
+    name,
   })
 
   const [triggerDialogOpen, setTriggerDialogOpen] = useState(false)

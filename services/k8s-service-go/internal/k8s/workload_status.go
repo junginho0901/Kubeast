@@ -3,9 +3,9 @@ package k8s
 import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
-	corev1 "k8s.io/api/core/v1"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/deploystatus"
+	jobrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/job"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/replicastatus"
 )
 
@@ -26,17 +26,9 @@ func deploymentStatus(d *appsv1.Deployment) (status, reason string) {
 	return deploystatus.Of(d)
 }
 
-// jobStatus is a Job's by its conditions: Complete, Failed or Running.
+// jobStatus is a Job's by its conditions: Complete, Failed or Running (jobrow.Status, which the Job row reads too).
 func jobStatus(j *batchv1.Job) string {
-	for _, c := range j.Status.Conditions {
-		if c.Type == batchv1.JobComplete && c.Status == corev1.ConditionTrue {
-			return "Complete"
-		}
-		if c.Type == batchv1.JobFailed && c.Status == corev1.ConditionTrue {
-			return "Failed"
-		}
-	}
-	return "Running"
+	return jobrow.Status(j)
 }
 
 // workloadHealth is how a list status is drawn: ok, warn or error; "" for a
