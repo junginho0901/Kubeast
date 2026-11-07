@@ -9,6 +9,11 @@
       "screen": "/ai-chat on",
       "selector": "canvas",
       "why": "The moving particle sphere of an empty chat: it never holds still."
+    },
+    {
+      "screen": "/admin/clusters on",
+      "selector": "[data-testid^=\"cluster-health-checked-\"]",
+      "why": "When the background check last ran, which moves by itself."
     }
   ]
 }

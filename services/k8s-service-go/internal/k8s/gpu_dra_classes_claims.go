@@ -66,6 +66,7 @@ func (s *Service) DescribeDeviceClass(ctx context.Context, name string) (map[str
 	} else {
 		result["used_by"] = drarow.UsedBy(name, claims)
 	}
+	s.setObjectEvents(ctx, result, "", "DeviceClass", name)
 
 	return result, nil
 }
@@ -155,6 +156,7 @@ func (s *Service) DescribeResourceClaim(ctx context.Context, namespace, name str
 	} else {
 		result["using_pods"] = using
 	}
+	s.setObjectEvents(ctx, result, namespace, "ResourceClaim", name)
 
 	return result, nil
 }
@@ -233,6 +235,7 @@ func (s *Service) DescribeResourceClaimTemplate(ctx context.Context, namespace, 
 	} else {
 		result["related_claims"] = related
 	}
+	s.setObjectEvents(ctx, result, namespace, "ResourceClaimTemplate", name)
 
 	return result, nil
 }

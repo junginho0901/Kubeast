@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { InfoSection, InfoRow, KeyValueTags, Th, Tx } from './DetailCommon'
+import { EventsSection, InfoSection, InfoRow, KeyValueTags, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { configParameterMap } from './draText'
@@ -22,6 +22,8 @@ type DeviceClassDescribe = {
   // the claims whose requests ask for this class, worked out on the server
   used_by?: Array<{ namespace: string; name: string; state: string; requests: string[] }>
   used_by_error?: string
+  events?: unknown[]
+  events_error?: string
   labels?: Record<string, string>
   annotations?: Record<string, string>
   created_at?: string | null
@@ -162,6 +164,8 @@ export default function DeviceClassInfo({ name, rawJson }: Props) {
           <KeyValueTags data={annotations} />
         </InfoSection>
       )}
+
+      <EventsSection events={describe?.events} error={describe?.events_error} loading={isLoading} />
     </>
   )
 }

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
+import { useAIContext } from '@/hooks/useAIContext'
 import { policyReportsEnabled } from '@/utils/features'
 import { InfoSection, NoneText } from './DetailCommon'
 import { violationsNameTheResource, violationsQuery, violationsView } from './violationsView'
@@ -31,10 +32,24 @@ export default function PolicyViolations({ kind, namespace, name, apiVersion }: 
     retry: false,
   })
   const view = violationsView(on, status, resource)
+  const selectorError = view.show === 'rows' ? view.selectorError : undefined
+  useAIContext(view.show === 'rows' ? {
+    source: 'PolicyViolations',
+    summary: `Policy violations of ${kind} ${name}: ${view.rows.length}`,
+    data: {
+      rows: view.rows.map((r) => ({ result: r.result, policy: r.policy, rule: r.rule, severity: r.severity, kind: r.kind, name: r.name, message: r.message })),
+      selector_error: selectorError,
+    },
+  } : null, [view.show, view.show === 'rows' ? view.rows : null, selectorError, kind, name])
   if (view.show === 'nothing') return null
   const named = violationsNameTheResource(kind)
   return (
     <InfoSection title="Policy violations">
+      {selectorError && (
+        <p className="text-xs text-amber-300 mb-2" data-testid="policy-violations-selector-error">
+          {tr('policyReports.selectorError', 'Results that pick resources by label could not be checked against this object: {{error}}', { error: selectorError })}
+        </p>
+      )}
       {view.show === 'loading' ? (
         <span className="text-slate-400 text-xs" data-testid="policy-violations-loading">{tr('common.loading', 'Loading...')}</span>
       ) : view.show === 'error' ? (

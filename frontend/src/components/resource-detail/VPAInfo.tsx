@@ -4,7 +4,7 @@ import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, ConditionsTable, Even
 import { fmtRel, fmtTs } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
-import { VPA_POLICY_EXTRA_HEAD, vpaPolicyExtraRows, vpaStartupBoostText, vpaValue } from './vpaDetail'
+import { VPA_POLICY_EXTRA_HEAD, vpaEvictionText, vpaPolicyExtraRows, vpaRecommendersText, vpaStartupBoostText, vpaValue } from './vpaDetail'
 
 interface Props {
   name: string
@@ -84,6 +84,7 @@ export default function VPAInfo({ name, namespace }: Props) {
           <InfoRow label="Namespace" value={namespace} />
           <InfoRow label="UID" value={desc.uid || '-'} />
           <InfoRow label="Created" value={fmtTs(desc.created_at) === '-' ? '-' : `${fmtTs(desc.created_at)} (${fmtRel(desc.created_at)})`} />
+          <InfoRow label="Observed Generation" value={vpaValue(desc.observed_generation)} />
         </div>
       </InfoSection>
 
@@ -116,6 +117,8 @@ export default function VPAInfo({ name, namespace }: Props) {
           <InfoRow label="Min Replicas" value={vpaValue(desc.min_replicas)} />
           <InfoRow label="Evict After OOM Seconds" value={vpaValue(desc.evict_after_oom_seconds)} />
           <InfoRow label="Startup Boost" value={vpaStartupBoostText(desc.startup_boost)} />
+          <InfoRow label="Eviction Requirements" value={vpaEvictionText(desc.eviction_requirements)} />
+          <InfoRow label="Recommenders" value={vpaRecommendersText(desc.recommenders)} />
         </div>
       </InfoSection>
 

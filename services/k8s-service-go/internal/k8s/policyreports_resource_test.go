@@ -11,8 +11,11 @@ import (
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	fakediscovery "k8s.io/client-go/discovery/fake"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
 )
 
@@ -219,5 +222,161 @@ func TestPolicyReportKeep_TheMatchedResourcesAPIVersion(t *testing.T) {
 	out.keep([]PolicyReportResult{r}, func(ref policyReportRef) bool { return ref.Name == "w2" })
 	if len(out.Rows) != 1 || out.Rows[0].Name != "w2" || out.Rows[0].APIVersion != "b.example.io/v1" {
 		t.Fatalf("rows = %+v, want w2 of b.example.io/v1", out.Rows)
+	}
+}
+
+// A result may pick its resources by label (resourceSelector), and a report its scope (scopeSelector): each object whose
+// labels match gets the row in its drawer, named after itself, in the report's namespace only.
+const prSelector = `{"apiVersion":"wgpolicyk8s.io/v1alpha2","kind":"PolicyReport","metadata":{"name":"r-sel","namespace":"shop"},"results":[` +
+	`{"policy":"need-limits","result":"fail","source":"kube-bench","message":"web pods","resourceSelector":{"matchLabels":{"app":"web"}}},` +
+	`{"policy":"no-latest","result":"warn","source":"kube-bench","resourceSelector":{"matchExpressions":[{"key":"tier","operator":"In","values":["front","back"]}]}},` +
+	`{"policy":"named-one","result":"fail","source":"kube-bench","resources":[{"apiVersion":"v1","kind":"ConfigMap","name":"cm-other","namespace":"shop"}]}]}`
+const prScopeSelector = `{"apiVersion":"wgpolicyk8s.io/v1alpha2","kind":"PolicyReport","metadata":{"name":"r-scope-sel","namespace":"shop"},"scopeSelector":{"matchLabels":{"app":"web"}},"results":[` +
+	`{"policy":"whole-scope","result":"error","source":"kube-bench"}]}`
+
+func labelledObject(kind, name string, labels string) func(w http.ResponseWriter) {
+	return func(w http.ResponseWriter) {
+		_, _ = w.Write([]byte(`{"apiVersion":"v1","kind":"` + kind + `","metadata":{"name":"` + name + `","namespace":"shop","labels":` + labels + `}}`))
+	}
+}
+
+func withPolicyDiscovery(s *Service) {
+	b := s.defaultBundle.Load()
+	disc := fake.NewSimpleClientset().Discovery().(*fakediscovery.FakeDiscovery)
+	disc.Resources = []*metav1.APIResourceList{
+		{GroupVersion: "v1", APIResources: []metav1.APIResource{{Name: "configmaps", SingularName: "configmap", Kind: "ConfigMap", Namespaced: true}, {Name: "pods", SingularName: "pod", Kind: "Pod", Namespaced: true}}},
+		{GroupVersion: "apps/v1", APIResources: []metav1.APIResource{{Name: "deployments", SingularName: "deployment", Kind: "Deployment", Namespaced: true}}},
+	}
+	s.defaultBundle.Store(&clientBundle{clientset: b.clientset, dynamic: b.dynamic, discovery: disc})
+}
+
+func TestPolicyReportsForResource_ResultsPickedByLabel(t *testing.T) {
+	s, _ := policyReportFake(t, map[string]func(http.ResponseWriter){
+		"/apis/wgpolicyk8s.io/v1alpha2/namespaces/shop/policyreports": reportList("PolicyReportList", prSelector, prScopeSelector),
+		"/api/v1/namespaces/shop/configmaps/cm-web":                   labelledObject("ConfigMap", "cm-web", `{"app":"web"}`),
+		"/api/v1/namespaces/shop/configmaps/cm-front":                 labelledObject("ConfigMap", "cm-front", `{"tier":"front"}`),
+		"/api/v1/namespaces/shop/configmaps/cm-plain":                 labelledObject("ConfigMap", "cm-plain", `{"team":"x"}`),
+		"/api/v1/namespaces/shop/configmaps/cm-other":                 labelledObject("ConfigMap", "cm-other", `{"team":"x"}`),
+	})
+	withPolicyDiscovery(s)
+	ctx := context.Background()
+	for _, c := range []struct {
+		name string
+		want []string
+	}{
+		{"cm-web", []string{"fail:shop/ConfigMap/cm-web/need-limits", "error:shop/ConfigMap/cm-web/whole-scope"}},
+		{"cm-front", []string{"warn:shop/ConfigMap/cm-front/no-latest"}},
+		{"cm-plain", []string{}},
+		{"cm-other", []string{"fail:shop/ConfigMap/cm-other/named-one"}},
+	} {
+		res, err := s.PolicyReportsForResource(ctx, "shop", "ConfigMap", c.name, "", false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := rowWords(res); !reflect.DeepEqual(got, c.want) || res.SelectorError != "" {
+			t.Errorf("%s: rows %v (selector error %q), want %v", c.name, got, res.SelectorError, c.want)
+		}
+	}
+	// the page keeps one row per result, saying what it picks
+	page, err := s.PolicyReportResults(ctx, PolicyReportFilter{Namespace: "shop", Results: []string{"fail", "warn", "error"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	selectors := map[string]string{}
+	for _, r := range page.Rows {
+		selectors[r.Policy] = r.Selector
+	}
+	if want := map[string]string{"need-limits": "app=web", "no-latest": "tier in (back,front)", "whole-scope": "app=web", "named-one": ""}; !reflect.DeepEqual(selectors, want) {
+		t.Errorf("page selectors %v, want %v", selectors, want)
+	}
+	// what the page shows of such a row can be searched
+	found, err := s.PolicyReportResults(ctx, PolicyReportFilter{Namespace: "shop", Search: "tier in"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(found.Rows) != 1 || found.Rows[0].Policy != "no-latest" {
+		t.Errorf("search by the selector: %+v", found.Rows)
+	}
+}
+
+// A workload's section takes the label-picked rows of its pods too, each named after its pod.
+func TestPolicyReportsForResource_WorkloadPodsPickedByLabel(t *testing.T) {
+	pod := func(name, app string) string {
+		return `{"metadata":{"name":"` + name + `","namespace":"shop","labels":{"app":"` + app + `"},"ownerReferences":[{"apiVersion":"apps/v1","kind":"ReplicaSet","name":"web-1","controller":true}]},"spec":{"containers":[{"name":"c"}]}}`
+	}
+	s, _ := policyReportFake(t, map[string]func(http.ResponseWriter){
+		"/apis/wgpolicyk8s.io/v1alpha2/namespaces/shop/policyreports": reportList("PolicyReportList", `{"apiVersion":"wgpolicyk8s.io/v1alpha2","kind":"PolicyReport","metadata":{"name":"r-sel","namespace":"shop"},"results":[{"policy":"need-limits","result":"fail","resourceSelector":{"matchLabels":{"app":"canary"}}}]}`),
+		"/apis/apps/v1/namespaces/shop/deployments/web":               labelledObject("Deployment", "web", `{"app":"web"}`),
+		"/apis/apps/v1/namespaces/shop/replicasets": func(w http.ResponseWriter) {
+			_, _ = w.Write([]byte(`{"apiVersion":"apps/v1","kind":"ReplicaSetList","metadata":{},"items":[{"metadata":{"name":"web-1","namespace":"shop","ownerReferences":[{"apiVersion":"apps/v1","kind":"Deployment","name":"web","controller":true}]},"spec":{"selector":{}}}]}`))
+		},
+		"/apis/batch/v1/namespaces/shop/jobs": func(w http.ResponseWriter) {
+			_, _ = w.Write([]byte(`{"apiVersion":"batch/v1","kind":"JobList","metadata":{},"items":[]}`))
+		},
+		"/api/v1/namespaces/shop/pods": func(w http.ResponseWriter) {
+			_, _ = w.Write([]byte(`{"apiVersion":"v1","kind":"PodList","metadata":{},"items":[` + pod("web-a", "canary") + `,` + pod("web-b", "web") + `]}`))
+		},
+	})
+	withPolicyDiscovery(s)
+	res, err := s.PolicyReportsForResource(context.Background(), "shop", "Deployment", "web", "apps/v1", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := rowWords(res); !reflect.DeepEqual(got, []string{"fail:shop/Pod/web-a/need-limits"}) || res.Totals != counts(0, 1, 0, 0, 0) {
+		t.Errorf("rows %v totals %+v, want web-a's row", got, res.Totals)
+	}
+}
+
+// Without leave to read the object its labels are not known: the rows naming it stay, and the answer says the
+// label-picked results could not be held to it; a report without selectors never asks for the object.
+func TestPolicyReportsForResource_ObjectLabelsUnread(t *testing.T) {
+	s, _ := policyReportFake(t, map[string]func(http.ResponseWriter){
+		"/apis/wgpolicyk8s.io/v1alpha2/namespaces/shop/policyreports": reportList("PolicyReportList", prSelector),
+		"/api/v1/namespaces/shop/configmaps/cm-other": func(w http.ResponseWriter) {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"kind":"Status","apiVersion":"v1","status":"Failure","reason":"Forbidden","code":403,"message":"configmaps is forbidden"}`))
+		},
+	})
+	withPolicyDiscovery(s)
+	res, err := s.PolicyReportsForResource(context.Background(), "shop", "ConfigMap", "cm-other", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := rowWords(res); !reflect.DeepEqual(got, []string{"fail:shop/ConfigMap/cm-other/named-one"}) || !strings.Contains(res.SelectorError, "configmaps is forbidden") {
+		t.Errorf("rows %v, selector error %q", got, res.SelectorError)
+	}
+
+	plain, ps := policyReportFake(t, map[string]func(http.ResponseWriter){
+		"/apis/wgpolicyk8s.io/v1alpha2/namespaces/shop/policyreports": reportList("PolicyReportList", prShopConfig),
+	})
+	withPolicyDiscovery(plain)
+	if _, err := plain.PolicyReportsForResource(context.Background(), "shop", "ConfigMap", "cm-a", "", false); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range ps.paths {
+		if strings.Contains(p, "/configmaps/") {
+			t.Errorf("asked for the object without a selector in the reports: %s", p)
+		}
+	}
+}
+
+// A cluster-scoped object's section takes the label-picked results of the ClusterPolicyReports.
+func TestPolicyReportsForClusterResource_ResultsPickedByLabel(t *testing.T) {
+	s, _ := policyReportFake(t, map[string]func(http.ResponseWriter){
+		"/apis/wgpolicyk8s.io/v1alpha2/clusterpolicyreports": reportList("ClusterPolicyReportList", `{"apiVersion":"wgpolicyk8s.io/v1alpha2","kind":"ClusterPolicyReport","metadata":{"name":"r"},"results":[{"policy":"nodes-need-zone","result":"fail","resourceSelector":{"matchLabels":{"pool":"gpu"}}}]}`),
+		"/api/v1/nodes/n1": func(w http.ResponseWriter) {
+			_, _ = w.Write([]byte(`{"apiVersion":"v1","kind":"Node","metadata":{"name":"n1","labels":{"pool":"gpu"}}}`))
+		},
+	})
+	b := s.defaultBundle.Load()
+	disc := fake.NewSimpleClientset().Discovery().(*fakediscovery.FakeDiscovery)
+	disc.Resources = []*metav1.APIResourceList{{GroupVersion: "v1", APIResources: []metav1.APIResource{{Name: "nodes", SingularName: "node", Kind: "Node", Namespaced: false}}}}
+	s.defaultBundle.Store(&clientBundle{clientset: b.clientset, dynamic: b.dynamic, discovery: disc})
+	res, err := s.PolicyReportsForClusterResource(context.Background(), "Node", "n1", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := rowWords(res); !reflect.DeepEqual(got, []string{"fail:/Node/n1/nodes-need-zone"}) {
+		t.Errorf("rows %v", got)
 	}
 }

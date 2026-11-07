@@ -27,6 +27,10 @@ func (m *memAudit) Write(_ context.Context, rec audit.Record) (int64, error) {
 type fakeSessions struct {
 	sessions  map[string]*model.Session
 	deleteErr error
+	// the messages of every session, oldest first; ids are positions + 1
+	messages []model.Message
+	// what GetMessagesBefore was asked
+	askedBefore, askedLimit int
 }
 
 func (f *fakeSessions) CreateSession(context.Context, string, string, string, string) (*model.Session, error) {
@@ -49,13 +53,27 @@ func (f *fakeSessions) DeleteSession(_ context.Context, id string) error {
 	delete(f.sessions, id)
 	return nil
 }
-func (f *fakeSessions) GetMessages(context.Context, string, int) ([]model.Message, error) {
-	return nil, nil
+func (f *fakeSessions) GetMessages(_ context.Context, _ string, limit int) ([]model.Message, error) {
+	if len(f.messages) <= limit {
+		return f.messages, nil
+	}
+	return f.messages[len(f.messages)-limit:], nil
+}
+func (f *fakeSessions) GetMessagesBefore(_ context.Context, _ string, beforeID, limit int) ([]model.Message, error) {
+	f.askedBefore, f.askedLimit = beforeID, limit
+	end := beforeID - 1
+	start := end - limit
+	if start < 0 {
+		start = 0
+	}
+	return f.messages[start:end], nil
 }
 func (f *fakeSessions) AddMessage(context.Context, string, string, string, *json.RawMessage, *json.RawMessage) (*model.Message, error) {
 	return nil, nil
 }
-func (f *fakeSessions) GetMessageCount(context.Context, string) (int, error) { return 0, nil }
+func (f *fakeSessions) GetMessageCount(context.Context, string) (int, error) {
+	return len(f.messages), nil
+}
 
 func sessionRequest(method, id, body string, user auth.TokenPayload) *http.Request {
 	r := httptest.NewRequest(method, "/api/v1/sessions/"+id, strings.NewReader(body))

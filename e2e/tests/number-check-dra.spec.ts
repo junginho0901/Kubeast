@@ -508,6 +508,46 @@ test.describe('number check — DRA screens', () => {
     }
   })
 
+  // what kubectl describe's generic describer lists: the events of the object's kind and name, in its namespace, a
+  // cluster-scoped object's in every namespace ("default", where recorders write them); none is a section without a table
+  test('the four DRA drawers list the events about the object, and an empty section without any', async ({ page }) => {
+    test.setTimeout(150_000)
+    await skipUnlessReady(page)
+    const at = new Date().toISOString().replace(/\.\d+Z$/, 'Z')
+    const written: string[] = []
+    const write = (ns: string, kind: string, name: string) => {
+      const eventName = `${name}.e2e-dra-events`.toLowerCase()
+      if (ns === 'default') written.push(eventName)
+      kubectl('create -f -', JSON.stringify({
+        apiVersion: 'v1', kind: 'Event', metadata: { name: eventName, namespace: ns },
+        involvedObject: { apiVersion: 'resource.k8s.io/v1', kind, name, ...(ns === 'default' ? {} : { namespace: ns }) },
+        reason: 'NumSeen', message: `${kind} seen by the e2e run`, type: 'Normal', count: 1, firstTimestamp: at, lastTimestamp: at, source: { component: 'e2e' },
+      }))
+    }
+    write('default', 'DeviceClass', CLASS)
+    write('default', 'ResourceSlice', ALL_SLICE)
+    write(NS, 'ResourceClaim', 'num-held')
+    write(NS, 'ResourceClaimTemplate', 'num-one')
+    try {
+      const pages: Record<string, string> = { DeviceClass: '/gpu/deviceclasses', ResourceSlice: '/gpu/resourceslices', ResourceClaim: '/gpu/resourceclaims', ResourceClaimTemplate: '/gpu/resourceclaimtemplates' }
+      const eventsOf = async () => {
+        const events = (await readDrawer(page)).Events
+        return events ? events.tables.flatMap((t) => t.rows.map((r) => r.slice(0, 3))) : 'no Events section'
+      }
+      for (const [detail, kind, seen] of [
+        [`DeviceClass/${CLASS}`, 'DeviceClass', true], [`ResourceSlice/${ALL_SLICE}`, 'ResourceSlice', true],
+        [`ResourceClaim/${NS}/num-held`, 'ResourceClaim', true], [`ResourceClaimTemplate/${NS}/num-one`, 'ResourceClaimTemplate', true],
+        [`ResourceClaim/${NS}/num-free`, 'ResourceClaim', false], [`ResourceClaimTemplate/${NS}/num-two`, 'ResourceClaimTemplate', false],
+      ] as [string, string, boolean][]) await test.step(detail, async () => {
+        await page.goto(url(pages[kind], `&detail=${encodeURIComponent(detail)}`))
+        await page.locator(DRAWER).last().waitFor({ timeout: 20_000 })
+        await expect.poll(eventsOf, { timeout: 20_000, message: detail }).toEqual(seen ? [['Normal', 'NumSeen', `${kind} seen by the e2e run`]] : [])
+      })
+    } finally {
+      if (written.length) kubectl(`delete events -n default ${written.join(' ')} --ignore-not-found`)
+    }
+  })
+
   // a Read grant limited to the fixture's namespace: the cluster refuses it DeviceClasses and ResourceSlices, so their
   // cards read "-" (not 0) and the table says why; ResourceClaims of every namespace are those of its namespace
   test('a grant limited to namespaces reads "-" on the cards of the kinds it may not list', async ({ page, browser, request }) => {

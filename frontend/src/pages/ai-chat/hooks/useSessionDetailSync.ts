@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/services/api'
+import type { SessionDetail } from '@/services/api/types'
 import type { ChatStreamState } from '@/services/chatStreamManager'
+import { mergeNewestPage } from '@/services/sessionMessages'
 import type { Message } from '../types'
 
 // 핵심 sessionDetail sync — 100줄짜리 useEffect 의 단일 담당. AIChat 의 가장
@@ -31,10 +33,19 @@ interface Params {
 }
 
 interface Result {
-  sessionDetail: any
+  sessionDetail: SessionDetail | undefined
 }
 
 const isTempSessionId = (id: string | null) => typeof id === 'string' && id.startsWith('temp:')
+
+// a saved message as the chat list holds it
+export const dbMessageToMessage = (msg: SessionDetail['messages'][number]): Message => ({
+  id: msg.id,
+  role: msg.role as 'user' | 'assistant',
+  content: msg.content,
+  toolCalls: msg.tool_calls || undefined,
+  usage: msg.usage ?? null,
+})
 
 export function useSessionDetailSync({
   selectedSessionId,
@@ -67,13 +78,7 @@ export function useSessionDetailSync({
   useEffect(() => {
     if (sessionDetail && stoppedSessionId !== sessionDetail.id) {
 
-      const dbMessages = sessionDetail.messages.map((msg: any) => ({
-        id: msg.id,
-        role: msg.role as 'user' | 'assistant',
-        content: msg.content,
-        toolCalls: msg.tool_calls || undefined,
-        usage: msg.usage ?? null,
-      }))
+      const dbMessages = sessionDetail.messages.map(dbMessageToMessage)
 
       // 스트리밍 직후(DB에 assistant가 아직 저장되기 전)에는 DB가 뒤처진 상태로 UI를 덮어쓰지 않도록 방어
       const uiSnapshot = messagesRef.current
@@ -120,10 +125,12 @@ export function useSessionDetailSync({
       if (pendingFinalSyncSessionId && sessionDetail.id === pendingFinalSyncSessionId) {
         const uiLen = messagesRef.current.length
         const last = dbMessages[dbMessages.length - 1]
+        // the answer holds the newest page only: what the screen holds above that page stays, and counts
+        const merged = mergeNewestPage(messagesRef.current, dbMessages)
         // "assistant로 끝난다"만으로는 부족함(이전 턴까지만 있어도 assistant로 끝날 수 있음).
         // 최소한 UI가 가진 메시지 수만큼 DB에 반영된 이후에만 동기화한다.
-        if (last && last.role === 'assistant' && dbMessages.length >= uiLen) {
-          setMessages(dbMessages)
+        if (last && last.role === 'assistant' && merged.length >= uiLen) {
+          setMessages(merged)
           setLastLoadedSessionId(sessionDetail.id)
           setPendingFinalSyncSessionId(null)
           setViewSessionId(sessionDetail.id)

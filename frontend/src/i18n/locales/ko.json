@@ -1717,6 +1717,11 @@
     }
   },
   "aiChat": {
+    "earlier": {
+      "hidden": "표시되지 않은 이전 메시지: {{count}}개",
+      "load": "이전 메시지 불러오기",
+      "error": "이전 메시지를 불러오지 못했습니다: {{error}}"
+    },
     "newChat": "새 대화",
     "newChatTitle": "새 대화",
     "multiSelectCancel": "취소",
@@ -2040,7 +2045,8 @@
     "scoped": "부여된 Namespace의 결과만 셉니다.",
     "truncated": "이 화면이 한 번에 읽는 양보다 보고서가 많습니다. Namespace나 정책으로 좁히면 전부 보입니다.",
     "loadError": "정책 보고서를 불러오지 못했습니다",
-    "violationsError": "정책 보고서를 불러오지 못했습니다: {{error}}"
+    "violationsError": "정책 보고서를 불러오지 못했습니다: {{error}}",
+    "selectorError": "레이블로 리소스를 고르는 결과를 이 개체와 맞춰 보지 못했습니다: {{error}}"
   },
   "monitoring": {
     "title": "Monitoring",
@@ -4406,6 +4412,7 @@
       "mode": "모드",
       "apiServer": "API 서버",
       "health": "상태",
+      "healthChecked": "검사 {{time}}",
       "createdBy": "등록자",
       "actions": "작업",
       "test": "테스트",
@@ -5192,6 +5199,7 @@
     "refresh": "새로고침",
     "disabled": "이 설치에서 알림 웹훅이 꺼져 있어(features.alertInvestigation.enabled) 알림이 들어오지 않습니다.",
     "forbidden": "알림은 클러스터 전체에 걸쳐 있어, 이 클러스터를 네임스페이스 제한 없이 읽을 수 있는 사용자에게만 보입니다.",
+    "storeLimited": "Alertmanager 상태를 잠시 못 읽었습니다(요청 한도). {{seconds}}초 뒤 다시 읽습니다.",
     "storeCut": "알림 저장소가 이 클러스터 알림 {{total}}건 중 앞의 {{listed}}건만 보냈습니다(저장소 한도, alertStore.maxAlerts). 그 밖의 알림은 Alertmanager 지금 상태를 보이지 않습니다.",
     "status": {
       "firing": "울리는 중",
@@ -5211,6 +5219,7 @@
       "cut": "모름 — 알림 저장소가 이 클러스터 알림 {{total}}건 중 {{listed}}건만 보냈고 이 알림은 없음",
       "loading": "알림 저장소에 묻는 중…",
       "failed": "모름 — 알림 저장소가 답하지 않음",
+      "limited": "모름 — 잠시 못 읽음(요청 한도), {{seconds}}초 뒤 다시 읽음",
       "none": "읽지 않음 — 이 클러스터엔 알림 저장소가 없음(features.alertStore)"
     },
     "filter": {

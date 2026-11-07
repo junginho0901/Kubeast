@@ -113,6 +113,18 @@ export const clusterApi = {
     return typeof data === 'string' ? { yaml: data } : data
   },
 
+  // the fallback drawer's read: the object's fields and the events about it
+  describeGenericResource: async (resourceType: string, name: string, namespace?: string): Promise<{ events?: unknown[]; events_error?: string }> => {
+    const { data } = await client.get('/cluster/resources/describe', {
+      params: {
+        resource_type: resourceType,
+        resource_name: name,
+        ...(namespace && namespace !== '-' ? { namespace } : {}),
+      },
+    })
+    return data
+  },
+
   getResourceJson: async (resourceType: string, name: string, namespace?: string): Promise<Record<string, unknown>> => {
     const { data } = await client.get('/cluster/resources/json', {
       params: {

@@ -32,7 +32,7 @@ export type ViolationsView =
   | { show: 'nothing' }
   | { show: 'loading' }
   | { show: 'error'; reason: string }
-  | { show: 'rows'; rows: PolicyReportResult[] }
+  | { show: 'rows'; rows: PolicyReportResult[]; selectorError?: string }
 
 type Read = { data?: unknown; error?: unknown }
 
@@ -47,8 +47,10 @@ export function violationsView(on: boolean, status: Read, resource: Read): Viola
   if (resource.data === undefined) return { show: 'loading' }
   // the not-installed answer of a report kind the cluster does not serve
   if (Array.isArray(resource.data)) return { show: 'nothing' }
-  const rows = ((resource.data as PolicyReportResource).rows ?? []).filter((r) => r.result === 'fail' || r.result === 'warn' || r.result === 'error')
-  return { show: 'rows', rows }
+  const answer = resource.data as PolicyReportResource
+  const rows = (answer.rows ?? []).filter((r) => r.result === 'fail' || r.result === 'warn' || r.result === 'error')
+  // the results that pick by label could not be held to this object: the rows naming it are not the whole answer
+  return answer.selector_error ? { show: 'rows', rows, selectorError: answer.selector_error } : { show: 'rows', rows }
 }
 
 // A workload's rows also name its pods, so its section names each row's resource; every other kind's rows are its own.

@@ -287,7 +287,8 @@ test.describe('number check: audit logs, session recordings, clusters, AI chat',
     await page.goto(CLUSTERS.path)
     // a cluster's row: the one holding its Access button
     const row = (id: string) => page.getByTestId('clusters-table').locator('tbody tr').filter({ has: page.getByTestId(`access-cluster-${id}`) })
-    const cell = (id: string) => row(id).locator('td').nth(3)
+    // the status itself; the time of the last check is the line under it
+    const cell = (id: string) => row(id).locator('td').nth(3).locator('> span').first()
     await expect(cell('default')).toHaveText(health(other!.health_status), { timeout: 15_000 })
 
     const tested = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/clusters/default/test' && r.request().method() === 'POST')
@@ -305,6 +306,96 @@ test.describe('number check: audit logs, session recordings, clusters, AI chat',
     await page.reload()
     const after = (await clusters()).find((c) => c.id === 'default')
     await expect(cell('default'), 'after a reload').toHaveText(health(after?.health_status), { timeout: 15_000 })
+  })
+
+  test('Clusters: the Health column says when the check it shows was made, the time the API answers', async ({ page }) => {
+    const answered = page.waitForResponse((r) => /\/api\/v1\/clusters(\?|$)/.test(r.url()) && !r.url().includes('accessibleOnly') && r.request().method() === 'GET')
+    await page.goto(CLUSTERS.path)
+    type Meta = { id: string; last_healthcheck_at?: string }
+    const items = ((await (await answered).json()).items ?? []) as Meta[]
+    expect(items.length, 'clusters listed').toBeGreaterThan(0)
+    const local = (iso: string) => page.evaluate((v) => {
+      const pad = (n: number) => String(n).padStart(2, '0')
+      const d = new Date(v)
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+    }, iso)
+    for (const c of items) {
+      const line = page.getByTestId(`cluster-health-checked-${c.id}`)
+      if (c.last_healthcheck_at) await expect.soft(line, c.id).toHaveText(EN.cluster.admin.healthChecked.replace('{{time}}', await local(c.last_healthcheck_at)), { timeout: 15_000 })
+      else await expect.soft(line, `${c.id} was never checked`).toHaveCount(0)
+    }
+  })
+
+  test('Audit logs: rows per page is the table\'s value, and choosing one reads at once', async ({ page }) => {
+    const reads: { limit: string | null; offset: string | null }[] = []
+    page.on('response', (r) => {
+      if (!r.url().includes('/api/v1/auth/admin/audit-logs?')) return
+      const q = new URL(r.url()).searchParams
+      reads.push({ limit: q.get('limit'), offset: q.get('offset') })
+    })
+    await page.goto(AUDIT.path)
+    const perPage = page.locator('label', { hasText: EN.adminAudit.filter.limit }).locator('button').first()
+    await expect(perPage, 'the table reads 50 to start with').toHaveText('50', { timeout: 15_000 })
+    await expect.poll(() => reads.at(-1)?.limit, { timeout: 15_000 }).toBe('50')
+
+    const answered = page.waitForResponse((r) => r.url().includes('/api/v1/auth/admin/audit-logs?') && new URL(r.url()).searchParams.get('limit') === '25')
+    await perPage.click()
+    await page.locator('label', { hasText: EN.adminAudit.filter.limit }).getByRole('button', { name: /^25$/ }).click()
+    const answer = (await (await answered).json()) as { items: unknown[]; total: number }
+    expect(reads.at(-1), 'read at once, from the first page, without pressing Search').toEqual({ limit: '25', offset: '0' })
+    await expect(perPage, 'the dropdown').toHaveText('25')
+    const rows = () => page.locator('main tbody tr').evaluateAll((all) => all.filter((r) => (r as HTMLTableRowElement).cells.length >= 7).length)
+    await expect.poll(rows, { timeout: 15_000, message: 'the table holds that many rows' }).toBe(answer.items.length)
+    expect(answer.items.length).toBe(Math.min(25, answer.total))
+  })
+
+  test('AI chat: a conversation longer than a page says what it does not show, and reads it above, each message once', async ({ page, request }) => {
+    test.setTimeout(180_000)
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const title = `${PREFIX}long-${Date.now().toString(36)}`
+    const created = await request.post(`/api/v1/sessions?cluster=${CHAT.cluster}`, { headers: bearer(admin), data: { title } })
+    expect(created.ok(), await created.text()).toBeTruthy()
+    const id = (await created.json()).id as string
+    const N = 205
+    try {
+      for (let from = 0; from < N; from += 50) {
+        const messages = Array.from({ length: Math.min(50, N - from) }, (_, i) => ({ role: (from + i) % 2 ? 'assistant' : 'user', content: `e2e long ${from + i}` }))
+        const saved = await request.post(`/api/v1/sessions/${id}/messages`, { headers: bearer(admin), data: { messages } })
+        expect(saved.ok(), await saved.text()).toBeTruthy()
+      }
+      const detail = await (await request.get(`/api/v1/sessions/${id}`, { headers: bearer(admin) })).json() as { messages: unknown[]; messages_before: number }
+      expect([detail.messages.length, detail.messages_before], 'the newest page and how many come before it').toEqual([100, 105])
+
+      const said = (n: number) => EN.aiChat.earlier.hidden.replace('{{count}}', String(n))
+      const texts = (root: string) => page.getByTestId(root).evaluate((el) => [...(el as HTMLElement).innerText.matchAll(/e2e long (\d+)/g)].map((m) => Number(m[1])))
+      const inOrder = (from: number) => Array.from({ length: N - from }, (_, i) => from + i)
+      const walk = async (root: string) => {
+        await expect(page.getByTestId('chat-earlier-count')).toHaveText(said(105), { timeout: 20_000 })
+        await expect.poll(() => texts(root), { timeout: 20_000, message: 'the newest page' }).toEqual(inOrder(105))
+        const load = page.getByTestId('chat-earlier-load')
+        await load.click()
+        await expect(page.getByTestId('chat-earlier-count')).toHaveText(said(5), { timeout: 20_000 })
+        await expect.poll(() => texts(root), { message: 'a page above it, each message once' }).toEqual(inOrder(5))
+        await load.click()
+        await expect(page.getByTestId('chat-earlier')).toHaveCount(0, { timeout: 20_000 })
+        await expect.poll(() => texts(root), { message: 'every message' }).toEqual(inOrder(0))
+      }
+
+      await test.step('AI Chat', async () => {
+        await page.goto(`${CHAT.path}?cluster=${CHAT.cluster}`)
+        await page.locator(`[title="${title}"]`).first().click({ timeout: 20_000 })
+        await walk('chat-messages')
+      })
+
+      await test.step('the floating chat', async () => {
+        await page.addInitScript((sid) => sessionStorage.setItem('kubest.floatingChat.sessionId', sid), id)
+        await page.goto(`/?cluster=${CHAT.cluster}`)
+        await page.getByTestId('floating-chat-toggle').click({ timeout: 20_000 })
+        await walk('floating-messages')
+      })
+    } finally {
+      await request.delete(`/api/v1/sessions/${id}`, { headers: bearer(admin), failOnStatusCode: false })
+    }
   })
 
   test('AI chat: each session card counts the messages the session API holds', async ({ page, request }) => {

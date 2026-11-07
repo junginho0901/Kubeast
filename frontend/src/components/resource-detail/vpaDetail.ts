@@ -23,6 +23,21 @@ export function vpaStartupBoostText(boost: unknown): string {
   return parts.length ? parts.join('; ') : '-'
 }
 
+// updatePolicy.evictionRequirements: each one's resources and when it allows an eviction, as the API writes them
+export function vpaEvictionText(requirements: unknown): string {
+  if (!Array.isArray(requirements) || requirements.length === 0) return '-'
+  return requirements.map((r) => {
+    const resources = Array.isArray(r?.resources) ? r.resources.join(', ') : '-'
+    return `${resources}: ${vpaValue(r?.changeRequirement)}`
+  }).join('; ')
+}
+
+// spec.recommenders: their names; none named means the default recommender
+export function vpaRecommendersText(recommenders: unknown): string {
+  if (!Array.isArray(recommenders) || recommenders.length === 0) return '-'
+  return recommenders.map((r) => vpaValue(r?.name)).join(', ')
+}
+
 // A container policy's OOM, memory aggregation and startup boost fields: one row per policy, or none when no policy
 // sets any of them (the table is not drawn, as the policies' own table without policies).
 export const VPA_POLICY_EXTRA_HEAD = ['Container', 'OOM Bump Up Ratio', 'OOM Min Bump Up', 'Memory Aggregation Interval Seconds', 'Memory Aggregation Interval Count', 'Startup Boost']

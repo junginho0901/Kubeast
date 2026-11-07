@@ -78,7 +78,7 @@ export function AIChatBody() {
   } = useSessionEditing({ isMultiSelectMode })
 
   // 세션 상세 조회 + DB↔UI 동기화 100줄 분기
-  useSessionDetailSync({
+  const { sessionDetail } = useSessionDetailSync({
     selectedSessionId,
     stoppedSessionId,
     pendingFinalSyncSessionId,
@@ -194,6 +194,7 @@ export function AIChatBody() {
       />
 
       <ChatMain
+        sessionDetail={sessionDetail}
         isStreaming={isStreaming}
         copiedMessageKey={copiedMessageKey}
         onCopy={handleCopyMessage}

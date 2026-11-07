@@ -78,6 +78,8 @@ type SessionDetailResponse struct {
 	CreatedAt time.Time         `json:"created_at"`
 	UpdatedAt time.Time         `json:"updated_at"`
 	Messages  []MessageResponse `json:"messages"`
+	// MessagesBefore counts the conversation's messages older than Messages, which holds the newest page.
+	MessagesBefore int `json:"messages_before"`
 }
 
 // MessageResponse is a message in the session detail response.

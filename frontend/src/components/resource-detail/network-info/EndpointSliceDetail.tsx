@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { InfoSection, InfoRow, KeyValueTags, Th, Tx } from '../DetailCommon'
-import { fmtRel, fmtTs } from '../detailFormat'
+import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
+import { EventsSection, InfoSection, InfoRow, KeyValueTags, Th, Tx } from '../DetailCommon'
+import { eventsForAI, fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
 
 interface Props {
@@ -29,6 +30,14 @@ function hintNames(listed: unknown, raw: unknown): string[] {
 }
 
 export default function EndpointSliceDetail({ name, namespace, rawJson }: Props) {
+  // the events kubectl describe lists about the slice
+  const { data: describe, isLoading } = useQuery({
+    queryKey: ['endpointslice-describe', namespace, name],
+    queryFn: () => api.describeEndpointSlice(namespace as string, name),
+    enabled: !!name && !!namespace,
+    retry: false,
+  })
+  useResourceDetailOverlay({ kind: 'EndpointSlice', name, namespace, extras: { spec: rawJson?.spec, status: rawJson?.status, ...eventsForAI(describe) } })
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const labels = ((rawJson?.labels as Record<string, string>) ?? (meta.labels as Record<string, string>) ?? {}) as Record<string, string>
   const annotations = ((rawJson?.annotations as Record<string, string>) ?? (meta.annotations as Record<string, string>) ?? {}) as Record<string, string>
@@ -177,6 +186,7 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
 
       {Object.keys(labels).length > 0 && <InfoSection title="Labels"><KeyValueTags data={labels} /></InfoSection>}
       {Object.keys(annotations).length > 0 && <InfoSection title="Annotations"><KeyValueTags data={annotations} /></InfoSection>}
+      <EventsSection events={describe?.events} error={describe?.events_error} loading={isLoading} />
     </>
   )
 }

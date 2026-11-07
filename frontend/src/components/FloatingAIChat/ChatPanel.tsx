@@ -17,7 +17,10 @@ import { MessageList, type DisplayMessage } from './MessageList'
 import { turnsOnScreen } from './turnsOnScreen'
 import { modalOpen } from '@/hooks/useModalStack'
 import { focusables } from '@/utils/focusables'
+import { hiddenEarlier, mergeNewestPage, prependEarlier } from '@/services/sessionMessages'
 import { useStickToBottom } from '@/hooks/useStickToBottom'
+import { useEarlierMessages } from '@/hooks/useEarlierMessages'
+import EarlierMessages from '@/components/EarlierMessages'
 import JumpToLatest from '@/components/JumpToLatest'
 import { InputArea } from './InputArea'
 import { SuggestedQuestions } from './SuggestedQuestions'
@@ -186,14 +189,22 @@ export function ChatPanel({
     }
   }
 
+  // What the panel holds of the conversation: the answer's newest page, under the pages read above it. Adjusted while
+  // rendering, so no frame shows the newest page without them.
+  const [held, setHeld] = useState({ sessionId, detail: sessionDetail, messages: sessionDetail?.messages ?? [] })
+  let heldMessages = held.messages
+  if (held.sessionId !== sessionId || held.detail !== sessionDetail) {
+    heldMessages = mergeNewestPage(held.sessionId === sessionId ? held.messages : [], sessionDetail?.messages ?? [])
+    setHeld({ sessionId, detail: sessionDetail, messages: heldMessages })
+  }
+
   const messages: DisplayMessage[] = useMemo(() => {
-    const history = sessionDetail?.messages ?? []
-    return history.map((m) => ({
+    return heldMessages.map((m) => ({
       role: m.role === 'assistant' ? 'assistant' : 'user',
       content: m.content,
       toolCalls: Array.isArray(m.tool_calls) ? m.tool_calls : undefined,
     }))
-  }, [sessionDetail])
+  }, [heldMessages])
 
   const ours = streamState.sessionId === sessionId
   const isStreaming = streamState.isStreaming && ours
@@ -208,6 +219,13 @@ export function ChatPanel({
 
   // follows new text only while the reader is at the bottom; a new question scrolls back smoothly
   const { ref: listRef, atBottom, scrollToBottom } = useStickToBottom<HTMLDivElement>([visibleMessages])
+  const earlier = useEarlierMessages({
+    sessionId,
+    oldestId: heldMessages[0]?.id,
+    listRef,
+    content: [visibleMessages],
+    onPage: (page) => setHeld((h) => ({ ...h, messages: prependEarlier(h.messages, page) })),
+  })
   const questions = visibleMessages.filter((m) => m.role === 'user').length
   const lastQuestions = useRef(questions)
   useEffect(() => {
@@ -283,6 +301,8 @@ export function ChatPanel({
             {t('floatingChat.sessionLoading', { defaultValue: 'Preparing session...' })}
           </div>
         ) : (
+          <>
+          <EarlierMessages hidden={hiddenEarlier(sessionDetail, heldMessages)} loading={earlier.loading} error={earlier.error} onLoad={earlier.load} />
           <MessageList
             messages={visibleMessages}
             emptyExtras={
@@ -292,6 +312,7 @@ export function ChatPanel({
               />
             }
           />
+          </>
         )}
       </div>
       {!atBottom && <JumpToLatest onClick={() => scrollToBottom()} />}

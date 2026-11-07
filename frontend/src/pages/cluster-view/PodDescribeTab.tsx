@@ -52,12 +52,12 @@ export function PodDescribeTab({ data, na, tr }: Props) {
         </div>
       </div>
 
-      {/* 레이블 */}
-      {data.labels && Object.keys(data.labels).length > 0 && (
-        <div>
-          <h3 className="text-lg font-semibold text-ink mb-4">
-            {tr('clusterView.describe.labels', 'Labels')}
-          </h3>
+      {/* 레이블: every section always shown — "None" without any */}
+      <div>
+        <h3 className="text-lg font-semibold text-ink mb-4">
+          {tr('clusterView.describe.labels', 'Labels')}
+        </h3>
+        {data.labels && Object.keys(data.labels).length > 0 ? (
           <div className="bg-slate-800 rounded-lg p-4">
             <div className="space-y-2">
               {Object.entries(data.labels).map(([key, value]) => (
@@ -68,15 +68,17 @@ export function PodDescribeTab({ data, na, tr }: Props) {
               ))}
             </div>
           </div>
-        </div>
-      )}
+        ) : (
+          <p className="text-slate-400 text-sm">{tr('common.none', 'None')}</p>
+        )}
+      </div>
 
       {/* 컨테이너 */}
-      {data.containers && data.containers.length > 0 && (
-        <div>
-          <h3 className="text-lg font-semibold text-ink mb-4">
-            {tr('clusterView.describe.containers', 'Containers')}
-          </h3>
+      <div>
+        <h3 className="text-lg font-semibold text-ink mb-4">
+          {tr('clusterView.describe.containers', 'Containers')}
+        </h3>
+        {data.containers && data.containers.length > 0 ? (
           <div className="space-y-4">
             {data.containers.map((container: any, idx: number) => (
               <div key={idx} className="bg-slate-800 rounded-lg p-4">
@@ -119,15 +121,17 @@ export function PodDescribeTab({ data, na, tr }: Props) {
               </div>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <p className="text-slate-400 text-sm">{tr('common.none', 'None')}</p>
+        )}
+      </div>
 
       {/* Conditions */}
-      {data.conditions && data.conditions.length > 0 && (
-        <div>
-          <h3 className="text-lg font-semibold text-ink mb-4">
-            {tr('clusterView.describe.conditions', 'Conditions')}
-          </h3>
+      <div>
+        <h3 className="text-lg font-semibold text-ink mb-4">
+          {tr('clusterView.describe.conditions', 'Conditions')}
+        </h3>
+        {data.conditions && data.conditions.length > 0 ? (
           <div className="bg-slate-800 rounded-lg overflow-hidden">
             <table className="w-full">
               <thead className="bg-slate-700">
@@ -162,8 +166,10 @@ export function PodDescribeTab({ data, na, tr }: Props) {
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+        ) : (
+          <p className="text-slate-400 text-sm">{tr('common.none', 'None')}</p>
+        )}
+      </div>
 
       {/* Events: always shown — "None" without events, and why when they could not be read */}
       <div>

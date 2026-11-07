@@ -115,6 +115,10 @@ func Info(u *unstructured.Unstructured) map[string]interface{} {
 		"min_replicas":            updatePolicy["minReplicas"],
 		"evict_after_oom_seconds": updatePolicy["evictAfterOOMSeconds"],
 		"startup_boost":           spec["startupBoost"],
+		// what else kubectl describe prints of a VPA, as written; nil without
+		"eviction_requirements": updatePolicy["evictionRequirements"],
+		"recommenders":          spec["recommenders"],
+		"observed_generation":   status["observedGeneration"],
 
 		"name":               u.GetName(),
 		"namespace":          u.GetNamespace(),

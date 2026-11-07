@@ -16,6 +16,8 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -66,6 +68,8 @@ func (s *Service) PolicyReportsInstalled(ctx context.Context) bool {
 type PolicyReportResult struct {
 	// also holds the resources a result names after its first: the row is about them too (a drawer's rows)
 	also []policyReportRef
+	// picks holds Selector parsed: the row is about each resource of its namespace whose labels match (a drawer's rows)
+	picks labels.Selector
 
 	Namespace string `json:"namespace"`
 	Kind      string `json:"kind"`
@@ -82,6 +86,8 @@ type PolicyReportResult struct {
 	// APIVersion is the resource's (the result's resources, else the report's scope), so a Kind two groups serve
 	// opens the right group's object.
 	APIVersion string `json:"api_version,omitempty"`
+	// Selector is what the result picks by label instead of naming a resource, as kubectl writes a selector.
+	Selector string `json:"selector,omitempty"`
 }
 
 // PolicyReportCounts are result counts in the order the report API names them.
@@ -172,6 +178,8 @@ type PolicyReportResource struct {
 	Namespace   string               `json:"namespace"`
 	Totals      PolicyReportCounts   `json:"totals"`
 	Rows        []PolicyReportResult `json:"rows"`
+	// SelectorError says why the results that pick by label could not be held to this resource (its labels unread).
+	SelectorError string `json:"selector_error,omitempty"`
 }
 
 // policyReportSet is one parsed read, cached per cluster, namespace and identity.
@@ -331,7 +339,7 @@ func (s *Service) PolicyReportResults(ctx context.Context, f PolicyReportFilter)
 		if len(sev) > 0 && !sev[strings.ToLower(r.Severity)] {
 			continue
 		}
-		if search != "" && !strings.Contains(strings.ToLower(r.Policy+" "+r.Rule+" "+r.Name+" "+r.Namespace+" "+r.Message), search) {
+		if search != "" && !strings.Contains(strings.ToLower(r.Policy+" "+r.Rule+" "+r.Name+" "+r.Selector+" "+r.Namespace+" "+r.Message), search) {
 			continue
 		}
 		rows = append(rows, r)
@@ -395,6 +403,8 @@ func (s *Service) PolicyReportsForResource(ctx context.Context, namespace, kind,
 		return nil, err
 	}
 	pods := map[string]bool{}
+	picking := set.picksByLabel()
+	var targets []policyReportTarget
 	if policyReportWorkloadKinds[kind] {
 		cs := s.clientsetCtx(ctx)
 		if cs == nil {
@@ -408,6 +418,9 @@ func (s *Service) PolicyReportsForResource(ctx context.Context, namespace, kind,
 		err = eachPod(ctx, cs.CoreV1(), namespace, metav1.ListOptions{}, func(p *corev1.Pod) {
 			if k, n, v := owner(*p); k == kind && n == name && sameAPIGroup(apiVersion, v) {
 				pods[p.Name] = true
+				if picking {
+					targets = append(targets, policyReportTarget{policyReportRef{namespace, "Pod", p.Name, "v1"}, p.Labels})
+				}
 			}
 		})
 		if err != nil {
@@ -415,10 +428,55 @@ func (s *Service) PolicyReportsForResource(ctx context.Context, namespace, kind,
 		}
 	}
 	out := &PolicyReportResource{GeneratedAt: set.at.UTC().Format(time.RFC3339), Kind: kind, Name: name, Namespace: namespace}
+	if picking {
+		target, err := s.policyReportObject(ctx, namespace, kind, name, apiVersion)
+		if err != nil {
+			out.SelectorError = err.Error()
+		} else {
+			targets = append(targets, target)
+		}
+	}
 	out.keep(set.results, func(ref policyReportRef) bool {
 		return ref.Namespace == namespace && ((ref.Kind == kind && ref.Name == name && sameAPIGroup(apiVersion, ref.APIVersion)) || (ref.Kind == "Pod" && pods[ref.Name]))
-	})
+	}, targets...)
 	return out, nil
+}
+
+// picksByLabel says whether any result picks its resources by label, the only reason to read the object's labels.
+func (set policyReportSet) picksByLabel() bool {
+	for i := range set.results {
+		if set.results[i].picks != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// policyReportTarget is a resource with its labels, held against the results that pick by label.
+type policyReportTarget struct {
+	ref    policyReportRef
+	labels map[string]string
+}
+
+// policyReportObject reads the object as the caller for its labels: a caller the cluster refuses learns nothing of them.
+func (s *Service) policyReportObject(ctx context.Context, namespace, kind, name, apiVersion string) (policyReportTarget, error) {
+	resource := kind
+	if group := apiGroup(apiVersion); group != "" {
+		resource = kind + "." + group
+	}
+	gvr, namespaced, err := s.ResolveResource(ctx, resource)
+	if err != nil {
+		return policyReportTarget{}, err
+	}
+	ns := namespace
+	if !namespaced {
+		ns = ""
+	}
+	obj, err := s.GetResource(ctx, gvr, ns, name)
+	if err != nil {
+		return policyReportTarget{}, err
+	}
+	return policyReportTarget{policyReportRef{namespace, kind, name, apiVersion}, obj.GetLabels()}, nil
 }
 
 // sameAPIGroup: whether a reference's apiVersion is of the asked one's group — any when either is not given.
@@ -444,9 +502,18 @@ func (s *Service) PolicyReportsForClusterResource(ctx context.Context, kind, nam
 		return nil, err
 	}
 	out := &PolicyReportResource{GeneratedAt: set.at.UTC().Format(time.RFC3339), Kind: kind, Name: name}
+	var targets []policyReportTarget
+	if set.picksByLabel() {
+		target, err := s.policyReportObject(ctx, "", kind, name, apiVersion)
+		if err != nil {
+			out.SelectorError = err.Error()
+		} else {
+			targets = append(targets, target)
+		}
+	}
 	out.keep(set.results, func(ref policyReportRef) bool {
 		return ref.Namespace == "" && ref.Kind == kind && ref.Name == name && sameAPIGroup(apiVersion, ref.APIVersion)
-	})
+	}, targets...)
 	return out, nil
 }
 
@@ -454,11 +521,23 @@ func (s *Service) PolicyReportsForClusterResource(ctx context.Context, kind, nam
 type policyReportRef struct{ Namespace, Kind, Name, APIVersion string }
 
 // keep takes the rows about the resource match picks — a result naming several
-// resources counts for each, its row named after the one that matched — worst
-// result first, then by policy and resource name.
-func (out *PolicyReportResource) keep(results []PolicyReportResult, match func(policyReportRef) bool) {
+// resources counts for each, its row named after the one that matched — and, for
+// a result that picks by label, one row per target in its namespace whose labels
+// match, named after it; worst result first, then by policy and resource name.
+func (out *PolicyReportResource) keep(results []PolicyReportResult, match func(policyReportRef) bool, targets ...policyReportTarget) {
 	out.Rows = []PolicyReportResult{}
 	for _, r := range results {
+		if r.picks != nil {
+			for _, t := range targets {
+				if t.ref.Namespace == r.Namespace && r.picks.Matches(labels.Set(t.labels)) {
+					row := r
+					row.Namespace, row.Kind, row.Name, row.APIVersion, row.picks = t.ref.Namespace, t.ref.Kind, t.ref.Name, t.ref.APIVersion, nil
+					out.Rows = append(out.Rows, row)
+					out.Totals.add(row.Result)
+				}
+			}
+			continue
+		}
 		ref := policyReportRef{r.Namespace, r.Kind, r.Name, r.APIVersion}
 		ok := match(ref)
 		for _, other := range r.also {
@@ -576,8 +655,26 @@ func (s *Service) readPolicyReportKind(ctx context.Context, gvr schema.GroupVers
 	}
 }
 
+// policyReportSelector parses a report's label selector field; one the API could not have written counts as none.
+func policyReportSelector(raw interface{}) (labels.Selector, string) {
+	m, ok := raw.(map[string]interface{})
+	if !ok {
+		return nil, ""
+	}
+	var ls metav1.LabelSelector
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(m, &ls); err != nil {
+		return nil, ""
+	}
+	sel, err := metav1.LabelSelectorAsSelector(&ls)
+	if err != nil {
+		return nil, ""
+	}
+	return sel, metav1.FormatLabelSelector(&ls)
+}
+
 // policyReportRows flattens one report. The resource a row is about comes from
-// the result's own resources list, else from the report's scope.
+// the result's own resources list, else what its resourceSelector picks, else
+// the report's scope, else what the report's scopeSelector picks.
 func policyReportRows(obj *unstructured.Unstructured) []PolicyReportResult {
 	scopeAPIVersion, _, _ := unstructured.NestedString(obj.Object, "scope", "apiVersion")
 	scopeKind, _, _ := unstructured.NestedString(obj.Object, "scope", "kind")
@@ -616,6 +713,10 @@ func policyReportRows(obj *unstructured.Unstructured) []PolicyReportResult {
 					row.Namespace = n
 				}
 			}
+		} else if sel, text := policyReportSelector(m["resourceSelector"]); sel != nil {
+			row.Kind, row.Name, row.APIVersion, row.picks, row.Selector = "", "", "", sel, text
+		} else if scopeKind == "" && scopeName == "" {
+			row.picks, row.Selector = policyReportSelector(obj.Object["scopeSelector"])
 		}
 		row.also = policyReportOthers(m["resources"], scopeNS)
 		if ts, ok := m["timestamp"].(map[string]interface{}); ok {

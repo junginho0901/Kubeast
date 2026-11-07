@@ -192,6 +192,19 @@ func (s *Store) Allow(user string) bool {
 	return lim.Allow()
 }
 
+// RetryAfter says how long until user's budget gives the next read back; it takes nothing from the budget.
+func (s *Store) RetryAfter(user string) time.Duration {
+	s.mu.Lock()
+	lim, ok := s.users[user]
+	s.mu.Unlock()
+	if !ok {
+		return 0
+	}
+	r := lim.Reserve()
+	defer r.Cancel()
+	return r.Delay()
+}
+
 // States an alert is reported in.
 const (
 	StateFiring      = "firing"

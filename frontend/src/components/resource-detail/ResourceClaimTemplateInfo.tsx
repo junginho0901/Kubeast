@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { InfoSection, InfoRow, KeyValueTags, Th, Tx } from './DetailCommon'
+import { EventsSection, InfoSection, InfoRow, KeyValueTags, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { DeviceRequestsTable } from './DeviceRequestsTable'
@@ -23,6 +23,8 @@ type ResourceClaimTemplateDescribe = {
   // the claims made from this template: what its pods' status.resourceClaimStatuses name, worked out on the server
   related_claims?: Array<{ name: string; namespace: string; pod: string }>
   related_claims_error?: string
+  events?: unknown[]
+  events_error?: string
   labels?: Record<string, string>
   annotations?: Record<string, string>
   created_at?: string | null
@@ -191,6 +193,8 @@ export default function ResourceClaimTemplateInfo({ name, namespace, rawJson }: 
           <KeyValueTags data={annotations} />
         </InfoSection>
       )}
+
+      <EventsSection events={describe?.events} error={describe?.events_error} loading={isLoading} />
     </>
   )
 }

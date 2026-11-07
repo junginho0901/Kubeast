@@ -21,7 +21,7 @@ import InvestigationReportModal from '@/components/InvestigationReportModal'
 import SilenceList from './SilenceList'
 import SilenceModal from './SilenceModal'
 import { alertInvestigationEnabled } from '@/utils/features'
-import { alertResource, liveLineOf, liveStateOf, severityChoices, silenceStart, storeCut, type LiveState } from '@/utils/alertInbox'
+import { alertResource, liveLineOf, liveStateOf, severityChoices, silenceStart, storeCut, storeLimited, storeLimitedSeconds, storeRefetchMs, type LiveState } from '@/utils/alertInbox'
 import { severityClass, skipReason, statusClass as investigationClass } from '@/utils/investigationFormat'
 import { investigateErrorText, investigateNowView } from '@/utils/investigateNow'
 import { formatAge, formatTime, utcTitle } from '@/utils/time'
@@ -89,12 +89,30 @@ export default function AlertInbox() {
     queryKey: ['alert-inbox', 'store', currentCluster],
     queryFn: api.listAlertStoreAlerts,
     enabled: storeOn,
-    refetchInterval: 60_000,
+    // read again when the server said after a refusal at the request limit, not at the next minute
+    refetchInterval: (q) => storeRefetchMs(q.state.error),
     retry: false,
   })
   const store = storeQuery.data
+  // Until a refused read's wait ends. Held while the next read is on its way (a query that never answered has no error
+  // then), so the notice does not blink each time.
+  const [limitedUntil, setLimitedUntil] = useState<number | null>(null)
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (storeQuery.isFetching) return
+    const limited = storeLimited(storeQuery.error)
+    setNow(Date.now())
+    setLimitedUntil(limited ? storeQuery.errorUpdatedAt + limited.retryAfter * 1000 : null)
+  }, [storeQuery.isFetching, storeQuery.error, storeQuery.errorUpdatedAt])
+  useEffect(() => setLimitedUntil(null), [currentCluster])
+  useEffect(() => {
+    if (limitedUntil === null) return
+    const tick = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(tick)
+  }, [limitedUntil])
+  const limitedSeconds = storeLimitedSeconds(limitedUntil, now)
   // what the alert window says about Alertmanager now; while the features are not known yet, as loading
-  const storeRead = { on: storeOn || !features.data, answer: store, failed: storeQuery.isError }
+  const storeRead = { on: storeOn || !features.data, answer: store, failed: storeQuery.isError, limited: limitedSeconds }
   const cut = storeCut(store)
   const rows = data?.items ?? []
   const total = data?.total ?? 0
@@ -121,6 +139,8 @@ export default function AlertInbox() {
       counts,
       // the store's list was cut at its limit: "live" is left out for the alerts it did not send
       alert_store_cut: cut ?? undefined,
+      // the store refused the last read (the request limit): "live" is what it last said, or left out; when it is read again
+      alert_store_limited: limitedUntil !== null ? { read_again_at: new Date(limitedUntil).toISOString() } : undefined,
       items: rows.map((r) => ({
         alertname: r.alertname, severity: r.severity, namespace: r.namespace || undefined, status: r.status,
         live: liveStateOf(r, store) ?? undefined, summary: r.summary || undefined, starts_at: r.starts_at,
@@ -129,7 +149,7 @@ export default function AlertInbox() {
         investigation_skip: r.investigation?.status === 'skipped' ? r.investigation.skip_reason || undefined : undefined,
       })),
     },
-  } : null, [data, store, currentCluster])
+  } : null, [data, store, currentCluster, limitedUntil])
 
   const statusLabel = (s: string) => tr(`alertInbox.status.${s}`, s)
   const tab = (value: string, label: string, count?: number) => (
@@ -171,6 +191,12 @@ export default function AlertInbox() {
       {cut && !showSilences && (
         <div className="shrink-0 rounded-lg border border-amber-800/60 bg-amber-900/20 px-3 py-2 text-sm text-amber-200">
           {tr('alertInbox.storeCut', 'The alert store sent the first {{listed}} of its {{total}} alerts for this cluster (its limit, alertStore.maxAlerts): for an alert not among them, what Alertmanager says now is not shown.', cut)}
+        </div>
+      )}
+
+      {limitedSeconds !== null && !showSilences && (
+        <div className="shrink-0 rounded-lg border border-amber-800/60 bg-amber-900/20 px-3 py-2 text-sm text-amber-200" data-testid="alert-store-limited">
+          {tr('alertInbox.storeLimited', 'Alertmanager\'s state could not be read for now (request limit). Reading again in {{seconds}} s.', { seconds: limitedSeconds })}
         </div>
       )}
 

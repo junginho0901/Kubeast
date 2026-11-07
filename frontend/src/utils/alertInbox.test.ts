@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { alertResource, liveLineOf, liveStateOf, severityChoices, silenceStart } from './alertInbox'
+import { alertResource, liveLineOf, liveStateOf, severityChoices, silenceStart, storeLimited, storeLimitedSeconds, storeRefetchMs } from './alertInbox'
 
 describe('the object an alert is about', () => {
   it('takes the most specific namespaced label first', () => {
@@ -53,6 +53,48 @@ describe('the alert window\'s "Alertmanager now" line', () => {
     expect(liveLineOf(firing, read(undefined, { failed: true }))).toEqual({ unknown: 'failed' })
     expect(liveLineOf(firing, read(undefined, { on: false }))).toEqual({ unknown: 'none' })
     expect(liveLineOf({ ...firing, status: 'resolved' }, read(undefined, { on: false }))).toBeNull()
+  })
+
+  it('says the store was not read because of the request limit, and in how many seconds it is read again', () => {
+    expect(liveLineOf(firing, { on: true, failed: true, limited: 12 })).toEqual({ unknown: 'limited', seconds: 12 })
+    // while the next read is on its way the line stays
+    expect(liveLineOf(firing, { on: true, failed: false, limited: 1 })).toEqual({ unknown: 'limited', seconds: 1 })
+    // an answer in hand still says what the store last said
+    expect(liveLineOf(firing, { on: true, failed: true, limited: 12, answer: { alerts: [{ fingerprint: 'a', state: 'silenced' }], total: 1, truncated: false } })).toEqual({ state: 'silenced' })
+  })
+})
+
+describe('a read of the alert store refused at the request limit', () => {
+  const refused = (status: number, retryAfter?: string) => ({ response: { status, headers: retryAfter === undefined ? {} : { 'retry-after': retryAfter } } })
+
+  it('reads the seconds the server names', () => {
+    expect(storeLimited(refused(429, '17'))).toEqual({ retryAfter: 17 })
+    expect(storeLimited(refused(429, '1'))).toEqual({ retryAfter: 1 })
+  })
+
+  it('without a usable Retry-After waits as long as the page reads anyway', () => {
+    expect(storeLimited(refused(429))).toEqual({ retryAfter: 60 })
+    expect(storeLimited(refused(429, 'soon'))).toEqual({ retryAfter: 60 })
+    expect(storeLimited(refused(429, '0'))).toEqual({ retryAfter: 60 })
+  })
+
+  it('is no other failure', () => {
+    expect(storeLimited(refused(502, '17'))).toBeNull()
+    expect(storeLimited(new Error('timeout'))).toBeNull()
+    expect(storeLimited(null)).toBeNull()
+  })
+
+  it('is read again when the server said, not at the next minute', () => {
+    expect(storeRefetchMs(refused(429, '17'))).toBe(17_000)
+    expect(storeRefetchMs(refused(502))).toBe(60_000)
+    expect(storeRefetchMs(null)).toBe(60_000)
+  })
+
+  it('counts down to the next read and never says zero while it waits', () => {
+    expect(storeLimitedSeconds(100_000, 83_000)).toBe(17)
+    expect(storeLimitedSeconds(100_000, 99_400)).toBe(1)
+    expect(storeLimitedSeconds(100_000, 120_000)).toBe(1)
+    expect(storeLimitedSeconds(null, 120_000)).toBeNull()
   })
 })
 

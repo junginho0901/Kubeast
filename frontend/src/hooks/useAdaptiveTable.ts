@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import { useAdaptiveRowsPerPage } from './useAdaptiveRowsPerPage'
 import { usePageSize } from '@/utils/pageSize'
 
@@ -56,7 +56,8 @@ function fitTable(body: HTMLElement) {
 // keeps it pinned to the wrapper's edge). Without it a wide table just looks
 // cut off. recalculationKey re-attaches it to a wrapper that mounts after a spinner.
 function useScrollMoreHint(bodyRef: React.RefObject<HTMLElement | null>, recalculationKey?: string | number) {
-  useEffect(() => {
+  // Before the paint, and before the rows are counted: a fold can change a row's height.
+  useLayoutEffect(() => {
     const body = bodyRef.current
     if (!body) return
     let frameId = 0
@@ -81,7 +82,7 @@ function useScrollMoreHint(bodyRef: React.RefObject<HTMLElement | null>, recalcu
       refold = true
       schedule()
     }
-    schedule()
+    update()
     body.addEventListener('scroll', schedule, { passive: true })
     window.addEventListener('resize', resized)
     let observer: ResizeObserver | null = null
@@ -129,6 +130,7 @@ export function useAdaptiveTable(options: UseAdaptiveTableOptions = {}) {
   const theadRef = useRef<HTMLTableSectionElement>(null)
   const firstRowRef = useRef<HTMLTableRowElement>(null)
 
+  useScrollMoreHint(bodyRef, options.recalculationKey)
   const fitRows = useAdaptiveRowsPerPage(containerRef, {
     ...options,
     bodyRef,
@@ -137,7 +139,6 @@ export function useAdaptiveTable(options: UseAdaptiveTableOptions = {}) {
   })
   // the rows-per-page choice in the footer (PageSizeSelect): fit the screen, or a fixed count that scrolls
   const pageSize = usePageSize()
-  useScrollMoreHint(bodyRef, options.recalculationKey)
 
   return { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage: pageSize === 'fit' ? fitRows : pageSize }
 }

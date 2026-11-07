@@ -9,6 +9,14 @@ export const fmtPodAge = formatAge
 
 // A drawer's events newest first by their last time; an answer without a list (not read) stays undefined, so the
 // Events section says they could not be read instead of "None".
+// What a drawer's Events section shows, for the floating chat: the list, or why it was not read; nothing before the answer.
+export function eventsForAI(describe: { events?: unknown; events_error?: unknown } | null | undefined): Record<string, unknown> {
+  return {
+    ...(describe?.events !== undefined ? { events: describe.events } : {}),
+    ...(describe?.events_error !== undefined ? { events_error: describe.events_error } : {}),
+  }
+}
+
 export function eventsNewestFirst(events: unknown): any[] | undefined {
   if (!Array.isArray(events)) return undefined
   const at = (e: any) => new Date(e?.last_timestamp || e?.first_timestamp || 0).getTime()

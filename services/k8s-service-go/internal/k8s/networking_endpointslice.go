@@ -39,7 +39,9 @@ func (s *Service) DescribeEndpointSlice(ctx context.Context, namespace, name str
 		return nil, fmt.Errorf("get endpoint slice %s/%s: %w", namespace, name, err)
 	}
 
-	return endpointslice.Info(es), nil
+	result := endpointslice.Info(es)
+	s.setObjectEvents(ctx, result, namespace, "EndpointSlice", name)
+	return result, nil
 }
 
 // DeleteEndpointSlice deletes an endpoint slice.

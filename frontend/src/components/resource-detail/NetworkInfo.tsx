@@ -16,8 +16,9 @@ interface Props {
 export default function NetworkInfo({ name, namespace, kind, rawJson }: Props) {
   // rawJson 의 spec/status 를 extras 로 추가 — base 에는 sanitize 된 raw 가 이미 있지만
   // network 리소스는 spec/status 가 핵심이라 명시적으로 다시 노출.
-  // A NetworkPolicy's drawer follows the object and says what it shows itself (NetworkPolicyDetail).
-  const extras = rawJson && kind !== 'NetworkPolicy'
+  // A NetworkPolicy's drawer follows the object and says what it shows itself (NetworkPolicyDetail); an Ingress's and an
+  // EndpointSlice's say it too, with the events their describe answer brings.
+  const extras = rawJson && !['NetworkPolicy', 'Ingress', 'EndpointSlice'].includes(kind)
     ? { spec: rawJson.spec, status: rawJson.status }
     : undefined
   useResourceDetailOverlay({ kind, name, namespace, extras })

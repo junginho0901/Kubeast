@@ -55,9 +55,42 @@ func TestInfo_FieldsOfVPA17(t *testing.T) {
 	}
 }
 
+// The rest kubectl describe prints of a VPA: the update policy's eviction requirements, the recommenders named for it
+// and the generation its status last saw, as the API writes them.
+func TestInfo_EvictionRequirementsRecommendersObservedGeneration(t *testing.T) {
+	u := &unstructured.Unstructured{}
+	if err := u.UnmarshalJSON([]byte(`{"apiVersion":"autoscaling.k8s.io/v1","kind":"VerticalPodAutoscaler","metadata":{"name":"web","namespace":"shop"},
+	"spec":{"recommenders":[{"name":"custom"}],"updatePolicy":{"updateMode":"Auto","evictionRequirements":[{"resources":["cpu","memory"],"changeRequirement":"TargetHigherThanRequests"}]}},
+	"status":{"observedGeneration":7}}`)); err != nil {
+		t.Fatal(err)
+	}
+	b, err := json.Marshal(Info(u))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var row map[string]interface{}
+	if err := json.Unmarshal(b, &row); err != nil {
+		t.Fatal(err)
+	}
+	for k, want := range map[string]interface{}{
+		"eviction_requirements": []interface{}{map[string]interface{}{"resources": []interface{}{"cpu", "memory"}, "changeRequirement": "TargetHigherThanRequests"}},
+		"recommenders":          []interface{}{map[string]interface{}{"name": "custom"}},
+		"observed_generation":   7.0,
+	} {
+		if !reflect.DeepEqual(row[k], want) {
+			t.Errorf("%s = %#v, want %#v", k, row[k], want)
+		}
+	}
+}
+
 // A VPA without them (an older CRD prunes them, or the VPA does not set them): null, which the screen shows as "-".
 func TestInfo_WithoutTheFieldsOfVPA17(t *testing.T) {
 	row := Info(vpa(nil))
+	for _, k := range []string{"eviction_requirements", "recommenders", "observed_generation"} {
+		if v, ok := row[k]; !ok || v != nil {
+			t.Errorf("%s = %#v (present %v), want nil", k, v, ok)
+		}
+	}
 	for _, k := range []string{"min_replicas", "evict_after_oom_seconds", "startup_boost"} {
 		if v, ok := row[k]; !ok || v != nil {
 			t.Errorf("%s = %#v (present %v), want nil", k, v, ok)

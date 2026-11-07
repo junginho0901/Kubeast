@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -101,6 +102,18 @@ func TestAlertStoreAlertsRefusals(t *testing.T) {
 		if w.Code != want {
 			t.Fatalf("read %d: %d, want %d", i+1, w.Code, want)
 		}
+	}
+	// a refused read says when the next one is taken: 3 a minute gives one back within 20 seconds
+	retry, err := strconv.Atoi(w.Header().Get("Retry-After"))
+	if err != nil || retry < 1 || retry > 20 {
+		t.Fatalf("Retry-After %q on a refused read, want 1 to 20 seconds", w.Header().Get("Retry-After"))
+	}
+	// an answered read names no wait
+	h2, _ := newAlertFixture(t)
+	w = httptest.NewRecorder()
+	h2.AlertStoreAlerts(w, logSearchRequestAs("/api/v1/alertstore/alerts", "self", "", podReader))
+	if w.Code != http.StatusOK || w.Header().Get("Retry-After") != "" {
+		t.Fatalf("an answered read: %d, Retry-After %q", w.Code, w.Header().Get("Retry-After"))
 	}
 	if (&Handler{}).alertStoreFeature()["enabled"] != false {
 		t.Fatal("feature on without a store")

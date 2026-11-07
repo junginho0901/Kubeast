@@ -435,6 +435,27 @@ dependencies:
       - path: docs/ko/oidc.md
         match: '확인함\(2026-10-21, Keycloak [0-9]'
 
+  # test2's CRDs (scripts/kind-test2-crds.sh).
+  - name: gateway-api
+    version: v1.3.0
+    upstream:
+      flavour: github
+      url: kubernetes-sigs/gateway-api
+    refPaths:
+      - path: scripts/kind-test2-crds.sh
+        match: '^GATEWAY_API_VERSION='
+      - path: e2e/actions/seed/seed.sh
+        match: 'The Gateway API \(v[0-9]'
+      - path: e2e/actions/README.md
+        match: 'Gateway API v[0-9.]+ experimental CRDs'
+
+  # No upstream check: kubernetes/autoscaler's releases mix its components, so "latest" there is not this one's.
+  - name: vertical-pod-autoscaler-crd
+    version: 1.8.1
+    refPaths:
+      - path: scripts/kind-test2-crds.sh
+        match: '^VPA_VERSION='
+
   - name: dra-example-driver
     version: v0.5.0
     upstream:

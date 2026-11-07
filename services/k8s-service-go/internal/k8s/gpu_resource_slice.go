@@ -56,6 +56,7 @@ func (s *Service) DescribeResourceSlice(ctx context.Context, name string) (map[s
 	} else {
 		result["allocations"] = drarow.SliceAllocations(obj, claims)
 	}
+	s.setObjectEvents(ctx, result, "", "ResourceSlice", name)
 
 	return result, nil
 }

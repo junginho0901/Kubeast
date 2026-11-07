@@ -143,6 +143,7 @@ func main() {
 		r.Get("/sessions/{session_id}", sessionHandler.GetSession)
 		// Renaming and deleting are recorded, so they wait for the audit store (deleting erases chat history).
 		r.With(audit.RequireWritable(auditStore)).Patch("/sessions/{session_id}", sessionHandler.UpdateSession)
+		r.Get("/sessions/{session_id}/messages", sessionHandler.GetEarlierMessages)
 		r.Post("/sessions/{session_id}/messages", sessionHandler.SaveMessages)
 		r.With(audit.RequireWritable(auditStore)).Delete("/sessions/{session_id}", sessionHandler.DeleteSession)
 	})

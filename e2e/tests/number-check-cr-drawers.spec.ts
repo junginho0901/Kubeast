@@ -308,7 +308,7 @@ function vpaWant(c: VPA): View {
     badges: { Mode: dash(cells.Mode), Provided: dash(cells.Provided), CPU: dash(cells.CPU), Memory: dash(cells.Mem) },
     counts: {},
     sections: {
-      Summary: section({ rows: { Name: m.name, Namespace: m.namespace, UID: m.uid, Created: at(m.creationTimestamp) } }),
+      Summary: section({ rows: { Name: m.name, Namespace: m.namespace, UID: m.uid, Created: at(m.creationTimestamp), 'Observed Generation': dash(st.observedGeneration) } }),
       'Target Reference': section({
         rows: {
           Kind: dash(spec.targetRef?.kind), Name: dash(spec.targetRef?.name),
@@ -322,6 +322,8 @@ function vpaWant(c: VPA): View {
           'Min Replicas': 'MinReplicas' in cells ? dash(cells.MinReplicas) : dash(spec.updatePolicy?.minReplicas),
           'Evict After OOM Seconds': 'OOMSeconds' in cells ? dash(cells.OOMSeconds) : dash(spec.updatePolicy?.evictAfterOOMSeconds),
           'Startup Boost': boostText(spec.startupBoost),
+          'Eviction Requirements': (spec.updatePolicy?.evictionRequirements ?? []).map((r: Obj) => `${(r.resources ?? []).join(', ')}: ${dash(r.changeRequirement)}`).join('; ') || '-',
+          Recommenders: (spec.recommenders ?? []).map((r: Obj) => dash(r.name)).join(', ') || '-',
         },
       }),
       ...(policies.length ? {
@@ -398,7 +400,7 @@ function crdWant(crd: Obj, instances: Obj[], events: Obj[]): View {
 }
 
 // the drawer of a kind Kubeast has no view for: the object's names and times, and every label and annotation whole
-function genericWant(o: Obj): View {
+function genericWant(o: Obj, events: Obj[]): View {
   const m = o.metadata
   return {
     badges: {},
@@ -407,6 +409,7 @@ function genericWant(o: Obj): View {
       'Basic Info': section({ rows: { Kind: o.kind, Name: m.name, Namespace: m.namespace, 'API Version': o.apiVersion, Created: at(m.creationTimestamp), UID: m.uid } }),
       ...(Object.keys(m.labels ?? {}).length ? { Labels: section({ tags: tags(m.labels) }) } : {}),
       ...(Object.keys(m.annotations ?? {}).length ? { Annotations: section({ tags: tags(m.annotations) }) } : {}),
+      Events: eventsSection(events),
     },
   }
 }
@@ -715,7 +718,10 @@ test.describe('number check — VPA, CRD, custom resource and fallback drawers',
           async () => customResourceWant(await customResource('verticalpodautoscalercheckpoints.autoscaling.k8s.io', 'num-vpacp')))
       }
       await compare(page, { ...link('test2', `VerticalPodAutoscalerCheckpoint/${NS}/num-vpacp`), name: 'link without apiVersion' },
-        'VerticalPodAutoscalerCheckpoint/num-vpacp', () => genericWant(get('verticalpodautoscalercheckpoints.autoscaling.k8s.io', 'num-vpacp')))
+        'VerticalPodAutoscalerCheckpoint/num-vpacp', () => {
+          const o = get('verticalpodautoscalercheckpoints.autoscaling.k8s.io', 'num-vpacp')
+          return genericWant(o, eventsAbout(o))
+        })
 
       // policy violations on default, from Policy Reports and by link: a pod's, two ConfigMaps' (num-cm-b only the second
       // resource one result names, so by link), one without any (None), a Service's and the namespace's — a cluster-scoped
