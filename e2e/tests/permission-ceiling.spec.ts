@@ -1,3 +1,8 @@
+import { execFileSync, execSync } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+
 import { test, expect, type APIRequestContext } from '@playwright/test'
 
 // M16: nobody may hand out more than they hold. A "limited admin" who can
@@ -9,6 +14,15 @@ import { test, expect, type APIRequestContext } from '@playwright/test'
 
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
+// The dev values list it in auth.impersonation.customRoles, with no role of that name.
+const CHART_BOUND = 'e2e-chart-bound'
+
+// The role names the install's chart binds, as auth-service reads them.
+function chartBoundRoles(): string[] {
+  const kc = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-ceiling-')), 'kubeconfig')
+  fs.writeFileSync(kc, execSync('kind get kubeconfig --name kubeast', { encoding: 'utf8' }), { mode: 0o600 })
+  return execFileSync('kubectl', ['--kubeconfig', kc, '-n', 'kubeast', 'get', 'configmap', 'kubeast-config', '-o', 'jsonpath={.data.IMPERSONATION_CUSTOM_ROLES}'], { encoding: 'utf8' }).split(',')
+}
 
 async function login(request: APIRequestContext, email: string, password: string) {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
@@ -269,6 +283,83 @@ test.describe('permission ceiling (M16)', () => {
       const refused = (await auditRows(request, admin, 'admin.roles.create')).find((r) => r.Result === 'failure' && r.After?.name === `e2e-name-${ts}`)
       expect.soft(refused, 'the refusal is audited').toBeTruthy()
     } finally {
+      for (const id of roles) await request.delete(`/api/v1/auth/admin/roles/${id}`, { headers: admin, failOnStatusCode: false })
+    }
+  })
+
+  test('a role name the chart binds takes a global admin, before its role exists and after it is deleted; the role form says why', async ({ request, browser }) => {
+    test.skip(!chartBoundRoles().includes(CHART_BOUND), `needs ${CHART_BOUND} in auth.impersonation.customRoles (deploy/kind/values.yaml)`)
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const ts = Date.now().toString(36)
+    const email = `e2e-chartrole-${ts}@kubeast.local`
+    const password = 'e2e-ceiling-throwaway-8'
+    const roles: number[] = []
+    let userId = ''
+    let bound = 0
+    // No permissions: a global role's token holds no menu or resource key to pass on, so only the name decides.
+    const create = (headers: Record<string, string>, name: string) => request.post('/api/v1/auth/admin/roles', { headers, data: { name, permissions: [] }, failOnStatusCode: false })
+    const update = (headers: Record<string, string>, id: number, name: string, description = '') => request.put(`/api/v1/auth/admin/roles/${id}`, { headers, data: { name, description, permissions: [] }, failOnStatusCode: false })
+    const roleNamed = async (name: string) => {
+      const raw = await (await request.get('/api/v1/auth/roles', { headers: admin })).json()
+      return ((Array.isArray(raw) ? raw : raw.items || []) as { id: number; name: string }[]).find((r) => r.name === name)
+    }
+    const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } })
+    try {
+      const leftover = await roleNamed(CHART_BOUND)
+      if (leftover) expect((await request.delete(`/api/v1/auth/admin/roles/${leftover.id}`, { headers: admin })).status()).toBe(204)
+
+      const adminRole = await request.post('/api/v1/auth/admin/roles', { headers: admin, data: { name: `e2e-chartrole-admin-${ts}`, permissions: ['menu.*', 'admin.roles.*'] } })
+      expect(adminRole.status(), await adminRole.text()).toBe(201)
+      const adminRoleId = (await adminRole.json()).id as number
+      roles.push(adminRoleId)
+      const made = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E role admin', email, password, role_id: adminRoleId } })
+      expect(made.status(), await made.text()).toBe(201)
+      userId = (await made.json()).id
+      expect((await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/self`, { headers: admin, data: { role: 'Read' } })).status()).toBe(200)
+      const roleAdmin = await login(request, email, password)
+
+      for (const name of [CHART_BOUND, CHART_BOUND.toUpperCase(), 'E2E Chart Bound']) {
+        const refused = await create(roleAdmin, name)
+        expect.soft(refused.status(), `create ${name}`).toBe(403)
+        expect.soft((await refused.json()).detail, `${name} says which group`).toContain(`permission ceiling: the chart binds kubeast:role:${CHART_BOUND}`)
+      }
+      expect.soft(await roleNamed(CHART_BOUND), 'nothing was made').toBeUndefined()
+      const row = (await auditRows(request, admin, 'admin.roles.create')).find((r) => r.ActorEmail === email && r.Result === 'failure' && r.After?.name === CHART_BOUND)
+      expect.soft(String(row?.Error ?? ''), 'the refusal is audited').toContain('permission ceiling')
+
+      const plain = await create(roleAdmin, `e2e-chartrole-plain-${ts}`)
+      expect(plain.status(), 'a name the chart does not list stays open').toBe(201)
+      const plainId = (await plain.json()).id as number
+      roles.push(plainId)
+      expect.soft((await update(roleAdmin, plainId, CHART_BOUND)).status(), 'a rename onto the listed name').toBe(403)
+      expect.soft((await roleNamed(`e2e-chartrole-plain-${ts}`))?.id, 'the rename did not happen').toBe(plainId)
+
+      const page = await ctx.newPage()
+      await page.goto('/login')
+      await page.locator('input[autocomplete="email"]').first().fill(email)
+      await page.locator('input[type="password"]').first().fill(password)
+      await page.locator('button[type="submit"]').first().click()
+      await page.waitForFunction(() => !document.querySelector('input[autocomplete="email"]'), { timeout: 20000 })
+      await page.goto('/admin/roles')
+      await page.getByRole('button', { name: /^(Create Role|역할 생성)$/ }).click()
+      await page.getByPlaceholder(/InfraManager/).fill(CHART_BOUND)
+      await page.getByRole('button', { name: /^(Create|생성)$/ }).click()
+      await expect(page.getByText(`permission ceiling: the chart binds kubeast:role:${CHART_BOUND}`), 'the form says why').toHaveCount(1, { timeout: 15000 })
+
+      const created = await create(admin, CHART_BOUND)
+      expect(created.status(), `a global admin creates what the chart lists: ${await created.text()}`).toBe(201)
+      bound = (await created.json()).id
+      const edited = await update(roleAdmin, bound, CHART_BOUND, 'edited by the role admin')
+      expect.soft(edited.status(), 'the role stays open to its editors').toBe(200)
+      expect.soft((await edited.json()).description).toBe('edited by the role admin')
+
+      expect((await request.delete(`/api/v1/auth/admin/roles/${bound}`, { headers: admin })).status()).toBe(204)
+      bound = 0
+      expect.soft((await create(roleAdmin, CHART_BOUND)).status(), 'after its role is deleted').toBe(403)
+    } finally {
+      await ctx.close()
+      if (bound) await request.delete(`/api/v1/auth/admin/roles/${bound}`, { headers: admin, failOnStatusCode: false })
+      if (userId) await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: admin, failOnStatusCode: false })
       for (const id of roles) await request.delete(`/api/v1/auth/admin/roles/${id}`, { headers: admin, failOnStatusCode: false })
     }
   })

@@ -18,6 +18,7 @@ import (
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/security"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
+	"github.com/junginho0901/kubeast/services/pkg/cluster"
 )
 
 const (
@@ -137,9 +138,10 @@ func newAuthAPIWith(t *testing.T, pending pendingRequest, settings func(*config.
 	}
 	store := &recordedAudit{}
 	authHandler := handler.NewAuthHandler(repo, mgr, cfg, store)
-	roleHandler := handler.NewRoleHandler(repo, store)
+	roleHandler := handler.NewRoleHandler(repo, store, cfg.ImpersonationCustomRoles)
 	setupHandler := handler.NewSetupHandler(cfg, nil, nil, store)
 	authMiddleware := security.AuthMiddleware(mgr, repo.TokenVersionFor, "kubeast.token")
+	clusterListAuth := security.InvestigatorReadMiddleware(mgr, repo.TokenVersionFor, "kubeast.token", cfg.AlertInvestigationEnabled)
 	r := chi.NewRouter()
 	r.Route("/api/v1/auth", func(r chi.Router) {
 		publicAuthRoutes(r, authHandler, setupHandler, cfg.InternalAPIToken)
@@ -149,7 +151,7 @@ func newAuthAPIWith(t *testing.T, pending pendingRequest, settings func(*config.
 			protectedAuthRoutes(r, authHandler, roleHandler, setupHandler, store)
 		})
 	})
-	topLevelRoutes(r, authMiddleware, authHandler, handler.NewClustersHandler(nil, nil, store, cfg), setupHandler, store)
+	topLevelRoutes(r, authMiddleware, clusterListAuth, authHandler, handler.NewClustersHandler(cluster.NewPostgresRegistry(pool, nil), nil, store, cfg), setupHandler, store)
 	return &authAPI{t: t, db: db, store: store, mgr: mgr, router: r}
 }
 

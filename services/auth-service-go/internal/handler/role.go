@@ -23,10 +23,17 @@ import (
 type RoleHandler struct {
 	repo       *repository.Repository
 	auditStore audit.Store
+	boundSlugs map[string]struct{}
 }
 
-func NewRoleHandler(repo *repository.Repository, auditStore audit.Store) *RoleHandler {
-	return &RoleHandler{repo: repo, auditStore: auditStore}
+// NewRoleHandler takes the role names the chart binds on the clusters
+// (auth.impersonation.customRoles).
+func NewRoleHandler(repo *repository.Repository, auditStore audit.Store, boundRoles []string) *RoleHandler {
+	boundSlugs := make(map[string]struct{}, len(boundRoles))
+	for _, name := range boundRoles {
+		boundSlugs[auth.RoleGroupSlug(name)] = struct{}{}
+	}
+	return &RoleHandler{repo: repo, auditStore: auditStore, boundSlugs: boundSlugs}
 }
 
 // samePermissions compares two permission lists as sets.
@@ -77,6 +84,19 @@ func (h *RoleHandler) roleNameConflict(ctx context.Context, name string, id int)
 		return fmt.Sprintf("Role name %q acts as the same Kubernetes group as role %q (kubeast:role:%s). Choose another name", name, other.Name, slug), nil
 	}
 	return "", nil
+}
+
+// chartBoundCeiling keeps a name out of reach when the chart already binds its
+// group: its holders get ClusterRoles no permission key describes, which this
+// service cannot read to compare with what the actor holds. Only "*", which acts
+// as cluster-admin on every cluster, is known to hold them all. A refusal wraps
+// errCeiling.
+func (h *RoleHandler) chartBoundCeiling(actor auth.TokenPayload, name string) error {
+	slug := auth.RoleGroupSlug(name)
+	if _, bound := h.boundSlugs[slug]; !bound || auth.MatchAny(actor.Perms["*"], "*") {
+		return nil
+	}
+	return fmt.Errorf("%w: the chart binds kubeast:role:%s on the clusters (auth.impersonation.customRoles). Only a global admin can give a role this name", errCeiling, slug)
 }
 
 // grantedRoleCeiling keeps an edit within what the editor holds where the role
@@ -183,6 +203,11 @@ func (h *RoleHandler) CreateRole(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, conflict)
 		return
 	}
+	if err := h.chartBoundCeiling(payload, req.Name); err != nil {
+		writeAudit(h.auditStore, r, payload, auditEvent{action: "admin.roles.create", targetType: "role", after: roleState(req.Name, req.Description, req.Permissions), err: err})
+		response.Error(w, http.StatusForbidden, err.Error())
+		return
+	}
 
 	role, err := h.repo.CreateRole(r.Context(), req.Name, req.Description, req.Permissions)
 	ev := auditEvent{action: "admin.roles.create", targetType: "role", after: roleState(req.Name, req.Description, req.Permissions), err: err}
@@ -275,6 +300,14 @@ func (h *RoleHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 				before: roleState(existing.Name, existing.Description, existing.Permissions), after: roleState(name, req.Description, req.Permissions), err: errors.New(conflict)})
 			response.Error(w, http.StatusBadRequest, conflict)
 			return
+		}
+		if auth.RoleGroupSlug(name) != auth.RoleGroupSlug(existing.Name) {
+			if err := h.chartBoundCeiling(payload, name); err != nil {
+				writeAudit(h.auditStore, r, payload, auditEvent{action: "admin.roles.update", targetType: "role", targetID: strconv.Itoa(id),
+					before: roleState(existing.Name, existing.Description, existing.Permissions), after: roleState(name, req.Description, req.Permissions), err: err})
+				response.Error(w, http.StatusForbidden, err.Error())
+				return
+			}
 		}
 	}
 

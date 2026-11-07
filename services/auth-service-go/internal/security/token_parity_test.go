@@ -19,10 +19,6 @@ var leftEmptyByTheMiddleware = map[string]string{
 	// The middleware compares "tv" itself and no handler reads the field: a token
 	// this service issues takes the version from the user's row.
 	"TokenVersion": "checked in the middleware, read by no handler",
-	// Only Impersonation reads it, and this service never acts on a cluster as the
-	// caller. The investigator's token reaches this service only at the
-	// token-version route, which reads the claim itself.
-	"System": "this service never acts on a cluster as the caller",
 	// Only auth.LiveSessions reads it, for a connection held open past its token, and this service holds none.
 	"ExpiresAt": "this service holds no connection open past a token",
 }
@@ -139,8 +135,10 @@ func signed(t *testing.T, mgr *JWTManager, claims jwt.MapClaims) string {
 	return tok
 }
 
+// serveWithMiddleware goes through the middleware that takes every token: the
+// investigator's as well, which the plain one refuses by its claim alone.
 func serveWithMiddleware(mgr *JWTManager, token string, read func(auth.TokenPayload)) *httptest.ResponseRecorder {
-	h := AuthMiddleware(mgr, nil, "")(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+	h := InvestigatorReadMiddleware(mgr, nil, "", true)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		if p, ok := auth.FromContext(r.Context()); ok {
 			read(p)
 		}

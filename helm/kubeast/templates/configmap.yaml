@@ -108,6 +108,12 @@ data:
   AUTH_TOKEN_VERSION_URL: "http://auth-service:8004/api/v1/auth/internal/token-version"
   TOOL_SERVER_URL: "http://tool-server:8086"
   IMPERSONATION_ENABLED: {{ .Values.auth.impersonation.enabled | quote }}
+  {{- /* The groups templates/impersonation-custom-roles.yaml binds: auth-service holds their names back (handler/role.go). */}}
+  {{- $boundRoles := list }}
+  {{- if .Values.auth.impersonation.enabled }}
+  {{- range .Values.auth.impersonation.customRoles }}{{ $boundRoles = append $boundRoles (include "kubeast.roleSlug" .name) }}{{ end }}
+  {{- end }}
+  IMPERSONATION_CUSTOM_ROLES: {{ join "," $boundRoles | quote }}
   KUBECONFIG_EXEC_COMMANDS: {{ join "," .Values.multicluster.execCommands | quote }}
   GATEWAY_POLICY_KINDS: {{ join "," .Values.gatewayApi.policyKinds | quote }}
   AI_WRITE_APPROVAL: {{ .Values.ai.writeApproval | quote }}

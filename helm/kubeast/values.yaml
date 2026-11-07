@@ -140,6 +140,8 @@ auth:
     # them instead of cluster-wide — the shape a namespace-scoped grant needs;
     # name Read, Write or Admin there to bind the system roles' scoped groups
     # (kubeast:role:read/write/admin, already allowed for impersonation).
+    # auth-service reads this list: naming a role so that it acts as a listed
+    # group takes all permissions (*), since a role of that name holds the binding.
     customRoles: []
     #  - name: sre-readonly
     #    clusterRoles: [view, "kubeast:cluster-reader"]

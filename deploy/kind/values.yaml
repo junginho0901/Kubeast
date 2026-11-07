@@ -26,6 +26,11 @@ auth:
   tokenTTLMinutes: 60
   bootstrapDemoUsers: true
   cookieSecure: false
+  # e2e/tests/permission-ceiling.spec.ts: a listed name with no role takes a global admin.
+  impersonation:
+    customRoles:
+      - name: e2e-chart-bound
+        clusterRoles: [view]
   accessRequests:
     enabled: true
     sweepSeconds: 5

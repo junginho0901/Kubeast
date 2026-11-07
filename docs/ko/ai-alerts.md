@@ -70,6 +70,7 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
   - auth-service가 그 클러스터용 **조사 전용 토큰**을 10분짜리로 발급합니다.
     - 권한은 읽기 도구 52개와 로그 저장소 검색이 확인하는 `resource.pod.read`입니다. Helm·정책 보고·비용·로그 파일·NetworkPolicy·네트워크 흐름·네트워크 차단·상위 통신 도구는 이 권한이 없어 조사에는 보이지 않습니다.
     - 알림에 `namespace` 라벨이 있으면 그 Namespace로 한정합니다.
+    - auth-service에서 열리는 경로는 하나입니다. 도구 `clusters_list`가 읽는 클러스터 목록이고, 그 클러스터의 행만 답합니다. 다른 경로는 403을 답하고, `features.alertInvestigation.enabled`가 꺼지면 이 경로도 멈춥니다.
     - 클러스터에는 사용자·그룹 `kubeast:investigator`로 요청합니다. 이 신원은 Secret·exec·쓰기 권한이 없는 읽기 전용 ClusterRole입니다(`templates/impersonation-investigator.yaml`).
   - 조사에서 CRD(Kyverno PolicyReport, Argo Rollout, KEDA ScaledObject 등)도 읽게 하려면 `extraRules`에 읽기 규칙을 추가하세요. 동사는 get, list, watch만 쓸 수 있고, `apiGroups "*"`, Secret, exec, 프록시, 토큰, 와일드카드 자원은 렌더 단계에서 거부합니다.
   - 추가한 규칙은 알림을 보내는 모든 클러스터에 다시 적용하세요(`scripts/render-target-rbac.sh`).

@@ -71,6 +71,7 @@ The feature is off by default (`features.alertInvestigation.enabled`). Turning i
   - auth-service issues an **investigation-only token** for that cluster, valid for 10 minutes.
     - It holds permissions for the 52 read tools plus `resource.pod.read`, which log store search asks for. It lacks the permissions of the Helm, policy report, cost, log file, NetworkPolicy, network flow, network drop and top talker tools, so the investigation does not see them.
     - When the alert has a `namespace` label, the token is limited to the alert's Namespace.
+    - Of auth-service's routes it opens one: the cluster list the tool `clusters_list` reads, which answers that cluster's row. The others answer 403, and it stops working there when `features.alertInvestigation.enabled` is off.
   - Requests reach the cluster as user and group `kubeast:investigator`: a read-only ClusterRole with no Secrets, exec or writes (`templates/impersonation-investigator.yaml`).
   - To let the investigation read CRDs too (Kyverno PolicyReport, Argo Rollout, KEDA ScaledObject, etc.), add read rules to `extraRules`, with verbs get, list and watch only. The render refuses `apiGroups "*"`, Secrets, exec, proxy, tokens and wildcard resources.
   - Apply the added rules again to every cluster that sends alerts (`scripts/render-target-rbac.sh`).

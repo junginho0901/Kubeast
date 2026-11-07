@@ -44,12 +44,15 @@ func publicAuthRoutes(r chi.Router, authHandler *handler.AuthHandler, setupHandl
 // topLevelRoutes registers multi-cluster CRUD, system info and the cluster-switch
 // audit. They live outside /api/v1/auth and all require a valid token; the
 // admin.clusters.* permission is enforced inside each cluster handler.
-func topLevelRoutes(r chi.Router, authMiddleware func(http.Handler) http.Handler, authHandler *handler.AuthHandler, clustersHandler *handler.ClustersHandler, setupHandler *handler.SetupHandler, auditStore audit.Store) {
+func topLevelRoutes(r chi.Router, authMiddleware, clusterListAuth func(http.Handler) http.Handler, authHandler *handler.AuthHandler, clustersHandler *handler.ClustersHandler, setupHandler *handler.SetupHandler, auditStore audit.Store) {
+	// The AI tool clusters_list reads this in an alert investigation too: the only
+	// route that takes the investigator's token.
+	r.With(clusterListAuth).Get("/api/v1/clusters", clustersHandler.ListClusters)
+
 	r.Group(func(r chi.Router) {
 		r.Use(authMiddleware)
 		r.Use(handler.AdminWritesGate(auditStore))
 
-		r.Get("/api/v1/clusters", clustersHandler.ListClusters)
 		r.Post("/api/v1/clusters", clustersHandler.RegisterCluster)
 		r.Post("/api/v1/clusters/validate", clustersHandler.ValidateCluster)
 		r.Delete("/api/v1/clusters/{id}", clustersHandler.DeleteCluster)
