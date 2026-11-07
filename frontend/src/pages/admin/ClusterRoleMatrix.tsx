@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ShieldCheck, Loader2 } from 'lucide-react'
@@ -7,6 +8,7 @@ import { clustersApi } from '@/services/api/clusters'
 import CustomDropdown from '@/components/CustomDropdown'
 import NamespaceScopeInput from '@/components/NamespaceScopeInput'
 import { usePermission } from '@/hooks/usePermission'
+import { refusalText } from './clusterAccessRefusal'
 
 interface Props {
   userID: string
@@ -24,30 +26,34 @@ interface Props {
 export default function ClusterRoleMatrix({ userID, canEdit: canEditUsers, userIsGlobalAdmin, isSelf }: Props) {
   const canEdit = canEditUsers && !isSelf
   const { t } = useTranslation()
-  const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
+  const tr = (key: string, fallback: string, options?: Record<string, unknown>) => t(key, { defaultValue: fallback, ...options })
   const queryClient = useQueryClient()
 
   // Without the full cluster list, the clusters one reaches — the ones one may grant on (permission ceiling).
   const { has } = usePermission()
   const everyCluster = has('admin.clusters.list')
-  const { data: clusters = [] } = useQuery({
+  const { data: clusters = [], error: clustersError } = useQuery({
     queryKey: ['clusters-all', everyCluster],
     queryFn: () => clustersApi.listClusters(!everyCluster),
     staleTime: 30_000,
   })
-  const { data: roles = [] } = useQuery({ queryKey: ['roles'], queryFn: api.listRoles, staleTime: 60_000 })
-  const { data: userRoles = {}, isLoading } = useQuery({
+  const { data: roles = [], error: rolesError } = useQuery({ queryKey: ['roles'], queryFn: api.listRoles, staleTime: 60_000 })
+  const { data: userRoles = {}, isLoading, error: userRolesError } = useQuery({
     queryKey: ['user-cluster-roles', userID],
     queryFn: () => api.getUserClusterRoles(userID),
     enabled: !!userID,
   })
   // The grants with their namespace scope (the role map above has no room for it).
-  const { data: grants = [] } = useQuery({
+  const { data: grants = [], error: grantsError } = useQuery({
     queryKey: ['user-cluster-grants', userID],
     queryFn: () => api.getUserClusterGrants(userID),
     enabled: !!userID,
   })
   const namespacesOf = (clusterId: string) => grants.find((g) => g.cluster_id === clusterId)?.namespaces
+  // Rows drawn from an answer that did not come would read "No access", and a change would send no namespaces.
+  const readRefusal = refusalText(userRolesError ?? grantsError ?? clustersError)
+  const rolesRefusal = refusalText(rolesError)
+  const [refusal, setRefusal] = useState<string | null>(null)
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['user-cluster-roles', userID] })
@@ -57,11 +63,15 @@ export default function ClusterRoleMatrix({ userID, canEdit: canEditUsers, userI
   const setMutation = useMutation({
     mutationFn: ({ clusterId, role, namespaces }: { clusterId: string; role: string; namespaces?: string[] }) =>
       api.setUserClusterRole(userID, clusterId, role, namespaces ?? namespacesOf(clusterId)),
+    onMutate: () => setRefusal(null),
     onSuccess: invalidate,
+    onError: (err) => setRefusal(refusalText(err)),
   })
   const removeMutation = useMutation({
     mutationFn: (clusterId: string) => api.removeUserClusterRole(userID, clusterId),
+    onMutate: () => setRefusal(null),
     onSuccess: invalidate,
+    onError: (err) => setRefusal(refusalText(err)),
   })
   const pending = setMutation.isPending || removeMutation.isPending
 
@@ -92,12 +102,27 @@ export default function ClusterRoleMatrix({ userID, canEdit: canEditUsers, userI
         </p>
       )}
 
+      {refusal && (
+        <p className="text-xs text-red-300 mb-3" role="alert" data-testid="cluster-role-matrix-refusal">
+          {tr('admin.userClusterRoles.changeError', 'Not changed: {{reason}}', { reason: refusal })}
+        </p>
+      )}
+      {!userIsGlobalAdmin && !readRefusal && rolesRefusal && (
+        <p className="text-xs text-red-300 mb-3" role="alert" data-testid="cluster-role-matrix-error">
+          {tr('admin.userClusterRoles.rolesError', 'Could not read the roles, so none can be chosen: {{reason}}', { reason: rolesRefusal })}
+        </p>
+      )}
+
       {userIsGlobalAdmin ? (
         <p className="text-sm text-primary-300 bg-primary-900/20 border border-primary-800/40 rounded-lg px-3 py-2">
           {tr('admin.userClusterRoles.adminAll', 'Global admin — reaches every cluster automatically.')}
         </p>
       ) : isLoading ? (
         <div className="text-xs text-slate-400 py-2">…</div>
+      ) : readRefusal ? (
+        <p className="text-xs text-red-300 py-2" role="alert" data-testid="cluster-role-matrix-error">
+          {tr('admin.userClusterRoles.readError', "Could not read this user's cluster access: {{reason}}", { reason: readRefusal })}
+        </p>
       ) : clusters.length === 0 ? (
         <div className="text-xs text-slate-400 py-2">
           {tr('admin.userClusterRoles.noClusters', 'No clusters registered.')}

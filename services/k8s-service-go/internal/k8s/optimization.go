@@ -50,6 +50,8 @@ type OptimizationResult struct {
 	Rows        []OptimizationRow  `json:"rows"`
 	Totals      OptimizationTotals `json:"totals"`
 	Pricing     *CostUnitPrices    `json:"pricing,omitempty"`
+	// ResizeKinds are the row kinds "Apply without restart" takes (POST …/optimization/resize).
+	ResizeKinds []string `json:"resize_kinds"`
 }
 
 // OptimizationTotals sums requests and recommendations over all pods of the rows.
@@ -123,6 +125,7 @@ func (s *Service) CollectOptimization(ctx context.Context, namespace string, win
 	}
 	rows := acc.rows()
 	res := &OptimizationResult{Namespace: namespace, WindowHours: windowHours, Source: source, GeneratedAt: time.Now().UTC().Format(time.RFC3339), Rows: rows, Totals: optimizationTotals(rows)}
+	res.ResizeKinds = ResizeKinds()
 	applyCostPricing(res, s.costUnitPricesForCtx(ctx, windowHours))
 	return res, nil
 }

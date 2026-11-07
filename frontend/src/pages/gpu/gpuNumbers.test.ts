@@ -112,6 +112,16 @@ describe('GPU screen numbers', () => {
     ]).toEqual(['NVIDIA-A100-SXM4-40GB • 40960', 'AMD_Instinct_MI300X • 192G', 'nvidia-l4', 'Intel Max_1550', 'NVIDIA Tesla-T4', 'AMD 알 수 없음'])
   })
 
+  // GPU Feature Discovery writes a number of mebibytes; AMD's node labeller writes its own unit; Intel writes no memory
+  it('gives a GPU memory label its unit', () => {
+    expect(gpuVendorLabels('NVIDIA', { 'nvidia.com/gpu.memory': '23034' }).memory).toBe('23034 MiB')
+    expect(gpuVendorLabels('AMD', { 'amd.com/gpu.vram': '192G' }).memory).toBe('192G')
+    expect(gpuVendorLabels('Intel', {}).memory).toBeUndefined()
+    expect(gpuVendorLabels('NVIDIA', {}).memory).toBeUndefined()
+    // a label someone wrote by hand with its own unit stays as written
+    expect(gpuVendorLabels('NVIDIA', { 'nvidia.com/gpu.memory': '24GB' }).memory).toBe('24GB')
+  })
+
   // the drawer: whose GPUs, each company's labels, the GPUs of all of them (not Intel's millicores)
   it('gives the Node drawer each company\'s GPU rows', () => {
     const amd = { 'amd.com/gpu.product-name': 'AMD_Instinct_MI300X', 'amd.com/gpu.vram': '192G', 'amd.com/gpu.driver-version': '6.12.12', 'amd.com/gpu.family': 'AI' }
@@ -122,7 +132,7 @@ describe('GPU screen numbers', () => {
     const mixed = { 'nvidia.com/gpu.product': 'NVIDIA-L4', 'nvidia.com/gpu.memory': '23034', 'nvidia.com/cuda.driver-version.full': '580.95.05', 'gpu.intel.com/product': 'Arc_Pro_B60', 'gpu.intel.com/family': 'B_Series' }
     const res = { 'nvidia.com/gpu': '1', 'gpu.intel.com/xe': '1', 'gpu.intel.com/millicores': '1000' }
     expect(nodeGpuRows(mixed, res, res)).toEqual([
-      ['GPU Vendor', 'NVIDIA, Intel'], ['GPU Product', 'NVIDIA-L4, Arc_Pro_B60'], ['GPU Memory', '23034'], ['GPU Count (Capacity)', '2'],
+      ['GPU Vendor', 'NVIDIA, Intel'], ['GPU Product', 'NVIDIA-L4, Arc_Pro_B60'], ['GPU Memory', '23034 MiB'], ['GPU Count (Capacity)', '2'],
       ['GPU Count (Allocatable)', '2'], ['Driver Version', '580.95.05'], ['GPU Family', 'B_Series'],
     ])
     expect(nodeGpuRows({}, { cpu: '4' }, { cpu: '4' })).toEqual([])

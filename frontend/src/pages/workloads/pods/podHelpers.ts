@@ -18,24 +18,52 @@ export function runningNotReady(pod: { status?: string | null; ready?: string | 
 }
 
 /**
- * The Pod drawer's Status tile. A pod initializing or being deleted reads the server's Status (kubectl's). Otherwise a
- * reason the pod or a container names comes first, a container's last crash too, which the drawer shows nowhere else;
- * with none named, the server's word (SchedulingGated), else the phase. A Running pod not ready stays Running, as
- * kubectl and the Pods list say, and the tile draws it yellow.
+ * The Pod drawer's Status tile: the server's Status, kubectl's word as the Pods list shows it, else the phase. A Running
+ * pod not ready stays Running and the tile draws it yellow. The pod's own reason and a container's last crash have rows
+ * of their own (status_reason, podLastStates).
  */
-export function podDrawerStatus(
-  describe: { status?: unknown; status_reason?: unknown } | null | undefined,
-  containers: any[],
-  phase: string,
+export function podDrawerStatus(describe: Record<string, unknown> | null | undefined, phase: string): string {
+  return typeof describe?.status === 'string' && describe.status ? describe.status : phase
+}
+
+/**
+ * The Status of a drawer's pod table: kubectl's word as the Pods list shows it (k8s-service podListView), the phase only
+ * for a row without one, so one pod reads the same in every window.
+ */
+export function podTableStatus(pod: { status?: unknown; phase?: unknown } | null | undefined): string {
+  return String(pod?.status || pod?.phase || '-')
+}
+
+export interface PodLastState {
+  container: string
+  reason: string
+  exit_code?: number
+  finished_at?: string
+}
+
+/** The containers that ended before, kubectl describe's "Last State: Terminated". */
+export function podLastStates(containers: any[]): PodLastState[] {
+  return containers.flatMap((c: any) => {
+    const ended = c?.last_state?.terminated
+    if (!ended) return []
+    return [{ container: String(c.name ?? ''), reason: String(ended.reason ?? ''), exit_code: ended.exit_code, finished_at: ended.finished_at }]
+  })
+}
+
+/** The Last State row: why and how each ended, with the container's name when there are several. */
+export function podLastStateText(
+  states: PodLastState[],
+  words: { exitCode?: (code: number) => string; time?: (at: string) => string } = {},
 ): string {
-  const server = typeof describe?.status === 'string' ? describe.status : ''
-  if (server.startsWith('Init:') || server === 'Terminating') return server
-  if (typeof describe?.status_reason === 'string' && describe.status_reason) return describe.status_reason
-  const reasons = containers
-    .map((c: any) => c?.state?.waiting?.reason || c?.state?.terminated?.reason || c?.last_state?.terminated?.reason)
-    .filter(Boolean)
-  if (reasons.length > 0) return String(reasons[0])
-  return server || phase
+  const exitCode = words.exitCode ?? ((code: number) => `exit code ${code}`)
+  const one = (s: PodLastState) => {
+    const details = [s.exit_code != null ? exitCode(s.exit_code) : '', s.finished_at && words.time ? words.time(s.finished_at) : ''].filter(Boolean).join(', ')
+    if (!s.reason) return details || '-'
+    return details ? `${s.reason} (${details})` : s.reason
+  }
+  if (states.length === 0) return '-'
+  if (states.length === 1) return one(states[0])
+  return states.map((s) => `${s.container}: ${one(s)}`).join(', ')
 }
 
 export function getStatusColor(status: string): string {

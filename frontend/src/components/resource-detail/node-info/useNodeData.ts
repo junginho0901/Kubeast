@@ -8,6 +8,7 @@ import { buildResourceLink } from '@/utils/resourceLink'
 import { formatBytes } from '@/pages/dashboard/utils'
 import { parseQuantityToBytes } from '@/pages/storage/pvcs/pvcHelpers'
 import { eventsNewestFirst } from '../detailFormat'
+import { nodeAllocatedView, readyChangedAt } from './nodeAllocated'
 
 // Byte-valued node resources shown in binary units ("977896124416" → "910.7Gi").
 export function formatCapacity(key: string, value: string | undefined): string {
@@ -88,7 +89,7 @@ export function useNodeData(name: string) {
       return ph !== 'Running' && ph !== 'Succeeded'
     }).length
 
-    const conditions = (nodeDescribe as { conditions?: Array<{ type?: string; status?: string; reason?: string }> } | undefined)?.conditions
+    const conditions = (nodeDescribe as { conditions?: Array<{ type?: string; status?: string; reason?: string; last_transition_time?: string }> } | undefined)?.conditions
     const taints = (nodeDescribe as { taints?: Array<{ key?: string; value?: string; effect?: string }> } | undefined)?.taints
     const unschedulable = (nodeDescribe as { unschedulable?: boolean } | undefined)?.unschedulable
 
@@ -121,6 +122,8 @@ export function useNodeData(name: string) {
         unschedulable,
         cpu_percent: nodeMetric?.cpu_percent,
         memory_percent: nodeMetric?.memory_percent,
+        allocated: nodeAllocatedView(nodeDescribe),
+        ready_changed_at: readyChangedAt(conditions),
         conditions: Array.isArray(conditions)
           ? conditions
               .filter((c) => c.status !== 'False' || c.type === 'Ready')
@@ -138,6 +141,7 @@ export function useNodeData(name: string) {
           name: p.name,
           namespace: p.namespace,
           phase: p.phase || p.status,
+          status: p.status,
           restart_count: p.restart_count,
           _link: buildResourceLink('Pod', p.namespace, p.name),
         })),

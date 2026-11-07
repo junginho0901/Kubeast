@@ -175,6 +175,9 @@ const tagSectionsIfAny = (o: Obj) => ({
   ...(Object.keys(o.metadata.labels ?? {}).length ? { Labels: section({ tags: tagsOf(o.metadata.labels) }) } : {}),
   ...(Object.keys(o.metadata.annotations ?? {}).length ? { Annotations: section({ tags: tagsOf(o.metadata.annotations) }) } : {}),
 })
+// a pod's STATUS as kubectl get pods -A printed it in this round: the drawers' pod tables show that word, not the phase
+let printedStatus: Record<string, string> = {}
+const kubectlStatus = (p: Obj) => printedStatus[`${p.metadata.namespace}/${p.metadata.name}`] ?? dash(p.status.phase)
 // a pod list of a drawer, in the API's order (namespace/name)
 const podTable = (head: string[], pods: Obj[], cells: (p: Obj) => string[]): TableView[] =>
   [{ head, rows: [...pods].sort((a, b) => (`${a.metadata.namespace}/${a.metadata.name}` < `${b.metadata.namespace}/${b.metadata.name}` ? -1 : 1)).map(cells) }]
@@ -438,7 +441,7 @@ const KINDS: Kind[] = [
             : section({ notes: ['No subjects defined.'] }),
           ...(sa.length ? {
             'Bound Pods via ServiceAccount Subjects': c.pods.length
-              ? section({ tables: podTable(['Namespace', 'Pod', 'SA', 'Status'], c.pods, (p) => [p.metadata.namespace, p.metadata.name, p.spec.serviceAccountName, dash(p.status.phase)]) })
+              ? section({ tables: podTable(['Namespace', 'Pod', 'SA', 'Status'], c.pods, (p) => [p.metadata.namespace, p.metadata.name, p.spec.serviceAccountName, kubectlStatus(p)]) })
               : section({ notes: ['No pod uses any of the bound ServiceAccounts.'] }),
           } : {}),
           ...tagSectionsIfAny(o),
@@ -461,7 +464,7 @@ const KINDS: Kind[] = [
           Summary: section({ rows: rowsOf({ Name: o.metadata.name, UID: o.metadata.uid, Created: at(o.metadata.creationTimestamp) }) }),
           'Priority Settings': section({ rows: rowsOf({ Value: String(o.value), 'Global Default': yesNo, 'Preemption Policy': preemption }) }),
           'Used By Pods': c.pods.length
-            ? section({ tables: podTable(['Namespace', 'Pod', 'Status', 'Node', 'Age'], c.pods, (p) => [p.metadata.namespace, p.metadata.name, dash(p.status.phase), dash(p.spec.nodeName), at(p.metadata.creationTimestamp)]) })
+            ? section({ tables: podTable(['Namespace', 'Pod', 'Status', 'Node', 'Age'], c.pods, (p) => [p.metadata.namespace, p.metadata.name, kubectlStatus(p), dash(p.spec.nodeName), at(p.metadata.creationTimestamp)]) })
             : section({ notes: ['No pod in the cluster uses this PriorityClass.'] }),
           Description: section({ marks: [dash(o.description)] }),
           Events: eventsSection(c.events),
@@ -501,7 +504,7 @@ const KINDS: Kind[] = [
             [NODES_MATCHING]: matching.length ? section({ marks: [...matching.slice(0, 20).map((n) => n.metadata.name), ...pagerMarks(matching.length, 20)] }) : section({ notes: ['No Node matches scheduling.nodeSelector.'] }),
           } : {}),
           'Used By Pods': c.pods.length
-            ? section({ tables: podTable(['Namespace', 'Pod', 'Status', 'Node'], c.pods, (p) => [p.metadata.namespace, p.metadata.name, dash(p.status.phase), dash(p.spec.nodeName)]) })
+            ? section({ tables: podTable(['Namespace', 'Pod', 'Status', 'Node'], c.pods, (p) => [p.metadata.namespace, p.metadata.name, kubectlStatus(p), dash(p.spec.nodeName)]) })
             : section({ notes: ['No pod in the cluster uses this RuntimeClass.'] }),
           Events: eventsSection(c.events),
           Labels: tagSection(o.metadata.labels),
@@ -637,6 +640,12 @@ test.describe('number check — cluster configuration, RBAC and admission drawer
           .filter((e: Obj) => e.involvedObject.uid === o.metadata.uid)
           .sort((a: Obj, b: Obj) => Date.parse(b.lastTimestamp ?? b.firstTimestamp) - Date.parse(a.lastTimestamp ?? a.firstTimestamp))
         const allPods: Obj[] = ['ClusterRoleBinding', 'PriorityClass', 'RuntimeClass'].includes(x.kind) ? JSON.parse(k('get pods -A -o json')).items : []
+        if (allPods.length) {
+          printedStatus = Object.fromEntries(k('get pods -A --no-headers').split('\n').filter(Boolean).map((line) => {
+            const [namespace, pod, , status] = line.trim().split(/\s+/)
+            return [`${namespace}/${pod}`, status]
+          }))
+        }
         const saOf = (p: Obj) => `${p.metadata.namespace}/${p.spec.serviceAccountName || 'default'}`
         const pods = x.kind === 'PriorityClass' ? allPods.filter((p) => p.spec.priorityClassName === name)
           : x.kind === 'RuntimeClass' ? allPods.filter((p) => p.spec.runtimeClassName === name)

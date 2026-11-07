@@ -15,6 +15,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { detailTarget } from '@/components/resource-detail/crDetail'
 import { useAIContext } from '@/hooks/useAIContext'
 import { absoluteTitle, formatAge, formatDate } from '@/utils/time'
+import { rolloutsCount } from './timelineCards'
 
 const TIME_RANGES = [
   { value: 1, label: '1h' },
@@ -90,12 +91,12 @@ export default function Timeline() {
     if (!timeline) return null
     // the cards' numbers: every event of the window, not the ones listed
     const totalEvents = timeline.summary.total_events
-    const totalRollouts = timeline.rollout_history?.length ?? 0
+    const totalRollouts = rolloutsCount(timeline)
     const warnings = timeline.summary.warning_count
     const prefix = warnings > 0 ? '⚠️ ' : ''
     return {
       source: 'base' as const,
-      summary: `${prefix}타임라인 · ${allNamespaces ? '전체 네임스페이스' : namespace} · 최근 ${hours}h · 이벤트 ${totalEvents}, 롤아웃 ${totalRollouts}${warnings ? `, Warning ${warnings}` : ''}`,
+      summary: `${prefix}타임라인 · ${allNamespaces ? '전체 네임스페이스' : namespace} · 최근 ${hours}h · 이벤트 ${totalEvents}, 롤아웃 ${totalRollouts ?? '못 읽음'}${warnings ? `, Warning ${warnings}` : ''}`,
       data: {
         filters: { namespace: allNamespaces ? '*' : namespace, hours, event_filter: eventFilter },
         stats: {
@@ -233,7 +234,7 @@ export default function Timeline() {
           />
           <SummaryCard
             label={t('timeline.rollouts', 'Rollouts')}
-            value={timeline.rollout_history.length}
+            value={rolloutsCount(timeline) ?? '-'}
             color="blue"
           />
         </div>
@@ -349,7 +350,7 @@ export default function Timeline() {
   )
 }
 
-function SummaryCard({ label, value, color }: { label: string; value: number; color: 'blue' | 'green' | 'yellow' }) {
+function SummaryCard({ label, value, color }: { label: string; value: number | string; color: 'blue' | 'green' | 'yellow' }) {
   const colors = {
     blue: 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 border-primary-200 dark:border-primary-800',
     green: 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800',

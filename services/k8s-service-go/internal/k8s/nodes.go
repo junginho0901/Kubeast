@@ -78,16 +78,21 @@ func (s *Service) cachedNodes(ctx context.Context) (*nodeList, bool) {
 
 // DescribeNode returns detailed info about a node.
 func (s *Service) DescribeNode(ctx context.Context, name string) (map[string]interface{}, error) {
-	// Fetch node and events in parallel
+	// Fetch node, events and the node's pods in parallel
 	var node *corev1.Node
 	var events *corev1.EventList
-	var nodeErr, eventsErr error
+	var allocated *allocatedTotals
+	var nodeErr, eventsErr, allocatedErr error
 
 	var wg sync.WaitGroup
-	wg.Add(2)
+	wg.Add(3)
 	go func() {
 		defer wg.Done()
 		node, nodeErr = s.clientsetCtx(ctx).CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
+	}()
+	go func() {
+		defer wg.Done()
+		allocated, allocatedErr = s.nodeAllocatedTotals(ctx, name)
 	}()
 	go func() {
 		defer wg.Done()
@@ -140,6 +145,8 @@ func (s *Service) DescribeNode(ctx context.Context, name string) (map[string]int
 		allocatable[string(k)] = v.String()
 	}
 	result["allocatable"] = allocatable
+
+	setAllocated(result, node, allocated, allocatedErr, scopeFromCtx(ctx))
 
 	// System info
 	result["system_info"] = map[string]interface{}{
