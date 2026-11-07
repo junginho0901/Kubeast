@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 )
 
@@ -45,6 +46,8 @@ func handleFindResource(ctx context.Context, args map[string]interface{}, header
 	// A namespace-scoped grant searches only its namespaces; the gate has
 	// already refused a namespace outside them.
 	namespaces := scopedNamespaces(ctx)
+	grant := namespaces
+	inGrant := func(ns string) bool { return len(grant) == 0 || slices.Contains(grant, ns) }
 	if namespace != "" {
 		namespaces = []string{namespace}
 	}
@@ -67,7 +70,11 @@ func handleFindResource(ctx context.Context, args map[string]interface{}, header
 				if note != "" {
 					notes = append(notes, note)
 				}
-				matches = append(matches, found...)
+				for _, match := range found {
+					if inGrant(match["namespace"]) {
+						matches = append(matches, match)
+					}
+				}
 				if total > len(found) {
 					truncated = true
 					notes = append(notes, fmt.Sprintf("pods: %d matched, %d listed", total, len(found)))
@@ -96,6 +103,10 @@ func handleFindResource(ctx context.Context, args map[string]interface{}, header
 				objNS, name := fields[0], fields[1]
 				if objNS == "<none>" {
 					objNS = ""
+				}
+				// Past the -n above, what a grant may not see: a namespace is listed by its own name, as on the screens.
+				if (objNS != "" && !inGrant(objNS)) || (isNamespaceKind(kind) && !inGrant(name)) {
+					continue
 				}
 				labels := ""
 				if len(fields) > 2 {
@@ -133,6 +144,11 @@ func handleFindResource(ctx context.Context, args map[string]interface{}, header
 		result["hint"] = "Nothing matched in the searched kinds and namespaces. Stop searching: tell the user what was searched and ask for the exact name, the namespace, or whether it lives in another cluster."
 	}
 	return marshalJSON(result)
+}
+
+func isNamespaceKind(kind string) bool {
+	name, _, _ := strings.Cut(strings.ToLower(strings.TrimSpace(kind)), ".")
+	return name == "namespaces" || name == "namespace" || name == "ns"
 }
 
 // labelMatch finds key:value in kubectl's map[k:v k2:v2] rendering of labels,

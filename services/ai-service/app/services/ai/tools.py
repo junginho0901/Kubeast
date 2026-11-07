@@ -382,6 +382,131 @@ K8S_READONLY_TOOLS: List[Dict] = [
     {
         "type": "function",
         "function": {
+            "name": "alerts_inbox",
+            "description": (
+                "The Alerts inbox: every alert Alertmanager sent to Kubeast for this cluster, firing or resolved, with who acknowledged it, who it is "
+                "assigned to and whether it is done, and its investigation. Without alert_id a page of the list with counts by status; with alert_id "
+                "one alert as its window opens, which adds the note (and who wrote it), annotations, receiver and investigate_now. Use it for \"who is "
+                "on this alert\", \"what is unassigned\", \"what did someone note\"; alerts_list reads the alert store and has none of these marks. "
+                "Reading only: changing a mark stays on the screen. For whoever reads the whole cluster (resource.pod.read, no namespace limit)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "alert_id": {"type": "string", "description": "One alert's id from the list, for its window with the note"},
+                    "status": {"type": "string", "description": "firing, stale (no word from Alertmanager for a while) or resolved"},
+                    "alert_severity": {"type": "string", "description": "The severity the alert carries; the answer's severities lists them"},
+                    "mine": {"type": "boolean", "description": "Only alerts assigned to the signed-in user"},
+                    "open_only": {"type": "boolean", "description": "Only alerts not marked done"},
+                    "search": {"type": "string", "description": "Text in the alert name, namespace, assignee, labels or annotations"},
+                    "limit": {"type": "integer", "description": "Rows per page (default 50, at most 200)"},
+                    "offset": {"type": "integer", "description": "Rows to skip, for the next page; total says how many there are"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "pod_rbac",
+            "description": (
+                "A pod's service account and the RoleBindings and ClusterRoleBindings that name it: the start of \"what can this pod do in the "
+                "cluster\". can_i asks about the signed-in user, not the pod. The answer names the roles (role_kind, role_name); read what each allows "
+                "with k8s_describe_resource (resource_type role in this namespace or clusterrole). secrets are names only."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "namespace": {"type": "string", "description": "The pod's namespace"},
+                    "pod_name": {"type": "string", "description": "The pod's name"},
+                },
+                "required": ["namespace", "pod_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "logfiles",
+            "description": (
+                "Log files inside a container, for an app that writes its logs to files instead of stdout, as a pod's Log files tab reads them "
+                "(permission resource.pod.logfile). Without path it lists the files the configured patterns cover; with path it reads the last lines "
+                "of one file and records the read in the audit log. Only covered paths can be read. Use k8s_get_pod_logs for stdout. "
+                "code on a refusal: path (not covered), namespace (not enabled there), no_file, tool_missing (no tail or ls in the image), unreadable."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "namespace": {"type": "string", "description": "The pod's namespace"},
+                    "pod_name": {"type": "string", "description": "The pod's name"},
+                    "container": {"type": "string", "description": "The container; the pod's default when not given"},
+                    "path": {"type": "string", "description": "Absolute path of one file from the list; leave out to list"},
+                    "lines": {"type": "integer", "description": "How many of the last lines to read (default 50, at most 2000)"},
+                },
+                "required": ["namespace", "pod_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "storage_summary",
+            "description": (
+                "What the Storage window computes: every PVC with its usage (used, capacity, percent and days until full, where Prometheus has them) "
+                "and every PV, counted by status with what needs a person first (Pending, Lost, Failed, Released), and the claim-to-volume topology. "
+                "namespace narrows the claims and the volumes claimed from it. Use it for \"any storage problems\" and \"which volume is nearly "
+                "full\". There is no total capacity here. A list the user may not read is named in pvs_error or topology_error; the rest stands."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "namespace": {"type": "string", "description": "Only this namespace; all the user may read when not given"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "network_policy_effective",
+            "description": (
+                "The NetworkPolicies that select a pod or a workload's pods, per direction (ingress, egress), with what their rules allow, as a "
+                "drawer's Network Policies section shows them. Use it for \"what limits this pod\"; network_policy_check decides one connection. "
+                "isolated false: nothing limits that direction. unevaluated lists other policy kinds (Cilium, Calico) that can change the answer."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "namespace": {"type": "string", "description": "The namespace"},
+                    "pod": {"type": "string", "description": "A pod; or give workload_kind and workload_name"},
+                    "workload_kind": {"type": "string", "description": "Deployment, StatefulSet, DaemonSet, ReplicaSet, Job or CronJob"},
+                    "workload_name": {"type": "string", "description": "The workload's name"},
+                },
+                "required": ["namespace"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "limit_range_violations",
+            "description": (
+                "The containers outside a LimitRange's bounds, one row per field (field, actual, limit), as its window's Violating Pods lists them: "
+                "pods made before the LimitRange existed can be out of bounds. Name the LimitRange; k8s_get_resources lists them."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "namespace": {"type": "string", "description": "The LimitRange's namespace"},
+                    "name": {"type": "string", "description": "The LimitRange's name"},
+                },
+                "required": ["namespace", "name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "prometheus_targets",
             "description": (
                 "Scrape targets of this cluster's Prometheus and whether the last scrape worked (health up/down, last error), the down ones first. "

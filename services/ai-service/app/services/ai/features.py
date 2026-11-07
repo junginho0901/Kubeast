@@ -75,6 +75,14 @@ def _investigate_now_on(features: Dict[str, Any], cluster: str) -> bool:
     return bool((features.get("alertInvestigation") or {}).get("enabled")) and investigation_settings.load().manual
 
 
+def _alert_inbox_on(features: Dict[str, Any], cluster: str) -> bool:
+    return bool((features.get("alertInvestigation") or {}).get("enabled"))
+
+
+def _log_files_on(features: Dict[str, Any], cluster: str) -> bool:
+    return bool((features.get("logFiles") or {}).get("enabled"))
+
+
 # tool name → does this cluster serve it. Tools not listed are always offered.
 GATES: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
     "prometheus_query": _prometheus_on,
@@ -98,6 +106,8 @@ GATES: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
     "cost": _cost_on,
     "policy_reports": _policy_reports_on,
     "alert_investigate": _investigate_now_on,
+    "alerts_inbox": _alert_inbox_on,
+    "logfiles": _log_files_on,
 }
 
 # tool name → (scope, permission) the screen's route asks for when the tool calls it.

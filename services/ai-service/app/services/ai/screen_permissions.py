@@ -61,9 +61,15 @@ TOOL_SCREEN_TABLE: Dict[str, Tuple[str, ...]] = {
     "k8s_count": _LEFT_TO_THE_CLUSTER,
     # The picker asks for a sign-in only; auth-service answers the caller's own clusters.
     "clusters_list": _LEFT_TO_THE_CLUSTER,
+    # A pod's RBAC tab, the Storage window's lists and a LimitRange's violations ask no permission of their own.
+    "pod_rbac": _LEFT_TO_THE_CLUSTER,
+    "storage_summary": _LEFT_TO_THE_CLUSTER,
+    "limit_range_violations": _LEFT_TO_THE_CLUSTER,
     "alert_investigate": _always("resource.alert.investigate", "resource.pod.read"),
     "k8s_get_pod_logs": _always("resource.pod.read"),
     "alerts_list": _always("resource.pod.read"),
+    "alerts_inbox": _always("resource.pod.read"),
+    "logfiles": _always("resource.pod.logfile"),
     "logsearch": _always("resource.pod.read"),
     "loki_query": _always("resource.pod.read"),
     "loki_labels": _always("resource.pod.read"),
@@ -72,6 +78,7 @@ TOOL_SCREEN_TABLE: Dict[str, Tuple[str, ...]] = {
     "helm_read": _always("resource.helm.read"),
     "cost": _always("resource.cost.read"),
     "network_policy_check": _always("resource.networkpolicy.read"),
+    "network_policy_effective": _always("resource.networkpolicy.read"),
     "network_flows": _always("resource.networkflow.read"),
     "network_drops": _always("resource.networkflow.read"),
     "network_top_flows": _always("resource.networkflow.read"),

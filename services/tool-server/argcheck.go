@@ -159,6 +159,10 @@ var argRules = map[string]argCheck{
 	"alertname": checkPrintable(200),
 	// An Alerts inbox row, which becomes one segment of a route's path.
 	"alert_id": checkInboxID,
+	// What an alert carries, not the three words of "severity" above.
+	"alert_severity": checkPrintable(50),
+	// A file in a container; k8s-service holds it to the configured patterns.
+	"path": checkContainerPath,
 }
 
 // validateToolArgs rejects any argument that would not be read by kubectl as
@@ -535,6 +539,13 @@ var inboxIDRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
 func checkInboxID(field, v string) error {
 	if !inboxIDRe.MatchString(v) {
 		return badArg(field, v, "an alert id from the Alerts inbox")
+	}
+	return nil
+}
+
+func checkContainerPath(field, v string) error {
+	if len(v) > 1024 || !strings.HasPrefix(v, "/") || strings.IndexFunc(v, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
+		return badArg(field, v, "an absolute file path")
 	}
 	return nil
 }

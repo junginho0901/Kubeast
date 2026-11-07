@@ -1,0 +1,4230 @@
+{
+ "cases": [
+  {
+   "tool": "alert_investigate",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "alert_investigate",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "alert_investigate",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "alert_investigate",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "alert_investigate",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "alert_investigate",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "alert_investigate",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "alert_investigate",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "alert_investigate",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "alerts_inbox",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "alerts_inbox",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "alerts_inbox",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "alerts_inbox",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "alerts_inbox",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "alerts_inbox",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "alerts_inbox",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "alerts_inbox",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "alerts_inbox",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "alerts_list",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "alerts_list",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "alerts_list",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "alerts_list",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "alerts_list",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "alerts_list",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "alerts_list",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "alerts_list",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "alerts_list",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "audit_search",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "audit_search",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "audit_search",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "audit_search",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "audit_search",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "audit_search",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "audit_search",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "audit_search",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "audit_search",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "can_i",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "can_i",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "can_i",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "can_i",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "can_i",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "can_i",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "can_i",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "can_i",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "can_i",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "clusters_list",
+   "args": {},
+   "refused": ""
+  },
+  {
+   "tool": "clusters_list",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "clusters_list",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "clusters_list",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "clusters_list",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "clusters_list",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": ""
+  },
+  {
+   "tool": "clusters_list",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "clusters_list",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "clusters_list",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "cost",
+   "args": {},
+   "refused": ""
+  },
+  {
+   "tool": "cost",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "cost",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "cost",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "cost",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "cost",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "cost",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "cost",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "cost",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "get_cluster_overview",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "get_cluster_overview",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "get_cluster_overview",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "get_cluster_overview",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "get_cluster_overview",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "get_cluster_overview",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "get_cluster_overview",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "get_cluster_overview",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "get_cluster_overview",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "get_node_metrics",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "get_node_metrics",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "get_node_metrics",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "get_node_metrics",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "get_node_metrics",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "get_node_metrics",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "get_node_metrics",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "get_node_metrics",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "get_node_metrics",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "get_pod_metrics",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "get_pod_metrics",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "get_pod_metrics",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "get_pod_metrics",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "get_pod_metrics",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "get_pod_metrics",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "get_pod_metrics",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "get_pod_metrics",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "get_pod_metrics",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "gitops_status",
+   "args": {},
+   "refused": ""
+  },
+  {
+   "tool": "gitops_status",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "gitops_status",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "gitops_status",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "gitops_status",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "gitops_status",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "gitops_status",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "gitops_status",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "gitops_status",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "helm_read",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "helm_read",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "helm_read",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "helm_read",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "helm_read",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "helm_read",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "helm_read",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "helm_read",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "helm_read",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "hygiene",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "hygiene",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "hygiene",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "hygiene",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "hygiene",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "hygiene",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "hygiene",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "hygiene",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "hygiene",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "issues",
+   "args": {},
+   "refused": ""
+  },
+  {
+   "tool": "issues",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "issues",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "issues",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "issues",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "issues",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "issues",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "issues",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "issues",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_annotate_resource",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "k8s_annotate_resource",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_annotate_resource",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_annotate_resource",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "k8s_annotate_resource",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_annotate_resource",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_annotate_resource",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_annotate_resource",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_annotate_resource",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_apply_manifest",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_check_service_connectivity",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "k8s_check_service_connectivity",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_check_service_connectivity",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_check_service_connectivity",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "k8s_check_service_connectivity",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_check_service_connectivity",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_check_service_connectivity",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_check_service_connectivity",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_check_service_connectivity",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_count",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "k8s_count",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_count",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_count",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "k8s_count",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_count",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_count",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_count",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_count",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_create_resource",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_delete_resource",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_describe_resource",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "k8s_describe_resource",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_describe_resource",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_describe_resource",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "k8s_describe_resource",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_describe_resource",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_describe_resource",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_describe_resource",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_describe_resource",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_diff",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_execute_command",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "k8s_execute_command",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_execute_command",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_execute_command",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "k8s_execute_command",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_execute_command",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_execute_command",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_execute_command",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_execute_command",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_explain",
+   "args": {},
+   "refused": ""
+  },
+  {
+   "tool": "k8s_explain",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_explain",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_explain",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_explain",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_explain",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_explain",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_explain",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_explain",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_find_resource",
+   "args": {},
+   "refused": ""
+  },
+  {
+   "tool": "k8s_find_resource",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_find_resource",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_find_resource",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "k8s_find_resource",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_find_resource",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_find_resource",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_find_resource",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_find_resource",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_get_available_api_resources",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_available_api_resources",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_available_api_resources",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_available_api_resources",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_available_api_resources",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_available_api_resources",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_available_api_resources",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_available_api_resources",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_available_api_resources",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_cluster_configuration",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_cluster_configuration",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_cluster_configuration",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_cluster_configuration",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_cluster_configuration",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_cluster_configuration",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_cluster_configuration",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_cluster_configuration",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_cluster_configuration",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_events",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "k8s_get_events",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_get_events",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_get_events",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "k8s_get_events",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_get_events",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_events",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_events",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_events",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_get_pod_logs",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "k8s_get_pod_logs",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_get_pod_logs",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_get_pod_logs",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "k8s_get_pod_logs",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_get_pod_logs",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_pod_logs",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_pod_logs",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_pod_logs",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_get_resource_yaml",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "k8s_get_resource_yaml",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_get_resource_yaml",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_get_resource_yaml",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "k8s_get_resource_yaml",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_get_resource_yaml",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_resource_yaml",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_resource_yaml",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_resource_yaml",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_get_resources",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "k8s_get_resources",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_get_resources",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_get_resources",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "k8s_get_resources",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_get_resources",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_resources",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_resources",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_get_resources",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_jq_query",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "k8s_jq_query",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_jq_query",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_jq_query",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "k8s_jq_query",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_jq_query",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_jq_query",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_jq_query",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_jq_query",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_label_resource",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "k8s_label_resource",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_label_resource",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_label_resource",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "k8s_label_resource",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_label_resource",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_label_resource",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_label_resource",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_label_resource",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_patch_resource",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "k8s_patch_resource",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_patch_resource",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_patch_resource",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "k8s_patch_resource",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_patch_resource",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_patch_resource",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_patch_resource",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_patch_resource",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_remove_annotation",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "k8s_remove_annotation",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_remove_annotation",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_remove_annotation",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "k8s_remove_annotation",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_remove_annotation",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_remove_annotation",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_remove_annotation",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_remove_annotation",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_remove_label",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "k8s_remove_label",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_remove_label",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_remove_label",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "k8s_remove_label",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_remove_label",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_remove_label",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_remove_label",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_remove_label",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_rollout",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "k8s_rollout",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_rollout",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_rollout",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "k8s_rollout",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_rollout",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_rollout",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_rollout",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_rollout",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_scale",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "k8s_scale",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_scale",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_scale",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "k8s_scale",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_scale",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_scale",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_scale",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_scale",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_tabular_query",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "k8s_tabular_query",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_tabular_query",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_tabular_query",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "k8s_tabular_query",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_tabular_query",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_tabular_query",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_tabular_query",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_tabular_query",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "limit_range_violations",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "limit_range_violations",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "limit_range_violations",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "limit_range_violations",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "limit_range_violations",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "limit_range_violations",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "limit_range_violations",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "limit_range_violations",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "limit_range_violations",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "logfiles",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "logfiles",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "logfiles",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "logfiles",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "logfiles",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "logfiles",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "logfiles",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "logfiles",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "logfiles",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "logsearch",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "logsearch",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "logsearch",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "logsearch",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "logsearch",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "logsearch",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "logsearch",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "logsearch",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "logsearch",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "loki_labels",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "loki_labels",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "loki_labels",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "loki_labels",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "loki_labels",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "loki_labels",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "loki_labels",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "loki_labels",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "loki_labels",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "loki_patterns",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "loki_patterns",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "loki_patterns",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "loki_patterns",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "loki_patterns",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "loki_patterns",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "loki_patterns",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "loki_patterns",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "loki_patterns",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "loki_query",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "loki_query",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "loki_query",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "loki_query",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "loki_query",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "loki_query",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "loki_query",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "loki_query",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "loki_query",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "network_drops",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "network_drops",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "network_drops",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "network_drops",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "network_drops",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "network_drops",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "network_drops",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "network_drops",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "network_drops",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "network_flows",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "network_flows",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "network_flows",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "network_flows",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "network_flows",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "network_flows",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "network_flows",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "network_flows",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "network_flows",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "network_policy_check",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "network_policy_check",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "network_policy_check",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "network_policy_check",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "network_policy_check",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "network_policy_check",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "network_policy_check",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "network_policy_check",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "network_policy_check",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "network_policy_effective",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "network_policy_effective",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "network_policy_effective",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "network_policy_effective",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "network_policy_effective",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "network_policy_effective",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "network_policy_effective",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "network_policy_effective",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "network_policy_effective",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "network_top_flows",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "network_top_flows",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "network_top_flows",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "network_top_flows",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "network_top_flows",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "network_top_flows",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "network_top_flows",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "network_top_flows",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "network_top_flows",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "nodes_log",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "nodes_log",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "nodes_log",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "nodes_log",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "nodes_log",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "nodes_log",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "nodes_log",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "nodes_log",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "nodes_log",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "nodes_stats_summary",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "nodes_stats_summary",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "nodes_stats_summary",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "nodes_stats_summary",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "nodes_stats_summary",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "nodes_stats_summary",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "nodes_stats_summary",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "nodes_stats_summary",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "nodes_stats_summary",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "optimization",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "optimization",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "optimization",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "optimization",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "optimization",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "optimization",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "optimization",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "optimization",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "optimization",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "pod_rbac",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "pod_rbac",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "pod_rbac",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "pod_rbac",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "pod_rbac",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "pod_rbac",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "pod_rbac",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "pod_rbac",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "pod_rbac",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "policy_reports",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "policy_reports",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "policy_reports",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "policy_reports",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "policy_reports",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "policy_reports",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "policy_reports",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "policy_reports",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "policy_reports",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "prometheus_labels",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_labels",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_labels",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_labels",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_labels",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_labels",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_labels",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_labels",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_labels",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_metrics",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_metrics",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_metrics",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_metrics",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_metrics",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_metrics",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_metrics",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_metrics",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_metrics",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_query",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_query",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_query",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_query",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_query",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_query",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_query",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_query",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_query",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_rules",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_rules",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_rules",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_rules",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_rules",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_rules",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_rules",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_rules",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_rules",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_targets",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_targets",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_targets",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_targets",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_targets",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_targets",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_targets",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_targets",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "prometheus_targets",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "resource_graph",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "resource_graph",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "resource_graph",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "resource_graph",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "resource_graph",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "resource_graph",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "resource_graph",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "resource_graph",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "resource_graph",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "storage_summary",
+   "args": {},
+   "refused": ""
+  },
+  {
+   "tool": "storage_summary",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "storage_summary",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "storage_summary",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "storage_summary",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "storage_summary",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "storage_summary",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "storage_summary",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "storage_summary",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "traces_compare",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "traces_compare",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "traces_compare",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "traces_compare",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "traces_compare",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "traces_compare",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "traces_compare",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "traces_compare",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "traces_compare",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "traces_get",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "traces_get",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "traces_get",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "traces_get",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "traces_get",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "traces_get",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "traces_get",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "traces_get",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "traces_get",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "traces_metrics",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "traces_metrics",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "traces_metrics",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "traces_metrics",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "traces_metrics",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "traces_metrics",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "traces_metrics",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "traces_metrics",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "traces_metrics",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "traces_search",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "traces_search",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "traces_search",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "traces_search",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "traces_search",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "traces_search",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "traces_search",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "traces_search",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "traces_search",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "traces_tags",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "traces_tags",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "traces_tags",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "traces_tags",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "traces_tags",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "traces_tags",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "traces_tags",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "traces_tags",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "traces_tags",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  }
+ ],
+ "cluster": "c",
+ "namespaces": [
+  "shop",
+  "web"
+ ]
+}

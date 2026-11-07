@@ -45,6 +45,12 @@
     - `alerts_list` — 알림 저장소에 있는 이 클러스터의 알림(울림·무음·억제 상태)과 그 알림을 덮은 무음
     - `alert_investigate` — Alerts 받은편지함의 알림 하나를 "지금 조사" 버튼처럼 정식 조사로 시작([AI 알림](ai-alerts.md) 참고)
     - `clusters_list` — 그 사람이 볼 수 있는 클러스터와 연결 상태. 클러스터 선택기 목록과 같고 값은 마지막 확인 결과입니다(실시간 아님). `admin.clusters.list`가 있으면 Admin → Clusters 목록도 받습니다. kubeconfig·자격 증명은 나가지 않습니다
+    - `alerts_inbox` — Alerts 받은편지함. 알림을 누가 확인했고 누가 맡았고 끝났는지, `alert_id`로 읽으면 메모까지 보여 줍니다. 읽기만 하며 표시 변경은 화면에서 합니다
+    - `pod_rbac` — 파드의 서비스 계정과 그 계정에 묶인 역할. 파드 RBAC API의 답과 같습니다. 각 역할이 허용하는 일은 `k8s_describe_resource`로 읽습니다
+    - `logfiles` — 컨테이너 안 로그 파일. 로그 파일 탭처럼 목록을 보거나 읽습니다(고정 `tail`, 마지막 N줄, 따라가기 없음. [컨테이너 안 로그 파일](operations.md#컨테이너-안-로그-파일-log-files) 참고)
+    - `storage_summary` — Storage 창의 PVC(사용량 포함)·PV 상태별 개수와 PVC→PV 연결
+    - `network_policy_effective` — 파드나 워크로드를 고르는 NetworkPolicy와 방향별 허용 규칙. 드로어의 Network Policies 칸과 같습니다
+    - `limit_range_violations` — LimitRange 범위를 벗어난 컨테이너. 그 창의 Violating Pods와 같습니다
     - `logsearch` — 로그 저장소 검색, 사라진 파드 포함
     - `loki_query` — LogQL. 로그 줄, 또는 `count_over_time`·`rate` 같은 메트릭 쿼리로 시간대별 에러 수 시리즈를 받고, 그래프로도 그립니다.
     - `loki_labels` — 로그 레이블 이름·값
@@ -141,7 +147,7 @@
 | --- | --- | --- | --- |
 | **Pending** | 가입·SSO 직후 기본값 | 없음 — 로그인은 되지만 API는 403 | — |
 | **Member** | 계정 등급 | 전역 권한 없음, **클러스터별 부여로만** 접근 | `kubeast:authenticated`(권한 없음) |
-| **Read** | 클러스터별 | 메뉴 10개 · 모든 리소스 읽기(`resource.*.read`, 비용 `resource.cost.read` 포함) · Helm 읽기(권한 키는 있지만 Release 기록이 Secret이라 클러스터가 거부 — 오른쪽 칸 참고) · 컨테이너 안 로그 파일 읽기(`resource.pod.logfile`, 기능을 켰을 때) · AI 채팅의 읽기 도구 44종(`ai.tool.<읽기 도구>`)과 MCP 연결(`ai.mcp.use`) — 쓰기 도구는 없음 | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view`는 Secret과 `services/proxy`를 제외하므로, Secret과 Helm 릴리스(Secret에 저장)는 클러스터가 거부하고 화면에는 권한 안내가 뜹니다. API 서버 프록시로 읽는 Prometheus·OpenCost(최적화 사용량·스토리지 분석·비용·드로어 메트릭)는 차트 값 `auth.impersonation.viewerProxyServices`에 적은 Service만 **GET으로** 열립니다. 허용은 그 Namespace의 Role로 주고, 이름은 정확히 `<service>:<port>`로 적으며, 다른 Service·POST·NS 범위 부여는 계속 거부됩니다([설정](configuration.md)의 values 주석). 적지 않으면 거부됩니다(프록시는 `kubeast:operator`=`edit`부터 허용) |
+| **Read** | 클러스터별 | 메뉴 10개 · 모든 리소스 읽기(`resource.*.read`, 비용 `resource.cost.read` 포함) · Helm 읽기(권한 키는 있지만 Release 기록이 Secret이라 클러스터가 거부 — 오른쪽 칸 참고) · 컨테이너 안 로그 파일 읽기(`resource.pod.logfile`, 기능을 켰을 때) · AI 채팅의 읽기 도구 50종(`ai.tool.<읽기 도구>`)과 MCP 연결(`ai.mcp.use`) — 쓰기 도구는 없음 | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view`는 Secret과 `services/proxy`를 제외하므로, Secret과 Helm 릴리스(Secret에 저장)는 클러스터가 거부하고 화면에는 권한 안내가 뜹니다. API 서버 프록시로 읽는 Prometheus·OpenCost(최적화 사용량·스토리지 분석·비용·드로어 메트릭)는 차트 값 `auth.impersonation.viewerProxyServices`에 적은 Service만 **GET으로** 열립니다. 허용은 그 Namespace의 Role로 주고, 이름은 정확히 `<service>:<port>`로 적으며, 다른 Service·POST·NS 범위 부여는 계속 거부됩니다([설정](configuration.md)의 values 주석). 적지 않으면 거부됩니다(프록시는 `kubeast:operator`=`edit`부터 허용) |
 | **Write** | 클러스터별 | `menu.*` · 리소스 생성/수정/삭제 · CronJob suspend/trigger · Secret 값 보기 · 로그 파일 읽기 · Helm rollback/upgrade/test · AI 툴 전부(`ai.tool.*`, 쓰기 도구 포함, 아래 Admin 전용 목록은 빼고) · MCP 연결 | `kubeast:operator` = `edit` + viewer |
 | **Admin** | 계정 등급(`*`) 또는 클러스터별 | 전부 — 관리자 메뉴, 모든 클러스터(나중에 등록한 것 포함) | `kubeast:admin` = `cluster-admin` |
 | 커스텀 | 클러스터별 | 고른 권한만(만드는 사람이 가진 권한 안에서) | `kubeast:role:<이름>` — 클러스터가 이 그룹을 바인딩하기 전에는 모든 호출이 403입니다(`auth.impersonation.customRoles`). 화면의 권한 없음 배너와 역할 만들기 창에 이 그룹 이름이 나옵니다 |
@@ -166,7 +172,7 @@
   - `k8s_execute_command`는 `resource.pod.exec`, undo의 `k8s_rollout`은 `resource.workload.rollback`이 필요합니다.
   - `<kind>`는 화면이 쓰는 이름(`permResource`)입니다. kind를 소문자로 쓴 것, `hpa`·`vpa`·`pdb`·`pv`·`pvc`·`crd`, 자기 이름이 없는 kind는 `customresource`입니다.
   - 호출이 가리키는 kind는 전부 봅니다. 쉼표 목록, 매니페스트의 문서 하나하나, List의 items가 모두 그렇습니다. `all`·`api-extensions`·`gateway-api`와 읽을 수 없는 매니페스트는 `resource.*.<verb>`가 필요합니다. CRD가 스스로 정한 짧은 이름이나 카테고리는 `customresource`로 봅니다.
-  - 화면이 권한을 묻는 읽기: `k8s_get_pod_logs`, `logsearch`, `loki_*` 도구, `alerts_list`는 `resource.pod.read`가 필요합니다. `helm_read`는 `resource.helm.read`, `cost`는 `resource.cost.read`, `policy_reports`는 `resource.policyreport.read`, `network_policy_check`는 `resource.networkpolicy.read`, `network_*` 흐름 도구는 `resource.networkflow.read`가 필요합니다. `hygiene`은 `admin.hygiene.read`, `audit_search`는 `admin.audit.read`, `nodes_*` 도구는 `admin.nodes.read`가 필요합니다. `alert_investigate`는 버튼이 묻는 `resource.alert.investigate`와 `resource.pod.read`가 필요합니다.
+  - 화면이 권한을 묻는 읽기: `k8s_get_pod_logs`, `logsearch`, `loki_*` 도구, `alerts_list`는 `resource.pod.read`가 필요합니다. `helm_read`는 `resource.helm.read`, `cost`는 `resource.cost.read`, `policy_reports`는 `resource.policyreport.read`, `network_policy_check`와 `network_policy_effective`는 `resource.networkpolicy.read`, `network_*` 흐름 도구는 `resource.networkflow.read`, `logfiles`는 `resource.pod.logfile`, `alerts_inbox`는 `resource.pod.read`가 필요합니다. `hygiene`은 `admin.hygiene.read`, `audit_search`는 `admin.audit.read`, `nodes_*` 도구는 `admin.nodes.read`가 필요합니다. `alert_investigate`는 버튼이 묻는 `resource.alert.investigate`와 `resource.pod.read`가 필요합니다.
   - 나머지 읽기 도구는 더 필요한 것이 없습니다. 그 화면도 `resource.<kind>.read`를 묻지 않고, 클러스터에 대한 역할과 클러스터 RBAC이 정하기 때문입니다(아래 읽기 API). `resource.*.read`가 없어도 그룹이 바인딩된 커스텀 역할은 화면과 AI로 같은 목록을 읽습니다. Secret 값은 AI로 가지 않습니다.
   - 절대 부를 수 없는 도구는 역할에 내주지 않습니다. 거절된 호출은 실행되지 않고 승인 카드도 없으며, 없는 권한을 말하고 실패 행(`ai.tool.call`, `ai.mcp.call`)을 남깁니다. 표(`services/tool-server/screen_permissions.go`, `app/services/ai/screen_permissions.py`)에 없는 도구는 누구에게나 거절됩니다.
 - **쓰기 API는 전부** 핸들러에서 권한을 검사하며, 감사 행을 남기지 못하면 거부됩니다(fail-closed).
@@ -215,6 +221,7 @@
     - "전체 네임스페이스" 조회는 목록의 네임스페이스를 하나씩 조회해 합칩니다.
     - 대시보드 개수도 그 안에서만 셉니다(`scoped: true`, 노드·PV는 0).
   - AI 도구와 MCP는 `namespace`를 반드시 받고, 부여된 네임스페이스와 함께 주어도 `all_namespaces`는 거부하며, 클러스터 전체 도구(overview·노드 메트릭·apply·create·API 목록·클러스터 설정)는 거부합니다.
+    - 다섯 도구는 화면처럼 스스로 그 범위 안에서만 읽으므로 네임스페이스 없이도 됩니다: `issues`, `cost`, `k8s_find_resource`, `gitops_status`, `storage_summary`. `k8s_explain`과 `clusters_list`는 객체 데이터를 읽지 않습니다.
   - 클러스터 쪽 신원은 `kubeast:role:<slug>` 그룹이므로 **그 네임스페이스마다 RoleBinding을 묶기 전에는 클러스터가 거부합니다**.
     차트 `auth.impersonation.customRoles`에 `{name: Read, namespaces: [a, b], clusterRoles: [view]}`처럼 적으면 그 RoleBinding이 렌더됩니다(등록한 클러스터마다 적용하세요).
   - 화면에서는 네임스페이스 선택기에 부여된 네임스페이스만 보이고, 권한 없음 안내에 "이 클러스터에서는 네임스페이스 a, b만"이 붙으며, 실시간 갱신도 네임스페이스별로 구독합니다.

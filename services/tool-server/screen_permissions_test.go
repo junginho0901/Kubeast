@@ -38,6 +38,9 @@ var readToolsTheScreenLeavesToTheCluster = []string{
 	"traces_search", "traces_get", "traces_tags", "traces_metrics", "traces_compare", "issues", "gitops_status", "optimization", "can_i",
 	"resource_graph", "k8s_jq_query", "k8s_tabular_query", "k8s_count",
 	"clusters_list",
+	"pod_rbac",
+	"storage_summary",
+	"limit_range_violations",
 }
 
 // The tools of the seeded Read role (auth-service repository.ReadAIToolPermissions).
@@ -49,6 +52,12 @@ var readRoleTools = []string{
 	"traces_metrics", "traces_compare", "alerts_list", "policy_reports", "helm_read", "cost", "optimization", "can_i", "network_policy_check",
 	"network_flows", "network_drops", "network_top_flows", "resource_graph", "k8s_jq_query", "k8s_tabular_query", "k8s_count", "gitops_status",
 	"clusters_list",
+	"pod_rbac",
+	"logfiles",
+	"storage_summary",
+	"network_policy_effective",
+	"limit_range_violations",
+	"alerts_inbox",
 }
 
 // The seeded Write role's list (auth-service repository_schema.go).
@@ -93,6 +102,13 @@ func screenPermissionCases() []screenCase {
 	// The alert window's "Investigate now": its own permission and reading the alert.
 	add("alert_investigate", args{"alert_id": "a1"}, "resource.alert.investigate", "resource.pod.read")
 	add("alert_investigate", args{"alertname": "HighLoad", "status_only": true}, "resource.alert.investigate", "resource.pod.read")
+	// The Log files tab's permission, listing or reading.
+	add("logfiles", args{"namespace": "shop", "pod_name": "web"}, "resource.pod.logfile")
+	add("logfiles", args{"namespace": "shop", "pod_name": "web", "path": "/var/log/app/app.log"}, "resource.pod.logfile")
+	add("network_policy_effective", args{"namespace": "shop", "pod": "web"}, "resource.networkpolicy.read")
+	// The Alerts inbox, the list and one alert.
+	add("alerts_inbox", nil, "resource.pod.read")
+	add("alerts_inbox", args{"alert_id": "a1"}, "resource.pod.read")
 
 	// One name in every spelling kubectl takes.
 	del := func(resourceType string, want ...string) {

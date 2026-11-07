@@ -30,29 +30,51 @@ func handleGitopsStatus(ctx context.Context, args map[string]interface{}, header
 	if name != "" && namespace == "" {
 		return "", wrapBadRequest("name needs namespace (the Application's own namespace, usually argocd)")
 	}
-	cmd, scope, err := listArgs(ctx, map[string]interface{}{"resource_type": argoApplicationsType, "namespace": namespace})
-	if err != nil {
-		return "", err
+	// A grant limited to namespaces reads each of its own, as a custom resource list does on the screens.
+	targets := []string{namespace}
+	var scope interface{}
+	if granted := scopedNamespaces(ctx); namespace == "" && len(granted) > 0 {
+		targets, scope = granted, granted
 	}
-	if name != "" {
-		cmd = append([]string{"get", argoApplicationsType, name}, cmd[2:]...)
-	}
-	list, res, err := getJSONList(ctx, headers, cmd, "Application", namespace)
-	if err != nil {
-		return "", err
-	}
-	if res != "" {
-		var failure map[string]interface{}
-		if json.Unmarshal([]byte(res), &failure) == nil && failure["status"] == "unknown_kind" {
-			return unavailableResult("gitops_status",
-				"Argo CD is not installed in this cluster (no applications.argoproj.io). Application objects live where Argo CD runs — call gitops_status on that cluster (the management cluster when Argo CD is central).",
-				gitopsAlternative)
+	var items []interface{}
+	var notes []string
+	refusal := ""
+	for _, target := range targets {
+		cmd, where, err := listArgs(ctx, map[string]interface{}{"resource_type": argoApplicationsType, "namespace": target})
+		if err != nil {
+			return "", err
 		}
-		return res, nil
+		if scope == nil {
+			scope = where
+		}
+		if name != "" {
+			cmd = append([]string{"get", argoApplicationsType, name}, cmd[2:]...)
+		}
+		list, res, err := getJSONList(ctx, headers, cmd, "Application", target)
+		if err != nil {
+			return "", err
+		}
+		if res != "" {
+			var failure map[string]interface{}
+			if json.Unmarshal([]byte(res), &failure) == nil && failure["status"] == "unknown_kind" {
+				return unavailableResult("gitops_status",
+					"Argo CD is not installed in this cluster (no applications.argoproj.io). Application objects live where Argo CD runs — call gitops_status on that cluster (the management cluster when Argo CD is central).",
+					gitopsAlternative)
+			}
+			if refusal == "" {
+				refusal = res
+			}
+			notes = append(notes, fmt.Sprintf("%s: %v (%v)", target, failure["status"], failure["reason"]))
+			continue
+		}
+		found := itemsOf(list)
+		if found == nil && list["metadata"] != nil {
+			found = []interface{}{list}
+		}
+		items = append(items, found...)
 	}
-	items := itemsOf(list)
-	if items == nil && list["metadata"] != nil {
-		items = []interface{}{list}
+	if len(notes) == len(targets) {
+		return refusal, nil
 	}
 
 	project := argString(args, "project", "")
@@ -121,8 +143,11 @@ func handleGitopsStatus(ctx context.Context, args map[string]interface{}, header
 	if truncated {
 		out["truncated"] = true
 	}
+	if len(notes) > 0 {
+		out["notes"] = notes
+	}
 	if len(items) == 0 {
-		out["hint"] = "No Argo CD Applications in " + scope + ". If Argo CD runs in another cluster (a management cluster), call gitops_status there; the Application's own namespace is usually argocd."
+		out["hint"] = fmt.Sprintf("No Argo CD Applications in %v. If Argo CD runs in another cluster (a management cluster), call gitops_status there; the Application's own namespace is usually argocd.", scope)
 	}
 	return marshalJSON(out)
 }

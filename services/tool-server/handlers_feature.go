@@ -383,7 +383,9 @@ func handleIssues(ctx context.Context, args map[string]interface{}, headers http
 	for _, issue := range reply.Issues {
 		ns, _ := issue["namespace"].(string)
 		sev, _ := issue["severity"].(string)
-		if !inScope(ns) || (severity != "" && sev != severity) {
+		// A list that could not be read holds no object and says the answer is partial, as on the screen.
+		unread := issue["kind"] == "Collector" && namespace == ""
+		if (!inScope(ns) && !unread) || (severity != "" && sev != severity) {
 			continue
 		}
 		counts[sev]++

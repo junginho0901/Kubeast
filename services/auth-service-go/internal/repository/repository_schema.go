@@ -56,6 +56,12 @@ var ReadAIToolPermissions = []string{
 	"ai.tool.k8s_count",
 	"ai.tool.gitops_status",
 	"ai.tool.clusters_list",
+	"ai.tool.pod_rbac",
+	"ai.tool.logfiles",
+	"ai.tool.storage_summary",
+	"ai.tool.network_policy_effective",
+	"ai.tool.limit_range_violations",
+	"ai.tool.alerts_inbox",
 }
 
 // InvestigatorPermissions is what the alert investigator's token carries: the
