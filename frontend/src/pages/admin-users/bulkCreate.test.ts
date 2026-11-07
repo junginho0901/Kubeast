@@ -3,7 +3,7 @@ import i18n from 'i18next'
 
 import en from '@/i18n/locales/en.json'
 import ko from '@/i18n/locales/ko.json'
-import { bulkCreateFailureRows, bulkCreateFailures, bulkCreateSummary, parseBulkCsv, readBulkCreateAnswer } from './bulkCreate'
+import { BULK_CSV_HEADER, bulkCreateFailureRows, bulkCreateFailures, bulkCreateSummary, bulkCsvTemplate, exampleBulkPassword, parseBulkCsv, readBulkCreateAnswer } from './bulkCreate'
 
 async function tFor(lang: 'en' | 'ko') {
   const inst = i18n.createInstance()
@@ -92,8 +92,17 @@ describe('the rows of the CSV', () => {
     })
   })
 
-  it('keeps the role the template leaves out as it was', () => {
-    expect(parseBulkCsv(csv('Ann,ann@example.com,fake-pass-1'), roles).users[0].role_id).toBe(3)
+  it('takes the account level the server takes when a row names no role', () => {
+    expect(parseBulkCsv(csv('Ann,ann@example.com,fake-pass-1'), roles).users[0].role_id).toBe(1)
+    expect(parseBulkCsv(csv('Ann,ann@example.com,fake-pass-1,,web'), roles).users[0].role_id).toBe(1)
+  })
+
+  it('reads a role name as written, as the server keeps it', () => {
+    const seeded = [{ id: 1, name: 'Member' }, { id: 2, name: 'Admin' }, { id: 3, name: 'Read' }]
+    expect(parseBulkCsv(csv('Ann,ann@example.com,fake-pass-1,read'), seeded)).toEqual({
+      users: [],
+      failed: [{ email: 'ann@example.com', reason: 'role', detail: 'read' }],
+    })
   })
 
   it('names a row it cannot send instead of dropping it, without the password', () => {
@@ -120,5 +129,47 @@ describe('the rows of the CSV', () => {
 
   it('has nothing to say of a file with only its header', () => {
     expect(parseBulkCsv('name,email,password,role,team\n', roles)).toEqual({ users: [], failed: [] })
+  })
+})
+
+describe('the template of the bulk upload', () => {
+  // the roles auth-service seeds
+  const roles = [{ id: 1, name: 'Pending' }, { id: 2, name: 'Member' }, { id: 3, name: 'Read' }, { id: 4, name: 'Write' }, { id: 5, name: 'Admin' }]
+  const PASSWORD = 'fake-template-password-for-test'
+  // the file as the browser saves it, which starts with a byte order mark
+  const asSaved = (teams: string[]) => String.fromCharCode(0xfeff) + bulkCsvTemplate(teams, roles, PASSWORD)
+
+  it('goes up as it is: one account of the account level the server gives by default', () => {
+    expect(parseBulkCsv(asSaved(['web']), roles)).toEqual({
+      users: [{ name: 'Hong Gildong', email: 'hong@example.com', password: PASSWORD, role_id: 2, team: 'web' }],
+      failed: [],
+    })
+  })
+
+  it('goes up as it is on a server with no team registered, which refuses a team it does not have', () => {
+    expect(parseBulkCsv(asSaved([]), roles)).toEqual({
+      users: [{ name: 'Hong Gildong', email: 'hong@example.com', password: PASSWORD, role_id: 2, team: undefined }],
+      failed: [],
+    })
+  })
+
+  it('writes the columns the format line says and the parser reads, in that order', () => {
+    const cell: Record<string, string> = { name: 'Ann', email: 'ann@example.com', password: PASSWORD, role: 'Admin', team: 'web' }
+    const row = BULK_CSV_HEADER.split(',').map((column) => cell[column] ?? 'not-a-column').join(',')
+    expect(parseBulkCsv(`${BULK_CSV_HEADER}\n${row}\n`, roles).users).toEqual([{ name: 'Ann', email: 'ann@example.com', password: PASSWORD, role_id: 5, team: 'web' }])
+    expect(bulkCsvTemplate([], roles, PASSWORD).split('\n')).toContain(BULK_CSV_HEADER)
+  })
+
+  it('names the teams and the account levels in its comments', () => {
+    const comments = bulkCsvTemplate(['web', 'db'], roles, PASSWORD).split('\n').filter((l) => l.startsWith('#'))
+    expect(comments).toEqual(['# Available Team: web, db', '# role (account level): Member, Admin'])
+  })
+
+  // The example goes up as it is, so a password every template shares would be an account anyone can sign in to.
+  it('gives each download a password of its own that the default policy takes', () => {
+    const first = exampleBulkPassword()
+    expect(first).not.toBe(exampleBulkPassword())
+    expect(first.length).toBeGreaterThanOrEqual(12)
+    expect(first).toMatch(/^[0-9a-f]+$/)
   })
 })

@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import i18next from 'i18next'
 import { I18nextProvider, initReactI18next } from 'react-i18next'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import en from '@/i18n/locales/en.json'
 import ko from '@/i18n/locales/ko.json'
 import MonitoringNodes from './MonitoringNodes'
@@ -13,7 +13,8 @@ import MonitoringNodes from './MonitoringNodes'
 
 vi.mock('@/contexts/ClusterContext', () => ({ useCluster: () => ({ currentCluster: 'c1' }) }))
 vi.mock('@/components/ResourceDetailContext', () => ({ useResourceDetail: () => ({ open: () => {} }) }))
-vi.mock('@/hooks/useAIContext', () => ({ useAIContext: () => {} }))
+const chat: { current: { summary?: string; data?: Record<string, unknown> } | null } = { current: null }
+vi.mock('@/hooks/useAIContext', () => ({ useAIContext: (input: { summary?: string; data?: Record<string, unknown> } | null) => { chat.current = input } }))
 
 const i18n = i18next.createInstance()
 beforeAll(async () => {
@@ -89,5 +90,66 @@ describe('the Monitoring Nodes tab', () => {
     const html = render(failed(httpError(503), [{ name: 'n1', cpu: '100m', cpu_percent: '5%', memory: '10Mi', memory_percent: '1%' }]))
     expect(html).toContain('100m')
     expect(html).not.toContain(FAILED)
+  })
+
+  describe('numbers a refresh could not replace', () => {
+    const NOW = new Date('2026-11-07T04:00:00Z').getTime()
+    const ROWS = [{ name: 'n1', cpu: '100m', cpu_percent: '5%', memory: '10Mi', memory_percent: '1%', timestamp: '2026-11-07T03:59:15Z' }]
+    const aged = (error: unknown) => {
+      const qc = seeded()
+      qc.setQueryData(KEY, ROWS, { updatedAt: NOW - 42_000 })
+      if (error) {
+        const q = qc.getQueryCache().find({ queryKey: KEY })!
+        q.setState({ ...q.state, status: 'error', error: error as Error, errorUpdatedAt: NOW, errorUpdateCount: 1 })
+      }
+      return qc
+    }
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'], now: NOW })
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('say that the refresh failed and how old they are', () => {
+      const html = render(aged(httpError(503)))
+      expect(html).toContain('data-testid="node-metrics-refresh-failed"')
+      expect(html).toContain('Refresh failed. These values are from 42s ago.')
+      expect(html).toContain('100m')
+    })
+
+    it('say so in the screen\'s language', () => {
+      expect(render(aged(httpError(503)), 'ko')).toContain('새로고침에 실패했습니다. 42s 전 값입니다.')
+    })
+
+    it('give the server\'s reason when there is one', () => {
+      expect(render(aged(httpError(502, { detail: 'the metrics API did not answer' })))).toContain('the metrics API did not answer')
+    })
+
+    it('stop saying it retries once metrics are off for this cluster', () => {
+      const off = renderToStaticMarkup(createElement(I18nextProvider, { i18n: i18n.cloneInstance({ lng: 'en' }) },
+        createElement(QueryClientProvider, { client: aged(httpError(503)) }, createElement(MonitoringNodes, { metricsUnavailable: true, onMetricsUnavailable: () => {} }))))
+      expect(off).toContain('Refresh failed.')
+      expect(off).not.toContain('Retrying automatically')
+    })
+
+    it('do not keep the green light', () => {
+      expect(render(aged(null))).toContain('bg-green-500')
+      expect(render(aged(httpError(503)))).not.toContain('bg-green-500')
+    })
+
+    it('tell the floating chat they are old, and from when', () => {
+      render(aged(httpError(502, { detail: 'the metrics API did not answer' })))
+      expect(chat.current?.summary).not.toContain('실시간')
+      expect(chat.current?.data?.refresh_failed).toEqual({ values_from: '2026-11-07T03:59:18.000Z', reason: 'the metrics API did not answer' })
+    })
+
+    it('say nothing while the refresh works', () => {
+      const html = render(aged(null))
+      expect(html).not.toContain('node-metrics-refresh-failed')
+      expect(html).not.toContain('Refresh failed')
+      expect(chat.current?.summary).toContain('실시간')
+      expect(chat.current?.data).not.toHaveProperty('refresh_failed')
+    })
   })
 })

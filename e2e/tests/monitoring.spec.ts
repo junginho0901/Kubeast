@@ -84,6 +84,46 @@ test.describe('Monitoring', () => {
       await expect(page.getByTestId('pod-metrics-error')).toHaveCount(0)
     })
 
+    const OLD_VALUES = /Refresh failed\. These values are from \d+s ago\.|새로고침에 실패했습니다\. \d+s 전 값입니다\./
+
+    test('a refresh of the Nodes tab that fails keeps the numbers, says how old they are and goes when a read works', async ({ page }) => {
+      let failing = false
+      await page.route('**/api/v1/cluster/metrics/nodes*', (route) => (failing ? route.fulfill(gateway503) : route.continue()))
+      await page.goto('/monitoring?cluster=default')
+      await expect.poll(() => page.getByTestId('monitoring-node').count(), { timeout: 30_000 }).toBeGreaterThan(0)
+      const nodes = await page.getByTestId('monitoring-node').count()
+
+      failing = true
+      const notice = page.getByTestId('node-metrics-refresh-failed')
+      await expect(notice).toContainText(OLD_VALUES, { timeout: 30_000 })
+      expect(await page.getByTestId('monitoring-node').count(), 'the cards stay').toBe(nodes)
+      await expect(page.getByTestId('node-metrics-error')).toHaveCount(0)
+
+      failing = false
+      await expect(notice).toHaveCount(0, { timeout: 30_000 })
+      expect(await page.getByTestId('monitoring-node').count()).toBe(nodes)
+    })
+
+    test('a refresh of the Pods tab that fails keeps the numbers, says how old they are and goes when a read works', async ({ page }) => {
+      let failing = false
+      await page.route('**/api/v1/cluster/metrics/pods*', (route) => (failing ? route.fulfill(gateway503) : route.continue()))
+      await page.goto('/monitoring?cluster=default')
+      await page.getByRole('button', { name: /pod resources|pod 리소스/i }).first().click()
+      await page.getByTestId('monitoring-namespace').click()
+      await page.getByTestId('monitoring-namespace-opt-kube-system').click()
+      await expect.poll(() => page.getByTestId('monitoring-pod-row').count(), { timeout: 30_000 }).toBeGreaterThan(0)
+      const rows = await page.getByTestId('monitoring-pod-row').count()
+
+      failing = true
+      const notice = page.getByTestId('pod-metrics-refresh-failed')
+      await expect(notice).toContainText(OLD_VALUES, { timeout: 30_000 })
+      expect(await page.getByTestId('monitoring-pod-row').count(), 'the rows stay').toBe(rows)
+      await expect(page.getByTestId('pod-metrics-error')).toHaveCount(0)
+
+      failing = false
+      await expect(notice).toHaveCount(0, { timeout: 30_000 })
+    })
+
     test('a 503 on the top resources is an error on the dashboard, and it recovers by itself', async ({ page }) => {
       let failing = true
       await page.route('**/api/v1/cluster/metrics/top-resources*', (route) => (failing ? route.fulfill(gateway503) : route.continue()))

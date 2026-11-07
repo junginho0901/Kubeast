@@ -2302,6 +2302,21 @@ test.describe('number check — list screens', () => {
     }
   })
 
+  test('a load balancer entry with an IP and a hostname shows both in the Service drawer', async ({ page }) => {
+    const name = 'num-lb-one-entry'
+    kubectl('apply -f -', JSON.stringify({ apiVersion: 'v1', kind: 'Service', metadata: { name, namespace: NS }, spec: { type: 'LoadBalancer', ports: [{ port: 5434 }] } }))
+    try {
+      kubectl(`patch service ${name} -n ${NS} --subresource=status --type=merge -p=${arg({ status: { loadBalancer: { ingress: [{ ip: '192.0.2.50', hostname: 'one.numbers.example' }] } } })}`)
+      await page.goto(`/network/services?cluster=self&namespace=${NS}`)
+      const row = page.locator('main tbody tr').filter({ has: page.getByRole('cell', { name, exact: true }) })
+      await expect(row).toContainText('192.0.2.50', { timeout: 20_000 })
+      await row.click()
+      await expect(page.locator(DRAWER).last()).toContainText(/LoadBalancer\s*192\.0\.2\.50 \(one\.numbers\.example\)\s*Session Affinity/, { timeout: 20_000 })
+    } finally {
+      kubectl(`delete service ${name} -n ${NS} --ignore-not-found`)
+    }
+  })
+
   test('Cluster View draws a pod whose sidecar is up and whose container runs as fine', async ({ page }) => {
     const table = await on().apiTable(`/api/v1/namespaces/${NS}/pods/num-sidecar`)
     const at = (column: string) => String(table.rows[0].cells[table.columnDefinitions.findIndex((c) => c.name === column)])

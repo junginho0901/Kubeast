@@ -15,7 +15,7 @@ import { logoutSession } from '@/services/auth'
 import { useNavigate } from 'react-router-dom'
 import { UserDetailModal } from './admin-users/UserDetailModal'
 import { bulkRoleFailures, bulkRoleFailureText, readBulkRoleAnswer } from './admin-users/bulkRole'
-import { bulkCreateFailureRows, bulkCreateFailures, bulkCreateSummary, parseBulkCsv, readBulkCreateAnswer, type ParsedBulkCsv } from './admin-users/bulkCreate'
+import { BULK_CSV_HEADER, bulkCreateFailureRows, bulkCreateFailures, bulkCreateSummary, bulkCsvTemplate, exampleBulkPassword, parseBulkCsv, readBulkCreateAnswer, type ParsedBulkCsv } from './admin-users/bulkCreate'
 
 const USERS_PAGE_SIZE = 25
 
@@ -329,14 +329,8 @@ export default function AdminUsers() {
 
   const downloadCsvTemplate = () => {
     const bom = '\uFEFF'
-    const teamNames = teamOptions.map((o) => o.name)
-    const comments = [
-      `# Available Team: ${teamNames.length > 0 ? teamNames.join(', ') : '(none registered)'}`,
-      `# role (account level): ${roles.filter((r) => ['Admin', 'Member'].includes(r.name)).map((r) => r.name).join(', ') || 'Admin, Member'}`,
-    ].join('\n')
-    const header = 'name,email,password,role,team'
-    const example = `Hong Gildong,hong@example.com,1234,read,${teamNames[0] || 'Team'}`
-    const blob = new Blob([bom + comments + '\n' + header + '\n' + example + '\n'], { type: 'text/csv;charset=utf-8' })
+    const template = bulkCsvTemplate(teamOptions.map((o) => o.name), roles, exampleBulkPassword())
+    const blob = new Blob([bom + template], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -889,7 +883,7 @@ export default function AdminUsers() {
 
               <div className="rounded-lg border border-slate-700 bg-slate-950/40 px-4 py-3">
                 <p className="text-xs text-slate-500 mb-1">{tr('adminUsers.bulkFormat', 'CSV format:')}</p>
-                <code className="text-xs text-slate-400">name,email,password,role,hq,team</code>
+                <code className="text-xs text-slate-400" data-testid="admin-users-bulk-format">{BULK_CSV_HEADER}</code>
               </div>
 
               {bulkUploadResult && (
@@ -939,6 +933,8 @@ export default function AdminUsers() {
         onClose={() => {
           setCreateModalOpen(false)
           setNewUser({ name: '', email: '', password: '', role_id: 0, team: '' })
+          // an empty form opened later is not refused yet
+          createUserMutation.reset()
         }}
         tr={tr}
       />

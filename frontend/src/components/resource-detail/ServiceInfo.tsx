@@ -95,7 +95,7 @@ function toPortDisplay(ports: DescribePort[]): string {
 
 function formatIngress(ingress: Array<{ ip?: string | null; hostname?: string | null }>): string {
   const values = ingress
-    .map((it) => it.ip || it.hostname)
+    .map((it) => (it.ip && it.hostname ? `${it.ip} (${it.hostname})` : it.ip || it.hostname))
     .filter(Boolean) as string[]
   return values.length > 0 ? values.join(', ') : '-'
 }

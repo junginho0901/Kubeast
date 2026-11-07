@@ -25,6 +25,8 @@ import { useCluster } from '@/contexts/ClusterContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { MonitoringSearch, NamespaceFilter } from './MonitoringFilters'
+import { MetricsRefreshFailed } from './MetricsRefreshFailed'
+import { metricsRefreshFailure, refreshFailureForChat } from './metricsRefresh'
 import type { PodMetric } from './types'
 
 interface MonitoringPodsProps {
@@ -67,7 +69,7 @@ export default function MonitoringPods({
   const { open: openDetail } = useResourceDetail()
 
   // Pod 리소스 사용량 (네임스페이스 선택 시에만 활성화, 5초마다 자동 갱신)
-  const { data: podMetrics, isLoading, error } = useQuery<PodMetric[], Error>({
+  const { data: podMetrics, isLoading, error, dataUpdatedAt } = useQuery<PodMetric[], Error>({
     queryKey: ['pod-metrics', currentCluster, selectedNamespace],
     // with each pod's limits from k8s-service's pod rows, so the page takes no pod list
     queryFn: () => api.getPodMetrics(selectedNamespace === 'all' ? undefined : selectedNamespace, true),
@@ -93,6 +95,8 @@ export default function MonitoringPods({
     }
   }, [error, onMetricsUnavailable])
 
+  const refreshFailure = useMemo(() => metricsRefreshFailure(error, podMetrics, dataUpdatedAt), [error, podMetrics, dataUpdatedAt])
+
   // 플로팅 AI 위젯용 스냅샷 — Pod 메트릭 요약
   const aiSnapshot = useMemo(() => {
     if (!Array.isArray(podMetrics)) return null
@@ -104,9 +108,10 @@ export default function MonitoringPods({
     const nsLabel = selectedNamespace === 'all' ? '전체' : selectedNamespace
     return {
       source: 'base' as const,
-      summary: `Pod 모니터링 — ${nsLabel} ${items.length}개 Pod 실시간 사용량`,
+      summary: `Pod 모니터링 — ${nsLabel} ${items.length}개 Pod ${refreshFailure ? '사용량, 새로고침 실패로 옛 값' : '실시간 사용량'}`,
       data: {
         tab: 'pods',
+        ...(refreshFailure ? { refresh_failed: refreshFailureForChat(refreshFailure) } : {}),
         filters: { namespace: selectedNamespace },
         ...summarizeList(items as unknown as Record<string, unknown>[], {
           topN: 15,
@@ -118,7 +123,7 @@ export default function MonitoringPods({
         }),
       },
     }
-  }, [podMetrics, selectedNamespace])
+  }, [podMetrics, selectedNamespace, refreshFailure])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
@@ -179,7 +184,7 @@ export default function MonitoringPods({
           <div className="flex flex-col items-end gap-1 text-right">
             {latestPodMetricTime && (
               <div className="flex items-center gap-2 text-sm text-slate-400">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <div className={`w-2 h-2 rounded-full ${refreshFailure ? 'bg-amber-500' : 'bg-green-500'}`}></div>
                 <span className="text-slate-400">{t('monitoring.autoRefresh')}</span>
               </div>
             )}
@@ -218,6 +223,8 @@ export default function MonitoringPods({
           </p>
         </div>
       )}
+
+      {selectedNamespace && refreshFailure && <MetricsRefreshFailed failure={refreshFailure} retrying={!metricsUnavailable} testId="pod-metrics-refresh-failed" />}
 
       {/* Pod 통계 카드 */}
       {selectedNamespace && podStats && (

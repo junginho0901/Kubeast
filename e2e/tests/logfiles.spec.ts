@@ -226,4 +226,28 @@ test.describe('Log files view', () => {
     await expect(page.getByTestId('logfile-select')).toContainText('/var/log/app/access.log')
     await expect(page.getByTestId('logfile-output')).toContainText(/access \d+/, { timeout: 15000 })
   })
+
+  // protected-namespaces.spec.ts holds the server's answer on the real namespace, where the dev values do not offer the
+  // view; this holds what the box makes of that answer.
+  test('a namespace Kubeast guards: the box says why and who may read there', async ({ page, request }) => {
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const pod = await writerPod(request, admin)
+    test.skip(!pod, 'features.logFiles is off or the e2e-logfile-writer fixture is missing')
+
+    await page.route('**/api/v1/cluster/namespaces/default/pods/*/logfiles*', (route) => route.fulfill({
+      status: 403,
+      contentType: 'application/json',
+      body: JSON.stringify({ reason: 'protected_namespace', detail: "forbidden: namespace default holds Kubeast's own credentials on this cluster" }),
+    }))
+    await page.goto(`/workloads/pods?cluster=${CLUSTER}`)
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr', { hasText: pod! }).first()
+    await expect(row).toBeVisible({ timeout: 20000 })
+    await row.click()
+    await expect(page.getByTestId('pod-logs-container')).toBeVisible({ timeout: 20000 })
+    await page.getByTestId('log-source-files').click()
+    const output = page.getByTestId('logfile-output')
+    await expect(output).toContainText(/Kubeast guards this namespace|Kubeast가 이 Namespace를 보호합니다/, { timeout: 15000 })
+    await expect(output).toContainText('resource.node.shell')
+    await expect(output).not.toContainText('forbidden:')
+  })
 })

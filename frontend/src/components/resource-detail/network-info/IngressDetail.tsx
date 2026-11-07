@@ -35,7 +35,7 @@ export default function IngressDetail({ name, namespace, rawJson }: Props) {
   const classDefaultRaw = rawJson?.class_is_default
   const classIsDefault = classDefaultRaw == null ? '-' : classDefaultRaw ? 'Yes' : 'No'
   const lbIngress = ((status.loadBalancer as any)?.ingress ?? []) as any[]
-  const lbAddresses = lbIngress.map((a: any) => a?.ip || a?.hostname).filter(Boolean)
+  const lbAddresses = lbIngress.map((a: any) => (a?.ip && a?.hostname ? `${a.ip} (${a.hostname})` : a?.ip || a?.hostname)).filter(Boolean)
   const lbPortStatuses = lbIngress.flatMap((a: any) => {
     const ports = Array.isArray(a?.ports) ? a.ports : []
     return ports.map((p: any) => ({ host: a?.ip || a?.hostname || '-', port: p?.port, protocol: p?.protocol, error: p?.error }))

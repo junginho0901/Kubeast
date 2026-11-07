@@ -1,6 +1,6 @@
 import type { VisibleDataLayer } from '@/components/PageContext'
 
-const MAX_BYTES = 8192 // 레이어당 8KB (모달 raw 데이터 + overlay 수용)
+export const MAX_LAYER_BYTES = 8192 // 레이어당 8KB (모달 raw 데이터 + overlay 수용)
 const MAX_SUMMARY_LEN = 300
 
 /**
@@ -19,11 +19,11 @@ export function enforceTokenBudget(layer: VisibleDataLayer): VisibleDataLayer {
   if (data) {
     const serialized = JSON.stringify(data)
     const bytes = new Blob([serialized]).size
-    if (bytes > MAX_BYTES) {
-      data = truncateData(data, MAX_BYTES)
+    if (bytes > MAX_LAYER_BYTES) {
+      data = truncateData(data, MAX_LAYER_BYTES)
       if (import.meta.env.DEV) {
         console.warn(
-          `[useAIContext] layer "${layer.source}" 의 data 가 ${bytes}B → ${MAX_BYTES}B 로 절삭됨`,
+          `[useAIContext] layer "${layer.source}" 의 data 가 ${bytes}B → ${MAX_LAYER_BYTES}B 로 절삭됨`,
         )
       }
     }

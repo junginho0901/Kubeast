@@ -2084,6 +2084,7 @@
     },
     "autoRefresh": "Auto refresh every 5 seconds",
     "metricTimestamp": "Metrics sampled at: {{time}}",
+    "refreshFailed": "Refresh failed. These values are from {{age}} ago.",
     "fetchNote": "* Data fetch can take longer than 5 seconds",
     "loading": "Loading data...",
     "metricsServerHint": "metrics-server is missing or not answering.",
@@ -2554,6 +2555,7 @@
         "no_file": "The file does not exist.",
         "tool_missing": "This container has no tail or ls, so its files cannot be read.",
         "unreadable": "The container user cannot read this file.",
+        "protected_namespace": "Kubeast guards this namespace, and reading a file runs a command in the container: in Kubeast's own namespace only a global admin may, in the node shell's namespace only someone holding resource.node.shell.",
         "generic": "Could not read the file: {{detail}}"
       }
     },
@@ -2893,6 +2895,7 @@
     "createUserTitle": "Add user",
     "createUserSubtitle": "Create a new user account with a specified role.",
     "createUserError": "Failed to create user.",
+    "createUserRefused": "Failed to create user: {{detail}}",
     "form": {
       "name": "Name",
       "namePlaceholder": "Jane Doe",

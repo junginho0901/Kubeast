@@ -25,6 +25,8 @@ import { buildResourceLink } from '@/utils/resourceLink'
 import { ListPager } from '@/components/ListPager'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { MonitoringSearch } from './MonitoringFilters'
+import { MetricsRefreshFailed } from './MetricsRefreshFailed'
+import { metricsRefreshFailure, refreshFailureForChat } from './metricsRefresh'
 import type { NodeMetric } from './types'
 
 // Node cards per page: the page scrolls, so a fixed count (as the admin tables) rather than a fit to the screen.
@@ -76,7 +78,7 @@ export default function MonitoringNodes({
     staleTime: 30000,
   })
 
-  const { data: nodeMetrics, isLoading, error } = useQuery<NodeMetric[], Error>({
+  const { data: nodeMetrics, isLoading, error, dataUpdatedAt } = useQuery<NodeMetric[], Error>({
     queryKey: ['node-metrics', currentCluster],
     queryFn: api.getNodeMetrics,
     enabled: !metricsUnavailable && !isMetricsDisabled(),
@@ -101,6 +103,8 @@ export default function MonitoringNodes({
     }
   }, [error, onMetricsUnavailable])
 
+  const refreshFailure = useMemo(() => metricsRefreshFailure(error, nodeMetrics, dataUpdatedAt), [error, nodeMetrics, dataUpdatedAt])
+
   // kubectl top nodes lists every node, those the metrics-server has no sample for last with <unknown>: the cards are
   // the node list's nodes, one without a sample showing -, so the count, the cards and the pager agree
   const allNodes = useMemo(() => {
@@ -121,12 +125,13 @@ export default function MonitoringNodes({
     const highCpu = items.filter((n) => (parsePercent(n.cpu_percent) ?? 0) > 85)
     const highMem = items.filter((n) => (parsePercent(n.memory_percent) ?? 0) > 85)
     const prefix = highCpu.length > 0 || highMem.length > 0 ? '⚠️ ' : ''
-    const summary = `${prefix}노드 모니터링 — ${items.length}개 노드 실시간 사용량`
+    const summary = `${prefix}노드 모니터링 — ${items.length}개 노드 ${refreshFailure ? '사용량, 새로고침 실패로 옛 값' : '실시간 사용량'}`
     return {
       source: 'base' as const,
       summary,
       data: {
         tab: 'nodes',
+        ...(refreshFailure ? { refresh_failed: refreshFailureForChat(refreshFailure) } : {}),
         ...summarizeList(items as unknown as Record<string, unknown>[], {
           topN: 10,
           pickFields: ['name', 'cpu', 'cpu_percent', 'memory', 'memory_percent'],
@@ -162,7 +167,7 @@ export default function MonitoringNodes({
         }),
       },
     }
-  }, [nodeMetrics, allNodes])
+  }, [nodeMetrics, allNodes, refreshFailure])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
@@ -193,7 +198,7 @@ export default function MonitoringNodes({
         <div className="flex flex-col items-end gap-1 text-right">
           {latestNodeMetricTime && (
             <div className="flex items-center gap-2 text-sm text-slate-400">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <div className={`w-2 h-2 rounded-full ${refreshFailure ? 'bg-amber-500' : 'bg-green-500'}`}></div>
               <span className="text-slate-400">{t('monitoring.autoRefresh')}</span>
             </div>
           )}
@@ -221,6 +226,7 @@ export default function MonitoringNodes({
         </div>
       ) : nodeMetrics && nodeMetrics.length > 0 ? (
         <div>
+        {refreshFailure && <MetricsRefreshFailed failure={refreshFailure} retrying={!metricsUnavailable} testId="node-metrics-refresh-failed" />}
         <MonitoringSearch value={search} onChange={setSearch} placeholder={t('monitoring.nodes.searchPlaceholder', 'Search nodes by name...')} testId="monitoring-node-search" />
         {filteredNodes.length === 0 && (
           <p className="py-12 text-center text-slate-400" data-testid="monitoring-node-empty">{t('common.noSearchResults', 'No results found.')}</p>
