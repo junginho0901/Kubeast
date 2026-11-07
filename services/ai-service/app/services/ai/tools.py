@@ -772,7 +772,9 @@ K8S_READONLY_TOOLS: List[Dict] = [
                 "rows — each with namespace, kind, name, policy, rule, result, severity, message, source — filtered by namespace, policy, the engine "
                 "that wrote it (policy_source), kind, results (e.g. fail,warn), severities (e.g. high,critical) or a search text, one page at a time: "
                 "total counts every match, next_offset is where the next page starts, truncated means the cluster held more reports than one read "
-                "takes. Two engines can name a policy alike; source tells them apart. Use it for "
+                "takes. cluster_reports_error says why rows the ClusterPolicyReports hold may be missing from either view (the cluster refused them, "
+                "a grant limited to namespaces, or too many to read): the counts are then not the whole, so say so. "
+                "Two engines can name a policy alike; source tells them apart. Use it for "
                 "\"which workloads violate policy X\", \"what fails in namespace Y\" or a compliance overview. {\"status\":\"unavailable\"} means the "
                 "cluster has no PolicyReport source. Only offered where the policy reports feature is on and the user may read them."
             ),

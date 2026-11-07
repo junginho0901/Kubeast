@@ -25,7 +25,8 @@ type YamlEditorProps = {
   isRefreshing?: boolean
   error?: string | null
   onRefresh?: () => void
-  onApply?: (nextValue: string) => Promise<void>
+  // false: nothing was written (the user declined), so the edit stays and nothing is called applied
+  onApply?: (nextValue: string) => Promise<boolean>
   onApplySuccess?: () => void
   onApplyError?: (message: string) => void
   onDirtyChange?: (dirty: boolean) => void
@@ -127,7 +128,7 @@ export default function YamlEditor({
       setDraft(sanitized)
     }
     try {
-      await onApply(sanitized)
+      if (!(await onApply(sanitized))) return
       setIsEditing(false)
       setApplySuccess(true)
       onApplySuccess?.()

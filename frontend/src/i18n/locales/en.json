@@ -3949,7 +3949,9 @@
       "apply": "Apply upgrade",
       "applying": "Upgrading...",
       "maskedNote": "A value shown as <REDACTED:…> stays as it is while its line does. Write over it to change it, or delete the line to remove it.",
-      "keptMasked": "Hidden values stay as they are: {{names}}"
+      "keptMasked": "Hidden values stay as they are: {{names}}",
+      "changedMasked": "Hidden values you wrote over or removed: {{names}}",
+      "noDiffValuesChange": "No difference shows in the manifest, but these values differ from the ones shown and will be saved. What changed may be hidden here, used only by a hook or used by nothing in the chart."
     },
     "test": {
       "button": "Run tests",

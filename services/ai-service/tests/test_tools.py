@@ -140,6 +140,13 @@ def test_the_overview_says_what_a_limited_grant_is_answered():
         assert words in description, words
 
 
+def test_policy_reports_says_what_a_missing_cluster_report_is_answered():
+    description = _tool("policy_reports")["description"]
+    assert "cluster_reports_error" in description
+    # counted against what could be read, or a model reads a partial total as the whole
+    assert "not the whole" in description
+
+
 def test_alerts_list_offers_the_silences_tab():
     tool = _tool("alerts_list")
     assert tool["parameters"]["properties"]["silences"]["type"] == "boolean"

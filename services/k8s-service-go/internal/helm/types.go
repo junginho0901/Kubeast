@@ -143,6 +143,10 @@ type UpgradeResult struct {
 	ChartVersion string `json:"chartVersion"`
 	// KeptMasked names where a value the caller could not read stayed as it was (masked_values.go).
 	KeptMasked []string `json:"kept_masked,omitempty"`
+	// ChangedMasked names where such a value was written over or removed, which a masked diff cannot show.
+	ChangedMasked []string `json:"changed_masked,omitempty"`
+	// ValuesChanged says the values sent differ from those the caller read, which no diff may show.
+	ValuesChanged bool `json:"values_changed,omitempty"`
 }
 
 // TestResult captures the outcome of running the helm test hooks for a

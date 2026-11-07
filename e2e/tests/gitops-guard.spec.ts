@@ -172,4 +172,50 @@ test.describe('Argo CD guard', () => {
     await expect(drawer.getByRole('button', { name: /^(delete\b|.*삭제$)/i })).toHaveCount(1)
     await expect(drawer.getByTestId('argo-blocked-hint')).toHaveCount(0)
   })
+
+  test('in warn mode, declining the warning writes nothing, calls nothing applied and keeps the edit', async ({ page, request }) => {
+    test.skip(!ADMIN_PASSWORD, 'E2E_USER_PASSWORD not set')
+    const admin = await login(request)
+    const features = await (await request.get('/api/v1/cluster/features?cluster=self', { headers: admin })).json()
+    test.skip(features.gitops?.argocd?.enabled !== true, 'gitops.argocd is off on this install')
+    const managed = await request.get('/api/v1/cluster/namespaces/default/deployments/e2e-argo-managed/describe?cluster=self', { headers: admin, failOnStatusCode: false })
+    test.skip(managed.status() === 404, 'fixture e2e-argo-managed is missing (deploy/kind/fixtures.yaml)')
+
+    // The screen is told warn; the server stays in block mode, so a write that does go out is refused and changes nothing.
+    await page.route('**/api/v1/cluster/features**', async (route) => {
+      const res = await route.fetch()
+      const body = await res.json()
+      await route.fulfill({ response: res, json: { ...body, gitops: { ...body.gitops, argocd: { ...body.gitops.argocd, mode: 'warn' } } } })
+    })
+    const writes: string[] = []
+    page.on('request', (r) => {
+      if (r.method() === 'POST' && r.url().includes('/yaml/apply')) writes.push(r.url())
+    })
+
+    await page.goto('/workloads/deployments?cluster=self')
+    await page.getByPlaceholder(/search/i).first().fill('e2e-argo-managed')
+    await page.getByRole('cell', { name: 'e2e-argo-managed', exact: true }).first().click()
+    const drawer = page.locator(DRAWER).last()
+    await expect(drawer.getByTestId('argo-badge')).toContainText('e2e-app', { timeout: 15000 })
+    await drawer.getByRole('button', { name: /^yaml$/i }).click()
+    await drawer.getByRole('button', { name: /^(edit|편집)$/i }).click()
+    const apply = drawer.getByRole('button', { name: /^(apply|적용)$/i })
+    const dialog = page.getByTestId('confirm-dialog')
+
+    await apply.click()
+    await expect(dialog).toContainText('e2e-app')
+    await dialog.getByRole('button', { name: /^(cancel|취소)$/i }).click()
+    await expect(dialog).toHaveCount(0)
+    await expect(drawer.getByText(/^(Applied|적용됨)$/)).toHaveCount(0)
+    await expect(apply, 'the edit stays').toHaveCount(1)
+    await expect(drawer.getByRole('button', { name: /^(edit|편집)$/i }), 'the edit stays').toHaveCount(0)
+    expect(writes).toEqual([])
+
+    // Going ahead sends the write, and what the server answers is what is said.
+    await apply.click()
+    await dialog.getByTestId('confirm-dialog-ok').click()
+    await expect(drawer.getByText('managed by Argo CD application e2e-app; change it in Git').first()).toBeVisible({ timeout: 15000 })
+    await expect(drawer.getByText(/^(Applied|적용됨)$/)).toHaveCount(0)
+    expect(writes).toHaveLength(1)
+  })
 })

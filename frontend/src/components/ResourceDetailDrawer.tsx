@@ -194,8 +194,9 @@ export default function ResourceDetailDrawer() {
   const keptMaskedRef = useRef(0)
   const handleApplyYamlGuarded = async (rawYaml: string) => {
     keptMaskedRef.current = 0
-    if (argoManaged && !argoBlocked && !(await confirm({ title: t('common.gitops.confirmTitle', { defaultValue: 'Managed by Argo CD' }), message: argoWarnText, confirmLabel: t('common.gitops.applyAnyway', { defaultValue: 'Apply anyway' }) }))) return
+    if (argoManaged && !argoBlocked && !(await confirm({ title: t('common.gitops.confirmTitle', { defaultValue: 'Managed by Argo CD' }), message: argoWarnText, confirmLabel: t('common.gitops.applyAnyway', { defaultValue: 'Apply anyway' }) }))) return false
     keptMaskedRef.current = await handleApplyYaml(rawYaml)
+    return true
   }
 
   // re-QA #38: system objects ask for the name; the namespaces the API server keeps get a notice

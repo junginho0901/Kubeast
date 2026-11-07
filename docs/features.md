@@ -383,7 +383,8 @@ Where the cluster has Recent flows or the Hubble metrics, the Resource Graph hea
 
 - View the release list, details, history, values, manifest and resources
 - **Rollback, Upgrade, Uninstall and Test**, all with a dry-run preview and run after confirmation
-- Without `resource.secret.reveal` the values are read masked. A value shown as `<REDACTED:…>` stays as it is while its line does, and the preview names which; written over, it changes, and with its line gone it goes. The same placeholder anywhere else is refused with where, as it stands for no value there
+- Without `resource.secret.reveal` the values are read masked. A value shown as `<REDACTED:…>` stays as it is while its line does, and the preview names which; written over, it changes, and with its line gone it goes. The preview names those too. It reads what you sent and does not compare it with the hidden value, so it does not tell you whether a guess was right. The same placeholder anywhere else is refused with where, as it stands for no value there. A list item goes with the item shown with the same text, so removing or moving items keeps each value with its item, and one item's other fields can be edited where it stands. Items that read alike must all stay, or which value is meant cannot be said and the upgrade is refused with where
+- The preview's Apply opens when the values you send differ from the values shown, also when the manifest shows no difference: a value only a Secret holds (without `resource.secret.reveal`), only a hook uses or nothing in the chart uses. The preview says so. A comment or another spacing is no change
 
 ## 🎮 GPU & DRA (Dynamic Resource Allocation)
 

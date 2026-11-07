@@ -253,12 +253,21 @@ func (s *Service) Uninstall(ctx context.Context, namespace, name string, keepHis
 // drive the service directly do not have to hand-shape a
 // map[string]interface{}.
 func (s *Service) UpgradeValues(ctx context.Context, namespace, name, valuesYAML string, dryRun bool) (*UpgradeResult, error) {
-	return s.upgradeValues(ctx, namespace, name, valuesYAML, dryRun, nil)
+	differs := false
+	result, err := s.upgradeValues(ctx, namespace, name, valuesYAML, dryRun, func(current *release.Release, vals map[string]interface{}) (map[string]interface{}, error) {
+		differs = valuesDiffer(vals, plainValues(current.Config))
+		return vals, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	result.ValuesChanged = differs
+	return result, nil
 }
 
-// UpgradeValuesWithoutReveal is UpgradeValues for an editor who read the values masked (masked_values.go). It names where
-// a hidden value stayed, in the result and for the caller's audit row, and no value comes back in its error.
-func (s *Service) UpgradeValuesWithoutReveal(ctx context.Context, namespace, name, valuesYAML string, dryRun bool) (*UpgradeResult, []string, error) {
+// UpgradeValuesWithoutReveal is UpgradeValues for an editor who read the values masked (masked_values.go). Its result names
+// where a hidden value stayed and where one was written over or removed, and no value comes back in its error.
+func (s *Service) UpgradeValuesWithoutReveal(ctx context.Context, namespace, name, valuesYAML string, dryRun bool) (*UpgradeResult, error) {
 	kept := &keptValues{}
 	result, err := s.upgradeValues(ctx, namespace, name, valuesYAML, dryRun, func(current *release.Release, vals map[string]interface{}) (map[string]interface{}, error) {
 		var restored map[string]interface{}
@@ -266,10 +275,12 @@ func (s *Service) UpgradeValuesWithoutReveal(ctx context.Context, namespace, nam
 		return restored, kept.refusal()
 	})
 	if err != nil {
-		return nil, nil, kept.scrub(err)
+		return nil, kept.scrub(err)
 	}
 	result.KeptMasked = kept.places
-	return result, kept.places, nil
+	result.ChangedMasked = kept.changed
+	result.ValuesChanged = kept.differs
+	return result, nil
 }
 
 func (s *Service) upgradeValues(ctx context.Context, namespace, name, valuesYAML string, dryRun bool, prepare func(*release.Release, map[string]interface{}) (map[string]interface{}, error)) (*UpgradeResult, error) {

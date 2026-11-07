@@ -259,7 +259,7 @@ export const clusterApi = {
   },
 
   // Health check — /health는 /api/v1가 아닌 루트에 있음
-  getHealth: async (): Promise<{ status: string; kubernetes: string; openai: string }> => {
+  getHealth: async (): Promise<{ status: string; kubernetes: string }> => {
     const { data } = await axios.get('/health', {
       baseURL: '',
     })

@@ -140,23 +140,25 @@ func (h *Handler) UpgradeHelmValues(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var result *helm.UpgradeResult
-	var kept []string
 	var err error
 	if h.canForCluster(r, "resource.secret.reveal") {
 		result, err = h.helmSvc.UpgradeValues(r.Context(), ns, name, req.Values, req.DryRun)
 	} else {
-		result, kept, err = h.helmSvc.UpgradeValuesWithoutReveal(r.Context(), ns, name, req.Values, req.DryRun)
+		result, err = h.helmSvc.UpgradeValuesWithoutReveal(r.Context(), ns, name, req.Values, req.DryRun)
 	}
 
 	if !req.DryRun {
 		fromRev := 0
 		newRev := 0
+		var kept, changed []string
 		if result != nil {
 			fromRev = result.FromRevision
 			newRev = result.NewRevision
+			kept = result.KeptMasked
+			changed = result.ChangedMasked
 		}
 		before := audit.MustJSON(map[string]any{"fromRevision": fromRev})
-		after := helmValuesAudit(newRev, req.Values, kept)
+		after := helmValuesAudit(newRev, req.Values, kept, changed)
 		h.recordHelmAudit(r, "helm.release.upgrade", "release", name, ns, helmValuesAuditError(err, req.Values), before, after)
 	}
 
@@ -173,8 +175,9 @@ func (h *Handler) UpgradeHelmValues(w http.ResponseWriter, r *http.Request) {
 // helmValuesAudit says what an upgrade sent without its text: the row reaches the
 // log pipeline and the sinks and cannot be deleted, and values hold passwords. No
 // hash either, since it can be guessed against a short value; newRevision names
-// the values in the release's own history. kept names where a value hidden from the caller stayed, by its keys.
-func helmValuesAudit(newRevision int, values string, kept []string) json.RawMessage {
+// the values in the release's own history. kept names where a value hidden from the caller stayed, by its keys, and
+// changed where one was written over or removed.
+func helmValuesAudit(newRevision int, values string, kept, changed []string) json.RawMessage {
 	keys := []string{}
 	var parsed map[string]any
 	if yaml.Unmarshal([]byte(values), &parsed) == nil {
@@ -190,6 +193,9 @@ func helmValuesAudit(newRevision int, values string, kept []string) json.RawMess
 	}
 	if len(kept) > 0 {
 		row["kept_masked"] = kept
+	}
+	if len(changed) > 0 {
+		row["changed_masked"] = changed
 	}
 	return audit.MustJSON(row)
 }
