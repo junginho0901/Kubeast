@@ -175,6 +175,52 @@ func writesAndTerminalsIn(t *testing.T, ns string) []protectedCase {
 	}
 }
 
+// The features answer, which every screen already holds, says where this caller's writes are refused, so a button
+// follows without a question of its own.
+func TestFeaturesNameWhereTheCallersWritesAreRefused(t *testing.T) {
+	limited := func(namespaces ...string) auth.TokenPayload {
+		p := writeOnCluster()
+		p.Namespaces = map[string][]string{"c": namespaces}
+		return p
+	}
+	holdingTheShell := writeOnCluster()
+	holdingTheShell.Perms["c"] = append(holdingTheShell.Perms["c"], "resource.node.shell")
+	for _, c := range []struct {
+		name    string
+		payload auth.TokenPayload
+		self    bool
+		want    []string
+	}{
+		{"write on the install cluster", writeOnCluster(), true, []string{installNS, nodeShellNS}},
+		{"write on another cluster", writeOnCluster(), false, []string{nodeShellNS}},
+		{"holding the node shell", holdingTheShell, true, []string{installNS}},
+		{"a cluster's admin", adminOnCluster(), true, []string{installNS}},
+		{"a global admin", globalAdminPayload(), true, []string{}},
+		{"a grant limited to other namespaces is told nothing of them", limited("shop"), true, []string{}},
+		{"a grant limited to the guarded one", limited(installNS), true, []string{installNS}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			rig := newProtectedRig(t, c.payload, c.self)
+			w := rig.do("GET", "/api/v1/features?cluster=c", "")
+			if w.Code != http.StatusOK {
+				t.Fatalf("status %d: %s", w.Code, w.Body.String())
+			}
+			var answer struct {
+				Refused *[]string `json:"writeGuardedNamespaces"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &answer); err != nil {
+				t.Fatal(err)
+			}
+			if answer.Refused == nil || !slices.Equal(*answer.Refused, c.want) {
+				t.Fatalf("writeGuardedNamespaces = %v, want %v", answer.Refused, c.want)
+			}
+			for _, call := range rig.api.calls {
+				t.Errorf("the answer asked the cluster: %s %s", call.method, call.path)
+			}
+		})
+	}
+}
+
 // Whichever way a request names the install namespace, the path, the query, the body or a YAML document, one
 // cluster's Write or Admin reaches none of its Secrets, writes nothing there and opens no terminal, and the cluster is not asked.
 func TestTheInstallNamespaceIsClosedToAnyoneButAGlobalAdmin(t *testing.T) {

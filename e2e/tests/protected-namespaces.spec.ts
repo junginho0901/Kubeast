@@ -331,6 +331,32 @@ test.describe.serial('the guarded namespaces', () => {
     expect(pods.content[0].text).toContain(aPod)
   })
 
+  test('the features answer names where a caller\'s writes are refused, and a list\'s create button goes there', async ({ request, browser }) => {
+    const refusedFor = async (token: string, cluster = 'self') => {
+      const res = await get(request, token, '/features', cluster)
+      expect(res.status()).toBe(200)
+      return ((await res.json()).writeGuardedNamespaces as string[]).sort()
+    }
+    expect(await refusedFor(writer)).toEqual([NS, SHELL_NS].sort())
+    expect(await refusedFor(writer, 'default'), 'on another cluster its name is ordinary').toEqual([SHELL_NS])
+    expect(await refusedFor(admin), 'a global admin').toEqual([])
+
+    const page = await signIn(browser, writerEmail)
+    try {
+      const asked: string[] = []
+      page.on('request', (r) => { if (r.url().includes('/can-i')) asked.push(r.url()) })
+      const create = page.getByRole('button', { name: tr('deployments.create'), exact: true })
+      await page.goto('/workloads/deployments?cluster=self&namespace=default')
+      await expect(create).toHaveCount(1, { timeout: 20_000 })
+      await page.goto(`/workloads/deployments?cluster=self&namespace=${NS}`)
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Deployments/, { timeout: 20_000 })
+      await expect(create).toHaveCount(0)
+      expect(asked, 'the page asked the cluster nothing for it').toEqual([])
+    } finally {
+      await page.context().close()
+    }
+  })
+
   test('the screens say why and show no button for what would be refused', async ({ browser }) => {
     test.setTimeout(120_000)
     const page = await signIn(browser, writerEmail)

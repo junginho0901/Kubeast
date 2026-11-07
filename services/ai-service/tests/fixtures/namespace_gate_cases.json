@@ -1576,6 +1576,69 @@
    "refused": ""
   },
   {
+   "tool": "k8s_cordon_node",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_cordon_node",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_cordon_node",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_cordon_node",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_cordon_node",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_cordon_node",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_cordon_node",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_cordon_node",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_cordon_node",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
    "tool": "k8s_count",
    "args": {},
    "refused": "namespace is required"
@@ -1700,6 +1763,132 @@
     "namespace": "shop"
    },
    "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_cronjob_suspend",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "k8s_cronjob_suspend",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_cronjob_suspend",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_cronjob_suspend",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "k8s_cronjob_suspend",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_cronjob_suspend",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_cronjob_suspend",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_cronjob_suspend",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_cronjob_suspend",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_cronjob_trigger",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "k8s_cronjob_trigger",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_cronjob_trigger",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_cronjob_trigger",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "k8s_cronjob_trigger",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "k8s_cronjob_trigger",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_cronjob_trigger",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_cronjob_trigger",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "k8s_cronjob_trigger",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
   },
   {
    "tool": "k8s_delete_resource",

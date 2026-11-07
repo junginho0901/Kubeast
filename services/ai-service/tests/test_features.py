@@ -120,7 +120,7 @@ def test_permission_gate_follows_what_k8s_service_asks_for():
     assert features.permitted("hygiene", _Token({"ai.tool.*", "resource.*.read"}), "self") is False
     # The write preview needs the write's RBAC: a Read grant does not get it, a Write grant does.
     assert features.gated_names(["k8s_diff", "k8s_count"], feats, "self", reader) == ["k8s_count"]
-    writer = _Token({"resource.*.edit", "resource.*.read"})
+    writer = _Holder({"self": ("resource.*.edit", "resource.*.read")})
     assert features.gated_names(["k8s_diff", "k8s_count"], feats, "self", writer) == ["k8s_diff", "k8s_count"]
     # The cluster-agnostic list hides a cluster-scoped requirement the token holds nowhere.
     assert features.permitted_anywhere("k8s_diff", reader) is False

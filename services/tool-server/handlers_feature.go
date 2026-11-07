@@ -117,10 +117,20 @@ func featureFailure(feature, alternative string, status int, body []byte) (strin
 	case status == http.StatusBadRequest:
 		return "", false, wrapBadRequest(detail)
 	default:
-		return "", false, fmt.Errorf("k8s-service %s: status %d: %s", feature, status, detail)
+		return "", false, fmt.Errorf("%s %s: status %d: %s", serviceOfFeature(feature), feature, status, detail)
 	}
 	out, err := marshalJSON(result)
 	return out, err == nil, err
+}
+
+// The features auth-service answers; the others come from k8s-service.
+var authServiceFeatures = map[string]bool{"access_review": true, "ai_usage": true, "access_requests": true, "audit_integrity": true, "audit_search": true, "clusters": true}
+
+func serviceOfFeature(feature string) string {
+	if authServiceFeatures[feature] {
+		return "auth-service"
+	}
+	return "k8s-service"
 }
 
 // featureMissing: k8s-service's 404 says the feature, not an object, is absent.

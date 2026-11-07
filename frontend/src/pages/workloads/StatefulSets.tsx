@@ -9,6 +9,7 @@ import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { useWritesRefusedIn } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { parseAgeSeconds, type SortKey } from './statefulsets/statefulSetHelpers'
@@ -31,7 +32,8 @@ export default function StatefulSets() {
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const { has } = usePermission()
-  const canWrite = has('resource.statefulset.create')
+  const writesRefused = useWritesRefusedIn()
+  const canWrite = has('resource.statefulset.create') && !writesRefused(selectedNamespace)
 
   const { data: namespaces } = useQuery({
     queryKey: ['namespaces'],

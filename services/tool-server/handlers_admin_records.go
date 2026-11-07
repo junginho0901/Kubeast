@@ -141,11 +141,13 @@ func modelLimit(options map[string]interface{}, name string) interface{} {
 	return value
 }
 
-// keyEnvSet reads as the AI Models card draws it: true beside a named variable, false where it warns "No key env", null where
-// its provider asks for no key. The variable's name stays out of the answer.
+// keyEnvSet reads as the AI Models card draws it: true beside a named variable, in either field ai-service reads a key
+// through, false where it warns "No key env", null where its provider asks for no key. The variable's name stays out of the answer.
 func keyEnvSet(config map[string]interface{}) interface{} {
-	if name, _ := config["api_key_env"].(string); name != "" {
-		return true
+	for _, field := range []string{"api_key_env", "api_key_secret_key"} {
+		if name, _ := config[field].(string); name != "" {
+			return true
+		}
 	}
 	if provider, _ := config["provider"].(string); keylessProviders[provider] {
 		return nil
@@ -154,8 +156,12 @@ func keyEnvSet(config map[string]interface{}) interface{} {
 }
 
 // handleAIModels reads Admin → AI Models: each model's name, provider, what it runs, whether a key variable is set and its limits.
-func handleAIModels(ctx context.Context, _ map[string]interface{}, headers http.Header) (string, error) {
-	status, body, err := aiServiceDo(ctx, headers, http.MethodGet, "/api/v1/ai/model-configs", nil)
+func handleAIModels(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+	var q url.Values
+	if argBool(args, "enabled_only") {
+		q = url.Values{"enabled_only": {"true"}}
+	}
+	status, body, err := aiServiceDo(ctx, headers, http.MethodGet, "/api/v1/ai/model-configs", q)
 	if err != nil {
 		return "", err
 	}
@@ -227,7 +233,7 @@ func handleSessionRecordings(ctx context.Context, args map[string]interface{}, h
 		if err != nil || out != "" {
 			return out, err
 		}
-		return marshalOrdered(map[string]interface{}{"note": recordingsOutputNote, "recording": pickFields(reply, recordingFields...)}, []string{"note"}, nil)
+		return marshalOrdered(map[string]interface{}{"note": recordingsOutputNote, "recording": recordingDetails(reply)}, []string{"note"}, nil)
 	}
 	limit, offset := adminPage(args)
 	// The route counts nothing: one row past the page says there is more, as on the screen.
@@ -254,12 +260,32 @@ func handleSessionRecordings(ctx context.Context, args map[string]interface{}, h
 		answer["next_offset"] = offset + limit
 	}
 	answer["returned"] = len(rows)
-	answer["rows"] = pickRows(rows, recordingFields)
+	details := make([]interface{}, 0, len(rows))
+	for _, r := range rows {
+		if row, ok := r.(map[string]interface{}); ok {
+			details = append(details, recordingDetails(row))
+		}
+	}
+	answer["rows"] = details
 	if len(rows) == 0 {
 		answer["hint"] = "No recording matches. Pod exec and node shell terminals are recorded while sessionRecording.enabled is on."
 	}
 	addRecordingSwitch(ctx, answer, headers)
 	return marshalRows(answer)
+}
+
+// recordingDetails is a recording's fields with the size the screen shows (SessionRecordings.tsx keptBytes): an
+// interrupted one kept what was uploaded, the others what was recorded, or what was uploaded before that is known.
+func recordingDetails(row map[string]interface{}) map[string]interface{} {
+	out := pickFields(row, recordingFields...)
+	recorded, _ := row["bytes"].(float64)
+	uploaded, _ := row["uploaded_bytes"].(float64)
+	kept := recorded
+	if row["status"] == "interrupted" || recorded == 0 {
+		kept = uploaded
+	}
+	out["kept_bytes"] = kept
+	return out
 }
 
 // addRecordingSwitch adds whether terminals are recorded now; not read is not off.

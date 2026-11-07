@@ -8,6 +8,7 @@ import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { useWritesRefusedIn } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Plus, RefreshCw } from 'lucide-react'
@@ -54,7 +55,8 @@ export default function Ingresses() {
     ),
   })
   const { has } = usePermission()
-  const canCreate = has('resource.ingress.create')
+  const writesRefused = useWritesRefusedIn()
+  const canCreate = has('resource.ingress.create') && !writesRefused(selectedNamespace)
 
   useKubeWatchList({
     enabled: true,

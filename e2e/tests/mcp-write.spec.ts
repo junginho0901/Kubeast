@@ -17,9 +17,10 @@ const RPC = { Accept: 'application/json, text/event-stream', 'Content-Type': 'ap
 const WRITE_TOOLS = [
   'k8s_apply_manifest', 'k8s_create_resource', 'k8s_delete_resource', 'k8s_patch_resource', 'k8s_annotate_resource',
   'k8s_remove_annotation', 'k8s_label_resource', 'k8s_remove_label', 'k8s_scale', 'k8s_rollout', 'k8s_execute_command',
+  'k8s_cordon_node', 'k8s_cronjob_suspend', 'k8s_cronjob_trigger',
 ]
-// Pod exec also asks for the screen's permission, which a Write ceiling does not hold (ai-write-permissions.spec.ts).
-const WRITE_ROLE_TOOLS = WRITE_TOOLS.filter((t) => t !== 'k8s_execute_command')
+// Pod exec and cordon also ask for the screen's permission, which a Write ceiling does not hold (ai-write-permissions.spec.ts).
+const WRITE_ROLE_TOOLS = WRITE_TOOLS.filter((t) => t !== 'k8s_execute_command' && t !== 'k8s_cordon_node')
 const stamp = () => Date.now().toString(36)
 
 function kubectlFor(kindName: string) {

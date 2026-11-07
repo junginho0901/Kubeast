@@ -519,6 +519,9 @@ func allPermissions() []map[string]interface{} {
 			{"ai.tool.ai_models", "Admin tool: AI models, without keys or addresses"},
 			{"ai.tool.session_recordings", "Admin tool: terminal session recordings' details, never what the terminal showed"},
 			{"ai.tool.k8s_execute_command", "Run a command in a pod (also needs Pod exec)"},
+			{"ai.tool.k8s_cordon_node", "Cordon or uncordon a node (also needs Cordon / uncordon)"},
+			{"ai.tool.k8s_cronjob_suspend", "Suspend a CronJob or let it run again (also needs Suspend CronJob)"},
+			{"ai.tool.k8s_cronjob_trigger", "Run a CronJob now (also needs Run CronJob now)"},
 			{"ai.mcp.use", "Connect an external AI agent (MCP) to this cluster"},
 		}},
 		{"category": "Admin", "permissions": []perm{

@@ -21,6 +21,9 @@ const (
 	adminPageDefault = 25 // the screens' page
 	// The sign-offs k8s-service answers at most (handler hygieneHistoryMax).
 	hygieneHistoryCap = 100
+	// The access review answers every row of every tab at once: 5 000 requests alone, each with a reason and a note of 500 bytes, take about 6 MiB.
+	// Decoding takes up to 3.5 times the body beside it, on a service whose default limit is 256 Mi, so this stays well below that.
+	reviewBodyCap = 16 << 20
 
 	reviewAlternative         = "Access review is off on this installation (auth.accessReview.enabled). Use audit_search for who changed what."
 	usageAlternative          = "AI Usage adds up the audit rows ai.chat.complete and ai.investigation.run; audit_search reads those rows."
@@ -271,6 +274,18 @@ func handleAccessReview(ctx context.Context, args map[string]interface{}, header
 	return marshalRows(answer)
 }
 
+// readReportBody reads a report, which every section comes from at once; ok is false when it is more than a tool holds.
+func readReportBody(ctx context.Context, headers http.Header, path string, q url.Values) (status int, body []byte, ok bool, err error) {
+	status, body, _, err = authServiceReadUpTo(ctx, headers, "/api/v1/auth"+path, q, reviewBodyCap)
+	return status, body, err == nil && len(body) < reviewBodyCap, err
+}
+
+func reviewTooLarge() (string, error) {
+	return marshalJSON(map[string]interface{}{"status": "failed", "feature": "access_review", "code": "too_large",
+		"reason": fmt.Sprintf("this report is larger than the %d MiB a tool reads", reviewBodyCap>>20),
+		"hint":   "Read it on the Access review screen (Admin → Access review), which also exports each tab as CSV."})
+}
+
 // readAccessReview gets the live report, or the one a sign-off stored with who signed. out is set when the route refused.
 func readAccessReview(ctx context.Context, args map[string]interface{}, headers http.Header) (report, signedOff map[string]interface{}, out string, err error) {
 	reviewID := argString(args, "review_id", "")
@@ -279,16 +294,24 @@ func readAccessReview(ctx context.Context, args map[string]interface{}, headers 
 		if err := sinceQuery(args, q); err != nil {
 			return nil, nil, "", err
 		}
-		status, body, err := authServiceGet(ctx, headers, "/admin/access-review", q)
+		status, body, ok, err := readReportBody(ctx, headers, "/admin/access-review", q)
 		if err != nil {
 			return nil, nil, "", err
+		}
+		if !ok {
+			out, err = reviewTooLarge()
+			return nil, nil, out, err
 		}
 		report, out, err = featureReply("access_review", reviewAlternative, status, body)
 		return report, nil, out, err
 	}
-	status, body, err := authServiceGet(ctx, headers, "/admin/access-review/history/"+url.PathEscape(reviewID), nil)
+	status, body, ok, err := readReportBody(ctx, headers, "/admin/access-review/history/"+url.PathEscape(reviewID), nil)
 	if err != nil {
 		return nil, nil, "", err
+	}
+	if !ok {
+		out, err = reviewTooLarge()
+		return nil, nil, out, err
 	}
 	if detail := detailOf(body); status == http.StatusNotFound && !featureMissing(detail) {
 		out, err = marshalJSON(map[string]interface{}{"status": "not_found", "feature": "access_review", "reason": detail, "hint": "review_section=history lists the sign-offs and their ids."})
@@ -298,8 +321,8 @@ func readAccessReview(ctx context.Context, args map[string]interface{}, headers 
 	if err != nil || out != "" {
 		return nil, nil, out, err
 	}
-	report, ok := reply["snapshot"].(map[string]interface{})
-	if !ok {
+	report, stored := reply["snapshot"].(map[string]interface{})
+	if !stored {
 		return nil, nil, "", fmt.Errorf("access_review: sign-off %s has no stored report", reviewID)
 	}
 	return report, pickFields(reply, "id", "reviewed_by_email", "reviewed_at", "note"), "", nil

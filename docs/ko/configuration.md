@@ -51,6 +51,7 @@ auth:
   impersonation:
     enabled: true
     clusterRoles: true
+    userPrefix: ""  # 예: kubeast:user: — 사람의 주소 앞에 붙음. 주소로 묶은 User 바인딩은 적용되지 않게 됨(cluster-requirements §1)
     customRoles: []
     #  - name: Read
     #    namespaces: [team-a, team-b]

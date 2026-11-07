@@ -54,6 +54,7 @@ auth:
   impersonation:
     enabled: true
     clusterRoles: true
+    userPrefix: ""  # e.g. kubeast:user: — before a person's address; moves User bindings to a new name (cluster-requirements §1)
     customRoles: []
     #  - name: Read
     #    namespaces: [team-a, team-b]

@@ -114,6 +114,7 @@ data:
   {{- range .Values.auth.impersonation.customRoles }}{{ $boundRoles = append $boundRoles (include "kubeast.roleSlug" .name) }}{{ end }}
   {{- end }}
   IMPERSONATION_CUSTOM_ROLES: {{ join "," $boundRoles | quote }}
+  IMPERSONATION_USER_PREFIX: {{ .Values.auth.impersonation.userPrefix | default "" | quote }}
   KUBECONFIG_EXEC_COMMANDS: {{ join "," .Values.multicluster.execCommands | quote }}
   GATEWAY_POLICY_KINDS: {{ join "," .Values.gatewayApi.policyKinds | quote }}
   AI_WRITE_APPROVAL: {{ .Values.ai.writeApproval | quote }}

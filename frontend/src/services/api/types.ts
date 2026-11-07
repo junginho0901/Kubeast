@@ -708,6 +708,8 @@ export interface PrometheusRangeResponse {
 // /api/v1/cluster/features — operator-opt-in toggles, read once at boot
 // and cached on the React Query client. See helm values.yaml `features.*`.
 export interface ClusterFeatures {
+  // Where this caller's writes are refused whatever its permissions say (services/pkg/protectedns).
+  writeGuardedNamespaces?: string[]
   // namespaceLimited: the caller's grant on this cluster is limited to namespaces, and the cluster's Prometheus,
   // which answers for the whole cluster, refuses it
   prometheus: { enabled: boolean; namespaceLimited?: boolean }

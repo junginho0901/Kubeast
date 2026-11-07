@@ -83,8 +83,8 @@ def app_permission_error(token, cluster: str, tool: str, args: Any = None) -> Op
     return _refusal(tool, missing, cluster) if missing else None
 
 
-# The legacy role mode has no permissions to read: its rules stay in is_tool_allowed, and these two stay with admin.
-_ADMIN_ONLY_WITHOUT_A_TOKEN = frozenset({"resource.pod.exec", "resource.workload.rollback"})
+# The legacy role mode has no permissions to read: its rules stay in is_tool_allowed, and these stay with admin.
+_ADMIN_ONLY_WITHOUT_A_TOKEN = frozenset({"resource.pod.exec", "resource.workload.rollback", "resource.node.cordon"})
 
 
 def tool_refusal(service: "AIService", tool: str, args: Any = None) -> Optional[str]:
@@ -156,9 +156,12 @@ def is_tool_allowed(service: "AIService", function_name: str) -> bool:
         "k8s_remove_label",
         "k8s_scale",
         "k8s_rollout",
+        "k8s_cronjob_suspend",
+        "k8s_cronjob_trigger",
     }
     admin_only_tools = {
         "k8s_execute_command",
+        "k8s_cordon_node",
     }
 
     if function_name in admin_only_tools:
@@ -216,8 +219,12 @@ CLUSTER_WIDE_TOOLS = frozenset({
     "prometheus_query", "prometheus_metrics", "prometheus_labels", "prometheus_rules", "prometheus_targets", "alerts_list",
     "hygiene", "k8s_diff", "audit_search", "nodes_stats_summary", "nodes_log", "alert_investigate", "alerts_inbox",
     "access_review", "ai_usage", "access_requests", "audit_integrity", "hygiene_history",
-    "investigations", "ai_models", "session_recordings",
+    "investigations", "ai_models", "session_recordings", "k8s_cordon_node",
 })
+
+# Kubeast's own records: their routes ask an all-cluster permission and never look at a grant's namespaces, so whoever
+# holds it reads them from any cluster, as on their screens (the same list tool-server keeps).
+KUBEAST_RECORD_TOOLS = frozenset({"audit_search", "access_review", "ai_usage", "access_requests", "audit_integrity", "investigations", "ai_models", "session_recordings"})
 
 # Tool-server's handler or k8s-service's route keeps these inside the grant, so they pass without naming a namespace.
 NAMESPACE_AWARE_TOOLS = frozenset({"k8s_find_resource", "issues", "cost", "gitops_status", "storage_summary", "timeline", "gpu", "get_cluster_overview"})
@@ -235,6 +242,8 @@ def namespace_scope_error(token, cluster: str, function_name: str, args: Dict) -
     if not scope or function_name in NAMESPACE_FREE_TOOLS:
         return None
     listed = ", ".join(scope)
+    if function_name in KUBEAST_RECORD_TOOLS and all(token.has_permission(p) for p in screen_permissions.app_permissions(function_name) or ["*"]):
+        return None
     if function_name in CLUSTER_WIDE_TOOLS:
         return f"forbidden: {function_name} spans the cluster; your grant on {cluster} is limited to namespaces {listed}"
     # The handlers read this flag before the namespace, so an own namespace beside it says nothing.

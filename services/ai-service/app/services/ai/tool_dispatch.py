@@ -76,7 +76,7 @@ FEATURE_TOOL_ARGS = {
     "audit_integrity": (set(), set(), set()),
     "hygiene_history": ({"review_id", "severity", "check"}, set(), {"limit"}),
     "investigations": ({"investigation_id", "status", "cluster_id"}, set(), {"limit", "offset"}),
-    "ai_models": (set(), set(), set()),
+    "ai_models": (set(), {"enabled_only"}, set()),
     "session_recordings": ({"recording_id", "actor_email", "recording_kind", "cluster_id"}, set(), {"limit", "offset"}),
     "policy_reports": ({"view", "namespace", "policy", "policy_source", "kind", "results", "severities", "search", "sort", "dir"}, set(), {"limit", "offset"}),
     "helm_read": ({"what", "namespace", "release", "status", "section"}, set(), {"revision", "from", "to"}),

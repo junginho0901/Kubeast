@@ -26,6 +26,7 @@ import { api } from '@/services/api'
 import type { OptimizationResponse, OptimizationRow, ResizeResult } from '@/services/api/types'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
 import { usePermission } from '@/hooks/usePermission'
+import { useWritesRefusedIn } from '@/hooks/useCanCreate'
 import { useAIContext } from '@/hooks/useAIContext'
 import { optimizationRowTarget } from '@/utils/detailTargets'
 import { aiEnabled } from '@/utils/features'
@@ -142,7 +143,8 @@ export function OptimizationModal({
       setResizeResults((m) => ({ ...m, [rowKey(row)]: { error: err?.response?.data?.detail ?? err?.response?.data?.error ?? err?.message ?? String(err) } }))
     },
   })
-  const applyOf = (row: OptimizationRow) => optimizationApply(row, canResize, table?.resize_kinds)
+  const writesRefused = useWritesRefusedIn()
+  const applyOf = (row: OptimizationRow) => optimizationApply(row, canResize && !writesRefused(row.namespace), table?.resize_kinds)
   const applyResize = async (row: OptimizationRow) => {
     const ok = await confirm({
       title: tr('dashboard.optimization.resize.title', 'Apply without restart'),
@@ -193,7 +195,7 @@ export function OptimizationModal({
       resize_kinds: table.resize_kinds,
       rows: table.rows.slice(0, 30).map((r) => ({
         kind: r.kind, api_version: r.api_version, name: r.name, container: r.container, pods: r.pods, flags: r.flags,
-        apply: optimizationApply(r, canResize, table.resize_kinds),
+        apply: optimizationApply(r, canResize && !writesRefused(r.namespace), table.resize_kinds),
         cpu_request_m: r.cpu_request_m, cpu_usage_m: r.cpu_usage_m, cpu_recommend_m: r.cpu_recommend_m,
         mem_request_bytes: r.mem_request_bytes, mem_usage_bytes: r.mem_usage_bytes, mem_recommend_bytes: r.mem_recommend_bytes,
         saving_month_usd: r.saving_month_usd,
@@ -235,6 +237,11 @@ export function OptimizationModal({
       {priced && <td className="px-2 py-1.5 text-right text-slate-100 whitespace-nowrap" data-testid="optimization-saving">{formatMoney(row.saving_month_usd)}</td>}
       {canResize && (
         <td className="px-2 py-1.5 max-w-[260px]">
+          {writesRefused(row.namespace) && optimizationApply(row, true, table?.resize_kinds) === 'apply' && (
+            <p data-testid="optimization-resize-guarded" className="text-[11px] text-slate-400 break-words">
+              {tr('dashboard.optimization.resize.guarded', 'Kubeast guards this namespace: this cannot be applied here.')}
+            </p>
+          )}
           {applyOf(row) === 'kind' && (
             <p data-testid="optimization-resize-kind" className="text-[11px] text-slate-400 break-words">
               {tr('dashboard.optimization.resize.kindRefused', 'Not available for {{kind}}: only {{kinds}} can be applied here.', { kind: row.kind, kinds: (table?.resize_kinds ?? []).join(', ') })}

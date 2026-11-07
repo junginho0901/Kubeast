@@ -68,6 +68,10 @@ def tool_target(tool: str, args: dict) -> ToolTarget:
         return ToolTarget("investigation", args["investigation_id"], None, None)
     if tool == "session_recordings" and args.get("recording_id"):
         return ToolTarget("session_recording", args["recording_id"], None, None)
+    if tool == "k8s_cordon_node":
+        return ToolTarget("node", args.get("resource_name") or tool, None, None)
+    if tool in ("k8s_cronjob_suspend", "k8s_cronjob_trigger"):
+        return ToolTarget("cronjob", args.get("resource_name") or tool, namespace, None)
     named =args.get("resource_name") or args.get("name") or args.get("pod_name")
     objects = [] if named else _manifest_objects(args)
     if not objects:
@@ -238,7 +242,8 @@ def write_tool_input(tool: str, args: dict) -> dict[str, Any]:
         if args.get(name):
             fields.update(_preview_fields(name, args[name], opts, secret=secret and name == "annotations"))
     for arg, field in (("container", "container"), ("patch_type", "patch_type"), ("action", "rollout_action"), ("revision", "revision"),
-                       ("replicas", "replicas"), ("all", "all"), ("force", "force"), ("grace_period", "grace_period")):
+                       ("replicas", "replicas"), ("all", "all"), ("force", "force"), ("grace_period", "grace_period"),
+                       ("uncordon", "uncordon"), ("suspend", "suspend")):
         if args.get(arg) is not None:
             fields[field] = _short(args[arg], opts)
     return fields

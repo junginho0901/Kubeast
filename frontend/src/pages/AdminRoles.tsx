@@ -7,7 +7,7 @@ import { ModalOverlay } from '@/components/ModalOverlay'
 import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
 import { usePermission } from '@/hooks/usePermission'
-import { customRoleGroup } from '@/utils/roleGroup'
+import { customRoleGroup, roleEditEndsSessions } from '@/utils/roleGroup'
 import { useConfirm } from '@/services/confirm'
 
 type PermCategory = { category: string; permissions: Array<{ key: string; description: string }> }
@@ -428,11 +428,25 @@ export default function AdminRoles() {
               </p>
             )}
 
+            {editingRole && !editingRole.is_system && roleEditEndsSessions(editingRole, formName, formPerms) && (
+              <p data-testid="role-session-notice" className="-mt-2 mb-5 text-xs text-amber-300">
+                {tr(
+                  'adminRoles.sessionNotice',
+                  'Saving this ends the sessions and API key tokens of the people holding this role, so they sign in again. You too, if you hold it.',
+                )}
+              </p>
+            )}
+
             {/* Permission grid */}
             <div className="flex-1 overflow-y-auto space-y-4 pr-1">
               {permCatalog.map((cat) => (
                 <div key={cat.category} className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-4">
                   <h3 className="text-sm font-semibold text-slate-200 mb-3">{tr(`adminRoles.catalog.category.${i18nKey(cat.category)}`, cat.category)}</h3>
+                  {cat.category === 'Menu' && (
+                    <p data-testid="role-menu-note" className="-mt-2 mb-3 text-[11px] text-slate-500">
+                      {tr('adminRoles.menuNote', "Hides the group in the sidebar. Its screens and the AI's reads stay open: the permissions below and the cluster decide those.")}
+                    </p>
+                  )}
                   <div className="grid grid-cols-2 gap-x-6 gap-y-2">
                     {cat.permissions.map((p) => (
                       <label

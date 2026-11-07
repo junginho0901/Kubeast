@@ -19,6 +19,12 @@ const (
 	recordingContentFields = `"user_id":"fake-user-id","location":"fake-recording-place","cast":"fake-terminal-output","transcript":"fake-terminal-output","content":"fake-terminal-output"`
 )
 
+// As the answer gives them: with the size the screen shows.
+var (
+	recordingRowAShown = strings.TrimSuffix(recordingRowA, "}") + `,"kept_bytes":4096}`
+	recordingRowBShown = strings.TrimSuffix(recordingRowB, "}") + `,"kept_bytes":0}`
+)
+
 func withRecordingContent(row string) string {
 	return strings.TrimSuffix(row, "}") + "," + recordingContentFields + "}"
 }
@@ -66,7 +72,7 @@ func TestSessionRecordings_ListsTheDetailsTheScreenListsAcrossClusters(t *testin
 		t.Errorf("a page and one row past it, as the screen asks: %s", list.URL.RawQuery)
 	}
 	m := decode(t, out)
-	assertSame(t, "rows", m["rows"], "["+recordingRowA+","+recordingRowB+"]")
+	assertSame(t, "rows", m["rows"], "["+recordingRowAShown+","+recordingRowBShown+"]")
 	if m["returned"] != float64(2) || m["offset"] != float64(0) || m["next_offset"] != nil || m["enabled"] != true {
 		t.Errorf("place: %v", m)
 	}
@@ -86,7 +92,7 @@ func TestSessionRecordings_ThereIsNoTotalSoOneRowPastThePageSaysThereIsMore(t *t
 		t.Errorf("query: %s", (*seen)[0].URL.RawQuery)
 	}
 	m := decode(t, out)
-	assertSame(t, "rows", m["rows"], "["+recordingRowA+"]")
+	assertSame(t, "rows", m["rows"], "["+recordingRowAShown+"]")
 	if m["returned"] != float64(1) || m["offset"] != float64(3) || m["next_offset"] != float64(4) {
 		t.Errorf("place: %v", m)
 	}
@@ -122,7 +128,7 @@ func TestSessionRecordings_OneRecordingIsItsDetailsAndNeverWhatTheTerminalShowed
 		t.Errorf("one recording was narrowed to a cluster: %s", (*seen)[0].URL.RawQuery)
 	}
 	m := decode(t, out)
-	assertSame(t, "recording", m["recording"], recordingRowB)
+	assertSame(t, "recording", m["recording"], recordingRowBShown)
 	if !strings.Contains(textOf(m["note"]), "Session recordings screen") {
 		t.Errorf("note: %v", m["note"])
 	}
@@ -131,7 +137,7 @@ func TestSessionRecordings_OneRecordingIsItsDetailsAndNeverWhatTheTerminalShowed
 func TestSessionRecordings_RecordingOffStillListsTheEarlierOnes(t *testing.T) {
 	recordingRoutes(t, 200, "["+recordingRowA+"]", 200, `{"enabled":false}`)
 	m := decode(t, runTool(t, ctxWithPayload("self", holderOf()), "session_recordings", args{}))
-	assertSame(t, "rows", m["rows"], "["+recordingRowA+"]")
+	assertSame(t, "rows", m["rows"], "["+recordingRowAShown+"]")
 	if m["enabled"] != false || !strings.Contains(textOf(m["note"]), "sessionRecording.enabled") {
 		t.Errorf("off: %v", m)
 	}
@@ -140,7 +146,7 @@ func TestSessionRecordings_RecordingOffStillListsTheEarlierOnes(t *testing.T) {
 func TestSessionRecordings_ASettingNotReadIsNotOff(t *testing.T) {
 	recordingRoutes(t, 200, "["+recordingRowA+"]", 500, `{"detail":"boom"}`)
 	m := decode(t, runTool(t, ctxWithPayload("self", holderOf()), "session_recordings", args{}))
-	assertSame(t, "rows", m["rows"], "["+recordingRowA+"]")
+	assertSame(t, "rows", m["rows"], "["+recordingRowAShown+"]")
 	if got, has := m["enabled"]; !has || got != nil {
 		t.Errorf("enabled = %v (present %v), want null", got, has)
 	}
@@ -353,8 +359,8 @@ func TestAIModels_KeyEnvSetSaysWhatTheCardSaysAndNeverTheName(t *testing.T) {
 		{"an empty name", "openai", `"api_key_env":""`, false},
 		{"no such field", "anthropic", `"tier":"default"`, false},
 		{"a provider the catalog does not list", "another", `"api_key_env":null`, false},
-		// The card reads api_key_env alone, also for a config whose older field names a variable.
-		{"only the older field", "openai", `"api_key_env":null,"api_key_secret_key":"FAKE_KEY_VARIABLE"`, false},
+		// ai-service reads a key through the older field too, and the card says so.
+		{"only the older field", "openai", `"api_key_env":null,"api_key_secret_key":"FAKE_KEY_VARIABLE"`, true},
 		{"a provider that needs no key", "ollama", `"api_key_env":null`, nil},
 		{"the catalog's ids are exact", "Ollama", `"api_key_env":null`, false},
 	} {

@@ -105,6 +105,9 @@ TOOL_SCREEN_TABLE: Dict[str, Tuple[str, ...]] = {
     "k8s_scale": _for_resource_type("edit"),
     "k8s_rollout": ("rollout",),
     "k8s_execute_command": _always("resource.pod.exec"),
+    "k8s_cordon_node": _always("resource.node.cordon"),
+    "k8s_cronjob_suspend": _always("resource.cronjob.suspend"),
+    "k8s_cronjob_trigger": _always("resource.cronjob.trigger"),
     "k8s_create_resource": _for_manifest("create"),
     # A screen's apply patches what exists; what kubectl apply would create is tool-server's applyCreateGate.
     "k8s_apply_manifest": _for_manifest("edit"),

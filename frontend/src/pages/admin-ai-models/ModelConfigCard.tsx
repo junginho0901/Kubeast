@@ -26,6 +26,8 @@ export default function ModelConfigCard({
   const tr = (key: string, fb: string, o?: Record<string, unknown>) => t(key, { defaultValue: fb, ...o })
   const confirm = useConfirm()
   const provDef = getProvider(cfg.provider)
+  // ai-service reads a key through either field (model_config_service._resolve_api_key).
+  const keyVariable = cfg.api_key_env || cfg.api_key_secret_key
   const usedFor = cfg.used_for ?? []
   const isActive = usedFor.includes('chat')
 
@@ -76,8 +78,8 @@ export default function ModelConfigCard({
             </div>
             <div className="text-xs text-slate-500 mt-0.5">
               {provDef?.label || cfg.provider} · <code className="text-slate-400">{getModelLabel(cfg.provider, cfg.model)}</code>
-              {cfg.api_key_env
-                ? <span className="text-emerald-400 ml-1">· 🔑 env: {cfg.api_key_env}</span>
+              {keyVariable
+                ? <span className="text-emerald-400 ml-1">· 🔑 env: {keyVariable}</span>
                 : provDef?.needsApiKey === false
                   ? null
                   : <span className="text-red-400 ml-1">· ⚠ {tr('admin.aiModels.noKeyEnv', 'No key env')}</span>}
