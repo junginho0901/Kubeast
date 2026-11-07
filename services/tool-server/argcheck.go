@@ -109,7 +109,7 @@ var argRules = map[string]argCheck{
 	"search":        checkSearchText,
 	"results":       checkWordList,
 	"severities":    checkWordList,
-	"check":         checkLowerWord,
+	"check":         checkCheckID,
 	"verb":          checkLowerWord,
 	"group":         checkAPIGroup,
 	// Query tools: a jq program, custom columns, a sort/group path, selectors.
@@ -131,6 +131,10 @@ var argRules = map[string]argCheck{
 	"rank_by":               checkEnum("memory", "cpu", "ephemeral_storage"),
 	"source":                checkLogSource,
 	"pattern":               checkPrintable(200),
+	// Access review's sections, a sign-off's id (it lands in a path), AI Usage's grouping.
+	"review_section": checkEnum("summary", "users", "cluster_roles", "api_keys", "access_requests", "roles", "history"),
+	"review_id":      checkObjectName,
+	"usage_group":    checkEnum("user", "model", "cluster"),
 	// The NetworkPolicy check (port is also k8s_check_service_connectivity's).
 	"src":      checkNetpolEnd,
 	"dst":      checkNetpolEnd,
@@ -465,10 +469,19 @@ func checkEnum(words ...string) argCheck {
 
 var (
 	lowerWordRe     = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+	checkIDRe       = regexp.MustCompile(`^[a-z][a-z0-9-]*(\.[a-z0-9-]+)*$`)
 	wordListRe      = regexp.MustCompile(`^[a-z]+(,[a-z]+)*$`)
 	qualifiedPathRe = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9._/-]*[A-Za-z0-9])?$`)
 	apiGroupRe      = regexp.MustCompile(`^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`)
 )
+
+// checkCheckID takes a Cluster Hygiene check's id, which is words with dots between them (upgrade.removed-api.helm).
+func checkCheckID(field, v string) error {
+	if len(v) > dns1123LabelMaxLength || !checkIDRe.MatchString(v) {
+		return badArg(field, v, "a check id from the report's checks list")
+	}
+	return nil
+}
 
 func checkLowerWord(field, v string) error {
 	if len(v) > dns1123LabelMaxLength || !lowerWordRe.MatchString(v) {

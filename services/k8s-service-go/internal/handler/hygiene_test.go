@@ -92,6 +92,7 @@ func TestHygieneGates(t *testing.T) {
 		{"export needs export", h.GetHygiene, "/api/v1/hygiene?format=csv", http.MethodGet, []string{"admin.hygiene.read"}},
 		{"signoff needs signoff", h.SignoffHygiene, "/api/v1/hygiene/signoff", http.MethodPost, []string{"admin.hygiene.read", "admin.hygiene.export"}},
 		{"history needs read", h.HygieneHistory, "/api/v1/hygiene/history", http.MethodGet, []string{"admin.review.read"}},
+		{"a stored report needs read", h.HygieneSnapshot, "/api/v1/hygiene/snapshot/x", http.MethodGet, []string{"admin.hygiene.export"}},
 	}
 	for _, c := range cases {
 		w := httptest.NewRecorder()

@@ -108,26 +108,31 @@ func handleHygiene(ctx context.Context, args map[string]interface{}, headers htt
 		return out, err
 	}
 	if report, ok := reply["report"].(map[string]interface{}); ok {
-		severity := strings.ToLower(argString(args, "severity", ""))
-		check := argString(args, "check", "")
-		if findings, ok := report["findings"].([]interface{}); ok && (severity != "" || check != "") {
-			kept := make([]interface{}, 0, len(findings))
-			for _, f := range findings {
-				m, _ := f.(map[string]interface{})
-				if severity != "" && strings.ToLower(fmt.Sprint(m["severity"])) != severity {
-					continue
-				}
-				if check != "" && fmt.Sprint(m["check"]) != check {
-					continue
-				}
-				kept = append(kept, f)
-			}
-			report["findings"] = kept
-			report["filter"] = map[string]string{"severity": severity, "check": check}
-		}
-		capList(report, "findings", hygieneFindCap)
+		cutHygieneReport(report, args)
 	}
 	return marshalJSON(reply)
+}
+
+// cutHygieneReport applies the severity and check filters and the cap to a report's findings.
+func cutHygieneReport(report map[string]interface{}, args map[string]interface{}) {
+	severity := strings.ToLower(argString(args, "severity", ""))
+	check := argString(args, "check", "")
+	if findings, ok := report["findings"].([]interface{}); ok && (severity != "" || check != "") {
+		kept := make([]interface{}, 0, len(findings))
+		for _, f := range findings {
+			m, _ := f.(map[string]interface{})
+			if severity != "" && strings.ToLower(fmt.Sprint(m["severity"])) != severity {
+				continue
+			}
+			if check != "" && fmt.Sprint(m["check"]) != check {
+				continue
+			}
+			kept = append(kept, f)
+		}
+		report["findings"] = kept
+		report["filter"] = map[string]string{"severity": severity, "check": check}
+	}
+	capList(report, "findings", hygieneFindCap)
 }
 
 // handlePolicyReports: the policy summary (per policy and namespace) or the

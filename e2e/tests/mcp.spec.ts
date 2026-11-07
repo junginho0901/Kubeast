@@ -155,7 +155,7 @@ test.describe('MCP server', () => {
       expect(podsRow?.Cluster ?? podsRow?.cluster).toBe('self')
       expect(after?.credential).toEqual({ type: 'api_key', akid: key.id })
 
-      // A Read user on self has ai.mcp.use and the fifty-two read tools (not the Admin-only hygiene, audit_search, nodes_stats_summary, nodes_log, the write preview k8s_diff nor alert_investigate, which starts an investigation), never a write tool (with write tools on, also the way to ask for a role).
+      // A Read user on self has ai.mcp.use and the fifty-two read tools (not the Admin-only hygiene, audit_search, nodes_stats_summary, nodes_log, access_review, ai_usage, access_requests, audit_integrity, hygiene_history, the write preview k8s_diff nor alert_investigate, which starts an investigation), never a write tool (with write tools on, also the way to ask for a role).
       const readList = await rpc(request, readerToken, 'tools/list')
       expect(readList.status()).toBe(200)
       const readNames = ((await readList.json()).result.tools as { name: string }[]).map((t) => t.name).sort()
@@ -168,6 +168,11 @@ test.describe('MCP server', () => {
       expect(readNames).not.toContain('hygiene')
       expect(readNames).not.toContain('audit_search')
       expect(readNames).not.toContain('nodes_log')
+      expect(readNames).not.toContain('access_review')
+      expect(readNames).not.toContain('ai_usage')
+      expect(readNames).not.toContain('access_requests')
+      expect(readNames).not.toContain('audit_integrity')
+      expect(readNames).not.toContain('hygiene_history')
       expect(readNames).not.toContain('k8s_diff')
 
       // The official client SDK connects the same way Claude Code does (a static Authorization header).

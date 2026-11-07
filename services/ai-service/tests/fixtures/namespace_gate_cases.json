@@ -1,6 +1,195 @@
 {
  "cases": [
   {
+   "tool": "access_requests",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "access_requests",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "access_requests",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "access_requests",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "access_requests",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "access_requests",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "access_requests",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "access_requests",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "access_requests",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "access_review",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "access_review",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "access_review",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "access_review",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "access_review",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "access_review",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "access_review",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "access_review",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "access_review",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "ai_usage",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "ai_usage",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "ai_usage",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "ai_usage",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "ai_usage",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "ai_usage",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "ai_usage",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "ai_usage",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "ai_usage",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
    "tool": "alert_investigate",
    "args": {},
    "refused": "spans the cluster"
@@ -183,6 +372,69 @@
   },
   {
    "tool": "alerts_list",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "audit_integrity",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "audit_integrity",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "audit_integrity",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "audit_integrity",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "audit_integrity",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "audit_integrity",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "audit_integrity",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "audit_integrity",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "audit_integrity",
    "args": {
     "all_namespaces": false,
     "namespace": "shop"
@@ -876,6 +1128,69 @@
   },
   {
    "tool": "hygiene",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "hygiene_history",
+   "args": {},
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "hygiene_history",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "hygiene_history",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "hygiene_history",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "hygiene_history",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "hygiene_history",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "hygiene_history",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "hygiene_history",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "hygiene_history",
    "args": {
     "all_namespaces": false,
     "namespace": "shop"

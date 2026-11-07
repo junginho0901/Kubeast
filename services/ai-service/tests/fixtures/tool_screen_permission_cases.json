@@ -1,8 +1,12 @@
 {
  "tools": [
+  "access_requests",
+  "access_review",
+  "ai_usage",
   "alert_investigate",
   "alerts_inbox",
   "alerts_list",
+  "audit_integrity",
   "audit_search",
   "can_i",
   "clusters_list",
@@ -14,6 +18,7 @@
   "gpu",
   "helm_read",
   "hygiene",
+  "hygiene_history",
   "issues",
   "k8s_annotate_resource",
   "k8s_apply_manifest",
@@ -860,6 +865,51 @@
    ],
    "write": true,
    "read": true
+  },
+  {
+   "tool": "access_review",
+   "args": {},
+   "want": [
+    "admin.review.read"
+   ],
+   "write": false,
+   "read": false
+  },
+  {
+   "tool": "ai_usage",
+   "args": {},
+   "want": [
+    "admin.audit.read"
+   ],
+   "write": false,
+   "read": false
+  },
+  {
+   "tool": "access_requests",
+   "args": {},
+   "want": [
+    "admin.users.update"
+   ],
+   "write": false,
+   "read": false
+  },
+  {
+   "tool": "audit_integrity",
+   "args": {},
+   "want": [
+    "admin.audit.read"
+   ],
+   "write": false,
+   "read": false
+  },
+  {
+   "tool": "hygiene_history",
+   "args": {},
+   "want": [
+    "admin.hygiene.read"
+   ],
+   "write": false,
+   "read": false
   },
   {
    "tool": "k8s_delete_resource",
