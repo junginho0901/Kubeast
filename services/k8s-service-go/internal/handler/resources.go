@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -165,12 +166,21 @@ func (h *Handler) ApplyResourceYAML(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := h.svc.ApplyResourceYAML(ctx, body.ResourceType, body.Namespace, body.Name, body.YAML)
-	h.recordAuditWithPayload(r, "k8s.yaml.apply", body.ResourceType, body.Name, body.Namespace, err,
-		nil, audit.MustJSON(map[string]interface{}{
-			"resource_type": body.ResourceType,
-			"yaml_len":      len(body.YAML),
-		}))
+	var data map[string]interface{}
+	var keptMasked []string
+	if !h.canForCluster(r, "resource.secret.reveal") && h.isSecretResourceType(r, body.ResourceType) {
+		data, keptMasked, err = h.svc.ApplySecretYAMLWithoutReveal(ctx, body.ResourceType, body.Namespace, body.Name, body.YAML)
+	} else {
+		data, err = h.svc.ApplyResourceYAML(ctx, body.ResourceType, body.Namespace, body.Name, body.YAML)
+	}
+	after := map[string]interface{}{
+		"resource_type": body.ResourceType,
+		"yaml_len":      len(body.YAML),
+	}
+	if len(keptMasked) > 0 {
+		after["kept_masked"] = keptMasked
+	}
+	h.recordAuditWithPayload(r, "k8s.yaml.apply", body.ResourceType, body.Name, body.Namespace, err, nil, audit.MustJSON(after))
 	if err != nil {
 		h.handleError(w, err)
 		return
@@ -212,6 +222,15 @@ func (h *Handler) CreateResourcesFromYAML(w http.ResponseWriter, r *http.Request
 			h.recordAuditWithPayload(r, "k8s.yaml.create", "multi", "", "", errAdmissionPoliciesReadOnly, nil,
 				audit.MustJSON(map[string]interface{}{"yaml_len": len(body.YAML), "default_namespace": body.Namespace}))
 			response.Error(w, http.StatusForbidden, errAdmissionPoliciesReadOnly.Error())
+			return
+		}
+	}
+	if !h.canForCluster(r, "resource.secret.reveal") {
+		if masks := k8s.YAMLSecretMasks(body.YAML); len(masks) > 0 {
+			refused := fmt.Errorf("a new Secret has no value for %s to stand for (%s): write the value or leave it out", k8s.SecretMask, strings.Join(masks, ", "))
+			h.recordAuditWithPayload(r, "k8s.yaml.create", "multi", "", "", refused, nil,
+				audit.MustJSON(map[string]interface{}{"yaml_len": len(body.YAML), "default_namespace": body.Namespace}))
+			response.Error(w, http.StatusBadRequest, refused.Error())
 			return
 		}
 	}

@@ -89,4 +89,40 @@ test.describe('number check — policy results that pick by label', () => {
       expect(rows.map((r) => [r.policy, r.selector, r.name]).sort()).toEqual([['sel-canary', 'app=sel-canary', ''], ['sel-web', 'app=web', '']])
     })
   })
+
+  test('a ClusterPolicyReport naming an object of a namespace is in that object\'s drawer', async ({ page, request }) => {
+    test.setTimeout(120_000)
+    let served = false
+    try {
+      served = /^clusterpolicyreports\./m.test(kubectl('api-resources --api-group=wgpolicyk8s.io -o name'))
+    } catch {
+      served = false
+    }
+    test.skip(!served, 'needs the ClusterPolicyReport CRD on the second cluster')
+    const name = `e2e-polsel-cluster-${run}`
+    const resource = `/api/v1/cluster/namespaces/${NS}/policyreports/resource?cluster=${CLUSTER}&kind=ConfigMap&name=cm-plain`
+    // the cluster reports are read once a minute per identity: past that read, as a refresh is
+    const readNow = async () => {
+      const res = await request.get(`${resource}&force_refresh=true`)
+      expect(res.ok(), await res.text()).toBeTruthy()
+      return (await res.json()) as { rows: { policy: string; report: string }[]; cluster_reports_error?: string }
+    }
+    try {
+      kubectl('create -f -', JSON.stringify({
+        apiVersion: 'wgpolicyk8s.io/v1alpha2', kind: 'ClusterPolicyReport', metadata: { name },
+        results: [{ policy: 'cluster-names-it', rule: 'r', result: 'fail', source: 'e2e', message: 'named by a cluster report',
+          resources: [{ apiVersion: 'v1', kind: 'ConfigMap', name: 'cm-plain', namespace: NS }] }],
+      }))
+      const answer = await readNow()
+      expect(answer.rows.map((r) => [r.policy, r.report])).toEqual([['cluster-names-it', name]])
+      expect(answer.cluster_reports_error).toBeUndefined()
+
+      await page.goto(`/?cluster=${CLUSTER}&detail=${encodeURIComponent(`ConfigMap/${NS}/cm-plain`)}`)
+      await expect.poll(() => rowsIn(page), { timeout: 30_000 }).toEqual([['fail', 'cluster-names-it/r', '-', 'named by a cluster report']])
+      await expect(page.locator(DRAWER).last().getByTestId('policy-violations-cluster-error')).toHaveCount(0)
+    } finally {
+      kubectl(`delete clusterpolicyreport ${name} --ignore-not-found`)
+      await readNow()
+    }
+  })
 })

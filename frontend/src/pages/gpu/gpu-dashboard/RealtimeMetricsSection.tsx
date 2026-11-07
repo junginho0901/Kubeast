@@ -7,7 +7,7 @@
 
 import { Activity } from 'lucide-react'
 import type { GPUMetricsData, GPUDeviceMetric } from '@/services/api'
-import { gpuRealtimeAverages, gpuSeriesPod } from '../gpuNumbers'
+import { gpuPercentText, gpuRealtimeAverages, gpusReportingUtil, gpuSeriesPod } from '../gpuNumbers'
 
 interface Props {
   metricsAvailable: boolean
@@ -23,6 +23,13 @@ export function RealtimeMetricsSection({ metricsAvailable, metrics, gpusByHost, 
   if (!metricsAvailable || !metrics) return null
   const podOf = (gpu: GPUDeviceMetric) => gpuSeriesPod(gpu, gpuPodKeys)
   const { util, memory } = gpuRealtimeAverages(metrics)
+  const memoryUsedMb = metrics.total_memory_used_mb ?? 0
+  const memoryTotalMb = metrics.total_memory_mb ?? 0
+  const reportingUtil = gpusReportingUtil(metrics.gpus ?? [])
+  // what the average leaves out, on the card only while it leaves some GPUs out and has others to average
+  const utilTitle = reportingUtil > 0 && reportingUtil < metrics.gpu_count
+    ? tr('gpuDashboardPage.realtime.avgUtilOf', 'The {{n}} of {{total}} GPUs that report utilization', { n: reportingUtil, total: metrics.gpu_count })
+    : undefined
 
   return (
     <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-5" data-testid="gpu-realtime">
@@ -45,7 +52,7 @@ export function RealtimeMetricsSection({ metricsAvailable, metrics, gpusByHost, 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         <div className="rounded-lg border border-slate-700/50 bg-slate-900/40 px-3 py-2.5">
           <div className="text-[11px] text-slate-400">{tr('gpuDashboardPage.realtime.avgUtil', 'Avg GPU Utilization')}</div>
-          <div className="mt-1 text-lg font-semibold text-ink" data-testid="gpu-realtime-avg-util">{util === null ? '-' : `${Math.round(util)}%`}</div>
+          <div className="mt-1 text-lg font-semibold text-ink" data-testid="gpu-realtime-avg-util" title={utilTitle}>{gpuPercentText(util)}</div>
           <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
             <div
               className={`h-full rounded-full ${(util ?? 0) >= 80 ? 'bg-red-500' : (util ?? 0) >= 50 ? 'bg-amber-500' : 'bg-primary-bright'}`}
@@ -55,7 +62,7 @@ export function RealtimeMetricsSection({ metricsAvailable, metrics, gpusByHost, 
         </div>
         <div className="rounded-lg border border-slate-700/50 bg-slate-900/40 px-3 py-2.5">
           <div className="text-[11px] text-slate-400">{tr('gpuDashboardPage.realtime.avgMemUtil', 'Avg Memory Utilization')}</div>
-          <div className="mt-1 text-lg font-semibold text-ink" data-testid="gpu-realtime-avg-mem">{memory === null ? '-' : `${Math.round(memory)}%`}</div>
+          <div className="mt-1 text-lg font-semibold text-ink" data-testid="gpu-realtime-avg-mem">{gpuPercentText(memory)}</div>
           <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
             <div
               className={`h-full rounded-full ${(memory ?? 0) >= 80 ? 'bg-red-500' : (memory ?? 0) >= 50 ? 'bg-amber-500' : 'bg-primary-bright'}`}
@@ -66,10 +73,10 @@ export function RealtimeMetricsSection({ metricsAvailable, metrics, gpusByHost, 
         <div className="rounded-lg border border-slate-700/50 bg-slate-900/40 px-3 py-2.5">
           <div className="text-[11px] text-slate-400">{tr('gpuDashboardPage.realtime.memUsed', 'Memory Used')}</div>
           <div className="mt-1 text-lg font-semibold text-ink" data-testid="gpu-realtime-mem-used">
-            {metrics.total_memory_mb > 0 ? `${(metrics.total_memory_used_mb / 1024).toFixed(1)} GiB` : '-'}
+            {memoryTotalMb > 0 ? `${(memoryUsedMb / 1024).toFixed(1)} GiB` : '-'}
           </div>
           <div className="text-[11px] text-slate-500" data-testid="gpu-realtime-mem-total">
-            / {metrics.total_memory_mb > 0 ? `${(metrics.total_memory_mb / 1024).toFixed(1)} GiB` : '-'}
+            / {memoryTotalMb > 0 ? `${(memoryTotalMb / 1024).toFixed(1)} GiB` : '-'}
           </div>
         </div>
         <div className="rounded-lg border border-slate-700/50 bg-slate-900/40 px-3 py-2.5">
@@ -95,25 +102,25 @@ export function RealtimeMetricsSection({ metricsAvailable, metrics, gpusByHost, 
                     <span className="text-[10px] text-slate-500 w-8">{tr('gpuDashboardPage.realtime.core', 'Core')}</span>
                     <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all ${gpu.gpu_util >= 80 ? 'bg-red-500' : gpu.gpu_util >= 50 ? 'bg-amber-500' : 'bg-primary-bright'}`}
-                        style={{ width: `${Math.min(gpu.gpu_util, 100)}%` }}
+                        className={`h-full rounded-full transition-all ${(gpu.gpu_util ?? 0) >= 80 ? 'bg-red-500' : (gpu.gpu_util ?? 0) >= 50 ? 'bg-amber-500' : 'bg-primary-bright'}`}
+                        style={{ width: `${Math.min(gpu.gpu_util ?? 0, 100)}%` }}
                       />
                     </div>
-                    <span className="text-[10px] font-mono text-slate-300 w-10 text-right" data-testid="gpu-realtime-core">{Math.round(gpu.gpu_util)}%</span>
+                    <span className="text-[10px] font-mono text-slate-300 w-10 text-right" data-testid="gpu-realtime-core">{gpuPercentText(gpu.gpu_util)}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] text-slate-500 w-8">{tr('gpuDashboardPage.realtime.mem', 'Mem')}</span>
                     <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all ${gpu.memory_util_percent >= 80 ? 'bg-red-500' : gpu.memory_util_percent >= 50 ? 'bg-amber-500' : 'bg-primary-bright'}`}
-                        style={{ width: `${Math.min(gpu.memory_util_percent, 100)}%` }}
+                        className={`h-full rounded-full transition-all ${(gpu.memory_util_percent ?? 0) >= 80 ? 'bg-red-500' : (gpu.memory_util_percent ?? 0) >= 50 ? 'bg-amber-500' : 'bg-primary-bright'}`}
+                        style={{ width: `${Math.min(gpu.memory_util_percent ?? 0, 100)}%` }}
                       />
                     </div>
-                    <span className="text-[10px] font-mono text-slate-300 w-10 text-right" data-testid="gpu-realtime-mem">{Math.round(gpu.memory_util_percent)}%</span>
+                    <span className="text-[10px] font-mono text-slate-300 w-10 text-right" data-testid="gpu-realtime-mem">{gpuPercentText(gpu.memory_util_percent)}</span>
                   </div>
-                  {(gpu.memory_temp > 0 || podOf(gpu)) && (
+                  {((gpu.memory_temp ?? 0) > 0 || podOf(gpu)) && (
                     <div className="text-[10px] text-slate-500">
-                      {gpu.memory_temp > 0 && (
+                      {gpu.memory_temp !== null && gpu.memory_temp > 0 && (
                         <span className="mr-2" data-testid="gpu-realtime-temp">
                           {tr('gpuDashboardPage.realtime.temp', 'Temp')}: <span className={gpu.memory_temp >= 85 ? 'text-red-400' : gpu.memory_temp >= 70 ? 'text-amber-400' : 'text-slate-400'}>{gpu.memory_temp}°C</span>
                         </span>

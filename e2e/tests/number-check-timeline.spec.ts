@@ -93,6 +93,29 @@ test.describe('Number check — Timeline', () => {
     kubectl(`delete namespace/${NS} --wait=false --ignore-not-found`)
   })
 
+  test('a window past 90 days or no number at all is refused with why; what the screen sends reads the events', async ({ page }) => {
+    const routes = [`/api/v1/cluster/timeline`, `/api/v1/cluster/namespaces/${NS}/timeline`, `/api/v1/cluster/namespaces/${NS}/timeline/Pod/nothing-of-that-name`]
+    for (const route of routes) {
+      for (const [query, word] of [['hours=2161', 'hours'], ['hours=3000000', 'hours'], ['hours=0', 'hours'], ['hours=abc', 'hours'], ['limit=5001', 'limit'], ['limit=0', 'limit']]) {
+        const res = await page.request.get(`${route}?cluster=${TIMELINE.cluster}&${query}`)
+        expect({ route, query, status: res.status() }).toEqual({ route, query, status: 400 })
+        expect(String((await res.json()).detail), `${route}?${query}`).toContain(word)
+      }
+    }
+    // the screen's four ranges and the longest the API takes hold the fixture's events; 2160 hours is the AI tool's 90 days
+    const before = cluster()
+    expect(before.total, 'the fixture events').toBeGreaterThan(0)
+    for (const hours of [24, 168, 2160]) {
+      const res = await page.request.get(`/api/v1/cluster/namespaces/${NS}/timeline?cluster=${TIMELINE.cluster}&hours=${hours}&limit=500`)
+      expect({ hours, status: res.status() }).toEqual({ hours, status: 200 })
+      expect(Number((await res.json() as Timeline).summary.total_events), `${hours} hours`).toBeGreaterThanOrEqual(before.total)
+    }
+    for (const hours of [1, 6]) {
+      const res = await page.request.get(`/api/v1/cluster/namespaces/${NS}/timeline?cluster=${TIMELINE.cluster}&hours=${hours}&limit=500`)
+      expect({ hours, status: res.status() }).toEqual({ hours, status: 200 })
+    }
+  })
+
   test('the Warning list is the newest warnings, the counts every event, the rollouts every workload kind', async ({ page }) => {
     test.setTimeout(120_000)
     const get = async (q: string) => (await page.request.get(`/api/v1/cluster/namespaces/${NS}/timeline?hours=24&limit=500&cluster=${TIMELINE.cluster}${q}`)).json() as Promise<Timeline>

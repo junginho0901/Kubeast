@@ -221,13 +221,29 @@ export function missingPluginVendors(badges: DevicePluginBadge[]): GPUVendor[] {
   return badges.flatMap((b) => (b.state === 'missing' && b.plugin ? [b.plugin.vendor] : []))
 }
 
-// The averages of the GPUs DCGM reports. The server answers 0 where it has no series to average, which is nothing
-// read, not GPUs at 0%; the cards say "-" and the floating chat null.
+// The averages of the GPUs DCGM reports. No series to average is nothing read, not GPUs at 0%: the cards say "-" and the
+// floating chat null.
 export function gpuRealtimeAverages(metrics: Pick<GPUMetricsData, 'gpu_count' | 'avg_gpu_util' | 'avg_memory_util' | 'total_memory_mb'>) {
   return {
     util: metrics.gpu_count > 0 ? metrics.avg_gpu_util : null,
-    memory: metrics.total_memory_mb > 0 ? metrics.avg_memory_util : null,
+    memory: (metrics.total_memory_mb ?? 0) > 0 ? metrics.avg_memory_util : null,
   }
+}
+
+// A percent as the GPU screens print it: "-" for a value that is not there.
+export const gpuPercentText = (value: number | null): string => (value === null ? '-' : `${Math.round(value)}%`)
+
+// The GPUs of a list that report a utilization series, which an average of them leaves the others out of.
+export const gpusReportingUtil = (gpus: GPUDeviceMetric[]): number => gpus.filter((g) => g.gpu_util !== null).length
+
+const meanOf = (values: Array<number | null>): number | null => {
+  const read = values.filter((v): v is number => v !== null)
+  return read.length > 0 ? read.reduce((sum, v) => sum + v, 0) / read.length : null
+}
+
+// A host's averages: the mean of its GPUs that have the number.
+export function gpuHostAverages(gpus: GPUDeviceMetric[]) {
+  return { util: meanOf(gpus.map((g) => g.gpu_util)), memory: meanOf(gpus.map((g) => g.memory_util_percent)) }
 }
 
 // The GPUs of each company in use and waiting, its nodes' capacity and allocatable (for the floating chat).
@@ -256,23 +272,32 @@ export function gpuPodVendorCounts(pods: GPUPodInfo[]) {
 
 export interface PodGpuUsage {
   gpus: number
-  gpu_util: number
-  memory_util_percent: number
+  gpu_util: number | null
+  memory_util_percent: number | null
 }
 
-// Each pod's GPUs from DCGM, keyed namespace/name: the utilization the mean of its GPUs' (as the dashboard's average),
-// the memory the used of their total (as the dashboard's memory average).
+// Each pod's GPUs from DCGM, keyed namespace/name: the utilization the mean of those that report it (as the dashboard's
+// average), the memory the used of the total of those that report both its series (as the dashboard's memory average).
 export function podGpuUsage(gpus: GPUDeviceMetric[] | undefined): Map<string, PodGpuUsage> {
-  const sums = new Map<string, { n: number; util: number; used: number; total: number }>()
+  const sums = new Map<string, { n: number; reporting: number; util: number; used: number; total: number }>()
   for (const g of gpus ?? []) {
     if (!g.exported_pod || !g.exported_namespace) continue
     const key = `${g.exported_namespace}/${g.exported_pod}`
-    const s = sums.get(key) ?? { n: 0, util: 0, used: 0, total: 0 }
+    const s = sums.get(key) ?? { n: 0, reporting: 0, util: 0, used: 0, total: 0 }
     s.n += 1
-    s.util += g.gpu_util
-    s.used += g.memory_used_mb
-    s.total += g.memory_total_mb
+    if (g.gpu_util !== null) {
+      s.reporting += 1
+      s.util += g.gpu_util
+    }
+    if (g.memory_total_mb !== null) {
+      s.used += g.memory_used_mb ?? 0
+      s.total += g.memory_total_mb
+    }
     sums.set(key, s)
   }
-  return new Map([...sums].map(([key, s]) => [key, { gpus: s.n, gpu_util: s.util / s.n, memory_util_percent: s.total > 0 ? (s.used / s.total) * 100 : 0 }]))
+  return new Map([...sums].map(([key, s]) => [key, {
+    gpus: s.n,
+    gpu_util: s.reporting > 0 ? s.util / s.reporting : null,
+    memory_util_percent: s.total > 0 ? (s.used / s.total) * 100 : null,
+  }]))
 }

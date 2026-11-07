@@ -42,6 +42,12 @@ describe('violationsView', () => {
     expect(violationsView(true, ON, { data: { rows: [] } })).toEqual({ show: 'rows', rows: [] })
   })
 
+  it('carries why the cluster reports could not be read, beside the rows of the namespace\'s', () => {
+    const view = violationsView(true, ON, { data: { rows: [row('fail', 'p1')], cluster_reports_error: REFUSED } })
+    expect(view).toMatchObject({ show: 'rows', clusterReportsError: REFUSED })
+    expect(view).toMatchObject({ rows: [{ policy: 'p1' }] })
+  })
+
   it('shows nothing while the feature is off, the user is not given reports, the status is unknown or the CRD is missing', () => {
     expect(violationsView(false, ON, { data: { rows: [] } })).toEqual({ show: 'nothing' })
     expect(violationsView(true, { error: axiosError(403, 'no permission') }, {})).toEqual({ show: 'nothing' })

@@ -2052,7 +2052,8 @@
     "truncated": "The cluster has more reports than this page reads at once; narrow by namespace or policy to see them all.",
     "loadError": "Could not load the policy reports",
     "violationsError": "Could not load the policy reports: {{error}}",
-    "selectorError": "Results that pick resources by label could not be checked against this object: {{error}}"
+    "selectorError": "Results that pick resources by label could not be checked against this object: {{error}}",
+    "clusterReportsError": "Results the cluster reports hold about this object are not listed: {{error}}"
   },
   "monitoring": {
     "title": "Monitoring",
@@ -4307,6 +4308,7 @@
     "realtime": {
       "avgMemUtil": "Avg Memory Utilization",
       "avgUtil": "Avg GPU Utilization",
+      "avgUtilOf": "The {{n}} of {{total}} GPUs that report utilization",
       "gpuCount": "Physical GPUs",
       "memUsed": "Memory Used",
       "title": "Real-time GPU Metrics"

@@ -907,6 +907,78 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
     }).toPass({ timeout: 90_000, intervals: [5_000] })
   })
 
+  // A GPU missing a series: GPU 2 reports no utilization, GPU 0 no free memory and no temperature. The screens, the API and
+  // the tool say "-" or null for those, and their averages are Prometheus's, which leaves a missing series out.
+  test('a GPU that reports only some of its series reads "-" and null, not 0, and the averages are Prometheus\'s', async ({ page, request }) => {
+    test.setTimeout(240_000)
+    await prepare(page)
+    const without = (body: string, gpu: number, names: string[]) =>
+      body.split('\n').filter((l) => !(l.includes(`UUID="GPU-e2e-num-${gpu}"`) && names.some((n) => l.startsWith(`${n}{`)))).join('\n')
+    const partial = without(without(exposition(PLAIN, 'hostname'), 2, ['DCGM_FI_DEV_GPU_UTIL']), 0, ['DCGM_FI_DEV_FB_FREE', 'DCGM_FI_DEV_MEMORY_TEMP'])
+    const headers = await admin(request)
+    const read = async () => {
+      const res = await request.get(`/api/v1/cluster/gpu/metrics?cluster=${CLUSTER}`, { headers })
+      expect(res.ok(), `gpu/metrics: ${res.status()}`).toBeTruthy()
+      return res.json() as Promise<Obj>
+    }
+    const row = (rows: Obj[], gpu: number) => rows.find((r) => r.uuid === `GPU-e2e-num-${gpu}`)
+    try {
+      writeMetrics('/www/metrics', partial)
+      await waitFor('the partial series in Prometheus', () => promValue('count(DCGM_FI_DEV_GPU_UTIL{UUID=~"GPU-e2e-num-.*"})') === 8 && promValue('count(DCGM_FI_DEV_FB_FREE{UUID=~"GPU-e2e-num-.*"})') === 8, 60_000)
+      const avgUtil = promValue('avg(DCGM_FI_DEV_GPU_UTIL)')
+
+      await test.step('the API', async () => {
+        await expect(async () => {
+          const metrics = await read()
+          expect({ count: metrics.gpu_count, util: row(metrics.gpus, 2)?.gpu_util, total: row(metrics.gpus, 0)?.memory_total_mb, percent: row(metrics.gpus, 0)?.memory_util_percent, temp: row(metrics.gpus, 0)?.memory_temp })
+            .toEqual({ count: 9, util: null, total: null, percent: null, temp: null })
+          expect(metrics.avg_gpu_util).toBeCloseTo(avgUtil, 6)
+          // both memory series only: GPU 0 reports used alone
+          expect(metrics.total_memory_used_mb).toBe(promValue('sum(DCGM_FI_DEV_FB_USED and on (UUID) DCGM_FI_DEV_FB_FREE)'))
+          expect(metrics.total_memory_free_mb).toBe(promValue('sum(DCGM_FI_DEV_FB_FREE)'))
+        }).toPass({ timeout: 60_000, intervals: [3_000] })
+      })
+
+      await test.step('GPU Dashboard', async () => {
+        await page.goto(url('/gpu/dashboard'))
+        const gpu = (n: number) => page.locator(`[data-testid="gpu-realtime-gpu"][data-uuid="GPU-e2e-num-${n}"]`)
+        await expect(gpu(2).getByTestId('gpu-realtime-core')).toHaveText('-', { timeout: 30_000 })
+        await expect(gpu(0).getByTestId('gpu-realtime-mem')).toHaveText('-')
+        await expect(gpu(0).getByTestId('gpu-realtime-temp')).toHaveCount(0)
+        // a real 0% stays: GPU 3 idles at 0
+        await expect(gpu(3).getByTestId('gpu-realtime-core')).toHaveText('0%')
+        await expect(page.getByTestId('gpu-realtime-avg-util')).toHaveText(`${Math.round(avgUtil)}%`)
+        await expect(page.getByTestId('gpu-realtime-avg-util')).toHaveAttribute('title', 'The 8 of 9 GPUs that report utilization')
+      })
+
+      await test.step('GPU Nodes', async () => {
+        await page.goto(url('/gpu/nodes'))
+        await page.getByRole('button', { name: /^(Metrics|메트릭)/ }).click()
+        const gpu = (n: number) => page.locator(`[data-testid="gpu-nodes-gpu"][data-uuid="GPU-e2e-num-${n}"]`)
+        await expect(gpu(2).getByTestId('gpu-nodes-core')).toHaveText('-', { timeout: 30_000 })
+        await expect(gpu(0).getByTestId('gpu-nodes-mem')).toHaveText('-')
+      })
+
+      await test.step('the AI tool', async () => {
+        test.skip(!(await mcpOn(request, headers)), 'needs the MCP server (mcp.enabled in the dev values)')
+        await expect(async () => {
+          const tool = await gpuTool(request, headers.Authorization)
+          expect(row(tool.gpus, 2)?.gpu_util).toBeNull()
+          expect(row(tool.gpus, 0)?.memory_used_mb).toBe(20000)
+          expect(row(tool.gpus, 0)?.memory_free_mb).toBeNull()
+          expect(tool.utilization.avg_gpu_util).toBeCloseTo(avgUtil, 6)
+          expect(tool.utilization.note).toContain('1 of the 9 GPUs report no utilization series')
+          // gpu-two-cards holds GPUs 1 and 2: the mean of the one that reports
+          expect(tool.gpu_pods.find((p: Obj) => p.name === 'gpu-two-cards')?.gpu_usage).toEqual({ gpus: 2, gpu_util: 50, memory_util_percent: (100000 / 160000) * 100 })
+          expect(tool.gpu_pods.find((p: Obj) => p.name === 'gpu-one')?.gpu_usage).toEqual({ gpus: 1, gpu_util: 30, memory_util_percent: null })
+        }).toPass({ timeout: 60_000, intervals: [3_000] })
+      })
+    } finally {
+      writeMetrics('/www/metrics', exposition(PLAIN, 'hostname'))
+      await waitFor('the full series back in Prometheus', () => promValue('count(DCGM_FI_DEV_GPU_UTIL{UUID=~"GPU-e2e-num-.*"})') === 9 && promValue('count(DCGM_FI_DEV_FB_FREE{UUID=~"GPU-e2e-num-.*"})') === 9, 60_000)
+    }
+  })
+
   test('GPU Dashboard: no GPU on any node but pods asking for one shows the pods; nothing at all says so', async ({ page }) => {
     await prepare(page)
     const c = await cluster()

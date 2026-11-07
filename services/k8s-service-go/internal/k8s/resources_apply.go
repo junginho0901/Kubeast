@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,6 +20,95 @@ import (
 
 // ApplyResourceYAML applies a strategic merge patch to a resource from YAML.
 func (s *Service) ApplyResourceYAML(ctx context.Context, resourceType, namespace, name, yamlStr string) (map[string]interface{}, error) {
+	return s.applyResourceYAML(ctx, resourceType, namespace, name, yamlStr, nil)
+}
+
+// ApplySecretYAMLWithoutReveal is ApplyResourceYAML for a Secret's editor who was shown its values as the mask: a mask
+// stands for the value it hides, and a merge patch leaves what it does not name, so each one is left out of the patch
+// and that value stays. It also names them, as the answer's kept_masked does.
+func (s *Service) ApplySecretYAMLWithoutReveal(ctx context.Context, resourceType, namespace, name, yamlStr string) (map[string]interface{}, []string, error) {
+	var kept []string
+	answer, err := s.applyResourceYAML(ctx, resourceType, namespace, name, yamlStr, func(object map[string]interface{}) {
+		kept = takeSecretMasks(object)
+	})
+	if err == nil && len(kept) > 0 {
+		answer["kept_masked"] = kept
+	}
+	return answer, kept, err
+}
+
+// isSecretDataMask: whether a value under a Secret's data is the mask, as it reads or in the base64 the YAML window makes
+// of a line it shows under stringData, quotes included.
+func isSecretDataMask(value interface{}) bool {
+	text, ok := value.(string)
+	if !ok {
+		return false
+	}
+	if text == SecretMask {
+		return true
+	}
+	decoded, err := base64.StdEncoding.DecodeString(text)
+	if err != nil {
+		return false
+	}
+	switch string(decoded) {
+	case SecretMask, "'" + SecretMask + "'", `"` + SecretMask + `"`:
+		return true
+	}
+	return false
+}
+
+// takeSecretMasks removes the masks from a Secret written as YAML and names what it removed; keys and fields only, which
+// a caller without reveal reads anyway.
+func takeSecretMasks(object map[string]interface{}) []string {
+	var taken []string
+	take := func(section string, isMask func(interface{}) bool) {
+		values, ok := object[section].(map[string]interface{})
+		if !ok {
+			return
+		}
+		for _, key := range sortedKeys(values) {
+			if isMask(values[key]) {
+				delete(values, key)
+				taken = append(taken, section+"."+key)
+			}
+		}
+		if len(values) == 0 {
+			delete(object, section)
+		}
+	}
+	take("data", isSecretDataMask)
+	take("stringData", func(value interface{}) bool { return value == SecretMask })
+	if metadata, ok := object["metadata"].(map[string]interface{}); ok {
+		if annotations, ok := metadata["annotations"].(map[string]interface{}); ok && annotations[lastAppliedAnnotation] == SecretMask {
+			delete(annotations, lastAppliedAnnotation)
+			taken = append(taken, "metadata.annotations."+lastAppliedAnnotation)
+		}
+	}
+	return taken
+}
+
+// YAMLSecretMasks names the masks in the core Secrets a create would make, each by its object: a new Secret has no value
+// for one to stand for. Documents past one that cannot be read are the create's to report.
+func YAMLSecretMasks(yamlStr string) []string {
+	decoder := yaml.NewDecoder(bufio.NewReader(bytes.NewBufferString(yamlStr)))
+	var out []string
+	for {
+		var document map[string]interface{}
+		if err := decoder.Decode(&document); err != nil {
+			return out
+		}
+		if document["kind"] != "Secret" || document["apiVersion"] != "v1" {
+			continue
+		}
+		metadata, _ := document["metadata"].(map[string]interface{})
+		for _, field := range takeSecretMasks(document) {
+			out = append(out, fmt.Sprintf("%v %s", metadata["name"], field))
+		}
+	}
+}
+
+func (s *Service) applyResourceYAML(ctx context.Context, resourceType, namespace, name, yamlStr string, prepare func(map[string]interface{})) (map[string]interface{}, error) {
 	gvr, namespaced, err := s.ResolveResource(ctx, resourceType)
 	if err != nil {
 		return nil, err
@@ -33,6 +123,9 @@ func (s *Service) ApplyResourceYAML(ctx context.Context, resourceType, namespace
 	var parsed interface{}
 	if err := yaml.Unmarshal([]byte(yamlStr), &parsed); err != nil {
 		return nil, fmt.Errorf("parse YAML: %w", err)
+	}
+	if object, ok := parsed.(map[string]interface{}); ok && prepare != nil {
+		prepare(object)
 	}
 
 	patchData, err := json.Marshal(parsed)

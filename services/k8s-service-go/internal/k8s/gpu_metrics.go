@@ -46,18 +46,16 @@ func (s *Service) GetGPUMetrics(ctx context.Context) (map[string]interface{}, er
 	}
 	wg.Wait()
 
-	// Build per-GPU metrics map keyed by UUID
+	// Build per-GPU metrics map keyed by UUID. A value is nil while no series gave it: not read is not 0.
 	type gpuMetric struct {
 		UUID              string
 		GPU               string
 		Hostname          string
 		ModelName         string
-		GPUUtil           float64
-		MemoryUsedMB      float64
-		MemoryFreeMB      float64
-		MemoryTotalMB     float64
-		MemoryUtilPercent float64
-		MemoryTemp        float64
+		GPUUtil           *float64
+		MemoryUsedMB      *float64
+		MemoryFreeMB      *float64
+		MemoryTemp        *float64
 		ExportedPod       string
 		ExportedNamespace string
 	}
@@ -100,72 +98,89 @@ func (s *Service) GetGPUMetrics(ctx context.Context) (map[string]interface{}, er
 			if g == nil {
 				continue
 			}
+			value := r.Value
 			switch qr.name {
 			case "gpu_util":
-				g.GPUUtil = r.Value
+				g.GPUUtil = &value
 			case "fb_used":
-				g.MemoryUsedMB = r.Value
+				g.MemoryUsedMB = &value
 			case "fb_free":
-				g.MemoryFreeMB = r.Value
+				g.MemoryFreeMB = &value
 			case "mem_temp":
-				g.MemoryTemp = r.Value
+				g.MemoryTemp = &value
 			}
 		}
 	}
 
-	// Calculate totals and build response
+	// Calculate totals and build response: each is of the GPUs that have the value, as PromQL's avg() and a division of
+	// two series are, and null with none. A GPU's memory takes both its series; one alone would read as 0 % or 100 %.
 	gpus := make([]map[string]interface{}, 0, len(gpuMap))
 	var totalUtil, totalMemUsed, totalMemFree float64
-	count := 0
+	utilCount, memCount := 0, 0
 
 	for _, key := range sortedKeys(gpuMap) {
 		g := gpuMap[key]
-		g.MemoryTotalMB = g.MemoryUsedMB + g.MemoryFreeMB
-		if g.MemoryTotalMB > 0 {
-			g.MemoryUtilPercent = (g.MemoryUsedMB / g.MemoryTotalMB) * 100
+		var memTotal, memPercent interface{}
+		if g.MemoryUsedMB != nil && g.MemoryFreeMB != nil {
+			total := *g.MemoryUsedMB + *g.MemoryFreeMB
+			memTotal = total
+			if total > 0 {
+				memPercent = (*g.MemoryUsedMB / total) * 100
+			}
+			totalMemUsed += *g.MemoryUsedMB
+			totalMemFree += *g.MemoryFreeMB
+			memCount++
 		}
-
-		totalUtil += g.GPUUtil
-		totalMemUsed += g.MemoryUsedMB
-		totalMemFree += g.MemoryFreeMB
-		count++
+		if g.GPUUtil != nil {
+			totalUtil += *g.GPUUtil
+			utilCount++
+		}
 
 		gpus = append(gpus, map[string]interface{}{
 			"uuid":                g.UUID,
 			"gpu":                 g.GPU,
 			"hostname":            g.Hostname,
 			"model_name":          g.ModelName,
-			"gpu_util":            g.GPUUtil,
-			"memory_used_mb":      g.MemoryUsedMB,
-			"memory_free_mb":      g.MemoryFreeMB,
-			"memory_total_mb":     g.MemoryTotalMB,
-			"memory_util_percent": g.MemoryUtilPercent,
-			"memory_temp":         g.MemoryTemp,
+			"gpu_util":            numberOrNull(g.GPUUtil),
+			"memory_used_mb":      numberOrNull(g.MemoryUsedMB),
+			"memory_free_mb":      numberOrNull(g.MemoryFreeMB),
+			"memory_total_mb":     memTotal,
+			"memory_util_percent": memPercent,
+			"memory_temp":         numberOrNull(g.MemoryTemp),
 			"exported_pod":        g.ExportedPod,
 			"exported_namespace":  g.ExportedNamespace,
 		})
 	}
 
-	avgUtil := float64(0)
-	avgMemUtil := float64(0)
-	totalMem := totalMemUsed + totalMemFree
-	if count > 0 {
-		avgUtil = totalUtil / float64(count)
+	var avgUtil, avgMemUtil, memUsed, memFree, memTotal interface{}
+	if utilCount > 0 {
+		avgUtil = totalUtil / float64(utilCount)
 	}
-	if totalMem > 0 {
-		avgMemUtil = (totalMemUsed / totalMem) * 100
+	if memCount > 0 {
+		memUsed, memFree, memTotal = totalMemUsed, totalMemFree, totalMemUsed+totalMemFree
+		if total := totalMemUsed + totalMemFree; total > 0 {
+			avgMemUtil = (totalMemUsed / total) * 100
+		}
 	}
 
 	return map[string]interface{}{
 		"available":            true,
-		"gpu_count":            count,
+		"gpu_count":            len(gpus),
 		"avg_gpu_util":         avgUtil,
 		"avg_memory_util":      avgMemUtil,
-		"total_memory_used_mb": totalMemUsed,
-		"total_memory_free_mb": totalMemFree,
-		"total_memory_mb":      totalMem,
+		"total_memory_used_mb": memUsed,
+		"total_memory_free_mb": memFree,
+		"total_memory_mb":      memTotal,
 		"gpus":                 gpus,
 	}, nil
+}
+
+// numberOrNull is a value a series gave, or nil for JSON's null.
+func numberOrNull(v *float64) interface{} {
+	if v == nil {
+		return nil
+	}
+	return *v
 }
 
 // dcgmLabel is the first of names a DCGM series carries: dcgm-exporter writes UUID (uuid with

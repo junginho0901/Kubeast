@@ -154,7 +154,7 @@ export function GPUPodsTable({
                 {metricsAvailable && (
                   <>
                     <td className="py-3 px-4">
-                      {podMetric ? (
+                      {podMetric && podMetric.gpu_util !== null ? (
                         <div className="flex items-center gap-2">
                           <div className="w-16 h-2 bg-slate-800 rounded-full overflow-hidden">
                             <div
@@ -169,7 +169,7 @@ export function GPUPodsTable({
                       )}
                     </td>
                     <td className="py-3 px-4">
-                      {podMetric ? (
+                      {podMetric && podMetric.memory_util_percent !== null ? (
                         <div className="flex items-center gap-2">
                           <div className="w-16 h-2 bg-slate-800 rounded-full overflow-hidden">
                             <div

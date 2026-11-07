@@ -21,7 +21,7 @@ const (
 	// the newest the screen lists
 	timelineEventsMax   = 500
 	timelineDefaultSpan = 24 * time.Hour
-	// parseFromTime's longest window; far past it the API's hours overflow into a window that reads nothing
+	// parseFromTime's longest window and the API's, which answers 400 past it
 	timelineMaxBack = 90 * 24 * time.Hour
 )
 

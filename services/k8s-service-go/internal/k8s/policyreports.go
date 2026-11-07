@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -180,6 +181,8 @@ type PolicyReportResource struct {
 	Rows        []PolicyReportResult `json:"rows"`
 	// SelectorError says why the results that pick by label could not be held to this resource (its labels unread).
 	SelectorError string `json:"selector_error,omitempty"`
+	// ClusterReportsError says why the rows the ClusterPolicyReports hold about this resource may be missing.
+	ClusterReportsError string `json:"cluster_reports_error,omitempty"`
 }
 
 // policyReportSet is one parsed read, cached per cluster, namespace and identity.
@@ -396,14 +399,27 @@ var policyReportWorkloadKinds = map[string]bool{"Deployment": true, "StatefulSet
 // the rows of its running pods come along (the pod template is what most
 // policies look at), each row naming the pod. With the resource's apiVersion, a
 // resource and a pod owner of another group with the same Kind and name are left
-// out; a result naming no apiVersion still counts.
+// out; a result naming no apiVersion still counts. A ClusterPolicyReport may name the resource too: those rows come from
+// the one read of the cluster reports a minute, and what stops that read is said beside the namespace's rows.
 func (s *Service) PolicyReportsForResource(ctx context.Context, namespace, kind, name, apiVersion string, force bool) (*PolicyReportResource, error) {
 	set, _, err := s.policyReportSet(ctx, namespace, force)
 	if err != nil {
 		return nil, err
 	}
+	results := set.results
+	clusterReportsError := ""
+	clusterSet, err := s.clusterPolicyReportSet(ctx, force)
+	switch {
+	case err == nil:
+		results = append(results[:len(results):len(results)], clusterSet.resultsNaming(namespace)...)
+		if clusterSet.truncated {
+			clusterReportsError = fmt.Sprintf("the cluster holds more than one read takes (%d reports, %d results), so the rest were not read", policyReportMaxReports, policyReportMaxResults)
+		}
+	case !apierrors.IsNotFound(err):
+		clusterReportsError = err.Error()
+	}
 	pods := map[string]bool{}
-	picking := set.picksByLabel()
+	picking := policyReportSet{results: results}.picksByLabel()
 	var targets []policyReportTarget
 	if policyReportWorkloadKinds[kind] {
 		cs := s.clientsetCtx(ctx)
@@ -427,7 +443,7 @@ func (s *Service) PolicyReportsForResource(ctx context.Context, namespace, kind,
 			return nil, fmt.Errorf("list pods: %w", err)
 		}
 	}
-	out := &PolicyReportResource{GeneratedAt: set.at.UTC().Format(time.RFC3339), Kind: kind, Name: name, Namespace: namespace}
+	out := &PolicyReportResource{GeneratedAt: set.at.UTC().Format(time.RFC3339), Kind: kind, Name: name, Namespace: namespace, ClusterReportsError: clusterReportsError}
 	if picking {
 		target, err := s.policyReportObject(ctx, namespace, kind, name, apiVersion)
 		if err != nil {
@@ -436,10 +452,23 @@ func (s *Service) PolicyReportsForResource(ctx context.Context, namespace, kind,
 			targets = append(targets, target)
 		}
 	}
-	out.keep(set.results, func(ref policyReportRef) bool {
+	out.keep(results, func(ref policyReportRef) bool {
 		return ref.Namespace == namespace && ((ref.Kind == kind && ref.Name == name && sameAPIGroup(apiVersion, ref.APIVersion)) || (ref.Kind == "Pod" && pods[ref.Name]))
 	}, targets...)
 	return out, nil
+}
+
+// resultsNaming are the results about an object of namespace, by the resource a row names or a later one of its result.
+// A cluster report's label selector, naming no namespace, stays with the cluster-scoped objects.
+func (set policyReportSet) resultsNaming(namespace string) []PolicyReportResult {
+	var out []PolicyReportResult
+	for i := range set.results {
+		r := &set.results[i]
+		if r.Namespace == namespace || slices.ContainsFunc(r.also, func(ref policyReportRef) bool { return ref.Namespace == namespace }) {
+			out = append(out, *r)
+		}
+	}
+	return out
 }
 
 // picksByLabel says whether any result picks its resources by label, the only reason to read the object's labels.
@@ -489,15 +518,7 @@ func sameAPIGroup(asked, ref string) bool {
 // ClusterPolicyReports, read as the caller and kept a minute like the others;
 // the apiVersion, when given, as PolicyReportsForResource takes it.
 func (s *Service) PolicyReportsForClusterResource(ctx context.Context, kind, name, apiVersion string, force bool) (*PolicyReportResource, error) {
-	if len(scopeFromCtx(ctx)) > 0 {
-		// as the summary, which leaves the cluster reports out of a grant limited to namespaces
-		return nil, apierrors.NewForbidden(schema.GroupResource{Group: clusterPolicyReportGVR.Group, Resource: clusterPolicyReportGVR.Resource}, "", fmt.Errorf("cluster reports are outside a grant limited to namespaces"))
-	}
-	// "*" starts no namespace name, so the cluster reports keep a cache entry of their own
-	set, err := s.cachedPolicyReports(ctx, "*cluster", force, func() (policyReportSet, error) {
-		set := policyReportSet{at: time.Now(), results: []PolicyReportResult{}}
-		return set, s.readPolicyReportKind(ctx, clusterPolicyReportGVR, "", &set)
-	})
+	set, err := s.clusterPolicyReportSet(ctx, force)
 	if err != nil {
 		return nil, err
 	}
@@ -515,6 +536,19 @@ func (s *Service) PolicyReportsForClusterResource(ctx context.Context, kind, nam
 		return ref.Namespace == "" && ref.Kind == kind && ref.Name == name && sameAPIGroup(apiVersion, ref.APIVersion)
 	}, targets...)
 	return out, nil
+}
+
+// clusterPolicyReportSet reads (or serves from the minute cache, unless force) the ClusterPolicyReports as the caller.
+func (s *Service) clusterPolicyReportSet(ctx context.Context, force bool) (policyReportSet, error) {
+	if len(scopeFromCtx(ctx)) > 0 {
+		// as the summary, which leaves the cluster reports out of a grant limited to namespaces
+		return policyReportSet{}, apierrors.NewForbidden(schema.GroupResource{Group: clusterPolicyReportGVR.Group, Resource: clusterPolicyReportGVR.Resource}, "", fmt.Errorf("cluster reports are outside a grant limited to namespaces"))
+	}
+	// "*" starts no namespace name, so the cluster reports keep a cache entry of their own
+	return s.cachedPolicyReports(ctx, "*cluster", force, func() (policyReportSet, error) {
+		set := policyReportSet{at: time.Now(), results: []PolicyReportResult{}}
+		return set, s.readPolicyReportKind(ctx, clusterPolicyReportGVR, "", &set)
+	})
 }
 
 // policyReportRef is a resource a result names.

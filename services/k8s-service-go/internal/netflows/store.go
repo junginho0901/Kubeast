@@ -255,7 +255,8 @@ func (r Request) matches(f Flow) bool {
 }
 
 // redact hides a peer outside the reader's namespaces; true when it did. An end with no namespace goes by its Service,
-// which names one (Hubble's destination_service comes apart from the endpoint), and with neither is an address only.
+// which names one (Hubble's destination_service comes apart from the endpoint), and with neither is an address only,
+// whose DNS names stay. A DNS name of a hidden peer says what its pod and Service names would.
 func (r Request) redact(e *End) bool {
 	if r.Scope == nil {
 		return false
@@ -264,7 +265,7 @@ func (r Request) redact(e *End) bool {
 	switch {
 	case e.Namespace != "" && r.inScope(e.Namespace):
 		if qualified && !r.inScope(serviceNS) {
-			e.Service = ""
+			e.Service, e.Names = "", nil
 			return true
 		}
 		return false
@@ -273,8 +274,8 @@ func (r Request) redact(e *End) bool {
 	case e.Namespace == "" && qualified && r.inScope(serviceNS):
 		return false
 	}
-	changed := e.Pod != "" || e.Workload != nil || e.Service != "" || e.Identity != 0
-	e.Pod, e.Workload, e.Service, e.Identity = "", nil, "", 0
+	changed := e.Pod != "" || e.Workload != nil || e.Service != "" || e.Identity != 0 || len(e.Names) > 0
+	e.Pod, e.Workload, e.Service, e.Identity, e.Names = "", nil, "", 0, nil
 	return changed
 }
 
