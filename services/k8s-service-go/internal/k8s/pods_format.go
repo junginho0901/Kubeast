@@ -173,18 +173,14 @@ func formatPodDetail(p *corev1.Pod) map[string]interface{} {
 		initContainers = append(initContainers, ic)
 	}
 
-	// READY, RESTARTS and an initializing pod's Status as kubectl prints them (pod_init.go)
-	iv := podInitState(p)
-	totalReady, totalContainers, totalRestarts := podCounts(p, iv)
-
-	status := string(p.Status.Phase)
+	// Status, READY and RESTARTS as the Pods list and kubectl print them (podListView)
+	status, totalReady, totalContainers, totalRestarts := podListView(p)
 	reason := p.Status.Reason
 	message := p.Status.Message
 
 	// Check for container-level issues
 	for _, cs := range p.Status.ContainerStatuses {
 		if cs.State.Waiting != nil && cs.State.Waiting.Reason != "" {
-			status = cs.State.Waiting.Reason
 			if reason == "" {
 				reason = cs.State.Waiting.Reason
 			}
@@ -194,15 +190,8 @@ func formatPodDetail(p *corev1.Pod) map[string]interface{} {
 			break
 		}
 		if cs.State.Terminated != nil && cs.State.Terminated.Reason != "" {
-			if p.Status.Phase != corev1.PodRunning {
-				status = cs.State.Terminated.Reason
-			}
 			break
 		}
-	}
-
-	if iv.status != "" {
-		status = iv.status
 	}
 
 	out := map[string]interface{}{
@@ -335,21 +324,6 @@ func formatPodDetail(p *corev1.Pod) map[string]interface{} {
 	return out
 }
 
-// podTableView is a pod's STATUS, READY and RESTARTS in a drawer's pod table: the Pods list's (podListView — sidecars
-// counted, an initializing pod's Init:…), and as kubectl v1.37 printPod ends, Unknown for a pod being deleted on a
-// node that stopped answering, Terminating for another one being deleted that has not finished.
-func podTableView(p *corev1.Pod) (status string, ready, total int, restarts int32) {
-	status, ready, total, restarts = podListView(p)
-	if p.DeletionTimestamp != nil {
-		if p.Status.Reason == "NodeLost" {
-			status = "Unknown"
-		} else if p.Status.Phase != corev1.PodSucceeded && p.Status.Phase != corev1.PodFailed {
-			status = "Terminating"
-		}
-	}
-	return status, ready, total, restarts
-}
-
 // listOwnedPods returns pods directly owned by the given controller
 // (matched via metadata.ownerReferences kind/name). Used by DescribeDaemonSet
 // / DescribeReplicaSet / DescribeStatefulSet to embed an owned_pods list in
@@ -375,7 +349,7 @@ func (s *Service) listOwnedPods(ctx context.Context, namespace, ownerKind, owner
 			return
 		}
 
-		status, ready, total, restarts := podTableView(pod)
+		status, ready, total, restarts := podListView(pod)
 		result = append(result, map[string]interface{}{
 			"name":          pod.Name,
 			"namespace":     pod.Namespace,

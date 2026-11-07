@@ -1644,6 +1644,7 @@ export interface PodListStats {
   ready: number
   not_ready: number
   pending: number
+  terminating: number
   error: number
   restarted: number
   completed: number

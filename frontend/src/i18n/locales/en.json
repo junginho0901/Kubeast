@@ -529,6 +529,7 @@
       "ready": "Ready",
       "notReady": "Not Ready",
       "pending": "Pending",
+      "terminating": "Terminating",
       "error": "Error",
       "restarted": "Restarted",
       "completed": "Completed"

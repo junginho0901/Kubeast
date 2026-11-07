@@ -14,7 +14,7 @@
    ],
    "init_containers": null,
    "phase": "",
-   "status": "",
+   "status": "Unknown",
    "status_reason": ""
   },
   "level": "warn",
@@ -467,7 +467,7 @@
    "deletion_timestamp": "2023-11-14T22:15:00Z",
    "init_containers": null,
    "phase": "",
-   "status": "",
+   "status": "Terminating",
    "status_reason": ""
   },
   "level": "warn",
@@ -492,7 +492,7 @@
    ],
    "init_containers": null,
    "phase": "Running",
-   "status": "Running",
+   "status": "Succeeded",
    "status_reason": ""
   },
   "level": "ok",
@@ -592,7 +592,7 @@
    ],
    "init_containers": null,
    "phase": "Running",
-   "status": "Running",
+   "status": "Error",
    "status_reason": ""
   },
   "level": "error",
@@ -701,7 +701,7 @@
    "deletion_timestamp": "2023-11-14T22:15:00Z",
    "init_containers": null,
    "phase": "Running",
-   "status": "Running",
+   "status": "Terminating",
    "status_reason": ""
   },
   "level": "warn",
@@ -819,7 +819,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Init:0/1",
+   "status": "Terminating",
    "status_reason": "ContainerStatusUnknown"
   },
   "level": "warn",
@@ -968,7 +968,7 @@
    "deletion_timestamp": "2023-11-14T22:15:00Z",
    "init_containers": null,
    "phase": "Running",
-   "status": "Running",
+   "status": "Terminating",
    "status_reason": ""
   },
   "level": "warn",
@@ -1316,7 +1316,7 @@
    "deletion_timestamp": "2023-11-14T22:15:00Z",
    "init_containers": null,
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Terminating",
    "status_reason": ""
   },
   "level": "warn",
@@ -1760,7 +1760,7 @@
    ],
    "init_containers": null,
    "phase": "Running",
-   "status": "Running",
+   "status": "ContainerCannotRun",
    "status_reason": ""
   },
   "level": "error",
@@ -2911,7 +2911,7 @@
    ],
    "init_containers": null,
    "phase": "",
-   "status": "",
+   "status": "Unknown",
    "status_reason": ""
   },
   "level": "warn",
@@ -3423,7 +3423,7 @@
    ],
    "init_containers": null,
    "phase": "Running",
-   "status": "Running",
+   "status": "Completed",
    "status_reason": ""
   },
   "level": "warn",
@@ -3793,7 +3793,7 @@
    "deletion_timestamp": "2023-11-14T22:15:00Z",
    "init_containers": null,
    "phase": "Running",
-   "status": "Running",
+   "status": "Terminating",
    "status_reason": ""
   },
   "level": "warn",
@@ -3944,7 +3944,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Succeeded",
    "status_reason": ""
   },
   "level": "warn",
@@ -3981,7 +3981,7 @@
    ],
    "init_containers": null,
    "phase": "Running",
-   "status": "Running",
+   "status": "Succeeded",
    "status_reason": ""
   },
   "level": "warn",
@@ -4261,7 +4261,7 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Unknown",
    "status_reason": ""
   },
   "level": "warn",
@@ -4367,7 +4367,7 @@
    "deletion_timestamp": "2023-11-14T22:15:00Z",
    "init_containers": null,
    "phase": "Pending",
-   "status": "OOMKilled",
+   "status": "Terminating",
    "status_reason": ""
   },
   "level": "warn",
@@ -5076,7 +5076,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Init:0/1",
+   "status": "Terminating",
    "status_reason": ""
   },
   "level": "warn",
@@ -5673,7 +5673,7 @@
    ],
    "init_containers": null,
    "phase": "",
-   "status": "",
+   "status": "Unknown",
    "status_reason": ""
   },
   "level": "warn",
@@ -6099,7 +6099,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Init:0/1",
+   "status": "Unknown",
    "status_reason": "NodeLost"
   },
   "level": "warn",
@@ -6454,7 +6454,7 @@
    ],
    "init_containers": null,
    "phase": "Running",
-   "status": "Running",
+   "status": "NotReady",
    "status_reason": "Completed"
   },
   "level": "warn",
@@ -6504,7 +6504,7 @@
    "deletion_timestamp": "2023-11-14T22:15:00Z",
    "init_containers": null,
    "phase": "Pending",
-   "status": "Completed",
+   "status": "Terminating",
    "status_reason": ""
   },
   "level": "warn",
@@ -6810,7 +6810,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Error",
    "status_reason": ""
   },
   "level": "error",
@@ -6871,7 +6871,7 @@
     }
    ],
    "phase": "Succeeded",
-   "status": "Succeeded",
+   "status": "Evicted",
    "status_reason": "Evicted"
   },
   "level": "error",
@@ -7421,7 +7421,7 @@
    ],
    "init_containers": null,
    "phase": "Failed",
-   "status": "Failed",
+   "status": "NotReady",
    "status_reason": "Completed"
   },
   "level": "error",
@@ -7650,7 +7650,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Init:0/1",
+   "status": "Terminating",
    "status_reason": ""
   },
   "level": "warn",
@@ -7726,7 +7726,7 @@
    ],
    "init_containers": null,
    "phase": "",
-   "status": "",
+   "status": "Unknown",
    "status_reason": ""
   },
   "level": "warn",
@@ -7754,7 +7754,7 @@
    ],
    "init_containers": null,
    "phase": "Running",
-   "status": "Running",
+   "status": "StartError",
    "status_reason": ""
   },
   "level": "error",
@@ -7867,7 +7867,7 @@
    ],
    "init_containers": null,
    "phase": "Running",
-   "status": "Running",
+   "status": "StartError",
    "status_reason": ""
   },
   "level": "error",
@@ -7918,7 +7918,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "ContainerCannotRun",
    "status_reason": ""
   },
   "level": "error",
@@ -8011,7 +8011,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Init:0/1",
+   "status": "Terminating",
    "status_reason": ""
   },
   "level": "warn",
@@ -8278,7 +8278,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Init:0/1",
+   "status": "Terminating",
    "status_reason": ""
   },
   "level": "warn",
@@ -8303,7 +8303,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "NodeLost",
    "status_reason": "NodeLost"
   },
   "level": "error",
@@ -9077,7 +9077,7 @@
    "deletion_timestamp": "2023-11-14T22:15:00Z",
    "init_containers": null,
    "phase": "",
-   "status": "",
+   "status": "Unknown",
    "status_reason": "NodeLost"
   },
   "level": "warn",
@@ -9218,7 +9218,7 @@
    ],
    "init_containers": null,
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "Completed",
    "status_reason": "Completed"
   },
   "level": "warn",
@@ -9341,7 +9341,7 @@
    ],
    "init_containers": null,
    "phase": "Running",
-   "status": "Running",
+   "status": "NotReady",
    "status_reason": "Completed"
   },
   "level": "warn",
@@ -9689,7 +9689,7 @@
    ],
    "init_containers": null,
    "phase": "",
-   "status": "",
+   "status": "Unknown",
    "status_reason": ""
   },
   "level": "warn",
@@ -9823,7 +9823,7 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Unknown",
    "status_reason": ""
   },
   "level": "warn",
@@ -9842,7 +9842,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Completed",
    "status_reason": "Completed"
   },
   "level": "warn",
@@ -10445,7 +10445,7 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Unknown",
    "status_reason": ""
   },
   "level": "warn",
@@ -10776,7 +10776,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "Init:0/1",
+   "status": "Terminating",
    "status_reason": ""
   },
   "level": "warn",
@@ -11349,7 +11349,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Error",
    "status_reason": ""
   },
   "level": "error",
@@ -11900,7 +11900,7 @@
     }
    ],
    "phase": "",
-   "status": "Init:0/1",
+   "status": "Terminating",
    "status_reason": "ImagePullBackOff"
   },
   "level": "warn",
@@ -12002,7 +12002,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Terminating",
    "status_reason": ""
   },
   "level": "warn",
@@ -12232,7 +12232,7 @@
    ],
    "init_containers": null,
    "phase": "Running",
-   "status": "Running",
+   "status": "StartError",
    "status_reason": ""
   },
   "level": "error",
@@ -12994,7 +12994,7 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Unknown",
    "status_reason": ""
   },
   "level": "warn",
@@ -13098,7 +13098,7 @@
     }
    ],
    "phase": "",
-   "status": "",
+   "status": "Unknown",
    "status_reason": ""
   },
   "level": "warn",
@@ -13779,7 +13779,7 @@
    ],
    "init_containers": null,
    "phase": "",
-   "status": "",
+   "status": "Unknown",
    "status_reason": ""
   },
   "level": "warn",
@@ -14311,7 +14311,7 @@
    ],
    "init_containers": null,
    "phase": "Running",
-   "status": "Running",
+   "status": "Error",
    "status_reason": ""
   },
   "level": "error",
@@ -14350,7 +14350,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "ContainerCannotRun",
    "status_reason": ""
   },
   "level": "error",
@@ -14418,7 +14418,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "Succeeded",
    "status_reason": ""
   },
   "level": "warn",
@@ -14775,7 +14775,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Init:0/2",
+   "status": "Terminating",
    "status_reason": "Evicted"
   },
   "level": "warn",
@@ -15124,7 +15124,7 @@
    "deletion_timestamp": "2023-11-14T22:15:00Z",
    "init_containers": null,
    "phase": "Pending",
-   "status": "Pending",
+   "status": "Terminating",
    "status_reason": ""
   },
   "level": "warn",
@@ -15608,7 +15608,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "OOMKilled",
    "status_reason": ""
   },
   "level": "error",
@@ -16519,7 +16519,7 @@
     }
    ],
    "phase": "Pending",
-   "status": "OOMKilled",
+   "status": "Terminating",
    "status_reason": ""
   },
   "level": "warn",
@@ -16755,7 +16755,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Init:0/1",
+   "status": "Terminating",
    "status_reason": ""
   },
   "level": "warn",
@@ -16912,7 +16912,7 @@
    ],
    "init_containers": null,
    "phase": "Running",
-   "status": "Running",
+   "status": "OOMKilled",
    "status_reason": ""
   },
   "level": "error",
@@ -17162,7 +17162,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Init:0/2",
+   "status": "Terminating",
    "status_reason": "ContainerCreating"
   },
   "level": "warn",
@@ -17347,7 +17347,7 @@
    ],
    "init_containers": null,
    "phase": "Running",
-   "status": "Running",
+   "status": "ContainerCannotRun",
    "status_reason": ""
   },
   "level": "error",
@@ -17521,7 +17521,7 @@
     }
    ],
    "phase": "Running",
-   "status": "Running",
+   "status": "ContainerCannotRun",
    "status_reason": ""
   },
   "level": "error",
@@ -17542,7 +17542,7 @@
    ],
    "init_containers": null,
    "phase": "Running",
-   "status": "Running",
+   "status": "Evicted",
    "status_reason": "Evicted"
   },
   "level": "error",
@@ -17670,7 +17670,7 @@
    ],
    "init_containers": null,
    "phase": "Unknown",
-   "status": "Unknown",
+   "status": "NotReady",
    "status_reason": "Completed"
   },
   "level": "warn",
@@ -18136,7 +18136,7 @@
    ],
    "init_containers": null,
    "phase": "Running",
-   "status": "Running",
+   "status": "Completed",
    "status_reason": ""
   },
   "level": "ok",
@@ -18175,7 +18175,7 @@
    ],
    "init_containers": null,
    "phase": "Running",
-   "status": "Running",
+   "status": "NotReady",
    "status_reason": "Completed"
   },
   "level": "ok",
@@ -18496,7 +18496,7 @@
    ],
    "init_containers": null,
    "phase": "Running",
-   "status": "Running",
+   "status": "StartError",
    "status_reason": ""
   },
   "level": "error",
@@ -18946,7 +18946,7 @@
    "deletion_timestamp": "2023-11-14T22:15:00Z",
    "init_containers": null,
    "phase": "Pending",
-   "status": "CrashLoopBackOff",
+   "status": "Terminating",
    "status_reason": "CrashLoopBackOff"
   },
   "level": "warn",
@@ -19410,7 +19410,7 @@
    ],
    "init_containers": null,
    "phase": "",
-   "status": "",
+   "status": "Unknown",
    "status_reason": ""
   },
   "level": "warn",
@@ -19605,7 +19605,7 @@
     }
    ],
    "phase": "Unknown",
-   "status": "Init:0/1",
+   "status": "Terminating",
    "status_reason": "ImagePullBackOff"
   },
   "level": "warn",
@@ -19681,7 +19681,7 @@
    ],
    "init_containers": null,
    "phase": "Running",
-   "status": "Running",
+   "status": "OOMKilled",
    "status_reason": ""
   },
   "level": "error",
@@ -20509,7 +20509,7 @@
     }
    ],
    "phase": "",
-   "status": "Init:0/1",
+   "status": "Terminating",
    "status_reason": "CrashLoopBackOff"
   },
   "level": "warn",
@@ -20594,7 +20594,7 @@
    ],
    "init_containers": null,
    "phase": "Pending",
-   "status": "Pending",
+   "status": "NotReady",
    "status_reason": "Completed"
   },
   "level": "warn",
@@ -21101,11 +21101,11 @@
    ],
    "init_containers": null,
    "phase": "",
-   "status": "",
+   "status": "NotReady",
    "status_reason": "Completed"
   },
   "level": "warn",
-  "reason": "Unknown"
+  "reason": "NotReady"
  },
  {
   "pod": {
@@ -21207,7 +21207,7 @@
    ],
    "init_containers": null,
    "phase": "",
-   "status": "",
+   "status": "Unknown",
    "status_reason": ""
   },
   "level": "warn",

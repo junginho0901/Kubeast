@@ -44,7 +44,10 @@ func TestBuildWorkloadGraph_StatusesAreTheLists(t *testing.T) {
 			State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}}}),
 		pod("pod-unready", corev1.PodRunning, corev1.ContainerStatus{Name: "app", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}}),
 		pod("pod-done", corev1.PodSucceeded, corev1.ContainerStatus{Name: "app", State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Completed"}}}),
+		pod("pod-going", corev1.PodRunning, corev1.ContainerStatus{Name: "app", Ready: true, State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}}),
 	}
+	gone := metav1.Now()
+	pods[3].DeletionTimestamp = &gone
 	res := &rgResources{deployments: deploys, statefulSets: sts, daemonSets: dss, replicaSets: rss, jobs: jobs}
 	for i := range pods {
 		res.pods = append(res.pods, toRGPod(&pods[i]))
@@ -85,6 +88,7 @@ func TestBuildWorkloadGraph_StatusesAreTheLists(t *testing.T) {
 		"Pod/ns/pod-crash":         "CrashLoopBackOff error",
 		"Pod/ns/pod-unready":       "Running warn",
 		"Pod/ns/pod-done":          "Completed ok",
+		"Pod/ns/pod-going":         "Terminating warn",
 	}
 	for id, w := range want {
 		got, ok := nodes[id]

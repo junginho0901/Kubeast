@@ -271,7 +271,7 @@ func findPodsUsingPVC(pods []corev1.Pod, users pvcUsers) []map[string]interface{
 	}
 	result := make([]map[string]interface{}, 0, len(ordered))
 	for _, pod := range ordered {
-		status, ready, total, restarts := podTableView(pod)
+		status, ready, total, restarts := podListView(pod)
 		result = append(result, map[string]interface{}{
 			"name":          pod.Name,
 			"namespace":     pod.Namespace,

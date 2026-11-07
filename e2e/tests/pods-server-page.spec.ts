@@ -24,13 +24,18 @@ function kubectlFor(kindName: string) {
 const kubectl = kubectlFor('kubeast')
 const tryKubectl = (args: string) => { try { return kubectl(args) } catch { return null } }
 
+type KContainer = { ready: boolean; restartCount: number; state?: { waiting?: { reason?: string }; terminated?: { reason?: string } } }
 interface KPod {
-  metadata: { name: string; namespace: string }
+  metadata: { name: string; namespace: string; deletionTimestamp?: string }
   spec: { containers: unknown[] }
-  status: { phase?: string; containerStatuses?: { ready: boolean; restartCount: number }[] }
+  status: { phase?: string; containerStatuses?: KContainer[]; initContainerStatuses?: KContainer[] }
 }
 const clusterPods = (): KPod[] => JSON.parse(kubectl('get pods -A -o json')).items
 const restarts = (p: KPod) => (p.status.containerStatuses ?? []).reduce((n, c) => n + c.restartCount, 0)
+// a pod is in one state card: what names an error or is being deleted is not counted by its phase
+const namesError = (p: KPod) => p.status.phase === 'Failed' || [...(p.status.initContainerStatuses ?? []), ...(p.status.containerStatuses ?? [])].some((c) =>
+  /error|failed|backoff|errimagepull|oomkilled/i.test(c.state?.waiting?.reason ?? c.state?.terminated?.reason ?? ''))
+const byPhase = (p: KPod) => !namesError(p) && !p.metadata.deletionTimestamp
 
 const rows = (page: Page) => page.locator('table tbody tr.cursor-pointer')
 const card = async (page: Page, label: RegExp) =>
@@ -61,8 +66,8 @@ test.describe('Pods list paged by the server', () => {
       return Number(shown) === pods.length && (await card(page, /^(Total|전체)$/)) === pods.length
     }, { timeout: 20_000 }).toBe(true)
     const pods = clusterPods()
-    expect(await card(page, /^(Pending|대기)$/)).toBe(pods.filter((p) => p.status.phase === 'Pending').length)
-    expect(await card(page, /^(Completed|완료)$/)).toBe(pods.filter((p) => p.status.phase === 'Succeeded').length)
+    expect(await card(page, /^(Pending|대기)$/)).toBe(pods.filter((p) => byPhase(p) && p.status.phase === 'Pending').length)
+    expect(await card(page, /^(Completed|완료)$/)).toBe(pods.filter((p) => byPhase(p) && p.status.phase === 'Succeeded').length)
     expect(await card(page, /^(Restarted|재시작 이력)$/)).toBe(pods.filter((p) => restarts(p) > 0).length)
 
     // the browser asked for pages only, each one block of rows

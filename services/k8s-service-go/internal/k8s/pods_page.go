@@ -103,15 +103,16 @@ type PodReasonCount struct {
 // PodStats are the Pods list's summary cards, over the namespace chosen
 // (the search does not change them).
 type PodStats struct {
-	Total      int              `json:"total"`
-	Ready      int              `json:"ready"`
-	NotReady   int              `json:"not_ready"`
-	Pending    int              `json:"pending"`
-	Error      int              `json:"error"`
-	Restarted  int              `json:"restarted"`
-	Completed  int              `json:"completed"`
-	TopReasons []PodReasonCount `json:"top_reasons"`
-	Health     PodHealthCounts  `json:"health"`
+	Total       int              `json:"total"`
+	Ready       int              `json:"ready"`
+	NotReady    int              `json:"not_ready"`
+	Pending     int              `json:"pending"`
+	Terminating int              `json:"terminating"`
+	Error       int              `json:"error"`
+	Restarted   int              `json:"restarted"`
+	Completed   int              `json:"completed"`
+	TopReasons  []PodReasonCount `json:"top_reasons"`
+	Health      PodHealthCounts  `json:"health"`
 }
 
 // PodHealthCounts counts the rows by the Cluster View card colour (podHealth).
@@ -600,10 +601,13 @@ func (r *podRow) item() PodListItem {
 	return it
 }
 
-// podStats counts the summary cards as the page did: Ready = Running with
-// every container ready, Not Ready = the other Running ones, Error = Failed or
-// a status that names an error, the four most common statuses (ties in the
-// API's order).
+// podStats counts the summary cards, a pod in one state card so that they add
+// up to the total: Error = Failed or a status that names an error, Terminating
+// = kubectl's STATUS, then Pending and Completed by the phase, Ready = Running
+// with every container ready and Not Ready what is left (Running not ready, the
+// phase Unknown, a lost node's pod being deleted). Restarted is what a pod went
+// through, not a state, and counts apart. Then the four most common statuses
+// (ties in the API's order).
 func podStats(rows []*podRow) PodStats {
 	st := PodStats{Total: len(rows), TopReasons: []PodReasonCount{}}
 	type reason struct {
@@ -616,17 +620,19 @@ func podStats(rows []*podRow) PodStats {
 		if phase == "" {
 			phase = r.status
 		}
-		switch phase {
-		case string(corev1.PodPending):
+		switch {
+		case phase == string(corev1.PodFailed) || statusNamesError(r.status):
+			st.Error++
+		case r.status == podStatusTerminating:
+			st.Terminating++
+		case phase == string(corev1.PodPending):
 			st.Pending++
-		case string(corev1.PodSucceeded):
+		case phase == string(corev1.PodSucceeded):
 			st.Completed++
-		case string(corev1.PodRunning):
-			if r.containers > 0 && r.ready == r.containers {
-				st.Ready++
-			} else {
-				st.NotReady++
-			}
+		case phase == string(corev1.PodRunning) && r.deleted == 0 && r.containers > 0 && r.ready == r.containers:
+			st.Ready++
+		default:
+			st.NotReady++
 		}
 		if r.restarts > 0 {
 			st.Restarted++
@@ -638,9 +644,6 @@ func podStats(rows []*podRow) PodStats {
 			st.Health.Warn++
 		default:
 			st.Health.Error++
-		}
-		if phase == string(corev1.PodFailed) || statusNamesError(r.status) {
-			st.Error++
 		}
 		if c := reasons[r.status]; c != nil {
 			c.count++

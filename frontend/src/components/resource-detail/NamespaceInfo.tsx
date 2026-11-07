@@ -164,7 +164,7 @@ export default function NamespaceInfo({ name }: Props) {
     const l = (s || '').toLowerCase()
     if (l === 'running') return 'badge-success'
     if (['succeeded', 'completed'].includes(l)) return 'badge-info'
-    if (l === 'pending') return 'badge-warning'
+    if (l === 'pending' || l === 'terminating') return 'badge-warning'
     if (['failed', 'error', 'crashloopbackoff'].includes(l)) return 'badge-error'
     return 'badge-info'
   }

@@ -107,6 +107,7 @@ export default function Pods() {
       ready: st?.ready ?? 0,
       notReady: st?.not_ready ?? 0,
       pending: st?.pending ?? 0,
+      terminating: st?.terminating ?? 0,
       error: st?.error ?? 0,
       restarted: st?.restarted ?? 0,
       completed: st?.completed ?? 0,
@@ -120,11 +121,12 @@ export default function Pods() {
       [tr('pods.stats.ready', 'Ready'), podStats.ready, 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
       [tr('pods.stats.notReady', 'Not Ready'), podStats.notReady, 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
       [tr('pods.stats.pending', 'Pending'), podStats.pending, 'border-yellow-700/40 bg-yellow-900/10', 'text-yellow-300'],
+      [tr('pods.stats.terminating', 'Terminating'), podStats.terminating, 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
       [tr('pods.stats.error', 'Error'), podStats.error, 'border-rose-700/40 bg-rose-900/10', 'text-rose-300'],
       [tr('pods.stats.restarted', 'Restarted'), podStats.restarted, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
       [tr('pods.stats.completed', 'Completed'), podStats.completed, 'border-slate-600/50 bg-slate-800/30', 'text-slate-300'],
     ],
-    [podStats.completed, podStats.error, podStats.notReady, podStats.pending, podStats.ready, podStats.restarted, podStats.total, tr],
+    [podStats.completed, podStats.error, podStats.notReady, podStats.pending, podStats.ready, podStats.restarted, podStats.terminating, podStats.total, tr],
   )
 
   const createPodYamlTemplate = useMemo(() => {
@@ -170,6 +172,7 @@ spec:
     if (podStats.error > 0) alertParts.push(`오류 ${podStats.error}`)
     if (podStats.notReady > 0) alertParts.push(`Not Ready ${podStats.notReady}`)
     if (podStats.pending > 0) alertParts.push(`Pending ${podStats.pending}`)
+    if (podStats.terminating > 0) alertParts.push(`Terminating ${podStats.terminating}`)
     const prefix = podStats.error > 0 ? '⚠️ ' : ''
     const alert = alertParts.length ? `, ${alertParts.join(', ')}` : ''
     const summary = `${prefix}${nsLabel} Pod ${podStats.total}개 (Ready ${podStats.ready}${alert})`
@@ -193,8 +196,10 @@ spec:
           ready: podStats.ready,
           not_ready: podStats.notReady,
           pending: podStats.pending,
+          terminating: podStats.terminating,
           error: podStats.error,
           restarted: podStats.restarted,
+          completed: podStats.completed,
           top_reasons: podStats.topReasons.map(([reason, count]) => ({ reason, count })),
         },
         ...summarizeList(pagedPods as unknown as Record<string, unknown>[], {
@@ -291,7 +296,7 @@ spec:
         </p>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 shrink-0">
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3 shrink-0">
         {summaryCards.map(([label, value, boxClass, labelColor]) => (
           <div key={label} className={`rounded-lg border px-3 py-2.5 ${boxClass}`}>
             <div className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelColor}`}>{label}</div>

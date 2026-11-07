@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"reflect"
@@ -86,43 +87,8 @@ func randomPod(rng *rand.Rand, i int) *corev1.Pod {
 
 func ptrTo[T any](v T) *T { return &v }
 
-// oldDisplayStatus is the page's pickPodDisplayStatus (podHelpers.ts) over
-// formatPodDetail's map, as the Pods list worked it out before the rows.
-func oldDisplayStatus(m map[string]interface{}) string {
-	if r, _ := m["status_reason"].(string); r != "" {
-		return r
-	}
-	var reasons []string
-	for _, c := range m["containers"].([]map[string]interface{}) {
-		st, _ := c["state"].(map[string]interface{})
-		if w, ok := st["waiting"].(map[string]interface{}); ok {
-			if r, _ := w["reason"].(string); r != "" {
-				reasons = append(reasons, r)
-			}
-		}
-		if t, ok := st["terminated"].(map[string]interface{}); ok {
-			if r, _ := t["reason"].(string); r != "" {
-				reasons = append(reasons, r)
-			}
-		}
-	}
-	if len(reasons) > 0 {
-		return reasons[0]
-	}
-	phase, _ := m["phase"].(string)
-	if phase == "" {
-		phase, _ = m["status"].(string)
-	}
-	if phase == "" {
-		phase = "Unknown"
-	}
-	// the page said NotReady for a Running pod not ready until 10-31; it says
-	// Running now, as kubectl does (the READY column carries readiness)
-	return phase
-}
-
-// The row's status, ready and restarts are what the page showed from the full
-// pod map, for every combination the generator draws.
+// The row's Status is kubectl's (kubectlPrintPod) and its other columns are what
+// the page showed from the full pod map, for every combination the generator draws.
 func TestPodRow_MatchesThePagesOldColumns(t *testing.T) {
 	rng := rand.New(rand.NewSource(1))
 	in := newInterner()
@@ -131,8 +97,8 @@ func TestPodRow_MatchesThePagesOldColumns(t *testing.T) {
 		m := formatPodDetail(p)
 		r := toPodRow(p, in)
 		it := r.item()
-		if want := oldDisplayStatus(m); it.Status != want {
-			t.Fatalf("pod %d status = %q, the page showed %q (%+v)", i, it.Status, want, p.Status)
+		if want := kubectlStatus(p); it.Status != want {
+			t.Fatalf("pod %d status = %q, kubectl prints %q (%+v, deleted %v)", i, it.Status, want, p.Status, p.DeletionTimestamp != nil)
 		}
 		if it.Ready != m["ready"] || it.RestartCount != m["restart_count"] || it.NodeName != m["node_name"] ||
 			it.PodIP != m["pod_ip"] || it.CreatedAt != m["created_at"] || it.Phase != m["phase"] {
@@ -147,38 +113,40 @@ func TestPodRow_MatchesThePagesOldColumns(t *testing.T) {
 	}
 }
 
-// oldStats is the page's podStats (Pods.tsx) over formatPodDetail's maps.
-func oldStats(maps []map[string]interface{}) PodStats {
-	st := PodStats{Total: len(maps), TopReasons: []PodReasonCount{}}
+// kubectlCards counts the state cards from what kubectl prints, a pod in one card: Error first (the phase Failed or a
+// status naming an error), then Terminating as kubectl's STATUS says it, then the phase; Ready the Running pods with
+// every container ready and Not Ready what is left, which is every pod no other card names. Restarted is what a pod
+// went through, not a state, and adds to no sum. The top statuses are the page's: the most common first, ties in the
+// API's order.
+func kubectlCards(pods []*corev1.Pod) PodStats {
+	st := PodStats{Total: len(pods), TopReasons: []PodReasonCount{}}
 	counts := map[string]int{}
 	var order []string
-	for _, m := range maps {
-		phase, _ := m["phase"].(string)
+	for _, p := range pods {
+		status := kubectlStatus(p)
+		_, readyCell, restarts := kubectlPrintPod(p)
+		phase := string(p.Status.Phase)
 		if phase == "" {
-			phase, _ = m["status"].(string)
+			phase = status
 		}
-		if phase == "" {
-			phase = "Unknown"
-		}
-		status := oldDisplayStatus(m)
 		var ready, total int
-		fmt.Sscanf(m["ready"].(string), "%d/%d", &ready, &total)
-		if phase == "Pending" {
-			st.Pending++
-		}
-		if m["restart_count"].(int32) > 0 {
+		fmt.Sscanf(readyCell, "%d/%d", &ready, &total)
+		if restarts > 0 {
 			st.Restarted++
 		}
-		if phase == "Succeeded" {
-			st.Completed++
-		}
-		if phase == "Running" && total > 0 && ready == total {
-			st.Ready++
-		} else if phase == "Running" {
-			st.NotReady++
-		}
-		if phase == "Failed" || statusNamesError(status) {
+		switch {
+		case phase == "Failed" || statusNamesError(status):
 			st.Error++
+		case status == "Terminating":
+			st.Terminating++
+		case phase == "Pending":
+			st.Pending++
+		case phase == "Succeeded":
+			st.Completed++
+		case phase == "Running" && p.DeletionTimestamp == nil && total > 0 && ready == total:
+			st.Ready++
+		default:
+			st.NotReady++
 		}
 		if counts[status] == 0 {
 			order = append(order, status)
@@ -192,14 +160,23 @@ func oldStats(maps []map[string]interface{}) PodStats {
 	return st
 }
 
-// The summary cards and the top statuses are what the page counted from the
-// API's list (in its order), and do not change with the search.
-func TestPodStats_MatchThePagesOldCounts(t *testing.T) {
+// A pod is in one of the six state cards, so they add up to the total; Restarted is apart.
+func podCardSum(s PodStats) int {
+	return s.Ready + s.NotReady + s.Pending + s.Terminating + s.Error + s.Completed
+}
+
+// The summary cards and the top statuses are what kubectl's columns count over the
+// API's list (in its order), they add up to the total and do not change with the search.
+func TestPodStats_EachPodInOneCard(t *testing.T) {
 	rng := rand.New(rand.NewSource(2))
 	in := newInterner()
 	var pods []*corev1.Pod
 	for i := 0; i < 3000; i++ {
-		pods = append(pods, randomPod(rng, i))
+		if i%2 == 0 {
+			pods = append(pods, randomPod(rng, i))
+		} else {
+			pods = append(pods, randomPrintPod(rng, i))
+		}
 	}
 	rows := make([]*podRow, len(pods))
 	for i, p := range pods {
@@ -211,12 +188,11 @@ func TestPodStats_MatchThePagesOldCounts(t *testing.T) {
 	sort.Slice(byKey, func(a, b int) bool {
 		return byKey[a].Namespace+"/"+byKey[a].Name < byKey[b].Namespace+"/"+byKey[b].Name
 	})
-	maps := make([]map[string]interface{}, len(byKey))
-	for i, p := range byKey {
-		maps[i] = formatPodDetail(p)
-	}
 	rng.Shuffle(len(rows), func(a, b int) { rows[a], rows[b] = rows[b], rows[a] }) // the store's order is a map's
 	got := buildPodPage(rows, PodPageQuery{Search: "team-01", Limit: 10}, time.Now())
+	if sum := podCardSum(got.Stats); sum != len(pods) {
+		t.Errorf("the cards add up to %d of %d pods: %+v", sum, len(pods), got.Stats)
+	}
 	// the card colour counts came after the page's counts: each pod in one colour, as podHealth gives it
 	health := PodHealthCounts{}
 	for _, p := range pods {
@@ -233,8 +209,103 @@ func TestPodStats_MatchThePagesOldCounts(t *testing.T) {
 		t.Fatalf("health counts %+v, want %+v", got.Stats.Health, health)
 	}
 	got.Stats.Health = PodHealthCounts{}
-	if want := oldStats(maps); !reflect.DeepEqual(got.Stats, want) {
+	if want := kubectlCards(byKey); !reflect.DeepEqual(got.Stats, want) {
 		t.Fatalf("stats\n got %+v\nwant %+v", got.Stats, want)
+	}
+}
+
+// 51 of a Deployment's pods being replaced read as Terminating, not as 51 more ready ones next to their new pods; the
+// card each state lands in, and the sum, whichever states the namespace holds.
+func TestPodStats_TerminatingIsItsOwnCard(t *testing.T) {
+	now := metav1.Now()
+	running := corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}
+	pod := func(i int, phase corev1.PodPhase, ready bool, state corev1.ContainerState, mod func(p *corev1.Pod)) *corev1.Pod {
+		p := overviewPod("a", fmt.Sprintf("p-%03d", i), phase)
+		p.Status.ContainerStatuses = []corev1.ContainerStatus{{Name: "c", Ready: ready, State: state}}
+		if mod != nil {
+			mod(p)
+		}
+		return p
+	}
+	deleted := func(p *corev1.Pod) { p.DeletionTimestamp = &now }
+	waiting := func(r string) corev1.ContainerState {
+		return corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: r}}
+	}
+	done := func(code int32, r string) corev1.ContainerState {
+		return corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: code, Reason: r}}
+	}
+	in := newInterner()
+	var rows []*podRow
+	add := func(n int, mk func(i int) *corev1.Pod) {
+		for i := 0; i < n; i++ {
+			rows = append(rows, toPodRow(mk(len(rows)), in))
+		}
+	}
+	add(51, func(i int) *corev1.Pod { return pod(i, corev1.PodRunning, true, running, deleted) })
+	add(100, func(i int) *corev1.Pod { return pod(i, corev1.PodRunning, true, running, nil) })
+	add(2, func(i int) *corev1.Pod { return pod(i, corev1.PodRunning, false, running, deleted) })
+	add(3, func(i int) *corev1.Pod {
+		return pod(i, corev1.PodPending, false, waiting("ContainerCreating"), deleted)
+	})
+	add(4, func(i int) *corev1.Pod { return pod(i, corev1.PodRunning, false, waiting("CrashLoopBackOff"), deleted) })
+	add(5, func(i int) *corev1.Pod { return pod(i, corev1.PodRunning, false, running, nil) })
+	add(6, func(i int) *corev1.Pod { return pod(i, corev1.PodPending, false, waiting("ContainerCreating"), nil) })
+	add(7, func(i int) *corev1.Pod { return pod(i, corev1.PodRunning, false, waiting("CrashLoopBackOff"), nil) })
+	add(8, func(i int) *corev1.Pod { return pod(i, corev1.PodPending, false, waiting("ImagePullBackOff"), nil) })
+	add(9, func(i int) *corev1.Pod { return pod(i, corev1.PodFailed, false, done(1, "Error"), deleted) })
+	add(10, func(i int) *corev1.Pod { return pod(i, corev1.PodSucceeded, false, done(0, "Completed"), deleted) })
+	add(11, func(i int) *corev1.Pod { return pod(i, corev1.PodSucceeded, false, done(0, "Completed"), nil) })
+	add(12, func(i int) *corev1.Pod { return pod(i, corev1.PodUnknown, false, corev1.ContainerState{}, nil) })
+	add(13, func(i int) *corev1.Pod {
+		return pod(i, corev1.PodRunning, true, running, func(p *corev1.Pod) { deleted(p); p.Status.Reason = "NodeLost" })
+	})
+	st := podStats(rows)
+	st.TopReasons, st.Health = nil, PodHealthCounts{}
+	want := PodStats{
+		Total:       len(rows),
+		Ready:       100,
+		NotReady:    5 + 12 + 13, // Running not ready, then the phase Unknown and a lost node's pod being deleted: kubectl's Unknown
+		Pending:     6,
+		Terminating: 51 + 2 + 3 + 4,
+		Error:       7 + 8 + 9,
+		Completed:   10 + 11,
+	}
+	if !reflect.DeepEqual(st, want) {
+		t.Errorf("cards\n got %+v\nwant %+v", st, want)
+	}
+	if sum := podCardSum(st); sum != len(rows) {
+		t.Errorf("the cards add up to %d of %d pods", sum, len(rows))
+	}
+}
+
+// A grant limited to namespaces counts the pods being deleted in those namespaces only; the answer names the card
+// the page draws.
+func TestGetPodPage_TerminatingCountsOnlyTheCallersPods(t *testing.T) {
+	now := metav1.Now()
+	going := func(ns, name string) *corev1.Pod {
+		p := overviewPod(ns, name, corev1.PodRunning)
+		p.DeletionTimestamp = &now
+		return p
+	}
+	objects := func() []k8sruntime.Object {
+		return []k8sruntime.Object{going("a", "p1"), overviewPod("a", "p2", corev1.PodRunning), going("b", "p3"), going("b", "p4"), going("c", "p5")}
+	}
+	ctx := context.Background()
+	s, _, _ := pageBundle(t, fake.NewSimpleClientset(objects()...), func(string) bool { return true })
+	p, err := s.GetPodPage(ctx, PodPageQuery{Limit: 50})
+	if err != nil || p.Stats.Terminating != 4 || p.Stats.Total != 5 {
+		t.Fatalf("every namespace: %+v %v", p, err)
+	}
+	body, err := json.Marshal(p.Stats)
+	if err != nil || !strings.Contains(string(body), `"terminating":4`) {
+		t.Fatalf("the answer: %s %v", body, err)
+	}
+	// the grant names a and c; the cluster lets it list a only
+	scoped := auth.WithPayload(ctx, auth.TokenPayload{UserID: "u1", Namespaces: map[string][]string{"default": {"a", "c"}}})
+	s, _, _ = pageBundle(t, fake.NewSimpleClientset(objects()...), func(ns string) bool { return ns == "a" })
+	p, err = s.GetPodPage(scoped, PodPageQuery{Limit: 50})
+	if err != nil || p.Stats.Terminating != 1 || p.Stats.Total != 2 || podCardSum(p.Stats) != 2 {
+		t.Fatalf("scoped: %+v %v", p, err)
 	}
 }
 

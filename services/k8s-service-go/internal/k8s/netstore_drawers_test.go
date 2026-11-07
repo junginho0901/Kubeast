@@ -271,9 +271,9 @@ func TestDescribePV_UsedByPodsAsKubectl(t *testing.T) {
 	}
 }
 
-// A drawer's pod table ends as kubectl's printPod does: Terminating while a pod not finished is deleted, Unknown when
-// its node was lost, a finished pod's own status.
-func TestPodTableView_Deleting(t *testing.T) {
+// A drawer's pod table says what the Pods list says, as kubectl's printPod does: Terminating while a pod not finished
+// is deleted, Unknown when its node was lost, a finished pod's own status.
+func TestPodListView_Deleting(t *testing.T) {
 	now := metav1.Now()
 	running := sidecarPod("a", "a", nil)
 	running.DeletionTimestamp = &now
@@ -285,7 +285,7 @@ func TestPodTableView_Deleting(t *testing.T) {
 		pod  corev1.Pod
 		want string
 	}{{running, "Terminating"}, {lost, "Unknown"}, {done, "Completed"}} {
-		if got, _, _, _ := podTableView(&c.pod); got != c.want {
+		if got, _, _, _ := podListView(&c.pod); got != c.want {
 			t.Errorf("%s: status %q, want %q", c.pod.Name, got, c.want)
 		}
 	}

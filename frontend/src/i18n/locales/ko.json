@@ -532,6 +532,7 @@
       "ready": "준비됨",
       "notReady": "준비 안 됨",
       "pending": "대기",
+      "terminating": "Terminating",
       "error": "오류",
       "restarted": "재시작 이력",
       "completed": "완료"

@@ -36,32 +36,33 @@ func TestPodInit_AsKubectlPrintsIt(t *testing.T) {
 		return p
 	}
 	cases := []struct {
-		name            string
-		p               *corev1.Pod
-		status, ready   string
-		restarts        int32
-		detailStatusSet bool
+		name          string
+		p             *corev1.Pod
+		status, ready string
+		restarts      int32
 	}{
 		{"init failed", pod(corev1.PodPending, []corev1.ContainerStatus{{Name: "migrate", RestartCount: 3, State: done(1, "Error", 0)}}, nil,
-			corev1.ContainerStatus{State: waiting("PodInitializing")}, false), "Init:Error", "0/1", 3, true},
+			corev1.ContainerStatus{State: waiting("PodInitializing")}, false), "Init:Error", "0/1", 3},
 		{"init crash looping", pod(corev1.PodPending, []corev1.ContainerStatus{{Name: "migrate", RestartCount: 5, State: waiting("CrashLoopBackOff")}}, nil,
-			corev1.ContainerStatus{State: waiting("PodInitializing")}, false), "Init:CrashLoopBackOff", "0/1", 5, true},
+			corev1.ContainerStatus{State: waiting("PodInitializing")}, false), "Init:CrashLoopBackOff", "0/1", 5},
 		{"second of two running", pod(corev1.PodPending, []corev1.ContainerStatus{{Name: "a", State: done(0, "Completed", 0)}, {Name: "b", State: running}}, nil,
-			corev1.ContainerStatus{State: waiting("PodInitializing")}, false), "Init:1/2", "0/1", 0, true},
+			corev1.ContainerStatus{State: waiting("PodInitializing")}, false), "Init:1/2", "0/1", 0},
 		{"waiting to start", pod(corev1.PodPending, []corev1.ContainerStatus{{Name: "a", State: waiting("PodInitializing")}}, nil,
-			corev1.ContainerStatus{State: waiting("PodInitializing")}, false), "Init:0/1", "0/1", 0, true},
+			corev1.ContainerStatus{State: waiting("PodInitializing")}, false), "Init:0/1", "0/1", 0},
 		{"killed without a reason", pod(corev1.PodPending, []corev1.ContainerStatus{{Name: "a", State: done(137, "", 9)}}, nil,
-			corev1.ContainerStatus{State: waiting("PodInitializing")}, false), "Init:Signal:9", "0/1", 0, true},
+			corev1.ContainerStatus{State: waiting("PodInitializing")}, false), "Init:Signal:9", "0/1", 0},
 		{"exit code without a reason", pod(corev1.PodPending, []corev1.ContainerStatus{{Name: "a", State: done(2, "", 0)}}, nil,
-			corev1.ContainerStatus{State: waiting("PodInitializing")}, false), "Init:ExitCode:2", "0/1", 0, true},
-		// the Initialized condition wins over a stale init status: the containers' columns as before
+			corev1.ContainerStatus{State: waiting("PodInitializing")}, false), "Init:ExitCode:2", "0/1", 0},
+		// the Initialized condition gives the containers' READY and RESTARTS, and the init reason stays unless a container names another
 		{"initialized", pod(corev1.PodRunning, []corev1.ContainerStatus{{Name: "a", RestartCount: 4, State: done(1, "Error", 0)}}, nil,
-			corev1.ContainerStatus{Ready: true, RestartCount: 1, State: running}, true), "Running", "1/1", 1, false},
+			corev1.ContainerStatus{Ready: true, RestartCount: 1, State: running}, true), "Init:Error", "1/1", 1},
+		{"initialized, a container waiting", pod(corev1.PodRunning, []corev1.ContainerStatus{{Name: "a", RestartCount: 4, State: done(1, "Error", 0)}}, nil,
+			corev1.ContainerStatus{RestartCount: 1, State: waiting("CrashLoopBackOff")}, true), "CrashLoopBackOff", "0/1", 1},
 		// a started sidecar (restartable init container) counts as a container, its restarts too
 		{"sidecar", pod(corev1.PodRunning, []corev1.ContainerStatus{{Name: "proxy", Ready: true, Started: &started, RestartCount: 2, State: running}},
-			[]corev1.Container{{Name: "proxy", RestartPolicy: &always}}, corev1.ContainerStatus{Ready: true, RestartCount: 1, State: running}, true), "Running", "2/2", 3, false},
+			[]corev1.Container{{Name: "proxy", RestartPolicy: &always}}, corev1.ContainerStatus{Ready: true, RestartCount: 1, State: running}, true), "Running", "2/2", 3},
 		{"sidecar not started", pod(corev1.PodPending, []corev1.ContainerStatus{{Name: "proxy", State: waiting("PodInitializing")}},
-			[]corev1.Container{{Name: "proxy", RestartPolicy: &always}}, corev1.ContainerStatus{State: waiting("PodInitializing")}, false), "Init:0/1", "0/2", 0, true},
+			[]corev1.Container{{Name: "proxy", RestartPolicy: &always}}, corev1.ContainerStatus{State: waiting("PodInitializing")}, false), "Init:0/1", "0/2", 0},
 	}
 	for _, c := range cases {
 		r := toPodRow(c.p, newInterner())
@@ -69,7 +70,7 @@ func TestPodInit_AsKubectlPrintsIt(t *testing.T) {
 			t.Errorf("%s: row %s %s %d, kubectl %s %s %d", c.name, r.status, r.item().Ready, r.restarts, c.status, c.ready, c.restarts)
 		}
 		d := formatPodDetail(c.p)
-		if d["ready"] != c.ready || d["restart_count"] != c.restarts || (c.detailStatusSet && d["status"] != c.status) {
+		if d["ready"] != c.ready || d["restart_count"] != c.restarts || d["status"] != c.status {
 			t.Errorf("%s: detail %v %v %v, kubectl %s %s %d", c.name, d["status"], d["ready"], d["restart_count"], c.status, c.ready, c.restarts)
 		}
 	}
