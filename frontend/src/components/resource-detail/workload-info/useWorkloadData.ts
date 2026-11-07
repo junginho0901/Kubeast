@@ -8,6 +8,8 @@ import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { usePermission } from '@/hooks/usePermission'
 import { replicaSetOwnerRow } from '../netstoreDetail'
 import { useDrawerFollowsObject } from '../useDrawerFollowsObject'
+import { useOwnedWatchedResources } from './useOwnedWatchedResources'
+import { workloadPodsLayer } from './workloadPodsLayer'
 
 // The list each kind's drawer watches its one object on.
 const WATCHED_LIST: Record<string, [apiVersion: string, plural: string]> = {
@@ -112,18 +114,33 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
     staleTime: 10_000,
   })
 
+  const volumeClaimTemplates = Array.isArray(describe?.volume_claim_templates)
+    ? describe.volume_claim_templates
+    : (Array.isArray(spec.volumeClaimTemplates) ? spec.volumeClaimTemplates : [])
+
+  // Held here so the window's table and the floating chat read one list; asked for once the describe answer has come, as
+  // when the table asked for it.
+  const owned = useOwnedWatchedResources({
+    kind,
+    namespace,
+    name,
+    selector: isLoading && needsDescribe ? undefined : selector,
+    volumeClaimTemplates,
+  })
+  const { pods: ownedPods, podsEnabled, podsLoaded } = owned
+
   // AI 위젯 overlay
   const aiSnapshot = useMemo(() => {
     if (!name || !kind) return null
     const desc = describe as Record<string, unknown> | undefined
     const events = (desc?.events as Array<{ type?: string; reason?: string; message?: string; last_timestamp?: string }>) ?? []
     const conditions = (desc?.conditions as Array<{ type?: string; status?: string; reason?: string }>) ?? []
-    const pods = (desc?.pods as Array<{ name?: string; phase?: string; restart_count?: number }>) ?? []
-    const notRunning = pods.filter((p) => p.phase && p.phase !== 'Running' && p.phase !== 'Succeeded').length
+    const pods = workloadPodsLayer(desc, { pods: ownedPods, podsEnabled, podsLoaded }, namespace)
     const replicas = (desc?.replicas as number | undefined) ?? (status.replicas as number | undefined)
     const ready = (desc?.ready_replicas as number | undefined) ?? (status.readyReplicas as number | undefined)
-    const prefix = notRunning > 0 || (replicas && ready !== undefined && ready < replicas) ? '⚠️ ' : ''
-    const summary = `${prefix}${kind} ${name} (${namespace}) — replicas ${ready ?? '?'}/${replicas ?? '?'}, Pod ${pods.length}개${notRunning ? ` (NotRunning ${notRunning})` : ''}`
+    const prefix = pods.notRunning > 0 || (replicas && ready !== undefined && ready < replicas) ? '⚠️ ' : ''
+    const podCount = pods.known ? `, Pod ${pods.total}개${pods.notRunning ? ` (NotRunning ${pods.notRunning})` : ''}` : ''
+    const summary = `${prefix}${kind} ${name} (${namespace}) — replicas ${ready ?? '?'}/${replicas ?? '?'}${podCount}`
 
     return {
       source: 'WorkloadInfo' as const,
@@ -141,14 +158,7 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
         strategy: desc?.strategy ?? spec.strategy,
         selector,
         conditions: conditions.slice(0, 8),
-        pods: pods.slice(0, 20).map((p: any) => ({
-          name: p.name,
-          phase: p.phase,
-          restart_count: p.restart_count,
-          ready: p.ready,
-          node_name: p.node_name,
-          _link: namespace && p.name ? buildResourceLink('Pod', namespace, p.name) : undefined,
-        })),
+        pods: pods.items,
         recent_events: events.slice(0, 10),
         ...(isCronJob && Array.isArray(ownedJobs)
           ? {
@@ -159,7 +169,7 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
           : {}),
       },
     }
-  }, [name, namespace, kind, describe, spec, status, selector, ownedJobs, isCronJob])
+  }, [name, namespace, kind, describe, spec, status, selector, ownedJobs, isCronJob, ownedPods, podsEnabled, podsLoaded])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
@@ -359,10 +369,6 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
     ? describe.conditions
     : (Array.isArray(status.conditions) ? status.conditions : [])
 
-  const volumeClaimTemplates = Array.isArray(describe?.volume_claim_templates)
-    ? describe.volume_claim_templates
-    : (Array.isArray(spec.volumeClaimTemplates) ? spec.volumeClaimTemplates : [])
-
   const showStrategy =
     strategyType !== '-' ||
     strategyRolling?.max_unavailable != null ||
@@ -419,6 +425,7 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
     isError,
     needsDescribe,
     ownedJobs,
+    owned,
     revisions,
     // mutations
     suspendMut,

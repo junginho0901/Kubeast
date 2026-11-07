@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsSection, Th, NoneText, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
+import { violatingPodCount } from './limitRangeViolations'
 import { usePagination } from './usePagination'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -34,6 +35,7 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
     staleTime: 10_000,
   })
   const violationList = Array.isArray(violations) ? violations : []
+  const podCount = violatingPodCount(violationList)
   const { items: pagedViolations, nav: violationsNav } = usePagination(violationList, 10)
 
   useResourceDetailOverlay({ kind: 'LimitRange', name, namespace, describe: desc })
@@ -59,8 +61,8 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
         ))}
         <SummaryBadge
           label="Violating Pods"
-          value={violationList.length}
-          color={violationList.length === 0 ? 'green' : violationList.length < 5 ? 'amber' : 'red'}
+          value={podCount}
+          color={podCount === 0 ? 'green' : podCount < 5 ? 'amber' : 'red'}
         />
       </div>
 
@@ -111,7 +113,7 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
         ) : <NoneText />}
       </InfoSection>
 
-      <InfoSection title="Violating Pods ({{n}})" titleValues={{ n: violationList.length }}>
+      <InfoSection title="Violating Pods ({{n}})" titleValues={{ n: podCount }}>
         {violationList.length === 0 ? (
           <p className="text-xs text-slate-400"><Tx>No pod in this namespace currently violates this LimitRange.</Tx></p>
         ) : (

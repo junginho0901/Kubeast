@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
+import { getJobStatusColor } from '@/pages/workloads/jobs/jobHelpers'
 import { StatusBadge } from './DetailCommon'
 
 // The CronJob drawer's Jobs table draws a Job's status with this badge: each word kubectl's printJob prints in the colour
@@ -21,6 +22,9 @@ describe('StatusBadge draws a Job status by what it means', () => {
       const html = renderToStaticMarkup(createElement(StatusBadge, { status }))
       expect(/badge-\w+/.exec(html)?.[0]).toBe(colour)
       expect(html).toContain(`>${status}<`)
+    })
+    it(`${status} is the same in the Jobs list`, () => {
+      expect(getJobStatusColor(status)).toBe(colour)
     })
   }
 })

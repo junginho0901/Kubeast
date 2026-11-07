@@ -2192,6 +2192,13 @@ test.describe('number check — list screens', () => {
           await expect.poll(async () => (await jobRow(page, c.name))?.Status, { timeout: 20_000 }).toBe(c.condition)
           expect(await jobRow(page, c.name)).toEqual(await jobPrints(c.name))
           await expect(jobBadge(page, c.name)).toHaveClass(c.badge)
+          if (c.condition === 'FailureTarget') {
+            // decided, not retrying, while the last pod is still there
+            const issue = async () => ((await (await page.request.get('/api/v1/cluster/issues?cluster=self')).json()).issues as { id: string; reason: string }[])
+              .find((i) => i.id === `Job/${NS}/${c.name}`)?.reason
+            await expect.poll(issue, { timeout: 20_000, message: 'its issue while its pods leave' }).toBe('FailureTarget')
+            expect((await jobPrints(c.name)).Status, 'kubectl still prints').toBe('FailureTarget')
+          }
         })
       }
     } finally {
@@ -2200,6 +2207,81 @@ test.describe('number check — list screens', () => {
         kubectl(`delete pod -n ${NS} -l batch.kubernetes.io/job-name=${c.name} --ignore-not-found --wait=false --grace-period=0 --force`)
       }
     }
+  })
+
+  test('a work queue\'s drawer says Completions <unset>, as kubectl describe does', async ({ page }) => {
+    const name = 'num-held'
+    expect(/^Completions:\s+(\S+)$/m.exec(kubectl(`describe job ${name} -n ${NS}`))?.[1], 'kubectl describe prints').toBe('<unset>')
+    await page.goto(`${JOBS}&detail=${encodeURIComponent(`Job/${NS}/${name}`)}`)
+    await expect(page.locator(DRAWER).last()).toContainText(/Completions\s*<unset>/, { timeout: 20_000 })
+    await expect(page.locator(DRAWER).last()).toContainText(/Parallelism\s*3/)
+  })
+
+  // One Job, one colour: a running Job is green in its list and in its CronJob's Jobs table, as its Resource Graph box is
+  // (number-check-graph.spec.ts), and its card with them.
+  test('a running Job is drawn green in the Jobs list and its CronJob\'s table', async ({ page }) => {
+    const name = 'num-going'
+    try {
+      kubectl('apply -f -', JSON.stringify({
+        apiVersion: 'batch/v1',
+        kind: 'Job',
+        metadata: {
+          name,
+          namespace: NS,
+          ownerReferences: [{ apiVersion: 'batch/v1', kind: 'CronJob', name: 'num-cron', uid: kubectl(`get cronjob num-cron -n ${NS} -o jsonpath='{.metadata.uid}'`), controller: true }],
+        },
+        spec: { template: { spec: { restartPolicy: 'Never', terminationGracePeriodSeconds: 0, containers: [{ name: 'app', image: 'busybox:1.37', imagePullPolicy: 'IfNotPresent', command: ['sleep', '300'] }] } } },
+      }))
+      await expect.poll(async () => (await jobPrints(name)).Status, { timeout: 20_000, message: 'kubectl prints' }).toBe('Running')
+      await page.goto(JOBS)
+      await expect.poll(async () => (await jobRow(page, name))?.Status, { timeout: 20_000 }).toBe('Running')
+      await expect(jobBadge(page, name)).toHaveClass(/badge-success/)
+      await expect(page.locator('main div.rounded-lg.border').filter({ hasText: /^(Running|실행 중)/ }).first()).toHaveClass(/emerald/)
+      await page.goto(`${JOBS}&detail=${encodeURIComponent(`CronJob/${NS}/num-cron`)}`)
+      const row = page.locator(DRAWER).last().locator('tbody tr').filter({ hasText: name })
+      await expect(row.locator('.badge').first()).toHaveText('Running', { timeout: 20_000 })
+      await expect(row.locator('.badge').first()).toHaveClass(/badge-success/)
+    } finally {
+      kubectl(`delete job ${name} -n ${NS} --ignore-not-found --wait=false`)
+    }
+  })
+
+  test('the floating chat is told the Jobs cards\' numbers, each Job by its Status', async ({ page }) => {
+    const sent: { base?: { data?: { stats?: Record<string, number>; interpretations?: string[] } } | null }[] = []
+    await page.route(/\/api\/v1\/sessions(\?|$)/, (route) =>
+      route.request().method() === 'POST'
+        ? route.fulfill({ json: { id: 'e2e-num-jobs-1', title: 'New Chat', created_at: '', updated_at: '', message_count: 0 } })
+        : route.fallback())
+    await page.route(/\/api\/v1\/sessions\/e2e-num-jobs-\d+(\?|$)/, (route) =>
+      route.fulfill({ json: { id: 'e2e-num-jobs-1', title: 'New Chat', created_at: '', updated_at: '', messages: [] } }))
+    await page.route(/\/api\/v1\/ai\/sessions\/e2e-num-jobs-\d+\/floating-chat/, (route) => {
+      sent.push(route.request().postDataJSON().page_context)
+      return route.fulfill({ contentType: 'text/event-stream', body: 'data: {"content":"ok"}\n\ndata: [DONE]\n\n' })
+    })
+    const ask = async () => {
+      if ((await page.getByTestId('floating-chat-panel').count()) === 0) await page.getByTestId('floating-chat-toggle').click()
+      const input = page.getByTestId('floating-chat-input')
+      await expect(input).toBeVisible()
+      const before = sent.length
+      await input.fill('what is on this screen?')
+      await input.press('Enter')
+      await expect.poll(() => sent.length).toBe(before + 1)
+      await expect(page.getByTestId('floating-chat-panel').getByRole('button', { name: 'Send' })).toBeVisible()
+      return sent[sent.length - 1].base?.data
+    }
+    const table = await on().apiTable(`/apis/batch/v1/namespaces/${NS}/jobs`)
+    const status = table.columnDefinitions.findIndex((c) => c.name === 'Status')
+    const statuses = table.rows.map((r) => String(r.cells[status]))
+    const want = {
+      total: statuses.length,
+      completed: statuses.filter((s) => s === 'Complete').length,
+      failed: statuses.filter((s) => s === 'Failed').length,
+      running: statuses.filter((s) => s !== 'Complete' && s !== 'Failed').length,
+    }
+    expect(statuses, 'a suspended Job, which runs no pods, is among them').toContain('Suspended')
+    await page.goto(JOBS)
+    await expect.poll(async () => (await readScreen(page)).cards, { timeout: 20_000 }).toMatchObject({ Total: want.total, Completed: want.completed, Running: want.running, Failed: want.failed })
+    await expect.poll(async () => (await ask())?.stats, { timeout: 20_000 }).toEqual(want)
   })
 
   // The External IP cell is what kubectl prints; the drawer's rows are the spec's external IPs and the load balancer's addresses.

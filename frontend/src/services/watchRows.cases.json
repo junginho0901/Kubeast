@@ -3364,7 +3364,7 @@
    "succeeded": 0
   },
   "shows": {
-   "badge": "badge-warning",
+   "badge": "badge-success",
    "completions": "0/1",
    "containers": "app, side",
    "duration": "60m",
@@ -3557,7 +3557,7 @@
    "succeeded": 0
   },
   "shows": {
-   "badge": "badge-warning",
+   "badge": "badge-success",
    "completions": "0/1",
    "containers": "app, side",
    "duration": "60m",
@@ -3985,7 +3985,7 @@
    "succeeded": 0
   },
   "shows": {
-   "badge": "badge-warning",
+   "badge": "badge-success",
    "completions": "0/1 of 3",
    "containers": "app, side",
    "duration": "60m",
@@ -4284,7 +4284,7 @@
    "succeeded": 0
   },
   "shows": {
-   "badge": "badge-warning",
+   "badge": "badge-success",
    "completions": "0/1",
    "containers": "app, side",
    "duration": "60m",

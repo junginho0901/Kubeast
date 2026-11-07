@@ -7,7 +7,7 @@ import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import type { GPUDashboardData, GPUMetricsData, GPUDeviceMetric, GPUNodeInfo } from '@/services/api'
-import type { SortKey, SummaryCard } from './gpuNodesHelpers'
+import { sortGPUNodes, type SortKey, type SummaryCard } from './gpuNodesHelpers'
 import { gpuModels, gpuNodeCounts, gpuVendorCounts, vendorNames } from '../gpuNumbers'
 import { nodeReadiness } from '@/utils/nodeStatus'
 
@@ -99,32 +99,7 @@ export function useGPUNodesData({ searchQuery, sortKey, sortDir, currentPage }: 
   // company's GPUs of a node under its own model
   const modelDistribution = useMemo(() => gpuModels(nodes), [nodes])
 
-  const sortedNodes = useMemo(() => {
-    if (!sortKey) return filteredNodes
-    const list = [...filteredNodes]
-    const getValue = (node: GPUNodeInfo): string | number => {
-      switch (sortKey) {
-        case 'name': return node.name
-        case 'gpu_vendor': return vendorNames(node.gpu_vendors)
-        case 'gpu_model': return node.gpu_model ?? ''
-        case 'gpu_memory': return node.gpu_memory ?? ''
-        case 'gpu_capacity': return node.gpu_capacity
-        case 'gpu_allocatable': return node.gpu_allocatable
-        case 'status': return node.status
-        case 'mig_strategy': return node.mig_strategy ?? ''
-        default: return ''
-      }
-    }
-    list.sort((a, b) => {
-      const av = getValue(a)
-      const bv = getValue(b)
-      if (typeof av === 'number' && typeof bv === 'number') {
-        return sortDir === 'asc' ? av - bv : bv - av
-      }
-      return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
-    })
-    return list
-  }, [filteredNodes, sortDir, sortKey])
+  const sortedNodes = useMemo(() => sortGPUNodes(filteredNodes, sortKey, sortDir), [filteredNodes, sortDir, sortKey])
 
   const adaptive = useAdaptiveTable({
     recalculationKey: sortedNodes.length,

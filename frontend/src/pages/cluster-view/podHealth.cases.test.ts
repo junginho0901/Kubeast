@@ -18,6 +18,34 @@ describe('getPodHealth gives what k8s-service gives', () => {
     expect(getPodHealth(creating).level).toBe('warn')
   })
 
+  describe('a pod that finished with a sidecar', () => {
+    const finished = (side: Record<string, unknown>, app: Record<string, unknown> = { state: { terminated: { reason: 'Completed', exit_code: 0 } } }) => {
+      const got = getPodHealth({ phase: 'Succeeded', containers: [{ name: 'app', ...app }], init_containers: [{ name: 'side', started: false, ...side }] })
+      return `${got.level} ${got.reason}`
+    }
+    const sidecar = { restart_policy: 'Always' }
+
+    it('is fine with its sidecar ended on SIGTERM', () => {
+      expect(finished({ ...sidecar, state: { terminated: { reason: 'Error', exit_code: 143 } } })).toBe('ok Succeeded')
+    })
+
+    it('is fine with its sidecar killed after its grace period', () => {
+      expect(finished({ ...sidecar, state: { terminated: { reason: 'Error', exit_code: 137 } } })).toBe('ok Succeeded')
+    })
+
+    it('is fine with its sidecar crashing when the containers ended', () => {
+      expect(finished({ ...sidecar, state: { waiting: { reason: 'CrashLoopBackOff' } } })).toBe('ok Succeeded')
+    })
+
+    it('stays an error when a plain init container failed', () => {
+      expect(finished({ state: { terminated: { reason: 'Error', exit_code: 1 } } })).toBe('error Error')
+    })
+
+    it('stays an error when its own container says it failed', () => {
+      expect(finished({ ...sidecar, state: { terminated: { reason: 'Completed', exit_code: 0 } } }, { state: { terminated: { reason: 'Error', exit_code: 1 } } })).toBe('error Error')
+    })
+  })
+
   describe('a pod with a sidecar', () => {
     const health = (side: Record<string, unknown>, app: Record<string, unknown> = { ready: true, state: { running: {} } }) => {
       const got = getPodHealth({ phase: 'Running', containers: [{ name: 'app', ...app }], init_containers: [{ name: 'side', ...side }] })

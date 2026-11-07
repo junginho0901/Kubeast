@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Box, CheckCircle, RefreshCw, Search, X, XCircle } from 'lucide-react'
+import { AlertCircle, Box, CheckCircle, RefreshCw, Search, X, XCircle } from 'lucide-react'
 
 import { ListPager } from '@/components/ListPager'
 import { ModalOverlay } from '@/components/ModalOverlay'
@@ -16,6 +16,7 @@ import { nodeStatusBadge, nodeStatusParts } from '@/utils/nodeStatus'
 import type { NamespaceCounts } from '../namespaceCounts'
 import { buildResourceLink } from '@/utils/resourceLink'
 import type { ResourceType } from '../types'
+import { podWindowAIFields, podWindowBadge } from './podWindowBadge'
 
 const ITEMS_PER_PAGE = 50
 
@@ -80,7 +81,8 @@ export function ResourceModal({
     data: {
       visible_items: filteredResources.slice(0, 30).map((r) => {
         const kind = KIND_BY_TYPE[selectedResourceType]
-        return { kind, name: r.name, namespace: r.namespace, status: r.status ?? r.phase, _link: buildResourceLink(kind, r.namespace, r.name) }
+        const fields = selectedResourceType === 'pods' ? podWindowAIFields(r) : { status: r.status ?? r.phase }
+        return { kind, name: r.name, namespace: r.namespace, ...fields, _link: buildResourceLink(kind, r.namespace, r.name) }
       }),
     },
   } : null, [selectedResourceType, isLoading, selectedStat?.name, resourceCount, searchQuery, filteredResources])
@@ -197,36 +199,45 @@ export function ResourceModal({
               {selectedResourceType === 'pods' && (
                 <div className="space-y-2">
                   {filteredResources.length > 0 ? (
-                    pageItems.map((pod) => (
-                      <div
-                        key={`${pod.namespace}-${pod.name}`}
-                        onClick={() => openDetail({ kind: 'Pod', name: pod.name, namespace: pod.namespace })}
-                        className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors cursor-pointer"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            {pod.phase === 'Running' ? (
-                              <CheckCircle className="w-5 h-5 text-green-400" />
-                            ) : (
-                              <XCircle className="w-5 h-5 text-red-400" />
-                            )}
-                            <div>
-                              <h3 className="font-medium text-ink">{pod.name}</h3>
-                              <p className="text-sm text-slate-400">{pod.namespace}</p>
+                    pageItems.map((pod) => {
+                      const shown = podWindowBadge(pod)
+                      const notReadyHint = shown.notReady ? tr('pods.table.notReadyHint', 'Not ready ({{ready}})', { ready: pod.ready }) : ''
+                      return (
+                        <div
+                          key={`${pod.namespace}-${pod.name}`}
+                          onClick={() => openDetail({ kind: 'Pod', name: pod.name, namespace: pod.namespace })}
+                          className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors cursor-pointer"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              {shown.level === 'ok' ? (
+                                <CheckCircle className="w-5 h-5 text-green-400" />
+                              ) : shown.level === 'error' ? (
+                                <XCircle className="w-5 h-5 text-red-400" />
+                              ) : (
+                                <AlertCircle className="w-5 h-5 text-yellow-400" />
+                              )}
+                              <div>
+                                <h3 className="font-medium text-ink">{pod.name}</h3>
+                                <p className="text-sm text-slate-400">{pod.namespace}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`badge ${shown.badge}`}
+                                title={[notReadyHint, shown.title].filter(Boolean).join(' · ') || undefined}
+                                data-testid="resource-modal-pod-status"
+                              >
+                                {shown.text}
+                              </span>
+                              {pod.node_name && (
+                                <span className="text-xs text-slate-400">{pod.node_name}</span>
+                              )}
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className={`badge ${pod.phase === 'Running' ? 'badge-success' : 'badge-warning'
-                              }`}>
-                              {pod.phase || '-'}
-                            </span>
-                            {pod.node_name && (
-                              <span className="text-xs text-slate-400">{pod.node_name}</span>
-                            )}
-                          </div>
                         </div>
-                      </div>
-                    ))
+                      )
+                    })
                   ) : (
                     <div className="text-center py-12">
                       <p className="text-slate-400">

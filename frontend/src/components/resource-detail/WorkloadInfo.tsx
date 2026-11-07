@@ -52,6 +52,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlo
     isError,
     needsDescribe,
     ownedJobs,
+    owned,
     revisions,
     suspendMut,
     triggerMut,
@@ -176,10 +177,8 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlo
       />
 
       <WorkloadOwnedResources
-        kind={kind}
-        name={name}
         namespace={namespace}
-        selector={selector}
+        owned={owned}
         isCronJob={isCronJob}
         isDaemonSet={isDaemonSet}
         isDeployment={isDeployment}
@@ -188,7 +187,6 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlo
         isStatefulSet={isStatefulSet}
         describe={describe}
         ownedJobs={ownedJobs}
-        volumeClaimTemplates={volumeClaimTemplates}
       />
 
       {Object.keys(selector).length > 0 && (

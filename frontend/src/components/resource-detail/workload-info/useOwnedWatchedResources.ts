@@ -15,12 +15,13 @@ interface Params {
   volumeClaimTemplates?: Array<any>
 }
 
-interface Result {
+export interface OwnedResources {
   pods: PodInfo[]
   replicaSets: ReplicaSetInfo[]
   jobs: JobInfo[]
   pvcsByPodName: Map<string, Array<{ vct: string; pvc?: PVCInfo }>>
   podsEnabled: boolean
+  podsLoaded: boolean
   rsEnabled: boolean
   jobsEnabled: boolean
   pvcsEnabled: boolean
@@ -35,7 +36,7 @@ function selectorToString(selector?: Record<string, string>): string {
 // ReplicaSet / StatefulSet detail. Pods are listed via labelSelector for Deployment,
 // via ownerReference filter for ReplicaSet/DaemonSet/StatefulSet/Job. Updates stream
 // through useKubeWatchList so kubectl scale / delete reflects immediately.
-export function useOwnedWatchedResources({ kind, namespace, name, selector, volumeClaimTemplates }: Params): Result {
+export function useOwnedWatchedResources({ kind, namespace, name, selector, volumeClaimTemplates }: Params): OwnedResources {
   const selectorStr = useMemo(() => selectorToString(selector), [selector])
 
   const podsKind = kind === 'DaemonSet' || kind === 'ReplicaSet' || kind === 'StatefulSet' || kind === 'Job' || kind === 'Deployment'
@@ -186,6 +187,7 @@ export function useOwnedWatchedResources({ kind, namespace, name, selector, volu
     jobs: Array.isArray(ownedJobsLive) ? ownedJobsLive : [],
     pvcsByPodName,
     podsEnabled,
+    podsLoaded: Array.isArray(pods),
     rsEnabled,
     jobsEnabled,
     pvcsEnabled,
