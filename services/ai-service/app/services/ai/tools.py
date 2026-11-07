@@ -1000,6 +1000,44 @@ K8S_READONLY_TOOLS: List[Dict] = [
     {
         "type": "function",
         "function": {
+            "name": "timeline",
+            "description": (
+                "Change history, as the Timeline screen shows it: events and rollout revisions (each Deployment's ReplicaSets, each StatefulSet's and DaemonSet's "
+                "ControllerRevisions) of one namespace, one object or every namespace the user reads. Use it for \"what changed before this broke?\", then read one object with k8s_describe_resource. "
+                "summary counts every event of the window; events holds the newest (events_shown of events_matching, said in events_note when cut), so do not count from the rows. "
+                "rollouts_total is null with rollouts_note when the rollouts could not be read: not counted, not zero. With until_time or a kind without a name, narrowed.events_matching is null when the "
+                "list stopped before reaching them: not counted, not zero. Events typically live about an hour in the cluster."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "namespace": {"type": "string", "description": "One namespace; empty for every namespace the user reads"},
+                    "since_time": {"type": "string", "description": "Start: 24h, 7d or an RFC3339 time (default 24h before the end). Rounded out to a whole hour back from now"},
+                    "until_time": {"type": "string", "description": "End as an RFC3339 time (default now)"},
+                    "event_type": {"type": "string", "enum": ["Normal", "Warning"], "description": "Only events of this type, the newest of that type; the counts stay of every event"},
+                    "kind": {"type": "string", "description": "An object's kind (Deployment, Pod …). With name, that object's history; alone, that kind among the rows read"},
+                    "name": {"type": "string", "description": "An object's name; needs kind and namespace (a Node's events are in namespace default)"},
+                    "limit": {"type": "integer", "description": "The newest events to list (default 200, at most 500, the screen's)"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "gpu",
+            "description": (
+                "GPUs and DRA, as the GPU screens show them: capacity, allocatable, in use (kubectl describe node's Allocated resources), free and waiting, in total, per company (NVIDIA, AMD, Intel) "
+                "and per node; each pod's request and status; device plugins, MIG and time-slicing; DeviceClasses and ResourceClaimTemplates; utilization, memory and temperature from DCGM where the "
+                "cluster's Prometheus has it. free is allocatable minus in use on each node, whatever the node's status. Use the counts here instead of adding up rows. A number a source could not give is null and the source is named in \"refused\" (the user's grant does not "
+                "reach it), \"not_read\" or \"not_served\", and utilization says why: it is not counted, not zero. ResourceClaims and ResourceSlices are k8s_get_resources."
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "k8s_jq_query",
             "description": (
                 "kubectl get -o json for a resource type, filtered by a jq expression — the way to read a large list without pulling it "

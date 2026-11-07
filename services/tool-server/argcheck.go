@@ -163,6 +163,8 @@ var argRules = map[string]argCheck{
 	"alert_severity": checkPrintable(50),
 	// A file in a container; k8s-service holds it to the configured patterns.
 	"path": checkContainerPath,
+	// The Timeline's event types: its API lists both for any other word.
+	"event_type": checkEnum("Normal", "Warning"),
 }
 
 // validateToolArgs rejects any argument that would not be read by kubectl as

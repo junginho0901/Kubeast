@@ -27,7 +27,7 @@ A "target cluster" is a cluster Kubeast manages, including the cluster it is ins
 | Drawer and dashboard graphs, optimization, storage analysis | Prometheus + metric collectors — §3 | `features.prometheus.enabled` (**off**) | Graph areas are hidden and optimization uses metrics-server point-in-time values |
 | Cost, optimization cost column | OpenCost — §4 | `features.cost.enabled` (on) | "OpenCost is not installed on this cluster" notice, no cost column |
 | Policy reports | The PolicyReport CRD and a tool that creates reports — §5 | `features.policyReports.enabled` (on) | "Not installed" notice |
-| GPU and DRA | NVIDIA, AMD or Intel device plugin and their node labels, DCGM exporter, DRA API — §6 | — | GPU counts and utilization are empty, or the DRA lists say "not installed" |
+| GPU and DRA (screens, AI `gpu`) | NVIDIA, AMD or Intel device plugin and their node labels, DCGM exporter, DRA API — §6 | — | GPU counts and utilization are empty, or the DRA lists say "not installed" |
 | VPA, Gateway API, Admission Policy, Ingress latency | The matching CRDs and controllers — §7 | — | Lists are empty with "not installed" |
 | Apply without restart (resize) | Kubernetes 1.35 or later — §8 | `features.inPlaceResize.enabled` (on) | The button is hidden and the API returns 409 |
 | Node shell | Privileged pods allowed, and the image — §9 | `nodeShell.enabled` (off) | Pod creation fails |

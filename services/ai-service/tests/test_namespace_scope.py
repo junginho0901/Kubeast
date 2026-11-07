@@ -16,6 +16,16 @@ def test_namespace_scope_error_mirrors_tool_server():
     assert namespace_scope_error(None, "c", "get_cluster_overview", {}) is None
 
 
+def test_a_tool_k8s_service_narrows_needs_no_namespace_and_stays_in_the_grant():
+    scoped = TokenPayload(user_id="u", role="member", matrix={"c": ("ai.tool.*",)}, namespaces={"c": ("api", "web")})
+    for tool in ("timeline", "gpu"):
+        assert namespace_scope_error(scoped, "c", tool, {}) is None, tool
+        assert namespace_scope_error(scoped, "c", tool, {"namespace": "web"}) is None, tool
+        assert "outside your grant" in namespace_scope_error(scoped, "c", tool, {"namespace": "db"}), tool
+        reason = namespace_scope_error(scoped, "c", tool, {"all_namespaces": True})
+        assert reason is not None and "spans the cluster" in reason, tool
+
+
 def test_all_namespaces_stays_inside_the_grant():
     scoped = TokenPayload(user_id="u", role="member", matrix={"c": ("ai.tool.*",)}, namespaces={"c": ("api", "web")})
     whole = TokenPayload(user_id="u", role="member", matrix={"c": ("ai.tool.*",)})

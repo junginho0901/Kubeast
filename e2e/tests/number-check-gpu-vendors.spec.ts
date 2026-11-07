@@ -514,6 +514,48 @@ test.describe('number check — AMD and Intel GPUs on the GPU screens', () => {
     }
   })
 
+  // ── the AI tool ──────────────────────────────────────────────────────────────────────────────────────────────────────
+
+  test('the AI tool gpu splits each company\'s numbers as the screens do, each as kubectl counts it', async ({ page, request }) => {
+    test.setTimeout(180_000)
+    await prepare(page)
+    const headers = await admin(request)
+    const config = await request.get('/api/v1/ai/mcp/config', { headers })
+    test.skip(!config.ok() || !(await config.json()).enabled, 'needs the MCP server (mcp.enabled in the dev values)')
+    await expect(async () => {
+      const c = await fixtureThere()
+      const res = await request.post('/api/v1/ai/mcp', {
+        headers: { Accept: 'application/json, text/event-stream', 'Content-Type': 'application/json', Authorization: headers.Authorization },
+        data: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'gpu', arguments: { cluster: CLUSTER } } },
+      })
+      expect(res.status(), await res.text()).toBe(200)
+      const tool = JSON.parse((await res.json()).result.content[0].text)
+
+      // each company's left is what its own GPUs on each node have left
+      const left = (v: { allocatable: number; used: number }) => Math.max(0, v.allocatable - v.used)
+      const nodesOf = (vendor: Vendor) => c.nodes.flatMap((n) => n.vendors.filter((v) => v.vendor === vendor))
+      expect(tool.vendors).toEqual(vendorTotals(c).map((v) => ({ ...v, free: nodesOf(v.vendor).reduce((s, e) => s + left(e), 0), nodes: nodesOf(v.vendor).length })))
+      expect(tool.total_gpu_free).toBe(c.nodes.flatMap((n) => n.vendors).reduce((s, e) => s + left(e), 0))
+      expect(tool.pod_vendors).toEqual(VENDORS.map((vendor) => {
+        const of = c.pods.filter((p) => p.vendors.some(([v]) => v === vendor))
+        return { vendor, pods: of.length, requested: of.filter((p) => !p.ended).reduce((s, p) => s + (p.vendors.find(([v]) => v === vendor)?.[1] ?? 0), 0) }
+      }).filter((v) => v.pods > 0))
+      for (const name of [AMD_NODE, INTEL_NODE]) {
+        const want = c.nodes.find((n) => n.name === name)!
+        const row = tool.gpu_nodes.find((n: Obj) => n.name === name)
+        expect(row.gpu_vendors.map((v: Obj) => [v.vendor, v.capacity, v.allocatable, v.used, v.model]), name).toEqual(want.vendors.map((v) => [v.vendor, v.capacity, v.allocatable, v.used, v.model]))
+        expect(row.gpu_free, name).toBe(want.vendors.reduce((s, e) => s + left(e), 0))
+      }
+      const models = new Map<string, { nodes: number; capacity: number; allocatable: number; used: number }>()
+      for (const v of c.nodes.flatMap((n) => n.vendors)) {
+        const e = models.get(v.model || 'Unknown') ?? { nodes: 0, capacity: 0, allocatable: 0, used: 0 }
+        models.set(v.model || 'Unknown', { nodes: e.nodes + 1, capacity: e.capacity + v.capacity, allocatable: e.allocatable + v.allocatable, used: e.used + v.used })
+      }
+      expect(Object.fromEntries(tool.models.map(({ model, ...e }: Obj) => [model, e]))).toEqual(Object.fromEntries(models))
+      expect(tool.device_plugins.map((p: Obj) => p.vendor), 'a plugin per company with GPUs').toEqual(expect.arrayContaining(['NVIDIA', 'AMD', 'Intel']))
+    }).toPass({ timeout: 90_000, intervals: [5_000] })
+  })
+
   // ── the floating chat ─────────────────────────────────────────────────────────────────────────────────────────────
 
   test('the floating chat is told each company\'s GPUs on each screen', async ({ page }) => {

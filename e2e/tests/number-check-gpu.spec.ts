@@ -821,6 +821,87 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
     }
   })
 
+  // ── the AI tool ───────────────────────────────────────────────────────────────────────────────────────────────────────
+
+  const mcpOn = async (request: APIRequestContext, headers: Record<string, string>) => {
+    const config = await request.get('/api/v1/ai/mcp/config', { headers })
+    return config.ok() && !!(await config.json()).enabled
+  }
+  const gpuTool = async (request: APIRequestContext, authorization: string) => {
+    const res = await request.post('/api/v1/ai/mcp', {
+      headers: { Accept: 'application/json, text/event-stream', 'Content-Type': 'application/json', Authorization: authorization },
+      data: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'gpu', arguments: { cluster: CLUSTER } } },
+      failOnStatusCode: false,
+    })
+    expect(res.status(), await res.text()).toBe(200)
+    const result = (await res.json()).result
+    expect(result.isError, result.content?.[0]?.text).toBeFalsy()
+    return JSON.parse(result.content[0].text) as Obj
+  }
+
+  test('the AI tool gpu answers what the screens read and count, kubectl\'s GPUs and Prometheus\'s DCGM', async ({ page, request }) => {
+    test.setTimeout(180_000)
+    await prepare(page)
+    const headers = await admin(request)
+    test.skip(!(await mcpOn(request, headers)), 'needs the MCP server (mcp.enabled in the dev values)')
+    const read = async (p: string) => {
+      const res = await request.get(`/api/v1/cluster/${p}?cluster=${CLUSTER}`, { headers })
+      expect(res.ok(), `${p}: ${res.status()}`).toBeTruthy()
+      return res.json() as Obj
+    }
+    await expect(async () => {
+      const c = await cluster()
+      const [dashboard, metrics, classes, templates] = await Promise.all([read('gpu/dashboard'), read('gpu/metrics'), read('deviceclasses'), read('resourceclaimtemplates/all')])
+      const tool = await gpuTool(request, headers.Authorization)
+
+      const left = (n: { allocatable: number; used: number }) => Math.max(0, n.allocatable - n.used)
+      const alloc = c.nodes.reduce((s, n) => s + n.allocatable, 0)
+      expect({ capacity: tool.total_gpu_capacity, allocatable: tool.total_gpu_allocatable, used: tool.total_gpu_used, waiting: tool.total_gpu_waiting, free: tool.total_gpu_free, rate: tool.allocation_rate }, 'kubectl').toEqual({
+        capacity: c.nodes.reduce((s, n) => s + n.capacity, 0), allocatable: alloc, used: c.used, waiting: c.waiting, free: c.nodes.reduce((s, n) => s + left(n), 0), rate: pct(c.used, alloc),
+      })
+      expect({ capacity: tool.total_gpu_capacity, allocatable: tool.total_gpu_allocatable, used: tool.total_gpu_used, waiting: tool.total_gpu_waiting }, 'the dashboard API').toEqual({
+        capacity: dashboard.total_gpu_capacity, allocatable: dashboard.total_gpu_allocatable, used: dashboard.total_gpu_used, waiting: dashboard.total_gpu_waiting,
+      })
+      const ready = c.nodes.filter((n) => readinessOf(n.status) === 'Ready').length
+      expect(tool.node_counts).toEqual({ total: c.nodes.length, ready, not_ready: c.nodes.length - ready })
+      expect(tool.pod_counts).toEqual({
+        total: c.pods.length,
+        running: c.pods.filter((p) => p.phase === 'Running').length,
+        pending: c.pods.filter((p) => p.phase === 'Pending').length,
+        failed: c.pods.filter((p) => p.phase === 'Failed' || namesError(p.status)).length,
+        requested: c.pods.filter((p) => !p.ended).reduce((s, p) => s + p.gpus, 0),
+        namespaces: new Set(c.pods.map((p) => p.namespace)).size,
+      })
+      expect(Object.fromEntries(tool.gpu_nodes.map((n: Obj) => [n.name, [n.gpu_capacity, n.gpu_allocatable, n.gpu_used, n.gpu_free, n.status]])), 'each node').toEqual(
+        Object.fromEntries(c.nodes.map((n) => [n.name, [n.capacity, n.allocatable, n.used, left(n), n.status]])))
+      expect(Object.fromEntries(tool.gpu_pods.map((p: Obj) => [`${p.namespace}/${p.name}`, [p.gpu_requested, p.status, p.node_name ?? '']])), 'each pod').toEqual(
+        Object.fromEntries(c.pods.map((p) => [p.key, [p.gpus, p.status, p.node]])))
+      expect(tool.vendors.map(({ free: _free, nodes: _nodes, ...v }: Obj) => v)).toEqual(dashboard.vendors)
+      expect(tool.device_plugins.map(({ state: _state, ...p }: Obj) => p)).toEqual(dashboard.device_plugins)
+      expect({ mig: tool.mig_enabled, slicing: tool.time_slicing_enabled }).toEqual({ mig: dashboard.mig_enabled, slicing: dashboard.time_slicing_enabled })
+
+      const { available, gpu_count, avg_gpu_util, avg_memory_util, total_memory_used_mb, total_memory_free_mb, total_memory_mb } = metrics
+      expect(tool.utilization).toEqual({ available, gpu_count, avg_gpu_util, avg_memory_util, total_memory_used_mb, total_memory_free_mb, total_memory_mb })
+      expect(tool.utilization.gpu_count, 'as Prometheus counts them').toBe(promValue('count(DCGM_FI_DEV_GPU_UTIL)'))
+      expect(tool.utilization.avg_gpu_util).toBeCloseTo(promValue('avg(DCGM_FI_DEV_GPU_UTIL)'), 6)
+      // a GPU's pod is named when it asks for GPUs or holds a DRA claim, a temperature of 0 is not there
+      const gpuRow = (g: G) => tool.gpus.find((r: Obj) => r.uuid === `GPU-e2e-num-${g.gpu}`)
+      for (const g of [...PLAIN, ...EXPORTED]) {
+        expect({ util: gpuRow(g)?.gpu_util, used: gpuRow(g)?.memory_used_mb, temp: gpuRow(g)?.memory_temp, pod: gpuRow(g)?.pod }, `GPU ${g.gpu}`).toEqual({
+          util: g.util, used: g.used, temp: g.temp || null, pod: g.pod ? `${NS}/${g.pod}` : undefined,
+        })
+      }
+      // the screens' podGpuUsage: the mean of its GPUs, the used of their memory
+      const usage = tool.gpu_pods.find((p: Obj) => p.name === 'gpu-two-cards')?.gpu_usage
+      expect(usage).toEqual({ gpus: 2, gpu_util: 60, memory_util_percent: (100000 / 160000) * 100 })
+
+      expect(tool.device_classes.map((d: Obj) => d.name)).toEqual(classes.map((d: Obj) => d.name))
+      expect(tool.device_classes.map((d: Obj) => d.name)).toContain(DRA_CLASS)
+      expect(tool.resource_claim_templates.map((t: Obj) => t.name)).toEqual(templates.map((t: Obj) => t.name))
+      expect(tool.refused, 'an admin is refused nothing').toBeUndefined()
+    }).toPass({ timeout: 90_000, intervals: [5_000] })
+  })
+
   test('GPU Dashboard: no GPU on any node but pods asking for one shows the pods; nothing at all says so', async ({ page }) => {
     await prepare(page)
     const c = await cluster()
@@ -878,6 +959,18 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
         await user.goto(url(p))
         await expect(user.getByTestId('table-forbidden'), `${p}: the table says why`).toHaveText(/permission/i, { timeout: 30_000 })
         await expect.poll(async () => (await readPage(user)).cards, { message: `${p}: cards` }).toEqual(Object.fromEntries(labels.map((l) => [l, '-'])))
+      }
+      // the AI tool: what a card shows as "-" is null and its source named, not zero
+      if (await mcpOn(request, headers)) {
+        const signedIn = await request.post('/api/v1/auth/login', { data: { email, password } })
+        expect(signedIn.ok(), `login ${email}`).toBeTruthy()
+        const tool = await gpuTool(request, `Bearer ${(await signedIn.json()).access_token as string}`)
+        expect({ capacity: tool.total_gpu_capacity, allocatable: tool.total_gpu_allocatable, used: tool.total_gpu_used, free: tool.total_gpu_free, nodes: tool.gpu_nodes, pods: tool.pod_counts, vendors: tool.vendors, gpus: tool.gpus })
+          .toEqual({ capacity: null, allocatable: null, used: null, free: null, nodes: null, pods: null, vendors: null, gpus: null })
+        expect(tool.refused.dashboard, 'the cluster refuses the nodes').toContain('forbidden')
+        expect(tool.refused.metrics, 'the cluster\'s Prometheus spans the cluster').toContain('limited to namespaces')
+        expect(tool.utilization.available).toBeNull()
+        expect(tool.null_note).toContain('not counted, not zero')
       }
     } finally {
       await ctx.close()

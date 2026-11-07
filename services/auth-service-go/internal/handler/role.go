@@ -455,6 +455,8 @@ func allPermissions() []map[string]interface{} {
 			{"ai.tool.network_drops", "Read tool: network drops by reason and peer (Hubble metrics)"},
 			{"ai.tool.network_top_flows", "Read tool: top talkers from AWS Network Flow Monitor"},
 			{"ai.tool.resource_graph", "Read tool: a namespace's resource graph"},
+			{"ai.tool.timeline", "Read tool: change history (events and rollouts)"},
+			{"ai.tool.gpu", "Read tool: GPU and DRA summary"},
 			{"ai.tool.hygiene", "Admin tool: the cluster hygiene report"},
 			{"ai.tool.k8s_jq_query", "Read tool: a resource list filtered by jq"},
 			{"ai.tool.k8s_tabular_query", "Read tool: a resource list as chosen columns"},

@@ -694,6 +694,69 @@
    "refused": ""
   },
   {
+   "tool": "gpu",
+   "args": {},
+   "refused": ""
+  },
+  {
+   "tool": "gpu",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "gpu",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "gpu",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "gpu",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "gpu",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "gpu",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "gpu",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "gpu",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
    "tool": "helm_read",
    "args": {},
    "refused": "namespace is required"
@@ -3900,6 +3963,69 @@
   },
   {
    "tool": "storage_summary",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "timeline",
+   "args": {},
+   "refused": ""
+  },
+  {
+   "tool": "timeline",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "timeline",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "timeline",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "timeline",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "timeline",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "timeline",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "timeline",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "timeline",
    "args": {
     "all_namespaces": false,
     "namespace": "shop"

@@ -180,6 +180,13 @@ async def test_second_batch_feature_tools_pass_declared_arguments_only():
         ("can_i", {"verb": "delete", "resource": "pods", "namespace": "shop", "group": ""}, {"verb": "delete", "resource": "pods", "namespace": "shop"}),
         ("resource_graph", {"namespace": "shop", "depth": 3}, {"namespace": "shop"}),
         (
+            "timeline",
+            {"namespace": "shop", "since_time": "6h", "until_time": "2026-11-06T09:00:00Z", "event_type": "Warning", "kind": "Deployment", "name": "web", "limit": 50, "cluster": "x", "hours": 3},
+            {"namespace": "shop", "since_time": "6h", "until_time": "2026-11-06T09:00:00Z", "event_type": "Warning", "kind": "Deployment", "name": "web", "limit": 50},
+        ),
+        ("timeline", {}, {}),
+        ("gpu", {"namespace": "shop", "cluster": "x"}, {}),
+        (
             "network_policy_check",
             {"src": " deployment/shop/client ", "dst": "service/shop/web", "port": 80, "protocol": "TCP", "namespace": "x"},
             {"src": "deployment/shop/client", "dst": "service/shop/web", "port": "80", "protocol": "TCP"},

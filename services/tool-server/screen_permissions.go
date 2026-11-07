@@ -104,6 +104,8 @@ var toolScreenTable = map[string]toolRule{
 	"pod_rbac":               leftToTheCluster,
 	"storage_summary":        leftToTheCluster,
 	"limit_range_violations": leftToTheCluster,
+	"timeline":               leftToTheCluster,
+	"gpu":                    leftToTheCluster,
 
 	"alert_investigate":        always("resource.alert.investigate", "resource.pod.read"),
 	"k8s_get_pod_logs":         always("resource.pod.read"),

@@ -34,27 +34,33 @@ const (
 
 // k8sServiceGet calls one k8s-service API for the routed cluster as the caller.
 func k8sServiceGet(ctx context.Context, headers http.Header, path string, q url.Values) (int, []byte, error) {
+	status, _, body, err := k8sServiceGetWithHeader(ctx, headers, path, q)
+	return status, body, err
+}
+
+// k8sServiceGetWithHeader is k8sServiceGet for an answer whose header says more than its body.
+func k8sServiceGetWithHeader(ctx context.Context, headers http.Header, path string, q url.Values) (int, http.Header, []byte, error) {
 	if q == nil {
 		q = url.Values{}
 	}
 	q.Set("cluster", clusterIDFromCtx(ctx))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, k8sServiceURL+"/api/v1"+path+"?"+q.Encode(), nil)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, nil, err
 	}
 	if auth := headers.Get("Authorization"); auth != "" {
 		req.Header.Set("Authorization", auth)
 	}
 	resp, err := doTraced(featureHTTP, req)
 	if err != nil {
-		return 0, nil, fmt.Errorf("k8s-service %s: %w", path, err)
+		return 0, nil, nil, fmt.Errorf("k8s-service %s: %w", path, err)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, featureBodyCap))
 	if err != nil {
-		return 0, nil, fmt.Errorf("k8s-service %s: %w", path, err)
+		return 0, nil, nil, fmt.Errorf("k8s-service %s: %w", path, err)
 	}
-	return resp.StatusCode, body, nil
+	return resp.StatusCode, resp.Header, body, nil
 }
 
 // doTraced sends a k8s-service request; for a tool call being recorded it asks
