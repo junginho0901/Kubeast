@@ -515,6 +515,9 @@ func (s *Service) mayListGroup(ctx context.Context, b *clientBundle, group, reso
 	if s.cache != nil && s.cache.Get(ctx, key, &allowed) {
 		return allowed, nil
 	}
+	if s.answered.askedAgain(key, time.Now()) {
+		ctx = askingAgain(ctx)
+	}
 	// The key holds the cluster and the identity the review goes out as, all its answer depends on.
 	return s.askOnce(ctx, key, func(ctx context.Context) (bool, error) {
 		var known bool
@@ -529,9 +532,11 @@ func (s *Service) mayListGroup(ctx context.Context, b *clientBundle, group, reso
 		if err != nil {
 			return false, err
 		}
+		ttl := accessCheckTTL()
 		if s.cache != nil {
-			s.cache.Set(ctx, key, review.Status.Allowed, accessCheckTTL())
+			s.cache.Set(ctx, key, review.Status.Allowed, ttl)
 		}
+		s.answered.answered(key, time.Now().Add(ttl))
 		return review.Status.Allowed, nil
 	})
 }

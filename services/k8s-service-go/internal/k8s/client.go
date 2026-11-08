@@ -24,6 +24,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/gitops"
 	"github.com/junginho0901/kubeast/services/pkg/protectedns"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -67,6 +68,9 @@ type clientBundle struct {
 	cost     *costCache
 	version  serverVersionCache
 	nodePods flight.Group[*nodePodList]
+	// events is one read of an object's events as kubeast:cache for everyone asking; eventsRefused the namespaces it was refused, until when
+	events        flight.Group[*corev1.EventList]
+	eventsRefused sync.Map
 
 	// cacheClient is the identity the overview informers watch as; inf is the
 	// running set, if any (informer_cache.go). id names the cluster in logs.
@@ -114,6 +118,7 @@ type Service struct {
 	limiters *clusterLimiters
 	// accessChecks is one access question to the cluster at a time per identity and question.
 	accessChecks flight.Group[bool]
+	answered     answeredChecks
 
 	watchEnabled bool
 
@@ -281,7 +286,10 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 	})
 	// A request recorded for an AI tool call (accesstrail) goes out with its own Audit-ID.
 	cfg.Wrap(kubetrail.RoundTripper)
-	clientset, err := kubernetes.NewForConfig(cfg)
+	// on a copy, so the dynamic client and UserRESTConfigFor keep rates of their own as before
+	userCfg := rest.CopyConfig(cfg)
+	userCfg.RateLimiter = newTurnLimiter(cfg.QPS, cfg.Burst)
+	clientset, err := kubernetes.NewForConfig(userCfg)
 	if err != nil {
 		return nil, fmt.Errorf("create clientset: %w", err)
 	}
@@ -290,6 +298,7 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 		// the same wrapped transports, so a review carries the caller's impersonation as before
 		reviewCfg := rest.CopyConfig(cfg)
 		reviewCfg.QPS, reviewCfg.Burst = float32(clientRates.reviewQPS), max(clientRates.reviewBurst, clientRates.reviewQPS)
+		reviewCfg.RateLimiter = newTurnLimiter(reviewCfg.QPS, reviewCfg.Burst)
 		reviews, err := kubernetes.NewForConfig(reviewCfg)
 		if err != nil {
 			return nil, fmt.Errorf("create review clientset: %w", err)
