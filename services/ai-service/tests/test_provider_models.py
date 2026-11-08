@@ -72,6 +72,23 @@ async def test_no_list_gives_an_empty_answer_with_the_reason(monkeypatch):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("body", [
+    {"provider": "openai", "api_key_env": "CLAUDE_CODE_OAUTH_TOKEN"},
+    {"provider": "openai", "api_key_env": "CLAUDE_CODE_OAUTH_TOKEN", "base_url": "https://models.example.test/v1"},
+    {"provider": "anthropic", "api_key_env": "CLAUDE_CODE_OAUTH_TOKEN"},
+], ids=["openai's address", "an address of its own", "anthropic's address"])
+async def test_the_subscription_token_goes_to_no_other_provider_for_a_list(monkeypatch, body):
+    """The connection test's provider rule: only provider claude-code may name the subscription token, so no list is asked with it."""
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-subscription-token")
+    monkeypatch.setattr(api_public, "_validate_base_url", lambda url: None)
+    seen = serve(monkeypatch, lambda r: httpx.Response(200, json={"data": [{"id": "gpt-5.5"}]}))
+    with pytest.raises(HTTPException) as e:
+        await api_public._list_provider_models(body)
+    assert e.value.status_code == 400 and "claude-code" in str(e.value.detail)
+    assert seen == []
+
+
+@pytest.mark.asyncio
 async def test_key_variable_and_base_url_follow_the_policy():
     with pytest.raises(HTTPException) as e:
         await api_public._list_provider_models({"provider": "openai", "api_key_env": "DATABASE_URL"})

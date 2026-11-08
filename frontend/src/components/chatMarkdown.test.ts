@@ -372,6 +372,24 @@ describe.each(SURFACES)('%s: what an answer keeps', (_name, render) => {
     expect(render('![A chart](https://example.test/a.png "Title")')).toContain('<img src="https://example.test/a.png" alt="A chart" title="Title"/>')
   })
 
+  it('an image on the console\'s own host keeps its text and loses its address, so drawing the answer asks the console nothing', () => {
+    vi.stubGlobal('location', new URL('https://console.example.test/ai-chat'))
+    try {
+      for (const src of [
+        '/api/v1/namespaces/shop/secrets/db/yaml', 'api/v1/recordings/1/cast', '?x=1', '//console.example.test/api/v1/x',
+        'https://console.example.test/api/v1/x', 'http://CONSOLE.example.test:8443/api/v1/x', '/\\console.example.test/api/v1/x',
+      ]) {
+        const html = render(`![shown](${src}) and <img src="${src}" alt="raw">`)
+        const images = [...html.matchAll(/<img\b[^>]*>/g)].map((m) => m[0]).filter((tag) => /alt="(?:shown|raw)"/.test(tag))
+        expect(images).toEqual(['<img alt="shown"/>', '<img alt="raw"/>'])
+        expect([...html.matchAll(/<link rel="preload" as="image" href="([^"]*)"/g)].map((m) => m[1]).filter((href) => href !== '/icon.svg')).toEqual([])
+      }
+      expect(render('![A chart](https://example.test/a.png)')).toContain('<img src="https://example.test/a.png" alt="A chart"/>')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('a link to a resource opens its drawer, and a malformed one is plain text', () => {
     const link = anchor(render('[nginx](kubest://pod?ns=default&name=nginx-abc)'), 'kubest://pod?ns=default&amp;name=nginx-abc')
     expect(link).toContain('class="text-primary-400 underline decoration-dotted hover:text-primary-300"')

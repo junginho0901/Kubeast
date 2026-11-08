@@ -5,7 +5,7 @@ import { MarkdownLink } from '@/components/FloatingAIChat/MarkdownLink'
 import { MarkdownDetails, MarkdownSummary } from '@/components/MarkdownDisclosure'
 import { MarkdownTable } from '@/components/MarkdownTable'
 import { fenceReader } from '@/services/chatTextUtils'
-import { REMARK_PLUGINS } from '@/utils/markdown'
+import { aiImageSrc, REMARK_PLUGINS } from '@/utils/markdown'
 
 // How a chat answer becomes elements, the same in AI Chat and the floating chat. An answer is text a model wrote after
 // reading the cluster, so it draws only these elements and attributes, and none of them acts outside the answer.
@@ -154,8 +154,10 @@ function takersAsWords() {
   }
 }
 
-// react-markdown blanks an address of a scheme it does not know; MarkdownLink checks each kubest:// link it gets.
-function urlTransform(url: string): string {
+// react-markdown blanks an address of a scheme it does not know; MarkdownLink checks each kubest:// link it gets. An
+// image keeps only another host's address (aiImageSrc).
+function urlTransform(url: string, key: string): string | null {
+  if (key === 'src') return aiImageSrc(url)
   return url.startsWith('kubest://') ? url : defaultUrlTransform(url)
 }
 

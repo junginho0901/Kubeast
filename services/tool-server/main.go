@@ -45,6 +45,10 @@ var (
 )
 
 func main() {
+	// A k8s_jq_query program's child process (jq_worker.go).
+	if len(os.Args) > 1 && os.Args[1] == jqWorkerArg {
+		os.Exit(runJQWorker(os.Stdin, os.Stdout))
+	}
 	memlimit.Set(kubectlReservedBytes(kubectlSlots.Cap()))
 	port := envOrDefault("PORT", "8086")
 
