@@ -33,6 +33,8 @@ var (
 	// Write tools need the user's approval id (set by ai-service's approve path).
 	writeApprovalRequired = !strings.EqualFold(os.Getenv("AI_WRITE_APPROVAL"), "false")
 	defaultTimeout        = 50 * time.Second
+	// callWriteLimit is the server's write limit (newHTTPServer): a big answer may wait for its place until shortly before it.
+	callWriteLimit = 55 * time.Second
 
 	// toolAuth validates the caller's JWT against auth-service's JWKS (same
 	// issuer/audience settings every other service uses).
@@ -516,7 +518,7 @@ func newHTTPServer(port string, h http.Handler) *http.Server {
 		Addr:         ":" + port,
 		Handler:      h,
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 55 * time.Second,
+		WriteTimeout: callWriteLimit,
 		IdleTimeout:  60 * time.Second,
 	}
 }

@@ -90,6 +90,13 @@ func (s *Service) DescribeJob(ctx context.Context, namespace, name string) (map[
 	if job.Spec.ManualSelector != nil {
 		result["manual_selector"] = *job.Spec.ManualSelector
 	}
+	// The selector the Job's pods are listed by, as the other workloads' answers give it.
+	selector := map[string]string{}
+	if job.Spec.Selector != nil && job.Spec.Selector.MatchLabels != nil {
+		selector = job.Spec.Selector.MatchLabels
+	}
+	result["selector"] = selector
+	setSelectorExpressions(result, job.Spec.Selector)
 	if job.Status.StartTime != nil {
 		result["start_time"] = toISO(job.Status.StartTime)
 	}

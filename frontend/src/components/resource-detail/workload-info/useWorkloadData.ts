@@ -89,6 +89,13 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
     return (fromRaw as Record<string, string> | undefined) ?? {}
   }, [describe?.selector, spec.selector])
 
+  // The answer gives them when the selector has any (selector_expressions); else the object, when the drawer has it.
+  const selectorExpressions = useMemo(() => {
+    if (Array.isArray(describe?.selector_expressions)) return describe.selector_expressions
+    const fromRaw = (spec.selector as Record<string, any> | undefined)?.matchExpressions
+    return Array.isArray(fromRaw) ? fromRaw : []
+  }, [describe?.selector_expressions, spec.selector])
+
   // Prometheus workload-level metrics
   const podPrefix = name ? `${name}-` : ''
   const nsFilter = namespace ? `namespace="${namespace}"` : ''
@@ -130,6 +137,7 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
     namespace,
     name,
     selector: isLoading && needsDescribe ? undefined : selector,
+    selectorExpressions,
     volumeClaimTemplates,
   })
   const { pods: ownedPods, counted: podsCounted, podsEnabled, podsLoaded, jobs: liveJobs, jobsEnabled } = owned
@@ -174,12 +182,6 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
       qc.invalidateQueries({ queryKey: ['workload-describe', kind, namespace, name] })
     },
   })
-
-  const selectorExpressions = useMemo(() => {
-    if (Array.isArray(describe?.selector_expressions)) return describe.selector_expressions
-    const fromRaw = (spec.selector as Record<string, any> | undefined)?.matchExpressions
-    return Array.isArray(fromRaw) ? fromRaw : []
-  }, [describe?.selector_expressions, spec.selector])
 
   const podTemplate = useMemo(() => {
     const fromDescribe = describe?.pod_template

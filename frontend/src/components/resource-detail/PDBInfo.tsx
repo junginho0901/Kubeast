@@ -5,6 +5,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { InfoSection, InfoRow, InfoGrid, SummaryBadge, KeyValueTags, ConditionsTable, EventsSection, StatusBadge, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
+import { selectorText } from './netpolText'
 import { useNamespacePodTable } from './useNamespacePodTable'
 import { SET_POD_TABLE_WATCH_MAX } from './namespacePodTable'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -36,20 +37,19 @@ export default function PDBInfo({ name, namespace }: Props) {
 
   useResourceDetailOverlay({ kind: 'PodDisruptionBudget', name, namespace, describe: desc })
 
-  const selectorMap = useMemo(
-    () => (desc?.selector as Record<string, string> | undefined) ?? {},
-    [desc?.selector],
-  )
+  // matchExpressions too, as the disruption controller reads the budget's selector
   const selectorStr = useMemo(
-    () => Object.entries(selectorMap).map(([k, v]) => `${k}=${v}`).join(','),
-    [selectorMap],
+    () => selectorText({ matchLabels: desc?.selector, matchExpressions: desc?.match_expressions }),
+    [desc?.selector, desc?.match_expressions],
   )
-  const protectedEnabled = !!namespace && !!selectorStr
+  // policy/v1: no selector protects no pod, an empty one every pod of the namespace; a server that does not say is read as before
+  const hasSelector = desc?.has_selector as boolean | undefined
+  const protectedEnabled = !!namespace && hasSelector !== false && (hasSelector === true || !!selectorStr)
 
   const protectedPods = useNamespacePodTable({
     enabled: protectedEnabled,
     namespace,
-    filter: { label_selector: selectorStr },
+    filter: selectorStr ? { label_selector: selectorStr } : {},
     queryKey: ['pdb-protected-pods', namespace, name, selectorStr],
     keeps: keepEvery,
     selector: selectorStr,
@@ -157,8 +157,14 @@ export default function PDBInfo({ name, namespace }: Props) {
       )}
 
       {/* Protected Pods (live) */}
+      {hasSelector === false && (
+        <InfoSection title="Protected Pods ({{n}})" titleValues={{ n: 0 }}>
+          <p className="text-xs text-slate-400"><Tx>This PodDisruptionBudget has no selector, so it protects no pod.</Tx></p>
+        </InfoSection>
+      )}
       {protectedEnabled && (
         <InfoSection title="Protected Pods ({{n}})" titleValues={{ n: protectedPods.total }}>
+          {!selectorStr && <p className="mb-2 text-xs text-slate-400"><Tx>The selector is empty, so this PodDisruptionBudget protects every pod of its namespace.</Tx></p>}
           {protectedPods.note}
           {protectedPods.loading ? (
             <p className="text-xs text-slate-400"><Tx>Loading...</Tx></p>

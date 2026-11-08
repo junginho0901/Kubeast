@@ -4979,6 +4979,8 @@
     "No pod in this namespace references this ResourceClaim.": "이 Namespace에 이 ResourceClaim을 참조하는 Pod가 없습니다.",
     "No pod in this namespace uses this ServiceAccount.": "이 Namespace에 이 ServiceAccount를 쓰는 Pod가 없습니다.",
     "No pod matches this selector.": "이 셀렉터에 맞는 Pod가 없습니다.",
+    "This PodDisruptionBudget has no selector, so it protects no pod.": "이 PodDisruptionBudget에는 셀렉터가 없어 보호하는 Pod가 없습니다.",
+    "The selector is empty, so this PodDisruptionBudget protects every pod of its namespace.": "셀렉터가 비어 있어 이 PodDisruptionBudget은 Namespace의 모든 Pod를 보호합니다.",
     "No pods match this selector.": "이 셀렉터에 맞는 Pod가 없습니다.",
     "No pods match this podSelector.": "이 podSelector에 맞는 Pod가 없습니다.",
     "No pod uses any of the bound ServiceAccounts.": "묶인 ServiceAccount를 쓰는 Pod가 없습니다.",

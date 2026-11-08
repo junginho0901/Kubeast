@@ -1073,8 +1073,10 @@ multicluster:
   # wsMaxSubscriptionsPerConn those of one browser tab.
   wsMaxSubscriptions: 2000
   wsMaxSubscriptionsPerConn: 50
-  # How many watches of one cluster may be starting at once; the rest wait, so
-  # a restart does not bring every subscription to the API server at one moment.
+  # How many watches of one cluster may be waiting for the API server's first
+  # answer at once; the rest wait, so a restart does not bring every subscription
+  # to the API server at one moment. A start not answered in 5 s gives its place
+  # to the next and stays open, so a slow API server can have more unanswered.
   wsWatchStartConcurrency: 16
   # How many reads of more than one page (500 pods, ReplicaSets, ...) run at once
   # in one k8s-service; the rest wait, and a read of one page waits for none. One

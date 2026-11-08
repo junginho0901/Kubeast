@@ -92,6 +92,7 @@ func (s *Service) DescribeDaemonSet(ctx context.Context, namespace, name string)
 	if ds.Spec.Selector != nil && ds.Spec.Selector.MatchLabels != nil {
 		result["selector"] = ds.Spec.Selector.MatchLabels
 	}
+	setSelectorExpressions(result, ds.Spec.Selector)
 
 	// Update strategy
 	updateStrategy := map[string]interface{}{

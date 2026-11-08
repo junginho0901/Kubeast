@@ -1,0 +1,464 @@
+[
+ {
+  "name": "matchLabels only",
+  "selector": {
+   "app": "web"
+  },
+  "has_selector": true,
+  "label_selector": "app=web",
+  "pods": [
+   {
+    "name": "frontend-pod",
+    "labels": {
+     "app": "web",
+     "env": "prod",
+     "team": "a",
+     "tier": "frontend"
+    }
+   },
+   {
+    "name": "backend-pod",
+    "labels": {
+     "app": "web",
+     "env": "prod",
+     "team": "a",
+     "tier": "backend"
+    }
+   },
+   {
+    "name": "untiered-pod",
+    "labels": {
+     "app": "web",
+     "env": "dev",
+     "team": "a"
+    }
+   },
+   {
+    "name": "canary-pod",
+    "labels": {
+     "app": "web",
+     "canary": "true",
+     "env": "prod",
+     "team": "a",
+     "tier": "frontend"
+    }
+   },
+   {
+    "name": "zone-b-pod",
+    "labels": {
+     "app": "web",
+     "env": "dev",
+     "team": "a",
+     "tier": "frontend",
+     "zone": "b"
+    }
+   },
+   {
+    "name": "other-app-pod",
+    "labels": {
+     "app": "api",
+     "env": "prod",
+     "team": "a",
+     "tier": "frontend"
+    }
+   }
+  ],
+  "protected": [
+   "frontend-pod",
+   "backend-pod",
+   "untiered-pod",
+   "canary-pod",
+   "zone-b-pod"
+  ]
+ },
+ {
+  "name": "matchLabels and In",
+  "selector": {
+   "app": "web"
+  },
+  "match_expressions": [
+   {
+    "key": "tier",
+    "operator": "In",
+    "values": [
+     "frontend"
+    ]
+   }
+  ],
+  "has_selector": true,
+  "label_selector": "app=web,tier in (frontend)",
+  "pods": [
+   {
+    "name": "frontend-pod",
+    "labels": {
+     "app": "web",
+     "env": "prod",
+     "team": "a",
+     "tier": "frontend"
+    }
+   },
+   {
+    "name": "backend-pod",
+    "labels": {
+     "app": "web",
+     "env": "prod",
+     "team": "a",
+     "tier": "backend"
+    }
+   },
+   {
+    "name": "untiered-pod",
+    "labels": {
+     "app": "web",
+     "env": "dev",
+     "team": "a"
+    }
+   },
+   {
+    "name": "canary-pod",
+    "labels": {
+     "app": "web",
+     "canary": "true",
+     "env": "prod",
+     "team": "a",
+     "tier": "frontend"
+    }
+   },
+   {
+    "name": "zone-b-pod",
+    "labels": {
+     "app": "web",
+     "env": "dev",
+     "team": "a",
+     "tier": "frontend",
+     "zone": "b"
+    }
+   },
+   {
+    "name": "other-app-pod",
+    "labels": {
+     "app": "api",
+     "env": "prod",
+     "team": "a",
+     "tier": "frontend"
+    }
+   }
+  ],
+  "protected": [
+   "frontend-pod",
+   "canary-pod",
+   "zone-b-pod"
+  ]
+ },
+ {
+  "name": "every operator",
+  "selector": {
+   "app": "web"
+  },
+  "match_expressions": [
+   {
+    "key": "env",
+    "operator": "In",
+    "values": [
+     "prod",
+     "dev"
+    ]
+   },
+   {
+    "key": "zone",
+    "operator": "NotIn",
+    "values": [
+     "b"
+    ]
+   },
+   {
+    "key": "team",
+    "operator": "Exists",
+    "values": null
+   },
+   {
+    "key": "canary",
+    "operator": "DoesNotExist",
+    "values": null
+   }
+  ],
+  "has_selector": true,
+  "label_selector": "app=web,!canary,env in (dev,prod),team,zone notin (b)",
+  "pods": [
+   {
+    "name": "frontend-pod",
+    "labels": {
+     "app": "web",
+     "env": "prod",
+     "team": "a",
+     "tier": "frontend"
+    }
+   },
+   {
+    "name": "backend-pod",
+    "labels": {
+     "app": "web",
+     "env": "prod",
+     "team": "a",
+     "tier": "backend"
+    }
+   },
+   {
+    "name": "untiered-pod",
+    "labels": {
+     "app": "web",
+     "env": "dev",
+     "team": "a"
+    }
+   },
+   {
+    "name": "canary-pod",
+    "labels": {
+     "app": "web",
+     "canary": "true",
+     "env": "prod",
+     "team": "a",
+     "tier": "frontend"
+    }
+   },
+   {
+    "name": "zone-b-pod",
+    "labels": {
+     "app": "web",
+     "env": "dev",
+     "team": "a",
+     "tier": "frontend",
+     "zone": "b"
+    }
+   },
+   {
+    "name": "other-app-pod",
+    "labels": {
+     "app": "api",
+     "env": "prod",
+     "team": "a",
+     "tier": "frontend"
+    }
+   }
+  ],
+  "protected": [
+   "frontend-pod",
+   "backend-pod",
+   "untiered-pod"
+  ]
+ },
+ {
+  "name": "expressions only",
+  "selector": {},
+  "match_expressions": [
+   {
+    "key": "tier",
+    "operator": "NotIn",
+    "values": [
+     "backend"
+    ]
+   }
+  ],
+  "has_selector": true,
+  "label_selector": "tier notin (backend)",
+  "pods": [
+   {
+    "name": "frontend-pod",
+    "labels": {
+     "app": "web",
+     "env": "prod",
+     "team": "a",
+     "tier": "frontend"
+    }
+   },
+   {
+    "name": "backend-pod",
+    "labels": {
+     "app": "web",
+     "env": "prod",
+     "team": "a",
+     "tier": "backend"
+    }
+   },
+   {
+    "name": "untiered-pod",
+    "labels": {
+     "app": "web",
+     "env": "dev",
+     "team": "a"
+    }
+   },
+   {
+    "name": "canary-pod",
+    "labels": {
+     "app": "web",
+     "canary": "true",
+     "env": "prod",
+     "team": "a",
+     "tier": "frontend"
+    }
+   },
+   {
+    "name": "zone-b-pod",
+    "labels": {
+     "app": "web",
+     "env": "dev",
+     "team": "a",
+     "tier": "frontend",
+     "zone": "b"
+    }
+   },
+   {
+    "name": "other-app-pod",
+    "labels": {
+     "app": "api",
+     "env": "prod",
+     "team": "a",
+     "tier": "frontend"
+    }
+   }
+  ],
+  "protected": [
+   "frontend-pod",
+   "untiered-pod",
+   "canary-pod",
+   "zone-b-pod",
+   "other-app-pod"
+  ]
+ },
+ {
+  "name": "empty selector",
+  "selector": {},
+  "has_selector": true,
+  "label_selector": "",
+  "pods": [
+   {
+    "name": "frontend-pod",
+    "labels": {
+     "app": "web",
+     "env": "prod",
+     "team": "a",
+     "tier": "frontend"
+    }
+   },
+   {
+    "name": "backend-pod",
+    "labels": {
+     "app": "web",
+     "env": "prod",
+     "team": "a",
+     "tier": "backend"
+    }
+   },
+   {
+    "name": "untiered-pod",
+    "labels": {
+     "app": "web",
+     "env": "dev",
+     "team": "a"
+    }
+   },
+   {
+    "name": "canary-pod",
+    "labels": {
+     "app": "web",
+     "canary": "true",
+     "env": "prod",
+     "team": "a",
+     "tier": "frontend"
+    }
+   },
+   {
+    "name": "zone-b-pod",
+    "labels": {
+     "app": "web",
+     "env": "dev",
+     "team": "a",
+     "tier": "frontend",
+     "zone": "b"
+    }
+   },
+   {
+    "name": "other-app-pod",
+    "labels": {
+     "app": "api",
+     "env": "prod",
+     "team": "a",
+     "tier": "frontend"
+    }
+   }
+  ],
+  "protected": [
+   "frontend-pod",
+   "backend-pod",
+   "untiered-pod",
+   "canary-pod",
+   "zone-b-pod",
+   "other-app-pod"
+  ]
+ },
+ {
+  "name": "no selector",
+  "selector": {},
+  "has_selector": false,
+  "label_selector": "",
+  "pods": [
+   {
+    "name": "frontend-pod",
+    "labels": {
+     "app": "web",
+     "env": "prod",
+     "team": "a",
+     "tier": "frontend"
+    }
+   },
+   {
+    "name": "backend-pod",
+    "labels": {
+     "app": "web",
+     "env": "prod",
+     "team": "a",
+     "tier": "backend"
+    }
+   },
+   {
+    "name": "untiered-pod",
+    "labels": {
+     "app": "web",
+     "env": "dev",
+     "team": "a"
+    }
+   },
+   {
+    "name": "canary-pod",
+    "labels": {
+     "app": "web",
+     "canary": "true",
+     "env": "prod",
+     "team": "a",
+     "tier": "frontend"
+    }
+   },
+   {
+    "name": "zone-b-pod",
+    "labels": {
+     "app": "web",
+     "env": "dev",
+     "team": "a",
+     "tier": "frontend",
+     "zone": "b"
+    }
+   },
+   {
+    "name": "other-app-pod",
+    "labels": {
+     "app": "api",
+     "env": "prod",
+     "team": "a",
+     "tier": "frontend"
+    }
+   }
+  ],
+  "protected": []
+ }
+]

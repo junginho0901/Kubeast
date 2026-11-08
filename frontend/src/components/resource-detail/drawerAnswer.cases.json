@@ -1254,6 +1254,7 @@
    "events": [],
    "expected_pods": 3,
    "generation": 0,
+   "has_selector": true,
    "labels": {
     "team": "a"
    },
@@ -1273,6 +1274,7 @@
    "desired_healthy": 2,
    "disruptions_allowed": 1,
    "expected_pods": 3,
+   "has_selector": true,
    "labels": null,
    "match_expressions": [
     {
@@ -1298,6 +1300,7 @@
    "events": [],
    "expected_pods": 3,
    "generation": 0,
+   "has_selector": true,
    "labels": null,
    "match_expressions": [
     {
@@ -1329,6 +1332,7 @@
    "events": [],
    "expected_pods": 3,
    "generation": 0,
+   "has_selector": true,
    "labels": null,
    "match_expressions": [
     {
@@ -1352,6 +1356,7 @@
    "desired_healthy": 2,
    "disruptions_allowed": 1,
    "expected_pods": 3,
+   "has_selector": true,
    "labels": {
     "team": "a"
    },
@@ -1373,6 +1378,7 @@
    "events": [],
    "expected_pods": 3,
    "generation": 0,
+   "has_selector": true,
    "labels": {
     "team": "a"
    },
@@ -1935,6 +1941,7 @@
     "service_account_name": "",
     "tolerations": []
    },
+   "selector": {},
    "start_time": "2026-11-06T11:00:00Z",
    "status": "Running",
    "succeeded": 0,
@@ -2009,6 +2016,7 @@
     "service_account_name": "",
     "tolerations": []
    },
+   "selector": {},
    "start_time": "2026-11-06T11:00:00Z",
    "status": "Running",
    "succeeded": 0,
@@ -2071,6 +2079,7 @@
     "service_account_name": "",
     "tolerations": []
    },
+   "selector": {},
    "start_time": "2026-11-06T11:00:00Z",
    "status": "Running",
    "succeeded": 0,
@@ -2166,6 +2175,7 @@
     "service_account_name": "",
     "tolerations": []
    },
+   "selector": {},
    "status": "Suspended",
    "succeeded": 0,
    "suspend": true,
