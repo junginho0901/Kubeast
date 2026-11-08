@@ -18,6 +18,8 @@ import (
 	"sync"
 	"time"
 
+	"k8s.io/client-go/tools/clientcmd"
+
 	"github.com/junginho0901/kubeast/services/pkg/internalauth"
 	"github.com/junginho0901/kubeast/services/pkg/protectedns"
 )
@@ -87,6 +89,7 @@ contexts:
 - context:
     cluster: in-cluster
     user: in-cluster
+    namespace: default
   name: in-cluster
 current-context: in-cluster
 users:
@@ -150,7 +153,7 @@ func resolveClusterAccess(ctx context.Context, clusterID string, headers http.He
 	if inCluster {
 		path, err = writeKubeconfigFile(clusterID, inClusterKubeconfigYAML)
 	} else if blob != "" {
-		path, err = writeKubeconfigFile(clusterID, blob)
+		path, err = writeKubeconfigFile(clusterID, namespaceDefault(blob))
 	}
 	if err != nil {
 		return "", protectedns.Namespaces{}, err
@@ -227,6 +230,24 @@ func fetchClusterKubeconfig(ctx context.Context, clusterID string, headers http.
 		return "", false, protected, err
 	}
 	return body.Kubeconfig, body.InCluster, body.Protected, nil
+}
+
+// namespaceDefault names default in the current context, as kubectl config set-context does: else kubectl in this pod takes POD_NAMESPACE, Kubeast's own.
+func namespaceDefault(blob string) string {
+	cfg, err := clientcmd.Load([]byte(blob))
+	if err != nil {
+		return blob
+	}
+	current := cfg.Contexts[cfg.CurrentContext]
+	if current == nil || current.Namespace == "default" {
+		return blob
+	}
+	current.Namespace = "default"
+	out, err := clientcmd.Write(*cfg)
+	if err != nil {
+		return blob
+	}
+	return string(out)
 }
 
 func writeKubeconfigFile(clusterID, blob string) (string, error) {

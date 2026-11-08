@@ -2,11 +2,14 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"sync/atomic"
 	"testing"
+
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 // resetKubeconfigCache clears the package-global resolver cache so each test
@@ -86,6 +89,50 @@ func TestResolveClusterKubeconfig_InCluster_SynthesizesSAKubeconfig(t *testing.T
 	}
 	if string(data) != inClusterKubeconfigYAML {
 		t.Errorf("in-cluster kubeconfig content unexpected:\n%s", string(data))
+	}
+}
+
+// With the proxy off kubectl reads the kubeconfig written here: its context names default, as the proxy's run kubeconfig
+// does, so a call naming no namespace does not land in POD_NAMESPACE, Kubeast's own, and the credential is kept as sent.
+func TestKubeconfigsWrittenForKubectlNameDefaultWhenNoNamespaceIsNamed(t *testing.T) {
+	registered := func(namespace string) string {
+		kc := "apiVersion: v1\nkind: Config\nclusters:\n- name: c\n  cluster:\n    server: https://203.0.113.10:6443\n" +
+			"contexts:\n- name: c\n  context:\n    cluster: c\n    user: u\n"
+		if namespace != "" {
+			kc += "    namespace: " + namespace + "\n"
+		}
+		return kc + "current-context: c\nusers:\n- name: u\n  user:\n    token: fake-token-for-tests\n"
+	}
+	for name, answer := range map[string]map[string]interface{}{
+		"in-cluster":                     {"kubeconfig": "", "in_cluster": true},
+		"registered, no namespace":       {"kubeconfig": registered(""), "in_cluster": false},
+		"registered, another namespace":  {"kubeconfig": registered("team-a"), "in_cluster": false},
+		"registered, Kubeast's own name": {"kubeconfig": registered(protectedInstall), "in_cluster": false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			resetKubeconfigCache()
+			_, restore := mockK8sService(t, func(w http.ResponseWriter, _ *http.Request) {
+				_ = json.NewEncoder(w).Encode(answer)
+			})
+			defer restore()
+			path, err := resolveClusterKubeconfig(context.Background(), "c1", http.Header{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := clientcmd.LoadFromFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			current := cfg.Contexts[cfg.CurrentContext]
+			if current == nil || current.Namespace != "default" {
+				t.Fatalf("context %+v: kubectl would not take default", current)
+			}
+			if answer["in_cluster"] == false {
+				if c, u := cfg.Clusters[current.Cluster], cfg.AuthInfos[current.AuthInfo]; c == nil || c.Server != "https://203.0.113.10:6443" || u == nil || u.Token != "fake-token-for-tests" {
+					t.Fatalf("cluster %+v user %+v: the kubeconfig changed beyond its namespace", c, u)
+				}
+			}
+		})
 	}
 }
 

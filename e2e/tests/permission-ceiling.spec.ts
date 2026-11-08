@@ -364,6 +364,64 @@ test.describe('permission ceiling (M16)', () => {
     }
   })
 
+  test('a role the chart binds is granted only by a global admin or an Admin of the cluster, and the role list says which', async ({ request }) => {
+    test.skip(!chartBoundRoles().includes(CHART_BOUND), `needs ${CHART_BOUND} in auth.impersonation.customRoles (deploy/kind/values.yaml)`)
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const ts = Date.now().toString(36)
+    const password = 'e2e-ceiling-throwaway-9'
+    const roles: number[] = []
+    const users: string[] = []
+    const listed = async () => {
+      const raw = await (await request.get('/api/v1/auth/roles', { headers: admin })).json()
+      return (Array.isArray(raw) ? raw : raw.items || []) as { id: number; name: string; chart_bound?: boolean }[]
+    }
+    const makeUser = async (name: string, roleId: number) => {
+      const made = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name, email: `${name}@kubeast.local`, password, role_id: roleId } })
+      expect(made.status(), await made.text()).toBe(201)
+      const id = (await made.json()).id as string
+      users.push(id)
+      return id
+    }
+    try {
+      const leftover = (await listed()).find((r) => r.name === CHART_BOUND)
+      if (leftover) expect((await request.delete(`/api/v1/auth/admin/roles/${leftover.id}`, { headers: admin })).status()).toBe(204)
+      const bound = await request.post('/api/v1/auth/admin/roles', { headers: admin, data: { name: CHART_BOUND, permissions: ['resource.objects.read'] } })
+      expect(bound.status(), await bound.text()).toBe(201)
+      roles.push((await bound.json()).id)
+      const now = await listed()
+      expect(now.find((r) => r.name === CHART_BOUND)?.chart_bound, 'the list marks the role the chart binds').toBe(true)
+      expect(now.filter((r) => r.chart_bound).map((r) => r.name), 'and no other').toEqual([CHART_BOUND])
+
+      const userAdmin = await request.post('/api/v1/auth/admin/roles', { headers: admin, data: { name: `e2e-chartgrant-users-${ts}`, permissions: ['menu.*', 'admin.users.*'] } })
+      expect(userAdmin.status(), await userAdmin.text()).toBe(201)
+      roles.push((await userAdmin.json()).id)
+      const delegate = await makeUser(`e2e-chartgrant-d-${ts}`, roles[1])
+      const target = await makeUser(`e2e-chartgrant-t-${ts}`, await roleId(request, admin, 'Member'))
+      const grantDelegate = async (role: string) =>
+        expect((await request.put(`/api/v1/auth/admin/users/${delegate}/cluster-roles/self`, { headers: admin, data: { role } })).status()).toBe(200)
+      const grantAs = async (role: string) => {
+        const headers = await login(request, `e2e-chartgrant-d-${ts}@kubeast.local`, password)
+        return request.put(`/api/v1/auth/admin/users/${target}/cluster-roles/self`, { headers, data: { role: CHART_BOUND }, failOnStatusCode: false }).then(async (r) => ({ role, status: r.status(), body: await r.text() }))
+      }
+
+      await grantDelegate('Read')
+      const refused = await grantAs('Read')
+      expect(refused.status, refused.body).toBe(403)
+      expect(refused.body).toContain('auth.impersonation.customRoles')
+      expect((await (await request.get(`/api/v1/auth/admin/users/${target}/cluster-roles`, { headers: admin })).json()).self, 'nothing was granted').toBeUndefined()
+      const row = (await auditRows(request, admin, 'user.cluster_role.set')).find((r) => r.TargetID === target && r.Result === 'failure')
+      expect(String(row?.Error ?? ''), 'the refusal is audited').toContain('permission ceiling')
+
+      await grantDelegate('Admin')
+      const granted = await grantAs('Admin')
+      expect(granted.status, granted.body).toBe(200)
+      expect((await (await request.get(`/api/v1/auth/admin/users/${target}/cluster-roles`, { headers: admin })).json()).self).toBe(CHART_BOUND)
+    } finally {
+      for (const id of users) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers: admin, failOnStatusCode: false })
+      for (const id of roles) await request.delete(`/api/v1/auth/admin/roles/${id}`, { headers: admin, failOnStatusCode: false })
+    }
+  })
+
   test('a role edit stays within what the editor holds on the clusters the role is granted on', async ({ request }) => {
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     const ts = Date.now().toString(36)

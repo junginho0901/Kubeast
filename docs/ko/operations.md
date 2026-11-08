@@ -67,6 +67,7 @@ Kubeast는 정책을 만들거나 데이터를 저장하지 않습니다.
 - **내보내기·서명**:
   - CSV(BOM·CRLF, 수식 문자 무력화)나 JSON으로 내려받을 수 있습니다.
   - 클러스터별로 메모와 함께 서명하면 그 순간의 보고서가 스냅샷으로 저장됩니다(`hygiene_reviews`, `retention.reviewDays` 동안 보관).
+  - Kubeast가 도는 클러스터에서 전역 관리자가 서명한 스냅샷은 다른 사람에게 [Kubeast 자체 Namespace](cluster-requirements.md#kubeast-자체-namespace에-누가-닿는가)의 TLS 인증서·Helm release 발견과 그 건수를 빼고 보입니다. 그 사람이 직접 돌린 점검과 같습니다.
   - 화면에는 마지막 서명과 다음 기한(`intervalDays`, 기본 30일)이 보입니다.
   - n8n 같은 자동화는 API 키로 `GET /api/v1/cluster/hygiene?cluster=<id>&format=json`을 호출해 가져가면 됩니다.
   - 항목의 `message`는 영어 문장이고 CSV와 스냅샷에도 이 문장이 들어갑니다. 화면은 같은 내용을 `message_key`·`message_args`로 받아 화면 언어로 보여 줍니다.
