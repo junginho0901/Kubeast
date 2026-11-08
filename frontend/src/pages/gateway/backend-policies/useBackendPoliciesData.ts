@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/services/api'
+import { useDescribeReads } from '@/services/pacedReads'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
@@ -46,6 +47,7 @@ export function useBackendPoliciesData<T extends BackendPolicyLike>({
   currentPage,
 }: UseParams<T>) {
   const queryClient = useQueryClient()
+  const describes = useDescribeReads()
   const namespaceDropdownRef = useRef<HTMLDivElement>(null)
   const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -80,7 +82,7 @@ export function useBackendPoliciesData<T extends BackendPolicyLike>({
       const name = event?.object?.name || event?.object?.metadata?.name
       const ns = event?.object?.namespace || event?.object?.metadata?.namespace
       if (name && ns) {
-        queryClient.invalidateQueries({ queryKey: [config.describeQueryKey, ns, name] })
+        describes.changed([config.describeQueryKey, ns, name])
       }
     },
   })

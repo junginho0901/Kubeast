@@ -7,6 +7,13 @@ import { applyReplicaSetWatchEvent } from '@/pages/workloads/replicasets/replica
 import { applyJobWatchEvent } from '@/pages/workloads/jobs/jobWatchNormalize'
 import { applySecretWatchEvent } from '@/pages/configuration/secrets/secretWatchNormalize'
 import { applyConfigMapWatchEvent } from '@/pages/configuration/configmaps/configMapWatchNormalize'
+import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
+import configMapInfoSrc from '@/components/resource-detail/ConfigMapInfo.tsx?raw'
+import secretInfoSrc from '@/components/resource-detail/SecretInfo.tsx?raw'
+import serviceAccountInfoSrc from '@/components/resource-detail/ServiceAccountInfo.tsx?raw'
+import serviceInfoSrc from '@/components/resource-detail/ServiceInfo.tsx?raw'
+import pdbInfoSrc from '@/components/resource-detail/PDBInfo.tsx?raw'
+import networkPolicyDetailSrc from '@/components/resource-detail/network-info/NetworkPolicyDetail.tsx?raw'
 import leasesPageSrc from '@/pages/cluster/Leases.tsx?raw'
 import replicaSetsPageSrc from '@/pages/workloads/ReplicaSets.tsx?raw'
 import jobsPageSrc from '@/pages/workloads/Jobs.tsx?raw'
@@ -407,6 +414,7 @@ describe('a list that opens with thousands of objects', () => {
       job: { apply: applyJobWatchEvent, row: (i) => ({ name: `j-${i}`, namespace: NS, status: 'Running', completions: 1, succeeded: 0, failed: 0, active: 1 }) },
       secret: { apply: applySecretWatchEvent, row: (i) => ({ name: `s-${i}`, namespace: NS, type: 'Opaque', data_keys: ['a'] }) },
       configmap: { apply: applyConfigMapWatchEvent, row: (i) => ({ name: `c-${i}`, namespace: NS, data_keys: ['a'], data_count: 1 }) },
+      pod: { apply: applyPodWatchEvent, row: (i) => ({ name: `p-${i}`, namespace: NS, status: 'Running', phase: 'Running', containers: [{ name: 'app' }] }) },
     }
     for (const [kind, { apply: applyKind, row }] of Object.entries(rows)) {
       const start = [row(0), row(1), row(2)]
@@ -452,6 +460,55 @@ describe('a list that opens with thousands of objects', () => {
   it('ReplicaSets, Jobs, Secrets and ConfigMaps gather their frames', () => {
     for (const src of [replicaSetsPageSrc, jobsPageSrc, secretsPageSrc, configMapsPageSrc]) expect(src).toContain('gatherEveryMs: LIST_GATHER_MS')
   })
+
+  // These tables watch their namespace's pods: at fifty thousand pods one pass over the rows per frame never ends.
+  it('a drawer\'s table of its namespace\'s pods gathers its frames', () => {
+    const podWatch = /path: `\/api\/v1\/namespaces\/\$\{namespace\}\/pods`,[^}]*?\}?[^}]*?applyEvent: \(prev, event\) => applyPodWatchEvent\(prev as PodInfo\[\] \| undefined, event\),\n\s*gatherEveryMs: LIST_GATHER_MS,/
+    const drawers = { configMapInfoSrc, secretInfoSrc, serviceAccountInfoSrc, serviceInfoSrc, pdbInfoSrc, networkPolicyDetailSrc }
+    for (const [name, src] of Object.entries(drawers)) expect(podWatch.test(src), name).toBe(true)
+  })
+
+  it('a table of pods opened on thousands of frames changes once, what one by one leaves', () => {
+    const pods = Array.from({ length: 2000 }, (_, i) => ({ name: `p-${String(i).padStart(5, '0')}`, namespace: NS, status: 'Running' }))
+    const frames = pods.map((pod) => added({ ...pod, status: 'Pending' }))
+    const one = openList(pods)
+    for (const f of frames.slice(0, 200)) applyWatchMessage(one.client, listKey, f, applyPodWatchEvent as never)
+    const all = openList(pods)
+    const setQueryData = vi.spyOn(all.client, 'setQueryData')
+    applyWatchFrames(all.client, listKey, frames.slice(0, 200), applyPodWatchEvent as never)
+    expect(setQueryData).toHaveBeenCalledTimes(1)
+    expect(all.client.getQueryData(listKey)).toEqual(one.client.getQueryData(listKey))
+    one.stop()
+    all.stop()
+  })
+
+  it('what a table of pods costs, measured when WATCH_BENCH is set', () => {
+    if (!process.env.WATCH_BENCH) return
+    for (const size of [2000, 5000, 20_000, 50_000]) {
+      const pods = Array.from({ length: size }, (_, i) => ({ name: `p-${String(i).padStart(5, '0')}`, namespace: NS, status: 'Running', phase: 'Running', ready: '1/1', restart_count: 0, node_name: 'n', pod_ip: '10.0.0.1', labels: { app: 'web' } }))
+      const frames = pods.map((pod) => added({ ...pod }))
+      let oneByOne = 'not run: it grows with the square'
+      if (size <= 5000) {
+        const one = openList(pods)
+        const t0 = performance.now()
+        for (const f of frames) applyWatchMessage(one.client, listKey, f, applyPodWatchEvent as never)
+        oneByOne = `${(performance.now() - t0).toFixed(1)}ms`
+        one.stop()
+      }
+      const all = openList(pods)
+      const t1 = performance.now()
+      applyWatchFrames(all.client, listKey, frames, applyPodWatchEvent as never)
+      const whole = performance.now() - t1
+      all.stop()
+      // as a socket brings them: a hundred millisecond's worth at a time, the queue being 256 frames
+      const pieces = openList(pods)
+      const t2 = performance.now()
+      for (let at = 0; at < frames.length; at += 2560) applyWatchFrames(pieces.client, listKey, frames.slice(at, at + 2560), applyPodWatchEvent as never)
+      const inPieces = performance.now() - t2
+      pieces.stop()
+      console.info(`bench pod table rows=${size} one-by-one=${oneByOne} gathered-whole=${whole.toFixed(1)}ms gathered-2560-a-time=${inPieces.toFixed(1)}ms`)
+    }
+  }, 300_000)
 })
 
 describe('a list the server has no room to follow', () => {

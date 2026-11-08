@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation, Trans } from 'react-i18next'
 import { api, type ServiceAccountInfo } from '@/services/api'
+import { useDescribeReads } from '@/services/pacedReads'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
@@ -24,6 +25,7 @@ type SummaryCard = [label: string, value: number, boxClass: string, labelClass: 
 
 export default function ServiceAccounts() {
   const queryClient = useQueryClient()
+  const describes = useDescribeReads()
   const { t } = useTranslation()
   const tr = useCallback((key: string, fallback: string, options?: Record<string, any>) => t(key, { defaultValue: fallback, ...options }), [t])
   const { open: openDetail } = useResourceDetail()
@@ -70,7 +72,7 @@ export default function ServiceAccounts() {
       const name = event?.object?.name || event?.object?.metadata?.name
       const ns = event?.object?.namespace || event?.object?.metadata?.namespace
       if (name && ns) {
-        queryClient.invalidateQueries({ queryKey: ['serviceaccount-describe', ns, name] })
+        describes.changed(['serviceaccount-describe', ns, name])
       }
     },
   })

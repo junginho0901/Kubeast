@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type ReferenceGrantInfo } from '@/services/api'
+import { useDescribeReads } from '@/services/pacedReads'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
@@ -25,6 +26,7 @@ import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 
 export default function ReferenceGrants() {
   const queryClient = useQueryClient()
+  const describes = useDescribeReads()
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
@@ -68,7 +70,7 @@ export default function ReferenceGrants() {
       const name = event?.object?.name || event?.object?.metadata?.name
       const ns = event?.object?.namespace || event?.object?.metadata?.namespace
       if (name && ns) {
-        queryClient.invalidateQueries({ queryKey: ['referencegrant-describe', ns, name] })
+        describes.changed(['referencegrant-describe', ns, name])
       }
     },
   })

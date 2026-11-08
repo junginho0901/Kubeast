@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type DeviceClassItem } from '@/services/api'
+import { useDescribeReads } from '@/services/pacedReads'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
@@ -24,6 +25,7 @@ interface UseParams {
 
 export function useDeviceClassesData({ searchQuery, sortKey, sortDir, currentPage }: UseParams) {
   const queryClient = useQueryClient()
+  const describes = useDescribeReads()
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   const { data: deviceClasses, isLoading } = useQuery({
@@ -45,7 +47,7 @@ export function useDeviceClassesData({ searchQuery, sortKey, sortDir, currentPag
       if (event?.type === 'DELETED') return
       const name = event?.object?.name || event?.object?.metadata?.name
       if (name) {
-        queryClient.invalidateQueries({ queryKey: ['deviceclass-describe', name] })
+        describes.changed(['deviceclass-describe', name])
       }
     },
   })

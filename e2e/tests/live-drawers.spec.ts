@@ -120,6 +120,32 @@ test.describe('what keeps up by itself', () => {
     expect(describes.length, 'the frame is the row').toBe(before)
   })
 
+  test('a Pod\'s Events count up while it stays as it is, and its answer is not read for that', async ({ page }) => {
+    test.setTimeout(120_000)
+    const podName = kubectl(`-n ${NS} get pod -l app=web -o 'jsonpath={.items[0].metadata.name}'`)
+    const eventOf = (count: number) => JSON.stringify({
+      apiVersion: 'v1', kind: 'Event', metadata: { name: 'pod.e2e-live', namespace: NS },
+      involvedObject: { apiVersion: 'v1', kind: 'Pod', name: podName, namespace: NS },
+      type: 'Warning', reason: 'E2ELiveBackOff', message: 'Back-off restarting failed container', count,
+      firstTimestamp: '2026-11-07T00:00:00Z', lastTimestamp: new Date().toISOString(), source: { component: 'kubelet' },
+    })
+    const describes = requests(page, new RegExp(`/pods/${podName}/describe`))
+    await page.goto(`/workloads/pods?cluster=self&namespace=${NS}&detail=${encodeURIComponent(`Pod/${NS}/${podName}`)}`)
+    const drawer = page.locator(DRAWER).last()
+    await expect(drawer.getByText('Events', { exact: true }).first()).toBeVisible({ timeout: 20_000 })
+    await expect.poll(() => describes.length, { timeout: 20_000 }).toBeGreaterThan(0)
+    await page.waitForTimeout(3_000)
+    const before = describes.length
+
+    kubectl('apply -f -', eventOf(1))
+    const row = drawer.locator('tr').filter({ hasText: 'E2ELiveBackOff' })
+    await expect(row).toHaveCount(1, { timeout: 20_000 })
+    kubectl('apply -f -', eventOf(7))
+    await expect.poll(async () => (await row.locator('td').last().innerText()).trim(), { timeout: 20_000 }).toBe(kubectl(`-n ${NS} get event pod.e2e-live -o 'jsonpath={.count}'`))
+    expect(describes.length, 'the frame is the row').toBe(before)
+    kubectl(`-n ${NS} delete event pod.e2e-live --ignore-not-found`)
+  })
+
   test('a pod\'s RBAC tab shows a binding made while it is open, and takes it away when it is gone', async ({ page }) => {
     test.setTimeout(150_000)
     kubectl(`-n ${NS} create role e2e-live-role --verb=get --resource=pods`)

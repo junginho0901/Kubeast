@@ -1,6 +1,7 @@
 import { useContext, useEffect, useMemo, useRef } from 'react'
-import { focusManager, hashKey, useQueryClient, type QueryClient, type QueryKey } from '@tanstack/react-query'
+import { hashKey, useQueryClient, type QueryClient, type QueryKey } from '@tanstack/react-query'
 import { getCurrentClusterID } from '@/services/clusterRef'
+import { FIRST_READ_MS, pacedReads, READ_AT_MOST_EVERY_MS } from '@/services/pacedReads'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { watchMultiplexer } from '@/services/watchMultiplexer'
 import { OBJECT_READ_EVERY_MS } from './drawerObjectLayer'
@@ -8,12 +9,6 @@ import { DrawerObjectReadContext } from './drawerObjectRead'
 
 type WatchEvent = { type?: string; object?: any }
 type Fields = Record<string, unknown>
-
-// A rollout writes many times a second and each read lists events, for everyone with the drawer open; a frame shows at once, so a read can wait.
-const READ_AT_MOST_EVERY_MS = 5000
-// A change after a quiet time is read this soon. Its writes come close together, and every open drawer gets them at one moment.
-const FIRST_READ_MS = 250
-const FIRST_READ_SPREAD_MS = 750
 
 // What the answer has under names of its own for counts a frame says under the list's.
 const MIRRORED: Record<string, Record<string, string>> = {
@@ -50,52 +45,6 @@ function answerWithFrame(answer: Fields, frame: Fields): Fields {
     next[section] = moved
   }
   return next
-}
-
-// At most one read in `everyMs`, soon after a quiet time; a read under way may have missed the change, and restarting it might never let one finish.
-function pacedReads(client: QueryClient, everyMs: number) {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  let lastRead = -Infinity
-  let waiting: QueryKey[] = []
-  let stopWaitingToShow: (() => void) | undefined
-
-  const read = () => {
-    timer = undefined
-    // A hidden tab draws nothing and takes no read of anybody's: it reads once when it shows again.
-    if (!focusManager.isFocused()) {
-      stopWaitingToShow = focusManager.subscribe(() => {
-        if (!focusManager.isFocused()) return
-        stopWaitingToShow?.()
-        stopWaitingToShow = undefined
-        read()
-      })
-      return
-    }
-    const underWay = waiting.filter((queryKey) => client.isFetching({ queryKey }) > 0)
-    for (const queryKey of waiting) {
-      if (!underWay.includes(queryKey)) void client.invalidateQueries({ queryKey })
-    }
-    if (underWay.length < waiting.length) lastRead = Date.now()
-    waiting = underWay
-    if (waiting.length > 0) timer = setTimeout(read, everyMs)
-  }
-
-  return {
-    ask(keys: QueryKey[]) {
-      const asked = new Set(waiting.map((key) => hashKey(key)))
-      waiting = [...waiting, ...keys.filter((key) => !asked.has(hashKey(key)))]
-      if (timer !== undefined || stopWaitingToShow) return
-      const soon = FIRST_READ_MS + Math.random() * FIRST_READ_SPREAD_MS
-      timer = setTimeout(read, Math.max(soon, lastRead + everyMs - Date.now()))
-    },
-    clear() {
-      if (timer !== undefined) clearTimeout(timer)
-      timer = undefined
-      waiting = []
-      stopWaitingToShow?.()
-      stopWaitingToShow = undefined
-    },
-  }
 }
 
 // objectFollower keeps a drawer on its object: a frame goes over the answer at once, and the rest of the answer, the tables in `alsoRead` and the floating chat's object (`chatKey`) are read at their pace.

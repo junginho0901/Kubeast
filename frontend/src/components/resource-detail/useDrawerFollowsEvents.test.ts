@@ -4,6 +4,7 @@ import { applyWatchMessage } from '@/services/useKubeWatchList'
 import { applyEventFrame } from './useDrawerFollowsEvents'
 import useWorkloadDataSrc from './workload-info/useWorkloadData.ts?raw'
 import hpaInfoSrc from './HPAInfo.tsx?raw'
+import podInfoSrc from './PodInfo.tsx?raw'
 
 // an event as the answer lists it, told apart by reason here
 const row = (reason: string, count: number, last: string) => ({
@@ -64,9 +65,30 @@ describe('a frame of an event on the answer in the cache', () => {
     expect((client.getQueryData(key) as any).events[0].count).toBe(9)
     expect(client.getQueryState(key)?.isInvalidated).toBe(false)
   })
+
+  // A container that keeps crashing counts up BackOff on the event while the Pod's status reads the same.
+  it('counts up a pod\'s BackOff on the Pod drawer\'s answer, nothing read again', () => {
+    const client = new QueryClient()
+    const podKey = ['pod-describe', 'shop', 'web-1']
+    const backOff = { type: 'Warning', reason: 'BackOff', message: 'Back-off restarting failed container', count: 4, first_timestamp: '2026-11-07T00:00:00Z', last_timestamp: '2026-11-07T01:00:00Z', source: 'kubelet' }
+    client.setQueryData(podKey, { name: 'web-1', status: 'CrashLoopBackOff', events: [backOff] })
+    const object = { ...backOff, count: 9, last_timestamp: '2026-11-07T01:30:00Z', source: { component: 'kubelet', host: 'n1' }, involved_object: { kind: 'Pod', name: 'web-1', namespace: 'shop' } }
+    applyWatchMessage(client, podKey, { type: 'DATA', data: data('MODIFIED', object) }, (prev, event) => applyEventFrame(prev, event))
+    const shown = client.getQueryData(podKey) as any
+    expect(shown.events).toEqual([{ ...backOff, count: 9, last_timestamp: '2026-11-07T01:30:00Z' }])
+    expect(shown.status).toBe('CrashLoopBackOff')
+    expect(client.getQueryState(podKey)?.isInvalidated).toBe(false)
+  })
 })
 
 describe('the drawers whose events follow', () => {
+  it('a Pod\'s, as its own object in its own namespace', () => {
+    const hook = podInfoSrc.match(/useDrawerFollowsEvents\(\{[^}]*\}\)/)?.[0] ?? ''
+    expect(hook).toContain("describeKey: ['pod-describe', namespace, name]")
+    expect(hook).toContain('answer: podDescribe')
+    expect(hook).toContain("kind: 'Pod'")
+  })
+
   it('a workload\'s and an HPA\'s', () => {
     expect(useWorkloadDataSrc).toContain('useDrawerFollowsEvents({')
     expect(hpaInfoSrc).toContain('useDrawerFollowsEvents({')

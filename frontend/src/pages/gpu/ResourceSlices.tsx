@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation, Trans } from 'react-i18next'
 import { api, type ResourceSliceItem } from '@/services/api'
+import { useDescribeReads } from '@/services/pacedReads'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useForbidden } from '@/services/forbiddenStore'
 import { applyResourceSliceWatchEvent } from './resourceslices/resourceSlicesWatch'
@@ -20,6 +21,7 @@ type SortKey = null | 'name' | 'node' | 'driver' | 'pool' | 'devices' | 'age'
 
 export default function ResourceSlices() {
   const queryClient = useQueryClient()
+  const describes = useDescribeReads()
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
@@ -49,7 +51,7 @@ export default function ResourceSlices() {
       if (event?.type === 'DELETED') return
       const name = event?.object?.name || event?.object?.metadata?.name
       if (name) {
-        queryClient.invalidateQueries({ queryKey: ['resourceslice-describe', name] })
+        describes.changed(['resourceslice-describe', name])
       }
     },
   })

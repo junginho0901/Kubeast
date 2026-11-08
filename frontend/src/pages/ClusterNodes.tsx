@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
+import { useDescribeReads } from '@/services/pacedReads'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { Plus, RefreshCw, Search } from 'lucide-react'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
@@ -22,6 +23,7 @@ import NodeTable from './cluster-nodes/NodeTable'
 
 export default function ClusterNodes() {
   const queryClient = useQueryClient()
+  const describes = useDescribeReads()
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
@@ -49,7 +51,7 @@ export default function ClusterNodes() {
     onEvent: (event) => {
       const name = event?.object?.name
       if (name) {
-        queryClient.invalidateQueries({ queryKey: ['cluster', 'nodes', 'describe', name] })
+        describes.changedFollowed(['cluster', 'nodes', 'describe', name])
       }
     },
   })

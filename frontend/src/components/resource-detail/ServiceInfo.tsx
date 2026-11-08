@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import type { PodInfo } from '@/services/api'
-import { useKubeWatchList } from '@/services/useKubeWatchList'
+import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
 import { ConditionsTable, EventsSection, InfoSection, InfoRow, KeyValueTags, StatusBadge, SummaryBadge, Th, Tx } from './DetailCommon'
@@ -139,6 +139,7 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
     path: `/api/v1/namespaces/${namespace}/pods`,
     query: `watch=1&labelSelector=${encodeURIComponent(selectorStr)}`,
     applyEvent: (prev, event) => applyPodWatchEvent(prev as PodInfo[] | undefined, event),
+    gatherEveryMs: LIST_GATHER_MS,
   })
 
   const matchingPodsList = Array.isArray(matchingPods) ? matchingPods : []

@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import type { PodInfo } from '@/services/api'
-import { useKubeWatchList } from '@/services/useKubeWatchList'
+import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
 import { networkPolicyToRawJson } from '@/pages/network/networkpolicies/networkPolicyHelpers'
@@ -67,6 +67,7 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
     path: `/api/v1/namespaces/${namespace}/pods`,
     query: `watch=1&labelSelector=${encodeURIComponent(selectorStr)}`,
     applyEvent: (prev, event) => applyPodWatchEvent(prev as PodInfo[] | undefined, event),
+    gatherEveryMs: LIST_GATHER_MS,
   })
 
   const pods = Array.isArray(affectedPods) ? affectedPods : []
