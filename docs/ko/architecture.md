@@ -158,4 +158,10 @@ v0.7.6 코드로 2026-11-08에 잰 값입니다. k8s-service 하나를 차트 �
 - 객체를 따라가는 드로어와, 파드 300개까지의 워크로드 파드 표는 각각 그 사람으로 클러스터 watch 하나를 씁니다. 사람끼리 나눠 쓰지 않습니다.
 - AI의 이벤트 읽기(`k8s_get_events` · `timeline`)는 `multicluster.eventListConcurrency` 밖에서 이벤트를 쪽 단위로 읽습니다.
 
-이 한도들을 정하는 차트 값과 2026-10-30에 잰 값은 영어 문서의 [Many users](../architecture.md#many-users)에 있습니다.
+이 한도들을 정하는 차트 값과 2026-10-30에 잰 값은 영어 문서의 [Many users](../architecture.md#many-users)에 있습니다. 그중 몇 가지는 이렇게 걸립니다.
+
+- Helm 화면의 스트림도 `multicluster.wsMaxSubscriptions`에 셉니다(watch 하나, 네임스페이스로 한정된 grant면 네임스페이스마다 하나). 한도를 넘으면 같은 알림이 그렇다고 말하고, 스트림은 30초~5분 뒤 다시 묻습니다. watch 시작도 `multicluster.wsWatchStartConcurrency` 자리를 거칩니다.
+- Cluster View의 노드 칸, Node 드로어의 파드 표와 Allocated Resources는 그 순간 묻는 모두를 위해 노드마다 한 번 `kubeast:cache`로 읽고, 사람마다 자기 신원이 파드를 볼 수 있는 네임스페이스만 남깁니다(SelfSubjectAccessReview, 60초). Allocated Resources의 합은 kubectl describe node와 같은 계산입니다(init 컨테이너는 가장 큰 값, 사이드카 더함, pod overhead).
+- 노드 칸을 그 사람으로 읽는 목록(접근 확인이 거부한 네임스페이스, 재시작 뒤 informer가 동기화되기 전, `kubeast:cache`가 거부될 때)도 공유 읽기와 같은 노드 읽기 자리 16개를 거칩니다.
+- 여러 쪽 읽기(`multicluster.bigReadConcurrency`)는 자리를 기다리는 동안 읽은 쪽을 쥐지 않고 다음 쪽의 위치만 쥡니다. 2026-11-08 전에는 기다리는 읽기마다 쪽 하나를 쥐었습니다(파드 256개 × 64 KiB에 16 MiB).
+- Pods 화면 · 노드 지도 · 노드 목록이 파드 행을 다루는 일은 CPU 수만큼, 많아야 8개가 한꺼번에 돕니다. 차트가 CPU limit을 두지 않아 Go는 노드의 CPU를 모두 세고, 하나가 파드 50 000개에서 행 약 2 MB를 쥡니다. k8s-service 환경 변수 `POD_ROW_CONCURRENCY`로 다른 수를 정할 수 있습니다.

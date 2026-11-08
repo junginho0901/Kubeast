@@ -136,6 +136,10 @@ type Service struct {
 	apiResourcesCache map[cluster.ID][]metav1.APIResourceList
 	apiResourcesAt    map[cluster.ID]time.Time
 	apiResourcesRead  map[cluster.ID]time.Time // when the lists were read, which apiResourcesAt shortens for a partial answer
+	// apiResourcesSF is one discovery read per cluster at a time; apiResourcesGen moves when the caches are cleared, so
+	// a read that started before is not kept.
+	apiResourcesSF  singleflight.Group
+	apiResourcesGen uint64
 }
 
 var errNotLoaded = fmt.Errorf("kubeconfig not loaded")
@@ -448,6 +452,7 @@ func (s *Service) invalidateCaches() {
 	s.apiResourcesCache = map[cluster.ID][]metav1.APIResourceList{}
 	s.apiResourcesAt = map[cluster.ID]time.Time{}
 	s.apiResourcesRead = map[cluster.ID]time.Time{}
+	s.apiResourcesGen++
 	s.apiResourcesMu.Unlock()
 
 	s.invalidateResolveCache()

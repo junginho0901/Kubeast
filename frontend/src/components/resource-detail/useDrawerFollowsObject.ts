@@ -22,18 +22,38 @@ const ROW_DEFAULTS = new Set(['completions'])
 const sameKind = (a: unknown, b: unknown) => a == null || b == null || (typeof a === typeof b && Array.isArray(a) === Array.isArray(b))
 const frameSpeaksFor = (frame: Fields, held: Fields, key: string) => !ROW_DEFAULTS.has(key) && sameKind(frame[key], held[key])
 
+// A node's conditions: the row says each one's type, status and reason, the answer adds its message and times
+// (TestAnAnswerAndALiveUpdateOfOneObjectSayTheSameUnderOneName holds the row's fields to the answer's).
+const ANSWER_SAYS_MORE = new Set(['conditions'])
+const answerSaysMore = (frame: unknown, held: unknown, key: string) => ANSWER_SAYS_MORE.has(key) && Array.isArray(frame) && Array.isArray(held)
+
+// What the frame says of each item, against the answer's item in its place.
+function sameItems(frame: unknown[], held: unknown[]): boolean {
+  return frame.length === held.length && frame.every((item, i) => {
+    const kept = held[i] as Fields | undefined
+    return !!item && typeof item === 'object' && !!kept && typeof kept === 'object' &&
+      Object.entries(item as Fields).every(([key, value]) => JSON.stringify(value) === JSON.stringify(kept[key]))
+  })
+}
+
+function keyDiffers(frame: Fields, held: Fields, key: string): boolean {
+  if (answerSaysMore(frame[key], held[key], key)) return !sameItems(frame[key] as unknown[], held[key] as unknown[])
+  return frameSpeaksFor(frame, held, key) && JSON.stringify(frame[key]) !== JSON.stringify(held[key])
+}
+
 // Whether a frame says something else than the answer does, in what both hold: the answer is the row with more in it.
 function differsFromAnswer(frame: Fields, answer: unknown): boolean {
   if (!answer || typeof answer !== 'object') return false
   const held = answer as Fields
-  return Object.keys(frame).some((key) => key in held && frameSpeaksFor(frame, held, key) && JSON.stringify(frame[key]) !== JSON.stringify(held[key]))
+  return Object.keys(frame).some((key) => key in held && keyDiffers(frame, held, key))
 }
 
-// The answer with what a frame says over it (TestAnAnswerAndALiveUpdateOfOneObjectSayTheSameUnderOneName).
+// The answer with what a frame says over it (TestAnAnswerAndALiveUpdateOfOneObjectSayTheSameUnderOneName); what the
+// answer says more of waits for its read.
 function answerWithFrame(answer: Fields, frame: Fields): Fields {
   const next = { ...answer }
   for (const key of Object.keys(frame)) {
-    if (frameSpeaksFor(frame, answer, key)) next[key] = frame[key]
+    if (frameSpeaksFor(frame, answer, key) && !answerSaysMore(frame[key], answer[key], key)) next[key] = frame[key]
   }
   for (const [section, names] of Object.entries(MIRRORED)) {
     const held = answer[section]
@@ -57,6 +77,8 @@ export function objectFollower(client: QueryClient, describeKey: QueryKey, every
   let lastFrame: Fields | undefined
   let frames = 0
   let framesAtReadStart = 0
+  // a frame came before the first answer, which nothing compared with it yet
+  let unanswered = false
   let joining: ReturnType<typeof setTimeout> | undefined
 
   const heldFromBefore = (key: QueryKey) => {
@@ -69,8 +91,15 @@ export function objectFollower(client: QueryClient, describeKey: QueryKey, every
     if (event.type !== 'updated' || event.query.queryHash !== describeHash) return
     if (event.action.type === 'fetch') {
       framesAtReadStart = frames
-    } else if (event.action.type === 'success' && !event.action.manual && lastFrame && frames > framesAtReadStart) {
-      client.setQueryData(describeKey, answerWithFrame(event.query.state.data as Fields, lastFrame))
+    } else if (event.action.type === 'success' && !event.action.manual) {
+      const first = unanswered
+      unanswered = false
+      if (lastFrame && frames > framesAtReadStart) {
+        const answer = event.query.state.data as Fields
+        // the frames before the first answer asked for no read: the rest of an answer that differs is read once
+        if (first && differsFromAnswer(lastFrame, answer)) reads.ask([describeKey, ...alsoRead])
+        client.setQueryData(describeKey, answerWithFrame(answer, lastFrame))
+      }
     }
   })
 
@@ -93,6 +122,17 @@ export function objectFollower(client: QueryClient, describeKey: QueryKey, every
       const opening = !started && event.type === 'ADDED'
       started = true
       const answer = client.getQueryData(describeKey) as Fields | undefined
+      // No answer yet: the read under way may have read the object before this frame, so the frame goes over that answer
+      // when it comes, compared with it then (stopWatchingReads).
+      if (answer === undefined) {
+        frames += 1
+        lastFrame = event.object
+        unanswered = true
+        // with no read under way (the first one failed) a change asks for one, as it did before
+        if (!opening && client.getQueryState(describeKey)?.fetchStatus !== 'fetching') reads.ask([describeKey, ...alsoRead])
+        if (chatKey && (!opening || heldFromBefore(chatKey))) chatReads?.ask([chatKey])
+        return
+      }
       const differs = differsFromAnswer(event.object, answer)
       if (opening && !differs) {
         // What the chat holds may be from before this watch, the tab away and back: nothing else would read it again.

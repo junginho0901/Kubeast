@@ -29,7 +29,42 @@ var followedResources = map[string]bool{
 	"horizontalpodautoscalers": true, "clusterroles": true, "clusterrolebindings": true, "rolebindings": true,
 	"priorityclasses": true, "runtimeclasses": true, "validatingwebhookconfigurations": true,
 	"mutatingwebhookconfigurations": true, "limitranges": true, "resourcequotas": true, "poddisruptionbudgets": true,
-	"customresourcedefinitions": true,
+	"customresourcedefinitions": true, "nodes": true,
+}
+
+const (
+	nodeHead       = `{"apiVersion":"v1","kind":"Node","metadata":{"name":"node-a","creationTimestamp":"2026-11-01T00:00:00Z","labels":{"node-role.kubernetes.io/control-plane":"","node-role.kubernetes.io/infra":"","node-role.kubernetes.io/gpu":""`
+	nodeInfo       = `"addresses":[{"type":"InternalIP","address":"10.0.0.1"}],"capacity":{"cpu":"4","memory":"8Gi","pods":"110"},"allocatable":{"cpu":"3900m","memory":"7Gi","pods":"110"},"nodeInfo":{"kubeletVersion":"v1.37.0","osImage":"Ubuntu 24.04","kernelVersion":"6.8.0","containerRuntimeVersion":"containerd://2.1.0"}`
+	nodeMemoryOK   = `{"type":"MemoryPressure","status":"False","reason":"KubeletHasSufficientMemory","message":"kubelet has sufficient memory available","lastHeartbeatTime":"2026-11-08T11:59:00Z","lastTransitionTime":"2026-11-01T00:00:00Z"}`
+	nodeReady      = nodeHead + `}},"spec":{"podCIDR":"10.244.0.0/24"},"status":{"conditions":[` + nodeMemoryOK + `,{"type":"Ready","status":"True","reason":"KubeletReady","message":"kubelet is posting ready status","lastHeartbeatTime":"2026-11-08T11:59:00Z","lastTransitionTime":"2026-11-01T00:01:00Z"}],` + nodeInfo + `}}`
+	nodeLabelled   = nodeHead + `,"team":"a"}},"spec":{"podCIDR":"10.244.0.0/24"},"status":{"conditions":[` + nodeMemoryOK + `,{"type":"Ready","status":"True","reason":"KubeletReady","message":"kubelet is posting ready status","lastHeartbeatTime":"2026-11-08T12:04:00Z","lastTransitionTime":"2026-11-01T00:01:00Z"}],` + nodeInfo + `}}`
+	nodeNotReady   = nodeHead + `}},"spec":{"podCIDR":"10.244.0.0/24","unschedulable":true,"taints":[{"key":"node.kubernetes.io/unreachable","effect":"NoSchedule"}]},"status":{"conditions":[` + nodeMemoryOK + `,{"type":"Ready","status":"Unknown","reason":"NodeStatusUnknown","message":"Kubelet stopped posting node status.","lastHeartbeatTime":"2026-11-08T11:59:00Z","lastTransitionTime":"2026-11-08T12:00:40Z"}],` + nodeInfo + `}}`
+	nodeNoReadyRow = nodeHead + `}},"spec":{"podCIDR":"10.244.0.0/24"},"status":{` + nodeInfo + `}}`
+)
+
+// drawerSources are the list rows' cases and those of the kinds whose list rows other tests hold: a Node drawer
+// follows the node list's frames.
+func drawerSources() []watchRowSource {
+	return append(watchRowSources(),
+		watchRowSource{name: "a node that gained a label keeps its conditions", resource: "nodes", before: nodeReady, after: nodeLabelled},
+		watchRowSource{name: "a node whose kubelet stopped reporting is cordoned and not ready", resource: "nodes", before: nodeReady, after: nodeNotReady},
+		watchRowSource{name: "a node with no conditions yet", resource: "nodes", before: nodeNoReadyRow, after: nodeReady},
+	)
+}
+
+// A node's roles read in one order, kubectl's (sorted), in its list row, its live update and its describe answer: in the
+// order of a map they made the opening update of a Node drawer differ from the answer it had just read.
+func TestANodesRolesReadInKubectlsOrderEverywhere(t *testing.T) {
+	api := newOneObjectAPI(t)
+	want := []interface{}{"control-plane", "gpu", "infra"}
+	for range 20 {
+		if got := liveRow(t, "nodes", nodeReady)["roles"]; !reflect.DeepEqual(got, want) {
+			t.Fatalf("live update roles %v, want %v", got, want)
+		}
+		if got := api.answer(t, "nodes", nodeReady)["roles"]; !reflect.DeepEqual(got, want) {
+			t.Fatalf("describe roles %v, want %v", got, want)
+		}
+	}
 }
 
 // oneObjectAPI answers a read of its object by name and every list with nothing, as a describe reads the object beside
@@ -128,6 +163,8 @@ func (a *oneObjectAPI) answer(t *testing.T, resource, object string) map[string]
 		out, err = a.svc.DescribePDB(ctx, "demo", name)
 	case "customresourcedefinitions":
 		out, err = a.svc.DescribeCRD(ctx, name)
+	case "nodes":
+		out, err = a.svc.DescribeNodeWithoutEvents(ctx, name)
 	default:
 		t.Fatalf("no describe for %s", resource)
 	}
@@ -143,7 +180,7 @@ func TestAnAnswerAndALiveUpdateOfOneObjectSayTheSameUnderOneName(t *testing.T) {
 	api := newOneObjectAPI(t)
 	seen := map[string]bool{}
 	kinds := map[string]bool{}
-	for _, c := range watchRowSources() {
+	for _, c := range drawerSources() {
 		if !followedResources[c.resource] {
 			continue
 		}
@@ -159,6 +196,12 @@ func TestAnAnswerAndALiveUpdateOfOneObjectSayTheSameUnderOneName(t *testing.T) {
 				if !ok || (c.resource == "jobs" && key == "completions" && held == nil) {
 					continue
 				}
+				if answerSaysMore(c.resource, key) {
+					if !sameItems(value, held) {
+						t.Errorf("%s (%s) %q: live %v, answer %v", c.name, c.resource, key, value, held)
+					}
+					continue
+				}
 				if !reflect.DeepEqual(value, held) {
 					t.Errorf("%s (%s) %q: live %v, answer %v", c.name, c.resource, key, value, held)
 				}
@@ -170,6 +213,32 @@ func TestAnAnswerAndALiveUpdateOfOneObjectSayTheSameUnderOneName(t *testing.T) {
 			t.Errorf("no case holds %s", resource)
 		}
 	}
+}
+
+// answerSaysMore: a node's conditions in the row are each one's type, status and reason, and the answer adds its
+// message and times, which the drawer keeps until its read (useDrawerFollowsObject ANSWER_SAYS_MORE).
+func answerSaysMore(resource, key string) bool { return resource == "nodes" && key == "conditions" }
+
+// sameItems: each item of the row says what the answer's item in its place says, in the fields the row has.
+func sameItems(live, held interface{}) bool {
+	frame, ok1 := live.([]interface{})
+	answer, ok2 := held.([]interface{})
+	if !ok1 || !ok2 || len(frame) != len(answer) {
+		return false
+	}
+	for i, item := range frame {
+		f, ok1 := item.(map[string]interface{})
+		a, ok2 := answer[i].(map[string]interface{})
+		if !ok1 || !ok2 {
+			return false
+		}
+		for k, v := range f {
+			if !reflect.DeepEqual(v, a[k]) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 type drawerAnswerCase struct {
@@ -185,7 +254,7 @@ func TestDrawerAnswerCasesFixture(t *testing.T) {
 	api := newOneObjectAPI(t)
 	count := map[string]int{}
 	cases := []drawerAnswerCase{}
-	for _, c := range watchRowSources() {
+	for _, c := range drawerSources() {
 		if !followedResources[c.resource] || c.before == c.after || count[c.resource] == perKind {
 			continue
 		}
