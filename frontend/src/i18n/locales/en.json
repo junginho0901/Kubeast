@@ -354,6 +354,7 @@
       "reject": "Reject",
       "notePlaceholder": "Note (optional)",
       "own": "Your own request — another admin must decide.",
+      "chartBound": "The chart binds this role on the cluster: only a global admin or an Admin of this cluster can approve it.",
       "failed": "The decision was not saved."
     },
     "mine": {
@@ -4204,7 +4205,8 @@
       "self": "This is your own account: your cluster access is changed by another admin or through an access request.",
       "readError": "Could not read this user's cluster access: {{reason}}",
       "rolesError": "Could not read the roles, so none can be chosen: {{reason}}",
-      "changeError": "Not changed: {{reason}}"
+      "changeError": "Not changed: {{reason}}",
+      "chartBound": "a global admin or this cluster's Admin grants it"
     },
     "aiModels": {
       "add": "Add Model",

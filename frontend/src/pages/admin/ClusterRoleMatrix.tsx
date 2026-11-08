@@ -8,6 +8,7 @@ import { clustersApi } from '@/services/api/clusters'
 import CustomDropdown from '@/components/CustomDropdown'
 import NamespaceScopeInput from '@/components/NamespaceScopeInput'
 import { usePermission } from '@/hooks/usePermission'
+import { givesChartBoundRole } from '@/utils/adminAccess'
 import { refusalText } from './clusterAccessRefusal'
 
 interface Props {
@@ -30,8 +31,11 @@ export default function ClusterRoleMatrix({ userID, canEdit: canEditUsers, userI
   const queryClient = useQueryClient()
 
   // Without the full cluster list, the clusters one reaches — the ones one may grant on (permission ceiling).
-  const { has } = usePermission()
+  const { has, permissions } = usePermission()
   const everyCluster = has('admin.clusters.list')
+  // a role the chart binds is given only by a global admin or an Admin of the cluster (givesChartBoundRole)
+  const { data: me } = useQuery({ queryKey: ['me'], queryFn: api.me, retry: false, staleTime: 30_000 })
+  const chartBoundHeld = (clusterId: string) => !givesChartBoundRole(permissions, me?.cluster_roles, me?.cluster_namespaces, clusterId)
   const { data: clusters = [], error: clustersError } = useQuery({
     queryKey: ['clusters-all', everyCluster],
     queryFn: () => clustersApi.listClusters(!everyCluster),
@@ -160,7 +164,16 @@ export default function ClusterRoleMatrix({ userID, canEdit: canEditUsers, userI
                     { value: '', label: tr('admin.userClusterRoles.none', 'No access'), testId: `cluster-role-${c.id}-opt-none` },
                     ...roles
                       .filter((r) => !['Pending', 'Member'].includes(r.name))
-                      .map((r) => ({ value: r.name, label: r.name, testId: `cluster-role-${c.id}-opt-${r.name}` })),
+                      .map((r) => {
+                        const held = !!r.chart_bound && chartBoundHeld(c.id)
+                        return {
+                          value: r.name,
+                          label: r.name,
+                          testId: `cluster-role-${c.id}-opt-${r.name}`,
+                          disabled: held,
+                          listHint: held ? tr('admin.userClusterRoles.chartBound', "a global admin or this cluster's Admin grants it") : undefined,
+                        }
+                      }),
                   ]}
                 />
               </div>

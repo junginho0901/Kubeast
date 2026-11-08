@@ -3,8 +3,10 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -135,6 +137,11 @@ func (h *AuthHandler) SetUserClusterRole(w http.ResponseWriter, r *http.Request)
 	if len(namespaces) > 0 {
 		after["namespaces"] = namespaces
 	}
+	if err := h.chartBoundGrantCeiling(payload, role.Name, clusterID); err != nil {
+		h.auditClusterRole(r, "user.cluster_role.set", payload, userID, target.Email, clusterID, after, err)
+		response.Error(w, http.StatusForbidden, err.Error())
+		return
+	}
 	// Ceiling: the grantor must hold everything the role gives on this cluster,
 	// and may not reach beyond their own namespaces there.
 	if missing := missingPermissions(payload, role.Permissions, clusterID); len(missing) > 0 {
@@ -197,6 +204,31 @@ func (h *AuthHandler) DeleteUserClusterRole(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// chartBoundGrantCeiling keeps a role the chart binds (auth.impersonation.customRoles) to whoever acts as cluster-admin
+// on clusterID already, a global admin or an Admin there not limited to namespaces: its holders get ClusterRoles no
+// permission key describes, so the key ceiling cannot compare them. Read, Write and Admin, which the chart binds only
+// for grants limited to namespaces, keep the key ceiling. A refusal wraps errCeiling.
+func (h *AuthHandler) chartBoundGrantCeiling(actor auth.TokenPayload, role, clusterID string) error {
+	slug := auth.RoleGroupSlug(role)
+	if builtinSlug(slug) || !h.chartBinds(slug) {
+		return nil
+	}
+	if _, groups := actor.Impersonation(clusterID); slices.Contains(groups, auth.GroupAdmin) {
+		return nil
+	}
+	return fmt.Errorf("%w: the chart binds kubeast:role:%s on the clusters (auth.impersonation.customRoles) to ClusterRoles no permission key describes. Only a global admin or an Admin of cluster %s not limited to namespaces can give role %s", errCeiling, slug, clusterID, role)
+}
+
+// chartBinds: the chart binds group kubeast:role:<slug> (IMPERSONATION_CUSTOM_ROLES).
+func (h *AuthHandler) chartBinds(slug string) bool {
+	for _, name := range h.cfg.ImpersonationCustomRoles {
+		if auth.RoleGroupSlug(name) == slug {
+			return true
+		}
+	}
+	return false
 }
 
 // refuseOwnClusterAccess stops a change to the caller's own cluster access, as a change of one's own role is: the

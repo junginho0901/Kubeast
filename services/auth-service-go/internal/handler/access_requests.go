@@ -363,6 +363,11 @@ func (h *AuthHandler) decideAccessRequest(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	if err := h.chartBoundGrantCeiling(payload, req.Role, req.ClusterID); err != nil {
+		h.auditAccessRequest(r, action, payload, req, after, err)
+		response.Error(w, http.StatusForbidden, err.Error())
+		return
+	}
 	// Ceiling, as for a direct grant: the approver must hold everything the
 	// role gives on this cluster.
 	perms, err := h.repo.GetPermissionsByRoleID(ctx, req.RoleID)

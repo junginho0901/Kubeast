@@ -144,6 +144,72 @@ func TestListSizeAsksTheAPIServer(t *testing.T) {
 	}
 }
 
+// largeObjects fakes kubectl for ConfigMaps of app=web in shop of these sizes: get --raw honours limit and continue,
+// as the API server does, and a plain list prints their names. It returns the calls.
+func largeObjects(t *testing.T, sizes ...int) *[][]string {
+	t.Helper()
+	freshAPIResources(t)
+	return fakeKubectl(t, func(args []string) (string, error) {
+		v := verb(args)
+		switch {
+		case len(v) > 0 && v[0] == "api-resources":
+			return apiResourcesTable, nil
+		case len(v) > 2 && v[0] == "get" && v[1] == "--raw":
+			u, _ := url.Parse(v[2])
+			limit, _ := strconv.Atoi(u.Query().Get("limit"))
+			from, _ := strconv.Atoi(u.Query().Get("continue"))
+			to := min(from+limit, len(sizes))
+			items := make([]string, 0, to-from)
+			for i := from; i < to; i++ {
+				items = append(items, fmt.Sprintf(`{"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":"cm-%d","namespace":"shop","labels":{"app":"web"}},"data":{"value":%q}}`,
+					i, strings.Repeat("x", sizes[i])))
+			}
+			next := ""
+			if to < len(sizes) {
+				next = strconv.Itoa(to)
+			}
+			return fmt.Sprintf(`{"apiVersion":"v1","kind":"ConfigMapList","metadata":{"continue":%q},"items":[%s]}`, next, strings.Join(items, ",")), nil
+		}
+		var names []string
+		for i := range sizes {
+			names = append(names, fmt.Sprintf("cm-%d", i))
+		}
+		return "NAME\n" + strings.Join(names, "\n") + "\n", nil
+	})
+}
+
+// How many objects a page holds says nothing of its bytes: a page past the tool output is read again smaller, and a
+// list is too large to count only when one object alone does not fit.
+func TestLargeObjectsAreCountedNotTakenForMany(t *testing.T) {
+	selected := map[string]interface{}{"resource_type": "configmaps", "namespace": "shop", "label_selector": "app=web"}
+	largeObjects(t, 600<<10, 600<<10)
+	out, err := handleCount(ctxFor("c1"), selected, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m := decode(t, out); m["count"] != float64(2) || m["count_at_least"] != nil {
+		t.Errorf("two ConfigMaps of 600 KiB: %s", out)
+	}
+	table, err := handleTabularQuery(ctxFor("c1"), map[string]interface{}{"resource_type": "configmaps", "namespace": "shop", "label_selector": "app=web", "columns": "NAME:.metadata.name"}, nil)
+	if err != nil || strings.Contains(table, "too_large") || !strings.Contains(table, "cm-1") {
+		t.Errorf("their table: %s %v", table, err)
+	}
+
+	calls := largeObjects(t, 1100<<10, 10)
+	out, err = handleCount(ctxFor("c1"), selected, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m := decode(t, out); m["status"] != "too_large" || m["count"] != nil || m["count_at_least"] != nil {
+		t.Errorf("one ConfigMap past the tool output: %s", out)
+	}
+	for _, c := range *calls {
+		if v := verb(c); len(v) > 1 && v[0] == "get" && v[1] != "--raw" {
+			t.Fatalf("kubectl listed them whole: %v", v)
+		}
+	}
+}
+
 func TestBigListToolsAnswerTheSizeWithoutKubectlListing(t *testing.T) {
 	bigCluster(t)
 	ctx := ctxFor("c1")

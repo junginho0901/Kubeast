@@ -25,8 +25,12 @@ const apiResourcesTTL = 5 * time.Minute
 
 type listSizeResult struct {
 	count   int
-	atLeast bool // count is a lower bound: a selector's matches were counted up to listMax+1, or a page was too big
+	atLeast bool // count is a lower bound: a selector's matches were counted up to listMax+1
+	unknown bool // one object is larger than the tool output, so the list could not be counted a page at a time
 }
+
+// tooMany: more objects than kubectl may hold, or objects too large to count; either way kubectl does not list them whole.
+func (s listSizeResult) tooMany() bool { return s.unknown || s.count > listMax }
 
 type apiResourcesEntry struct {
 	at        time.Time
@@ -54,9 +58,11 @@ func listSize(ctx context.Context, headers http.Header, kind, namespace string, 
 	if fieldSelector != "" {
 		q.Set("fieldSelector", fieldSelector)
 	}
+	selected := len(q) > 0
+	pageSize := listSizePage
 	limit := 1
-	if len(q) > 0 {
-		limit = listSizePage
+	if selected {
+		limit = pageSize
 	}
 	n := 0
 	for {
@@ -66,8 +72,13 @@ func listSize(ctx context.Context, headers http.Header, kind, namespace string, 
 			return listSizeResult{}, false, err
 		}
 		if outputCut(out) {
-			// a page of listSizePage objects larger than the tool output: far beyond what kubectl may list
-			return listSizeResult{count: listMax + 1, atLeast: true}, true, nil
+			// bytes say nothing of how many: the same page again at half the objects (continue holds no limit), these too
+			if limit == 1 {
+				return listSizeResult{unknown: true}, true, nil
+			}
+			limit /= 2
+			pageSize = limit
+			continue
 		}
 		var page struct {
 			Items    []json.RawMessage `json:"items"`
@@ -83,12 +94,12 @@ func listSize(ctx context.Context, headers http.Header, kind, namespace string, 
 		switch {
 		case page.Metadata.Continue == "":
 			return listSizeResult{count: n}, true, nil
-		case page.Metadata.RemainingItemCount != nil && limit == 1:
+		case page.Metadata.RemainingItemCount != nil && !selected:
 			return listSizeResult{count: n + int(*page.Metadata.RemainingItemCount)}, true, nil
 		case n > listMax:
 			return listSizeResult{count: n, atLeast: true}, true, nil
 		}
-		limit = listSizePage
+		limit = pageSize
 		q.Set("continue", page.Metadata.Continue)
 	}
 }
@@ -170,10 +181,14 @@ func listTooLarge(kind, scope string, size listSizeResult) (string, error) {
 		"reason": fmt.Sprintf("%d objects match; this tool lists them whole with kubectl, which holds at most %d", size.count, listMax),
 		"hint":   "Narrow with namespace, label_selector or field_selector. k8s_count answers how many at any size; for events, k8s_get_events lists the newest.",
 	}
-	if size.atLeast {
+	switch {
+	case size.unknown:
+		reply["reason"] = fmt.Sprintf("an object of this list is larger than the tool output holds (%d bytes): the list could not be counted a page at a time, so it is not listed whole", outputMaxBytes)
+		reply["hint"] = "Narrow with namespace, label_selector or field_selector, or read one object by its name."
+	case size.atLeast:
 		reply["count_at_least"] = size.count
 		reply["reason"] = fmt.Sprintf("more than %d objects match; this tool lists them whole with kubectl, which holds at most %d", listMax, listMax)
-	} else {
+	default:
 		reply["count"] = size.count
 	}
 	return marshalJSON(reply)
@@ -188,7 +203,7 @@ func listTooMany(ctx context.Context, headers http.Header, args map[string]inter
 	}
 	namespace := argString(args, "namespace", "")
 	size, ok, err := listSize(ctx, headers, kind, namespace, namespace == "", argString(args, "label_selector", ""), argString(args, "field_selector", ""))
-	if err != nil || !ok || size.count <= listMax {
+	if err != nil || !ok || !size.tooMany() {
 		return "", false, nil
 	}
 	out, err := listTooLarge(kind, scope, size)

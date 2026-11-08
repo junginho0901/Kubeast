@@ -418,3 +418,90 @@ func TestApprovalStaysWithinTheApproversNamespaces(t *testing.T) {
 		})
 	}
 }
+
+// chartBoundAPI is newAuthAPI on an install whose chart binds role ops (auth.impersonation.customRoles), with role ops
+// holding the Read key only and the pending request asking for it.
+func chartBoundAPI(t *testing.T, bound ...string) *authAPI {
+	t.Helper()
+	now := time.Now().UTC().Format(pgTimestamp)
+	text, integer, stamp := uint32(pgtype.TextOID), uint32(pgtype.Int4OID), uint32(pgtype.TimestamptzOID)
+	list, boolean := uint32(pgtype.TextArrayOID), uint32(pgtype.BoolOID)
+	return newAuthAPIWith(t, pendingRequest{owner: "requester"}, func(c *config.Config) {
+		c.ImpersonationCustomRoles = bound
+		c.AccessRequests.Roles = []string{"Write", "ops"}
+	},
+		pgRule{match: "FROM roles WHERE name", oids: []uint32{integer, text, text, boolean, stamp, stamp}, rows: [][]any{{5, "ops", "", "f", now, now}}},
+		pgRule{match: "WHERE ar.id =",
+			oids: []uint32{text, text, text, text, text, text, integer, text, integer, text, text, stamp, text, text, stamp, text, stamp, stamp, text, list},
+			rows: [][]any{{"r1", "requester", "req@example.com", "Req", "c", "c", 5, "ops", 30, "needed", "pending", now, nil, nil, nil, nil, nil, nil, nil, nil}}},
+	)
+}
+
+// grantorAs signs in with admin.users.update and role on cluster c, holding perms there, limited to namespaces if any.
+func (a *authAPI) grantorAs(role string, perms []string, namespaces ...string) string {
+	a.t.Helper()
+	var ns map[string][]string
+	if len(namespaces) > 0 {
+		ns = map[string][]string{"c": namespaces}
+	}
+	tok, err := a.mgr.CreateToken("grantor", "grantor@example.com", "Member", auth.PermissionMatrix{"*": {"admin.users.update"}, "c": perms}, map[string]string{"c": role}, ns, 0)
+	if err != nil {
+		a.t.Fatal(err)
+	}
+	return tok
+}
+
+// A role the chart binds acts on the cluster as ClusterRoles no permission key describes: it is given, by a grant or an
+// approval, only by a global admin or by one who acts as cluster-admin there (the built-in Admin, not limited to
+// namespaces). The built-in names stay with the key ceiling.
+func TestARoleTheChartBindsIsGivenOnlyByWhoHoldsTheClusterWhole(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		token func(a *authAPI) string
+		body  string
+		want  int
+	}{
+		{"a delegate holding the role's keys", func(a *authAPI) string { return a.grantorAs("Read", []string{readPerm}) }, `{"role":"ops"}`, http.StatusForbidden},
+		{"an Admin of the cluster limited to namespaces", func(a *authAPI) string { return a.grantorAs("Admin", []string{"*"}, "team-a") }, `{"role":"ops","namespaces":["team-a"]}`, http.StatusForbidden},
+		{"an Admin of the whole cluster", func(a *authAPI) string { return a.grantorAs("Admin", []string{"*"}) }, `{"role":"ops"}`, http.StatusOK},
+		{"a global admin", func(a *authAPI) string { return a.grantor([]string{"*"}) }, `{"role":"ops"}`, http.StatusOK},
+	} {
+		t.Run("grant: "+c.name, func(t *testing.T) {
+			api := chartBoundAPI(t, "ops")
+			w := api.call(c.token(api), http.MethodPut, "/admin/users/target/cluster-roles/c", c.body)
+			if w.Code != c.want || (c.want == http.StatusForbidden && !strings.Contains(w.Body.String(), "auth.impersonation.customRoles")) {
+				t.Fatalf("%d %s, want %d", w.Code, w.Body.String(), c.want)
+			}
+			if wrote := api.db.ran("INSERT INTO user_cluster_roles"); wrote != (c.want == http.StatusOK) {
+				t.Errorf("grant written = %v with status %d", wrote, w.Code)
+			}
+			if c.want == http.StatusForbidden && len(api.store.failures("user.cluster_role.set")) != 1 {
+				t.Errorf("the refusal must leave one failure row: %+v", api.store.rows)
+			}
+		})
+		t.Run("approval: "+c.name, func(t *testing.T) {
+			api := chartBoundAPI(t, "ops")
+			w := api.call(c.token(api), http.MethodPost, "/admin/access-requests/r1/approve", "")
+			want := c.want
+			if c.name == "an Admin of the cluster limited to namespaces" {
+				want = http.StatusForbidden // the request is for the whole cluster
+			}
+			if w.Code != want {
+				t.Fatalf("%d %s, want %d", w.Code, w.Body.String(), want)
+			}
+			if wrote := api.db.ran("INSERT INTO user_cluster_roles"); wrote != (want == http.StatusOK) {
+				t.Errorf("grant written = %v with status %d", wrote, w.Code)
+			}
+		})
+	}
+	// a role the chart does not bind keeps the key ceiling
+	api := chartBoundAPI(t)
+	if w := api.call(api.grantorAs("Read", []string{readPerm}), http.MethodPut, "/admin/users/target/cluster-roles/c", `{"role":"ops"}`); w.Code != http.StatusOK {
+		t.Errorf("a role the chart does not bind, from the delegate: %d %s", w.Code, w.Body.String())
+	}
+	// so does a built-in role the chart binds for its grants limited to namespaces (the fake's role is the built-in Write)
+	api = newAuthAPIWith(t, pendingRequest{owner: "requester"}, func(c *config.Config) { c.ImpersonationCustomRoles = []string{"Write"} })
+	if w := api.call(api.grantorAs("Read", []string{readPerm}), http.MethodPut, "/admin/users/target/cluster-roles/c", `{"role":"Write"}`); w.Code != http.StatusOK {
+		t.Errorf("the built-in Write the chart binds, from the delegate: %d %s", w.Code, w.Body.String())
+	}
+}
