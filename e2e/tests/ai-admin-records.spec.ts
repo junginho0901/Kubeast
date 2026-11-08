@@ -33,6 +33,8 @@ const stamp = () => Date.now().toString(36)
 const rfc3339 = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z')
 const field = (row: Obj, go: string, json: string) => row[go] ?? row[json]
 const without = (row: Obj, ...names: string[]) => Object.fromEntries(Object.entries(row).filter(([name]) => !names.includes(name)))
+// A recording as the tool gives it: the route's row with the size the screen shows (SessionRecordings.tsx keptBytes).
+const sizedAsShown = (row: Obj) => ({ ...without(row, 'user_id'), kept_bytes: row.status === 'interrupted' ? row.uploaded_bytes : row.bytes || row.uploaded_bytes })
 
 async function login(request: APIRequestContext, email = EMAIL, password = PASSWORD): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
@@ -115,7 +117,7 @@ test.describe('the AI reads what the Admin screens read of Kubeast\'s own record
       const every = await answer(request, admin, 'session_recordings', { actor_email: `e2e-p5-${run}`, limit: 25 })
       const listed = (await route({ user: `e2e-p5-${run}` })) as Obj[]
       expect(listed.map((r) => r.id)).toEqual([ids[1], ids[0]])
-      expect(every.rows).toEqual(listed.map((r) => without(r, 'user_id')))
+      expect(every.rows).toEqual(listed.map(sizedAsShown))
       expect(every.returned).toBe(2)
       expect(every.next_offset).toBeUndefined()
       expect(every.enabled).toBe((await api(request, admin, '/api/v1/cluster/recordings/config')).enabled)
@@ -135,7 +137,7 @@ test.describe('the AI reads what the Admin screens read of Kubeast\'s own record
       const one = await call(request, admin, 'session_recordings', { recording_id: ids[0] })
       expect(one.isError, one.text).toBe(false)
       const stored = await api(request, admin, `/api/v1/cluster/recordings/${ids[0]}`, { cluster: '' })
-      expect(JSON.parse(one.text).recording).toEqual(without(stored, 'user_id'))
+      expect(JSON.parse(one.text).recording).toEqual(sizedAsShown(stored))
       expect(JSON.parse(one.text).note).toContain('Session recordings screen')
       expect(one.text).not.toContain(place)
       expect((await answer(request, admin, 'session_recordings', { recording_id: `e2e-p5-gone-${run}` })).status).toBe('not_found')

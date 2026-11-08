@@ -145,7 +145,8 @@ test.describe('the screens\' buttons through the AI', () => {
   })
 
   test('tools/list names what the role holds, not every read tool', async ({ request }) => {
-    const oneRead = await userWithRole(request, `e2e-btn-read-${STAMP}`, ['ai.mcp.use', 'ai.tool.k8s_get_resources'])
+    // a read tool behind a list asks the role's read key, as the list does (read_gate.go)
+    const oneRead = await userWithRole(request, `e2e-btn-read-${STAMP}`, ['ai.mcp.use', 'ai.tool.k8s_get_resources', 'resource.objects.read'])
     expect(await listed(request, oneRead)).toEqual(['k8s_get_resources', 'list_clusters', 'request_access'])
 
     const oneButton = await userWithRole(request, `e2e-btn-run-${STAMP}`, ['ai.mcp.use', 'ai.tool.k8s_cronjob_trigger', 'resource.cronjob.trigger'])

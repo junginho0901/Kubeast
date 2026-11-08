@@ -6,6 +6,8 @@ export interface ResourceDetailTarget {
   namespace?: string
   apiVersion?: string
   rawJson?: Record<string, unknown>
+  // When the drawer was handed its row (ResourceDetailProvider): a read of the object from before then is older than the row.
+  openedAt?: number
 }
 
 export interface ResourceDetailContextValue {

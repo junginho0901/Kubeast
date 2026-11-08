@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CRDInfo } from '@/services/api/types'
 import { apiParam, fromParam, toParam } from '../detailParam'
-import { customResourceTarget, detailTarget, needsCustomResourceLookup, otherFields } from './crDetail'
+import { customResourceTarget, detailTarget, drawerResourceType, needsCustomResourceLookup, otherFields } from './crDetail'
 
 // test2 serves Widget from two groups (its own qa.example.com and the number check's), and the number check's
 // BackendTLSPolicy of another group than Gateway API's
@@ -70,6 +70,23 @@ describe('customResourceTarget', () => {
     const back = fromParam(toParam(asked), apiParam(asked))
     expect(back).toEqual(asked)
     expect(customResourceTarget(back!, CRDS).rawJson?.crd_name).toBe('widgets.qa.example.com')
+  })
+})
+
+// test2 serves the number check's backendtlspolicies at numbers.kubeast.io's preferred version and Gateway API's at
+// v1alpha3, not its group's preferred v1: k8s-service answers the name alone with the first (matchResource)
+describe('drawerResourceType', () => {
+  it('names a kind of a group with its group, so the drawer reads and saves the object it draws', () => {
+    expect(drawerResourceType('BackendTLSPolicy')).toBe('backendtlspolicies.gateway.networking.k8s.io')
+    expect(drawerResourceType('Gateway')).toBe('gateways.gateway.networking.k8s.io')
+    expect(drawerResourceType('Deployment')).toBe('deployments.apps')
+    expect(drawerResourceType('VerticalPodAutoscaler')).toBe('verticalpodautoscalers.autoscaling.k8s.io')
+  })
+
+  it('leaves a core kind and a kind with no drawer of its own as they were', () => {
+    expect(drawerResourceType('ConfigMap')).toBe('configmap')
+    expect(drawerResourceType('Secret')).toBe('secret')
+    expect(drawerResourceType('PodTemplate')).toBe('podtemplate')
   })
 })
 

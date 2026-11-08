@@ -25,6 +25,7 @@ func discoveryService(lists []metav1.APIResourceList) (*Service, context.Context
 	s := &Service{
 		apiResourcesCache: map[cluster.ID][]metav1.APIResourceList{"self": lists},
 		apiResourcesAt:    map[cluster.ID]time.Time{"self": time.Now()},
+		apiResourcesRead:  map[cluster.ID]time.Time{"self": time.Now()}, // read just now: a miss is the answer
 	}
 	return s, cluster.WithID(context.Background(), "self")
 }

@@ -58,12 +58,16 @@ const answerReads = (page: Page, name: string) =>
   counter(page, (u) => u.pathname === `/api/v1/cluster/namespaces/${NS}/deployments/${name}/describe`)
 
 test.describe('what a screen asks of the server', () => {
+  // A failed test starts a new worker, which runs these again: the namespace the last one left is gone before it comes back.
   test.beforeAll(() => {
+    test.setTimeout(180_000)
+    kubectl(`delete namespace ${NS} --ignore-not-found --wait=true --timeout=120s`)
     kubectl('apply -f -', `apiVersion: v1\nkind: Namespace\nmetadata: {name: ${NS}}`)
     for (const name of ['quiet', 'busy', 'refused']) kubectl('apply -f -', deployment(name))
   })
   test.afterAll(() => {
-    kubectl(`delete namespace ${NS} --ignore-not-found --wait=false`)
+    test.setTimeout(180_000)
+    kubectl(`delete namespace ${NS} --ignore-not-found --wait=true --timeout=120s`)
   })
 
   test('a quiet drawer reads its object and its answer once, and a change reaches the screen and both reads within seconds', async ({ page }) => {
@@ -126,7 +130,7 @@ test.describe('what a screen asks of the server', () => {
         const msg = JSON.parse(String(message))
         if (msg.type === 'REQUEST' && decodeURIComponent(msg.query).includes('metadata.name=refused')) {
           asked = msg
-          ws.send(JSON.stringify({ type: 'ERROR', ...msg, error: { message: 'deployments is forbidden', reason: 'forbidden' } }))
+          ws.send(JSON.stringify({ ...msg, type: 'ERROR', error: { message: 'deployments is forbidden', reason: 'forbidden' } }))
           return
         }
         server.send(message)
@@ -144,7 +148,7 @@ test.describe('what a screen asks of the server', () => {
     await page.waitForTimeout(25_000)
     expect(object.count() - before, 'reads in 25 s without a watch').toBeGreaterThanOrEqual(2)
 
-    answer!({ type: 'RESYNC', ...asked })
+    answer!({ ...asked, type: 'RESYNC' })
     await expect(page.getByTestId('watch-problem-notice')).toHaveCount(0, { timeout: 5_000 })
     // the read that RESYNC asks for, within its spread
     await page.waitForTimeout(12_000)

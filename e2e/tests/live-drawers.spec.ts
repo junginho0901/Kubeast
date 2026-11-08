@@ -293,7 +293,7 @@ test.describe('what keeps up by itself', () => {
           ws.send(message)
         })
       })
-      await page.goto('/storage/storageclasses?cluster=self')
+      await page.goto('/storage?tab=storageclasses&cluster=self')
       const rows = page.locator('main tbody tr')
       await expect.poll(() => asked.length, { timeout: 20_000 }).toBeGreaterThan(0)
       expect(asked).toEqual(['/api/v1/storageclasses'])

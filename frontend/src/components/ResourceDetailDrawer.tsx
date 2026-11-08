@@ -17,7 +17,6 @@ import {
   SELF_LOADING_KINDS,
   UNRESOLVABLE_KINDS,
   decodeSecretYaml,
-  kindToPlural,
 } from './resource-detail/utils'
 import { useResourceDelete } from './resource-detail/useResourceDelete'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
@@ -29,7 +28,7 @@ import { ModalFrame } from './ModalFrame'
 import { modalButton } from './modalStyles'
 import { TypeToConfirm, WarningBox } from './TypeToConfirm'
 import { systemObject, type SystemReason } from './resource-detail/systemObject'
-import { customResourceTarget, deleteTarget, needsCustomResourceLookup } from './resource-detail/crDetail'
+import { customResourceTarget, deleteTarget, drawerResourceType, needsCustomResourceLookup } from './resource-detail/crDetail'
 import { drawerObjectLayer, followsObjectForChat, objectReadInterval } from './resource-detail/drawerObjectLayer'
 import { drawerBody, useDrawerFollowsRead } from './resource-detail/useDrawerFollowsRead'
 import { DrawerObjectReadContext } from './resource-detail/drawerObjectRead'
@@ -173,9 +172,9 @@ export default function ResourceDetailDrawer() {
   const [objectWatchAnswers, setObjectWatchAnswers] = useState(false)
   const objectKey = useMemo(() => ['resource-json', kind, ns, name], [kind, ns, name])
   const objectRead = useMemo(() => (followsForChat ? { key: objectKey, setWatchAnswers: setObjectWatchAnswers } : null), [followsForChat, objectKey])
-  const { data: fetchedRawJson, isFetching: rawJsonFetching, error: rawJsonError } = useQuery({
+  const { data: fetchedRawJson, dataUpdatedAt: rawJsonReadAt, isFetching: rawJsonFetching, error: rawJsonError } = useQuery({
     queryKey: objectKey,
-    queryFn: () => api.getResourceJson(kindToPlural(kind), name, ns || undefined),
+    queryFn: () => api.getResourceJson(drawerResourceType(kind), name, ns || undefined),
     enabled: needsRawJsonFetch || followsForChat,
     staleTime: 30_000,
     refetchInterval: (query) => objectReadInterval(followsForChat, query.state.error, objectWatchAnswers),
@@ -184,7 +183,8 @@ export default function ResourceDetailDrawer() {
   })
 
   // The body follows the read above, which goes on for the floating chat: no request of its own, none while nothing changes.
-  const effectiveRawJson = useMemo(() => drawerBody(kind, target?.rawJson, fetchedRawJson), [kind, target?.rawJson, fetchedRawJson])
+  const effectiveRawJson = useMemo(() => drawerBody(kind, target?.rawJson, fetchedRawJson, rawJsonReadAt, target?.openedAt),
+    [kind, target?.rawJson, fetchedRawJson, rawJsonReadAt, target?.openedAt])
   useDrawerFollowsRead(kind, ns, name, fetchedRawJson)
   // Opened by link with nothing from a list: an object that is gone (404) or out of the caller's reach (403) says
   // so, instead of an empty object with a delete button.
