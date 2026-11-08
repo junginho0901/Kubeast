@@ -64,7 +64,8 @@ type clientBundle struct {
 	logStore *logsearch.Store
 	// cost caches this cluster's discovered OpenCost and its recent allocation
 	// answers (cost.go), on the bundle for the same reasons as prom.
-	cost *costCache
+	cost    *costCache
+	version serverVersionCache
 
 	// cacheClient is the identity the overview informers watch as; inf is the
 	// running set, if any (informer_cache.go). id names the cluster in logs.

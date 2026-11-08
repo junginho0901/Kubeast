@@ -23,10 +23,19 @@ func InternalError(w http.ResponseWriter, r *http.Request, err error) {
 func JSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	if data != nil {
-		json.NewEncoder(w).Encode(data)
+	if data == nil {
+		return
 	}
+	// json.Encoder holds its grown buffer until a slow client takes the answer; this holds the answer's own bytes.
+	b, err := json.Marshal(data)
+	if err != nil {
+		return
+	}
+	_, _ = w.Write(b)
+	_, _ = w.Write(newline)
 }
+
+var newline = []byte{'\n'}
 
 // Error writes a JSON error response matching FastAPI's format.
 func Error(w http.ResponseWriter, status int, detail string) {

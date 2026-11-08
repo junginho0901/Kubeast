@@ -198,8 +198,9 @@ type JWTValidator struct {
 	fetchMu    sync.Mutex // serializes refetches
 	httpClient *http.Client
 
-	tvMu sync.Mutex
-	tv   map[string]tokenVersionEntry // per subject (token_version.go)
+	tvMu    sync.Mutex
+	tv      map[string]tokenVersionEntry // per subject (token_version.go)
+	tvCalls map[string]*tokenVersionCall // per token, the lookups under way
 }
 
 // NewJWTValidator creates a new validator.
@@ -215,6 +216,7 @@ func NewJWTValidator(cfg JWKSConfig) *JWTValidator {
 		keys:       make(map[string]*rsa.PublicKey),
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 		tv:         make(map[string]tokenVersionEntry),
+		tvCalls:    make(map[string]*tokenVersionCall),
 	}
 }
 
