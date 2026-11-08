@@ -125,14 +125,3 @@ func (s *Service) DescribeEndpoints(ctx context.Context, namespace, name string)
 func (s *Service) DeleteEndpoints(ctx context.Context, namespace, name string) error {
 	return s.clientsetCtx(ctx).CoreV1().Endpoints(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
-
-// ========== Formatting helpers ==========
-
-func formatEndpointsBasic(name, namespace string, ts *metav1.Time, subsets int) map[string]interface{} {
-	return map[string]interface{}{
-		"name":         name,
-		"namespace":    namespace,
-		"subset_count": subsets,
-		"created_at":   toISO(ts),
-	}
-}

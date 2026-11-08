@@ -205,11 +205,12 @@ describe('the list pages', () => {
 
   it('are the pages of a kind whose drawer reads an answer', () => {
     const using = Object.entries(listPages).filter(([, src]) => src.includes('useDescribeReads()')).map(([path]) => path.replace('../pages/', ''))
+    // Not Ingresses and Endpoints: the keys they asked for (ingress-detail, endpoint-describe) were no drawer's, so those reads went; their drawers follow by their own reads.
     expect(using.sort()).toEqual([
       'ClusterNodes.tsx', 'Namespaces.tsx', 'configuration/ConfigMaps.tsx', 'configuration/Secrets.tsx',
       'gateway/GRPCRoutes.tsx', 'gateway/GatewayClasses.tsx', 'gateway/Gateways.tsx', 'gateway/HTTPRoutes.tsx', 'gateway/ReferenceGrants.tsx', 'gateway/backend-policies/useBackendPoliciesData.ts',
       'gpu/ResourceClaimTemplates.tsx', 'gpu/ResourceClaims.tsx', 'gpu/ResourceSlices.tsx', 'gpu/device-classes/useDeviceClassesData.ts',
-      'network/EndpointSlices.tsx', 'network/Endpoints.tsx', 'network/IngressClasses.tsx', 'network/Ingresses.tsx', 'network/NetworkPolicies.tsx', 'network/Services.tsx',
+      'network/EndpointSlices.tsx', 'network/IngressClasses.tsx', 'network/NetworkPolicies.tsx', 'network/Services.tsx',
       'security/Roles.tsx', 'security/ServiceAccounts.tsx',
       'storage/PersistentVolumes.tsx', 'storage/StorageClasses.tsx', 'storage/VolumeAttachments.tsx',
     ])

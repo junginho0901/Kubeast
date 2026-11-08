@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,7 +18,8 @@ import (
 
 // k8s-service's, auth-service's, session-service's and ai-service's tests hold every GET route to a row of this file. These hold each row to the tool: a tool
 // that is registered, takes the arguments and reaches that route or that kind. A row with a note says how the tool answers
-// the same facts another way, so only its call is checked.
+// the same facts another way: reads names what its call reaches there, and that is checked. That those facts are the same
+// is the note's word.
 const aiRouteCoverageFile = "../ai-service/tests/fixtures/ai_route_coverage.json"
 
 type aiRouteCoverage struct {
@@ -25,6 +27,7 @@ type aiRouteCoverage struct {
 	Args     map[string]interface{} `json:"args"`
 	Via      string                 `json:"via"`
 	Note     string                 `json:"note"`
+	Reads    string                 `json:"reads"`
 	Excluded string                 `json:"excluded"`
 }
 
@@ -92,6 +95,24 @@ func TestRouteCoverage_AViaRouteIsARouteOfTheTable(t *testing.T) {
 	}
 }
 
+// What a note's call reads is a route some service has, unless it is a kubectl run.
+func TestRouteCoverage_AReadsRouteIsARouteOfTheTable(t *testing.T) {
+	table := loadRouteCoverage(t)
+	for service, rows := range table {
+		for route, row := range rows {
+			if row.Reads == "" || strings.HasPrefix(row.Reads, "kubectl ") {
+				continue
+			}
+			if !slices.ContainsFunc(slices.Collect(maps.Values(table)), func(other map[string]aiRouteCoverage) bool {
+				_, ok := other[row.Reads]
+				return ok
+			}) {
+				t.Errorf("%s %s reads %s, which is in no service's table", service, route, row.Reads)
+			}
+		}
+	}
+}
+
 type coverageCalls struct {
 	mu      sync.Mutex
 	paths   []string
@@ -126,6 +147,43 @@ func (c *coverageCalls) ranKubectlOn(kind, name string) bool {
 		}
 	}
 	return false
+}
+
+// reads: a route of the stand-in, or the words of one kubectl run, in their order, after "kubectl ".
+func (c *coverageCalls) reads(what string) bool {
+	words, isKubectl := strings.CutPrefix(what, "kubectl ")
+	if !isKubectl {
+		return c.reached(routePattern(what))
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.ContainsFunc(c.kubectl, func(args []string) bool {
+		rest := args
+		for _, word := range strings.Fields(words) {
+			at := slices.Index(rest, word)
+			if at < 0 {
+				return false
+			}
+			rest = rest[at+1:]
+		}
+		return true
+	})
+}
+
+func TestRouteCoverage_ReadsMatchesOnlyWhatTheCallRan(t *testing.T) {
+	calls := &coverageCalls{paths: []string{"/api/v1/namespaces/x/timeline/Deployment/y"}, kubectl: [][]string{{"get", "jobs", "-n", "x", "-o", "wide"}}}
+	for what, want := range map[string]bool{
+		"/api/v1/namespaces/{namespace}/timeline/{kind}/{name}": true,
+		"/api/v1/namespaces/{namespace}/timeline":               false,
+		"kubectl get jobs -n x":                                 true,
+		"kubectl -n x get jobs":                                 false,
+		"kubectl get pods":                                      false,
+		"":                                                      false,
+	} {
+		if got := calls.reads(what); got != want {
+			t.Errorf("reads(%q) = %v, want %v", what, got, want)
+		}
+	}
 }
 
 func (c *coverageCalls) String() string {
@@ -192,6 +250,9 @@ func TestRouteCoverage_EachToolReachesWhatItsRowSays(t *testing.T) {
 				t.Fatalf("%s refused the row's arguments: %v", row.Tool, err)
 			}
 			if row.Note != "" {
+				if !calls.reads(row.Reads) {
+					t.Errorf("%s did not read %q: %s", row.Tool, row.Reads, calls)
+				}
 				return
 			}
 			route := strings.SplitN(key, " ", 2)[1]
@@ -219,7 +280,9 @@ func TestRouteCoverage_EachRowIsAToolOrAReason(t *testing.T) {
 			case (row.Tool == "") == (row.Excluded == ""):
 				t.Errorf("%s %s: a tool or a reason, one of them: %+v", service, route, row)
 			case row.Tool != "" && row.Via != "" && row.Note != "":
-				t.Errorf("%s %s: via is checked and a note is not, so one of them: %+v", service, route, row)
+				t.Errorf("%s %s: via says the route it reads and a note says it reads another way, so one of them: %+v", service, route, row)
+			case (row.Note == "") != (row.Reads == ""):
+				t.Errorf("%s %s: a note and what its call reads, both of them: %+v", service, route, row)
 			case row.Tool == "" && len(row.Excluded) < 40:
 				t.Errorf("%s %s: %q does not say why", service, route, row.Excluded)
 			}

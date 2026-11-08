@@ -153,8 +153,13 @@ jobs:
           git fetch --no-tags --depth=1 origin '+refs/tags/v*:refs/tags/v*'
           scripts/chart-upgrade-values.sh
       - name: kubeconform
+        env:
+          KUBECONFORM_VERSION: v0.8.0
+          KUBECONFORM_SHA256: 9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883
         run: |
-          curl -sSL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz
+          curl -sSfL -o kubeconform.tar.gz "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          echo "${KUBECONFORM_SHA256}  kubeconform.tar.gz" | sha256sum -c -
+          tar xzf kubeconform.tar.gz
           helm template kubeast helm/kubeast --namespace kubeast --set pdb.enabled=true \
             | ./kubeconform -strict -summary -kubernetes-version 1.33.0 -ignore-missing-schemas
 
@@ -202,6 +207,8 @@ jobs:
   govulncheck:
     name: govulncheck (${{ matrix.module }})
     runs-on: ubuntu-latest
+    env:
+      GOVULNCHECK_VERSION: v1.9.0
     strategy:
       fail-fast: false
       matrix:
@@ -227,7 +234,7 @@ jobs:
           check-latest: true
           cache-dependency-path: ${{ matrix.module }}/go.sum
       - working-directory: ${{ matrix.module }}
-        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+        run: go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...
 
   npm-audit:
     name: npm audit (frontend)
@@ -246,13 +253,15 @@ jobs:
   pip-audit:
     name: pip-audit (ai-service)
     runs-on: ubuntu-latest
+    env:
+      PIP_AUDIT_VERSION: 2.10.1
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.14"
       - run: |
-          pip install pip-audit
+          pip install "pip-audit==${PIP_AUDIT_VERSION}"
           pip-audit -r services/ai-service/requirements.txt
 
   dependencies:

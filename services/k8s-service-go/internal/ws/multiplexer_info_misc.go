@@ -11,7 +11,7 @@ import (
 
 // namespaceToInfo — list endpoint: GetNamespaces inline (namespaces.go).
 func namespaceToInfo(obj *unstructured.Unstructured) map[string]interface{} {
-	metadata := obj.Object["metadata"].(map[string]interface{})
+	metadata, _ := obj.Object["metadata"].(map[string]interface{})
 	status, _ := obj.Object["status"].(map[string]interface{})
 
 	phase := ""
@@ -40,7 +40,7 @@ func serviceToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 
 // eventToInfo — list endpoint: GetEvents inline (events.go).
 func eventToInfo(obj *unstructured.Unstructured) map[string]interface{} {
-	metadata := obj.Object["metadata"].(map[string]interface{})
+	metadata, _ := obj.Object["metadata"].(map[string]interface{})
 
 	involved := map[string]interface{}{}
 	if io, ok := obj.Object["involvedObject"].(map[string]interface{}); ok {
@@ -92,7 +92,7 @@ func eventToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 // raw spec/status 통째로 포함 → frontend 의 normalize 가 raw K8s 형태 처리
 // 경로 (metadata.x ?? obj.x, status.phase 등) 로 정상 추출.
 func genericToInfo(obj *unstructured.Unstructured) map[string]interface{} {
-	metadata := obj.Object["metadata"].(map[string]interface{})
+	metadata, _ := obj.Object["metadata"].(map[string]interface{})
 	spec, _ := obj.Object["spec"].(map[string]interface{})
 	status, _ := obj.Object["status"].(map[string]interface{})
 	out := map[string]interface{}{

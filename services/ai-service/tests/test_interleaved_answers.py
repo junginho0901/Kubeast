@@ -153,7 +153,6 @@ async def test_an_api_key_turn_saves_the_text_before_a_call_in_front_of_it(monke
         _build_language_directive=lambda message: "Answer in English.",
         _get_tools_definition=lambda: tools,
         _filter_tools_for_output_preference=lambda tools, message: tools,
-        _detect_write_intent=lambda message: False,
         _execute_function_with_context=execute,
     )
 

@@ -316,13 +316,18 @@ func TestWriteToolsAnswerAMissingArgumentThemselves(t *testing.T) {
 	setGitopsMode(t, gitops.ModeBlock)
 	registry := buildToolRegistry()
 	for _, tool := range []string{"k8s_annotate_resource", "k8s_remove_annotation", "k8s_label_resource", "k8s_remove_label"} {
-		calls := kubectlScript(t, answerWith(argoTracked("apps", "Deployment", "shop", "web")))
-		_, err := registry[tool].Handler(ctxFor("c1"), map[string]interface{}{"resource_type": "deployments"}, bearer())
-		if !errors.Is(err, errBadRequest) {
-			t.Errorf("%s: %v", tool, err)
-		}
-		if len(*calls) != 0 {
-			t.Errorf("%s: calls %v", tool, *calls)
+		for _, args := range []map[string]interface{}{
+			{"resource_type": "deployments"},
+			{"resource_type": "deployments", "resource_name": "web", "namespace": "shop"},
+		} {
+			calls := kubectlScript(t, answerWith(argoTracked("apps", "Deployment", "shop", "web")))
+			_, err := registry[tool].Handler(ctxFor("c1"), args, bearer())
+			if !errors.Is(err, errBadRequest) {
+				t.Errorf("%s %v: %v", tool, args, err)
+			}
+			if len(*calls) != 0 {
+				t.Errorf("%s %v: calls %v", tool, args, *calls)
+			}
 		}
 	}
 }

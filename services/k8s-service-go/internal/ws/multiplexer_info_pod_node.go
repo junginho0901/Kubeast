@@ -17,7 +17,7 @@ func podToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 
 // nodeToInfo — list endpoint: formatNodeSummary (nodes.go).
 func nodeToInfo(obj *unstructured.Unstructured) map[string]interface{} {
-	metadata := obj.Object["metadata"].(map[string]interface{})
+	metadata, _ := obj.Object["metadata"].(map[string]interface{})
 	spec, _ := obj.Object["spec"].(map[string]interface{})
 	status, _ := obj.Object["status"].(map[string]interface{})
 

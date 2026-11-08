@@ -299,10 +299,6 @@ class AIService:
         from app.services.ai.intent import detect_output_preference
         return detect_output_preference(text)
 
-    def _detect_write_intent(self, text: Optional[str]) -> bool:
-        from app.services.ai.intent import detect_write_intent
-        return detect_write_intent(text)
-
     def _mentions_events(self, text: Optional[str]) -> bool:
         from app.services.ai.intent import mentions_events
         return mentions_events(text)

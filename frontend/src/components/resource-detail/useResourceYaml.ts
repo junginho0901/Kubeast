@@ -78,8 +78,8 @@ export function useResourceYaml({ target, tab, canEditYaml }: Args) {
     } else if (kind === 'Namespace') {
       queryClient.invalidateQueries({ queryKey: ['namespace-describe', name] })
       queryClient.invalidateQueries({ queryKey: ['namespaces'] })
-      queryClient.invalidateQueries({ queryKey: ['namespace-resource-quotas', name] })
-      queryClient.invalidateQueries({ queryKey: ['namespace-limit-ranges', name] })
+      queryClient.invalidateQueries({ queryKey: ['namespace-rq', name] })
+      queryClient.invalidateQueries({ queryKey: ['namespace-lr', name] })
     } else if (kind === 'Pod') {
       queryClient.invalidateQueries({ queryKey: ['pod-describe', ns, name] })
       queryClient.invalidateQueries({ queryKey: ['cluster', 'pods'] })
@@ -99,7 +99,7 @@ export function useResourceYaml({ target, tab, canEditYaml }: Args) {
     } else if (kind === 'Endpoints' && ns) {
       queryClient.invalidateQueries({ queryKey: ['network', 'endpoints'] })
       queryClient.invalidateQueries({ queryKey: ['network', 'endpoints', ns] })
-      queryClient.invalidateQueries({ queryKey: ['endpoint-describe', ns, name] })
+      queryClient.invalidateQueries({ queryKey: ['endpoints-describe', ns, name] })
     } else if (kind === 'EndpointSlice' && ns) {
       queryClient.invalidateQueries({ queryKey: ['network', 'endpointslices'] })
       queryClient.invalidateQueries({ queryKey: ['network', 'endpointslices', ns] })
@@ -107,7 +107,7 @@ export function useResourceYaml({ target, tab, canEditYaml }: Args) {
     } else if (kind === 'Ingress' && ns) {
       queryClient.invalidateQueries({ queryKey: ['network', 'ingresses'] })
       queryClient.invalidateQueries({ queryKey: ['network', 'ingresses', ns] })
-      queryClient.invalidateQueries({ queryKey: ['ingress-detail', ns, name] })
+      queryClient.invalidateQueries({ queryKey: ['ingress-describe', ns, name] })
     } else if (kind === 'IngressClass') {
       queryClient.invalidateQueries({ queryKey: ['network', 'ingressclasses'] })
       queryClient.invalidateQueries({ queryKey: ['ingressclass-describe', name] })

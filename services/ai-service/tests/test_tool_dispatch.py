@@ -28,15 +28,8 @@ def _make_service(*, allowed: bool = True, role: str = "admin"):
     service._locate_resource_for_yaml = AsyncMock(return_value=None)
     service._pick_log_container = AsyncMock(return_value=None)
     service._resolve_single = AsyncMock(return_value={})
-    # k8s_service 의 모든 attribute 가 AsyncMock 처럼 동작하도록
+    # Records every call on the client, so a test can hold that none was made.
     service.k8s_service = MagicMock()
-    for attr in (
-        "get_namespaces",
-        "get_pod_metrics",
-        "get_node_metrics",
-        "get_cluster_overview",
-    ):
-        setattr(service.k8s_service, attr, AsyncMock(return_value=[]))
     return service
 
 
@@ -60,7 +53,7 @@ async def test_permission_denied_returns_error_json():
     assert "read" in parsed["error"]
     # 권한 거부 시 실제 도구 호출은 일어나면 안 됨
     service._call_tool_server.assert_not_called()
-    service.k8s_service.get_cluster_overview.assert_not_called()
+    assert service.k8s_service.mock_calls == []
 
 
 @pytest.mark.asyncio
@@ -79,7 +72,7 @@ async def test_cache_hit_returns_cached_value_without_calling_tools():
 
     assert result == cached
     service._call_tool_server.assert_not_called()
-    service.k8s_service.get_cluster_overview.assert_not_called()
+    assert service.k8s_service.mock_calls == []
 
 
 @pytest.mark.asyncio

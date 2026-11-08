@@ -140,6 +140,10 @@ func handleAnnotateResource(ctx context.Context, args map[string]interface{}, he
 	namespace := argString(args, "namespace", "")
 	overwrite := argBool(args, "overwrite")
 
+	notice, err := gitopsGuard(ctx, headers, resourceType, resourceName, namespace)
+	if err != nil {
+		return "", err
+	}
 	cmdArgs := []string{"annotate", resourceType, resourceName}
 	for k, v := range annotations {
 		cmdArgs = append(cmdArgs, fmt.Sprintf("%s=%s", k, v))
@@ -150,7 +154,8 @@ func handleAnnotateResource(ctx context.Context, args map[string]interface{}, he
 	if overwrite {
 		cmdArgs = append(cmdArgs, "--overwrite")
 	}
-	return runKubectl(ctx, headers, cmdArgs...)
+	out, err := runKubectl(ctx, headers, cmdArgs...)
+	return withGitopsNotice(notice, out), err
 }
 
 func handleRemoveAnnotation(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
@@ -169,6 +174,10 @@ func handleRemoveAnnotation(ctx context.Context, args map[string]interface{}, he
 	namespace := argString(args, "namespace", "")
 	overwrite := argBool(args, "overwrite")
 
+	notice, err := gitopsGuard(ctx, headers, resourceType, resourceName, namespace)
+	if err != nil {
+		return "", err
+	}
 	cmdArgs := []string{"annotate", resourceType, resourceName}
 	for _, k := range keys {
 		cmdArgs = append(cmdArgs, fmt.Sprintf("%s-", k))
@@ -179,7 +188,8 @@ func handleRemoveAnnotation(ctx context.Context, args map[string]interface{}, he
 	if overwrite {
 		cmdArgs = append(cmdArgs, "--overwrite")
 	}
-	return runKubectl(ctx, headers, cmdArgs...)
+	out, err := runKubectl(ctx, headers, cmdArgs...)
+	return withGitopsNotice(notice, out), err
 }
 
 func handleLabelResource(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
@@ -198,6 +208,10 @@ func handleLabelResource(ctx context.Context, args map[string]interface{}, heade
 	namespace := argString(args, "namespace", "")
 	overwrite := argBool(args, "overwrite")
 
+	notice, err := gitopsGuard(ctx, headers, resourceType, resourceName, namespace)
+	if err != nil {
+		return "", err
+	}
 	cmdArgs := []string{"label", resourceType, resourceName}
 	for k, v := range labels {
 		cmdArgs = append(cmdArgs, fmt.Sprintf("%s=%s", k, v))
@@ -208,7 +222,8 @@ func handleLabelResource(ctx context.Context, args map[string]interface{}, heade
 	if overwrite {
 		cmdArgs = append(cmdArgs, "--overwrite")
 	}
-	return runKubectl(ctx, headers, cmdArgs...)
+	out, err := runKubectl(ctx, headers, cmdArgs...)
+	return withGitopsNotice(notice, out), err
 }
 
 func handleRemoveLabel(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
@@ -227,6 +242,10 @@ func handleRemoveLabel(ctx context.Context, args map[string]interface{}, headers
 	namespace := argString(args, "namespace", "")
 	overwrite := argBool(args, "overwrite")
 
+	notice, err := gitopsGuard(ctx, headers, resourceType, resourceName, namespace)
+	if err != nil {
+		return "", err
+	}
 	cmdArgs := []string{"label", resourceType, resourceName}
 	for _, k := range keys {
 		cmdArgs = append(cmdArgs, fmt.Sprintf("%s-", k))
@@ -237,7 +256,8 @@ func handleRemoveLabel(ctx context.Context, args map[string]interface{}, headers
 	if overwrite {
 		cmdArgs = append(cmdArgs, "--overwrite")
 	}
-	return runKubectl(ctx, headers, cmdArgs...)
+	out, err := runKubectl(ctx, headers, cmdArgs...)
+	return withGitopsNotice(notice, out), err
 }
 
 func handleScaleResource(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
