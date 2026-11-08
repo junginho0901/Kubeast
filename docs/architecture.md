@@ -143,6 +143,30 @@ Measured on 2026-10-30 with one k8s-service at the chart's limits (512 Mi; gatew
 | 500 people keeping the Pods page or Cluster View open (polls every 2 s, 8 node boxes each — 2 000 live watches), pods restarted during the run | 0 errors · p95 325 ms · every socket got the changes · k8s-service at most 427 MiB, CPU 1.9 cores on average |
 | 300, 400, 500 people opening the Pods page and Cluster View at the same instant (11 requests each) | 0 errors, no restart · k8s-service at most 413 MiB · gateway at most 103 MiB · the last answer after 17, 30 and 29 s |
 
+### Many different people on a large cluster
+
+Measured again on 2026-11-08 with the v0.7.6 code, the same way: one k8s-service at the chart's 512 Mi (the Go collector's limit is 90 % of it, 461 MiB), a laptop kind cluster, a KWOK cluster of 1 000 nodes, 50 000 pods and 100 000 events, requests from inside the kind network. This time each person signed in as an account of its own: 500 accounts, a fifth of them limited to 5 or 20 namespaces. One account's identical reads are shared (`handler.Shared`), so different accounts are the harder case. Before each run k8s-service was started fresh and the KWOK cluster warmed up.
+
+| What | Result |
+| --- | --- |
+| 100, then 300 different people opening a ConfigMap drawer within 10 s in the namespace of 50 000 pods and 76 000 events, and keeping it open for 2 minutes | 0 errors, no restart · opening p95 1.4 s (100) and 1.2 s (300) · while open p95 6 ms · the API server answered none of Kubeast's requests with 429 · k8s-service at most 150 MiB |
+| 100 different people following a Deployment of 500 pods, then a DaemonSet of 1 000 pods, in their drawers through a rollout (3 minutes each) | 0 errors, no restart · k8s-service at most 300 MiB · every change reached every drawer · a drawer's describe read again p95 12.0 s (Deployment) and 7.2 s (DaemonSet), a change on screen p95 22 s and 17 s |
+| 500 different people keeping the Dashboard, Pods and Cluster View open for 6 minutes, then 100 of them opening those screens at the same instant | while open p95 16 ms, no restart, no 429 · k8s-service at most 440 MiB · of the 100, half got their last answer only at the load's 60 s timeout, and 263 requests failed |
+| 20 people using the AI's read tools at once for 2 minutes (one account, 407 calls) | no restart · tool-server at most 162 MiB of 256 Mi · 8 calls failed, all reading events (`k8s_get_events`, `timeline`) |
+
+Sizing:
+
+- The chart's 512 Mi for k8s-service held every v0.7.6 run above, on 50 000 pods. Keep it unless many people use a large cluster at once.
+- When many people use a large cluster at once — hundreds of accounts, tens of thousands of pods — set `resources.k8sService.limits.memory` to `1Gi` (the collector's limit follows). The crowd of 100 above came within 21 MiB of the collector's limit, and on 2026-11-07, before the changes this page describes, the same crowd took k8s-service to 611 MiB with a limit of 1 Gi.
+- More memory does not make a crowd faster: the 1 Gi run of 2026-11-07 had the same 60 s answers. It keeps k8s-service from restarting when a crowd and a large namespace meet.
+
+Known limits of v0.7.6, from these runs:
+
+- The 100 people arriving at once above. k8s-service had answered their requests: on an earlier run the same day its sockets to the gateway held 46 MB unsent with retransmissions, and at quiet times k8s-service and auth-service retransmitted some 4 200 segments in 6 minutes too. That points at the laptop's kind network rather than Kubeast, but it has not yet been measured on a real cluster.
+- A drawer that follows its object reads its describe again as the object changes, and each person's read waits on the client's rate to the cluster (`multicluster.clientQPS`). During a rollout followed by 100 different people that read takes seconds (above), where a quiet drawer answers in milliseconds.
+- A drawer that follows its object, and a workload's pod table up to 300 pods, each hold one watch on the cluster as that person. They are not shared between people.
+- The AI's event reads (`k8s_get_events`, `timeline`) read pages of events outside `multicluster.eventListConcurrency`.
+
 What sets these limits:
 
 - `multicluster.wsMaxSubscriptions` (2 000): every live watch on a screen is one watch on the cluster as the user. Past the limit, a screen loads but does not update, says so and asks again by itself, spread over half a minute and more. A drawer shares the list watch of the page behind it instead of opening its own, and most drawers follow their object on the read they already make every 10 s, which costs no watch.
