@@ -466,19 +466,19 @@
       "route": "^/api/v1/cluster(/namespaces/[^/]+)?/pdbs(/all|/[^/]+/describe)?$|^live /apis/policy/v1(/namespaces/[^/]+)?/poddisruptionbudgets$",
       "cell": "\\.has_selector$",
       "why": "A PodDisruptionBudget's row says whether it has a selector (internal/pdb): in policy/v1 none protects no pod and an empty one every pod of the namespace, and both read selector {}. The drawer's Protected Pods follows it.",
-      "pr": "TBD"
+      "pr": "#738"
     },
     {
       "route": "^/api/v1/cluster/namespaces/[^/]+/(deployments|statefulsets|daemonsets|replicasets|jobs)/[^/]+/describe$",
       "cell": "^\\$\\.selector_expressions(\\.|\\[|$)",
       "why": "A workload's describe gives its selector's matchExpressions when it has any, so the drawer's pod table reads the pods of the whole selector.",
-      "pr": "TBD"
+      "pr": "#738"
     },
     {
       "route": "^/api/v1/cluster/namespaces/[^/]+/jobs/[^/]+/describe$",
       "cell": "^\\$\\.selector(\\.|\\[|$)",
       "why": "A Job's describe gives its selector's matchLabels as the other workloads' do, so its pod table does not wait for the object.",
-      "pr": "TBD"
+      "pr": "#738"
     }
   ]
 }
