@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -150,42 +151,77 @@ var credentialLastWord = regexp.MustCompile(`(^|_)[a-z0-9]*(password|passwd|pwd|
 var (
 	workingDirectoryKey = regexp.MustCompile(`^(PWD|OLDPWD|pwd|oldpwd)$`)
 	pathShaped          = regexp.MustCompile(`^(~|\.{1,2})?(/[A-Za-z0-9._~\-]*)*$`)
+	// A directory with a space, past its first part: /fake pass cannot be told from a value, /home/me/My Docs can.
+	pathWithSpaces = regexp.MustCompile(`^/[A-Za-z0-9._~\-]+(/[A-Za-z0-9._~\- ]*)+$`)
+	// Two humps in one part of a path read as encoded text.
+	encodedPathPart = regexp.MustCompile(`[a-z0-9][A-Z][^/]*[a-z0-9][A-Z]`)
 )
 
+// isWorkingDirectory: in the shell's own capitals the name says where a process runs. In lower case it may as well be a
+// password's abbreviation, so a value that reads as encoded text goes.
 func isWorkingDirectory(key, value string) bool {
-	return workingDirectoryKey.MatchString(key) && pathShaped.MatchString(strings.TrimSpace(value))
-}
-
-// leftToTheWordRule: KEY=word under a glued name stays with the rule for a line's words, as PGPASSWORD=x psql -h db has
-// to: the command after the word is not the value. Whatever that rule cannot read as one word is masked to the end of
-// the line.
-func leftToTheWordRule(key, line string) bool {
-	if separatedKey.MatchString(normalizeKey(key)) {
+	if !workingDirectoryKey.MatchString(key) {
 		return false
 	}
+	v := strings.TrimSpace(value)
+	if key == strings.ToUpper(key) {
+		return pathShaped.MatchString(v) || pathWithSpaces.MatchString(v)
+	}
+	return pathShaped.MatchString(v) && !encodedPathPart.MatchString(v)
+}
+
+// namesASecretObject: keys charts use for the name of a Secret that holds the value (existingSecret, tlsSecret).
+var namesASecretObject = regexp.MustCompile(`(^|_)(existing|tls|ssl|ca|cert|certificate|pull|image_pull)_?secret$`)
+
+func readsAsAName(v string) bool {
+	return nameShaped.MatchString(v) && (strings.ContainsAny(v, "-./") || !strings.ContainsAny(v, "0123456789"))
+}
+
+// namesAnObject: the name is what a reader needs and holds nothing. In capitals the key is an environment variable, which
+// holds the value itself.
+func namesAnObject(key, value string) bool {
+	return key != strings.ToUpper(key) && namesASecretObject.MatchString(normalizeKey(key)) && readsAsAName(strings.TrimSpace(value))
+}
+
+// countsWhatPassed: a small number under a short name (foo_pass: 3) is a count; no password is that short.
+func countsWhatPassed(normalizedKey, value string) bool {
+	return len(value) < 4 && len(normalizedKey) > 5 && strings.HasSuffix(normalizedKey, "_pass")
+}
+
+// commandAfter: what follows KEY=word reads as more of a command line: another assignment, a path, or a word and its flag.
+// Anything else cannot be told from a value with spaces.
+var commandAfter = regexp.MustCompile(`^[ \t]+(?:[A-Za-z_][A-Za-z0-9_]*=|[./~][^ \t]*(?:[ \t]|$)|[A-Za-z0-9_.\-]+[ \t]+-{1,2}[A-Za-z])`)
+
+// leftToTheWordRule: KEY=word stays with the rule for a line's words when the command after the word is not the value:
+// always under a glued name, as PGPASSWORD=x psql has to, and under a name standing apart when the rest reads as a
+// command. Whatever that rule cannot read as one word is masked to the end of the line.
+func leftToTheWordRule(key, line string) bool {
 	loc := inlinePair.FindStringSubmatchIndex(line)
 	if loc == nil || line[loc[4]:loc[5]] != key {
 		return false
 	}
+	separated := separatedKey.MatchString(normalizeKey(key))
 	if loc[1] == len(line) || line[loc[1]] == ' ' || line[loc[1]] == '\t' {
-		return true
+		return !separated || commandAfter.MatchString(line[loc[1]:])
 	}
-	return line[loc[1]] == '}' && strings.HasPrefix(line[loc[8]:loc[9]], "${")
+	return !separated && line[loc[1]] == '}' && strings.HasPrefix(line[loc[8]:loc[9]], "${")
 }
 
 // valueStays says whether a sensitive key's text value is left as it is.
 func valueStays(key, value string) bool {
-	if isWorkingDirectory(key, value) {
+	if isWorkingDirectory(key, value) || namesAnObject(key, value) {
 		return true
 	}
 	if !valueLooksHarmless(value) {
 		return false
 	}
 	v := strings.TrimSpace(value)
-	return v == "" || !onlyNumberCharacters(v) || !credentialLastWord.MatchString(normalizeKey(key))
+	k := normalizeKey(key)
+	return v == "" || !onlyNumberCharacters(v) || !credentialLastWord.MatchString(k) || countsWhatPassed(k, v)
 }
 
-// holdsCredential says whether a decoded member's value is a credential by its key. true, false and null say nothing.
+// holdsCredential says whether a decoded member's value is a credential by its key. true, false and null say nothing. A
+// number comes as its digits.
 func holdsCredential(key, value string, isString, isNumber bool) bool {
 	switch {
 	case !keyIsSensitive(key):
@@ -193,7 +229,8 @@ func holdsCredential(key, value string, isString, isNumber bool) bool {
 	case isString:
 		return !valueStays(key, value)
 	case isNumber:
-		return credentialLastWord.MatchString(normalizeKey(key))
+		k := normalizeKey(key)
+		return credentialLastWord.MatchString(k) && !countsWhatPassed(k, value)
 	}
 	return false
 }
@@ -204,7 +241,7 @@ func decodedCredential(key string, v any) bool {
 	case string:
 		return holdsCredential(key, t, true, false)
 	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64, json.Number:
-		return holdsCredential(key, "", false, true)
+		return holdsCredential(key, fmt.Sprint(t), false, true)
 	}
 	return false
 }
@@ -227,6 +264,9 @@ func maskBlockValues(s string, st *Stats) string {
 		line := lines[i]
 		out = append(out, line)
 		i++
+		if !strings.Contains(line, ":") || !strings.ContainsAny(line, "|>") {
+			continue
+		}
 		m := blockKey.FindStringSubmatch(line)
 		if m == nil || !keyIsSensitive(m[2]) {
 			continue
@@ -264,66 +304,215 @@ var (
 	listItem = regexp.MustCompile(`^([ \t]*-[ \t]+)(.*?)([ \t]*\r?)$`)
 )
 
-// A JSON string in text, plain or backslash-escaped as an annotation holds it.
-const jsonStringInText = `"(?:[^"\\\r\n]|\\[^\r\n])*"|\\"(?:[^"\\\r\n]|\\[^"\r\n])*\\"`
-
 var (
-	// jsonListInText: `"key": [...]` in a line, up to its bracket or, in text cut short, the line's end. A list holding a
-	// mapping or a list does not match: those have their own keys.
-	jsonListInText = regexp.MustCompile(`(?m)(\\?")([A-Za-z0-9_.\-]+)(\\?"[ \t]*:[ \t]*\[)((?:` + jsonStringInText + `|[^\[\]{}"\\\r\n])*(?:"[^"\r\n]*)?)(\]|\r?$)`)
-	jsonListItem   = regexp.MustCompile(jsonStringInText + `|"[^"\r\n]*$|[^ \t\r\n,"\\]+`)
-	// jsonListOpens: a key whose list goes on below this line, quoted or at the line's start: in a sentence a word before a
-	// colon is not one. jsonListLine: one item on a line of its own.
-	jsonListOpens = regexp.MustCompile(`(?:^[ \t]*(?:-[ \t]+)?"?|")([A-Za-z0-9_.\-]+)"?[ \t]*:[ \t]*\[[^\]\r\n]*\r?$`)
-	jsonListLine  = regexp.MustCompile(`^([ \t]*)(` + jsonStringInText + `|"[^"\r\n]*|[^ \t\r\n,"\\\[\]{}:]+)([ \t,\]}]*\r?)$`)
+	// jsonListOpens: a key and the bracket of its list, in any quote and any level of escaping, or at the line's start: in a
+	// sentence a word before a colon is not one.
+	jsonListOpens = regexp.MustCompile(`(?m)["']([A-Za-z0-9_.\-]+)\\*["'][ \t]*:[ \t\r\n]*\[|^[ \t]*(?:-[ \t]+)?([A-Za-z0-9_.\-]+)[ \t]*:[ \t]*\[`)
+	// jsonListLineStarts: a line that goes on with a list: a string, a bracket, or one word.
+	jsonListLineStarts = regexp.MustCompile(`^[ \t]*(?:\\*["'\[\]{}]|[^ \t\r\n,"'\\\[\]{}:]+[ \t]*(?:[,\]}]|\r?$))`)
 )
 
-// maskListItem masks one item of a JSON list under a sensitive key, in the quote it came in, or quote if it had none.
-func maskListItem(key, item, quote string, st *Stats) string {
-	value := item
-	switch {
-	case strings.HasPrefix(item, `\"`):
-		value, quote = strings.TrimSuffix(item[2:], `\"`), `\"`
-	case strings.HasPrefix(item, `"`):
-		value, quote = strings.TrimSuffix(item[1:], `"`), `"`
-	}
-	if valueStays(key, value) {
-		return item
-	}
-	st.add("key_name", 1)
-	return quote + "<REDACTED:" + key + ">" + quote
+const jsonListWordEnds = " \t\r\n,\"'\\[]{}"
+
+type jsonListOpening struct {
+	start, end int
+	key, quote string
 }
 
-// maskJSONLists masks a sensitive key's JSON list held in one line of text, which a parser cannot read when the text is a
-// log line or was cut short.
-func maskJSONLists(s string, st *Stats) string {
-	return jsonListInText.ReplaceAllStringFunc(s, func(m string) string {
-		sub := jsonListInText.FindStringSubmatch(m)
-		if !keyIsSensitive(sub[2]) {
-			return m
+// jsonListOpenings are the sensitive keys' lists in s, in order. A key at the line's start whose list closes on that line
+// is the line rule's.
+func jsonListOpenings(s string) []jsonListOpening {
+	var out []jsonListOpening
+	for _, loc := range jsonListOpens.FindAllStringSubmatchIndex(s, -1) {
+		if loc[2] < 0 {
+			key := s[loc[4]:loc[5]]
+			rest := s[loc[1]:]
+			if i := strings.IndexAny(rest, "\r\n"); i >= 0 {
+				rest = rest[:i]
+			}
+			if keyIsSensitive(key) && !strings.Contains(rest, "]") {
+				out = append(out, jsonListOpening{loc[0], loc[1], key, `"`})
+			}
+			continue
 		}
-		items := jsonListItem.ReplaceAllStringFunc(sub[4], func(item string) string { return maskListItem(sub[2], item, sub[1], st) })
-		return sub[1] + sub[2] + sub[3] + items + sub[5]
-	})
+		if key := s[loc[2]:loc[3]]; keyIsSensitive(key) {
+			start := loc[0]
+			for start > 0 && s[start-1] == '\\' {
+				start--
+			}
+			out = append(out, jsonListOpening{start, loc[1], key, s[start : loc[0]+1]})
+		}
+	}
+	return out
+}
+
+// quoteAt says where a string opens at s[i]: any backslashes, then a quote.
+func quoteAt(s string, i int) (level int, ok bool) {
+	j := i
+	for j < len(s) && s[j] == '\\' {
+		j++
+	}
+	if j < len(s) && (s[j] == '"' || s[j] == '\'') {
+		return j - i, true
+	}
+	return 0, false
+}
+
+// lineStringEnd is the index after the string that opens at s[i] with level backslashes, which ends with its line at the
+// latest: a text cut short has no closing quote. closed says whether it had one.
+func lineStringEnd(s string, i, level int) (end int, closed bool) {
+	open := i + level
+	q := s[open]
+	step := 2 * (level + 1)
+	for j := open + 1; j < len(s); j++ {
+		switch s[j] {
+		case '\r', '\n':
+			return j, false
+		case q:
+			run := 0
+			for k := j - 1; k > open && s[k] == '\\'; k-- {
+				run++
+			}
+			if run%step == level {
+				return j + 1, true
+			}
+		}
+	}
+	return len(s), false
+}
+
+// nextLineGoesOnWithAList: the first line after s[i] with anything on it reads as more of a list.
+func nextLineGoesOnWithAList(s string, i int) bool {
+	for i < len(s) {
+		end := strings.IndexByte(s[i:], '\n')
+		if end < 0 {
+			end = len(s) - i
+		}
+		line := s[i : i+end]
+		if strings.TrimSpace(line) != "" {
+			return jsonListLineStarts.MatchString(line)
+		}
+		i += end + 1
+	}
+	return true
+}
+
+// maskJSONLists masks each item of a sensitive key's list in text, which a parser cannot read when it is a log line or was
+// cut short: at any depth of lists, past mappings, in any quote. A mapping has its own keys, a count or a state stays as it
+// does on the key's own line, and the list ends at its bracket or the first line that does not read as one. One pass over
+// the text, however lists nest.
+func maskJSONLists(s string, st *Stats) string {
+	if !strings.Contains(s, "[") {
+		return s
+	}
+	openings := jsonListOpenings(s)
+	if len(openings) == 0 {
+		return s
+	}
+	type openList struct {
+		key, quote      string
+		depth, mappings int
+	}
+	var out strings.Builder
+	at := 0
+	mask := func(from, to int, list *openList, quote, value string) {
+		if !valueStays(list.key, value) {
+			out.WriteString(s[at:from])
+			out.WriteString(quote + "<REDACTED:" + list.key + ">" + quote)
+			at = to
+			st.add("key_name", 1)
+		}
+	}
+	var stack []*openList
+	next := 0
+	for i := 0; i < len(s); {
+		for next < len(openings) && openings[next].start < i {
+			next++
+		}
+		if len(stack) == 0 && next == len(openings) {
+			break
+		}
+		if next < len(openings) && (len(stack) == 0 || stack[len(stack)-1].mappings > 0) && (len(stack) == 0 || openings[next].start == i) {
+			stack = append(stack, &openList{key: openings[next].key, quote: openings[next].quote, depth: 1})
+			i = openings[next].end
+			next++
+			continue
+		}
+		list := stack[len(stack)-1]
+		c := s[i]
+		if list.mappings > 0 {
+			level, opens := quoteAt(s, i)
+			switch {
+			case opens:
+				i, _ = lineStringEnd(s, i, level)
+			case c == '{':
+				list.mappings++
+				i++
+			case c == '}':
+				list.mappings--
+				i++
+			default:
+				i++
+			}
+			continue
+		}
+		level, opens := quoteAt(s, i)
+		switch {
+		case opens:
+			end, closed := lineStringEnd(s, i, level)
+			first := i + level + 1
+			last := end
+			if closed {
+				last = end - level - 1
+			}
+			mask(i, end, list, s[i:first], s[first:last])
+			i = end
+		case c == '\n':
+			if !nextLineGoesOnWithAList(s, i+1) {
+				stack = stack[:0]
+			}
+			i++
+		case c == ' ' || c == '\t' || c == '\r' || c == ',' || c == '\\':
+			i++
+		case c == '[':
+			list.depth++
+			i++
+		case c == ']':
+			if list.depth--; list.depth == 0 {
+				stack = stack[:len(stack)-1]
+			}
+			i++
+		case c == '{':
+			list.mappings = 1
+			i++
+		case c == '}':
+			stack = stack[:len(stack)-1]
+			i++
+		default:
+			end := i
+			for end < len(s) && !strings.ContainsRune(jsonListWordEnds, rune(s[end])) {
+				end++
+			}
+			mask(i, end, list, list.quote, s[i:end])
+			i = end
+		}
+	}
+	if at == 0 {
+		return s
+	}
+	out.WriteString(s[at:])
+	return out.String()
 }
 
 // maskListValues replaces each item of a sensitive key's list on the lines below it, which the line rules read as words
 // with no key. An item that is a mapping has its own keys, and a count or a state stays as it does on the key's own line.
-// A JSON list is read up to its first line that is not one item, so what follows a mapping in the same list stays.
 func maskListValues(s string, st *Stats) string {
 	if !strings.Contains(s, "\n") {
 		return s
 	}
 	lines := strings.Split(s, "\n")
 	for i, line := range lines {
-		if open := jsonListOpens.FindStringSubmatch(line); open != nil && keyIsSensitive(open[1]) {
-			for j := i + 1; j < len(lines); j++ {
-				item := jsonListLine.FindStringSubmatch(lines[j])
-				if item == nil {
-					break
-				}
-				lines[j] = item[1] + maskListItem(open[1], item[2], `"`, st) + item[3]
-			}
+		if !listKeyMayStartAt(line) {
 			continue
 		}
 		m := listKey.FindStringSubmatch(line)
@@ -375,8 +564,132 @@ func onlyNumberCharacters(v string) bool {
 }
 
 func keyIsSensitive(key string) bool {
+	if nextCredentialWord(key, 0) < 0 {
+		return false
+	}
 	k := normalizeKey(key)
 	return (sensitiveKey.MatchString(k) && !notSecretKey.MatchString(k)) || isShortPassword(key)
+}
+
+// startsWithFold says whether s at i starts with word, in any case of its ASCII letters.
+func startsWithFold(s string, i int, word string) bool {
+	if len(s)-i < len(word) {
+		return false
+	}
+	for j := 0; j < len(word); j++ {
+		c := s[i+j]
+		if 'A' <= c && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		if c != word[j] {
+			return false
+		}
+	}
+	return true
+}
+
+// foldsToASCII: a case-insensitive rule also reads these two letters as s (U+017F) and k (U+212A).
+func foldsToASCII(s string, i int) bool {
+	switch s[i] {
+	case 0xC5:
+		return i+1 < len(s) && s[i+1] == 0xBF
+	case 0xE2:
+		return i+2 < len(s) && s[i+1] == 0x84 && s[i+2] == 0xAA
+	}
+	return false
+}
+
+// nextCredentialWord is where a word every sensitive key holds starts at or after i, -1 if none. It looks ahead of the
+// key-name rules: nearly all text holds none, and it costs a tenth of a percent of what those rules cost.
+func nextCredentialWord(s string, i int) int {
+	for ; i < len(s); i++ {
+		switch s[i] {
+		case 'p', 'P':
+			if startsWithFold(s, i, "pass") || startsWithFold(s, i, "pwd") {
+				return i
+			}
+		case 's', 'S':
+			if startsWithFold(s, i, "secret") {
+				return i
+			}
+		case 't', 'T':
+			if startsWithFold(s, i, "token") {
+				return i
+			}
+		case 'k', 'K':
+			if startsWithFold(s, i, "key") {
+				return i
+			}
+		case 'c', 'C':
+			if startsWithFold(s, i, "credential") || startsWithFold(s, i, "connection") {
+				return i
+			}
+		case 'd', 'D':
+			if startsWithFold(s, i, "dsn") {
+				return i
+			}
+		case 0xC5, 0xE2:
+			if foldsToASCII(s, i) {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+// containsFold says whether s may hold word to a case-insensitive rule.
+func containsFold(s, word string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i]|0x20 == word[0] && startsWithFold(s, i, word) || foldsToASCII(s, i) {
+			return true
+		}
+	}
+	return false
+}
+
+// replaceOnCredentialLines is replaceCount for a rule that reads one line at a time, on the lines holding a credential word.
+func replaceOnCredentialLines(re *regexp.Regexp, s string, f func(string) string, st *Stats, kind string) string {
+	var out strings.Builder
+	at := 0
+	for i := nextCredentialWord(s, 0); i >= 0; i = nextCredentialWord(s, i) {
+		start := strings.LastIndexByte(s[:i], '\n') + 1
+		end := len(s)
+		if nl := strings.IndexByte(s[i:], '\n'); nl >= 0 {
+			end = i + nl
+		}
+		line := s[start:end]
+		if replaced := replaceCount(re, line, f, st, kind); replaced != line {
+			out.WriteString(s[at:start])
+			out.WriteString(replaced)
+			at = end
+		}
+		i = end
+	}
+	if at == 0 {
+		return s
+	}
+	out.WriteString(s[at:])
+	return out.String()
+}
+
+// holdsProviderPrefix: what providerKey's alternatives start with.
+func holdsProviderPrefix(s string) bool {
+	for _, prefix := range []string{"sk-", "AIza", "ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_", "xox", "hf_"} {
+		if strings.Contains(s, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// listKeyMayStartAt: listKey's first colon has nothing after it but space or a comment, without a regexp for each line.
+func listKeyMayStartAt(line string) bool {
+	colon := strings.IndexByte(line, ':')
+	if colon < 0 {
+		return false
+	}
+	rest := strings.TrimLeft(line[colon+1:], " \t")
+	return rest == "" || rest == "\r" || rest[0] == '#'
 }
 
 // A credential among the words of a line (a log line, a command, a connection string, a URL's query). Prose reads the
@@ -385,8 +698,13 @@ func keyIsSensitive(key string) bool {
 const (
 	inlineWord   = `(?:passwords?|passwds?|pwds?|secret|token|api[_.\-]?keys?|access[_.\-]?keys?|private[_.\-]?keys?|secret[_.\-]?keys?|credentials?|dsns?|connection[_.\-]?strings?|pgpass|[_.\-]pass)`
 	inlineKey    = `([A-Za-z0-9_.\-]*?` + inlineWord + `)`
-	inlineBefore = `(^|[^A-Za-z0-9_.\-])`
+	inlineBefore = `(--from-file=["']?|^|[^A-Za-z0-9_.\-])`
 )
+
+// fileAfterAKey: kubectl's --from-file=[key=]source names a file under the key, whatever the key says.
+func fileAfterAKey(before, value string) bool {
+	return strings.HasPrefix(strings.ToLower(before), "--from-file=") && strings.ContainsAny(value, "/.")
+}
 
 var (
 	inlinePair   = regexp.MustCompile(`(?i)` + inlineBefore + inlineKey + `(=)([^\s"'\\&;,)\]}|={*%<>\[(][^\s"'\\&;,)\]}|]*)`)
@@ -418,19 +736,19 @@ func inlineValueStays(key, value string) bool {
 		return true // pass=ok, first_pass=done
 	}
 	credential := credentialLastWord.MatchString(k)
-	if !credential && onlyNumberCharacters(v) {
-		return true // token=5, secret=3: a count or a duration
+	if onlyNumberCharacters(v) && (!credential || countsWhatPassed(k, v)) {
+		return true // token=5, secret=3, foo_pass=3: a count or a duration
 	}
 	// In capitals the key is an environment variable, which holds the value itself.
-	if credential || key == strings.ToUpper(key) || !inlineNamesAnObject.MatchString(k) || !nameShaped.MatchString(v) {
+	if credential || key == strings.ToUpper(key) || !inlineNamesAnObject.MatchString(k) {
 		return false
 	}
-	return strings.ContainsAny(v, "-./") || !strings.ContainsAny(v, "0123456789")
+	return readsAsAName(v)
 }
 
 func maskInlinePair(m string) string {
 	sub := inlinePair.FindStringSubmatch(m)
-	if inlineValueStays(sub[2], sub[4]) {
+	if inlineValueStays(sub[2], sub[4]) || fileAfterAKey(sub[1], sub[4]) {
 		return m
 	}
 	return sub[1] + sub[2] + sub[3] + "<REDACTED:" + strings.TrimLeft(sub[2], "-") + ">"
@@ -438,7 +756,7 @@ func maskInlinePair(m string) string {
 
 func maskInlineQuoted(m string) string {
 	sub := inlineQuoted.FindStringSubmatch(m)
-	if inlineValueStays(sub[2], sub[4]) {
+	if inlineValueStays(sub[2], sub[4]) || fileAfterAKey(sub[1], sub[4]) {
 		return m
 	}
 	quote := sub[4][:1]
@@ -450,22 +768,26 @@ func maskInlineQuoted(m string) string {
 
 // --- value-pattern rules ---------------------------------------------------
 
+// spaceChars are the spaces a rule reads between its parts, past the ASCII ones of \s: text in another script may use its own
+// (the full-width space of Korean text). The same list is in redact.py.
+const spaceChars = `\s\x0b\x1c-\x1f\x{85}\x{a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}`
+
 var (
 	privateKeyBlock = regexp.MustCompile(`-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----`)
 	urlCredentials  = regexp.MustCompile(`([A-Za-z][A-Za-z0-9+.\-]*://[^:/\s@"']+:)[^@\s"']+(@)`)
-	authorization   = regexp.MustCompile(`(?i)\b(Bearer|Basic)\s+([A-Za-z0-9._~+/=\-]{16,})`)
+	authorization   = regexp.MustCompile(`(?i)\b(Bearer|Basic)[` + spaceChars + `]+([A-Za-z0-9._~+/=\-]{16,})`)
 	jwtToken        = regexp.MustCompile(`\beyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\b`)
 	awsAccessKey    = regexp.MustCompile(`\b(AKIA|ASIA)[0-9A-Z]{16}\b`)
-	awsSecretValue  = regexp.MustCompile(`(?i)(aws_secret_access_key\s*[:=]\s*"?)([A-Za-z0-9/+=]{40})`)
+	awsSecretValue  = regexp.MustCompile(`(?i)(aws_secret_access_key[` + spaceChars + `]*[:=][` + spaceChars + `]*"?)([A-Za-z0-9/+=]{40})`)
 	// providerKey: API keys by their published prefixes (the gitleaks rule set), with looser lengths since an
 	// error message may cut a key short. A bare sk- run counts only with an upper-case letter and a digit,
 	// which a Kubernetes object name (lower case) never has.
 	providerKey = regexp.MustCompile(`\b(?:sk-[A-Za-z0-9_\-]{20,}|AIza[A-Za-z0-9_\-]{35}|gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}|xox[abposr]-[A-Za-z0-9\-]{10,}|hf_[A-Za-z0-9]{30,})`)
 
 	emailAddr = regexp.MustCompile(`\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b`)
-	krPhone   = regexp.MustCompile(`\b01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}\b`)
-	krRRN     = regexp.MustCompile(`\b\d{6}[-\s]?[1-4]\d{6}\b`)
-	cardNum   = regexp.MustCompile(`\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b`)
+	krPhone   = regexp.MustCompile(`\b01[016789][-.` + spaceChars + `]?\d{3,4}[-.` + spaceChars + `]?\d{4}\b`)
+	krRRN     = regexp.MustCompile(`\b\d{6}[-` + spaceChars + `]?[1-4]\d{6}\b`)
+	cardNum   = regexp.MustCompile(`\b\d{4}[-` + spaceChars + `]?\d{4}[-` + spaceChars + `]?\d{4}[-` + spaceChars + `]?\d{4}\b`)
 )
 
 // Text redacts free text (kubectl output, logs, YAML, JSON). Secret documents
@@ -475,7 +797,7 @@ func Text(s string, o Options) (string, Stats) {
 	if s == "" {
 		return s, st
 	}
-	if namesSecretYAML(s) || secretJSONKind.MatchString(s) {
+	if namesSecret(s) {
 		var n int
 		s, n = stripSecretDocuments(s)
 		st.add("secret", n)
@@ -483,32 +805,37 @@ func Text(s string, o Options) (string, Stats) {
 	if !o.Enabled {
 		return s, st
 	}
-	if o.on("private_key") {
+	// Each rule first looks for what it cannot match without: most text goes through none of them.
+	if o.on("private_key") && strings.Contains(s, "PRIVATE KEY") {
 		s = replaceCount(privateKeyBlock, s, func(string) string { return "<REDACTED:private_key>" }, &st, "private_key")
 	}
-	if o.on("url_credentials") {
+	if o.on("url_credentials") && strings.Contains(s, "://") && strings.IndexByte(s, '@') >= 0 {
 		s = replaceCount(urlCredentials, s, func(m string) string {
 			sub := urlCredentials.FindStringSubmatch(m)
 			return sub[1] + "<REDACTED:password>" + sub[2]
 		}, &st, "url_credentials")
 	}
-	if o.on("authorization") {
+	if o.on("authorization") && (containsFold(s, "bearer") || containsFold(s, "basic")) {
 		s = replaceCount(authorization, s, func(m string) string {
 			sub := authorization.FindStringSubmatch(m)
 			return sub[1] + " <REDACTED:token>"
 		}, &st, "authorization")
 	}
-	if o.on("jwt") {
+	if o.on("jwt") && strings.Contains(s, "eyJ") {
 		s = replaceCount(jwtToken, s, func(string) string { return "<REDACTED:jwt>" }, &st, "jwt")
 	}
 	if o.on("aws_key") {
-		s = replaceCount(awsAccessKey, s, func(string) string { return "<REDACTED:aws_access_key>" }, &st, "aws_key")
-		s = replaceCount(awsSecretValue, s, func(m string) string {
-			sub := awsSecretValue.FindStringSubmatch(m)
-			return sub[1] + "<REDACTED:aws_secret_key>"
-		}, &st, "aws_key")
+		if strings.Contains(s, "AKIA") || strings.Contains(s, "ASIA") {
+			s = replaceCount(awsAccessKey, s, func(string) string { return "<REDACTED:aws_access_key>" }, &st, "aws_key")
+		}
+		if containsFold(s, "aws_secret_access_key") {
+			s = replaceCount(awsSecretValue, s, func(m string) string {
+				sub := awsSecretValue.FindStringSubmatch(m)
+				return sub[1] + "<REDACTED:aws_secret_key>"
+			}, &st, "aws_key")
+		}
 	}
-	if o.on("provider_key") {
+	if o.on("provider_key") && holdsProviderPrefix(s) {
 		s = replaceCount(providerKey, s, func(m string) string {
 			if strings.HasPrefix(m, "sk-") && !(strings.ContainsAny(m, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") && strings.ContainsAny(m, "0123456789")) {
 				return m
@@ -516,7 +843,7 @@ func Text(s string, o Options) (string, Stats) {
 			return "<REDACTED:api_key>"
 		}, &st, "provider_key")
 	}
-	if o.on("key_name") {
+	if o.on("key_name") && nextCredentialWord(s, 0) >= 0 {
 		s = maskBlockValues(s, &st)
 		s = maskListValues(s, &st)
 		s = maskJSONLists(s, &st)
@@ -528,14 +855,16 @@ func Text(s string, o Options) (string, Stats) {
 			}
 			return sub[1] + key + sub[3] + "<REDACTED:" + key + ">" + sub[5]
 		}, &st, "key_name")
-		s = replaceCount(envListJSON, s, func(m string) string {
-			sub := envListJSON.FindStringSubmatch(m)
-			if !keyIsSensitive(sub[2]) || valueStays(sub[2], sub[3]) {
-				return m
-			}
-			return sub[1] + "<REDACTED:" + sub[2] + ">" + sub[4]
-		}, &st, "key_name")
-		s = replaceCount(keyValueLine, s, func(m string) string {
+		if strings.Contains(s, `"name"`) {
+			s = replaceCount(envListJSON, s, func(m string) string {
+				sub := envListJSON.FindStringSubmatch(m)
+				if !keyIsSensitive(sub[2]) || valueStays(sub[2], sub[3]) {
+					return m
+				}
+				return sub[1] + "<REDACTED:" + sub[2] + ">" + sub[4]
+			}, &st, "key_name")
+		}
+		s = replaceOnCredentialLines(keyValueLine, s, func(m string) string {
 			sub := keyValueLine.FindStringSubmatch(m)
 			key, value := sub[2], sub[4]
 			if !keyIsSensitive(key) || valueStays(key, value) || leftToTheWordRule(key, m) {
@@ -543,15 +872,17 @@ func Text(s string, o Options) (string, Stats) {
 			}
 			return sub[1] + sub[3] + "<REDACTED:" + key + ">" + sub[5]
 		}, &st, "key_name")
-		s = replaceCount(envListYAML, s, func(m string) string {
-			sub := envListYAML.FindStringSubmatch(m)
-			if !keyIsSensitive(sub[2]) || valueStays(sub[2], sub[4]) {
-				return m
-			}
-			return sub[1] + sub[3] + "<REDACTED:" + sub[2] + ">" + sub[5]
-		}, &st, "key_name")
-		s = replaceCount(inlineQuoted, s, maskInlineQuoted, &st, "key_name")
-		s = replaceCount(inlinePair, s, maskInlinePair, &st, "key_name")
+		if strings.Contains(s, "name:") && strings.Contains(s, "value:") {
+			s = replaceCount(envListYAML, s, func(m string) string {
+				sub := envListYAML.FindStringSubmatch(m)
+				if !keyIsSensitive(sub[2]) || valueStays(sub[2], sub[4]) {
+					return m
+				}
+				return sub[1] + sub[3] + "<REDACTED:" + sub[2] + ">" + sub[5]
+			}, &st, "key_name")
+		}
+		s = replaceOnCredentialLines(inlineQuoted, s, maskInlineQuoted, &st, "key_name")
+		s = replaceOnCredentialLines(inlinePair, s, maskInlinePair, &st, "key_name")
 	}
 	return redactPII(s, o, &st), st
 }
@@ -610,13 +941,45 @@ var (
 	// A chart may quote the kind or put spaces after the colon; kubectl prints `kind: Secret`.
 	secretYAMLKind = regexp.MustCompile(`(?m)^[ \t]*(?:-[ \t]+)?["']?kind["']?[ \t]*:[ \t]*["']?Secret["']?[ \t]*\r?$`)
 	// `"kind": "Secret"`, or kubectl's own words in a refused patch, whose JSON does not say what it patches.
-	secretJSONKind = regexp.MustCompile(`"kind"\s*:\s*"Secret"|\bKind=Secret\b`)
+	secretJSONKind = regexp.MustCompile(`"kind"[` + spaceChars + `]*:[` + spaceChars + `]*"Secret"|\bKind=Secret\b`)
 	// A field of a JSON Secret that holds its values, up to where the value starts.
-	jsonSecretField = regexp.MustCompile(`"(data|stringData|data_values|kubectl\.kubernetes\.io/last-applied-configuration)"\s*:\s*`)
+	jsonSecretField = regexp.MustCompile(`"(data|stringData|data_values|kubectl\.kubernetes\.io/last-applied-configuration)"[` + spaceChars + `]*:[` + spaceChars + `]*`)
+	// The same two as JSON in a string, its quotes escaped: a log line holding an object.
+	escapedSecretKind  = regexp.MustCompile(`"kind(\\+)"[` + spaceChars + `]*:[` + spaceChars + `]*\\+"Secret\\+"`)
+	escapedSecretField = regexp.MustCompile(`"(data|stringData|data_values|kubectl\.kubernetes\.io/last-applied-configuration)(\\+)"[` + spaceChars + `]*:[` + spaceChars + `]*`)
+	// The same two in YAML's flow style, on one line or several: {kind: Secret, data: {key: value}}.
+	secretFlowKind  = regexp.MustCompile(`[{,][ \t\r\n]*["']?kind["']?[ \t]*:[ \t]*["']?Secret["']?[ \t\r\n]*[,}]`)
+	flowSecretField = regexp.MustCompile(`[{,][ \t\r\n]*["']?(data|stringData|data_values|kubectl\.kubernetes\.io/last-applied-configuration)["']?[ \t]*:[ \t]*`)
 )
+
+// maxEscapeLevel: past this many backslashes a quote is not read as JSON in a string.
+const maxEscapeLevel = 15
 
 func namesSecretYAML(s string) bool {
 	return strings.Contains(s, "kind: Secret") || secretYAMLKind.MatchString(s)
+}
+
+// namesSecret: the word comes first, so text that never says it, most of what goes through here, costs one search.
+func namesSecret(s string) bool {
+	return strings.Contains(s, "Secret") &&
+		(namesSecretYAML(s) || secretJSONKind.MatchString(s) || secretFlowKind.MatchString(s) || strings.Contains(s, `"Secret\`) && escapedSecretKind.MatchString(s))
+}
+
+// escapedSecretLevels are the levels of escaping at which s says it is a Secret, lowest first.
+func escapedSecretLevels(s string) []int {
+	if !strings.Contains(s, `"Secret\`) {
+		return nil
+	}
+	seen := map[int]bool{}
+	var levels []int
+	for _, loc := range escapedSecretKind.FindAllStringSubmatchIndex(s, -1) {
+		if level := loc[3] - loc[2]; level <= maxEscapeLevel && !seen[level] {
+			seen[level] = true
+			levels = append(levels, level)
+		}
+	}
+	sort.Ints(levels)
+	return levels
 }
 
 // StripSecretText strips text known to hold a Secret, also when nothing in it says so: an answer cut off by an output
@@ -640,12 +1003,23 @@ func stripSecretDocuments(s string) (string, int) {
 	docs := strings.Split(s, "\n---")
 	total := 0
 	for i, doc := range docs {
+		if !strings.Contains(doc, "Secret") {
+			continue
+		}
 		if namesSecretYAML(doc) {
 			out, n := stripSecretYAML(doc)
 			docs[i], total = out, total+n
 		}
 		if secretJSONKind.MatchString(docs[i]) {
 			out, n := stripSecretJSON(docs[i])
+			docs[i], total = out, total+n
+		}
+		if secretFlowKind.MatchString(docs[i]) {
+			out, n := stripSecretFlow(docs[i])
+			docs[i], total = out, total+n
+		}
+		for _, level := range escapedSecretLevels(docs[i]) {
+			out, n := stripEscapedSecretJSON(docs[i], level)
 			docs[i], total = out, total+n
 		}
 	}
@@ -759,6 +1133,318 @@ func stripSecretJSON(doc string) (string, int) {
 		}
 		doc = doc[end:]
 	}
+}
+
+// stripEscapedSecretJSON is stripSecretJSON for JSON whose quotes each come after level backslashes.
+func stripEscapedSecretJSON(doc string, level int) (string, int) {
+	var out strings.Builder
+	n := 0
+	for {
+		loc := escapedSecretField.FindStringSubmatchIndex(doc)
+		if loc == nil {
+			out.WriteString(doc)
+			return out.String(), n
+		}
+		out.WriteString(doc[:loc[1]])
+		before := 0
+		for before < loc[0] && doc[loc[0]-before-1] == '\\' {
+			before++
+		}
+		if before != level || loc[5]-loc[4] != level {
+			doc = doc[loc[1]:]
+			continue
+		}
+		var end int
+		if doc[loc[2]:loc[3]] != lastAppliedName && loc[1] < len(doc) && doc[loc[1]] == '{' {
+			end = maskEscapedObject(&out, doc, loc[1], level, &n)
+		} else {
+			end = maskEscapedValue(&out, doc, loc[1], level, &n)
+		}
+		if end < 0 {
+			return out.String(), n
+		}
+		doc = doc[end:]
+	}
+}
+
+// escapedStringEnd is the index after the string that opens at s[i] with level backslashes, -1 if s ends first. A quote
+// inside it has more backslashes in front of it than the one that closes it, and the count says which.
+func escapedStringEnd(s string, i, level int) int {
+	first := i + level + 1
+	step := 2 * (level + 1)
+	for j := first; j < len(s); j++ {
+		if s[j] != '"' {
+			continue
+		}
+		run := 0
+		for k := j - 1; k >= first && s[k] == '\\'; k-- {
+			run++
+		}
+		if run%step == level {
+			return j + 1
+		}
+	}
+	return -1
+}
+
+// escapedValueEnd is jsonValueEnd at a level of escaping.
+func escapedValueEnd(s string, i, level int) int {
+	if i >= len(s) {
+		return -1
+	}
+	quote := strings.Repeat(`\`, level) + `"`
+	if strings.HasPrefix(s[i:], quote) {
+		return escapedStringEnd(s, i, level)
+	}
+	if s[i] == '{' || s[i] == '[' {
+		depth := 0
+		for j := i; j < len(s); {
+			if strings.HasPrefix(s[j:], quote) {
+				end := escapedStringEnd(s, j, level)
+				if end < 0 {
+					return -1
+				}
+				j = end
+				continue
+			}
+			switch s[j] {
+			case '{', '[':
+				depth++
+			case '}', ']':
+				if depth--; depth == 0 {
+					return j + 1
+				}
+			}
+			j++
+		}
+		return -1
+	}
+	j := i
+	for j < len(s) && !strings.ContainsRune(",}]\r\n", rune(s[j])) {
+		j++
+	}
+	return j
+}
+
+// maskEscapedObject is maskJSONObject at a level of escaping.
+func maskEscapedObject(out *strings.Builder, s string, i, level int, n *int) int {
+	quote := strings.Repeat(`\`, level) + `"`
+	out.WriteByte('{')
+	for j := i + 1; j < len(s); {
+		c := s[j]
+		switch {
+		case c == '}':
+			out.WriteByte('}')
+			return j + 1
+		case strings.HasPrefix(s[j:], quote):
+			end := escapedStringEnd(s, j, level)
+			if end < 0 {
+				out.WriteString(quote + secretPlaceholder + quote)
+				*n++
+				return -1
+			}
+			colon := end
+			for colon < len(s) && isJSONSpace(s[colon]) {
+				colon++
+			}
+			if colon >= len(s) || s[colon] != ':' { // no key: a value out of place is still a value
+				if j = maskEscapedValue(out, s, j, level, n); j < 0 {
+					return -1
+				}
+				continue
+			}
+			out.WriteString(s[j : colon+1])
+			j = colon + 1
+			for j < len(s) && isJSONSpace(s[j]) {
+				out.WriteByte(s[j])
+				j++
+			}
+			if j = maskEscapedValue(out, s, j, level, n); j < 0 {
+				return -1
+			}
+		default:
+			if c == ',' || isJSONSpace(c) {
+				out.WriteByte(c)
+			}
+			j++
+		}
+	}
+	return -1
+}
+
+// maskEscapedValue is maskJSONValue at a level of escaping.
+func maskEscapedValue(out *strings.Builder, s string, i, level int, n *int) int {
+	quote := strings.Repeat(`\`, level) + `"`
+	end := escapedValueEnd(s, i, level)
+	value := s[i:]
+	if end >= 0 {
+		value = s[i:end]
+	}
+	switch {
+	case end >= 0 && (value == "{}" || value == "null" || value == quote+quote || value == "[]" || strings.HasPrefix(value, quote+"<REDACTED")):
+		out.WriteString(value)
+	default:
+		out.WriteString(quote + secretPlaceholder + quote)
+		*n++
+	}
+	return end
+}
+
+// stripSecretFlow masks the values of a Secret written in YAML's flow style. Like stripSecretJSON it scans, since the text
+// may be cut or hold other text around the object. Key names stay; a value keeps its quote; what is already a placeholder
+// stays too.
+func stripSecretFlow(doc string) (string, int) {
+	var out strings.Builder
+	n := 0
+	for {
+		loc := flowSecretField.FindStringSubmatchIndex(doc)
+		if loc == nil {
+			out.WriteString(doc)
+			return out.String(), n
+		}
+		out.WriteString(doc[:loc[1]])
+		var end int
+		if doc[loc[2]:loc[3]] != lastAppliedName && loc[1] < len(doc) && doc[loc[1]] == '{' {
+			end = maskFlowObject(&out, doc, loc[1], &n)
+		} else {
+			end = maskFlowValue(&out, doc, loc[1], &n)
+		}
+		if end < 0 {
+			return out.String(), n
+		}
+		doc = doc[end:]
+	}
+}
+
+// maskFlowObject writes the mapping at s[i] with each value masked and returns the index after it, -1 if s ends first.
+func maskFlowObject(out *strings.Builder, s string, i int, n *int) int {
+	out.WriteByte('{')
+	for j := i + 1; j < len(s); {
+		switch c := s[j]; {
+		case c == '}':
+			out.WriteByte('}')
+			return j + 1
+		case c == ',' || isJSONSpace(c):
+			out.WriteByte(c)
+			j++
+		default:
+			if value, isKey := flowKeyEnd(s, j); isKey {
+				out.WriteString(s[j:value])
+				j = value
+			}
+			if j = maskFlowValue(out, s, j, n); j < 0 {
+				return -1
+			}
+		}
+	}
+	return -1
+}
+
+// flowKeyEnd says where the value of the key at s[i] starts, if what is there is a key and not a value out of place.
+func flowKeyEnd(s string, i int) (int, bool) {
+	j := i
+	if s[i] == '"' || s[i] == '\'' {
+		if j = flowStringEnd(s, i); j < 0 {
+			return 0, false
+		}
+	} else {
+		for j < len(s) && !strings.ContainsRune(",}\r\n", rune(s[j])) {
+			if s[j] == ':' && (j+1 == len(s) || strings.ContainsRune(" \t\r\n,}", rune(s[j+1]))) {
+				break
+			}
+			j++
+		}
+	}
+	for j < len(s) && (s[j] == ' ' || s[j] == '\t') {
+		j++
+	}
+	if j >= len(s) || s[j] != ':' {
+		return 0, false
+	}
+	j++
+	for j < len(s) && (s[j] == ' ' || s[j] == '\t') {
+		j++
+	}
+	return j, true
+}
+
+// flowStringEnd is the index after the quoted string at s[i], -1 if s ends first: a backslash escapes in double quotes, a
+// doubled quote in single ones.
+func flowStringEnd(s string, i int) int {
+	q := s[i]
+	for j := i + 1; j < len(s); j++ {
+		switch {
+		case q == '"' && s[j] == '\\':
+			j++
+		case s[j] == q && q == '\'' && j+1 < len(s) && s[j+1] == q:
+			j++
+		case s[j] == q:
+			return j + 1
+		}
+	}
+	return -1
+}
+
+// flowValueEnd is the index after the value at s[i], -1 if s ends inside quotes or brackets.
+func flowValueEnd(s string, i int) int {
+	if i >= len(s) {
+		return -1
+	}
+	switch s[i] {
+	case '"', '\'':
+		return flowStringEnd(s, i)
+	case '{', '[':
+		depth := 0
+		for j := i; j < len(s); {
+			switch s[j] {
+			case '"', '\'':
+				end := flowStringEnd(s, j)
+				if end < 0 {
+					return -1
+				}
+				j = end
+				continue
+			case '{', '[':
+				depth++
+			case '}', ']':
+				if depth--; depth == 0 {
+					return j + 1
+				}
+			}
+			j++
+		}
+		return -1
+	}
+	j := i
+	for j < len(s) && !strings.ContainsRune(",}]\r\n", rune(s[j])) {
+		j++
+	}
+	return j
+}
+
+// maskFlowValue writes the placeholder for the value at s[i] and returns the index after it, -1 if s ends first. An empty
+// value has nothing to hide and stays.
+func maskFlowValue(out *strings.Builder, s string, i int, n *int) int {
+	end := flowValueEnd(s, i)
+	if i >= len(s) {
+		return -1
+	}
+	value := s[i:]
+	if end >= 0 {
+		value = s[i:end]
+	}
+	quote := ""
+	if value[0] == '"' || value[0] == '\'' {
+		quote = value[:1]
+	}
+	if bare := strings.TrimSpace(value); end >= 0 && (bare == "" || bare == "{}" || bare == "[]" || bare == "null" || bare == "~" || bare == `""` || bare == "''" ||
+		strings.HasPrefix(strings.TrimLeft(bare, `"'`), "<REDACTED")) {
+		out.WriteString(value)
+		return end
+	}
+	out.WriteString(quote + secretPlaceholder + quote)
+	*n++
+	return end
 }
 
 // maskJSONObject writes the object at s[i] with each value masked and returns the index after it, -1 if s ends first.

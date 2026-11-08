@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -166,6 +167,83 @@ func TestWebhookFormats(t *testing.T) {
 		}
 		if !strings.Contains(string(c.body[0]), `"content":"Kubeast: 2 audit events`) {
 			t.Fatalf("discord body %s", c.body[0])
+		}
+	})
+	// A target's name or an error comes from a request: in a channel it stays the words it is.
+	marked := []Event{{ID: 3, Time: time.Unix(0, 0), Action: "k8s.pod.delete", Result: "failure", ActorEmail: "a_b@example.com",
+		TargetType: "pod", TargetID: "[click](https://example.test/) **bold** @everyone <@&1234> `code`", Error: "denied"}}
+	t.Run("teams draws a field as plain words", func(t *testing.T) {
+		c := &captured{}
+		srv := c.server(t, 202)
+		if err := webhook(t, "teams", "", map[string]string{"url": srv.URL}, nil).Send(context.Background(), marked); err != nil {
+			t.Fatal(err)
+		}
+		var msg struct {
+			Attachments []struct {
+				Content struct {
+					Body []map[string]any `json:"body"`
+				} `json:"content"`
+			} `json:"attachments"`
+		}
+		if err := json.Unmarshal(c.body[0], &msg); err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, block := range msg.Attachments[0].Content.Body {
+			if !strings.Contains(fmt.Sprint(block), "[click]") {
+				continue
+			}
+			found = true
+			if block["type"] != "RichTextBlock" {
+				t.Errorf("a field goes through a block that reads Markdown: %v", block)
+			}
+			inlines, _ := block["inlines"].([]any)
+			if len(inlines) != 1 || inlines[0].(map[string]any)["type"] != "TextRun" ||
+				!strings.Contains(inlines[0].(map[string]any)["text"].(string), "[click](https://example.test/) **bold**") {
+				t.Errorf("the line is not there as written: %v", block)
+			}
+		}
+		if !found {
+			t.Fatalf("no line with the target: %s", c.body[0])
+		}
+	})
+	t.Run("discord draws a field as plain words and calls nobody", func(t *testing.T) {
+		c := &captured{}
+		srv := c.server(t, 204)
+		if err := webhook(t, "discord", "", map[string]string{"url": srv.URL}, nil).Send(context.Background(), marked); err != nil {
+			t.Fatal(err)
+		}
+		var msg struct {
+			Content         string `json:"content"`
+			Flags           int    `json:"flags"`
+			AllowedMentions struct {
+				Parse []string `json:"parse"`
+			} `json:"allowed_mentions"`
+		}
+		if err := json.Unmarshal(c.body[0], &msg); err != nil {
+			t.Fatal(err)
+		}
+		for _, escaped := range []string{`\[click\]`, `\*\*bold\*\*`, `\<@&1234\>`, "\\`code\\`", `a\_b@example.com`} {
+			if !strings.Contains(msg.Content, escaped) {
+				t.Errorf("%s is not escaped: %s", escaped, msg.Content)
+			}
+		}
+		if msg.AllowedMentions.Parse == nil || len(msg.AllowedMentions.Parse) != 0 {
+			t.Errorf("allowed_mentions.parse = %v, want empty: %s", msg.AllowedMentions.Parse, c.body[0])
+		}
+		if msg.Flags != 4 {
+			t.Errorf("flags = %d, want SUPPRESS_EMBEDS: %s", msg.Flags, c.body[0])
+		}
+	})
+	t.Run("telegram and pagerduty send no markup, so a field reads as it was written", func(t *testing.T) {
+		c := &captured{}
+		srv := c.server(t, 200)
+		s := webhook(t, "telegram", srv.URL, map[string]string{"botToken": "123:abc"}, func(sc *SinkConfig) { sc.Webhook.ChatID = "-1001" })
+		if err := s.Send(context.Background(), marked); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(c.body[0]), "[click](https://example.test/) **bold**") || strings.Contains(string(c.body[0]), "parse_mode") {
+			t.Errorf("telegram body %s", c.body[0])
 		}
 	})
 	t.Run("telegram path and chat id", func(t *testing.T) {

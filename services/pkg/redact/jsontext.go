@@ -144,6 +144,9 @@ func (w *jsonRewriter) object(start, end int, secret bool) {
 		w.text(m.keyStart, m.keyEnd)
 		value, isString := w.stringOf(m.valueStart, m.valEnd)
 		isNumber := startsNumber(w.src[m.valueStart])
+		if isNumber {
+			value = w.src[m.valueStart:m.valEnd]
+		}
 		switch {
 		case secret && secretValueFields[m.key]:
 			w.secretField(m.valueStart, m.valEnd)
@@ -170,7 +173,11 @@ func startsNumber(c byte) bool { return c == '-' || (c >= '0' && c <= '9') }
 func (w *jsonRewriter) credentialList(key string, start, end int, secret bool) {
 	for _, e := range w.elements(start, end) {
 		value, isString := w.stringOf(e[0], e[1])
-		if holdsCredential(key, value, isString, startsNumber(w.src[e[0]])) {
+		isNumber := startsNumber(w.src[e[0]])
+		if isNumber {
+			value = w.src[e[0]:e[1]]
+		}
+		if holdsCredential(key, value, isString, isNumber) {
 			w.replace(e[0], e[1], jsonString("<REDACTED:"+key+">"))
 			w.st.add("key_name", 1)
 			continue

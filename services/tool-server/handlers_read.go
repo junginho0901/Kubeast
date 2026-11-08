@@ -92,14 +92,16 @@ func handleGetResources(ctx context.Context, args map[string]interface{}, header
 	if err != nil {
 		return explainFailure(ctx, headers, err, resourceType, resourceName, namespace)
 	}
-	return stripCutSecret(out, resourceType), nil
+	return stripCutSecret(ctx, out, resourceType), nil
 }
 
 // stripCutSecret: a Secret the output cap cut may end before the line that says it is one, which handleCall's masking
 // goes by.
-func stripCutSecret(out, resourceType string) string {
+func stripCutSecret(ctx context.Context, out, resourceType string) string {
 	if outputCut(out) && namesSecrets(resourceType) {
-		out, _ = redact.StripSecretText(out)
+		var n int
+		out, n = redact.StripSecretText(out)
+		countReadMasks(ctx, n)
 	}
 	return out
 }
@@ -121,7 +123,7 @@ func handleGetResourceYAML(ctx context.Context, args map[string]interface{}, hea
 	if err != nil {
 		return explainFailure(ctx, headers, err, resourceType, resourceName, namespace)
 	}
-	return stripCutSecret(out, resourceType), nil
+	return stripCutSecret(ctx, out, resourceType), nil
 }
 
 func handleDescribeResource(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {

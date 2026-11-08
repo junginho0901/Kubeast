@@ -63,12 +63,12 @@ PRIVATE_NETWORKS = (
     ipaddress.ip_network("fc00::/7"), ipaddress.ip_network("fe80::/10"),
     ipaddress.ip_network("fec0::/10"), ipaddress.ip_network("ff00::/8"),
 )
-# IPv6 forms with an IPv4 address in their low 32 bits: NAT64, a site's own NAT64 (RFC 8215, read as its usual /96),
-# IPv4-translated (SIIT) and the old IPv4-compatible one.
+# IPv6 forms with an IPv4 address in their low 32 bits: NAT64, IPv4-translated (SIIT) and the old IPv4-compatible one.
 IPV4_IN_LOW_BITS = (
-    ipaddress.ip_network("64:ff9b::/96"), ipaddress.ip_network("64:ff9b:1::/48"),
-    ipaddress.ip_network("::ffff:0:0:0/96"), ipaddress.ip_network("::/96"),
+    ipaddress.ip_network("64:ff9b::/96"), ipaddress.ip_network("::ffff:0:0:0/96"), ipaddress.ip_network("::/96"),
 )
+# A site's own NAT64 prefix (RFC 8215), whose length the address does not say: see _site_nat64_addresses.
+SITE_NAT64 = ipaddress.ip_network("64:ff9b:1::/48")
 
 MASK = "***"
 
@@ -189,6 +189,22 @@ def _addresses(host: str, resolve: Callable[..., list]) -> List[ipaddress._BaseA
     return addrs
 
 
+def _site_nat64_addresses(ip: ipaddress.IPv6Address) -> List[ipaddress.IPv4Address]:
+    """Each IPv4 address a site's own NAT64 form can carry. RFC 6052 places it by the prefix's length, /48, /56, /64 or /96,
+    with bits 64 to 71 empty and nothing after it, and the address does not say which: every reading that fits counts. A
+    first octet of 0 is the empty part of another reading, so it counts only when nothing else does."""
+    b = ip.packed
+    forms = [b[12:16]] if any(b[12:16]) else []
+    if b[8] == 0:
+        if not any(b[11:]):
+            forms.append(bytes((b[6], b[7], b[9], b[10])))
+        if not any(b[12:]):
+            forms.append(bytes((b[7], b[9], b[10], b[11])))
+        if not any(b[13:]):
+            forms.append(b[9:13])
+    return [ipaddress.IPv4Address(f) for f in forms if f[0] != 0] or [ipaddress.IPv4Address(b[12:16])]
+
+
 def _addresses_to_judge(ip: ipaddress._BaseAddress) -> List[ipaddress._BaseAddress]:
     """The address and each IPv4 address its form carries: an IPv6 form reaches that address, and a network of the other
     version never contains it. A public IPv4 behind NAT64 stays public, so an IPv6-only cluster keeps its endpoints.
@@ -198,6 +214,8 @@ def _addresses_to_judge(ip: ipaddress._BaseAddress) -> List[ipaddress._BaseAddre
         return [ip]
     judged = [ip, *(ip.teredo or ())]
     judged += [carried for carried in (ip.ipv4_mapped, ip.sixtofour) if carried is not None]
+    if ip in SITE_NAT64:
+        return judged + _site_nat64_addresses(ip)
     isatap = (int(ip) >> 32) & 0xFCFFFFFF == 0x00005EFE
     if isatap or any(ip in net for net in IPV4_IN_LOW_BITS):
         judged.append(ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF))

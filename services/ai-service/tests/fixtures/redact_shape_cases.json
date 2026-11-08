@@ -341,9 +341,19 @@
       "want": "env DB_PASS=<REDACTED:DB_PASS> HOME=/root\nPGPASS=<REDACTED:PGPASS> psql -h db\nlevel=info smtp_pass=<REDACTED:smtp_pass> host=mail\nauth failed user: bob db_pass: \"<REDACTED:db_pass>\"\n"
     },
     {
-      "name": "a short name standing apart goes to the end of the line, as a whole password word does",
-      "input": "DB_PASS=fake-pass-1 psql -h db\nDB_PASSWORD=fake-pass-1 psql -h db\n",
-      "want": "DB_PASS=<REDACTED:DB_PASS>\nDB_PASSWORD=<REDACTED:DB_PASSWORD>\n"
+      "name": "a password word standing apart keeps the command after it",
+      "input": "DB_PASS=fake-pass-1 psql -h db\nDB_PASSWORD=fake-pass-1 psql -h db\nDB_PASSWORD=fake-pass-1 HOME=/root\nDB_PASSWORD=fake-pass-1 ./run.sh\nDB_PASSWORD=fake-pass-1 /usr/bin/psql --help\n",
+      "want": "DB_PASS=<REDACTED:DB_PASS> psql -h db\nDB_PASSWORD=<REDACTED:DB_PASSWORD> psql -h db\nDB_PASSWORD=<REDACTED:DB_PASSWORD> HOME=/root\nDB_PASSWORD=<REDACTED:DB_PASSWORD> ./run.sh\nDB_PASSWORD=<REDACTED:DB_PASSWORD> /usr/bin/psql --help\n"
+    },
+    {
+      "name": "the command after a password word loses its own credentials",
+      "input": "DB_PASSWORD=fake-pass-1 psql --password=fake-pass-2 -h db\nDB_PASSWORD=fake-pass-1 API_TOKEN=fake-token-1 ./run.sh\n",
+      "want": "DB_PASSWORD=<REDACTED:DB_PASSWORD> psql --password=<REDACTED:password> -h db\nDB_PASSWORD=<REDACTED:DB_PASSWORD> API_TOKEN=<REDACTED:API_TOKEN> ./run.sh\n"
+    },
+    {
+      "name": "what cannot be told from a value with spaces goes to the end of the line",
+      "input": "DB_PASSWORD=fake pass 1\nDB_PASS=fake pass 1\nDB_PASSWORD=fake-pass-1 psql\nDB_PASSWORD: fake-pass-1 psql -h db\nDB_PASSWORD = fake-pass-1 psql -h db\n",
+      "want": "DB_PASSWORD=<REDACTED:DB_PASSWORD>\nDB_PASS=<REDACTED:DB_PASS>\nDB_PASSWORD=<REDACTED:DB_PASSWORD>\nDB_PASSWORD: <REDACTED:DB_PASSWORD>\nDB_PASSWORD = <REDACTED:DB_PASSWORD>\n"
     },
     {
       "name": "digits as a password under its short name",
@@ -464,7 +474,242 @@
       "name": "an opening bracket holds no value and what is under it has its own key",
       "input": "\"secret\": {\n  \"secretName\": \"my-tls\"\n},\n\"token\": {\n  \"value\": 5\n}\n",
       "want": "\"secret\": {\n  \"secretName\": \"my-tls\"\n},\n\"token\": {\n  \"value\": 5\n}\n"
+    },
+    {
+      "name": "a credential's list in single quotes, as a program prints it",
+      "input": "log {'api_keys': ['fake-1', 'fake-2'], 'level': 'info'} end\n",
+      "want": "log {'api_keys': ['<REDACTED:api_keys>', '<REDACTED:api_keys>'], 'level': 'info'} end\n"
+    },
+    {
+      "name": "a list inside a credential's list",
+      "input": "log {\"api_keys\":[[\"fake-1\"],[\"fake-2\",[\"fake-3\"]]],\"level\":\"info\"} end\n",
+      "want": "log {\"api_keys\":[[\"<REDACTED:api_keys>\"],[\"<REDACTED:api_keys>\",[\"<REDACTED:api_keys>\"]]],\"level\":\"info\"} end\n"
+    },
+    {
+      "name": "a mapping and values in one credential's list",
+      "input": "log {\"api_keys\":[{\"name\":\"ci\"},\"fake-1\",{\"token\":\"fake-token-1\"},\"fake-2\"]} end\n",
+      "want": "log {\"api_keys\":[{\"name\":\"ci\"},\"<REDACTED:api_keys>\",{\"token\":\"<REDACTED:token>\"},\"<REDACTED:api_keys>\"]} end\n"
+    },
+    {
+      "name": "two items on one line of a list on many lines",
+      "input": "\"api_keys\": [\n  \"fake-1\", \"fake-2\",\n  \"fake-3\"\n]\n",
+      "want": "\"api_keys\": [\n  \"<REDACTED:api_keys>\", \"<REDACTED:api_keys>\",\n  \"<REDACTED:api_keys>\"\n]\n"
+    },
+    {
+      "name": "values after a mapping in a list on many lines",
+      "input": "\"api_keys\": [\n  {\"name\": \"ci\"},\n  \"fake-1\",\n  {\n    \"name\": \"ci\"\n  },\n  \"fake-2\"\n]\n",
+      "want": "\"api_keys\": [\n  {\"name\": \"ci\"},\n  \"<REDACTED:api_keys>\",\n  {\n    \"name\": \"ci\"\n  },\n  \"<REDACTED:api_keys>\"\n]\n"
+    },
+    {
+      "name": "a list inside a list on many lines, a blank line, a bracket on the next line",
+      "input": "\"api_keys\": [\n  [\n    \"fake-1\"\n  ]\n]\n\"passwords\": [\n\n  \"fake-2\"\n]\n\"private_keys\":\n[\n  \"fake-3\"\n]\n",
+      "want": "\"api_keys\": [\n  [\n    \"<REDACTED:api_keys>\"\n  ]\n]\n\"passwords\": [\n\n  \"<REDACTED:passwords>\"\n]\n\"private_keys\":\n[\n  \"<REDACTED:private_keys>\"\n]\n"
+    },
+    {
+      "name": "a credential's list inside a mapping of another credential's list",
+      "input": "log {\"api_keys\":[{\"passwords\":[\"fake-1\"]},\"fake-2\"]} end\n",
+      "want": "log {\"api_keys\":[{\"passwords\":[\"<REDACTED:passwords>\"]},\"<REDACTED:api_keys>\"]} end\n"
+    },
+    {
+      "name": "a list that is no list ends where its lines stop reading as items",
+      "input": "\"passwords\": [\n  \"fake-1\",\nthe next line of the log\n\"level\": \"info\"\n",
+      "want": "\"passwords\": [\n  \"<REDACTED:passwords>\",\nthe next line of the log\n\"level\": \"info\"\n"
+    },
+    {
+      "name": "a Secret in one line of flow YAML",
+      "input": "{apiVersion: v1, kind: Secret, metadata: {name: db}, data: {password: ZmFrZS0x, note: ZmFrZS0y}}\n",
+      "want": "{apiVersion: v1, kind: Secret, metadata: {name: db}, data: {password: <REDACTED:secret>, note: <REDACTED:secret>}}\n"
+    },
+    {
+      "name": "a Secret in flow YAML keeps its values' quotes and reads past what is in them",
+      "input": "{kind: Secret, stringData: {note: \"fake}value,1\", other: 'fake}value''2', third: fake-3}, type: Opaque}\n",
+      "want": "{kind: Secret, stringData: {note: \"<REDACTED:secret>\", other: '<REDACTED:secret>', third: <REDACTED:secret>}, type: Opaque}\n"
+    },
+    {
+      "name": "a Secret printed as a mapping in single quotes",
+      "input": "got {'kind': 'Secret', 'data': {'note': 'fake-value-1'}} end\n",
+      "want": "got {'kind': 'Secret', 'data': {'note': '<REDACTED:secret>'}} end\n"
+    },
+    {
+      "name": "a flow Secret's kind after its data, inside a list, or quoted on one side",
+      "input": "{data: {note: fake-1}, kind: Secret}\n---\n{kind: List, items: [{kind: Secret, data: {note: fake-2}}]}\n---\n{\"kind\": Secret, \"data\": {note: fake-3}}\n",
+      "want": "{data: {note: <REDACTED:secret>}, kind: Secret}\n---\n{kind: List, items: [{kind: Secret, data: {note: <REDACTED:secret>}}]}\n---\n{\"kind\": Secret, \"data\": {note: <REDACTED:secret>}}\n"
+    },
+    {
+      "name": "a flow Secret's data as one word, over many lines, or cut off",
+      "input": "{kind: Secret, data: fake-1}\n---\n{kind: Secret, data: {\n  note: fake-2,\n  other: fake-3}}\n---\n{kind: Secret, data: {note: fake-4, other: fake-va",
+      "want": "{kind: Secret, data: <REDACTED:secret>}\n---\n{kind: Secret, data: {\n  note: <REDACTED:secret>,\n  other: <REDACTED:secret>}}\n---\n{kind: Secret, data: {note: <REDACTED:secret>, other: <REDACTED:secret>"
+    },
+    {
+      "name": "a flow Secret's last-applied annotation",
+      "input": "{kind: Secret, metadata: {annotations: {kubectl.kubernetes.io/last-applied-configuration: '{\"data\":{\"note\":\"fake-1\"}}'}}, data: {}}\n",
+      "want": "{kind: Secret, metadata: {annotations: {kubectl.kubernetes.io/last-applied-configuration: '<REDACTED:secret>'}}, data: {}}\n"
+    },
+    {
+      "name": "other kinds in flow YAML and a sentence naming the kind stay",
+      "input": "{kind: ConfigMap, data: {note: plain}}\nthe kind: Secret, data: {note: plain}\n---\n{kind: Secret, data: {}, stringData: null}\n",
+      "want": "{kind: ConfigMap, data: {note: plain}}\nthe kind: Secret, data: {note: plain}\n---\n{kind: Secret, data: {}, stringData: null}\n"
+    },
+    {
+      "name": "a Secret as escaped JSON in a log line",
+      "input": "msg=\"{\\\"kind\\\":\\\"Secret\\\",\\\"data\\\":{\\\"note\\\":\\\"fake-value-1\\\",\\\"other\\\":\\\"fake-value-2\\\"}}\" level=info\n",
+      "want": "msg=\"{\\\"kind\\\":\\\"Secret\\\",\\\"data\\\":{\\\"note\\\":\\\"<REDACTED:secret>\\\",\\\"other\\\":\\\"<REDACTED:secret>\\\"}}\" level=info\n"
+    },
+    {
+      "name": "an escaped Secret's data before its kind, with spaces, escaped twice",
+      "input": "a {\\\"data\\\": {\\\"note\\\": \\\"fake-1\\\"}, \\\"kind\\\": \\\"Secret\\\"} end\nb {\\\\\\\"kind\\\\\\\":\\\\\\\"Secret\\\\\\\",\\\\\\\"stringData\\\\\\\":{\\\\\\\"note\\\\\\\":\\\\\\\"fake-2\\\\\\\"}} end\n",
+      "want": "a {\\\"data\\\": {\\\"note\\\": \\\"<REDACTED:secret>\\\"}, \\\"kind\\\": \\\"Secret\\\"} end\nb {\\\\\\\"kind\\\\\\\":\\\\\\\"Secret\\\\\\\",\\\\\\\"stringData\\\\\\\":{\\\\\\\"note\\\\\\\":\\\\\\\"<REDACTED:secret>\\\\\\\"}} end\n"
+    },
+    {
+      "name": "an escaped Secret's value holding quotes and braces, or cut off",
+      "input": "a {\\\"kind\\\":\\\"Secret\\\",\\\"data\\\":{\\\"note\\\":\\\"fake\\\\\\\"}1\\\",\\\"b\\\":\\\"fake-2\\\"}} end\n---\nb {\\\"kind\\\":\\\"Secret\\\",\\\"data\\\":{\\\"note\\\":\\\"fake-va",
+      "want": "a {\\\"kind\\\":\\\"Secret\\\",\\\"data\\\":{\\\"note\\\":\\\"<REDACTED:secret>\\\",\\\"b\\\":\\\"<REDACTED:secret>\\\"}} end\n---\nb {\\\"kind\\\":\\\"Secret\\\",\\\"data\\\":{\\\"note\\\":\\\"<REDACTED:secret>\\\""
+    },
+    {
+      "name": "an escaped Secret's last-applied annotation",
+      "input": "{\\\"kind\\\":\\\"Secret\\\",\\\"metadata\\\":{\\\"annotations\\\":{\\\"kubectl.kubernetes.io/last-applied-configuration\\\":\\\"{\\\\\\\"data\\\\\\\":{\\\\\\\"note\\\\\\\":\\\\\\\"fake-1\\\\\\\"}}\\\"}},\\\"data\\\":{}}\n",
+      "want": "{\\\"kind\\\":\\\"Secret\\\",\\\"metadata\\\":{\\\"annotations\\\":{\\\"kubectl.kubernetes.io/last-applied-configuration\\\":\\\"<REDACTED:secret>\\\"}},\\\"data\\\":{}}\n"
+    },
+    {
+      "name": "another kind as escaped JSON stays",
+      "input": "msg=\"{\\\"kind\\\":\\\"ConfigMap\\\",\\\"data\\\":{\\\"note\\\":\\\"plain\\\"}}\"\n",
+      "want": "msg=\"{\\\"kind\\\":\\\"ConfigMap\\\",\\\"data\\\":{\\\"note\\\":\\\"plain\\\"}}\"\n"
+    },
+    {
+      "name": "encoded text under the lower-case name of the working directory goes",
+      "input": "pwd: /Zm9vYmFy\noldpwd: /ZmFrZS1wYXNz\npwd=/Zm9vYmFy\n",
+      "want": "pwd: <REDACTED:pwd>\noldpwd: <REDACTED:oldpwd>\npwd=<REDACTED:pwd>\n"
+    },
+    {
+      "name": "a path under the lower-case name of the working directory stays",
+      "input": "pwd: /app\npwd: /srv/app\npwd: /Users/me/Projects\npwd: /home/me/MyApp\noldpwd: /var/lib/App2\n",
+      "want": "pwd: /app\npwd: /srv/app\npwd: /Users/me/Projects\npwd: /home/me/MyApp\noldpwd: /var/lib/App2\n"
+    },
+    {
+      "name": "the shell's own spelling keeps any path",
+      "input": "PWD=/Zm9vYmFy\nOLDPWD: /ZmFrZS1wYXNz\n",
+      "want": "PWD=/Zm9vYmFy\nOLDPWD: /ZmFrZS1wYXNz\n"
+    },
+    {
+      "name": "the working directory with a space and with what follows on its line",
+      "input": "PWD=/home/me/My Docs\nOLDPWD: /srv/my app/current\nPWD=/app HOME=/root\nPWD=/app DB_PASSWORD=fake-pass-1\n",
+      "want": "PWD=/home/me/My Docs\nOLDPWD: /srv/my app/current\nPWD=/app HOME=/root\nPWD=/app DB_PASSWORD=<REDACTED:DB_PASSWORD>\n"
+    },
+    {
+      "name": "a space under the lower-case name, or in the first part of a path, goes",
+      "input": "pwd: /home/me/My Docs\nPWD=/my docs/app\n",
+      "want": "pwd: <REDACTED:pwd>\nPWD=<REDACTED:PWD>\n"
+    },
+    {
+      "name": "a file given to kubectl under a credential's key stays",
+      "input": "kubectl create secret generic db --from-file=token=./token.txt --from-file=ssh-privatekey=/home/me/.ssh/id_rsa --from-file=\"password=./a b\" --from-literal=password=fake-pass-1\n",
+      "want": "kubectl create secret generic db --from-file=token=./token.txt --from-file=ssh-privatekey=/home/me/.ssh/id_rsa --from-file=\"password=./a b\" --from-literal=password=<REDACTED:password>\n"
+    },
+    {
+      "name": "what is no file after a credential's key goes",
+      "input": "run --from-file=token=fake-pass-1 --not-from-file=token=./fake-pass-2\n",
+      "want": "run --from-file=token=<REDACTED:token> --not-from-file=token=<REDACTED:token>\n"
+    },
+    {
+      "name": "a key that names a Secret object keeps the name",
+      "input": "existingSecret: my-secret\ntlsSecret: my-tls\ntlssecret: my-tls\nauth.existing_secret: db-creds\nimagePullSecret: regcred\ncaSecret: \"my-ca\"\nexistingSecret=my-secret\n{\"tlsSecret\":\"my-tls\"}\n- name: tlsSecret\n  value: my-tls\n",
+      "want": "existingSecret: my-secret\ntlsSecret: my-tls\ntlssecret: my-tls\nauth.existing_secret: db-creds\nimagePullSecret: regcred\ncaSecret: \"my-ca\"\nexistingSecret=my-secret\n{\"tlsSecret\":\"my-tls\"}\n- name: tlsSecret\n  value: my-tls\n"
+    },
+    {
+      "name": "what does not read as an object's name under such a key goes, and so does any other secret",
+      "input": "tlsSecret: Fake-Value-1\nexistingSecret: abc123\nTLS_SECRET=my-tls\njwtSecret: my-dev-value\nclient_secret: my-value\nsecret: my-tls\nwebhookSecret: fake-value-1\n",
+      "want": "tlsSecret: <REDACTED:tlsSecret>\nexistingSecret: <REDACTED:existingSecret>\nTLS_SECRET=<REDACTED:TLS_SECRET>\njwtSecret: <REDACTED:jwtSecret>\nclient_secret: <REDACTED:client_secret>\nsecret: <REDACTED:secret>\nwebhookSecret: <REDACTED:webhookSecret>\n"
+    },
+    {
+      "name": "a small number under a short name counts what passed",
+      "input": "foo_pass: 3\nbar_pass: 12\nbaz_pass=123\nTESTS_PASS=12\nlevel=info foo_pass=3\nlog {\"foo_pass\": \"3\"} end\n",
+      "want": "foo_pass: 3\nbar_pass: 12\nbaz_pass=123\nTESTS_PASS=12\nlevel=info foo_pass=3\nlog {\"foo_pass\": \"3\"} end\n"
+    },
+    {
+      "name": "four digits under a short name, and any digits under PGPASS or a whole password word, go",
+      "input": "foo_pass: 1234\nsmtp_pass=1234\nPGPASS: 3\npassword: 3\nDB_PASSWORD=3\n",
+      "want": "foo_pass: <REDACTED:foo_pass>\nsmtp_pass=<REDACTED:smtp_pass>\nPGPASS: <REDACTED:PGPASS>\npassword: <REDACTED:password>\nDB_PASSWORD=<REDACTED:DB_PASSWORD>\n"
+    },
+    {
+      "name": "a value right after a Korean letter",
+      "input": "키는ghp_abcdefghijklmnopqrstuvwxyzabcdefghij 입니다\n토큰sk-abcdefghijklmnopqrsTUV123\n구글AIzaabcdefghijklmnopqrstuvwxyzabcdefghi\n슬랙xoxb-abcdefghijkl\n허깅hf_abcdefghijklmnopqrstuvwxyzabcdef\n깃github_pat_abcdefghijklmnopqrstuvwxyz\n값AKIAABCDEFGHIJKLMNOP\n값eyJhbGciOiJI.eyJzdWIiOiIx.abcdefghijkl\n인증Bearer abcdefghijklmnopqrstuvwxyz\n인증Basic abcdefghijklmnopqrstuvwxyz\n",
+      "want": "키는<REDACTED:api_key> 입니다\n토큰<REDACTED:api_key>\n구글<REDACTED:api_key>\n슬랙<REDACTED:api_key>\n허깅<REDACTED:api_key>\n깃<REDACTED:api_key>\n값<REDACTED:aws_access_key>\n값<REDACTED:jwt>\n인증Bearer <REDACTED:token>\n인증Basic <REDACTED:token>\n"
+    },
+    {
+      "name": "a value right before a Korean letter",
+      "input": "ghp_abcdefghijklmnopqrstuvwxyzabcdefghij입니다\nAKIAABCDEFGHIJKLMNOP입니다\neyJhbGciOiJI.eyJzdWIiOiIx.abcdefghijkl입니다\nBearer abcdefghijklmnopqrstuvwxyz입니다\n",
+      "want": "<REDACTED:api_key>입니다\n<REDACTED:aws_access_key>입니다\n<REDACTED:jwt>입니다\nBearer <REDACTED:token>입니다\n"
+    },
+    {
+      "name": "a value next to a letter of another script",
+      "input": "éAKIAABCDEFGHIJKLMNOP\nяghp_abcdefghijklmnopqrstuvwxyzabcdefghij\n中sk-abcdefghijklmnopqrsTUV123\nñeyJhbGciOiJI.eyJzdWIiOiIx.abcdefghijkl中\n",
+      "want": "é<REDACTED:aws_access_key>\nя<REDACTED:api_key>\n中<REDACTED:api_key>\nñ<REDACTED:jwt>中\n"
+    },
+    {
+      "name": "English in a Korean sentence that holds no value stays",
+      "input": "데스크-구성 디스크sk-짧음 basic설정 Bearer토큰 기본basic 짧은값 eyJ시작 AKIA입니다 한글sk-abcdefghijklmnopqrstuvwxyz 한글AKIA1234 토큰은 만료됨 비밀번호는 없음 한글ghp_짧음\n",
+      "want": "데스크-구성 디스크sk-짧음 basic설정 Bearer토큰 기본basic 짧은값 eyJ시작 AKIA입니다 한글sk-abcdefghijklmnopqrstuvwxyz 한글AKIA1234 토큰은 만료됨 비밀번호는 없음 한글ghp_짧음\n"
+    },
+    {
+      "name": "a letter of the same script still joins a word to a value's start",
+      "input": "desk-abcdefghijklmnopqrsTUV123 xAKIAABCDEFGHIJKLMNOP AKIAABCDEFGHIJKLMNOPx xeyJhbGciOiJI.eyJzdWIiOiIx.abcdefghijkl mybasic abcdefghijklmnopqrstuvwxyz\n",
+      "want": "desk-abcdefghijklmnopqrsTUV123 xAKIAABCDEFGHIJKLMNOP AKIAABCDEFGHIJKLMNOPx xeyJhbGciOiJI.eyJzdWIiOiIx.abcdefghijkl mybasic abcdefghijklmnopqrstuvwxyz\n"
+    },
+    {
+      "name": "another space between a scheme or a key and its value",
+      "input": "Bearer　abcdefghijklmnopqrstuvwxyz\nBasic abcdefghijklmnopqrstuvwxyz\naws_secret_access_key　=　abcdefghijklmnopqrstuvwxyzabcdefghijklmn\n",
+      "want": "Bearer <REDACTED:token>\nBasic <REDACTED:token>\naws_secret_access_key　=　<REDACTED:aws_secret_key>\n"
+    },
+    {
+      "name": "a Secret said after a Korean letter or with another space in its JSON",
+      "input": "오류Kind=Secret {\"data\":{\"note\":\"fake-1\"}}\n---\n{\"kind\"　:　\"Secret\",\"data\":{\"note\":\"fake-2\"}}\n---\n{\"kind\":\"Secret\",\"data\"　:　{\"note\":\"fake-3\"}}\n---\n{\\\"kind\\\"　:　\\\"Secret\\\",\\\"data\\\"　:　{\\\"note\\\":\\\"fake-4\\\"}}\n",
+      "want": "오류Kind=Secret {\"data\":{\"note\":\"<REDACTED:secret>\"}}\n---\n{\"kind\"　:　\"Secret\",\"data\":{\"note\":\"<REDACTED:secret>\"}}\n---\n{\"kind\":\"Secret\",\"data\"　:　{\"note\":\"<REDACTED:secret>\"}}\n---\n{\\\"kind\\\"　:　\\\"Secret\\\",\\\"data\\\"　:　{\\\"note\\\":\\\"<REDACTED:secret>\\\"}}\n"
+    },
+    {
+      "name": "another space inside a URL's password",
+      "input": "dial https://bob:fake pass@example.test/x now\n",
+      "want": "dial https://bob:<REDACTED:password>@example.test/x now\n"
+    },
+    {
+      "name": "digits of another width are a value",
+      "input": "password: １２３４\nDB_PASS=１２\ntoken: ٣\n",
+      "want": "password: <REDACTED:password>\nDB_PASS=<REDACTED:DB_PASS>\ntoken: <REDACTED:token>\n"
     }
+  ],
+  "text_with_personal_data": [
+    {
+      "name": "next to Korean letters",
+      "input": "전화01012345678입니다 메일bob@example.com입니다 주민9001011234567번 카드1234-5678-9012-3456번\n",
+      "want": "전화<REDACTED:phone>입니다 메일<EMAIL_1>입니다 주민<REDACTED:rrn>번 카드<REDACTED:card>번\n"
+    },
+    {
+      "name": "with another space between the parts",
+      "input": "카드1234　5678　9012　3456번 전화010　1234　5678 주민900101　1234567\n",
+      "want": "카드<REDACTED:card>번 전화<REDACTED:phone> 주민<REDACTED:rrn>\n"
+    },
+    {
+      "name": "digits in the middle of ASCII stay",
+      "input": "x01012345678 a9001011234567b 12345678901234567 x@y\n",
+      "want": "x01012345678 a9001011234567b 12345678901234567 x@y\n"
+    }
+  ],
+  "commands": [
+    {"name": "a shell", "input": ["/bin/sh"], "want": ["/bin/sh"]},
+    {"name": "a program and its arguments", "input": ["ls", "-la", "/tmp"], "want": ["ls", "-la", "/tmp"]},
+    {"name": "a credential's flag", "input": ["mysql", "--password=fake-pass-1", "-h", "db"], "want": ["mysql", "--password=<REDACTED:-password>", "-h", "db"]},
+    {"name": "a flag's value in the next argument", "input": ["psql", "--password", "fake-pass-1", "-h", "db"], "want": ["psql", "--password", "<REDACTED:password>", "-h", "db"]},
+    {"name": "one string, as a terminal's command", "input": ["mysql -h db --password=fake-pass-1"], "want": ["mysql -h db --password=<REDACTED:password>"]},
+    {"name": "inside a shell line", "input": ["sh", "-c", "mysql -h db --password=fake-pass-1 && env TOKEN=fake-token-1 app"], "want": ["sh", "-c", "mysql -h db --password=<REDACTED:password> && env TOKEN=<REDACTED:TOKEN> app"]},
+    {"name": "mysql's joined -p", "input": ["mysql -h db -pfake-pass-1"], "want": ["mysql -h db -p<REDACTED:password>"]},
+    {"name": "sshpass and redis-cli", "input": ["sshpass -p fake-pass-1 ssh db", "redis-cli -a fake-pass-2 ping"], "want": ["sshpass -p <REDACTED:password> ssh db", "redis-cli -a <REDACTED:password> ping"]},
+    {"name": "a user and a password", "input": ["curl -u bob:fake-pass-1 https://example.test/"], "want": ["curl -u bob:<REDACTED:password> https://example.test/"]},
+    {"name": "an authorization header", "input": ["curl", "-H", "Authorization: fake-scheme fake-value-1", "https://example.test/"], "want": ["curl", "-H", "Authorization: <REDACTED:password>", "https://example.test/"]},
+    {"name": "what names a variable stays", "input": ["sh -c 'mysql --password=$DB_PASSWORD'", "--token", "${TOKEN}"], "want": ["sh -c 'mysql --password=$DB_PASSWORD'", "--token", "${TOKEN}"]},
+    {"name": "a flag naming a file stays", "input": ["--password-file=/etc/p", "--token-ttl=60"], "want": ["--password-file=/etc/p", "--token-ttl=60"]},
+    {"name": "the working directory and its abbreviation", "input": ["env", "PWD=/app", "OLDPWD=/root", "DB_PWD=/fake-pass-1", "--pwd=/fake-pass-2", "PWD=fake-pass-3", "APIKEY=fake-key-1", "PGPASSWORD=fake-pass-4", "ls"], "want": ["env", "PWD=/app", "OLDPWD=/root", "DB_PWD=<REDACTED:DB_PWD>", "--pwd=<REDACTED:-pwd>", "PWD=<REDACTED:PWD>", "APIKEY=<REDACTED:APIKEY>", "PGPASSWORD=<REDACTED:PGPASSWORD>", "ls"]},
+    {"name": "a short name and a plural", "input": ["env", "DB_PASS=fake-pass-1", "PGPASS=fake-pass-2", "API_KEYS=fake-key-1", "passwords=fake-pass-3", "first_pass=done", "pass=ok", "bypass=yes", "--pass=ok", "--db-pass", "fake-pass-4", "ls"], "want": ["env", "DB_PASS=<REDACTED:DB_PASS>", "PGPASS=<REDACTED:PGPASS>", "API_KEYS=<REDACTED:API_KEYS>", "passwords=<REDACTED:passwords>", "first_pass=done", "pass=ok", "bypass=yes", "--pass=ok", "--db-pass", "<REDACTED:db-pass>", "ls"]},
+    {"name": "a value next to a Korean letter", "input": ["curl", "-H", "인증Bearer abcdefghijklmnopqrstuvwxyz", "키는ghp_abcdefghijklmnopqrstuvwxyzabcdefghij"], "want": ["curl", "-H", "인증Bearer <REDACTED:token>", "키는<REDACTED:api_key>"]},
+    {"name": "a file given to kubectl", "input": ["kubectl", "create", "secret", "generic", "db", "--from-file=token=./token.txt", "--from-file=ssh-privatekey=/home/me/.ssh/id_rsa", "--from-file=password=fake-pass-1", "--from-literal=password=fake-pass-2"], "want": ["kubectl", "create", "secret", "generic", "db", "--from-file=token=./token.txt", "--from-file=ssh-privatekey=/home/me/.ssh/id_rsa", "--from-file=password=<REDACTED:password>", "--from-literal=password=<REDACTED:password>"]}
   ],
   "objects": [
     {
@@ -638,9 +883,45 @@
       "name": "a credential key's list of mappings, and a list under another key, stay",
       "input": {"api_keys": [{"name": "ci", "key_prefix": "kb_abc", "token": "fake-token-1"}], "credentials": [{"name": "aws"}], "secrets": ["my-tls", "other"], "imagePullSecrets": [{"name": "regcred"}], "tokens": [120, 80], "rules": ["get", "list"]},
       "want": {"api_keys": [{"name": "ci", "key_prefix": "kb_abc", "token": "<REDACTED:token>"}], "credentials": [{"name": "aws"}], "secrets": ["my-tls", "other"], "imagePullSecrets": [{"name": "regcred"}], "tokens": [120, 80], "rules": ["get", "list"]}
+    },
+    {
+      "name": "encoded text under the lower-case name of the working directory goes, a path stays",
+      "input": [{"pwd": "/Zm9vYmFy"}, {"name": "oldpwd", "value": "/ZmFrZS1wYXNz"}, {"pwd": "/Users/me/Projects"}, {"PWD": "/Zm9vYmFy"}],
+      "want": [{"pwd": "<REDACTED:pwd>"}, {"name": "oldpwd", "value": "<REDACTED:oldpwd>"}, {"pwd": "/Users/me/Projects"}, {"PWD": "/Zm9vYmFy"}]
+    },
+    {
+      "name": "the working directory with a space, in the shell's own spelling",
+      "input": [{"PWD": "/home/me/My Docs"}, {"name": "OLDPWD", "value": "/srv/my app/current"}, {"pwd": "/home/me/My Docs"}, {"PWD": "/fake pass"}],
+      "want": [{"PWD": "/home/me/My Docs"}, {"name": "OLDPWD", "value": "/srv/my app/current"}, {"pwd": "<REDACTED:pwd>"}, {"PWD": "<REDACTED:PWD>"}]
+    },
+    {
+      "name": "a key that names a Secret object keeps the name",
+      "input": {"existingSecret": "my-secret", "tlsSecret": "my-tls", "tlssecret": "my-tls", "auth": {"existing_secret": "db-creds"}, "imagePullSecret": "regcred", "caSecret": "my-ca"},
+      "want": {"existingSecret": "my-secret", "tlsSecret": "my-tls", "tlssecret": "my-tls", "auth": {"existing_secret": "db-creds"}, "imagePullSecret": "regcred", "caSecret": "my-ca"}
+    },
+    {
+      "name": "what does not read as an object's name under such a key goes, and so does any other secret",
+      "input": {"tlsSecret": "Fake-Value-1", "existingSecret": "abc123", "TLS_SECRET": "my-tls", "jwtSecret": "my-dev-value", "client_secret": "my-value", "secret": "my-tls"},
+      "want": {"tlsSecret": "<REDACTED:tlsSecret>", "existingSecret": "<REDACTED:existingSecret>", "TLS_SECRET": "<REDACTED:TLS_SECRET>", "jwtSecret": "<REDACTED:jwtSecret>", "client_secret": "<REDACTED:client_secret>", "secret": "<REDACTED:secret>"}
+    },
+    {
+      "name": "a small number under a short name counts what passed",
+      "input": {"foo_pass": 3, "bar_pass": "12", "baz_pass": 123, "smtp_pass": 1234, "DB_PASS": "1234", "PGPASS": 3, "password": 3},
+      "want": {"foo_pass": 3, "bar_pass": "12", "baz_pass": 123, "smtp_pass": "<REDACTED:smtp_pass>", "DB_PASS": "<REDACTED:DB_PASS>", "PGPASS": "<REDACTED:PGPASS>", "password": "<REDACTED:password>"}
+    },
+    {
+      "name": "a value next to a Korean letter and digits of another width",
+      "input": {"note": "키는ghp_abcdefghijklmnopqrstuvwxyzabcdefghij 입니다", "password": "１２３４", "name": "한글AKIA1234"},
+      "want": {"note": "키는<REDACTED:api_key> 입니다", "password": "<REDACTED:password>", "name": "한글AKIA1234"}
     }
   ],
   "key_names": [
+    {"key": "existingSecret", "redact": false, "audit": true},
+    {"key": "tlsSecret", "redact": false, "audit": true},
+    {"key": "tlssecret", "redact": false, "audit": true},
+    {"key": "imagePullSecret", "redact": false, "audit": true},
+    {"key": "TLS_SECRET", "redact": true, "audit": true},
+    {"key": "webhookSecret", "redact": true, "audit": true},
     {"key": "password", "redact": true, "audit": true},
     {"key": "db_password", "redact": true, "audit": true},
     {"key": "POSTGRES_PASSWORD", "redact": true, "audit": true},

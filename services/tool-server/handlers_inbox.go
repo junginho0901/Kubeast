@@ -26,11 +26,9 @@ var (
 )
 
 const (
-	inboxPageSize      = 200
-	inboxPagesMax      = 5
-	inboxCandidatesCap = 20
-	// Enough to summarize; report_link opens the whole report.
-	investigationReportCap = 4000
+	inboxPageSize          = 200
+	inboxPagesMax          = 5
+	inboxCandidatesCap     = 20
 	permInvestigationsRead = "admin.investigations.read"
 
 	inboxAlternative  = "Investigations are off on this installation (features.alertInvestigation). Read the alert with alerts_list and prometheus_rules and look into it with the read tools."
@@ -294,23 +292,22 @@ func inboxWindowOf(ctx context.Context, headers http.Header, id string) (map[str
 
 // investigationAnswer leads with what the chat needs, for a result cut at the model's limit.
 type investigationAnswer struct {
-	Started         bool                   `json:"started"`
-	Note            string                 `json:"note"`
-	Investigation   interface{}            `json:"investigation"`
-	ReportLink      string                 `json:"report_link,omitempty"`
-	AlertLink       string                 `json:"alert_link"`
-	InvestigateNow  interface{}            `json:"investigate_now"`
-	Error           interface{}            `json:"error,omitempty"`
-	ReportError     string                 `json:"report_error,omitempty"`
-	Model           interface{}            `json:"model,omitempty"`
-	TotalTokens     interface{}            `json:"total_tokens,omitempty"`
-	ToolCallCount   interface{}            `json:"tool_call_count,omitempty"`
-	DurationMS      interface{}            `json:"duration_ms,omitempty"`
-	FinishedAt      interface{}            `json:"finished_at,omitempty"`
-	Report          string                 `json:"report,omitempty"`
-	ReportTruncated *bool                  `json:"report_truncated,omitempty"`
-	ReportChars     *int                   `json:"report_chars,omitempty"`
-	Alert           map[string]interface{} `json:"alert"`
+	Started        bool                   `json:"started"`
+	Note           string                 `json:"note"`
+	Investigation  interface{}            `json:"investigation"`
+	ReportLink     string                 `json:"report_link,omitempty"`
+	AlertLink      string                 `json:"alert_link"`
+	InvestigateNow interface{}            `json:"investigate_now"`
+	Error          interface{}            `json:"error,omitempty"`
+	ReportError    string                 `json:"report_error,omitempty"`
+	Model          interface{}            `json:"model,omitempty"`
+	TotalTokens    interface{}            `json:"total_tokens,omitempty"`
+	ToolCallCount  interface{}            `json:"tool_call_count,omitempty"`
+	DurationMS     interface{}            `json:"duration_ms,omitempty"`
+	FinishedAt     interface{}            `json:"finished_at,omitempty"`
+	Report         string                 `json:"report,omitempty"`
+	ReportChars    *int                   `json:"report_chars,omitempty"`
+	Alert          map[string]interface{} `json:"alert"`
 }
 
 const (
@@ -356,13 +353,8 @@ func addReport(ctx context.Context, headers http.Header, id string, answer *inve
 	answer.Model, answer.TotalTokens, answer.ToolCallCount, answer.DurationMS, answer.FinishedAt =
 		detail["model"], detail["total_tokens"], detail["tool_call_count"], detail["duration_ms"], detail["finished_at"]
 	if report, _ := detail["report"].(string); report != "" {
-		runes := []rune(report)
-		truncated := len(runes) > investigationReportCap
-		if truncated {
-			report = string(runes[:investigationReportCap])
-		}
-		chars := len(runes)
-		answer.Report, answer.ReportTruncated, answer.ReportChars = report, &truncated, &chars
+		chars := len([]rune(report))
+		answer.Report, answer.ReportChars = report, &chars
 	}
 	return nil
 }

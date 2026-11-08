@@ -146,6 +146,7 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 	access := payload.Access(clusterID, impersonationEnabled)
 	rec := &accesstrail.Recorder{}
 	ctx = accesstrail.NewContext(ctx, rec)
+	ctx, masked := withReadMasks(ctx)
 
 	output, err := tool.Handler(ctx, req.Arguments, r.Header)
 	if err != nil {
@@ -157,14 +158,15 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 		} else if errors.Is(err, errForbidden) {
 			status = http.StatusForbidden
 		}
-		respondToolError(w, status, err.Error(), &access, trailOf(rec))
+		text, stats := redactToolOutput(err.Error())
+		respondJSON(w, status, ToolCallResponse{Error: text, Redacted: addReadMasks(stats, masked), Access: &access, Requests: trailOf(rec)})
 		return
 	}
 
 	// Everything a tool returns is bound for the model: mask credentials
 	// (and Secret data) here, once, for every tool.
 	content, stats := redactToolOutput(output)
-	respondJSON(w, http.StatusOK, ToolCallResponse{Content: content, Redacted: stats, Access: &access, Requests: trailOf(rec)})
+	respondJSON(w, http.StatusOK, ToolCallResponse{Content: content, Redacted: addReadMasks(stats, masked), Access: &access, Requests: trailOf(rec)})
 }
 
 func trailOf(rec *accesstrail.Recorder) *accesstrail.Trail {

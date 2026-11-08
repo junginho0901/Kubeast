@@ -127,6 +127,10 @@ func handleDiff(ctx context.Context, args map[string]interface{}, headers http.H
 	if status == "unchanged" {
 		out["hint"] = "Applying this manifest would change nothing (ignoring server-owned fields and status)."
 	}
+	if found := placeholdersInWrite(args); len(found) > 0 {
+		out["placeholders"] = found
+		out["hint"] = "This manifest holds what the assistant reads in place of a value, so the diff compares those letters and not the value behind them. A write holding them is refused. To change other fields, call k8s_patch_resource with those fields only."
+	}
 	return marshalJSON(out)
 }
 

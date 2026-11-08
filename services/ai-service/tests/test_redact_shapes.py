@@ -36,6 +36,37 @@ def test_key_names(case):
     assert ("fake-value-1" not in out) == case["redact"], out
 
 
+@pytest.mark.parametrize("case", CASES["commands"], ids=lambda c: c["name"])
+def test_command_shapes(case):
+    assert redact.redact_command(case["input"], redact.Options()) == case["want"]
+
+
+@pytest.mark.parametrize("case", CASES["text_with_personal_data"], ids=lambda c: c["name"])
+def test_personal_data_shapes(case):
+    assert redact.redact_text(case["input"], redact.Options(pii=True))[0] == case["want"]
+
+
+def test_the_floating_snapshot_loses_a_key_written_right_after_a_korean_word():
+    ctx = PageContextPayload(
+        page_type="resource-list", page_title="Pods", path="/workloads/pods", snapshot_at="2026-11-07T00:00:00Z",
+        base=VisibleDataLayer(source="base", summary="pods", data={"note": "키는ghp_abcdefghijklmnopqrstuvwxyzabcdefghij 입니다"}),
+    )
+    text = build_context_prompt(ctx)
+    assert "ghp_abcdefghijklmnopqrstuvwxyz" not in text
+    assert "키는<REDACTED:api_key> 입니다" in text
+
+
+@pytest.mark.parametrize("text", [
+    "{kind: Secret, data: {note: fake-value-1, other: fake-value-2}}\n",
+    'msg="{\\"kind\\":\\"Secret\\",\\"data\\":{\\"note\\":\\"fake-value-1\\",\\"other\\":\\"fake-value-2\\"}}"',
+], ids=["flow", "escaped"])
+@pytest.mark.parametrize("enabled", [True, False], ids=["rules on", "rules off"])
+def test_secrets_in_flow_or_escaped_form_are_stripped_with_the_rules_off_and_counted(text, enabled):
+    out, stats = redact.redact_text(text, redact.Options(enabled=enabled))
+    assert "fake-value" not in out
+    assert stats.kinds["secret"] == 2
+
+
 def test_masking_is_counted_for_the_audit_row():
     _, stats = redact.redact_text("token: |\n  fake-block-value\n", redact.Options())
     assert stats.kinds == {"key_name": 1}

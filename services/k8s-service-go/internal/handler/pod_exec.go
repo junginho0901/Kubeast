@@ -12,6 +12,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/ws"
 
 	"github.com/junginho0901/kubeast/services/pkg/audit"
+	"github.com/junginho0901/kubeast/services/pkg/redact"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -26,6 +27,9 @@ var execUpgrader = websocket.Upgrader{
 	WriteBufferSize:   4096,
 	EnableCompression: false,
 }
+
+// execRowRedactOpts: a stored row cannot be masked later, so it does not follow REDACTION_ENABLED, as an AI exec's row does not.
+var execRowRedactOpts = redact.Options{Enabled: true, Disabled: map[string]bool{}}
 
 // PodExecWS handles WebSocket /api/v1/namespaces/{namespace}/pods/{name}/exec/ws.
 // Write+Admin: opens an interactive shell into a running container.
@@ -48,7 +52,8 @@ func (h *Handler) PodExecWS(w http.ResponseWriter, r *http.Request) {
 		h.refuseUnaudited(w, r, rerr)
 		return
 	}
-	payload := map[string]interface{}{"container": container, "command": command}
+	// The row holds what was asked with its credentials masked; only the container gets the command as it came.
+	payload := map[string]interface{}{"container": container, "command": redact.Command([]string{command}, execRowRedactOpts)[0]}
 	rec, ok := h.startRecording(w, r, "exec", namespace, podName, container, "k8s.pod.exec", "pod", payload)
 	if !ok {
 		return

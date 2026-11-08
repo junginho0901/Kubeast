@@ -10,6 +10,42 @@ import (
 const dryRunCM = `{"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":"app","namespace":"shop","uid":"u1","resourceVersion":"99","creationTimestamp":"2026-10-15T00:00:00Z","managedFields":[{"manager":"kubectl"}],"annotations":{"kubectl.kubernetes.io/last-applied-configuration":"{}","team":"shop"}},"data":{"a":"2","b":"x"}}`
 const liveCM = `{"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":"app","namespace":"shop","uid":"u1","resourceVersion":"42","creationTimestamp":"2026-10-15T00:00:00Z","managedFields":[{"manager":"helm"}],"annotations":{"team":"shop"}},"data":{"a":"1","b":"x"}}`
 
+// A manifest holding what stands for a value compares those letters: the answer says so, since the write would be refused.
+func TestDiff_SaysAManifestHoldsAPlaceholder(t *testing.T) {
+	fakeKubectl(t, func(args []string) (string, error) {
+		if verb(args)[0] == "apply" {
+			return dryRunCM, nil
+		}
+		return liveCM, nil
+	})
+	manifest := "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: app\n  namespace: shop\ndata:\n  a: \"2\"\n  b: <REDACTED:b>\n"
+	out, err := handleDiff(ctxFor("c1"), map[string]interface{}{"yaml_content": manifest}, bearer())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := decode(t, out)
+	held, _ := m["placeholders"].([]interface{})
+	if len(held) != 1 || held[0] != "<REDACTED:b>" {
+		t.Errorf("placeholders = %v", m["placeholders"])
+	}
+	if hint, _ := m["hint"].(string); !strings.Contains(hint, "refused") {
+		t.Errorf("hint = %q", m["hint"])
+	}
+	if m["status"] != "changed" || m["diff"] == "" {
+		t.Errorf("the preview itself went: %s", out)
+	}
+
+	plain := strings.Replace(manifest, "<REDACTED:b>", "x", 1)
+	out, err = handleDiff(ctxFor("c1"), map[string]interface{}{"yaml_content": plain}, bearer())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = decode(t, out)
+	if _, has := m["placeholders"]; has {
+		t.Errorf("a manifest of plain values names placeholders: %s", out)
+	}
+}
+
 func TestDiff_ChangedCreatedUnchangedAndRefusals(t *testing.T) {
 	var stdinSeen string
 	calls := fakeKubectl(t, func(args []string) (string, error) {

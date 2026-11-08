@@ -97,6 +97,16 @@ FEATURE_TOOL_ARGS = {
 }
 
 
+# A refusal is a few sentences, so a long answer costs no parsing here.
+_REFUSAL_MAX_CHARS = 8192
+
+
+def _is_refusal(result) -> bool:
+    from app.services.ai.streaming import tool_outcome
+
+    return isinstance(result, str) and len(result) <= _REFUSAL_MAX_CHARS and tool_outcome(result)[0] != "success"
+
+
 async def execute_function_with_context(
     service: "AIService",
     function_name: str,
@@ -411,9 +421,10 @@ async def execute_function_with_context(
         else:
             return json.dumps({"error": f"Unknown function: {function_name}"})
         
-        # 캐시에 저장 (5분 TTL)
-        tool_context.cache[cache_key] = result
-        
+        # 캐시에 저장 (5분 TTL). A refusal is not kept: the grant or the state behind it may change before it would expire.
+        if not _is_refusal(result):
+            tool_context.cache[cache_key] = result
+
         log.debug("[DEBUG] Function result cached: %s", cache_key)
         return result
     

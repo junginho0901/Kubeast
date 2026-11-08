@@ -25,6 +25,16 @@ type shapeCases struct {
 		Key    string `json:"key"`
 		Redact bool   `json:"redact"`
 	} `json:"key_names"`
+	Commands []struct {
+		Name  string   `json:"name"`
+		Input []string `json:"input"`
+		Want  []string `json:"want"`
+	} `json:"commands"`
+	TextWithPersonalData []struct {
+		Name  string `json:"name"`
+		Input string `json:"input"`
+		Want  string `json:"want"`
+	} `json:"text_with_personal_data"`
 }
 
 // The same cases run in ai-service (test_redact_shapes.py): the two rule lists must give the same answers.
@@ -37,8 +47,22 @@ func TestSharedShapeCases(t *testing.T) {
 	if err := json.Unmarshal(raw, &cases); err != nil {
 		t.Fatal(err)
 	}
-	if len(cases.Text) == 0 || len(cases.Objects) == 0 || len(cases.KeyNames) == 0 {
+	if len(cases.Text) == 0 || len(cases.Objects) == 0 || len(cases.KeyNames) == 0 || len(cases.Commands) == 0 || len(cases.TextWithPersonalData) == 0 {
 		t.Fatal("no cases read")
+	}
+	for _, c := range cases.TextWithPersonalData {
+		t.Run("personal/"+c.Name, func(t *testing.T) {
+			if got, _ := Text(c.Input, Options{Enabled: true, PII: true, Disabled: map[string]bool{}}); got != c.Want {
+				t.Errorf("got  %q\nwant %q", got, c.Want)
+			}
+		})
+	}
+	for _, c := range cases.Commands {
+		t.Run("command/"+c.Name, func(t *testing.T) {
+			if got := Command(c.Input, Options{Enabled: true, Disabled: map[string]bool{}}); !reflect.DeepEqual(got, c.Want) {
+				t.Errorf("got  %q\nwant %q", got, c.Want)
+			}
+		})
 	}
 	opts := Options{Enabled: true, Disabled: map[string]bool{}}
 	for _, c := range cases.Text {
@@ -182,6 +206,24 @@ func TestObjectMasksThePluralNamesAndTheShortPassword(t *testing.T) {
 	got, _ := Object(in, Options{Enabled: true, Disabled: map[string]bool{}})
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got  %v\nwant %v", got, want)
+	}
+}
+
+// A Secret's values go whether the rules are on or not, in every spelling, and each is counted for the audit row.
+func TestSecretsInFlowOrEscapedFormAreStrippedWithTheRulesOffAndCounted(t *testing.T) {
+	for _, in := range []string{
+		"{kind: Secret, data: {note: fake-value-1, other: fake-value-2}}\n",
+		`msg="{\"kind\":\"Secret\",\"data\":{\"note\":\"fake-value-1\",\"other\":\"fake-value-2\"}}"`,
+	} {
+		for _, opts := range []Options{{Enabled: true, Disabled: map[string]bool{}}, {Enabled: false}} {
+			got, st := Text(in, opts)
+			if strings.Contains(got, "fake-value") {
+				t.Errorf("enabled %v: %q", opts.Enabled, got)
+			}
+			if st.Kinds["secret"] != 2 {
+				t.Errorf("enabled %v: counted %+v, want 2", opts.Enabled, st)
+			}
+		}
 	}
 }
 

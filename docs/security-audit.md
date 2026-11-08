@@ -32,6 +32,8 @@ Without `?cluster=`, the request goes to the registry's default cluster (the sel
 
 To turn it off, set `auth.apiKeys.enabled: false` (`API_KEYS_ENABLED` in compose). Issuing, revoking and exchanging keys are recorded in the audit log.
 
+`GET /api/v1/auth/me` answers a key's token with that key's reach: its clusters, role ceiling and namespaces, not its owner's other grants.
+
 ## Open connections
 
 A terminal, a followed log and a live list are authenticated when they open. The browser cannot hand them a new token afterwards, so they do not end with their token.
@@ -89,7 +91,7 @@ Without sinks, nothing changes.
 |---|---|---|
 | `s3` | long-term retention (S3, MinIO, GCS, R2). Time-partitioned NDJSON gzip | `accessKeyId`, `secretAccessKey`; without them, IRSA (role in `serviceAccounts.authService.annotations`) |
 | `webhook` `json` | general purpose, such as SIEM or n8n (optional HMAC signature `X-Kubeast-Signature`) | `url`, `hmacSecret` |
-| `webhook` `slack`, `teams`, `discord` | chat notifications | `url` |
+| `webhook` `slack`, `teams`, `discord` | chat notifications. A field reaches the channel as plain words: no link, formatting or mention comes from a target's name or an error | `url` |
 | `webhook` `telegram` | chat notifications (`chatId`) | `botToken` |
 | `webhook` `pagerduty` | on-call (Events v2, one per event) | `routingKey` |
 | `email` | email (SMTP, STARTTLS/TLS) | `username`, `password` |
@@ -170,7 +172,7 @@ When session recording is on (`sessionRecording.enabled`, default off), the **ou
 
 When a session opens, the terminal first prints one line, "This session is recorded" ("이 세션은 녹화됩니다" on a Korean screen). The recording keeps that line too. The audit row (`k8s.pod.exec` or `k8s.node.shell`) gets a `recording_id`.
 
-An exec through an AI tool has no recording: it is one command and its result, not a terminal. Its command, masked, is in the `k8s.pod.exec` row and in `ai.tool.execute` or `ai.mcp.call`.
+An exec through an AI tool has no recording: it is one command and its result, not a terminal. Its command, masked, is in the `k8s.pod.exec` row and in `ai.tool.execute` or `ai.mcp.call`. A terminal's own command is masked in its row the same way.
 
 - **Storage**: during the session, k8s-service writes to a local volume and uploads chunks every `chunkSeconds` (default 30 seconds). If the k8s-service pod disappears, only the last chunk interval is lost. The store is one of:
   - `s3`: recommended for production, with the same fields as the audit S3 sink. S3 keys are mounted as files, so they do not touch k8s-service's IRSA identity.
@@ -198,6 +200,15 @@ sessionRecording:
   enabled: true
   s3: {bucket: kubeast-sessions, prefix: sessions/, region: ap-northeast-2}   # s3:PutObject·GetObject on the k8s-service role
 ```
+
+## What masked Helm values do not hide
+
+Without `resource.secret.reveal` a release's values read masked, and the upgrade preview does not say whether a value written over the hidden one was right. A chart can give the value away by what it renders from it:
+
+- A chart that renders a hidden value's checksum (`checksum/secret: {{ .Values.adminPassword | sha256sum }}`, the usual way to roll a Deployment on a change) puts that hash on the Deployment, where whoever reads the Deployment or the release's manifest can read it and try guesses against it. In the preview a right guess and a wrong one differ on that line.
+- The same goes for any other value the chart renders from it into something that is not a Secret.
+
+Kubeast does not hide those lines: the hash also stands on the object in the cluster for anyone who can read it, and hiding it from the preview would hide that a rollout is coming. Keep such a value in a Secret the chart references (`existingSecret`) and take its checksum from something other than the value, or do not give `helm` editing rights on a release to someone who must not be able to try guesses.
 
 ## AI tool calls in the cluster's audit log
 

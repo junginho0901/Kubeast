@@ -54,6 +54,15 @@ func intersectPerms(a, b []string) []string {
 	return out
 }
 
+// keyPermissions is everything a key's matrix holds, on any cluster.
+func keyPermissions(matrix auth.PermissionMatrix) []string {
+	var out []string
+	for _, perms := range matrix {
+		out = append(out, perms...)
+	}
+	return out
+}
+
 // narrowForAPIKey builds the matrix and cluster roles an exchanged token
 // carries: one entry per cluster in clusterIDs, holding what the user has
 // there cut down to ceilingPerms, and the role name of their grant there capped

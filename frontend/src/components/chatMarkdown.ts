@@ -59,16 +59,18 @@ const BLOCKS = new Set(['blockquote', 'details', 'div', 'dl', 'figure', 'h1', 'h
 const holdsBlock = (node: AnswerNode): boolean =>
   node.type === 'element' && (BLOCKS.has(node.tagName ?? '') || (node.children ?? []).some(holdsBlock))
 
-function unwrapLinksAroundBlocks(parent: AnswerNode) {
+function unwrapLinks(parent: AnswerNode, inSummary: boolean) {
   if (!parent.children) return
   parent.children = parent.children.flatMap((child) => {
-    unwrapLinksAroundBlocks(child)
-    return child.tagName === 'a' && child.children?.some(holdsBlock) ? child.children : [child]
+    const head = inSummary || child.tagName === 'summary'
+    unwrapLinks(child, head)
+    return child.tagName === 'a' && (head || child.children?.some(holdsBlock)) ? child.children ?? [] : [child]
   })
 }
 
-// An <a> left open takes in every block after it, which would make the rest of the answer and its tool blocks one link.
-const keepLinksInline = () => unwrapLinksAroundBlocks
+// An <a> left open takes in every block after it, which would make the rest of the answer and its tool blocks one link. And
+// the head of a disclosure is a button, whose press would open the link too.
+const keepLinksInline = () => (tree: AnswerNode) => unwrapLinks(tree, false)
 
 // CommonMark's HTML blocks that only their own closing ends: left open, one takes the rest of the answer as raw HTML.
 const OPEN_UNTIL_CLOSED: [RegExp, RegExp][] = [

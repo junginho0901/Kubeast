@@ -3,6 +3,7 @@ package cluster
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"k8s.io/client-go/tools/clientcmd"
@@ -33,7 +34,7 @@ var staticCredentialEnv = []string{"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",
 func CheckKubeconfigExec(blob string, allow []string) error {
 	cfg, err := clientcmd.Load([]byte(blob))
 	if err != nil {
-		return fmt.Errorf("invalid kubeconfig: %w", err)
+		return fmt.Errorf("invalid kubeconfig: %s", WithoutQuoted(err))
 	}
 	for name, c := range cfg.Clusters {
 		if c == nil {
@@ -76,6 +77,15 @@ func CheckKubeconfigExec(blob string, allow []string) error {
 		}
 	}
 	return nil
+}
+
+// quotedInError is what a YAML parser or client-go quotes of what it could not read.
+var quotedInError = regexp.MustCompile(`"(?:[^"\\]|\\.)*"|'[^']*'|` + "`[^`]*`")
+
+// WithoutQuoted is a kubeconfig's refusal without what it quotes: the words say what is wrong, and a quoted value may be a
+// token or a server address holding a password, on its way to a stored audit row.
+func WithoutQuoted(err error) string {
+	return quotedInError.ReplaceAllString(err.Error(), "<value>")
 }
 
 func containsString(list []string, s string) bool {

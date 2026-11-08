@@ -80,7 +80,7 @@ func getJSONList(ctx context.Context, headers http.Header, cmd []string, kind, n
 	if err := json.Unmarshal([]byte(out), &list); err != nil {
 		return nil, "", fmt.Errorf("kubectl get -o json: unreadable output: %w", err)
 	}
-	redact.StripSecrets(list)
+	countReadMasks(ctx, redact.StripSecrets(list))
 	return list, "", nil
 }
 

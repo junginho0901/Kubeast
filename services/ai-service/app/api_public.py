@@ -39,6 +39,25 @@ def _validate_base_url(url: str) -> None:
         raise HTTPException(status_code=400, detail=str(e))
 
 
+_REFUSAL_MESSAGE_CHARS = 300
+
+
+def _provider_refusal(resp: httpx.Response, api_key: str) -> str:
+    """The status and the provider's own error message. Any other body stays out: base_url may be a service that is no model
+    API, and its page would come back through this test to the screen and the audit row."""
+    try:
+        data = resp.json()
+    except Exception:
+        data = None
+    if isinstance(data, dict):
+        err = data.get("error")
+        for message in (err.get("message") if isinstance(err, dict) else err, data.get("message"), data.get("detail")):
+            if isinstance(message, str) and message.strip():
+                return f"HTTP {resp.status_code}: {safe_error(message, [api_key])[:_REFUSAL_MESSAGE_CHARS]}"
+    kind = (resp.headers.get("content-type") or "no content type").split(";")[0].strip()[:60]
+    return f"HTTP {resp.status_code}: the server answered {kind}, {len(resp.content)} bytes, which is no model API's error"
+
+
 async def _test_openai_compatible(
     api_key: str,
     model: str,
@@ -96,12 +115,7 @@ async def _test_anthropic(
                 "message": "Connection successful",
             }
         else:
-            detail = resp.text
-            try:
-                detail = resp.json().get("error", {}).get("message", resp.text)
-            except Exception:
-                pass
-            return {"success": False, "message": f"HTTP {resp.status_code}: {detail}"}
+            return {"success": False, "message": _provider_refusal(resp, api_key)}
 
 
 async def _test_google(
@@ -129,10 +143,8 @@ async def _test_google(
                 "message": "Connection successful",
             }
         else:
-            detail = resp.text
             try:
-                err = resp.json().get("error", {})
-                detail = err.get("message", resp.text)
+                resp.json().get("error", {})
                 # Quota exceeded means the key IS valid
                 if resp.status_code == 429:
                     return {
@@ -142,7 +154,7 @@ async def _test_google(
                     }
             except Exception:
                 pass
-            return {"success": False, "message": f"HTTP {resp.status_code}: {detail}"}
+            return {"success": False, "message": _provider_refusal(resp, api_key)}
 
 
 # Provider routing table
@@ -316,6 +328,10 @@ async def _test_model_connection(request: dict) -> dict:
         refused = model_config_policy.refused_address(e)
         if refused is not None:
             return {"success": False, "message": refused.detail}
+        # The client's error text holds the body; a server that answered is read as the other paths read it.
+        response = getattr(e, "response", None)
+        if isinstance(response, httpx.Response):
+            return {"success": False, "message": _provider_refusal(response, api_key)}
         return {"success": False, "message": safe_error(e, [api_key])}
 
 

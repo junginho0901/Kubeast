@@ -1,12 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import ReactMarkdown from 'react-markdown'
 import { ExternalLink, Siren } from 'lucide-react'
 
 import type { Investigation } from '@/services/api/investigations'
 import { useAIContext } from '@/hooks/useAIContext'
+import { AIMarkdown } from '@/components/AIMarkdown'
 import { ModalFrame } from '@/components/ModalFrame'
-import { REMARK_PLUGINS } from '@/utils/markdown'
 import { formatWhen } from '@/pages/admin/accessRequestFormat'
 import { duration, severityClass, skipReason, statusClass } from '@/utils/investigationFormat'
 
@@ -89,7 +88,7 @@ export default function InvestigationReportModal({ id, load, onClose }: {
             <section>
               <h3 className="mb-2 text-xs font-semibold text-slate-400">{tr('investigations.section.report', 'Report')}</h3>
               <div className="prose prose-invert prose-sm max-w-none rounded-lg border border-slate-700 bg-slate-950/40 px-4 py-3" data-testid="investigation-report">
-                <ReactMarkdown remarkPlugins={REMARK_PLUGINS}>{data.report}</ReactMarkdown>
+                <AIMarkdown>{data.report}</AIMarkdown>
               </div>
             </section>
           )}

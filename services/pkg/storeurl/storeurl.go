@@ -53,7 +53,9 @@ var (
 	sixToFour        = netip.MustParsePrefix("2002::/16")
 	// IPv6 forms with an IPv4 address in their low 32 bits: NAT64, a site's own NAT64 (RFC 8215, read as its usual /96),
 	// IPv4-translated (SIIT) and the old IPv4-compatible one.
-	ipv4InLowBits = []netip.Prefix{netip.MustParsePrefix("64:ff9b::/96"), netip.MustParsePrefix("64:ff9b:1::/48"), netip.MustParsePrefix("::ffff:0:0:0/96"), netip.MustParsePrefix("::/96")}
+	ipv4InLowBits = []netip.Prefix{netip.MustParsePrefix("64:ff9b::/96"), netip.MustParsePrefix("::ffff:0:0:0/96"), netip.MustParsePrefix("::/96")}
+	// A site's own NAT64 prefix (RFC 8215), whose length the address does not say: see siteNAT64Addresses.
+	siteNAT64 = netip.MustParsePrefix("64:ff9b:1::/48")
 )
 
 func allowedHosts() []string {
@@ -92,10 +94,51 @@ func reached(a netip.Addr) []netip.Addr {
 		return []netip.Addr{a, netip.AddrFrom4([4]byte(b[4:8])), netip.AddrFrom4([4]byte{^b[12], ^b[13], ^b[14], ^b[15]})}
 	case sixToFour.Contains(a):
 		return []netip.Addr{a, netip.AddrFrom4([4]byte(b[2:6]))}
+	case siteNAT64.Contains(a):
+		return append([]netip.Addr{a}, siteNAT64Addresses(b)...)
 	case isatap || inAny(a, ipv4InLowBits):
 		return []netip.Addr{a, netip.AddrFrom4([4]byte(b[12:16]))}
 	}
 	return []netip.Addr{a}
+}
+
+// siteNAT64Addresses is each IPv4 address a site's own NAT64 form can carry. RFC 6052 places it by the prefix's length, /48,
+// /56, /64 or /96, with bits 64 to 71 empty and nothing after it, and the address does not say which: every reading that
+// fits counts. A first octet of 0 is the empty part of another reading, so it counts only when nothing else does.
+func siteNAT64Addresses(b [16]byte) []netip.Addr {
+	empty := func(from int) bool {
+		for _, c := range b[from:] {
+			if c != 0 {
+				return false
+			}
+		}
+		return true
+	}
+	var forms [][4]byte
+	if !empty(12) {
+		forms = append(forms, [4]byte(b[12:16]))
+	}
+	if b[8] == 0 {
+		if empty(11) {
+			forms = append(forms, [4]byte{b[6], b[7], b[9], b[10]})
+		}
+		if empty(12) {
+			forms = append(forms, [4]byte{b[7], b[9], b[10], b[11]})
+		}
+		if empty(13) {
+			forms = append(forms, [4]byte(b[9:13]))
+		}
+	}
+	var out []netip.Addr
+	for _, f := range forms {
+		if f[0] != 0 {
+			out = append(out, netip.AddrFrom4(f))
+		}
+	}
+	if len(out) == 0 {
+		return []netip.Addr{netip.AddrFrom4([4]byte(b[12:16]))}
+	}
+	return out
 }
 
 func inAny(a netip.Addr, networks []netip.Prefix) bool {
