@@ -148,10 +148,10 @@ func sessionEndNotice(code, lang string) string {
 	}
 }
 
-func hangUp(w io.Writer) {
+func hangUp(w io.Writer, pause time.Duration) {
 	for i, key := range shellHangup {
 		if i > 0 {
-			time.Sleep(shellHangupPause)
+			time.Sleep(pause)
 		}
 		if _, err := w.Write(key); err != nil {
 			return
@@ -179,6 +179,8 @@ func streamShell(ctx context.Context, conn *websocket.Conn, in <-chan []byte, cf
 	if err != nil {
 		return err
 	}
+	// Read once: the hang-up below can outlive this call.
+	grace, pause := shellHangupGrace, shellHangupPause
 	held := ctx
 	ctx, cancel := context.WithCancel(context.WithoutCancel(held))
 	defer cancel()
@@ -220,10 +222,10 @@ func streamShell(ctx context.Context, conn *websocket.Conn, in <-chan []byte, cf
 				return
 			}
 		}
-		go hangUp(stdinW)
+		go hangUp(stdinW, pause)
 		select {
 		case <-streamDone:
-		case <-time.After(shellHangupGrace):
+		case <-time.After(grace):
 		}
 	}()
 

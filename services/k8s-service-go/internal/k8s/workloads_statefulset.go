@@ -102,6 +102,7 @@ func (s *Service) DescribeStatefulSet(ctx context.Context, namespace, name strin
 	if sts.Spec.Selector != nil && sts.Spec.Selector.MatchLabels != nil {
 		result["selector"] = sts.Spec.Selector.MatchLabels
 	}
+	setSelectorExpressions(result, sts.Spec.Selector)
 
 	// Update strategy
 	updateStrategy := map[string]interface{}{

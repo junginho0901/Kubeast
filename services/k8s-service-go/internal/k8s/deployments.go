@@ -101,6 +101,7 @@ func (s *Service) DescribeDeployment(ctx context.Context, namespace, name string
 	if dep.Spec.Selector != nil && dep.Spec.Selector.MatchLabels != nil {
 		result["selector"] = dep.Spec.Selector.MatchLabels
 	}
+	setSelectorExpressions(result, dep.Spec.Selector)
 
 	// Strategy
 	strategy := map[string]interface{}{

@@ -89,6 +89,7 @@ func (s *Service) DescribeReplicaSet(ctx context.Context, namespace, name string
 	if rs.Spec.Selector != nil && rs.Spec.Selector.MatchLabels != nil {
 		result["selector"] = rs.Spec.Selector.MatchLabels
 	}
+	setSelectorExpressions(result, rs.Spec.Selector)
 
 	// Pod template
 	result["pod_template"] = formatPodTemplate(rs.Spec.Template)

@@ -1,5 +1,8 @@
 # /metrics on ai-service: the Prometheus text format with the shared
 # kubeast_http_* names, the route label as a template, probes not counted.
+import os
+
+import pytest
 from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
 
@@ -41,7 +44,16 @@ def test_metrics_count_routes_by_template_not_path():
     assert 'kubeast_http_requests_in_flight{service="ai"} 0.0' in body
     assert 'route="/health"' not in body and 'route="/metrics"' not in body
     assert 'route="/api/v1/ai/sessions/a/history"' not in body
+    # prometheus_client's default collectors are served with ours; python_info is there on every system.
+    assert "python_info{" in body
+
+
+# prometheus_client's process collector reads /proc: Linux, as the image runs, has it and macOS does not.
+@pytest.mark.skipif(not os.path.exists("/proc/self/stat"), reason="prometheus_client's process collector reads /proc/self/stat, which this system does not have")
+def test_metrics_serve_the_process_collector_where_proc_exists():
+    body = TestClient(build(True)).get("/metrics").text
     assert "process_cpu_seconds_total" in body
+    assert "process_resident_memory_bytes" in body
 
 
 def test_metrics_disabled_is_404():

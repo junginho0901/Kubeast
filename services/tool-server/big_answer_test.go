@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -82,8 +84,9 @@ func (h *heldResponse) bytes() []byte {
 	return h.body.Bytes()
 }
 
-// answerCalls calls a reader's tool whose answer is big, or small when resource_name is "small".
-func answerCalls(t *testing.T, big string) func(ctx context.Context, w http.ResponseWriter, name string) {
+// answerCalls calls a reader's tool whose answer is big, or small when resource_name is "small". With resource_name
+// "leaves" the tool calls leave before it answers big.
+func answerCalls(t *testing.T, big string, leave ...func()) func(ctx context.Context, w http.ResponseWriter, name string) {
 	t.Helper()
 	resetKubeconfigCache()
 	_, restore := mockK8sService(t, func(w http.ResponseWriter, r *http.Request) {
@@ -99,6 +102,11 @@ func answerCalls(t *testing.T, big string) func(ctx context.Context, w http.Resp
 		Handler: func(_ context.Context, args map[string]interface{}, _ http.Header) (string, error) {
 			if args["resource_name"] == "small" {
 				return `{"kind":"ConfigMap","metadata":{"name":"small"}}`, nil
+			}
+			if args["resource_name"] == "leaves" {
+				for _, f := range leave {
+					f()
+				}
 			}
 			return big, nil
 		},
@@ -185,22 +193,186 @@ func TestASmallAnswerWaitsForNoBigOne(t *testing.T) {
 	}
 }
 
-// A big answer whose call has no time left to wait goes out as it would alone.
-func TestABigAnswerWithNoTimeLeftStillGoesOutUnchanged(t *testing.T) {
+// A big answer whose call has no time left and finds no place before the answer could no longer be written in time is
+// not masked or written past the three places: its caller gets a short error saying why, which it can act on.
+func TestABigAnswerThatFindsNoPlaceInTimeIsABusyErrorAndNeverGoesPastThePlaces(t *testing.T) {
 	call := answerCalls(t, kubectlListJSON(1<<20))
-	want := aloneAnswer(t, call, "big")
+	aloneAnswer(t, call, "big")
+	shortCalls(t, 100*time.Millisecond)
+	prev := callWriteLimit
+	callWriteLimit = answerWriteMargin + 500*time.Millisecond
+	t.Cleanup(func() { callWriteLimit = prev })
 	release := make(chan struct{})
 	var wg sync.WaitGroup
 	_, writing := holdBigAnswers(t, call, 6, release, &wg)
 	defer func() { close(release); wg.Wait() }()
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-	rec := httptest.NewRecorder()
+	late := &bigWrites{release: make(chan struct{})}
+	close(late.release)
+	w := late.response()
 	start := time.Now()
-	call(ctx, rec, "big")
-	if took := time.Since(start); took > 2*time.Second || rec.Code != http.StatusOK || !bytes.Equal(rec.Body.Bytes(), want) {
-		t.Errorf("with %d big answers being written: took %v, status %d, %d bytes (alone %d)", writing, took, rec.Code, rec.Body.Len(), len(want))
+	call(context.Background(), w, "big")
+	took := time.Since(start)
+	status, body := w.answer()
+	var answer ToolCallResponse
+	if err := json.Unmarshal(body, &answer); err != nil {
+		t.Fatalf("with %d big answers being written: the answer is not JSON (%v): %.200s", writing, err, body)
 	}
+	if took > 2*time.Second || status != http.StatusServiceUnavailable || late.most.Load() != 0 || answer.Content != "" || !strings.Contains(answer.Error, "busy") || !strings.Contains(answer.Error, "ask again") {
+		t.Errorf("with %d big answers being written: took %v, status %d, %d big writes, error %q, %d bytes of content", writing, took, status, late.most.Load(), answer.Error, len(answer.Content))
+	}
+	if answer.Access == nil {
+		t.Error("the busy answer does not say what identity the call reached the cluster as")
+	}
+}
+
+// bigWrites counts the big answers inside their write at once; each stays there until release closes.
+type bigWrites struct {
+	release   chan struct{}
+	now, most atomic.Int64
+}
+
+func (b *bigWrites) response() *watchedResponse {
+	return &watchedResponse{header: http.Header{}, writes: b}
+}
+
+type watchedResponse struct {
+	header http.Header
+	writes *bigWrites
+	mu     sync.Mutex
+	status int
+	body   bytes.Buffer
+}
+
+func (w *watchedResponse) Header() http.Header { return w.header }
+func (w *watchedResponse) WriteHeader(code int) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.status = code
+}
+func (w *watchedResponse) Write(p []byte) (int, error) {
+	if len(p) > bigAnswerBytes {
+		n := w.writes.now.Add(1)
+		for most := w.writes.most.Load(); n > most && !w.writes.most.CompareAndSwap(most, n); most = w.writes.most.Load() {
+		}
+		<-w.writes.release
+		defer w.writes.now.Add(-1)
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.body.Write(p)
+}
+
+func (w *watchedResponse) answer() (int, []byte) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.status, w.body.Bytes()
+}
+
+// shortCalls gives every call started after it d of time, as the 50 s would run out.
+func shortCalls(t *testing.T, d time.Duration) {
+	t.Helper()
+	prev := defaultTimeout
+	defaultTimeout = d
+	t.Cleanup(func() { defaultTimeout = prev })
+}
+
+// Calls whose time ran out while three big answers were being written wait for a place, and each goes out whole once
+// one comes: never more than three masked and written at once.
+func TestBigAnswersPastTheirCallsTimeWaitForAPlaceAndGoOutWhole(t *testing.T) {
+	call := answerCalls(t, kubectlListJSON(1<<20))
+	want := aloneAnswer(t, call, "big")
+	shortCalls(t, 100*time.Millisecond)
+	writes := &bigWrites{release: make(chan struct{})}
+	var wg sync.WaitGroup
+	start := func() *watchedResponse {
+		w := writes.response()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			call(context.Background(), w, "big")
+		}()
+		return w
+	}
+	answers := []*watchedResponse{start(), start(), start()}
+	for deadline := time.Now().Add(5 * time.Second); writes.now.Load() < 3; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			close(writes.release)
+			wg.Wait()
+			t.Fatalf("setup: %d of 3 big answers reached their write", writes.now.Load())
+		}
+	}
+	for i := 0; i < 8; i++ {
+		answers = append(answers, start())
+	}
+	time.Sleep(time.Second)
+	held := writes.most.Load()
+	close(writes.release)
+	wg.Wait()
+	if held > 3 || writes.most.Load() > 3 {
+		t.Errorf("%d big answers masked and written at once while three held their places (%d at most in all), want at most 3", held, writes.most.Load())
+	}
+	for i, w := range answers {
+		if status, body := w.answer(); status != http.StatusOK || !bytes.Equal(body, want) {
+			t.Errorf("answer %d: status %d, %d bytes (alone %d)", i, status, len(body), len(want))
+		}
+	}
+}
+
+// A big answer whose caller has gone is not masked or written: nobody would read it, and it would do that work past the
+// three places. Whether its turn had come or not.
+func TestABigAnswerWhoseCallerLeftIsNotMaskedOrWritten(t *testing.T) {
+	for _, full := range []bool{true, false} {
+		ctx, cancel := context.WithCancel(context.Background())
+		call := answerCalls(t, kubectlListJSON(1<<20), cancel)
+		aloneAnswer(t, call, "big")
+		release := make(chan struct{})
+		var wg sync.WaitGroup
+		writing := 0
+		if full {
+			_, writing = holdBigAnswers(t, call, 3, release, &wg)
+		}
+		w := &recordedResponse{header: http.Header{}}
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			call(ctx, w, "leaves")
+		}()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("with %d big answers being written: a call whose caller left did not end", writing)
+		}
+		close(release)
+		wg.Wait()
+		if n := w.written(); n != 0 {
+			t.Errorf("with %d big answers being written: a call whose caller left wrote %d bytes, want none", writing, n)
+		}
+		if in := bigAnswerSlots.InUse(); in != 0 {
+			t.Errorf("with %d big answers being written: %d places still taken after every call ended", writing, in)
+		}
+	}
+}
+
+// recordedResponse counts what is written to it and takes it at once.
+type recordedResponse struct {
+	header http.Header
+	mu     sync.Mutex
+	n      int
+}
+
+func (r *recordedResponse) Header() http.Header { return r.header }
+func (r *recordedResponse) WriteHeader(int)     {}
+func (r *recordedResponse) Write(p []byte) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.n += len(p)
+	return len(p), nil
+}
+
+func (r *recordedResponse) written() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.n
 }
 
 type discardResponse struct{ header http.Header }
