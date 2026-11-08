@@ -215,6 +215,22 @@ test.describe('Resource Graph — pod groups', () => {
     await expect(page.locator(DRAWER)).toContainText('db-3')
   })
 
+  test('an open group asks every few seconds with the revision it holds, and its rows stay', async ({ page }) => {
+    const asked: URL[] = []
+    page.on('request', (request) => {
+      const url = new URL(request.url())
+      if (url.pathname === '/api/v1/cluster/pods/page' && url.searchParams.get('owner') === 'StatefulSet/db') asked.push(url)
+    })
+    await page.goto(`/cluster/resource-graph?cluster=self&namespace=${NS}`)
+    await page.getByTestId('graph-group').filter({ hasText: 'StatefulSet' }).click()
+    const rows = page.getByTestId('pod-group-list').getByTestId('pod-group-row')
+    await expect(rows).toHaveCount(12)
+    await expect.poll(() => asked.length, { timeout: 15_000 }).toBeGreaterThanOrEqual(2)
+    expect(asked[0].searchParams.get('revision')).toBeNull()
+    expect(asked[1].searchParams.get('revision')).toBeTruthy()
+    await expect(rows).toHaveCount(12)
+  })
+
   test('a search finds a pod inside a group, a group expands to its pods, and Expand all draws every pod', async ({ page }) => {
     await page.goto(`/cluster/resource-graph?cluster=self&namespace=${NS}`)
     const groups = page.getByTestId('graph-group')

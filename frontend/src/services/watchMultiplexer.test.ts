@@ -220,6 +220,8 @@ describe('WebSocketMultiplexer', () => {
   it('reconnect 가 실패하면 backoff 가 늘어남 (1s → 2s → 4s)', async () => {
     const mux = new WebSocketMultiplexer()
     const msg = { type: 'REQUEST' as const, clusterId: 'default', path: '/api/v1/pods', query: 'watch=1' }
+    // the longest of each wait
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0.9999)
 
     const p = mux.subscribe(msg, vi.fn())
     await flush()
@@ -243,6 +245,38 @@ describe('WebSocketMultiplexer', () => {
     await vi.advanceTimersByTimeAsync(700)
     await flush()
     expect(MockWebSocket.instances).toHaveLength(3) // 2s 경과 후 옴
+    random.mockRestore()
+  })
+
+  // A server that restarts closes every socket at one moment: each browser comes back at its own.
+  it('browsers cut at one moment do not all reconnect at one moment, and none waits longer than the backoff', async () => {
+    const random = vi.spyOn(Math, 'random')
+    const msg = { type: 'REQUEST' as const, clusterId: 'default', path: '/api/v1/pods', query: 'watch=1' }
+    const sockets: MockWebSocket[] = []
+    for (let i = 0; i < 100; i += 1) {
+      const mux = new WebSocketMultiplexer()
+      const p = mux.subscribe(msg, vi.fn())
+      await flush()
+      const ws = MockWebSocket.instances[MockWebSocket.instances.length - 1]
+      ws.simulateOpen()
+      await p
+      sockets.push(ws)
+    }
+    MockWebSocket.reset()
+    sockets.forEach((ws, i) => {
+      random.mockReturnValue(i / 100)
+      ws.simulateServerClose()
+    })
+
+    await vi.advanceTimersByTimeAsync(499)
+    expect(MockWebSocket.instances).toHaveLength(0)
+    await vi.advanceTimersByTimeAsync(251)
+    const first = MockWebSocket.instances.length
+    expect(first).toBeGreaterThanOrEqual(40)
+    expect(first).toBeLessThanOrEqual(60)
+    await vi.advanceTimersByTimeAsync(250)
+    expect(MockWebSocket.instances).toHaveLength(100)
+    random.mockRestore()
   })
 
   it('마지막 listener unsubscribe 시 backend 에 CLOSE 전송', async () => {
@@ -557,6 +591,182 @@ describe('WebSocketMultiplexer', () => {
     expect(mux.follows('self', msg.path, 'watch=1&fieldSelector=x')).toBe(false)
     mux.unsubscribe(msg, listener)
     expect(mux.follows('self', msg.path, msg.query)).toBe(false)
+  })
+
+  it('says whether a frame has answered a watch on this socket, which a drawer that joins it would not hear', async () => {
+    const mux = new WebSocketMultiplexer()
+    const listener = vi.fn()
+    const msg = { type: 'REQUEST' as const, clusterId: 'self', path: '/apis/apps/v1/deployments', query: 'watch=1' }
+    const sub = mux.subscribe(msg, listener)
+    await flush()
+    const ws = MockWebSocket.instances[0]
+    ws.simulateOpen()
+    await sub
+    expect(mux.answers('self', msg.path, msg.query)).toBe(false)
+    ws.simulateMessage({ type: 'DATA', clusterId: 'self', path: msg.path, query: msg.query, data: { type: 'ADDED', object: { name: 'web' } } })
+    expect(mux.answers('self', msg.path, msg.query)).toBe(true)
+    expect(mux.answers('other', msg.path, msg.query)).toBe(false)
+    ws.simulateMessage({ type: 'ERROR', clusterId: 'self', path: msg.path, query: msg.query, error: { message: 'x', reason: 'unreachable' } })
+    expect(mux.answers('self', msg.path, msg.query)).toBe(false)
+    ws.simulateMessage({ type: 'RESYNC', clusterId: 'self', path: msg.path, query: msg.query })
+    expect(mux.answers('self', msg.path, msg.query)).toBe(true)
+    ws.simulateServerClose()
+    expect(mux.answers('self', msg.path, msg.query)).toBe(false)
+  })
+
+  it('tells who asks when its socket closed', async () => {
+    const mux = new WebSocketMultiplexer()
+    const closed = vi.fn()
+    const off = mux.onSocketClosed(closed)
+    const p = mux.subscribe({ type: 'REQUEST', clusterId: 'self', path: '/api/v1/pods', query: 'watch=1' }, vi.fn())
+    await flush()
+    const ws = MockWebSocket.instances[0]
+    ws.simulateOpen()
+    await p
+    ws.simulateServerClose()
+    expect(closed).toHaveBeenCalledTimes(1)
+    off()
+    await vi.advanceTimersByTimeAsync(1000)
+    await flush()
+    MockWebSocket.instances[1].simulateServerClose()
+    expect(closed).toHaveBeenCalledTimes(1)
+  })
+
+  describe('a watch the limit refused', () => {
+    const msg = { type: 'REQUEST' as const, clusterId: 'self', path: '/api/v1/namespaces/demo/configmaps', query: 'watch=1' }
+    const refusal = { type: 'ERROR', clusterId: msg.clusterId, path: msg.path, query: msg.query, error: { message: 'max subscriptions reached for the server (2000), cannot create new watch', reason: 'limit' } }
+    const requests = (ws: MockWebSocket) => ws.sent.map((m) => JSON.parse(m)).filter((m) => m.type === 'REQUEST')
+    const open = async (listener = vi.fn()) => {
+      resetWatchProblems()
+      const mux = new WebSocketMultiplexer()
+      const p = mux.subscribe(msg, listener)
+      await flush()
+      const ws = MockWebSocket.instances[MockWebSocket.instances.length - 1]
+      ws.simulateOpen()
+      await p
+      return { mux, ws, listener }
+    }
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+      ;(globalThis as any).document = undefined
+    })
+
+    it('asks again on its own within a minute, with no new page and no reload', async () => {
+      const { ws } = await open()
+      expect(requests(ws)).toHaveLength(1)
+      ws.simulateMessage(refusal)
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(requests(ws).length).toBeGreaterThanOrEqual(2)
+      expect(requests(ws)[1]).toEqual({ ...msg, resync: true })
+    })
+
+    it('asks no sooner than half its first wait and at a time of its own, so a crowd refused together does not ask together', async () => {
+      const asked: number[] = []
+      const random = vi.spyOn(Math, 'random')
+      for (const r of [0, 0.5, 0.9999]) {
+        random.mockReturnValue(r)
+        const { ws } = await open()
+        ws.simulateMessage(refusal)
+        const started = Date.now()
+        for (let ms = 0; ms < 70_000 && requests(ws).length < 2; ms += 1000) await vi.advanceTimersByTimeAsync(1000)
+        asked.push(Date.now() - started)
+      }
+      expect(Math.min(...asked)).toBeGreaterThanOrEqual(15_000)
+      expect(Math.max(...asked)).toBeLessThanOrEqual(45_000)
+      expect(Math.max(...asked) - Math.min(...asked)).toBeGreaterThanOrEqual(20_000)
+    })
+
+    it('goes on asking while it is refused', async () => {
+      vi.spyOn(Math, 'random').mockReturnValue(0.9999)
+      const { ws } = await open()
+      ws.simulateMessage(refusal)
+      for (let i = 0; i < 4; i += 1) {
+        const before = requests(ws).length
+        // the longest of each wait, 45 s, 90 s, 180 s, 360 s
+        await vi.advanceTimersByTimeAsync(45_000 * 2 ** i)
+        expect(requests(ws)).toHaveLength(before + 1)
+        ws.simulateMessage(refusal)
+      }
+      expect(requests(ws).length).toBeGreaterThanOrEqual(5)
+      expect(getWatchProblem()).toBe('server_limit')
+    })
+
+    it('leaves reading the list to the RESYNC the server sends once it gives the place, on an empty list too', async () => {
+      vi.spyOn(Math, 'random').mockReturnValue(0.9999)
+      const { ws, listener } = await open()
+      ws.simulateMessage(refusal)
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(requests(ws)[1]).toEqual({ ...msg, resync: true })
+      listener.mockClear()
+      await vi.advanceTimersByTimeAsync(10_000)
+      // nothing is made up here: the server's frame is what says the watch is on
+      expect(listener).not.toHaveBeenCalled()
+      ws.simulateMessage({ type: 'RESYNC', clusterId: msg.clusterId, path: msg.path, query: msg.query })
+      expect(listener.mock.calls.map(([m]) => m.type)).toEqual(['RESYNC'])
+      expect(getWatchProblem()).toBeUndefined()
+      const asked = requests(ws).length
+      await vi.advanceTimersByTimeAsync(300_000)
+      expect(requests(ws)).toHaveLength(asked)
+    })
+
+    it('stops asking once the screen closed it', async () => {
+      const { mux, ws, listener } = await open()
+      ws.simulateMessage(refusal)
+      mux.unsubscribe(msg, listener)
+      const asked = requests(ws).length
+      await vi.advanceTimersByTimeAsync(300_000)
+      expect(requests(ws)).toHaveLength(asked)
+    })
+
+    it('does not ask from a hidden tab, and asks when the tab shows again', async () => {
+      const { ws } = await open()
+      ;(globalThis as any).document = { visibilityState: 'hidden' }
+      ws.simulateMessage(refusal)
+      await vi.advanceTimersByTimeAsync(300_000)
+      expect(requests(ws)).toHaveLength(1)
+      ;(globalThis as any).document = { visibilityState: 'visible' }
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(requests(ws).length).toBeGreaterThanOrEqual(2)
+    })
+
+    it('a reconnect asks for it with the rest, and only once', async () => {
+      const { ws } = await open()
+      ws.simulateMessage(refusal)
+      ws.simulateServerClose()
+      await vi.advanceTimersByTimeAsync(1000)
+      await flush()
+      const ws2 = MockWebSocket.instances[MockWebSocket.instances.length - 1]
+      ws2.simulateOpen()
+      await flush()
+      expect(requests(ws2)).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(300_000)
+      expect(requests(ws2)).toHaveLength(1)
+    })
+
+    it('another problem of the same watch leaves it to the server, which keeps trying', async () => {
+      const { ws } = await open()
+      ws.simulateMessage(refusal)
+      await vi.advanceTimersByTimeAsync(60_000)
+      ws.simulateMessage({ ...refusal, error: { message: 'nope', reason: 'forbidden' } })
+      const asked = requests(ws).length
+      await vi.advanceTimersByTimeAsync(300_000)
+      expect(requests(ws)).toHaveLength(asked)
+      expect(getWatchProblem()).toBe('forbidden')
+    })
+
+    it('a hidden tab that closes a watch gives its place away and does not ask for it', async () => {
+      const other = { ...msg, path: '/api/v1/namespaces/demo/secrets' }
+      const { mux, ws, listener } = await open()
+      await mux.subscribe(other, listener)
+      ws.simulateMessage({ ...refusal, path: other.path })
+      ;(globalThis as any).document = { visibilityState: 'hidden' }
+      mux.unsubscribe(msg, listener)
+      expect(requests(ws)).toHaveLength(2)
+      ;(globalThis as any).document = { visibilityState: 'visible' }
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(requests(ws)[2]).toEqual({ ...other, resync: true })
+    })
   })
 
   describe('the session of a socket ended', () => {

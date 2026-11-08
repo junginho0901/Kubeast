@@ -312,6 +312,23 @@ func TestARequestThatMissedSomethingGetsOneResyncOnceTheWatchIsOn(t *testing.T) 
 	}
 }
 
+// A screen refused a place asks again this way: on a list with no object this frame is all that tells it the watch is on.
+func TestAListWithNoObjectThatMissedSomethingGetsItsResyncToo(t *testing.T) {
+	api := newChangesAPI()
+	m := muxOn(t, api.serve)
+	conn := socketTo(t, m, everyCluster)
+	if err := conn.WriteJSON(map[string]any{"type": "REQUEST", "clusterId": "c1", "path": "/api/v1/namespaces/demo/configmaps", "query": "watch=1", "resync": true}); err != nil {
+		t.Fatal(err)
+	}
+	incoming := framesOf(conn)
+	if f := nextOf(t, incoming); f.Type != "RESYNC" {
+		t.Fatalf("frame %s, want RESYNC", f.Type)
+	}
+	if rest := framesUntilQuiet(incoming, 300*time.Millisecond); len(rest) != 0 {
+		t.Errorf("after the RESYNC: %+v", rest)
+	}
+}
+
 // listAnswerClients answers whether the caller may list a kind as the cluster would.
 type listAnswerClients struct {
 	fakeClients

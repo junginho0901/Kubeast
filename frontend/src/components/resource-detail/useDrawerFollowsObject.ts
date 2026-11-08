@@ -1,70 +1,178 @@
-import { useEffect, useMemo, useRef } from 'react'
-import { useQueryClient, type QueryClient, type QueryKey } from '@tanstack/react-query'
+import { useContext, useEffect, useMemo, useRef } from 'react'
+import { focusManager, hashKey, useQueryClient, type QueryClient, type QueryKey } from '@tanstack/react-query'
 import { getCurrentClusterID } from '@/services/clusterRef'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { watchMultiplexer } from '@/services/watchMultiplexer'
+import { OBJECT_READ_EVERY_MS } from './drawerObjectLayer'
+import { DrawerObjectReadContext } from './drawerObjectRead'
 
 type WatchEvent = { type?: string; object?: any }
+type Fields = Record<string, unknown>
 
-// A rollout writes a workload's status many times a second, and each read of a drawer's answer lists its events too.
-const READ_AT_MOST_EVERY_MS = 1000
+// A rollout writes many times a second and each read lists events, for everyone with the drawer open; a frame shows at once, so a read can wait.
+const READ_AT_MOST_EVERY_MS = 5000
+// A change after a quiet time is read this soon. Its writes come close together, and every open drawer gets them at one moment.
+const FIRST_READ_MS = 250
+const FIRST_READ_SPREAD_MS = 750
 
-// Whether a frame says something else than the answer does, in what both hold: the answer is the row with more in it.
-function differsFromAnswer(frame: Record<string, unknown>, answer: unknown): boolean {
-  if (!answer || typeof answer !== 'object') return false
-  const held = answer as Record<string, unknown>
-  return Object.keys(frame).some((key) => key in held && JSON.stringify(frame[key]) !== JSON.stringify(held[key]))
+// What the answer has under names of its own for counts a frame says under the list's.
+const MIRRORED: Record<string, Record<string, string>> = {
+  replicas_status: { desired: 'replicas', current: 'current_replicas', ready: 'ready_replicas', updated: 'updated_replicas', available: 'available_replicas' },
+  daemonset_status: { desired: 'desired', current: 'current', ready: 'ready', updated: 'updated', available: 'available', misscheduled: 'misscheduled', unavailable: 'unavailable' },
 }
 
-// objectFollower reads a drawer's answer again when its object changes. The answer holds more than a frame (events,
-// conditions, settings), so it is read rather than replaced; the drawer keeps showing the last one until it comes. The
-// tables in `alsoRead` hang on the same object and are read with it, each at its own pace.
-export function objectFollower(client: QueryClient, describeKey: QueryKey, everyMs = READ_AT_MOST_EVERY_MS, alsoRead: QueryKey[] = []) {
+// A Job with no completions: the row says 1, as kubectl's table does, and the answer says none.
+const ROW_DEFAULTS = new Set(['completions'])
+// A row that could not be converted has other shapes under the same names.
+const sameKind = (a: unknown, b: unknown) => a == null || b == null || (typeof a === typeof b && Array.isArray(a) === Array.isArray(b))
+const frameSpeaksFor = (frame: Fields, held: Fields, key: string) => !ROW_DEFAULTS.has(key) && sameKind(frame[key], held[key])
+
+// Whether a frame says something else than the answer does, in what both hold: the answer is the row with more in it.
+function differsFromAnswer(frame: Fields, answer: unknown): boolean {
+  if (!answer || typeof answer !== 'object') return false
+  const held = answer as Fields
+  return Object.keys(frame).some((key) => key in held && frameSpeaksFor(frame, held, key) && JSON.stringify(frame[key]) !== JSON.stringify(held[key]))
+}
+
+// The answer with what a frame says over it (TestAnAnswerAndALiveUpdateOfOneObjectSayTheSameUnderOneName).
+function answerWithFrame(answer: Fields, frame: Fields): Fields {
+  const next = { ...answer }
+  for (const key of Object.keys(frame)) {
+    if (frameSpeaksFor(frame, answer, key)) next[key] = frame[key]
+  }
+  for (const [section, names] of Object.entries(MIRRORED)) {
+    const held = answer[section]
+    if (!held || typeof held !== 'object') continue
+    const moved = { ...(held as Fields) }
+    for (const [part, name] of Object.entries(names)) {
+      if (frame[name] !== undefined) moved[part] = frame[name]
+    }
+    next[section] = moved
+  }
+  return next
+}
+
+// At most one read in `everyMs`, soon after a quiet time; a read under way may have missed the change, and restarting it might never let one finish.
+function pacedReads(client: QueryClient, everyMs: number) {
   let timer: ReturnType<typeof setTimeout> | undefined
-  let started = false
+  let lastRead = -Infinity
   let waiting: QueryKey[] = []
+  let stopWaitingToShow: (() => void) | undefined
 
   const read = () => {
     timer = undefined
-    // A read under way may have missed the change, and restarting it on each frame might never let one finish.
+    // A hidden tab draws nothing and takes no read of anybody's: it reads once when it shows again.
+    if (!focusManager.isFocused()) {
+      stopWaitingToShow = focusManager.subscribe(() => {
+        if (!focusManager.isFocused()) return
+        stopWaitingToShow?.()
+        stopWaitingToShow = undefined
+        read()
+      })
+      return
+    }
     const underWay = waiting.filter((queryKey) => client.isFetching({ queryKey }) > 0)
     for (const queryKey of waiting) {
       if (!underWay.includes(queryKey)) void client.invalidateQueries({ queryKey })
     }
+    if (underWay.length < waiting.length) lastRead = Date.now()
     waiting = underWay
     if (waiting.length > 0) timer = setTimeout(read, everyMs)
   }
 
-  const readSoon = (keys: QueryKey[]) => {
-    waiting = keys
-    if (timer === undefined) timer = setTimeout(read, everyMs)
+  return {
+    ask(keys: QueryKey[]) {
+      const asked = new Set(waiting.map((key) => hashKey(key)))
+      waiting = [...waiting, ...keys.filter((key) => !asked.has(hashKey(key)))]
+      if (timer !== undefined || stopWaitingToShow) return
+      const soon = FIRST_READ_MS + Math.random() * FIRST_READ_SPREAD_MS
+      timer = setTimeout(read, Math.max(soon, lastRead + everyMs - Date.now()))
+    },
+    clear() {
+      if (timer !== undefined) clearTimeout(timer)
+      timer = undefined
+      waiting = []
+      stopWaitingToShow?.()
+      stopWaitingToShow = undefined
+    },
+  }
+}
+
+// objectFollower keeps a drawer on its object: a frame goes over the answer at once, and the rest of the answer, the tables in `alsoRead` and the floating chat's object (`chatKey`) are read at their pace.
+export function objectFollower(client: QueryClient, describeKey: QueryKey, everyMs = READ_AT_MOST_EVERY_MS, alsoRead: QueryKey[] = [], chatKey?: QueryKey) {
+  const reads = pacedReads(client, everyMs)
+  const chatReads = chatKey ? pacedReads(client, OBJECT_READ_EVERY_MS) : undefined
+  const openedAt = Date.now()
+  const describeHash = hashKey(describeKey)
+  let started = false
+  let lastFrame: Fields | undefined
+  let frames = 0
+  let framesAtReadStart = 0
+  let joining: ReturnType<typeof setTimeout> | undefined
+
+  const heldFromBefore = (key: QueryKey) => {
+    const held = client.getQueryState(key)
+    return !!held && held.dataUpdatedAt > 0 && held.dataUpdatedAt < openedAt && held.fetchStatus === 'idle'
   }
 
-  const stop = () => {
-    if (timer !== undefined) clearTimeout(timer)
-    timer = undefined
-    waiting = []
+  // A read that started before a frame may answer what the frame moved on from: what is on screen does not go back.
+  const stopWatchingReads = client.getQueryCache().subscribe((event) => {
+    if (event.type !== 'updated' || event.query.queryHash !== describeHash) return
+    if (event.action.type === 'fetch') {
+      framesAtReadStart = frames
+    } else if (event.action.type === 'success' && !event.action.manual && lastFrame && frames > framesAtReadStart) {
+      client.setQueryData(describeKey, answerWithFrame(event.query.state.data as Fields, lastFrame))
+    }
+  })
+
+  const stopReads = () => {
+    reads.clear()
+    chatReads?.clear()
   }
 
   return {
     onEvent(event: WatchEvent) {
       if (!event?.object) return
-      // A deleted object leaves the last answer on screen until the drawer closes: a read now would only say 404.
+      // The last answer stays on screen until the drawer closes: a read would only say 404, which the floating chat is told.
       if (event.type === 'DELETED') {
-        stop()
+        stopReads()
+        lastFrame = undefined
+        if (chatKey) chatReads?.ask([chatKey])
         return
       }
       // A watch opens with the object as it is, which the answer the drawer just asked for says too.
       const opening = !started && event.type === 'ADDED'
       started = true
-      if (opening && !differsFromAnswer(event.object, client.getQueryData(describeKey))) return
-      readSoon([describeKey, ...alsoRead])
+      const answer = client.getQueryData(describeKey) as Fields | undefined
+      const differs = differsFromAnswer(event.object, answer)
+      if (opening && !differs) {
+        // What the chat holds may be from before this watch, the tab away and back: nothing else would read it again.
+        if (chatKey && heldFromBefore(chatKey)) chatReads?.ask([chatKey])
+        return
+      }
+      frames += 1
+      lastFrame = event.object
+      if (differs) client.setQueryData(describeKey, answerWithFrame(answer as Fields, event.object))
+      reads.ask([describeKey, ...alsoRead])
+      if (chatKey) chatReads?.ask([chatKey])
     },
     // The watch cannot say what changed while it was gone, and its RESYNC reads only the answer.
     onResync() {
-      if (alsoRead.length > 0) readSoon(alsoRead)
+      if (alsoRead.length > 0) reads.ask(alsoRead)
+      if (chatKey) chatReads?.ask([chatKey])
     },
-    stop,
+    // A list already open opens with nothing for this drawer, so what is held from before, the tab away and back, is read here; the screen's own reads have started by then.
+    onJoinedList() {
+      joining = setTimeout(() => {
+        if (heldFromBefore(describeKey)) reads.ask([describeKey])
+        if (chatKey && heldFromBefore(chatKey)) chatReads?.ask([chatKey])
+      }, FIRST_READ_MS)
+    },
+    stop() {
+      if (joining !== undefined) clearTimeout(joining)
+      stopReads()
+      stopWatchingReads()
+    },
   }
 }
 
@@ -85,19 +193,22 @@ export function useDrawerFollowsObject(options: { enabled: boolean; describeKey:
     () => (options.enabled ? openListOf(options.path, (path) => watchMultiplexer.follows(clusterId, path, 'watch=1')) : null),
     [options.enabled, options.path, clusterId],
   )
+  const objectRead = useContext(DrawerObjectReadContext)
+  const chatKey = objectRead?.key
   const keyDep = JSON.stringify(options.describeKey)
   const alsoDep = JSON.stringify(options.alsoRead ?? [])
   const follower = useRef<ReturnType<typeof objectFollower> | null>(null)
 
   useEffect(() => {
     if (!options.enabled) return
-    const current = objectFollower(client, JSON.parse(keyDep) as QueryKey, READ_AT_MOST_EVERY_MS, JSON.parse(alsoDep) as QueryKey[])
+    const current = objectFollower(client, JSON.parse(keyDep) as QueryKey, READ_AT_MOST_EVERY_MS, JSON.parse(alsoDep) as QueryKey[], chatKey)
     follower.current = current
+    if (openList) current.onJoinedList()
     return () => {
       current.stop()
       follower.current = null
     }
-  }, [client, keyDep, alsoDep, options.enabled])
+  }, [client, keyDep, alsoDep, chatKey, openList, options.enabled])
 
   const namespace = /\/namespaces\/([^/]+)\//.exec(options.path)?.[1]
   useKubeWatchList({
@@ -105,12 +216,13 @@ export function useDrawerFollowsObject(options: { enabled: boolean; describeKey:
     queryKey: options.describeKey as any[],
     path: openList ?? options.path,
     query: openList ? 'watch=1' : `watch=1&fieldSelector=${encodeURIComponent(`metadata.name=${options.name}`)}`,
-    // the frame is not the answer: it stays until it is read again, which a RESYNC of this watch asks for too
+    // what the frame says goes through the follower, which compares it first; a RESYNC of this watch asks for the answer too
     listensOnly: true,
     onEvent: (event) => {
       if (!openList || frameOfObject(event, options.name, namespace)) follower.current?.onEvent(event)
     },
     onResync: () => follower.current?.onResync(),
+    onAnswering: (answers) => objectRead?.setWatchAnswers(answers),
   })
 }
 

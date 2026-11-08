@@ -1,6 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { QueryClient, QueryObserver } from '@tanstack/react-query'
+
+// TanStack Query keeps no clock on a server, which is what it takes this environment for.
+vi.hoisted(() => {
+  ;(globalThis as { window?: unknown }).window ??= {}
+})
+
+import { focusManager, QueryClient, QueryObserver, type QueryKey } from '@tanstack/react-query'
 import { applyWatchMessage } from '@/services/useKubeWatchList'
+import { objectReadInterval } from './drawerObjectLayer'
+import answerCases from './drawerAnswer.cases.json'
+import drawerSrc from '../ResourceDetailDrawer.tsx?raw'
 import workloadDataSrc from './workload-info/useWorkloadData.ts?raw'
 import hpaInfoSrc from './HPAInfo.tsx?raw'
 import clusterRoleInfoSrc from './ClusterRoleInfo.tsx?raw'
@@ -57,19 +66,21 @@ describe('an open drawer follows its object', () => {
     vi.useRealTimers()
   })
 
-  it('shows what the object says now once it changes, with what only the answer holds', async () => {
+  it('shows what an update says at once, and what only the answer holds when it is read', async () => {
     let replicas = 2
-    const drawer = openDrawer(() => ({ name: 'web', replicas, events: [{ reason: 'Scaled' }] }))
+    let events = [{ reason: 'Scaled' }]
+    const drawer = openDrawer(() => ({ name: 'web', replicas, events }))
     await vi.advanceTimersByTimeAsync(0)
     expect(drawer.shown()).toEqual({ name: 'web', replicas: 2, events: [{ reason: 'Scaled' }] })
 
     replicas = 3
+    events = [{ reason: 'Scaled' }, { reason: 'ScaledAgain' }]
     drawer.frame('ADDED', { name: 'web', replicas: 2 })
     drawer.frame('MODIFIED', { name: 'web', replicas: 3 })
-    // the last answer stays on screen until the new one comes
-    expect(drawer.shown()).toEqual({ name: 'web', replicas: 2, events: [{ reason: 'Scaled' }] })
-    await vi.advanceTimersByTimeAsync(1000)
+    // the rest of the last answer stays on screen until the new one comes
     expect(drawer.shown()).toEqual({ name: 'web', replicas: 3, events: [{ reason: 'Scaled' }] })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(drawer.shown()).toEqual({ name: 'web', replicas: 3, events: [{ reason: 'Scaled' }, { reason: 'ScaledAgain' }] })
     drawer.close()
   })
 
@@ -121,16 +132,18 @@ describe('an open drawer follows its object', () => {
     const drawer = openDrawer(() => ({ name: 'web', replicas }))
     await vi.advanceTimersByTimeAsync(0)
     drawer.frame('ADDED', { name: 'web', replicas: 0 })
-    for (let i = 1; i <= 20; i += 1) {
+    for (let i = 1; i <= 10; i += 1) {
       replicas = i
       drawer.frame('MODIFIED', { name: 'web', replicas: i })
-      await vi.advanceTimersByTimeAsync(40)
+      await vi.advanceTimersByTimeAsync(20)
     }
-    // 800 ms of changes: none read yet at most one a second
+    // 200 ms of changes: the read waits for those close together
     expect(drawer.reads()).toBe(1)
-    await vi.advanceTimersByTimeAsync(1000)
+    await vi.advanceTimersByTimeAsync(800)
     expect(drawer.reads()).toBe(2)
-    expect(drawer.shown()).toEqual({ name: 'web', replicas: 20 })
+    expect(drawer.shown()).toEqual({ name: 'web', replicas: 10 })
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(drawer.reads()).toBe(2)
     drawer.close()
   })
 
@@ -201,9 +214,413 @@ describe('an open drawer follows its object', () => {
     await vi.advanceTimersByTimeAsync(0)
     replicas = 3
     applyWatchMessage(drawer.client, describeKey, { type: 'RESYNC' })
-    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(5000)
     expect(drawer.shown()).toEqual({ name: 'web', replicas: 3 })
     drawer.close()
+  })
+})
+
+// The drawer's two reads as the page makes them: its answer, and the object for the floating chat on the clock only
+// while the watch of the object does not answer. Reads are counted, not intervals.
+function openReads(answer: () => Record<string, unknown>, object: () => Record<string, unknown> = () => ({ metadata: { name: 'web' } })) {
+  const client = new QueryClient()
+  // as the provider does, so a tab that shows again reads what is stale
+  client.mount()
+  const chatKey: QueryKey = ['resource-json', 'Deployment', 'demo', 'web']
+  let reads = 0
+  let chatReads = 0
+  let answering = true
+  const describeObserver = new QueryObserver(client, {
+    queryKey: describeKey,
+    retry: false,
+    queryFn: async () => {
+      reads += 1
+      return answer()
+    },
+  })
+  const chatObserver = new QueryObserver(client, {
+    queryKey: chatKey,
+    retry: false,
+    staleTime: 30_000,
+    refetchInterval: (query) => objectReadInterval(true, query.state.error, answering),
+    queryFn: async () => {
+      chatReads += 1
+      return object()
+    },
+  })
+  const stops = [describeObserver.subscribe(() => {}), chatObserver.subscribe(() => {})]
+  const follower = (objectFollower as (...args: unknown[]) => ReturnType<typeof objectFollower>)(client, describeKey, undefined, [], chatKey)
+  return {
+    client,
+    follower,
+    frame: (type: string, object: unknown) =>
+      applyWatchMessage(client, describeKey, { type: 'DATA', data: { type, object } }, (prev) => prev as any[], follower.onEvent),
+    reads: () => reads,
+    chatReads: () => chatReads,
+    shown: () => describeObserver.getCurrentResult().data,
+    objectShown: () => chatObserver.getCurrentResult().data,
+    setAnswering: (value: boolean) => {
+      answering = value
+      chatObserver.setOptions({ ...chatObserver.options })
+    },
+    close: () => {
+      follower.stop()
+      stops.forEach((stop) => stop())
+      client.unmount()
+    },
+  }
+}
+
+describe('how often an open drawer reads', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+    focusManager.setFocused(undefined)
+  })
+
+  it('reads nothing past the first read of each while its object stays as it is', async () => {
+    const drawer = openReads(() => ({ name: 'web', replicas: 2 }))
+    await vi.advanceTimersByTimeAsync(0)
+    drawer.frame('ADDED', { name: 'web', replicas: 2 })
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(drawer.reads()).toBe(1)
+    expect(drawer.chatReads()).toBe(1)
+    drawer.close()
+  })
+
+  it('reads the answer and the object within a second of one change', async () => {
+    let replicas = 2
+    const drawer = openReads(() => ({ name: 'web', replicas }), () => ({ metadata: { name: 'web' }, spec: { replicas } }))
+    await vi.advanceTimersByTimeAsync(0)
+    drawer.frame('ADDED', { name: 'web', replicas: 2 })
+    replicas = 3
+    drawer.frame('MODIFIED', { name: 'web', replicas: 3 })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(drawer.reads()).toBe(2)
+    expect(drawer.chatReads()).toBe(2)
+    expect(drawer.objectShown()).toEqual({ metadata: { name: 'web' }, spec: { replicas: 3 } })
+    drawer.close()
+  })
+
+  it('reads again as soon as it may for a change after a quiet time, not five seconds after the last read', async () => {
+    let replicas = 2
+    const drawer = openReads(() => ({ name: 'web', replicas }))
+    await vi.advanceTimersByTimeAsync(0)
+    drawer.frame('ADDED', { name: 'web', replicas: 2 })
+    replicas = 3
+    drawer.frame('MODIFIED', { name: 'web', replicas: 3 })
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(drawer.reads()).toBe(2)
+    replicas = 4
+    drawer.frame('MODIFIED', { name: 'web', replicas: 4 })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(drawer.reads()).toBe(3)
+    drawer.close()
+  })
+
+  it('reads the answer once in five seconds at most and the object once in ten under a stream of changes, and both after the last', async () => {
+    let replicas = 2
+    const drawer = openReads(() => ({ name: 'web', replicas }), () => ({ metadata: { name: 'web' }, spec: { replicas } }))
+    await vi.advanceTimersByTimeAsync(0)
+    drawer.frame('ADDED', { name: 'web', replicas: 2 })
+    for (let i = 0; i < 300; i += 1) {
+      replicas = 3 + i
+      drawer.frame('MODIFIED', { name: 'web', replicas })
+      await vi.advanceTimersByTimeAsync(200)
+    }
+    if (process.env.WATCH_BENCH) console.info(`bench a minute of 5 changes a second: answer ${drawer.reads()} reads, object ${drawer.chatReads()} reads`)
+    expect(drawer.reads()).toBeLessThanOrEqual(1 + 13)
+    expect(drawer.chatReads()).toBeLessThanOrEqual(1 + 7)
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(drawer.shown()).toEqual({ name: 'web', replicas })
+    expect(drawer.objectShown()).toEqual({ metadata: { name: 'web' }, spec: { replicas } })
+    drawer.close()
+  })
+
+  it('goes back to reading the object on the clock while the watch does not answer, and stops when it answers again', async () => {
+    const drawer = openReads(() => ({ name: 'web', replicas: 2 }))
+    await vi.advanceTimersByTimeAsync(0)
+    drawer.setAnswering(false)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(drawer.chatReads()).toBeGreaterThanOrEqual(1 + 5)
+    const before = drawer.chatReads()
+    drawer.setAnswering(true)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(drawer.chatReads()).toBe(before)
+    drawer.close()
+  })
+
+  it('reads the object once when it is deleted, which tells the chat it is gone, and not the answer', async () => {
+    let gone = false
+    const drawer = openReads(() => ({ name: 'web', replicas: 2 }), () => {
+      if (gone) throw Object.assign(new Error('gone'), { response: { status: 404 } })
+      return { metadata: { name: 'web' } }
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    drawer.frame('ADDED', { name: 'web', replicas: 2 })
+    gone = true
+    drawer.frame('DELETED', { name: 'web', replicas: 2 })
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(drawer.reads()).toBe(1)
+    expect(drawer.chatReads()).toBe(2)
+    drawer.close()
+  })
+
+  it('reads the object again when the watch lost its place', async () => {
+    let replicas = 2
+    const drawer = openReads(() => ({ name: 'web', replicas }), () => ({ metadata: { name: 'web' }, spec: { replicas } }))
+    await vi.advanceTimersByTimeAsync(0)
+    drawer.frame('ADDED', { name: 'web', replicas: 2 })
+    replicas = 3
+    applyWatchMessage(drawer.client, describeKey, { type: 'RESYNC' }, undefined, undefined, drawer.follower.onResync)
+    await vi.advanceTimersByTimeAsync(7000)
+    expect(drawer.objectShown()).toEqual({ metadata: { name: 'web' }, spec: { replicas: 3 } })
+    expect(drawer.chatReads()).toBe(2)
+    drawer.close()
+  })
+
+  it('reads the object again when what it holds was read before this watch opened', async () => {
+    const client = new QueryClient()
+    const chatKey: QueryKey = ['resource-json', 'Deployment', 'demo', 'web']
+    let reads = 0
+    client.setQueryData(chatKey, { metadata: { name: 'web' }, spec: { replicas: 1 } })
+    await vi.advanceTimersByTimeAsync(1)
+    const stop = new QueryObserver(client, {
+      queryKey: chatKey,
+      staleTime: 30_000,
+      queryFn: async () => {
+        reads += 1
+        return { metadata: { name: 'web' }, spec: { replicas: 2 } }
+      },
+    }).subscribe(() => {})
+    const follower = (objectFollower as (...args: unknown[]) => ReturnType<typeof objectFollower>)(client, describeKey, undefined, [], chatKey)
+    follower.onEvent({ type: 'ADDED', object: { name: 'web', replicas: 2 } })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(reads).toBe(1)
+    expect(client.getQueryData(chatKey)).toEqual({ metadata: { name: 'web' }, spec: { replicas: 2 } })
+    follower.stop()
+    stop()
+  })
+
+  // A list already open has said what it opens with: no frame comes to tell the drawer anything.
+  describe('joining a list already open', () => {
+    function joinAfter(age: number) {
+      const client = new QueryClient()
+      const chatKey: QueryKey = ['resource-json', 'Deployment', 'demo', 'web']
+      let reads = 0
+      let chatReads = 0
+      client.setQueryData(describeKey, { name: 'web', replicas: 1 })
+      client.setQueryData(chatKey, { metadata: { name: 'web' } })
+      return vi.advanceTimersByTimeAsync(age).then(() => {
+        const stops = [
+          new QueryObserver(client, { queryKey: describeKey, staleTime: 60_000, queryFn: async () => { reads += 1; return { name: 'web', replicas: 2 } } }).subscribe(() => {}),
+          new QueryObserver(client, { queryKey: chatKey, staleTime: 60_000, queryFn: async () => { chatReads += 1; return { metadata: { name: 'web' } } } }).subscribe(() => {}),
+        ]
+        const follower = (objectFollower as (...args: unknown[]) => ReturnType<typeof objectFollower>)(client, describeKey, undefined, [], chatKey)
+        return { client, follower, reads: () => reads, chatReads: () => chatReads, close: () => { follower.stop(); stops.forEach((stop) => stop()) } }
+      })
+    }
+
+    it('reads once what it holds from before it joined, as a frame opening a watch of its own would have it do', async () => {
+      const drawer = await joinAfter(1)
+      drawer.follower.onJoinedList()
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(drawer.reads()).toBe(1)
+      expect(drawer.chatReads()).toBe(1)
+      expect(drawer.client.getQueryData(describeKey)).toEqual({ name: 'web', replicas: 2 })
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(drawer.reads()).toBe(1)
+      drawer.close()
+    })
+
+    it('reads nothing the drawer is reading already, or anything once it is closed', async () => {
+      const reading = await joinAfter(1)
+      reading.follower.onJoinedList()
+      void reading.client.fetchQuery({ queryKey: describeKey, queryFn: () => new Promise((resolve) => setTimeout(() => resolve({ name: 'web', replicas: 3 }), 2000)) })
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(reading.reads()).toBe(0)
+      reading.close()
+
+      const closed = await joinAfter(1)
+      closed.follower.onJoinedList()
+      closed.close()
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(closed.reads()).toBe(0)
+      expect(closed.chatReads()).toBe(0)
+    })
+
+    it('the hook joins only a list it shares, and hands the first read to the follower', () => {
+      expect(followHookSrc).toContain('if (openList) current.onJoinedList()')
+    })
+  })
+
+  it('a hidden tab reads nothing for its changes and reads once when it shows again', async () => {
+    let replicas = 2
+    const drawer = openReads(() => ({ name: 'web', replicas }), () => ({ metadata: { name: 'web' }, spec: { replicas } }))
+    await vi.advanceTimersByTimeAsync(0)
+    drawer.frame('ADDED', { name: 'web', replicas: 2 })
+    focusManager.setFocused(false)
+    for (let i = 0; i < 100; i += 1) {
+      replicas = 3 + i
+      drawer.frame('MODIFIED', { name: 'web', replicas })
+      await vi.advanceTimersByTimeAsync(600)
+    }
+    expect(drawer.reads()).toBe(1)
+    expect(drawer.chatReads()).toBe(1)
+    // what a frame says still reaches the answer, so the tab shows it the moment it comes back
+    expect(drawer.shown()).toEqual({ name: 'web', replicas })
+
+    focusManager.setFocused(true)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(drawer.reads()).toBe(2)
+    expect(drawer.chatReads()).toBe(2)
+    expect(drawer.objectShown()).toEqual({ metadata: { name: 'web' }, spec: { replicas } })
+    drawer.close()
+  })
+
+  it('a read that started before an update does not bring the older value back', async () => {
+    let replicas = 1
+    let events = ['first']
+    const client = new QueryClient()
+    const observer = new QueryObserver(client, {
+      queryKey: describeKey,
+      retry: false,
+      queryFn: () =>
+        new Promise((resolve) => {
+          const at = { name: 'web', replicas, events }
+          setTimeout(() => resolve(at), 400)
+        }),
+    })
+    const unsubscribe = observer.subscribe(() => {})
+    await vi.advanceTimersByTimeAsync(400)
+    const follower = objectFollower(client, describeKey)
+    follower.onEvent({ type: 'ADDED', object: { name: 'web', replicas: 1 } })
+
+    events = ['second']
+    void client.invalidateQueries({ queryKey: describeKey })
+    await vi.advanceTimersByTimeAsync(100)
+    replicas = 2
+    follower.onEvent({ type: 'MODIFIED', object: { name: 'web', replicas: 2 } })
+    expect((observer.getCurrentResult().data as { replicas: number }).replicas).toBe(2)
+    // the read under way answers replicas 1, with its newer events
+    await vi.advanceTimersByTimeAsync(300)
+    expect(observer.getCurrentResult().data).toEqual({ name: 'web', replicas: 2, events: ['second'] })
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(observer.getCurrentResult().data).toEqual({ name: 'web', replicas: 2, events: ['second'] })
+    follower.stop()
+    unsubscribe()
+  })
+
+  it('the drawer reads its object on the clock only while the watch of that object does not answer', () => {
+    expect(drawerSrc).toContain('refetchInterval: (query) => objectReadInterval(followsForChat, query.state.error, objectWatchAnswers),')
+    expect(drawerSrc).toContain('<DrawerObjectReadContext.Provider value={objectRead}>')
+    expect(followHookSrc).toContain('useContext(DrawerObjectReadContext)')
+    expect(followHookSrc).toContain('onAnswering: (answers) => objectRead?.setWatchAnswers(answers),')
+  })
+})
+
+// What only the answer holds waits for its read: within a second of a change, within five while changes keep coming.
+// Written by kind, so a new field that waits is seen here.
+const READ_BRINGS: Record<string, string[]> = {
+  deployments: ['conditions', 'pod_template', 'replicas_status.current'],
+  statefulsets: ['pod_template'],
+  daemonsets: ['pod_template'],
+  replicasets: [],
+  jobs: ['conditions', 'start_time', 'suspend'],
+  cronjobs: ['active_jobs', 'time_zone'],
+  horizontalpodautoscalers: ['conditions', 'last_scale_time', 'metrics_status'],
+  clusterroles: ['rules'],
+  clusterrolebindings: [],
+  rolebindings: [],
+  priorityclasses: [],
+  runtimeclasses: ['overhead', 'scheduling'],
+  validatingwebhookconfigurations: ['webhooks'],
+  mutatingwebhookconfigurations: ['webhooks'],
+  limitranges: [],
+  resourcequotas: ['spec_hard'],
+  poddisruptionbudgets: ['match_expressions', 'max_unavailable', 'min_available', 'unhealthy_pod_eviction_policy'],
+  customresourcedefinitions: ['versions'],
+}
+
+type AnswerCase = { name: string; resource: string; before: Record<string, unknown>; frame: Record<string, unknown>; after: Record<string, unknown> }
+
+describe('what a live update changes in an open drawer before its answer is read', () => {
+  const show = (c: AnswerCase) => {
+    const client = new QueryClient()
+    client.setQueryData(describeKey, c.before)
+    const follower = objectFollower(client, describeKey)
+    follower.onEvent({ type: 'MODIFIED', object: c.frame })
+    follower.stop()
+    return client.getQueryData(describeKey) as Record<string, unknown>
+  }
+  const flat = (value: Record<string, unknown>) => {
+    const cells: Record<string, string> = {}
+    for (const [key, cell] of Object.entries(value)) {
+      if (key === 'replicas_status' || key === 'daemonset_status') {
+        for (const [part, number] of Object.entries(cell as Record<string, unknown>)) cells[`${key}.${part}`] = JSON.stringify(number)
+      } else {
+        cells[key] = JSON.stringify(cell)
+      }
+    }
+    return cells
+  }
+
+  for (const c of answerCases as unknown as AnswerCase[]) {
+    it(`${c.resource}: ${c.name}`, () => {
+      const shown = flat(show(c))
+      const after = flat(c.after)
+      // a field of the row that no answer has draws nothing
+      const onlyTheRow = (key: string) => key in c.frame && !(key in c.before) && !(key in c.after)
+      const lagging = Object.keys({ ...shown, ...after }).filter((key) => shown[key] !== after[key] && !onlyTheRow(key)).sort()
+      expect(lagging.filter((key) => !READ_BRINGS[c.resource].includes(key))).toEqual([])
+    })
+  }
+
+  it('keeps every field of the answer an update does not name', () => {
+    const client = new QueryClient()
+    const answer = { name: 'web', replicas: 2, events: [{ reason: 'Scaled' }], conditions: [{ type: 'Available' }], pod_template: { containers: [] } }
+    client.setQueryData(describeKey, answer)
+    const follower = objectFollower(client, describeKey)
+    follower.onEvent({ type: 'MODIFIED', object: { name: 'web', replicas: 3 } })
+    follower.stop()
+    expect(client.getQueryData(describeKey)).toEqual({ ...answer, replicas: 3 })
+  })
+
+  it('does not write a default of the row over an answer that says there is none', () => {
+    const client = new QueryClient()
+    const answer = { name: 'job', completions: null, status: 'Running' }
+    client.setQueryData(describeKey, answer)
+    const follower = objectFollower(client, describeKey)
+    follower.onEvent({ type: 'ADDED', object: { name: 'job', completions: 1, status: 'Running' } })
+    expect(client.getQueryData(describeKey)).toEqual(answer)
+    follower.stop()
+  })
+
+  it('takes nothing of another shape from a row the server could not convert', () => {
+    const client = new QueryClient()
+    const answer = { name: 'web', status: 'Running', replicas: 2, conditions: [{ type: 'Available' }] }
+    client.setQueryData(describeKey, answer)
+    const follower = objectFollower(client, describeKey)
+    follower.onEvent({ type: 'MODIFIED', object: { name: 'web', status: { replicas: 3 }, spec: { replicas: 3 } } })
+    follower.stop()
+    const shown = client.getQueryData(describeKey) as Record<string, unknown>
+    expect(shown.status).toBe('Running')
+    expect(shown.conditions).toEqual([{ type: 'Available' }])
+  })
+
+  it('moves the Replicas section with the counts it mirrors', () => {
+    const client = new QueryClient()
+    client.setQueryData(describeKey, {
+      name: 'web', replicas: 2, ready_replicas: 2, updated_replicas: 2, available_replicas: 2,
+      replicas_status: { desired: 2, current: 2, ready: 2, updated: 2, available: 2 },
+    })
+    const follower = objectFollower(client, describeKey)
+    follower.onEvent({ type: 'MODIFIED', object: { name: 'web', replicas: 3, ready_replicas: 2, updated_replicas: 1, available_replicas: 2 } })
+    follower.stop()
+    expect((client.getQueryData(describeKey) as { replicas_status: unknown }).replicas_status).toEqual({ desired: 3, current: 2, ready: 2, updated: 1, available: 2 })
   })
 })
 
@@ -252,9 +669,12 @@ describe('a table in a drawer that reads what its object decides', () => {
 
   beforeEach(() => {
     vi.useFakeTimers()
+    // the last moment a read may start, so what is on screen just then can be said
+    vi.spyOn(Math, 'random').mockReturnValue(0.9999)
   })
   afterEach(() => {
     vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
   it('reads it again when the object changes, keeping the last rows on screen until the new ones come', async () => {
@@ -344,7 +764,7 @@ describe('a table in a drawer that reads what its object decides', () => {
     await vi.advanceTimersByTimeAsync(0)
     rows = ['pod-b']
     applyWatchMessage(drawer.client, describeKey, { type: 'RESYNC' }, undefined, undefined, drawer.follower.onResync)
-    await vi.advanceTimersByTimeAsync(1001)
+    await vi.advanceTimersByTimeAsync(6001)
     expect(drawer.tableReads()).toBe(2)
     expect(drawer.rowsShown()).toEqual(['pod-b'])
     drawer.close()

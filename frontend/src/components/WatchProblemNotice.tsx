@@ -12,7 +12,8 @@ export default function WatchProblemNotice() {
   const problem = useWatchProblem(useForbiddenLists())
   const text = problem && {
     forbidden: t('layout.watchProblem.forbidden', 'The cluster refuses live updates for part of this page. Rows may be out of date; refresh to read them again.'),
-    limit: t('layout.watchProblem.limit', 'Too many lists are following the cluster for live updates. Rows may be out of date; close other tabs or refresh.'),
+    limit: t('layout.watchProblem.limit', 'This tab follows as many lists as one tab may. The rest are read about once a minute and go back to live updates by themselves when this tab has room.'),
+    server_limit: t('layout.watchProblem.serverLimit', 'The server follows as many lists as it can. The rows on this page are read about once a minute and go back to live updates by themselves when it has room.'),
     unreachable: t('layout.watchProblem.unreachable', 'The cluster cannot be reached, so live updates are paused. They come back by themselves.'),
     failed: t('layout.watchProblem.failed', 'Live updates are paused because the cluster answered with an error. They come back by themselves.'),
     scope: t('layout.watchProblem.scope', 'Your access is limited to namespaces, so objects of the whole cluster on this page do not update live. Rows may be out of date; refresh to read them again.'),
