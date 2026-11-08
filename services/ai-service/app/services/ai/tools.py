@@ -1475,7 +1475,12 @@ ADMIN_READ_TOOLS: List[Dict] = [
                 "no key. active names the model the chat runs on and providers what this install cannot run, with why. "
                 "It never answers an API key, the name of the variable holding one, a header, a certificate or an address, which stay on the screen, as do adding, changing and testing a model."
             ),
-            "parameters": {"type": "object", "properties": {}},
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "enabled_only": {"type": "boolean", "description": "Only the models that are switched on (default every model)"},
+                },
+            },
         },
     },
     {
@@ -1484,8 +1489,8 @@ ADMIN_READ_TOOLS: List[Dict] = [
             "name": "session_recordings",
             "description": (
                 "That a terminal session was recorded and its details (Admin → Session recordings; permission admin.sessions.read), newest first and of every cluster unless "
-                "cluster_id names one: kind (exec or node-shell), user_email, cluster, namespace, target, container, started_at, ended_at, bytes, uploaded_bytes (what an interrupted recording "
-                "kept), parts, status (recording, uploading, uploaded, interrupted), truncated and last_error. enabled says whether terminals are recorded now. Its details, never what the terminal "
+                "cluster_id names one: kind (exec or node-shell), user_email, cluster, namespace, target, container, started_at, ended_at, kept_bytes (the size the screen shows: what is kept of it), "
+                "bytes (what was recorded), uploaded_bytes, parts, status (recording, uploading, uploaded, interrupted), truncated and last_error. enabled says whether terminals are recorded now. Its details, never what the terminal "
                 "showed: that opens only on the screen, where each view is audited. There is no total: next_offset says there is more."
             ),
             "parameters": {
@@ -1706,6 +1711,55 @@ K8S_WRITE_TOOLS: List[Dict] = [
                     },
                 },
                 "required": ["pod_name", "command"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "k8s_cordon_node",
+            "description": (
+                "Cordon a node so nothing new is scheduled on it, or uncordon it: the Cordon button of the Node window (permission resource.node.cordon). "
+                "It evicts nothing; draining stays on the screen."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "resource_name": {"type": "string", "description": "Node name"},
+                    "uncordon": {"type": "boolean", "description": "true lets the node take pods again (default false: cordon)"},
+                },
+                "required": ["resource_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "k8s_cronjob_suspend",
+            "description": "Suspend a CronJob or let it run again: the Suspend button of the CronJob window (permission resource.cronjob.suspend). Jobs already running go on.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "resource_name": {"type": "string", "description": "CronJob name"},
+                    "namespace": {"type": "string", "description": "Namespace of the CronJob"},
+                    "suspend": {"type": "boolean", "description": "true suspends it, false lets it run again"},
+                },
+                "required": ["resource_name", "namespace", "suspend"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "k8s_cronjob_trigger",
+            "description": "Run a CronJob now as a new Job, whatever its schedule says: the Run now button of the CronJob window (permission resource.cronjob.trigger). Answers the Job's name.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "resource_name": {"type": "string", "description": "CronJob name"},
+                    "namespace": {"type": "string", "description": "Namespace of the CronJob"},
+                },
+                "required": ["resource_name", "namespace"],
             },
         },
     },

@@ -31,6 +31,7 @@ var writeTools = map[string]struct{}{
 	"k8s_apply_manifest": {}, "k8s_create_resource": {}, "k8s_delete_resource": {}, "k8s_patch_resource": {},
 	"k8s_annotate_resource": {}, "k8s_remove_annotation": {}, "k8s_label_resource": {}, "k8s_remove_label": {},
 	"k8s_scale": {}, "k8s_rollout": {}, "k8s_execute_command": {},
+	"k8s_cordon_node": {}, "k8s_cronjob_suspend": {}, "k8s_cronjob_trigger": {},
 }
 
 func requiresApproval(tool string) bool {
@@ -91,6 +92,29 @@ var clusterWideTools = map[string]struct{}{
 	"investigations": {}, "ai_models": {}, "session_recordings": {},
 	// The Alerts inbox is for whoever reads the cluster as a whole.
 	"alert_investigate": {}, "alerts_inbox": {},
+	// A node belongs to the whole cluster, as its route says.
+	"k8s_cordon_node": {},
+}
+
+// kubeastRecordTools read Kubeast's own records: their routes ask an all-cluster permission and never look at a grant's
+// namespaces, so whoever holds it reads them from any cluster, as on their screens. ai-service keeps the same list
+// (permissions.KUBEAST_RECORD_TOOLS).
+var kubeastRecordTools = map[string]struct{}{
+	"audit_search": {}, "access_review": {}, "ai_usage": {}, "access_requests": {}, "audit_integrity": {},
+	"investigations": {}, "ai_models": {}, "session_recordings": {},
+}
+
+func holdsRecordsOnAllClusters(payload auth.TokenPayload, tool string, args map[string]interface{}) bool {
+	if _, record := kubeastRecordTools[tool]; !record {
+		return false
+	}
+	required, _ := toolAppPermissions(tool, args)
+	for _, permission := range required {
+		if !payload.HasPermission(permission) {
+			return false
+		}
+	}
+	return len(required) > 0
 }
 
 // namespaceAwareTools apply a namespace-scoped grant themselves — the handler
@@ -113,7 +137,7 @@ func namespaceGate(payload auth.TokenPayload, clusterID, tool string, args map[s
 		clusterID = defaultClusterID
 	}
 	scope := payload.Namespaces[clusterID]
-	if len(scope) == 0 {
+	if len(scope) == 0 || holdsRecordsOnAllClusters(payload, tool, args) {
 		return nil
 	}
 	if _, wide := clusterWideTools[tool]; wide {

@@ -23,7 +23,7 @@ import logging
 import os
 import time
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 import anyio
 import jsonschema
@@ -105,7 +105,8 @@ READ_TOOLS: Dict[str, Tool] = _read_tools()
 # that nor ai.mcp.use, one with a Write ceiling not the exec permission. No approval step: the
 # user's own permissions (or a granted access request) and the Argo CD guard
 # apply, and the annotations tell the client which calls change the cluster.
-WRITE_NON_DESTRUCTIVE = frozenset({"k8s_annotate_resource", "k8s_remove_annotation", "k8s_label_resource", "k8s_remove_label"})
+WRITE_NON_DESTRUCTIVE = frozenset({"k8s_annotate_resource", "k8s_remove_annotation", "k8s_label_resource", "k8s_remove_label",
+                                   "k8s_cordon_node", "k8s_cronjob_suspend", "k8s_cronjob_trigger"})
 
 
 def _write_tools() -> Dict[str, Tool]:
@@ -294,12 +295,18 @@ def _tools_allowed_in(payload: TokenPayload, cluster: str) -> List[str]:
     return names
 
 
+def _callable_anywhere(payload: TokenPayload, names: Iterable[str]) -> List[str]:
+    """The tools a call could pass in at least one cluster of the token's matrix: the list says what a call answers."""
+    clusters = [c for c in payload.matrix if c != "*"] or ["*"]
+    return [name for name in names if feature_gate.permitted_anywhere(name, payload)
+            and any(_may_use_mcp(payload, c) and token_may_call(payload, c, name) for c in clusters)]
+
+
 def _write_tools_anywhere(payload: TokenPayload) -> List[str]:
     """Write tools the token may call in at least one cluster of its matrix."""
     if not mcp_write_tools_enabled():
         return []
-    clusters = [c for c in payload.matrix if c != "*"] or ["*"]
-    return [name for name in WRITE_TOOLS if any(token_may_call(payload, c, name) for c in clusters)]
+    return _callable_anywhere(payload, WRITE_TOOLS)
 
 
 def _http_meta(context: Optional[Context]) -> Dict[str, str]:
@@ -342,8 +349,8 @@ class KubeastMCPServer(MCPServer):
         if not _may_use_mcp(payload):
             # Nothing to call yet; with write tools on the agent may still ask for a role.
             return [REQUEST_ACCESS] if mcp_write_tools_enabled() else []
-        # The Admin-only read tool is listed only for a token that holds its global permission.
-        tools = [LIST_CLUSTERS, *(t for n, t in {**READ_TOOLS, **ACTION_TOOLS}.items() if feature_gate.permitted_anywhere(n, payload)), *(WRITE_TOOLS[n] for n in _write_tools_anywhere(payload))]
+        reads = {**READ_TOOLS, **ACTION_TOOLS}
+        tools = [LIST_CLUSTERS, *(reads[n] for n in _callable_anywhere(payload, reads)), *(WRITE_TOOLS[n] for n in _write_tools_anywhere(payload))]
         if mcp_write_tools_enabled():
             tools.append(REQUEST_ACCESS)
         return tools

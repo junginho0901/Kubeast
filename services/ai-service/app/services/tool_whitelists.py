@@ -94,6 +94,9 @@ WRITE_TOOL_NAMES: frozenset[str] = frozenset(
         "k8s_scale",
         "k8s_rollout",
         "k8s_execute_command",
+        "k8s_cordon_node",
+        "k8s_cronjob_suspend",
+        "k8s_cronjob_trigger",
     }
 )
 

@@ -110,51 +110,43 @@ GATES: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
     "logfiles": _log_files_on,
 }
 
-# tool name → (scope, permission) the screen's route asks for when the tool calls it.
-# Without it the call could only answer forbidden, so the tool is not offered.
+# tool name → (scope, the permission that names it) of the screen's route. Without what the route asks the call could
+# only answer forbidden, so the tool is not offered. screen_permissions decides, every permission of the tool together.
 # "global" = the all-cluster entry (admin.*), "cluster" = granted in the active cluster.
 REQUIRED_PERMISSIONS: Dict[str, tuple[str, str]] = {
     **{tool: ("global" if permission.startswith("admin.") else "cluster", permission)
        for tool, permission in screen_permissions.fixed_permissions().items() if tool not in WRITE_TOOL_NAMES},
-    # A server dry run needs the write's RBAC; the Write role's edit permission stands for it.
+    # A server dry run needs the write's RBAC; edit on the kind a manifest names stands for it, as the call asks.
     "k8s_diff": ("cluster", "resource.*.edit"),
 }
 
 
-def _held_globally(perm: str, token) -> bool:
+def _holds(perm: str, token, cluster: Optional[str]) -> bool:
     global_key = screen_permissions.ALSO_GLOBAL.get(perm)
-    return bool(global_key and token.has_permission(global_key))
-
-
-def permitted(name: str, token, cluster: Optional[str]) -> bool:
-    """The token holds what k8s-service will ask for; no token (legacy role mode) keeps the tool."""
-    req = REQUIRED_PERMISSIONS.get(name)
-    if req is None or token is None:
+    if global_key and token.has_permission(global_key):
         return True
-    scope, perm = req
-    if _held_globally(perm, token):
-        return True
-    if scope == "global":
+    if perm.startswith("admin."):
         return bool(token.has_permission(perm))
     return bool(token.has_permission_for_cluster(perm, cluster))
 
 
+def permitted(name: str, token, cluster: Optional[str]) -> bool:
+    """The token holds what k8s-service will ask for; no token (legacy role mode) keeps the tool."""
+    if name not in REQUIRED_PERMISSIONS or token is None:
+        return True
+    return screen_permissions.may_be_called(lambda perm: _holds(perm, token, cluster), name)
+
+
 def permitted_anywhere(name: str, token) -> bool:
     """For a cluster-agnostic list (MCP tools/list): a global requirement must be
-    held; a per-cluster one in at least one cluster of the token's matrix
-    (list_clusters then decides per cluster)."""
-    req = REQUIRED_PERMISSIONS.get(name)
-    if req is None or token is None:
+    held; a per-cluster one in at least one cluster of the token's matrix, all of
+    the tool's in that one (list_clusters then decides per cluster)."""
+    if name not in REQUIRED_PERMISSIONS or token is None:
         return True
-    scope, perm = req
-    if _held_globally(perm, token):
-        return True
-    if scope == "global":
-        return bool(token.has_permission(perm))
     clusters = [c for c in (getattr(token, "matrix", None) or {}) if c != "*"]
     if not clusters:
-        return bool(token.has_permission_for_cluster(perm, None))
-    return any(token.has_permission_for_cluster(perm, c) for c in clusters)
+        return permitted(name, token, None)
+    return any(permitted(name, token, c) for c in clusters)
 
 _cache: Dict[str, tuple[float, Dict[str, Any]]] = {}
 

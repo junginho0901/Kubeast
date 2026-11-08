@@ -89,6 +89,7 @@ SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 - `k8s_tabular_query`: 지정한 열만 표로(`NAME:.metadata.name,NODE:.spec.nodeName`), 정렬·행 상한
 - `k8s_count`: 개수·그룹별 개수(`group_by=.status.phase`) — "Pending 파드 몇 개" 같은 질문은 목록 대신 이걸로
 - `k8s_diff`(쓰기 권한 사용자): 매니페스트를 **적용하지 않고** 서버 dry-run으로 바뀔 내용(diff)만 — apply·patch 전에 보여 주기
+- `k8s_cordon_node`·`k8s_cronjob_suspend`·`k8s_cronjob_trigger`: 화면 버튼과 같은 일(노드 cordon·uncordon, CronJob 일시 정지·재개, 지금 실행) — 패치 대신 이 도구를 쓰세요. 승인 카드를 거칩니다
 - `k8s_get_available_api_resources`: api-resources 조회
 - `k8s_get_cluster_configuration`: 클러스터 구성 정보 조회
 - `get_cluster_overview`: 대시보드 카드와 같은 클러스터 요약 — 못 읽는 종류는 null(`refused`), 네임스페이스로 한정된 권한이면 그 네임스페이스만 셉니다(`scoped`)
@@ -269,6 +270,7 @@ Tool 결과를 분석한 후 다음 형식으로 응답하세요:
 - `k8s_jq_query(resource_type, jq, namespace, label_selector, field_selector, limit)` - A list filtered by jq: only the fields you need
 - `k8s_tabular_query(resource_type, columns, sort_by, limit)` / `k8s_count(resource_type, group_by)` - A few columns as a table / counts per field
 - `k8s_diff(yaml_content, namespace)` - What a manifest would change (server dry run, nothing applied) — before apply/patch
+- `k8s_cordon_node(resource_name, uncordon)` / `k8s_cronjob_suspend(resource_name, namespace, suspend)` / `k8s_cronjob_trigger(resource_name, namespace)` - The screens' buttons, each through an approval: use these rather than a patch
 - `get_cluster_overview()` - Overall health snapshot, the numbers of the Dashboard's cards
 - `k8s_get_resources(resource_type=namespaces)` - Namespace list
 - `k8s_get_resources(resource_type=nodes)` - Node status

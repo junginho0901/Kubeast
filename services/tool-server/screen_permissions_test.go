@@ -207,6 +207,10 @@ func screenPermissionCases() []screenCase {
 	rollout("", "resource.statefulset.edit")
 	rollout("anything", "resource.statefulset.edit")
 	add("k8s_execute_command", args{"pod_name": "web", "command": []interface{}{"ls"}}, "resource.pod.exec")
+	add("k8s_cordon_node", args{"resource_name": "n1"}, "resource.node.cordon")
+	add("k8s_cordon_node", args{"resource_name": "n1", "uncordon": true}, "resource.node.cordon")
+	add("k8s_cronjob_suspend", args{"resource_name": "x", "namespace": "shop", "suspend": true}, "resource.cronjob.suspend")
+	add("k8s_cronjob_trigger", args{"resource_name": "x", "namespace": "shop"}, "resource.cronjob.trigger")
 
 	cm := "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a\n"
 	secret := "apiVersion: v1\nkind: Secret\nmetadata:\n  name: b\n"
@@ -408,7 +412,7 @@ func aiToolPerms(tools []string) []string {
 // Written out as a rule, not read from the table: Write holds every call but what is Admin-only on the screens.
 func writeRoleHolds(c screenCase) bool {
 	for _, perm := range c.Want {
-		if perm == "resource.pod.exec" || perm == "resource.workload.rollback" || perm == "resource.alert.investigate" || perm == "resource.hygiene.scan" || strings.HasPrefix(perm, "admin.") {
+		if perm == "resource.pod.exec" || perm == "resource.workload.rollback" || perm == "resource.alert.investigate" || perm == "resource.hygiene.scan" || perm == "resource.node.cordon" || strings.HasPrefix(perm, "admin.") {
 			return false
 		}
 	}

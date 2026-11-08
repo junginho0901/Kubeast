@@ -23,6 +23,38 @@ async function roleId(request: APIRequestContext, admin: string, name: string): 
 }
 
 test.describe('custom role in the UI', () => {
+  test('the role window says a menu key only hides, and when a save ends the sessions of those holding the role', async ({ page, request }) => {
+    test.setTimeout(60_000)
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const roleName = `e2e-notice-${Date.now().toString(36)}`
+    const role = await request.post('/api/v1/auth/admin/roles', { headers: bearer(admin), data: { name: roleName, description: 'e2e', permissions: ['menu.workloads', 'resource.*.read'] } })
+    expect(role.status(), await role.text()).toBe(201)
+    const createdRole = (await role.json()).id
+    try {
+      await page.goto('/admin/roles')
+      await page.locator('tr', { hasText: roleName }).getByTitle(/^(Edit|편집|수정)$/).click()
+      const notice = page.getByTestId('role-session-notice')
+      const box = (key: RegExp) => page.locator('label').filter({ has: page.locator('span', { hasText: key }) }).locator('input[type="checkbox"]')
+      await expect(page.getByTestId('role-menu-note')).toHaveText(/Hides the group in the sidebar|사이드바에서 그룹을 가립니다/)
+      await expect(notice, 'nothing changed yet').toHaveCount(0)
+
+      await box(/^resource\.\*\.create$/).check()
+      await expect(notice, 'an added permission ends nothing').toHaveCount(0)
+      await box(/^resource\.\*\.read$/).uncheck()
+      await expect(notice).toHaveText(/ends the sessions|세션과 API 키 토큰이 끝나/)
+      await box(/^resource\.\*\.read$/).check()
+      await expect(notice).toHaveCount(0)
+
+      const name = page.locator('input:not([type="checkbox"])').first()
+      await name.fill(roleName.toUpperCase())
+      await expect(notice, 'the same group').toHaveCount(0)
+      await name.fill(`${roleName}-other`)
+      await expect(notice).toHaveText(/ends the sessions|세션과 API 키 토큰이 끝나/)
+    } finally {
+      await request.delete(`/api/v1/auth/admin/roles/${createdRole}`, { headers: bearer(admin), failOnStatusCode: false })
+    }
+  })
+
   test('menu.* hides the other groups; the overview is refused until the cluster binds the group', async ({ page, request }) => {
     test.setTimeout(90_000)
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)

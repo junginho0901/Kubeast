@@ -127,6 +127,13 @@ auth:
   impersonation:
     enabled: true
     clusterRoles: true
+    # Goes before a person's email in the user name a cluster sees, e.g. "kubeast:user:".
+    # Then a binding a cluster made of that address for its own sign-in (OIDC, IAM) is
+    # not opened by a Kubeast account of the same address. Groups do not change. Empty
+    # by default: when set, every binding of a User to an address stops applying to
+    # Kubeast's requests and the cluster's audit log shows the longer name, so move
+    # those bindings to groups first (docs/cluster-requirements.md §1).
+    userPrefix: ""
     # A custom Kubeast role (anything but Read/Write/Admin) granted on a
     # cluster acts there as group kubeast:role:<slug> (lowercase; any character
     # other than a-z 0-9 . _ - becomes "-"). The impersonator ClusterRole allows

@@ -157,6 +157,9 @@ var toolScreenTable = map[string]toolRule{
 	"k8s_scale":             forResourceType("edit"),
 	"k8s_rollout":           rolloutRule,
 	"k8s_execute_command":   always("resource.pod.exec"),
+	"k8s_cordon_node":       always("resource.node.cordon"),
+	"k8s_cronjob_suspend":   always("resource.cronjob.suspend"),
+	"k8s_cronjob_trigger":   always("resource.cronjob.trigger"),
 	"k8s_create_resource":   forManifest("create"),
 	// A screen's apply patches what exists; what kubectl apply would create is applyCreateGate's.
 	"k8s_apply_manifest": forManifest("edit"),

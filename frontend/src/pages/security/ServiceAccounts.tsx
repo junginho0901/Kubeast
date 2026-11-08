@@ -12,6 +12,7 @@ import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { useWritesRefusedIn } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
@@ -51,7 +52,8 @@ export default function ServiceAccounts() {
         : api.getServiceAccounts(selectedNamespace, false),
   })
   const { has } = usePermission()
-  const canCreate = has('resource.serviceaccount.create')
+  const writesRefused = useWritesRefusedIn()
+  const canCreate = has('resource.serviceaccount.create') && !writesRefused(selectedNamespace)
 
   useKubeWatchList({
     enabled: true,

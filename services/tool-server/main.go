@@ -490,6 +490,21 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Description: "Execute a command inside a pod container (kubectl exec)",
 		Handler:     handleExecuteCommand,
 	})
+	register(ToolDefinition{
+		Name:        "k8s_cordon_node",
+		Description: "Cordon or uncordon a node (the Cordon button's route)",
+		Handler:     handleCordonNode,
+	})
+	register(ToolDefinition{
+		Name:        "k8s_cronjob_suspend",
+		Description: "Suspend a CronJob or let it run again (the Suspend button's route)",
+		Handler:     handleCronJobSuspend,
+	})
+	register(ToolDefinition{
+		Name:        "k8s_cronjob_trigger",
+		Description: "Run a CronJob now (the Run now button's route)",
+		Handler:     handleCronJobTrigger,
+	})
 
 	return registry
 }

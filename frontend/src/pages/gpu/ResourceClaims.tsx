@@ -8,6 +8,7 @@ import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { useWritesRefusedIn } from '@/hooks/useCanCreate'
 import { useForbidden } from '@/services/forbiddenStore'
 import { useKindServed } from '@/services/listStatusStore'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
@@ -52,7 +53,8 @@ export default function ResourceClaims() {
   // a list the cluster refused counts nothing: the cards say "-"
   const forbidden = useForbidden('resourceclaims')
   const served = useKindServed('resourceclaims')
-  const canCreate = has('resource.resourceclaim.create') && served
+  const writesRefused = useWritesRefusedIn()
+  const canCreate = has('resource.resourceclaim.create') && served && !writesRefused(selectedNamespace)
 
   useKubeWatchList({
     enabled: !forbidden,

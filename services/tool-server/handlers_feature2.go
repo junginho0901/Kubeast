@@ -40,6 +40,15 @@ const (
 
 // k8sServicePost is k8sServiceGet with a JSON body (the Helm diff).
 func k8sServicePost(ctx context.Context, headers http.Header, path string, q url.Values, body interface{}) (int, []byte, error) {
+	return k8sServiceWithBody(ctx, headers, http.MethodPost, path, q, body, "")
+}
+
+// k8sServiceSend presses a route that writes. The route's audit row keeps where it came from: a tool, not the window.
+func k8sServiceSend(ctx context.Context, headers http.Header, method, path string, body interface{}) (int, []byte, error) {
+	return k8sServiceWithBody(ctx, headers, method, path, nil, body, "kubeast-tool-server")
+}
+
+func k8sServiceWithBody(ctx context.Context, headers http.Header, method, path string, q url.Values, body interface{}, userAgent string) (int, []byte, error) {
 	if q == nil {
 		q = url.Values{}
 	}
@@ -48,11 +57,14 @@ func k8sServicePost(ctx context.Context, headers http.Header, path string, q url
 	if err != nil {
 		return 0, nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, k8sServiceURL+"/api/v1"+path+"?"+q.Encode(), bytes.NewReader(raw))
+	req, err := http.NewRequestWithContext(ctx, method, k8sServiceURL+"/api/v1"+path+"?"+q.Encode(), bytes.NewReader(raw))
 	if err != nil {
 		return 0, nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if userAgent != "" {
+		req.Header.Set("User-Agent", userAgent)
+	}
 	if auth := headers.Get("Authorization"); auth != "" {
 		req.Header.Set("Authorization", auth)
 	}

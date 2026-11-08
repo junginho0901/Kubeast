@@ -75,6 +75,10 @@ func authServiceRead(ctx context.Context, headers http.Header, path string, q ur
 }
 
 func authServiceReadAt(ctx context.Context, headers http.Header, path string, q url.Values) (int, []byte, http.Header, error) {
+	return authServiceReadUpTo(ctx, headers, path, q, featureBodyCap)
+}
+
+func authServiceReadUpTo(ctx context.Context, headers http.Header, path string, q url.Values, bodyCap int64) (int, []byte, http.Header, error) {
 	target := authServiceURL + path
 	if len(q) > 0 {
 		target += "?" + q.Encode()
@@ -91,7 +95,7 @@ func authServiceReadAt(ctx context.Context, headers http.Header, path string, q 
 		return 0, nil, nil, fmt.Errorf("auth-service %s: %w", path, err)
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, featureBodyCap))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, bodyCap))
 	if err != nil {
 		return 0, nil, nil, fmt.Errorf("auth-service %s: %w", path, err)
 	}

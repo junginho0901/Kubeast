@@ -1,7 +1,9 @@
+import { useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { getCurrentClusterID } from '@/services/clusterRef'
 import { usePermission } from './usePermission'
+import { useClusterFeatures } from './usePrometheusQuery'
 
 /** The Kubernetes resource a create or delete button acts on, for the cluster's own answer. */
 export interface AccessTarget {
@@ -42,4 +44,11 @@ export function useCanI(permission: string, verb: string, target?: AccessTarget)
 
 export function useCanCreate(permission: string, target?: AccessTarget): boolean {
   return useCanI(permission, 'create', target)
+}
+
+// Whether the server refuses this user's writes in a namespace whatever the permissions say. It reads the features
+// answer the layout already holds, so a list or a row asks nothing of its own; an answer that says nothing keeps the button.
+export function useWritesRefusedIn(): (namespace?: string) => boolean {
+  const refused = useClusterFeatures().data?.writeGuardedNamespaces
+  return useCallback((namespace?: string) => !!namespace && !!refused?.includes(namespace), [refused])
 }

@@ -8,6 +8,7 @@ import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { useWritesRefusedIn } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Plus, RefreshCw } from 'lucide-react'
@@ -54,7 +55,8 @@ export default function NetworkPolicies() {
     ),
   })
   const { has } = usePermission()
-  const canCreate = has('resource.networkpolicy.create')
+  const writesRefused = useWritesRefusedIn()
+  const canCreate = has('resource.networkpolicy.create') && !writesRefused(selectedNamespace)
 
   useKubeWatchList({
     enabled: true,

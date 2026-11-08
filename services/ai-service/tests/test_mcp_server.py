@@ -17,7 +17,8 @@ from app.security import TokenPayload
 from app.services.audit_writer import AuditUnavailable
 
 MATRIX_WRITE = {"self": ("ai.tool.*", "ai.mcp.use", "resource.*.read", "resource.*.create", "resource.*.delete", "resource.pod.logfile",
-                         "resource.deployment.edit", "resource.configmap.edit", "resource.secret.edit"), "default": ("resource.*.read",)}
+                         "resource.deployment.edit", "resource.configmap.edit", "resource.secret.edit", "resource.cronjob.suspend", "resource.cronjob.trigger"),
+                "default": ("resource.*.read",)}
 TOKENS = {
     "tok-write": TokenPayload(user_id="u-write", role="member", email="w@example.com", matrix=MATRIX_WRITE),
     "tok-read": TokenPayload(user_id="u-read", role="member", email="r@example.com", matrix={"self": ("resource.*.read",)}),
@@ -28,7 +29,8 @@ TOKENS = {
     "tok-readtools": TokenPayload(user_id="u-rt", role="member", email="rt@example.com", matrix={"self": ("ai.mcp.use", "ai.tool.k8s_get_resources", "resource.*.read")}),
 }
 TOKENS["tok-scoped"] = TokenPayload(user_id="u-scoped", role="member", email="s@example.com", matrix=MATRIX_WRITE, namespaces={"self": ("api", "web")})
-WRITE_TOOL_NAMES = {"k8s_apply_manifest", "k8s_create_resource", "k8s_delete_resource", "k8s_patch_resource", "k8s_annotate_resource", "k8s_remove_annotation", "k8s_label_resource", "k8s_remove_label", "k8s_scale", "k8s_rollout", "k8s_execute_command"}
+WRITE_TOOL_NAMES = {"k8s_apply_manifest", "k8s_create_resource", "k8s_delete_resource", "k8s_patch_resource", "k8s_annotate_resource", "k8s_remove_annotation", "k8s_label_resource", "k8s_remove_label", "k8s_scale", "k8s_rollout", "k8s_execute_command",
+                    "k8s_cordon_node", "k8s_cronjob_suspend", "k8s_cronjob_trigger"}
 
 RPC_HEADERS = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
 
@@ -123,9 +125,10 @@ async def test_list_tools_is_read_only_and_needs_the_permission(fakes):
         names = tool_names(res)
         assert "list_clusters" in names and "k8s_get_pod_logs" in names and "get_node_metrics" in names
         # Every read tool but the Admin-only ones (hygiene, audit_search, nodes_stats_summary, nodes_log and the seven
-        # reads of what spans Kubeast with hygiene_history) and the write preview (no edit grant), plus list_clusters.
-        assert not ({"hygiene", "k8s_diff", "audit_search", "nodes_stats_summary", "nodes_log", "access_review", "ai_usage", "access_requests", "audit_integrity", "hygiene_history", "investigations", "ai_models", "session_recordings"} & set(names))
-        assert len(names) == len(mcp_server.READ_TOOLS) - 12
+        # reads of what spans Kubeast with hygiene_history), plus list_clusters. The write preview goes with edit on a kind.
+        assert "k8s_diff" in names
+        assert not ({"hygiene", "audit_search", "nodes_stats_summary", "nodes_log", "access_review", "ai_usage", "access_requests", "audit_integrity", "hygiene_history", "investigations", "ai_models", "session_recordings"} & set(names))
+        assert len(names) == len(mcp_server.READ_TOOLS) - 11
         assert not any(n.startswith(("k8s_apply", "k8s_delete", "k8s_scale", "k8s_execute")) for n in names)
         tools = res.json()["result"]["tools"]
         assert all(t["annotations"]["readOnlyHint"] is True for t in tools)
@@ -266,10 +269,10 @@ async def test_list_clusters_names_the_tools_allowed_in_each(fakes, monkeypatch)
 
         data = json.loads(res.json()["result"]["content"][0]["text"])
     by_id = {c["id"]: c for c in data["clusters"]}
-    # A grant with ai.tool.* and resource.*.read (edit of some kinds, not every kind) gets every read tool but the Admin-only
-    # hygiene report and the write preview, which needs the write's RBAC.
+    # A grant with ai.tool.* and resource.*.read (edit of some kinds) gets every read tool but the Admin-only
+    # hygiene report; the write preview goes with edit on a kind, as its call does.
     admin_only = {"hygiene", "audit_search", "nodes_stats_summary", "nodes_log", "access_review", "ai_usage", "access_requests", "audit_integrity", "hygiene_history", "investigations", "ai_models", "session_recordings"}
-    assert by_id["self"]["mcp"] is True and set(by_id["self"]["tools"]) == set(mcp_server.READ_TOOLS) - admin_only - {"k8s_diff"}
+    assert by_id["self"]["mcp"] is True and set(by_id["self"]["tools"]) == set(mcp_server.READ_TOOLS) - admin_only
     assert by_id["default"]["mcp"] is False and by_id["default"]["tools"] == []
     assert by_id["self"]["namespaces"] is None  # an unscoped grant
     assert feature_calls == [("Bearer tok-write", "self", "self")]
@@ -283,7 +286,7 @@ async def test_list_clusters_names_the_tools_allowed_in_each(fakes, monkeypatch)
     tools = {c["id"]: c["tools"] for c in data["clusters"]}["self"]
     assert "issues" in tools and "prometheus_query" not in tools and "logsearch" not in tools
     prometheus = {"prometheus_query", "prometheus_metrics", "prometheus_labels", "prometheus_rules", "prometheus_targets", "network_drops"}
-    assert set(tools) == set(mcp_server.READ_TOOLS) - prometheus - {"logsearch", "loki_query", "loki_labels", "loki_patterns", "cost", "policy_reports", "k8s_diff",
+    assert set(tools) == set(mcp_server.READ_TOOLS) - prometheus - {"logsearch", "loki_query", "loki_labels", "loki_patterns", "cost", "policy_reports",
                                                          "traces_search", "traces_get", "traces_tags", "traces_metrics", "traces_compare",
                                                          "alerts_list", "network_flows", "network_top_flows", "logfiles", "alerts_inbox"} - admin_only
 
@@ -401,22 +404,20 @@ async def test_write_tools_follow_the_switch_and_the_users_permissions(fakes, mo
     async with running_app(server) as client:
         res = await call(client, "tok-write", "tools/list")
         tools = {t["name"]: t for t in res.json()["result"]["tools"]}
-        # A Write role holds every write tool but Pod exec, which asks for the screen's permission too.
-        assert WRITE_TOOL_NAMES - {"k8s_execute_command"} <= set(tools) and "k8s_execute_command" not in tools and "request_access" in tools
-        # read tools (not the Admin-only hygiene nor k8s_diff without edit of every kind) + write tools + list_clusters + request_access
-        assert not ({"hygiene", "k8s_diff", "audit_search", "nodes_stats_summary", "nodes_log", "access_review", "ai_usage", "access_requests", "audit_integrity", "hygiene_history", "investigations", "ai_models", "session_recordings"} & set(tools))
-        assert len(tools) == len(mcp_server.READ_TOOLS) - 13 + len(WRITE_TOOL_NAMES) - 1 + 2
+        # A Write role holds every write tool but Pod exec and cordon, which ask for the screen's permission too.
+        assert WRITE_TOOL_NAMES - {"k8s_execute_command", "k8s_cordon_node"} <= set(tools) and not {"k8s_execute_command", "k8s_cordon_node"} & set(tools) and "request_access" in tools
+        # read tools (not the Admin-only hygiene) + write tools + list_clusters + request_access
+        assert not ({"hygiene", "audit_search", "nodes_stats_summary", "nodes_log", "access_review", "ai_usage", "access_requests", "audit_integrity", "hygiene_history", "investigations", "ai_models", "session_recordings"} & set(tools))
+        assert len(tools) == len(mcp_server.READ_TOOLS) - 12 + len(WRITE_TOOL_NAMES) - 2 + 2
         # Honest annotations: writes are not read-only, destructive unless they only touch labels/annotations.
         assert tools["k8s_delete_resource"]["annotations"] == {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": False}
         assert tools["k8s_label_resource"]["annotations"]["destructiveHint"] is False and tools["k8s_label_resource"]["annotations"]["readOnlyHint"] is False
         assert tools["k8s_delete_resource"]["inputSchema"]["required"] == ["resource_type", "cluster"]
         assert all(tools[n]["annotations"]["readOnlyHint"] is True for n in mcp_server.READ_TOOLS if n in tools)
 
-        # Read tools only (no ai.tool.k8s_delete_resource): read tools are listed as before, no write tool is, and a write call is refused + audited.
-        # Nor logfiles: this role does not hold the Log files tab's permission.
+        # One read tool (no ai.tool.k8s_delete_resource): the one it holds is listed, no write tool is, and a write call is refused + audited.
         names = tool_names(await call(client, "tok-readtools", "tools/list"))
-        assert "logfiles" not in names
-        assert not (set(names) & WRITE_TOOL_NAMES) and "request_access" in names and len(names) == len(mcp_server.READ_TOOLS) - 14 + 2
+        assert names == ["k8s_get_resources", "list_clusters", "request_access"]
         res = await call(client, "tok-readtools", "tools/call", {"name": "k8s_delete_resource", "arguments": {"cluster": "self", "resource_type": "pod", "resource_name": "p", "namespace": "ns"}})
         assert res.json()["result"]["isError"] is True and "forbidden" in res.json()["result"]["content"][0]["text"]
         # No MCP anywhere: only the way to ask for a role.

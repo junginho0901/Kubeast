@@ -7,6 +7,7 @@ import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { useWritesRefusedIn } from '@/hooks/useCanCreate'
 import { podNeedsALook } from '@/utils/aiContext/podCounts'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
@@ -40,7 +41,8 @@ export default function Pods() {
   })
 
   const { has } = usePermission()
-  const canCreate = has('resource.pod.create')
+  const writesRefused = useWritesRefusedIn()
+  const canCreate = has('resource.pod.create') && !writesRefused(selectedNamespace)
 
   // The server filters, sorts, counts and pages (k8s-service pods_page.go): a large
   // cluster's pods never come to the browser whole. The search goes out after a pause.

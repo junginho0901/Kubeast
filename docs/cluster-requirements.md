@@ -61,6 +61,7 @@ Kubeast sends requests to the cluster **as the signed-in person** (impersonation
 A new account's name may not hold a colon, a space or a control character, so it cannot be a `system:`, `eks:` or `kubeast:` user or another address with spaces around it.
 Kubeast cannot tell whether an address belongs to the person: anyone with `admin.users.create`, or an admin approving a self sign-up, can name an address that has no account yet.
 Prefer group bindings; if you bind a `User`, make sure that person's account exists, or that accounts come from your identity provider.
+`auth.impersonation.userPrefix` (empty by default), for example `kubeast:user:`, puts a name of Kubeast's own before the address, so a binding a cluster made of an address for its own sign-in (OIDC, IAM) is not opened by a Kubeast account of that address. Group bindings keep working. Setting it changes the name the cluster sees and writes in its audit log, and every binding of a `User` to an address stops applying to Kubeast's requests: move those to groups first, on every registered cluster.
 
 **Write = the Kubernetes default `edit`.** This is the same scope as someone given `edit` for kubectl. It includes:
 

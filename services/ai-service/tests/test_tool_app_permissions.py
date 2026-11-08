@@ -24,7 +24,7 @@ from app.services.tool_whitelists import READONLY_TOOL_NAMES, WRITE_TOOL_NAMES
 CASES = json.loads((Path(__file__).parent / "fixtures" / "tool_app_permission_cases.json").read_text())
 CLUSTER = "alpha"
 ALL_TOOLS = [{"type": "function", "function": {"name": n}} for n in sorted(WRITE_TOOL_NAMES | READONLY_TOOL_NAMES)]
-WRITE_ROLE = ("ai.tool.*", "ai.mcp.use", "resource.*.read", "resource.*.create", "resource.*.edit", "resource.*.delete")
+WRITE_ROLE = ("ai.tool.*", "ai.mcp.use", "resource.*.read", "resource.*.create", "resource.*.edit", "resource.*.delete", "resource.cronjob.suspend", "resource.cronjob.trigger")
 EXEC_ROLE = (*WRITE_ROLE, "resource.pod.exec")
 ROLLBACK_ROLE = (*WRITE_ROLE, "resource.workload.rollback")
 
@@ -177,7 +177,7 @@ def test_the_catalog_offers_pod_exec_by_the_same_decision():
 
 def test_a_write_role_is_not_offered_pod_exec_and_keeps_every_other_write_tool():
     offered = {t["function"]["name"] for t in permissions.filter_tools_by_role(_service(_token(WRITE_ROLE)), K8S_WRITE_TOOLS)}
-    assert offered == WRITE_TOOL_NAMES - {"k8s_execute_command"}
+    assert offered == WRITE_TOOL_NAMES - {"k8s_execute_command", "k8s_cordon_node"}
 
 
 @pytest.mark.parametrize("token", [_admin(), _token(EXEC_ROLE)], ids=["admin", "custom role with Pod exec"])
@@ -784,7 +784,7 @@ def test_each_call_of_the_built_in_roles_goes_as_before():
 def test_the_built_in_roles_are_offered_what_they_were():
     write = _token(SCREEN["write_role"])
     assert _offered(_admin(), [{"type": "function", "function": {"name": n}} for n in CATALOG]) == set(CATALOG)
-    assert _offered(write) == (WRITE_TOOL_NAMES | READONLY_TOOL_NAMES) - {"k8s_execute_command"}
+    assert _offered(write) == (WRITE_TOOL_NAMES | READONLY_TOOL_NAMES) - {"k8s_execute_command", "k8s_cordon_node"}
     assert _offered(_token(SCREEN["read_role"]), [{"type": "function", "function": {"name": n}} for n in sorted(READONLY_TOOL_NAMES)]) == READONLY_TOOL_NAMES
 
 

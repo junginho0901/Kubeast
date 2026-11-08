@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 )
@@ -41,6 +42,11 @@ const (
 	SystemInvestigator = "investigator"
 	UserInvestigator   = "kubeast:investigator"
 	GroupInvestigator  = "kubeast:investigator"
+
+	// userPrefixEnv is chart auth.impersonation.userPrefix: a name of Kubeast's own before a person's address, so a
+	// binding a cluster made of that address for its own sign-in is not opened by a Kubeast account holding it. Off by
+	// default, as a binding of a User to an address stops applying when it is on; groups do not change.
+	userPrefixEnv = "IMPERSONATION_USER_PREFIX"
 )
 
 // Impersonation returns the Kubernetes identity to act as in clusterID.
@@ -55,6 +61,7 @@ func (p TokenPayload) Impersonation(clusterID string) (user string, groups []str
 		}
 		return user, []string{GroupAuthenticated}
 	}
+	user = strings.TrimSpace(os.Getenv(userPrefixEnv)) + user
 	set := map[string]struct{}{GroupAuthenticated: {}}
 	if matchAny(p.Perms["*"], "*") {
 		set[GroupAdmin] = struct{}{}

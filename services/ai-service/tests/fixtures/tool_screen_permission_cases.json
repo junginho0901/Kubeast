@@ -25,8 +25,11 @@
   "k8s_annotate_resource",
   "k8s_apply_manifest",
   "k8s_check_service_connectivity",
+  "k8s_cordon_node",
   "k8s_count",
   "k8s_create_resource",
+  "k8s_cronjob_suspend",
+  "k8s_cronjob_trigger",
   "k8s_delete_resource",
   "k8s_describe_resource",
   "k8s_diff",
@@ -2138,6 +2141,54 @@
     "resource.pod.exec"
    ],
    "write": false,
+   "read": false
+  },
+  {
+   "tool": "k8s_cordon_node",
+   "args": {
+    "resource_name": "n1"
+   },
+   "want": [
+    "resource.node.cordon"
+   ],
+   "write": false,
+   "read": false
+  },
+  {
+   "tool": "k8s_cordon_node",
+   "args": {
+    "resource_name": "n1",
+    "uncordon": true
+   },
+   "want": [
+    "resource.node.cordon"
+   ],
+   "write": false,
+   "read": false
+  },
+  {
+   "tool": "k8s_cronjob_suspend",
+   "args": {
+    "namespace": "shop",
+    "resource_name": "x",
+    "suspend": true
+   },
+   "want": [
+    "resource.cronjob.suspend"
+   ],
+   "write": true,
+   "read": false
+  },
+  {
+   "tool": "k8s_cronjob_trigger",
+   "args": {
+    "namespace": "shop",
+    "resource_name": "x"
+   },
+   "want": [
+    "resource.cronjob.trigger"
+   ],
+   "write": true,
    "read": false
   },
   {

@@ -234,7 +234,7 @@ async def test_mcp_lists_it_for_a_holder_only(mcp, monkeypatch):  # noqa: F811
         monkeypatch.setattr(mcp_server, "get_access_token", lambda: access)
         return {t.name for t in await mcp_server.KubeastMCPServer(tool_server_url="http://tools").list_tools()}
 
-    holder = await names(_token(("ai.mcp.use", TOOL, *BUTTON)))
+    holder = await names(_token(("ai.mcp.use", TOOL, f"ai.tool.{CLUSTERS}", *BUTTON)))
     assert INVESTIGATE in holder and CLUSTERS in holder
     writer = await names(_token(("ai.mcp.use", *WRITE_ROLE)))
     assert INVESTIGATE not in writer and CLUSTERS in writer

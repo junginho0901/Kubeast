@@ -4,6 +4,7 @@ import { useWindowVirtualizer } from '@tanstack/react-virtual'
 import { Box, Loader2, Search, Server } from 'lucide-react'
 import { api, type PodInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
+import { useWritesRefusedIn } from '@/hooks/useCanCreate'
 import { getPodHealth, getHealthIcon } from './podHealth'
 import { useClusterView } from './ClusterViewContext'
 import { pickMainContainer, podToDetail } from './types'
@@ -96,6 +97,7 @@ export function PodNodeGrid({ entries, matched, all, isLoading, canDeletePod }: 
 }
 
 function NodeBox({ entry, canDeletePod }: { entry: NodeEntry; canDeletePod: boolean }) {
+  const writesRefused = useWritesRefusedIn()
   const {
     tr,
     selectedNamespace,
@@ -163,7 +165,7 @@ function NodeBox({ entry, canDeletePod }: { entry: NodeEntry; canDeletePod: bool
   }
 
   const handlePodContextMenu = (event: React.MouseEvent, pod: PodInfo) => {
-    if (!canDeletePod) return
+    if (!canDeletePod || writesRefused(pod.namespace)) return
     event.preventDefault()
     setPodContextMenu({ x: event.clientX, y: event.clientY, pod })
   }

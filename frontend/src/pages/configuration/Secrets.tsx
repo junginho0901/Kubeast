@@ -12,6 +12,7 @@ import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { useWritesRefusedIn } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
@@ -52,7 +53,8 @@ export default function Secrets() {
         : api.getSecrets(selectedNamespace, false),
   })
   const { has } = usePermission()
-  const canCreate = has('resource.secret.create')
+  const writesRefused = useWritesRefusedIn()
+  const canCreate = has('resource.secret.create') && !writesRefused(selectedNamespace)
   // The cluster's RBAC decides: a viewer (kubeast:viewer) may list most kinds
   // but not Secrets, which the list endpoint reports as 403.
   const secretsForbidden =

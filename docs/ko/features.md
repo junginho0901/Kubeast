@@ -87,8 +87,9 @@
       - `audit_integrity` — 감사 로그 체인이 어디까지 봉인됐는지와 마지막 앵커를 답합니다(`admin.audit.read`). 체인을 검사하지는 않습니다. 검사는 Audit Logs의 Verify 버튼이 합니다.
       - `hygiene_history` — 클러스터의 위생 점검 서명 이력, 서명 주기(`interval_days`), 서명 때 저장한 보고서를 답합니다(`resource.hygiene.scan` 또는 `admin.hygiene.read`).
       - `investigations` — Investigations처럼 모든 클러스터 또는 한 클러스터의 알림 조사 보고서를 답합니다(`admin.investigations.read`). `investigation_id`를 주면 보고서 본문, 도구 호출, 라벨, 주석까지 열며 `ai.investigation.view`로 남습니다.
-      - `ai_models` — AI Models가 읽는 값에서 모델마다 이름, 제공자, 지금 쓰이는 곳(`used_for`), 한도, 이 설치에서 쓸 수 없는 제공자를 답합니다(`admin.ai_models.*`). `key_env_set`은 키 변수가 정해져 있는지만 말합니다. false는 카드의 "키 환경변수 없음" 경고이고, null은 키를 묻지 않는 제공자입니다. API 키, 키를 담은 변수 이름, 헤더, 인증서, 주소는 답하지 않습니다.
-      - `session_recordings` — Session recordings처럼 터미널 세션이 녹화됐다는 사실과 그 정보를 답합니다(`admin.sessions.read`): 누가, 종류, 클러스터, 대상, 시각, 크기, 상태. 터미널에 나온 내용은 읽지 않습니다. 내용은 그 화면에서만 열리고 `admin.session.read`로 남습니다.
+      - `ai_models` — AI Models가 읽는 값에서 모델마다 이름, 제공자, 지금 쓰이는 곳(`used_for`), 한도, 이 설치에서 쓸 수 없는 제공자를 답합니다(`admin.ai_models.*`). `enabled_only`는 켜진 모델만 답합니다. `key_env_set`은 키 변수가 `api_key_env`나 옛 칸 `api_key_secret_key`에 정해져 있는지만 말합니다. 모델은 둘 다 똑같이 읽습니다. false는 카드의 "키 환경변수 없음" 경고이고, null은 키를 묻지 않는 제공자입니다. API 키, 키를 담은 변수 이름, 헤더, 인증서, 주소는 답하지 않습니다.
+      - `session_recordings` — Session recordings처럼 터미널 세션이 녹화됐다는 사실과 그 정보를 답합니다(`admin.sessions.read`): 누가, 종류, 클러스터, 대상, 시각, 크기(`kept_bytes`, Size 칸), 상태. 터미널에 나온 내용은 읽지 않습니다. 내용은 그 화면에서만 열리고 `admin.session.read`로 남습니다.
+      - `audit_search`와 Kubeast 자체 기록을 읽는 이 도구들은(클러스터를 읽는 `hygiene_history`와 `nodes_*` 도구는 빼고) 화면처럼 모든 클러스터 권한을 가진 사람에게 어느 클러스터에서든 답합니다. 그 사람의 부여가 네임스페이스로 한정된 클러스터에서도 그렇습니다. 그 밖의 사람은 거기서 거절됩니다.
       - 이 답은 주는 칸을 하나하나 정해 둡니다. API 키 값과 비밀번호 해시는 들어 있지 않고, `key_prefix`는 목록에 보이는 키 앞부분입니다. 메일 주소는 `ai.redaction.pii`를 따릅니다.
     - `nodes_stats_summary`·`nodes_log` — kubelet의 stats summary와 로그 질의를 API 서버 프록시로 읽습니다(`admin.nodes.read` + 클러스터 RBAC `nodes/proxy`).
       로그 질의는 kubelet의 `enableSystemLogQuery`가 켜져 있어야 하며, 꺼져 있으면 unavailable로 답합니다.
@@ -176,6 +177,7 @@
 - **Kubeast가 도는 클러스터의 자기 Namespace는 전역 관리자(모든 클러스터의 `*`) 전용입니다.** 로그인 키와 다른 클러스터의 자격 증명이 거기 있기 때문입니다.
   - 그 클러스터의 Write나 Admin 부여를 포함해 그 밖의 사람은 화면, API, AI 도구, MCP에서 403으로 거절됩니다. 대상은 그 안의 Secret과 Helm release, 그 안의 변경 전부, 그 안의 파드에 exec·attach와 로그 파일입니다. 여러 Namespace에 걸친 Secret 목록에서는 빠지고, 리소스 서랍은 거절될 동작의 버튼을 숨깁니다.
   - 파드, 로그, 이벤트, ConfigMap은 계속 읽을 수 있습니다. 다른 클러스터에 있는 같은 이름의 Namespace는 평범한 Namespace입니다.
+  - 버튼도 따라갑니다. `/cluster/features`의 `writeGuardedNamespaces`가 이 사람의 쓰기를 거절하는 곳을 말하므로, 거기서는 목록의 만들기 버튼, Cluster View의 파드 메뉴, Optimization의 Apply가 행마다 묻지 않고 사라집니다. 전체 네임스페이스 목록에서는 YAML이 네임스페이스를 정하므로 만들기 버튼이 남습니다.
   - 이것은 앱의 제한입니다. 클러스터 쪽에서 그 클러스터의 Write는 여전히 전체에 걸친 `edit`, Admin은 `cluster-admin`이므로, 쿠버네티스를 직접 쓰는 사람은 RBAC으로 따로 막아야 합니다([자세히](cluster-requirements.md#kubeast-자체-namespace에-누가-닿는가)).
 - **노드 셸의 Namespace(`nodeShell.namespace`)는 어느 클러스터에서든 `resource.node.shell`을 가진 사람 전용입니다.** 특권 파드가 허용되는 곳이고 노드 셸의 로그는 곧 그 화면이므로, 그 밖의 사람은 그 안의 변경 전부와 그 안의 파드에 exec·attach, 로그 파일, 로그가 거절됩니다([자세히](cluster-requirements.md#9-노드-셸)).
 - **AI는 화면이 묻는 것을 묻습니다.** `ai.tool.<도구>`는 도구를 엽니다. 호출마다 그 클러스터에서, 같은 화면 뒤의 라우트가 묻는 권한도 있어야 합니다. 채팅과 MCP가 같고, 클러스터 RBAC이 역할의 그룹에 무엇을 허용하든 같습니다. 커스텀 역할의 그룹을 바인딩해도 AI로 그 역할의 화면보다 더 하지는 못합니다.
@@ -184,15 +186,16 @@
   - `k8s_create_resource`는 `resource.<kind>.create`가 필요합니다.
   - `k8s_apply_manifest`와 미리 보기 `k8s_diff`는 `resource.<kind>.edit`이 필요합니다. `kubectl apply`는 없는 것을 만들기도 하므로, 아직 없는 객체에는 `resource.<kind>.create`도 필요합니다. 이 권한이 없으면 먼저 사용자 권한으로 객체를 찾아 보고, 없거나 클러스터가 답하지 않으면 거절합니다.
   - `k8s_execute_command`는 `resource.pod.exec`, undo의 `k8s_rollout`은 `resource.workload.rollback`이 필요합니다.
+  - `k8s_cordon_node`, `k8s_cronjob_suspend`, `k8s_cronjob_trigger`는 Cordon, Suspend, Run now 버튼을 그 라우트로 누르며 `resource.node.cordon`, `resource.cronjob.suspend`, `resource.cronjob.trigger`가 필요합니다. 버튼 권한만 가진 역할도 화면에서 되는 일을 AI로 할 수 있습니다. Node의 YAML 적용은 화면에서도 AI에서도 `resource.node.edit`을 묻고, 클러스터 RBAC이 그 역할의 그룹에 노드 patch를 허용하면(`edit`은 허용하지 않습니다) 다른 칸처럼 `spec.unschedulable`도 바꿀 수 있습니다.
   - `<kind>`는 화면이 쓰는 이름(`permResource`)입니다. kind를 소문자로 쓴 것, `hpa`·`vpa`·`pdb`·`pv`·`pvc`·`crd`, 자기 이름이 없는 kind는 `customresource`입니다.
   - 호출이 가리키는 kind는 전부 봅니다. 쉼표 목록, 매니페스트의 문서 하나하나, List의 items가 모두 그렇습니다. `all`·`api-extensions`·`gateway-api`와 읽을 수 없는 매니페스트는 `resource.*.<verb>`가 필요합니다. CRD가 스스로 정한 짧은 이름이나 카테고리는 `customresource`로 봅니다.
   - 화면이 권한을 묻는 읽기: `k8s_get_pod_logs`, `logsearch`, `loki_*` 도구, `alerts_list`는 `resource.pod.read`가 필요합니다. `helm_read`는 `resource.helm.read`, `cost`는 `resource.cost.read`, `policy_reports`는 `resource.policyreport.read`, `network_policy_check`와 `network_policy_effective`는 `resource.networkpolicy.read`, `network_*` 흐름 도구는 `resource.networkflow.read`, `logfiles`는 `resource.pod.logfile`, `alerts_inbox`는 `resource.pod.read`가 필요합니다. `hygiene`과 `hygiene_history`는 `admin.hygiene.read`, `audit_search`·`ai_usage`·`audit_integrity`는 `admin.audit.read`, `access_review`는 `admin.review.read`, `access_requests`는 `admin.users.update`, `investigations`는 `admin.investigations.read`, `ai_models`는 `admin.ai_models.*`, `session_recordings`는 `admin.sessions.read`, `nodes_*` 도구는 `admin.nodes.read`가 필요합니다. `alert_investigate`는 버튼이 묻는 `resource.alert.investigate`와 `resource.pod.read`가 필요합니다.
   - 나머지 읽기 도구는 더 필요한 것이 없습니다. 그 화면도 `resource.<kind>.read`를 묻지 않고, 클러스터에 대한 역할과 클러스터 RBAC이 정하기 때문입니다(아래 읽기 API). `resource.*.read`가 없어도 그룹이 바인딩된 커스텀 역할은 화면과 AI로 같은 목록을 읽습니다. Secret 값은 AI로 가지 않습니다.
-  - 절대 부를 수 없는 도구는 역할에 내주지 않습니다. 거절된 호출은 실행되지 않고 승인 카드도 없으며, 없는 권한을 말하고 실패 행(`ai.tool.call`, `ai.mcp.call`)을 남깁니다. 표(`services/tool-server/screen_permissions.go`, `app/services/ai/screen_permissions.py`)에 없는 도구는 누구에게나 거절됩니다.
+  - 절대 부를 수 없는 도구는 채팅, `list_clusters`, MCP `tools/list` 어디서도 내주지 않습니다. `tools/list`는 어느 클러스터에서든 호출이 될 수 있는 것을 답합니다. 그 클러스터에 `ai.tool.<도구>`와 도구가 묻는 권한이 다 있어야 합니다. 거절된 호출은 실행되지 않고 승인 카드도 없으며, 없는 권한을 말하고 실패 행(`ai.tool.call`, `ai.mcp.call`)을 남깁니다. 표(`services/tool-server/screen_permissions.go`, `app/services/ai/screen_permissions.py`)에 없는 도구는 누구에게나 거절됩니다.
 - **쓰기 API는 전부** 핸들러에서 권한을 검사하며, 감사 행을 남기지 못하면 거부됩니다(fail-closed).
   - **읽기 API**는 "그 클러스터에 역할이 있는가"(클러스터 미들웨어, deny-by-default)와 클러스터의 RBAC(viewer 그룹), 두 단계로 막습니다.
     - `resource.*.read`(역할 화면의 "Pod 로그·…에서 묻습니다")는 목록을 열어 주는 권한이 아닙니다. 일부 라우트만 묻습니다: Pod 로그·로그 검색·Alerts 읽기(`resource.pod.read`), Helm(`resource.helm.read`), Cost(`resource.cost.read`), Policy Reports(`resource.policyreport.read`), NetworkPolicy 확인(`resource.networkpolicy.read`), 네트워크 흐름·드롭·트래픽(`resource.networkflow.read`). 이 권한이 없는 커스텀 역할도 클러스터가 그 그룹을 묶었다면 다른 목록을 봅니다.
-  - `menu.*`는 화면 메뉴만 가리며, 사이드바 그룹마다 하나씩 있습니다. 기본 역할에는 `menu.*`가 있으므로 커스텀 역할에서만 그룹이 빠집니다.
+  - `menu.*`는 화면 메뉴만 가리며, 역할 창도 그렇게 말합니다. 그 그룹의 화면은 주소로 열리고 AI도 읽습니다. 사이드바 그룹마다 하나씩 있습니다. 기본 역할에는 `menu.*`가 있으므로 커스텀 역할에서만 그룹이 빠집니다.
     - Core(대시보드·Cluster View·Monitoring·Alerts·Cost·AI Chat·Resource Graph·Change History·Advanced Search)는 `menu.dashboard`입니다. Alerts·Cost·AI Chat은 그 기능을 켰을 때만 나타납니다.
     - Cluster와 Custom Resources는 `menu.cluster`입니다.
     - Workloads·Storage·Network·Gateway·GPU·Security·Configuration·Helm은 같은 이름의 키를 따릅니다.
@@ -264,7 +267,7 @@
   - 거부는 403이고 감사 로그에 실패로 남습니다. 전역 관리자(`*`)와 자기 계정을 바꾸는 일은 제한하지 않습니다.
   - 다른 사람의 API 키 폐기는 `admin.users.update`로 계속 됩니다. 유출된 키를 바로 막기 위해서이고, 소유자가 다시 발급할 수 있습니다.
   - 역할에 더하는 권한은 그 역할이 부여된 모든 클러스터에서, 부여된 네임스페이스 범위까지 고치는 사람이 갖고 있어야 합니다.
-- **역할 고치기와 세션**: 역할에서 권한을 빼면 그 권한을 아직 쓸 수 있는 세션과 키 토큰이 바로 끝납니다. 그 역할을 클러스터에서 부여받은 모든 사람의 것이고, `*`·`admin.*` 권한이면 전역 역할로 가진 사람의 것도 끝납니다. 다른 그룹이 되도록 이름을 바꾸면 부여받은 모든 사람의 것이 끝납니다. 권한을 더하거나 설명만 고치면 아무것도 끝나지 않으며, 더한 권한은 다음 갱신 때 받습니다. 그 역할을 가진 사람이 고치면 그 사람도 다시 로그인합니다.
+- **역할 고치기와 세션**: 역할에서 권한을 빼면 그 권한을 아직 쓸 수 있는 세션과 키 토큰이 바로 끝납니다. 그 역할을 클러스터에서 부여받은 모든 사람의 것이고, `*`·`admin.*` 권한이면 전역 역할로 가진 사람의 것도 끝납니다. 다른 그룹이 되도록 이름을 바꾸면 부여받은 모든 사람의 것이 끝납니다. 권한을 더하거나 설명만 고치면 아무것도 끝나지 않으며, 더한 권한은 다음 갱신 때 받습니다. 그 역할을 가진 사람이 고치면 그 사람도 다시 로그인합니다. 이렇게 되는 저장 앞에는 역할 창이 미리 말합니다.
 - **역할 이름**: 역할은 클러스터에서 이름으로 만든 그룹으로 동작합니다. 새 이름과 이름 바꾸기는 내장 역할과 대소문자·공백만 다르거나, 다른 역할과 같은 그룹이 되면(`a b`와 `a-b`, 글자 수가 같은 한글 이름) 거부됩니다. 차트가 바인딩한 그룹(`auth.impersonation.customRoles`)이 되는 이름에는 모든 권한(`*`)이 필요합니다. 그 역할이 권한 키로 나타나지 않는 그 바인딩을 받기 때문입니다([클러스터 요구 사항](cluster-requirements.md) §1). 이미 저장된 이름은 그대로 동작합니다.
 - **목록이 비었을 때 화면에 나오는 문구**는 다음과 같습니다.
   - 권한이 없으면(403): "볼 권한이 없습니다"(위쪽 배너 + 표)

@@ -174,7 +174,7 @@ def test_a_models_key_and_address_are_not_read_and_its_limits_are_said():
     assert "key_env_set" in description and "No key env" in description
     assert "key_env_set" in SYSTEM_MESSAGE
     assert str(limits.TOOL_RESULT_CHARS) in description and "max_tokens" in description and "tool_result_chars" in description
-    assert not _tool("ai_models")["parameters"].get("properties")
+    assert set(_tool("ai_models")["parameters"]["properties"]) == {"enabled_only"}
     assert "API 키" in SYSTEM_MESSAGE
 
 

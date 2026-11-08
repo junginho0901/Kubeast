@@ -63,8 +63,14 @@ describe('Optimization Apply', () => {
 
   it('the window and the floating chat read it', () => {
     const src = readFileSync(fileURLToPath(new URL('./modals/OptimizationModal.tsx', import.meta.url)), 'utf8')
-    expect(src).toContain('const applyOf = (row: OptimizationRow) => optimizationApply(row, canResize, table?.resize_kinds)')
+    expect(src).toContain('const applyOf = (row: OptimizationRow) => optimizationApply(row, canResize && !writesRefused(row.namespace), table?.resize_kinds)')
     expect(src).toContain('data-testid="optimization-resize-kind"')
-    expect(src).toContain("apply: optimizationApply(r, canResize, table.resize_kinds)")
+    expect(src).toContain('data-testid="optimization-resize-guarded"')
+    expect(src).toContain('apply: optimizationApply(r, canResize && !writesRefused(r.namespace), table.resize_kinds)')
+  })
+
+  it('Cluster View opens no pod menu in a namespace that refuses the write', () => {
+    const src = readFileSync(fileURLToPath(new URL('../cluster-view/PodNodeGrid.tsx', import.meta.url)), 'utf8')
+    expect(src).toContain('if (!canDeletePod || writesRefused(pod.namespace)) return')
   })
 })
