@@ -414,6 +414,11 @@ async def _list_provider_models(request: dict) -> dict:
         base = user_base_url or _OPENAI_COMPATIBLE_DEFAULTS.get(provider, "")
         if not base:
             return {"models": [], "error": f"base_url is required for provider '{provider}'"}
+    # The connection test's provider rule, before the key leaves: the subscription token goes to no other provider.
+    try:
+        model_config_policy.check_provider_fields(provider, (api_key_env,), user_base_url)
+    except model_config_policy.PolicyError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     try:
         return {"models": await _list_models(provider, api_key, base, verify, judged=bool(user_base_url))}

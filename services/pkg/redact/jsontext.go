@@ -131,10 +131,14 @@ func (w *jsonRewriter) stringOf(start, end int) (string, bool) {
 func (w *jsonRewriter) object(start, end int, secret bool) {
 	ms := w.members(start, end)
 	envSecret := ""
+	secretList := false
 	for _, m := range ms {
 		value, isString := w.stringOf(m.valueStart, m.valEnd)
 		if m.key == "kind" && isString && value == "Secret" {
 			secret = true
+		}
+		if m.key == "kind" && isString && value == "SecretList" {
+			secretList = true
 		}
 		if m.key == "name" && isString && w.opts.on("key_name") && keyIsSensitive(value) {
 			envSecret = value // a container env entry: the key is "value", so the name decides
@@ -161,10 +165,24 @@ func (w *jsonRewriter) object(start, end int, secret bool) {
 			w.st.add("key_name", 1)
 		case w.opts.on("key_name") && w.src[m.valueStart] == '[' && keyIsSensitive(m.key):
 			w.credentialList(m.key, m.valueStart, m.valEnd, secret)
+		case secretList && m.key == "items" && w.src[m.valueStart] == '[':
+			for _, e := range w.elements(m.valueStart, m.valEnd) {
+				w.value(e[0], e[1], secret || w.src[e[0]] == '{' && !w.hasKind(e[0], e[1]))
+			}
 		default:
 			w.value(m.valueStart, m.valEnd, secret)
 		}
 	}
+}
+
+// hasKind: an object of a typed list with a kind of its own; without one kubectl reads it as the list's (itemIsSecret).
+func (w *jsonRewriter) hasKind(start, end int) bool {
+	for _, m := range w.members(start, end) {
+		if value, isString := w.stringOf(m.valueStart, m.valEnd); m.key == "kind" && isString && value != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func startsNumber(c byte) bool { return c == '-' || (c >= '0' && c <= '9') }

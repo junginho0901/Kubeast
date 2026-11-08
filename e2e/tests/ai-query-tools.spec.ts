@@ -141,6 +141,24 @@ test.describe('AI query tools: jq, tabular, count, and the k8s_diff preview', ()
     }
   })
 
+  test('a jq program that builds more than a run may hold is refused for its memory, and tool-server keeps running', async ({ request }) => {
+    const token = await login(request)
+    test.skip(!(await mcpOn(request, token)), 'the MCP server is off (mcp.enabled)')
+    const pods = () => kubectl(`-n kubeast get pods -l app=tool-server -o jsonpath='{range .items[*]}{.metadata.name}={.status.containerStatuses[0].restartCount}{" "}{end}'`).replace(/'/g, '').trim()
+    const before = pods()
+    expect(before).toMatch(/=\d+/)
+
+    for (const program of ['[range(6000000)] | length', 'reduce range(27) as $i ("a"; . + .) | length', '"a" * 200000000 | length']) {
+      const refused = await call(request, token, 'k8s_jq_query', { resource_type: 'pods', namespace: 'kubeast', jq: program })
+      expect(refused.isError, program).toBe(true)
+      expect(refused.text, program).toMatch(/jq: the expression needed more memory than a run may hold/)
+    }
+    const after = json((await call(request, token, 'k8s_jq_query', { resource_type: 'pods', namespace: 'kubeast', jq: '[.items[].metadata.name] | length' })).text)
+    expect(after.results).toEqual([Number(kubectl(`-n kubeast get pods -o jsonpath='{.items[*].metadata.name}'`).replace(/'/g, '').split(/\s+/).filter(Boolean).length)])
+    // the same pods with the same restart counts: no container was killed for the programs' memory
+    expect(pods()).toBe(before)
+  })
+
   test('a Secret answers every query tool without its values, a ConfigMap read the same way keeps them, and k8s_diff names keys only', async ({ request }) => {
     const admin = await login(request)
     test.skip(!(await mcpOn(request, admin)), 'the MCP server is off (mcp.enabled)')

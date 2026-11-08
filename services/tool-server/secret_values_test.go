@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -417,7 +418,25 @@ func TestToolOutputKeepsEverythingElseOfItsJSON(t *testing.T) {
 	}
 }
 
-// k8s_diff previews a Secret without its values, whatever its keys are called, and still says which keys would change.
+// secretRevealer signs the caller of toolServerForSecrets in with resource.secret.reveal as well.
+func secretRevealer(t *testing.T) {
+	t.Helper()
+	prev := toolAuth
+	toolAuth = fakeValidator{payload: auth.TokenPayload{UserID: "u1", Email: "a@example.com",
+		Perms: auth.PermissionMatrix{secretValuesCluster: {"ai.tool.*", "resource.*.read", "resource.*.edit", "resource.helm.read", "resource.secret.reveal"}}}}
+	t.Cleanup(func() { toolAuth = prev })
+}
+
+// What k8s_diff answered of a Secret, the parts a value could change.
+func diffAnswer(t *testing.T, resp ToolCallResponse) string {
+	t.Helper()
+	m := decode(t, resp.Content)
+	read, _ := json.Marshal([]interface{}{m["status"], m["lines_added"], m["lines_removed"], m["diff"], m["hint"], m["values_not_compared"]})
+	return string(read)
+}
+
+// k8s_diff previews a Secret without its values, whatever its keys are called, and to one who may reveal them still says
+// which keys would change.
 func TestDiffOfASecretNamesTheChangedKeysWithoutTheirValues(t *testing.T) {
 	const oldKey, newKey, sameCrt, oldReg, newReg = "b2xkLWZha2Uta2V5", "bmV3LWZha2Uta2V5", "c2FtZS1mYWtlLWNydA==", "b2xkLWZha2UtcmVn", "bmV3LWZha2UtcmVn"
 	secret := func(key, reg string) string {
@@ -426,6 +445,7 @@ func TestDiffOfASecretNamesTheChangedKeysWithoutTheirValues(t *testing.T) {
 	}
 	manifest := "apiVersion: v1\nkind: Secret\nmetadata:\n  name: tls\n  namespace: shop\n"
 	toolServerForSecrets(t, nil)
+	secretRevealer(t)
 	values := []string{oldKey, newKey, sameCrt, oldReg, newReg}
 
 	fakeKubectl(t, func(args []string) (string, error) {
@@ -473,6 +493,130 @@ func TestDiffOfASecretNamesTheChangedKeysWithoutTheirValues(t *testing.T) {
 	}
 	if m := decode(t, resp.Content); m["status"] != "created" || !strings.Contains(m["diff"].(string), "tls.key") {
 		t.Fatalf("created: %s", resp.Content)
+	}
+}
+
+// k8s_diff of a Secret as the signed-in caller, against a live Secret holding liveData; the dry run holds dryData.
+func secretDiff(t *testing.T, manifest string, liveData, dryData map[string]string) ToolCallResponse {
+	t.Helper()
+	object := func(data map[string]string) string {
+		raw, _ := json.Marshal(map[string]interface{}{"apiVersion": "v1", "kind": "Secret", "type": "Opaque",
+			"metadata": map[string]interface{}{"name": "db", "namespace": "shop"}, "data": data})
+		return string(raw)
+	}
+	fakeKubectl(t, func(args []string) (string, error) {
+		if has(args, "apply") {
+			return object(dryData), nil
+		}
+		return object(liveData), nil
+	})
+	return callTool(t, "k8s_diff", map[string]interface{}{"yaml_content": manifest})
+}
+
+// Without resource.secret.reveal a Secret's values are not compared: a value that matches the live one and one that does
+// not read the same, under stringData and data alike, and each key the manifest gives shows as a change, saying why.
+func TestDiffOfASecretWithoutRevealReadsTheSameForARightAndAWrongValue(t *testing.T) {
+	const livePassword, liveToken, kept = "fake-live-password", "ZmFrZS1saXZlLXRva2Vu", "ZmFrZS1rZXB0LXZhbHVl"
+	toolServerForSecrets(t, nil)
+	answerFor := func(password, token string) (string, ToolCallResponse) {
+		manifest := "apiVersion: v1\nkind: Secret\nmetadata:\n  name: db\n  namespace: shop\nstringData:\n  password: " + password + "\ndata:\n  token: " + token + "\n"
+		resp := secretDiff(t, manifest,
+			map[string]string{"password": base64.StdEncoding.EncodeToString([]byte(livePassword)), "token": liveToken, "kept": kept},
+			map[string]string{"password": base64.StdEncoding.EncodeToString([]byte(password)), "token": token, "kept": kept})
+		return diffAnswer(t, resp), resp
+	}
+	right, rightResp := answerFor(livePassword, liveToken)
+	wrong, wrongResp := answerFor("fake-wrong-guess", "ZmFrZS13cm9uZy10b2tlbg==")
+	if right != wrong {
+		t.Fatalf("a right value and a wrong one read differently:\nright: %s\nwrong: %s", right, wrong)
+	}
+	for _, resp := range []ToolCallResponse{rightResp, wrongResp} {
+		for _, v := range []string{livePassword, liveToken, kept, "fake-wrong-guess", "ZmFrZS13cm9uZy10b2tlbg==", base64.StdEncoding.EncodeToString([]byte(livePassword))} {
+			if strings.Contains(resp.Content+resp.Error, v) {
+				t.Fatalf("the preview holds the value %q: %s", v, resp.Content)
+			}
+		}
+	}
+	m := decode(t, rightResp.Content)
+	diff, _ := m["diff"].(string)
+	if m["status"] != "changed" || m["lines_added"] != float64(2) || m["lines_removed"] != float64(2) {
+		t.Fatalf("each key the manifest gives is a change: %s", rightResp.Content)
+	}
+	for _, line := range []string{`-    "password": "<REDACTED:secret>"`, `+    "password": "<REDACTED:secret`, `-    "token": "<REDACTED:secret>"`, `+    "token": "<REDACTED:secret`} {
+		if !strings.Contains(diff, line) {
+			t.Fatalf("%q missing from:\n%s", line, diff)
+		}
+	}
+	if strings.Contains(diff, `-    "kept"`) || strings.Contains(diff, `+    "kept"`) {
+		t.Fatalf("a key the manifest does not give is no change:\n%s", diff)
+	}
+	if note, _ := m["values_not_compared"].(string); !strings.Contains(note, "resource.secret.reveal") || !strings.Contains(note, "password") || !strings.Contains(note, "token") {
+		t.Fatalf("the answer must say which values were not compared and why: %s", rightResp.Content)
+	}
+}
+
+// Keys the manifest adds and keys the apply takes out are still named, without a value.
+func TestDiffOfASecretWithoutRevealNamesAddedAndRemovedKeys(t *testing.T) {
+	const gone, added, kept = "ZmFrZS1nb25lLXZhbHVl", "ZmFrZS1uZXctdmFsdWU=", "ZmFrZS1rZXB0LXZhbHVl"
+	toolServerForSecrets(t, nil)
+	manifest := "apiVersion: v1\nkind: Secret\nmetadata:\n  name: db\n  namespace: shop\ndata:\n  added: " + added + "\n"
+	resp := secretDiff(t, manifest, map[string]string{"gone": gone, "kept": kept}, map[string]string{"added": added, "kept": kept})
+	for _, v := range []string{gone, added, kept} {
+		if strings.Contains(resp.Content+resp.Error, v) {
+			t.Fatalf("the preview holds the value %q: %s", v, resp.Content)
+		}
+	}
+	m := decode(t, resp.Content)
+	diff, _ := m["diff"].(string)
+	if m["status"] != "changed" || m["lines_added"] != float64(1) || m["lines_removed"] != float64(1) {
+		t.Fatalf("one key added, one taken out: %s", resp.Content)
+	}
+	for _, line := range []string{`+    "added": "<REDACTED:secret>"`, `-    "gone": "<REDACTED:secret>"`} {
+		if !strings.Contains(diff, line) {
+			t.Fatalf("%q missing from:\n%s", line, diff)
+		}
+	}
+	if note, _ := m["values_not_compared"].(string); !strings.Contains(note, "resource.secret.reveal") {
+		t.Fatalf("the answer must say the values are not compared: %s", resp.Content)
+	}
+}
+
+// One who may reveal the values gets them compared, as before: unchanged for the same value, the key changed for another.
+func TestDiffOfASecretByOneWhoMayRevealComparesTheValues(t *testing.T) {
+	const live = "ZmFrZS1saXZlLXZhbHVl"
+	toolServerForSecrets(t, nil)
+	secretRevealer(t)
+	manifest := func(value string) string {
+		return "apiVersion: v1\nkind: Secret\nmetadata:\n  name: db\n  namespace: shop\ndata:\n  password: " + value + "\n"
+	}
+	same := decode(t, secretDiff(t, manifest(live), map[string]string{"password": live}, map[string]string{"password": live}).Content)
+	if same["status"] != "unchanged" || same["values_not_compared"] != nil {
+		t.Fatalf("the same value: %v", same)
+	}
+	other := decode(t, secretDiff(t, manifest("ZmFrZS1vdGhlcg=="), map[string]string{"password": live}, map[string]string{"password": "ZmFrZS1vdGhlcg=="}).Content)
+	diff, _ := other["diff"].(string)
+	if other["status"] != "changed" || other["lines_added"] != float64(1) || other["lines_removed"] != float64(1) || !strings.Contains(diff, `-    "password"`) ||
+		!strings.Contains(diff, `+    "password"`) || strings.Contains(diff, live) || strings.Contains(diff, "ZmFrZS1vdGhlcg==") || other["values_not_compared"] != nil {
+		t.Fatalf("another value: %v", other)
+	}
+}
+
+// Other kinds keep their diff as it was, values and all, whoever asks.
+func TestDiffOfAnotherKindIsNotTouchedByTheSecretRule(t *testing.T) {
+	toolServerForSecrets(t, nil)
+	object := func(mode string) string {
+		return `{"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":"app","namespace":"shop"},"data":{"mode":"` + mode + `"}}`
+	}
+	fakeKubectl(t, func(args []string) (string, error) {
+		if has(args, "apply") {
+			return object("plain-config-new"), nil
+		}
+		return object("plain-config-old"), nil
+	})
+	m := decode(t, callTool(t, "k8s_diff", map[string]interface{}{"yaml_content": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: app\n  namespace: shop\ndata:\n  mode: plain-config-new\n"}).Content)
+	diff, _ := m["diff"].(string)
+	if m["status"] != "changed" || !strings.Contains(diff, `-    "mode": "plain-config-old"`) || !strings.Contains(diff, `+    "mode": "plain-config-new"`) || m["values_not_compared"] != nil {
+		t.Fatalf("a ConfigMap's diff: %v", m)
 	}
 }
 
