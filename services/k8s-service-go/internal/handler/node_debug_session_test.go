@@ -139,8 +139,12 @@ func TestANodeShellWaitingForItsPodEndsWithItsSession(t *testing.T) {
 	}
 	wantSessionEndedClose(t, c)
 	wantDebugPodDeleted(t, &deleted)
-	if row := store.shellRow(t); row.Result != audit.ResultFailure {
+	row := store.shellRow(t)
+	if row.Result != audit.ResultFailure {
 		t.Fatalf("the attempt's row = %+v, want a failure: no shell opened", row)
+	}
+	if want := "session ended: " + auth.SessionRevoked; row.Error != want {
+		t.Fatalf("the attempt's row says %q, want %q", row.Error, want)
 	}
 }
 
