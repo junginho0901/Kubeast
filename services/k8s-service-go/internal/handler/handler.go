@@ -25,6 +25,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/traces"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/tracing"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/ws"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
@@ -75,10 +76,16 @@ type Handler struct {
 	logSearchCanI func(ctx context.Context, namespace string) (bool, error)
 	// sharedReads is one run at a time of each read Shared wraps.
 	sharedReads flight.Group[*sharedAnswer]
+	// watchLimits are the sockets' limits of live watches and watch starts, which the Helm releases' stream keeps to
+	// too (nil in tests: none).
+	watchLimits *ws.Multiplexer
 }
 
 // SetRecorder turns on terminal session recording (internal/recording).
 func (h *Handler) SetRecorder(m *recording.Manager) { h.recorder = m }
+
+// SetWatchLimits holds the Helm releases' stream to the multiplexer's live watches and its places for starting one.
+func (h *Handler) SetWatchLimits(m *ws.Multiplexer) { h.watchLimits = m }
 
 // SetLiveSessions sets what ends open terminals and followed streams when their session stops standing.
 func (h *Handler) SetLiveSessions(s *auth.LiveSessions) { h.liveSessions = s }

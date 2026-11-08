@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -83,24 +84,11 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 	fetch("Pod", func(ns string) error {
 		// podListChunk at a time, each page cut to rgPod, so a large cluster is never held whole
 		var pods []rgPod
-		var read pagedRead
-		defer read.done()
-		opts := metav1.ListOptions{Limit: podListChunk}
-		for {
-			list, err := s.clientsetCtx(ctx).CoreV1().Pods(ns).List(ctx, opts)
-			if err != nil {
-				return err
-			}
-			for i := range list.Items {
-				pods = append(pods, toRGPod(&list.Items[i]))
-			}
-			if list.Continue == "" {
-				break
-			}
-			if err := read.nextPage(ctx); err != nil {
-				return err
-			}
-			opts.Continue = list.Continue
+		err := eachPod(ctx, s.clientsetCtx(ctx).CoreV1(), ns, metav1.ListOptions{}, func(p *corev1.Pod) {
+			pods = append(pods, toRGPod(p))
+		})
+		if err != nil {
+			return err
 		}
 		mu.Lock()
 		res.pods = append(res.pods, pods...)

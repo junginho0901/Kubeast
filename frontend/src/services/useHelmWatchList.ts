@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { HelmReleaseSummary } from './api'
 import { liveSessionEnded, SESSION_ENDED_EVENT } from './auth'
+import { clearWatchProblem, recordWatchFrame } from './watchProblemStore'
 
 // Helm release watch — Server-Sent Events 로 cluster + namespace 별 release
 // 변화를 실시간 push. backend 가 Helm Secret 을 decode 해서 보내주므로 K8s
@@ -88,6 +89,22 @@ export const applyHelmWatchEvent = (
   return items
 }
 
+type StreamFrame = Parameters<typeof recordWatchFrame>[1]
+
+// What a named event of the stream tells the page's watch problem notice: the server's limit of live watches, said as a
+// socket's refusal says it, and that the releases are followed again. A start failure is plain text and stays in the log.
+export function helmStreamFrame(name: string, data: string | undefined): StreamFrame | undefined {
+  if (name === 'following') return { type: 'DATA' }
+  if (name !== 'error' || !data) return undefined
+  try {
+    const parsed = JSON.parse(data) as StreamFrame['error']
+    if (parsed && typeof parsed === 'object' && typeof parsed.reason === 'string') return { type: 'ERROR', error: parsed }
+  } catch {
+    // not a refusal of ours
+  }
+  return undefined
+}
+
 /**
  * useHelmWatchList — /api/v1/helm/releases/stream 에 SSE 로 구독하고 named
  * react-query cache 를 Helm release Secret 변화에 따라 갱신.
@@ -116,8 +133,11 @@ export function useHelmWatchList(options: UseHelmWatchListOptions): void {
 
     const url = buildHelmWatchURL(cluster, namespace)
     const es = new EventSource(url, { withCredentials: true })
+    const problemKey = `${cluster}\n${url}`
+    es.addEventListener('following', () => recordWatchFrame(problemKey, { type: 'DATA' }))
 
     es.onmessage = (raw: MessageEvent) => {
+      recordWatchFrame(problemKey, { type: 'DATA' })
       try {
         const msg = JSON.parse(raw.data) as HelmWatchEvent
         const key = queryKeyRef.current
@@ -154,10 +174,13 @@ export function useHelmWatchList(options: UseHelmWatchListOptions): void {
       if (errData) {
         console.warn('helm watch sse error frame', errData)
       }
+      const frame = helmStreamFrame('error', errData)
+      if (frame) recordWatchFrame(problemKey, frame)
     })
 
     return () => {
       es.close()
+      clearWatchProblem(problemKey)
     }
   }, [cluster, namespace, enabled, queryClient, queryKeyDep])
 }

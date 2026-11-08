@@ -361,25 +361,10 @@ func (s *hygienePodSummary) add(p *corev1.Pod) {
 // hygienePodSummaryOf lists the pods podListChunk at a time and checks each page as it comes.
 func hygienePodSummaryOf(ctx context.Context, cs kubernetes.Interface, target int) (*hygienePodSummary, error) {
 	sum := newHygienePodSummary(target)
-	var read pagedRead
-	defer read.done()
-	opts := metav1.ListOptions{Limit: podListChunk}
-	for {
-		l, err := cs.CoreV1().Pods("").List(ctx, opts)
-		if err != nil {
-			return nil, err
-		}
-		for i := range l.Items {
-			sum.add(&l.Items[i])
-		}
-		if l.Continue == "" {
-			return sum, nil
-		}
-		if err := read.nextPage(ctx); err != nil {
-			return nil, err
-		}
-		opts.Continue = l.Continue
+	if err := eachPod(ctx, cs.CoreV1(), "", metav1.ListOptions{}, sum.add); err != nil {
+		return nil, err
 	}
+	return sum, nil
 }
 
 // hygieneTarget is the minor the upgrade checks judge against: the option, else the server's next.

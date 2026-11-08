@@ -6,12 +6,14 @@ import (
 	"slices"
 	"strings"
 
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
+	"github.com/junginho0901/kubeast/services/pkg/cluster"
 )
 
 // Cluster View draws every node with its pods as coloured dots (the node map)
@@ -90,6 +92,16 @@ func podNodeSummary(rows []*podRow, q string) *PodNodeSummary {
 
 // GetPodsOnNode is the pods on node ("" = not scheduled) the caller's own list shows, from one read for everyone as kubeast:cache kept to what its identity may list (podListAccess), what that check refuses listed as the caller.
 func (s *Service) GetPodsOnNode(ctx context.Context, node, namespace string) ([]map[string]interface{}, error) {
+	list, err := s.podsOnNodeOf(ctx, node, namespace)
+	if err != nil {
+		return nil, err
+	}
+	return list.rows, nil
+}
+
+// podsOnNodeOf is GetPodsOnNode's read with what kubectl describe node adds up of each pod, which the Node drawer's
+// Allocated Resources sum: one read of the node for everyone, as its pod table and Cluster View's box read it.
+func (s *Service) podsOnNodeOf(ctx context.Context, node, namespace string) (*nodePodList, error) {
 	b := s.bundleForCtx(ctx)
 	if b == nil {
 		return nil, errNotLoaded
@@ -103,9 +115,9 @@ func (s *Service) GetPodsOnNode(ctx context.Context, node, namespace string) ([]
 		ci.touch()
 		all, allowed, err := s.podListAccess(ctx, b, namespace)
 		if err == nil {
-			rows, err := s.podsOnNodeShared(ctx, b, node, namespaces, all, allowed)
+			list, err := s.podsOnNodeShared(ctx, b, node, namespaces, all, allowed)
 			if !apierrors.IsForbidden(err) {
-				return rows, err
+				return list, err
 			}
 		} else if !apierrors.IsForbidden(err) {
 			return nil, err
@@ -114,23 +126,69 @@ func (s *Service) GetPodsOnNode(ctx context.Context, node, namespace string) ([]
 	if b.clientset == nil {
 		return nil, errNotLoaded
 	}
-	return listPodsOnNode(ctx, b.clientset.CoreV1(), node, namespaces)
+	return nodePodsOfCaller(ctx, b.id, b.clientset.CoreV1(), node, namespaces)
 }
 
-// nodePodList is one read of a node's pods, each row with its namespace in the API's order; its callers change nothing in it.
+// nodePodList is one read of a node's pods, each row with its namespace and what kubectl describe node adds up of it
+// (allocationOf), in the API's order; its callers change nothing in it.
 type nodePodList struct {
 	rows       []map[string]interface{}
 	namespaces []string
+	alloc      []podAllocation
+}
+
+func nodePodListOf(items []corev1.Pod) *nodePodList {
+	list := &nodePodList{rows: formatPodList(items), namespaces: make([]string, len(items)), alloc: make([]podAllocation, len(items))}
+	for i := range items {
+		list.namespaces[i] = items[i].Namespace
+		list.alloc[i] = allocationOf(&items[i])
+	}
+	return list
+}
+
+// emptyNodePodList holds no pod and answers an empty list, not null.
+func emptyNodePodList() *nodePodList {
+	return &nodePodList{rows: []map[string]interface{}{}}
+}
+
+// keep adds from's pod i.
+func (l *nodePodList) keep(from *nodePodList, i int) {
+	l.rows = append(l.rows, from.rows[i])
+	l.namespaces = append(l.namespaces, from.namespaces[i])
+	l.alloc = append(l.alloc, from.alloc[i])
+}
+
+// keepAll adds every pod of from, which may be nil.
+func (l *nodePodList) keepAll(from *nodePodList) {
+	if from == nil {
+		return
+	}
+	for i := range from.rows {
+		l.keep(from, i)
+	}
 }
 
 // nodeReadsAtOnce: a node of 40 pods holds about 0.7 MiB while it is read, and at the client's 100 a second a read would take over 160 ms before 16 places set the pace.
 const nodeReadsAtOnce = 16
 
-// nodeReadPlaces bound the shared node reads of each cluster at once; without them the client's burst let 200 through together.
+// nodeReadPlaces bound the reads of a node's pods of each cluster at once, shared or as a caller; without them the
+// client's burst let 200 through together.
 var nodeReadPlaces = newClusterPlaces("node pods read", nodeReadsAtOnce)
 
-// podsOnNodeShared keeps the shared read's rows of the allowed namespaces and lists the refused ones as the caller, in the order of namespaces.
-func (s *Service) podsOnNodeShared(ctx context.Context, b *clientBundle, node string, namespaces []string, all bool, allowed []string) ([]map[string]interface{}, error) {
+// listNodePodsAsCaller is one list of node's pods in namespace ("" = every namespace) as the caller, holding one of
+// the cluster's node read places: before the informers sync, or when the shared read is refused, a crowd of callers
+// costs the API server what the shared read's crowd does.
+func listNodePodsAsCaller(ctx context.Context, id cluster.ID, pods typedcorev1.PodsGetter, node, namespace string) (*corev1.PodList, error) {
+	release, err := nodeReadPlaces.take(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	return pods.Pods(namespace).List(ctx, metav1.ListOptions{FieldSelector: "spec.nodeName=" + node})
+}
+
+// podsOnNodeShared keeps the shared read's pods of the allowed namespaces and lists the refused ones as the caller, in the order of namespaces.
+func (s *Service) podsOnNodeShared(ctx context.Context, b *clientBundle, node string, namespaces []string, all bool, allowed []string) (*nodePodList, error) {
 	list, _, err := b.nodePods.Do(ctx, node, func(ctx context.Context) (*nodePodList, error) {
 		release, err := nodeReadPlaces.take(ctx, b.id)
 		if err != nil {
@@ -144,20 +202,20 @@ func (s *Service) podsOnNodeShared(ctx context.Context, b *clientBundle, node st
 	}
 	accesstrail.Cached(ctx, "pods on the node (read as "+overviewCacheUser+")")
 	if all {
-		return list.rows, nil
+		return list, nil
 	}
 	refused := slices.DeleteFunc(slices.Clone(namespaces), func(ns string) bool { return slices.Contains(allowed, ns) })
-	own := make([][]map[string]interface{}, len(refused))
+	own := make([]*nodePodList, len(refused))
 	if len(refused) > 0 {
 		if b.clientset == nil {
 			return nil, errNotLoaded
 		}
 		errs := make([]error, len(refused))
 		sideBySide(len(refused), func(i int) {
-			l, err := b.clientset.CoreV1().Pods(refused[i]).List(ctx, metav1.ListOptions{FieldSelector: "spec.nodeName=" + node})
+			l, err := listNodePodsAsCaller(ctx, b.id, b.clientset.CoreV1(), node, refused[i])
 			switch {
 			case err == nil:
-				own[i] = formatPodList(l.Items)
+				own[i] = nodePodListOf(l.Items)
 			case !apierrors.IsForbidden(err) && !apierrors.IsNotFound(err):
 				errs[i] = fmt.Errorf("list pods on node %q: %w", node, err)
 			}
@@ -168,15 +226,15 @@ func (s *Service) podsOnNodeShared(ctx context.Context, b *clientBundle, node st
 			}
 		}
 	}
-	out := make([]map[string]interface{}, 0, len(list.rows))
+	out := emptyNodePodList()
 	for _, ns := range namespaces {
 		if i := slices.Index(refused, ns); i >= 0 {
-			out = append(out, own[i]...)
+			out.keepAll(own[i])
 			continue
 		}
 		for j, rowNamespace := range list.namespaces {
 			if rowNamespace == ns {
-				out = append(out, list.rows[j])
+				out.keep(list, j)
 			}
 		}
 	}
@@ -192,24 +250,41 @@ func readNodePods(ctx context.Context, client kubernetes.Interface, node string)
 	if err != nil {
 		return nil, fmt.Errorf("list pods on node %q: %w", node, err)
 	}
-	list := &nodePodList{rows: formatPodList(l.Items), namespaces: make([]string, len(l.Items))}
-	for i := range l.Items {
-		list.namespaces[i] = l.Items[i].Namespace
-	}
-	return list, nil
+	return nodePodListOf(l.Items), nil
 }
 
-func listPodsOnNode(ctx context.Context, pods typedcorev1.PodsGetter, node string, namespaces []string) ([]map[string]interface{}, error) {
-	opts := metav1.ListOptions{FieldSelector: "spec.nodeName=" + node}
-	list := func(ns string) ([]map[string]interface{}, error) {
-		l, err := pods.Pods(ns).List(ctx, opts)
+// nodePodsOfCaller lists node's pods as the caller, across the cluster or in each of namespaces (one the cluster
+// refuses left out unless all are, as fanOutNamespaces does), each list holding one of the cluster's node read places.
+func nodePodsOfCaller(ctx context.Context, id cluster.ID, pods typedcorev1.PodsGetter, node string, namespaces []string) (*nodePodList, error) {
+	list := func(ns string) ([]*nodePodList, error) {
+		l, err := listNodePodsAsCaller(ctx, id, pods, node, ns)
 		if err != nil {
 			return nil, fmt.Errorf("list pods on node %q: %w", node, err)
 		}
-		return formatPodList(l.Items), nil
+		return []*nodePodList{nodePodListOf(l.Items)}, nil
 	}
+	var parts []*nodePodList
+	var err error
 	if len(namespaces) == 0 {
-		return list("")
+		parts, err = list("")
+	} else {
+		parts, err = fanOutNamespaces(namespaces, list)
 	}
-	return fanOutNamespaces(namespaces, list)
+	if err != nil {
+		return nil, err
+	}
+	out := emptyNodePodList()
+	for _, part := range parts {
+		out.keepAll(part)
+	}
+	return out, nil
+}
+
+// listPodsOnNode is nodePodsOfCaller's rows.
+func listPodsOnNode(ctx context.Context, id cluster.ID, pods typedcorev1.PodsGetter, node string, namespaces []string) ([]map[string]interface{}, error) {
+	list, err := nodePodsOfCaller(ctx, id, pods, node, namespaces)
+	if err != nil {
+		return nil, err
+	}
+	return list.rows, nil
 }

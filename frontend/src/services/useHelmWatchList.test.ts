@@ -1,6 +1,26 @@
 import { describe, expect, it } from 'vitest'
-import { applyHelmWatchEvent } from './useHelmWatchList'
+import { applyHelmWatchEvent, helmStreamFrame } from './useHelmWatchList'
 import type { HelmReleaseSummary } from './api'
+import { clearWatchProblem, getWatchProblem, recordWatchFrame } from './watchProblemStore'
+
+describe('what the Helm releases stream tells the watch problem notice', () => {
+  const key = 'c\n/api/v1/helm/releases/stream?cluster=c'
+  // as k8s-service's helm_watch.go writes it (helmLimitFrame)
+  const limit = '{"limit_scope":"server","message":"max subscriptions reached for the server, cannot create new watch","reason":"limit"}'
+
+  it('says the server\'s limit as a socket\'s refusal does, and clears it once the stream follows', () => {
+    recordWatchFrame(key, helmStreamFrame('error', limit)!)
+    expect(getWatchProblem()).toBe('server_limit')
+    recordWatchFrame(key, helmStreamFrame('following', '{}')!)
+    expect(getWatchProblem()).toBeUndefined()
+  })
+
+  it('leaves a start failure, plain text, to the log', () => {
+    expect(helmStreamFrame('error', 'kubeconfig not loaded')).toBeUndefined()
+    expect(helmStreamFrame('error', undefined)).toBeUndefined()
+    clearWatchProblem(key)
+  })
+})
 
 const rel = (name: string, revision: number, status = 'deployed'): HelmReleaseSummary => ({
   name, namespace: 'apps', revision, status, chart: 'web', chartVersion: '1.0.0', appVersion: '1.0', updated: '2026-11-02T00:00:00Z',

@@ -21,23 +21,7 @@ const timelinePageSize = 500
 
 // eachRolloutPage lists a kind timelinePageSize at a time, giving each page to keep, as a big read past the first.
 func eachRolloutPage[L metav1.ListInterface](ctx context.Context, list func(metav1.ListOptions) (L, error), keep func(L)) error {
-	var read pagedRead
-	defer read.done()
-	opts := metav1.ListOptions{Limit: timelinePageSize}
-	for {
-		page, err := list(opts)
-		if err != nil {
-			return err
-		}
-		keep(page)
-		if page.GetContinue() == "" {
-			return nil
-		}
-		if err := read.nextPage(ctx); err != nil {
-			return err
-		}
-		opts.Continue = page.GetContinue()
-	}
+	return eachPage(ctx, metav1.ListOptions{Limit: timelinePageSize}, list, keep)
 }
 
 // rolloutReplicaSet keeps what rolloutHistoryFromLists reads of a ReplicaSet.

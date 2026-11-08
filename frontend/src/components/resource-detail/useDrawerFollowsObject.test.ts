@@ -127,6 +127,69 @@ describe('an open drawer follows its object', () => {
     unsubscribe()
   })
 
+  // The first read went out before the object changed and answers after the watch opened with the change.
+  const slowFirstAnswer = (server: { replicas: number }) => {
+    const client = new QueryClient()
+    let reads = 0
+    const observer = new QueryObserver(client, {
+      queryKey: describeKey,
+      retry: false,
+      queryFn: () => {
+        reads += 1
+        const read = { name: 'web', replicas: server.replicas, events: [{ reason: `read ${reads}` }] }
+        return new Promise((resolve) => setTimeout(() => resolve(read), 500))
+      },
+    })
+    const unsubscribe = observer.subscribe(() => {})
+    const follower = objectFollower(client, describeKey, 1000)
+    return {
+      follower,
+      reads: () => reads,
+      shown: () => observer.getCurrentResult().data as { replicas: number; events: Array<{ reason: string }> } | undefined,
+      close: () => {
+        follower.stop()
+        unsubscribe()
+      },
+    }
+  }
+
+  it('keeps what the watch opened with over a first answer read before it, and reads that answer again once', async () => {
+    const server = { replicas: 1 }
+    const drawer = slowFirstAnswer(server)
+    server.replicas = 2
+    drawer.follower.onEvent({ type: 'ADDED', object: { name: 'web', replicas: 2 } })
+    await vi.advanceTimersByTimeAsync(500)
+    expect(drawer.shown()?.replicas).toBe(2)
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(drawer.reads()).toBe(2)
+    expect(drawer.shown()).toEqual({ name: 'web', replicas: 2, events: [{ reason: 'read 2' }] })
+    drawer.close()
+  })
+
+  it('reads nothing more when the first answer, come after the watch opened, says what the watch said', async () => {
+    const server = { replicas: 2 }
+    const drawer = slowFirstAnswer(server)
+    drawer.follower.onEvent({ type: 'ADDED', object: { name: 'web', replicas: 2 } })
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(drawer.reads()).toBe(1)
+    expect(drawer.shown()?.replicas).toBe(2)
+    drawer.close()
+  })
+
+  it('keeps a change the watch brought before the first answer over that answer, with one read more', async () => {
+    const server = { replicas: 1 }
+    const drawer = slowFirstAnswer(server)
+    drawer.follower.onEvent({ type: 'ADDED', object: { name: 'web', replicas: 1 } })
+    server.replicas = 3
+    drawer.follower.onEvent({ type: 'MODIFIED', object: { name: 'web', replicas: 3 } })
+    await vi.advanceTimersByTimeAsync(500)
+    expect(drawer.shown()?.replicas).toBe(3)
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(drawer.reads()).toBe(2)
+    expect(drawer.shown()?.replicas).toBe(3)
+    drawer.close()
+  })
+
   it('reads once for many changes close together, and last after the last of them', async () => {
     let replicas = 0
     const drawer = openDrawer(() => ({ name: 'web', replicas }))
@@ -216,6 +279,66 @@ describe('an open drawer follows its object', () => {
     applyWatchMessage(drawer.client, describeKey, { type: 'RESYNC' })
     await vi.advanceTimersByTimeAsync(5000)
     expect(drawer.shown()).toEqual({ name: 'web', replicas: 3 })
+    drawer.close()
+  })
+})
+
+// A Node drawer follows the node list, whose rows carry each condition's type, status and reason; the describe answer
+// says each with its message and times, which "Since Ready Changed" and the Conditions section show.
+describe('a Node drawer and the node list row it follows', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  const condition = (type: string, status: string, reason: string, since: string, beat: string) => ({
+    row: { type, status, reason },
+    answer: { type, status, reason, message: `${type} is ${status}`, last_heartbeat_time: beat, last_transition_time: since },
+  })
+  const node = (labels: Record<string, string>, conditions: Array<ReturnType<typeof condition>>) => ({
+    row: { name: 'node-a', status: 'Ready', roles: ['control-plane'], labels, conditions: conditions.map((c) => c.row) },
+    answer: { name: 'node-a', status: 'Ready', roles: ['control-plane'], labels, conditions: conditions.map((c) => c.answer), pod_cidr: '10.244.0.0/24' },
+  })
+  const ready = condition('Ready', 'True', 'KubeletReady', '2026-11-01T00:01:00Z', '2026-11-08T11:59:00Z')
+  const memory = condition('MemoryPressure', 'False', 'KubeletHasSufficientMemory', '2026-11-01T00:00:00Z', '2026-11-08T11:59:00Z')
+
+  it('keeps the conditions\' times and reads nothing more when the watch opens with the node as it is', async () => {
+    const opened = node({}, [memory, ready])
+    const drawer = openDrawer(() => opened.answer)
+    await vi.advanceTimersByTimeAsync(0)
+    drawer.frame('ADDED', opened.row)
+    await vi.advanceTimersByTimeAsync(5000)
+    expect((drawer.shown() as typeof opened.answer).conditions).toEqual(opened.answer.conditions)
+    expect(drawer.reads()).toBe(1)
+    drawer.close()
+  })
+
+  it('shows a new label at once and keeps the conditions\' times until the answer is read again', async () => {
+    let now = node({}, [memory, ready])
+    const drawer = openDrawer(() => now.answer)
+    await vi.advanceTimersByTimeAsync(0)
+    drawer.frame('ADDED', now.row)
+    now = node({ team: 'a' }, [memory, condition('Ready', 'True', 'KubeletReady', '2026-11-01T00:01:00Z', '2026-11-08T12:04:00Z')])
+    drawer.frame('MODIFIED', now.row)
+    const shown = drawer.shown() as typeof now.answer
+    expect(shown.labels).toEqual({ team: 'a' })
+    expect(shown.conditions.map((c) => c.last_transition_time)).toEqual(['2026-11-01T00:00:00Z', '2026-11-01T00:01:00Z'])
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(drawer.shown()).toEqual(now.answer)
+    drawer.close()
+  })
+
+  it('reads again when the node the watch opens with no longer has the conditions the answer says', async () => {
+    let now = node({}, [memory, ready])
+    const drawer = openDrawer(() => now.answer)
+    await vi.advanceTimersByTimeAsync(0)
+    now = node({}, [memory, condition('Ready', 'Unknown', 'NodeStatusUnknown', '2026-11-08T12:00:40Z', '2026-11-08T11:59:00Z')])
+    drawer.frame('ADDED', now.row)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(drawer.reads()).toBe(2)
+    expect((drawer.shown() as typeof now.answer).conditions).toEqual(now.answer.conditions)
     drawer.close()
   })
 })
@@ -543,6 +666,8 @@ const READ_BRINGS: Record<string, string[]> = {
   resourcequotas: ['spec_hard'],
   poddisruptionbudgets: ['match_expressions', 'max_unavailable', 'min_available', 'unhealthy_pod_eviction_policy'],
   customresourcedefinitions: ['versions'],
+  // the row's conditions have no message or times
+  nodes: ['conditions'],
 }
 
 type AnswerCase = { name: string; resource: string; before: Record<string, unknown>; frame: Record<string, unknown>; after: Record<string, unknown> }

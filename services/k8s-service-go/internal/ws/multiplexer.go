@@ -210,14 +210,57 @@ type Multiplexer struct {
 	mu     sync.Mutex
 	subs   map[string]*subscription // key -> subscription
 	starts map[string]*limits.Slots // cluster -> places for starting a watch
+	// held are the live watches of streams outside the sockets (HoldWatches), which count against MaxSubscriptions too.
+	held int
 }
 
-// SubscriptionCount is the number of live subscriptions across all connections (metrics).
+// SubscriptionCount is the number of live subscriptions across all connections and the watches HoldWatches holds (metrics).
 func (m *Multiplexer) SubscriptionCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return len(m.subs)
+	return len(m.subs) + m.held
 }
+
+// HoldWatches takes n of the server's live watches (MaxSubscriptions) for a stream outside the sockets — the Helm
+// releases' stream, one watch per namespace of a grant limited to them — or says they do not fit. release gives them back.
+func (m *Multiplexer) HoldWatches(n int) (release func(), ok bool) {
+	maxTotal := m.MaxSubscriptions
+	if maxTotal <= 0 {
+		maxTotal = defaultMaxSubscriptions
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.subs)+m.held+n > maxTotal {
+		return nil, false
+	}
+	m.held += n
+	return sync.OnceFunc(func() {
+		m.mu.Lock()
+		m.held -= n
+		m.mu.Unlock()
+	}), true
+}
+
+// StartWatch waits for one of the cluster's places for starting a watch, as a socket's watch does (takeWatchStart), for a
+// stream outside the sockets. The place goes back by release or after startHoldFor, whichever comes first.
+func (m *Multiplexer) StartWatch(ctx context.Context, clusterID string) (release func(), err error) {
+	give, err := m.watchStartPlaces(effectiveClusterID(clusterID)).Take(ctx)
+	if err != nil {
+		return nil, err
+	}
+	once := sync.OnceFunc(give)
+	timer := time.AfterFunc(m.startHoldFor, once)
+	return func() {
+		timer.Stop()
+		once()
+	}, nil
+}
+
+// WatchTimeoutSeconds is what a watch asks the API server to run for, spread as the sockets' watches are.
+func WatchTimeoutSeconds() int64 { return watchTimeoutSeconds() }
+
+// WatchResumeDelay is the wait before a watch that ended goes on, spread as the sockets' watches are.
+func WatchResumeDelay() time.Duration { return watchResumeDelay() }
 
 // subscriptionCluster is the cluster a REQUEST targets: its own clusterId, or
 // the connection's cluster that the HTTP ClusterMiddleware resolved.
@@ -396,7 +439,7 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Reject if this connection's or the global cap is reached
-			if len(connSubs) >= maxPerConn || len(m.subs) >= maxTotal {
+			if len(connSubs) >= maxPerConn || len(m.subs)+m.held >= maxTotal {
 				limit, scope, limitScope := maxPerConn, "this connection", limitScopeTab
 				if len(connSubs) < maxPerConn {
 					limit, scope, limitScope = maxTotal, "the server", limitScopeServer
