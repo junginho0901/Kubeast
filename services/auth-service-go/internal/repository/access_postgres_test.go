@@ -15,6 +15,7 @@ import (
 
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/accessreview"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/repository"
+	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/dbmigrate"
 )
 
@@ -318,6 +319,47 @@ func TestPostgresDormantIsWhatTheLockTakes(t *testing.T) {
 }
 
 func ptr(t time.Time) *time.Time { return &t }
+
+// Deleting a cluster takes its grants with it (ON DELETE CASCADE), so it ends the tokens that carry them, as every
+// other change of a grant does: a cluster registered again under the same name is not reached with the old role.
+func TestPostgresDeletingAClusterEndsTheTokensOfItsGrants(t *testing.T) {
+	pool := migratedDatabase(t)
+	ctx := context.Background()
+	repo := repository.New(pool)
+	role := roleID(t, pool, "t-granted", "resource.*.read")
+	exec(t, pool, `INSERT INTO clusters (id, display_name, mode) VALUES ('c1', 'One', 'external'), ('c2', 'Two', 'external')`)
+	users := []string{"on-c1", "on-both", "on-c2", "none"}
+	for _, id := range users {
+		exec(t, pool, `INSERT INTO auth_users (id, name, email, password_hash, role_id) VALUES ($1, $1, $2, 'x', $3)`, id, id+"@example.com", role)
+	}
+	exec(t, pool, `INSERT INTO user_cluster_roles (user_id, cluster_id, role_id) VALUES ('on-c1', 'c1', $1), ('on-both', 'c1', $1), ('on-both', 'c2', $1), ('on-c2', 'c2', $1)`, role)
+
+	if err := cluster.NewPostgresRegistry(pool, nil).Remove(ctx, "c1", nil); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]int{}
+	for _, id := range users {
+		v, err := repo.GetTokenVersion(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got[id] = v
+	}
+	if want := map[string]int{"on-c1": 1, "on-both": 1, "on-c2": 0, "none": 0}; !maps.Equal(got, want) {
+		t.Errorf("token versions %v, want %v", got, want)
+	}
+	rows, err := pool.Query(ctx, `SELECT user_id || '@' || cluster_id FROM user_cluster_roles ORDER BY 1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	left, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(left, []string{"on-both@c2", "on-c2@c2"}) {
+		t.Errorf("grants left %v", left)
+	}
+}
 
 func TestPostgresRoleEditEndsTheTokensItNames(t *testing.T) {
 	pool := migratedDatabase(t)

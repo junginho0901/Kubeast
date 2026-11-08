@@ -409,8 +409,8 @@ func (r *PostgresRegistry) AddSelf(ctx context.Context, displayName, createdBy s
 	return r.GetMeta(ctx, id)
 }
 
-// Remove deletes a cluster row (CASCADE clears its user_cluster_roles) and
-// best-effort removes its kubeconfig secret. A secret-delete failure does not
+// Remove deletes a cluster row (CASCADE clears its user_cluster_roles, and the
+// holders of those grants get a new token_version) and best-effort removes its kubeconfig secret. A secret-delete failure does not
 // fail the call — the row is already gone.
 func (r *PostgresRegistry) Remove(ctx context.Context, id ID, writer SecretWriter) error {
 	var secretName, promSecret, lsSecret *string
@@ -421,7 +421,13 @@ func (r *PostgresRegistry) Remove(ctx context.Context, id ID, writer SecretWrite
 	if err != nil {
 		return err
 	}
-	if _, err := r.pool.Exec(ctx, `DELETE FROM clusters WHERE id = $1`, id); err != nil {
+	// The cascade takes the grants, so the tokens carrying them end in the same statement, as any other grant change does.
+	if _, err := r.pool.Exec(ctx, `
+		WITH ended AS (
+			UPDATE auth_users SET token_version = token_version + 1, updated_at = NOW()
+			WHERE id IN (SELECT user_id FROM user_cluster_roles WHERE cluster_id = $1)
+		)
+		DELETE FROM clusters WHERE id = $1`, id); err != nil {
 		return fmt.Errorf("delete cluster: %w", err)
 	}
 	if secretName != nil && *secretName != "" && writer != nil {

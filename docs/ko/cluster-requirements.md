@@ -76,7 +76,7 @@ Kubeast 화면에서 셸은 Admin만 열 수 있지만, 클러스터 권한으�
 목록에 있는 그룹은 그 이름의 역할이 있든 없든 ClusterRole을 갖고 있고, 그 이름의 역할은 그 그룹으로 동작합니다.
 Kubeast는 그 ClusterRole과 사람이 가진 권한을 비교할 수 없으므로, 목록의 그룹이 되는 새 이름과 이름 바꾸기에는 모든 권한(`*`, 전역 Admin)이 필요합니다. `admin.roles.create`나 `admin.roles.update`를 가진 다른 사람은 403을 받고 감사 행이 남습니다.
 그러니 이름을 목록에 적고 전역 Admin이 역할을 만들거나, 역할을 먼저 만들고 나서 목록에 적으세요. 그 뒤로는 다른 역할과 같습니다. `admin.roles.update`로 고칠 수 있고, 목록의 이름으로 이미 저장된 역할은 그대로 동작합니다.
-부여는 막지 않습니다. `admin.users.update`는 부여하는 사람이 가진 권한 키 안에서 그 역할을 부여하고, 그 키는 바인딩을 나타내지 않습니다. 넓은 ClusterRole로 적은 역할에는 그만큼 넓은 키를 주세요.
+그 역할의 부여(직접 부여나 접근 요청 승인)는 전역 관리자나 그 클러스터의 Admin(Namespace 한정 없음)만 할 수 있습니다. 이들은 그 클러스터에서 `kubeast:admin`, 곧 `cluster-admin`으로 동작하므로 바인딩이 주는 것을 이미 가졌습니다. `admin.users.update`를 가진 다른 사람은 403을 받고 감사 행이 남으며, 클러스터 접근 선택지와 승인 버튼도 그렇게 보입니다. Namespace 한정 부여를 위해 목록에 적은 Read·Write·Admin은 이렇게 막지 않습니다.
 차트는 이 목록을 `IMPERSONATION_CUSTOM_ROLES`로 auth-service에 넘깁니다. Docker Compose에는 차트가 없으므로, 클러스터에 이런 바인딩을 적용했다면 `.env`의 이 변수에 이름을 적으세요.
 
 **역할을 지워도 바인딩은 지워지지 않습니다.** 적용된 모든 클러스터에 남고, 다음에 그 이름으로 만든 역할이 그 바인딩으로 동작합니다.
@@ -522,7 +522,7 @@ service:
 
 - **이 클러스터의 역할은 이 클러스터 전체에 대한 쿠버네티스 권한입니다.** Write는 `kubeast:operator`로 동작하고, 차트가 이 그룹을 클러스터 전체에 `edit` ClusterRole로 바인딩합니다. `edit`은 모든 Namespace에서 Secret을 읽고 파드를 만듭니다. Admin은 `kubeast:admin`, 곧 `cluster-admin`입니다.
 - **Kubeast 앱은 자기 Namespace를 전역 관리자(모든 클러스터의 `*` 권한)로 제한합니다.** 이 클러스터의 Write나 Admin 부여를 포함해 그 밖의 사람은 화면, API, AI 도구, MCP에서 다음을 하면 까닭과 함께 403을 받습니다.
-  - 그 안의 Secret과 Helm release 읽기(여러 Namespace에 걸친 목록에서는 빠집니다)
+  - 그 안의 Secret과 Helm release 읽기(여러 Namespace에 걸친 목록에서는 빠집니다. 전역 관리자가 sign-off한 Cluster Hygiene 보고서에서도 그 안의 TLS 인증서·Helm release 발견과 그 건수가 빠집니다)
   - 그 안의 변경 전부: 파드·워크로드 만들기, YAML 적용, 삭제, ServiceAccount 토큰, Namespace 객체 자체
   - 그 안의 파드에 exec·attach·port-forward, 로그 파일 읽기, API 서버를 거쳐 그 안의 파드·Service로 프록시하기. Kubeast가 읽는 Prometheus나 OpenCost는 다른 Namespace에 두세요. Kubeast는 그 프록시로 읽습니다.
 - 파드, 로그, 이벤트, ConfigMap은 계속 읽을 수 있고, drain은 그 안의 파드도 옮길 수 있습니다.
@@ -531,7 +531,7 @@ service:
   - 사람의 쿠버네티스 신원은 RBAC으로 이 Namespace의 Secret을 못 읽게 묶으세요. `kubectl auth can-i get secrets -n <릴리스 네임스페이스> --as <사용자>`로 확인합니다.
   - 다른 Namespace에도 Pod Security를 적용하세요. 호스트 `/`를 마운트한 파드는 그 노드의 Secret에 모두 닿습니다.
   - 노드 셸(`resource.node.shell`)은 이 클러스터 노드의 root이므로 같은 Secret에 닿습니다. 이 클러스터에서는 전역 관리자로 삼아도 되는 사람에게만 주세요.
-- **In-cluster**로 연결한 클러스터는 이 클러스터입니다. kubeconfig로 연결한 클러스터는 `kube-system` 네임스페이스 UID를 viewer 신원(`kubeast:viewer`)으로 읽어 비교하고, 같으면 위 내용을 똑같이 적용합니다. 그 UID를 읽지 못하면 로그를 남기고 다른 클러스터로 다루므로, 이 클러스터는 In-cluster로 연결하세요.
+- **In-cluster**로 연결한 클러스터는 이 클러스터입니다. kubeconfig로 연결한 클러스터는 `kube-system` 네임스페이스 UID를 viewer 신원(`kubeast:viewer`)으로 읽어 비교하고, 같으면 위 내용을 똑같이 적용합니다. 그 UID를 읽지 못하면 로그를 남기고, 나중 요청이 읽을 때까지(10초에 한 번까지) 그 클러스터의 릴리스 네임스페이스와 같은 이름 Namespace에 위 제한을 적용합니다. 다른 UID로 답하면 그때부터 다른 클러스터입니다. 이 클러스터는 In-cluster로 연결하세요.
 - 등록한 다른 클러스터에 있는 같은 이름의 Namespace는 평범한 Namespace입니다.
 
 ## 16. Hubble Relay (네트워크 흐름)

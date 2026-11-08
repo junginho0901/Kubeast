@@ -150,7 +150,9 @@ auth:
     # name Read, Write or Admin there to bind the system roles' scoped groups
     # (kubeast:role:read/write/admin, already allowed for impersonation).
     # auth-service reads this list: naming a role so that it acts as a listed
-    # group takes all permissions (*), since a role of that name holds the binding.
+    # group takes all permissions (*), since a role of that name holds the binding,
+    # and granting or approving a listed custom role takes a global admin or an
+    # Admin of that cluster not limited to namespaces.
     customRoles: []
     #  - name: sre-readonly
     #    clusterRoles: [view, "kubeast:cluster-reader"]

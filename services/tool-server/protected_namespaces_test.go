@@ -291,6 +291,72 @@ func TestKubectlWithoutTheProxyIsHeldByItsArguments(t *testing.T) {
 	}
 }
 
+// A proxy that was to run and did not start leaves no request read on its way: the kubectl tools say so and run nothing,
+// while one the operator turned off keeps the direct path held by kubectl's arguments.
+func TestAKubectlProxyThatDidNotStartRefusesTheKubectlTools(t *testing.T) {
+	prevProxy, prevExec, prevRefusal := kubectlProxy, kubectlExec, kubectlProxyRefusal
+	defer func() { kubectlProxy, kubectlExec, kubectlProxyRefusal = prevProxy, prevExec, prevRefusal }()
+	ran := 0
+	kubectlExec = func(context.Context, []string, *string) ([]byte, error) {
+		ran++
+		return []byte("ok"), nil
+	}
+	ctx := withProtectedNamespaces(auth.WithPayload(withClusterID(context.Background(), "c"), writeCaller), onInstallCluster)
+
+	kubectlProxy, kubectlProxyRefusal = nil, errKubectlProxyNotStarted
+	for _, args := range [][]string{{"get", "pods", "-n", "shop"}, {"get", "secrets", "-n", "shop"}} {
+		if _, err := runKubectl(ctx, http.Header{}, args...); err == nil || ran != 0 || !strings.Contains(err.Error(), "kubectl proxy") {
+			t.Fatalf("%v after a failed start: err %v, ran %d", args, err, ran)
+		}
+	}
+	if _, _, err := runKubectlKeepingEnd(ctx, "logs", "p", "-n", "shop"); err == nil || ran != 0 {
+		t.Fatalf("logs after a failed start: err %v, ran %d", err, ran)
+	}
+
+	kubectlProxyRefusal = nil // TOOL_SERVER_KUBECTL_PROXY=false
+	if _, err := runKubectl(ctx, http.Header{}, "get", "pods", "-n", "shop"); err != nil || ran != 1 {
+		t.Fatalf("with the proxy turned off: err %v, ran %d", err, ran)
+	}
+}
+
+// kubectl reads a comma list of kinds one by one, so a list naming Secrets is a Secret read, on the tool's arguments and
+// on kubectl's with the proxy off.
+func TestAKindListNamingSecretsIsHeldAsASecretRead(t *testing.T) {
+	for _, kinds := range []string{"pods,secrets", "configmaps, Secret", "pods,secrets.v1"} {
+		args := map[string]interface{}{"resource_type": kinds, "namespace": protectedInstall}
+		if err := protectedToolGate(writeCaller, "c", onInstallCluster, "k8s_get_resources", args); !errors.Is(err, protectedns.ErrRefused) {
+			t.Errorf("tool %q: %v", kinds, err)
+		}
+	}
+	prevProxy, prevExec := kubectlProxy, kubectlExec
+	kubectlProxy = nil
+	defer func() { kubectlProxy, kubectlExec = prevProxy, prevExec }()
+	ran := 0
+	kubectlExec = func(context.Context, []string, *string) ([]byte, error) {
+		ran++
+		return []byte("ok"), nil
+	}
+	ctx := withProtectedNamespaces(auth.WithPayload(withClusterID(context.Background(), "c"), writeCaller), onInstallCluster)
+	for _, args := range [][]string{
+		{"get", "pods,secrets", "-n", protectedInstall},
+		{"describe", "configmaps,Secrets", "-n", protectedInstall},
+		{"get", "pods,secrets", "-A"},
+	} {
+		ran = 0
+		if _, err := runKubectl(ctx, http.Header{}, args...); err == nil || ran != 0 {
+			t.Errorf("kubectl %v: err %v, ran %d", args, err, ran)
+		}
+	}
+	// a list without Secrets reads the install namespace as before
+	ran = 0
+	if _, err := runKubectl(ctx, http.Header{}, "get", "pods,configmaps", "-n", protectedInstall); err != nil || ran != 1 {
+		t.Errorf("pods,configmaps: err %v, ran %d", err, ran)
+	}
+	if err := protectedToolGate(writeCaller, "c", onInstallCluster, "k8s_get_resources", map[string]interface{}{"resource_type": "pods,configmaps", "namespace": protectedInstall}); err != nil {
+		t.Errorf("tool pods,configmaps: %v", err)
+	}
+}
+
 // k8s-service names the two namespaces with the kubeconfig, and a refused call answers 403 before anything runs, the
 // model's and an MCP client's alike.
 func TestHandleCallTakesTheNamespacesFromK8sService(t *testing.T) {

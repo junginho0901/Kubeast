@@ -280,6 +280,9 @@ func handleCount(ctx context.Context, args map[string]interface{}, headers http.
 		namespace := argString(args, "namespace", "")
 		if size, ok, err := listSize(ctx, headers, argString(args, "resource_type", ""), namespace, namespace == "",
 			argString(args, "label_selector", ""), argString(args, "field_selector", "")); err == nil && ok {
+			if size.unknown {
+				return listTooLarge(argString(args, "resource_type", ""), scope, size)
+			}
 			out := map[string]interface{}{"resource_type": argString(args, "resource_type", ""), "scope": scope}
 			if size.atLeast {
 				out["count_at_least"] = size.count

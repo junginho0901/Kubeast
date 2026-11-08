@@ -76,7 +76,7 @@ Give people who need a narrower scope a custom role (`auth.impersonation.customR
 A listed group holds its ClusterRoles whether or not a role of that name exists, and a role of that name acts as that group.
 Kubeast cannot compare those ClusterRoles with what a person holds, so a new name or a rename that makes a listed group takes all permissions (`*`, the global Admin). Anyone else holding `admin.roles.create` or `admin.roles.update` gets 403 and an audit row.
 So list the name and have a global admin create the role, or create the role first and list it after. From then on it is a role like any other: `admin.roles.update` edits it, and a role already stored under a listed name keeps working.
-Granting it is not held back: `admin.users.update` grants it within the permission keys the grantor holds, and those keys do not describe the binding. Give a role listed with wide ClusterRoles keys as wide.
+Granting it, directly or by approving an access request, takes a global admin or an Admin of that cluster not limited to namespaces: they act there as `kubeast:admin`, which is `cluster-admin`, so they already hold whatever the binding gives. Anyone else holding `admin.users.update` gets 403 and an audit row, and the Cluster access choice and the Approve button say so. Read, Write and Admin listed for their grants limited to namespaces are not held back this way.
 The chart hands the list to auth-service as `IMPERSONATION_CUSTOM_ROLES`. Docker Compose has no chart: put the names in that variable in `.env` if you apply such bindings to your clusters.
 
 **Deleting a role does not remove its bindings.** They stay on every cluster they were applied to, and the next role of that name acts with them.
@@ -506,7 +506,7 @@ The release namespace holds the key that signs sign-ins (`kubeast-auth-keys`), t
 
 - **A role on this cluster is Kubernetes access to this whole cluster.** Write acts as `kubeast:operator`, which the chart binds to the `edit` ClusterRole across the cluster, and `edit` reads Secrets and creates pods in every namespace. Admin acts as `kubeast:admin`, which is `cluster-admin`.
 - **The Kubeast app limits its namespace to global admins** (the `*` permission on every cluster). Anyone else, a Write or Admin grant on this cluster included, gets a 403 with the reason on screens, the API, AI tools and MCP for:
-  - reading its Secrets and Helm releases (a list across namespaces leaves them out),
+  - reading its Secrets and Helm releases (a list across namespaces leaves them out, and so does a Cluster Hygiene report a global admin signed off: its TLS certificate and Helm release findings there, with their counts),
   - any change there: creating pods or workloads, applying YAML, deleting, ServiceAccount tokens, the Namespace object itself,
   - exec, attach, port-forward and log files in its pods, and proxying to its pods and Services through the API server. Keep a Prometheus or OpenCost that Kubeast reads in its own namespace: Kubeast reads them through that proxy.
 - Its pods, logs, events and ConfigMaps stay readable, and a drain can still move its pods.
@@ -515,7 +515,7 @@ The release namespace holds the key that signs sign-ins (`kubeast-auth-keys`), t
   - Bind people's own Kubernetes identities with RBAC so they cannot read Secrets in this namespace: check with `kubectl auth can-i get secrets -n <release namespace> --as <user>`.
   - Enforce Pod Security in the other namespaces: a pod that mounts the host's `/` reaches every Secret on its node.
   - The node shell (`resource.node.shell`) is root on this cluster's nodes, so it reaches the same Secrets. Give it on this cluster only to people you would make global admins.
-- A cluster connected as **In-cluster** is this cluster. One connected with a kubeconfig is compared with it by the `kube-system` namespace's UID, read with the viewer identity (`kubeast:viewer`): when they match, all of this applies to it too. When that UID cannot be read, Kubeast logs it and treats the cluster as another one, so connect this cluster as In-cluster.
+- A cluster connected as **In-cluster** is this cluster. One connected with a kubeconfig is compared with it by the `kube-system` namespace's UID, read with the viewer identity (`kubeast:viewer`): when they match, all of this applies to it too. When that UID cannot be read, Kubeast logs it and holds a namespace of the release namespace's name there to these limits until a later request reads it (at most one read every 10 seconds); a cluster that answers with another UID is then another one. Connect this cluster as In-cluster.
 - A namespace of the same name on another registered cluster is an ordinary namespace.
 
 ## 16. Hubble Relay (network flows)
