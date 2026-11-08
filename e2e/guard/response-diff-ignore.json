@@ -118,7 +118,7 @@
     },
     {
       "route": "^/api/v1/auth/admin/access-review/history$",
-      "cell": "^\\$\\.\\$(length|order)$|^\\$header\\.x-kubeast-total$|^\\$\\[[^\\]]+\\]\\.(id|reviewed_by|reviewed_by_email|reviewed_at|note|counts\\.(roles|users|locked|dormant|global_admins|cluster_grants|dormant_locked|access_requests|api_keys_active|api_keys_unused|never_logged_in|temporary_grants|api_keys_expiring))$",
+      "cell": "^\\$\\.\\$(length|order)$|^\\$header\\.x-kubeast-total$|^\\$\\[[^\\]]+\\]\\.(id|reviewed_by|reviewed_by_email|reviewed_at|note|counts\\.(roles|users|locked|dormant|global_admins|full_admins|cluster_grants|dormant_locked|access_requests|api_keys_active|api_keys_unused|never_logged_in|temporary_grants|api_keys_expiring))$",
       "why": "Past reviews page: the server honours limit=25 (v0.7.5 ignored it and sent 100) and says the total in X-Kubeast-Total; the cells are rows 26 to 100.",
       "pr": "#632"
     },
@@ -226,8 +226,8 @@
     },
     {
       "route": "^/api/v1/resource-graph$",
-      "cell": "^\\$\\.nodes\\[[^\\]]*\\]\\.health$|^\\$\\.nodes\\[(Deployment|ReplicaSet|StatefulSet|DaemonSet|Pod)/[^\\]]*\\]\\.status$",
-      "why": "A box says what its list says (a pod's Status, a workload's summary status) and carries its health; a Deployment past its deadline reads Failed with #603.",
+      "cell": "^\\$\\.nodes\\[[^\\]]*\\]\\.health$|^\\$\\.nodes\\[(Deployment|ReplicaSet|StatefulSet|DaemonSet|Job|Pod)/[^\\]]*\\]\\.status$",
+      "why": "A box says what its list says (a pod's Status, a workload's summary status) and carries its health; a Deployment past its deadline reads Failed with #603, a suspended Job Suspended with #685.",
       "pr": "#596"
     },
     {
@@ -406,8 +406,8 @@
     },
     {
       "route": "^/api/v1/cluster/clusterroles/[^/]+/describe$",
-      "cell": "^\\$\\.rules\\[\\d+\\]\\.resourceNames$",
-      "why": "ClusterRole rules are as the API has them: a rule with no names leaves the key out instead of sending null.",
+      "cell": "^\\$\\.rules\\[\\d+\\]\\.(resourceNames|apiGroups|resources)$|^\\$\\.rules\\[\\d+\\]\\.nonResourceURLs(\\.\\$length$|\\.\\$order$|\\[)",
+      "why": "ClusterRole rules are as the API has them: a rule leaves out the keys it does not set instead of sending null, and a rule of nonResourceURLs sends them.",
       "pr": "#619"
     },
     {
@@ -479,6 +479,286 @@
       "cell": "^\\$\\.selector(\\.|\\[|$)",
       "why": "A Job's describe gives its selector's matchLabels as the other workloads' do, so its pod table does not wait for the object.",
       "pr": "#738"
+    },
+    {
+      "route": "^/api/v1/cluster/timeline$",
+      "cell": "^\\$\\.events\\[Pod/default/e2e-unschedulable-[^\\]]*\\]\\.(message|reason|source|type|involved_object\\.(kind|name|namespace)|resource\\.(kind|name|namespace))$|^\\$\\.events\\.\\$length$|^\\$\\.summary\\.(total_events|warning_count)$",
+      "user": "^(admin|operator|viewer|global-admin)$",
+      "why": "An events.k8s.io series is in the window by its last observed time, as kubectl's printEvent reads it; v0.7.5 read its first eventTime and left out the dev fixture's day-old FailedScheduling series.",
+      "pr": "#522"
+    },
+    {
+      "route": "^live /api/v1(/namespaces/[^/]+)?/events$",
+      "cell": "^\\$\\.items\\[[^\\]]*\\]\\.(count|first_timestamp|last_timestamp)$",
+      "why": "A live event carries the times and count as the list writes them (eventtime), so an events.k8s.io event's are not null.",
+      "pr": "#522"
+    },
+    {
+      "route": "^/api/v1/cluster/timeline$",
+      "cell": "^\\$status$|^\\$\\.detail$|^\\$\\.summary\\.|^\\$\\.(events|rollout_history)\\.\\$(length|order)$|^\\$\\.(events|rollout_history)\\[[^/\\]]*/e2e-guard-[^/\\]]+-a/",
+      "user": "^nsread$",
+      "newStatus": "^200$",
+      "why": "A grant limited to namespaces reads the timeline of its own namespaces, one at a time as the user, instead of being refused the cluster's events; the rows are that namespace's only.",
+      "pr": "#667"
+    },
+    {
+      "route": "^/api/v1/cluster/ingressclasses/[^/]+/ingresses$",
+      "cell": "^\\$status$|^\\$\\.detail$|^\\$\\.\\$(length|order)$|^\\$\\[/e2e-guard-[^/\\]]+-a/",
+      "user": "^nsread$",
+      "newStatus": "^200$",
+      "why": "A grant limited to namespaces lists a class's Ingresses in its own namespaces instead of being refused the whole cluster's.",
+      "pr": "#667"
+    },
+    {
+      "route": "^/api/v1/helm/releases$|^/api/v1/cluster/resources/(json|yaml)$|^/api/v1/cluster/custom-resources/[^/]+/[^/]+/[^/]+(/[^/]+/[^/]+/describe)?$",
+      "cell": "^\\$\\.detail$",
+      "user": "^nsread$",
+      "why": "A grant limited to namespaces is refused another namespace by Kubeast before the cluster is asked, and its lists ask the cluster in its own namespaces, so the refusal names that namespace.",
+      "pr": "#667"
+    },
+    {
+      "route": "^/api/v1/cluster/pods/page$",
+      "cell": ".",
+      "user": "^nsread$",
+      "newStatus": "^403$",
+      "why": "This route did not exist in v0.7.5 (404); a grant limited to namespaces asking it for another namespace is refused before the cluster is asked.",
+      "pr": "#667"
+    },
+    {
+      "route": "^/api/v1/auth/permissions$",
+      "cell": "^\\$\\[AI tools\\]\\.permissions\\[ai\\.tool\\.k8s_execute_command\\]\\.description$",
+      "why": "The AI's command tool runs a command in a pod and also needs Pod exec.",
+      "pr": "#668"
+    },
+    {
+      "route": "^/api/v1/cluster/secrets/all$|^live /api/v1/secrets$",
+      "cell": "^\\$(\\.items)?\\.\\$(length|order)$|^\\$(\\.items)?\\[[^\\]]*/kubeast/[^\\]/]+\\]\\.(created_at|data_count|data_keys|labels|annotations|name|namespace|type|watchEvent)(\\.|\\[|$)",
+      "user": "^(admin|operator)$",
+      "why": "Only a global admin reads Secrets in the install namespace: a list across namespaces leaves it out (fieldSelector metadata.namespace!=kubeast), so a cluster Admin or Write grant no longer sees its rows.",
+      "pr": "#669"
+    },
+    {
+      "route": "^/api/v1/helm/releases$",
+      "cell": "^\\$\\.items\\.\\$(length|order)$|^\\$\\.items\\[/kubeast/[^\\]/]+/\\d+\\]\\.(name|namespace|revision|status|chart|chartVersion|appVersion|updated)$",
+      "user": "^(admin|operator)$",
+      "why": "Helm releases are kept in Secrets, so a release in the install namespace is read only by a global admin.",
+      "pr": "#669"
+    },
+    {
+      "route": "^/api/v1/auth/admin/access-review$",
+      "cell": "^\\$\\.(roles|cluster_roles)\\[[^\\]]*\\]\\.flags(\\.\\$length$|\\.\\$order$|\\[sensitive_access\\]$)",
+      "why": "The access review flags roles holding node shell, pod exec or Secret reveal (sensitive_access).",
+      "pr": "#672"
+    },
+    {
+      "route": "^live /api/v1/volumeattachments$",
+      "cell": "^\\$\\.items\\.\\$order$|^\\$\\.items\\[VolumeAttachment/|^\\$\\.items\\[/[^\\]]*\\]\\.(attached|attacher|created_at|name|node_name|persistent_volume_name|watchEvent|labels|annotations)(\\.|\\[|$)",
+      "why": "A live VolumeAttachment update was the raw object and is now the list row (internal/volumeattachment), named without its kind.",
+      "pr": "#673"
+    },
+    {
+      "route": "^live /api(s/batch)?/v1(/namespaces/[^/]+)?/cronjobs$",
+      "cell": "^\\$\\.items\\[[^\\]]*\\]\\.(last_schedule_time|last_successful_time)$",
+      "why": "A live CronJob update is the list row (internal/cronjob), which also names its last schedule and success times with the _time suffix.",
+      "pr": "#673"
+    },
+    {
+      "route": "^/api/v1/auth/permissions$",
+      "cell": "^\\$\\[AI tools\\]\\.permissions\\[ai\\.tool\\.\\*\\]\\.description$",
+      "why": "Every AI tool call also needs the permission its screen asks.",
+      "pr": "#677"
+    },
+    {
+      "route": "^/api/v1/auth/permissions$",
+      "cell": "^\\$\\[AI tools\\]\\.permissions\\[ai\\.tool\\.(helm_execute)\\]\\.(key|description)$",
+      "why": "The AI's Helm command tool is gone.",
+      "pr": "#678"
+    },
+    {
+      "route": "^live /api/v1(/namespaces/[^/]+)?/(endpoints|networkpolicies|ingressclasses)$",
+      "cell": "^\\$\\.items\\.\\$order$|^\\$\\.items\\[(Endpoints|NetworkPolicy|IngressClass)/",
+      "why": "A live update was the raw object and is now the list row, so the row is named without its kind and the raw object's cells go.",
+      "pr": "#679"
+    },
+    {
+      "route": "^live /api/v1(/namespaces/[^/]+)?/(endpoints|networkpolicies|ingressclasses)$",
+      "cell": "^\\$\\.items\\[/[^\\]]*\\]\\.(annotations|controller|created_at|default_deny_egress|default_deny_ingress|egress|egress_rules|finalizers|ingress|ingress_rules|is_default|labels|name|namespace|not_ready_addresses|not_ready_count|not_ready_targets|pod_selector|policy_types|ports|ready_addresses|ready_count|ready_targets|selects_all_pods|watchEvent)(\\.|\\[|$)",
+      "why": "A live update is now the same row as the list (internal/endpoints, internal/networkpolicy, internal/ingressclass), which every cell of the row under its new name is.",
+      "pr": "#679"
+    },
+    {
+      "route": "^live /api/v1/pvs$",
+      "cell": "^\\$\\.items\\[[^\\]]*\\]\\.message$",
+      "why": "A live PV update is the list row (internal/pv), which carries the volume's status message.",
+      "pr": "#679"
+    },
+    {
+      "route": "^/api/v1/cluster(/namespaces/[^/]+)?/networkpolicies(/all)?$",
+      "cell": "^\\$\\[[^\\]]*\\]\\.(ingress|egress)\\[[^\\]]*\\]\\.(from|to)\\[[^\\]]*\\]\\.(pod_selector|namespace_selector)(\\.|$)",
+      "why": "A peer's selectors are sent as the API has them, matchLabels and matchExpressions, instead of the labels alone (internal/networkpolicy).",
+      "pr": "#679"
+    },
+    {
+      "route": "^live /api(s/apps)?/v1(/namespaces/[^/]+)?/replicasets$",
+      "cell": "^\\$\\.items\\[[^\\]]*\\]\\.owner_references(\\.\\$length$|\\.\\$order$|\\[)",
+      "why": "A live ReplicaSet update is the list row (internal/replicaset), which sends its owner references, an empty list for one nobody owns.",
+      "pr": "#683"
+    },
+    {
+      "route": "^/api/v1/cluster(/namespaces/[^/]+)?/networkpolicies(/all)?$",
+      "cell": "^\\$\\[[^\\]]*\\]\\.finalizers$",
+      "why": "The NetworkPolicy row carries the object's finalizers, as the live row does.",
+      "pr": "#683"
+    },
+    {
+      "route": "^live /api/v1(/namespaces/[^/]+)?/pods$",
+      "cell": "^\\$\\.items\\[[^\\]]*\\]\\.containers\\[[^\\]]*\\]\\.(env_from(\\.\\$length$|\\.\\$order$|\\[)|security_context\\.|ports(\\.\\$order$|\\[\\d+\\]\\.(container_port|protocol)$|\\[//[^\\]]*\\]\\.(name|container_port|protocol)$))",
+      "why": "A live Pod update is the list row (internal/podrow): each container carries envFrom, its security context and its ports' names. A port row was paired by position and is now paired by its name, so its number and protocol read as removed and added; a rule cannot hold the two values equal, and the number of ports stays checked.",
+      "pr": "#684"
+    },
+    {
+      "route": "^live /api(s/batch)?/v1(/namespaces/[^/]+)?/jobs$",
+      "cell": "^\\$\\.items\\[[^\\]]*\\]\\.owner_references(\\.\\$length$|\\.\\$order$|\\[)",
+      "why": "A live Job update is the list row (internal/job), which sends its owner references, an empty list for a Job nobody owns.",
+      "pr": "#684"
+    },
+    {
+      "route": "^/api/v1/cluster/services/all$|^/api/v1/cluster/namespaces/[^/]+/services(/[^/]+/describe)?$|^live /api/v1(/namespaces/[^/]+)?/services$",
+      "cell": "\\.(external_ips|load_balancer_ingress)(\\.\\$length$|\\.\\$order$|\\[)",
+      "why": "A Service's row lists its external IPs and load balancer ingress as kubectl's EXTERNAL-IP column reads them, an empty list when there are none.",
+      "pr": "#685"
+    },
+    {
+      "route": "^/api/v1/cluster/jobs/all$|^/api/v1/cluster/namespaces/[^/]+/jobs(/[^/]+/describe)?$|^live /api(s/batch)?/v1(/namespaces/[^/]+)?/jobs$",
+      "cell": "^\\$(\\.items)?(\\[[^\\]]*\\])?\\.(status|completions_text)$",
+      "why": "A Job's status is kubectl's STATUS (a suspended Job reads Suspended, not Running or Active) and its COMPLETIONS column is sent as text.",
+      "pr": "#685"
+    },
+    {
+      "route": "^/api/v1/auth/permissions$",
+      "cell": "^\\$\\[AI tools\\]\\.permissions\\[ai\\.tool\\.(clusters_list|alert_investigate)\\]\\.(key|description)$",
+      "why": "The alert_investigate and clusters_list AI tools.",
+      "pr": "#687"
+    },
+    {
+      "route": "^/api/v1/auth/permissions$",
+      "cell": "^\\$\\[AI tools\\]\\.permissions\\[ai\\.tool\\.(pod_rbac|logfiles|storage_summary|network_policy_effective|limit_range_violations|alerts_inbox)\\]\\.(key|description)$",
+      "why": "AI tools for what the pod, storage, policy and alert screens compute.",
+      "pr": "#688"
+    },
+    {
+      "route": "^/api/v1/auth/permissions$",
+      "cell": "^\\$\\[AI tools\\]\\.permissions\\[ai\\.tool\\.(timeline|gpu)\\]\\.(key|description)$",
+      "why": "The timeline and GPU AI tools.",
+      "pr": "#689"
+    },
+    {
+      "route": "^/api/v1/auth/permissions$",
+      "cell": "^\\$\\[AI tools\\]\\.permissions\\[ai\\.tool\\.(access_review|ai_usage|access_requests|audit_integrity|hygiene_history)\\]\\.(key|description)$",
+      "why": "The admin read AI tools.",
+      "pr": "#690"
+    },
+    {
+      "route": "^/api/v1/cluster/gpu/dashboard$",
+      "cell": "^\\$\\.gpu_nodes\\[[^\\]]*\\]\\.gpu_memory$",
+      "why": "GPU Feature Discovery's memory label, a number of mebibytes, is given its unit (MiB).",
+      "pr": "#694"
+    },
+    {
+      "route": "^/api/v1/cluster/nodes/[^/]+/describe$",
+      "cell": "^\\$\\.allocated_resources(\\.\\$length$|\\[)",
+      "why": "The Node drawer's Allocated resources table, as kubectl describe node prints it, is computed by describe.",
+      "pr": "#694"
+    },
+    {
+      "route": "^/api/v1/cluster/hygiene$",
+      "cell": "^\\$status$|^\\$\\.detail$|^\\$\\.(cluster|interval_days|last_review|next_due|due)(\\.|$)|^\\$\\.report\\.(generated_at|server_version|target_version|counts\\.|collectors\\.\\$length$|excluded_namespaces(\\.\\$length$|\\.\\$order$|\\[))|^\\$\\.report\\.(checks|findings)\\.\\$(length|order)$|^\\$\\.report\\.checks\\[[^\\]]*\\]\\.(id|severity|refs|findings|exempt|applies|since)$|^\\$\\.report\\.findings\\[[^\\]]*\\]\\.(check|severity|kind|name|namespace|container|pods|message|message_key|exempt|exempt_reason|message_args\\.(added|api|controls|fields|image|paths|pods|removed|resources|subjects))$",
+      "user": "^admin$",
+      "newStatus": "^200$",
+      "why": "Cluster Hygiene is read with resource.hygiene.scan on the cluster, which a cluster Admin grant holds, instead of the global admin.hygiene.read only.",
+      "pr": "#696"
+    },
+    {
+      "route": "^/api/v1/cluster/gpu/dashboard$",
+      "cell": "^\\$status$|^\\$\\.detail$|^\\$\\.(gpu_nodes|gpu_pods)\\.\\$length$|^\\$\\.(mig_enabled|time_slicing_config|time_slicing_enabled|total_gpu_used)$",
+      "user": "^nsread$",
+      "newStatus": "^200$",
+      "why": "GPU Pods asks pods_only=1, which answers a grant limited to namespaces from its own pods instead of refusing it the cluster's nodes.",
+      "pr": "#696"
+    },
+    {
+      "route": "^/api/v1/auth/permissions$",
+      "cell": "^\\$\\.\\$(length|order)$|^\\$\\[Cluster\\]\\.|^\\$\\[Admin\\]\\.permissions\\[admin\\.hygiene\\.read\\]\\.description$",
+      "why": "Cluster Hygiene moved to the new Cluster category under resource.hygiene.scan, and admin.hygiene.read says it reaches every cluster.",
+      "pr": "#696"
+    },
+    {
+      "route": "^/api/v1/cluster/namespaces/[^/]+/owned-pods$",
+      "cell": "^\\$\\[[^\\]]*\\]\\.phase$",
+      "why": "A namespace's owned pods carry their phase, for the pod counts the windows show.",
+      "pr": "#698"
+    },
+    {
+      "route": "^/api/v1/cluster/gpu/metrics$",
+      "cell": "^\\$\\.(avg_gpu_util|avg_memory_util|total_memory_used_mb|total_memory_free_mb|total_memory_mb)$",
+      "user": "^global-admin$",
+      "why": "A GPU number no series was read for is null instead of 0, so the screen says it could not be read. Only the global admin reads a cluster whose Prometheus has no DCGM series (default); on test2 the numbers stay checked for every user but the global admin.",
+      "pr": "#702"
+    },
+    {
+      "route": "^live /(api|apis/[^/]+)/v1(/namespaces/[^/]+)?/(clusterroles|clusterrolebindings|rolebindings|priorityclasses|runtimeclasses|validatingwebhookconfigurations|mutatingwebhookconfigurations|leases|limitranges|resourcequotas|poddisruptionbudgets|customresourcedefinitions)$",
+      "cell": "^\\$\\.error$|^\\$\\.items\\.\\$(length|order)$|^\\$\\.items\\[[^\\]]*\\]\\.(acquire_time|annotations|created_at|current_healthy|description|desired_healthy|disruptions_allowed|expected_pods|global_default|group|handler|holder_identity|kind|labels|lease_duration_seconds|lease_transitions|limits|min_available|name|namespace|preemption_policy|renew_time|role_ref_kind|role_ref_name|rules_count|scope|selector|served_versions|status_hard|status_used|subjects|subjects_count|value|version|watchEvent|webhooks_count)(\\.|\\[|$)",
+      "why": "These twelve kinds had no live updates in v0.7.5 (unsupported resource); they are watched and send the list's row, and a grant limited to namespaces is told once that a cluster-scoped kind is outside it.",
+      "pr": "#703"
+    },
+    {
+      "route": "^live /api/v1/(nodes|namespaces|storageclasses|ingressclasses|volumeattachments|pvs|gatewayclasses)$",
+      "cell": "^\\$\\.error$",
+      "user": "^nsread$",
+      "why": "A grant limited to namespaces watching a cluster-scoped kind is told the kind is outside its grant, instead of being asked to watch one of its namespaces.",
+      "pr": "#703"
+    },
+    {
+      "route": "^/api/v1/auth/permissions$",
+      "cell": "^\\$\\[AI tools\\]\\.permissions\\[ai\\.tool\\.(investigations|ai_models|session_recordings)\\]\\.(key|description)$",
+      "why": "The AI reads investigations, AI models and session recordings.",
+      "pr": "#705"
+    },
+    {
+      "route": "^/api/v1/cluster/features$",
+      "cell": "^\\$\\.writeGuardedNamespaces(\\.\\$length$|\\.\\$order$|\\[)",
+      "why": "The features name the guarded namespaces that refuse this caller's writes, so the write buttons follow them.",
+      "pr": "#713"
+    },
+    {
+      "route": "^/api/v1/auth/permissions$",
+      "cell": "^\\$\\[AI tools\\]\\.permissions\\[ai\\.tool\\.(k8s_cordon_node|k8s_cronjob_suspend|k8s_cronjob_trigger)\\]\\.(key|description)$",
+      "why": "The AI's cordon and CronJob tools, each also needing the permission its screen's button asks.",
+      "pr": "#713"
+    },
+    {
+      "route": "^/api/v1/cluster/nodes/[^/]+/describe$",
+      "cell": "^\\$\\.events(\\.\\$length$|\\.\\$order$|\\[)",
+      "why": "The Node drawer asks describe with events=0 and lists and follows the node's events by itself. A rule cannot see the query (the route is the path), so this covers the events cells of every node describe; the drawer is the only caller in the run.",
+      "pr": "#714"
+    },
+    {
+      "route": "^/api/v1/cluster/namespaces/[^/]+/(pods|pdbs)/[^/]+/describe$",
+      "cell": "^\\$\\.conditions\\[[^\\]]*\\]\\.observed_generation$",
+      "why": "A condition says which generation it was written for, where its writer says.",
+      "pr": "#714"
+    },
+    {
+      "route": "^live /apis/[^/]+\\.guard\\.kubeast\\.io/v1(/namespaces/[^/]+)?/guardchecks$",
+      "cell": "^\\$\\.error$",
+      "why": "A watch of changes (notify=1) may name any custom resource, since its frames hold no object; v0.7.5 answered unsupported resource.",
+      "pr": "#714"
+    },
+    {
+      "route": "^/api/v1/auth/permissions$",
+      "cell": "^\\$\\[Resources\\]\\.permissions\\[resource\\.objects\\.read\\]\\.(key|description)$|^\\$\\[Resources\\]\\.permissions\\[resource\\.\\*\\.read\\]\\.description$",
+      "why": "The role's read permission decides ordinary lists and details: resource.objects.read beside resource.*.read, which says what more it opens.",
+      "pr": "#718"
     }
   ]
 }

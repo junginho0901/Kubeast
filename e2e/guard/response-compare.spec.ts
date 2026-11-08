@@ -74,6 +74,15 @@ test.describe('the response comparison', () => {
     expect(counted.real).toEqual([{ cell: '$.events[Pod/n/a/Failed/m].count', kind: 'changed', old: '1', new: '2' }])
   })
 
+  test('a catalog\'s groups pair by their category, so a group inserted in the middle is that group only', () => {
+    const group = (category: string, ...keys: string[]) => ({ category, permissions: keys.map((key) => ({ key, description: key })) })
+    const old = answer([group('All', '*'), group('Pod', 'resource.pod.exec'), group('Admin', 'admin.*')])
+    const fresh = answer([group('All', '*'), group('Cluster', 'resource.hygiene.scan'), group('Pod', 'resource.pod.exec'), group('Admin', 'admin.*')])
+    const cells = sortCells(old, fresh, old).real.map((d) => d.cell)
+    expect(cells.filter((c) => !c.startsWith('$[Cluster]')).sort()).toEqual(['$.$length', '$.$order'])
+    expect(cells).toContain('$[Cluster].permissions[resource.hygiene.scan].key')
+  })
+
   test('a rollout\'s revisions are rows of their own', () => {
     const rollout = (revision: number, replicas: number) => ({ name: 'web', namespace: 'n', revision, replicas })
     const s = sortCells(answer([rollout(1, 2), rollout(2, 3)]), answer([rollout(1, 2), rollout(2, 4)]), answer([rollout(1, 2), rollout(2, 3)]))
