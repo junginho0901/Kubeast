@@ -503,6 +503,7 @@ func TestScopedGrantIsRefusedOutsideItsNamespacesOnEveryWay(t *testing.T) {
 		{"pod metrics by query", "GET", "/api/v1/metrics/pods?namespace=" + outside, ""},
 		{"optimization by query", "GET", "/api/v1/optimization?namespace=" + outside, ""},
 		{"pod page by query", "GET", "/api/v1/pods/page?namespace=" + outside, ""},
+		{"a drawer's pods by query", "GET", "/api/v1/pods/page?config_map=x&secret=x&namespace=" + outside, ""},
 		{"pods per node by query", "GET", "/api/v1/pods/nodes?namespace=" + outside, ""},
 		{"pods on a node by query", "GET", "/api/v1/pods/on-node?node=n1&namespace=" + outside, ""},
 		{"policy report summary by query", "GET", "/api/v1/policyreports/summary?namespace=" + outside, ""},

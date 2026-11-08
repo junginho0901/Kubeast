@@ -1698,6 +1698,8 @@ export interface PodPage {
   source: 'index' | 'list'
   /** with `groups`: the matched pods per namespace, largest first, the rest as "(other)" */
   by_namespace?: { name: string; count: number }[]
+  /** a drawer table's conditions as the server applied them; a server from before them sends none */
+  filters?: { namespace?: string; config_map?: string; secret?: string; service_account?: string; label_selector?: string }
 }
 
 /** One node on the Cluster View node map: its pods by the cards' colour (getPodHealth); node "" = not scheduled. */
@@ -1737,6 +1739,11 @@ export interface PodPageParams {
   priority_class?: string
   /** `<namespace>/<name>,…`: pods running as any of these service accounts */
   service_account?: string
+  /** pods naming this ConfigMap or Secret of `namespace` (a volume, the environment, an image pull secret) */
+  config_map?: string
+  secret?: string
+  /** pods whose labels this selector selects, as the API server reads one */
+  label_selector?: string
   /** 1: also count the matched pods per namespace, node and phase (`by_namespace` …) */
   groups?: 1
   /** how many of each group before "(other)" (server default 20, at most 1000) */

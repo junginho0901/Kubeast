@@ -14,6 +14,8 @@ import serviceAccountInfoSrc from '@/components/resource-detail/ServiceAccountIn
 import serviceInfoSrc from '@/components/resource-detail/ServiceInfo.tsx?raw'
 import pdbInfoSrc from '@/components/resource-detail/PDBInfo.tsx?raw'
 import networkPolicyDetailSrc from '@/components/resource-detail/network-info/NetworkPolicyDetail.tsx?raw'
+import roleBindingInfoSrc from '@/components/resource-detail/RoleBindingInfo.tsx?raw'
+import namespacePodTableSrc from '@/components/resource-detail/useNamespacePodTable.tsx?raw'
 import leasesPageSrc from '@/pages/cluster/Leases.tsx?raw'
 import replicaSetsPageSrc from '@/pages/workloads/ReplicaSets.tsx?raw'
 import jobsPageSrc from '@/pages/workloads/Jobs.tsx?raw'
@@ -464,8 +466,11 @@ describe('a list that opens with thousands of objects', () => {
   // These tables watch their namespace's pods: at fifty thousand pods one pass over the rows per frame never ends.
   it('a drawer\'s table of its namespace\'s pods gathers its frames', () => {
     const podWatch = /path: `\/api\/v1\/namespaces\/\$\{namespace\}\/pods`,[^}]*?\}?[^}]*?applyEvent: \(prev, event\) => applyPodWatchEvent\(prev as PodInfo\[\] \| undefined, event\),\n\s*gatherEveryMs: LIST_GATHER_MS,/
-    const drawers = { configMapInfoSrc, secretInfoSrc, serviceAccountInfoSrc, serviceInfoSrc, pdbInfoSrc, networkPolicyDetailSrc }
+    const drawers = { serviceInfoSrc, pdbInfoSrc, namespacePodTableSrc }
     for (const [name, src] of Object.entries(drawers)) expect(podWatch.test(src), name).toBe(true)
+    // the tables of the pods that use an object follow them through that one table (namespacePodTable.test.ts)
+    const users = { configMapInfoSrc, secretInfoSrc, serviceAccountInfoSrc, roleBindingInfoSrc, networkPolicyDetailSrc }
+    for (const [name, src] of Object.entries(users)) expect(src.includes('useNamespacePodTable({'), name).toBe(true)
   })
 
   it('a table of pods opened on thousands of frames changes once, what one by one leaves', () => {

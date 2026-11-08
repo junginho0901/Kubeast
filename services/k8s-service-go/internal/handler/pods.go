@@ -31,7 +31,7 @@ func (h *Handler) GetAllPods(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetPodPage handles GET /api/v1/pods/page: one page of the Pods list
-// (namespace, q, sort, dir, offset, limit up to 500, revision).
+// (namespace, q, sort, dir, offset, limit up to 500, revision) or of a drawer's pods (config_map, secret, …).
 func (h *Handler) GetPodPage(w http.ResponseWriter, r *http.Request) {
 	q := k8s.PodPageQuery{
 		Namespace: queryParam(r, "namespace", ""),
@@ -65,9 +65,14 @@ func (h *Handler) GetPodPage(w http.ResponseWriter, r *http.Request) {
 			response.Error(w, http.StatusBadRequest, "label_selector: "+err.Error())
 			return
 		}
-		q.LabelSelector = sel
+		q.LabelSelector, q.LabelSelectorText = sel, v
 	}
 	q.Phase = queryParam(r, "phase", "")
+	q.ConfigMap, q.Secret = queryParam(r, "config_map", ""), queryParam(r, "secret", "")
+	if (q.ConfigMap != "" || q.Secret != "") && q.Namespace == "" {
+		response.Error(w, http.StatusBadRequest, "config_map and secret need the namespace they are in")
+		return
+	}
 	q.RuntimeClass = queryParam(r, "runtime_class", "")
 	q.PriorityClass = queryParam(r, "priority_class", "")
 	for _, sa := range splitList(queryParam(r, "service_account", "")) {

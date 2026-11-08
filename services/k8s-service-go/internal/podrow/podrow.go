@@ -4,7 +4,6 @@ package podrow
 
 import (
 	"fmt"
-	"maps"
 	"slices"
 	"time"
 
@@ -215,12 +214,12 @@ func Info(p *corev1.Pod) map[string]interface{} {
 		}
 	}
 
-	cms, secrets := references(&p.Spec)
+	cms, secrets := ReferenceNames(&p.Spec)
 	if len(cms) > 0 {
-		out["config_map_refs"] = slices.Sorted(maps.Keys(cms))
+		out["config_map_refs"] = cms
 	}
 	if len(secrets) > 0 {
-		out["secret_refs"] = slices.Sorted(maps.Keys(secrets))
+		out["secret_refs"] = secrets
 	}
 	return out
 }
@@ -271,58 +270,59 @@ func containerSecurityContext(c *corev1.SecurityContext) map[string]interface{} 
 	return sc
 }
 
-// references are the ConfigMaps and Secrets a pod names: the Used By Pods sections of their drawers filter on them.
-func references(spec *corev1.PodSpec) (cms, secrets map[string]struct{}) {
-	cms, secrets = map[string]struct{}{}, map[string]struct{}{}
-	for _, v := range spec.Volumes {
-		if v.ConfigMap != nil && v.ConfigMap.Name != "" {
-			cms[v.ConfigMap.Name] = struct{}{}
+// ReferenceNames are the ConfigMaps and Secrets a pod names, each once and sorted: the Used By Pods sections of their
+// drawers filter on them, in the row and in the pod rows the server pages (pod_index.go).
+func ReferenceNames(spec *corev1.PodSpec) (configMaps, secrets []string) {
+	add := func(list *[]string, name string) {
+		if name != "" {
+			*list = append(*list, name)
 		}
-		if v.Secret != nil && v.Secret.SecretName != "" {
-			secrets[v.Secret.SecretName] = struct{}{}
+	}
+	for _, v := range spec.Volumes {
+		if v.ConfigMap != nil {
+			add(&configMaps, v.ConfigMap.Name)
+		}
+		if v.Secret != nil {
+			add(&secrets, v.Secret.SecretName)
 		}
 		if v.Projected != nil {
 			for _, src := range v.Projected.Sources {
-				if src.ConfigMap != nil && src.ConfigMap.Name != "" {
-					cms[src.ConfigMap.Name] = struct{}{}
+				if src.ConfigMap != nil {
+					add(&configMaps, src.ConfigMap.Name)
 				}
-				if src.Secret != nil && src.Secret.Name != "" {
-					secrets[src.Secret.Name] = struct{}{}
-				}
-			}
-		}
-	}
-	collectEnvRefs := func(containers []corev1.Container) {
-		for _, c := range containers {
-			for _, e := range c.EnvFrom {
-				if e.ConfigMapRef != nil && e.ConfigMapRef.Name != "" {
-					cms[e.ConfigMapRef.Name] = struct{}{}
-				}
-				if e.SecretRef != nil && e.SecretRef.Name != "" {
-					secrets[e.SecretRef.Name] = struct{}{}
-				}
-			}
-			for _, env := range c.Env {
-				if env.ValueFrom == nil {
-					continue
-				}
-				if env.ValueFrom.ConfigMapKeyRef != nil && env.ValueFrom.ConfigMapKeyRef.Name != "" {
-					cms[env.ValueFrom.ConfigMapKeyRef.Name] = struct{}{}
-				}
-				if env.ValueFrom.SecretKeyRef != nil && env.ValueFrom.SecretKeyRef.Name != "" {
-					secrets[env.ValueFrom.SecretKeyRef.Name] = struct{}{}
+				if src.Secret != nil {
+					add(&secrets, src.Secret.Name)
 				}
 			}
 		}
 	}
-	collectEnvRefs(spec.Containers)
-	collectEnvRefs(spec.InitContainers)
+	for _, c := range slices.Concat(spec.Containers, spec.InitContainers) {
+		for _, e := range c.EnvFrom {
+			if e.ConfigMapRef != nil {
+				add(&configMaps, e.ConfigMapRef.Name)
+			}
+			if e.SecretRef != nil {
+				add(&secrets, e.SecretRef.Name)
+			}
+		}
+		for _, env := range c.Env {
+			if env.ValueFrom == nil {
+				continue
+			}
+			if env.ValueFrom.ConfigMapKeyRef != nil {
+				add(&configMaps, env.ValueFrom.ConfigMapKeyRef.Name)
+			}
+			if env.ValueFrom.SecretKeyRef != nil {
+				add(&secrets, env.ValueFrom.SecretKeyRef.Name)
+			}
+		}
+	}
 	for _, ips := range spec.ImagePullSecrets {
-		if ips.Name != "" {
-			secrets[ips.Name] = struct{}{}
-		}
+		add(&secrets, ips.Name)
 	}
-	return cms, secrets
+	slices.Sort(configMaps)
+	slices.Sort(secrets)
+	return slices.Compact(configMaps), slices.Compact(secrets)
 }
 
 func containerState(state corev1.ContainerState) map[string]interface{} {

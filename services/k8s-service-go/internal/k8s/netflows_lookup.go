@@ -37,12 +37,13 @@ func netflowsWorkloads(ctx context.Context, cs kubernetes.Interface, namespace s
 func netflowsWorkloadsOf(rows []*podRow) map[string]netflows.Workload {
 	out := map[string]netflows.Workload{}
 	for _, r := range rows {
-		if r.workloadKind == "" {
+		c := r.common()
+		if c.workloadKind == "" {
 			continue
 		}
-		w := netflows.Workload{Kind: r.workloadKind, Name: r.workloadName}
+		w := netflows.Workload{Kind: c.workloadKind, Name: c.workloadName}
 		out[r.name] = w
-		out[r.generateName+"*"] = w
+		out[c.generateName+"*"] = w
 	}
 	return out
 }

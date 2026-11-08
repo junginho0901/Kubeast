@@ -22,6 +22,29 @@ func TestGetPodPageRefusesBadQueries(t *testing.T) {
 	}
 }
 
+// A ConfigMap or Secret is named within one namespace, so a page asked for one without a namespace is refused before
+// the cluster is read.
+func TestGetPodPageAsksANamespaceWithAConfigMapOrASecret(t *testing.T) {
+	for _, q := range []string{"config_map=app", "secret=app", "config_map=app&secret=app", "namespace=&secret=app"} {
+		code := func() (code int) {
+			defer func() {
+				if recover() != nil {
+					code = -1 // it went on to the service
+				}
+			}()
+			rec := httptest.NewRecorder()
+			(&Handler{}).GetPodPage(rec, httptest.NewRequest(http.MethodGet, "/api/v1/pods/page?"+q, nil))
+			if rec.Code == http.StatusBadRequest && !strings.Contains(rec.Body.String(), "namespace") {
+				t.Errorf("%s: the refusal must name the namespace: %s", q, rec.Body.String())
+			}
+			return rec.Code
+		}()
+		if code != http.StatusBadRequest {
+			t.Errorf("%s: %d, want 400 (-1: it read the cluster)", q, code)
+		}
+	}
+}
+
 // The pods of one node need the node named; "" (the pods not scheduled) is a value, a missing one is refused.
 func TestGetPodsOnNodeNeedsNode(t *testing.T) {
 	rec := httptest.NewRecorder()

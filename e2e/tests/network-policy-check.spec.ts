@@ -216,6 +216,33 @@ spec:
     await expect(page.getByText('Affected Pods (1)')).toBeVisible()
   })
 
+  test('in a namespace of more pods than the line the check window reads no name whole and checks a name typed from the server\'s matches', async ({ page }) => {
+    let wholeReads = 0
+    page.on('request', (r) => { if (new URL(r.url()).pathname.endsWith(`/cluster/namespaces/${A}/pods`)) wholeReads += 1 })
+    // the window's count of the namespace's pods, answered as for one past the line (2 000)
+    await page.route((url) => url.pathname.endsWith('/cluster/pods/page') && url.searchParams.get('namespace') === A && url.searchParams.get('limit') === '1', async (route) => {
+      const response = await route.fetch()
+      const body = await response.json()
+      body.stats = { ...body.stats, total: 5000 }
+      await route.fulfill({ response, json: body })
+    })
+    await page.goto(`/workloads/pods?cluster=${CLUSTER}&namespace=${A}&detail=Pod/${A}/web`)
+    await expect(page.getByTestId('netpol-section')).toBeVisible({ timeout: 20_000 })
+    wholeReads = 0
+    await page.getByTestId('netpol-check-open').click()
+    const modal = page.getByTestId('netpol-check-modal')
+    await expect(modal.getByTestId('netpol-check-name-many')).toHaveText('This namespace has 5000 pods, too many to list: type a name, and up to 50 that match it are suggested.')
+    await page.getByTestId('netpol-check-direction').click()
+    await page.getByTestId('netpol-check-direction-opt-in').click()
+    await modal.getByTestId('netpol-check-name-input').fill('cli')
+    await expect.poll(() => modal.locator('#netpol-check-name-matches option').evaluateAll((options) => options.map((o) => (o as HTMLOptionElement).value)), { timeout: 10_000 }).toContain('client')
+    await modal.getByTestId('netpol-check-name-input').fill('client')
+    await page.getByTestId('netpol-check-port').fill('9090')
+    await page.getByTestId('netpol-check-run').click()
+    await expect(modal.getByTestId('netpol-check-overall')).toHaveText('Denied')
+    expect(wholeReads, 'no name of the namespace is read whole').toBe(0)
+  })
+
   test('a namespace-limited user stays in their namespaces and hears unknown where labels are needed', async ({ request }) => {
     // The operator binds the namespace-limited group in A (docs: namespace-scoped grants) — first to a
     // role that reads pods, Services and NetworkPolicies but not the Namespace object.
