@@ -1,3 +1,89 @@
 {
-  "rules": []
+  "rules": [
+    {
+      "screen": "^(default|dark|light) · /account on self$",
+      "why": "Node Shell's settings moved from the Admin group to a card at the end of Settings.",
+      "pr": "#696"
+    },
+    {
+      "screen": "^(default|dark|light) · drawer (ClusterRole|ClusterRoleBinding|ConfigMap|CronJob|CustomResourceDefinition|CustomResourceInstance|DaemonSet|Deployment|Endpoints|HorizontalPodAutoscaler|IngressClass|Lease|LimitRange|MutatingAdmissionPolicy|MutatingWebhookConfiguration|Namespace|PersistentVolume|PersistentVolumeClaim|PriorityClass|ReplicaSet|ResourceQuota|Role|RoleBinding|RuntimeClass|Secret|Service|StatefulSet|StorageClass|ValidatingAdmissionPolicy|ValidatingWebhookConfiguration|VolumeAttachment) \\([^)]+\\)$",
+      "why": "The drawer opens over Settings, whose new Node Shell card shows at the bottom left of the drawer.",
+      "pr": "#696"
+    },
+    {
+      "screen": "^(default|dark|light) · drawer (DeviceClass|EndpointSlice|Ingress|NetworkPolicy|ResourceClaim|ResourceClaimTemplate) \\([^)]+\\)$",
+      "why": "These drawers list the events about their object in an Events section at the end, and Settings behind them has the Node Shell card.",
+      "pr": "#695, #696"
+    },
+    {
+      "screen": "^(default|dark|light) · drawer Job \\(namespace under test\\)$",
+      "why": "A Job's Status follows kubectl's printJob, so the suspended guard Job reads Suspended instead of Active, and Settings behind the drawer has the Node Shell card.",
+      "pr": "#685, #696"
+    },
+    {
+      "screen": "^(default|dark|light) · drawer Node \\(cluster\\)$",
+      "why": "The Node drawer's first card reads Since Ready Changed and an Allocated Resources section as kubectl describe node gives it pushes the rest down, and Settings behind it has the Node Shell card.",
+      "pr": "#694, #696"
+    },
+    {
+      "screen": "^(default|dark|light) · drawer Pod \\(namespace under test\\)$",
+      "why": "The Pod drawer adds Reason, Message and Last State to Basic Info and an Observed Generation column to Conditions, and Settings behind it has the Node Shell card.",
+      "pr": "#694, #696, #714"
+    },
+    {
+      "screen": "^(default|dark|light) · drawer PodDisruptionBudget \\(namespace under test\\)$",
+      "why": "Conditions show an Observed Generation column when the conditions carry one, and Settings behind the drawer has the Node Shell card.",
+      "pr": "#696, #714"
+    },
+    {
+      "screen": "^(default|dark|light) · drawer ServiceAccount \\(namespace under test\\)$",
+      "why": "Effective Permissions counts the bindings of the ServiceAccount's groups too, so the two discovery bindings of system:serviceaccounts show, and Settings behind the drawer has the Node Shell card.",
+      "pr": "#692, #696"
+    },
+    {
+      "screen": "^(default|dark|light) · /admin/(access-requests|access-review|ai-models|ai-usage|audit|investigations|organizations|roles|session-recordings|users) on (default|self|test2)$",
+      "why": "Cluster Hygiene and Node Shell left the sidebar's Admin group, so the entries after them move up.",
+      "pr": "#696"
+    },
+    {
+      "screen": "^(default|dark|light) · /admin/clusters on (default|self|test2)$",
+      "why": "Each cluster's Health has its check time under it, which makes the rows taller and wraps Mode and Created by, and the Admin group no longer lists Cluster Hygiene and Node Shell.",
+      "pr": "#695, #696"
+    },
+    {
+      "screen": "^(default|dark|light) · /cluster/(mutatingadmissionpolicies|mutatingwebhookconfigurations|namespaces|nodes|priorityclasses|runtimeclasses|validatingadmissionpolicies|validatingwebhookconfigurations) on (default|self|test2)$",
+      "why": "Cluster Hygiene joined the end of the sidebar's Cluster group, so the groups after it move down.",
+      "pr": "#696"
+    },
+    {
+      "screen": "^(default|dark|light) · /cluster/hygiene on (default|self|test2)$",
+      "why": "Cluster Hygiene moved to this address in the Cluster group, where the compared build answers Page not found.",
+      "pr": "#696"
+    },
+    {
+      "screen": "^(default|dark|light) · /custom-resources/instances on (default|self|test2)$",
+      "why": "A line says these rows do not update live, which moves the table down a line and leaves Fit one row fewer.",
+      "pr": "#714"
+    },
+    {
+      "screen": "^(default|dark|light) · /gpu/dashboard on test2$",
+      "why": "A line says the device plugin is not under the names Kubeast looks for, and a node's GPU memory carries its unit, MiB.",
+      "pr": "#694"
+    },
+    {
+      "screen": "^(default|dark|light) · /gpu/nodes on test2$",
+      "why": "A node's GPU memory carries its unit, MiB, since GPU Feature Discovery's label is a bare number of mebibytes.",
+      "pr": "#694"
+    },
+    {
+      "screen": "^(default|dark|light) · /workloads/pods on (default|self|test2)$",
+      "why": "The Pods list has a Terminating card and counts each pod in one card, so Pending no longer counts a pod that Error counts.",
+      "pr": "#682"
+    },
+    {
+      "screen": "^(default|dark|light) · /workloads/jobs on (default|test2|self)$",
+      "why": "The Jobs list's Running card is green, as a running Job's badge and the Resource Graph read it; it counts every Job neither complete nor failed, a suspended one too, whose row now reads Suspended as kubectl prints it.",
+      "pr": "#697, #685"
+    }
+  ]
 }
