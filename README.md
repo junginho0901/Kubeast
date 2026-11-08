@@ -30,6 +30,8 @@ helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.5 \
 
 The install script, Docker Compose, uninstalling, finding the admin password, connecting a cluster and turning on AI are covered in [Installation and first setup](docs/getting-started.md).
 
+The chart gives k8s-service 512 Mi. If many people will use a large cluster at once (hundreds of accounts, tens of thousands of pods), set `resources.k8sService.limits.memory` to `1Gi`: how it was measured and what it held are in [Many different people on a large cluster](docs/architecture.md#many-different-people-on-a-large-cluster).
+
 ## Documentation
 
 | Document | Contents |
@@ -41,7 +43,7 @@ The install script, Docker Compose, uninstalling, finding the admin password, co
 | [Operations features](docs/operations.md) | Policy reports, cluster hygiene check, Argo CD guard, dashboard quick actions, log files, log search, trace links, trusted CAs |
 | [Cluster requirements](docs/cluster-requirements.md) | What the clusters you manage must have (RBAC, metrics-server, Prometheus, OpenCost, etc.) and how to check |
 | [SSO (OIDC) setup](docs/oidc.md) | Connecting Keycloak, Google, Entra ID or Okta |
-| [Architecture](docs/architecture.md) | Services, container images, resource usage |
+| [Architecture](docs/architecture.md) | Services, container images, resource usage, sizing for many users |
 | [Configuration (values.yaml)](docs/configuration.md) | Chart values explained |
 | [Database: TLS, backup and restore](docs/database-backup-restore.md) | DB connection TLS, backup and restore, retention |
 | [Console metrics](docs/metrics.md) | Kubeast's own `/metrics` |

@@ -30,6 +30,8 @@ helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.5 \
 
 설치 스크립트·Docker Compose·제거, 관리자 비밀번호 확인, 클러스터 연결, AI 켜기는 [설치와 첫 설정](docs/ko/getting-started.md)에 있습니다.
 
+차트는 k8s-service에 512 Mi를 줍니다. 많은 사람이 큰 클러스터를 한꺼번에 쓴다면(계정 수백 개, 파드 수만 개) `resources.k8sService.limits.memory`를 `1Gi`로 올리세요. 어떻게 쟀고 무엇을 버텼는지는 [많은 사람이 큰 클러스터를 쓸 때](docs/ko/architecture.md#많은-사람이-큰-클러스터를-쓸-때)에 있습니다.
+
 ## 문서
 
 | 문서 | 내용 |
@@ -41,7 +43,7 @@ helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.5 \
 | [운영 기능](docs/ko/operations.md) | 정책 보고서 · 클러스터 위생 점검 · Argo CD 가드 · 대시보드 빠른 작업 · 로그 파일 · 로그 검색 · 트레이스 링크 · 신뢰할 CA |
 | [클러스터 준비물](docs/ko/cluster-requirements.md) | 관리할 클러스터에 있어야 하는 것(RBAC·metrics-server·Prometheus·OpenCost 등)과 확인 방법 |
 | [SSO(OIDC) 설정](docs/ko/oidc.md) | Keycloak · Google · Entra ID · Okta 연결 |
-| [아키텍처](docs/ko/architecture.md) | 서비스 구성 · 컨테이너 이미지 · 자원 사용량 |
+| [아키텍처](docs/ko/architecture.md) | 서비스 구성 · 컨테이너 이미지 · 자원 사용량 · 많은 사람이 쓸 때 메모리 |
 | [설정 (values.yaml)](docs/ko/configuration.md) | 차트 값 설명 |
 | [데이터베이스: TLS·백업·복원](docs/ko/database-backup-restore.md) | DB 연결 TLS · 백업·복원 · 보존 기간 |
 | [콘솔 메트릭](docs/ko/metrics.md) | Kubeast 자신의 `/metrics` |
