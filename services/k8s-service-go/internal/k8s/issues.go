@@ -93,23 +93,15 @@ func (s *Service) CollectIssues(ctx context.Context, opts IssuesOptions) ([]Issu
 func (s *Service) podIssues(ctx context.Context, opts IssuesOptions) ([]Issue, error) {
 	list := func(namespace string) ([]Issue, error) {
 		var out []Issue
-		var read pagedRead
-		defer read.done()
-		lo := metav1.ListOptions{Limit: podListChunk}
-		for {
-			l, err := s.clientsetCtx(ctx).CoreV1().Pods(namespace).List(ctx, lo)
-			if err != nil {
-				return nil, err
-			}
+		err := eachPage(ctx, metav1.ListOptions{Limit: podListChunk}, func(lo metav1.ListOptions) (*corev1.PodList, error) {
+			return s.clientsetCtx(ctx).CoreV1().Pods(namespace).List(ctx, lo)
+		}, func(l *corev1.PodList) {
 			out = append(out, issuesFromPods(formatPodList(l.Items), opts)...)
-			if l.Continue == "" {
-				return out, nil
-			}
-			if err := read.nextPage(ctx); err != nil {
-				return nil, err
-			}
-			lo.Continue = l.Continue
+		})
+		if err != nil {
+			return nil, err
 		}
+		return out, nil
 	}
 	if scope := scopeFromCtx(ctx); len(scope) > 0 {
 		return fanOutNamespaces(scope, list)

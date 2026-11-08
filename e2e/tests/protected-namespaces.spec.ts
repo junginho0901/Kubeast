@@ -331,6 +331,30 @@ test.describe.serial('the guarded namespaces', () => {
     expect(pods.content[0].text).toContain(aPod)
   })
 
+  test('over MCP a call naming no namespace reads default as kubectl does, and a list of kinds naming Secrets is refused', async ({ request }) => {
+    const config = await request.get('/api/v1/ai/mcp/config', { headers: bearer(admin) })
+    test.skip(!(config.ok() && (await config.json()).enabled), 'the MCP server is off (mcp.enabled)')
+    const keyRes = await request.post('/api/v1/auth/api-keys', { headers: bearer(writer), data: { name: `e2e protected default ${STAMP}`, expires_in_days: 1, cluster_ids: ['self'], role_ceiling: 'Write' } })
+    expect(keyRes.status(), 'issue key').toBe(201)
+    const key = (await keyRes.json()).key as string
+    const call = async (name: string, args: object) => {
+      const res = await request.post(MCP, { headers: { ...RPC, Authorization: `Bearer ${key}` }, data: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: { cluster: 'self', ...args } } }, failOnStatusCode: false })
+      return (await res.json()).result as { isError?: boolean; content: { text: string }[] }
+    }
+    const names = (namespace: string) => kubectl(`-n ${namespace} get configmaps -o jsonpath='{.items[*].metadata.name}'`).split(/\s+/).filter(Boolean)
+    const inDefault = names('default')
+    const onlyInOwn = names(NS).filter((name) => !inDefault.includes(name))
+    expect(onlyInOwn, `ConfigMaps of ${NS} that default does not have`).toContain('kubeast-config')
+    const listed = await call('k8s_get_resources', { resource_type: 'configmaps' })
+    expect(listed.isError, listed.content?.[0]?.text).toBeFalsy()
+    for (const name of inDefault) expect(listed.content[0].text, `default's ${name}`).toContain(name)
+    for (const name of onlyInOwn) expect(listed.content[0].text, `${NS}'s ${name}`).not.toContain(name)
+
+    const both = await call('k8s_get_resources', { resource_type: 'pods,secrets', namespace: NS })
+    expect(both.isError, both.content?.[0]?.text).toBe(true)
+    expect(both.content[0].text).toContain(`namespace ${NS}`)
+  })
+
   test('the features answer names where a caller\'s writes are refused, and a list\'s create button goes there', async ({ request, browser }) => {
     const refusedFor = async (token: string, cluster = 'self') => {
       const res = await get(request, token, '/features', cluster)

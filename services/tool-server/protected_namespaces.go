@@ -59,11 +59,16 @@ func protectedToolAct(tool string, args map[string]interface{}) protectedns.Act 
 	return protectedns.ActRead
 }
 
-// isSecretResourceName reads a name as kubectl takes one: secret, secrets, Secret, secret/name, secrets.v1 and so on.
+// isSecretResourceName reads a name as kubectl takes one: secret, secrets, Secret, secret/name, secrets.v1, each kind of pods,secrets.
 func isSecretResourceName(name string) bool {
-	name, _, _ = strings.Cut(strings.ToLower(name), "/")
-	name, _, _ = strings.Cut(name, ".")
-	return name == "secret" || name == "secrets"
+	for _, one := range strings.Split(strings.ToLower(name), ",") {
+		one, _, _ = strings.Cut(strings.TrimSpace(one), "/")
+		one, _, _ = strings.Cut(one, ".")
+		if one == "secret" || one == "secrets" {
+			return true
+		}
+	}
+	return false
 }
 
 // manifestRefusal holds every document of a manifest, the items of a List too, so none of it is applied when one is refused.

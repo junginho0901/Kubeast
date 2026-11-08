@@ -10,6 +10,10 @@
 //
 // An IPv6 form counts as each IPv4 address it carries. The chart's own store URLs are the installer's and do not come
 // through here.
+//
+// Through a proxy in the service's environment (HTTP_PROXY, HTTPS_PROXY) only the host as written is checked: the proxy
+// resolves the name and connects, so the dial check sees the proxy's address. A host under NO_PROXY is dialled here and
+// checked. ai-service's model connections make the same choice (app/services/model_http.py).
 package storeurl
 
 import (
@@ -248,7 +252,8 @@ func stayOnHost(req *http.Request, via []*http.Request) error {
 	return nil
 }
 
-// Client is an HTTP client for registered stores. It keeps the default transport's proxy, TLS and pool settings.
+// Client is an HTTP client for registered stores. It keeps the default transport's proxy (see the package comment), TLS
+// and pool settings.
 func Client(timeout time.Duration) *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.DialContext = dial

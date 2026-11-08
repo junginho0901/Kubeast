@@ -47,17 +47,22 @@ var (
 )
 
 func main() {
+	// A k8s_jq_query program's child process (jq_worker.go).
+	if len(os.Args) > 1 && os.Args[1] == jqWorkerArg {
+		os.Exit(runJQWorker(os.Stdin, os.Stdout))
+	}
 	memlimit.Set(kubectlReservedBytes(kubectlSlots.Cap()))
 	port := envOrDefault("PORT", "8086")
 
 	toolRegistry := buildToolRegistry()
 
 	// kubectl reaches clusters through a loopback proxy that lists each request
-	// with its Audit-ID (kubeproxy.go); TOOL_SERVER_KUBECTL_PROXY=false or a
-	// failed start keeps the direct path.
+	// with its Audit-ID (kubeproxy.go); TOOL_SERVER_KUBECTL_PROXY=false keeps the
+	// direct path, and a failed start refuses the kubectl tools.
 	if !strings.EqualFold(os.Getenv("TOOL_SERVER_KUBECTL_PROXY"), "false") {
 		if p, err := startKubeProxy(); err != nil {
-			log.Printf("kubectl proxy not started, kubectl goes to clusters directly: %v", err)
+			log.Printf("kubectl proxy not started, the kubectl tools are refused until tool-server restarts: %v", err)
+			kubectlProxyRefusal = errKubectlProxyNotStarted
 		} else {
 			kubectlProxy = p
 		}

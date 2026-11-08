@@ -34,6 +34,29 @@ def test_a_json_patch_under_env_is_held_by_its_path_whatever_it_names():
     assert [op["value"] for op in kept_tool_args(args)["patch"]] == ["<REDACTED:value>", "<REDACTED:value>"]
 
 
+SECRET_LIST = "apiVersion: v1\nkind: SecretList\nitems:\n- metadata: {name: a, namespace: shop}\n  data: {cfg.json: ZmFrZS1jZmctdmFsdWU=}\n  stringData: {settings.ini: fake-settings-value}\n"
+SECRET_LIST_GONE = ("ZmFrZS1jZmctdmFsdWU=", "fake-settings-value")
+
+
+def test_a_typed_secret_list_loses_its_items_values_as_kubectl_reads_them_as_secrets():
+    for tool in ("k8s_apply_manifest", "k8s_create_resource"):
+        preview = write_tool_input(tool, {"yaml_content": SECRET_LIST})["manifest_preview"]
+        assert "cfg.json" in preview and "settings.ini" in preview
+        for gone in SECRET_LIST_GONE:
+            assert gone not in preview
+    kept = kept_tool_args({"yaml_content": SECRET_LIST})["yaml_content"]
+    assert "cfg.json" in kept
+    for gone in SECRET_LIST_GONE:
+        assert gone not in kept
+    as_object = kept_tool_args({"resource_manifest": {"kind": "SecretList", "items": [{"metadata": {"name": "a"}, "data": {"cfg.json": "ZmFrZS1jZmctdmFsdWU="}}]}})
+    assert as_object["resource_manifest"]["items"][0]["data"] == {"cfg.json": "<REDACTED:secret>"}
+
+
+def test_an_item_of_another_kind_in_a_secret_list_keeps_its_fields():
+    manifest = {"kind": "SecretList", "items": [{"kind": "ConfigMap", "metadata": {"name": "a"}, "data": {"cfg.json": "plain-config"}}]}
+    assert kept_tool_args({"resource_manifest": manifest})["resource_manifest"]["items"][0]["data"] == {"cfg.json": "plain-config"}
+
+
 def test_named_arguments_are_the_target():
     args = {"resource_type": "deployment", "resource_name": "web", "namespace": "shop"}
     assert tool_target("k8s_scale", args) == ToolTarget("deployment", "web", "shop", None)

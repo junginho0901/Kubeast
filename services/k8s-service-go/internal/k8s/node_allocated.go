@@ -9,8 +9,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	resourcehelper "k8s.io/component-helpers/resource"
 )
 
@@ -18,7 +16,26 @@ import (
 // getPodsTotalRequestsAndLimits): each pod's requests and limits as Kubernetes counts them.
 type allocatedTotals struct{ requests, limits corev1.ResourceList }
 
-func (t *allocatedTotals) add(p *corev1.Pod) {
+// podAllocation is what kubectl describe node counts of one pod: its requests and limits, nothing once it has ended.
+type podAllocation struct {
+	requests, limits corev1.ResourceList
+	ended            bool
+}
+
+// allocationOf counts p as Kubernetes does (init containers at their peak, sidecars added, pod overhead and pod-level
+// resources); kubectl lists the pods not Succeeded or Failed.
+func allocationOf(p *corev1.Pod) podAllocation {
+	return podAllocation{
+		requests: resourcehelper.PodRequests(p, resourcehelper.PodResourcesOptions{}),
+		limits:   resourcehelper.PodLimits(p, resourcehelper.PodResourcesOptions{}),
+		ended:    p.Status.Phase == corev1.PodSucceeded || p.Status.Phase == corev1.PodFailed,
+	}
+}
+
+func (t *allocatedTotals) add(a podAllocation) {
+	if a.ended {
+		return
+	}
 	sum := func(total, pod corev1.ResourceList) {
 		for name, q := range pod {
 			if have, ok := total[name]; ok {
@@ -29,28 +46,22 @@ func (t *allocatedTotals) add(p *corev1.Pod) {
 			}
 		}
 	}
-	sum(t.requests, resourcehelper.PodRequests(p, resourcehelper.PodResourcesOptions{}))
-	sum(t.limits, resourcehelper.PodLimits(p, resourcehelper.PodResourcesOptions{}))
+	sum(t.requests, a.requests)
+	sum(t.limits, a.limits)
 }
 
-// nodeAllocatedTotals reads the pods kubectl sums, on the node and not Succeeded or Failed, as the caller. A grant
-// limited to namespaces lists those only, so it is told nothing of the other pods on the node.
+// nodeAllocatedTotals adds up the pods kubectl sums from the node's read its pod table and Cluster View share
+// (podsOnNodeOf): one read as kubeast:cache for everyone opening the node, kept to the namespaces the caller's identity
+// may list pods in, a namespace that check refuses listed as the caller. A grant limited to namespaces is told nothing
+// of the other pods on the node.
 func (s *Service) nodeAllocatedTotals(ctx context.Context, node string) (*allocatedTotals, error) {
-	cs := s.clientsetCtx(ctx)
-	if cs == nil {
-		return nil, errNotLoaded
-	}
-	opts := metav1.ListOptions{FieldSelector: fields.AndSelectors(
-		fields.OneTermEqualSelector("spec.nodeName", node),
-		fields.OneTermNotEqualSelector("status.phase", string(corev1.PodSucceeded)),
-		fields.OneTermNotEqualSelector("status.phase", string(corev1.PodFailed)),
-	).String()}
-	t := &allocatedTotals{requests: corev1.ResourceList{}, limits: corev1.ResourceList{}}
-	err := eachCallerNamespace(ctx, "", func(namespace string) error {
-		return eachPod(ctx, cs.CoreV1(), namespace, opts, t.add)
-	})
+	pods, err := s.podsOnNodeOf(ctx, node, "")
 	if err != nil {
 		return nil, err
+	}
+	t := &allocatedTotals{requests: corev1.ResourceList{}, limits: corev1.ResourceList{}}
+	for _, a := range pods.alloc {
+		t.add(a)
 	}
 	return t, nil
 }

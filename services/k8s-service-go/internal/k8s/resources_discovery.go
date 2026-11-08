@@ -33,41 +33,60 @@ func (s *Service) apiResources(ctx context.Context) ([]metav1.APIResourceList, t
 	}
 	s.apiResourcesMu.RUnlock()
 
-	s.apiResourcesMu.Lock()
-	defer s.apiResourcesMu.Unlock()
-	if s.apiResourcesCache == nil {
-		s.apiResourcesCache = map[cluster.ID][]metav1.APIResourceList{}
-		s.apiResourcesAt = map[cluster.ID]time.Time{}
+	// One read per cluster at a time, outside the lock: a cluster slow to answer discovery kept every cluster's
+	// requests waiting on it (TestOneClustersSlowDiscoveryKeepsNoOtherClusterWaiting).
+	v, err, _ := s.apiResourcesSF.Do(string(cid), func() (interface{}, error) {
+		s.apiResourcesMu.RLock()
+		cached, at, read, gen := s.apiResourcesCache[cid], s.apiResourcesAt[cid], s.apiResourcesRead[cid], s.apiResourcesGen
+		s.apiResourcesMu.RUnlock()
+		if cached != nil && time.Since(at) < apiResourcesTTL {
+			return discovered{cached, read}, nil
+		}
+		dc := s.discoveryCtx(ctx)
+		if dc == nil {
+			return nil, errNotLoaded
+		}
+		groups, lists, err := dc.ServerGroupsAndResources()
+		// One aggregated API that does not answer leaves the others known, as kubectl goes on with them. A short cache:
+		// the kinds of that API come back when it does.
+		partial := discovery.IsGroupDiscoveryFailedError(err)
+		if err != nil && !partial {
+			return nil, fmt.Errorf("discover API resources: %w", err)
+		}
+		if partial {
+			slog.Warn("some API groups are not answering", "cluster", cid, "err", err)
+		}
+		result := discovered{preferredFirst(groups, lists), time.Now()}
+		s.apiResourcesMu.Lock()
+		defer s.apiResourcesMu.Unlock()
+		// lists read from a bundle that was replaced meanwhile are not kept
+		if gen != s.apiResourcesGen {
+			return result, nil
+		}
+		if s.apiResourcesCache == nil {
+			s.apiResourcesCache = map[cluster.ID][]metav1.APIResourceList{}
+			s.apiResourcesAt = map[cluster.ID]time.Time{}
+			s.apiResourcesRead = map[cluster.ID]time.Time{}
+		}
+		s.apiResourcesCache[cid] = result.lists
+		s.apiResourcesRead[cid] = result.read
+		s.apiResourcesAt[cid] = result.read
+		if partial {
+			s.apiResourcesAt[cid] = result.read.Add(-apiResourcesTTL + apiResourcesPartialTTL)
+		}
+		return result, nil
+	})
+	if err != nil {
+		return nil, time.Time{}, err
 	}
-	if s.apiResourcesRead == nil {
-		s.apiResourcesRead = map[cluster.ID]time.Time{}
-	}
+	d := v.(discovered)
+	return d.lists, d.read, nil
+}
 
-	// Double-check after acquiring write lock
-	if cached := s.apiResourcesCache[cid]; cached != nil && time.Since(s.apiResourcesAt[cid]) < apiResourcesTTL {
-		return cached, s.apiResourcesRead[cid], nil
-	}
-
-	groups, lists, err := s.discoveryCtx(ctx).ServerGroupsAndResources()
-	// One aggregated API that does not answer leaves the others known, as kubectl goes on with them. A short cache: the
-	// kinds of that API come back when it does.
-	partial := discovery.IsGroupDiscoveryFailedError(err)
-	if err != nil && !partial {
-		return nil, time.Time{}, fmt.Errorf("discover API resources: %w", err)
-	}
-	if partial {
-		slog.Warn("some API groups are not answering", "cluster", cid, "err", err)
-	}
-
-	result := preferredFirst(groups, lists)
-	read := time.Now()
-	s.apiResourcesCache[cid] = result
-	s.apiResourcesRead[cid] = read
-	s.apiResourcesAt[cid] = read
-	if partial {
-		s.apiResourcesAt[cid] = read.Add(-apiResourcesTTL + apiResourcesPartialTTL)
-	}
-	return result, read, nil
+// discovered is one read of a cluster's API resources and when it was read.
+type discovered struct {
+	lists []metav1.APIResourceList
+	read  time.Time
 }
 
 const (

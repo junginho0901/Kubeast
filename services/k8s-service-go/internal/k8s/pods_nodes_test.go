@@ -85,10 +85,10 @@ func TestListPodsOnNode(t *testing.T) {
 		asked = append(asked, a.GetNamespace()+"|"+fs)
 		return false, nil, nil
 	})
-	if _, err := listPodsOnNode(ctx, cs.CoreV1(), "n1", nil); err != nil {
+	if _, err := listPodsOnNode(ctx, "default", cs.CoreV1(), "n1", nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := listPodsOnNode(ctx, cs.CoreV1(), "", []string{"a", "b"}); err != nil {
+	if _, err := listPodsOnNode(ctx, "default", cs.CoreV1(), "", []string{"a", "b"}); err != nil {
 		t.Fatal(err)
 	}
 	want := []string{"|spec.nodeName=n1", "a|spec.nodeName=", "b|spec.nodeName="}
@@ -98,7 +98,7 @@ func TestListPodsOnNode(t *testing.T) {
 	cs.PrependReactor("list", "pods", func(a k8stesting.Action) (bool, k8sruntime.Object, error) {
 		return true, nil, apierrors.NewForbidden(schema.GroupResource{Resource: "pods"}, "", fmt.Errorf("no"))
 	})
-	if _, err := listPodsOnNode(ctx, cs.CoreV1(), "n1", []string{"a"}); !apierrors.IsForbidden(err) {
+	if _, err := listPodsOnNode(ctx, "default", cs.CoreV1(), "n1", []string{"a"}); !apierrors.IsForbidden(err) {
 		t.Fatalf("refused: %v", err)
 	}
 	if _, err := callerNamespaces(auth.WithPayload(ctx, auth.TokenPayload{UserID: "u", Namespaces: map[string][]string{"default": {"a"}}}), "b"); !apierrors.IsForbidden(err) {

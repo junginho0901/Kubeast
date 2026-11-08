@@ -913,6 +913,11 @@
       "name": "a value next to a Korean letter and digits of another width",
       "input": {"note": "키는ghp_abcdefghijklmnopqrstuvwxyzabcdefghij 입니다", "password": "１２３４", "name": "한글AKIA1234"},
       "want": {"note": "키는<REDACTED:api_key> 입니다", "password": "<REDACTED:password>", "name": "한글AKIA1234"}
+    },
+    {
+      "name": "the items of a typed Secret list without a kind of their own are Secrets",
+      "input": {"apiVersion": "v1", "kind": "SecretList", "items": [{"metadata": {"name": "a"}, "data": {"cfg.json": "ZmFrZS1jZmctdmFsdWU="}, "stringData": {"settings.ini": "fake-settings-value"}}, {"kind": "ConfigMap", "metadata": {"name": "b"}, "data": {"settings.ini": "plain-config"}}]},
+      "want": {"apiVersion": "v1", "kind": "SecretList", "items": [{"metadata": {"name": "a"}, "data": {"cfg.json": "<REDACTED:secret>"}, "stringData": {"settings.ini": "<REDACTED:secret>"}}, {"kind": "ConfigMap", "metadata": {"name": "b"}, "data": {"settings.ini": "plain-config"}}]}
     }
   ],
   "key_names": [

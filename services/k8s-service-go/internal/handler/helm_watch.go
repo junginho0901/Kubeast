@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/rand/v2"
 	"net/http"
 	"sync"
 	"time"
@@ -17,18 +18,24 @@ import (
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/helm"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/ws"
+	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
-
-// helmWatchTimeoutSeconds is the K8s watch's server-side timeout. The
-// API server forces a re-list and rebroadcasts at this interval; we
-// reconnect transparently. 5 minutes matches what the multiplexer uses
-// for native resources (see ws/multiplexer.go).
-const helmWatchTimeoutSeconds int64 = 300
 
 // helmWatchKeepaliveInterval — SSE comment line (": keepalive\n\n") 주기.
 // proxy / LB idle timeout 방어용. 이전 WebSocket 의 30s ping interval 과 동일.
 const helmWatchKeepaliveInterval = 30 * time.Second
+
+// helmLimitRetry is the wait before a stream the server's limit of live watches refused asks again: half a minute to
+// five, as a page the sockets refused asks again, so what was refused together does not come back together.
+var helmLimitRetry = func() time.Duration { return 30*time.Second + rand.N(270*time.Second) }
+
+// helmLimitFrame is what the page's watch problem notice reads of a socket's refusal for the server's limit.
+var helmLimitFrame = func() string {
+	b, _ := json.Marshal(map[string]string{"reason": "limit", "limit_scope": "server", "message": "max subscriptions reached for the server, cannot create new watch"})
+	return string(b)
+}()
 
 // WatchHelmReleases handles GET /api/v1/helm/releases/stream and pushes
 // real-time release events back to the client over Server-Sent Events.
@@ -91,6 +98,13 @@ func (h *Handler) runHelmWatchSSE(ctx context.Context, w http.ResponseWriter, fl
 	keepalive := time.NewTicker(helmWatchKeepaliveInterval)
 	defer keepalive.Stop()
 
+	// The stream's watches count against the server's live watches while it is open (multicluster.wsMaxSubscriptions).
+	release, told, err := h.holdHelmWatches(ctx, w, flusher, keepalive, helmWatchCount(ctx, namespace))
+	if release == nil {
+		return err
+	}
+	defer release()
+
 	for {
 		if ctx.Err() != nil {
 			return nil
@@ -98,15 +112,24 @@ func (h *Handler) runHelmWatchSSE(ctx context.Context, w http.ResponseWriter, fl
 
 		watcher, err := h.startSecretWatch(ctx, namespace)
 		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
 			// transient kubeconfig hot-reload / API server hiccup — back off + retry
 			if writeErr := writeSSEEvent(w, flusher, "error", response.Public(err)); writeErr != nil {
 				return writeErr
 			}
-			select {
-			case <-ctx.Done():
+			if !keepAliveFor(ctx, w, flusher, keepalive, 5*time.Second) {
 				return nil
-			case <-time.After(5 * time.Second):
-				continue
+			}
+			continue
+		}
+		// the page was told the limit kept it from following: it follows again
+		if told {
+			told = false
+			if err := writeSSEEvent(w, flusher, "following", "{}"); err != nil {
+				watcher.Stop()
+				return err
 			}
 		}
 
@@ -116,16 +139,64 @@ func (h *Handler) runHelmWatchSSE(ctx context.Context, w http.ResponseWriter, fl
 		}
 		watcher.Stop()
 
-		if ctx.Err() != nil {
+		// K8s 의 TimeoutSeconds 가 차서 watcher 가 닫혔다. A moment's spread, as the sockets' watches go on, then a new one.
+		if !keepAliveFor(ctx, w, flusher, keepalive, ws.WatchResumeDelay()) {
 			return nil
 		}
-		// K8s 의 TimeoutSeconds 가 차서 watcher 가 닫혔다. for 루프가 새 watcher 시작.
 	}
 }
 
-// startSecretWatch opens the Secret watch with the helm release fieldSelector.
+// helmWatchCount is how many watches the stream opens: one per namespace of a grant limited to them.
+func helmWatchCount(ctx context.Context, namespace string) int {
+	if scope := k8s.CallerScope(ctx); namespace == "" && len(scope) > 0 {
+		return len(scope)
+	}
+	return 1
+}
+
+// holdHelmWatches takes n of the server's live watches, telling the page and asking again later while they do not fit.
+// release is nil when the stream ended first; told says the page was told.
+func (h *Handler) holdHelmWatches(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, keepalive *time.Ticker, n int) (release func(), told bool, err error) {
+	if h.watchLimits == nil {
+		return func() {}, false, nil
+	}
+	for {
+		if release, ok := h.watchLimits.HoldWatches(n); ok {
+			return release, told, nil
+		}
+		if err := writeSSEEvent(w, flusher, "error", helmLimitFrame); err != nil {
+			return nil, told, err
+		}
+		told = true
+		if !keepAliveFor(ctx, w, flusher, keepalive, helmLimitRetry()) {
+			return nil, told, nil
+		}
+	}
+}
+
+// keepAliveFor waits d, writing the keepalive comment meanwhile; false when the stream ended first.
+func keepAliveFor(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, keepalive *time.Ticker, d time.Duration) bool {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-timer.C:
+			return true
+		case <-keepalive.C:
+			if _, err := io.WriteString(w, ": keepalive\n\n"); err != nil {
+				return false
+			}
+			flusher.Flush()
+		}
+	}
+}
+
+// startSecretWatch opens the Secret watch with the helm release fieldSelector, each watch taking one of the cluster's
+// places for starting a watch as a socket's watch does.
 func (h *Handler) startSecretWatch(ctx context.Context, namespace string) (watch.Interface, error) {
-	timeout := helmWatchTimeoutSeconds
+	timeout := ws.WatchTimeoutSeconds()
 	opts := metav1.ListOptions{
 		FieldSelector:  "type=" + helm.SecretType,
 		Watch:          true,
@@ -140,12 +211,21 @@ func (h *Handler) startSecretWatch(ctx context.Context, namespace string) (watch
 		return nil, errKubeconfigNotLoaded
 	}
 
-	if scope := k8s.CallerScope(ctx); namespace == "" && len(scope) > 0 {
-		return watchNamespaces(scope, func(ns string) (watch.Interface, error) {
-			return cs.CoreV1().Secrets(ns).Watch(ctx, opts)
-		})
+	open := func(ns string) (watch.Interface, error) {
+		if h.watchLimits != nil {
+			id, _ := cluster.FromContext(ctx)
+			release, err := h.watchLimits.StartWatch(ctx, string(id))
+			if err != nil {
+				return nil, err
+			}
+			defer release()
+		}
+		return cs.CoreV1().Secrets(ns).Watch(ctx, opts)
 	}
-	return cs.CoreV1().Secrets(namespace).Watch(ctx, opts)
+	if scope := k8s.CallerScope(ctx); namespace == "" && len(scope) > 0 {
+		return watchNamespaces(scope, open)
+	}
+	return open(namespace)
 }
 
 // watchNamespaces opens one watch per namespace of a grant limited to namespaces, leaving out one the cluster refuses

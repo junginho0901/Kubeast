@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"math/rand/v2"
+	"os"
 	"runtime"
 	"slices"
 	"strconv"
@@ -324,7 +325,19 @@ func (p *podRowSet) done() {
 // copies — 400 people opening the Pods page at once took k8s-service from 93
 // to 482 MiB. A place is taken after the access check, so callers waiting on
 // the cluster's answer do not hold one.
-var podRowSlots = make(chan struct{}, runtime.GOMAXPROCS(0))
+var podRowSlots = make(chan struct{}, podRowConcurrency(runtime.GOMAXPROCS(0)))
+
+// maxPodRowPlaces: the chart sets no CPU limit, so Go counts every CPU of the node, and each place holds about 2 MB of
+// rows on 50 000 pods — 96 places on a big node would add some 190 MB where the measured crowd had 482 MiB of 512 Mi.
+const maxPodRowPlaces = 8
+
+// podRowConcurrency is the CPUs up to maxPodRowPlaces, or POD_ROW_CONCURRENCY when set.
+func podRowConcurrency(procs int) int {
+	if n, err := strconv.Atoi(os.Getenv("POD_ROW_CONCURRENCY")); err == nil && n > 0 {
+		return n
+	}
+	return max(1, min(procs, maxPodRowPlaces))
+}
 
 func takePodRowSlot(ctx context.Context) (func(), error) {
 	select {

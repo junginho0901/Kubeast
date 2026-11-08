@@ -10,6 +10,8 @@ import { formatDuration, formatWhen } from './accessRequestFormat'
 import { REQUESTS_PER_PAGE, accessRequestQuery, pageCount, type AccessRequestTab } from './accessRequestPages'
 import { usePendingAccessRequestCount } from '@/hooks/usePendingAccessRequestCount'
 import { utcTitle } from '@/utils/time'
+import { givesChartBoundRole } from '@/utils/adminAccess'
+import { parsePermissions } from '@/utils/permissions'
 
 // Admin review of access requests (temporary per-cluster role grants):
 // pending requests to approve or reject with an optional note, and the
@@ -39,6 +41,11 @@ export default function AccessRequests() {
   const setPage = (p: number) => setPaged({ key: pageKey, page: p })
 
   const { data: me } = useQuery({ queryKey: ['me'], queryFn: api.me, staleTime: 30_000, retry: false })
+  // a role the chart binds is approved only by a global admin or an Admin of its cluster (givesChartBoundRole)
+  const { data: roles = [] } = useQuery({ queryKey: ['roles'], queryFn: api.listRoles, staleTime: 60_000 })
+  const chartBound = new Set(roles.filter((role) => role.chart_bound).map((role) => role.name))
+  const approvalHeld = (role: string, cluster: string) =>
+    chartBound.has(role) && !givesChartBoundRole(parsePermissions(me?.permissions_matrix), me?.cluster_roles, me?.cluster_namespaces, cluster)
   const { data: config } = useQuery({ queryKey: ['access-requests', 'config'], queryFn: api.getAccessRequestsConfig, staleTime: 60_000 })
   const { data: pendingCount = 0 } = usePendingAccessRequestCount({ enabled: true, refetchInterval: 30_000 })
   // Both tabs are read (the one not shown at its first page), so switching shows rows at once; each keeps the
@@ -197,10 +204,15 @@ export default function AccessRequests() {
                               placeholder={tr('accessRequests.admin.notePlaceholder', 'Note (optional)')}
                               className="w-40 rounded-lg border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-ink placeholder:text-slate-500"
                             />
+                            {approvalHeld(r.role, r.cluster_id) && (
+                              <span className="max-w-56 whitespace-normal text-right text-xs text-amber-200" data-testid={`access-request-chart-bound-${r.id}`}>
+                                {tr('accessRequests.admin.chartBound', 'The chart binds this role on the cluster: only a global admin or an Admin of this cluster can approve it.')}
+                              </span>
+                            )}
                             <button
                               type="button"
                               data-testid={`access-request-approve-${r.id}`}
-                              disabled={busy}
+                              disabled={busy || approvalHeld(r.role, r.cluster_id)}
                               onClick={() => approve.mutate(r.id)}
                               className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
                             >

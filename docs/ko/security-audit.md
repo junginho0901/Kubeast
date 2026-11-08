@@ -237,4 +237,6 @@ AI 도구 호출마다 클러스터가 그 호출을 누구로 봤는지와 그 
   - 요청마다 클러스터 자격 증명, 그 사람의 impersonation, 새 `Audit-ID`를 붙여 보내고 목록에 남깁니다.
   - exec·attach·port-forward·로그 스트림도 같은 중계를 거칩니다. 업그레이드된 연결(exec)은 끝날 때 상태 101로 남습니다.
   - kubectl 자체의 탐색 요청(`/api`·`/apis`·`/openapi`)은 중계를 거치지만 목록에는 넣지 않습니다.
-  - tool-server에 `TOOL_SERVER_KUBECTL_PROXY=false`를 주면 kubectl이 `--as`로 클러스터에 바로 붙고, 목록은 없습니다. 그러면 요청을 읽는 곳이 없으므로 [Kubeast 자체 Namespace와 노드 셸의 Namespace](cluster-requirements.md#kubeast-자체-namespace에-누가-닿는가)는 kubectl 인자로 판단하고, Kubeast가 도는 클러스터에서 모든 Namespace의 Secret 목록은 전역 관리자가 아니면 거절합니다.
+  - tool-server에 `TOOL_SERVER_KUBECTL_PROXY=false`를 주면 kubectl이 `--as`로 클러스터에 바로 붙고, 목록은 없습니다. 그러면 요청을 읽는 곳이 없으므로 [Kubeast 자체 Namespace와 노드 셸의 Namespace](cluster-requirements.md#kubeast-자체-namespace에-누가-닿는가)는 kubectl 인자로 판단하고(`pods,secrets`처럼 쉼표로 적은 종류는 하나씩), Kubeast가 도는 클러스터에서 모든 Namespace의 Secret 목록은 전역 관리자가 아니면 거절합니다.
+  - 변수를 그대로 두어 켜져야 할 중계가 시작에 실패하면, 직접 붙지 않고 tool-server를 다시 시작할 때까지 kubectl 도구가 그 까닭과 함께 거절됩니다. 다른 도구와 화면은 그대로입니다.
+  - 두 길 모두 Namespace를 적지 않은 호출은 `default`에서 동작합니다. kubectl이 읽는 kubeconfig의 context에 `kubectl config set-context --namespace`처럼 적어 두고, 등록한 kubeconfig가 적은 Namespace는 쓰지 않습니다. 적지 않으면 tool-server 파드 안의 kubectl은 파드 자신의 Namespace를 씁니다.

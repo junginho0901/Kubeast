@@ -90,6 +90,36 @@ func proxyClient(t *testing.T, p *kubeProxy) *http.Client {
 	return &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: proxyRoots(t, p)}}}
 }
 
+// A call that names no namespace works in default, as the size check and the tools' messages say: the run kubeconfig
+// names it, so kubectl in the pod does not take POD_NAMESPACE, Kubeast's own, and a manifest's own namespaces still apply.
+func TestKubectlThroughTheProxyTakesDefaultWhenNoNamespaceIsNamed(t *testing.T) {
+	api, _ := fakeAPIServer(t)
+	p, err := startKubeProxy()
+	if err != nil {
+		t.Fatal(err)
+	}
+	prevProxy := kubectlProxy
+	kubectlProxy = p
+	defer func() { kubectlProxy = prevProxy }()
+	ctx := withClusterID(withKubeconfigPath(context.Background(), clusterKubeconfig(t, api.URL)), "c")
+	argv, done, err := kubectlCommand(ctx, []string{"get", "deployments"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer done()
+	cfg, err := clientcmd.LoadFromFile(argv[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := cfg.Contexts[cfg.CurrentContext]; c == nil || c.Namespace != "default" {
+		t.Fatalf("run kubeconfig context %+v: kubectl in the pod would take POD_NAMESPACE", c)
+	}
+	ns, overridden, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(&clientcmd.ClientConfigLoadingRules{ExplicitPath: argv[1]}, &clientcmd.ConfigOverrides{}).Namespace()
+	if err != nil || ns != "default" || overridden {
+		t.Fatalf("namespace %q overridden %v err %v: a manifest naming its own namespace must still apply there", ns, overridden, err)
+	}
+}
+
 // The token kubectl was given, read back from the kubeconfig the proxy wrote.
 // client-go reads a token only for a TLS server: the proxy must be https.
 func runToken(t *testing.T, path string) (server, token string) {

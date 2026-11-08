@@ -94,7 +94,7 @@
     - `nodes_stats_summary`·`nodes_log` — kubelet의 stats summary와 로그 질의를 API 서버 프록시로 읽습니다(`admin.nodes.read` + 클러스터 RBAC `nodes/proxy`).
       로그 질의는 kubelet의 `enableSystemLogQuery`가 켜져 있어야 하며, 꺼져 있으면 unavailable로 답합니다.
   - 큰 목록은 다음 도구로 줄여 받습니다.
-    - `k8s_jq_query` — `kubectl get -o json`을 jq로 걸러 필요한 필드만, 환경·파일 접근 없음, 5초 상한
+    - `k8s_jq_query` — `kubectl get -o json`을 jq로 걸러 필요한 필드만, 환경·파일 접근 없음, 5초 상한. 프로그램은 메모리 상한이 있는 자식 프로세스에서 돕니다(1 MiB 목록이면 약 40 MiB). 긴 range나 반복한 문자열처럼 그보다 많이 만드는 프로그램은 그 이유로 거절하고 tool-server는 그대로 돕니다.
     - `k8s_tabular_query` — 고른 열만 표로
     - `k8s_count` — 개수, 그룹별 개수
     - **Secret 값은 이 길로 나가지 않습니다.** `k8s_jq_query`·`k8s_count`는 값을 뺀 목록을 읽습니다. 키 이름은 남고 값은 `<REDACTED:secret>`입니다. kubectl이 직접 계산하는 출력은 먼저 지울 수 없으므로, Secret의 표와 `jsonpath`·`go-template`·`custom-columns` 출력, `.data`로 묶은 개수는 다른 길을 안내하며 거절합니다. 여러 종류를 함께 읽으면 다른 종류의 값은 그대로입니다. 실패한 도구의 글도 답과 똑같이 가립니다.
@@ -106,11 +106,11 @@
   - 질의 도구는 API 서버가 받는 필드 셀렉터를 모두 받습니다(`status.phase!=Running`·`spec.nodeName=node-1`). `k8s_get_events`는 이벤트 필드만 받습니다.
     - 없는 파드 이름의 비슷한 이름은 파드 전부를 받지 않고, 그 이름의 단어를 가진 파드에서 찾습니다.
     - `k8s_jq_query`·`k8s_tabular_query`는 지금도 kubectl로 파드를 받는데, kubectl은 받은 파드를 전부 메모리에 듭니다. 그래서 네임스페이스·레이블 셀렉터 범위의 파드가 5,000개를 넘으면 개수와 크기 상관없이 답하는 도구를 알려 주며 `too_large`로 답합니다.
-  - 다른 종류는 kubectl로 목록을 받기 전에 크기를 먼저 묻습니다. kubectl은 출력 방식과 상관없이 목록 전체를 들고 있기 때문입니다(이벤트 11만 개에 1~1.8GB). API 서버가 객체 없이 개수를 답합니다(`limit=1`과 남은 수, 셀렉터가 있으면 500개씩 5,001개까지 셈). 5,000개를 넘으면 `k8s_get_resources`·`k8s_jq_query`·`k8s_tabular_query`·필드로 묶은 `k8s_count`는 목록을 받지 않고 개수와 함께 `too_large`로 답하고, 묶지 않은 `k8s_count`는 크기와 상관없이 그 개수로 답합니다.
+  - 다른 종류는 kubectl로 목록을 받기 전에 크기를 먼저 묻습니다. kubectl은 출력 방식과 상관없이 목록 전체를 들고 있기 때문입니다(이벤트 11만 개에 1~1.8GB). API 서버가 객체 없이 개수를 답합니다(`limit=1`과 남은 수, 셀렉터가 있으면 500개씩 5,001개까지 셈). 한 쪽이 도구 출력보다 길면 바이트로는 개수를 알 수 없으므로 객체 수를 반으로 줄여 다시 묻고, 객체 하나가 그보다 긴 목록은 개수 없이 `too_large`로 답합니다. 5,000개를 넘으면 `k8s_get_resources`·`k8s_jq_query`·`k8s_tabular_query`·필드로 묶은 `k8s_count`는 목록을 받지 않고 개수와 함께 `too_large`로 답하고, 묶지 않은 `k8s_count`는 크기와 상관없이 그 개수로 답합니다.
   - `k8s_get_events`는 최신 이벤트를 최신 순으로 답합니다(기본 200, 최대 1,000). k8s-service가 쪽 단위로 읽으며, 더 많으면 전체 수를 함께 말합니다.
   - kubectl 목록이 도구 출력 상한(`TOOL_OUTPUT_MAX_BYTES`, 1 MiB)보다 길면 잘렸다고 답합니다. `k8s_jq_query`·`k8s_count`는 `too_large`, `k8s_tabular_query`는 "전체 수는 모름"으로 답하며, 읽기 오류나 틀린 개수를 내지 않습니다.
-  - 쓰기 전에는 `k8s_diff`로 바뀔 내용을 먼저 보여 줍니다. AI가 값 대신 읽은 글자가 든 manifest는 `placeholders`로 알려 줍니다. diff는 그 글자를 비교한 것이고 쓰기는 거절되기 때문입니다. 서버 dry-run 결과를 라이브 객체와 비교한 diff이며 **실제로 적용하지 않고**, 쓰기 권한이 있는 사용자에게만 보입니다. Secret이면 값 없이 바뀌는 키 이름만 보여 줍니다.
-  - AI가 값 대신 읽은 글자(`<REDACTED:…>`, Secret의 `***`, 인코딩한 꼴 포함)를 담은 쓰기는 그 글자가 저장되므로 누구든 거절합니다. 승인 카드 전에 걸리고 tool-server에서 한 번 더 걸립니다. 거절 글이 대신 할 일을 말합니다: 다른 칸만 패치하고, 새 값은 사용자에게 받습니다.
+  - 쓰기 전에는 `k8s_diff`로 바뀔 내용을 먼저 보여 줍니다. AI가 값 대신 읽은 글자가 든 manifest는 `placeholders`로 알려 줍니다. diff는 그 글자를 비교한 것이고 쓰기는 거절되기 때문입니다. 서버 dry-run 결과를 라이브 객체와 비교한 diff이며 **실제로 적용하지 않고**, 쓰기 권한이 있는 사용자에게만 보입니다. Secret이면 값 없이 바뀌는 키 이름만 보여 줍니다. `resource.secret.reveal`이 없으면 화면과 같이 값을 비교하지 않습니다. 매니페스트에 적은 키 가운데 Secret에 이미 있는 키는 값이 달라졌든 아니든 바뀜으로 보이고, `values_not_compared`가 그 까닭을 말합니다. 맞는 값을 적어도 틀린 값과 똑같이 보입니다. 새로 생기는 키와 빠지는 키는 그대로 알려 줍니다.
+  - AI가 값 대신 읽은 글자(이름에 무엇이 들었든 `<REDACTED:…>`, `k8s_diff`의 `<REDACTED:secret:new value>`, `REDACTION_PII`의 `<EMAIL_n>`, `SecretList` 안의 것까지 Secret의 `***`, 인코딩한 꼴 포함)를 담은 쓰기는 그 글자가 저장되므로 누구든 거절합니다. 승인 카드 전에 걸리고 tool-server에서 한 번 더 걸립니다. 거절 글이 대신 할 일을 말합니다: 다른 칸만 패치하고, 새 값은 사용자에게 받습니다.
 - **플로팅 AI 위젯(AI Chat)** — 모든 페이지에 떠 있는 위젯이 **현재 화면 컨텍스트**(보고 있는 리소스)를 이해하고 답합니다.
   - 답할 때는 read-only 툴만 씁니다.
   - 첫 글자가 나오기 전에는 대기 점이, 끝난 답 옆에는 작은 복사 아이콘이 보이고 토큰 줄은 없습니다. 넓은 표는 상자 안에서 스크롤되고 머리 줄은 고정됩니다.

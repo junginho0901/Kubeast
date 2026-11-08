@@ -18,6 +18,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
@@ -44,9 +45,13 @@ type clusterAPI struct {
 	may    func(user, verb, resource, namespace, fieldSelector string) bool
 	// holdCache, when set, holds every list as kubeast:cache until it is closed
 	holdCache chan struct{}
-	calls     []apiCall
+	// holdCallers, when set, holds every list of a node's pods as a caller until it is closed
+	holdCallers chan struct{}
+	calls       []apiCall
 	// cacheNow and cacheMost are the requests as kubeast:cache under way now and at most
 	cacheNow, cacheMost int
+	// callerNow and callerMost are the lists of a node's pods as a caller under way now and at most
+	callerNow, callerMost int
 }
 
 func (a *clusterAPI) allowed(user, verb, resource, namespace, selector string) bool {
@@ -125,8 +130,8 @@ func (a *clusterAPI) serve(w http.ResponseWriter, r *http.Request) {
 	switch parts := strings.Split(strings.Trim(path, "/"), "/"); {
 	case len(parts) == 1:
 		resource = parts[0]
-	case len(parts) == 2 && parts[0] == "namespaces":
-		resource, name = "namespaces", parts[1]
+	case len(parts) == 2 && (parts[0] == "namespaces" || parts[0] == "nodes"):
+		resource, name = parts[0], parts[1]
 	case len(parts) == 3 && parts[0] == "namespaces":
 		namespace, resource = parts[1], parts[2]
 	default:
@@ -152,17 +157,36 @@ func (a *clusterAPI) serve(w http.ResponseWriter, r *http.Request) {
 	if user == overviewCacheUser && a.holdCache != nil {
 		<-a.holdCache
 	}
+	if user != overviewCacheUser && resource == "pods" && strings.HasPrefix(selector, "spec.nodeName=") {
+		a.mu.Lock()
+		a.callerNow++
+		a.callerMost = max(a.callerMost, a.callerNow)
+		a.mu.Unlock()
+		defer func() {
+			a.mu.Lock()
+			a.callerNow--
+			a.mu.Unlock()
+		}()
+		if a.holdCallers != nil {
+			<-a.holdCallers
+		}
+	}
 	if !a.allowed(user, verb, resource, namespace, selector) {
 		writeStatus(w, http.StatusForbidden, "Forbidden", fmt.Sprintf("%s is forbidden: User %q cannot %s resource %q", resource, user, verb, resource))
 		return
 	}
 	switch resource {
 	case "pods":
-		node, byNode := strings.CutPrefix(selector, "spec.nodeName=")
+		// the fields the API server selects pods by here: the node and the phase
+		fieldSel, err := fields.ParseSelector(selector)
+		if err != nil {
+			writeStatus(w, http.StatusBadRequest, "BadRequest", err.Error())
+			return
+		}
 		a.mu.Lock()
 		list := &corev1.PodList{TypeMeta: metav1.TypeMeta{Kind: "PodList", APIVersion: "v1"}, ListMeta: metav1.ListMeta{ResourceVersion: "7"}}
 		for _, p := range a.pods {
-			if (namespace == "" || p.Namespace == namespace) && (!byNode || p.Spec.NodeName == node) {
+			if (namespace == "" || p.Namespace == namespace) && fieldSel.Matches(fields.Set{"spec.nodeName": p.Spec.NodeName, "status.phase": string(p.Status.Phase)}) {
 				list.Items = append(list.Items, p)
 			}
 		}
@@ -193,6 +217,11 @@ func (a *clusterAPI) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, list)
 	case "nodes":
+		if name != "" {
+			full := resourceList("cpu", "4", "memory", "16Gi", "ephemeral-storage", "100Gi", "hugepages-2Mi", "1Gi", "hugepages-1Gi", "0", "pods", "110", "nvidia.com/gpu", "8", "example.com/dongle", "3")
+			writeJSON(w, &corev1.Node{TypeMeta: metav1.TypeMeta{Kind: "Node", APIVersion: "v1"}, ObjectMeta: metav1.ObjectMeta{Name: name}, Status: corev1.NodeStatus{Capacity: full, Allocatable: full}})
+			return
+		}
 		writeJSON(w, &corev1.NodeList{TypeMeta: metav1.TypeMeta{Kind: "NodeList", APIVersion: "v1"}})
 	default:
 		http.NotFound(w, r)
@@ -298,7 +327,7 @@ func TestPodsOnNodeAreWhatTheCallersOwnListShows(t *testing.T) {
 			t.Fatalf("%s: %v", c.name, err)
 		}
 		namespaces, _ := callerNamespaces(c.ctx, c.namespace)
-		want, err := listPodsOnNode(c.ctx, b.clientset.CoreV1(), c.node, namespaces)
+		want, err := listPodsOnNode(c.ctx, b.id, b.clientset.CoreV1(), c.node, namespaces)
 		if err != nil {
 			t.Fatalf("%s: the caller's own list: %v", c.name, err)
 		}
@@ -435,7 +464,7 @@ func TestPodsOnNodeAreTheCallersOwnListWhenTheCacheIdentityIsRefused(t *testing.
 			t.Fatal(err)
 		}
 		namespaces, _ := callerNamespaces(ctx, "")
-		want, _ := listPodsOnNode(ctx, b.clientset.CoreV1(), "n1", namespaces)
+		want, _ := listPodsOnNode(ctx, b.id, b.clientset.CoreV1(), "n1", namespaces)
 		if len(want) == 0 || answerJSON(t, got) != answerJSON(t, want) {
 			t.Errorf("got %d pods, the caller's own list %d", len(got), len(want))
 		}

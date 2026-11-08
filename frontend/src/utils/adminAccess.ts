@@ -32,6 +32,18 @@ export function isGlobalAdmin(matrix: PermissionMatrix): boolean {
   return (matrix['*'] ?? []).includes('*')
 }
 
+// A role the chart binds (`chart_bound` in the role list) acts on a cluster as ClusterRoles no permission key
+// describes, so only a global admin or an Admin of that cluster not limited to namespaces gives it, by a grant or an
+// approval (auth-service chartBoundGrantCeiling).
+export function givesChartBoundRole(
+  matrix: PermissionMatrix,
+  clusterRoles: Record<string, string> | null | undefined,
+  clusterNamespaces: Record<string, string[]> | null | undefined,
+  cluster: string,
+): boolean {
+  return isGlobalAdmin(matrix) || (clusterRoles?.[cluster]?.trim().toLowerCase() === 'admin' && !clusterNamespaces?.[cluster]?.length)
+}
+
 // A role's permission list (not a token matrix): the same rule for the person a page shows.
 export function roleReachesEveryCluster(permissions: string[] | null | undefined): boolean {
   return (permissions ?? []).includes('*')

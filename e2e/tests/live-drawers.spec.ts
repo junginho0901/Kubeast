@@ -204,6 +204,45 @@ test.describe('what keeps up by itself', () => {
     kubectl(`-n ${NS} delete pod e2e-live-big --wait=false`)
   })
 
+  test('a Node drawer keeps when its node last turned Ready while a change of the node comes live', async ({ page }) => {
+    test.setTimeout(120_000)
+    const node = kubectl(`-n ${NS} get pod -l app=web -o 'jsonpath={.items[0].spec.nodeName}'`)
+    const readyAt = kubectl(`get node ${node} -o 'jsonpath={.status.conditions[?(@.type=="Ready")].lastTransitionTime}'`)
+    expect(readyAt, 'kubectl reads the Ready condition').toMatch(/^\d{4}-\d{2}-\d{2}T/)
+    const describes = requests(page, new RegExp(`/nodes/${node}/describe`))
+    await page.goto(`/cluster/nodes?cluster=self&detail=${encodeURIComponent(`Node/${node}`)}`)
+    const drawer = page.locator(DRAWER).last()
+    const since = drawer.getByText('Since Ready Changed', { exact: true }).locator('xpath=following-sibling::p[1]')
+    await expect(since).not.toHaveText(/^\s*-?\s*$/, { timeout: 30_000 })
+    const shown = (await since.innerText()).trim()
+    // every frame from here on: what the cell says while the change comes in and is read again
+    await since.evaluate((cell) => {
+      const seen: string[] = []
+      ;(window as unknown as { __readySeen: string[] }).__readySeen = seen
+      const sample = () => {
+        seen.push((cell as HTMLElement).innerText.trim())
+        if (seen.length < 2000) requestAnimationFrame(sample)
+      }
+      requestAnimationFrame(sample)
+    })
+    const readsBefore = describes.length
+    const label = `e2e-live-ready-${STAMP}`
+    kubectl(`label node ${node} ${label}=yes --overwrite`)
+    try {
+      // the Labels section shows the key on its own, the frame's labels written over the answer's
+      await expect(drawer.getByText(label, { exact: true })).toHaveCount(1, { timeout: 20_000 })
+      await expect.poll(() => describes.length, { timeout: 20_000 }).toBeGreaterThan(readsBefore)
+      await page.waitForTimeout(2_000)
+      const seen = await page.evaluate(() => (window as unknown as { __readySeen: string[] }).__readySeen)
+      expect(seen.length, 'the cell was sampled while the change came in').toBeGreaterThan(10)
+      // the age it shows may move on by a minute meanwhile; it never goes empty
+      expect(seen.filter((text) => text === '' || text === '-'), `the cell, ${shown} when the drawer opened, never went empty`).toEqual([])
+      expect(kubectl(`get node ${node} -o 'jsonpath={.status.conditions[?(@.type=="Ready")].lastTransitionTime}'`), 'a label leaves the Ready condition as it was').toBe(readyAt)
+    } finally {
+      kubectl(`label node ${node} ${label}-`)
+    }
+  })
+
   test('a CRD drawer\'s table and the chosen kind\'s rows follow its objects, and the list of every kind says it does not', async ({ page }) => {
     test.setTimeout(120_000)
     await page.goto(`/?cluster=self&detail=${encodeURIComponent(`CustomResourceDefinition/${CRD}`)}`)
