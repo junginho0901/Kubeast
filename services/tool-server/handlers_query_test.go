@@ -140,6 +140,9 @@ func TestCount_GroupBy(t *testing.T) {
 func TestQueryArgsAndGate(t *testing.T) {
 	for _, args := range []map[string]interface{}{
 		{"jq": `.items[] | select(.status.phase == "Running")`}, {"columns": "NAME:.metadata.name,IMG:.spec.containers[*].image"},
+		// kubectl's JSONPath filters and negative indices (an AI eval run on 2026-11-08 wrote these and was refused)
+		{"columns": `NAME:.metadata.name,STATUS:.status.conditions[-1].type,READY:.status.conditions[?(@.type=="Ready")].status,TAINTS:.spec.taints`},
+		{"columns": `PORT:.spec.ports[?(@.port >= 1000)].port,LAST:.status.conditions[-2:].type`},
 		{"sort_by": ".metadata.creationTimestamp"}, {"group_by": ".spec.nodeName"}, {"label_selector": "app=web,tier!=db"}, {"label_selector": "env in (prod,staging)"},
 	} {
 		if err := validateToolArgs(args); err != nil {
@@ -148,6 +151,7 @@ func TestQueryArgsAndGate(t *testing.T) {
 	}
 	for _, args := range []map[string]interface{}{
 		{"jq": strings.Repeat(".", 1001)}, {"columns": "NAME"}, {"columns": "NAME:.a;rm"}, {"sort_by": "metadata.name"}, {"group_by": ".a b"},
+		{"columns": "N:{.metadata.name}"}, {"columns": "N:.a`x`"}, {"columns": "N:.a$(x)"}, {"columns": "N:.a\nb"}, {"columns": "N:.a\\b"},
 		{"label_selector": "--all"}, {"label_selector": "a\nb"},
 	} {
 		if err := validateToolArgs(args); !errors.Is(err, errBadRequest) {

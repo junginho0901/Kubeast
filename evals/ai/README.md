@@ -63,6 +63,7 @@ Claude subscription counts cached input too, so its numbers are large and do not
 | Claude Haiku 5.5 (subscription), 2026-10-20, after the one-sentence-before-a-tool instruction | 12/12 | 3.5 | 13.0 |
 | Claude Haiku 5.5 (subscription), 2026-10-26, after `network_flows` named Calico's Whisker | 12/12 | 3.7 | 11.9 |
 | Claude Haiku 5.5 (subscription), 2026-10-26, after the `network_top_flows` tool was added | 12/12 | 3.3 | 11.1 |
+| Claude Haiku 5.5 (subscription), 2026-11-08, the v0.7.6 code (new read tools, tool permission tables) | 12/12 | 3.8 | 11.5 |
 
 What changed after the first run: case 06 failed because an empty alert store ended the answer ("no alert fires")
 while Prometheus was firing the rule — the dev Prometheus sends to no Alertmanager. `alerts_list`'s empty results,
@@ -78,3 +79,8 @@ Relay. No case calls that tool; the run checks that the change leaves the others
 
 2026-10-26: the tool `network_top_flows` (Network Flow Monitor top talkers) and its lines in the chat instruction were
 added. No case calls it either; the other answers stayed at 12/12.
+
+2026-11-08: the v0.7.6 code, with the read tools that answer what each screen reads and the tables that hold a tool to
+its screen's permission, stayed at 12/12. In case 08 `k8s_tabular_query` refused columns holding a JSONPath filter
+and a negative index, which kubectl takes, and the model read the nodes again with `k8s_jq_query`; the check now takes
+them.
