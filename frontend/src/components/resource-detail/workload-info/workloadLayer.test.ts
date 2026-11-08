@@ -159,7 +159,7 @@ describe('the Jobs a CronJob window lists', () => {
     ]
     const html = renderToStaticMarkup(createElement(WorkloadOwnedResources, {
       namespace: 'ns', isCronJob: true, isDaemonSet: false, isDeployment: false, isJob: false, isReplicaSet: false, isStatefulSet: false,
-      owned: { ...noPods, replicaSets: [], jobs: [], pvcsByPodName: {}, rsEnabled: false, jobsEnabled: false, pvcsEnabled: false } as never,
+      owned: { ...noPods, podTable: { items: [], total: 0, loading: false }, replicaSets: [], jobs: [], pvcsByPodName: {}, rsEnabled: false, jobsEnabled: false, pvcsEnabled: false } as never,
       describe: undefined, ownedJobs: rows,
     }))
     const durations = html.split('<tbody')[1].split('</tr>').slice(0, 4).map((row) => [...row.matchAll(/<td[^>]*>(.*?)<\/td>/g)].map((m) => m[1].replace(/<[^>]+>/g, '')).pop())

@@ -133,6 +133,7 @@ type PodPageFilters struct {
 	Secret         string `json:"secret,omitempty"`
 	ServiceAccount string `json:"service_account,omitempty"`
 	LabelSelector  string `json:"label_selector,omitempty"`
+	Owner          string `json:"owner,omitempty"` // <kind>/<name>
 }
 
 type PodPage struct {
@@ -142,7 +143,9 @@ type PodPage struct {
 	ByPhase     []PodGroupCount `json:"by_phase,omitempty"`
 	Items       []PodListItem   `json:"items"`
 	Total       int             `json:"total"` // rows the search matched
-	Stats       PodStats        `json:"stats"`
+	// NotRunning: of those, the ones whose Status (the phase without one) is not Running, Completed or Succeeded
+	NotRunning int      `json:"not_running"`
+	Stats      PodStats `json:"stats"`
 	// Revision changes when a row the caller may see could show something new;
 	// "" when the rows were listed (no informer to say).
 	Revision  string `json:"revision"`
@@ -173,7 +176,19 @@ func (q PodPageQuery) filters() PodPageFilters {
 	if q.LabelSelector != nil {
 		f.LabelSelector = q.LabelSelectorText
 	}
+	if q.OwnerKind != "" {
+		f.Owner = q.OwnerKind + "/" + q.OwnerName
+	}
 	return f
+}
+
+// rowNeedsALook is the floating chat's podNotRunning: the Status, else the phase, is not one that asks nothing.
+func rowNeedsALook(r *podRow) bool {
+	word := r.status
+	if word == "" {
+		word = r.phase
+	}
+	return word != "" && word != "Running" && word != "Completed" && word != "Succeeded"
 }
 
 // searchWords splits a search as the AI's find_pods does: lower case, everything but letters and digits a separator.
@@ -664,6 +679,11 @@ func buildPodPage(rows []*podRow, q PodPageQuery, now time.Time) *PodPage {
 	}
 	sortPodRows(matched, q.Sort, q.Desc, now)
 	page.Total = len(matched)
+	for _, r := range matched {
+		if rowNeedsALook(r) {
+			page.NotRunning++
+		}
+	}
 	limit := q.Limit
 	if limit <= 0 || limit > PodPageMaxLimit {
 		limit = PodPageMaxLimit

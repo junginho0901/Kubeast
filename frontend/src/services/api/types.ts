@@ -1690,6 +1690,8 @@ export interface PodPage {
   items: PodListRow[]
   /** rows the search matched */
   total: number
+  /** of those, the ones whose Status (the phase without one) is not Running, Completed or Succeeded; a server from before it sends none */
+  not_running?: number
   stats: PodListStats
   /** changes when a row could show something new; "" when the server listed the cluster */
   revision: string
@@ -1699,7 +1701,7 @@ export interface PodPage {
   /** with `groups`: the matched pods per namespace, largest first, the rest as "(other)" */
   by_namespace?: { name: string; count: number }[]
   /** a drawer table's conditions as the server applied them; a server from before them sends none */
-  filters?: { namespace?: string; config_map?: string; secret?: string; service_account?: string; label_selector?: string }
+  filters?: { namespace?: string; config_map?: string; secret?: string; service_account?: string; label_selector?: string; owner?: string }
 }
 
 /** One node on the Cluster View node map: its pods by the cards' colour (getPodHealth); node "" = not scheduled. */

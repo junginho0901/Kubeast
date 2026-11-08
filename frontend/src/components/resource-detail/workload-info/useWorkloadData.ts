@@ -132,7 +132,7 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
     selector: isLoading && needsDescribe ? undefined : selector,
     volumeClaimTemplates,
   })
-  const { pods: ownedPods, podsEnabled, podsLoaded, jobs: liveJobs, jobsEnabled } = owned
+  const { pods: ownedPods, counted: podsCounted, podsEnabled, podsLoaded, jobs: liveJobs, jobsEnabled } = owned
 
   const suspendMut = useMutation({
     mutationFn: (suspend: boolean) => api.suspendCronJob(namespace as string, name, suspend),
@@ -239,9 +239,9 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
     if (!name || !kind) return null
     return workloadLayer({
       kind, name, namespace, describe, spec, status, selector, ownedJobs, controllerZone, createdAt, labels, selectorExpressions, podTemplate, volumeClaimTemplates,
-      owned: { pods: ownedPods, podsEnabled, podsLoaded, jobs: liveJobs, jobsEnabled },
+      owned: { pods: ownedPods, counted: podsCounted, podsEnabled, podsLoaded, jobs: liveJobs, jobsEnabled },
     })
-  }, [name, namespace, kind, describe, spec, status, selector, ownedJobs, controllerZone, createdAt, labels, selectorExpressions, podTemplate, volumeClaimTemplates, ownedPods, podsEnabled, podsLoaded, liveJobs, jobsEnabled])
+  }, [name, namespace, kind, describe, spec, status, selector, ownedJobs, controllerZone, createdAt, labels, selectorExpressions, podTemplate, volumeClaimTemplates, ownedPods, podsCounted, podsEnabled, podsLoaded, liveJobs, jobsEnabled])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 

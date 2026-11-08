@@ -235,7 +235,10 @@ describe.each(drawers)('the $kind drawer\'s table of the pods that use it', (d) 
     expect(r.html).toContain(`${d.title} (${matched})`)
     expect(r.html).toContain('page-00009')
     expect(r.html).toContain('data-testid="drawer-pods-read-every"')
-    expect(r.html).toContain('every 10 seconds')
+    // a selector's matches passed the line, else the namespace's pods
+    expect(r.html).toContain(d.bySelector
+      ? 'Too many pods match this selector to follow live, so this table is read again every 10 seconds.'
+      : 'This namespace has too many pods to follow live, so this table is read again every 10 seconds.')
     expect(r.pageEvery(big(50_000))).toBe(10_000)
     expect(r.pageEvery(big(5000))).toBe(3_000)
     expect(render(d, (qc) => qc.setQueryData(firstPageKey(d), big(5000))).html).toContain('every 3 seconds')

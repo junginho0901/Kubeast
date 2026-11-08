@@ -39,12 +39,16 @@ export default function WorkloadOwnedResources({
   const { open: openDetail } = useResourceDetail()
   const tr = (key: string, fallback: string, o?: Record<string, any>) => t(key, { defaultValue: fallback, ...o })
 
-  const { replicaSets, jobs: liveJobs, pvcsByPodName, rsEnabled, jobsEnabled, pvcsEnabled } = owned
+  const { replicaSets, jobs: liveJobs, pvcsByPodName, rsEnabled, jobsEnabled, pvcsEnabled, podTable } = owned
 
-  // Fallback to describe.owned_pods for DS/RS/STS until the first watch tick.
-  // The watch query returns the canonical list once enabled.
-  const displayPods = ownedDisplayPods(describe, owned)
-  const showOwnedPods = (isDaemonSet || isReplicaSet || isStatefulSet || isJob) && displayPods.length > 0
+  // The table's rows (whole and live, or the server's pages); describe.owned_pods until the first of them came.
+  const tableRows = owned.podsEnabled && (podTable.whole !== undefined || podTable.page !== undefined)
+  const describePods = tableRows ? [] : ownedDisplayPods(describe, { pods: [], podsEnabled: false })
+  const { items: pagedDescribePods, nav: describePodsNav } = usePagination(describePods as Array<any>, 10)
+  const podRows: Array<any> = tableRows ? podTable.items : pagedDescribePods
+  const podTotal = tableRows ? podTable.total : describePods.length
+  const podsWaiting = !tableRows && describePods.length === 0 && podTable.loading
+  const showOwnedPods = (isDaemonSet || isReplicaSet || isStatefulSet || isJob) && (podTotal > 0 || podsWaiting)
   const showDeploymentRS = isDeployment && rsEnabled
   // CronJob owned Jobs — prefer live hook result, fallback to prop (parent's
   // staleTime-only query) until first watch tick.
@@ -56,7 +60,6 @@ export default function WorkloadOwnedResources({
   const sortedRs = [...(Array.isArray(replicaSets) ? replicaSets : [])]
     .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
   const { items: pagedRs, nav: rsNav } = usePagination(sortedRs, 10)
-  const { items: pagedDisplayPods, nav: displayPodsNav } = usePagination(displayPods as Array<any>, 10)
   const { items: pagedOwnedJobs, nav: ownedJobsNav } = usePagination(displayJobs, 10)
 
   return (
@@ -98,7 +101,11 @@ export default function WorkloadOwnedResources({
       )}
 
       {showOwnedPods && (
-        <InfoSection title="Pods ({{n}})" titleValues={{ n: displayPods.length }}>
+        <InfoSection title="Pods ({{n}})" titleValues={{ n: podTotal }}>
+          {tableRows && podTable.note}
+          {podsWaiting ? (
+            <p className="text-xs text-slate-400"><Tx>Loading...</Tx></p>
+          ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs table-fixed min-w-[700px]">
               <thead className="text-slate-400">
@@ -112,7 +119,7 @@ export default function WorkloadOwnedResources({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {pagedDisplayPods.map((pod: any) => {
+                {podRows.map((pod: any) => {
                   const pvcEntries = pvcsEnabled ? (pvcsByPodName.get(pod.name) ?? []) : []
                   return (
                     <tr
@@ -146,8 +153,9 @@ export default function WorkloadOwnedResources({
                 })}
               </tbody>
             </table>
-            {displayPodsNav}
+            {tableRows ? podTable.nav : describePodsNav}
           </div>
+          )}
         </InfoSection>
       )}
 

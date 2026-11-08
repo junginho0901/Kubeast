@@ -1,16 +1,17 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import type { PodInfo } from '@/services/api'
-import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
 import { InfoSection, InfoRow, InfoGrid, SummaryBadge, KeyValueTags, ConditionsTable, EventsSection, StatusBadge, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
-import { usePagination } from './usePagination'
+import { useNamespacePodTable } from './useNamespacePodTable'
+import { SET_POD_TABLE_WATCH_MAX } from './namespacePodTable'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
+
+// The API server applies the selector to the whole read: every row it gives is a match.
+const keepEvery = () => true
 
 interface Props {
   name: string
@@ -45,24 +46,15 @@ export default function PDBInfo({ name, namespace }: Props) {
   )
   const protectedEnabled = !!namespace && !!selectorStr
 
-  const { data: protectedPods } = useQuery({
-    queryKey: ['pdb-protected-pods', namespace, name, selectorStr],
-    queryFn: () => api.getPods(namespace, selectorStr),
+  const protectedPods = useNamespacePodTable({
     enabled: protectedEnabled,
-    staleTime: 5_000,
-  })
-
-  useKubeWatchList({
-    enabled: protectedEnabled,
+    namespace,
+    filter: { label_selector: selectorStr },
     queryKey: ['pdb-protected-pods', namespace, name, selectorStr],
-    path: `/api/v1/namespaces/${namespace}/pods`,
-    query: `watch=1&labelSelector=${encodeURIComponent(selectorStr)}`,
-    applyEvent: (prev, event) => applyPodWatchEvent(prev as PodInfo[] | undefined, event),
-    gatherEveryMs: LIST_GATHER_MS,
+    keeps: keepEvery,
+    selector: selectorStr,
+    line: SET_POD_TABLE_WATCH_MAX,
   })
-
-  const pods = Array.isArray(protectedPods) ? protectedPods : []
-  const { items: pagedPods, nav: podsNav } = usePagination(pods, 10)
 
   if (isLoading) {
     return <div className="text-xs text-slate-400 py-4 text-center"><Tx>Loading...</Tx></div>
@@ -166,8 +158,11 @@ export default function PDBInfo({ name, namespace }: Props) {
 
       {/* Protected Pods (live) */}
       {protectedEnabled && (
-        <InfoSection title="Protected Pods ({{n}})" titleValues={{ n: pods.length }}>
-          {pods.length === 0 ? (
+        <InfoSection title="Protected Pods ({{n}})" titleValues={{ n: protectedPods.total }}>
+          {protectedPods.note}
+          {protectedPods.loading ? (
+            <p className="text-xs text-slate-400"><Tx>Loading...</Tx></p>
+          ) : protectedPods.total === 0 ? (
             <p className="text-xs text-slate-400"><Tx>No pod matches this selector.</Tx></p>
           ) : (
             <div className="overflow-x-auto">
@@ -182,7 +177,7 @@ export default function PDBInfo({ name, namespace }: Props) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
-                  {pagedPods.map((p: any) => (
+                  {protectedPods.items.map((p: any) => (
                     <tr
                       key={`${p.namespace}/${p.name}`}
                       className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
@@ -197,7 +192,7 @@ export default function PDBInfo({ name, namespace }: Props) {
                   ))}
                 </tbody>
               </table>
-              {podsNav}
+              {protectedPods.nav}
             </div>
           )}
         </InfoSection>

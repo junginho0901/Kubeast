@@ -720,10 +720,15 @@ func forwardEvents(ctx context.Context, watcher watch.Interface, req RequestMess
 
 		// resource is gvr.Resource: the path's own segment may be an alias ("pvs"), which objectToInfo would send as a partial object.
 		f := req.frame("DATA")
-		f.Data = map[string]interface{}{
+		// Queued as its JSON: a socket behind holds 256 frames, and a row's map took some 8 KiB a pod.
+		data, err := json.Marshal(map[string]interface{}{
 			"type":   string(event.Type),
 			"object": objectToInfo(resource, obj),
+		})
+		if err != nil {
+			continue
 		}
+		f.Data = json.RawMessage(data)
 		if !send(ctx, sendCh, f) {
 			return false
 		}

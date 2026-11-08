@@ -4,6 +4,18 @@ import { podPagePollEvery } from '@/services/podPageRead'
 // Up to this many pods a drawer's table reads them whole and follows them by a watch: five accounts reading 2 000 at once hold some 34 MiB (TestWholeNamespacePodReadCost), what 500 people left of the GC's 461 (docs/architecture.md "Many users").
 export const POD_TABLE_WATCH_MAX = 2000
 
+// The same line for the tables of a selector's or a workload's pods (Service, PodDisruptionBudget, workloads), each open drawer following them by a watch of its own (TestStalledWatchSubscriberHeldCost).
+export const SET_POD_TABLE_WATCH_MAX = 2000
+
+// The note over a table read a page at a time, naming what passed the line: the namespace's pods, a selector's matches or a workload's pods.
+export function podTableNote(owner: string | undefined, bySelector: boolean): { text: string; values: Record<string, string> } {
+  if (owner) {
+    return { text: 'This {{kind}} has too many pods to follow live, so this table is read again every {{seconds}} seconds.', values: { kind: owner.split('/')[0] } }
+  }
+  if (bySelector) return { text: 'Too many pods match this selector to follow live, so this table is read again every {{seconds}} seconds.', values: {} }
+  return { text: 'This namespace has too many pods to follow live, so this table is read again every {{seconds}} seconds.', values: {} }
+}
+
 // A first page the server failed to answer is asked again this often.
 const FIRST_READ_RETRY_MS = 10_000
 
@@ -13,8 +25,8 @@ export function podTableSize(page: PodPage, bySelector: boolean): number {
 }
 
 // Whether the table reads the server's pages, with no whole read and no watch: the page or the rows held pass the line.
-export function podTableReadsPages({ answered, held }: { answered?: PodPage; held?: number }, bySelector: boolean): boolean {
-  return (held !== undefined && held > POD_TABLE_WATCH_MAX) || (answered !== undefined && podTableSize(answered, bySelector) > POD_TABLE_WATCH_MAX)
+export function podTableReadsPages({ answered, held }: { answered?: PodPage; held?: number }, bySelector: boolean, line = POD_TABLE_WATCH_MAX): boolean {
+  return (held !== undefined && held > line) || (answered !== undefined && podTableSize(answered, bySelector) > line)
 }
 
 // Whether it reads the pods whole: once a page said they are few, or on a 4xx, which refuses the whole read as well.
@@ -33,7 +45,7 @@ export function podTableShows(options: { pages: boolean; held: boolean; answered
 // A page from a server that did not apply every condition asked (one from before them names none): its rows are not the table's.
 export class PodPageNotFiltered extends Error {}
 
-const ECHOED = ['namespace', 'config_map', 'secret', 'service_account', 'label_selector'] as const
+const ECHOED = ['namespace', 'config_map', 'secret', 'service_account', 'label_selector', 'owner'] as const
 
 export function podPageApplied(asked: Partial<Record<(typeof ECHOED)[number], unknown>>, page: PodPage): boolean {
   const filters = page.filters

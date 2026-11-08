@@ -32,7 +32,7 @@ var (
 	impersonationEnabled = !strings.EqualFold(os.Getenv("IMPERSONATION_ENABLED"), "false")
 	// Write tools need the user's approval id (set by ai-service's approve path).
 	writeApprovalRequired = !strings.EqualFold(os.Getenv("AI_WRITE_APPROVAL"), "false")
-	defaultTimeout        = 60 * time.Second
+	defaultTimeout        = 50 * time.Second
 
 	// toolAuth validates the caller's JWT against auth-service's JWKS (same
 	// issuer/audience settings every other service uses).
@@ -76,13 +76,7 @@ func main() {
 	// kubeconfig rotation or a cluster delete). Cluster-network only.
 	mux.Handle("/internal/invalidate", invalidateHandler(os.Getenv(internalauth.Env)))
 
-	srv := &http.Server{
-		Addr:         ":" + port,
-		Handler:      m.Middleware(mux),
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  60 * time.Second,
-	}
+	srv := newHTTPServer(port, m.Middleware(mux))
 
 	go func() {
 		log.Printf("tool-server listening on :%s", port)
@@ -509,6 +503,17 @@ func buildToolRegistry() map[string]ToolDefinition {
 	})
 
 	return registry
+}
+
+// The write limit outlasts a call's time (defaultTimeout) and ends before ai-service stops waiting (60 s).
+func newHTTPServer(port string, h http.Handler) *http.Server {
+	return &http.Server{
+		Addr:         ":" + port,
+		Handler:      h,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 55 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
 }
 
 // invalidateHandler answers POST /internal/invalidate?cluster= from a service

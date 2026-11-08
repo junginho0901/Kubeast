@@ -4879,6 +4879,8 @@
     "Matching Pods ({{n}})": "셀렉터에 맞는 Pod ({{n}})",
     "Affected Pods ({{n}})": "적용 대상 Pod ({{n}})",
     "This namespace has too many pods to follow live, so this table is read again every {{seconds}} seconds.": "이 Namespace는 Pod가 많아 실시간으로 따라가지 않고 이 표를 {{seconds}}초마다 다시 읽습니다.",
+    "Too many pods match this selector to follow live, so this table is read again every {{seconds}} seconds.": "이 셀렉터에 맞는 Pod가 많아 실시간으로 따라가지 않고 이 표를 {{seconds}}초마다 다시 읽습니다.",
+    "This {{kind}} has too many pods to follow live, so this table is read again every {{seconds}} seconds.": "이 {{kind}}의 Pod가 많아 실시간으로 따라가지 않고 이 표를 {{seconds}}초마다 다시 읽습니다.",
     "Protected Pods ({{n}})": "보호 대상 Pod ({{n}})",
     "Violating Pods ({{n}})": "위반 Pod ({{n}})",
     "Nodes Matching scheduling.nodeSelector ({{n}})": "scheduling.nodeSelector에 맞는 Node ({{n}})",
