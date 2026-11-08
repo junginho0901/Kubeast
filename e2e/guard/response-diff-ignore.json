@@ -51,12 +51,14 @@
     {
       "route": "^/api/v1/cluster/pods/page$",
       "cell": ".",
+      "newStatus": "^200$",
       "why": "This route did not exist in v0.7.5 (404): the Pods list paged by the server.",
       "pr": "#497"
     },
     {
       "route": "^/api/v1/cluster/pods/(nodes|on-node)$",
       "cell": ".",
+      "newStatus": "^200$",
       "why": "These routes did not exist in v0.7.5 (404): Cluster View's node map and one node's pods.",
       "pr": "#498"
     },
@@ -418,6 +420,7 @@
       "route": "^/api/v1/cluster/resources$",
       "cell": ".",
       "user": "^nsread$",
+      "newStatus": "^200$",
       "why": "A grant limited to namespaces lists its namespaces as the user instead of being refused the whole cluster; the rows are that namespace's only.",
       "pr": "#613"
     },
@@ -425,6 +428,7 @@
       "route": "^/api/v1/cluster/nodes/[^/]+/pods$",
       "cell": ".",
       "user": "^nsread$",
+      "newStatus": "^200$",
       "why": "A grant limited to namespaces reads a node's pods in its namespaces instead of being refused.",
       "pr": "#498"
     },

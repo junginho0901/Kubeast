@@ -213,7 +213,7 @@ function rowOf(user: string, request: string, route: string, screens: Set<string
   const real: Difference[] = []
   const known: Row['known'] = []
   for (const d of sorted.real) {
-    const rule = ignored(route, d.cell, user)
+    const rule = ignored(route, d.cell, user, String(n.status))
     if (rule) known.push({ ...d, why: rule.why, pr: rule.pr })
     else real.push(d)
   }
