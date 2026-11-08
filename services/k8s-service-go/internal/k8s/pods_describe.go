@@ -24,9 +24,7 @@ func (s *Service) DescribePod(ctx context.Context, namespace, name string) (map[
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
-			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Pod", name),
-		})
+		events, eventsErr = s.objectEvents(ctx, namespace, "Pod", name)
 	}()
 	wg.Wait()
 

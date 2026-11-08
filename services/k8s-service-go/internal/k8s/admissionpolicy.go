@@ -142,9 +142,7 @@ func (s *Service) DescribeMutatingAdmissionPolicy(ctx context.Context, name stri
 // clusterObjectEvents lists the events about a cluster-scoped object as the other drawers find them (involvedObject name
 // and kind, in every namespace); the func it returns puts them, or why they could not be listed, on a describe answer.
 func (s *Service) clusterObjectEvents(ctx context.Context, kind, name string) func(map[string]interface{}) {
-	events, err := s.clientsetCtx(ctx).CoreV1().Events("").List(ctx, metav1.ListOptions{
-		FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=%s", name, kind),
-	})
+	events, err := s.objectEvents(ctx, "", kind, name)
 	return func(result map[string]interface{}) { setEvents(result, events, err) }
 }
 

@@ -35,9 +35,7 @@ func (s *Service) DescribePriorityClass(ctx context.Context, name string) (map[s
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events("").List(ctx, metav1.ListOptions{
-			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=PriorityClass", name),
-		})
+		events, eventsErr = s.objectEvents(ctx, "", "PriorityClass", name)
 	}()
 	wg.Wait()
 

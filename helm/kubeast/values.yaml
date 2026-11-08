@@ -1078,8 +1078,12 @@ multicluster:
   # read of a 50 000-pod namespace asks 39 to 78 pages a second and holds up to
   # about 110 MiB.
   bigReadConcurrency: 2
+  # How many lists of one object's events (the drawers' Events) one cluster gets
+  # at once; the rest wait. Priority and fairness counts such a list as up to 10
+  # seats of the API server's global-default level, about 49 by default.
+  eventListConcurrency: 4
   # How many kubectl processes tool-server runs at once; the rest wait inside
-  # their call's 60 s. About 40 MiB each, inside resources.toolServer's limit, and
+  # their call's 50 s. About 40 MiB each, inside resources.toolServer's limit, and
   # the Go collector's limit is lowered by that much per process.
   toolServerKubectlConcurrency: 3
   # Credential plugins a registered kubeconfig may run (exec.command base

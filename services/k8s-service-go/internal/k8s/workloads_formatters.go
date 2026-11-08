@@ -3,13 +3,11 @@ package k8s
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	cronjobrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/cronjob"
 	dsrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/daemonset"
@@ -59,12 +57,9 @@ func setEvents(result map[string]interface{}, events *corev1.EventList, err erro
 	result["events"] = formatEventList(events.Items)
 }
 
-// setObjectEvents reads the events about an object as kubectl describe finds them — by its name and kind, in its
-// namespace, in every namespace for a cluster-scoped one — onto its describe answer.
+// setObjectEvents reads the events about an object (objectEvents) onto its describe answer.
 func (s *Service) setObjectEvents(ctx context.Context, result map[string]interface{}, namespace, kind, name string) {
-	events, err := s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
-		FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=%s", name, kind),
-	})
+	events, err := s.objectEvents(ctx, namespace, kind, name)
 	setEvents(result, events, err)
 }
 

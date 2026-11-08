@@ -55,9 +55,7 @@ func (s *Service) DescribeVolumeAttachment(ctx context.Context, name string) (ma
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events("").List(ctx, metav1.ListOptions{
-			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=VolumeAttachment", name),
-		})
+		events, eventsErr = s.objectEvents(ctx, "", "VolumeAttachment", name)
 	}()
 	wg.Wait()
 

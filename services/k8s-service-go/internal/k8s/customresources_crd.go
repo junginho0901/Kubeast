@@ -40,9 +40,7 @@ func (s *Service) DescribeCRD(ctx context.Context, name string) (map[string]inte
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events("").List(ctx, metav1.ListOptions{
-			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=CustomResourceDefinition", name),
-		})
+		events, eventsErr = s.objectEvents(ctx, "", "CustomResourceDefinition", name)
 	}()
 	wg.Wait()
 	if err != nil {

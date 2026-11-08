@@ -37,9 +37,7 @@ func (s *Service) DescribeMutatingWebhookConfiguration(ctx context.Context, name
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events("").List(ctx, metav1.ListOptions{
-			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=MutatingWebhookConfiguration", name),
-		})
+		events, eventsErr = s.objectEvents(ctx, "", "MutatingWebhookConfiguration", name)
 	}()
 	wg.Wait()
 
@@ -157,9 +155,7 @@ func (s *Service) DescribeValidatingWebhookConfiguration(ctx context.Context, na
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events("").List(ctx, metav1.ListOptions{
-			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=ValidatingWebhookConfiguration", name),
-		})
+		events, eventsErr = s.objectEvents(ctx, "", "ValidatingWebhookConfiguration", name)
 	}()
 	wg.Wait()
 

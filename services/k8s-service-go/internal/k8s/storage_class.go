@@ -67,9 +67,7 @@ func (s *Service) DescribeStorageClass(ctx context.Context, name string) (map[st
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events("").List(ctx, metav1.ListOptions{
-			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=StorageClass", name),
-		})
+		events, eventsErr = s.objectEvents(ctx, "", "StorageClass", name)
 	}()
 	wg.Wait()
 

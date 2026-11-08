@@ -46,9 +46,7 @@ func (s *Service) DescribeRoleBinding(ctx context.Context, namespace, name strin
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
-			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=RoleBinding", name),
-		})
+		events, eventsErr = s.objectEvents(ctx, namespace, "RoleBinding", name)
 	}()
 	wg.Wait()
 
