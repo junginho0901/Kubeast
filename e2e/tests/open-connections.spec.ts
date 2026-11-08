@@ -288,8 +288,13 @@ test.describe('a list that does not follow, and what the floating chat is told',
         if (msg.type === 'REQUEST' && msg.path === '/api/v1/nodes') asked = msg
         server.send(message)
       })
-      server.onMessage((message) => ws.send(message))
-      answer = (frame) => ws.send(JSON.stringify(frame))
+      // From the first frame the test writes, only its own: any frame of the real watch means it answers again.
+      let relay = true
+      server.onMessage((message) => { if (relay) ws.send(message) })
+      answer = (frame) => {
+        relay = false
+        ws.send(JSON.stringify(frame))
+      }
     })
     // another list on the page is refused: the banner names that one and not these rows
     await page.route('**/api/v1/cluster/metrics/nodes*', (route) =>

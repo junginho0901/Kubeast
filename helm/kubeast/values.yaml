@@ -572,6 +572,7 @@ resources:
   aiService:
     requests: { cpu: 100m, memory: 256Mi }
     limits: { memory: 1Gi }
+  # 1Gi when many people use a large cluster at once: docs/architecture.md "Many different people on a large cluster".
   k8sService:
     requests: { cpu: 100m, memory: 128Mi }
     limits: { memory: 512Mi }
