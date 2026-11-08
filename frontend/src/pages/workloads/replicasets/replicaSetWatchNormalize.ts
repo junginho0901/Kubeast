@@ -53,7 +53,7 @@ export function normalizeWatchReplicaSetObject(obj: any): ReplicaSetInfo {
       uid: r?.uid ?? null,
       controller: r?.controller ?? null,
     })),
-    labels: metadata?.labels ?? obj?.labels ?? {},
+    labels: metadata?.labels ?? obj?.labels,
     selector,
     created_at: metadata?.creationTimestamp ?? obj?.created_at ?? null,
     status: computeReplicaSetStatus({ replicas, ready_replicas: readyReplicas, available_replicas: availableReplicas }),

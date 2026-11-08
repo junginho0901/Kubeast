@@ -25,8 +25,9 @@ type YamlEditorProps = {
   isRefreshing?: boolean
   error?: string | null
   onRefresh?: () => void
-  // false: nothing was written (the user declined), so the edit stays and nothing is called applied
-  onApply?: (nextValue: string) => Promise<boolean>
+  // false: nothing was written (the user declined), so the edit stays and nothing is called applied.
+  // opened: the text when Edit was pressed, which a later refresh of `value` does not change.
+  onApply?: (nextValue: string, opened: string) => Promise<boolean>
   onApplySuccess?: () => void
   onApplyError?: (message: string) => void
   onDirtyChange?: (dirty: boolean) => void
@@ -59,6 +60,7 @@ export default function YamlEditor({
   const [applyError, setApplyError] = useState<string | null>(null)
   const [applySuccess, setApplySuccess] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [opened, setOpened] = useState('')
   const isReady = !isLoading && !error && value !== undefined
   const editorOptions = useMemo(
     () => ({
@@ -128,7 +130,7 @@ export default function YamlEditor({
       setDraft(sanitized)
     }
     try {
-      if (!(await onApply(sanitized))) return
+      if (!(await onApply(sanitized, opened))) return
       setIsEditing(false)
       setApplySuccess(true)
       onApplySuccess?.()
@@ -193,7 +195,10 @@ export default function YamlEditor({
               ) : (
                 <button
                   type="button"
-                  onClick={() => setIsEditing(true)}
+                  onClick={() => {
+                    setOpened(draft)
+                    setIsEditing(true)
+                  }}
                   disabled={!isReady}
                   className="px-2.5 py-1 text-xs rounded-sm border border-slate-700 text-slate-300 hover:text-ink hover:border-slate-500 disabled:opacity-50 transition-colors"
                 >

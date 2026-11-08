@@ -1,10 +1,9 @@
-import { useState, type ReactNode } from 'react'
+import { Fragment, memo, useState, type ReactNode } from 'react'
 import { Check, Copy } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import ReactMarkdown from 'react-markdown'
 import { stripToolDetails } from '@/services/chatTextUtils'
 import { ChatCharts } from '@/components/ChatChart'
-import { CHAT_MARKDOWN } from '@/components/chatMarkdown'
+import { ChatAnswerMarkdown } from '@/components/ChatAnswerMarkdown'
 
 export interface DisplayMessage {
   // 'error' = why a turn failed, in its place under that turn
@@ -14,6 +13,8 @@ export interface DisplayMessage {
   pending?: boolean
   // the tool calls so far: the graphs the AI asked to show come from here, as soon as their results come
   toolCalls?: unknown[]
+  // a saved answer that ended by an error (its usage says so): what came before the error
+  failed?: boolean
 }
 
 interface MessageListProps {
@@ -58,7 +59,15 @@ export function MessageList({ messages, emptyExtras }: MessageListProps) {
           {msg.content}
         </div>
       ) : (
-        <MessageBubble key={position} role={msg.role} content={msg.content} pending={msg.pending} toolCalls={msg.toolCalls} />
+        <Fragment key={position}>
+          <MessageBubble role={msg.role} content={msg.content} pending={msg.pending} toolCalls={msg.toolCalls} />
+          {/* the error itself is not saved: once this page is read again, this is what is left of it */}
+          {msg.failed && messages[position + 1]?.role !== 'error' && (
+            <div className="rounded-md border border-red-700/50 bg-red-900/20 px-3 py-2 text-xs text-red-300" data-testid="floating-answer-failed">
+              {t('aiChat.turnUsage.failedTitle', { defaultValue: 'The answer ended here because of an error. What came before it is kept.' })}
+            </div>
+          )}
+        </Fragment>
       )))}
     </div>
   )
@@ -71,7 +80,8 @@ interface MessageBubbleProps {
   toolCalls?: unknown[]
 }
 
-function MessageBubble({ role, content, pending, toolCalls }: MessageBubbleProps) {
+// memo: while an answer comes the list is drawn every few milliseconds, and the bubbles above it have not changed.
+const MessageBubble = memo(function MessageBubble({ role, content, pending, toolCalls }: MessageBubbleProps) {
   if (role === 'user') {
     return (
       <div className="flex justify-end">
@@ -87,7 +97,7 @@ function MessageBubble({ role, content, pending, toolCalls }: MessageBubbleProps
       <div className={`min-w-0 max-w-[80%] rounded-lg bg-slate-800 px-3 py-2 text-sm text-slate-100 ${pending ? 'opacity-90' : ''}`}>
         {content ? (
           <div className="chat-md floating-md prose prose-invert prose-sm max-w-none wrap-break-word">
-            <ReactMarkdown {...CHAT_MARKDOWN}>{content}</ReactMarkdown>
+            <ChatAnswerMarkdown content={content} />
             <ChatCharts toolCalls={toolCalls} />
           </div>
         ) : (
@@ -101,7 +111,7 @@ function MessageBubble({ role, content, pending, toolCalls }: MessageBubbleProps
       {!pending && content ? <CopyAnswer content={content} /> : null}
     </div>
   )
-}
+})
 
 // The finished answer's copy control, in the empty space at the bubble's bottom right: faint until pointed at, a
 // check for 1.5 s after copying; it fades in where it stands when the answer ends.

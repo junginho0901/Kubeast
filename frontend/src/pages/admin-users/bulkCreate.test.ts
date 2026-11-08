@@ -105,6 +105,24 @@ describe('the rows of the CSV', () => {
     })
   })
 
+  // Read and Write act per cluster: as an account level they give nothing, and the server moves such an account to Member at its next start.
+  it('refuses an account level of Read or Write and says where they belong', () => {
+    const seeded = [{ id: 1, name: 'Member' }, { id: 2, name: 'Admin' }, { id: 3, name: 'Read' }, { id: 4, name: 'Write' }]
+    expect(parseBulkCsv(csv('Ann,ann@example.com,fake-pass-1,Read', 'Bob,bob@example.com,fake-pass-2,Write', 'Cid,cid@example.com,fake-pass-3,Member'), seeded)).toEqual({
+      users: [{ name: 'Cid', email: 'cid@example.com', password: 'fake-pass-3', role_id: 1, team: undefined }],
+      failed: [
+        { email: 'ann@example.com', reason: 'cluster_role', detail: 'Read' },
+        { email: 'bob@example.com', reason: 'cluster_role', detail: 'Write' },
+      ],
+    })
+  })
+
+  it('says why in both languages', async () => {
+    const refused = [{ email: 'ann@example.com', reason: 'cluster_role' as const, detail: 'Read' }]
+    expect(bulkCreateFailureRows(await tFor('en'), refused)).toEqual(['ann@example.com: Read and Write are granted per cluster and give nothing as an account level: make the account Member and grant the role on a cluster: Read'])
+    expect(bulkCreateFailureRows(await tFor('ko'), refused)).toEqual(['ann@example.com: Read와 Write는 클러스터마다 주는 역할이라 계정 등급으로는 권한이 없습니다. 계정은 Member로 만들고 클러스터에서 역할을 주세요: Read'])
+  })
+
   it('names a row it cannot send instead of dropping it, without the password', () => {
     const parsed = parseBulkCsv(csv(
       'Ann,ann@example.com,fake-pass-1,Member',

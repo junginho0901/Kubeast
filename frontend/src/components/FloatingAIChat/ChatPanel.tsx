@@ -14,7 +14,7 @@ import { serializeSnapshotForBackend } from '@/utils/aiContext/serializeSnapshot
 import { chatErrorText } from '@/utils/chatError'
 
 import { MessageList, type DisplayMessage } from './MessageList'
-import { turnsOnScreen } from './turnsOnScreen'
+import { conversationGone, forgetsConversation, turnsOnScreen } from './turnsOnScreen'
 import { modalOpen } from '@/hooks/useModalStack'
 import { focusables } from '@/utils/focusables'
 import { hiddenEarlier, mergeNewestPage, prependEarlier } from '@/services/sessionMessages'
@@ -85,10 +85,11 @@ export function ChatPanel({
   })
 
   // the tab remembers a conversation this account cannot open (another account's, or deleted): start a new one
+  const sessionGone = conversationGone(sessionError, streamState, sessionId)
+  const leaveSession = sessionGone && forgetsConversation(streamState, sessionId)
   useEffect(() => {
-    const status = (sessionError as { response?: { status?: number } } | null)?.response?.status
-    if (status === 404 || status === 403) setSessionId(null)
-  }, [sessionError, setSessionId])
+    if (leaveSession) setSessionId(null)
+  }, [leaveSession, setSessionId])
 
   // 스트리밍 종료 직후 히스토리 리프레시 (a failed turn's question may be saved: the next question's place counts it)
   useEffect(() => {
@@ -100,8 +101,8 @@ export function ChatPanel({
   }, [streamState.status, sessionId, queryClient])
 
   const handleSubmit = async (message: string) => {
-    // 세션이 없으면 즉시 생성 (지연 생성 — D22)
-    let activeSessionId = sessionId
+    // 세션이 없으면 즉시 생성 (지연 생성 — D22). One the server no longer has is left here, with the turn that found out.
+    let activeSessionId = sessionGone ? null : sessionId
     if (!activeSessionId) {
       try {
         const session = await createSessionMutation.mutateAsync()
@@ -127,7 +128,7 @@ export function ChatPanel({
         activeSessionId,
         message,
         extraBody,
-        messages.length,
+        activeSessionId === sessionId ? messages.length : 0,
       )
     } catch {
       // ChatStreamManager 가 내부 상태에 error 를 기록하므로 별도 처리 불필요
@@ -203,6 +204,7 @@ export function ChatPanel({
       role: m.role === 'assistant' ? 'assistant' : 'user',
       content: m.content,
       toolCalls: Array.isArray(m.tool_calls) ? m.tool_calls : undefined,
+      failed: m.usage?.failed === true,
     }))
   }, [heldMessages])
 

@@ -37,6 +37,10 @@ dependencies:
         match: 'git clone --branch v'
       - path: docs/ko/getting-started.md
         match: 'git clone --branch v'
+      - path: docs/supply-chain.md
+        match: 'kubeast-auth-service:v'
+      - path: docs/ko/supply-chain.md
+        match: 'kubeast-auth-service:v'
 
   # Built from source into the tool-server and k8s-service images (their Dockerfiles), so the
   # release image scan sees this toolchain rather than the project's release binary.

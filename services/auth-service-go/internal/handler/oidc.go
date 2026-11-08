@@ -190,7 +190,7 @@ func extractClaims(raw map[string]any, cfg config.OIDCConfig) oidcClaims {
 
 // nameTakenByPasswordAccount says whether a provider's name that is no address matches an account made with a password
 // and still holding one, such as the chart's admin. An address is the provider's to vouch for (email_verified,
-// allowedDomains), but with emailClaim on a username anyone who may pick that name would be handed the account. An
+// allowedDomains), but with claims.email on a username anyone who may pick that name would be handed the account. An
 // account the provider made is its own, and a name nobody holds yet makes a new one.
 func (h *AuthHandler) nameTakenByPasswordAccount(ctx context.Context, name string) (bool, error) {
 	if strings.Contains(name, "@") {

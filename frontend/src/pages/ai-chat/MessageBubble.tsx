@@ -1,12 +1,12 @@
+import { memo } from 'react'
 import { User, Check, Copy } from 'lucide-react'
 import { turnUsageText } from '@/utils/turnUsage'
-import ReactMarkdown from 'react-markdown'
 import type { TFunction } from 'i18next'
 import type { Message } from './types'
 import { truncateToolResultsInContent } from './messageContent'
 import { ApprovalCard } from './ApprovalCard'
 import { ChatCharts } from '@/components/ChatChart'
-import { CHAT_MARKDOWN } from '@/components/chatMarkdown'
+import { ChatAnswerMarkdown } from '@/components/ChatAnswerMarkdown'
 
 // 단일 메시지 말풍선 — user / assistant(Kubeast 아이콘) 아바타 + 콘텐츠 + 답변 대기 중인 로딩 점 +
 // (assistant 의 경우) 아래쪽 사용량 / Copy / Download ZIP 줄. 그 줄은 답이 나오는 동안 닫혀 있다가
@@ -21,7 +21,8 @@ interface Props {
   t: TFunction
 }
 
-export function MessageBubble({ message, idx, copiedMessageKey, onCopy, onDownloadJson, t }: Props) {
+// memo: while an answer comes the list is drawn every few milliseconds, and the bubbles above it have not changed.
+export const MessageBubble = memo(function MessageBubble({ message, idx, copiedMessageKey, onCopy, onDownloadJson, t }: Props) {
   const messageKey = message.id != null ? `db-${message.id}` : `tmp-${idx}`
   const settled = message.role === 'assistant' && !message.isTemporary
   const showCopyButton = settled && Boolean(message.content)
@@ -61,7 +62,7 @@ export function MessageBubble({ message, idx, copiedMessageKey, onCopy, onDownlo
                     {message.content}
                   </p>
                 ) : (
-                  <ReactMarkdown {...CHAT_MARKDOWN}>{truncateToolResultsInContent(message.content)}</ReactMarkdown>
+                  <ChatAnswerMarkdown content={truncateToolResultsInContent(message.content)} />
                 )}
                 {message.role === 'assistant' && <ChatCharts toolCalls={message.toolCalls} />}
                 {message.role === 'assistant' &&
@@ -165,4 +166,4 @@ export function MessageBubble({ message, idx, copiedMessageKey, onCopy, onDownlo
       </div>
     </div>
   )
-}
+})

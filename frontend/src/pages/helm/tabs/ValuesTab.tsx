@@ -6,6 +6,7 @@ import { Loader2 } from 'lucide-react'
 import { api, type HelmUpgradeResponse } from '@/services/api'
 import { usePermission } from '@/hooks/usePermission'
 import UpgradePreviewModal from '../modals/UpgradePreviewModal'
+import { failedPreview } from '../modals/upgradePreview'
 
 export default function ValuesTab({ namespace, name }: { namespace: string; name: string }) {
   const { t } = useTranslation()
@@ -24,8 +25,6 @@ export default function ValuesTab({ namespace, name }: { namespace: string; name
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [preview, setPreview] = useState<HelmUpgradeResponse | null>(null)
-  // what the server answered when it refused the preview, which the window says in place of a diff
-  const [refusal, setRefusal] = useState<string | null>(null)
 
   const current = valuesQuery.data?.content ?? ''
 
@@ -102,11 +101,9 @@ export default function ValuesTab({ namespace, name }: { namespace: string; name
                   values: draft,
                   dryRun: true,
                 })
-                setRefusal(null)
                 setPreview(r)
               } catch (err: any) {
-                setRefusal(String(err?.response?.data?.detail ?? err?.message ?? 'dry-run failed'))
-                setPreview({ dryRun: true, fromRevision: 0, chartVersion: '' })
+                setPreview(failedPreview(err))
               }
             }}
             className="inline-flex items-center gap-1.5 rounded-sm bg-primary-600 hover:bg-primary-700 px-3 py-1.5 text-sm text-white disabled:opacity-40"
@@ -149,14 +146,9 @@ export default function ValuesTab({ namespace, name }: { namespace: string; name
           name={name}
           values={draft}
           preview={preview}
-          refusal={refusal ?? undefined}
-          onClose={() => {
-            setPreview(null)
-            setRefusal(null)
-          }}
+          onClose={() => setPreview(null)}
           onApplied={() => {
             setPreview(null)
-            setRefusal(null)
             setEditing(false)
             setDraft('')
           }}

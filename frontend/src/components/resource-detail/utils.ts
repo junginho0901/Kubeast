@@ -253,6 +253,53 @@ export function encodeSecretYaml(yaml: string): string {
   return result.join('\n')
 }
 
+const SECRET_SECTION = /^(data|stringData):/
+
+// The keys under a Secret's data and stringData in the window's text; null for text not written line by line.
+function secretWindowKeys(yaml: string): Set<string> | null {
+  const keys = new Set<string>()
+  let inSection = false
+  let indent = -1
+  for (const line of yaml.split('\n')) {
+    if (SECRET_SECTION.test(line)) {
+      if (!/^(data|stringData):\s*(#.*)?$/.test(line)) return null
+      inSection = true
+      indent = -1
+      continue
+    }
+    if (!inSection || line.trim() === '' || line.trim().startsWith('#')) continue
+    const at = line.search(/\S/)
+    if (at === 0) {
+      inSection = false
+      continue
+    }
+    if (indent < 0) indent = at
+    // deeper lines belong to a block value above them
+    if (at > indent) continue
+    const key = at === indent ? /^\s+("[^"]+"|'[^']+'|[^\s:#]+):(\s|$)/.exec(line) : null
+    if (!key) return null
+    keys.add(key[1].replace(/^["']|["']$/g, ''))
+  }
+  return keys
+}
+
+// The text a save sends. A merge patch leaves what it does not name, so a key whose line left the window since Edit goes
+// out as null; only what the text held then can leave, not a key someone added since.
+export function secretYamlToSave(edited: string, opened?: string): string {
+  const saved = encodeSecretYaml(edited)
+  const before = opened === undefined ? null : secretWindowKeys(opened)
+  const after = secretWindowKeys(edited)
+  if (!before || !after || !/^kind:\s*Secret\s*(#.*)?$/m.test(edited)) return saved
+  const removed = [...before].filter((key) => !after.has(key))
+  if (removed.length === 0) return saved
+  const lines = saved.split('\n')
+  const at = lines.findIndex((line) => /^data:\s*(#.*)?$/.test(line))
+  if (at === -1) return `${saved}${saved.endsWith('\n') ? '' : '\n'}data:\n${removed.map((key) => `  "${key}":`).join('\n')}\n`
+  const indent = /^(\s+)\S/.exec(lines[at + 1] ?? '')?.[1] ?? '  '
+  lines.splice(at + 1, 0, ...removed.map((key) => `${indent}"${key}":`))
+  return lines.join('\n')
+}
+
 export function kindToPlural(kind: string): string {
   const map: Record<string, string> = {
     Pod: 'pod', Node: 'node', Namespace: 'namespace', Service: 'service',

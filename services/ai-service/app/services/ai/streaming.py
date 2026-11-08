@@ -134,6 +134,20 @@ def _ready_for_tool_block(out: str) -> str:
     return f"{out.rstrip()}\n{closing}\n\n" if closing else out
 
 
+async def _keep_failed_answer(db, service, session_id: str, parts: list, tool_calls: list, turn_usage: dict) -> None:
+    """What a failed turn wrote stays with its question, marked failed (messages.usage, frontend turnUsage): a reload and
+    the next model call would otherwise lose what its tools did. Awaited before the error event, so the list the screen
+    reads on that event has it. A failure of this save must not take the turn's error with it."""
+    wrote = any(kind == "tool" or str(value).strip() for kind, value in parts)
+    if db is None or not (wrote or tool_calls):
+        return
+    usage = usage_acct.message_usage(turn_usage, model=getattr(service, "model", None)) or {}
+    try:
+        await db.add_message(session_id, "assistant", answer_markdown(parts, tool_calls), tool_calls=tool_calls or None, usage={**usage, "failed": True})
+    except Exception as err:
+        log.warning("Could not keep the failed answer of session %s: %s", session_id, safe_error(err))
+
+
 def answer_markdown(parts: list, tool_calls: list) -> str:
     """The saved answer: the turn's text and tool blocks in the order they came — what the model wrote before a
     tool call stays in front of it. parts holds ("text", str) and ("tool", call_id); a call no part names goes
@@ -669,10 +683,16 @@ async def session_chat_stream(
     iteration = 0
     turn_active = False     # ai.chat.send written: a turn exists to account for
     turn_completed = False  # ai.chat.complete written: never write it twice
+    # What the turn has written, for a failure at any point (_keep_failed_answer).
+    db = None
+    parts: list = []
+    tool_calls_log: list = []
+    assistant_content = ""
+    answer_saved = False
 
     try:
         db = await get_db_service()
-        
+
         # 세션 확인
         session = await db.get_session(session_id)
         if not session:
@@ -838,9 +858,8 @@ async def session_chat_stream(
         # ===== Multi-turn Tool Calling Loop =====
         max_iterations = 10  # 최대 10번까지 tool call 반복 허용
         iteration = 0
-        assistant_content = ""
-        tool_calls_log = []  # Tool call 정보 저장
-        parts: list = []  # the turn in order: ("text", what the model wrote) / ("tool", call_id) — the saved answer
+        # tool_calls_log: Tool call 정보 저장
+        # parts: the turn in order: ("text", what the model wrote) / ("tool", call_id) — the saved answer
 
         # Per-turn usage accounting → ai.chat.complete audit (admin AI-usage view).
         turn_started = time.monotonic()
@@ -873,6 +892,7 @@ async def session_chat_stream(
                     yield event
             except Exception as cc_error:
                 log.error("Claude Code turn failed: %s", safe_error(cc_error))
+                await _keep_failed_answer(db, service, session_id, cc_turn.parts, tool_calls_log, turn_usage)
                 yield f"data: {json.dumps(model_error(service, cc_error), ensure_ascii=False)}\n\n"
                 await _audit_chat_complete(
                     service, session_id, audit_actor, audit_http,
@@ -904,7 +924,8 @@ async def session_chat_stream(
             # GPT 호출 (Function Calling)
             log.debug("[AI Service] Session Chat API 호출 (Iteration %s) - 요청 모델: %s", iteration, service.model)
             log.debug("[DEBUG] Messages count: %d, Tools count: %d", len(messages), len(tools))
-            
+
+            stream_content = ""
             try:
                 _fc_kwargs = dict(
                     model=service.model,
@@ -927,7 +948,6 @@ async def session_chat_stream(
 
                 # --- streaming delta 수집 ---
                 collected_tool_calls = {}  # index -> {id, name, arguments}
-                stream_content = ""
                 stream_usage = None
                 last_finish_reason = None
 
@@ -983,6 +1003,7 @@ async def session_chat_stream(
 
             except Exception as api_error:
                 log.error("model call failed (%s): %s", service.provider, safe_error(api_error))
+                await _keep_failed_answer(db, service, session_id, parts + [("text", stream_content)], tool_calls_log, turn_usage)
                 yield f"data: {json.dumps(model_error(service, api_error), ensure_ascii=False)}\n\n"
                 await _audit_chat_complete(
                     service, session_id, audit_actor, audit_http,
@@ -1128,6 +1149,7 @@ async def session_chat_stream(
             session_id, "assistant", full_message, tool_calls=tool_calls_log or None,
             usage=usage_acct.message_usage(turn_usage, model=getattr(service, "model", None)),
         )
+        answer_saved = True
         log.debug("[DEBUG] Message saved to DB")
 
         await _audit_chat_complete(
@@ -1172,4 +1194,8 @@ async def session_chat_stream(
         raise
     except Exception as e:
         log.error("Session chat error: %s", safe_error(e))
+        if not answer_saved:
+            # a continuation that failed has its letters only here; the final text may already be a part
+            letters = [] if ("text", assistant_content) in parts else [("text", assistant_content)]
+            await _keep_failed_answer(db, service, session_id, parts + letters, tool_calls_log, turn_usage)
         yield f"data: {json.dumps({'error': safe_error(e)}, ensure_ascii=False)}\n\n"

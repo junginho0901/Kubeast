@@ -32,6 +32,19 @@ describe('turnUsageText', () => {
     expect(turnUsageText(t, { model: 'm' } as never)).toBeNull()
   })
 
+  it('says an answer ended by an error, with the tokens the provider reported, in both languages', async () => {
+    const en_t = await tFor('en')
+    expect(turnUsageText(en_t, { failed: true })).toEqual({
+      text: 'Ended by an error',
+      title: 'The answer ended here because of an error. What came before it is kept.',
+    })
+    expect(turnUsageText(en_t, { failed: true, prompt_tokens: 100, completion_tokens: 5 })?.text).toBe('Ended by an error · In 100 · out 5 tokens')
+    expect(turnUsageText(await tFor('ko'), { failed: true })).toEqual({
+      text: '오류로 끝남',
+      title: '오류로 여기서 끝난 답입니다. 그때까지 온 내용을 남겼습니다.',
+    })
+  })
+
   it('says a stopped answer has no usage to show, in both languages', async () => {
     expect(turnUsageText(await tFor('ko'), { stopped: true })?.text).toBe('멈춤 · 사용량을 표시할 수 없음')
     expect(turnUsageText(await tFor('en'), { stopped: true })).toEqual({

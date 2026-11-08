@@ -1423,7 +1423,8 @@ export interface ReplicaSetInfo {
     uid?: string | null
     controller?: boolean | null
   }>
-  labels: Record<string, string>
+  // the list row leaves labels out: no list shows them, and the drawer reads them from its describe answer
+  labels?: Record<string, string>
   selector: Record<string, string>
   created_at: string
   status: string
@@ -1836,6 +1837,8 @@ export interface PVInfo {
   driver?: string | null
   volume_handle?: string | null
   node_affinity?: string | null
+  reason?: string | null
+  message?: string | null
   created_at: string
 }
 
@@ -2205,7 +2208,8 @@ export interface AdminResetPasswordResponse extends Member {
 // One account a bulk creation left out; detail is what the reason's words cannot say.
 export interface BulkCreateFailure {
   email: string
-  reason: 'missing_fields' | 'name' | 'password' | 'role' | 'ceiling' | 'team' | 'exists' | 'failed'
+  // cluster_role: said by the screen before anything is sent, the rest by the server too
+  reason: 'missing_fields' | 'name' | 'password' | 'role' | 'cluster_role' | 'ceiling' | 'team' | 'exists' | 'failed'
   detail?: string
 }
 
@@ -2354,7 +2358,7 @@ export interface SessionDetail {
     role: string
     content: string
     tool_calls?: any
-    usage?: { prompt_tokens: number; completion_tokens: number; cached_tokens?: number; model_calls?: number; model?: string | null } | null
+    usage?: { prompt_tokens?: number; completion_tokens?: number; cached_tokens?: number; model_calls?: number; model?: string | null; stopped?: boolean; failed?: boolean } | null
     created_at: string
   }>
   // the conversation's messages older than `messages`, which holds its newest page

@@ -498,10 +498,10 @@ class ClaudeCodeChat:
             while True:
                 kind, value = await queue.get()
                 if kind is done:
-                    if isinstance(value, Exception):
-                        raise value
                     if segment.strip():
                         out.parts.append(("text", segment))
+                    if isinstance(value, Exception):
+                        raise value
                     out.usage = usage_of(value.usage)
                     out.turns = state["turn"]  # Claude Code's num_turns counts one more on a run cut at max_turns
                     if value.subtype == "error_max_turns":

@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import en from '@/i18n/locales/en.json'
 import ServiceInfo from './ServiceInfo'
+import ServiceDetail from './network-info/ServiceDetail'
 
 // A load balancer's status can name an IP and a hostname at once: the row shows what the object has.
 
@@ -33,6 +34,19 @@ const render = (describeIngress: Ingress | null, rawIngress: Ingress = []) => {
   // the value after the row's label
   return /LoadBalancer<\/[^>]+>\s*<[^>]+>([^<]*)</.exec(html)?.[1] ?? 'no row'
 }
+
+describe('the Load Balancer row of the network drawer', () => {
+  const row = (ingress: Ingress) => {
+    const html = renderToStaticMarkup(createElement(I18nextProvider, { i18n },
+      createElement(ServiceDetail, { name: 'lb', namespace: 'ns', rawJson: { status: { loadBalancer: { ingress } } } })))
+    return /Load Balancer<\/[^>]+>\s*<[^>]+>([^<]*)</.exec(html)?.[1] ?? 'no row'
+  }
+
+  it('shows what the status has, as the Service drawer does', () => {
+    expect(row([{ ip: '203.0.113.5', hostname: 'a.example.com' }, { hostname: 'b.example.com' }, { ip: '203.0.113.6' }]))
+      .toBe('203.0.113.5 (a.example.com), b.example.com, 203.0.113.6')
+  })
+})
 
 describe('the LoadBalancer row of a Service', () => {
   it('shows the IP and the hostname when the status has both', () => {

@@ -73,6 +73,7 @@ def code_fence(text: str) -> str:
 
 _FENCE_OPEN = re.compile(r" {0,3}(?:(`{3,})[^`]*|(~{3,})[^\n]*)")
 _FENCE_CLOSE = re.compile(r" {0,3}(`{3,}|~{3,})[ \t\r]*")
+_LIST_ITEM = re.compile(r"\s*(?:[-*+]|\d{1,9}[.)])\s")
 
 
 def _line_end(text: str, at: int) -> int:
@@ -80,11 +81,28 @@ def _line_end(text: str, at: int) -> int:
     return len(text) if end == -1 else end
 
 
+def _indent_of(line: str) -> int:
+    return len(line) - len(line.lstrip())
+
+
+def _in_list_item(text: str, at: int, indent: int) -> bool:
+    """Whether the fence at `at`, indented so far, sits under a list item: the nearest less indented line above is its marker."""
+    end = at - 1
+    while end >= 0:
+        start = text.rfind("\n", 0, end) + 1
+        line = text[start:end]
+        if line.strip() and _indent_of(line) < indent:
+            return _LIST_ITEM.match(line) is not None
+        end = start - 1
+    return False
+
+
 def fence_reader(text: str):
     """A reader of text's fenced code blocks, by CommonMark's rules (backticks or tildes, up to three spaces in, closed
     by a line of the same mark at least as long): given the start of a line, moving forward, where the block that opens
     there ends, or -1. A fence nothing closes is no block: an answer saved before results got their longer fence can
-    hold an odd line of backticks, and reading the rest as code would lose the answer after it."""
+    hold an odd line of backticks, and reading the rest as code would lose the answer after it. A line less indented
+    than a fence under a list item ends the item, and the fence with it."""
     unclosed: dict = {}  # the shortest fence of each mark with no closing line after it, so open fences stay one pass
 
     def fence_end(at: int) -> int:
@@ -92,12 +110,16 @@ def fence_reader(text: str):
         fence = opening and (opening.group(1) or opening.group(2))
         if not fence or len(fence) >= unclosed.get(fence[0], float("inf")):
             return -1
+        indent = _indent_of(opening.group(0))
         line = _line_end(text, at) + 1
         while line <= len(text):
             end = _line_end(text, line)
             closing = _FENCE_CLOSE.fullmatch(text, line, end)
             if closing and closing.group(1)[0] == fence[0] and len(closing.group(1)) >= len(fence):
                 return min(end + 1, len(text))
+            body = text[line:end]
+            if body.strip() and _indent_of(body) < indent and _in_list_item(text, at, indent):
+                return line
             line = end + 1
         unclosed[fence[0]] = len(fence)
         return -1
@@ -109,9 +131,6 @@ def closing_fence(text: str) -> Optional[str]:
     """The line that closes the code block text leaves open, or None. A tool block below an open one reads as code. A
     fence with a less indented line after it was in a list item that line ended, and a closing line there would open a
     new block (frontend chatTextUtils.closingFence does the same, chatAnswer.cases.json holds the two equal)."""
-    def indent_of(line: str) -> int:
-        return len(line) - len(line.lstrip())
-
     fence_end = fence_reader(text)
     at = 0
     while at < len(text):
@@ -122,8 +141,8 @@ def closing_fence(text: str) -> Optional[str]:
         next_line = _line_end(text, at)
         opening = _FENCE_OPEN.fullmatch(text, at, next_line)
         if opening:
-            indent = indent_of(text[at:next_line])
-            ended = any(after.strip() and indent_of(after) < indent for after in text[next_line:].split("\n"))
+            indent = _indent_of(text[at:next_line])
+            ended = any(after.strip() and _indent_of(after) < indent for after in text[next_line:].split("\n"))
             if not ended:
                 return " " * indent + (opening.group(1) or opening.group(2))
         at = next_line + 1

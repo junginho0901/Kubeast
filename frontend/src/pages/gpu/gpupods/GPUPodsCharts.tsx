@@ -5,7 +5,7 @@
 // status 분포 전부 (count 내림차순) — bar 색상 status 별 분기.
 
 import { Box } from 'lucide-react'
-import { statusNamesError } from '../gpuNumbers'
+import { gpuPodStatusBar } from '../gpuNumbers'
 
 interface NodeUsageEntry {
   podCount: number
@@ -73,13 +73,7 @@ export function GPUPodsCharts({
                   </div>
                   <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full ${
-                        status === 'Running' ? 'bg-emerald-500'
-                        : status === 'Pending' ? 'bg-yellow-500'
-                        : status === 'Succeeded' || status === 'Completed' ? 'bg-slate-500'
-                        : statusNamesError(status) ? 'bg-red-500'
-                        : 'bg-slate-500'
-                      }`}
+                      className={`h-full rounded-full ${gpuPodStatusBar(status, 'bg-slate-500')}`}
                       style={{ width: `${pct}%` }}
                     />
                   </div>

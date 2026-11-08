@@ -5,7 +5,7 @@ import { useNodeShellSettings } from '@/services/nodeShellSettings'
 import { applyWatchEvent, useKubeWatchList } from '@/services/useKubeWatchList'
 import { useChangeReader } from '@/services/useWatchChanges'
 import { useAIContext } from '@/hooks/useAIContext'
-import { podCounts } from '@/utils/aiContext/podCounts'
+import { notRunningPods, podCounts } from '@/utils/aiContext/podCounts'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { formatBytes } from '@/pages/dashboard/utils'
 import { parseQuantityToBytes } from '@/pages/storage/pvcs/pvcHelpers'
@@ -25,6 +25,7 @@ export function formatCapacity(key: string, value: string | undefined): string {
 type DrainStatus = 'idle' | 'pending' | 'draining' | 'success' | 'error'
 
 const PAGE_SIZE = 10
+const NOT_RUNNING_TOLD = 20
 
 export function useNodeData(name: string) {
   const qc = useQueryClient()
@@ -107,6 +108,7 @@ export function useNodeData(name: string) {
       podsByNs[ns] = (podsByNs[ns] ?? 0) + 1
     }
     const { notRunning, byPhase: podsByPhase, byStatus: podsByStatus } = podCounts(podsArr)
+    const needALook = notRunningPods(podsArr as Array<{ name?: string; namespace?: string; status?: string; phase?: string; ready?: string; restart_count?: number }>, NOT_RUNNING_TOLD)
 
     const conditions = (nodeDescribe as { conditions?: Array<{ type?: string; status?: string; reason?: string; last_transition_time?: string }> } | undefined)?.conditions
     const taints = (nodeDescribe as { taints?: Array<{ key?: string; value?: string; effect?: string }> } | undefined)?.taints
@@ -152,6 +154,11 @@ export function useNodeData(name: string) {
         taints,
         pods_total: podsArr.length,
         pods_not_running: notRunning,
+        // which ones, wherever they are in the table: the pages below hold only what is on screen
+        pods_not_running_list: needALook.items.length > 0
+          ? needALook.items.map((p) => ({ ...p, _link: buildResourceLink('Pod', p.namespace, p.name ?? '') }))
+          : undefined,
+        pods_not_running_cut: needALook.cut > 0 ? needALook.cut : undefined,
         pods_by_namespace: podsByNs,
         pods_by_phase: podsByPhase,
         pods_by_status: podsByStatus,

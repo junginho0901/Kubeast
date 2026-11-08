@@ -8,7 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '@/services/api'
 
-import { kindToPlural, encodeSecretYaml } from './utils'
+import { kindToPlural, secretYamlToSave } from './utils'
 
 interface Target {
   kind: string
@@ -53,8 +53,8 @@ export function useResourceYaml({ target, tab, canEditYaml }: Args) {
   })
 
   // Answers how many of a Secret's masked values the server left as they were.
-  const handleApplyYaml = async (rawYaml: string): Promise<number> => {
-    const yaml = kind === 'Secret' && canEditYaml ? encodeSecretYaml(rawYaml) : rawYaml
+  const handleApplyYaml = async (rawYaml: string, opened?: string): Promise<number> => {
+    const yaml = kind === 'Secret' && canEditYaml ? secretYamlToSave(rawYaml, opened) : rawYaml
     if (kind === 'Node') await api.applyNodeYaml(name, yaml)
     else if (kind === 'Namespace') await api.applyNamespaceYaml(name, yaml)
     else if (kind === 'CustomResourceDefinition') await api.applyResourceYaml('customresourcedefinitions', name, yaml, undefined)

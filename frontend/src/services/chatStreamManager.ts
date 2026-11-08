@@ -7,9 +7,9 @@ export type StreamingPhase = 'waiting' | 'tools' | 'answer'
 
 export type ChatStreamStatus = 'idle' | 'streaming' | 'completed' | 'aborted' | 'error'
 
-// A turn of this conversation that failed or was stopped before the current one. The server saves none of a failed
-// turn's letters or its error, perhaps not its question, and a stopped turn's letters only if the page's save reaches it,
-// so a screen drawn from the saved messages has them only from here.
+// A turn of this conversation that failed or was stopped before the current one. The server never saves a failed turn's
+// error, perhaps not its question, and its letters only when it saw the failure (a stream cut on the way it did not); a
+// stopped turn's letters only if the page's save reaches it. A screen drawn from the saved messages has the rest only from here.
 export interface FailedTurn {
   question: string
   content: string

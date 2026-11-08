@@ -85,6 +85,8 @@ export interface HelmUpgradeResponse {
   changed_masked?: string[]
   // the values sent differ from those the caller read, which the diff may not show
   values_changed?: boolean
+  // the screen's own: why the dry run gave no answer, in place of a diff (pages/helm/modals/upgradePreview)
+  failed?: string
 }
 
 export interface HelmUninstallResponse {

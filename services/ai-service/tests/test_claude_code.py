@@ -352,6 +352,17 @@ async def test_a_failure_without_a_result_reports_the_error(on):
 
 
 @pytest.mark.asyncio
+async def test_a_run_that_fails_keeps_the_text_it_had_written(on):
+    on([("text", "Half of the answer"), ("raise", ProcessError("Command failed with exit code 1"))])
+    chat = claude_code.ClaudeCodeChat(model="m", token="t")
+    out = claude_code.TurnResult()
+    with pytest.raises(claude_code.ClaudeCodeError, match="exit code 1"):
+        async for _ in chat.turn(messages=[{"role": "user", "content": "hi"}], tools=[], run_tool=None, out=out):
+            pass
+    assert out.parts == [("text", "Half of the answer")]
+
+
+@pytest.mark.asyncio
 async def test_max_turns_ends_the_turn_without_an_answer(on):
     # Measured 10-17 on Claude Code 2.1.301: max_turns=N stops after N tool calls and reports num_turns N+1.
     on([("call", "list_clusters", {}), ("result", ResultMessage(subtype="error_max_turns", is_error=True, num_turns=2))])

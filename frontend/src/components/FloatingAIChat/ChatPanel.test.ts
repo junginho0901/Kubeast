@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ChatPanel } from '@/components/FloatingAIChat/ChatPanel'
+import { conversationGone, forgetsConversation } from '@/components/FloatingAIChat/turnsOnScreen'
 import { floatingChatStreamManager } from '@/services/floatingChatStreamManager'
 
 // The floating chat's panel as it stands after a turn: the real manager, each fetch answered, the panel drawn over a
@@ -41,7 +42,7 @@ async function ask(question: string, answer: Response | ReturnType<typeof stillC
 
 const saved = (...messages: [string, string][]) => messages.map(([role, content], i) => ({ id: i + 1, role, content }))
 
-function panel(history?: ReturnType<typeof saved>, conversationId = session) {
+function panel(history?: Array<ReturnType<typeof saved>[number] & { usage?: unknown }>, conversationId = session) {
   const client = new QueryClient()
   if (history) client.setQueryData(['floating-session-detail', conversationId], { messages: history })
   const element = createElement(ChatPanel, {
@@ -213,6 +214,43 @@ describe('the floating chat keeps a failed turn when the next question comes', (
     expect(rows(panel())).toEqual(['one?', REFUSED, 'two?', 'Par', CUT, 'three?', 'Now'])
   })
 
+  // The list a question was sent with can be behind: the answer before it was still on its way to the screen.
+  describe('in its place when the saved messages reached the screen late', () => {
+    const late = async () => {
+      await ask('first?', answered('First.'), 0)
+      await ask('failed?', refused(), 0)
+    }
+
+    it('with the next answer saved', async () => {
+      await late()
+      await ask('third?', answered('Third.'), 0)
+      expect(rows(panel(saved(['user', 'first?'], ['assistant', 'First.'], ['user', 'third?'], ['assistant', 'Third.']))))
+        .toEqual(['first?', 'First.', 'failed?', REFUSED, 'third?', 'Third.'])
+    })
+
+    it('with the next question not saved yet', async () => {
+      await late()
+      await ask('third?', stillComing('Now'), 0)
+      expect(rows(panel(saved(['user', 'first?'], ['assistant', 'First.']))))
+        .toEqual(['first?', 'First.', 'failed?', REFUSED, 'third?', 'Now'])
+    })
+
+    it('with its own question saved', async () => {
+      await late()
+      await ask('third?', answered('Third.'), 0)
+      expect(rows(panel(saved(['user', 'first?'], ['assistant', 'First.'], ['user', 'failed?'], ['user', 'third?'], ['assistant', 'Third.']))))
+        .toEqual(['first?', 'First.', 'failed?', REFUSED, 'third?', 'Third.'])
+    })
+
+    it('with two failures in a row', async () => {
+      await late()
+      await ask('again?', cut('Par'), 0)
+      await ask('third?', answered('Third.'), 0)
+      expect(rows(panel(saved(['user', 'first?'], ['assistant', 'First.'], ['user', 'third?'], ['assistant', 'Third.']))))
+        .toEqual(['first?', 'First.', 'failed?', REFUSED, 'again?', 'Par', CUT, 'third?', 'Third.'])
+    })
+  })
+
   it('a question after a stopped answer keeps the failure before it', async () => {
     await ask('one?', refused())
     await ask('two?', stillComing('Par'))
@@ -243,6 +281,84 @@ describe('the floating chat keeps a failed turn when the next question comes', (
     await ask('elsewhere?', answered('Here'), 0, other)
     await ask('back?', stillComing('Now'))
     expect(rows(panel())).toEqual(['back?', 'Now'])
+  })
+})
+
+// The server saves what a failed turn wrote, marked, before it sends the error.
+describe('the floating chat with a failed answer the server saved', () => {
+  const FAILED = 'AI model call failed'
+  const NOTE = 'The answer ended here because of an error. What came before it is kept.'
+  const failing = (text: string) => new Response(sse({ content: text }, { error: FAILED }))
+  const answerFailed = (...messages: [string, string][]) => saved(...messages).map((m) => (m.role === 'assistant' ? { ...m, usage: { failed: true } } : m))
+
+  it('shows once, with the error under it', async () => {
+    await ask('first?', failing('Par'))
+    expect(rows(panel(answerFailed(['user', 'first?'], ['assistant', 'Par'])))).toEqual(['first?', 'Par', FAILED])
+  })
+
+  it('shows once when the next question comes, with the error in its place', async () => {
+    await ask('first?', failing('Par'))
+    await ask('second?', stillComing('Now'), 2)
+    expect(rows(panel(answerFailed(['user', 'first?'], ['assistant', 'Par'])))).toEqual(['first?', 'Par', FAILED, 'second?', 'Now'])
+  })
+
+  it('shows once when the list had not reached the screen as the next question was sent', async () => {
+    await ask('first?', failing('Par'))
+    await ask('second?', stillComing('Now'), 0)
+    expect(rows(panel())).toEqual(['first?', 'Par', FAILED, 'second?', 'Now'])
+    expect(rows(panel(answerFailed(['user', 'first?'], ['assistant', 'Par'])))).toEqual(['first?', 'Par', FAILED, 'second?', 'Now'])
+  })
+
+  it('stands for its turn even when the letters differ, as an unfinished tool block does', async () => {
+    await ask('first?', failing('Par '))
+    await ask('second?', stillComing('Now'), 0)
+    expect(rows(panel(answerFailed(['user', 'first?'], ['assistant', 'Par saved'])))).toEqual(['first?', 'Par saved', FAILED, 'second?', 'Now'])
+  })
+
+  it('does not stand for a turn whose letters the server never had', async () => {
+    await ask('first?', cut('Cut'))
+    await ask('second?', failing('Par'), 0)
+    await ask('third?', stillComing('Now'), 0)
+    expect(rows(panel(answerFailed(['user', 'first?'], ['user', 'second?'], ['assistant', 'Par']))))
+      .toEqual(['first?', 'Cut', CUT, 'second?', 'Par', FAILED, 'third?', 'Now'])
+  })
+
+  it('says it ended by an error once the page was read again, with nothing else to say so', () => {
+    const html = panel(answerFailed(['user', 'first?'], ['assistant', 'Par']))
+    expect(rows(html)).toEqual(['first?', 'Par', NOTE])
+    expect(answers(html)).toBe(1)
+  })
+
+  it('a finished answer says nothing of the kind', () => {
+    expect(rows(panel(saved(['user', 'first?'], ['assistant', 'Done.'])))).toEqual(['first?', 'Done.'])
+  })
+})
+
+// The server answered 404 for a conversation: the turn that found out stays on screen until the next question, which starts a new one.
+describe('a conversation the server no longer has', () => {
+  it('stays on screen while the turn that found out is the last thing it says', async () => {
+    await ask('how many clusters?', new Response(sse({ error: 'Session not found', error_key: 'sessionNotFound' })))
+    expect(forgetsConversation(floatingChatStreamManager.getState(), session)).toBe(false)
+  })
+
+  it('is forgotten when the tab only remembered it', () => {
+    expect(forgetsConversation({ status: 'idle', sessionId: null }, session)).toBe(true)
+    expect(forgetsConversation({ status: 'completed', sessionId: session }, session)).toBe(true)
+    expect(forgetsConversation({ status: 'error', sessionId: 'another' }, session)).toBe(true)
+  })
+
+  it('takes these answers for gone', () => {
+    const quiet = { errorKey: null, sessionId: session }
+    expect(conversationGone({ response: { status: 404 } }, quiet, session)).toBe(true)
+    expect(conversationGone({ response: { status: 403 } }, quiet, session)).toBe(true)
+    expect(conversationGone({ response: { status: 500 } }, quiet, session)).toBe(false)
+    expect(conversationGone(null, quiet, session)).toBe(false)
+  })
+
+  it('takes the chat saying so for gone, before the read of the list has answered', () => {
+    expect(conversationGone(null, { errorKey: 'sessionNotFound', sessionId: session }, session)).toBe(true)
+    expect(conversationGone(null, { errorKey: 'sessionNotFound', sessionId: 'another' }, session)).toBe(false)
+    expect(conversationGone(null, { errorKey: 'streamCut', sessionId: session }, session)).toBe(false)
   })
 })
 

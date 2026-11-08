@@ -4,7 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { enforceTokenBudget } from '@/utils/aiContext/tokenBudget'
 import { cronJobDrawerInfo } from '@/pages/workloads/cronjobs/cronJobHelpers'
+import { formatDuration, jobDurationSeconds } from '@/pages/workloads/jobs/jobHelpers'
 import WorkloadKindInfo from './WorkloadKindInfo'
+import WorkloadOwnedResources from './WorkloadOwnedResources'
 import WorkloadStrategySection from './WorkloadStrategySection'
 import { ownedDisplayJobs, workloadLayer, workloadReplicaView, workloadSettingsInfo } from './workloadLayer'
 
@@ -145,6 +147,45 @@ describe('the Jobs a CronJob window lists', () => {
       { name: 'old', status: 'Complete', start_time: '2026-11-05T18:00:00Z', duration: '90s' },
     ])
     expect(got.data?.owned_jobs_total).toBe(3)
+  })
+
+  // kubectl's DURATION: the rows of its Jobs table and Recent Runs say one thing of one run
+  it('draws a run\'s Duration in the Jobs table as Recent Runs and kubectl do', () => {
+    const rows = [
+      { ...job('ended', '2026-11-07T03:00:00Z', '2026-11-07T03:02:05Z'), duration_seconds: 125 },
+      job('from-the-list', '2026-11-07T02:00:00Z', '2026-11-07T02:00:30Z'),
+      job('going', '2026-11-07T03:59:00Z', undefined, 'Running'),
+      job('waiting', undefined, undefined, 'Pending'),
+    ]
+    const html = renderToStaticMarkup(createElement(WorkloadOwnedResources, {
+      namespace: 'ns', isCronJob: true, isDaemonSet: false, isDeployment: false, isJob: false, isReplicaSet: false, isStatefulSet: false,
+      owned: { ...noPods, replicaSets: [], jobs: [], pvcsByPodName: {}, rsEnabled: false, jobsEnabled: false, pvcsEnabled: false } as never,
+      describe: undefined, ownedJobs: rows,
+    }))
+    const durations = html.split('<tbody')[1].split('</tr>').slice(0, 4).map((row) => [...row.matchAll(/<td[^>]*>(.*?)<\/td>/g)].map((m) => m[1].replace(/<[^>]+>/g, '')).pop())
+    expect(durations).toEqual(['2m5s', '30s', '60s', '-'])
+    expect(rows.slice(0, 3).map((j) => formatDuration(jobDurationSeconds(j)))).toEqual(durations.slice(0, 3))
+  })
+
+  // The window draws no pods of a CronJob, whose runs hold them: the counts its Jobs answered say what they did.
+  it('tells the pods of its Jobs from the rows it lists', () => {
+    const got = layer('CronJob', CRONJOB, {
+      ownedJobs: [
+        { ...job('a', '2026-11-07T03:00:00Z', '2026-11-07T03:01:00Z'), active: 0, succeeded: 2, failed: 0 },
+        { ...job('b', '2026-11-07T03:30:00Z', undefined, 'Running'), active: 1, succeeded: 0, failed: 3 },
+      ],
+    })
+    expect(got.data?.job_pods).toEqual({ active: 1, succeeded: 2, failed: 3 })
+    expect(got.summary).toContain(', Job 2개 (Pod active 1, succeeded 2, failed 3)')
+  })
+
+  it('says nothing of pods before it has read any', () => {
+    const got = layer('CronJob', CRONJOB)
+    expect(got.data).not.toHaveProperty('job_pods')
+    expect(got.data?.pods).toBeUndefined()
+    expect(got.summary).not.toContain('Pod ')
+    expect(layer('StatefulSet', STATEFUL_SET).data?.pods).toBeUndefined()
+    expect(layer('StatefulSet', STATEFUL_SET, { owned: { pods: [], podsEnabled: true, podsLoaded: true } }).data?.pods).toEqual([])
   })
 
   it('keeps the newest of more than it tells, and says how many there are', () => {

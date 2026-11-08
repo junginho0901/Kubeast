@@ -472,6 +472,59 @@ test.describe('The floating chat keeps each turn on screen', () => {
     }
   })
 
+  test('a conversation that is gone keeps the turn that found out, and the next question starts a new one', async ({ page }) => {
+    const sessions: string[] = []
+    const chat = answering(page, /\/api\/v1\/ai\/sessions\/[^/]+\/floating-chat/, async (route) => {
+      const id = /sessions\/([^/]+)\//.exec(route.request().url())?.[1] ?? ''
+      sessions.push(id)
+      if (sessions.length > 1) return route.fulfill({ contentType: 'text/event-stream', body: sse({ content: 'A new one.' }, '[DONE]') })
+      await dropSession(page, id)
+      return route.fulfill({ contentType: 'text/event-stream', body: sse({ error: 'Session not found', error_key: 'sessionNotFound' }) })
+    })
+    await chat.ready
+    try {
+      const input = await openFloating(page)
+      await input.fill(QUESTION)
+      await input.press('Enter')
+      await chat.answered
+      const list = page.getByTestId('floating-messages')
+      const gone = /no longer exists|더 이상 없습니다/
+      await expect(list).toContainText(gone)
+      const read = page.waitForResponse((r) => /\/api\/v1\/sessions\/[^/?]+(?:\?.*)?$/.test(r.url()) && r.request().method() === 'GET' && r.status() === 404, { timeout: 10_000 }).catch(() => null)
+      await read
+      // the read's answer reaches the panel after the response
+      await page.waitForTimeout(500)
+      await expect(list, 'the question stays after the read says the conversation is gone').toContainText(QUESTION)
+      await expect(list).toContainText(gone)
+
+      await input.fill('and now?')
+      await input.press('Enter')
+      await expect(page.getByTestId('floating-answer').last()).toContainText('A new one.')
+      expect(sessions).toHaveLength(2)
+      expect(sessions[1]).not.toBe(sessions[0])
+      await expect(list).not.toContainText(QUESTION)
+    } finally {
+      for (const id of sessions) await dropSession(page, id)
+    }
+  })
+
+  test('AI chat: a saved answer an error ended says so under it', async ({ page }) => {
+    const { id, title } = await storedSession(page, PARTIAL)
+    await page.route(new RegExp(`/api/v1/sessions/${id}(?:\\?.*)?$`), async (route) => {
+      const response = await route.fetch()
+      const detail = await response.json() as { messages: { role: string; usage?: unknown }[] }
+      for (const message of detail.messages) if (message.role === 'assistant') message.usage = { failed: true, prompt_tokens: 100, completion_tokens: 7 }
+      await route.fulfill({ response, json: detail })
+    })
+    try {
+      const answer = await openStored(page, title)
+      await expect(answer).toContainText(PARTIAL)
+      await expect(answer.getByTestId('turn-usage')).toHaveText(/^(Ended by an error · In 100 · out 7 tokens|오류로 끝남 · 입력 100 · 출력 7 토큰)$/)
+    } finally {
+      await dropSession(page, id)
+    }
+  })
+
   test('an answer does not leave the screen while the saved messages are on their way, and an open tool block stays open', async ({ page }) => {
     await page.clock.install()
     const chat = answering(page, /\/api\/v1\/ai\/sessions\/[^/]+\/floating-chat/, async (route) => {

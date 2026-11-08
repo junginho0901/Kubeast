@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { formatDuration, jobDurationSeconds } from '@/pages/workloads/jobs/jobHelpers'
 import { workloadStatusLabel } from '@/utils/workloadStatus'
 import { InfoSection, StatusBadge, Th, Tx } from '../DetailCommon'
 import { fmtRel } from '../detailFormat'
@@ -168,7 +169,7 @@ export default function WorkloadOwnedResources({
                     <td className="py-2 pr-2"><ResourceLink kind="Job" name={job.name} namespace={job.namespace || namespace} /></td>
                     <td className="py-2 pr-2"><StatusBadge status={job.status || '-'} /></td>
                     <td className="py-2 pr-2">{job.start_time ? fmtRel(job.start_time) : '-'}</td>
-                    <td className="py-2 pr-2">{job.duration_seconds != null ? `${job.duration_seconds}s` : '-'}</td>
+                    <td className="py-2 pr-2">{formatDuration(jobDurationSeconds(job))}</td>
                   </tr>
                 ))}
               </tbody>

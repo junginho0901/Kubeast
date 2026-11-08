@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom'
 import { Monitor, Box, ArrowRight } from 'lucide-react'
 import type { GPUDashboardData } from '@/services/api'
 import { getStatusColor } from './helpers'
-import { statusNamesError } from '../gpuNumbers'
+import { gpuPodStatusBar } from '../gpuNumbers'
 
 interface Props {
   data: GPUDashboardData
@@ -82,13 +82,7 @@ export function DistributionsSection({ data, modelDistribution, podStatusDist, t
                   <span className={`badge ${getStatusColor(status)} w-24 justify-center`}>{status}</span>
                   <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full ${
-                        status === 'Running' ? 'bg-emerald-500'
-                        : status === 'Pending' ? 'bg-yellow-500'
-                        : status === 'Succeeded' || status === 'Completed' ? 'bg-primary-bright'
-                        : statusNamesError(status) ? 'bg-red-500'
-                        : 'bg-slate-500'
-                      }`}
+                      className={`h-full rounded-full ${gpuPodStatusBar(status, 'bg-primary-bright')}`}
                       style={{ width: `${pct}%` }}
                     />
                   </div>
