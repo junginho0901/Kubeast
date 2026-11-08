@@ -14,6 +14,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/eventtime"
 	jobrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/job"
 	rsrow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/replicaset"
+	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
 // Formatting helpers — turn typed K8s objects into the
@@ -44,7 +45,7 @@ func setEvents(result map[string]interface{}, events *corev1.EventList, err erro
 		err = errors.New("events not read")
 	}
 	if err != nil {
-		reason := err.Error()
+		reason := response.Public(err)
 		if reason == "" {
 			// an API error whose Status carries no message
 			reason = "events could not be listed: " + string(apierrors.ReasonForError(err))

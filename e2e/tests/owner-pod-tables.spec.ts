@@ -6,7 +6,7 @@ import path from 'node:path'
 import { test, expect, type Page, type Route } from '@playwright/test'
 
 // The pod tables of a Service, a PodDisruptionBudget, a ReplicaSet, a DaemonSet and a Job on cluster `self`, in a namespace
-// of this run's. Each table's first page comes from the server's pod rows; a set past the line (2 000 pods) is stood in by
+// of this run's. Each table's first page comes from the server's pod rows; a set past the line (300 pods) is stood in by
 // that answer's count, so the spec needs no large workload. Below it the table reads its pods whole and follows them live
 // as before; past it no pod is read whole, no watch opens and the table reads its pages again. A server that did not keep
 // the owner is answered the old way. It does not skip. The namespace is removed after.

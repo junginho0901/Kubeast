@@ -4,8 +4,8 @@ import { podPagePollEvery } from '@/services/podPageRead'
 // Up to this many pods a drawer's table reads them whole and follows them by a watch: five accounts reading 2 000 at once hold some 34 MiB (TestWholeNamespacePodReadCost), what 500 people left of the GC's 461 (docs/architecture.md "Many users").
 export const POD_TABLE_WATCH_MAX = 2000
 
-// The same line for the tables of a selector's or a workload's pods (Service, PodDisruptionBudget, workloads), each open drawer following them by a watch of its own (TestStalledWatchSubscriberHeldCost).
-export const SET_POD_TABLE_WATCH_MAX = 2000
+// The line for the tables of a selector's or a workload's pods (Service, PodDisruptionBudget, workloads), each open drawer following them by a watch of its own (TestStalledWatchSubscriberHeldCost): 100 people following 500 or 1 000 pods through a rollout took k8s-service past 512 Mi on 2026-11-08 (docs/architecture.md "Many users").
+export const SET_POD_TABLE_WATCH_MAX = 300
 
 // The note over a table read a page at a time, naming what passed the line: the namespace's pods, a selector's matches or a workload's pods.
 export function podTableNote(owner: string | undefined, bySelector: boolean): { text: string; values: Record<string, string> } {
