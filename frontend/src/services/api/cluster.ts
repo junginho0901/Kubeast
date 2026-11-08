@@ -6,6 +6,7 @@
 import axios from 'axios'
 
 import { client } from './client'
+import type { YamlOpened } from './types'
 import type {
   ClusterIssuesResponse,
   ClusterOverview,
@@ -69,8 +70,8 @@ export const clusterApi = {
     return data
   },
 
-  applyNamespaceYaml: async (name: string, yaml: string): Promise<{ status: string }> => {
-    const { data } = await client.post(`/cluster/namespaces/${name}/yaml/apply`, { yaml })
+  applyNamespaceYaml: async (name: string, yaml: string, opened?: YamlOpened): Promise<{ status: string }> => {
+    const { data } = await client.post(`/cluster/namespaces/${name}/yaml/apply`, { yaml, opened })
     return data
   },
 
@@ -136,12 +137,13 @@ export const clusterApi = {
     return data
   },
 
-  applyResourceYaml: async (resourceType: string, name: string, yaml: string, namespace?: string): Promise<{ status: string; kept_masked?: string[] }> => {
+  applyResourceYaml: async (resourceType: string, name: string, yaml: string, namespace?: string, opened?: YamlOpened): Promise<{ status: string; kept_masked?: string[] }> => {
     const { data } = await client.post('/cluster/resources/yaml/apply', {
       resource_type: resourceType,
       resource_name: name,
       namespace: namespace && namespace !== '-' ? namespace : undefined,
       yaml,
+      opened,
     })
     return data
   },
@@ -197,8 +199,8 @@ export const clusterApi = {
     return data
   },
 
-  applyNodeYaml: async (name: string, yaml: string): Promise<{ status: string }> => {
-    const { data } = await client.post(`/cluster/nodes/${name}/yaml/apply`, { yaml })
+  applyNodeYaml: async (name: string, yaml: string, opened?: YamlOpened): Promise<{ status: string }> => {
+    const { data } = await client.post(`/cluster/nodes/${name}/yaml/apply`, { yaml, opened })
     return data
   },
 

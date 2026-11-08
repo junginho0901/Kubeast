@@ -136,6 +136,32 @@ type applyYAMLBody struct {
 	Name         string `json:"name"`
 	ResourceName string `json:"resource_name"`
 	YAML         string `json:"yaml"`
+	// where a YAML window's edit began: a save takes out of the object what left this text (k8s.ApplyEditedYAML)
+	Opened *yamlOpened `json:"opened"`
+}
+
+// yamlOpened is the text an edit began from, as what it does not share with the text saved: the two whole would pass the
+// 1 MiB body limit at half the size of the largest object that saves today.
+type yamlOpened struct {
+	Head  int      `json:"head"`
+	Tail  int      `json:"tail"`
+	Lines []string `json:"lines"`
+}
+
+// text is the text an edit began from, given the text saved; "" for none, or for an answer that does not fit that text.
+func (o *yamlOpened) text(saved string) string {
+	if o == nil {
+		return ""
+	}
+	lines := strings.Split(saved, "\n")
+	if o.Head < 0 || o.Tail < 0 || o.Head+o.Tail > len(lines) {
+		return ""
+	}
+	out := make([]string, 0, o.Head+len(o.Lines)+o.Tail)
+	out = append(out, lines[:o.Head]...)
+	out = append(out, o.Lines...)
+	out = append(out, lines[len(lines)-o.Tail:]...)
+	return strings.Join(out, "\n")
 }
 
 // ApplyResourceYAML handles POST /api/v1/resources/yaml/apply. It needs the
@@ -169,9 +195,9 @@ func (h *Handler) ApplyResourceYAML(w http.ResponseWriter, r *http.Request) {
 	var data map[string]interface{}
 	var keptMasked []string
 	if !h.canForCluster(r, "resource.secret.reveal") && h.isSecretResourceType(r, body.ResourceType) {
-		data, keptMasked, err = h.svc.ApplySecretYAMLWithoutReveal(ctx, body.ResourceType, body.Namespace, body.Name, body.YAML)
+		data, keptMasked, err = h.svc.ApplySecretYAMLWithoutReveal(ctx, body.ResourceType, body.Namespace, body.Name, body.Opened.text(body.YAML), body.YAML)
 	} else {
-		data, err = h.svc.ApplyResourceYAML(ctx, body.ResourceType, body.Namespace, body.Name, body.YAML)
+		data, err = h.svc.ApplyEditedYAML(ctx, body.ResourceType, body.Namespace, body.Name, body.Opened.text(body.YAML), body.YAML)
 	}
 	after := map[string]interface{}{
 		"resource_type": body.ResourceType,

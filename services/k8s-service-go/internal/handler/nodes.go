@@ -100,14 +100,15 @@ func (h *Handler) ApplyNodeYAML(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 
 	var body struct {
-		YAML string `json:"yaml"`
+		YAML   string      `json:"yaml"`
+		Opened *yamlOpened `json:"opened"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		response.Error(w, http.StatusBadRequest, "invalid request body: "+err.Error())
 		return
 	}
 
-	data, err := h.svc.ApplyResourceYAML(ctx, "nodes", "", name, body.YAML)
+	data, err := h.svc.ApplyEditedYAML(ctx, "nodes", "", name, body.Opened.text(body.YAML), body.YAML)
 	h.recordAuditWithPayload(r, "k8s.node.edit", "node", name, "", err,
 		nil, audit.MustJSON(map[string]interface{}{"yaml_len": len(body.YAML)}))
 	if err != nil {

@@ -146,10 +146,8 @@ export function statusNamesError(status: string): boolean {
   return ['error', 'failed', 'backoff', 'errimagepull', 'oomkilled'].some((w) => s.includes(w))
 }
 
-// A status's colour on the two GPU pod lists: the Pods list's, red for what the cards here count as Failed.
-export function gpuPodStatusColor(status: string): string {
-  return statusNamesError(status) ? 'badge-error' : podsListStatusColor(status)
-}
+// A status's colour on the two GPU pod lists is the Pods list's.
+export const gpuPodStatusColor = podsListStatusColor
 
 // The bar of a status in a distribution says what its badge says; a pod that finished needs nothing, each screen draws it its way.
 export function gpuPodStatusBar(status: string, finished: string): string {

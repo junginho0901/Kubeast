@@ -1,5 +1,4 @@
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
-import ServiceDetail from './network-info/ServiceDetail'
 import IngressDetail from './network-info/IngressDetail'
 import IngressClassDetail from './network-info/IngressClassDetail'
 import NetworkPolicyDetail from './network-info/NetworkPolicyDetail'
@@ -23,7 +22,6 @@ export default function NetworkInfo({ name, namespace, kind, rawJson }: Props) {
     : undefined
   useResourceDetailOverlay({ kind, name, namespace, extras })
 
-  if (kind === 'Service') return <ServiceDetail name={name} namespace={namespace} rawJson={rawJson} />
   if (kind === 'Ingress') return <IngressDetail name={name} namespace={namespace} rawJson={rawJson} />
   if (kind === 'IngressClass') return <IngressClassDetail name={name} rawJson={rawJson} />
   if (kind === 'NetworkPolicy') return <NetworkPolicyDetail name={name} namespace={namespace} rawJson={rawJson} />
