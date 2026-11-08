@@ -1,13 +1,16 @@
 suite: migrate-job — schema migration hook Job
 templates:
   - migrate-job.yaml
+  - configmap.yaml   # the Job renders its values
 tests:
   - it: is not rendered in the default startup mode (auth-service migrates at boot)
+    template: migrate-job.yaml
     asserts:
       - hasDocuments:
           count: 0
 
   - it: migrations.mode=job renders a pre-install/pre-upgrade hook Job running auth-service with MIGRATE_ONLY
+    template: migrate-job.yaml
     set:
       migrations.mode: job
     asserts:
@@ -38,15 +41,32 @@ tests:
       - contains:
           path: spec.template.spec.containers[0].envFrom
           content:
-            configMapRef:
-              name: kubeast-config
-      - contains:
-          path: spec.template.spec.containers[0].envFrom
-          content:
             secretRef:
               name: kubeast-secrets
 
+  - it: carries kubeast-config's values itself, since a pre-install hook runs before the release creates that ConfigMap
+    template: migrate-job.yaml
+    set:
+      migrations.mode: job
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].envFrom
+          content:
+            configMapRef:
+              name: kubeast-config
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: MIGRATIONS_MODE
+            value: job
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: APP_NAME
+            value: Kubeast
+
   - it: reads credentials from secrets.existingSecret when one is given
+    template: migrate-job.yaml
     set:
       migrations.mode: job
       secrets.existingSecret: company-kubeast
@@ -58,6 +78,7 @@ tests:
               name: company-kubeast
 
   - it: mounts the database CA when sslRootCert is set so the migration connects like the services
+    template: migrate-job.yaml
     set:
       migrations.mode: job
       postgresql.sslRootCert.secretName: rds-ca
