@@ -200,7 +200,7 @@ test.describe('what a screen asks of the server', () => {
           requests += 1
           if (!room) {
             refused += 1
-            ws.send(JSON.stringify({ type: 'ERROR', clusterId: msg.clusterId, path: msg.path, query: msg.query, error: { message: 'max subscriptions reached for the server (2000), cannot create new watch', reason: 'limit' } }))
+            ws.send(JSON.stringify({ type: 'ERROR', clusterId: msg.clusterId, path: msg.path, query: msg.query, error: { message: 'max subscriptions reached for the server (2000), cannot create new watch', reason: 'limit', limit_scope: 'server' } }))
             return
           }
         }

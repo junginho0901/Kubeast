@@ -15,6 +15,52 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/eventtime"
 )
 
+// timelinePageSize: ControllerRevisions carry whole pod templates and a ReplicaSet its own, so one list of a busy
+// cluster holds far more than the few rows a window keeps.
+const timelinePageSize = 500
+
+// eachRolloutPage lists a kind timelinePageSize at a time, giving each page to keep, as a big read past the first.
+func eachRolloutPage[L metav1.ListInterface](ctx context.Context, list func(metav1.ListOptions) (L, error), keep func(L)) error {
+	var read pagedRead
+	defer read.done()
+	opts := metav1.ListOptions{Limit: timelinePageSize}
+	for {
+		page, err := list(opts)
+		if err != nil {
+			return err
+		}
+		keep(page)
+		if page.GetContinue() == "" {
+			return nil
+		}
+		if err := read.nextPage(ctx); err != nil {
+			return err
+		}
+		opts.Continue = page.GetContinue()
+	}
+}
+
+// rolloutReplicaSet keeps what rolloutHistoryFromLists reads of a ReplicaSet.
+func rolloutReplicaSet(rs *appsv1.ReplicaSet) appsv1.ReplicaSet {
+	kept := appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{
+		Name:              rs.Name,
+		Namespace:         rs.Namespace,
+		CreationTimestamp: rs.CreationTimestamp,
+		OwnerReferences:   rs.OwnerReferences,
+		Annotations:       map[string]string{},
+	}}
+	for _, a := range []string{"deployment.kubernetes.io/revision", "kubernetes.io/change-cause"} {
+		if v, ok := rs.Annotations[a]; ok {
+			kept.Annotations[a] = v
+		}
+	}
+	kept.Spec.Replicas = rs.Spec.Replicas
+	for _, c := range rs.Spec.Template.Spec.Containers {
+		kept.Spec.Template.Spec.Containers = append(kept.Spec.Template.Spec.Containers, corev1.Container{Image: c.Image})
+	}
+	return kept
+}
+
 // TimelineResult holds merged events and rollout history for a timeline view.
 type TimelineResult struct {
 	Events         []map[string]interface{} `json:"events"`
@@ -200,23 +246,41 @@ func (s *Service) getNamespaceRolloutHistory(ctx context.Context, namespace stri
 
 func (s *Service) rolloutHistoryIn(ctx context.Context, namespace string, cutoff time.Time) ([]map[string]interface{}, error) {
 	var wg sync.WaitGroup
-	var deploys *appsv1.DeploymentList
-	var rsList *appsv1.ReplicaSetList
-	var crList *appsv1.ControllerRevisionList
+	deploys := &appsv1.DeploymentList{}
+	rsList := &appsv1.ReplicaSetList{}
+	crRows := make([]map[string]interface{}, 0)
 	var deploysErr, rsErr, crErr error
 
 	wg.Add(3)
 	go func() {
 		defer wg.Done()
-		deploys, deploysErr = s.clientsetCtx(ctx).AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{})
+		deploysErr = eachRolloutPage(ctx, func(o metav1.ListOptions) (*appsv1.DeploymentList, error) {
+			return s.clientsetCtx(ctx).AppsV1().Deployments(namespace).List(ctx, o)
+		}, func(page *appsv1.DeploymentList) {
+			for i := range page.Items {
+				deploys.Items = append(deploys.Items, appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: page.Items[i].Namespace, Name: page.Items[i].Name}})
+			}
+		})
 	}()
 	go func() {
 		defer wg.Done()
-		rsList, rsErr = s.clientsetCtx(ctx).AppsV1().ReplicaSets(namespace).List(ctx, metav1.ListOptions{})
+		rsErr = eachRolloutPage(ctx, func(o metav1.ListOptions) (*appsv1.ReplicaSetList, error) {
+			return s.clientsetCtx(ctx).AppsV1().ReplicaSets(namespace).List(ctx, o)
+		}, func(page *appsv1.ReplicaSetList) {
+			for i := range page.Items {
+				if !page.Items[i].CreationTimestamp.Time.Before(cutoff) {
+					rsList.Items = append(rsList.Items, rolloutReplicaSet(&page.Items[i]))
+				}
+			}
+		})
 	}()
 	go func() {
 		defer wg.Done()
-		crList, crErr = s.clientsetCtx(ctx).AppsV1().ControllerRevisions(namespace).List(ctx, metav1.ListOptions{})
+		crErr = eachRolloutPage(ctx, func(o metav1.ListOptions) (*appsv1.ControllerRevisionList, error) {
+			return s.clientsetCtx(ctx).AppsV1().ControllerRevisions(namespace).List(ctx, o)
+		}, func(page *appsv1.ControllerRevisionList) {
+			crRows = append(crRows, controllerRevisionRollouts(page, cutoff)...)
+		})
 	}()
 	wg.Wait()
 
@@ -230,7 +294,7 @@ func (s *Service) rolloutHistoryIn(ctx context.Context, namespace string, cutoff
 		return nil, fmt.Errorf("list controller revisions for timeline: %w", crErr)
 	}
 
-	result := append(rolloutHistoryFromLists(deploys, rsList, cutoff), controllerRevisionRollouts(crList, cutoff)...)
+	result := append(rolloutHistoryFromLists(deploys, rsList, cutoff), crRows...)
 	sortRolloutsNewestFirst(result)
 	return result, nil
 }
@@ -338,55 +402,58 @@ func rolloutHistoryFromLists(deploys *appsv1.DeploymentList, rsList *appsv1.Repl
 }
 
 func (s *Service) getDeploymentRolloutTimeline(ctx context.Context, namespace, name string, cutoff time.Time) ([]map[string]interface{}, error) {
-	rsList, err := s.clientsetCtx(ctx).AppsV1().ReplicaSets(namespace).List(ctx, metav1.ListOptions{})
+	result := make([]map[string]interface{}, 0)
+	err := eachRolloutPage(ctx, func(o metav1.ListOptions) (*appsv1.ReplicaSetList, error) {
+		return s.clientsetCtx(ctx).AppsV1().ReplicaSets(namespace).List(ctx, o)
+	}, func(page *appsv1.ReplicaSetList) {
+		for i := range page.Items {
+			rs := &page.Items[i]
+			if rs.CreationTimestamp.Time.Before(cutoff) {
+				continue
+			}
+
+			owned := false
+			for _, ref := range rs.OwnerReferences {
+				if ref.Kind == "Deployment" && ref.Name == name {
+					owned = true
+					break
+				}
+			}
+			if !owned {
+				continue
+			}
+
+			revStr, ok := rs.Annotations["deployment.kubernetes.io/revision"]
+			if !ok {
+				continue
+			}
+			rev, err := strconv.ParseInt(revStr, 10, 64)
+			if err != nil {
+				continue
+			}
+
+			images := extractContainerImages(rs.Spec.Template.Spec.Containers)
+			changeCause := rs.Annotations["kubernetes.io/change-cause"]
+
+			replicas := int32(0)
+			if rs.Spec.Replicas != nil {
+				replicas = *rs.Spec.Replicas
+			}
+
+			result = append(result, map[string]interface{}{
+				"kind":         "Deployment",
+				"name":         name,
+				"namespace":    namespace,
+				"revision":     rev,
+				"change_cause": nilIfEmpty(changeCause),
+				"created_at":   toISO(&rs.CreationTimestamp),
+				"images":       images,
+				"replicas":     replicas,
+			})
+		}
+	})
 	if err != nil {
 		return nil, fmt.Errorf("list replicasets for timeline: %w", err)
-	}
-
-	result := make([]map[string]interface{}, 0)
-	for _, rs := range rsList.Items {
-		if rs.CreationTimestamp.Time.Before(cutoff) {
-			continue
-		}
-
-		owned := false
-		for _, ref := range rs.OwnerReferences {
-			if ref.Kind == "Deployment" && ref.Name == name {
-				owned = true
-				break
-			}
-		}
-		if !owned {
-			continue
-		}
-
-		revStr, ok := rs.Annotations["deployment.kubernetes.io/revision"]
-		if !ok {
-			continue
-		}
-		rev, err := strconv.ParseInt(revStr, 10, 64)
-		if err != nil {
-			continue
-		}
-
-		images := extractContainerImages(rs.Spec.Template.Spec.Containers)
-		changeCause := rs.Annotations["kubernetes.io/change-cause"]
-
-		replicas := int32(0)
-		if rs.Spec.Replicas != nil {
-			replicas = *rs.Spec.Replicas
-		}
-
-		result = append(result, map[string]interface{}{
-			"kind":         "Deployment",
-			"name":         name,
-			"namespace":    namespace,
-			"revision":     rev,
-			"change_cause": nilIfEmpty(changeCause),
-			"created_at":   toISO(&rs.CreationTimestamp),
-			"images":       images,
-			"replicas":     replicas,
-		})
 	}
 
 	sort.Slice(result, func(i, j int) bool {
@@ -399,40 +466,43 @@ func (s *Service) getDeploymentRolloutTimeline(ctx context.Context, namespace, n
 }
 
 func (s *Service) getControllerRevisionTimeline(ctx context.Context, namespace, kind, name string, cutoff time.Time) ([]map[string]interface{}, error) {
-	crList, err := s.clientsetCtx(ctx).AppsV1().ControllerRevisions(namespace).List(ctx, metav1.ListOptions{})
+	result := make([]map[string]interface{}, 0)
+	err := eachRolloutPage(ctx, func(o metav1.ListOptions) (*appsv1.ControllerRevisionList, error) {
+		return s.clientsetCtx(ctx).AppsV1().ControllerRevisions(namespace).List(ctx, o)
+	}, func(page *appsv1.ControllerRevisionList) {
+		for i := range page.Items {
+			cr := &page.Items[i]
+			if cr.CreationTimestamp.Time.Before(cutoff) {
+				continue
+			}
+
+			owned := false
+			for _, ref := range cr.OwnerReferences {
+				if ref.Kind == kind && ref.Name == name {
+					owned = true
+					break
+				}
+			}
+			if !owned {
+				continue
+			}
+
+			images := extractImagesFromControllerRevision(cr)
+
+			result = append(result, map[string]interface{}{
+				"kind":         kind,
+				"name":         name,
+				"namespace":    namespace,
+				"revision":     cr.Revision,
+				"change_cause": nil,
+				"created_at":   toISO(&cr.CreationTimestamp),
+				"images":       images,
+				"replicas":     0,
+			})
+		}
+	})
 	if err != nil {
 		return nil, fmt.Errorf("list controller revisions for timeline: %w", err)
-	}
-
-	result := make([]map[string]interface{}, 0)
-	for _, cr := range crList.Items {
-		if cr.CreationTimestamp.Time.Before(cutoff) {
-			continue
-		}
-
-		owned := false
-		for _, ref := range cr.OwnerReferences {
-			if ref.Kind == kind && ref.Name == name {
-				owned = true
-				break
-			}
-		}
-		if !owned {
-			continue
-		}
-
-		images := extractImagesFromControllerRevision(&cr)
-
-		result = append(result, map[string]interface{}{
-			"kind":         kind,
-			"name":         name,
-			"namespace":    namespace,
-			"revision":     cr.Revision,
-			"change_cause": nil,
-			"created_at":   toISO(&cr.CreationTimestamp),
-			"images":       images,
-			"replicas":     0,
-		})
 	}
 
 	sort.Slice(result, func(i, j int) bool {

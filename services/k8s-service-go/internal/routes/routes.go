@@ -21,6 +21,7 @@ import (
 // wsMux is threaded through because the WebSocket multiplexer is part
 // of the public API surface but lives in its own package.
 func Register(r chi.Router, h *handler.Handler, wsMux *ws.Multiplexer) {
+	r = sharingReads(r, h)
 	RegisterCluster(r, h)
 	RegisterPods(r, h)
 	RegisterWorkloads(r, h)

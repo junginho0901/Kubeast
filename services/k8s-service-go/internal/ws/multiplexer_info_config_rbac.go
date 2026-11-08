@@ -16,7 +16,7 @@ import (
 // not convert stays a generic row, which has no data: a row holds no value.
 func configmapToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 	var cm corev1.ConfigMap
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, &cm); err != nil {
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(slimKeysOnly(obj, "data", "binaryData"), &cm); err != nil {
 		return genericToInfo(obj)
 	}
 	return configmaprow.Info(&cm)
@@ -26,7 +26,7 @@ func configmapToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 // convert stays a generic row, which has neither the data nor the annotations: a row holds no value.
 func secretToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 	var s corev1.Secret
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, &s); err != nil {
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(slimKeysOnly(obj, "data"), &s); err != nil {
 		return genericToInfo(obj)
 	}
 	return secretrow.Info(&s)

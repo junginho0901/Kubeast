@@ -14,6 +14,7 @@ import (
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/alerts"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/flight"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/helm"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/hygiene"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
@@ -72,6 +73,8 @@ type Handler struct {
 	alertStore *alerts.Store
 	// logSearchCanI replaces the pods/log access review in tests.
 	logSearchCanI func(ctx context.Context, namespace string) (bool, error)
+	// sharedReads is one run at a time of each read Shared wraps.
+	sharedReads flight.Group[*sharedAnswer]
 }
 
 // SetRecorder turns on terminal session recording (internal/recording).

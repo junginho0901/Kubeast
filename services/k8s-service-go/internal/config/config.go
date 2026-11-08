@@ -118,6 +118,7 @@ type Config struct {
 	// browser cannot take the whole budget (second review L22).
 	WSMaxSubscriptions        int
 	WSMaxSubscriptionsPerConn int
+	WSWatchStartConcurrency   int
 	// MaxRequestBodyBytes caps every request body; YAML apply/create of large
 	// manifests fit well under the default 4 MiB.
 	MaxRequestBodyBytes int
@@ -200,6 +201,7 @@ func Load() Config {
 		WSHeartbeatInterval:       pkgconfig.GetEnvInt("WS_HEARTBEAT_INTERVAL", 30),
 		WSMaxSubscriptions:        pkgconfig.GetEnvInt("WS_MAX_SUBSCRIPTIONS", 2000),
 		WSMaxSubscriptionsPerConn: pkgconfig.GetEnvInt("WS_MAX_SUBSCRIPTIONS_PER_CONN", 50),
+		WSWatchStartConcurrency:   pkgconfig.GetEnvInt("WS_WATCH_START_CONCURRENCY", 16),
 		MaxRequestBodyBytes:       pkgconfig.GetEnvInt("MAX_REQUEST_BODY_BYTES", 4<<20),
 
 		NodeShellEnabled:    pkgconfig.GetEnvBool("NODE_SHELL_ENABLED", false),

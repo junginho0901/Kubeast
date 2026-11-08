@@ -83,6 +83,8 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 	fetch("Pod", func(ns string) error {
 		// podListChunk at a time, each page cut to rgPod, so a large cluster is never held whole
 		var pods []rgPod
+		var read pagedRead
+		defer read.done()
 		opts := metav1.ListOptions{Limit: podListChunk}
 		for {
 			list, err := s.clientsetCtx(ctx).CoreV1().Pods(ns).List(ctx, opts)
@@ -94,6 +96,9 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 			}
 			if list.Continue == "" {
 				break
+			}
+			if err := read.nextPage(ctx); err != nil {
+				return err
 			}
 			opts.Continue = list.Continue
 		}

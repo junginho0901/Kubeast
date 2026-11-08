@@ -76,7 +76,7 @@ func gitopsRead(ctx context.Context, args ...string) ([]gitops.Object, error) {
 		return nil, err
 	}
 	defer done()
-	output, runErr := kubectlExec(ctx, argv, nil)
+	output, runErr := kubectlRun(ctx, argv, nil)
 	return gitopsReadOutput(string(output), runErr)
 }
 

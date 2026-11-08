@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"os"
 	"sort"
@@ -98,6 +99,19 @@ func (p TokenPayload) CacheIdentity(clusterID string) string {
 	user, groups := p.Impersonation(clusterID)
 	sum := sha256.Sum256([]byte(user + "|" + strings.Join(groups, ",")))
 	return hex.EncodeToString(sum[:8])
+}
+
+// ClaimsKey is a short hash of all a token says about who holds it and what they may do, its times aside: the checks
+// Kubeast makes and the cluster's answer are the same for two requests with one key, so they may share one read of the
+// cluster. "" when it cannot be worked out, which shares nothing.
+func (p TokenPayload) ClaimsKey() string {
+	p.AuthTime, p.ExpiresAt = 0, 0
+	b, err := json.Marshal(p)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:16])
 }
 
 // RoleGroupSlug is the form of a role name its group is built from, trimmed as

@@ -20,6 +20,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/dbmigrate"
 	"github.com/junginho0901/kubeast/services/pkg/limits"
 	pkglogger "github.com/junginho0901/kubeast/services/pkg/logger"
+	"github.com/junginho0901/kubeast/services/pkg/memlimit"
 	"github.com/junginho0901/kubeast/services/pkg/metrics"
 	"github.com/junginho0901/kubeast/services/session-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/session-service-go/internal/handler"
@@ -45,6 +46,7 @@ func main() {
 	// Setup logger
 	pkglogger.Setup("session-service", cfg.Debug)
 	slog.Info("starting session-service", "port", cfg.Port)
+	memlimit.Set(0)
 
 	// Connect to database
 	dbURL := cfg.DatabaseURLForPgx()

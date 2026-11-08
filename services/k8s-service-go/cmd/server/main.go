@@ -41,6 +41,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/internalauth"
 	"github.com/junginho0901/kubeast/services/pkg/limits"
 	"github.com/junginho0901/kubeast/services/pkg/logger"
+	"github.com/junginho0901/kubeast/services/pkg/memlimit"
 	"github.com/junginho0901/kubeast/services/pkg/metrics"
 )
 
@@ -52,7 +53,7 @@ func main() {
 	logger.Setup(cfg.AppName, cfg.Debug)
 
 	slog.Info("starting k8s-service-go", "port", cfg.Port, "debug", cfg.Debug)
-	setMemoryLimit()
+	memlimit.Set(0)
 
 	// The /internal routes (kubeconfig for tool-server, validate/invalidate for
 	// auth-service) need the shared service token; without one they answer 503
@@ -272,6 +273,7 @@ func main() {
 	wsMux := ws.NewMultiplexer(k8sSvc)
 	wsMux.MaxSubscriptions = cfg.WSMaxSubscriptions
 	wsMux.MaxSubscriptionsPerConn = cfg.WSMaxSubscriptionsPerConn
+	wsMux.MaxWatchStarts = cfg.WSWatchStartConcurrency
 
 	// Open terminals, watches and followed logs end when the session behind them stops standing.
 	liveSessions := auth.NewLiveSessions(auth.LiveSessionConfig{

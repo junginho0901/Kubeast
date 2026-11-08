@@ -6,13 +6,12 @@ import { useSyncExternalStore } from 'react'
 
 export type WatchProblem = 'forbidden' | 'limit' | 'server_limit' | 'unreachable' | 'failed' | 'scope'
 
-type WatchFrame = { type: string; error?: { message?: string; reason?: string } }
+type WatchFrame = { type: string; error?: { message?: string; reason?: string; limit_scope?: string } }
 
 const SERIOUS_FIRST: WatchProblem[] = ['forbidden', 'limit', 'server_limit', 'unreachable', 'failed', 'scope']
 const SILENT = new Set(['not_served', 'unsupported'])
 
-// The server gives both limits one reason and says which in its message (multiplexer.go; multiplexer_watch_test.go holds the words).
-const limitOf = (frame: WatchFrame): WatchProblem => (frame.error?.message?.includes('for the server') ? 'server_limit' : 'limit')
+const limitOf = (frame: WatchFrame): WatchProblem => (frame.error?.limit_scope === 'server' ? 'server_limit' : 'limit')
 
 // The kinds a watch names otherwise than the REST list it feeds does (forbiddenStore's segments).
 const LIST_OF_KIND: Record<string, string> = {
