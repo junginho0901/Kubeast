@@ -51,12 +51,12 @@ func (h *Handler) CanI(w http.ResponseWriter, r *http.Request) {
 		response.JSON(w, http.StatusOK, map[string]bool{"allowed": false})
 		return
 	}
-	cs, err := h.svc.ClientsetFor(r.Context())
+	reviews, err := h.svc.ReviewsFor(r.Context())
 	if err != nil {
 		h.handleError(w, err)
 		return
 	}
-	review, err := cs.AuthorizationV1().SelfSubjectAccessReviews().Create(r.Context(), &authorizationv1.SelfSubjectAccessReview{
+	review, err := reviews.Create(r.Context(), &authorizationv1.SelfSubjectAccessReview{
 		Spec: authorizationv1.SelfSubjectAccessReviewSpec{ResourceAttributes: attrs},
 	}, metav1.CreateOptions{})
 	if err != nil {

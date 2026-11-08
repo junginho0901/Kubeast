@@ -261,6 +261,14 @@ spec:
               value: "{{ .Values.multicluster.breakerConsecutiveFails }}"
             - name: MC_BREAKER_OPEN_SEC
               value: "{{ .Values.multicluster.breakerOpenSec }}"
+            - name: MC_CLIENT_QPS
+              value: "{{ .Values.multicluster.clientQPS | default 100 }}"
+            - name: MC_CLIENT_BURST
+              value: "{{ .Values.multicluster.clientBurst | default 200 }}"
+            - name: MC_REVIEW_QPS
+              value: "{{ .Values.multicluster.reviewQPS | default 0 }}"
+            - name: MC_REVIEW_BURST
+              value: "{{ .Values.multicluster.reviewBurst | default 0 }}"
             - name: WS_MAX_SUBSCRIPTIONS
               value: "{{ .Values.multicluster.wsMaxSubscriptions | default 2000 }}"
             - name: WS_MAX_SUBSCRIPTIONS_PER_CONN

@@ -190,6 +190,10 @@ multicluster:
   healthcheckIntervalSec: 60
   rateLimitQPS: 0           # 0 = off
   breakerConsecutiveFails: 5
+  clientQPS: 100            # 클러스터 API 서버로 보내는 client-go 속도
+  clientBurst: 200
+  reviewQPS: 0              # 0 = 권한 확인이 clientQPS를 같이 씀. architecture.md "Many users" 참고
+  reviewBurst: 0
 ```
 
 전체 옵션은 [helm/kubeast/values.yaml](../../helm/kubeast/values.yaml)에서 볼 수 있습니다.

@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"time"
 
-	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -249,28 +248,9 @@ func (s *Service) GetComponentStatuses(ctx context.Context) ([]map[string]interf
 var errOverviewForbidden = apierrors.NewForbidden(schema.GroupResource{Resource: "namespaces"}, "",
 	errors.New("your identity in this cluster may not list namespaces, so the cluster overview is not shown"))
 
-// overviewIdentityAllowed answers from the cache (per cluster and identity,
-// accessCheckTTL) or asks the cluster through b.mayListNamespaces.
+// overviewIdentityAllowed asks whether the caller may list namespaces (mayList, the namespace list's question too).
 func (s *Service) overviewIdentityAllowed(ctx context.Context, b *clientBundle) error {
-	key := s.clusterCacheKey(ctx, "overview_identity")
-	var allowed bool
-	if s.cache != nil && s.cache.Get(ctx, key, &allowed) {
-		if allowed {
-			return nil
-		}
-		return errOverviewForbidden
-	}
-	allowed, err := s.askOnce(ctx, key, func(ctx context.Context) (bool, error) {
-		var known bool
-		if s.cache != nil && s.cache.Get(ctx, key, &known) {
-			return known, nil
-		}
-		ok, err := b.mayListNamespaces(ctx)
-		if err == nil && s.cache != nil {
-			s.cache.Set(ctx, key, ok, accessCheckTTL())
-		}
-		return ok, err
-	})
+	allowed, err := s.mayList(ctx, b, "namespaces", "")
 	if err != nil {
 		return err
 	}
@@ -278,21 +258,6 @@ func (s *Service) overviewIdentityAllowed(ctx context.Context, b *clientBundle) 
 		return errOverviewForbidden
 	}
 	return nil
-}
-
-// mayListNamespaces is a SelfSubjectAccessReview for "list namespaces" as the
-// caller (the impersonated identity the bundle's clients carry).
-func (b *clientBundle) mayListNamespaces(ctx context.Context) (bool, error) {
-	if b.authz == nil {
-		return true, nil
-	}
-	review, err := b.authz.SelfSubjectAccessReviews().Create(ctx, &authorizationv1.SelfSubjectAccessReview{
-		Spec: authorizationv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authorizationv1.ResourceAttributes{Verb: "list", Resource: "namespaces"}},
-	}, metav1.CreateOptions{})
-	if err != nil {
-		return false, err
-	}
-	return review.Status.Allowed, nil
 }
 
 // getScopedOverviewUncached counts a namespace-scoped caller's namespaces

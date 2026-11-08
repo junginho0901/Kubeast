@@ -64,8 +64,9 @@ type clientBundle struct {
 	logStore *logsearch.Store
 	// cost caches this cluster's discovered OpenCost and its recent allocation
 	// answers (cost.go), on the bundle for the same reasons as prom.
-	cost    *costCache
-	version serverVersionCache
+	cost     *costCache
+	version  serverVersionCache
+	nodePods flight.Group[*nodePodList]
 
 	// cacheClient is the identity the overview informers watch as; inf is the
 	// running set, if any (informer_cache.go). id names the cluster in logs.
@@ -140,6 +141,10 @@ type ServiceOptions struct {
 	QueryCacheTTL  time.Duration // Prometheus query cache TTL; 0 = singleflight only
 	RateLimitQPS   int           // per-cluster request rate; 0 = off
 	RateLimitBurst int           // per-cluster burst
+	ClientQPS      int           // client-go's rate to each cluster's API server; 0 = 100
+	ClientBurst    int           // 0 = 200
+	ReviewQPS      int           // the callers' access checks on a rate of their own; 0 = the client's
+	ReviewBurst    int           // 0 = ReviewQPS
 	BreakerFails   int           // open breaker after N consecutive fails; 0 = off
 	BreakerOpen    time.Duration // breaker open duration before half-open
 	// Impersonation makes every API call carry the signed-in user as
@@ -160,7 +165,11 @@ type ServiceOptions struct {
 var (
 	impersonationEnabled bool
 	execCommands         []string
+	clientRates          rates
 )
+
+// rates are ServiceOptions' client rates, read by buildClientBundle.
+type rates struct{ qps, burst, reviewQPS, reviewBurst int }
 
 // NewService creates a K8s service backed by registry. Failure isolation: if no
 // clusters are registered yet (pre-Setup) or the default cluster is unreachable
@@ -168,6 +177,7 @@ var (
 func NewService(ctx context.Context, registry cluster.Registry, watchEnabled bool, c *cache.Cache, opts ServiceOptions) (*Service, error) {
 	impersonationEnabled = opts.Impersonation
 	execCommands = opts.ExecCommands
+	clientRates = rates{opts.ClientQPS, opts.ClientBurst, opts.ReviewQPS, opts.ReviewBurst}
 	installNamespace, nodeShellNamespace = opts.InstallNamespace, opts.NodeShellNamespace
 	s := &Service{
 		registry:          registry,
@@ -242,8 +252,13 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 		}
 	}
 
-	cfg.QPS = 100
-	cfg.Burst = 200
+	cfg.QPS, cfg.Burst = 100, 200
+	if clientRates.qps > 0 {
+		cfg.QPS = float32(clientRates.qps)
+	}
+	if clientRates.burst > 0 {
+		cfg.Burst = clientRates.burst
+	}
 	// The overview informers run outside any user request: with impersonation
 	// on they act as a fixed viewer identity instead of the per-request user
 	// the wrapped transport adds.
@@ -268,6 +283,17 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create clientset: %w", err)
 	}
+	authz := clientset.AuthorizationV1()
+	if clientRates.reviewQPS > 0 {
+		// the same wrapped transports, so a review carries the caller's impersonation as before
+		reviewCfg := rest.CopyConfig(cfg)
+		reviewCfg.QPS, reviewCfg.Burst = float32(clientRates.reviewQPS), max(clientRates.reviewBurst, clientRates.reviewQPS)
+		reviews, err := kubernetes.NewForConfig(reviewCfg)
+		if err != nil {
+			return nil, fmt.Errorf("create review clientset: %w", err)
+		}
+		authz = reviews.AuthorizationV1()
+	}
 	dynClient, err := dynamic.NewForConfig(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("create dynamic client: %w", err)
@@ -275,7 +301,7 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 	promExt, promSvc := promSourceFromInfo(info)
 	return &clientBundle{
 		clientset:   clientset,
-		authz:       clientset.AuthorizationV1(),
+		authz:       authz,
 		dynamic:     dynClient,
 		discovery:   clientset.Discovery(),
 		restConfig:  cfg,
@@ -499,6 +525,15 @@ func (s *Service) RESTConfigFor(ctx context.Context) (*rest.Config, error) {
 		return nil, err
 	}
 	return b.restConfig, nil
+}
+
+// ReviewsFor is the caller's access checks on the cluster in ctx, on the reviews' own rate when one is set.
+func (s *Service) ReviewsFor(ctx context.Context) (authorizationv1client.SelfSubjectAccessReviewInterface, error) {
+	b, err := s.ForCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return b.authz.SelfSubjectAccessReviews(), nil
 }
 
 // ErrNoUser is returned by UserRESTConfigFor when impersonation is on but ctx
