@@ -7,6 +7,18 @@
 // 평탄화 + 중복 제거 + 정렬해서 (resource, verbs) 표 형태로 가공.
 // 가장 복잡한 로직 (~100줄) 인데 tr / React 의존 X 라 순수 함수로 추출.
 
+const RBAC_API = '/apis/rbac.authorization.k8s.io/v1'
+
+// What the tab's answer is worked out from: the bindings and the roles they name. A list the answer says it could not read
+// would only be refused again, and say on the page what the tab already says.
+export function rbacWatchPaths(namespace: string, answer: any): string[] {
+  if (!answer) return []
+  return [
+    ...(answer.role_bindings_error ? [] : [`${RBAC_API}/namespaces/${namespace}/rolebindings`, `${RBAC_API}/namespaces/${namespace}/roles`]),
+    ...(answer.cluster_role_bindings_error ? [] : [`${RBAC_API}/clusterrolebindings`, `${RBAC_API}/clusterroles`]),
+  ]
+}
+
 export const isAuthenticatedOnlyGrant = (binding: any): boolean => {
   const matchedBy = binding?.matched_by
   if (Array.isArray(matchedBy) && matchedBy.length > 0) {

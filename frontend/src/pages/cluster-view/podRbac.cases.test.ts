@@ -19,6 +19,7 @@ vi.mock('@tanstack/react-query', () => ({
   keepPreviousData: (previous: unknown) => previous,
 }))
 vi.mock('@/services/api', () => ({ api: {} }))
+vi.mock('@/services/useWatchChanges', () => ({ useWatchChanges: () => undefined }))
 vi.mock('@/hooks/useAIContext', () => ({
   useAIContext: (input: unknown) => {
     state.layer = input

@@ -161,10 +161,14 @@ const dash = (v: unknown) => (v === undefined || v === null || v === '' ? '-' : 
 const at = (t?: string) => (t && new Date(t).getUTCFullYear() >= 1980 ? `@${t}` : '-')
 const NONE = say('common.none', 'None')
 const section = (s: Partial<Section> = {}): Section => ({ rows: {}, cards: [], tables: [], notes: [], tags: [], rest: '', ...s })
-const conditionsTable = (conds: Obj[]): TableView => ({
-  head: ['Type', 'Status', 'Reason', 'Message', 'Last Transition'],
-  rows: conds.map((c) => [dash(c.type), dash(c.status), dash(c.reason), dash(c.message), at(c.lastTransitionTime)]),
-})
+const conditionsTable = (conds: Obj[]): TableView => {
+  // the column is there when a condition of the table says which generation it was written for
+  const generation = conds.some((c) => c.observedGeneration != null)
+  return {
+    head: ['Type', 'Status', 'Reason', 'Message', ...(generation ? ['Observed Generation'] : []), 'Last Transition'],
+    rows: conds.map((c) => [dash(c.type), dash(c.status), dash(c.reason), dash(c.message), ...(generation ? [dash(c.observedGeneration)] : []), at(c.lastTransitionTime)]),
+  }
+}
 const conditionsSection = (conds: Obj[]) => (conds.length ? section({ tables: [conditionsTable(conds)] }) : section({ rest: NONE }))
 // newest first, as kubectl's printEvent dates them
 const eventsSection = (events: Obj[]) => (events.length

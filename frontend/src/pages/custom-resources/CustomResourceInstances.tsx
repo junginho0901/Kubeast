@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation, Trans } from 'react-i18next'
-import { api, type CustomResourceInstanceInfo } from '@/services/api'
+import { api, type CustomResourceInstanceInfo, type CustomResourceInstanceList } from '@/services/api'
+import { LIVE_ROWS_MAX, useWatchChanges } from '@/services/useWatchChanges'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { ageSeconds as parseAgeSeconds, formatAge } from '@/utils/time'
@@ -13,6 +14,7 @@ import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { printerCellText, type PrinterCell, type PrinterColumn } from './printerCells'
 import { crReadNotice } from './readNotice'
+import { withRowsOfKind } from './rowsOfKind'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search, ShieldAlert, AlertTriangle } from 'lucide-react'
 import CustomDropdown from '@/components/CustomDropdown'
 
@@ -60,6 +62,20 @@ export default function CustomResourceInstances() {
     enabled: !!selectedGroup && !!selectedVersion && !!selectedPlural,
     retry: false,
   })
+
+  // One kind at a time: a tab has room for 50 watches and a cluster often has more CRDs. Its rows are what the CRD's own
+  // list answers, so the list of every kind is not read for them.
+  const followsKind = Array.isArray(fullInstances) && fullInstances.length <= LIVE_ROWS_MAX
+  useWatchChanges({
+    enabled: followsKind,
+    paths: [`/apis/${selectedGroup}/${selectedVersion}/${selectedPlural}`],
+    read: [['custom-resources', 'full-instances', selectedGroup, selectedVersion, selectedPlural]],
+    clusterWide: selected?.scope === 'Cluster',
+  })
+  useEffect(() => {
+    if (!kindFilter || !Array.isArray(fullInstances)) return
+    queryClient.setQueryData<CustomResourceInstanceList>(['custom-resources', 'instances'], (list) => withRowsOfKind(list, kindFilter, fullInstances))
+  }, [kindFilter, fullInstances, queryClient])
 
   const printerColumns = useMemo<PrinterColumn[]>(() => {
     const first = Array.isArray(fullInstances) ? fullInstances.find((inst: any) => Array.isArray(inst.printer_cells)) : undefined
@@ -288,6 +304,12 @@ export default function CustomResourceInstances() {
       {searchQuery && (
         <p className="text-sm text-slate-400 shrink-0">
           {tr('crInstancesPage.matchCount', '{{count}} result(s) match.', { count: filteredItems.length })}
+        </p>
+      )}
+
+      {!followsKind && !isLoading && (
+        <p data-testid="cr-not-live" className="text-sm text-slate-400 shrink-0">
+          {tr('crInstancesPage.notLive', 'These rows do not update live. Choose a kind of up to {{max}} objects to follow it, or refresh.', { max: LIVE_ROWS_MAX })}
         </p>
       )}
 

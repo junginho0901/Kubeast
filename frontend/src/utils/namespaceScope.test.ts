@@ -19,4 +19,27 @@ describe('namespace scope', () => {
     expect(scopedPaths('/api/v1/pods', undefined)).toEqual(['/api/v1/pods'])
     expect(scopedPaths('/api/v1/pods', [])).toEqual(['/api/v1/pods'])
   })
+
+  it('leaves a kind of no namespace whole: one watch, which the server answers by the cluster\'s RBAC', () => {
+    for (const path of [
+      '/api/v1/nodes',
+      '/api/v1/namespaces',
+      '/api/v1/persistentvolumes',
+      '/apis/storage.k8s.io/v1/storageclasses',
+      '/apis/storage.k8s.io/v1/volumeattachments',
+      '/apis/networking.k8s.io/v1/ingressclasses',
+      '/apis/rbac.authorization.k8s.io/v1/clusterroles',
+      '/apis/rbac.authorization.k8s.io/v1/clusterrolebindings',
+      '/apis/scheduling.k8s.io/v1/priorityclasses',
+      '/apis/node.k8s.io/v1/runtimeclasses',
+      '/apis/admissionregistration.k8s.io/v1/validatingwebhookconfigurations',
+      '/apis/admissionregistration.k8s.io/v1/mutatingwebhookconfigurations',
+      '/apis/apiextensions.k8s.io/v1/customresourcedefinitions',
+      '/apis/gateway.networking.k8s.io/v1/gatewayclasses',
+      '/apis/resource.k8s.io/v1/deviceclasses',
+      '/apis/resource.k8s.io/v1/resourceslices',
+    ]) {
+      expect(scopedPaths(path, ['api', 'web'])).toEqual([path])
+    }
+  })
 })

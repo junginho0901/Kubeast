@@ -49,6 +49,56 @@ describe('applyWatchMessage', () => {
   })
 })
 
+describe('a row a live update adds', () => {
+  const list = ['workloads', 'deployments', 'all']
+  const namesOf = (client: QueryClient) => (client.getQueryData(list) as Array<{ namespace?: string; name: string }>).map((r) => `${r.namespace ?? ''}/${r.name}`)
+  const added = (object: object) => frame('DATA', { data: { type: 'ADDED', object } })
+
+  it('goes where the list\'s next read puts it, by namespace and name as the API server lists them', () => {
+    const client = new QueryClient()
+    client.setQueryData(list, [{ namespace: 'a', name: 'web' }, { namespace: 'c', name: 'api' }, { namespace: 'c', name: 'web' }])
+    applyWatchMessage(client, list, added({ namespace: 'c', name: 'db' }))
+    expect(namesOf(client)).toEqual(['a/web', 'c/api', 'c/db', 'c/web'])
+    applyWatchMessage(client, list, added({ namespace: 'b', name: 'zeta' }))
+    expect(namesOf(client)).toEqual(['a/web', 'b/zeta', 'c/api', 'c/db', 'c/web'])
+    applyWatchMessage(client, list, added({ namespace: 'd', name: 'last' }))
+    expect(namesOf(client)).toEqual(['a/web', 'b/zeta', 'c/api', 'c/db', 'c/web', 'd/last'])
+  })
+
+  it('reads the name and namespace of a row in the object\'s own shape too', () => {
+    const client = new QueryClient()
+    client.setQueryData(list, [{ metadata: { name: 'a' } }, { metadata: { name: 'c' } }])
+    applyWatchMessage(client, list, added({ metadata: { name: 'b' } }))
+    expect((client.getQueryData(list) as Array<{ metadata: { name: string } }>).map((r) => r.metadata.name)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('a row a list has already stays in its place, and so does the one it replaces', () => {
+    const client = new QueryClient()
+    client.setQueryData(list, [{ name: 'a', v: 1 }, { name: 'b', v: 1 }])
+    applyWatchMessage(client, list, frame('DATA', { data: { type: 'MODIFIED', object: { name: 'b', v: 2 } } }))
+    expect(client.getQueryData(list)).toEqual([{ name: 'a', v: 1 }, { name: 'b', v: 2 }])
+    applyWatchMessage(client, list, frame('DATA', { data: { type: 'DELETED', object: { name: 'a' } } }))
+    expect(client.getQueryData(list)).toEqual([{ name: 'b', v: 2 }])
+  })
+
+  // The frames a watch opens with name what the list holds: they must not move a row or cost a search for a place.
+  it('leaves the same array when a frame says what the list already says', () => {
+    const client = new QueryClient()
+    const rows = [{ name: 'a' }, { name: 'b' }]
+    client.setQueryData(list, rows)
+    const before = client.getQueryData(list)
+    applyWatchMessage(client, list, frame('DATA', { data: { type: 'ADDED', object: { name: 'b' } } }))
+    expect(client.getQueryData(list)).toBe(before)
+  })
+
+  it('stays last in a list a custom apply keeps in another order, when it does not add at the end', () => {
+    const client = new QueryClient()
+    client.setQueryData(list, [{ name: 'b' }, { name: 'c' }])
+    applyWatchMessage(client, list, added({ name: 'a' }), (prev, event) => [event.object, ...(prev ?? [])])
+    expect((client.getQueryData(list) as Array<{ name: string }>).map((r) => r.name)).toEqual(['a', 'b', 'c'])
+  })
+})
+
 describe('a list whose objects write themselves all the time', () => {
   const leases = ['cluster', 'leases', 'all']
   const lease = (name: string, renewed: string) => ({ name, namespace: 'kube-node-lease', created_at: '2026-11-01T00:00:00Z', holder_identity: name, renew_time: renewed })

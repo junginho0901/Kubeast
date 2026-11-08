@@ -170,7 +170,8 @@ export const clusterApi = {
   },
 
   describeNode: async (name: string): Promise<any> => {
-    const { data } = await client.get(`/cluster/nodes/${name}/describe`)
+    // the drawer lists the events by itself (getNodeEvents), and this read comes again as the node's pods change
+    const { data } = await client.get(`/cluster/nodes/${name}/describe`, { params: { events: 0 } })
     return data
   },
 

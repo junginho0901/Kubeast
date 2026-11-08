@@ -28,6 +28,46 @@ type nodePodsAPI struct {
 
 	mu    sync.Mutex
 	asked []string
+	// lists of events, which across namespaces read every event the cluster holds
+	eventLists int
+}
+
+// The Node drawer lists its events by itself and follows them, so its describe asks without them: a read that repeats as
+// the node's pods change must not scan every event of the cluster each time.
+func TestDescribeNode_AWindowThatFollowsItsEventsAsksWithoutThem(t *testing.T) {
+	alloc := resourceList("cpu", "4", "memory", "16Gi")
+	api := &nodePodsAPI{node: allocNode(alloc, alloc), pods: []corev1.Pod{
+		allocPod("shop", "p", "n1", corev1.PodRunning, allocBox("app", resourceList("cpu", "1"), nil)),
+	}}
+	s, _ := api.service(t)
+
+	without, err := s.DescribeNodeWithoutEvents(context.Background(), "n1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	api.mu.Lock()
+	lists := api.eventLists
+	api.mu.Unlock()
+	if lists != 0 {
+		t.Errorf("listed the events %d times", lists)
+	}
+	if _, ok := without["events"]; ok {
+		t.Errorf("the answer holds events: %#v", without["events"])
+	}
+	if _, ok := without["events_error"]; ok {
+		t.Errorf("the answer says the events could not be read: %#v", without["events_error"])
+	}
+	if got := allocatedRowsOf(t, without)[0]; got != [3]string{"cpu", "1 (25%)", "0 (0%)"} {
+		t.Errorf("cpu row %v", got)
+	}
+
+	whole, err := s.DescribeNode(context.Background(), "n1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := whole["events"]; !ok {
+		t.Error("the describe the AI's tool and others read lost its events")
+	}
 }
 
 func (a *nodePodsAPI) client(t *testing.T) *kubernetes.Clientset {
@@ -64,6 +104,9 @@ func (a *nodePodsAPI) client(t *testing.T) *kubernetes.Clientset {
 			}
 			_ = json.NewEncoder(w).Encode(corev1.PodList{TypeMeta: metav1.TypeMeta{Kind: "PodList", APIVersion: "v1"}, Items: items})
 		case parts[len(parts)-1] == "events":
+			a.mu.Lock()
+			a.eventLists++
+			a.mu.Unlock()
 			_ = json.NewEncoder(w).Encode(corev1.EventList{TypeMeta: metav1.TypeMeta{Kind: "EventList", APIVersion: "v1"}})
 		default:
 			w.WriteHeader(http.StatusNotFound)

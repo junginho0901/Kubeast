@@ -445,6 +445,15 @@ func (s *Service) mayList(ctx context.Context, b *clientBundle, resource, namesp
 	return s.mayListGroup(ctx, b, "", resource, namespace)
 }
 
+// MayListKind is mayListGroup across the cluster for the live list updates (ws.ListChecker).
+func (s *Service) MayListKind(ctx context.Context, group, resource string) (bool, error) {
+	b := s.bundleForCtx(ctx)
+	if b == nil {
+		return false, errNotLoaded
+	}
+	return s.mayListGroup(ctx, b, group, resource, "")
+}
+
 // mayListGroup is mayList for a resource of any API group.
 func (s *Service) mayListGroup(ctx context.Context, b *clientBundle, group, resource, namespace string) (bool, error) {
 	if b.authz == nil {

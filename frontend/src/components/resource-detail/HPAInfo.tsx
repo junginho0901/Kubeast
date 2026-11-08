@@ -7,6 +7,7 @@ import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { usePrometheusRangeQuery } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, Sparkline } from './PrometheusMetrics'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
 
 interface Props {
@@ -29,6 +30,7 @@ export default function HPAInfo({ name, namespace }: Props) {
     path: `/apis/autoscaling/v2/namespaces/${namespace}/horizontalpodautoscalers`,
     name,
   })
+  useDrawerFollowsEvents({ describeKey: ['hpa-describe', namespace, name], answer: desc, kind: 'HorizontalPodAutoscaler', namespace, name })
 
   useResourceDetailOverlay({ kind: 'HorizontalPodAutoscaler', name, namespace, describe: desc })
 

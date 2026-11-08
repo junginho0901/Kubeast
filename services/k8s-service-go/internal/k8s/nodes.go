@@ -78,6 +78,16 @@ func (s *Service) cachedNodes(ctx context.Context) (*nodeList, bool) {
 
 // DescribeNode returns detailed info about a node.
 func (s *Service) DescribeNode(ctx context.Context, name string) (map[string]interface{}, error) {
+	return s.describeNode(ctx, name, true)
+}
+
+// DescribeNodeWithoutEvents is DescribeNode for the Node drawer, which lists the events by itself and follows them: its
+// read comes again as the node's pods change, and a list of events across namespaces reads every event of the cluster.
+func (s *Service) DescribeNodeWithoutEvents(ctx context.Context, name string) (map[string]interface{}, error) {
+	return s.describeNode(ctx, name, false)
+}
+
+func (s *Service) describeNode(ctx context.Context, name string, withEvents bool) (map[string]interface{}, error) {
 	// Fetch node, events and the node's pods in parallel
 	var node *corev1.Node
 	var events *corev1.EventList
@@ -85,7 +95,7 @@ func (s *Service) DescribeNode(ctx context.Context, name string) (map[string]int
 	var nodeErr, eventsErr, allocatedErr error
 
 	var wg sync.WaitGroup
-	wg.Add(3)
+	wg.Add(2)
 	go func() {
 		defer wg.Done()
 		node, nodeErr = s.clientsetCtx(ctx).CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
@@ -94,12 +104,15 @@ func (s *Service) DescribeNode(ctx context.Context, name string) (map[string]int
 		defer wg.Done()
 		allocated, allocatedErr = s.nodeAllocatedTotals(ctx, name)
 	}()
-	go func() {
-		defer wg.Done()
-		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events("").List(ctx, metav1.ListOptions{
-			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Node", name),
-		})
-	}()
+	if withEvents {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events("").List(ctx, metav1.ListOptions{
+				FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Node", name),
+			})
+		}()
+	}
 	wg.Wait()
 
 	if nodeErr != nil {
@@ -192,7 +205,9 @@ func (s *Service) DescribeNode(ctx context.Context, name string) (map[string]int
 	result["volumes_in_use"] = volumesInUse
 
 	// Events
-	setEvents(result, events, eventsErr)
+	if withEvents {
+		setEvents(result, events, eventsErr)
+	}
 
 	result["annotations"] = node.Annotations
 

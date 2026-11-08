@@ -402,6 +402,163 @@ describe('WebSocketMultiplexer', () => {
     expect(getWatchProblem()).toBeUndefined()
   })
 
+  describe('a watch refused a place', () => {
+    const open = async (mux: WebSocketMultiplexer, msgs: Array<{ type: 'REQUEST'; clusterId: string; path: string; query: string }>, listener: () => void) => {
+      const subs = msgs.map((msg) => mux.subscribe(msg, listener))
+      await flush()
+      const ws = MockWebSocket.instances[0]
+      ws.simulateOpen()
+      await Promise.all(subs)
+      return ws
+    }
+    const sentOf = (ws: MockWebSocket) => ws.sent.map((raw) => JSON.parse(raw))
+    const refuse = (ws: MockWebSocket, msg: { path: string; query: string }) =>
+      ws.simulateMessage({ type: 'ERROR', clusterId: 'self', path: msg.path, query: msg.query, error: { message: 'max subscriptions', reason: 'limit' } })
+
+    const first = { type: 'REQUEST' as const, clusterId: 'self', path: '/api/v1/pods', query: 'watch=1' }
+    const second = { type: 'REQUEST' as const, clusterId: 'self', path: '/api/v1/services', query: 'watch=1' }
+
+    beforeEach(() => resetWatchProblems())
+
+    it('asks again by itself, once the wait has passed, saying it missed what came meanwhile', async () => {
+      const mux = new WebSocketMultiplexer()
+      const ws = await open(mux, [first], vi.fn())
+      expect(sentOf(ws)).toHaveLength(1)
+      refuse(ws, first)
+      expect(getWatchProblem()).toBe('limit')
+
+      // nothing is asked at once: hundreds of tabs were refused together
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(sentOf(ws)).toHaveLength(1)
+
+      await vi.advanceTimersByTimeAsync(5 * 60_000)
+      const asks = sentOf(ws)
+      expect(asks.length).toBeGreaterThan(1)
+      expect(asks[1]).toMatchObject({ type: 'REQUEST', path: first.path, query: first.query, resync: true })
+    })
+
+    it('waits longer each time it is refused again, so a full server is asked less and less', async () => {
+      const mux = new WebSocketMultiplexer()
+      const ws = await open(mux, [first], vi.fn())
+      refuse(ws, first)
+      const when: number[] = []
+      for (let i = 0; i < 4; i += 1) {
+        const before = sentOf(ws).length
+        const start = Date.now()
+        for (let waited = 0; waited < 10 * 60_000 && sentOf(ws).length === before; waited += 1000) await vi.advanceTimersByTimeAsync(1000)
+        expect(sentOf(ws).length).toBe(before + 1)
+        when.push(Date.now() - start)
+        refuse(ws, first)
+      }
+      // 30 s, 60 s, 120 s, 240 s, each between half and one and a half of that
+      expect(when[0]).toBeLessThanOrEqual(45_000)
+      expect(when[3]).toBeGreaterThanOrEqual(120_000)
+    })
+
+    it('asks at once when this tab closes a watch of its own, which frees a place the server would give it', async () => {
+      const mux = new WebSocketMultiplexer()
+      const listener = vi.fn()
+      const ws = await open(mux, [first, second], listener)
+      refuse(ws, second)
+      expect(sentOf(ws)).toHaveLength(2)
+
+      mux.unsubscribe(first, listener)
+      const asks = sentOf(ws)
+      expect(asks[2]).toMatchObject({ type: 'CLOSE', path: first.path })
+      expect(asks[3]).toMatchObject({ type: 'REQUEST', path: second.path, resync: true })
+    })
+
+    it('stops asking once the watch answers, and when nobody follows it any more', async () => {
+      const mux = new WebSocketMultiplexer()
+      const listener = vi.fn()
+      const ws = await open(mux, [first, second], listener)
+      refuse(ws, first)
+      refuse(ws, second)
+
+      ws.simulateMessage({ type: 'RESYNC', clusterId: 'self', path: first.path, query: first.query })
+      mux.unsubscribe(second, listener)
+      const before = sentOf(ws).filter((m) => m.type === 'REQUEST').length
+      await vi.advanceTimersByTimeAsync(20 * 60_000)
+      expect(sentOf(ws).filter((m) => m.type === 'REQUEST').length).toBe(before)
+    })
+
+    it('another refusal is not asked again: the grant or the kind decides those', async () => {
+      const mux = new WebSocketMultiplexer()
+      const ws = await open(mux, [first], vi.fn())
+      ws.simulateMessage({ type: 'ERROR', clusterId: 'self', path: first.path, query: first.query, error: { message: 'x', reason: 'scope' } })
+      await vi.advanceTimersByTimeAsync(20 * 60_000)
+      expect(sentOf(ws)).toHaveLength(1)
+    })
+
+    it('a socket that comes back asks once for everything, not again for the refused ones', async () => {
+      const mux = new WebSocketMultiplexer()
+      const ws1 = await open(mux, [first], vi.fn())
+      refuse(ws1, first)
+      ws1.simulateServerClose()
+      await vi.advanceTimersByTimeAsync(40_000)
+      const ws2 = MockWebSocket.instances[1]
+      ws2.simulateOpen()
+      await flush()
+      expect(sentOf(ws2)).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(20 * 60_000)
+      expect(sentOf(ws2)).toHaveLength(1)
+    })
+  })
+
+  describe('a watch of changes', () => {
+    const changes = { type: 'REQUEST' as const, clusterId: 'self', path: '/apis/rbac.authorization.k8s.io/v1/clusterroles', query: 'watch=1&notify=1' }
+    const list = { type: 'REQUEST' as const, clusterId: 'self', path: '/api/v1/pods', query: 'watch=1' }
+
+    it('reaches its listener', async () => {
+      const mux = new WebSocketMultiplexer()
+      const listener = vi.fn()
+      const sub = mux.subscribe(changes, listener)
+      await flush()
+      const ws = MockWebSocket.instances[0]
+      ws.simulateOpen()
+      await sub
+      ws.simulateMessage({ type: 'CHANGED', clusterId: 'self', path: changes.path, query: changes.query })
+      expect(listener).toHaveBeenCalledWith(expect.objectContaining({ type: 'CHANGED' }))
+    })
+
+    // It sends no objects as it opens, so nothing else would tell it what changed while the socket was gone. A list's
+    // watch sends its objects again and asks for nothing more.
+    it('alone says it missed something when its socket comes back', async () => {
+      const mux = new WebSocketMultiplexer()
+      const listener = vi.fn()
+      const subs = [mux.subscribe(changes, listener), mux.subscribe(list, listener)]
+      await flush()
+      const ws1 = MockWebSocket.instances[0]
+      ws1.simulateOpen()
+      await Promise.all(subs)
+      expect(ws1.sent.map((raw) => JSON.parse(raw).resync)).toEqual([undefined, undefined])
+
+      ws1.simulateServerClose()
+      await vi.advanceTimersByTimeAsync(40_000)
+      const ws2 = MockWebSocket.instances[1]
+      ws2.simulateOpen()
+      await flush()
+      const asks = ws2.sent.map((raw) => JSON.parse(raw))
+      expect(asks.find((m) => m.path === changes.path)).toMatchObject({ resync: true })
+      expect(asks.find((m) => m.path === list.path)?.resync).toBeUndefined()
+    })
+  })
+
+  it('says whether a list is followed on this cluster, which a drawer on that list can share', async () => {
+    const mux = new WebSocketMultiplexer()
+    const listener = vi.fn()
+    const msg = { type: 'REQUEST' as const, clusterId: 'self', path: '/apis/apps/v1/deployments', query: 'watch=1' }
+    const sub = mux.subscribe(msg, listener)
+    await flush()
+    MockWebSocket.instances[0].simulateOpen()
+    await sub
+    expect(mux.follows('self', msg.path, msg.query)).toBe(true)
+    expect(mux.follows('other', msg.path, msg.query)).toBe(false)
+    expect(mux.follows('self', msg.path, 'watch=1&fieldSelector=x')).toBe(false)
+    mux.unsubscribe(msg, listener)
+    expect(mux.follows('self', msg.path, msg.query)).toBe(false)
+  })
+
   describe('the session of a socket ended', () => {
     // A fresh module each time: services/auth signs out once per page load, and remembers it in a module variable.
     const freshMux = async () => {

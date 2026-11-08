@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"time"
 
 	"helm.sh/helm/v3/pkg/action"
@@ -18,6 +19,13 @@ import (
 // mutations happen at human timescales (install/upgrade minutes apart),
 // so 30s is a good trade between freshness and API pressure.
 const listCacheTTL = 30 * time.Second
+
+const (
+	// outside the pattern invalidateListCache deletes, which would take the mark with it
+	listGenerationKey = "helm|releases-generation"
+	// longer than a read of the releases takes
+	listGenerationTTL = time.Hour
+)
 
 // listCacheKey scopes the cached list by cluster and by the identity the list
 // was read as (auth.TokenPayload.CacheIdentity).
@@ -62,6 +70,7 @@ func (s *Service) ListReleases(ctx context.Context, namespace, status string, fo
 			return cached, nil
 		}
 	}
+	generation := s.listGeneration(ctx)
 
 	// For cluster-wide listing, the Helm SDK requires an action config
 	// initialized with an empty namespace AND AllNamespaces=true.
@@ -93,8 +102,21 @@ func (s *Service) ListReleases(ctx context.Context, namespace, status string, fo
 
 	if s.cache != nil {
 		s.cache.Set(ctx, cacheKey, out, listCacheTTL)
+		// Checked after the Set: an invalidation later than this check deletes what was just stored, an earlier one is seen.
+		if s.listGeneration(ctx) != generation {
+			s.cache.Delete(ctx, cacheKey)
+		}
 	}
 	return out, nil
+}
+
+// listGeneration is the mark of the last invalidation. In the cache, so a replica's read sees another replica's write.
+func (s *Service) listGeneration(ctx context.Context) string {
+	var generation string
+	if s.cache != nil {
+		s.cache.Peek(ctx, listGenerationKey, &generation)
+	}
+	return generation
 }
 
 // sortReleases gives a deterministic order: namespace then name. Helm itself returns
@@ -115,6 +137,8 @@ func (s *Service) invalidateListCache(ctx context.Context) {
 	if s.cache == nil {
 		return
 	}
+	// The mark goes first: a read under way that stores its older list after the delete below finds the mark moved.
+	s.cache.Set(ctx, listGenerationKey, strconv.FormatInt(time.Now().UnixNano(), 36), listGenerationTTL)
 	s.cache.DeletePattern(ctx, "helm|releases|*")
 }
 

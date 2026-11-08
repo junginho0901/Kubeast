@@ -30,6 +30,15 @@ func formatEventList(events []corev1.Event) []map[string]interface{} {
 	return result
 }
 
+// withObservedGeneration says which generation a condition was written for, where its writer says: a status that lags
+// its spec reads true for an older one.
+func withObservedGeneration(condition map[string]interface{}, generation int64) map[string]interface{} {
+	if generation != 0 {
+		condition["observed_generation"] = generation
+	}
+	return condition
+}
+
 // setEvents puts an object's events on its describe answer, newest first, or, when they could not be listed, the
 // reason as events_error and no events: the drawer then says so instead of showing "None" for events it never read.
 func setEvents(result map[string]interface{}, events *corev1.EventList, err error) {

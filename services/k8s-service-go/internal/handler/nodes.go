@@ -24,7 +24,11 @@ func (h *Handler) GetNodes(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DescribeNode(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	name := chi.URLParam(r, "name")
-	data, err := h.svc.DescribeNode(ctx, name)
+	describe := h.svc.DescribeNode
+	if queryParam(r, "events", "") == "0" {
+		describe = h.svc.DescribeNodeWithoutEvents
+	}
+	data, err := describe(ctx, name)
 	if err != nil {
 		h.handleError(w, err)
 		return

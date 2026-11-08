@@ -3561,6 +3561,7 @@
     "refreshTitle": "Force refresh",
     "allKinds": "All kinds",
     "matchCount": "{{count}} result(s) match.",
+    "notLive": "These rows do not update live. Choose a kind of up to {{max}} objects to follow it, or refresh.",
     "stats": {
       "total": "Total Instances",
       "kinds": "Unique Kinds",
@@ -3575,6 +3576,7 @@
     }
   },
   "crdInfo": {
+    "notLive": "A table of more than {{max}} objects does not update live. Close and open this window to read it again.",
     "basicInfo": "Basic Info",
     "group": "Group",
     "scope": "Scope",

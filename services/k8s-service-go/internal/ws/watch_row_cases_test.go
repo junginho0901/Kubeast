@@ -1027,7 +1027,7 @@ func lenOf(v interface{}) int {
 }
 
 // These lists are watched as the user and a grant limited to namespaces stays in them: the row a live update carries
-// changes nothing about who may open the watch.
+// changes nothing about who may open the watch. A kind of the cluster goes on to ask the cluster (clusterListRefusal).
 func TestAWatchOfTheseListsStaysInsideANamespaceGrant(t *testing.T) {
 	scoped := auth.TokenPayload{
 		Perms:      auth.PermissionMatrix{"self": {"resource.*.read"}},
@@ -1037,8 +1037,9 @@ func TestAWatchOfTheseListsStaysInsideANamespaceGrant(t *testing.T) {
 		"/api/v1/services":                                                  false,
 		"/api/v1/endpoints":                                                 false,
 		"/api/v1/networkpolicies":                                           false,
-		"/api/v1/pvs":                                                       false,
-		"/api/v1/ingressclasses":                                            false,
+		"/api/v1/pvs":                                                       true,
+		"/api/v1/ingressclasses":                                            true,
+		"/api/v1/namespaces":                                                false,
 		"/api/v1/namespaces/team-b/services":                                false,
 		"/api/v1/namespaces/team-b/endpoints":                               false,
 		"/api/v1/namespaces/team-b/networkpolicies":                         false,

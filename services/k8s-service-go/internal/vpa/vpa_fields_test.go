@@ -84,6 +84,25 @@ func TestInfo_EvictionRequirementsRecommendersObservedGeneration(t *testing.T) {
 }
 
 // A VPA without them (an older CRD prunes them, or the VPA does not set them): null, which the screen shows as "-".
+// A condition's generation is the writer's to give: as written where it does, no key where it does not.
+func TestInfo_AConditionsGenerationAsWritten(t *testing.T) {
+	u := &unstructured.Unstructured{}
+	if err := u.UnmarshalJSON([]byte(`{"apiVersion":"autoscaling.k8s.io/v1","kind":"VerticalPodAutoscaler","metadata":{"name":"web","namespace":"shop"},
+"status":{"conditions":[{"type":"RecommendationProvided","status":"True","observedGeneration":3},{"type":"LowConfidence","status":"False"}]}}`)); err != nil {
+		t.Fatal(err)
+	}
+	conditions, _ := Info(u)["conditions"].([]map[string]interface{})
+	if len(conditions) != 2 {
+		t.Fatalf("conditions = %#v", conditions)
+	}
+	if got := conditions[0]["observed_generation"]; got != int64(3) {
+		t.Errorf("observed_generation = %#v, want 3", got)
+	}
+	if got, ok := conditions[1]["observed_generation"]; ok {
+		t.Errorf("a condition without one has observed_generation = %#v", got)
+	}
+}
+
 func TestInfo_WithoutTheFieldsOfVPA17(t *testing.T) {
 	row := Info(vpa(nil))
 	for _, k := range []string{"eviction_requirements", "recommenders", "observed_generation"} {

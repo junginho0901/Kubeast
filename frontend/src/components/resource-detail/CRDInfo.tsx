@@ -7,6 +7,7 @@ import { fmtRel, fmtTs } from './detailFormat'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
 import { usePagination } from './usePagination'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
+import { LIVE_ROWS_MAX, useWatchChanges } from '@/services/useWatchChanges'
 import { formatAge } from '@/utils/time'
 
 interface Props {
@@ -49,6 +50,13 @@ export default function CRDInfo({ name, rawJson }: Props) {
     queryFn: () => api.getCustomResourceInstances(group, storageVersion, plural),
     enabled: !!group && !!storageVersion && !!plural,
     retry: false,
+  })
+  const followsInstances = Array.isArray(crInstances) && crInstances.length <= LIVE_ROWS_MAX
+  useWatchChanges({
+    enabled: followsInstances,
+    paths: [`/apis/${group}/${storageVersion}/${plural}`],
+    read: [['crd-instances', group, storageVersion, plural]],
+    clusterWide: describe?.scope === 'Cluster',
   })
 
   const [instanceSearch, setInstanceSearch] = useState('')
@@ -231,6 +239,9 @@ export default function CRDInfo({ name, rawJson }: Props) {
       {/* CR Instances sub-list */}
       {Array.isArray(crInstances) && (
         <InfoSection title="Custom Resources ({{n}})" titleValues={{ n: crInstances.length }}>
+          {!followsInstances && (
+            <p className="mb-2 text-xs text-slate-400">{t('crdInfo.notLive', { defaultValue: 'A table of more than {{max}} objects does not update live. Close and open this window to read it again.', max: LIVE_ROWS_MAX })}</p>
+          )}
           {crInstances.length > 5 && (
             <div className="mb-2">
               <input
