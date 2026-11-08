@@ -73,8 +73,9 @@ function askedSelectors(page: Page) {
 }
 
 // The pods on the Protected Pods table's page (ten a page): each must be one the budget protects.
+// The section's own box: `has` is queried inside each box, so its locator starts from the page, not the drawer.
 const protectedShown = (drawer: Locator) =>
-  drawer.locator('div.rounded-lg').filter({ has: drawer.getByText(/^Protected Pods \(\d+\)$/) }).locator('tbody tr td:first-child').allTextContents()
+  drawer.locator('div.rounded-lg').filter({ has: drawer.page().getByText(/^Protected Pods \(\d+\)$/) }).last().locator('tbody tr td:first-child').allTextContents()
 
 type Layer = { source: string; data?: { pods?: { name: string }[] } & Record<string, unknown> }
 
