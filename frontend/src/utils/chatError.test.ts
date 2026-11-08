@@ -45,6 +45,14 @@ describe('chatErrorText', () => {
     }
   })
 
+  it('says a refused model address sent nothing, without the address, and who looks at it', async () => {
+    const args = { provider: 'OpenAI-compatible', detail: "the model's address is not allowed, so nothing was sent" }
+    expect(chatErrorText(await tFor('ko'), 'x', 'modelAddress', args)).toBe(
+      'AI 모델을 호출하지 못했습니다 (OpenAI-compatible): 모델 주소가 허용되지 않아 아무것도 보내지 않았습니다. 관리자가 Admin → AI Models에서 이 모델의 연결 테스트로 이유를 확인하세요.')
+    expect(chatErrorText(await tFor('en'), 'x', 'modelAddress', args)).toBe(
+      "AI model call failed (OpenAI-compatible): the model's address is not allowed, so nothing was sent. An administrator runs Test on this model in Admin → AI Models to see why.")
+  })
+
   it('says in the screen language how a stream ended without an answer', async () => {
     const ko_t = await tFor('ko')
     expect(chatErrorText(ko_t, 'x', 'streamHttp', { status: 503, detail: 'audit unavailable' })).toBe('채팅 요청이 실패했습니다 (HTTP 503): audit unavailable')

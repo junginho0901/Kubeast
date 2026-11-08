@@ -4,7 +4,7 @@ import httpx
 import pytest
 
 from app import api_public
-from app.services import model_config_policy, provider_adapter
+from app.services import model_config_policy
 from app.services.provider_adapter import ProviderAdapter
 
 BASE = "https://res.openai.azure.com/openai/v1/"
@@ -27,7 +27,7 @@ def serve(monkeypatch):
         def __init__(self, **_kw):
             super().__init__(transport=httpx.MockTransport(handler))
 
-    monkeypatch.setattr(provider_adapter.httpx, "AsyncClient", FakeAzure)
+    monkeypatch.setattr(httpx, "AsyncClient", FakeAzure)
     return seen
 
 

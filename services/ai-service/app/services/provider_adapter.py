@@ -19,10 +19,10 @@ from __future__ import annotations
 import logging
 import re
 from typing import Optional, Dict, Any
-import httpx
 
 from app.services.ai.limits import KUBEAST_KEYS
 from app.services.model_config_policy import AZURE_PROVIDERS, AZURE_V1_URL_HINT
+from app.services.model_http import model_client
 from app.services.tls import build_verify
 
 logger = logging.getLogger(__name__)
@@ -166,6 +166,7 @@ class ProviderAdapter:
         default_headers: Optional[Dict[str, str]] = None,
         options: Optional[Dict[str, Any]] = None,
         ca_cert: Optional[str] = None,
+        installer_base_url: bool = False,
         **_kwargs: Any,
     ):
         self.provider = (provider or "openai").strip().lower()
@@ -201,7 +202,7 @@ class ProviderAdapter:
             print(f"[Provider Adapter] provider=claude-code (Claude subscription), model={model}", flush=True)
             return
 
-        http_client = httpx.AsyncClient(verify=build_verify(tls_verify, ca_cert))
+        http_client = model_client(build_verify(tls_verify, ca_cert), judged=bool(clean_base_url) and not installer_base_url)
 
         if self.provider == "anthropic":
             from app.services.anthropic_messages import AnthropicMessagesClient

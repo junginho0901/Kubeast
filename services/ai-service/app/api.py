@@ -113,7 +113,7 @@ def _config_hash(resolved) -> str:
     return (
         f"{resolved.provider}|{resolved.model}|{resolved.base_url}|"
         f"{resolved.api_key[:8] if resolved.api_key else ''}|"
-        f"{resolved.tls_verify}|{bool(resolved.ca_cert)}|{resolved.options}"
+        f"{resolved.tls_verify}|{bool(resolved.ca_cert)}|{resolved.options}|{resolved.installer_base_url}"
     )
 
 
@@ -128,6 +128,7 @@ def _new_ai_service(resolved):
         tls_verify=resolved.tls_verify,
         ca_cert=resolved.ca_cert,
         options=resolved.options,
+        installer_base_url=resolved.installer_base_url,
     )
 
 
@@ -145,9 +146,14 @@ async def _build_ai_service(authorization: str, cluster_name: Optional[str] = No
     """
     global _cached_ai_config_hash, _cached_ai_service, _cached_economy_hash, _cached_economy_service
 
+    from app.services.model_config_policy import AddressRefused
     from app.services.model_config_service import resolve_economy_model_config, resolve_model_config
 
-    resolved = await resolve_model_config()
+    try:
+        resolved = await resolve_model_config()
+    except AddressRefused as e:
+        logger.warning("active model config refused: %s", e.detail)
+        raise HTTPException(status_code=503, detail=f"{e}. An administrator runs Test on this model in Admin → AI Models to see why.") from e
     config_hash = _config_hash(resolved)
     if _cached_ai_service is None or config_hash != _cached_ai_config_hash:
         # Config changed or first call — build the LLM client once. The cached

@@ -315,7 +315,8 @@ ai:
   # A model config's base_url must be a public http(s) endpoint; hosts that
   # resolve to private addresses (an in-cluster Ollama, an internal LLM
   # gateway) are refused unless listed here. Exact host, or ".suffix" for a
-  # domain and its subdomains. Cloud metadata addresses are never allowed.
+  # domain and its subdomains. Cloud metadata addresses are never allowed,
+  # and a listed host is held to that too when a connection opens.
   # A config's api_key_env may only name OPENAI_API_KEY, ANTHROPIC_API_KEY,
   # GEMINI_API_KEY, CLAUDE_CODE_OAUTH_TOKEN (provider claude-code only) or a
   # KUBEAST_AI_KEY_* variable (add those to the secret).

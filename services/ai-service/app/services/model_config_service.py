@@ -43,6 +43,8 @@ class ResolvedModelConfig:
     tls_verify: bool
     ca_cert: Optional[str] = None
     options: Optional[Dict[str, Any]] = None
+    # base_url is the chart's value (no stored config), which the address rule does not read.
+    installer_base_url: bool = False
 
 
 def _resolve_api_key(config: ModelConfig) -> Optional[str]:
@@ -77,6 +79,7 @@ def _build_resolved(config: Optional[ModelConfig]) -> ResolvedModelConfig:
             api_key=settings.OPENAI_API_KEY,
             extra_headers={},
             tls_verify=True,
+            installer_base_url=True,
         )
 
     provider = (config.provider or "openai").strip().lower()
@@ -99,7 +102,7 @@ def _build_resolved(config: Optional[ModelConfig]) -> ResolvedModelConfig:
     try:
         model_config_policy.check_base_url(base_url)
     except model_config_policy.PolicyError as e:
-        raise ValueError(f"active model config base_url is not allowed: {e}")
+        raise model_config_policy.AddressRefused(f"active model config base_url is not allowed: {e}") from e
     # Ollama serves the OpenAI-compatible API under /v1; the connection test
     # already appends it, so the runtime client must resolve the same URL.
     if provider == "ollama" and base_url and not base_url.endswith("/v1"):
@@ -176,7 +179,7 @@ async def resolve_economy_model_config() -> Optional[ResolvedModelConfig]:
         try:
             resolved = _build_resolved(config)
         except ValueError as e:
-            logger.warning("economy model config %s is not usable, using the active one: %s", getattr(config, "id", "?"), e)
+            logger.warning("economy model config %s is not usable, using the active one: %s", getattr(config, "id", "?"), getattr(e, "detail", e))
     _cached_economy, _cached_economy_found, _cached_economy_at = resolved, True, time.monotonic()
     return resolved
 

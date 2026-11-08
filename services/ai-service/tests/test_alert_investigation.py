@@ -812,7 +812,7 @@ async def test_run_one_masks_credentials_in_a_provider_error(monkeypatch):
 async def test_the_investigator_builds_a_claude_subscription_service(monkeypatch):
     async def resolve(config_id=None):
         return SimpleNamespace(provider="claude-code", model="claude-haiku-5-5", base_url=None, api_key="t",
-                               extra_headers={}, tls_verify=True, ca_cert=None, options=None)
+                               extra_headers={}, tls_verify=True, ca_cert=None, options=None, installer_base_url=False)
 
     monkeypatch.setattr("app.services.model_config_service.resolve_model_config", resolve)
     service = await runner.build_service(InvestigationSettings(), "token", "self")

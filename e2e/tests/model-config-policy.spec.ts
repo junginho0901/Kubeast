@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { hasStandIn, STAND_IN, STAND_IN_ADDRESS, STAND_IN_SKIP } from './model-address-standin'
 
 // M19: a model config may only read the key variables meant for it, send
 // them to public endpoints (or allow-listed hosts) and carry no auth
@@ -112,5 +113,40 @@ test.describe('model config policy (M19)', () => {
     } finally {
       for (const id of created) await request.delete(`/api/v1/ai/model-configs/${id}`, { headers: admin, failOnStatusCode: false })
     }
+  })
+
+  test('a listed name resolving to a metadata address gets no connection, and the test, the list and the row say which', async ({ request }) => {
+    test.skip(!hasStandIn(), STAND_IN_SKIP)
+    const admin = await adminHeaders(request)
+    const since = new Date(Date.now() - 1000).toISOString()
+
+    const saved = await request.post('/api/v1/ai/model-configs', {
+      headers: admin, data: { name: `e2e-model-address-${Date.now().toString(36)}`, provider: 'custom', model: 'm', base_url: `${STAND_IN}/v1`, enabled: false },
+    })
+    expect(saved.status(), 'the allow list vouches for the name when a config is saved').toBe(200)
+    await request.delete(`/api/v1/ai/model-configs/${(await saved.json()).id}`, { headers: admin })
+
+    const tested = await request.post('/api/v1/ai/model-configs/test', {
+      headers: admin, data: { provider: 'custom', model: 'm', api_key: 'fake-key-for-a-refusal', base_url: `${STAND_IN}/v1` }, timeout: 60_000,
+    })
+    expect(tested.status()).toBe(200)
+    const test_ = await tested.json()
+    expect(test_.success).toBe(false)
+    expect(test_.message).toContain('when connecting')
+    expect(test_.message).toContain(STAND_IN_ADDRESS)
+    expect(test_.message, 'the list does not help with a metadata address').not.toContain('AI_BASE_URL_ALLOWED_HOSTS')
+
+    const listed = await request.post('/api/v1/ai/model-configs/models', { headers: admin, data: { provider: 'ollama', base_url: STAND_IN }, timeout: 60_000 })
+    expect(listed.status()).toBe(200)
+    const list = await listed.json()
+    expect(list.models).toEqual([])
+    expect(list.error).toContain(STAND_IN_ADDRESS)
+
+    const rows = await request.get('/api/v1/auth/admin/audit-logs', { headers: admin, params: { action: 'ai.model_config.test', since, limit: '100' } })
+    expect(rows.ok()).toBeTruthy()
+    const row = ((await rows.json()).items as Array<{ result: string; error: string; after: { ok: boolean; base_url: string } }>).find((r) => r.after?.base_url === `${STAND_IN}/v1`)
+    expect(row?.result).toBe('failure')
+    expect(row?.after.ok).toBe(false)
+    expect(row?.error).toContain(STAND_IN_ADDRESS)
   })
 })

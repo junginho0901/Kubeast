@@ -48,6 +48,8 @@ ai:
     - host.docker.internal
     # the model endpoint that only refuses (deploy/kind/devtools.yaml, ai-provider-errors.spec.ts)
     - model-stub.kubeast-devtools.svc.cluster.local
+    # a listed name that resolves to a metadata address, refused when connecting (e2e/tests/model-address-standin.ts)
+    - model-metadata-standin.kubeast-devtools.svc.cluster.local
   # rebuild-kind.sh loads one ai-service image under the local tag (with Claude Code when built
   # WITH_CLAUDE_CODE=true), so scripts/kind-model-subscription.sh turns the provider on without a tag suffix.
   providers:

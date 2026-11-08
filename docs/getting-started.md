@@ -191,6 +191,14 @@ The model dropdown shows the models the provider reports for that key and addres
 - If there is no key or the list cannot be fetched, the built-in list is shown with the reason. "Custom model name" also works.
 - The browser does not call anything outside Kubeast. So even on an internal network, you get the list from the address in that setting (an internal gateway, Ollama).
 
+A model's address follows one rule:
+
+- It must be a public address. A host that resolves to a private address needs to be in `ai.baseUrlAllowedHosts`. A cloud metadata address is refused even for a host on that list.
+- The rule runs when a setting is saved, tested and used, and again each time a connection opens, on the addresses that connection will use. So a name that resolves to something else by then gets nothing sent to it.
+- The chat then says the address was refused, without naming it. **Test** and the model dropdown's note say which address and whether the list can help.
+- It does not apply to a provider's built-in address (a setting with no `base_url`) or to the chart's `ai.baseUrl` when no setting is stored.
+- With a proxy in ai-service's environment (`HTTP_PROXY`, `HTTPS_PROXY`), the proxy resolves the model's name, so the check when a connection opens does not run. A host under `NO_PROXY` connects directly, and it does.
+
 To use only the console without AI, install with `ai.enabled: false`:
 
 - ai-service, tool-server and the ModelConfig controller are not deployed.

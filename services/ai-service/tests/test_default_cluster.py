@@ -27,7 +27,7 @@ def builder(monkeypatch):
             self.update_authorization(None, cluster_name=None)
 
     resolved = SimpleNamespace(provider="openai", model="m", base_url=None, api_key="k", extra_headers=None,
-                               tls_verify=True, ca_cert=None, options=None)
+                               tls_verify=True, ca_cert=None, options=None, installer_base_url=False)
 
     async def fake_resolve():
         return resolved

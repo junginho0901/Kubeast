@@ -136,7 +136,7 @@ def test_handshake_with_a_server_signed_by_the_mounted_ca(monkeypatch, tmp_path,
 async def test_model_list_names_an_untrusted_certificate(monkeypatch):
     monkeypatch.setattr(api_public, "_validate_base_url", lambda url: None)
 
-    async def untrusted(provider, api_key, base, verify):
+    async def untrusted(provider, api_key, base, verify, judged=True):
         raise httpx.ConnectError("[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate")
 
     monkeypatch.setattr(api_public, "_list_models", untrusted)
@@ -152,11 +152,11 @@ async def test_connection_test_and_model_list_use_the_model_ca(monkeypatch, ca):
     monkeypatch.setattr(api_public, "_validate_base_url", lambda url: None)
     seen = {}
 
-    async def fake_list(provider, api_key, base, verify):
+    async def fake_list(provider, api_key, base, verify, judged=True):
         seen["list"] = verify
         return []
 
-    async def fake_test(api_key, model, base, verify, provider=""):
+    async def fake_test(api_key, model, base, verify, provider="", judged=True):
         seen["test"] = verify
         return {"success": True}
 

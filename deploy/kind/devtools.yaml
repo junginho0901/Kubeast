@@ -343,6 +343,31 @@ spec:
   selector: {app: model-stub}
   ports: [{port: 8090, targetPort: 8090}]
 ---
+# A name on the dev allow list (ai.baseUrlAllowedHosts) that resolves to a cloud metadata address, for the specs of
+# e2e/tests/model-address-standin.ts: ai-service refuses it when connecting, so nothing goes there and no pod is behind
+# it. This address and not 169.254.x: an EndpointSlice takes no link-local address.
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-metadata-standin
+  namespace: kubeast-devtools
+spec:
+  clusterIP: None
+  ports: [{port: 8090, targetPort: 8090}]
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: model-metadata-standin
+  namespace: kubeast-devtools
+  labels:
+    kubernetes.io/service-name: model-metadata-standin
+addressType: IPv4
+endpoints:
+  - addresses: ["168.63.129.16"]
+ports:
+  - {port: 8090, protocol: TCP}
+---
 # the AWS keys k8s-service signs the Network Flow Monitor stand-in's requests with (the stand-in reads none)
 apiVersion: v1
 kind: Secret

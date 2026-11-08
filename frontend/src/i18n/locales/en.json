@@ -1783,6 +1783,7 @@
       "modelUsageWindow": "AI model call failed ({{provider}}): the usage limit is reached until {{retry_at}} (UTC). ({{detail}})",
       "modelAuth": "AI model call failed ({{provider}}): the provider refused the key or token. An administrator checks it in Admin → AI Models. ({{detail}})",
       "modelUnavailable": "AI model call failed ({{provider}}): the provider is overloaded or did not answer. Try again later. ({{detail}})",
+      "modelAddress": "AI model call failed ({{provider}}): the model's address is not allowed, so nothing was sent. An administrator runs Test on this model in Admin → AI Models to see why.",
       "streamHttp": "The chat request failed (HTTP {{status}}): {{detail}}",
       "streamHttpStatus": "The chat request failed (HTTP {{status}}).",
       "streamCut": "The connection closed before the answer finished, so the text above may be incomplete. Ask again for the whole answer.",
