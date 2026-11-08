@@ -52,6 +52,22 @@ export function waitsForCluster(keys: string[], currentCluster: string, matrix: 
   return keys.some((k) => !k.startsWith('admin.') && holdsOnAnyCluster(matrix, k))
 }
 
+// What k8s-service's lists and details ask (handler/read_gate.go). resource.*.read covers it.
+export const LISTS_AND_DETAILS = 'resource.objects.read'
+
+// A role whose screens would stay empty: it gives something on a cluster and no list. A role of admin keys opens pages,
+// and an empty one reaches no cluster.
+export function roleReadsNoList(perms: Iterable<string>): boolean {
+  const list = [...perms]
+  return list.some((p) => !p.startsWith('admin.')) && !matchAny(list, LISTS_AND_DETAILS)
+}
+
+// What the new role form starts with: a new role reads the lists its group is bound to, if its author may hand that out
+// (the permission ceiling refuses a key the author holds nowhere).
+export function newRolePermissions(matrix: PermissionMatrix): string[] {
+  return holdsOnAnyCluster(matrix, LISTS_AND_DETAILS) ? [LISTS_AND_DETAILS] : []
+}
+
 // parsePermissions accepts only the per-cluster map form. A flat array or a
 // missing/!object value yields an empty matrix (deny-all), matching the
 // backend's reject-and-relogin behavior on the UI side.

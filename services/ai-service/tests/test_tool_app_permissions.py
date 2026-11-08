@@ -744,6 +744,8 @@ async def test_a_chat_read_tools_row_stays_metadata_only(rows):
 
 SCREEN = json.loads((Path(__file__).parent / "fixtures" / "tool_screen_permission_cases.json").read_text())
 TOOLS_ONLY = ("ai.tool.*", "ai.mcp.use")
+LISTS_AND_DETAILS = "resource.objects.read"
+TOOLS_AND_LISTS = (*TOOLS_ONLY, LISTS_AND_DETAILS)
 CATALOG = sorted({t["function"]["name"] for t in tools_catalog.get_tools_definition(SimpleNamespace(_filter_tools_by_role=lambda tools: tools))})
 
 
@@ -790,10 +792,28 @@ def test_the_built_in_roles_are_offered_what_they_were():
 
 def test_a_role_with_tools_and_no_resource_permission_is_offered_only_what_its_screens_show():
     offered = _offered(_token(TOOLS_ONLY))
-    assert "k8s_get_resources" in offered and "k8s_describe_resource" in offered and "issues" in offered
+    # The screens read no list for this role: only what has no object in it is left.
+    assert offered & {"k8s_get_resources", "k8s_describe_resource", "issues", "prometheus_query", "timeline"} == set()
     assert offered & {"k8s_get_pod_logs", "logsearch", "helm_read", "cost", "network_flows"} == set()
+    assert offered & WRITE_TOOL_NAMES == set()
+    assert {"can_i", "k8s_get_available_api_resources", "k8s_get_cluster_configuration", "k8s_explain"} <= offered
+
+
+def test_the_key_offers_the_lists_and_nothing_a_screen_asks_more_for():
+    offered = _offered(_token(TOOLS_AND_LISTS))
+    assert {"k8s_get_resources", "k8s_describe_resource", "issues", "prometheus_query", "timeline"} <= offered
+    assert offered & {"k8s_get_pod_logs", "logsearch", "helm_read", "cost", "network_flows", "policy_reports", "network_policy_check"} == set()
     # rollout stays for its status and history; everything else that writes needs a permission no kind here holds.
     assert offered & WRITE_TOOL_NAMES == {"k8s_rollout"}
+
+
+def test_the_investigators_token_keeps_its_reads_and_no_more():
+    token = _token([*(f"ai.tool.{n}" for n in READONLY_TOOL_NAMES), "resource.pod.read", LISTS_AND_DETAILS])
+    refused = {"policy_reports", "helm_read", "cost", "logfiles", "network_policy_check", "network_policy_effective",
+               "network_flows", "network_drops", "network_top_flows"}
+    wrong = [c["tool"] for c in SCREEN["cases"] if c["read"]
+             and permissions.token_may_call(token, CLUSTER, c["tool"], c["args"]) == (c["tool"] in refused)]
+    assert wrong == []
 
 
 @pytest.mark.parametrize("perms,present,absent", [
@@ -840,6 +860,11 @@ def test_a_tool_not_in_the_table_is_closed(monkeypatch):
     ("ai_models", {}, ["admin.ai_models.*"]),
     ("session_recordings", {"recording_id": "r1"}, ["admin.sessions.read"]),
     ("k8s_diff", {"yaml_content": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: a\n"}, ["resource.secret.edit"]),
+    ("k8s_get_resources", {"resource_type": "secrets", "namespace": "shop"}, [LISTS_AND_DETAILS]),
+    ("k8s_describe_resource", {"resource_type": "configmap", "resource_name": "a", "namespace": "shop"}, [LISTS_AND_DETAILS]),
+    ("k8s_get_events", {"namespace": "shop"}, [LISTS_AND_DETAILS]),
+    ("prometheus_query", {"promql": "up"}, [LISTS_AND_DETAILS]),
+    ("k8s_rollout", {"action": "status", "resource_type": "deploy", "resource_name": "x", "namespace": "shop"}, [LISTS_AND_DETAILS]),
 ])
 async def test_a_refused_read_in_the_chat_does_not_run_and_says_why(rows, name, args, perms):
     got = await _chat_call(_token(TOOLS_ONLY), name, args, offered=[{"type": "function", "function": {"name": name}}])
@@ -858,7 +883,19 @@ async def test_a_refused_read_in_the_chat_does_not_run_and_says_why(rows, name, 
     ("k8s_get_events", {"namespace": "shop"}),
     ("prometheus_query", {"promql": "up"}),
 ])
-async def test_a_read_the_screens_leave_to_the_cluster_runs_for_the_same_role(rows, name, args):
+async def test_a_read_of_a_list_runs_for_a_role_holding_the_key(rows, name, args):
+    got = await _chat_call(_token(TOOLS_AND_LISTS), name, args, offered=[{"type": "function", "function": {"name": name}}])
+    assert [n for n, _ in got.service.executed] == [name]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name,args", [
+    ("can_i", {"verb": "get", "resource": "pods"}),
+    ("k8s_get_available_api_resources", {}),
+    ("k8s_get_cluster_configuration", {}),
+    ("k8s_explain", {"resource": "pods"}),
+])
+async def test_a_tool_with_no_object_in_its_answer_runs_without_the_key(rows, name, args):
     got = await _chat_call(_token(TOOLS_ONLY), name, args, offered=[{"type": "function", "function": {"name": name}}])
     assert [n for n, _ in got.service.executed] == [name]
 
@@ -960,15 +997,15 @@ def test_only_what_is_missing_is_named():
 
 
 def test_mcp_offers_each_cluster_what_may_be_called_there(mcp):
-    token = TokenPayload(user_id="u1", role="member", matrix={CLUSTER: TOOLS_ONLY, "prod": ("ai.mcp.use", "ai.tool.*", "resource.pod.read", "resource.*.delete")})
+    token = TokenPayload(user_id="u1", role="member", matrix={CLUSTER: TOOLS_ONLY, "prod": ("ai.mcp.use", "ai.tool.*", LISTS_AND_DETAILS, "resource.pod.read", "resource.*.delete")})
     alpha, prod = mcp_server._tools_allowed_in(token, CLUSTER), mcp_server._tools_allowed_in(token, "prod")
-    assert "k8s_get_resources" in alpha and "k8s_get_resources" in prod
+    assert "k8s_get_resources" not in alpha and "k8s_get_resources" in prod
     assert "k8s_get_pod_logs" not in alpha and "k8s_get_pod_logs" in prod
     assert "k8s_delete_resource" not in alpha and "k8s_delete_resource" in prod
 
 
 def test_a_feature_tool_is_not_listed_where_its_screen_permission_is_held_nowhere():
-    for name in ("k8s_get_pod_logs", "logsearch", "loki_query", "alerts_list", "network_policy_check", "helm_read", "cost"):
+    for name in ("k8s_get_pod_logs", "logsearch", "loki_query", "alerts_list", "network_policy_check", "helm_read", "cost", "prometheus_query", "traces_search"):
         assert feature_gate.permitted_anywhere(name, _token(TOOLS_ONLY)) is False, name
         assert feature_gate.permitted_anywhere(name, _token(SCREEN["read_role"])) is True, name
         assert feature_gate.permitted_anywhere(name, _admin()) is True, name
@@ -1009,10 +1046,26 @@ def test_the_legacy_role_mode_keeps_its_rules():
 
 @pytest.mark.asyncio
 async def test_the_model_is_told_which_writes_a_role_with_tools_only_cannot_do(monkeypatch):
-    models, _ = await _ask(monkeypatch, "이 파드 지워줘", user_role="read", token=_token(TOOLS_ONLY))
+    models, _ = await _ask(monkeypatch, "이 파드 지워줘", user_role="read", token=_token(TOOLS_AND_LISTS))
     told = " ".join(m["content"] for m in models[0] if m["role"] == "system")
     for verb in ("create", "edit", "delete"):
         assert f"resource.<kind>.{verb}" in told
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("perms", [TOOLS_ONLY, ("ai.tool.get_pod_metrics", "ai.mcp.use")], ids=["with write tools", "with read tools only"])
+async def test_the_model_is_told_when_the_role_reads_no_list(monkeypatch, perms):
+    models, _ = await _ask(monkeypatch, "파드 목록 보여줘", user_role="read", token=_token(perms))
+    told = " ".join(m["content"] for m in models[0] if m["role"] == "system")
+    assert LISTS_AND_DETAILS in told
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("perms", [TOOLS_AND_LISTS, WRITE_ROLE], ids=["the key", "the wildcard"])
+async def test_the_model_is_not_told_about_the_lists_a_role_reads(monkeypatch, perms):
+    models, _ = await _ask(monkeypatch, "파드 목록 보여줘", user_role="read", token=_token(perms))
+    told = " ".join(m["content"] for m in models[0] if m["role"] == "system")
+    assert LISTS_AND_DETAILS not in told
 
 
 @pytest.mark.asyncio

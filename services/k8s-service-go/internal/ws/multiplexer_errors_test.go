@@ -9,6 +9,8 @@ import (
 
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
+
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
 // frameReason reads the machine reason beside a frame's message.
@@ -86,6 +88,47 @@ func TestAClusterTheCallerHasNoGrantOnIsARefusal(t *testing.T) {
 	request(t, conn, "REQUEST", "c1", "/api/v1/pods", "watch=1")
 	if reason := frameReason(t, nextFrame(t, conn)); reason != reasonForbidden {
 		t.Fatalf("reason = %q", reason)
+	}
+}
+
+// A live list reads what the list route reads, so it asks what that route asks.
+func TestAWatchAsksWhatTheListAsks(t *testing.T) {
+	const key = "resource.objects.read"
+	for _, c := range []struct {
+		name    string
+		perms   auth.PermissionMatrix
+		refused bool
+	}{
+		{"menus only", auth.PermissionMatrix{"c1": {"menu.*"}}, true},
+		{"AI tools only", auth.PermissionMatrix{"c1": {"ai.tool.*"}}, true},
+		{"Pod logs only", auth.PermissionMatrix{"c1": {"resource.pod.read"}}, true},
+		{"the key on another cluster", auth.PermissionMatrix{"c1": {"menu.*"}, "c2": {key}}, true},
+		{"the key", auth.PermissionMatrix{"c1": {key}}, false},
+		{"the Read role's wildcard", auth.PermissionMatrix{"c1": {"resource.*.read"}}, false},
+		{"Admin on the cluster", auth.PermissionMatrix{"c1": {"*"}}, false},
+		{"global admin", everyCluster, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			m := muxOn(t, eventThenHold)
+			conn := socketTo(t, m, c.perms)
+			request(t, conn, "REQUEST", "c1", "/api/v1/pods", "watch=1")
+			f := nextFrame(t, conn)
+			if c.refused {
+				if reason := frameReason(t, f); reason != reasonForbidden {
+					t.Fatalf("reason = %q", reason)
+				}
+				if !strings.Contains(f.Error.Message, key) {
+					t.Fatalf("message = %q, want it to name %s", f.Error.Message, key)
+				}
+				if got := m.SubscriptionCount(); got != 0 {
+					t.Fatalf("%d subscriptions, want none opened", got)
+				}
+				return
+			}
+			if f.Type == "ERROR" {
+				t.Fatalf("frame = %+v, want the watch to run", f)
+			}
+		})
 	}
 }
 

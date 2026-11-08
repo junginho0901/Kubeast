@@ -103,10 +103,10 @@ def test_permission_gate_follows_what_k8s_service_asks_for():
     names = ["issues", "hygiene", "policy_reports", "helm_read", "cost", "can_i"]
     # No token (legacy role mode): nothing is hidden by permission.
     assert features.gated_names(names, feats, "self") == names
-    reader = _Token({"resource.helm.read", "resource.policyreport.read", "resource.cost.read"})
+    reader = _Token({"resource.objects.read", "resource.helm.read", "resource.policyreport.read", "resource.cost.read"})
     assert features.gated_names(names, feats, "self", reader) == ["issues", "policy_reports", "helm_read", "cost", "can_i"]
     bare = _Token({"ai.tool.*"})
-    assert features.gated_names(names, feats, "self", bare) == ["issues", "can_i"]
+    assert features.gated_names(names, feats, "self", bare) == ["can_i"]
     admin = _Token(set(), {"*"})
     assert features.gated_names(names, feats, "self", admin) == names
     hygiene_only = _Token(set(), {"admin.hygiene.read"})
@@ -139,8 +139,9 @@ def test_permission_gate_follows_what_k8s_service_asks_for():
         assert features.gated_names([name], feats, "self", admin) == [name]
         assert features.gated_names([name], feats, "self", _Token(set(), {perm})) == [name]
         assert features.permitted_anywhere(name, reader) is False and features.permitted_anywhere(name, admin) is True
-    # gitops_status asks nothing beyond the cluster's own RBAC.
-    assert features.gated_names(["gitops_status"], feats, "self", bare) == ["gitops_status"]
+    # gitops_status reads an object as the lists do, then the cluster's own RBAC decides.
+    assert features.gated_names(["gitops_status"], feats, "self", reader) == ["gitops_status"]
+    assert features.gated_names(["gitops_status"], feats, "self", bare) == []
     # filter_tools applies the same rule to tool definitions, in order.
     tools = _tools("hygiene", "k8s_get_pod_logs", "cost")
     assert _names(features.filter_tools(tools, feats, "self", reader)) == ["cost"]
@@ -151,8 +152,8 @@ def test_permission_gate_follows_what_k8s_service_asks_for():
 async def test_gate_tools_skips_the_features_call_when_no_permitted_feature_tool_remains():
     k8s = SimpleNamespace(get_features=AsyncMock(return_value={}))
     service = SimpleNamespace(cluster_name="c1", k8s_service=k8s, token=_Token({"ai.tool.*"}))
-    out = await features.gate_tools(_tools("issues", "cost", "hygiene", "helm_read"), service)
-    assert _names(out) == ["issues"]
+    out = await features.gate_tools(_tools("can_i", "cost", "hygiene", "helm_read"), service)
+    assert _names(out) == ["can_i"]
     k8s.get_features.assert_not_called()
 
 

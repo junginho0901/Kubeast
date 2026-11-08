@@ -22,9 +22,9 @@ from tests.test_tool_app_permissions import CLUSTER, SCREEN, WRITE_ROLE, _admin,
 
 # tool → what its screen's route asks; [] = the route leaves it to the cluster's RBAC.
 ASKS = {
-    "pod_rbac": [],
-    "storage_summary": [],
-    "limit_range_violations": [],
+    "pod_rbac": ["resource.objects.read"],
+    "storage_summary": ["resource.objects.read"],
+    "limit_range_violations": ["resource.objects.read"],
     "logfiles": ["resource.pod.logfile"],
     "network_policy_effective": ["resource.networkpolicy.read"],
     "alerts_inbox": ["resource.pod.read"],
@@ -80,10 +80,11 @@ def test_the_table_says_what_the_screen_asks(tool):
 
 
 @pytest.mark.parametrize("perms,allowed", [
-    (("ai.tool.*",), {"pod_rbac", "storage_summary", "limit_range_violations"}),
-    (("ai.tool.*", "resource.pod.logfile"), {"pod_rbac", "storage_summary", "limit_range_violations", "logfiles"}),
-    (("ai.tool.*", "resource.networkpolicy.read"), {"pod_rbac", "storage_summary", "limit_range_violations", "network_policy_effective"}),
-    (("ai.tool.*", "resource.pod.read"), {"pod_rbac", "storage_summary", "limit_range_violations", "alerts_inbox"}),
+    (("ai.tool.*",), set()),
+    (("ai.tool.*", "resource.objects.read"), {"pod_rbac", "storage_summary", "limit_range_violations"}),
+    (("ai.tool.*", "resource.pod.logfile"), {"logfiles"}),
+    (("ai.tool.*", "resource.networkpolicy.read"), {"network_policy_effective"}),
+    (("ai.tool.*", "resource.pod.read"), {"alerts_inbox"}),
     (tuple(SCREEN["read_role"]), set(TOOLS)),
     (tuple(SCREEN["write_role"]), set(TOOLS)),
     (("resource.pod.logfile", "resource.pod.read", "resource.networkpolicy.read"), set()),
@@ -130,8 +131,8 @@ def test_the_tools_of_every_cluster_ask_no_feature():
 
 
 def test_an_investigation_does_not_read_a_containers_files():
-    # Its token is the Read tools and resource.pod.read, not the tab's permission.
-    investigator = _token([*(f"ai.tool.{n}" for n in READONLY_TOOL_NAMES), "resource.pod.read"])
+    # Its token is the Read tools, the lists and resource.pod.read, not the tab's permission.
+    investigator = _token([*(f"ai.tool.{n}" for n in READONLY_TOOL_NAMES), "resource.objects.read", "resource.pod.read"])
     assert permissions.token_may_call(investigator, CLUSTER, "logfiles") is False
     assert features.gated_names(["logfiles"], {"logFiles": {"enabled": True}}, CLUSTER, investigator) == []
     assert permissions.token_may_call(investigator, CLUSTER, "alerts_inbox") is True
@@ -218,14 +219,14 @@ async def test_in_the_chat_a_namespace_outside_the_grant_never_leaves():
     ("k8s_explain", {"resource": "pods"}), ("issues", {}), ("cost", {}), ("gitops_status", {}), ("k8s_find_resource", {"query": "web"}),
 ])
 async def test_over_mcp_the_call_reaches_tool_server(mcp, tool, args):  # noqa: F811
-    res = await mcp.call(_scoped(("ai.mcp.use", "ai.tool.*", "resource.cost.read")), tool, args)
+    res = await mcp.call(_scoped(("ai.mcp.use", "ai.tool.*", "resource.objects.read", "resource.cost.read")), tool, args)
     assert res.is_error is not True and [n for n, _ in _ToolServer.calls] == [tool]
     assert mcp.audit[-1].get("result") != "failure"
 
 
 @pytest.mark.asyncio
 async def test_over_mcp_a_namespace_outside_the_grant_never_leaves(mcp):  # noqa: F811
-    res = await mcp.call(_scoped(("ai.mcp.use", "ai.tool.*")), "issues", {"namespace": "db"})
+    res = await mcp.call(_scoped(("ai.mcp.use", "ai.tool.*", "resource.objects.read")), "issues", {"namespace": "db"})
     assert res.is_error is True and "outside your grant" in res.content[0].text and _ToolServer.calls == []
     assert mcp.audit[-1]["error"] == "forbidden: namespace scope"
 

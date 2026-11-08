@@ -6,6 +6,7 @@ import { resetForbidden, useForbiddenLabels } from '@/services/forbiddenStore'
 import { resetListStatus } from '@/services/listStatusStore'
 import { joinResources } from '@/utils/forbiddenResource'
 import { usePermission } from '@/hooks/usePermission'
+import { LISTS_AND_DETAILS } from '@/utils/permissions'
 import { customRoleGroup } from '@/utils/roleGroup'
 
 // Shown above the page when a cluster list request answered 403 for the
@@ -17,11 +18,13 @@ export default function ForbiddenBanner({ clusterKey }: { clusterKey: string }) 
   const { t } = useTranslation()
   const location = useLocation()
   const resources = useForbiddenLabels()
-  const { clusterRole, permissions, clusterNamespaces } = usePermission()
+  const { has, clusterRole, permissions, clusterNamespaces } = usePermission()
+  const readsLists = has(LISTS_AND_DETAILS)
   // A custom role acts on the cluster as its own group; until the cluster
   // allows and binds it, every request is refused — say which group that is.
+  // A role without the read permission never gets that far: the cluster is not why.
   const isGlobalAdmin = (permissions['*'] ?? []).includes('*')
-  const group = isGlobalAdmin ? null : customRoleGroup(clusterRole)
+  const group = isGlobalAdmin || !readsLists ? null : customRoleGroup(clusterRole)
 
   useEffect(() => {
     resetForbidden()
@@ -49,6 +52,14 @@ export default function ForbiddenBanner({ clusterKey }: { clusterKey: string }) 
             {t('layout.forbidden.namespaces', {
               defaultValue: 'Your access to this cluster is limited to the namespaces {{namespaces}}; cluster-wide pages and other namespaces are not shown.',
               namespaces: clusterNamespaces.join(', '),
+            })}
+          </div>
+        )}
+        {!readsLists && (
+          <div data-testid="forbidden-read-permission-hint" className="mt-1 text-amber-100/80">
+            {t('layout.forbidden.readPermission', {
+              defaultValue:
+                'Your role on this cluster holds neither resource.objects.read (lists and details) nor resource.*.read (All resources: read), so Kubeast reads no list for it. Ask an administrator to add one.',
             })}
           </div>
         )}

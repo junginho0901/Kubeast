@@ -7,6 +7,7 @@ import { ModalOverlay } from '@/components/ModalOverlay'
 import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
 import { usePermission } from '@/hooks/usePermission'
+import { newRolePermissions, roleReadsNoList } from '@/utils/permissions'
 import { customRoleGroup, roleEditEndsSessions } from '@/utils/roleGroup'
 import { useConfirm } from '@/services/confirm'
 
@@ -32,7 +33,7 @@ export default function AdminRoles() {
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [usersRole, setUsersRole] = useState<RoleWithDetails | null>(null)
 
-  const { has: hasPerm } = usePermission()
+  const { has: hasPerm, permissions: myPermissions } = usePermission()
   const canListUsers = hasPerm('admin.users.read')
 
   const { data: roles = [], isLoading } = useQuery({
@@ -108,7 +109,7 @@ export default function AdminRoles() {
     setEditingRole(null)
     setFormName('')
     setFormDesc('')
-    setFormPerms(new Set())
+    setFormPerms(new Set(newRolePermissions(myPermissions)))
     setFormError(null)
   }
 
@@ -433,6 +434,15 @@ export default function AdminRoles() {
                 {tr(
                   'adminRoles.sessionNotice',
                   'Saving this ends the sessions and API key tokens of the people holding this role, so they sign in again. You too, if you hold it.',
+                )}
+              </p>
+            )}
+
+            {!editingRole?.is_system && roleReadsNoList(formPerms) && (
+              <p data-testid="role-no-list-hint" className="-mt-2 mb-5 text-xs text-amber-300">
+                {tr(
+                  'adminRoles.noListHint',
+                  'As it stands this role\'s screens read no list. Choose resource.objects.read (lists and details) or resource.*.read.',
                 )}
               </p>
             )}

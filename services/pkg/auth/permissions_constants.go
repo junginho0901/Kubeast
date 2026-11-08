@@ -11,3 +11,7 @@ const (
 	PermClustersDelete = "admin.clusters.delete"
 	PermClustersUpdate = "admin.clusters.update"
 )
+
+// PermObjectsRead is what a list or detail with no permission of its own asks. It is not a kind: resource.*.read covers
+// it and the routes that ask more (Pod logs, Helm, Cost), so a role can hold the lists without those.
+const PermObjectsRead = "resource.objects.read"

@@ -136,11 +136,14 @@ func TestInvestigatorToken(t *testing.T) {
 		if len(perms) != 1 || len(perms["default"]) != len(repository.InvestigatorPermissions) {
 			t.Fatalf("permissions: %v", perms)
 		}
-		// The read tools and the one read permission the log store search asks for — never a write.
+		// The read tools, what the lists ask and what the log store search asks — never a write, and not Helm or Cost.
 		for _, p := range perms["default"] {
-			if !strings.HasPrefix(p, "ai.tool.") && p != "resource.pod.read" {
+			if !strings.HasPrefix(p, "ai.tool.") && p != "resource.pod.read" && p != auth.PermObjectsRead {
 				t.Fatalf("unexpected permission %q", p)
 			}
+		}
+		if !perms.HasForCluster(auth.PermObjectsRead, "default") {
+			t.Fatalf("the investigator cannot read the lists: %v", perms)
 		}
 		ns := auth.ParseNamespaces(claims["ns"])
 		if tc.ns == "" && len(ns) != 0 || tc.ns != "" && (len(ns["default"]) != 1 || ns["default"][0] != tc.ns) {

@@ -64,7 +64,7 @@ test.describe('a Secret editor without reveal', () => {
     expect(lastApplied, 'the fixture keeps its values in the annotation').toContain(VALUE)
 
     const role = await request.post('/api/v1/auth/admin/roles', { headers: bearer(admin), data: { name: ROLE, description: 'e2e',
-      permissions: ['menu.dashboard', 'menu.configuration', 'resource.*.read', 'resource.*.edit', 'resource.*.create'] } })
+      permissions: ['menu.dashboard', 'menu.configuration', 'resource.objects.read', 'resource.*.edit', 'resource.*.create'] } })
     expect(role.status(), await role.text()).toBe(201)
     roleId = (await role.json()).id
     // What auth.impersonation.customRoles renders, done by hand: the service account may act as this group.

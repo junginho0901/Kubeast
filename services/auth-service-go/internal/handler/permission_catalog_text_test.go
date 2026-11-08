@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// resource.*.read does not open the lists, the role on the cluster and the cluster's RBAC do: the catalog's description
-// says what asks for it, the same words as the English catalog of the role screen.
+// resource.*.read opens the lists and details and what asks more, and the cluster's RBAC still decides what the group
+// sees: the catalog's description says so, the same words as the English catalog of the role screen.
 func TestPermissionCatalog_ReadSaysWhatAsksForIt(t *testing.T) {
 	var categories []struct {
 		Permissions []struct {
@@ -30,7 +30,7 @@ func TestPermissionCatalog_ReadSaysWhatAsksForIt(t *testing.T) {
 	if strings.Contains(strings.ToLower(description), "all resources") {
 		t.Errorf("description %q promises every resource", description)
 	}
-	for _, word := range []string{"Pod logs", "Helm", "Cost", "other lists", "cluster's RBAC"} {
+	for _, word := range []string{"lists and details", "Pod logs", "Helm", "Cost", "cluster's RBAC"} {
 		if !strings.Contains(description, word) {
 			t.Errorf("description %q does not say %q", description, word)
 		}

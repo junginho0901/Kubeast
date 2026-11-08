@@ -118,7 +118,7 @@ function fixture(ns: string) {
 const has = (ns: string, what: string) => tryKubectl(`-n ${ns} get ${what} -o name`) !== null
 
 test.describe('the AI asks what the screens ask', () => {
-  test('a role with AI tools only, bound in the cluster, reads the lists its screens read and changes nothing', async ({ request }) => {
+  test('a role with AI tools and the lists, bound in the cluster, reads the lists its screens read and changes nothing', async ({ request }) => {
     test.setTimeout(240_000)
     const ctx = await people(request)
     const s = stamp()
@@ -126,7 +126,7 @@ test.describe('the AI asks what the screens ask', () => {
     try {
       fixture(ns)
       const roleName = `e2e-parity-tools-${s}`
-      await ctx.role(roleName, ['ai.mcp.use', 'ai.tool.*'], ns)
+      await ctx.role(roleName, ['ai.mcp.use', 'ai.tool.*', 'resource.objects.read'], ns)
       const { token, email } = await ctx.person('tools', roleName)
 
       // A list: the screen's route answers, so the tool does.

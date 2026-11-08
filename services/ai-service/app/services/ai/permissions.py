@@ -113,11 +113,15 @@ def unavailable_note(service: "AIService") -> Optional[str]:
     if token is None:
         return None
     cluster = effective_cluster(service)
-    if not any(is_tool_allowed(service, name) for name in WRITE_TOOL_NAMES):
-        return (f"This user's role in cluster {cluster} holds no write tools, so this chat cannot change anything there. "
-                "If they ask for a change, say that their role does not allow it and that an admin can grant one.")
     def holds(permission: str) -> bool:
         return token.has_permission_for_cluster(permission, cluster)
+
+    reads = "" if holds(screen_permissions.LISTS_AND_DETAILS) else (
+        f"This user's role in cluster {cluster} does not hold {screen_permissions.LISTS_AND_DETAILS}, so this chat reads no list or detail there. "
+        "If they ask for one, say that their role lacks the permission and that an admin can grant it. ")
+    if not any(is_tool_allowed(service, name) for name in WRITE_TOOL_NAMES):
+        return (f"{reads}This user's role in cluster {cluster} holds no write tools, so this chat cannot change anything there. "
+                "If they ask for a change, say that their role does not allow it and that an admin can grant one.")
 
     lacking =[f"{required} ({what})" for tool, args, what in (
         ("k8s_execute_command", {}, "running a command in a pod, k8s_execute_command"),
@@ -128,8 +132,8 @@ def unavailable_note(service: "AIService") -> Optional[str]:
                 and any(holds(f"ai.tool.{tool}") and rule[0] in ("resource_type", "manifest") and rule[1] == verb
                         for tool, rule in screen_permissions.TOOL_SCREEN_TABLE.items() if tool in WRITE_TOOL_NAMES)]
     if not lacking:
-        return None
-    return (f"This user's role in cluster {cluster} does not hold {' or '.join(lacking)}. "
+        return reads.strip() or None
+    return (f"{reads}This user's role in cluster {cluster} does not hold {' or '.join(lacking)}. "
             "If they ask for that, say that their role lacks the permission and that an admin can grant it.")
 
 

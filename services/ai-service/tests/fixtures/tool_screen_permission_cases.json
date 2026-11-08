@@ -356,28 +356,279 @@
   {
    "tool": "k8s_get_resources",
    "args": {},
-   "want": null,
+   "want": [
+    "resource.objects.read"
+   ],
    "write": true,
    "read": true
   },
   {
    "tool": "k8s_get_resource_yaml",
    "args": {},
-   "want": null,
+   "want": [
+    "resource.objects.read"
+   ],
    "write": true,
    "read": true
   },
   {
    "tool": "k8s_describe_resource",
    "args": {},
-   "want": null,
+   "want": [
+    "resource.objects.read"
+   ],
    "write": true,
    "read": true
   },
   {
    "tool": "k8s_get_events",
    "args": {},
-   "want": null,
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "get_cluster_overview",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "get_node_metrics",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "get_pod_metrics",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "k8s_check_service_connectivity",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "k8s_find_resource",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "prometheus_query",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "prometheus_metrics",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "prometheus_labels",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "prometheus_rules",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "prometheus_targets",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "traces_search",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "traces_get",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "traces_tags",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "traces_metrics",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "traces_compare",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "issues",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "gitops_status",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "optimization",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "resource_graph",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "k8s_jq_query",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "k8s_tabular_query",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "k8s_count",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "pod_rbac",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "storage_summary",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "limit_range_violations",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "timeline",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "gpu",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
    "write": true,
    "read": true
   },
@@ -396,133 +647,7 @@
    "read": true
   },
   {
-   "tool": "get_cluster_overview",
-   "args": {},
-   "want": null,
-   "write": true,
-   "read": true
-  },
-  {
-   "tool": "get_node_metrics",
-   "args": {},
-   "want": null,
-   "write": true,
-   "read": true
-  },
-  {
-   "tool": "get_pod_metrics",
-   "args": {},
-   "want": null,
-   "write": true,
-   "read": true
-  },
-  {
-   "tool": "k8s_check_service_connectivity",
-   "args": {},
-   "want": null,
-   "write": true,
-   "read": true
-  },
-  {
-   "tool": "k8s_find_resource",
-   "args": {},
-   "want": null,
-   "write": true,
-   "read": true
-  },
-  {
    "tool": "k8s_explain",
-   "args": {},
-   "want": null,
-   "write": true,
-   "read": true
-  },
-  {
-   "tool": "prometheus_query",
-   "args": {},
-   "want": null,
-   "write": true,
-   "read": true
-  },
-  {
-   "tool": "prometheus_metrics",
-   "args": {},
-   "want": null,
-   "write": true,
-   "read": true
-  },
-  {
-   "tool": "prometheus_labels",
-   "args": {},
-   "want": null,
-   "write": true,
-   "read": true
-  },
-  {
-   "tool": "prometheus_rules",
-   "args": {},
-   "want": null,
-   "write": true,
-   "read": true
-  },
-  {
-   "tool": "prometheus_targets",
-   "args": {},
-   "want": null,
-   "write": true,
-   "read": true
-  },
-  {
-   "tool": "traces_search",
-   "args": {},
-   "want": null,
-   "write": true,
-   "read": true
-  },
-  {
-   "tool": "traces_get",
-   "args": {},
-   "want": null,
-   "write": true,
-   "read": true
-  },
-  {
-   "tool": "traces_tags",
-   "args": {},
-   "want": null,
-   "write": true,
-   "read": true
-  },
-  {
-   "tool": "traces_metrics",
-   "args": {},
-   "want": null,
-   "write": true,
-   "read": true
-  },
-  {
-   "tool": "traces_compare",
-   "args": {},
-   "want": null,
-   "write": true,
-   "read": true
-  },
-  {
-   "tool": "issues",
-   "args": {},
-   "want": null,
-   "write": true,
-   "read": true
-  },
-  {
-   "tool": "gitops_status",
-   "args": {},
-   "want": null,
-   "write": true,
-   "read": true
-  },
-  {
-   "tool": "optimization",
    "args": {},
    "want": null,
    "write": true,
@@ -536,70 +661,7 @@
    "read": true
   },
   {
-   "tool": "resource_graph",
-   "args": {},
-   "want": null,
-   "write": true,
-   "read": true
-  },
-  {
-   "tool": "k8s_jq_query",
-   "args": {},
-   "want": null,
-   "write": true,
-   "read": true
-  },
-  {
-   "tool": "k8s_tabular_query",
-   "args": {},
-   "want": null,
-   "write": true,
-   "read": true
-  },
-  {
-   "tool": "k8s_count",
-   "args": {},
-   "want": null,
-   "write": true,
-   "read": true
-  },
-  {
    "tool": "clusters_list",
-   "args": {},
-   "want": null,
-   "write": true,
-   "read": true
-  },
-  {
-   "tool": "pod_rbac",
-   "args": {},
-   "want": null,
-   "write": true,
-   "read": true
-  },
-  {
-   "tool": "storage_summary",
-   "args": {},
-   "want": null,
-   "write": true,
-   "read": true
-  },
-  {
-   "tool": "limit_range_violations",
-   "args": {},
-   "want": null,
-   "write": true,
-   "read": true
-  },
-  {
-   "tool": "timeline",
-   "args": {},
-   "want": null,
-   "write": true,
-   "read": true
-  },
-  {
-   "tool": "gpu",
    "args": {},
    "want": null,
    "write": true,
@@ -610,7 +672,9 @@
    "args": {
     "resource_type": "secrets"
    },
-   "want": null,
+   "want": [
+    "resource.objects.read"
+   ],
    "write": true,
    "read": true
   },
@@ -619,7 +683,9 @@
    "args": {
     "resource_type": "all"
    },
-   "want": null,
+   "want": [
+    "resource.objects.read"
+   ],
    "write": true,
    "read": true
   },
@@ -629,7 +695,9 @@
     "resource_name": "x",
     "resource_type": "secret"
    },
-   "want": null,
+   "want": [
+    "resource.objects.read"
+   ],
    "write": true,
    "read": true
   },
@@ -2051,7 +2119,9 @@
     "resource_name": "web",
     "resource_type": "statefulsets.apps"
    },
-   "want": null,
+   "want": [
+    "resource.objects.read"
+   ],
    "write": true,
    "read": false
   },
@@ -2062,7 +2132,9 @@
     "resource_name": "web",
     "resource_type": "statefulsets.apps"
    },
-   "want": null,
+   "want": [
+    "resource.objects.read"
+   ],
    "write": true,
    "read": false
   },
@@ -2073,7 +2145,9 @@
     "resource_name": "web",
     "resource_type": "statefulsets.apps"
    },
-   "want": null,
+   "want": [
+    "resource.objects.read"
+   ],
    "write": true,
    "read": false
   },

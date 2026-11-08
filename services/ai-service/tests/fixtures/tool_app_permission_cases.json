@@ -460,7 +460,7 @@
    "resource.pod.exec",
    "resource.workload.rollback"
   ],
-  "allowed": true
+  "allowed": false
  },
  {
   "name": "custom role with both screen permissions: rollout history",
@@ -475,7 +475,7 @@
    "resource.pod.exec",
    "resource.workload.rollback"
   ],
-  "allowed": true
+  "allowed": false
  },
  {
   "name": "custom role with both screen permissions: scale",
@@ -590,7 +590,7 @@
    "ai.tool.*",
    "resource.pod.exec"
   ],
-  "allowed": true
+  "allowed": false
  },
  {
   "name": "custom role with Pod exec only: rollout history",
@@ -604,7 +604,7 @@
    "ai.tool.*",
    "resource.pod.exec"
   ],
-  "allowed": true
+  "allowed": false
  },
  {
   "name": "custom role with Pod exec only: scale",
@@ -717,7 +717,7 @@
    "ai.tool.*",
    "resource.workload.rollback"
   ],
-  "allowed": true
+  "allowed": false
  },
  {
   "name": "custom role with rollback only: rollout history",
@@ -731,7 +731,7 @@
    "ai.tool.*",
    "resource.workload.rollback"
   ],
-  "allowed": true
+  "allowed": false
  },
  {
   "name": "custom role with rollback only: scale",
@@ -1216,7 +1216,7 @@
    "ai.tool.k8s_rollout",
    "resource.workload.rollback"
   ],
-  "allowed": true
+  "allowed": false
  },
  {
   "name": "the rollout tool with rollback: rollout history",
@@ -1230,7 +1230,7 @@
    "ai.tool.k8s_rollout",
    "resource.workload.rollback"
   ],
-  "allowed": true
+  "allowed": false
  },
  {
   "name": "the rollout tool with rollback: scale",
@@ -1337,7 +1337,7 @@
   "perms": [
    "ai.tool.k8s_rollout"
   ],
-  "allowed": true
+  "allowed": false
  },
  {
   "name": "the rollout tool without rollback: rollout history",
@@ -1350,7 +1350,7 @@
   "perms": [
    "ai.tool.k8s_rollout"
   ],
-  "allowed": true
+  "allowed": false
  },
  {
   "name": "the rollout tool without rollback: scale",
@@ -1374,6 +1374,133 @@
   },
   "perms": [
    "ai.tool.k8s_rollout"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the rollout tool with the lists: pod exec",
+  "tool": "k8s_execute_command",
+  "args": {
+   "command": [
+    "ls"
+   ],
+   "namespace": "shop",
+   "pod_name": "web"
+  },
+  "perms": [
+   "ai.tool.k8s_rollout",
+   "resource.objects.read"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the rollout tool with the lists: rollout undo",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "undo",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_rollout",
+   "resource.objects.read"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the rollout tool with the lists: rollout restart",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "restart",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_rollout",
+   "resource.objects.read"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the rollout tool with the lists: rollout pause",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "pause",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_rollout",
+   "resource.objects.read"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the rollout tool with the lists: rollout resume",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "resume",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_rollout",
+   "resource.objects.read"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the rollout tool with the lists: rollout status",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "status",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_rollout",
+   "resource.objects.read"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "the rollout tool with the lists: rollout history",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "history",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_rollout",
+   "resource.objects.read"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "the rollout tool with the lists: scale",
+  "tool": "k8s_scale",
+  "args": {
+   "replicas": 2,
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.k8s_rollout",
+   "resource.objects.read"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "the rollout tool with the lists: delete",
+  "tool": "k8s_delete_resource",
+  "args": {
+   "resource_name": "web",
+   "resource_type": "configmap"
+  },
+  "perms": [
+   "ai.tool.k8s_rollout",
+   "resource.objects.read"
   ],
   "allowed": false
  },
@@ -1461,7 +1588,7 @@
    "ai.tool.k8s_rollout",
    "resource.deployment.edit"
   ],
-  "allowed": true
+  "allowed": false
  },
  {
   "name": "the rollout tool with edit of that kind: rollout history",
@@ -1475,7 +1602,7 @@
    "ai.tool.k8s_rollout",
    "resource.deployment.edit"
   ],
-  "allowed": true
+  "allowed": false
  },
  {
   "name": "the rollout tool with edit of that kind: scale",
@@ -1582,7 +1709,7 @@
   "perms": [
    "ai.tool.*"
   ],
-  "allowed": true
+  "allowed": false
  },
  {
   "name": "custom role with no resource permission: rollout history",
@@ -1595,7 +1722,7 @@
   "perms": [
    "ai.tool.*"
   ],
-  "allowed": true
+  "allowed": false
  },
  {
   "name": "custom role with no resource permission: scale",
@@ -1619,6 +1746,133 @@
   },
   "perms": [
    "ai.tool.*"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "custom role with the lists: pod exec",
+  "tool": "k8s_execute_command",
+  "args": {
+   "command": [
+    "ls"
+   ],
+   "namespace": "shop",
+   "pod_name": "web"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.objects.read"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "custom role with the lists: rollout undo",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "undo",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.objects.read"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "custom role with the lists: rollout restart",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "restart",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.objects.read"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "custom role with the lists: rollout pause",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "pause",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.objects.read"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "custom role with the lists: rollout resume",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "resume",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.objects.read"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "custom role with the lists: rollout status",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "status",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.objects.read"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "custom role with the lists: rollout history",
+  "tool": "k8s_rollout",
+  "args": {
+   "action": "history",
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.objects.read"
+  ],
+  "allowed": true
+ },
+ {
+  "name": "custom role with the lists: scale",
+  "tool": "k8s_scale",
+  "args": {
+   "replicas": 2,
+   "resource_name": "web",
+   "resource_type": "deployment"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.objects.read"
+  ],
+  "allowed": false
+ },
+ {
+  "name": "custom role with the lists: delete",
+  "tool": "k8s_delete_resource",
+  "args": {
+   "resource_name": "web",
+   "resource_type": "configmap"
+  },
+  "perms": [
+   "ai.tool.*",
+   "resource.objects.read"
   ],
   "allowed": false
  },
@@ -1712,7 +1966,7 @@
    "resource.deployment.edit",
    "resource.configmap.delete"
   ],
-  "allowed": true
+  "allowed": false
  },
  {
   "name": "custom role with these kinds: rollout history",
@@ -1727,7 +1981,7 @@
    "resource.deployment.edit",
    "resource.configmap.delete"
   ],
-  "allowed": true
+  "allowed": false
  },
  {
   "name": "custom role with these kinds: scale",
@@ -1848,7 +2102,7 @@
    "resource.statefulset.edit",
    "resource.secret.delete"
   ],
-  "allowed": true
+  "allowed": false
  },
  {
   "name": "custom role with other kinds: rollout history",
@@ -1863,7 +2117,7 @@
    "resource.statefulset.edit",
    "resource.secret.delete"
   ],
-  "allowed": true
+  "allowed": false
  },
  {
   "name": "custom role with other kinds: scale",

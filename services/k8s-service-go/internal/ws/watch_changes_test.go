@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"k8s.io/client-go/dynamic"
 )
 
@@ -309,6 +310,44 @@ func TestARequestThatMissedSomethingGetsOneResyncOnceTheWatchIsOn(t *testing.T) 
 	api.waitForWatches(t, 1)
 	if rest := framesUntilQuiet(incoming, 300*time.Millisecond); len(rest) != 0 {
 		t.Errorf("after the RESYNC: %+v", rest)
+	}
+}
+
+// It says when a table changed, which a role without the key may not read: refused before any call to the cluster.
+func TestAWatchOfChangesAsksWhatTheListAsks(t *testing.T) {
+	const key = "resource.objects.read"
+	const path = "/apis/rbac.authorization.k8s.io/v1/clusterroles"
+	for _, c := range []struct {
+		name    string
+		perms   auth.PermissionMatrix
+		refused bool
+	}{
+		{"Pod logs only", auth.PermissionMatrix{"c1": {"resource.pod.read"}}, true},
+		{"the key on another cluster", auth.PermissionMatrix{"c1": {"menu.*"}, "c2": {key}}, true},
+		{"the key", auth.PermissionMatrix{"c1": {key}}, false},
+		{"the Read role's wildcard", auth.PermissionMatrix{"c1": {"resource.*.read"}}, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			api := newChangesAPI()
+			m := muxOn(t, api.serve)
+			conn := socketTo(t, m, c.perms)
+			request(t, conn, "REQUEST", "c1", path, changesQuery)
+			if !c.refused {
+				api.waitForWatches(t, 1)
+				return
+			}
+			f := nextFrame(t, conn)
+			if reason := frameReason(t, f); reason != reasonForbidden {
+				t.Fatalf("reason = %q", reason)
+			}
+			if !strings.Contains(f.Error.Message, key) {
+				t.Fatalf("message = %q, want it to name %s", f.Error.Message, key)
+			}
+			lists, watches := api.asked()
+			if len(lists) != 0 || len(watches) != 0 || m.SubscriptionCount() != 0 {
+				t.Fatalf("lists %v, watches %v, %d subscriptions: nothing should have opened", lists, watches, m.SubscriptionCount())
+			}
+		})
 	}
 }
 

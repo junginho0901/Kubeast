@@ -20,7 +20,7 @@ def test_write_tool_allowed_only_on_granted_cluster():
 
 
 def test_tool_list_is_filtered_per_cluster():
-    matrix = {"alpha": ["ai.tool.*", "resource.*.delete"], "prod": []}
+    matrix = {"alpha": ["ai.tool.*", "resource.objects.read", "resource.*.delete"], "prod": []}
     tools = [
         {"type": "function", "function": {"name": "k8s_get_resources"}},
         {"type": "function", "function": {"name": "k8s_delete_resource"}},

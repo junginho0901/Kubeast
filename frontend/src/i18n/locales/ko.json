@@ -488,6 +488,7 @@
       "title": "권한 없음",
       "body": "{{resources}}: 이 클러스터에서 볼 권한이 없습니다. 관리자에게 해당 권한이 포함된 역할을 요청하세요.",
       "customRole": "역할 \"{{role}}\"은(는) 이 클러스터에서 Kubernetes 그룹 {{group}}(으)로 동작합니다. 모든 페이지에 이 안내가 뜬다면 클러스터가 아직 이 그룹을 허용·바인딩하지 않은 것입니다(차트 auth.impersonation.customRoles).",
+      "readPermission": "이 클러스터에서 받은 역할에 resource.objects.read(목록·상세)도 resource.*.read(All resources: read)도 없어 Kubeast가 목록을 읽지 않습니다. 관리자에게 둘 중 하나를 더해 달라고 요청하세요.",
       "namespaces": "이 클러스터에서는 네임스페이스 {{namespaces}}만 볼 수 있습니다. 클러스터 범위 화면과 다른 네임스페이스는 보이지 않습니다."
     },
     "watchProblem": {
@@ -3843,7 +3844,8 @@
         "menu_configuration": "설정",
         "menu_admin": "관리자",
         "resource_all_all": "모든 리소스 전체",
-        "resource_all_read": "Pod 로그·로그 검색·Alerts·Helm·Cost·Policy Reports·네트워크 읽기에서 묻습니다. 다른 목록은 클러스터에 받은 역할과 클러스터 RBAC이 정합니다.",
+        "resource_all_read": "모든 종류의 목록·상세와 Pod 로그·로그 검색·Alerts·Helm·Cost·Policy Reports·네트워크 읽기를 엽니다. 실제로 보이는 것은 역할의 그룹에 대한 클러스터 RBAC이 정합니다.",
+        "resource_objects_read": "모든 종류의 목록·상세만 엽니다. Pod 로그·로그 검색·Alerts·Helm·Cost·Policy Reports·네트워크 읽기는 열지 않습니다. 이 칸도 resource.*.read도 없으면 역할의 화면은 아무것도 읽지 못합니다.",
         "resource_all_create": "모든 리소스 생성",
         "resource_all_edit": "모든 리소스 수정",
         "resource_all_delete": "모든 리소스 삭제",
@@ -3995,6 +3997,7 @@
     "createError": "역할을 만들지 못했습니다",
     "createTitle": "역할 생성",
     "customNote": "이 역할에 줄 권한을 고르세요(본인이 가진 권한만)",
+    "noListHint": "이대로면 이 역할의 화면은 아무 목록도 읽지 못합니다. resource.objects.read(목록·상세)나 resource.*.read를 고르세요.",
     "groupHint": "클러스터에서 이 역할은 Kubernetes 그룹 {{group}}(으)로 동작합니다. 클러스터마다 이 그룹을 허용·바인딩해야 하고(차트 auth.impersonation.customRoles), 그렇지 않으면 그 클러스터의 모든 요청이 거부됩니다.",
     "delete": "삭제",
     "deleteConfirm": "\"{{name}}\" 역할을 삭제할까요?",

@@ -1,5 +1,37 @@
 import { describe, expect, it } from 'vitest'
-import { hasPermission, holdsOnAnyCluster, matchAny, permMatches, permResource, waitsForCluster } from './permissions'
+import { hasPermission, holdsOnAnyCluster, LISTS_AND_DETAILS, matchAny, newRolePermissions, permMatches, permResource, roleReadsNoList, waitsForCluster } from './permissions'
+
+describe('a role that would read no list', () => {
+  it.each([
+    [['menu.*'], true],
+    [['menu.dashboard', 'ai.tool.*'], true],
+    [['resource.*.edit', 'resource.*.delete'], true],
+    [['resource.helm.read', 'menu.helm'], true],
+    [['menu.*', LISTS_AND_DETAILS], false],
+    [['menu.*', 'resource.*.read'], false],
+    [['resource.*.*'], false],
+    [['*'], false],
+    // Nothing to warn about: a role of admin keys opens pages, and an empty one reaches no cluster.
+    [['admin.audit.read'], false],
+    [[], false],
+  ])('%j → %s', (perms, want) => {
+    expect(roleReadsNoList(new Set(perms))).toBe(want)
+  })
+})
+
+// A new role starts as it reads today, within what its author may hand out (the permission ceiling).
+describe('what the new role form starts with', () => {
+  it.each([
+    ['a global admin', { '*': ['*'] }, [LISTS_AND_DETAILS]],
+    ['Read on a cluster', { c1: ['menu.*', 'resource.*.read'] }, [LISTS_AND_DETAILS]],
+    ['the key on a cluster', { c1: [LISTS_AND_DETAILS] }, [LISTS_AND_DETAILS]],
+    ['role admin keys alone', { '*': ['admin.roles.*'] }, []],
+    ['no key on any cluster', { c1: ['menu.*'] }, []],
+    ['nothing', {}, []],
+  ])('%s', (_name, matrix, want) => {
+    expect(newRolePermissions(matrix)).toEqual(want)
+  })
+})
 
 // Same table as services/pkg/auth permissions_test.go — the three matchers
 // (Go, Python, TS) must agree on wildcard semantics.
