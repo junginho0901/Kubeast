@@ -182,6 +182,39 @@ test.describe('What a chat answer may draw', () => {
     }
   })
 
+  test('AI Chat: an image on the console\'s own host keeps its text and asks the console nothing, another host\'s keeps its address', async ({ page }) => {
+    const title = `${MARK}-img-${Date.now().toString(36)}`
+    const own = `/api/v1/${MARK}/image`
+    const created = await page.request.post('/api/v1/sessions?cluster=self', { headers: XRW, data: { title } })
+    expect(created.ok(), `create session: ${created.status()}`).toBeTruthy()
+    const id = (await created.json()).id as string
+    const asked: string[] = []
+    page.on('request', (request) => {
+      if (request.url().includes(MARK)) asked.push(request.url())
+    })
+    try {
+      const origin = new URL(process.env.E2E_BASE_URL || 'http://localhost:30080').origin
+      const content = [`![relative](${own}?a=1)`, `![absolute](${origin}${own}?a=2)`, `<img src="${own}?a=3" alt="raw">`, `![other](https://example.test/${MARK}.png)`, 'After the images.'].join('\n\n')
+      const saved = await page.request.post(`/api/v1/sessions/${id}/messages?cluster=self`, {
+        headers: XRW, data: { messages: [{ role: 'user', content: 'show a picture' }, { role: 'assistant', content }] },
+      })
+      expect(saved.ok(), `save messages: ${saved.status()}`).toBeTruthy()
+      await page.goto('/ai-chat?cluster=self')
+      await page.waitForLoadState('networkidle')
+      await page.getByText(title, { exact: true }).first().click()
+      const bubble = page.locator(ASSISTANT).last()
+      await expect(bubble).toContainText('After the images.')
+      await page.waitForTimeout(1000)
+      const images = await bubble.locator('img[alt]').evaluateAll((els) => els.map((el) => [el.getAttribute('alt'), el.getAttribute('src')]))
+      expect(images.filter(([alt]) => alt !== '')).toEqual([
+        ['relative', null], ['absolute', null], ['raw', null], ['other', `https://example.test/${MARK}.png`],
+      ])
+      expect(asked.filter((url) => url.startsWith(origin))).toEqual([])
+    } finally {
+      await dropSession(page, id)
+    }
+  })
+
   test('AI Chat: a tool result with lines of backticks stays in its code block, while the answer comes and once saved', async ({ page }) => {
     await page.clock.install()
     const title = `${MARK}-${Date.now().toString(36)}`

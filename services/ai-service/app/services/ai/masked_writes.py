@@ -11,11 +11,13 @@ from typing import Any, List, Optional
 from app.services.tool_whitelists import WRITE_TOOL_NAMES
 
 _SHOWN = 5
-_PLACEHOLDER = re.compile(r"""(?:<|\\u003[cC])REDACTED:([^<>\s"'\\]*)(?:>|\\u003[eE])""")
+# A masked value (its name may hold spaces: a key's name, k8s_diff's "new value") and a personal-data address (REDACTION_PII).
+_PLACEHOLDER = re.compile(r"""(?:<|\\u003[cC])(REDACTED:[^<>"'\\\r\n]*|EMAIL_[0-9]+)(?:>|\\u003[eE])""")
 _ENCODED_TOKEN = re.compile(r"[A-Za-z0-9+/]{16,}={0,2}")
-# k8s-service's Secret mask means nothing outside a Secret, where three stars may be a value.
-_SECRET_KIND_YAML = re.compile(r"""^[ \t]*(?:-[ \t]+)?["']?kind["']?[ \t]*:[ \t]*["']?Secret["']?[ \t]*\r?$""", re.MULTILINE)
-_SECRET_KIND_JSON = re.compile(r'"kind"\s*:\s*"Secret"')
+# k8s-service's Secret mask means nothing outside a Secret, where three stars may be a value. A SecretList's items without a
+# kind of their own are Secrets to kubectl.
+_SECRET_KIND_YAML = re.compile(r"""^[ \t]*(?:-[ \t]+)?["']?kind["']?[ \t]*:[ \t]*["']?Secret(?:List)?["']?[ \t]*\r?$""", re.MULTILINE)
+_SECRET_KIND_JSON = re.compile(r'"kind"\s*:\s*"Secret(?:List)?"')
 _MASK_YAML = re.compile(r"""^[ \t]*(?:-[ \t]+)?["']?[A-Za-z0-9._/\-]+["']?[ \t]*:[ \t]*["']?\*\*\*["']?[ \t]*\r?$""", re.MULTILINE)
 _MASK_JSON = re.compile(r'"[A-Za-z0-9._/\-]+"\s*:\s*"\*\*\*"')
 # base64 of the mask, without and with the quotes an older YAML window saved it with
@@ -57,15 +59,15 @@ def _placeholders(args: dict) -> List[str]:
             found.append(word)
 
     for text in _argument_texts(args):
-        for name in _PLACEHOLDER.findall(text):
-            add(f"<REDACTED:{name}>")
+        for word in _PLACEHOLDER.findall(text):
+            add(f"<{word}>")
         for token in _ENCODED_TOKEN.findall(text):
             try:
                 decoded = base64.b64decode(token, validate=True).decode("utf-8", "ignore")
             except (binascii.Error, ValueError):
                 continue
-            for name in _PLACEHOLDER.findall(decoded):
-                add(f"<REDACTED:{name}>")
+            for word in _PLACEHOLDER.findall(decoded):
+                add(f"<{word}>")
         for document in text.split("\n---"):
             if not (names_secret or _SECRET_KIND_YAML.search(document) or _SECRET_KIND_JSON.search(document)):
                 continue

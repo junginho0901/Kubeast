@@ -163,10 +163,13 @@ func gitopsGuard(ctx context.Context, headers http.Header, resourceType, name, n
 // a whole list. A type it cannot size (several, a category) is listed as before.
 func gitopsListFits(ctx context.Context, headers http.Header, resourceType, namespace string) error {
 	size, ok, err := listSize(ctx, headers, resourceType, namespace, false, "", "")
-	if err == nil && ok && size.count > listMax {
-		return fmt.Errorf("%d objects are more than the %d it reads", size.count, listMax)
+	switch {
+	case err != nil || !ok || !size.tooMany():
+		return nil
+	case size.unknown:
+		return fmt.Errorf("an object is larger than the %d bytes it reads at a time", outputMaxBytes)
 	}
-	return nil
+	return fmt.Errorf("%d objects are more than the %d it reads", size.count, listMax)
 }
 
 // gitopsGuardManifest checks every object a manifest would change: each document

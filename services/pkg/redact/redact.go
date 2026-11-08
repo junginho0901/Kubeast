@@ -1557,9 +1557,9 @@ func jsonValueEnd(s string, i int) int {
 
 // Object redacts a decoded JSON/YAML value in place: map keys that look like
 // credentials lose their values, a container env entry's value follows its
-// name, every string goes through Text, and a map with kind: Secret loses
-// data/stringData wherever they sit under it, with the last-applied annotation
-// of any annotations under it.
+// name, every string goes through Text, and a map with kind: Secret (or an
+// item without a kind in a SecretList) loses data/stringData wherever they sit
+// under it, with the last-applied annotation of any annotations under it.
 func Object(v any, o Options) (any, Stats) {
 	var st Stats
 	return walk(v, o, &st, false), st
@@ -1574,6 +1574,18 @@ func StripSecrets(v any) int {
 	return st.Kinds["secret"]
 }
 
+// itemIsSecret: a typed list's item carries no kind of its own, and kubectl reads it as the list's (apimachinery
+// decodeToList), so an item without one in a SecretList is a Secret.
+func itemIsSecret(list map[string]any, key string, item any) bool {
+	kind, _ := list["kind"].(string)
+	m, ok := item.(map[string]any)
+	if !ok || kind != "SecretList" || key != "items" {
+		return false
+	}
+	itemKind, _ := m["kind"].(string)
+	return itemKind == ""
+}
+
 func stripSecrets(v any, secret bool, st *Stats) {
 	switch t := v.(type) {
 	case map[string]any:
@@ -1584,6 +1596,12 @@ func stripSecrets(v any, secret bool, st *Stats) {
 			maskSecretFields(t, st)
 		}
 		for k, val := range t {
+			if items, ok := val.([]any); ok && k == "items" {
+				for _, item := range items {
+					stripSecrets(item, secret || itemIsSecret(t, k, item), st)
+				}
+				continue
+			}
 			if !secret || !secretValueFields[k] {
 				stripSecrets(val, secret, st)
 			}
@@ -1649,6 +1667,12 @@ func walk(v any, o Options, st *Stats, secret bool) any {
 						st.add("key_name", 1)
 					}
 				}
+			}
+			if items, ok := val.([]any); ok && k == "items" {
+				for i, item := range items {
+					items[i] = walk(item, o, st, secret || itemIsSecret(t, k, item))
+				}
+				continue
 			}
 			t[k] = walk(val, o, st, secret)
 		}

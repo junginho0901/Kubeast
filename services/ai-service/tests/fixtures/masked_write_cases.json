@@ -116,6 +116,42 @@
    "refused": ["<REDACTED:password>"]
   },
   {
+   "name": "apply a Secret with the diff's placeholder for a changed value",
+   "tool": "k8s_apply_manifest",
+   "args": {"yaml_content": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: db\n  namespace: shop\nstringData:\n  password: \"<REDACTED:secret:new value>\"\n"},
+   "refused": ["<REDACTED:secret:new value>"]
+  },
+  {
+   "name": "a value masked by a key name holding a space",
+   "tool": "k8s_apply_manifest",
+   "args": {"resource_manifest": {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "app", "namespace": "shop"}, "data": {"db password": "<REDACTED:db password>"}}},
+   "refused": ["<REDACTED:db password>"]
+  },
+  {
+   "name": "apply a ConfigMap holding an address read as a personal-data placeholder",
+   "tool": "k8s_apply_manifest",
+   "args": {"yaml_content": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: app\n  namespace: shop\ndata:\n  ADMIN: <EMAIL_1>\n"},
+   "refused": ["<EMAIL_1>"]
+  },
+  {
+   "name": "patch text escaping a personal-data placeholder",
+   "tool": "k8s_patch_resource",
+   "args": {"resource_type": "deployment", "resource_name": "web", "namespace": "shop", "patch": "{\"metadata\":{\"annotations\":{\"owner\":\"\\u003cEMAIL_2\\u003e\"}}}"},
+   "refused": ["<EMAIL_2>"]
+  },
+  {
+   "name": "apply a SecretList whose items hold the screen's mask",
+   "tool": "k8s_apply_manifest",
+   "args": {"yaml_content": "apiVersion: v1\nkind: SecretList\nitems:\n- metadata:\n    name: db\n    namespace: shop\n  stringData:\n    password: '***'\n"},
+   "refused": ["***"]
+  },
+  {
+   "name": "an address in angle brackets without a number",
+   "tool": "k8s_apply_manifest",
+   "args": {"yaml_content": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: app\n  namespace: shop\ndata:\n  template: <EMAIL_ADDRESS>\n"},
+   "refused": []
+  },
+  {
    "name": "a Secret with its own values",
    "tool": "k8s_apply_manifest",
    "args": {"yaml_content": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: db\n  namespace: shop\ndata:\n  password: ZmFrZS12YWx1ZQ==\nstringData:\n  user: fake-user\n"},

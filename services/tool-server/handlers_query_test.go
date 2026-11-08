@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
@@ -14,6 +15,43 @@ const queryPodList = `{"apiVersion":"v1","kind":"List","items":[
  {"metadata":{"name":"web-1","namespace":"shop"},"status":{"phase":"Running"},"spec":{"nodeName":"n1"}},
  {"metadata":{"name":"web-2","namespace":"shop"},"status":{"phase":"Pending"},"spec":{"nodeName":"n2"}},
  {"metadata":{"name":"api-1","namespace":"db"},"status":{"phase":"Running"},"spec":{"nodeName":"n1"}}]}`
+
+// A jq program that builds more than a run may hold is stopped with that reason, whether it grows step by step or in one
+// operation, and the next program runs as before.
+func TestJQProgramThatOutgrowsItsMemoryIsStopped(t *testing.T) {
+	for _, expr := range []string{
+		`[range(6000000)] | length`,
+		`reduce range(27) as $i ("a"; . + .) | length`,
+		`"a" * 200000000 | length`,
+	} {
+		fakeKubectl(t, func(args []string) (string, error) { return queryPodList, nil })
+		out, err := handleJQQuery(ctxFor("c1"), map[string]interface{}{"resource_type": "pods", "namespace": "shop", "jq": expr}, bearer())
+		if !errors.Is(err, errBadRequest) || !strings.Contains(err.Error(), "memory") {
+			t.Errorf("%s: want a refusal for its memory, got %v %.200s", expr, err, out)
+		}
+	}
+	fakeKubectl(t, func(args []string) (string, error) { return queryPodList, nil })
+	out, err := handleJQQuery(ctxFor("c1"), map[string]interface{}{"resource_type": "pods", "namespace": "shop", "jq": `[.items[].metadata.name] | length`}, bearer())
+	if err != nil || !strings.Contains(out, `"results":[3]`) {
+		t.Fatalf("the next program: %v %s", err, out)
+	}
+}
+
+// A jq program that runs past the time limit is stopped with that reason.
+func TestJQProgramThatRunsPastItsTimeIsStopped(t *testing.T) {
+	prev := jqTimeout
+	jqTimeout = 300 * time.Millisecond
+	t.Cleanup(func() { jqTimeout = prev })
+	fakeKubectl(t, func(args []string) (string, error) { return queryPodList, nil })
+	start := time.Now()
+	_, err := handleJQQuery(ctxFor("c1"), map[string]interface{}{"resource_type": "pods", "namespace": "shop", "jq": `until(false; .)`}, bearer())
+	if !errors.Is(err, errBadRequest) || !strings.Contains(err.Error(), "took longer than 300ms") {
+		t.Fatalf("want a refusal for its time, got %v", err)
+	}
+	if took := time.Since(start); took > 3*time.Second {
+		t.Fatalf("stopped after %s", took)
+	}
+}
 
 func TestJQQuery_FilterCapsAndErrors(t *testing.T) {
 	calls := fakeKubectl(t, func(args []string) (string, error) { return "Warning: deprecated\n" + queryPodList, nil })

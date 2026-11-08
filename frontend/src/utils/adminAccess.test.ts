@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ADMIN_PAGE_PERMISSIONS, isGlobalAdmin, readsHygiene, roleReachesEveryCluster } from './adminAccess'
+import { ADMIN_PAGE_PERMISSIONS, givesChartBoundRole, isGlobalAdmin, readsHygiene, roleReachesEveryCluster } from './adminAccess'
 import { hasPermission, type PermissionMatrix } from './permissions'
 
 // The sidebar (Layout canOpen) and the routes (RequireAdmin → RequirePermission) both ask has(p) of the page's keys on
@@ -93,5 +93,25 @@ describe('who reads a cluster\'s hygiene report', () => {
     expect(readsHygiene(has({ self: ['*'] }), null, 'other')).toBe(false)
     expect(readsHygiene(has({ self: ['*'], other: READ }), null, 'other')).toBe(false)
     expect(readsHygiene(has({ self: READ, other: ['*'] }), null, 'other')).toBe(true)
+  })
+})
+
+// The same rule as auth-service chartBoundGrantCeiling: who acts as cluster-admin on the cluster already.
+describe('who gives a role the chart binds', () => {
+  const users = { '*': ['admin.users.update'] }
+  it('a global admin, on every cluster', () => {
+    expect(givesChartBoundRole({ '*': ['*'] }, {}, {}, 'self')).toBe(true)
+  })
+
+  it('an Admin of that cluster not limited to namespaces', () => {
+    expect(givesChartBoundRole({ ...users, self: ['*'] }, { self: 'Admin' }, {}, 'self')).toBe(true)
+    expect(givesChartBoundRole({ ...users, self: ['*'] }, { self: 'Admin' }, { self: ['team-a'] }, 'self')).toBe(false)
+    expect(givesChartBoundRole({ ...users, self: ['*'] }, { self: 'Admin' }, {}, 'other')).toBe(false)
+  })
+
+  it('not a user admin holding less there, nor every admin key', () => {
+    expect(givesChartBoundRole({ ...users, self: READ }, { self: 'Read' }, {}, 'self')).toBe(false)
+    expect(givesChartBoundRole({ ...users, self: WRITE }, { self: 'Write' }, {}, 'self')).toBe(false)
+    expect(givesChartBoundRole({ '*': ['admin.*'] }, {}, {}, 'self')).toBe(false)
   })
 })

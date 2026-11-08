@@ -113,6 +113,52 @@ test.describe('AI query tools: jq, tabular, count, and the k8s_diff preview', ()
     expect(nodes.count).toBe(Number(kubectl(`get nodes -o name`).split('\n').filter(Boolean).length))
   })
 
+  test('a few large objects are counted as few: a page past the tool output is read again smaller', async ({ request }) => {
+    const token = await login(request)
+    test.skip(!(await mcpOn(request, token)), 'the MCP server is off (mcp.enabled)')
+    const ns = `e2e-big-cm-${stamp()}`
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-big-cm-'))
+    const file = path.join(dir, 'value')
+    fs.writeFileSync(file, 'x'.repeat(600 << 10))
+    kubectl(`create namespace ${ns}`)
+    try {
+      for (const name of ['big-a', 'big-b']) {
+        kubectl(`-n ${ns} create configmap ${name} --from-file=value=${file}`)
+        kubectl(`-n ${ns} label configmap ${name} app=e2e-big`)
+      }
+      const inCluster = kubectl(`-n ${ns} get configmaps -l app=e2e-big -o name`).split('\n').filter(Boolean)
+      expect(inCluster).toEqual(['configmap/big-a', 'configmap/big-b'])
+
+      const counted = json((await call(request, token, 'k8s_count', { resource_type: 'configmaps', namespace: ns, label_selector: 'app=e2e-big' })).text)
+      expect(counted.count).toBe(inCluster.length)
+      expect(counted.count_at_least).toBeUndefined()
+      const table = (await call(request, token, 'k8s_tabular_query', { resource_type: 'configmaps', namespace: ns, label_selector: 'app=e2e-big', columns: 'NAME:.metadata.name' })).text
+      expect(table).not.toContain('too_large')
+      expect(table.split('\n').slice(2).map((l) => l.trim()).sort()).toEqual(['big-a', 'big-b'])
+    } finally {
+      kubectl(`delete namespace ${ns} --wait=false`, true)
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('a jq program that builds more than a run may hold is refused for its memory, and tool-server keeps running', async ({ request }) => {
+    const token = await login(request)
+    test.skip(!(await mcpOn(request, token)), 'the MCP server is off (mcp.enabled)')
+    const pods = () => kubectl(`-n kubeast get pods -l app=tool-server -o jsonpath='{range .items[*]}{.metadata.name}={.status.containerStatuses[0].restartCount}{" "}{end}'`).replace(/'/g, '').trim()
+    const before = pods()
+    expect(before).toMatch(/=\d+/)
+
+    for (const program of ['[range(6000000)] | length', 'reduce range(27) as $i ("a"; . + .) | length', '"a" * 200000000 | length']) {
+      const refused = await call(request, token, 'k8s_jq_query', { resource_type: 'pods', namespace: 'kubeast', jq: program })
+      expect(refused.isError, program).toBe(true)
+      expect(refused.text, program).toMatch(/jq: the expression needed more memory than a run may hold/)
+    }
+    const after = json((await call(request, token, 'k8s_jq_query', { resource_type: 'pods', namespace: 'kubeast', jq: '[.items[].metadata.name] | length' })).text)
+    expect(after.results).toEqual([Number(kubectl(`-n kubeast get pods -o jsonpath='{.items[*].metadata.name}'`).replace(/'/g, '').split(/\s+/).filter(Boolean).length)])
+    // the same pods with the same restart counts: no container was killed for the programs' memory
+    expect(pods()).toBe(before)
+  })
+
   test('a Secret answers every query tool without its values, a ConfigMap read the same way keeps them, and k8s_diff names keys only', async ({ request }) => {
     const admin = await login(request)
     test.skip(!(await mcpOn(request, admin)), 'the MCP server is off (mcp.enabled)')

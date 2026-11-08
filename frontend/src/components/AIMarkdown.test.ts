@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { AIMarkdown } from '@/components/AIMarkdown'
 import reportModal from '@/components/InvestigationReportModal.tsx?raw'
 import optimizationModal from '@/pages/dashboard/modals/OptimizationModal.tsx?raw'
@@ -31,6 +31,21 @@ describe('AIMarkdown', () => {
     expect(html).not.toContain('<script')
     expect(html).not.toContain('href="https://example.test/raw"')
     expect(html).toContain('text')
+  })
+
+  it('an image on the console\'s own host keeps its text and loses its address, another host\'s keeps it', () => {
+    vi.stubGlobal('location', new URL('https://console.example.test/alerts'))
+    try {
+      for (const src of ['/api/v1/namespaces/shop/secrets/db/yaml', '//console.example.test/x', 'https://console.example.test:8443/x']) {
+        const html = render(`![shown](${src})`)
+        expect(html).not.toMatch(/<img\b[^>]*\ssrc=/)
+        expect(html).not.toContain('as="image"')
+        expect(html).toContain('alt="shown"')
+      }
+      expect(render('![A chart](https://example.test/a.png)')).toContain('<img src="https://example.test/a.png" alt="A chart"/>')
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('keeps tables and ranges as the shared Markdown rules read them', () => {

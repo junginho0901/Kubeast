@@ -150,7 +150,9 @@ auth:
     # name Read, Write or Admin there to bind the system roles' scoped groups
     # (kubeast:role:read/write/admin, already allowed for impersonation).
     # auth-service reads this list: naming a role so that it acts as a listed
-    # group takes all permissions (*), since a role of that name holds the binding.
+    # group takes all permissions (*), since a role of that name holds the binding,
+    # and granting or approving a listed custom role takes a global admin or an
+    # Admin of that cluster not limited to namespaces.
     customRoles: []
     #  - name: sre-readonly
     #    clusterRoles: [view, "kubeast:cluster-reader"]
@@ -1083,9 +1085,10 @@ multicluster:
   # at once; the rest wait. Priority and fairness counts such a list as up to 10
   # seats of the API server's global-default level, about 49 by default.
   eventListConcurrency: 4
-  # How many kubectl processes tool-server runs at once; the rest wait inside
-  # their call's 50 s. About 40 MiB each, inside resources.toolServer's limit, and
-  # the Go collector's limit is lowered by that much per process.
+  # How many kubectl processes tool-server runs at once (a k8s_jq_query program's
+  # child process takes a place too); the rest wait inside their call's 50 s.
+  # About 40 MiB each, inside resources.toolServer's limit, and the Go
+  # collector's limit is lowered by that much per process.
   toolServerKubectlConcurrency: 3
   # Credential plugins a registered kubeconfig may run (exec.command base
   # names). They execute inside the k8s-service and tool-server pods, so only

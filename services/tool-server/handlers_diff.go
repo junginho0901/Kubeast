@@ -14,7 +14,12 @@ import (
 	"net/http"
 	"os/exec"
 	"reflect"
+	"sort"
 	"strings"
+
+	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
+
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
 const (
@@ -91,7 +96,11 @@ func handleDiff(ctx context.Context, args map[string]interface{}, headers http.H
 		dropPath(want, path)
 		dropPath(live, path)
 	}
-	hideSecretValues(want, live)
+	mayReveal := false
+	if payload, ok := auth.FromContext(ctx); ok {
+		mayReveal = holdsForTool(payload, "resource.secret.reveal", clusterIDFromCtx(ctx))
+	}
+	notCompared := hideSecretValues(want, live, mayReveal, manifestSecretKeys(manifest))
 	wantText := prettyJSON(want)
 	liveTextClean := ""
 	if live != nil {
@@ -127,6 +136,14 @@ func handleDiff(ctx context.Context, args map[string]interface{}, headers http.H
 	if status == "unchanged" {
 		out["hint"] = "Applying this manifest would change nothing (ignoring server-owned fields and status)."
 	}
+	if notCompared != nil {
+		keys := "none here"
+		if len(notCompared) > 0 {
+			keys = strings.Join(notCompared, ", ")
+		}
+		out["values_not_compared"] = "Without resource.secret.reveal this Secret's values are not compared, as on the screens. Each key the manifest gives that the live Secret holds shows as a change whether its value differs or not: " +
+			keys + ". Keys added and taken out are named without their values."
+	}
 	if found := placeholdersInWrite(args); len(found) > 0 {
 		out["placeholders"] = found
 		out["hint"] = "This manifest holds what the assistant reads in place of a value, so the diff compares those letters and not the value behind them. A write holding them is refused. To change other fields, call k8s_patch_resource with those fields only."
@@ -134,11 +151,37 @@ func handleDiff(ctx context.Context, args map[string]interface{}, headers http.H
 	return marshalJSON(out)
 }
 
+// secretNotCompared stands for a value the caller may not reveal, which a right guess and a wrong one would otherwise tell apart.
+const secretNotCompared = "<REDACTED:secret:not compared>"
+
 // hideSecretValues keeps a Secret's preview to which keys would change: its keys may have any name, so the rules on
-// names would not find them. Values are compared here and leave as placeholders that differ only if the values do.
-func hideSecretValues(want, live map[string]interface{}) {
+// names would not find them. For one who may reveal the values they are compared here and leave as placeholders that
+// differ only if the values do. For anyone else nothing is compared, as the Helm preview's changed_masked: a key the
+// manifest names (named, nil when the manifest could not be read) and the live Secret holds is a change, and those keys
+// are returned, sorted (an empty list for a Secret with none, nil when the values were compared or it is no Secret).
+func hideSecretValues(want, live map[string]interface{}, compare bool, named map[string]bool) []string {
 	if kind, _ := want["kind"].(string); kind != "Secret" {
-		return
+		return nil
+	}
+	if !compare {
+		notCompared := []string{}
+		for _, field := range []string{"data", "stringData"} {
+			after, _ := want[field].(map[string]interface{})
+			before, _ := live[field].(map[string]interface{})
+			for k := range after {
+				if _, both := before[k]; both && (named == nil || named[k]) {
+					after[k] = secretNotCompared
+					notCompared = append(notCompared, k)
+					continue
+				}
+				after[k] = "<REDACTED:secret>"
+			}
+			for k := range before {
+				before[k] = "<REDACTED:secret>"
+			}
+		}
+		sort.Strings(notCompared)
+		return notCompared
 	}
 	for _, field := range []string{"data", "stringData"} {
 		after, _ := want[field].(map[string]interface{})
@@ -159,6 +202,23 @@ func hideSecretValues(want, live map[string]interface{}) {
 			}
 		}
 	}
+	return nil
+}
+
+// manifestSecretKeys is the keys a manifest of one object gives under data and stringData, nil when it cannot be read.
+func manifestSecretKeys(manifest string) map[string]bool {
+	var object map[string]interface{}
+	if err := utilyaml.NewYAMLOrJSONDecoder(strings.NewReader(manifest), 4096).Decode(&object); err != nil {
+		return nil
+	}
+	keys := map[string]bool{}
+	for _, field := range []string{"data", "stringData"} {
+		values, _ := object[field].(map[string]interface{})
+		for k := range values {
+			keys[k] = true
+		}
+	}
+	return keys
 }
 
 // qualifiedType renders the type for kubectl get: the bare kind for the core

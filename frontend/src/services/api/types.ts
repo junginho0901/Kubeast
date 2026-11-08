@@ -2103,6 +2103,8 @@ export interface RoleWithDetails {
   permissions: string[]
   created_at: string
   updated_at: string
+  // The chart binds this custom role's group: only a global admin or an Admin of the cluster gives it.
+  chart_bound?: boolean
 }
 
 export interface Member {

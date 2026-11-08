@@ -23,7 +23,6 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/gitops"
-	"github.com/junginho0901/kubeast/services/pkg/protectedns"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -77,7 +76,7 @@ type clientBundle struct {
 	id          cluster.ID
 	cacheClient kubernetes.Interface
 	// protected is what this cluster's client holds a signed-in user to (services/pkg/protectedns).
-	protected   protectedns.Namespaces
+	protected   *guardedNamespaces
 	infMu       sync.Mutex
 	inf         *clusterInformers
 	infFailedAt time.Time
@@ -286,7 +285,7 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 	// Inside the recording, so a refused request is listed for the call as the cluster's own refusal is.
 	protected := protectedFor(info, cacheClient)
 	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper {
-		return protectedns.RoundTripper(rt, protected, string(info.ID))
+		return &guardedTransport{base: rt, rules: protected, clusterID: string(info.ID)}
 	})
 	// A request recorded for an AI tool call (accesstrail) goes out with its own Audit-ID.
 	cfg.Wrap(kubetrail.RoundTripper)
@@ -582,7 +581,7 @@ func (s *Service) UserRESTConfigFor(ctx context.Context) (*rest.Config, error) {
 	}
 	// This config's callers send their own contexts, which the bundle's check cannot read a user from.
 	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper {
-		return protectedns.Pinned(rt, b.protected, string(b.id), p)
+		return &guardedTransport{base: rt, rules: b.protected, clusterID: string(b.id), pinned: &p}
 	})
 	return cfg, nil
 }
