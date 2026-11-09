@@ -96,7 +96,10 @@ test('a refused values upgrade leaves a summary in its audit row and no value', 
   const after = await (await request.get(`${release}?cluster=self`, { headers: bearer(admin) })).json()
   expect(after.revision).toBe(revision)
 
+  // the upgrade rows only: a page holds the rows that fit the screen
   await page.goto('/admin/audit')
+  await page.getByPlaceholder('k8s.pod.delete').fill('helm.release.upgrade')
+  await page.getByRole('button', { name: /^(Search|조회)$/ }).first().click()
   await page.locator('tbody tr', { hasText: 'helm.release.upgrade' }).first().click()
   const shown = page.locator('pre', { hasText: '"values_len"' })
   await expect(shown).toContainText(`"values_len": ${values.length}`)

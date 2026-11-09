@@ -18,7 +18,7 @@ import (
 // or node shell, and the admin read API.
 //
 //   GET /api/v1/recordings/config           any signed-in user — is recording on
-//   GET /api/v1/recordings?user=&cluster=&kind=&limit=&offset=   admin.sessions.read (newest first)
+//   GET /api/v1/recordings?user=&cluster=&kind=&limit=&offset=   admin.sessions.read (newest first, X-Kubeast-Total)
 //   GET /api/v1/recordings/{id}             admin.sessions.read
 //   GET /api/v1/recordings/{id}/cast        admin.sessions.read, audited admin.session.read (format=text for the transcript)
 //
@@ -67,18 +67,26 @@ func (h *Handler) ListRecordings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.recorder == nil {
+		w.Header().Set("X-Kubeast-Total", "0")
 		response.JSON(w, http.StatusOK, []recording.Recording{})
 		return
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
-	list, err := h.recorder.List(r.Context(), recording.Filter{
+	filter := recording.Filter{
 		User: r.URL.Query().Get("user"), Cluster: r.URL.Query().Get("cluster"), Kind: r.URL.Query().Get("kind"), Limit: limit, Offset: offset,
-	})
+	}
+	list, err := h.recorder.List(r.Context(), filter)
 	if err != nil {
 		response.InternalError(w, r, err)
 		return
 	}
+	total, err := h.recorder.Count(r.Context(), filter)
+	if err != nil {
+		response.InternalError(w, r, err)
+		return
+	}
+	w.Header().Set("X-Kubeast-Total", strconv.Itoa(total))
 	response.JSON(w, http.StatusOK, list)
 }
 

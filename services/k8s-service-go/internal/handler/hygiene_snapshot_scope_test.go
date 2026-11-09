@@ -27,6 +27,9 @@ func (s *oneReview) Create(context.Context, *hygiene.Review) error { return nil 
 func (s *oneReview) List(context.Context, string, int) ([]hygiene.Review, error) {
 	return nil, nil
 }
+func (s *oneReview) Page(context.Context, string, int, int) ([]hygiene.Review, int, error) {
+	return nil, 0, nil
+}
 func (s *oneReview) Get(_ context.Context, clusterID, id string) (*hygiene.Review, error) {
 	if clusterID != s.review.Cluster || id != s.review.ID {
 		return nil, hygiene.ErrNotFound

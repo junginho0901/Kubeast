@@ -7,11 +7,10 @@ export function auditPageFilter(filter: AuditLogFilter, offset: number, answer?:
   return { ...filter, offset, as_of: filter.as_of ?? (placeholder ? undefined : answer?.as_of) }
 }
 
-// Rows per page is the table's own value, so choosing one reads at once: the filter the table shows, from the first
-// page, and a new as_of (the rows written since show, as a Search would).
+// The read for a rows per page (the screen's Fit or the footer's choice): the page that holds the first row on
+// screen, of the same read (as_of), so a new size neither goes back to the first page nor lets rows written since in.
 export function auditLimitFilter(filter: AuditLogFilter, limit: number): AuditLogFilter {
-  const { as_of: _asOf, ...rest } = filter
-  return { ...rest, limit, offset: 0 }
+  return { ...filter, limit, offset: Math.floor((filter.offset ?? 0) / limit) * limit }
 }
 
 // The CSV of the applied filter, of the rows the screen counts (as_of).
