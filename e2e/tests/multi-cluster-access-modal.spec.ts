@@ -56,7 +56,8 @@ test('cluster Access modal grants + revokes a per-cluster role', async ({ page, 
     const list = (await listRes.json()) as Array<{ user_id: string; role: string }>
     expect(list.some((g) => g.user_id === userId && g.role === 'Read')).toBeTruthy()
 
-    // Revoke via the row's trash button.
+    // Revoke via the row's trash button (the window pages its grants: find the row by its email).
+    await page.getByTestId('cluster-access-search').fill(email)
     await page.getByTestId(`cluster-access-revoke-${userId}`).click()
     await expect
       .poll(

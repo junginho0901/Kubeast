@@ -6,7 +6,12 @@ import { Plus, Pencil, Trash2, Shield, X, Check, Users } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
+import { ListPager } from '@/components/ListPager'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
+import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { usePermission } from '@/hooks/usePermission'
+import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
+import { pageOf } from '@/utils/listPages'
 import { newRolePermissions, roleReadsNoList } from '@/utils/permissions'
 import { customRoleGroup, roleEditEndsSessions } from '@/utils/roleGroup'
 import { useConfirm } from '@/services/confirm'
@@ -16,6 +21,8 @@ type PermCategory = { category: string; permissions: Array<{ key: string; descri
 // The permission catalog comes from auth-service in English; translate it by
 // key here. "." and "*" are i18next separators / awkward in keys, so map them.
 const i18nKey = (s: string) => s.toLowerCase().replace(/\*/g, 'all').replace(/[^a-z0-9]+/g, '_')
+
+const ROLE_COLUMNS = 5
 
 export default function AdminRoles() {
   const queryClient = useQueryClient()
@@ -51,6 +58,11 @@ export default function AdminRoles() {
   const roleMembers = usersRole
     ? allUsers.filter((u) => u.role?.id === usersRole.id)
     : []
+
+  // the page is as high as the screen; the table pages the roles, as many as fit (or the footer's fixed choice)
+  const [page, setPage] = useState(1)
+  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: `${isLoading}:${roles.length}` })
+  const shown = pageOf(roles, page, rowsPerPage)
 
   const { data: permCatalog = [] } = useQuery<PermCategory[]>({
     queryKey: ['permissions'],
@@ -149,8 +161,8 @@ export default function AdminRoles() {
   const isSaving = createMutation.isPending || updateMutation.isPending
 
   return (
-    <div className="space-y-6">
-      <div className="page-head items-center">
+    <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
+      <div className="page-head items-center shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('adminRoles.title', 'Role Management')}</h1>
           <p className="mt-2 text-slate-400">
@@ -167,7 +179,7 @@ export default function AdminRoles() {
       </div>
 
       {deleteError && (
-        <div className="rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200" role="alert" data-testid="admin-roles-delete-error">
+        <div className="shrink-0 rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200" role="alert" data-testid="admin-roles-delete-error">
           {deleteError}
         </div>
       )}
@@ -175,9 +187,10 @@ export default function AdminRoles() {
       {isLoading ? (
         <div className="text-slate-400 text-sm">{tr('adminRoles.loading', 'Loading...')}</div>
       ) : (
-        <div className="rounded-2xl border border-slate-700 bg-slate-800/50 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-800 text-slate-400">
+        <div ref={containerRef} className="flex-1 min-h-0 flex flex-col rounded-2xl border border-slate-700 bg-slate-800/50 overflow-hidden">
+          <div ref={bodyRef} className="overflow-x-auto flex-1 min-h-0">
+          <table className="w-full text-sm" data-testid="roles-table">
+            <thead ref={theadRef} className="bg-slate-800 text-slate-400">
               <tr className="text-left">
                 <th className="px-4 py-3">{tr('adminRoles.col.name', 'Name')}</th>
                 <th className="px-4 py-3">{tr('adminRoles.col.description', 'Description')}</th>
@@ -187,12 +200,12 @@ export default function AdminRoles() {
               </tr>
             </thead>
             <tbody>
-              {roles.map((role) => {
+              {shown.rows.map((role, idx) => {
                 const memberCount = canListUsers
                   ? allUsers.filter((u) => u.role?.id === role.id).length
                   : null
                 return (
-                <tr key={role.id} className="border-t border-slate-700 text-slate-200">
+                <tr key={role.id} ref={idx === 0 ? firstRowRef : undefined} className="border-t border-slate-700 text-slate-200">
                   <td className="px-4 py-3 font-medium">
                     <button
                       type="button"
@@ -276,8 +289,12 @@ export default function AdminRoles() {
                 </tr>
                 )
               })}
+              {roles.length === 0 && <TableEmptyRow colSpan={ROLE_COLUMNS} resource="admin-roles" />}
             </tbody>
+            <AdaptiveTableFillerRows count={rowsPerPage - shown.rows.length} columnCount={ROLE_COLUMNS} />
           </table>
+          </div>
+          <ListPager currentPage={shown.page} totalPages={shown.pages} total={roles.length} rowsPerPage={rowsPerPage} onPageChange={setPage} testId="roles-pager" />
         </div>
       )}
 

@@ -4,9 +4,14 @@ import { CheckCircle, ChevronDown, ChevronUp, Clock, Copy, Download, KeyRound, L
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ListPager } from '@/components/ListPager'
 import { ModalOverlay } from '@/components/ModalOverlay'
+import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
+import { usePagination } from '@/components/resource-detail/usePagination'
 import { useTranslation } from 'react-i18next'
 import { usePermission } from '@/hooks/usePermission'
+import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { formatTime } from '@/utils/time'
+import { pageOf } from '@/utils/listPages'
 import { useAdminUserData } from './admin-users/useAdminUserData'
 import { ReauthModal } from './admin-users/ReauthModal'
 import { CreateUserModal } from './admin-users/CreateUserModal'
@@ -16,8 +21,10 @@ import { useNavigate } from 'react-router-dom'
 import { UserDetailModal } from './admin-users/UserDetailModal'
 import { bulkRoleFailures, bulkRoleFailureText, readBulkRoleAnswer } from './admin-users/bulkRole'
 import { BULK_CSV_HEADER, bulkCreateFailureRows, bulkCreateFailures, bulkCreateSummary, bulkCsvTemplate, exampleBulkPassword, parseBulkCsv, readBulkCreateAnswer, type ParsedBulkCsv } from './admin-users/bulkCreate'
+import { roleMenuOpensUp } from './admin-users/roleMenu'
+import { allPendingSelected, toggleAllPending as toggleAllPendingIds, toggleOnePending } from './admin-users/pendingSelection'
 
-const USERS_PAGE_SIZE = 25
+const USER_COLUMNS = 6
 
 export default function AdminUsers() {
   const queryClient = useQueryClient()
@@ -29,6 +36,7 @@ export default function AdminUsers() {
   const [page, setPage] = useState(1)
   const [roleDrafts, setRoleDrafts] = useState<Record<string, number>>({})
   const [openRoleDropdownUserId, setOpenRoleDropdownUserId] = useState<string | null>(null)
+  const [roleMenuUp, setRoleMenuUp] = useState(false)
   const roleDropdownRef = useRef<HTMLDivElement | null>(null)
   const [reauthModalOpen, setReauthModalOpen] = useState(false)
   const [createModalOpen, setCreateModalOpen] = useState(false)
@@ -289,9 +297,17 @@ export default function AdminUsers() {
       : sortedRows),
     [sortedRows, query],
   )
-  const pageCount = Math.max(1, Math.ceil(filteredRows.length / USERS_PAGE_SIZE))
-  const currentPage = Math.min(page, pageCount)
-  const pagedRows = filteredRows.slice((currentPage - 1) * USERS_PAGE_SIZE, currentPage * USERS_PAGE_SIZE)
+  // the table takes the screen's height left; its rows per page are what fits (or the footer's fixed choice)
+  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: `${isLoading}:${filteredRows.length}` })
+  const { rows: pagedRows, page: currentPage, pages: pageCount } = pageOf(filteredRows, page, rowsPerPage)
+  // role names are stored capitalized ("Pending"), so compare without case
+  const pendingRows = useMemo(() => rows.filter((u) => u.role?.name?.toLowerCase() === 'pending'), [rows])
+  const pendingIds = useMemo(() => pendingRows.map((u) => u.id), [pendingRows])
+  // the Pending window pages its accounts as a drawer's table does; the choice is kept by id across its pages
+  const { items: pendingPageRows, nav: pendingNav } = usePagination(pendingRows, 10)
+  // a bulk upload's rows that were not created (up to the server's 100 a request), ten at a time
+  const bulkFailureLines = useMemo(() => (bulkUploadResult ? bulkCreateFailureRows(t, bulkUploadResult.failed) : []), [bulkUploadResult, t])
+  const { items: bulkFailureRows, nav: bulkFailureNav } = usePagination(bulkFailureLines, 10)
 
   if (isLoading) {
     return <div className="text-slate-300">{tr('adminUsers.loading', 'Loading...')}</div>
@@ -302,8 +318,6 @@ export default function AdminUsers() {
   }
 
   const isBlocked = reauthModalOpen
-  // role names are stored capitalized ("Pending"), so compare without case
-  const pendingRows = rows.filter((u) => u.role?.name?.toLowerCase() === 'pending')
 
   const handleSort = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) {
@@ -357,24 +371,12 @@ export default function AdminUsers() {
     e.target.value = ''
   }
 
-  const togglePendingSelect = (id: string) => {
-    setPendingSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  const toggleAllPending = () => {
-    if (pendingSelectedIds.size === pendingRows.length) {
-      setPendingSelectedIds(new Set())
-    } else {
-      setPendingSelectedIds(new Set(pendingRows.map((u) => u.id)))
-    }
-  }
+  const togglePendingSelect = (id: string) => setPendingSelectedIds((prev) => toggleOnePending(prev, id))
+  // every pending account, on every page of the window
+  const toggleAllPending = () => setPendingSelectedIds((prev) => toggleAllPendingIds(prev, pendingIds))
 
   const handlePendingBulkApprove = (roleName: string) => {
+    // every account chosen, on any page; one gone meanwhile is sent too, so the answer names it
     const ids = Array.from(pendingSelectedIds)
     if (ids.length === 0) return
     const matchedRole = roles.find((r) => r.name === roleName)
@@ -383,8 +385,8 @@ export default function AdminUsers() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="page-head items-start">
+    <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
+      <div className="page-head items-start shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('adminUsers.title', 'User management')}</h1>
           <p className="mt-2 text-slate-400">
@@ -441,12 +443,12 @@ export default function AdminUsers() {
       </div>
 
       {actionError && (
-        <div className="rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200" role="alert" data-testid="admin-users-action-error">
+        <div className="shrink-0 rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200" role="alert" data-testid="admin-users-action-error">
           {actionError}
         </div>
       )}
 
-      <div className="relative">
+      <div className="relative shrink-0">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
         <input
           type="text"
@@ -458,9 +460,10 @@ export default function AdminUsers() {
         />
       </div>
 
-      <div className="rounded-2xl border border-slate-700 bg-slate-800/50 overflow-visible">
+      <div ref={containerRef} className="flex-1 min-h-0 flex flex-col rounded-2xl border border-slate-700 bg-slate-800/50">
+        <div ref={bodyRef} className="overflow-x-auto flex-1 min-h-0">
         <table className="w-full text-sm">
-          <thead className="bg-slate-800 text-slate-400">
+          <thead ref={theadRef} className="bg-slate-800 text-slate-400">
             <tr className="text-left">
               <th className="px-4 py-3 cursor-pointer select-none hover:text-ink" onClick={() => handleSort('name')}>
                 {tr('adminUsers.table.name', 'Name')}{renderSortIcon('name')}
@@ -479,7 +482,7 @@ export default function AdminUsers() {
             </tr>
           </thead>
           <tbody>
-            {pagedRows.map((u) => {
+            {pagedRows.map((u, idx) => {
               const isUpdating = updateRoleMutation.isPending && updateRoleMutation.variables?.userId === u.id
               const isResetting = resetPasswordMutation.isPending && resetPasswordMutation.variables?.userId === u.id
               const isDeleting = deleteUserMutation.isPending && deleteUserMutation.variables?.userId === u.id
@@ -492,6 +495,7 @@ export default function AdminUsers() {
               return (
                 <tr
                   key={u.id}
+                  ref={idx === 0 ? firstRowRef : undefined}
                   className={`border-t border-slate-700 text-slate-200 ${isPending ? 'bg-amber-950/10' : ''}`}
                 >
                   <td className="px-4 py-3">
@@ -535,7 +539,12 @@ export default function AdminUsers() {
                       <button
                         type="button"
                         disabled={isUpdating || isBlocked}
-                        onClick={() => setOpenRoleDropdownUserId((prev) => (prev === u.id ? null : u.id))}
+                        onClick={(e) => {
+                          // the table scrolls inside its card: near its bottom the menu opens upward, where it is not cut off
+                          const table = bodyRef.current?.getBoundingClientRect()
+                          setRoleMenuUp(!!table && roleMenuOpensUp(table.bottom, e.currentTarget.getBoundingClientRect().bottom))
+                          setOpenRoleDropdownUserId((prev) => (prev === u.id ? null : u.id))
+                        }}
                         className="w-32 inline-flex items-center justify-between gap-2 rounded-lg border border-slate-600 bg-slate-900/40 px-3 py-2 text-xs text-slate-200 hover:bg-slate-900/60 focus:outline-hidden focus:ring-2 focus:ring-primary-600 disabled:opacity-50"
                         aria-haspopup="menu"
                         aria-expanded={isOpen}
@@ -549,7 +558,8 @@ export default function AdminUsers() {
                       {isOpen && (
                         <div
                           role="menu"
-                          className="absolute right-0 mt-2 w-32 rounded-xl border border-slate-700 bg-slate-900 shadow-xl z-50 overflow-hidden"
+                          data-placement={roleMenuUp ? 'up' : 'down'}
+                          className={`absolute right-0 ${roleMenuUp ? 'bottom-full mb-2' : 'mt-2'} w-32 rounded-xl border border-slate-700 bg-slate-900 shadow-xl z-50 overflow-hidden`}
                         >
                           {/* Inline row dropdown sets the GLOBAL role → account
                               level only (Admin/Member/Pending). Read/Write are
@@ -667,22 +677,17 @@ export default function AdminUsers() {
                 </tr>
               )
             })}
-            {filteredRows.length === 0 && (
-              <tr>
-                <td className="px-4 py-6 text-center text-slate-400" colSpan={6}>
-                  {query ? tr('common.noSearchResults', 'No results found.') : tr('common.listEmpty', 'No items.')}
-                </td>
-              </tr>
-            )}
+            {filteredRows.length === 0 && <TableEmptyRow colSpan={USER_COLUMNS} resource="admin-users" searching={!!query} />}
           </tbody>
+          <AdaptiveTableFillerRows count={rowsPerPage - pagedRows.length} columnCount={USER_COLUMNS} />
         </table>
+        </div>
         <ListPager
           currentPage={currentPage}
           totalPages={pageCount}
           total={filteredRows.length}
-          rowsPerPage={USERS_PAGE_SIZE}
+          rowsPerPage={rowsPerPage}
           onPageChange={setPage}
-          showPageSize={false}
           testId="admin-users-pager"
         />
       </div>
@@ -709,9 +714,10 @@ export default function AdminUsers() {
       {pendingModalOpen && (
         <ModalOverlay onClose={() => setPendingModalOpen(false)}>
           <div
-            className="w-full max-w-2xl rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
+            className="w-full max-w-2xl max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
             role="dialog"
             aria-modal="true"
+            data-testid="admin-users-pending-window"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-3">
@@ -741,8 +747,11 @@ export default function AdminUsers() {
                         <th className="px-3 py-2.5 w-10">
                           <input
                             type="checkbox"
-                            checked={pendingSelectedIds.size === pendingRows.length && pendingRows.length > 0}
+                            checked={allPendingSelected(pendingSelectedIds, pendingIds)}
                             onChange={toggleAllPending}
+                            title={tr('adminUsers.bulk.selectAllPages', 'Select all {{count}} pending users, on every page', { count: pendingIds.length })}
+                            aria-label={tr('adminUsers.bulk.selectAllPages', 'Select all {{count}} pending users, on every page', { count: pendingIds.length })}
+                            data-testid="admin-users-pending-select-all"
                             className="h-4 w-4 rounded-sm border-slate-600 bg-slate-900 text-primary-600 focus:ring-primary-600 focus:ring-offset-0"
                           />
                         </th>
@@ -752,13 +761,14 @@ export default function AdminUsers() {
                       </tr>
                     </thead>
                     <tbody>
-                      {pendingRows.map((u) => {
+                      {pendingPageRows.map((u) => {
                         const isChecked = pendingSelectedIds.has(u.id)
                         return (
                           <tr
                             key={u.id}
                             className={`border-t border-slate-700 text-slate-200 cursor-pointer hover:bg-slate-800/50 ${isChecked ? 'bg-primary-950/20' : ''}`}
                             onClick={() => togglePendingSelect(u.id)}
+                            data-testid="admin-users-pending-row"
                           >
                             <td className="px-3 py-2.5">
                               <input
@@ -778,6 +788,7 @@ export default function AdminUsers() {
                     </tbody>
                   </table>
                 </div>
+                <div data-testid="admin-users-pending-pages">{pendingNav}</div>
 
                 {actionError && (
                   <div className="mt-4 rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200" role="alert" data-testid="admin-users-bulk-error">
@@ -787,8 +798,8 @@ export default function AdminUsers() {
 
                 <div className="mt-4 flex items-center gap-3">
                   {pendingSelectedIds.size > 0 && (
-                    <span className="text-xs text-slate-400">
-                      {tr('adminUsers.bulk.selected', '{{count}} selected', { count: pendingSelectedIds.size })}
+                    <span className="text-xs text-slate-400" data-testid="admin-users-pending-chosen">
+                      {tr('adminUsers.bulk.selectedEveryPage', '{{count}} selected, on every page', { count: pendingSelectedIds.size })}
                     </span>
                   )}
                   <div className="flex-1" />
@@ -832,7 +843,7 @@ export default function AdminUsers() {
       {bulkUploadModalOpen && (
         <ModalOverlay onClose={() => { setBulkUploadModalOpen(false); setBulkUploadResult(null) }}>
           <div
-            className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
+            className="w-full max-w-lg max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
             role="dialog"
             aria-modal="true"
             onClick={(e) => e.stopPropagation()}
@@ -896,9 +907,10 @@ export default function AdminUsers() {
                   {bulkUploadResult.failed.length > 0 && (
                     <div className="rounded-lg border border-red-800/40 bg-red-950/20 px-4 py-2 text-sm text-red-300 space-y-1" role="alert" data-testid="admin-users-bulk-create-failed">
                       <div className="font-medium">{bulkCreateSummary(t, bulkUploadResult.total, bulkUploadResult.failed.length)}</div>
-                      {bulkCreateFailureRows(t, bulkUploadResult.failed).map((row, i) => (
-                        <div key={i}>{row}</div>
+                      {bulkFailureRows.map((row, i) => (
+                        <div key={i} data-testid="admin-users-bulk-create-failed-row">{row}</div>
                       ))}
+                      <div data-testid="admin-users-bulk-create-failed-pages">{bulkFailureNav}</div>
                     </div>
                   )}
                   {bulkUploadResult.error && (
