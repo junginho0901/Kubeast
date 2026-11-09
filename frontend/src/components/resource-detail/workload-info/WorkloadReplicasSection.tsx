@@ -1,5 +1,8 @@
+import { useMemo } from 'react'
 import { InfoSection, InfoRow, InfoGrid, SummaryBadge, Tx } from '../DetailCommon'
 import { PrometheusSection, MetricCard } from '../PrometheusMetrics'
+import { usePagination } from '../usePagination'
+import { busiestFirst, type PodSample } from './workloadInfoFormatters'
 
 interface ReplicaView {
   desired: string | number
@@ -105,23 +108,32 @@ export default function WorkloadReplicasSection({
           )}
         </div>
         {promWorkloadMetrics.data['cpu_per_pod']?.results && promWorkloadMetrics.data['cpu_per_pod'].results.length > 0 && (
-          <div className="space-y-2">
-            <div className="text-[11px] text-slate-400 font-medium"><Tx>Per-Pod CPU (millicores)</Tx></div>
-            {promWorkloadMetrics.data['cpu_per_pod']!.results.map((r) => (
-              <div key={r.metric?.pod} className="flex items-center gap-3">
-                <span className="text-xs text-slate-400 w-48 truncate">{r.metric?.pod}</span>
-                <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full ${r.value >= 500 ? 'bg-red-500' : r.value >= 200 ? 'bg-amber-500' : 'bg-primary-bright'}`}
-                    style={{ width: `${Math.min((r.value / 1000) * 100, 100)}%` }}
-                  />
-                </div>
-                <span className="text-[10px] font-mono text-slate-300 w-14 text-right">{r.value.toFixed(0)}m</span>
-              </div>
-            ))}
-          </div>
+          <PerPodCpu results={promWorkloadMetrics.data['cpu_per_pod'].results} />
         )}
       </PrometheusSection>
     </>
+  )
+}
+
+function PerPodCpu({ results }: { results: PodSample[] }) {
+  const sorted = useMemo(() => busiestFirst(results), [results])
+  const { items: paged, nav } = usePagination(sorted, 10)
+  return (
+    <div className="space-y-2" data-testid="per-pod-cpu">
+      <div className="text-[11px] text-slate-400 font-medium"><Tx>Per-Pod CPU (millicores)</Tx></div>
+      {paged.map((r) => (
+        <div key={r.metric?.pod} className="flex items-center gap-3" data-testid="per-pod-cpu-row">
+          <span className="text-xs text-slate-400 w-48 truncate">{r.metric?.pod}</span>
+          <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full ${r.value >= 500 ? 'bg-red-500' : r.value >= 200 ? 'bg-amber-500' : 'bg-primary-bright'}`}
+              style={{ width: `${Math.min((r.value / 1000) * 100, 100)}%` }}
+            />
+          </div>
+          <span className="text-[10px] font-mono text-slate-300 w-14 text-right">{r.value.toFixed(0)}m</span>
+        </div>
+      ))}
+      {nav}
+    </div>
   )
 }

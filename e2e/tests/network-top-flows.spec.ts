@@ -4,13 +4,16 @@ import os from 'node:os'
 import path from 'node:path'
 import { test, expect, type APIRequestContext } from '@playwright/test'
 
+import { everyPage, pagesOf } from './drawer-pages'
+
 // Top talkers from the Network Flow Monitor stand-in of deploy/kind/devtools.yaml (nfm-stub), which the dev
 // values make cluster self's monitor kubeast-monitor. The spec gives it rows that name this install's own pods —
 // gateway and k8s-service both ways, k8s-service to CoreDNS in kube-system across zones, k8s-service to an S3
 // address, a host-network flow and a flow of another namespace — and compares what Kubeast shows with the
 // cluster: the workloads named as kubectl names the pods' owners, what the stand-in was asked, the audit row, a
 // namespace-limited reader refused until the cluster lets it list pods and then seeing peers elsewhere by
-// namespace and address only, the drawer and the AI tool over MCP. Skips without the stand-in.
+// namespace and address only, the drawer (and, its read stood in, every page of more rows than a page) and the AI
+// tool over MCP. Skips without the stand-in.
 
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
@@ -230,6 +233,29 @@ test.describe('Top talkers (Network Flow Monitor)', () => {
     await page.getByTestId('toptalkers-metric-opt-RETRANSMISSIONS').click()
     expect(await (await retrans).json()).toMatchObject({ view: 'aws', metric: 'RETRANSMISSIONS', unit: 'Count' })
     await expect(section.getByTestId('toptalkers-value')).toHaveText('800', { timeout: 20_000 })
+  })
+
+  test('a drawer of more talkers than a page shows every one, page by page, in the answer\'s order', async ({ page }) => {
+    test.skip(!ready, 'no Network Flow Monitor stand-in for cluster self (deploy/kind/devtools.yaml, features.networkFlowMonitor)')
+    const [kind, name] = owners.k8s.split('/')
+    // the drawer's read stood in with more rows than a page: the pages are the drawer's, the rows the answer's
+    const rows: Row[] = Array.from({ length: 23 }, (_, i) => ({
+      local: { namespace: NS, pod: pods.k8s, workload: { kind, name } }, remote: { ip: `10.252.0.${i}` }, port: 443, value: 1_000_000 - i, category: 'INTRA_AZ',
+    }))
+    await page.route(/\/networktopflows(\?|$)/, (route) => route.fulfill({
+      json: { cluster: CLUSTER, monitor: 'kubeast-monitor', namespace: NS, kind, name, metric: 'DATA_TRANSFERRED', unit: 'Bytes', view: 'cluster', range: '1h', rows, truncated: false },
+    }))
+    try {
+      await page.goto(`/workloads/deployments?cluster=${CLUSTER}&namespace=${NS}&detail=Deployment/${NS}/${name}`)
+      const section = page.getByTestId('toptalkers-section')
+      await expect(section).toBeVisible({ timeout: 20_000 })
+      await section.getByTestId('toptalkers-load').click()
+      const list = section.getByTestId('toptalkers-list')
+      await list.waitFor({ timeout: 20_000 })
+      expect(await everyPage(list, '[data-testid="toptalkers-peer"]')).toEqual(pagesOf(rows.map((r) => [r.remote.ip!])))
+    } finally {
+      await page.unroute(/\/networktopflows(\?|$)/)
+    }
   })
 
   test('the AI tool reads the same rows over MCP', async ({ request }) => {
